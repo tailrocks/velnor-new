@@ -1,0 +1,8 @@
+name: Local composite
+description: Print local-action-ok from a local composite action.
+runs:
+  using: composite
+  steps:
+    - name: Print
+      shell: bash
+      run: echo local-action-ok
