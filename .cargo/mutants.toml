@@ -1,0 +1,71 @@
+# cargo-mutants scope for risk-triggered verification (RQ-9.8).
+# Manual runs only: `cargo mutants` from the repo root. NOT wired into CI —
+# before any scheduled/CI use, the tool must additionally be pinned in the
+# Mise-managed catalog per version-policy §2 (unpinned validation tools are
+# forbidden); the repo-local pin below covers manual runs only.
+#
+# pinned: cargo-mutants = "27.1.0"
+# The pin above MUST equal [validation-tools] cargo-mutants in
+# .velnor/version-policy.toml (checked by scripts/check-freshness.sh).
+# Install exactly that release, e.g.:
+#   cargo install --locked cargo-mutants --version 27.1.0
+# then run from the repo root:
+#   cargo mutants
+# Full-codebase runs take hours; examine only the highest-risk units:
+# untrusted-input parsers (wrong parse = wrong plan), identities (wrong
+# identity = wrong cache verdict or wrong pin), selection (wrong set =
+# skipped work), aggregation (wrong merge = wrong verdict), and the real
+# production wiring under review (inventory/pin/validate assembly).
+
+examine_globs = [
+    # Parsers: config validation, strict JSON, manifests, toolfiles,
+    # metadata JSON, lock/policy TOML subset, workflow plans.
+    "crates/core/velnor-actions-contract-config/src/config/**/*.rs",
+    "crates/core/velnor-actions-contract/src/strict_json.rs",
+    "crates/core/velnor-actions-contract-release/src/manifest.rs",
+    "crates/core/velnor-actions-contract-release/src/candidate_manifest.rs",
+    "crates/core/velnor-actions-contract-release/src/tooling.rs",
+    "crates/core/velnor-actions-contract-workflow/src/workflow/plan.rs",
+    "crates/adapters/velnor-actions-rust-core/src/metadata.rs",
+    "crates/adapters/velnor-actions-mise-catalog/src/catalog/lock.rs",
+    "crates/adapters/velnor-actions-mise-catalog/src/toolfiles.rs",
+    # Identities: validated ids, cache keys/ids, rust identity, cover id.
+    "crates/core/velnor-actions-contract/src/ids/**/*.rs",
+    "crates/core/velnor-actions-contract/src/cachekey.rs",
+    "crates/core/velnor-actions-contract-workflow/src/workflow/cache_ids.rs",
+    "crates/adapters/velnor-actions-rust/src/identity.rs",
+    "crates/services/velnor-actions-orchestrator-cover-baseline/src/**/*.rs",
+    "crates/services/velnor-actions-orchestrator-task-report-write/src/**/*.rs",
+    # Selection: affected-package computation and edge closure.
+    "crates/services/velnor-actions-orchestrator-selection/src/select.rs",
+    "crates/services/velnor-actions-orchestrator-selection/src/select_affected.rs",
+    "crates/services/velnor-actions-orchestrator-discovery/src/select_edges.rs",
+    # Aggregation: baseline coverage, final merge, merge requests.
+    "crates/services/velnor-actions-orchestrator-cover/src/**/*.rs",
+    "crates/services/velnor-actions-orchestrator-internal/src/cover_baseline.rs",
+    "crates/services/velnor-actions-orchestrator-internal/src/merge_request.rs",
+    "crates/services/velnor-actions-orchestrator-merge-ports/src/**/*.rs",
+    "crates/services/velnor-actions-orchestrator-merge/src/**/*.rs",
+    "crates/services/velnor-actions-orchestrator-merge-request-ports/src/**/*.rs",
+    "crates/services/velnor-actions-orchestrator-merge-request/src/**/*.rs",
+    "crates/services/velnor-actions-orchestrator-baseline-publish/src/**/*.rs",
+    "crates/services/velnor-actions-orchestrator-plan-obligation/src/**/*.rs",
+    "crates/services/velnor-actions-orchestrator-retrieve/src/**/*.rs",
+    "crates/services/velnor-actions-orchestrator-check-runtime/src/**/*.rs",
+    "crates/services/velnor-actions-orchestrator-internal/src/**/*.rs",
+    "crates/services/velnor-actions-orchestrator-retrieve-reports/src/**/*.rs",
+    # Production wiring under review: inventory assembly, pin records,
+    # staged validation verdict, and orchestrator wiring passes.
+    "crates/services/velnor-actions-orchestrator-discovery/src/inventory.rs",
+    "crates/services/velnor-actions-orchestrator-pins/src/pins.rs",
+    "crates/services/velnor-actions-orchestrator-staged-validation/src/validate.rs",
+    "crates/services/velnor-actions-orchestrator-workflow-ir/src/workflow/wire_w1.rs",
+    "crates/services/velnor-actions-orchestrator-graph/src/internal_plan/wire_w2.rs",
+]
+
+exclude_globs = [
+    "crates/*/tests/**",
+]
+
+# Skip low-signal mutants: Debug impls and explicit error constructors.
+exclude_re = ["impl Debug", "impl core::fmt::Display"]

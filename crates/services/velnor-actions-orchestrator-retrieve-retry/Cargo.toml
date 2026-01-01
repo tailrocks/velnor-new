@@ -1,0 +1,14 @@
+[package]
+name = "velnor-actions-orchestrator-retrieve-retry"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+autotests = false
+
+[lints]
+workspace = true
+
+[[test]]
+name = "velnor_orchestrator_retrieve_retry"
+path = "tests/main.rs"

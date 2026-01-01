@@ -1,0 +1,243 @@
+use std::path::{Path, PathBuf};
+
+use serde::Deserialize;
+use velnor_actions_contract::{canonical_json_bytes, canonical_json_str};
+use velnor_actions_contract_workflow::{
+    ARTIFACT_HOSTED_MATRIX_OUTPUT, ARTIFACT_VELNOR_MATRIX_OUTPUT, ArtifactBuildProducer,
+    ArtifactBuildProvider, FINAL_JSON_FILENAME, FinalStatus, MATRIX_JSON_FILENAME,
+    PLAN_JSON_FILENAME, artifact_matrix_for_provider, matrix_json_bytes, plan_json_bytes,
+};
+
+use crate::internal::{PlanResponse, check_schema};
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::decisions::plan_artifact_dir;
+use velnor_actions_orchestrator_core::{internal, internal_contract};
+use velnor_actions_orchestrator_plan::plan_output_limits::{PlanOutputMode, check_plan_outputs};
+
+/// Canonical `plan`/`matrix` outputs for `$GITHUB_OUTPUT`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlanOutputs {
+    /// Canonical matrix JSON (single line).
+    pub matrix: String,
+    /// Plan ID for step outputs (WF-4.15).
+    pub plan_id: String,
+    /// Run key for step outputs (WF-4.15).
+    pub run_key: String,
+    /// Comma-wrapped covered task IDs (empty when none covered).
+    pub covered_tasks: String,
+    /// Provider-specific artifact matrix when hosted builds are selected.
+    pub artifact_hosted_matrix: Option<String>,
+    /// Provider-specific artifact matrix when Scale Set builds are selected.
+    pub artifact_velnor_matrix: Option<String>,
+    /// Aggregate UTF-16 byte size of values promoted by this output mode.
+    pub job_outputs_utf16_bytes: usize,
+}
+
+/// Split one `plan-v1` response into canonical `$GITHUB_OUTPUT` values.
+///
+/// # Errors
+/// Returns [`OrchestratorError::Internal`] for malformed responses.
+pub fn plan_outputs(
+    response_json: &str,
+    mode: PlanOutputMode,
+) -> Result<PlanOutputs, OrchestratorError> {
+    let response: PlanResponse =
+        serde_json::from_str(response_json).map_err(|_| internal("malformed_response"))?;
+    check_schema(response.schema)?;
+    response.plan.validate().map_err(internal_contract)?;
+    if response
+        .plan
+        .artifact_tasks
+        .iter()
+        .any(|task| task.producer == ArtifactBuildProducer::MatrixBuild)
+        && mode != PlanOutputMode::DynamicMatrix
+    {
+        return Err(internal("artifact_build_requires_dynamic_outputs"));
+    }
+    let artifact_hosted_matrix =
+        artifact_matrix_if_selected(&response.plan, ArtifactBuildProvider::GithubHosted)?;
+    let artifact_velnor_matrix =
+        artifact_matrix_if_selected(&response.plan, ArtifactBuildProvider::VelnorScaleSet)?;
+    let mut outputs = PlanOutputs {
+        matrix: canonical_json_str(&response.matrix).map_err(internal_contract)?,
+        plan_id: response.plan.plan_id.clone(),
+        run_key: response.plan.run_key.clone(),
+        covered_tasks:
+            velnor_actions_orchestrator_covered_tasks::covered_tasks::CoveredTasks::for_plan(
+                &response.plan,
+            )
+            .encode(),
+        artifact_hosted_matrix,
+        artifact_velnor_matrix,
+        job_outputs_utf16_bytes: 0,
+    };
+    outputs.job_outputs_utf16_bytes = check_plan_outputs(
+        mode,
+        response.matrix.include.len().max(
+            response
+                .plan
+                .artifact_tasks
+                .iter()
+                .filter(|task| task.producer == ArtifactBuildProducer::MatrixBuild)
+                .count(),
+        ),
+        &outputs.promoted_job_outputs(mode),
+    )?;
+    Ok(outputs)
+}
+
+impl PlanOutputs {
+    /// Required named outputs written by the plan step, in stable order.
+    #[must_use]
+    pub fn step_outputs(&self) -> Vec<(&'static str, &str)> {
+        let mut outputs: Vec<(&'static str, &str)> = vec![
+            ("matrix", &self.matrix),
+            ("plan_id", &self.plan_id),
+            ("run_key", &self.run_key),
+            (
+                velnor_actions_orchestrator_covered_tasks::covered_tasks::COVERED_TASKS_OUTPUT,
+                &self.covered_tasks,
+            ),
+        ];
+        if let Some(matrix) = self.artifact_hosted_matrix.as_deref() {
+            outputs.push((ARTIFACT_HOSTED_MATRIX_OUTPUT, matrix));
+        }
+        if let Some(matrix) = self.artifact_velnor_matrix.as_deref() {
+            outputs.push((ARTIFACT_VELNOR_MATRIX_OUTPUT, matrix));
+        }
+        outputs
+    }
+
+    /// Output records promoted to job outputs by this workflow path.
+    #[must_use]
+    pub fn promoted_job_outputs(&self, mode: PlanOutputMode) -> Vec<(&'static str, &str)> {
+        match mode {
+            PlanOutputMode::Static => {
+                vec![(
+                    velnor_actions_orchestrator_covered_tasks::covered_tasks::COVERED_TASKS_OUTPUT,
+                    &self.covered_tasks,
+                )]
+            }
+            PlanOutputMode::DynamicMatrix => self.step_outputs(),
+        }
+    }
+}
+
+fn artifact_matrix_if_selected(
+    plan: &velnor_actions_contract_workflow::Plan,
+    provider: ArtifactBuildProvider,
+) -> Result<Option<String>, OrchestratorError> {
+    let selected = plan.artifact_tasks.iter().any(|task| {
+        task.producer == ArtifactBuildProducer::MatrixBuild && task.providers.contains(&provider)
+    });
+    selected
+        .then(|| artifact_matrix_for_provider(plan, provider))
+        .transpose()
+        .map_err(internal_contract)
+}
+
+/// Publish `plan.json` + `matrix.json` for the plan artifact.
+///
+/// Contract §4 fixes these files under `<velnor-dir>/<run-key>/`, the
+/// directory uploaded by the plan job.
+///
+/// # Errors
+/// Returns [`OrchestratorError::Internal`] for malformed responses and
+/// [`OrchestratorError::Io`] for unwritable directories.
+pub fn publish_plan_files(
+    response_json: &str,
+    velnor_dir: &Path,
+) -> Result<PathBuf, OrchestratorError> {
+    let response: PlanResponse =
+        serde_json::from_str(response_json).map_err(|_| internal("malformed_response"))?;
+    check_schema(response.schema)?;
+    let dir = plan_artifact_dir(velnor_dir, &response.plan.run_key)?;
+    write_plan_files(&response, velnor_dir, &dir)?;
+    Ok(dir)
+}
+
+fn write_plan_files(
+    response: &PlanResponse,
+    velnor_dir: &Path,
+    dir: &Path,
+) -> Result<(), OrchestratorError> {
+    velnor_actions_orchestrator_core::exclusive_write::create_dir_no_symlink(
+        artifact_anchor(velnor_dir)?,
+        dir,
+    )?;
+    let plan = plan_json_bytes(&response.plan).map_err(internal_contract)?;
+    let matrix = matrix_json_bytes(&response.matrix).map_err(internal_contract)?;
+    velnor_actions_orchestrator_core::exclusive_write::write_exclusive(
+        &dir.join(PLAN_JSON_FILENAME),
+        &plan,
+        "plan_artifact",
+    )?;
+    velnor_actions_orchestrator_core::exclusive_write::write_exclusive(
+        &dir.join(MATRIX_JSON_FILENAME),
+        &matrix,
+        "plan_artifact",
+    )?;
+    if let Some(manifest) = response.baseline_manifest.as_ref() {
+        let bytes = canonical_json_bytes(manifest).map_err(internal_contract)?;
+        velnor_actions_orchestrator_core::exclusive_write::write_exclusive(
+            &dir.join(
+                velnor_actions_orchestrator_baseline_publish::baseline_publish::BASELINE_FILENAME,
+            ),
+            &bytes,
+            "plan_artifact",
+        )?;
+    }
+    Ok(())
+}
+
+/// Publish `final-report.json` for the final artifact.
+///
+/// # Errors
+/// Returns [`OrchestratorError::Internal`] for malformed responses and
+/// [`OrchestratorError::Io`] for unwritable directories.
+pub fn publish_final_report(
+    response_json: &str,
+    velnor_dir: &Path,
+) -> Result<PathBuf, OrchestratorError> {
+    let report: velnor_actions_contract_workflow::FinalReport =
+        serde_json::from_str(response_json).map_err(|_| internal("malformed_response"))?;
+    check_schema(report.schema)?;
+    let dir = plan_artifact_dir(velnor_dir, &report.run_key)?;
+    velnor_actions_orchestrator_core::exclusive_write::create_dir_no_symlink(
+        artifact_anchor(velnor_dir)?,
+        &dir,
+    )?;
+    let bytes = canonical_json_bytes(&report).map_err(internal_contract)?;
+    velnor_actions_orchestrator_core::exclusive_write::write_exclusive(
+        &dir.join(FINAL_JSON_FILENAME),
+        &bytes,
+        "plan_artifact",
+    )?;
+    Ok(dir)
+}
+
+/// True when one `merge-v1` response is a passing verdict.
+///
+/// # Errors
+/// Returns [`OrchestratorError::Internal`] for malformed responses.
+pub fn merge_passed(response_json: &str) -> Result<bool, OrchestratorError> {
+    #[derive(Debug, Deserialize)]
+    struct Verdict {
+        status: FinalStatus,
+    }
+    let verdict: Verdict =
+        serde_json::from_str(response_json).map_err(|_| internal("malformed_response"))?;
+    Ok(matches!(
+        verdict.status,
+        FinalStatus::Passed | FinalStatus::NoWork
+    ))
+}
+
+fn artifact_anchor(velnor_dir: &Path) -> Result<&Path, OrchestratorError> {
+    velnor_dir
+        .parent()
+        .ok_or_else(|| internal("missing_dir_anchor"))
+}
+
+#[cfg(test)]
+mod tests;

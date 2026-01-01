@@ -1,0 +1,13 @@
+[package]
+name = "velnor-runner-launch-slot"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+velnor-runner-host = { version = "=0.1.7", path = "../velnor-runner-host" }
+velnor-runner-journal = { version = "=0.1.7", path = "../velnor-runner-journal" }

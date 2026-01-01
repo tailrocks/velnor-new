@@ -1,0 +1,145 @@
+[workspace]
+members = [
+    "crates/adapters/velnor-actions-actionlint",
+    "crates/adapters/velnor-actions-mise",
+    "crates/adapters/velnor-actions-mise-cache",
+    "crates/adapters/velnor-actions-mise-catalog",
+    "crates/adapters/velnor-actions-mise-core",
+    "crates/adapters/velnor-actions-mise-nextest",
+    "crates/adapters/velnor-actions-mise-probes",
+    "crates/adapters/velnor-actions-rust",
+    "crates/adapters/velnor-actions-rust-core",
+    "crates/adapters/velnor-actions-tofu",
+    "crates/adapters/velnor-actions-tofu-core",
+    "crates/apps/velnor-actions-cli",
+    "crates/apps/velnor-actions-repo-policy",
+    "crates/core/velnor-actions-contract",
+    "crates/core/velnor-actions-contract-config",
+    "crates/core/velnor-actions-contract-planning",
+    "crates/core/velnor-actions-contract-release",
+    "crates/core/velnor-actions-contract-workflow",
+    "crates/services/velnor-actions-orchestrator",
+    "crates/services/velnor-actions-orchestrator-baseline-publish",
+    "crates/services/velnor-actions-orchestrator-check-acquisition",
+    "crates/services/velnor-actions-orchestrator-check-evidence",
+    "crates/services/velnor-actions-orchestrator-check-preparation",
+    "crates/services/velnor-actions-orchestrator-check-runtime",
+    "crates/services/velnor-actions-orchestrator-core",
+    "crates/services/velnor-actions-orchestrator-cover",
+    "crates/services/velnor-actions-orchestrator-cover-baseline",
+    "crates/services/velnor-actions-orchestrator-cover-compat",
+    "crates/services/velnor-actions-orchestrator-covered-tasks",
+    "crates/services/velnor-actions-orchestrator-discovery",
+    "crates/services/velnor-actions-orchestrator-external-data",
+    "crates/services/velnor-actions-orchestrator-generation",
+    "crates/services/velnor-actions-orchestrator-graph",
+    "crates/services/velnor-actions-orchestrator-internal",
+    "crates/services/velnor-actions-orchestrator-merge",
+    "crates/services/velnor-actions-orchestrator-merge-ports",
+    "crates/services/velnor-actions-orchestrator-merge-request",
+    "crates/services/velnor-actions-orchestrator-merge-request-ports",
+    "crates/services/velnor-actions-orchestrator-noop-report",
+    "crates/services/velnor-actions-orchestrator-pins",
+    "crates/services/velnor-actions-orchestrator-plan",
+    "crates/services/velnor-actions-orchestrator-plan-obligation",
+    "crates/services/velnor-actions-orchestrator-preseed-manifest",
+    "crates/services/velnor-actions-orchestrator-provisioning",
+    "crates/services/velnor-actions-orchestrator-request-event",
+    "crates/services/velnor-actions-orchestrator-retrieve",
+    "crates/services/velnor-actions-orchestrator-retrieve-reports",
+    "crates/services/velnor-actions-orchestrator-retrieve-retry",
+    "crates/services/velnor-actions-orchestrator-run-select",
+    "crates/services/velnor-actions-orchestrator-runtime-evidence",
+    "crates/services/velnor-actions-orchestrator-runtime-execute",
+    "crates/services/velnor-actions-orchestrator-runtime-plan",
+    "crates/services/velnor-actions-orchestrator-selection",
+    "crates/services/velnor-actions-orchestrator-staged-validation",
+    "crates/services/velnor-actions-orchestrator-task-report",
+    "crates/services/velnor-actions-orchestrator-task-report-write",
+    "crates/services/velnor-actions-orchestrator-workflow-ir",
+    "crates/services/velnor-actions-workflow-cache",
+    "crates/services/velnor-actions-workflow-document",
+    "crates/services/velnor-actions-workflow-generator",
+    "crates/services/velnor-actions-workflow-jobs",
+    "crates/services/velnor-actions-workflow-release",
+    "crates/services/velnor-actions-workflow-render-strict",
+    "crates/services/velnor-actions-workflow-renderer",
+    "crates/services/velnor-actions-workflow-schema2",
+    "crates/services/velnor-actions-workflow-steps",
+    "crates/services/velnor-actions-workflow-tree",
+    "crates/tools/velnor-archive-guard",
+    "crates/tools/velnor-runner-apparmor",
+    "crates/tools/velnor-runner-cli",
+    "crates/tools/velnor-runner-core",
+    "crates/tools/velnor-runner-docker-spec",
+    "crates/tools/velnor-runner-github",
+    "crates/tools/velnor-runner-host",
+    "crates/tools/velnor-runner-host-config",
+    "crates/tools/velnor-runner-journal",
+    "crates/tools/velnor-runner-launch",
+    "crates/tools/velnor-runner-launch-slot",
+]
+resolver = "3"
+
+[workspace.dependencies]
+blake3 = { version = "=1.8.7" }
+bollard = { version = "=0.21.1", default-features = false, features = ["pipe"] }
+clap = { version = "=4.6.7", features = ["derive"] }
+flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"] }
+getrandom = { version = "=0.4.3" }
+hcl = { version = "=0.19.8", package = "hcl-rs" }
+lzma-rust2 = { version = "=0.21.0", default-features = false, features = ["std", "xz"] }
+proc-macro2 = { version = "=1.0.107" }
+rustix = { version = "=1.1.5", features = ["fs"] }
+security-framework = { version = "=3.7.0" }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = { version = "=1.0.151" }
+sha2 = { version = "=0.11.0", default-features = false }
+syn = { version = "=3.0.6", features = ["full", "visit"] }
+tar = { version = "=0.4.46", default-features = false }
+tempfile = { version = "=3.27.0" }
+thiserror = { version = "=2.0.21" }
+tokio = { version = "=1.49.0", features = ["rt-multi-thread", "macros", "time", "io-util", "sync", "net"] }
+toml = { version = "=0.9.12" }
+turso = { version = "=0.8.1" }
+zeroize = { version = "=1.8.1", features = ["derive"] }
+zip = { version = "=8.6.0", default-features = false, features = ["deflate-flate2"] }
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.98"
+version = "0.1.7"
+license = "MIT OR Apache-2.0"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+unused_must_use = "deny"
+unexpected_cfgs = "deny"
+unfulfilled_lint_expectations = "deny"
+missing_docs = "warn"
+missing_debug_implementations = "warn"
+unreachable_pub = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+too_many_lines = "deny"
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+dbg_macro = "deny"
+mem_forget = "deny"
+await_holding_lock = "deny"
+await_holding_refcell_ref = "deny"
+let_underscore_future = "deny"
+let_underscore_must_use = "deny"
+undocumented_unsafe_blocks = "deny"
+allow_attributes_without_reason = "deny"
+allow_attributes = "warn"
+
+[workspace.lints.rustdoc]
+broken_intra_doc_links = "deny"
+private_intra_doc_links = "deny"

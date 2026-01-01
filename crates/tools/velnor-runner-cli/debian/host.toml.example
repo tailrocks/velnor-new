@@ -1,0 +1,40 @@
+# Pending ChainArgos Linux host template for the required Ubuntu 26.04 lane.
+# This deliberately names an unsupported profile/set pair: the current Velnor
+# binary has no compiled Ubuntu 26.04 profile and must reject this file. Do not
+# substitute the Ubuntu 24.04 image or infer a profile from a generic label.
+# Activation requires a reviewed compiled profile bound to immutable official
+# runner and DinD image digests, plus measured capacity/drain settings and the
+# live repository/group/workflow trust checks. No image digest can be supplied
+# through this configuration. The workflow path below remains illustrative.
+# Do not put a PAT, GitHub App key, or JIT data in this file.
+schema = 1
+
+[github]
+repository = "ChainArgos/java-monorepo"
+registration_scope = "repository"
+runner_group_id = 1
+runner_group_name = "Default"
+scale_set_name = "ubuntu-26.04-scale-set"
+credential_ref = "systemd-credential:github-token"
+
+[trust]
+allowed_repositories = ["ChainArgos/java-monorepo"]
+allowed_events = ["push", "pull_request"]
+# Illustrative only: verify the exact path against the live workflow before activation.
+allowed_workflow_paths = [".github/workflows/ci.yml"]
+allow_forks = false
+
+[runner]
+image_profile = "ubuntu-26.04-amd64"
+
+[host]
+platform = "linux"
+# Zero is intentionally invalid. Set a measured host-wide limit before starting.
+max_jobs = 0
+# Zero is intentionally invalid until drain/cleanup tests set a measured bound.
+drain_timeout_secs = 0
+
+[docker]
+context = "default"
+platform = "linux/amd64"
+endpoint = "unix:///var/run/docker.sock"
