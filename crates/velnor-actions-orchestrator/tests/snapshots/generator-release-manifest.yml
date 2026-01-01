@@ -1,0 +1,63 @@
+name: Attest generator release manifest
+description: Shared steps for Attest generator release manifest
+runs:
+  using: composite
+  steps:
+    - name: Setup Mise
+      uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
+      with:
+        cache: "false"
+        env: "false"
+        install: "false"
+        version: 2026.9.18
+    - name: Install pinned GitHub CLI
+      shell: bash
+      run: mise --no-config --no-env --no-hooks install gh@2.102.0
+    - name: Download x86_64-unknown-linux-gnu assets
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      with:
+        name: generator-linux-assets
+        path: linux-assets
+    - name: Prevalidate and extract uploaded candidate archive
+      shell: bash
+      run: "set -eu\npython3 scripts/generator-release/extract-candidate.py 'linux-assets/generator-linux-assets.tar' 'linux-assets' 'velnor-actions-0.1.1-x86_64-unknown-linux-gnu' 'velnor-actions-0.1.1-x86_64-unknown-linux-gnu.sha256' 'velnor-actions-0.1.1-x86_64-unknown-linux-gnu.provenance.json'"
+    - name: Verify extracted candidate file types and executable mode
+      shell: bash
+      run: "set -eu\ntest -f linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu\ntest ! -L linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu\ntest -x linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu\ntest -f linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu.sha256\ntest ! -L linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu.sha256\ntest ! -x linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu.sha256\ntest -f linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu.provenance.json\ntest ! -L linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu.provenance.json\ntest ! -x linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu.provenance.json"
+    - name: Download aarch64-apple-darwin assets
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      with:
+        name: generator-macos-assets
+        path: macos-assets
+    - name: Prevalidate and extract uploaded candidate archive
+      shell: bash
+      run: "set -eu\npython3 scripts/generator-release/extract-candidate.py 'macos-assets/generator-macos-assets.tar' 'macos-assets' 'velnor-actions-0.1.1-aarch64-apple-darwin' 'velnor-actions-0.1.1-aarch64-apple-darwin.sha256' 'velnor-actions-0.1.1-aarch64-apple-darwin.provenance.json'"
+    - name: Verify extracted candidate file types and executable mode
+      shell: bash
+      run: "set -eu\ntest -f macos-assets/velnor-actions-0.1.1-aarch64-apple-darwin\ntest ! -L macos-assets/velnor-actions-0.1.1-aarch64-apple-darwin\ntest -x macos-assets/velnor-actions-0.1.1-aarch64-apple-darwin\ntest -f macos-assets/velnor-actions-0.1.1-aarch64-apple-darwin.sha256\ntest ! -L macos-assets/velnor-actions-0.1.1-aarch64-apple-darwin.sha256\ntest ! -x macos-assets/velnor-actions-0.1.1-aarch64-apple-darwin.sha256\ntest -f macos-assets/velnor-actions-0.1.1-aarch64-apple-darwin.provenance.json\ntest ! -L macos-assets/velnor-actions-0.1.1-aarch64-apple-darwin.provenance.json\ntest ! -x macos-assets/velnor-actions-0.1.1-aarch64-apple-darwin.provenance.json"
+    - name: Verify assets and create release manifest
+      shell: bash
+      run: bash scripts/generator-release/create-release-manifest.sh '0.1.1' 'tailrocks/velnor-new'
+    - name: Attest built artifacts
+      uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8
+      with:
+        subject-path: release-manifest.json
+    - name: Fetch and verify manifest attestation bundle
+      env:
+        GH_TOKEN: ${{ github.token }}
+      shell: bash
+      run: "set -eu\nmkdir -p release-attestations\nsubject='release-manifest.json'\ndigest=\"$(sha256sum \"$subject\" | awk 'NR == 1 { print $1; next } { exit 1 } END { if (NR != 1) exit 1 }')\"\ntest \"${#digest}\" -eq 64\ncase \"$digest\" in *[!0123456789abcdef]*|'') exit 1 ;; esac\nbundle=\"sha256:${digest}.jsonl\"\ntest ! -e \"$bundle\"\ndownloaded=false\nfor attempt in 1 2 3 4 5; do\n  if mise --no-config --no-env --no-hooks exec gh@2.102.0 -- gh attestation download \"$subject\" --repo \"$GITHUB_REPOSITORY\" --predicate-type https://slsa.dev/provenance/v1 --limit 10 && test -s \"$bundle\"; then downloaded=true; break; fi\n  if test \"$attempt\" -lt 5; then sleep 3; fi\ndone\ntest \"$downloaded\" = true\nmise --no-config --no-env --no-hooks exec gh@2.102.0 -- gh attestation verify \"$subject\" --repo \"$GITHUB_REPOSITORY\" --bundle \"$bundle\" --source-digest \"$GITHUB_SHA\" --source-ref refs/heads/main --signer-workflow \"${GITHUB_REPOSITORY}/.github/workflows/generator-release.yml\" > /dev/null\nmv \"$bundle\" \"release-attestations/release-manifest.json.intoto.jsonl\""
+    - name: Upload verified manifest attestation bundle
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      with:
+        if-no-files-found: error
+        name: generator-release-manifest-attestations
+        path: release-attestations/release-manifest.json.intoto.jsonl
+        retention-days: 1
+    - name: Upload release manifest
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      with:
+        if-no-files-found: error
+        name: generator-release-manifest
+        path: release-manifest.json
+        retention-days: 1

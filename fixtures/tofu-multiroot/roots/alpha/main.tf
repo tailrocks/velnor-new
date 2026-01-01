@@ -1,0 +1,3 @@
+variable "a" {
+  default = "alpha"
+}

@@ -1,0 +1,21 @@
+[package]
+name = "velnor-actions-mise"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+autotests = false
+
+[lints]
+workspace = true
+
+[dependencies]
+velnor-actions-contract = { version = "=0.1.1", path = "../velnor-actions-contract" }
+serde = { workspace = true }
+
+[[test]]
+name = "velnor_mise"
+path = "tests/velnor_mise.rs"
+
+[dev-dependencies]
+velnor-actions-tofu = { version = "=0.1.1", path = "../velnor-actions-tofu" }

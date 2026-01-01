@@ -1,0 +1,62 @@
+schema = 2
+
+[workflow]
+name = "CI"
+policy = "velnor-repository-v1"
+default_branch = "main"
+generator_validation = "bootstrap"
+max_parallel_jobs = 2
+
+[resources]
+compiler_process_budget = 2
+test_process_budget = 2
+
+[test_sharding]
+default_shards = 1
+
+[test_sharding.by_manifest]
+
+[stacks]
+ignore = []
+
+[stacks.rust]
+compile_driver = "mbx"
+test_runner = "cargo_nextest"
+custom_tasks = []
+
+[[stacks.rust.configurations]]
+name = "default"
+features = ["default"]
+target = "host"
+
+[stacks.rust.release]
+enabled = false
+manifest_path = "Cargo.toml"
+packages = []
+publishable_workspace = false
+environment = "release"
+authentication = "trusted-publishing"
+release_pr = true
+tag_name = "{{ package }}-v{{ version }}"
+
+[discovery]
+exclude = ["fixtures/**"]
+
+[actions.overrides]
+
+[execution]
+default_profile = "hosted"
+hosted_profile = "hosted"
+scale_set_profile = "local"
+workflows = ["qualification", "image_release", "macos_binary_release", "generator_release"]
+
+[execution.profiles.hosted]
+kind = "github-hosted"
+label = "ubuntu-26.04"
+platform = "linux/amd64"
+
+[execution.profiles.local]
+kind = "github-scale-set"
+name = "ubuntu-26.04-scale-set"
+labels = ["velnor", "ubuntu-26.04-scale-set"]
+platform = "linux/amd64"

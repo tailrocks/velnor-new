@@ -1,0 +1,70 @@
+Velnor Actions plan 0.1.1
+Repository: <repo>
+
+Detected stacks
+  Rust: selected
+  Workspace crates: 2
+    - parity-app (crates/app/Cargo.toml) [lib; depends on parity-tool]
+    - parity-tool (crates/tool/Cargo.toml) [bin, lib]
+  Profile .: mbx compile driver (declared), cargo_nextest test runner (declared)
+  Nextest profile .: ci (.config/nextest.toml)
+    evidence .config/nextest.toml:1 [profile.ci] [durable]
+
+Workflow to generate
+  .github/actionlint.yaml
+  .github/workflows/ci.yml
+  Workflow: CI (consumer-v1)
+  Push branch: main
+  Runner: ubuntu-26.04 (latest pinned default)
+  Jobs:
+    - actionlint (4 steps)
+    - plan (13 steps)
+    - publish-baseline (5 steps)
+    - required (9 steps)
+    - rust-parity-app (22 steps)
+    - rust-parity-tool (21 steps)
+    - 2 Rust crate jobs
+      Each: Clippy -> build -> run tests -> doctests -> doc build
+      Entries:
+        - rust-parity-app
+        - rust-parity-tool
+      Obligations:
+        - stack/rust/crates/app/build/default
+        - stack/rust/crates/app/clippy/default
+        - stack/rust/crates/app/doc/default
+        - stack/rust/crates/app/doctest/default
+        - stack/rust/crates/app/nextest/default/shard-1-of-2
+        - stack/rust/crates/app/nextest/default/shard-2-of-2
+        - stack/rust/crates/tool/build/default
+        - stack/rust/crates/tool/clippy/default
+        - stack/rust/crates/tool/doc/default
+        - stack/rust/crates/tool/nextest/default/shard-1-of-2
+        - stack/rust/crates/tool/nextest/default/shard-2-of-2
+  Parallel: 2 independent crate jobs; no matrix fan-out
+  Critical path: stack/rust/crates/app/clippy/default -> stack/rust/crates/app/build/default -> stack/rust/crates/app/nextest/default/shard-1-of-2 (3 tasks)
+  Clippy memory groups: 1; barriers: 0
+  Cache layers: Mise tools, Cargo sources, MBX compilation objects
+  Actionlint: 1.7.12 pinned
+  Action pins: 7
+    - actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+    - actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+    - actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+    - actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+    - actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+    - jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
+    - jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6
+  Ineligible: stack/rust/crates/tool/doctest/default has no test targets; no test command emitted
+  Pull-request execution narrows crate obligations through its event-time affected-work plan.
+
+Required-check migration
+  Old: .github/workflows/velnor.yml (check: Velnor / Required)
+  New: .github/workflows/ci.yml (check: Required)
+  1. Merge the generator change so .github/workflows/ci.yml replaces .github/workflows/velnor.yml in one commit.
+  2. Let one .github/workflows/ci.yml run complete on the default branch so the Required check appears.
+  3. In branch protection, require Required and remove Velnor / Required; never remove the old check before the new one exists. [EXTERNAL: repository admin]
+
+Recommendations
+  mise.lock not found; Velnor will not create or refresh it
+  mise.toml not found; Velnor will use its pinned tools
+  rust-toolchain.toml not found; Velnor will not create it
+  tool_install_unverified:7 installs skip verification (no mise.lock): actionlint@1.7.12, gh@2.102.0, mr-boxington@1.21.1, nextest@0.9.146, rust@1.98.1, shellcheck@0.11.0, zizmor@1.30.1; install on the CI platform and commit the resulting lock

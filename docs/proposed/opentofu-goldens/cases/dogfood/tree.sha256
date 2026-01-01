@@ -1,0 +1,17 @@
+4778fbe08a93634a2e5d2f4dfa53dceb2694697b5bd53aaf8cd1bc6eb164bde9  ./.github/AGENTS.md
+a2f39606320ce3532d2d65cd0a176e5070e06d8d57fb05e6ac51101f01628487  ./.github/actionlint.yaml
+ccfade8d04433e121d27cb7574c0c2a7581ad1e873015e42eaee74fed929e6b9  ./.github/actions/generator-release-attest-linux/action.yml
+f368b21af8d289fcbaa06526fd178cc763c3d7621f74b4c119093e09c132f914  ./.github/actions/generator-release-attest-macos/action.yml
+f17860d10bc7578408abbb3a93ab1a488a70e4c24bfce60a9b7a2509bfb9ce65  ./.github/actions/generator-release-build-linux/action.yml
+81ac0c6db978e99e9e0a2fb3320f37f38decb5f9549d82aaa767193722750baf  ./.github/actions/generator-release-build-macos/action.yml
+3ab818a3d6ee584651e3738d931fe73c30d4d595fe6de2c0e8b7dbbca5ce2e02  ./.github/actions/generator-release-manifest/action.yml
+4b1a95e8beff06755ba2df22dcbf87fd920fd68d1a93c045c7317b266f57398d  ./.github/actions/generator-release-publish/action.yml
+584d8733d1e0da7a1f555bcac0fa52b30e085af6c60c0a4e1aee6a888281ac64  ./.github/actions/generator-release-qualify-linux/action.yml
+780f44c8ef91eda112a936d202ad2928c4a9f5b5d2c27e541b00ef8ee7efd9ce  ./.github/actions/generator-release-qualify-macos/action.yml
+c1098afeb9f939f0f9518dca251ae6e8207d75a18aee0ab0e7dc16655b176551  ./.github/workflows/ci.yml
+c6873ba49e8c184dd71d7b80d55c9734ee4e491429a798f07d7e3c66285d729b  ./.github/workflows/freshness.yml
+19e2bd864927b8b277d79b75d672f6bf344c1530252061686bcaf3e7f05e809c  ./.github/workflows/generator-release.yml
+cdd06e788409b7aa9fed9018d255e28b921c751f2c59bd4536dc47d7af168094  ./.github/workflows/image-release.yml
+46f2851bfb01376dbeabf46cdd80b12701d636beb16f0a46a329dc5eca284728  ./.github/workflows/macos-binary-release.yml
+9b7a474d8833caddd8128759eed845357847ced89a329ae81e65d1f045829fd8  ./.github/workflows/qualification.yml
+link ./.github/CLAUDE.md -> AGENTS.md

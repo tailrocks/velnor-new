@@ -1,0 +1,99 @@
+# alint-policy fixture rust-max-lines/fail: derived from .alint.yml.
+# alint-policy fixture: comments carry no policy weight.
+# alint-policy fixture: comments carry no policy weight.
+# alint-policy fixture: comments carry no policy weight.
+# alint-policy fixture: comments carry no policy weight.
+# alint-policy fixture: comments carry no policy weight.
+# alint-policy fixture: comments carry no policy weight.
+# alint-policy fixture: comments carry no policy weight.
+# alint-policy fixture: comments carry no policy weight.
+# alint-policy fixture: comments carry no policy weight.
+# alint-policy fixture: comments carry no policy weight.
+# alint-policy fixture: comments carry no policy weight.
+# alint-policy fixture: comments carry no policy weight.
+# alint-policy fixture: comments carry no policy weight.
+# alint-policy fixture: comments carry no policy weight.
+# alint-policy fixture: comments carry no policy weight.
+# alint-policy fixture: comments carry no policy weight.
+# alint-policy fixture: comments carry no policy weight.
+# alint-policy fixture: comments carry no policy weight.
+version: 1
+
+# alint-policy fixture: comments carry no policy weight.
+# alint-policy fixture: comments carry no policy weight.
+# alint-policy fixture: comments carry no policy weight.
+ignore:
+  - "fixtures/**"
+
+rules:
+  # alint-policy fixture: comments carry no policy weight.
+  - id: required-files
+    kind: file_exists
+    paths:
+      - Cargo.toml
+      - Cargo.lock
+      - clippy.toml
+      - deny.toml
+      - rustfmt.toml
+      - CODEOWNERS
+      - .alint.yml
+      - .config/nextest.toml
+      - AGENTS.md
+    level: error
+    message: "Repo-shape file is missing (rust-quality-contract §1)"
+
+  # alint-policy fixture: comments carry no policy weight.
+  # alint-policy fixture: comments carry no policy weight.
+  # alint-policy fixture: comments carry no policy weight.
+  - id: claude-is-agents-symlink
+    kind: command
+    paths: "**/AGENTS.md"
+    command:
+      - sh
+      - -c
+      - 'dir=$(dirname "$1") && test -L "$dir/CLAUDE.md" && test "$(readlink "$dir/CLAUDE.md")" = AGENTS.md'
+      - alint-claude-link
+      - "{path}"
+    level: error
+    message: "Each AGENTS.md must have a sibling CLAUDE.md symlink to AGENTS.md"
+
+  # alint-policy fixture: comments carry no policy weight.
+  - id: agent-instructions-max-lines
+    kind: file_max_lines
+    paths: "**/AGENTS.md"
+    max_lines: 100
+    level: error
+    message: "AGENTS.md exceeds 100 lines; move detailed guidance into docs"
+
+  - id: agent-instructions-max-size
+    kind: file_max_size
+    paths: "**/AGENTS.md"
+    max_bytes: 16384
+    level: error
+    message: "AGENTS.md exceeds 16 KiB; move detailed guidance into docs"
+
+  # alint-policy fixture: comments carry no policy weight.
+  - id: crates-only
+    kind: file_absent
+    paths:
+      include: ["**/*.rs"]
+      exclude: ["crates/**"]
+    level: error
+    message: "First-party Rust sources MUST live under crates/"
+
+  # alint-policy fixture: comments carry no policy weight.
+  # alint-policy fixture: comments carry no policy weight.
+  # alint-policy fixture: comments carry no policy weight.
+  # alint-policy fixture: comments carry no policy weight.
+
+  - id: lib-main-max-lines
+    kind: file_max_lines
+    paths:
+      include:
+        - "crates/velnor-actions-*/src/lib.rs"
+        - "crates/velnor-actions-*/src/main.rs"
+        - "crates/velnor-runner/crates/*/src/lib.rs"
+        - "crates/velnor-runner/crates/*/src/main.rs"
+    max_lines: 150
+    level: error
+    message: "src/lib.rs and src/main.rs MUST stay under 150 physical lines (§5)"

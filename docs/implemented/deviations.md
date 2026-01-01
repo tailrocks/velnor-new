@@ -1,0 +1,90 @@
+# Recorded deviations (SHOULD rows)
+
+Per `docs/README.md`, a SHOULD recommendation may be changed only by
+recording the reason and impact. Each entry names the row, the chosen
+behavior, and why. MUST / MUST-NOT halves are unaffected and still bind.
+
+## RQ-4.1 — test layout (SHOULD: `src/<unit>/tests.rs`)
+
+Tests live in `crates/*/tests/impl_*.rs` behind a single `[[test]]` entry
+point per crate, not in `src/**/tests.rs` modules.
+
+- Reason: single-binary layout keeps production files free of test code and
+  gives one deterministic test target per crate (`autotests = false`).
+- Impact: none on enforcement — V1 MUST NOT enforce layout via a custom
+  parser, and `.alint.yml` explicitly disclaims layout enforcement
+  (MUST-NOT halves honored).
+- Status: accepted deviation, no expiry.
+
+## RQ-4.3 — integration entry naming (SHOULD: `tests/integration.rs` + `tests/cases/`)
+
+Entry points are named `tests/velnor_<crate>.rs` with case files as
+`tests/impl_*.rs` siblings, not `tests/integration.rs` + `tests/cases/`.
+
+- Reason: per-crate entry names stay unique and greppable in an 8-crate
+  workspace; `impl_*.rs` siblings avoid an extra directory level.
+- Impact: none on the MUST-NOT half (no binary per case), pinned by
+  `test_entries_match_layout_and_stay_far_below_cases`: one `[[test]]`
+  entry per crate, except orchestrator which honestly carries a second
+  hermetic `validation_failure` target; every crate holds at least 10x
+  more cases than entries (`autotests = false` throughout).
+- Status: accepted deviation, no expiry.
+
+## RQ-4.7 — `proptest` (SHOULD: cover parsers/planners/invariants)
+
+No `proptest` dependency yet; parsers and planners are covered by
+hand-written boundary fixtures instead.
+
+- Reason: parsers/planners are small total functions whose edge inputs are
+  enumerated by hand-written boundary/failure cases
+  (`fixtures_stay_independent_and_cover_failures` pins >=50 such cases
+  and independent `TempDir`/`fresh_tempdir` fixtures); adding `proptest`
+  now would widen the external set against the RQ-7.1 narrowness rule
+  for unproven gain.
+- Impact: no property coverage until the risk-triggered rollout fires;
+  example coverage carries parser/plan invariants meanwhile.
+- Status: reviewed 2026-09-29; revisit when the first risk trigger fires
+  per [verification-triggers.md](verification-triggers.md) or at V1
+  code-complete, whichever is first.
+
+## RQ-2.12 — `mise.lock` absent (no deviation)
+
+`mise.lock` does not exist at HEAD. This is the specified state: the file is
+optional and repo-owned, and Velnor MUST NOT create or refresh it.
+Recorded here only to close the audit row explicitly.
+
+## VER-0.1 — version-policy file shape (residual gap, not a deviation)
+
+`.velnor/version-policy.toml` now carries the §0 header (`schema`, `channel`,
+`check_interval_hours`, `max_exception_days`) plus the catalog-mirror
+sections. The fuller §2 registry/source-rule prose lives in the normative
+spec, not duplicated into the file. No deviation is claimed: the file holds
+every machine-checked field, and the mirror equality test still passes.
+
+## S10/D6 — manifest content is consumer-asserted audit data (residual, not a deviation)
+
+Neither the pre-seed nor the candidate manifest is content-revalidated at
+merge. The pre-seed manifest is audit-only by design (pre-seed is
+trust-on-review: a PR self-check on its own bytes would be circular, so
+the trust root is human review of the pre-seed source and workflow).
+The candidate manifest is verified by consumers with the emitted shell
+script before any candidate command runs (cache-contract §4), and the
+merge re-checks the head binding via the S3 attestation
+(`commit == plan.head`) plus the candidate job's needs conclusion; the
+remaining fields (`sha256`/`toolchain`/`target`) are consumer-asserted
+at merge time. No deviation is claimed: every stated check runs where
+stated, and the policy texts (cache-contract §4, `candidate_manifest`
+docs, `preseed` docs, merge-request docs) agree on the split.
+
+## D7 — needs-inventory integrity rests on workflow review (residual, not a deviation)
+
+`VELNOR_NEEDS_EXPECTED` is generated YAML consumed as the merge's
+required-inventory ground truth. The freshness gate that would catch a
+hand edit lives in the same file it verifies, so an edit that shrinks
+the inventory and neuters the freshness check is self-consistent
+against every code check. The control is procedural: generated
+workflow files change only through reviewed PRs (repo `CODEOWNERS`
+covers `.github/workflows/`; branch protection enforces review), and
+inventory/condition edits are security-sensitive by policy
+([classification.md](classification.md)). No deviation is claimed: no
+code check promises tamper-evidence for the committed `needs` set.

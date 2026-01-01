@@ -1,0 +1,25 @@
+velnor-actions: WARNING: .velnor/release-manifest.json is absent; generated workflows use a debug-only stand-in that MUST NOT ship
+Preview: <preview>
+Repository: <repo>
+.github/AGENTS.md
+.github/CLAUDE.md
+.github/actionlint.yaml
+.github/actions/generator-release-attest-linux/action.yml
+.github/actions/generator-release-attest-macos/action.yml
+.github/actions/generator-release-build-linux/action.yml
+.github/actions/generator-release-build-macos/action.yml
+.github/actions/generator-release-manifest/action.yml
+.github/actions/generator-release-publish/action.yml
+.github/actions/generator-release-qualify-linux/action.yml
+.github/actions/generator-release-qualify-macos/action.yml
+.github/workflows/ci.yml
+.github/workflows/freshness.yml
+.github/workflows/generator-release.yml
+.github/workflows/image-release.yml
+.github/workflows/macos-binary-release.yml
+.github/workflows/qualification.yml
+mise.lock not found; Velnor will not create or refresh it
+mise.toml is read-only input; Velnor never modifies it
+rust-toolchain.toml not found; Velnor will not create it
+shadowed_nextest_config: .config/nextest.toml shadowed by crates/velnor-runner/.config/nextest.toml; profile selected from crates/velnor-runner/.config/nextest.toml
+tool_install_unverified:9 installs skip verification (no mise.lock): actionlint@1.7.12, cargo-deny@0.20.2, gh@2.102.0, mr-boxington@1.21.1, nextest@0.9.146, opentofu@1.13.1, rust@1.98.1, shellcheck@0.11.0, zizmor@1.30.1; install on the CI platform and commit the resulting lock

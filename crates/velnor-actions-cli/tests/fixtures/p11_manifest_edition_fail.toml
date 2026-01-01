@@ -1,0 +1,6 @@
+# Negative fixture: literal wrong edition (rejected by the
+# inheritance-aware edition rule: members must declare
+# `edition.workspace = true`, never a literal).
+[package]
+name = "p11-edition-fail"
+edition = "2021"

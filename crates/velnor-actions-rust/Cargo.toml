@@ -1,0 +1,20 @@
+[package]
+name = "velnor-actions-rust"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+autotests = false
+
+[lints]
+workspace = true
+
+[dependencies]
+velnor-actions-contract = { version = "=0.1.1", path = "../velnor-actions-contract" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { version = "=0.9.12" }
+
+[[test]]
+name = "velnor_rust"
+path = "tests/velnor_rust.rs"

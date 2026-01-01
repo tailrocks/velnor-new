@@ -1,0 +1,66 @@
+# Legacy disposition
+
+`tailrocks/velnor` main `3f6633252963efef0d71244aadae36516a11601e`. Two open
+draft PRs, zero reviews, zero comments. Neither draft is production proof.
+Unmerged safety fixes are ported as invariants and retested. They are not
+assumed correct and they are not dropped.
+
+Legacy runner license is Apache-2.0 only. This repository is MIT OR Apache-2.0.
+Do not copy legacy blobs and relabel them.
+
+## PR 1135 head `3074bb36` (unchanged)
+
+Port once into the typed artifact path. The schema-2 copies are the same
+invariant and are `superseded`.
+
+| Path | Bucket | Reason |
+|---|---|---|
+| `crates/velnor-workflow/README.md` | adapt with tests | Stage, immutable artifact id, fresh verifier, consumers depend on verification. Put that in the new tests, not this README. |
+| `crates/velnor-workflow/src/config/mod.rs` | adapt with tests | Case-insensitive exact and ancestor path collisions fail. |
+| `crates/velnor-workflow/src/primitives/check_profiles.rs` | adapt with tests | Stage regular non-empty files, upload that tree, download by immutable artifact id, reject symlink ancestors, consumers need the verifier. |
+| `crates/velnor-workflow/src/s2/config/mod.rs` | superseded | Duplicate of the schema-1 collision check. |
+| `crates/velnor-workflow/src/s2/primitives/check_profiles.rs` | superseded | Second renderer of the same verifier. |
+
+## PR 1133 head `a2a4d9f4` (moved, five commits past `27049c4`)
+
+New commits: omitted group echoes, sandbox clippy, group proof for id adoption,
+socket lint, fail closed on missing BuildKit claims. Read the new head.
+
+| Path | Bucket | Reason |
+|---|---|---|
+| `Cargo.lock`, `Cargo.toml`, `README.md` | out of current scope | Old workspace metadata and Pages docs. |
+| `crates/velnor-control/src/journal.rs` | adapt with tests | Intent before side effects; draining advertises no new capacity; provisional acquire is not ownership. Full reducer was not line-audited. |
+| `crates/velnor-model/src/scheduler.rs` | adapt with tests | Go null/zero decoding; demand is `totalAssignedJobs`; header `X-ScaleSetMaxCapacity`; `disableUpdate` wire shape. Do not port the gate that rejects Scale Sets. |
+| `crates/velnor-runner/debian/*` | out of current scope | systemd and apt. This host is a LaunchAgent. |
+| `crates/velnor-runner/src/args.rs` | adapt with tests | Explicit scale-set mode. Do not add a native interpreter mode. |
+| `crates/velnor-runner/src/buildkit.rs` | adapt with tests | Missing or symlink claims do not delete shared builders. Retest. |
+| `crates/velnor-runner/src/container.rs` | adapt with tests | Delete uses one exact id. Do not port the native job-container spec. |
+| `crates/velnor-runner/src/docker/client.rs` | out of current scope | Test visibility only. |
+| `crates/velnor-runner/src/docker_lease.rs` | adapt with tests | Exact ids, no prefix delete, foreign objects survive, volume delete is double-attested. Rest of the file was not line-audited. |
+| `crates/velnor-runner/src/execution/docker.rs`, `execution/mod.rs`, `execution/tests.rs`, `preflight.rs`, `tests/jobs_slice.rs` | adapt with tests | Do not inject hidden per-slot CPU or memory ceilings and then claim the same profile. |
+| `crates/velnor-runner/src/executor.rs` | superseded | Native Actions interpreter. |
+| `crates/velnor-runner/src/main.rs` | out of current scope | Version string only. |
+| `crates/velnor-runner/src/node/controller.rs` | out of current scope | Counter and clippy, not an identity rule. |
+| `crates/velnor-runner/src/node/exec.rs` | superseded | Missing mode must not default to a native interpreter. |
+| `crates/velnor-runner/src/runner.rs`, `service.rs` | adapt with tests | Scale-set mode does not start native slots and does not delete the set on restart. |
+| `crates/velnor-runner/src/scaleset/registration.rs` | adapt with tests | `disableUpdate=true` after create, adopt, and race. Omitted group echoes are not mismatches. Identity drift fails closed. |
+| `crates/velnor-runner/tests/scaleset_daemon.rs` | adapt with tests | Port the registration cases, not the old daemon harness. |
+| `crates/velnor-tools/src/evidence_check.rs` | adapt with tests | Duplicate keys and ids fail. One metadata stream plus one digest-matched archive for the immutable id. |
+| `crates/velnor-tools/src/github_live_collector.rs` | adapt with tests | Artifact URL, attempt, repository, and head SHA bind to one id. |
+| `crates/velnor-tools/src/lane_compare.rs` | adapt with tests | Full census. Duplicates fail. Unsafe URLs fail. |
+| `crates/velnor-workflow/src/candidate_sandbox.rs` | adapt with tests | Archive member limits and symlink escape. Not line-audited past those checks. |
+| `crates/velnor-workflow/src/config/mod.rs`, `lib.rs`, `scan/file_walk.rs`, `scan/mod.rs` | adapt with tests | Refuse a symlinked static source root. Port once. |
+| `crates/velnor-workflow/src/consumer_negatives.rs`, `primitives/ir.rs` | adapt with tests | Trusted pin and immutable commit identity. Unverified; retest. |
+| `crates/velnor-workflow/src/exec.rs` | adapt with tests | Subprocess cleanup is bounded and fail-closed. |
+| `crates/velnor-workflow/src/promote.rs` | adapt with tests | Failed promotion restores the previous output. |
+| `crates/velnor-workflow/src/s2/primitives/package_release.rs` | adapt with tests | Publish handoff uses the upload step's artifact id. Port once. |
+| `crates/velnor-workflow/src/s2/primitives/product_transport.rs`, `s2/provider.rs`, `s2/results.rs` | adapt with tests | Cached inspect is not readiness. Platform mismatch is not a skip. Live identity is independent of outcome policy. |
+| `crates/velnor-workflow/src/s2/**` twins of schema-1 files (`config`, `dispatch`, `mod`, `ir`, `reuse`, `runtime`, `scan`) | superseded | Do not keep a second generator. |
+| `crates/velnor-workflow/src/platform.rs` and `s2` alias-only renames (`docs_site`, `release`, `renovate`, `runtime_products`, `check_profiles` in this PR) | out of current scope | Rename only. Artifact rules are PR 1135. |
+| `crates/velnor-workflow/src/tui/**`, `s2/tui/**` | out of current scope | No TUI in this product. |
+| `crates/velnor-workflow/src/rust_include.rs` | out of current scope | Old include-macro resolver. |
+| `crates/velnor-workflow/tests/bootstrap_transport.rs`, `full_tree_replacement.rs` | adapt with tests | Archive rejection and static-generation ownership. Port the cases. |
+
+Copied reference material: none yet. Adapted invariants are the rows marked
+`adapt with tests`. Rejected wholesale: native interpreter, Debian packaging,
+TUI, schema-2 duplicate generator, and the scheduler gate that forbids Scale Sets.

@@ -1,0 +1,8 @@
+# Nextest profiles (Gate 0 skeleton).
+# Empty-run behavior is enforced via CLI `--no-tests fail` (contract §4);
+# nextest has no profile-level equivalent, so it is not set here.
+[profile.ci]
+retries = 0
+test-threads = "num-cpus"
+status-level = "all"
+final-status-level = "flaky"

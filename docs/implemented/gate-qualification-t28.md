@@ -1,0 +1,126 @@
+# T28 gate qualification record: full producer/qualification gate set
+
+T28 row contract (`docs/reviews/opentofu-evidence.md:47`): "Final full
+gate set incl. Gates 0–8 re-runs at final Phase-B source. No waived
+failures."
+
+Source identity: `667b692aafb7a8f2b00d9bc3bf9544dbf8b4d324` (accepted
+T27 landing commit) plus the comment-only fixes in the T28 commit
+itself (3 rustdoc one-word delinks + 1 shellcheck directive line; zero
+product bytes — verify with `git diff 667b692 <t28> -- .
+':!docs/implemented/gate-qualification-t28.md'`, which must show
+comment lines only). Every run below executed in a worktree at that
+identity; the full nextest suite was re-run after this doc landed to
+prove the record itself changes nothing.
+
+Machine: `arm64`, macOS 27.0. Toolchain: rustc/cargo 1.98.1, mise
+2026.9.16, nextest 0.9.146 via
+`mise x "aqua:nextest-rs/nextest/cargo-nextest@0.9.146"`, alint 0.17.0
+(local; CI pins 0.16.1 — skew recorded, not fixed), actionlint 1.7.12,
+shellcheck 0.11.0, zizmor 1.30.1, cargo-machete 0.9.2 (all via
+version-policy pins).
+
+## Gate results (every gate named, exact command + result + counts)
+
+| # | Gate | Command | Result |
+|---|------|---------|--------|
+| 1 | fmt | `cargo fmt --all -- --check` | PASS, exit 0, empty output (2 runs) |
+| 2 | clippy | `cargo clippy --locked --workspace --all-targets -- -D warnings` | PASS, exit 0 (2 runs) |
+| 3 | nextest | pinned `cargo nextest run --locked --workspace` | PASS, 2616/2616 + 1 skipped (2 full runs) |
+| 4 | alint | `alint validate-config && alint check --fail-on-warning` | PASS, exit 0, 3 pre-existing infos steady |
+| 5 | deny | `cargo deny check` (plain; `--locked` is a local CLI parse error per standing precedent) | PASS, advisories/bans/licenses/sources ok |
+| 6 | freshness | `bash scripts/check-freshness.sh` | PASS (`check-freshness: PASS`) |
+| 7 | doctests | `cargo test --locked --workspace --doc` | PASS, exit 0, 0 tests (vacuous across 7 lib suites) |
+| 8 | doc build | `cargo doc --locked --workspace --no-deps` | BEFORE: FAIL exit 101 (1 rustdoc error + 3 warnings); AFTER fix 1: PASS exit 0, 0 warnings |
+| 9 | verify-local | `bash scripts/verify-local.sh` | BEFORE: FAIL (`doc-velnor_actions_tofu`); AFTER fix 1: PASS (37 `ok:` stages, 0 `FAIL`) |
+| 10 | goldens | `bash scripts/capture-opentofu-goldens.sh check` | PASS, `ALL GOLDENS MATCH` 5/5 (2 runs: pre- and post-fix 2) |
+| 11 | Gates 0–8 keys | pinned nextest `-E` over the 53 prep-S2b names | PASS, 54/54 (G8 `candidate_never_plans…` exists in 2 suites) |
+| 12 | actionlint | pinned `actionlint -color` (shellcheck backend) | PASS, exit 0, no findings |
+| 13 | shellcheck | pinned `shellcheck -S warning` on verify-local/check-freshness/goldens scripts | BEFORE: 1 SC2046 warning; AFTER fix 2: exit 0 clean |
+| 14 | zizmor | pinned `zizmor --no-online-audits --config .zizmor.yml .github/workflows` | PASS, exit 0, no findings (1 suppressed) |
+| 15 | machete | pinned `cargo machete` over all 8 crates | PASS, zero unused deps in every crate |
+| 16 | real-binary tofu | pinned nextest hermetic realbin filter (default suite) | PASS, 9/9 |
+| 17 | ignored-live | pinned `cargo nextest list --run-ignored ignored-only --workspace` | exactly 1: `live_tofu_registry_init_downloads_provider` (documented `VELNOR_LIVE_TOFU=1` opt-in; stays ignored) |
+| 18 | branch CI | `gh run list --branch feat/native-opentofu` | no runs listed (workflows trigger on PR/main only; local gates + pinned re-runs are the signal until a PR opens) |
+
+## Fixed failures (before/after, narrowest layer)
+
+Fix 1 — rustdoc private-link error (failing gates: doc build #8,
+verify-local #9). `cargo doc` failed with `error: public
+documentation for 'parser_json' links to private item
+'crate::parser::Walk'` at
+`crates/velnor-actions-tofu/src/parser_json.rs:3`, plus 3
+`redundant explicit link target` warnings (`argv.rs:3`, `family.rs:4`,
+`parser_json.rs:3`). Latent since T10: no root gate builds docs and
+no branch CI exists to run the per-crate doc job. Fix: delink three
+one-word doc references to plain code ticks (comment-only, zero
+product bytes, no behavior change). After: `cargo doc --locked
+--workspace --no-deps` exit 0 with 0 warnings; `verify-local.sh`
+PASS 37/37. No new tests: the doc gate itself is the regression pin
+(any future broken link re-fails gate #8).
+
+Fix 2 — stale shellcheck directive (gate-adjacent hygiene, no gate
+failed). Standalone shellcheck flagged `SC2046` at
+`scripts/capture-opentofu-goldens.sh:98` (`set -- $(setup_case
+"$case")`); the pre-existing `# shellcheck disable=SC2086` no longer
+covers the command-substitution code under pinned shellcheck 0.11.0.
+The split is intentional (`$1 $2` consumed by `capture_case` on the
+next line). Fix: reason comment + extended directive
+`SC2086,SC2046` (comment-only). After: shellcheck exit 0 on all
+three scripts; `bash -n` clean; goldens re-run `ALL MATCH`.
+
+Zero removed assertions; zero `#[allow]` added (product `#[allow]`
+count stays 0); all existing pins green and behavior-identical (the
+4-file diff is comment-only by inspection).
+
+## Recorded out-of-scope gaps (evidence, not fixed, not waived)
+
+- 3 freshness `temporary_holds` (rust 1.98.1, jdx/mise-action v5.0.0,
+  asamarts/alint v0.16.1) expire 2026-10-15 (issue #6); valid today,
+  re-check at any later identity or `exception-expiry` fails.
+- `--check-upstream` (weekly-job mode, not a root gate): 10+
+  `upstream-probe` rows fail — all `lookup_failed (HTTP Error 403:
+  rate limit exceeded)` on api.github.com (environmental, same class
+  as the Phase-A M8 verdict) except `rust: stale pin 1.98.1 vs
+  1.99.0`, which is the held pin above. Plain gate #6 unaffected.
+- Gate-6 probe UNPASSED (`gate-6-task-result-reuse.md:10`, mise
+  `--file` blocker) — standing documented state, T29+ scope.
+- Perf gaps ledger (`performance-p13.md`, `performance.md`,
+  `cache-measurements.md` UNPASSED/UNMEASURED rows), NEEDS-HUMAN
+  seed/release halves (`release-gates.md`, gate-8 follow-ups) —
+  standing documented state, T29+ scope.
+- 1 ignored live test (gate #17) — documented network opt-in, not a
+  waiver: `#[ignore]` count is 1 + 1 doc mention; debt-marker count 0;
+  `todo!`/`unimplemented!`/`panic!`/`.unwrap()` in `crates/*/src` 0;
+  `deny.toml ignore = []`; freshness `exceptions: []`.
+
+## Local-vs-CI deltas (named, not hand-waved)
+
+- Local gates run workspace-wide; CI runs per-crate with `mbx`
+  wrappers, `--offline`, and `write-task-report-v1` sidecars.
+  verify-local.sh (gate #9, PASS) mirrors the CI per-crate shape
+  including `--offline` and is the closest local analog.
+- Local nextest uses the default profile; CI uses `--profile ci`.
+  verify-local's per-crate `test-*` stages run the `ci` profile
+  (all `ok:`), covering the delta.
+- Doctest gate is vacuous locally (0 tests) and CLI has no doctest
+  step in either CI or verify-local — mirrored exactly.
+- Local alint 0.17.0 vs CI 0.16.1: same exit-0 verdict with the same
+  3 infos; version skew only.
+- `cargo deny check --locked` is a local CLI parse error; plain
+  `cargo deny check` is the working gate (standing precedent).
+- Branch CI has never run (gate #18); per-crate CI jobs are
+  unexecuted by design until a PR opens.
+
+## 2026-10-02 fix: opentofu install for tofu-spawning suites (PR #10 CI)
+
+Residual from this qualification: branch CI never ran before PR #10,
+so the hermetic violation slipped all local gates — the
+`velnor-actions-mise` crate job installed rust+mbx+nextest but not
+opentofu while its suite spawns real `tofu` (`tofu_exec`), failing 4
+realbin tests with `mise WARN opentofu@1.13.1 is not installed and
+auto-install is disabled` (PR #10 run 36991743365 job 110789858438;
+independent repro run 36992365509). Fixed in this commit via the
+`TOFU_EXEC_SUITES` classification (`matrix_tools.rs`): the mise job's
+`Prepare pinned tools` step installs `opentofu@1.13.1`, nothing else
+changes.

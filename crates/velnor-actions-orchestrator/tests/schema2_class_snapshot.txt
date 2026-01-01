@@ -1,0 +1,329 @@
+  composite-hosted:
+    name: Composite / GitHub hosted
+    if: inputs.mode == 'composite'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"
+      - name: Local composite
+        uses: ./qualification/actions/composite # zizmor: ignore[self-repository]
+  composite-scale-set:
+    name: Composite / Velnor Scale Set
+    if: inputs.mode == 'composite'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"
+      - name: Local composite
+        uses: ./qualification/actions/composite # zizmor: ignore[self-repository]
+  js-pin-hosted:
+    name: Pinned JavaScript / GitHub hosted
+    if: inputs.mode == 'js-pin'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - name: Pinned script
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        with:
+          script: console.log('js-pin-ok')
+  js-pin-scale-set:
+    name: Pinned JavaScript / Velnor Scale Set
+    if: inputs.mode == 'js-pin'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
+    steps:
+      - name: Pinned script
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        with:
+          script: console.log('js-pin-ok')
+  docker-action-hosted:
+    name: Docker action / GitHub hosted
+    if: inputs.mode == 'docker-action'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"
+      - name: Local docker
+        uses: ./qualification/actions/docker # zizmor: ignore[self-repository]
+  docker-action-scale-set:
+    name: Docker action / Velnor Scale Set
+    if: inputs.mode == 'docker-action'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"
+      - name: Local docker
+        uses: ./qualification/actions/docker # zizmor: ignore[self-repository]
+  container-hosted:
+    name: Container / GitHub hosted
+    if: inputs.mode == 'container'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: sh -e {0}
+    container: alpine:3.22
+    services:
+      redis:
+        image: redis:7-alpine
+        options: "--health-cmd \"redis-cli ping\" --health-interval 5s --health-timeout 5s --health-retries 12"
+        ports:
+          - "6379:6379"
+    steps:
+      - name: Service DNS
+        shell: sh
+        run: "i=0; while [ \"$i\" -lt 20 ]; do nc -z -w 1 redis 6379 && exit 0; i=$((i+1)); sleep 1; done; exit 1"
+  container-scale-set:
+    name: Container / Velnor Scale Set
+    if: inputs.mode == 'container'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: sh -e {0}
+    container: alpine:3.22
+    services:
+      redis:
+        image: redis:7-alpine
+        options: "--health-cmd \"redis-cli ping\" --health-interval 5s --health-timeout 5s --health-retries 12"
+        ports:
+          - "6379:6379"
+    steps:
+      - name: Service DNS
+        shell: sh
+        run: "i=0; while [ \"$i\" -lt 20 ]; do nc -z -w 1 redis 6379 && exit 0; i=$((i+1)); sleep 1; done; exit 1"
+  outputs-scale-set:
+    name: Outputs / Velnor Scale Set
+    if: inputs.mode == 'outputs'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
+    outputs:
+      proof: ${{ steps.emit.outputs.proof }}
+    steps:
+      - name: Write output env and path
+        id: emit
+        run: "mkdir -p \"$RUNNER_TEMP/g4-bin\" && printf '%s\\n' '#!/bin/sh' 'echo path-ok' > \"$RUNNER_TEMP/g4-bin/g4-path-ok\" && chmod +x \"$RUNNER_TEMP/g4-bin/g4-path-ok\" && echo proof=outputs-ok >> \"$GITHUB_OUTPUT\" && echo G4_ENV=outputs-ok >> \"$GITHUB_ENV\" && echo \"$RUNNER_TEMP/g4-bin\" >> \"$GITHUB_PATH\""
+      - name: Check env and path
+        run: "test \"$G4_ENV\" = outputs-ok && g4-path-ok | grep -qx path-ok"
+  outputs-hosted:
+    name: Outputs / GitHub hosted
+    if: inputs.mode == 'outputs'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    needs:
+      - outputs-scale-set
+    steps:
+      - name: Check job output
+        env:
+          PROOF: ${{ needs.outputs-scale-set.outputs.proof }}
+        run: "test \"$PROOF\" = outputs-ok"
+  mask-hosted:
+    name: Mask / GitHub hosted
+    if: inputs.mode == 'mask'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - name: Mask canary
+        run: "echo \"::add-mask::g4-mask-canary\" && echo g4-mask-canary"
+  mask-scale-set:
+    name: Mask / Velnor Scale Set
+    if: inputs.mode == 'mask'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
+    steps:
+      - name: Mask canary
+        run: "echo \"::add-mask::g4-mask-canary\" && echo g4-mask-canary"
+  cache-scale-set:
+    name: Cache / Velnor Scale Set
+    if: inputs.mode == 'cache'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Write cache file
+        run: echo cache-ok > g4-cache.txt
+      - name: Save cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: g4-cache.txt
+          key: g4-cache-${{ github.run_id }}
+  cache-hosted:
+    name: Cache / GitHub hosted
+    if: inputs.mode == 'cache'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    needs:
+      - cache-scale-set
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Restore cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: g4-cache.txt
+          key: g4-cache-${{ github.run_id }}
+          fail-on-cache-miss: "true"
+      - name: Check restore
+        run: grep -qx cache-ok g4-cache.txt
+  oidc-hosted:
+    name: OIDC / GitHub hosted
+    if: inputs.mode == 'oidc'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Require OIDC request URL
+        run: "test -n \"$ACTIONS_ID_TOKEN_REQUEST_URL\""
+  oidc-scale-set:
+    name: OIDC / Velnor Scale Set
+    if: inputs.mode == 'oidc'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Require OIDC request URL
+        run: "test -n \"$ACTIONS_ID_TOKEN_REQUEST_URL\""
+  post-fail-hosted:
+    name: Post failure / GitHub hosted
+    if: inputs.mode == 'post-fail'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"
+      - name: Main fails post runs
+        uses: ./qualification/actions/post-fail # zizmor: ignore[self-repository]
+  post-fail-scale-set:
+    name: Post failure / Velnor Scale Set
+    if: inputs.mode == 'post-fail'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"
+      - name: Main fails post runs
+        uses: ./qualification/actions/post-fail # zizmor: ignore[self-repository]
+  cancel-hosted:
+    name: Cancel / GitHub hosted
+    if: inputs.mode == 'cancel'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - name: Sleep until cancelled
+        run: sleep 180
+  cancel-scale-set:
+    name: Cancel / Velnor Scale Set
+    if: inputs.mode == 'cancel'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
+    steps:
+      - name: Sleep until cancelled
+        run: sleep 180
+  compose-hosted:
+    name: Compose / GitHub hosted
+    if: inputs.mode == 'compose'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"
+      - name: Start compose
+        run: docker compose -f qualification/compose/stack.yml up -d --wait
+      - name: Prove both services
+        run: "docker compose -f qualification/compose/stack.yml ps --services --status running > \"$RUNNER_TEMP/g4-compose-ps\" && grep -qx api \"$RUNNER_TEMP/g4-compose-ps\" && grep -qx db \"$RUNNER_TEMP/g4-compose-ps\""
+      - name: Remove compose
+        run: docker compose -f qualification/compose/stack.yml down --volumes
+      - name: Record compose
+        run: echo compose-ok
+  compose-scale-set:
+    name: Compose / Velnor Scale Set
+    if: inputs.mode == 'compose'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"
+      - name: Start compose
+        run: docker compose -f qualification/compose/stack.yml up -d --wait
+      - name: Prove both services
+        run: "docker compose -f qualification/compose/stack.yml ps --services --status running > \"$RUNNER_TEMP/g4-compose-ps\" && grep -qx api \"$RUNNER_TEMP/g4-compose-ps\" && grep -qx db \"$RUNNER_TEMP/g4-compose-ps\""
+      - name: Remove compose
+        run: docker compose -f qualification/compose/stack.yml down --volumes
+      - name: Record compose
+        run: echo compose-ok
+  bind-hosted:
+    name: Bind / GitHub hosted
+    if: inputs.mode == 'bind'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - name: Bind workspace file
+        run: "printf '%s\\n' bind-ok > \"$GITHUB_WORKSPACE/g4-bind.txt\" && docker run --rm -v \"$GITHUB_WORKSPACE/g4-bind.txt:/g4-bind.txt:ro\" alpine:3.22 cat /g4-bind.txt > \"$RUNNER_TEMP/g4-bind-out\" && grep -qx bind-ok \"$RUNNER_TEMP/g4-bind-out\""
+  bind-scale-set:
+    name: Bind / Velnor Scale Set
+    if: inputs.mode == 'bind'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
+    steps:
+      - name: Bind workspace file
+        run: "printf '%s\\n' bind-ok > \"$GITHUB_WORKSPACE/g4-bind.txt\" && docker run --rm -v \"$GITHUB_WORKSPACE/g4-bind.txt:/g4-bind.txt:ro\" alpine:3.22 cat /g4-bind.txt > \"$RUNNER_TEMP/g4-bind-out\" && grep -qx bind-ok \"$RUNNER_TEMP/g4-bind-out\""
