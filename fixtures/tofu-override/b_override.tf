@@ -1,0 +1,3 @@
+variable "level" {
+  default = "b"
+}

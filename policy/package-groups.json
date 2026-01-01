@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "groups": {
+    "velnor-actions-actionlint": "library",
+    "velnor-actions-cli": "tool",
+    "velnor-actions-contract": "library",
+    "velnor-actions-mise": "library",
+    "velnor-actions-orchestrator": "library",
+    "velnor-actions-rust": "library",
+    "velnor-actions-tofu": "library",
+    "velnor-actions-workflow-renderer": "library",
+    "velnor-archive-guard": "tool"
+  }
+}

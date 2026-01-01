@@ -1,0 +1,10 @@
+schema = 1
+protocol_repository = "actions/scaleset"
+protocol_sha = "e6daac702355cdb5b880b4fbdcf6d85dcd9e48e5"
+runner_repository = "actions/runner"
+runner_version = "2.337.0"
+runner_sha256 = "70920811a4f8ad4328818682bca5c6469c1c942fab52448868071d0063816613"
+runner_platform = "linux/amd64"
+base_image = "ubuntu:26.04"
+bollard = "=0.21.1"
+turso = "=0.8.1"
