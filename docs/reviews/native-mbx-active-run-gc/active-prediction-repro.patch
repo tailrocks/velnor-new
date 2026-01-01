@@ -1,0 +1,121 @@
+diff --git a/crates/mbx-cache-store/src/store_tests.rs b/crates/mbx-cache-store/src/store_tests.rs
+index 3def496..f0ec8c1 100644
+--- a/crates/mbx-cache-store/src/store_tests.rs
++++ b/crates/mbx-cache-store/src/store_tests.rs
+@@ -2364,3 +2364,116 @@ fn a_due_sweep_is_reported_without_being_claimed() {
+     );
+     assert!(sweep_is_due(store, Duration::ZERO));
+ }
++
++
++#[test]
++fn a_sweep_before_group_receipt_can_orphan_an_active_prediction() {
++    let source = tempfile::tempdir().unwrap();
++    let destination = tempfile::tempdir().unwrap();
++    let workspace = source.path().join("workspace");
++    std::fs::create_dir_all(&workspace).unwrap();
++    let group = "github-run-42/in-flight";
++    let identity = "4".repeat(64);
++    let action = store_result(source.path(), "active in-flight compiled action", &[]);
++
++    // A compiler has published its result and the agent holds its prediction,
++    // but Cargo has not returned yet, so commit_task_actions has not persisted
++    // the task manifest or group receipt. The live checkout alone has no roots.
++    record_checkout(
++        source.path(),
++        &identity,
++        &workspace,
++        &workspace.join("target"),
++    )
++    .unwrap();
++    gc(source.path(), 0).unwrap();
++    assert!(
++        LocalActionCache::new(source.path())
++            .find(&action)
++            .unwrap()
++            .is_none(),
++        "the collector has no on-disk receipt or committed task manifest to root"
++    );
++
++    // Cargo returns; ActionRun::commit now publishes the prediction and group receipt.
++    record_build_in_group(
++        source.path(),
++        &identity,
++        &workspace,
++        std::slice::from_ref(&action),
++        Some(group),
++    );
++    let archive = destination.path().join("job.tar");
++    let error = export_group(source.path(), group, &archive).unwrap_err();
++    println!("reproduced: {error:#}");
++    assert!(
++        format!("{error:#}").contains(&format!("action result is missing for {}", action.hash)),
++        "got {error:#}"
++    );
++}
++
++#[test]
++fn a_sweep_after_group_receipt_preserves_the_current_export_closure() {
++    let source = tempfile::tempdir().unwrap();
++    let destination = tempfile::tempdir().unwrap();
++    let workspace = source.path().join("workspace");
++    std::fs::create_dir_all(&workspace).unwrap();
++    let group = "github-run-42/completed";
++    let identity = "5".repeat(64);
++    let action = store_result(source.path(), "completed action", &[]);
++
++    // Model a fully returned Cargo command: ActionRun::commit has persisted
++    // the completed group's receipt before the explicit collector starts.
++    record_build_in_group(
++        source.path(),
++        &identity,
++        &workspace,
++        std::slice::from_ref(&action),
++        Some(group),
++    );
++
++    // An imported, unrooted candidate is old cache state, not active work.
++    let stale_output = store_object(source.path(), &vec![b'x'; 4_096]);
++    store_result(source.path(), "unrooted imported candidate", &[stale_output]);
++    let outcome = gc(source.path(), 1_024).unwrap();
++    assert!(outcome.removed_objects > 0);
++    assert!(
++        LocalActionCache::new(source.path())
++            .find(&action)
++            .unwrap()
++            .is_some(),
++        "the completed group's receipt keeps its action result rooted"
++    );
++
++    let archive = destination.path().join("job.tar");
++    export_group(source.path(), group, &archive).unwrap();
++    assert!(archive.is_file());
++    println!("post-task collection preserved the completed group and export succeeded");
++}
++
++#[test]
++fn a_sweep_after_group_receipt_can_still_evict_it_over_budget() {
++    let source = tempfile::tempdir().unwrap();
++    let destination = tempfile::tempdir().unwrap();
++    let workspace = source.path().join("workspace");
++    std::fs::create_dir_all(&workspace).unwrap();
++    let group = "github-run-42/over-budget";
++    let identity = "6".repeat(64);
++    let output = store_object(source.path(), &vec![b'x'; 4_096]);
++    let action = store_result(source.path(), "completed action larger than budget", &[output]);
++    record_build_in_group(
++        source.path(),
++        &identity,
++        &workspace,
++        std::slice::from_ref(&action),
++        Some(group),
++    );
++
++    // Group receipts are collector roots, but the store may evict rooted
++    // objects once their closure itself cannot fit within the requested budget.
++    gc(source.path(), 1_024).unwrap();
++    let archive = destination.path().join("job.tar");
++    let error = export_group(source.path(), group, &archive).unwrap_err();
++    println!("over-budget post-task collection: {error:#}");
++    assert!(format!("{error:#}").contains("cache object is missing for"));
++}

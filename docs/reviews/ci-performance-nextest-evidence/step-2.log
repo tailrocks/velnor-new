@@ -1,0 +1,28 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.00s
+────────────
+ Nextest run ID 473fb18b-1665-4964-bd3b-67afda2f0fbc with nextest profile: default
+    Starting 1 test across 1 binary
+        FAIL [   0.009s] (1/1) velnor-c08-probe injected_failure
+  stdout ───
+
+    running 1 test
+    test injected_failure ... FAILED
+
+    failures:
+
+    failures:
+        injected_failure
+
+    test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+  stderr ───
+
+    thread 'injected_failure' (277420348) panicked at src/lib.rs:2:25:
+    C08_INJECTED_FAILURE
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+  Cancelling due to test failure: 
+────────────
+     Summary [   0.012s] 1 test run: 0 passed, 1 failed, 0 skipped
+        FAIL [   0.009s] (1/1) velnor-c08-probe injected_failure
+error: test run failed

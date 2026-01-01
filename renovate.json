@@ -1,0 +1,44 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Velnor V1: propose ALL updates (major + minor/patch) as reviewed changes; never merge, never touch tool inputs.",
+  "extends": ["config:recommended"],
+  "enabledManagers": ["cargo", "github-actions"],
+  "cargo": {
+    "enabled": true
+  },
+  "github-actions": {
+    "enabled": true
+  },
+  "packageRules": [
+    {
+      "description": "Cargo majors need explicit migration review (VER-3.2: incompatible = migration, never silent).",
+      "matchManagers": ["cargo"],
+      "matchUpdateTypes": ["major"],
+      "labels": ["dependencies", "major", "needs-migration-review"]
+    },
+    {
+      "description": "Cargo minor/patch updates ride the normal qualification gate.",
+      "matchManagers": ["cargo"],
+      "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
+      "labels": ["dependencies"],
+      "groupName": "cargo minor/patch"
+    },
+    {
+      "description": "Refresh only Velnor-owned pins/locks; never propose tool-input edits (VER-3.4). Defense-in-depth: mise is not in enabledManagers, so this rule only bites if mise is ever enabled.",
+      "matchManagers": ["mise"],
+      "matchFileNames": ["mise.toml", "mise.lock", "rust-toolchain.toml"],
+      "enabled": false
+    },
+    {
+      "description": "The alint pin is a reviewed policy pin; changes need policy review.",
+      "matchManagers": ["github-actions"],
+      "matchPackageNames": ["asamarts/alint"],
+      "labels": ["dependencies", "policy-review"]
+    }
+  ],
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": ["dependencies", "security", "expedited"]
+  },
+  "dependencyDashboard": true
+}

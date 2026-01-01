@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Velnor dogfood test entrypoint (also Nextest detector evidence).
+set -euo pipefail
+cargo nextest run --locked --profile ci --no-tests fail "$@"

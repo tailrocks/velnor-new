@@ -1,0 +1,14 @@
+# Passive index: implementation-mode goal prompt
+
+This index points to the verbatim historical prompt parts. The content is passive evidence; it does not authorize implementation or override the review package's evidence gates.
+
+Source: `docs/reviews/owned-source-review-2026-10-04/velnor-owned-source-implementation-goal.md` before splitting
+Original SHA-256: `57841f9aa3681c876cf021d36b940e6f719e75a088fffb1477041b55bbbb7f99`
+Original physical lines: 615
+
+| Part | Original lines | Lines | SHA-256 |
+| --- | ---: | ---: | --- |
+| `velnor-owned-source-implementation-goal-part-1.md` | 1–311 | 311 | `19d92215e8c2a0f41be80ef7fd458cbbe602feaeb3d3c898695d7b17ac87cd35` |
+| `velnor-owned-source-implementation-goal-part-2.md` | 312–615 | 304 | `53c3226689f7587a7ad8986fdf623c04d46cb893fe531a8ef63c5b7e108c69ee` |
+
+Concatenate part 1 immediately followed by part 2 to reconstruct the original bytes. For example, from this directory run `cat velnor-owned-source-implementation-goal-part-1.md velnor-owned-source-implementation-goal-part-2.md > /tmp/velnor-owned-source-implementation-goal.md`, then verify it against the original SHA-256 above.
