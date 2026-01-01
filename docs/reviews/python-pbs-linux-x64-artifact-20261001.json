@@ -1,0 +1,39 @@
+{
+  "schema": 1,
+  "status": "ARTIFACT_BYTES_VERIFIED_HOSTED_RUNTIME_PENDING",
+  "scope": "Pin the x86_64 Linux CPython 3.14.8 PBS artifact and extraction layout used by generator-owned no-config Mise installs.",
+  "python_version": "3.14.8",
+  "mise_version": "2026.9.18",
+  "distribution": {
+    "repository": "astral-sh/python-build-standalone",
+    "release_tag": "20261001",
+    "asset": "cpython-3.14.8+20261001-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz",
+    "download_url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261001/cpython-3.14.8%2B20261001-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz",
+    "api_asset_digest": "sha256:b373a4a4e4e70fc05f368c9b53d7738bf37637682b650d96c742805d2da26c32",
+    "downloaded_archive_sha256": "b373a4a4e4e70fc05f368c9b53d7738bf37637682b650d96c742805d2da26c32",
+    "size_bytes": 36292523,
+    "archive_root": "python/",
+    "selected_binary_member": "python/bin/python3.14",
+    "selected_binary_sha256": "4b67d7e58e4e3f58339106f9192dbd66421608dc2fcc6a705b20115ba588232b",
+    "api_digest_matches_downloaded_bytes": true
+  },
+  "mise_http_selector": "http:python[url=https://github.com/astral-sh/python-build-standalone/releases/download/20261001/cpython-3.14.8%2B20261001-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz,checksum=sha256:b373a4a4e4e70fc05f368c9b53d7738bf37637682b650d96c742805d2da26c32,strip_components=1,bin_path=bin]@3.14.8",
+  "cache_identity_inputs": [
+    "x86_64-unknown-linux-gnu",
+    "mise 2026.9.18",
+    "complete selector including URL, SHA-256, strip_components, and bin_path"
+  ],
+  "cache_integrity_guard": "Generated shell resolves python3.14 once, checks that path against the selected executable SHA-256, then executes every Python suite through that same path. It does not resolve or execute a separate python alias.",
+  "cache_integrity_limits": [
+    "The guard assumes a stable, trusted job-owned filesystem and PATH between hashing and exec; it does not hold an inode or prevent concurrent replacement.",
+    "The shell and sha256sum helper are resolved through PATH inside the Mise environment and remain trusted inputs.",
+    "The selected executable hash does not verify the Python standard library or shared libraries. The archive checksum covers cold downloaded archive bytes; warm restored runtime integrity remains unqualified."
+  ],
+  "mise_lock_audit_claim": "Lock audit checks entry coverage, pinned version, platform presence, and checksum syntax only. It does not bind the committed lock URL/options/checksum to the catalog selector or establish artifact provenance; catalog selector and archive evidence carry that identity.",
+  "sources": [
+    "https://api.github.com/repos/astral-sh/python-build-standalone/releases/tags/20261001",
+    "https://github.com/astral-sh/python-build-standalone/releases/tag/20261001",
+    "https://mise.jdx.dev/dev-tools/backends/http.html"
+  ],
+  "qualification_limit": "Artifact API digest and downloaded archive bytes agree; the selected binary hash is derived from that archive after the configured strip. This record does not claim a hosted Linux install or performance measurement."
+}

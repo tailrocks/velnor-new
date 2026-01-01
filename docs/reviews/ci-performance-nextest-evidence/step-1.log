@@ -1,0 +1,9 @@
+mbx[setup]: first build on this machine
+mbx[setup]:   cache is /var/folders/8p/h376l_nn3375kyj72czdq2x80000gn/T/velnor-c08-pinned-vufcdxwj/mbx-cache, shared by every checkout and worktree, pruned to 185.0 GiB
+mbx[setup]:   this filesystem supports reflinks, so target/ shares disk with the cache instead of copying
+mbx[setup]:   target/ is managed: deleted when its checkout is gone, unused for 30 days, over 100.0 GiB total, or the disk runs low
+mbx[setup]:   `mbx gc --dry-run` previews cleanup; `mbx settings ls gc` shows every limit
+   Compiling velnor-c08-probe v0.1.0 (/private/var/folders/8p/h376l_nn3375kyj72czdq2x80000gn/T/velnor-c08-pinned-vufcdxwj)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.30s
+velnor-c08-probe
+mbx[cache]: 0 hits, 0 misses, 2 not looked up; 0 B downloaded, 0 B uploaded, 1015.8 KiB stored locally

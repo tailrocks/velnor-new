@@ -1,0 +1,91 @@
+{
+  "schema": 1,
+  "status": "source-qualified-native-build-required",
+  "tool": "actionlint",
+  "selection_version": "1.7.12",
+  "reported_version": "1.7.12-velnor-cache-mode.1+patch.7c81196d7996",
+  "behavior_abi": "actionlint-cache-mode-literal-v1",
+  "source": {
+    "upstream_repository": "https://github.com/rhysd/actionlint",
+    "upstream_commit": "914e7df21a07ef503a81201c76d2b11c789d3fca",
+    "patched_git_tree": "46225027f97bc1f98d914797f9625700527a4afa",
+    "patch_path": "scripts/actionlint-cache-mode.patch",
+    "patch_sha256": "7c81196d799636344ea309336af5a11a4d67f2bd4ece3cee733765670dc00142",
+    "go_mod_sha256": "858b82eb613822def66e73aefca4c97189cfea3a25706854be03b6737c818818",
+    "go_sum_sha256": "6da1057f64fd200c5f018bfee5bff88cbc792f2034c72413cf7e083dc0147bf1",
+    "license_files": {
+      "LICENSE.txt": "03a26b06d224380a02bf100e05fff3b2dfc71b14d4e2fa685ec9963a87563c22"
+    },
+    "upstream_git_tree": "ecee8c9c752f012b2da57a5fc59863624539b43b"
+  },
+  "compiler": {
+    "go_version": "go1.27.1",
+    "cgo_enabled": "0",
+    "native_only": true,
+    "approved_assets": {}
+  },
+  "targets": {
+    "x86_64-unknown-linux-gnu": [
+      "linux",
+      "amd64"
+    ],
+    "aarch64-apple-darwin": [
+      "darwin",
+      "arm64"
+    ],
+    "x86_64-apple-darwin": [
+      "darwin",
+      "amd64"
+    ]
+  },
+  "environment": {
+    "GOENV": "off",
+    "GOTOOLCHAIN": "local",
+    "GOWORK": "off",
+    "GOFLAGS": "-mod=readonly",
+    "GOPROXY": "https://proxy.golang.org",
+    "GOSUMDB": "sum.golang.org",
+    "CGO_ENABLED": "0",
+    "TZ": "UTC",
+    "LC_ALL": "C",
+    "SOURCE_DATE_EPOCH": "0",
+    "GOAMD64": "v1",
+    "GOARM64": "v8.0"
+  },
+  "module_preparation_argv": [
+    "go",
+    "mod",
+    "download",
+    "all"
+  ],
+  "module_verify_argv": [
+    "go",
+    "mod",
+    "verify"
+  ],
+  "build_environment_override": {
+    "GOPROXY": "off",
+    "GOSUMDB": "off"
+  },
+  "build_argv": [
+    "go",
+    "build",
+    "-trimpath",
+    "-buildvcs=false",
+    "-mod=readonly",
+    "-ldflags",
+    "-s -w -buildid= -X github.com/rhysd/actionlint.version=1.7.12-velnor-cache-mode.1+patch.7c81196d7996 -X github.com/rhysd/actionlint.installedFrom=velnor-owned-cache-mode",
+    "-o",
+    "<output>/actionlint",
+    "./cmd/actionlint"
+  ],
+  "version_banner_template": "1.7.12-velnor-cache-mode.1+patch.7c81196d7996\nvelnor-owned-cache-mode\nbuilt with go1.27.1 compiler for {goos}/{goarch}\n",
+  "publication_required": [
+    "owned immutable source commit and tree",
+    "signed source receipt binding base patch lock license and recipe",
+    "authenticated exact Go toolchain assets for each native host",
+    "three native qualification receipts",
+    "immutable archive and extracted binary SHA-256 per host",
+    "closed runtime factory admission"
+  ]
+}
