@@ -1,0 +1,82 @@
+//! Docker transport checks for worker identity and cleanup proof.
+
+use std::time::Duration;
+
+use crate::HostError;
+
+pub(super) const TIMEOUT: Duration = Duration::from_secs(2);
+pub(super) const WORKER: &str = "wtransport";
+pub(super) const RUNNER_ID: &str = concat!(
+    "0123456789abcdef",
+    "0123456789abcdef",
+    "0123456789abcdef",
+    "0123456789abcdef"
+);
+
+#[test]
+fn public_volume_catalog_matches_the_six_role_worker_layout() {
+    assert_eq!(
+        super::worker_volume_names(WORKER),
+        Ok(vec![
+            "wtransport".to_owned(),
+            "wtransport-work".to_owned(),
+            "wtransport-externals".to_owned(),
+            "wtransport-docker".to_owned(),
+            "wtransport-home".to_owned(),
+            "wtransport-tmp".to_owned(),
+        ])
+    );
+    assert_eq!(
+        super::worker_volume_names("bad/name"),
+        Err(HostError::ForbiddenMount)
+    );
+}
+
+pub(super) fn volume_names() -> [(&'static str, &'static str); 3] {
+    [
+        ("wtransport", "socket"),
+        ("wtransport-work", "work"),
+        ("wtransport-docker", "dind-data"),
+    ]
+}
+
+pub(super) fn official_volume_names() -> [(&'static str, &'static str); 4] {
+    [
+        ("wtransport", "socket"),
+        ("wtransport-work", "work"),
+        ("wtransport-externals", "externals"),
+        ("wtransport-docker", "dind-data"),
+    ]
+}
+
+pub(super) fn volume_json(name: &str, worker: &str, role: &str) -> String {
+    serde_json::json!({
+        "Name": name,
+        "Driver": "local",
+        "Mountpoint": format!("/var/lib/docker/volumes/{name}/_data"),
+        "Labels": {"velnor.worker": worker, "velnor.role": role},
+        "Options": {},
+        "Scope": "local"
+    })
+    .to_string()
+}
+
+pub(super) fn container_json(id: &str, worker: Option<&str>, role: Option<&str>) -> String {
+    let labels = match (worker, role) {
+        (Some(worker), Some(role)) => serde_json::json!({
+            "velnor.worker": worker,
+            "velnor.volume": worker,
+            "velnor.role": role
+        }),
+        _ => serde_json::json!({}),
+    };
+    serde_json::json!({
+        "Id": id,
+        "Config": {"Labels": labels},
+        "HostConfig": {"CgroupnsMode": "private"}
+    })
+    .to_string()
+}
+
+#[cfg(all(test, unix))]
+mod volumes_tests;

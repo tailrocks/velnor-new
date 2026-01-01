@@ -1,0 +1,69 @@
+[package]
+name = "velnor-runner-cli"
+description = "Developmental Velnor Linux service package; not production-qualified"
+repository = "https://github.com/tailrocks/velnor-new"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+clap = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+velnor-actions-contract-workflow = { version = "=0.1.7", path = "../../core/velnor-actions-contract-workflow" }
+velnor-actions-orchestrator-merge-ports = { version = "=0.1.7", path = "../../services/velnor-actions-orchestrator-merge-ports" }
+velnor-runner-github = { version = "=0.1.7", path = "../velnor-runner-github" }
+velnor-runner-core = { version = "=0.1.7", path = "../velnor-runner-core" }
+velnor-runner-host = { version = "=0.1.7", path = "../velnor-runner-host" }
+velnor-runner-launch = { version = "=0.1.7", path = "../velnor-runner-launch" }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+rustix = { workspace = true, features = ["process"] }
+tokio = { workspace = true, features = ["signal"] }
+
+[target.'cfg(target_os = "macos")'.dev-dependencies]
+security-framework = { workspace = true }
+
+[dev-dependencies]
+velnor-actions-contract = { version = "=0.1.7", path = "../../core/velnor-actions-contract" }
+
+[lib]
+name = "velnor_runner_cli"
+path = "src/lib.rs"
+
+[[bin]]
+name = "velnor-host"
+path = "src/main.rs"
+
+[package.metadata.deb]
+name = "velnor-host"
+maintainer = "Alexey Zhokhov <alexey@zhokhov.com>"
+copyright = "2026, Tailrocks"
+license-file = ["../../../LICENSE-MIT", "0"]
+extended-description = """\
+Developmental package proposal only. At this source revision the Linux Scale Set
+controller and service stop lifecycle are not production-qualified. Do not enable
+or start this unit. Velnor is intended to launch an unmodified official GitHub
+runner container with private per-job Docker-in-Docker, but this artifact does
+not prove that behavior. The controller's host Docker access is host-privileged;
+Docker-group membership grants root-level host control. Job containers share
+the host kernel and are not VM-equivalent isolation.
+"""
+depends = ["$auto", "ca-certificates", "curl", "mawk", "systemd (>= 247)"]
+section = "admin"
+priority = "optional"
+profile = "release"
+assets = [
+    ["target/release/velnor-host", "usr/bin/", "755"],
+    ["debian/account-check", "usr/lib/velnor-host/account-check", "755"],
+    ["debian/velnor-host-identity-check.service", "usr/lib/systemd/system/", "644"],
+    ["debian/host.toml.example", "usr/share/doc/velnor-host/examples/host.toml", "644"],
+    ["../../../LICENSE-APACHE", "usr/share/doc/velnor-host/licenses/LICENSE-APACHE", "644"],
+    ["../../../LICENSE-MIT", "usr/share/doc/velnor-host/licenses/LICENSE-MIT", "644"],
+]
+maintainer-scripts = "debian/"
+systemd-units = { unit-name = "velnor-host", unit-scripts = "debian/", enable = false, start = false, stop-on-upgrade = true, restart-after-upgrade = false }

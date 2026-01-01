@@ -1,0 +1,4 @@
+# Create only when absent. Colon prefixes preserve an existing operator
+# directory so Connect can reject ownership/mode mismatches without repair.
+d /etc/velnor-host :0750 :root :velnor -
+d /var/lib/velnor-host :0750 :velnor :velnor -

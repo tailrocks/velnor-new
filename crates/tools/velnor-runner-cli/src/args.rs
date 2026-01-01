@@ -1,0 +1,181 @@
+//! Command tree. The binary name is `velnor-host`.
+
+use std::path::PathBuf;
+
+use clap::{Args, Parser, Subcommand};
+
+/// Rust Scale Set controller for the selected host platform.
+#[derive(Debug, Parser)]
+#[command(name = "velnor-host", version, about)]
+pub struct Cli {
+    /// Controller state directory. Defaults are host-platform specific.
+    #[arg(long, global = true)]
+    pub state: Option<PathBuf>,
+    /// Host configuration file. Defaults are host-platform specific.
+    #[arg(long, global = true, value_name = "PATH")]
+    pub config: Option<PathBuf>,
+    /// Command.
+    #[command(subcommand)]
+    pub command: Command,
+}
+
+/// Input fields for the `connect` command.
+#[derive(Debug, Args)]
+pub struct ConnectArgs {
+    /// `owner/name`.
+    #[arg(long)]
+    pub repo: String,
+    /// Scale set name.
+    #[arg(long)]
+    pub scale_set: String,
+    /// Container platform.
+    #[arg(long)]
+    pub platform: String,
+    /// Controller backend. Omit on macOS to keep the existing default.
+    #[arg(long, value_parser = ["linux", "macos"])]
+    pub host_platform: Option<String>,
+    /// Registration scope. Linux requires repository registration.
+    #[arg(long, value_parser = ["repository"])]
+    pub registration_scope: Option<String>,
+    /// Exact GitHub runner group id. Required for Linux.
+    #[arg(long)]
+    pub runner_group_id: Option<i64>,
+    /// Exact GitHub runner group name. Required for Linux.
+    #[arg(long)]
+    pub runner_group_name: Option<String>,
+    /// Exact accepted workflow event. Linux requires one or more; repeat as needed.
+    #[arg(long = "allow-event", action = clap::ArgAction::Append)]
+    pub allowed_events: Vec<String>,
+    /// Exact Actions workflow path, such as `.github/workflows/ci.yml`.
+    /// Linux requires one or more; repeat as needed.
+    #[arg(long = "allow-workflow-path", action = clap::ArgAction::Append)]
+    pub allowed_workflow_paths: Vec<String>,
+    /// JSON file containing the exact Linux `JobTrustPolicy`. Linux requires this input.
+    #[arg(long, value_name = "PATH")]
+    pub trust_policy_file: Option<PathBuf>,
+    /// Immutable supported runner image profile; required on Linux.
+    #[arg(long)]
+    pub image_profile: Option<String>,
+    /// Total host-wide permits. Must be measured for Linux.
+    #[arg(long)]
+    pub max_jobs: Option<u32>,
+    /// Operator-selected finite drain deadline in seconds. Linux requires it.
+    #[arg(long)]
+    pub drain_timeout_secs: Option<u64>,
+    /// Docker context name.
+    #[arg(long)]
+    pub docker_context: Option<String>,
+    /// Unix socket endpoint.
+    #[arg(long)]
+    pub endpoint: Option<String>,
+}
+
+/// Operator commands.
+#[derive(Debug, Subcommand)]
+pub enum Command {
+    /// Bind one repository and scale set. The token is read from stdin and is not a flag.
+    Connect(Box<ConnectArgs>),
+    /// Print readiness.
+    Status {
+        /// JSON object.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Read-only checks.
+    Doctor {
+        /// Perform a read-only Docker Engine GET /version; this does not prove controller readiness.
+        #[arg(long)]
+        probe: bool,
+    },
+    /// Read controller logs.
+    Logs {
+        /// Follow new log records until interrupted.
+        #[arg(long)]
+        follow: bool,
+    },
+    /// Stop new admissions.
+    Drain {
+        /// Wait for authoritative launch reconciliation and cleanup.
+        #[arg(long)]
+        wait: bool,
+        /// Maximum wait in seconds. Defaults to the configured drain timeout.
+        #[arg(long, value_name = "SECONDS", requires = "wait")]
+        timeout_secs: Option<u64>,
+    },
+    /// Allow admissions again.
+    Resume,
+    /// Host service lifecycle (`systemd` on Linux, `LaunchAgent` on macOS).
+    Service {
+        /// install, start, stop, uninstall, verify-stopped, or read manager state.
+        #[command(subcommand)]
+        action: ServiceAction,
+    },
+    /// Foreground daemon.
+    Daemon {
+        /// run.
+        #[command(subcommand)]
+        action: DaemonAction,
+    },
+    /// Fail-closed lane comparison.
+    Compare {
+        /// Repository whose identity must be represented by the evidence.
+        #[arg(long)]
+        repo: String,
+        /// Workflow run ID to match against scoped evidence.
+        #[arg(long)]
+        run_id: u64,
+        /// Positive workflow run attempt to match against the evidence keys.
+        #[arg(long)]
+        attempt: u64,
+        /// Directory of expected, observed, and census JSON. Current records omit repository/run ID, so scoped comparison remains `NOT_PROVEN`.
+        #[arg(long, value_name = "DIR", conflicts_with = "scoped_evidence")]
+        evidence: Option<PathBuf>,
+        /// Versioned offline scope-binding input. A successful result is `BOUND_ONLY`, not a parity or runner-placement proof.
+        #[arg(long, value_name = "FILE", conflicts_with = "evidence")]
+        scoped_evidence: Option<PathBuf>,
+    },
+    /// Drain and stop this local controller; retain the remote Scale Set and journal.
+    Disconnect {
+        /// Drain first.
+        #[arg(long, requires = "wait")]
+        drain: bool,
+        /// Wait for authoritative launch reconciliation and cleanup.
+        #[arg(long, requires = "drain")]
+        wait: bool,
+        /// Maximum wait in seconds. Defaults to the configured drain timeout.
+        #[arg(long, value_name = "SECONDS", requires = "wait")]
+        timeout_secs: Option<u64>,
+        /// Remove only the configured host credential and config after verified local stop.
+        #[arg(long, requires = "wait")]
+        remove_local: bool,
+    },
+}
+
+/// `service` actions.
+#[derive(Debug, Clone, Copy, Subcommand)]
+pub enum ServiceAction {
+    /// Read whether the host service is active, stopped, or unknown.
+    Status,
+    /// Verify the effective package unit before systemd starts the controller.
+    Preflight,
+    /// Install or enable the platform service.
+    Install,
+    /// Start the installed service; durable drain remains set until `resume`.
+    Start,
+    /// Stop the service after an external drain proof.
+    Stop,
+    /// Verify a successful, completed systemd stop without mutating the service.
+    VerifyStopped,
+    /// Remove the plist.
+    Uninstall,
+}
+
+/// `daemon` actions.
+#[derive(Debug, Clone, Copy, Subcommand)]
+pub enum DaemonAction {
+    /// Run in the foreground.
+    Run,
+}
+
+#[cfg(test)]
+mod tests;

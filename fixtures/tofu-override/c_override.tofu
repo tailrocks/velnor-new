@@ -1,0 +1,3 @@
+variable "winner" {
+  default = "tofu"
+}
