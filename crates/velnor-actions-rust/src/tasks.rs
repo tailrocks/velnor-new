@@ -1,5 +1,6 @@
 //! Per-package task-group derivation with clippy-gates-tests edges.
 
+use serde::Serialize;
 use velnor_actions_contract::{ContractError, manifest_key_for_cargo_manifest, task_id_for_stack};
 
 use crate::evidence::{RustExecutionProfile, TestRunner};
@@ -321,4 +322,79 @@ fn has_test_targets(package: &PackageRecord) -> bool {
         matches!(target.kind.as_str(), "lib" | "bin" | "test")
             || ((target.kind == "example" || target.kind == "bench") && target.test)
     })
+}
+
+/// Typed Rust task-identity extension (cache §1); unknown schemas disable reuse.
+#[derive(Debug, Clone, Serialize)]
+pub struct RustTaskIdentityExtension {
+    /// Cargo package ID.
+    pub package_id: String,
+    /// Normalized manifest path.
+    pub manifest: String,
+    /// Workspace/local-package graph digest.
+    pub graph_digest: String,
+    /// Target kinds and names.
+    pub targets: Vec<String>,
+    /// Enabled features.
+    pub features: Vec<String>,
+    /// Rust target and profile.
+    pub target: String,
+    /// Compile driver and test runner.
+    pub driver: String,
+    /// Cargo config and build-script input digests.
+    pub config_digest: String,
+    /// `.config/nextest.toml` digest for Nextest profiles.
+    pub nextest_digest: Option<String>,
+    /// Rust task kind plus test/archive identity.
+    pub kind: String,
+    /// Build script reads undeclared inputs; disables reuse and coverage.
+    pub undeclared_reads: bool,
+}
+
+impl RustTaskIdentityExtension {
+    /// Wrap the extension in the stack-neutral envelope.
+    #[must_use]
+    pub fn to_stack_extension(&self) -> velnor_actions_contract::StackExtension {
+        velnor_actions_contract::StackExtension {
+            schema: "rust-task-identity-v1".to_owned(),
+            data: serde_json::to_value(self).unwrap_or(serde_json::Value::Null),
+        }
+    }
+
+    /// Reject reuse when build inputs are undeclared or dynamic.
+    /// # Errors
+    pub fn reuse_eligible(&self) -> Result<(), ContractError> {
+        if self.undeclared_reads {
+            return Err(ContractError::identity(
+                "stack_extension",
+                "undeclared_inputs",
+            ));
+        }
+        Ok(())
+    }
+}
+
+/// Derive one shard task ID from an unsharded base ID.
+/// # Errors
+pub fn shard_task_id(base: &str, index: u32, count: u32) -> Result<String, ContractError> {
+    let rest = base
+        .strip_prefix("stack/")
+        .ok_or_else(|| ContractError::identity("task_id", "malformed_task_id"))?;
+    let parts: Vec<&str> = rest.split('/').collect();
+    if parts.len() < 4 || rest.contains("shard-") {
+        return Err(ContractError::identity("task_id", "bad_base_id"));
+    }
+    task_id_for_stack(
+        parts[0],
+        &parts[1..parts.len() - 2].join("/"),
+        parts[parts.len() - 2],
+        parts[parts.len() - 1],
+        Some((index, count)),
+    )
+}
+
+/// True only for detected Nextest profiles; cargo-test never shards.
+#[must_use]
+pub fn shards_allowed(test_runner: &str) -> bool {
+    test_runner == "cargo_nextest"
 }

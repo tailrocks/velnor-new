@@ -5,6 +5,8 @@ mod impl_rust;
 mod impl_rust_detect;
 #[path = "impl_rust_evidence.rs"]
 mod impl_rust_evidence;
+#[path = "impl_rust_gates.rs"]
+mod impl_rust_gates;
 #[path = "impl_rust_metadata.rs"]
 mod impl_rust_metadata;
 #[path = "impl_rust_tasks.rs"]

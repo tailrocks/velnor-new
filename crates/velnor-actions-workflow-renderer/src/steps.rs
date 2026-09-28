@@ -1,9 +1,6 @@
 //! Fixed step templates over validated command strings.
 //!
-//! Templates fix names, env keys, and payload shapes. Action refs and command
-//! argv arrive as validated strings; nothing here builds shell or stack syntax.
-//! Internal plan/merge steps travel only via env plus a request file: no
-//! private subcommand string ever reaches rendered YAML.
+//! Templates fix names, env keys, and payload shapes; argv arrives validated.
 
 use std::collections::BTreeMap;
 
@@ -27,14 +24,21 @@ pub const REQUEST_DIR_PREFIX: &str = "$RUNNER_TEMP/velnor/";
 pub const ASSET_SHA_ENV: &str = "VELNOR_ASSET_SHA256";
 /// Env key carrying the downloaded asset URL.
 pub const ASSET_URL_ENV: &str = "VELNOR_ASSET_URL";
+/// Pinned mr-boxington action name (objects mode).
+pub const MBX_ACTION_NAME: &str = "jdx/mr-boxington-action";
+/// Cache restore/save action names.
+pub const CACHE_RESTORE_NAME: &str = "actions/cache/restore";
+/// Cache save action name.
+pub const CACHE_SAVE_NAME: &str = "actions/cache/save";
+/// Task-artifacts dir archived for task-result reuse.
+pub const TASK_ARTIFACTS_DIR: &str = "$MISE_TASK_CACHE_DIR/task-artifacts/v2";
+/// Target-directory prefix isolating one lane.
+pub const TARGET_DIR_PREFIX: &str = "$RUNNER_TEMP/velnor/target/";
 /// Substrings that must never appear in rendered YAML.
 pub const FORBIDDEN_TOKENS: &[&str] = &["__internal", "velnor-actions __", "velnor-actions run"];
 
-/// Reject text containing a private-subcommand token.
-///
+/// Reject text containing a private-subcommand or parallel token.
 /// # Errors
-///
-/// Returns [`RenderError::PrivateSubcommand`] naming the token found.
 pub fn scan_for_private_subcommands(text: &str) -> Result<(), RenderError> {
     for token in FORBIDDEN_TOKENS {
         if text.contains(token) {
@@ -45,10 +49,7 @@ pub fn scan_for_private_subcommands(text: &str) -> Result<(), RenderError> {
 }
 
 /// Validate an `owner/repo@<40 hex>` action ref; branches are rejected.
-///
 /// # Errors
-///
-/// Returns [`RenderError::BadActionRef`] for malformed or unpinned refs.
 pub fn validate_uses(uses: &str) -> Result<(), RenderError> {
     let Some((name, sha)) = uses.split_once('@') else {
         return Err(RenderError::BadActionRef(format!("missing_sha:{uses}")));
@@ -64,28 +65,20 @@ pub fn validate_uses(uses: &str) -> Result<(), RenderError> {
             "forbidden_action:{uses}"
         )));
     }
-    if sha.len() != 40
-        || !sha
-            .bytes()
-            .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
-    {
+    if sha.len() != 40 || !is_lower_hex(sha) {
         return Err(RenderError::BadActionRef(format!("unpinned_ref:{uses}")));
     }
     Ok(())
 }
+
 /// Checkout step without persisted credentials.
-///
 /// # Errors
-///
-/// Returns [`RenderError::BadActionRef`] unless `uses` is a pinned
-/// `actions/checkout` ref.
 pub fn checkout_step(uses: &str) -> Result<Step, RenderError> {
     validate_uses(uses)?;
     if !uses.starts_with("actions/checkout@") {
         return Err(RenderError::BadActionRef(format!("not_checkout:{uses}")));
     }
-    let mut with = BTreeMap::new();
-    with.insert("persist-credentials".to_owned(), "false".to_owned());
+    let with = BTreeMap::from([("persist-credentials".to_owned(), "false".to_owned())]);
     Ok(Step {
         name: "Checkout".to_owned(),
         kind: StepKind::Action {
@@ -96,11 +89,7 @@ pub fn checkout_step(uses: &str) -> Result<Step, RenderError> {
 }
 
 /// Validated pinned-action step.
-///
 /// # Errors
-///
-/// Returns [`RenderError::BadActionRef`] for bad refs or names, or
-/// [`RenderError::PrivateSubcommand`] for leaked tokens.
 pub fn action_step(
     name: &str,
     uses: &str,
@@ -112,9 +101,8 @@ pub fn action_step(
     validate_uses(uses)?;
     scan_for_private_subcommands(name)?;
     scan_for_private_subcommands(uses)?;
-    for (key, value) in &with {
-        scan_for_private_subcommands(key)?;
-        scan_for_private_subcommands(value)?;
+    for entry in with.iter().flat_map(|(key, value)| [key, value]) {
+        scan_for_private_subcommands(entry)?;
     }
     Ok(Step {
         name: name.to_owned(),
@@ -126,10 +114,7 @@ pub fn action_step(
 }
 
 /// Validated fixed-argv shell step.
-///
 /// # Errors
-///
-/// Returns [`RenderError::BadCommand`] or [`RenderError::PrivateSubcommand`].
 pub fn shell_step(
     name: &str,
     argv: Vec<String>,
@@ -148,26 +133,24 @@ pub fn shell_step(
 }
 
 /// Acquire-Velnor step: digest-verified staging under runner temp.
-///
-/// Requires `VELNOR_ASSET_SHA256` (64 hex) and an `https` asset URL in env,
-/// plus a staged-binary path under `$RUNNER_TEMP` in argv.
-///
 /// # Errors
-///
-/// Returns [`RenderError::BadCommand`] or [`RenderError::PrivateSubcommand`].
 pub fn acquire_velnor_step(
     argv: Vec<String>,
     env: BTreeMap<String, String>,
 ) -> Result<Step, RenderError> {
     commands::validate_command_argv(&argv)?;
     commands::validate_env(&env)?;
-    match env.get(ASSET_SHA_ENV) {
-        Some(sha) if sha.len() == 64 && is_lower_hex(sha) => {}
-        _ => return Err(RenderError::BadCommand("bad_asset_sha256".to_owned())),
+    if env
+        .get(ASSET_SHA_ENV)
+        .is_none_or(|sha| sha.len() != 64 || !is_lower_hex(sha))
+    {
+        return Err(RenderError::BadCommand("bad_asset_sha256".to_owned()));
     }
-    match env.get(ASSET_URL_ENV) {
-        Some(url) if url.starts_with("https://") => {}
-        _ => return Err(RenderError::BadCommand("bad_asset_url".to_owned())),
+    if env
+        .get(ASSET_URL_ENV)
+        .is_none_or(|url| !url.starts_with("https://"))
+    {
+        return Err(RenderError::BadCommand("bad_asset_url".to_owned()));
     }
     if !argv.iter().any(|arg| arg.contains(STAGED_BINARY_PREFIX)) {
         return Err(RenderError::BadCommand("unstaged_binary".to_owned()));
@@ -176,10 +159,7 @@ pub fn acquire_velnor_step(
 }
 
 /// Internal plan/merge step; operation travels via env, never argv.
-///
 /// # Errors
-///
-/// Returns [`RenderError::BadCommand`] for unknown operations.
 pub fn internal_step(name: &str, operation: &str) -> Result<Step, RenderError> {
     if name.trim().is_empty() {
         return Err(RenderError::BadCommand("empty_name".to_owned()));
@@ -220,80 +200,102 @@ pub fn merge_step() -> Step {
     }
 }
 
+/// Objects-mode MBX step; cargo profiles must never emit or install MBX.
+/// # Errors
+pub fn mbx_objects_step(uses: &str, cargo_profile: bool) -> Result<Step, RenderError> {
+    if cargo_profile {
+        return Err(RenderError::BadCommand("cargo_profile_no_mbx".to_owned()));
+    }
+    validate_uses(uses)?;
+    if !uses.starts_with(&format!("{MBX_ACTION_NAME}@")) {
+        return Err(RenderError::BadActionRef(format!("not_mbx_action:{uses}")));
+    }
+    let with = BTreeMap::from([("mode".to_owned(), "objects".to_owned())]);
+    action_step("Restore MBX objects", uses, with)
+}
+
+/// Cache restore/save step over `actions/cache`; MBX never archives here.
+/// # Errors
+pub fn cache_action_step(
+    restore: bool,
+    uses: &str,
+    layer: &str,
+    key: &str,
+    restore_keys: &[String],
+    paths: &[String],
+) -> Result<Step, RenderError> {
+    validate_uses(uses)?;
+    let want = if restore {
+        CACHE_RESTORE_NAME
+    } else {
+        CACHE_SAVE_NAME
+    };
+    if !uses.starts_with(&format!("{want}@")) {
+        return Err(RenderError::BadActionRef(format!("bad_cache_uses:{uses}")));
+    }
+    if !matches!(layer, "sources" | "task") {
+        return Err(RenderError::BadCommand("mbx_needs_objects_mode".to_owned()));
+    }
+    if key.trim().is_empty() || key.contains(' ') || key.contains('\n') {
+        return Err(RenderError::BadCommand("bad_cache_key".to_owned()));
+    }
+    for path in paths {
+        validate_cache_path(layer, path)?;
+    }
+    let mut with = BTreeMap::from([
+        ("key".to_owned(), key.to_owned()),
+        ("path".to_owned(), paths.join("\n")),
+    ]);
+    if restore {
+        with.insert("restore-keys".to_owned(), restore_keys.join("\n"));
+    }
+    let name = if restore {
+        "Restore cache"
+    } else {
+        "Save cache"
+    };
+    action_step(name, uses, with)
+}
+
+fn validate_cache_path(layer: &str, path: &str) -> Result<(), RenderError> {
+    let second = path.split('/').nth(1);
+    let sources_ok = path.starts_with("$CARGO_HOME/") && matches!(second, Some("registry" | "git"));
+    if layer == "sources" && sources_ok || layer == "task" && path == TASK_ARTIFACTS_DIR {
+        Ok(())
+    } else {
+        Err(RenderError::BadCommand(format!("bad_cache_path:{path}")))
+    }
+}
+
+/// Isolated target directory for one lane.
+#[must_use]
+pub fn target_dir_for_lane(lane_id: &str) -> String {
+    format!("{TARGET_DIR_PREFIX}{lane_id}")
+}
+
 /// Double-quote an env-derived shell path for `run:` lines.
-///
-/// `$NAME/...` and `${NAME}...` spans expand in shell; left bare they trip
-/// shellcheck SC2086 under actionlint. Wrapping the whole word in `"` keeps
-/// expansion while defeating word splitting. Byte-deterministic and
-/// idempotent; YAML escaping stays the emitter's job.
-///
-/// GitHub `${{ ... }}` expressions and plain words pass through untouched:
-/// they are not shell expansions and must not gain shell quotes. Callers
-/// pass validated argv (no command substitution); only `"` and `\` gain
-/// escapes so `$` spans keep expanding.
 #[must_use]
 pub fn quote_env_path_for_run(path: &str) -> String {
-    if path.len() >= 2 && path.starts_with('"') && path.ends_with('"') {
+    let quoted = path.len() >= 2 && path.starts_with('"') && path.ends_with('"');
+    if quoted || !has_shell_expansion(path) {
         return path.to_owned();
     }
-    if !has_shell_expansion(path) {
-        return path.to_owned();
-    }
-    let mut out = String::with_capacity(path.len() + 2);
-    out.push('"');
-    for ch in path.chars() {
-        if ch == '"' || ch == '\\' {
-            out.push('\\');
-        }
-        out.push(ch);
-    }
-    out.push('"');
-    out
+    format!("\"{}\"", path.replace('\\', "\\\\").replace('"', "\\\""))
 }
 
 /// True when a `run:` line carries a bare `$VAR/` word-splitting pattern.
-///
-/// A `$NAME` or `${NAME}` expansion outside double quotes trips shellcheck
-/// SC2086 under actionlint. Single-quoted spans suppress expansion, so they
-/// are ignored; GitHub `${{ ... }}` expressions are not shell and are
-/// ignored too. Only `"`-quoted expansions scan clean.
 #[must_use]
 pub fn has_bare_env_expansion(line: &str) -> bool {
-    let bytes = line.as_bytes();
-    let mut index = 0;
-    let mut in_single = false;
-    let mut in_double = false;
-    while index < bytes.len() {
-        let byte = bytes[index];
-        if in_single {
-            if byte == b'\'' {
-                in_single = false;
-            }
-        } else if in_double {
-            if byte == b'\\' {
-                index += 1;
-            } else if byte == b'"' {
-                in_double = false;
-            }
-        } else if byte == b'\'' {
-            in_single = true;
-        } else if byte == b'"' {
-            in_double = true;
-        } else if byte == b'$' && is_shell_expansion_at(bytes, index) {
-            return true;
-        }
-        index += 1;
-    }
-    false
+    scan_run_words(line).iter().any(|(_, bare)| *bare)
 }
 
 /// Quote bare env words in a joined `run:` line (idempotent).
 #[must_use]
 pub fn quote_run_line_env_paths(run_line: &str) -> String {
-    split_run_words(run_line)
+    scan_run_words(run_line)
         .into_iter()
-        .map(|word| {
-            if has_bare_env_expansion(&word) {
+        .map(|(word, bare)| {
+            if bare {
                 quote_env_path_for_run(&decode_run_word(&word))
             } else {
                 word
@@ -303,48 +305,43 @@ pub fn quote_run_line_env_paths(run_line: &str) -> String {
         .join(" ")
 }
 
-/// Split on whitespace outside single/double quotes.
-fn split_run_words(run_line: &str) -> Vec<String> {
+fn scan_run_words(run_line: &str) -> Vec<(String, bool)> {
+    let bytes = run_line.as_bytes();
     let mut words = Vec::new();
     let mut cur = String::new();
-    let (mut single, mut double) = (false, false);
-    let mut chars = run_line.chars().peekable();
-    while let Some(ch) = chars.next() {
-        if single {
+    let mut bare = false;
+    let mut quote = 0u8;
+    let mut chars = run_line.char_indices();
+    while let Some((index, ch)) = chars.next() {
+        if quote == 1 {
             cur.push(ch);
             if ch == '\'' {
-                single = false;
+                quote = 0;
             }
-        } else if double {
+        } else if quote == 2 {
             cur.push(ch);
             if ch == '\\' {
-                if let Some(n) = chars.next() {
-                    cur.push(n);
-                }
+                cur.extend(chars.next().map(|(_, next)| next));
             } else if ch == '"' {
-                double = false;
+                quote = 0;
             }
         } else if ch == '\'' {
-            single = true;
+            quote = 1;
             cur.push(ch);
         } else if ch == '"' {
-            double = true;
+            quote = 2;
             cur.push(ch);
-        } else if ch == '\\' {
-            cur.push(ch);
-            if let Some(n) = chars.next() {
-                cur.push(n);
-            }
         } else if ch.is_whitespace() {
             if !cur.is_empty() {
-                words.push(std::mem::take(&mut cur));
+                words.push((std::mem::take(&mut cur), std::mem::take(&mut bare)));
             }
         } else {
+            bare = bare || ch == '$' && is_shell_expansion_at(bytes, index);
             cur.push(ch);
         }
     }
     if !cur.is_empty() {
-        words.push(cur);
+        words.push((cur, bare));
     }
     words
 }
