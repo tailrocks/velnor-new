@@ -6,6 +6,13 @@
 
 use crate::error::MiseError;
 
+/// Bootstrap lock and version-policy IO plus verification.
+///
+/// Hosted here because the crate root is frozen: `mise::catalog::lock` is
+/// the canonical path for lock parsing and catalog-equality checks.
+#[path = "lock.rs"]
+pub mod lock;
+
 /// Qualified mise runner release (tag `v2026.9.16`).
 /// Source: `https://api.github.com/repos/jdx/mise/releases/latest`; checked 2026-09-28.
 pub const MISE_VERSION: &str = "2026.9.16";

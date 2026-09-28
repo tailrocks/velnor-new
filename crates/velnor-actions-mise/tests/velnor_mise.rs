@@ -11,5 +11,9 @@ mod impl_mise_catalog;
 mod impl_mise_command;
 #[path = "impl_mise_git.rs"]
 mod impl_mise_git;
+#[path = "impl_mise_lock.rs"]
+mod impl_mise_lock;
+#[path = "impl_mise_policy.rs"]
+mod impl_mise_policy;
 #[path = "impl_mise_requests.rs"]
 mod impl_mise_requests;
