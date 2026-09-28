@@ -12,6 +12,9 @@ fn unknown_flags_exit_two() -> Result<(), Box<dyn Error>> {
         vec!["plan", "--format", "json"],
         vec!["init", "--force"],
         vec!["generate", "--check"],
+        vec!["init", "--ignore"],
+        vec!["plan", "--ignore"],
+        vec!["generate", "--ignore", "rust"],
     ] {
         let output = spawn(&args, &[], &tmp)?;
         assert_eq!(code(&output), 2, "args {args:?} must be usage errors");
@@ -68,6 +71,32 @@ fn plan_without_config_exits_one() -> Result<(), Box<dyn Error>> {
     git_init(&tmp)?;
     let output = spawn(&["plan"], &[], &tmp)?;
     assert_eq!(code(&output), 1);
+    cleanup(&tmp);
+    Ok(())
+}
+
+#[test]
+fn help_describes_stack_generic_generator() -> Result<(), Box<dyn Error>> {
+    let tmp = fresh_tempdir("args-help")?;
+    let output = spawn(&["--help"], &[], &tmp)?;
+    assert_eq!(code(&output), 0);
+    let help = String::from_utf8_lossy(&output.stdout).into_owned();
+    assert!(help.contains("generate GitHub Actions workflows"), "{help}");
+    assert!(!help.contains("rust"), "{help}");
+    assert!(!help.contains("Rust"), "{help}");
+    cleanup(&tmp);
+    Ok(())
+}
+
+#[test]
+fn output_dir_help_guides_unique_tmp_choice() -> Result<(), Box<dyn Error>> {
+    let tmp = fresh_tempdir("args-gen-help")?;
+    let output = spawn(&["generate", "--help"], &[], &tmp)?;
+    assert_eq!(code(&output), 0);
+    let help = String::from_utf8_lossy(&output.stdout).into_owned();
+    assert!(help.contains("--output-dir"), "{help}");
+    assert!(help.contains("unique"), "{help}");
+    assert!(help.contains("/tmp"), "{help}");
     cleanup(&tmp);
     Ok(())
 }

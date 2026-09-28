@@ -1,8 +1,10 @@
 //! Typed dispatch for public commands and the private file entrypoint.
 //!
-//! The private gate requires both `VELNOR_INTERNAL_OP` and a pre-existing
-//! request file. Anything else falls through to Clap, so public behavior is
-//! byte-identical with or without the environment set.
+//! The private gate requires `VELNOR_INTERNAL_OP` plus the exact request file
+//! in `VELNOR_REQUEST_FILE`: `write-request-v1` needs GitHub event env and no
+//! pre-existing file, `plan-v1`/`merge-v1` need a pre-existing request file.
+//! Anything else falls through to Clap, so public behavior is byte-identical
+//! with or without the environment set.
 
 use std::env;
 use std::fs;
@@ -11,43 +13,40 @@ use std::process::ExitCode;
 
 use clap::Parser;
 use velnor_actions_orchestrator::{
-    GenerateOptions, OrchestratorError, generate, init_config, merge_internal, plan_internal,
-    plan_text, prepare, resolve_root,
+    GenerateOptions, MERGE_OP, OrchestratorError, PLAN_OP, REQUEST_FILE_ENV, WRITE_REQUEST_OP,
+    generate, init_config, merge_internal, merge_passed, plan_internal, plan_outputs, plan_text,
+    prepare, resolve_root, response_path_for, write_request,
 };
 
 use crate::args::{Cli, Command};
 
 /// Environment variable selecting the private operation. Never printed.
 const OP_ENV: &str = "VELNOR_INTERNAL_OP";
-/// Environment variable carrying the run key. Never printed.
-const RUN_KEY_ENV: &str = "VELNOR_RUN_KEY";
-/// Environment variable carrying the runner temp root. Never printed.
-const RUNNER_TEMP_ENV: &str = "RUNNER_TEMP";
-/// Private plan operation tag.
-const PLAN_OP: &str = "plan-v1";
-/// Private merge operation tag.
-const MERGE_OP: &str = "merge-v1";
-/// Private request file name under the run directory.
-const REQUEST_FILE: &str = "request.json";
-/// Private response file name under the run directory.
-const RESPONSE_FILE: &str = "response.json";
+/// Environment variable carrying the `$GITHUB_OUTPUT` path. Never printed.
+const GITHUB_OUTPUT_ENV: &str = "GITHUB_OUTPUT";
+/// Environment variable carrying the triggering event name. Never printed.
+const GITHUB_EVENT_ENV: &str = "GITHUB_EVENT_NAME";
+/// Environment variable carrying the event payload path. Never printed.
+const GITHUB_EVENT_PATH_ENV: &str = "GITHUB_EVENT_PATH";
 
 /// Private operation selected by the gate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum InternalOp {
+    /// Materialize the request file from the GitHub environment.
+    WriteRequest,
     /// Plan operation.
     Plan,
     /// Merge operation.
     Merge,
 }
 
-/// Validated private request: operation plus run directory.
+/// Validated private request: operation plus exact request-file path.
 #[derive(Debug)]
 struct InternalRequest {
     /// Operation to run.
     op: InternalOp,
-    /// Run directory holding the request and response files.
-    dir: PathBuf,
+    /// Exact request-file path from the environment.
+    path: PathBuf,
 }
 
 /// Parse Clap arguments and dispatch one public command.
@@ -71,46 +70,109 @@ pub(crate) fn try_internal() -> Option<ExitCode> {
     Some(run_internal(&request))
 }
 
-/// Check the private gate: known op plus a pre-existing request file.
+/// Check the private gate: known op plus request-file presence by op.
 fn gate_request() -> Option<InternalRequest> {
     let op = match env::var(OP_ENV).as_deref() {
-        Ok(PLAN_OP) => InternalOp::Plan,
-        Ok(MERGE_OP) => InternalOp::Merge,
+        Ok(tag) if tag == WRITE_REQUEST_OP => InternalOp::WriteRequest,
+        Ok(tag) if tag == PLAN_OP => InternalOp::Plan,
+        Ok(tag) if tag == MERGE_OP => InternalOp::Merge,
         _ => return None,
     };
-    let runner_temp = env::var_os(RUNNER_TEMP_ENV).filter(|value| !value.is_empty())?;
-    let run_key = env::var(RUN_KEY_ENV)
-        .ok()
-        .filter(|key| valid_run_key(key))?;
-    let dir = Path::new(&runner_temp).join("velnor").join(run_key);
-    if !dir.join(REQUEST_FILE).is_file() {
-        return None;
+    let path = env::var_os(REQUEST_FILE_ENV)
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)?;
+    match op {
+        InternalOp::WriteRequest => {
+            if path.exists() {
+                return None;
+            }
+            if !env::var(GITHUB_EVENT_ENV).is_ok_and(|name| !name.is_empty()) {
+                return None;
+            }
+            if env::var_os(GITHUB_EVENT_PATH_ENV).is_none_or(|value| value.is_empty()) {
+                return None;
+            }
+        }
+        InternalOp::Plan | InternalOp::Merge => {
+            if !path.is_file() {
+                return None;
+            }
+        }
     }
-    Some(InternalRequest { op, dir })
+    Some(InternalRequest { op, path })
 }
 
-/// Reject empty or path-escaping run keys without printing them.
-fn valid_run_key(key: &str) -> bool {
-    !key.is_empty() && !key.contains(['/', '\\']) && key != "." && key != ".."
-}
-
-/// Read the request file, dispatch to the orchestrator, write the response.
+/// Run one validated private operation.
 fn run_internal(request: &InternalRequest) -> ExitCode {
-    let text = match fs::read_to_string(request.dir.join(REQUEST_FILE)) {
+    match request.op {
+        InternalOp::WriteRequest => match write_request() {
+            Ok(_) => ExitCode::SUCCESS,
+            Err(error) => fail_internal(&error.to_string()),
+        },
+        InternalOp::Plan => run_plan_internal(&request.path),
+        InternalOp::Merge => run_merge_internal(&request.path),
+    }
+}
+
+/// Read the request, run the planner, write the sibling response plus outputs.
+fn run_plan_internal(path: &Path) -> ExitCode {
+    let text = match fs::read_to_string(path) {
         Ok(text) => text,
         Err(error) => return fail_internal(&format!("read request: {error}")),
     };
-    let response = match request.op {
-        InternalOp::Plan => plan_internal(&text),
-        InternalOp::Merge => merge_internal(&text),
-    };
-    let response = match response {
+    let response = match plan_internal(&text) {
         Ok(response) => response,
         Err(error) => return fail_internal(&error.to_string()),
     };
-    match fs::write(request.dir.join(RESPONSE_FILE), response) {
+    let sibling = match response_path_for(path) {
+        Ok(sibling) => sibling,
+        Err(error) => return fail_internal(&error.to_string()),
+    };
+    if let Err(error) = fs::write(&sibling, &response) {
+        return fail_internal(&format!("write response: {error}"));
+    }
+    let outputs = match plan_outputs(&response) {
+        Ok(outputs) => outputs,
+        Err(error) => return fail_internal(&error.to_string()),
+    };
+    let Some(output_path) = env::var_os(GITHUB_OUTPUT_ENV).filter(|value| !value.is_empty()) else {
+        return fail_internal("missing github output");
+    };
+    let body = format!("matrix={}\nplan={}\n", outputs.matrix, outputs.plan);
+    match fs::OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open(&output_path)
+        .and_then(|mut file| {
+            use std::io::Write;
+            file.write_all(body.as_bytes())
+        }) {
         Ok(()) => ExitCode::SUCCESS,
-        Err(error) => fail_internal(&format!("write response: {error}")),
+        Err(error) => fail_internal(&format!("append outputs: {error}")),
+    }
+}
+
+/// Read the request, run the merge, write the sibling response, exit verdict.
+fn run_merge_internal(path: &Path) -> ExitCode {
+    let text = match fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(error) => return fail_internal(&format!("read request: {error}")),
+    };
+    let response = match merge_internal(&text) {
+        Ok(response) => response,
+        Err(error) => return fail_internal(&error.to_string()),
+    };
+    let sibling = match response_path_for(path) {
+        Ok(sibling) => sibling,
+        Err(error) => return fail_internal(&error.to_string()),
+    };
+    if let Err(error) = fs::write(&sibling, &response) {
+        return fail_internal(&format!("write response: {error}"));
+    }
+    match merge_passed(&response) {
+        Ok(true) => ExitCode::SUCCESS,
+        Ok(false) => ExitCode::from(1),
+        Err(error) => fail_internal(&error.to_string()),
     }
 }
 
@@ -161,12 +223,17 @@ fn run_generate(output_dir: Option<PathBuf>) -> ExitCode {
         return ExitCode::from(1);
     };
     let options = GenerateOptions { output_dir };
-    let report = resolve_root(&cwd).and_then(|root| {
-        let preparation = prepare(&root)?;
-        generate(&preparation, &options)
-    });
+    let root = match resolve_root(&cwd) {
+        Ok(root) => root,
+        Err(error) => return fail_public(&error),
+    };
+    let report = prepare(&root).and_then(|preparation| generate(&preparation, &options));
     match report {
         Ok(report) => {
+            if let Some(dir) = &options.output_dir {
+                eprintln!("Preview: {}", absolute_preview(&cwd, dir).display());
+                eprintln!("Repository: {}", root.display());
+            }
             for path in &report.files_written {
                 eprintln!("{path}");
             }
@@ -177,6 +244,16 @@ fn run_generate(output_dir: Option<PathBuf>) -> ExitCode {
         }
         Err(error) => fail_public(&error),
     }
+}
+
+/// Absolute preview path for the stderr report; canonical when possible.
+fn absolute_preview(cwd: &Path, dir: &Path) -> PathBuf {
+    let joined = if dir.is_absolute() {
+        dir.to_path_buf()
+    } else {
+        cwd.join(dir)
+    };
+    joined.canonicalize().unwrap_or(joined)
 }
 
 /// Read the working directory, reporting failures as exit 1.

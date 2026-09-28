@@ -4,36 +4,14 @@
 use std::error::Error;
 use std::path::{Path, PathBuf};
 
-use crate::impl_cli_tmp::{cleanup, code, fresh_tempdir, spawn};
+use crate::impl_cli_tmp::{cleanup, code, fresh_tempdir, spawn_isolated};
 
-/// Run one child with the internal env set.
-fn with_internal_env(
-    args: &[&str],
-    op: Option<&str>,
-    runner_temp: Option<&Path>,
-    run_key: Option<&str>,
-    cwd: &Path,
-) -> Result<std::process::Output, Box<dyn Error>> {
-    let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_velnor-actions"));
-    command.args(args).current_dir(cwd);
-    if let Some(op) = op {
-        command.env("VELNOR_INTERNAL_OP", op);
-    }
-    if let Some(temp) = runner_temp {
-        command.env("RUNNER_TEMP", temp);
-    }
-    if let Some(key) = run_key {
-        command.env("VELNOR_RUN_KEY", key);
-    }
-    Ok(command.output()?)
-}
-
-/// Stage `$RUNNER_TEMP/velnor/<key>/request.json` with `body`.
-fn stage_request(temp: &Path, key: &str, body: &str) -> Result<PathBuf, Box<dyn Error>> {
-    let dir = temp.join("velnor").join(key);
-    std::fs::create_dir_all(&dir)?;
-    std::fs::write(dir.join("request.json"), body)?;
-    Ok(dir)
+/// Stage `<dir>/<name>` with `body`, creating parents.
+fn stage_request(dir: &Path, name: &str, body: &str) -> Result<PathBuf, Box<dyn Error>> {
+    std::fs::create_dir_all(dir)?;
+    let path = dir.join(name);
+    std::fs::write(&path, body)?;
+    Ok(path)
 }
 
 /// Assert two outputs are byte-identical in code, stdout, and stderr.
@@ -43,33 +21,57 @@ fn assert_identical(left: &std::process::Output, right: &std::process::Output) {
     assert_eq!(left.stderr, right.stderr);
 }
 
+/// Assert the JSON protocol ran: silent stdout, sibling response, no mode leak.
+fn assert_protocol(output: &std::process::Output, dir: &Path, sibling: &str) {
+    let status = code(output);
+    assert!(status == 0 || status == 1, "internal exit was {status}");
+    assert!(output.stdout.is_empty(), "internal stdout must stay empty");
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+    assert!(!stderr.contains("plan-v1"));
+    assert!(!stderr.contains("merge-v1"));
+    assert!(!stderr.contains("write-request-v1"));
+    assert!(!stderr.contains("VELNOR_INTERNAL"));
+    if status == 0 {
+        assert!(dir.join(sibling).is_file());
+    }
+}
+
 /// The named regression: bare or private-looking argv without env is usage.
 #[test]
 fn internal_op_requires_env_gate_and_keeps_public_tree() -> Result<(), Box<dyn Error>> {
     let tmp = fresh_tempdir("gate")?;
-    let bare = spawn(&[], &[], &tmp)?;
+    let bare = spawn_isolated(&[], &[], &tmp)?;
     assert_eq!(code(&bare), 2);
-    let hidden = spawn(&["__internal"], &[], &tmp)?;
+    let hidden = spawn_isolated(&["__internal"], &[], &tmp)?;
     assert_eq!(code(&hidden), 2);
-    let hidden_plan = spawn(&["__internal-plan"], &[], &tmp)?;
+    let hidden_plan = spawn_isolated(&["__internal-plan"], &[], &tmp)?;
     assert_eq!(code(&hidden_plan), 2);
-    let help = spawn(&["--help"], &[], &tmp)?;
+    let help = spawn_isolated(&["--help"], &[], &tmp)?;
     assert_eq!(code(&help), 0);
     let help_text = String::from_utf8_lossy(&help.stdout).into_owned();
     assert!(!help_text.contains("__"));
     assert!(!help_text.contains("plan-v1"));
     assert!(!help_text.contains("merge-v1"));
+    assert!(!help_text.contains("write-request-v1"));
     cleanup(&tmp);
     Ok(())
 }
 
 #[test]
-fn env_without_request_file_matches_bare() -> Result<(), Box<dyn Error>> {
+fn plan_and_merge_without_request_file_match_bare() -> Result<(), Box<dyn Error>> {
     let tmp = fresh_tempdir("gate-nofile")?;
-    let bare = spawn(&[], &[], &tmp)?;
+    let bare = spawn_isolated(&[], &[], &tmp)?;
     assert_eq!(code(&bare), 2);
     for op in ["plan-v1", "merge-v1"] {
-        let gated = with_internal_env(&[], Some(op), Some(&tmp), Some("r1"), &tmp)?;
+        let missing = tmp.join(format!("{op}-request.json"));
+        let gated = spawn_isolated(
+            &[],
+            &[
+                ("VELNOR_INTERNAL_OP", op),
+                ("VELNOR_REQUEST_FILE", missing.to_str().unwrap_or("/")),
+            ],
+            &tmp,
+        )?;
         assert_eq!(code(&gated), 2);
         assert_identical(&bare, &gated);
     }
@@ -78,14 +80,65 @@ fn env_without_request_file_matches_bare() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn unknown_op_matches_bare() -> Result<(), Box<dyn Error>> {
-    let tmp = fresh_tempdir("gate-op")?;
-    let dir = stage_request(&tmp, "r1", "{}")?;
-    let bare = spawn(&[], &[], &tmp)?;
-    let gated = with_internal_env(&[], Some("bogus-v9"), Some(&tmp), Some("r1"), &tmp)?;
+fn write_request_without_github_env_matches_bare() -> Result<(), Box<dyn Error>> {
+    let tmp = fresh_tempdir("gate-wr-env")?;
+    let bare = spawn_isolated(&[], &[], &tmp)?;
+    let missing = tmp.join("plan-v1-request.json");
+    let gated = spawn_isolated(
+        &[],
+        &[
+            ("VELNOR_INTERNAL_OP", "write-request-v1"),
+            ("VELNOR_REQUEST_FILE", missing.to_str().unwrap_or("/")),
+        ],
+        &tmp,
+    )?;
+    assert_identical(&bare, &gated);
+    assert!(!missing.exists());
+    cleanup(&tmp);
+    Ok(())
+}
+
+#[test]
+fn write_request_with_existing_file_matches_bare() -> Result<(), Box<dyn Error>> {
+    let tmp = fresh_tempdir("gate-wr-exists")?;
+    let dir = tmp.join("request");
+    let staged = stage_request(&dir, "plan-v1-request.json", "{}")?;
+    let payload = stage_request(&dir, "event.json", "{}")?;
+    let bare = spawn_isolated(&[], &[], &tmp)?;
+    let gated = spawn_isolated(
+        &[],
+        &[
+            ("VELNOR_INTERNAL_OP", "write-request-v1"),
+            ("VELNOR_REQUEST_FILE", staged.to_str().unwrap_or("/")),
+            ("GITHUB_EVENT_NAME", "push"),
+            ("GITHUB_EVENT_PATH", payload.to_str().unwrap_or("/")),
+        ],
+        &tmp,
+    )?;
     assert_eq!(code(&gated), 2);
     assert_identical(&bare, &gated);
-    assert!(!dir.join("response.json").exists());
+    assert_eq!(std::fs::read_to_string(&staged)?, "{}");
+    cleanup(&tmp);
+    Ok(())
+}
+
+#[test]
+fn unknown_op_matches_bare() -> Result<(), Box<dyn Error>> {
+    let tmp = fresh_tempdir("gate-op")?;
+    let dir = tmp.join("request");
+    let staged = stage_request(&dir, "plan-v1-request.json", "{}")?;
+    let bare = spawn_isolated(&[], &[], &tmp)?;
+    let gated = spawn_isolated(
+        &[],
+        &[
+            ("VELNOR_INTERNAL_OP", "bogus-v9"),
+            ("VELNOR_REQUEST_FILE", staged.to_str().unwrap_or("/")),
+        ],
+        &tmp,
+    )?;
+    assert_eq!(code(&gated), 2);
+    assert_identical(&bare, &gated);
+    assert!(!dir.join("plan-v1-response.json").exists());
     cleanup(&tmp);
     Ok(())
 }
@@ -93,18 +146,22 @@ fn unknown_op_matches_bare() -> Result<(), Box<dyn Error>> {
 #[test]
 fn missing_gate_pieces_match_bare() -> Result<(), Box<dyn Error>> {
     let tmp = fresh_tempdir("gate-missing")?;
-    let _ = stage_request(&tmp, "r1", "{}")?;
-    let bare = spawn(&[], &[], &tmp)?;
-    let no_temp = with_internal_env(&[], Some("plan-v1"), None, Some("r1"), &tmp)?;
-    assert_identical(&bare, &no_temp);
-    let no_key = with_internal_env(&[], Some("plan-v1"), Some(&tmp), None, &tmp)?;
-    assert_identical(&bare, &no_key);
-    let no_op = with_internal_env(&[], None, Some(&tmp), Some("r1"), &tmp)?;
-    assert_identical(&bare, &no_op);
-    let empty_op = with_internal_env(&[], Some(""), Some(&tmp), Some("r1"), &tmp)?;
-    assert_identical(&bare, &empty_op);
-    let empty_key = with_internal_env(&[], Some("plan-v1"), Some(&tmp), Some(""), &tmp)?;
-    assert_identical(&bare, &empty_key);
+    let dir = tmp.join("request");
+    let staged = stage_request(&dir, "plan-v1-request.json", "{}")?;
+    let bare = spawn_isolated(&[], &[], &tmp)?;
+    let file = staged.to_str().unwrap_or("/");
+    for vars in [
+        vec![("VELNOR_INTERNAL_OP", "plan-v1")],
+        vec![("VELNOR_REQUEST_FILE", file)],
+        vec![("VELNOR_INTERNAL_OP", ""), ("VELNOR_REQUEST_FILE", file)],
+        vec![
+            ("VELNOR_INTERNAL_OP", "plan-v1"),
+            ("VELNOR_REQUEST_FILE", ""),
+        ],
+    ] {
+        let gated = spawn_isolated(&[], &vars, &tmp)?;
+        assert_identical(&bare, &gated);
+    }
     cleanup(&tmp);
     Ok(())
 }
@@ -112,11 +169,18 @@ fn missing_gate_pieces_match_bare() -> Result<(), Box<dyn Error>> {
 #[test]
 fn help_and_version_identical_with_env() -> Result<(), Box<dyn Error>> {
     let tmp = fresh_tempdir("gate-help")?;
+    let dir = tmp.join("request");
+    let staged = stage_request(&dir, "plan-v1-request.json", "{}")?;
+    let file = staged.to_str().unwrap_or("/").to_owned();
     for flag in ["--help", "--version"] {
-        let plain = spawn(&[flag], &[], &tmp)?;
+        let plain = spawn_isolated(&[flag], &[], &tmp)?;
         assert_eq!(code(&plain), 0);
-        for op in ["plan-v1", "merge-v1", "bogus-v9"] {
-            let gated = with_internal_env(&[flag], Some(op), Some(&tmp), Some("r1"), &tmp)?;
+        for op in ["write-request-v1", "plan-v1", "merge-v1", "bogus-v9"] {
+            let gated = spawn_isolated(
+                &[flag],
+                &[("VELNOR_INTERNAL_OP", op), ("VELNOR_REQUEST_FILE", &file)],
+                &tmp,
+            )?;
             assert_identical(&plain, &gated);
         }
     }
@@ -127,14 +191,24 @@ fn help_and_version_identical_with_env() -> Result<(), Box<dyn Error>> {
 #[test]
 fn public_commands_ignore_internal_env() -> Result<(), Box<dyn Error>> {
     let tmp = fresh_tempdir("gate-public")?;
+    let dir = tmp.join("request");
+    let staged = stage_request(&dir, "plan-v1-request.json", "{}")?;
+    let file = staged.to_str().unwrap_or("/").to_owned();
     for args in [
         vec!["__internal"],
         vec!["plan", "--format", "json"],
         vec!["init", "extra"],
     ] {
-        let plain = spawn(&args, &[], &tmp)?;
+        let plain = spawn_isolated(&args, &[], &tmp)?;
         assert_eq!(code(&plain), 2);
-        let gated = with_internal_env(&args, Some("plan-v1"), Some(&tmp), Some("r1"), &tmp)?;
+        let gated = spawn_isolated(
+            &args,
+            &[
+                ("VELNOR_INTERNAL_OP", "plan-v1"),
+                ("VELNOR_REQUEST_FILE", &file),
+            ],
+            &tmp,
+        )?;
         assert_identical(&plain, &gated);
     }
     cleanup(&tmp);
@@ -142,54 +216,24 @@ fn public_commands_ignore_internal_env() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn traversal_run_key_is_refused() -> Result<(), Box<dyn Error>> {
-    let tmp = fresh_tempdir("gate-traversal")?;
-    let outer = tmp.join("outer");
-    let target = outer.join("velnor").join("victim");
-    std::fs::create_dir_all(&target)?;
-    std::fs::write(target.join("request.json"), "{}")?;
-    let bare = spawn(&[], &[], &tmp)?;
-    for key in ["../outer/velnor/victim", "..", ".", "a/b", "a\\b"] {
-        let gated = with_internal_env(&[], Some("plan-v1"), Some(&outer), Some(key), &tmp)?;
-        assert_eq!(code(&gated), 2, "key {key} must be refused");
-        assert_identical(&bare, &gated);
-    }
-    assert!(!target.join("response.json").exists());
-    cleanup(&tmp);
-    Ok(())
-}
-
-/// Assert the JSON protocol ran: silent stdout, response file, no mode leak.
-fn assert_protocol(output: &std::process::Output, dir: &Path) {
-    let status = code(output);
-    assert!(status == 0 || status == 1, "internal exit was {status}");
-    assert!(output.stdout.is_empty(), "internal stdout must stay empty");
-    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
-    assert!(!stderr.contains("plan-v1"));
-    assert!(!stderr.contains("merge-v1"));
-    assert!(!stderr.contains("VELNOR_INTERNAL"));
-    if status == 0 {
-        assert!(dir.join("response.json").is_file());
-    }
-}
-
-#[test]
 fn unreadable_request_exits_one_without_response() -> Result<(), Box<dyn Error>> {
     use std::os::unix::fs::PermissionsExt;
     let tmp = fresh_tempdir("gate-unreadable")?;
-    let dir = stage_request(&tmp, "r1", "{}")?;
-    std::fs::set_permissions(
-        dir.join("request.json"),
-        std::fs::Permissions::from_mode(0o000),
+    let dir = tmp.join("request");
+    let staged = stage_request(&dir, "plan-v1-request.json", "{}")?;
+    std::fs::set_permissions(&staged, std::fs::Permissions::from_mode(0o000))?;
+    let output = spawn_isolated(
+        &[],
+        &[
+            ("VELNOR_INTERNAL_OP", "plan-v1"),
+            ("VELNOR_REQUEST_FILE", staged.to_str().unwrap_or("/")),
+        ],
+        &tmp,
     )?;
-    let output = with_internal_env(&[], Some("plan-v1"), Some(&tmp), Some("r1"), &tmp)?;
     assert_eq!(code(&output), 1);
     assert!(output.stdout.is_empty());
-    assert!(!dir.join("response.json").exists());
-    std::fs::set_permissions(
-        dir.join("request.json"),
-        std::fs::Permissions::from_mode(0o600),
-    )?;
+    assert!(!dir.join("plan-v1-response.json").exists());
+    std::fs::set_permissions(&staged, std::fs::Permissions::from_mode(0o600))?;
     cleanup(&tmp);
     Ok(())
 }
@@ -197,9 +241,17 @@ fn unreadable_request_exits_one_without_response() -> Result<(), Box<dyn Error>>
 #[test]
 fn staged_plan_request_runs_json_protocol() -> Result<(), Box<dyn Error>> {
     let tmp = fresh_tempdir("gate-plan")?;
-    let dir = stage_request(&tmp, "r1", "{}")?;
-    let output = with_internal_env(&[], Some("plan-v1"), Some(&tmp), Some("r1"), &tmp)?;
-    assert_protocol(&output, &dir);
+    let dir = tmp.join("request");
+    let staged = stage_request(&dir, "plan-v1-request.json", "{}")?;
+    let output = spawn_isolated(
+        &[],
+        &[
+            ("VELNOR_INTERNAL_OP", "plan-v1"),
+            ("VELNOR_REQUEST_FILE", staged.to_str().unwrap_or("/")),
+        ],
+        &tmp,
+    )?;
+    assert_protocol(&output, &dir, "plan-v1-response.json");
     cleanup(&tmp);
     Ok(())
 }
@@ -207,9 +259,17 @@ fn staged_plan_request_runs_json_protocol() -> Result<(), Box<dyn Error>> {
 #[test]
 fn staged_merge_request_runs_json_protocol() -> Result<(), Box<dyn Error>> {
     let tmp = fresh_tempdir("gate-merge")?;
-    let dir = stage_request(&tmp, "r1", "{}")?;
-    let output = with_internal_env(&[], Some("merge-v1"), Some(&tmp), Some("r1"), &tmp)?;
-    assert_protocol(&output, &dir);
+    let dir = tmp.join("request");
+    let staged = stage_request(&dir, "merge-v1-request.json", "{}")?;
+    let output = spawn_isolated(
+        &[],
+        &[
+            ("VELNOR_INTERNAL_OP", "merge-v1"),
+            ("VELNOR_REQUEST_FILE", staged.to_str().unwrap_or("/")),
+        ],
+        &tmp,
+    )?;
+    assert_protocol(&output, &dir, "merge-v1-response.json");
     cleanup(&tmp);
     Ok(())
 }

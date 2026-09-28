@@ -2,7 +2,9 @@
 
 use std::error::Error;
 
-use crate::impl_cli_tmp::{cleanup, code, fresh_tempdir, git_init, spawn};
+use crate::impl_cli_tmp::{
+    add_crate_pair, cleanup, code, fresh_tempdir, git_init, init_repo, spawn,
+};
 
 #[test]
 fn init_creates_config_then_refuses_overwrite() -> Result<(), Box<dyn Error>> {
@@ -44,14 +46,12 @@ fn unknown_command_exits_two() -> Result<(), Box<dyn Error>> {
 fn env_without_request_file_exits_two() -> Result<(), Box<dyn Error>> {
     let tmp = fresh_tempdir("smoke-env")?;
     git_init(&tmp)?;
-    let runner = tmp.join("runner-temp");
-    std::fs::create_dir_all(&runner)?;
+    let missing = tmp.join("plan-v1-request.json");
     let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_velnor-actions"));
     command
         .current_dir(&tmp)
         .env("VELNOR_INTERNAL_OP", "plan-v1")
-        .env("RUNNER_TEMP", &runner)
-        .env("VELNOR_RUN_KEY", "smoke");
+        .env("VELNOR_REQUEST_FILE", &missing);
     let gated = command.output()?;
     assert_eq!(code(&gated), 2);
     let bare = spawn(&[], &[], &tmp)?;
@@ -145,19 +145,97 @@ fn generate_keeps_recommendations_on_stderr() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+/// Byte-compare two preview trees file by file.
+fn assert_same_tree(left: &std::path::Path, right: &std::path::Path) -> Result<(), Box<dyn Error>> {
+    let mut pending = vec![left.to_path_buf()];
+    while let Some(path) = pending.pop() {
+        for entry in std::fs::read_dir(&path)? {
+            let entry = entry?;
+            let relative = entry.path().strip_prefix(left)?.to_path_buf();
+            let other = right.join(&relative);
+            if entry.file_type()?.is_dir() {
+                pending.push(entry.path());
+            } else {
+                assert_eq!(
+                    std::fs::read(entry.path())?,
+                    std::fs::read(&other)?,
+                    "preview differs at {}",
+                    relative.display()
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn preview_prints_absolute_paths_and_files() -> Result<(), Box<dyn Error>> {
+    let tmp = fresh_tempdir("smoke-abs")?;
+    init_repo(&tmp)?;
+    add_crate_pair(&tmp)?;
+    let outer = fresh_tempdir("smoke-abs-preview")?;
+    let preview = outer.join("preview");
+    let output = spawn(
+        &["generate", "--output-dir", preview.to_str().unwrap_or("/")],
+        &[],
+        &tmp,
+    )?;
+    assert_eq!(code(&output), 0, "stderr: {:?}", output.stderr);
+    assert!(output.stdout.is_empty());
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+    let want_preview = preview.canonicalize().unwrap_or_else(|_| preview.clone());
+    let want_root = tmp.canonicalize().unwrap_or_else(|_| tmp.clone());
+    assert!(
+        stderr.contains(&format!("Preview: {}", want_preview.display())),
+        "{stderr}"
+    );
+    assert!(
+        stderr.contains(&format!("Repository: {}", want_root.display())),
+        "{stderr}"
+    );
+    assert!(stderr.contains(".github/actionlint.yaml"), "{stderr}");
+    assert!(stderr.contains(".github/workflows/velnor.yml"), "{stderr}");
+    cleanup(&tmp);
+    cleanup(&outer);
+    Ok(())
+}
+
+#[test]
+fn previews_use_unique_tmp_dirs_without_collision() -> Result<(), Box<dyn Error>> {
+    let tmp = fresh_tempdir("smoke-unique")?;
+    init_repo(&tmp)?;
+    add_crate_pair(&tmp)?;
+    let outer = fresh_tempdir("smoke-unique-previews")?;
+    let first = outer.join("first");
+    let second = outer.join("second");
+    for preview in [&first, &second] {
+        let output = spawn(
+            &["generate", "--output-dir", preview.to_str().unwrap_or("/")],
+            &[],
+            &tmp,
+        )?;
+        assert_eq!(code(&output), 0, "stderr: {:?}", output.stderr);
+        assert!(preview.starts_with(std::env::temp_dir()));
+        assert!(preview.join(".github/workflows/velnor.yml").is_file());
+    }
+    assert_same_tree(&first.join(".github"), &second.join(".github"))?;
+    cleanup(&tmp);
+    cleanup(&outer);
+    Ok(())
+}
+
 #[test]
 fn help_is_identical_with_and_without_env() -> Result<(), Box<dyn Error>> {
     let tmp = fresh_tempdir("smoke-help")?;
     let plain = spawn(&["--help"], &[], &tmp)?;
     assert_eq!(code(&plain), 0);
-    let runner = tmp.join("runner-temp");
+    let missing = tmp.join("merge-v1-request.json");
     let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_velnor-actions"));
     command
         .arg("--help")
         .current_dir(&tmp)
         .env("VELNOR_INTERNAL_OP", "merge-v1")
-        .env("RUNNER_TEMP", &runner)
-        .env("VELNOR_RUN_KEY", "smoke");
+        .env("VELNOR_REQUEST_FILE", &missing);
     let gated = command.output()?;
     assert_eq!(code(&gated), 0);
     assert_eq!(gated.stdout, plain.stdout);

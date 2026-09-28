@@ -23,6 +23,7 @@ pub(crate) enum Command {
     /// Render and write the `.github` tree.
     Generate {
         /// Preview root; writes `PATH/.github` without touching the repository.
+        /// Choose a unique directory under /tmp or runner temporary storage.
         #[arg(long = "output-dir", value_name = "PATH")]
         output_dir: Option<PathBuf>,
     },
