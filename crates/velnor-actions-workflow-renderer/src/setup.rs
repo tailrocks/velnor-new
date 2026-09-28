@@ -55,11 +55,15 @@ impl MiseSetup {
     }
 }
 
-/// Fixed `Setup Mise` step: exact `version`/`sha256`, no install or env.
+/// Fixed `Setup Mise` step: exact `version`/`sha256`, no install, env, or cache.
 ///
 /// `install: false` keeps project tool files, tasks, and hooks from
-/// running; `env: false` keeps Mise env out of subsequent steps. The
-/// `with` map is exactly these four keys.
+/// running; `env: false` keeps Mise env out of subsequent steps.
+/// `cache: false` (plus `cache_save: false`) pins the action's cache
+/// off: its default restore hashes the whole workspace for tool files
+/// and ELOOPs on symlink loops, while `install: false` means it never
+/// saves anyway. Tool reuse comes from the explicit tools-cache steps.
+/// The `with` map is exactly these six keys.
 /// # Errors
 pub fn mise_setup_step(setup: &MiseSetup) -> Result<Step, RenderError> {
     setup.validate()?;
@@ -71,6 +75,8 @@ pub fn mise_setup_step(setup: &MiseSetup) -> Result<Step, RenderError> {
             ("sha256".to_owned(), setup.sha256.clone()),
             ("install".to_owned(), "false".to_owned()),
             ("env".to_owned(), "false".to_owned()),
+            ("cache".to_owned(), "false".to_owned()),
+            ("cache_save".to_owned(), "false".to_owned()),
         ]),
     )
 }
@@ -154,6 +160,14 @@ fn is_setup_step(step: &Step) -> bool {
     matches!(&step.kind, StepKind::Action { uses, .. } if uses.starts_with(&format!("{MISE_ACTION_NAME}@")))
 }
 
+/// Index of the setup step, when the job carries exactly the gate output.
+///
+/// Called after [`ensure_setup`], so any present step is already
+/// shape-checked; the tools cache anchors on it without revalidating.
+pub(crate) fn setup_index(job: &Job) -> Option<usize> {
+    job.steps.iter().position(is_setup_step)
+}
+
 /// Reject malformed setup steps: exact inputs, nothing else.
 fn check_setup_shape(job_id: &str, step: &Step) -> Result<(), RenderError> {
     let StepKind::Action { uses, with } = &step.kind else {
@@ -162,9 +176,11 @@ fn check_setup_shape(job_id: &str, step: &Step) -> Result<(), RenderError> {
     if steps::validate_uses(uses).is_err() {
         return Err(setup_malformed(job_id));
     }
-    let shape_ok = with.len() == 4
+    let shape_ok = with.len() == 6
         && with.get("install").is_some_and(|v| v == "false")
         && with.get("env").is_some_and(|v| v == "false")
+        && with.get("cache").is_some_and(|v| v == "false")
+        && with.get("cache_save").is_some_and(|v| v == "false")
         && with.get("version").is_some_and(|v| is_catalog_version(v))
         && with
             .get("sha256")

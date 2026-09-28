@@ -10,7 +10,9 @@ use crate::{RenderError, commands, marker};
 
 pub use crate::cache_steps::{
     CACHE_RESTORE_NAME, CACHE_SAVE_NAME, MBX_ACTION_NAME, TARGET_DIR_PREFIX, TASK_ARTIFACTS_DIR,
-    cache_action_step, mbx_objects_step, target_dir_for_lane,
+    TOOLS_CACHE_PATH, TOOLS_KEY_PREFIX, TOOLS_RESTORE_NAME, TOOLS_RESTORE_USES, TOOLS_SAVE_NAME,
+    TOOLS_SAVE_USES, cache_action_step, mbx_objects_step, target_dir_for_lane, tools_cache_key,
+    tools_restore_step, tools_save_step,
 };
 
 /// Env key selecting the staged-binary internal operation.

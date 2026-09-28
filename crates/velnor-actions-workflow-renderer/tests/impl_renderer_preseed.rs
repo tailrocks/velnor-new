@@ -10,6 +10,11 @@ use super::impl_renderer_fixtures::*;
 
 const TARGET: &str = "x86_64-unknown-linux-gnu";
 const MARK: &str = "(pre-seed trust-on-review)";
+const MBX_VERSION: &str = "1.19.0";
+
+fn mbx_probe() -> Vec<String> {
+    mise_argv("mr-boxington@1.19.0", "mbx", &["--version"])
+}
 
 fn build_argv() -> Vec<String> {
     mise_argv(
@@ -36,7 +41,7 @@ fn preseed_plan() -> Result<(String, Job), RenderError> {
         vec![
             checkout_step(&checkout_pin())?,
             preseed_build_step(build.clone())?,
-            preseed_verify_step()?,
+            preseed_verify_step(&mbx_probe(), MBX_VERSION)?,
             preseed_manifest_step(&build, TARGET)?,
             preseed_upload_step()?,
             preseed_stage_step(PreseedStageSource::LocalBuild, STAGED)?,
@@ -66,7 +71,7 @@ fn preseed_templates_carry_trust_mark_and_exact_artifact() -> Result<(), RenderE
     let manifest = preseed_manifest_step(&build, TARGET)?;
     for step in [
         preseed_build_step(build.clone())?,
-        preseed_verify_step()?,
+        preseed_verify_step(&mbx_probe(), MBX_VERSION)?,
         manifest,
         preseed_upload_step()?,
         preseed_download_step()?,
@@ -105,6 +110,45 @@ fn preseed_templates_carry_trust_mark_and_exact_artifact() -> Result<(), RenderE
         preseed_stage_step(PreseedStageSource::LocalBuild, "target/release/x").is_err(),
         "unstaged path accepted"
     );
+    Ok(())
+}
+
+#[test]
+fn preseed_verify_pins_binary_and_mbx_route() -> Result<(), RenderError> {
+    let step = preseed_verify_step(&mbx_probe(), MBX_VERSION)?;
+    let velnor_actions_contract::StepKind::Shell { run, .. } = &step.kind else {
+        panic!("verify must be a shell step");
+    };
+    assert_eq!((run[0].as_str(), run[1].as_str()), ("sh", "-c"));
+    for need in [
+        "test -x target/release/velnor-actions",
+        "mise --no-config --no-env --no-hooks exec mr-boxington@1.19.0 -- mbx --version",
+        "grep -qxF \"mbx 1.19.0\"",
+    ] {
+        assert!(run[2].contains(need), "verify misses {need}: {}", run[2]);
+    }
+    assert!(
+        !run[2].contains('\'') && !run[2].contains("$(") && !run[2].contains('`'),
+        "verify keeps shellcheck-safe quoting: {}",
+        run[2]
+    );
+    for bad_version in ["", "latest", "1.19", "v1.19.0", "1.19.0 "] {
+        assert!(
+            preseed_verify_step(&mbx_probe(), bad_version).is_err(),
+            "version accepted: {bad_version}"
+        );
+    }
+    for bad_probe in [
+        Vec::new(),
+        vec!["mbx".to_owned(), "--version".to_owned()],
+        mise_argv("mr-boxington@1.19.0", "mbx", &["--help"]),
+        mise_argv("mr-boxington@latest", "mbx", &["--version"]),
+    ] {
+        assert!(
+            preseed_verify_step(&bad_probe, MBX_VERSION).is_err(),
+            "probe accepted: {bad_probe:?}"
+        );
+    }
     Ok(())
 }
 

@@ -6,7 +6,7 @@
 //! generation never calls either.
 
 use velnor_actions_contract::{GeneratorLock, WorkflowIr, target_for_runner_label};
-use velnor_actions_mise::ToolCatalog;
+use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_workflow_renderer::render::{FINAL_JOB_ID, PLAN_JOB_ID, TASK_JOB_ID};
 use velnor_actions_workflow_renderer::steps::STAGED_BINARY_PREFIX;
 use velnor_actions_workflow_renderer::{
@@ -16,7 +16,7 @@ use velnor_actions_workflow_renderer::{
 
 use crate::OrchestratorError;
 use crate::pins::lock_acquire_step;
-use crate::vectors::candidate_build_argv;
+use crate::vectors::{candidate_build_argv, mbx_probe_argv};
 use crate::workflow::WorkflowPlan;
 
 /// Attach lock-backed Acquire steps to the plan and final jobs.
@@ -53,12 +53,13 @@ pub(crate) fn attach_lock_acquire(
 /// Attach explicit pre-seed build-once steps (Velnor policy, no lock).
 ///
 /// The plan job builds the helper once from the checked-out source with
-/// the fixed §4 vector, verifies the MBX compile output, records the
-/// source commit in a manifest, uploads the exactly-named artifact, and
-/// stages its local build; task (when present) and final jobs download
-/// that artifact and stage it instead of rebuilding. Sets the render
-/// context's pre-seed mode so the strict gates accept fixed pre-seed
-/// staging. Consumer generation never calls this.
+/// the fixed §4 vector, verifies the MBX compile output plus its pinned
+/// route, records the source commit in a manifest, uploads the
+/// exactly-named artifact, and stages its local build; task (when
+/// present) and final jobs download that artifact and stage it instead
+/// of rebuilding. Sets the render context's pre-seed mode so the strict
+/// gates accept fixed pre-seed staging. Consumer generation never calls
+/// this.
 pub(crate) fn attach_preseed(
     workflow: &mut WorkflowPlan,
     label: &str,
@@ -69,10 +70,11 @@ pub(crate) fn attach_preseed(
         problem: format!("unsupported_target_for_runner:{label}"),
     })?;
     let build = candidate_build_argv(&catalog)?;
+    let probe = mbx_probe_argv(&catalog)?;
     let staged = format!("{STAGED_BINARY_PREFIX}{version}");
     let plan_steps = vec![
         preseed_build_step(build.clone())?,
-        preseed_verify_step()?,
+        preseed_verify_step(&probe, catalog.version(PinnedTool::MrBoxington))?,
         preseed_manifest_step(&build, target)?,
         preseed_upload_step()?,
         preseed_stage_step(PreseedStageSource::LocalBuild, &staged)?,

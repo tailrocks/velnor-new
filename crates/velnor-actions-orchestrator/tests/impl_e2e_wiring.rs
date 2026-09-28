@@ -6,6 +6,7 @@
 //! staged-binary use, the Velnor policy carries deny plus machete, and every
 //! step is named.
 
+use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::WORKFLOW_PATH;
 
@@ -97,12 +98,16 @@ fn uses_staged_helper(step: &StepText) -> bool {
         && step.body.contains("$RUNNER_TEMP/velnor/bin")
 }
 
-/// Setup Mise must be first (modulo Checkout) and precede every `mise` use.
+/// Tools-cache step display names, asserted as emitted text.
+const RESTORE_TOOLS_TEXT: &str = "Restore Mise tools";
+const SAVE_TOOLS_TEXT: &str = "Save Mise tools";
+
+/// Setup Mise must be first (modulo Checkout plus tools restore) and precede every `mise` use.
 fn check_setup_first(job: &JobText) -> Result<(), String> {
     let setup = job.steps.iter().position(|s| s.name == "Setup Mise");
     let first_mise = job.steps.iter().position(uses_mise);
     match (setup, first_mise) {
-        (Some(at), Some(first)) if at < first && at <= 1 => Ok(()),
+        (Some(at), Some(first)) if at < first && setup_is_early(job, at) => Ok(()),
         (Some(_) | None, None) => Ok(()),
         (None, Some(_)) => Err(format!("{}: mise use without Setup Mise", job.id)),
         (Some(at), Some(first)) => Err(format!(
@@ -110,6 +115,74 @@ fn check_setup_first(job: &JobText) -> Result<(), String> {
             job.id
         )),
     }
+}
+
+/// Setup position is legal at 0-1, or at 2 behind the tools restore.
+fn setup_is_early(job: &JobText, at: usize) -> bool {
+    at <= 1 || (at == 2 && job.steps[1].name == RESTORE_TOOLS_TEXT)
+}
+
+/// Setup Mise must pin the action cache off: default `cache:true` walks the
+/// workspace hashing tool files and ELOOPs on the symlink-loop fixture.
+fn check_setup_cache_off(job: &JobText) -> Result<(), String> {
+    for step in job.steps.iter().filter(|s| s.name == "Setup Mise") {
+        for need in ["cache: \"false\"", "cache_save: \"false\""] {
+            if !step.body.contains(need) {
+                return Err(format!("{}: Setup Mise misses {need}", job.id));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Every setup job must restore tools before setup and save after it, over
+/// the mise data dir only with a tool-file-hashed key.
+fn check_tools_cache(job: &JobText) -> Result<(), String> {
+    let Some(setup_at) = job.steps.iter().position(|s| s.name == "Setup Mise") else {
+        return Ok(());
+    };
+    let Some(restore_at) = job.steps.iter().position(|s| s.name == RESTORE_TOOLS_TEXT) else {
+        return Err(format!("{}: Setup Mise without tools restore", job.id));
+    };
+    let Some(save_at) = job.steps.iter().position(|s| s.name == SAVE_TOOLS_TEXT) else {
+        return Err(format!("{}: Setup Mise without tools save", job.id));
+    };
+    if !(restore_at < setup_at && setup_at < save_at) {
+        return Err(format!("{}: {restore_at} {setup_at} {save_at}", job.id));
+    }
+    for (name, at) in [(RESTORE_TOOLS_TEXT, restore_at), (SAVE_TOOLS_TEXT, save_at)] {
+        let step = &job.steps[at];
+        for need in [
+            "actions/cache/",
+            "key: mise-tools-v1-",
+            "hashFiles(",
+            "path: ~/.local/share/mise",
+        ] {
+            if !step.body.contains(need) {
+                return Err(format!("{}: {name} misses {need}:\n{}", job.id, step.body));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Verify-MBX step must keep the executable check and prove the pinned route.
+fn check_verify_mbx(plan: &JobText, mbx: &str) -> Result<(), String> {
+    let verify = plan
+        .steps
+        .iter()
+        .find(|step| step.name.contains("Verify MBX compile"))
+        .ok_or("missing Verify MBX compile step")?;
+    for need in [
+        "test -x target/release/velnor-actions".to_owned(),
+        "mbx --version".to_owned(),
+        format!("grep -qxF \\\"mbx {mbx}\\\""),
+    ] {
+        if !verify.body.contains(&need) {
+            return Err(format!("verify misses {need}"));
+        }
+    }
+    Ok(())
 }
 
 /// Every staged-helper use must follow an Acquire or pre-seed Stage step.
@@ -147,6 +220,8 @@ fn check_tree(yaml: &str) -> Result<Vec<JobText>, String> {
     }
     for job in &jobs {
         check_setup_first(job)?;
+        check_setup_cache_off(job)?;
+        check_tools_cache(job)?;
         check_provisioned(job)?;
         check_named(job)?;
     }
@@ -271,6 +346,10 @@ fn emitted_yaml_preseed_builds_once_and_shares_artifact() -> TestResult {
             .any(|step| step.body.contains("name: velnor-preseed-helper")),
         "plan misses exact artifact upload:\n{yaml}"
     );
+    let mbx = ToolCatalog::pinned()
+        .version(PinnedTool::MrBoxington)
+        .to_owned();
+    check_verify_mbx(plan, &mbx)?;
     assert!(
         !yaml.contains("pattern:"),
         "no wildcard artifact matching:\n{yaml}"

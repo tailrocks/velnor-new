@@ -22,6 +22,8 @@ fn setup_step_shape_exact() -> Result<(), RenderError> {
             ("sha256".to_owned(), MISE_SHA256.to_owned()),
             ("install".to_owned(), "false".to_owned()),
             ("env".to_owned(), "false".to_owned()),
+            ("cache".to_owned(), "false".to_owned()),
+            ("cache_save".to_owned(), "false".to_owned()),
         ])
     );
     Ok(())
@@ -85,6 +87,8 @@ fn strict_inserts_setup_before_mise_exec() -> Result<(), RenderError> {
         format!("sha256: {MISE_SHA256}"),
         "install: \"false\"".to_owned(),
         "env: \"false\"".to_owned(),
+        "cache: \"false\"".to_owned(),
+        "cache_save: \"false\"".to_owned(),
     ] {
         assert!(text.contains(&line), "missing {line}:\n{text}");
     }

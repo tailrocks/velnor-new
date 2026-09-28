@@ -2,8 +2,11 @@
 
 use velnor_actions_contract::{Step, StepKind};
 use velnor_actions_workflow_renderer::steps::{
-    cache_action_step, mbx_objects_step, target_dir_for_lane,
+    TOOLS_CACHE_PATH, TOOLS_RESTORE_NAME, TOOLS_SAVE_NAME, cache_action_step, mbx_objects_step,
+    target_dir_for_lane, tools_cache_key, tools_restore_step, tools_save_step,
 };
+
+use super::impl_renderer_fixtures::*;
 
 /// Pinned refs used across cache-step cases.
 fn sha() -> &'static str {
@@ -144,6 +147,168 @@ fn cache_save_writes_task_artifacts_only() {
         )
         .is_err()
     );
+}
+
+#[test]
+fn tools_cache_key_scopes_target_mise_generator_job_and_toolfiles() {
+    let key = tools_cache_key(
+        "x86_64-unknown-linux-gnu",
+        "2026.9.16",
+        "0.1.0",
+        "velnor-plan",
+    )
+    .expect("tools key");
+    assert!(key.starts_with("mise-tools-v1-"), "{key}");
+    for part in [
+        "x86_64-unknown-linux-gnu",
+        "2026.9.16",
+        "0.1.0",
+        "velnor-plan",
+        "hashFiles('mise.toml','.mise.toml','mise.lock','.mise.lock','.tool-versions')",
+    ] {
+        assert!(key.contains(part), "key misses {part}: {key}");
+    }
+    assert!(!key.contains(' ') && !key.contains('\n'), "{key}");
+    for bad in [
+        ("", "2026.9.16", "0.1.0", "velnor-plan"),
+        ("x86_64-unknown-linux-gnu", "latest", "0.1.0", "velnor-plan"),
+        (
+            "x86_64-unknown-linux-gnu",
+            "2026.9.16",
+            "0.1.0",
+            "velnor plan",
+        ),
+        (
+            "x86_64-unknown-linux-gnu",
+            "2026.9.16",
+            "0.1.0",
+            "plan${{x}}",
+        ),
+        (
+            "wasm32-unknown-unknown",
+            "2026.9.16",
+            "0.1.0",
+            "velnor-plan",
+        ),
+    ] {
+        assert!(
+            tools_cache_key(bad.0, bad.1, bad.2, bad.3).is_err(),
+            "key accepted {bad:?}"
+        );
+    }
+}
+
+#[test]
+fn tools_restore_and_save_pin_mise_data_dir_only() {
+    let key = tools_cache_key(
+        "x86_64-unknown-linux-gnu",
+        "2026.9.16",
+        "0.1.0",
+        "velnor-plan",
+    )
+    .expect("tools key");
+    let restore = tools_restore_step(&key).expect("restore");
+    assert_eq!(restore.name, TOOLS_RESTORE_NAME);
+    let StepKind::Action { uses, with } = &restore.kind else {
+        panic!("restore must be an action step");
+    };
+    assert!(uses.starts_with("actions/cache/restore@"), "{uses}");
+    assert_eq!(with.get("key").map(String::as_str), Some(key.as_str()));
+    assert_eq!(with.get("path").map(String::as_str), Some(TOOLS_CACHE_PATH));
+    assert!(
+        with.get("restore-keys")
+            .is_some_and(|keys| keys.starts_with("mise-tools-v1-")),
+        "restore carries a prefix key"
+    );
+    let save = tools_save_step(&key).expect("save");
+    assert_eq!(save.name, TOOLS_SAVE_NAME);
+    let StepKind::Action { uses, with } = &save.kind else {
+        panic!("save must be an action step");
+    };
+    assert!(uses.starts_with("actions/cache/save@"), "{uses}");
+    assert_eq!(with.get("key").map(String::as_str), Some(key.as_str()));
+    assert_eq!(with.get("path").map(String::as_str), Some(TOOLS_CACHE_PATH));
+    assert!(
+        !with.contains_key("restore-keys"),
+        "save has no restore keys"
+    );
+    assert!(
+        cache_action_step(
+            true,
+            &format!("actions/cache/restore@{}", sha()),
+            "tools",
+            &key,
+            &[],
+            &["$CARGO_HOME/registry".to_owned()]
+        )
+        .is_err(),
+        "tools layer rejects non-mise paths"
+    );
+}
+
+#[test]
+fn strict_wraps_setup_with_tools_restore_and_save()
+-> Result<(), velnor_actions_workflow_renderer::RenderError> {
+    use std::collections::BTreeMap;
+    use velnor_actions_workflow_renderer::{checkout_step, shell_step};
+    let lint = job(
+        "velnor-workflow-lint",
+        "Velnor Workflow Lint",
+        Vec::new(),
+        vec![
+            checkout_step(&checkout_pin())?,
+            shell_step(
+                "Run actionlint",
+                mise_argv("actionlint@1.7.12", "actionlint", &["-color"]),
+                BTreeMap::new(),
+            )?,
+        ],
+    );
+    let text = strict(&fixture_ir(vec![lint]), &fixture_ctx())?;
+    let names = step_names(&text, "velnor-workflow-lint");
+    let restore_at = names.iter().position(|s| s == TOOLS_RESTORE_NAME);
+    let setup_at = names.iter().position(|s| s == "Setup Mise");
+    let save_at = names.iter().position(|s| s == TOOLS_SAVE_NAME);
+    assert_eq!(
+        (restore_at, setup_at, save_at),
+        (Some(1), Some(2), names.len().checked_sub(1)),
+        "restore<setup<save(last): {names:?}"
+    );
+    assert!(text.contains("actions/cache/restore@"), "{text}");
+    assert!(text.contains("actions/cache/save@"), "{text}");
+    Ok(())
+}
+
+#[test]
+fn strict_leaves_setup_less_jobs_without_tools_cache()
+-> Result<(), velnor_actions_workflow_renderer::RenderError> {
+    use velnor_actions_workflow_renderer::{checkout_step, merge_step, plan_step};
+    let plan = job(
+        "velnor-plan",
+        "Velnor Plan",
+        Vec::new(),
+        vec![
+            checkout_step(&checkout_pin())?,
+            acquire_fixture()?,
+            plan_step(),
+        ],
+    );
+    let mut final_job = job(
+        "velnor-final",
+        "Velnor / Required",
+        vec!["velnor-plan".to_owned()],
+        vec![acquire_fixture()?, merge_step()],
+    );
+    final_job.1.condition = Some("always()".to_owned());
+    let text = strict(&fixture_ir(vec![plan, final_job]), &fixture_ctx())?;
+    let names = step_names(&text, "velnor-final");
+    assert!(
+        !names
+            .iter()
+            .any(|s| s == TOOLS_RESTORE_NAME || s == TOOLS_SAVE_NAME),
+        "setup-less job must not cache: {names:?}"
+    );
+    Ok(())
 }
 
 #[test]

@@ -13,8 +13,8 @@ use velnor_actions_contract::{
 };
 
 use crate::{
-    RenderError, closure, commands, document, guard, marker, matrix, preseed, setup, steps,
-    support, yaml::render_yaml,
+    RenderError, cache_steps, closure, commands, document, guard, marker, matrix, preseed, setup,
+    steps, support, yaml::render_yaml,
 };
 
 pub use crate::matrix::{
@@ -191,6 +191,7 @@ pub fn render_workflow_ir_strict(
     for (id, job) in &mut jobs {
         let always = id == PLAN_JOB_ID || id == TASK_JOB_ID;
         setup::ensure_setup(id, job, mise, always)?;
+        cache_steps::ensure_tools_cache(id, job, mise, &ctx.generator_version, &ctx.runs_on)?;
         closure::check_internal_staged(id, job, ctx.preseed)?;
     }
     closure::check_plan_anchor(&jobs)?;

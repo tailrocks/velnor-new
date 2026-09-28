@@ -25,11 +25,13 @@ fn strict_plan_job_gets_full_prelude_in_order() -> Result<(), RenderError> {
         step_names(&text, "velnor-plan"),
         [
             "Checkout",
+            "Restore Mise tools",
             SETUP_MISE_NAME,
             ACQUIRE_NAME,
             CHECK_GENERATED_NAME,
             "Plan",
             PUBLISH_PLAN_NAME,
+            "Save Mise tools",
         ]
     );
     Ok(())

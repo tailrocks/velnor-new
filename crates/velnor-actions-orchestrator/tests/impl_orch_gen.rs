@@ -371,6 +371,9 @@ fn orch_gen_candidate_qualify_is_artifact_only() -> TestResult {
         );
     }
     for line in yaml.lines().filter(|line| line.contains("candidate")) {
+        if line.contains("mise-tools-v1-") {
+            continue; // Tools-cache keys name the job; they never carry build outputs.
+        }
         for banned in ["actions/cache", "key:", "restore"] {
             assert!(
                 !line.contains(banned),

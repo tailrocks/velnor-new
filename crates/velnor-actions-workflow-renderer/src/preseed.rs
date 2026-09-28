@@ -75,23 +75,90 @@ pub fn preseed_build_step(build: Vec<String>) -> Result<Step, RenderError> {
     steps::shell_step(PRESEED_BUILD_NAME, build, std::collections::BTreeMap::new())
 }
 
-/// Fixed MBX-compile verification: the build output must exist and execute.
+/// Fixed MBX-compile verification: output executable plus pinned-route proof.
 ///
-/// The fixed build vector runs ONLY `mbx build` (never cargo), so an
-/// executable output proves MBX handled the compile; anything else fails
-/// the step instead of uploading a missing binary.
+/// Beyond the executable output, the step runs the caller-supplied
+/// isolated `mbx --version` probe and requires its whole line to equal
+/// `mbx <version>` (exact pinned catalog version, never `latest`), so a
+/// wrong-toolchain compile fails here instead of uploading. The probe
+/// resolves through Mise on every run, cold or warm; the script carries
+/// no quotes, substitution, or variables, keeping shellcheck quoting safe.
 /// # Errors
-pub fn preseed_verify_step() -> Result<Step, RenderError> {
+pub fn preseed_verify_step(probe: &[String], mbx_version: &str) -> Result<Step, RenderError> {
     debug_assert!(PRESEED_VERIFY_NAME.ends_with(TRUST_MARK));
+    if !is_exact_version(mbx_version) {
+        return Err(RenderError::BadCommand(format!(
+            "preseed_bad_mbx_version:{mbx_version}"
+        )));
+    }
+    check_probe_shape(probe)?;
+    let script = format!(
+        "test -x {PRESEED_BUILD_OUTPUT} && {} | grep -qxF \"mbx {mbx_version}\"",
+        probe.join(" ")
+    );
     steps::shell_step(
         PRESEED_VERIFY_NAME,
-        vec![
-            "sh".to_owned(),
-            "-c".to_owned(),
-            format!("test -x {PRESEED_BUILD_OUTPUT}"),
-        ],
+        vec!["sh".to_owned(), "-c".to_owned(), script],
         std::collections::BTreeMap::new(),
     )
+}
+
+/// Probe shape: isolated `mise exec <spec@exact> -- mbx --version`.
+///
+/// First arg `mise`, at least one `spec@exact` tool spec between `exec`
+/// and `--`, tail exactly `mbx --version`, every arg shell-plain (no
+/// whitespace, quotes, expansions, or operators) so script embedding is
+/// injection-free.
+fn check_probe_shape(probe: &[String]) -> Result<(), RenderError> {
+    let malformed = || RenderError::BadCommand("preseed_bad_mbx_probe".to_owned());
+    if probe.len() < 6
+        || probe.first().is_some_and(|arg| arg != "mise")
+        || probe.iter().any(|arg| !is_probe_token(arg))
+    {
+        return Err(malformed());
+    }
+    let (Some(exec), Some(sep)) = (
+        probe.iter().position(|arg| arg == "exec"),
+        probe.iter().position(|arg| arg == "--"),
+    ) else {
+        return Err(malformed());
+    };
+    if exec == 0 || sep <= exec + 1 || probe[1..exec].iter().any(|arg| !arg.starts_with('-')) {
+        return Err(malformed());
+    }
+    if probe[exec + 1..sep]
+        .iter()
+        .any(|arg| arg.starts_with('-') || !is_exact_tool_spec(arg))
+    {
+        return Err(malformed());
+    }
+    if probe[sep + 1..] != ["mbx".to_owned(), "--version".to_owned()] {
+        return Err(malformed());
+    }
+    Ok(())
+}
+
+/// Probe args: nonempty alphanumerics plus `-_.@:/+` only.
+fn is_probe_token(arg: &str) -> bool {
+    !arg.is_empty()
+        && arg.bytes().all(|b| {
+            b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b'@' | b':' | b'/' | b'+')
+        })
+}
+
+/// Tool specs pin an exact `major.minor.patch` after `@`.
+fn is_exact_tool_spec(spec: &str) -> bool {
+    spec.rsplit_once('@')
+        .is_some_and(|(_, version)| is_exact_version(version))
+}
+
+/// Exact versions: three nonempty numeric dot parts, nothing else.
+fn is_exact_version(version: &str) -> bool {
+    let parts: Vec<&str> = version.split('.').collect();
+    parts.len() == 3
+        && parts
+            .iter()
+            .all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()))
 }
 
 /// Fixed script writing the pre-seed helper manifest JSON.

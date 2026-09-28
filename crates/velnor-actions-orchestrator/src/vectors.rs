@@ -171,6 +171,27 @@ fn policy_argv(
     strings_of(exec.argv()).map_err(|problem| OrchestratorError::Contract { problem })
 }
 
+/// Fixed pre-seed MBX route probe through pinned Mise.
+///
+/// Runs `mbx --version` under the exact pinned `mr-boxington` spec so
+/// the verify step proves the compile route, not just the output file.
+/// Resolves through Mise on every run, cold or warm.
+/// # Errors
+///
+/// Returns a contract error when the Mise adapter rejects the vector.
+pub(crate) fn mbx_probe_argv(catalog: &ToolCatalog) -> Result<Vec<String>, OrchestratorError> {
+    let program = OsString::from("mbx");
+    let exec = PinnedToolExec::new(
+        vec![PinnedTool::MrBoxington],
+        &program,
+        vec![OsString::from("--version")],
+    )
+    .map_err(|err| OrchestratorError::Contract {
+        problem: err.to_string(),
+    })?;
+    strings_of(exec.argv(catalog)).map_err(|problem| OrchestratorError::Contract { problem })
+}
+
 /// Fixed bootstrap §4 build vector through pinned Mise.
 ///
 /// Shared by the candidate build and the pre-seed helper build, so both
@@ -279,6 +300,26 @@ mod tests {
         assert_eq!(machete, want);
         assert!(policy_argv("evil-tool", "1.2.3", "cargo", &["deny"]).is_err());
         assert!(policy_argv("cargo-deny", "latest", "cargo", &["deny"]).is_err());
+    }
+
+    #[test]
+    fn mbx_probe_vector_is_byte_exact() {
+        let probe = mbx_probe_argv(&ToolCatalog::pinned()).expect("probe argv");
+        let want: Vec<String> = [
+            "mise",
+            "--no-config",
+            "--no-env",
+            "--no-hooks",
+            "exec",
+            "mr-boxington@1.19.0",
+            "--",
+            "mbx",
+            "--version",
+        ]
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+        assert_eq!(probe, want);
     }
 
     #[test]

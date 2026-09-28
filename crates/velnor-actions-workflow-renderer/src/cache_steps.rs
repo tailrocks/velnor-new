@@ -5,10 +5,11 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::Step;
+use velnor_actions_contract::{Job, Step, target_for_runner_label};
 
 use crate::{
     RenderError,
+    setup::MiseSetup,
     steps::{action_step, validate_uses},
 };
 
@@ -22,6 +23,21 @@ pub const CACHE_SAVE_NAME: &str = "actions/cache/save";
 pub const TASK_ARTIFACTS_DIR: &str = "$MISE_TASK_CACHE_DIR/task-artifacts/v2";
 /// Target-directory prefix isolating one lane.
 pub const TARGET_DIR_PREFIX: &str = "$RUNNER_TEMP/velnor/target/";
+/// Pinned `actions/cache/restore` ref (v6.1.0, qualified 2026-09-28).
+pub const TOOLS_RESTORE_USES: &str =
+    "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
+/// Pinned `actions/cache/save` ref (v6.1.0, qualified 2026-09-28).
+pub const TOOLS_SAVE_USES: &str = "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
+/// Display name of the tools restore step.
+pub const TOOLS_RESTORE_NAME: &str = "Restore Mise tools";
+/// Display name of the tools save step.
+pub const TOOLS_SAVE_NAME: &str = "Save Mise tools";
+/// Sole tools-cache path: the default mise data dir.
+pub const TOOLS_CACHE_PATH: &str = "~/.local/share/mise";
+/// Tools-cache key namespace.
+pub const TOOLS_KEY_PREFIX: &str = "mise-tools-v1";
+/// Tool files hashed into the tools key (literal names, never globs).
+const TOOLS_KEY_FILES: &str = "'mise.toml','.mise.toml','mise.lock','.mise.lock','.tool-versions'";
 
 /// Objects-mode MBX step; cargo profiles must never emit or install MBX.
 /// # Errors
@@ -56,7 +72,7 @@ pub fn cache_action_step(
     if !uses.starts_with(&format!("{want}@")) {
         return Err(RenderError::BadActionRef(format!("bad_cache_uses:{uses}")));
     }
-    if !matches!(layer, "sources" | "task") {
+    if !matches!(layer, "sources" | "task" | "tools") {
         return Err(RenderError::BadCommand("mbx_needs_objects_mode".to_owned()));
     }
     if key.trim().is_empty() || key.contains(' ') || key.contains('\n') {
@@ -83,11 +99,142 @@ pub fn cache_action_step(
 fn validate_cache_path(layer: &str, path: &str) -> Result<(), RenderError> {
     let second = path.split('/').nth(1);
     let sources_ok = path.starts_with("$CARGO_HOME/") && matches!(second, Some("registry" | "git"));
-    if layer == "sources" && sources_ok || layer == "task" && path == TASK_ARTIFACTS_DIR {
+    if layer == "sources" && sources_ok
+        || layer == "task" && path == TASK_ARTIFACTS_DIR
+        || layer == "tools" && path == TOOLS_CACHE_PATH
+    {
         Ok(())
     } else {
         Err(RenderError::BadCommand(format!("bad_cache_path:{path}")))
     }
+}
+
+/// Tools-cache key: target, mise, generator, job, plus tool-file hash.
+///
+/// Static segments invalidate exactly when pins change; the trailing
+/// `hashFiles` over literal tool-file names (no workspace walk, no
+/// ELOOP) churns the key when tool files change. No spaces: the cache
+/// action rejects them.
+/// # Errors
+pub fn tools_cache_key(
+    target: &str,
+    mise_version: &str,
+    generator_version: &str,
+    job_id: &str,
+) -> Result<String, RenderError> {
+    if !velnor_actions_contract::is_supported_target(target) {
+        return Err(RenderError::BadCommand(format!(
+            "bad_cache_target:{target}"
+        )));
+    }
+    for (label, value) in [
+        ("mise", mise_version),
+        ("generator", generator_version),
+        ("job", job_id),
+    ] {
+        if !is_key_segment(value) {
+            return Err(RenderError::BadCommand(format!(
+                "bad_cache_key_{label}:{value}"
+            )));
+        }
+    }
+    Ok(format!(
+        "{TOOLS_KEY_PREFIX}-{target}-{mise_version}-{generator_version}-{job_id}-${{{{hashFiles({TOOLS_KEY_FILES})}}}}"
+    ))
+}
+
+/// Prefix restore key: same pins and job, any tool-file hash.
+fn tools_restore_keys(key: &str) -> Vec<String> {
+    vec![tools_key_prefix_of(key)]
+}
+
+/// Key minus its trailing hash expression, kept as a prefix.
+///
+/// Splits on the expression marker (never on `-`: file names inside
+/// the hash carry dashes); marker-less keys degrade to a full prefix.
+fn tools_key_prefix_of(key: &str) -> String {
+    key.split_once("${{")
+        .map_or_else(|| format!("{key}-"), |(head, _)| head.to_owned())
+}
+
+/// Tools restore step over the pinned restore action.
+/// # Errors
+pub fn tools_restore_step(key: &str) -> Result<Step, RenderError> {
+    let restore_keys = tools_restore_keys(key);
+    let step = cache_action_step(
+        true,
+        TOOLS_RESTORE_USES,
+        "tools",
+        key,
+        &restore_keys,
+        &[TOOLS_CACHE_PATH.to_owned()],
+    )?;
+    rename_step(step, TOOLS_RESTORE_NAME)
+}
+
+/// Tools save step over the pinned save action.
+/// # Errors
+pub fn tools_save_step(key: &str) -> Result<Step, RenderError> {
+    let step = cache_action_step(
+        false,
+        TOOLS_SAVE_USES,
+        "tools",
+        key,
+        &[],
+        &[TOOLS_CACHE_PATH.to_owned()],
+    )?;
+    rename_step(step, TOOLS_SAVE_NAME)
+}
+
+/// Rename a built step; names are fixed by the caller contract.
+fn rename_step(mut step: Step, name: &str) -> Result<Step, RenderError> {
+    crate::steps::scan_for_private_subcommands(name)?;
+    name.clone_into(&mut step.name);
+    Ok(step)
+}
+
+/// Wrap the setup step with tools restore (before) and save (last).
+///
+/// Restore precedes setup so the `sha256`-verified mise binary is
+/// installed after any cached bytes; save closes the job so every
+/// on-demand install lands in the cache. Setup-less jobs are
+/// untouched; tools-named steps already present fail closed.
+/// # Errors
+pub(crate) fn ensure_tools_cache(
+    job_id: &str,
+    job: &mut Job,
+    mise: &MiseSetup,
+    generator_version: &str,
+    runs_on: &str,
+) -> Result<(), RenderError> {
+    let Some(setup_at) = crate::setup::setup_index(job) else {
+        return Ok(());
+    };
+    if job
+        .steps
+        .iter()
+        .any(|step| step.name == TOOLS_RESTORE_NAME || step.name == TOOLS_SAVE_NAME)
+    {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "duplicate_tools_cache:{job_id}"
+        )));
+    }
+    let target = target_for_runner_label(runs_on).ok_or_else(|| {
+        RenderError::InvalidWorkflow(format!("tools_cache_unsupported_target:{job_id}"))
+    })?;
+    let key = tools_cache_key(target, &mise.version, generator_version, job_id)?;
+    job.steps.insert(setup_at, tools_restore_step(&key)?);
+    job.steps.push(tools_save_step(&key)?);
+    Ok(())
+}
+
+/// Key segments: nonempty alphanumerics plus `.-_`, never `latest`.
+fn is_key_segment(value: &str) -> bool {
+    !value.is_empty()
+        && !value.contains("latest")
+        && value
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'_'))
 }
 
 /// Isolated target directory for one lane.
