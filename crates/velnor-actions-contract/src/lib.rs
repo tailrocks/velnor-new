@@ -11,6 +11,7 @@ pub mod config;
 pub mod errors;
 pub mod ids;
 pub mod manifest;
+pub mod marker;
 pub mod workflow;
 
 pub use canonical::{
@@ -36,6 +37,7 @@ pub use manifest::{
     ActionPin, GeneratorBinary, GeneratorLock, LockedGenerator, MiseBootstrap, ReleaseManifest,
     TargetRecord,
 };
+pub use marker::MARKER_PREFIX;
 pub use workflow::{
     BaselineProof, BaselineStatus, CacheLayer, CacheOutcome, CacheResult, CandidateReport,
     CandidateStatus, Concurrency, ExecuteTaskIds, ExecuteTaskRef, FinalCounts, FinalReport,

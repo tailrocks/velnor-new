@@ -3,3 +3,5 @@
 mod impl_contract;
 #[path = "impl_contract_ids.rs"]
 mod impl_contract_ids;
+#[path = "impl_contract_reports.rs"]
+mod impl_contract_reports;
