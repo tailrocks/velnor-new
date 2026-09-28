@@ -11,7 +11,7 @@ use velnor_actions_rust::{
     CandidateOutcome, DeriveInputs, DetectionStatus, FileIndex, Recommendation,
     RustExecutionProfile, TaskGroup, TaskKind, WorkspaceRecord, apply_stack_ignores,
     check_candidate_outcomes, check_duplicates, dedupe_workspaces, derive_task_groups,
-    derive_workspace_fmt, discover_candidates, parse_metadata_json, to_detected_projects,
+    derive_workspace_fmt, parse_metadata_json, to_detected_projects,
 };
 
 use crate::OrchestratorError;
@@ -56,7 +56,14 @@ pub struct Discovery {
 /// contract errors when any stage fails.
 pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, OrchestratorError> {
     let index = build_file_index(root, &config.discovery.exclude)?;
-    let candidates = discover_candidates(&index);
+    let mut candidates = Vec::new();
+    let mut previous = "";
+    for (stack_id, schema, detect) in DETECTORS {
+        debug_assert!(previous < stack_id, "registry runs ascending");
+        debug_assert_eq!(schema, DETECTION_SCHEMA, "registry schema");
+        previous = stack_id;
+        candidates.extend(detect(&index));
+    }
     let projects = to_detected_projects(&candidates);
     check_duplicates(&projects).map_err(|err| OrchestratorError::Detection {
         problem: err.to_string(),
@@ -80,15 +87,23 @@ pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, 
     })
 }
 
-/// Debug-only manifest fixture; release builds never read the file.
-///
-/// Integration tests link the non-`cfg(test)` library, so the fixture
-/// cannot enter through `cfg(test)`. Debug builds read the explicit
-/// `.velnor/release-manifest.json` file when present and otherwise fall
-/// back to an embedded `example.invalid` fixture (also debug-only), so
-/// debug source builds stay usable for tests while release builds (the
-/// only shippable artifacts, built with `--release`) have no injection
-/// path and fail consumer generation without baked provenance.
+/// Detector registry (stack id, record schema, implementation), ascending.
+/// V1 registers rust; schema 1 is `{ stack_id, project_root, manifest }`.
+type DetectorEntry = (
+    &'static str,
+    u32,
+    fn(&FileIndex) -> Vec<velnor_actions_rust::CargoCandidate>,
+);
+const DETECTION_SCHEMA: u32 = 1;
+const DETECTORS: [DetectorEntry; 1] = [(
+    velnor_actions_rust::STACK_ID,
+    DETECTION_SCHEMA,
+    velnor_actions_rust::discover_candidates,
+)];
+
+/// Debug-only manifest fixture: explicit file, else an embedded
+/// `example.invalid` stand-in. Release builds never read the file and
+/// have no injection path.
 #[cfg(debug_assertions)]
 #[expect(clippy::unnecessary_wraps, reason = "release twin returns None")]
 fn debug_manifest_fixture(root: &Path) -> Option<String> {
@@ -96,20 +111,17 @@ fn debug_manifest_fixture(root: &Path) -> Option<String> {
         return Some(text);
     }
     let sha = "a".repeat(64);
-    let targets = [
+    let mut targets = Vec::new();
+    for target in [
         "x86_64-unknown-linux-gnu",
         "aarch64-apple-darwin",
         "x86_64-apple-darwin",
-    ]
-    .iter()
-    .map(|target| {
-        format!(
-            "\"target\":\"{target}\",\"artifact\":\"https://example.invalid/r/{target}\",\"sha256\":\"{sha}\""
-        )
-    })
-    .map(|record| format!("{{{record}}}"))
-    .collect::<Vec<_>>()
-    .join(",");
+    ] {
+        targets.push(format!(
+            "{{\"target\":\"{target}\",\"artifact\":\"https://example.invalid/r/{target}\",\"sha256\":\"{sha}\"}}"
+        ));
+    }
+    let targets = targets.join(",");
     let version = env!("CARGO_PKG_VERSION");
     Some(format!(
         "{{\"schema\":1,\"version\":\"{version}\",\"repository\":\"tailrocks/velnor-new\",\"targets\":[{targets}]}}"
@@ -178,9 +190,7 @@ fn run_inventories(
 
 /// Why one manifest produced no inventory.
 enum FetchFailure {
-    /// Cargo reported a malformed manifest.
     Malformed(String),
-    /// Tooling failed without a Cargo diagnostic.
     Incomplete(String),
 }
 
@@ -213,12 +223,11 @@ fn plan_workspaces(
         .iter()
         .map(|project| project.manifest.as_str())
         .collect();
-    let mut keep_roots = BTreeSet::new();
-    for (manifest, record) in &inventories {
-        if selected_manifests.contains(manifest.as_str()) {
-            keep_roots.insert(record.workspace_root.clone());
-        }
-    }
+    let keep_roots: BTreeSet<_> = inventories
+        .iter()
+        .filter(|(manifest, _)| selected_manifests.contains(manifest.as_str()))
+        .map(|(_, record)| record.workspace_root.clone())
+        .collect();
     let records: Vec<WorkspaceRecord> = inventories.into_iter().map(|(_, record)| record).collect();
     let mut planned = Vec::new();
     for record in dedupe_workspaces(records) {
@@ -260,6 +269,9 @@ fn derive_all(
             )?);
         }
     }
+    for group in &groups {
+        velnor_actions_contract::validate_task_id(&group.task_id)?;
+    }
     groups.sort_by(|left, right| left.task_id.cmp(&right.task_id));
     Ok(groups)
 }
@@ -300,8 +312,7 @@ fn expand_shards(
     config: &VelnorConfig,
     group: &TaskGroup,
 ) -> Result<Vec<TaskGroup>, ContractError> {
-    let is_test = matches!(group.kind, TaskKind::Test | TaskKind::Nextest);
-    if !is_test || group.no_test_targets {
+    if !matches!(group.kind, TaskKind::Test | TaskKind::Nextest) || group.no_test_targets {
         return Ok(vec![group.clone()]);
     }
     let shards = shard_count(config, group);
@@ -309,7 +320,7 @@ fn expand_shards(
         return Ok(vec![group.clone()]);
     }
     let mut expanded = Vec::new();
-    for shard in 0..shards {
+    for shard in 1..=shards {
         let task_id = task_id_for_stack(
             velnor_actions_rust::STACK_ID,
             &group.manifest_key,
@@ -327,12 +338,12 @@ fn expand_shards(
 /// Shard count for one group from the sharding policy.
 fn shard_count(config: &VelnorConfig, group: &TaskGroup) -> u32 {
     let manifest = manifest_for_key(&group.manifest_key);
-    config
-        .test_sharding
+    let shards = &config.test_sharding;
+    shards
         .by_manifest
         .get(&manifest)
         .copied()
-        .unwrap_or(config.test_sharding.default_shards)
+        .unwrap_or(shards.default_shards)
 }
 
 /// Manifest path for a manifest key.
@@ -368,6 +379,11 @@ fn collect_recommendations(index: &FileIndex, workspaces: &[PlannedWorkspace]) -
         out.insert("mise.toml is read-only input; Velnor never modifies it".to_owned());
     } else {
         out.insert("mise.toml not found; Velnor will use its pinned tools".to_owned());
+    }
+    if index.contains("mise.lock") {
+        out.insert("mise.lock is read-only input; Velnor never modifies it".to_owned());
+    } else {
+        out.insert("mise.lock not found; Velnor will not create or refresh it".to_owned());
     }
     if index.contains("rust-toolchain.toml") {
         out.insert("rust-toolchain.toml is read-only input; Velnor never modifies it".to_owned());

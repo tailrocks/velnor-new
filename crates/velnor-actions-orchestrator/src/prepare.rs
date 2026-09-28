@@ -117,12 +117,21 @@ fn branch_from_origin_head(text: &str) -> Option<String> {
 }
 
 /// Require the canonical identity for the Velnor-repository policy.
+///
+/// The local `origin` URL is the authority. `GITHUB_REPOSITORY` is only a
+/// consistency hint: a mismatch fails closed and never unlocks, and a
+/// matching hint without a canonical origin unlocks nothing either.
 fn check_velnor_identity(root: &Path, config: &VelnorConfig) -> Result<(), OrchestratorError> {
     if config.workflow.policy == WorkflowPolicy::ConsumerV1 {
         return Ok(());
     }
-    if std::env::var("GITHUB_REPOSITORY").as_deref() == Ok(VELNOR_IDENTITY) {
-        return Ok(());
+    if let Ok(hint) = std::env::var("GITHUB_REPOSITORY")
+        && hint != VELNOR_IDENTITY
+    {
+        return Err(OrchestratorError::IdentityRejected {
+            problem: "github_repository_mismatch:velnor_policy_requires_tailrocks_velnor_new"
+                .to_owned(),
+        });
     }
     if origin_matches(root) {
         return Ok(());
@@ -134,11 +143,22 @@ fn check_velnor_identity(root: &Path, config: &VelnorConfig) -> Result<(), Orche
 
 /// True when the local `origin` URL normalizes to the canonical identity.
 ///
-/// Only the `url` key inside the `[remote "origin"]` section counts; other
+/// The git directory resolves through the Mise git helper and only the
+/// `url` key inside the `[remote "origin"]` section counts; other
 /// sections, other keys, and decoy remotes never grant the identity.
+/// Nothing is fetched: local config only.
 fn origin_matches(root: &Path) -> bool {
-    let Some(config) = git_config_path(root).and_then(|path| std::fs::read_to_string(path).ok())
+    let Ok(output) = GitRequest::rev_parse(vec![OsString::from("--absolute-git-dir")]).run_in(root)
     else {
+        return false;
+    };
+    if !output.success {
+        return false;
+    }
+    let Ok(git_dir) = output.stdout_text("git") else {
+        return false;
+    };
+    let Ok(config) = std::fs::read_to_string(PathBuf::from(git_dir.trim()).join("config")) else {
         return false;
     };
     let mut in_origin = false;
@@ -182,25 +202,4 @@ fn url_matches_identity(value: &str) -> bool {
         url = stripped.to_owned();
     }
     url == VELNOR_IDENTITY || url.ends_with(&format!("/{VELNOR_IDENTITY}"))
-}
-
-/// Locate `.git/config`, following a worktree `gitdir` pointer.
-fn git_config_path(root: &Path) -> Option<PathBuf> {
-    let dot_git = root.join(".git");
-    let meta = std::fs::symlink_metadata(&dot_git).ok()?;
-    if meta.is_dir() {
-        return Some(dot_git.join("config"));
-    }
-    if !meta.is_file() {
-        return None;
-    }
-    let pointer = std::fs::read_to_string(&dot_git).ok()?;
-    let dir = pointer.strip_prefix("gitdir:")?.trim();
-    let base = PathBuf::from(dir);
-    let resolved = if base.is_absolute() {
-        base
-    } else {
-        dot_git.parent()?.join(base)
-    };
-    Some(resolved.join("config"))
 }

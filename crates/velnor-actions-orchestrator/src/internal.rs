@@ -1,14 +1,13 @@
 //! Event-time `plan-v1` / `merge-v1` JSON entrypoints (schema 1).
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::{
-    BaselineStatus, ContractError, ExecuteTaskIds, ExecuteTaskRef, MatrixEntry, ObligationDecision,
-    Plan, PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanPackage, PlanRunner,
-    RunnerSelection, Trust, WorkflowEvent, canonical_json_bytes, digest_b3, plan_id_for_run,
-    validate_run_key,
+    BaselineStatus, ContractError, MatrixEntry, ObligationDecision, Plan, PlanBaseline,
+    PlanGenerator, PlanMatrix, PlanObligation, PlanRunner, RunnerSelection, Trust, WorkflowEvent,
+    canonical_json_bytes, digest_b3, plan_id_for_run,
 };
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_rust::TaskGroup;
@@ -16,10 +15,18 @@ use velnor_actions_rust::TaskGroup;
 use crate::OrchestratorError;
 use crate::cover::apply_baseline;
 use crate::discover::Discovery;
+use crate::internal_plan::{
+    adapter_metadata, default_generator, execute_ids, manifest_for_key, plan_packages,
+};
+use crate::internal_request::resolve_run_key;
 use crate::merge::BaselineManifest;
 use crate::prepare::prepare;
 use crate::select::select_groups;
 use crate::vectors::task_argv;
+
+pub use crate::internal_request::{
+    PlanOutputs, merge_passed, plan_outputs, response_path_for, write_request, write_request_parts,
+};
 
 /// Schema version accepted by both internal entrypoints.
 pub(crate) const SCHEMA: u32 = 1;
@@ -27,13 +34,26 @@ pub(crate) const SCHEMA: u32 = 1;
 /// Maximum canonical `matrix.json` bytes; oversize errors, never truncates.
 pub(crate) const MATRIX_BUDGET_BYTES: usize = 262_144;
 
+/// Env key carrying the exact request-file path.
+pub const REQUEST_FILE_ENV: &str = "VELNOR_REQUEST_FILE";
+/// Write-request operation tag.
+pub const WRITE_REQUEST_OP: &str = "write-request-v1";
+/// Plan operation tag.
+pub const PLAN_OP: &str = "plan-v1";
+/// Merge operation tag.
+pub const MERGE_OP: &str = "merge-v1";
+
 /// `plan-v1` request: run scope plus optional repo root and generator.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct PlanRequest {
     /// Request schema; must be 1.
     schema: u32,
-    /// Run key (`local` or `r<id>-a<attempt>`).
+    /// Consuming operation; must be `plan-v1` when present.
+    #[serde(default)]
+    op: Option<String>,
+    /// Run key; empty derives from the GitHub environment.
+    #[serde(default)]
     run_key: String,
     /// Base commit or null.
     base: Option<String>,
@@ -53,14 +73,14 @@ struct PlanRequest {
 }
 
 /// `plan-v1` response: schema plus plan and matrix copies.
-#[derive(Debug, Serialize)]
-struct PlanResponse {
+#[derive(Debug, Serialize, Deserialize)]
+pub(crate) struct PlanResponse {
     /// Response schema; always 1.
-    schema: u32,
+    pub(crate) schema: u32,
     /// Affected plan.
-    plan: Plan,
+    pub(crate) plan: Plan,
     /// Matrix copy, byte-identical to the embedded matrix.
-    matrix: PlanMatrix,
+    pub(crate) matrix: PlanMatrix,
 }
 
 /// Compute the affected plan plus matrix for one event (schema-1 JSON).
@@ -70,12 +90,16 @@ struct PlanResponse {
 /// Returns [`OrchestratorError::Internal`] for malformed requests and
 /// discovery, selection, or validation failures.
 pub fn plan_internal(request_json: &str) -> Result<String, OrchestratorError> {
-    let request: PlanRequest =
+    let mut request: PlanRequest =
         serde_json::from_str(request_json).map_err(|err| OrchestratorError::Internal {
             problem: format!("malformed_request:{err}"),
         })?;
     check_schema(request.schema)?;
-    validate_run_key(&request.run_key).map_err(internal_contract)?;
+    if request.op.as_deref().is_some_and(|op| op != PLAN_OP) {
+        return Err(internal("op_mismatch"));
+    }
+    let run_key = resolve_run_key(Some(request.run_key.as_str()))?;
+    request.run_key = run_key;
     if request.head.trim().is_empty() {
         return Err(internal("empty_head"));
     }
@@ -133,7 +157,10 @@ pub fn plan_internal(request_json: &str) -> Result<String, OrchestratorError> {
 fn check_matrix_budget(matrix: &PlanMatrix) -> Result<(), OrchestratorError> {
     let bytes = canonical_json_bytes(matrix).map_err(internal_contract)?;
     if bytes.len() > MATRIX_BUDGET_BYTES {
-        return Err(internal(&format!("matrix_budget_exceeded:{}", bytes.len())));
+        return Err(internal(&format!(
+            "matrix_budget_exceeded:{}:broaden selection or reduce matrix entries",
+            bytes.len()
+        )));
     }
     Ok(())
 }
@@ -315,78 +342,4 @@ struct InputDigestInputs<'a> {
     package_id: &'a str,
     /// Toolchain identity digest.
     toolchain_id: &'a str,
-}
-
-/// Manifest path for a manifest key.
-fn manifest_for_key(key: &str) -> String {
-    if key == "root" {
-        "Cargo.toml".to_owned()
-    } else {
-        format!("{key}/Cargo.toml")
-    }
-}
-
-/// Opaque adapter metadata for one matrix entry.
-fn adapter_metadata(group: &TaskGroup) -> serde_json::Value {
-    serde_json::json!({
-        "package_id": group.package_id,
-        "package_name": group.package_name,
-        "manifest_key": group.manifest_key,
-        "kind": group.kind.as_str(),
-        "configuration": group.configuration,
-        "target": group.target,
-    })
-}
-
-/// Single executable obligation named by kind.
-fn execute_ids(group: &TaskGroup) -> ExecuteTaskIds {
-    ExecuteTaskIds {
-        tasks: BTreeMap::from([(
-            group.kind.as_str().to_owned(),
-            ExecuteTaskRef::Single(group.task_id.clone()),
-        )]),
-    }
-}
-
-/// Default generator identity when the request omits it.
-fn default_generator() -> PlanGenerator {
-    PlanGenerator {
-        version: env!("CARGO_PKG_VERSION").to_owned(),
-        target: format!("{}-{}", std::env::consts::ARCH, std::env::consts::OS),
-        sha256: "0".repeat(64),
-    }
-}
-
-/// Complete package inventory with selection flags.
-fn plan_packages(discovery: &Discovery, selected: &BTreeSet<&str>) -> Vec<PlanPackage> {
-    let mut packages = Vec::new();
-    for workspace in &discovery.workspaces {
-        for package in &workspace.record.packages {
-            if !package.in_workspace || package.external {
-                continue;
-            }
-            let is_selected = selected.contains(package.id.as_str());
-            let mut tasks: Vec<String> = discovery
-                .task_groups
-                .iter()
-                .filter(|group| group.package_id == package.id)
-                .map(|group| group.task_id.clone())
-                .collect();
-            tasks.sort();
-            packages.push(PlanPackage {
-                package_id: package.id.clone(),
-                name: package.name.clone(),
-                manifest: package.manifest.clone(),
-                selected: is_selected,
-                reasons: vec![if is_selected {
-                    "selected".to_owned()
-                } else {
-                    "not_affected".to_owned()
-                }],
-                tasks,
-            });
-        }
-    }
-    packages.sort_by(|left, right| left.package_id.cmp(&right.package_id));
-    packages
 }

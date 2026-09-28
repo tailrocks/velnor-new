@@ -154,15 +154,25 @@ fn tampered_task_entry_executes_with_miss_warning() -> TestResult {
     let (repo, seed) = plan_with_manifest(None)?;
     let base = seed.base.clone().expect("base");
     let mut tasks = entries_for(&seed);
+    let tampered_id = tasks[0]["task_id"].as_str().expect("task id").to_owned();
     tasks[0]["input_digest"] =
         serde_json::Value::String(velnor_actions_contract::digest_b3(b"tampered"));
     let manifest = manifest_for(&seed, &base, &tasks);
     let plan = plan_at(repo.path(), &base, &seed.head, Some(manifest))?;
-    assert!(
-        plan.obligations
-            .iter()
-            .all(|ob| ob.decision == ObligationDecision::Execute)
-    );
+    assert!(plan.obligations.len() > 1, "needs covered + tampered pair");
+    for ob in &plan.obligations {
+        if ob.task_id == tampered_id {
+            assert_eq!(ob.decision, ObligationDecision::Execute, "{ob:?}");
+            assert!(ob.baseline_proof.is_none(), "{ob:?}");
+        } else {
+            assert_eq!(
+                ob.decision,
+                ObligationDecision::CoveredByTrustedBaseline,
+                "{ob:?}"
+            );
+            assert!(ob.baseline_proof.is_some(), "{ob:?}");
+        }
+    }
     assert!(
         plan.warnings
             .iter()
@@ -170,31 +180,48 @@ fn tampered_task_entry_executes_with_miss_warning() -> TestResult {
         "{:?}",
         plan.warnings
     );
+    assert_eq!(
+        plan.baseline.status,
+        velnor_actions_contract::BaselineStatus::Used
+    );
     Ok(())
 }
 
 #[test]
-fn valid_manifest_reverts_safely_until_contract_accepts_baseline_names() -> TestResult {
+fn valid_manifest_covers_exact_obligations() -> TestResult {
     let (repo, seed) = plan_with_manifest(None)?;
+    assert!(!seed.obligations.is_empty());
     let base = seed.base.clone().expect("base");
     let manifest = manifest_for(&seed, &base, &entries_for(&seed));
+    let artifact_name = manifest["artifact_name"]
+        .as_str()
+        .expect("artifact name")
+        .to_owned();
     let plan = plan_at(repo.path(), &base, &seed.head, Some(manifest))?;
+    for ob in &plan.obligations {
+        assert_eq!(
+            ob.decision,
+            ObligationDecision::CoveredByTrustedBaseline,
+            "{ob:?}"
+        );
+        let proof = ob.baseline_proof.as_ref().expect("proof");
+        assert_eq!(proof.source_commit, base);
+        assert_eq!(proof.artifact_id, 9);
+        assert_eq!(proof.artifact_name, artifact_name);
+    }
+    assert!(plan.matrix.include.is_empty(), "{:?}", plan.matrix.include);
     assert!(
-        plan.obligations
-            .iter()
-            .all(|ob| ob.decision == ObligationDecision::Execute)
-    );
-    assert_eq!(plan.matrix.include.len(), seed.matrix.include.len());
-    assert!(
-        plan.warnings
+        !plan
+            .warnings
             .iter()
             .any(|w| w.contains("plan_invalid:reverted")),
         "{:?}",
         plan.warnings
     );
+    plan.validate()?;
     assert_eq!(
         plan.baseline.status,
-        velnor_actions_contract::BaselineStatus::Unavailable
+        velnor_actions_contract::BaselineStatus::Used
     );
     Ok(())
 }

@@ -3,9 +3,6 @@
 use std::ffi::OsString;
 use std::path::Path;
 
-use velnor_actions_actionlint::config::{
-    ZizmorConfigInput, ZizmorWorkflowText, render_zizmor_yaml,
-};
 use velnor_actions_contract::GeneratorLock;
 use velnor_actions_mise::catalog::lock::{load_text, parse_generator_lock, verify_version_policy};
 use velnor_actions_mise::{PinnedTool, PinnedToolExec, ProcessOutput, ToolCatalog};
@@ -13,6 +10,8 @@ use velnor_actions_workflow_renderer::render::RenderedTree;
 
 use crate::OrchestratorError;
 use crate::generate::write_tree;
+use crate::validate_shell::{run_shellcheck_bodies, run_shellcheck_probe};
+use crate::validate_zizmor::{run_zizmor, write_zizmor_config};
 
 /// Velnor-repository-only bootstrap lock (never read for consumers).
 const GENERATOR_LOCK_REL: &str = ".velnor/generator.lock";
@@ -22,9 +21,6 @@ const VERSION_POLICY_REL: &str = ".velnor/version-policy.toml";
 
 /// Staged actionlint config consumed via `-config-file`.
 const ACTIONLINT_CONFIG: &str = ".github/actionlint.yaml";
-
-/// Staging-only zizmor config at the staging root, never generated.
-const ZIZMOR_CONFIG: &str = ".zizmor.yml";
 
 /// Staged workflows directory prefix.
 const WORKFLOWS_DIR: &str = ".github/workflows/";
@@ -48,6 +44,7 @@ pub(crate) fn validate_staged(tree: &RenderedTree) -> Result<Vec<String>, Orches
     run_shellcheck_probe(&catalog, staging.path())?;
     write_zizmor_config(staging.path(), tree)?;
     run_zizmor(&catalog, staging.path())?;
+    run_shellcheck_bodies(&catalog, staging.path(), &workflows)?;
     let mut validated = vec![
         catalog.tool_spec(PinnedTool::Actionlint),
         catalog.tool_spec(PinnedTool::Shellcheck),
@@ -93,7 +90,7 @@ fn contract_of(err: impl ToString) -> OrchestratorError {
     clippy::case_sensitive_file_extension_comparisons,
     reason = "rendered tree paths are exact lowercase by construction"
 )]
-fn is_workflow_path(path: &str) -> bool {
+pub(crate) fn is_workflow_path(path: &str) -> bool {
     path.starts_with(WORKFLOWS_DIR) && (path.ends_with(".yml") || path.ends_with(".yaml"))
 }
 
@@ -121,13 +118,7 @@ fn staged_workflows(tree: &RenderedTree) -> Result<Vec<String>, OrchestratorErro
     Ok(workflows)
 }
 
-/// Run pinned actionlint with the staged config over staged workflows.
-///
-/// Shellcheck integration stays disabled (`-shellcheck ""`) until the
-/// renderer quotes env-derived `run:` lines: the staged-binary path trips
-/// SC2086 today, and the CI lint job still enforces shellcheck on the
-/// committed tree. Re-enable by adding `Shellcheck` to the toolset and
-/// dropping the flag once the renderer quotes those lines.
+/// Run pinned actionlint, with shellcheck on, over staged workflows.
 fn run_actionlint(
     catalog: &ToolCatalog,
     staging: &Path,
@@ -136,8 +127,6 @@ fn run_actionlint(
     let mut args = vec![
         OsString::from("-no-color"),
         OsString::from("-oneline"),
-        OsString::from("-shellcheck"),
-        OsString::from(""),
         OsString::from("-config-file"),
         OsString::from(ACTIONLINT_CONFIG),
     ];
@@ -145,7 +134,7 @@ fn run_actionlint(
     let output = pinned_output(
         catalog,
         "actionlint",
-        vec![PinnedTool::Actionlint],
+        vec![PinnedTool::Actionlint, PinnedTool::Shellcheck],
         args,
         staging,
     )?;
@@ -159,80 +148,8 @@ fn run_actionlint(
     }
 }
 
-/// Prove the pinned shellcheck binary resolves and runs.
-fn run_shellcheck_probe(catalog: &ToolCatalog, staging: &Path) -> Result<(), OrchestratorError> {
-    let output = pinned_output(
-        catalog,
-        "shellcheck",
-        vec![PinnedTool::Shellcheck],
-        vec![OsString::from("--version")],
-        staging,
-    )?;
-    if output.success {
-        Ok(())
-    } else {
-        Err(OrchestratorError::Validation {
-            tool: "shellcheck".to_owned(),
-            problem: diagnose(&output),
-        })
-    }
-}
-
-/// Emit the staging-only zizmor config into the staging root.
-///
-/// Scans staged workflow bytes for the exact blessed Alint tag and
-/// ignores only those `unpinned-uses` locations; every other ref
-/// still requires a hash. Never touches the generated tree.
-fn write_zizmor_config(staging: &Path, tree: &RenderedTree) -> Result<(), OrchestratorError> {
-    let mut workflows = Vec::new();
-    for file in &tree.files {
-        if is_workflow_path(&file.path) {
-            workflows.push(ZizmorWorkflowText {
-                path: file.path.clone(),
-                text: file.bytes.clone(),
-            });
-        }
-    }
-    let input = ZizmorConfigInput {
-        generator_version: env!("CARGO_PKG_VERSION").to_owned(),
-        workflows,
-    };
-    let output = render_zizmor_yaml(&input)?;
-    let dest = staging.join(ZIZMOR_CONFIG);
-    std::fs::write(&dest, output.yaml)
-        .map_err(|err| OrchestratorError::io(dest.display().to_string(), err.to_string()))
-}
-
-/// Run pinned zizmor offline over the staged tree with its config.
-fn run_zizmor(catalog: &ToolCatalog, staging: &Path) -> Result<(), OrchestratorError> {
-    let args = [
-        "--offline",
-        "--no-progress",
-        "--color",
-        "never",
-        "--config",
-        ZIZMOR_CONFIG,
-        ".",
-    ];
-    let output = pinned_output(
-        catalog,
-        "zizmor",
-        vec![PinnedTool::Zizmor],
-        args.iter().map(OsString::from).collect(),
-        staging,
-    )?;
-    if output.success {
-        Ok(())
-    } else {
-        Err(OrchestratorError::Validation {
-            tool: "zizmor".to_owned(),
-            problem: diagnose(&output),
-        })
-    }
-}
-
 /// Execute one pinned tool in staging; spawn failure fails closed.
-fn pinned_output(
+pub(crate) fn pinned_output(
     catalog: &ToolCatalog,
     tool: &str,
     tools: Vec<PinnedTool>,
@@ -262,7 +179,7 @@ fn pinned_output(
 }
 
 /// Validator diagnostics, capped; exit code when streams are empty.
-fn diagnose(output: &ProcessOutput) -> String {
+pub(crate) fn diagnose(output: &ProcessOutput) -> String {
     let bytes = if output.stdout.is_empty() {
         output.stderr.as_slice()
     } else {

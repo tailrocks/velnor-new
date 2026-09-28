@@ -6,9 +6,12 @@ use std::path::Path;
 
 use velnor_actions_contract::WorkflowEvent;
 use velnor_actions_mise::GitRequest;
-use velnor_actions_rust::{DepKind, LocalEdge, TaskGroup, reverse_closure};
+use velnor_actions_rust::{FOREIGN_TOOL_FILES, RUST_TOOLCHAIN_FILE, TaskGroup};
 
 use crate::discover::Discovery;
+use crate::select_affected::{affected_packages, has_unowned_file};
+use crate::select_edges::{base_edges, head_edges};
+use crate::validators::{validate_diff_rev, validate_select_diff_args};
 
 /// Select task groups: affected subset on PRs with a base, else all.
 pub(crate) fn select_groups<'a>(
@@ -31,15 +34,18 @@ pub(crate) fn select_groups<'a>(
         return all;
     }
     let base = base.unwrap_or_default();
-    let changed = match changed_files(root, base, head) {
-        Ok(files) => files,
-        Err(problem) => {
-            warnings.push(format!("comparison_unavailable:{problem}:selecting_all"));
-            return all;
-        }
+    let Some((changed, toolfiles)) = change_sets(root, base, head, warnings) else {
+        return all;
     };
     if changed.is_empty() {
-        warnings.push("no_affected_files".to_owned());
+        warnings.push(
+            if toolfiles {
+                "toolfiles_only:findings_only"
+            } else {
+                "no_affected_files"
+            }
+            .to_owned(),
+        );
         return Vec::new();
     }
     if changed.iter().any(|path| path == "Cargo.lock") {
@@ -55,7 +61,7 @@ pub(crate) fn select_groups<'a>(
         return all;
     }
     let head_edges = head_edges(discovery);
-    let base_edges = match base_edges(root, base, discovery) {
+    let base_edges = match base_edges(root, base, head, discovery) {
         Ok(edges) => edges,
         Err(problem) => {
             warnings.push(format!("comparison_unavailable:{problem}:selecting_all"));
@@ -78,9 +84,21 @@ pub(crate) fn select_groups<'a>(
 }
 
 /// Files changed between base and head via the allowlisted `diff` verb.
+///
+/// The trailing `--` separates the revision range from paths; a `--` before
+/// the range would misparse the range as a path, so validation above is the
+/// flag-injection defense and the separator is belt and braces.
 fn changed_files(root: &Path, base: &str, head: &str) -> Result<BTreeSet<String>, String> {
+    validate_diff_rev(base, "bad_base")?;
+    validate_diff_rev(head, "bad_head")?;
     let range = format!("{base}...{head}");
-    let output = GitRequest::diff(vec![OsString::from("--name-only"), OsString::from(range)])
+    let args = vec![
+        OsString::from("--name-only"),
+        OsString::from(range),
+        OsString::from("--"),
+    ];
+    validate_select_diff_args(&args).map_err(|err| err.to_string())?;
+    let output = GitRequest::diff(args)
         .run_in(root)
         .map_err(|err| err.to_string())?;
     output
@@ -95,306 +113,83 @@ fn changed_files(root: &Path, base: &str, head: &str) -> Result<BTreeSet<String>
         .collect())
 }
 
+/// Committed change set minus advisory tool files, or `None` to broaden.
+///
+/// Git failures and non-ignored untracked files broaden with a recorded
+/// warning; the flag reports whether tool files were filtered, for the
+/// findings-only warning when nothing else changed.
+fn change_sets(
+    root: &Path,
+    base: &str,
+    head: &str,
+    warnings: &mut Vec<String>,
+) -> Option<(BTreeSet<String>, bool)> {
+    let changed = match changed_files(root, base, head) {
+        Ok(files) => files,
+        Err(problem) => {
+            warnings.push(format!("comparison_unavailable:{problem}:selecting_all"));
+            return None;
+        }
+    };
+    let untracked = match untracked_files(root) {
+        Ok(files) => files,
+        Err(problem) => {
+            warnings.push(format!("comparison_unavailable:{problem}:selecting_all"));
+            return None;
+        }
+    };
+    let toolfiles = changed.iter().any(|path| is_advisory_toolfile(path))
+        || untracked.iter().any(|path| is_advisory_toolfile(path));
+    if untracked
+        .into_iter()
+        .any(|path| !is_advisory_toolfile(&path))
+    {
+        warnings.push("untracked_files:selecting_all".to_owned());
+        return None;
+    }
+    let changed = changed
+        .into_iter()
+        .filter(|path| !is_advisory_toolfile(path))
+        .collect();
+    Some((changed, toolfiles))
+}
+
+/// Untracked non-ignored paths via the allowlisted `ls-files` verb.
+///
+/// Ignored paths never surface (`--exclude-standard`); any other untracked
+/// file broadens via the caller because the committed diff cannot see it.
+fn untracked_files(root: &Path) -> Result<BTreeSet<String>, String> {
+    let args = ["--others", "--exclude-standard", "-z"]
+        .iter()
+        .map(OsString::from)
+        .collect();
+    let output = GitRequest::ls_files(args)
+        .run_in(root)
+        .map_err(|err| err.to_string())?;
+    output
+        .require_success("git")
+        .map_err(|err| err.to_string())?;
+    let mut out = BTreeSet::new();
+    for chunk in output
+        .stdout
+        .split(|byte| *byte == 0)
+        .filter(|entry| !entry.is_empty())
+    {
+        let path = String::from_utf8(chunk.to_vec()).map_err(|err| err.to_string())?;
+        out.insert(path);
+    }
+    Ok(out)
+}
+
+/// True for advisory tool files: findings-only, never select or broaden.
+///
+/// Generated execution uses Velnor's exact pins, so these repository inputs
+/// feed inspection findings only; a task consuming one must declare it.
+fn is_advisory_toolfile(path: &str) -> bool {
+    path == RUST_TOOLCHAIN_FILE || path == ".mise.toml" || FOREIGN_TOOL_FILES.contains(&path)
+}
+
 /// True for root Cargo config paths: root manifest or cargo config.
 fn is_root_config(path: &str) -> bool {
     path == "Cargo.toml" || path == ".cargo/config.toml" || path == ".cargo/config"
-}
-
-/// Head local-path edges from discovery records.
-fn head_edges(discovery: &Discovery) -> Vec<LocalEdge> {
-    let mut edges = Vec::new();
-    for workspace in &discovery.workspaces {
-        edges.extend(workspace.record.edges.iter().cloned());
-    }
-    edges
-}
-
-/// Base local-path edges from base-revision manifests, in head-id space.
-///
-/// Each head package manifest is read at `base`; path dependencies resolve
-/// to the head package owning the target directory, so removed or renamed
-/// edges still select their head consumers. Manifests absent at base are
-/// new and contribute nothing; fetch or parse failures are errors.
-fn base_edges(root: &Path, base: &str, discovery: &Discovery) -> Result<Vec<LocalEdge>, String> {
-    let mut packages: Vec<(String, String)> = Vec::new();
-    for workspace in &discovery.workspaces {
-        for package in &workspace.record.packages {
-            if package.in_workspace && !package.external {
-                packages.push((manifest_dir(&package.manifest), package.id.clone()));
-            }
-        }
-    }
-    let mut edges = Vec::new();
-    for workspace in &discovery.workspaces {
-        for package in &workspace.record.packages {
-            if !package.in_workspace || package.external {
-                continue;
-            }
-            let Some(text) = base_manifest(root, base, &package.manifest)? else {
-                continue;
-            };
-            edges.extend(manifest_edges(
-                &text,
-                &package.id,
-                &manifest_dir(&package.manifest),
-                &packages,
-            )?);
-        }
-    }
-    Ok(edges)
-}
-
-/// Base content of one manifest; `None` when absent at base.
-fn base_manifest(root: &Path, base: &str, manifest: &str) -> Result<Option<String>, String> {
-    let spec = format!("{base}:{manifest}");
-    let output = GitRequest::show(vec![OsString::from(spec)])
-        .run_in(root)
-        .map_err(|err| err.to_string())?;
-    if let Err(err) = output.require_success("git") {
-        let problem = err.to_string();
-        if problem.contains("does not exist") {
-            return Ok(None);
-        }
-        return Err(problem);
-    }
-    output
-        .stdout_text("git")
-        .map(Some)
-        .map_err(|err| err.to_string())
-}
-
-/// Path edges of one base manifest, resolved to head package IDs.
-fn manifest_edges(
-    text: &str,
-    from: &str,
-    dir: &str,
-    packages: &[(String, String)],
-) -> Result<Vec<LocalEdge>, String> {
-    let document: toml::Table = toml::from_str(text).map_err(|err| err.to_string())?;
-    let mut edges = Vec::new();
-    for (table, kind) in sections() {
-        if let Some(deps) = document.get(table).and_then(toml::Value::as_table) {
-            edges.extend(dep_edges(deps, from, dir, packages, kind, None));
-        }
-    }
-    if let Some(targets) = document.get("target").and_then(toml::Value::as_table) {
-        for (name, target) in targets {
-            let Some(target) = target.as_table() else {
-                continue;
-            };
-            for (table, kind) in sections() {
-                if let Some(deps) = target.get(table).and_then(toml::Value::as_table) {
-                    edges.extend(dep_edges(deps, from, dir, packages, kind, Some(name)));
-                }
-            }
-        }
-    }
-    Ok(edges)
-}
-
-/// Dependency tables with their edge kinds.
-fn sections() -> [(&'static str, DepKind); 3] {
-    [
-        ("dependencies", DepKind::Normal),
-        ("build-dependencies", DepKind::Build),
-        ("dev-dependencies", DepKind::Dev),
-    ]
-}
-
-/// Path-dep edges of one dependency table.
-fn dep_edges(
-    deps: &toml::Table,
-    from: &str,
-    dir: &str,
-    packages: &[(String, String)],
-    kind: DepKind,
-    target: Option<&str>,
-) -> Vec<LocalEdge> {
-    let mut edges = Vec::new();
-    for spec in deps.values() {
-        let Some(spec) = spec.as_table() else {
-            continue;
-        };
-        let Some(path) = spec.get("path").and_then(toml::Value::as_str) else {
-            continue;
-        };
-        let joined = join_dir(dir, path);
-        let Some(to) = packages
-            .iter()
-            .find(|(owned, _)| *owned == joined)
-            .map(|(_, id)| id)
-        else {
-            continue;
-        };
-        let optional = spec
-            .get("optional")
-            .and_then(toml::Value::as_bool)
-            .unwrap_or(false);
-        edges.push(LocalEdge {
-            from: from.to_owned(),
-            to: to.clone(),
-            kind,
-            optional,
-            target: target.map(str::to_owned),
-        });
-    }
-    edges
-}
-
-/// Join a manifest directory with a dep path, resolving `.` and `..`.
-fn join_dir(dir: &str, path: &str) -> String {
-    let mut parts: Vec<&str> = dir.split('/').filter(|seg| !seg.is_empty()).collect();
-    for seg in path.split('/') {
-        if seg.is_empty() || seg == "." {
-            continue;
-        }
-        if seg == ".." {
-            parts.pop();
-        } else {
-            parts.push(seg);
-        }
-    }
-    parts.join("/")
-}
-
-/// Package IDs owning changed files plus their reverse closure.
-///
-/// The closure runs over the union of the base and head graphs, so edges
-/// removed or renamed at head still select their consumers.
-fn affected_packages(
-    discovery: &Discovery,
-    changed: &BTreeSet<String>,
-    base_edges: &[LocalEdge],
-    head_edges: &[LocalEdge],
-) -> BTreeSet<String> {
-    let mut owners: Vec<(String, String)> = Vec::new();
-    for workspace in &discovery.workspaces {
-        for package in &workspace.record.packages {
-            if package.in_workspace && !package.external {
-                owners.push((manifest_dir(&package.manifest), package.id.clone()));
-            }
-        }
-    }
-    let mut owned = BTreeSet::new();
-    for path in changed {
-        if let Some(id) = deepest_owner(&owners, path) {
-            owned.insert(id);
-        }
-    }
-    let mut selected = owned.clone();
-    selected.extend(reverse_closure(base_edges, head_edges, &owned));
-    selected
-}
-
-/// True when any changed file has no owning package.
-fn has_unowned_file(discovery: &Discovery, changed: &BTreeSet<String>) -> bool {
-    let mut dirs = Vec::new();
-    for workspace in &discovery.workspaces {
-        for package in &workspace.record.packages {
-            if package.in_workspace && !package.external {
-                dirs.push(manifest_dir(&package.manifest));
-            }
-        }
-    }
-    changed
-        .iter()
-        .any(|path| !dirs.iter().any(|dir| owns(dir, path)))
-}
-
-/// True when manifest directory `dir` owns `path`.
-fn owns(dir: &str, path: &str) -> bool {
-    dir.is_empty() || *path == *dir || path.starts_with(&format!("{dir}/"))
-}
-
-/// Deepest manifest directory owning `path`; the root package owns the rest.
-fn deepest_owner(owners: &[(String, String)], path: &str) -> Option<String> {
-    let mut best: Option<&(String, String)> = None;
-    for owner in owners {
-        if owns(&owner.0, path) && best.is_none_or(|current| owner.0.len() > current.0.len()) {
-            best = Some(owner);
-        }
-    }
-    best.map(|owner| owner.1.clone())
-}
-
-/// Directory of a manifest path; empty for the repository root.
-fn manifest_dir(manifest: &str) -> String {
-    manifest
-        .rsplit_once('/')
-        .map_or_else(String::new, |(dir, _)| dir.to_owned())
-}
-
-#[cfg(test)]
-mod tests {
-    use velnor_actions_rust::{
-        CompileDriver, PackageRecord, RustExecutionProfile, TestRunner, WorkspaceRecord,
-    };
-
-    use super::*;
-    use crate::discover::PlannedWorkspace;
-
-    /// Discovery with packages `a` and `b` under `a/` and `b/`.
-    fn two_package_discovery() -> Discovery {
-        let package = |id: &str| PackageRecord {
-            id: id.to_owned(),
-            name: id.to_owned(),
-            version: "0.1.0".to_owned(),
-            manifest: format!("{id}/Cargo.toml"),
-            external: false,
-            in_workspace: true,
-            targets: Vec::new(),
-            features: Vec::new(),
-            has_build_script: false,
-        };
-        Discovery {
-            statuses: Vec::new(),
-            workspaces: vec![PlannedWorkspace {
-                record: WorkspaceRecord {
-                    workspace_root: String::new(),
-                    members: vec!["a".to_owned(), "b".to_owned()],
-                    packages: vec![package("a"), package("b")],
-                    edges: Vec::new(),
-                },
-                profile: RustExecutionProfile {
-                    compile_driver: CompileDriver::Cargo,
-                    test_runner: TestRunner::CargoTest,
-                    evidence: Vec::new(),
-                },
-                recommendations: Vec::new(),
-            }],
-            task_groups: Vec::new(),
-            recommendations: Vec::new(),
-            consumer_manifest_json: None,
-        }
-    }
-
-    fn edge(from: &str, to: &str) -> LocalEdge {
-        LocalEdge {
-            from: from.to_owned(),
-            to: to.to_owned(),
-            kind: DepKind::Normal,
-            optional: false,
-            target: None,
-        }
-    }
-
-    #[test]
-    fn union_of_base_and_head_graphs_selects_removed_consumers() {
-        let discovery = two_package_discovery();
-        let changed: BTreeSet<String> = ["b/src/lib.rs".to_owned()].into_iter().collect();
-        let base = vec![edge("a", "b")];
-        let head: Vec<LocalEdge> = Vec::new();
-        let selected = affected_packages(&discovery, &changed, &base, &head);
-        assert_eq!(
-            selected,
-            ["a".to_owned(), "b".to_owned()].into_iter().collect(),
-            "base-only edge selects its consumer"
-        );
-        let selected = affected_packages(&discovery, &changed, &[], &head);
-        assert_eq!(
-            selected,
-            ["b".to_owned()].into_iter().collect(),
-            "without the base edge only the owner is selected"
-        );
-    }
 }

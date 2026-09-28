@@ -232,14 +232,18 @@ pub(crate) fn revalidate_coverage(
             .tasks
             .iter()
             .find(|task| task.task_id == obligation.task_id);
-        match hit {
-            Some(task)
-                if task.task_digest == obligation.task_digest
-                    && task.input_digest == obligation.input_digest
-                    && proof.run_id == task.proof_run_id
-                    && proof.artifact_name == manifest.artifact_name
-                    && proof.manifest_digest
-                        == digest_b3(&canonical_json_bytes(manifest).unwrap_or_default()) => {}
+        let Some(task) = hit else {
+            signals.planning_failed = true;
+            continue;
+        };
+        let bound = task.task_digest == obligation.task_digest
+            && task.input_digest == obligation.input_digest
+            && proof.run_id == task.proof_run_id
+            && proof.artifact_name == manifest.artifact_name;
+        // A serialization failure is planning_failed, never a digest over an
+        // empty default that could verify against a forged proof.
+        match canonical_json_bytes(manifest) {
+            Ok(bytes) if bound && proof.manifest_digest == digest_b3(&bytes) => {}
             _ => signals.planning_failed = true,
         }
     }

@@ -3,13 +3,32 @@
 use std::collections::BTreeSet;
 
 use velnor_actions_actionlint::ACTIONLINT_VERSION;
-use velnor_actions_contract::{RunnerSelection, WorkflowPolicy};
+use velnor_actions_contract::{RunnerSelection, StepKind, WorkflowPolicy};
 use velnor_actions_rust::{DetectionStatus, TaskGroup, TaskKind};
-use velnor_actions_workflow_renderer::render::{ACTIONLINT_PATH, WORKFLOW_PATH};
+use velnor_actions_workflow_renderer::render::{
+    ACTIONLINT_PATH, MATRIX_NEEDS_JOB_ENV, TASK_JOB_ID, WORKFLOW_PATH,
+};
 
+use crate::OrchestratorError;
 use crate::discover::local_dep_names;
+use crate::generate::render_staged_tree;
 use crate::prepare::GenerationPreparation;
 use crate::workflow::CHECKOUT_USES;
+
+/// Render the concise deterministic `plan` report from a preparation,
+/// after rendering the full tree in memory and discarding the bytes.
+///
+/// Fails when generation-time rendering would fail, keeping `plan` on
+/// the same renderer output `generate` writes. Writes nothing.
+///
+/// # Errors
+///
+/// Returns render, actionlint, lock, or unsafe-path errors from the
+/// discarded renderer pass.
+pub fn plan_text_checked(prep: &GenerationPreparation) -> Result<String, OrchestratorError> {
+    let _ = render_staged_tree(prep)?;
+    Ok(plan_text(prep))
+}
 
 /// Render the concise deterministic `plan` report from a preparation.
 #[must_use]
@@ -144,13 +163,17 @@ fn workflow_section(out: &mut String, prep: &GenerationPreparation) {
         push(out, &format!("    - {} ({} steps)", id, job.steps.len()));
     }
     matrix_lines(out, prep);
-    push(
-        out,
-        &format!(
-            "  Parallel: up to {} matrix entries; independent crate entries",
-            prep.config.workflow.max_parallel_jobs
-        ),
-    );
+    if has_task_matrix(prep) {
+        push(
+            out,
+            &format!(
+                "  Parallel: up to {} matrix entries; independent crate entries",
+                prep.config.workflow.max_parallel_jobs
+            ),
+        );
+    } else {
+        push(out, "  Parallel: single job; no matrix fan-out");
+    }
     push(out, &format!("  Cache layers: {}", cache_layers(prep)));
     push(out, &format!("  Actionlint: {ACTIONLINT_VERSION} pinned"));
     push(out, &format!("  Action pins: {CHECKOUT_USES}"));
@@ -161,7 +184,19 @@ fn workflow_section(out: &mut String, prep: &GenerationPreparation) {
     );
 }
 
+/// True when the IR task job carries the matrix marker trio.
+fn has_task_matrix(prep: &GenerationPreparation) -> bool {
+    prep.workflow.ir.jobs.get(TASK_JOB_ID).is_some_and(|job| {
+        job.steps.iter().any(|step| {
+            matches!(&step.kind, StepKind::Shell { env, .. } if env.contains_key(MATRIX_NEEDS_JOB_ENV))
+        })
+    })
+}
+
 /// Matrix entry count plus the per-entry kind chain.
+///
+/// Matrix wording appears only when the IR carries it; otherwise the
+/// static no-work line keeps plan and YAML in agreement.
 fn matrix_lines(out: &mut String, prep: &GenerationPreparation) {
     let runnable = prep
         .discovery
@@ -169,7 +204,7 @@ fn matrix_lines(out: &mut String, prep: &GenerationPreparation) {
         .iter()
         .filter(|group| !group.no_test_targets)
         .count();
-    if runnable == 0 {
+    if !has_task_matrix(prep) || runnable == 0 {
         push(out, "    - no matrix entries (no-work workflow)");
         return;
     }

@@ -20,6 +20,56 @@ pub struct GenerateOptions {
     pub output_dir: Option<PathBuf>,
 }
 
+/// Read-only tool files generation must never modify (TOOL-2.10).
+const TOOL_FILES: [&str; 4] = [
+    "mise.toml",
+    ".mise.toml",
+    "mise.lock",
+    "rust-toolchain.toml",
+];
+
+/// Byte snapshot of the read-only tool files for drift detection.
+///
+/// Captured when [`generate`] starts and verified before any output
+/// replacement, so a mid-generation tool-file change fails closed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ToolSnapshot {
+    /// One entry per [`TOOL_FILES`] path: bytes, or `None` when absent.
+    entries: Vec<(String, Option<Vec<u8>>)>,
+}
+
+impl ToolSnapshot {
+    /// Capture the current tool-file bytes under `root`.
+    #[must_use]
+    pub fn capture(root: &Path) -> Self {
+        let entries = TOOL_FILES
+            .iter()
+            .map(|rel| {
+                let bytes = std::fs::read(root.join(rel)).ok();
+                ((*rel).to_owned(), bytes)
+            })
+            .collect();
+        Self { entries }
+    }
+
+    /// Fail when any tool file differs from the captured bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns a contract error naming the first drifted file.
+    pub fn verify(&self, root: &Path) -> Result<(), OrchestratorError> {
+        let fresh = Self::capture(root);
+        for ((rel, want), (_, got)) in self.entries.iter().zip(fresh.entries.iter()) {
+            if want != got {
+                return Err(OrchestratorError::Contract {
+                    problem: format!("tool_files_changed:{rel}"),
+                });
+            }
+        }
+        Ok(())
+    }
+}
+
 /// Report for [`generate`].
 #[derive(Debug, Clone)]
 pub struct GenerateReport {
@@ -45,6 +95,31 @@ pub fn generate(
     prep: &GenerationPreparation,
     opts: &GenerateOptions,
 ) -> Result<GenerateReport, OrchestratorError> {
+    let tools = ToolSnapshot::capture(&prep.root);
+    let tree = render_staged_tree(prep)?;
+    let validated_by = validate_staged(&tree)?;
+    tools.verify(&prep.root)?;
+    match &opts.output_dir {
+        None => replace_in_place(prep, &tree)?,
+        Some(dir) => write_preview(prep, dir, &tree)?,
+    }
+    Ok(GenerateReport {
+        files_written: tree.files.iter().map(|file| file.path.clone()).collect(),
+        recommendations: prep.discovery.recommendations.clone(),
+        validated_by,
+    })
+}
+
+/// Render the validated two-file tree in memory, shared by `generate`.
+///
+/// Attaches the Velnor-repository lock step when the bootstrap files are
+/// present, renders both files, and lexically validates every tree path.
+/// Performs no writes and runs no validators.
+///
+/// # Errors
+///
+/// Returns lock, render, actionlint, or unsafe-path errors.
+pub fn render_staged_tree(prep: &GenerationPreparation) -> Result<RenderedTree, OrchestratorError> {
     let mut owned = prep.clone();
     if prep.config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1
         && let Some(lock) = verify_velnor_repository_files(&prep.root)?
@@ -58,16 +133,7 @@ pub fn generate(
     }
     let tree = render_all(&owned)?;
     check_tree_paths(&tree)?;
-    let validated_by = validate_staged(&tree)?;
-    match &opts.output_dir {
-        None => replace_in_place(prep, &tree)?,
-        Some(dir) => write_preview(prep, dir, &tree)?,
-    }
-    Ok(GenerateReport {
-        files_written: tree.files.iter().map(|file| file.path.clone()).collect(),
-        recommendations: prep.discovery.recommendations.clone(),
-        validated_by,
-    })
+    Ok(tree)
 }
 
 /// Render both files plus the marker-checked two-file tree, in memory only.
