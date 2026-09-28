@@ -6,6 +6,7 @@
 //! All types here are effect-free data plus pure derivation/validation.
 //! Derivation formulas are normative; example strings in docs are illustrative.
 
+pub mod cachekey;
 pub mod canonical;
 pub mod config;
 pub mod errors;
