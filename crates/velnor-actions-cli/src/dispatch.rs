@@ -137,7 +137,7 @@ fn run_init() -> ExitCode {
     }
 }
 
-/// Dispatch `plan`: report to stdout, recommendations to stderr.
+/// Dispatch `plan`: report (recommendations included) to stdout only.
 fn run_plan() -> ExitCode {
     let Some(cwd) = working_dir() else {
         return ExitCode::from(1);
@@ -151,9 +151,6 @@ fn run_plan() -> ExitCode {
     print!("{text}");
     if !text.ends_with('\n') {
         println!();
-    }
-    for recommendation in &preparation.discovery.recommendations {
-        eprintln!("{recommendation}");
     }
     ExitCode::SUCCESS
 }
