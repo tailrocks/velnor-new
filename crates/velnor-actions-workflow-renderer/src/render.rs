@@ -13,8 +13,8 @@ use velnor_actions_contract::{
 };
 
 use crate::{
-    RenderError, closure, commands, document, guard, marker, matrix, setup, steps, support,
-    yaml::render_yaml,
+    RenderError, closure, commands, document, guard, marker, matrix, preseed, setup, steps,
+    support, yaml::render_yaml,
 };
 
 pub use crate::matrix::{
@@ -69,6 +69,10 @@ pub struct RenderContext {
     pub policy_commands: Vec<PolicyCommand>,
     /// Fixed vectors for the `velnor-candidate` job, when enabled.
     pub candidate: Option<CandidateSpec>,
+    /// Pre-seed mode: Velnor policy without a bootstrap lock (trust-on-
+    /// review). Accepts fixed pre-seed staging for internal steps and
+    /// requires the build-once artifact closure; never set for consumers.
+    pub preseed: bool,
 }
 
 /// One fixed policy-job shell step: display name plus validated argv.
@@ -166,8 +170,10 @@ pub fn render_workflow_ir(
 ///
 /// Every `mise`-invoking job (plus plan/task unconditionally) gains a
 /// preceding pinned setup step; internal steps without a preceding
-/// Acquire step and anchorless plan jobs fail closed. Pins arrive via
-/// `mise`; the renderer never invents them.
+/// Acquire step and anchorless plan jobs fail closed. In pre-seed mode
+/// the fixed pre-seed stage step stages instead, and the build-once
+/// artifact closure is enforced. Pins arrive via `mise`; the renderer
+/// never invents them.
 ///
 /// # Errors
 ///
@@ -185,9 +191,10 @@ pub fn render_workflow_ir_strict(
     for (id, job) in &mut jobs {
         let always = id == PLAN_JOB_ID || id == TASK_JOB_ID;
         setup::ensure_setup(id, job, mise, always)?;
-        closure::check_internal_staged(id, job)?;
+        closure::check_internal_staged(id, job, ctx.preseed)?;
     }
     closure::check_plan_anchor(&jobs)?;
+    preseed::check_preseed_closure(&jobs, ctx.preseed)?;
     closure::insert_plan_closure(&mut jobs, ctx)?;
     render_merged(ir, &jobs, ctx)
 }
@@ -231,6 +238,12 @@ fn merged_jobs(
     ctx: &RenderContext,
 ) -> Result<BTreeMap<String, Job>, RenderError> {
     ctx.validate()?;
+    if ctx.preseed && policy != WorkflowPolicy::VelnorRepositoryV1 {
+        return Err(RenderError::PolicyRejected {
+            policy: "consumer-v1".to_owned(),
+            problem: "preseed_requires_velnor_policy".to_owned(),
+        });
+    }
     ir.validate().map_err(RenderError::Contract)?;
     check_triggers(&ir.triggers)?;
     check_concurrency(&ir.concurrency)?;

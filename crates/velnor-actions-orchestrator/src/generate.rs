@@ -5,13 +5,16 @@ use std::path::{Path, PathBuf};
 use velnor_actions_actionlint::render_actionlint_yaml;
 use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_workflow_renderer::guard::{self, SafeTreePath};
-use velnor_actions_workflow_renderer::render::{RenderedTree, render_tree, render_workflow_ir};
+use velnor_actions_workflow_renderer::render::{
+    RenderedTree, render_tree, render_workflow_ir_strict,
+};
 use velnor_actions_workflow_renderer::steps::rehead_actionlint_marker;
 
 use crate::OrchestratorError;
+use crate::attach::{attach_lock_acquire, attach_preseed};
+use crate::pins::resolve_mise_setup;
 use crate::prepare::GenerationPreparation;
 use crate::validate::{validate_staged, verify_velnor_repository_files};
-use crate::workflow::attach_lock_acquire;
 
 /// Options for [`generate`].
 #[derive(Debug, Clone, Default)]
@@ -112,24 +115,31 @@ pub fn generate(
 
 /// Render the validated two-file tree in memory, shared by `generate`.
 ///
-/// Attaches the Velnor-repository lock step when the bootstrap files are
-/// present, renders both files, and lexically validates every tree path.
-/// Performs no writes and runs no validators.
+/// Attaches the Velnor-repository lock steps when the bootstrap lock is
+/// present, explicit pre-seed build-once steps (trust-on-review) when it
+/// is absent, renders both files through the strict entrypoint, and
+/// lexically validates every tree path. Performs no writes and runs no
+/// validators.
 ///
 /// # Errors
 ///
 /// Returns lock, render, actionlint, or unsafe-path errors.
 pub fn render_staged_tree(prep: &GenerationPreparation) -> Result<RenderedTree, OrchestratorError> {
     let mut owned = prep.clone();
-    if prep.config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1
-        && let Some(lock) = verify_velnor_repository_files(&prep.root)?
-    {
-        attach_lock_acquire(
-            &mut owned.workflow.ir,
-            &lock,
-            &prep.runner_label,
-            env!("CARGO_PKG_VERSION"),
-        )?;
+    if prep.config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1 {
+        match verify_velnor_repository_files(&prep.root)? {
+            Some(lock) => attach_lock_acquire(
+                &mut owned.workflow.ir,
+                &lock,
+                &prep.runner_label,
+                env!("CARGO_PKG_VERSION"),
+            )?,
+            None => attach_preseed(
+                &mut owned.workflow,
+                &prep.runner_label,
+                env!("CARGO_PKG_VERSION"),
+            )?,
+        }
     }
     let tree = render_all(&owned)?;
     check_tree_paths(&tree)?;
@@ -137,13 +147,19 @@ pub fn render_staged_tree(prep: &GenerationPreparation) -> Result<RenderedTree, 
 }
 
 /// Render both files plus the marker-checked two-file tree, in memory only.
+///
+/// Strict rendering inserts the pinned Mise setup ahead of every `mise`
+/// use and rejects unstaged helper invocations instead of emitting dead
+/// `mise: command not found` or exit-127 CI jobs.
 fn render_all(prep: &GenerationPreparation) -> Result<RenderedTree, OrchestratorError> {
     let version = env!("CARGO_PKG_VERSION");
-    let workflow = render_workflow_ir(
+    let mise = resolve_mise_setup(&prep.config, &prep.runner_label)?;
+    let workflow = render_workflow_ir_strict(
         &prep.workflow.ir,
         prep.config.workflow.policy,
         prep.workflow.support.as_ref(),
         &prep.workflow.context,
+        &mise,
     )?;
     let actionlint = render_actionlint_yaml(&prep.workflow.actionlint)?;
     let actionlint = rehead_actionlint_marker(&actionlint.yaml, version)?;

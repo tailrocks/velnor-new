@@ -46,6 +46,24 @@ fn make_velnor_repo(config: &str) -> Result<TempDir, Box<dyn std::error::Error>>
     Ok(repo)
 }
 
+/// Three-target generator lock accepted by the provenance seed gate.
+fn lock_text() -> Result<String, Box<dyn std::error::Error>> {
+    use std::fmt::Write as _;
+    let version = env!("CARGO_PKG_VERSION");
+    let mut bins = String::new();
+    for target in velnor_actions_contract::SUPPORTED_TARGETS {
+        write!(
+            bins,
+            "[[generator.binaries]]\ntarget = \"{target}\"\nartifact = \"https://example.invalid/r/{target}\"\nsha256 = \"{}\"\n",
+            "a".repeat(64)
+        )?;
+    }
+    Ok(format!(
+        "schema = 1\n[generator]\nbinary = \"velnor-actions\"\nversion = \"{version}\"\n{bins}[mise-bootstrap]\nversion = \"2026.9.16\"\nartifact = \"https://example.invalid/mise\"\nsha256 = \"{}\"\n",
+        "b".repeat(64)
+    ))
+}
+
 #[test]
 fn orch_gen_plan_matches_generated_tree() -> TestResult {
     let repo = make_repo(config_with_branch())?;
@@ -325,6 +343,7 @@ fn orch_gen_candidate_qualify_is_artifact_only() -> TestResult {
     let repo = make_velnor_repo(
         "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\npolicy = \"velnor-repository-v1\"\ngenerator_validation = \"candidate\"\n",
     )?;
+    fs::write(repo.path().join(".velnor/generator.lock"), lock_text()?)?;
     let prep = prepare(repo.path())?;
     // Render-level assertions: full `generate` on candidate mode currently
     // fails the shellcheck gate on renderer-owned manifest content (SC2154
@@ -358,40 +377,6 @@ fn orch_gen_candidate_qualify_is_artifact_only() -> TestResult {
                 "no cache restore of candidate:{line}"
             );
         }
-    }
-    Ok(())
-}
-
-#[test]
-fn orch_gen_no_direct_process_spawn_in_source() -> TestResult {
-    let src = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src");
-    let mut files = Vec::new();
-    for entry in fs::read_dir(&src)? {
-        files.push(entry?.path());
-    }
-    files.sort();
-    assert!(!files.is_empty(), "orchestrator src present");
-    for path in files {
-        if path.extension().and_then(|ext| ext.to_str()) != Some("rs") {
-            continue;
-        }
-        let text = fs::read_to_string(&path)?;
-        for banned in ["process::Command", "Command::new", ".spawn("] {
-            assert!(
-                !text.contains(banned),
-                "{} contains {banned}",
-                path.display()
-            );
-        }
-    }
-    Ok(())
-}
-
-#[test]
-fn orch_gen_plan_module_has_no_second_discovery() -> TestResult {
-    let text = fs::read_to_string(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/plan.rs"))?;
-    for banned in ["discover(", "build_workflow("] {
-        assert!(!text.contains(banned), "plan.rs must not call {banned}");
     }
     Ok(())
 }

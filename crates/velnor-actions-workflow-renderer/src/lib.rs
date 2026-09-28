@@ -12,6 +12,7 @@ mod document;
 pub mod guard;
 pub mod marker;
 mod matrix;
+pub mod preseed;
 pub mod render;
 pub mod setup;
 pub mod steps;
@@ -32,6 +33,13 @@ pub use marker::{
     MARKER_PREFIX, MARKER_SUFFIX, check_first_line, marker_for_version, validate_version,
     with_marker,
 };
+pub use preseed::{
+    PRESEED_ARTIFACT_NAME, PRESEED_BUILD_NAME, PRESEED_BUILD_OUTPUT, PRESEED_DOWNLOAD_NAME,
+    PRESEED_DOWNLOADED_BINARY, PRESEED_MANIFEST_FILE, PRESEED_MANIFEST_NAME, PRESEED_OUTPUT_DIR,
+    PRESEED_STAGE_DIR, PRESEED_STAGE_NAME, PRESEED_UPLOAD_NAME, PRESEED_VERIFY_NAME,
+    PreseedStageSource, preseed_build_step, preseed_download_step, preseed_manifest_script,
+    preseed_manifest_step, preseed_stage_step, preseed_upload_step, preseed_verify_step,
+};
 pub use render::{
     ACTIONLINT_PATH, ALINT_JOB_ID, ALINT_USES, CANDIDATE_JOB_ID, CONCURRENCY_CANCEL,
     CONCURRENCY_GROUP, CandidateSpec, EXPECTED_PR_TYPES, FINAL_CONDITION, FINAL_DISPLAY_NAME,
@@ -42,12 +50,12 @@ pub use render::{
 };
 pub use setup::{MISE_ACTION_NAME, SETUP_MISE_NAME, mise_setup_step};
 pub use steps::{
-    ACQUIRE_NAME, ASSET_SHA_ENV, ASSET_URL_ENV, FORBIDDEN_TOKENS, INTERNAL_OP_ENV,
-    MATRIX_REPORT_UPLOAD_NAME, MERGE_OPERATION, PLAN_OPERATION, REQUEST_DIR_PREFIX,
-    REQUEST_FILE_ENV, RUN_KEY_EXPR, STAGED_BINARY_PREFIX, WRITE_REQUEST_OPERATION,
-    acquire_velnor_step, action_step, checkout_step, internal_step, matrix_report_upload_step,
-    merge_step, plan_step, scan_for_private_subcommands, shell_step, validate_uses,
-    write_request_step,
+    ACQUIRE_NAME, ASSET_SHA_ENV, ASSET_URL_ENV, DENY_STEP_NAME, FORBIDDEN_TOKENS, INTERNAL_OP_ENV,
+    MACHETE_STEP_NAME, MATRIX_REPORT_UPLOAD_NAME, MERGE_OPERATION, PLAN_OPERATION,
+    REQUEST_DIR_PREFIX, REQUEST_FILE_ENV, RUN_KEY_EXPR, STAGED_BINARY_PREFIX,
+    WRITE_REQUEST_OPERATION, acquire_velnor_step, action_step, checkout_step, internal_step,
+    matrix_report_upload_step, merge_step, plan_step, scan_for_private_subcommands, shell_step,
+    validate_uses, write_request_step,
 };
 pub use yaml::{Yaml, quote_scalar, render_yaml};
 

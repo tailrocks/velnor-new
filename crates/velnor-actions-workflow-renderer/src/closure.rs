@@ -10,7 +10,7 @@
 use velnor_actions_contract::{Job, Step, StepKind};
 
 use crate::{
-    RenderError,
+    RenderError, preseed,
     render::{PLAN_JOB_ID, RenderContext},
     steps,
 };
@@ -77,8 +77,14 @@ pub fn provision_acquire_step(
 /// Internal steps invoke the staged helper; without a preceding
 /// Acquire the path does not exist and CI fails with exit 127, so
 /// generation fails closed here instead of emitting the dead call.
+/// In pre-seed mode the fixed pre-seed stage step stages instead, and
+/// only there: the stage name outside pre-seed mode fails closed.
 /// # Errors
-pub(crate) fn check_internal_staged(job_id: &str, job: &Job) -> Result<(), RenderError> {
+pub(crate) fn check_internal_staged(
+    job_id: &str,
+    job: &Job,
+    preseed: bool,
+) -> Result<(), RenderError> {
     let mut staged = false;
     for step in &job.steps {
         if is_acquire_step(step) {
@@ -88,6 +94,14 @@ pub(crate) fn check_internal_staged(job_id: &str, job: &Job) -> Result<(), Rende
             return Err(RenderError::InvalidWorkflow(format!(
                 "acquire_malformed:{job_id}"
             )));
+        } else if step.name == preseed::PRESEED_STAGE_NAME {
+            if !preseed {
+                return Err(RenderError::InvalidWorkflow(format!(
+                    "preseed_stage_without_mode:{job_id}"
+                )));
+            }
+            check_preseed_stage_shape(job_id, step)?;
+            staged = true;
         } else if matches!(step.kind, StepKind::Internal { .. }) && !staged {
             return Err(RenderError::InvalidWorkflow(format!(
                 "internal_without_acquire:{job_id}"
@@ -95,6 +109,30 @@ pub(crate) fn check_internal_staged(job_id: &str, job: &Job) -> Result<(), Rende
         }
     }
     Ok(())
+}
+
+/// Reject stage-named steps that do not copy a fixed origin to staging.
+fn check_preseed_stage_shape(job_id: &str, step: &Step) -> Result<(), RenderError> {
+    let StepKind::Shell { run, .. } = &step.kind else {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "preseed_stage_malformed:{job_id}"
+        )));
+    };
+    let copies = run.iter().any(|arg| arg.contains("cp "))
+        && run
+            .iter()
+            .any(|arg| arg.contains(steps::STAGED_BINARY_PREFIX))
+        && run.iter().any(|arg| {
+            arg.contains(preseed::PRESEED_BUILD_OUTPUT)
+                || arg.contains(preseed::PRESEED_DOWNLOADED_BINARY)
+        });
+    if copies {
+        Ok(())
+    } else {
+        Err(RenderError::InvalidWorkflow(format!(
+            "preseed_stage_malformed:{job_id}"
+        )))
+    }
 }
 
 /// True for digest-verified Acquire steps (name plus asset env keys).

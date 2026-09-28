@@ -243,6 +243,7 @@ fn render_gate_roundtrip_accepts_plan() -> TestResult {
         checkout_uses: pin,
         policy_commands: Vec::new(),
         candidate: None,
+        preseed: false,
     };
     let text = render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx)?;
     let pairs = internal_env_pairs(&text);

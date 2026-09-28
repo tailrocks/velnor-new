@@ -38,6 +38,7 @@ pub(crate) fn fixture_ctx() -> RenderContext {
         checkout_uses: checkout_pin(),
         policy_commands: Vec::new(),
         candidate: None,
+        preseed: false,
     }
 }
 

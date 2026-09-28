@@ -50,6 +50,7 @@ fn ctx() -> RenderContext {
         checkout_uses: format!("actions/checkout@{:040x}", 0),
         policy_commands: Vec::new(),
         candidate: None,
+        preseed: false,
     }
 }
 

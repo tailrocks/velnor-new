@@ -53,6 +53,10 @@ pub const ACQUIRE_NAME: &str = "Acquire Velnor";
 pub const RUN_KEY_EXPR: &str = "r${{ github.run_id }}-a${{ github.run_attempt }}";
 /// Display name of the matrix-report upload step.
 pub const MATRIX_REPORT_UPLOAD_NAME: &str = "Upload matrix report";
+/// Contract-fixed display name of the policy cargo-deny step.
+pub const DENY_STEP_NAME: &str = "Run cargo-deny";
+/// Contract-fixed display name of the policy cargo-machete step.
+pub const MACHETE_STEP_NAME: &str = "Run cargo-machete";
 
 pub use crate::commands::{
     has_bare_env_expansion, quote_env_path_for_run, quote_run_line_env_paths,

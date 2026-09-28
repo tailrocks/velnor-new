@@ -98,18 +98,21 @@ pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, Orches
 /// those policy jobs exist. IR validation requires `needs` to name IR jobs
 /// only, so this builds the IR subset and the renderer appends the merged
 /// support IDs post-merge (see `support.rs`); the release job never gates.
-pub(crate) fn final_job(label: &str, with_task: bool) -> Job {
+pub(crate) fn final_job(label: &str, with_task: bool, acquire: Option<Step>) -> Job {
     let mut needs = vec![PLAN_JOB_ID.to_owned()];
     if with_task {
         needs.push(TASK_JOB_ID.to_owned());
     }
     needs.push(LINT_JOB_ID.to_owned());
+    let mut steps = Vec::new();
+    steps.extend(acquire);
+    steps.push(merge_step());
     Job {
         display_name: FINAL_DISPLAY_NAME.to_owned(),
         runs_on: label.to_owned(),
         needs,
         condition: Some(FINAL_CONDITION.to_owned()),
-        steps: vec![merge_step()],
+        steps,
     }
 }
 

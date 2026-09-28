@@ -15,6 +15,8 @@ mod impl_renderer_lint;
 mod impl_renderer_matrix;
 #[path = "impl_renderer_planclose.rs"]
 mod impl_renderer_planclose;
+#[path = "impl_renderer_preseed.rs"]
+mod impl_renderer_preseed;
 #[path = "impl_renderer_protocol.rs"]
 mod impl_renderer_protocol;
 #[path = "impl_renderer_setup.rs"]

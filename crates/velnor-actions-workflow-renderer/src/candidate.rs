@@ -116,7 +116,7 @@ fn release_env() -> BTreeMap<String, String> {
 ///
 /// Joins the `tool@exact` specs between `exec` and `--`; fails when the
 /// vector has no specs, so the manifest never carries a guessed toolchain.
-fn toolchain_identity(build: &[String]) -> Result<String, RenderError> {
+pub(crate) fn toolchain_identity(build: &[String]) -> Result<String, RenderError> {
     let mut specs = Vec::new();
     let mut in_specs = false;
     for arg in build {

@@ -273,6 +273,7 @@ fn emit_ctx() -> RenderContext {
         checkout_uses: pin("actions/checkout"),
         policy_commands: Vec::new(),
         candidate: None,
+        preseed: false,
     }
 }
 

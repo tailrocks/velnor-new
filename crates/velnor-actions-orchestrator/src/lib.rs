@@ -5,6 +5,7 @@
 //! vectors itself, and assembles no workflow text: execution belongs to
 //! Mise, vectors to [`vectors`] via Mise requests, text to the renderer.
 
+mod attach;
 mod config;
 mod cover;
 mod cover_baseline;
@@ -19,6 +20,7 @@ mod internal;
 mod internal_plan;
 mod internal_request;
 mod merge;
+mod pins;
 mod plan;
 mod prepare;
 mod root;

@@ -1,6 +1,7 @@
 //! Integration test entry point; cases live in the sibling files.
 mod impl_common;
 mod impl_config_internal;
+mod impl_e2e_wiring;
 mod impl_gate8_acquire;
 mod impl_gate8_e;
 mod impl_gates_cover;
@@ -11,6 +12,7 @@ mod impl_merge;
 mod impl_orch_broaden;
 mod impl_orch_core;
 mod impl_orch_gen;
+mod impl_orch_gen2;
 mod impl_orch_intake;
 mod impl_orch_merge;
 mod impl_orch_plansel;
