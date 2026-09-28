@@ -38,6 +38,10 @@ pub(crate) fn select_groups<'a>(
         warnings.push("no_affected_files".to_owned());
         return Vec::new();
     }
+    if has_unowned_file(discovery, &changed) {
+        warnings.push("unclassified_files:selecting_all".to_owned());
+        return all;
+    }
     let selected_ids = affected_packages(discovery, &changed);
     let mut keys = BTreeSet::new();
     for group in &all {
@@ -94,13 +98,31 @@ fn affected_packages(discovery: &Discovery, changed: &BTreeSet<String>) -> BTree
     selected
 }
 
+/// True when any changed file has no owning package.
+fn has_unowned_file(discovery: &Discovery, changed: &BTreeSet<String>) -> bool {
+    let mut dirs = Vec::new();
+    for workspace in &discovery.workspaces {
+        for package in &workspace.record.packages {
+            if package.in_workspace && !package.external {
+                dirs.push(manifest_dir(&package.manifest));
+            }
+        }
+    }
+    changed
+        .iter()
+        .any(|path| !dirs.iter().any(|dir| owns(dir, path)))
+}
+
+/// True when manifest directory `dir` owns `path`.
+fn owns(dir: &str, path: &str) -> bool {
+    dir.is_empty() || *path == *dir || path.starts_with(&format!("{dir}/"))
+}
+
 /// Deepest manifest directory owning `path`; the root package owns the rest.
 fn deepest_owner(owners: &[(String, String)], path: &str) -> Option<String> {
     let mut best: Option<&(String, String)> = None;
     for owner in owners {
-        let owns =
-            owner.0.is_empty() || *path == owner.0 || path.starts_with(&format!("{}/", owner.0));
-        if owns && best.is_none_or(|current| owner.0.len() > current.0.len()) {
+        if owns(&owner.0, path) && best.is_none_or(|current| owner.0.len() > current.0.len()) {
             best = Some(owner);
         }
     }

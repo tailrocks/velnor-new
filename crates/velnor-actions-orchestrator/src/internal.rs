@@ -14,14 +14,16 @@ use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_rust::TaskGroup;
 
 use crate::OrchestratorError;
-use crate::config::load_config;
-use crate::discover::{Discovery, discover};
-use crate::prepare::runner_label_for;
+use crate::discover::Discovery;
+use crate::prepare::prepare;
 use crate::select::select_groups;
 use crate::vectors::task_argv;
 
 /// Schema version accepted by both internal entrypoints.
 pub(crate) const SCHEMA: u32 = 1;
+
+/// Maximum canonical `matrix.json` bytes; oversize errors, never truncates.
+pub(crate) const MATRIX_BUDGET_BYTES: usize = 262_144;
 
 /// `plan-v1` request: run scope plus optional repo root and generator.
 #[derive(Debug, Deserialize)]
@@ -73,23 +75,28 @@ pub fn plan_internal(request_json: &str) -> Result<String, OrchestratorError> {
         return Err(internal("empty_head"));
     }
     let root = plan_root(request.root.as_deref())?;
-    let config = load_config(&root)?;
-    let discovery = discover(&root, &config)?;
-    let (label, selection) = runner_label_for(&config);
+    let prep = prepare(&root)?;
     let catalog = ToolCatalog::pinned();
     let mut warnings = Vec::new();
     let selected = select_groups(
-        &root,
+        &prep.root,
         request.event,
         request.base.as_deref(),
         &request.head,
-        &discovery,
+        &prep.discovery,
         &mut warnings,
     );
     let plan = build_plan(
-        &request, &discovery, &selected, &label, selection, &catalog, warnings,
+        &request,
+        &prep.discovery,
+        &selected,
+        &prep.runner_label,
+        prep.runner_selection,
+        &catalog,
+        warnings,
     )?;
     plan.validate().map_err(internal_contract)?;
+    check_matrix_budget(&plan.matrix)?;
     let response = PlanResponse {
         schema: SCHEMA,
         matrix: plan.matrix.clone(),
@@ -98,6 +105,15 @@ pub fn plan_internal(request_json: &str) -> Result<String, OrchestratorError> {
     serde_json::to_string(&response).map_err(|err| OrchestratorError::Internal {
         problem: format!("response_encode:{err}"),
     })
+}
+
+/// Reject a matrix whose canonical bytes exceed the budget.
+fn check_matrix_budget(matrix: &PlanMatrix) -> Result<(), OrchestratorError> {
+    let bytes = canonical_json_bytes(matrix).map_err(internal_contract)?;
+    if bytes.len() > MATRIX_BUDGET_BYTES {
+        return Err(internal(&format!("matrix_budget_exceeded:{}", bytes.len())));
+    }
+    Ok(())
 }
 
 /// Reject any schema other than 1.

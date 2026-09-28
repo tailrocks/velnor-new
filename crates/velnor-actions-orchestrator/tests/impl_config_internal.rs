@@ -155,6 +155,7 @@ fn internal_merge_aggregates_reports() -> TestResult {
         "schema": 1,
         "run_key": "local",
         "plan": plan,
+        "matrix": plan.matrix,
         "matrix_reports": [],
         "required_jobs": [{"job_id": "velnor-plan", "conclusion": "success"}],
     });
@@ -171,6 +172,7 @@ fn internal_merge_aggregates_reports() -> TestResult {
         "schema": 1,
         "run_key": "local",
         "plan": plan,
+        "matrix": plan.matrix,
         "matrix_reports": reports,
         "required_jobs": [{"job_id": "velnor-plan", "conclusion": "success"}],
     });

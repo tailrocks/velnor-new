@@ -6,6 +6,7 @@
 //! Mise, vectors to [`vectors`] via Mise requests, text to the renderer.
 
 mod config;
+mod cover;
 mod discover;
 mod error;
 mod evidence;
@@ -17,6 +18,7 @@ mod plan;
 mod prepare;
 mod root;
 mod select;
+mod validate;
 mod vectors;
 mod workflow;
 

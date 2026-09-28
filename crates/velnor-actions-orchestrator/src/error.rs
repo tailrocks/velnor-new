@@ -124,6 +124,14 @@ pub enum OrchestratorError {
         /// Machine-readable problem detail.
         problem: String,
     },
+    /// Staged-tree validation failed before any write.
+    #[error("validation: {tool}: {problem}")]
+    Validation {
+        /// Validator that failed (`actionlint`, `shellcheck`, or `zizmor`).
+        tool: String,
+        /// Machine-readable problem detail.
+        problem: String,
+    },
     /// Filesystem IO failed.
     #[error("io: {path}: {problem}")]
     Io {

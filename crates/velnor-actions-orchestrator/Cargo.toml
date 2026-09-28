@@ -24,6 +24,10 @@ workspace = true
 name = "velnor_orchestrator"
 path = "tests/velnor_orchestrator.rs"
 
+[[test]]
+name = "validation_failure"
+path = "tests/validation_failure.rs"
+
 [dev-dependencies]
 serde_json = { version = "1.0.151" }
 tempfile = { version = "3.23.0" }

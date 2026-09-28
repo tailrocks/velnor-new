@@ -8,6 +8,7 @@ use velnor_actions_workflow_renderer::render::{RenderedTree, render_tree, render
 
 use crate::OrchestratorError;
 use crate::prepare::GenerationPreparation;
+use crate::validate::validate_staged;
 
 /// Options for [`generate`].
 #[derive(Debug, Clone, Default)]
@@ -23,6 +24,8 @@ pub struct GenerateReport {
     pub files_written: Vec<String>,
     /// Recommendations shared with `plan`.
     pub recommendations: Vec<String>,
+    /// Pinned validators that accepted the staged tree, sorted.
+    pub validated_by: Vec<String>,
 }
 
 /// Render in memory, then replace `.github` atomically or write a preview.
@@ -41,6 +44,7 @@ pub fn generate(
 ) -> Result<GenerateReport, OrchestratorError> {
     let tree = render_all(prep)?;
     check_tree_paths(&tree)?;
+    let validated_by = validate_staged(&tree)?;
     match &opts.output_dir {
         None => replace_in_place(prep, &tree)?,
         Some(dir) => write_preview(prep, dir, &tree)?,
@@ -48,6 +52,7 @@ pub fn generate(
     Ok(GenerateReport {
         files_written: tree.files.iter().map(|file| file.path.clone()).collect(),
         recommendations: prep.discovery.recommendations.clone(),
+        validated_by,
     })
 }
 
@@ -227,9 +232,8 @@ fn prepare_preview_dir(root: &Path, dest: &Path) -> Result<PathBuf, Orchestrator
     }
     Ok(canonical)
 }
-
 /// Write every rendered file under `github_dir`.
-fn write_tree(github_dir: &Path, tree: &RenderedTree) -> Result<(), OrchestratorError> {
+pub(crate) fn write_tree(github_dir: &Path, tree: &RenderedTree) -> Result<(), OrchestratorError> {
     for file in &tree.files {
         let rel = file.path.strip_prefix(".github/").unwrap_or(&file.path);
         let dest = github_dir.join(rel);
