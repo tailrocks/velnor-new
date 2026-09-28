@@ -8,6 +8,9 @@ autotests = false
 [lints]
 workspace = true
 
+[dependencies]
+velnor-actions-contract = { path = "../velnor-actions-contract" }
+
 [[test]]
 name = "velnor_actionlint"
 path = "tests/velnor_actionlint.rs"

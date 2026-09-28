@@ -1,7 +1,32 @@
-//! actionlint pin/capability metadata and config (Gate 0 shell).
+//! Pinned actionlint configuration, capability, and action-schema types.
 //!
-//! Owns generated config and action-schema validation. Must not own Mise
-//! process execution, stack scanning, or generic workflow rendering.
+//! Owns generated `actionlint.yaml` bytes, the pinned actionlint
+//! capability flags, pinned action refs with override/input validation,
+//! and lint-tool pins. Pure data plus validation: never spawns
+//! processes, never reads the filesystem; Mise executes tools while the
+//! orchestrator invokes this crate for config and validation.
+
+pub mod actions;
+pub mod capabilities;
+pub mod config;
+pub mod error;
+pub mod overrides;
+pub mod tools;
+
+pub use actions::{ALINT_ACTION, ALINT_REVIEWED_TAG, ALLOWED_ACTIONS, PinnedActionRef};
+pub use capabilities::{ACTIONLINT_VERSION, ActionlintCapabilities, StepSyntax};
+pub use config::{
+    ActionlintConfigInput, ActionlintConfigOutput, IgnoreEntry, IgnorePolicy, RUNNER_LABEL_BRIDGE,
+    render_actionlint_yaml,
+};
+pub use error::ActionlintError;
+pub use overrides::{
+    ActionInputSchema, ActionPinOverride, ApprovedPin, ApprovedPinCatalog, validate_action_inputs,
+};
+pub use tools::{
+    ActionlintToolchain, SHELLCHECK_VERSION, ShellcheckToolchain, WorkflowLintTools,
+    ZizmorToolchain,
+};
 
 /// Stable identifier for the actionlint tool metadata.
 pub const TOOL_ID: &str = "actionlint";
