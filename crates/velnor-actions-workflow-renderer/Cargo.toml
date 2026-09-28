@@ -5,6 +5,9 @@ edition.workspace = true
 rust-version.workspace = true
 autotests = false
 
+[dependencies]
+velnor-actions-contract = { path = "../velnor-actions-contract" }
+
 [lints]
 workspace = true
 
