@@ -5,9 +5,26 @@ edition.workspace = true
 rust-version.workspace = true
 autotests = false
 
+[dependencies]
+velnor-actions-actionlint = { path = "../velnor-actions-actionlint" }
+velnor-actions-contract = { path = "../velnor-actions-contract" }
+velnor-actions-mise = { path = "../velnor-actions-mise" }
+velnor-actions-rust = { path = "../velnor-actions-rust" }
+velnor-actions-workflow-renderer = { path = "../velnor-actions-workflow-renderer" }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = { version = "1.0.151" }
+tempfile = { version = "3.23.0" }
+thiserror = { version = "2.0.21" }
+toml = { version = "0.9.8" }
+
 [lints]
 workspace = true
 
 [[test]]
 name = "velnor_orchestrator"
 path = "tests/velnor_orchestrator.rs"
+
+[dev-dependencies]
+serde_json = { version = "1.0.151" }
+tempfile = { version = "3.23.0" }
+velnor-actions-contract = { path = "../velnor-actions-contract" }
