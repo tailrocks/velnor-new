@@ -66,9 +66,17 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Restore Mise tools
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-velnor-plan-${{hashFiles('mise.toml','.mise.toml','mise.lock','.mise.lock','.tool-versions')}}
+          path: ~/.local/share/mise
+          restore-keys: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-velnor-plan-
       - name: Setup Mise
         uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
         with:
+          cache: "false"
+          cache_save: "false"
           env: "false"
           install: "false"
           sha256: b6f8757201f6a2ee799f45f3f52ef7ca0b4071523637dc3b0b24264dd3333518
@@ -76,7 +84,7 @@ jobs:
       - name: Build helper (pre-seed trust-on-review)
         run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 -- mbx build --release --locked --package velnor-actions-cli --bin velnor-actions
       - name: Verify MBX compile (pre-seed trust-on-review)
-        run: sh -c 'test -x target/release/velnor-actions'
+        run: "sh -c 'test -x target/release/velnor-actions && mise --no-config --no-env --no-hooks exec mr-boxington@1.19.0 -- mbx --version | grep -qxF \"mbx 1.19.0\"'"
       - name: Write helper manifest (pre-seed trust-on-review)
         run: "sh -c 'mkdir -p $RUNNER_TEMP/velnor/preseed-output && cp target/release/velnor-actions $RUNNER_TEMP/velnor/preseed-output/velnor-actions && sha256sum $RUNNER_TEMP/velnor/preseed-output/velnor-actions > $RUNNER_TEMP/velnor/preseed-output/sha.txt && read sha rest < $RUNNER_TEMP/velnor/preseed-output/sha.txt && printf \"{\"schema\":1,\"commit\":\"%s\",\"target\":\"x86_64-unknown-linux-gnu\",\"toolchain\":\"rust@1.98.1+mr-boxington@1.19.0\",\"sha256\":\"%s\"}\" \"$GITHUB_SHA\" \"$sha\" > $RUNNER_TEMP/velnor/preseed-output/preseed-manifest.json'"
       - name: Upload helper (pre-seed trust-on-review)
@@ -103,6 +111,11 @@ jobs:
           if-no-files-found: error
           name: velnor-plan-r${{ github.run_id }}-a${{ github.run_attempt }}
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
+      - name: Save Mise tools
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-velnor-plan-${{hashFiles('mise.toml','.mise.toml','mise.lock','.mise.lock','.tool-versions')}}
+          path: ~/.local/share/mise
   velnor-policy:
     name: Velnor Policy
     runs-on: ubuntu-26.04
@@ -111,9 +124,17 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Restore Mise tools
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-velnor-policy-${{hashFiles('mise.toml','.mise.toml','mise.lock','.mise.lock','.tool-versions')}}
+          path: ~/.local/share/mise
+          restore-keys: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-velnor-policy-
       - name: Setup Mise
         uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
         with:
+          cache: "false"
+          cache_save: "false"
           env: "false"
           install: "false"
           sha256: b6f8757201f6a2ee799f45f3f52ef7ca0b4071523637dc3b0b24264dd3333518
@@ -124,6 +145,11 @@ jobs:
         run: mise --no-config --no-env --no-hooks exec cargo-deny@0.20.2 -- cargo deny --locked check
       - name: Run cargo-machete
         run: mise --no-config --no-env --no-hooks exec ubi:bnjbvr/cargo-machete@0.9.2 -- cargo machete
+      - name: Save Mise tools
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-velnor-policy-${{hashFiles('mise.toml','.mise.toml','mise.lock','.mise.lock','.tool-versions')}}
+          path: ~/.local/share/mise
   velnor-task:
     name: Velnor Task
     runs-on: ubuntu-26.04
@@ -138,9 +164,17 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Restore Mise tools
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-velnor-task-${{hashFiles('mise.toml','.mise.toml','mise.lock','.mise.lock','.tool-versions')}}
+          path: ~/.local/share/mise
+          restore-keys: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-velnor-task-
       - name: Setup Mise
         uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
         with:
+          cache: "false"
+          cache_save: "false"
           env: "false"
           install: "false"
           sha256: b6f8757201f6a2ee799f45f3f52ef7ca0b4071523637dc3b0b24264dd3333518
@@ -157,6 +191,11 @@ jobs:
           VELNOR_TASK_ID: ${{ matrix.task_id }}
           VELNOR_TASK_RUN: ${{ matrix.run }}
         run: "sh -c 'echo \"$VELNOR_TASK_ID\" && : \"${VELNOR_TASK_RUN:?matrix.run_missing}\" && sh -c \"$VELNOR_TASK_RUN\"'"
+      - name: Save Mise tools
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-velnor-task-${{hashFiles('mise.toml','.mise.toml','mise.lock','.mise.lock','.tool-versions')}}
+          path: ~/.local/share/mise
   velnor-workflow-lint:
     name: Velnor Workflow Lint
     runs-on: ubuntu-26.04
@@ -165,12 +204,25 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Restore Mise tools
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-velnor-workflow-lint-${{hashFiles('mise.toml','.mise.toml','mise.lock','.mise.lock','.tool-versions')}}
+          path: ~/.local/share/mise
+          restore-keys: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-velnor-workflow-lint-
       - name: Setup Mise
         uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
         with:
+          cache: "false"
+          cache_save: "false"
           env: "false"
           install: "false"
           sha256: b6f8757201f6a2ee799f45f3f52ef7ca0b4071523637dc3b0b24264dd3333518
           version: 2026.9.16
       - name: Run actionlint
         run: mise --no-config --no-env --no-hooks exec actionlint@1.7.12 shellcheck@0.11.0 -- actionlint -color
+      - name: Save Mise tools
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-velnor-workflow-lint-${{hashFiles('mise.toml','.mise.toml','mise.lock','.mise.lock','.tool-versions')}}
+          path: ~/.local/share/mise
