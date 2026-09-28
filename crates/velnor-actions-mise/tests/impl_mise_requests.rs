@@ -145,7 +145,7 @@ fn pinned_exec_selects_exact_tools() -> Result<(), String> {
 }
 
 #[test]
-fn pinned_exec_accepts_all_six_tools() -> Result<(), String> {
+fn pinned_exec_accepts_all_seven_tools() -> Result<(), String> {
     let request = PinnedToolExec::new(
         PinnedTool::ALL.to_vec(),
         OsStr::new("gh"),
@@ -160,9 +160,48 @@ fn pinned_exec_accepts_all_six_tools() -> Result<(), String> {
         "actionlint@1.7.12",
         "shellcheck@0.11.0",
         "zizmor@1.30.1",
+        "aqua:nextest-rs/nextest/cargo-nextest@0.9.146",
     ] {
         assert!(argv.iter().any(|arg| arg == spec), "missing spec: {spec}");
     }
+    Ok(())
+}
+
+#[test]
+fn pinned_exec_runs_nextest_without_preinstalled_tools() -> Result<(), String> {
+    let request = PinnedToolExec::new(
+        vec![PinnedTool::Rust, PinnedTool::Nextest],
+        OsStr::new("cargo"),
+        strings(&[
+            "nextest",
+            "run",
+            "--locked",
+            "--offline",
+            "--manifest-path",
+            "Cargo.toml",
+        ]),
+    )
+    .map_err(|err| err.to_string())?;
+    assert_eq!(
+        request.argv(&pinned()),
+        strings(&[
+            "mise",
+            "--no-config",
+            "--no-env",
+            "--no-hooks",
+            "exec",
+            "rust@1.98.1",
+            "aqua:nextest-rs/nextest/cargo-nextest@0.9.146",
+            "--",
+            "cargo",
+            "nextest",
+            "run",
+            "--locked",
+            "--offline",
+            "--manifest-path",
+            "Cargo.toml",
+        ])
+    );
     Ok(())
 }
 

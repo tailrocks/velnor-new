@@ -67,6 +67,7 @@ tool_consts = {
     "actionlint": "ACTIONLINT_VERSION",
     "shellcheck": "SHELLCHECK_VERSION",
     "zizmor": "ZIZMOR_VERSION",
+    "nextest": "NEXTEST_VERSION",
 }
 seen_tools = set()
 for tool in inv.get("tools", []):

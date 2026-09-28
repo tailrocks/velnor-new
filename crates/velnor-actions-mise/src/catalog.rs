@@ -34,6 +34,21 @@ pub const SHELLCHECK_VERSION: &str = "0.11.0";
 /// Qualified zizmor tool release (`zizmorcore/zizmor` tag `v1.30.1`, stable, published 2026-09-09).
 /// Source: `https://api.github.com/repos/zizmorcore/zizmor/releases/latest`; checked 2026-09-28.
 pub const ZIZMOR_VERSION: &str = "1.30.1";
+/// Qualified cargo-nextest release (`nextest-rs/nextest` tag
+/// `cargo-nextest-0.9.146`, published 2026-09-21).
+/// Source: `https://crates.io/api/v1/crates/cargo-nextest`; checked 2026-09-29.
+pub const NEXTEST_VERSION: &str = "0.9.146";
+
+// Backend-qualified mise selector prefix for Nextest. The mise registry
+// has no `nextest` shorthand, so the catalog pins the aqua-registry path.
+// Qualified 2026-09-29: `mise ls-remote` lists 0.9.146, `mise install
+// aqua:nextest-rs/nextest/cargo-nextest@0.9.146` fetched the prebuilt
+// universal-apple-darwin tarball in ~3s, and the isolated
+// `mise --no-config --no-env --no-hooks exec rust@1.98.1 <spec> --
+// cargo nextest --version` probe reported cargo-nextest 0.9.146.
+// Rejected: `github:nextest-rs/nextest` tags carry a `cargo-nextest-`
+// prefix (not an exact pin); `cargo:cargo-nextest` compiles from source.
+const NEXTEST_TOOL_SPEC_PREFIX: &str = "aqua:nextest-rs/nextest/cargo-nextest";
 
 /// Tools Velnor may select through mise, by registry name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -50,17 +65,20 @@ pub enum PinnedTool {
     Shellcheck,
     /// Workflow security linter (`zizmor`).
     Zizmor,
+    /// Nextest test runner (`nextest`, invoked as `cargo nextest`).
+    Nextest,
 }
 
 impl PinnedTool {
     /// Every catalog tool in stable order.
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Rust,
         Self::MrBoxington,
         Self::Gh,
         Self::Actionlint,
         Self::Shellcheck,
         Self::Zizmor,
+        Self::Nextest,
     ];
 
     /// Mise registry name used in `<tool>@<version>` selectors.
@@ -73,6 +91,7 @@ impl PinnedTool {
             Self::Actionlint => "actionlint",
             Self::Shellcheck => "shellcheck",
             Self::Zizmor => "zizmor",
+            Self::Nextest => "nextest",
         }
     }
 
@@ -82,6 +101,7 @@ impl PinnedTool {
     ///
     /// Returns [`MiseError::UnknownTool`] for names outside the catalog.
     /// `mbx` and `mr_boxington` are rejected: the tool is `mr-boxington`.
+    /// `cargo-nextest` is rejected: the tool is `nextest`.
     pub fn from_tool_name(name: &str) -> Result<Self, MiseError> {
         Self::ALL
             .iter()
@@ -108,6 +128,8 @@ pub struct ToolCatalog {
     shellcheck: String,
     /// Pinned zizmor tool version.
     zizmor: String,
+    /// Pinned Nextest runner version.
+    nextest: String,
 }
 
 impl ToolCatalog {
@@ -121,6 +143,7 @@ impl ToolCatalog {
             actionlint: ACTIONLINT_VERSION.to_owned(),
             shellcheck: SHELLCHECK_VERSION.to_owned(),
             zizmor: ZIZMOR_VERSION.to_owned(),
+            nextest: NEXTEST_VERSION.to_owned(),
         }
     }
 
@@ -137,6 +160,7 @@ impl ToolCatalog {
         actionlint: &str,
         shellcheck: &str,
         zizmor: &str,
+        nextest: &str,
     ) -> Result<Self, MiseError> {
         validate_exact_version(PinnedTool::Rust.tool_name(), rust)?;
         validate_exact_version(PinnedTool::MrBoxington.tool_name(), mr_boxington)?;
@@ -144,6 +168,7 @@ impl ToolCatalog {
         validate_exact_version(PinnedTool::Actionlint.tool_name(), actionlint)?;
         validate_exact_version(PinnedTool::Shellcheck.tool_name(), shellcheck)?;
         validate_exact_version(PinnedTool::Zizmor.tool_name(), zizmor)?;
+        validate_exact_version(PinnedTool::Nextest.tool_name(), nextest)?;
         Ok(Self {
             rust: rust.to_owned(),
             mr_boxington: mr_boxington.to_owned(),
@@ -151,6 +176,7 @@ impl ToolCatalog {
             actionlint: actionlint.to_owned(),
             shellcheck: shellcheck.to_owned(),
             zizmor: zizmor.to_owned(),
+            nextest: nextest.to_owned(),
         })
     }
 
@@ -164,13 +190,20 @@ impl ToolCatalog {
             PinnedTool::Actionlint => &self.actionlint,
             PinnedTool::Shellcheck => &self.shellcheck,
             PinnedTool::Zizmor => &self.zizmor,
+            PinnedTool::Nextest => &self.nextest,
         }
     }
 
-    /// Mise selector `<tool>@<exact>` for one tool.
+    /// Mise selector for one tool: `<tool>@<exact>`, except Nextest,
+    /// which needs its backend-qualified aqua-registry path.
     #[must_use]
     pub fn tool_spec(&self, tool: PinnedTool) -> String {
-        format!("{}@{}", tool.tool_name(), self.version(tool))
+        match tool {
+            PinnedTool::Nextest => {
+                format!("{NEXTEST_TOOL_SPEC_PREFIX}@{}", self.version(tool))
+            }
+            _ => format!("{}@{}", tool.tool_name(), self.version(tool)),
+        }
     }
 
     /// Mise selectors for several tools, in the given order.

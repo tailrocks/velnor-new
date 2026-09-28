@@ -2,6 +2,10 @@
 //!
 //! Pure data helpers over [`TaskGroup`](crate::tasks::TaskGroup); the
 //! orchestrator wraps payloads in pinned-tool execution via the Mise adapter.
+//! Nextest payloads must run under the Rust plus Nextest pinned toolchain
+//! (`mise ... exec rust@<exact> aqua:nextest-rs/nextest/cargo-nextest@<exact>
+//! -- cargo <payload>`); a bare `cargo nextest` assumes a preinstalled
+//! runner and violates the no-undeclared-preinstalled-tools rule.
 
 use std::ffi::OsString;
 
@@ -89,6 +93,8 @@ pub fn shards_allowed(test_runner: &str) -> bool {
 ///
 /// Pure data: the orchestrator wraps this payload in a pinned-tool
 /// execution via the Mise adapter; this crate builds no invocations.
+/// [`TaskKind::Nextest`](crate::tasks::TaskKind::Nextest) payloads require
+/// the pinned Nextest tool in that execution, not a preinstalled runner.
 #[must_use]
 pub fn cargo_payload_argv(group: &TaskGroup) -> Vec<OsString> {
     let manifest = manifest_for_key(&group.manifest_key);
@@ -135,6 +141,8 @@ fn push_kind_args(args: &mut Vec<OsString>, group: &TaskGroup, manifest: &str) {
             }
         }
         TaskKind::Nextest => {
+            // Runs only under the Rust plus Nextest pinned toolchain; the
+            // `cargo nextest` subcommand resolves from the pinned tool.
             args.extend([
                 flag("nextest"),
                 flag("run"),

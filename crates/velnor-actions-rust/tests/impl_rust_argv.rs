@@ -53,3 +53,25 @@ fn payload_features_and_target() {
     );
     assert!(!text(&group(TaskKind::Fmt)).contains(&"--no-default-features".to_owned()));
 }
+
+#[test]
+fn nextest_payload_is_pinned_tool_input() {
+    assert_eq!(
+        text(&group(TaskKind::Nextest)),
+        [
+            "nextest",
+            "run",
+            "--locked",
+            "--offline",
+            "--manifest-path",
+            "Cargo.toml",
+        ]
+    );
+    let mut custom = group(TaskKind::Nextest);
+    custom.manifest_key = "crates/demo".to_owned();
+    assert!(
+        text(&custom)
+            .windows(2)
+            .any(|w| w == ["--manifest-path", "crates/demo/Cargo.toml"])
+    );
+}
