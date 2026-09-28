@@ -1,0 +1,292 @@
+//! Staging-only zizmor config cases: blessed-tag green, targeted ignore.
+
+use std::ffi::OsString;
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::process::Command;
+
+use tempfile::TempDir;
+use velnor_actions_actionlint::actions::{
+    ALINT_ACTION, ALINT_REVIEWED_TAG, CHECKOUT_ACTION_SHA, CHECKOUT_ACTION_VERSION,
+};
+use velnor_actions_actionlint::config::{
+    ZizmorConfigInput, ZizmorWorkflowText, render_zizmor_yaml,
+};
+use velnor_actions_mise::{PinnedTool, PinnedToolExec, ProcessOutput, ToolCatalog};
+use velnor_actions_orchestrator::{GenerateOptions, generate, prepare};
+
+/// Test error shortcut.
+type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+/// Run git with inherited failure context.
+fn git(args: &[&str], cwd: &Path) -> TestResult {
+    let status = Command::new("git").args(args).current_dir(cwd).status()?;
+    assert!(status.success(), "git {args:?} failed");
+    Ok(())
+}
+
+/// Release-manifest fixture for `prepare`.
+fn manifest_json() -> String {
+    let targets = [
+        "x86_64-unknown-linux-gnu",
+        "aarch64-apple-darwin",
+        "x86_64-apple-darwin",
+    ]
+    .iter()
+    .map(|target| {
+        format!(
+            "{{\"target\":\"{target}\",\"artifact\":\"https://example.invalid/r/{target}\",\"sha256\":\"{}\"}}",
+            "a".repeat(64)
+        )
+    })
+    .collect::<Vec<_>>()
+    .join(",");
+    format!(
+        "{{\"schema\":1,\"version\":\"0.1.0\",\"repository\":\"tailrocks/velnor-new\",\"targets\":[{targets}]}}"
+    )
+}
+
+/// One generator-lock binary record.
+fn binary_record(target: &str) -> String {
+    format!(
+        "[[generator.binaries]]\ntarget = \"{target}\"\nartifact = \"https://example.invalid/r/{target}\"\nsha256 = \"{}\"\n",
+        "a".repeat(64)
+    )
+}
+
+/// Generator-lock fixture for velnor-policy `prepare`.
+fn lock_text() -> String {
+    let bins = binary_record("x86_64-unknown-linux-gnu")
+        + &binary_record("aarch64-apple-darwin")
+        + &binary_record("x86_64-apple-darwin");
+    format!(
+        "schema = 1\n[generator]\nbinary = \"velnor-actions\"\nversion = \"0.1.0\"\n{bins}[mise-bootstrap]\nversion = \"2026.9.16\"\nartifact = \"https://example.invalid/mise\"\nsha256 = \"{}\"\n",
+        "b".repeat(64)
+    )
+}
+
+/// Live version-policy mirror from the working tree.
+fn repo_policy() -> Result<String, Box<dyn std::error::Error>> {
+    let path = format!(
+        "{}/../../.velnor/version-policy.toml",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    Ok(fs::read_to_string(path)?)
+}
+
+/// Git fixture: config plus one root crate (uncommitted).
+fn make_repo(config: &str) -> Result<TempDir, Box<dyn std::error::Error>> {
+    let dir = TempDir::new()?;
+    let root = dir.path();
+    git(&["init", "-b", "testmain"], root)?;
+    git(&["config", "user.email", "test@example.com"], root)?;
+    git(&["config", "user.name", "Test"], root)?;
+    git(&["config", "commit.gpgsign", "false"], root)?;
+    fs::create_dir_all(root.join(".velnor"))?;
+    fs::write(root.join(".velnor/config.toml"), config)?;
+    fs::write(root.join(".velnor/release-manifest.json"), manifest_json())?;
+    fs::write(
+        root.join("Cargo.toml"),
+        "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+    )?;
+    fs::create_dir_all(root.join("src"))?;
+    fs::write(root.join("src/lib.rs"), "pub fn f() {}\n")?;
+    Ok(dir)
+}
+
+/// Velnor-policy fixture: origin plus lock and policy mirror.
+fn make_policy_repo() -> Result<TempDir, Box<dyn std::error::Error>> {
+    let repo = make_repo(
+        "schema = 1\n[workflow]\nname = \"CI\"\npolicy = \"velnor-repository-v1\"\ndefault_branch = \"testmain\"\n",
+    )?;
+    git(
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/tailrocks/velnor-new.git",
+        ],
+        repo.path(),
+    )?;
+    fs::write(repo.path().join(".velnor/generator.lock"), lock_text())?;
+    fs::write(
+        repo.path().join(".velnor/version-policy.toml"),
+        repo_policy()?,
+    )?;
+    Ok(repo)
+}
+
+/// Live dirs plus preview root, workflow bytes, and validators.
+type PolicyPreview = (TempDir, TempDir, PathBuf, String, Vec<String>);
+
+/// Green velnor-policy preview.
+fn policy_preview() -> Result<PolicyPreview, Box<dyn std::error::Error>> {
+    let repo = make_policy_repo()?;
+    let prep = prepare(repo.path())?;
+    let parent = TempDir::new()?;
+    let preview = parent.path().join("preview");
+    let report = generate(
+        &prep,
+        &GenerateOptions {
+            output_dir: Some(preview.clone()),
+        },
+    )?;
+    assert_eq!(report.files_written.len(), 2, "two generated files");
+    let yaml = fs::read_to_string(preview.join(".github/workflows/velnor.yml"))?;
+    Ok((repo, parent, preview, yaml, report.validated_by))
+}
+
+/// Scratch tree mirroring staged validation: `.github` plus config.
+fn stage(preview: &Path, yaml: &str) -> Result<TempDir, Box<dyn std::error::Error>> {
+    let dir = TempDir::new()?;
+    let root = dir.path();
+    fs::create_dir_all(root.join(".github/workflows"))?;
+    fs::write(root.join(".github/workflows/velnor.yml"), yaml)?;
+    fs::write(
+        root.join(".github/actionlint.yaml"),
+        fs::read(preview.join(".github/actionlint.yaml"))?,
+    )?;
+    let input = ZizmorConfigInput {
+        generator_version: env!("CARGO_PKG_VERSION").to_owned(),
+        workflows: vec![ZizmorWorkflowText {
+            path: ".github/workflows/velnor.yml".to_owned(),
+            text: yaml.to_owned(),
+        }],
+    };
+    fs::write(root.join(".zizmor.yml"), render_zizmor_yaml(&input)?.yaml)?;
+    Ok(dir)
+}
+
+/// Run pinned zizmor over `dir` exactly like staged validation.
+fn run_zizmor(dir: &Path) -> Result<ProcessOutput, Box<dyn std::error::Error>> {
+    let catalog = ToolCatalog::pinned();
+    let program = OsString::from("zizmor");
+    let args = [
+        "--offline",
+        "--no-progress",
+        "--color",
+        "never",
+        "--config",
+        ".zizmor.yml",
+        ".",
+    ];
+    let exec = PinnedToolExec::new(
+        vec![PinnedTool::Zizmor],
+        &program,
+        args.iter().map(OsString::from).collect(),
+    )?;
+    Ok(exec.command(&catalog)?.with_cwd(dir.to_path_buf()).run()?)
+}
+
+/// Combined zizmor streams for summary assertions.
+fn streams(output: &ProcessOutput) -> String {
+    format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    )
+}
+
+#[test]
+fn velnor_policy_blessed_tag_validates_green() -> TestResult {
+    let (_repo, _parent, preview, yaml, validated_by) = policy_preview()?;
+    assert_eq!(
+        validated_by,
+        vec![
+            "actionlint@1.7.12".to_owned(),
+            "shellcheck@0.11.0".to_owned(),
+            "zizmor@1.30.1".to_owned(),
+        ]
+    );
+    let blessed = format!("uses: {ALINT_ACTION}@{ALINT_REVIEWED_TAG}");
+    assert!(yaml.contains(&blessed), "blessed tag rendered");
+    assert!(
+        !preview.join(".zizmor.yml").exists(),
+        "no staging config in output"
+    );
+    assert!(
+        !preview.join(".github/.zizmor.yml").exists(),
+        "no config in generated tree"
+    );
+    Ok(())
+}
+
+/// The 1 suppressed finding is `undocumented-permissions` (low,
+/// auditor/pedantic-only); it must stay suppressed, never ignored.
+#[test]
+fn staging_suppressions_stable_no_new() -> TestResult {
+    let (_repo, _parent, preview, yaml, _) = policy_preview()?;
+    let staged = stage(&preview, &yaml)?;
+    let output = run_zizmor(staged.path())?;
+    let text = streams(&output);
+    assert!(output.success, "staged config greens zizmor: {text}");
+    assert!(
+        text.contains("1 ignored"),
+        "blessed finding ignored: {text}"
+    );
+    assert!(text.contains("1 suppressed"), "no new suppressions: {text}");
+    Ok(())
+}
+
+#[test]
+fn consumer_tree_unaffected() -> TestResult {
+    let repo = make_repo("schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n")?;
+    let prep = prepare(repo.path())?;
+    let parent = TempDir::new()?;
+    let preview = parent.path().join("preview");
+    generate(
+        &prep,
+        &GenerateOptions {
+            output_dir: Some(preview.clone()),
+        },
+    )?;
+    assert!(
+        !preview.join(".zizmor.yml").exists(),
+        "no staging config in output"
+    );
+    let yaml = fs::read_to_string(preview.join(".github/workflows/velnor.yml"))?;
+    let input = ZizmorConfigInput {
+        generator_version: env!("CARGO_PKG_VERSION").to_owned(),
+        workflows: vec![ZizmorWorkflowText {
+            path: ".github/workflows/velnor.yml".to_owned(),
+            text: yaml,
+        }],
+    };
+    assert!(
+        render_zizmor_yaml(&input)?.approved_ignores.is_empty(),
+        "consumer needs no ignore"
+    );
+    Ok(())
+}
+
+#[test]
+fn different_unpinned_tag_still_fails() -> TestResult {
+    let (_repo, _parent, preview, yaml, _) = policy_preview()?;
+    let pinned = format!("actions/checkout@{CHECKOUT_ACTION_SHA}");
+    let unpinned = format!("actions/checkout@{CHECKOUT_ACTION_VERSION}");
+    let mutated = yaml.replacen(&pinned, &unpinned, 1);
+    assert_ne!(mutated, yaml, "fixture still pins checkout");
+    let staged = stage(&preview, &mutated)?;
+    let output = run_zizmor(staged.path())?;
+    let text = streams(&output);
+    assert!(!output.success, "unpinned checkout must fail: {text}");
+    assert!(text.contains("unpinned-uses"), "rule fires: {text}");
+    assert!(text.contains(&unpinned), "other ref flagged: {text}");
+    Ok(())
+}
+
+#[test]
+fn blessed_repo_wrong_tag_still_fails() -> TestResult {
+    let (_repo, _parent, preview, yaml, _) = policy_preview()?;
+    let blessed = format!("{ALINT_ACTION}@{ALINT_REVIEWED_TAG}");
+    let wrong = format!("{ALINT_ACTION}@v0.17.0");
+    let mutated = yaml.replacen(&blessed, &wrong, 1);
+    assert_ne!(mutated, yaml, "fixture still carries blessed tag");
+    let staged = stage(&preview, &mutated)?;
+    let output = run_zizmor(staged.path())?;
+    let text = streams(&output);
+    assert!(!output.success, "wrong alint tag must fail: {text}");
+    assert!(text.contains("unpinned-uses"), "rule fires: {text}");
+    assert!(text.contains(&wrong), "wrong ref flagged: {text}");
+    Ok(())
+}

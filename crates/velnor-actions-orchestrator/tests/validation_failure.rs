@@ -197,3 +197,7 @@ exec \"$VELNOR_REAL_MISE\" \"$@\"
         Ok(out)
     }
 }
+
+#[cfg(unix)]
+#[path = "zizmor_staging.rs"]
+mod zizmor_staging;

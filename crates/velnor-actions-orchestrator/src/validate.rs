@@ -3,6 +3,9 @@
 use std::ffi::OsString;
 use std::path::Path;
 
+use velnor_actions_actionlint::config::{
+    ZizmorConfigInput, ZizmorWorkflowText, render_zizmor_yaml,
+};
 use velnor_actions_contract::GeneratorLock;
 use velnor_actions_mise::catalog::lock::{load_text, parse_generator_lock, verify_version_policy};
 use velnor_actions_mise::{PinnedTool, PinnedToolExec, ProcessOutput, ToolCatalog};
@@ -19,6 +22,9 @@ const VERSION_POLICY_REL: &str = ".velnor/version-policy.toml";
 
 /// Staged actionlint config consumed via `-config-file`.
 const ACTIONLINT_CONFIG: &str = ".github/actionlint.yaml";
+
+/// Staging-only zizmor config at the staging root, never generated.
+const ZIZMOR_CONFIG: &str = ".zizmor.yml";
 
 /// Staged workflows directory prefix.
 const WORKFLOWS_DIR: &str = ".github/workflows/";
@@ -40,6 +46,7 @@ pub(crate) fn validate_staged(tree: &RenderedTree) -> Result<Vec<String>, Orches
     let catalog = ToolCatalog::pinned();
     run_actionlint(&catalog, staging.path(), &workflows)?;
     run_shellcheck_probe(&catalog, staging.path())?;
+    write_zizmor_config(staging.path(), tree)?;
     run_zizmor(&catalog, staging.path())?;
     let mut validated = vec![
         catalog.tool_spec(PinnedTool::Actionlint),
@@ -81,11 +88,16 @@ fn contract_of(err: impl ToString) -> OrchestratorError {
     }
 }
 
-/// Staged workflow files, sorted; empty is a fail-closed error.
+/// Workflow files: under `.github/workflows/` with a YAML extension.
 #[expect(
     clippy::case_sensitive_file_extension_comparisons,
     reason = "rendered tree paths are exact lowercase by construction"
 )]
+fn is_workflow_path(path: &str) -> bool {
+    path.starts_with(WORKFLOWS_DIR) && (path.ends_with(".yml") || path.ends_with(".yaml"))
+}
+
+/// Staged workflow files, sorted; empty is a fail-closed error.
 fn staged_workflows(tree: &RenderedTree) -> Result<Vec<String>, OrchestratorError> {
     if !tree.files.iter().any(|file| file.path == ACTIONLINT_CONFIG) {
         return Err(OrchestratorError::Validation {
@@ -97,9 +109,7 @@ fn staged_workflows(tree: &RenderedTree) -> Result<Vec<String>, OrchestratorErro
         .files
         .iter()
         .map(|file| file.path.clone())
-        .filter(|path| {
-            path.starts_with(WORKFLOWS_DIR) && (path.ends_with(".yml") || path.ends_with(".yaml"))
-        })
+        .filter(|path| is_workflow_path(path))
         .collect();
     workflows.sort();
     if workflows.is_empty() {
@@ -168,9 +178,42 @@ fn run_shellcheck_probe(catalog: &ToolCatalog, staging: &Path) -> Result<(), Orc
     }
 }
 
-/// Run pinned zizmor offline over the staged tree.
+/// Emit the staging-only zizmor config into the staging root.
+///
+/// Scans staged workflow bytes for the exact blessed Alint tag and
+/// ignores only those `unpinned-uses` locations; every other ref
+/// still requires a hash. Never touches the generated tree.
+fn write_zizmor_config(staging: &Path, tree: &RenderedTree) -> Result<(), OrchestratorError> {
+    let mut workflows = Vec::new();
+    for file in &tree.files {
+        if is_workflow_path(&file.path) {
+            workflows.push(ZizmorWorkflowText {
+                path: file.path.clone(),
+                text: file.bytes.clone(),
+            });
+        }
+    }
+    let input = ZizmorConfigInput {
+        generator_version: env!("CARGO_PKG_VERSION").to_owned(),
+        workflows,
+    };
+    let output = render_zizmor_yaml(&input)?;
+    let dest = staging.join(ZIZMOR_CONFIG);
+    std::fs::write(&dest, output.yaml)
+        .map_err(|err| OrchestratorError::io(dest.display().to_string(), err.to_string()))
+}
+
+/// Run pinned zizmor offline over the staged tree with its config.
 fn run_zizmor(catalog: &ToolCatalog, staging: &Path) -> Result<(), OrchestratorError> {
-    let args = ["--offline", "--no-progress", "--color", "never", "."];
+    let args = [
+        "--offline",
+        "--no-progress",
+        "--color",
+        "never",
+        "--config",
+        ZIZMOR_CONFIG,
+        ".",
+    ];
     let output = pinned_output(
         catalog,
         "zizmor",
