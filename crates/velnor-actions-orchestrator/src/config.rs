@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use serde::Deserialize;
+use velnor_actions_contract::config::{ActionPinOverride, ActionsConfig};
 use velnor_actions_contract::{
     DiscoveryConfig, GeneratorValidation, ResourcesConfig, RustConfiguration, RustStackConfig,
     StacksConfig, TestShardingConfig, VelnorConfig, WorkflowConfig, WorkflowPolicy,
@@ -104,6 +105,9 @@ struct PartialConfig {
     /// Discovery section.
     #[serde(default)]
     discovery: PartialDiscovery,
+    /// Actions section.
+    #[serde(default)]
+    actions: PartialActions,
 }
 
 /// Workflow section with every value optional.
@@ -173,6 +177,15 @@ struct PartialDiscovery {
     exclude: Vec<String>,
 }
 
+/// Actions section with every value optional.
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PartialActions {
+    /// Pin overrides keyed by exact action key.
+    #[serde(default)]
+    overrides: BTreeMap<String, ActionPinOverride>,
+}
+
 impl PartialConfig {
     /// Fill hardcoded defaults for every omitted value.
     fn materialize(self) -> Result<VelnorConfig, OrchestratorError> {
@@ -186,6 +199,7 @@ impl PartialConfig {
             test_sharding: self.test_sharding.materialize(),
             stacks: self.stacks.materialize()?,
             discovery: self.discovery.materialize(),
+            actions: self.actions.materialize(),
         })
     }
 }
@@ -256,6 +270,15 @@ impl PartialDiscovery {
     fn materialize(self) -> DiscoveryConfig {
         DiscoveryConfig {
             exclude: self.exclude,
+        }
+    }
+}
+
+impl PartialActions {
+    /// Fill actions defaults (no overrides).
+    fn materialize(self) -> ActionsConfig {
+        ActionsConfig {
+            overrides: self.overrides,
         }
     }
 }

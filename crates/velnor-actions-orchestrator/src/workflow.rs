@@ -1,13 +1,14 @@
 //! Workflow-IR, render-context, and actionlint-input construction.
 
 use std::collections::BTreeMap;
+use std::ffi::OsString;
 
 use velnor_actions_actionlint::{ActionlintConfigInput, IgnorePolicy};
 use velnor_actions_contract::{
     Concurrency, GeneratorValidation, Job, Permissions, Step, StepKind, Trigger, VelnorConfig,
     VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
 };
-use velnor_actions_mise::ToolCatalog;
+use velnor_actions_mise::{PinnedTool, PinnedToolExec, ToolCatalog};
 use velnor_actions_rust::{TaskGroup, TaskKind};
 use velnor_actions_workflow_renderer::render::{
     CONCURRENCY_CANCEL, CONCURRENCY_GROUP, EXPECTED_PR_TYPES, FINAL_CONDITION, FINAL_DISPLAY_NAME,
@@ -26,6 +27,12 @@ pub const CHECKOUT_USES: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c18
 
 /// Default literal runner label when the config omits the override.
 pub const DEFAULT_RUNNER_LABEL: &str = "ubuntu-26.04";
+
+/// Always-on workflow-lint job ID, emitted for both policies.
+pub(crate) const LINT_JOB_ID: &str = "velnor-workflow-lint";
+
+/// Display name of the always-on workflow-lint job.
+pub(crate) const LINT_DISPLAY_NAME: &str = "Velnor Workflow Lint";
 
 /// Fixed request directory rendered for internal plan/merge steps.
 pub(crate) const REQUEST_DIR: &str = "$RUNNER_TEMP/velnor/request";
@@ -76,6 +83,7 @@ pub(crate) fn build_workflow(
             task_job(label, &task_groups, &catalog)?,
         );
     }
+    jobs.insert(LINT_JOB_ID.to_owned(), lint_job(label, &catalog)?);
     jobs.insert(
         FINAL_JOB_ID.to_owned(),
         final_job(label, !task_groups.is_empty()),
@@ -138,12 +146,44 @@ fn task_job(
     })
 }
 
+/// Always-on lint job: checkout plus pinned actionlint over the tree.
+fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, OrchestratorError> {
+    let program = OsString::from("actionlint");
+    let exec = PinnedToolExec::new(
+        vec![PinnedTool::Actionlint, PinnedTool::Shellcheck],
+        &program,
+        vec![OsString::from("-color")],
+    )
+    .map_err(|err| OrchestratorError::Contract {
+        problem: err.to_string(),
+    })?;
+    let argv = strings_of(exec.argv(catalog))
+        .map_err(|problem| OrchestratorError::Contract { problem })?;
+    Ok(Job {
+        display_name: LINT_DISPLAY_NAME.to_owned(),
+        runs_on: label.to_owned(),
+        needs: Vec::new(),
+        condition: None,
+        steps: vec![
+            checkout_action(),
+            Step {
+                name: "Run actionlint".to_owned(),
+                kind: StepKind::Shell {
+                    run: argv,
+                    env: BTreeMap::new(),
+                },
+            },
+        ],
+    })
+}
+
 /// Final gate with the exact required-check name and `always()` condition.
 fn final_job(label: &str, with_task: bool) -> Job {
     let mut needs = vec![PLAN_JOB_ID.to_owned()];
     if with_task {
         needs.push(TASK_JOB_ID.to_owned());
     }
+    needs.push(LINT_JOB_ID.to_owned());
     Job {
         display_name: FINAL_DISPLAY_NAME.to_owned(),
         runs_on: label.to_owned(),
@@ -195,6 +235,18 @@ fn task_step_name(group: &TaskGroup) -> String {
         group.package_name.clone()
     };
     format!("{kind} {what} ({})", group.configuration)
+}
+
+/// Convert fixed argv to UTF-8 strings.
+fn strings_of(argv: Vec<OsString>) -> Result<Vec<String>, String> {
+    let mut out = Vec::with_capacity(argv.len());
+    for arg in argv {
+        match arg.into_string() {
+            Ok(text) => out.push(text),
+            Err(_) => return Err("non_utf8_argv".to_owned()),
+        }
+    }
+    Ok(out)
 }
 
 /// Renderer scalars: version, label, staged path, request dir, pins.

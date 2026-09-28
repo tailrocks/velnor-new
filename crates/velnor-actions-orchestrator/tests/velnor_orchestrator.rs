@@ -4,3 +4,4 @@ mod impl_config_internal;
 mod impl_gen_gates;
 mod impl_merge;
 mod impl_prepare_generate;
+mod impl_select;

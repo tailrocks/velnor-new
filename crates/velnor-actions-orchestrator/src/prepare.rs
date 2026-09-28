@@ -90,7 +90,7 @@ fn resolve_default_branch(root: &Path, config: &VelnorConfig) -> Result<String, 
     })?;
     if !output.success {
         return Err(OrchestratorError::DefaultBranch {
-            problem: "origin_head_unresolvable".to_owned(),
+            problem: "origin_head_unresolvable:set workflow.default_branch".to_owned(),
         });
     }
     let text = output
@@ -99,7 +99,7 @@ fn resolve_default_branch(root: &Path, config: &VelnorConfig) -> Result<String, 
             problem: err.to_string(),
         })?;
     branch_from_origin_head(text.trim()).ok_or_else(|| OrchestratorError::DefaultBranch {
-        problem: "origin_head_unresolvable".to_owned(),
+        problem: "origin_head_unresolvable:set workflow.default_branch".to_owned(),
     })
 }
 
@@ -133,20 +133,55 @@ fn check_velnor_identity(root: &Path, config: &VelnorConfig) -> Result<(), Orche
 }
 
 /// True when the local `origin` URL normalizes to the canonical identity.
+///
+/// Only the `url` key inside the `[remote "origin"]` section counts; other
+/// sections, other keys, and decoy remotes never grant the identity.
 fn origin_matches(root: &Path) -> bool {
     let Some(config) = git_config_path(root).and_then(|path| std::fs::read_to_string(path).ok())
     else {
         return false;
     };
-    config.lines().any(|line| {
-        line.split_once('=').is_some_and(|(_, value)| {
-            let mut url = value.trim().to_lowercase();
-            if let Some(stripped) = url.strip_suffix(".git") {
-                url = stripped.to_owned();
-            }
-            url == VELNOR_IDENTITY || url.ends_with(&format!("/{VELNOR_IDENTITY}"))
-        })
-    })
+    let mut in_origin = false;
+    for line in config.lines() {
+        let trimmed = line.trim();
+        if let Some(header) = trimmed
+            .strip_prefix('[')
+            .and_then(|rest| rest.strip_suffix(']'))
+        {
+            in_origin = is_origin_section(header.trim());
+            continue;
+        }
+        if !in_origin {
+            continue;
+        }
+        let Some((key, value)) = line.split_once('=') else {
+            continue;
+        };
+        if !key.trim().eq_ignore_ascii_case("url") {
+            continue;
+        }
+        if url_matches_identity(value.trim()) {
+            return true;
+        }
+    }
+    false
+}
+
+/// True for the `[remote "origin"]` section header (case-insensitive section).
+fn is_origin_section(header: &str) -> bool {
+    let mut parts = header.splitn(2, char::is_whitespace);
+    let section = parts.next().unwrap_or_default();
+    let subsection = parts.next().unwrap_or_default().trim();
+    section.eq_ignore_ascii_case("remote") && subsection == "\"origin\""
+}
+
+/// True when a remote URL normalizes to the canonical identity.
+fn url_matches_identity(value: &str) -> bool {
+    let mut url = value.to_lowercase();
+    if let Some(stripped) = url.strip_suffix(".git") {
+        url = stripped.to_owned();
+    }
+    url == VELNOR_IDENTITY || url.ends_with(&format!("/{VELNOR_IDENTITY}"))
 }
 
 /// Locate `.git/config`, following a worktree `gitdir` pointer.

@@ -140,9 +140,10 @@ fn workflow_section(out: &mut String, prep: &GenerationPreparation) {
         &format!("  Runner: {} ({provenance})", prep.runner_label),
     );
     push(out, "  Jobs:");
-    push(out, "    - plan and formatting");
+    for (id, job) in &prep.workflow.ir.jobs {
+        push(out, &format!("    - {} ({} steps)", id, job.steps.len()));
+    }
     matrix_lines(out, prep);
-    push(out, "    - final required result");
     push(
         out,
         &format!(

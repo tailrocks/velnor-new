@@ -173,6 +173,51 @@ fn atomic_replace_failure_preserves_old_tree() -> TestResult {
 }
 
 #[test]
+fn generated_workflow_has_always_on_lint_job() -> TestResult {
+    for config in [
+        config_with_branch(),
+        "schema = 1\n[workflow]\ndefault_branch = \"testmain\"\n[stacks]\nignore = [\"rust\"]\n",
+    ] {
+        let repo = make_repo(config)?;
+        let root = repo.path();
+        let prep = prepare(root)?;
+        let parent = TempDir::new()?;
+        let preview_root = parent.path().join("preview");
+        generate(
+            &prep,
+            &GenerateOptions {
+                output_dir: Some(preview_root.clone()),
+            },
+        )?;
+        let text = fs::read_to_string(preview_root.join(".github/workflows/velnor.yml"))?;
+        assert!(text.contains("velnor-workflow-lint:"), "lint job:\n{text}");
+        assert!(
+            text.contains("Velnor Workflow Lint"),
+            "display name:\n{text}"
+        );
+        assert!(
+            text.contains(
+                "mise --no-config --no-env --no-hooks exec actionlint@1.7.12 shellcheck@0.11.0 -- actionlint -color"
+            ),
+            "pinned actionlint run:\n{text}"
+        );
+        let (_, tail) = text
+            .split_once("velnor-final:")
+            .ok_or_else(|| std::io::Error::other("missing final job"))?;
+        assert!(
+            tail.contains("- velnor-workflow-lint"),
+            "final needs lint:\n{text}"
+        );
+        // Lint sorts last, so its block runs to the end without `needs:`.
+        let (_, lint) = text
+            .split_once("velnor-workflow-lint:")
+            .ok_or_else(|| std::io::Error::other("missing lint job"))?;
+        assert!(!lint.contains("needs:"), "lint is independent:\n{text}");
+    }
+    Ok(())
+}
+
+#[test]
 fn ignored_rust_plans_no_work() -> TestResult {
     let repo = make_repo(
         "schema = 1\n[workflow]\ndefault_branch = \"testmain\"\n[stacks]\nignore = [\"rust\"]\n",

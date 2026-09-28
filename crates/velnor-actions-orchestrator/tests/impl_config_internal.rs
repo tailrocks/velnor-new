@@ -3,9 +3,9 @@
 use std::fs;
 
 use tempfile::TempDir;
-use velnor_actions_contract::FinalReport;
+use velnor_actions_contract::{FinalReport, RunnerSelection};
 use velnor_actions_orchestrator::{
-    OrchestratorError, init_config, merge_internal, plan_internal, prepare, resolve_root,
+    OrchestratorError, init_config, merge_internal, plan_internal, plan_text, prepare, resolve_root,
 };
 
 use crate::impl_common::{
@@ -202,5 +202,178 @@ fn internal_entrypoints_reject_bad_schema() -> TestResult {
         matches!(err, OrchestratorError::Internal { .. }),
         "got {err}"
     );
+    Ok(())
+}
+
+#[test]
+fn uncommented_init_sample_parses_with_overrides() -> TestResult {
+    let repo = make_repo(config_with_branch())?;
+    let root = repo.path();
+    fs::remove_file(root.join(".velnor/config.toml"))?;
+    init_config(root)?;
+    let sample = fs::read_to_string(root.join(".velnor/config.toml"))?;
+    let mut live = String::new();
+    for line in sample.lines() {
+        let uncommented = uncomment_sample_line(line);
+        live.push_str(uncommented);
+        live.push('\n');
+    }
+    assert!(
+        live.contains("[actions.overrides]"),
+        "sample must document overrides"
+    );
+    fs::write(root.join(".velnor/config.toml"), &live)?;
+    let prep = prepare(root)?;
+    assert_eq!(prep.config.actions.overrides.len(), 7);
+    assert_eq!(
+        prep.config.actions.overrides["actions/checkout"].version,
+        "v7.0.1"
+    );
+    assert_eq!(prep.runner_label, "ubuntu-24.04");
+    assert_eq!(prep.runner_selection, RunnerSelection::ConfigOverride);
+    Ok(())
+}
+
+/// Uncomment a sample line when it carries TOML after the `#`.
+fn uncomment_sample_line(line: &str) -> &str {
+    let Some(rest) = line.strip_prefix('#') else {
+        return line;
+    };
+    let code = rest.trim_start();
+    if code.starts_with('[') || code.starts_with('"') || is_assignment(code) {
+        code
+    } else {
+        line
+    }
+}
+
+/// True for `key = value` sample lines (prose has no assignment).
+fn is_assignment(code: &str) -> bool {
+    let Some((key, _)) = code.split_once('=') else {
+        return false;
+    };
+    !key.trim().is_empty()
+        && key.trim().bytes().all(|b| {
+            b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.' | b'-' | b'"' | b'/' | b' ')
+        })
+        && !key.contains("  ")
+}
+
+#[test]
+fn unknown_override_key_rejected_with_key_path() -> TestResult {
+    let repo = make_repo(
+        "schema = 1\n[workflow]\ndefault_branch = \"testmain\"\n[actions.overrides]\n\"bogus/action\" = { version = \"v1.2.3\", sha = \"3d3c42e5aac5ba805825da76410c181273ba90b1\" }\n",
+    )?;
+    let err = err_of(prepare(repo.path()), "unknown override rejected")?;
+    assert!(
+        err.to_string().contains("actions.overrides.bogus/action"),
+        "got {err}"
+    );
+    let repo = make_repo(
+        "schema = 1\n[workflow]\ndefault_branch = \"testmain\"\n[actions.overrides]\n\"asamarts/alint\" = { version = \"v0.16.1\", sha = \"9f9d34ba0eae3888299b9e570f43338b0e7f2cdb\" }\n",
+    )?;
+    let err = err_of(prepare(repo.path()), "alint override rejected")?;
+    assert!(
+        err.to_string().contains("actions.overrides.asamarts/alint"),
+        "got {err}"
+    );
+    Ok(())
+}
+
+#[test]
+fn runner_label_exact_match_at_prepare() -> TestResult {
+    for label in ["ubuntu-latest", "ubuntu-24.04-latest", "ubuntu-99.04"] {
+        let repo = make_repo(&format!(
+            "schema = 1\n[workflow]\ndefault_branch = \"testmain\"\nrunner_label = \"{label}\"\n"
+        ))?;
+        let err = err_of(prepare(repo.path()), "label rejected")?;
+        assert!(
+            err.to_string().contains("workflow.runner_label"),
+            "{label}: got {err}"
+        );
+    }
+    for label in ["ubuntu-22.04", "ubuntu-24.04-arm", "ubuntu-26.04-arm"] {
+        let repo = make_repo(&format!(
+            "schema = 1\n[workflow]\ndefault_branch = \"testmain\"\nrunner_label = \"{label}\"\n"
+        ))?;
+        let prep = prepare(repo.path())?;
+        assert_eq!(prep.runner_label, label);
+        assert_eq!(prep.runner_selection, RunnerSelection::ConfigOverride);
+    }
+    let repo = make_repo(config_with_branch())?;
+    let prep = prepare(repo.path())?;
+    assert_eq!(prep.runner_label, "ubuntu-26.04");
+    assert_eq!(prep.runner_selection, RunnerSelection::LatestDefault);
+    Ok(())
+}
+
+#[test]
+fn uppercase_rust_name_rejected_with_key_path() -> TestResult {
+    let repo = make_repo(
+        "schema = 1\n[workflow]\ndefault_branch = \"testmain\"\n[stacks.rust]\nconfigurations = [{ name = \"Default\", features = [], target = \"host\" }]\n",
+    )?;
+    let err = err_of(prepare(repo.path()), "uppercase rejected")?;
+    assert!(
+        err.to_string().contains("stacks.rust.configurations.name"),
+        "got {err}"
+    );
+    Ok(())
+}
+
+#[test]
+fn branch_failure_hints_default_branch_setting() -> TestResult {
+    let repo = make_repo("schema = 1\n")?;
+    let err = err_of(prepare(repo.path()), "branch unresolvable")?;
+    assert!(
+        matches!(err, OrchestratorError::DefaultBranch { .. }),
+        "got {err}"
+    );
+    assert!(
+        err.to_string().contains("set workflow.default_branch"),
+        "got {err}"
+    );
+    Ok(())
+}
+
+#[test]
+fn plan_job_lines_come_from_ir_job_ids() -> TestResult {
+    let repo = make_repo(config_with_branch())?;
+    let prep = prepare(repo.path())?;
+    let text = plan_text(&prep);
+    assert!(!prep.workflow.ir.jobs.is_empty(), "IR has jobs");
+    for (id, job) in &prep.workflow.ir.jobs {
+        let line = format!("- {id} ({} steps)", job.steps.len());
+        assert!(text.contains(&line), "missing {line}:\n{text}");
+    }
+    assert!(text.contains("Rust crate matrix"), "matrix detail:\n{text}");
+    Ok(())
+}
+
+#[test]
+fn identity_ignores_decoy_lines_and_remotes() -> TestResult {
+    if std::env::var("GITHUB_REPOSITORY").is_ok() {
+        return Ok(()); // Precondition: no ambient repository identity.
+    }
+    let config = "schema = 1\n[workflow]\npolicy = \"velnor-repository-v1\"\ndefault_branch = \"testmain\"\n";
+    // Decoy: identity in another remote, in a non-url key, and in comments.
+    let repo = make_repo(config)?;
+    let git_config = repo.path().join(".git/config");
+    let mut text = fs::read_to_string(&git_config)?;
+    text.push_str(
+        "[remote \"upstream\"]\n\turl = https://github.com/tailrocks/velnor-new.git\n[remote \"origin\"]\n\turl = https://example.com/other/repo.git\n\tpushurl = https://github.com/tailrocks/velnor-new.git\n# tailrocks/velnor-new\n",
+    );
+    fs::write(&git_config, text)?;
+    let err = err_of(prepare(repo.path()), "decoys rejected")?;
+    assert!(
+        matches!(err, OrchestratorError::IdentityRejected { .. }),
+        "got {err}"
+    );
+    // Positive control: origin url grants the identity.
+    let repo = make_repo(config)?;
+    let git_config = repo.path().join(".git/config");
+    let mut text = fs::read_to_string(&git_config)?;
+    text.push_str("[remote \"origin\"]\n\turl = https://github.com/tailrocks/velnor-new.git\n");
+    fs::write(&git_config, text)?;
+    prepare(repo.path())?;
     Ok(())
 }
