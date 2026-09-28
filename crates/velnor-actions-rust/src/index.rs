@@ -1,7 +1,4 @@
 //! Sorted repository file index with exclusion filtering.
-//!
-//! The orchestrator builds one index per run and hands surviving paths to
-//! detectors; exclusions therefore apply before any detection runs.
 
 use std::collections::BTreeSet;
 use std::fmt;
@@ -78,17 +75,24 @@ impl fmt::Display for IndexError {
 
 impl std::error::Error for IndexError {}
 
-/// Build the sorted index of `root`, dropping excluded paths.
-///
-/// Applies [`BUILTIN_EXCLUSIONS`] plus `exclusions` before returning, so
-/// detectors only observe surviving paths. Refuses symlinks that escape
-/// `root` or loop.
+/// Filesystem-walk alias of [`build_index_walk`] (non-git contexts only).
 ///
 /// # Errors
 ///
-/// Returns [`IndexError`] when the root is unreadable, a pattern is
-/// malformed, or a symlink escapes or loops.
+/// Passes through [`build_index_walk`] failures.
 pub fn build_index(root: &Path, exclusions: &[String]) -> Result<FileIndex, IndexError> {
+    build_index_walk(root, exclusions)
+}
+
+/// Build the sorted index of `root` by walking the filesystem.
+///
+/// Non-git contexts only. Applies [`BUILTIN_EXCLUSIONS`] plus `exclusions`;
+/// refuses symlinks that escape `root` or loop.
+///
+/// # Errors
+///
+/// Forwards root, pattern, and symlink failures as [`IndexError`].
+pub fn build_index_walk(root: &Path, exclusions: &[String]) -> Result<FileIndex, IndexError> {
     for pattern in exclusions {
         validate_pattern(pattern)?;
     }
@@ -101,17 +105,65 @@ pub fn build_index(root: &Path, exclusions: &[String]) -> Result<FileIndex, Inde
     while let Some(dir) = stack.pop() {
         walk_dir(&dir, &canonical, &mut stack, &mut visited, &mut files)?;
     }
-    let mut patterns: Vec<&str> = Vec::with_capacity(BUILTIN_EXCLUSIONS.len() + exclusions.len());
-    patterns.extend(BUILTIN_EXCLUSIONS.iter().copied());
-    patterns.extend(exclusions.iter().map(String::as_str));
-    let kept = files
-        .into_iter()
-        .filter(|path| !is_excluded(path, &patterns))
-        .collect();
     Ok(FileIndex {
         root: canonical,
-        files: kept,
+        files: apply_exclusions(files, exclusions),
     })
+}
+
+/// Build the sorted index from a caller-supplied allowlist.
+///
+/// `files` must be repository-relative POSIX paths the caller enumerated
+/// (tracked via `git ls-files` plus an explicit untracked pass; orchestrator
+/// wiring pending). Pure apart from canonicalizing `root`: drops duplicates,
+/// applies exclusions, and sorts. Existence is not checked.
+///
+/// # Errors
+///
+/// Forwards root, pattern, and entry failures as [`IndexError`].
+pub fn build_index_from_list(
+    root: &Path,
+    files: &[String],
+    exclusions: &[String],
+) -> Result<FileIndex, IndexError> {
+    for pattern in exclusions {
+        validate_pattern(pattern)?;
+    }
+    for entry in files {
+        check_entry(entry)?;
+    }
+    let canonical = root
+        .canonicalize()
+        .map_err(|err| IndexError::RootUnreadable(err.to_string()))?;
+    Ok(FileIndex {
+        root: canonical,
+        files: apply_exclusions(files.iter().cloned().collect(), exclusions),
+    })
+}
+
+/// Apply built-in plus caller exclusions, returning sorted survivors.
+fn apply_exclusions(files: BTreeSet<String>, exclusions: &[String]) -> Vec<String> {
+    let patterns: Vec<&str> = BUILTIN_EXCLUSIONS
+        .iter()
+        .copied()
+        .chain(exclusions.iter().map(String::as_str))
+        .collect();
+    files
+        .into_iter()
+        .filter(|path| !is_excluded(path, &patterns))
+        .collect()
+}
+
+/// Reject empty, absolute, and `..`-containing entries (never silently dropped).
+fn check_entry(entry: &str) -> Result<(), IndexError> {
+    let bad = entry.is_empty()
+        || entry.starts_with('/')
+        || entry.contains('\\')
+        || entry.split('/').any(|segment| segment == "..");
+    if bad {
+        return Err(IndexError::SymlinkEscape(entry.to_owned()));
+    }
+    Ok(())
 }
 
 /// Read one directory, queueing subdirectories and recording files.
@@ -171,14 +223,7 @@ fn walk_link(
 
 /// Whether `target` is the link's directory or one of its ancestors.
 fn is_ancestor_or_self(target: &Path, link: &Path) -> bool {
-    let mut current = link.parent();
-    while let Some(dir) = current {
-        if dir == target {
-            return true;
-        }
-        current = dir.parent();
-    }
-    false
+    link.ancestors().skip(1).any(|dir| dir == target)
 }
 
 /// Render `path` as a repository-relative POSIX path.
@@ -206,8 +251,7 @@ fn show(path: &Path) -> String {
 ///
 /// # Errors
 ///
-/// Returns [`IndexError::MalformedPattern`] for empty, absolute,
-/// parent-traversal, or malformed patterns.
+/// Rejects bad patterns with [`IndexError::MalformedPattern`].
 pub fn validate_pattern(pattern: &str) -> Result<(), IndexError> {
     let malformed = pattern.is_empty()
         || pattern.starts_with('/')
@@ -222,22 +266,7 @@ pub fn validate_pattern(pattern: &str) -> Result<(), IndexError> {
 
 /// Bytes allowed in exclusion globs.
 fn is_glob_byte(byte: u8) -> bool {
-    byte.is_ascii_alphanumeric()
-        || matches!(
-            byte,
-            b'/' | b'.'
-                | b'-'
-                | b'_'
-                | b'*'
-                | b'?'
-                | b'['
-                | b']'
-                | b'{'
-                | b'}'
-                | b'!'
-                | b'+'
-                | b'@'
-        )
+    byte.is_ascii_alphanumeric() || b"/.-_*?[]{}!+@".contains(&byte)
 }
 
 /// Whether `path` or an ancestor directory matches any pattern.
@@ -263,10 +292,7 @@ fn matches_path_or_ancestor(pattern: &str, path: &str) -> bool {
     false
 }
 
-/// Match a repository-relative path against one glob.
-///
-/// Supports `**` across segments, `*` and `?` within a segment, `[...]`
-/// classes, and non-nested `{a,b}` alternation.
+/// Match a repository-relative path against one glob (`**`, `*`, `?`, `[...]`, `{a,b}`).
 #[must_use]
 pub fn matches_glob(pattern: &str, path: &str) -> bool {
     let segments: Vec<&str> = path.split('/').collect();

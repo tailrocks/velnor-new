@@ -19,15 +19,14 @@ pub use detect::{
     to_detected_projects,
 };
 pub use evidence::{
-    CompileDriver, Evidence, EvidenceFile, EvidenceStrength, GENERATED_MARKER,
-    NEXTEST_RECOMMENDATION, PERSIST_EVIDENCE, ProfileError, ProfileInputs, ProfileOutcome,
-    Recommendation, RustExecutionProfile, TestRunner, detect_profile, evidence_scan_excluded,
-    is_generated_output,
+    CompileDriver, Evidence, EvidenceFile, EvidenceStrength, NEXTEST_RECOMMENDATION,
+    PERSIST_EVIDENCE, ProfileError, ProfileInputs, ProfileOutcome, Recommendation,
+    RustExecutionProfile, TestRunner, detect_profile, evidence_scan_excluded, is_generated_output,
 };
 pub use graph::{dedupe_workspaces, reverse_closure};
 pub use index::{
-    BUILTIN_EXCLUSIONS, FileIndex, IndexError, build_index, is_excluded, matches_glob,
-    validate_pattern,
+    BUILTIN_EXCLUSIONS, FileIndex, IndexError, build_index, build_index_from_list,
+    build_index_walk, is_excluded, matches_glob, validate_pattern,
 };
 pub use metadata::{
     DepKind, LocalEdge, METADATA_FORMAT_VERSION, MetadataError, PackageRecord, TargetRecord,
