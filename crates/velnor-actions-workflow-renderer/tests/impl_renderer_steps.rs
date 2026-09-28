@@ -1,9 +1,15 @@
 //! Fixed step-template and command-validation cases.
 use std::collections::BTreeMap;
+use velnor_actions_contract::{Concurrency, Job, Permissions, Trigger, WorkflowIr, WorkflowPolicy};
+use velnor_actions_workflow_renderer::steps::{
+    has_bare_env_expansion, quote_env_path_for_run, quote_run_line_env_paths,
+};
 use velnor_actions_workflow_renderer::{
-    ASSET_SHA_ENV, ASSET_URL_ENV, RenderError, STAGED_BINARY_PREFIX, acquire_velnor_step,
-    action_step, checkout_step, internal_step, join_argv_for_run, merge_step, plan_step,
-    quote_run_arg, scan_for_private_subcommands, shell_step, validate_command_argv, validate_uses,
+    ASSET_SHA_ENV, ASSET_URL_ENV, CONCURRENCY_CANCEL, CONCURRENCY_GROUP, RenderContext,
+    RenderError, STAGED_BINARY_PREFIX, acquire_velnor_step, action_step, checkout_step,
+    internal_step, join_argv_for_run, merge_step, plan_step, quote_run_arg, quote_scalar,
+    render_workflow_ir, scan_for_private_subcommands, shell_step, validate_command_argv,
+    validate_uses,
 };
 
 fn pin(name: &str) -> String {
@@ -136,6 +142,152 @@ fn internal_steps_accept_only_plan_and_merge() {
     assert!(internal_step("", "plan-v1").is_err());
     assert_eq!(plan_step().name, "Plan");
     assert_eq!(merge_step().name, "Merge reports");
+}
+
+#[test]
+fn env_paths_quote_for_run_without_word_splitting() {
+    let staged = format!("{STAGED_BINARY_PREFIX}0.1.0");
+    let quoted = quote_env_path_for_run(&staged);
+    assert_eq!(quoted, "\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"");
+    assert_eq!(quote_env_path_for_run(&quoted), quoted);
+    assert_eq!(quote_env_path_for_run(&staged), quoted);
+    assert_eq!(quote_env_path_for_run("cargo"), "cargo");
+    assert_eq!(
+        quote_env_path_for_run("${{ github.run_id }}"),
+        "${{ github.run_id }}"
+    );
+    assert_eq!(
+        quote_env_path_for_run("${RUNNER_TEMP}/tool"),
+        "\"${RUNNER_TEMP}/tool\""
+    );
+}
+
+#[test]
+fn emitted_run_lines_carry_no_bare_env_expansion() {
+    let staged = format!("{STAGED_BINARY_PREFIX}0.1.0");
+    let run_value = quote_env_path_for_run(&staged);
+    assert!(!has_bare_env_expansion(&run_value));
+    assert!(has_bare_env_expansion(&staged));
+    assert!(has_bare_env_expansion("run: $RUNNER_TEMP/x"));
+    assert!(has_bare_env_expansion("run: ${RUNNER_TEMP}/x"));
+    assert!(!has_bare_env_expansion("run: \"$RUNNER_TEMP/x\""));
+    assert!(!has_bare_env_expansion("run: ${{ github.run_id }}"));
+    assert!(!has_bare_env_expansion("run: 'literal $HOME stays put'"));
+    let yaml_scalar = quote_scalar(&run_value);
+    assert_eq!(
+        yaml_scalar,
+        "\"\\\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\\\"\""
+    );
+    assert_eq!(unescape_yaml_double(&yaml_scalar), Some(run_value));
+}
+
+/// Minimal `"`-scalar decoder proving the YAML round-trip.
+fn unescape_yaml_double(scalar: &str) -> Option<String> {
+    let inner = scalar.strip_prefix('"')?.strip_suffix('"')?;
+    let mut out = String::new();
+    let mut chars = inner.chars();
+    while let Some(ch) = chars.next() {
+        if ch == '\\' {
+            match chars.next()? {
+                '"' => out.push('"'),
+                '\\' => out.push('\\'),
+                _ => return None,
+            }
+        } else {
+            out.push(ch);
+        }
+    }
+    Some(out)
+}
+
+const EMIT_VERSION: &str = "0.1.0";
+const EMIT_LABEL: &str = "ubuntu-26.04";
+
+fn emit_ctx() -> RenderContext {
+    RenderContext {
+        generator_version: EMIT_VERSION.to_owned(),
+        runs_on: EMIT_LABEL.to_owned(),
+        staged_binary: format!("{STAGED_BINARY_PREFIX}{EMIT_VERSION}"),
+        request_dir: "$RUNNER_TEMP/velnor/r1-a1".to_owned(),
+        checkout_uses: pin("actions/checkout"),
+        policy_commands: Vec::new(),
+        candidate: None,
+    }
+}
+
+fn emit_triggers() -> Trigger {
+    Trigger {
+        pull_request_types: ["opened", "synchronize", "reopened", "ready_for_review"]
+            .iter()
+            .map(ToString::to_string)
+            .collect(),
+        push_branches: vec!["main".to_owned()],
+        merge_group: true,
+    }
+}
+
+fn emit_concurrency() -> Concurrency {
+    Concurrency {
+        group: CONCURRENCY_GROUP.to_owned(),
+        cancel_in_progress: CONCURRENCY_CANCEL.to_owned(),
+    }
+}
+
+#[test]
+fn rendered_run_steps_quote_runner_temp_paths() -> Result<(), RenderError> {
+    let mut jobs = BTreeMap::new();
+    jobs.insert(
+        "velnor-plan".to_owned(),
+        Job {
+            display_name: "Velnor Plan".to_owned(),
+            runs_on: EMIT_LABEL.to_owned(),
+            needs: Vec::new(),
+            condition: None,
+            steps: vec![
+                checkout_step(&pin("actions/checkout"))?,
+                shell_step(
+                    "Run tool",
+                    argv(&["$RUNNER_TEMP/velnor/bin/x", "--flag"]),
+                    BTreeMap::new(),
+                )?,
+                plan_step(),
+            ],
+        },
+    );
+    let ir = WorkflowIr {
+        name: "CI".to_owned(),
+        triggers: emit_triggers(),
+        permissions: Permissions {
+            contents: "read".to_owned(),
+            actions: "read".to_owned(),
+        },
+        concurrency: emit_concurrency(),
+        jobs,
+    };
+    let ctx = emit_ctx();
+    let first = render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx)?;
+    let second = render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx)?;
+    assert_eq!(first, second);
+    assert!(
+        first.contains("run: \"\\\"$RUNNER_TEMP/velnor/bin/x\\\" --flag\""),
+        "quoted shell run missing:\n{first}"
+    );
+    assert!(
+        first.contains("run: \"\\\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\\\"\""),
+        "quoted internal run missing:\n{first}"
+    );
+    for line in first.lines() {
+        if line.trim_start().starts_with("run:") {
+            assert!(!has_bare_env_expansion(line), "bare expansion in {line:?}");
+        }
+    }
+    let quoted = "\"$RUNNER_TEMP/velnor/bin/x\" --flag";
+    assert_eq!(
+        quote_run_line_env_paths("$RUNNER_TEMP/velnor/bin/x --flag"),
+        quoted
+    );
+    assert_eq!(quote_run_line_env_paths(quoted), quoted);
+    Ok(())
 }
 
 #[test]

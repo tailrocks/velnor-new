@@ -219,6 +219,143 @@ pub fn merge_step() -> Step {
         },
     }
 }
+
+/// Double-quote an env-derived shell path for `run:` lines.
+///
+/// `$NAME/...` and `${NAME}...` spans expand in shell; left bare they trip
+/// shellcheck SC2086 under actionlint. Wrapping the whole word in `"` keeps
+/// expansion while defeating word splitting. Byte-deterministic and
+/// idempotent; YAML escaping stays the emitter's job.
+///
+/// GitHub `${{ ... }}` expressions and plain words pass through untouched:
+/// they are not shell expansions and must not gain shell quotes. Callers
+/// pass validated argv (no command substitution); only `"` and `\` gain
+/// escapes so `$` spans keep expanding.
+#[must_use]
+pub fn quote_env_path_for_run(path: &str) -> String {
+    if path.len() >= 2 && path.starts_with('"') && path.ends_with('"') {
+        return path.to_owned();
+    }
+    if !has_shell_expansion(path) {
+        return path.to_owned();
+    }
+    let mut out = String::with_capacity(path.len() + 2);
+    out.push('"');
+    for ch in path.chars() {
+        if ch == '"' || ch == '\\' {
+            out.push('\\');
+        }
+        out.push(ch);
+    }
+    out.push('"');
+    out
+}
+
+/// True when a `run:` line carries a bare `$VAR/` word-splitting pattern.
+///
+/// A `$NAME` or `${NAME}` expansion outside double quotes trips shellcheck
+/// SC2086 under actionlint. Single-quoted spans suppress expansion, so they
+/// are ignored; GitHub `${{ ... }}` expressions are not shell and are
+/// ignored too. Only `"`-quoted expansions scan clean.
+#[must_use]
+pub fn has_bare_env_expansion(line: &str) -> bool {
+    let bytes = line.as_bytes();
+    let mut index = 0;
+    let mut in_single = false;
+    let mut in_double = false;
+    while index < bytes.len() {
+        let byte = bytes[index];
+        if in_single {
+            if byte == b'\'' {
+                in_single = false;
+            }
+        } else if in_double {
+            if byte == b'\\' {
+                index += 1;
+            } else if byte == b'"' {
+                in_double = false;
+            }
+        } else if byte == b'\'' {
+            in_single = true;
+        } else if byte == b'"' {
+            in_double = true;
+        } else if byte == b'$' && is_shell_expansion_at(bytes, index) {
+            return true;
+        }
+        index += 1;
+    }
+    false
+}
+
+/// Quote bare env words in a joined `run:` line (idempotent).
+#[must_use]
+pub fn quote_run_line_env_paths(run_line: &str) -> String {
+    split_run_words(run_line)
+        .into_iter()
+        .map(|word| {
+            if has_bare_env_expansion(&word) {
+                quote_env_path_for_run(&decode_run_word(&word))
+            } else {
+                word
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// Split on whitespace outside single/double quotes.
+fn split_run_words(run_line: &str) -> Vec<String> {
+    let mut words = Vec::new();
+    let mut cur = String::new();
+    let (mut single, mut double) = (false, false);
+    let mut chars = run_line.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if single {
+            cur.push(ch);
+            if ch == '\'' {
+                single = false;
+            }
+        } else if double {
+            cur.push(ch);
+            if ch == '\\' {
+                if let Some(n) = chars.next() {
+                    cur.push(n);
+                }
+            } else if ch == '"' {
+                double = false;
+            }
+        } else if ch == '\'' {
+            single = true;
+            cur.push(ch);
+        } else if ch == '"' {
+            double = true;
+            cur.push(ch);
+        } else if ch == '\\' {
+            cur.push(ch);
+            if let Some(n) = chars.next() {
+                cur.push(n);
+            }
+        } else if ch.is_whitespace() {
+            if !cur.is_empty() {
+                words.push(std::mem::take(&mut cur));
+            }
+        } else {
+            cur.push(ch);
+        }
+    }
+    if !cur.is_empty() {
+        words.push(cur);
+    }
+    words
+}
+
+/// Decode single-quote spans (`'\''` → `'`).
+fn decode_run_word(word: &str) -> String {
+    word.replace("'\\''", "\0")
+        .replace('\'', "")
+        .replace('\0', "'")
+}
+
 /// True for `owner/repo` over alphanumerics plus `.-_`.
 fn is_action_name(name: &str) -> bool {
     !name.is_empty()
@@ -232,4 +369,22 @@ fn is_lower_hex(value: &str) -> bool {
     value
         .bytes()
         .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+}
+
+/// True when text holds a `$NAME`/`${NAME}` shell expansion span.
+fn has_shell_expansion(text: &str) -> bool {
+    let bytes = text.as_bytes();
+    bytes
+        .iter()
+        .enumerate()
+        .any(|(index, byte)| *byte == b'$' && is_shell_expansion_at(bytes, index))
+}
+
+/// True when `bytes[index] == b'$'` starts a shell span (`${{` excluded).
+fn is_shell_expansion_at(bytes: &[u8], index: usize) -> bool {
+    match bytes.get(index + 1) {
+        Some(b'{') => bytes.get(index + 2) != Some(&b'{'),
+        Some(next) => next.is_ascii_alphabetic() || *next == b'_',
+        None => false,
+    }
 }

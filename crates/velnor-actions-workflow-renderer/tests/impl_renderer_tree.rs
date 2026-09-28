@@ -238,7 +238,7 @@ fn rendered_yaml_contains_no_private_subcommands() -> Result<(), RenderError> {
     assert!(text.contains(&format!(
         "{REQUEST_FILE_ENV}: $RUNNER_TEMP/velnor/r1-a1/plan-v1-request.json"
     )));
-    assert!(text.contains("run: $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0"));
+    assert!(text.contains("run: \"\\\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\\\"\""));
     assert!(!text.contains("run: $RUNNER_TEMP/velnor/bin/velnor-actions plan"));
     Ok(())
 }

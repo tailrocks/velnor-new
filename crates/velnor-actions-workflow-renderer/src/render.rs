@@ -7,7 +7,10 @@ use velnor_actions_contract::{
     Concurrency, Trigger, VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
 };
 
-use crate::{RenderError, commands, document, guard, marker, steps, support, yaml::render_yaml};
+use crate::{
+    RenderError, commands, document, guard, marker, steps, support,
+    yaml::{Yaml, render_yaml},
+};
 
 /// Generated workflow path inside the repository.
 pub const WORKFLOW_PATH: &str = ".github/workflows/velnor.yml";
@@ -154,10 +157,9 @@ pub fn render_workflow_ir(
     }
     support::check_candidate_invariants(&jobs)?;
     support::check_final_gate(&jobs)?;
-    let text = marker::with_marker(
-        &ctx.generator_version,
-        &render_yaml(&document::workflow_to_yaml(ir, &jobs, ctx)?),
-    )?;
+    let document = document::workflow_to_yaml(ir, &jobs, ctx)?;
+    let document = quote_run_values_in_yaml(document);
+    let text = marker::with_marker(&ctx.generator_version, &render_yaml(&document))?;
     steps::scan_for_private_subcommands(&text)?;
     Ok(text)
 }
@@ -191,6 +193,30 @@ pub fn render_tree(
             },
         ],
     })
+}
+
+/// Quote bare env paths in every `run:` scalar.
+fn quote_run_values_in_yaml(node: Yaml) -> Yaml {
+    match node {
+        Yaml::Map(entries) => Yaml::Map(
+            entries
+                .into_iter()
+                .map(|(key, value)| {
+                    if key == "run" {
+                        if let Yaml::Str(line) = value {
+                            (key, Yaml::Str(steps::quote_run_line_env_paths(&line)))
+                        } else {
+                            (key, value)
+                        }
+                    } else {
+                        (key, quote_run_values_in_yaml(value))
+                    }
+                })
+                .collect(),
+        ),
+        Yaml::Seq(items) => Yaml::Seq(items.into_iter().map(quote_run_values_in_yaml).collect()),
+        other => other,
+    }
 }
 
 /// Require a literal versioned Ubuntu label (no aliases or expressions).
