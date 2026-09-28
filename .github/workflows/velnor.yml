@@ -44,6 +44,13 @@ jobs:
       - velnor-policy
     if: always()
     steps:
+      - name: Download helper (pre-seed trust-on-review)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: velnor-preseed-helper
+          path: $RUNNER_TEMP/velnor/preseed
+      - name: Stage helper (pre-seed trust-on-review)
+        run: sh -c 'mkdir -p $RUNNER_TEMP/velnor/bin && cp $RUNNER_TEMP/velnor/preseed/velnor-actions $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0 && chmod +x $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0'
       - name: Merge reports
         env:
           VELNOR_INTERNAL_OP: merge-v1
@@ -52,16 +59,50 @@ jobs:
   velnor-plan:
     name: Velnor Plan
     runs-on: ubuntu-26.04
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Setup Mise
+        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
+        with:
+          env: "false"
+          install: "false"
+          sha256: b6f8757201f6a2ee799f45f3f52ef7ca0b4071523637dc3b0b24264dd3333518
+          version: 2026.9.16
+      - name: Build helper (pre-seed trust-on-review)
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 -- mbx build --release --locked --package velnor-actions-cli --bin velnor-actions
+      - name: Verify MBX compile (pre-seed trust-on-review)
+        run: sh -c 'test -x target/release/velnor-actions'
+      - name: Write helper manifest (pre-seed trust-on-review)
+        run: "sh -c 'mkdir -p $RUNNER_TEMP/velnor/preseed-output && cp target/release/velnor-actions $RUNNER_TEMP/velnor/preseed-output/velnor-actions && sha256sum $RUNNER_TEMP/velnor/preseed-output/velnor-actions > $RUNNER_TEMP/velnor/preseed-output/sha.txt && read sha rest < $RUNNER_TEMP/velnor/preseed-output/sha.txt && printf \"{\"schema\":1,\"commit\":\"%s\",\"target\":\"x86_64-unknown-linux-gnu\",\"toolchain\":\"rust@1.98.1+mr-boxington@1.19.0\",\"sha256\":\"%s\"}\" \"$GITHUB_SHA\" \"$sha\" > $RUNNER_TEMP/velnor/preseed-output/preseed-manifest.json'"
+      - name: Upload helper (pre-seed trust-on-review)
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          if-no-files-found: error
+          name: velnor-preseed-helper
+          path: $RUNNER_TEMP/velnor/preseed-output
+      - name: Stage helper (pre-seed trust-on-review)
+        run: sh -c 'mkdir -p $RUNNER_TEMP/velnor/bin && cp target/release/velnor-actions $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0 && chmod +x $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0'
+      - name: Check generated files
+        run: "sh -c '$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0 generate --output-dir \"$RUNNER_TEMP/velnor-actions-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}\" && diff -r --brief .github \"$RUNNER_TEMP/velnor-actions-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/.github\"'"
       - name: Plan
+        id: plan
         env:
           VELNOR_INTERNAL_OP: plan-v1
           VELNOR_REQUEST_FILE: $RUNNER_TEMP/velnor/request/plan-v1-request.json
         run: "\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\""
+      - name: Publish plan
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          if-no-files-found: error
+          name: velnor-plan-r${{ github.run_id }}-a${{ github.run_attempt }}
+          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
   velnor-policy:
     name: Velnor Policy
     runs-on: ubuntu-26.04
@@ -70,88 +111,52 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Setup Mise
+        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
+        with:
+          env: "false"
+          install: "false"
+          sha256: b6f8757201f6a2ee799f45f3f52ef7ca0b4071523637dc3b0b24264dd3333518
+          version: 2026.9.16
       - name: Verify pinned tools
         run: mise --no-config --no-env --no-hooks exec gh@2.101.0 -- gh --version
+      - name: Run cargo-deny
+        run: mise --no-config --no-env --no-hooks exec cargo-deny@0.20.2 -- cargo deny --locked check
+      - name: Run cargo-machete
+        run: mise --no-config --no-env --no-hooks exec ubi:bnjbvr/cargo-machete@0.9.2 -- cargo machete
   velnor-task:
     name: Velnor Task
     runs-on: ubuntu-26.04
     needs:
       - velnor-plan
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix: ${{ fromJSON(needs.velnor-plan.outputs.matrix) }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
-      - name: Build velnor-actions-actionlint (default)
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 -- cargo build --locked --offline --manifest-path crates/velnor-actions-actionlint/Cargo.toml
-      - name: Clippy velnor-actions-actionlint (default)
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 -- cargo clippy --locked --offline --manifest-path crates/velnor-actions-actionlint/Cargo.toml --package velnor-actions-actionlint --all-targets
-      - name: Doc velnor-actions-actionlint (default)
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 -- cargo doc --locked --offline --manifest-path crates/velnor-actions-actionlint/Cargo.toml --no-deps
-      - name: Doctests velnor-actions-actionlint (default)
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 -- cargo test --locked --offline --manifest-path crates/velnor-actions-actionlint/Cargo.toml --doc
-      - name: Nextest velnor-actions-actionlint (default)
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 -- cargo nextest run --locked --offline --manifest-path crates/velnor-actions-actionlint/Cargo.toml
-      - name: Build velnor-actions-cli (default)
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 -- cargo build --locked --offline --manifest-path crates/velnor-actions-cli/Cargo.toml
-      - name: Clippy velnor-actions-cli (default)
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 -- cargo clippy --locked --offline --manifest-path crates/velnor-actions-cli/Cargo.toml --package velnor-actions-cli --all-targets
-      - name: Doc velnor-actions-cli (default)
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 -- cargo doc --locked --offline --manifest-path crates/velnor-actions-cli/Cargo.toml --no-deps
-      - name: Nextest velnor-actions-cli (default)
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 -- cargo nextest run --locked --offline --manifest-path crates/velnor-actions-cli/Cargo.toml
-      - name: Build velnor-actions-contract (default)
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 -- cargo build --locked --offline --manifest-path crates/velnor-actions-contract/Cargo.toml
-      - name: Clippy velnor-actions-contract (default)
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 -- cargo clippy --locked --offline --manifest-path crates/velnor-actions-contract/Cargo.toml --package velnor-actions-contract --all-targets
-      - name: Doc velnor-actions-contract (default)
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 -- cargo doc --locked --offline --manifest-path crates/velnor-actions-contract/Cargo.toml --no-deps
-      - name: Doctests velnor-actions-contract (default)
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 -- cargo test --locked --offline --manifest-path crates/velnor-actions-contract/Cargo.toml --doc
-      - name: Nextest velnor-actions-contract (default)
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 -- cargo nextest run --locked --offline --manifest-path crates/velnor-actions-contract/Cargo.toml
-      - name: Build velnor-actions-mise (default)
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 -- cargo build --locked --offline --manifest-path crates/velnor-actions-mise/Cargo.toml
-      - name: Clippy velnor-actions-mise (default)
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 -- cargo clippy --locked --offline --manifest-path crates/velnor-actions-mise/Cargo.toml --package velnor-actions-mise --all-targets
-      - name: Doc velnor-actions-mise (default)
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 -- cargo doc --locked --offline --manifest-path crates/velnor-actions-mise/Cargo.toml --no-deps
-      - name: Doctests velnor-actions-mise (default)
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 -- cargo test --locked --offline --manifest-path crates/velnor-actions-mise/Cargo.toml --doc
-      - name: Nextest velnor-actions-mise (default)
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 -- cargo nextest run --locked --offline --manifest-path crates/velnor-actions-mise/Cargo.toml
-      - name: Build velnor-actions-orchestrator (default)
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 -- cargo build --locked --offline --manifest-path crates/velnor-actions-orchestrator/Cargo.toml
-      - name: Clippy velnor-actions-orchestrator (default)
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 -- cargo clippy --locked --offline --manifest-path crates/velnor-actions-orchestrator/Cargo.toml --package velnor-actions-orchestrator --all-targets
-      - name: Doc velnor-actions-orchestrator (default)
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 -- cargo doc --locked --offline --manifest-path crates/velnor-actions-orchestrator/Cargo.toml --no-deps
-      - name: Doctests velnor-actions-orchestrator (default)
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 -- cargo test --locked --offline --manifest-path crates/velnor-actions-orchestrator/Cargo.toml --doc
-      - name: Nextest velnor-actions-orchestrator (default)
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 -- cargo nextest run --locked --offline --manifest-path crates/velnor-actions-orchestrator/Cargo.toml
-      - name: Build velnor-actions-rust (default)
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 -- cargo build --locked --offline --manifest-path crates/velnor-actions-rust/Cargo.toml
-      - name: Clippy velnor-actions-rust (default)
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 -- cargo clippy --locked --offline --manifest-path crates/velnor-actions-rust/Cargo.toml --package velnor-actions-rust --all-targets
-      - name: Doc velnor-actions-rust (default)
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 -- cargo doc --locked --offline --manifest-path crates/velnor-actions-rust/Cargo.toml --no-deps
-      - name: Doctests velnor-actions-rust (default)
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 -- cargo test --locked --offline --manifest-path crates/velnor-actions-rust/Cargo.toml --doc
-      - name: Nextest velnor-actions-rust (default)
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 -- cargo nextest run --locked --offline --manifest-path crates/velnor-actions-rust/Cargo.toml
-      - name: Build velnor-actions-workflow-renderer (default)
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 -- cargo build --locked --offline --manifest-path crates/velnor-actions-workflow-renderer/Cargo.toml
-      - name: Clippy velnor-actions-workflow-renderer (default)
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 -- cargo clippy --locked --offline --manifest-path crates/velnor-actions-workflow-renderer/Cargo.toml --package velnor-actions-workflow-renderer --all-targets
-      - name: Doc velnor-actions-workflow-renderer (default)
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 -- cargo doc --locked --offline --manifest-path crates/velnor-actions-workflow-renderer/Cargo.toml --no-deps
-      - name: Doctests velnor-actions-workflow-renderer (default)
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 -- cargo test --locked --offline --manifest-path crates/velnor-actions-workflow-renderer/Cargo.toml --doc
-      - name: Nextest velnor-actions-workflow-renderer (default)
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 -- cargo nextest run --locked --offline --manifest-path crates/velnor-actions-workflow-renderer/Cargo.toml
-      - name: Format workspace (default)
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 -- cargo fmt --check --manifest-path Cargo.toml
+      - name: Setup Mise
+        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
+        with:
+          env: "false"
+          install: "false"
+          sha256: b6f8757201f6a2ee799f45f3f52ef7ca0b4071523637dc3b0b24264dd3333518
+          version: 2026.9.16
+      - name: Download helper (pre-seed trust-on-review)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: velnor-preseed-helper
+          path: $RUNNER_TEMP/velnor/preseed
+      - name: Stage helper (pre-seed trust-on-review)
+        run: sh -c 'mkdir -p $RUNNER_TEMP/velnor/bin && cp $RUNNER_TEMP/velnor/preseed/velnor-actions $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0 && chmod +x $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0'
+      - name: Run task
+        env:
+          VELNOR_TASK_ID: ${{ matrix.task_id }}
+          VELNOR_TASK_RUN: ${{ matrix.run }}
+        run: "sh -c 'echo \"$VELNOR_TASK_ID\" && : \"${VELNOR_TASK_RUN:?matrix.run_missing}\" && sh -c \"$VELNOR_TASK_RUN\"'"
   velnor-workflow-lint:
     name: Velnor Workflow Lint
     runs-on: ubuntu-26.04
@@ -160,5 +165,12 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Setup Mise
+        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
+        with:
+          env: "false"
+          install: "false"
+          sha256: b6f8757201f6a2ee799f45f3f52ef7ca0b4071523637dc3b0b24264dd3333518
+          version: 2026.9.16
       - name: Run actionlint
         run: mise --no-config --no-env --no-hooks exec actionlint@1.7.12 shellcheck@0.11.0 -- actionlint -color
