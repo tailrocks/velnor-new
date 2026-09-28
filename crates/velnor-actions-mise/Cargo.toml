@@ -3,13 +3,14 @@ name = "velnor-actions-mise"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+license.workspace = true
 autotests = false
 
 [lints]
 workspace = true
 
 [dependencies]
-velnor-actions-contract = { path = "../velnor-actions-contract" }
+velnor-actions-contract = { version = "0.1.0", path = "../velnor-actions-contract" }
 serde = { version = "=1.0.229", features = ["derive"] }
 
 [[test]]

@@ -3,14 +3,15 @@ name = "velnor-actions-orchestrator"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+license.workspace = true
 autotests = false
 
 [dependencies]
-velnor-actions-actionlint = { path = "../velnor-actions-actionlint" }
-velnor-actions-contract = { path = "../velnor-actions-contract" }
-velnor-actions-mise = { path = "../velnor-actions-mise" }
-velnor-actions-rust = { path = "../velnor-actions-rust" }
-velnor-actions-workflow-renderer = { path = "../velnor-actions-workflow-renderer" }
+velnor-actions-actionlint = { version = "0.1.0", path = "../velnor-actions-actionlint" }
+velnor-actions-contract = { version = "0.1.0", path = "../velnor-actions-contract" }
+velnor-actions-mise = { version = "0.1.0", path = "../velnor-actions-mise" }
+velnor-actions-rust = { version = "0.1.0", path = "../velnor-actions-rust" }
+velnor-actions-workflow-renderer = { version = "0.1.0", path = "../velnor-actions-workflow-renderer" }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = { version = "=1.0.151" }
 tempfile = { version = "=3.27.0" }
@@ -31,4 +32,4 @@ path = "tests/validation_failure.rs"
 [dev-dependencies]
 serde_json = { version = "=1.0.151" }
 tempfile = { version = "=3.27.0" }
-velnor-actions-contract = { path = "../velnor-actions-contract" }
+velnor-actions-contract = { version = "0.1.0", path = "../velnor-actions-contract" }

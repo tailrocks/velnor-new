@@ -1,11 +1,14 @@
-# cargo-deny policy (Gate 0 skeleton; zero dependencies yet).
-# Rejects yanked/unsound advisories, unknown registries, moving git
-# sources, and wildcard versions; defines the reviewed license allowlist.
+# cargo-deny policy for the pinned cargo-deny 0.20.2 schema.
+# Intent: fail on yanked/unsound/vulnerable/unmaintained advisories,
+# unknown registries/git sources, wildcard versions, and any license
+# outside the reviewed allowlist below.
+# NOTE (deny 0.20): per-lint severity keys were removed from [advisories]
+# and [licenses] (EmbarkStudios/cargo-deny#611). Advisory findings now
+# always fail unless listed in `ignore`; licenses fail unless listed in
+# `allow`. This preserves (and for unmaintained, strengthens) the
+# previous yanked/unsound=deny, unlicensed/copyleft=deny posture.
 
 [advisories]
-yanked = "deny"
-unsound = "deny"
-unmaintained = "warn"
 ignore = []
 
 [bans]
@@ -22,8 +25,6 @@ allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 allow-git = []
 
 [licenses]
-unlicensed = "deny"
-copyleft = "deny"
 allow = [
     "MIT",
     "Apache-2.0",
