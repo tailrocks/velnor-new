@@ -6,7 +6,12 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract::{Step, StepKind};
 
-use crate::{RenderError, commands};
+use crate::{RenderError, commands, marker};
+
+pub use crate::cache_steps::{
+    CACHE_RESTORE_NAME, CACHE_SAVE_NAME, MBX_ACTION_NAME, TARGET_DIR_PREFIX, TASK_ARTIFACTS_DIR,
+    cache_action_step, mbx_objects_step, target_dir_for_lane,
+};
 
 /// Env key selecting the staged-binary internal operation.
 pub const INTERNAL_OP_ENV: &str = "VELNOR_INTERNAL_OP";
@@ -24,18 +29,22 @@ pub const REQUEST_DIR_PREFIX: &str = "$RUNNER_TEMP/velnor/";
 pub const ASSET_SHA_ENV: &str = "VELNOR_ASSET_SHA256";
 /// Env key carrying the downloaded asset URL.
 pub const ASSET_URL_ENV: &str = "VELNOR_ASSET_URL";
-/// Pinned mr-boxington action name (objects mode).
-pub const MBX_ACTION_NAME: &str = "jdx/mr-boxington-action";
-/// Cache restore/save action names.
-pub const CACHE_RESTORE_NAME: &str = "actions/cache/restore";
-/// Cache save action name.
-pub const CACHE_SAVE_NAME: &str = "actions/cache/save";
-/// Task-artifacts dir archived for task-result reuse.
-pub const TASK_ARTIFACTS_DIR: &str = "$MISE_TASK_CACHE_DIR/task-artifacts/v2";
-/// Target-directory prefix isolating one lane.
-pub const TARGET_DIR_PREFIX: &str = "$RUNNER_TEMP/velnor/target/";
 /// Substrings that must never appear in rendered YAML.
 pub const FORBIDDEN_TOKENS: &[&str] = &["__internal", "velnor-actions __", "velnor-actions run"];
+/// Pinned `actions/upload-artifact` ref (v7.0.1, qualified 2026-09-28).
+pub const UPLOAD_ARTIFACT_USES: &str =
+    "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a";
+/// Pinned `actions/download-artifact` ref (v8.0.1, qualified 2026-09-28).
+pub const DOWNLOAD_ARTIFACT_USES: &str =
+    "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c";
+/// Candidate artifact name shared by the upload and download steps.
+pub const CANDIDATE_ARTIFACT_NAME: &str = "velnor-candidate";
+/// Candidate manifest filename inside the uploaded artifact.
+pub const CANDIDATE_MANIFEST_FILE: &str = "candidate-manifest.json";
+/// Directory holding the built candidate binary plus its manifest.
+pub const CANDIDATE_OUTPUT_DIR: &str = "$RUNNER_TEMP/velnor/candidate-output";
+/// Directory receiving the downloaded candidate for qualification.
+pub const CANDIDATE_STAGE_DIR: &str = "$RUNNER_TEMP/velnor/candidate";
 
 /// Reject text containing a private-subcommand or parallel token.
 /// # Errors
@@ -132,6 +141,65 @@ pub fn shell_step(
     })
 }
 
+/// Replace the actionlint header line with the renderer marker.
+///
+/// The actionlint adapter emits its own header comment while the renderer
+/// requires its exact marker on every tree file; the composition boundary
+/// normalizes the first line only and passes the body through untouched.
+/// # Errors
+pub fn rehead_actionlint_marker(yaml: &str, version: &str) -> Result<String, RenderError> {
+    let Some((_, body)) = yaml.split_once('\n') else {
+        return Err(RenderError::BadCommand(
+            "actionlint_without_header".to_owned(),
+        ));
+    };
+    Ok(format!("{}\n{body}", marker::marker_for_version(version)?))
+}
+
+/// Candidate-artifact upload step over the pinned upload action.
+/// # Errors
+pub fn upload_artifact_step(name: &str, path: &str) -> Result<Step, RenderError> {
+    if name.trim().is_empty() || path.trim().is_empty() {
+        return Err(RenderError::BadActionRef("empty_artifact_io".to_owned()));
+    }
+    action_step(
+        "Upload candidate",
+        UPLOAD_ARTIFACT_USES,
+        BTreeMap::from([
+            ("name".to_owned(), name.to_owned()),
+            ("path".to_owned(), path.to_owned()),
+            ("if-no-files-found".to_owned(), "error".to_owned()),
+        ]),
+    )
+}
+
+/// Candidate-artifact download step over the pinned download action.
+/// # Errors
+pub fn download_artifact_step(name: &str, path: &str) -> Result<Step, RenderError> {
+    if name.trim().is_empty() || path.trim().is_empty() {
+        return Err(RenderError::BadActionRef("empty_artifact_io".to_owned()));
+    }
+    action_step(
+        "Download candidate",
+        DOWNLOAD_ARTIFACT_USES,
+        BTreeMap::from([
+            ("name".to_owned(), name.to_owned()),
+            ("path".to_owned(), path.to_owned()),
+        ]),
+    )
+}
+
+/// Fixed script writing the per-target candidate manifest JSON.
+///
+/// Emits exactly the contract keys: source commit, target triple,
+/// toolchain identity, and binary SHA-256 (computed at runtime).
+#[must_use]
+pub fn candidate_manifest_script(target: &str, toolchain: &str) -> String {
+    format!(
+        "mkdir -p {CANDIDATE_OUTPUT_DIR} && cp target/release/velnor-actions {CANDIDATE_OUTPUT_DIR}/velnor-actions && sha256sum {CANDIDATE_OUTPUT_DIR}/velnor-actions | cut -d' ' -f1 > {CANDIDATE_OUTPUT_DIR}/sha.txt && read sha rest < {CANDIDATE_OUTPUT_DIR}/sha.txt && printf '{{\"schema\":1,\"commit\":\"%s\",\"target\":\"{target}\",\"toolchain\":\"{toolchain}\",\"sha256\":\"%s\"}}' \"$GITHUB_SHA\" \"$sha\" > {CANDIDATE_OUTPUT_DIR}/{CANDIDATE_MANIFEST_FILE}"
+    )
+}
+
 /// Acquire-Velnor step: digest-verified staging under runner temp.
 /// # Errors
 pub fn acquire_velnor_step(
@@ -198,79 +266,6 @@ pub fn merge_step() -> Step {
             operation: MERGE_OPERATION.to_owned(),
         },
     }
-}
-
-/// Objects-mode MBX step; cargo profiles must never emit or install MBX.
-/// # Errors
-pub fn mbx_objects_step(uses: &str, cargo_profile: bool) -> Result<Step, RenderError> {
-    if cargo_profile {
-        return Err(RenderError::BadCommand("cargo_profile_no_mbx".to_owned()));
-    }
-    validate_uses(uses)?;
-    if !uses.starts_with(&format!("{MBX_ACTION_NAME}@")) {
-        return Err(RenderError::BadActionRef(format!("not_mbx_action:{uses}")));
-    }
-    let with = BTreeMap::from([("mode".to_owned(), "objects".to_owned())]);
-    action_step("Restore MBX objects", uses, with)
-}
-
-/// Cache restore/save step over `actions/cache`; MBX never archives here.
-/// # Errors
-pub fn cache_action_step(
-    restore: bool,
-    uses: &str,
-    layer: &str,
-    key: &str,
-    restore_keys: &[String],
-    paths: &[String],
-) -> Result<Step, RenderError> {
-    validate_uses(uses)?;
-    let want = if restore {
-        CACHE_RESTORE_NAME
-    } else {
-        CACHE_SAVE_NAME
-    };
-    if !uses.starts_with(&format!("{want}@")) {
-        return Err(RenderError::BadActionRef(format!("bad_cache_uses:{uses}")));
-    }
-    if !matches!(layer, "sources" | "task") {
-        return Err(RenderError::BadCommand("mbx_needs_objects_mode".to_owned()));
-    }
-    if key.trim().is_empty() || key.contains(' ') || key.contains('\n') {
-        return Err(RenderError::BadCommand("bad_cache_key".to_owned()));
-    }
-    for path in paths {
-        validate_cache_path(layer, path)?;
-    }
-    let mut with = BTreeMap::from([
-        ("key".to_owned(), key.to_owned()),
-        ("path".to_owned(), paths.join("\n")),
-    ]);
-    if restore {
-        with.insert("restore-keys".to_owned(), restore_keys.join("\n"));
-    }
-    let name = if restore {
-        "Restore cache"
-    } else {
-        "Save cache"
-    };
-    action_step(name, uses, with)
-}
-
-fn validate_cache_path(layer: &str, path: &str) -> Result<(), RenderError> {
-    let second = path.split('/').nth(1);
-    let sources_ok = path.starts_with("$CARGO_HOME/") && matches!(second, Some("registry" | "git"));
-    if layer == "sources" && sources_ok || layer == "task" && path == TASK_ARTIFACTS_DIR {
-        Ok(())
-    } else {
-        Err(RenderError::BadCommand(format!("bad_cache_path:{path}")))
-    }
-}
-
-/// Isolated target directory for one lane.
-#[must_use]
-pub fn target_dir_for_lane(lane_id: &str) -> String {
-    format!("{TARGET_DIR_PREFIX}{lane_id}")
 }
 
 /// Double-quote an env-derived shell path for `run:` lines.

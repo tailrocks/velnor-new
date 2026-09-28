@@ -179,8 +179,15 @@ fn candidate_job_renders_with_plan_dependency() -> Result<(), RenderError> {
         argv: vec!["deny".to_owned()],
     }];
     ctx.candidate = Some(CandidateSpec {
-        build: argv_of(&["mise", "exec", "--", "build"]),
-        qualify: argv_of(&["mise", "exec", "--", "qualify"]),
+        build: argv_of(&[
+            "mise",
+            "exec",
+            "rust@1.98.1",
+            "mr-boxington@1.19.0",
+            "--",
+            "build",
+        ]),
+        qualify: argv_of(&["sh", "-c", "plan-and-check"]),
     });
     let support =
         WorkflowPolicy::VelnorRepositoryV1.support_workflow(GeneratorValidation::Candidate);
@@ -192,6 +199,9 @@ fn candidate_job_renders_with_plan_dependency() -> Result<(), RenderError> {
     )?;
     assert!(text.contains("velnor-candidate:"));
     assert!(text.contains("velnor-plan"));
+    assert!(text.contains("velnor-release:"));
+    assert!(text.contains("ref_protected"));
+    assert!(text.contains("actions/download-artifact@"));
     Ok(())
 }
 

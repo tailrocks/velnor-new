@@ -4,6 +4,7 @@
 //! orchestrator supplies. This crate launches no processes, builds no tool
 //! invocations, reads no tool files, and renders no workflow text.
 
+mod argv;
 pub mod detect;
 pub mod evidence;
 pub mod graph;

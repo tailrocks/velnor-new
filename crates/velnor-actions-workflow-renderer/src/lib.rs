@@ -4,6 +4,7 @@
 //! subprocesses, no shell construction beyond quoting fixed argv, and no
 //! stack-specific logic: tool pins and command vectors arrive validated.
 
+mod cache_steps;
 mod commands;
 mod document;
 pub mod guard;
