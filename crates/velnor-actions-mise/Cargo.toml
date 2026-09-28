@@ -8,6 +8,10 @@ autotests = false
 [lints]
 workspace = true
 
+[dependencies]
+velnor-actions-contract = { path = "../velnor-actions-contract" }
+serde = { version = "1.0.229", features = ["derive"] }
+
 [[test]]
 name = "velnor_mise"
 path = "tests/velnor_mise.rs"
