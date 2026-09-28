@@ -13,6 +13,8 @@ pub mod git;
 pub mod nextest;
 pub mod preflight;
 pub mod requests;
+pub mod restore;
+pub mod reuse;
 pub mod template;
 
 pub use cache::{
@@ -39,6 +41,14 @@ pub use nextest::{
 };
 pub use preflight::{RouteDriver, RouteProof, prove_route};
 pub use requests::{MetadataDiscovery, MetadataQualification, MiseInstall, PinnedToolExec};
+pub use restore::{
+    MissReason, RestoreCheck, RestoreEvidence, ReuseFallback, ReusePlan, ToolAvailability,
+    fallback_for_error, plan_reuse, verify_restored_task_result,
+};
+pub use reuse::{
+    ReuseGrant, ReuseQualification, ReuseSignal, TaskArtifactTransport, TaskCacheKey,
+    TaskReuseRequest,
+};
 pub use template::TaskTemplate;
 
 /// Stable identifier for the Mise tool wrapper.

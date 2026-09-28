@@ -31,5 +31,9 @@ mod impl_mise_policy;
 mod impl_mise_preflight;
 #[path = "impl_mise_requests.rs"]
 mod impl_mise_requests;
+#[path = "impl_mise_restore.rs"]
+mod impl_mise_restore;
+#[path = "impl_mise_reuse.rs"]
+mod impl_mise_reuse;
 #[path = "impl_mise_templates.rs"]
 mod impl_mise_templates;

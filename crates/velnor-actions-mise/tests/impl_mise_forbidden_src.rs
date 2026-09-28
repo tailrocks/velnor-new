@@ -22,6 +22,8 @@ fn expected_modules() -> Vec<&'static str> {
         "nextest.rs",
         "preflight.rs",
         "requests.rs",
+        "restore.rs",
+        "reuse.rs",
         "template.rs",
     ]
 }
