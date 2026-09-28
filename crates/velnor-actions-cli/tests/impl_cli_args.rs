@@ -41,6 +41,28 @@ fn generate_missing_flag_value_exits_two() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn bare_invocation_and_unknown_commands_exit_two() -> Result<(), Box<dyn Error>> {
+    let tmp = fresh_tempdir("args-bare")?;
+    git_init(&tmp)?;
+    for args in [Vec::<&str>::new(), vec!["bogus"], vec!["__internal"]] {
+        let output = spawn(&args, &[], &tmp)?;
+        assert_eq!(code(&output), 2, "args {args:?} must be usage errors");
+    }
+    cleanup(&tmp);
+    Ok(())
+}
+
+#[test]
+fn generate_without_output_dir_parses() -> Result<(), Box<dyn Error>> {
+    let tmp = fresh_tempdir("args-gen-plain")?;
+    git_init(&tmp)?;
+    let output = spawn(&["generate"], &[], &tmp)?;
+    assert_eq!(code(&output), 1, "parses, then fails on missing config");
+    cleanup(&tmp);
+    Ok(())
+}
+
+#[test]
 fn plan_without_config_exits_one() -> Result<(), Box<dyn Error>> {
     let tmp = fresh_tempdir("args-plan")?;
     git_init(&tmp)?;

@@ -2,6 +2,8 @@
 //!
 //! Consumer policy rejects support IR; Velnor policy merges typed Alint,
 //! policy, and optional candidate jobs. No toolchain-qualification job exists.
+//! The always-on `velnor-workflow-lint` job arrives via typed IR and is
+//! emitted for both policies; it is never support IR.
 
 use std::collections::BTreeMap;
 
@@ -16,7 +18,15 @@ use crate::{
     steps,
 };
 
+/// Always-on workflow-lint job ID, emitted for both policies.
+pub(crate) const LINT_JOB_ID: &str = "velnor-workflow-lint";
+
+/// Display name of the always-on workflow-lint job.
+pub(crate) const LINT_DISPLAY_NAME: &str = "Velnor Workflow Lint";
+
 /// Consumer policy: reject support IR and Velnor-only job IDs.
+///
+/// The lint job is a base IR job, not support IR, so it passes through.
 pub(crate) fn reject_consumer_support(
     jobs: &BTreeMap<String, Job>,
     support: Option<&VelnorSupportWorkflow>,
@@ -195,6 +205,8 @@ pub(crate) fn check_candidate_invariants(jobs: &BTreeMap<String, Job>) -> Result
 }
 
 /// Final gate keeps the exact required-check name and `always()` condition.
+///
+/// The always-on lint job keeps its exact display name on both policies.
 pub(crate) fn check_final_gate(jobs: &BTreeMap<String, Job>) -> Result<(), RenderError> {
     if let Some(final_job) = jobs.get(FINAL_JOB_ID) {
         if final_job.display_name != FINAL_DISPLAY_NAME {
@@ -205,6 +217,11 @@ pub(crate) fn check_final_gate(jobs: &BTreeMap<String, Job>) -> Result<(), Rende
                 "bad_final_condition".to_owned(),
             ));
         }
+    }
+    if let Some(lint) = jobs.get(LINT_JOB_ID)
+        && lint.display_name != LINT_DISPLAY_NAME
+    {
+        return Err(RenderError::InvalidWorkflow("bad_lint_name".to_owned()));
     }
     Ok(())
 }
