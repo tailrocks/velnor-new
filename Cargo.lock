@@ -183,6 +183,9 @@ checksum = "d245f478577f809a851594d02313b640fb437e0bb33866753cff937863096954"
 [[package]]
 name = "velnor-actions-actionlint"
 version = "0.1.0"
+dependencies = [
+ "velnor-actions-contract",
+]
 
 [[package]]
 name = "velnor-actions-cli"
@@ -201,6 +204,10 @@ dependencies = [
 [[package]]
 name = "velnor-actions-mise"
 version = "0.1.0"
+dependencies = [
+ "serde",
+ "velnor-actions-contract",
+]
 
 [[package]]
 name = "velnor-actions-orchestrator"
@@ -209,10 +216,18 @@ version = "0.1.0"
 [[package]]
 name = "velnor-actions-rust"
 version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "velnor-actions-contract",
+]
 
 [[package]]
 name = "velnor-actions-workflow-renderer"
 version = "0.1.0"
+dependencies = [
+ "velnor-actions-contract",
+]
 
 [[package]]
 name = "zmij"
