@@ -11,6 +11,15 @@ use crate::errors::ContractError;
 
 /// Cache-key schema id, always `v1`.
 pub const CACHE_SCHEMA_ID: &str = "v1";
+/// Extension schema emitted by the Rust adapter's identity extension.
+pub const RUST_EXTENSION_SCHEMA: &str = "rust-task-identity-v1";
+/// Known stack-extension schemas; unknown schemas disable reuse/coverage.
+pub const KNOWN_STACK_EXTENSION_SCHEMAS: &[&str] = &[RUST_EXTENSION_SCHEMA];
+/// True when `schema` is a known stack-extension schema (cache §1).
+#[must_use]
+pub fn is_known_stack_extension_schema(schema: &str) -> bool {
+    KNOWN_STACK_EXTENSION_SCHEMAS.contains(&schema)
+}
 /// Maximum GitHub cache-key bytes; longer keys fail generation.
 pub const MAX_CACHE_KEY_BYTES: usize = 512;
 
@@ -205,7 +214,7 @@ pub fn cache_format_id(inputs: &FormatInputs) -> Result<String, ContractError> {
 /// Compute `stack_extension_id` over the canonical adapter extension.
 /// # Errors
 pub fn stack_extension_id(extension: &StackExtension) -> Result<String, ContractError> {
-    if extension.schema.trim().is_empty() {
+    if !is_known_stack_extension_schema(extension.schema.trim()) {
         return Err(ContractError::identity("stack_extension", "unknown_schema"));
     }
     Ok(digest_b3(&canonical_json_bytes(extension)?))
@@ -374,5 +383,12 @@ mod tests {
         );
         assert!(validate_miss_reason("no_entry").is_ok());
         assert!(validate_miss_reason("sometimes").is_err());
+    }
+
+    #[test]
+    fn unknown_extension_schemas_disable_identity() {
+        assert!(is_known_stack_extension_schema(RUST_EXTENSION_SCHEMA));
+        assert!(!is_known_stack_extension_schema("rust-task-v2"));
+        assert!(!is_known_stack_extension_schema(""));
     }
 }
