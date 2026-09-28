@@ -5,6 +5,17 @@ acceptance checks. It is not a proposal or a list of work in progress.
 
 No verified Velnor implementation is recorded yet.
 
+## Living process registries
+
+These are maintained process documents, not capability records: they stay
+current on every change to the process they describe.
+
+- [File classification registry](classification.md) (RQ-4.2 / RQ-5.2)
+- [Recorded deviations](deviations.md) (SHOULD rows)
+- [Update and exception procedure](update-procedure.md) (VER §3–§4)
+- [Risk-triggered verification](verification-triggers.md) (RQ-9.8)
+- [Release gates: NEEDS-HUMAN unblock conditions](release-gates.md)
+
 ## Recording rule
 
 Every pull request that lands an implementation MUST update this index and add

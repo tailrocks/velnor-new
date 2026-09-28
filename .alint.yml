@@ -1,30 +1,75 @@
 # Velnor repository policy, enforced by asamarts/alint as its own CI job.
-# Gate 0 skeleton: generic file/path placement, required files, and
-# line-count rules ONLY. No dependency-architecture, Rust-syntax, or
-# test-layout claims (Alint cannot inspect those; see rust-quality-contract).
-# NOTE: validate this schema against the pinned Alint action version.
+# Generic file/path placement, required files, and line-count rules ONLY.
+# No dependency-architecture, Rust-syntax, or test-layout claims: Alint
+# cannot inspect those (see docs/proposed/rust-quality-contract.md §1, §4).
+#
+# Schema: alint config model (`version` + `rules`, each rule with
+# id/kind/level). Validated with the pinned alint binary:
+#   alint validate-config
+# The 80-line function/method limit (§5, "using Clippy accounting") is NOT
+# expressed here — alint ships no function-level rule kind. It is enforced
+# by Clippy (`too_many_lines = "deny"` + `too-many-lines-threshold = 80`).
+#
+# §5 limits are hard errors. No baseline/ratchet: oversized files MUST be
+# split, never grandfathered (relabeling or exclusion to satisfy limits is
+# forbidden by §5).
 version: 1
-required_files:
-  - "Cargo.toml"
-  - "Cargo.lock"
-  - "clippy.toml"
-  - "deny.toml"
-  - ".alint.yml"
-  - ".config/nextest.toml"
-  - "AGENTS.md"
-path_rules:
-  # First-party Rust packages live only under crates/.
-  - id: "crates-only"
-    pattern: "^crates/velnor-actions-[a-z-]+/(src|tests)/.*\\.rs$"
-    allow: true
-file_rules:
-  # Hard size limits for new handwritten code (physical lines).
-  - id: "rust-max-lines"
-    pattern: "\\.rs$"
+
+# `fixtures/` holds adversarial test inputs (incl. a symlink loop and an
+# escape symlink the walker cannot traverse). It is not Velnor-owned
+# product code, so it is excluded from the walked index (ARCH-1.12).
+ignore:
+  - "fixtures/**"
+
+rules:
+  # Required repo-shape files (rust-quality-contract §1 / RQ-1.1).
+  - id: required-files
+    kind: file_exists
+    paths:
+      - Cargo.toml
+      - Cargo.lock
+      - clippy.toml
+      - deny.toml
+      - rustfmt.toml
+      - CODEOWNERS
+      - .alint.yml
+      - .config/nextest.toml
+      - AGENTS.md
+    level: error
+    message: "Repo-shape file is missing (rust-quality-contract §1)"
+
+  # First-party Rust packages live only under crates/ (ARCH-1.10).
+  - id: crates-only
+    kind: file_absent
+    paths:
+      include: ["**/*.rs"]
+      exclude: ["crates/**"]
+    level: error
+    message: "First-party Rust sources MUST live under crates/"
+
+  # Hard size limits for new handwritten code, physical lines (RQ §5).
+  # Scoped to Velnor-owned product paths; fixtures are test inputs and
+  # lockfiles/vendored/generated output are classified elsewhere, so they
+  # are excluded here rather than relabeled (ARCH-1.12, RQ-5.2).
+  - id: rust-max-lines
+    kind: file_max_lines
+    paths:
+      include:
+        - "crates/velnor-actions-*/src/**/*.rs"
+        - "crates/velnor-actions-*/tests/**/*.rs"
+      exclude:
+        - "**/fixtures/**"
+        - "**/testdata/**"
     max_lines: 400
-  - id: "lib-main-max-lines"
-    pattern: "(src/lib\\.rs|src/main\\.rs)$"
+    level: error
+    message: "Rust source exceeds 400 physical lines (rust-quality-contract §5)"
+
+  - id: lib-main-max-lines
+    kind: file_max_lines
+    paths:
+      include:
+        - "crates/velnor-actions-*/src/lib.rs"
+        - "crates/velnor-actions-*/src/main.rs"
     max_lines: 150
-  - id: "function-max-lines"
-    pattern: "\\.rs$"
-    max_function_lines: 80
+    level: error
+    message: "src/lib.rs and src/main.rs MUST stay under 150 physical lines (§5)"

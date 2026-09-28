@@ -1,0 +1,27 @@
+# cargo-mutants scope for risk-triggered verification (RQ-9.8).
+# Manual runs only: `cargo mutants` from the repo root. NOT wired into CI —
+# before any scheduled/CI use, pin cargo-mutants in the Mise-managed
+# inventory per version-policy §2 (unpinned validation tools are forbidden).
+# Full-codebase runs take hours; examine only the highest-risk units:
+# parsers (wrong parse = wrong plan), selection (wrong set = skipped work),
+# aggregation (wrong merge = wrong verdict).
+
+examine_globs = [
+    # Parsers: config validation, metadata JSON, lock/policy TOML subset.
+    "crates/velnor-actions-contract/src/config/**/*.rs",
+    "crates/velnor-actions-contract/src/workflow/plan.rs",
+    "crates/velnor-actions-rust/src/metadata.rs",
+    "crates/velnor-actions-mise/src/lock.rs",
+    # Selection: affected-package computation.
+    "crates/velnor-actions-orchestrator/src/select.rs",
+    # Aggregation: baseline coverage + final merge.
+    "crates/velnor-actions-orchestrator/src/cover.rs",
+    "crates/velnor-actions-orchestrator/src/merge.rs",
+]
+
+exclude_globs = [
+    "crates/*/tests/**",
+]
+
+# Skip low-signal mutants: Debug impls and explicit error constructors.
+exclude_re = ["impl Debug", "impl core::fmt::Display"]

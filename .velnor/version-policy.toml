@@ -1,9 +1,14 @@
-# Velnor-repository-only version-policy mirror (bootstrap contract §1).
-# Mirrors the compiled catalog in velnor-actions-mise/src/catalog.rs plus the
-# action pins in .velnor/freshness-inventory.json (qualified 2026-09-28).
-# Dogfood CI fails when this mirror differs from the catalog. Consumer
-# repositories do not need this file; the generator never creates it.
+# Velnor-repository-only version-policy file (version-policy §0–§2).
+# Header declares the policy schema, stable channel, freshness cadence, and
+# maximum exception age. The [tools]/[runner]/[[actions]] sections mirror the
+# compiled catalog in velnor-actions-mise/src/catalog.rs plus the action pins
+# in .velnor/freshness-inventory.json (qualified 2026-09-28). Dogfood CI fails
+# when this mirror differs from the catalog. Consumer repositories do not
+# need this file; the generator never creates it.
 schema = 1
+channel = "stable"
+check_interval_hours = 24
+max_exception_days = 14
 
 [tools]
 mise = "2026.9.16"
