@@ -9,6 +9,11 @@ autotests = false
 name = "velnor-actions"
 path = "src/main.rs"
 
+[dependencies]
+velnor-actions-contract = { path = "../velnor-actions-contract" }
+velnor-actions-orchestrator = { path = "../velnor-actions-orchestrator" }
+clap = { version = "4.6", features = ["derive"] }
+
 [lints]
 workspace = true
 

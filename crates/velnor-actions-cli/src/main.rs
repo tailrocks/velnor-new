@@ -1,32 +1,19 @@
-//! `velnor-actions` command-line entry point (Gate 0 shell).
+//! `velnor-actions` command-line entry point.
 //!
-//! Owns argument parsing, typed dispatch, plan rendering, and exit codes.
-//! Must not own orchestration algorithms or domain rules. The Clap parser
-//! arrives in a later gate; this shell keeps a std-only `--version`/`--help`
-//! surface so the binary target exists and is testable with zero dependencies.
+//! Owns argument parsing, typed dispatch, and exit codes. Must not own
+//! orchestration algorithms, domain rules, or process creation.
+
+mod args;
+mod dispatch;
 
 use std::process::ExitCode;
 
-/// Binary name; the only target name without the package-purpose suffix.
-const BINARY_NAME: &str = "velnor-actions";
-
-/// Shell usage text printed for `--help` and unknown arguments.
-const USAGE: &str = "usage: velnor-actions [--version] [--help]\n";
-
+/// Run the private gate on bare invocations, else the public Clap tree.
 fn main() -> ExitCode {
-    let mut args = std::env::args().skip(1);
-    match args.next().as_deref() {
-        None | Some("--help" | "-h") => {
-            print!("{BINARY_NAME} {}\n{USAGE}", env!("CARGO_PKG_VERSION"));
-            ExitCode::SUCCESS
-        }
-        Some("--version" | "-V") => {
-            println!("{BINARY_NAME} {}", env!("CARGO_PKG_VERSION"));
-            ExitCode::SUCCESS
-        }
-        Some(_) => {
-            eprint!("{USAGE}");
-            ExitCode::from(2)
-        }
+    if std::env::args_os().len() <= 1
+        && let Some(outcome) = dispatch::try_internal()
+    {
+        return outcome;
     }
+    dispatch::run_public()
 }
