@@ -32,6 +32,9 @@ pub fn validate_command_argv(argv: &[String]) -> Result<(), RenderError> {
                 "command_substitution:{arg}"
             )));
         }
+        if has_background_op(arg) {
+            return Err(RenderError::BadCommand(format!("background_shell:{arg}")));
+        }
         if previous == Some("cargo") && arg == "install" {
             return Err(RenderError::BadCommand("cargo_install".to_owned()));
         }
@@ -74,7 +77,10 @@ pub fn validate_env(env: &BTreeMap<String, String>) -> Result<(), RenderError> {
 /// Join validated argv into one `run:` line with POSIX quoting.
 ///
 /// `$NAME`/`${...}` spans pass through for runner expansion; every other
-/// character is quoted. See [`quote_run_arg`].
+/// character is quoted. See [`quote_run_arg`]. The inline script of
+/// `sh -c`/`bash -c` is single-quoted whole instead: inner-shell
+/// variables (assigned or inherited) must survive the outer shell, and
+/// the script's own quotes must stay syntactic, not literal.
 ///
 /// # Errors
 ///
@@ -83,9 +89,30 @@ pub fn join_argv_for_run(argv: &[String]) -> Result<String, RenderError> {
     validate_command_argv(argv)?;
     Ok(argv
         .iter()
-        .map(|arg| quote_run_arg(arg))
+        .enumerate()
+        .map(|(index, arg)| {
+            if index == 2 && is_inline_shell(argv) {
+                quote_script_arg(arg)
+            } else {
+                quote_run_arg(arg)
+            }
+        })
         .collect::<Vec<_>>()
         .join(" "))
+}
+
+/// True for `sh -c <script>`/`bash -c <script>` vectors.
+fn is_inline_shell(argv: &[String]) -> bool {
+    argv.len() > 2 && matches!(argv[0].as_str(), "sh" | "bash") && argv[1].as_str() == "-c"
+}
+
+/// Single-quote one inline script; only `'` needs escaping.
+///
+/// Inside single quotes `$`, `"`, and `\` stay literal for the outer
+/// shell, so the inner shell expands inherited env plus its own
+/// assignments exactly as the fixed script intends.
+fn quote_script_arg(script: &str) -> String {
+    format!("'{}'", script.replace('\'', "'\\''"))
 }
 
 /// POSIX-quote one argv element, preserving `$` expansion spans.
@@ -114,6 +141,24 @@ pub fn quote_run_arg(arg: &str) -> String {
 /// True for `/cargo` or paths ending in `/cargo`.
 fn is_absolute_cargo(arg: &str) -> bool {
     arg.starts_with('/') && (arg == "/cargo" || arg.ends_with("/cargo"))
+}
+
+/// True for shell background operators (`&`), never for `&&`/redirections.
+///
+/// Bans ` & `, leading `&`, and trailing single `&`; `&&` chains, `>&`
+/// redirections, and URL query `&` stay legal fixed-vector content.
+fn has_background_op(arg: &str) -> bool {
+    if arg.contains(" & ") {
+        return true;
+    }
+    let trimmed = arg.trim();
+    if let Some(head) = trimmed.strip_prefix('&') {
+        return !head.starts_with('&');
+    }
+    if let Some(body) = trimmed.strip_suffix('&') {
+        return !body.ends_with('&');
+    }
+    false
 }
 /// True when an argv element needs no quoting in `run:`.
 fn is_plain_run_token(arg: &str) -> bool {
@@ -178,5 +223,109 @@ fn flush_run_literal(literal: &mut String, out: &mut String) {
         out.push_str(literal);
         out.push('\'');
         literal.clear();
+    }
+}
+
+/// Double-quote an env-derived shell path for `run:` lines.
+#[must_use]
+pub fn quote_env_path_for_run(path: &str) -> String {
+    let quoted = path.len() >= 2 && path.starts_with('"') && path.ends_with('"');
+    if quoted || !has_shell_expansion(path) {
+        return path.to_owned();
+    }
+    format!("\"{}\"", path.replace('\\', "\\\\").replace('"', "\\\""))
+}
+
+/// True when a `run:` line carries a bare `$VAR/` word-splitting pattern.
+#[must_use]
+pub fn has_bare_env_expansion(line: &str) -> bool {
+    scan_run_words(line).iter().any(|(_, bare)| *bare)
+}
+
+/// Quote bare env words in a joined `run:` line (idempotent).
+///
+/// Words that already carry quoting are never rewritten: converting
+/// single-quoted `'...'$VAR'...'` concatenation to double quotes would
+/// expand inner-shell variables (e.g. `read`-assigned `$sha`) in the
+/// outer shell instead. Only fully bare words gain double quotes.
+#[must_use]
+pub fn quote_run_line_env_paths(run_line: &str) -> String {
+    scan_run_words(run_line)
+        .into_iter()
+        .map(|(word, bare)| {
+            if bare && !word.contains('\'') && !word.contains('"') {
+                quote_env_path_for_run(&decode_run_word(&word))
+            } else {
+                word
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// Split a `run:` line into words plus bare-expansion flags.
+fn scan_run_words(run_line: &str) -> Vec<(String, bool)> {
+    let bytes = run_line.as_bytes();
+    let mut words = Vec::new();
+    let mut cur = String::new();
+    let mut bare = false;
+    let mut quote = 0u8;
+    let mut chars = run_line.char_indices();
+    while let Some((index, ch)) = chars.next() {
+        if quote == 1 {
+            cur.push(ch);
+            if ch == '\'' {
+                quote = 0;
+            }
+        } else if quote == 2 {
+            cur.push(ch);
+            if ch == '\\' {
+                cur.extend(chars.next().map(|(_, next)| next));
+            } else if ch == '"' {
+                quote = 0;
+            }
+        } else if ch == '\'' {
+            quote = 1;
+            cur.push(ch);
+        } else if ch == '"' {
+            quote = 2;
+            cur.push(ch);
+        } else if ch.is_whitespace() {
+            if !cur.is_empty() {
+                words.push((std::mem::take(&mut cur), std::mem::take(&mut bare)));
+            }
+        } else {
+            bare = bare || ch == '$' && is_shell_expansion_at(bytes, index);
+            cur.push(ch);
+        }
+    }
+    if !cur.is_empty() {
+        words.push((cur, bare));
+    }
+    words
+}
+
+/// Decode single-quote spans (`'\''` → `'`).
+fn decode_run_word(word: &str) -> String {
+    word.replace("'\\''", "\0")
+        .replace('\'', "")
+        .replace('\0', "'")
+}
+
+/// True when text holds a `$NAME`/`${NAME}` shell expansion span.
+fn has_shell_expansion(text: &str) -> bool {
+    let bytes = text.as_bytes();
+    bytes
+        .iter()
+        .enumerate()
+        .any(|(index, byte)| *byte == b'$' && is_shell_expansion_at(bytes, index))
+}
+
+/// True when `bytes[index] == b'$'` starts a shell span (`${{` excluded).
+fn is_shell_expansion_at(bytes: &[u8], index: usize) -> bool {
+    match bytes.get(index + 1) {
+        Some(b'{') => bytes.get(index + 2) != Some(&b'{'),
+        Some(next) => next.is_ascii_alphabetic() || *next == b'_',
+        None => false,
     }
 }

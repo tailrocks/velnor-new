@@ -2,15 +2,25 @@
 //!
 //! Fail-closed gates: exact triggers, concurrency, single runner label,
 //! consumer support rejection, and candidate-never-plans invariants.
+//! The strict entrypoint additionally mandates Mise setup, staged
+//! helpers, and the plan anchor; the legacy entrypoint preserves the
+//! previous contract for in-flight callers.
+
+use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
-    Concurrency, Trigger, VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
+    Concurrency, Job, Trigger, VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
 };
 
 use crate::{
-    RenderError, commands, document, guard, marker, steps, support,
-    yaml::{Yaml, render_yaml},
+    RenderError, closure, commands, document, guard, marker, matrix, setup, steps, support,
+    yaml::render_yaml,
 };
+
+pub use crate::matrix::{
+    MATRIX_MAX_PARALLEL_ENV, MATRIX_NEEDS_JOB_ENV, MATRIX_OUTPUT_ENV, MatrixSource, PLAN_STEP_ID,
+};
+pub use crate::setup::MiseSetup;
 
 /// Generated workflow path inside the repository.
 pub const WORKFLOW_PATH: &str = ".github/workflows/velnor.yml";
@@ -134,6 +144,10 @@ impl RenderContext {
 
 /// Render one workflow document from IR under a policy gate.
 ///
+/// Inserts the mandated plan closure (freshness + publish) shared by
+/// both entrypoints; use [`render_workflow_ir_strict`] for the full
+/// fail-closed pass (Mise setup plus staged-helper gates).
+///
 /// # Errors
 ///
 /// Returns [`RenderError`] for invalid context, IR, policy, or steps.
@@ -143,25 +157,39 @@ pub fn render_workflow_ir(
     support: Option<&VelnorSupportWorkflow>,
     ctx: &RenderContext,
 ) -> Result<String, RenderError> {
-    ctx.validate()?;
-    ir.validate().map_err(RenderError::Contract)?;
-    check_triggers(&ir.triggers)?;
-    check_concurrency(&ir.concurrency)?;
-    check_single_label(ir, &ctx.runs_on)?;
-    let mut jobs = ir.jobs.clone();
-    match policy {
-        WorkflowPolicy::ConsumerV1 => support::reject_consumer_support(&jobs, support)?,
-        WorkflowPolicy::VelnorRepositoryV1 => {
-            support::merge_support_jobs(&mut jobs, support, ctx)?;
-        }
+    let mut jobs = merged_jobs(ir, policy, support, ctx)?;
+    closure::insert_plan_closure(&mut jobs, ctx)?;
+    render_merged(ir, &jobs, ctx)
+}
+
+/// Strict render: setup insertion plus staged-helper and anchor gates.
+///
+/// Every `mise`-invoking job (plus plan/task unconditionally) gains a
+/// preceding pinned setup step; internal steps without a preceding
+/// Acquire step and anchorless plan jobs fail closed. Pins arrive via
+/// `mise`; the renderer never invents them.
+///
+/// # Errors
+///
+/// Returns [`RenderError`] for invalid pins, context, IR, policy,
+/// missing setup/staging, or steps.
+pub fn render_workflow_ir_strict(
+    ir: &WorkflowIr,
+    policy: WorkflowPolicy,
+    support: Option<&VelnorSupportWorkflow>,
+    ctx: &RenderContext,
+    mise: &MiseSetup,
+) -> Result<String, RenderError> {
+    mise.validate()?;
+    let mut jobs = merged_jobs(ir, policy, support, ctx)?;
+    for (id, job) in &mut jobs {
+        let always = id == PLAN_JOB_ID || id == TASK_JOB_ID;
+        setup::ensure_setup(id, job, mise, always)?;
+        closure::check_internal_staged(id, job)?;
     }
-    support::check_candidate_invariants(&jobs)?;
-    support::check_final_gate(&jobs)?;
-    let document = document::workflow_to_yaml(ir, &jobs, ctx)?;
-    let document = quote_run_values_in_yaml(document);
-    let text = marker::with_marker(&ctx.generator_version, &render_yaml(&document))?;
-    steps::scan_for_private_subcommands(&text)?;
-    Ok(text)
+    closure::check_plan_anchor(&jobs)?;
+    closure::insert_plan_closure(&mut jobs, ctx)?;
+    render_merged(ir, &jobs, ctx)
 }
 
 /// Assemble the exact two-file tree from rendered workflow bytes plus the
@@ -195,28 +223,48 @@ pub fn render_tree(
     })
 }
 
-/// Quote bare env paths in every `run:` scalar.
-fn quote_run_values_in_yaml(node: Yaml) -> Yaml {
-    match node {
-        Yaml::Map(entries) => Yaml::Map(
-            entries
-                .into_iter()
-                .map(|(key, value)| {
-                    if key == "run" {
-                        if let Yaml::Str(line) = value {
-                            (key, Yaml::Str(steps::quote_run_line_env_paths(&line)))
-                        } else {
-                            (key, value)
-                        }
-                    } else {
-                        (key, quote_run_values_in_yaml(value))
-                    }
-                })
-                .collect(),
-        ),
-        Yaml::Seq(items) => Yaml::Seq(items.into_iter().map(quote_run_values_in_yaml).collect()),
-        other => other,
+/// Validate context/IR plus policy merge and support invariants.
+fn merged_jobs(
+    ir: &WorkflowIr,
+    policy: WorkflowPolicy,
+    support: Option<&VelnorSupportWorkflow>,
+    ctx: &RenderContext,
+) -> Result<BTreeMap<String, Job>, RenderError> {
+    ctx.validate()?;
+    ir.validate().map_err(RenderError::Contract)?;
+    check_triggers(&ir.triggers)?;
+    check_concurrency(&ir.concurrency)?;
+    check_single_label(ir, &ctx.runs_on)?;
+    let mut jobs = ir.jobs.clone();
+    match policy {
+        WorkflowPolicy::ConsumerV1 => support::reject_consumer_support(&jobs, support)?,
+        WorkflowPolicy::VelnorRepositoryV1 => {
+            support::merge_support_jobs(&mut jobs, support, ctx)?;
+        }
     }
+    support::check_candidate_invariants(&jobs)?;
+    support::check_final_gate(&jobs)?;
+    Ok(jobs)
+}
+
+/// Emit matrix strategy plus the quoted, marked workflow text.
+fn render_merged(
+    ir: &WorkflowIr,
+    jobs: &BTreeMap<String, Job>,
+    ctx: &RenderContext,
+) -> Result<String, RenderError> {
+    let matrix = matrix::task_matrix_of(jobs)?;
+    let jobs = matrix
+        .as_ref()
+        .map_or_else(|| jobs.clone(), |_| matrix::scrub_matrix_marker(jobs));
+    let mut document = document::workflow_to_yaml(ir, &jobs, ctx)?;
+    if let Some((source, max_parallel)) = &matrix {
+        matrix::attach_task_matrix(&mut document, source, *max_parallel)?;
+    }
+    let document = crate::yaml::quote_run_values_in_yaml(document);
+    let text = marker::with_marker(&ctx.generator_version, &render_yaml(&document))?;
+    steps::scan_for_private_subcommands(&text)?;
+    Ok(text)
 }
 
 /// Require a literal versioned Ubuntu label (no aliases or expressions).

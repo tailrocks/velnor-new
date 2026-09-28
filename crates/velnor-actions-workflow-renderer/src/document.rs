@@ -120,10 +120,14 @@ fn step_to_yaml(job_id: &str, step: &Step, ctx: &RenderContext) -> Result<Yaml, 
                 steps::scan_for_private_subcommands(key)?;
                 steps::scan_for_private_subcommands(value)?;
             }
-            let mut entries = vec![
-                ("name".to_owned(), Yaml::str(step.name.clone())),
-                ("uses".to_owned(), Yaml::str(uses.clone())),
-            ];
+            let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
+            if uses == steps::UPLOAD_ARTIFACT_USES {
+                entries.push((
+                    "if".to_owned(),
+                    Yaml::str(crate::render::FINAL_CONDITION.to_owned()),
+                ));
+            }
+            entries.push(("uses".to_owned(), Yaml::str(uses.clone())));
             if !with.is_empty() {
                 let inputs: Vec<(String, Yaml)> = with
                     .iter()
@@ -151,18 +155,14 @@ fn step_to_yaml(job_id: &str, step: &Step, ctx: &RenderContext) -> Result<Yaml, 
             Ok(Yaml::Map(entries))
         }
         StepKind::Internal { operation } => {
-            if operation != steps::PLAN_OPERATION && operation != steps::MERGE_OPERATION {
-                return Err(RenderError::BadCommand(format!(
-                    "unknown_internal_op:{operation}"
-                )));
-            }
-            let request = format!("{}/{operation}-request.json", ctx.request_dir);
+            let (op, target) = steps::split_internal_operation(operation)?;
+            let request = format!("{}/{target}-request.json", ctx.request_dir);
             Ok(Yaml::Map(vec![
                 ("name".to_owned(), Yaml::str(step.name.clone())),
                 (
                     "env".to_owned(),
                     Yaml::Map(vec![
-                        (INTERNAL_OP_ENV.to_owned(), Yaml::str(operation.clone())),
+                        (INTERNAL_OP_ENV.to_owned(), Yaml::str(op.to_owned())),
                         (REQUEST_FILE_ENV.to_owned(), Yaml::str(request)),
                     ]),
                 ),

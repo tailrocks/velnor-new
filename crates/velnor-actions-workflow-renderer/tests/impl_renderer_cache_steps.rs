@@ -77,7 +77,11 @@ fn cache_restore_accepts_only_allowed_paths() {
     match &step.kind {
         StepKind::Action { with, .. } => {
             assert_eq!(with.get("key").map(String::as_str), Some(key.as_str()));
-            assert!(with.contains_key("restore-keys"));
+            assert_eq!(
+                with.get("restore-keys").map(String::as_str),
+                Some("velnor-v1-"),
+                "restore-keys pass through verbatim; the renderer never computes identity"
+            );
         }
         _ => panic!("restore must be an action step"),
     }

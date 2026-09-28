@@ -21,6 +21,8 @@ pub const REQUEST_FILE_ENV: &str = "VELNOR_REQUEST_FILE";
 pub const PLAN_OPERATION: &str = "plan-v1";
 /// Report-merge operation name.
 pub const MERGE_OPERATION: &str = "merge-v1";
+/// Write-request operation name.
+pub const WRITE_REQUEST_OPERATION: &str = "write-request-v1";
 /// Required prefix of the digest-verified staged binary path.
 pub const STAGED_BINARY_PREFIX: &str = "$RUNNER_TEMP/velnor/bin/velnor-actions-";
 /// Required prefix of internal request directories.
@@ -45,6 +47,16 @@ pub const CANDIDATE_MANIFEST_FILE: &str = "candidate-manifest.json";
 pub const CANDIDATE_OUTPUT_DIR: &str = "$RUNNER_TEMP/velnor/candidate-output";
 /// Directory receiving the downloaded candidate for qualification.
 pub const CANDIDATE_STAGE_DIR: &str = "$RUNNER_TEMP/velnor/candidate";
+/// Contract-fixed display name of the helper-staging step.
+pub const ACQUIRE_NAME: &str = "Acquire Velnor";
+/// Run-key expression (`r<run-id>-a<run-attempt>`, workflow-contract §3).
+pub const RUN_KEY_EXPR: &str = "r${{ github.run_id }}-a${{ github.run_attempt }}";
+/// Display name of the matrix-report upload step.
+pub const MATRIX_REPORT_UPLOAD_NAME: &str = "Upload matrix report";
+
+pub use crate::commands::{
+    has_bare_env_expansion, quote_env_path_for_run, quote_run_line_env_paths,
+};
 
 /// Reject text containing a private-subcommand or parallel token.
 /// # Errors
@@ -189,6 +201,33 @@ pub fn download_artifact_step(name: &str, path: &str) -> Result<Step, RenderErro
     )
 }
 
+/// Matrix-report upload step (`velnor-matrix-<run-key>-<matrix-key>`).
+///
+/// Carries the leg's `matrix-report.json` plus `tasks/` files; the
+/// matrix key resolves from the leg's matrix context at runtime, so
+/// this step belongs in the matrix task template only. `if: always()`
+/// is attached at render.
+/// # Errors
+pub fn matrix_report_upload_step() -> Result<Step, RenderError> {
+    action_step(
+        MATRIX_REPORT_UPLOAD_NAME,
+        UPLOAD_ARTIFACT_USES,
+        BTreeMap::from([
+            (
+                "name".to_owned(),
+                format!("velnor-matrix-{RUN_KEY_EXPR}-${{{{ matrix.matrix_key }}}}"),
+            ),
+            (
+                "path".to_owned(),
+                format!(
+                    "${{{{ runner.temp }}}}/velnor/{RUN_KEY_EXPR}/${{{{ matrix.matrix_key }}}}"
+                ),
+            ),
+            ("if-no-files-found".to_owned(), "error".to_owned()),
+        ]),
+    )
+}
+
 /// Fixed script writing the per-target candidate manifest JSON.
 ///
 /// Emits exactly the contract keys: source commit, target triple,
@@ -223,25 +262,64 @@ pub fn acquire_velnor_step(
     if !argv.iter().any(|arg| arg.contains(STAGED_BINARY_PREFIX)) {
         return Err(RenderError::BadCommand("unstaged_binary".to_owned()));
     }
-    shell_step("Acquire Velnor", argv, env)
+    let downloads = argv.iter().any(|arg| arg.contains(ASSET_URL_ENV));
+    let verifies = argv.iter().any(|arg| arg.contains(ASSET_SHA_ENV));
+    if !downloads || !verifies {
+        return Err(RenderError::BadCommand("acquire_without_verify".to_owned()));
+    }
+    shell_step(ACQUIRE_NAME, argv, env)
 }
 
-/// Internal plan/merge step; operation travels via env, never argv.
+/// Split an internal operation into env op plus request-file target op.
+///
+/// `plan-v1`/`merge-v1` target themselves; `write-request-v1:<target>` gates
+/// on `write-request-v1` while materializing the target's request file.
+/// # Errors
+pub(crate) fn split_internal_operation(operation: &str) -> Result<(&str, &str), RenderError> {
+    if operation == PLAN_OPERATION || operation == MERGE_OPERATION {
+        return Ok((operation, operation));
+    }
+    let rest = operation
+        .strip_prefix(WRITE_REQUEST_OPERATION)
+        .and_then(|rest| rest.strip_prefix(':'));
+    if let Some(target) = rest
+        && (target == PLAN_OPERATION || target == MERGE_OPERATION)
+    {
+        return Ok((WRITE_REQUEST_OPERATION, target));
+    }
+    Err(RenderError::BadCommand(format!(
+        "unknown_internal_op:{operation}"
+    )))
+}
+
+/// Internal plan/merge/write-request step; operation travels via env, never argv.
 /// # Errors
 pub fn internal_step(name: &str, operation: &str) -> Result<Step, RenderError> {
     if name.trim().is_empty() {
         return Err(RenderError::BadCommand("empty_name".to_owned()));
     }
-    if operation != PLAN_OPERATION && operation != MERGE_OPERATION {
-        return Err(RenderError::BadCommand(format!(
-            "unknown_internal_op:{operation}"
-        )));
-    }
+    split_internal_operation(operation)?;
     scan_for_private_subcommands(name)?;
     Ok(Step {
         name: name.to_owned(),
         kind: StepKind::Internal {
             operation: operation.to_owned(),
+        },
+    })
+}
+
+/// Fixed write-request step materializing `<target>-request.json` at event time.
+/// # Errors
+pub fn write_request_step(target: &str) -> Result<Step, RenderError> {
+    if target != PLAN_OPERATION && target != MERGE_OPERATION {
+        return Err(RenderError::BadCommand(format!(
+            "unknown_internal_op:{target}"
+        )));
+    }
+    Ok(Step {
+        name: "Write request".to_owned(),
+        kind: StepKind::Internal {
+            operation: format!("{WRITE_REQUEST_OPERATION}:{target}"),
         },
     })
 }
@@ -268,86 +346,6 @@ pub fn merge_step() -> Step {
     }
 }
 
-/// Double-quote an env-derived shell path for `run:` lines.
-#[must_use]
-pub fn quote_env_path_for_run(path: &str) -> String {
-    let quoted = path.len() >= 2 && path.starts_with('"') && path.ends_with('"');
-    if quoted || !has_shell_expansion(path) {
-        return path.to_owned();
-    }
-    format!("\"{}\"", path.replace('\\', "\\\\").replace('"', "\\\""))
-}
-
-/// True when a `run:` line carries a bare `$VAR/` word-splitting pattern.
-#[must_use]
-pub fn has_bare_env_expansion(line: &str) -> bool {
-    scan_run_words(line).iter().any(|(_, bare)| *bare)
-}
-
-/// Quote bare env words in a joined `run:` line (idempotent).
-#[must_use]
-pub fn quote_run_line_env_paths(run_line: &str) -> String {
-    scan_run_words(run_line)
-        .into_iter()
-        .map(|(word, bare)| {
-            if bare {
-                quote_env_path_for_run(&decode_run_word(&word))
-            } else {
-                word
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
-fn scan_run_words(run_line: &str) -> Vec<(String, bool)> {
-    let bytes = run_line.as_bytes();
-    let mut words = Vec::new();
-    let mut cur = String::new();
-    let mut bare = false;
-    let mut quote = 0u8;
-    let mut chars = run_line.char_indices();
-    while let Some((index, ch)) = chars.next() {
-        if quote == 1 {
-            cur.push(ch);
-            if ch == '\'' {
-                quote = 0;
-            }
-        } else if quote == 2 {
-            cur.push(ch);
-            if ch == '\\' {
-                cur.extend(chars.next().map(|(_, next)| next));
-            } else if ch == '"' {
-                quote = 0;
-            }
-        } else if ch == '\'' {
-            quote = 1;
-            cur.push(ch);
-        } else if ch == '"' {
-            quote = 2;
-            cur.push(ch);
-        } else if ch.is_whitespace() {
-            if !cur.is_empty() {
-                words.push((std::mem::take(&mut cur), std::mem::take(&mut bare)));
-            }
-        } else {
-            bare = bare || ch == '$' && is_shell_expansion_at(bytes, index);
-            cur.push(ch);
-        }
-    }
-    if !cur.is_empty() {
-        words.push((cur, bare));
-    }
-    words
-}
-
-/// Decode single-quote spans (`'\''` → `'`).
-fn decode_run_word(word: &str) -> String {
-    word.replace("'\\''", "\0")
-        .replace('\'', "")
-        .replace('\0', "'")
-}
-
 /// True for `owner/repo` over alphanumerics plus `.-_`.
 fn is_action_name(name: &str) -> bool {
     !name.is_empty()
@@ -361,22 +359,4 @@ fn is_lower_hex(value: &str) -> bool {
     value
         .bytes()
         .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
-}
-
-/// True when text holds a `$NAME`/`${NAME}` shell expansion span.
-fn has_shell_expansion(text: &str) -> bool {
-    let bytes = text.as_bytes();
-    bytes
-        .iter()
-        .enumerate()
-        .any(|(index, byte)| *byte == b'$' && is_shell_expansion_at(bytes, index))
-}
-
-/// True when `bytes[index] == b'$'` starts a shell span (`${{` excluded).
-fn is_shell_expansion_at(bytes: &[u8], index: usize) -> bool {
-    match bytes.get(index + 1) {
-        Some(b'{') => bytes.get(index + 2) != Some(&b'{'),
-        Some(next) => next.is_ascii_alphabetic() || *next == b'_',
-        None => false,
-    }
 }

@@ -106,6 +106,43 @@ fn argv_validation_rejects_policy_violations() {
 }
 
 #[test]
+fn inline_shell_scripts_quote_whole_for_inner_expansion() {
+    let line = join_argv_for_run(&argv(&["sh", "-c", "read sha rest < f && echo \"$sha\""]));
+    assert_eq!(
+        line.ok().as_deref(),
+        Some("sh -c 'read sha rest < f && echo \"$sha\"'")
+    );
+    let quotes = join_argv_for_run(&argv(&["sh", "-c", "cut -d' ' -f1"]));
+    assert_eq!(
+        quotes.ok().as_deref(),
+        Some("sh -c 'cut -d'\\'' '\\'' -f1'")
+    );
+    let direct = join_argv_for_run(&argv(&["mise", "exec", "--", "cargo", "test"]));
+    assert_eq!(direct.ok().as_deref(), Some("mise exec -- cargo test"));
+}
+
+#[test]
+fn argv_rejects_background_shell_but_keeps_chains_and_urls() {
+    for script in ["a & b", "sleep 1&", "& echo hi", "run & sleep"] {
+        assert!(
+            validate_command_argv(&argv(&["sh", "-c", script])).is_err(),
+            "background accepted: {script}"
+        );
+    }
+    for script in [
+        "a && b",
+        "cmd 2>&1",
+        "curl 'https://example.invalid/x?a=1&b=2'",
+        "echo done",
+    ] {
+        assert!(
+            validate_command_argv(&argv(&["sh", "-c", script])).is_ok(),
+            "legal rejected: {script}"
+        );
+    }
+}
+
+#[test]
 fn acquire_template_requires_digest_and_staging() {
     let staged = format!("{STAGED_BINARY_PREFIX}0.1.0");
     let mut env = BTreeMap::new();
@@ -114,7 +151,14 @@ fn acquire_template_requires_digest_and_staging() {
         ASSET_URL_ENV.to_owned(),
         "https://example.invalid/v0.1.0/bin".to_owned(),
     );
-    let good = acquire_velnor_step(argv(&["fetch", &staged]), env.clone());
+    let wired = argv(&[
+        "sh",
+        "-c",
+        &format!(
+            "curl -fsSL \"$VELNOR_ASSET_URL\" -o {staged} && echo \"$VELNOR_ASSET_SHA256\" | sha256sum -c -"
+        ),
+    ]);
+    let good = acquire_velnor_step(wired.clone(), env.clone());
     assert!(good.is_ok());
     assert_eq!(
         good.ok().map(|step| step.name),
@@ -122,14 +166,15 @@ fn acquire_template_requires_digest_and_staging() {
     );
     let mut bad_sha = env.clone();
     bad_sha.insert(ASSET_SHA_ENV.to_owned(), "zzz".to_owned());
-    assert!(acquire_velnor_step(argv(&["fetch", &staged]), bad_sha).is_err());
+    assert!(acquire_velnor_step(wired.clone(), bad_sha).is_err());
     let mut bad_url = env.clone();
     bad_url.insert(
         ASSET_URL_ENV.to_owned(),
         "http://example.invalid/bin".to_owned(),
     );
-    assert!(acquire_velnor_step(argv(&["fetch", &staged]), bad_url).is_err());
-    assert!(acquire_velnor_step(argv(&["fetch", "/tmp/bin"]), env).is_err());
+    assert!(acquire_velnor_step(wired.clone(), bad_url).is_err());
+    assert!(acquire_velnor_step(argv(&["fetch", "/tmp/bin"]), env.clone()).is_err());
+    assert!(acquire_velnor_step(argv(&["fetch", &staged]), env).is_err());
 }
 
 #[test]
@@ -160,6 +205,22 @@ fn env_paths_quote_for_run_without_word_splitting() {
         quote_env_path_for_run("${RUNNER_TEMP}/tool"),
         "\"${RUNNER_TEMP}/tool\""
     );
+}
+
+#[test]
+fn requote_leaves_quoted_words_untouched() {
+    let bare = "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0";
+    assert_eq!(
+        quote_run_line_env_paths(bare),
+        "\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\""
+    );
+    let mixed = "sh -c 'read sha rest < f && printf \"%s\" \"$sha\"' $RUNNER_TEMP/x";
+    assert_eq!(
+        quote_run_line_env_paths(mixed),
+        "sh -c 'read sha rest < f && printf \"%s\" \"$sha\"' \"$RUNNER_TEMP/x\""
+    );
+    let script = "sh -c 'mkdir '$RUNNER_TEMP'/x && read sha rest'";
+    assert_eq!(quote_run_line_env_paths(script), script);
 }
 
 #[test]
