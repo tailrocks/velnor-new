@@ -3,10 +3,20 @@
 use std::ffi::OsString;
 
 use velnor_actions_mise::{PinnedTool, PinnedToolExec, ToolCatalog};
-use velnor_actions_rust::{TaskGroup, TaskKind};
+use velnor_actions_rust::TaskGroup;
+use velnor_actions_rust::tasks::cargo_payload_argv;
 use velnor_actions_workflow_renderer::render::CandidateSpec;
 
 use crate::OrchestratorError;
+
+/// Staged path of the downloaded candidate binary under runner temp.
+pub(crate) const CANDIDATE_BINARY_PATH: &str = "$RUNNER_TEMP/velnor/candidate/velnor-actions";
+
+/// Directory receiving the artifact-executed generation check.
+pub(crate) const QUALIFY_OUTPUT_DIR: &str = "$RUNNER_TEMP/velnor/qualify-check";
+
+/// Payload fragments that prove a rebuild; qualify argv must avoid them all.
+const REBUILD_MARKERS: [&str; 5] = ["cargo", "mbx", "rustc", "mise", "build"];
 
 /// V1 fixed vector for one group: pinned `mise` payload plus kind args.
 pub(crate) fn task_argv(
@@ -17,20 +27,59 @@ pub(crate) fn task_argv(
     if group.compile_driver == "mbx" {
         tools.push(PinnedTool::MrBoxington);
     }
-    let manifest = manifest_for_key(&group.manifest_key);
-    let mut args: Vec<OsString> = Vec::new();
-    push_kind_args(&mut args, group, &manifest);
-    push_feature_args(&mut args, group);
-    if group.target != "host" {
-        args.push(OsString::from("--target"));
-        args.push(OsString::from(&group.target));
-    }
     let program = OsString::from("cargo");
-    let exec =
-        PinnedToolExec::new(tools, &program, args).map_err(|err| OrchestratorError::Contract {
+    let exec = PinnedToolExec::new(tools, &program, cargo_payload_argv(group)).map_err(|err| {
+        OrchestratorError::Contract {
             problem: err.to_string(),
-        })?;
+        }
+    })?;
     strings_of(exec.argv(catalog)).map_err(|problem| OrchestratorError::Contract { problem })
+}
+
+/// Typed candidate-qualification request: artifact execution, never a rebuild.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct QualifyRequest {
+    /// Downloaded candidate binary path (staged by download-artifact).
+    binary: String,
+    /// Scratch directory for the artifact-executed generation check.
+    output_dir: String,
+}
+
+impl QualifyRequest {
+    /// Fixed request over the staged candidate path.
+    pub(crate) fn staged() -> Self {
+        Self {
+            binary: CANDIDATE_BINARY_PATH.to_owned(),
+            output_dir: QUALIFY_OUTPUT_DIR.to_owned(),
+        }
+    }
+
+    /// Fixed qualify argv: artifact `plan` plus artifact `generate --check`.
+    ///
+    /// Runs the downloaded binary twice (plan, then a generation check
+    /// into scratch) without invoking any build tool. Rejects rebuilds.
+    pub(crate) fn argv(&self) -> Result<Vec<String>, OrchestratorError> {
+        let script = format!(
+            "{} plan && {} generate --output-dir {} && test -f {}/.github/workflows/velnor.yml",
+            self.binary, self.binary, self.output_dir, self.output_dir
+        );
+        let argv = vec!["sh".to_owned(), "-c".to_owned(), script];
+        Self::check_no_rebuild(&argv)?;
+        Ok(argv)
+    }
+
+    /// Reject any qualify vector that could rebuild the candidate.
+    pub(crate) fn check_no_rebuild(argv: &[String]) -> Result<(), OrchestratorError> {
+        for arg in argv {
+            let lower = arg.to_lowercase();
+            if REBUILD_MARKERS.iter().any(|mark| lower.contains(mark)) {
+                return Err(OrchestratorError::Contract {
+                    problem: format!("qualify_must_not_rebuild:{arg}"),
+                });
+            }
+        }
+        Ok(())
+    }
 }
 
 /// Fixed policy-job vector: a pinned `gh` version probe.
@@ -66,115 +115,12 @@ pub(crate) fn candidate_spec(catalog: &ToolCatalog) -> Result<CandidateSpec, Orc
     .map_err(|err| OrchestratorError::Contract {
         problem: err.to_string(),
     })?;
-    let cargo = OsString::from("cargo");
-    let qualify = PinnedToolExec::new(
-        vec![PinnedTool::Rust],
-        &cargo,
-        fixed(&[
-            "test",
-            "--locked",
-            "--offline",
-            "--package",
-            "velnor-actions-cli",
-        ]),
-    )
-    .map_err(|err| OrchestratorError::Contract {
-        problem: err.to_string(),
-    })?;
+    let qualify = QualifyRequest::staged().argv()?;
     Ok(CandidateSpec {
         build: strings_of(build.argv(catalog))
             .map_err(|problem| OrchestratorError::Contract { problem })?,
-        qualify: strings_of(qualify.argv(catalog))
-            .map_err(|problem| OrchestratorError::Contract { problem })?,
+        qualify,
     })
-}
-
-/// Append the per-kind fixed payload arguments.
-fn push_kind_args(args: &mut Vec<OsString>, group: &TaskGroup, manifest: &str) {
-    let flag = OsString::from;
-    match group.kind {
-        TaskKind::Fmt => {
-            args.extend([
-                flag("fmt"),
-                flag("--check"),
-                flag("--manifest-path"),
-                flag(manifest),
-            ]);
-        }
-        TaskKind::Clippy => {
-            args.extend([
-                flag("clippy"),
-                flag("--locked"),
-                flag("--offline"),
-                flag("--manifest-path"),
-                flag(manifest),
-            ]);
-            if !group.package_name.is_empty() {
-                args.extend([flag("--package"), flag(&group.package_name)]);
-            }
-            args.push(flag("--all-targets"));
-        }
-        TaskKind::Test => {
-            args.extend([flag("test"), flag("--locked"), flag("--offline")]);
-            push_manifest(args, manifest);
-            for target_flag in &group.target_flags {
-                args.push(flag(target_flag));
-            }
-        }
-        TaskKind::Nextest => {
-            args.extend([
-                flag("nextest"),
-                flag("run"),
-                flag("--locked"),
-                flag("--offline"),
-            ]);
-            push_manifest(args, manifest);
-        }
-        TaskKind::Doctest => {
-            args.extend([flag("test"), flag("--locked"), flag("--offline")]);
-            push_manifest(args, manifest);
-            args.push(flag("--doc"));
-        }
-        TaskKind::Doc => {
-            args.extend([flag("doc"), flag("--locked"), flag("--offline")]);
-            push_manifest(args, manifest);
-            args.push(flag("--no-deps"));
-        }
-        TaskKind::Build => {
-            args.extend([flag("build"), flag("--locked"), flag("--offline")]);
-            push_manifest(args, manifest);
-        }
-    }
-}
-
-/// Append `--manifest-path <manifest>`.
-fn push_manifest(args: &mut Vec<OsString>, manifest: &str) {
-    args.push(OsString::from("--manifest-path"));
-    args.push(OsString::from(manifest));
-}
-
-/// Append feature flags unless the group uses default features.
-fn push_feature_args(args: &mut Vec<OsString>, group: &TaskGroup) {
-    if group.kind == TaskKind::Fmt {
-        return;
-    }
-    if group.features.len() == 1 && group.features[0] == "default" {
-        return;
-    }
-    args.push(OsString::from("--no-default-features"));
-    if !group.features.is_empty() {
-        args.push(OsString::from("--features"));
-        args.push(OsString::from(group.features.join(",")));
-    }
-}
-
-/// Manifest path for a manifest key.
-fn manifest_for_key(key: &str) -> String {
-    if key == "root" {
-        "Cargo.toml".to_owned()
-    } else {
-        format!("{key}/Cargo.toml")
-    }
 }
 
 /// Build a fixed argument list.
@@ -192,4 +138,39 @@ fn strings_of(argv: Vec<OsString>) -> Result<Vec<String>, String> {
         }
     }
     Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn qualify_runs_artifact_without_rebuild_markers() {
+        let argv = QualifyRequest::staged()
+            .argv()
+            .map_err(|err| err.to_string());
+        assert!(argv.as_ref().is_ok_and(|argv| argv[0] == "sh"));
+        assert!(argv.is_ok_and(|argv| {
+            argv[2].contains("plan")
+                && argv[2].contains("generate")
+                && QualifyRequest::check_no_rebuild(&argv).is_ok()
+        }));
+    }
+
+    #[test]
+    fn qualify_rebuild_attempt_rejected() {
+        for bad in [
+            "cargo test",
+            "mbx build",
+            "rustc x",
+            "mise exec",
+            "rebuild all",
+        ] {
+            let err = QualifyRequest::check_no_rebuild(&["sh".to_owned(), bad.to_owned()]);
+            assert!(
+                err.is_err_and(|err| err.to_string().contains("must_not_rebuild")),
+                "{bad}"
+            );
+        }
+    }
 }

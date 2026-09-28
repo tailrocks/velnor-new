@@ -9,12 +9,13 @@ use velnor_actions_contract::{
 use velnor_actions_mise::{MetadataDiscovery, MiseError, ToolCatalog};
 use velnor_actions_rust::{
     CandidateOutcome, DeriveInputs, DetectionStatus, FileIndex, Recommendation,
-    RustExecutionProfile, TaskGroup, TaskKind, WorkspaceRecord, apply_stack_ignores, build_index,
+    RustExecutionProfile, TaskGroup, TaskKind, WorkspaceRecord, apply_stack_ignores,
     check_candidate_outcomes, check_duplicates, dedupe_workspaces, derive_task_groups,
     derive_workspace_fmt, discover_candidates, parse_metadata_json, to_detected_projects,
 };
 
 use crate::OrchestratorError;
+use crate::discover_index::build_file_index;
 use crate::evidence::profile_for_workspace;
 
 /// One workspace with its inventory, profile, and recommendations.
@@ -28,6 +29,10 @@ pub struct PlannedWorkspace {
     pub recommendations: Vec<Recommendation>,
 }
 
+/// Debug-only consumer-manifest fixture filename under `.velnor`.
+#[cfg(debug_assertions)]
+const RELEASE_MANIFEST_REL: &str = ".velnor/release-manifest.json";
+
 /// Full detection output feeding planning and rendering.
 #[derive(Debug, Clone)]
 pub struct Discovery {
@@ -39,6 +44,8 @@ pub struct Discovery {
     pub task_groups: Vec<TaskGroup>,
     /// Sorted unique recommendations.
     pub recommendations: Vec<String>,
+    /// Debug-only release-manifest text; always `None` in release builds.
+    pub consumer_manifest_json: Option<String>,
 }
 
 /// Run file index, detection, inventory, profiles, and task derivation.
@@ -48,11 +55,7 @@ pub struct Discovery {
 /// Returns discovery, detection, inventory, profile, preparation, or
 /// contract errors when any stage fails.
 pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, OrchestratorError> {
-    let index = build_index(root, &config.discovery.exclude).map_err(|err| {
-        OrchestratorError::Discovery {
-            problem: err.to_string(),
-        }
-    })?;
+    let index = build_file_index(root, &config.discovery.exclude)?;
     let candidates = discover_candidates(&index);
     let projects = to_detected_projects(&candidates);
     check_duplicates(&projects).map_err(|err| OrchestratorError::Detection {
@@ -73,7 +76,50 @@ pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, 
         workspaces,
         task_groups,
         recommendations,
+        consumer_manifest_json: debug_manifest_fixture(root),
     })
+}
+
+/// Debug-only manifest fixture; release builds never read the file.
+///
+/// Integration tests link the non-`cfg(test)` library, so the fixture
+/// cannot enter through `cfg(test)`. Debug builds read the explicit
+/// `.velnor/release-manifest.json` file when present and otherwise fall
+/// back to an embedded `example.invalid` fixture (also debug-only), so
+/// debug source builds stay usable for tests while release builds (the
+/// only shippable artifacts, built with `--release`) have no injection
+/// path and fail consumer generation without baked provenance.
+#[cfg(debug_assertions)]
+#[expect(clippy::unnecessary_wraps, reason = "release twin returns None")]
+fn debug_manifest_fixture(root: &Path) -> Option<String> {
+    if let Ok(text) = std::fs::read_to_string(root.join(RELEASE_MANIFEST_REL)) {
+        return Some(text);
+    }
+    let sha = "a".repeat(64);
+    let targets = [
+        "x86_64-unknown-linux-gnu",
+        "aarch64-apple-darwin",
+        "x86_64-apple-darwin",
+    ]
+    .iter()
+    .map(|target| {
+        format!(
+            "\"target\":\"{target}\",\"artifact\":\"https://example.invalid/r/{target}\",\"sha256\":\"{sha}\""
+        )
+    })
+    .map(|record| format!("{{{record}}}"))
+    .collect::<Vec<_>>()
+    .join(",");
+    let version = env!("CARGO_PKG_VERSION");
+    Some(format!(
+        "{{\"schema\":1,\"version\":\"{version}\",\"repository\":\"tailrocks/velnor-new\",\"targets\":[{targets}]}}"
+    ))
+}
+
+/// Release builds have no manifest injection path.
+#[cfg(not(debug_assertions))]
+fn debug_manifest_fixture(_root: &Path) -> Option<String> {
+    None
 }
 
 /// Sorted local dependency display names for one package.

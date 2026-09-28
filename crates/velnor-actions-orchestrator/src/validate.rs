@@ -3,11 +3,19 @@
 use std::ffi::OsString;
 use std::path::Path;
 
+use velnor_actions_contract::GeneratorLock;
+use velnor_actions_mise::catalog::lock::{load_text, parse_generator_lock, verify_version_policy};
 use velnor_actions_mise::{PinnedTool, PinnedToolExec, ProcessOutput, ToolCatalog};
 use velnor_actions_workflow_renderer::render::RenderedTree;
 
 use crate::OrchestratorError;
 use crate::generate::write_tree;
+
+/// Velnor-repository-only bootstrap lock (never read for consumers).
+const GENERATOR_LOCK_REL: &str = ".velnor/generator.lock";
+
+/// Velnor-repository-only version-policy mirror (never read for consumers).
+const VERSION_POLICY_REL: &str = ".velnor/version-policy.toml";
 
 /// Staged actionlint config consumed via `-config-file`.
 const ACTIONLINT_CONFIG: &str = ".github/actionlint.yaml";
@@ -40,6 +48,37 @@ pub(crate) fn validate_staged(tree: &RenderedTree) -> Result<Vec<String>, Orches
     ];
     validated.sort();
     Ok(validated)
+}
+
+/// Verify Velnor-repository bootstrap files; return the lock when present.
+///
+/// Fails when the version-policy mirror differs from the compiled catalog
+/// or when the lock is malformed. Missing files are skipped (pre-seed
+/// trust-on-review); the plan job then carries no Acquire step. Consumer
+/// generation never calls this: it must not read either file.
+pub(crate) fn verify_velnor_repository_files(
+    root: &Path,
+) -> Result<Option<GeneratorLock>, OrchestratorError> {
+    let catalog = ToolCatalog::pinned();
+    let policy = root.join(VERSION_POLICY_REL);
+    if policy.is_file() {
+        let text = load_text(&policy).map_err(contract_of)?;
+        verify_version_policy(&text, &catalog).map_err(contract_of)?;
+    }
+    let lock_path = root.join(GENERATOR_LOCK_REL);
+    if !lock_path.is_file() {
+        return Ok(None);
+    }
+    let text = load_text(&lock_path).map_err(contract_of)?;
+    parse_generator_lock(&text).map(Some).map_err(contract_of)
+}
+
+/// Map a lock failure onto the contract error channel.
+#[expect(clippy::needless_pass_by_value, reason = "map_err passes owned errors")]
+fn contract_of(err: impl ToString) -> OrchestratorError {
+    OrchestratorError::Contract {
+        problem: err.to_string(),
+    }
 }
 
 /// Staged workflow files, sorted; empty is a fail-closed error.

@@ -16,6 +16,31 @@ pub(crate) type TestResult = Result<(), Box<dyn std::error::Error>>;
 /// Snapshot map shortcut.
 pub(crate) type Snapshot = BTreeMap<String, (Vec<u8>, SystemTime)>;
 
+/// Release-manifest fixture for consumer generation tests.
+///
+/// Debug builds read `.velnor/release-manifest.json` as the provenance
+/// fixture; release binaries never read it and accept baked provenance
+/// alone. Every fixture repo carries it so consumer `prepare` succeeds.
+pub(crate) fn fixture_manifest_json() -> String {
+    let targets = [
+        "x86_64-unknown-linux-gnu",
+        "aarch64-apple-darwin",
+        "x86_64-apple-darwin",
+    ]
+    .iter()
+    .map(|target| {
+        format!(
+            "{{\"target\":\"{target}\",\"artifact\":\"https://example.invalid/r/{target}\",\"sha256\":\"{}\"}}",
+            "a".repeat(64)
+        )
+    })
+    .collect::<Vec<_>>()
+    .join(",");
+    format!(
+        "{{\"schema\":1,\"version\":\"0.1.0\",\"repository\":\"tailrocks/velnor-new\",\"targets\":[{targets}]}}"
+    )
+}
+
 /// Build a git fixture: config plus one root crate (uncommitted).
 pub(crate) fn make_repo(config: &str) -> Result<TempDir, Box<dyn std::error::Error>> {
     let dir = TempDir::new()?;
@@ -26,6 +51,10 @@ pub(crate) fn make_repo(config: &str) -> Result<TempDir, Box<dyn std::error::Err
     git(&["config", "commit.gpgsign", "false"], root)?;
     fs::create_dir_all(root.join(".velnor"))?;
     fs::write(root.join(".velnor/config.toml"), config)?;
+    fs::write(
+        root.join(".velnor/release-manifest.json"),
+        fixture_manifest_json(),
+    )?;
     fs::write(
         root.join("Cargo.toml"),
         "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",

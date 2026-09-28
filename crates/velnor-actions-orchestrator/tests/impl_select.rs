@@ -7,7 +7,7 @@ use tempfile::TempDir;
 use velnor_actions_contract::Plan;
 use velnor_actions_orchestrator::plan_internal;
 
-use crate::impl_common::{TestResult, config_with_branch, git, git_line};
+use crate::impl_common::{TestResult, config_with_branch, fixture_manifest_json, git, git_line};
 
 /// Two-member workspace fixture; root package included when asked.
 fn make_ws_repo(root_package: bool) -> Result<TempDir, Box<dyn std::error::Error>> {
@@ -19,6 +19,10 @@ fn make_ws_repo(root_package: bool) -> Result<TempDir, Box<dyn std::error::Error
     git(&["config", "commit.gpgsign", "false"], root)?;
     fs::create_dir_all(root.join(".velnor"))?;
     fs::write(root.join(".velnor/config.toml"), config_with_branch())?;
+    fs::write(
+        root.join(".velnor/release-manifest.json"),
+        fixture_manifest_json(),
+    )?;
     let header = if root_package {
         "[package]\nname = \"rootpkg\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n"
     } else {

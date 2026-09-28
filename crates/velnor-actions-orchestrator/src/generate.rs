@@ -3,12 +3,15 @@
 use std::path::{Path, PathBuf};
 
 use velnor_actions_actionlint::render_actionlint_yaml;
+use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_workflow_renderer::guard::{self, SafeTreePath};
 use velnor_actions_workflow_renderer::render::{RenderedTree, render_tree, render_workflow_ir};
+use velnor_actions_workflow_renderer::steps::rehead_actionlint_marker;
 
 use crate::OrchestratorError;
 use crate::prepare::GenerationPreparation;
-use crate::validate::validate_staged;
+use crate::validate::{validate_staged, verify_velnor_repository_files};
+use crate::workflow::attach_lock_acquire;
 
 /// Options for [`generate`].
 #[derive(Debug, Clone, Default)]
@@ -42,7 +45,18 @@ pub fn generate(
     prep: &GenerationPreparation,
     opts: &GenerateOptions,
 ) -> Result<GenerateReport, OrchestratorError> {
-    let tree = render_all(prep)?;
+    let mut owned = prep.clone();
+    if prep.config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1
+        && let Some(lock) = verify_velnor_repository_files(&prep.root)?
+    {
+        attach_lock_acquire(
+            &mut owned.workflow.ir,
+            &lock,
+            &prep.runner_label,
+            env!("CARGO_PKG_VERSION"),
+        )?;
+    }
+    let tree = render_all(&owned)?;
     check_tree_paths(&tree)?;
     let validated_by = validate_staged(&tree)?;
     match &opts.output_dir {
@@ -66,23 +80,8 @@ fn render_all(prep: &GenerationPreparation) -> Result<RenderedTree, Orchestrator
         &prep.workflow.context,
     )?;
     let actionlint = render_actionlint_yaml(&prep.workflow.actionlint)?;
-    let actionlint = rehead_marker(&actionlint.yaml, version)?;
+    let actionlint = rehead_actionlint_marker(&actionlint.yaml, version)?;
     Ok(render_tree(&workflow, &actionlint, version)?)
-}
-
-/// Replace the actionlint header line with the renderer marker.
-///
-/// The actionlint adapter emits its own header comment while the renderer
-/// requires its exact marker on every tree file; the composition boundary
-/// normalizes the first line only and passes the body through untouched.
-fn rehead_marker(actionlint_yaml: &str, version: &str) -> Result<String, OrchestratorError> {
-    let Some((_, body)) = actionlint_yaml.split_once('\n') else {
-        return Err(OrchestratorError::Render {
-            problem: "actionlint_without_header".to_owned(),
-        });
-    };
-    let marker = velnor_actions_workflow_renderer::marker::marker_for_version(version)?;
-    Ok(format!("{marker}\n{body}"))
 }
 
 /// Validate every rendered path lexically plus symlink-prefix probing.

@@ -364,6 +364,7 @@ mod tests {
             }],
             task_groups: Vec::new(),
             recommendations: Vec::new(),
+            consumer_manifest_json: None,
         }
     }
 

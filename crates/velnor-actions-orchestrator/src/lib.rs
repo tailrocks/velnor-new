@@ -8,6 +8,7 @@
 mod config;
 mod cover;
 mod discover;
+mod discover_index;
 mod error;
 mod evidence;
 mod generate;
@@ -21,6 +22,7 @@ mod select;
 mod validate;
 mod vectors;
 mod workflow;
+mod workflow_jobs;
 
 pub use discover::{Discovery, PlannedWorkspace};
 pub use error::OrchestratorError;

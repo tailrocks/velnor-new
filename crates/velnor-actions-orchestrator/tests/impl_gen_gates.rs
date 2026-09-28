@@ -7,7 +7,9 @@ use std::path::Path;
 use tempfile::TempDir;
 use velnor_actions_orchestrator::{GenerateOptions, generate, plan_internal, prepare};
 
-use crate::impl_common::{TestResult, config_with_branch, err_of, git, make_repo, snapshot};
+use crate::impl_common::{
+    TestResult, config_with_branch, err_of, fixture_manifest_json, git, make_repo, snapshot,
+};
 
 /// Render `generate` into a fresh preview and read every file's bytes.
 fn preview_bytes(root: &Path) -> Result<BTreeMap<String, Vec<u8>>, Box<dyn std::error::Error>> {
@@ -97,6 +99,10 @@ fn make_wide_repo(members: u32) -> Result<TempDir, Box<dyn std::error::Error>> {
         format!(
             "schema = 1\n[workflow]\ndefault_branch = \"testmain\"\n[stacks.rust]\nconfigurations = [{configs}]\n"
         ),
+    )?;
+    fs::write(
+        root.join(".velnor/release-manifest.json"),
+        fixture_manifest_json(),
     )?;
     let member_list = (0..members)
         .map(|index| format!("\"members/m{index:02}\""))

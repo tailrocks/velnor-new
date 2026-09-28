@@ -80,6 +80,10 @@ exec \"$VELNOR_REAL_MISE\" \"$@\"
             "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n",
         )?;
         fs::write(
+            root.join(".velnor/release-manifest.json"),
+            manifest_fixture(),
+        )?;
+        fs::write(
             root.join("Cargo.toml"),
             "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
         )?;
@@ -127,6 +131,27 @@ exec \"$VELNOR_REAL_MISE\" \"$@\"
         assert!(!preview_root.exists(), "no partial preview write");
         assert_eq!(before, content(root)?, "failed preview writes nothing");
         Ok(())
+    }
+
+    /// Debug-only consumer-manifest fixture for the scrubbed repo.
+    fn manifest_fixture() -> String {
+        let targets = [
+            "x86_64-unknown-linux-gnu",
+            "aarch64-apple-darwin",
+            "x86_64-apple-darwin",
+        ]
+        .iter()
+        .map(|target| {
+            format!(
+                "{{\"target\":\"{target}\",\"artifact\":\"https://example.invalid/r/{target}\",\"sha256\":\"{}\"}}",
+                "a".repeat(64)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+        format!(
+            "{{\"schema\":1,\"version\":\"0.1.0\",\"repository\":\"tailrocks/velnor-new\",\"targets\":[{targets}]}}"
+        )
     }
 
     /// Real `mise` resolved before the fake shadows it.

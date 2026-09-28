@@ -9,7 +9,8 @@ use velnor_actions_orchestrator::{
 };
 
 use crate::impl_common::{
-    TestResult, config_with_branch, err_of, git, make_repo, passing_reports, plan_for_source_change,
+    TestResult, config_with_branch, err_of, fixture_manifest_json, git, make_repo, passing_reports,
+    plan_for_source_change,
 };
 
 #[test]
@@ -97,6 +98,10 @@ fn default_branch_prefers_config_then_origin_head() -> TestResult {
     )?;
     fs::create_dir_all(clone_path.join(".velnor"))?;
     fs::write(clone_path.join(".velnor/config.toml"), "schema = 1\n")?;
+    fs::write(
+        clone_path.join(".velnor/release-manifest.json"),
+        fixture_manifest_json(),
+    )?;
     fs::write(
         clone_path.join("Cargo.toml"),
         "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
@@ -292,13 +297,23 @@ fn runner_label_exact_match_at_prepare() -> TestResult {
             "{label}: got {err}"
         );
     }
-    for label in ["ubuntu-22.04", "ubuntu-24.04-arm", "ubuntu-26.04-arm"] {
+    let repo = make_repo(
+        "schema = 1\n[workflow]\ndefault_branch = \"testmain\"\nrunner_label = \"ubuntu-22.04\"\n",
+    )?;
+    let prep = prepare(repo.path())?;
+    assert_eq!(prep.runner_label, "ubuntu-22.04");
+    assert_eq!(prep.runner_selection, RunnerSelection::ConfigOverride);
+    // Gate 8: `-arm` labels have no supported release target, so consumer
+    // generation fails rather than embedding a wrong-architecture asset.
+    for label in ["ubuntu-24.04-arm", "ubuntu-26.04-arm"] {
         let repo = make_repo(&format!(
             "schema = 1\n[workflow]\ndefault_branch = \"testmain\"\nrunner_label = \"{label}\"\n"
         ))?;
-        let prep = prepare(repo.path())?;
-        assert_eq!(prep.runner_label, label);
-        assert_eq!(prep.runner_selection, RunnerSelection::ConfigOverride);
+        let err = err_of(prepare(repo.path()), "arm label rejected")?;
+        assert!(
+            err.to_string().contains("unsupported_target_for_runner"),
+            "{label}: got {err}"
+        );
     }
     let repo = make_repo(config_with_branch())?;
     let prep = prepare(repo.path())?;
