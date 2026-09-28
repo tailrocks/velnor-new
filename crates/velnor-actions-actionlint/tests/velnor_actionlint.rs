@@ -7,5 +7,7 @@ mod impl_actionlint_actions;
 mod impl_actionlint_caps;
 #[path = "impl_actionlint_config.rs"]
 mod impl_actionlint_config;
+#[path = "impl_actionlint_lint.rs"]
+mod impl_actionlint_lint;
 #[path = "impl_actionlint_tools.rs"]
 mod impl_actionlint_tools;

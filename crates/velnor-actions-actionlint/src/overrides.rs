@@ -5,7 +5,8 @@
 
 use crate::ActionlintError;
 use crate::actions::{
-    ALINT_ACTION, ALLOWED_ACTIONS, PinnedActionRef, is_full_sha, is_version_tag, split_key,
+    ALINT_ACTION, ALLOWED_ACTIONS, CHECKOUT_ACTION, PinnedActionRef, is_full_sha, is_version_tag,
+    split_key,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -147,6 +148,19 @@ impl ActionInputSchema {
             .chain(self.optional.iter())
             .cloned()
             .collect()
+    }
+}
+
+/// Canonical input schema for the no-credentials checkout step.
+///
+/// `persist-credentials` is required (always `false` in generated
+/// jobs); `ref` and `fetch-depth` are the only other accepted inputs.
+#[must_use]
+pub fn checkout_inputs_schema() -> ActionInputSchema {
+    ActionInputSchema {
+        action: CHECKOUT_ACTION.to_owned(),
+        required: vec!["persist-credentials".to_owned()],
+        optional: vec!["ref".to_owned(), "fetch-depth".to_owned()],
     }
 }
 

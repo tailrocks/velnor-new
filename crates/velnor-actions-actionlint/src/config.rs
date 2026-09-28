@@ -116,6 +116,8 @@ pub struct ActionlintConfigOutput {
     pub yaml: String,
     /// Validated narrow ignores, sorted by `(path, rule)`.
     pub approved_ignores: Vec<IgnoreEntry>,
+    /// Whether the bytes carry the runner-label bridge block.
+    pub runner_bridge_emitted: bool,
 }
 
 /// Render deterministic actionlint config bytes from typed input.
@@ -136,6 +138,7 @@ pub fn render_actionlint_yaml(
     Ok(ActionlintConfigOutput {
         yaml,
         approved_ignores: approved,
+        runner_bridge_emitted: input.capabilities.requires_runner_label_bridge(),
     })
 }
 

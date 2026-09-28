@@ -20,6 +20,9 @@ pub const ALLOWED_ACTIONS: [&str; 8] = [
 /// Action key holding the sole mutable-tag exception.
 pub const ALINT_ACTION: &str = "asamarts/alint";
 
+/// Action key for the no-credentials checkout every job embeds.
+pub const CHECKOUT_ACTION: &str = "actions/checkout";
+
 /// Reviewed Alint tag; changing it is a version-policy update, not config.
 /// Sole spec-blessed mutable-tag exception (`docs/proposed/version-policy.md` §2).
 /// Source: `https://api.github.com/repos/asamarts/alint/releases/latest`; checked 2026-09-28.
@@ -107,6 +110,21 @@ impl PinnedActionRef {
         }
     }
 
+    /// Canonical qualified checkout ref for job `uses:` values.
+    ///
+    /// Binds [`CHECKOUT_ACTION_SHA`] to [`CHECKOUT_ACTION_VERSION`] so
+    /// emitters never hand-write the pin. Valid by construction.
+    #[must_use]
+    pub fn checkout() -> Self {
+        Self {
+            repo: CHECKOUT_ACTION.to_owned(),
+            path: None,
+            sha: Some(CHECKOUT_ACTION_SHA.to_owned()),
+            version_comment: CHECKOUT_ACTION_VERSION.to_owned(),
+            tag_exception: false,
+        }
+    }
+
     /// Full action key: `repo` plus optional `/path`.
     #[must_use]
     pub fn uses_key(&self) -> String {
@@ -116,18 +134,23 @@ impl PinnedActionRef {
         }
     }
 
-    /// Render the deterministic `uses:` line with version comment.
+    /// Bare `key@ref` value carried by `StepKind::Action` payloads.
+    ///
+    /// Comment-free: the renderer emits this verbatim as the `uses:`
+    /// scalar, so emitters must pass it through unmodified.
     #[must_use]
-    pub fn render_uses(&self) -> String {
+    pub fn uses_value(&self) -> String {
         let reference = self
             .sha
             .clone()
             .unwrap_or_else(|| ALINT_REVIEWED_TAG.to_owned());
-        format!(
-            "uses: {}@{reference} # {}",
-            self.uses_key(),
-            self.version_comment
-        )
+        format!("{}@{reference}", self.uses_key())
+    }
+
+    /// Render the deterministic `uses:` line with version comment.
+    #[must_use]
+    pub fn render_uses(&self) -> String {
+        format!("uses: {} # {}", self.uses_value(), self.version_comment)
     }
 
     /// Parse `repo[/path]@ref` with an expected version comment.

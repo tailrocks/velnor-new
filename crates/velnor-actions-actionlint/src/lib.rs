@@ -14,7 +14,9 @@ pub mod overrides;
 pub mod tools;
 pub mod zizmor;
 
-pub use actions::{ALINT_ACTION, ALINT_REVIEWED_TAG, ALLOWED_ACTIONS, PinnedActionRef};
+pub use actions::{
+    ALINT_ACTION, ALINT_REVIEWED_TAG, ALLOWED_ACTIONS, CHECKOUT_ACTION, PinnedActionRef,
+};
 pub use capabilities::{ACTIONLINT_VERSION, ActionlintCapabilities, StepSyntax};
 pub use config::{
     ActionlintConfigInput, ActionlintConfigOutput, IgnoreEntry, IgnorePolicy, RUNNER_LABEL_BRIDGE,
@@ -22,7 +24,8 @@ pub use config::{
 };
 pub use error::ActionlintError;
 pub use overrides::{
-    ActionInputSchema, ActionPinOverride, ApprovedPin, ApprovedPinCatalog, validate_action_inputs,
+    ActionInputSchema, ActionPinOverride, ApprovedPin, ApprovedPinCatalog, checkout_inputs_schema,
+    validate_action_inputs,
 };
 pub use tools::{
     ActionlintToolchain, SHELLCHECK_VERSION, ShellcheckToolchain, WorkflowLintTools,
