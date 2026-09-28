@@ -2,14 +2,15 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use velnor_actions_contract::{
     CandidateReport, FinalCounts, FinalReport, FinalStatus, MatrixEntry, MatrixReport,
-    ObligationDecision, Plan, PlanMatrix, RequiredJobResult, canonical_json_bytes,
+    ObligationDecision, Plan, PlanMatrix, RequiredJobResult, canonical_json_bytes, digest_b3,
     final_report_id_for_run, validate_run_key,
 };
 
 use crate::OrchestratorError;
+use crate::cover::shard::{ResourceLimits, ShardProof, check_entry_shards, validate_budgets};
 use crate::cover::{Fold, Signals, cover_entry, partition_reports};
 use crate::internal::{SCHEMA, check_schema, internal, internal_contract};
 
@@ -33,6 +34,69 @@ pub(crate) struct MergeRequest {
     /// Candidate report when candidate validation ran.
     #[serde(default)]
     candidate: Option<CandidateReport>,
+    /// Trusted baseline manifest for coverage revalidation.
+    #[serde(default)]
+    baseline_manifest: Option<BaselineManifest>,
+    /// Shard proofs for partitioned test entries.
+    #[serde(default)]
+    shard_proofs: Vec<ShardProof>,
+    /// Configured resource limits revalidated here.
+    #[serde(default)]
+    limits: Option<ResourceLimits>,
+    /// Sequential-reference obligation set.
+    #[serde(default)]
+    reference_task_ids: Option<Vec<String>>,
+}
+
+/// One trusted-baseline task proof: identities plus provenance run IDs.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct BaselineTaskEntry {
+    /// Covered task ID.
+    pub(crate) task_id: String,
+    /// Covered task digest.
+    pub(crate) task_digest: String,
+    /// Covered input digest.
+    pub(crate) input_digest: String,
+    /// Original direct-execution proof run.
+    pub(crate) proof_run_id: u64,
+    /// Carrying run that revalidated the proof.
+    pub(crate) observed_run_id: u64,
+}
+
+/// Trusted `baseline.json`: minimum shape plus artifact binding.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct BaselineManifest {
+    /// Manifest schema; must be 1.
+    pub(crate) schema: u32,
+    /// Repository identity digest.
+    pub(crate) repository_id: String,
+    /// Exact trusted source commit.
+    pub(crate) source_commit: String,
+    /// Protected ref under test.
+    #[serde(rename = "ref")]
+    pub ref_: String,
+    /// Protected event; must be `push`.
+    pub(crate) event: String,
+    /// Protected workflow ref.
+    pub(crate) workflow_ref: String,
+    /// Proof run ID.
+    pub(crate) run_id: u64,
+    /// Proof run attempt.
+    pub(crate) run_attempt: u64,
+    /// Final result; must be `passed`.
+    pub(crate) final_status: String,
+    /// Generator version.
+    pub(crate) generator_version: String,
+    /// Generator SHA-256.
+    pub generator_sha256: String,
+    /// Compatibility identity.
+    pub(crate) compatibility_id: String,
+    /// Numeric baseline artifact ID.
+    pub(crate) artifact_id: u64,
+    /// Derived baseline artifact name.
+    pub(crate) artifact_name: String,
+    /// Per-task proofs.
+    pub(crate) tasks: Vec<BaselineTaskEntry>,
 }
 
 /// Aggregate matrix reports into the final gate report (schema-1 JSON).
@@ -81,6 +145,7 @@ fn build_final(request: &MergeRequest) -> Result<FinalReport, OrchestratorError>
     let mut signals = Signals::default();
     check_agreement(request, &mut signals)?;
     check_plan_shape(request, &mut signals);
+    check_plan_evidence(request, &mut signals);
     let entries = plan_entries(request);
     let obligations = plan_digests(request);
     let partition = partition_reports(request, &entries, &mut signals);
@@ -94,6 +159,11 @@ fn build_final(request: &MergeRequest) -> Result<FinalReport, OrchestratorError>
             signals.not_run = true;
             continue;
         };
+        if shards_failed(entry, report.empty_partition, request) {
+            signals.planning_failed = true;
+            uncovered += 1;
+            continue;
+        }
         if cover_entry(
             request,
             entry,
@@ -135,6 +205,46 @@ fn build_final(request: &MergeRequest) -> Result<FinalReport, OrchestratorError>
     })
 }
 
+/// Revalidate planner coverage claims against the trusted manifest.
+pub(crate) fn revalidate_coverage(
+    plan: &Plan,
+    manifest: Option<&BaselineManifest>,
+    signals: &mut Signals,
+) {
+    let covered: Vec<&velnor_actions_contract::PlanObligation> = plan
+        .obligations
+        .iter()
+        .filter(|ob| ob.decision == ObligationDecision::CoveredByTrustedBaseline)
+        .collect();
+    if covered.is_empty() {
+        return;
+    }
+    let Some(manifest) = manifest else {
+        signals.planning_failed = true;
+        return;
+    };
+    for obligation in covered {
+        let Some(proof) = &obligation.baseline_proof else {
+            signals.planning_failed = true;
+            continue;
+        };
+        let hit = manifest
+            .tasks
+            .iter()
+            .find(|task| task.task_id == obligation.task_id);
+        match hit {
+            Some(task)
+                if task.task_digest == obligation.task_digest
+                    && task.input_digest == obligation.input_digest
+                    && proof.run_id == task.proof_run_id
+                    && proof.artifact_name == manifest.artifact_name
+                    && proof.manifest_digest
+                        == digest_b3(&canonical_json_bytes(manifest).unwrap_or_default()) => {}
+            _ => signals.planning_failed = true,
+        }
+    }
+}
+
 /// Check 1: `matrix.json` agrees byte-for-byte with the plan matrix.
 fn check_agreement(request: &MergeRequest, signals: &mut Signals) -> Result<(), OrchestratorError> {
     let plan_bytes = canonical_json_bytes(&request.plan.matrix).map_err(internal_contract)?;
@@ -161,6 +271,64 @@ fn plan_entries(request: &MergeRequest) -> BTreeMap<&str, &MatrixEntry> {
         .iter()
         .map(|entry| (entry.report_id.as_str(), entry))
         .collect()
+}
+
+/// Compare the planned obligation set with the sequential reference.
+fn reference_matches(reference: &[String], planned: &[String]) -> bool {
+    let mut left = reference.to_vec();
+    let mut right = planned.to_vec();
+    left.sort();
+    right.sort();
+    left == right
+}
+
+/// Revalidate planner coverage, limits, and reference obligations.
+fn check_plan_evidence(request: &MergeRequest, signals: &mut Signals) {
+    revalidate_coverage(&request.plan, request.baseline_manifest.as_ref(), signals);
+    if request
+        .limits
+        .as_ref()
+        .is_some_and(|limits| validate_budgets(limits).is_err())
+    {
+        signals.planning_failed = true;
+    }
+    if request
+        .reference_task_ids
+        .as_ref()
+        .is_some_and(|reference| !reference_matches(reference, &request.plan.task_ids))
+    {
+        signals.planning_failed = true;
+    }
+}
+
+/// True when an entry's shard proofs fail validation.
+fn shards_failed(entry: &MatrixEntry, empty: u32, request: &MergeRequest) -> bool {
+    let bases = sharded_bases(entry);
+    if bases.is_empty() {
+        return false;
+    }
+    let mut inputs = BTreeMap::new();
+    for ob in &request.plan.obligations {
+        inputs.insert(ob.task_id.clone(), ob.input_digest.clone());
+    }
+    check_entry_shards(&bases, empty, &request.shard_proofs, &inputs).is_err()
+}
+
+/// Base task IDs carrying shard suffixes in one entry.
+fn sharded_bases(entry: &MatrixEntry) -> BTreeSet<String> {
+    let mut bases = BTreeSet::new();
+    for task_ref in entry.execute_task_ids.tasks.values() {
+        let ids = match task_ref {
+            velnor_actions_contract::ExecuteTaskRef::Single(id) => std::slice::from_ref(id),
+            velnor_actions_contract::ExecuteTaskRef::Shards(ids) => ids.as_slice(),
+        };
+        for id in ids {
+            if let Some((base, _)) = id.split_once("/shard-") {
+                bases.insert(base.to_owned());
+            }
+        }
+    }
+    bases
 }
 
 /// Obligation task digests keyed by task ID.

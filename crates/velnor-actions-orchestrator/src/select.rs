@@ -20,9 +20,12 @@ pub(crate) fn select_groups<'a>(
     warnings: &mut Vec<String>,
 ) -> Vec<&'a TaskGroup> {
     let all: Vec<&TaskGroup> = discovery.task_groups.iter().collect();
-    let narrow = event == WorkflowEvent::PullRequest && base.is_some();
-    if !narrow {
-        if event == WorkflowEvent::PullRequest {
+    let narrows = matches!(
+        event,
+        WorkflowEvent::PullRequest | WorkflowEvent::MergeGroup
+    );
+    if !(narrows && base.is_some()) {
+        if narrows {
             warnings.push("comparison_unavailable:missing_base:selecting_all".to_owned());
         }
         return all;

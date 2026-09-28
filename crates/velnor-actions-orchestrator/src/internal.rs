@@ -14,7 +14,9 @@ use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_rust::TaskGroup;
 
 use crate::OrchestratorError;
+use crate::cover::apply_baseline;
 use crate::discover::Discovery;
+use crate::merge::BaselineManifest;
 use crate::prepare::prepare;
 use crate::select::select_groups;
 use crate::vectors::task_argv;
@@ -45,6 +47,9 @@ struct PlanRequest {
     /// Generator identity override.
     #[serde(default)]
     generator: Option<PlanGenerator>,
+    /// Trusted baseline evidence for coverage classification.
+    #[serde(default)]
+    baseline_manifest: Option<serde_json::Value>,
 }
 
 /// `plan-v1` response: schema plus plan and matrix copies.
@@ -86,7 +91,7 @@ pub fn plan_internal(request_json: &str) -> Result<String, OrchestratorError> {
         &prep.discovery,
         &mut warnings,
     );
-    let plan = build_plan(
+    let mut plan = build_plan(
         &request,
         &prep.discovery,
         &selected,
@@ -94,6 +99,23 @@ pub fn plan_internal(request_json: &str) -> Result<String, OrchestratorError> {
         prep.runner_selection,
         &catalog,
         warnings,
+    )?;
+    let manifest = request.baseline_manifest.and_then(|value| {
+        serde_json::from_value::<BaselineManifest>(value)
+            .inspect_err(|_| {
+                plan.warnings
+                    .push("baseline_miss:malformed_manifest".to_owned());
+            })
+            .ok()
+    });
+    apply_baseline(
+        &mut plan,
+        request.event,
+        &prep.default_branch,
+        &prep.root,
+        velnor_actions_workflow_renderer::render::WORKFLOW_PATH,
+        &catalog,
+        manifest,
     )?;
     plan.validate().map_err(internal_contract)?;
     check_matrix_budget(&plan.matrix)?;
