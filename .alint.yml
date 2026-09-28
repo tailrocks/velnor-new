@@ -1,0 +1,30 @@
+# Velnor repository policy, enforced by asamarts/alint as its own CI job.
+# Gate 0 skeleton: generic file/path placement, required files, and
+# line-count rules ONLY. No dependency-architecture, Rust-syntax, or
+# test-layout claims (Alint cannot inspect those; see rust-quality-contract).
+# NOTE: validate this schema against the pinned Alint action version.
+version: 1
+required_files:
+  - "Cargo.toml"
+  - "Cargo.lock"
+  - "clippy.toml"
+  - "deny.toml"
+  - ".alint.yml"
+  - ".config/nextest.toml"
+  - "AGENTS.md"
+path_rules:
+  # First-party Rust packages live only under crates/.
+  - id: "crates-only"
+    pattern: "^crates/velnor-actions-[a-z-]+/(src|tests)/.*\\.rs$"
+    allow: true
+file_rules:
+  # Hard size limits for new handwritten code (physical lines).
+  - id: "rust-max-lines"
+    pattern: "\\.rs$"
+    max_lines: 400
+  - id: "lib-main-max-lines"
+    pattern: "(src/lib\\.rs|src/main\\.rs)$"
+    max_lines: 150
+  - id: "function-max-lines"
+    pattern: "\\.rs$"
+    max_function_lines: 80

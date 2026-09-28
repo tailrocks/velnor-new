@@ -1,0 +1,17 @@
+[package]
+name = "velnor-actions-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+autotests = false
+
+[[bin]]
+name = "velnor-actions"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[[test]]
+name = "velnor_cli"
+path = "tests/velnor_cli.rs"
