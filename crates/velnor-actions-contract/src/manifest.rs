@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::errors::ContractError;
 
+pub use crate::candidate_manifest::CandidateArtifactManifest;
+
 /// Versioned release manifest: one immutable asset record per target.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -102,6 +104,13 @@ impl ReleaseManifest {
     /// Schema version this contract accepts.
     pub const SCHEMA: u32 = 1;
 
+    /// Parse canonical release-manifest JSON, rejecting malformed input.
+    /// # Errors
+    pub fn parse_json(text: &str, file: &str) -> Result<Self, ContractError> {
+        serde_json::from_str(text)
+            .map_err(|err| ContractError::config(file, "document", format!("malformed_json:{err}")))
+    }
+
     /// Find the asset record for a target triple.
     #[must_use]
     pub fn record_for_target(&self, target: &str) -> Option<&TargetRecord> {
@@ -143,6 +152,30 @@ impl ReleaseManifest {
 impl GeneratorLock {
     /// Schema version this contract accepts.
     pub const SCHEMA: u32 = 1;
+
+    /// Require exactly one binary record per supported target, no extras.
+    /// # Errors
+    pub fn check_supported_targets(&self, file: &str) -> Result<(), ContractError> {
+        for target in crate::targets::SUPPORTED_TARGETS {
+            if self.binary_for_target(target).is_none() {
+                return Err(ContractError::config(
+                    file,
+                    "generator.binaries",
+                    format!("missing_target:{target}"),
+                ));
+            }
+        }
+        for record in &self.generator.binaries {
+            if !crate::targets::is_supported_target(&record.target) {
+                return Err(ContractError::config(
+                    file,
+                    "generator.binaries",
+                    format!("unsupported_target:{}", record.target),
+                ));
+            }
+        }
+        Ok(())
+    }
 
     /// Find the binary record for a target triple.
     #[must_use]
@@ -231,7 +264,7 @@ impl GeneratorLock {
 }
 
 /// Check a document schema version.
-fn check_schema(schema: u32) -> Result<(), ContractError> {
+pub(crate) fn check_schema(schema: u32) -> Result<(), ContractError> {
     if schema != 1 {
         return Err(ContractError::UnsupportedSchema {
             field: "schema",
@@ -257,7 +290,7 @@ fn check_semver(version: &str, file: &str, key: &str) -> Result<(), ContractErro
 }
 
 /// Check target-triple shape.
-fn check_target(target: &str, file: &str, key: &str) -> Result<(), ContractError> {
+pub(crate) fn check_target(target: &str, file: &str, key: &str) -> Result<(), ContractError> {
     let valid = !target.is_empty()
         && target.contains('-')
         && target.bytes().all(|b| {
@@ -286,7 +319,7 @@ fn check_immutable_url(url: &str, file: &str, key: &str) -> Result<(), ContractE
 }
 
 /// Check a SHA-256 hex digest.
-fn check_sha256(sha: &str, file: &str, key: &str) -> Result<(), ContractError> {
+pub(crate) fn check_sha256(sha: &str, file: &str, key: &str) -> Result<(), ContractError> {
     if sha.len() == 64 && is_lower_hex(sha) {
         Ok(())
     } else {
@@ -295,7 +328,7 @@ fn check_sha256(sha: &str, file: &str, key: &str) -> Result<(), ContractError> {
 }
 
 /// Check lowercase hex.
-fn is_lower_hex(text: &str) -> bool {
+pub(crate) fn is_lower_hex(text: &str) -> bool {
     text.bytes()
         .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
 }

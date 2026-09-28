@@ -7,12 +7,14 @@
 //! Derivation formulas are normative; example strings in docs are illustrative.
 
 pub mod cachekey;
+pub mod candidate_manifest;
 pub mod canonical;
 pub mod config;
 pub mod errors;
 pub mod ids;
 pub mod manifest;
 pub mod marker;
+pub mod targets;
 pub mod workflow;
 
 pub use canonical::{
@@ -35,10 +37,14 @@ pub use ids::{
     validate_task_report_id,
 };
 pub use manifest::{
-    ActionPin, GeneratorBinary, GeneratorLock, LockedGenerator, MiseBootstrap, ReleaseManifest,
-    TargetRecord,
+    ActionPin, CandidateArtifactManifest, GeneratorBinary, GeneratorLock, LockedGenerator,
+    MiseBootstrap, ReleaseManifest, TargetRecord,
 };
 pub use marker::MARKER_PREFIX;
+pub use targets::{
+    RELEASE_MANIFEST_FILENAME, SUPPORTED_TARGETS, asset_filename, is_supported_target,
+    target_for_runner_label,
+};
 pub use workflow::{
     BaselineProof, BaselineStatus, CacheLayer, CacheOutcome, CacheResult, CandidateReport,
     CandidateStatus, Concurrency, ExecuteTaskIds, ExecuteTaskRef, FinalCounts, FinalReport,
