@@ -30,8 +30,10 @@ MUST fail with Clap's usage diagnostic.
 `crates/velnor-actions-cli/src/main.rs` parses arguments and dispatches typed
 requests to `velnor-actions-orchestrator`. The CLI MUST NOT invoke Git, Cargo,
 Mise, MBX, Nextest, or GitHub CLI directly. Command parsing tests MUST live in
-separate test files. The orchestrator owns all external process calls and all
-internal plan/task/report types.
+separate test files. The orchestrator owns internal plan/task/report types and
+coordinates typed process requests. The Mise adapter owns process creation,
+argument validation, environment construction, and result capture for those
+requests; the orchestrator MUST NOT launch processes or construct shell text.
 
 ## 2. Repository root
 

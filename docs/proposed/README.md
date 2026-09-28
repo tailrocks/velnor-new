@@ -55,16 +55,17 @@ V1 MUST NOT implement Docker, self-hosted runner registration, GitHub runner pro
 ## Normative specifications
 
 1. [Architecture](architecture.md) defines workspace crates, configuration, discovery, data contracts, and generated-file ownership.
-2. [Generated-file contract](generated-file-contract.md) defines task names, file ownership, safe rendering, and atomic output replacement.
-3. [CLI contract](cli-contract.md) fixes the stack-generic `velnor-actions` Clap command tree (`init`, `plan`, and `generate`), automatic detection, TOML ignore settings, and V1 Rust behavior.
-4. [Workflow contract](workflow-contract.md) defines triggers, jobs, and matrix data.
-5. [Task execution contract](task-execution-contract.md) defines task steps, Mise invocation, execution, and reports.
-6. [Cache and report contract](cache-contract.md) defines task identities, cache ownership/trust, reports, and final status aggregation.
-7. [Parallelism and affected-work contract](parallelism-and-selection-contract.md) defines dependency-aware selection, trusted baseline coverage, native background/wait steps, bounded concurrency, and complete test partitioning.
-8. [Rust quality contract](rust-quality-contract.md) defines tests, lints, file limits, dependencies, verification and policy protection.
-9. [Agent and performance contract](agent-and-performance-contract.md) defines agent instructions, performance measurements, acceptance budgets, and readiness evidence.
-10. [Tooling input contract](tooling-input-contract.md) defines read-only inspection and human recommendations for Rust/Mise tool files.
-11. [Version policy](version-policy.md) defines latest-stable tool pins, freshness checks, exception expiry, and V2 version inventory.
-12. [Implementation plan](implementation-plan.md) defines the ordered work packages and merge gates.
+2. [Bootstrap and release contract](bootstrap-and-release-contract.md) defines consumer bootstrap assets, the compiled version catalog, Velnor's bootstrap lock, and release promotion.
+3. [Generated-file contract](generated-file-contract.md) defines task names, file ownership, safe rendering, and atomic output replacement.
+4. [CLI contract](cli-contract.md) fixes the stack-generic `velnor-actions` Clap command tree (`init`, `plan`, and `generate`), automatic detection, TOML ignore settings, and V1 Rust behavior.
+5. [Workflow contract](workflow-contract.md) defines triggers, jobs, and matrix data.
+6. [Task execution contract](task-execution-contract.md) defines task steps, Mise invocation, execution, and reports.
+7. [Cache and report contract](cache-contract.md) defines task identities, cache ownership/trust, reports, and final status aggregation.
+8. [Parallelism and affected-work contract](parallelism-and-selection-contract.md) defines dependency-aware selection, trusted baseline coverage, native background/wait steps, bounded concurrency, and complete test partitioning.
+9. [Rust quality contract](rust-quality-contract.md) defines tests, lints, file limits, dependencies, verification and policy protection.
+10. [Agent and performance contract](agent-and-performance-contract.md) defines agent instructions, performance measurements, acceptance budgets, and readiness evidence.
+11. [Tooling input contract](tooling-input-contract.md) defines read-only inspection and human recommendations for Rust/Mise tool files.
+12. [Version policy](version-policy.md) defines latest-stable tool pins, freshness checks, exception expiry, and V2 version inventory.
+13. [Implementation plan](implementation-plan.md) defines the ordered work packages and merge gates.
 
 The listed documents are intended to be implementable without inventing behavior. If a behavior is not specified, fail with a clear error and add a decision to the spec before implementing it. Do not silently broaden V1.

@@ -118,9 +118,12 @@ or consumer-project input. A reviewed Velnor version-policy change updates it
 with `.velnor/version-policy.toml`. Velnor Actions never creates or updates a
 consumer's `.mise-version`.
 
-`Cargo.toml`, `rust-toolchain.toml`, `mise.toml`, `mise.lock`,
-`.velnor/config.toml`, and `.velnor/version-policy.toml` are repository-owned
-inputs. The three tool files are optional and read-only to Velnor. Velnor
+`Cargo.toml`, `rust-toolchain.toml`, `mise.toml`, `mise.lock`, and
+`.velnor/config.toml` are consumer repository inputs. The three tool files are
+optional and read-only to Velnor. The version catalog is compiled into each
+released generator binary; `.velnor/version-policy.toml` is required only in
+Velnor's own repository as a mirror for freshness checks. Consumers do not
+need it. Velnor
 reports missing, malformed, stale, or conflicting settings with manual
 recommendations; it never creates or edits them. V1 generates only the
 `.github` tree listed in the [generated-file contract](generated-file-contract.md).
@@ -172,105 +175,27 @@ and candidate validation; accept it only for canonical `tailrocks/velnor-new`.
 In CI check `GITHUB_REPOSITORY`; locally normalize `origin`. Missing or
 mismatched identity fails validation. The policy does not select a stack.
 
-`workflow.runner_label` is optional. If omitted, generation MUST use the latest pinned label in `.velnor/version-policy.toml`. An explicit value MUST exactly match that file's supported-label list; it is the only runner-version compatibility override and is recorded as `config_override`. The plan records `latest_default` when no override is present. `workflow.name` is the display name. If `workflow.default_branch` is omitted, resolve the branch named by local symbolic ref `refs/remotes/origin/HEAD`; if that ref is absent or invalid, generation fails and instructs the user to set `workflow.default_branch`. Never assume `main`, use the current feature branch, or fetch a remote to guess. `generator_validation` is `bootstrap` or `candidate`; Velnor uses `candidate`. `max_parallel_jobs`, compiler/test budgets, and shard settings bound execution.
+`workflow.runner_label` is optional. If omitted, generation MUST use the
+latest pinned label in its compiled-in release catalog. An explicit value MUST
+exactly match that catalog's supported-label list; it is the only
+runner-version compatibility override and is recorded as `config_override`.
+The plan records `latest_default` when no override is present. Velnor's own
+`.velnor/version-policy.toml` mirrors the catalog and CI checks equality.
+`workflow.name` is the display name. If `workflow.default_branch` is omitted,
+resolve the branch named by local symbolic ref `refs/remotes/origin/HEAD`; if
+that ref is absent or invalid, generation fails and instructs the user to set
+`workflow.default_branch`. Never assume `main`, use the current feature branch,
+or fetch a remote to guess. `generator_validation` is `bootstrap` or
+`candidate`; Velnor uses `candidate`. `max_parallel_jobs`, compiler/test
+budgets, and shard settings bound execution.
 
 `stacks.ignore` is a sorted, duplicate-free list of exact registered stack IDs. For example, `ignore = ["rust"]` disables Rust task planning and generation. Detection still runs, and matching detections appear with status `ignored`. Unknown IDs fail configuration validation. CLI flags cannot change this list. Stack-specific options belong under `[stacks.<id>]`; V1 supports `[stacks.rust].configurations` only. If that field is absent, use one documented default Rust configuration. `discovery.exclude` contains repository-relative POSIX path globs applied before detectors; it is not a stack selector. Invalid, absolute, parent-traversal, or malformed patterns fail validation. V1 registers only `rust`; no-Rust repositories produce an empty stack inventory. V1 MUST reject custom shell fragments, raw YAML, arbitrary `uses:` actions, and task definitions in this file.
 
 Configuration validation MUST report file, key path, and problem. Unknown `schema` versions fail with `unsupported_schema`; unknown keys fail with `unknown_config_field`. Defaults MUST NOT be invented for required fields.
 
-`.velnor/generator.lock` MUST contain:
-
-```toml
-schema = 1
-
-[generator]
-binary = "velnor-actions"
-version = "<exact-semver>"
-
-[[generator.binaries]]
-target = "x86_64-unknown-linux-gnu"
-artifact = "<immutable-release-artifact-url>"
-sha256 = "<64-lowercase-hex>"
-
-[[generator.binaries]]
-target = "aarch64-apple-darwin"
-artifact = "<immutable-release-artifact-url>"
-sha256 = "<64-lowercase-hex>"
-
-[[generator.binaries]]
-target = "x86_64-apple-darwin"
-artifact = "<immutable-release-artifact-url>"
-sha256 = "<64-lowercase-hex>"
-
-[mise-bootstrap]
-version = "<exact-semver>"
-artifact = "<immutable-release-artifact-url>"
-sha256 = "<64-lowercase-hex>"
-
-[[actions]]
-name = "actions/checkout"
-version = "<release-label-for-review>"
-sha = "<40-lowercase-hex-commit>"
-reviewed = "YYYY-MM-DD"
-```
-
-One `actions` record is required for each action Velnor itself emits. This is a dogfood mirror of the binary's compiled-in registry, not a required consumer file; consumer workflows work from the registry and optional `.velnor/config.toml` overrides. The artifact URL MUST refer to an immutable release asset named for the `velnor-actions` executable and target; Velnor verifies SHA-256 before execution. Action names MUST be from the allowlist in the workflow contract. Each default action SHA MUST correspond to its latest stable release under the [version policy](version-policy.md). Lock updates are reviewed toolchain changes, not automatic generation side effects.
-
-`.mise-version` MUST contain the same exact semantic version as
-`mise-bootstrap.version`. GitHub CI bootstraps Mise by downloading that locked
-release binary and verifying SHA-256 before invoking it. Local development MUST
-use the same pinned version. This is the only step allowed to obtain Mise
-without Mise itself. Every tool after this bootstrap is installed or selected
-by Mise.
-
-The `generator.binaries` array MUST contain exactly one entry for every
-supported execution target. The target is the Rust host triple reported by the
-bootstrapped toolchain. A missing or duplicate target entry is an error; Velnor
-MUST NOT run a binary built for another target. Each artifact URL MUST be
-immutable and each digest MUST be verified before execution. The lock file's
-single `generator.version` applies to every binary entry.
-
-### 3.1 Bootstrap, candidate, and promotion lifecycle
-
-The bootstrap binary is the only Velnor binary allowed to decide the current
-workflow graph. A candidate binary MUST NOT generate the job graph that builds
-or promotes that same candidate. This prevents a changed generator from
-changing the work needed to prove itself.
-
-The first release and every later release use this sequence:
-
-1. A protected `generator.lock` points to an already published, immutable
-   bootstrap release. The initial release is seeded once by a manually reviewed
-   binary built through Mise/MBX using the exact tool pins below; no Velnor
-   binary is required to build that seed.
-2. The pinned `velnor-actions` binary is invoked to select the record whose
-   `target` matches the runner, verify its version and SHA-256, and use that
-   binary for `plan`, metadata, and
-   matrix generation. The plan job MUST NOT wait for or invoke the candidate.
-3. The candidate build job invokes the fixed Cargo/MBX argument vector through
-   Mise with exact versions from `.velnor/version-policy.toml`. It MUST NOT
-   depend on or modify project tool files.
-4. The candidate build uploads one binary for the runner target, together with
-   its SHA-256, source commit, target triple, and toolchain identity. Candidate
-   qualification downloads that exact artifact; it MUST NOT rebuild it in a
-   later job.
-5. Candidate qualification runs the candidate against generated output,
-   fixtures, policy checks, and the required V1 gates. It may validate a
-   changed generator output; the old bootstrap binary MUST NOT be required to
-   reproduce a new generator contract.
-6. A protected release job promotes only a candidate that passed qualification.
-   It publishes immutable per-target assets, verifies the published digests,
-   then updates `generator.lock` to the new version and all target entries in a
-   separate reviewed change. The lock update is the final promotion step.
-
-CI invokes the candidate build as `mise exec --no-config rust@<exact>
-mr-boxington@<exact> -- mbx build --release --locked --package
-velnor-actions-cli --bin velnor-actions`. The package and binary names differ.
-Explicit arguments select exact tools without loading project
-tool files. The policy gate MUST verify MBX handled the compile. A pull-request
-candidate is never promoted and never replaces the locked bootstrap binary.
-Until promotion completes, ordinary CI runs continue using the previous lock
-entry.
+Bootstrap identity, compiled-in version catalog, `.velnor/generator.lock`,
+Mise bootstrap, candidate qualification, and release promotion are specified
+in the [bootstrap and release contract](bootstrap-and-release-contract.md).
 
 ## 4. Cargo discovery and metadata
 

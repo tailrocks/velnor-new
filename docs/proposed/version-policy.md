@@ -24,10 +24,12 @@ non-yanked release that supports the selected platform and required feature
 set. Prereleases, nightly builds, moving Git refs, wildcards, and floating
 `latest` selectors are forbidden in normal builds. Resolve the newest allowed
 release, then record its exact version, immutable revision, or digest in the
-applicable authority: `.velnor/version-policy.toml` for explicit Mise tool
-arguments, `Cargo.lock` for crates, and `.velnor/generator.lock` for binary and
-action artifacts. Local development, CI, releases, and agents MUST consume the
-same committed pins; no job may independently resolve versions.
+generator's compiled-in release catalog, `Cargo.lock` for crates, and
+`.velnor/generator.lock` for Velnor's own bootstrap binary. The Velnor-only
+`.velnor/version-policy.toml` mirrors the compiled catalog for freshness and
+release checks; consumer generation MUST NOT require it. Local development,
+CI, releases, and agents MUST consume the same committed pins; no job may
+independently resolve versions.
 
 “Latest” means latest upstream stable release at the update's recorded check
 time. An incompatible newest release is a migration requirement, not a reason
@@ -46,26 +48,38 @@ requirement exists.
 
 ## 2. Authoritative version inventory
 
-Each `[tools.<name>]` record in `.velnor/version-policy.toml` MUST identify the
-tool, exact stable version, canonical upstream source, supported platforms,
-and artifact digest when that source publishes one. The records include Rust,
-MBX, Nextest, `gh`, cargo-deny, cargo-machete, actionlint, zizmor, and every
-other tool called by a generated task. Mise
-bootstrap itself is pinned by `.velnor/generator.lock`. Generated workflow and
-task commands pass these exact versions as explicit Mise tool arguments; they
-do not resolve `latest` independently.
+The compiled-in catalog MUST identify each tool called by generated workflows
+with its exact stable version, canonical upstream source, supported platforms,
+and artifact digest when available. It includes Rust, MBX, Nextest, `gh`,
+cargo-deny, cargo-machete, actionlint, zizmor, and every other generated-task
+tool. Generated workflows embed these exact values and pass them as explicit
+Mise tool arguments; they never read a consumer version-policy file or resolve
+`latest` independently. Velnor's `.velnor/version-policy.toml` MUST mirror
+every catalog entry and is checked for equality during dogfood CI and release
+qualification. Mise bootstrap itself is pinned by `.velnor/generator.lock`
+inside Velnor's own workflow and by the compiled-in Mise release record in
+consumer workflow output.
 
 | Versioned input | Authority | Freshness requirement |
 |---|---|---|
-| Rust compiler and components | Exact pins in `.velnor/version-policy.toml`; run through Mise | Latest stable Rust and matching current components |
+| Rust compiler and components | Compiled-in generator catalog; embedded in generated workflows and run through Mise | Latest stable Rust and matching current components |
 | Mise bootstrap | `.mise-version`, `.velnor/generator.lock` | Both equal the latest qualified stable Mise release; exact artifact digest |
-| MBX, Nextest, `gh`, and policy/CI tools | Exact pins in `.velnor/version-policy.toml`; run through Mise | Latest stable releases; includes cargo-deny, cargo-machete, actionlint, ShellCheck, and zizmor |
+| MBX, Nextest, `gh`, and policy/CI tools | Compiled-in generator catalog; embedded in generated workflows and run through Mise | Latest stable releases; includes cargo-deny, cargo-machete, actionlint, ShellCheck, and zizmor |
 | Direct and transitive Rust crates | Workspace manifests, `Cargo.lock` | Newest stable graph; major updates included; all changed versions pass the full locked gate |
-| Generated Velnor binary | `.velnor/generator.lock` | Latest qualified stable Velnor release for each supported target, with SHA-256 |
+| Velnor workflow bootstrap | Consumer output embeds the exact generating release version, immutable target asset URL, and binary SHA-256; Velnor dogfood also checks `.velnor/generator.lock` | Latest qualified stable Velnor release for each supported target |
 | GitHub Actions | Compiled-in Velnor action registry; optional exact overrides in `.velnor/config.toml` | Default record is the latest reviewed stable release; workflow uses immutable full commit SHA |
 | Alint GitHub Action | Compiled-in Velnor action registry; emitted as the reviewed `asamarts/alint@v0.16.1` tag | `v0.16.1` is the current reviewed default. This is the only mutable-tag exception to full-SHA action pins; changing it requires a reviewed Velnor version-policy update |
 | GitHub-hosted OS image | Generated `runs-on` label and recorded runner metadata | Latest stable supported Ubuntu image family after host qualification; exact versioned label is the pin. GitHub may update its image contents in place, so record `ImageOS` and `ImageVersion` as runtime evidence and cache identity, not as immutable pins |
 | Deferred V2/V3 runtime inputs | `.velnor/runner.lock` (created before runner implementation) | Latest qualified Docker Desktop/Engine, official runner, base-image digest, GitHub API version, protocol revision, and runner dependencies including Turso |
+
+Consumer workflows MUST be self-contained: all tool pins, action pins, runner
+labels, and the bootstrap binary identity are embedded in generated output.
+They MUST run after `velnor-actions init` and `generate` without requiring
+`.velnor/version-policy.toml` or `.velnor/generator.lock`. The generator MUST
+fail generation when its executable lacks verified release provenance needed
+to embed a real immutable bootstrap asset and digest. Velnor's own workflow is
+the sole exception because its protected lock supplies and verifies its
+bootstrapping identity.
 
 `rust-toolchain.toml`, `mise.toml`, and `mise.lock` are optional,
 repository-owned inspection inputs. They do not define Velnor's generated

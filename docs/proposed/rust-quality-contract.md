@@ -1,8 +1,7 @@
 # Velnor V1 Rust Quality Contract
 
-**Status:** Proposed specification. Nothing in this document is implemented by
-this document. Landed implementation records live in `docs/implemented/` and
-must be updated in the same pull request as the implementation.
+**Status:** Proposed specification. Landed implementation records live in
+`docs/implemented/` and must change in the same implementation pull request.
 
 This contract governs the selected Rust stack in the Velnor V1 workflow
 generator. It specifies the Rust repository shape, tool selection, test
@@ -77,15 +76,16 @@ independent of other stack crates.
 | `velnor-actions-mise` | Mise tool selection, pinned command construction, fixed subprocess/environment wrapper, `mise.toml`/`mise.lock` inspection, Mise cache integration | Cargo metadata, Rust graph/selection rules, `rust-toolchain.toml`, GitHub YAML, stack discovery |
 | `velnor-actions-actionlint` | actionlint pin/capability metadata, generated config, action-schema validation | Mise process execution, stack scanning, generic workflow rendering |
 | `velnor-actions-workflow-renderer` | Generic GitHub Actions workflow YAML from typed workflow IR | Rust/Cargo, Mise syntax, repository scanning, subprocesses, stack policy |
-| `velnor-actions-orchestrator` | Composition, obligation selection, cache evidence, scheduling, generation coordination | Parsing Cargo/Mise files, direct YAML templates, CLI parsing, OS process details |
+| `velnor-actions-orchestrator` | Composition, obligation selection, cache evidence, scheduling, generation coordination, typed process-request coordination | Parsing Cargo/Mise files, direct YAML templates, CLI parsing, OS process details, process creation |
 | `velnor-actions-cli` | Clap parser, typed dispatch, concise deterministic human plan renderer, generation output, and exit-code formatting; emits binary `velnor-actions` | Orchestration algorithms or Rust, Mise, and renderer domain rules |
 
 The authority order MUST be:
 
 1. Cargo manifests and `Cargo.lock` define packages and dependencies.
-2. `.velnor/version-policy.toml` defines exact versions used by generated
-   workflows. `mise.toml`, `mise.lock`, and `rust-toolchain.toml`, when present,
-   are repository-owned inspection inputs only.
+2. The compiled catalog defines generated-workflow versions. Velnor's
+   `.velnor/version-policy.toml` mirrors it for freshness checks; consumers do
+   not need that file. Optional `mise.toml`, `mise.lock`, and
+   `rust-toolchain.toml` are repository-owned inspection inputs.
 3. `.velnor/config.toml` defines Velnor policy and explicit exceptions.
 4. The generator emits workflows and task definitions; generated files MUST NOT
    be hand-maintained.
@@ -115,9 +115,11 @@ rust-version = "1.98"
 ```
 
 Mise MUST execute Rust tooling locally and in CI. Generated commands use exact
-Rust, MBX, and auxiliary-tool pins in `.velnor/version-policy.toml` through
-`mise exec`; they MUST NOT depend on project `mise.toml` or `mise.lock`. Gate 0
-rechecks current releases. Cargo `rust-version` declares MSRV and MUST be
+Rust, MBX, and auxiliary-tool pins from the compiled-in generator catalog
+through `mise exec`; they MUST NOT depend on consumer `.velnor/version-policy.toml`,
+project `mise.toml`, or `mise.lock`. Velnor's dogfood gates compare the catalog
+to its repository-owned version-policy mirror and recheck current releases.
+Cargo `rust-version` declares MSRV and MUST be
 qualified for every product crate on dependency/toolchain/policy updates and
 release qualification, not every pull request. It MUST match the selected
 stable toolchain's major/minor unless compatibility requires otherwise. A
@@ -155,12 +157,11 @@ before invoking it; local developers MUST use the same pinned release. The
 bootstrap verifies version and digest. Mise itself is the bootstrap exception;
 all subsequent tools MUST be installed and selected by Mise.
 
-Mise MUST be the installation and execution mechanism for Rust, components,
-MBX, Nextest when selected, `gh`, policy tools, and Rust-related binaries. Velnor's exact
-required tool pins MUST be recorded in its version-policy inventory and used
-through explicit Mise tool arguments. The project's `mise.toml` and `mise.lock`
-may provide inspection data but are optional, repository-owned, and read-only
-to Velnor. The tool policy is defined by the [version policy](version-policy.md).
+Mise MUST install and execute Rust, components, MBX, selected Nextest, `gh`,
+policy tools, and Rust binaries. Exact pins come from the compiled catalog and
+explicit Mise arguments; Velnor's version-policy file mirrors them for
+freshness checks. Consumer `mise.toml` and `mise.lock` are optional,
+repository-owned, read-only inputs. See [version policy](version-policy.md).
 An illustrative hand-maintained project config is:
 
 ```toml

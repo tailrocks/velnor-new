@@ -1,15 +1,14 @@
 # Velnor V1 Workflow Contract
 
-Status: proposed implementation specification; none is implemented. Completion requires acceptance and Velnor
-dogfooding.
+Status: proposed specification; implementation requires Velnor dogfooding.
 
 This document fixes V1 defaults; unsupported configuration MUST be rejected.
 
 ## 1. Product boundary
 
-Velnor Actions is a stack-generic GitHub Actions workflow generator and focused task executor. V1 registers
-only the Rust/Cargo detector and adapter. It runs locally and on GitHub-hosted runners. Self-hosted runners,
-Docker supervision, a workflow interpreter, and a distributed cache service are deferred.
+Velnor Actions is a stack-generic workflow generator and focused task executor. V1 registers only Rust/Cargo
+and runs locally or on GitHub-hosted runners. Self-hosted runners, Docker supervision, a workflow interpreter,
+and a distributed cache service are deferred.
 
 Each registered stack adapter owns its discovery and task proposals. The Mise adapter owns tool selection,
 command construction and execution, and cache integration. The actionlint crate owns actionlint configuration
@@ -84,10 +83,11 @@ The following files are authoritative:
 | File | Authority |
 |---|---|
 | `Cargo.toml`, member manifests, `Cargo.lock` | Packages, targets, dependencies, and resolution |
-| `.velnor/version-policy.toml` | Exact latest tool versions used by Velnor-generated commands |
+| Compiled-in version catalog | Exact latest tool versions, runner-label inventory, and generator-release identity used by generated workflows |
+| `.velnor/version-policy.toml` | Velnor-repository-only mirror of the compiled catalog for freshness and release checks; consumers do not need this file |
 | `rust-toolchain.toml`, `mise.toml`, `mise.lock` | Optional repository-owned inspection inputs; Velnor never writes them |
 | `.velnor/config.toml` | Stack-neutral workflow policy, selected-stack exclusions, and explicit exceptions |
-| `.velnor/generator.lock` | Velnor repository bootstrap binary and mirror of bundled action pins; not required or generated for consumers |
+| `.velnor/generator.lock` | Velnor repository bootstrap override and mirror of bundled action pins; not required or generated for consumers |
 | `.github/**` | Complete generated workflow tree |
 
 The supported configuration boundary is:
@@ -170,23 +170,21 @@ future adapters add namespaced task entries to this composed task job without CL
 The following `velnor-*` labels are GitHub Actions job IDs only. They are not Cargo packages, executable
 names, generated command labels, or CLI subcommands. The sole Velnor executable is `velnor-actions`.
 
-1. `velnor-plan`: checkout; initialize Mise with `jdx/mise-action` pinned by
-the compiled-in action registry (`install: false`, `env: false`); acquire the
-exact Velnor binary from `.velnor/generator.lock` and verify SHA-256; install locked tools, including GitHub CLI for exact
-trusted-baseline lookup; run formatting checks; discover selected stack obligations; resolve an exact trusted
-base artifact where available; classify obligations as execute, cached-reuse, or baseline-covered; emit the
-bounded matrix and complete plan report. When `workflow.generator_validation = "bootstrap"`, it also checks
-generated files with that locked binary. When the value is `candidate`, it MUST NOT invoke the candidate or
-require the bootstrap binary to reproduce a new generator output.
+1. `velnor-plan`: checkout; setup Mise through its pinned action with exact catalog `version`/`sha256`; acquire
+   the bootstrap asset from the generated descriptor and verify it. Consumers embed the generating release version, target URL, and
+   digest; Velnor uses the matching `.velnor/generator.lock` record and checks equality. Install exact tools
+   from the embedded catalog, including GitHub CLI for trusted-baseline lookup. Discover obligations, resolve
+   a valid baseline, classify every obligation, and emit the bounded matrix and complete plan report. In
+   bootstrap validation mode, check generated files with the locked binary. In candidate mode, do not invoke
+   the candidate or require the bootstrap to reproduce new generator output.
 2. `velnor-task`: one matrix entry per selected stack task-group/configuration
 obligation. It runs the focused steps in the [task execution contract](task-execution-contract.md) and uploads
 one stack-neutral report even after failure.
-3. `velnor-workflow-lint`: checkout with `persist-credentials: false`; initialize Mise with the pinned `jdx/mise-action`; install exact
-`actionlint` and `shellcheck` versions through Mise with project config, environment, and hooks disabled;
-run `mise exec --no-config actionlint@<exact> shellcheck@<exact> -- actionlint -color` from the repository
-root. Actionlint reads `.github/actionlint.yaml`, discovers all generated workflow files, and invokes the
-Mise-provided ShellCheck integration. This job runs for every
-consumer and is a required obligation, including when no Rust stack is detected.
+3. `velnor-workflow-lint`: checkout without persisted credentials; setup Mise with pinned action, version,
+   and SHA-256; install exact
+   Actionlint and ShellCheck versions with project config, env, and hooks disabled; run
+   `mise exec --no-config actionlint@<exact> shellcheck@<exact> -- actionlint -color` from the root. This
+   required job reads `.github/actionlint.yaml` and checks every generated workflow, even with no Rust stack.
 4. `velnor-final`: `if: always()`, depends on the base and enabled policy jobs, validates reports/conclusions,
 and is the required status check.
 
@@ -245,13 +243,15 @@ and never written to the repo.
 
 1. `Checkout`: `actions/checkout` at the event's intended commit with
 `persist-credentials: false`.
-2. `Setup Mise`: use the bundled full-SHA-pinned `jdx/mise-action` with
-`install: false` and `env: false`; project tool files, task definitions, and hooks must not run.
+2. `Setup Mise`: use the bundled full-SHA-pinned `jdx/mise-action` with exact catalog `version` and `sha256`,
+`install: false`, and `env: false`; project tool files, task definitions, and hooks must not run.
 3. `Prepare pinned tools`: run `MISE_LOCKFILE=0 mise install --no-config
---no-env --no-hooks <tool>@<exact>...` from `.velnor/version-policy.toml`; set Velnor-owned
+--no-env --no-hooks <tool>@<exact>...` using exact versions embedded in the
+generator release catalog; set Velnor-owned
 `MISE_RUSTUP_HOME`/`MISE_CARGO_HOME`. Project config, env, hooks, and lockfile writes are disabled.
-4. `Acquire Velnor`: download the target-matching locked binary and verify its
-SHA-256.
+4. `Acquire Velnor`: for consumers, download the exact target asset and
+verify SHA-256 from the embedded release descriptor; for Velnor, use and verify
+the matching `.velnor/generator.lock` record.
 5. `Format`: run the generated fixed format command through pinned Mise; use
 the detected Rust compile driver (MBX only when project evidence selects it).
 6. `Check generated files`: invoke the public `velnor-actions generate

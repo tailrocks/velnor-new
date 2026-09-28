@@ -104,7 +104,7 @@ Each path has one owner:
 
 | Data | Owner | Rule |
 |---|---|---|
-| Mise tools and Rust components | Mise | Invoke exact versions from `.velnor/version-policy.toml` with project config, env files, and hooks disabled |
+| Mise tools and Rust components | Compiled-in generator catalog, executed by Mise | Embed and invoke exact versions; disable project config, env files, and hooks |
 | Cargo registry and Git sources | Velnor source layer | Exclude credentials; separate from MBX |
 | Compiler objects and scheduler state | `jdx/mr-boxington-action` when MBX is selected | Use its pinned GitHub-cache objects mode; never archive MBX data through another cache action |
 | Mutable target directory | Matrix job | Reuse sequentially; never share concurrently |

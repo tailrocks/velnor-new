@@ -107,17 +107,18 @@ For detected Nextest workspaces, compile each test configuration once into an ar
 
 ## Gate 8: non-circular bootstrap and self-hosting
 
-The protected `.velnor/generator.lock` contains one immutable generator binary
-record per supported host target. The pinned `velnor-actions` binary selects
-and verifies the record matching the runner before it generates the workflow.
-It MUST use that locked binary for the current workflow graph; it MUST NOT wait
-for a binary built from the current source.
+Implement the [bootstrap and release contract](bootstrap-and-release-contract.md).
+Velnor's own protected `.velnor/generator.lock` selects its bootstrap; consumer
+workflows embed the exact released generator URL and SHA-256. The bootstrap
+MUST determine the current graph and MUST NOT wait for a binary built from the
+current source.
 
 The initial seed and every later candidate use this sequence:
 
 1. Build the seed or candidate with a fixed Cargo/MBX argument vector through
-   Mise, using exact pins from `.velnor/version-policy.toml`; it does not call
-   the candidate or load project tool files.
+   Mise, using exact pins from the compiled-in catalog (verified against
+   Velnor's `.velnor/version-policy.toml` mirror); it does not call the
+   candidate or load project tool files.
 2. Record the source commit, target triple, compiler/tool identities, version,
    and SHA-256 in a candidate manifest. Upload the executable and manifest as
    one run-scoped artifact.
