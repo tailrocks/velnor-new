@@ -6,19 +6,26 @@
 
 use crate::error::MiseError;
 
-/// Qualified mise runner release.
+/// Qualified mise runner release (tag `v2026.9.16`).
+/// Source: `https://api.github.com/repos/jdx/mise/releases/latest`; checked 2026-09-28.
 pub const MISE_VERSION: &str = "2026.9.16";
 /// Qualified Rust stable toolchain.
+/// Source: `https://static.rust-lang.org/dist/channel-rust-stable.toml`; checked 2026-09-28.
 pub const RUST_VERSION: &str = "1.98.1";
-/// Qualified `mr-boxington` tool (binary on PATH is `mbx`).
+/// Qualified `mr-boxington` tool (binary on PATH is `mbx`; tag `v1.19.0`).
+/// Source: `https://api.github.com/repos/jdx/mr-boxington/releases/latest`; checked 2026-09-28.
 pub const MR_BOXINGTON_VERSION: &str = "1.19.0";
-/// Qualified GitHub CLI.
+/// Qualified GitHub CLI (tag `v2.101.0`).
+/// Source: `https://api.github.com/repos/cli/cli/releases/latest`; checked 2026-09-28.
 pub const GH_VERSION: &str = "2.101.0";
-/// Qualified actionlint release.
+/// Qualified actionlint release (tag `v1.7.12`).
+/// Source: `https://api.github.com/repos/rhysd/actionlint/releases/latest`; checked 2026-09-28.
 pub const ACTIONLINT_VERSION: &str = "1.7.12";
-/// Qualified shellcheck release.
+/// Qualified shellcheck release (tag `v0.11.0`).
+/// Source: `https://api.github.com/repos/koalaman/shellcheck/releases/latest`; checked 2026-09-28.
 pub const SHELLCHECK_VERSION: &str = "0.11.0";
-/// Qualified zizmor tool release (`zizmorcore/zizmor` tag `v1.30.1`).
+/// Qualified zizmor tool release (`zizmorcore/zizmor` tag `v1.30.1`, stable, published 2026-09-09).
+/// Source: `https://api.github.com/repos/zizmorcore/zizmor/releases/latest`; checked 2026-09-28.
 pub const ZIZMOR_VERSION: &str = "1.30.1";
 
 /// Tools Velnor may select through mise, by registry name.

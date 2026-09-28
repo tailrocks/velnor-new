@@ -7,7 +7,8 @@
 
 use crate::{ACTIONLINT_VERSION, ActionlintError};
 
-/// Pinned `ShellCheck` release (verified 2026-09-28 per version policy).
+/// Pinned `ShellCheck` release (tag `v0.11.0`; mirrors the mise catalog pin).
+/// Source: `https://api.github.com/repos/koalaman/shellcheck/releases/latest`; checked 2026-09-28.
 pub const SHELLCHECK_VERSION: &str = "0.11.0";
 
 /// Pinned actionlint toolchain identity.

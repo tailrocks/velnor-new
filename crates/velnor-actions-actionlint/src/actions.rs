@@ -21,7 +21,40 @@ pub const ALLOWED_ACTIONS: [&str; 8] = [
 pub const ALINT_ACTION: &str = "asamarts/alint";
 
 /// Reviewed Alint tag; changing it is a version-policy update, not config.
+/// Sole spec-blessed mutable-tag exception (`docs/proposed/version-policy.md` §2).
+/// Source: `https://api.github.com/repos/asamarts/alint/releases/latest`; checked 2026-09-28.
 pub const ALINT_REVIEWED_TAG: &str = "v0.16.1";
+
+/// Qualified `jdx/mise-action` release.
+/// Source: `https://api.github.com/repos/jdx/mise-action/releases/latest`; checked 2026-09-28.
+pub const MISE_ACTION_VERSION: &str = "v4.3.0";
+/// Full commit SHA for [`MISE_ACTION_VERSION`] (tag object type `commit`).
+pub const MISE_ACTION_SHA: &str = "c2a87611a18de5b3828c5652fe268e992400cb5c";
+/// Qualified `actions/checkout` release.
+/// Source: `https://api.github.com/repos/actions/checkout/releases/latest`; checked 2026-09-28.
+pub const CHECKOUT_ACTION_VERSION: &str = "v7.0.1";
+/// Full commit SHA for [`CHECKOUT_ACTION_VERSION`] (`v7` moves with it).
+pub const CHECKOUT_ACTION_SHA: &str = "3d3c42e5aac5ba805825da76410c181273ba90b1";
+/// Qualified `actions/download-artifact` release.
+/// Source: `https://api.github.com/repos/actions/download-artifact/releases/latest`; checked 2026-09-28.
+pub const DOWNLOAD_ARTIFACT_ACTION_VERSION: &str = "v8.0.1";
+/// Full commit SHA for [`DOWNLOAD_ARTIFACT_ACTION_VERSION`] (`v8` moves with it).
+pub const DOWNLOAD_ARTIFACT_ACTION_SHA: &str = "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c";
+/// Qualified `actions/upload-artifact` release.
+/// Source: `https://api.github.com/repos/actions/upload-artifact/releases/latest`; checked 2026-09-28.
+pub const UPLOAD_ARTIFACT_ACTION_VERSION: &str = "v7.0.1";
+/// Full commit SHA for [`UPLOAD_ARTIFACT_ACTION_VERSION`] (`v7` moves with it).
+pub const UPLOAD_ARTIFACT_ACTION_SHA: &str = "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a";
+/// Qualified `actions/cache` release (shared by `restore` and `save`).
+/// Source: `https://api.github.com/repos/actions/cache/releases/latest`; checked 2026-09-28.
+pub const CACHE_ACTION_VERSION: &str = "v6.1.0";
+/// Full commit SHA for [`CACHE_ACTION_VERSION`] (`v6` moves with it; v6 is current, no replacement).
+pub const CACHE_ACTION_SHA: &str = "55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
+/// Qualified `jdx/mr-boxington-action` release.
+/// Source: `https://api.github.com/repos/jdx/mr-boxington-action/releases`; checked 2026-09-28.
+pub const MR_BOXINGTON_ACTION_VERSION: &str = "v1.5.0";
+/// Full commit SHA for [`MR_BOXINGTON_ACTION_VERSION`] (`v1` moves with it).
+pub const MR_BOXINGTON_ACTION_SHA: &str = "9df1d4b18b2147788a7ee7a2c7b84ecf62fd89d3";
 
 /// One pinned action reference: `repo[/path]@sha` plus version comment.
 #[derive(Debug, Clone, PartialEq, Eq)]
