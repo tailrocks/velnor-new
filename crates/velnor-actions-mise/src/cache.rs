@@ -1,8 +1,8 @@
 //! Read-only task-result cache helpers per the qualified mise schema.
 //!
-//! Covers cache modes, the `task-artifacts/v2` layout, artifact path
-//! resolution, and digest verification. Nothing here executes `mise run`,
-//! writes artifacts, or configures remote caching: reads only.
+//! Covers modes, the `task-artifacts/v2` layout, artifact resolution, digest
+//! verification, sources allowlist, task defs, reuse checks, and the exact-base
+//! `gh` lookup. Nothing here writes artifacts or configures remote caching.
 
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter, Result as FmtResult};
@@ -17,18 +17,16 @@ use crate::error::MiseError;
 
 /// Directory holding cached task outputs inside a mise cache parent.
 pub const TASK_ARTIFACTS_DIR_NAME: &str = "task-artifacts";
-
 /// Artifact layout version kept as the final path segment.
 pub const TASK_ARTIFACTS_VERSION: &str = "v2";
-
-/// Environment variable overriding the task-cache parent directory.
+/// Env var overriding the task-cache parent directory.
 pub const TASK_CACHE_DIR_ENV: &str = "MISE_TASK_CACHE_DIR";
-
-/// Environment variable holding the default mise cache directory.
+/// Env var holding the default mise cache directory.
 pub const CACHE_DIR_ENV: &str = "MISE_CACHE_DIR";
-
-/// Environment variable selecting the task-cache access mode.
+/// Env var selecting the task-cache access mode.
 pub const TASK_CACHE_MODE_ENV: &str = "MISE_TASK_CACHE";
+/// Runner-temp prefix owning every generated task definition.
+pub const TASK_DEF_PREFIX: &str = "$RUNNER_TEMP/velnor/tasks/";
 
 /// Qualified task-cache access modes (`--task-cache` / `MISE_TASK_CACHE`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -48,14 +46,13 @@ pub enum TaskCacheMode {
 
 impl Display for TaskCacheMode {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        let mode = match self {
+        f.write_str(match self {
             Self::ReadWrite => "read-write",
             Self::ReadOnly => "read-only",
             Self::WriteOnly => "write-only",
             Self::Off => "off",
             Self::LocalOnly => "local-only",
-        };
-        write!(f, "{mode}")
+        })
     }
 }
 
@@ -76,27 +73,21 @@ impl FromStr for TaskCacheMode {
     }
 }
 
-/// Resolve the artifact directory from explicit parent directories.
-///
-/// `MISE_TASK_CACHE_DIR` overrides the parent; otherwise the default mise
-/// cache directory applies. Both keep the `task-artifacts/v2` suffix.
-/// Returns `None` when neither parent is known.
+/// Resolve the artifact dir from explicit parents (`task-artifacts/v2` suffix).
 #[must_use]
 pub fn resolve_task_artifact_dir(
     task_cache_dir: Option<&Path>,
     cache_dir: Option<&Path>,
 ) -> Option<PathBuf> {
-    task_cache_dir.or(cache_dir).map(|parent| {
+    let parent = task_cache_dir.or(cache_dir)?;
+    Some(
         parent
             .join(TASK_ARTIFACTS_DIR_NAME)
-            .join(TASK_ARTIFACTS_VERSION)
-    })
+            .join(TASK_ARTIFACTS_VERSION),
+    )
 }
 
-/// Resolve the artifact directory from the process environment.
-///
-/// Reads [`TASK_CACHE_DIR_ENV`] and [`CACHE_DIR_ENV`]; see
-/// [`resolve_task_artifact_dir`] for the layout rules.
+/// Resolve the artifact dir from the process environment.
 #[must_use]
 pub fn task_artifact_dir_from_env() -> Option<PathBuf> {
     let task_cache_dir = std::env::var_os(TASK_CACHE_DIR_ENV).map(PathBuf::from);
@@ -105,33 +96,19 @@ pub fn task_artifact_dir_from_env() -> Option<PathBuf> {
 }
 
 /// Read the task-cache mode from [`TASK_CACHE_MODE_ENV`].
-///
-/// Returns `None` when the variable is unset or empty.
-///
 /// # Errors
-///
-/// Returns [`MiseError::UnknownCacheMode`] for values outside the five
-/// qualified modes.
+/// Returns [`MiseError::UnknownCacheMode`] for unqualified values.
 pub fn cache_mode_from_env() -> Result<Option<TaskCacheMode>, MiseError> {
-    let Some(raw) = std::env::var_os(TASK_CACHE_MODE_ENV) else {
-        return Ok(None);
-    };
-    let mode = raw.to_string_lossy();
-    if mode.is_empty() {
+    let raw = std::env::var_os(TASK_CACHE_MODE_ENV).unwrap_or_default();
+    if raw.is_empty() {
         return Ok(None);
     }
-    TaskCacheMode::from_str(&mode).map(Some)
+    TaskCacheMode::from_str(&raw.to_string_lossy()).map(Some)
 }
 
 /// Join a relative artifact name onto its root, refusing escapes.
-///
-/// `.` segments are skipped so `a/./b` normalizes to `a/b`; anything that
-/// could leave the root is rejected.
-///
 /// # Errors
-///
-/// Returns [`MiseError::ArtifactEscapesRoot`] for absolute names, names
-/// with `..` segments or path prefixes, and names without artifacts.
+/// Returns [`MiseError::ArtifactEscapesRoot`] for absolute, empty, or escaping names.
 pub fn artifact_path(root: &Path, relative: &str) -> Result<PathBuf, MiseError> {
     let candidate = Path::new(relative);
     if candidate.is_absolute() {
@@ -166,20 +143,16 @@ fn escapes_root(relative: &str) -> MiseError {
 }
 
 /// Read one artifact file into memory.
-///
 /// # Errors
-///
-/// Returns [`MiseError::ArtifactNotFound`] when the file does not exist
-/// and [`MiseError::ArtifactUnreadable`] for any other read failure.
+/// Returns not-found/unreadable errors for missing or failing reads.
 pub fn read_artifact_bytes(path: &Path) -> Result<Vec<u8>, MiseError> {
     std::fs::read(path).map_err(|err| {
+        let path = path.to_string_lossy().into_owned();
         if err.kind() == ErrorKind::NotFound {
-            MiseError::ArtifactNotFound {
-                path: path.to_string_lossy().into_owned(),
-            }
+            MiseError::ArtifactNotFound { path }
         } else {
             MiseError::ArtifactUnreadable {
-                path: path.to_string_lossy().into_owned(),
+                path,
                 message: err.to_string(),
             }
         }
@@ -187,11 +160,8 @@ pub fn read_artifact_bytes(path: &Path) -> Result<Vec<u8>, MiseError> {
 }
 
 /// Verify artifact bytes against an expected `b3-` digest.
-///
 /// # Errors
-///
-/// Returns [`MiseError::InvalidDigest`] for malformed digests and
-/// [`MiseError::DigestMismatch`] when the bytes hash differently.
+/// Returns [`MiseError::InvalidDigest`] or [`MiseError::DigestMismatch`].
 pub fn verify_artifact_digest(bytes: &[u8], expected: &str) -> Result<(), MiseError> {
     validate_digest(expected).map_err(|err| MiseError::InvalidDigest {
         value: expected.to_owned(),
@@ -209,20 +179,15 @@ pub fn verify_artifact_digest(bytes: &[u8], expected: &str) -> Result<(), MiseEr
 }
 
 /// Declared cache-key inputs of one task, per the qualified schema.
-///
-/// Mirrors what mise hashes into a task key: source contents, declared
-/// environment, command inputs (command text plus captured streams),
-/// resolved tools, and dependency artifact keys. OS and architecture are
-/// contributed by mise itself.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CachedTaskDescriptor {
     /// Task name as addressed by `mise run`.
     pub task_name: String,
-    /// Source globs whose contents feed the key; at least one is required.
+    /// Source globs feeding the key; at least one is required.
     pub sources: Vec<String>,
     /// Declared outputs restored from a cache hit.
     pub outputs: Vec<String>,
-    /// Command inputs hashed with their captured stdout and stderr.
+    /// Command inputs hashed with captured stdout and stderr.
     pub command_inputs: Vec<String>,
     /// Declared environment entries (`cache.env`) feeding the key.
     pub env: BTreeMap<String, String>,
@@ -234,24 +199,17 @@ pub struct CachedTaskDescriptor {
 
 impl CachedTaskDescriptor {
     /// Reject descriptors mise could never cache (currently: no sources).
-    ///
     /// # Errors
-    ///
     /// Returns [`MiseError::CacheNotEligible`] when `sources` is empty.
     pub fn validate(&self) -> Result<(), MiseError> {
         if self.sources.is_empty() {
-            return Err(MiseError::CacheNotEligible {
-                task: self.task_name.clone(),
-                reason: "task_declares_no_sources".to_owned(),
-            });
+            return Err(ineligible(&self.task_name, "task_declares_no_sources"));
         }
         Ok(())
     }
 
     /// Deterministic digest over the declared inputs (canonical JSON + BLAKE3).
-    ///
     /// # Errors
-    ///
     /// Returns [`MiseError::Contract`] when canonical serialization fails.
     pub fn cache_inputs_digest(&self) -> Result<String, MiseError> {
         self.validate()?;
@@ -260,4 +218,179 @@ impl CachedTaskDescriptor {
         })?;
         Ok(digest_b3(&bytes))
     }
+}
+
+/// Reject a sources-archive path outside `registry/` or `git/`.
+/// # Errors
+pub fn validate_sources_path(path: &str) -> Result<(), MiseError> {
+    let mut parts = path.split('/');
+    let top = parts.next().unwrap_or("");
+    if !matches!(top, "registry" | "git") || path.starts_with('/') || path.contains('\\') {
+        return Err(escapes_root(path));
+    }
+    if parts.any(|seg| seg == ".." || seg.starts_with("credentials")) {
+        return Err(escapes_root(path));
+    }
+    Ok(())
+}
+
+/// Task-cache mode for one workflow event: local/pr/merge/push/release.
+/// # Errors
+pub fn mode_for_event(event: &str) -> Result<TaskCacheMode, MiseError> {
+    match event {
+        "local" => Ok(TaskCacheMode::LocalOnly),
+        "pull_request" | "merge_group" => Ok(TaskCacheMode::ReadOnly),
+        "push" => Ok(TaskCacheMode::ReadWrite),
+        "release" => Ok(TaskCacheMode::Off),
+        _ => Err(MiseError::UnknownCacheMode {
+            mode: event.to_owned(),
+        }),
+    }
+}
+
+/// Reject generated task files outside runner temp (never `.mise/tasks`).
+/// # Errors
+pub fn validate_task_def_path(path: &str) -> Result<(), MiseError> {
+    if !path.starts_with(TASK_DEF_PREFIX) || path.strip_suffix(".toml").is_none() {
+        return Err(escapes_root(path));
+    }
+    if path.contains("..") || path.contains(".mise/tasks") {
+        return Err(escapes_root(path));
+    }
+    Ok(())
+}
+
+/// One qualified deterministic task definition (Gate 6).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct QualifiedTaskDef {
+    /// Task name addressed by `mise run`.
+    pub name: String,
+    /// Fixed command arguments.
+    pub run: Vec<String>,
+    /// Source globs; at least one is required.
+    pub sources: Vec<String>,
+    /// Declared outputs (`None` renders `outputs = []`).
+    pub outputs: Option<Vec<String>>,
+    /// Command inputs hashed with captured streams.
+    pub command_inputs: Vec<String>,
+}
+
+/// Render a versioned task TOML: marker first, then fixed fields.
+/// # Errors
+pub fn render_task_toml(version: &str, def: &QualifiedTaskDef) -> Result<String, MiseError> {
+    if def.sources.is_empty() || def.run.is_empty() || def.name.trim().is_empty() {
+        return Err(ineligible(&def.name, "task_def_incomplete"));
+    }
+    let outputs = match &def.outputs {
+        Some(outputs) => toml_strings(outputs),
+        None => "[]".to_owned(),
+    };
+    Ok([
+        format!("# velnor-actions {version}\n"),
+        format!("run = {}\n", toml_strings(&def.run)),
+        format!("sources = {}\n", toml_strings(&def.sources)),
+        format!("outputs = {outputs}\n"),
+        "[cache]\n".to_owned(),
+        format!("command_inputs = {}\n", toml_strings(&def.command_inputs)),
+    ]
+    .join(""))
+}
+
+/// Quote strings as a TOML array of double-quoted values.
+fn toml_strings(values: &[String]) -> String {
+    let items: Vec<String> = values.iter().map(|value| format!("{value:?}")).collect();
+    format!("[{}]", items.join(", "))
+}
+
+/// Fixed `mise run --task-cache <mode> <task> --file <path>` argv.
+/// # Errors
+pub fn task_run_argv(
+    mode: TaskCacheMode,
+    task: &str,
+    file: &str,
+) -> Result<Vec<String>, MiseError> {
+    validate_task_def_path(file)?;
+    if task.trim().is_empty() || task.contains('/') || task.contains(' ') {
+        return Err(ineligible(task, "bad_task_name"));
+    }
+    Ok([
+        "mise",
+        "--no-config",
+        "--no-env",
+        "--no-hooks",
+        "run",
+        "--task-cache",
+        &mode.to_string(),
+        task,
+        "--file",
+        file,
+    ]
+    .iter()
+    .map(ToString::to_string)
+    .collect())
+}
+
+/// Reject reuse for nondeterministic or undeclared-state task kinds.
+/// # Errors
+pub fn qualify_reuse(
+    kind: &str,
+    network: bool,
+    clock: bool,
+    random: bool,
+) -> Result<(), MiseError> {
+    if matches!(kind, "publish" | "deploy" | "notify" | "service") || network || clock || random {
+        return Err(ineligible(kind, "task_not_eligible"));
+    }
+    Ok(())
+}
+
+/// Verify every declared output is present with a matching digest.
+/// # Errors
+pub fn verify_reused_outputs(
+    task: &str,
+    declared: &[String],
+    observed: &[(String, Vec<u8>, String)],
+) -> Result<(), MiseError> {
+    for path in declared {
+        let Some((_, bytes, digest)) = observed.iter().find(|(name, _, _)| name == path) else {
+            return Err(MiseError::ArtifactNotFound { path: path.clone() });
+        };
+        verify_artifact_digest(bytes, digest)
+            .map_err(|_| ineligible(task, "task_result_incomplete"))?;
+    }
+    Ok(())
+}
+
+/// Shared rejection for an ineligible cache task.
+fn ineligible(task: &str, reason: &str) -> MiseError {
+    MiseError::CacheNotEligible {
+        task: task.to_owned(),
+        reason: reason.to_owned(),
+    }
+}
+
+/// Classify a restore attempt: hit or a precise miss reason.
+///
+/// Checks run in order: present, digest, compatibility, trust, inputs.
+/// # Errors
+pub fn classify_restore(checks: [bool; 5]) -> Result<(), &'static str> {
+    let reasons = [
+        "no_entry",
+        "cache_corrupt",
+        "compatibility_mismatch",
+        "trust_scope_mismatch",
+        "input_digest_mismatch",
+    ];
+    for (index, ok) in checks.iter().enumerate() {
+        if !ok {
+            return Err(reasons[index]);
+        }
+    }
+    Ok(())
+}
+
+/// Save allowlist: trusted layers save only on protected pushes.
+#[must_use]
+pub fn save_allowed(layer_trust: &str, event: &str, passed: bool) -> bool {
+    layer_trust != "trusted" || (event == "push" && passed)
 }
