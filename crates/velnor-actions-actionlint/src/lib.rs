@@ -12,6 +12,7 @@ pub mod config;
 pub mod error;
 pub mod overrides;
 pub mod tools;
+pub mod zizmor;
 
 pub use actions::{ALINT_ACTION, ALINT_REVIEWED_TAG, ALLOWED_ACTIONS, PinnedActionRef};
 pub use capabilities::{ACTIONLINT_VERSION, ActionlintCapabilities, StepSyntax};

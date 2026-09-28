@@ -15,6 +15,20 @@ pub enum MiseError {
     },
     /// A pinned tool request named zero tools; Velnor always pins at least one.
     EmptyToolchain,
+    /// A payload names a forbidden program (`rustup`) or installer action.
+    ForbiddenPayload {
+        /// Rejected program as supplied.
+        program: String,
+        /// Machine-readable reason (`rustup_forbidden`, `cargo_install_forbidden`).
+        reason: String,
+    },
+    /// A Nextest shape input (package, partition, key) is malformed.
+    InvalidNextestInput {
+        /// Rejected field name.
+        field: String,
+        /// Rejected value as supplied.
+        value: String,
+    },
     /// A tool name is not in the Velnor pinned catalog.
     UnknownTool {
         /// Rejected tool name.
@@ -115,6 +129,12 @@ impl Display for MiseError {
         match self {
             Self::EmptyCommand { program } => write!(f, "empty_command: {program}"),
             Self::EmptyToolchain => write!(f, "empty_toolchain"),
+            Self::ForbiddenPayload { program, reason } => {
+                write!(f, "forbidden_payload: {program}: {reason}")
+            }
+            Self::InvalidNextestInput { field, value } => {
+                write!(f, "invalid_nextest_input: {field}: {value}")
+            }
             Self::UnknownTool { tool } => write!(f, "unknown_tool: {tool}"),
             Self::InvalidToolVersion { tool, version } => {
                 write!(f, "invalid_tool_version: {tool}: {version}")

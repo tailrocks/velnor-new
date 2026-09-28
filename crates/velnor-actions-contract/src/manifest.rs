@@ -105,10 +105,15 @@ impl ReleaseManifest {
     pub const SCHEMA: u32 = 1;
 
     /// Parse canonical release-manifest JSON, rejecting malformed input.
+    ///
+    /// Duplicate keys are rejected (cache §1); unknown keys fail with
+    /// `unknown_config_field` (arch §3).
     /// # Errors
     pub fn parse_json(text: &str, file: &str) -> Result<Self, ContractError> {
-        serde_json::from_str(text)
-            .map_err(|err| ContractError::config(file, "document", format!("malformed_json:{err}")))
+        let value = crate::strict_json::parse_strict_json(text).map_err(|err| {
+            ContractError::config(file, "document", format!("malformed_json:{err}"))
+        })?;
+        serde_json::from_value(value).map_err(|err| map_manifest_error(file, &err))
     }
 
     /// Find the asset record for a target triple.
@@ -261,6 +266,17 @@ impl GeneratorLock {
         }
         Ok(())
     }
+}
+
+/// Map a manifest decode error: unknown keys become `unknown_config_field`.
+fn map_manifest_error(file: &str, err: &serde_json::Error) -> ContractError {
+    let message = err.to_string();
+    if let Some(rest) = message.strip_prefix("unknown field `")
+        && let Some((field, _)) = rest.split_once('`')
+    {
+        return ContractError::unknown_config_field(file, field);
+    }
+    ContractError::config(file, "document", format!("malformed_json:{message}"))
 }
 
 /// Check a document schema version.

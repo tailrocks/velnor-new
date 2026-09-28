@@ -2,7 +2,7 @@
 use std::collections::BTreeMap;
 use velnor_actions_contract::{
     CompatibilityInputs, ContractError, ExecuteTaskIds, ExecuteTaskRef, MatrixEntry,
-    StackExtension, TaskConfiguration, TaskGenerator, TaskIdentity, TaskInput,
+    StackExtension, TaskConfiguration, TaskGenerator, TaskIdentity, TaskInput, VcsInputs,
     artifact_id_for_candidate, artifact_id_for_final, artifact_id_for_matrix, artifact_id_for_plan,
     canonical_json_bytes, canonical_json_str, compatibility_id, digest_b3, input_digest,
     manifest_key_for_cargo_manifest, matrix_id_for_task_group, matrix_key_for_id, plan_id_for_run,
@@ -19,7 +19,8 @@ pub(crate) const TASK: &str = "stack/rust/crates/velnor-actions-contract/clippy/
 /// Sample task-group ID shared by contract cases.
 pub(crate) const GROUP: &str = "stack/rust/crates/velnor-actions-contract/validation/default";
 
-fn sample_identity() -> TaskIdentity {
+/// Sample task identity shared by contract cases.
+pub(crate) fn sample_identity() -> TaskIdentity {
     TaskIdentity {
         schema_version: 1,
         stack_id: "rust".to_owned(),
@@ -46,6 +47,12 @@ fn sample_identity() -> TaskIdentity {
             path: "crates/velnor-actions-contract/src/lib.rs".to_owned(),
             digest: digest_b3(b"fn main() {}"),
         }],
+        dependencies: vec![],
+        vcs: VcsInputs {
+            commit: None,
+            reference: None,
+            submodules: BTreeMap::new(),
+        },
         toolchain_id: digest_b3(b"toolchain"),
         platform_id: digest_b3(b"platform"),
         environment: BTreeMap::from([("RUSTFLAGS".to_owned(), "-D warnings".to_owned())]),

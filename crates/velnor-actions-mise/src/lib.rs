@@ -8,8 +8,12 @@ pub mod cache;
 pub mod catalog;
 pub mod command;
 pub mod error;
+pub mod gate6;
 pub mod git;
+pub mod nextest;
+pub mod preflight;
 pub mod requests;
+pub mod template;
 
 pub use cache::{
     CACHE_DIR_ENV, CachedTaskDescriptor, TASK_ARTIFACTS_DIR_NAME, TASK_ARTIFACTS_VERSION,
@@ -22,11 +26,20 @@ pub use catalog::{
     SHELLCHECK_VERSION, ToolCatalog, ZIZMOR_VERSION, validate_exact_version,
 };
 pub use command::{
-    ISOLATION_ENV, IsolatedCommand, MISE_GLOBAL_FLAGS, ProcessOutput, TOOL_COMMAND_SEPARATOR,
+    ALLOWED_MISE_SUBCOMMANDS, ISOLATION_ENV, IsolatedCommand, MISE_CARGO_HOME_ENV,
+    MISE_GLOBAL_FLAGS, MISE_RUSTUP_HOME_ENV, NO_AUTO_INSTALL_ENV, ProcessOutput,
+    RUSTUP_TOOLCHAIN_ENV, TOOL_COMMAND_SEPARATOR, is_allowed_mise_subcommand, toolchain_env,
 };
 pub use error::MiseError;
+pub use gate6::{Gate6Fixture, qualified_task_run_argv, render_gated_task_toml};
 pub use git::{ALLOWED_GIT_VERBS, GitRequest, is_allowed_git_verb};
-pub use requests::{MetadataDiscovery, MetadataQualification, PinnedToolExec};
+pub use nextest::{
+    ARCHIVE_FILE, NEXTEST_EXTRACT_BASE, NextestArchive, NextestDriver, NextestList,
+    NextestPartition, NextestRun,
+};
+pub use preflight::{RouteDriver, RouteProof, prove_route};
+pub use requests::{MetadataDiscovery, MetadataQualification, MiseInstall, PinnedToolExec};
+pub use template::TaskTemplate;
 
 /// Stable identifier for the Mise tool wrapper.
 pub const TOOL_ID: &str = "mise";

@@ -252,3 +252,75 @@ fn workflow_ir_validates_pins_and_refs() -> Result<(), ContractError> {
     assert!(bad.validate().is_err());
     Ok(())
 }
+
+#[test]
+fn reports_validate_only_when_matrix_id_matches_entry() -> Result<(), ContractError> {
+    use velnor_actions_contract::{ExecuteTaskIds, ExecuteTaskRef, MatrixEntry};
+    let run_key = run_key_for_ci(11, 1);
+    let mut tasks = BTreeMap::new();
+    tasks.insert("clippy".to_owned(), ExecuteTaskRef::Single(TASK.to_owned()));
+    let entry = MatrixEntry::derive(
+        "rust",
+        "stack/rust/crates/velnor-actions-contract/validation/default",
+        serde_json::json!({"manifest": "crates/velnor-actions-contract/Cargo.toml"}),
+        ExecuteTaskIds { tasks },
+        &digest_b3(b"entry-inputs"),
+        &run_key,
+    )?;
+    let task_digest = digest_b3(b"task-bytes");
+    let report = TaskReport {
+        schema: 1,
+        task_report_id: task_report_id_for_task(&run_key, &entry.matrix_key, &task_digest)?,
+        run_key: run_key.clone(),
+        event: WorkflowEvent::PullRequest,
+        trust: Trust::Pr,
+        matrix_id: entry.id.clone(),
+        matrix_key: entry.matrix_key.clone(),
+        task_id: TASK.to_owned(),
+        task_digest,
+        status: TaskStatus::Executed,
+        not_selected_reason: None,
+        cache: CacheOutcome {
+            layer: CacheLayer::Task,
+            key: "velnor-v1-task-pr-x".to_owned(),
+            result: CacheResult::Miss,
+            miss_reason: Some("no_entry".to_owned()),
+        },
+        exit_code: 0,
+        duration_ms: 12,
+        outputs: vec![],
+    };
+    report.validate()?;
+    let matrix = MatrixReport {
+        schema: 1,
+        report_id: entry.report_id.clone(),
+        run_key,
+        matrix_id: entry.id.clone(),
+        matrix_key: entry.matrix_key.clone(),
+        status: MatrixStatus::Passed,
+        expected_task_ids: vec![TASK.to_owned()],
+        task_report_ids: vec![report.task_report_id.clone()],
+        tasks: vec![velnor_actions_contract::MatrixTaskEntry {
+            task_report_id: report.task_report_id.clone(),
+            task_id: TASK.to_owned(),
+            status: TaskStatus::Executed,
+            exit_code: 0,
+        }],
+        selected: 1,
+        reused: 0,
+        executed: 1,
+        empty_partition: 0,
+        not_selected: 0,
+        failed: 0,
+        cancelled: 0,
+    };
+    matrix.validate()?;
+    let other = "stack:rust|task:internal/plan/default".to_owned();
+    let mut bad_task = report.clone();
+    bad_task.matrix_id = other.clone();
+    assert!(bad_task.validate().is_err());
+    let mut bad_matrix = matrix.clone();
+    bad_matrix.matrix_id = other;
+    assert!(bad_matrix.validate().is_err());
+    Ok(())
+}

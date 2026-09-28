@@ -8,7 +8,7 @@ use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 
 use crate::catalog::{PinnedTool, ToolCatalog};
-use crate::command::{IsolatedCommand, ProcessOutput, mise_argv_tail};
+use crate::command::{IsolatedCommand, ProcessOutput, mise_argv_tail, mise_install_argv_tail};
 use crate::error::MiseError;
 
 /// Cargo payload program executed after the `--` separator.
@@ -183,13 +183,22 @@ pub struct PinnedToolExec {
     args: Vec<OsString>,
 }
 
+/// Program stem that must never run as a payload: direct toolchain
+/// management bypasses Mise selection, so it is forbidden.
+const FORBIDDEN_PROGRAM_STEM: &str = "rustup";
+
 impl PinnedToolExec {
     /// Run `program` with `args` under the given pinned tools.
     ///
+    /// Direct toolchain managers and installer actions are rejected:
+    /// validation runs through Mise-selected tools only.
+    ///
     /// # Errors
     ///
-    /// Returns [`MiseError::EmptyToolchain`] for zero tools and
-    /// [`MiseError::EmptyCommand`] for an empty program.
+    /// Returns [`MiseError::EmptyToolchain`] for zero tools,
+    /// [`MiseError::EmptyCommand`] for an empty program, and
+    /// [`MiseError::ForbiddenPayload`] for `rustup` programs and
+    /// `cargo install` payloads.
     pub fn new(
         tools: Vec<PinnedTool>,
         program: &OsStr,
@@ -203,6 +212,7 @@ impl PinnedToolExec {
                 program: "mise".to_owned(),
             });
         }
+        reject_forbidden_payload(program, &args)?;
         Ok(Self {
             tools,
             program: program.to_owned(),
@@ -265,6 +275,92 @@ impl PinnedToolExec {
     }
 }
 
+/// Bootstrap installation of exact catalog tools (the `mise install` step).
+///
+/// Exact argv: `mise install --no-config --no-env --no-hooks
+/// <tool>@<exact>...` under `MISE_LOCKFILE=0` plus Velnor-owned homes. This
+/// is the bootstrap exception: the only Velnor invocation that installs
+/// tools. Every later invocation runs through `exec` with implicit
+/// installation disabled, so a missing tool fails as a preparation error.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MiseInstall {
+    /// Tools installed as `<tool>@<exact>` selectors.
+    tools: Vec<PinnedTool>,
+}
+
+impl MiseInstall {
+    /// Install the given catalog tools at their exact pins.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MiseError::EmptyToolchain`] for zero tools.
+    pub fn new(tools: Vec<PinnedTool>) -> Result<Self, MiseError> {
+        if tools.is_empty() {
+            return Err(MiseError::EmptyToolchain);
+        }
+        Ok(Self { tools })
+    }
+
+    /// Tools installed as `<tool>@<exact>` selectors.
+    #[must_use]
+    pub fn tools(&self) -> &[PinnedTool] {
+        &self.tools
+    }
+
+    /// Full mise argument vector including the program.
+    #[must_use]
+    pub fn argv(&self, catalog: &ToolCatalog) -> Vec<OsString> {
+        let specs = catalog.tool_specs(&self.tools);
+        let mut argv = vec![OsString::from("mise")];
+        argv.extend(mise_install_argv_tail(&specs));
+        argv
+    }
+
+    /// Isolated command running this installation.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MiseError::EmptyToolchain`] only if the tool list were
+    /// empty, which the constructor rules out.
+    pub fn command(&self, catalog: &ToolCatalog) -> Result<IsolatedCommand, MiseError> {
+        let specs = catalog.tool_specs(&self.tools);
+        IsolatedCommand::mise_install(&specs)
+    }
+
+    /// Run the installation and return its typed output.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MiseError::SpawnFailed`] when the child cannot be
+    /// spawned or reaped. A nonzero exit is returned as data.
+    pub fn run(&self, catalog: &ToolCatalog) -> Result<ProcessOutput, MiseError> {
+        self.command(catalog)?.run()
+    }
+}
+
+/// Reject `rustup` payloads (bare or absolute) and `cargo install` payloads.
+fn reject_forbidden_payload(program: &OsStr, args: &[OsString]) -> Result<(), MiseError> {
+    let stem = Path::new(program)
+        .file_stem()
+        .map(|stem| stem.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    if stem == FORBIDDEN_PROGRAM_STEM {
+        return Err(MiseError::ForbiddenPayload {
+            program: program.to_string_lossy().into_owned(),
+            reason: "rustup_forbidden".to_owned(),
+        });
+    }
+    let is_cargo_install =
+        program == OsStr::new(CARGO_PROGRAM) && args.first().is_some_and(|arg| arg == "install");
+    if is_cargo_install {
+        return Err(MiseError::ForbiddenPayload {
+            program: CARGO_PROGRAM.to_owned(),
+            reason: "cargo_install_forbidden".to_owned(),
+        });
+    }
+    Ok(())
+}
+
 /// Full mise argv: program plus the shared globals/`exec`/specs/`--` tail.
 fn full_mise_argv(
     catalog: &ToolCatalog,
@@ -273,6 +369,6 @@ fn full_mise_argv(
 ) -> Vec<OsString> {
     let specs = catalog.tool_specs(tools);
     let mut argv = vec![OsString::from("mise")];
-    argv.extend(mise_argv_tail(&specs, payload));
+    argv.extend(mise_argv_tail("exec", &specs, payload));
     argv
 }

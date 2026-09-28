@@ -1,14 +1,15 @@
 //! Schema-1 affected plan and generic matrix entries.
 use super::baseline::{BaselineProof, PlanBaseline};
+use super::execute::ExecuteTaskIds;
 use crate::canonical::validate_digest;
-use crate::config::RunnerSelection;
+use crate::config::{RunnerSelection, VelnorConfig};
 use crate::errors::ContractError;
 use crate::ids::{
     artifact_id_for_matrix, matrix_id_for_task_group, matrix_key_for_id, plan_id_for_run,
     report_id_for_matrix, validate_id, validate_run_key, validate_task_id,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 /// One `matrix.include` entry.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MatrixEntry {
@@ -30,22 +31,24 @@ pub struct MatrixEntry {
     pub report_id: String,
     /// Derived artifact name.
     pub artifact_id: String,
+    /// Cache identity digests recorded in the plan (cache §1).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_ids: Option<EntryCacheIds>,
 }
-/// Executable obligations: single IDs or shard arrays (stack-neutral keys).
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct ExecuteTaskIds {
-    /// Named task references.
-    pub tasks: BTreeMap<String, ExecuteTaskRef>,
-}
-/// One named task reference.
+/// Workspace/lane/platform/toolchain/format digests for one entry.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum ExecuteTaskRef {
-    /// Single task ID.
-    Single(String),
-    /// Sharded task IDs.
-    Shards(Vec<String>),
+#[serde(deny_unknown_fields)]
+pub struct EntryCacheIds {
+    /// Workspace identity digest.
+    pub workspace_id: String,
+    /// Lane identity digest.
+    pub lane_id: String,
+    /// Platform identity digest.
+    pub platform_id: String,
+    /// Toolchain identity digest.
+    pub toolchain_id: String,
+    /// Cache-format identity digest.
+    pub cache_format_id: String,
 }
 /// Schema-1 affected plan.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -196,6 +199,7 @@ impl MatrixEntry {
             adapter_metadata,
             execute_task_ids,
             input_digest: input_digest.to_owned(),
+            cache_ids: None,
         })
     }
     /// Validate derivations, digests, and task references for a run key.
@@ -215,6 +219,12 @@ impl MatrixEntry {
         }
         validate_digest(&self.input_digest)?;
         self.execute_task_ids.validate()?;
+        if !VelnorConfig::REGISTERED_STACKS.contains(&self.stack_id.as_str()) {
+            return Err(ContractError::identity("stack_id", "unregistered_stack"));
+        }
+        if let Some(cache_ids) = &self.cache_ids {
+            cache_ids.validate()?;
+        }
         let expect_id = matrix_id_for_task_group(&self.stack_id, &self.task_id)?;
         if expect_id != self.id {
             return Err(ContractError::identity("id", "id_mismatch"));
@@ -222,29 +232,18 @@ impl MatrixEntry {
         Ok(())
     }
 }
-impl ExecuteTaskIds {
-    /// Validate reference names and every task ID they name.
+impl EntryCacheIds {
+    /// Validate every recorded cache identity digest.
     /// # Errors
     pub fn validate(&self) -> Result<(), ContractError> {
-        for (name, task_ref) in &self.tasks {
-            if name.is_empty()
-                || !name
-                    .bytes()
-                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_')
-            {
-                return Err(ContractError::identity("execute_task_ids", "bad_name"));
-            }
-            match task_ref {
-                ExecuteTaskRef::Single(id) => validate_task_id(id)?,
-                ExecuteTaskRef::Shards(ids) => {
-                    if ids.is_empty() {
-                        return Err(ContractError::identity("execute_task_ids", "empty_shards"));
-                    }
-                    for id in ids {
-                        validate_task_id(id)?;
-                    }
-                }
-            }
+        for value in [
+            self.workspace_id.as_str(),
+            self.lane_id.as_str(),
+            self.platform_id.as_str(),
+            self.toolchain_id.as_str(),
+            self.cache_format_id.as_str(),
+        ] {
+            validate_digest(value)?;
         }
         Ok(())
     }
@@ -273,12 +272,20 @@ impl Plan {
             entry.id.as_str()
         })?;
         let mut matrix_ids = BTreeSet::new();
+        let mut matrix_keys = BTreeSet::new();
         for entry in &self.matrix.include {
             entry.validate(&self.run_key)?;
             if !matrix_ids.insert(entry.id.as_str()) {
                 return Err(ContractError::Collision(format!("matrix id {}", entry.id)));
             }
+            if !matrix_keys.insert(entry.matrix_key.as_str()) {
+                return Err(ContractError::Collision(format!(
+                    "matrix key {}",
+                    entry.matrix_key
+                )));
+            }
         }
+        check_obligation_agreement(&self.task_ids, &self.obligations)?;
         for package in &self.packages {
             check_sorted(&package.reasons, "packages.reasons")?;
             check_sorted(&package.tasks, "packages.tasks")?;
@@ -312,6 +319,24 @@ impl PlanObligation {
             proof.validate()?;
         }
         Ok(())
+    }
+}
+/// Check `task_ids` contains every obligation ID, nothing else (wf §4).
+fn check_obligation_agreement(
+    task_ids: &[String],
+    obligations: &[PlanObligation],
+) -> Result<(), ContractError> {
+    let mut expected: Vec<&str> = obligations
+        .iter()
+        .map(|obligation| obligation.task_id.as_str())
+        .collect();
+    expected.sort_unstable();
+    let mut actual: Vec<&str> = task_ids.iter().map(String::as_str).collect();
+    actual.sort_unstable();
+    if expected == actual {
+        Ok(())
+    } else {
+        Err(ContractError::identity("task_ids", "obligation_mismatch"))
     }
 }
 /// Check a string list is sorted and duplicate-free.

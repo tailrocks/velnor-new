@@ -62,6 +62,30 @@ impl VelnorConfig {
         self.stacks.validate(file)?;
         self.discovery.validate(file)?;
         self.actions.validate(file)?;
+        self.check_shard_budgets(file)?;
+        Ok(())
+    }
+
+    /// Reject shard counts beyond the test-process budget (par §8).
+    /// # Errors
+    pub fn check_shard_budgets(&self, file: &str) -> Result<(), ContractError> {
+        let budget = self.resources.test_process_budget;
+        if self.test_sharding.default_shards > budget {
+            return Err(ContractError::config(
+                file,
+                "test_sharding.default_shards",
+                "exceeds_test_process_budget",
+            ));
+        }
+        for (manifest, shards) in &self.test_sharding.by_manifest {
+            if *shards > budget {
+                return Err(ContractError::config(
+                    file,
+                    format!("test_sharding.by_manifest.{manifest}"),
+                    "exceeds_test_process_budget",
+                ));
+            }
+        }
         Ok(())
     }
 }

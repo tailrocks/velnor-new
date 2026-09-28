@@ -114,6 +114,33 @@ pub fn final_report_id_for_run(run_key: &str) -> Result<String, ContractError> {
     validate_run_key(run_key)?;
     Ok(format!("final-{run_key}"))
 }
+/// Final-report path under `$RUNNER_TEMP` (cache §3).
+/// # Errors
+pub fn final_report_relpath(run_key: &str) -> Result<String, ContractError> {
+    validate_run_key(run_key)?;
+    Ok(format!("velnor/{run_key}/final-report.json"))
+}
+/// Matrix-report path under `$RUNNER_TEMP` (cache §3).
+/// # Errors
+pub fn matrix_report_relpath(run_key: &str, matrix_key: &str) -> Result<String, ContractError> {
+    validate_run_key(run_key)?;
+    crate::ids::validate_matrix_key(matrix_key)?;
+    Ok(format!("velnor/{run_key}/{matrix_key}/matrix-report.json"))
+}
+/// Task-report path under `$RUNNER_TEMP` (task §5).
+/// # Errors
+pub fn task_report_relpath(
+    run_key: &str,
+    matrix_key: &str,
+    task_report_id: &str,
+) -> Result<String, ContractError> {
+    validate_run_key(run_key)?;
+    crate::ids::validate_matrix_key(matrix_key)?;
+    crate::ids::validate_task_report_id(task_report_id)?;
+    Ok(format!(
+        "velnor/{run_key}/{matrix_key}/tasks/{task_report_id}.json"
+    ))
+}
 /// Validate a final report ID.
 /// # Errors
 pub fn validate_final_report_id(value: &str) -> Result<(), ContractError> {

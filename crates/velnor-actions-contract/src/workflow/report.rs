@@ -200,8 +200,24 @@ impl TaskReport {
                 "reason_mismatch",
             ));
         }
+        if let Some(reason) = &self.cache.miss_reason {
+            crate::cachekey::validate_miss_reason(reason)?;
+        }
         if self.cache.key.len() > 512 {
             return Err(ContractError::identity("cache.key", "key_too_long"));
+        }
+        for output in &self.outputs {
+            crate::canonical::normalize_posix_path(output)?;
+        }
+        Ok(())
+    }
+    /// Check `outputs` lists only declared task outputs (cache §3).
+    /// # Errors
+    pub fn validate_outputs_declared(&self, declared: &[String]) -> Result<(), ContractError> {
+        for output in &self.outputs {
+            if !declared.contains(output) {
+                return Err(ContractError::identity("outputs", "undeclared_output"));
+            }
         }
         Ok(())
     }
@@ -295,95 +311,4 @@ fn check_matrix_id(matrix_id: &str, matrix_key: &str) -> Result<(), ContractErro
         return Err(ContractError::identity("matrix_id", "id_mismatch"));
     }
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::ids::run_key_for_ci;
-    use crate::workflow::plan::{ExecuteTaskIds, ExecuteTaskRef, MatrixEntry};
-    use std::collections::BTreeMap;
-
-    /// Build one sample matrix entry for report tests.
-    fn sample_entry(run_key: &str) -> Result<MatrixEntry, ContractError> {
-        let mut tasks = BTreeMap::new();
-        tasks.insert(
-            "clippy".to_owned(),
-            ExecuteTaskRef::Single(
-                "stack/rust/crates/velnor-actions-contract/clippy/default".to_owned(),
-            ),
-        );
-        MatrixEntry::derive(
-            "rust",
-            "stack/rust/crates/velnor-actions-contract/validation/default",
-            serde_json::json!({"manifest": "crates/velnor-actions-contract/Cargo.toml"}),
-            ExecuteTaskIds { tasks },
-            &crate::canonical::digest_b3(b"entry-inputs"),
-            run_key,
-        )
-    }
-
-    #[test]
-    fn reports_validate_only_when_matrix_id_matches_entry() -> Result<(), ContractError> {
-        let run_key = run_key_for_ci(11, 1);
-        let entry = sample_entry(&run_key)?;
-        let task_digest = crate::canonical::digest_b3(b"task-bytes");
-        let task_report_id = task_report_id_for_task(&run_key, &entry.matrix_key, &task_digest)?;
-        let report = TaskReport {
-            schema: 1,
-            task_report_id,
-            run_key: run_key.clone(),
-            event: WorkflowEvent::PullRequest,
-            trust: Trust::Pr,
-            matrix_id: entry.id.clone(),
-            matrix_key: entry.matrix_key.clone(),
-            task_id: "stack/rust/crates/velnor-actions-contract/clippy/default".to_owned(),
-            task_digest,
-            status: TaskStatus::Executed,
-            not_selected_reason: None,
-            cache: CacheOutcome {
-                layer: CacheLayer::Task,
-                key: "velnor-v1-task-pr-x".to_owned(),
-                result: CacheResult::Miss,
-                miss_reason: Some("no_entry".to_owned()),
-            },
-            exit_code: 0,
-            duration_ms: 12,
-            outputs: vec![],
-        };
-        report.validate()?;
-        let matrix = MatrixReport {
-            schema: 1,
-            report_id: entry.report_id.clone(),
-            run_key,
-            matrix_id: entry.id.clone(),
-            matrix_key: entry.matrix_key.clone(),
-            status: MatrixStatus::Passed,
-            expected_task_ids: vec![report.task_id.clone()],
-            task_report_ids: vec![report.task_report_id.clone()],
-            tasks: vec![MatrixTaskEntry {
-                task_report_id: report.task_report_id.clone(),
-                task_id: report.task_id.clone(),
-                status: TaskStatus::Executed,
-                exit_code: 0,
-            }],
-            selected: 1,
-            reused: 0,
-            executed: 1,
-            empty_partition: 0,
-            not_selected: 0,
-            failed: 0,
-            cancelled: 0,
-        };
-        matrix.validate()?;
-        let other = "stack:rust|task:internal/plan/default".to_owned();
-        assert_ne!(matrix_key_for_id(&other)?, entry.matrix_key);
-        let mut bad_task = report.clone();
-        bad_task.matrix_id = other.clone();
-        assert!(bad_task.validate().is_err());
-        let mut bad_matrix = matrix.clone();
-        bad_matrix.matrix_id = other;
-        assert!(bad_matrix.validate().is_err());
-        Ok(())
-    }
 }

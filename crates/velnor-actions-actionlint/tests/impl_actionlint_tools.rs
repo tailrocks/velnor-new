@@ -1,7 +1,23 @@
 //! Lint-tool pin cases.
 use velnor_actions_actionlint::{
-    ActionlintError, ActionlintToolchain, ShellcheckToolchain, WorkflowLintTools, ZizmorToolchain,
+    ACTIONLINT_VERSION, ActionlintError, ActionlintToolchain, ShellcheckToolchain,
+    WorkflowLintTools, ZizmorToolchain,
 };
+
+#[test]
+fn single_pinned_actionlint_identity_for_config_and_workflows() {
+    let tools = WorkflowLintTools::new("1.9.0").expect("valid zizmor pin");
+    assert_eq!(tools.actionlint.version(), ACTIONLINT_VERSION);
+    assert_eq!(
+        tools.actionlint.mise_tool_spec(),
+        format!("actionlint@{ACTIONLINT_VERSION}"),
+        "one pinned binary lints both the staged config and every workflow"
+    );
+    assert_eq!(
+        tools.mise_tool_specs()[0],
+        tools.actionlint.mise_tool_spec()
+    );
+}
 
 #[test]
 fn pinned_tool_specs_are_exact() {

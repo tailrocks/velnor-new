@@ -10,6 +10,7 @@ use std::collections::BTreeMap;
 use serde::Serialize;
 
 use crate::errors::ContractError;
+use crate::vcs::VcsInputs;
 
 /// A validated `b3-<64 lowercase hex>` digest.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -121,6 +122,10 @@ pub struct TaskIdentity {
     pub configuration: TaskConfiguration,
     /// Declared input paths with content digests.
     pub inputs: Vec<TaskInput>,
+    /// Upstream task IDs this task depends on (sorted, cache §1).
+    pub dependencies: Vec<String>,
+    /// Observed VCS revision inputs (par §4.2).
+    pub vcs: VcsInputs,
     /// Toolchain identity digest.
     pub toolchain_id: String,
     /// Platform identity digest.
@@ -182,6 +187,13 @@ pub struct StackExtension {
 }
 
 impl TaskIdentity {
+    /// Parse identity JSON, rejecting duplicate keys (cache §1).
+    /// # Errors
+    pub fn parse_json(text: &str) -> Result<Self, ContractError> {
+        let value = crate::strict_json::parse_strict_json(text)?;
+        serde_json::from_value(value).map_err(|err| ContractError::CanonicalJson(err.to_string()))
+    }
+
     /// Validate relative paths, task ID, and digest shapes.
     /// # Errors
     pub fn validate(&self) -> Result<(), ContractError> {
@@ -203,6 +215,27 @@ impl TaskIdentity {
         }
         if self.argv.iter().any(|arg| arg.starts_with('/')) {
             return Err(ContractError::identity("argv", "absolute_path"));
+        }
+        self.validate_dependencies()?;
+        self.vcs.validate()?;
+        for name in self.environment.keys() {
+            if crate::secrets::is_secret_env_name(name) {
+                return Err(ContractError::identity(
+                    "environment",
+                    format!("secret_env:{name}"),
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    /// Validate dependency task IDs are well-formed and sorted.
+    fn validate_dependencies(&self) -> Result<(), ContractError> {
+        for dep in &self.dependencies {
+            crate::ids::validate_task_id(dep)?;
+        }
+        if self.dependencies.windows(2).any(|pair| pair[0] > pair[1]) {
+            return Err(ContractError::identity("dependencies", "must_be_sorted"));
         }
         Ok(())
     }

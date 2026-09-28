@@ -6,7 +6,8 @@ use crate::evidence::{RustExecutionProfile, TestRunner};
 use crate::metadata::PackageRecord;
 
 pub use crate::argv::{
-    RustTaskIdentityExtension, cargo_payload_argv, shard_task_id, shards_allowed,
+    EntryMetadata, ExtensionInputs, RustTaskIdentityExtension, cargo_payload_argv, entry_metadata,
+    evidence_id, parse_rerun_changed, require_nextest_for_shards, shard_task_id, shards_allowed,
 };
 
 /// Rust task kinds derived per package.
@@ -77,6 +78,33 @@ pub struct TaskGroup {
     pub compile_driver: String,
     /// Selected test runner.
     pub test_runner: String,
+    /// Declared non-Rust task inputs (sorted, deduped).
+    pub declared_inputs: Vec<String>,
+}
+
+impl TaskGroup {
+    /// Attach declared non-Rust inputs (sorted, deduped).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ContractError`] for empty, absolute, or traversing paths.
+    pub fn with_declared_inputs(mut self, paths: &[String]) -> Result<Self, ContractError> {
+        for path in paths {
+            let bad =
+                path.is_empty() || path.starts_with('/') || path.split('/').any(|s| s == "..");
+            if bad {
+                return Err(ContractError::identity(
+                    "declared_inputs",
+                    format!("bad_input:{path}"),
+                ));
+            }
+        }
+        let mut sorted = paths.to_vec();
+        sorted.sort();
+        sorted.dedup();
+        self.declared_inputs = sorted;
+        Ok(self)
+    }
 }
 
 /// Inputs for per-package derivation.
@@ -210,6 +238,7 @@ pub fn derive_workspace_fmt(
         package_arg: None,
         compile_driver: profile.compile_driver.as_str().to_owned(),
         test_runner: profile.test_runner.as_str().to_owned(),
+        declared_inputs: Vec::new(),
     })
 }
 
@@ -248,6 +277,7 @@ fn plain_group(
         package_arg: None,
         compile_driver: base.driver.to_owned(),
         test_runner: base.runner.to_owned(),
+        declared_inputs: Vec::new(),
     }
 }
 

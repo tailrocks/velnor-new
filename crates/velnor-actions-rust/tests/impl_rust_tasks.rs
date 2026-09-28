@@ -272,6 +272,55 @@ fn fmt_only_with_explicit_config() {
 }
 
 #[test]
+fn workspace_fmt_carries_driver_runner() {
+    let profile = nextest_profile();
+    let workspace = derive_workspace_fmt("Cargo.toml", &profile, "default", "host");
+    let Ok(workspace) = workspace else {
+        panic!("workspace fmt must succeed");
+    };
+    assert_eq!(workspace.compile_driver, "mbx");
+    assert_eq!(workspace.test_runner, "cargo_nextest");
+    assert!(workspace.declared_inputs.is_empty());
+}
+
+#[test]
+fn declared_inputs_accept_non_rust_and_reject_bad() {
+    let package = package();
+    let profile = cargo_profile();
+    let features = vec!["default".to_owned()];
+    let inputs = inputs(&package, &profile, &features);
+    let Ok(groups) = derive_task_groups(&inputs) else {
+        panic!("derivation must succeed");
+    };
+    assert!(groups.iter().all(|group| group.declared_inputs.is_empty()));
+    let paths = vec![
+        "tests/data/corpus.md".to_owned(),
+        "tests/data/vectors.json".to_owned(),
+        "tests/data/corpus.md".to_owned(),
+    ];
+    let with = groups[1].clone().with_declared_inputs(&paths);
+    let Ok(with) = with else {
+        panic!("declared inputs must attach");
+    };
+    assert_eq!(
+        with.declared_inputs,
+        vec![
+            "tests/data/corpus.md".to_owned(),
+            "tests/data/vectors.json".to_owned(),
+        ]
+    );
+    for bad in ["", "/absolute/path.md", "a/../../escape.md"] {
+        assert!(
+            groups[1]
+                .clone()
+                .with_declared_inputs(&[bad.to_owned()])
+                .is_err(),
+            "bad input must be rejected: {bad}"
+        );
+    }
+}
+
+#[test]
 fn carries_driver_runner_and_sorted_features() {
     let package = package();
     let profile = nextest_profile();

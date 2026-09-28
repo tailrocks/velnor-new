@@ -9,11 +9,27 @@ mod impl_mise_cache_gates;
 mod impl_mise_catalog;
 #[path = "impl_mise_command.rs"]
 mod impl_mise_command;
+#[path = "impl_mise_env.rs"]
+mod impl_mise_env;
+#[path = "impl_mise_forbidden_src.rs"]
+mod impl_mise_forbidden_src;
+#[path = "impl_mise_gate6.rs"]
+mod impl_mise_gate6;
 #[path = "impl_mise_git.rs"]
 mod impl_mise_git;
+#[path = "impl_mise_install.rs"]
+mod impl_mise_install;
 #[path = "impl_mise_lock.rs"]
 mod impl_mise_lock;
+#[path = "impl_mise_negative.rs"]
+mod impl_mise_negative;
+#[path = "impl_mise_nextest.rs"]
+mod impl_mise_nextest;
 #[path = "impl_mise_policy.rs"]
 mod impl_mise_policy;
+#[path = "impl_mise_preflight.rs"]
+mod impl_mise_preflight;
 #[path = "impl_mise_requests.rs"]
 mod impl_mise_requests;
+#[path = "impl_mise_templates.rs"]
+mod impl_mise_templates;

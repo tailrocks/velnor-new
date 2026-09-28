@@ -2,10 +2,10 @@
 
 use velnor_actions_contract::digest_b3;
 use velnor_actions_mise::cache::{
-    QualifiedTaskDef, TaskCacheMode, classify_restore, mode_for_event, qualify_reuse,
-    render_task_toml, save_allowed, task_run_argv, validate_sources_path, validate_task_def_path,
-    verify_reused_outputs,
+    QualifiedTaskDef, TaskCacheMode, classify_restore, mode_for_event, qualify_reuse, save_allowed,
+    task_run_argv, validate_sources_path, validate_task_def_path, verify_reused_outputs,
 };
+use velnor_actions_mise::{Gate6Fixture, render_gated_task_toml};
 
 /// Sources allowlist accepts only `registry/` and `git/` subtrees.
 #[test]
@@ -89,7 +89,8 @@ fn task_toml_renders_marker_and_fixed_fields() {
         outputs: None,
         command_inputs: vec!["rustc --version".to_owned()],
     };
-    let toml = render_task_toml("0.1.0", &def).expect("render");
+    let fixture = Gate6Fixture::new("gate6/cache-gates").expect("fixture");
+    let toml = render_gated_task_toml("0.1.0", &def, &fixture).expect("render");
     let mut lines = toml.lines();
     assert_eq!(lines.next().expect("marker"), "# velnor-actions 0.1.0");
     assert!(
@@ -102,12 +103,12 @@ fn task_toml_renders_marker_and_fixed_fields() {
         sources: Vec::new(),
         ..def.clone()
     };
-    assert!(render_task_toml("0.1.0", &empty).is_err());
+    assert!(render_gated_task_toml("0.1.0", &empty, &fixture).is_err());
     let unnamed = QualifiedTaskDef {
         name: String::new(),
         ..def
     };
-    assert!(render_task_toml("0.1.0", &unnamed).is_err());
+    assert!(render_gated_task_toml("0.1.0", &unnamed, &fixture).is_err());
 }
 
 /// Task invocation uses leading globals plus `--task-cache` and `--file`.

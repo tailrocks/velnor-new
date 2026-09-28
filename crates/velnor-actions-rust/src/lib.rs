@@ -2,7 +2,8 @@
 //!
 //! Pure inventory, evidence, and task-group derivation from bytes the
 //! orchestrator supplies. This crate launches no processes, builds no tool
-//! invocations, reads no tool files, and renders no workflow text.
+//! invocations, reads no files itself, and renders no workflow text. It owns
+//! read-only inspection of supplied `rust-toolchain.toml` bytes.
 
 mod argv;
 pub mod detect;
@@ -12,6 +13,7 @@ pub mod index;
 pub mod metadata;
 pub mod scan;
 pub mod tasks;
+pub mod toolfiles;
 
 pub use detect::{
     CandidateOutcome, CargoCandidate, DetectError, DetectedProject, DetectionStatus,
@@ -34,6 +36,11 @@ pub use metadata::{
     WorkspaceRecord, parse_metadata_json,
 };
 pub use tasks::{DeriveInputs, TaskGroup, TaskKind, derive_task_groups, derive_workspace_fmt};
+pub use toolfiles::{
+    FOREIGN_TOOL_FILES, MISSING_RECOMMENDED_INPUT, OWNED_SYMBOLS, RUST_TOOLCHAIN_FILE,
+    TOOLING_INPUT_INVALID, ToolFile, ToolFinding, ToolInspectError, ToolchainInspection,
+    ToolchainSpec, inspect_toolchain_file, is_owned_tool_file, stack_for_symbol,
+};
 
 /// Stable identifier for the Rust stack.
 pub const STACK_ID: &str = "rust";

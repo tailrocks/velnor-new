@@ -9,8 +9,8 @@
 pub mod artifact;
 
 pub use artifact::{
-    artifact_id_for_candidate, artifact_id_for_final, artifact_id_for_matrix, artifact_id_for_plan,
-    target_key, validate_artifact_id,
+    artifact_id_for_baseline, artifact_id_for_candidate, artifact_id_for_final,
+    artifact_id_for_matrix, artifact_id_for_plan, target_key, validate_artifact_id,
 };
 
 use crate::canonical::validate_digest;

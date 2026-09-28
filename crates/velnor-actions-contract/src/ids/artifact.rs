@@ -24,6 +24,17 @@ pub fn artifact_id_for_final(run_key: &str) -> Result<String, ContractError> {
     Ok(format!("velnor-final-{run_key}"))
 }
 
+/// Derive `velnor-baseline-<commit>-<compat>` with full IDs (par §5).
+/// # Errors
+pub fn artifact_id_for_baseline(commit: &str, compat: &str) -> Result<String, ContractError> {
+    if commit.len() != 40 || !is_lower_hex(commit) {
+        return Err(ContractError::identity("artifact_id", "bad_source_commit"));
+    }
+    crate::canonical::validate_digest(compat)
+        .map_err(|_| ContractError::identity("artifact_id", "bad_compatibility_id"))?;
+    Ok(format!("velnor-baseline-{commit}-{compat}"))
+}
+
 /// Derive `velnor-candidate-<run-key>-<target-key>` from a target triple.
 /// # Errors
 pub fn artifact_id_for_candidate(run_key: &str, target: &str) -> Result<String, ContractError> {
@@ -57,6 +68,9 @@ pub fn validate_artifact_id(value: &str) -> Result<(), ContractError> {
     }
     if let Some(rest) = value.strip_prefix("velnor-candidate-") {
         return validate_candidate_artifact(rest);
+    }
+    if let Some(rest) = value.strip_prefix("velnor-baseline-") {
+        return validate_baseline_artifact(rest);
     }
     Err(ContractError::identity(
         "artifact_id",
@@ -103,6 +117,24 @@ fn validate_candidate_artifact(rest: &str) -> Result<(), ContractError> {
         "artifact_id",
         "bad_candidate_artifact",
     ))
+}
+
+/// Validate the commit/compat tail of a baseline artifact name.
+fn validate_baseline_artifact(rest: &str) -> Result<(), ContractError> {
+    let bad = || ContractError::identity("artifact_id", "bad_baseline_artifact");
+    let Some((commit, compat)) = rest.split_once('-') else {
+        return Err(bad());
+    };
+    if commit.len() != 40 || !is_lower_hex(commit) {
+        return Err(bad());
+    }
+    crate::canonical::validate_digest(compat).map_err(|_| bad())
+}
+
+/// Check lowercase hex.
+fn is_lower_hex(text: &str) -> bool {
+    text.bytes()
+        .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
 }
 
 /// Check target-key shape (matches [`target_key`] output grammar).

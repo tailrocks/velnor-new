@@ -1,5 +1,8 @@
 //! Cargo payload argv shape cases (moved from the orchestrator).
-use velnor_actions_rust::tasks::{TaskGroup, TaskKind, cargo_payload_argv};
+use velnor_actions_rust::tasks::{
+    TaskGroup, TaskKind, cargo_payload_argv, entry_metadata, evidence_id,
+};
+use velnor_actions_rust::{Evidence, EvidenceStrength};
 
 fn group(kind: TaskKind) -> TaskGroup {
     TaskGroup {
@@ -18,6 +21,7 @@ fn group(kind: TaskKind) -> TaskGroup {
         package_arg: None,
         compile_driver: "cargo".to_owned(),
         test_runner: "cargo_test".to_owned(),
+        declared_inputs: Vec::new(),
     }
 }
 
@@ -52,6 +56,66 @@ fn payload_features_and_target() {
             .any(|w| w == ["--target", "x86_64-unknown-linux-gnu"])
     );
     assert!(!text(&group(TaskKind::Fmt)).contains(&"--no-default-features".to_owned()));
+}
+
+#[test]
+fn payloads_never_emit_all_features() {
+    let kinds = [
+        TaskKind::Fmt,
+        TaskKind::Clippy,
+        TaskKind::Test,
+        TaskKind::Nextest,
+        TaskKind::Doctest,
+        TaskKind::Doc,
+        TaskKind::Build,
+    ];
+    for kind in kinds {
+        for features in [
+            vec!["default".to_owned()],
+            vec!["serde".to_owned(), "cli".to_owned()],
+            Vec::new(),
+        ] {
+            let mut group_case = group(kind);
+            group_case.features = features;
+            for arg in text(&group_case) {
+                assert!(
+                    !arg.contains("all-features"),
+                    "forbidden flag for {kind:?}: {arg}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn entry_metadata_carries_driver_runner_and_evidence() {
+    let group_case = group(TaskKind::Test);
+    let sightings = vec![
+        Evidence {
+            path: "scripts/test.sh".to_owned(),
+            line: 2,
+            command_or_setting: "cargo test --package a".to_owned(),
+            strength: EvidenceStrength::Strong,
+        },
+        Evidence {
+            path: "mise.toml".to_owned(),
+            line: 4,
+            command_or_setting: "mr_boxington = true".to_owned(),
+            strength: EvidenceStrength::Strong,
+        },
+    ];
+    let metadata = entry_metadata(&group_case, &sightings);
+    assert_eq!(metadata.compile_driver, "cargo");
+    assert_eq!(metadata.test_runner, "cargo_test");
+    assert_eq!(metadata.evidence_ids.len(), 2);
+    assert!(metadata.evidence_ids[0].starts_with("scripts/test.sh:2:"));
+    assert!(metadata.evidence_ids[1].starts_with("mise.toml:4:"));
+    assert_eq!(metadata.evidence_ids[0], evidence_id(&sightings[0]));
+    assert_eq!(
+        entry_metadata(&group_case, &sightings),
+        metadata,
+        "entry metadata is deterministic"
+    );
 }
 
 #[test]

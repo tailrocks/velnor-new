@@ -52,6 +52,12 @@ impl ContractError {
         }
     }
 
+    /// Build an unknown-key error (`unknown_config_field`, arch §3).
+    #[must_use]
+    pub fn unknown_config_field(file: impl Into<String>, key_path: impl Into<String>) -> Self {
+        Self::config(file, key_path, "unknown_config_field")
+    }
+
     /// Build a config validation error.
     #[must_use]
     pub fn config(

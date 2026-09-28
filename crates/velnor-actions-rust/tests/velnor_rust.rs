@@ -11,8 +11,12 @@ mod impl_rust_evidence;
 mod impl_rust_gates;
 #[path = "impl_rust_metadata.rs"]
 mod impl_rust_metadata;
+#[path = "impl_rust_negative.rs"]
+mod impl_rust_negative;
 #[path = "impl_rust_tasks.rs"]
 mod impl_rust_tasks;
+#[path = "impl_rust_toolfiles.rs"]
+mod impl_rust_toolfiles;
 
 /// Shared inline-fixture support (no fixture files outside `tests/`).
 mod support {

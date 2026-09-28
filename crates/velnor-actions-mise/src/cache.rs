@@ -276,8 +276,12 @@ pub struct QualifiedTaskDef {
 }
 
 /// Render a versioned task TOML: marker first, then fixed fields.
+///
+/// Crate-private: task-cache TOML is a schema change enabled only with
+/// Gate-6 fixtures (see `gate6`), so external callers must go through the
+/// gated wrapper.
 /// # Errors
-pub fn render_task_toml(version: &str, def: &QualifiedTaskDef) -> Result<String, MiseError> {
+pub(crate) fn render_task_toml(version: &str, def: &QualifiedTaskDef) -> Result<String, MiseError> {
     if def.sources.is_empty() || def.run.is_empty() || def.name.trim().is_empty() {
         return Err(ineligible(&def.name, "task_def_incomplete"));
     }

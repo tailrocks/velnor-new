@@ -12,6 +12,7 @@ use std::ffi::OsString;
 use serde::Serialize;
 use velnor_actions_contract::{ContractError, task_id_for_stack};
 
+use crate::evidence::{Evidence, TestRunner};
 use crate::tasks::{TaskGroup, TaskKind};
 
 /// Typed Rust task-identity extension (cache §1); unknown schemas disable reuse.
@@ -23,13 +24,13 @@ pub struct RustTaskIdentityExtension {
     pub manifest: String,
     /// Workspace/local-package graph digest.
     pub graph_digest: String,
-    /// Target kinds and names.
+    /// Target kinds and names, sorted.
     pub targets: Vec<String>,
-    /// Enabled features.
+    /// Enabled features, sorted.
     pub features: Vec<String>,
     /// Rust target and profile.
     pub target: String,
-    /// Compile driver and test runner.
+    /// Compile driver plus test runner (`driver+runner`).
     pub driver: String,
     /// Cargo config and build-script input digests.
     pub config_digest: String,
@@ -39,6 +40,51 @@ pub struct RustTaskIdentityExtension {
     pub kind: String,
     /// Build script reads undeclared inputs; disables reuse and coverage.
     pub undeclared_reads: bool,
+    /// `Cargo.lock` digest, when the lockfile is available.
+    pub lock_digest: Option<String>,
+    /// Archive identity (producing build task id) for Nextest archives only.
+    pub archive: Option<String>,
+    /// Declared `rerun-if-changed` build inputs, sorted.
+    pub rerun_inputs: Vec<String>,
+    /// Declared non-Rust task inputs, sorted.
+    pub declared_inputs: Vec<String>,
+}
+
+/// Inputs for deriving one task-identity extension before selection.
+#[derive(Debug, Clone)]
+pub struct ExtensionInputs<'a> {
+    /// Cargo package ID.
+    pub package_id: &'a str,
+    /// Normalized manifest path.
+    pub manifest: &'a str,
+    /// Workspace/local-package graph digest.
+    pub graph_digest: &'a str,
+    /// Target kinds and names.
+    pub targets: &'a [String],
+    /// Enabled features.
+    pub features: &'a [String],
+    /// Rust target and profile.
+    pub target: &'a str,
+    /// Compile driver.
+    pub driver: &'a str,
+    /// Test runner.
+    pub runner: &'a str,
+    /// Cargo config and build-script input digests.
+    pub config_digest: &'a str,
+    /// `Cargo.lock` digest, when the lockfile is available.
+    pub lock_digest: Option<&'a str>,
+    /// `.config/nextest.toml` digest for Nextest profiles.
+    pub nextest_digest: Option<&'a str>,
+    /// Rust task kind.
+    pub kind: TaskKind,
+    /// Build task id producing the archive (Nextest `Build` only).
+    pub archive_source: Option<&'a str>,
+    /// Declared `rerun-if-changed` inputs (`None` means unknown).
+    pub rerun_inputs: Option<&'a [String]>,
+    /// Whether the package carries a build script.
+    pub has_build_script: bool,
+    /// Declared non-Rust task inputs.
+    pub declared_inputs: &'a [String],
 }
 
 impl RustTaskIdentityExtension {
@@ -62,6 +108,47 @@ impl RustTaskIdentityExtension {
         }
         Ok(())
     }
+
+    /// Derive the extension for one task group before selection and reuse.
+    ///
+    /// Archives attach only to Nextest `Build` groups (cargo-test never
+    /// archives; the archive carries its producing build task id so trust
+    /// and retention follow the source). A build script with unknown
+    /// `rerun-if-changed` inputs conservatively disables reuse.
+    #[must_use]
+    pub fn for_task(inputs: &ExtensionInputs<'_>) -> Self {
+        let nextest = inputs.runner == TestRunner::CargoNextest.as_str();
+        let archive = if inputs.kind == TaskKind::Build && nextest {
+            inputs.archive_source.map(str::to_owned)
+        } else {
+            None
+        };
+        Self {
+            package_id: inputs.package_id.to_owned(),
+            manifest: inputs.manifest.to_owned(),
+            graph_digest: inputs.graph_digest.to_owned(),
+            targets: sorted_unique(inputs.targets),
+            features: sorted_unique(inputs.features),
+            target: inputs.target.to_owned(),
+            driver: format!("{}+{}", inputs.driver, inputs.runner),
+            config_digest: inputs.config_digest.to_owned(),
+            nextest_digest: inputs.nextest_digest.map(str::to_owned),
+            kind: inputs.kind.as_str().to_owned(),
+            undeclared_reads: inputs.has_build_script && inputs.rerun_inputs.is_none(),
+            lock_digest: inputs.lock_digest.map(str::to_owned),
+            archive,
+            rerun_inputs: inputs.rerun_inputs.map_or_else(Vec::new, sorted_unique),
+            declared_inputs: sorted_unique(inputs.declared_inputs),
+        }
+    }
+}
+
+/// Sorted deduped copy for identity stability.
+fn sorted_unique(values: &[String]) -> Vec<String> {
+    let mut out = values.to_vec();
+    out.sort();
+    out.dedup();
+    out
 }
 
 /// Derive one shard task ID from an unsharded base ID.
@@ -87,6 +174,76 @@ pub fn shard_task_id(base: &str, index: u32, count: u32) -> Result<String, Contr
 #[must_use]
 pub fn shards_allowed(test_runner: &str) -> bool {
     test_runner == "cargo_nextest"
+}
+
+/// Reject sharded obligations for non-Nextest runners.
+///
+/// Cargo-test is always one test obligation; only Nextest profiles shard.
+///
+/// # Errors
+///
+/// Returns [`ContractError`] when `count` exceeds one for cargo-test.
+pub fn require_nextest_for_shards(runner: &str, count: u32) -> Result<(), ContractError> {
+    if count > 1 && !shards_allowed(runner) {
+        return Err(ContractError::identity(
+            "shard_count",
+            "cargo_test_single_obligation",
+        ));
+    }
+    Ok(())
+}
+
+/// Declared `rerun-if-changed` inputs from build-script output, sorted.
+///
+/// Accepts both `cargo::rerun-if-changed=PATH` and the legacy
+/// `cargo:rerun-if-changed=PATH` forms; anything else is ignored (never an
+/// error: unknown directives stay opaque).
+#[must_use]
+pub fn parse_rerun_changed(output: &str) -> Vec<String> {
+    let mut paths = Vec::new();
+    for line in output.lines() {
+        let line = line.trim();
+        let path = line
+            .strip_prefix("cargo::rerun-if-changed=")
+            .or_else(|| line.strip_prefix("cargo:rerun-if-changed="))
+            .map(str::trim)
+            .filter(|path| !path.is_empty());
+        if let Some(path) = path {
+            paths.push(path.to_owned());
+        }
+    }
+    paths.sort();
+    paths.dedup();
+    paths
+}
+
+/// Adapter entry metadata: detected driver/runner plus evidence ids.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EntryMetadata {
+    /// Detected compile driver.
+    pub compile_driver: String,
+    /// Detected test runner.
+    pub test_runner: String,
+    /// Stable evidence ids backing the selection, in evidence order.
+    pub evidence_ids: Vec<String>,
+}
+
+/// Build entry metadata from one task group plus its profile evidence.
+#[must_use]
+pub fn entry_metadata(group: &TaskGroup, evidence: &[Evidence]) -> EntryMetadata {
+    EntryMetadata {
+        compile_driver: group.compile_driver.clone(),
+        test_runner: group.test_runner.clone(),
+        evidence_ids: evidence.iter().map(evidence_id).collect(),
+    }
+}
+
+/// Stable id for one evidence sighting: `path:line:digest8`.
+#[must_use]
+pub fn evidence_id(evidence: &Evidence) -> String {
+    let digest = velnor_actions_contract::digest_b3(evidence.command_or_setting.as_bytes());
+    let short = digest.get(..8).unwrap_or(&digest);
+    format!("{}:{}:{short}", evidence.path, evidence.line)
 }
 
 /// Fixed Cargo payload argv for one task group (kind, features, target).

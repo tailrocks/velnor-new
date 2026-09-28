@@ -211,6 +211,15 @@ impl ToolCatalog {
     pub fn tool_specs(&self, tools: &[PinnedTool]) -> Vec<String> {
         tools.iter().map(|tool| self.tool_spec(*tool)).collect()
     }
+
+    /// Exact `RUSTUP_TOOLCHAIN` value: the pinned Rust version.
+    ///
+    /// Rendered Cargo steps set this override so an inspected project
+    /// toolchain file cannot select another compiler.
+    #[must_use]
+    pub fn rustup_toolchain(&self) -> String {
+        self.version(PinnedTool::Rust).to_owned()
+    }
 }
 
 /// Reject loose selectors: only exact `major.minor.patch` pins qualify.
