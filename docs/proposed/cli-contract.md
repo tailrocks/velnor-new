@@ -35,6 +35,15 @@ coordinates typed process requests. The Mise adapter owns process creation,
 argument validation, environment construction, and result capture for those
 requests; the orchestrator MUST NOT launch processes or construct shell text.
 
+Internal workflow steps MUST NOT be exposed as subcommands. The sole
+non-CLI internal entrypoint is the `VELNOR_INTERNAL_OP` environment
+variable plus a request file: when `VELNOR_INTERNAL_OP` names a typed
+operation (`plan`, `merge-reports`, or `check-generated`), the binary
+reads its schema-1 JSON request from `VELNOR_INTERNAL_REQUEST_FILE`,
+writes its schema-1 JSON result to `VELNOR_INTERNAL_RESPONSE_FILE`, and
+MUST ignore CLI arguments. Any other op value fails with exit 2. Helper
+staging and version rules are in §6 and [workflow §3](workflow-contract.md).
+
 ## 2. Repository root
 
 All commands resolve the root by running `git rev-parse --show-toplevel` from
@@ -146,6 +155,8 @@ schema = 1
 # Optional Rust task configuration. The Rust detector is automatic in V1.
 # [stacks.rust]
 # configurations = [{ name = "default", features = ["default"], target = "host" }]
+# compile_driver = "cargo"         # Sticky override: "cargo" or "mbx"; conflicts with durable evidence fail closed.
+# test_runner = "cargo_test"       # Sticky override: "cargo_test" or "cargo_nextest".
 
 # Optional repository-relative POSIX globs excluded before detector input.
 # [discovery]
@@ -233,7 +244,11 @@ workflow plan, not from hardcoded display text.
 tasks, restore or publish caches, or modify `.github`, `.velnor/config.toml`,
 user tool files, source files, or other repository content. It MUST use the
 same validated preparation object and renderer output as `generate`; rendered
-bytes exist only in memory and are discarded after the report is printed.
+bytes exist only in memory, or staged under an outside-root temporary
+directory that is discarded, and identical validation runs over either
+form. Staging MUST be outside the repository root and MUST NOT be an
+ancestor of it, mirroring `generate --output-dir` rules; canonicalization,
+escape-fail-closed, and no-repository-writes still apply.
 
 ## 6. `generate`
 
@@ -285,10 +300,22 @@ memory or in a run-scoped temporary directory while generation or a generated
 workflow executes. They MUST NOT become additional public CLI commands or
 additional repository-owned generated files.
 
+A workflow helper is the SHA-256-verified generating-release binary
+staged at `$RUNNER_TEMP`, never a repository path or a second
+executable. The helper version MUST equal the bootstrap descriptor
+selected in [workflow §3](workflow-contract.md), EXCEPT the enumerated
+candidate-qualification steps in candidate mode (`Check generated
+files` and the `velnor-candidate` qualification checks), which use the
+verified candidate artifact. No other step may invoke the candidate.
+
 ## 7. Output and exit status
 
 `plan` writes its report to stdout. `generate` writes human-readable
 recommendations about optional tooling files and detection findings to stderr.
+When `generate` replaces the `.github` tree, it MUST also list every
+removed path that was not Velnor-generated output on stderr (see
+[generated-file §3](generated-file-contract.md)); previews report the
+same list without modifying the repository.
 Neither `plan` nor `generate` has JSON or format-selection options. The
 generated workflow is the machine-readable product; detailed plans and reports
 remain internal and are validated by the orchestrator and workflow's final

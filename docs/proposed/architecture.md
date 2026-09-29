@@ -162,6 +162,8 @@ ignore = [] # example override: ["rust"] disables Rust planning/generation
 
 [stacks.rust]
 configurations = [{ name = "default", features = ["default"], target = "host" }]
+# compile_driver = "cargo" # optional sticky override: "cargo" | "mbx"
+# test_runner = "cargo_test" # optional sticky override: "cargo_test" | "cargo_nextest"
 
 [discovery]
 exclude = ["vendor/**", "fixtures/**"]
@@ -189,7 +191,7 @@ or fetch a remote to guess. `generator_validation` is `bootstrap` or
 `candidate`; Velnor uses `candidate`. `max_parallel_jobs`, compiler/test
 budgets, and shard settings bound execution.
 
-`stacks.ignore` is a sorted, duplicate-free list of exact registered stack IDs. For example, `ignore = ["rust"]` disables Rust task planning and generation. Detection still runs, and matching detections appear with status `ignored`. Unknown IDs fail configuration validation. CLI flags cannot change this list. Stack-specific options belong under `[stacks.<id>]`; V1 supports `[stacks.rust].configurations` only. If that field is absent, use one documented default Rust configuration. `discovery.exclude` contains repository-relative POSIX path globs applied before detectors; it is not a stack selector. Invalid, absolute, parent-traversal, or malformed patterns fail validation. V1 registers only `rust`; no-Rust repositories produce an empty stack inventory. V1 MUST reject custom shell fragments, raw YAML, arbitrary `uses:` actions, and task definitions in this file.
+`stacks.ignore` is a sorted, duplicate-free list of exact registered stack IDs. For example, `ignore = ["rust"]` disables Rust task planning and generation. Detection still runs, and matching detections appear with status `ignored`. Unknown IDs fail configuration validation. CLI flags cannot change this list. Stack-specific options belong under `[stacks.<id>]`; V1 supports `[stacks.rust].configurations`, `[stacks.rust].compile_driver`, and `[stacks.rust].test_runner` only. The driver/runner keys are sticky profile declarations; conflicts with durable evidence fail closed (see [task execution](task-execution-contract.md)). If that field is absent, use one documented default Rust configuration. `discovery.exclude` contains repository-relative POSIX path globs applied before detectors; it is not a stack selector. Invalid, absolute, parent-traversal, or malformed patterns fail validation. V1 registers only `rust`; no-Rust repositories produce an empty stack inventory. V1 MUST reject custom shell fragments, raw YAML, arbitrary `uses:` actions, and task definitions in this file.
 
 Configuration validation MUST report file, key path, and problem. Unknown `schema` versions fail with `unsupported_schema`; unknown keys fail with `unknown_config_field`. Defaults MUST NOT be invented for required fields.
 
@@ -228,6 +230,16 @@ mise exec --no-config rust@<exact> -- cargo metadata --format-version 1 --locked
 ```
 
 This uses the same explicit tool pins and Cargo metadata command. Missing offline dependencies are `preparation_incomplete`, not a reason to fetch or produce a partial resolution. Velnor's own manifest-to-model adapter consumes the JSON; the `cargo_metadata` crate MAY deserialize it but MUST NOT execute Cargo. The plan job MUST NOT wait for full resolution merely to compute conservative local reverse dependencies.
+
+When the workspace has no `Cargo.lock`, discovery still uses the
+`--no-deps` command above (which needs no lockfile). Resolution
+qualification MUST take an explicit unpinned path: run the qualification
+command without `--locked` but still with `--offline`, record
+`lockfile_absent_unpinned` in the plan, and MUST NOT fetch from the
+network. A missing lockfile MUST NOT silently enable network access; any
+offline resolution failure is `preparation_incomplete`. All metadata
+subprocesses keep the `--no-config` family; manifest paths are
+canonicalized, escape fails closed, and no repository write occurs.
 
 The inventory MUST retain workspace root, Cargo package ID, repository-relative manifest path, package name/version, members/exclusions, target kind/name/test status, normal/build/dev/target-specific dependencies, local path edges, declared features, required features, doctests, build scripts, toolchain/config inputs, and declared external files.
 
@@ -304,6 +316,23 @@ entries, and task IDs MUST be sorted deterministically. Unknown plan schema
 fails. Each omitted package/task MUST have an explanation available to
 internal explanation records. The plan written to its run-scoped location and
 the matrix sent through `GITHUB_OUTPUT` MUST have the same canonical matrix bytes.
+
+Field grammars in this contract and the [cache contract](cache-contract.md)
+are normative over examples; on conflict the grammar wins. `*_digest`
+fields are path-independent semantic identities: BLAKE3 over canonical
+JSON with absolute paths stripped and repository-relative POSIX paths.
+Artifact `*_id` values of form `velnor-<kind>-<run-key>-…` are derived
+NAMEs for upload/download matching only, never identity inputs. Bare
+numeric service IDs are permitted ONLY in evidence records
+(`baseline.proof`, `final-report.downloaded_artifacts`), never in
+identities or NAME derivation beyond the run-key correlator; the run key
+is correlation, not identity, and MUST NOT enter task/input digests.
+Platform, toolchain, cache-format, or declared-input changes invalidate
+prior identities. A `shard-1-of-1` entry runs in one step; multi-shard
+entries use archive-plus-partition fan-out (see [parallelism
+§8](parallelism-and-selection-contract.md)). Report publication is
+atomic: validate in staging, then rename-swap; on failure prior bytes
+remain byte-identical.
 
 Generated workflow and Mise task ownership, task naming, rendering, and atomic write rules are specified in the [generated-file contract](generated-file-contract.md).
 

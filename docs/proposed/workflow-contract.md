@@ -188,7 +188,7 @@ one stack-neutral report even after failure.
 4. `velnor-final`: `if: always()`, depends on the base and enabled policy jobs, validates reports/conclusions,
 and is the required status check.
 
-Only for `workflow.policy = "velnor-repository-v1"`, emit two additional independent jobs. `velnor-alint`
+Only for `workflow.policy = "velnor-repository-v1"`, emit two additional independent jobs plus generated `velnor-release.yml` and `velnor-qualification.yml` workflows rendered from typed workflow IR, each with an explicit `permissions:` block (least privilege for its role). `velnor-alint`
 checks out source with `persist-credentials: false` and runs `uses: asamarts/alint@v0.16.1` with `path: .`,
 `config: .alint.yml`, `format: github`, and `fail-on-warning: true`. `velnor-policy` runs the remaining
 dependency/security checks. The Alint tag is the explicit exception to Velnor's normal full-SHA action rule.
@@ -202,7 +202,7 @@ When `workflow.generator_validation = "candidate"`, the generator MUST also emit
 architecture contract; that invocation is a workflow step, not a separately named task or executable. The job
 uploads the candidate binary, runs generation/fixture qualification against that exact artifact, and uploads
 one candidate report. The candidate job MUST depend on `velnor-plan` but MUST NOT provide the matrix consumed
-by `velnor-task`; the matrix is always computed by the locked bootstrap binary. Consumer repositories do not
+by `velnor-task`; the matrix is always computed by the locked bootstrap binary. The candidate binary MUST NOT emit a matrix in any step. Consumer repositories do not
 emit this job.
 
 Under `workflow.policy = "velnor-repository-v1"`, `velnor-policy` MUST run cargo-deny, cargo-machete, and
@@ -257,7 +257,7 @@ the detected Rust compile driver (MBX only when project evidence selects it).
 6. `Check generated files`: invoke the public `velnor-actions generate
 --output-dir "$RUNNER_TEMP/velnor-actions-\${GITHUB_RUN_ID}-\${GITHUB_RUN_ATTEMPT}"` in bootstrap mode;
 compare its `.github` tree byte-for-byte with the committed tree. Candidate mode performs the same check with
-the candidate binary.
+the candidate binary. Only this step and the `velnor-candidate` qualification checks may invoke the candidate artifact; every other step uses the bootstrap-descriptor helper version (see [cli §1 and §6](cli-contract.md)).
 7. `Plan`: run the generated fixed planner step with the exact event
 comparison refs. It writes the schema-1 plan to `$RUNNER_TEMP/velnor/<run-key>/plan.json`. Both refs MUST
 identify the exact event comparison, including the pull request merge result where applicable. The step uses

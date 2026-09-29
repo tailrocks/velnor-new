@@ -306,6 +306,19 @@ and SHA-256. The report MUST verify the manifest before running any candidate co
 run-scoped qualification outputs and MUST NOT be restored by ordinary cache keys or treated as a promoted
 generator binary.
 
+Field grammars here are normative over examples. `*_digest` fields are
+path-independent semantic identities: BLAKE3 over canonical JSON with
+absolute paths stripped and repository-relative POSIX paths. Artifact
+`*_id` values (`velnor-<kind>-<run-key>-…`) are derived NAMEs for
+upload/download matching only. Bare numeric service IDs are permitted
+ONLY in evidence records (`baseline.proof` and the final report's
+`downloaded_artifacts` array), never in identities or NAME derivation
+beyond the run-key correlator. Platform, toolchain, cache-format, or
+declared-input changes invalidate. `shard-1-of-1` runs in one step;
+multi-shard entries use archive-plus-partition fan-out. Publication is
+atomic: validate in staging, then rename-swap; failure leaves prior
+bytes byte-identical.
+
 ## 4. Final gate and exit rules
 
 Every matrix entry uploads the artifact named by its matrix `artifact_id` with `if: always()`.
@@ -326,6 +339,9 @@ entry, and every task report ID is unique and has the matching task digest.
 4. If candidate validation is required, the candidate report is present,
 references the expected source commit and target artifact, and is passing.
 5. The result precedence below is applied only after structural validation.
+6. The plan's `generator` `{version, sha256}` MUST equal the lock record
+for the runner target (consumers: the embedded release descriptor);
+mismatch is `planning_failed`.
 
 The final gate computes exactly one result:
 

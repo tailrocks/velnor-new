@@ -31,12 +31,12 @@ Every official Velnor release MUST publish:
    SHA-256 digest.
 
 When a release-installed `velnor-actions` binary generates consumer workflows,
-it MUST obtain the manifest for its own exact version, validate the manifest
-schema, version, repository, supported targets, and immutable URLs, then embed
-the runner-target URL and digest in generated workflow steps. The workflow
-MUST download that exact asset and verify SHA-256 before invoking it. The
-release manifest is selected by exact version; generation MUST NOT query a
-floating `latest` endpoint.
+its compiled-in manifest record for its own exact version MUST be validated —
+schema, version, repository, supported targets, immutable URLs — with no
+network access during generation; it then embeds the runner-target URL and
+digest in generated workflow steps. The workflow MUST download that exact
+asset and verify SHA-256 before invoking it. The release manifest record is
+selected by exact version; generation MUST NOT query a floating `latest` endpoint.
 
 A source build or binary without an official release version MUST fail
 consumer workflow generation with a diagnostic recommending installation of
@@ -112,7 +112,9 @@ NOT decide the graph that builds or promotes itself.
    rebuild it in another job.
 5. Qualify the exact candidate against generation fixtures, negative policy
    fixtures, and required V1 gates. The previous bootstrap MUST NOT have to
-   reproduce newly changed candidate output.
+   reproduce newly changed candidate output. The candidate MUST NOT emit a
+   workflow matrix; golden fixture files are the oracle for changed output,
+   and committed digests MUST be real measured values, never placeholders.
 6. A protected release job publishes only a qualified candidate. It publishes
    immutable per-target assets and the versioned release manifest, verifies
    their digests, then updates `.velnor/generator.lock` in a separate reviewed

@@ -51,8 +51,20 @@ adapter contains Mise parsing/commands, the Mise crate contains Rust graph
 logic, the renderer emits Mise syntax, or the CLI invokes external tools.
 It MUST also fail if process execution escapes the Mise adapter or if the
 orchestrator constructs shell commands instead of issuing typed tool requests.
+Policy fixtures are committed policy tests per [rust-quality
+§5](rust-quality-contract.md) (cargo-metadata edge test, exact member-set
+test, literal-substring ownership tests, Alint-generic plus Clippy sizes,
+human-reviewed snapshots); custom linters are forbidden and Alint stays
+generic-only.
 
 An implementation gate passes only when all listed proofs pass on the named CI runner and the result is recorded with the code. A skipped, cancelled, missing, or infrastructure-failed proof does not pass a gate.
+
+Two gate vocabularies are normative: `policy-on-source` (a check that
+validates repository source, e.g. Alint, deny, actionlint, zizmor) and
+`qualification-of-generator` (a check that validates a candidate
+generator binary against fixtures and golden files, never by asking the
+old bootstrap to reproduce new output). Gates MUST label each proof
+with the vocabulary it satisfies.
 
 ## Gate 0: bootstrap repository contract
 
@@ -127,7 +139,9 @@ The initial seed and every later candidate use this sequence:
    job.
 4. Run candidate generation checks, policy checks, and fixture qualification
    with the candidate. The candidate may validate output that the old locked
-   generator cannot reproduce.
+   generator cannot reproduce. The candidate MUST NOT emit a matrix; golden
+   files are the oracle for changed output, and committed digests MUST be
+   real measured values, never placeholders.
 5. Promote only after all candidate checks and the required final aggregation
    pass. Publish immutable per-target release assets, verify their digests, and
    update the protected generator lock in a separate reviewed change.

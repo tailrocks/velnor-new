@@ -65,11 +65,31 @@ Strong MBX evidence is executable project intent: a Mise Rust setting with
 script, or existing hand-written workflow that invokes `mbx`. Strong Nextest
 evidence is an executable task/script/workflow invoking `cargo nextest` or
 `nextest run/archive/list`. Ordinary `cargo test` invocation selects Cargo's
-test runner. Installed tools, lockfile entries, comments, documentation,
-README examples, cache directories, and Velnor-generated workflows are not
-usage evidence. If both competing ordinary test runners are explicitly used,
+test runner. Lockfile entries, comments, documentation, and Velnor-generated
+workflows are non-evidence and MUST NOT influence selection; installed tools,
+cache directories, and README examples are transient evidence (see table below). If both competing ordinary test runners are explicitly used,
 generation fails with `ambiguous_test_runner` and lists evidence. If neither is
 used, default to `cargo test` and print a Nextest recommendation only.
+
+Evidence strength is normative:
+
+| Strength | Selects profile | Examples |
+|---|---|---|
+| `durable` | Yes | Mise Rust `mr_boxington = true`; Cargo rustc wrapper naming MBX; executable task, script, or hand-written workflow invoking `mbx`, `cargo nextest`, or `nextest run/archive/list`; ordinary `cargo test` invocation for the Cargo test runner |
+| `transient` | Only with explicit declaration | Installed tools, cache directories, README examples |
+| `non-evidence` | Never | Lockfile entries, comments, documentation, Velnor-generated workflows |
+
+When the selected profile rests on transient evidence only, `plan` MUST
+record a `transient_profile_evidence` finding and `generate` MUST exit 1
+with instructions to declare explicit sticky keys. The sticky keys are
+`[stacks.rust] compile_driver = "cargo" | "mbx"` and `[stacks.rust]
+test_runner = "cargo_test" | "cargo_nextest"` (see
+[architecture §3](architecture.md)). A declared key that conflicts with
+durable evidence fails closed with exit 1. Every profile records its
+provenance (declared keys and evidence records with path, line, and
+command-or-setting) in the plan finding and the generation report.
+Persistence is the user-edited `.velnor/config.toml` only; `generate`
+MUST never write configuration.
 
 The profile is per workspace, appears in the concise generation report, and is
 part of every Rust task and cache identity. Switching Cargo/MBX or Cargo

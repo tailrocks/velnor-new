@@ -29,7 +29,7 @@ deny.toml
 .alint.yml
 .config/nextest.toml
 AGENTS.md
-.github/CODEOWNERS
+CODEOWNERS                  # repo root; Velnor never emits, reads, or validates it
 .velnor/config.toml
 .velnor/version-policy.toml
 crates/
@@ -50,8 +50,8 @@ All first-party Rust packages MUST be under `crates/`. The root manifest MUST
 be a virtual workspace with exactly the seven product package names listed in
 the table below. Cargo metadata is authoritative for package membership and
 dependency relationships. V1 does not add a custom linter to reject package
-renames or validate the architecture dependency matrix; those decisions are
-reviewed from Cargo manifests and code. Rust/Cargo-specific symbols, Cargo
+renames or validate the architecture dependency matrix; those decisions are reviewed only through the §5
+mechanism allowlist (committed policy tests, generic Alint, Clippy, human-reviewed snapshots). Rust/Cargo-specific symbols, Cargo
 metadata, and `rust-toolchain.toml` inspection are restricted to
 `velnor-actions-rust`; Mise syntax, environment, `mise.toml`/`mise.lock`
 inspection, and task metadata are restricted to `velnor-actions-mise`; actionlint
@@ -244,8 +244,7 @@ optional heavyweight dependency, platform separation, stable API, or measured
 rebuild reduction. Pure model code MUST NOT depend on UI, database, HTTP,
 platform, or process crates. Do not create wrapper or `utils` crates only to
 meet a count. The allowed dependency directions are architectural requirements
-reviewed from Cargo metadata; V1 does not provide a custom dependency-edge
-linter.
+reviewed from Cargo metadata through this mechanism allowlist only: (1) a `cargo-metadata` edge test over the manifest graph, (2) an exact workspace member-set test, (3) literal-substring ownership tests over declared paths, (4) sizes via generic Alint line-count rules plus Clippy `too_many_lines`, (5) human-reviewed insta snapshots. Custom linters are forbidden; Alint stays generic-only.
 
 ## 6. Compiler, Clippy, and formatting policy
 

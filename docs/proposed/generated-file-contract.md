@@ -9,8 +9,17 @@ Velnor V1 generate writes one complete tree:
 .github/
 ├── actionlint.yaml
 └── workflows/
-    └── velnor.yml
+    ├── velnor.yml
+    ├── velnor-release.yml        # velnor-repository-v1 only
+    └── velnor-qualification.yml  # velnor-repository-v1 only
 ```
+
+The release and qualification workflows are emitted only for
+`workflow.policy = "velnor-repository-v1"`; `consumer-v1` MUST NOT emit
+them. All three workflow files are rendered from typed workflow IR by
+`velnor-actions-workflow-renderer`, each with an explicit `permissions:`
+block (least privilege for its role); see [workflow
+§3](workflow-contract.md).
 
 | Output | Produces format | Write coordinator | Ownership rule |
 |---|---|---|---|
