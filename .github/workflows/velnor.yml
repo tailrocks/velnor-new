@@ -66,6 +66,8 @@ jobs:
     runs-on: ubuntu-26.04
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
+      plan_id: ${{ steps.plan.outputs.plan_id }}
+      run_key: ${{ steps.plan.outputs.run_key }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -86,6 +88,16 @@ jobs:
           install: "false"
           sha256: b6f8757201f6a2ee799f45f3f52ef7ca0b4071523637dc3b0b24264dd3333518
           version: 2026.9.16
+      - name: Prepare pinned tools
+        env:
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_LOCKFILE: "0"
+          MISE_NO_CONFIG: "1"
+          MISE_NO_ENV: "1"
+          MISE_NO_HOOKS: "1"
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUSTUP_TOOLCHAIN: 1.98.1
+        run: mise --no-config --no-env --no-hooks install rust@1.98.1 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1
       - name: Build helper (pre-seed trust-on-review)
         run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 -- mbx build --release --locked --package velnor-actions-cli --bin velnor-actions
       - name: Verify MBX compile (pre-seed trust-on-review)
@@ -206,6 +218,13 @@ jobs:
         with:
           key: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-velnor-task-${{hashFiles('mise.toml','.mise.toml','mise.lock','.mise.lock','.tool-versions')}}
           path: ~/.local/share/mise
+      - name: Upload matrix report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          if-no-files-found: error
+          name: velnor-matrix-r${{ github.run_id }}-a${{ github.run_attempt }}-${{ matrix.matrix_key }}
+          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/${{ matrix.matrix_key }}
   velnor-workflow-lint:
     name: Velnor Workflow Lint
     runs-on: ubuntu-26.04
