@@ -12,7 +12,8 @@ use std::ffi::OsString;
 use serde::Serialize;
 use velnor_actions_contract::{ContractError, task_id_for_stack};
 
-use crate::evidence::{Evidence, TestRunner};
+use crate::evidence::Evidence;
+use crate::profile::TestRunner;
 use crate::tasks::{TaskGroup, TaskKind};
 
 /// Typed Rust task-identity extension (cache §1); unknown schemas disable reuse.

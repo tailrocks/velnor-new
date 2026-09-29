@@ -2,26 +2,33 @@
 
 use std::path::Path;
 
-use velnor_actions_rust::{
-    EvidenceFile, FileIndex, ProfileInputs, WorkspaceRecord, detect_profile,
+use velnor_actions_contract::{
+    DeclaredCompileDriver, DeclaredTestRunner, RustStackConfig, is_generated_marker_line,
 };
-use velnor_actions_workflow_renderer::marker::MARKER_PREFIX;
+use velnor_actions_rust::{
+    CompileDriver, EvidenceFile, FileIndex, ProfileInputs, TestRunner, WorkspaceRecord,
+    detect_profile,
+};
 
 use crate::OrchestratorError;
 use crate::discover::PlannedWorkspace;
 
 /// Detect the execution profile from bytes read under `root`.
 ///
-/// Generated workflow output (marker-prefixed) is never evidence; only
-/// durable signals outside `.github` plus handwritten workflows qualify.
+/// Generated workflow output (current or historical marker) is never
+/// evidence. Durable signals outside `.github` select profiles silently;
+/// hand-written workflows inside `.github` are transient and yield blocking
+/// findings unless `[stacks.rust]` declares the profile.
 ///
 /// # Errors
 ///
-/// Returns [`OrchestratorError::Profile`] on ambiguous test runners.
+/// Returns [`OrchestratorError::Profile`] on ambiguous test runners or when
+/// durable evidence contradicts a declared key.
 pub(crate) fn profile_for_workspace(
     root: &Path,
     index: &FileIndex,
     record: &WorkspaceRecord,
+    rust: Option<&RustStackConfig>,
 ) -> Result<velnor_actions_rust::ProfileOutcome, OrchestratorError> {
     let _ = record;
     let tool_text = read_optional(root, "mise.toml").or(read_optional(root, ".mise.toml"));
@@ -51,6 +58,8 @@ pub(crate) fn profile_for_workspace(
         cargo_configs: cargo_files(cargo_a.as_ref(), cargo_b.as_ref()),
         executables,
         handwritten_workflows: flows,
+        declared_driver: rust.and_then(|stack| stack.compile_driver.map(map_driver)),
+        declared_runner: rust.and_then(|stack| stack.test_runner.map(map_runner)),
     };
     detect_profile(&inputs).map_err(|err| OrchestratorError::Profile {
         problem: err.to_string(),
@@ -133,11 +142,57 @@ fn is_workflow_path(path: &str) -> bool {
             .is_some_and(|ext| ext == "yml" || ext == "yaml")
 }
 
-/// True when the first line carries the generated marker prefix.
+/// True when the first line carries a generated marker (either spelling).
 fn starts_generated(text: &str) -> bool {
-    text.lines()
-        .next()
-        .is_some_and(|line| line.starts_with(MARKER_PREFIX))
+    text.lines().next().is_some_and(is_generated_marker_line)
+}
+
+/// Map a declared config driver to the selection enum.
+fn map_driver(declared: DeclaredCompileDriver) -> CompileDriver {
+    match declared {
+        DeclaredCompileDriver::Cargo => CompileDriver::Cargo,
+        DeclaredCompileDriver::Mbx => CompileDriver::Mbx,
+    }
+}
+
+/// Map a declared config runner to the selection enum.
+fn map_runner(declared: DeclaredTestRunner) -> TestRunner {
+    match declared {
+        DeclaredTestRunner::CargoTest => TestRunner::CargoTest,
+        DeclaredTestRunner::CargoNextest => TestRunner::CargoNextest,
+    }
+}
+
+/// Blocking profile findings across workspaces, in workspace order.
+///
+/// Each entry names the workspace root plus one finding; `generate` fails
+/// closed on any entry before touching `.github`, while `plan` reports them.
+pub(crate) fn blocking_findings(workspaces: &[PlannedWorkspace]) -> Vec<String> {
+    let mut out = Vec::new();
+    for workspace in workspaces {
+        let root = &workspace.record.workspace_root;
+        for finding in &workspace.findings {
+            for sighting in &finding.evidence {
+                out.push(format!(
+                    "{}:{}:{} {}: {}",
+                    root_label(root),
+                    sighting.path,
+                    sighting.line,
+                    sighting.command_or_setting,
+                    finding.message
+                ));
+            }
+            if finding.evidence.is_empty() {
+                out.push(format!("{}: {}", root_label(root), finding.message));
+            }
+        }
+    }
+    out
+}
+
+/// Display label for a workspace root (`.` for the repository root).
+fn root_label(root: &str) -> &str {
+    if root.is_empty() { "." } else { root }
 }
 
 /// Committed-profile drift warnings for every workspace (GAP-C.1, VER-4.2).

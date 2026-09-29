@@ -1,8 +1,12 @@
-//! Strong executable-intent evidence and per-workspace profiles.
+//! Executable-intent evidence scanning with durability tags.
+//!
+//! Scanning only; selection lives in [`crate::profile`]. Evidence rooted in
+//! the generated `.github` tree is [`EvidenceStrength::Transient`]; evidence
+//! elsewhere (Mise settings, rustc wrappers, executable tasks and scripts
+//! outside `.github`) is [`EvidenceStrength::Durable`]. Generated workflows
+//! (current or historical marker) are never evidence.
 
-use std::fmt;
-
-use velnor_actions_contract::MARKER_PREFIX;
+use velnor_actions_contract::is_generated_marker_line;
 
 use crate::scan::{
     has_adjacent, has_command, has_setting, line_no, snippet, starts_with_word, strip_comment,
@@ -14,51 +18,24 @@ pub const NEXTEST_RECOMMENDATION: &str = "nextest_recommendation";
 /// Recommendation code for persisting a durable signal.
 pub const PERSIST_EVIDENCE: &str = "persist_evidence";
 
-/// Selected compile driver for one workspace.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CompileDriver {
-    /// Plain Cargo compilation.
-    Cargo,
-    /// MBX compilation.
-    Mbx,
-}
-
-impl CompileDriver {
-    /// Stable profile name.
-    #[must_use]
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Cargo => "cargo",
-            Self::Mbx => "mbx",
-        }
-    }
-}
-
-/// Selected test runner for one workspace.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TestRunner {
-    /// Plain `cargo test`.
-    CargoTest,
-    /// Nextest execution.
-    CargoNextest,
-}
-
-impl TestRunner {
-    /// Stable profile name.
-    #[must_use]
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::CargoTest => "cargo_test",
-            Self::CargoNextest => "cargo_nextest",
-        }
-    }
-}
-
-/// Evidence strength; only strong evidence selects profiles.
+/// Evidence durability; only durable evidence selects profiles silently.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum EvidenceStrength {
-    /// Executable project intent.
-    Strong,
+    /// Survives regeneration (config, wrapper, task/script outside `.github`).
+    Durable,
+    /// Vanishes when Velnor replaces `.github`; needs an explicit declaration.
+    Transient,
+}
+
+impl EvidenceStrength {
+    /// Stable durability name.
+    #[must_use]
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Durable => "durable",
+            Self::Transient => "transient",
+        }
+    }
 }
 
 /// One recorded evidence sighting.
@@ -70,37 +47,8 @@ pub struct Evidence {
     pub line: u32,
     /// Matched setting or command text.
     pub command_or_setting: String,
-    /// Evidence strength.
+    /// Evidence durability.
     pub strength: EvidenceStrength,
-}
-
-/// Advisory recommendation emitted with a profile.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Recommendation {
-    /// Stable recommendation code.
-    pub code: String,
-    /// Human-readable guidance.
-    pub message: String,
-}
-
-/// Per-workspace execution profile.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RustExecutionProfile {
-    /// Selected compile driver.
-    pub compile_driver: CompileDriver,
-    /// Selected test runner.
-    pub test_runner: TestRunner,
-    /// Strong evidence backing the selection, sorted by `(path, line)`.
-    pub evidence: Vec<Evidence>,
-}
-
-/// Detected profile plus advisory recommendations.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProfileOutcome {
-    /// Selected profile.
-    pub profile: RustExecutionProfile,
-    /// Advisory recommendations.
-    pub recommendations: Vec<Recommendation>,
 }
 
 /// One named content blob offered as evidence.
@@ -112,148 +60,19 @@ pub struct EvidenceFile<'a> {
     pub content: &'a str,
 }
 
-/// Inputs for profile detection (all bytes come from the orchestrator).
-#[derive(Debug, Clone, Default)]
-pub struct ProfileInputs<'a> {
-    /// Tool-config content holding the Rust `mr_boxington` setting, if any.
-    pub tool_config: Option<EvidenceFile<'a>>,
-    /// Cargo config contents inspected for `rustc-wrapper` naming MBX.
-    pub cargo_configs: Vec<EvidenceFile<'a>>,
-    /// Executable task and script contents.
-    pub executables: Vec<EvidenceFile<'a>>,
-    /// Hand-written workflow contents (never generated output).
-    pub handwritten_workflows: Vec<EvidenceFile<'a>>,
-}
-
-/// Profile detection failure.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ProfileError {
-    /// Both test runners are explicitly used.
-    AmbiguousTestRunner {
-        /// Conflicting evidence, sorted.
-        evidence: Vec<Evidence>,
-    },
-}
-
-impl fmt::Display for ProfileError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let Self::AmbiguousTestRunner { evidence } = self;
-        write!(f, "ambiguous_test_runner: {} sightings", evidence.len())
-    }
-}
-
-impl std::error::Error for ProfileError {}
-
-/// Detect the per-workspace profile from strong evidence only.
-///
-/// # Errors
-///
-/// Returns [`ProfileError::AmbiguousTestRunner`] when both test runners are
-/// explicitly used.
-pub fn detect_profile(inputs: &ProfileInputs<'_>) -> Result<ProfileOutcome, ProfileError> {
-    let mut mbx = Vec::new();
-    let mut nextest = Vec::new();
-    let mut cargo_test = Vec::new();
-    let mut fragile_only = true;
-    if let Some(config) = &inputs.tool_config {
-        let found = scan_tool_config(config);
-        if !found.is_empty() {
-            fragile_only = false;
-        }
-        mbx.extend(found);
-    }
-    for config in &inputs.cargo_configs {
-        let found = scan_cargo_config(config);
-        if !found.is_empty() {
-            fragile_only = false;
-        }
-        mbx.extend(found);
-    }
-    for file in &inputs.executables {
-        let (found_mbx, found_nextest, found_cargo) = scan_command_text(file);
-        if !found_mbx.is_empty() || !found_nextest.is_empty() || !found_cargo.is_empty() {
-            fragile_only = false;
-        }
-        mbx.extend(found_mbx);
-        nextest.extend(found_nextest);
-        cargo_test.extend(found_cargo);
-    }
-    for file in &inputs.handwritten_workflows {
-        let (found_mbx, found_nextest, found_cargo) = scan_command_text(file);
-        mbx.extend(found_mbx);
-        nextest.extend(found_nextest);
-        cargo_test.extend(found_cargo);
-    }
-    if !nextest.is_empty() && !cargo_test.is_empty() {
-        let mut conflicting = nextest;
-        conflicting.extend(cargo_test);
-        conflicting.sort();
-        return Err(ProfileError::AmbiguousTestRunner {
-            evidence: conflicting,
-        });
-    }
-    let compile_driver = if mbx.is_empty() {
-        CompileDriver::Cargo
-    } else {
-        CompileDriver::Mbx
-    };
-    let test_defaulted = nextest.is_empty() && cargo_test.is_empty();
-    let test_runner = if nextest.is_empty() {
-        TestRunner::CargoTest
-    } else {
-        TestRunner::CargoNextest
-    };
-    let mut evidence = mbx;
-    evidence.extend(nextest);
-    evidence.extend(cargo_test);
-    evidence.sort();
-    let empty = evidence.is_empty();
-    let recommendations = recommend(test_defaulted, fragile_only, empty);
-    Ok(ProfileOutcome {
-        profile: RustExecutionProfile {
-            compile_driver,
-            test_runner,
-            evidence,
-        },
-        recommendations,
-    })
-}
-
-fn recommend(test_defaulted: bool, fragile_only: bool, empty: bool) -> Vec<Recommendation> {
-    let mut out = Vec::new();
-    if test_defaulted {
-        out.push(Recommendation {
-            code: NEXTEST_RECOMMENDATION.to_owned(),
-            message: "no explicit test-runner usage; defaulting to `cargo test`".to_owned(),
-        });
-    }
-    if fragile_only {
-        let message = if empty {
-            "no MBX or Nextest usage detected; to adopt either, add a durable signal"
-        } else {
-            "profile rests on hand-written workflows that generation replaces; persist a durable signal"
-        };
-        out.push(Recommendation {
-            code: PERSIST_EVIDENCE.to_owned(),
-            message: message.to_owned(),
-        });
-    }
-    out
-}
-
 /// Whether content is generated output (never evidence).
+///
+/// Accepts the current spec marker and the historical
+/// `# Generated by velnor-actions ` prefix: old files were never handwritten.
 #[must_use]
 pub fn is_generated_output(content: &str) -> bool {
-    content
-        .lines()
-        .next()
-        .is_some_and(|first| first.starts_with(MARKER_PREFIX))
+    content.lines().next().is_some_and(is_generated_marker_line)
 }
 
 /// Whether `path` must be skipped by evidence collection (output, docs, locks, caches).
 #[must_use]
 pub fn evidence_scan_excluded(path: &str) -> bool {
-    if path == ".github" || path.starts_with(".github/") {
+    if is_github_path(path) {
         return true;
     }
     if is_lock_path(path) {
@@ -266,6 +85,11 @@ pub fn evidence_scan_excluded(path: &str) -> bool {
         return true;
     }
     path == ".git" || path.starts_with(".git/")
+}
+
+/// Whether `path` is rooted in the generated `.github` tree.
+fn is_github_path(path: &str) -> bool {
+    path == ".github" || path.starts_with(".github/")
 }
 
 /// Whether `path` is documentation (never evidence).
@@ -295,31 +119,42 @@ fn is_lock_path(path: &str) -> bool {
     })
 }
 
+/// Durability for one file: `.github`-rooted sightings are always transient.
+fn strength_for(file: &EvidenceFile<'_>, base: EvidenceStrength) -> EvidenceStrength {
+    if is_github_path(file.path) {
+        EvidenceStrength::Transient
+    } else {
+        base
+    }
+}
+
 /// Scan tool-config content for the Rust `mr_boxington` setting.
-fn scan_tool_config(file: &EvidenceFile<'_>) -> Vec<Evidence> {
+pub(crate) fn scan_tool_config(file: &EvidenceFile<'_>) -> Vec<Evidence> {
     if is_generated_output(file.content) {
         return Vec::new();
     }
+    let strength = strength_for(file, EvidenceStrength::Durable);
     let mut out = Vec::new();
     for (index, line) in file.content.lines().enumerate() {
         let code = strip_comment(line);
         if has_setting(code, "mr_boxington", "true") {
-            out.push(sighting(file, index, code));
+            out.push(sighting(file, index, code, strength));
         }
     }
     out
 }
 
 /// Scan Cargo config content for `rustc-wrapper` naming MBX.
-fn scan_cargo_config(file: &EvidenceFile<'_>) -> Vec<Evidence> {
+pub(crate) fn scan_cargo_config(file: &EvidenceFile<'_>) -> Vec<Evidence> {
     if is_generated_output(file.content) {
         return Vec::new();
     }
+    let strength = strength_for(file, EvidenceStrength::Durable);
     let mut out = Vec::new();
     for (index, line) in file.content.lines().enumerate() {
         let code = strip_comment(line);
         if mentions_wrapper(code) && mentions_mbx(code) {
-            out.push(sighting(file, index, code));
+            out.push(sighting(file, index, code, strength));
         }
     }
     out
@@ -336,10 +171,18 @@ fn mentions_mbx(code: &str) -> bool {
 }
 
 /// Scan task, script, or workflow text for driver and runner invocations.
-fn scan_command_text(file: &EvidenceFile<'_>) -> (Vec<Evidence>, Vec<Evidence>, Vec<Evidence>) {
+///
+/// Callers pass [`EvidenceStrength::Durable`] for executable tasks and
+/// scripts, [`EvidenceStrength::Transient`] for hand-written workflows;
+/// `.github`-rooted files are transient either way.
+pub(crate) fn scan_command_text(
+    file: &EvidenceFile<'_>,
+    base: EvidenceStrength,
+) -> (Vec<Evidence>, Vec<Evidence>, Vec<Evidence>) {
     if is_generated_output(file.content) {
         return (Vec::new(), Vec::new(), Vec::new());
     }
+    let strength = strength_for(file, base);
     let mut mbx = Vec::new();
     let mut nextest = Vec::new();
     let mut cargo_test = Vec::new();
@@ -349,13 +192,13 @@ fn scan_command_text(file: &EvidenceFile<'_>) -> (Vec<Evidence>, Vec<Evidence>, 
             continue;
         }
         if invokes_mbx(code) {
-            mbx.push(sighting(file, index, code));
+            mbx.push(sighting(file, index, code, strength));
         }
         if invokes_nextest(code) {
-            nextest.push(sighting(file, index, code));
+            nextest.push(sighting(file, index, code, strength));
         }
         if invokes_cargo_test(code) {
-            cargo_test.push(sighting(file, index, code));
+            cargo_test.push(sighting(file, index, code, strength));
         }
     }
     (mbx, nextest, cargo_test)
@@ -389,11 +232,125 @@ fn invokes_cargo_test(code: &str) -> bool {
     has_adjacent(code, "cargo", "test") || has_adjacent(code, "mbx", "test")
 }
 
-fn sighting(file: &EvidenceFile<'_>, index: usize, code: &str) -> Evidence {
+fn sighting(
+    file: &EvidenceFile<'_>,
+    index: usize,
+    code: &str,
+    strength: EvidenceStrength,
+) -> Evidence {
     Evidence {
         path: file.path.to_owned(),
         line: line_no(index),
         command_or_setting: snippet(code),
-        strength: EvidenceStrength::Strong,
+        strength,
+    }
+}
+
+/// Evidence grouped by durability for selection.
+#[derive(Debug, Default)]
+pub(crate) struct Seen {
+    /// Durable MBX sightings.
+    pub(crate) mbx_durable: Vec<Evidence>,
+    /// Transient MBX sightings.
+    pub(crate) mbx_transient: Vec<Evidence>,
+    /// Durable Nextest sightings.
+    pub(crate) nextest_durable: Vec<Evidence>,
+    /// Transient Nextest sightings.
+    pub(crate) nextest_transient: Vec<Evidence>,
+    /// Durable `cargo test` sightings.
+    pub(crate) cargo_durable: Vec<Evidence>,
+    /// Transient `cargo test` sightings.
+    pub(crate) cargo_transient: Vec<Evidence>,
+}
+
+impl Seen {
+    /// Whether any durable sighting exists.
+    pub(crate) fn has_durable(&self) -> bool {
+        !self.mbx_durable.is_empty()
+            || !self.nextest_durable.is_empty()
+            || !self.cargo_durable.is_empty()
+    }
+
+    /// Whether no sighting of any kind exists.
+    pub(crate) fn is_empty(&self) -> bool {
+        self.mbx_durable.is_empty()
+            && self.mbx_transient.is_empty()
+            && self.nextest_durable.is_empty()
+            && self.nextest_transient.is_empty()
+            && self.cargo_durable.is_empty()
+            && self.cargo_transient.is_empty()
+    }
+
+    /// Whether any runner sighting (durable or transient) exists.
+    pub(crate) fn has_runner(&self) -> bool {
+        !self.nextest_durable.is_empty()
+            || !self.nextest_transient.is_empty()
+            || !self.cargo_durable.is_empty()
+            || !self.cargo_transient.is_empty()
+    }
+
+    /// Every sighting, sorted.
+    pub(crate) fn all_sorted(mut self) -> Vec<Evidence> {
+        let mut out = self.mbx_durable;
+        out.append(&mut self.mbx_transient);
+        out.append(&mut self.nextest_durable);
+        out.append(&mut self.nextest_transient);
+        out.append(&mut self.cargo_durable);
+        out.append(&mut self.cargo_transient);
+        out.sort();
+        out
+    }
+}
+
+/// Collect durability-tagged evidence from every input category.
+pub(crate) fn collect_evidence(
+    tool_config: Option<&EvidenceFile<'_>>,
+    cargo_configs: &[EvidenceFile<'_>],
+    executables: &[EvidenceFile<'_>],
+    handwritten: &[EvidenceFile<'_>],
+) -> Seen {
+    let mut seen = Seen::default();
+    if let Some(config) = tool_config {
+        push_mbx(&mut seen, scan_tool_config(config));
+    }
+    for config in cargo_configs {
+        push_mbx(&mut seen, scan_cargo_config(config));
+    }
+    for file in executables {
+        let (mbx, nextest, cargo) = scan_command_text(file, EvidenceStrength::Durable);
+        push_mbx(&mut seen, mbx);
+        push_runner(&mut seen, nextest, cargo);
+    }
+    for file in handwritten {
+        let (mbx, nextest, cargo) = scan_command_text(file, EvidenceStrength::Transient);
+        push_mbx(&mut seen, mbx);
+        push_runner(&mut seen, nextest, cargo);
+    }
+    seen
+}
+
+/// Sort MBX sightings into the durable/transient buckets.
+fn push_mbx(seen: &mut Seen, sightings: Vec<Evidence>) {
+    for sighting in sightings {
+        match sighting.strength {
+            EvidenceStrength::Durable => seen.mbx_durable.push(sighting),
+            EvidenceStrength::Transient => seen.mbx_transient.push(sighting),
+        }
+    }
+}
+
+/// Sort runner sightings into the durable/transient buckets.
+fn push_runner(seen: &mut Seen, nextest: Vec<Evidence>, cargo: Vec<Evidence>) {
+    for sighting in nextest {
+        match sighting.strength {
+            EvidenceStrength::Durable => seen.nextest_durable.push(sighting),
+            EvidenceStrength::Transient => seen.nextest_transient.push(sighting),
+        }
+    }
+    for sighting in cargo {
+        match sighting.strength {
+            EvidenceStrength::Durable => seen.cargo_durable.push(sighting),
+            EvidenceStrength::Transient => seen.cargo_transient.push(sighting),
+        }
     }
 }

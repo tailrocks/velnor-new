@@ -31,6 +31,8 @@ pub struct PlannedWorkspace {
     pub profile: RustExecutionProfile,
     /// Profile recommendations.
     pub recommendations: Vec<Recommendation>,
+    /// Blocking profile findings; `generate` fails closed when non-empty.
+    pub findings: Vec<velnor_actions_rust::ProfileFinding>,
 }
 
 /// Debug-only consumer-manifest fixture filename under `.velnor`.
@@ -83,7 +85,7 @@ pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, 
             problem: err.to_string(),
         }
     })?;
-    let workspaces = plan_workspaces(root, &index, &statuses, inventories)?;
+    let workspaces = plan_workspaces(root, &index, &statuses, inventories, config)?;
     qualify_workspaces(root, &workspaces)?;
     let task_groups = derive_all(config, &index, &workspaces)?;
     let tool_checks = check_tool_inputs(root);
@@ -180,6 +182,7 @@ fn plan_workspaces(
     index: &FileIndex,
     statuses: &[DetectionStatus],
     inventories: Vec<(String, WorkspaceRecord)>,
+    config: &VelnorConfig,
 ) -> Result<Vec<PlannedWorkspace>, OrchestratorError> {
     let selected = velnor_actions_rust::selected_projects(statuses);
     let selected_manifests: BTreeSet<&str> = selected
@@ -197,11 +200,12 @@ fn plan_workspaces(
         if !keep_roots.contains(&record.workspace_root) {
             continue;
         }
-        let outcome = profile_for_workspace(root, index, &record)?;
+        let outcome = profile_for_workspace(root, index, &record, config.stacks.rust.as_ref())?;
         planned.push(PlannedWorkspace {
             record,
             profile: outcome.profile,
             recommendations: outcome.recommendations,
+            findings: outcome.findings,
         });
     }
     planned.sort_by(|left, right| left.record.workspace_root.cmp(&right.record.workspace_root));

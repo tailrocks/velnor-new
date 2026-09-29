@@ -99,13 +99,13 @@ fn entry_metadata_carries_driver_runner_and_evidence() {
             path: "scripts/test.sh".to_owned(),
             line: 2,
             command_or_setting: "cargo test --package a".to_owned(),
-            strength: EvidenceStrength::Strong,
+            strength: EvidenceStrength::Durable,
         },
         Evidence {
             path: "mise.toml".to_owned(),
             line: 4,
             command_or_setting: "mr_boxington = true".to_owned(),
-            strength: EvidenceStrength::Strong,
+            strength: EvidenceStrength::Durable,
         },
     ];
     let metadata = entry_metadata(&group_case, &sightings);

@@ -1,8 +1,8 @@
 //! Task-group derivation cases.
 use velnor_actions_contract::validate_task_id;
 use velnor_actions_rust::{
-    CompileDriver, DeriveInputs, PackageRecord, RustExecutionProfile, TargetRecord, TaskKind,
-    TestRunner, derive_task_groups, derive_workspace_fmt,
+    CompileDriver, DeriveInputs, PackageRecord, ProfileSource, RustExecutionProfile, TargetRecord,
+    TaskKind, TestRunner, derive_task_groups, derive_workspace_fmt,
 };
 
 /// Target entry for fixtures.
@@ -51,6 +51,8 @@ fn cargo_profile() -> RustExecutionProfile {
         compile_driver: CompileDriver::Cargo,
         test_runner: TestRunner::CargoTest,
         evidence: Vec::new(),
+        driver_source: ProfileSource::Detected,
+        runner_source: ProfileSource::Detected,
     }
 }
 
@@ -60,6 +62,8 @@ fn nextest_profile() -> RustExecutionProfile {
         compile_driver: CompileDriver::Mbx,
         test_runner: TestRunner::CargoNextest,
         evidence: Vec::new(),
+        driver_source: ProfileSource::Detected,
+        runner_source: ProfileSource::Detected,
     }
 }
 

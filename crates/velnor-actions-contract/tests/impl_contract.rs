@@ -38,6 +38,8 @@ fn config_validation_reports_key_paths() {
                     features: vec!["default".to_owned()],
                     target: "host".to_owned(),
                 }],
+                compile_driver: None,
+                test_runner: None,
             }),
         },
         discovery: DiscoveryConfig {
@@ -160,6 +162,8 @@ fn uppercase_rust_config_name_rejected_with_key_path() {
                     features: vec![],
                     target: "host".to_owned(),
                 }],
+                compile_driver: None,
+                test_runner: None,
             }),
         },
         discovery: DiscoveryConfig { exclude: vec![] },

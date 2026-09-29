@@ -2,8 +2,8 @@
 
 use velnor_actions_contract::{ContractError, manifest_key_for_cargo_manifest, task_id_for_stack};
 
-use crate::evidence::{RustExecutionProfile, TestRunner};
 use crate::metadata::PackageRecord;
+use crate::profile::{RustExecutionProfile, TestRunner};
 
 pub use crate::argv::{
     EntryMetadata, ExtensionInputs, RustTaskIdentityExtension, cargo_payload_argv, entry_metadata,

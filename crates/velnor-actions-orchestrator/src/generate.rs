@@ -14,6 +14,7 @@ use crate::OrchestratorError;
 use crate::attach::{attach_lock_acquire, attach_preseed};
 use crate::pins::resolve_mise_setup;
 use crate::prepare::GenerationPreparation;
+use crate::provenance::{ProfileProvenance, profile_provenance};
 use crate::validate::{validate_staged, verify_velnor_repository_files};
 
 /// Options for [`generate`].
@@ -82,6 +83,8 @@ pub struct GenerateReport {
     pub recommendations: Vec<String>,
     /// Pinned validators that accepted the staged tree, sorted.
     pub validated_by: Vec<String>,
+    /// Per-workspace profile provenance.
+    pub profiles: Vec<ProfileProvenance>,
 }
 
 /// Render in memory, then replace `.github` atomically or write a preview.
@@ -93,11 +96,15 @@ pub struct GenerateReport {
 ///
 /// # Errors
 ///
-/// Returns render, actionlint, preview, unsafe-path, or IO errors.
+/// Returns profile errors on transient-only evidence or conflicts, plus
+/// render, actionlint, preview, unsafe-path, or IO errors. The profile gate
+/// runs before any render, validation, or write, so a blocked `generate`
+/// leaves every output untouched.
 pub fn generate(
     prep: &GenerationPreparation,
     opts: &GenerateOptions,
 ) -> Result<GenerateReport, OrchestratorError> {
+    fail_on_blocking_findings(prep)?;
     let tools = ToolSnapshot::capture(&prep.root);
     let tree = render_staged_tree(prep)?;
     let validated_by = validate_staged(&tree)?;
@@ -110,6 +117,22 @@ pub fn generate(
         files_written: tree.files.iter().map(|file| file.path.clone()).collect(),
         recommendations: prep.discovery.recommendations.clone(),
         validated_by,
+        profiles: profile_provenance(prep),
+    })
+}
+
+/// Fail closed on transient-only profile evidence before touching `.github`.
+fn fail_on_blocking_findings(prep: &GenerationPreparation) -> Result<(), OrchestratorError> {
+    let blockers = crate::evidence::blocking_findings(&prep.discovery.workspaces);
+    if blockers.is_empty() {
+        return Ok(());
+    }
+    Err(OrchestratorError::Profile {
+        problem: format!(
+            "{}: {}",
+            velnor_actions_rust::TRANSIENT_EVIDENCE_CODE,
+            blockers.join("; ")
+        ),
     })
 }
 

@@ -13,6 +13,7 @@ pub mod graph;
 pub mod identity;
 pub mod index;
 pub mod metadata;
+pub mod profile;
 pub mod scan;
 pub mod stability;
 pub mod tasks;
@@ -27,9 +28,8 @@ pub use detect::{
     to_detected_projects,
 };
 pub use evidence::{
-    CompileDriver, Evidence, EvidenceFile, EvidenceStrength, NEXTEST_RECOMMENDATION,
-    PERSIST_EVIDENCE, ProfileError, ProfileInputs, ProfileOutcome, Recommendation,
-    RustExecutionProfile, TestRunner, detect_profile, evidence_scan_excluded, is_generated_output,
+    Evidence, EvidenceFile, EvidenceStrength, NEXTEST_RECOMMENDATION, PERSIST_EVIDENCE,
+    evidence_scan_excluded, is_generated_output,
 };
 pub use graph::{dedupe_workspaces, reverse_closure};
 pub use identity::{GroupExtensionInputs, adapter_entry_metadata, expand_shards_for_group};
@@ -40,6 +40,11 @@ pub use index::{
 pub use metadata::{
     DepKind, LocalEdge, METADATA_FORMAT_VERSION, MetadataError, PackageRecord, TargetRecord,
     WorkspaceRecord, parse_metadata_json,
+};
+pub use profile::{
+    AMBIGUOUS_RUNNER_CODE, CompileDriver, PROFILE_CONFLICT_CODE, ProfileError, ProfileFinding,
+    ProfileInputs, ProfileOutcome, ProfileSource, Recommendation, RustExecutionProfile,
+    TRANSIENT_EVIDENCE_CODE, TestRunner, detect_profile,
 };
 pub use stability::{
     CommittedProfile, committed_profile_differs, read_committed_profile_for_comparison,

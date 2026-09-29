@@ -88,7 +88,8 @@ pub(crate) fn manifest_dir(manifest: &str) -> String {
 #[cfg(test)]
 mod tests {
     use velnor_actions_rust::{
-        CompileDriver, DepKind, PackageRecord, RustExecutionProfile, TestRunner, WorkspaceRecord,
+        CompileDriver, DepKind, PackageRecord, ProfileSource, RustExecutionProfile, TestRunner,
+        WorkspaceRecord,
     };
 
     use super::*;
@@ -120,8 +121,11 @@ mod tests {
                     compile_driver: CompileDriver::Cargo,
                     test_runner: TestRunner::CargoTest,
                     evidence: Vec::new(),
+                    driver_source: ProfileSource::Detected,
+                    runner_source: ProfileSource::Detected,
                 },
                 recommendations: Vec::new(),
+                findings: Vec::new(),
             }],
             task_groups: Vec::new(),
             tool_checks: Vec::new(),

@@ -79,25 +79,51 @@ fn stacks_section(out: &mut String, prep: &GenerationPreparation) {
         push(out, &format!("    - {name} ({manifest}) [{detail}]"));
     }
     for workspace in &prep.discovery.workspaces {
-        let root = if workspace.record.workspace_root.is_empty() {
-            "."
-        } else {
-            workspace.record.workspace_root.as_str()
-        };
+        profile_lines(out, workspace);
+    }
+}
+
+/// Per-workspace profile provenance: drivers, sources, evidence, findings.
+fn profile_lines(out: &mut String, workspace: &crate::discover::PlannedWorkspace) {
+    let root = if workspace.record.workspace_root.is_empty() {
+        "."
+    } else {
+        workspace.record.workspace_root.as_str()
+    };
+    let profile = &workspace.profile;
+    push(
+        out,
+        &format!(
+            "  Profile {root}: {} compile driver ({}), {} test runner ({})",
+            profile.compile_driver.as_str(),
+            profile.driver_source.as_str(),
+            profile.test_runner.as_str(),
+            profile.runner_source.as_str()
+        ),
+    );
+    for evidence in &profile.evidence {
         push(
             out,
             &format!(
-                "  Profile {root}: {} compile driver, {} test runner",
-                workspace.profile.compile_driver.as_str(),
-                workspace.profile.test_runner.as_str()
+                "    evidence {}:{} {} [{}]",
+                evidence.path,
+                evidence.line,
+                evidence.command_or_setting,
+                evidence.strength.as_str()
             ),
         );
-        for evidence in &workspace.profile.evidence {
+    }
+    for finding in &workspace.findings {
+        for sighting in &finding.evidence {
             push(
                 out,
                 &format!(
-                    "    evidence {}:{} {}",
-                    evidence.path, evidence.line, evidence.command_or_setting
+                    "    finding {} {}:{} {}: {}",
+                    finding.code,
+                    sighting.path,
+                    sighting.line,
+                    sighting.command_or_setting,
+                    finding.message
                 ),
             );
         }

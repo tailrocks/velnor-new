@@ -4,9 +4,9 @@ use std::collections::BTreeSet;
 use velnor_actions_rust::tasks::{ExtensionInputs, RustTaskIdentityExtension, parse_rerun_changed};
 use velnor_actions_rust::{
     CompileDriver, DepKind, DeriveInputs, Evidence, EvidenceStrength, GroupExtensionInputs,
-    LocalEdge, PackageRecord, RustExecutionProfile, TargetRecord, TaskKind, TestRunner,
-    adapter_entry_metadata, derive_task_groups, evidence_scan_excluded, expand_shards_for_group,
-    reverse_closure,
+    LocalEdge, PackageRecord, ProfileSource, RustExecutionProfile, TargetRecord, TaskKind,
+    TestRunner, adapter_entry_metadata, derive_task_groups, evidence_scan_excluded,
+    expand_shards_for_group, reverse_closure,
 };
 
 /// Target entry for fixtures.
@@ -44,6 +44,8 @@ fn cargo_profile() -> RustExecutionProfile {
         compile_driver: CompileDriver::Cargo,
         test_runner: TestRunner::CargoTest,
         evidence: Vec::new(),
+        driver_source: ProfileSource::Detected,
+        runner_source: ProfileSource::Detected,
     }
 }
 
@@ -53,6 +55,8 @@ fn nextest_profile() -> RustExecutionProfile {
         compile_driver: CompileDriver::Mbx,
         test_runner: TestRunner::CargoNextest,
         evidence: Vec::new(),
+        driver_source: ProfileSource::Detected,
+        runner_source: ProfileSource::Detected,
     }
 }
 
@@ -320,7 +324,7 @@ fn adapter_entry_metadata_carries_driver_runner_evidence() {
         path: "scripts/test.sh".to_owned(),
         line: 2,
         command_or_setting: "cargo test --package a".to_owned(),
-        strength: EvidenceStrength::Strong,
+        strength: EvidenceStrength::Durable,
     }];
     let meta = adapter_entry_metadata(&groups[1], &sightings);
     assert_eq!(

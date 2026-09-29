@@ -6,8 +6,9 @@ use std::path::Path;
 use serde::Deserialize;
 use velnor_actions_contract::config::{ActionPinOverride, ActionsConfig};
 use velnor_actions_contract::{
-    DiscoveryConfig, GeneratorValidation, ResourcesConfig, RustConfiguration, RustStackConfig,
-    StacksConfig, TestShardingConfig, VelnorConfig, WorkflowConfig, WorkflowPolicy,
+    DeclaredCompileDriver, DeclaredTestRunner, DiscoveryConfig, GeneratorValidation,
+    ResourcesConfig, RustConfiguration, RustStackConfig, StacksConfig, TestShardingConfig,
+    VelnorConfig, WorkflowConfig, WorkflowPolicy,
 };
 
 use crate::OrchestratorError;
@@ -164,6 +165,10 @@ struct PartialStacks {
 struct PartialRustStack {
     /// Rust task configuration variants.
     configurations: Option<Vec<RustConfiguration>>,
+    /// Sticky declared compile driver.
+    compile_driver: Option<DeclaredCompileDriver>,
+    /// Sticky declared test runner.
+    test_runner: Option<DeclaredTestRunner>,
 }
 
 /// Discovery section with every value optional.
@@ -195,7 +200,7 @@ impl PartialConfig {
             workflow: self.workflow.materialize(),
             resources: self.resources.materialize(),
             test_sharding: self.test_sharding.materialize(),
-            stacks: self.stacks.materialize()?,
+            stacks: self.stacks.materialize(),
             discovery: self.discovery.materialize(),
             actions: self.actions.materialize(),
         })
@@ -240,26 +245,19 @@ impl PartialSharding {
 
 impl PartialStacks {
     /// Fill stacks defaults.
-    fn materialize(self) -> Result<StacksConfig, OrchestratorError> {
-        let rust = self
-            .rust
-            .map(|stack| {
-                stack
-                    .configurations
-                    .map(|configurations| RustStackConfig { configurations })
-                    .ok_or_else(|| {
-                        OrchestratorError::config(
-                            CONFIG_REL,
-                            "stacks.rust.configurations",
-                            "missing_required_configurations",
-                        )
-                    })
-            })
-            .transpose()?;
-        Ok(StacksConfig {
+    fn materialize(self) -> StacksConfig {
+        let rust = self.rust.map(|stack| {
+            let defaults = RustStackConfig::default_config();
+            RustStackConfig {
+                configurations: stack.configurations.unwrap_or(defaults.configurations),
+                compile_driver: stack.compile_driver,
+                test_runner: stack.test_runner,
+            }
+        });
+        StacksConfig {
             ignore: self.ignore,
             rust,
-        })
+        }
     }
 }
 

@@ -13,6 +13,8 @@ mod impl_rust_evidence;
 mod impl_rust_f2a;
 #[path = "impl_rust_f2b.rs"]
 mod impl_rust_f2b;
+#[path = "impl_rust_gapc.rs"]
+mod impl_rust_gapc;
 #[path = "impl_rust_gates.rs"]
 mod impl_rust_gates;
 #[path = "impl_rust_metadata.rs"]

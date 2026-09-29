@@ -17,12 +17,48 @@ pub struct StacksConfig {
     pub rust: Option<RustStackConfig>,
 }
 
+/// Declared compile driver (`[stacks.rust] compile_driver`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DeclaredCompileDriver {
+    /// Plain Cargo compilation.
+    Cargo,
+    /// MBX compilation.
+    Mbx,
+}
+
+/// Declared test runner (`[stacks.rust] test_runner`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DeclaredTestRunner {
+    /// Plain `cargo test`.
+    CargoTest,
+    /// Nextest execution.
+    CargoNextest,
+}
+
 /// Rust stack options.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RustStackConfig {
     /// Rust task configuration variants.
+    #[serde(default = "default_configurations")]
     pub configurations: Vec<RustConfiguration>,
+    /// Sticky declared compile driver; conflicts with durable evidence fail closed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub compile_driver: Option<DeclaredCompileDriver>,
+    /// Sticky declared test runner; conflicts with durable evidence fail closed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub test_runner: Option<DeclaredTestRunner>,
+}
+
+/// Documented default: one `default` configuration variant list.
+fn default_configurations() -> Vec<RustConfiguration> {
+    vec![RustConfiguration {
+        name: "default".to_owned(),
+        features: vec!["default".to_owned()],
+        target: "host".to_owned(),
+    }]
 }
 
 /// One Rust task configuration variant.
@@ -39,15 +75,13 @@ pub struct RustConfiguration {
 }
 
 impl RustStackConfig {
-    /// Documented default: one `default` configuration.
+    /// Documented default: one `default` configuration, no declarations.
     #[must_use]
     pub fn default_config() -> Self {
         Self {
-            configurations: vec![RustConfiguration {
-                name: "default".to_owned(),
-                features: vec!["default".to_owned()],
-                target: "host".to_owned(),
-            }],
+            configurations: default_configurations(),
+            compile_driver: None,
+            test_runner: None,
         }
     }
 }

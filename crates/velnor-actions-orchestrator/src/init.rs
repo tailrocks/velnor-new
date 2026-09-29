@@ -112,6 +112,8 @@ const SAMPLE_BODY: &str = r#"schema = 1
 # Optional Rust task configuration. The Rust detector is automatic in V1.
 # [stacks.rust]
 # configurations = [{ name = "default", features = ["default"], target = "host" }]
+# compile_driver = "cargo"         # Sticky override: "cargo" or "mbx"; conflicts with durable evidence fail closed.
+# test_runner = "cargo_test"       # Sticky override: "cargo_test" or "cargo_nextest".
 
 # Optional repository-relative POSIX globs excluded before detector input.
 # [discovery]

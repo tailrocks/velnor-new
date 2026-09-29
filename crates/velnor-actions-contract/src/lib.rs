@@ -35,10 +35,10 @@ pub use canonical::{
     is_valid_digest, normalize_posix_path, validate_digest,
 };
 pub use config::{
-    DiscoveryConfig, GeneratorValidation, PolicyJob, ResourcesConfig, RunnerSelection,
-    RustConfiguration, RustStackConfig, ShardTimingEvidence, StacksConfig, TestShardingConfig,
-    VelnorConfig, VelnorSupportWorkflow, WorkflowConfig, WorkflowPolicy,
-    validate_shard_changes_need_evidence,
+    DeclaredCompileDriver, DeclaredTestRunner, DiscoveryConfig, GeneratorValidation, PolicyJob,
+    ResourcesConfig, RunnerSelection, RustConfiguration, RustStackConfig, ShardTimingEvidence,
+    StacksConfig, TestShardingConfig, VelnorConfig, VelnorSupportWorkflow, WorkflowConfig,
+    WorkflowPolicy, validate_shard_changes_need_evidence,
 };
 pub use errors::ContractError;
 pub use extensions::{RUST_EXTENSION_REQUIRED_SLOTS, validate_rust_extension};
@@ -64,7 +64,7 @@ pub use manifest::{
     ActionPin, CandidateArtifactManifest, GeneratorBinary, GeneratorLock, LockedGenerator,
     MiseBootstrap, ReleaseManifest, TargetRecord, require_release_version,
 };
-pub use marker::MARKER_PREFIX;
+pub use marker::{MARKER_PREFIX, OLD_MARKER_PREFIX, is_generated_marker_line};
 pub use policy::{
     FreshnessEntry, FreshnessStatus, GithubRunnerImages, NightlyRecord, PolicyException,
     RunnerInventory, VersionPolicy, days_between,

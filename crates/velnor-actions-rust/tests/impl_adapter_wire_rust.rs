@@ -5,9 +5,9 @@ use velnor_actions_rust::tasks::{
     ExtensionInputs, RustTaskIdentityExtension, TaskGroup, TaskKind, cargo_payload_argv,
 };
 use velnor_actions_rust::{
-    CompileDriver, DeriveInputs, GroupExtensionInputs, IndexMode, PackageRecord, RUSTDOCFLAGS_ENV,
-    RustExecutionProfile, TargetRecord, TestRunner, build_index_from_tracked, cargo_payload_env,
-    derive_task_groups, derive_workspace_fmt_if_explicit,
+    CompileDriver, DeriveInputs, GroupExtensionInputs, IndexMode, PackageRecord, ProfileSource,
+    RUSTDOCFLAGS_ENV, RustExecutionProfile, TargetRecord, TestRunner, build_index_from_tracked,
+    cargo_payload_env, derive_task_groups, derive_workspace_fmt_if_explicit,
 };
 
 fn target(kind: &str) -> TargetRecord {
@@ -39,6 +39,8 @@ fn profile() -> RustExecutionProfile {
         compile_driver: CompileDriver::Cargo,
         test_runner: TestRunner::CargoTest,
         evidence: Vec::new(),
+        driver_source: ProfileSource::Detected,
+        runner_source: ProfileSource::Detected,
     }
 }
 
