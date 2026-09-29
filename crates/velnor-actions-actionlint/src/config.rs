@@ -80,6 +80,21 @@ impl ActionlintConfigInput {
         self
     }
 
+    /// Append multiple repository configuration variable names.
+    ///
+    /// Order and duplicates do not matter: rendering sorts and dedupes.
+    /// The orchestrator passes the exact declared repo names here.
+    #[must_use]
+    pub fn with_config_variables(
+        mut self,
+        names: impl IntoIterator<Item = impl Into<String>>,
+    ) -> Self {
+        for name in names {
+            self.config_variables.push(name.into());
+        }
+        self
+    }
+
     /// Append a generated workflow path.
     #[must_use]
     pub fn with_workflow_path(mut self, path: impl Into<String>) -> Self {

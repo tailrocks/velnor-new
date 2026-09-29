@@ -38,6 +38,23 @@ impl ActionlintToolchain {
     pub fn mise_tool_spec(&self) -> String {
         format!("actionlint@{}", self.version)
     }
+
+    /// Staged lint arguments for one pinned-binary invocation.
+    ///
+    /// Returns `["-no-color", "-oneline", "-config-file", config, ...workflows]`
+    /// so the staged config and every staged workflow share a single
+    /// invocation of the pinned binary. Pure data: the caller spawns via Mise.
+    #[must_use]
+    pub fn staged_lint_argv(config_path: &str, workflows: &[String]) -> Vec<String> {
+        let mut argv = vec![
+            "-no-color".to_owned(),
+            "-oneline".to_owned(),
+            "-config-file".to_owned(),
+            config_path.to_owned(),
+        ];
+        argv.extend(workflows.iter().cloned());
+        argv
+    }
 }
 
 impl Default for ActionlintToolchain {
