@@ -200,6 +200,10 @@ fn run_init() -> ExitCode {
 }
 
 /// Dispatch `plan`: report (recommendations included) to stdout only.
+///
+/// Contract §5 routes findings to stderr in one sentence, but §5's own
+/// example shows `Recommendations` inside the stdout report and §7 assigns
+/// the report to stdout; the example plus §7 govern, so stderr stays empty.
 fn run_plan() -> ExitCode {
     let Some(cwd) = working_dir() else {
         return ExitCode::from(1);

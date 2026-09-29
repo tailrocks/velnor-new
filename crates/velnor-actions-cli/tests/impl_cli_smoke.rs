@@ -102,9 +102,33 @@ fn plan_emits_recommendations_once_to_stdout_only() -> Result<(), Box<dyn Error>
     let stderr = String::from_utf8_lossy(&plan.stderr).into_owned();
     assert!(stdout.contains("Velnor Actions plan"));
     assert!(stderr.is_empty(), "plan stderr must stay empty: {stderr:?}");
+    // CLI-5.4: §5's example plus §7 govern over the findings-to-stderr
+    // sentence, so the report carries one `Recommendations` section shaped
+    // like the example: header on its own line after the workflow section,
+    // two-space bodies, stdout only.
+    assert_eq!(
+        stdout
+            .lines()
+            .filter(|line| *line == "Recommendations")
+            .count(),
+        1,
+        "one Recommendations header:\n{stdout}"
+    );
+    let workflow = stdout
+        .find("Workflow to generate")
+        .ok_or("workflow section")?;
+    let header = stdout.find("\nRecommendations\n").ok_or("recs header")?;
+    assert!(
+        workflow < header,
+        "recommendations follow workflow:\n{stdout}"
+    );
     let recs = plan_recommendations(&stdout);
     assert!(!recs.is_empty());
     for rec in &recs {
+        assert!(
+            stdout.lines().any(|line| line == format!("  {rec}")),
+            "rec not two-space indented: {rec}"
+        );
         let hits = stdout.lines().filter(|line| line.trim() == rec).count()
             + stderr.lines().filter(|line| line.trim() == rec).count();
         assert_eq!(hits, 1, "recommendation emitted {hits}x: {rec}");
@@ -139,6 +163,63 @@ fn generate_keeps_recommendations_on_stderr() -> Result<(), Box<dyn Error>> {
             "generate stderr missing: {rec}"
         );
     }
+    assert!(preview.join(".github/workflows/velnor.yml").is_file());
+    cleanup(&tmp);
+    cleanup(&outer);
+    Ok(())
+}
+
+#[test]
+fn generate_writes_manual_change_suggestions_for_malformed_tools() -> Result<(), Box<dyn Error>> {
+    let tmp = fresh_tempdir("smoke-malformed-tools")?;
+    git_init(&tmp)?;
+    assert_eq!(code(&spawn(&["init"], &[], &tmp)?), 0);
+    pin_branch(&tmp)?;
+    // TOOL-2.2: malformed tool files stay read-only inputs; both commands
+    // report `tooling_input_invalid` plus a concrete manual-change suggestion.
+    std::fs::write(tmp.join("mise.toml"), "[tools\nrust = \n")?;
+    std::fs::write(tmp.join("rust-toolchain.toml"), "[[[\n")?;
+    let mise_before = std::fs::read(tmp.join("mise.toml"))?;
+    let toolchain_before = std::fs::read(tmp.join("rust-toolchain.toml"))?;
+    let plan = spawn(&["plan"], &[], &tmp)?;
+    assert_eq!(code(&plan), 0, "stderr: {:?}", plan.stderr);
+    assert!(plan.stderr.is_empty());
+    let stdout = String::from_utf8_lossy(&plan.stdout).into_owned();
+    let invalid: Vec<String> = plan_recommendations(&stdout)
+        .into_iter()
+        .filter(|rec| rec.contains("tooling_input_invalid"))
+        .collect();
+    assert_eq!(invalid.len(), 2, "both files flagged:\n{stdout}");
+    for rec in &invalid {
+        assert!(rec.contains("fix it manually"), "no suggestion: {rec}");
+    }
+    assert!(invalid.iter().any(|rec| rec.contains("mise.toml")));
+    assert!(
+        invalid
+            .iter()
+            .any(|rec| rec.contains("rust-toolchain.toml"))
+    );
+    let outer = fresh_tempdir("smoke-malformed-preview")?;
+    let preview = outer.join("preview");
+    let generated = spawn(
+        &["generate", "--output-dir", preview.to_str().unwrap_or("/")],
+        &[],
+        &tmp,
+    )?;
+    assert_eq!(code(&generated), 0, "stderr: {:?}", generated.stderr);
+    assert!(generated.stdout.is_empty());
+    let stderr = String::from_utf8_lossy(&generated.stderr).into_owned();
+    for rec in &invalid {
+        assert!(
+            stderr.lines().any(|line| line == rec),
+            "generate stderr missing: {rec}"
+        );
+    }
+    assert_eq!(std::fs::read(tmp.join("mise.toml"))?, mise_before);
+    assert_eq!(
+        std::fs::read(tmp.join("rust-toolchain.toml"))?,
+        toolchain_before
+    );
     assert!(preview.join(".github/workflows/velnor.yml").is_file());
     cleanup(&tmp);
     cleanup(&outer);
