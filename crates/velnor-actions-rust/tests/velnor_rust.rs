@@ -7,6 +7,10 @@ mod impl_rust_argv;
 mod impl_rust_detect;
 #[path = "impl_rust_evidence.rs"]
 mod impl_rust_evidence;
+#[path = "impl_rust_f2a.rs"]
+mod impl_rust_f2a;
+#[path = "impl_rust_f2b.rs"]
+mod impl_rust_f2b;
 #[path = "impl_rust_gates.rs"]
 mod impl_rust_gates;
 #[path = "impl_rust_metadata.rs"]

@@ -9,9 +9,11 @@ mod argv;
 pub mod detect;
 pub mod evidence;
 pub mod graph;
+pub mod identity;
 pub mod index;
 pub mod metadata;
 pub mod scan;
+pub mod stability;
 pub mod tasks;
 pub mod toolfiles;
 
@@ -27,6 +29,7 @@ pub use evidence::{
     RustExecutionProfile, TestRunner, detect_profile, evidence_scan_excluded, is_generated_output,
 };
 pub use graph::{dedupe_workspaces, reverse_closure};
+pub use identity::{GroupExtensionInputs, adapter_entry_metadata, expand_shards_for_group};
 pub use index::{
     BUILTIN_EXCLUSIONS, FileIndex, IndexError, build_index, build_index_from_list,
     build_index_walk, is_excluded, matches_glob, validate_pattern,
@@ -34,6 +37,9 @@ pub use index::{
 pub use metadata::{
     DepKind, LocalEdge, METADATA_FORMAT_VERSION, MetadataError, PackageRecord, TargetRecord,
     WorkspaceRecord, parse_metadata_json,
+};
+pub use stability::{
+    CommittedProfile, committed_profile_differs, read_committed_profile_for_comparison,
 };
 pub use tasks::{DeriveInputs, TaskGroup, TaskKind, derive_task_groups, derive_workspace_fmt};
 pub use toolfiles::{
