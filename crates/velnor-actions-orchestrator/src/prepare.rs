@@ -9,6 +9,7 @@ use velnor_actions_mise::GitRequest;
 use crate::OrchestratorError;
 use crate::config::load_config;
 use crate::discover::{Discovery, discover};
+use crate::source_prep::lockful_roots;
 use crate::workflow::{DEFAULT_RUNNER_LABEL, WorkflowPlan, build_workflow};
 
 /// Canonical repository identity allowed the Velnor-repository policy.
@@ -51,8 +52,15 @@ pub fn prepare(root: &Path) -> Result<GenerationPreparation, OrchestratorError> 
     let default_branch = resolve_default_branch(&canonical, &config)?;
     check_velnor_identity(&canonical, &config)?;
     let discovery = discover(&canonical, &config)?;
+    let fetch_roots = lockful_roots(&canonical, &discovery.workspaces);
     let (runner_label, runner_selection) = runner_label_for(&config);
-    let workflow = build_workflow(&config, &default_branch, &runner_label, &discovery)?;
+    let workflow = build_workflow(
+        &config,
+        &default_branch,
+        &runner_label,
+        &discovery,
+        &fetch_roots,
+    )?;
     Ok(GenerationPreparation {
         root: canonical,
         config,

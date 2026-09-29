@@ -362,11 +362,29 @@ fn cli_carries_no_stack_flags() -> TestResult {
 #[test]
 fn offline_deps_fail_closed_without_fetch() -> TestResult {
     for path in src_files()? {
+        let name = path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default();
         for (line, code) in code_of(&path)? {
+            if name == "source_prep.rs" {
+                assert!(
+                    !code.contains(".run("),
+                    "source_prep emits fetch steps, never executes: {}:{line}",
+                    path.display()
+                );
+                continue;
+            }
             let scrubbed = code
                 .replace("fetch_inventory", "")
                 .replace("FetchFailure", "")
-                .replace("fetch_add", "");
+                .replace("fetch_add", "")
+                // Gate-1 emission threading: plan-job `cargo fetch` step
+                // builders plus their lockful-root inputs. The argv literal
+                // lives in source_prep.rs (scoped above, execution-free);
+                // analysis-time fetching stays forbidden.
+                .replace("fetch_steps", "")
+                .replace("fetch_roots", "");
             assert!(
                 !scrubbed.contains("fetch"),
                 "fetch verb at {}:{line}: {code}",

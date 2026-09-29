@@ -178,7 +178,7 @@ mod tests {
         let mut ir = bare_ir(BTreeMap::from([
             (
                 "velnor-plan".to_owned(),
-                plan_job("ubuntu-26.04", None, &catalog, false).expect("plan job"),
+                plan_job("ubuntu-26.04", None, &catalog, false, &[]).expect("plan job"),
             ),
             (
                 "velnor-final".to_owned(),
@@ -221,7 +221,7 @@ mod tests {
             ir: bare_ir(BTreeMap::from([
                 (
                     "velnor-plan".to_owned(),
-                    plan_job("ubuntu-26.04", None, &catalog, false).expect("plan job"),
+                    plan_job("ubuntu-26.04", None, &catalog, false, &[]).expect("plan job"),
                 ),
                 ("velnor-task".to_owned(), task_job("ubuntu-26.04", 2)),
                 (

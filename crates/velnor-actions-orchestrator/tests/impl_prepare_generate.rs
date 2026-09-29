@@ -4,8 +4,10 @@ use std::fs;
 use std::path::Path;
 
 use tempfile::TempDir;
+use velnor_actions_contract::StepKind;
+use velnor_actions_orchestrator::decisions::{MetadataFailure, classify_metadata_failure};
 use velnor_actions_orchestrator::{
-    GenerateOptions, OrchestratorError, generate, plan_text, prepare,
+    GenerateOptions, OrchestratorError, generate, plan_text, prepare, render_staged_tree,
 };
 
 use crate::impl_common::{
@@ -215,6 +217,134 @@ fn generated_workflow_has_always_on_lint_job() -> TestResult {
         assert!(!lint.contains("needs:"), "lint is independent:\n{text}");
     }
     Ok(())
+}
+
+/// Hand-written lock for a no-deps fixture package: hermetic, no network.
+fn demo_lock(name: &str) -> String {
+    format!("version = 4\n\n[[package]]\nname = \"{name}\"\nversion = \"0.1.0\"\n")
+}
+
+#[test]
+fn plan_job_fetches_lockful_sources_before_generate_consumers() -> TestResult {
+    let repo = make_repo(config_with_branch())?;
+    let root = repo.path();
+    fs::write(root.join("Cargo.lock"), demo_lock("demo"))?;
+    let prep = prepare(root)?;
+    let plan = prep
+        .workflow
+        .ir
+        .jobs
+        .get("velnor-plan")
+        .ok_or_else(|| std::io::Error::other("missing plan job"))?;
+    let names: Vec<&str> = plan.steps.iter().map(|step| step.name.as_str()).collect();
+    let at = |name: &str| names.iter().position(|seen| *seen == name);
+    let (Some(prepare_at), Some(fetch_at), Some(write_at), Some(plan_at)) = (
+        at("Prepare pinned tools"),
+        at("Fetch Cargo sources"),
+        at("Write request"),
+        at("Plan"),
+    ) else {
+        return Err(format!("plan steps miss fetch ordering: {names:?}").into());
+    };
+    assert!(
+        prepare_at < fetch_at && fetch_at < write_at && write_at < plan_at,
+        "prep before request before plan: {names:?}"
+    );
+    let StepKind::Shell { run, env } = &plan.steps[fetch_at].kind else {
+        return Err("fetch step must be a shell step".into());
+    };
+    assert!(
+        run.windows(2).any(|pair| pair == ["cargo", "fetch"])
+            && run.contains(&"--locked".to_owned()),
+        "fetch argv must be cargo fetch --locked: {run:?}"
+    );
+    assert!(env.is_empty(), "fetch shares the default cargo home");
+    let tree = render_staged_tree(&prep)?;
+    let yaml = tree
+        .get(".github/workflows/velnor.yml")
+        .ok_or_else(|| std::io::Error::other("missing workflow"))?;
+    let fetch_pos = yaml
+        .find("Fetch Cargo sources")
+        .ok_or_else(|| std::io::Error::other("rendered fetch missing"))?;
+    let check_pos = yaml
+        .find("Check generated files")
+        .ok_or_else(|| std::io::Error::other("rendered freshness missing"))?;
+    assert!(
+        fetch_pos < check_pos,
+        "fetch must precede Check generated files"
+    );
+    Ok(())
+}
+
+#[test]
+fn plan_job_omits_fetch_without_lockfile() -> TestResult {
+    let repo = make_repo(config_with_branch())?;
+    let prep = prepare(repo.path())?;
+    let plan = prep
+        .workflow
+        .ir
+        .jobs
+        .get("velnor-plan")
+        .ok_or_else(|| std::io::Error::other("missing plan job"))?;
+    assert!(
+        plan.steps
+            .iter()
+            .all(|step| !step.name.starts_with("Fetch Cargo sources")),
+        "lockless workspaces have nothing to fetch"
+    );
+    Ok(())
+}
+
+#[test]
+fn nested_lockful_workspace_gets_named_fetch() -> TestResult {
+    let repo = make_repo(config_with_branch())?;
+    let root = repo.path();
+    fs::write(root.join("Cargo.lock"), demo_lock("demo"))?;
+    fs::create_dir_all(root.join("nested/src"))?;
+    fs::write(
+        root.join("nested/Cargo.toml"),
+        "[package]\nname = \"nested\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+    )?;
+    fs::write(root.join("nested/src/lib.rs"), "pub fn g() {}\n")?;
+    fs::write(root.join("nested/Cargo.lock"), demo_lock("nested"))?;
+    let prep = prepare(root)?;
+    let plan = prep
+        .workflow
+        .ir
+        .jobs
+        .get("velnor-plan")
+        .ok_or_else(|| std::io::Error::other("missing plan job"))?;
+    let mut nested = plan.steps.iter().filter(|step| {
+        matches!(&step.kind, StepKind::Shell { .. })
+            && step.name == "Fetch Cargo sources (nested/Cargo.toml)"
+    });
+    let step = nested
+        .next()
+        .ok_or_else(|| std::io::Error::other("missing nested fetch"))?;
+    assert!(nested.next().is_none(), "exactly one nested fetch");
+    let StepKind::Shell { run, .. } = &step.kind else {
+        return Err("fetch step must be a shell step".into());
+    };
+    assert!(
+        run.windows(2)
+            .any(|pair| pair == ["--manifest-path", "nested/Cargo.toml"]),
+        "nested fetch names its manifest: {run:?}"
+    );
+    assert!(
+        plan.steps
+            .iter()
+            .any(|step| step.name == "Fetch Cargo sources"),
+        "root fetch still present"
+    );
+    Ok(())
+}
+
+#[test]
+fn cold_registry_stderr_classifies_incomplete() {
+    assert_eq!(
+        classify_metadata_failure("error: failed to download anstyle-wincon v3.0.11"),
+        MetadataFailure::Incomplete
+    );
 }
 
 #[test]

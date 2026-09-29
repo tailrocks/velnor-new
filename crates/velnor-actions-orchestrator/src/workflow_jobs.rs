@@ -17,6 +17,7 @@ use velnor_actions_workflow_renderer::steps::{
 };
 
 use crate::OrchestratorError;
+use crate::source_prep::fetch_steps;
 use crate::workflow::CHECKOUT_USES;
 
 /// Always-on workflow-lint job ID, emitted for both policies.
@@ -49,6 +50,8 @@ const MATRIX_OUTPUT_NAME: &str = "matrix";
 /// The write-request step materializes the event request file the plan
 /// step's private gate requires; without it the helper falls through to
 /// CLI usage and the job (plus its `Publish plan` upload) fails.
+/// `Fetch Cargo sources` runs `cargo fetch --locked` per lockful
+/// workspace ahead of every locked/offline consumer (Gate 1).
 /// # Errors
 ///
 /// Returns a contract error when a typed step request is rejected.
@@ -57,9 +60,11 @@ pub(crate) fn plan_job(
     acquire: Option<Step>,
     catalog: &ToolCatalog,
     use_mbx: bool,
+    fetch_roots: &[String],
 ) -> Result<Job, OrchestratorError> {
     let mut steps = vec![checkout_action()];
     steps.push(prepare_pinned_tools_step(catalog, plan_tools(use_mbx))?);
+    steps.extend(fetch_steps(catalog, fetch_roots)?);
     steps.extend(acquire);
     steps.push(request_step(PLAN_OPERATION)?);
     steps.push(plan_step());
@@ -294,7 +299,7 @@ mod tests {
     fn plan_job_writes_request_before_plan() {
         let catalog = ToolCatalog::pinned();
         for acquire in [None, Some(checkout_action())] {
-            let job = plan_job("ubuntu-26.04", acquire, &catalog, false).expect("plan job");
+            let job = plan_job("ubuntu-26.04", acquire, &catalog, false, &[]).expect("plan job");
             let names: Vec<&str> = job.steps.iter().map(|step| step.name.as_str()).collect();
             let write_at = names.iter().position(|name| *name == "Write request");
             let plan_at = names.iter().position(|name| *name == "Plan");
@@ -319,7 +324,7 @@ mod tests {
     fn plan_job_prepares_pinned_tools_before_generate_consumers() {
         let catalog = ToolCatalog::pinned();
         for use_mbx in [false, true] {
-            let job = plan_job("ubuntu-26.04", None, &catalog, use_mbx).expect("plan job");
+            let job = plan_job("ubuntu-26.04", None, &catalog, use_mbx, &[]).expect("plan job");
             let names: Vec<&str> = job.steps.iter().map(|step| step.name.as_str()).collect();
             let prepare_at = names
                 .iter()

@@ -60,6 +60,7 @@ pub(crate) fn build_workflow(
     branch: &str,
     label: &str,
     discovery: &Discovery,
+    fetch_roots: &[String],
 ) -> Result<WorkflowPlan, OrchestratorError> {
     let catalog = ToolCatalog::pinned();
     let version = env!("CARGO_PKG_VERSION").to_owned();
@@ -77,7 +78,13 @@ pub(crate) fn build_workflow(
     };
     jobs.insert(
         PLAN_JOB_ID.to_owned(),
-        plan_job(label, acquire.clone(), &catalog, plan_uses_mbx(discovery))?,
+        plan_job(
+            label,
+            acquire.clone(),
+            &catalog,
+            plan_uses_mbx(discovery),
+            fetch_roots,
+        )?,
     );
     let task_groups: Vec<&TaskGroup> = discovery
         .task_groups

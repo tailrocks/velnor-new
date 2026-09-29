@@ -7,7 +7,7 @@ use velnor_actions_rust::{CandidateOutcome, WorkspaceRecord, parse_metadata_json
 
 use crate::OrchestratorError;
 use crate::decisions::{MetadataFailure, classify_metadata_failure};
-use crate::discover::{PlannedWorkspace, workspace_manifest};
+use crate::discover::{PlannedWorkspace, workspace_lock, workspace_manifest};
 
 /// Candidate outcomes plus successful manifest inventories.
 pub(crate) type Inventories = (Vec<CandidateOutcome>, Vec<(String, WorkspaceRecord)>);
@@ -91,11 +91,7 @@ pub(crate) fn qualify_workspaces(
     let catalog = ToolCatalog::pinned();
     for workspace in workspaces {
         let prefix = workspace.record.workspace_root.clone();
-        let lock = if prefix.is_empty() {
-            "Cargo.lock".to_owned()
-        } else {
-            format!("{prefix}/Cargo.lock")
-        };
+        let lock = workspace_lock(&prefix);
         if !root.join(&lock).is_file() {
             continue;
         }

@@ -324,3 +324,15 @@ pub(crate) fn workspace_manifest(workspace_root: &str) -> String {
         format!("{workspace_root}/Cargo.toml")
     }
 }
+
+/// Workspace-root lockfile path for a workspace root.
+///
+/// Shared by qualification and source-prep gating so both agree on
+/// which workspaces are pinned.
+pub(crate) fn workspace_lock(workspace_root: &str) -> String {
+    if workspace_root.is_empty() {
+        "Cargo.lock".to_owned()
+    } else {
+        format!("{workspace_root}/Cargo.lock")
+    }
+}
