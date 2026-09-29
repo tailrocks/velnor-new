@@ -14,7 +14,7 @@ review; the row must name a verification rule that actually runs.
 |---|---|---|---|
 | Cargo lockfile | `Cargo.lock` | repo maintainers (`CODEOWNERS`) | `cargo metadata --locked` in CI; `scripts/check-freshness.sh` declared-vs-locked probe (RQ-2.11) |
 | Version-policy mirror + inventory | `.velnor/version-policy.toml`, `.velnor/freshness-inventory.json` | repo maintainers | `repo_policy_mirror_matches_compiled_catalog`; `scripts/check-freshness.sh` |
-| Alint baseline | `.alint-baseline.json` | repo maintainers | `alint check` (config-level `baseline:`); regenerate only to prune fixed entries, never to accept new debt |
+| Alint baseline | none — no `.alint-baseline.json` at HEAD | repo maintainers | §5 limits are hard errors; no grandfathering ([update-procedure.md](update-procedure.md)) |
 | Test fixtures (committed inputs) | `fixtures/**` | owning crate's tests | Excluded from Alint's walked index (`.alint.yml` `ignore:`); each fixture dir carries a `README.md` stating intent |
 | Generated CI tree | `.github/workflows/velnor.yml`, `.github/actionlint.yaml` | generator (`velnor-actions` binary, exact release in header marker) | First-line version marker, no dates; regen must be byte-identical (RQ-1.9); validated by actionlint+zizmor before replace |
 | Generator preview output | `$RUNNER_TEMP/.../.github/**` (never committed) | ephemeral, CI job | Byte-compared against in-place render; outside repo root |

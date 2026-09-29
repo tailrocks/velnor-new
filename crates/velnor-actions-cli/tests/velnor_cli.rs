@@ -19,5 +19,9 @@ mod impl_cli_smoke;
 mod impl_cli_tmp;
 #[path = "impl_repo_deps.rs"]
 mod impl_repo_deps;
+#[path = "impl_repo_freshness.rs"]
+mod impl_repo_freshness;
 #[path = "impl_repo_policy.rs"]
 mod impl_repo_policy;
+#[path = "impl_repo_shape.rs"]
+mod impl_repo_shape;

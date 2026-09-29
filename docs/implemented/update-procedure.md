@@ -63,9 +63,8 @@ technical reason, `granted` and `expires` (YYYY-MM-DD), and is recorded in
 
 No update or exception may raise a §5 limit, add an arbitrary exclusion,
 relabel handwritten code as generated, or reduce test assertions to satisfy
-a limit. The Alint baseline grandfathered 9 pre-existing >400-line files at
-adoption; pruning that list happens only by splitting the files, and
-re-baselining to accept new debt is forbidden.
+a limit. There is no Alint baseline: §5 limits are hard errors, oversized
+files MUST be split, and grandfathering new or existing debt is forbidden.
 
 ## Row pre-declaration (locks not yet created)
 
