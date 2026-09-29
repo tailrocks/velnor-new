@@ -233,7 +233,7 @@ mod tests {
                 ),
                 (
                     "velnor-task".to_owned(),
-                    task_job("ubuntu-26.04", 2, &catalog, false).expect("task job"),
+                    task_job("ubuntu-26.04", 2, &catalog, false, &[]).expect("task job"),
                 ),
                 (
                     "velnor-final".to_owned(),

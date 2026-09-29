@@ -1,4 +1,4 @@
-//! Plan-job Cargo source preparation ahead of locked/offline consumers.
+//! Plan- and task-job Cargo source preparation ahead of locked/offline consumers.
 //!
 //! Gate 1 orders resolution after preparation: `cargo fetch --locked`
 //! populates every target's sources from the network once, so the later
@@ -43,8 +43,10 @@ pub(crate) fn lockful_roots(root: &Path, workspaces: &[PlannedWorkspace]) -> Vec
 /// The root workspace keeps the minimal argv; nested workspaces name
 /// their manifest explicitly and carry it in the step name. The step
 /// env is intentionally empty: fetched sources must land in the same
-/// default cargo home that `generate`'s internal metadata reads, and a
-/// divergent `MISE_CARGO_HOME` here would hide them from that reader.
+/// default cargo home that the locked/offline consumers read
+/// (`generate`'s internal metadata in plan, `matrix.run` in task jobs),
+/// and a divergent `MISE_CARGO_HOME` here would hide them from those
+/// readers.
 /// # Errors
 ///
 /// Returns a contract error when the Mise adapter rejects the request.

@@ -41,7 +41,11 @@ fn mbx_objects_step_pins_action_and_mode() {
     match &step.kind {
         StepKind::Action { uses: got, with } => {
             assert!(got.starts_with("jdx/mr-boxington-action@"), "{got}");
-            assert_eq!(with.get("mode").map(String::as_str), Some("objects"));
+            assert_eq!(
+                with.get("github-cache-mode").map(String::as_str),
+                Some("objects")
+            );
+            assert!(!with.contains_key("mode"), "no such action input");
         }
         _ => panic!("mbx must be an action step"),
     }

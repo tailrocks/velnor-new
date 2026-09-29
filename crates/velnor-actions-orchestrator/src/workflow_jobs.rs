@@ -71,11 +71,13 @@ pub(crate) fn plan_job(
     })
 }
 
-/// Matrix consumer job: checkout, pinned tools, MBX objects, template.
+/// Matrix consumer job: checkout, pinned tools, sources, MBX, template.
 ///
 /// No stack logic: every matrix leg runs the same template, which logs
 /// `matrix.task_id` and executes `matrix.run`. The marker trio directs
-/// the renderer to the producer; it never renders.
+/// the renderer to the producer; it never renders. `Fetch Cargo sources`
+/// runs `cargo fetch --locked` per lockful workspace ahead of `Run task`
+/// so locked/offline payloads resolve from a cold registry (Gate 1).
 /// # Errors
 ///
 /// Returns a contract error when a typed step request is rejected.
@@ -84,8 +86,15 @@ pub(crate) fn task_job(
     max_parallel_jobs: u32,
     catalog: &ToolCatalog,
     use_mbx: bool,
+    fetch_roots: &[String],
 ) -> Result<Job, OrchestratorError> {
-    crate::workflow::wire_w1::build_task_job(label, max_parallel_jobs, catalog, use_mbx)
+    crate::workflow::wire_w1::build_task_job(
+        label,
+        max_parallel_jobs,
+        catalog,
+        use_mbx,
+        fetch_roots,
+    )
 }
 
 /// Always-on lint job: checkout plus pinned actionlint over the tree.

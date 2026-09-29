@@ -139,7 +139,7 @@ pub fn mbx_objects_step(uses: &str, cargo_profile: bool) -> Result<Step, RenderE
     if !uses.starts_with(&format!("{MBX_ACTION_NAME}@")) {
         return Err(RenderError::BadActionRef(format!("not_mbx_action:{uses}")));
     }
-    let with = BTreeMap::from([("mode".to_owned(), "objects".to_owned())]);
+    let with = BTreeMap::from([("github-cache-mode".to_owned(), "objects".to_owned())]);
     action_step("Restore MBX objects", uses, with)
 }
 

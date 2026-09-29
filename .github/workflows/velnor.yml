@@ -284,10 +284,12 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
         run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.19.0
+      - name: Fetch Cargo sources
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked
       - name: Restore MBX objects
         uses: jdx/mr-boxington-action@9df1d4b18b2147788a7ee7a2c7b84ecf62fd89d3
         with:
-          mode: objects
+          github-cache-mode: objects
       - name: Run task
         env:
           VELNOR_EVENT_NAME: ${{ github.event_name }}

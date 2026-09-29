@@ -98,7 +98,13 @@ pub(crate) fn build_workflow(
     if !task_groups.is_empty() {
         jobs.insert(
             TASK_JOB_ID.to_owned(),
-            task_job(label, config.workflow.max_parallel_jobs, &catalog, use_mbx)?,
+            task_job(
+                label,
+                config.workflow.max_parallel_jobs,
+                &catalog,
+                use_mbx,
+                fetch_roots,
+            )?,
         );
     }
     jobs.insert(LINT_JOB_ID.to_owned(), lint_job(label, &catalog)?);

@@ -30,6 +30,7 @@ use velnor_actions_workflow_renderer::steps::{
 
 use crate::OrchestratorError;
 use crate::discover::Discovery;
+use crate::source_prep::fetch_steps;
 use crate::utf8::{strings_of, strings_of_env};
 use crate::workflow_jobs::matrix_task_step;
 
@@ -82,12 +83,14 @@ pub(crate) fn vet_step_syntax(syntax: StepSyntax) -> Result<(), OrchestratorErro
         .map_err(OrchestratorError::from)
 }
 
-/// Matrix consumer job: checkout, pinned tools, MBX objects, template.
+/// Matrix consumer job: checkout, pinned tools, sources, MBX, template.
 ///
 /// Order follows task-execution-contract §2: `Prepare pinned tools`
-/// sits at index 1, the MBX objects restore (MBX legs only) follows,
-/// and the fixed matrix-entry template closes the job. Gate-6 cache
-/// steps stay absent until a qualification fixture enables them.
+/// sits at index 1, `Fetch Cargo sources` runs per lockful root so the
+/// locked/offline payloads resolve from a cold registry, the MBX
+/// objects restore (MBX legs only) follows, and the fixed matrix-entry
+/// template closes the job. Gate-6 cache steps stay absent until a
+/// qualification fixture enables them.
 ///
 /// # Errors
 ///
@@ -97,9 +100,11 @@ pub(crate) fn build_task_job(
     max_parallel_jobs: u32,
     catalog: &ToolCatalog,
     use_mbx: bool,
+    fetch_roots: &[String],
 ) -> Result<Job, OrchestratorError> {
     let mut steps = vec![checkout_step()?];
     steps.push(prepare_task_tools_step(catalog, use_mbx)?);
+    steps.extend(fetch_steps(catalog, fetch_roots)?);
     steps.extend(mbx_task_step(use_mbx)?);
     steps.extend(maybe_task_cache_steps(None, TaskCacheMode::Off, "")?);
     steps.push(matrix_task_step(max_parallel_jobs));
@@ -364,7 +369,10 @@ mod tests {
             panic!("mbx must be an action step");
         };
         assert!(uses.starts_with("jdx/mr-boxington-action@"), "{uses}");
-        assert_eq!(with.get("mode").map(String::as_str), Some("objects"));
+        assert_eq!(
+            with.get("github-cache-mode").map(String::as_str),
+            Some("objects")
+        );
         assert!(PinnedActionRef::parse_uses(uses, MR_BOXINGTON_ACTION_VERSION).is_ok());
     }
 
