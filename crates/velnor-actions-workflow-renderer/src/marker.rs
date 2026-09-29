@@ -7,7 +7,7 @@ use crate::RenderError;
 /// Marker text before the version (re-exported from the contract crate).
 pub use velnor_actions_contract::MARKER_PREFIX;
 /// Marker text after the version.
-pub const MARKER_SUFFIX: &str = " - DO NOT EDIT";
+pub const MARKER_SUFFIX: &str = "; edit .velnor/config.toml and regenerate.";
 
 /// Build the exact first-line marker for a generator version.
 ///

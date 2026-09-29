@@ -2,6 +2,7 @@
 mod impl_common;
 mod impl_config_internal;
 mod impl_e2e_wiring;
+mod impl_final_orch;
 mod impl_gate8_acquire;
 mod impl_gate8_e;
 mod impl_gates_cover;

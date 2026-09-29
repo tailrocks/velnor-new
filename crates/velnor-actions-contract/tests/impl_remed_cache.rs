@@ -273,3 +273,32 @@ fn cache_key_shape_and_bound() -> Result<(), ContractError> {
     );
     Ok(())
 }
+
+#[test]
+fn cache_declared_env_value_change_invalidates_identity() -> Result<(), ContractError> {
+    let base = sample_identity();
+    let before = input_digest(&base)?;
+    let mut changed = base.clone();
+    changed.environment.insert(
+        "RUSTFLAGS".to_owned(),
+        "-D warnings -W clippy::pedantic".to_owned(),
+    );
+    changed.validate()?;
+    assert_ne!(input_digest(&changed)?, before);
+    Ok(())
+}
+
+#[test]
+fn cache_mbx_hit_can_never_satisfy_task_obligation() -> Result<(), ContractError> {
+    let compat = digest_b3(b"compat");
+    let snapshot = digest_b3(b"snapshot");
+    let mbx_key = cache_key("mbx", "pr", &compat, &snapshot)?;
+    let task_key = cache_key("task", "pr", &compat, &snapshot)?;
+    assert_ne!(mbx_key, task_key, "layer is part of key identity");
+    let mbx_prefix = restore_prefix("mbx", "pr", &compat)?;
+    assert!(
+        !task_key.starts_with(&mbx_prefix),
+        "mbx transport cannot feed the task gate"
+    );
+    Ok(())
+}
