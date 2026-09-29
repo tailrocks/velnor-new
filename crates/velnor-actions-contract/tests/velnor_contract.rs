@@ -1,6 +1,8 @@
 //! Integration test entry point; cases live in the sibling files.
 #[path = "impl_adapter_wire_contract.rs"]
 mod impl_adapter_wire_contract;
+#[path = "impl_alint_negative.rs"]
+mod impl_alint_negative;
 #[path = "impl_contract.rs"]
 mod impl_contract;
 #[path = "impl_contract_ids.rs"]
