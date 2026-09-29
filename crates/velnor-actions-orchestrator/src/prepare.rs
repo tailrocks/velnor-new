@@ -210,10 +210,45 @@ fn is_origin_section(header: &str) -> bool {
 }
 
 /// True when a remote URL normalizes to the canonical identity.
+///
+/// Both host and path must match `github.com/tailrocks/velnor-new` exactly
+/// (after lowercasing and trimming an optional `.git` suffix and trailing
+/// slashes). A bare `tailrocks/velnor-new` also matches for local fixtures.
+/// A path-suffix match alone is rejected: any host that merely ends in the
+/// identity path (e.g. `evil.example/tailrocks/velnor-new`) grants nothing.
 fn url_matches_identity(value: &str) -> bool {
-    let mut url = value.to_lowercase();
+    let mut url = value.trim().to_lowercase();
+    while url.ends_with('/') {
+        url.pop();
+    }
     if let Some(stripped) = url.strip_suffix(".git") {
         url = stripped.to_owned();
     }
-    url == VELNOR_IDENTITY || url.ends_with(&format!("/{VELNOR_IDENTITY}"))
+    if url == VELNOR_IDENTITY {
+        return true;
+    }
+    let Some((host, path)) = split_host_path(&url) else {
+        return false;
+    };
+    host == "github.com" && path == VELNOR_IDENTITY
+}
+
+/// Split a remote URL into `(host, path)` for `scheme://` and scp forms.
+fn split_host_path(url: &str) -> Option<(&str, &str)> {
+    if let Some((_scheme, rest)) = url.split_once("://") {
+        let after_user = rest.rsplit('@').next().unwrap_or(rest);
+        let (host, path) = after_user.split_once('/')?;
+        let mut path = path;
+        while path.ends_with('/') {
+            path = path.strip_suffix('/').unwrap_or(path);
+        }
+        return Some((host, path));
+    }
+    // scp-like `host:path` (user part already stripped by caller split).
+    let (before_colon, path) = url.split_once(':')?;
+    let host = before_colon.rsplit('@').next().unwrap_or(before_colon);
+    if host.is_empty() || host.contains('/') || path.is_empty() || path.starts_with('/') {
+        return None;
+    }
+    Some((host, path))
 }

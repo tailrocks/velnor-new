@@ -36,13 +36,28 @@ argument validation, environment construction, and result capture for those
 requests; the orchestrator MUST NOT launch processes or construct shell text.
 
 Internal workflow steps MUST NOT be exposed as subcommands. The sole
-non-CLI internal entrypoint is the `VELNOR_INTERNAL_OP` environment
-variable plus a request file: when `VELNOR_INTERNAL_OP` names a typed
-operation (`plan`, `merge-reports`, or `check-generated`), the binary
-reads its schema-1 JSON request from `VELNOR_INTERNAL_REQUEST_FILE`,
-writes its schema-1 JSON result to `VELNOR_INTERNAL_RESPONSE_FILE`, and
-MUST ignore CLI arguments. Any other op value fails with exit 2. Helper
-staging and version rules are in §6 and [workflow §3](workflow-contract.md).
+non-CLI internal entrypoint is a bare invocation (no CLI arguments)
+with `VELNOR_INTERNAL_OP` naming a versioned typed operation
+(`write-request-v1`, `plan-v1`, `merge-v1`, or `fetch-reports-v1`) plus
+its gate inputs. `plan-v1` and `merge-v1` read schema-1 JSON from the
+existing request file at `VELNOR_REQUEST_FILE` and write the schema-1
+JSON result to the sibling `<op>-response.json` derived from the
+`<op>-request.json` file name; `write-request-v1` requires that path to
+be absent plus the GitHub event environment, and materializes the
+request file; `fetch-reports-v1` takes no request file and instead
+requires the runner-temp velnor directory plus the numeric run ID.
+Versioned tags replace the earlier unversioned op vocabulary, which had
+no names for request materialization or report retrieval. Any CLI
+argument — including `--help`, `--version`, and public commands —
+routes to the public Clap tree with the internal environment ignored,
+so every public surface stays byte-identical with or without the
+environment set; generated steps always invoke the helper bare, and
+stray arguments fail closed through Clap's usage diagnostic (exit 2).
+An unsatisfiable gate (unknown op, missing inputs) on a bare invocation
+likewise falls through to Clap and fails with the usage diagnostic
+(exit 2). A satisfied gate that fails operationally exits 1 with empty
+stdout and a one-line stderr diagnostic. Helper staging and version
+rules are in §6 and [workflow §3](workflow-contract.md).
 
 ## 2. Repository root
 

@@ -16,8 +16,8 @@ use clap::Parser;
 use velnor_actions_orchestrator::{
     FETCH_OP, GenerateOptions, MERGE_OP, OrchestratorError, PLAN_OP, REQUEST_FILE_ENV,
     WRITE_REQUEST_OP, generate, init_config, merge_internal, merge_passed, plan_internal,
-    plan_outputs, plan_text, prepare, publish_final_report, publish_plan_files, resolve_root,
-    response_path_for, retrieve_reports, write_request,
+    plan_outputs, plan_text_checked, prepare, publish_final_report, publish_plan_files,
+    resolve_root, response_path_for, retrieve_reports, write_request,
 };
 
 use crate::args::{Cli, Command};
@@ -250,7 +250,10 @@ fn run_plan() -> ExitCode {
         Ok(preparation) => preparation,
         Err(error) => return fail_public(&error),
     };
-    let text = plan_text(&preparation);
+    let text = match plan_text_checked(&preparation) {
+        Ok(text) => text,
+        Err(error) => return fail_public(&error),
+    };
     print!("{text}");
     if !text.ends_with('\n') {
         println!();

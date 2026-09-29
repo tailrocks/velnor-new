@@ -315,14 +315,24 @@ fn trust_probe_identity_inner() -> TestResult {
     let repo = make_repo(
         "schema = 1\n[workflow]\npolicy = \"velnor-repository-v1\"\ndefault_branch = \"testmain\"\n",
     )?;
-    let url = if scenario.contains("canonical_origin") {
+    let url = if scenario.contains("scp_canonical_origin") {
+        "git@github.com:tailrocks/velnor-new.git"
+    } else if scenario.contains("canonical_origin") {
         "https://github.com/tailrocks/velnor-new.git"
+    } else if scenario.contains("hostile_subdomain_origin") {
+        "https://github.com.evil.example/tailrocks/velnor-new.git"
+    } else if scenario.contains("hostile_scp_origin") {
+        "git@evil.example:tailrocks/velnor-new.git"
+    } else if scenario.contains("hostile_suffix_origin") {
+        "https://evil.example/tailrocks/velnor-new.git"
     } else {
         "https://example.com/other/repo.git"
     };
     git(&["remote", "add", "origin", url], repo.path())?;
     match scenario.as_str() {
-        "canonical_hint_canonical_origin" | "no_hint_canonical_origin" => {
+        "canonical_hint_canonical_origin"
+        | "no_hint_canonical_origin"
+        | "no_hint_scp_canonical_origin" => {
             prepare(repo.path())?;
         }
         name => {
@@ -353,6 +363,10 @@ fn identity_hint_scenarios() -> TestResult {
             Some("tailrocks/velnor-new"),
         ),
         ("no_hint_canonical_origin", None),
+        ("no_hint_scp_canonical_origin", None),
+        ("no_hint_hostile_suffix_origin", None),
+        ("no_hint_hostile_scp_origin", None),
+        ("no_hint_hostile_subdomain_origin", None),
     ];
     for (probe, hint) in cases {
         let mut child = std::process::Command::new(std::env::current_exe()?);
