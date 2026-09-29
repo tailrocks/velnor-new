@@ -8,7 +8,7 @@ resolver 3, MSRV 1.98. `Cargo.lock` committed; always pass `--locked`.
 - Build: `cargo build --workspace --locked`
 - Test (all): `cargo test --workspace --locked`
 - Test (one): `cargo test --package <name> --locked`
-- Nextest CI: `cargo nextest run --workspace --locked --profile ci`
+- Nextest CI: `cargo nextest run --workspace --locked --profile ci --no-tests fail`
 - Fmt check: `cargo fmt --all -- --check`
 - Clippy (per package): `cargo clippy --package <name> --all-targets --locked -- -D warnings`
 - Deny: `cargo deny --locked check`
