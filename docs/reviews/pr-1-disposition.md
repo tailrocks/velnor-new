@@ -9,7 +9,7 @@ Classes: **D** = accepted design change · **B** = confirmed bug · **V** = pend
 | R01 | 7 Rust crate jobs + 1 job per repo-wide validator (D) | renderer | pending | /tmp/pr1-p05p06-probe.md (47-job graph) |
 | R02 | Each validator owns its job; no per-task fan-out (D) | orchestrator | pending | /tmp/pr1-p05p06-probe.md; /tmp/pr1-salvaged-evidence.md W1 |
 | R03 | No umbrella Policy/Workflow-Lint groupings (D) | renderer | pending | /tmp/pr1-p05p06-probe.md (merge_support_jobs) |
-| R04 | Alint bundles + edition-2024 enforcement (B) | alint | partial | /tmp/p00-repro.log (preserved); fix in flight |
+| R04 | Alint bundles + edition-2024 enforcement (B) | alint | partial | P00 done in 1748495 (semantic policy + fixtures); bundles/edition rule pending P11 |
 | R05 | Per-job cache restore; MBX setup before any Cargo cmd (B) | cache | pending | verification pending (hosted run) |
 | R06 | Single Mise cache identity; drop role duplicates (B) | cache | pending | verification pending (hosted run) |
 | R07 | Measured Rust cache design choice (V) | cache | pending | verification pending (hosted run) |
