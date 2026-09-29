@@ -1,11 +1,14 @@
-# Velnor repository policy, enforced by asamarts/alint as its own CI job.
-# Generic file/path placement, required files, and line-count rules ONLY.
+# Repository policy, enforced by asamarts/alint as its own CI job.
+# Generic file/path requirements and agent-instruction file integrity only.
 # No dependency-architecture, Rust-syntax, or test-layout claims: Alint
 # cannot inspect those (see docs/proposed/rust-quality-contract.md §1, §4).
 #
 # Schema: alint config model (`version` + `rules`, each rule with
-# id/kind/level). Validated with the pinned alint binary:
-#   alint validate-config
+# id/kind/level). The top-level `command` rule is trusted and checks only
+# each AGENTS.md's sibling CLAUDE.md symlink, which Alint has no native
+# symlink-target rule to express. Its `pair` rule checks existence only;
+# the command below checks the link type and target on the CI Linux runner.
+# Validate with the pinned alint binary: `alint validate-config`.
 # The 80-line function/method limit (§5, "using Clippy accounting") is NOT
 # expressed here — alint ships no function-level rule kind. It is enforced
 # by Clippy (`too_many_lines = "deny"` + `too-many-lines-threshold = 80`).
@@ -37,6 +40,36 @@ rules:
       - AGENTS.md
     level: error
     message: "Repo-shape file is missing (rust-quality-contract §1)"
+
+  # Run against each real AGENTS.md and check its sibling. `pair` only checks
+  # partner existence and cannot enforce symlink type or target; this trusted
+  # command requires the relative target text to be exactly AGENTS.md.
+  - id: claude-is-agents-symlink
+    kind: command
+    paths: "**/AGENTS.md"
+    command:
+      - sh
+      - -c
+      - 'dir=$(dirname "$1") && test -L "$dir/CLAUDE.md" && test "$(readlink "$dir/CLAUDE.md")" = AGENTS.md'
+      - alint-claude-link
+      - "{path}"
+    level: error
+    message: "Each AGENTS.md must have a sibling CLAUDE.md symlink to AGENTS.md"
+
+  # Keep instruction files concise so they fit in agent context by default.
+  - id: agent-instructions-max-lines
+    kind: file_max_lines
+    paths: "**/AGENTS.md"
+    max_lines: 100
+    level: error
+    message: "AGENTS.md exceeds 100 lines; move detailed guidance into docs"
+
+  - id: agent-instructions-max-size
+    kind: file_max_size
+    paths: "**/AGENTS.md"
+    max_bytes: 16384
+    level: error
+    message: "AGENTS.md exceeds 16 KiB; move detailed guidance into docs"
 
   # First-party Rust packages live only under crates/ (ARCH-1.10).
   - id: crates-only
