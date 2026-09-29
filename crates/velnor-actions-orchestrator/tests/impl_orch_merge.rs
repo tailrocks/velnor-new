@@ -126,9 +126,8 @@ fn orch_core_entries_emit_single_only() -> TestResult {
                 "no inferred fan-out"
             );
         }
+        assert!(entry.test_run.is_empty(), "no test_run refs");
     }
-    let text = serde_json::to_string(&plan.matrix)?;
-    assert!(!text.contains("\"test_run\":"), "no test_run array");
     Ok(())
 }
 

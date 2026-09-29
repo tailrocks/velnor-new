@@ -12,7 +12,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use velnor_actions_contract::{
     CacheLayer, CacheOutcome, CacheResult, ContractError, NotSelectedReason, ObligationDecision,
-    TaskReport, TaskStatus, Trust, WorkflowEvent, task_report_id_for_task, validate_run_key,
+    RunnerImageEvidence, TaskReport, TaskStatus, Trust, WorkflowEvent, join_runner_temp,
+    task_report_id_for_task, validate_run_key,
 };
 
 use crate::OrchestratorError;
@@ -175,9 +176,32 @@ pub fn not_selected_report(inputs: &NotSelectedInputs<'_>) -> Result<TaskReport,
         exit_code: 0,
         duration_ms: 0,
         outputs: Vec::new(),
+        lane: None,
+        queue: None,
+        partition: None,
+        reason: None,
+        timing: None,
     };
     report.validate()?;
+    report.validate_outputs_declared(&[])?;
     Ok(report)
+}
+
+/// Observed runner-image evidence for one label (VER-4.2).
+///
+/// The label's first segment names the OS and the rest the version
+/// (`ubuntu-26.04`); unversioned labels record `unknown`.
+pub(crate) fn runner_image_evidence(label: &str) -> Result<RunnerImageEvidence, ContractError> {
+    let (os, version) = match label.split_once('-') {
+        Some((os, rest)) if !rest.is_empty() => (os, rest),
+        _ => (label, "unknown"),
+    };
+    let evidence = RunnerImageEvidence {
+        image_os: os.to_owned(),
+        image_version: version.to_owned(),
+    };
+    evidence.validate()?;
+    Ok(evidence)
 }
 
 /// Broaden warning for global-config or outside-project paths, if any.
@@ -247,7 +271,10 @@ pub const PLAN_JSON_NAME: &str = "plan.json";
 /// Returns an internal error when the run key is invalid.
 pub fn plan_artifact_dir(velnor_dir: &Path, run_key: &str) -> Result<PathBuf, OrchestratorError> {
     validate_run_key(run_key).map_err(internal_contract)?;
-    Ok(velnor_dir.join(run_key))
+    let dir = velnor_dir.to_string_lossy();
+    join_runner_temp(dir.as_ref(), run_key)
+        .map(PathBuf::from)
+        .map_err(internal_contract)
 }
 
 /// Validated `$RUNNER_TEMP/velnor/<run-key>/plan.json` path.

@@ -359,10 +359,11 @@ fn adapter_metadata_forwards_adapter_value() -> TestResult {
             "compile_driver",
             "test_runner",
             "evidence_ids",
+            "task_cache_enabled",
         ] {
             assert!(meta.contains_key(key), "{key} in {}", entry.id);
         }
-        assert_eq!(meta.len(), 9, "adapter shape only");
+        assert_eq!(meta.len(), 10, "adapter shape only");
         assert!(
             !meta["compile_driver"]
                 .as_str()

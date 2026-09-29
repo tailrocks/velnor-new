@@ -18,7 +18,6 @@ use velnor_actions_workflow_renderer::steps::{
 
 use crate::OrchestratorError;
 use crate::source_prep::fetch_steps;
-use crate::workflow::CHECKOUT_USES;
 
 /// Always-on workflow-lint job ID, emitted for both policies.
 pub(crate) const LINT_JOB_ID: &str = "velnor-workflow-lint";
@@ -62,7 +61,7 @@ pub(crate) fn plan_job(
     use_mbx: bool,
     fetch_roots: &[String],
 ) -> Result<Job, OrchestratorError> {
-    let mut steps = vec![checkout_action()];
+    let mut steps = vec![checkout_action()?];
     steps.push(prepare_pinned_tools_step(catalog, plan_tools(use_mbx))?);
     steps.extend(fetch_steps(catalog, fetch_roots)?);
     steps.extend(acquire);
@@ -77,19 +76,21 @@ pub(crate) fn plan_job(
     })
 }
 
-/// Matrix consumer job: checkout plus the fixed matrix-entry template.
+/// Matrix consumer job: checkout, pinned tools, MBX objects, template.
 ///
 /// No stack logic: every matrix leg runs the same template, which logs
 /// `matrix.task_id` and executes `matrix.run`. The marker trio directs
 /// the renderer to the producer; it never renders.
-pub(crate) fn task_job(label: &str, max_parallel_jobs: u32) -> Job {
-    Job {
-        display_name: "Velnor Task".to_owned(),
-        runs_on: label.to_owned(),
-        needs: vec![PLAN_JOB_ID.to_owned()],
-        condition: None,
-        steps: vec![checkout_action(), matrix_task_step(max_parallel_jobs)],
-    }
+/// # Errors
+///
+/// Returns a contract error when a typed step request is rejected.
+pub(crate) fn task_job(
+    label: &str,
+    max_parallel_jobs: u32,
+    catalog: &ToolCatalog,
+    use_mbx: bool,
+) -> Result<Job, OrchestratorError> {
+    crate::workflow::wire_w1::build_task_job(label, max_parallel_jobs, catalog, use_mbx)
 }
 
 /// Always-on lint job: checkout plus pinned actionlint over the tree.
@@ -111,7 +112,7 @@ pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, Orches
         needs: Vec::new(),
         condition: None,
         steps: vec![
-            checkout_action(),
+            checkout_action()?,
             Step {
                 name: "Run actionlint".to_owned(),
                 kind: StepKind::Shell {
@@ -219,16 +220,8 @@ fn request_step(target: &str) -> Result<Step, OrchestratorError> {
 }
 
 /// Pinned checkout action without persisted credentials.
-fn checkout_action() -> Step {
-    let mut with = BTreeMap::new();
-    with.insert("persist-credentials".to_owned(), "false".to_owned());
-    Step {
-        name: "Checkout".to_owned(),
-        kind: StepKind::Action {
-            uses: CHECKOUT_USES.to_owned(),
-            with,
-        },
-    }
+fn checkout_action() -> Result<Step, OrchestratorError> {
+    crate::workflow::wire_w1::checkout_step()
 }
 
 /// Fixed matrix-entry template: log the task ID, then run its command.
@@ -236,7 +229,7 @@ fn checkout_action() -> Step {
 /// A missing `matrix.run` fails the leg via `${VAR:?...}` instead of a
 /// silent no-op. Matrix context arrives via env only, keeping `run:`
 /// free of `${{ }}` for shellcheck and template-injection scans.
-fn matrix_task_step(max_parallel_jobs: u32) -> Step {
+pub(crate) fn matrix_task_step(max_parallel_jobs: u32) -> Step {
     let script = format!(
         "echo \"${TASK_ID_ENV}\" && : \"${{{TASK_RUN_ENV}:?matrix.run_missing}}\" && sh -c \"${TASK_RUN_ENV}\""
     );
@@ -260,7 +253,7 @@ fn matrix_task_step(max_parallel_jobs: u32) -> Step {
 }
 
 /// Convert fixed argv to UTF-8 strings.
-fn strings_of(argv: Vec<OsString>) -> Result<Vec<String>, String> {
+pub(crate) fn strings_of(argv: Vec<OsString>) -> Result<Vec<String>, String> {
     let mut out = Vec::with_capacity(argv.len());
     for arg in argv {
         match arg.into_string() {
@@ -272,7 +265,9 @@ fn strings_of(argv: Vec<OsString>) -> Result<Vec<String>, String> {
 }
 
 /// Convert fixed env pairs to UTF-8 strings.
-fn strings_of_env(env: &[(OsString, OsString)]) -> Result<BTreeMap<String, String>, String> {
+pub(crate) fn strings_of_env(
+    env: &[(OsString, OsString)],
+) -> Result<BTreeMap<String, String>, String> {
     let mut out = BTreeMap::new();
     for (key, value) in env {
         let (Some(key), Some(value)) = (key.to_str(), value.to_str()) else {
@@ -298,7 +293,7 @@ mod tests {
     #[test]
     fn plan_job_writes_request_before_plan() {
         let catalog = ToolCatalog::pinned();
-        for acquire in [None, Some(checkout_action())] {
+        for acquire in [None, Some(checkout_action().expect("checkout step"))] {
             let job = plan_job("ubuntu-26.04", acquire, &catalog, false, &[]).expect("plan job");
             let names: Vec<&str> = job.steps.iter().map(|step| step.name.as_str()).collect();
             let write_at = names.iter().position(|name| *name == "Write request");
@@ -374,7 +369,7 @@ mod tests {
 
     #[test]
     fn final_job_writes_request_before_merge() {
-        for acquire in [None, Some(checkout_action())] {
+        for acquire in [None, Some(checkout_action().expect("checkout step"))] {
             let job = final_job("ubuntu-26.04", true, acquire).expect("final job");
             let names: Vec<&str> = job.steps.iter().map(|step| step.name.as_str()).collect();
             let write_at = names.iter().position(|name| *name == "Write request");

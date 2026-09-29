@@ -34,7 +34,10 @@ pub(crate) fn load_config(root: &Path) -> Result<VelnorConfig, OrchestratorError
         }
     })?;
     let partial: PartialConfig = toml::from_str(&text).map_err(|err| {
-        OrchestratorError::config(CONFIG_REL, "document", single_line(&err.to_string()))
+        config_error(velnor_actions_contract::ContractError::map_decode_error(
+            CONFIG_REL,
+            &err.to_string(),
+        ))
     })?;
     let config = partial.materialize()?;
     if let Err(err) = config.validate(CONFIG_REL) {
@@ -77,11 +80,6 @@ fn check_policy_mode(config: &VelnorConfig) -> Result<(), OrchestratorError> {
         ));
     }
     Ok(())
-}
-
-/// Collapse a multi-line error to one line.
-fn single_line(text: &str) -> String {
-    text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 /// Top-level document with every section optional.

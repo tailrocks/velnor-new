@@ -24,9 +24,12 @@ pub(crate) fn select_groups<'a>(
     warnings: &mut Vec<String>,
 ) -> Vec<&'a TaskGroup> {
     let all: Vec<&TaskGroup> = discovery.task_groups.iter().collect();
+    if event == WorkflowEvent::Local {
+        return select_local(discovery, root, warnings);
+    }
     let narrows = matches!(
         event,
-        WorkflowEvent::PullRequest | WorkflowEvent::MergeGroup
+        WorkflowEvent::PullRequest | WorkflowEvent::MergeGroup | WorkflowEvent::Fork
     );
     if !(narrows && base.is_some()) {
         if narrows {
@@ -38,6 +41,40 @@ pub(crate) fn select_groups<'a>(
     let Some((changed, toolfiles)) = change_sets(root, base, head, warnings) else {
         return all;
     };
+    narrow_from_changed(discovery, &changed, toolfiles, root, base, head, warnings)
+}
+
+/// Local pre-push selection: the working tree against `HEAD`.
+fn select_local<'a>(
+    discovery: &'a Discovery,
+    root: &Path,
+    warnings: &mut Vec<String>,
+) -> Vec<&'a TaskGroup> {
+    let all: Vec<&'a TaskGroup> = discovery.task_groups.iter().collect();
+    let sha = match head_sha(root) {
+        Ok(sha) => sha,
+        Err(problem) => {
+            warnings.push(format!("comparison_unavailable:{problem}:selecting_all"));
+            return all;
+        }
+    };
+    let Some((changed, toolfiles)) = local_change_set(root, warnings) else {
+        return all;
+    };
+    narrow_from_changed(discovery, &changed, toolfiles, root, &sha, &sha, warnings)
+}
+
+/// Narrow one change set to owning groups, broadening on risk.
+fn narrow_from_changed<'a>(
+    discovery: &'a Discovery,
+    changed: &BTreeSet<String>,
+    toolfiles: bool,
+    root: &Path,
+    base: &str,
+    head: &str,
+    warnings: &mut Vec<String>,
+) -> Vec<&'a TaskGroup> {
+    let all: Vec<&TaskGroup> = discovery.task_groups.iter().collect();
     if changed.is_empty() {
         warnings.push(
             if toolfiles {
@@ -64,7 +101,7 @@ pub(crate) fn select_groups<'a>(
         warnings.push(warning.to_owned());
         return all;
     }
-    if has_unowned_file(discovery, &changed) {
+    if has_unowned_file(discovery, changed) {
         warnings.push("unclassified_files:selecting_all".to_owned());
         return all;
     }
@@ -76,7 +113,7 @@ pub(crate) fn select_groups<'a>(
             return all;
         }
     };
-    let selected_ids = affected_packages(discovery, &changed, &base_edges, &head_edges);
+    let selected_ids = affected_packages(discovery, changed, &base_edges, &head_edges);
     let mut keys = BTreeSet::new();
     for group in &all {
         if selected_ids.contains(&group.package_id) {
@@ -160,6 +197,78 @@ fn change_sets(
         .filter(|path| !is_advisory_toolfile(path))
         .collect();
     Some((changed, toolfiles))
+}
+
+/// Working-tree change set minus advisory tool files, or `None` to broaden.
+///
+/// Staged plus unstaged diffs plus untracked files form the local union;
+/// git failures broaden with a recorded warning.
+fn local_change_set(root: &Path, warnings: &mut Vec<String>) -> Option<(BTreeSet<String>, bool)> {
+    let mut changed = BTreeSet::new();
+    for cached in [true, false] {
+        match tree_diff_names(root, cached) {
+            Ok(files) => changed.extend(files),
+            Err(problem) => {
+                warnings.push(format!("comparison_unavailable:{problem}:selecting_all"));
+                return None;
+            }
+        }
+    }
+    let untracked = match untracked_files(root) {
+        Ok(files) => files,
+        Err(problem) => {
+            warnings.push(format!("comparison_unavailable:{problem}:selecting_all"));
+            return None;
+        }
+    };
+    changed.extend(untracked);
+    let toolfiles = changed.iter().any(|path| is_advisory_toolfile(path));
+    let changed = changed
+        .into_iter()
+        .filter(|path| !is_advisory_toolfile(path))
+        .collect();
+    Some((changed, toolfiles))
+}
+
+/// Names from the staged (`--cached`) or unstaged working-tree diff.
+fn tree_diff_names(root: &Path, cached: bool) -> Result<BTreeSet<String>, String> {
+    let mut args = vec![OsString::from("--name-only")];
+    if cached {
+        args.push(OsString::from("--cached"));
+    }
+    args.push(OsString::from("--no-renames"));
+    args.push(OsString::from("--"));
+    validate_select_diff_args(&args).map_err(|err| err.to_string())?;
+    let output = GitRequest::diff(args)
+        .run_in(root)
+        .map_err(|err| err.to_string())?;
+    output
+        .require_success("git")
+        .map_err(|err| err.to_string())?;
+    let text = output.stdout_text("git").map_err(|err| err.to_string())?;
+    Ok(text
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(str::to_owned)
+        .collect())
+}
+
+/// Resolve `HEAD` to a SHA for local comparison.
+fn head_sha(root: &Path) -> Result<String, String> {
+    let output = GitRequest::rev_parse(vec![OsString::from("HEAD")])
+        .run_in(root)
+        .map_err(|err| err.to_string())?;
+    if !output.success {
+        return Err("missing_head".to_owned());
+    }
+    let sha = output
+        .stdout_text("git")
+        .map_err(|err| err.to_string())?
+        .trim()
+        .to_owned();
+    validate_diff_rev(&sha, "bad_head")?;
+    Ok(sha)
 }
 
 /// Untracked non-ignored paths via the allowlisted `ls-files` verb.

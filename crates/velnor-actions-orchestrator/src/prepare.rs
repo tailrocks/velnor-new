@@ -3,11 +3,12 @@
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
-use velnor_actions_contract::{RunnerSelection, VelnorConfig, WorkflowPolicy};
+use velnor_actions_contract::{RunnerImageEvidence, RunnerSelection, VelnorConfig, WorkflowPolicy};
 use velnor_actions_mise::GitRequest;
 
 use crate::OrchestratorError;
-use crate::config::load_config;
+use crate::config::{CONFIG_REL, load_config};
+use crate::decisions::runner_image_evidence;
 use crate::discover::{Discovery, discover};
 use crate::source_prep::lockful_roots;
 use crate::workflow::{DEFAULT_RUNNER_LABEL, WorkflowPlan, build_workflow};
@@ -32,6 +33,8 @@ pub struct GenerationPreparation {
     pub discovery: Discovery,
     /// Workflow IR plus renderer inputs.
     pub workflow: WorkflowPlan,
+    /// Observed runner-image evidence for the label (VER-4.2).
+    pub runner_image: RunnerImageEvidence,
 }
 
 /// Build the shared preparation object for `root`.
@@ -61,6 +64,8 @@ pub fn prepare(root: &Path) -> Result<GenerationPreparation, OrchestratorError> 
         &discovery,
         &fetch_roots,
     )?;
+    let runner_image = runner_image_evidence(&runner_label)
+        .map_err(|err| OrchestratorError::config(CONFIG_REL, "workflow", err.to_string()))?;
     Ok(GenerationPreparation {
         root: canonical,
         config,
@@ -69,6 +74,7 @@ pub fn prepare(root: &Path) -> Result<GenerationPreparation, OrchestratorError> 
         runner_selection,
         discovery,
         workflow,
+        runner_image,
     })
 }
 

@@ -67,6 +67,8 @@ fn shard_first_entry(
         .map(|ob| ob.task_id.clone())
         .collect();
     plan.task_ids.sort();
+    plan.edges
+        .retain(|edge| edge.from != base.task_id && edge.to != base.task_id);
     let entry = plan.matrix.include.first_mut().ok_or("missing entry")?;
     entry.execute_task_ids.tasks = std::collections::BTreeMap::from([(
         "nextest".to_owned(),

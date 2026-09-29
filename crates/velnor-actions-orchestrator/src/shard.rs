@@ -125,7 +125,10 @@ fn check_group(
     if first.runner != "cargo_nextest" {
         return Err("sharding_requires_nextest".into());
     }
-    if first.archive_digest.is_none() && !first.no_test_targets {
+    if velnor_actions_mise::requires_archive_transfer(first.shard_count)
+        && first.archive_digest.is_none()
+        && !first.no_test_targets
+    {
         return Err("missing_archive".into());
     }
     for proof in group {
@@ -177,6 +180,9 @@ pub(crate) struct ResourceLimits {
     pub(crate) shards: u32,
     /// Configured retries (V1: zero).
     pub(crate) retries: u32,
+    /// Shared-service resource groups, when measured (PAR-8.19).
+    #[serde(default)]
+    pub(crate) resource_groups: Vec<String>,
 }
 
 /// Reject zero budgets, over-budget shards, and above-capacity concurrency.
@@ -198,6 +204,12 @@ pub(crate) fn validate_budgets(limits: &ResourceLimits) -> Result<(), String> {
     }
     if limits.max_parallel > limits.capacity {
         return Err("concurrency_above_capacity".into());
+    }
+    let mut groups = limits.resource_groups.clone();
+    groups.sort();
+    groups.dedup();
+    if groups != limits.resource_groups || groups.iter().any(|group| group.trim().is_empty()) {
+        return Err("resource_groups_unordered".into());
     }
     Ok(())
 }
@@ -303,6 +315,7 @@ pub(crate) fn resolve_manifests(
     base: &str,
     workflow: &str,
     branch: &str,
+    artifact: Option<&str>,
 ) -> Result<Vec<BaselineManifest>, String> {
     let lookup = BaselineLookup::new(base, workflow, branch)?;
     let text = BaselineLookup::run(catalog, root, lookup.list_args())?;
@@ -311,7 +324,14 @@ pub(crate) fn resolve_manifests(
     BaselineLookup::run(
         catalog,
         root,
-        BaselineLookup::download_args(run_id, temp.path()),
+        crate::cover_baseline::baseline_download_args(
+            base,
+            workflow,
+            branch,
+            artifact,
+            run_id,
+            temp.path(),
+        ),
     )?;
     collect_manifests(temp.path(), base)
 }
@@ -322,19 +342,7 @@ fn collect_manifests(dir: &Path, base: &str) -> Result<Vec<BaselineManifest>, St
     let entries = std::fs::read_dir(dir).map_err(|_| "baseline_unavailable".to_owned())?;
     for entry in entries {
         let entry = entry.map_err(|_| "baseline_unavailable".to_owned())?;
-        let name = entry.file_name().to_string_lossy().into_owned();
-        let Some(rest) = name.strip_prefix(&format!("velnor-baseline-{base}-")) else {
-            continue;
-        };
-        if validate_digest(rest).is_err() {
-            continue;
-        }
-        let bytes = std::fs::read(entry.path().join("baseline.json"))
-            .map_err(|_| "baseline_unavailable")?;
-        if let Ok(manifest) = serde_json::from_slice::<BaselineManifest>(&bytes)
-            && manifest.source_commit == base
-            && manifest.artifact_name == name
-        {
+        if let Some(manifest) = crate::cover_baseline::baseline_entry_for(&entry.path(), base) {
             out.push(manifest);
         }
     }

@@ -69,6 +69,20 @@ pub(crate) fn config_with_branch() -> &'static str {
     "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n"
 }
 
+/// Nextest task file so the fixture detects the Nextest runner.
+pub(crate) fn write_nextest_task(root: &Path) -> TestResult {
+    fs::create_dir_all(root.join(".mise/tasks"))?;
+    let task = root.join(".mise/tasks/test");
+    fs::write(&task, "#!/bin/sh\ncargo nextest run --locked\n")?;
+    #[cfg(unix)]
+    {
+        let mut perms = fs::metadata(&task)?.permissions();
+        std::os::unix::fs::PermissionsExt::set_mode(&mut perms, 0o755);
+        fs::set_permissions(&task, perms)?;
+    }
+    Ok(())
+}
+
 /// Run git with inherited failure context.
 pub(crate) fn git(args: &[&str], cwd: &Path) -> TestResult {
     let status = StdCommand::new("git")

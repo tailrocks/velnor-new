@@ -184,6 +184,23 @@ impl TaskTiming {
     }
 }
 
+/// Contract rendering of one scheduler timing breakdown (PAR-9.2).
+#[must_use]
+pub fn contract_timing(timing: &TaskTiming) -> velnor_actions_contract::TaskTiming {
+    velnor_actions_contract::TaskTiming {
+        queue_ms: timing.queue_ms,
+        runner_ms: timing.runner_ms,
+        task_ms: timing.task_ms,
+        cache_ms: timing.cache_ms,
+        prep_ms: timing.prep_ms,
+        download_ms: timing.download_ms,
+        compiler_ms: timing.compiler_ms,
+        mbx_ms: timing.mbx_ms,
+        test_ms: timing.test_ms,
+        lock_wait_ms: timing.lock_wait_ms,
+    }
+}
+
 /// Sum one timing breakdown over many tasks, slot by slot.
 #[must_use]
 pub fn aggregate_timings(timings: &[TaskTiming]) -> TaskTiming {

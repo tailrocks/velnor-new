@@ -3,6 +3,7 @@
 use std::collections::BTreeSet;
 use std::fs;
 
+use serde_json::{Value, json};
 use tempfile::TempDir;
 use velnor_actions_contract::{
     FinalReport, MatrixReport, MatrixStatus, ObligationDecision, Plan, TaskStatus,
@@ -44,6 +45,73 @@ pub(crate) fn merge_request(
 /// One successful required job.
 pub(crate) fn success_jobs() -> serde_json::Value {
     serde_json::json!([{"job_id": "velnor-plan", "conclusion": "success"}])
+}
+
+/// JSON helper result.
+pub(crate) type WireResult = Result<Value, Box<dyn std::error::Error>>;
+
+/// Plan response value for one event/root/revision request.
+pub(crate) fn plan_value(
+    root: &std::path::Path,
+    event: &str,
+    base: Option<&str>,
+    head: &str,
+    m: Option<&Value>,
+) -> WireResult {
+    let request = json!({"schema": 1, "run_key": "local", "event": event, "base": base,
+        "head": head, "root": root.display().to_string(), "baseline_manifest": m});
+    Ok(serde_json::from_str(&plan_internal(&request.to_string())?)?)
+}
+
+/// Plan response value for a pull-request request.
+pub(crate) fn pr_value(
+    root: &std::path::Path,
+    base: &str,
+    head: &str,
+    m: Option<&Value>,
+) -> WireResult {
+    plan_value(root, "pull_request", Some(base), head, m)
+}
+
+/// Baseline manifest fixture for one plan.
+pub(crate) fn manifest_for(plan: &Plan, base: &str, branch: &str) -> WireResult {
+    let first = plan
+        .obligations
+        .first()
+        .ok_or_else(|| std::io::Error::other("obligation"))?;
+    let digest = &first.task_digest;
+    Ok(
+        json!({"schema": 1, "repository_id": digest, "source_commit": base,
+        "ref": format!("refs/heads/{branch}"), "event": "push",
+        "workflow_ref": format!("o/r/.github/workflows/velnor.yml@refs/heads/{branch}"),
+        "run_id": 7, "run_attempt": 1, "final_status": "passed",
+        "generator_version": plan.generator.version, "generator_sha256": plan.generator.sha256,
+        "compatibility_id": digest, "artifact_id": 9,
+        "artifact_name": format!("velnor-baseline-{base}-{digest}"),
+        "tasks": plan.obligations.iter().map(|ob| json!({"task_id": ob.task_id,
+            "task_digest": ob.task_digest, "input_digest": ob.input_digest,
+            "proof_run_id": 7, "observed_run_id": 7})).collect::<Vec<_>>()}),
+    )
+}
+
+/// Merge request for one plan plus its reports.
+pub(crate) fn merge_request_for(plan: &Plan, reports: &[MatrixReport]) -> WireResult {
+    let plan = serde_json::to_value(plan)?;
+    let reports = serde_json::to_value(reports)?;
+    Ok(merge_request(
+        &plan,
+        &plan["matrix"].clone(),
+        &reports,
+        &success_jobs(),
+    ))
+}
+
+/// True when the plan carries a warning containing `part`.
+pub(crate) fn has_warning(value: &Value, part: &str) -> bool {
+    value["plan"]["warnings"].as_array().is_some_and(|list| {
+        list.iter()
+            .any(|w| w.as_str().is_some_and(|s| s.contains(part)))
+    })
 }
 
 /// Rewrite the single task of a report, keeping counts coherent.

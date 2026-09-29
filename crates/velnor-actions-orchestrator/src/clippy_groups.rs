@@ -93,6 +93,10 @@ mod tests {
             compile_driver: "cargo".to_owned(),
             test_runner: "cargo_test".to_owned(),
             declared_inputs: Vec::new(),
+            undeclared_reads: false,
+            uses_network: false,
+            uses_clock: false,
+            uses_random: false,
         }
     }
 

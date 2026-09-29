@@ -3,7 +3,8 @@
 use std::ffi::OsString;
 
 use velnor_actions_mise::{
-    IsolatedCommand, PinnedTool, PinnedToolExec, ToolCatalog, validate_exact_version,
+    CandidateBuild, IsolatedCommand, PinnedTool, PinnedToolExec, RouteDriver, ToolCatalog,
+    validate_exact_version,
 };
 use velnor_actions_rust::TaskGroup;
 use velnor_actions_rust::tasks::cargo_payload_argv;
@@ -46,16 +47,20 @@ const MACHETE_SCAN_CRATES: [&str; 7] = [
     "crates/velnor-actions-cli",
 ];
 
+/// Contract-fixed display name of the policy zizmor step.
+pub(crate) const ZIZMOR_STEP_NAME: &str = "Run zizmor";
+
 /// V1 fixed vector for one group: pinned `mise` payload plus kind args.
+///
+/// The payload program follows the group's compile route: MBX profiles
+/// execute through `mbx`, every other spelling through `cargo`.
 pub(crate) fn task_argv(
     group: &TaskGroup,
     catalog: &ToolCatalog,
 ) -> Result<Vec<String>, OrchestratorError> {
-    let mut tools = vec![PinnedTool::Rust];
-    if group.compile_driver == "mbx" {
-        tools.push(PinnedTool::MrBoxington);
-    }
-    let program = OsString::from("cargo");
+    let driver = RouteDriver::from_compile_driver(&group.compile_driver);
+    let tools = driver.map_or(vec![PinnedTool::Rust], RouteDriver::tools);
+    let program = OsString::from(driver.map_or("cargo", RouteDriver::program));
     let exec = PinnedToolExec::new(tools, &program, cargo_payload_argv(group)).map_err(|err| {
         OrchestratorError::Contract {
             problem: err.to_string(),
@@ -86,6 +91,20 @@ pub(crate) fn deny_argv() -> Result<Vec<String>, OrchestratorError> {
         "cargo",
         &["deny", "--locked", "check"],
     )
+}
+
+/// Fixed policy-job vector: offline zizmor audit through pinned Mise.
+pub(crate) fn zizmor_argv(catalog: &ToolCatalog) -> Result<Vec<String>, OrchestratorError> {
+    let program = OsString::from("zizmor");
+    let exec = PinnedToolExec::new(
+        vec![PinnedTool::Zizmor],
+        &program,
+        vec![OsString::from("--no-online-audits")],
+    )
+    .map_err(|err| OrchestratorError::Contract {
+        problem: err.to_string(),
+    })?;
+    strings_of(exec.argv(catalog)).map_err(|problem| OrchestratorError::Contract { problem })
 }
 
 /// Fixed policy-job vector: `cargo machete` over product crates via Mise.
@@ -163,21 +182,7 @@ pub(crate) fn mbx_probe_argv(catalog: &ToolCatalog) -> Result<Vec<String>, Orche
 pub(crate) fn candidate_build_argv(
     catalog: &ToolCatalog,
 ) -> Result<Vec<String>, OrchestratorError> {
-    let mbx = OsString::from("mbx");
-    let build = PinnedToolExec::new(
-        vec![PinnedTool::Rust, PinnedTool::MrBoxington],
-        &mbx,
-        fixed(&[
-            "build",
-            "--release",
-            "--locked",
-            "--package",
-            "velnor-actions-cli",
-            "--bin",
-            "velnor-actions",
-        ]),
-    )
-    .map_err(|err| OrchestratorError::Contract {
+    let build = CandidateBuild::new().map_err(|err| OrchestratorError::Contract {
         problem: err.to_string(),
     })?;
     strings_of(build.argv(catalog)).map_err(|problem| OrchestratorError::Contract { problem })
@@ -189,11 +194,6 @@ pub(crate) fn candidate_spec(catalog: &ToolCatalog) -> Result<CandidateSpec, Orc
         build: candidate_build_argv(catalog)?,
         qualify: QualifyRequest::staged().argv()?,
     })
-}
-
-/// Build a fixed argument list.
-fn fixed(flags: &[&str]) -> Vec<OsString> {
-    flags.iter().map(OsString::from).collect()
 }
 
 /// Convert fixed argv to UTF-8 strings.
@@ -279,6 +279,62 @@ mod tests {
         assert_eq!(probe, want);
     }
 
+    /// Minimal group with one compile-driver spelling.
+    fn group_with_driver(driver: &str) -> TaskGroup {
+        TaskGroup {
+            task_id: "stack/rust|task/t".to_owned(),
+            package_id: String::new(),
+            package_name: String::new(),
+            manifest_key: "root".to_owned(),
+            kind: velnor_actions_rust::TaskKind::Clippy,
+            configuration: "default".to_owned(),
+            features: Vec::new(),
+            target: "host".to_owned(),
+            gated_by: Vec::new(),
+            depends_on: Vec::new(),
+            target_flags: Vec::new(),
+            no_test_targets: false,
+            package_arg: None,
+            compile_driver: driver.to_owned(),
+            test_runner: "cargo_test".to_owned(),
+            declared_inputs: Vec::new(),
+            undeclared_reads: false,
+            uses_network: false,
+            uses_clock: false,
+            uses_random: false,
+        }
+    }
+
+    #[test]
+    fn task_payload_program_follows_route_driver() {
+        let catalog = ToolCatalog::pinned();
+        for (driver, program, mbx) in [
+            ("cargo", "cargo", false),
+            ("mbx", "mbx", true),
+            ("bogus", "cargo", false),
+        ] {
+            let argv = task_argv(&group_with_driver(driver), &catalog).expect("task argv");
+            let at = argv.iter().position(|arg| arg == "--").expect("separator");
+            assert_eq!(argv[at + 1], program, "{driver} program");
+            assert_eq!(
+                argv.iter().any(|arg| arg.contains("mr-boxington")),
+                mbx,
+                "{driver} tools"
+            );
+        }
+    }
+
+    #[test]
+    fn zizmor_vector_is_pinned_and_offline() {
+        let argv = zizmor_argv(&ToolCatalog::pinned()).expect("zizmor argv");
+        assert_eq!(argv[0], "mise");
+        assert!(argv.iter().any(|arg| arg == "zizmor@1.30.1"), "{argv:?}");
+        assert!(
+            argv.iter().any(|arg| arg == "--no-online-audits"),
+            "{argv:?}"
+        );
+    }
+
     #[test]
     fn section4_build_vector_is_byte_exact() {
         let build = candidate_build_argv(&ToolCatalog::pinned()).expect("build argv");
@@ -304,5 +360,18 @@ mod tests {
         .map(ToString::to_string)
         .collect();
         assert_eq!(build, want);
+    }
+
+    #[test]
+    fn candidate_build_delegates_to_mise_constructor() {
+        let catalog = ToolCatalog::pinned();
+        let mine = candidate_build_argv(&catalog).expect("build argv");
+        let owned = CandidateBuild::new()
+            .expect("mise build")
+            .argv(&catalog)
+            .into_iter()
+            .map(|arg| arg.into_string().expect("utf8"))
+            .collect::<Vec<_>>();
+        assert_eq!(mine, owned);
     }
 }

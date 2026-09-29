@@ -6,10 +6,12 @@ use std::path::Path;
 use velnor_actions_contract::{
     ContractError, RustConfiguration, RustStackConfig, VelnorConfig, task_id_for_stack,
 };
+use velnor_actions_mise::{ArchivePlan, NextestArchive, NextestDriver, SortedInventory};
 use velnor_actions_rust::{
     DeriveInputs, DetectionStatus, FileIndex, Recommendation, RustExecutionProfile, TaskGroup,
-    TaskKind, WorkspaceRecord, apply_stack_ignores, check_candidate_outcomes, check_duplicates,
-    dedupe_workspaces, derive_task_groups, derive_workspace_fmt, to_detected_projects,
+    WorkspaceRecord, apply_stack_ignores, check_candidate_outcomes, check_duplicates,
+    dedupe_workspaces, derive_task_groups, derive_workspace_fmt_if_explicit,
+    expand_shards_for_group, to_detected_projects,
 };
 
 use crate::OrchestratorError;
@@ -219,6 +221,7 @@ fn derive_all(
         .unwrap_or_else(RustStackConfig::default_config);
     let explicit_fmt = index.contains("rustfmt.toml") || index.contains(".rustfmt.toml");
     let mut groups = Vec::new();
+    let mut archives = ArchivePlan::new();
     for workspace in workspaces {
         for config_name in &rust.configurations {
             groups.extend(derive_for_config(
@@ -227,6 +230,7 @@ fn derive_all(
                 &workspace.profile,
                 config_name,
                 explicit_fmt,
+                &mut archives,
             )?);
         }
     }
@@ -244,6 +248,7 @@ fn derive_for_config(
     profile: &RustExecutionProfile,
     rust_config: &RustConfiguration,
     explicit_fmt: bool,
+    archives: &mut ArchivePlan,
 ) -> Result<Vec<TaskGroup>, OrchestratorError> {
     let mut groups = Vec::new();
     for package in &record.packages {
@@ -259,12 +264,19 @@ fn derive_for_config(
             explicit_fmt,
         };
         for group in derive_task_groups(&inputs)? {
-            groups.extend(expand_shards(config, &group)?);
+            groups.extend(expand_shards(config, &group, archives)?);
         }
     }
     let manifest = workspace_manifest(&record.workspace_root);
-    let fmt = derive_workspace_fmt(&manifest, profile, &rust_config.name, &rust_config.target)?;
-    groups.push(fmt);
+    if let Some(fmt) = derive_workspace_fmt_if_explicit(
+        &manifest,
+        profile,
+        &rust_config.name,
+        &rust_config.target,
+        explicit_fmt,
+    )? {
+        groups.push(fmt);
+    }
     Ok(groups)
 }
 
@@ -272,14 +284,18 @@ fn derive_for_config(
 fn expand_shards(
     config: &VelnorConfig,
     group: &TaskGroup,
+    archives: &mut ArchivePlan,
 ) -> Result<Vec<TaskGroup>, ContractError> {
-    if !matches!(group.kind, TaskKind::Test | TaskKind::Nextest) || group.no_test_targets {
-        return Ok(vec![group.clone()]);
-    }
     let shards = shard_count(config, group);
-    if shards <= 1 {
+    if !expand_shards_for_group(
+        group.kind,
+        &group.test_runner,
+        shards,
+        group.no_test_targets,
+    )? {
         return Ok(vec![group.clone()]);
     }
+    plan_shard_archive(group, archives);
     let mut expanded = Vec::new();
     for shard in 1..=shards {
         let task_id = task_id_for_stack(
@@ -293,7 +309,32 @@ fn expand_shards(
         sharded.task_id = task_id;
         expanded.push(sharded);
     }
+    let mut ids: Vec<String> = expanded.iter().map(|group| group.task_id.clone()).collect();
+    ids.sort();
+    SortedInventory::from_sorted(ids)
+        .map_err(|err| ContractError::identity("shard_inventory", err.to_string()))?;
     Ok(expanded)
+}
+
+/// Record one archive per package/config; duplicates are already planned.
+fn plan_shard_archive(group: &TaskGroup, archives: &mut ArchivePlan) {
+    let driver = match group.compile_driver.as_str() {
+        "cargo" => NextestDriver::Cargo,
+        "mbx" => NextestDriver::Mbx,
+        _ => return,
+    };
+    let target = if group.target == "host" {
+        None
+    } else {
+        Some(group.target.as_str())
+    };
+    let Ok(archive) = NextestArchive::new(driver, &group.package_name, &group.features, target)
+    else {
+        return;
+    };
+    if archives.add(&archive).is_err() {
+        // Archive already planned for this package/config.
+    }
 }
 
 /// Shard count for one group from the sharding policy.

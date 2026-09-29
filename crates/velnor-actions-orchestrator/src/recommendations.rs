@@ -31,7 +31,9 @@ pub(crate) fn collect_recommendations(
         out.insert(line);
     }
     for finding in tool_conflicts(tool_checks) {
-        out.insert(finding_line(&finding));
+        if finding.validate().is_ok() {
+            out.insert(finding_line(&finding));
+        }
     }
     if index.contains("mise.toml") || index.contains(".mise.toml") {
         out.insert("mise.toml is read-only input; Velnor never modifies it".to_owned());

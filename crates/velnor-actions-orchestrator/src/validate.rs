@@ -118,19 +118,21 @@ fn staged_workflows(tree: &RenderedTree) -> Result<Vec<String>, OrchestratorErro
     Ok(workflows)
 }
 
+/// Staged actionlint argv from the actionlint toolchain (GEN-2.16).
+fn actionlint_argv(workflows: &[String]) -> Vec<OsString> {
+    velnor_actions_actionlint::ActionlintToolchain::staged_lint_argv(ACTIONLINT_CONFIG, workflows)
+        .iter()
+        .map(OsString::from)
+        .collect()
+}
+
 /// Run pinned actionlint, with shellcheck on, over staged workflows.
 fn run_actionlint(
     catalog: &ToolCatalog,
     staging: &Path,
     workflows: &[String],
 ) -> Result<(), OrchestratorError> {
-    let mut args = vec![
-        OsString::from("-no-color"),
-        OsString::from("-oneline"),
-        OsString::from("-config-file"),
-        OsString::from(ACTIONLINT_CONFIG),
-    ];
-    args.extend(workflows.iter().map(OsString::from));
+    let args = actionlint_argv(workflows);
     let output = pinned_output(
         catalog,
         "actionlint",
@@ -197,4 +199,34 @@ pub(crate) fn diagnose(output: &ProcessOutput) -> String {
         return format!("exit_code:{code}");
     }
     text
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn actionlint_argv_has_single_config_file_first() {
+        let workflows = vec![".github/workflows/velnor.yml".to_owned()];
+        let argv: Vec<String> = actionlint_argv(&workflows)
+            .iter()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(
+            argv[0..4],
+            [
+                "-no-color",
+                "-oneline",
+                "-config-file",
+                ".github/actionlint.yaml"
+            ]
+        );
+        assert_eq!(argv[4], workflows[0]);
+        assert_eq!(
+            argv.iter()
+                .filter(|arg| arg.as_str() == "-config-file")
+                .count(),
+            1
+        );
+    }
 }

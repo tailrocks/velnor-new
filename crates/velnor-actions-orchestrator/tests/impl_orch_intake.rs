@@ -11,7 +11,9 @@ use velnor_actions_orchestrator::{
 };
 use velnor_actions_rust::DetectionStatus;
 
-use crate::impl_common::{TestResult, config_with_branch, err_of, make_repo, snapshot};
+use crate::impl_common::{
+    TestResult, config_with_branch, err_of, make_repo, snapshot, write_nextest_task,
+};
 
 /// Selected detection manifests in discovery order.
 fn selected_manifests(statuses: &[DetectionStatus]) -> Vec<String> {
@@ -236,11 +238,11 @@ fn intake_unconfigured_suites_are_not_sharded() -> TestResult {
         root.join(".velnor/config.toml"),
         "schema = 1\n[workflow]\ndefault_branch = \"testmain\"\n[test_sharding]\ndefault_shards = 2\n",
     )?;
+    let err = err_of(prepare(root), "cargo_test shards")?.to_string();
+    assert!(err.contains("cargo_test_single_obligation"), "{err}");
+    write_nextest_task(root)?;
     let ids = task_ids_for(root)?;
-    assert!(
-        ids.iter().any(|id| id.contains("/shard-")),
-        "explicit shards expand"
-    );
+    assert!(ids.join(" ").contains("/shard-"), "explicit shards expand");
     for id in &ids {
         velnor_actions_contract::validate_task_id(id)?;
     }

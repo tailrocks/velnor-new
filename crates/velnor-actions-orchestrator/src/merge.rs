@@ -4,14 +4,16 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::{
-    CandidateReport, FinalCounts, FinalReport, FinalStatus, MatrixEntry, MatrixReport,
-    ObligationDecision, Plan, PlanMatrix, RequiredJobResult, canonical_json_bytes,
+    CandidateReport, FinalCounts, FinalReport, FinalStatus, ManifestTaskProof, MatrixEntry,
+    MatrixReport, ObligationDecision, Plan, PlanMatrix, RequiredJobResult, canonical_json_bytes,
     final_report_id_for_run, validate_run_key,
 };
 
 use crate::OrchestratorError;
 use crate::cover::shard::{ResourceLimits, ShardProof, check_entry_shards, validate_budgets};
-use crate::cover::{Fold, Signals, cover_entry, partition_reports, revalidate_coverage};
+use crate::cover::{
+    CoverSinks, Fold, Signals, cover_entry, partition_reports, revalidate_coverage,
+};
 use crate::internal::{SCHEMA, check_schema, internal, internal_contract};
 
 /// `merge-v1` request: plan, matrix bytes, reports, jobs, and candidate.
@@ -64,6 +66,9 @@ pub(crate) struct BaselineTaskEntry {
     /// External-data freshness (required for advisory kinds).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) external_data: Option<crate::external_data::ExternalDataFreshness>,
+    /// Structured task proof, when the publisher recorded one (PAR-5.3).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) proof: Option<ManifestTaskProof>,
 }
 
 /// Trusted `baseline.json`: minimum shape plus artifact binding.
@@ -139,6 +144,7 @@ pub fn merge_internal(request_json: &str) -> Result<String, OrchestratorError> {
         if candidate.run_key != request.run_key {
             return Err(internal("candidate_run_mismatch"));
         }
+        check_candidate_proof(&request.plan, candidate)?;
     }
     let final_report = build_final(&request)?;
     final_report.validate().map_err(internal_contract)?;
@@ -146,6 +152,23 @@ pub fn merge_internal(request_json: &str) -> Result<String, OrchestratorError> {
         problem: format!("response_encode:{err}"),
     })
 }
+/// Reject untrusted or unbound candidate proofs (PAR-5.12).
+///
+/// Pull-request runs never present candidate proofs, and a proof must bind
+/// the merged head commit.
+fn check_candidate_proof(
+    plan: &Plan,
+    candidate: &CandidateReport,
+) -> Result<(), OrchestratorError> {
+    if plan.trust == velnor_actions_contract::Trust::Pr {
+        return Err(internal("candidate_proof_untrusted"));
+    }
+    if candidate.source_commit != plan.head {
+        return Err(internal("candidate_commit_mismatch"));
+    }
+    Ok(())
+}
+
 /// Aggregate one final report from validated plan plus reports.
 fn build_final(request: &MergeRequest) -> Result<FinalReport, OrchestratorError> {
     let mut signals = Signals::default();
@@ -158,6 +181,7 @@ fn build_final(request: &MergeRequest) -> Result<FinalReport, OrchestratorError>
     let mut fold = Fold::default();
     let mut seen_task_reports = BTreeSet::new();
     let mut downloaded = Vec::new();
+    let mut miss_reasons = BTreeSet::new();
     let mut uncovered = 0u32;
     for entry in &request.plan.matrix.include {
         let Some(report) = partition.valid.get(entry.report_id.as_str()) else {
@@ -170,15 +194,13 @@ fn build_final(request: &MergeRequest) -> Result<FinalReport, OrchestratorError>
             uncovered += 1;
             continue;
         }
-        if cover_entry(
-            request,
-            entry,
-            report,
-            &obligations,
-            &mut seen_task_reports,
-            &mut fold,
-            &mut signals,
-        )? {
+        let mut sinks = CoverSinks {
+            seen_task_reports: &mut seen_task_reports,
+            fold: &mut fold,
+            signals: &mut signals,
+            miss_reasons: &mut miss_reasons,
+        };
+        if cover_entry(request, entry, report, &obligations, &mut sinks)? {
             downloaded.push(entry.artifact_id.clone());
         } else {
             uncovered += 1;
@@ -208,14 +230,15 @@ fn build_final(request: &MergeRequest) -> Result<FinalReport, OrchestratorError>
             blocked: fold.blocked,
             not_run: uncovered + partition.malformed + partition.duplicates,
         },
+        miss_reasons: miss_reasons.into_iter().collect(),
     })
 }
 
-/// Check 1: `matrix.json` agrees byte-for-byte with the plan matrix.
+/// Check 1: `matrix.json` agrees with the plan matrix (WF-4.16).
 fn check_agreement(request: &MergeRequest, signals: &mut Signals) -> Result<(), OrchestratorError> {
-    let plan_bytes = canonical_json_bytes(&request.plan.matrix).map_err(internal_contract)?;
     let matrix_bytes = canonical_json_bytes(&request.matrix).map_err(internal_contract)?;
-    if plan_bytes != matrix_bytes {
+    if velnor_actions_contract::check_matrix_agreement(&request.plan.matrix, &matrix_bytes).is_err()
+    {
         signals.planning_failed = true;
     }
     Ok(())

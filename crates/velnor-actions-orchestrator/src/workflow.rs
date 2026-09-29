@@ -1,8 +1,14 @@
 //! Workflow-IR, render-context, and actionlint-input construction.
 
+//! W1 emission wiring lives in the child module below (self-declared via
+//! `#[path]` so `lib.rs` stays untouched); the integrator only registers
+//! the companion test file.
+#[path = "wire_w1.rs"]
+pub(crate) mod wire_w1;
+
 use std::collections::BTreeMap;
 
-use velnor_actions_actionlint::{ActionlintConfigInput, IgnorePolicy};
+use velnor_actions_actionlint::{ActionlintConfigInput, IgnorePolicy, StepSyntax};
 use velnor_actions_contract::{
     Concurrency, GeneratorValidation, Permissions, Trigger, VelnorConfig, VelnorSupportWorkflow,
     WorkflowIr, WorkflowPolicy,
@@ -20,7 +26,9 @@ use velnor_actions_workflow_renderer::steps::{
 use crate::OrchestratorError;
 use crate::discover::Discovery;
 use crate::pins::consumer_acquire_step;
-use crate::vectors::{candidate_spec, deny_argv, machete_argv, verify_tools_argv};
+use crate::vectors::{
+    ZIZMOR_STEP_NAME, candidate_spec, deny_argv, machete_argv, verify_tools_argv, zizmor_argv,
+};
 use crate::workflow_jobs::{final_job, lint_job, plan_job, task_job};
 
 pub(crate) use crate::workflow_jobs::LINT_JOB_ID;
@@ -62,9 +70,11 @@ pub(crate) fn build_workflow(
     discovery: &Discovery,
     fetch_roots: &[String],
 ) -> Result<WorkflowPlan, OrchestratorError> {
+    wire_w1::vet_step_syntax(StepSyntax::JobMatrix)?;
     let catalog = ToolCatalog::pinned();
     let version = env!("CARGO_PKG_VERSION").to_owned();
     let policy = config.workflow.policy;
+    let use_mbx = plan_uses_mbx(discovery);
     let support = match policy {
         WorkflowPolicy::ConsumerV1 => None,
         WorkflowPolicy::VelnorRepositoryV1 => {
@@ -78,13 +88,7 @@ pub(crate) fn build_workflow(
     };
     jobs.insert(
         PLAN_JOB_ID.to_owned(),
-        plan_job(
-            label,
-            acquire.clone(),
-            &catalog,
-            plan_uses_mbx(discovery),
-            fetch_roots,
-        )?,
+        plan_job(label, acquire.clone(), &catalog, use_mbx, fetch_roots)?,
     );
     let task_groups: Vec<&TaskGroup> = discovery
         .task_groups
@@ -94,7 +98,7 @@ pub(crate) fn build_workflow(
     if !task_groups.is_empty() {
         jobs.insert(
             TASK_JOB_ID.to_owned(),
-            task_job(label, config.workflow.max_parallel_jobs),
+            task_job(label, config.workflow.max_parallel_jobs, &catalog, use_mbx)?,
         );
     }
     jobs.insert(LINT_JOB_ID.to_owned(), lint_job(label, &catalog)?);
@@ -102,6 +106,8 @@ pub(crate) fn build_workflow(
         FINAL_JOB_ID.to_owned(),
         final_job(label, !task_groups.is_empty(), acquire)?,
     );
+    wire_w1::ensure_plan_format_step(&mut jobs, discovery, &catalog)?;
+    wire_w1::check_task_mbx_gating(&jobs, !task_groups.is_empty(), use_mbx)?;
     let ir = WorkflowIr {
         name: config.workflow.name.clone(),
         triggers: Trigger {
@@ -163,6 +169,10 @@ fn render_context(
                 name: MACHETE_STEP_NAME.to_owned(),
                 argv: machete_argv()?,
             },
+            PolicyCommand {
+                name: ZIZMOR_STEP_NAME.to_owned(),
+                argv: zizmor_argv(catalog)?,
+            },
         ]
     } else {
         Vec::new()
@@ -187,7 +197,9 @@ fn render_context(
 
 /// Actionlint input: generated workflow path plus policy-graded ignores.
 fn actionlint_input(policy: WorkflowPolicy, version: &str) -> ActionlintConfigInput {
-    let mut input = ActionlintConfigInput::new(version).with_workflow_path(WORKFLOW_PATH);
+    let mut input = ActionlintConfigInput::new(version)
+        .with_workflow_path(WORKFLOW_PATH)
+        .with_config_variables(wire_w1::declared_config_variables());
     input.policy = match policy {
         WorkflowPolicy::ConsumerV1 => IgnorePolicy::Consumer,
         WorkflowPolicy::VelnorRepositoryV1 => IgnorePolicy::VelnorProtected,

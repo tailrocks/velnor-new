@@ -216,6 +216,10 @@ fn clippy_group() -> velnor_actions_rust::TaskGroup {
         compile_driver: "cargo".to_owned(),
         test_runner: "cargo-test".to_owned(),
         declared_inputs: Vec::new(),
+        undeclared_reads: false,
+        uses_network: false,
+        uses_clock: false,
+        uses_random: false,
     }
 }
 
@@ -228,6 +232,8 @@ fn extension_inputs<'a>(
 ) -> velnor_actions_rust::GroupExtensionInputs<'a> {
     velnor_actions_rust::GroupExtensionInputs {
         package_id: "demo",
+        workspace_id: "workspace",
+        profile: "default",
         manifest: "Cargo.toml",
         graph_digest: graph,
         targets,

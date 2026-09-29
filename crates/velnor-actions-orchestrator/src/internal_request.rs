@@ -6,8 +6,8 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::{
-    FinalStatus, WorkflowEvent, canonical_json_bytes, canonical_json_str, run_key_for_ci,
-    validate_run_key,
+    FinalStatus, MATRIX_JSON_FILENAME, PLAN_JSON_FILENAME, WorkflowEvent, canonical_json_bytes,
+    canonical_json_str, matrix_json_bytes, plan_json_bytes, run_key_for_ci, validate_run_key,
 };
 
 use crate::OrchestratorError;
@@ -40,6 +40,10 @@ pub struct PlanOutputs {
     pub plan: String,
     /// Canonical matrix JSON (single line).
     pub matrix: String,
+    /// Plan ID for step outputs (WF-4.15).
+    pub plan_id: String,
+    /// Run key for step outputs (WF-4.15).
+    pub run_key: String,
 }
 
 /// Materialize the canonical request file from the GitHub environment.
@@ -94,6 +98,7 @@ pub fn write_request_parts(
         "pull_request" => WorkflowEvent::PullRequest,
         "push" => WorkflowEvent::Push,
         "merge_group" => WorkflowEvent::MergeGroup,
+        "local" => WorkflowEvent::Local,
         _ => return Err(internal("unsupported_event")),
     };
     let payload: serde_json::Value =
@@ -158,6 +163,8 @@ pub fn plan_outputs(response_json: &str) -> Result<PlanOutputs, OrchestratorErro
     Ok(PlanOutputs {
         plan: canonical_json_str(&response.plan).map_err(internal_contract)?,
         matrix: canonical_json_str(&response.matrix).map_err(internal_contract)?,
+        plan_id: response.plan.plan_id.clone(),
+        run_key: response.plan.run_key.clone(),
     })
 }
 
@@ -200,10 +207,10 @@ pub(crate) fn write_plan_files(
 ) -> Result<(), OrchestratorError> {
     fs::create_dir_all(dir)
         .map_err(|err| OrchestratorError::io(dir.display().to_string(), err.to_string()))?;
-    let plan = canonical_json_bytes(&response.plan).map_err(internal_contract)?;
-    let matrix = canonical_json_bytes(&response.matrix).map_err(internal_contract)?;
-    write_new(&dir.join("plan.json"), &plan)?;
-    write_new(&dir.join("matrix.json"), &matrix)?;
+    let plan = plan_json_bytes(&response.plan).map_err(internal_contract)?;
+    let matrix = matrix_json_bytes(&response.matrix).map_err(internal_contract)?;
+    write_new(&dir.join(PLAN_JSON_FILENAME), &plan)?;
+    write_new(&dir.join(MATRIX_JSON_FILENAME), &matrix)?;
     Ok(())
 }
 
@@ -309,6 +316,20 @@ fn request_refs(
                 .or_else(|| nonempty(github_sha))
                 .ok_or_else(|| internal("missing_push_head"))?;
             Ok((base, head))
+        }
+        WorkflowEvent::Fork => {
+            let pr = &payload["pull_request"];
+            Ok((
+                Some(
+                    nonempty(pr["base"]["sha"].as_str())
+                        .ok_or_else(|| internal("missing_pr_base"))?,
+                ),
+                nonempty(pr["head"]["sha"].as_str()).ok_or_else(|| internal("missing_pr_head"))?,
+            ))
+        }
+        WorkflowEvent::Local => {
+            let head = nonempty(github_sha).unwrap_or_else(|| "HEAD".to_owned());
+            Ok((None, head))
         }
     }
 }

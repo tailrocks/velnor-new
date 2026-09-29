@@ -14,9 +14,10 @@ use velnor_actions_contract::{
 
 use crate::OrchestratorError;
 use crate::internal::internal_contract;
+use crate::internal_plan::wire_w2;
 use crate::merge::{BaselineManifest, MergeRequest};
 
-pub(crate) use crate::cover_baseline::apply_baseline;
+pub(crate) use crate::cover_baseline::{BaselineInputs, apply_baseline};
 
 /// Aggregated merge signals feeding result precedence.
 #[derive(Debug, Default)]
@@ -95,50 +96,67 @@ pub(crate) struct Fold {
     pub(crate) blocked: u32,
 }
 
+/// Mutable merge sinks threaded through per-entry coverage checks.
+#[derive(Debug)]
+pub(crate) struct CoverSinks<'a> {
+    /// Seen task-report IDs.
+    pub(crate) seen_task_reports: &'a mut BTreeSet<String>,
+    /// Folded task counts.
+    pub(crate) fold: &'a mut Fold,
+    /// Merge signals.
+    pub(crate) signals: &'a mut Signals,
+    /// Miss reasons for uncovered tasks.
+    pub(crate) miss_reasons: &'a mut BTreeSet<String>,
+}
+
 /// Check 3 for one entry: binding, task set, counts, digests; fold on cover.
 pub(crate) fn cover_entry(
     request: &MergeRequest,
     entry: &MatrixEntry,
     report: &MatrixReport,
     obligations: &BTreeMap<&str, &str>,
-    seen_task_reports: &mut BTreeSet<String>,
-    fold: &mut Fold,
-    signals: &mut Signals,
+    sinks: &mut CoverSinks<'_>,
 ) -> Result<bool, OrchestratorError> {
     if report.matrix_id != entry.id || report.matrix_key != entry.matrix_key {
-        signals.planning_failed = true;
-        signals.not_run = true;
+        sinks.signals.planning_failed = true;
+        sinks.signals.not_run = true;
         return Ok(false);
     }
     if report_tasks(report) != flattened(entry) {
-        signals.planning_failed = true;
-        signals.not_run = true;
+        sinks.signals.planning_failed = true;
+        sinks.signals.not_run = true;
         return Ok(false);
     }
     let Some(recount) = recount(report) else {
-        signals.not_run = true;
+        sinks.signals.not_run = true;
         return Ok(false);
     };
-    if !check_digests(request, report, obligations, seen_task_reports)? {
-        signals.planning_failed = true;
-        signals.not_run = true;
+    if !check_digests(
+        request,
+        report,
+        obligations,
+        &mut *sinks.seen_task_reports,
+        &mut *sinks.miss_reasons,
+    )? {
+        sinks.signals.planning_failed = true;
+        sinks.signals.not_run = true;
         return Ok(false);
     }
-    fold.reused += recount.reused;
-    fold.executed += recount.executed;
-    fold.empty_partition += recount.empty_partition;
-    fold.failed += recount.failed;
-    fold.cancelled += recount.cancelled;
-    fold.blocked += recount.blocked;
-    fold_report_status(report, signals);
+    sinks.fold.reused += recount.reused;
+    sinks.fold.executed += recount.executed;
+    sinks.fold.empty_partition += recount.empty_partition;
+    sinks.fold.failed += recount.failed;
+    sinks.fold.cancelled += recount.cancelled;
+    sinks.fold.blocked += recount.blocked;
+    fold_report_status(report, &mut *sinks.signals);
     if recount.failed > 0 {
-        signals.failed = true;
+        sinks.signals.failed = true;
     }
     if recount.cancelled > 0 {
-        signals.cancelled = true;
+        sinks.signals.cancelled = true;
     }
     if recount.blocked > 0 {
-        signals.not_run = true;
+        sinks.signals.not_run = true;
     }
     Ok(true)
 }
@@ -195,6 +213,7 @@ fn check_digests(
     report: &MatrixReport,
     obligations: &BTreeMap<&str, &str>,
     seen_task_reports: &mut BTreeSet<String>,
+    miss_reasons: &mut BTreeSet<String>,
 ) -> Result<bool, OrchestratorError> {
     for task in &report.tasks {
         if !seen_task_reports.insert(task.task_report_id.clone()) {
@@ -206,6 +225,12 @@ fn check_digests(
         let expected = task_report_id_for_task(&request.run_key, &report.matrix_key, digest)
             .map_err(internal_contract)?;
         if expected != task.task_report_id {
+            return Ok(false);
+        }
+        if task.status == TaskStatus::Reused
+            && let Err(reason) = wire_w2::verify_reused_task(&task.task_id)
+        {
+            miss_reasons.insert(reason.as_str().to_owned());
             return Ok(false);
         }
     }

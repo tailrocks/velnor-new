@@ -5,10 +5,12 @@ use velnor_actions_contract::{
 };
 use velnor_actions_mise::catalog::lock::{load_text, parse_generator_lock};
 
+use crate::discover::Discovery;
 use crate::extension_schemas::coverage_schema_known;
 use crate::external_data::{
     DEFAULT_EXTERNAL_DATA_MAX_AGE_SECS, external_data_kind, may_skip_external_data,
 };
+use crate::internal_plan::extension_bundle;
 use crate::merge::BaselineManifest;
 
 /// Bootstrap lock resolving release generator identity for source builds.
@@ -55,6 +57,23 @@ pub(crate) fn resolve_generator_identity(plan: &mut Plan, root: &std::path::Path
     }
 }
 
+/// True when the adapter extension refuses baseline coverage (PAR-4.10).
+///
+/// Undeclared reads and conservative execution both force execution;
+/// obligations without adapter inputs keep the other coverage checks.
+fn coverage_refused(discovery: &Discovery, task_id: &str) -> bool {
+    let Some(group) = discovery
+        .task_groups
+        .iter()
+        .find(|group| group.task_id == task_id)
+    else {
+        return false;
+    };
+    let bundle = extension_bundle(discovery, group);
+    let ext = group.identity_extension(&bundle.inputs());
+    ext.coverage_eligible().is_err() || ext.conservative_execution_required()
+}
+
 /// Release triple for a generator target: triples pass through, else map.
 ///
 /// Source builds record `{arch}-{os}`; release locks pin full triples.
@@ -76,6 +95,7 @@ pub(crate) fn apply_coverage(
     manifest: &BaselineManifest,
     digest: &str,
     base: String,
+    discovery: &Discovery,
 ) {
     for obligation in &mut plan.obligations {
         let hit = manifest.tasks.iter().find(|task| {
@@ -88,6 +108,13 @@ pub(crate) fn apply_coverage(
                 .push(format!("baseline_miss:{}:no_entry", obligation.task_id));
             continue;
         };
+        if coverage_refused(discovery, &obligation.task_id) {
+            plan.warnings.push(format!(
+                "baseline_miss:{}:undeclared_inputs",
+                obligation.task_id
+            ));
+            continue;
+        }
         if !coverage_schema_known(&obligation.task_id) {
             plan.warnings.push(format!(
                 "baseline_miss:{}:unknown_extension_schema",
@@ -195,6 +222,7 @@ mod tests {
             },
             task_ids: task_ids.iter().map(|id| (*id).to_owned()).collect(),
             warnings: Vec::new(),
+            edges: Vec::new(),
         }
     }
 
@@ -229,8 +257,25 @@ mod tests {
                     proof_run_id: 7,
                     observed_run_id: 7,
                     external_data: external_data.cloned(),
+                    proof: None,
                 })
                 .collect(),
+        }
+    }
+
+    /// Discovery without groups: obligations keep the other checks.
+    fn empty_discovery() -> Discovery {
+        Discovery {
+            statuses: Vec::new(),
+            workspaces: Vec::new(),
+            task_groups: Vec::new(),
+            tool_checks: Vec::new(),
+            clippy_memory: crate::clippy_groups::ClippyMemoryPlan {
+                groups: Vec::new(),
+                barriers: 0,
+            },
+            recommendations: Vec::new(),
+            consumer_manifest_json: None,
         }
     }
 
@@ -250,7 +295,13 @@ mod tests {
         let advisory = "stack/rust/root/advisory/default";
         let mut plan = plan_with(&[rust, unknown, advisory]);
         let manifest = manifest_with(&[rust, unknown, advisory], None);
-        apply_coverage(&mut plan, &manifest, &digest_b3(b"m"), "base".to_owned());
+        apply_coverage(
+            &mut plan,
+            &manifest,
+            &digest_b3(b"m"),
+            "base".to_owned(),
+            &empty_discovery(),
+        );
         let decision = |id: &str| {
             plan.obligations
                 .iter()
@@ -281,7 +332,13 @@ mod tests {
         let mut plan = plan_with(&[advisory]);
         let proof = fresh_proof();
         let manifest = manifest_with(&[advisory], Some(&proof));
-        apply_coverage(&mut plan, &manifest, &digest_b3(b"m"), "base".to_owned());
+        apply_coverage(
+            &mut plan,
+            &manifest,
+            &digest_b3(b"m"),
+            "base".to_owned(),
+            &empty_discovery(),
+        );
         assert_eq!(
             plan.obligations[0].decision,
             ObligationDecision::CoveredByTrustedBaseline

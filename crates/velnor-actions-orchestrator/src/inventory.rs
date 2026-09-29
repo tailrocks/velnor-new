@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use velnor_actions_mise::{MetadataDiscovery, MetadataQualification, MiseError, ToolCatalog};
+use velnor_actions_mise::{MetadataDiscovery, MetadataQualification, ToolCatalog};
 use velnor_actions_rust::{CandidateOutcome, WorkspaceRecord, parse_metadata_json};
 
 use crate::OrchestratorError;
@@ -71,12 +71,41 @@ fn fetch_inventory(
     let path: PathBuf = root.join(manifest);
     let request = MetadataDiscovery::new(path)
         .map_err(|err| FetchFailure::Incomplete(format!("bad_manifest_path:{err}")))?;
-    let json = request.run(catalog).map_err(|err| match err {
-        MiseError::NonZeroExit { stderr, .. } => classify_exit_failure(&stderr),
-        other => FetchFailure::Incomplete(other.to_string()),
-    })?;
+    let command = request
+        .command(catalog)
+        .map_err(|err| FetchFailure::Incomplete(err.to_string()))?;
+    let auto_install_off = command.disables_auto_install();
+    let output = command
+        .run()
+        .map_err(|err| FetchFailure::Incomplete(err.to_string()))?;
+    if !output.success {
+        let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+        if auto_install_off && is_tool_missing(&stderr) {
+            return Err(FetchFailure::Incomplete(format!(
+                "tool_missing:{}",
+                stderr.lines().next().unwrap_or_default().trim()
+            )));
+        }
+        return Err(classify_exit_failure(&stderr));
+    }
+    let json = output
+        .stdout_text("mise")
+        .map_err(|err| FetchFailure::Incomplete(err.to_string()))?;
     parse_metadata_json(&json, root, manifest)
         .map_err(|err| FetchFailure::Malformed(err.to_string()))
+}
+
+/// True when stderr reports a missing tool rather than a bad manifest.
+fn is_tool_missing(stderr: &str) -> bool {
+    let text = stderr.to_lowercase();
+    [
+        "not installed",
+        "missing tool",
+        "tool missing",
+        "no such tool",
+    ]
+    .iter()
+    .any(|marker| text.contains(marker))
 }
 
 /// Qualify locked/offline resolution wherever a lockfile pins deps.
@@ -118,4 +147,19 @@ pub(crate) fn qualify_workspaces(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tool_missing_markers_are_conservative() {
+        assert!(is_tool_missing("mise ERROR Tool rust@1.2.3 not installed"));
+        assert!(is_tool_missing("No such tool: nextest"));
+        assert!(!is_tool_missing(
+            "error: failed to parse manifest at Cargo.toml"
+        ));
+        assert!(!is_tool_missing(""));
+    }
 }

@@ -29,3 +29,5 @@ mod impl_select;
 mod impl_trust;
 mod impl_validators;
 mod impl_validators_repo;
+mod impl_wire_w1;
+mod impl_wire_w2;

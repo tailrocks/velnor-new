@@ -215,6 +215,19 @@ fn matrix_lines(out: &mut String, prep: &GenerationPreparation) {
     if !kinds.is_empty() {
         push(out, &format!("      Each: {}", kinds.join(" -> ")));
     }
+    let mut ids: Vec<&str> = prep
+        .discovery
+        .task_groups
+        .iter()
+        .filter(|group| !group.no_test_targets)
+        .map(|group| group.task_id.as_str())
+        .collect();
+    ids.sort_unstable();
+    ids.dedup();
+    push(out, "      Entries:");
+    for id in ids {
+        push(out, &format!("        - {id}"));
+    }
 }
 
 /// Kind words in fixed order for the groups present.

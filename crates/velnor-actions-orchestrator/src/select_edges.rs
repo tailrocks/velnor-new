@@ -1,13 +1,19 @@
 //! Base/head dependency-graph edges for affected-work selection.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;
 use std::path::Path;
 
+use velnor_actions_contract::{
+    CachePolicy, ContractError, EdgeKind, ResourceClass, ResourceDemand, TaskEdge, TaskGraph,
+    TaskNode, digest_b3,
+};
 use velnor_actions_mise::GitRequest;
-use velnor_actions_rust::{DepKind, LocalEdge};
+use velnor_actions_rust::{DepKind, LocalEdge, STACK_ID, TaskGroup, TaskKind};
 
 use crate::discover::Discovery;
+use crate::internal_plan::{component_id_of, manifest_for_key};
+use crate::schedule::resource_exclusions;
 use crate::select_affected::manifest_dir;
 use crate::validators::{validate_diff_rev, validate_select_diff_args, validate_select_show_args};
 
@@ -213,4 +219,160 @@ fn join_dir(dir: &str, path: &str) -> String {
         }
     }
     parts.join("/")
+}
+
+/// Validated plan graph: nodes per group plus sorted unique edges (PAR-3.1/3.2).
+///
+/// Data edges follow `depends_on`, gate edges follow `gated_by`, report
+/// edges bind shard legs to their base task, and resource exclusions come
+/// from the lane assignment. Endpoints outside the selection are dropped:
+/// plan edges must name planned obligations.
+pub(crate) fn plan_task_graph(
+    selected: &[&TaskGroup],
+    lanes: &BTreeMap<String, u32>,
+    digests: &BTreeMap<String, String>,
+) -> Result<Vec<TaskEdge>, ContractError> {
+    let ids: BTreeSet<&str> = selected
+        .iter()
+        .map(|group| group.task_id.as_str())
+        .collect();
+    let mut nodes = Vec::with_capacity(selected.len());
+    for group in selected {
+        let mut node = task_node(group, lanes, digests);
+        node.depends_on.retain(|dep| ids.contains(dep.as_str()));
+        node.gated_by.retain(|gate| ids.contains(gate.as_str()));
+        nodes.push(node);
+    }
+    nodes.sort_by(|left, right| left.task_id.cmp(&right.task_id));
+    let mut edges = Vec::new();
+    for group in selected {
+        for dep in &group.depends_on {
+            push_edge(&mut edges, &ids, dep, &group.task_id, EdgeKind::Data);
+        }
+        for gate in &group.gated_by {
+            push_edge(&mut edges, &ids, gate, &group.task_id, EdgeKind::Gate);
+        }
+        if let Some((base, _)) = group.task_id.split_once("/shard-") {
+            push_edge(&mut edges, &ids, &group.task_id, base, EdgeKind::Report);
+        }
+    }
+    exclusion_edges(selected, lanes, &mut edges);
+    sort_dedupe_edges(&mut edges);
+    let graph = TaskGraph { nodes, edges };
+    graph.validate()?;
+    Ok(graph.edges)
+}
+
+/// One graph node for one selected group.
+fn task_node(
+    group: &TaskGroup,
+    lanes: &BTreeMap<String, u32>,
+    digests: &BTreeMap<String, String>,
+) -> TaskNode {
+    let lane = lanes.get(&group.task_id).copied().unwrap_or(0);
+    let mut depends_on = group.depends_on.clone();
+    depends_on.sort();
+    depends_on.dedup();
+    let mut gated_by = group.gated_by.clone();
+    gated_by.sort();
+    gated_by.dedup();
+    TaskNode {
+        task_id: group.task_id.clone(),
+        stack_id: STACK_ID.to_owned(),
+        component_id: component_id_of(&group.package_id),
+        task_kind: group.kind.as_str().to_owned(),
+        configuration: group.configuration.clone(),
+        input_digest: digests.get(&group.task_id).cloned().unwrap_or_default(),
+        depends_on,
+        gated_by,
+        reads: vec![manifest_for_key(&group.manifest_key)],
+        writes: Vec::new(),
+        outputs: Vec::new(),
+        resource: ResourceDemand {
+            class: resource_class_for(group.kind),
+            cpu_milli: None,
+            memory_mb: None,
+            needs_network: group.uses_network,
+            service: None,
+        },
+        lane_id: digest_b3(lane.to_string().as_bytes()),
+        cache_policy: CachePolicy {
+            allow_compilation_reuse: true,
+            allow_task_reuse: !group.undeclared_reads,
+        },
+    }
+}
+
+/// Resource class for one task kind.
+fn resource_class_for(kind: TaskKind) -> ResourceClass {
+    match kind {
+        TaskKind::Clippy | TaskKind::Build => ResourceClass::Compiler,
+        TaskKind::Test | TaskKind::Nextest | TaskKind::Doctest => ResourceClass::Test,
+        TaskKind::Doc | TaskKind::Fmt => ResourceClass::Lightweight,
+    }
+}
+
+/// Push one edge when both endpoints are planned and distinct.
+fn push_edge(
+    edges: &mut Vec<TaskEdge>,
+    ids: &BTreeSet<&str>,
+    from: &str,
+    to: &str,
+    kind: EdgeKind,
+) {
+    if from != to && ids.contains(from) && ids.contains(to) {
+        edges.push(TaskEdge {
+            from: from.to_owned(),
+            to: to.to_owned(),
+            kind,
+        });
+    }
+}
+
+/// Resource-exclusion edges for lane-sharing pairs (PAR-7.2).
+fn exclusion_edges(
+    selected: &[&TaskGroup],
+    lanes: &BTreeMap<String, u32>,
+    edges: &mut Vec<TaskEdge>,
+) {
+    let assignments: Vec<(&str, u32)> = selected
+        .iter()
+        .map(|group| {
+            (
+                group.task_id.as_str(),
+                lanes.get(&group.task_id).copied().unwrap_or(0),
+            )
+        })
+        .collect();
+    for (left, right) in resource_exclusions(&assignments) {
+        edges.push(TaskEdge {
+            from: left,
+            to: right,
+            kind: EdgeKind::ResourceExclusion,
+        });
+    }
+}
+
+/// Sort edges by (`from`, `to`, kind) and drop duplicates.
+fn sort_dedupe_edges(edges: &mut Vec<TaskEdge>) {
+    edges.sort_by(|left, right| {
+        (left.from.as_str(), left.to.as_str(), edge_rank(left.kind)).cmp(&(
+            right.from.as_str(),
+            right.to.as_str(),
+            edge_rank(right.kind),
+        ))
+    });
+    edges.dedup_by(|curr, prev| {
+        curr.from == prev.from && curr.to == prev.to && curr.kind == prev.kind
+    });
+}
+
+/// Kind rank mirroring the contract's deterministic edge order.
+fn edge_rank(kind: EdgeKind) -> u8 {
+    match kind {
+        EdgeKind::Data => 0,
+        EdgeKind::Gate => 1,
+        EdgeKind::Report => 2,
+        EdgeKind::ResourceExclusion => 3,
+    }
 }

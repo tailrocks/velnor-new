@@ -46,6 +46,8 @@ pub struct ToolInputCheck {
     pub values: BTreeMap<String, String>,
     /// BLAKE3 digest over raw bytes, when readable.
     pub digest: Option<String>,
+    /// Adapter finding codes, sorted unique (TOOL-1.2).
+    pub codes: Vec<String>,
 }
 
 /// Check every tool-input path under `root`.
@@ -89,7 +91,19 @@ fn check_toolchain(path: &str, bytes: Option<&[u8]>) -> ToolInputCheck {
         parse,
         values: spec_values(inspection.spec.as_ref()),
         digest,
+        codes: finding_codes(&inspection.findings),
     }
+}
+
+/// Sorted unique finding codes from adapter findings.
+fn finding_codes(findings: &[velnor_actions_rust::ToolFinding]) -> Vec<String> {
+    let mut codes: Vec<String> = findings
+        .iter()
+        .map(|finding| finding.code.clone())
+        .collect();
+    codes.sort();
+    codes.dedup();
+    codes
 }
 
 /// Invalid problem from adapter findings, if the adapter flagged any.
@@ -132,6 +146,7 @@ fn unreadable(path: &str, digest: Option<String>) -> ToolInputCheck {
         },
         values: BTreeMap::new(),
         digest,
+        codes: vec![TOOLING_INPUT_INVALID.to_owned()],
     }
 }
 
@@ -148,6 +163,7 @@ fn check_mise_file(path: &str, bytes: Option<&[u8]>, json_fallback: bool) -> Too
             parse: ToolParse::Missing,
             values: BTreeMap::new(),
             digest,
+            codes: Vec::new(),
         };
     };
     let Ok(text) = std::str::from_utf8(raw) else {
@@ -160,6 +176,7 @@ fn check_mise_file(path: &str, bytes: Option<&[u8]>, json_fallback: bool) -> Too
             parse: ToolParse::Valid,
             values: flatten_json(&toml_to_json(&value)),
             digest,
+            codes: Vec::new(),
         },
         Err(toml_err) => {
             if json_fallback && let Ok(json) = serde_json::from_str::<serde_json::Value>(text) {
@@ -169,6 +186,7 @@ fn check_mise_file(path: &str, bytes: Option<&[u8]>, json_fallback: bool) -> Too
                     parse: ToolParse::Valid,
                     values: flatten_json(&json),
                     digest,
+                    codes: Vec::new(),
                 };
             }
             ToolInputCheck {
@@ -179,6 +197,7 @@ fn check_mise_file(path: &str, bytes: Option<&[u8]>, json_fallback: bool) -> Too
                 },
                 values: BTreeMap::new(),
                 digest,
+                codes: vec![TOOLING_INPUT_INVALID.to_owned()],
             }
         }
     }

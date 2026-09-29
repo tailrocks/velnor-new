@@ -223,7 +223,10 @@ mod tests {
                     "velnor-plan".to_owned(),
                     plan_job("ubuntu-26.04", None, &catalog, false, &[]).expect("plan job"),
                 ),
-                ("velnor-task".to_owned(), task_job("ubuntu-26.04", 2)),
+                (
+                    "velnor-task".to_owned(),
+                    task_job("ubuntu-26.04", 2, &catalog, false).expect("task job"),
+                ),
                 (
                     "velnor-final".to_owned(),
                     final_job("ubuntu-26.04", true, None).expect("final job"),

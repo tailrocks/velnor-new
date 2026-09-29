@@ -29,10 +29,22 @@ pub(crate) fn affected_packages(
         if let Some(id) = deepest_owner(&owners, path) {
             owned.insert(id);
         }
+        if let Some(id) = declared_owner(discovery, path) {
+            owned.insert(id);
+        }
     }
     let mut selected = owned.clone();
     selected.extend(reverse_closure(base_edges, head_edges, &owned));
     selected
+}
+
+/// Package whose group declares `path` as an input, if any (PAR-4.11).
+fn declared_owner(discovery: &Discovery, path: &str) -> Option<String> {
+    discovery
+        .task_groups
+        .iter()
+        .find(|group| group.declared_inputs.iter().any(|input| input == path))
+        .map(|group| group.package_id.clone())
 }
 
 /// True when any changed file has no owning package.
@@ -149,6 +161,40 @@ mod tests {
             selected,
             ["b".to_owned()].into_iter().collect(),
             "without the base edge only the owner is selected"
+        );
+    }
+
+    #[test]
+    fn declared_inputs_select_their_package() {
+        use velnor_actions_rust::{TaskGroup, TaskKind};
+        let mut discovery = two_package_discovery();
+        discovery.task_groups = vec![TaskGroup {
+            task_id: "stack/rust/a/clippy/default".to_owned(),
+            package_id: "a".to_owned(),
+            package_name: "a".to_owned(),
+            manifest_key: "a".to_owned(),
+            kind: TaskKind::Clippy,
+            configuration: "default".to_owned(),
+            features: Vec::new(),
+            target: "host".to_owned(),
+            gated_by: Vec::new(),
+            depends_on: Vec::new(),
+            target_flags: Vec::new(),
+            no_test_targets: false,
+            package_arg: None,
+            compile_driver: "cargo".to_owned(),
+            test_runner: "cargo_test".to_owned(),
+            declared_inputs: vec!["docs/spec.md".to_owned()],
+            undeclared_reads: false,
+            uses_network: false,
+            uses_clock: false,
+            uses_random: false,
+        }];
+        let changed: BTreeSet<String> = ["docs/spec.md".to_owned()].into_iter().collect();
+        let selected = affected_packages(&discovery, &changed, &[], &[]);
+        assert!(
+            selected.contains("a"),
+            "declared input selects package a: {selected:?}"
         );
     }
 }

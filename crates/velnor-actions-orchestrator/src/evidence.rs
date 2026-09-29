@@ -8,6 +8,7 @@ use velnor_actions_rust::{
 use velnor_actions_workflow_renderer::marker::MARKER_PREFIX;
 
 use crate::OrchestratorError;
+use crate::discover::PlannedWorkspace;
 
 /// Detect the execution profile from bytes read under `root`.
 ///
@@ -137,4 +138,60 @@ fn starts_generated(text: &str) -> bool {
     text.lines()
         .next()
         .is_some_and(|line| line.starts_with(MARKER_PREFIX))
+}
+
+/// Committed-profile drift warnings for every workspace (GAP-C.1, VER-4.2).
+///
+/// Compares the committed generated workflow against freshly detected
+/// driver/runner spellings and the configured runner label; drift warns,
+/// never fails.
+pub(crate) fn workspace_drift_warnings(
+    root: &Path,
+    workspaces: &[PlannedWorkspace],
+    label: &str,
+) -> Vec<String> {
+    let mut warnings = Vec::new();
+    let committed = read_optional(
+        root,
+        velnor_actions_workflow_renderer::render::WORKFLOW_PATH,
+    );
+    let Some(bytes) = committed.as_deref() else {
+        return warnings;
+    };
+    for workspace in workspaces {
+        let driver = workspace.profile.compile_driver.as_str();
+        let runner = workspace.profile.test_runner.as_str();
+        let previous = velnor_actions_rust::read_committed_profile_for_comparison(bytes);
+        if velnor_actions_rust::committed_profile_differs(previous.as_ref(), driver, runner) {
+            let prev = previous
+                .as_ref()
+                .map(|known| format!("{}/{}", known.compile_driver, known.test_runner));
+            warnings.push(format!(
+                "committed_profile_drift:{driver}/{runner}:committed_{}:persist a durable signal",
+                prev.as_deref().unwrap_or("unknown")
+            ));
+        }
+        if let Some(committed_label) = committed_runs_on(bytes)
+            && velnor_actions_contract::runner_family_changed(&committed_label, label)
+        {
+            warnings.push(format!(
+                "runner_family_changed:{committed_label}:{label}:requalify_toolchain"
+            ));
+        }
+    }
+    warnings
+}
+
+/// First `runs-on` value in committed bytes, if any.
+fn committed_runs_on(bytes: &str) -> Option<String> {
+    for line in bytes.lines() {
+        let Some((_, value)) = line.split_once("runs-on:") else {
+            continue;
+        };
+        let value = value.trim().trim_matches(['"', '\'']);
+        if !value.is_empty() {
+            return Some(value.to_owned());
+        }
+    }
+    None
 }

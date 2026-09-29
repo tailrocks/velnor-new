@@ -26,7 +26,13 @@ const SHORT_SHA_MIN_LEN: usize = 4;
 
 /// `git diff` flags the selection call paths emit; any other leading-dash
 /// argument is rejected.
-const DIFF_ALLOWED_FLAGS: [&str; 4] = ["--name-only", "--no-renames", "--diff-filter=A", "--"];
+const DIFF_ALLOWED_FLAGS: [&str; 5] = [
+    "--name-only",
+    "--no-renames",
+    "--diff-filter=A",
+    "--cached",
+    "--",
+];
 
 /// `git show` flags the batched-manifest call path emits, besides the
 /// separately validated `--format=<payload>` flag.
