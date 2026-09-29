@@ -25,7 +25,8 @@ use crate::select::select_groups;
 use crate::vectors::task_argv;
 
 pub use crate::internal_request::{
-    PlanOutputs, merge_passed, plan_outputs, response_path_for, write_request, write_request_parts,
+    PlanOutputs, merge_passed, plan_outputs, publish_plan_files, response_path_for, write_request,
+    write_request_parts,
 };
 
 /// Schema version accepted by both internal entrypoints.

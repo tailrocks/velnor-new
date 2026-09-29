@@ -9,7 +9,8 @@ use velnor_actions_contract::{
     Concurrency, Job, Permissions, Trigger, WorkflowIr, WorkflowPolicy, canonical_json_str,
 };
 use velnor_actions_orchestrator::{
-    merge_passed, plan_internal, plan_outputs, response_path_for, write_request_parts,
+    assemble_merge_request, merge_internal, merge_passed, plan_internal, plan_outputs,
+    publish_plan_files, response_path_for, write_request_parts,
 };
 use velnor_actions_workflow_renderer::render::RenderContext;
 use velnor_actions_workflow_renderer::steps::write_request_step;
@@ -17,7 +18,10 @@ use velnor_actions_workflow_renderer::{
     CONCURRENCY_CANCEL, CONCURRENCY_GROUP, checkout_step, plan_step, render_workflow_ir,
 };
 
-use crate::impl_common::{TestResult, config_with_branch, err_of, git, git_line, make_repo};
+use crate::impl_common::{
+    TestResult, config_with_branch, err_of, git, git_line, make_repo, passing_reports,
+    plan_for_source_change,
+};
 
 #[test]
 fn write_request_materializes_pull_request() -> TestResult {
@@ -81,10 +85,10 @@ fn write_request_materializes_merge_group() -> TestResult {
     let head = "e".repeat(40);
     let payload =
         format!("{{\"merge_group\":{{\"base_sha\":\"{base}\",\"head_sha\":\"{head}\"}}}}");
-    let file = dir.path().join("merge-v1-request.json");
+    let file = dir.path().join("plan-v1-request.json");
     write_request_parts(&file, "merge_group", &payload, None)?;
     let value: serde_json::Value = serde_json::from_str(&fs::read_to_string(&file)?)?;
-    assert_eq!(value["op"], "merge-v1");
+    assert_eq!(value["op"], "plan-v1");
     assert_eq!(value["event"], "merge_group");
     assert_eq!(value["base"], base);
     assert_eq!(value["head"], head);
@@ -160,6 +164,90 @@ fn plan_outputs_agree_with_plan_matrix() -> TestResult {
     assert!(!outputs.matrix.contains('\n'));
     assert!(outputs.plan.contains(&outputs.matrix));
     assert!(err_of(plan_outputs("not json"), "outputs reject garbage").is_ok());
+    Ok(())
+}
+
+/// Producer/consumer agreement: assembled files feed the merge unchanged.
+#[test]
+fn merge_assembled_request_roundtrips_to_passed() -> TestResult {
+    let (_repo, plan) = plan_for_source_change()?;
+    let reports = passing_reports(&plan)?;
+    assert!(!reports.is_empty(), "fixture must carry reports");
+    let dir = TempDir::new()?;
+    let run = dir.path().join("run");
+    fs::create_dir_all(run.join("reports"))?;
+    fs::write(run.join("plan.json"), serde_json::to_string(&plan)?)?;
+    fs::write(
+        run.join("matrix.json"),
+        serde_json::to_string(&plan.matrix)?,
+    )?;
+    for (index, report) in reports.iter().enumerate() {
+        fs::write(
+            run.join("reports").join(format!("r{index}.json")),
+            serde_json::to_string(report)?,
+        )?;
+    }
+    let request = assemble_merge_request("local", &run)?;
+    let value: serde_json::Value = serde_json::from_str(&request)?;
+    assert!(value.get("base").is_none(), "merge shape: {request}");
+    let final_report: velnor_actions_contract::FinalReport =
+        serde_json::from_str(&merge_internal(&request)?)?;
+    assert_eq!(
+        final_report.status,
+        velnor_actions_contract::FinalStatus::Passed
+    );
+    Ok(())
+}
+
+#[test]
+fn merge_assembly_rejects_missing_plan() -> TestResult {
+    let dir = TempDir::new()?;
+    let err = err_of(
+        assemble_merge_request("local", dir.path()),
+        "missing plan refused",
+    )?;
+    assert!(err.to_string().contains("missing_plan_artifact"), "{err}");
+    Ok(())
+}
+
+/// Plan artifact: response publishes the exact pair `Publish plan` uploads.
+#[test]
+fn publish_plan_files_writes_artifact_pair() -> TestResult {
+    let repo = make_repo(config_with_branch())?;
+    let root = repo.path();
+    git(&["add", "."], root)?;
+    git(&["commit", "-m", "one"], root)?;
+    let head = git_line(&["rev-parse", "HEAD"], root)?;
+    let request = serde_json::json!({
+        "schema": 1,
+        "run_key": "local",
+        "base": null,
+        "head": head,
+        "event": "push",
+        "root": root.display().to_string(),
+    });
+    let response = plan_internal(&request.to_string())?;
+    let dir = TempDir::new()?;
+    let run = publish_plan_files(&response, &dir.path().join("velnor"))?;
+    assert_eq!(run, dir.path().join("velnor").join("local"));
+    let plan_text = fs::read_to_string(run.join("plan.json"))?;
+    let matrix_text = fs::read_to_string(run.join("matrix.json"))?;
+    let value: serde_json::Value = serde_json::from_str(&response)?;
+    assert_eq!(plan_text, canonical_json_str(&value["plan"])?);
+    assert_eq!(matrix_text, canonical_json_str(&value["matrix"])?);
+    assert!(matrix_text.starts_with("{\"include\":"), "{matrix_text}");
+    let err = err_of(
+        publish_plan_files(&response, &dir.path().join("velnor")),
+        "second publish refused",
+    )?;
+    assert!(err.to_string().contains("plan_artifact_exists"), "{err}");
+    assert!(
+        err_of(
+            publish_plan_files("not json", dir.path()),
+            "garbage refused"
+        )
+        .is_ok()
+    );
     Ok(())
 }
 

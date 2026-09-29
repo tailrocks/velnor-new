@@ -108,8 +108,8 @@ pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, Orches
 /// those policy jobs exist. IR validation requires `needs` to name IR jobs
 /// only, so this builds the IR subset and the renderer appends the merged
 /// support IDs post-merge (see `support.rs`); the release job never gates.
-/// The write-request step materializes the event request file the merge
-/// step's private gate requires.
+/// The write-request step assembles the merge request from the downloaded
+/// plan and matrix-report artifacts the merge step consumes.
 /// # Errors
 ///
 /// Returns a contract error when the typed request step is rejected.

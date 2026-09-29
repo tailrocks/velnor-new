@@ -39,6 +39,21 @@ const CARGO_MACHETE_VERSION: &str = "0.9.2";
 /// Mise tool specs the policy vectors may select, without versions.
 const POLICY_TOOL_SPECS: [&str; 2] = ["cargo-deny", "ubi:bnjbvr/cargo-machete"];
 
+/// Product crates scanned by the machete vector, in contract order.
+///
+/// Fixed paths keep the intentional `fixtures/symlink-escape` negative
+/// fixture out of the scan: a bare `cargo machete` walk errors on the
+/// fixture's dangling `src` symlink instead of skipping it.
+const MACHETE_SCAN_CRATES: [&str; 7] = [
+    "crates/velnor-actions-contract",
+    "crates/velnor-actions-rust",
+    "crates/velnor-actions-mise",
+    "crates/velnor-actions-actionlint",
+    "crates/velnor-actions-workflow-renderer",
+    "crates/velnor-actions-orchestrator",
+    "crates/velnor-actions-cli",
+];
+
 /// V1 fixed vector for one group: pinned `mise` payload plus kind args.
 pub(crate) fn task_argv(
     group: &TaskGroup,
@@ -127,13 +142,15 @@ pub(crate) fn deny_argv() -> Result<Vec<String>, OrchestratorError> {
     )
 }
 
-/// Fixed policy-job vector: `cargo machete` through pinned Mise.
+/// Fixed policy-job vector: `cargo machete` over product crates via Mise.
 pub(crate) fn machete_argv() -> Result<Vec<String>, OrchestratorError> {
+    let mut args = vec!["machete"];
+    args.extend(MACHETE_SCAN_CRATES);
     policy_argv(
         "ubi:bnjbvr/cargo-machete",
         CARGO_MACHETE_VERSION,
         "cargo",
-        &["machete"],
+        &args,
     )
 }
 
@@ -293,6 +310,13 @@ mod tests {
             "--",
             "cargo",
             "machete",
+            "crates/velnor-actions-contract",
+            "crates/velnor-actions-rust",
+            "crates/velnor-actions-mise",
+            "crates/velnor-actions-actionlint",
+            "crates/velnor-actions-workflow-renderer",
+            "crates/velnor-actions-orchestrator",
+            "crates/velnor-actions-cli",
         ]
         .iter()
         .map(ToString::to_string)

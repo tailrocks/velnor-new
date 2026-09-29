@@ -106,7 +106,9 @@ fn repo_config_sample_parses_through_prepare() -> TestResult {
         WorkflowPolicy::VelnorRepositoryV1
     );
     assert_eq!(prep.config.discovery.exclude, vec!["fixtures/**"]);
-    assert_eq!(prep.default_branch, "testmain");
+    // The live sample pins the branch: config wins over origin/HEAD so CI
+    // checkouts (which create no origin/HEAD) still resolve the branch.
+    assert_eq!(prep.default_branch, "main");
     Ok(())
 }
 

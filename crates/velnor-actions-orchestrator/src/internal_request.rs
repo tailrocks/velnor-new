@@ -15,7 +15,7 @@ use crate::internal::{
     MERGE_OP, PLAN_OP, PlanResponse, SCHEMA, check_schema, internal, internal_contract,
 };
 
-/// Event-time request: `{schema, op, event, base, head, root}` (schema 1).
+/// Plan-time request: `{schema, op, event, base, head, root}` (schema 1).
 #[derive(Debug, Serialize)]
 struct EventRequest {
     /// Request schema; always 1.
@@ -71,6 +71,8 @@ pub fn write_request() -> Result<PathBuf, OrchestratorError> {
 ///
 /// The consuming op comes from the `<op>-request.json` file name; the file
 /// is written exclusively (a pre-existing file errors, never overwritten).
+/// The merge target assembles its request from downloaded artifacts and
+/// ignores the event payload.
 ///
 /// # Errors
 ///
@@ -84,6 +86,9 @@ pub fn write_request_parts(
 ) -> Result<PathBuf, OrchestratorError> {
     let path = request_path.to_path_buf();
     let op = request_op(&path)?;
+    if op == MERGE_OP {
+        return crate::merge_request::write_merge_request(&path);
+    }
     let event = match event_name {
         "pull_request" => WorkflowEvent::PullRequest,
         "push" => WorkflowEvent::Push,
@@ -153,6 +158,66 @@ pub fn plan_outputs(response_json: &str) -> Result<PlanOutputs, OrchestratorErro
         plan: canonical_json_str(&response.plan).map_err(internal_contract)?,
         matrix: canonical_json_str(&response.matrix).map_err(internal_contract)?,
     })
+}
+
+/// Publish `plan.json` + `matrix.json` for the plan artifact.
+///
+/// Contract §4 fixes the artifact content under `<velnor-dir>/<run-key>/`
+/// (the plan step passes `$RUNNER_TEMP/velnor`), which `Publish plan`
+/// uploads; without these files the upload fails with no-files-found.
+/// The run key comes from the response plan, so the files always land in
+/// the directory the upload step names.
+///
+/// # Errors
+///
+/// Returns [`OrchestratorError::Internal`] for malformed responses and
+/// [`OrchestratorError::Io`] for unwritable directories.
+pub fn publish_plan_files(
+    response_json: &str,
+    velnor_dir: &Path,
+) -> Result<PathBuf, OrchestratorError> {
+    let response: PlanResponse =
+        serde_json::from_str(response_json).map_err(|_| internal("malformed_response"))?;
+    check_schema(response.schema)?;
+    let dir = velnor_dir.join(&response.plan.run_key);
+    write_plan_files(&response, &dir)?;
+    Ok(dir)
+}
+
+/// Write canonical `plan.json` plus `matrix.json` into one directory.
+///
+/// `matrix.json` is exactly `{"include": [...]}`: the same matrix the
+/// plan step emits through `$GITHUB_OUTPUT`.
+///
+/// # Errors
+///
+/// Returns [`OrchestratorError::Internal`] for encoding failures and
+/// [`OrchestratorError::Io`] for unwritable directories.
+pub(crate) fn write_plan_files(
+    response: &PlanResponse,
+    dir: &Path,
+) -> Result<(), OrchestratorError> {
+    fs::create_dir_all(dir)
+        .map_err(|err| OrchestratorError::io(dir.display().to_string(), err.to_string()))?;
+    let plan = canonical_json_bytes(&response.plan).map_err(internal_contract)?;
+    let matrix = canonical_json_bytes(&response.matrix).map_err(internal_contract)?;
+    write_new(&dir.join("plan.json"), &plan)?;
+    write_new(&dir.join("matrix.json"), &matrix)?;
+    Ok(())
+}
+
+/// Exclusively write one artifact file; a pre-existing file errors.
+fn write_new(path: &Path, bytes: &[u8]) -> Result<(), OrchestratorError> {
+    fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+        .map_err(|_| internal("plan_artifact_exists"))
+        .and_then(|mut file| {
+            use std::io::Write;
+            file.write_all(bytes)
+                .map_err(|_| internal("plan_artifact_unwritable"))
+        })
 }
 
 /// True when one `merge-v1` response is a passing verdict.

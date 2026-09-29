@@ -24,6 +24,7 @@ mod internal;
 mod internal_plan;
 mod internal_request;
 mod merge;
+mod merge_request;
 mod pins;
 mod plan;
 mod prepare;
@@ -61,9 +62,11 @@ pub use generate::{GenerateOptions, GenerateReport, ToolSnapshot, generate, rend
 pub use init::{InitReport, init_config};
 pub use internal::{
     MERGE_OP, PLAN_OP, PlanOutputs, REQUEST_FILE_ENV, WRITE_REQUEST_OP, merge_passed,
-    plan_internal, plan_outputs, response_path_for, write_request, write_request_parts,
+    plan_internal, plan_outputs, publish_plan_files, response_path_for, write_request,
+    write_request_parts,
 };
 pub use merge::merge_internal;
+pub use merge_request::assemble_merge_request;
 pub use plan::{plan_text, plan_text_checked};
 pub use prepare::{GenerationPreparation, prepare};
 pub use root::resolve_root;
