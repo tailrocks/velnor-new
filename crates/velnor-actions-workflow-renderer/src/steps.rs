@@ -42,8 +42,6 @@ pub const UPLOAD_ARTIFACT_USES: &str =
 /// Pinned `actions/download-artifact` ref (v8.0.1, qualified 2026-09-28).
 pub const DOWNLOAD_ARTIFACT_USES: &str =
     "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c";
-/// Candidate artifact name shared by the upload and download steps.
-pub const CANDIDATE_ARTIFACT_NAME: &str = "velnor-candidate";
 /// Candidate manifest filename inside the uploaded artifact.
 pub const CANDIDATE_MANIFEST_FILE: &str = "candidate-manifest.json";
 /// Directory holding the built candidate binary plus its manifest.

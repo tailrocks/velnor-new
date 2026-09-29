@@ -28,6 +28,10 @@ pub use artifact_paths::{
     CANDIDATE_OUTPUT_DIR_EXPR, CANDIDATE_STAGE_DIR_EXPR, PRESEED_OUTPUT_DIR_EXPR,
     PRESEED_STAGE_DIR_EXPR,
 };
+pub use candidate::{
+    VERIFY_MANIFEST_NAME, candidate_artifact_name, candidate_manifest_verify_script,
+    candidate_manifest_verify_step,
+};
 pub use closure::{
     CHECK_GENERATED_NAME, FRESHNESS_OUTDIR, HelperProvenance, PLAN_ARTIFACT_NAME,
     PLAN_ARTIFACT_PATH, PUBLISH_PLAN_NAME, SEED_REMEDIATION, freshness_step,
@@ -53,9 +57,9 @@ pub use render::{
     ACTIONLINT_PATH, ALINT_JOB_ID, ALINT_USES, CANDIDATE_JOB_ID, CONCURRENCY_CANCEL,
     CONCURRENCY_GROUP, CandidateSpec, EXPECTED_PR_TYPES, FINAL_CONDITION, FINAL_DISPLAY_NAME,
     FINAL_JOB_ID, MATRIX_MAX_PARALLEL_ENV, MATRIX_NEEDS_JOB_ENV, MATRIX_OUTPUT_ENV, MatrixSource,
-    MiseSetup, PLAN_JOB_ID, PLAN_STEP_ID, POLICY_JOB_ID, PolicyCommand, RenderContext,
-    RenderedFile, RenderedTree, TASK_JOB_ID, WORKFLOW_PATH, render_tree, render_workflow_ir,
-    render_workflow_ir_strict,
+    MiseSetup, PLAN_ID_OUTPUT, PLAN_JOB_ID, PLAN_STEP_ID, POLICY_JOB_ID, PolicyCommand,
+    RUN_KEY_OUTPUT, RenderContext, RenderedFile, RenderedTree, TASK_JOB_ID, WORKFLOW_PATH,
+    render_tree, render_workflow_ir, render_workflow_ir_strict,
 };
 pub use setup::{MISE_ACTION_NAME, SETUP_MISE_NAME, mise_setup_step};
 pub use steps::{

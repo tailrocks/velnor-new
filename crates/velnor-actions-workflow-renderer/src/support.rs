@@ -248,6 +248,89 @@ pub(crate) fn check_candidate_invariants(jobs: &BTreeMap<String, Job>) -> Result
     Ok(())
 }
 
+/// Credential env keys that must never reach task execution.
+const STRIPPED_CREDENTIAL_KEYS: &[&str] = &["GITHUB_TOKEN", "ACTIONS_RUNTIME_TOKEN"];
+
+/// Token hygiene: `${{ github.token }}` only as plan `GH_TOKEN`.
+///
+/// Parallelism §5: the planning process receives the token only as
+/// `GH_TOKEN`, never printed or inherited by task execution; before any
+/// repository task starts, credential variables are stripped from the
+/// child environment. Enforced here: `GITHUB_TOKEN`/`ACTIONS_RUNTIME_TOKEN`
+/// fail everywhere, `GH_TOKEN` is allowed only in the plan job with the
+/// exact `${{ github.token }}` value, and no `run:` content or action
+/// input may name a token (nothing prints or forwards one).
+pub(crate) fn check_token_hygiene(jobs: &BTreeMap<String, Job>) -> Result<(), RenderError> {
+    for (id, job) in jobs {
+        for step in &job.steps {
+            check_step_tokens(id, step)?;
+        }
+    }
+    Ok(())
+}
+
+/// Reject credential leaks in one step's env, argv, and action inputs.
+fn check_step_tokens(id: &str, step: &Step) -> Result<(), RenderError> {
+    match &step.kind {
+        StepKind::Shell { run, env } => {
+            check_env_tokens(id, env)?;
+            for arg in run {
+                if names_token(arg) {
+                    return Err(RenderError::InvalidWorkflow(format!(
+                        "token_in_run:{id}:{}",
+                        step.name
+                    )));
+                }
+            }
+        }
+        StepKind::Action { with, .. } => {
+            for value in with.values() {
+                if names_token(value) {
+                    return Err(RenderError::InvalidWorkflow(format!(
+                        "token_in_action_input:{id}:{}",
+                        step.name
+                    )));
+                }
+            }
+        }
+        StepKind::Internal { .. } => {}
+    }
+    Ok(())
+}
+
+/// Reject stripped keys everywhere; scope `GH_TOKEN` to the plan job.
+fn check_env_tokens(id: &str, env: &BTreeMap<String, String>) -> Result<(), RenderError> {
+    for (key, value) in env {
+        if STRIPPED_CREDENTIAL_KEYS.contains(&key.as_str()) {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "credential_env:{id}:{key}"
+            )));
+        }
+        if key == "GH_TOKEN" {
+            let scoped = id == PLAN_JOB_ID && value == "${{ github.token }}";
+            if !scoped {
+                return Err(RenderError::InvalidWorkflow(format!(
+                    "token_misplaced:{id}:GH_TOKEN"
+                )));
+            }
+        } else if names_token(value) {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "token_in_env:{id}:{key}"
+            )));
+        }
+    }
+    Ok(())
+}
+
+/// True when text names a token handle (never printed or forwarded).
+fn names_token(text: &str) -> bool {
+    text.contains("GH_TOKEN")
+        || text.contains("GITHUB_TOKEN")
+        || text.contains("ACTIONS_RUNTIME_TOKEN")
+        || text.contains("github.token")
+        || text.contains("secrets.GITHUB_TOKEN")
+}
+
 /// Final gate keeps the exact required-check name and `always()` condition.
 ///
 /// The always-on lint job keeps its exact display name on both policies.

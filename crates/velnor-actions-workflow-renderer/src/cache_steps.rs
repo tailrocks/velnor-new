@@ -168,6 +168,9 @@ pub fn cache_action_step(
     if key.trim().is_empty() || key.contains(' ') || key.contains('\n') {
         return Err(RenderError::BadCommand("bad_cache_key".to_owned()));
     }
+    if paths.is_empty() {
+        return Err(RenderError::BadCommand("empty_cache_paths".to_owned()));
+    }
     for path in paths {
         validate_cache_path(layer, path)?;
     }

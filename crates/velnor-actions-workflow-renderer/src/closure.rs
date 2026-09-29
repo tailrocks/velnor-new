@@ -241,6 +241,63 @@ pub(crate) fn insert_plan_closure(
     Ok(())
 }
 
+/// Insert write-request steps immediately before their consumers.
+///
+/// The `plan-v1`/`merge-v1` gates require the request file materialized
+/// (workflow-contract §3); the orchestrator emits these in IR, and this
+/// backstop closes hand-built IR the same way. Idempotent: present
+/// request steps are never duplicated, and insertion always lands after
+/// any Acquire step (directly before the already-staged consumer).
+/// # Errors
+pub(crate) fn insert_request_closure(
+    jobs: &mut std::collections::BTreeMap<String, Job>,
+) -> Result<(), RenderError> {
+    for (job_id, target) in [
+        (PLAN_JOB_ID, steps::PLAN_OPERATION),
+        (crate::render::FINAL_JOB_ID, steps::MERGE_OPERATION),
+    ] {
+        let Some(job) = jobs.get_mut(job_id) else {
+            continue;
+        };
+        let want = format!("{}:{target}", steps::WRITE_REQUEST_OPERATION);
+        let present = job.steps.iter().any(
+            |step| matches!(&step.kind, StepKind::Internal { operation } if operation == &want),
+        );
+        if present {
+            continue;
+        }
+        if let Some(at) = job.steps.iter().position(
+            |step| matches!(&step.kind, StepKind::Internal { operation } if operation == target),
+        ) {
+            job.steps.insert(at, steps::write_request_step(target)?);
+        }
+    }
+    Ok(())
+}
+
+/// Append the matrix-report upload to the task job exactly once.
+///
+/// Cache-contract §4 requires every matrix entry to upload its artifact
+/// with `if: always()` (attached at render); the template carries the
+/// leg's `matrix-report.json` plus `tasks/` files under the derived
+/// `velnor-matrix-<run-key>-<matrix-key>` name. Idempotent.
+/// # Errors
+pub(crate) fn insert_task_closure(
+    jobs: &mut std::collections::BTreeMap<String, Job>,
+) -> Result<(), RenderError> {
+    let Some(task) = jobs.get_mut(crate::render::TASK_JOB_ID) else {
+        return Ok(());
+    };
+    let present = task
+        .steps
+        .iter()
+        .any(|step| step.name == steps::MATRIX_REPORT_UPLOAD_NAME);
+    if !present {
+        task.steps.push(steps::matrix_report_upload_step()?);
+    }
+    Ok(())
+}
+
 /// Require the `plan-v1` anchor in the plan job (strict entrypoint).
 /// # Errors
 pub(crate) fn check_plan_anchor(

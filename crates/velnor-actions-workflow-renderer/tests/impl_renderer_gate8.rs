@@ -1,27 +1,28 @@
 //! Gate-8 renderer cases: artifacts, manifest script, rehead, release.
 use velnor_actions_contract::{GeneratorValidation, WorkflowPolicy};
 use velnor_actions_workflow_renderer::steps::{
-    CANDIDATE_ARTIFACT_NAME, candidate_manifest_script, download_artifact_step,
-    rehead_actionlint_marker, upload_artifact_step,
+    candidate_manifest_script, download_artifact_step, rehead_actionlint_marker,
+    upload_artifact_step,
 };
 use velnor_actions_workflow_renderer::{
     CANDIDATE_OUTPUT_DIR_EXPR, CANDIDATE_STAGE_DIR_EXPR, PRESEED_OUTPUT_DIR_EXPR,
-    PRESEED_STAGE_DIR_EXPR, PolicyCommand, RenderError, checkout_step, merge_step, plan_step,
-    preseed_download_step, preseed_upload_step, render_workflow_ir, write_request_step,
+    PRESEED_STAGE_DIR_EXPR, PolicyCommand, RenderError, candidate_artifact_name, checkout_step,
+    merge_step, plan_step, preseed_download_step, preseed_upload_step, render_workflow_ir,
+    write_request_step,
 };
 
 use super::impl_renderer_fixtures::*;
 
 #[test]
-fn artifact_steps_pin_actions_and_reject_empty() {
-    let up = upload_artifact_step(CANDIDATE_ARTIFACT_NAME, "${{ runner.temp }}/velnor/out")
-        .map(|step| step.name);
+fn artifact_steps_pin_actions_and_reject_empty() -> Result<(), RenderError> {
+    let name = candidate_artifact_name("x86_64-unknown-linux-gnu")?;
+    let up = upload_artifact_step(&name, "${{ runner.temp }}/velnor/out").map(|step| step.name);
     assert_eq!(up, Ok("Upload candidate".to_owned()));
-    let down = download_artifact_step(CANDIDATE_ARTIFACT_NAME, "${{ runner.temp }}/velnor/in")
-        .map(|step| step.name);
+    let down = download_artifact_step(&name, "${{ runner.temp }}/velnor/in").map(|step| step.name);
     assert_eq!(down, Ok("Download candidate".to_owned()));
     assert!(upload_artifact_step("", "p").is_err());
     assert!(download_artifact_step("n", "").is_err());
+    Ok(())
 }
 
 #[test]

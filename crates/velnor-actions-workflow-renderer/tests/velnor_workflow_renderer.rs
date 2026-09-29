@@ -3,6 +3,8 @@
 mod impl_renderer_acquire;
 #[path = "impl_renderer_cache_steps.rs"]
 mod impl_renderer_cache_steps;
+#[path = "impl_renderer_f2close.rs"]
+mod impl_renderer_f2close;
 #[path = "impl_renderer_fixtures.rs"]
 mod impl_renderer_fixtures;
 #[path = "impl_renderer_gate8.rs"]

@@ -284,6 +284,14 @@ pub fn check_timings_report_last(job: &Job) -> Result<(), RenderError> {
     }
 }
 
+/// Task-contract `not_applicable` maps to this cache-schema reason.
+///
+/// Task-execution contract §1 reports inapplicable steps (compiler-object
+/// restore on Cargo profiles, unselected doctests) as `not_applicable`;
+/// the cache-contract §3 schema carries no such status, so no-op steps
+/// report `not_selected` with [`NotSelectedReason::Unsupported`].
+pub const NOT_APPLICABLE_REASON: NotSelectedReason = NotSelectedReason::Unsupported;
+
 /// Task contract wording note: the cache schema has no `not_applicable`
 /// status, so no-op steps report `not_selected` with this reason enum.
 fn reason_name(reason: NotSelectedReason) -> &'static str {

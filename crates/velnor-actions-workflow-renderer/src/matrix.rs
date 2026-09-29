@@ -19,6 +19,10 @@ pub const MATRIX_OUTPUT_ENV: &str = "VELNOR_MATRIX_OUTPUT";
 pub const MATRIX_MAX_PARALLEL_ENV: &str = "VELNOR_MATRIX_MAX_PARALLEL";
 /// Step ID of the matrix-producing plan step.
 pub const PLAN_STEP_ID: &str = "plan";
+/// Job-output name carrying the plan ID (`plan-<run-key>`).
+pub const PLAN_ID_OUTPUT: &str = "plan_id";
+/// Job-output name carrying the run key (`r<run-id>-a<run-attempt>`).
+pub const RUN_KEY_OUTPUT: &str = "run_key";
 
 /// Typed matrix source for the task job's `strategy.matrix`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -148,15 +152,19 @@ pub(crate) fn attach_task_matrix(
             ),
         ]),
     )?;
-    insert_job_key(
-        jobs,
-        needs_job,
-        "outputs",
-        Yaml::Map(vec![(
-            output.clone(),
-            Yaml::str(format!("${{{{ steps.{PLAN_STEP_ID}.outputs.{output} }}}}")),
-        )]),
-    )?;
+    let mut outputs = vec![(
+        output.clone(),
+        Yaml::str(format!("${{{{ steps.{PLAN_STEP_ID}.outputs.{output} }}}}")),
+    )];
+    for name in [PLAN_ID_OUTPUT, RUN_KEY_OUTPUT] {
+        if name != output {
+            outputs.push((
+                name.to_owned(),
+                Yaml::str(format!("${{{{ steps.{PLAN_STEP_ID}.outputs.{name} }}}}")),
+            ));
+        }
+    }
+    insert_job_key(jobs, needs_job, "outputs", Yaml::Map(outputs))?;
     insert_plan_step_id(jobs, needs_job, output)
 }
 

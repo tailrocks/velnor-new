@@ -18,7 +18,8 @@ use crate::{
 };
 
 pub use crate::matrix::{
-    MATRIX_MAX_PARALLEL_ENV, MATRIX_NEEDS_JOB_ENV, MATRIX_OUTPUT_ENV, MatrixSource, PLAN_STEP_ID,
+    MATRIX_MAX_PARALLEL_ENV, MATRIX_NEEDS_JOB_ENV, MATRIX_OUTPUT_ENV, MatrixSource, PLAN_ID_OUTPUT,
+    PLAN_STEP_ID, RUN_KEY_OUTPUT,
 };
 pub use crate::setup::MiseSetup;
 
@@ -163,6 +164,8 @@ pub fn render_workflow_ir(
 ) -> Result<String, RenderError> {
     let mut jobs = merged_jobs(ir, policy, support, ctx)?;
     closure::insert_plan_closure(&mut jobs, ctx)?;
+    closure::insert_request_closure(&mut jobs)?;
+    closure::insert_task_closure(&mut jobs)?;
     render_merged(ir, &jobs, ctx)
 }
 
@@ -197,6 +200,8 @@ pub fn render_workflow_ir_strict(
     closure::check_plan_anchor(&jobs)?;
     preseed::check_preseed_closure(&jobs, ctx.preseed)?;
     closure::insert_plan_closure(&mut jobs, ctx)?;
+    closure::insert_request_closure(&mut jobs)?;
+    closure::insert_task_closure(&mut jobs)?;
     render_merged(ir, &jobs, ctx)
 }
 
@@ -259,6 +264,7 @@ fn merged_jobs(
     msrv::check_no_msrv(&jobs)?;
     support::check_candidate_invariants(&jobs)?;
     support::check_final_gate(&jobs)?;
+    support::check_token_hygiene(&jobs)?;
     Ok(jobs)
 }
 

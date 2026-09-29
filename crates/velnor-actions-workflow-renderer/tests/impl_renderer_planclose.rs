@@ -29,6 +29,7 @@ fn strict_plan_job_gets_full_prelude_in_order() -> Result<(), RenderError> {
             SETUP_MISE_NAME,
             ACQUIRE_NAME,
             CHECK_GENERATED_NAME,
+            "Write request",
             "Plan",
             PUBLISH_PLAN_NAME,
             "Save Mise tools",

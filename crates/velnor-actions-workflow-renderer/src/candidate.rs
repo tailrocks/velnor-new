@@ -7,7 +7,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::Job;
+use velnor_actions_contract::{Job, Step};
 
 use crate::{
     RenderError,
@@ -17,12 +17,68 @@ use crate::{
     steps,
 };
 
-/// Candidate job: build once, upload with manifest, download, qualify.
+/// Display name of the candidate-manifest verification step.
+pub const VERIFY_MANIFEST_NAME: &str = "Verify candidate manifest";
+
+/// Derived candidate artifact name for one target triple.
+///
+/// Cache-contract §4 fixes `velnor-candidate-<run-key>-<target-key>`; the
+/// run key resolves from the workflow run at runtime while the target key
+/// derives from the literal triple now (contract `target_key` grammar).
+/// # Errors
+pub fn candidate_artifact_name(target: &str) -> Result<String, RenderError> {
+    let key = velnor_actions_contract::target_key(target).map_err(RenderError::Contract)?;
+    Ok(format!("velnor-candidate-{}-{key}", steps::RUN_KEY_EXPR))
+}
+
+/// Fixed script verifying the downloaded manifest before any run.
+///
+/// Checks the manifest beside the downloaded binary: schema 1, 40-hex
+/// commit equal to the checked-out `$GITHUB_SHA`, exact expected target,
+/// nonempty toolchain, 64-hex sha256 equal to the binary's recomputed
+/// digest. Pure POSIX `sh` parameter expansion plus `sha256sum`: no
+/// command substitution (rejected by argv validation), no single quotes
+/// (whole-script quoting, preseed precedent). The manifest writer emits
+/// no trailing newline, so the `read` carries an `|| [ -n ... ]` guard.
+#[must_use]
+pub fn candidate_manifest_verify_script(target: &str) -> String {
+    let dir = steps::CANDIDATE_STAGE_DIR;
+    let file = steps::CANDIDATE_MANIFEST_FILE;
+    format!(
+        "m=\"{dir}/{file}\" && b=\"{dir}/velnor-actions\" && test -f \"$m\" && test -x \"$b\" && read line rest < \"$m\" || [ -n \"$line\" ] && v=${{line#*\\\"schema\\\":}} && v=${{v%%,*}} && [ \"$v\" = 1 ] && c=${{line#*\\\"commit\\\":\\\"}} && c=${{c%%\\\"*}} && [ \"${{#c}}\" = 40 ] && [ \"$c\" = \"$GITHUB_SHA\" ] && t=${{line#*\\\"target\\\":\\\"}} && t=${{t%%\\\"*}} && [ \"$t\" = \"{target}\" ] && tc=${{line#*\\\"toolchain\\\":\\\"}} && tc=${{tc%%\\\"*}} && [ -n \"$tc\" ] && s=${{line#*\\\"sha256\\\":\\\"}} && s=${{s%%\\\"*}} && [ \"${{#s}}\" = 64 ] && sha256sum \"$b\" > \"{dir}/got.txt\" && read got rest < \"{dir}/got.txt\" && [ \"$got\" = \"$s\" ]"
+    )
+}
+
+/// Manifest verification step; must precede every candidate execution.
+///
+/// Cache-contract §3: the report MUST verify the manifest before running
+/// any candidate command. The expected target is the literal triple the
+/// candidate job builds for (never the manifest's own claim).
+/// # Errors
+pub fn candidate_manifest_verify_step(target: &str) -> Result<Step, RenderError> {
+    if !velnor_actions_contract::is_supported_target(target) {
+        return Err(RenderError::BadCommand(format!(
+            "candidate_unsupported_target:{target}"
+        )));
+    }
+    steps::shell_step(
+        VERIFY_MANIFEST_NAME,
+        vec![
+            "sh".to_owned(),
+            "-c".to_owned(),
+            candidate_manifest_verify_script(target),
+        ],
+        BTreeMap::new(),
+    )
+}
+
+/// Candidate job: build once, upload with manifest, download, verify, qualify.
 ///
 /// Qualification runs against the downloaded artifact and never rebuilds
 /// it (bootstrap contract §4 steps 4-5). Needs plan; feeds nothing.
-/// Candidate mode performs the generated-files check with the downloaded
-/// candidate binary, after the download and before qualification.
+/// Candidate mode verifies the downloaded manifest, then performs the
+/// generated-files check with the downloaded candidate binary, after the
+/// download and before qualification.
 /// # Errors
 pub(crate) fn candidate_job(ctx: &RenderContext, spec: &CandidateSpec) -> Result<Job, RenderError> {
     let target =
@@ -31,6 +87,7 @@ pub(crate) fn candidate_job(ctx: &RenderContext, spec: &CandidateSpec) -> Result
         })?;
     let toolchain = toolchain_identity(&spec.build)?;
     let manifest = steps::candidate_manifest_script(target, &toolchain);
+    let artifact = candidate_artifact_name(target)?;
     let candidate_binary = format!("{}/velnor-actions", steps::CANDIDATE_STAGE_DIR);
     Ok(Job {
         display_name: "Velnor Candidate".to_owned(),
@@ -45,11 +102,9 @@ pub(crate) fn candidate_job(ctx: &RenderContext, spec: &CandidateSpec) -> Result
                 vec!["sh".to_owned(), "-c".to_owned(), manifest],
                 BTreeMap::new(),
             )?,
-            steps::upload_artifact_step(steps::CANDIDATE_ARTIFACT_NAME, CANDIDATE_OUTPUT_DIR_EXPR)?,
-            steps::download_artifact_step(
-                steps::CANDIDATE_ARTIFACT_NAME,
-                CANDIDATE_STAGE_DIR_EXPR,
-            )?,
+            steps::upload_artifact_step(&artifact, CANDIDATE_OUTPUT_DIR_EXPR)?,
+            steps::download_artifact_step(&artifact, CANDIDATE_STAGE_DIR_EXPR)?,
+            candidate_manifest_verify_step(target)?,
             freshness_step(&candidate_binary, FRESHNESS_OUTDIR)?,
             steps::shell_step("Qualify candidate", spec.qualify.clone(), BTreeMap::new())?,
         ],
@@ -63,6 +118,11 @@ pub(crate) fn candidate_job(ctx: &RenderContext, spec: &CandidateSpec) -> Result
 /// separate reviewed change (bootstrap contract §4 step 6), never here.
 /// # Errors
 pub(crate) fn release_job(ctx: &RenderContext) -> Result<Job, RenderError> {
+    let target =
+        velnor_actions_contract::target_for_runner_label(&ctx.runs_on).ok_or_else(|| {
+            RenderError::InvalidWorkflow(format!("unsupported_target_for_runner:{}", ctx.runs_on))
+        })?;
+    let artifact = candidate_artifact_name(target)?;
     Ok(Job {
         display_name: super::support::RELEASE_DISPLAY_NAME.to_owned(),
         runs_on: ctx.runs_on.clone(),
@@ -70,10 +130,7 @@ pub(crate) fn release_job(ctx: &RenderContext) -> Result<Job, RenderError> {
         condition: Some(super::support::RELEASE_REF_CONDITION.to_owned()),
         steps: vec![
             steps::checkout_step(&ctx.checkout_uses)?,
-            steps::download_artifact_step(
-                steps::CANDIDATE_ARTIFACT_NAME,
-                CANDIDATE_STAGE_DIR_EXPR,
-            )?,
+            steps::download_artifact_step(&artifact, CANDIDATE_STAGE_DIR_EXPR)?,
             steps::shell_step(
                 "Publish release assets",
                 vec![
