@@ -42,6 +42,12 @@ fn payload_shapes_per_kind() {
         text(&group(TaskKind::Fmt))[..3],
         ["fmt", "--check", "--manifest-path"]
     );
+    let mut workspace = group(TaskKind::Fmt);
+    workspace.package_name.clear();
+    assert_eq!(
+        text(&workspace)[..4],
+        ["fmt", "--all", "--check", "--manifest-path"]
+    );
     let clippy = text(&group(TaskKind::Clippy));
     assert!(clippy.contains(&"--all-targets".to_owned()) && clippy.contains(&"demo".to_owned()));
     assert!(text(&group(TaskKind::Test)).contains(&"--lib".to_owned()));

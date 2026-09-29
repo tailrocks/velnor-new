@@ -283,7 +283,7 @@ fn w1_plan_format_runs_fmt_check() -> TestResult {
     let plan = window(&yaml, "  velnor-plan:", "  velnor-task:")?;
     assert!(plan.contains("- name: Format"), "format step:\n{plan}");
     assert!(
-        plan.contains("mise ") && plan.contains("cargo fmt --check"),
+        plan.contains("mise ") && plan.contains("fmt --all --check"),
         "{plan}"
     );
     let format_at = plan.find("- name: Format").ok_or("format step")?;

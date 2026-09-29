@@ -281,12 +281,16 @@ fn push_kind_args(args: &mut Vec<OsString>, group: &TaskGroup, manifest: &str) {
     let flag = OsString::from;
     match group.kind {
         TaskKind::Fmt => {
-            args.extend([
-                flag("fmt"),
-                flag("--check"),
-                flag("--manifest-path"),
-                flag(manifest),
-            ]);
+            // Workspace fmt groups name no package: their manifest may be
+            // virtual, and cargo-fmt reads a bare --manifest-path as a
+            // package manifest, exiting "Failed to find targets". --all
+            // selects the whole workspace instead. Per-package groups keep
+            // the narrow manifest-only form.
+            args.push(flag("fmt"));
+            if group.package_name.is_empty() {
+                args.push(flag("--all"));
+            }
+            args.extend([flag("--check"), flag("--manifest-path"), flag(manifest)]);
         }
         TaskKind::Clippy => {
             args.extend([
