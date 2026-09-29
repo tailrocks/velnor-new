@@ -108,7 +108,7 @@ pub(crate) fn build_task_job(
     steps.extend(fetch_steps(catalog, fetch_roots)?);
     steps.extend(mbx_task_step(use_mbx)?);
     steps.extend(maybe_task_cache_steps(None, TaskCacheMode::Off, "")?);
-    steps.push(matrix_task_step(max_parallel_jobs));
+    steps.push(matrix_task_step(max_parallel_jobs, catalog));
     Ok(Job {
         display_name: "Velnor Task".to_owned(),
         runs_on: label.to_owned(),
@@ -137,9 +137,10 @@ fn prepare_task_tools_step(
     use_nextest: bool,
 ) -> Result<Step, OrchestratorError> {
     let mut tools = task_driver_tools(use_mbx);
-    if use_nextest {
-        tools.push(PinnedTool::Nextest);
-    }
+    tools.push(PinnedTool::Actionlint);
+    tools.push(PinnedTool::Shellcheck);
+    tools.push(PinnedTool::Zizmor);
+    tools.extend(use_nextest.then_some(PinnedTool::Nextest));
     let prepare = PreparePinnedTools::new(tools, ToolHomes::runner_temp()).map_err(|err| {
         OrchestratorError::Contract {
             problem: err.to_string(),
