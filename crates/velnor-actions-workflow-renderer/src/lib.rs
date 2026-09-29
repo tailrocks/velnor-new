@@ -34,9 +34,9 @@ pub use candidate::{
     candidate_manifest_verify_step, check_release_build,
 };
 pub use closure::{
-    CHECK_GENERATED_NAME, FRESHNESS_OUTDIR, HelperProvenance, PLAN_ARTIFACT_NAME,
-    PLAN_ARTIFACT_PATH, PUBLISH_PLAN_NAME, SEED_REMEDIATION, freshness_step,
-    provision_acquire_step, publish_plan_step,
+    CHECK_GENERATED_NAME, DOWNLOAD_PLAN_NAME, FRESHNESS_OUTDIR, HelperProvenance,
+    PLAN_ARTIFACT_NAME, PLAN_ARTIFACT_PATH, PUBLISH_PLAN_NAME, SEED_REMEDIATION,
+    download_plan_step, freshness_step, provision_acquire_step, publish_plan_step,
 };
 pub use commands::{
     check_no_bare_cargo, has_bare_env_expansion, join_argv_for_run, quote_env_path_for_run,

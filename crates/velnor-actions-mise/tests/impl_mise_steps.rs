@@ -199,6 +199,49 @@ fn prepared_inputs_rejects_empty_manifest() -> Result<(), String> {
 }
 
 #[test]
+fn tool_homes_runner_temp_uses_expression_paths() {
+    let homes = ToolHomes::runner_temp();
+    assert_eq!(
+        homes.rustup_home(),
+        "${{ runner.temp }}/velnor/rustup",
+        "shell $VAR never expands in env position"
+    );
+    assert_eq!(
+        homes.cargo_home(),
+        "${{ runner.temp }}/velnor/cargo",
+        "shell $VAR never expands in env position"
+    );
+}
+
+#[test]
+fn tool_homes_exec_env_is_verification_env() -> Result<(), String> {
+    let catalog = pinned();
+    let env = homes()?.exec_env(&catalog);
+    for (key, value) in [
+        ("MISE_NO_CONFIG", "1"),
+        ("MISE_NO_ENV", "1"),
+        ("MISE_NO_HOOKS", "1"),
+        ("MISE_LOCKFILE", "0"),
+        ("MISE_AUTO_INSTALL", "false"),
+        ("MISE_EXEC_AUTO_INSTALL", "false"),
+        ("MISE_RUSTUP_HOME", "/velnor/rustup"),
+        ("MISE_CARGO_HOME", "/velnor/cargo"),
+        ("RUSTUP_TOOLCHAIN", "1.98.1"),
+    ] {
+        assert!(env_has(&env, key, value), "missing {key}={value}: {env:?}");
+    }
+    assert_eq!(env.len(), 9, "exact step env, no drift: {env:?}");
+    let qualified = VerifyPreparedInputs::new(PathBuf::from("Cargo.toml"), homes()?)
+        .map_err(|err| err.to_string())?;
+    assert_eq!(
+        env,
+        qualified.env(&catalog),
+        "one exec-env constructor serves every verification step"
+    );
+    Ok(())
+}
+
+#[test]
 fn tool_homes_rejects_empty() {
     assert!(matches!(
         ToolHomes::new("", "/velnor/cargo"),

@@ -1,0 +1,8 @@
+# Velnor policy audit exception (version-policy §2): exactly
+# uses asamarts/alint@v0.16.1 may stay tag-pinned; every other ref
+# still requires a hash. Line-scoped: regen drift fails the policy
+# scan until this ignore is re-derived (pinned by repo policy test).
+rules:
+  unpinned-uses:
+    ignore:
+      - velnor.yml:30:15  # expires: alint reviewed-tag exception review (version-policy §2)

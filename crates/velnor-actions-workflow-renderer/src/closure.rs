@@ -19,6 +19,8 @@ use crate::{
 pub const CHECK_GENERATED_NAME: &str = "Check generated files";
 /// Contract-fixed display name of the plan-report upload step.
 pub const PUBLISH_PLAN_NAME: &str = "Publish plan";
+/// Contract-fixed display name of the final plan-download step.
+pub const DOWNLOAD_PLAN_NAME: &str = "Download plan";
 /// Freshness preview root, verbatim from workflow-contract §3 step 6.
 pub const FRESHNESS_OUTDIR: &str =
     "$RUNNER_TEMP/velnor-actions-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}";
@@ -202,6 +204,57 @@ pub fn publish_plan_step() -> Result<Step, RenderError> {
             ("if-no-files-found".to_owned(), "error".to_owned()),
         ]),
     )
+}
+
+/// Fixed plan-artifact download step (fails loud when absent).
+///
+/// Mirrors [`publish_plan_step`]: same name and directory, so the pair
+/// agrees by construction. No `if:`: the job-level `always()` governs.
+/// # Errors
+pub fn download_plan_step() -> Result<Step, RenderError> {
+    steps::action_step(
+        DOWNLOAD_PLAN_NAME,
+        steps::DOWNLOAD_ARTIFACT_USES,
+        std::collections::BTreeMap::from([
+            ("name".to_owned(), PLAN_ARTIFACT_NAME.to_owned()),
+            ("path".to_owned(), PLAN_ARTIFACT_PATH.to_owned()),
+        ]),
+    )
+}
+
+/// Insert `Download plan` before the merge write-request, once.
+///
+/// Without the download the final job has no plan to merge. Without a
+/// final job there is nothing to close over. Re-running never dupes.
+/// # Errors
+pub(crate) fn insert_final_closure(
+    jobs: &mut std::collections::BTreeMap<String, Job>,
+) -> Result<(), RenderError> {
+    let Some(final_job) = jobs.get_mut(crate::render::FINAL_JOB_ID) else {
+        return Ok(());
+    };
+    let present = final_job
+        .steps
+        .iter()
+        .any(|step| step.name == DOWNLOAD_PLAN_NAME);
+    if !present {
+        let at = final_download_at(final_job);
+        final_job.steps.insert(at, download_plan_step()?);
+    }
+    Ok(())
+}
+
+/// Insert before the merge write-request, else before merge, else at end.
+fn final_download_at(job: &Job) -> usize {
+    let want = [steps::WRITE_REQUEST_OPERATION, steps::MERGE_OPERATION].join(":");
+    let at = |op: &str| {
+        job.steps.iter().position(
+            |step| matches!(&step.kind, StepKind::Internal { operation } if operation == op),
+        )
+    };
+    at(&want)
+        .or_else(|| at(steps::MERGE_OPERATION))
+        .unwrap_or(job.steps.len())
 }
 
 /// Insert freshness before and publish after the plan step, once each.

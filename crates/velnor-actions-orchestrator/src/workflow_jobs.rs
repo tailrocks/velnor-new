@@ -191,13 +191,7 @@ fn prepare_pinned_tools_step(
     catalog: &ToolCatalog,
     tools: Vec<PinnedTool>,
 ) -> Result<Step, OrchestratorError> {
-    let homes = ToolHomes::new(
-        "${{ runner.temp }}/velnor/rustup",
-        "${{ runner.temp }}/velnor/cargo",
-    )
-    .map_err(|err| OrchestratorError::Contract {
-        problem: err.to_string(),
-    })?;
+    let homes = ToolHomes::runner_temp();
     let prepare =
         PreparePinnedTools::new(tools, homes).map_err(|err| OrchestratorError::Contract {
             problem: err.to_string(),

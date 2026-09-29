@@ -269,6 +269,10 @@ fn w1_policy_carries_zizmor_after_machete() -> TestResult {
         "{policy}"
     );
     assert!(policy.contains("--no-online-audits"), "{policy}");
+    assert!(
+        policy.contains("zizmor --no-online-audits --config .zizmor.yml .github/workflows"),
+        "zizmor input+config:\n{policy}"
+    );
     Ok(())
 }
 
@@ -281,6 +285,18 @@ fn w1_plan_format_runs_fmt_check() -> TestResult {
         plan.contains("mise ") && plan.contains("cargo fmt --check"),
         "{plan}"
     );
+    let format_at = plan.find("- name: Format").ok_or("format step")?;
+    let tail = &plan[format_at..];
+    let block = &tail[..tail.len().min(900)];
+    for key in [
+        "MISE_RUSTUP_HOME:",
+        "MISE_CARGO_HOME:",
+        "RUSTUP_TOOLCHAIN: 1.98.1",
+        "MISE_AUTO_INSTALL:",
+        "MISE_EXEC_AUTO_INSTALL:",
+    ] {
+        assert!(block.contains(key), "format env misses {key}:\n{block}");
+    }
     let ignored =
         "schema = 1\n[workflow]\ndefault_branch = \"testmain\"\n[stacks]\nignore = [\"rust\"]\n";
     let (_repo, yaml, _alint) = preview_both(ignored)?;

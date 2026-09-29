@@ -93,13 +93,31 @@ pub(crate) fn deny_argv() -> Result<Vec<String>, OrchestratorError> {
     )
 }
 
+/// Policy zizmor scan target: generated workflows only.
+///
+/// Never the repo root: `fixtures/` carries intentional negative
+/// workflows that must fail adapter tests, not the policy audit.
+const ZIZMOR_POLICY_INPUT: &str = ".github/workflows";
+
+/// Policy zizmor config: the committed reviewed-tag exception file.
+///
+/// The config carries exactly the version-policy §2 `unpinned-uses`
+/// ignore; a missing file errors the scan instead of silently dropping
+/// the exception.
+const ZIZMOR_POLICY_CONFIG: &str = ".zizmor.yml";
+
 /// Fixed policy-job vector: offline zizmor audit through pinned Mise.
 pub(crate) fn zizmor_argv(catalog: &ToolCatalog) -> Result<Vec<String>, OrchestratorError> {
     let program = OsString::from("zizmor");
     let exec = PinnedToolExec::new(
         vec![PinnedTool::Zizmor],
         &program,
-        vec![OsString::from("--no-online-audits")],
+        vec![
+            OsString::from("--no-online-audits"),
+            OsString::from("--config"),
+            OsString::from(ZIZMOR_POLICY_CONFIG),
+            OsString::from(ZIZMOR_POLICY_INPUT),
+        ],
     )
     .map_err(|err| OrchestratorError::Contract {
         problem: err.to_string(),
@@ -327,11 +345,10 @@ mod tests {
     #[test]
     fn zizmor_vector_is_pinned_and_offline() {
         let argv = zizmor_argv(&ToolCatalog::pinned()).expect("zizmor argv");
-        assert_eq!(argv[0], "mise");
-        assert!(argv.iter().any(|arg| arg == "zizmor@1.30.1"), "{argv:?}");
-        assert!(
-            argv.iter().any(|arg| arg == "--no-online-audits"),
-            "{argv:?}"
+        assert_eq!(
+            argv.join(" "),
+            "mise --no-config --no-env --no-hooks exec zizmor@1.30.1 -- zizmor \
+             --no-online-audits --config .zizmor.yml .github/workflows"
         );
     }
 

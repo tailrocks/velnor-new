@@ -1,10 +1,28 @@
 //! Plan `Format` step: insertion between staging and freshness.
+use std::collections::BTreeMap;
+
+use velnor_actions_contract::StepKind;
 use velnor_actions_workflow_renderer::plan_format::{FORMAT_STEP_NAME, ensure_plan_format};
 use velnor_actions_workflow_renderer::{
     CHECK_GENERATED_NAME, RenderError, checkout_step, plan_step,
 };
 
 use super::impl_renderer_fixtures::*;
+
+/// Realistic toolchain env the orchestrator supplies for `Format`.
+fn format_env() -> BTreeMap<String, String> {
+    BTreeMap::from([
+        (
+            "MISE_RUSTUP_HOME".to_owned(),
+            "${{ runner.temp }}/velnor/rustup".to_owned(),
+        ),
+        (
+            "MISE_CARGO_HOME".to_owned(),
+            "${{ runner.temp }}/velnor/cargo".to_owned(),
+        ),
+        ("RUSTUP_TOOLCHAIN".to_owned(), "1.98.1".to_owned()),
+    ])
+}
 
 #[test]
 fn plan_format_inserts_between_staging_and_plan() -> Result<(), RenderError> {
@@ -22,6 +40,7 @@ fn plan_format_inserts_between_staging_and_plan() -> Result<(), RenderError> {
     ensure_plan_format(
         &mut jobs,
         mise_argv("rust@1.98.1", "cargo", &["fmt", "--check"]),
+        format_env(),
     )?;
     let names: Vec<&str> = jobs["velnor-plan"]
         .steps
@@ -32,6 +51,19 @@ fn plan_format_inserts_between_staging_and_plan() -> Result<(), RenderError> {
         names,
         ["Checkout", "Acquire Velnor", FORMAT_STEP_NAME, "Plan"]
     );
+    let format = jobs["velnor-plan"]
+        .steps
+        .iter()
+        .find(|step| step.name == FORMAT_STEP_NAME)
+        .ok_or_else(|| RenderError::InvalidWorkflow("format_missing".to_owned()))?;
+    let StepKind::Shell { env, .. } = &format.kind else {
+        return Err(RenderError::InvalidWorkflow(
+            "format_step_malformed".to_owned(),
+        ));
+    };
+    for (key, value) in format_env() {
+        assert_eq!(env.get(&key), Some(&value), "format env routes toolchain");
+    }
     let text = strict(&fixture_ir(jobs.into_iter().collect()), &fixture_ctx())?;
     let rendered = step_names(&text, "velnor-plan");
     let format_at = rendered.iter().position(|name| name == FORMAT_STEP_NAME);
@@ -55,8 +87,8 @@ fn plan_format_is_idempotent_and_validates_shape() -> Result<(), RenderError> {
     );
     let mut jobs = fixture_ir(vec![plan]).jobs;
     let argv = mise_argv("rust@1.98.1", "cargo", &["fmt", "--check"]);
-    ensure_plan_format(&mut jobs, argv.clone())?;
-    ensure_plan_format(&mut jobs, argv)?;
+    ensure_plan_format(&mut jobs, argv.clone(), format_env())?;
+    ensure_plan_format(&mut jobs, argv, format_env())?;
     let count = jobs["velnor-plan"]
         .steps
         .iter()
@@ -71,8 +103,12 @@ fn plan_format_is_idempotent_and_validates_shape() -> Result<(), RenderError> {
     );
     let mut fresh_jobs = fixture_ir(vec![fresh]).jobs;
     assert!(
-        ensure_plan_format(&mut fresh_jobs, vec!["cargo".to_owned(), "fmt".to_owned()],)
-            .is_err_and(|err| format!("{err:?}").contains("format_without_mise")),
+        ensure_plan_format(
+            &mut fresh_jobs,
+            vec!["cargo".to_owned(), "fmt".to_owned()],
+            format_env(),
+        )
+        .is_err_and(|err| format!("{err:?}").contains("format_without_mise")),
         "bare-cargo format must fail"
     );
     let lonely = job(
@@ -82,7 +118,11 @@ fn plan_format_is_idempotent_and_validates_shape() -> Result<(), RenderError> {
         vec![checkout_step(&checkout_pin())?],
     );
     let mut jobs = fixture_ir(vec![lonely]).jobs;
-    ensure_plan_format(&mut jobs, mise_argv("rust@1.98.1", "cargo", &["fmt"]))?;
+    ensure_plan_format(
+        &mut jobs,
+        mise_argv("rust@1.98.1", "cargo", &["fmt"]),
+        format_env(),
+    )?;
     Ok(())
 }
 
@@ -98,8 +138,12 @@ fn plan_format_rejects_non_shell_format() -> Result<(), RenderError> {
     );
     let mut jobs = fixture_ir(vec![plan]).jobs;
     assert!(
-        ensure_plan_format(&mut jobs, mise_argv("rust@1.98.1", "cargo", &["fmt"]),)
-            .is_err_and(|err| format!("{err:?}").contains("format_step_malformed")),
+        ensure_plan_format(
+            &mut jobs,
+            mise_argv("rust@1.98.1", "cargo", &["fmt"]),
+            format_env(),
+        )
+        .is_err_and(|err| format!("{err:?}").contains("format_step_malformed")),
         "action-shaped format must fail"
     );
     Ok(())

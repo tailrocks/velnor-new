@@ -149,7 +149,7 @@ impl RenderContext {
 
 /// Render one workflow document from IR under a policy gate.
 ///
-/// Inserts the mandated plan closure (freshness + publish) shared by
+/// Inserts the mandated closures (plan, request, task, final) shared by
 /// both entrypoints; use [`render_workflow_ir_strict`] for the full
 /// fail-closed pass (Mise setup plus staged-helper gates).
 ///
@@ -166,6 +166,7 @@ pub fn render_workflow_ir(
     closure::insert_plan_closure(&mut jobs, ctx)?;
     closure::insert_request_closure(&mut jobs)?;
     closure::insert_task_closure(&mut jobs)?;
+    closure::insert_final_closure(&mut jobs)?;
     render_merged(ir, &jobs, ctx)
 }
 
@@ -202,6 +203,7 @@ pub fn render_workflow_ir_strict(
     closure::insert_plan_closure(&mut jobs, ctx)?;
     closure::insert_request_closure(&mut jobs)?;
     closure::insert_task_closure(&mut jobs)?;
+    closure::insert_final_closure(&mut jobs)?;
     render_merged(ir, &jobs, ctx)
 }
 

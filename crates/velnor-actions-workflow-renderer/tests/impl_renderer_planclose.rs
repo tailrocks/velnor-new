@@ -1,9 +1,10 @@
 //! Plan closure: freshness gate, publish upload, anchor, legacy path.
 use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_workflow_renderer::{
-    ACQUIRE_NAME, CHECK_GENERATED_NAME, FRESHNESS_OUTDIR, MATRIX_REPORT_UPLOAD_NAME,
-    PUBLISH_PLAN_NAME, RUN_KEY_EXPR, RenderError, SETUP_MISE_NAME, checkout_step, freshness_step,
-    matrix_report_upload_step, plan_step, publish_plan_step, render_workflow_ir,
+    ACQUIRE_NAME, CHECK_GENERATED_NAME, DOWNLOAD_PLAN_NAME, FRESHNESS_OUTDIR,
+    MATRIX_REPORT_UPLOAD_NAME, MERGE_OPERATION, PUBLISH_PLAN_NAME, RUN_KEY_EXPR, RenderError,
+    SETUP_MISE_NAME, checkout_step, download_plan_step, freshness_step, matrix_report_upload_step,
+    merge_step, plan_step, publish_plan_step, render_workflow_ir, write_request_step,
 };
 
 use super::impl_renderer_fixtures::*;
@@ -137,6 +138,64 @@ fn matrix_report_upload_names_derive_from_run_and_leg() -> Result<(), RenderErro
     );
     assert!(with["path"].contains("matrix.matrix_key"));
     assert_eq!(with["if-no-files-found"].as_str(), "error");
+    Ok(())
+}
+
+#[test]
+fn download_plan_shape_mirrors_publish() -> Result<(), RenderError> {
+    let download = download_plan_step()?;
+    assert_eq!(download.name, DOWNLOAD_PLAN_NAME);
+    let velnor_actions_contract::StepKind::Action { uses, with } = &download.kind else {
+        panic!("download must be an action step");
+    };
+    assert!(uses.starts_with("actions/download-artifact@"));
+    let publish = publish_plan_step()?;
+    let velnor_actions_contract::StepKind::Action {
+        with: published, ..
+    } = &publish.kind
+    else {
+        panic!("publish must be an action step");
+    };
+    assert_eq!(with["name"], published["name"], "artifact name agrees");
+    assert_eq!(with["path"], published["path"], "artifact path agrees");
+    Ok(())
+}
+
+#[test]
+fn final_job_gets_download_before_write_request() -> Result<(), RenderError> {
+    let (id, mut final_job) = job(
+        "velnor-final",
+        "Velnor / Required",
+        Vec::new(),
+        vec![
+            acquire_fixture()?,
+            write_request_step(MERGE_OPERATION)?,
+            merge_step(),
+        ],
+    );
+    final_job.condition = Some("always()".to_owned());
+    let text = strict(&fixture_ir(vec![(id, final_job)]), &fixture_ctx())?;
+    let names = step_names(&text, "velnor-final");
+    let count = names
+        .iter()
+        .filter(|name| name.as_str() == DOWNLOAD_PLAN_NAME)
+        .count();
+    assert_eq!(count, 1, "exactly one download: {names:?}");
+    let download_at = names.iter().position(|name| name == DOWNLOAD_PLAN_NAME);
+    let write_at = names.iter().position(|name| name == "Write request");
+    let merge_at = names.iter().position(|name| name == "Merge reports");
+    assert!(
+        download_at.is_some_and(|at| Some(at) < write_at && Some(at) < merge_at)
+            && write_at.is_some_and(|at| Some(at) < merge_at),
+        "download precedes merge request: {names:?}"
+    );
+    let at = text.find(DOWNLOAD_PLAN_NAME).expect("download step");
+    let window = snip(&text, at, 500);
+    assert!(
+        !window.contains("if: always()"),
+        "job-level always governs:\n{window}"
+    );
+    assert!(window.contains("velnor-plan-"), "artifact name:\n{window}");
     Ok(())
 }
 

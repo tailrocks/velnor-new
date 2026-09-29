@@ -130,13 +130,7 @@ fn prepare_task_tools_step(
     catalog: &ToolCatalog,
     use_mbx: bool,
 ) -> Result<Step, OrchestratorError> {
-    let homes = ToolHomes::new(
-        "${{ runner.temp }}/velnor/rustup",
-        "${{ runner.temp }}/velnor/cargo",
-    )
-    .map_err(|err| OrchestratorError::Contract {
-        problem: err.to_string(),
-    })?;
+    let homes = ToolHomes::runner_temp();
     let prepare = PreparePinnedTools::new(task_driver_tools(use_mbx), homes).map_err(|err| {
         OrchestratorError::Contract {
             problem: err.to_string(),
@@ -220,8 +214,9 @@ pub(crate) fn maybe_task_cache_steps(
 /// stack configuration by default (workflow-contract §3 plan step 5).
 /// With an explicit fmt group the argv comes from it; otherwise it is
 /// synthesized from the first planned workspace profile (MBX route when
-/// the profile selects it). Without selected Rust work there is nothing
-/// to format.
+/// the profile selects it). The step carries the full `exec`
+/// verification env so it runs the prepared toolchain. Without selected
+/// Rust work there is nothing to format.
 ///
 /// # Errors
 ///
@@ -231,13 +226,14 @@ pub(crate) fn ensure_plan_format_step(
     discovery: &Discovery,
     catalog: &ToolCatalog,
 ) -> Result<(), OrchestratorError> {
+    let env = format_step_env(catalog)?;
     if let Some(fmt) = discovery
         .task_groups
         .iter()
         .find(|group| matches!(group.kind, TaskKind::Fmt))
     {
         let argv = crate::vectors::task_argv(fmt, catalog)?;
-        return plan_format::ensure_plan_format(jobs, argv).map_err(OrchestratorError::from);
+        return plan_format::ensure_plan_format(jobs, argv, env).map_err(OrchestratorError::from);
     }
     let (Some(workspace), Some(template)) =
         (discovery.workspaces.first(), discovery.task_groups.first())
@@ -255,7 +251,18 @@ pub(crate) fn ensure_plan_format_step(
         problem: err.to_string(),
     })?;
     let argv = crate::vectors::task_argv(&fmt, catalog)?;
-    plan_format::ensure_plan_format(jobs, argv).map_err(OrchestratorError::from)
+    plan_format::ensure_plan_format(jobs, argv, env).map_err(OrchestratorError::from)
+}
+
+/// Full `exec` verification env routing Format at the prepared toolchain.
+///
+/// Without the owned homes the step resolves whatever ambient toolchain
+/// the runner offers (a minimal image toolchain has no `rustfmt`); with
+/// them it runs the `Prepare pinned tools` toolchain, and a missing tool
+/// fails as a preparation error instead of installing.
+fn format_step_env(catalog: &ToolCatalog) -> Result<BTreeMap<String, String>, OrchestratorError> {
+    strings_of_env(&ToolHomes::runner_temp().exec_env(catalog))
+        .map_err(|problem| OrchestratorError::Contract { problem })
 }
 
 /// Gate MBX presence in the task job against its driver selection.

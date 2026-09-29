@@ -32,6 +32,18 @@ pub struct ToolHomes {
 }
 
 impl ToolHomes {
+    /// Velnor-owned tool homes under runner temp (expression form).
+    ///
+    /// Shell `$VAR` never expands in the `env:` position that carries
+    /// these paths; the `${{ runner.temp }}` expression form does.
+    #[must_use]
+    pub fn runner_temp() -> Self {
+        Self {
+            rustup_home: "${{ runner.temp }}/velnor/rustup".to_owned(),
+            cargo_home: "${{ runner.temp }}/velnor/cargo".to_owned(),
+        }
+    }
+
     /// Bind the two owned home values.
     ///
     /// # Errors
@@ -71,6 +83,21 @@ impl ToolHomes {
             &self.cargo_home,
             &catalog.rustup_toolchain(),
         )
+    }
+
+    /// Full env for a pinned `exec` verification step.
+    ///
+    /// Isolation quartet, install-disable pair, plus the owned-homes
+    /// triple: the step runs the prepared toolchain, and a missing tool
+    /// fails as a preparation error instead of installing.
+    #[must_use]
+    pub fn exec_env(&self, catalog: &ToolCatalog) -> Vec<(OsString, OsString)> {
+        let mut env = IsolatedCommand::env_overlay();
+        for (key, value) in NO_AUTO_INSTALL_ENV {
+            env.push((OsString::from(key), OsString::from(value)));
+        }
+        env.extend(self.env(catalog));
+        env
     }
 }
 
@@ -210,12 +237,7 @@ impl VerifyPreparedInputs {
     /// correspondence is pinned by test, not by construction comment.
     #[must_use]
     pub fn env(&self, catalog: &ToolCatalog) -> Vec<(OsString, OsString)> {
-        let mut env = IsolatedCommand::env_overlay();
-        for (key, value) in NO_AUTO_INSTALL_ENV {
-            env.push((OsString::from(key), OsString::from(value)));
-        }
-        env.extend(self.homes.env(catalog));
-        env
+        self.homes.exec_env(catalog)
     }
 
     /// Isolated command running this qualification under the owned homes.
