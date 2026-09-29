@@ -465,7 +465,6 @@ name = "velnor-actions-cli"
 version = "0.1.0"
 dependencies = [
  "clap",
- "velnor-actions-contract",
  "velnor-actions-orchestrator",
 ]
 
