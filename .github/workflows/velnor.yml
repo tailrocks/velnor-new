@@ -113,6 +113,8 @@ jobs:
           path: ${{ runner.temp }}/velnor/preseed-output
       - name: Stage helper (pre-seed trust-on-review)
         run: sh -c 'mkdir -p $RUNNER_TEMP/velnor/bin && cp target/release/velnor-actions $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0 && chmod +x $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0'
+      - name: Fetch Cargo sources
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked
       - name: Write request
         env:
           VELNOR_INTERNAL_OP: write-request-v1
