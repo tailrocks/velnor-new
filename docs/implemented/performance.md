@@ -1,6 +1,9 @@
 # V1 performance acceptance — local + CI-observable measurements
 
 Commit measured: `75f150a` (branch `docs/velnor-actions-spec`).
+Refreshed at `bdfffb9`: suite is now 1048 pass/0 fail (978 integration +
+70 src-unit, 21 binaries; nextest ci profile 1048/1048 in 10.77 s);
+cases 1–7 figures below were measured at `75f150a` except where noted.
 Machine: `arm64`, macOS 27.0 (26A428), Apple M5 Max.
 Toolchain: rustc/cargo 1.98.1, MBX 1.19.0 via mise cargo-wrapper shim,
 nextest 0.9.143 (mise.toml pins aqua nextest 0.9.146; PATH resolved 0.9.143).
@@ -113,9 +116,9 @@ Bounds from code: `.github/workflows/velnor.yml` matrix strategy
 `test-threads = "num-cpus"`; CI profile `--no-tests fail` via CLI.
 Local 2-lane run (separate `CARGO_TARGET_DIR`s, cold targets, warm MBX):
 
-- Concurrent: contract lane (88 tests) + cli lane (110 tests) → 7.86 s
-  wall, both exit 0. MBX lane1 `36 hits, 3 misses`, lane2 `70 hits, 9
-  misses`, `0 B` transferred.
+- Concurrent: contract lane (88 tests at measure time; 89 at `bdfffb9`)
+  + cli lane (110 tests) → 7.86 s wall, both exit 0. MBX lane1 `36
+  hits, 3 misses`, lane2 `70 hits, 9 misses`, `0 B` transferred.
 - Sequential same lanes, cold targets → 9.28 s wall.
 
 Speedup 1.18x: with a warm MBX store each lane's compile is seconds and
@@ -146,7 +149,22 @@ Mise-managed `rust-version` toolchain run of every package; plus
 
 ## CI runs (branch `docs/velnor-actions-spec`, `ubuntu-26.04`)
 
-Latest completed run 36540401062 (failure, 91 s created→updated):
+Green run 36569723507 at `bdfffb9` (success 47/47, 21 m 19 s
+created→updated —
+`https://github.com/tailrocks/velnor-new/actions/runs/36569723507`):
+
+| Job | Wall | Notes |
+| --- | --- | --- |
+| Queue (created → first job start) | ~4 s | fast pickup |
+| Velnor Plan | 81 s | 15 s tool prep + 48 s cold helper build; `Plan` step itself 1 s; `Check generated files` 1 s |
+| Velnor Task × 42 | 18 m 52 s span (12:42:17→13:01:09Z) | `max-parallel: 2` serialized, setup-dominated per entry |
+| Velnor Policy / Alint / Workflow Lint | ≤ 20 s each | deny+machete+zizmor / alint binary / actionlint |
+| Velnor / Required | 52 s | downloaded + validated 42/42 matrix reports; `final-report.json` `status: passed`, 0 failed |
+
+Full-matrix wall scales with entry count under the `max-parallel: 2`
+bound; per-entry cost is tool provisioning, not Velnor analysis (1 s).
+
+Earlier red run 36540401062 (failure, 91 s created→updated):
 
 | Job | Wall | Notes |
 | --- | --- | --- |
@@ -159,26 +177,23 @@ Latest completed run 36540401062 (failure, 91 s created→updated):
 | Velnor Task | skipped | plan never published |
 
 Outlier run 36528572043: 11 m 10 s, all-red matrix fan-out (see case 6).
-No green run exists on this branch, so every CI budget verdict below is
-UNMEASURED pending a green run on the named runner (and a merge-queue
-run for the merge path, which has no samples at all).
+A merge-queue run has no samples at all (merge path timing UNMEASURED).
 
 ## Budget verdicts
 
-- Provisioned structural preflight < 2 s: local `./target/debug/
-  velnor-actions plan` (warm, no compilation, analysis + report only)
-  → 0.87 s wall. Supports the budget on fast hardware; UNMEASURED on
-  the named hosted runner after tool provisioning.
+- Provisioned structural preflight < 2 s: PASSED. Local
+  `./target/debug/velnor-actions plan` (warm, analysis + report only)
+  → 0.87 s; hosted `Plan` step post-provisioning → 1 s (green run).
 - Warm leaf validation in seconds: compile 0.51 s (case 4) fits;
   whole-suite validation ~25 s does not — per-crate lanes (case 6,
   ~9 s for two small crates sequentially) are the conforming scope.
-  Hosted-runner value UNMEASURED.
-- 2-minute warm dogfood path on named hardware: local warm full runs
-  are 11 s (nextest) to 56 s (cold compile+test), so the budget fits
-  locally; the CI warm path is UNMEASURED (no green run; observed
-  red runs span 1.5–11 min and are setup-dominated).
-- Doctest gate: UNMEASURED — `cargo test --doc --workspace` fails
-  locally with pre-existing E0063 at
-  `crates/velnor-actions-orchestrator/src/config.rs:249` under
-  `--cfg doctest` (missing `compile_driver`/`test_runner` fields).
-  Not touched: outside this task's write allowance.
+  Hosted single-leg warm value UNMEASURED (legs provision tools per
+  entry; no isolated warm-leg sample).
+- Two-minute warm SMALL-FIXTURE path on a named runner: explicitly
+  UNPASSED — no small-fixture CI run exists. (Full-dogfood green run
+  is 21 m 19 s for 47 jobs; the contract budgets the small fixture,
+  not the full matrix.)
+- Doctest gate: green — `cargo test --doc --workspace --locked`
+  exits 0 (6 crates, 0 doctests; the former E0063 at
+  `orchestrator/src/config.rs` no longer reproduces). Vacuous: no
+  doctests exist yet.

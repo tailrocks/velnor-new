@@ -12,8 +12,9 @@ procedure (human steps). Nothing here invents automation that is not wired.
 - Renovate: proposes version changes only; never merges (see `renovate.json`).
 - `scripts/check-freshness.sh`: fail-closed gate. Human `ok:` lines plus
   machine-readable `row: {...}` JSON lines (`check`/`subject`/`status`/
-  `detail`). Checks: pin-match, `policy-header`, `exception-expiry`,
+  `detail`). Row-emitting checks: `policy-header`, `exception-expiry`,
   `standing-exception`, `lock-staleness`, `lock-mtime` (info only).
+  Pin comparisons are human-only `check(...)` lines, not `row()` output.
 
 ## Update set (VER-3.2 / VER-3.3)
 

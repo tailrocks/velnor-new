@@ -2,18 +2,20 @@
 
 Scope: every MUST/MUST NOT + acceptance criterion in `docs/proposed/` (13 contracts),
 grouped one row per clause cluster. Terse per RQ §5 (this doc ≤400 lines).
-HEAD: branch `docs/velnor-actions-spec` @ `f725a87` (unmerged; CI round 5 pending).
-Tree note: evidence ran on clean HEAD; concurrent uncommitted sibling edits in
-`crates/velnor-actions-contract/` (mid-edit; its test target currently fails to
-compile) arrived after verification and were left untouched.
+HEAD: branch `docs/velnor-actions-spec` @ `bdfffb9` (unmerged; dogfood CI
+green 47/47 — run `36569723507`, `https://github.com/tailrocks/velnor-new/actions/runs/36569723507`).
+Tree note: evidence ran on clean HEAD (only untracked root scratch
+`velnor-actions-v1-goal.md`, excluded from commits); clean-checkout
+re-verification at HEAD passed identically.
 
 Legend — crates: CT contract RS rust MI mise AL actionlint RD renderer OR
 orchestrator CLI cli. Paths abbreviated: `OR/src/x.rs` =
 `crates/velnor-actions-orchestrator/src/x.rs`; tests `OR/tests/f.rs:name`.
-Evidence: T = full `cargo test --workspace --locked` green 2026-09-29 (1016
-pass/0 fail: 949 integ + 67 unit); F = also individually filter-verified ≥1
-`... ok`; C = clippy contract pkg clean; Fmt = fmt clean; Deny = deny ok;
-R = file read @HEAD; CI5 = dogfood CI round 5 pending, no run link.
+Evidence: T = full `cargo test --workspace --locked` green 2026-09-29 (1048
+pass/0 fail: 978 integ + 70 unit, 21 binaries); F = also individually
+filter-verified ≥1 `... ok`; C = clippy all 7 pkgs clean; Fmt = fmt clean;
+Deny = deny ok; R = file read @HEAD; CI6 = dogfood CI green 47/47 on HEAD
+(run `36569723507`, link above).
 
 ## Gate 0 — repository contract
 
@@ -29,8 +31,8 @@ R = file read @HEAD; CI5 = dogfood CI round 5 pending, no run link.
 | RQ-5: 400/150/80 limits; docs 400; no baseline/ratchet/relabelling | 0 | — | `.alint.yml`, `clippy.toml` (R) | `CLI/tests/impl_repo_shape.rs:rq53_limits_discipline_no_baseline`, `CT/tests/impl_alint_negative.rs:rust_max_lines_fixture_exceeds_400`, `:lib_main_max_lines_fixture_exceeds_150` | T+F |
 | RQ-6: ws lint baseline (unsafe forbid, unwrap/expect/panic/todo/dbg deny); clippy per-pkg; fmt baseline | 0 | — | `Cargo.toml`, `clippy.toml`, `rustfmt.toml` (R) | `RS/tests/impl_adapter_wire_rust.rs:clippy_denies_warnings_after_all_targets`, `CLI/tests/impl_repo_policy.rs:clippy_toml_has_five_settings` | T+C+Fmt |
 | RQ-7: narrow deps, `[workspace.dependencies]` opt-in; deny+machete in CI; no wildcard/yanked; dup review | 0 | — | `Cargo.toml`, `deny.toml` (R) | `OR/tests/impl_wire_w1.rs:w1_policy_carries_zizmor_after_machete`, `RD/tests/impl_renderer_sweep.rs:policy_renders_deny_machete_zizmor_in_order` | T+Deny |
-| RQ-8/PLAN-G0: separate required `velnor-alint` job @ exactly `asamarts/alint@v0.16.1`; consumer-v1 MUST NOT emit/require | 0 | RD | `RD/src/support.rs`, `RD/src/render.rs` | `RD/tests/impl_renderer_tree.rs:velnor_policy_renders_alint_and_policy_only`, `OR/tests/zizmor_staging.rs:velnor_policy_blessed_tag_validates_green`, `:blessed_repo_wrong_tag_still_fails` | T+F; live job CI5 |
-| PLAN-G0: negative fixture rejects EACH alint rule; no 2nd structure linter; deny/actionlint/zizmor separate | 0 | CT | `fixtures/alint-negative/*`, `CT/tests/impl_alint_negative.rs` | `CT/tests/impl_alint_negative.rs:required_files_fixture_reports_exactly_one_missing`, `:crates_only_fixture_path_is_rejected` (+2 size rows above) | T; live-binary proof CI5 |
+| RQ-8/PLAN-G0: separate required `velnor-alint` job @ exactly `asamarts/alint@v0.16.1`; consumer-v1 MUST NOT emit/require | 0 | RD | `RD/src/support.rs`, `RD/src/render.rs` | `RD/tests/impl_renderer_tree.rs:velnor_policy_renders_alint_and_policy_only`, `OR/tests/zizmor_staging.rs:velnor_policy_blessed_tag_validates_green`, `:blessed_repo_wrong_tag_still_fails` | T+F; live job CI6 |
+| PLAN-G0: negative fixture rejects EACH alint rule; no 2nd structure linter; deny/actionlint/zizmor separate | 0 | CT | `fixtures/alint-negative/*`, `CT/tests/impl_alint_negative.rs` | `CT/tests/impl_alint_negative.rs:required_files_fixture_reports_exactly_one_missing`, `:crates_only_fixture_path_is_rejected` (+2 size rows above) | T; live-binary proof CI6 |
 | VER-0/RQ-2: version-policy §0 header + catalog mirror; stable channel; no nightly | 0 | MI | `.velnor/version-policy.toml`, `MI/src/catalog.rs` (R) | `CLI/tests/impl_repo_freshness.rs:boot34_mise_version_matches_catalog`, `CLI/tests/impl_repo_policy.rs:no_nightly_toolchain`, `CT/tests/impl_remed_policy.rs:ver_nightly_record_requires_dated_toolchain` | T+F |
 | AGENT accept: repo-policy/toolchain/workspace/tests/limits/lints/deps rows | 0 | — | `AGENTS.md` (R, 25 lines) | covered by rows above (alint, pins, ws-shape, suite, limits, clippy, deny) | T+C+Fmt+Deny |
 
@@ -60,13 +62,13 @@ R = file read @HEAD; CI5 = dogfood CI round 5 pending, no run link.
 |---|---|---|---|---|---|
 | CLI: staging outside repo; atomic dir replace; any failure→old tree byte-identical | 2 | OR | `OR/src/generate.rs`, `prepare.rs` | `OR/tests/impl_prepare_generate.rs:atomic_replace_failure_preserves_old_tree`, `OR/tests/impl_orch_gen.rs:orch_gen_preview_and_in_place_tree_hygiene` | T+F |
 | CLI: `--output-dir` fresh/empty/absent, outside repo, unique tmp; identical tree; repo untouched | 2 | OR | `OR/src/generate.rs` | `OR/tests/impl_prepare_generate.rs:generate_preview_matches_in_place_and_preserves_repo`, `:preview_refuses_unsafe_destinations`, `OR/tests/impl_orch_f2c.rs:preview_dirs_are_unique_tmp_roots` | T+F |
-| GEN/CLI: exact first-line version marker, no dates, every file | 2 | CT/RD | `CT/src/marker.rs`, `RD/src/marker.rs` | `RD/tests/impl_renderer_tree.rs:marker_is_exact_first_line_without_dates`, `CT/src/marker.rs:prefix_matches_rendered_first_line` | T+F; cited `_sample` name MISSING (0 match), corrected name F |
+| GEN/CLI: exact first-line version marker, no dates, every file | 2 | CT/RD | `CT/src/marker.rs`, `RD/src/marker.rs` | `RD/tests/impl_renderer_tree.rs:marker_is_exact_first_line_without_dates`, `CT/src/marker.rs:prefix_matches_rendered_first_line` (src-unit) | T+F; gate-2 record `_sample` citation corrected in this refresh |
 | GEN: deterministic bytes; stable key order; safe quoting; sorted paths/ids/steps; reject invalid | 2 | RD | `RD/src/render.rs`, `yaml.rs` | `RD/tests/impl_renderer_tree.rs:workflow_render_is_byte_stable`, `RD/tests/impl_renderer_yaml.rs:yaml_render_is_byte_stable`, `:yaml_quotes_only_when_required` | T+F |
 | GEN: fixed-argv steps only; no config shell/raw-YAML/arbitrary-uses; unvalidated IR rejected | 2 | RD | `RD/src/steps.rs`, `commands.rs` | `RD/tests/impl_renderer_steps.rs:shell_step_joins_fixed_argv_with_quoting`, `:uses_validation_rejects_moving_refs_and_forbidden_actions`, `RD/tests/impl_renderer_tree_policy.rs:renderer_rejects_unvalidated_steps_inside_ir` | T |
 | GEN: full `.github` replace (consumer exactly 2 sorted paths); preview byte-equal; cross-checkout stable | 2 | RD/OR | `RD/src/document.rs` | `RD/tests/impl_renderer_tree.rs:consumer_tree_has_exactly_two_sorted_paths`, `OR/tests/impl_orch_f2d.rs:plans_are_byte_deterministic`, `OR/tests/impl_gen_gates.rs:cross_checkout_determinism` | T+F |
 | WF/PLAN-G2: action allowlist, full-SHA pins, no `taiki-e/install-action`, no broad suppressions | 2 | AL/RD | `AL/src/actions.rs`, `RD/src/steps.rs` | `AL/tests/impl_actionlint_actions.rs:forbidden_installer_actions_rejected`, `RD/tests/impl_renderer_steps.rs:checkout_template_pins_action_without_credentials` | T |
 | WF: actionlint.yaml rendered by AL (no `-init-config`), deterministic+header; runner bridge until supported | 2 | AL | `AL/src/config.rs` | `AL/tests/impl_actionlint_lint.rs:bridge_label_shape_is_hosted_ubuntu`, `AL/tests/impl_actionlint_caps.rs:bridge_required_until_label_recognized` | T |
-| PLAN-G2: staged lint (actionlint/ShellCheck/zizmor) pre-replace; fixtures incl parallel/wait held rejected | 2 | AL/OR | `AL/src/tools.rs`, `OR/tests/zizmor_staging.rs` | `OR/tests/zizmor_staging.rs:velnor_policy_blessed_tag_validates_green`, `:blessed_repo_wrong_tag_still_fails`, `AL/tests/impl_actionlint_caps.rs:native_parallelism_unqualified_by_default` | T+F; live lint CI5 |
+| PLAN-G2: staged lint (actionlint/ShellCheck/zizmor) pre-replace; fixtures incl parallel/wait held rejected | 2 | AL/OR | `AL/src/tools.rs`, `OR/tests/zizmor_staging.rs` | `OR/tests/zizmor_staging.rs:velnor_policy_blessed_tag_validates_green`, `:blessed_repo_wrong_tag_still_fails`, `AL/tests/impl_actionlint_caps.rs:native_parallelism_unqualified_by_default` | T+F; live lint CI6 |
 | ARCH-5: plan.json schema-1 full shape; sorted; run_key; matrix bytes == GITHUB_OUTPUT | 2 | OR | `OR/src/internal_plan.rs`, `plan.rs` | `OR/tests/impl_orch_core.rs:orch_core_plan_matrix_outputs_byte_identical`, `CT/tests/impl_remed_contract.rs:gen_task_ids_preserved_through_plan_and_matrix`, `RD/tests/impl_renderer_f2close_matrix.rs:plan_outputs_publish_plan_id_run_key_and_matrix` | T |
 | ARCH-5: digest grammar (b3 canonical, path-independent; run-key NOT in digests; numeric IDs evidence-only) | 2 | CT | `CT/src/canonical.rs`, `cachekey.rs` | `CT/tests/impl_contract_ids.rs:canonical_json_sorts_keys_and_handles_floats`, `:identities_are_path_independent_and_artifact_id_is_derived_name`, `:digest_helpers_use_b3_prefix` | T |
 
@@ -97,7 +99,7 @@ R = file read @HEAD; CI5 = dogfood CI round 5 pending, no run link.
 | RQ-3: `.mise-version` exact; bootstrap from lock SHA; Mise installs/selects all later tools | 4 | MI | `MI/src/catalog.rs`, `build.rs` | `CLI/tests/impl_repo_freshness.rs:boot34_mise_version_matches_catalog`, `RD/tests/impl_adapter_wire_renderer.rs:bare_cargo_scan_rejects_unpinned_rust`, `MI/tests/impl_mise_negative.rs:gh_pinned_exec_is_exact` | T+F |
 | RQ-3: `mise run/exec` only; no abs-cargo/cargo-install/2nd cache; auto-install off post-prep | 4 | MI | `MI/src/command.rs` | `MI/tests/impl_mise_surface.rs:catalog_pins_ignore_project_selectors`, `OR/tests/impl_orch_f2e.rs:conflicting_tool_pins_recommend` | T |
 | RQ-3: preflight proves route per ws (MBX tool/ver/invocation vs exact cargo, no wrapper); per-lane target dirs | 4 | MI | `MI/src/preflight.rs` | `MI/tests/impl_mise_preflight.rs:cargo_proof_pins_exact_toolchain_without_wrapper`, `:mbx_proof_reports_tool_version_and_invocation`, `:unreportable_format_fails_without_guessing` | T |
-| TE: profile per ws (driver/runner/evidence); sticky overrides fail closed; RUSTUP_TOOLCHAIN exact; no repo writes | 4 | RS/MI | `RS/src/evidence.rs`, `MI/src/command.rs` | `RS/tests/impl_rust_f2a.rs:adapter_entry_metadata_carries_driver_runner_evidence`, `RS/tests/impl_rust_tasks.rs:carries_driver_runner_and_sorted_features` | T; transient→finding+exit-1 MISSING (no `transient` in crates/) |
+| TE: profile per ws (driver/runner/evidence); sticky overrides fail closed; RUSTUP_TOOLCHAIN exact; no repo writes | 4 | RS/MI/OR/CLI | `RS/src/evidence.rs`, `RS/src/profile.rs`, `OR/src/generate.rs`, `CLI/src/dispatch.rs` | `RS/tests/impl_rust_f2a.rs:adapter_entry_metadata_carries_driver_runner_evidence`, `RS/tests/impl_rust_tasks.rs:carries_driver_runner_and_sorted_features`, `OR/tests/impl_gapc.rs:transient_mbx_blocks_generate`, `:transient_nextest_blocks_generate`, `:transient_cargo_test_defaults_without_block` | T+F; transient→finding+exit-1 via `TRANSIENT_EVIDENCE_CODE` + generate fail-closed gate |
 | TOOL: tool files byte-identical across generate/replace (verified pre-replace) | 4 | OR | `OR/src/generate.rs` | `CLI/tests/impl_repo_freshness.rs:ver34_tool_files_untouched`, `OR/tests/impl_orch_intake.rs:intake_tool_inputs_untouched_and_reported` | T+F |
 | PAR: 6 resource classes; finite budgets; ≤10 bg steps/job; exclusions on shared dirs; cargo never MBX | 4 | OR/MI | `OR/src/schedule.rs` | `CT/tests/impl_remed_par.rs:par_resource_classes_cover_six_kinds`, `OR/tests/impl_orch_intake.rs:intake_default_budgets_are_conservative_and_reported` | T |
 
@@ -145,10 +147,10 @@ R = file read @HEAD; CI5 = dogfood CI round 5 pending, no run link.
 | VER: exact tool pins incl scheduled checks; exact direct deps + locked transitive; Renovate majors; git-deps approved-only | 8 | MI | `MI/src/catalog.rs`, `deny.toml` (R) | `MI/tests/impl_adapter_wire_mise.rs:freshness_requirements_enforced`, `OR/tests/impl_orch_f2c.rs:extension_identity_tracks_lock_digest` | T+Deny; updater run NEEDS-HUMAN |
 | RQ-9: per-pkg clippy/test/doctest/doc/msrv tasks; one matrix entry per crate; no ws-wide default; SHA+least-priv | 8 | MI/RD | `MI/src/steps.rs`, `RD/src/msrv.rs` | `RS/tests/impl_rust_tasks.rs:clippy_names_exactly_one_package`, `RS/tests/impl_adapter_wire_rust.rs:doc_gated_by_doctest_and_clippy`, `RD/tests/impl_renderer_msrv.rs:msrv_job_is_per_crate`, `:pr_render_rejects_msrv_steps`, `OR/tests/impl_wire_w1.rs:w1_pr_workflows_carry_no_msrv` | T |
 | RQ-9: risk-triggered mutants/fuzz/Miri/Loom/semver; coverage≠evidence; retries need reason | 8 | — | `docs/implemented/verification-triggers.md` (R) | MISSING in suite (manual-trigger procedure; no proptest/mutants/semver tests by design) | MISSING (procedure only) |
-| AGENT: 7 perf cases on named hw; budgets (2s preflight, warm-leaf seconds, 2min warm); queue split; no auto-baseline | 8 | — | — | MISSING — unmeasured per `README.md` (`OR/tests/impl_final_orch.rs:critical_path_reports_task_durations` exists, no budgets/timings) | MISSING |
-| AGENT: readiness = all rows green from clean checkout + negative suite rejects each bypass | 8 | — | — | MISSING — branch unmerged, CI5 pending, seed/human gates open | MISSING |
+| AGENT: 7 perf cases on named hw; budgets (2s preflight, warm-leaf seconds, 2min warm); queue split; no auto-baseline | 8 | — | `docs/implemented/performance.md` (R) | measured: 7 local cases + green-run timings + queue split; preflight fits locally (0.87 s) and hosted (1 s Plan step); 2-min warm SMALL-FIXTURE path explicitly UNPASSED (no small-fixture run) | partial: small-fixture budget unproved |
+| AGENT: readiness = all rows green from clean checkout + negative suite rejects each bypass | 8 | — | — | suite 1048/0 local + clean checkout + CI6 green 47/47 incl final gate; branch unmerged, seed/human gates open | partial: merge + NEEDS-HUMAN gates open |
 | AGENT: AGENTS.md short, points at contracts, requires regression tests, forbids suppression/deletion/hand-edits | 8 | — | `AGENTS.md` (R) | read @HEAD: short + commands + gate rules + spec pointers; suite green upholds test rule | T+R (partial: no literal delete-tests line) |
-| PLAN: gates in order; proofs labelled policy-on-source vs qualification-of-generator; record-in-same-PR rule | 8 | — | `docs/implemented/gate-*.md` (R) | gate records 0–8 present on branch; proof-vocabulary labels MISSING in records | partial: labels MISSING |
+| PLAN: gates in order; proofs labelled policy-on-source vs qualification-of-generator; record-in-same-PR rule | 8 | — | `docs/implemented/gate-*.md` (R) | gate records 0–8 present on branch, each carries a Proof-vocabulary line; records updated in this same PR | T+R |
 
 ## SHOULD deviations (per `deviations.md`)
 
@@ -159,12 +161,19 @@ until first risk trigger (revisit at V1 code-complete). RQ-2.12 `mise.lock`
 absent = specified state, no deviation. VER-0.1 header-only file = residual gap,
 not a deviation.
 
-## MISSING summary (7)
+## MISSING summary (4 honest residues)
 
-1. Cited `prefix_matches_rendered_first_line_sample`: 0 matches (stale name;
-   real `prefix_matches_rendered_first_line` F-verified). 2. TE transient-profile
-   finding + generate exit 1 (no `transient` in `crates/`). 3. `.velnor/generator.
-   lock` + seed/release/protection (BOOT NEEDS-HUMAN). 4. Release-gate wiring +
-   human update/security runs (VER NEEDS-HUMAN). 5. Risk-triggered tool runs
-   (manual procedure only). 6. Perf budgets/measurements. 7. CI round-5 run links
-   + proof-vocabulary labels.
+1. `.velnor/generator.lock` + seed v0 + release publication + branch
+   protection (BOOT NEEDS-HUMAN; mechanical halves tested, human halves
+   unproved). 2. Release-gate workflow wiring + human update/security runs
+   (VER NEEDS-HUMAN; `scripts/check-freshness.sh` exists, no release gate
+   calls it). 3. Risk-triggered tool runs — mutants/fuzz/Miri/Loom/semver
+   (manual procedure in `verification-triggers.md` only; no recorded runs).
+4. Two-minute warm SMALL-FIXTURE path on a named runner (no small-fixture
+   CI run exists; full-dogfood green run is 21 m 19 s for 47 jobs).
+
+Resolved in this refresh: stale `_sample` citation (gate-2 record
+corrected), TE transient finding + exit 1 (Gap C: `TRANSIENT_EVIDENCE_CODE`
++ `generate.rs` fail-closed gate + `impl_gapc` tests), perf measurements
+(`performance.md` + green-run timings), CI run links (run `36569723507`),
+proof-vocabulary labels (all gate records).
