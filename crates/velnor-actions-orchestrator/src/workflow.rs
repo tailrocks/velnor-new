@@ -32,7 +32,10 @@ pub const CHECKOUT_USES: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c18
 pub const DEFAULT_RUNNER_LABEL: &str = "ubuntu-26.04";
 
 /// Fixed request directory rendered for internal plan/merge steps.
-pub(crate) const REQUEST_DIR: &str = "$RUNNER_TEMP/velnor/request";
+///
+/// GitHub-expression spelling: shell `$VAR` never expands in the `env:`
+/// position that carries this path.
+pub(crate) const REQUEST_DIR: &str = "${{ runner.temp }}/velnor/request";
 
 /// Complete renderer input derived from one discovery.
 #[derive(Debug, Clone)]
@@ -72,7 +75,7 @@ pub(crate) fn build_workflow(
         WorkflowPolicy::ConsumerV1 => Some(consumer_acquire_step(label, &version, discovery)?),
         WorkflowPolicy::VelnorRepositoryV1 => None,
     };
-    jobs.insert(PLAN_JOB_ID.to_owned(), plan_job(label, acquire.clone()));
+    jobs.insert(PLAN_JOB_ID.to_owned(), plan_job(label, acquire.clone())?);
     let task_groups: Vec<&TaskGroup> = discovery
         .task_groups
         .iter()
@@ -87,7 +90,7 @@ pub(crate) fn build_workflow(
     jobs.insert(LINT_JOB_ID.to_owned(), lint_job(label, &catalog)?);
     jobs.insert(
         FINAL_JOB_ID.to_owned(),
-        final_job(label, !task_groups.is_empty(), acquire),
+        final_job(label, !task_groups.is_empty(), acquire)?,
     );
     let ir = WorkflowIr {
         name: config.workflow.name.clone(),

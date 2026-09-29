@@ -112,6 +112,11 @@ mod tests {
                 recommendations: Vec::new(),
             }],
             task_groups: Vec::new(),
+            tool_checks: Vec::new(),
+            clippy_memory: crate::clippy_groups::ClippyMemoryPlan {
+                groups: Vec::new(),
+                barriers: 0,
+            },
             recommendations: Vec::new(),
             consumer_manifest_json: None,
         }

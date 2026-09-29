@@ -9,7 +9,9 @@ use velnor_actions_workflow_renderer::render::{
     FINAL_CONDITION, FINAL_DISPLAY_NAME, MATRIX_MAX_PARALLEL_ENV, MATRIX_NEEDS_JOB_ENV,
     MATRIX_OUTPUT_ENV, PLAN_JOB_ID, TASK_JOB_ID,
 };
-use velnor_actions_workflow_renderer::steps::{merge_step, plan_step};
+use velnor_actions_workflow_renderer::steps::{
+    MERGE_OPERATION, PLAN_OPERATION, merge_step, plan_step, write_request_step,
+};
 
 use crate::OrchestratorError;
 use crate::workflow::CHECKOUT_USES;
@@ -29,18 +31,26 @@ const TASK_RUN_ENV: &str = "VELNOR_TASK_RUN";
 /// Producer output carrying the matrix JSON for `fromJSON`.
 const MATRIX_OUTPUT_NAME: &str = "matrix";
 
-/// Planner job: checkout, optional Acquire Velnor, plus the plan step.
-pub(crate) fn plan_job(label: &str, acquire: Option<Step>) -> Job {
+/// Planner job: checkout, optional Acquire Velnor, request, plan.
+///
+/// The write-request step materializes the event request file the plan
+/// step's private gate requires; without it the helper falls through to
+/// CLI usage and the job (plus its `Publish plan` upload) fails.
+/// # Errors
+///
+/// Returns a contract error when the typed request step is rejected.
+pub(crate) fn plan_job(label: &str, acquire: Option<Step>) -> Result<Job, OrchestratorError> {
     let mut steps = vec![checkout_action()];
     steps.extend(acquire);
+    steps.push(request_step(PLAN_OPERATION)?);
     steps.push(plan_step());
-    Job {
+    Ok(Job {
         display_name: "Velnor Plan".to_owned(),
         runs_on: label.to_owned(),
         needs: Vec::new(),
         condition: None,
         steps,
-    }
+    })
 }
 
 /// Matrix consumer job: checkout plus the fixed matrix-entry template.
@@ -98,7 +108,16 @@ pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, Orches
 /// those policy jobs exist. IR validation requires `needs` to name IR jobs
 /// only, so this builds the IR subset and the renderer appends the merged
 /// support IDs post-merge (see `support.rs`); the release job never gates.
-pub(crate) fn final_job(label: &str, with_task: bool, acquire: Option<Step>) -> Job {
+/// The write-request step materializes the event request file the merge
+/// step's private gate requires.
+/// # Errors
+///
+/// Returns a contract error when the typed request step is rejected.
+pub(crate) fn final_job(
+    label: &str,
+    with_task: bool,
+    acquire: Option<Step>,
+) -> Result<Job, OrchestratorError> {
     let mut needs = vec![PLAN_JOB_ID.to_owned()];
     if with_task {
         needs.push(TASK_JOB_ID.to_owned());
@@ -106,14 +125,22 @@ pub(crate) fn final_job(label: &str, with_task: bool, acquire: Option<Step>) -> 
     needs.push(LINT_JOB_ID.to_owned());
     let mut steps = Vec::new();
     steps.extend(acquire);
+    steps.push(request_step(MERGE_OPERATION)?);
     steps.push(merge_step());
-    Job {
+    Ok(Job {
         display_name: FINAL_DISPLAY_NAME.to_owned(),
         runs_on: label.to_owned(),
         needs,
         condition: Some(FINAL_CONDITION.to_owned()),
         steps,
-    }
+    })
+}
+
+/// Typed write-request step for one internal target, mapped to contract errors.
+fn request_step(target: &str) -> Result<Step, OrchestratorError> {
+    write_request_step(target).map_err(|err| OrchestratorError::Contract {
+        problem: err.to_string(),
+    })
 }
 
 /// Pinned checkout action without persisted credentials.
@@ -167,4 +194,65 @@ fn strings_of(argv: Vec<OsString>) -> Result<Vec<String>, String> {
         }
     }
     Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Internal operation of one step, if any.
+    fn operation_of(step: &Step) -> Option<&str> {
+        match &step.kind {
+            StepKind::Internal { operation } => Some(operation),
+            StepKind::Action { .. } | StepKind::Shell { .. } => None,
+        }
+    }
+
+    #[test]
+    fn plan_job_writes_request_before_plan() {
+        for acquire in [None, Some(checkout_action())] {
+            let job = plan_job("ubuntu-26.04", acquire).expect("plan job");
+            let names: Vec<&str> = job.steps.iter().map(|step| step.name.as_str()).collect();
+            let write_at = names.iter().position(|name| *name == "Write request");
+            let plan_at = names.iter().position(|name| *name == "Plan");
+            assert!(
+                write_at.is_some_and(|write| Some(write) < plan_at),
+                "request must precede plan: {names:?}"
+            );
+            let write = &job.steps[write_at.expect("write request step")];
+            assert_eq!(
+                operation_of(write),
+                Some("write-request-v1:plan-v1"),
+                "request must target plan"
+            );
+            assert_eq!(
+                operation_of(&job.steps[plan_at.expect("plan step")]),
+                Some(PLAN_OPERATION)
+            );
+        }
+    }
+
+    #[test]
+    fn final_job_writes_request_before_merge() {
+        for acquire in [None, Some(checkout_action())] {
+            let job = final_job("ubuntu-26.04", true, acquire).expect("final job");
+            let names: Vec<&str> = job.steps.iter().map(|step| step.name.as_str()).collect();
+            let write_at = names.iter().position(|name| *name == "Write request");
+            let merge_at = names.iter().position(|name| *name == "Merge reports");
+            assert!(
+                write_at.is_some_and(|write| Some(write) < merge_at),
+                "request must precede merge: {names:?}"
+            );
+            let write = &job.steps[write_at.expect("write request step")];
+            assert_eq!(
+                operation_of(write),
+                Some("write-request-v1:merge-v1"),
+                "request must target merge"
+            );
+            assert_eq!(
+                operation_of(&job.steps[merge_at.expect("merge step")]),
+                Some(MERGE_OPERATION)
+            );
+        }
+    }
 }

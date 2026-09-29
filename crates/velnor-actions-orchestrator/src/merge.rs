@@ -61,6 +61,9 @@ pub(crate) struct BaselineTaskEntry {
     pub(crate) proof_run_id: u64,
     /// Carrying run that revalidated the proof.
     pub(crate) observed_run_id: u64,
+    /// External-data freshness (required for advisory kinds).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) external_data: Option<crate::external_data::ExternalDataFreshness>,
 }
 
 /// Trusted `baseline.json`: minimum shape plus artifact binding.

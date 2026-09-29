@@ -174,6 +174,8 @@ fn workflow_section(out: &mut String, prep: &GenerationPreparation) {
     } else {
         push(out, "  Parallel: single job; no matrix fan-out");
     }
+    critical_path_lines(out, prep);
+    clippy_lines(out, prep);
     push(out, &format!("  Cache layers: {}", cache_layers(prep)));
     push(out, &format!("  Actionlint: {ACTIONLINT_VERSION} pinned"));
     push(out, &format!("  Action pins: {CHECKOUT_USES}"));
@@ -236,6 +238,28 @@ fn present_kinds(groups: &[TaskGroup]) -> Vec<&'static str> {
         }
     }
     kinds
+}
+
+/// Structural critical path over the derived task groups.
+fn critical_path_lines(out: &mut String, prep: &GenerationPreparation) {
+    let path = crate::critical_path::critical_path_structural(&prep.discovery.task_groups);
+    push(
+        out,
+        &format!("  {}", crate::critical_path::critical_path_line(&path)),
+    );
+}
+
+/// Barrier-separated Clippy memory schedule.
+fn clippy_lines(out: &mut String, prep: &GenerationPreparation) {
+    let memory = &prep.discovery.clippy_memory;
+    push(
+        out,
+        &format!(
+            "  Clippy memory groups: {}; barriers: {}",
+            memory.groups.len(),
+            memory.barriers
+        ),
+    );
 }
 
 /// Cache layers derived from selected drivers.

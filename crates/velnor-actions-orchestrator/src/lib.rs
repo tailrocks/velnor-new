@@ -6,14 +6,18 @@
 //! Mise, vectors to [`vectors`] via Mise requests, text to the renderer.
 
 mod attach;
+mod clippy_groups;
 mod config;
 mod cover;
 mod cover_baseline;
 mod cover_identity;
+mod critical_path;
 mod discover;
 mod discover_index;
 mod error;
 mod evidence;
+mod extension_schemas;
+mod external_data;
 mod generate;
 mod init;
 mod internal;
@@ -23,10 +27,13 @@ mod merge;
 mod pins;
 mod plan;
 mod prepare;
+mod recommendations;
 mod root;
 mod select;
 mod select_affected;
 mod select_edges;
+mod toolcheck;
+mod toolfindings;
 mod validate;
 mod validate_shell;
 mod validate_zizmor;
@@ -35,8 +42,21 @@ mod vectors;
 mod workflow;
 mod workflow_jobs;
 
+pub use clippy_groups::{ClippyMemoryPlan, clippy_memory_groups};
+pub use critical_path::{
+    CriticalPath, critical_path, critical_path_for_groups, critical_path_line,
+    critical_path_structural, render_critical_path,
+};
 pub use discover::{Discovery, PlannedWorkspace};
 pub use error::OrchestratorError;
+pub use extension_schemas::{
+    coverage_schema_known, extension_schema_for_stack, reuse_eligible_for_schema,
+    task_kind_segment, task_stack_segment,
+};
+pub use external_data::{
+    DEFAULT_EXTERNAL_DATA_MAX_AGE_SECS, EXTERNAL_DATA_CHECK_KIND, ExternalDataFreshness,
+    external_data_kind, may_skip_external_data,
+};
 pub use generate::{GenerateOptions, GenerateReport, ToolSnapshot, generate, render_staged_tree};
 pub use init::{InitReport, init_config};
 pub use internal::{
@@ -47,6 +67,10 @@ pub use merge::merge_internal;
 pub use plan::{plan_text, plan_text_checked};
 pub use prepare::{GenerationPreparation, prepare};
 pub use root::resolve_root;
+pub use toolcheck::{TOOL_INPUT_PATHS, ToolInputCheck, ToolParse, check_tool_inputs};
+pub use toolfindings::{
+    CONFLICTING_TOOL_VALUES, UNSUPPORTED_TOOL_VALUE, finding_line, tool_check_lines, tool_conflicts,
+};
 pub use validators::{
     GitArgError, validate_diff_args, validate_diff_rev, validate_git_args, validate_rev,
     validate_select_diff_args, validate_select_show_args, validate_show_args, validate_show_path,

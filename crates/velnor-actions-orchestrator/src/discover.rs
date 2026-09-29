@@ -15,8 +15,11 @@ use velnor_actions_rust::{
 };
 
 use crate::OrchestratorError;
+use crate::clippy_groups::{ClippyMemoryPlan, clippy_memory_groups};
 use crate::discover_index::build_file_index;
 use crate::evidence::profile_for_workspace;
+use crate::recommendations::collect_recommendations;
+use crate::toolcheck::{ToolInputCheck, check_tool_inputs};
 
 /// One workspace with its inventory, profile, and recommendations.
 #[derive(Debug, Clone)]
@@ -42,6 +45,10 @@ pub struct Discovery {
     pub workspaces: Vec<PlannedWorkspace>,
     /// Derived task groups sorted by task ID.
     pub task_groups: Vec<TaskGroup>,
+    /// Tool-input checks: presence, parse, values, digests.
+    pub tool_checks: Vec<ToolInputCheck>,
+    /// Barrier-separated Clippy memory schedule.
+    pub clippy_memory: ClippyMemoryPlan,
     /// Sorted unique recommendations.
     pub recommendations: Vec<String>,
     /// Debug-only release-manifest text; always `None` in release builds.
@@ -77,11 +84,15 @@ pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, 
     })?;
     let workspaces = plan_workspaces(root, &index, &statuses, inventories)?;
     let task_groups = derive_all(config, &index, &workspaces)?;
-    let recommendations = collect_recommendations(&index, &workspaces);
+    let tool_checks = check_tool_inputs(root);
+    let clippy_memory = clippy_memory_groups(&task_groups);
+    let recommendations = collect_recommendations(&index, &workspaces, &tool_checks);
     Ok(Discovery {
         statuses,
         workspaces,
         task_groups,
+        tool_checks,
+        clippy_memory,
         recommendations,
         consumer_manifest_json: debug_manifest_fixture(root),
     })
@@ -362,39 +373,4 @@ fn workspace_manifest(workspace_root: &str) -> String {
     } else {
         format!("{workspace_root}/Cargo.toml")
     }
-}
-
-/// Collect profile plus tool-file recommendations, sorted and unique.
-fn collect_recommendations(index: &FileIndex, workspaces: &[PlannedWorkspace]) -> Vec<String> {
-    let mut out = BTreeSet::new();
-    for workspace in workspaces {
-        for recommendation in &workspace.recommendations {
-            out.insert(format!(
-                "{}: {}",
-                recommendation.code, recommendation.message
-            ));
-        }
-    }
-    if index.contains("mise.toml") || index.contains(".mise.toml") {
-        out.insert("mise.toml is read-only input; Velnor never modifies it".to_owned());
-    } else {
-        out.insert("mise.toml not found; Velnor will use its pinned tools".to_owned());
-    }
-    if index.contains("mise.lock") {
-        out.insert("mise.lock is read-only input; Velnor never modifies it".to_owned());
-    } else {
-        out.insert("mise.lock not found; Velnor will not create or refresh it".to_owned());
-    }
-    if index.contains("rust-toolchain.toml") {
-        out.insert("rust-toolchain.toml is read-only input; Velnor never modifies it".to_owned());
-    } else {
-        out.insert("rust-toolchain.toml not found; Velnor will not create it".to_owned());
-    }
-    if index.contains(".github/CODEOWNERS") {
-        out.insert(
-            "CODEOWNERS inside .github is removed on generate; keep it at the repository root or under docs/"
-                .to_owned(),
-        );
-    }
-    out.into_iter().collect()
 }

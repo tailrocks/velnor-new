@@ -162,10 +162,13 @@ mod tests {
             actions: Vec::new(),
         };
         let mut ir = bare_ir(BTreeMap::from([
-            ("velnor-plan".to_owned(), plan_job("ubuntu-26.04", None)),
+            (
+                "velnor-plan".to_owned(),
+                plan_job("ubuntu-26.04", None).expect("plan job"),
+            ),
             (
                 "velnor-final".to_owned(),
-                final_job("ubuntu-26.04", false, None),
+                final_job("ubuntu-26.04", false, None).expect("final job"),
             ),
         ]));
         assert!(attach_lock_acquire(&mut ir, &lock, "ubuntu-26.04", "0.1.0").is_ok());
@@ -174,13 +177,16 @@ mod tests {
             .iter()
             .map(|s| s.name.as_str())
             .collect();
-        assert_eq!(names, ["Checkout", "Acquire Velnor", "Plan"]);
+        assert_eq!(
+            names,
+            ["Checkout", "Acquire Velnor", "Write request", "Plan"]
+        );
         let names: Vec<&str> = ir.jobs["velnor-final"]
             .steps
             .iter()
             .map(|s| s.name.as_str())
             .collect();
-        assert_eq!(names, ["Acquire Velnor", "Merge reports"]);
+        assert_eq!(names, ["Acquire Velnor", "Write request", "Merge reports"]);
         assert!(attach_lock_acquire(&mut ir, &lock, "ubuntu-26.04-arm", "0.1.0").is_err());
     }
 
@@ -192,11 +198,14 @@ mod tests {
         };
         let mut plan = WorkflowPlan {
             ir: bare_ir(BTreeMap::from([
-                ("velnor-plan".to_owned(), plan_job("ubuntu-26.04", None)),
+                (
+                    "velnor-plan".to_owned(),
+                    plan_job("ubuntu-26.04", None).expect("plan job"),
+                ),
                 ("velnor-task".to_owned(), task_job("ubuntu-26.04", 2)),
                 (
                     "velnor-final".to_owned(),
-                    final_job("ubuntu-26.04", true, None),
+                    final_job("ubuntu-26.04", true, None).expect("final job"),
                 ),
             ])),
             support: None,
@@ -228,6 +237,7 @@ mod tests {
                 "Write helper manifest (pre-seed trust-on-review)",
                 "Upload helper (pre-seed trust-on-review)",
                 PRESEED_STAGE_NAME,
+                "Write request",
                 "Plan",
             ]
         );

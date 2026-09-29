@@ -239,7 +239,7 @@ fn render_gate_roundtrip_accepts_plan() -> TestResult {
         generator_version: "0.1.0".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
         staged_binary: "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0".to_owned(),
-        request_dir: "$RUNNER_TEMP/velnor/request".to_owned(),
+        request_dir: "${{ runner.temp }}/velnor/request".to_owned(),
         checkout_uses: pin,
         policy_commands: Vec::new(),
         candidate: None,
@@ -248,14 +248,14 @@ fn render_gate_roundtrip_accepts_plan() -> TestResult {
     let text = render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx)?;
     let pairs = internal_env_pairs(&text);
     assert_eq!(pairs.len(), 2, "{text}");
-    let request_template = "$RUNNER_TEMP/velnor/request/plan-v1-request.json";
+    let request_template = "${{ runner.temp }}/velnor/request/plan-v1-request.json";
     assert!(pairs.contains(&("write-request-v1".to_owned(), request_template.to_owned())));
     assert!(pairs.contains(&("plan-v1".to_owned(), request_template.to_owned())));
 
     let dir = TempDir::new()?;
     let head = "f".repeat(40);
     let payload = format!("{{\"before\":null,\"after\":\"{head}\"}}");
-    let file = request_template.replace("$RUNNER_TEMP", &dir.path().display().to_string());
+    let file = request_template.replace("${{ runner.temp }}", &dir.path().display().to_string());
     write_request_parts(Path::new(&file), "push", &payload, Some(&head))?;
     let value: serde_json::Value = serde_json::from_str(&fs::read_to_string(&file)?)?;
     assert_eq!(value["op"], "plan-v1");

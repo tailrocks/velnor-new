@@ -46,7 +46,7 @@ fn ctx() -> RenderContext {
         generator_version: "0.1.0".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
         staged_binary: "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0".to_owned(),
-        request_dir: "$RUNNER_TEMP/velnor/r".to_owned(),
+        request_dir: "${{ runner.temp }}/velnor/r".to_owned(),
         checkout_uses: format!("actions/checkout@{:040x}", 0),
         policy_commands: Vec::new(),
         candidate: None,

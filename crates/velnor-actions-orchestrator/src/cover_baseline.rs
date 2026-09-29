@@ -48,8 +48,13 @@ pub(crate) fn validate_manifest(
             && validate_digest(&task.task_digest).is_ok()
             && validate_digest(&task.input_digest).is_ok();
         let runs_ok = task.proof_run_id > 0 && task.observed_run_id > 0;
+        let fresh_ok = task
+            .external_data
+            .as_ref()
+            .is_none_or(|proof| proof.validate().is_ok());
         reject(ids_ok, "bad_task_identity")?;
         reject(runs_ok, "bad_proof_identity")?;
+        reject(fresh_ok, "bad_external_data")?;
     }
     Ok(())
 }
