@@ -9,8 +9,12 @@ mod impl_contract_reports;
 mod impl_contract_targets;
 #[path = "impl_remed_cache.rs"]
 mod impl_remed_cache;
+#[path = "impl_remed_cache_b.rs"]
+mod impl_remed_cache_b;
 #[path = "impl_remed_contract.rs"]
 mod impl_remed_contract;
+#[path = "impl_remed_contract_b.rs"]
+mod impl_remed_contract_b;
 #[path = "impl_remed_par.rs"]
 mod impl_remed_par;
 #[path = "impl_remed_policy.rs"]

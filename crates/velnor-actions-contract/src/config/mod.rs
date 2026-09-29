@@ -10,7 +10,9 @@ mod workflow;
 
 pub use actions::{ALINT_ACTION_KEY, ActionPinOverride, ActionsConfig, OVERRIDABLE_ACTIONS};
 pub use discovery::DiscoveryConfig;
-pub use resources::{ResourcesConfig, TestShardingConfig};
+pub use resources::{
+    ResourcesConfig, ShardTimingEvidence, TestShardingConfig, validate_shard_changes_need_evidence,
+};
 pub use stacks::{RustConfiguration, RustStackConfig, StacksConfig};
 pub use workflow::{
     GeneratorValidation, LATEST_RUNNER_LABEL, PolicyJob, RUNNER_LABEL_CATALOG, RunnerSelection,

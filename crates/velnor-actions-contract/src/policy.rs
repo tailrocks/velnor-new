@@ -18,6 +18,8 @@ pub struct VersionPolicy {
     pub schema: u32,
     /// Language channel; must be `stable`.
     pub channel: String,
+    /// Release registry the checker compares against.
+    pub registry: String,
     /// Freshness check interval in hours; weakening (larger) rejected.
     pub check_interval_hours: u32,
     /// Maximum exception age in days; weakening (larger) rejected.
@@ -139,6 +141,13 @@ impl VersionPolicy {
         }
         if self.channel != Self::CHANNEL {
             return Err(ContractError::config(file, "channel", "must_be_stable"));
+        }
+        if !is_registry_url(&self.registry) {
+            return Err(ContractError::config(
+                file,
+                "registry",
+                "malformed_registry",
+            ));
         }
         if self.check_interval_hours == 0 || self.check_interval_hours > Self::CHECK_INTERVAL_HOURS
         {
@@ -320,6 +329,13 @@ impl FreshnessEntry {
         }
         Ok(())
     }
+}
+
+/// True for an `https://` registry URL without whitespace.
+fn is_registry_url(registry: &str) -> bool {
+    registry.starts_with("https://")
+        && registry.len() > "https://".len()
+        && !registry.chars().any(char::is_whitespace)
 }
 
 /// Days from `start` to `end` (`YYYY-MM-DD`); `None` when malformed.

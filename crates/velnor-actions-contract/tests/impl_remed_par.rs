@@ -1,11 +1,12 @@
 //! Remediation cases: PAR audit rows.
-use crate::impl_contract_ids::sample_identity;
+use crate::impl_contract_ids::{MANIFEST, TASK, sample_identity};
 use crate::impl_remed_contract::{sample_plan, valid_config};
 use std::collections::BTreeMap;
 use velnor_actions_contract::{
-    ArchiveInputs, CachePolicy, ContractError, EdgeKind, ResourceClass, ResourceDemand, TaskEdge,
-    TaskGraph, TaskNode, archive_id, artifact_id_for_baseline, digest_b3, input_digest,
-    run_key_for_ci, validate_artifact_id,
+    ArchiveInputs, CachePolicy, ContractError, EdgeKind, ManifestTaskProof, ResourceClass,
+    ResourceDemand, ShardTimingEvidence, TaskEdge, TaskGraph, TaskNode, archive_id,
+    artifact_id_for_baseline, digest_b3, input_digest, run_key_for_ci, validate_artifact_id,
+    validate_shard_changes_need_evidence,
 };
 
 #[test]
@@ -233,7 +234,7 @@ fn par_resource_classes_cover_six_kinds() {
 }
 
 #[test]
-fn par_archive_identity_covers_nine_inputs() -> Result<(), ContractError> {
+fn par_archive_identity_covers_eleven_inputs() -> Result<(), ContractError> {
     let inputs = ArchiveInputs {
         source_digest: digest_b3(b"source"),
         package: "demo".to_owned(),
@@ -244,6 +245,8 @@ fn par_archive_identity_covers_nine_inputs() -> Result<(), ContractError> {
         runtime: "glibc-2.39".to_owned(),
         test_runner: "cargo-nextest@0.9.96".to_owned(),
         format: "tar.zst".to_owned(),
+        platform_id: digest_b3(b"platform"),
+        config_digest: digest_b3(b"config"),
     };
     let keys: Vec<String> = serde_json::to_value(&inputs)
         .expect("value")
@@ -252,17 +255,26 @@ fn par_archive_identity_covers_nine_inputs() -> Result<(), ContractError> {
         .keys()
         .cloned()
         .collect();
-    assert_eq!(keys.len(), 9);
+    assert_eq!(keys.len(), 11);
     let id = archive_id(&inputs)?;
     assert_eq!(id, archive_id(&inputs)?);
     let mut changed = inputs.clone();
     changed.test_runner = "cargo-nextest@0.9.97".to_owned();
     assert_ne!(archive_id(&changed)?, id);
+    let mut platform = inputs.clone();
+    platform.platform_id = digest_b3(b"other-platform");
+    assert_ne!(archive_id(&platform)?, id);
+    let mut config = inputs.clone();
+    config.config_digest = digest_b3(b"other-config");
+    assert_ne!(archive_id(&config)?, id);
     let mut unsorted = inputs.clone();
     unsorted.features = vec!["b".to_owned(), "a".to_owned()];
     assert!(archive_id(&unsorted).is_err());
-    let mut bad = inputs;
+    let mut bad = inputs.clone();
     bad.toolchain_id = "nope".to_owned();
+    assert!(archive_id(&bad).is_err());
+    let mut bad = inputs;
+    bad.platform_id = "nope".to_owned();
     assert!(archive_id(&bad).is_err());
     Ok(())
 }
@@ -280,4 +292,86 @@ fn par_shards_capped_by_test_budget() {
     let mut config = valid_config();
     config.test_sharding.by_manifest = BTreeMap::from([("crates/large/Cargo.toml".to_owned(), 2)]);
     assert_eq!(config.validate("cfg"), Ok(()));
+}
+
+#[test]
+fn par_shard_changes_require_timing_evidence() {
+    let previous = valid_config().test_sharding;
+    let mut next = previous.clone();
+    next.default_shards = 2;
+    let err = validate_shard_changes_need_evidence(&previous, &next, &[], "cfg")
+        .expect_err("default change needs evidence");
+    assert!(
+        err.to_string()
+            .contains("shard_change_without_timing_evidence")
+    );
+    let default_evidence = ShardTimingEvidence {
+        manifest: None,
+        timing_digest: digest_b3(b"timing"),
+    };
+    assert_eq!(
+        validate_shard_changes_need_evidence(&previous, &next, &[default_evidence], "cfg"),
+        Ok(())
+    );
+    let mut scoped = previous.clone();
+    scoped.by_manifest = BTreeMap::from([(MANIFEST.to_owned(), 2)]);
+    let err = validate_shard_changes_need_evidence(&previous, &scoped, &[], "cfg")
+        .expect_err("manifest change needs evidence");
+    assert!(
+        err.to_string()
+            .contains("shard_change_without_timing_evidence")
+    );
+    let scoped_evidence = ShardTimingEvidence {
+        manifest: Some(MANIFEST.to_owned()),
+        timing_digest: digest_b3(b"timing"),
+    };
+    assert_eq!(
+        validate_shard_changes_need_evidence(&previous, &scoped, &[scoped_evidence], "cfg"),
+        Ok(())
+    );
+    let mut bad = previous.clone();
+    bad.default_shards = 2;
+    let wrong_scope = ShardTimingEvidence {
+        manifest: Some(MANIFEST.to_owned()),
+        timing_digest: digest_b3(b"timing"),
+    };
+    assert!(validate_shard_changes_need_evidence(&previous, &bad, &[wrong_scope], "cfg").is_err());
+    assert_eq!(
+        validate_shard_changes_need_evidence(&previous, &previous, &[], "cfg"),
+        Ok(())
+    );
+}
+
+#[test]
+fn par_manifest_task_proof_binds_identities() {
+    let proof = ManifestTaskProof {
+        task_id: TASK.to_owned(),
+        task_digest: digest_b3(b"task"),
+        input_digest: digest_b3(b"inputs"),
+        graph_digest: digest_b3(b"graph"),
+        toolchain_id: digest_b3(b"toolchain"),
+        mbx_digest: digest_b3(b"mbx"),
+        platform_id: digest_b3(b"platform"),
+        profile: "test".to_owned(),
+        proof_run_id: 4242,
+    };
+    assert_eq!(proof.validate(), Ok(()));
+    let mut bad = proof.clone();
+    bad.graph_digest = "nope".to_owned();
+    assert!(bad.validate().is_err());
+    let mut bad = proof.clone();
+    bad.toolchain_id = "nope".to_owned();
+    assert!(bad.validate().is_err());
+    let mut bad = proof.clone();
+    bad.mbx_digest = "nope".to_owned();
+    assert!(bad.validate().is_err());
+    let mut bad = proof.clone();
+    bad.platform_id = "nope".to_owned();
+    assert!(bad.validate().is_err());
+    let mut bad = proof.clone();
+    bad.proof_run_id = 0;
+    assert!(bad.validate().is_err());
+    let mut bad = proof;
+    bad.task_id = "bogus".to_owned();
+    assert!(bad.validate().is_err());
 }

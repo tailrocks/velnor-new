@@ -2,8 +2,10 @@
 use velnor_actions_contract::cachekey::{PlatformInputs, platform_id};
 use velnor_actions_contract::config::{ALINT_ACTION_KEY, LATEST_RUNNER_LABEL, OVERRIDABLE_ACTIONS};
 use velnor_actions_contract::{
-    ContractError, Finding, FreshnessEntry, FreshnessStatus, GithubRunnerImages, NightlyRecord,
-    PolicyException, RunnerInventory, VersionPolicy, days_between,
+    ContractError, FRESHNESS_CLASSES, Finding, FreshnessEntry, FreshnessRequirement,
+    FreshnessStatus, GithubRunnerImages, NightlyRecord, PolicyException, RunnerImageEvidence,
+    RunnerInventory, ToolIdentity, VersionPolicy, days_between, runner_family_changed,
+    validate_freshness_class,
 };
 
 #[test]
@@ -52,6 +54,13 @@ fn ver_policy_header_rejects_weakening() {
     strict.max_exception_days = 7;
     strict.check_interval_hours = 12;
     assert_eq!(strict.validate("p"), Ok(()));
+    let mut bad = good.clone();
+    bad.registry = "not-a-url".to_owned();
+    let err = bad.validate("p").expect_err("registry");
+    assert!(err.to_string().contains("malformed_registry"));
+    let mut bad = good.clone();
+    bad.registry = "https://releases.example.com/rust".to_owned();
+    assert_eq!(bad.validate("p"), Ok(()));
     let mut value = serde_json::to_value(&good).expect("value");
     value["weaken"] = serde_json::json!(true);
     assert!(serde_json::from_value::<VersionPolicy>(value).is_err());
@@ -62,6 +71,7 @@ fn sample_policy() -> VersionPolicy {
     VersionPolicy {
         schema: 1,
         channel: "stable".to_owned(),
+        registry: "https://static.rust-lang.org/dist".to_owned(),
         check_interval_hours: 24,
         max_exception_days: 14,
         github_runner_images: GithubRunnerImages {
@@ -215,4 +225,87 @@ fn ver_platform_binds_runner_image() -> Result<(), ContractError> {
     assert_ne!(platform("20260929.1.0")?, base);
     assert_eq!(platform("20260928.1.0")?, base);
     Ok(())
+}
+
+#[test]
+fn ver_tool_identity_carries_source_platforms_digest() {
+    let tool = ToolIdentity {
+        name: "rust".to_owned(),
+        version: "1.98.1".to_owned(),
+        source: "https://static.rust-lang.org/dist/channel-rust-stable.toml".to_owned(),
+        platforms: vec!["linux-x64".to_owned()],
+        digest: "ab".repeat(32),
+    };
+    assert_eq!(tool.validate("catalog"), Ok(()));
+    let mut bad = tool.clone();
+    bad.version = "1.98".to_owned();
+    bad.platforms = vec![];
+    assert!(bad.validate("catalog").is_err());
+    let mut bad = tool.clone();
+    bad.version = "stable".to_owned();
+    assert!(bad.validate("catalog").is_err());
+    let mut bad = tool.clone();
+    bad.source = "https://releases.example.com/rust/latest".to_owned();
+    assert!(bad.validate("catalog").is_err());
+    let mut bad = tool.clone();
+    bad.platforms = vec![];
+    assert!(bad.validate("catalog").is_err());
+    let mut bad = tool.clone();
+    bad.digest = "xyz".to_owned();
+    assert!(bad.validate("catalog").is_err());
+    let mut bad = tool;
+    bad.name = "Rust!".to_owned();
+    assert!(bad.validate("catalog").is_err());
+}
+
+#[test]
+fn ver_freshness_classes_cover_nine_inputs() {
+    assert_eq!(
+        FRESHNESS_CLASSES,
+        [
+            "compiler",
+            "bootstrap",
+            "tools",
+            "crates",
+            "velnor",
+            "actions",
+            "alint",
+            "runner",
+            "deferred"
+        ]
+    );
+    for class in FRESHNESS_CLASSES {
+        assert_eq!(validate_freshness_class(class), Ok(()));
+        let requirement = FreshnessRequirement {
+            class: class.to_owned(),
+            max_age_days: 30,
+        };
+        assert_eq!(requirement.validate("inv"), Ok(()), "{class}");
+    }
+    assert!(validate_freshness_class("packages").is_err());
+    let zero = FreshnessRequirement {
+        class: "crates".to_owned(),
+        max_age_days: 0,
+    };
+    assert!(zero.validate("inv").is_err());
+}
+
+#[test]
+fn ver_runner_image_evidence_and_family_change() {
+    let evidence = RunnerImageEvidence {
+        image_os: "ubuntu26".to_owned(),
+        image_version: "20260928.1.0".to_owned(),
+    };
+    assert_eq!(evidence.validate(), Ok(()));
+    let text = serde_json::to_string(&evidence).expect("serialize");
+    assert!(text.contains("ubuntu26") && text.contains("20260928.1.0"));
+    for overclaim in ["packages", "immutable", "fixed"] {
+        assert!(!text.contains(overclaim), "overclaims {overclaim}");
+    }
+    let mut bad = evidence.clone();
+    bad.image_version = String::new();
+    assert!(bad.validate().is_err());
+    assert!(!runner_family_changed("ubuntu-26.04", "ubuntu-26.04-arm"));
+    assert!(runner_family_changed("ubuntu-24.04", "ubuntu-26.04"));
+    assert!(runner_family_changed("ubuntu-26.04", "ubuntu-24.04-arm"));
 }

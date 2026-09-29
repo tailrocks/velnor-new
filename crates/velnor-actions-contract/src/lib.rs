@@ -12,8 +12,10 @@ pub mod candidate_manifest;
 pub mod canonical;
 pub mod config;
 pub mod errors;
+pub mod extensions;
 pub mod finding;
 pub mod formats;
+pub mod freshness;
 pub mod graph;
 pub mod ids;
 pub mod manifest;
@@ -22,6 +24,7 @@ pub mod policy;
 pub mod secrets;
 pub mod strict_json;
 pub mod targets;
+pub mod tooling;
 pub mod vcs;
 pub mod workflow;
 
@@ -33,12 +36,18 @@ pub use canonical::{
 };
 pub use config::{
     DiscoveryConfig, GeneratorValidation, PolicyJob, ResourcesConfig, RunnerSelection,
-    RustConfiguration, RustStackConfig, StacksConfig, TestShardingConfig, VelnorConfig,
-    VelnorSupportWorkflow, WorkflowConfig, WorkflowPolicy,
+    RustConfiguration, RustStackConfig, ShardTimingEvidence, StacksConfig, TestShardingConfig,
+    VelnorConfig, VelnorSupportWorkflow, WorkflowConfig, WorkflowPolicy,
+    validate_shard_changes_need_evidence,
 };
 pub use errors::ContractError;
+pub use extensions::{RUST_EXTENSION_REQUIRED_SLOTS, validate_rust_extension};
 pub use finding::Finding;
 pub use formats::{DECLARED_GITHUB_FORMATS, find_github_format, is_declared_github_format};
+pub use freshness::{
+    FRESHNESS_CLASSES, FreshnessRequirement, RunnerImageEvidence, runner_family_changed,
+    validate_freshness_class,
+};
 pub use graph::{
     CachePolicy, EdgeKind, ResourceClass, ResourceDemand, TaskEdge, TaskGraph, TaskNode,
 };
@@ -52,7 +61,7 @@ pub use ids::{
 };
 pub use manifest::{
     ActionPin, CandidateArtifactManifest, GeneratorBinary, GeneratorLock, LockedGenerator,
-    MiseBootstrap, ReleaseManifest, TargetRecord,
+    MiseBootstrap, ReleaseManifest, TargetRecord, require_release_version,
 };
 pub use marker::MARKER_PREFIX;
 pub use policy::{
@@ -65,16 +74,19 @@ pub use targets::{
     RELEASE_MANIFEST_FILENAME, SUPPORTED_TARGETS, asset_filename, is_supported_target,
     target_for_runner_label,
 };
+pub use tooling::ToolIdentity;
 pub use vcs::VcsInputs;
 pub use workflow::{
     BaselineProof, BaselineStatus, CacheLayer, CacheOutcome, CacheResult, CandidateReport,
     CandidateStatus, Concurrency, EntryCacheIds, ExecuteTaskIds, ExecuteTaskRef, FinalCounts,
-    FinalReport, FinalStatus, Job, MatrixEntry, MatrixReport, MatrixStatus, MatrixTaskEntry,
-    NotSelectedReason, ObligationDecision, Permissions, Plan, PlanBaseline, PlanGenerator,
-    PlanMatrix, PlanObligation, PlanPackage, PlanRunner, RequiredJobResult, Step, StepKind,
-    TaskReport, TaskStatus, Trigger, Trust, WorkflowEvent, WorkflowIr, candidate_report_id_for_run,
-    final_report_id_for_run, final_report_relpath, matrix_report_relpath, task_report_relpath,
-    validate_candidate_report_id, validate_final_report_id,
+    FinalReport, FinalStatus, Job, MATRIX_JSON_FILENAME, ManifestTaskProof, MatrixEntry,
+    MatrixReport, MatrixStatus, MatrixTaskEntry, NotSelectedReason, ObligationDecision,
+    PLAN_JSON_FILENAME, Permissions, Plan, PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation,
+    PlanPackage, PlanRunner, RequiredJobResult, Step, StepKind, TaskReport, TaskStatus, Trigger,
+    Trust, WorkflowEvent, WorkflowIr, candidate_report_id_for_run, check_matrix_agreement,
+    final_report_id_for_run, final_report_relpath, join_runner_temp, matrix_json_bytes,
+    matrix_report_relpath, plan_json_bytes, task_report_relpath, validate_candidate_report_id,
+    validate_final_report_id,
 };
 
 /// Version marker for the contract schema shell.

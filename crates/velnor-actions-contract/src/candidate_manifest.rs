@@ -56,3 +56,25 @@ impl CandidateArtifactManifest {
         Ok(())
     }
 }
+
+/// Require an exact release version (`X.Y.Z`, gaps §E).
+///
+/// Pre-release suffixes, missing components, and empty versions fail
+/// with `non_release_build`: only exact releases may publish.
+/// # Errors
+pub fn require_release_version(version: &str, file: &str) -> Result<(), ContractError> {
+    if is_release_version(version) {
+        Ok(())
+    } else {
+        Err(ContractError::config(file, "version", "non_release_build"))
+    }
+}
+
+/// True only for exact numeric `X.Y.Z` release versions.
+fn is_release_version(version: &str) -> bool {
+    let parts: Vec<&str> = version.split('.').collect();
+    parts.len() == 3
+        && parts
+            .iter()
+            .all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()))
+}

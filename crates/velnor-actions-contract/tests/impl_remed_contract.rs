@@ -153,6 +153,14 @@ fn arch_unknown_keys_fail_with_unknown_config_field() {
     };
     assert_eq!(problem, "unknown_config_field");
     assert_eq!(key_path, "shell");
+    let serde_err = "unknown field `shell`, expected `schema`";
+    let mapped = ContractError::map_decode_error("cfg.toml", serde_err);
+    assert_eq!(mapped.to_string(), "cfg.toml: shell: unknown_config_field");
+    let toml_err = "TOML parse error at line 3, column 1\n  |\n3 | shell = \"x\"\n  | ^^^^^\nunknown field 'shell', expected 'schema'";
+    let mapped = ContractError::map_decode_error("cfg.toml", toml_err);
+    assert_eq!(mapped.to_string(), "cfg.toml: shell: unknown_config_field");
+    let other = ContractError::map_decode_error("cfg.toml", "expected value, found eof");
+    assert!(other.to_string().starts_with("cfg.toml: document:"));
 }
 
 #[test]
@@ -196,135 +204,5 @@ fn gen_task_ids_preserved_through_plan_and_matrix() -> Result<(), ContractError>
     assert_eq!(round_trip.obligations[0].task_id, TASK);
     assert!(round_trip.matrix.include[0].id.ends_with(GROUP));
     assert!(text.contains(TASK));
-    Ok(())
-}
-
-#[test]
-fn wf_contract_surface_has_no_utility_fields() {
-    let value = serde_json::to_value(valid_config()).expect("serialize");
-    let top: Vec<&str> = value
-        .as_object()
-        .expect("object")
-        .keys()
-        .map(String::as_str)
-        .collect();
-    assert_eq!(
-        top,
-        [
-            "actions",
-            "discovery",
-            "resources",
-            "schema",
-            "stacks",
-            "test_sharding",
-            "workflow"
-        ]
-    );
-    let section = |name: &str| -> Vec<String> {
-        let mut keys: Vec<String> = value[name]
-            .as_object()
-            .expect("section")
-            .keys()
-            .cloned()
-            .collect();
-        keys.sort();
-        keys
-    };
-    assert_eq!(
-        section("workflow").join(","),
-        "generator_validation,max_parallel_jobs,name,policy"
-    );
-    assert_eq!(section("stacks").join(","), "ignore");
-    let text = serde_json::to_string(&value).expect("text");
-    for forbidden in ["shell", "uses", "yaml", "command", "argv", "mise_task"] {
-        assert!(!text.contains(forbidden), "leaked {forbidden}");
-    }
-}
-
-#[test]
-fn wf_plan_runner_records_label_and_provenance() -> Result<(), ContractError> {
-    for selection in [
-        RunnerSelection::LatestDefault,
-        RunnerSelection::ConfigOverride,
-    ] {
-        let runner = PlanRunner {
-            label: "ubuntu-24.04".to_owned(),
-            selection,
-        };
-        let text = serde_json::to_string(&runner).expect("serialize");
-        let back: PlanRunner = serde_json::from_str(&text).expect("deserialize");
-        assert_eq!(back.label, "ubuntu-24.04");
-        assert_eq!(back.selection, selection);
-    }
-    let run_key = run_key_for_ci(4, 1);
-    let mut plan = sample_plan(&run_key)?;
-    plan.runner.selection = RunnerSelection::ConfigOverride;
-    plan.runner.label = "ubuntu-24.04".to_owned();
-    plan.validate()?;
-    Ok(())
-}
-
-#[test]
-fn wf_matrix_entry_requires_registered_stack() -> Result<(), ContractError> {
-    use velnor_actions_contract::{ExecuteTaskIds, MatrixEntry};
-    let run_key = run_key_for_ci(6, 1);
-    sample_entry(&run_key)?.validate(&run_key)?;
-    let bogus = MatrixEntry::derive(
-        "bogus",
-        GROUP,
-        serde_json::json!({}),
-        ExecuteTaskIds {
-            tasks: BTreeMap::new(),
-        },
-        &digest_b3(b"entry-inputs"),
-        &run_key,
-    )?;
-    let err = bogus.validate(&run_key).expect_err("bogus stack");
-    assert_eq!(
-        err,
-        ContractError::identity("stack_id", "unregistered_stack")
-    );
-    Ok(())
-}
-
-#[test]
-fn wf_duplicate_matrix_id_or_key_is_collision() -> Result<(), ContractError> {
-    let run_key = run_key_for_ci(7, 1);
-    let mut plan = sample_plan(&run_key)?;
-    plan.validate()?;
-    let entry = sample_entry(&run_key)?;
-    plan.matrix.include.push(entry);
-    let err = plan.validate().expect_err("duplicate id");
-    assert!(matches!(err, ContractError::Collision(_)), "got {err}");
-    Ok(())
-}
-
-#[test]
-fn wf_plan_matrix_canonical_bytes_agree() -> Result<(), ContractError> {
-    use velnor_actions_contract::canonical_json_bytes;
-    let run_key = run_key_for_ci(8, 1);
-    let plan = sample_plan(&run_key)?;
-    plan.validate()?;
-    let plan_bytes = canonical_json_bytes(&plan)?;
-    let matrix_bytes = canonical_json_bytes(&plan.matrix)?;
-    assert_eq!(plan_bytes, canonical_json_bytes(&plan)?);
-    assert_eq!(matrix_bytes, canonical_json_bytes(&plan.matrix)?);
-    let text = String::from_utf8(plan_bytes).expect("utf8");
-    assert!(text.contains("\"matrix\":{\"include\":["));
-    Ok(())
-}
-
-#[test]
-fn task_driver_runner_switch_invalidates_evidence() -> Result<(), ContractError> {
-    use crate::impl_contract_ids::sample_identity;
-    use velnor_actions_contract::input_digest;
-    let base = input_digest(&sample_identity())?;
-    let mut switched = sample_identity();
-    switched.configuration.compile_driver = "mbx".to_owned();
-    assert_ne!(input_digest(&switched)?, base);
-    let mut runner = sample_identity();
-    runner.configuration.test_runner = "cargo_nextest".to_owned();
-    assert_ne!(input_digest(&runner)?, base);
-    assert_eq!(input_digest(&sample_identity())?, base);
     Ok(())
 }

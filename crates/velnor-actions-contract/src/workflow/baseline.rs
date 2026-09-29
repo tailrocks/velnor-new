@@ -50,6 +50,51 @@ pub struct BaselineProof {
     /// Proof manifest digest.
     pub manifest_digest: String,
 }
+/// Per-task manifest proof entry (par §5).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ManifestTaskProof {
+    /// Task ID.
+    pub task_id: String,
+    /// Task digest.
+    pub task_digest: String,
+    /// Input digest.
+    pub input_digest: String,
+    /// Workspace/package graph digest.
+    pub graph_digest: String,
+    /// Toolchain identity digest.
+    pub toolchain_id: String,
+    /// Mr Boxington cache-identity digest.
+    pub mbx_digest: String,
+    /// Platform identity digest.
+    pub platform_id: String,
+    /// Build profile.
+    pub profile: String,
+    /// Numeric proof run ID (proof only, never identity input).
+    pub proof_run_id: u64,
+}
+impl ManifestTaskProof {
+    /// Validate digests, profile, and the proof run reference.
+    /// # Errors
+    pub fn validate(&self) -> Result<(), ContractError> {
+        crate::ids::validate_task_id(&self.task_id)?;
+        for value in [
+            self.task_digest.as_str(),
+            self.input_digest.as_str(),
+            self.graph_digest.as_str(),
+            self.toolchain_id.as_str(),
+            self.mbx_digest.as_str(),
+            self.platform_id.as_str(),
+        ] {
+            validate_digest(value)?;
+        }
+        crate::cachekey::validate_semantic_text("profile", &self.profile)?;
+        if self.proof_run_id == 0 {
+            return Err(ContractError::identity("proof_run_id", "missing_proof_run"));
+        }
+        Ok(())
+    }
+}
 impl BaselineProof {
     /// Validate the artifact name shape and manifest digest.
     /// # Errors

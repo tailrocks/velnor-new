@@ -141,6 +141,27 @@ pub fn task_report_relpath(
         "velnor/{run_key}/{matrix_key}/tasks/{task_report_id}.json"
     ))
 }
+/// Join a report relpath under `$RUNNER_TEMP` (cache §3).
+///
+/// Pure path join: rejects an empty temp dir, absolute relpaths, and
+/// parent traversal. Writers call this; readers resolve the same way.
+/// # Errors
+pub fn join_runner_temp(runner_temp: &str, relpath: &str) -> Result<String, ContractError> {
+    if runner_temp.trim().is_empty() {
+        return Err(ContractError::identity("runner_temp", "empty_temp_dir"));
+    }
+    if runner_temp.contains("..") {
+        return Err(ContractError::identity("runner_temp", "parent_traversal"));
+    }
+    if relpath.is_empty() || relpath.starts_with('/') || relpath.contains('\\') {
+        return Err(ContractError::identity("relpath", "non_relative_path"));
+    }
+    if relpath.split('/').any(|seg| seg.is_empty() || seg == "..") {
+        return Err(ContractError::identity("relpath", "parent_traversal"));
+    }
+    Ok(format!("{}/{}", runner_temp.trim_end_matches('/'), relpath))
+}
+
 /// Validate a final report ID.
 /// # Errors
 pub fn validate_final_report_id(value: &str) -> Result<(), ContractError> {

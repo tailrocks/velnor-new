@@ -58,6 +58,21 @@ impl ContractError {
         Self::config(file, key_path, "unknown_config_field")
     }
 
+    /// Map a serde/TOML decode failure to a key-path error (arch §3).
+    ///
+    /// Unknown-field prose (backtick or single-quote form, including
+    /// multi-line TOML errors) becomes `unknown_config_field` with the
+    /// offending key path; anything else becomes a `document` error.
+    /// Pure string mapping: no IO, no parsing beyond the message.
+    #[must_use]
+    pub fn map_decode_error(file: impl Into<String>, message: &str) -> Self {
+        let file = file.into();
+        if let Some(key) = unknown_field_key(message) {
+            return Self::unknown_config_field(file, key);
+        }
+        Self::config(file, "document", single_line(message))
+    }
+
     /// Build a config validation error.
     #[must_use]
     pub fn config(
@@ -71,4 +86,33 @@ impl ContractError {
             problem: problem.into(),
         }
     }
+}
+
+/// Extract the offending key from unknown-field prose, if present.
+fn unknown_field_key(message: &str) -> Option<String> {
+    let marker = message.find("unknown field")?;
+    let rest = &message[marker + "unknown field".len()..];
+    for (open, close) in [('`', '`'), ('\'', '\''), ('"', '"')] {
+        if let Some(start) = rest.find(open) {
+            let after = &rest[start + open.len_utf8()..];
+            if let Some(end) = after.find(close) {
+                let key = after[..end].trim().to_owned();
+                if !key.is_empty() {
+                    return Some(key);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Collapse a multi-line decode message to one line.
+fn single_line(message: &str) -> String {
+    message
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .chars()
+        .take(300)
+        .collect()
 }

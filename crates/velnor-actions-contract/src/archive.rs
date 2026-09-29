@@ -1,7 +1,8 @@
 //! Nextest archive identity inputs (par §8).
 //!
 //! The archive identity MUST include source, package, target, features,
-//! profile, toolchain, runtime, Nextest version, and archive format.
+//! profile, toolchain, runtime, Nextest version, archive format, plus
+//! explicit platform and config digests.
 
 use serde::Serialize;
 
@@ -30,6 +31,10 @@ pub struct ArchiveInputs {
     pub test_runner: String,
     /// Archive format.
     pub format: String,
+    /// Platform identity digest (explicit, not via runtime/profile).
+    pub platform_id: String,
+    /// Cargo config digest (explicit, not via target).
+    pub config_digest: String,
 }
 
 /// Compute the archive identity digest over the canonical inputs.
@@ -37,6 +42,8 @@ pub struct ArchiveInputs {
 pub fn archive_id(inputs: &ArchiveInputs) -> Result<String, ContractError> {
     validate_digest(&inputs.source_digest)?;
     validate_digest(&inputs.toolchain_id)?;
+    validate_digest(&inputs.platform_id)?;
+    validate_digest(&inputs.config_digest)?;
     for (field, value) in [
         ("package", inputs.package.as_str()),
         ("target", inputs.target.as_str()),

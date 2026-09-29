@@ -2,7 +2,7 @@
 use super::baseline::{BaselineProof, PlanBaseline};
 use super::execute::ExecuteTaskIds;
 use crate::canonical::validate_digest;
-use crate::config::{RunnerSelection, VelnorConfig};
+use crate::config::{RUNNER_LABEL_CATALOG, RunnerSelection, VelnorConfig};
 use crate::errors::ContractError;
 use crate::ids::{
     artifact_id_for_matrix, matrix_id_for_task_group, matrix_key_for_id, plan_id_for_run,
@@ -248,6 +248,19 @@ impl EntryCacheIds {
         Ok(())
     }
 }
+impl PlanRunner {
+    /// Validate the recorded label against the exact-label catalog.
+    /// # Errors
+    pub fn validate(&self) -> Result<(), ContractError> {
+        if !RUNNER_LABEL_CATALOG.contains(&self.label.as_str()) {
+            return Err(ContractError::identity(
+                "runner.label",
+                format!("unsupported_label:{}", self.label),
+            ));
+        }
+        Ok(())
+    }
+}
 impl Plan {
     /// Plan schema version.
     pub const SCHEMA: u32 = 1;
@@ -265,6 +278,7 @@ impl Plan {
         if plan_id_for_run(&self.run_key)? != self.plan_id {
             return Err(ContractError::identity("plan_id", "plan_mismatch"));
         }
+        self.runner.validate()?;
         check_sorted_unique(&self.task_ids, "task_ids")?;
         check_sorted_by(&self.packages, "packages", |pkg| pkg.package_id.as_str())?;
         check_sorted_by(&self.obligations, "obligations", |ob| ob.task_id.as_str())?;

@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use crate::errors::ContractError;
 
 pub use crate::candidate_manifest::CandidateArtifactManifest;
+pub use crate::candidate_manifest::require_release_version;
 
 /// Versioned release manifest: one immutable asset record per target.
 #[derive(Debug, Clone, Serialize, Deserialize)]

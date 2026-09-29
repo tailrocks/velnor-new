@@ -1,15 +1,14 @@
 //! Remediation cases: CACHE audit rows.
 use crate::impl_contract_ids::{TASK, sample_entry, sample_identity};
 use velnor_actions_contract::cachekey::{
-    CACHE_SCHEMA_ID, CacheIdentity, FormatInputs, LaneInputs, MAX_CACHE_KEY_BYTES, MISS_REASONS,
-    PlatformInputs, ToolchainInputs, WorkspaceInputs, cache_format_id, cache_key, lane_id,
-    platform_id, restore_prefix, toolchain_id, validate_miss_reason, workspace_id,
+    CACHE_SCHEMA_ID, CacheIdentity, FormatInputs, LaneInputs, MAX_CACHE_KEY_BYTES, PlatformInputs,
+    ToolchainInputs, WorkspaceInputs, cache_format_id, cache_key, lane_id, platform_id,
+    restore_prefix, toolchain_id, workspace_id,
 };
 use velnor_actions_contract::{
     CacheLayer, CacheOutcome, CacheResult, ContractError, EntryCacheIds, TaskReport, TaskStatus,
-    Trust, WorkflowEvent, canonical_json_str, digest_b3, final_report_id_for_run,
-    final_report_relpath, input_digest, is_secret_env_name, matrix_report_relpath,
-    parse_strict_json, run_key_for_ci, task_report_id_for_task, task_report_relpath,
+    Trust, WorkflowEvent, canonical_json_str, digest_b3, input_digest, is_secret_env_name,
+    parse_strict_json, run_key_for_ci, task_report_id_for_task,
 };
 
 #[test]
@@ -207,6 +206,40 @@ fn cache_key_shape_and_bound() -> Result<(), ContractError> {
     assert!(cache_key("task", "trusted", "nope", &snapshot).is_err());
     let prefix = restore_prefix("mbx", "pr", &compat)?;
     assert!(prefix.ends_with('-') && !prefix.contains(&snapshot));
+    let overlong = format!(
+        "velnor-v1-task-trusted-{compat}-{}",
+        "x".repeat(MAX_CACHE_KEY_BYTES)
+    );
+    assert!(overlong.len() > MAX_CACHE_KEY_BYTES);
+    let run_key = run_key_for_ci(20, 1);
+    let entry = sample_entry(&run_key)?;
+    let task_digest = digest_b3(b"task-bytes");
+    let mut report = TaskReport {
+        schema: 1,
+        task_report_id: task_report_id_for_task(&run_key, &entry.matrix_key, &task_digest)?,
+        run_key,
+        event: WorkflowEvent::PullRequest,
+        trust: Trust::Pr,
+        matrix_id: entry.id.clone(),
+        matrix_key: entry.matrix_key.clone(),
+        task_id: TASK.to_owned(),
+        task_digest,
+        status: TaskStatus::Executed,
+        not_selected_reason: None,
+        cache: CacheOutcome {
+            layer: CacheLayer::Task,
+            key,
+            result: CacheResult::Hit,
+            miss_reason: None,
+        },
+        exit_code: 0,
+        duration_ms: 1,
+        outputs: vec![],
+    };
+    report.validate()?;
+    report.cache.key = overlong;
+    let err = report.validate().expect_err("overlong key");
+    assert_eq!(err, ContractError::identity("cache.key", "key_too_long"));
     assert!(
         workspace_id(&WorkspaceInputs {
             repository_id: digest_b3(b"repo"),
@@ -235,126 +268,5 @@ fn cache_key_shape_and_bound() -> Result<(), ContractError> {
         })
         .is_ok()
     );
-    Ok(())
-}
-
-#[test]
-fn cache_commit_sha_alone_is_not_identity() -> Result<(), ContractError> {
-    let sha = "ab".repeat(20);
-    assert!(cache_key("task", "trusted", &sha, &digest_b3(b"s")).is_err());
-    let mut first = sample_identity();
-    first.vcs.commit = Some(sha.clone());
-    let mut second = sample_identity();
-    second.vcs.commit = Some(sha);
-    second.argv.push("--extra".to_owned());
-    assert_ne!(input_digest(&first)?, input_digest(&second)?);
-    assert_eq!(input_digest(&first)?, input_digest(&first)?);
-    Ok(())
-}
-
-#[test]
-fn cache_miss_reason_membership_enforced() -> Result<(), ContractError> {
-    assert_eq!(MISS_REASONS.len(), 13);
-    for reason in MISS_REASONS {
-        assert_eq!(validate_miss_reason(reason), Ok(()));
-    }
-    assert!(validate_miss_reason("sometimes").is_err());
-    let run_key = run_key_for_ci(22, 1);
-    let entry = sample_entry(&run_key)?;
-    let task_digest = digest_b3(b"task-bytes");
-    let mut report = TaskReport {
-        schema: 1,
-        task_report_id: task_report_id_for_task(&run_key, &entry.matrix_key, &task_digest)?,
-        run_key: run_key.clone(),
-        event: WorkflowEvent::PullRequest,
-        trust: Trust::Pr,
-        matrix_id: entry.id.clone(),
-        matrix_key: entry.matrix_key.clone(),
-        task_id: TASK.to_owned(),
-        task_digest,
-        status: TaskStatus::Executed,
-        not_selected_reason: None,
-        cache: CacheOutcome {
-            layer: CacheLayer::Task,
-            key: "k".to_owned(),
-            result: CacheResult::Miss,
-            miss_reason: Some("no_entry".to_owned()),
-        },
-        exit_code: 0,
-        duration_ms: 1,
-        outputs: vec![],
-    };
-    report.validate()?;
-    report.cache.miss_reason = Some("sometimes".to_owned());
-    assert!(report.validate().is_err());
-    Ok(())
-}
-
-#[test]
-fn cache_report_outputs_declared_and_secret_free() -> Result<(), ContractError> {
-    let run_key = run_key_for_ci(23, 1);
-    let entry = sample_entry(&run_key)?;
-    let task_digest = digest_b3(b"task-bytes");
-    let mut report = TaskReport {
-        schema: 1,
-        task_report_id: task_report_id_for_task(&run_key, &entry.matrix_key, &task_digest)?,
-        run_key,
-        event: WorkflowEvent::PullRequest,
-        trust: Trust::Pr,
-        matrix_id: entry.id.clone(),
-        matrix_key: entry.matrix_key.clone(),
-        task_id: TASK.to_owned(),
-        task_digest,
-        status: TaskStatus::Executed,
-        not_selected_reason: None,
-        cache: CacheOutcome {
-            layer: CacheLayer::Task,
-            key: "k".to_owned(),
-            result: CacheResult::Hit,
-            miss_reason: None,
-        },
-        exit_code: 0,
-        duration_ms: 1,
-        outputs: vec!["target/report.json".to_owned()],
-    };
-    report.validate()?;
-    let declared = vec!["target/report.json".to_owned()];
-    assert_eq!(report.validate_outputs_declared(&declared), Ok(()));
-    assert!(report.validate_outputs_declared(&[]).is_err());
-    report.outputs = vec!["/abs/report.json".to_owned()];
-    assert!(report.validate().is_err());
-    let text = serde_json::to_string(&report).expect("serialize");
-    for key in ["environment", "secret", "token", "credential"] {
-        assert!(!text.contains(key), "leaked {key}");
-    }
-    Ok(())
-}
-
-#[test]
-fn cache_final_report_path_and_ids() -> Result<(), ContractError> {
-    let run_key = run_key_for_ci(24, 1);
-    let entry = sample_entry(&run_key)?;
-    assert_eq!(
-        final_report_id_for_run(&run_key)?,
-        format!("final-{run_key}")
-    );
-    assert_eq!(
-        final_report_relpath(&run_key)?,
-        format!("velnor/{run_key}/final-report.json")
-    );
-    assert_eq!(
-        matrix_report_relpath(&run_key, &entry.matrix_key)?,
-        format!("velnor/{run_key}/{}/matrix-report.json", entry.matrix_key)
-    );
-    let task_digest = digest_b3(b"t");
-    let task_report = task_report_id_for_task(&run_key, &entry.matrix_key, &task_digest)?;
-    assert_eq!(
-        task_report_relpath(&run_key, &entry.matrix_key, &task_report)?,
-        format!(
-            "velnor/{run_key}/{}/tasks/{task_report}.json",
-            entry.matrix_key
-        )
-    );
-    assert!(final_report_relpath("bogus").is_err());
     Ok(())
 }
