@@ -78,6 +78,44 @@ pub(crate) fn code(output: &Output) -> i32 {
     output.status.code().unwrap_or(-1)
 }
 
+/// Commit all working-tree files with a fixed test identity; return HEAD sha.
+///
+/// Plan/merge verify the checkout against the request head, so protocol
+/// fixtures must be real commits, not empty `git init` shells.
+pub(crate) fn commit_all(dir: &Path) -> Result<String, Box<dyn Error>> {
+    for args in [
+        vec!["add", "-A"],
+        vec![
+            "-c",
+            "user.name=velnor-test",
+            "-c",
+            "user.email=test@example.invalid",
+            "commit",
+            "-q",
+            "-m",
+            "fixture",
+        ],
+    ] {
+        let output = Command::new("git").args(&args).current_dir(dir).output()?;
+        if !output.status.success() {
+            return Err(format!("git {args:?} failed: {}", output.status).into());
+        }
+    }
+    head_sha(dir)
+}
+
+/// Current HEAD sha of a fixture repo.
+pub(crate) fn head_sha(dir: &Path) -> Result<String, Box<dyn Error>> {
+    let output = Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(dir)
+        .output()?;
+    if !output.status.success() {
+        return Err("git rev-parse HEAD failed".into());
+    }
+    Ok(String::from_utf8(output.stdout)?.trim().to_owned())
+}
+
 /// Git-init plus `init` plus branch pinning: a plannable empty repo.
 pub(crate) fn init_repo(dir: &Path) -> Result<(), Box<dyn Error>> {
     git_init(dir)?;

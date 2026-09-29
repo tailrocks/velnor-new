@@ -3,45 +3,91 @@
 //! The final job downloads the plan artifact (`plan.json`, `matrix.json`)
 //! plus every matrix-report artifact under `reports/<artifact-id>/` before
 //! the merge step; this module assembles those files into the canonical
-//! merge-request JSON that [`crate::merge_internal`] consumes. Required
-//! job conclusions ride no workflow channel yet, so the assembled request
-//! carries none; matrix evidence alone drives the verdict until that
-//! channel lands.
+//! merge-request JSON that [`crate::merge_internal`] consumes.
+//!
+//! Required validator conclusions arrive through the `VELNOR_NEEDS_JSON`
+//! channel: a JSON object mapping each job in the final gate's `needs`
+//! to its conclusion, either directly (`{"velnor-plan": "success"}`) or in
+//! `toJSON(needs)` shape (`{"velnor-plan": {"result": "success"}}`). The
+//! renderer emits the finalized `needs` set; assembly declares it as the
+//! required inventory (minus the matrix-driver job, whose legs prove
+//! themselves through per-leg reports) and fails closed on a missing or
+//! unparsable channel.
+//!
+//! Assembly never drops evidence silently: every missing or unparsable
+//! artifact becomes an explicit `assembly_errors` entry that fails the
+//! verdict, so the merge still emits its diagnostic `planning_failed`
+//! report instead of dying in request assembly.
+
+// Needs-channel parsing lives beside assembly so `lib.rs` stays untouched.
+#[path = "needs_channel.rs"]
+mod needs_channel;
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use velnor_actions_contract::{canonical_json_str, validate_artifact_id};
 
+use self::needs_channel::{NEEDS_ENV, parse_needs};
 use crate::OrchestratorError;
 use crate::internal::{internal, internal_contract};
 use crate::internal_request::resolve_run_key;
 
 /// Assemble one canonical merge request from a run directory.
 ///
-/// Reads `plan.json`, `matrix.json`, and exactly the plan-expected
+/// Reads `plan.json`, `matrix.json`, exactly the plan-expected
 /// `reports/<artifact-id>/matrix-report.json` files (sorted by report ID
 /// for determinism; anything else under `reports/` is ignored, never
-/// globbed). A missing `reports/` entry means zero reports for that leg,
-/// which the merge judges honestly (`not_run` for pending entries,
-/// `no_work` for an empty plan). A missing or unparsable plan or matrix
-/// becomes JSON null so the merge still reaches its `planning_failed`
-/// verdict instead of dying in request assembly.
+/// globbed), plus optional `baseline.json` and `candidate-report.json`.
+/// Validator inventory and conclusions come from [`NEEDS_ENV`]. Every
+/// missing or unparsable input is recorded in `assembly_errors`, never
+/// dropped, so the merge judges the gap explicitly.
 ///
 /// # Errors
 ///
-/// Returns [`OrchestratorError::Io`] for unreadable directories and
-/// [`OrchestratorError::Internal`] for unparsable expected reports.
+/// Returns [`OrchestratorError::Internal`] for encoding failures.
 pub fn assemble_merge_request(run_key: &str, run_dir: &Path) -> Result<String, OrchestratorError> {
-    let plan = read_optional_json(run_dir, "plan.json");
-    let matrix = read_optional_json(run_dir, "matrix.json");
-    let reports = read_expected_reports(&plan, &run_dir.join("reports"))?;
+    let needs = std::env::var(NEEDS_ENV).ok();
+    assemble_with_needs(run_key, run_dir, needs.as_deref())
+}
+
+/// Assemble one merge request with an explicit needs channel.
+///
+/// The public wrapper reads [`NEEDS_ENV`]; tests pass the channel
+/// explicitly for determinism.
+///
+/// # Errors
+///
+/// Returns [`OrchestratorError::Internal`] for encoding failures.
+fn assemble_with_needs(
+    run_key: &str,
+    run_dir: &Path,
+    needs: Option<&str>,
+) -> Result<String, OrchestratorError> {
+    let mut errors = Vec::new();
+    let plan = read_json(run_dir, "plan.json", "plan", true, &mut errors);
+    let matrix = read_json(run_dir, "matrix.json", "matrix", true, &mut errors);
+    let reports = read_expected_reports(&plan, &run_dir.join("reports"), &mut errors);
+    let baseline = read_json(run_dir, "baseline.json", "baseline", false, &mut errors);
+    let candidate = read_json(
+        run_dir,
+        "candidate-report.json",
+        "candidate_report",
+        false,
+        &mut errors,
+    );
+    let (inventory, jobs) = parse_needs(needs, &mut errors);
     let request = serde_json::json!({
         "schema": 1,
         "run_key": run_key,
         "plan": plan,
         "matrix": matrix,
         "matrix_reports": reports,
+        "required_job_ids": inventory,
+        "required_jobs": jobs,
+        "assembly_errors": errors,
+        "baseline_manifest": baseline,
+        "candidate": candidate,
     });
     canonical_json_str(&request).map_err(internal_contract)
 }
@@ -68,13 +114,13 @@ pub(crate) fn write_merge_request(request_path: &Path) -> Result<PathBuf, Orches
 /// Assemble and exclusively write one merge request file.
 ///
 /// The file is written exclusively (a pre-existing file errors, never
-/// overwritten), matching the plan request writer.
+/// overwritten), matching the plan request writer. Missing inputs are
+/// recorded in the request, not refused here.
 ///
 /// # Errors
 ///
-/// Returns [`OrchestratorError::Internal`] for missing plan/matrix files
-/// or a pre-existing request file; [`OrchestratorError::Io`] for
-/// unreadable artifact JSON.
+/// Returns [`OrchestratorError::Internal`] for a pre-existing request
+/// file or unwritable paths.
 pub(crate) fn write_merge_request_to(
     request_path: &Path,
     run_key: &str,
@@ -99,32 +145,41 @@ pub(crate) fn write_merge_request_to(
     Ok(path)
 }
 
-/// Read one optional JSON artifact; missing or unparsable becomes null.
-fn read_optional_json(run_dir: &Path, name: &str) -> serde_json::Value {
-    fs::read_to_string(run_dir.join(name))
-        .ok()
-        .and_then(|text| serde_json::from_str(&text).ok())
-        .unwrap_or(serde_json::Value::Null)
+/// Read one JSON artifact; failures become null plus an explicit error.
+///
+/// Absence errors only for required artifacts; corruption always errors.
+fn read_json(
+    run_dir: &Path,
+    name: &str,
+    kind: &str,
+    required: bool,
+    errors: &mut Vec<String>,
+) -> serde_json::Value {
+    let Ok(text) = fs::read_to_string(run_dir.join(name)) else {
+        if required {
+            errors.push(format!("missing_{kind}"));
+        }
+        return serde_json::Value::Null;
+    };
+    let Ok(value) = serde_json::from_str(&text) else {
+        errors.push(format!("unparsable_{kind}"));
+        return serde_json::Value::Null;
+    };
+    value
 }
 
 /// Read exactly the plan-expected matrix reports, sorted by report ID.
 ///
-/// Each `matrix.include` entry names its artifact; absent files mean the
-/// leg never reported (merge judges `not_run`). Stray files are ignored.
-/// Both `gh` extract layouts are accepted (direct plus one nested
-/// artifact directory); both paths are exact, never globbed. A
-/// present-but-unparsable expected report fails closed, as does an
-/// artifact ID that fails shape validation (never a path traversal).
-///
-/// # Errors
-///
-/// Returns [`OrchestratorError::Io`] for unreadable or unparsable
-/// expected reports and [`OrchestratorError::Internal`] for malformed
-/// artifact IDs.
+/// Each `matrix.include` entry names its artifact; absent or unreadable
+/// files are recorded in `errors`, never skipped silently. Stray files
+/// are ignored. Both `gh` extract layouts are accepted (direct plus one
+/// nested artifact directory); both paths are exact, never globbed. An
+/// artifact ID that fails shape validation is recorded, never traversed.
 fn read_expected_reports(
     plan: &serde_json::Value,
     dir: &Path,
-) -> Result<Vec<serde_json::Value>, OrchestratorError> {
+    errors: &mut Vec<String>,
+) -> Vec<serde_json::Value> {
     let mut expected = Vec::new();
     if let Some(entries) = plan
         .get("matrix")
@@ -132,10 +187,12 @@ fn read_expected_reports(
         .and_then(serde_json::Value::as_array)
     {
         for entry in entries {
-            let artifact_id = entry.get("artifact_id").and_then(serde_json::Value::as_str);
-            if let Some(artifact_id) = artifact_id {
-                validate_artifact_id(artifact_id).map_err(internal_contract)?;
-                expected.push(artifact_id);
+            match entry.get("artifact_id").and_then(serde_json::Value::as_str) {
+                Some(id) => match validate_artifact_id(id) {
+                    Ok(()) => expected.push(id),
+                    Err(_) => errors.push(format!("bad_artifact_id:{id}")),
+                },
+                None => errors.push("bad_artifact_id".to_owned()),
             }
         }
     }
@@ -151,21 +208,22 @@ fn read_expected_reports(
         } else if nested.is_file() {
             nested
         } else if direct.exists() || nested.exists() {
-            return Err(OrchestratorError::io(
-                direct.display().to_string(),
-                "unreadable_matrix_report".to_owned(),
-            ));
+            errors.push(format!("unreadable_report:{artifact_id}"));
+            continue;
         } else {
+            errors.push(format!("missing_report:{artifact_id}"));
             continue;
         };
-        let text = fs::read_to_string(&path)
-            .map_err(|err| OrchestratorError::io(path.display().to_string(), err.to_string()))?;
-        let report: serde_json::Value = serde_json::from_str(&text)
-            .map_err(|err| OrchestratorError::io(path.display().to_string(), err.to_string()))?;
-        reports.push(report);
+        match fs::read_to_string(&path) {
+            Ok(text) => match serde_json::from_str(&text) {
+                Ok(report) => reports.push(report),
+                Err(_) => errors.push(format!("unparsable_report:{artifact_id}")),
+            },
+            Err(_) => errors.push(format!("unreadable_report:{artifact_id}")),
+        }
     }
     reports.sort_by(|left, right| report_id(left).cmp(report_id(right)));
-    Ok(reports)
+    reports
 }
 
 /// Sort key for one report value; empty when the ID is absent.
@@ -204,6 +262,16 @@ mod tests {
         dir
     }
 
+    /// Error strings of one assembled request.
+    fn error_list(request: &str) -> Vec<String> {
+        serde_json::from_str::<serde_json::Value>(request).expect("json")["assembly_errors"]
+            .as_array()
+            .expect("errors")
+            .iter()
+            .filter_map(|value| value.as_str().map(str::to_owned))
+            .collect()
+    }
+
     #[test]
     fn assembly_shape_carries_no_base() {
         let aid = "velnor-matrix-local-m-0123456789abcdef";
@@ -214,12 +282,17 @@ mod tests {
                 r#"{"report_id":"b"}"#,
             )],
         );
-        let request = assemble_merge_request("local", dir.path()).expect("assemble");
+        let needs = r#"{"velnor-plan":"success","velnor-task":"success"}"#;
+        let request = assemble_with_needs("local", dir.path(), Some(needs)).expect("assemble");
         let value: serde_json::Value = serde_json::from_str(&request).expect("json");
         assert!(value.get("base").is_none(), "{request}");
         assert_eq!(value["schema"], 1);
-        assert_eq!(value["run_key"], "local");
         assert_eq!(value["matrix_reports"].as_array().map(Vec::len), Some(1));
+        assert_eq!(
+            value["required_job_ids"],
+            serde_json::json!(["velnor-plan"])
+        );
+        assert!(error_list(&request).is_empty(), "{request}");
     }
 
     #[test]
@@ -238,13 +311,10 @@ mod tests {
                     r#"{"report_id":"report-1"}"#,
                 ),
                 ("reports/stray.json", r#"{"report_id":"stray"}"#),
-                (
-                    "reports/velnor-matrix-local-m-9999999999999999/matrix-report.json",
-                    r#"{"report_id":"unexpected"}"#,
-                ),
             ],
         );
-        let request = assemble_merge_request("local", dir.path()).expect("assemble");
+        let needs = r#"{"velnor-plan":{"result":"success","outputs":{}}}"#;
+        let request = assemble_with_needs("local", dir.path(), Some(needs)).expect("assemble");
         let value: serde_json::Value = serde_json::from_str(&request).expect("json");
         let ids: Vec<&str> = value["matrix_reports"]
             .as_array()
@@ -253,16 +323,21 @@ mod tests {
             .map(|report| report["report_id"].as_str().unwrap_or_default())
             .collect();
         assert_eq!(ids, ["report-1", "report-2"]);
+        assert!(error_list(&request).is_empty(), "{request}");
     }
 
     #[test]
-    fn assembly_nulls_missing_plan_and_rejects_bad_report() {
+    fn assembly_records_gaps_and_rejects_bad_report() {
         let empty = tempfile::TempDir::new().expect("tempdir");
-        let request = assemble_merge_request("local", empty.path()).expect("null plan");
+        let request = assemble_with_needs("local", empty.path(), None).expect("null plan");
         let value: serde_json::Value = serde_json::from_str(&request).expect("json");
         assert!(value["plan"].is_null(), "{request}");
         assert!(value["matrix"].is_null(), "{request}");
-        assert_eq!(value["matrix_reports"].as_array().map(Vec::len), Some(0));
+        assert_eq!(value["required_job_ids"].as_array().map(Vec::len), Some(0));
+        let errors = error_list(&request);
+        for want in ["missing_plan", "missing_matrix", "missing_needs_channel"] {
+            assert!(errors.contains(&want.to_owned()), "{errors:?}");
+        }
         let aid = "velnor-matrix-local-m-0123456789abcdef";
         let bad = staged(
             &plan_with(&[aid]),
@@ -271,8 +346,35 @@ mod tests {
                 "not json",
             )],
         );
-        let err = assemble_merge_request("local", bad.path()).expect_err("bad report");
-        assert!(matches!(err, OrchestratorError::Io { .. }), "{err}");
+        let request =
+            assemble_with_needs("local", bad.path(), Some(r#"{"a":"b"}"#)).expect("diagnostic");
+        let errors = error_list(&request);
+        assert!(
+            errors
+                .iter()
+                .any(|error| error.starts_with("unparsable_report:")),
+            "{errors:?}"
+        );
+        assert!(
+            errors
+                .iter()
+                .any(|error| error.starts_with("bad_needs_result:")),
+            "{errors:?}"
+        );
+        let missing = staged(&plan_with(&[aid]), &[]);
+        let request = assemble_with_needs(
+            "local",
+            missing.path(),
+            Some(r#"{"velnor-plan":"success"}"#),
+        )
+        .expect("diagnostic");
+        let errors = error_list(&request);
+        assert!(
+            errors
+                .iter()
+                .any(|error| error.starts_with("missing_report:")),
+            "{errors:?}"
+        );
     }
 
     #[test]

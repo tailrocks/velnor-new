@@ -128,11 +128,18 @@ fn make_wide_repo(members: u32) -> Result<TempDir, Box<dyn std::error::Error>> {
 fn matrix_budget_enforced_never_truncated() -> TestResult {
     let repo = make_wide_repo(60)?;
     let root = repo.path();
+    git(&["add", "."], root)?;
+    git(&["commit", "-m", "wide"], root)?;
+    let output = std::process::Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(root)
+        .output()?;
+    let head = String::from_utf8(output.stdout)?.trim().to_owned();
     let request = serde_json::json!({
         "schema": 1,
         "run_key": "local",
         "base": serde_json::Value::Null,
-        "head": "0123456789abcdef0123456789abcdef01234567",
+        "head": head,
         "event": "push",
         "root": root.display().to_string(),
     });

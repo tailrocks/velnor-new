@@ -196,10 +196,16 @@ fn merge_assembled_request_roundtrips_to_passed() -> TestResult {
         )?;
     }
     let request = assemble_merge_request("local", &run)?;
-    let value: serde_json::Value = serde_json::from_str(&request)?;
+    let mut value: serde_json::Value = serde_json::from_str(&request)?;
     assert!(value.get("base").is_none(), "merge shape: {request}");
+    // The needs channel is env-provided (unit-tested); patch it in to prove
+    // artifact agreement end to end without racing process-global env.
+    value["required_job_ids"] = serde_json::json!(["velnor-plan"]);
+    value["required_jobs"] =
+        serde_json::json!([{"job_id": "velnor-plan", "conclusion": "success"}]);
+    value["assembly_errors"] = serde_json::json!([]);
     let final_report: velnor_actions_contract::FinalReport =
-        serde_json::from_str(&merge_internal(&request)?)?;
+        serde_json::from_str(&merge_internal(&value.to_string())?)?;
     assert_eq!(
         final_report.status,
         velnor_actions_contract::FinalStatus::Passed
@@ -213,6 +219,12 @@ fn merge_assembly_nulls_missing_plan_to_planning_failed() -> TestResult {
     let request = assemble_merge_request("local", dir.path())?;
     let value: serde_json::Value = serde_json::from_str(&request)?;
     assert!(value["plan"].is_null(), "null plan: {request}");
+    assert!(
+        value["assembly_errors"]
+            .as_array()
+            .is_some_and(|e| e.len() >= 3),
+        "gaps recorded: {request}"
+    );
     let final_report: velnor_actions_contract::FinalReport =
         serde_json::from_str(&merge_internal(&request)?)?;
     final_report.validate()?;
@@ -220,6 +232,13 @@ fn merge_assembly_nulls_missing_plan_to_planning_failed() -> TestResult {
         final_report.status,
         velnor_actions_contract::FinalStatus::PlanningFailed
     );
+    for token in ["source_missing", "no_entry"] {
+        assert!(
+            final_report.miss_reasons.contains(&token.to_owned()),
+            "diagnosed: {:?}",
+            final_report.miss_reasons
+        );
+    }
     Ok(())
 }
 
@@ -268,7 +287,7 @@ fn publish_plan_files_writes_artifact_pair() -> TestResult {
 fn merge_verdict_mapping() -> TestResult {
     for (status, passed) in [
         ("passed", true),
-        ("no_work", true),
+        ("no_work", false),
         ("failed", false),
         ("cancelled", false),
         ("not_run", false),

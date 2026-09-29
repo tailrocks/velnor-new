@@ -4,15 +4,13 @@ use std::fs;
 use std::path::Path;
 
 use tempfile::TempDir;
-use velnor_actions_contract::Plan;
+use velnor_actions_contract::{ObligationDecision, Plan};
 use velnor_actions_orchestrator::plan_internal;
 
 use crate::impl_common::{TestResult, config_with_branch, fixture_manifest_json, git, git_line};
 
-/// Two-member workspace fixture; root package included when asked.
-fn make_ws_repo(root_package: bool) -> Result<TempDir, Box<dyn std::error::Error>> {
-    let dir = TempDir::new()?;
-    let root = dir.path();
+/// Init a git repo with Velnor config plus release fixture.
+fn scaffold(root: &Path) -> TestResult {
     git(&["init", "-b", "testmain"], root)?;
     git(&["config", "user.email", "test@example.com"], root)?;
     git(&["config", "user.name", "Test"], root)?;
@@ -23,6 +21,14 @@ fn make_ws_repo(root_package: bool) -> Result<TempDir, Box<dyn std::error::Error
         root.join(".velnor/release-manifest.json"),
         fixture_manifest_json(),
     )?;
+    Ok(())
+}
+
+/// Two-member workspace fixture; root package included when asked.
+fn make_ws_repo(root_package: bool) -> Result<TempDir, Box<dyn std::error::Error>> {
+    let dir = TempDir::new()?;
+    let root = dir.path();
+    scaffold(root)?;
     let header = if root_package {
         "[package]\nname = \"rootpkg\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n"
     } else {
@@ -52,16 +58,7 @@ fn make_ws_repo(root_package: bool) -> Result<TempDir, Box<dyn std::error::Error
 fn make_mixed_repo() -> Result<TempDir, Box<dyn std::error::Error>> {
     let dir = TempDir::new()?;
     let root = dir.path();
-    git(&["init", "-b", "testmain"], root)?;
-    git(&["config", "user.email", "test@example.com"], root)?;
-    git(&["config", "user.name", "Test"], root)?;
-    git(&["config", "commit.gpgsign", "false"], root)?;
-    fs::create_dir_all(root.join(".velnor"))?;
-    fs::write(root.join(".velnor/config.toml"), config_with_branch())?;
-    fs::write(
-        root.join(".velnor/release-manifest.json"),
-        fixture_manifest_json(),
-    )?;
+    scaffold(root)?;
     fs::write(
         root.join("Cargo.toml"),
         "[workspace]\nmembers = [\"alpha\", \"beta\"]\n",
@@ -123,8 +120,29 @@ fn selects_both(plan: &Plan) -> bool {
         && plan.task_ids.iter().any(|id| id.contains("beta"))
 }
 
+/// Reasons of one member's obligations, non-empty by construction.
+fn reasons_for<'a>(plan: &'a Plan, member: &str) -> Vec<&'a str> {
+    let reasons: Vec<&str> = plan
+        .obligations
+        .iter()
+        .filter(|ob| ob.task_id.contains(member))
+        .map(|ob| ob.reason.as_str())
+        .collect();
+    assert!(!reasons.is_empty(), "{member} has obligations");
+    reasons
+}
+
+/// Assert every obligation executes as changed.
+fn assert_all_changed(plan: &Plan) {
+    let changed = plan
+        .obligations
+        .iter()
+        .all(|ob| ob.reason == "affected_by_change");
+    assert!(changed, "{:?}", plan.obligations);
+}
+
 #[test]
-fn narrow_change_selects_owner_only() -> TestResult {
+fn narrow_change_keeps_universe_with_reasons() -> TestResult {
     let repo = make_ws_repo(false)?;
     let root = repo.path();
     let base = commit(root, "one")?;
@@ -134,16 +152,17 @@ fn narrow_change_selects_owner_only() -> TestResult {
     )?;
     let head = commit(root, "two")?;
     let (plan, warnings) = plan_pr(root, Some(&base), &head)?;
+    assert!(selects_both(&plan), "universe kept: {:?}", plan.task_ids);
     assert!(
-        !plan.task_ids.iter().any(|id| id.contains("alpha")),
-        "alpha excluded: {:?}",
-        plan.task_ids
+        plan.obligations
+            .iter()
+            .all(|ob| ob.decision == ObligationDecision::Execute),
+        "no proof, all execute"
     );
-    assert!(
-        plan.task_ids.iter().any(|id| id.contains("beta")),
-        "beta kept: {:?}",
-        plan.task_ids
-    );
+    let beta = reasons_for(&plan, "beta");
+    assert!(beta.iter().all(|r| *r == "affected_by_change"), "{beta:?}");
+    let alpha = reasons_for(&plan, "alpha");
+    assert!(alpha.iter().all(|r| *r == "unproven"), "{alpha:?}");
     assert!(warnings.is_empty(), "no warnings: {warnings:?}");
     Ok(())
 }
@@ -232,9 +251,10 @@ fn cargo_lock_change_selects_all() -> TestResult {
     assert!(
         warnings
             .iter()
-            .any(|warning| warning == "cargo_lock_changed:selecting_all"),
+            .any(|warning| warning == "cargo_lock_changed:all_changed"),
         "tag: {warnings:?}"
     );
+    assert_all_changed(&plan);
     Ok(())
 }
 
@@ -255,9 +275,10 @@ fn root_config_change_selects_all() -> TestResult {
     assert!(
         warnings
             .iter()
-            .any(|warning| warning == "root_config_changed:selecting_all"),
+            .any(|warning| warning == "root_config_changed:all_changed"),
         "tag: {warnings:?}"
     );
+    assert_all_changed(&plan);
     Ok(())
 }
 
@@ -277,9 +298,10 @@ fn unclassified_file_still_selects_all() -> TestResult {
     assert!(
         warnings
             .iter()
-            .any(|warning| warning == "unclassified_files:selecting_all"),
+            .any(|warning| warning == "unclassified_files:all_changed"),
         "tag: {warnings:?}"
     );
+    assert_all_changed(&plan);
     Ok(())
 }
 
@@ -333,6 +355,11 @@ fn removed_dependency_keeps_consumer_selected() -> TestResult {
         "removed edge keeps consumer: {:?}",
         plan.task_ids
     );
+    let alpha = reasons_for(&plan, "alpha");
+    assert!(
+        alpha.iter().all(|r| *r == "affected_by_change"),
+        "{alpha:?}"
+    );
     assert!(
         !warnings
             .iter()
@@ -352,9 +379,10 @@ fn missing_or_bad_base_tags_comparison_unavailable() -> TestResult {
     assert!(
         warnings
             .iter()
-            .any(|warning| warning == "comparison_unavailable:missing_base:selecting_all"),
+            .any(|warning| warning == "comparison_unavailable:missing_base:all_changed"),
         "tag: {warnings:?}"
     );
+    assert_all_changed(&plan);
     let (plan, warnings) = plan_pr(root, Some(&"0".repeat(40)), &head)?;
     assert!(selects_both(&plan), "bad base broadens");
     assert!(

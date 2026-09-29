@@ -14,7 +14,7 @@ use crate::impl_orch_core::{
 };
 
 #[test]
-fn orch_core_merge_counts_cover_all_six_states() -> TestResult {
+fn orch_core_merge_counts_cover_five_states() -> TestResult {
     let repo = wide_repo(2)?;
     let root = repo.path();
     git(&["add", "."], root)?;
@@ -25,9 +25,9 @@ fn orch_core_merge_counts_cover_all_six_states() -> TestResult {
     let plan: Plan = serde_json::from_value(value["plan"].clone())?;
     plan.validate()?;
     let mut reports = passing_reports(&plan)?;
-    assert!(reports.len() >= 6, "fixture needs six entries");
+    assert!(reports.len() >= 5, "fixture needs five entries");
+    // Reused claims need restore proof and fail closed separately.
     let cases = [
-        (TaskStatus::Reused, MatrixStatus::Passed),
         (TaskStatus::Executed, MatrixStatus::Passed),
         (TaskStatus::EmptyPartition, MatrixStatus::Passed),
         (TaskStatus::NotSelected, MatrixStatus::NotRun),
@@ -47,7 +47,7 @@ fn orch_core_merge_counts_cover_all_six_states() -> TestResult {
     let final_report = merge(&request)?;
     let counts = &final_report.counts;
     let extra = u32::try_from(reports.len() - cases.len()).unwrap_or(u32::MAX);
-    assert_eq!(counts.reused, 1);
+    assert_eq!(counts.reused, 0);
     assert_eq!(counts.executed, 1 + extra);
     assert_eq!(counts.empty_partition, 1);
     assert_eq!(counts.blocked, 1);

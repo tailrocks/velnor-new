@@ -120,6 +120,22 @@ pub(crate) fn has(plan: &Plan, needle: &str) -> bool {
     plan.task_ids.iter().any(|id| id.contains(needle))
 }
 
+/// True when a member's obligations exist and all carry `reason`.
+pub(crate) fn reasons_are(plan: &Plan, needle: &str, reason: &str) -> bool {
+    let mut any = false;
+    for ob in plan
+        .obligations
+        .iter()
+        .filter(|ob| ob.task_id.contains(needle))
+    {
+        any = true;
+        if ob.reason != reason {
+            return false;
+        }
+    }
+    any
+}
+
 /// Manifest binding `base` with `tasks` entries for the seed plan.
 pub(crate) fn manifest_for(plan: &Plan, base: &str, tasks: &Json) -> Json {
     let compat = velnor_actions_contract::digest_b3(b"compat");
@@ -232,7 +248,7 @@ pub(crate) fn merge_status(
     proofs: &[Json],
     extra: &Json,
 ) -> Result<FinalStatus, Box<dyn std::error::Error>> {
-    let mut request = serde_json::json!({"schema": 1, "run_key": "local", "plan": plan, "matrix": plan.matrix, "matrix_reports": reports, "required_jobs": [{"job_id": "velnor-plan", "conclusion": "success"}], "shard_proofs": proofs});
+    let mut request = serde_json::json!({"schema": 1, "run_key": "local", "plan": plan, "matrix": plan.matrix, "matrix_reports": reports, "required_job_ids": ["velnor-plan"], "required_jobs": [{"job_id": "velnor-plan", "conclusion": "success"}], "shard_proofs": proofs});
     for (key, value) in extra.as_object().ok_or("not an object")? {
         request[key] = value.clone();
     }
@@ -245,7 +261,7 @@ pub(crate) fn merge_status(
 }
 
 #[test]
-fn rename_within_package_selects_owner_only() -> TestResult {
+fn rename_within_package_marks_owner_affected() -> TestResult {
     let (plan, warnings) = plan_change(
         &["alpha", "beta"],
         &[],
@@ -253,17 +269,28 @@ fn rename_within_package_selects_owner_only() -> TestResult {
         &["beta/src/lib.rs"],
         &[("beta/src/main.rs", "pub fn f(){}\n")],
     )?;
-    assert!(!has(&plan, "alpha"), "alpha out: {:?}", plan.task_ids);
-    assert!(has(&plan, "beta"), "beta in: {:?}", plan.task_ids);
+    assert!(has(&plan, "alpha") && has(&plan, "beta"), "universe kept");
     assert!(
-        !warnings.iter().any(|w| w.contains("selecting_all")),
+        reasons_are(&plan, "beta", "affected_by_change"),
+        "owner affected: {:?}",
+        plan.obligations
+    );
+    assert!(
+        reasons_are(&plan, "alpha", "unproven"),
+        "peer unproven: {:?}",
+        plan.obligations
+    );
+    assert!(
+        !warnings
+            .iter()
+            .any(|w| w.contains("all_changed") || w.contains("comparison_unavailable")),
         "{warnings:?}"
     );
     Ok(())
 }
 
 #[test]
-fn diamond_closure_selects_transitively() -> TestResult {
+fn diamond_closure_marks_transitively() -> TestResult {
     let deps = [
         ("b", "a", "dependencies"),
         ("c", "a", "dependencies"),
@@ -278,7 +305,11 @@ fn diamond_closure_selects_transitively() -> TestResult {
         &[("a/src/lib.rs", BUMP)],
     )?;
     for member in ["/a/", "/b/", "/c/", "/d/"] {
-        assert!(has(&plan, member), "{member} in: {:?}", plan.task_ids);
+        assert!(
+            reasons_are(&plan, member, "affected_by_change"),
+            "{member} affected: {:?}",
+            plan.obligations
+        );
     }
     let (plan, warnings) = plan_change(
         &["a", "b", "c", "d"],
@@ -288,15 +319,15 @@ fn diamond_closure_selects_transitively() -> TestResult {
         &[("d/src/lib.rs", BUMP)],
     )?;
     assert!(
-        has(&plan, "/d/"),
-        "leaf in: {:?} {warnings:?}",
-        plan.task_ids
+        reasons_are(&plan, "/d/", "affected_by_change"),
+        "leaf affected: {:?} {warnings:?}",
+        plan.obligations
     );
     for member in ["/a/", "/b/", "/c/"] {
         assert!(
-            !has(&plan, member),
-            "{member} out: {:?} {warnings:?}",
-            plan.task_ids
+            reasons_are(&plan, member, "unproven"),
+            "{member} unproven: {:?} {warnings:?}",
+            plan.obligations
         );
     }
     let (plan, warnings) = plan_change(
@@ -307,20 +338,21 @@ fn diamond_closure_selects_transitively() -> TestResult {
         &[("c/src/lib.rs", BUMP)],
     )?;
     assert!(
-        has(&plan, "/c/") && has(&plan, "/d/"),
+        reasons_are(&plan, "/c/", "affected_by_change")
+            && reasons_are(&plan, "/d/", "affected_by_change"),
         "dev edge propagates: {:?} {warnings:?}",
-        plan.task_ids
+        plan.obligations
     );
     assert!(
-        !has(&plan, "/a/") && !has(&plan, "/b/"),
-        "others out: {:?}",
-        plan.task_ids
+        reasons_are(&plan, "/a/", "unproven") && reasons_are(&plan, "/b/", "unproven"),
+        "others unproven: {:?}",
+        plan.obligations
     );
     Ok(())
 }
 
 #[test]
-fn build_script_and_fixture_changes_select_owner() -> TestResult {
+fn build_script_and_fixture_changes_mark_owner() -> TestResult {
     let deps = [("alpha", "beta", "dependencies")];
     let (plan, _) = plan_change(
         &["alpha", "beta"],
@@ -330,9 +362,10 @@ fn build_script_and_fixture_changes_select_owner() -> TestResult {
         &[("beta/build.rs", "fn main(){println!(\"hi\");}\n")],
     )?;
     assert!(
-        has(&plan, "alpha") && has(&plan, "beta"),
+        reasons_are(&plan, "alpha", "affected_by_change")
+            && reasons_are(&plan, "beta", "affected_by_change"),
         "closure: {:?}",
-        plan.task_ids
+        plan.obligations
     );
     let (plan, _) = plan_change(
         &["alpha", "beta"],
@@ -341,7 +374,15 @@ fn build_script_and_fixture_changes_select_owner() -> TestResult {
         &[],
         &[("alpha/tests/data.json", "{\"v\":1}\n")],
     )?;
-    assert!(has(&plan, "alpha"), "alpha in: {:?}", plan.task_ids);
-    assert!(!has(&plan, "beta"), "beta out: {:?}", plan.task_ids);
+    assert!(
+        reasons_are(&plan, "alpha", "affected_by_change"),
+        "alpha affected: {:?}",
+        plan.obligations
+    );
+    assert!(
+        reasons_are(&plan, "beta", "unproven"),
+        "beta unproven: {:?}",
+        plan.obligations
+    );
     Ok(())
 }

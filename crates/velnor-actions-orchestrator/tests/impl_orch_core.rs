@@ -26,18 +26,26 @@ pub(crate) fn merge(
 }
 
 /// Canonical merge request for plan/matrix values with report/job overrides.
+///
+/// The declared inventory mirrors the supplied results, so callers testing
+/// inventory mismatches must overwrite `required_job_ids` explicitly.
 pub(crate) fn merge_request(
     plan: &serde_json::Value,
     matrix: &serde_json::Value,
     reports: &serde_json::Value,
     jobs: &serde_json::Value,
 ) -> serde_json::Value {
+    let ids: Vec<serde_json::Value> = jobs
+        .as_array()
+        .map(|jobs| jobs.iter().map(|job| job["job_id"].clone()).collect())
+        .unwrap_or_default();
     serde_json::json!({
         "schema": 1,
         "run_key": "local",
         "plan": plan,
         "matrix": matrix,
         "matrix_reports": reports,
+        "required_job_ids": ids,
         "required_jobs": jobs,
     })
 }
@@ -336,21 +344,16 @@ fn orch_core_selected_packages_have_execute_obligations() -> TestResult {
 }
 
 #[test]
-fn orch_core_omitted_packages_carry_reasons() -> TestResult {
+fn orch_core_universe_packages_carry_reasons() -> TestResult {
     let (_repo, plan) = plan_for_partial_change()?;
-    let omitted: Vec<&str> = plan
-        .packages
-        .iter()
-        .filter(|package| !package.selected)
-        .map(|package| package.package_id.as_str())
-        .collect();
-    assert!(!omitted.is_empty(), "fixture must omit one member");
+    assert!(!plan.packages.is_empty(), "fixture must inventory members");
     for package in &plan.packages {
         assert!(!package.reasons.is_empty(), "{}", package.package_id);
-        if package.selected {
-            assert!(package.reasons.contains(&"selected".to_owned()));
+        if package.tasks.is_empty() {
+            assert!(!package.selected, "{}", package.package_id);
         } else {
-            assert!(package.reasons.contains(&"not_affected".to_owned()));
+            assert!(package.selected, "{}", package.package_id);
+            assert!(package.reasons.contains(&"selected".to_owned()));
         }
     }
     Ok(())

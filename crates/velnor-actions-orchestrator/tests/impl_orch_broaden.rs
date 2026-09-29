@@ -3,7 +3,7 @@
 use crate::impl_common::{TestResult, passing_reports, plan_for_source_change};
 use crate::impl_orch_plansel::{
     BUMP, commit, entries_for, has, inv_digest, make_ws, manifest_for, merge_status, plan_at,
-    plan_change, proof, put, shard_plan, sharded_reports, test_value,
+    plan_change, proof, put, reasons_are, shard_plan, sharded_reports, test_value,
 };
 use serde_json::Value as Json;
 use velnor_actions_contract::{FinalStatus, ObligationDecision, Plan};
@@ -46,7 +46,7 @@ fn generator_and_workflow_changes_broaden() -> TestResult {
 }
 
 #[test]
-fn toolfile_edits_are_findings_only() -> TestResult {
+fn toolfile_edits_leave_universe_unproven() -> TestResult {
     let (plan, warnings) = plan_change(
         &["alpha", "beta"],
         &[],
@@ -57,7 +57,18 @@ fn toolfile_edits_are_findings_only() -> TestResult {
             ("rust-toolchain.toml", "[toolchain]\n"),
         ],
     )?;
-    assert!(plan.task_ids.is_empty(), "no work: {:?}", plan.task_ids);
+    assert!(
+        has(&plan, "alpha") && has(&plan, "beta"),
+        "universe kept: {:?}",
+        plan.task_ids
+    );
+    assert!(
+        plan.obligations
+            .iter()
+            .all(|ob| ob.decision == ObligationDecision::Execute && ob.reason == "unproven"),
+        "all unproven: {:?}",
+        plan.obligations
+    );
     assert!(
         warnings.iter().any(|w| w.contains("toolfiles_only")),
         "{warnings:?}"
@@ -69,8 +80,17 @@ fn toolfile_edits_are_findings_only() -> TestResult {
         &[],
         &[("mise.toml", "[tools]\n"), ("beta/src/lib.rs", BUMP)],
     )?;
-    assert!(!has(&plan, "alpha"), "alpha out: {:?}", plan.task_ids);
-    assert!(has(&plan, "beta"), "beta in: {:?}", plan.task_ids);
+    assert!(has(&plan, "alpha") && has(&plan, "beta"), "universe kept");
+    assert!(
+        reasons_are(&plan, "beta", "affected_by_change"),
+        "beta affected: {:?}",
+        plan.obligations
+    );
+    assert!(
+        reasons_are(&plan, "alpha", "unproven"),
+        "alpha unproven: {:?}",
+        plan.obligations
+    );
     Ok(())
 }
 
@@ -95,16 +115,25 @@ fn untracked_files_broaden() -> TestResult {
 #[test]
 fn exact_baseline_covers_unchanged() -> TestResult {
     let (repo, seed) = plan_for_source_change()?;
-    let base = seed.base.clone().ok_or("missing base")?;
-    let manifest = manifest_for(&seed, &base, &entries_for(&seed));
-    let (plan, _) = plan_at(repo.path(), Some(&base), &seed.head, Some(manifest))?;
+    let head = seed.head.clone();
+    let (bare, _) = plan_at(repo.path(), Some(&head), &head, None)?;
+    assert!(!bare.task_ids.is_empty(), "empty diff keeps universe");
+    assert!(
+        bare.obligations
+            .iter()
+            .all(|ob| ob.decision == ObligationDecision::Execute && ob.reason == "unproven"),
+        "empty diff unproven without baseline: {:?}",
+        bare.obligations
+    );
+    let manifest = manifest_for(&bare, &head, &entries_for(&bare));
+    let (plan, _) = plan_at(repo.path(), Some(&head), &head, Some(manifest))?;
     assert!(
         plan.obligations
             .iter()
             .all(|ob| ob.decision == ObligationDecision::CoveredByTrustedBaseline)
     );
     assert!(plan.matrix.include.is_empty(), "matrix pruned");
-    assert_eq!(plan.task_ids, seed.task_ids, "plan retains all");
+    assert_eq!(plan.task_ids, bare.task_ids, "plan retains all");
     assert_eq!(
         plan.baseline.status,
         velnor_actions_contract::BaselineStatus::Used
@@ -146,14 +175,15 @@ fn baseline_miss_reasons_are_precise() -> TestResult {
 #[test]
 fn carried_proof_revalidated_by_exact_identity() -> TestResult {
     let (repo, seed) = plan_for_source_change()?;
-    let base = seed.base.clone().ok_or("missing base")?;
-    let mut tasks = entries_for(&seed);
+    let head = seed.head.clone();
+    let (bare, _) = plan_at(repo.path(), Some(&head), &head, None)?;
+    let mut tasks = entries_for(&bare);
     for task in tasks.as_array_mut().ok_or("tasks shape")? {
         task["proof_run_id"] = Json::from(5);
         task["observed_run_id"] = Json::from(7);
     }
-    let manifest = manifest_for(&seed, &base, &tasks);
-    let (plan, _) = plan_at(repo.path(), Some(&base), &seed.head, Some(manifest))?;
+    let manifest = manifest_for(&bare, &head, &tasks);
+    let (plan, _) = plan_at(repo.path(), Some(&head), &head, Some(manifest))?;
     assert!(
         plan.obligations
             .iter()

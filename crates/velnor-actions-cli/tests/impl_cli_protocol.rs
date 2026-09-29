@@ -3,7 +3,9 @@
 use std::error::Error;
 use std::path::Path;
 
-use crate::impl_cli_tmp::{cleanup, code, fresh_tempdir, git_init, spawn_isolated};
+use crate::impl_cli_tmp::{
+    cleanup, code, commit_all, fresh_tempdir, git_init, head_sha, spawn_isolated,
+};
 
 /// Pin the push branch so plan works without origin/HEAD.
 fn pin_branch(repo: &Path) -> Result<(), Box<dyn Error>> {
@@ -83,23 +85,24 @@ fn write_request_rejects_malformed_payload() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-/// Empty repo with config: plan selects nothing, merge reports no-work.
+/// Empty repo with config, committed: plan selects nothing, merge reports no-work.
 fn empty_repo() -> Result<std::path::PathBuf, Box<dyn Error>> {
     let tmp = fresh_tempdir("proto-repo")?;
     git_init(&tmp)?;
     assert_eq!(code(&spawn_isolated(&["init"], &[], &tmp)?), 0);
     pin_branch(&tmp)?;
+    commit_all(&tmp)?;
     Ok(tmp)
 }
 
-/// Stage one event-shape plan request; return the request path.
+/// Stage one event-shape plan request against the repo's real HEAD.
 fn stage_plan_request(repo: &Path) -> Result<std::path::PathBuf, Box<dyn Error>> {
+    let head = head_sha(repo)?;
     let request = repo.join("plan-v1-request.json");
     std::fs::write(
         &request,
         format!(
-            "{{\"schema\":1,\"op\":\"plan-v1\",\"event\":\"push\",\"base\":null,\"head\":\"{}\",\"root\":\".\"}}",
-            "c".repeat(40)
+            "{{\"schema\":1,\"op\":\"plan-v1\",\"event\":\"push\",\"base\":null,\"head\":\"{head}\",\"root\":\".\"}}"
         ),
     )?;
     Ok(request)
@@ -143,7 +146,7 @@ fn plan_writes_response_and_github_outputs() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn merge_no_work_plan_passes() -> Result<(), Box<dyn Error>> {
+fn merge_no_work_plan_reports_no_work() -> Result<(), Box<dyn Error>> {
     let repo = empty_repo()?;
     let request = stage_plan_request(&repo)?;
     let outputs = repo.join("github-outputs");
@@ -168,7 +171,9 @@ fn merge_no_work_plan_passes() -> Result<(), Box<dyn Error>> {
     let merge_request = repo.join("merge-v1-request.json");
     std::fs::write(
         &merge_request,
-        format!("{{\"schema\":1,\"run_key\":\"r7-a2\",\"matrix_reports\":[],{rest}"),
+        format!(
+            "{{\"schema\":1,\"run_key\":\"r7-a2\",\"matrix_reports\":[],\"required_job_ids\":[\"velnor-plan\"],\"required_jobs\":[{{\"job_id\":\"velnor-plan\",\"conclusion\":\"success\"}}],{rest}"
+        ),
     )?;
     let output = spawn_isolated(
         &[],
@@ -179,7 +184,7 @@ fn merge_no_work_plan_passes() -> Result<(), Box<dyn Error>> {
         ],
         &repo,
     )?;
-    assert_eq!(code(&output), 0, "stderr: {:?}", output.stderr);
+    assert_eq!(code(&output), 1, "stderr: {:?}", output.stderr);
     assert!(output.stdout.is_empty());
     assert_no_leak(&output);
     let verdict = std::fs::read_to_string(repo.join("merge-v1-response.json"))?;

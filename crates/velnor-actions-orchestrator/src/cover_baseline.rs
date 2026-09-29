@@ -3,8 +3,11 @@
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
+use std::collections::BTreeSet;
+
 use velnor_actions_contract::{
-    BaselineStatus, Plan, WorkflowEvent, canonical_json_bytes, digest_b3, validate_digest,
+    BaselineStatus, Plan, PlanBaseline, WorkflowEvent, canonical_json_bytes, digest_b3,
+    validate_digest,
 };
 use velnor_actions_mise::BaselineLookup as MiseBaselineLookup;
 
@@ -107,7 +110,9 @@ pub(crate) struct BaselineInputs<'a> {
 /// Classify obligations against baseline evidence, or execute everything.
 ///
 /// A provided manifest is validated and applied; otherwise a live exact-base
-/// lookup runs when the plan has a base and obligations. Coverage that would
+/// lookup runs when the plan has a base and obligations. Every miss keeps
+/// full execution and records its exact reason: cache misses, corruption,
+/// and expiry broaden instead of failing, while coverage that would
 /// invalidate the plan reverts to full execution with a warning.
 /// # Errors
 pub(crate) fn apply_baseline(
@@ -116,33 +121,12 @@ pub(crate) fn apply_baseline(
     inputs: BaselineInputs<'_>,
     manifest: Option<BaselineManifest>,
     discovery: &Discovery,
+    changed: Option<&BTreeSet<String>>,
 ) -> Result<(), OrchestratorError> {
     resolve_generator_identity(plan, inputs.root);
-    let manifest = manifest.or_else(|| {
-        let base = plan.base.clone()?;
-        if plan.obligations.is_empty() {
-            return None;
-        }
-        if is_source_build(&plan.generator.sha256) {
-            plan.baseline.reason = Some(SOURCE_BUILD_REASON.to_owned());
-            return None;
-        }
-        match shard::resolve_manifests(
-            inputs.catalog,
-            inputs.root,
-            &base,
-            inputs.workflow,
-            inputs.branch,
-            None,
-        ) {
-            Ok(found) => found.into_iter().next(),
-            Err(reason) => {
-                plan.baseline.reason = Some(reason);
-                None
-            }
-        }
-    });
+    let manifest = manifest.or_else(|| lookup_manifest(plan, inputs));
     let Some(manifest) = manifest else {
+        plan.baseline.status = BaselineStatus::Unavailable;
         return Ok(());
     };
     if !publish_event_eligible(event) {
@@ -151,6 +135,7 @@ pub(crate) fn apply_baseline(
         ));
     }
     let Some(base) = plan.base.clone() else {
+        mark_unavailable(plan, "baseline_no_base");
         plan.warnings.push("baseline_miss:missing_base".to_owned());
         return Ok(());
     };
@@ -161,10 +146,12 @@ pub(crate) fn apply_baseline(
         &plan.generator.version,
         &plan.generator.sha256,
     ) {
+        mark_unavailable(plan, &format!("baseline_invalid:{reason}"));
         plan.warnings.push(format!("baseline_miss:{reason}"));
         return Ok(());
     }
     if baseline_expired(manifest.expires_at_unix, unix_now()) {
+        mark_unavailable(plan, "baseline_expired");
         plan.warnings.push("baseline_miss:cache_expired".to_owned());
         return Ok(());
     }
@@ -174,15 +161,71 @@ pub(crate) fn apply_baseline(
         plan.matrix.clone(),
         plan.packages.clone(),
     );
-    apply_coverage(plan, &manifest, &digest, base, discovery);
+    let covered = apply_coverage(plan, &manifest, &digest, discovery, changed);
     if plan.validate().is_err() {
         (plan.obligations, plan.matrix, plan.packages) = saved;
         plan.warnings
             .push("baseline_miss:plan_invalid:reverted".to_owned());
-        plan.baseline.status = BaselineStatus::Unavailable;
-        plan.baseline.reason = Some("baseline_unavailable".to_owned());
+        mark_unavailable(plan, "baseline_unavailable");
+    } else if covered == 0 {
+        mark_unavailable(plan, "baseline_no_entries_matched");
+    } else {
+        plan.baseline = PlanBaseline {
+            status: BaselineStatus::Used,
+            base_commit: Some(base),
+            run_id: Some(manifest.run_id),
+            artifact_id: Some(manifest.artifact_id),
+            artifact_name: Some(manifest.artifact_name.clone()),
+            manifest_digest: Some(digest),
+            reason: None,
+        };
     }
     Ok(())
+}
+
+/// Mark baseline evidence unavailable with an explicit reason.
+fn mark_unavailable(plan: &mut Plan, reason: &str) {
+    plan.baseline.status = BaselineStatus::Unavailable;
+    plan.baseline.reason = Some(reason.to_owned());
+}
+
+/// Live exact-base lookup when the caller supplied no manifest.
+///
+/// Every miss records its reason on the plan; `None` means execute-all.
+fn lookup_manifest(plan: &mut Plan, inputs: BaselineInputs<'_>) -> Option<BaselineManifest> {
+    let Some(base) = plan.base.clone() else {
+        mark_unavailable(plan, "baseline_no_base");
+        return None;
+    };
+    if plan.obligations.is_empty() {
+        mark_unavailable(plan, "baseline_no_obligations");
+        return None;
+    }
+    if is_source_build(&plan.generator.sha256) {
+        mark_unavailable(plan, SOURCE_BUILD_REASON);
+        return None;
+    }
+    match shard::resolve_manifests(
+        inputs.catalog,
+        inputs.root,
+        &base,
+        inputs.workflow,
+        inputs.branch,
+        None,
+    ) {
+        Ok(found) => {
+            let mut found = found.into_iter();
+            let first = found.next();
+            if first.is_none() {
+                mark_unavailable(plan, "baseline_not_found");
+            }
+            first
+        }
+        Err(reason) => {
+            mark_unavailable(plan, &reason);
+            None
+        }
+    }
 }
 
 /// Baseline download argv: exact-name when the artifact is known (PAR-5.10).

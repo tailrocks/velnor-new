@@ -1,20 +1,29 @@
 //! Event-time `merge-v1` JSON entrypoint (schema 1).
 
+// Inventory checks live beside the merge so `lib.rs` stays untouched.
+#[path = "required_evidence.rs"]
+pub(crate) mod required_evidence;
+
 use std::collections::{BTreeMap, BTreeSet};
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use velnor_actions_contract::{
-    CandidateReport, FinalCounts, FinalReport, FinalStatus, ManifestTaskProof, MatrixEntry,
-    MatrixReport, ObligationDecision, Plan, PlanMatrix, RequiredJobResult, canonical_json_bytes,
+    CandidateReport, FinalCounts, FinalReport, FinalStatus, MatrixEntry, MatrixReport,
+    ObligationDecision, Plan, PlanMatrix, RequiredJobResult, canonical_json_bytes,
     final_report_id_for_run, validate_run_key,
 };
 
+pub(crate) use self::required_evidence::BaselineManifest;
+use self::required_evidence::{
+    check_required_evidence, diagnostic_without_plan, fold_candidate, fold_jobs,
+    reported_job_results,
+};
 use crate::OrchestratorError;
 use crate::cover::shard::{ResourceLimits, ShardProof, check_entry_shards, validate_budgets};
 use crate::cover::{
     CoverSinks, Fold, Signals, cover_entry, partition_reports, revalidate_coverage,
 };
-use crate::internal::{SCHEMA, check_schema, internal, internal_contract};
+use crate::internal::{SCHEMA, check_schema, internal_contract};
 
 /// `merge-v1` request: plan, matrix bytes, reports, jobs, and candidate.
 #[derive(Debug, Deserialize)]
@@ -32,9 +41,13 @@ pub(crate) struct MergeRequest {
     matrix: Option<PlanMatrix>,
     /// Matrix reports to aggregate.
     pub(crate) matrix_reports: Vec<MatrixReport>,
-    /// Required non-matrix job results.
+    /// Declared validator inventory from the workflow `needs` channel.
+    pub(crate) required_job_ids: Vec<String>,
+    /// Observed validator conclusions covering the inventory exactly.
+    pub(crate) required_jobs: Vec<RequiredJobResult>,
+    /// Assembly failure details; every entry fails the verdict.
     #[serde(default)]
-    required_jobs: Vec<RequiredJobResult>,
+    pub(crate) assembly_errors: Vec<String>,
     /// Candidate report when candidate validation ran.
     #[serde(default)]
     candidate: Option<CandidateReport>,
@@ -52,77 +65,18 @@ pub(crate) struct MergeRequest {
     reference_task_ids: Option<Vec<String>>,
 }
 
-/// One trusted-baseline task proof: identities plus provenance run IDs.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct BaselineTaskEntry {
-    /// Covered task ID.
-    pub(crate) task_id: String,
-    /// Covered task digest.
-    pub(crate) task_digest: String,
-    /// Covered input digest.
-    pub(crate) input_digest: String,
-    /// Original direct-execution proof run.
-    pub(crate) proof_run_id: u64,
-    /// Carrying run that revalidated the proof.
-    pub(crate) observed_run_id: u64,
-    /// External-data freshness (required for advisory kinds).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) external_data: Option<crate::external_data::ExternalDataFreshness>,
-    /// Structured task proof, when the publisher recorded one (PAR-5.3).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) proof: Option<ManifestTaskProof>,
-}
-
-/// Trusted `baseline.json`: minimum shape plus artifact binding.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct BaselineManifest {
-    /// Manifest schema; must be 1.
-    pub(crate) schema: u32,
-    /// Repository identity digest.
-    pub(crate) repository_id: String,
-    /// Exact trusted source commit.
-    pub(crate) source_commit: String,
-    /// Protected ref under test.
-    #[serde(rename = "ref")]
-    pub ref_: String,
-    /// Protected event; must be `push`.
-    pub(crate) event: String,
-    /// Protected workflow ref.
-    pub(crate) workflow_ref: String,
-    /// Proof run ID.
-    pub(crate) run_id: u64,
-    /// Proof run attempt.
-    pub(crate) run_attempt: u64,
-    /// Final result; must be `passed`.
-    pub(crate) final_status: String,
-    /// Generator version.
-    pub(crate) generator_version: String,
-    /// Generator SHA-256.
-    pub generator_sha256: String,
-    /// Compatibility identity.
-    pub(crate) compatibility_id: String,
-    /// Numeric baseline artifact ID.
-    pub(crate) artifact_id: u64,
-    /// Derived baseline artifact name.
-    pub(crate) artifact_name: String,
-    /// Per-task proofs.
-    pub(crate) tasks: Vec<BaselineTaskEntry>,
-    /// Unix expiry; absent means the baseline never expires.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) expires_at_unix: Option<u64>,
-}
-
 /// Aggregate matrix reports into the final gate report (schema-1 JSON).
 ///
-/// Structural mismatches yield a `planning_failed` final report; only
-/// malformed requests fail outright. A missing plan still yields a
-/// verdict (`planning_failed`) instead of an error. Consumes the
-/// emitted plan only and never rediscovers repository state.
+/// Only the request envelope (JSON shape, schema, run key) fails
+/// outright; every evidence failure yields a diagnostic `planning_failed`
+/// verdict with closed failure tokens. A missing plan still yields a
+/// verdict instead of an error. Consumes the emitted plan only and never
+/// rediscovers repository state.
 ///
 /// # Errors
 ///
 /// Returns [`OrchestratorError::Internal`] for malformed requests and
-/// plan, candidate, or final-report validation failures.
+/// response-encoding failures.
 pub fn merge_internal(request_json: &str) -> Result<String, OrchestratorError> {
     let mut request: MergeRequest =
         serde_json::from_str(request_json).map_err(|err| OrchestratorError::Internal {
@@ -133,52 +87,85 @@ pub fn merge_internal(request_json: &str) -> Result<String, OrchestratorError> {
     request
         .required_jobs
         .sort_by(|left, right| left.job_id.cmp(&right.job_id));
-    for job in &request.required_jobs {
-        if job.job_id.trim().is_empty() || job.conclusion.trim().is_empty() {
-            return Err(internal("malformed_required_job"));
-        }
+    if let Some(report) = evidence_diagnostic(&request)? {
+        return encode_report(&report);
     }
     let Some(plan) = request.plan.as_ref() else {
-        let final_report =
-            FinalReport::without_plan(&request.run_key, request.required_jobs.clone())
-                .map_err(internal_contract)?;
-        final_report.validate().map_err(internal_contract)?;
-        return serde_json::to_string(&final_report).map_err(|err| OrchestratorError::Internal {
-            problem: format!("response_encode:{err}"),
-        });
-    };
-    plan.validate().map_err(internal_contract)?;
-    if plan.run_key != request.run_key {
-        return Err(internal("plan_run_mismatch"));
-    }
-    if let Some(candidate) = &request.candidate {
-        candidate.validate().map_err(internal_contract)?;
-        if candidate.run_key != request.run_key {
-            return Err(internal("candidate_run_mismatch"));
+        let mut tokens = BTreeSet::new();
+        if request.assembly_errors.is_empty() {
+            tokens.insert("source_missing".to_owned());
         }
-        check_candidate_proof(plan, candidate)?;
-    }
+        return encode_report(&diagnostic_without_plan(&request, tokens)?);
+    };
     let final_report = build_final(&request, plan)?;
     final_report.validate().map_err(internal_contract)?;
-    serde_json::to_string(&final_report).map_err(|err| OrchestratorError::Internal {
+    encode_report(&final_report)
+}
+
+/// Encode one final report as JSON.
+///
+/// # Errors
+///
+/// Returns [`OrchestratorError::Internal`] for encoding failures.
+fn encode_report(report: &FinalReport) -> Result<String, OrchestratorError> {
+    serde_json::to_string(report).map_err(|err| OrchestratorError::Internal {
         problem: format!("response_encode:{err}"),
     })
 }
-/// Reject untrusted or unbound candidate proofs (PAR-5.12).
+
+/// Diagnostic verdict for corrupt evidence; `None` when usable.
+fn evidence_diagnostic(request: &MergeRequest) -> Result<Option<FinalReport>, OrchestratorError> {
+    let Some(token) = evidence_failure(request) else {
+        return Ok(None);
+    };
+    diagnostic_without_plan(request, BTreeSet::from([token])).map(Some)
+}
+
+/// First evidence failure token, if any.
 ///
-/// Pull-request runs never present candidate proofs, and a proof must bind
-/// the merged head commit.
-fn check_candidate_proof(
-    plan: &Plan,
-    candidate: &CandidateReport,
-) -> Result<(), OrchestratorError> {
-    if plan.trust == velnor_actions_contract::Trust::Pr {
-        return Err(internal("candidate_proof_untrusted"));
+/// Shape failures corrupt the set; wrong-run evidence mistrusts scope.
+/// `None` means the evidence is usable, not that it passes.
+fn evidence_failure(request: &MergeRequest) -> Option<String> {
+    let jobs_ok = request
+        .required_jobs
+        .iter()
+        .all(|job| !job.job_id.trim().is_empty() && !job.conclusion.trim().is_empty());
+    let inventory_ok = request
+        .required_job_ids
+        .iter()
+        .all(|id| !id.trim().is_empty());
+    if !jobs_ok || !inventory_ok {
+        return Some("cache_corrupt".to_owned());
     }
-    if candidate.source_commit != plan.head {
-        return Err(internal("candidate_commit_mismatch"));
+    if let Some(plan) = request.plan.as_ref() {
+        if plan.validate().is_err() {
+            return Some("cache_corrupt".to_owned());
+        }
+        if plan.run_key != request.run_key {
+            return Some("trust_scope_mismatch".to_owned());
+        }
     }
-    Ok(())
+    candidate_failure(request)
+}
+
+/// Candidate evidence failure token, if any.
+///
+/// Qualification accepts any event, so a required untrusted PR
+/// candidate qualifies here without promotion rights; promotion stays
+/// with the protected release job. The proof must bind the planned head.
+fn candidate_failure(request: &MergeRequest) -> Option<String> {
+    let candidate = request.candidate.as_ref()?;
+    if candidate.validate().is_err() {
+        return Some("cache_corrupt".to_owned());
+    }
+    if candidate.run_key != request.run_key {
+        return Some("trust_scope_mismatch".to_owned());
+    }
+    let bound = request
+        .plan
+        .as_ref()
+        .is_none_or(|plan| candidate.source_commit == plan.head);
+    (!bound).then_some("input_digest_mismatch".to_owned())
 }
 
 /// Aggregate one final report from validated plan plus reports.
@@ -189,12 +176,13 @@ fn build_final(request: &MergeRequest, plan: &Plan) -> Result<FinalReport, Orche
     check_plan_evidence(plan, request, &mut signals);
     let entries = plan_entries(plan);
     let obligations = plan_digests(plan);
-    let partition = partition_reports(request, &entries, &mut signals);
+    let mut miss_reasons = BTreeSet::new();
+    let partition = partition_reports(request, &entries, &mut signals, &mut miss_reasons);
     let mut fold = Fold::default();
     let mut seen_task_reports = BTreeSet::new();
     let mut downloaded = Vec::new();
-    let mut miss_reasons = BTreeSet::new();
     let mut uncovered = 0u32;
+    check_required_evidence(plan, request, &mut signals, &mut miss_reasons);
     for entry in &plan.matrix.include {
         let Some(report) = partition.valid.get(entry.report_id.as_str()) else {
             uncovered += 1;
@@ -229,7 +217,7 @@ fn build_final(request: &MergeRequest, plan: &Plan) -> Result<FinalReport, Orche
         plan_id: plan.plan_id.clone(),
         expected_report_ids: entries.into_keys().map(str::to_owned).collect(),
         downloaded_artifact_ids: downloaded,
-        required_job_results: request.required_jobs.clone(),
+        required_job_results: reported_job_results(request),
         status,
         counts: FinalCounts {
             selected: u32::try_from(plan.task_ids.len()).unwrap_or(u32::MAX),
@@ -344,27 +332,6 @@ fn plan_digests(plan: &Plan) -> BTreeMap<&str, &str> {
         .map(|obligation| (obligation.task_id.as_str(), obligation.task_digest.as_str()))
         .collect()
 }
-/// Fold required job conclusions; skipped is never success.
-fn fold_jobs(jobs: &[RequiredJobResult], signals: &mut Signals) {
-    for job in jobs {
-        match job.conclusion.as_str() {
-            "success" => {}
-            "cancelled" => signals.cancelled = true,
-            "skipped" | "neutral" => signals.not_run = true,
-            _ => signals.failed = true,
-        }
-    }
-}
-
-/// Check 4: fold the candidate conclusion when validation ran.
-fn fold_candidate(candidate: Option<&CandidateReport>, signals: &mut Signals) {
-    match candidate.map(|report| report.status) {
-        None | Some(velnor_actions_contract::CandidateStatus::Passed) => {}
-        Some(velnor_actions_contract::CandidateStatus::Failed) => signals.failed = true,
-        Some(velnor_actions_contract::CandidateStatus::Cancelled) => signals.cancelled = true,
-    }
-}
-
 /// Check 5: precedence over collected signals, then pass or no-work.
 fn decide(signals: &Signals, plan: &Plan) -> FinalStatus {
     if signals.planning_failed {

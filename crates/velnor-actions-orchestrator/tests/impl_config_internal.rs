@@ -162,6 +162,7 @@ fn internal_merge_aggregates_reports() -> TestResult {
         "plan": plan,
         "matrix": plan.matrix,
         "matrix_reports": [],
+        "required_job_ids": ["velnor-plan"],
         "required_jobs": [{"job_id": "velnor-plan", "conclusion": "success"}],
     });
     let merged = merge_internal(&merge_request.to_string())?;
@@ -179,6 +180,7 @@ fn internal_merge_aggregates_reports() -> TestResult {
         "plan": plan,
         "matrix": plan.matrix,
         "matrix_reports": reports,
+        "required_job_ids": ["velnor-plan"],
         "required_jobs": [{"job_id": "velnor-plan", "conclusion": "success"}],
     });
     let merged = merge_internal(&merge_request.to_string())?;

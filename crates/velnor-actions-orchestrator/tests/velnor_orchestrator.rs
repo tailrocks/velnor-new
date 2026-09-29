@@ -27,6 +27,7 @@ mod impl_orch_plansel;
 mod impl_plan_prepare;
 mod impl_prepare_generate;
 mod impl_protocol;
+mod impl_required_evidence;
 mod impl_select;
 mod impl_task_source_prep;
 mod impl_trust;

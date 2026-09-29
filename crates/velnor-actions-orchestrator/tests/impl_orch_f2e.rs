@@ -11,8 +11,8 @@ use velnor_actions_orchestrator::{
 };
 
 use crate::impl_common::{
-    TestResult, config_with_branch, fixture_manifest_json, make_repo, plan_for_source_change,
-    snapshot,
+    TestResult, config_with_branch, fixture_manifest_json, git, git_line, make_repo,
+    plan_for_source_change, snapshot,
 };
 
 /// Preview-generate `prep` into `dir`.
@@ -223,10 +223,13 @@ fn in_place_generate_preserves_config() -> TestResult {
 #[test]
 fn authority_order_gates_pipeline() -> TestResult {
     let bad = make_repo("schema = \n")?;
-    let request = serde_json::json!({"schema": 1, "run_key": "local", "base": None::<String>, "head": "abc", "event": "push", "root": bad.path().display().to_string()});
+    git(&["add", "."], bad.path())?;
+    git(&["commit", "-m", "bad"], bad.path())?;
+    let head = git_line(&["rev-parse", "HEAD"], bad.path())?;
+    let request = serde_json::json!({"schema": 1, "run_key": "local", "base": None::<String>, "head": head, "event": "push", "root": bad.path().display().to_string()});
     let err = plan_internal(&request.to_string()).expect_err("bad config gates first");
     assert!(err.to_string().contains("config.toml"), "{err}");
-    let missing = serde_json::json!({"schema": 1, "run_key": "local", "base": None::<String>, "head": "abc", "event": "push", "root": "/nonexistent-velnor-root-xyz"});
+    let missing = serde_json::json!({"schema": 1, "run_key": "local", "base": None::<String>, "head": head, "event": "push", "root": "/nonexistent-velnor-root-xyz"});
     assert!(
         plan_internal(&missing.to_string()).is_err(),
         "root gates before config"

@@ -257,7 +257,8 @@ fn write_new(path: &Path, bytes: &[u8]) -> Result<(), OrchestratorError> {
 
 /// True when one `merge-v1` response is a passing verdict.
 ///
-/// `passed` and `no_work` pass; every other status fails.
+/// Only `passed` passes: `no_work` proves nothing validated, so the gate
+/// stays red; every other status fails.
 ///
 /// # Errors
 ///
@@ -269,10 +270,7 @@ pub fn merge_passed(response_json: &str) -> Result<bool, OrchestratorError> {
     }
     let verdict: Verdict =
         serde_json::from_str(response_json).map_err(|_| internal("malformed_response"))?;
-    Ok(matches!(
-        verdict.status,
-        FinalStatus::Passed | FinalStatus::NoWork
-    ))
+    Ok(matches!(verdict.status, FinalStatus::Passed))
 }
 
 /// Explicit run key, else `r<run-id>-a<attempt>` from the GitHub environment.

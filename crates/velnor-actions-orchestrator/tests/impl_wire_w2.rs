@@ -3,11 +3,10 @@
 use std::fs;
 use std::path::Path;
 
-use serde_json::{Value, json};
+use serde_json::json;
 use velnor_actions_contract as C;
 use velnor_actions_orchestrator::{
-    decisions::plan_json_path, merge_internal, plan_internal, plan_outputs, plan_text, prepare,
-    publish_plan_files,
+    decisions::plan_json_path, plan_outputs, plan_text, prepare, publish_plan_files,
 };
 
 use super::impl_common::{
@@ -16,7 +15,7 @@ use super::impl_common::{
 };
 use super::impl_orch_core::{
     WireResult, has_warning, manifest_for, merge, merge_request, merge_request_for, plan_value,
-    pr_value, push_request, success_jobs,
+    pr_value, success_jobs,
 };
 
 fn shard_config() -> String {
@@ -34,7 +33,7 @@ fn v1_push_plan_wiring() -> TestResult {
     assert!(plan.edges.iter().any(|e| e.kind == C::EdgeKind::Gate));
     for ob in &plan.obligations {
         assert_eq!(ob.decision, C::ObligationDecision::Execute);
-        assert_eq!(ob.reason, "selected");
+        assert_eq!(ob.reason, "affected_by_change");
         C::validate_digest(&ob.input_digest)?;
         C::validate_digest(&ob.task_digest)?;
     }
@@ -72,13 +71,11 @@ fn input_digest_is_deterministic() -> TestResult {
 fn build_script_package_rejects_reuse_and_coverage() -> TestResult {
     let dir = make_repo(config_with_branch())?;
     let root = dir.path();
-    git(&["add", "."], root)?;
-    git(&["commit", "-m", "one"], root)?;
     fs::write(root.join("build.rs"), "fn main() {}\n")?;
     git(&["add", "."], root)?;
-    git(&["commit", "-m", "two"], root)?;
-    let base = git_line(&["rev-parse", "HEAD~1"], root)?;
+    git(&["commit", "-m", "one"], root)?;
     let head = git_line(&["rev-parse", "HEAD"], root)?;
+    let base = head.clone();
     let value = plan_value(root, "pull_request", Some(&base), &head, None)?;
     let plan: C::Plan = serde_json::from_value(value["plan"].clone())?;
     assert!(!plan.obligations.is_empty());
@@ -94,16 +91,21 @@ fn build_script_package_rejects_reuse_and_coverage() -> TestResult {
 }
 
 #[test]
-fn reused_reports_verify_before_cover() -> TestResult {
+fn reused_reports_fail_without_restore_proof() -> TestResult {
     let (_repo, plan) = plan_for_source_change()?;
     let mut reports = passing_reports(&plan)?;
     let first = reports.first_mut().expect("report");
     first.tasks[0].status = C::TaskStatus::Reused;
     (first.reused, first.executed) = (1, 0);
     let final_report = merge(&merge_request_for(&plan, &reports)?)?;
-    assert_eq!(final_report.status, C::FinalStatus::Passed);
-    assert_eq!(final_report.counts.reused, 1);
-    assert!(final_report.miss_reasons.is_empty());
+    assert_eq!(final_report.status, C::FinalStatus::PlanningFailed);
+    assert!(
+        final_report
+            .miss_reasons
+            .contains(&"task_result_incomplete".to_owned()),
+        "reuse without proof fails: {:?}",
+        final_report.miss_reasons
+    );
     Ok(())
 }
 
@@ -155,55 +157,25 @@ fn resource_groups_validate_at_merge() -> TestResult {
 fn manifest_task_proofs_validate_per_task() -> TestResult {
     let (repo, plan) = plan_for_source_change()?;
     let root = repo.path();
-    let base = git_line(&["rev-parse", "HEAD~1"], root)?;
     let head = git_line(&["rev-parse", "HEAD"], root)?;
-    let mut manifest = manifest_for(&plan, &base, "testmain")?;
+    let mut manifest = manifest_for(&plan, &head, "testmain")?;
     let tasks = manifest["tasks"].as_array_mut().expect("tasks");
     for (task, ob) in tasks.iter_mut().zip(&plan.obligations) {
         task["proof"] = json!({"task_id": ob.task_id, "task_digest": ob.task_digest, "input_digest": ob.input_digest,
             "graph_digest": ob.task_digest, "toolchain_id": ob.task_digest, "mbx_digest": ob.task_digest,
             "platform_id": ob.task_digest, "profile": "default", "proof_run_id": 7});
     }
-    let warm = plan_value(root, "pull_request", Some(&base), &head, Some(&manifest))?;
+    let warm = plan_value(root, "pull_request", Some(&head), &head, Some(&manifest))?;
     for ob in warm["plan"]["obligations"].as_array().expect("obligations") {
         assert_eq!(ob["decision"], "covered_by_trusted_baseline", "{ob}");
     }
-    let mut bad = manifest_for(&plan, &base, "testmain")?;
+    let mut bad = manifest_for(&plan, &head, "testmain")?;
     let ob0 = &plan.obligations[0];
     bad["tasks"][0]["proof"] = json!({"task_id": ob0.task_id, "task_digest": "bogus", "input_digest": ob0.input_digest,
         "graph_digest": ob0.task_digest, "toolchain_id": ob0.task_digest, "mbx_digest": ob0.task_digest,
         "platform_id": ob0.task_digest, "profile": "default", "proof_run_id": 7});
-    let cold = plan_value(root, "pull_request", Some(&base), &head, Some(&bad))?;
+    let cold = plan_value(root, "pull_request", Some(&head), &head, Some(&bad))?;
     assert!(has_warning(&cold, "bad_task_proof"));
-    Ok(())
-}
-
-#[test]
-fn candidate_proofs_need_trust_and_commit() -> TestResult {
-    let (repo, plan) = plan_for_source_change()?;
-    let head = git_line(&["rev-parse", "HEAD"], repo.path())?;
-    let candidate = |commit: &str| {
-        json!({"schema": 1, "report_id": "candidate-local-x86-64-unknown-linux-gnu",
-        "run_key": "local", "source_commit": commit, "target": "x86_64-unknown-linux-gnu",
-        "artifact_sha256": "1".repeat(64), "generator_version": "0.1.0", "status": "passed", "checks": []})
-    };
-    let reports = passing_reports(&plan)?;
-    let mut pr = merge_request_for(&plan, &reports)?;
-    pr["candidate"] = candidate(&head);
-    let err = err_of(merge_internal(&pr.to_string()), "pr proof")?;
-    let untrusted = err.to_string().contains("candidate_proof_untrusted");
-    assert!(untrusted, "{err}");
-    let req = push_request(repo.path(), &head).to_string();
-    let value: Value = serde_json::from_str(&plan_internal(&req)?)?;
-    let push_plan: C::Plan = serde_json::from_value(value["plan"].clone())?;
-    let push_reports = passing_reports(&push_plan)?;
-    let mut trusted = merge_request_for(&push_plan, &push_reports)?;
-    trusted["candidate"] = candidate(&head);
-    assert_eq!(merge(&trusted)?.status, C::FinalStatus::Passed);
-    trusted["candidate"] = candidate(&"0".repeat(40));
-    let err = err_of(merge_internal(&trusted.to_string()), "commit bind")?;
-    let mismatch = err.to_string().contains("candidate_commit_mismatch");
-    assert!(mismatch, "{err}");
     Ok(())
 }
 
@@ -271,14 +243,30 @@ fn local_select_uses_working_tree() -> TestResult {
     let value = plan_value(root, "local", None, &head, None)?;
     let ids = value["plan"]["task_ids"].as_array().expect("task ids");
     assert!(!ids.is_empty());
-    let only_b = ids
-        .iter()
-        .all(|id| id.as_str().is_some_and(|s| s.contains("/b/")));
-    assert!(only_b, "{ids:?}");
+    for member in ["/a/", "/b/"] {
+        assert!(
+            ids.iter()
+                .any(|id| id.as_str().is_some_and(|s| s.contains(member))),
+            "{member} in universe: {ids:?}"
+        );
+    }
+    let obs = value["plan"]["obligations"].as_array().expect("obs");
+    assert!(
+        obs.iter()
+            .filter(|ob| ob["task_id"].as_str().is_some_and(|s| s.contains("/b/")))
+            .all(|ob| ob["reason"] == "affected_by_change"),
+        "{obs:?}"
+    );
+    assert!(
+        obs.iter()
+            .filter(|ob| ob["task_id"].as_str().is_some_and(|s| s.contains("/a/")))
+            .all(|ob| ob["reason"] == "unproven"),
+        "{obs:?}"
+    );
     git(&["checkout", "--", "."], root)?;
     let value = plan_value(root, "local", None, &head, None)?;
     assert!(
-        value["plan"]["task_ids"]
+        !value["plan"]["task_ids"]
             .as_array()
             .expect("task ids")
             .is_empty()

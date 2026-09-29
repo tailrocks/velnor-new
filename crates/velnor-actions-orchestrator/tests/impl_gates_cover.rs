@@ -152,13 +152,13 @@ fn malformed_manifest_is_a_miss_not_a_failure() -> TestResult {
 #[test]
 fn tampered_task_entry_executes_with_miss_warning() -> TestResult {
     let (repo, seed) = plan_with_manifest(None)?;
-    let base = seed.base.clone().expect("base");
+    let head = seed.head.clone();
     let mut tasks = entries_for(&seed);
     let tampered_id = tasks[0]["task_id"].as_str().expect("task id").to_owned();
     tasks[0]["input_digest"] =
         serde_json::Value::String(velnor_actions_contract::digest_b3(b"tampered"));
-    let manifest = manifest_for(&seed, &base, &tasks);
-    let plan = plan_at(repo.path(), &base, &seed.head, Some(manifest))?;
+    let manifest = manifest_for(&seed, &head, &tasks);
+    let plan = plan_at(repo.path(), &head, &head, Some(manifest))?;
     assert!(plan.obligations.len() > 1, "needs covered + tampered pair");
     for ob in &plan.obligations {
         if ob.task_id == tampered_id {
@@ -191,13 +191,13 @@ fn tampered_task_entry_executes_with_miss_warning() -> TestResult {
 fn valid_manifest_covers_exact_obligations() -> TestResult {
     let (repo, seed) = plan_with_manifest(None)?;
     assert!(!seed.obligations.is_empty());
-    let base = seed.base.clone().expect("base");
-    let manifest = manifest_for(&seed, &base, &entries_for(&seed));
+    let head = seed.head.clone();
+    let manifest = manifest_for(&seed, &head, &entries_for(&seed));
     let artifact_name = manifest["artifact_name"]
         .as_str()
         .expect("artifact name")
         .to_owned();
-    let plan = plan_at(repo.path(), &base, &seed.head, Some(manifest))?;
+    let plan = plan_at(repo.path(), &head, &head, Some(manifest))?;
     for ob in &plan.obligations {
         assert_eq!(
             ob.decision,
@@ -205,7 +205,7 @@ fn valid_manifest_covers_exact_obligations() -> TestResult {
             "{ob:?}"
         );
         let proof = ob.baseline_proof.as_ref().expect("proof");
-        assert_eq!(proof.source_commit, base);
+        assert_eq!(proof.source_commit, head);
         assert_eq!(proof.artifact_id, 9);
         assert_eq!(proof.artifact_name, artifact_name);
     }
@@ -263,6 +263,7 @@ fn merge_rejects_covered_claims_without_manifest() -> TestResult {
         "plan": plan,
         "matrix": plan.matrix,
         "matrix_reports": reports,
+        "required_job_ids": ["velnor-plan"],
         "required_jobs": [{"job_id": "velnor-plan", "conclusion": "success"}],
     });
     let final_report: velnor_actions_contract::FinalReport =
@@ -272,7 +273,7 @@ fn merge_rejects_covered_claims_without_manifest() -> TestResult {
 }
 
 #[test]
-fn merge_group_narrows_like_pull_request() -> TestResult {
+fn merge_group_classifies_like_pull_request() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     let root = repo.path();
     git(&["add", "."], root)?;

@@ -51,23 +51,33 @@ pub(crate) fn partition_reports<'a>(
     request: &'a MergeRequest,
     entries: &BTreeMap<&str, &MatrixEntry>,
     signals: &mut Signals,
+    miss_reasons: &mut BTreeSet<String>,
 ) -> Partition<'a> {
     let mut valid = BTreeMap::new();
     let mut malformed = 0u32;
     let mut duplicates = 0u32;
     for report in &request.matrix_reports {
-        if report.run_key != request.run_key || report.validate().is_err() {
+        if report.run_key != request.run_key {
             malformed += 1;
             signals.not_run = true;
+            miss_reasons.insert("trust_scope_mismatch".to_owned());
+            continue;
+        }
+        if report.validate().is_err() {
+            malformed += 1;
+            signals.not_run = true;
+            miss_reasons.insert("cache_corrupt".to_owned());
             continue;
         }
         if valid.contains_key(report.report_id.as_str()) {
             duplicates += 1;
             signals.not_run = true;
+            miss_reasons.insert("cache_corrupt".to_owned());
             continue;
         }
         if !entries.contains_key(report.report_id.as_str()) {
             signals.planning_failed = true;
+            miss_reasons.insert("cache_corrupt".to_owned());
             continue;
         }
         valid.insert(report.report_id.as_str(), report);
@@ -135,6 +145,7 @@ pub(crate) fn cover_entry(
         request,
         report,
         obligations,
+        &entry.declared_outputs,
         &mut *sinks.seen_task_reports,
         &mut *sinks.miss_reasons,
     )? {
@@ -212,6 +223,7 @@ fn check_digests(
     request: &MergeRequest,
     report: &MatrixReport,
     obligations: &BTreeMap<&str, &str>,
+    declared: &[String],
     seen_task_reports: &mut BTreeSet<String>,
     miss_reasons: &mut BTreeSet<String>,
 ) -> Result<bool, OrchestratorError> {
@@ -227,8 +239,11 @@ fn check_digests(
         if expected != task.task_report_id {
             return Ok(false);
         }
+        // Task reports carry no restore observations yet (P04); reuse
+        // claims fail closed until the contract carries them.
+        let observed: &[(String, Vec<u8>, String)] = &[];
         if task.status == TaskStatus::Reused
-            && let Err(reason) = wire_w2::verify_reused_task(&task.task_id)
+            && let Err(reason) = wire_w2::verify_reused_task(&task.task_id, declared, observed)
         {
             miss_reasons.insert(reason.as_str().to_owned());
             return Ok(false);
