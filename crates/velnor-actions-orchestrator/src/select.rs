@@ -15,7 +15,32 @@ use crate::select_edges::{base_edges, head_edges};
 use crate::validators::{validate_diff_rev, validate_select_diff_args};
 
 /// Select task groups: affected subset on PRs with a base, else all.
+///
+/// Groups without applicable targets are never selected: scheduling them
+/// would emit impossible obligations (for example `cargo test --doc` for a
+/// package with no doctest-able target). Each omission is recorded as a
+/// `valid_no_test_targets:<task-id>` warning, never silent.
 pub(crate) fn select_groups<'a>(
+    root: &Path,
+    event: WorkflowEvent,
+    base: Option<&str>,
+    head: &str,
+    discovery: &'a Discovery,
+    warnings: &mut Vec<String>,
+) -> Vec<&'a TaskGroup> {
+    let mut kept = Vec::new();
+    for group in select_candidate_groups(root, event, base, head, discovery, warnings) {
+        if group.no_test_targets {
+            warnings.push(format!("valid_no_test_targets:{}", group.task_id));
+        } else {
+            kept.push(group);
+        }
+    }
+    kept
+}
+
+/// Candidate task groups before the valid-no-target exclusion.
+fn select_candidate_groups<'a>(
     root: &Path,
     event: WorkflowEvent,
     base: Option<&str>,

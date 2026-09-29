@@ -52,6 +52,11 @@ pub const NEXTEST_VERSION: &str = "0.9.146";
 // prefix (not an exact pin); `cargo:cargo-nextest` compiles from source.
 const NEXTEST_TOOL_SPEC_PREFIX: &str = "aqua:nextest-rs/nextest/cargo-nextest";
 
+/// Pinned Rust target triple: the single Linux target the runner fleet
+/// maps to (`velnor_actions_contract::targets` stays the source of
+/// truth; both runner labels resolve here).
+pub const RUST_TARGET_TRIPLE: &str = "x86_64-unknown-linux-gnu";
+
 /// Platforms every catalog tool supports (sorted, exact labels).
 const TOOL_PLATFORMS: [&str; 2] = ["ubuntu-24.04", "ubuntu-26.04"];
 
@@ -239,6 +244,10 @@ impl ToolCatalog {
 
     /// Mise selector for one tool: `<tool>@<exact>`, except Nextest,
     /// which needs its backend-qualified aqua-registry path.
+    ///
+    /// Rust carries no inline options: bracketed tool options are silently
+    /// ignored on config-less CLI specs, so components install through the
+    /// fixed `PrepareRustComponents` step instead.
     #[must_use]
     pub fn tool_spec(&self, tool: PinnedTool) -> String {
         match tool {
@@ -247,6 +256,15 @@ impl ToolCatalog {
             }
             _ => format!("{}@{}", tool.tool_name(), self.version(tool)),
         }
+    }
+
+    /// Exact `rustup` toolchain name: `<rust-exact>-<target-triple>`.
+    ///
+    /// Addresses the toolchain `mise install rust@<exact>` creates, so the
+    /// fixed component step cannot resolve an ambient toolchain instead.
+    #[must_use]
+    pub fn rust_toolchain_name(&self) -> String {
+        format!("{}-{RUST_TARGET_TRIPLE}", self.version(PinnedTool::Rust))
     }
 
     /// Mise selectors for several tools, in the given order.

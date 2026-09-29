@@ -16,7 +16,14 @@ report explaining why.
 The job's action prelude checks out the selected commit with the pinned
 `actions/checkout` and `persist-credentials: false`, initializes the pinned Mise action without project config
 or environment loading, and uses Mise to install the exact selected Rust,
-components, and tools. For an MBX profile only, it then invokes the pinned
+components, and tools. Mise honors `components`/`profile` only from
+`mise.toml`, which config-less CI invocations cannot use, and installs
+the minimal rustup profile otherwise; so components arrive through the
+fixed `Prepare Rust components` step (`mise exec rust@<exact> --
+rustup component add --toolchain <exact>-<triple> clippy rustfmt`):
+the pinned toolchain's own rustup, deterministic, writing only
+Velnor-owned tool homes — Mise installing components, not an ad hoc
+installer. For an MBX profile only, it then invokes the pinned
 `jdx/mr-boxington-action` in `github-cache-mode: objects`; this action owns MBX
 object restore/save. For a Cargo profile, that action and MBX installation are
 absent. `actions/cache/restore` and `actions/cache/save` handle Cargo source

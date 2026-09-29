@@ -45,6 +45,17 @@ fn empty_package() -> PackageRecord {
     package
 }
 
+/// Binary-only package: testable bins but no doctest-able lib target.
+fn bin_only_package() -> PackageRecord {
+    let mut package = package();
+    package.targets = vec![
+        target("bin", "a-bin", true, false),
+        target("test", "integration", true, false),
+    ];
+    package.has_build_script = false;
+    package
+}
+
 /// Profile selecting Cargo and plain `cargo test`.
 fn cargo_profile() -> RustExecutionProfile {
     RustExecutionProfile {
@@ -217,6 +228,41 @@ fn no_targets_records_valid_no_test_targets() {
         .filter(|group| group.kind == TaskKind::Doctest)
         .collect();
     assert!(doctest[0].no_test_targets);
+}
+
+#[test]
+fn bin_only_package_marks_doctest_valid_no_target() {
+    let bin_only = bin_only_package();
+    let profile = cargo_profile();
+    let features = vec!["default".to_owned()];
+    let derived = inputs(&bin_only, &profile, &features);
+    let Ok(groups) = derive_task_groups(&derived) else {
+        panic!("derivation must succeed");
+    };
+    let doctest: Vec<&velnor_actions_rust::TaskGroup> = groups
+        .iter()
+        .filter(|group| group.kind == TaskKind::Doctest)
+        .collect();
+    assert_eq!(doctest.len(), 1);
+    assert!(doctest[0].no_test_targets);
+    let test: Vec<&velnor_actions_rust::TaskGroup> = groups
+        .iter()
+        .filter(|group| group.kind == TaskKind::Test)
+        .collect();
+    assert_eq!(test.len(), 1);
+    assert!(!test[0].no_test_targets);
+    assert_eq!(test[0].target_flags, vec!["--bins", "--tests"]);
+    let with_lib = package();
+    let derived = inputs(&with_lib, &profile, &features);
+    let Ok(groups) = derive_task_groups(&derived) else {
+        panic!("derivation must succeed");
+    };
+    let doctest: Vec<&velnor_actions_rust::TaskGroup> = groups
+        .iter()
+        .filter(|group| group.kind == TaskKind::Doctest)
+        .collect();
+    assert_eq!(doctest.len(), 1);
+    assert!(!doctest[0].no_test_targets);
 }
 
 #[test]

@@ -85,12 +85,11 @@ pub(crate) fn vet_step_syntax(syntax: StepSyntax) -> Result<(), OrchestratorErro
 
 /// Matrix consumer job: checkout, pinned tools, sources, MBX, template.
 ///
-/// Order follows task-execution-contract §2: `Prepare pinned tools`
-/// sits at index 1, `Fetch Cargo sources` runs per lockful root so the
-/// locked/offline payloads resolve from a cold registry, the MBX
-/// objects restore (MBX legs only) follows, and the fixed matrix-entry
-/// template closes the job. Gate-6 cache steps stay absent until a
-/// qualification fixture enables them.
+/// Order follows task-execution-contract §2: `Prepare pinned tools` sits at index 1 with
+/// `Prepare Rust components` right after, `Fetch Cargo sources` runs per lockful root so the
+/// locked/offline payloads resolve from a cold registry, the MBX objects restore (MBX legs
+/// only) follows, and the fixed matrix-entry template closes the job. Gate-6 cache steps
+/// stay absent until a qualification fixture enables them.
 ///
 /// # Errors
 ///
@@ -100,10 +99,12 @@ pub(crate) fn build_task_job(
     max_parallel_jobs: u32,
     catalog: &ToolCatalog,
     use_mbx: bool,
+    use_nextest: bool,
     fetch_roots: &[String],
 ) -> Result<Job, OrchestratorError> {
     let mut steps = vec![checkout_step()?];
-    steps.push(prepare_task_tools_step(catalog, use_mbx)?);
+    steps.push(prepare_task_tools_step(catalog, use_mbx, use_nextest)?);
+    steps.push(super::prepare_rust_components_step(catalog)?);
     steps.extend(fetch_steps(catalog, fetch_roots)?);
     steps.extend(mbx_task_step(use_mbx)?);
     steps.extend(maybe_task_cache_steps(None, TaskCacheMode::Off, "")?);
@@ -121,13 +122,11 @@ pub(crate) fn build_task_job(
 #[must_use]
 pub(crate) fn task_driver_tools(use_mbx: bool) -> Vec<PinnedTool> {
     let mut tools = vec![PinnedTool::Rust];
-    if use_mbx {
-        tools.push(PinnedTool::MrBoxington);
-    }
+    tools.extend(use_mbx.then_some(PinnedTool::MrBoxington));
     tools
 }
 
-/// Typed `Prepare pinned tools` step for the task-job driver set.
+/// Typed `Prepare pinned tools` step for the task-job tool set.
 ///
 /// # Errors
 ///
@@ -135,9 +134,13 @@ pub(crate) fn task_driver_tools(use_mbx: bool) -> Vec<PinnedTool> {
 fn prepare_task_tools_step(
     catalog: &ToolCatalog,
     use_mbx: bool,
+    use_nextest: bool,
 ) -> Result<Step, OrchestratorError> {
-    let homes = ToolHomes::runner_temp();
-    let prepare = PreparePinnedTools::new(task_driver_tools(use_mbx), homes).map_err(|err| {
+    let mut tools = task_driver_tools(use_mbx);
+    if use_nextest {
+        tools.push(PinnedTool::Nextest);
+    }
+    let prepare = PreparePinnedTools::new(tools, ToolHomes::runner_temp()).map_err(|err| {
         OrchestratorError::Contract {
             problem: err.to_string(),
         }
@@ -374,10 +377,23 @@ mod tests {
             Some("objects")
         );
         assert!(PinnedActionRef::parse_uses(uses, MR_BOXINGTON_ACTION_VERSION).is_ok());
+        assert!(declared_config_variables().is_empty());
     }
 
     #[test]
-    fn v1_declares_no_config_variables() {
-        assert!(declared_config_variables().is_empty());
+    fn task_prepare_steps_carry_nextest_and_components() {
+        use velnor_actions_mise::PREPARE_RUST_COMPONENTS_STEP;
+        let catalog = ToolCatalog::pinned();
+        for use_nextest in [false, true] {
+            let job = build_task_job("ubuntu-26.04", 2, &catalog, false, use_nextest, &[])
+                .expect("task job");
+            assert_eq!(job.steps[1].name, PREPARE_PINNED_TOOLS_STEP);
+            assert_eq!(job.steps[2].name, PREPARE_RUST_COMPONENTS_STEP);
+            let StepKind::Shell { run, .. } = &job.steps[1].kind else {
+                panic!("prepare must be a shell step");
+            };
+            let nextest = catalog.tool_spec(PinnedTool::Nextest);
+            assert_eq!(run.contains(&nextest), use_nextest);
+        }
     }
 }

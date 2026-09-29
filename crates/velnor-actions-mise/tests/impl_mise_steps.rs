@@ -2,8 +2,9 @@
 use std::ffi::OsString;
 use std::path::PathBuf;
 use velnor_actions_mise::{
-    MiseError, PREPARE_PINNED_TOOLS_STEP, PinnedTool, PreparePinnedTools, ToolCatalog, ToolHomes,
-    VERIFY_PREPARED_INPUTS_STEP, VerifyPreparedInputs,
+    MiseError, PREPARE_PINNED_TOOLS_STEP, PREPARE_RUST_COMPONENTS_STEP, PinnedTool,
+    PreparePinnedTools, PrepareRustComponents, ToolCatalog, ToolHomes, VERIFY_PREPARED_INPUTS_STEP,
+    VerifyPreparedInputs,
 };
 
 fn pinned() -> ToolCatalog {
@@ -238,6 +239,53 @@ fn tool_homes_exec_env_is_verification_env() -> Result<(), String> {
         qualified.env(&catalog),
         "one exec-env constructor serves every verification step"
     );
+    Ok(())
+}
+
+#[test]
+fn rust_components_argv_is_fixed_rustup_add() -> Result<(), String> {
+    assert_eq!(PREPARE_RUST_COMPONENTS_STEP, "Prepare Rust components");
+    let request = PrepareRustComponents::new(homes()?);
+    assert_eq!(
+        PrepareRustComponents::step_name(),
+        PREPARE_RUST_COMPONENTS_STEP
+    );
+    assert_eq!(PrepareRustComponents::components(), ["clippy", "rustfmt"]);
+    assert_eq!(
+        request.argv(&pinned()),
+        strings(&[
+            "mise",
+            "--no-config",
+            "--no-env",
+            "--no-hooks",
+            "exec",
+            "rust@1.98.1",
+            "--",
+            "rustup",
+            "component",
+            "add",
+            "--toolchain",
+            "1.98.1-x86_64-unknown-linux-gnu",
+            "clippy",
+            "rustfmt",
+        ])
+    );
+    Ok(())
+}
+
+#[test]
+fn rust_components_command_matches_step() -> Result<(), String> {
+    let catalog = pinned();
+    let request = PrepareRustComponents::new(homes()?);
+    let command = request.command(&catalog).map_err(|err| err.to_string())?;
+    assert_eq!(command.argv(), request.argv(&catalog));
+    assert_eq!(command.full_env(), request.env(&catalog));
+    assert!(command.disables_auto_install());
+    assert!(env_has(
+        &request.env(&catalog),
+        "RUSTUP_TOOLCHAIN",
+        "1.98.1"
+    ));
     Ok(())
 }
 

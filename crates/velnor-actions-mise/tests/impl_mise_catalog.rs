@@ -2,7 +2,8 @@
 use velnor_actions_mise::catalog::NEXTEST_VERSION;
 use velnor_actions_mise::{
     ACTIONLINT_VERSION, GH_VERSION, MISE_VERSION, MR_BOXINGTON_VERSION, MiseError, PinnedTool,
-    RUST_VERSION, SHELLCHECK_VERSION, ToolCatalog, ZIZMOR_VERSION, validate_exact_version,
+    RUST_TARGET_TRIPLE, RUST_VERSION, SHELLCHECK_VERSION, ToolCatalog, ZIZMOR_VERSION,
+    validate_exact_version,
 };
 
 #[test]
@@ -153,4 +154,16 @@ fn catalog_new_validates_every_slot() {
         ),
         Err(MiseError::InvalidToolVersion { .. })
     ));
+}
+
+#[test]
+fn rust_toolchain_name_pins_version_and_target() {
+    assert_eq!(RUST_TARGET_TRIPLE, "x86_64-unknown-linux-gnu");
+    assert!(velnor_actions_contract::targets::is_supported_target(
+        RUST_TARGET_TRIPLE
+    ));
+    assert_eq!(
+        ToolCatalog::pinned().rust_toolchain_name(),
+        "1.98.1-x86_64-unknown-linux-gnu"
+    );
 }

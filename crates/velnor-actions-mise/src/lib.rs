@@ -31,9 +31,9 @@ pub use cache::{
     verify_artifact_digest,
 };
 pub use catalog::{
-    ACTIONLINT_VERSION, GH_VERSION, MISE_VERSION, MR_BOXINGTON_VERSION, PinnedTool, RUST_VERSION,
-    SHELLCHECK_VERSION, ToolCatalog, ZIZMOR_VERSION, check_freshness_requirements,
-    validate_exact_version,
+    ACTIONLINT_VERSION, GH_VERSION, MISE_VERSION, MR_BOXINGTON_VERSION, PinnedTool,
+    RUST_TARGET_TRIPLE, RUST_VERSION, SHELLCHECK_VERSION, ToolCatalog, ZIZMOR_VERSION,
+    check_freshness_requirements, validate_exact_version,
 };
 pub use command::{
     ALLOWED_MISE_SUBCOMMANDS, ISOLATION_ENV, IsolatedCommand, MISE_CARGO_HOME_ENV,
@@ -64,8 +64,8 @@ pub use reuse::{
     TaskReuseRequest,
 };
 pub use steps::{
-    PREPARE_PINNED_TOOLS_STEP, PreparePinnedTools, ToolHomes, VERIFY_PREPARED_INPUTS_STEP,
-    VerifyPreparedInputs,
+    PREPARE_PINNED_TOOLS_STEP, PREPARE_RUST_COMPONENTS_STEP, PreparePinnedTools,
+    PrepareRustComponents, ToolHomes, VERIFY_PREPARED_INPUTS_STEP, VerifyPreparedInputs,
 };
 pub use template::TaskTemplate;
 pub use toolfiles::{

@@ -31,12 +31,12 @@ const MATRIX_OUTPUT_NAME: &str = "matrix";
 
 /// Planner job: checkout, pinned-tool install, optional Acquire, request, plan.
 ///
-/// `Prepare pinned tools` installs the exact catalog tools the later steps
-/// consume through fail-closed `mise exec`: Rust plus the detected MBX
-/// driver for the format/build steps, and the actionlint/shellcheck/zizmor
-/// validators the public `generate` runs inside `Check generated files`.
-/// Without it the freshness step fails with `mise ... couldn't exec
-/// process` because implicit installation is disabled there.
+/// `Prepare pinned tools` installs the exact catalog tools the later steps consume
+/// through fail-closed `mise exec`: Rust plus the detected MBX driver for the
+/// format/build steps, Nextest when any leg selects it, and the validators the
+/// public `generate` runs inside `Check generated files`. Without it the freshness
+/// step fails with `mise ... couldn't exec process` because implicit installation
+/// is disabled there.
 ///
 /// No `Verify toolchain` step: task-execution-contract §2 scopes it to
 /// task jobs; the plan sequence is workflow-contract §3 steps 1-8.
@@ -54,10 +54,13 @@ pub(crate) fn plan_job(
     acquire: Option<Step>,
     catalog: &ToolCatalog,
     use_mbx: bool,
+    use_nextest: bool,
     fetch_roots: &[String],
 ) -> Result<Job, OrchestratorError> {
     let mut steps = vec![checkout_action()?];
-    steps.push(prepare_pinned_tools_step(catalog, plan_tools(use_mbx))?);
+    let prepare = prepare_pinned_tools_step(catalog, plan_tools(use_mbx, use_nextest))?;
+    steps.push(prepare);
+    steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
     steps.extend(fetch_steps(catalog, fetch_roots)?);
     steps.extend(acquire);
     steps.push(request_step(PLAN_OPERATION)?);
@@ -73,11 +76,10 @@ pub(crate) fn plan_job(
 
 /// Matrix consumer job: checkout, pinned tools, sources, MBX, template.
 ///
-/// No stack logic: every matrix leg runs the same template, which logs
-/// `matrix.task_id` and executes `matrix.run`. The marker trio directs
-/// the renderer to the producer; it never renders. `Fetch Cargo sources`
-/// runs `cargo fetch --locked` per lockful workspace ahead of `Run task`
-/// so locked/offline payloads resolve from a cold registry (Gate 1).
+/// No stack logic: every matrix leg runs the same template, which logs `matrix.task_id`
+/// and executes `matrix.run`. The marker trio directs the renderer to the producer; it
+/// never renders. `Fetch Cargo sources` runs `cargo fetch --locked` per lockful workspace
+/// ahead of `Run task` so locked/offline payloads resolve from a cold registry (Gate 1).
 /// # Errors
 ///
 /// Returns a contract error when a typed step request is rejected.
@@ -86,6 +88,7 @@ pub(crate) fn task_job(
     max_parallel_jobs: u32,
     catalog: &ToolCatalog,
     use_mbx: bool,
+    use_nextest: bool,
     fetch_roots: &[String],
 ) -> Result<Job, OrchestratorError> {
     crate::workflow::wire_w1::build_task_job(
@@ -93,6 +96,7 @@ pub(crate) fn task_job(
         max_parallel_jobs,
         catalog,
         use_mbx,
+        use_nextest,
         fetch_roots,
     )
 }
@@ -169,13 +173,13 @@ pub(crate) fn final_job(
     })
 }
 
-/// Plan-job install set: driver tools plus the `generate` validators.
+/// Plan-job install set: driver tools, the `generate` validators, Nextest when used.
 ///
-/// Validators join the driver set because `Check generated files` runs the
-/// public `generate`, whose staged validation fail-closed-execs pinned
-/// actionlint, shellcheck, and zizmor; installing only the driver
-/// toolchain leaves that step red. Order follows `PinnedTool::ALL`.
-fn plan_tools(use_mbx: bool) -> Vec<PinnedTool> {
+/// Validators join the driver set because `Check generated files` runs the public
+/// `generate`, whose staged validation fail-closed-execs pinned actionlint, shellcheck,
+/// and zizmor; installing only the driver toolchain leaves that step red. Order
+/// follows `PinnedTool::ALL`.
+fn plan_tools(use_mbx: bool, use_nextest: bool) -> Vec<PinnedTool> {
     let mut tools = vec![PinnedTool::Rust];
     if use_mbx {
         tools.push(PinnedTool::MrBoxington);
@@ -185,6 +189,9 @@ fn plan_tools(use_mbx: bool) -> Vec<PinnedTool> {
         PinnedTool::Shellcheck,
         PinnedTool::Zizmor,
     ]);
+    if use_nextest {
+        tools.push(PinnedTool::Nextest);
+    }
     tools
 }
 
@@ -290,36 +297,42 @@ mod tests {
         }
     }
 
+    /// Assert Write request precedes `target` with the expected operations.
+    fn assert_request_before(job: &Job, target: &str, request: &str, operation: &str) {
+        let names: Vec<&str> = job.steps.iter().map(|step| step.name.as_str()).collect();
+        let write_at = names.iter().position(|name| *name == "Write request");
+        let target_at = names.iter().position(|name| *name == target);
+        assert!(
+            write_at.is_some_and(|write| Some(write) < target_at),
+            "request must precede {target}: {names:?}"
+        );
+        assert_eq!(
+            operation_of(&job.steps[write_at.expect("write request step")]),
+            Some(request),
+            "request must target {target}"
+        );
+        assert_eq!(
+            operation_of(&job.steps[target_at.expect("target step")]),
+            Some(operation)
+        );
+    }
+
     #[test]
     fn plan_job_writes_request_before_plan() {
         let catalog = ToolCatalog::pinned();
         for acquire in [None, Some(checkout_action().expect("checkout step"))] {
-            let job = plan_job("ubuntu-26.04", acquire, &catalog, false, &[]).expect("plan job");
-            let names: Vec<&str> = job.steps.iter().map(|step| step.name.as_str()).collect();
-            let write_at = names.iter().position(|name| *name == "Write request");
-            let plan_at = names.iter().position(|name| *name == "Plan");
-            assert!(
-                write_at.is_some_and(|write| Some(write) < plan_at),
-                "request must precede plan: {names:?}"
-            );
-            let write = &job.steps[write_at.expect("write request step")];
-            assert_eq!(
-                operation_of(write),
-                Some("write-request-v1:plan-v1"),
-                "request must target plan"
-            );
-            assert_eq!(
-                operation_of(&job.steps[plan_at.expect("plan step")]),
-                Some(PLAN_OPERATION)
-            );
+            let job =
+                plan_job("ubuntu-26.04", acquire, &catalog, false, false, &[]).expect("plan job");
+            assert_request_before(&job, "Plan", "write-request-v1:plan-v1", PLAN_OPERATION);
         }
     }
 
     #[test]
     fn plan_job_prepares_pinned_tools_before_generate_consumers() {
         let catalog = ToolCatalog::pinned();
-        for use_mbx in [false, true] {
-            let job = plan_job("ubuntu-26.04", None, &catalog, use_mbx, &[]).expect("plan job");
+        for (use_mbx, use_nextest) in [(false, false), (false, true), (true, true)] {
+            let job = plan_job("ubuntu-26.04", None, &catalog, use_mbx, use_nextest, &[])
+                .expect("plan job");
             let names: Vec<&str> = job.steps.iter().map(|step| step.name.as_str()).collect();
             let prepare_at = names
                 .iter()
@@ -351,17 +364,21 @@ mod tests {
             if use_mbx {
                 specs.insert(1, catalog.tool_spec(PinnedTool::MrBoxington));
             }
+            if use_nextest {
+                specs.push(catalog.tool_spec(PinnedTool::Nextest));
+            }
             assert_eq!(
                 install_at.map(|at| &run[at + 1..]),
                 Some(specs.as_slice()),
                 "install specs: {run:?}"
             );
-            for key in [
+            let keys = [
                 "MISE_RUSTUP_HOME",
                 "MISE_CARGO_HOME",
                 "RUSTUP_TOOLCHAIN",
                 "MISE_LOCKFILE",
-            ] {
+            ];
+            for key in keys {
                 assert!(env.contains_key(key), "env misses {key}: {env:?}");
             }
         }
@@ -372,22 +389,11 @@ mod tests {
         let catalog = ToolCatalog::pinned();
         for acquire in [None, Some(checkout_action().expect("checkout step"))] {
             let job = final_job("ubuntu-26.04", true, acquire, &catalog).expect("final job");
-            let names: Vec<&str> = job.steps.iter().map(|step| step.name.as_str()).collect();
-            let write_at = names.iter().position(|name| *name == "Write request");
-            let merge_at = names.iter().position(|name| *name == "Merge reports");
-            assert!(
-                write_at.is_some_and(|write| Some(write) < merge_at),
-                "request must precede merge: {names:?}"
-            );
-            let write = &job.steps[write_at.expect("write request step")];
-            assert_eq!(
-                operation_of(write),
-                Some("write-request-v1:merge-v1"),
-                "request must target merge"
-            );
-            assert_eq!(
-                operation_of(&job.steps[merge_at.expect("merge step")]),
-                Some(MERGE_OPERATION)
+            assert_request_before(
+                &job,
+                "Merge reports",
+                "write-request-v1:merge-v1",
+                MERGE_OPERATION,
             );
         }
     }

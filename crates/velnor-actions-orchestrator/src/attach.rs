@@ -178,7 +178,7 @@ mod tests {
         let mut ir = bare_ir(BTreeMap::from([
             (
                 "velnor-plan".to_owned(),
-                plan_job("ubuntu-26.04", None, &catalog, false, &[]).expect("plan job"),
+                plan_job("ubuntu-26.04", None, &catalog, false, false, &[]).expect("plan job"),
             ),
             (
                 "velnor-final".to_owned(),
@@ -197,6 +197,7 @@ mod tests {
                 "Checkout",
                 "Prepare pinned tools",
                 "Acquire Velnor",
+                "Prepare Rust components",
                 "Write request",
                 "Plan"
             ]
@@ -229,11 +230,11 @@ mod tests {
             ir: bare_ir(BTreeMap::from([
                 (
                     "velnor-plan".to_owned(),
-                    plan_job("ubuntu-26.04", None, &catalog, false, &[]).expect("plan job"),
+                    plan_job("ubuntu-26.04", None, &catalog, false, false, &[]).expect("plan job"),
                 ),
                 (
                     "velnor-task".to_owned(),
-                    task_job("ubuntu-26.04", 2, &catalog, false, &[]).expect("task job"),
+                    task_job("ubuntu-26.04", 2, &catalog, false, false, &[]).expect("task job"),
                 ),
                 (
                     "velnor-final".to_owned(),
@@ -270,6 +271,7 @@ mod tests {
                 "Write helper manifest (pre-seed trust-on-review)",
                 "Upload helper (pre-seed trust-on-review)",
                 PRESEED_STAGE_NAME,
+                "Prepare Rust components",
                 "Write request",
                 "Plan",
             ]

@@ -147,7 +147,7 @@ jobs:
           MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
-        run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.19.0 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1
+        run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.19.0 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
       - name: Build helper (pre-seed trust-on-review)
         run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 -- mbx build --release --locked --package velnor-actions-cli --bin velnor-actions
       - name: Verify MBX compile (pre-seed trust-on-review)
@@ -163,6 +163,18 @@ jobs:
           path: ${{ runner.temp }}/velnor/preseed-output
       - name: Stage helper (pre-seed trust-on-review)
         run: sh -c 'mkdir -p $RUNNER_TEMP/velnor/bin && cp target/release/velnor-actions $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0 && chmod +x $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0'
+      - name: Prepare Rust components
+        env:
+          MISE_AUTO_INSTALL: "false"
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_EXEC_AUTO_INSTALL: "false"
+          MISE_LOCKFILE: "0"
+          MISE_NO_CONFIG: "1"
+          MISE_NO_ENV: "1"
+          MISE_NO_HOOKS: "1"
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUSTUP_TOOLCHAIN: 1.98.1
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- rustup component add --toolchain 1.98.1-x86_64-unknown-linux-gnu clippy rustfmt
       - name: Fetch Cargo sources
         run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked
       - name: Write request
@@ -181,7 +193,7 @@ jobs:
           MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 -- mbx fmt --check --manifest-path crates/velnor-actions-actionlint/Cargo.toml
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx fmt --check --manifest-path crates/velnor-actions-actionlint/Cargo.toml
       - name: Check generated files
         run: "sh -c '$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0 generate --output-dir \"$RUNNER_TEMP/velnor-actions-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}\" && diff -r --brief .github \"$RUNNER_TEMP/velnor-actions-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/.github\"'"
       - name: Plan
@@ -283,7 +295,19 @@ jobs:
           MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
-        run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.19.0
+        run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
+      - name: Prepare Rust components
+        env:
+          MISE_AUTO_INSTALL: "false"
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_EXEC_AUTO_INSTALL: "false"
+          MISE_LOCKFILE: "0"
+          MISE_NO_CONFIG: "1"
+          MISE_NO_ENV: "1"
+          MISE_NO_HOOKS: "1"
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUSTUP_TOOLCHAIN: 1.98.1
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- rustup component add --toolchain 1.98.1-x86_64-unknown-linux-gnu clippy rustfmt
       - name: Fetch Cargo sources
         run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked
       - name: Restore MBX objects

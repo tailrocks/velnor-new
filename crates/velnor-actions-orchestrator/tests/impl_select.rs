@@ -48,6 +48,37 @@ fn make_ws_repo(root_package: bool) -> Result<TempDir, Box<dyn std::error::Error
     Ok(dir)
 }
 
+/// Workspace with a lib member `alpha` and a bin-only member `beta`.
+fn make_mixed_repo() -> Result<TempDir, Box<dyn std::error::Error>> {
+    let dir = TempDir::new()?;
+    let root = dir.path();
+    git(&["init", "-b", "testmain"], root)?;
+    git(&["config", "user.email", "test@example.com"], root)?;
+    git(&["config", "user.name", "Test"], root)?;
+    git(&["config", "commit.gpgsign", "false"], root)?;
+    fs::create_dir_all(root.join(".velnor"))?;
+    fs::write(root.join(".velnor/config.toml"), config_with_branch())?;
+    fs::write(
+        root.join(".velnor/release-manifest.json"),
+        fixture_manifest_json(),
+    )?;
+    fs::write(
+        root.join("Cargo.toml"),
+        "[workspace]\nmembers = [\"alpha\", \"beta\"]\n",
+    )?;
+    for member in ["alpha", "beta"] {
+        let dir = root.join(member);
+        fs::create_dir_all(dir.join("src"))?;
+        fs::write(
+            dir.join("Cargo.toml"),
+            format!("[package]\nname = \"{member}\"\nversion = \"0.1.0\"\nedition = \"2021\"\n"),
+        )?;
+    }
+    fs::write(root.join("alpha/src/lib.rs"), "pub fn f() {}\n")?;
+    fs::write(root.join("beta/src/main.rs"), "fn main() {}\n")?;
+    Ok(dir)
+}
+
 /// Commit everything and return the new HEAD.
 fn commit(root: &Path, message: &str) -> Result<String, Box<dyn std::error::Error>> {
     git(&["add", "."], root)?;
@@ -114,6 +145,73 @@ fn narrow_change_selects_owner_only() -> TestResult {
         plan.task_ids
     );
     assert!(warnings.is_empty(), "no warnings: {warnings:?}");
+    Ok(())
+}
+
+#[test]
+fn bin_only_package_omits_doctest_with_reason() -> TestResult {
+    let repo = make_mixed_repo()?;
+    let root = repo.path();
+    let base = commit(root, "one")?;
+    fs::write(root.join("beta/src/main.rs"), "fn main() { println!(); }\n")?;
+    let head = commit(root, "two")?;
+    let (plan, warnings) = plan_pr(root, Some(&base), &head)?;
+    assert!(
+        plan.task_ids.iter().any(|id| id.contains("beta")),
+        "beta kept: {:?}",
+        plan.task_ids
+    );
+    assert!(
+        !plan
+            .task_ids
+            .iter()
+            .any(|id| id.contains("beta") && id.contains("doctest")),
+        "no beta doctest leg: {:?}",
+        plan.task_ids
+    );
+    assert!(
+        plan.task_ids
+            .iter()
+            .any(|id| id.contains("beta") && id.contains("/doc/")),
+        "beta doc leg kept: {:?}",
+        plan.task_ids
+    );
+    assert!(
+        warnings
+            .iter()
+            .any(|warning| warning.starts_with("valid_no_test_targets:")
+                && warning.contains("beta")
+                && warning.contains("doctest")),
+        "explicit omission reason: {warnings:?}"
+    );
+    assert!(
+        !plan
+            .obligations
+            .iter()
+            .any(|ob| ob.task_id.contains("beta") && ob.task_id.contains("doctest")),
+        "no beta doctest obligation"
+    );
+    let (plan, warnings) = {
+        fs::write(
+            root.join("alpha/src/lib.rs"),
+            "pub fn f() {}\npub fn g() {}\n",
+        )?;
+        let head = commit(root, "three")?;
+        plan_pr(root, Some(&base), &head)?
+    };
+    assert!(
+        plan.task_ids
+            .iter()
+            .any(|id| id.contains("alpha") && id.contains("doctest")),
+        "lib doctest leg kept: {:?}",
+        plan.task_ids
+    );
+    assert!(
+        !warnings
+            .iter()
+            .any(|warning| warning.contains("alpha") && warning.contains("doctest")),
+        "no omission for lib doctest: {warnings:?}"
+    );
     Ok(())
 }
 

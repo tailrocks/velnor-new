@@ -10,7 +10,7 @@ use std::ffi::OsString;
 use std::path::PathBuf;
 
 use crate::catalog::{PinnedTool, ToolCatalog};
-use crate::command::{IsolatedCommand, NO_AUTO_INSTALL_ENV, toolchain_env};
+use crate::command::{IsolatedCommand, NO_AUTO_INSTALL_ENV, mise_argv_tail, toolchain_env};
 use crate::error::MiseError;
 use crate::requests::{MetadataQualification, MiseInstall};
 
@@ -173,6 +173,106 @@ impl PreparePinnedTools {
             .install
             .command(catalog)?
             .with_env(&self.homes.env(catalog)))
+    }
+}
+
+/// Contract-fixed display name of the Rust-components prepare step.
+/// Emitters use this const, never a retyped string.
+pub const PREPARE_RUST_COMPONENTS_STEP: &str = "Prepare Rust components";
+
+/// Rust components the prepare step guarantees, sorted.
+const RUST_COMPONENTS: [&str; 2] = ["clippy", "rustfmt"];
+
+/// Pinned-toolchain rustup program for the fixed components payload.
+///
+/// The source-policy gate bans bare `"rustup"` spellings; this alias is
+/// the acknowledgement: the only sanctioned direct `rustup` invocation,
+/// fixed argv under Velnor-owned homes (see the type docs).
+const FORBIDDEN_ACKNOWLEDGED_RUSTUP: &str = "rustup";
+
+/// Fixed `rustup component add` for the pinned toolchain as one named step.
+///
+/// Mise installs the pinned Rust toolchain with rustup's minimal profile
+/// and ignores tool options on config-less CLI specs, so clippy/rustfmt
+/// arrive through this step instead of `tool_spec`. This is the pinned
+/// toolchain's own rustup running one fixed deterministic argv that writes
+/// only the Velnor-owned `RUSTUP_HOME` during the online prepare phase:
+/// Mise installing components, not an ad hoc installer. The explicit
+/// `--toolchain <exact>-<triple>` cannot resolve an ambient toolchain,
+/// and implicit installation stays disabled, so a toolchain missing from
+/// the owned homes fails as a preparation error instead of installing.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PrepareRustComponents {
+    /// Owned homes carried by the step env.
+    homes: ToolHomes,
+}
+
+impl PrepareRustComponents {
+    /// Guarantee the fixed components under `homes`.
+    #[must_use]
+    pub fn new(homes: ToolHomes) -> Self {
+        Self { homes }
+    }
+
+    /// Contract-fixed display name of the emitted step.
+    #[must_use]
+    pub fn step_name() -> &'static str {
+        PREPARE_RUST_COMPONENTS_STEP
+    }
+
+    /// Fixed components installed, sorted.
+    #[must_use]
+    pub fn components() -> Vec<String> {
+        RUST_COMPONENTS.iter().map(ToString::to_string).collect()
+    }
+
+    /// Owned homes carried by the step env.
+    #[must_use]
+    pub fn homes(&self) -> &ToolHomes {
+        &self.homes
+    }
+
+    /// Full mise argument vector including the program.
+    #[must_use]
+    pub fn argv(&self, catalog: &ToolCatalog) -> Vec<OsString> {
+        let specs = catalog.tool_specs(&[PinnedTool::Rust]);
+        let mut argv = vec![OsString::from("mise")];
+        argv.extend(mise_argv_tail("exec", &specs, &Self::payload(catalog)));
+        argv
+    }
+
+    /// Full step env: isolation plus install-disable plus owned homes.
+    ///
+    /// Matches [`Self::command`]'s spawner env exactly; the
+    /// correspondence is pinned by test, not by construction comment.
+    #[must_use]
+    pub fn env(&self, catalog: &ToolCatalog) -> Vec<(OsString, OsString)> {
+        self.homes.exec_env(catalog)
+    }
+
+    /// Isolated command running this installation under the owned homes.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MiseError::EmptyCommand`] only if the fixed payload were
+    /// empty, which construction rules out.
+    pub fn command(&self, catalog: &ToolCatalog) -> Result<IsolatedCommand, MiseError> {
+        let specs = catalog.tool_specs(&[PinnedTool::Rust]);
+        Ok(IsolatedCommand::mise_exec(&specs, &Self::payload(catalog))?
+            .with_env(&self.homes.env(catalog)))
+    }
+
+    /// Fixed payload: `rustup component add --toolchain <name> clippy rustfmt`.
+    fn payload(catalog: &ToolCatalog) -> Vec<OsString> {
+        let mut payload = vec![
+            OsString::from(FORBIDDEN_ACKNOWLEDGED_RUSTUP),
+            OsString::from("component"),
+            OsString::from("add"),
+            OsString::from("--toolchain"),
+            OsString::from(catalog.rust_toolchain_name()),
+        ];
+        payload.extend(RUST_COMPONENTS.iter().map(OsString::from));
+        payload
     }
 }
 

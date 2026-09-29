@@ -6,12 +6,10 @@ use velnor_actions_mise::{
     CandidateBuild, IsolatedCommand, PinnedTool, PinnedToolExec, RouteDriver, ToolCatalog,
     validate_exact_version,
 };
-use velnor_actions_rust::TaskGroup;
-use velnor_actions_rust::tasks::cargo_payload_argv;
+use velnor_actions_rust::{TaskGroup, TestRunner, tasks::cargo_payload_argv};
 use velnor_actions_workflow_renderer::render::CandidateSpec;
 
-use crate::OrchestratorError;
-use crate::qualify::QualifyRequest;
+use crate::{OrchestratorError, qualify::QualifyRequest};
 
 /// Qualified cargo-deny release.
 /// Source: `https://crates.io/api/v1/crates/cargo-deny`; checked 2026-09-29.
@@ -52,14 +50,17 @@ pub(crate) const ZIZMOR_STEP_NAME: &str = "Run zizmor";
 
 /// V1 fixed vector for one group: pinned `mise` payload plus kind args.
 ///
-/// The payload program follows the group's compile route: MBX profiles
-/// execute through `mbx`, every other spelling through `cargo`.
+/// Program follows the compile route (`mbx` for MBX, `cargo` otherwise); Nextest
+/// profiles add the runner tool, `cargo_test` legs never carry it.
 pub(crate) fn task_argv(
     group: &TaskGroup,
     catalog: &ToolCatalog,
 ) -> Result<Vec<String>, OrchestratorError> {
     let driver = RouteDriver::from_compile_driver(&group.compile_driver);
-    let tools = driver.map_or(vec![PinnedTool::Rust], RouteDriver::tools);
+    let mut tools = driver.map_or(vec![PinnedTool::Rust], RouteDriver::tools);
+    if group.test_runner == TestRunner::CargoNextest.as_str() {
+        tools.push(PinnedTool::Nextest);
+    }
     let program = OsString::from(driver.map_or("cargo", RouteDriver::program));
     let exec = PinnedToolExec::new(tools, &program, cargo_payload_argv(group)).map_err(|err| {
         OrchestratorError::Contract {
@@ -230,10 +231,15 @@ fn strings_of(argv: Vec<OsString>) -> Result<Vec<String>, String> {
 mod tests {
     use super::*;
 
+    /// Owned argv expectation from literals.
+    fn argv_of(parts: &[&str]) -> Vec<String> {
+        parts.iter().map(ToString::to_string).collect()
+    }
+
     #[test]
     fn policy_vectors_pin_specs_and_payloads() {
         let deny = deny_argv().expect("deny argv");
-        let want: Vec<String> = [
+        let want = argv_of(&[
             "mise",
             "--no-config",
             "--no-env",
@@ -245,13 +251,10 @@ mod tests {
             "deny",
             "--locked",
             "check",
-        ]
-        .iter()
-        .map(ToString::to_string)
-        .collect();
+        ]);
         assert_eq!(deny, want);
         let machete = machete_argv().expect("machete argv");
-        let want: Vec<String> = [
+        let want = argv_of(&[
             "mise",
             "--no-config",
             "--no-env",
@@ -268,10 +271,7 @@ mod tests {
             "crates/velnor-actions-workflow-renderer",
             "crates/velnor-actions-orchestrator",
             "crates/velnor-actions-cli",
-        ]
-        .iter()
-        .map(ToString::to_string)
-        .collect();
+        ]);
         assert_eq!(machete, want);
         assert!(policy_argv("evil-tool", "1.2.3", "cargo", &["deny"]).is_err());
         assert!(policy_argv("cargo-deny", "latest", "cargo", &["deny"]).is_err());
@@ -280,7 +280,7 @@ mod tests {
     #[test]
     fn mbx_probe_vector_is_byte_exact() {
         let probe = mbx_probe_argv(&ToolCatalog::pinned()).expect("probe argv");
-        let want: Vec<String> = [
+        let want = argv_of(&[
             "mise",
             "--no-config",
             "--no-env",
@@ -290,10 +290,7 @@ mod tests {
             "--",
             "mbx",
             "--version",
-        ]
-        .iter()
-        .map(ToString::to_string)
-        .collect();
+        ]);
         assert_eq!(probe, want);
     }
 
@@ -343,6 +340,18 @@ mod tests {
     }
 
     #[test]
+    fn task_runner_tools_follow_test_runner() {
+        let catalog = ToolCatalog::pinned();
+        let nextest = catalog.tool_spec(PinnedTool::Nextest);
+        for (runner, want) in [("cargo_test", false), ("cargo_nextest", true)] {
+            let mut group = group_with_driver("cargo");
+            group.test_runner = runner.to_owned();
+            let argv = task_argv(&group, &catalog).expect("task argv");
+            assert_eq!(argv.contains(&nextest), want, "{runner} nextest");
+        }
+    }
+
+    #[test]
     fn zizmor_vector_is_pinned_and_offline() {
         let argv = zizmor_argv(&ToolCatalog::pinned()).expect("zizmor argv");
         assert_eq!(
@@ -355,7 +364,7 @@ mod tests {
     #[test]
     fn section4_build_vector_is_byte_exact() {
         let build = candidate_build_argv(&ToolCatalog::pinned()).expect("build argv");
-        let want: Vec<String> = [
+        let want = argv_of(&[
             "mise",
             "--no-config",
             "--no-env",
@@ -372,10 +381,7 @@ mod tests {
             "velnor-actions-cli",
             "--bin",
             "velnor-actions",
-        ]
-        .iter()
-        .map(ToString::to_string)
-        .collect();
+        ]);
         assert_eq!(build, want);
     }
 

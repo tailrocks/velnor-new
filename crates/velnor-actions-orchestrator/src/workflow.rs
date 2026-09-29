@@ -10,11 +10,13 @@ use std::collections::BTreeMap;
 
 use velnor_actions_actionlint::{ActionlintConfigInput, IgnorePolicy, StepSyntax};
 use velnor_actions_contract::{
-    Concurrency, GeneratorValidation, Permissions, Trigger, VelnorConfig, VelnorSupportWorkflow,
-    WorkflowIr, WorkflowPolicy,
+    Concurrency, GeneratorValidation, Permissions, Step, StepKind, Trigger, VelnorConfig,
+    VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
 };
-use velnor_actions_mise::ToolCatalog;
-use velnor_actions_rust::{CompileDriver, TaskGroup};
+use velnor_actions_mise::{
+    PREPARE_RUST_COMPONENTS_STEP, PrepareRustComponents, ToolCatalog, ToolHomes,
+};
+use velnor_actions_rust::{CompileDriver, TaskGroup, TestRunner};
 use velnor_actions_workflow_renderer::render::{
     CONCURRENCY_CANCEL, CONCURRENCY_GROUP, EXPECTED_PR_TYPES, FINAL_JOB_ID, PLAN_JOB_ID,
     PolicyCommand, RenderContext, TASK_JOB_ID, WORKFLOW_PATH,
@@ -26,6 +28,7 @@ use velnor_actions_workflow_renderer::steps::{
 use crate::OrchestratorError;
 use crate::discover::Discovery;
 use crate::pins::consumer_acquire_step;
+use crate::utf8::{strings_of, strings_of_env};
 use crate::vectors::{
     ZIZMOR_STEP_NAME, candidate_spec, deny_argv, machete_argv, verify_tools_argv, zizmor_argv,
 };
@@ -86,9 +89,17 @@ pub(crate) fn build_workflow(
         WorkflowPolicy::ConsumerV1 => Some(consumer_acquire_step(label, &version, discovery)?),
         WorkflowPolicy::VelnorRepositoryV1 => None,
     };
+    let use_nextest = plan_uses_nextest(discovery);
     jobs.insert(
         PLAN_JOB_ID.to_owned(),
-        plan_job(label, acquire.clone(), &catalog, use_mbx, fetch_roots)?,
+        plan_job(
+            label,
+            acquire.clone(),
+            &catalog,
+            use_mbx,
+            use_nextest,
+            fetch_roots,
+        )?,
     );
     let task_groups: Vec<&TaskGroup> = discovery
         .task_groups
@@ -103,6 +114,7 @@ pub(crate) fn build_workflow(
                 config.workflow.max_parallel_jobs,
                 &catalog,
                 use_mbx,
+                use_nextest,
                 fetch_roots,
             )?,
         );
@@ -150,6 +162,41 @@ fn plan_uses_mbx(discovery: &Discovery) -> bool {
         .workspaces
         .iter()
         .any(|workspace| workspace.profile.compile_driver == CompileDriver::Mbx)
+}
+
+/// True when any selected workspace runs tests through Nextest.
+///
+/// Both prepare steps union the Nextest runner on this signal, so
+/// `cargo_nextest` legs resolve the pinned runner while `cargo_test`
+/// legs never carry it.
+fn plan_uses_nextest(discovery: &Discovery) -> bool {
+    discovery
+        .workspaces
+        .iter()
+        .any(|workspace| workspace.profile.test_runner == TestRunner::CargoNextest)
+}
+
+/// Typed `Prepare Rust components` step, shared by plan and task jobs.
+///
+/// Runs second, right after `Prepare pinned tools`: the pinned toolchain
+/// exists by then, so the fixed `rustup component add` guarantees
+/// clippy/rustfmt idempotently under the owned homes.
+///
+/// # Errors
+///
+/// Returns a contract error when the Mise adapter rejects the request.
+pub(crate) fn prepare_rust_components_step(
+    catalog: &ToolCatalog,
+) -> Result<Step, OrchestratorError> {
+    let request = PrepareRustComponents::new(ToolHomes::runner_temp());
+    let run = strings_of(request.argv(catalog))
+        .map_err(|problem| OrchestratorError::Contract { problem })?;
+    let env = strings_of_env(&request.env(catalog))
+        .map_err(|problem| OrchestratorError::Contract { problem })?;
+    Ok(Step {
+        name: PREPARE_RUST_COMPONENTS_STEP.to_owned(),
+        kind: StepKind::Shell { run, env },
+    })
 }
 
 /// Renderer scalars: version, label, staged path, request dir, pins.
