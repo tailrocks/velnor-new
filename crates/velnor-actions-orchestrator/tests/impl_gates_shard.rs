@@ -164,6 +164,7 @@ fn merge_with(
         "plan": plan,
         "matrix": plan.matrix,
         "matrix_reports": reports,
+        "required_job_ids": ["velnor-plan"],
         "required_jobs": [{"job_id": "velnor-plan", "conclusion": "success"}],
         "shard_proofs": proofs,
     });

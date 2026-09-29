@@ -81,10 +81,22 @@ pub(crate) struct ReuseOutcome {
     pub(crate) task_cache_enabled: bool,
 }
 
+impl ReuseOutcome {
+    /// Forced execution with an explicit reason (changed work).
+    pub(crate) fn execute(reason: &str) -> Self {
+        Self {
+            decision: ObligationDecision::Execute,
+            reason: reason.to_owned(),
+            task_cache_key: None,
+            task_cache_enabled: false,
+        }
+    }
+}
+
 /// Decide reuse for one group (REUSE-1/6/7, PAR-3.4).
 ///
-/// Unqualified extensions never reuse; unqualified tools keep the V1
-/// `Execute`/`selected` outcome; granted reuse builds the typed request
+/// Unqualified extensions never reuse; unavailable tools keep the
+/// `Execute`/`unproven` outcome; granted reuse builds the typed request
 /// (REUSE-2, fail-closed) and records the cache-key digest (REUSE-3).
 pub(crate) fn plan_reuse_outcome(
     group: &TaskGroup,
@@ -105,7 +117,7 @@ pub(crate) fn plan_reuse_outcome(
     if availability != ToolAvailability::Ready {
         return Ok(ReuseOutcome {
             decision: ObligationDecision::Execute,
-            reason: "selected".to_owned(),
+            reason: "unproven".to_owned(),
             task_cache_key: None,
             task_cache_enabled: false,
         });
@@ -206,12 +218,19 @@ pub(crate) fn check_archive_identity(
 
 /// Verify a `reused` task against its restore evidence (REUSE-5).
 ///
-/// Matrix summaries carry no restore outcome yet (declared outputs need
-/// `MatrixEntry.declared_outputs`, observed digests need task-level cache
-/// outcomes), so V1 verifies intact evidence with empty observations and
-/// rejects only when the evidence itself fails.
-pub(crate) fn verify_reused_task(task_id: &str) -> Result<(), MissReason> {
-    verify_restored_task_result(task_id, RestoreEvidence::intact(), &[], &[])
+/// Reuse needs observed output digests covering every declared output;
+/// a claim with no observations fails closed as incomplete, never
+/// passes on intact evidence alone. Observed digests need task-level
+/// cache outcomes in the report contract (P04).
+pub(crate) fn verify_reused_task(
+    task_id: &str,
+    declared: &[String],
+    observed: &[(String, Vec<u8>, String)],
+) -> Result<(), MissReason> {
+    if observed.is_empty() {
+        return Err(MissReason::TASK_RESULT_INCOMPLETE);
+    }
+    verify_restored_task_result(task_id, RestoreEvidence::intact(), declared, observed)
 }
 
 #[cfg(test)]
@@ -260,7 +279,7 @@ mod tests {
         )
         .expect("missing");
         assert_eq!(missing.decision, ObligationDecision::Execute);
-        assert_eq!(missing.reason, "selected");
+        assert_eq!(missing.reason, "unproven");
         assert!(missing.task_cache_key.is_none());
         let granted = plan_reuse_outcome(
             &group,
@@ -293,7 +312,10 @@ mod tests {
         assert_eq!(refused.reason, MissReason::TASK_NOT_ELIGIBLE.as_str());
         let signals = reuse_qualification(&dirty, WorkflowEvent::Push);
         assert!(signals.always_run());
-        assert!(verify_reused_task("t").is_ok());
+        assert_eq!(
+            verify_reused_task("t", &[], &[]).expect_err("no observations"),
+            MissReason::TASK_RESULT_INCOMPLETE
+        );
         let broken = RestoreEvidence::intact().fail(RestoreCheck::EntryPresent);
         assert_eq!(
             verify_restored_task_result("t", broken, &[], &[]).expect_err("entry"),

@@ -1,8 +1,8 @@
 //! Generator identity resolution and baseline coverage application.
 
-use velnor_actions_contract::{
-    BaselineProof, BaselineStatus, ObligationDecision, Plan, PlanBaseline,
-};
+use std::collections::BTreeSet;
+
+use velnor_actions_contract::{BaselineProof, ObligationDecision, Plan};
 use velnor_actions_mise::catalog::lock::{load_text, parse_generator_lock};
 
 use crate::discover::Discovery;
@@ -10,6 +10,7 @@ use crate::extension_schemas::coverage_schema_known;
 use crate::external_data::{
     DEFAULT_EXTERNAL_DATA_MAX_AGE_SECS, external_data_kind, may_skip_external_data,
 };
+use crate::internal::plan_obligation::{changed_keys, member_changed};
 use crate::internal_plan::extension_bundle;
 use crate::merge::BaselineManifest;
 
@@ -89,15 +90,31 @@ fn release_target(target: &str) -> Option<&str> {
     }
 }
 
-/// Mark covered obligations, prune the matrix, and record the baseline.
+/// Mark covered obligations and prune the matrix; returns covered count.
+///
+/// Changed obligations never cover, even on identity match: the
+/// changed hint guards identities that may miss semantic inputs.
+/// Baseline provenance is set by the caller from the returned count.
 pub(crate) fn apply_coverage(
     plan: &mut Plan,
     manifest: &BaselineManifest,
     digest: &str,
-    base: String,
     discovery: &Discovery,
-) {
+    changed: Option<&BTreeSet<String>>,
+) -> u32 {
+    let universe: Vec<_> = discovery.task_groups.iter().collect();
+    let keys = changed
+        .map(|set| changed_keys(&universe, set))
+        .unwrap_or_default();
+    let mut covered = 0u32;
     for obligation in &mut plan.obligations {
+        let group = discovery
+            .task_groups
+            .iter()
+            .find(|group| group.task_id == obligation.task_id);
+        if group.is_none_or(|group| member_changed(group, changed, &keys)) {
+            continue;
+        }
         let hit = manifest.tasks.iter().find(|task| {
             task.task_id == obligation.task_id
                 && task.task_digest == obligation.task_digest
@@ -144,6 +161,7 @@ pub(crate) fn apply_coverage(
             artifact_name: manifest.artifact_name.clone(),
             manifest_digest: digest.to_owned(),
         });
+        covered += 1;
     }
     plan.matrix.include.retain(|entry| {
         plan.obligations
@@ -155,25 +173,18 @@ pub(crate) fn apply_coverage(
             ob.decision == ObligationDecision::Execute && package.tasks.contains(&ob.task_id)
         });
     }
-    plan.baseline = PlanBaseline {
-        status: BaselineStatus::Used,
-        base_commit: Some(base),
-        run_id: Some(manifest.run_id),
-        artifact_id: Some(manifest.artifact_id),
-        artifact_name: Some(manifest.artifact_name.clone()),
-        manifest_digest: Some(digest.to_owned()),
-        reason: None,
-    };
+    covered
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::external_data::ExternalDataFreshness;
-    use crate::merge::{BaselineManifest, BaselineTaskEntry};
+    use crate::merge::BaselineManifest;
+    use crate::merge::required_evidence::BaselineTaskEntry;
     use velnor_actions_contract::{
-        ObligationDecision, PlanGenerator, PlanMatrix, PlanObligation, PlanRunner, RunnerSelection,
-        Trust, WorkflowEvent, digest_b3,
+        BaselineStatus, ObligationDecision, PlanBaseline, PlanGenerator, PlanMatrix,
+        PlanObligation, PlanRunner, RunnerSelection, Trust, WorkflowEvent, digest_b3,
     };
 
     /// Plan carrying one execute obligation per `task_ids`.
@@ -263,12 +274,37 @@ mod tests {
         }
     }
 
-    /// Discovery without groups: obligations keep the other checks.
-    fn empty_discovery() -> Discovery {
+    /// Discovery with one plain group per task ID, all unchanged.
+    fn discovery_with(task_ids: &[&str]) -> Discovery {
+        use velnor_actions_rust::{TaskGroup, TaskKind};
         Discovery {
             statuses: Vec::new(),
             workspaces: Vec::new(),
-            task_groups: Vec::new(),
+            task_groups: task_ids
+                .iter()
+                .map(|id| TaskGroup {
+                    task_id: (*id).to_owned(),
+                    package_id: "demo".to_owned(),
+                    package_name: "demo".to_owned(),
+                    manifest_key: "root".to_owned(),
+                    kind: TaskKind::Clippy,
+                    configuration: "default".to_owned(),
+                    features: Vec::new(),
+                    target: "host".to_owned(),
+                    gated_by: Vec::new(),
+                    depends_on: Vec::new(),
+                    target_flags: Vec::new(),
+                    no_test_targets: false,
+                    package_arg: None,
+                    compile_driver: "cargo".to_owned(),
+                    test_runner: "cargo_nextest".to_owned(),
+                    declared_inputs: Vec::new(),
+                    undeclared_reads: false,
+                    uses_network: false,
+                    uses_clock: false,
+                    uses_random: false,
+                })
+                .collect(),
             tool_checks: Vec::new(),
             clippy_memory: crate::clippy_groups::ClippyMemoryPlan {
                 groups: Vec::new(),
@@ -295,13 +331,15 @@ mod tests {
         let advisory = "stack/rust/root/advisory/default";
         let mut plan = plan_with(&[rust, unknown, advisory]);
         let manifest = manifest_with(&[rust, unknown, advisory], None);
-        apply_coverage(
+        let unchanged = Some(BTreeSet::new());
+        let covered = apply_coverage(
             &mut plan,
             &manifest,
             &digest_b3(b"m"),
-            "base".to_owned(),
-            &empty_discovery(),
+            &discovery_with(&[rust, unknown, advisory]),
+            unchanged.as_ref(),
         );
+        assert_eq!(covered, 1);
         let decision = |id: &str| {
             plan.obligations
                 .iter()
@@ -332,13 +370,15 @@ mod tests {
         let mut plan = plan_with(&[advisory]);
         let proof = fresh_proof();
         let manifest = manifest_with(&[advisory], Some(&proof));
-        apply_coverage(
+        let unchanged = Some(BTreeSet::new());
+        let covered = apply_coverage(
             &mut plan,
             &manifest,
             &digest_b3(b"m"),
-            "base".to_owned(),
-            &empty_discovery(),
+            &discovery_with(&[advisory]),
+            unchanged.as_ref(),
         );
+        assert_eq!(covered, 1);
         assert_eq!(
             plan.obligations[0].decision,
             ObligationDecision::CoveredByTrustedBaseline

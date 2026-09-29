@@ -1,34 +1,32 @@
 //! Event-time `plan-v1` / `merge-v1` JSON entrypoints (schema 1).
 
+// Obligation identities live beside the planner so `lib.rs` stays untouched.
+#[path = "plan_obligation.rs"]
+pub(crate) mod plan_obligation;
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::{
-    BaselineStatus, ContractError, MatrixEntry, Plan, PlanBaseline, PlanGenerator, PlanMatrix,
-    PlanObligation, PlanRunner, RunnerSelection, Trust, WorkflowEvent, canonical_json_bytes,
-    digest_b3, plan_id_for_run,
+    BaselineStatus, ContractError, Plan, PlanBaseline, PlanGenerator, PlanMatrix, PlanRunner,
+    RunnerSelection, Trust, WorkflowEvent, canonical_json_bytes, plan_id_for_run,
 };
-use velnor_actions_mise::{ToolAvailability, ToolCatalog};
+use velnor_actions_mise::ToolCatalog;
 use velnor_actions_rust::TaskGroup;
 
+use self::plan_obligation::{GroupInputs, changed_keys, lane_table, member_changed, plan_group};
 use crate::OrchestratorError;
 use crate::cover::{BaselineInputs, apply_baseline};
 use crate::decisions::dedupe_sorted;
 use crate::discover::Discovery;
-use crate::internal_plan::wire_w2::{self, GroupWire};
-use crate::internal_plan::{
-    IdentityInputs, adapter_metadata, cache_ids_for, default_generator, evidence_for_group,
-    execute_ids, extension_bundle, manifest_for_key, plan_packages, record_task_cache,
-    task_identity_digest, toolchain_id,
-};
+use crate::internal_plan::wire_w2::GroupWire;
+use crate::internal_plan::{default_generator, plan_packages};
 use crate::internal_request::resolve_run_key;
 use crate::merge::BaselineManifest;
 use crate::prepare::prepare;
-use crate::schedule::assign_lanes;
-use crate::select::select_groups;
+use crate::select::{classify_changed, select_universe, verify_checkout};
 use crate::select_edges::plan_task_graph;
-use crate::vectors::task_argv;
 
 pub use crate::internal_request::{
     PlanOutputs, merge_passed, plan_outputs, publish_final_report, publish_plan_files,
@@ -111,6 +109,7 @@ pub fn plan_internal(request_json: &str) -> Result<String, OrchestratorError> {
         return Err(internal("empty_head"));
     }
     let root = plan_root(request.root.as_deref())?;
+    verify_checkout(&root, request.event, &request.head)?;
     let prep = prepare(&root)?;
     let catalog = ToolCatalog::pinned();
     let mut warnings = Vec::new();
@@ -119,7 +118,8 @@ pub fn plan_internal(request_json: &str) -> Result<String, OrchestratorError> {
         &prep.discovery.workspaces,
         &prep.runner_label,
     ));
-    let selected = select_groups(
+    let universe = select_universe(&prep.discovery, &mut warnings);
+    let changed = classify_changed(
         &prep.root,
         request.event,
         request.base.as_deref(),
@@ -130,7 +130,8 @@ pub fn plan_internal(request_json: &str) -> Result<String, OrchestratorError> {
     let mut plan = build_plan(
         &request,
         &prep.discovery,
-        &selected,
+        &universe,
+        changed.as_ref(),
         &prep.runner_label,
         prep.runner_selection,
         &catalog,
@@ -155,6 +156,7 @@ pub fn plan_internal(request_json: &str) -> Result<String, OrchestratorError> {
         },
         manifest,
         &prep.discovery,
+        changed.as_ref(),
     )?;
     plan.validate().map_err(internal_contract)?;
     check_matrix_budget(&plan.matrix)?;
@@ -220,36 +222,49 @@ fn plan_root(override_root: Option<&Path>) -> Result<PathBuf, OrchestratorError>
     crate::root::resolve_root(&cwd)
 }
 
-/// Build the validated plan from selected groups.
+/// Build the validated plan from the obligation universe.
+///
+/// Identities attach for every member before changed-work hints and
+/// baseline evidence classify dispositions; the execution matrix keeps
+/// execute obligations only after that classification.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "one call site threads plan scope plus universe plus classification"
+)]
 fn build_plan(
     request: &PlanRequest,
     discovery: &Discovery,
-    selected: &[&TaskGroup],
+    universe: &[&TaskGroup],
+    changed: Option<&BTreeSet<String>>,
     label: &str,
     selection: RunnerSelection,
     catalog: &ToolCatalog,
     warnings: Vec<String>,
 ) -> Result<Plan, OrchestratorError> {
-    let mut obligations = Vec::with_capacity(selected.len());
-    let mut entries = Vec::with_capacity(selected.len());
-    let mut task_ids = Vec::with_capacity(selected.len());
+    let mut obligations = Vec::with_capacity(universe.len());
+    let mut entries = Vec::with_capacity(universe.len());
+    let mut task_ids = Vec::with_capacity(universe.len());
     let mut digests = BTreeMap::new();
-    let lanes = lane_table(selected);
+    let lanes = lane_table(universe);
+    let keys = changed
+        .map(|set| changed_keys(universe, set))
+        .unwrap_or_default();
     let generator = request.generator.clone().unwrap_or_else(default_generator);
-    for group in selected {
+    for group in universe {
         let wire = GroupWire {
             event: request.event,
             generator: &generator,
         };
-        let (obligation, entry) = plan_group(
+        let (obligation, entry) = plan_group(&GroupInputs {
             discovery,
             group,
-            &request.run_key,
+            run_key: &request.run_key,
             label,
-            lanes.get(&group.task_id).copied().unwrap_or(0),
+            lane: lanes.get(&group.task_id).copied().unwrap_or(0),
             catalog,
             wire,
-        )?;
+            changed: member_changed(group, changed, &keys),
+        })?;
         task_ids.push(group.task_id.clone());
         digests.insert(group.task_id.clone(), obligation.input_digest.clone());
         obligations.push(obligation);
@@ -258,12 +273,12 @@ fn build_plan(
     obligations.sort_by(|left, right| left.task_id.cmp(&right.task_id));
     entries.sort_by(|left, right| left.id.cmp(&right.id));
     task_ids.sort();
-    let edges = plan_task_graph(selected, &lanes, &digests).map_err(internal_contract)?;
+    let edges = plan_task_graph(universe, &lanes, &digests).map_err(internal_contract)?;
     let (_, duplicates) = dedupe_sorted(&task_ids);
     if let Some(dup) = duplicates.first() {
         return Err(internal(&format!("duplicate_task_id:{dup}")));
     }
-    let selected_ids: BTreeSet<&str> = selected
+    let selected_ids: BTreeSet<&str> = universe
         .iter()
         .map(|group| group.package_id.as_str())
         .collect();
@@ -299,98 +314,4 @@ fn build_plan(
         warnings,
         edges,
     })
-}
-
-/// Deterministic lane per selected task ID.
-fn lane_table(selected: &[&TaskGroup]) -> std::collections::BTreeMap<String, u32> {
-    let ids: Vec<String> = selected.iter().map(|group| group.task_id.clone()).collect();
-    assign_lanes(&ids).into_iter().collect()
-}
-
-/// Obligation plus matrix entry for one selected group.
-fn plan_group(
-    discovery: &Discovery,
-    group: &TaskGroup,
-    run_key: &str,
-    label: &str,
-    lane: u32,
-    catalog: &ToolCatalog,
-    wire: GroupWire<'_>,
-) -> Result<(PlanObligation, MatrixEntry), OrchestratorError> {
-    let toolchain = toolchain_id(group, catalog).map_err(internal_contract)?;
-    let argv = task_argv(group, catalog)?;
-    let manifest = manifest_for_key(&group.manifest_key);
-    let bundle = extension_bundle(discovery, group);
-    let ext = group.identity_extension(&bundle.inputs());
-    let platform_id = digest_b3(label.as_bytes());
-    let input_digest = task_identity_digest(&IdentityInputs {
-        group,
-        argv: &argv,
-        toolchain_id: &toolchain,
-        platform_id: &platform_id,
-        manifest: &manifest,
-        generator: wire.generator,
-        extension: ext.to_stack_extension(),
-    })
-    .map_err(internal_contract)?;
-    let reuse = wire_w2::plan_reuse_outcome(
-        group,
-        wire.event,
-        ToolAvailability::Missing,
-        &toolchain,
-        &input_digest,
-        ext.reuse_eligible().is_ok(),
-    )?;
-    wire_w2::check_archive_identity(group, &toolchain, &platform_id, bundle.config_digest())?;
-    let task_digest = digest_of(&TaskDigestInputs {
-        task_id: &group.task_id,
-        argv: &argv,
-        toolchain_id: &toolchain,
-    })
-    .map_err(internal_contract)?;
-    let obligation = PlanObligation {
-        task_id: group.task_id.clone(),
-        decision: reuse.decision,
-        reason: reuse.reason,
-        task_digest: task_digest.clone(),
-        input_digest: input_digest.clone(),
-        baseline_proof: None,
-    };
-    let mut metadata = adapter_metadata(group, evidence_for_group(discovery, group));
-    record_task_cache(
-        &mut metadata,
-        reuse.task_cache_enabled,
-        reuse.task_cache_key.as_deref(),
-    );
-    let run = velnor_actions_workflow_renderer::join_argv_for_run(&argv)
-        .map_err(|err| internal(&err.to_string()))?;
-    let mut entry = MatrixEntry::derive(
-        velnor_actions_rust::STACK_ID,
-        &group.task_id,
-        &run,
-        &task_digest,
-        metadata,
-        execute_ids(group),
-        &input_digest,
-        run_key,
-    )
-    .map_err(internal_contract)?;
-    entry.cache_ids = Some(cache_ids_for(group, label, lane, &toolchain));
-    Ok((obligation, entry))
-}
-
-/// Digest of canonical bytes for a serializable input struct.
-fn digest_of<T: Serialize>(inputs: &T) -> Result<String, ContractError> {
-    Ok(digest_b3(&canonical_json_bytes(inputs)?))
-}
-
-/// Task-digest preimage fields.
-#[derive(Debug, Serialize)]
-struct TaskDigestInputs<'a> {
-    /// Stable task ID.
-    task_id: &'a str,
-    /// Fixed argument vector.
-    argv: &'a [String],
-    /// Toolchain identity digest.
-    toolchain_id: &'a str,
 }

@@ -118,25 +118,23 @@ fn injection_revs_broaden_without_spawning_flags() -> TestResult {
         "$(touch /tmp/velnor_trust_pwn)",
         "-x",
     ] {
-        for (bad_base, bad_head) in [(Some(evil), head.as_str()), (Some(base.as_str()), evil)] {
-            let (plan, warnings) = plan_with(root, bad_base, bad_head, None)?;
-            assert!(
-                plan.task_ids.iter().any(|id| id.contains("alpha")),
-                "broadens: {:?}",
-                plan.task_ids
-            );
-            assert!(
-                plan.task_ids.iter().any(|id| id.contains("beta")),
-                "broadens: {:?}",
-                plan.task_ids
-            );
-            let want = if bad_head == evil {
-                "bad_head"
-            } else {
-                "bad_base"
-            };
-            assert!(warnings.iter().any(|w| w.contains(want)), "{warnings:?}");
-        }
+        let (plan, warnings) = plan_with(root, Some(evil), &head, None)?;
+        assert!(
+            plan.task_ids.iter().any(|id| id.contains("alpha")),
+            "broadens: {:?}",
+            plan.task_ids
+        );
+        assert!(
+            plan.task_ids.iter().any(|id| id.contains("beta")),
+            "broadens: {:?}",
+            plan.task_ids
+        );
+        assert!(
+            warnings.iter().any(|w| w.contains("bad_base")),
+            "{warnings:?}"
+        );
+        let err = plan_with(root, Some(&base), evil, None).expect_err("evil head rejected");
+        assert!(err.to_string().contains("bad_head"), "got {err}");
         assert!(
             !std::path::Path::new("/tmp/velnor_trust_pwn").exists(),
             "no flag effect"
@@ -146,7 +144,7 @@ fn injection_revs_broaden_without_spawning_flags() -> TestResult {
 }
 
 #[test]
-fn short_sha_base_still_narrows() -> TestResult {
+fn short_sha_base_still_classifies() -> TestResult {
     let repo = two_pkg_repo()?;
     let root = repo.path();
     let base = commit(root, "one")?;
@@ -156,22 +154,28 @@ fn short_sha_base_still_narrows() -> TestResult {
     )?;
     let head = commit(root, "two")?;
     let (plan, warnings) = plan_with(root, Some(&base[..7]), &head, None)?;
-    assert!(
-        !plan.task_ids.iter().any(|id| id.contains("alpha")),
-        "alpha out: {:?}",
-        plan.task_ids
-    );
-    assert!(
-        plan.task_ids.iter().any(|id| id.contains("beta")),
-        "beta in: {:?}",
-        plan.task_ids
-    );
+    for member in ["alpha", "beta"] {
+        let obs: Vec<_> = plan
+            .obligations
+            .iter()
+            .filter(|ob| ob.task_id.contains(member))
+            .collect();
+        let want = if member == "beta" {
+            "affected_by_change"
+        } else {
+            "unproven"
+        };
+        assert!(
+            !obs.is_empty() && obs.iter().all(|ob| ob.reason == want),
+            "{member}: {obs:?}"
+        );
+    }
     assert!(warnings.is_empty(), "no warnings: {warnings:?}");
     Ok(())
 }
 
 #[test]
-fn new_package_at_head_still_narrows() -> TestResult {
+fn new_package_at_head_marks_affected() -> TestResult {
     let repo = two_pkg_repo()?;
     let root = repo.path();
     std::fs::write(
@@ -192,21 +196,22 @@ fn new_package_at_head_still_narrows() -> TestResult {
     )?;
     let head = commit(root, "two")?;
     let (plan, warnings) = plan_with(root, Some(&base), &head, None)?;
-    assert!(
-        !plan.task_ids.iter().any(|id| id.contains("alpha")),
-        "alpha out: {:?}",
-        plan.task_ids
-    );
-    assert!(
-        plan.task_ids.iter().any(|id| id.contains("beta")),
-        "beta in: {:?}",
-        plan.task_ids
-    );
-    assert!(
-        plan.task_ids.iter().any(|id| id.contains("gamma")),
-        "gamma in: {:?}",
-        plan.task_ids
-    );
+    for member in ["alpha", "beta", "gamma"] {
+        let obs: Vec<_> = plan
+            .obligations
+            .iter()
+            .filter(|ob| ob.task_id.contains(member))
+            .collect();
+        let want = if member == "alpha" {
+            "unproven"
+        } else {
+            "affected_by_change"
+        };
+        assert!(
+            !obs.is_empty() && obs.iter().all(|ob| ob.reason == want),
+            "{member}: {obs:?}"
+        );
+    }
     assert!(
         !warnings
             .iter()
@@ -279,6 +284,8 @@ fn merge_flags_wrong_manifest_digest() -> TestResult {
     let request = serde_json::json!({
         "schema": 1, "run_key": "local", "plan": plan, "matrix": plan.matrix,
         "matrix_reports": reports, "baseline_manifest": manifest,
+        "required_job_ids": ["velnor-plan"],
+        "required_jobs": [{"job_id": "velnor-plan", "conclusion": "success"}],
     });
     let final_report: velnor_actions_contract::FinalReport =
         serde_json::from_str(&merge_internal(&request.to_string())?)?;

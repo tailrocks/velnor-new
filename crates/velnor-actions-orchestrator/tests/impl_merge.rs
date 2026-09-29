@@ -18,18 +18,26 @@ fn merge(request: &serde_json::Value) -> Result<FinalReport, Box<dyn std::error:
 }
 
 /// Canonical merge request for a plan with report/job overrides.
+///
+/// The declared inventory mirrors the supplied results, so callers testing
+/// inventory mismatches must overwrite `required_job_ids` explicitly.
 fn merge_request(
     plan: &Plan,
     matrix: &serde_json::Value,
     reports: &serde_json::Value,
     jobs: &serde_json::Value,
 ) -> serde_json::Value {
+    let ids: Vec<serde_json::Value> = jobs
+        .as_array()
+        .map(|jobs| jobs.iter().map(|job| job["job_id"].clone()).collect())
+        .unwrap_or_default();
     serde_json::json!({
         "schema": 1,
         "run_key": "local",
         "plan": plan,
         "matrix": matrix,
         "matrix_reports": reports,
+        "required_job_ids": ids,
         "required_jobs": jobs,
     })
 }
@@ -281,7 +289,7 @@ fn tampered_reports_rejected() -> TestResult {
 }
 
 #[test]
-fn empty_plan_merges_no_work() -> TestResult {
+fn empty_diff_no_baseline_executes_all() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     let root = repo.path();
     git(&["add", "."], root)?;
@@ -298,25 +306,30 @@ fn empty_plan_merges_no_work() -> TestResult {
     let response = velnor_actions_orchestrator::plan_internal(&plan_request.to_string())?;
     let value: serde_json::Value = serde_json::from_str(&response)?;
     let plan: Plan = serde_json::from_value(value["plan"].clone())?;
-    assert!(plan.obligations.is_empty(), "empty diff selects nothing");
-    assert!(plan.task_ids.is_empty(), "empty diff selects nothing");
-    assert!(plan.matrix.include.is_empty(), "empty diff selects nothing");
+    assert!(!plan.obligations.is_empty(), "empty diff keeps universe");
+    assert!(!plan.task_ids.is_empty(), "empty diff keeps universe");
+    assert!(!plan.matrix.include.is_empty(), "empty diff executes");
+    assert!(
+        plan.obligations.iter().all(|ob| ob.reason == "unproven"),
+        "nothing proven: {:?}",
+        plan.obligations
+    );
 
+    let reports = passing_reports(&plan)?;
+    let request = merge_request(
+        &plan,
+        &serde_json::to_value(&plan.matrix)?,
+        &serde_json::to_value(&reports)?,
+        &success_jobs(),
+    );
+    assert_eq!(merge(&request)?.status, FinalStatus::Passed);
+
+    // Without reports the unproven legs are not-run, never no-work.
     let request = merge_request(
         &plan,
         &serde_json::to_value(&plan.matrix)?,
         &serde_json::json!([]),
         &success_jobs(),
-    );
-    assert_eq!(merge(&request)?.status, FinalStatus::NoWork);
-
-    // No-work still needs every always-required check to pass.
-    let skipped = serde_json::json!([{"job_id": "velnor-plan", "conclusion": "skipped"}]);
-    let request = merge_request(
-        &plan,
-        &serde_json::to_value(&plan.matrix)?,
-        &serde_json::json!([]),
-        &skipped,
     );
     assert_eq!(merge(&request)?.status, FinalStatus::NotRun);
 
@@ -340,6 +353,7 @@ fn missing_plan_merges_to_planning_failed() -> TestResult {
         "plan": null,
         "matrix": null,
         "matrix_reports": [],
+        "required_job_ids": ["velnor-plan"],
         "required_jobs": [{"job_id": "velnor-plan", "conclusion": "failure"}],
     });
     let final_report = merge(&request)?;
@@ -357,6 +371,8 @@ fn missing_plan_merges_to_planning_failed() -> TestResult {
         "plan": plan,
         "matrix": null,
         "matrix_reports": [],
+        "required_job_ids": ["velnor-plan"],
+        "required_jobs": [{"job_id": "velnor-plan", "conclusion": "success"}],
     });
     assert_eq!(merge(&request)?.status, FinalStatus::PlanningFailed);
     Ok(())

@@ -21,7 +21,8 @@ fn offline_dependency_aborts_plan() -> TestResult {
         "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\nvelnor-nonexistent-crate-xyz = \"9.9.9\"\n",
     )?;
     std::fs::write(repo.path().join("Cargo.lock"), "version = 3\n")?;
-    let request = serde_json::json!({"schema": 1, "run_key": "local", "base": None::<String>, "head": "abc", "event": "push", "root": repo.path().display().to_string()});
+    let head = commit(repo.path(), "one")?;
+    let request = serde_json::json!({"schema": 1, "run_key": "local", "base": None::<String>, "head": head, "event": "push", "root": repo.path().display().to_string()});
     let err = plan_internal(&request.to_string()).expect_err("offline dep must abort");
     let text = err.to_string();
     assert!(text.contains("preparation_incomplete"), "{text}");
@@ -31,24 +32,26 @@ fn offline_dependency_aborts_plan() -> TestResult {
 }
 
 #[test]
-fn omitted_tasks_carry_internal_reasons() -> TestResult {
-    use velnor_actions_orchestrator::decisions::omission_ledger;
+fn obligations_carry_internal_reasons() -> TestResult {
     let repo = make_ws(&["alpha", "beta"], &[])?;
     let base = commit(repo.path(), "one")?;
     put(repo.path(), "beta/src/lib.rs", BUMP)?;
     let head = commit(repo.path(), "two")?;
     let (full, _) = plan_at(repo.path(), None, &head, None)?;
-    let (narrowed, _) = plan_at(repo.path(), Some(&base), &head, None)?;
+    let (compared, _) = plan_at(repo.path(), Some(&base), &head, None)?;
     assert!(has(&full, "alpha") && has(&full, "beta"));
-    assert!(!has(&narrowed, "alpha") && has(&narrowed, "beta"));
-    let selected: BTreeSet<String> = narrowed.task_ids.iter().cloned().collect();
-    let ledger = omission_ledger(&full.task_ids, &selected);
-    assert!(!ledger.is_empty(), "narrowing omits tasks");
-    for omission in &ledger {
-        assert!(!omission.reason.is_empty(), "{}", omission.task_id);
-        assert!(!selected.contains(&omission.task_id));
-    }
-    for obligation in narrowed.obligations.iter().chain(full.obligations.iter()) {
+    assert_eq!(
+        full.task_ids, compared.task_ids,
+        "universe stable across comparisons"
+    );
+    assert!(
+        full.obligations
+            .iter()
+            .all(|ob| ob.reason == "affected_by_change"),
+        "unknown comparison marks all changed: {:?}",
+        full.obligations
+    );
+    for obligation in compared.obligations.iter().chain(full.obligations.iter()) {
         assert!(!obligation.reason.is_empty(), "{}", obligation.task_id);
     }
     Ok(())
@@ -132,7 +135,7 @@ fn cache_miss_cannot_fail_merge() -> TestResult {
 fn merge_without_reports_is_not_run() -> TestResult {
     let (_repo, plan) = plan_for_source_change()?;
     assert!(!plan.matrix.include.is_empty());
-    let request = serde_json::json!({"schema": 1, "run_key": "local", "plan": plan, "matrix": plan.matrix, "matrix_reports": [], "required_jobs": [{"job_id": "velnor-plan", "conclusion": "success"}]});
+    let request = serde_json::json!({"schema": 1, "run_key": "local", "plan": plan, "matrix": plan.matrix, "matrix_reports": [], "required_job_ids": ["velnor-plan"], "required_jobs": [{"job_id": "velnor-plan", "conclusion": "success"}]});
     let final_report: velnor_actions_contract::FinalReport =
         serde_json::from_str(&merge_internal(&request.to_string())?)?;
     assert_eq!(final_report.status, FinalStatus::NotRun);
@@ -148,19 +151,28 @@ fn undetected_stacks_plan_no_work() -> TestResult {
     let dir = tempfile::TempDir::new()?;
     let root = dir.path();
     git(&["init", "-b", "testmain"], root)?;
+    git(&["config", "user.email", "t@e.c"], root)?;
+    git(&["config", "user.name", "T"], root)?;
+    git(&["config", "commit.gpgsign", "false"], root)?;
     std::fs::create_dir_all(root.join(".velnor"))?;
     std::fs::write(root.join(".velnor/config.toml"), config_with_branch())?;
     std::fs::write(root.join("README.md"), "no manifests here\n")?;
-    let request = serde_json::json!({"schema": 1, "run_key": "local", "base": None::<String>, "head": "abc", "event": "push", "root": root.display().to_string()});
+    let head = commit(root, "one")?;
+    let request = serde_json::json!({"schema": 1, "run_key": "local", "base": None::<String>, "head": head, "event": "push", "root": root.display().to_string()});
     let response = plan_internal(&request.to_string())?;
     let value: Json = serde_json::from_str(&response)?;
     let plan: Plan = serde_json::from_value(value["plan"].clone())?;
     assert!(plan.task_ids.is_empty(), "no inventory, no work");
     assert!(plan.packages.is_empty());
-    let merge = serde_json::json!({"schema": 1, "run_key": "local", "plan": plan, "matrix": plan.matrix, "matrix_reports": []});
-    let final_report: velnor_actions_contract::FinalReport =
-        serde_json::from_str(&merge_internal(&merge.to_string())?)?;
+    let jobs = serde_json::json!([{"job_id": "velnor-plan", "conclusion": "success"}, {"job_id": "velnor-workflow-lint", "conclusion": "success"}]);
+    let merge = serde_json::json!({"schema": 1, "run_key": "local", "plan": plan, "matrix": plan.matrix, "matrix_reports": [], "required_job_ids": ["velnor-plan", "velnor-workflow-lint"], "required_jobs": jobs});
+    let merged = merge_internal(&merge.to_string())?;
+    let final_report: velnor_actions_contract::FinalReport = serde_json::from_str(&merged)?;
     assert_eq!(final_report.status, FinalStatus::NoWork);
+    assert!(
+        !velnor_actions_orchestrator::merge_passed(&merged)?,
+        "no work proves nothing, gate stays red"
+    );
     Ok(())
 }
 
@@ -256,17 +268,18 @@ fn generator_mismatch_executes_with_reason() -> TestResult {
 #[test]
 fn carried_proofs_cover_with_original_run() -> TestResult {
     let (repo, seed) = plan_for_source_change()?;
-    let base = seed.base.clone().ok_or("missing base")?;
-    let mut tasks = entries_for(&seed);
+    let head = seed.head.clone();
+    let (nodiff, _) = plan_at(repo.path(), Some(&head), &head, None)?;
+    let mut tasks = entries_for(&nodiff);
     for task in tasks.as_array_mut().ok_or("tasks")? {
         task["proof_run_id"] = Json::from(5);
         task["observed_run_id"] = Json::from(9);
     }
     let (plan, _) = plan_at(
         repo.path(),
-        Some(&base),
-        &seed.head,
-        Some(manifest_for(&seed, &base, &tasks)),
+        Some(&head),
+        &head,
+        Some(manifest_for(&nodiff, &head, &tasks)),
     )?;
     assert!(
         plan.obligations
@@ -284,7 +297,8 @@ fn carried_proofs_cover_with_original_run() -> TestResult {
 fn shard_budgets_reject_at_plan_time() -> TestResult {
     let config = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[resources]\ncompiler_process_budget = 2\ntest_process_budget = 2\n[test_sharding]\ndefault_shards = 99\n";
     let repo = make_repo(config)?;
-    let request = serde_json::json!({"schema": 1, "run_key": "local", "base": None::<String>, "head": "abc", "event": "push", "root": repo.path().display().to_string()});
+    let head = commit(repo.path(), "one")?;
+    let request = serde_json::json!({"schema": 1, "run_key": "local", "base": None::<String>, "head": head, "event": "push", "root": repo.path().display().to_string()});
     let err = plan_internal(&request.to_string()).expect_err("over-budget shards rejected");
     assert!(
         err.to_string().contains("exceeds_test_process_budget"),
@@ -309,9 +323,11 @@ fn expired_baselines_schedule_execution() -> TestResult {
         warnings.iter().any(|w| w.contains("cache_expired")),
         "{warnings:?}"
     );
-    let mut fresh = manifest_for(&seed, &base, &entries_for(&seed));
+    let head = seed.head.clone();
+    let (nodiff, _) = plan_at(repo.path(), Some(&head), &head, None)?;
+    let mut fresh = manifest_for(&nodiff, &head, &entries_for(&nodiff));
     fresh["expires_at_unix"] = Json::from(4_102_444_800_u64);
-    let (covered, _) = plan_at(repo.path(), Some(&base), &seed.head, Some(fresh))?;
+    let (covered, _) = plan_at(repo.path(), Some(&head), &head, Some(fresh))?;
     assert!(
         covered
             .obligations

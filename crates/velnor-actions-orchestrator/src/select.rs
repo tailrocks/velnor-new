@@ -1,4 +1,9 @@
-//! Event-time affected-work selection for `plan-v1`.
+//! Obligation universe and changed-work classification for `plan-v1`.
+//!
+//! The plan carries the full configured obligation universe; changed-work
+//! analysis only classifies obligations as changed (must execute) or
+//! unchanged (eligible for verified reuse/baseline coverage). Nothing is
+//! ever removed for being unaffected: without proof, everything executes.
 
 use std::collections::BTreeSet;
 use std::ffi::OsString;
@@ -8,28 +13,26 @@ use velnor_actions_contract::WorkflowEvent;
 use velnor_actions_mise::GitRequest;
 use velnor_actions_rust::{FOREIGN_TOOL_FILES, RUST_TOOLCHAIN_FILE, TaskGroup};
 
+use crate::OrchestratorError;
 use crate::decisions::selection_broadens_for_path;
 use crate::discover::Discovery;
+use crate::internal::internal;
 use crate::select_affected::{affected_packages, has_unowned_file};
 use crate::select_edges::{base_edges, head_edges};
 use crate::validators::{validate_diff_rev, validate_select_diff_args};
 
-/// Select task groups: affected subset on PRs with a base, else all.
+/// Full obligation universe: every group with applicable targets.
 ///
-/// Groups without applicable targets are never selected: scheduling them
-/// would emit impossible obligations (for example `cargo test --doc` for a
+/// Groups without applicable targets are never obligations: scheduling
+/// them would emit impossible work (for example `cargo test --doc` for a
 /// package with no doctest-able target). Each omission is recorded as a
 /// `valid_no_test_targets:<task-id>` warning, never silent.
-pub(crate) fn select_groups<'a>(
-    root: &Path,
-    event: WorkflowEvent,
-    base: Option<&str>,
-    head: &str,
+pub(crate) fn select_universe<'a>(
     discovery: &'a Discovery,
     warnings: &mut Vec<String>,
 ) -> Vec<&'a TaskGroup> {
     let mut kept = Vec::new();
-    for group in select_candidate_groups(root, event, base, head, discovery, warnings) {
+    for group in &discovery.task_groups {
         if group.no_test_targets {
             warnings.push(format!("valid_no_test_targets:{}", group.task_id));
         } else {
@@ -39,118 +42,174 @@ pub(crate) fn select_groups<'a>(
     kept
 }
 
-/// Candidate task groups before the valid-no-target exclusion.
-fn select_candidate_groups<'a>(
+/// Changed package IDs, or `None` when the comparison is unknown.
+///
+/// `None` marks every obligation changed (fail-open broad: the correct
+/// unknown-comparison behavior). An empty set means nothing changed, so
+/// obligations stay eligible for verified coverage instead of executing
+/// unconditionally. Push compares `before...head` when a base exists.
+pub(crate) fn classify_changed(
     root: &Path,
     event: WorkflowEvent,
     base: Option<&str>,
     head: &str,
-    discovery: &'a Discovery,
+    discovery: &Discovery,
     warnings: &mut Vec<String>,
-) -> Vec<&'a TaskGroup> {
-    let all: Vec<&TaskGroup> = discovery.task_groups.iter().collect();
+) -> Option<BTreeSet<String>> {
     if event == WorkflowEvent::Local {
-        return select_local(discovery, root, warnings);
+        return classify_local(root, discovery, warnings);
     }
-    let narrows = matches!(
-        event,
-        WorkflowEvent::PullRequest | WorkflowEvent::MergeGroup | WorkflowEvent::Fork
-    );
-    if !(narrows && base.is_some()) {
-        if narrows {
-            warnings.push("comparison_unavailable:missing_base:selecting_all".to_owned());
+    let Some(base) = base else {
+        if matches!(
+            event,
+            WorkflowEvent::PullRequest | WorkflowEvent::MergeGroup | WorkflowEvent::Fork
+        ) {
+            warnings.push("comparison_unavailable:missing_base:all_changed".to_owned());
         }
-        return all;
-    }
-    let base = base.unwrap_or_default();
-    let Some((changed, toolfiles)) = change_sets(root, base, head, warnings) else {
-        return all;
+        return None;
     };
-    narrow_from_changed(discovery, &changed, toolfiles, root, base, head, warnings)
+    let (changed, toolfiles) = change_sets(root, base, head, warnings)?;
+    Some(affected_from_changed(
+        discovery, &changed, toolfiles, root, base, head, warnings,
+    ))
 }
 
-/// Local pre-push selection: the working tree against `HEAD`.
-fn select_local<'a>(
-    discovery: &'a Discovery,
+/// Local pre-push classification: the working tree against `HEAD`.
+fn classify_local(
     root: &Path,
+    discovery: &Discovery,
     warnings: &mut Vec<String>,
-) -> Vec<&'a TaskGroup> {
-    let all: Vec<&'a TaskGroup> = discovery.task_groups.iter().collect();
+) -> Option<BTreeSet<String>> {
     let sha = match head_sha(root) {
         Ok(sha) => sha,
         Err(problem) => {
-            warnings.push(format!("comparison_unavailable:{problem}:selecting_all"));
-            return all;
+            warnings.push(format!("comparison_unavailable:{problem}:all_changed"));
+            return None;
         }
     };
-    let Some((changed, toolfiles)) = local_change_set(root, warnings) else {
-        return all;
-    };
-    narrow_from_changed(discovery, &changed, toolfiles, root, &sha, &sha, warnings)
+    let (changed, toolfiles) = local_change_set(root, warnings)?;
+    Some(affected_from_changed(
+        discovery, &changed, toolfiles, root, &sha, &sha, warnings,
+    ))
 }
 
-/// Narrow one change set to owning groups, broadening on risk.
-fn narrow_from_changed<'a>(
-    discovery: &'a Discovery,
+/// Changed package IDs for one change set, broadening on risk.
+///
+/// An empty change set marks nothing changed: obligations stay eligible
+/// for verified coverage, and execute when no proof covers them. Any
+/// risk (lockfile, root config, broadening paths, unowned files, edge
+/// failures) marks every package changed.
+fn affected_from_changed(
+    discovery: &Discovery,
     changed: &BTreeSet<String>,
     toolfiles: bool,
     root: &Path,
     base: &str,
     head: &str,
     warnings: &mut Vec<String>,
-) -> Vec<&'a TaskGroup> {
-    let all: Vec<&TaskGroup> = discovery.task_groups.iter().collect();
+) -> BTreeSet<String> {
+    let groups = &discovery.task_groups;
+    let all_packages: BTreeSet<String> = groups
+        .iter()
+        .map(|group| group.package_id.clone())
+        .collect();
     if changed.is_empty() {
         warnings.push(
             if toolfiles {
-                "toolfiles_only:findings_only"
+                "toolfiles_only:all_unchanged"
             } else {
-                "no_affected_files"
+                "no_affected_files:all_unchanged"
             }
             .to_owned(),
         );
-        return Vec::new();
+        return BTreeSet::new();
     }
     if changed.iter().any(|path| path == "Cargo.lock") {
-        warnings.push("cargo_lock_changed:selecting_all".to_owned());
-        return all;
+        warnings.push("cargo_lock_changed:all_changed".to_owned());
+        return all_packages;
     }
     if changed.iter().any(|path| is_root_config(path)) {
-        warnings.push("root_config_changed:selecting_all".to_owned());
-        return all;
+        warnings.push("root_config_changed:all_changed".to_owned());
+        return all_packages;
     }
     if let Some(warning) = changed
         .iter()
         .find_map(|path| selection_broadens_for_path(path))
     {
         warnings.push(warning.to_owned());
-        return all;
+        return all_packages;
     }
     if has_unowned_file(discovery, changed) {
-        warnings.push("unclassified_files:selecting_all".to_owned());
-        return all;
+        warnings.push("unclassified_files:all_changed".to_owned());
+        return all_packages;
     }
     let head_edges = head_edges(discovery);
-    let base_edges = match base_edges(root, base, head, discovery) {
-        Ok(edges) => edges,
+    match base_edges(root, base, head, discovery) {
+        Ok(base_edges) => affected_packages(discovery, changed, &base_edges, &head_edges),
         Err(problem) => {
-            warnings.push(format!("comparison_unavailable:{problem}:selecting_all"));
-            return all;
-        }
-    };
-    let selected_ids = affected_packages(discovery, changed, &base_edges, &head_edges);
-    let mut keys = BTreeSet::new();
-    for group in &all {
-        if selected_ids.contains(&group.package_id) {
-            keys.insert(group.manifest_key.clone());
+            warnings.push(format!("comparison_unavailable:{problem}:all_changed"));
+            all_packages
         }
     }
-    all.into_iter()
-        .filter(|group| {
-            selected_ids.contains(&group.package_id)
-                || (group.package_id.is_empty() && keys.contains(&group.manifest_key))
-        })
-        .collect()
+}
+
+/// True when one group counts as changed under the affected packages.
+///
+/// Groups with an empty package ID follow their manifest siblings: a
+/// workspace-level task is affected when any same-manifest package is.
+pub(crate) fn group_changed(
+    group: &TaskGroup,
+    changed: &BTreeSet<String>,
+    changed_keys: &BTreeSet<String>,
+) -> bool {
+    changed.contains(&group.package_id)
+        || (group.package_id.is_empty() && changed_keys.contains(&group.manifest_key))
+}
+
+/// Verify the analyzed checkout matches the intended head.
+///
+/// Identities describe the working tree; a checkout at any other commit
+/// would validate the wrong tree. Push and merge-group runs resolve
+/// `HEAD` exactly; PR and fork runs additionally accept the merge
+/// checkout (`HEAD^2`), which is what would land. Local runs analyze
+/// the working tree itself and skip this check.
+///
+/// # Errors
+///
+/// Returns [`OrchestratorError::Internal`] for checkout/head mismatch or
+/// unresolvable `HEAD`.
+pub(crate) fn verify_checkout(
+    root: &Path,
+    event: WorkflowEvent,
+    head: &str,
+) -> Result<(), OrchestratorError> {
+    if event == WorkflowEvent::Local {
+        return Ok(());
+    }
+    validate_diff_rev(head, "bad_head").map_err(|problem| internal(&problem))?;
+    let checkout = head_sha(root).map_err(|p| internal(&format!("bad_checkout:{p}")))?;
+    if checkout == head {
+        return Ok(());
+    }
+    if matches!(event, WorkflowEvent::PullRequest | WorkflowEvent::Fork)
+        && second_parent(root).as_deref() == Some(head)
+    {
+        return Ok(());
+    }
+    Err(internal("checkout_head_mismatch"))
+}
+
+/// Second parent of the checkout merge commit, if any.
+fn second_parent(root: &Path) -> Option<String> {
+    let output = GitRequest::rev_parse(vec![OsString::from("HEAD^2")])
+        .run_in(root)
+        .ok()?;
+    if !output.success {
+        return None;
+    }
+    let sha = output.stdout_text("git").ok()?.trim().to_owned();
+    validate_diff_rev(&sha, "bad_head").ok()?;
+    Some(sha)
 }
 
 /// Files changed between base and head via the allowlisted `diff` verb.
@@ -197,14 +256,14 @@ fn change_sets(
     let changed = match changed_files(root, base, head) {
         Ok(files) => files,
         Err(problem) => {
-            warnings.push(format!("comparison_unavailable:{problem}:selecting_all"));
+            warnings.push(format!("comparison_unavailable:{problem}:all_changed"));
             return None;
         }
     };
     let untracked = match untracked_files(root) {
         Ok(files) => files,
         Err(problem) => {
-            warnings.push(format!("comparison_unavailable:{problem}:selecting_all"));
+            warnings.push(format!("comparison_unavailable:{problem}:all_changed"));
             return None;
         }
     };
@@ -214,7 +273,7 @@ fn change_sets(
         .into_iter()
         .any(|path| !is_advisory_toolfile(&path))
     {
-        warnings.push("untracked_files:selecting_all".to_owned());
+        warnings.push("untracked_files:all_changed".to_owned());
         return None;
     }
     let changed = changed
@@ -234,7 +293,7 @@ fn local_change_set(root: &Path, warnings: &mut Vec<String>) -> Option<(BTreeSet
         match tree_diff_names(root, cached) {
             Ok(files) => changed.extend(files),
             Err(problem) => {
-                warnings.push(format!("comparison_unavailable:{problem}:selecting_all"));
+                warnings.push(format!("comparison_unavailable:{problem}:all_changed"));
                 return None;
             }
         }
@@ -242,7 +301,7 @@ fn local_change_set(root: &Path, warnings: &mut Vec<String>) -> Option<(BTreeSet
     let untracked = match untracked_files(root) {
         Ok(files) => files,
         Err(problem) => {
-            warnings.push(format!("comparison_unavailable:{problem}:selecting_all"));
+            warnings.push(format!("comparison_unavailable:{problem}:all_changed"));
             return None;
         }
     };
