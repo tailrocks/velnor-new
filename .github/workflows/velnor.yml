@@ -309,6 +309,10 @@ jobs:
           RUSTUP_TOOLCHAIN: 1.98.1
         run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- rustup component add --toolchain 1.98.1-x86_64-unknown-linux-gnu clippy rustfmt
       - name: Fetch Cargo sources
+        env:
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUSTUP_TOOLCHAIN: 1.98.1
         run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked
       - name: Restore MBX objects
         uses: jdx/mr-boxington-action@9df1d4b18b2147788a7ee7a2c7b84ecf62fd89d3

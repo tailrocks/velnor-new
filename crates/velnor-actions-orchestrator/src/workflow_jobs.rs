@@ -9,8 +9,7 @@ use velnor_actions_mise::{
     ToolHomes,
 };
 use velnor_actions_workflow_renderer::render::{
-    FINAL_CONDITION, FINAL_DISPLAY_NAME, MATRIX_MAX_PARALLEL_ENV, MATRIX_NEEDS_JOB_ENV,
-    MATRIX_OUTPUT_ENV, PLAN_JOB_ID, TASK_JOB_ID,
+    FINAL_CONDITION, FINAL_DISPLAY_NAME, PLAN_JOB_ID, TASK_JOB_ID,
 };
 use velnor_actions_workflow_renderer::steps::{
     MERGE_OPERATION, PLAN_OPERATION, merge_step, plan_step, write_request_step,
@@ -25,9 +24,6 @@ pub(crate) const LINT_JOB_ID: &str = "velnor-workflow-lint";
 
 /// Display name of the always-on workflow-lint job.
 pub(crate) const LINT_DISPLAY_NAME: &str = "Velnor Workflow Lint";
-
-/// Producer output carrying the matrix JSON for `fromJSON`.
-const MATRIX_OUTPUT_NAME: &str = "matrix";
 
 /// Planner job: checkout, pinned-tool install, optional Acquire, request, plan.
 ///
@@ -61,7 +57,7 @@ pub(crate) fn plan_job(
     let prepare = prepare_pinned_tools_step(catalog, plan_tools(use_mbx, use_nextest))?;
     steps.push(prepare);
     steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
-    steps.extend(fetch_steps(catalog, fetch_roots)?);
+    steps.extend(fetch_steps(catalog, fetch_roots, &BTreeMap::new())?);
     steps.extend(acquire);
     steps.push(request_step(PLAN_OPERATION)?);
     steps.push(plan_step());
@@ -225,64 +221,6 @@ fn request_step(target: &str) -> Result<Step, OrchestratorError> {
 /// Pinned checkout action without persisted credentials.
 fn checkout_action() -> Result<Step, OrchestratorError> {
     crate::workflow::wire_w1::checkout_step()
-}
-
-/// Fixed matrix-entry template: run the command, always write reports.
-///
-/// Missing `matrix.run`/`matrix.task_digest` fail the leg via `${VAR:?...}`; env carries
-/// matrix context plus the owned-homes triple, keeping `run:` free of `${{ }}` for scans.
-pub(crate) fn matrix_task_step(max_parallel_jobs: u32, catalog: &ToolCatalog) -> Step {
-    use velnor_actions_workflow_renderer::{task_steps as legs, toolchain_env};
-    let homes = ToolHomes::runner_temp();
-    let toolchain = catalog.rustup_toolchain();
-    let env = toolchain_env::with_toolchain_homes(
-        &BTreeMap::from([
-            (
-                legs::LEG_TASK_ID_ENV.to_owned(),
-                "${{ matrix.task_id }}".to_owned(),
-            ),
-            (
-                legs::LEG_TASK_RUN_ENV.to_owned(),
-                "${{ matrix.run }}".to_owned(),
-            ),
-            (
-                legs::LEG_TASK_DIGEST_ENV.to_owned(),
-                "${{ matrix.task_digest }}".to_owned(),
-            ),
-            (
-                legs::LEG_MATRIX_KEY_ENV.to_owned(),
-                "${{ matrix.matrix_key }}".to_owned(),
-            ),
-            (
-                legs::LEG_MATRIX_ID_ENV.to_owned(),
-                "${{ matrix.id }}".to_owned(),
-            ),
-            (
-                legs::LEG_EVENT_ENV.to_owned(),
-                "${{ github.event_name }}".to_owned(),
-            ),
-            (MATRIX_NEEDS_JOB_ENV.to_owned(), PLAN_JOB_ID.to_owned()),
-            (MATRIX_OUTPUT_ENV.to_owned(), MATRIX_OUTPUT_NAME.to_owned()),
-            (
-                MATRIX_MAX_PARALLEL_ENV.to_owned(),
-                max_parallel_jobs.to_string(),
-            ),
-        ]),
-        homes.rustup_home(),
-        homes.cargo_home(),
-        &toolchain,
-    );
-    Step {
-        name: "Run task".to_owned(),
-        kind: StepKind::Shell {
-            run: vec![
-                "sh".to_owned(),
-                "-c".to_owned(),
-                legs::leg_execution_script(),
-            ],
-            env,
-        },
-    }
 }
 
 #[cfg(test)]

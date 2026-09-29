@@ -258,7 +258,10 @@ fn plan_job_fetches_lockful_sources_before_generate_consumers() -> TestResult {
             && run.contains(&"--locked".to_owned()),
         "fetch argv must be cargo fetch --locked: {run:?}"
     );
-    assert!(env.is_empty(), "fetch shares the default cargo home");
+    assert!(
+        env.is_empty(),
+        "plan fetch keeps the ambient homes its helper inherits"
+    );
     let tree = render_staged_tree(&prep)?;
     let yaml = tree
         .get(".github/workflows/velnor.yml")

@@ -118,11 +118,11 @@ fn orch_spawns_no_processes_and_confines_shell_wrappers() -> TestResult {
     assert_eq!(
         sh_files,
         std::collections::BTreeSet::from([
+            "matrix_step.rs".to_owned(),
             "pins.rs".to_owned(),
             "qualify.rs".to_owned(),
-            "workflow_jobs.rs".to_owned(),
         ]),
-        "fixed sh wrappers live in pins/qualify/workflow_jobs only"
+        "fixed sh wrappers live in matrix_step/pins/qualify only"
     );
     Ok(())
 }

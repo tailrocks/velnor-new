@@ -82,7 +82,28 @@ fn task_job_fetches_lockful_sources_before_run_task() -> TestResult {
             && run.contains(&"--locked".to_owned()),
         "fetch argv must be cargo fetch --locked: {run:?}"
     );
-    assert!(env.is_empty(), "fetch shares the default cargo home");
+    let StepKind::Shell { env: run_env, .. } = &task.steps[run_at].kind else {
+        return Err("Run task must be a shell step".into());
+    };
+    for key in ["MISE_RUSTUP_HOME", "MISE_CARGO_HOME", "RUSTUP_TOOLCHAIN"] {
+        assert_eq!(
+            env.get(key),
+            run_env.get(key),
+            "fetch must share the Run task toolchain home {key}"
+        );
+        assert!(
+            env.get(key).is_some_and(|value| !value.is_empty()),
+            "fetch toolchain home {key} must be set"
+        );
+    }
+    Ok(())
+}
+
+/// Rendered task-job YAML window for a lockful fixture repo.
+fn lockful_task_window() -> Result<String, Box<dyn std::error::Error>> {
+    let repo = make_repo(config_with_branch())?;
+    fs::write(repo.path().join("Cargo.lock"), demo_lock("demo"))?;
+    let prep = prepare(repo.path())?;
     let tree = render_staged_tree(&prep)?;
     let yaml = tree
         .get(WORKFLOW_PATH)
@@ -91,7 +112,12 @@ fn task_job_fetches_lockful_sources_before_run_task() -> TestResult {
         .find("  velnor-task:")
         .ok_or_else(|| std::io::Error::other("missing task job"))?;
     let lint_at = yaml.find("  velnor-workflow-lint:").unwrap_or(yaml.len());
-    let window = &yaml[task_at..lint_at];
+    Ok(yaml[task_at..lint_at].to_owned())
+}
+
+#[test]
+fn rendered_task_fetch_precedes_run_task_with_toolchain_triple() -> TestResult {
+    let window = lockful_task_window()?;
     let fetch_pos = window
         .find("Fetch Cargo sources")
         .ok_or_else(|| std::io::Error::other("rendered fetch missing"))?;
@@ -103,6 +129,13 @@ fn task_job_fetches_lockful_sources_before_run_task() -> TestResult {
         window.contains("cargo fetch --locked"),
         "rendered fetch argv:\n{window}"
     );
+    let fetch_window = &window[fetch_pos..run_pos];
+    for key in ["MISE_RUSTUP_HOME:", "MISE_CARGO_HOME:", "RUSTUP_TOOLCHAIN:"] {
+        assert!(
+            fetch_window.contains(key),
+            "rendered fetch must carry {key}:\n{window}"
+        );
+    }
     Ok(())
 }
 

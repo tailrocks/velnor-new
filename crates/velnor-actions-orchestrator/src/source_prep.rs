@@ -41,18 +41,19 @@ pub(crate) fn lockful_roots(root: &Path, workspaces: &[PlannedWorkspace]) -> Vec
 /// One `cargo fetch --locked` step per lockful workspace root.
 ///
 /// The root workspace keeps the minimal argv; nested workspaces name
-/// their manifest explicitly and carry it in the step name. The step
-/// env is intentionally empty: fetched sources must land in the same
-/// default cargo home that the locked/offline consumers read
-/// (`generate`'s internal metadata in plan, `matrix.run` in task jobs),
-/// and a divergent `MISE_CARGO_HOME` here would hide them from those
-/// readers.
+/// their manifest explicitly and carry it in the step name. The caller
+/// supplies the step env, which MUST equal the cargo-consumer env of
+/// the same job: fetched sources land in the `MISE_CARGO_HOME` this
+/// step runs with, so a divergent home hides them from the readers.
+/// Task jobs pass the owned-homes triple their `Run task` step reads;
+/// plan jobs pass the empty map their ambient-home helper inherits.
 /// # Errors
 ///
 /// Returns a contract error when the Mise adapter rejects the request.
 pub(crate) fn fetch_steps(
     catalog: &ToolCatalog,
     roots: &[String],
+    env: &BTreeMap<String, String>,
 ) -> Result<Vec<Step>, OrchestratorError> {
     let mut steps = Vec::with_capacity(roots.len());
     for root in roots {
@@ -79,7 +80,7 @@ pub(crate) fn fetch_steps(
             name,
             kind: StepKind::Shell {
                 run,
-                env: BTreeMap::new(),
+                env: env.clone(),
             },
         });
     }
@@ -105,7 +106,7 @@ mod tests {
     #[test]
     fn root_step_vector_is_byte_exact() {
         let catalog = ToolCatalog::pinned();
-        let steps = fetch_steps(&catalog, &[String::new()]).expect("fetch steps");
+        let steps = fetch_steps(&catalog, &[String::new()], &BTreeMap::new()).expect("fetch steps");
         assert_eq!(steps.len(), 1);
         assert_eq!(steps[0].name, FETCH_SOURCES_STEP);
         let want: Vec<String> = [
@@ -127,13 +128,29 @@ mod tests {
             panic!("fetch must be a shell step");
         };
         assert_eq!(run, &want);
-        assert!(env.is_empty(), "fetch shares the default cargo home");
+        assert!(env.is_empty(), "plan fetch keeps ambient homes");
+    }
+
+    #[test]
+    fn caller_env_is_carried_verbatim() {
+        let catalog = ToolCatalog::pinned();
+        let env = BTreeMap::from([
+            ("MISE_RUSTUP_HOME".to_owned(), "rustup".to_owned()),
+            ("MISE_CARGO_HOME".to_owned(), "cargo".to_owned()),
+            ("RUSTUP_TOOLCHAIN".to_owned(), "1.98.1".to_owned()),
+        ]);
+        let steps = fetch_steps(&catalog, &[String::new()], &env).expect("fetch steps");
+        let StepKind::Shell { env: got, .. } = &steps[0].kind else {
+            panic!("fetch must be a shell step");
+        };
+        assert_eq!(got, &env, "task fetch must match Run task homes");
     }
 
     #[test]
     fn nested_step_names_its_manifest() {
         let catalog = ToolCatalog::pinned();
-        let steps = fetch_steps(&catalog, &["nested".to_owned()]).expect("fetch steps");
+        let steps =
+            fetch_steps(&catalog, &["nested".to_owned()], &BTreeMap::new()).expect("fetch steps");
         assert_eq!(steps.len(), 1);
         assert_eq!(steps[0].name, "Fetch Cargo sources (nested/Cargo.toml)");
         let StepKind::Shell { run, .. } = &steps[0].kind else {
@@ -148,7 +165,7 @@ mod tests {
     #[test]
     fn lockless_roots_emit_no_steps() {
         let catalog = ToolCatalog::pinned();
-        let steps = fetch_steps(&catalog, &[]).expect("fetch steps");
+        let steps = fetch_steps(&catalog, &[], &BTreeMap::new()).expect("fetch steps");
         assert!(steps.is_empty());
     }
 }

@@ -17,10 +17,7 @@ use velnor_actions_actionlint::{
     checkout_inputs_schema, validate_action_inputs,
 };
 use velnor_actions_contract::{Job, Step, StepKind};
-use velnor_actions_mise::{
-    Gate6Fixture, PREPARE_PINNED_TOOLS_STEP, PinnedTool, PreparePinnedTools, TaskCacheMode,
-    ToolCatalog, ToolHomes,
-};
+use velnor_actions_mise::{Gate6Fixture, TaskCacheMode, ToolCatalog, ToolHomes};
 use velnor_actions_rust::{TaskKind, derive_workspace_fmt};
 use velnor_actions_workflow_renderer::plan_format;
 use velnor_actions_workflow_renderer::render::{PLAN_JOB_ID, TASK_JOB_ID};
@@ -30,9 +27,9 @@ use velnor_actions_workflow_renderer::steps::{
 
 use crate::OrchestratorError;
 use crate::discover::Discovery;
+use crate::matrix_step::{matrix_task_step, prepare_task_tools_step, task_toolchain_env};
 use crate::source_prep::fetch_steps;
-use crate::utf8::{strings_of, strings_of_env};
-use crate::workflow_jobs::matrix_task_step;
+use crate::utf8::strings_of_env;
 
 /// Declared repository configuration variable names (GEN-2.14).
 ///
@@ -85,11 +82,11 @@ pub(crate) fn vet_step_syntax(syntax: StepSyntax) -> Result<(), OrchestratorErro
 
 /// Matrix consumer job: checkout, pinned tools, sources, MBX, template.
 ///
-/// Order follows task-execution-contract §2: `Prepare pinned tools` sits at index 1 with
-/// `Prepare Rust components` right after, `Fetch Cargo sources` runs per lockful root so the
-/// locked/offline payloads resolve from a cold registry, the MBX objects restore (MBX legs
-/// only) follows, and the fixed matrix-entry template closes the job. Gate-6 cache steps
-/// stay absent until a qualification fixture enables them.
+/// Order follows task-execution-contract §2: prepare, components, per-root
+/// `Fetch Cargo sources` (sharing the `Run task` toolchain env so cold
+/// locked/offline payloads resolve), MBX objects restore (MBX legs only),
+/// then the fixed matrix-entry template. Gate-6 cache steps stay absent
+/// until a qualification fixture enables them.
 ///
 /// # Errors
 ///
@@ -105,7 +102,11 @@ pub(crate) fn build_task_job(
     let mut steps = vec![checkout_step()?];
     steps.push(prepare_task_tools_step(catalog, use_mbx, use_nextest)?);
     steps.push(super::prepare_rust_components_step(catalog)?);
-    steps.extend(fetch_steps(catalog, fetch_roots)?);
+    steps.extend(fetch_steps(
+        catalog,
+        fetch_roots,
+        &task_toolchain_env(catalog),
+    )?);
     steps.extend(mbx_task_step(use_mbx)?);
     steps.extend(maybe_task_cache_steps(None, TaskCacheMode::Off, "")?);
     steps.push(matrix_task_step(max_parallel_jobs, catalog));
@@ -115,44 +116,6 @@ pub(crate) fn build_task_job(
         needs: vec![PLAN_JOB_ID.to_owned()],
         condition: None,
         steps,
-    })
-}
-
-/// Task-job driver tools: Rust plus MBX only on MBX evidence.
-#[must_use]
-pub(crate) fn task_driver_tools(use_mbx: bool) -> Vec<PinnedTool> {
-    let mut tools = vec![PinnedTool::Rust];
-    tools.extend(use_mbx.then_some(PinnedTool::MrBoxington));
-    tools
-}
-
-/// Typed `Prepare pinned tools` step for the task-job tool set.
-///
-/// # Errors
-///
-/// Returns a contract error when the Mise adapter rejects the request.
-fn prepare_task_tools_step(
-    catalog: &ToolCatalog,
-    use_mbx: bool,
-    use_nextest: bool,
-) -> Result<Step, OrchestratorError> {
-    let mut tools = task_driver_tools(use_mbx);
-    tools.push(PinnedTool::Actionlint);
-    tools.push(PinnedTool::Shellcheck);
-    tools.push(PinnedTool::Zizmor);
-    tools.extend(use_nextest.then_some(PinnedTool::Nextest));
-    let prepare = PreparePinnedTools::new(tools, ToolHomes::runner_temp()).map_err(|err| {
-        OrchestratorError::Contract {
-            problem: err.to_string(),
-        }
-    })?;
-    let run = strings_of(prepare.argv(catalog))
-        .map_err(|problem| OrchestratorError::Contract { problem })?;
-    let env = strings_of_env(&prepare.env(catalog))
-        .map_err(|problem| OrchestratorError::Contract { problem })?;
-    Ok(Step {
-        name: PREPARE_PINNED_TOOLS_STEP.to_owned(),
-        kind: StepKind::Shell { run, env },
     })
 }
 
@@ -362,6 +325,9 @@ mod tests {
 
     #[test]
     fn mbx_and_driver_tools_follow_selection() {
+        use velnor_actions_mise::PinnedTool;
+
+        use crate::matrix_step::task_driver_tools;
         assert_eq!(task_driver_tools(false), vec![PinnedTool::Rust]);
         assert_eq!(
             task_driver_tools(true),
@@ -383,7 +349,9 @@ mod tests {
 
     #[test]
     fn task_prepare_steps_carry_nextest_and_components() {
-        use velnor_actions_mise::PREPARE_RUST_COMPONENTS_STEP;
+        use velnor_actions_mise::{
+            PREPARE_PINNED_TOOLS_STEP, PREPARE_RUST_COMPONENTS_STEP, PinnedTool,
+        };
         let catalog = ToolCatalog::pinned();
         for use_nextest in [false, true] {
             let job = build_task_job("ubuntu-26.04", 2, &catalog, false, use_nextest, &[])
