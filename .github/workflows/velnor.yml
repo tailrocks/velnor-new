@@ -48,13 +48,18 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: velnor-preseed-helper
-          path: $RUNNER_TEMP/velnor/preseed
+          path: ${{ runner.temp }}/velnor/preseed
       - name: Stage helper (pre-seed trust-on-review)
         run: sh -c 'mkdir -p $RUNNER_TEMP/velnor/bin && cp $RUNNER_TEMP/velnor/preseed/velnor-actions $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0 && chmod +x $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0'
+      - name: Write request
+        env:
+          VELNOR_INTERNAL_OP: write-request-v1
+          VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/merge-v1-request.json
+        run: "\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\""
       - name: Merge reports
         env:
           VELNOR_INTERNAL_OP: merge-v1
-          VELNOR_REQUEST_FILE: $RUNNER_TEMP/velnor/request/merge-v1-request.json
+          VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/merge-v1-request.json
         run: "\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\""
   velnor-plan:
     name: Velnor Plan
@@ -86,23 +91,28 @@ jobs:
       - name: Verify MBX compile (pre-seed trust-on-review)
         run: "sh -c 'test -x target/release/velnor-actions && mise --no-config --no-env --no-hooks exec mr-boxington@1.19.0 -- mbx --version | grep -qxF \"mbx 1.19.0\"'"
       - name: Write helper manifest (pre-seed trust-on-review)
-        run: "sh -c 'mkdir -p $RUNNER_TEMP/velnor/preseed-output && cp target/release/velnor-actions $RUNNER_TEMP/velnor/preseed-output/velnor-actions && sha256sum $RUNNER_TEMP/velnor/preseed-output/velnor-actions > $RUNNER_TEMP/velnor/preseed-output/sha.txt && read sha rest < $RUNNER_TEMP/velnor/preseed-output/sha.txt && printf \"{\"schema\":1,\"commit\":\"%s\",\"target\":\"x86_64-unknown-linux-gnu\",\"toolchain\":\"rust@1.98.1+mr-boxington@1.19.0\",\"sha256\":\"%s\"}\" \"$GITHUB_SHA\" \"$sha\" > $RUNNER_TEMP/velnor/preseed-output/preseed-manifest.json'"
+        run: "sh -c 'mkdir -p $RUNNER_TEMP/velnor/preseed-output && cp target/release/velnor-actions $RUNNER_TEMP/velnor/preseed-output/velnor-actions && sha256sum $RUNNER_TEMP/velnor/preseed-output/velnor-actions > $RUNNER_TEMP/velnor/preseed-output/sha.txt && read sha rest < $RUNNER_TEMP/velnor/preseed-output/sha.txt && printf \"{\\\"schema\\\":1,\\\"commit\\\":\\\"%s\\\",\\\"target\\\":\\\"x86_64-unknown-linux-gnu\\\",\\\"toolchain\\\":\\\"rust@1.98.1+mr-boxington@1.19.0\\\",\\\"sha256\\\":\\\"%s\\\"}\" \"$GITHUB_SHA\" \"$sha\" > $RUNNER_TEMP/velnor/preseed-output/preseed-manifest.json'"
       - name: Upload helper (pre-seed trust-on-review)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           if-no-files-found: error
           name: velnor-preseed-helper
-          path: $RUNNER_TEMP/velnor/preseed-output
+          path: ${{ runner.temp }}/velnor/preseed-output
       - name: Stage helper (pre-seed trust-on-review)
         run: sh -c 'mkdir -p $RUNNER_TEMP/velnor/bin && cp target/release/velnor-actions $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0 && chmod +x $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0'
+      - name: Write request
+        env:
+          VELNOR_INTERNAL_OP: write-request-v1
+          VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/plan-v1-request.json
+        run: "\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\""
       - name: Check generated files
         run: "sh -c '$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0 generate --output-dir \"$RUNNER_TEMP/velnor-actions-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}\" && diff -r --brief .github \"$RUNNER_TEMP/velnor-actions-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/.github\"'"
       - name: Plan
         id: plan
         env:
           VELNOR_INTERNAL_OP: plan-v1
-          VELNOR_REQUEST_FILE: $RUNNER_TEMP/velnor/request/plan-v1-request.json
+          VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/plan-v1-request.json
         run: "\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\""
       - name: Publish plan
         if: always()
@@ -183,7 +193,7 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: velnor-preseed-helper
-          path: $RUNNER_TEMP/velnor/preseed
+          path: ${{ runner.temp }}/velnor/preseed
       - name: Stage helper (pre-seed trust-on-review)
         run: sh -c 'mkdir -p $RUNNER_TEMP/velnor/bin && cp $RUNNER_TEMP/velnor/preseed/velnor-actions $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0 && chmod +x $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0'
       - name: Run task
