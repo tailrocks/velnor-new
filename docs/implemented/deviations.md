@@ -23,8 +23,11 @@ Entry points are named `tests/velnor_<crate>.rs` with case files as
 
 - Reason: per-crate entry names stay unique and greppable in a 7-crate
   workspace; `impl_*.rs` siblings avoid an extra directory level.
-- Impact: none — exactly one test binary per crate; the MUST-NOT half (no
-  binary per case) is satisfied via `autotests = false` + one `[[test]]`.
+- Impact: none on the MUST-NOT half (no binary per case), pinned by
+  `test_entries_match_layout_and_stay_far_below_cases`: one `[[test]]`
+  entry per crate, except orchestrator which honestly carries a second
+  hermetic `validation_failure` target; every crate holds at least 10x
+  more cases than entries (`autotests = false` throughout).
 - Status: accepted deviation, no expiry.
 
 ## RQ-4.7 — `proptest` (SHOULD: cover parsers/planners/invariants)
@@ -32,11 +35,16 @@ Entry points are named `tests/velnor_<crate>.rs` with case files as
 No `proptest` dependency yet; parsers and planners are covered by
 hand-written boundary fixtures instead.
 
-- Reason: dependency set is still minimal; property tests are scheduled with
-  the risk-triggered verification rollout
-  ([verification-triggers.md](verification-triggers.md)).
-- Impact: parsers/planners rely on example coverage until then.
-- Status: temporary; revisit when the first risk trigger fires or at V1
+- Reason: parsers/planners are small total functions whose edge inputs are
+  enumerated by hand-written boundary/failure cases
+  (`fixtures_stay_independent_and_cover_failures` pins >=50 such cases
+  and independent `TempDir`/`fresh_tempdir` fixtures); adding `proptest`
+  now would widen the external set against the RQ-7.1 narrowness rule
+  for unproven gain.
+- Impact: no property coverage until the risk-triggered rollout fires;
+  example coverage carries parser/plan invariants meanwhile.
+- Status: reviewed 2026-09-29; revisit when the first risk trigger fires
+  per [verification-triggers.md](verification-triggers.md) or at V1
   code-complete, whichever is first.
 
 ## RQ-2.12 — `mise.lock` absent (no deviation)

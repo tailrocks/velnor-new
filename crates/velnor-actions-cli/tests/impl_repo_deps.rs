@@ -299,3 +299,68 @@ fn parse_tests_live_outside_src() -> Result<(), Box<dyn Error>> {
     assert!(read("crates/velnor-actions-cli/tests/impl_cli_args.rs")?.contains("#[test]"));
     Ok(())
 }
+
+#[test]
+fn test_entries_match_layout_and_stay_far_below_cases() -> Result<(), Box<dyn Error>> {
+    for (dir, _) in MEMBERS {
+        let body = manifest(dir)?;
+        let entries = body.matches("[[test]]").count();
+        let want = if dir.ends_with("orchestrator") { 2 } else { 1 };
+        assert_eq!(entries, want, "{dir} entry drift");
+        let mut in_test = false;
+        for line in body.lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with('[') {
+                in_test = trimmed == "[[test]]";
+            } else if in_test && trimmed.starts_with("path = ") {
+                let path = trimmed.split('"').nth(1).ok_or("test path")?;
+                let rest = path.strip_prefix("tests/").ok_or("test path")?;
+                assert!(!rest.contains('/'), "{dir} nests test binary {path}");
+            }
+        }
+        assert!(
+            entries * 10 <= test_markers(dir)?,
+            "{dir} nears one-binary-per-case"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn fixtures_stay_independent_and_cover_failures() -> Result<(), Box<dyn Error>> {
+    let tokens = [
+        "fail",
+        "invalid",
+        "missing",
+        "reject",
+        "err",
+        "denied",
+        "forbidden",
+        "empty",
+        "boundary",
+    ];
+    let mut tempdir_files = 0;
+    let mut failure_cases = 0;
+    for (dir, _) in MEMBERS {
+        for path in tree_files(&format!("{dir}/tests"), "rs")? {
+            let body = std::fs::read_to_string(&path)?;
+            if body.contains("TempDir") {
+                tempdir_files += 1;
+            }
+            for line in body.lines() {
+                let trimmed = line.trim_start();
+                if trimmed.starts_with("fn ") && tokens.iter().any(|token| trimmed.contains(token))
+                {
+                    failure_cases += 1;
+                }
+            }
+        }
+    }
+    assert!(tempdir_files >= 10, "only {tempdir_files} TempDir files");
+    assert!(failure_cases >= 50, "only {failure_cases} failure cases");
+    let helper = read("crates/velnor-actions-cli/tests/impl_cli_tmp.rs")?;
+    for token in ["std::process::id()", "fetch_add", "create_dir_all"] {
+        assert!(helper.contains(token), "fresh_tempdir loses {token}");
+    }
+    Ok(())
+}
