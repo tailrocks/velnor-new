@@ -50,6 +50,7 @@ pub use freshness::{
 };
 pub use graph::{
     CachePolicy, EdgeKind, ResourceClass, ResourceDemand, TaskEdge, TaskGraph, TaskNode,
+    validate_plan_edges,
 };
 pub use ids::{
     artifact_id_for_baseline, artifact_id_for_candidate, artifact_id_for_final,
@@ -82,8 +83,8 @@ pub use workflow::{
     FinalReport, FinalStatus, Job, MATRIX_JSON_FILENAME, ManifestTaskProof, MatrixEntry,
     MatrixReport, MatrixStatus, MatrixTaskEntry, NotSelectedReason, ObligationDecision,
     PLAN_JSON_FILENAME, Permissions, Plan, PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation,
-    PlanPackage, PlanRunner, RequiredJobResult, Step, StepKind, TaskReport, TaskStatus, Trigger,
-    Trust, WorkflowEvent, WorkflowIr, candidate_report_id_for_run, check_matrix_agreement,
+    PlanPackage, PlanRunner, RequiredJobResult, Step, StepKind, TaskReport, TaskStatus, TaskTiming,
+    Trigger, Trust, WorkflowEvent, WorkflowIr, candidate_report_id_for_run, check_matrix_agreement,
     final_report_id_for_run, final_report_relpath, join_runner_temp, matrix_json_bytes,
     matrix_report_relpath, plan_json_bytes, task_report_relpath, validate_candidate_report_id,
     validate_final_report_id,

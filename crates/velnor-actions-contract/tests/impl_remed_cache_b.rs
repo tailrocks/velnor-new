@@ -54,6 +54,11 @@ fn cache_miss_reason_membership_enforced() -> Result<(), ContractError> {
         exit_code: 0,
         duration_ms: 1,
         outputs: vec![],
+        lane: None,
+        queue: None,
+        partition: None,
+        reason: None,
+        timing: None,
     };
     report.validate()?;
     report.cache.miss_reason = Some("sometimes".to_owned());
@@ -87,6 +92,11 @@ fn cache_report_outputs_declared_and_secret_free() -> Result<(), ContractError> 
         exit_code: 0,
         duration_ms: 1,
         outputs: vec!["target/report.json".to_owned()],
+        lane: None,
+        queue: None,
+        partition: None,
+        reason: None,
+        timing: None,
     };
     report.validate()?;
     let declared = vec!["target/report.json".to_owned()];

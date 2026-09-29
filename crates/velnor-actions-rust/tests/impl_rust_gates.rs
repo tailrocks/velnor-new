@@ -10,6 +10,8 @@ use velnor_actions_rust::tasks::{
 fn extension() -> RustTaskIdentityExtension {
     RustTaskIdentityExtension {
         package_id: "demo 0.1.0".to_owned(),
+        workspace_id: "workspace".to_owned(),
+        profile: "default".to_owned(),
         manifest: "Cargo.toml".to_owned(),
         graph_digest: velnor_actions_contract::digest_b3(b"graph"),
         targets: vec!["lib".to_owned()],
@@ -85,6 +87,8 @@ fn constructor_inputs<'a>(
 ) -> ExtensionInputs<'a> {
     ExtensionInputs {
         package_id: "demo 0.1.0",
+        workspace_id: "workspace",
+        profile: "default",
         manifest: "Cargo.toml",
         graph_digest: "graph",
         targets,

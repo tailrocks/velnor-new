@@ -234,12 +234,12 @@ pub fn validate_sources_path(path: &str) -> Result<(), MiseError> {
     Ok(())
 }
 
-/// Task-cache mode for one workflow event: local/pr/merge/push/release.
+/// Task-cache mode for one workflow event: local/pr/fork/merge/push/release.
 /// # Errors
 pub fn mode_for_event(event: &str) -> Result<TaskCacheMode, MiseError> {
     match event {
         "local" => Ok(TaskCacheMode::LocalOnly),
-        "pull_request" | "merge_group" => Ok(TaskCacheMode::ReadOnly),
+        "pull_request" | "merge_group" | "fork" => Ok(TaskCacheMode::ReadOnly),
         "push" => Ok(TaskCacheMode::ReadWrite),
         "release" => Ok(TaskCacheMode::Off),
         _ => Err(MiseError::UnknownCacheMode {

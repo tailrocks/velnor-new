@@ -20,6 +20,15 @@ use crate::{
 /// Display name of the candidate-manifest verification step.
 pub const VERIFY_MANIFEST_NAME: &str = "Verify candidate manifest";
 
+/// Fail release qualification on non-release generator versions (GAP-E.1).
+///
+/// The release job calls this before publishing; pre-release and
+/// malformed versions fail closed with `non_release_build`.
+/// # Errors
+pub fn check_release_build(version: &str, file: &str) -> Result<(), RenderError> {
+    velnor_actions_contract::require_release_version(version, file).map_err(RenderError::Contract)
+}
+
 /// Derived candidate artifact name for one target triple.
 ///
 /// Cache-contract §4 fixes `velnor-candidate-<run-key>-<target-key>`; the

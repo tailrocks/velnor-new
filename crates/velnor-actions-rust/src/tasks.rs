@@ -47,6 +47,10 @@ impl TaskKind {
 
 /// One derived Rust task group.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "task-group cache/reuse signal flags"
+)]
 pub struct TaskGroup {
     /// Stable task id.
     pub task_id: String,
@@ -80,6 +84,14 @@ pub struct TaskGroup {
     pub test_runner: String,
     /// Declared non-Rust task inputs (sorted, deduped).
     pub declared_inputs: Vec<String>,
+    /// Build script may read undeclared inputs (conservative at derive).
+    pub undeclared_reads: bool,
+    /// Task needs network access (Rust payloads run offline: false).
+    pub uses_network: bool,
+    /// Task reads the wall clock (Rust payloads: false).
+    pub uses_clock: bool,
+    /// Task needs randomness (Rust payloads: false).
+    pub uses_random: bool,
 }
 
 impl TaskGroup {
@@ -189,13 +201,8 @@ pub fn derive_task_groups(inputs: &DeriveInputs<'_>) -> Result<Vec<TaskGroup>, C
     let doctest_id = task_id(&base, TaskKind::Doctest)?;
     groups.push(doctest_group(&base, &doctest_id, &clippy_id));
     let doc_id = task_id(&base, TaskKind::Doc)?;
-    groups.push(plain_group(
-        &base,
-        TaskKind::Doc,
-        &doc_id,
-        std::slice::from_ref(&clippy_id),
-        &[],
-    ));
+    let doc_gates = [clippy_id.clone(), doctest_id.clone()];
+    groups.push(plain_group(&base, TaskKind::Doc, &doc_id, &doc_gates, &[]));
     if inputs.explicit_fmt {
         let fmt_id = task_id(&base, TaskKind::Fmt)?;
         groups.push(plain_group(&base, TaskKind::Fmt, &fmt_id, &[], &[]));
@@ -239,7 +246,33 @@ pub fn derive_workspace_fmt(
         compile_driver: profile.compile_driver.as_str().to_owned(),
         test_runner: profile.test_runner.as_str().to_owned(),
         declared_inputs: Vec::new(),
+        undeclared_reads: false,
+        uses_network: false,
+        uses_clock: false,
+        uses_random: false,
     })
+}
+
+/// Derive the workspace formatting group only with explicit root config.
+///
+/// Returns `None` without explicit workspace formatting configuration:
+/// per-package groups cover explicit packages and the plan-job Format
+/// step covers the rest, so a workspace matrix obligation would double-run.
+///
+/// # Errors
+///
+/// Returns [`ContractError`] when the workspace manifest or task id is invalid.
+pub fn derive_workspace_fmt_if_explicit(
+    workspace_manifest: &str,
+    profile: &RustExecutionProfile,
+    configuration: &str,
+    target: &str,
+    explicit_fmt: bool,
+) -> Result<Option<TaskGroup>, ContractError> {
+    if !explicit_fmt {
+        return Ok(None);
+    }
+    derive_workspace_fmt(workspace_manifest, profile, configuration, target).map(Some)
 }
 
 /// Derive one task id for `kind`.
@@ -278,6 +311,10 @@ fn plain_group(
         compile_driver: base.driver.to_owned(),
         test_runner: base.runner.to_owned(),
         declared_inputs: Vec::new(),
+        undeclared_reads: base.package.has_build_script,
+        uses_network: false,
+        uses_clock: false,
+        uses_random: false,
     }
 }
 

@@ -42,6 +42,71 @@ pub struct TaskReport {
     /// Declared outputs only.
     #[serde(default)]
     pub outputs: Vec<String>,
+    /// Assigned isolated lane, when scheduled by lane (par §9).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lane: Option<u32>,
+    /// Queue the task waited in, when queued (par §9).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub queue: Option<String>,
+    /// Shard partition id, when sharded (par §9).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub partition: Option<String>,
+    /// Schedule reason, when placement was decided (par §9).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+    /// Measured timing breakdown, when collected (par §9).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timing: Option<TaskTiming>,
+}
+/// Measured per-slot task timing in milliseconds (par §9).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TaskTiming {
+    /// Queue wait before dispatch.
+    pub queue_ms: u64,
+    /// Runner provisioning.
+    pub runner_ms: u64,
+    /// Task-body wall time.
+    pub task_ms: u64,
+    /// Cache restore/save handling.
+    pub cache_ms: u64,
+    /// Preparation before the payload.
+    pub prep_ms: u64,
+    /// Artifact downloads.
+    pub download_ms: u64,
+    /// Compiler wall time.
+    pub compiler_ms: u64,
+    /// MBX object handling.
+    pub mbx_ms: u64,
+    /// Test execution proper.
+    pub test_ms: u64,
+    /// Lock waits.
+    pub lock_wait_ms: u64,
+}
+impl TaskTiming {
+    /// Sum of separately measured slots.
+    #[must_use]
+    pub fn accounted_total(&self) -> u64 {
+        self.slots()
+            .iter()
+            .fold(0, |sum, slot| sum.saturating_add(*slot))
+    }
+    /// All slots in canonical order.
+    #[must_use]
+    pub fn slots(&self) -> [u64; 10] {
+        [
+            self.queue_ms,
+            self.runner_ms,
+            self.task_ms,
+            self.cache_ms,
+            self.prep_ms,
+            self.download_ms,
+            self.compiler_ms,
+            self.mbx_ms,
+            self.test_ms,
+            self.lock_wait_ms,
+        ]
+    }
 }
 /// Task execution status.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -208,6 +273,15 @@ impl TaskReport {
         }
         for output in &self.outputs {
             crate::canonical::normalize_posix_path(output)?;
+        }
+        for (field, value) in [
+            ("queue", self.queue.as_deref()),
+            ("partition", self.partition.as_deref()),
+            ("reason", self.reason.as_deref()),
+        ] {
+            if let Some(text) = value {
+                crate::cachekey::validate_semantic_text(field, text)?;
+            }
         }
         Ok(())
     }

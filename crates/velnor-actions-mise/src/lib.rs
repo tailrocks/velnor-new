@@ -20,6 +20,7 @@ pub mod restore;
 pub mod reuse;
 pub mod steps;
 pub mod template;
+pub mod toolfiles;
 pub mod verify;
 
 pub use build::{CANDIDATE_BUILD_BIN, CANDIDATE_BUILD_PACKAGE, CandidateBuild};
@@ -31,7 +32,8 @@ pub use cache::{
 };
 pub use catalog::{
     ACTIONLINT_VERSION, GH_VERSION, MISE_VERSION, MR_BOXINGTON_VERSION, PinnedTool, RUST_VERSION,
-    SHELLCHECK_VERSION, ToolCatalog, ZIZMOR_VERSION, validate_exact_version,
+    SHELLCHECK_VERSION, ToolCatalog, ZIZMOR_VERSION, check_freshness_requirements,
+    validate_exact_version,
 };
 pub use command::{
     ALLOWED_MISE_SUBCOMMANDS, ISOLATION_ENV, IsolatedCommand, MISE_CARGO_HOME_ENV,
@@ -46,12 +48,16 @@ pub use nextest::{
     ARCHIVE_FILE, NEXTEST_EXTRACT_BASE, NextestArchive, NextestDriver, NextestList,
     NextestPartition, NextestRun,
 };
-pub use nextest_plan::{ArchivePlan, SortedInventory};
+pub use nextest_plan::{
+    ArchiveIdentityInputs, ArchivePlan, SortedInventory, archive_identity, archive_write_required,
+    count_inventory_tests, requires_archive_transfer,
+};
 pub use preflight::{RouteDriver, RouteProof, prove_route};
 pub use requests::{MetadataDiscovery, MetadataQualification, MiseInstall, PinnedToolExec};
 pub use restore::{
-    MissReason, RestoreCheck, RestoreEvidence, ReuseFallback, ReusePlan, ToolAvailability,
-    fallback_for_error, plan_reuse, verify_restored_task_result,
+    MissReason, RestoreCheck, RestoreEvidence, ReuseFallback, ReusePlan, SaveInputs,
+    ToolAvailability, fallback_for_error, plan_reuse, save_decision, save_useful,
+    verify_restored_task_result, writers_overlap,
 };
 pub use reuse::{
     ReuseGrant, ReuseQualification, ReuseSignal, TaskArtifactTransport, TaskCacheKey,
@@ -62,6 +68,12 @@ pub use steps::{
     VerifyPreparedInputs,
 };
 pub use template::TaskTemplate;
+pub use toolfiles::{
+    FOREIGN_TOOL_FILES, MISE_ENV_PREFIX, MISE_LOCK_FILE, MISE_TOML_FILE, MISSING_RECOMMENDED_INPUT,
+    MiseInspection, MiseSpec, OWNED_SYMBOLS, TOOLING_INPUT_INVALID, ToolFile, ToolFinding,
+    ToolInspectError, inspect_mise_file, is_mise_env_symbol, is_owned_mise_file,
+    lock_tool_versions, stack_for_symbol,
+};
 pub use verify::{TestRunner, VERIFY_TOOLCHAIN_STEP, VerifySpec, VerifyToolchain};
 
 /// Stable identifier for the Mise tool wrapper.

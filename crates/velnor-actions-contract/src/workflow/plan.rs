@@ -1,9 +1,12 @@
 //! Schema-1 affected plan and generic matrix entries.
 use super::baseline::{BaselineProof, PlanBaseline};
-use super::execute::ExecuteTaskIds;
-use crate::canonical::validate_digest;
+use super::execute::{ExecuteTaskIds, ExecuteTaskRef};
+use crate::canonical::{normalize_posix_path, validate_digest};
 use crate::config::{RUNNER_LABEL_CATALOG, RunnerSelection, VelnorConfig};
 use crate::errors::ContractError;
+use crate::graph::{
+    TaskEdge, check_sorted, check_sorted_by, check_sorted_unique, validate_plan_edges,
+};
 use crate::ids::{
     artifact_id_for_matrix, matrix_id_for_task_group, matrix_key_for_id, plan_id_for_run,
     report_id_for_matrix, validate_id, validate_run_key, validate_task_id,
@@ -34,6 +37,12 @@ pub struct MatrixEntry {
     /// Cache identity digests recorded in the plan (cache §1).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cache_ids: Option<EntryCacheIds>,
+    /// Declared task outputs reuse verification covers (cache §3).
+    #[serde(default)]
+    pub declared_outputs: Vec<String>,
+    /// Per-shard test-run refs; empty for non-test entries (par §8).
+    #[serde(default)]
+    pub test_run: Vec<ExecuteTaskRef>,
 }
 /// Workspace/lane/platform/toolchain/format digests for one entry.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -84,6 +93,9 @@ pub struct Plan {
     /// Plan warnings.
     #[serde(default)]
     pub warnings: Vec<String>,
+    /// Typed graph edges incl. resource exclusions (par §3, §7).
+    #[serde(default)]
+    pub edges: Vec<TaskEdge>,
 }
 /// Triggering workflow event.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -95,6 +107,10 @@ pub enum WorkflowEvent {
     Push,
     /// Merge group.
     MergeGroup,
+    /// Local pre-push run (tracked+staged+untracked+deletions).
+    Local,
+    /// Fork pull-request run (untrusted, read-only caches).
+    Fork,
 }
 /// Trust scope.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -200,6 +216,8 @@ impl MatrixEntry {
             execute_task_ids,
             input_digest: input_digest.to_owned(),
             cache_ids: None,
+            declared_outputs: Vec::new(),
+            test_run: Vec::new(),
         })
     }
     /// Validate derivations, digests, and task references for a run key.
@@ -219,6 +237,12 @@ impl MatrixEntry {
         }
         validate_digest(&self.input_digest)?;
         self.execute_task_ids.validate()?;
+        for output in &self.declared_outputs {
+            normalize_posix_path(output)?;
+        }
+        for task_ref in &self.test_run {
+            task_ref.validate()?;
+        }
         if !VelnorConfig::REGISTERED_STACKS.contains(&self.stack_id.as_str()) {
             return Err(ContractError::identity("stack_id", "unregistered_stack"));
         }
@@ -293,10 +317,8 @@ impl Plan {
                 return Err(ContractError::Collision(format!("matrix id {}", entry.id)));
             }
             if !matrix_keys.insert(entry.matrix_key.as_str()) {
-                return Err(ContractError::Collision(format!(
-                    "matrix key {}",
-                    entry.matrix_key
-                )));
+                let detail = format!("matrix key {}", entry.matrix_key);
+                return Err(ContractError::Collision(detail));
             }
         }
         check_obligation_agreement(&self.task_ids, &self.obligations)?;
@@ -307,6 +329,7 @@ impl Plan {
         for obligation in &self.obligations {
             obligation.validate()?;
         }
+        validate_plan_edges(&self.edges, &self.task_ids)?;
         Ok(())
     }
 }
@@ -351,34 +374,5 @@ fn check_obligation_agreement(
         Ok(())
     } else {
         Err(ContractError::identity("task_ids", "obligation_mismatch"))
-    }
-}
-/// Check a string list is sorted and duplicate-free.
-fn check_sorted_unique(list: &[String], field: &'static str) -> Result<(), ContractError> {
-    check_sorted(list, field)?;
-    let unique: BTreeSet<&str> = list.iter().map(String::as_str).collect();
-    if unique.len() != list.len() {
-        return Err(ContractError::identity(field, "duplicate_entry"));
-    }
-    Ok(())
-}
-/// Check a string list is sorted.
-fn check_sorted(list: &[String], field: &'static str) -> Result<(), ContractError> {
-    if list.windows(2).all(|pair| pair[0] <= pair[1]) {
-        Ok(())
-    } else {
-        Err(ContractError::identity(field, "must_be_sorted"))
-    }
-}
-/// Check records are sorted by a key.
-fn check_sorted_by<T>(
-    list: &[T],
-    field: &'static str,
-    key: impl Fn(&T) -> &str,
-) -> Result<(), ContractError> {
-    if list.windows(2).all(|pair| key(&pair[0]) <= key(&pair[1])) {
-        Ok(())
-    } else {
-        Err(ContractError::identity(field, "must_be_sorted"))
     }
 }

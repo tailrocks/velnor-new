@@ -11,8 +11,8 @@ use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::path::Path;
 
 use velnor_actions_contract::{
-    ActionPin, GeneratorBinary, GeneratorLock, LockedGenerator, MiseBootstrap, ReleaseManifest,
-    SUPPORTED_TARGETS,
+    ActionPin, GeneratorBinary, GeneratorLock, GithubRunnerImages, LockedGenerator, MiseBootstrap,
+    ReleaseManifest, RunnerInventory, SUPPORTED_TARGETS, VersionPolicy,
 };
 
 use super::{MISE_VERSION, PinnedTool, ToolCatalog};
@@ -73,13 +73,9 @@ pub fn parse_generator_lock(text: &str) -> Result<GeneratorLock, LockError> {
     let doc = parse_toml(text)?;
     let lock = lock_from_doc(&doc)?;
     lock.validate("generator.lock")
-        .map_err(|err| LockError::Invalid {
-            problem: err.to_string(),
-        })?;
+        .map_err(|err| invalid(err.to_string()))?;
     lock.check_supported_targets("generator.lock")
-        .map_err(|err| LockError::Invalid {
-            problem: err.to_string(),
-        })?;
+        .map_err(|err| invalid(err.to_string()))?;
     Ok(lock)
 }
 
@@ -162,9 +158,80 @@ pub fn verify_version_policy(text: &str, catalog: &ToolCatalog) -> Result<(), Lo
     }
 }
 
+/// Parse the version-policy header into its contract document.
+///
+/// Reads the top-level header plus the `[runner]` inventory (or the dotted
+/// `[github_runner_images.linux_x64]` form); the `[tools]` mirror stays
+/// [`verify_version_policy`]'s job.
+/// # Errors
+pub fn parse_version_policy(text: &str) -> Result<VersionPolicy, LockError> {
+    let doc = parse_toml(text)?;
+    check_schema(&doc, VersionPolicy::SCHEMA)?;
+    let top = section(&doc, "")?;
+    let inventory =
+        section(&doc, "runner").or_else(|_| section(&doc, "github_runner_images.linux_x64"))?;
+    Ok(VersionPolicy {
+        schema: VersionPolicy::SCHEMA,
+        channel: entry(&top, "channel")?,
+        registry: entry(&top, "registry")?,
+        check_interval_hours: entry_int(&top, "check_interval_hours")?,
+        max_exception_days: entry_int(&top, "max_exception_days")?,
+        github_runner_images: GithubRunnerImages {
+            linux_x64: RunnerInventory {
+                default: entry(&inventory, "default")?,
+                supported: parse_string_list(&entry(&inventory, "supported")?)?,
+            },
+        },
+    })
+}
+
+/// Verify the version-policy header against the contract schema.
+///
+/// Fails closed on malformed headers and weakened cadence. The `[tools]`
+/// mirror check stays separate until the repo file carries `registry` and
+/// `supported` (VER-2.19 human seed).
+/// # Errors
+pub fn verify_policy_header(text: &str) -> Result<(), LockError> {
+    parse_version_policy(text)?
+        .validate("version-policy.toml")
+        .map_err(|err| invalid(err.to_string()))
+}
+
 /// Build a mismatch error.
 fn mismatch(problem: String) -> LockError {
     LockError::Mismatch { problem }
+}
+
+/// Build an invalid-document error.
+fn invalid(problem: String) -> LockError {
+    LockError::Invalid { problem }
+}
+
+/// Fetch one required bare-integer entry.
+fn entry_int(entries: &BTreeMap<String, String>, key: &str) -> Result<u32, LockError> {
+    let value = entries.get(key).and_then(|entry| entry.parse::<u32>().ok());
+    value.ok_or_else(|| invalid(format!("missing_key:{key}")))
+}
+
+/// Parse a raw `["a", "b"]` value stored opaquely by [`parse_value`].
+fn parse_string_list(raw: &str) -> Result<Vec<String>, LockError> {
+    let inner = raw
+        .strip_prefix('[')
+        .and_then(|rest| rest.strip_suffix(']'))
+        .ok_or_else(|| malformed(format!("bad_list:{raw}")))?;
+    let mut items = Vec::new();
+    for item in inner.split(',') {
+        let item = item.trim();
+        if item.is_empty() {
+            continue;
+        }
+        let unquoted = item
+            .strip_prefix('"')
+            .and_then(|rest| rest.strip_suffix('"'))
+            .ok_or_else(|| malformed(format!("bad_list:{raw}")))?;
+        items.push(unescape(unquoted)?);
+    }
+    Ok(items)
 }
 
 /// One parsed TOML section: dotted name plus string-or-int entries.
@@ -224,12 +291,15 @@ fn strip_comment(line: &str) -> &str {
     line
 }
 
-/// Parse one scalar: double-quoted string or bare integer.
+/// Parse one scalar: double-quoted string, bare integer, or raw `[...]`.
 fn parse_value(text: &str) -> Result<String, LockError> {
     if let Some(inner) = text.strip_prefix('"')
         && let Some(inner) = inner.strip_suffix('"')
     {
         return unescape(inner);
+    }
+    if text.starts_with('[') && text.ends_with(']') {
+        return Ok(text.to_owned());
     }
     if !text.is_empty() && text.bytes().all(|b| b.is_ascii_digit()) {
         return Ok(text.to_owned());
@@ -273,9 +343,10 @@ fn check_schema(doc: &TomlDoc, want: u32) -> Result<(), LockError> {
 
 /// Fetch one required string entry.
 fn entry(entries: &BTreeMap<String, String>, key: &str) -> Result<String, LockError> {
-    entries.get(key).cloned().ok_or_else(|| LockError::Invalid {
-        problem: format!("missing_key:{key}"),
-    })
+    entries
+        .get(key)
+        .cloned()
+        .ok_or_else(|| invalid(format!("missing_key:{key}")))
 }
 
 /// Fetch the single section with `name`.
@@ -283,9 +354,7 @@ fn section(doc: &TomlDoc, name: &str) -> Result<BTreeMap<String, String>, LockEr
     doc.iter()
         .find(|(title, _)| title == name)
         .map(|(_, entries)| entries.clone())
-        .ok_or_else(|| LockError::Invalid {
-            problem: format!("missing_section:{name}"),
-        })
+        .ok_or_else(|| invalid(format!("missing_section:{name}")))
 }
 
 /// Map a parsed document onto the typed [`GeneratorLock`].

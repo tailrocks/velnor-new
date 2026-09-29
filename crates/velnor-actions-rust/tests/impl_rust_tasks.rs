@@ -118,7 +118,18 @@ fn derives_groups_with_clippy_gates() {
     assert!(clippy.gated_by.is_empty());
     assert!(clippy.depends_on.is_empty());
     for group in groups.iter().skip(1) {
-        assert_eq!(group.gated_by, vec![clippy.task_id.clone()]);
+        if group.kind == TaskKind::Doc {
+            let doctest = groups
+                .iter()
+                .find(|g| g.kind == TaskKind::Doctest)
+                .expect("doctest");
+            assert_eq!(
+                group.gated_by,
+                vec![clippy.task_id.clone(), doctest.task_id.clone()]
+            );
+        } else {
+            assert_eq!(group.gated_by, vec![clippy.task_id.clone()]);
+        }
     }
     assert!(groups[1].depends_on.is_empty());
 }

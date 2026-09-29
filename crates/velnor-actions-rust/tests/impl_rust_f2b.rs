@@ -26,6 +26,10 @@ fn group() -> TaskGroup {
         compile_driver: "cargo".to_owned(),
         test_runner: "cargo_test".to_owned(),
         declared_inputs: Vec::new(),
+        undeclared_reads: false,
+        uses_network: false,
+        uses_clock: false,
+        uses_random: false,
     }
 }
 
@@ -76,6 +80,8 @@ fn declared_inputs_shift_extension_identity() {
     let digests_for = |group: &TaskGroup| {
         group.identity_extension(&velnor_actions_rust::GroupExtensionInputs {
             package_id: "demo 0.1.0",
+            workspace_id: "workspace",
+            profile: "default",
             manifest: "Cargo.toml",
             graph_digest: "graph",
             targets: &targets,

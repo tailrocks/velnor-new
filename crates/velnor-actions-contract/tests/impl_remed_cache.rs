@@ -206,10 +206,8 @@ fn cache_key_shape_and_bound() -> Result<(), ContractError> {
     assert!(cache_key("task", "trusted", "nope", &snapshot).is_err());
     let prefix = restore_prefix("mbx", "pr", &compat)?;
     assert!(prefix.ends_with('-') && !prefix.contains(&snapshot));
-    let overlong = format!(
-        "velnor-v1-task-trusted-{compat}-{}",
-        "x".repeat(MAX_CACHE_KEY_BYTES)
-    );
+    let pad = "x".repeat(MAX_CACHE_KEY_BYTES);
+    let overlong = format!("velnor-v1-task-trusted-{compat}-{pad}");
     assert!(overlong.len() > MAX_CACHE_KEY_BYTES);
     let run_key = run_key_for_ci(20, 1);
     let entry = sample_entry(&run_key)?;
@@ -235,6 +233,11 @@ fn cache_key_shape_and_bound() -> Result<(), ContractError> {
         exit_code: 0,
         duration_ms: 1,
         outputs: vec![],
+        lane: None,
+        queue: None,
+        partition: None,
+        reason: None,
+        timing: None,
     };
     report.validate()?;
     report.cache.key = overlong;

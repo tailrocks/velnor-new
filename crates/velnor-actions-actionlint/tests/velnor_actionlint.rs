@@ -13,3 +13,5 @@ mod impl_actionlint_f2;
 mod impl_actionlint_lint;
 #[path = "impl_actionlint_tools.rs"]
 mod impl_actionlint_tools;
+#[path = "impl_adapter_wire_actionlint.rs"]
+mod impl_adapter_wire_actionlint;

@@ -10,6 +10,7 @@ pub mod actions;
 pub mod capabilities;
 pub mod config;
 pub mod error;
+pub mod metadata;
 pub mod overrides;
 pub mod tools;
 pub mod zizmor;
@@ -17,12 +18,18 @@ pub mod zizmor;
 pub use actions::{
     ALINT_ACTION, ALINT_REVIEWED_TAG, ALLOWED_ACTIONS, CHECKOUT_ACTION, PinnedActionRef,
 };
-pub use capabilities::{ACTIONLINT_VERSION, ActionlintCapabilities, StepSyntax};
+pub use capabilities::{
+    ACTIONLINT_VERSION, ActionlintCapabilities, NativeParallelismConcerns, StepSyntax,
+};
 pub use config::{
     ActionlintConfigInput, ActionlintConfigOutput, IgnoreEntry, IgnorePolicy, RUNNER_LABEL_BRIDGE,
     render_actionlint_yaml,
 };
 pub use error::ActionlintError;
+pub use metadata::{
+    ACTIONLINT_CONFIG_FILE, FOREIGN_TOOL_FILES, OWNED_SYMBOLS, is_owned_actionlint_file,
+    stack_for_symbol,
+};
 pub use overrides::{
     ActionInputSchema, ActionPinOverride, ApprovedPin, ApprovedPinCatalog, checkout_inputs_schema,
     validate_action_inputs,

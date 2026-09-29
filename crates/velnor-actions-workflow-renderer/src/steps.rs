@@ -11,8 +11,9 @@ use crate::{RenderError, artifact_paths, commands, marker};
 pub use crate::cache_steps::{
     CACHE_RESTORE_NAME, CACHE_SAVE_NAME, CompileDriver, MBX_ACTION_NAME, TARGET_DIR_PREFIX,
     TASK_ARTIFACTS_DIR, TOOLS_CACHE_PATH, TOOLS_KEY_PREFIX, TOOLS_RESTORE_NAME, TOOLS_RESTORE_USES,
-    TOOLS_SAVE_NAME, TOOLS_SAVE_USES, cache_action_step, check_mbx_gating, mbx_objects_step,
-    mbx_step_for_driver, target_dir_for_lane, tools_cache_key, tools_restore_step, tools_save_step,
+    TOOLS_SAVE_NAME, TOOLS_SAVE_USES, cache_action_step, check_cache_step_order, check_mbx_gating,
+    lane_cargo_target_env, mbx_objects_step, mbx_step_for_driver, target_dir_for_lane,
+    tools_cache_key, tools_restore_step, tools_save_step,
 };
 
 /// Env key selecting the staged-binary internal operation.

@@ -27,6 +27,9 @@ pub struct FinalReport {
     pub status: FinalStatus,
     /// Status counts.
     pub counts: FinalCounts,
+    /// Cache miss/save-failure reasons observed while merging.
+    #[serde(default)]
+    pub miss_reasons: Vec<String>,
 }
 /// One required job conclusion.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -219,6 +222,9 @@ impl FinalReport {
         }
         for artifact_id in &self.downloaded_artifact_ids {
             validate_artifact_id(artifact_id)?;
+        }
+        for reason in &self.miss_reasons {
+            crate::cachekey::validate_miss_reason(reason)?;
         }
         Ok(())
     }

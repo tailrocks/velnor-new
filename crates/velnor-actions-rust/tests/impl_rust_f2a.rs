@@ -80,6 +80,8 @@ fn digests<'a>(
 ) -> GroupExtensionInputs<'a> {
     GroupExtensionInputs {
         package_id: &package.id,
+        workspace_id: "workspace",
+        profile: "default",
         manifest: &package.manifest,
         graph_digest: "graph",
         targets,
@@ -228,6 +230,8 @@ fn archive_trust_follows_source_build() {
     let declared: Vec<String> = Vec::new();
     let base = ExtensionInputs {
         package_id: "demo 0.1.0",
+        workspace_id: "workspace",
+        profile: "default",
         manifest: "Cargo.toml",
         graph_digest: "graph",
         targets: &targets,

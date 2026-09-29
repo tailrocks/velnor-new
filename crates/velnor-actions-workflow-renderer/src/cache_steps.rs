@@ -5,7 +5,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, Step, target_for_runner_label};
+use velnor_actions_contract::{Job, Step, StepKind, target_for_runner_label};
 
 use crate::{
     RenderError,
@@ -334,4 +334,40 @@ fn is_key_segment(value: &str) -> bool {
 #[must_use]
 pub fn target_dir_for_lane(lane_id: &str) -> String {
     format!("{TARGET_DIR_PREFIX}{lane_id}")
+}
+
+/// `CARGO_TARGET_DIR` env pair isolating one lane (CACHE-1.20).
+#[must_use]
+pub fn lane_cargo_target_env(lane_id: &str) -> (String, String) {
+    ("CARGO_TARGET_DIR".to_owned(), target_dir_for_lane(lane_id))
+}
+
+/// Check restore-before/save-after ordering over cache action steps.
+///
+/// Every `actions/cache/restore` step (plus MBX objects restore) must
+/// precede every `actions/cache/save` step within one job.
+/// # Errors
+pub fn check_cache_step_order(steps: &[Step]) -> Result<(), RenderError> {
+    let mut last_restore: Option<usize> = None;
+    let mut first_save: Option<usize> = None;
+    for (index, step) in steps.iter().enumerate() {
+        let StepKind::Action { uses, .. } = &step.kind else {
+            continue;
+        };
+        if uses.starts_with("actions/cache/restore@")
+            || uses.starts_with(&format!("{MBX_ACTION_NAME}@"))
+        {
+            last_restore = Some(index);
+        } else if uses.starts_with("actions/cache/save@") {
+            first_save.get_or_insert(index);
+        }
+    }
+    if let (Some(restore), Some(save)) = (last_restore, first_save)
+        && restore > save
+    {
+        return Err(RenderError::InvalidWorkflow(
+            "cache_save_before_restore".to_owned(),
+        ));
+    }
+    Ok(())
 }

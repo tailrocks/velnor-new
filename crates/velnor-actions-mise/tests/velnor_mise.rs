@@ -1,4 +1,6 @@
 //! Integration test entry point; cases live in the sibling files.
+#[path = "impl_adapter_wire_mise.rs"]
+mod impl_adapter_wire_mise;
 #[path = "impl_mise.rs"]
 mod impl_mise;
 #[path = "impl_mise_baseline.rs"]

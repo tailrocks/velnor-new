@@ -20,6 +20,10 @@ use crate::tasks::{TaskGroup, TaskKind};
 pub struct RustTaskIdentityExtension {
     /// Cargo package ID.
     pub package_id: String,
+    /// Workspace identity digest.
+    pub workspace_id: String,
+    /// Execution profile (configuration) name.
+    pub profile: String,
     /// Normalized manifest path.
     pub manifest: String,
     /// Workspace/local-package graph digest.
@@ -55,6 +59,10 @@ pub struct RustTaskIdentityExtension {
 pub struct ExtensionInputs<'a> {
     /// Cargo package ID.
     pub package_id: &'a str,
+    /// Workspace identity digest.
+    pub workspace_id: &'a str,
+    /// Execution profile (configuration) name.
+    pub profile: &'a str,
     /// Normalized manifest path.
     pub manifest: &'a str,
     /// Workspace/local-package graph digest.
@@ -125,6 +133,8 @@ impl RustTaskIdentityExtension {
         };
         Self {
             package_id: inputs.package_id.to_owned(),
+            workspace_id: inputs.workspace_id.to_owned(),
+            profile: inputs.profile.to_owned(),
             manifest: inputs.manifest.to_owned(),
             graph_digest: inputs.graph_digest.to_owned(),
             targets: sorted_unique(inputs.targets),
@@ -285,14 +295,14 @@ fn push_kind_args(args: &mut Vec<OsString>, group: &TaskGroup, manifest: &str) {
                 flag("--manifest-path"),
                 flag(manifest),
             ]);
-            if !group.package_name.is_empty() {
-                args.extend([flag("--package"), flag(&group.package_name)]);
-            }
+            push_package(args, group);
             args.push(flag("--all-targets"));
+            args.extend([flag("--"), flag("-D"), flag("warnings")]);
         }
         TaskKind::Test => {
             args.extend([flag("test"), flag("--locked"), flag("--offline")]);
             push_manifest(args, manifest);
+            push_package(args, group);
             for target_flag in &group.target_flags {
                 args.push(flag(target_flag));
             }
@@ -307,22 +317,36 @@ fn push_kind_args(args: &mut Vec<OsString>, group: &TaskGroup, manifest: &str) {
                 flag("--offline"),
             ]);
             push_manifest(args, manifest);
+            push_package(args, group);
+            args.extend([flag("--no-tests"), flag("fail")]);
         }
         TaskKind::Doctest => {
             args.extend([flag("test"), flag("--locked"), flag("--offline")]);
             push_manifest(args, manifest);
+            push_package(args, group);
             args.push(flag("--doc"));
         }
         TaskKind::Doc => {
             args.extend([flag("doc"), flag("--locked"), flag("--offline")]);
             push_manifest(args, manifest);
+            push_package(args, group);
             args.push(flag("--no-deps"));
         }
         TaskKind::Build => {
             args.extend([flag("build"), flag("--locked"), flag("--offline")]);
             push_manifest(args, manifest);
+            push_package(args, group);
         }
     }
+}
+
+/// Append `--package <name>` unless the group names no package.
+fn push_package(args: &mut Vec<OsString>, group: &TaskGroup) {
+    if group.package_name.is_empty() {
+        return;
+    }
+    args.push(OsString::from("--package"));
+    args.push(OsString::from(&group.package_name));
 }
 
 /// Append `--manifest-path <manifest>`.

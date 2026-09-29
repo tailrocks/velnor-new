@@ -22,6 +22,10 @@ fn group(kind: TaskKind) -> TaskGroup {
         compile_driver: "cargo".to_owned(),
         test_runner: "cargo_test".to_owned(),
         declared_inputs: Vec::new(),
+        undeclared_reads: false,
+        uses_network: false,
+        uses_clock: false,
+        uses_random: false,
     }
 }
 
@@ -129,6 +133,10 @@ fn nextest_payload_is_pinned_tool_input() {
             "--offline",
             "--manifest-path",
             "Cargo.toml",
+            "--package",
+            "demo",
+            "--no-tests",
+            "fail",
         ]
     );
     let mut custom = group(TaskKind::Nextest);

@@ -261,6 +261,24 @@ pub fn timings_report_step(
     steps::shell_step(REPORT_TIMINGS_NAME, argv, env)
 }
 
+/// Locked/offline prepared-inputs step over validated Mise argv.
+///
+/// The task §2 step runs after Prepare/Verify-toolchain in
+/// [`TASK_STEP_NAMES`] order; argv must invoke `mise` (the locked
+/// qualification vector arrives from the orchestrator).
+/// # Errors
+pub fn prepared_inputs_step(
+    argv: Vec<String>,
+    env: BTreeMap<String, String>,
+) -> Result<Step, RenderError> {
+    if argv.first().is_none_or(|program| program != "mise") {
+        return Err(RenderError::BadCommand(
+            "prepared_inputs_without_mise".to_owned(),
+        ));
+    }
+    steps::shell_step(VERIFY_INPUTS_NAME, argv, env)
+}
+
 /// Require the timings report to close the named steps.
 ///
 /// Non-named steps (artifact upload) may follow; no named step may run

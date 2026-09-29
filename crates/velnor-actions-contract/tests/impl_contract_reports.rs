@@ -64,6 +64,7 @@ fn plan_validates_sorting_and_matrix() -> Result<(), ContractError> {
         },
         task_ids: vec![TASK.to_owned()],
         warnings: vec![],
+        edges: vec![],
     };
     plan.validate()?;
     let mut bad = plan.clone();
@@ -112,6 +113,11 @@ fn task_and_matrix_reports_validate() -> Result<(), ContractError> {
         exit_code: 0,
         duration_ms: 12,
         outputs: vec![],
+        lane: None,
+        queue: None,
+        partition: None,
+        reason: None,
+        timing: None,
     };
     report.validate()?;
     let skipped = TaskReport {
@@ -185,6 +191,7 @@ fn final_and_candidate_reports_validate() -> Result<(), ContractError> {
             blocked: 0,
             not_run: 0,
         },
+        miss_reasons: vec![],
     };
     final_report.validate()?;
     assert_eq!(
@@ -289,6 +296,11 @@ fn reports_validate_only_when_matrix_id_matches_entry() -> Result<(), ContractEr
         exit_code: 0,
         duration_ms: 12,
         outputs: vec![],
+        lane: None,
+        queue: None,
+        partition: None,
+        reason: None,
+        timing: None,
     };
     report.validate()?;
     let matrix = MatrixReport {

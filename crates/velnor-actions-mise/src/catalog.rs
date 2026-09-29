@@ -4,6 +4,8 @@
 //! stable from `channel-rust-stable.toml`, the rest from GitHub releases or
 //! the mise registry. Project `mise.toml` selectors never alter these pins.
 
+use velnor_actions_contract::{FreshnessRequirement, ToolIdentity, validate_freshness_class};
+
 use crate::error::MiseError;
 
 /// Bootstrap lock and version-policy IO plus verification.
@@ -49,6 +51,15 @@ pub const NEXTEST_VERSION: &str = "0.9.146";
 // Rejected: `github:nextest-rs/nextest` tags carry a `cargo-nextest-`
 // prefix (not an exact pin); `cargo:cargo-nextest` compiles from source.
 const NEXTEST_TOOL_SPEC_PREFIX: &str = "aqua:nextest-rs/nextest/cargo-nextest";
+
+/// Platforms every catalog tool supports (sorted, exact labels).
+const TOOL_PLATFORMS: [&str; 2] = ["ubuntu-24.04", "ubuntu-26.04"];
+
+/// Placeholder artifact digest pending live requalification (ver §2).
+///
+/// Shape-valid only: the freshness checker must replace this with each
+/// upstream release-artifact sha256 before digest enforcement.
+const PLACEHOLDER_DIGEST: &str = "0000000000000000000000000000000000000000000000000000000000000000";
 
 /// Tools Velnor may select through mise, by registry name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -136,7 +147,7 @@ impl ToolCatalog {
     /// Catalog holding the qualified pins.
     #[must_use]
     pub fn pinned() -> Self {
-        Self {
+        let catalog = Self {
             rust: RUST_VERSION.to_owned(),
             mr_boxington: MR_BOXINGTON_VERSION.to_owned(),
             gh: GH_VERSION.to_owned(),
@@ -144,7 +155,9 @@ impl ToolCatalog {
             shellcheck: SHELLCHECK_VERSION.to_owned(),
             zizmor: ZIZMOR_VERSION.to_owned(),
             nextest: NEXTEST_VERSION.to_owned(),
-        }
+        };
+        debug_assert!(catalog.validate_identities().is_ok());
+        catalog
     }
 
     /// Catalog with explicit versions; every version must be an exact pin.
@@ -169,7 +182,7 @@ impl ToolCatalog {
         validate_exact_version(PinnedTool::Shellcheck.tool_name(), shellcheck)?;
         validate_exact_version(PinnedTool::Zizmor.tool_name(), zizmor)?;
         validate_exact_version(PinnedTool::Nextest.tool_name(), nextest)?;
-        Ok(Self {
+        let catalog = Self {
             rust: rust.to_owned(),
             mr_boxington: mr_boxington.to_owned(),
             gh: gh.to_owned(),
@@ -177,7 +190,37 @@ impl ToolCatalog {
             shellcheck: shellcheck.to_owned(),
             zizmor: zizmor.to_owned(),
             nextest: nextest.to_owned(),
-        })
+        };
+        catalog.validate_identities()?;
+        Ok(catalog)
+    }
+
+    /// Pinned identity record for one tool (ver §2).
+    #[must_use]
+    pub fn tool_identity(&self, tool: PinnedTool) -> ToolIdentity {
+        ToolIdentity {
+            name: tool.tool_name().to_owned(),
+            version: self.version(tool).to_owned(),
+            source: tool_source(tool, self.version(tool)),
+            platforms: TOOL_PLATFORMS.iter().map(ToString::to_string).collect(),
+            digest: PLACEHOLDER_DIGEST.to_owned(),
+        }
+    }
+
+    /// Validate every catalog identity record.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MiseError::Contract`] for the first invalid identity.
+    pub fn validate_identities(&self) -> Result<(), MiseError> {
+        for tool in PinnedTool::ALL {
+            self.tool_identity(tool)
+                .validate("catalog")
+                .map_err(|err| MiseError::Contract {
+                    problem: err.to_string(),
+                })?;
+        }
+        Ok(())
     }
 
     /// Exact pinned version for one tool.
@@ -247,4 +290,48 @@ fn invalid_version(tool: &str, version: &str) -> MiseError {
         tool: tool.to_owned(),
         version: version.to_owned(),
     }
+}
+
+/// Immutable qualification source for one tool at an exact version.
+fn tool_source(tool: PinnedTool, version: &str) -> String {
+    match tool {
+        PinnedTool::Rust => "https://static.rust-lang.org/dist/channel-rust-stable.toml".to_owned(),
+        PinnedTool::MrBoxington => {
+            format!("https://github.com/jdx/mr-boxington/releases/tag/v{version}")
+        }
+        PinnedTool::Gh => format!("https://github.com/cli/cli/releases/tag/v{version}"),
+        PinnedTool::Actionlint => {
+            format!("https://github.com/rhysd/actionlint/releases/tag/v{version}")
+        }
+        PinnedTool::Shellcheck => {
+            format!("https://github.com/koalaman/shellcheck/releases/tag/v{version}")
+        }
+        PinnedTool::Zizmor => {
+            format!("https://github.com/zizmorcore/zizmor/releases/tag/v{version}")
+        }
+        PinnedTool::Nextest => {
+            format!("https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-{version}")
+        }
+    }
+}
+
+/// Enforce per-class freshness requirements in Rust (ver §2).
+///
+/// # Errors
+///
+/// Returns [`MiseError::Contract`] for an unknown class or a violated bound.
+pub fn check_freshness_requirements(
+    requirements: &[FreshnessRequirement],
+) -> Result<(), MiseError> {
+    for requirement in requirements {
+        validate_freshness_class(&requirement.class).map_err(|err| MiseError::Contract {
+            problem: err.to_string(),
+        })?;
+        requirement
+            .validate("freshness")
+            .map_err(|err| MiseError::Contract {
+                problem: err.to_string(),
+            })?;
+    }
+    Ok(())
 }

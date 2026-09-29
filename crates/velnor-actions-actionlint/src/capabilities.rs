@@ -86,6 +86,21 @@ impl ActionlintCapabilities {
         self
     }
 
+    /// Qualify native emission only when every concern is qualified.
+    ///
+    /// Gate 7 only: partial evidence leaves the capability unqualified,
+    /// so emission still fails closed on native syntax.
+    #[must_use]
+    pub const fn qualify_native_step_parallelism_if(
+        mut self,
+        concerns: NativeParallelismConcerns,
+    ) -> Self {
+        if concerns.qualified() {
+            self.native_step_parallelism = true;
+        }
+        self
+    }
+
     /// Record that a newer pinned release recognizes `ubuntu-26.04`.
     ///
     /// Removes the runner-label bridge from generated config. Only valid
@@ -135,5 +150,56 @@ impl ActionlintCapabilities {
 impl Default for ActionlintCapabilities {
     fn default() -> Self {
         Self::for_pinned()
+    }
+}
+
+/// Per-concern evidence qualifying native step parallelism (par §6).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "spec-mandated per-concern qualification flags"
+)]
+pub struct NativeParallelismConcerns {
+    /// Join semantics qualified.
+    pub joins: bool,
+    /// Failed-child handling qualified.
+    pub failures: bool,
+    /// Cancellation propagation qualified.
+    pub cancel: bool,
+    /// Output visibility qualified.
+    pub outputs: bool,
+    /// Timing and ordering qualified.
+    pub timing: bool,
+}
+
+impl NativeParallelismConcerns {
+    /// No concern qualified.
+    #[must_use]
+    pub const fn none() -> Self {
+        Self {
+            joins: false,
+            failures: false,
+            cancel: false,
+            outputs: false,
+            timing: false,
+        }
+    }
+
+    /// Every concern qualified.
+    #[must_use]
+    pub const fn all() -> Self {
+        Self {
+            joins: true,
+            failures: true,
+            cancel: true,
+            outputs: true,
+            timing: true,
+        }
+    }
+
+    /// Whether every concern is qualified.
+    #[must_use]
+    pub const fn qualified(&self) -> bool {
+        self.joins && self.failures && self.cancel && self.outputs && self.timing
     }
 }

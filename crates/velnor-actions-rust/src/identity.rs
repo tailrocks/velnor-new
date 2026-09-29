@@ -17,6 +17,10 @@ use crate::tasks::{TaskGroup, TaskKind};
 pub struct GroupExtensionInputs<'a> {
     /// Cargo package ID.
     pub package_id: &'a str,
+    /// Workspace identity digest.
+    pub workspace_id: &'a str,
+    /// Execution profile (configuration) name.
+    pub profile: &'a str,
     /// Normalized manifest path.
     pub manifest: &'a str,
     /// Workspace/local-package graph digest.
@@ -51,6 +55,8 @@ impl TaskGroup {
     ) -> RustTaskIdentityExtension {
         let derived = ExtensionInputs {
             package_id: inputs.package_id,
+            workspace_id: inputs.workspace_id,
+            profile: inputs.profile,
             manifest: inputs.manifest,
             graph_digest: inputs.graph_digest,
             targets: inputs.targets,
@@ -83,6 +89,15 @@ impl TaskGroup {
         let mut merged = self.declared_inputs.clone();
         merged.extend(rerun.iter().cloned());
         self.with_declared_inputs(&merged)
+    }
+
+    /// Whether this group consumes `path` as a declared non-Rust input.
+    ///
+    /// Selection broadening consults this: a changed tool file or fixture
+    /// reselects every group consuming it.
+    #[must_use]
+    pub fn consumes(&self, path: &str) -> bool {
+        self.declared_inputs.iter().any(|input| input == path)
     }
 }
 

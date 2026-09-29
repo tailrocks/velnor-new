@@ -22,6 +22,7 @@ pub mod setup;
 pub mod steps;
 mod support;
 pub mod task_steps;
+pub mod toolchain_env;
 pub mod yaml;
 
 pub use artifact_paths::{
@@ -30,7 +31,7 @@ pub use artifact_paths::{
 };
 pub use candidate::{
     VERIFY_MANIFEST_NAME, candidate_artifact_name, candidate_manifest_verify_script,
-    candidate_manifest_verify_step,
+    candidate_manifest_verify_step, check_release_build,
 };
 pub use closure::{
     CHECK_GENERATED_NAME, FRESHNESS_OUTDIR, HelperProvenance, PLAN_ARTIFACT_NAME,
@@ -38,8 +39,8 @@ pub use closure::{
     provision_acquire_step, publish_plan_step,
 };
 pub use commands::{
-    has_bare_env_expansion, join_argv_for_run, quote_env_path_for_run, quote_run_arg,
-    quote_run_line_env_paths, validate_command_argv, validate_env,
+    check_no_bare_cargo, has_bare_env_expansion, join_argv_for_run, quote_env_path_for_run,
+    quote_run_arg, quote_run_line_env_paths, validate_command_argv, validate_env,
 };
 pub use guard::{SafeTreePath, check_no_symlink, join_within_root, validate_tree_path};
 pub use marker::{
@@ -66,8 +67,9 @@ pub use steps::{
     ACQUIRE_NAME, ASSET_SHA_ENV, ASSET_URL_ENV, CompileDriver, DENY_STEP_NAME, FORBIDDEN_TOKENS,
     INTERNAL_OP_ENV, MACHETE_STEP_NAME, MATRIX_REPORT_UPLOAD_NAME, MERGE_OPERATION, PLAN_OPERATION,
     REQUEST_DIR_PREFIX, REQUEST_FILE_ENV, RUN_KEY_EXPR, STAGED_BINARY_PREFIX,
-    WRITE_REQUEST_OPERATION, acquire_velnor_step, action_step, check_mbx_gating, checkout_step,
-    internal_step, matrix_report_upload_step, mbx_step_for_driver, merge_step, plan_step,
+    WRITE_REQUEST_OPERATION, acquire_velnor_step, action_step, check_cache_step_order,
+    check_mbx_gating, checkout_step, internal_step, lane_cargo_target_env,
+    matrix_report_upload_step, mbx_step_for_driver, merge_step, plan_step,
     scan_for_private_subcommands, shell_step, validate_uses, write_request_step,
 };
 pub use yaml::{Yaml, quote_scalar, render_yaml};

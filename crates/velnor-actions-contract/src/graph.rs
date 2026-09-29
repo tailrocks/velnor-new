@@ -233,6 +233,76 @@ impl TaskGraph {
     }
 }
 
+/// Validate plan-level edges against the obligation task IDs.
+///
+/// Endpoints must name planned obligations, self-loops are rejected, and
+/// edges must be sorted and unique by (`from`, `to`, kind).
+/// # Errors
+pub fn validate_plan_edges(edges: &[TaskEdge], task_ids: &[String]) -> Result<(), ContractError> {
+    let mut seen = BTreeSet::new();
+    let mut last: Option<(&str, &str, u8)> = None;
+    for edge in edges {
+        validate_task_id(&edge.from)?;
+        validate_task_id(&edge.to)?;
+        if edge.from == edge.to {
+            return Err(ContractError::identity("edges", "self_loop"));
+        }
+        for end in [&edge.from, &edge.to] {
+            if !task_ids.iter().any(|id| id == end) {
+                return Err(ContractError::identity("edges", "unknown_task"));
+            }
+        }
+        let key = (
+            edge.from.as_str(),
+            edge.to.as_str(),
+            edge_kind_rank(edge.kind),
+        );
+        if !seen.insert(key) {
+            return Err(ContractError::identity("edges", "duplicate_edge"));
+        }
+        if last.is_some_and(|prev| prev >= key) {
+            return Err(ContractError::identity("edges", "must_be_sorted"));
+        }
+        last = Some(key);
+    }
+    Ok(())
+}
+
+/// Check a string list is sorted and duplicate-free.
+pub(crate) fn check_sorted_unique(
+    list: &[String],
+    field: &'static str,
+) -> Result<(), ContractError> {
+    check_sorted(list, field)?;
+    let unique: BTreeSet<&str> = list.iter().map(String::as_str).collect();
+    if unique.len() != list.len() {
+        return Err(ContractError::identity(field, "duplicate_entry"));
+    }
+    Ok(())
+}
+
+/// Check a string list is sorted.
+pub(crate) fn check_sorted(list: &[String], field: &'static str) -> Result<(), ContractError> {
+    if list.windows(2).all(|pair| pair[0] <= pair[1]) {
+        Ok(())
+    } else {
+        Err(ContractError::identity(field, "must_be_sorted"))
+    }
+}
+
+/// Check records are sorted by a key.
+pub(crate) fn check_sorted_by<T>(
+    list: &[T],
+    field: &'static str,
+    key: impl Fn(&T) -> &str,
+) -> Result<(), ContractError> {
+    if list.windows(2).all(|pair| key(&pair[0]) <= key(&pair[1])) {
+        Ok(())
+    } else {
+        Err(ContractError::identity(field, "must_be_sorted"))
+    }
+}
+
 /// Check a task-ID list is sorted, unique, and well-formed.
 fn check_sorted_ids(list: &[String], field: &'static str) -> Result<(), ContractError> {
     for id in list {

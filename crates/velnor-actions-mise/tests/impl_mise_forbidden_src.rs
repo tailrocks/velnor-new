@@ -29,6 +29,7 @@ fn expected_modules() -> Vec<&'static str> {
         "reuse.rs",
         "steps.rs",
         "template.rs",
+        "toolfiles.rs",
         "verify.rs",
     ]
 }
@@ -94,6 +95,47 @@ fn mise_sources_stay_read_only_and_unmanaged() -> Result<(), String> {
     Ok(())
 }
 
+/// Tokens banned in every mise source file (writes, managers, installers,
+/// project-config creators, and floating selectors).
+const ALWAYS_BANNED: &[&str] = &[
+    "fs::write",
+    "File::create",
+    "create_dir",
+    "create_new",
+    "OpenOptions",
+    "write_all",
+    "fs::copy",
+    "fs::rename",
+    "fs::remove",
+    "set_permissions",
+    "symlink",
+    "hard_link",
+    "cargo install",
+    "install-action",
+    "taiki-e",
+    "\"use\"",
+    "\"lock\"",
+    "\"upgrade\"",
+    "mise use",
+    "mise lock",
+    "mise upgrade",
+    "tool-versions",
+    ".tool-versions",
+    "mise-version",
+    "apply-fix",
+    "apply_fix",
+];
+
+/// Tool-file names allowed only in `toolfiles.rs` (read-only routing and
+/// inspection): owned Mise files plus foreign Rust files for routing.
+const TOOLFILES_ONLY: &[&str] = &[
+    "mise.toml",
+    "mise.lock",
+    "rust-toolchain.toml",
+    "Cargo.toml",
+    "Cargo.lock",
+];
+
 fn check_file(path: &Path, violations: &mut Vec<String>) -> Result<(), String> {
     let name = path
         .file_name()
@@ -101,39 +143,16 @@ fn check_file(path: &Path, violations: &mut Vec<String>) -> Result<(), String> {
         .ok_or_else(|| format!("nameless file: {}", path.display()))?;
     for (line, code) in code_of(path)? {
         let at = format!("{name}:{line}");
-        for token in [
-            "fs::write",
-            "File::create",
-            "create_dir",
-            "create_new",
-            "OpenOptions",
-            "write_all",
-            "fs::copy",
-            "fs::rename",
-            "fs::remove",
-            "set_permissions",
-            "symlink",
-            "hard_link",
-            "cargo install",
-            "install-action",
-            "taiki-e",
-            "\"use\"",
-            "\"lock\"",
-            "\"upgrade\"",
-            "mise use",
-            "mise lock",
-            "mise upgrade",
-            "mise.toml",
-            "mise.lock",
-            "tool-versions",
-            ".tool-versions",
-            "rust-toolchain.toml",
-            "mise-version",
-            "apply-fix",
-            "apply_fix",
-        ] {
+        for token in ALWAYS_BANNED {
             if code.contains(token) {
                 violations.push(format!("{at}: forbidden `{token}` in `{code}`"));
+            }
+        }
+        if name != "toolfiles.rs" {
+            for token in TOOLFILES_ONLY {
+                if code.contains(token) {
+                    violations.push(format!("{at}: `{token}` outside toolfiles.rs in `{code}`"));
+                }
             }
         }
         if code.contains("\"rustup\"") && !code.contains("FORBIDDEN") {

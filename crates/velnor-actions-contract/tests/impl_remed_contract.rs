@@ -89,6 +89,7 @@ pub(crate) fn sample_plan(run_key: &str) -> Result<Plan, ContractError> {
         },
         task_ids: vec![TASK.to_owned()],
         warnings: vec![],
+        edges: vec![],
     })
 }
 

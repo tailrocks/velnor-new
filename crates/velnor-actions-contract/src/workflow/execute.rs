@@ -31,18 +31,26 @@ impl ExecuteTaskIds {
             {
                 return Err(ContractError::identity("execute_task_ids", "bad_name"));
             }
-            match task_ref {
-                ExecuteTaskRef::Single(id) => validate_task_id(id)?,
-                ExecuteTaskRef::Shards(ids) => {
-                    if ids.is_empty() {
-                        return Err(ContractError::identity("execute_task_ids", "empty_shards"));
-                    }
-                    for id in ids {
-                        validate_task_id(id)?;
-                    }
-                }
-            }
+            task_ref.validate()?;
         }
         Ok(())
+    }
+}
+impl ExecuteTaskRef {
+    /// Validate the named task ID or shard IDs.
+    /// # Errors
+    pub fn validate(&self) -> Result<(), ContractError> {
+        match self {
+            Self::Single(id) => validate_task_id(id),
+            Self::Shards(ids) => {
+                if ids.is_empty() {
+                    return Err(ContractError::identity("execute_task_ids", "empty_shards"));
+                }
+                for id in ids {
+                    validate_task_id(id)?;
+                }
+                Ok(())
+            }
+        }
     }
 }

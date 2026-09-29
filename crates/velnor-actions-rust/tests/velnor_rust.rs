@@ -1,4 +1,6 @@
 //! Integration test entry point; cases live in the sibling files.
+#[path = "impl_adapter_wire_rust.rs"]
+mod impl_adapter_wire_rust;
 #[path = "impl_rust.rs"]
 mod impl_rust;
 #[path = "impl_rust_argv.rs"]

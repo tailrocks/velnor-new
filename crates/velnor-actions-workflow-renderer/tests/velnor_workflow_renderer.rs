@@ -1,4 +1,6 @@
 //! Integration test entry point; cases live in the sibling files.
+#[path = "impl_adapter_wire_renderer.rs"]
+mod impl_adapter_wire_renderer;
 #[path = "impl_renderer_acquire.rs"]
 mod impl_renderer_acquire;
 #[path = "impl_renderer_cache_steps.rs"]

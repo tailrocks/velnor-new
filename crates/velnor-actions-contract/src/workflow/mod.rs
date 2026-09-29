@@ -25,5 +25,5 @@ pub use qualification::{
 };
 pub use report::{
     CacheLayer, CacheOutcome, CacheResult, MatrixReport, MatrixStatus, MatrixTaskEntry,
-    NotSelectedReason, TaskReport, TaskStatus,
+    NotSelectedReason, TaskReport, TaskStatus, TaskTiming,
 };
