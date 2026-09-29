@@ -6,6 +6,9 @@
 use std::error::Error;
 use std::path::{Path, PathBuf};
 
+#[path = "alint_miniyaml.rs"]
+mod alint_miniyaml;
+
 /// Expected members as (directory, package name).
 pub(crate) const MEMBERS: [(&str, &str); 7] = [
     (
@@ -61,14 +64,12 @@ pub(crate) fn tree_files(relative: &str, extension: &str) -> Result<Vec<PathBuf>
 
 /// First double-quoted value on the first line containing `key`.
 pub(crate) fn quoted_value(text: &str, key: &str) -> Result<String, Box<dyn Error>> {
-    for line in text.lines() {
-        if line.contains(key)
-            && let Some(value) = line.split('"').nth(1)
-        {
-            return Ok(value.to_owned());
-        }
-    }
-    Err(format!("{key} not found").into())
+    text.lines()
+        .filter(|line| line.contains(key))
+        .filter_map(|line| line.split('"').nth(1))
+        .map(str::to_owned)
+        .next()
+        .ok_or_else(|| format!("{key} not found").into())
 }
 
 /// Non-comment lines inside dependency sections of a manifest.
@@ -212,10 +213,8 @@ pub(crate) fn minor(version: &str) -> String {
 #[test]
 fn rust_version_tracks_toolchain() -> Result<(), Box<dyn Error>> {
     let workspace = quoted_value(&read("Cargo.toml")?, "rust-version")?;
-    let catalog = quoted_value(
-        &read("crates/velnor-actions-mise/src/catalog.rs")?,
-        "RUST_VERSION",
-    )?;
+    let catalog_src = read("crates/velnor-actions-mise/src/catalog.rs")?;
+    let catalog = quoted_value(&catalog_src, "RUST_VERSION")?;
     let mise = quoted_value(&read("mise.toml")?, "rust = ")?;
     assert_eq!(minor(&workspace), minor(&catalog), "catalog drift");
     assert_eq!(minor(&workspace), minor(&mise), "mise drift");
@@ -336,6 +335,31 @@ fn no_git_dependencies() -> Result<(), Box<dyn Error>> {
     }
     let lock = read("Cargo.lock")?;
     assert!(!lock.contains("git+"), "lockfile has git source");
+    Ok(())
+}
+
+#[test]
+fn alint_config_semantic_policy() -> Result<(), Box<dyn Error>> {
+    assert_eq!(alint_miniyaml::ALLOWED_KINDS.len(), 6);
+    assert!(alint_miniyaml::ALLOWED_KINDS.contains(&"pair"));
+    alint_miniyaml::check_policy(&alint_miniyaml::parse(&read(".alint.yml")?)?)
+}
+
+#[test]
+fn alint_rule_fixtures_pass_fail_and_express_command() -> Result<(), Box<dyn Error>> {
+    for row in &alint_miniyaml::EXPECTED {
+        let id = row.id;
+        let pass = alint_miniyaml::parse(&alint_miniyaml::fixture(id, "pass")?)?;
+        alint_miniyaml::check_policy(&pass).map_err(|err| format!("{id} pass: {err}"))?;
+        let fail = alint_miniyaml::parse(&alint_miniyaml::fixture(id, "fail")?)?;
+        let failed = alint_miniyaml::check_policy(&fail).is_err();
+        assert!(failed, "{id} fail passed");
+    }
+    let extra = alint_miniyaml::parse(&alint_miniyaml::fixture("command", "expressible")?)?;
+    let added = alint_miniyaml::rule(&extra, "example-toml-edition-rule").ok_or("added rule")?;
+    alint_miniyaml::check_rule_shape(added)?;
+    let rejected = alint_miniyaml::check_policy(&extra).is_err();
+    assert!(rejected, "unknown id passed");
     Ok(())
 }
 
