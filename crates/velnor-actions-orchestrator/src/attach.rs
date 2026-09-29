@@ -5,8 +5,8 @@
 //! pre-seed build-once steps (trust-on-review) when it does not. Consumer
 //! generation never calls either.
 
-use velnor_actions_contract::{GeneratorLock, WorkflowIr, target_for_runner_label};
-use velnor_actions_mise::{PinnedTool, ToolCatalog};
+use velnor_actions_contract::{GeneratorLock, Step, WorkflowIr, target_for_runner_label};
+use velnor_actions_mise::{PREPARE_PINNED_TOOLS_STEP, PinnedTool, ToolCatalog};
 use velnor_actions_workflow_renderer::render::{FINAL_JOB_ID, PLAN_JOB_ID, TASK_JOB_ID};
 use velnor_actions_workflow_renderer::steps::STAGED_BINARY_PREFIX;
 use velnor_actions_workflow_renderer::{
@@ -40,7 +40,8 @@ pub(crate) fn attach_lock_acquire(
             problem: "plan_job_missing".to_owned(),
         });
     };
-    plan.steps.insert(1, plan_step);
+    let at = after_prepare(&plan.steps);
+    plan.steps.insert(at, plan_step);
     let Some(final_gate) = ir.jobs.get_mut(FINAL_JOB_ID) else {
         return Err(OrchestratorError::Contract {
             problem: "final_job_missing".to_owned(),
@@ -84,7 +85,8 @@ pub(crate) fn attach_preseed(
             problem: "plan_job_missing".to_owned(),
         });
     };
-    plan.steps.splice(1..1, plan_steps);
+    let at = after_prepare(&plan.steps);
+    plan.steps.splice(at..at, plan_steps);
     let Some(final_gate) = workflow.ir.jobs.get_mut(FINAL_JOB_ID) else {
         return Err(OrchestratorError::Contract {
             problem: "final_job_missing".to_owned(),
@@ -108,6 +110,17 @@ pub(crate) fn attach_preseed(
     }
     workflow.context.preseed = true;
     Ok(())
+}
+
+/// Insert index for plan-job provisioning: after `Prepare pinned tools`.
+///
+/// Contract order is Checkout < Setup Mise < Prepare < Acquire; the
+/// fallback covers hand-built fixtures without the install step.
+fn after_prepare(steps: &[Step]) -> usize {
+    steps
+        .iter()
+        .position(|step| step.name == PREPARE_PINNED_TOOLS_STEP)
+        .map_or(1, |index| index + 1)
 }
 
 #[cfg(test)]
@@ -161,10 +174,11 @@ mod tests {
             },
             actions: Vec::new(),
         };
+        let catalog = ToolCatalog::pinned();
         let mut ir = bare_ir(BTreeMap::from([
             (
                 "velnor-plan".to_owned(),
-                plan_job("ubuntu-26.04", None).expect("plan job"),
+                plan_job("ubuntu-26.04", None, &catalog, false).expect("plan job"),
             ),
             (
                 "velnor-final".to_owned(),
@@ -179,7 +193,13 @@ mod tests {
             .collect();
         assert_eq!(
             names,
-            ["Checkout", "Acquire Velnor", "Write request", "Plan"]
+            [
+                "Checkout",
+                "Prepare pinned tools",
+                "Acquire Velnor",
+                "Write request",
+                "Plan"
+            ]
         );
         let names: Vec<&str> = ir.jobs["velnor-final"]
             .steps
@@ -196,11 +216,12 @@ mod tests {
         use velnor_actions_workflow_renderer::{
             PRESEED_BUILD_NAME, PRESEED_DOWNLOAD_NAME, PRESEED_STAGE_NAME,
         };
+        let catalog = ToolCatalog::pinned();
         let mut plan = WorkflowPlan {
             ir: bare_ir(BTreeMap::from([
                 (
                     "velnor-plan".to_owned(),
-                    plan_job("ubuntu-26.04", None).expect("plan job"),
+                    plan_job("ubuntu-26.04", None, &catalog, false).expect("plan job"),
                 ),
                 ("velnor-task".to_owned(), task_job("ubuntu-26.04", 2)),
                 (
@@ -232,6 +253,7 @@ mod tests {
             names,
             [
                 "Checkout",
+                "Prepare pinned tools",
                 PRESEED_BUILD_NAME,
                 "Verify MBX compile (pre-seed trust-on-review)",
                 "Write helper manifest (pre-seed trust-on-review)",

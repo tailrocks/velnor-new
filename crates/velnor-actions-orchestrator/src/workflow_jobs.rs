@@ -4,7 +4,10 @@ use std::collections::BTreeMap;
 use std::ffi::OsString;
 
 use velnor_actions_contract::{Job, Step, StepKind};
-use velnor_actions_mise::{PinnedTool, PinnedToolExec, ToolCatalog};
+use velnor_actions_mise::{
+    PREPARE_PINNED_TOOLS_STEP, PinnedTool, PinnedToolExec, PreparePinnedTools, ToolCatalog,
+    ToolHomes,
+};
 use velnor_actions_workflow_renderer::render::{
     FINAL_CONDITION, FINAL_DISPLAY_NAME, MATRIX_MAX_PARALLEL_ENV, MATRIX_NEEDS_JOB_ENV,
     MATRIX_OUTPUT_ENV, PLAN_JOB_ID, TASK_JOB_ID,
@@ -31,16 +34,32 @@ const TASK_RUN_ENV: &str = "VELNOR_TASK_RUN";
 /// Producer output carrying the matrix JSON for `fromJSON`.
 const MATRIX_OUTPUT_NAME: &str = "matrix";
 
-/// Planner job: checkout, optional Acquire Velnor, request, plan.
+/// Planner job: checkout, pinned-tool install, optional Acquire, request, plan.
+///
+/// `Prepare pinned tools` installs the exact catalog tools the later steps
+/// consume through fail-closed `mise exec`: Rust plus the detected MBX
+/// driver for the format/build steps, and the actionlint/shellcheck/zizmor
+/// validators the public `generate` runs inside `Check generated files`.
+/// Without it the freshness step fails with `mise ... couldn't exec
+/// process` because implicit installation is disabled there.
+///
+/// No `Verify toolchain` step: task-execution-contract §2 scopes it to
+/// task jobs; the plan sequence is workflow-contract §3 steps 1-8.
 ///
 /// The write-request step materializes the event request file the plan
 /// step's private gate requires; without it the helper falls through to
 /// CLI usage and the job (plus its `Publish plan` upload) fails.
 /// # Errors
 ///
-/// Returns a contract error when the typed request step is rejected.
-pub(crate) fn plan_job(label: &str, acquire: Option<Step>) -> Result<Job, OrchestratorError> {
+/// Returns a contract error when a typed step request is rejected.
+pub(crate) fn plan_job(
+    label: &str,
+    acquire: Option<Step>,
+    catalog: &ToolCatalog,
+    use_mbx: bool,
+) -> Result<Job, OrchestratorError> {
     let mut steps = vec![checkout_action()];
+    steps.push(prepare_pinned_tools_step(catalog, plan_tools(use_mbx))?);
     steps.extend(acquire);
     steps.push(request_step(PLAN_OPERATION)?);
     steps.push(plan_step());
@@ -136,6 +155,57 @@ pub(crate) fn final_job(
     })
 }
 
+/// Plan-job install set: driver tools plus the `generate` validators.
+///
+/// Validators join the driver set because `Check generated files` runs the
+/// public `generate`, whose staged validation fail-closed-execs pinned
+/// actionlint, shellcheck, and zizmor; installing only the driver
+/// toolchain leaves that step red. Order follows `PinnedTool::ALL`.
+fn plan_tools(use_mbx: bool) -> Vec<PinnedTool> {
+    let mut tools = vec![PinnedTool::Rust];
+    if use_mbx {
+        tools.push(PinnedTool::MrBoxington);
+    }
+    tools.extend([
+        PinnedTool::Actionlint,
+        PinnedTool::Shellcheck,
+        PinnedTool::Zizmor,
+    ]);
+    tools
+}
+
+/// Typed `Prepare pinned tools` step for one exact tool set.
+///
+/// Homes use the runner-temp expression form: shell `$VAR` never expands
+/// in the `env:` position that carries these paths.
+/// # Errors
+///
+/// Returns a contract error when the Mise adapter rejects the request.
+fn prepare_pinned_tools_step(
+    catalog: &ToolCatalog,
+    tools: Vec<PinnedTool>,
+) -> Result<Step, OrchestratorError> {
+    let homes = ToolHomes::new(
+        "${{ runner.temp }}/velnor/rustup",
+        "${{ runner.temp }}/velnor/cargo",
+    )
+    .map_err(|err| OrchestratorError::Contract {
+        problem: err.to_string(),
+    })?;
+    let prepare =
+        PreparePinnedTools::new(tools, homes).map_err(|err| OrchestratorError::Contract {
+            problem: err.to_string(),
+        })?;
+    let run = strings_of(prepare.argv(catalog))
+        .map_err(|problem| OrchestratorError::Contract { problem })?;
+    let env = strings_of_env(&prepare.env(catalog))
+        .map_err(|problem| OrchestratorError::Contract { problem })?;
+    Ok(Step {
+        name: PREPARE_PINNED_TOOLS_STEP.to_owned(),
+        kind: StepKind::Shell { run, env },
+    })
+}
+
 /// Typed write-request step for one internal target, mapped to contract errors.
 fn request_step(target: &str) -> Result<Step, OrchestratorError> {
     write_request_step(target).map_err(|err| OrchestratorError::Contract {
@@ -196,6 +266,18 @@ fn strings_of(argv: Vec<OsString>) -> Result<Vec<String>, String> {
     Ok(out)
 }
 
+/// Convert fixed env pairs to UTF-8 strings.
+fn strings_of_env(env: &[(OsString, OsString)]) -> Result<BTreeMap<String, String>, String> {
+    let mut out = BTreeMap::new();
+    for (key, value) in env {
+        let (Some(key), Some(value)) = (key.to_str(), value.to_str()) else {
+            return Err("non_utf8_env".to_owned());
+        };
+        out.insert(key.to_owned(), value.to_owned());
+    }
+    Ok(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -210,8 +292,9 @@ mod tests {
 
     #[test]
     fn plan_job_writes_request_before_plan() {
+        let catalog = ToolCatalog::pinned();
         for acquire in [None, Some(checkout_action())] {
-            let job = plan_job("ubuntu-26.04", acquire).expect("plan job");
+            let job = plan_job("ubuntu-26.04", acquire, &catalog, false).expect("plan job");
             let names: Vec<&str> = job.steps.iter().map(|step| step.name.as_str()).collect();
             let write_at = names.iter().position(|name| *name == "Write request");
             let plan_at = names.iter().position(|name| *name == "Plan");
@@ -229,6 +312,58 @@ mod tests {
                 operation_of(&job.steps[plan_at.expect("plan step")]),
                 Some(PLAN_OPERATION)
             );
+        }
+    }
+
+    #[test]
+    fn plan_job_prepares_pinned_tools_before_generate_consumers() {
+        let catalog = ToolCatalog::pinned();
+        for use_mbx in [false, true] {
+            let job = plan_job("ubuntu-26.04", None, &catalog, use_mbx).expect("plan job");
+            let names: Vec<&str> = job.steps.iter().map(|step| step.name.as_str()).collect();
+            let prepare_at = names
+                .iter()
+                .position(|name| *name == PREPARE_PINNED_TOOLS_STEP);
+            assert_eq!(
+                prepare_at,
+                Some(1),
+                "prepare sits after checkout: {names:?}"
+            );
+            let write_at = names.iter().position(|name| *name == "Write request");
+            let plan_at = names.iter().position(|name| *name == "Plan");
+            assert!(
+                prepare_at
+                    .is_some_and(|prepare| Some(prepare) < write_at && Some(prepare) < plan_at),
+                "prepare must precede request and plan: {names:?}"
+            );
+            let StepKind::Shell { run, env } = &job.steps[prepare_at.expect("prepare step")].kind
+            else {
+                panic!("prepare must be a shell step: {names:?}");
+            };
+            assert_eq!(run[0], "mise");
+            let install_at = run.iter().position(|arg| arg == "install");
+            let mut specs = vec![
+                catalog.tool_spec(PinnedTool::Rust),
+                catalog.tool_spec(PinnedTool::Actionlint),
+                catalog.tool_spec(PinnedTool::Shellcheck),
+                catalog.tool_spec(PinnedTool::Zizmor),
+            ];
+            if use_mbx {
+                specs.insert(1, catalog.tool_spec(PinnedTool::MrBoxington));
+            }
+            assert_eq!(
+                install_at.map(|at| &run[at + 1..]),
+                Some(specs.as_slice()),
+                "install specs: {run:?}"
+            );
+            for key in [
+                "MISE_RUSTUP_HOME",
+                "MISE_CARGO_HOME",
+                "RUSTUP_TOOLCHAIN",
+                "MISE_LOCKFILE",
+            ] {
+                assert!(env.contains_key(key), "env misses {key}: {env:?}");
+            }
         }
     }
 

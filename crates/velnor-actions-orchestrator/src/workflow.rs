@@ -8,7 +8,7 @@ use velnor_actions_contract::{
     WorkflowIr, WorkflowPolicy,
 };
 use velnor_actions_mise::ToolCatalog;
-use velnor_actions_rust::TaskGroup;
+use velnor_actions_rust::{CompileDriver, TaskGroup};
 use velnor_actions_workflow_renderer::render::{
     CONCURRENCY_CANCEL, CONCURRENCY_GROUP, EXPECTED_PR_TYPES, FINAL_JOB_ID, PLAN_JOB_ID,
     PolicyCommand, RenderContext, TASK_JOB_ID, WORKFLOW_PATH,
@@ -75,7 +75,10 @@ pub(crate) fn build_workflow(
         WorkflowPolicy::ConsumerV1 => Some(consumer_acquire_step(label, &version, discovery)?),
         WorkflowPolicy::VelnorRepositoryV1 => None,
     };
-    jobs.insert(PLAN_JOB_ID.to_owned(), plan_job(label, acquire.clone())?);
+    jobs.insert(
+        PLAN_JOB_ID.to_owned(),
+        plan_job(label, acquire.clone(), &catalog, plan_uses_mbx(discovery))?,
+    );
     let task_groups: Vec<&TaskGroup> = discovery
         .task_groups
         .iter()
@@ -117,6 +120,17 @@ pub(crate) fn build_workflow(
         context,
         actionlint,
     })
+}
+
+/// True when any selected workspace compiles through MBX.
+///
+/// The plan job pre-installs the MBX driver only on detected project
+/// evidence, never by default; consumers without MBX stay Cargo-only.
+fn plan_uses_mbx(discovery: &Discovery) -> bool {
+    discovery
+        .workspaces
+        .iter()
+        .any(|workspace| workspace.profile.compile_driver == CompileDriver::Mbx)
 }
 
 /// Renderer scalars: version, label, staged path, request dir, pins.
