@@ -122,6 +122,13 @@ pub enum MiseError {
         /// Contract error detail.
         problem: String,
     },
+    /// A typed-step input (tool home, target, platform) is blank or malformed.
+    InvalidStepInput {
+        /// Rejected field name.
+        field: String,
+        /// Rejected value as supplied.
+        value: String,
+    },
 }
 
 impl Display for MiseError {
@@ -168,6 +175,9 @@ impl Display for MiseError {
                 write!(f, "digest_mismatch: expected {expected}, got {actual}")
             }
             Self::Contract { problem } => write!(f, "contract: {problem}"),
+            Self::InvalidStepInput { field, value } => {
+                write!(f, "invalid_step_input: {field}: {value}")
+            }
         }
     }
 }

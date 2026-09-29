@@ -15,7 +15,9 @@ pub mod preflight;
 pub mod requests;
 pub mod restore;
 pub mod reuse;
+pub mod steps;
 pub mod template;
+pub mod verify;
 
 pub use cache::{
     CACHE_DIR_ENV, CachedTaskDescriptor, TASK_ARTIFACTS_DIR_NAME, TASK_ARTIFACTS_VERSION,
@@ -49,7 +51,9 @@ pub use reuse::{
     ReuseGrant, ReuseQualification, ReuseSignal, TaskArtifactTransport, TaskCacheKey,
     TaskReuseRequest,
 };
+pub use steps::{PREPARE_PINNED_TOOLS_STEP, PreparePinnedTools, ToolHomes};
 pub use template::TaskTemplate;
+pub use verify::{TestRunner, VERIFY_TOOLCHAIN_STEP, VerifySpec, VerifyToolchain};
 
 /// Stable identifier for the Mise tool wrapper.
 pub const TOOL_ID: &str = "mise";

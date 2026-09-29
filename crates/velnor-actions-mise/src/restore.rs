@@ -244,6 +244,7 @@ pub fn fallback_for_error(error: &MiseError) -> MissReason {
         | MiseError::GitVerbRejected { .. }
         | MiseError::InvalidManifestPath { .. }
         | MiseError::InvalidNextestInput { .. }
+        | MiseError::InvalidStepInput { .. }
         | MiseError::ArtifactEscapesRoot { .. } => MissReason::TASK_NOT_ELIGIBLE,
     }
 }

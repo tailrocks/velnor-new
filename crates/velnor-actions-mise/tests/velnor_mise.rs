@@ -35,5 +35,9 @@ mod impl_mise_requests;
 mod impl_mise_restore;
 #[path = "impl_mise_reuse.rs"]
 mod impl_mise_reuse;
+#[path = "impl_mise_steps.rs"]
+mod impl_mise_steps;
 #[path = "impl_mise_templates.rs"]
 mod impl_mise_templates;
+#[path = "impl_mise_verify.rs"]
+mod impl_mise_verify;
