@@ -1,23 +1,22 @@
 //! Detection, inventory, profile, and task-group coordination.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use velnor_actions_contract::{
     ContractError, RustConfiguration, RustStackConfig, VelnorConfig, task_id_for_stack,
 };
-use velnor_actions_mise::{MetadataDiscovery, MiseError, ToolCatalog};
 use velnor_actions_rust::{
-    CandidateOutcome, DeriveInputs, DetectionStatus, FileIndex, Recommendation,
-    RustExecutionProfile, TaskGroup, TaskKind, WorkspaceRecord, apply_stack_ignores,
-    check_candidate_outcomes, check_duplicates, dedupe_workspaces, derive_task_groups,
-    derive_workspace_fmt, parse_metadata_json, to_detected_projects,
+    DeriveInputs, DetectionStatus, FileIndex, Recommendation, RustExecutionProfile, TaskGroup,
+    TaskKind, WorkspaceRecord, apply_stack_ignores, check_candidate_outcomes, check_duplicates,
+    dedupe_workspaces, derive_task_groups, derive_workspace_fmt, to_detected_projects,
 };
 
 use crate::OrchestratorError;
 use crate::clippy_groups::{ClippyMemoryPlan, clippy_memory_groups};
 use crate::discover_index::build_file_index;
 use crate::evidence::profile_for_workspace;
+use crate::inventory::{qualify_workspaces, run_inventories};
 use crate::recommendations::collect_recommendations;
 use crate::toolcheck::{ToolInputCheck, check_tool_inputs};
 
@@ -83,6 +82,7 @@ pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, 
         }
     })?;
     let workspaces = plan_workspaces(root, &index, &statuses, inventories)?;
+    qualify_workspaces(root, &workspaces)?;
     let task_groups = derive_all(config, &index, &workspaces)?;
     let tool_checks = check_tool_inputs(root);
     let clippy_memory = clippy_memory_groups(&task_groups);
@@ -111,6 +111,14 @@ const DETECTORS: [DetectorEntry; 1] = [(
     DETECTION_SCHEMA,
     velnor_actions_rust::discover_candidates,
 )];
+
+/// Registered detectors as (stack ID, record schema), ascending.
+pub(crate) fn detector_entries() -> Vec<(&'static str, u32)> {
+    DETECTORS
+        .iter()
+        .map(|(stack_id, schema, _)| (*stack_id, *schema))
+        .collect()
+}
 
 /// Debug-only manifest fixture: explicit file, else an embedded
 /// `example.invalid` stand-in. Release builds never read the file and
@@ -162,64 +170,6 @@ pub(crate) fn local_dep_names(record: &WorkspaceRecord, package_id: &str) -> Vec
         }
     }
     deps.into_iter().map(str::to_owned).collect()
-}
-
-/// Candidate outcomes plus successful manifest inventories.
-type Inventories = (Vec<CandidateOutcome>, Vec<(String, WorkspaceRecord)>);
-
-/// Run metadata discovery for every candidate manifest.
-fn run_inventories(
-    root: &Path,
-    candidates: &[velnor_actions_rust::CargoCandidate],
-) -> Result<Inventories, OrchestratorError> {
-    let catalog = ToolCatalog::pinned();
-    let mut outcomes = Vec::with_capacity(candidates.len());
-    let mut inventories = Vec::new();
-    for candidate in candidates {
-        let manifest = candidate.manifest.clone();
-        match fetch_inventory(root, &manifest, &catalog) {
-            Ok(record) => {
-                outcomes.push(CandidateOutcome {
-                    manifest: manifest.clone(),
-                    metadata_ok: true,
-                    diagnostic: None,
-                });
-                inventories.push((manifest, record));
-            }
-            Err(FetchFailure::Malformed(diagnostic)) => outcomes.push(CandidateOutcome {
-                manifest,
-                metadata_ok: false,
-                diagnostic: Some(diagnostic),
-            }),
-            Err(FetchFailure::Incomplete(problem)) => {
-                return Err(OrchestratorError::PreparationIncomplete { manifest, problem });
-            }
-        }
-    }
-    Ok((outcomes, inventories))
-}
-
-/// Why one manifest produced no inventory.
-enum FetchFailure {
-    Malformed(String),
-    Incomplete(String),
-}
-
-/// Discover and parse one manifest through pinned Cargo.
-fn fetch_inventory(
-    root: &Path,
-    manifest: &str,
-    catalog: &ToolCatalog,
-) -> Result<WorkspaceRecord, FetchFailure> {
-    let path: PathBuf = root.join(manifest);
-    let request = MetadataDiscovery::new(path)
-        .map_err(|err| FetchFailure::Incomplete(format!("bad_manifest_path:{err}")))?;
-    let json = request.run(catalog).map_err(|err| match err {
-        MiseError::NonZeroExit { stderr, .. } => FetchFailure::Malformed(stderr),
-        other => FetchFailure::Incomplete(other.to_string()),
-    })?;
-    parse_metadata_json(&json, root, manifest)
-        .map_err(|err| FetchFailure::Malformed(err.to_string()))
 }
 
 /// Keep selected workspaces, detect profiles, fail incomplete tooling.
@@ -367,7 +317,7 @@ fn manifest_for_key(key: &str) -> String {
 }
 
 /// Workspace-root manifest path for a workspace root.
-fn workspace_manifest(workspace_root: &str) -> String {
+pub(crate) fn workspace_manifest(workspace_root: &str) -> String {
     if workspace_root.is_empty() {
         "Cargo.toml".to_owned()
     } else {

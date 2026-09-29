@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use velnor_actions_contract::{canonical_json_bytes, digest_b3, validate_digest};
 use velnor_actions_mise::{PinnedTool, PinnedToolExec, ToolCatalog};
 
+use crate::decisions::select_exact_base_run;
 use crate::merge::BaselineManifest;
 
 /// V1 retry budget: retries are always zero.
@@ -313,21 +314,6 @@ pub(crate) fn resolve_manifests(
         BaselineLookup::download_args(run_id, temp.path()),
     )?;
     collect_manifests(temp.path(), base)
-}
-
-/// Select the exact-base successful push run; newest-other-commit forbidden.
-fn select_exact_base_run(text: &str, base: &str, branch: &str) -> Result<u64, String> {
-    let runs: Vec<serde_json::Value> =
-        serde_json::from_str(text).map_err(|_| "baseline_unavailable".to_owned())?;
-    runs.iter()
-        .find(|run| {
-            run["headSha"] == base
-                && run["headBranch"] == branch
-                && run["event"] == "push"
-                && run["conclusion"] == "success"
-        })
-        .and_then(|run| run["databaseId"].as_u64())
-        .ok_or_else(|| "baseline_unavailable".to_owned())
 }
 
 /// Keep temp artifacts matching the exact-base baseline shape.

@@ -9,6 +9,7 @@ use crate::cover::shard;
 use crate::cover_identity::{
     SOURCE_BUILD_REASON, apply_coverage, is_source_build, resolve_generator_identity,
 };
+use crate::decisions::baseline_expired;
 use crate::internal::internal_contract;
 use crate::merge::BaselineManifest;
 
@@ -69,6 +70,13 @@ fn reject(ok: bool, reason: &str) -> Result<(), String> {
     if ok { Ok(()) } else { Err(reason.to_owned()) }
 }
 
+/// Current Unix time; clock failure fails closed (all dated baselines expire).
+fn unix_now() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(u64::MAX, |elapsed| elapsed.as_secs())
+}
+
 /// Classify obligations against baseline evidence, or execute everything.
 ///
 /// A provided manifest is validated and applied; otherwise a live exact-base
@@ -122,6 +130,10 @@ pub(crate) fn apply_baseline(
         &plan.generator.sha256,
     ) {
         plan.warnings.push(format!("baseline_miss:{reason}"));
+        return Ok(());
+    }
+    if baseline_expired(manifest.expires_at_unix, unix_now()) {
+        plan.warnings.push("baseline_miss:cache_expired".to_owned());
         return Ok(());
     }
     let digest = digest_b3(&canonical_json_bytes(&manifest).map_err(internal_contract)?);

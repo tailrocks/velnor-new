@@ -5,22 +5,25 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::{
-    BaselineStatus, ContractError, MatrixEntry, ObligationDecision, Plan, PlanBaseline,
-    PlanGenerator, PlanMatrix, PlanObligation, PlanRunner, RunnerSelection, Trust, WorkflowEvent,
-    canonical_json_bytes, digest_b3, plan_id_for_run,
+    BaselineStatus, ContractError, EntryCacheIds, MatrixEntry, ObligationDecision, Plan,
+    PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanRunner, RunnerSelection, Trust,
+    WorkflowEvent, canonical_json_bytes, digest_b3, plan_id_for_run,
 };
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_rust::TaskGroup;
 
 use crate::OrchestratorError;
 use crate::cover::apply_baseline;
+use crate::decisions::dedupe_sorted;
 use crate::discover::Discovery;
 use crate::internal_plan::{
-    adapter_metadata, default_generator, execute_ids, manifest_for_key, plan_packages,
+    adapter_metadata, default_generator, evidence_for_group, execute_ids, manifest_for_key,
+    plan_packages,
 };
 use crate::internal_request::resolve_run_key;
 use crate::merge::BaselineManifest;
 use crate::prepare::prepare;
+use crate::schedule::assign_lanes;
 use crate::select::select_groups;
 use crate::vectors::task_argv;
 
@@ -219,8 +222,16 @@ fn build_plan(
     let mut obligations = Vec::with_capacity(selected.len());
     let mut entries = Vec::with_capacity(selected.len());
     let mut task_ids = Vec::with_capacity(selected.len());
+    let lanes = lane_table(selected);
     for group in selected {
-        let (obligation, entry) = plan_group(group, &request.run_key, catalog)?;
+        let (obligation, entry) = plan_group(
+            discovery,
+            group,
+            &request.run_key,
+            label,
+            lanes.get(&group.task_id).copied().unwrap_or(0),
+            catalog,
+        )?;
         task_ids.push(group.task_id.clone());
         obligations.push(obligation);
         entries.push(entry);
@@ -228,6 +239,10 @@ fn build_plan(
     obligations.sort_by(|left, right| left.task_id.cmp(&right.task_id));
     entries.sort_by(|left, right| left.id.cmp(&right.id));
     task_ids.sort();
+    let (_, duplicates) = dedupe_sorted(&task_ids);
+    if let Some(dup) = duplicates.first() {
+        return Err(internal(&format!("duplicate_task_id:{dup}")));
+    }
     let selected_ids: BTreeSet<&str> = selected
         .iter()
         .map(|group| group.package_id.as_str())
@@ -265,10 +280,19 @@ fn build_plan(
     })
 }
 
+/// Deterministic lane per selected task ID.
+fn lane_table(selected: &[&TaskGroup]) -> std::collections::BTreeMap<String, u32> {
+    let ids: Vec<String> = selected.iter().map(|group| group.task_id.clone()).collect();
+    assign_lanes(&ids).into_iter().collect()
+}
+
 /// Obligation plus matrix entry for one selected group.
 fn plan_group(
+    discovery: &Discovery,
     group: &TaskGroup,
     run_key: &str,
+    label: &str,
+    lane: u32,
     catalog: &ToolCatalog,
 ) -> Result<(PlanObligation, MatrixEntry), OrchestratorError> {
     let toolchain = toolchain_id(group, catalog).map_err(internal_contract)?;
@@ -294,16 +318,28 @@ fn plan_group(
         input_digest: input_digest.clone(),
         baseline_proof: None,
     };
-    let entry = MatrixEntry::derive(
+    let mut entry = MatrixEntry::derive(
         velnor_actions_rust::STACK_ID,
         &group.task_id,
-        adapter_metadata(group),
+        adapter_metadata(group, evidence_for_group(discovery, group)),
         execute_ids(group),
         &input_digest,
         run_key,
     )
     .map_err(internal_contract)?;
+    entry.cache_ids = Some(cache_ids_for(group, label, lane, &toolchain));
     Ok((obligation, entry))
+}
+
+/// Orchestrator-recorded cache identities for one entry (cache §2).
+fn cache_ids_for(group: &TaskGroup, label: &str, lane: u32, toolchain: &str) -> EntryCacheIds {
+    EntryCacheIds {
+        workspace_id: digest_b3(manifest_for_key(&group.manifest_key).as_bytes()),
+        lane_id: digest_b3(lane.to_string().as_bytes()),
+        platform_id: digest_b3(label.as_bytes()),
+        toolchain_id: toolchain.to_owned(),
+        cache_format_id: digest_b3(b"velnor-cache-format-v1"),
+    }
 }
 
 /// Toolchain identity digest for one group.

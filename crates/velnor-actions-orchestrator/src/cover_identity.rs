@@ -219,6 +219,7 @@ mod tests {
             compatibility_id: digest.clone(),
             artifact_id: 9,
             artifact_name: "velnor-baseline".to_owned(),
+            expires_at_unix: None,
             tasks: task_ids
                 .iter()
                 .map(|id| BaselineTaskEntry {

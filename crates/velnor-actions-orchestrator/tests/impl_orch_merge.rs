@@ -128,7 +128,7 @@ fn orch_core_entries_emit_single_only() -> TestResult {
         }
     }
     let text = serde_json::to_string(&plan.matrix)?;
-    assert!(!text.contains("test_run"), "no test_run array");
+    assert!(!text.contains("\"test_run\":"), "no test_run array");
     Ok(())
 }
 

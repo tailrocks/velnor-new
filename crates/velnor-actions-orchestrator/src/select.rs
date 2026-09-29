@@ -8,6 +8,7 @@ use velnor_actions_contract::WorkflowEvent;
 use velnor_actions_mise::GitRequest;
 use velnor_actions_rust::{FOREIGN_TOOL_FILES, RUST_TOOLCHAIN_FILE, TaskGroup};
 
+use crate::decisions::selection_broadens_for_path;
 use crate::discover::Discovery;
 use crate::select_affected::{affected_packages, has_unowned_file};
 use crate::select_edges::{base_edges, head_edges};
@@ -54,6 +55,13 @@ pub(crate) fn select_groups<'a>(
     }
     if changed.iter().any(|path| is_root_config(path)) {
         warnings.push("root_config_changed:selecting_all".to_owned());
+        return all;
+    }
+    if let Some(warning) = changed
+        .iter()
+        .find_map(|path| selection_broadens_for_path(path))
+    {
+        warnings.push(warning.to_owned());
         return all;
     }
     if has_unowned_file(discovery, &changed) {

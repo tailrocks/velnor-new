@@ -11,6 +11,7 @@ use velnor_actions_contract::{
 };
 
 use crate::OrchestratorError;
+use crate::decisions::plan_artifact_dir;
 use crate::internal::{
     MERGE_OP, PLAN_OP, PlanResponse, SCHEMA, check_schema, internal, internal_contract,
 };
@@ -179,7 +180,7 @@ pub fn publish_plan_files(
     let response: PlanResponse =
         serde_json::from_str(response_json).map_err(|_| internal("malformed_response"))?;
     check_schema(response.schema)?;
-    let dir = velnor_dir.join(&response.plan.run_key);
+    let dir = plan_artifact_dir(velnor_dir, &response.plan.run_key)?;
     write_plan_files(&response, &dir)?;
     Ok(dir)
 }

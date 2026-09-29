@@ -3,7 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{ExecuteTaskIds, ExecuteTaskRef, PlanGenerator, PlanPackage};
-use velnor_actions_rust::TaskGroup;
+use velnor_actions_rust::{Evidence, TaskGroup, adapter_entry_metadata};
 
 use crate::discover::Discovery;
 
@@ -16,16 +16,30 @@ pub(crate) fn manifest_for_key(key: &str) -> String {
     }
 }
 
-/// Opaque adapter metadata for one matrix entry.
-pub(crate) fn adapter_metadata(group: &TaskGroup) -> serde_json::Value {
-    serde_json::json!({
-        "package_id": group.package_id,
-        "package_name": group.package_name,
-        "manifest_key": group.manifest_key,
-        "kind": group.kind.as_str(),
-        "configuration": group.configuration,
-        "target": group.target,
-    })
+/// Opaque adapter metadata for one matrix entry, forwarded uninterpreted.
+///
+/// The Rust adapter constructs the value (legacy fields plus detected
+/// driver/runner/evidence); the orchestrator only carries the bytes.
+pub(crate) fn adapter_metadata(group: &TaskGroup, evidence: &[Evidence]) -> serde_json::Value {
+    adapter_entry_metadata(group, evidence)
+}
+
+/// Profile evidence backing one group: its workspace sightings, if any.
+pub(crate) fn evidence_for_group<'a>(
+    discovery: &'a Discovery,
+    group: &TaskGroup,
+) -> &'a [Evidence] {
+    for workspace in &discovery.workspaces {
+        let owns = workspace
+            .record
+            .packages
+            .iter()
+            .any(|package| package.id == group.package_id);
+        if owns {
+            return &workspace.profile.evidence;
+        }
+    }
+    &[]
 }
 
 /// Single executable obligation named by kind.

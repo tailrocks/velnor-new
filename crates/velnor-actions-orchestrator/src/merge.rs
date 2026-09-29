@@ -5,13 +5,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::{
     CandidateReport, FinalCounts, FinalReport, FinalStatus, MatrixEntry, MatrixReport,
-    ObligationDecision, Plan, PlanMatrix, RequiredJobResult, canonical_json_bytes, digest_b3,
+    ObligationDecision, Plan, PlanMatrix, RequiredJobResult, canonical_json_bytes,
     final_report_id_for_run, validate_run_key,
 };
 
 use crate::OrchestratorError;
 use crate::cover::shard::{ResourceLimits, ShardProof, check_entry_shards, validate_budgets};
-use crate::cover::{Fold, Signals, cover_entry, partition_reports};
+use crate::cover::{Fold, Signals, cover_entry, partition_reports, revalidate_coverage};
 use crate::internal::{SCHEMA, check_schema, internal, internal_contract};
 
 /// `merge-v1` request: plan, matrix bytes, reports, jobs, and candidate.
@@ -100,6 +100,9 @@ pub(crate) struct BaselineManifest {
     pub(crate) artifact_name: String,
     /// Per-task proofs.
     pub(crate) tasks: Vec<BaselineTaskEntry>,
+    /// Unix expiry; absent means the baseline never expires.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) expires_at_unix: Option<u64>,
 }
 
 /// Aggregate matrix reports into the final gate report (schema-1 JSON).
@@ -206,50 +209,6 @@ fn build_final(request: &MergeRequest) -> Result<FinalReport, OrchestratorError>
             not_run: uncovered + partition.malformed + partition.duplicates,
         },
     })
-}
-
-/// Revalidate planner coverage claims against the trusted manifest.
-pub(crate) fn revalidate_coverage(
-    plan: &Plan,
-    manifest: Option<&BaselineManifest>,
-    signals: &mut Signals,
-) {
-    let covered: Vec<&velnor_actions_contract::PlanObligation> = plan
-        .obligations
-        .iter()
-        .filter(|ob| ob.decision == ObligationDecision::CoveredByTrustedBaseline)
-        .collect();
-    if covered.is_empty() {
-        return;
-    }
-    let Some(manifest) = manifest else {
-        signals.planning_failed = true;
-        return;
-    };
-    for obligation in covered {
-        let Some(proof) = &obligation.baseline_proof else {
-            signals.planning_failed = true;
-            continue;
-        };
-        let hit = manifest
-            .tasks
-            .iter()
-            .find(|task| task.task_id == obligation.task_id);
-        let Some(task) = hit else {
-            signals.planning_failed = true;
-            continue;
-        };
-        let bound = task.task_digest == obligation.task_digest
-            && task.input_digest == obligation.input_digest
-            && proof.run_id == task.proof_run_id
-            && proof.artifact_name == manifest.artifact_name;
-        // A serialization failure is planning_failed, never a digest over an
-        // empty default that could verify against a forged proof.
-        match canonical_json_bytes(manifest) {
-            Ok(bytes) if bound && proof.manifest_digest == digest_b3(&bytes) => {}
-            _ => signals.planning_failed = true,
-        }
-    }
 }
 
 /// Check 1: `matrix.json` agrees byte-for-byte with the plan matrix.

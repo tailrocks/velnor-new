@@ -8,12 +8,13 @@ pub(crate) mod shard;
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{
-    ExecuteTaskRef, MatrixEntry, MatrixReport, MatrixStatus, TaskStatus, task_report_id_for_task,
+    ExecuteTaskRef, MatrixEntry, MatrixReport, MatrixStatus, ObligationDecision, Plan,
+    PlanObligation, TaskStatus, canonical_json_bytes, digest_b3, task_report_id_for_task,
 };
 
 use crate::OrchestratorError;
 use crate::internal::internal_contract;
-use crate::merge::MergeRequest;
+use crate::merge::{BaselineManifest, MergeRequest};
 
 pub(crate) use crate::cover_baseline::apply_baseline;
 
@@ -209,6 +210,50 @@ fn check_digests(
         }
     }
     Ok(true)
+}
+
+/// Revalidate planner coverage claims against the trusted manifest.
+pub(crate) fn revalidate_coverage(
+    plan: &Plan,
+    manifest: Option<&BaselineManifest>,
+    signals: &mut Signals,
+) {
+    let covered: Vec<&PlanObligation> = plan
+        .obligations
+        .iter()
+        .filter(|ob| ob.decision == ObligationDecision::CoveredByTrustedBaseline)
+        .collect();
+    if covered.is_empty() {
+        return;
+    }
+    let Some(manifest) = manifest else {
+        signals.planning_failed = true;
+        return;
+    };
+    for obligation in covered {
+        let Some(proof) = &obligation.baseline_proof else {
+            signals.planning_failed = true;
+            continue;
+        };
+        let hit = manifest
+            .tasks
+            .iter()
+            .find(|task| task.task_id == obligation.task_id);
+        let Some(task) = hit else {
+            signals.planning_failed = true;
+            continue;
+        };
+        let bound = task.task_digest == obligation.task_digest
+            && task.input_digest == obligation.input_digest
+            && proof.run_id == task.proof_run_id
+            && proof.artifact_name == manifest.artifact_name;
+        // A serialization failure is planning_failed, never a digest over an
+        // empty default that could verify against a forged proof.
+        match canonical_json_bytes(manifest) {
+            Ok(bytes) if bound && proof.manifest_digest == digest_b3(&bytes) => {}
+            _ => signals.planning_failed = true,
+        }
+    }
 }
 
 /// Fold one aggregate report status into signals.

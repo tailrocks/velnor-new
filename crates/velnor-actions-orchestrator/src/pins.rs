@@ -89,6 +89,23 @@ pub(crate) fn consumer_acquire_step(
 }
 
 /// Consumer Acquire step from an explicit manifest (pure; `None` fails).
+///
+/// A source build (no embedded manifest) fails consumer generation with a
+/// provenance diagnostic recommending an official release (boot §2).
+///
+/// # Errors
+///
+/// Returns a contract error without provenance, on version or target
+/// mismatch, or on malformed manifests.
+pub fn consumer_acquire_step_with_manifest(
+    label: &str,
+    version: &str,
+    json: Option<&str>,
+) -> Result<Step, OrchestratorError> {
+    consumer_acquire_from(label, version, json)
+}
+
+/// Consumer Acquire step from an explicit manifest (pure; `None` fails).
 fn consumer_acquire_from(
     label: &str,
     version: &str,
