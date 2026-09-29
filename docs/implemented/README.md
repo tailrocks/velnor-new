@@ -3,7 +3,29 @@
 This directory records implementation that has landed and passed its required
 acceptance checks. It is not a proposal or a list of work in progress.
 
-No verified Velnor implementation is recorded yet.
+## Implementation records (Velnor Actions V1, Gates 0–8)
+
+Recorded on unmerged branch `docs/velnor-actions-spec` (HEAD `f725a87`).
+Per the recording rule below, these describe the change being merged and
+become implemented records only when that change merges with its required
+checks passing. Dogfood CI round 5 is pending; run links to be filled then.
+
+- [Gate 0: repository contract](gate-0-repository-contract.md)
+- [Gate 1: repository root, config, inventory, and plan](gate-1-init-inventory-plan.md)
+- [Gate 2: deterministic generator](gate-2-deterministic-generator.md)
+- [Gate 3: generated execution and visible jobs](gate-3-execution-visible-jobs.md)
+- [Gate 4: tool and compilation reuse](gate-4-tool-compilation-reuse.md)
+- [Gate 5: trusted baseline coverage](gate-5-trusted-baseline.md)
+- [Gate 6: task-result reuse](gate-6-task-result-reuse.md)
+- [Gate 7: parallel test fan-out](gate-7-parallel-fanout.md)
+- [Gate 8: Velnor dogfooding](gate-8-dogfooding.md)
+
+Shared acceptance state: local workspace suite green (933 integration
+`#[test]` + 64 src-unit `#[test]` by grep; implementation agent reports
+981 green, clippy 0, fmt clean at HEAD). Seed approvals and release
+publication are NEEDS-HUMAN and unproved ([release-gates.md](release-gates.md)
+BOOT rows). Performance is unmeasured: no benchmark harness or recorded
+timings were found in the repo, so no budget claim is made here.
 
 ## Living process registries
 
