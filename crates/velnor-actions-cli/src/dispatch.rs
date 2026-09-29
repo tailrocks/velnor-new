@@ -15,7 +15,7 @@ use clap::Parser;
 use velnor_actions_orchestrator::{
     GenerateOptions, MERGE_OP, OrchestratorError, PLAN_OP, REQUEST_FILE_ENV, WRITE_REQUEST_OP,
     generate, init_config, merge_internal, merge_passed, plan_internal, plan_outputs, plan_text,
-    prepare, resolve_root, response_path_for, write_request,
+    prepare, publish_plan_files, resolve_root, response_path_for, write_request,
 };
 
 use crate::args::{Cli, Command};
@@ -24,6 +24,8 @@ use crate::args::{Cli, Command};
 const OP_ENV: &str = "VELNOR_INTERNAL_OP";
 /// Environment variable carrying the `$GITHUB_OUTPUT` path. Never printed.
 const GITHUB_OUTPUT_ENV: &str = "GITHUB_OUTPUT";
+/// Environment variable carrying the runner temp dir. Never printed.
+const RUNNER_TEMP_ENV: &str = "RUNNER_TEMP";
 /// Environment variable carrying the triggering event name. Never printed.
 const GITHUB_EVENT_ENV: &str = "GITHUB_EVENT_NAME";
 /// Environment variable carrying the event payload path. Never printed.
@@ -114,7 +116,7 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
     }
 }
 
-/// Read the request, run the planner, write the sibling response plus outputs.
+/// Read the request, run the planner, publish files, write response plus outputs.
 fn run_plan_internal(path: &Path) -> ExitCode {
     let text = match fs::read_to_string(path) {
         Ok(text) => text,
@@ -130,6 +132,12 @@ fn run_plan_internal(path: &Path) -> ExitCode {
     };
     if let Err(error) = fs::write(&sibling, &response) {
         return fail_internal(&format!("write response: {error}"));
+    }
+    let Some(runner_temp) = env::var_os(RUNNER_TEMP_ENV).filter(|value| !value.is_empty()) else {
+        return fail_internal("missing runner temp");
+    };
+    if let Err(error) = publish_plan_files(&response, &Path::new(&runner_temp).join("velnor")) {
+        return fail_internal(&error.to_string());
     }
     let outputs = match plan_outputs(&response) {
         Ok(outputs) => outputs,

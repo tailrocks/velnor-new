@@ -150,9 +150,8 @@ struct GroupBase<'a> {
 /// Derive the per-package task groups; Clippy gates build, test, doctest, doc.
 ///
 /// Formatting is per package only with explicit configuration; otherwise the
-/// single plan-level group from [`derive_workspace_fmt`] applies. The build
-/// group exists only for Nextest profiles; plain `cargo test` compiles and
-/// runs in one step.
+/// plan-job Format step covers formatting. The build group exists only for
+/// Nextest profiles; plain `cargo test` compiles and runs in one step.
 ///
 /// # Errors
 ///

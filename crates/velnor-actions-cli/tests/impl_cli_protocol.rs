@@ -111,6 +111,7 @@ fn plan_writes_response_and_github_outputs() -> Result<(), Box<dyn Error>> {
     let request = stage_plan_request(&repo)?;
     let outputs = repo.join("github-outputs");
     std::fs::write(&outputs, "seed=1\n")?;
+    let runner_temp = repo.join("runner-temp");
     let output = spawn_isolated(
         &[],
         &[
@@ -119,6 +120,7 @@ fn plan_writes_response_and_github_outputs() -> Result<(), Box<dyn Error>> {
             ("GITHUB_RUN_ID", "7"),
             ("GITHUB_RUN_ATTEMPT", "2"),
             ("GITHUB_OUTPUT", outputs.to_str().unwrap_or("/")),
+            ("RUNNER_TEMP", runner_temp.to_str().unwrap_or("/")),
         ],
         &repo,
     )?;
@@ -145,6 +147,7 @@ fn merge_no_work_plan_passes() -> Result<(), Box<dyn Error>> {
     let repo = empty_repo()?;
     let request = stage_plan_request(&repo)?;
     let outputs = repo.join("github-outputs");
+    let runner_temp = repo.join("runner-temp");
     let plan = spawn_isolated(
         &[],
         &[
@@ -153,6 +156,7 @@ fn merge_no_work_plan_passes() -> Result<(), Box<dyn Error>> {
             ("GITHUB_RUN_ID", "7"),
             ("GITHUB_RUN_ATTEMPT", "2"),
             ("GITHUB_OUTPUT", outputs.to_str().unwrap_or("/")),
+            ("RUNNER_TEMP", runner_temp.to_str().unwrap_or("/")),
         ],
         &repo,
     )?;
@@ -179,6 +183,65 @@ fn merge_no_work_plan_passes() -> Result<(), Box<dyn Error>> {
     assert_no_leak(&output);
     let verdict = std::fs::read_to_string(repo.join("merge-v1-response.json"))?;
     assert!(verdict.contains("\"status\":\"no_work\""), "{verdict}");
+    cleanup(&repo);
+    Ok(())
+}
+
+#[test]
+fn plan_publishes_plan_artifact_files() -> Result<(), Box<dyn Error>> {
+    let repo = empty_repo()?;
+    let request = stage_plan_request(&repo)?;
+    let outputs = repo.join("github-outputs");
+    let runner_temp = repo.join("runner-temp");
+    let output = spawn_isolated(
+        &[],
+        &[
+            ("VELNOR_INTERNAL_OP", "plan-v1"),
+            ("VELNOR_REQUEST_FILE", request.to_str().unwrap_or("/")),
+            ("GITHUB_RUN_ID", "7"),
+            ("GITHUB_RUN_ATTEMPT", "2"),
+            ("GITHUB_OUTPUT", outputs.to_str().unwrap_or("/")),
+            ("RUNNER_TEMP", runner_temp.to_str().unwrap_or("/")),
+        ],
+        &repo,
+    )?;
+    assert_eq!(code(&output), 0, "stderr: {:?}", output.stderr);
+    assert_no_leak(&output);
+    let run_dir = runner_temp.join("velnor").join("r7-a2");
+    let plan_json = std::fs::read_to_string(run_dir.join("plan.json"))?;
+    let matrix_json = std::fs::read_to_string(run_dir.join("matrix.json"))?;
+    assert!(plan_json.contains("\"run_key\":\"r7-a2\""), "{plan_json}");
+    let body = std::fs::read_to_string(&outputs)?;
+    let lines: Vec<&str> = body.lines().collect();
+    assert_eq!(lines.len(), 2, "{body}");
+    let matrix = lines[0].strip_prefix("matrix=").ok_or("matrix line")?;
+    let plan = lines[1].strip_prefix("plan=").ok_or("plan line")?;
+    assert_eq!(matrix_json, matrix, "matrix.json agrees with GITHUB_OUTPUT");
+    assert_eq!(plan_json, plan, "plan.json agrees with GITHUB_OUTPUT");
+    cleanup(&repo);
+    Ok(())
+}
+
+#[test]
+fn plan_without_runner_temp_exits_one() -> Result<(), Box<dyn Error>> {
+    let repo = empty_repo()?;
+    let request = stage_plan_request(&repo)?;
+    let outputs = repo.join("github-outputs");
+    let output = spawn_isolated(
+        &[],
+        &[
+            ("VELNOR_INTERNAL_OP", "plan-v1"),
+            ("VELNOR_REQUEST_FILE", request.to_str().unwrap_or("/")),
+            ("GITHUB_RUN_ID", "7"),
+            ("GITHUB_RUN_ATTEMPT", "2"),
+            ("GITHUB_OUTPUT", outputs.to_str().unwrap_or("/")),
+        ],
+        &repo,
+    )?;
+    assert_eq!(code(&output), 1);
+    assert!(output.stdout.is_empty());
+    assert_no_leak(&output);
+    assert!(repo.join("plan-v1-response.json").is_file());
     cleanup(&repo);
     Ok(())
 }
