@@ -72,6 +72,22 @@ fn exec_disables_implicit_install() -> Result<(), String> {
 }
 
 #[test]
+fn auto_install_predicate_separates_exec_from_install() -> Result<(), String> {
+    let exec = IsolatedCommand::mise_exec(
+        &["rust@1.98.1".to_owned()],
+        &[OsString::from("cargo"), OsString::from("--version")],
+    )
+    .map_err(|err| err.to_string())?;
+    assert!(exec.disables_auto_install());
+    let install = IsolatedCommand::mise_install(&["rust@1.98.1".to_owned()])
+        .map_err(|err| err.to_string())?;
+    assert!(!install.disables_auto_install());
+    let extended = exec.with_env(&toolchain_env("/velnor/rustup", "/velnor/cargo", "1.98.1"));
+    assert!(extended.disables_auto_install());
+    Ok(())
+}
+
+#[test]
 fn install_and_direct_keep_install_enabled() -> Result<(), String> {
     let install = IsolatedCommand::mise_install(&["rust@1.98.1".to_owned()])
         .map_err(|err| err.to_string())?;

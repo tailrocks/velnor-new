@@ -1,7 +1,9 @@
-//! `Prepare pinned tools` step cases (TASK-2.1, WF-3.39).
+//! `Prepare pinned tools` and `Verify prepared inputs` step cases (TASK-2.1, TASK-2.5, WF-3.39).
 use std::ffi::OsString;
+use std::path::PathBuf;
 use velnor_actions_mise::{
     MiseError, PREPARE_PINNED_TOOLS_STEP, PinnedTool, PreparePinnedTools, ToolCatalog, ToolHomes,
+    VERIFY_PREPARED_INPUTS_STEP, VerifyPreparedInputs,
 };
 
 fn pinned() -> ToolCatalog {
@@ -117,6 +119,82 @@ fn prepare_pinned_tools_exposes_tools_and_homes() -> Result<(), String> {
     assert_eq!(step.tools(), &[PinnedTool::Rust, PinnedTool::MrBoxington]);
     assert_eq!(step.homes().rustup_home(), "/velnor/rustup");
     assert_eq!(step.homes().cargo_home(), "/velnor/cargo");
+    Ok(())
+}
+
+#[test]
+fn prepared_inputs_step_name_is_contract_fixed() {
+    assert_eq!(VERIFY_PREPARED_INPUTS_STEP, "Verify prepared inputs");
+    assert_eq!(
+        VerifyPreparedInputs::step_name(),
+        VERIFY_PREPARED_INPUTS_STEP
+    );
+}
+
+#[test]
+fn prepared_inputs_argv_is_locked_offline_qualification() -> Result<(), String> {
+    let step = VerifyPreparedInputs::new(PathBuf::from("Cargo.toml"), homes()?)
+        .map_err(|err| err.to_string())?;
+    assert_eq!(
+        step.workspace_manifest(),
+        PathBuf::from("Cargo.toml").as_path()
+    );
+    assert_eq!(step.homes().rustup_home(), "/velnor/rustup");
+    assert_eq!(
+        step.argv(&pinned()),
+        strings(&[
+            "mise",
+            "--no-config",
+            "--no-env",
+            "--no-hooks",
+            "exec",
+            "rust@1.98.1",
+            "--",
+            "cargo",
+            "metadata",
+            "--format-version",
+            "1",
+            "--locked",
+            "--offline",
+            "--manifest-path",
+            "Cargo.toml",
+        ])
+    );
+    Ok(())
+}
+
+#[test]
+fn prepared_inputs_env_matches_command() -> Result<(), String> {
+    let catalog = pinned();
+    let step = VerifyPreparedInputs::new(PathBuf::from("Cargo.toml"), homes()?)
+        .map_err(|err| err.to_string())?;
+    let command = step.command(&catalog).map_err(|err| err.to_string())?;
+    assert_eq!(command.program(), "mise");
+    assert_eq!(command.argv(), step.argv(&catalog));
+    assert_eq!(command.full_env(), step.env(&catalog));
+    assert!(command.disables_auto_install());
+    let env = step.env(&catalog);
+    for (key, value) in [
+        ("MISE_NO_CONFIG", "1"),
+        ("MISE_LOCKFILE", "0"),
+        ("MISE_AUTO_INSTALL", "false"),
+        ("MISE_EXEC_AUTO_INSTALL", "false"),
+        ("MISE_RUSTUP_HOME", "/velnor/rustup"),
+        ("MISE_CARGO_HOME", "/velnor/cargo"),
+        ("RUSTUP_TOOLCHAIN", "1.98.1"),
+    ] {
+        assert!(env_has(&env, key, value), "missing {key}={value}: {env:?}");
+    }
+    assert_eq!(env.len(), 9, "exact step env, no drift: {env:?}");
+    Ok(())
+}
+
+#[test]
+fn prepared_inputs_rejects_empty_manifest() -> Result<(), String> {
+    assert!(matches!(
+        VerifyPreparedInputs::new(PathBuf::from(""), homes()?),
+        Err(MiseError::InvalidManifestPath { .. })
+    ));
     Ok(())
 }
 

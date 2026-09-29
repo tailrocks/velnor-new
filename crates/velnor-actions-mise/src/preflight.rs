@@ -25,6 +25,19 @@ pub enum RouteDriver {
 }
 
 impl RouteDriver {
+    /// Map an execution-profile compile-driver spelling to its route.
+    ///
+    /// Only the contract spellings resolve; project tool selectors and
+    /// unknown drivers resolve to nothing, never to a default route.
+    #[must_use]
+    pub fn from_compile_driver(value: &str) -> Option<Self> {
+        match value {
+            "cargo" => Some(Self::Cargo),
+            "mbx" => Some(Self::Mbx),
+            _ => None,
+        }
+    }
+
     /// Adapter family name used in the cache-format identity.
     #[must_use]
     pub const fn adapter(self) -> &'static str {

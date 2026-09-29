@@ -103,3 +103,24 @@ fn proof_command_matches_invocation() -> Result<(), String> {
     assert_eq!(command.program(), "mise");
     Ok(())
 }
+
+#[test]
+fn compile_driver_spelling_maps_to_route() {
+    assert_eq!(
+        RouteDriver::from_compile_driver("cargo"),
+        Some(RouteDriver::Cargo)
+    );
+    assert_eq!(
+        RouteDriver::from_compile_driver("mbx"),
+        Some(RouteDriver::Mbx)
+    );
+    assert_eq!(RouteDriver::Cargo.program(), "cargo");
+    assert_eq!(RouteDriver::Mbx.program(), "mbx");
+    for unknown in ["", "rustc", "latest", "stable", "cargo ", "MBX"] {
+        assert_eq!(
+            RouteDriver::from_compile_driver(unknown),
+            None,
+            "{unknown} must resolve to no route"
+        );
+    }
+}

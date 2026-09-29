@@ -1,5 +1,5 @@
 //! Logical task-template cases.
-use velnor_actions_mise::TaskTemplate;
+use velnor_actions_mise::{MiseError, ProcessOutput, TaskTemplate};
 
 #[test]
 fn template_names_are_stable() {
@@ -37,6 +37,41 @@ fn template_names_roundtrip() {
     ] {
         assert_eq!(TaskTemplate::from_name(bad), None, "{bad} must not resolve");
     }
+}
+
+#[test]
+fn template_execution_preserves_exit_status() {
+    for template in TaskTemplate::ALL {
+        assert!(
+            template.targets_single_package() || template.is_repo_wide(),
+            "{} declares its arity",
+            template.name()
+        );
+    }
+    let failed = ProcessOutput {
+        stdout: Vec::new(),
+        stderr: b"clippy failed".to_vec(),
+        code: Some(3),
+        success: false,
+    };
+    let err = failed
+        .require_success("mise")
+        .expect_err("nonzero exit must surface");
+    assert_eq!(
+        err,
+        MiseError::NonZeroExit {
+            program: "mise".to_owned(),
+            code: Some(3),
+            stderr: "clippy failed".to_owned(),
+        }
+    );
+    let passed = ProcessOutput {
+        stdout: Vec::new(),
+        stderr: Vec::new(),
+        code: Some(0),
+        success: true,
+    };
+    assert!(passed.require_success("mise").is_ok());
 }
 
 #[test]

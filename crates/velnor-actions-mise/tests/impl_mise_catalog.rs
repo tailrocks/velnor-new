@@ -107,6 +107,29 @@ fn exact_version_validation_accepts_only_pins() {
 }
 
 #[test]
+fn tool_file_values_never_become_pins() {
+    for tool in PinnedTool::ALL {
+        let catalog = ToolCatalog::pinned();
+        let version = catalog.version(tool);
+        assert!(
+            validate_exact_version(tool.tool_name(), version).is_ok(),
+            "pinned version is exact: {version}"
+        );
+    }
+    for loose in [
+        "latest", "stable", "system", "1.98", "v1.98.1", ">=1.98", "",
+    ] {
+        assert!(
+            matches!(
+                validate_exact_version("rust", loose),
+                Err(MiseError::InvalidToolVersion { .. })
+            ),
+            "tool-file-style selector must fail: {loose}"
+        );
+    }
+}
+
+#[test]
 fn catalog_new_validates_every_slot() {
     let catalog = ToolCatalog::new(
         "1.98.1", "1.19.0", "2.101.0", "1.7.12", "0.11.0", "1.30.1", "0.9.146",

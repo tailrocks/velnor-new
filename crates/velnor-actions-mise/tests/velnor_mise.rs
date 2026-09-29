@@ -1,6 +1,10 @@
 //! Integration test entry point; cases live in the sibling files.
 #[path = "impl_mise.rs"]
 mod impl_mise;
+#[path = "impl_mise_baseline.rs"]
+mod impl_mise_baseline;
+#[path = "impl_mise_build.rs"]
+mod impl_mise_build;
 #[path = "impl_mise_cache.rs"]
 mod impl_mise_cache;
 #[path = "impl_mise_cache_gates.rs"]
@@ -25,6 +29,8 @@ mod impl_mise_lock;
 mod impl_mise_negative;
 #[path = "impl_mise_nextest.rs"]
 mod impl_mise_nextest;
+#[path = "impl_mise_nextest_plan.rs"]
+mod impl_mise_nextest_plan;
 #[path = "impl_mise_policy.rs"]
 mod impl_mise_policy;
 #[path = "impl_mise_preflight.rs"]
@@ -37,6 +43,8 @@ mod impl_mise_restore;
 mod impl_mise_reuse;
 #[path = "impl_mise_steps.rs"]
 mod impl_mise_steps;
+#[path = "impl_mise_surface.rs"]
+mod impl_mise_surface;
 #[path = "impl_mise_templates.rs"]
 mod impl_mise_templates;
 #[path = "impl_mise_verify.rs"]

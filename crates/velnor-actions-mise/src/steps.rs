@@ -7,11 +7,12 @@
 //! step env; renderers serialize, never invent.
 
 use std::ffi::OsString;
+use std::path::PathBuf;
 
 use crate::catalog::{PinnedTool, ToolCatalog};
-use crate::command::{IsolatedCommand, toolchain_env};
+use crate::command::{IsolatedCommand, NO_AUTO_INSTALL_ENV, toolchain_env};
 use crate::error::MiseError;
-use crate::requests::MiseInstall;
+use crate::requests::{MetadataQualification, MiseInstall};
 
 /// Contract-fixed display name shared by task-execution §2 step 1 and
 /// workflow §3 step 3. Emitters use this const, never a retyped string.
@@ -143,6 +144,89 @@ impl PreparePinnedTools {
     pub fn command(&self, catalog: &ToolCatalog) -> Result<IsolatedCommand, MiseError> {
         Ok(self
             .install
+            .command(catalog)?
+            .with_env(&self.homes.env(catalog)))
+    }
+}
+
+/// Contract-fixed display name of the task-execution §2 prepared-inputs
+/// step. Emitters use this const, never a retyped string.
+pub const VERIFY_PREPARED_INPUTS_STEP: &str = "Verify prepared inputs";
+
+/// Locked/offline preparation qualification as one named step.
+///
+/// Fixed argv from [`MetadataQualification`]; the step env adds the
+/// install disable plus the owned homes to the isolation quartet, so a
+/// missing tool or dependency fails instead of fetching. Explicit
+/// installation stays out: this step verifies, never installs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VerifyPreparedInputs {
+    /// Fixed locked/offline qualification request.
+    qualification: MetadataQualification,
+    /// Owned homes carried by the step env.
+    homes: ToolHomes,
+}
+
+impl VerifyPreparedInputs {
+    /// Qualify `workspace_manifest` under `homes`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MiseError::InvalidManifestPath`] for an empty manifest.
+    pub fn new(workspace_manifest: PathBuf, homes: ToolHomes) -> Result<Self, MiseError> {
+        Ok(Self {
+            qualification: MetadataQualification::new(workspace_manifest)?,
+            homes,
+        })
+    }
+
+    /// Contract-fixed display name of the emitted step.
+    #[must_use]
+    pub fn step_name() -> &'static str {
+        VERIFY_PREPARED_INPUTS_STEP
+    }
+
+    /// Workspace-root manifest whose resolution is qualified.
+    #[must_use]
+    pub fn workspace_manifest(&self) -> &std::path::Path {
+        self.qualification.workspace_manifest()
+    }
+
+    /// Owned homes carried by the step env.
+    #[must_use]
+    pub fn homes(&self) -> &ToolHomes {
+        &self.homes
+    }
+
+    /// Full mise argument vector including the program.
+    #[must_use]
+    pub fn argv(&self, catalog: &ToolCatalog) -> Vec<OsString> {
+        self.qualification.argv(catalog)
+    }
+
+    /// Full step env: isolation plus install-disable plus owned homes.
+    ///
+    /// Matches [`Self::command`]'s spawner env exactly; the
+    /// correspondence is pinned by test, not by construction comment.
+    #[must_use]
+    pub fn env(&self, catalog: &ToolCatalog) -> Vec<(OsString, OsString)> {
+        let mut env = IsolatedCommand::env_overlay();
+        for (key, value) in NO_AUTO_INSTALL_ENV {
+            env.push((OsString::from(key), OsString::from(value)));
+        }
+        env.extend(self.homes.env(catalog));
+        env
+    }
+
+    /// Isolated command running this qualification under the owned homes.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MiseError::EmptyCommand`] only if the fixed payload were
+    /// empty, which the constructor rules out.
+    pub fn command(&self, catalog: &ToolCatalog) -> Result<IsolatedCommand, MiseError> {
+        Ok(self
+            .qualification
             .command(catalog)?
             .with_env(&self.homes.env(catalog)))
     }

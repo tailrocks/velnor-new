@@ -129,6 +129,13 @@ pub enum MiseError {
         /// Rejected value as supplied.
         value: String,
     },
+    /// A baseline-lookup input (base SHA, workflow, branch, artifact) is malformed.
+    InvalidBaselineInput {
+        /// Rejected field name.
+        field: String,
+        /// Rejected value as supplied.
+        value: String,
+    },
 }
 
 impl Display for MiseError {
@@ -177,6 +184,9 @@ impl Display for MiseError {
             Self::Contract { problem } => write!(f, "contract: {problem}"),
             Self::InvalidStepInput { field, value } => {
                 write!(f, "invalid_step_input: {field}: {value}")
+            }
+            Self::InvalidBaselineInput { field, value } => {
+                write!(f, "invalid_baseline_input: {field}: {value}")
             }
         }
     }

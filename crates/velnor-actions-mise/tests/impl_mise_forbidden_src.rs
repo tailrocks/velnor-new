@@ -11,15 +11,18 @@ fn src_dir() -> PathBuf {
 
 fn expected_modules() -> Vec<&'static str> {
     vec![
+        "build.rs",
         "cache.rs",
         "catalog.rs",
         "command.rs",
         "error.rs",
         "gate6.rs",
+        "gh.rs",
         "git.rs",
         "lib.rs",
         "lock.rs",
         "nextest.rs",
+        "nextest_plan.rs",
         "preflight.rs",
         "requests.rs",
         "restore.rs",
@@ -122,6 +125,8 @@ fn check_file(path: &Path, violations: &mut Vec<String>) -> Result<(), String> {
             "mise upgrade",
             "mise.toml",
             "mise.lock",
+            "tool-versions",
+            ".tool-versions",
             "rust-toolchain.toml",
             "mise-version",
             "apply-fix",

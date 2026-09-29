@@ -223,6 +223,20 @@ fn fallback_execution_cases() -> Vec<(MiseError, MissReason)> {
             },
             MissReason::TASK_NOT_ELIGIBLE,
         ),
+        (
+            MiseError::InvalidStepInput {
+                field: "target".to_owned(),
+                value: String::new(),
+            },
+            MissReason::TASK_NOT_ELIGIBLE,
+        ),
+        (
+            MiseError::InvalidBaselineInput {
+                field: "base_sha".to_owned(),
+                value: "abc".to_owned(),
+            },
+            MissReason::CACHE_UNAVAILABLE,
+        ),
     ]
 }
 
@@ -238,7 +252,7 @@ fn fallback_maps_every_error_and_executes() {
     for (error, reason) in &cases {
         assert_eq!(fallback_for_error(error), *reason, "map {error}");
     }
-    assert_eq!(cases.len(), 22, "every variant mapped");
+    assert_eq!(cases.len(), 24, "every variant mapped");
     let fallback = ReuseFallback::execute_with(MissReason::CACHE_UNAVAILABLE);
     assert_eq!(fallback.reason(), MissReason::CACHE_UNAVAILABLE);
     assert!(fallback.proceeds_to_execute(), "miss never fails");

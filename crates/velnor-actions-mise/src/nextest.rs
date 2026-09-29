@@ -148,6 +148,19 @@ impl NextestArchive {
         })
     }
 
+    /// Configuration key proving archive-once: package, target, features.
+    ///
+    /// The driver is deliberately excluded: both drivers share one
+    /// archive file, so either driver reserves the configuration.
+    #[must_use]
+    pub fn config_key(&self) -> (String, Option<String>, Vec<String>) {
+        (
+            self.package.clone(),
+            self.target.clone(),
+            self.features.clone(),
+        )
+    }
+
     /// Payload arguments: program first, then its fixed arguments.
     #[must_use]
     pub fn payload(&self) -> Vec<OsString> {

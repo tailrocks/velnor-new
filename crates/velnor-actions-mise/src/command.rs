@@ -235,6 +235,20 @@ impl IsolatedCommand {
         env
     }
 
+    /// Whether implicit tool installation is disabled for this command.
+    ///
+    /// Verification `exec` commands carry the disable pair, so a missing
+    /// tool fails instead of installing: the failure is a preparation
+    /// error, never a silent fetch.
+    #[must_use]
+    pub fn disables_auto_install(&self) -> bool {
+        let full = self.full_env();
+        NO_AUTO_INSTALL_ENV.iter().all(|(key, value)| {
+            full.iter()
+                .any(|(found, seen)| found == key && seen == value)
+        })
+    }
+
     /// Spawn the child, capture both streams, and wait for its typed exit.
     ///
     /// Standard input is closed; no shell interprets any argument.
