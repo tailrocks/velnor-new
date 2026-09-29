@@ -182,7 +182,7 @@ mod tests {
             ),
             (
                 "velnor-final".to_owned(),
-                final_job("ubuntu-26.04", false, None).expect("final job"),
+                final_job("ubuntu-26.04", false, None, &catalog).expect("final job"),
             ),
         ]));
         assert!(attach_lock_acquire(&mut ir, &lock, "ubuntu-26.04", "0.1.0").is_ok());
@@ -206,7 +206,15 @@ mod tests {
             .iter()
             .map(|s| s.name.as_str())
             .collect();
-        assert_eq!(names, ["Acquire Velnor", "Write request", "Merge reports"]);
+        assert_eq!(
+            names,
+            [
+                "Acquire Velnor",
+                "Prepare pinned tools",
+                "Write request",
+                "Merge reports"
+            ]
+        );
         assert!(attach_lock_acquire(&mut ir, &lock, "ubuntu-26.04-arm", "0.1.0").is_err());
     }
 
@@ -229,7 +237,7 @@ mod tests {
                 ),
                 (
                     "velnor-final".to_owned(),
-                    final_job("ubuntu-26.04", true, None).expect("final job"),
+                    final_job("ubuntu-26.04", true, None, &catalog).expect("final job"),
                 ),
             ])),
             support: None,

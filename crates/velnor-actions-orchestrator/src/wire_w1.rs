@@ -30,7 +30,8 @@ use velnor_actions_workflow_renderer::steps::{
 
 use crate::OrchestratorError;
 use crate::discover::Discovery;
-use crate::workflow_jobs::{matrix_task_step, strings_of, strings_of_env};
+use crate::utf8::{strings_of, strings_of_env};
+use crate::workflow_jobs::matrix_task_step;
 
 /// Declared repository configuration variable names (GEN-2.14).
 ///

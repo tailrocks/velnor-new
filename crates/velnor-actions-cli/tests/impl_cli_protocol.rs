@@ -175,6 +175,7 @@ fn merge_no_work_plan_passes() -> Result<(), Box<dyn Error>> {
         &[
             ("VELNOR_INTERNAL_OP", "merge-v1"),
             ("VELNOR_REQUEST_FILE", merge_request.to_str().unwrap_or("/")),
+            ("RUNNER_TEMP", runner_temp.to_str().unwrap_or("/")),
         ],
         &repo,
     )?;
@@ -183,6 +184,13 @@ fn merge_no_work_plan_passes() -> Result<(), Box<dyn Error>> {
     assert_no_leak(&output);
     let verdict = std::fs::read_to_string(repo.join("merge-v1-response.json"))?;
     assert!(verdict.contains("\"status\":\"no_work\""), "{verdict}");
+    let published = std::fs::read_to_string(
+        runner_temp
+            .join("velnor")
+            .join("r7-a2")
+            .join("final-report.json"),
+    )?;
+    assert!(published.contains("\"status\":\"no_work\""), "{published}");
     cleanup(&repo);
     Ok(())
 }

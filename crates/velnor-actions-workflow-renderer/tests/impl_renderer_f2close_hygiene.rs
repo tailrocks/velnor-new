@@ -272,6 +272,32 @@ fn token_hygiene_scopes_gh_token_to_plan() -> Result<(), RenderError> {
 }
 
 #[test]
+fn token_hygiene_allows_final_fetch_token() -> Result<(), RenderError> {
+    let (id, mut final_job) = job(
+        "velnor-final",
+        "Velnor / Required",
+        vec!["velnor-plan".to_owned()],
+        vec![
+            checkout_step(&checkout_pin())?,
+            shell_step(
+                "Prepare pinned tools",
+                vec!["true".to_owned()],
+                BTreeMap::from([("GH_TOKEN".to_owned(), "${{ github.token }}".to_owned())]),
+            )?,
+            merge_step(),
+        ],
+    );
+    final_job.condition = Some("always()".to_owned());
+    render_workflow_ir(
+        &fixture_ir(vec![minimal_plan_job()?, (id, final_job)]),
+        WorkflowPolicy::ConsumerV1,
+        None,
+        &fixture_ctx(),
+    )?;
+    Ok(())
+}
+
+#[test]
 fn token_hygiene_rejects_prints_and_task_tokens() -> Result<(), RenderError> {
     let printed = token_plan_job(
         "Task",

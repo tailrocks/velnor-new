@@ -24,6 +24,8 @@ pub const REQUEST_FILE_ENV: &str = "VELNOR_REQUEST_FILE";
 pub const PLAN_OPERATION: &str = "plan-v1";
 /// Report-merge operation name.
 pub const MERGE_OPERATION: &str = "merge-v1";
+/// Matrix-report fetch operation name.
+pub const FETCH_OPERATION: &str = "fetch-reports-v1";
 /// Write-request operation name.
 pub const WRITE_REQUEST_OPERATION: &str = "write-request-v1";
 /// Required prefix of the digest-verified staged binary path.
@@ -286,11 +288,13 @@ pub fn acquire_velnor_step(
 
 /// Split an internal operation into env op plus request-file target op.
 ///
-/// `plan-v1`/`merge-v1` target themselves; `write-request-v1:<target>` gates
-/// on `write-request-v1` while materializing the target's request file.
+/// `plan-v1`/`merge-v1`/`fetch-reports-v1` target themselves (fetch takes
+/// no request file; its input root is the runner-temp velnor directory);
+/// `write-request-v1:<target>` gates on `write-request-v1` while
+/// materializing the target's request file.
 /// # Errors
 pub(crate) fn split_internal_operation(operation: &str) -> Result<(&str, &str), RenderError> {
-    if operation == PLAN_OPERATION || operation == MERGE_OPERATION {
+    if operation == PLAN_OPERATION || operation == MERGE_OPERATION || operation == FETCH_OPERATION {
         return Ok((operation, operation));
     }
     let rest = operation

@@ -79,15 +79,16 @@ pub use tooling::ToolIdentity;
 pub use vcs::VcsInputs;
 pub use workflow::{
     BaselineProof, BaselineStatus, CacheLayer, CacheOutcome, CacheResult, CandidateReport,
-    CandidateStatus, Concurrency, EntryCacheIds, ExecuteTaskIds, ExecuteTaskRef, FinalCounts,
-    FinalReport, FinalStatus, Job, MATRIX_JSON_FILENAME, ManifestTaskProof, MatrixEntry,
-    MatrixReport, MatrixStatus, MatrixTaskEntry, NotSelectedReason, ObligationDecision,
-    PLAN_JSON_FILENAME, Permissions, Plan, PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation,
-    PlanPackage, PlanRunner, RequiredJobResult, Step, StepKind, TaskReport, TaskStatus, TaskTiming,
-    Trigger, Trust, WorkflowEvent, WorkflowIr, candidate_report_id_for_run, check_matrix_agreement,
-    final_report_id_for_run, final_report_relpath, join_runner_temp, matrix_json_bytes,
-    matrix_report_relpath, plan_json_bytes, task_report_relpath, validate_candidate_report_id,
-    validate_final_report_id,
+    CandidateStatus, Concurrency, EntryCacheIds, ExecuteTaskIds, ExecuteTaskRef,
+    FINAL_JSON_FILENAME, FinalCounts, FinalReport, FinalStatus, Job, MATRIX_JSON_FILENAME,
+    ManifestTaskProof, MatrixEntry, MatrixReport, MatrixStatus, MatrixTaskEntry, NotSelectedReason,
+    ObligationDecision, PLAN_JSON_FILENAME, Permissions, Plan, PlanBaseline, PlanGenerator,
+    PlanMatrix, PlanObligation, PlanPackage, PlanRunner, RequiredJobResult, Step, StepKind,
+    TaskReport, TaskStatus, TaskTiming, Trigger, Trust, WorkflowEvent, WorkflowIr,
+    candidate_report_id_for_run, check_matrix_agreement, final_report_id_for_run,
+    final_report_relpath, join_runner_temp, matrix_json_bytes, matrix_report_relpath,
+    plan_json_bytes, task_report_relpath, validate_candidate_report_id, validate_final_report_id,
+    validate_matrix_run,
 };
 
 /// Version marker for the contract schema shell.

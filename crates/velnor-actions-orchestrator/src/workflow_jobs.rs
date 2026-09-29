@@ -18,18 +18,13 @@ use velnor_actions_workflow_renderer::steps::{
 
 use crate::OrchestratorError;
 use crate::source_prep::fetch_steps;
+use crate::utf8::{strings_of, strings_of_env};
 
 /// Always-on workflow-lint job ID, emitted for both policies.
 pub(crate) const LINT_JOB_ID: &str = "velnor-workflow-lint";
 
 /// Display name of the always-on workflow-lint job.
 pub(crate) const LINT_DISPLAY_NAME: &str = "Velnor Workflow Lint";
-
-/// Matrix entry task ID consumed by the fixed task template.
-const TASK_ID_ENV: &str = "VELNOR_TASK_ID";
-
-/// Matrix entry command consumed by the fixed task template.
-const TASK_RUN_ENV: &str = "VELNOR_TASK_RUN";
 
 /// Producer output carrying the matrix JSON for `fromJSON`.
 const MATRIX_OUTPUT_NAME: &str = "matrix";
@@ -133,15 +128,18 @@ pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, Orches
 /// those policy jobs exist. IR validation requires `needs` to name IR jobs
 /// only, so this builds the IR subset and the renderer appends the merged
 /// support IDs post-merge (see `support.rs`); the release job never gates.
-/// The write-request step assembles the merge request from the downloaded
+/// `Prepare pinned tools` installs only `gh`: the fetch step downloads
+/// each expected matrix artifact by exact name through it. The
+/// write-request step assembles the merge request from the downloaded
 /// plan and matrix-report artifacts the merge step consumes.
 /// # Errors
 ///
-/// Returns a contract error when the typed request step is rejected.
+/// Returns a contract error when a typed step request is rejected.
 pub(crate) fn final_job(
     label: &str,
     with_task: bool,
     acquire: Option<Step>,
+    catalog: &ToolCatalog,
 ) -> Result<Job, OrchestratorError> {
     let mut needs = vec![PLAN_JOB_ID.to_owned()];
     if with_task {
@@ -150,6 +148,7 @@ pub(crate) fn final_job(
     needs.push(LINT_JOB_ID.to_owned());
     let mut steps = Vec::new();
     steps.extend(acquire);
+    steps.push(prepare_pinned_tools_step(catalog, vec![PinnedTool::Gh])?);
     steps.push(request_step(MERGE_OPERATION)?);
     steps.push(merge_step());
     Ok(Job {
@@ -218,18 +217,38 @@ fn checkout_action() -> Result<Step, OrchestratorError> {
     crate::workflow::wire_w1::checkout_step()
 }
 
-/// Fixed matrix-entry template: log the task ID, then run its command.
+/// Fixed matrix-entry template: run the command, always write reports.
 ///
-/// A missing `matrix.run` fails the leg via `${VAR:?...}` instead of a
-/// silent no-op. Matrix context arrives via env only, keeping `run:`
-/// free of `${{ }}` for shellcheck and template-injection scans.
+/// Missing `matrix.run`/`matrix.task_digest` fail the leg via `${VAR:?...}`
+/// instead of a silent no-op. Matrix context arrives via env only, keeping
+/// `run:` free of `${{ }}` for shellcheck and template-injection scans.
 pub(crate) fn matrix_task_step(max_parallel_jobs: u32) -> Step {
-    let script = format!(
-        "echo \"${TASK_ID_ENV}\" && : \"${{{TASK_RUN_ENV}:?matrix.run_missing}}\" && sh -c \"${TASK_RUN_ENV}\""
-    );
+    use velnor_actions_workflow_renderer::task_steps as legs;
     let env = BTreeMap::from([
-        (TASK_ID_ENV.to_owned(), "${{ matrix.task_id }}".to_owned()),
-        (TASK_RUN_ENV.to_owned(), "${{ matrix.run }}".to_owned()),
+        (
+            legs::LEG_TASK_ID_ENV.to_owned(),
+            "${{ matrix.task_id }}".to_owned(),
+        ),
+        (
+            legs::LEG_TASK_RUN_ENV.to_owned(),
+            "${{ matrix.run }}".to_owned(),
+        ),
+        (
+            legs::LEG_TASK_DIGEST_ENV.to_owned(),
+            "${{ matrix.task_digest }}".to_owned(),
+        ),
+        (
+            legs::LEG_MATRIX_KEY_ENV.to_owned(),
+            "${{ matrix.matrix_key }}".to_owned(),
+        ),
+        (
+            legs::LEG_MATRIX_ID_ENV.to_owned(),
+            "${{ matrix.id }}".to_owned(),
+        ),
+        (
+            legs::LEG_EVENT_ENV.to_owned(),
+            "${{ github.event_name }}".to_owned(),
+        ),
         (MATRIX_NEEDS_JOB_ENV.to_owned(), PLAN_JOB_ID.to_owned()),
         (MATRIX_OUTPUT_ENV.to_owned(), MATRIX_OUTPUT_NAME.to_owned()),
         (
@@ -240,36 +259,14 @@ pub(crate) fn matrix_task_step(max_parallel_jobs: u32) -> Step {
     Step {
         name: "Run task".to_owned(),
         kind: StepKind::Shell {
-            run: vec!["sh".to_owned(), "-c".to_owned(), script],
+            run: vec![
+                "sh".to_owned(),
+                "-c".to_owned(),
+                legs::leg_execution_script(),
+            ],
             env,
         },
     }
-}
-
-/// Convert fixed argv to UTF-8 strings.
-pub(crate) fn strings_of(argv: Vec<OsString>) -> Result<Vec<String>, String> {
-    let mut out = Vec::with_capacity(argv.len());
-    for arg in argv {
-        match arg.into_string() {
-            Ok(text) => out.push(text),
-            Err(_) => return Err("non_utf8_argv".to_owned()),
-        }
-    }
-    Ok(out)
-}
-
-/// Convert fixed env pairs to UTF-8 strings.
-pub(crate) fn strings_of_env(
-    env: &[(OsString, OsString)],
-) -> Result<BTreeMap<String, String>, String> {
-    let mut out = BTreeMap::new();
-    for (key, value) in env {
-        let (Some(key), Some(value)) = (key.to_str(), value.to_str()) else {
-            return Err("non_utf8_env".to_owned());
-        };
-        out.insert(key.to_owned(), value.to_owned());
-    }
-    Ok(out)
 }
 
 #[cfg(test)]
@@ -363,8 +360,9 @@ mod tests {
 
     #[test]
     fn final_job_writes_request_before_merge() {
+        let catalog = ToolCatalog::pinned();
         for acquire in [None, Some(checkout_action().expect("checkout step"))] {
-            let job = final_job("ubuntu-26.04", true, acquire).expect("final job");
+            let job = final_job("ubuntu-26.04", true, acquire, &catalog).expect("final job");
             let names: Vec<&str> = job.steps.iter().map(|step| step.name.as_str()).collect();
             let write_at = names.iter().position(|name| *name == "Write request");
             let merge_at = names.iter().position(|name| *name == "Merge reports");

@@ -8,7 +8,7 @@ use velnor_actions_contract::{Job, Step, StepKind, Trigger, WorkflowIr};
 
 use crate::{
     RenderError, commands,
-    render::{ALINT_JOB_ID, ALINT_USES, RenderContext},
+    render::{ALINT_JOB_ID, ALINT_USES, FINAL_JOB_ID, RenderContext},
     steps::{self, INTERNAL_OP_ENV, REQUEST_FILE_ENV},
     yaml::Yaml,
 };
@@ -105,6 +105,39 @@ fn job_to_yaml(id: &str, job: &Job, ctx: &RenderContext) -> Result<Yaml, RenderE
     Ok(Yaml::Map(entries))
 }
 
+/// True for the final job's plan download (fetch is gated inline below).
+///
+/// An absent plan artifact (failed plan) must still reach the merge
+/// verdict instead of failing the job at the download step.
+fn is_verdict_download(step: &Step) -> bool {
+    matches!(
+        &step.kind,
+        StepKind::Action { uses, .. } if uses == steps::DOWNLOAD_ARTIFACT_USES
+    ) && step.name == crate::closure::DOWNLOAD_PLAN_NAME
+}
+
+/// Env for one internal step: op plus request file, fetch carries auth.
+///
+/// The fetch op takes no request file; it reads the plan from the
+/// run directory and authenticates `gh` with the job token plus the
+/// repository slug (fixed literals, never caller input). Token hygiene
+/// still gates IR-level `GH_TOKEN` (see `support`); this render-time
+/// pair is fixed by construction for the fetch step only.
+fn internal_env(op: &str, target: &str, ctx: &RenderContext) -> Yaml {
+    if op == steps::FETCH_OPERATION {
+        return Yaml::Map(vec![
+            ("GH_REPO".to_owned(), Yaml::str("${{ github.repository }}")),
+            ("GH_TOKEN".to_owned(), Yaml::str("${{ github.token }}")),
+            (INTERNAL_OP_ENV.to_owned(), Yaml::str(op.to_owned())),
+        ]);
+    }
+    let request = format!("{}/{target}-request.json", ctx.request_dir);
+    Yaml::Map(vec![
+        (INTERNAL_OP_ENV.to_owned(), Yaml::str(op.to_owned())),
+        (REQUEST_FILE_ENV.to_owned(), Yaml::str(request)),
+    ])
+}
+
 /// Render one step; internal ops become env plus request file, never argv.
 /// The pinned Alint tag is accepted only inside the `velnor-alint` job.
 fn step_to_yaml(job_id: &str, step: &Step, ctx: &RenderContext) -> Result<Yaml, RenderError> {
@@ -126,6 +159,9 @@ fn step_to_yaml(job_id: &str, step: &Step, ctx: &RenderContext) -> Result<Yaml, 
                     "if".to_owned(),
                     Yaml::str(crate::render::FINAL_CONDITION.to_owned()),
                 ));
+            }
+            if job_id == FINAL_JOB_ID && is_verdict_download(step) {
+                entries.push(("continue-on-error".to_owned(), Yaml::Bool(true)));
             }
             entries.push(("uses".to_owned(), Yaml::str(uses.clone())));
             if !with.is_empty() {
@@ -156,21 +192,16 @@ fn step_to_yaml(job_id: &str, step: &Step, ctx: &RenderContext) -> Result<Yaml, 
         }
         StepKind::Internal { operation } => {
             let (op, target) = steps::split_internal_operation(operation)?;
-            let request = format!("{}/{target}-request.json", ctx.request_dir);
-            Ok(Yaml::Map(vec![
-                ("name".to_owned(), Yaml::str(step.name.clone())),
-                (
-                    "env".to_owned(),
-                    Yaml::Map(vec![
-                        (INTERNAL_OP_ENV.to_owned(), Yaml::str(op.to_owned())),
-                        (REQUEST_FILE_ENV.to_owned(), Yaml::str(request)),
-                    ]),
-                ),
-                (
-                    "run".to_owned(),
-                    Yaml::str(commands::quote_run_arg(&ctx.staged_binary)),
-                ),
-            ]))
+            let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
+            if job_id == FINAL_JOB_ID && operation == steps::FETCH_OPERATION {
+                entries.push(("continue-on-error".to_owned(), Yaml::Bool(true)));
+            }
+            entries.push(("env".to_owned(), internal_env(op, target, ctx)));
+            entries.push((
+                "run".to_owned(),
+                Yaml::str(commands::quote_run_arg(&ctx.staged_binary)),
+            ));
+            Ok(Yaml::Map(entries))
         }
     }
 }

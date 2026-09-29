@@ -10,6 +10,7 @@ mod candidate;
 pub mod closure;
 mod commands;
 mod document;
+mod final_steps;
 pub mod guard;
 pub mod marker;
 mod matrix;

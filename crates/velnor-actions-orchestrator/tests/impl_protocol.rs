@@ -181,9 +181,17 @@ fn merge_assembled_request_roundtrips_to_passed() -> TestResult {
         run.join("matrix.json"),
         serde_json::to_string(&plan.matrix)?,
     )?;
-    for (index, report) in reports.iter().enumerate() {
+    for report in &reports {
+        let entry = plan
+            .matrix
+            .include
+            .iter()
+            .find(|entry| entry.report_id == report.report_id)
+            .ok_or_else(|| std::io::Error::other("report without entry"))?;
+        let dir = run.join("reports").join(&entry.artifact_id);
+        fs::create_dir_all(&dir)?;
         fs::write(
-            run.join("reports").join(format!("r{index}.json")),
+            dir.join("matrix-report.json"),
             serde_json::to_string(report)?,
         )?;
     }
@@ -200,13 +208,18 @@ fn merge_assembled_request_roundtrips_to_passed() -> TestResult {
 }
 
 #[test]
-fn merge_assembly_rejects_missing_plan() -> TestResult {
+fn merge_assembly_nulls_missing_plan_to_planning_failed() -> TestResult {
     let dir = TempDir::new()?;
-    let err = err_of(
-        assemble_merge_request("local", dir.path()),
-        "missing plan refused",
-    )?;
-    assert!(err.to_string().contains("missing_plan_artifact"), "{err}");
+    let request = assemble_merge_request("local", dir.path())?;
+    let value: serde_json::Value = serde_json::from_str(&request)?;
+    assert!(value["plan"].is_null(), "null plan: {request}");
+    let final_report: velnor_actions_contract::FinalReport =
+        serde_json::from_str(&merge_internal(&request)?)?;
+    final_report.validate()?;
+    assert_eq!(
+        final_report.status,
+        velnor_actions_contract::FinalStatus::PlanningFailed
+    );
     Ok(())
 }
 

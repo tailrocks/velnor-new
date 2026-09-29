@@ -104,7 +104,7 @@ pub(crate) fn build_workflow(
     jobs.insert(LINT_JOB_ID.to_owned(), lint_job(label, &catalog)?);
     jobs.insert(
         FINAL_JOB_ID.to_owned(),
-        final_job(label, !task_groups.is_empty(), acquire)?,
+        final_job(label, !task_groups.is_empty(), acquire, &catalog)?,
     );
     wire_w1::ensure_plan_format_step(&mut jobs, discovery, &catalog)?;
     wire_w1::check_task_mbx_gating(&jobs, !task_groups.is_empty(), use_mbx)?;

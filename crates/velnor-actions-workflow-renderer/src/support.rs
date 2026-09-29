@@ -251,15 +251,17 @@ pub(crate) fn check_candidate_invariants(jobs: &BTreeMap<String, Job>) -> Result
 /// Credential env keys that must never reach task execution.
 const STRIPPED_CREDENTIAL_KEYS: &[&str] = &["GITHUB_TOKEN", "ACTIONS_RUNTIME_TOKEN"];
 
-/// Token hygiene: `${{ github.token }}` only as plan `GH_TOKEN`.
+/// Token hygiene: `${{ github.token }}` only as plan/final `GH_TOKEN`.
 ///
 /// Parallelism §5: the planning process receives the token only as
 /// `GH_TOKEN`, never printed or inherited by task execution; before any
 /// repository task starts, credential variables are stripped from the
-/// child environment. Enforced here: `GITHUB_TOKEN`/`ACTIONS_RUNTIME_TOKEN`
-/// fail everywhere, `GH_TOKEN` is allowed only in the plan job with the
-/// exact `${{ github.token }}` value, and no `run:` content or action
-/// input may name a token (nothing prints or forwards one).
+/// child environment. The final job's report fetch needs the same
+/// read-only token for exact `gh` artifact downloads. Enforced here:
+/// `GITHUB_TOKEN`/`ACTIONS_RUNTIME_TOKEN` fail everywhere, `GH_TOKEN` is
+/// allowed only in the plan/final jobs with the exact `${{ github.token }}`
+/// value, and no `run:` content or action input may name a token
+/// (nothing prints or forwards one).
 pub(crate) fn check_token_hygiene(jobs: &BTreeMap<String, Job>) -> Result<(), RenderError> {
     for (id, job) in jobs {
         for step in &job.steps {
@@ -298,7 +300,7 @@ fn check_step_tokens(id: &str, step: &Step) -> Result<(), RenderError> {
     Ok(())
 }
 
-/// Reject stripped keys everywhere; scope `GH_TOKEN` to the plan job.
+/// Reject stripped keys everywhere; scope `GH_TOKEN` to plan/final jobs.
 fn check_env_tokens(id: &str, env: &BTreeMap<String, String>) -> Result<(), RenderError> {
     for (key, value) in env {
         if STRIPPED_CREDENTIAL_KEYS.contains(&key.as_str()) {
@@ -307,7 +309,8 @@ fn check_env_tokens(id: &str, env: &BTreeMap<String, String>) -> Result<(), Rend
             )));
         }
         if key == "GH_TOKEN" {
-            let scoped = id == PLAN_JOB_ID && value == "${{ github.token }}";
+            let scoped =
+                (id == PLAN_JOB_ID || id == FINAL_JOB_ID) && value == "${{ github.token }}";
             if !scoped {
                 return Err(RenderError::InvalidWorkflow(format!(
                     "token_misplaced:{id}:GH_TOKEN"

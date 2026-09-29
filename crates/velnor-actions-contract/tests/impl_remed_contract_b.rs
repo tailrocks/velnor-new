@@ -131,6 +131,8 @@ fn wf_matrix_entry_requires_registered_stack() -> Result<(), ContractError> {
     let bogus = MatrixEntry::derive(
         "bogus",
         GROUP,
+        "mise exec --no-config rust@1.98.1 -- cargo clippy --locked",
+        &digest_b3(b"task-bytes"),
         serde_json::json!({}),
         ExecuteTaskIds {
             tasks: BTreeMap::new(),

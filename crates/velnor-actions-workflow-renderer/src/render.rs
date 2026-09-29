@@ -13,8 +13,8 @@ use velnor_actions_contract::{
 };
 
 use crate::{
-    RenderError, cache_steps, closure, commands, document, guard, marker, matrix, msrv, preseed,
-    setup, steps, support, yaml::render_yaml,
+    RenderError, cache_steps, closure, commands, document, final_steps, guard, marker, matrix,
+    msrv, preseed, setup, steps, support, yaml::render_yaml,
 };
 
 pub use crate::matrix::{
@@ -167,6 +167,7 @@ pub fn render_workflow_ir(
     closure::insert_request_closure(&mut jobs)?;
     closure::insert_task_closure(&mut jobs)?;
     closure::insert_final_closure(&mut jobs)?;
+    final_steps::insert_final_fanin(&mut jobs)?;
     render_merged(ir, &jobs, ctx)
 }
 
@@ -204,6 +205,7 @@ pub fn render_workflow_ir_strict(
     closure::insert_request_closure(&mut jobs)?;
     closure::insert_task_closure(&mut jobs)?;
     closure::insert_final_closure(&mut jobs)?;
+    final_steps::insert_final_fanin(&mut jobs)?;
     render_merged(ir, &jobs, ctx)
 }
 

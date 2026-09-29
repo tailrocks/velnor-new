@@ -31,8 +31,8 @@ use crate::select_edges::plan_task_graph;
 use crate::vectors::task_argv;
 
 pub use crate::internal_request::{
-    PlanOutputs, merge_passed, plan_outputs, publish_plan_files, response_path_for, write_request,
-    write_request_parts,
+    PlanOutputs, merge_passed, plan_outputs, publish_final_report, publish_plan_files,
+    response_path_for, write_request, write_request_parts,
 };
 
 /// Schema version accepted by both internal entrypoints.
@@ -352,7 +352,7 @@ fn plan_group(
         task_id: group.task_id.clone(),
         decision: reuse.decision,
         reason: reuse.reason,
-        task_digest,
+        task_digest: task_digest.clone(),
         input_digest: input_digest.clone(),
         baseline_proof: None,
     };
@@ -362,9 +362,13 @@ fn plan_group(
         reuse.task_cache_enabled,
         reuse.task_cache_key.as_deref(),
     );
+    let run = velnor_actions_workflow_renderer::join_argv_for_run(&argv)
+        .map_err(|err| internal(&err.to_string()))?;
     let mut entry = MatrixEntry::derive(
         velnor_actions_rust::STACK_ID,
         &group.task_id,
+        &run,
+        &task_digest,
         metadata,
         execute_ids(group),
         &input_digest,

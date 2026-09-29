@@ -2,10 +2,12 @@
 use std::collections::BTreeMap;
 use velnor_actions_contract::NotSelectedReason;
 use velnor_actions_workflow_renderer::task_steps::{
-    CLIPPY_NAME, DOCTESTS_NAME, DOCUMENTATION_NAME, NOOP_EVENT_ENV, NOOP_MATRIX_ID_ENV,
-    NOOP_MATRIX_KEY_ENV, NoOpReport, REPORT_TIMINGS_NAME, RESTORE_OBJECTS_NAME, TASK_STEP_NAMES,
-    TaskStepMode, TaskStepSpec, build_task_steps, check_doc_after_doctest, check_task_step_order,
-    check_timings_report_last, noop_report_script, noop_step, timings_report_step,
+    CLIPPY_NAME, DOCTESTS_NAME, DOCUMENTATION_NAME, LEG_EVENT_ENV, LEG_MATRIX_ID_ENV,
+    LEG_MATRIX_KEY_ENV, LEG_TASK_DIGEST_ENV, LEG_TASK_ID_ENV, LEG_TASK_RUN_ENV, NOOP_EVENT_ENV,
+    NOOP_MATRIX_ID_ENV, NOOP_MATRIX_KEY_ENV, NoOpReport, REPORT_TIMINGS_NAME, RESTORE_OBJECTS_NAME,
+    TASK_STEP_NAMES, TaskStepMode, TaskStepSpec, build_task_steps, check_doc_after_doctest,
+    check_task_step_order, check_timings_report_last, leg_execution_script, noop_report_script,
+    noop_step, timings_report_step,
 };
 use velnor_actions_workflow_renderer::{RenderError, checkout_step, shell_step};
 
@@ -205,5 +207,50 @@ fn task_timings_report_is_last_and_names_matrix_report() -> Result<(), RenderErr
             .is_err_and(|err| format!("{err:?}").contains("timings_report_not_last")),
         "named step after timings must fail"
     );
+    Ok(())
+}
+
+#[test]
+fn leg_script_runs_command_and_always_reports() -> Result<(), RenderError> {
+    let script = leg_execution_script();
+    for want in [
+        ":?matrix.run_missing",
+        ":?matrix.task_digest_missing",
+        "code=$?",
+        "matrix-report.json",
+        "/tasks/",
+        "cut -c4-19",
+        "exit $code",
+    ] {
+        assert!(script.contains(want), "missing {want}:\n{script}");
+    }
+    for banned in ["$(", "`", "${{", "cargo", "mbx", "nextest"] {
+        assert!(!script.contains(banned), "banned {banned}:\n{script}");
+    }
+    let env = BTreeMap::from([
+        (
+            LEG_TASK_ID_ENV.to_owned(),
+            "${{ matrix.task_id }}".to_owned(),
+        ),
+        (LEG_TASK_RUN_ENV.to_owned(), "${{ matrix.run }}".to_owned()),
+        (
+            LEG_TASK_DIGEST_ENV.to_owned(),
+            "${{ matrix.task_digest }}".to_owned(),
+        ),
+        (
+            LEG_MATRIX_KEY_ENV.to_owned(),
+            "${{ matrix.matrix_key }}".to_owned(),
+        ),
+        (LEG_MATRIX_ID_ENV.to_owned(), "${{ matrix.id }}".to_owned()),
+        (
+            LEG_EVENT_ENV.to_owned(),
+            "${{ github.event_name }}".to_owned(),
+        ),
+    ]);
+    shell_step(
+        "Run task",
+        vec!["sh".to_owned(), "-c".to_owned(), script],
+        env,
+    )?;
     Ok(())
 }

@@ -24,10 +24,12 @@ pub(crate) struct MergeRequest {
     schema: u32,
     /// Run key.
     pub(crate) run_key: String,
-    /// Validated plan.
-    plan: Plan,
+    /// Validated plan; absent when the plan artifact never landed.
+    #[serde(default)]
+    plan: Option<Plan>,
     /// `matrix.json` content; must agree with the plan matrix.
-    matrix: PlanMatrix,
+    #[serde(default)]
+    matrix: Option<PlanMatrix>,
     /// Matrix reports to aggregate.
     pub(crate) matrix_reports: Vec<MatrixReport>,
     /// Required non-matrix job results.
@@ -113,8 +115,9 @@ pub(crate) struct BaselineManifest {
 /// Aggregate matrix reports into the final gate report (schema-1 JSON).
 ///
 /// Structural mismatches yield a `planning_failed` final report; only
-/// malformed requests fail outright. Consumes the emitted plan only and
-/// never rediscovers repository state.
+/// malformed requests fail outright. A missing plan still yields a
+/// verdict (`planning_failed`) instead of an error. Consumes the
+/// emitted plan only and never rediscovers repository state.
 ///
 /// # Errors
 ///
@@ -127,10 +130,6 @@ pub fn merge_internal(request_json: &str) -> Result<String, OrchestratorError> {
         })?;
     check_schema(request.schema)?;
     validate_run_key(&request.run_key).map_err(internal_contract)?;
-    request.plan.validate().map_err(internal_contract)?;
-    if request.plan.run_key != request.run_key {
-        return Err(internal("plan_run_mismatch"));
-    }
     request
         .required_jobs
         .sort_by(|left, right| left.job_id.cmp(&right.job_id));
@@ -139,14 +138,27 @@ pub fn merge_internal(request_json: &str) -> Result<String, OrchestratorError> {
             return Err(internal("malformed_required_job"));
         }
     }
+    let Some(plan) = request.plan.as_ref() else {
+        let final_report =
+            FinalReport::without_plan(&request.run_key, request.required_jobs.clone())
+                .map_err(internal_contract)?;
+        final_report.validate().map_err(internal_contract)?;
+        return serde_json::to_string(&final_report).map_err(|err| OrchestratorError::Internal {
+            problem: format!("response_encode:{err}"),
+        });
+    };
+    plan.validate().map_err(internal_contract)?;
+    if plan.run_key != request.run_key {
+        return Err(internal("plan_run_mismatch"));
+    }
     if let Some(candidate) = &request.candidate {
         candidate.validate().map_err(internal_contract)?;
         if candidate.run_key != request.run_key {
             return Err(internal("candidate_run_mismatch"));
         }
-        check_candidate_proof(&request.plan, candidate)?;
+        check_candidate_proof(plan, candidate)?;
     }
-    let final_report = build_final(&request)?;
+    let final_report = build_final(&request, plan)?;
     final_report.validate().map_err(internal_contract)?;
     serde_json::to_string(&final_report).map_err(|err| OrchestratorError::Internal {
         problem: format!("response_encode:{err}"),
@@ -170,26 +182,26 @@ fn check_candidate_proof(
 }
 
 /// Aggregate one final report from validated plan plus reports.
-fn build_final(request: &MergeRequest) -> Result<FinalReport, OrchestratorError> {
+fn build_final(request: &MergeRequest, plan: &Plan) -> Result<FinalReport, OrchestratorError> {
     let mut signals = Signals::default();
-    check_agreement(request, &mut signals)?;
-    check_plan_shape(request, &mut signals);
-    check_plan_evidence(request, &mut signals);
-    let entries = plan_entries(request);
-    let obligations = plan_digests(request);
+    check_agreement(request.matrix.as_ref(), plan, &mut signals)?;
+    check_plan_shape(plan, &mut signals);
+    check_plan_evidence(plan, request, &mut signals);
+    let entries = plan_entries(plan);
+    let obligations = plan_digests(plan);
     let partition = partition_reports(request, &entries, &mut signals);
     let mut fold = Fold::default();
     let mut seen_task_reports = BTreeSet::new();
     let mut downloaded = Vec::new();
     let mut miss_reasons = BTreeSet::new();
     let mut uncovered = 0u32;
-    for entry in &request.plan.matrix.include {
+    for entry in &plan.matrix.include {
         let Some(report) = partition.valid.get(entry.report_id.as_str()) else {
             uncovered += 1;
             signals.not_run = true;
             continue;
         };
-        if shards_failed(entry, report.empty_partition, request) {
+        if shards_failed(entry, report.empty_partition, plan, request) {
             signals.planning_failed = true;
             uncovered += 1;
             continue;
@@ -209,22 +221,22 @@ fn build_final(request: &MergeRequest) -> Result<FinalReport, OrchestratorError>
     fold_jobs(&request.required_jobs, &mut signals);
     fold_candidate(request.candidate.as_ref(), &mut signals);
     downloaded.sort();
-    let status = decide(&signals, &request.plan);
+    let status = decide(&signals, plan);
     Ok(FinalReport {
         schema: SCHEMA,
         report_id: final_report_id_for_run(&request.run_key).map_err(internal_contract)?,
         run_key: request.run_key.clone(),
-        plan_id: request.plan.plan_id.clone(),
+        plan_id: plan.plan_id.clone(),
         expected_report_ids: entries.into_keys().map(str::to_owned).collect(),
         downloaded_artifact_ids: downloaded,
         required_job_results: request.required_jobs.clone(),
         status,
         counts: FinalCounts {
-            selected: u32::try_from(request.plan.task_ids.len()).unwrap_or(u32::MAX),
+            selected: u32::try_from(plan.task_ids.len()).unwrap_or(u32::MAX),
             reused: fold.reused,
             executed: fold.executed,
             empty_partition: fold.empty_partition,
-            covered: covered_count(request),
+            covered: covered_count(plan),
             failed: fold.failed,
             cancelled: fold.cancelled,
             blocked: fold.blocked,
@@ -235,27 +247,32 @@ fn build_final(request: &MergeRequest) -> Result<FinalReport, OrchestratorError>
 }
 
 /// Check 1: `matrix.json` agrees with the plan matrix (WF-4.16).
-fn check_agreement(request: &MergeRequest, signals: &mut Signals) -> Result<(), OrchestratorError> {
-    let matrix_bytes = canonical_json_bytes(&request.matrix).map_err(internal_contract)?;
-    if velnor_actions_contract::check_matrix_agreement(&request.plan.matrix, &matrix_bytes).is_err()
-    {
+fn check_agreement(
+    matrix: Option<&PlanMatrix>,
+    plan: &Plan,
+    signals: &mut Signals,
+) -> Result<(), OrchestratorError> {
+    let Some(matrix) = matrix else {
+        signals.planning_failed = true;
+        return Ok(());
+    };
+    let matrix_bytes = canonical_json_bytes(matrix).map_err(internal_contract)?;
+    if velnor_actions_contract::check_matrix_agreement(&plan.matrix, &matrix_bytes).is_err() {
         signals.planning_failed = true;
     }
     Ok(())
 }
 
 /// The no-work decision needs obligations and task IDs to agree.
-fn check_plan_shape(request: &MergeRequest, signals: &mut Signals) {
-    if request.plan.obligations.is_empty() != request.plan.task_ids.is_empty() {
+fn check_plan_shape(plan: &Plan, signals: &mut Signals) {
+    if plan.obligations.is_empty() != plan.task_ids.is_empty() {
         signals.planning_failed = true;
     }
 }
 
 /// Expected entries keyed by report ID, sorted.
-fn plan_entries(request: &MergeRequest) -> BTreeMap<&str, &MatrixEntry> {
-    request
-        .plan
-        .matrix
+fn plan_entries(plan: &Plan) -> BTreeMap<&str, &MatrixEntry> {
+    plan.matrix
         .include
         .iter()
         .map(|entry| (entry.report_id.as_str(), entry))
@@ -272,8 +289,8 @@ fn reference_matches(reference: &[String], planned: &[String]) -> bool {
 }
 
 /// Revalidate planner coverage, limits, and reference obligations.
-fn check_plan_evidence(request: &MergeRequest, signals: &mut Signals) {
-    revalidate_coverage(&request.plan, request.baseline_manifest.as_ref(), signals);
+fn check_plan_evidence(plan: &Plan, request: &MergeRequest, signals: &mut Signals) {
+    revalidate_coverage(plan, request.baseline_manifest.as_ref(), signals);
     if request
         .limits
         .as_ref()
@@ -284,20 +301,20 @@ fn check_plan_evidence(request: &MergeRequest, signals: &mut Signals) {
     if request
         .reference_task_ids
         .as_ref()
-        .is_some_and(|reference| !reference_matches(reference, &request.plan.task_ids))
+        .is_some_and(|reference| !reference_matches(reference, &plan.task_ids))
     {
         signals.planning_failed = true;
     }
 }
 
 /// True when an entry's shard proofs fail validation.
-fn shards_failed(entry: &MatrixEntry, empty: u32, request: &MergeRequest) -> bool {
+fn shards_failed(entry: &MatrixEntry, empty: u32, plan: &Plan, request: &MergeRequest) -> bool {
     let bases = sharded_bases(entry);
     if bases.is_empty() {
         return false;
     }
     let mut inputs = BTreeMap::new();
-    for ob in &request.plan.obligations {
+    for ob in &plan.obligations {
         inputs.insert(ob.task_id.clone(), ob.input_digest.clone());
     }
     check_entry_shards(&bases, empty, &request.shard_proofs, &inputs).is_err()
@@ -321,10 +338,8 @@ fn sharded_bases(entry: &MatrixEntry) -> BTreeSet<String> {
 }
 
 /// Obligation task digests keyed by task ID.
-fn plan_digests(request: &MergeRequest) -> BTreeMap<&str, &str> {
-    request
-        .plan
-        .obligations
+fn plan_digests(plan: &Plan) -> BTreeMap<&str, &str> {
+    plan.obligations
         .iter()
         .map(|obligation| (obligation.task_id.as_str(), obligation.task_digest.as_str()))
         .collect()
@@ -368,11 +383,9 @@ fn decide(signals: &Signals, plan: &Plan) -> FinalStatus {
 }
 
 /// Obligations covered without execution.
-fn covered_count(request: &MergeRequest) -> u32 {
+fn covered_count(plan: &Plan) -> u32 {
     u32::try_from(
-        request
-            .plan
-            .obligations
+        plan.obligations
             .iter()
             .filter(|obligation| obligation.decision != ObligationDecision::Execute)
             .count(),

@@ -2,7 +2,8 @@
 //!
 //! The private gate requires `VELNOR_INTERNAL_OP` plus the exact request file
 //! in `VELNOR_REQUEST_FILE`: `write-request-v1` needs GitHub event env and no
-//! pre-existing file, `plan-v1`/`merge-v1` need a pre-existing request file.
+//! pre-existing file, `plan-v1`/`merge-v1` need a pre-existing request file,
+//! `fetch-reports-v1` needs runner temp plus the numeric run ID instead.
 //! Anything else falls through to Clap, so public behavior is byte-identical
 //! with or without the environment set.
 
@@ -13,9 +14,10 @@ use std::process::ExitCode;
 
 use clap::Parser;
 use velnor_actions_orchestrator::{
-    GenerateOptions, MERGE_OP, OrchestratorError, PLAN_OP, REQUEST_FILE_ENV, WRITE_REQUEST_OP,
-    generate, init_config, merge_internal, merge_passed, plan_internal, plan_outputs, plan_text,
-    prepare, publish_plan_files, resolve_root, response_path_for, write_request,
+    FETCH_OP, GenerateOptions, MERGE_OP, OrchestratorError, PLAN_OP, REQUEST_FILE_ENV,
+    WRITE_REQUEST_OP, generate, init_config, merge_internal, merge_passed, plan_internal,
+    plan_outputs, plan_text, prepare, publish_final_report, publish_plan_files, resolve_root,
+    response_path_for, retrieve_reports, write_request,
 };
 
 use crate::args::{Cli, Command};
@@ -40,6 +42,8 @@ enum InternalOp {
     Plan,
     /// Merge operation.
     Merge,
+    /// Matrix-report fetch operation.
+    Fetch,
 }
 
 /// Validated private request: operation plus exact request-file path.
@@ -73,13 +77,27 @@ pub(crate) fn try_internal() -> Option<ExitCode> {
 }
 
 /// Check the private gate: known op plus request-file presence by op.
+///
+/// Fetch takes no request file: it needs the runner-temp velnor
+/// directory plus the numeric run ID instead.
 fn gate_request() -> Option<InternalRequest> {
     let op = match env::var(OP_ENV).as_deref() {
         Ok(tag) if tag == WRITE_REQUEST_OP => InternalOp::WriteRequest,
         Ok(tag) if tag == PLAN_OP => InternalOp::Plan,
         Ok(tag) if tag == MERGE_OP => InternalOp::Merge,
+        Ok(tag) if tag == FETCH_OP => InternalOp::Fetch,
         _ => return None,
     };
+    if op == InternalOp::Fetch {
+        let temp = env::var_os(RUNNER_TEMP_ENV).filter(|value| !value.is_empty())?;
+        if env::var("GITHUB_RUN_ID").is_ok_and(|id| !id.is_empty()) {
+            return Some(InternalRequest {
+                op,
+                path: Path::new(&temp).join("velnor"),
+            });
+        }
+        return None;
+    }
     let path = env::var_os(REQUEST_FILE_ENV)
         .filter(|value| !value.is_empty())
         .map(PathBuf::from)?;
@@ -100,6 +118,7 @@ fn gate_request() -> Option<InternalRequest> {
                 return None;
             }
         }
+        InternalOp::Fetch => {}
     }
     Some(InternalRequest { op, path })
 }
@@ -113,6 +132,10 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
         },
         InternalOp::Plan => run_plan_internal(&request.path),
         InternalOp::Merge => run_merge_internal(&request.path),
+        InternalOp::Fetch => match retrieve_reports() {
+            Ok(_) => ExitCode::SUCCESS,
+            Err(error) => fail_internal(&error.to_string()),
+        },
     }
 }
 
@@ -160,7 +183,7 @@ fn run_plan_internal(path: &Path) -> ExitCode {
     }
 }
 
-/// Read the request, run the merge, write the sibling response, exit verdict.
+/// Read the request, run the merge, publish the verdict, exit verdict.
 fn run_merge_internal(path: &Path) -> ExitCode {
     let text = match fs::read_to_string(path) {
         Ok(text) => text,
@@ -176,6 +199,12 @@ fn run_merge_internal(path: &Path) -> ExitCode {
     };
     if let Err(error) = fs::write(&sibling, &response) {
         return fail_internal(&format!("write response: {error}"));
+    }
+    let Some(runner_temp) = env::var_os(RUNNER_TEMP_ENV).filter(|value| !value.is_empty()) else {
+        return fail_internal("missing runner temp");
+    };
+    if let Err(error) = publish_final_report(&response, &Path::new(&runner_temp).join("velnor")) {
+        return fail_internal(&error.to_string());
     }
     match merge_passed(&response) {
         Ok(true) => ExitCode::SUCCESS,

@@ -11,6 +11,8 @@ mod impl_renderer_f2close;
 mod impl_renderer_f2close_hygiene;
 #[path = "impl_renderer_f2close_matrix.rs"]
 mod impl_renderer_f2close_matrix;
+#[path = "impl_renderer_finalfanin.rs"]
+mod impl_renderer_finalfanin;
 #[path = "impl_renderer_fixtures.rs"]
 mod impl_renderer_fixtures;
 #[path = "impl_renderer_gate8.rs"]

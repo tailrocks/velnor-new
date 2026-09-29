@@ -285,7 +285,11 @@ impl BaselineLookup {
     }
 
     /// Run fixed `gh` args under the pinned catalog in `root`.
-    fn run(catalog: &ToolCatalog, root: &Path, args: Vec<OsString>) -> Result<String, String> {
+    pub(crate) fn run(
+        catalog: &ToolCatalog,
+        root: &Path,
+        args: Vec<OsString>,
+    ) -> Result<String, String> {
         let exec = PinnedToolExec::new(vec![PinnedTool::Gh], OsStr::new("gh"), args);
         let exec = exec.map_err(|err| err.to_string())?;
         let output = exec

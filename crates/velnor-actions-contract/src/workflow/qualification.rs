@@ -207,6 +207,41 @@ pub fn validate_candidate_report_id(value: &str) -> Result<(), ContractError> {
 impl FinalReport {
     /// Report schema version.
     pub const SCHEMA: u32 = 1;
+    /// Honest verdict when no plan exists: `planning_failed`, zero counts.
+    ///
+    /// Job results must arrive sorted by job ID; expected/downloaded lists
+    /// stay empty because nothing was scheduled or fetched.
+    /// # Errors
+    pub fn without_plan(
+        run_key: &str,
+        required_job_results: Vec<RequiredJobResult>,
+    ) -> Result<Self, ContractError> {
+        validate_run_key(run_key)?;
+        let mut jobs = required_job_results;
+        jobs.sort_by(|left, right| left.job_id.cmp(&right.job_id));
+        Ok(Self {
+            schema: Self::SCHEMA,
+            report_id: final_report_id_for_run(run_key)?,
+            run_key: run_key.to_owned(),
+            plan_id: crate::ids::plan_id_for_run(run_key)?,
+            expected_report_ids: Vec::new(),
+            downloaded_artifact_ids: Vec::new(),
+            required_job_results: jobs,
+            status: FinalStatus::PlanningFailed,
+            counts: FinalCounts {
+                selected: 0,
+                reused: 0,
+                executed: 0,
+                empty_partition: 0,
+                covered: 0,
+                failed: 0,
+                cancelled: 0,
+                blocked: 0,
+                not_run: 0,
+            },
+            miss_reasons: Vec::new(),
+        })
+    }
     /// Validate schema, derived IDs, sorting, and artifact names.
     /// # Errors
     pub fn validate(&self) -> Result<(), ContractError> {

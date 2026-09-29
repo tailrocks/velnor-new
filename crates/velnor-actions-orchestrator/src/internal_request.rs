@@ -6,8 +6,9 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::{
-    FinalStatus, MATRIX_JSON_FILENAME, PLAN_JSON_FILENAME, WorkflowEvent, canonical_json_bytes,
-    canonical_json_str, matrix_json_bytes, plan_json_bytes, run_key_for_ci, validate_run_key,
+    FINAL_JSON_FILENAME, FinalStatus, MATRIX_JSON_FILENAME, PLAN_JSON_FILENAME, WorkflowEvent,
+    canonical_json_bytes, canonical_json_str, matrix_json_bytes, plan_json_bytes, run_key_for_ci,
+    validate_run_key,
 };
 
 use crate::OrchestratorError;
@@ -212,6 +213,32 @@ pub(crate) fn write_plan_files(
     write_new(&dir.join(PLAN_JSON_FILENAME), &plan)?;
     write_new(&dir.join(MATRIX_JSON_FILENAME), &matrix)?;
     Ok(())
+}
+
+/// Publish `final-report.json` for the final artifact.
+///
+/// Contract §3 fixes the verdict file under `<velnor-dir>/<run-key>/`
+/// (the merge step passes `$RUNNER_TEMP/velnor`), which `Publish final
+/// report` uploads; without it the upload fails with no-files-found.
+/// Runs for every verdict, passing or not, before the exit-code check.
+///
+/// # Errors
+///
+/// Returns [`OrchestratorError::Internal`] for malformed responses and
+/// [`OrchestratorError::Io`] for unwritable directories.
+pub fn publish_final_report(
+    response_json: &str,
+    velnor_dir: &Path,
+) -> Result<PathBuf, OrchestratorError> {
+    let report: velnor_actions_contract::FinalReport =
+        serde_json::from_str(response_json).map_err(|_| internal("malformed_response"))?;
+    check_schema(report.schema)?;
+    let dir = plan_artifact_dir(velnor_dir, &report.run_key)?;
+    fs::create_dir_all(&dir)
+        .map_err(|err| OrchestratorError::io(dir.display().to_string(), err.to_string()))?;
+    let bytes = canonical_json_bytes(&report).map_err(internal_contract)?;
+    write_new(&dir.join(FINAL_JSON_FILENAME), &bytes)?;
+    Ok(dir)
 }
 
 /// Exclusively write one artifact file; a pre-existing file errors.

@@ -13,6 +13,8 @@ use crate::workflow::plan::{Plan, PlanMatrix};
 pub const PLAN_JSON_FILENAME: &str = "plan.json";
 /// Matrix document filename inside the plan artifact.
 pub const MATRIX_JSON_FILENAME: &str = "matrix.json";
+/// Final verdict filename written by merge, uploaded by the final job.
+pub const FINAL_JSON_FILENAME: &str = "final-report.json";
 
 /// Render the canonical `plan.json` bytes for a validated plan.
 /// # Errors

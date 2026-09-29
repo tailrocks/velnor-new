@@ -5,7 +5,7 @@ use std::fs;
 use tempfile::TempDir;
 use velnor_actions_orchestrator::{GenerateOptions, generate, plan_text, prepare};
 
-use super::impl_common::{TestResult, config_with_branch, make_repo};
+use super::impl_common::{TestResult, config_with_branch, make_repo, plan_for_source_change};
 
 /// Preview `velnor.yml` text for one config; temps keep the dirs alive.
 fn preview_yml(config: &str) -> Result<(TempDir, TempDir, String), Box<dyn std::error::Error>> {
@@ -37,7 +37,13 @@ fn matrix_yaml_shape_exact() -> TestResult {
     ] {
         assert!(text.contains(line), "missing {line}:\n{text}");
     }
-    assert!(!text.contains("VELNOR_MATRIX_"), "marker stripped:\n{text}");
+    for marker in [
+        "VELNOR_MATRIX_NEEDS_JOB",
+        "VELNOR_MATRIX_OUTPUT",
+        "VELNOR_MATRIX_MAX_PARALLEL",
+    ] {
+        assert!(!text.contains(marker), "marker stripped:\n{text}");
+    }
     Ok(())
 }
 
@@ -90,5 +96,36 @@ fn task_consumes_matrix_context() -> TestResult {
         assert!(text.contains(want), "missing {want}:\n{text}");
     }
     assert!(!text.contains("(default)"), "no per-group steps:\n{text}");
+    Ok(())
+}
+
+#[test]
+fn planned_entries_carry_leg_command_and_digest() -> TestResult {
+    let (_repo, plan) = plan_for_source_change()?;
+    assert!(!plan.matrix.include.is_empty(), "fixture must select work");
+    for entry in &plan.matrix.include {
+        assert!(!entry.run.is_empty(), "empty run for {}", entry.id);
+        assert!(
+            !entry.run.contains(['\n', '\r', '\0']),
+            "multiline run for {}",
+            entry.id
+        );
+        assert!(
+            entry.run.starts_with("mise "),
+            "unpinned run for {}: {}",
+            entry.id,
+            entry.run
+        );
+        let obligation = plan
+            .obligations
+            .iter()
+            .find(|ob| ob.task_id == entry.task_id)
+            .ok_or_else(|| std::io::Error::other("entry without obligation"))?;
+        assert_eq!(
+            entry.task_digest, obligation.task_digest,
+            "digest mismatch for {}",
+            entry.id
+        );
+    }
     Ok(())
 }

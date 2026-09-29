@@ -331,3 +331,33 @@ fn empty_plan_merges_no_work() -> TestResult {
     ));
     Ok(())
 }
+
+#[test]
+fn missing_plan_merges_to_planning_failed() -> TestResult {
+    let request = serde_json::json!({
+        "schema": 1,
+        "run_key": "local",
+        "plan": null,
+        "matrix": null,
+        "matrix_reports": [],
+        "required_jobs": [{"job_id": "velnor-plan", "conclusion": "failure"}],
+    });
+    let final_report = merge(&request)?;
+    final_report.validate()?;
+    assert_eq!(final_report.status, FinalStatus::PlanningFailed);
+    assert_eq!(final_report.report_id, "final-local");
+    assert!(final_report.expected_report_ids.is_empty());
+    assert_eq!(final_report.required_job_results.len(), 1);
+
+    // A missing matrix file with a present plan is also planning_failed.
+    let (_repo, plan) = plan_for_source_change()?;
+    let request = serde_json::json!({
+        "schema": 1,
+        "run_key": "local",
+        "plan": plan,
+        "matrix": null,
+        "matrix_reports": [],
+    });
+    assert_eq!(merge(&request)?.status, FinalStatus::PlanningFailed);
+    Ok(())
+}

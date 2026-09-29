@@ -32,6 +32,7 @@ mod plan;
 mod prepare;
 mod qualify;
 mod recommendations;
+mod retrieve_reports;
 mod root;
 pub mod schedule;
 mod select;
@@ -40,6 +41,7 @@ mod select_edges;
 mod source_prep;
 mod toolcheck;
 mod toolfindings;
+mod utf8;
 mod validate;
 mod validate_shell;
 mod validate_zizmor;
@@ -67,8 +69,8 @@ pub use generate::{GenerateOptions, GenerateReport, ToolSnapshot, generate, rend
 pub use init::{InitReport, init_config};
 pub use internal::{
     MERGE_OP, PLAN_OP, PlanOutputs, REQUEST_FILE_ENV, WRITE_REQUEST_OP, merge_passed,
-    plan_internal, plan_outputs, publish_plan_files, response_path_for, write_request,
-    write_request_parts,
+    plan_internal, plan_outputs, publish_final_report, publish_plan_files, response_path_for,
+    write_request, write_request_parts,
 };
 pub use merge::merge_internal;
 pub use merge_request::assemble_merge_request;
@@ -76,6 +78,7 @@ pub use pins::consumer_acquire_step_with_manifest;
 pub use plan::{plan_text, plan_text_checked};
 pub use prepare::{GenerationPreparation, prepare};
 pub use qualify::qualify_argv_staged;
+pub use retrieve_reports::{FETCH_OP, retrieve_reports};
 pub use root::resolve_root;
 pub use toolcheck::{TOOL_INPUT_PATHS, ToolInputCheck, ToolParse, check_tool_inputs};
 pub use toolfindings::{

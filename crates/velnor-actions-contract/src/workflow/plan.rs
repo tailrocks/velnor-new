@@ -1,5 +1,6 @@
 //! Schema-1 affected plan and generic matrix entries.
 use super::baseline::{BaselineProof, PlanBaseline};
+use super::cache_ids::EntryCacheIds;
 use super::execute::{ExecuteTaskIds, ExecuteTaskRef};
 use crate::canonical::{normalize_posix_path, validate_digest};
 use crate::config::{RUNNER_LABEL_CATALOG, RunnerSelection, VelnorConfig};
@@ -24,6 +25,10 @@ pub struct MatrixEntry {
     pub stack_id: String,
     /// Stable matrix task-group ID.
     pub task_id: String,
+    /// Fixed single-line shell command the leg executes (`matrix.run`).
+    pub run: String,
+    /// Obligation task digest binding the leg's reports (`b3-` + 64 hex).
+    pub task_digest: String,
     /// Opaque stack-adapter metadata.
     pub adapter_metadata: serde_json::Value,
     /// Executable obligations for this entry.
@@ -43,21 +48,6 @@ pub struct MatrixEntry {
     /// Per-shard test-run refs; empty for non-test entries (par §8).
     #[serde(default)]
     pub test_run: Vec<ExecuteTaskRef>,
-}
-/// Workspace/lane/platform/toolchain/format digests for one entry.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct EntryCacheIds {
-    /// Workspace identity digest.
-    pub workspace_id: String,
-    /// Lane identity digest.
-    pub lane_id: String,
-    /// Platform identity digest.
-    pub platform_id: String,
-    /// Toolchain identity digest.
-    pub toolchain_id: String,
-    /// Cache-format identity digest.
-    pub cache_format_id: String,
 }
 /// Schema-1 affected plan.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -192,9 +182,15 @@ pub struct PlanMatrix {
 impl MatrixEntry {
     /// Build an entry, deriving `id`, `matrix_key`, `report_id`, `artifact_id`.
     /// # Errors
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "entry identity needs all eight inputs at once"
+    )]
     pub fn derive(
         stack_id: &str,
         task_group_id: &str,
+        run: &str,
+        task_digest: &str,
         adapter_metadata: serde_json::Value,
         execute_task_ids: ExecuteTaskIds,
         input_digest: &str,
@@ -204,6 +200,8 @@ impl MatrixEntry {
         let matrix_key = matrix_key_for_id(&id)?;
         validate_run_key(run_key)?;
         validate_digest(input_digest)?;
+        validate_matrix_run(run)?;
+        validate_digest(task_digest)?;
         execute_task_ids.validate()?;
         Ok(Self {
             report_id: report_id_for_matrix(run_key, &matrix_key)?,
@@ -212,6 +210,8 @@ impl MatrixEntry {
             matrix_key,
             stack_id: stack_id.to_owned(),
             task_id: task_group_id.to_owned(),
+            run: run.to_owned(),
+            task_digest: task_digest.to_owned(),
             adapter_metadata,
             execute_task_ids,
             input_digest: input_digest.to_owned(),
@@ -236,6 +236,8 @@ impl MatrixEntry {
             return Err(ContractError::identity("artifact_id", "artifact_mismatch"));
         }
         validate_digest(&self.input_digest)?;
+        validate_matrix_run(&self.run)?;
+        validate_digest(&self.task_digest)?;
         self.execute_task_ids.validate()?;
         for output in &self.declared_outputs {
             normalize_posix_path(output)?;
@@ -252,22 +254,6 @@ impl MatrixEntry {
         let expect_id = matrix_id_for_task_group(&self.stack_id, &self.task_id)?;
         if expect_id != self.id {
             return Err(ContractError::identity("id", "id_mismatch"));
-        }
-        Ok(())
-    }
-}
-impl EntryCacheIds {
-    /// Validate every recorded cache identity digest.
-    /// # Errors
-    pub fn validate(&self) -> Result<(), ContractError> {
-        for value in [
-            self.workspace_id.as_str(),
-            self.lane_id.as_str(),
-            self.platform_id.as_str(),
-            self.toolchain_id.as_str(),
-            self.cache_format_id.as_str(),
-        ] {
-            validate_digest(value)?;
         }
         Ok(())
     }
@@ -358,6 +344,21 @@ impl PlanObligation {
         Ok(())
     }
 }
+/// Validate one leg command: nonempty single line (GITHUB_OUTPUT-safe).
+/// # Errors
+pub fn validate_matrix_run(value: &str) -> Result<(), ContractError> {
+    if value.is_empty() {
+        return Err(ContractError::identity("run", "empty_run"));
+    }
+    if value
+        .chars()
+        .any(|ch| ch == '\0' || ch == '\n' || ch == '\r')
+    {
+        return Err(ContractError::identity("run", "multiline_run"));
+    }
+    Ok(())
+}
+
 /// Check `task_ids` contains every obligation ID, nothing else (wf §4).
 fn check_obligation_agreement(
     task_ids: &[String],

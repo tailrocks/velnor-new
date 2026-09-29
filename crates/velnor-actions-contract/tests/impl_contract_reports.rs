@@ -269,6 +269,8 @@ fn reports_validate_only_when_matrix_id_matches_entry() -> Result<(), ContractEr
     let entry = MatrixEntry::derive(
         "rust",
         "stack/rust/crates/velnor-actions-contract/validation/default",
+        "mise exec --no-config rust@1.98.1 -- cargo clippy --locked",
+        &digest_b3(b"task-bytes"),
         serde_json::json!({"manifest": "crates/velnor-actions-contract/Cargo.toml"}),
         ExecuteTaskIds { tasks },
         &digest_b3(b"entry-inputs"),
@@ -334,5 +336,31 @@ fn reports_validate_only_when_matrix_id_matches_entry() -> Result<(), ContractEr
     let mut bad_matrix = matrix.clone();
     bad_matrix.matrix_id = other;
     assert!(bad_matrix.validate().is_err());
+    Ok(())
+}
+
+#[test]
+fn final_without_plan_is_planning_failed() -> Result<(), ContractError> {
+    let run_key = run_key_for_ci(9, 3);
+    let jobs = vec![
+        RequiredJobResult {
+            job_id: "velnor-plan".to_owned(),
+            conclusion: "failure".to_owned(),
+        },
+        RequiredJobResult {
+            job_id: "velnor-alint".to_owned(),
+            conclusion: "success".to_owned(),
+        },
+    ];
+    let report = FinalReport::without_plan(&run_key, jobs)?;
+    report.validate()?;
+    assert_eq!(report.status, FinalStatus::PlanningFailed);
+    assert_eq!(report.report_id, format!("final-{run_key}"));
+    assert_eq!(report.plan_id, format!("plan-{run_key}"));
+    assert!(report.expected_report_ids.is_empty());
+    assert!(report.downloaded_artifact_ids.is_empty());
+    assert_eq!(report.required_job_results[0].job_id, "velnor-alint");
+    assert_eq!(report.counts.selected, 0);
+    assert!(FinalReport::without_plan("bogus", Vec::new()).is_err());
     Ok(())
 }
