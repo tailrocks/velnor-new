@@ -29,7 +29,10 @@ default_branch = "main"                 # Push branch override; required: action
 # ignore = []                           # Example: ["rust"].
 
 # Optional Rust task configuration. The Rust detector is automatic in V1.
-# [stacks.rust]
+[stacks.rust]
+# Declared dogfood profile (sticky across regenerations; see Gap C).
+compile_driver = "mbx"
+test_runner = "cargo_nextest"
 # configurations = [{ name = "default", features = ["default"], target = "host" }]
 
 # Optional repository-relative POSIX globs excluded before detector input.
