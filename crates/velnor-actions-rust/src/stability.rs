@@ -4,7 +4,8 @@
 //! generated header's recorded profile for stability comparison only: when
 //! durable evidence vanished purely because Velnor replaced a hand-written
 //! workflow, the orchestrator warns (GAP-C.2 fallback) instead of silently
-//! flipping Cargo↔MBX or test↔Nextest. Nothing here produces [`Evidence`].
+//! flipping Cargo↔MBX or test↔Nextest. Nothing here produces
+//! [`Evidence`](crate::evidence::Evidence).
 
 use crate::evidence::is_generated_output;
 use crate::scan::{has_adjacent, has_command, strip_comment};

@@ -345,6 +345,45 @@ fn w1_pr_workflows_carry_no_msrv() -> TestResult {
     Ok(())
 }
 
+/// Trimmed `env:` line starting with `key` inside one rendered step block.
+fn env_line<'a>(block: &'a str, key: &str) -> Result<&'a str, &'static str> {
+    for line in block.lines() {
+        if line.trim().starts_with(key) {
+            return Ok(line.trim());
+        }
+    }
+    Err("env line")
+}
+
+#[test]
+fn w1_task_prepare_and_run_share_toolchain_union() -> TestResult {
+    let (_repo, yaml, _alint) = preview_both(config_with_branch())?;
+    let task = window(&yaml, "  velnor-task:", "  velnor-workflow-lint:")?;
+    let prepare_at = task.find("- name: Prepare pinned tools").ok_or("prepare")?;
+    let run_at = task.find("- name: Run task").ok_or("run task")?;
+    let catalog = ToolCatalog::pinned();
+    for tool in [
+        PinnedTool::Actionlint,
+        PinnedTool::Shellcheck,
+        PinnedTool::Zizmor,
+    ] {
+        let spec = catalog.tool_spec(tool);
+        assert!(
+            task[prepare_at..run_at].contains(&spec),
+            "prepare misses {spec}:\n{task}"
+        );
+    }
+    for key in ["MISE_RUSTUP_HOME:", "MISE_CARGO_HOME:", "RUSTUP_TOOLCHAIN:"] {
+        let line = env_line(&task[run_at..], key)?;
+        assert_eq!(
+            env_line(&task[prepare_at..run_at], key)?,
+            line,
+            "{key}:\n{task}"
+        );
+    }
+    Ok(())
+}
+
 #[test]
 fn w1_task_cache_v1_emits_no_cache_steps() -> TestResult {
     let (_repo, yaml, _alint) = preview_both(config_with_branch())?;

@@ -26,7 +26,7 @@ pub use velnor_actions_workflow_renderer::steps::FETCH_OPERATION as FETCH_OP;
 ///
 /// Resolves the run ID from `GITHUB_RUN_ID` and the run directory from
 /// `RUNNER_TEMP/velnor/<run-key>`, then delegates to
-/// [`retrieve_reports_to`]. Returns the count of artifacts downloaded.
+/// `retrieve_reports_to`. Returns the count of artifacts downloaded.
 ///
 /// # Errors
 ///

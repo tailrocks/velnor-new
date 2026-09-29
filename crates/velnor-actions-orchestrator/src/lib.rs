@@ -3,7 +3,7 @@
 //! Composes the contract, Rust, Mise, actionlint, and workflow-renderer
 //! adapters. This crate launches no child invocations, builds no fixed
 //! vectors itself, and assembles no workflow text: execution belongs to
-//! Mise, vectors to [`vectors`] via Mise requests, text to the renderer.
+//! Mise, vectors to `vectors` via Mise requests, text to the renderer.
 
 mod attach;
 mod clippy_groups;

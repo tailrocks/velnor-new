@@ -3,7 +3,7 @@
 //! Verifies Rust, the selected compile driver, the selected test
 //! runner, the target, and the runner platform, and reports optional
 //! advisory tool-file findings. The compile route is proven through
-//! [`prove_route`](crate::preflight::prove_route); probes are identity
+//! [`prove_route`]; probes are identity
 //! invocations (`--version`), never builds. Findings arrive validated
 //! from the owning adapters; this step only reports them.
 

@@ -155,9 +155,7 @@ pub(crate) fn final_job(
     catalog: &ToolCatalog,
 ) -> Result<Job, OrchestratorError> {
     let mut needs = vec![PLAN_JOB_ID.to_owned()];
-    if with_task {
-        needs.push(TASK_JOB_ID.to_owned());
-    }
+    needs.extend(with_task.then_some(TASK_JOB_ID.to_owned()));
     needs.push(LINT_JOB_ID.to_owned());
     let mut steps = Vec::new();
     steps.extend(acquire);
@@ -181,17 +179,13 @@ pub(crate) fn final_job(
 /// follows `PinnedTool::ALL`.
 fn plan_tools(use_mbx: bool, use_nextest: bool) -> Vec<PinnedTool> {
     let mut tools = vec![PinnedTool::Rust];
-    if use_mbx {
-        tools.push(PinnedTool::MrBoxington);
-    }
+    tools.extend(use_mbx.then_some(PinnedTool::MrBoxington));
     tools.extend([
         PinnedTool::Actionlint,
         PinnedTool::Shellcheck,
         PinnedTool::Zizmor,
     ]);
-    if use_nextest {
-        tools.push(PinnedTool::Nextest);
-    }
+    tools.extend(use_nextest.then_some(PinnedTool::Nextest));
     tools
 }
 
@@ -235,43 +229,49 @@ fn checkout_action() -> Result<Step, OrchestratorError> {
 
 /// Fixed matrix-entry template: run the command, always write reports.
 ///
-/// Missing `matrix.run`/`matrix.task_digest` fail the leg via `${VAR:?...}`
-/// instead of a silent no-op. Matrix context arrives via env only, keeping
-/// `run:` free of `${{ }}` for shellcheck and template-injection scans.
-pub(crate) fn matrix_task_step(max_parallel_jobs: u32) -> Step {
-    use velnor_actions_workflow_renderer::task_steps as legs;
-    let env = BTreeMap::from([
-        (
-            legs::LEG_TASK_ID_ENV.to_owned(),
-            "${{ matrix.task_id }}".to_owned(),
-        ),
-        (
-            legs::LEG_TASK_RUN_ENV.to_owned(),
-            "${{ matrix.run }}".to_owned(),
-        ),
-        (
-            legs::LEG_TASK_DIGEST_ENV.to_owned(),
-            "${{ matrix.task_digest }}".to_owned(),
-        ),
-        (
-            legs::LEG_MATRIX_KEY_ENV.to_owned(),
-            "${{ matrix.matrix_key }}".to_owned(),
-        ),
-        (
-            legs::LEG_MATRIX_ID_ENV.to_owned(),
-            "${{ matrix.id }}".to_owned(),
-        ),
-        (
-            legs::LEG_EVENT_ENV.to_owned(),
-            "${{ github.event_name }}".to_owned(),
-        ),
-        (MATRIX_NEEDS_JOB_ENV.to_owned(), PLAN_JOB_ID.to_owned()),
-        (MATRIX_OUTPUT_ENV.to_owned(), MATRIX_OUTPUT_NAME.to_owned()),
-        (
-            MATRIX_MAX_PARALLEL_ENV.to_owned(),
-            max_parallel_jobs.to_string(),
-        ),
-    ]);
+/// Missing `matrix.run`/`matrix.task_digest` fail the leg via `${VAR:?...}`; env carries
+/// matrix context plus the owned-homes triple, keeping `run:` free of `${{ }}` for scans.
+pub(crate) fn matrix_task_step(max_parallel_jobs: u32, catalog: &ToolCatalog) -> Step {
+    use velnor_actions_workflow_renderer::{task_steps as legs, toolchain_env};
+    let homes = ToolHomes::runner_temp();
+    let toolchain = catalog.rustup_toolchain();
+    let env = toolchain_env::with_toolchain_homes(
+        &BTreeMap::from([
+            (
+                legs::LEG_TASK_ID_ENV.to_owned(),
+                "${{ matrix.task_id }}".to_owned(),
+            ),
+            (
+                legs::LEG_TASK_RUN_ENV.to_owned(),
+                "${{ matrix.run }}".to_owned(),
+            ),
+            (
+                legs::LEG_TASK_DIGEST_ENV.to_owned(),
+                "${{ matrix.task_digest }}".to_owned(),
+            ),
+            (
+                legs::LEG_MATRIX_KEY_ENV.to_owned(),
+                "${{ matrix.matrix_key }}".to_owned(),
+            ),
+            (
+                legs::LEG_MATRIX_ID_ENV.to_owned(),
+                "${{ matrix.id }}".to_owned(),
+            ),
+            (
+                legs::LEG_EVENT_ENV.to_owned(),
+                "${{ github.event_name }}".to_owned(),
+            ),
+            (MATRIX_NEEDS_JOB_ENV.to_owned(), PLAN_JOB_ID.to_owned()),
+            (MATRIX_OUTPUT_ENV.to_owned(), MATRIX_OUTPUT_NAME.to_owned()),
+            (
+                MATRIX_MAX_PARALLEL_ENV.to_owned(),
+                max_parallel_jobs.to_string(),
+            ),
+        ]),
+        homes.rustup_home(),
+        homes.cargo_home(),
+        &toolchain,
+    );
     Step {
         name: "Run task".to_owned(),
         kind: StepKind::Shell {
