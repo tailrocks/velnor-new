@@ -1,0 +1,78 @@
+//! Plan-job `Format` step (workflow contract §3 plan step 5).
+//!
+//! Formatting runs in `velnor-plan` per selected stack config through
+//! pinned Mise; the fixed argv arrives from the orchestrator's Mise
+//! vectors. The renderer validates the Mise shape and anchors the step
+//! between helper staging and the freshness/plan closure.
+
+use std::collections::BTreeMap;
+
+use velnor_actions_contract::{Job, Step, StepKind};
+
+use crate::{RenderError, closure, render::PLAN_JOB_ID, steps};
+
+/// Contract-fixed display name of the plan format step.
+pub const FORMAT_STEP_NAME: &str = "Format";
+
+/// Fixed `Format` step over orchestrator-supplied Mise argv.
+///
+/// The vector must start with `mise`: plan formatting runs through
+/// pinned Mise, never a bare toolchain or ad-hoc installer.
+/// # Errors
+pub fn format_step(argv: Vec<String>) -> Result<Step, RenderError> {
+    if argv.first().is_none_or(|program| program != "mise") {
+        return Err(RenderError::BadCommand("format_without_mise".to_owned()));
+    }
+    steps::shell_step(FORMAT_STEP_NAME, argv, BTreeMap::new())
+}
+
+/// Insert `Format` into the plan job between staging and freshness.
+///
+/// Anchors before the freshness check when present, else before the
+/// `plan-v1` step, else before plan publish; without a plan job there is
+/// nothing to close over. Re-running never duplicates the step.
+/// # Errors
+pub fn ensure_plan_format(
+    jobs: &mut BTreeMap<String, Job>,
+    argv: Vec<String>,
+) -> Result<(), RenderError> {
+    let Some(plan) = jobs.get_mut(PLAN_JOB_ID) else {
+        return Ok(());
+    };
+    if let Some(format) = plan.steps.iter().find(|step| step.name == FORMAT_STEP_NAME) {
+        return check_format_shape(format);
+    }
+    let step = format_step(argv)?;
+    let at = format_insert_at(plan);
+    plan.steps.insert(at, step);
+    Ok(())
+}
+
+/// Reject present-but-malformed `Format` steps (non-shell payloads).
+fn check_format_shape(format: &Step) -> Result<(), RenderError> {
+    if matches!(format.kind, StepKind::Shell { .. }) {
+        Ok(())
+    } else {
+        Err(RenderError::InvalidWorkflow(
+            "format_step_malformed".to_owned(),
+        ))
+    }
+}
+
+/// Insert before freshness, else plan, else publish, else at the end.
+fn format_insert_at(plan: &Job) -> usize {
+    plan.steps
+        .iter()
+        .position(|step| step.name == closure::CHECK_GENERATED_NAME)
+        .or_else(|| {
+            plan.steps.iter().position(|step| {
+                matches!(&step.kind, StepKind::Internal { operation } if operation == steps::PLAN_OPERATION)
+            })
+        })
+        .or_else(|| {
+            plan.steps
+                .iter()
+                .position(|step| step.name == closure::PUBLISH_PLAN_NAME)
+        })
+        .unwrap_or(plan.steps.len())
+}

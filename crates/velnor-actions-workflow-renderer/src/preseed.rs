@@ -13,6 +13,7 @@ use velnor_actions_contract::{Job, Step};
 
 use crate::{
     RenderError,
+    artifact_paths::{PRESEED_OUTPUT_DIR_EXPR, PRESEED_STAGE_DIR_EXPR},
     render::{FINAL_JOB_ID, PLAN_JOB_ID, TASK_JOB_ID},
     steps,
 };
@@ -20,8 +21,12 @@ use crate::{
 /// Exact pre-seed helper artifact name (run-scoped, no wildcards).
 pub const PRESEED_ARTIFACT_NAME: &str = "velnor-preseed-helper";
 /// Directory holding the built helper binary plus its manifest.
+///
+/// Shell `run:` spelling only; the upload input uses [`PRESEED_OUTPUT_DIR_EXPR`].
 pub const PRESEED_OUTPUT_DIR: &str = "$RUNNER_TEMP/velnor/preseed-output";
 /// Directory receiving the downloaded pre-seed helper.
+///
+/// Shell `run:` spelling only; the download input uses [`PRESEED_STAGE_DIR_EXPR`].
 pub const PRESEED_STAGE_DIR: &str = "$RUNNER_TEMP/velnor/preseed";
 /// Manifest filename inside the pre-seed artifact.
 pub const PRESEED_MANIFEST_FILE: &str = "preseed-manifest.json";
@@ -165,13 +170,13 @@ fn is_exact_version(version: &str) -> bool {
 ///
 /// Emits exactly the §4.4 keys: recorded source commit, target triple,
 /// toolchain identity, and binary SHA-256 (computed at runtime). The script
-/// carries NO single quotes (double-quoted printf format, `read` instead
-/// of `cut`): inner quotes would break whole-script quoting and expose
-/// `$sha` to shellcheck as SC2154.
+/// carries NO single quotes (double-quoted printf format with shell-escaped
+/// inner quotes, `read` instead of `cut`): inner quotes would break
+/// whole-script quoting and expose `$sha` to shellcheck as SC2154.
 #[must_use]
 pub fn preseed_manifest_script(target: &str, toolchain: &str) -> String {
     format!(
-        "mkdir -p {PRESEED_OUTPUT_DIR} && cp {PRESEED_BUILD_OUTPUT} {PRESEED_OUTPUT_DIR}/velnor-actions && sha256sum {PRESEED_OUTPUT_DIR}/velnor-actions > {PRESEED_OUTPUT_DIR}/sha.txt && read sha rest < {PRESEED_OUTPUT_DIR}/sha.txt && printf \"{{\"schema\":1,\"commit\":\"%s\",\"target\":\"{target}\",\"toolchain\":\"{toolchain}\",\"sha256\":\"%s\"}}\" \"$GITHUB_SHA\" \"$sha\" > {PRESEED_OUTPUT_DIR}/{PRESEED_MANIFEST_FILE}"
+        "mkdir -p {PRESEED_OUTPUT_DIR} && cp {PRESEED_BUILD_OUTPUT} {PRESEED_OUTPUT_DIR}/velnor-actions && sha256sum {PRESEED_OUTPUT_DIR}/velnor-actions > {PRESEED_OUTPUT_DIR}/sha.txt && read sha rest < {PRESEED_OUTPUT_DIR}/sha.txt && printf \"{{\\\"schema\\\":1,\\\"commit\\\":\\\"%s\\\",\\\"target\\\":\\\"{target}\\\",\\\"toolchain\\\":\\\"{toolchain}\\\",\\\"sha256\\\":\\\"%s\\\"}}\" \"$GITHUB_SHA\" \"$sha\" > {PRESEED_OUTPUT_DIR}/{PRESEED_MANIFEST_FILE}"
     )
 }
 
@@ -205,7 +210,7 @@ pub fn preseed_upload_step() -> Result<Step, RenderError> {
         steps::UPLOAD_ARTIFACT_USES,
         std::collections::BTreeMap::from([
             ("name".to_owned(), PRESEED_ARTIFACT_NAME.to_owned()),
-            ("path".to_owned(), PRESEED_OUTPUT_DIR.to_owned()),
+            ("path".to_owned(), PRESEED_OUTPUT_DIR_EXPR.to_owned()),
             ("if-no-files-found".to_owned(), "error".to_owned()),
         ]),
     )
@@ -220,7 +225,7 @@ pub fn preseed_download_step() -> Result<Step, RenderError> {
         steps::DOWNLOAD_ARTIFACT_USES,
         std::collections::BTreeMap::from([
             ("name".to_owned(), PRESEED_ARTIFACT_NAME.to_owned()),
-            ("path".to_owned(), PRESEED_STAGE_DIR.to_owned()),
+            ("path".to_owned(), PRESEED_STAGE_DIR_EXPR.to_owned()),
         ]),
     )
 }

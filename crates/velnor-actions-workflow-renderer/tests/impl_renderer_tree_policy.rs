@@ -22,7 +22,7 @@ fn fixture_ctx() -> RenderContext {
         generator_version: VERSION.to_owned(),
         runs_on: LABEL.to_owned(),
         staged_binary: format!("$RUNNER_TEMP/velnor/bin/velnor-actions-{VERSION}"),
-        request_dir: "$RUNNER_TEMP/velnor/r1-a1".to_owned(),
+        request_dir: "${{ runner.temp }}/velnor/r1-a1".to_owned(),
         checkout_uses: checkout_pin(),
         policy_commands: Vec::new(),
         candidate: None,

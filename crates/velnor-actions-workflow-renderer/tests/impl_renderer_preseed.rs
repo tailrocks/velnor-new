@@ -85,11 +85,11 @@ fn preseed_templates_carry_trust_mark_and_exact_artifact() -> Result<(), RenderE
     }
     let script = preseed_manifest_script(TARGET, "rust@1.98.1");
     for key in [
-        "\"schema\":1",
-        "\"commit\":",
-        "\"target\":",
-        "\"toolchain\":",
-        "\"sha256\":",
+        "\\\"schema\\\":1",
+        "\\\"commit\\\":",
+        "\\\"target\\\":",
+        "\\\"toolchain\\\":",
+        "\\\"sha256\\\":",
     ] {
         assert!(script.contains(key), "manifest misses {key}: {script}");
     }
@@ -111,6 +111,33 @@ fn preseed_templates_carry_trust_mark_and_exact_artifact() -> Result<(), RenderE
         "unstaged path accepted"
     );
     Ok(())
+}
+
+#[test]
+fn preseed_manifest_printf_unescapes_to_valid_json() {
+    let script = preseed_manifest_script(TARGET, "rust@1.98.1");
+    assert!(
+        !script.contains("\"{\""),
+        "bare-quote printf the shell eats: {script}"
+    );
+    let after_printf = script.split_once("printf \"").expect("printf invocation").1;
+    let head = after_printf
+        .split_once("\"$GITHUB_SHA\"")
+        .expect("format end")
+        .0;
+    let format = head
+        .strip_suffix(' ')
+        .expect("trailing space")
+        .strip_suffix('"')
+        .expect("closing quote");
+    assert!(
+        !format.replace("\\\"", "").contains('\\'),
+        "stray escape in format: {format}"
+    );
+    assert_eq!(
+        format.replace("\\\"", "\""),
+        "{\"schema\":1,\"commit\":\"%s\",\"target\":\"x86_64-unknown-linux-gnu\",\"toolchain\":\"rust@1.98.1\",\"sha256\":\"%s\"}"
+    );
 }
 
 #[test]

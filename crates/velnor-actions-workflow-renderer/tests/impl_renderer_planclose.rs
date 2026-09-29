@@ -157,7 +157,7 @@ fn uploads_carry_if_always_and_downloads_do_not() -> Result<(), RenderError> {
     assert!(window.contains("if: always()"), "publish if:\n{window}");
     let download = velnor_actions_workflow_renderer::steps::download_artifact_step(
         "some-artifact",
-        "$RUNNER_TEMP/x",
+        "${{ runner.temp }}/x",
     )?;
     let polling = job(
         "velnor-poll",

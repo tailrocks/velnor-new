@@ -34,7 +34,7 @@ pub(crate) fn fixture_ctx() -> RenderContext {
         generator_version: VERSION.to_owned(),
         runs_on: LABEL.to_owned(),
         staged_binary: STAGED.to_owned(),
-        request_dir: "$RUNNER_TEMP/velnor/r1-a1".to_owned(),
+        request_dir: "${{ runner.temp }}/velnor/r1-a1".to_owned(),
         checkout_uses: checkout_pin(),
         policy_commands: Vec::new(),
         candidate: None,

@@ -4,6 +4,7 @@
 //! subprocesses, no shell construction beyond quoting fixed argv, and no
 //! stack-specific logic: tool pins and command vectors arrive validated.
 
+mod artifact_paths;
 mod cache_steps;
 mod candidate;
 pub mod closure;
@@ -12,13 +13,21 @@ mod document;
 pub mod guard;
 pub mod marker;
 mod matrix;
+pub mod msrv;
+pub mod overlap;
+pub mod plan_format;
 pub mod preseed;
 pub mod render;
 pub mod setup;
 pub mod steps;
 mod support;
+pub mod task_steps;
 pub mod yaml;
 
+pub use artifact_paths::{
+    CANDIDATE_OUTPUT_DIR_EXPR, CANDIDATE_STAGE_DIR_EXPR, PRESEED_OUTPUT_DIR_EXPR,
+    PRESEED_STAGE_DIR_EXPR,
+};
 pub use closure::{
     CHECK_GENERATED_NAME, FRESHNESS_OUTDIR, HelperProvenance, PLAN_ARTIFACT_NAME,
     PLAN_ARTIFACT_PATH, PUBLISH_PLAN_NAME, SEED_REMEDIATION, freshness_step,
@@ -50,12 +59,12 @@ pub use render::{
 };
 pub use setup::{MISE_ACTION_NAME, SETUP_MISE_NAME, mise_setup_step};
 pub use steps::{
-    ACQUIRE_NAME, ASSET_SHA_ENV, ASSET_URL_ENV, DENY_STEP_NAME, FORBIDDEN_TOKENS, INTERNAL_OP_ENV,
-    MACHETE_STEP_NAME, MATRIX_REPORT_UPLOAD_NAME, MERGE_OPERATION, PLAN_OPERATION,
+    ACQUIRE_NAME, ASSET_SHA_ENV, ASSET_URL_ENV, CompileDriver, DENY_STEP_NAME, FORBIDDEN_TOKENS,
+    INTERNAL_OP_ENV, MACHETE_STEP_NAME, MATRIX_REPORT_UPLOAD_NAME, MERGE_OPERATION, PLAN_OPERATION,
     REQUEST_DIR_PREFIX, REQUEST_FILE_ENV, RUN_KEY_EXPR, STAGED_BINARY_PREFIX,
-    WRITE_REQUEST_OPERATION, acquire_velnor_step, action_step, checkout_step, internal_step,
-    matrix_report_upload_step, merge_step, plan_step, scan_for_private_subcommands, shell_step,
-    validate_uses, write_request_step,
+    WRITE_REQUEST_OPERATION, acquire_velnor_step, action_step, check_mbx_gating, checkout_step,
+    internal_step, matrix_report_upload_step, mbx_step_for_driver, merge_step, plan_step,
+    scan_for_private_subcommands, shell_step, validate_uses, write_request_step,
 };
 pub use yaml::{Yaml, quote_scalar, render_yaml};
 

@@ -12,7 +12,7 @@ use velnor_actions_workflow_renderer::{
 
 const VERSION: &str = "0.1.0";
 const LABEL: &str = "ubuntu-26.04";
-const REQUEST_DIR: &str = "$RUNNER_TEMP/velnor/request";
+const REQUEST_DIR: &str = "${{ runner.temp }}/velnor/request";
 
 fn checkout_pin() -> String {
     format!("actions/checkout@{:040x}", 0)
@@ -128,7 +128,7 @@ fn write_request_targets_known_ops_only() {
 
 #[test]
 fn download_reports_use_explicit_names() -> Result<(), RenderError> {
-    let step = download_artifact_step("velnor-plan-response", "$RUNNER_TEMP/velnor/request")?;
+    let step = download_artifact_step("velnor-plan-response", "${{ runner.temp }}/velnor/request")?;
     let ir = fixture_ir(vec![checkout_step(&checkout_pin())?, step]);
     let text = render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &fixture_ctx())?;
     assert!(text.contains("name: velnor-plan-response"));

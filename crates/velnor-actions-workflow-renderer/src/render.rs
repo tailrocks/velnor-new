@@ -13,8 +13,8 @@ use velnor_actions_contract::{
 };
 
 use crate::{
-    RenderError, cache_steps, closure, commands, document, guard, marker, matrix, preseed, setup,
-    steps, support, yaml::render_yaml,
+    RenderError, cache_steps, closure, commands, document, guard, marker, matrix, msrv, preseed,
+    setup, steps, support, yaml::render_yaml,
 };
 
 pub use crate::matrix::{
@@ -256,6 +256,7 @@ fn merged_jobs(
             support::merge_support_jobs(&mut jobs, support, ctx)?;
         }
     }
+    msrv::check_no_msrv(&jobs)?;
     support::check_candidate_invariants(&jobs)?;
     support::check_final_gate(&jobs)?;
     Ok(jobs)

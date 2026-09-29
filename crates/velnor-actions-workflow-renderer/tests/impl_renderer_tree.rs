@@ -22,7 +22,7 @@ fn fixture_ctx() -> RenderContext {
         generator_version: VERSION.to_owned(),
         runs_on: LABEL.to_owned(),
         staged_binary: format!("$RUNNER_TEMP/velnor/bin/velnor-actions-{VERSION}"),
-        request_dir: "$RUNNER_TEMP/velnor/r1-a1".to_owned(),
+        request_dir: "${{ runner.temp }}/velnor/r1-a1".to_owned(),
         checkout_uses: checkout_pin(),
         policy_commands: Vec::new(),
         candidate: None,
@@ -237,7 +237,7 @@ fn rendered_yaml_contains_no_private_subcommands() -> Result<(), RenderError> {
     }
     assert!(text.contains(&format!("{INTERNAL_OP_ENV}: plan-v1")));
     assert!(text.contains(&format!(
-        "{REQUEST_FILE_ENV}: $RUNNER_TEMP/velnor/r1-a1/plan-v1-request.json"
+        "{REQUEST_FILE_ENV}: ${{{{ runner.temp }}}}/velnor/r1-a1/plan-v1-request.json"
     )));
     assert!(text.contains("run: \"\\\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\\\"\""));
     assert!(!text.contains("run: $RUNNER_TEMP/velnor/bin/velnor-actions plan"));

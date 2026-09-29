@@ -269,7 +269,7 @@ fn emit_ctx() -> RenderContext {
         generator_version: EMIT_VERSION.to_owned(),
         runs_on: EMIT_LABEL.to_owned(),
         staged_binary: format!("{STAGED_BINARY_PREFIX}{EMIT_VERSION}"),
-        request_dir: "$RUNNER_TEMP/velnor/r1-a1".to_owned(),
+        request_dir: "${{ runner.temp }}/velnor/r1-a1".to_owned(),
         checkout_uses: pin("actions/checkout"),
         policy_commands: Vec::new(),
         candidate: None,

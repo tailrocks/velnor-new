@@ -39,6 +39,96 @@ pub const TOOLS_KEY_PREFIX: &str = "mise-tools-v1";
 /// Tool files hashed into the tools key (literal names, never globs).
 const TOOLS_KEY_FILES: &str = "'mise.toml','.mise.toml','mise.lock','.mise.lock','.tool-versions'";
 
+/// Detected Rust compile driver (task-execution contract profile).
+///
+/// The orchestrator maps the workspace's detected profile to this typed
+/// selector; the renderer never inspects evidence itself.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CompileDriver {
+    /// Cargo profile: MBX action and installation are absent.
+    Cargo,
+    /// MBX profile: the objects-mode action restores compiler objects.
+    Mbx,
+}
+
+/// MBX objects step only for MBX-selected profiles; Cargo yields none.
+///
+/// Workflow contract §3 emits `jdx/mr-boxington-action` only when the
+/// Rust detector selects MBX; Cargo legs carry neither the action nor
+/// the tool (task-execution contract prelude).
+/// # Errors
+pub fn mbx_step_for_driver(uses: &str, driver: CompileDriver) -> Result<Option<Step>, RenderError> {
+    match driver {
+        CompileDriver::Cargo => Ok(None),
+        CompileDriver::Mbx => mbx_objects_step(uses, false).map(Some),
+    }
+}
+
+/// Gate MBX action/tool presence against per-job driver selections.
+///
+/// Jobs without a declared driver are skipped (plan/final/lint carry
+/// none); declared Cargo jobs must be MBX-free while MBX jobs carry
+/// exactly one objects-mode step.
+/// # Errors
+pub fn check_mbx_gating(
+    jobs: &BTreeMap<String, Job>,
+    drivers: &BTreeMap<String, CompileDriver>,
+) -> Result<(), RenderError> {
+    for (id, driver) in drivers {
+        let Some(job) = jobs.get(id.as_str()) else {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "mbx_gating_unknown_job:{id}"
+            )));
+        };
+        check_job_mbx(id, job, *driver)?;
+    }
+    Ok(())
+}
+
+/// Enforce one job's MBX presence against its declared driver.
+fn check_job_mbx(id: &str, job: &Job, driver: CompileDriver) -> Result<(), RenderError> {
+    let actions = job.steps.iter().filter(|step| is_mbx_action(step)).count();
+    let tools = job
+        .steps
+        .iter()
+        .any(|step| uses_mbx_tool(step) && !is_mbx_action(step));
+    match driver {
+        CompileDriver::Cargo => {
+            if actions > 0 {
+                return Err(RenderError::InvalidWorkflow(format!(
+                    "mbx_action_without_selection:{id}"
+                )));
+            }
+            if tools {
+                return Err(RenderError::InvalidWorkflow(format!(
+                    "mbx_tool_without_selection:{id}"
+                )));
+            }
+        }
+        CompileDriver::Mbx => {
+            if actions == 0 {
+                return Err(RenderError::InvalidWorkflow(format!(
+                    "mbx_missing_for_selection:{id}"
+                )));
+            }
+            if actions > 1 {
+                return Err(RenderError::InvalidWorkflow(format!("mbx_duplicated:{id}")));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// True for `jdx/mr-boxington-action` steps.
+fn is_mbx_action(step: &Step) -> bool {
+    matches!(&step.kind, velnor_actions_contract::StepKind::Action { uses, .. } if uses.starts_with(&format!("{MBX_ACTION_NAME}@")))
+}
+
+/// True when shell argv invokes the `mbx` program or tool spec.
+fn uses_mbx_tool(step: &Step) -> bool {
+    matches!(&step.kind, velnor_actions_contract::StepKind::Shell { run, .. } if run.iter().any(|arg| arg == "mbx" || arg.contains("mr-boxington")))
+}
+
 /// Objects-mode MBX step; cargo profiles must never emit or install MBX.
 /// # Errors
 pub fn mbx_objects_step(uses: &str, cargo_profile: bool) -> Result<Step, RenderError> {

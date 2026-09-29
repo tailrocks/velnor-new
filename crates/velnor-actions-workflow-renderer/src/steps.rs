@@ -6,13 +6,13 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract::{Step, StepKind};
 
-use crate::{RenderError, commands, marker};
+use crate::{RenderError, artifact_paths, commands, marker};
 
 pub use crate::cache_steps::{
-    CACHE_RESTORE_NAME, CACHE_SAVE_NAME, MBX_ACTION_NAME, TARGET_DIR_PREFIX, TASK_ARTIFACTS_DIR,
-    TOOLS_CACHE_PATH, TOOLS_KEY_PREFIX, TOOLS_RESTORE_NAME, TOOLS_RESTORE_USES, TOOLS_SAVE_NAME,
-    TOOLS_SAVE_USES, cache_action_step, mbx_objects_step, target_dir_for_lane, tools_cache_key,
-    tools_restore_step, tools_save_step,
+    CACHE_RESTORE_NAME, CACHE_SAVE_NAME, CompileDriver, MBX_ACTION_NAME, TARGET_DIR_PREFIX,
+    TASK_ARTIFACTS_DIR, TOOLS_CACHE_PATH, TOOLS_KEY_PREFIX, TOOLS_RESTORE_NAME, TOOLS_RESTORE_USES,
+    TOOLS_SAVE_NAME, TOOLS_SAVE_USES, cache_action_step, check_mbx_gating, mbx_objects_step,
+    mbx_step_for_driver, target_dir_for_lane, tools_cache_key, tools_restore_step, tools_save_step,
 };
 
 /// Env key selecting the staged-binary internal operation.
@@ -27,8 +27,9 @@ pub const MERGE_OPERATION: &str = "merge-v1";
 pub const WRITE_REQUEST_OPERATION: &str = "write-request-v1";
 /// Required prefix of the digest-verified staged binary path.
 pub const STAGED_BINARY_PREFIX: &str = "$RUNNER_TEMP/velnor/bin/velnor-actions-";
-/// Required prefix of internal request directories.
-pub const REQUEST_DIR_PREFIX: &str = "$RUNNER_TEMP/velnor/";
+/// Required prefix of internal request directories (expression form: shell
+/// `$VAR` never expands in the `env:` position that carries this path).
+pub const REQUEST_DIR_PREFIX: &str = "${{ runner.temp }}/velnor/";
 /// Env key carrying the downloaded asset SHA-256.
 pub const ASSET_SHA_ENV: &str = "VELNOR_ASSET_SHA256";
 /// Env key carrying the downloaded asset URL.
@@ -46,8 +47,14 @@ pub const CANDIDATE_ARTIFACT_NAME: &str = "velnor-candidate";
 /// Candidate manifest filename inside the uploaded artifact.
 pub const CANDIDATE_MANIFEST_FILE: &str = "candidate-manifest.json";
 /// Directory holding the built candidate binary plus its manifest.
+///
+/// Shell `run:` spelling only; action inputs use
+/// [`crate::CANDIDATE_OUTPUT_DIR_EXPR`].
 pub const CANDIDATE_OUTPUT_DIR: &str = "$RUNNER_TEMP/velnor/candidate-output";
 /// Directory receiving the downloaded candidate for qualification.
+///
+/// Shell `run:` spelling only; action inputs and `env:` use
+/// [`crate::CANDIDATE_STAGE_DIR_EXPR`].
 pub const CANDIDATE_STAGE_DIR: &str = "$RUNNER_TEMP/velnor/candidate";
 /// Contract-fixed display name of the helper-staging step.
 pub const ACQUIRE_NAME: &str = "Acquire Velnor";
@@ -180,6 +187,7 @@ pub fn upload_artifact_step(name: &str, path: &str) -> Result<Step, RenderError>
     if name.trim().is_empty() || path.trim().is_empty() {
         return Err(RenderError::BadActionRef("empty_artifact_io".to_owned()));
     }
+    artifact_paths::check_artifact_path(path)?;
     action_step(
         "Upload candidate",
         UPLOAD_ARTIFACT_USES,
@@ -197,6 +205,7 @@ pub fn download_artifact_step(name: &str, path: &str) -> Result<Step, RenderErro
     if name.trim().is_empty() || path.trim().is_empty() {
         return Err(RenderError::BadActionRef("empty_artifact_io".to_owned()));
     }
+    artifact_paths::check_artifact_path(path)?;
     action_step(
         "Download candidate",
         DOWNLOAD_ARTIFACT_USES,

@@ -11,6 +11,7 @@ use velnor_actions_contract::Job;
 
 use crate::{
     RenderError,
+    artifact_paths::{CANDIDATE_OUTPUT_DIR_EXPR, CANDIDATE_STAGE_DIR_EXPR},
     closure::{FRESHNESS_OUTDIR, freshness_step},
     render::{CANDIDATE_JOB_ID, CandidateSpec, PLAN_JOB_ID, RenderContext},
     steps,
@@ -44,13 +45,10 @@ pub(crate) fn candidate_job(ctx: &RenderContext, spec: &CandidateSpec) -> Result
                 vec!["sh".to_owned(), "-c".to_owned(), manifest],
                 BTreeMap::new(),
             )?,
-            steps::upload_artifact_step(
-                steps::CANDIDATE_ARTIFACT_NAME,
-                steps::CANDIDATE_OUTPUT_DIR,
-            )?,
+            steps::upload_artifact_step(steps::CANDIDATE_ARTIFACT_NAME, CANDIDATE_OUTPUT_DIR_EXPR)?,
             steps::download_artifact_step(
                 steps::CANDIDATE_ARTIFACT_NAME,
-                steps::CANDIDATE_STAGE_DIR,
+                CANDIDATE_STAGE_DIR_EXPR,
             )?,
             freshness_step(&candidate_binary, FRESHNESS_OUTDIR)?,
             steps::shell_step("Qualify candidate", spec.qualify.clone(), BTreeMap::new())?,
@@ -74,7 +72,7 @@ pub(crate) fn release_job(ctx: &RenderContext) -> Result<Job, RenderError> {
             steps::checkout_step(&ctx.checkout_uses)?,
             steps::download_artifact_step(
                 steps::CANDIDATE_ARTIFACT_NAME,
-                steps::CANDIDATE_STAGE_DIR,
+                CANDIDATE_STAGE_DIR_EXPR,
             )?,
             steps::shell_step(
                 "Publish release assets",
@@ -107,7 +105,7 @@ fn release_env() -> BTreeMap<String, String> {
         ),
         (
             "VELNOR_STAGE_DIR".to_owned(),
-            steps::CANDIDATE_STAGE_DIR.to_owned(),
+            CANDIDATE_STAGE_DIR_EXPR.to_owned(),
         ),
     ])
 }

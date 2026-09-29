@@ -13,8 +13,16 @@ mod impl_renderer_guard;
 mod impl_renderer_lint;
 #[path = "impl_renderer_matrix.rs"]
 mod impl_renderer_matrix;
+#[path = "impl_renderer_mbxgate.rs"]
+mod impl_renderer_mbxgate;
+#[path = "impl_renderer_msrv.rs"]
+mod impl_renderer_msrv;
+#[path = "impl_renderer_overlap.rs"]
+mod impl_renderer_overlap;
 #[path = "impl_renderer_planclose.rs"]
 mod impl_renderer_planclose;
+#[path = "impl_renderer_planformat.rs"]
+mod impl_renderer_planformat;
 #[path = "impl_renderer_preseed.rs"]
 mod impl_renderer_preseed;
 #[path = "impl_renderer_protocol.rs"]
@@ -25,6 +33,8 @@ mod impl_renderer_setup;
 mod impl_renderer_steps;
 #[path = "impl_renderer_sweep.rs"]
 mod impl_renderer_sweep;
+#[path = "impl_renderer_tasksteps.rs"]
+mod impl_renderer_tasksteps;
 #[path = "impl_renderer_tree.rs"]
 mod impl_renderer_tree;
 #[path = "impl_renderer_tree_policy.rs"]
