@@ -11,8 +11,8 @@ workspace = true
 
 [dependencies]
 velnor-actions-contract = { version = "=0.1.0", path = "../velnor-actions-contract" }
-serde = { version = "=1.0.229", features = ["derive"] }
-serde_json = { version = "=1.0.151" }
+serde = { workspace = true }
+serde_json = { workspace = true }
 
 [[test]]
 name = "velnor_rust"
