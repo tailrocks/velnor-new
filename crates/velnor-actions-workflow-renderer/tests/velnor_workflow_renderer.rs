@@ -5,6 +5,10 @@ mod impl_renderer_acquire;
 mod impl_renderer_cache_steps;
 #[path = "impl_renderer_f2close.rs"]
 mod impl_renderer_f2close;
+#[path = "impl_renderer_f2close_hygiene.rs"]
+mod impl_renderer_f2close_hygiene;
+#[path = "impl_renderer_f2close_matrix.rs"]
+mod impl_renderer_f2close_matrix;
 #[path = "impl_renderer_fixtures.rs"]
 mod impl_renderer_fixtures;
 #[path = "impl_renderer_gate8.rs"]

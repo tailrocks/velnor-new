@@ -6,7 +6,7 @@ use velnor_actions_contract::{
 use velnor_actions_workflow_renderer::{
     ASSET_SHA_ENV, ASSET_URL_ENV, CONCURRENCY_CANCEL, CONCURRENCY_GROUP, MiseSetup, RenderContext,
     RenderError, STAGED_BINARY_PREFIX, acquire_velnor_step, checkout_step, plan_step,
-    render_workflow_ir_strict,
+    render_workflow_ir_strict, shell_step,
 };
 
 pub(crate) const VERSION: &str = "0.1.0";
@@ -141,5 +141,53 @@ pub(crate) fn minimal_plan_job() -> Result<(String, Job), RenderError> {
         "Velnor Plan",
         Vec::new(),
         vec![checkout_step(&checkout_pin())?, plan_step()],
+    ))
+}
+
+/// Candidate context: pinned-tools policy command plus build/qualify spec.
+pub(crate) fn candidate_ctx() -> RenderContext {
+    let mut ctx = fixture_ctx();
+    ctx.policy_commands = vec![velnor_actions_workflow_renderer::PolicyCommand {
+        name: "Verify pinned tools".to_owned(),
+        argv: vec!["true".to_owned()],
+    }];
+    ctx.candidate = Some(velnor_actions_workflow_renderer::CandidateSpec {
+        build: mise_argv("mbx@1.0.0", "mbx", &["build"]),
+        qualify: vec!["sh".to_owned(), "-c".to_owned(), "true".to_owned()],
+    });
+    ctx
+}
+
+/// Task job wired for matrix fan-out plus the matrix report upload.
+pub(crate) fn matrix_task_job() -> Result<(String, velnor_actions_contract::Job), RenderError> {
+    let env = BTreeMap::from([
+        (
+            "VELNOR_TASK_ID".to_owned(),
+            "${{ matrix.task_id }}".to_owned(),
+        ),
+        ("VELNOR_TASK_RUN".to_owned(), "${{ matrix.run }}".to_owned()),
+        (
+            velnor_actions_workflow_renderer::MATRIX_NEEDS_JOB_ENV.to_owned(),
+            "velnor-plan".to_owned(),
+        ),
+        (
+            velnor_actions_workflow_renderer::MATRIX_OUTPUT_ENV.to_owned(),
+            "matrix".to_owned(),
+        ),
+        (
+            velnor_actions_workflow_renderer::MATRIX_MAX_PARALLEL_ENV.to_owned(),
+            "2".to_owned(),
+        ),
+    ]);
+    let step = shell_step(
+        "Run task",
+        vec!["sh".to_owned(), "-c".to_owned(), "echo hi".to_owned()],
+        env,
+    )?;
+    Ok(job(
+        "velnor-task",
+        "Velnor Task",
+        vec!["velnor-plan".to_owned()],
+        vec![checkout_step(&checkout_pin())?, step],
     ))
 }
