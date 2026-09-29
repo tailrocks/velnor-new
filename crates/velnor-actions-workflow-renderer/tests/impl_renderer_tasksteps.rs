@@ -254,3 +254,84 @@ fn leg_script_runs_command_and_always_reports() -> Result<(), RenderError> {
     )?;
     Ok(())
 }
+
+type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
+
+const LEG_DIGEST: &str = "b3-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+const LEG_MATRIX_KEY: &str = "m-0123456789abcdef";
+const LEG_TASK_ID: &str = "stack/rust/crates/demo/build/default";
+
+fn leg_stub_dir(tag: &str) -> std::path::PathBuf {
+    std::env::temp_dir().join(format!("velnor-leg-{}-{tag}", std::process::id()))
+}
+
+fn run_leg_script(run: &str, temp: &std::path::Path) -> TestResult<std::process::Output> {
+    let output = std::process::Command::new("sh")
+        .arg("-c")
+        .arg(leg_execution_script())
+        .env(LEG_TASK_RUN_ENV, run)
+        .env(LEG_TASK_ID_ENV, LEG_TASK_ID)
+        .env(LEG_TASK_DIGEST_ENV, LEG_DIGEST)
+        .env(LEG_MATRIX_KEY_ENV, LEG_MATRIX_KEY)
+        .env(LEG_MATRIX_ID_ENV, format!("stack:rust|task:{LEG_TASK_ID}"))
+        .env(LEG_EVENT_ENV, "pull_request")
+        .env("GITHUB_RUN_ID", "7")
+        .env("GITHUB_RUN_ATTEMPT", "1")
+        .env("RUNNER_TEMP", temp)
+        .output()?;
+    Ok(output)
+}
+
+fn read_json(path: &std::path::Path) -> TestResult<serde_json::Value> {
+    let text = std::fs::read_to_string(path)?;
+    Ok(serde_json::from_str(&text)?)
+}
+
+fn leg_dir(temp: &std::path::Path) -> std::path::PathBuf {
+    temp.join("velnor/r7-a1").join(LEG_MATRIX_KEY)
+}
+
+#[test]
+fn leg_script_reports_parse_as_json_on_success() -> TestResult {
+    let temp = leg_stub_dir("pass");
+    let output = run_leg_script("true", &temp)?;
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "leg failed: {stderr}");
+    let dir = leg_dir(&temp);
+    let matrix = read_json(&dir.join("matrix-report.json"))?;
+    assert_eq!(matrix["schema"], 1);
+    assert_eq!(matrix["status"], "passed");
+    assert_eq!(matrix["executed"], 1);
+    assert_eq!(matrix["failed"], 0);
+    let task_report_id = matrix["task_report_ids"][0]
+        .as_str()
+        .expect("task_report_ids[0] is a string");
+    let task = read_json(&dir.join("tasks").join(format!("{task_report_id}.json")))?;
+    assert_eq!(task["schema"], 1);
+    assert_eq!(task["status"], "executed");
+    assert_eq!(task["exit_code"], 0);
+    assert_eq!(task["task_id"], LEG_TASK_ID);
+    assert_eq!(task["task_digest"], LEG_DIGEST);
+    std::fs::remove_dir_all(&temp)?;
+    Ok(())
+}
+
+#[test]
+fn leg_script_reports_parse_as_json_on_failure() -> TestResult {
+    let temp = leg_stub_dir("fail");
+    let output = run_leg_script("false", &temp)?;
+    assert_eq!(output.status.code(), Some(1));
+    let dir = leg_dir(&temp);
+    let matrix = read_json(&dir.join("matrix-report.json"))?;
+    assert_eq!(matrix["status"], "failed");
+    assert_eq!(matrix["executed"], 0);
+    assert_eq!(matrix["failed"], 1);
+    let task_report_id = matrix["task_report_ids"][0]
+        .as_str()
+        .expect("task_report_ids[0] is a string");
+    let task = read_json(&dir.join("tasks").join(format!("{task_report_id}.json")))?;
+    assert_eq!(task["status"], "failed");
+    assert_eq!(task["exit_code"], 1);
+    std::fs::remove_dir_all(&temp)?;
+    Ok(())
+}
