@@ -7,7 +7,7 @@ Classes: **D** = accepted design change · **B** = confirmed bug · **V** = pend
 | ID | Required outcome (class) | Package | Status | Evidence / commit |
 |----|--------------------------|---------|--------|-------------------|
 | R01 | 7 Rust crate jobs + 1 job per repo-wide validator (D) | renderer | pending | /tmp/pr1-p05p06-probe.md (47-job graph) |
-| R02 | Each validator owns its job; no per-task fan-out (D) | orchestrator | pending | /tmp/pr1-p05p06-probe.md; /tmp/pr1-salvaged-evidence.md W1 |
+| R02 | Each validator owns its job; no per-task fan-out (D) | orchestrator | partial | merge side done in 6d142e4 (exact-set required-evidence, VELNOR_NEEDS_JSON); validator-job rendering pending P05 |
 | R03 | No umbrella Policy/Workflow-Lint groupings (D) | renderer | pending | /tmp/pr1-p05p06-probe.md (merge_support_jobs) |
 | R04 | Alint bundles + edition-2024 enforcement (B) | alint | partial | P00 done in 1748495 (semantic policy + fixtures); bundles/edition rule pending P11 |
 | R05 | Per-job cache restore; MBX setup before any Cargo cmd (B) | cache | pending | verification pending (hosted run) |
@@ -39,6 +39,17 @@ Classes: **D** = accepted design change · **B** = confirmed bug · **V** = pend
 | G01 | Thread 4119057282 (workflow-contract:175, P1) replied (V) | contract | replied; impl pending | PR head 8ccc60c; 0 unresolved threads |
 | G02 | Thread 4119057286 (workflow-contract:251, P1) replied (V) | contract | replied; impl pending | PR head 8ccc60c; 0 unresolved threads |
 | G03 | Thread 4119057292 (cli-contract:34, P2) replied (V) | contract | replied; impl pending | PR head 8ccc60c; 0 unresolved threads |
+
+## Package evidence
+
+- P01+P02 (`6d142e4`, pushed): closed required-evidence contract
+  (`required_evidence.rs`, `needs_channel.rs` VELNOR_NEEDS_JSON), obligation
+  universe with dispositions (`plan_obligation.rs`), checkout-must-match-head,
+  NoWork-never-pass, qualification/promotion split. Standalone-verified:
+  orchestrator 66+6+295 green, CLI 112 green, `cargo fmt --check` clean.
+  Open gaps: renderer must emit VELNOR_NEEDS_JSON + download
+  candidate-report/baseline artifacts (P05); `HEAD^2` checkout assumption
+  needs W5 confirmation.
 
 ## PR state (2026-09-29, /tmp/pr1-state.md)
 
