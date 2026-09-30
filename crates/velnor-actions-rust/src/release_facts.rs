@@ -125,7 +125,7 @@ struct RawReleasePackage {
     id: String,
     manifest_path: String,
     #[serde(default)]
-    publish: Option<Option<Vec<String>>>,
+    publish: Option<Vec<String>>,
     #[serde(default)]
     dependencies: Vec<RawReleaseDep>,
 }
@@ -187,9 +187,9 @@ pub(crate) fn parse_release_facts(
 /// Map one package's `publish` value to its setting.
 fn publish_setting(package: &RawReleasePackage) -> Result<PublishSetting, ReleaseError> {
     match &package.publish {
-        None | Some(None) => Ok(PublishSetting::Open),
-        Some(Some(list)) if list.is_empty() => Ok(PublishSetting::Forbidden),
-        Some(Some(list)) => {
+        None => Ok(PublishSetting::Open),
+        Some(list) if list.is_empty() => Ok(PublishSetting::Forbidden),
+        Some(list) => {
             for registry in list {
                 if !validate_registry_name(registry) {
                     return Err(ReleaseError::InvalidRegistry {
@@ -227,13 +227,13 @@ fn convert_dep(
     dirs: &BTreeMap<String, String>,
     hint: &str,
 ) -> Result<DepFact, ReleaseError> {
-    if let Some(registry) = dependency.registry.as_deref() {
-        if !validate_registry_name(registry) {
-            return Err(ReleaseError::InvalidRegistry {
-                package: package.name.clone(),
-                registry: registry.to_owned(),
-            });
-        }
+    if let Some(registry) = dependency.registry.as_deref()
+        && !validate_registry_name(registry)
+    {
+        return Err(ReleaseError::InvalidRegistry {
+            package: package.name.clone(),
+            registry: registry.to_owned(),
+        });
     }
     let name = dependency
         .package

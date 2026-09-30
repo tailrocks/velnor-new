@@ -18,6 +18,11 @@ pub mod lock;
 #[path = "release_plz.rs"]
 pub mod release_plz;
 
+/// MBX provisioning modes (root frozen: `mise::catalog::mbx`).
+#[path = "catalog_mbx.rs"]
+pub mod mbx;
+pub use mbx::MbxProvisioning;
+
 /// Qualified mise runner release (tag `v2026.9.16`).
 /// Source: `https://api.github.com/repos/jdx/mise/releases/latest`; checked 2026-09-28.
 pub const MISE_VERSION: &str = "2026.9.16";
@@ -292,39 +297,6 @@ impl ToolCatalog {
         (reported == self.version(PinnedTool::MrBoxington))
             .then_some(())
             .ok_or_else(|| invalid_version(PinnedTool::MrBoxington.tool_name(), reported))
-    }
-}
-
-/// How the effective MBX binary is provisioned (P07-10 contract).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum MbxProvisioning {
-    /// Mise installs the catalog pin; the action installs nothing.
-    CatalogInstall,
-    /// The action installs through its exact-version input (must equal the pin).
-    ActionExactVersion,
-    /// The action runs a preinstalled binary at this absolute path.
-    PreinstalledTool {
-        /// Absolute path to the preinstalled `mbx` binary.
-        tool_path: String,
-    },
-}
-
-impl MbxProvisioning {
-    /// Preinstalled-tool mode for one validated absolute binary path.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`MiseError::InvalidStepInput`] unless the path is absolute.
-    pub fn preinstalled(tool_path: &str) -> Result<Self, MiseError> {
-        if !tool_path.starts_with('/') || tool_path.contains('\0') {
-            return Err(MiseError::InvalidStepInput {
-                field: "tool_path".to_owned(),
-                value: tool_path.to_owned(),
-            });
-        }
-        Ok(Self::PreinstalledTool {
-            tool_path: tool_path.to_owned(),
-        })
     }
 }
 

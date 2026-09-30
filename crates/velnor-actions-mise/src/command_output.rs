@@ -70,6 +70,26 @@ impl ProcessOutput {
     }
 }
 
+/// Redact `--token <value>` argv pairs for `Debug`: the flag stays so
+/// the shape is visible, the following value becomes `<redacted>`.
+/// Every other argument renders unchanged.
+#[must_use]
+pub(crate) fn redact_argv_for_debug(argv: &[std::ffi::OsString]) -> Vec<String> {
+    let mut out = Vec::with_capacity(argv.len());
+    let mut hide_next = false;
+    for arg in argv {
+        let text = arg.to_string_lossy().into_owned();
+        if hide_next {
+            out.push("<redacted>".to_owned());
+            hide_next = false;
+        } else {
+            hide_next = text == "--token";
+            out.push(text);
+        }
+    }
+    out
+}
+
 pub(crate) fn read_capped<R: std::io::Read>(pipe: Option<R>, limit: usize) -> (Vec<u8>, bool) {
     let Some(pipe) = pipe else {
         return (Vec::new(), false);

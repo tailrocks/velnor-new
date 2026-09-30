@@ -1,6 +1,5 @@
 //! Event-time protocol rendering: write-request/plan/merge env wiring.
 use std::collections::BTreeMap;
-use velnor_actions_contract::workflow::ir::PermissionLevel;
 use velnor_actions_contract::{Concurrency, Job, Permissions, Trigger, WorkflowIr, WorkflowPolicy};
 use velnor_actions_workflow_renderer::steps::{
     WRITE_REQUEST_OPERATION, download_artifact_step, write_request_step,
@@ -58,12 +57,7 @@ fn fixture_ir(steps: Vec<velnor_actions_contract::Step>) -> WorkflowIr {
             workflow_dispatch: None,
             schedule: None,
         },
-        permissions: Permissions {
-            contents: PermissionLevel::Read,
-            pull_requests: PermissionLevel::None,
-            id_token: PermissionLevel::None,
-            actions: PermissionLevel::Read,
-        },
+        permissions: Permissions::default(),
         concurrency: Concurrency {
             group: CONCURRENCY_GROUP.to_owned(),
             cancel_in_progress: CONCURRENCY_CANCEL.to_owned(),

@@ -10,7 +10,9 @@ use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 
 use crate::catalog::{PinnedTool, ToolCatalog};
-use crate::command::{IsolatedCommand, ProcessOutput, mise_argv_tail, mise_install_argv_tail};
+use crate::command::{
+    IsolatedCommand, ProcessOutput, mise_argv_tail, mise_install_argv_tail, redact_argv_for_debug,
+};
 use crate::error::MiseError;
 
 /// Cargo payload program executed after the `--` separator.
@@ -179,7 +181,9 @@ impl MetadataQualification {
 }
 
 /// One payload program run under at least one pinned tool.
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// `Debug` redacts `--token` values; payload shape stays visible.
+#[derive(Clone, PartialEq, Eq)]
 pub struct PinnedToolExec {
     /// Tools selected as `<tool>@<exact>` before the `--` separator.
     tools: Vec<PinnedTool>,
@@ -187,6 +191,16 @@ pub struct PinnedToolExec {
     program: OsString,
     /// Payload arguments passed byte-exact.
     args: Vec<OsString>,
+}
+
+impl std::fmt::Debug for PinnedToolExec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PinnedToolExec")
+            .field("tools", &self.tools)
+            .field("program", &self.program)
+            .field("args", &redact_argv_for_debug(&self.args))
+            .finish()
+    }
 }
 
 /// Program stem that must never run as a payload: direct toolchain

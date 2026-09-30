@@ -1,6 +1,5 @@
 //! Fixed step-template and command-validation cases.
 use std::collections::BTreeMap;
-use velnor_actions_contract::workflow::ir::PermissionLevel;
 use velnor_actions_contract::{Concurrency, Job, Permissions, Trigger, WorkflowIr, WorkflowPolicy};
 use velnor_actions_workflow_renderer::steps::{
     has_bare_env_expansion, quote_env_path_for_run, quote_run_line_env_paths,
@@ -326,12 +325,7 @@ fn rendered_run_steps_quote_runner_temp_paths() -> Result<(), RenderError> {
     let ir = WorkflowIr {
         name: "CI".to_owned(),
         triggers: emit_triggers(),
-        permissions: Permissions {
-            contents: PermissionLevel::Read,
-            pull_requests: PermissionLevel::None,
-            id_token: PermissionLevel::None,
-            actions: PermissionLevel::Read,
-        },
+        permissions: Permissions::default(),
         concurrency: emit_concurrency(),
         jobs,
     };

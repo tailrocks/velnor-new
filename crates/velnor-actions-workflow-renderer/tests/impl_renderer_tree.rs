@@ -1,6 +1,5 @@
 //! Workflow/tree rendering and policy gating cases.
 use std::collections::BTreeMap;
-use velnor_actions_contract::workflow::ir::PermissionLevel;
 use velnor_actions_contract::{
     Concurrency, GeneratorValidation, Job, Permissions, Trigger, ValidatorKind,
     VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
@@ -70,12 +69,7 @@ fn fixture_ir() -> Result<WorkflowIr, RenderError> {
     Ok(WorkflowIr {
         name: "CI".to_owned(),
         triggers: exact_triggers(),
-        permissions: Permissions {
-            contents: PermissionLevel::Read,
-            pull_requests: PermissionLevel::None,
-            id_token: PermissionLevel::None,
-            actions: PermissionLevel::Read,
-        },
+        permissions: Permissions::default(),
         concurrency: exact_concurrency(),
         jobs,
     })

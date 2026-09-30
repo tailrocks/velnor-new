@@ -324,6 +324,14 @@ pub fn classify_tag(state: &TagState) -> TagOutcome {
     }
 }
 
+/// Append a formatted escape without an intermediate allocation.
+///
+/// `String` writes are infallible; the default maps the unrepresentable error.
+fn append_escape(out: &mut String, args: std::fmt::Arguments<'_>) {
+    use std::fmt::Write as _;
+    write!(out, "{args}").unwrap_or_default();
+}
+
 /// Append `text` as a TOML basic string.
 fn toml_string(text: &str, out: &mut String) {
     out.push('"');
@@ -336,7 +344,7 @@ fn toml_string(text: &str, out: &mut String) {
             '\t' => out.push_str("\\t"),
             other if other.is_control() => {
                 let code = u32::from(other);
-                out.push_str(&format!("\\u{code:04X}"));
+                append_escape(out, format_args!("\\u{code:04X}"));
             }
             other => out.push(other),
         }

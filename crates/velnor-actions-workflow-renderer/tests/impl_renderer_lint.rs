@@ -1,6 +1,5 @@
 //! Always-on lint job cases: emitted from typed IR for both policies.
 use std::collections::BTreeMap;
-use velnor_actions_contract::workflow::ir::PermissionLevel;
 use velnor_actions_contract::{
     Concurrency, Job, Permissions, Trigger, VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
 };
@@ -100,12 +99,7 @@ fn fixture_ir() -> Result<WorkflowIr, RenderError> {
             workflow_dispatch: None,
             schedule: None,
         },
-        permissions: Permissions {
-            contents: PermissionLevel::Read,
-            pull_requests: PermissionLevel::None,
-            id_token: PermissionLevel::None,
-            actions: PermissionLevel::Read,
-        },
+        permissions: Permissions::default(),
         concurrency: Concurrency {
             group: CONCURRENCY_GROUP.to_owned(),
             cancel_in_progress: CONCURRENCY_CANCEL.to_owned(),

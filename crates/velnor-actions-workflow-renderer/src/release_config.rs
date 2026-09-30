@@ -157,32 +157,39 @@ fn toml_escape(value: &str) -> String {
     value.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
+/// Render one TOML line; `String` writes are infallible in practice.
+fn toml_line(out: &mut String, args: std::fmt::Arguments<'_>) -> Result<(), RenderError> {
+    use std::fmt::Write as _;
+    out.write_fmt(args)
+        .map_err(|_| RenderError::InvalidWorkflow("toml_write".to_owned()))
+}
+
 /// Deterministic TOML body; only the bootstrap call passes `true`.
 ///
 /// # Errors
 ///
-/// Returns [`RenderError`] when the body cannot be written.
+/// Returns [`RenderError`] for malformed configs.
 fn toml_body(config: &ReleasePlzConfig, release_always: bool) -> Result<String, RenderError> {
-    use std::fmt::Write as _;
-    let failed = |_: std::fmt::Error| RenderError::InvalidWorkflow("toml_write".to_owned());
     let mut out = String::from("[workspace]\nrelease = false\n");
-    writeln!(out, "release_always = {release_always}").map_err(failed)?;
-    writeln!(
-        out,
-        "semver_check = {semver_check}",
-        semver_check = config.semver_check
-    )
-    .map_err(failed)?;
+    toml_line(
+        &mut out,
+        format_args!("release_always = {release_always}\n"),
+    )?;
+    toml_line(
+        &mut out,
+        format_args!("semver_check = {}\n", config.semver_check),
+    )?;
     out.push_str("publish_no_verify = false\npublish_allow_dirty = false\n");
-    writeln!(
-        out,
-        "git_tag_name = \"{tag}\"",
-        tag = toml_escape(&config.tag_pattern)
-    )
-    .map_err(failed)?;
+    toml_line(
+        &mut out,
+        format_args!("git_tag_name = \"{}\"\n", toml_escape(&config.tag_pattern)),
+    )?;
     for package in &config.packages {
         out.push_str("\n[[package]]\n");
-        writeln!(out, "name = \"{name}\"", name = toml_escape(&package.name)).map_err(failed)?;
+        toml_line(
+            &mut out,
+            format_args!("name = \"{}\"\n", toml_escape(&package.name)),
+        )?;
         out.push_str("release = true\npublish = true\ngit_only = false\n");
         if !package.publish_features.is_empty() {
             let features: Vec<String> = package
@@ -190,8 +197,10 @@ fn toml_body(config: &ReleasePlzConfig, release_always: bool) -> Result<String, 
                 .iter()
                 .map(|feature| format!("\"{}\"", toml_escape(feature)))
                 .collect();
-            let joined = features.join(", ");
-            writeln!(out, "publish_features = [{joined}]").map_err(failed)?;
+            toml_line(
+                &mut out,
+                format_args!("publish_features = [{}]\n", features.join(", ")),
+            )?;
         }
     }
     Ok(out)

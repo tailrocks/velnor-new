@@ -17,7 +17,7 @@ pub use baseline::{BaselineProof, BaselineStatus, ManifestTaskProof, PlanBaselin
 pub use cache_ids::EntryCacheIds;
 pub use crate_job::{CrateJob, CrateObligation};
 pub use execute::{ExecuteTaskIds, ExecuteTaskRef};
-pub use ir::{Concurrency, Job, Permissions, Step, StepKind, Trigger, WorkflowIr};
+pub use ir::{Concurrency, Job, PermissionLevel, Permissions, Step, StepKind, Trigger, WorkflowIr};
 pub use jobs::{
     CI_WORKFLOW_PATH, CRATE_JOB_ID_PREFIX, FRESHNESS_CRON_WEEKLY, FRESHNESS_WORKFLOW_PATH,
     NEEDS_CHANNEL_ENV, NEEDS_CHANNEL_EXPRESSION, NeedsConclusions, PLAN_DISPLAY_NAME, PLAN_JOB_ID,

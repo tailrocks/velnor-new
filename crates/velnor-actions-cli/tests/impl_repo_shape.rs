@@ -15,7 +15,10 @@ fn collect_entries(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), Box<dyn Err
         let file_type = entry.file_type()?;
         if file_type.is_dir() {
             let name = entry.file_name().to_string_lossy().into_owned();
-            if name == "target" || name == ".git" {
+            // Product content is never hidden: skip build output, VCS state,
+            // and ignored tool checkouts (nested worktrees carry their own
+            // crates/*/Cargo.toml package roots that are not repo content).
+            if name == "target" || name.starts_with('.') {
                 continue;
             }
             collect_entries(&entry.path(), out)?;

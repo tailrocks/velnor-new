@@ -147,6 +147,8 @@ mod tests {
             runs_on: "ubuntu-26.04".to_owned(),
             needs: vec![PLAN_JOB_ID.to_owned()],
             condition: None,
+            permissions: None,
+            environment: None,
             steps: vec![crate::workflow::wire_w1::checkout_step().expect("checkout")],
         }
     }
@@ -159,11 +161,10 @@ mod tests {
                 pull_request_types: Vec::new(),
                 push_branches: Vec::new(),
                 merge_group: false,
+                workflow_dispatch: None,
+                schedule: None,
             },
-            permissions: Permissions {
-                contents: "read".to_owned(),
-                actions: "read".to_owned(),
-            },
+            permissions: Permissions::default(),
             concurrency: Concurrency {
                 group: "g".to_owned(),
                 cancel_in_progress: "c".to_owned(),

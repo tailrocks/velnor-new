@@ -37,6 +37,24 @@ mod impl_renderer_planformat;
 mod impl_renderer_preseed;
 #[path = "impl_renderer_protocol.rs"]
 mod impl_renderer_protocol;
+#[path = "impl_renderer_release_config.rs"]
+mod impl_renderer_release_config;
+#[path = "impl_renderer_release_gates.rs"]
+mod impl_renderer_release_gates;
+#[path = "impl_renderer_release_jobs.rs"]
+mod impl_renderer_release_jobs;
+#[path = "impl_renderer_release_lock.rs"]
+mod impl_renderer_release_lock;
+#[path = "impl_renderer_release_publish.rs"]
+mod impl_renderer_release_publish;
+#[path = "impl_renderer_release_snapshot.rs"]
+mod impl_renderer_release_snapshot;
+#[path = "impl_renderer_release_spec.rs"]
+mod impl_renderer_release_spec;
+#[path = "impl_renderer_release_tree.rs"]
+mod impl_renderer_release_tree;
+#[path = "impl_renderer_release_units.rs"]
+mod impl_renderer_release_units;
 #[path = "impl_renderer_setup.rs"]
 mod impl_renderer_setup;
 #[path = "impl_renderer_steps.rs"]
@@ -51,5 +69,7 @@ mod impl_renderer_toolchain_contract;
 mod impl_renderer_tree;
 #[path = "impl_renderer_tree_policy.rs"]
 mod impl_renderer_tree_policy;
+#[path = "impl_renderer_typed_ir.rs"]
+mod impl_renderer_typed_ir;
 #[path = "impl_renderer_yaml.rs"]
 mod impl_renderer_yaml;
