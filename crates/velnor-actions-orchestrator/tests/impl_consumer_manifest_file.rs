@@ -119,10 +119,7 @@ fn absent_manifest_fails_closed_without_provenance() {
     let err = consumer_acquire_step_with_manifest("ubuntu-26.04", "0.1.0", None)
         .expect_err("absent manifest fails");
     let text = err.to_string();
-    assert!(
-        text.contains("consumer_requires_release_install"),
-        "{text}"
-    );
+    assert!(text.contains("consumer_requires_release_install"), "{text}");
     assert!(text.contains("official"), "{text}");
 }
 
