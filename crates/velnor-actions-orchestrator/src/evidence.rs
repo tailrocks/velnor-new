@@ -29,7 +29,7 @@ use crate::discover::PlannedWorkspace;
 ///
 /// Returns [`OrchestratorError::Profile`] on ambiguous runners or
 /// drivers, when durable evidence contradicts a declared key, or when a
-/// present Nextest config is malformed.
+/// present wrapper file or Nextest config is malformed.
 pub(crate) fn profile_for_workspace(
     root: &Path,
     index: &FileIndex,
@@ -65,7 +65,7 @@ pub(crate) fn profile_for_workspace(
         handwritten_workflows: flows,
         declared_driver: rust.and_then(|stack| stack.compile_driver.map(map_driver)),
         declared_runner: rust.and_then(|stack| stack.test_runner.map(map_runner)),
-        mise_wrappers: wrapper_inputs(root, &record.workspace_root),
+        mise_wrappers: wrapper_inputs(root, &record.workspace_root)?,
         nextest_configs: nextest_inputs(root, &record.workspace_root)?,
     };
     detect_profile(&inputs).map_err(|err| OrchestratorError::Profile {
@@ -88,10 +88,20 @@ fn tool_config_input(root: &Path) -> Option<(String, String)> {
 
 /// Structurally resolved wrappers for one workspace.
 ///
-/// Inspects the repository-root and workspace-root Mise files. Malformed
-/// TOML yields no wrapper from that file (toolcheck reports the
-/// defect); generated output never feeds discovery.
-fn wrapper_inputs(root: &Path, workspace_root: &str) -> Vec<MiseWrapperInput> {
+/// Inspects the repository-root and workspace-root Mise files. A present
+/// file with malformed TOML (or a non-string wrapper value) fails closed
+/// through [`strict_evidence`]: broken bytes cannot honestly select a
+/// driver, exactly like Nextest configs. Generated output never feeds
+/// discovery.
+///
+/// # Errors
+///
+/// Returns [`OrchestratorError::Profile`] when a present wrapper file is
+/// malformed: the profile cannot be honestly selected from broken bytes.
+fn wrapper_inputs(
+    root: &Path,
+    workspace_root: &str,
+) -> Result<Vec<MiseWrapperInput>, OrchestratorError> {
     let mut out = Vec::new();
     for relative in mise_candidates(workspace_root) {
         let Some(text) = read_optional(root, &relative) else {
@@ -100,7 +110,8 @@ fn wrapper_inputs(root: &Path, workspace_root: &str) -> Vec<MiseWrapperInput> {
         if is_generated_output(&text) {
             continue;
         }
-        let Ok(Some(wrapper)) = parse_cargo_wrapper(&text) else {
+        let parsed = strict_evidence(parse_cargo_wrapper(&text), &relative)?;
+        let Some(wrapper) = parsed else {
             continue;
         };
         out.push(MiseWrapperInput {
@@ -110,7 +121,21 @@ fn wrapper_inputs(root: &Path, workspace_root: &str) -> Vec<MiseWrapperInput> {
             shim_mode: wrapper.shim_mode,
         });
     }
-    out
+    Ok(out)
+}
+
+/// Fail closed on malformed evidence bytes, naming the supplying file.
+///
+/// The single strictness gate for every evidence file kind: wrappers and
+/// Nextest configs share it so a broken file can never silently degrade
+/// to Cargo defaults and hide a real driver or runner signal.
+fn strict_evidence<T, E: std::fmt::Display>(
+    parsed: Result<T, E>,
+    relative: &str,
+) -> Result<T, OrchestratorError> {
+    parsed.map_err(|failed| OrchestratorError::Profile {
+        problem: format!("{failed}:{relative}"),
+    })
 }
 
 /// Mise files inspected per workspace: the root pair plus the nested pair.
@@ -141,9 +166,7 @@ fn nextest_inputs(
         if is_generated_output(&text) {
             continue;
         }
-        let config = parse_nextest_config(&text).map_err(|failed| OrchestratorError::Profile {
-            problem: format!("{failed}:{relative}"),
-        })?;
+        let config = strict_evidence(parse_nextest_config(&text), &relative)?;
         out.push(NextestConfigInput {
             path: relative,
             profiles: config.profiles,
