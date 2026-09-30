@@ -24,6 +24,8 @@ mod p12_live;
 mod p12_manifest;
 #[path = "fixtures/p12_policy.rs"]
 mod p12_policy;
+#[path = "fixtures/p12_upstream.rs"]
+mod p12_upstream;
 
 /// Expected members as (directory, package name).
 pub(crate) const MEMBERS: [(&str, &str); 7] = [

@@ -23,7 +23,8 @@ automation that is not wired.
   `scripts/check-freshness.sh --with-advisories` (plus the live
   `cargo deny` scan, 180 s bound),
   `scripts/check-freshness.sh --check-upstream` (plus the bounded
-  read-only upstream probe; scheduled use, writes nothing),
+  read-only upstream probe; intended for the future scheduled job, writes
+  nothing),
   `scripts/check-freshness.sh --root DIR` (validate a fixture tree; the
   CLI policy suite uses this for every pass/fail case).
 
@@ -90,14 +91,21 @@ stale evidence, and any row whose recorded `latest` differs from the pin
 fails the gate. An operational lookup failure is a distinct failed check;
 it MUST NOT be reported as current (VER-3.4 gate rule).
 
-The scheduled job refreshes this evidence with read-only lookups and
-records the new timestamp plus version delta in the reviewed update set.
-`--check-upstream` is the bounded probe for that job: one GET per row
-(10 s timeout, 512 KiB cap, small fixed row count), parsing only
+No scheduled producer exists today: no workflow runs this probe on a
+schedule, and the generator cannot express a schedule trigger (its
+triggers are pull-request, push, and merge-group only). Until the
+remaining wiring step lands — P05's `ci.yml` migration adds schedule
+trigger support plus a read-only freshness job — evidence timestamps
+advance only through reviewed update sets, and the real-root
+`upstream-freshness` rows stay honestly red once `checked_at` ages past
+`check_interval_hours`.
+`--check-upstream` is the bounded probe that future job runs: one GET per
+row (10 s timeout, 512 KiB cap, small fixed row count), parsing only
 GitHub-releases tags, `crates.io` `max_version`, and the rust channel
-manifest's `[pkg.rust]` version. It writes nothing. Stale pins and lookup
-failures fail as rows; they are signal for the next update set, not a
-build gate. The GitHub-hosted runner family has no releases API: its
+manifest's `[pkg.rust]` version. It writes nothing. Every probe row
+records its source URL and check timestamp; stale pins and lookup
+failures fail as rows — signal for the next update set, not a build
+gate. The GitHub-hosted runner family has no releases API: its
 latest-family evidence comes from platform qualification, recorded as
 runtime `ImageOS`/`ImageVersion`, not from this probe.
 
@@ -143,8 +151,26 @@ Install exactly that release (`cargo install --locked cargo-mutants
 --version 27.1.0`) and run `cargo mutants` from the repo root. Surviving
 mutants MUST be killed or justified before the change lands; before any
 scheduled/CI use, the tool must additionally be pinned in the Mise-managed
-catalog. Property, fuzz, Miri/Loom, and semver triggers live in
-`docs/implemented/verification-triggers.md`.
+catalog.
+
+Property testing is a runnable path today without new dependencies: the
+`p12_property` CLI suites drive the public binary over seeded generated
+repos and assert never-panic plus plan/generate determinism and exact
+crate counts (`cargo nextest run --locked -p velnor-actions-cli -E
+'test(p12_property)'`). Unit-level strategies over validators, task-ID
+segments, and the final merge entrypoint migrate to `proptest` once the
+requested pin lands: proptest `1.11.0` (exact `=1.11.0`, `rust-version`
+1.85, inside MSRV 1.98; needs a manifest owner to add the dev-dependency
+plus lockfile entry).
+
+Fuzzing is infeasible in this wave, with evidence: a fuzz target needs a
+new `fuzz/` crate manifest plus `cargo-fuzz` and `libfuzzer-sys` pins,
+and version-policy §2 requires pinning `cargo-fuzz` (and any nightly
+toolchain it needs) BEFORE enabling the check — none of those pins or
+manifests exist, and manifest/version-policy edits belong to the parent,
+not this change. The designated target when wiring lands is the
+final-gate merge entrypoint over untrusted request JSON. Miri/Loom and
+semver triggers live in `docs/implemented/verification-triggers.md`.
 
 ## Limits discipline (RQ-5.3)
 

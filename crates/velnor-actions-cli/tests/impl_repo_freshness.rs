@@ -8,6 +8,9 @@ use std::error::Error;
 
 use crate::impl_repo_policy::{quoted_value, read};
 
+#[path = "fixtures/p12_property.rs"]
+mod p12_property;
+
 #[test]
 fn boot34_mise_version_matches_catalog() -> Result<(), Box<dyn Error>> {
     let pinned = read(".mise-version")?;
