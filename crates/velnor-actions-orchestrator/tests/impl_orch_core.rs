@@ -275,7 +275,8 @@ pub(crate) fn plan_for_partial_change() -> Result<(TempDir, Plan), Box<dyn std::
 pub(crate) fn covered_plan(
     plan: &Plan,
 ) -> Result<(serde_json::Value, serde_json::Value), Box<dyn std::error::Error>> {
-    let base = "a".repeat(40);
+    let base = plan.base.clone();
+    let base = base.ok_or_else(|| std::io::Error::other("base"))?;
     let compat = digest_b3(b"compat");
     let artifact_name = format!("velnor-baseline-{base}-{compat}");
     let tasks: Vec<serde_json::Value> = plan

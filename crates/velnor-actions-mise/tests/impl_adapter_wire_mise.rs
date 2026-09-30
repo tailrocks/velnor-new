@@ -38,15 +38,25 @@ fn save_decision_denies_with_reasons() {
         })
     };
     assert_eq!(save("trusted", "push", true), Ok(()));
-    assert_eq!(save("pr", "pull_request", true), Ok(()));
-    assert_eq!(
-        save("trusted", "pull_request", true),
-        Err(MissReason::CACHE_WRITE_DISABLED)
-    );
-    assert_eq!(
-        save("trusted", "push", false),
-        Err(MissReason::CACHE_WRITE_DISABLED)
-    );
+    assert_eq!(save("pr", "push", true), Ok(()));
+    for (trust, event, passed) in [
+        ("trusted", "pull_request", true),
+        ("trusted", "push", false),
+        ("pr", "pull_request", true),
+        ("pr", "pull_request", false),
+        ("pr", "push", false),
+        ("pr", "merge_group", true),
+        ("pr", "fork", true),
+        ("pr", "release", true),
+        ("pr", "local", true),
+        ("unknown", "push", true),
+    ] {
+        assert_eq!(
+            save(trust, event, passed),
+            Err(MissReason::CACHE_WRITE_DISABLED),
+            "{trust} {event} {passed}"
+        );
+    }
     let down = save_decision(&SaveInputs {
         layer_trust: "pr",
         event: "push",

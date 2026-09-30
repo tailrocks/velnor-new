@@ -4,19 +4,23 @@
 // module compiles without touching shared files.
 #[path = "shard.rs"]
 pub(crate) mod shard;
+// Coverage revalidation lives apart so this file keeps its size gate.
+#[path = "cover_revalidate.rs"]
+pub(crate) mod revalidate;
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{
-    ExecuteTaskRef, MatrixEntry, MatrixReport, MatrixStatus, ObligationDecision, Plan, TaskReport,
-    TaskStatus, canonical_json_bytes, digest_b3, task_report_id_for_task,
+    ExecuteTaskRef, MatrixEntry, MatrixReport, MatrixStatus, TaskReport, TaskStatus,
+    task_report_id_for_task,
 };
 
 use crate::OrchestratorError;
 use crate::internal::internal_contract;
 use crate::internal_plan::wire_w2;
-use crate::merge::{BaselineManifest, MergeRequest};
+use crate::merge::MergeRequest;
 
+pub(crate) use self::revalidate::revalidate_coverage;
 pub(crate) use crate::cover_baseline::{BaselineInputs, apply_baseline};
 
 /// Aggregated merge signals feeding result precedence.
@@ -250,7 +254,8 @@ fn check_digests(
         // claims fail closed until the contract carries them.
         let observed: &[(String, Vec<u8>, String)] = &[];
         if task.status == TaskStatus::Reused
-            && let Err(reason) = wire_w2::verify_reused_task(&task.task_id, declared, observed)
+            && let Err(reason) =
+                wire_w2::verify_reused_task(&task.task_id, declared, observed, None, None, None)
         {
             miss_reasons.insert(reason.as_str().to_owned());
             return Ok(false);
@@ -310,71 +315,6 @@ fn exit_coherent(status: TaskStatus, exit_code: i32) -> bool {
         | TaskStatus::EmptyPartition
         | TaskStatus::NotSelected
         | TaskStatus::Cancelled => true,
-    }
-}
-
-/// Revalidate planner coverage claims against the trusted manifest.
-///
-/// Every failure carries a miss token so diagnostics never emit bare
-/// `planning_failed` verdicts. The disposition match stays exhaustive so
-/// a future decision variant fails to compile here instead of silently
-/// skipping revalidation.
-pub(crate) fn revalidate_coverage(
-    plan: &Plan,
-    manifest: Option<&BaselineManifest>,
-    signals: &mut Signals,
-    miss_reasons: &mut BTreeSet<String>,
-) {
-    let mut covered = Vec::new();
-    for obligation in &plan.obligations {
-        match obligation.decision {
-            ObligationDecision::CoveredByTrustedBaseline => covered.push(obligation),
-            ObligationDecision::Execute | ObligationDecision::ReusedFromTaskCache => {}
-        }
-    }
-    if covered.is_empty() {
-        return;
-    }
-    let Some(manifest) = manifest else {
-        signals.planning_failed = true;
-        miss_reasons.insert("source_missing".to_owned());
-        return;
-    };
-    if manifest.schema != crate::internal_plan::snapshot::CANONICAL_SCHEMA_VERSION {
-        signals.planning_failed = true;
-        miss_reasons.insert("cache_corrupt".to_owned());
-        return;
-    }
-    for obligation in covered {
-        let Some(proof) = &obligation.baseline_proof else {
-            signals.planning_failed = true;
-            miss_reasons.insert("cache_corrupt".to_owned());
-            continue;
-        };
-        let hit = manifest
-            .tasks
-            .iter()
-            .find(|task| task.task_id == obligation.task_id);
-        let Some(task) = hit else {
-            signals.planning_failed = true;
-            miss_reasons.insert("cache_corrupt".to_owned());
-            continue;
-        };
-        let bound = task.task_digest == obligation.task_digest
-            && task.input_digest == obligation.input_digest
-            && task.closure_digest == obligation.closure_digest
-            && proof.run_id() == task.proof_run_id
-            && proof.artifact_id() == manifest.artifact_id
-            && proof.artifact_name() == manifest.artifact_name;
-        // A serialization failure is planning_failed, never a digest over an
-        // empty default that could verify against a forged proof.
-        match canonical_json_bytes(manifest) {
-            Ok(bytes) if bound && proof.manifest_digest() == digest_b3(&bytes) => {}
-            _ => {
-                signals.planning_failed = true;
-                miss_reasons.insert("cache_corrupt".to_owned());
-            }
-        }
     }
 }
 

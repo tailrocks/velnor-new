@@ -2,10 +2,27 @@
 
 use velnor_actions_contract::digest_b3;
 use velnor_actions_mise::cache::{
-    QualifiedTaskDef, TaskCacheMode, classify_restore, mode_for_event, qualify_reuse, save_allowed,
-    task_run_argv, validate_sources_path, validate_task_def_path, verify_reused_outputs,
+    QualifiedTaskDef, TaskCacheMode, mode_for_event, qualify_reuse, save_allowed, task_run_argv,
+    validate_sources_path, validate_task_def_path, verify_reused_outputs,
 };
+use velnor_actions_mise::restore_evidence::{RestoreObservation, classify_restore};
 use velnor_actions_mise::{Gate6Fixture, render_gated_task_toml};
+
+/// Fully observed restore: real path, bytes, and matching digests.
+fn observed_restore() -> RestoreObservation {
+    let bytes = b"entry bytes".to_vec();
+    RestoreObservation {
+        entry_path: "task-artifacts/v2/clippy/entry".to_owned(),
+        entry_bytes: bytes.clone(),
+        expected_digest: digest_b3(&bytes),
+        expected_compat: digest_b3(b"compat"),
+        observed_compat: digest_b3(b"compat"),
+        expected_owner: "trusted".to_owned(),
+        observed_owner: "trusted".to_owned(),
+        expected_inputs: digest_b3(b"inputs"),
+        observed_inputs: digest_b3(b"inputs"),
+    }
+}
 
 /// Sources allowlist accepts only `registry/` and `git/` subtrees.
 #[test]
@@ -160,39 +177,58 @@ fn reuse_qualification_rejects_nondeterministic_tasks() {
 }
 
 /// Restore attempts classify hits and precise miss reasons in order.
+///
+/// Classification consumes observed evidence only: a real observed
+/// restore passes, and each unverified input fails with its reason.
 #[test]
 fn restore_classification_uses_precise_reasons() {
-    assert!(classify_restore([true, true, true, true, true]).is_ok());
-    assert_eq!(
-        classify_restore([false, true, true, true, true]),
-        Err("no_entry")
-    );
-    assert_eq!(
-        classify_restore([true, false, true, true, true]),
-        Err("cache_corrupt")
-    );
-    assert_eq!(
-        classify_restore([true, true, false, true, true]),
-        Err("compatibility_mismatch")
-    );
-    assert_eq!(
-        classify_restore([true, true, true, false, true]),
-        Err("trust_scope_mismatch")
-    );
-    assert_eq!(
-        classify_restore([true, true, true, true, false]),
-        Err("input_digest_mismatch")
-    );
+    assert!(classify_restore(&observed_restore()).is_ok());
+    let check = |label: &str, obs: &RestoreObservation, reason: &str| {
+        assert_eq!(classify_restore(obs), Err(reason), "{label}");
+    };
+    let mut obs = observed_restore();
+    obs.entry_path.clear();
+    check("missing entry", &obs, "no_entry");
+    let mut obs = observed_restore();
+    obs.entry_bytes = b"forged".to_vec();
+    check("tampered bytes", &obs, "cache_corrupt");
+    let mut obs = observed_restore();
+    obs.observed_compat = digest_b3(b"other");
+    check("compat drift", &obs, "compatibility_mismatch");
+    let mut obs = observed_restore();
+    obs.observed_owner = "pr".to_owned();
+    check("owner drift", &obs, "trust_scope_mismatch");
+    let mut obs = observed_restore();
+    obs.observed_inputs = digest_b3(b"other");
+    check("input drift", &obs, "input_digest_mismatch");
+    let mut obs = observed_restore();
+    obs.expected_inputs = "bogus".to_owned();
+    check("malformed recorded digest", &obs, "input_digest_mismatch");
 }
 
-/// Trusted layers save only on protected pushes with a pass.
+/// Every layer saves only producer-successful pushes.
+///
+/// Failed runs never save on any layer, and non-push events never save
+/// through this path; unknown trust scopes deny closed.
 #[test]
-fn trusted_saves_gate_on_push_and_pass() {
-    assert!(save_allowed("trusted", "push", true));
-    assert!(!save_allowed("trusted", "push", false));
-    assert!(!save_allowed("trusted", "pull_request", true));
-    assert!(!save_allowed("trusted", "merge_group", true));
-    assert!(save_allowed("pr", "pull_request", true));
+fn saves_gate_on_push_and_pass_for_all_layers() {
+    for layer in ["trusted", "pr"] {
+        assert!(save_allowed(layer, "push", true), "{layer} push saves");
+        assert!(!save_allowed(layer, "push", false), "{layer} failed run");
+        for event in [
+            "pull_request",
+            "merge_group",
+            "fork",
+            "release",
+            "local",
+            "schedule",
+        ] {
+            assert!(!save_allowed(layer, event, true), "{layer} {event}");
+            assert!(!save_allowed(layer, event, false), "{layer} {event}");
+        }
+    }
+    assert!(!save_allowed("unknown", "push", true));
+    assert!(!save_allowed("", "push", true));
 }
 
 /// Reuse requires every declared output present with a matching digest.
@@ -210,4 +246,17 @@ fn reused_outputs_verify_presence_and_digests() {
         digest_b3(b"report-bytes"),
     )];
     assert!(verify_reused_outputs("clippy", &declared, &poisoned).is_err());
+}
+
+/// P04 zero-byte rule at the mise layer: an empty observation is
+/// incomplete even when its digest verifies, matching the orchestrator.
+#[test]
+fn zero_byte_outputs_fail_mise_layer_as_incomplete() {
+    let declared = vec!["out/report.json".to_owned()];
+    let empty = vec![("out/report.json".to_owned(), Vec::new(), digest_b3(b""))];
+    let err = verify_reused_outputs("clippy", &declared, &empty).expect_err("zero byte");
+    assert!(
+        err.to_string().contains("task_result_incomplete"),
+        "P04 verdict: {err}"
+    );
 }

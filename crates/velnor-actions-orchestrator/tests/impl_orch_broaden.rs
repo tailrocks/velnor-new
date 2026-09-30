@@ -202,7 +202,7 @@ fn carried_proof_revalidated_by_exact_identity() -> TestResult {
 #[test]
 fn lookup_without_exact_artifact_schedules_normally() -> TestResult {
     let (repo, seed) = plan_for_source_change()?;
-    let request = serde_json::json!({"schema": 1, "run_key": "local", "base": seed.base, "head": seed.head, "event": "pull_request", "root": repo.path().display().to_string(), "generator": {"version": seed.generator.version, "target": seed.generator.target, "sha256": "e".repeat(64)}});
+    let request = serde_json::json!({"schema": 1, "run_key": "local", "base": seed.base, "head": seed.head, "event": "pull_request", "root": repo.path().display().to_string()});
     let value: Json = serde_json::from_str(&plan_internal(&request.to_string())?)?;
     let plan: Plan = serde_json::from_value(value["plan"].clone())?;
     assert!(

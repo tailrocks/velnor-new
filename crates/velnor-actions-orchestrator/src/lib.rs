@@ -45,6 +45,7 @@ mod release_identity;
 mod release_steps;
 mod retrieve_reports;
 mod root;
+pub mod run_select;
 pub mod schedule;
 mod select;
 mod select_affected;

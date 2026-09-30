@@ -15,11 +15,12 @@ use velnor_actions_mise::{
 };
 use velnor_actions_mise::{
     cache::mode_for_event,
-    restore::{MissReason, ReusePlan, plan_reuse},
+    restore::MissReason,
+    reuse::{ReusePlan, plan_reuse},
 };
 use velnor_actions_rust::{TaskGroup, TaskKind};
 
-use self::reuse_stages::verify_reused_pipeline;
+use self::reuse_stages::{ExpectedReuseIdentity, ObservedRestoreMeta, verify_reused_pipeline};
 use crate::{OrchestratorError, internal::internal};
 /// Wiring inputs for one group: event plus generator identity.
 #[derive(Debug, Clone, Copy)]
@@ -29,9 +30,14 @@ pub(crate) struct GroupWire<'a> {
 }
 
 /// Reuse-cache event name for one workflow event.
+///
+/// Spellings match [`mode_for_event`](velnor_actions_mise::cache::mode_for_event)
+/// exactly: forks stay `fork` (read-only), never the `pull_request`
+/// spelling, so the two layers can never disagree about fork handling.
 pub(crate) fn reuse_event_name(event: WorkflowEvent) -> &'static str {
     match event {
-        WorkflowEvent::PullRequest | WorkflowEvent::Fork => "pull_request",
+        WorkflowEvent::PullRequest => "pull_request",
+        WorkflowEvent::Fork => "fork",
         WorkflowEvent::Push => "push",
         WorkflowEvent::MergeGroup => "merge_group",
         WorkflowEvent::Local => "local",
@@ -60,24 +66,32 @@ pub(crate) struct ReuseOutcome {
     pub(crate) reason: String,
     pub(crate) task_cache_key: Option<String>,
     pub(crate) task_cache_enabled: bool,
+    /// Validated plan-time input digest the merge-time live digest must
+    /// still equal; `None` only for forced-execution paths that never
+    /// validated a digest.
+    pub(crate) recorded_input_digest: Option<String>,
 }
 impl ReuseOutcome {
-    fn execute_with(reason: String) -> Self {
+    fn execute_with(reason: String, recorded_input_digest: Option<String>) -> Self {
         Self {
             decision: ObligationDecision::Execute,
             reason,
             task_cache_key: None,
             task_cache_enabled: false,
+            recorded_input_digest,
         }
     }
     /// Forced execution with an explicit reason (changed work).
     pub(crate) fn execute(reason: &str) -> Self {
-        Self::execute_with(reason.to_owned())
+        Self::execute_with(reason.to_owned(), None)
     }
 }
 /// Decide reuse eligibility for one group (REUSE-1/6/7, PAR-3.4).
 /// Plan time never grants reuse: merge-time evidence required, so eligible
-/// groups execute with `no_entry` and task-cache stays disabled.
+/// groups execute with `no_entry` and task-cache stays disabled. The
+/// validated input digest is recorded on the outcome so the persisted
+/// obligation carries the exact value the merge-time live digest must
+/// still equal (same-path source edits flip the live digest and reject).
 pub(crate) fn plan_reuse_outcome(
     group: &TaskGroup,
     event: WorkflowEvent,
@@ -88,9 +102,11 @@ pub(crate) fn plan_reuse_outcome(
 ) -> Result<ReuseOutcome, OrchestratorError> {
     validate_digest(toolchain_id).map_err(|err| internal(&err.to_string()))?;
     validate_digest(input_digest).map_err(|err| internal(&err.to_string()))?;
+    let recorded = Some(input_digest.to_owned());
     if !reuse_eligible {
         return Ok(ReuseOutcome::execute_with(
             MissReason::TASK_NOT_ELIGIBLE.as_str().to_owned(),
+            recorded,
         ));
     }
     match availability {
@@ -98,10 +114,11 @@ pub(crate) fn plan_reuse_outcome(
         ToolAvailability::Unqualified => {
             return Ok(ReuseOutcome::execute_with(
                 MissReason::FORCED_UNCACHED.as_str().to_owned(),
+                recorded,
             ));
         }
         ToolAvailability::Missing => {
-            return Ok(ReuseOutcome::execute_with("unproven".to_owned()));
+            return Ok(ReuseOutcome::execute_with("unproven".to_owned(), recorded));
         }
     }
     let mode = mode_for_event(reuse_event_name(event))
@@ -109,9 +126,11 @@ pub(crate) fn plan_reuse_outcome(
     match plan_reuse(availability, &reuse_qualification(group, event), mode) {
         ReusePlan::Reuse(_) => Ok(ReuseOutcome::execute_with(
             MissReason::NO_ENTRY.as_str().to_owned(),
+            recorded,
         )),
         ReusePlan::Execute(fallback) => Ok(ReuseOutcome::execute_with(
             fallback.reason().as_str().to_owned(),
+            recorded,
         )),
     }
 }
@@ -199,15 +218,29 @@ pub(crate) fn check_archive_identity_with_source(
         .map_err(|err| internal(&format!("archive_identity_rejected:{err}")))
 }
 
-/// Verify a `reused` task; fails closed without restore observations.
-/// `Verified` needs [`verify_reused_pipeline`] with all three observation
-/// arguments once reports carry restore metadata.
+/// Verify a `reused` task against its bound identity and live inputs.
+///
+/// The restore evidence must name `task_id`, and the live input digest
+/// must still equal the recorded plan-time digest; missing evidence of
+/// any kind fails closed. `Verified` needs the full observation set
+/// once reports carry restore metadata.
 pub(crate) fn verify_reused_task(
-    _task_id: &str,
+    task_id: &str,
     declared: &[String],
     observed: &[(String, Vec<u8>, String)],
+    expected: Option<&ExpectedReuseIdentity>,
+    restore: Option<&ObservedRestoreMeta>,
+    live_input_digest: Option<&str>,
 ) -> Result<(), MissReason> {
-    verify_reused_pipeline(declared, observed, None, None, None)
+    verify_reused_pipeline(
+        declared,
+        observed,
+        None,
+        expected,
+        restore,
+        task_id,
+        live_input_digest,
+    )
 }
 #[cfg(test)]
 #[path = "wire_w2_tests.rs"]

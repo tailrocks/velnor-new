@@ -349,6 +349,10 @@ pub fn qualify_reuse(
 }
 
 /// Verify every declared output is present with a matching digest.
+///
+/// Zero-byte observations fail under the single P04 rule in
+/// [`crate::restore_evidence::output_bytes_complete`], shared with the
+/// orchestrator layer so both layers always agree.
 /// # Errors
 pub fn verify_reused_outputs(
     task: &str,
@@ -359,6 +363,9 @@ pub fn verify_reused_outputs(
         let Some((_, bytes, digest)) = observed.iter().find(|(name, _, _)| name == path) else {
             return Err(MiseError::ArtifactNotFound { path: path.clone() });
         };
+        if !crate::restore_evidence::output_bytes_complete(bytes) {
+            return Err(ineligible(task, "task_result_incomplete"));
+        }
         verify_artifact_digest(bytes, digest)
             .map_err(|_| ineligible(task, "task_result_incomplete"))?;
     }
@@ -373,28 +380,13 @@ fn ineligible(task: &str, reason: &str) -> MiseError {
     }
 }
 
-/// Classify a restore attempt: hit or a precise miss reason.
+/// Save allowlist: producer-successful pushes only, for every layer.
 ///
-/// Checks run in order: present, digest, compatibility, trust, inputs.
-/// # Errors
-pub fn classify_restore(checks: [bool; 5]) -> Result<(), &'static str> {
-    let reasons = [
-        "no_entry",
-        "cache_corrupt",
-        "compatibility_mismatch",
-        "trust_scope_mismatch",
-        "input_digest_mismatch",
-    ];
-    for (index, ok) in checks.iter().enumerate() {
-        if !ok {
-            return Err(reasons[index]);
-        }
-    }
-    Ok(())
-}
-
-/// Save allowlist: trusted layers save only on protected pushes.
+/// A save needs its producer to have passed and a protected-push event;
+/// failed runs never save, and PR, fork, merge-group, release, local,
+/// and unknown events never save through this path (PR task caches are
+/// read-only; release caching is off). Unknown trust scopes deny closed.
 #[must_use]
 pub fn save_allowed(layer_trust: &str, event: &str, passed: bool) -> bool {
-    layer_trust != "trusted" || (event == "push" && passed)
+    passed && event == "push" && matches!(layer_trust, "trusted" | "pr")
 }

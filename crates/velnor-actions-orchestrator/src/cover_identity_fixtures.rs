@@ -68,7 +68,7 @@ pub(super) fn manifest_with(entries: &[(&str, &str)]) -> BaselineManifest {
     let commit = "a".repeat(40);
     BaselineManifest {
         schema: 2,
-        repository_id: digest.clone(),
+        repository_id: digest_b3("github.com/o/r".as_bytes()),
         source_commit: commit.clone(),
         ref_: "refs/heads/testmain".to_owned(),
         event: "push".to_owned(),
@@ -167,7 +167,8 @@ pub(super) fn provenance_for(manifest: &BaselineManifest) -> ValidatedProvenance
         workflow_path: ".github/workflows/ci.yml".to_owned(),
         generator_version: "0.1.0".to_owned(),
         generator_sha256: "1".repeat(64),
-        repository_id: Some(digest_b3(b"digest")),
+        repository_id: Some(digest_b3("github.com/o/r".as_bytes())),
+        repository_slug: Some("o/r".to_owned()),
     };
     let bytes = canonical_json_bytes(manifest).expect("canonical");
     let digest = digest_b3(&bytes);

@@ -6,10 +6,10 @@
 
 use std::fmt::{Display, Formatter, Result as FmtResult};
 
-use crate::cache::{TaskCacheMode, verify_reused_outputs};
+use crate::cache::verify_reused_outputs;
 use crate::command::is_cancel_or_timeout;
 use crate::error::MiseError;
-use crate::reuse::{ReuseGrant, ReuseQualification};
+use crate::restore_evidence::RestoreObservation;
 
 /// One ordered restore check; the first failure wins (REUSE-5).
 /// Ownership is explicit: the archive owner must match the trust scope
@@ -37,12 +37,16 @@ pub struct RestoreEvidence {
 }
 
 impl RestoreEvidence {
-    /// Build evidence from five real observations (no `intact()` shortcut).
+    /// Build evidence from observed restore evidence: restored paths,
+    /// bytes, and digests compared against recorded expectations (no
+    /// `intact()` shortcut, no bare-bool constructor).
     ///
     /// Order follows [`RestoreCheck`]: presence, digest, compat, owner, inputs.
     #[must_use]
-    pub fn verify(checks: [bool; 5]) -> Self {
-        Self { checks }
+    pub fn verify(obs: &RestoreObservation) -> Self {
+        Self {
+            checks: obs.checks(),
+        }
     }
 
     /// Record one failing check.
@@ -293,45 +297,6 @@ pub fn probe_tool_availability(qualified: bool, probe_failed: bool) -> ToolAvail
     }
 }
 
-/// Reuse plan: reuse under a grant, or execute with a fallback reason.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ReusePlan {
-    /// Reuse the cached result under this grant.
-    Reuse(ReuseGrant),
-    /// Execute without reuse, reporting this fallback.
-    Execute(ReuseFallback),
-}
-
-/// Decide reuse for one qualification: missing tools, release paths, and
-/// unqualified tasks execute without reuse and report their reason.
-#[must_use]
-pub fn plan_reuse(
-    availability: ToolAvailability,
-    qualification: &ReuseQualification,
-    mode: TaskCacheMode,
-) -> ReusePlan {
-    match availability {
-        ToolAvailability::Ready => {}
-        ToolAvailability::Unqualified => {
-            return ReusePlan::Execute(ReuseFallback::execute_with(MissReason::FORCED_UNCACHED));
-        }
-        ToolAvailability::Missing => {
-            return ReusePlan::Execute(ReuseFallback::execute_with(MissReason::CACHE_UNAVAILABLE));
-        }
-    }
-    match qualification.check(mode) {
-        Ok(grant) => ReusePlan::Reuse(grant),
-        Err(error) => {
-            debug_assert!(
-                !is_cancel_or_timeout(&error),
-                "pure qualification never cancels"
-            );
-            let reason = fallback_for_error(&error).unwrap_or(MissReason::FORCED_UNCACHED);
-            ReusePlan::Execute(ReuseFallback::execute_with(reason))
-        }
-    }
-}
-
 /// Save-decision inputs for one cache layer (CACHE-2.x).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SaveInputs<'a> {
@@ -362,7 +327,7 @@ pub fn save_decision(inputs: &SaveInputs<'_>) -> Result<(), MissReason> {
     if inputs.active_writer {
         return Err(MissReason::CACHE_WRITE_DISABLED);
     }
-    if inputs.layer_trust == "trusted" && !(inputs.event == "push" && inputs.passed) {
+    if !crate::cache::save_allowed(inputs.layer_trust, inputs.event, inputs.passed) {
         return Err(MissReason::CACHE_WRITE_DISABLED);
     }
     Ok(())

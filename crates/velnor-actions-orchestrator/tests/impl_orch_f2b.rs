@@ -7,9 +7,9 @@ use velnor_actions_contract::{
     digest_b3, matrix_id_for_task_group, matrix_key_for_id,
 };
 use velnor_actions_orchestrator::decisions::{
-    MetadataFailure, NotSelectedInputs, ObligationInputs, baseline_expired, classify_obligation,
-    classify_restore_with_ownership, dedupe_sorted, not_selected_report, omission_ledger,
-    plan_artifact_dir, plan_json_path, select_exact_base_run, selection_broadens_for_path,
+    CacheHit, MetadataFailure, NotSelectedInputs, ObligationInputs, baseline_expired,
+    classify_obligation, classify_restore_with_ownership, dedupe_sorted, not_selected_report,
+    omission_ledger, plan_artifact_dir, plan_json_path, selection_broadens_for_path,
 };
 
 use crate::impl_common::{TestResult, passing_reports, plan_for_source_change};
@@ -22,9 +22,26 @@ fn open_inputs() -> ObligationInputs {
         undeclared_inputs: false,
         nondeterministic: false,
         inputs_controlled: false,
-        cache_hit_verified: false,
+        cache_hit: CacheHit::Execute,
         baseline_covered: false,
         restore_miss_reason: None,
+    }
+}
+
+/// Fully observed restore: real path, bytes, and matching digests.
+fn observed_restore() -> velnor_actions_mise::restore_evidence::RestoreObservation {
+    use velnor_actions_mise::restore_evidence::RestoreObservation;
+    let bytes = b"entry bytes".to_vec();
+    RestoreObservation {
+        entry_path: "task-artifacts/v2/clippy/entry".to_owned(),
+        entry_bytes: bytes.clone(),
+        expected_digest: digest_b3(&bytes),
+        expected_compat: digest_b3(b"compat"),
+        observed_compat: digest_b3(b"compat"),
+        expected_owner: "trusted".to_owned(),
+        observed_owner: "trusted".to_owned(),
+        expected_inputs: digest_b3(b"inputs"),
+        observed_inputs: digest_b3(b"inputs"),
     }
 }
 
@@ -79,7 +96,7 @@ fn every_obligation_classifies_with_reason() {
         (ObligationDecision::Execute, "always_run_dynamic_inputs")
     );
     open.inputs_controlled = true;
-    open.cache_hit_verified = true;
+    open.cache_hit = CacheHit::Verified;
     assert_eq!(
         decide(&open),
         (
@@ -87,7 +104,7 @@ fn every_obligation_classifies_with_reason() {
             "reused_from_task_cache"
         )
     );
-    open.cache_hit_verified = false;
+    open.cache_hit = CacheHit::Execute;
     open.baseline_covered = true;
     assert_eq!(
         decide(&open),
@@ -106,21 +123,28 @@ fn every_obligation_classifies_with_reason() {
 
 #[test]
 fn restore_checks_ownership_explicitly() {
+    let obs = observed_restore();
     assert_eq!(
-        classify_restore_with_ownership(false, [true; 5]),
+        classify_restore_with_ownership("pr", &obs),
         Err("ownership_mismatch")
     );
-    assert!(classify_restore_with_ownership(true, [true; 5]).is_ok());
+    assert!(classify_restore_with_ownership("trusted", &obs).is_ok());
+    let mut obs = observed_restore();
+    obs.entry_path.clear();
     assert_eq!(
-        classify_restore_with_ownership(true, [false, true, true, true, true]),
+        classify_restore_with_ownership("trusted", &obs),
         Err("no_entry")
     );
+    let mut obs = observed_restore();
+    obs.entry_bytes = b"forged".to_vec();
     assert_eq!(
-        classify_restore_with_ownership(true, [true, false, true, true, true]),
+        classify_restore_with_ownership("trusted", &obs),
         Err("cache_corrupt")
     );
+    let mut obs = observed_restore();
+    obs.observed_owner = "pr".to_owned();
     assert_eq!(
-        classify_restore_with_ownership(true, [true, true, true, false, true]),
+        classify_restore_with_ownership("pr", &obs),
         Err("trust_scope_mismatch")
     );
 }
@@ -232,18 +256,49 @@ fn baselines_expire_on_schedule() {
 
 #[test]
 fn exact_base_run_filter_pins_provenance() {
+    use velnor_actions_orchestrator::run_select::{
+        SelectedBaseRun, select_baseline_artifact, select_exact_base_run,
+    };
     let base = "a".repeat(40);
     let other = "b".repeat(40);
     let runs = serde_json::json!([
-        {"databaseId": 1, "headSha": other, "headBranch": "t", "event": "push", "conclusion": "success"},
-        {"databaseId": 2, "headSha": base, "headBranch": "t", "event": "push", "conclusion": "failure"},
-        {"databaseId": 3, "headSha": base, "headBranch": "t", "event": "pull_request", "conclusion": "success"},
+        {"databaseId": 1, "headSha": other, "headBranch": "t", "event": "push", "conclusion": "success", "attempt": 1},
+        {"databaseId": 2, "headSha": base, "headBranch": "t", "event": "push", "conclusion": "failure", "attempt": 1},
+        {"databaseId": 3, "headSha": base, "headBranch": "t", "event": "pull_request", "conclusion": "success", "attempt": 1},
         {"databaseId": 4, "headSha": base, "headBranch": "t", "event": "push", "conclusion": "success"},
+        {"databaseId": 5, "headSha": base, "headBranch": "t", "event": "push", "conclusion": "success", "attempt": 3},
     ]);
-    assert_eq!(select_exact_base_run(&runs.to_string(), &base, "t"), Ok(4));
+    assert_eq!(
+        select_exact_base_run(&runs.to_string(), &base, "t"),
+        Ok(SelectedBaseRun {
+            run_id: 5,
+            attempt: 3
+        })
+    );
     assert!(select_exact_base_run(&runs.to_string(), &"c".repeat(40), "t").is_err());
     assert!(select_exact_base_run("not json", &base, "t").is_err());
     assert!(select_exact_base_run("[]", &base, "t").is_err());
+    let unattested = serde_json::json!([
+        {"databaseId": 6, "headSha": base, "headBranch": "t", "event": "push", "conclusion": "success"},
+        {"databaseId": 7, "headSha": base, "headBranch": "t", "event": "push", "conclusion": "success", "attempt": 0},
+    ]);
+    assert!(
+        select_exact_base_run(&unattested.to_string(), &base, "t").is_err(),
+        "runs without attempt evidence never select"
+    );
+    let listed = serde_json::json!({"artifacts": [
+        {"id": 8, "name": "other", "expired": false},
+        {"id": 9, "name": "velnor-baseline-x", "expired": true},
+        {"id": 10, "name": "velnor-baseline-x", "expired": false},
+    ]});
+    assert_eq!(
+        select_baseline_artifact(&listed.to_string(), "velnor-baseline-x"),
+        Ok(10)
+    );
+    assert!(select_baseline_artifact(&listed.to_string(), "missing").is_err());
+    assert!(select_baseline_artifact("not json", "velnor-baseline-x").is_err());
+    let array = serde_json::json!([{"databaseId": 11, "name": "n", "expired": false}]);
+    assert_eq!(select_baseline_artifact(&array.to_string(), "n"), Ok(11));
 }
 
 #[test]

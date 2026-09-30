@@ -62,7 +62,15 @@ fn reuse_outcomes_execute_with_precise_reasons() {
     for result in [&missing, &gated, &eligible, &refused] {
         assert_eq!(result.decision, ObligationDecision::Execute);
         assert!(result.task_cache_key.is_none());
+        assert_eq!(
+            result.recorded_input_digest.as_deref(),
+            Some(digest.as_str())
+        );
     }
+    assert_eq!(
+        ReuseOutcome::execute("affected_by_change").recorded_input_digest,
+        None
+    );
     let mut dirty = group;
     dirty.undeclared_reads = true;
     assert!(reuse_qualification(&dirty, WorkflowEvent::Push).always_run());
@@ -81,35 +89,62 @@ fn reuse_outcomes_execute_with_precise_reasons() {
 
 #[test]
 fn reused_tasks_verify_outputs_then_fail_trust_closed() {
+    let run = |task: &str,
+               declared: &[String],
+               observed: &[(String, Vec<u8>, String)]|
+     -> Result<(), MissReason> {
+        verify_reused_task(task, declared, observed, None, None, None)
+    };
     assert_eq!(
-        verify_reused_task("t", &[], &[]).expect_err("no observations"),
+        run("t", &[], &[]).expect_err("no observations"),
         MissReason::TASK_RESULT_INCOMPLETE
     );
     let declared = vec!["out/report.json".to_owned()];
     assert_eq!(
-        verify_reused_task("t", &declared, &[]).expect_err("no payload"),
+        run("t", &declared, &[]).expect_err("no payload"),
         MissReason::TASK_RESULT_INCOMPLETE
     );
     let bytes = b"report-bytes".to_vec();
     let digest = digest_b3(&bytes);
     let observed = vec![("out/report.json".to_owned(), bytes.clone(), digest.clone())];
     assert_eq!(
-        verify_reused_task("t", &[], &observed).expect_err("empty descriptor"),
+        run("t", &[], &observed).expect_err("empty descriptor"),
         MissReason::TASK_NOT_ELIGIBLE
     );
     let tampered = vec![("out/report.json".to_owned(), bytes, digest_b3(b"other"))];
     assert_eq!(
-        verify_reused_task("t", &declared, &tampered).expect_err("tampered"),
+        run("t", &declared, &tampered).expect_err("tampered"),
         MissReason::CACHE_CORRUPT
     );
     let empty = vec![("out/report.json".to_owned(), Vec::new(), digest.clone())];
     assert_eq!(
-        verify_reused_task("t", &declared, &empty).expect_err("zero byte"),
+        run("t", &declared, &empty).expect_err("zero byte"),
         MissReason::TASK_RESULT_INCOMPLETE
     );
     assert_eq!(
-        verify_reused_task("t", &declared, &observed).expect_err("no trust anchor"),
+        run("t", &declared, &observed).expect_err("no trust anchor"),
         MissReason::TASK_RESULT_INCOMPLETE
+    );
+}
+
+#[test]
+fn reuse_event_names_match_mode_spellings() {
+    use velnor_actions_mise::cache::{TaskCacheMode, mode_for_event};
+    assert_eq!(reuse_event_name(WorkflowEvent::Fork), "fork");
+    assert_eq!(reuse_event_name(WorkflowEvent::PullRequest), "pull_request");
+    for event in [
+        WorkflowEvent::PullRequest,
+        WorkflowEvent::Fork,
+        WorkflowEvent::Push,
+        WorkflowEvent::MergeGroup,
+        WorkflowEvent::Local,
+    ] {
+        let name = reuse_event_name(event);
+        assert!(mode_for_event(name).is_ok(), "{name}");
+    }
+    assert_eq!(
+        mode_for_event(reuse_event_name(WorkflowEvent::Fork)).expect("fork"),
+        TaskCacheMode::ReadOnly
     );
 }
 
@@ -189,18 +224,23 @@ fn observations_thread_to_verified_or_precise_miss() {
         dep_keys: Vec::new(),
     };
     let (key, compat) = (digest_b3(b"key"), digest_b3(b"compat"));
+    let live = digest_b3(b"inputs");
     let expected = ExpectedReuseIdentity {
         cache_key: key.clone(),
         compatibility_id: compat.clone(),
         owner_scope: "trusted".to_owned(),
+        input_digest: live.clone(),
     };
     let declared = vec!["out/report.json".to_owned()];
+    let task = "stack/rust/root/clippy/default";
     let good = ObservedRestoreMeta {
+        task_id: task.to_owned(),
         key: key.clone(),
         compat: compat.clone(),
         owner: "trusted".to_owned(),
     };
     let bad = ObservedRestoreMeta {
+        task_id: task.to_owned(),
         key,
         compat: digest_b3(b"other"),
         owner: "trusted".to_owned(),
@@ -212,11 +252,77 @@ fn observations_thread_to_verified_or_precise_miss() {
             Some(&descriptor),
             Some(&expected),
             Some(restore),
+            task,
+            Some(&live),
         )
     };
     assert!(run(&good).is_ok());
     assert_eq!(
         run(&bad).expect_err("compat"),
         MissReason::COMPATIBILITY_MISMATCH
+    );
+}
+
+/// Bound task plus live digest: foreign evidence and drifted inputs
+/// reject, while the fully bound reuse verifies.
+#[test]
+fn verified_reuse_binds_task_and_live_inputs() {
+    let bytes = b"report-bytes".to_vec();
+    let digest = digest_b3(&bytes);
+    let observed = vec![("out/report.json".to_owned(), bytes, digest)];
+    let (key, compat) = (digest_b3(b"key"), digest_b3(b"compat"));
+    let live = digest_b3(b"inputs");
+    let expected = ExpectedReuseIdentity {
+        cache_key: key.clone(),
+        compatibility_id: compat.clone(),
+        owner_scope: "trusted".to_owned(),
+        input_digest: live.clone(),
+    };
+    let declared = vec!["out/report.json".to_owned()];
+    let task = "stack/rust/root/clippy/default";
+    let good = ObservedRestoreMeta {
+        task_id: task.to_owned(),
+        key,
+        compat,
+        owner: "trusted".to_owned(),
+    };
+    let foreign = ObservedRestoreMeta {
+        task_id: "stack/rust/root/other/default".to_owned(),
+        ..good.clone()
+    };
+    assert_eq!(
+        verify_reused_task(
+            task,
+            &declared,
+            &observed,
+            Some(&expected),
+            Some(&foreign),
+            Some(&live)
+        )
+        .expect_err("task"),
+        MissReason::NO_ENTRY
+    );
+    assert_eq!(
+        verify_reused_task(
+            task,
+            &declared,
+            &observed,
+            Some(&expected),
+            Some(&good),
+            Some(&digest_b3(b"edited")),
+        )
+        .expect_err("live drift"),
+        MissReason::INPUT_DIGEST_MISMATCH
+    );
+    assert!(
+        verify_reused_task(
+            task,
+            &declared,
+            &observed,
+            Some(&expected),
+            Some(&good),
+            Some(&live)
+        )
+        .is_ok()
     );
 }

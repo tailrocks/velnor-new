@@ -36,6 +36,7 @@ fn expected_modules() -> Vec<&'static str> {
         "release_plz.rs",
         "requests.rs",
         "restore.rs",
+        "restore_evidence.rs",
         "reuse.rs",
         "runtime_paths.rs",
         "steps.rs",

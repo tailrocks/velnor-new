@@ -1,0 +1,194 @@
+//! Assembly tests.
+//!
+//! Declared via `#[path]` from `merge_request.rs` under `cfg(test)`.
+
+use super::*;
+
+/// Minimal plan JSON naming the given artifact IDs.
+fn plan_with(artifact_ids: &[&str]) -> String {
+    let include: Vec<String> = artifact_ids
+        .iter()
+        .map(|id| format!(r#"{{"artifact_id":"{id}","report_id":"report-for-{id}"}}"#))
+        .collect();
+    format!(r#"{{"matrix":{{"include":[{}]}}}}"#, include.join(","))
+}
+
+/// Run directory with caller-supplied plan plus caller-supplied files.
+fn staged(plan: &str, files: &[(&str, &str)]) -> tempfile::TempDir {
+    let dir = tempfile::TempDir::new().expect("tempdir");
+    std::fs::write(dir.path().join("plan.json"), plan).expect("plan");
+    std::fs::write(dir.path().join("matrix.json"), "{}").expect("matrix");
+    for (name, body) in files {
+        let path = dir.path().join(name);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).expect("parents");
+        }
+        std::fs::write(&path, body).expect("file");
+    }
+    dir
+}
+
+/// Error strings of one assembled request.
+fn error_list(request: &str) -> Vec<String> {
+    serde_json::from_str::<serde_json::Value>(request).expect("json")["assembly_errors"]
+        .as_array()
+        .expect("errors")
+        .iter()
+        .filter_map(|value| value.as_str().map(str::to_owned))
+        .collect()
+}
+
+#[test]
+fn assembly_shape_carries_no_base() {
+    let aid = "velnor-matrix-local-m-0123456789abcdef";
+    let dir = staged(
+        &plan_with(&[aid]),
+        &[(
+            "reports/velnor-matrix-local-m-0123456789abcdef/matrix-report.json",
+            r#"{"report_id":"b"}"#,
+        )],
+    );
+    let needs = r#"{"plan":"success","rust-demo":"success"}"#;
+    let request = assemble_with_needs("local", dir.path(), Some(needs)).expect("assemble");
+    let value: serde_json::Value = serde_json::from_str(&request).expect("json");
+    assert!(value.get("base").is_none(), "{request}");
+    assert_eq!(value["schema"], 1);
+    assert_eq!(value["matrix_reports"].as_array().map(Vec::len), Some(1));
+    assert_eq!(
+        value["required_job_ids"],
+        serde_json::json!(["plan", "rust-demo"])
+    );
+    assert!(error_list(&request).is_empty(), "{request}");
+}
+
+#[test]
+fn assembly_reads_expected_only_and_sorts_reports() {
+    let first = "velnor-matrix-local-m-0000000000000001";
+    let second = "velnor-matrix-local-m-0000000000000002";
+    let dir = staged(
+        &plan_with(&[first, second]),
+        &[
+            (
+                "reports/velnor-matrix-local-m-0000000000000002/matrix-report.json",
+                r#"{"report_id":"report-2"}"#,
+            ),
+            (
+                "reports/velnor-matrix-local-m-0000000000000001/matrix-report.json",
+                r#"{"report_id":"report-1"}"#,
+            ),
+            ("reports/stray.json", r#"{"report_id":"stray"}"#),
+        ],
+    );
+    let needs = r#"{"plan":{"result":"success","outputs":{}}}"#;
+    let request = assemble_with_needs("local", dir.path(), Some(needs)).expect("assemble");
+    let value: serde_json::Value = serde_json::from_str(&request).expect("json");
+    let ids: Vec<&str> = value["matrix_reports"]
+        .as_array()
+        .expect("reports")
+        .iter()
+        .map(|report| report["report_id"].as_str().unwrap_or_default())
+        .collect();
+    assert_eq!(ids, ["report-1", "report-2"]);
+    assert!(error_list(&request).is_empty(), "{request}");
+}
+
+#[test]
+fn assembly_records_gaps_and_rejects_bad_report() {
+    let empty = tempfile::TempDir::new().expect("tempdir");
+    let request = assemble_with_needs("local", empty.path(), None).expect("null plan");
+    let value: serde_json::Value = serde_json::from_str(&request).expect("json");
+    assert!(value["plan"].is_null(), "{request}");
+    assert!(value["matrix"].is_null(), "{request}");
+    assert_eq!(value["required_job_ids"].as_array().map(Vec::len), Some(0));
+    let errors = error_list(&request);
+    for want in ["missing_plan", "missing_matrix", "missing_needs_channel"] {
+        assert!(errors.contains(&want.to_owned()), "{errors:?}");
+    }
+    let aid = "velnor-matrix-local-m-0123456789abcdef";
+    let bad = staged(
+        &plan_with(&[aid]),
+        &[(
+            "reports/velnor-matrix-local-m-0123456789abcdef/matrix-report.json",
+            "not json",
+        )],
+    );
+    let request =
+        assemble_with_needs("local", bad.path(), Some(r#"{"a":"b"}"#)).expect("diagnostic");
+    let errors = error_list(&request);
+    assert!(
+        errors
+            .iter()
+            .any(|error| error.starts_with("unparsable_report:")),
+        "{errors:?}"
+    );
+    assert!(
+        errors
+            .iter()
+            .any(|error| error.starts_with("bad_needs_result:")),
+        "{errors:?}"
+    );
+    let missing = staged(&plan_with(&[aid]), &[]);
+    let request = assemble_with_needs("local", missing.path(), Some(r#"{"plan":"success"}"#))
+        .expect("diagnostic");
+    let errors = error_list(&request);
+    assert!(
+        errors
+            .iter()
+            .any(|error| error.starts_with("missing_report:")),
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn assembly_rejects_links_oversize_and_unreadable_inputs() {
+    let dir = staged("{}", &[]);
+    std::fs::write(dir.path().join("real.json"), "{}").expect("real");
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(
+        dir.path().join("real.json"),
+        dir.path().join("baseline.json"),
+    )
+    .expect("link");
+    #[cfg(unix)]
+    {
+        let request =
+            assemble_with_needs("local", dir.path(), Some(r#"{"plan":"success"}"#)).expect("asm");
+        let errors = error_list(&request);
+        assert!(
+            errors.contains(&"symlink_baseline".to_owned()),
+            "symlinked baseline.json reports: {errors:?}"
+        );
+        std::fs::remove_file(dir.path().join("baseline.json")).expect("rm");
+    }
+    std::fs::write(
+        dir.path().join("candidate-report.json"),
+        "x".repeat(usize::try_from(MAX_ASSEMBLY_JSON_BYTES + 10).expect("bound")),
+    )
+    .expect("big");
+    let request =
+        assemble_with_needs("local", dir.path(), Some(r#"{"plan":"success"}"#)).expect("asm");
+    let errors = error_list(&request);
+    assert!(
+        errors.contains(&"oversize_candidate_report".to_owned()),
+        "{errors:?}"
+    );
+    std::fs::remove_file(dir.path().join("candidate-report.json")).expect("rm");
+    std::fs::create_dir(dir.path().join("baseline.json")).expect("dir");
+    let request =
+        assemble_with_needs("local", dir.path(), Some(r#"{"plan":"success"}"#)).expect("asm");
+    let errors = error_list(&request);
+    assert!(
+        errors.contains(&"unreadable_baseline".to_owned()),
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn request_file_writes_exclusively() {
+    let dir = staged("{}", &[]);
+    let file = dir.path().join("sub").join("merge-v1-request.json");
+    let written = write_merge_request_to(&file, "local", dir.path()).expect("write");
+    assert_eq!(written, file);
+    let err = write_merge_request_to(&file, "local", dir.path()).expect_err("exists");
+    assert!(err.to_string().contains("request_exists"), "{err}");
+}

@@ -284,6 +284,16 @@ fn is_symlink(path: &Path) -> bool {
 /// so oversize files error instead of exhausting memory. Failure
 /// classes map directly onto assembly error prefixes.
 fn read_bounded(path: &Path) -> Result<String, &'static str> {
+    read_staged_text(path, MAX_STAGED_REPORT_BYTES)
+}
+
+/// Read one file with symlink rejection and a caller size bound.
+///
+/// Shared by staged-report reads and merge-request assembly so every
+/// event-time read enforces the same gates: symlinks and non-files
+/// reject, missing files report, and oversize files error instead of
+/// exhausting memory.
+pub(crate) fn read_staged_text(path: &Path, bound: u64) -> Result<String, &'static str> {
     match fs::symlink_metadata(path) {
         Ok(meta) if meta.file_type().is_symlink() => return Err("symlink"),
         Ok(meta) if !meta.is_file() => return Err("unreadable"),
@@ -292,10 +302,10 @@ fn read_bounded(path: &Path) -> Result<String, &'static str> {
     }
     let file = fs::File::open(path).map_err(|_| "unreadable")?;
     let mut text = String::new();
-    file.take(MAX_STAGED_REPORT_BYTES + 1)
+    file.take(bound + 1)
         .read_to_string(&mut text)
         .map_err(|_| "unreadable")?;
-    if u64::try_from(text.len()).unwrap_or(u64::MAX) > MAX_STAGED_REPORT_BYTES {
+    if u64::try_from(text.len()).unwrap_or(u64::MAX) > bound {
         return Err("oversize");
     }
     Ok(text)
@@ -327,60 +337,5 @@ fn expected_artifact_ids(plan: &serde_json::Value) -> Vec<&str> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn retrieve_argv_names_exact_artifact() {
-        let args = retrieve_args(
-            7,
-            "velnor-matrix-r7-a2-m-0123456789abcdef",
-            Path::new("/tmp/x"),
-        )
-        .expect("argv");
-        let text: Vec<String> = args
-            .iter()
-            .map(|arg| arg.to_string_lossy().into_owned())
-            .collect();
-        assert_eq!(
-            text,
-            [
-                "run",
-                "download",
-                "7",
-                "--name",
-                "velnor-matrix-r7-a2-m-0123456789abcdef",
-                "--dir",
-                "/tmp/x"
-            ]
-        );
-        assert!(retrieve_args(7, "velnor-matrix-*", Path::new("/tmp/x")).is_err());
-        assert!(retrieve_args(7, "../escape", Path::new("/tmp/x")).is_err());
-    }
-
-    #[test]
-    fn missing_plan_retrieves_zero_without_spawning() {
-        let dir = tempfile::TempDir::new().expect("tempdir");
-        let run = dir.path().join("r7-a2");
-        assert_eq!(retrieve_reports_to(7, &run), 0);
-        assert!(!run.join("reports").exists(), "no downloads attempted");
-    }
-
-    #[test]
-    fn enumeration_follows_plan_order() {
-        let plan = serde_json::json!({
-            "matrix": {"include": [
-                {"artifact_id": "velnor-matrix-r7-a2-m-0000000000000002"},
-                {"artifact_id": "velnor-matrix-r7-a2-m-0000000000000001"},
-            ]}
-        });
-        assert_eq!(
-            expected_artifact_ids(&plan),
-            [
-                "velnor-matrix-r7-a2-m-0000000000000002",
-                "velnor-matrix-r7-a2-m-0000000000000001",
-            ]
-        );
-        assert!(expected_artifact_ids(&serde_json::json!({})).is_empty());
-    }
-}
+#[path = "retrieve_reports_tests.rs"]
+mod retrieve_reports_tests;

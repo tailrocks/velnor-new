@@ -10,9 +10,10 @@ use std::path::{Path, PathBuf};
 use crate::cache::{
     CachedTaskDescriptor, TaskCacheMode, artifact_path, qualify_reuse, resolve_task_artifact_dir,
 };
+use crate::command::is_cancel_or_timeout;
 use crate::error::MiseError;
 use crate::gate6::{Gate6Fixture, qualified_task_run_argv};
-use crate::restore::MissReason;
+use crate::restore::{MissReason, ReuseFallback, ToolAvailability, fallback_for_error};
 
 /// Event name that never reuses a cached task result.
 const RELEASE_EVENT: &str = "release";
@@ -236,6 +237,45 @@ impl TaskCacheKey {
     #[must_use]
     pub fn digest(&self) -> &str {
         &self.digest
+    }
+}
+
+/// Reuse plan: reuse under a grant, or execute with a fallback reason.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReusePlan {
+    /// Reuse the cached result under this grant.
+    Reuse(ReuseGrant),
+    /// Execute without reuse, reporting this fallback.
+    Execute(ReuseFallback),
+}
+
+/// Decide reuse for one qualification: missing tools, release paths, and
+/// unqualified tasks execute without reuse and report their reason.
+#[must_use]
+pub fn plan_reuse(
+    availability: ToolAvailability,
+    qualification: &ReuseQualification,
+    mode: TaskCacheMode,
+) -> ReusePlan {
+    match availability {
+        ToolAvailability::Ready => {}
+        ToolAvailability::Unqualified => {
+            return ReusePlan::Execute(ReuseFallback::execute_with(MissReason::FORCED_UNCACHED));
+        }
+        ToolAvailability::Missing => {
+            return ReusePlan::Execute(ReuseFallback::execute_with(MissReason::CACHE_UNAVAILABLE));
+        }
+    }
+    match qualification.check(mode) {
+        Ok(grant) => ReusePlan::Reuse(grant),
+        Err(error) => {
+            debug_assert!(
+                !is_cancel_or_timeout(&error),
+                "pure qualification never cancels"
+            );
+            let reason = fallback_for_error(&error).unwrap_or(MissReason::FORCED_UNCACHED);
+            ReusePlan::Execute(ReuseFallback::execute_with(reason))
+        }
     }
 }
 
