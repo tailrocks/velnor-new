@@ -69,6 +69,52 @@ pub fn reject_denied_step_keys(env: &BTreeMap<String, String>) -> Result<(), Ren
     Ok(())
 }
 
+/// Isolation keys forbidden in project-task step env (P07-7 hook escape).
+///
+/// The isolation quartet plus the install-disable pair. Trusted generated
+/// steps carry these from the Mise adapter's single source; untrusted
+/// project-task declarations must never smuggle them in to re-enable
+/// hooks, config, or implicit installs. Mirrors the Mise adapter's
+/// reserved set minus credentials (denied separately above) without
+/// depending on it.
+pub const STEP_ISOLATION_DENYLIST: [&str; 6] = [
+    "MISE_NO_CONFIG",
+    "MISE_NO_ENV",
+    "MISE_NO_HOOKS",
+    "MISE_LOCKFILE",
+    "MISE_AUTO_INSTALL",
+    "MISE_EXEC_AUTO_INSTALL",
+];
+
+/// Reject privileged isolation keys in a project-task step env map.
+/// # Errors
+pub fn reject_privileged_task_keys(env: &BTreeMap<String, String>) -> Result<(), RenderError> {
+    for key in STEP_ISOLATION_DENYLIST {
+        if env.contains_key(key) {
+            return Err(RenderError::BadCommand(format!(
+                "privileged_task_env:{key}"
+            )));
+        }
+    }
+    Ok(())
+}
+
+/// Merge the triple over untrusted project-task declarations, refusing all privileged keys.
+///
+/// Same contract as [`checked_task_env`], plus isolation-key denial: a
+/// hostile project task cannot re-enable hooks/config or smuggle
+/// credentials through its declared env.
+/// # Errors
+pub fn checked_project_task_env(
+    base: &BTreeMap<String, String>,
+    rustup_home: &str,
+    cargo_home: &str,
+    toolchain: &str,
+) -> Result<BTreeMap<String, String>, RenderError> {
+    reject_privileged_task_keys(base)?;
+    checked_task_env(base, rustup_home, cargo_home, toolchain)
+}
+
 /// Merge the triple over a validated base, refusing blanks and credentials.
 ///
 /// The base carries the caller's policy pairs plus step extras; blank

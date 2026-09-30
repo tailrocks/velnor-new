@@ -9,6 +9,9 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
+use crate::catalog::{PinnedTool, validate_exact_version};
+use crate::wrappers::parse_cargo_wrapper;
+
 /// Tool-file name owned by the Mise adapter.
 pub const MISE_TOML_FILE: &str = "mise.toml";
 /// Lock-file name owned by the Mise adapter.
@@ -189,6 +192,78 @@ pub fn inspect_mise_file(
     match parse_tools(text) {
         Ok(spec) => Ok(MiseInspection::present(path, spec)),
         Err(problem) => Ok(MiseInspection::invalid(path, &problem)),
+    }
+}
+
+/// Reconciliation of the Cargo wrapper against the local tool pin.
+///
+/// A `wrappers.cargo.command = "mbx"` wrapper requires the `mbx` binary;
+/// clean checkouts resolve it from the `[tools]` exact pin in this same
+/// file, never from a global install (P07-9).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MbxWrapperStatus {
+    /// No MBX wrapper: no pin required.
+    NoMbxWrapper,
+    /// MBX wrapper with an exact local `mr-boxington` pin.
+    Pinned {
+        /// Exact pinned version selecting the `mbx` binary.
+        version: String,
+    },
+    /// MBX wrapper without a local `mr-boxington` pin.
+    MissingPin,
+    /// Malformed wrapper or tool table, or a non-exact pin selector.
+    Invalid {
+        /// Machine-readable problem detail.
+        problem: String,
+    },
+}
+
+/// Reconcile one `mise.toml` text: wrapper-required MBX versus local pin.
+///
+/// Returns [`MbxWrapperStatus::NoMbxWrapper`] when no structural MBX
+/// wrapper exists. A wrapper selecting MBX needs an exact
+/// `mr-boxington` pin in `[tools]`; anything else fails closed.
+#[must_use]
+pub fn mbx_wrapper_pin_status(content: &str) -> MbxWrapperStatus {
+    let wrapper = match parse_cargo_wrapper(content) {
+        Ok(wrapper) => wrapper,
+        Err(diagnostic) => {
+            return MbxWrapperStatus::Invalid {
+                problem: diagnostic.to_string(),
+            };
+        }
+    };
+    if !wrapper.is_some_and(|found| found.is_mbx()) {
+        return MbxWrapperStatus::NoMbxWrapper;
+    }
+    let inspection = match inspect_mise_file(MISE_TOML_FILE, Some(content)) {
+        Ok(inspection) => inspection,
+        Err(error) => {
+            return MbxWrapperStatus::Invalid {
+                problem: error.to_string(),
+            };
+        }
+    };
+    let Some(spec) = inspection.spec else {
+        let problem = inspection
+            .findings
+            .first()
+            .and_then(|finding| finding.observed.clone())
+            .unwrap_or_else(|| "unreadable_tools".to_owned());
+        return MbxWrapperStatus::Invalid { problem };
+    };
+    let tool = PinnedTool::MrBoxington.tool_name();
+    let Some(selector) = spec.tools.get(tool) else {
+        return MbxWrapperStatus::MissingPin;
+    };
+    if validate_exact_version(tool, selector).is_ok() {
+        MbxWrapperStatus::Pinned {
+            version: selector.clone(),
+        }
+    } else {
+        MbxWrapperStatus::Invalid {
+            problem: format!("inexact_pin:{tool}:{selector}"),
+        }
     }
 }
 

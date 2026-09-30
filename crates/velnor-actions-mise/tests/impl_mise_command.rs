@@ -1,7 +1,11 @@
 //! Fixed subprocess wrapper cases.
 use std::ffi::{OsStr, OsString};
+use velnor_actions_mise::command::{
+    SPAWN_CANCELLED_MESSAGE, SPAWN_TIMEOUT_MESSAGE_PREFIX, is_cancel_or_timeout,
+};
 use velnor_actions_mise::{
-    ISOLATION_ENV, IsolatedCommand, MISE_GLOBAL_FLAGS, ProcessOutput, TOOL_COMMAND_SEPARATOR,
+    ISOLATION_ENV, IsolatedCommand, MISE_GLOBAL_FLAGS, MiseError, ProcessOutput,
+    TOOL_COMMAND_SEPARATOR,
 };
 
 fn specs() -> Vec<String> {
@@ -173,4 +177,42 @@ fn process_output_reports_typed_exit() {
         binary.stdout_text("mise"),
         Err(velnor_actions_mise::MiseError::InvalidUtf8 { .. })
     ));
+}
+
+#[test]
+fn cancel_or_timeout_classifier_separates_abortions_from_outcomes() {
+    assert_eq!(SPAWN_CANCELLED_MESSAGE, "cancelled");
+    assert_eq!(SPAWN_TIMEOUT_MESSAGE_PREFIX, "timeout_after_secs:");
+    for message in [
+        "cancelled",
+        "timeout_after_secs:1",
+        "timeout_after_secs:600",
+    ] {
+        let error = MiseError::SpawnFailed {
+            program: "sh".to_owned(),
+            message: message.to_owned(),
+        };
+        assert!(is_cancel_or_timeout(&error), "{message} must classify");
+    }
+    for error in [
+        MiseError::SpawnFailed {
+            program: "sh".to_owned(),
+            message: "stdout_limit_exceeded:1024".to_owned(),
+        },
+        MiseError::SpawnFailed {
+            program: "no-such-program".to_owned(),
+            message: "No such file or directory (os error 2)".to_owned(),
+        },
+        MiseError::NonZeroExit {
+            program: "sh".to_owned(),
+            code: Some(1),
+            stderr: String::new(),
+        },
+        MiseError::CacheNotEligible {
+            task: "clippy".to_owned(),
+            reason: "forced_uncached".to_owned(),
+        },
+    ] {
+        assert!(!is_cancel_or_timeout(&error), "{error} must not classify");
+    }
 }

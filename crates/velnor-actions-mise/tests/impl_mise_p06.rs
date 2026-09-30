@@ -1,8 +1,9 @@
 //! P06 detection cases: structural wrappers, Nextest config, profile argv.
+use velnor_actions_mise::toolfiles::{MbxWrapperStatus, mbx_wrapper_pin_status};
 use velnor_actions_mise::{
-    CI_PROFILE_NAME, DEFAULT_PROFILE_NAME, NEXTEST_CONFIG_REL, NextestArchive, NextestDriver,
-    NextestList, NextestPartition, NextestRun, PinnedTool, ToolCatalog, is_mbx_command,
-    parse_cargo_wrapper, parse_nextest_config,
+    CI_PROFILE_NAME, DEFAULT_PROFILE_NAME, MR_BOXINGTON_VERSION, NEXTEST_CONFIG_REL,
+    NextestArchive, NextestDriver, NextestList, NextestPartition, NextestRun, PinnedTool,
+    ToolCatalog, is_mbx_command, parse_cargo_wrapper, parse_nextest_config,
 };
 
 /// This repository's own `mise.toml` wrapper line (inline-table spelling).
@@ -243,6 +244,42 @@ fn nextest_default_constructors_match_ci() {
 }
 
 #[test]
+fn consumed_config_selects_emitted_profile() {
+    let catalog = ToolCatalog::pinned();
+    let nextest = catalog.tool_spec(PinnedTool::Nextest);
+    let driver = NextestDriver::Mbx;
+    for (content, want) in [
+        (REPO_NEXTEST, "ci"),
+        ("[profile.linux]\nretries = 1\n", "default"),
+    ] {
+        let config = parse_nextest_config(content).expect("config");
+        let selected = config.selected_profile();
+        assert_eq!(selected, want);
+        let partition = NextestPartition::new(1, 1).expect("partition");
+        let archive =
+            NextestArchive::with_profile(driver, "demo", &[], None, selected).expect("archive");
+        assert!(carries_profile(&archive.payload(), want), "{want}");
+        let full = argv_text(&archive.argv(&catalog));
+        assert!(full.contains(&nextest), "{want}");
+        let list = NextestList::with_profile(driver, partition, selected).expect("list");
+        assert!(carries_profile(&list.payload(), want), "{want}");
+        let run =
+            NextestRun::with_profile(driver, partition, "m-abc", "p1", selected).expect("run");
+        assert!(carries_profile(&run.payload(), want), "{want}");
+    }
+}
+
+#[test]
+fn resolved_default_differs_from_baked_ci() {
+    let baked = NextestArchive::new(NextestDriver::Cargo, "demo", &[], None).expect("archive");
+    assert_eq!(baked.profile(), "ci");
+    let resolved = NextestArchive::with_profile(NextestDriver::Cargo, "demo", &[], None, "default")
+        .expect("archive");
+    assert_ne!(baked.payload(), resolved.payload());
+    assert!(carries_profile(&resolved.payload(), "default"));
+}
+
+#[test]
 fn nextest_bad_profile_rejected() {
     for profile in ["", "has space", "semi;colon", "quote\"x"] {
         assert!(
@@ -262,4 +299,93 @@ fn argv_text(argv: &[std::ffi::OsString]) -> Vec<String> {
     argv.iter()
         .map(|arg| arg.to_string_lossy().into_owned())
         .collect()
+}
+
+/// True when argv carries `--profile <want>`.
+fn carries_profile(argv: &[std::ffi::OsString], want: &str) -> bool {
+    argv_text(argv).windows(2).any(|w| w == ["--profile", want])
+}
+
+/// This repository's own root `mise.toml` bytes (P07-9 reconciliation).
+const REPO_MISE_TOML: &str = include_str!("../../../mise.toml");
+
+#[test]
+fn repo_wrapper_reconciles_with_local_mbx_pin() {
+    let status = mbx_wrapper_pin_status(REPO_MISE_TOML);
+    assert_eq!(
+        status,
+        MbxWrapperStatus::Pinned {
+            version: MR_BOXINGTON_VERSION.to_owned(),
+        },
+        "root wrapper must resolve MBX from the local exact pin"
+    );
+    let catalog = ToolCatalog::pinned();
+    let spec = catalog.tool_spec(PinnedTool::MrBoxington);
+    assert_eq!(spec, format!("mr-boxington@{MR_BOXINGTON_VERSION}"));
+    let install = velnor_actions_mise::MiseInstall::new(vec![PinnedTool::MrBoxington])
+        .expect("mbx install request");
+    let argv = argv_text(&install.argv(&catalog));
+    assert_eq!(argv[0], "mise");
+    assert!(
+        argv.contains(&"--no-config".to_owned()),
+        "clean-env: {argv:?}"
+    );
+    assert!(argv.contains(&"--no-env".to_owned()), "clean-env: {argv:?}");
+    assert!(
+        argv.contains(&"--no-hooks".to_owned()),
+        "clean-env: {argv:?}"
+    );
+    assert!(argv.contains(&"install".to_owned()), "{argv:?}");
+    assert!(
+        argv.contains(&spec),
+        "fresh checkout installs MBX from the pin: {argv:?}"
+    );
+}
+
+#[test]
+fn mbx_wrapper_without_pin_is_missing() {
+    for content in [
+        "[wrappers.cargo]\ncommand = \"mbx\"\n[tools]\nrust = \"1.98.1\"\n",
+        "[wrappers.cargo]\ncommand = \"mbx\"\n",
+    ] {
+        assert_eq!(
+            mbx_wrapper_pin_status(content),
+            MbxWrapperStatus::MissingPin,
+            "{content:?}"
+        );
+    }
+}
+
+#[test]
+fn mbx_wrapper_loose_pin_is_invalid() {
+    for selector in ["latest", "v1.19.0", "1.19", "1"] {
+        let content = format!(
+            "[wrappers.cargo]\ncommand = \"mbx\"\n[tools]\nmr-boxington = \"{selector}\"\n"
+        );
+        assert!(
+            matches!(
+                mbx_wrapper_pin_status(&content),
+                MbxWrapperStatus::Invalid { .. }
+            ),
+            "{selector} must fail closed"
+        );
+    }
+    assert!(matches!(
+        mbx_wrapper_pin_status("[wrappers.cargo]\ncommand = \"mbx\"\n[tools]\nbroken = \n"),
+        MbxWrapperStatus::Invalid { .. }
+    ));
+}
+
+#[test]
+fn non_mbx_wrapper_needs_no_pin() {
+    for content in [
+        "[tools]\nrust = \"1.98.1\"\n",
+        "[wrappers.cargo]\ncommand = \"cargo\"\n[tools]\nrust = \"1.98.1\"\n",
+    ] {
+        assert_eq!(
+            mbx_wrapper_pin_status(content),
+            MbxWrapperStatus::NoMbxWrapper,
+            "{content:?}"
+        );
+    }
 }

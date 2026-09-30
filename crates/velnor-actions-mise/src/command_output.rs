@@ -8,6 +8,23 @@ use std::io::Read;
 
 use crate::error::MiseError;
 
+/// `SpawnFailed` message for external cancellation (P07-5).
+pub const SPAWN_CANCELLED_MESSAGE: &str = "cancelled";
+
+/// `SpawnFailed` message prefix for deadline expiry; seconds are appended.
+pub const SPAWN_TIMEOUT_MESSAGE_PREFIX: &str = "timeout_after_secs:";
+
+/// Whether a command error is timeout/cancellation, not a task outcome.
+///
+/// Both abortions surface as typed [`MiseError::SpawnFailed`]: they must
+/// propagate to the caller and never degrade into a normal cache miss.
+#[must_use]
+pub fn is_cancel_or_timeout(error: &MiseError) -> bool {
+    matches!(error, MiseError::SpawnFailed { message, .. }
+        if message == SPAWN_CANCELLED_MESSAGE
+            || message.starts_with(SPAWN_TIMEOUT_MESSAGE_PREFIX))
+}
+
 /// Typed child-process result: captured streams plus a typed exit.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProcessOutput {

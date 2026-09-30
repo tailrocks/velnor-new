@@ -7,7 +7,8 @@
 use std::ffi::OsString;
 use std::time::Duration;
 use velnor_actions_mise::command::{
-    EnvPolicy, IsolatedCommand, OUTPUT_CAPTURE_LIMIT_BYTES, RUN_TIMEOUT_SECS, is_reserved_env_key,
+    CancelHandle, EnvPolicy, IsolatedCommand, OUTPUT_CAPTURE_LIMIT_BYTES, RUN_TIMEOUT_SECS,
+    is_cancel_or_timeout, is_reserved_env_key,
 };
 use velnor_actions_mise::{GitRequest, MiseError};
 
@@ -258,13 +259,16 @@ fn timeout_kills_and_reports_timeout() -> Result<(), String> {
     let start = std::time::Instant::now();
     let err = task
         .run_bounded(1024, Duration::from_secs(1))
-        .map_err(|err| err.to_string())
         .expect_err("sleep past a 1s deadline must fail");
     assert!(
         start.elapsed() < Duration::from_secs(5),
         "child must be killed"
     );
-    assert!(err.contains("timeout_after_secs:1"), "got {err}");
+    assert!(is_cancel_or_timeout(&err), "timeout must classify: {err}");
+    assert!(
+        err.to_string().contains("timeout_after_secs:1"),
+        "got {err}"
+    );
     Ok(())
 }
 
@@ -299,4 +303,79 @@ fn real_exit_and_signal_preserved() -> Result<(), String> {
     assert_eq!(output.code, None);
     assert_eq!(output.signal, Some(9));
     Ok(())
+}
+
+#[test]
+fn precancelled_run_fails_typed_without_spawning() {
+    let cancel = CancelHandle::new();
+    assert!(!cancel.is_cancelled());
+    cancel.cancel();
+    assert!(cancel.is_cancelled());
+    let task = IsolatedCommand::repo_task("definitely-not-a-program", Vec::new(), &[])
+        .expect("task builds");
+    let err = task
+        .run_cancellable(1024, Duration::from_secs(60), &cancel)
+        .expect_err("precancelled run must fail");
+    assert!(is_cancel_or_timeout(&err), "cancel must classify: {err}");
+    assert!(
+        matches!(&err, MiseError::SpawnFailed { message, .. } if message == "cancelled"),
+        "got {err}"
+    );
+}
+
+#[test]
+fn mid_run_cancel_kills_child_and_reports_cancelled() {
+    use std::sync::Arc;
+    let cancel = Arc::new(CancelHandle::new());
+    let stopper = Arc::clone(&cancel);
+    let task = IsolatedCommand::repo_task(
+        "/bin/sh",
+        vec![OsString::from("-c"), OsString::from("sleep 30")],
+        &[],
+    )
+    .expect("task builds");
+    let canceller = std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(200));
+        stopper.cancel();
+    });
+    let start = std::time::Instant::now();
+    let err = task
+        .run_cancellable(1024, Duration::from_secs(60), &cancel)
+        .expect_err("cancelled run must fail");
+    canceller.join().expect("canceller joins");
+    assert!(
+        start.elapsed() < Duration::from_secs(30),
+        "child must be killed"
+    );
+    assert!(is_cancel_or_timeout(&err), "cancel must classify: {err}");
+    assert!(
+        matches!(&err, MiseError::SpawnFailed { message, .. } if message == "cancelled"),
+        "got {err}"
+    );
+}
+
+#[test]
+fn hook_escape_privileged_declared_keys_never_run() {
+    for key in [
+        "MISE_NO_CONFIG",
+        "MISE_NO_ENV",
+        "MISE_NO_HOOKS",
+        "MISE_LOCKFILE",
+        "MISE_AUTO_INSTALL",
+        "MISE_EXEC_AUTO_INSTALL",
+        "MISE_GITHUB_TOKEN",
+        "GITHUB_TOKEN",
+        "GH_TOKEN",
+        "ACTIONS_RUNTIME_TOKEN",
+    ] {
+        assert!(is_reserved_env_key(key), "{key} must be reserved");
+        let declared = vec![(OsString::from(key), OsString::from("hostile"))];
+        assert!(
+            matches!(
+                IsolatedCommand::repo_task("sh", Vec::new(), &declared),
+                Err(MiseError::InvalidStepInput { .. })
+            ),
+            "project task declaring {key} must fail before spawn"
+        );
+    }
 }

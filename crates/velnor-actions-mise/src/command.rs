@@ -13,12 +13,15 @@ pub use self::env::{
     EnvPolicy, ISOLATION_ENV, MISE_CARGO_HOME_ENV, MISE_RUSTUP_HOME_ENV, NO_AUTO_INSTALL_ENV,
     RUSTUP_TOOLCHAIN_ENV, is_reserved_env_key, toolchain_env,
 };
-pub use self::output::ProcessOutput;
+pub use self::output::{
+    ProcessOutput, SPAWN_CANCELLED_MESSAGE, SPAWN_TIMEOUT_MESSAGE_PREFIX, is_cancel_or_timeout,
+};
 use self::output::{read_capped, signal_of};
 
 use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use crate::error::MiseError;
@@ -42,6 +45,36 @@ pub const RUN_TIMEOUT_SECS: u64 = 600;
 #[must_use]
 pub fn is_allowed_mise_subcommand(subcommand: &str) -> bool {
     ALLOWED_MISE_SUBCOMMANDS.contains(&subcommand)
+}
+
+/// External cancellation handle for one subprocess run (P07-5).
+///
+/// Beyond the internal deadline: any thread holding a shared handle may
+/// abort the run, and the child is killed at the next poll. Cancellation
+/// surfaces as typed [`MiseError::SpawnFailed`], never as a task outcome.
+#[derive(Debug, Default)]
+pub struct CancelHandle {
+    /// Cancellation flag shared with the polling run loop.
+    cancelled: AtomicBool,
+}
+
+impl CancelHandle {
+    /// New uncancelled handle.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Request cancellation; the run loop kills the child at its next poll.
+    pub fn cancel(&self) {
+        self.cancelled.store(true, Ordering::SeqCst);
+    }
+
+    /// Whether cancellation was requested.
+    #[must_use]
+    pub fn is_cancelled(&self) -> bool {
+        self.cancelled.load(Ordering::SeqCst)
+    }
 }
 
 /// A fully isolated, shell-free child-process invocation.
@@ -191,18 +224,40 @@ impl IsolatedCommand {
     }
 
     /// Spawn the child under explicit bounds and wait for its typed exit.
-    /// Residual: grandchildren inheriting the pipes can delay EOF after kill.
     ///
     /// # Errors
     ///
     /// Returns [`MiseError::SpawnFailed`] on spawn failure, output-limit
     /// breach, reader failure, or timeout.
     pub fn run_bounded(&self, cap: usize, timeout: Duration) -> Result<ProcessOutput, MiseError> {
+        self.run_cancellable(cap, timeout, &CancelHandle::new())
+    }
+
+    /// Spawn the child under explicit bounds plus external cancellation.
+    /// Residual: grandchildren inheriting the pipes can delay EOF after kill.
+    ///
+    /// A pre-cancelled handle fails without spawning; mid-run
+    /// cancellation kills the child. Both surface as typed
+    /// [`MiseError::SpawnFailed`], classified by [`is_cancel_or_timeout`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MiseError::SpawnFailed`] on spawn failure, output-limit
+    /// breach, reader failure, timeout, or cancellation.
+    pub fn run_cancellable(
+        &self,
+        cap: usize,
+        timeout: Duration,
+        cancel: &CancelHandle,
+    ) -> Result<ProcessOutput, MiseError> {
         let program = self.program.to_string_lossy().into_owned();
         let fail = |message: &str| MiseError::SpawnFailed {
             program: program.clone(),
             message: message.to_owned(),
         };
+        if cancel.is_cancelled() {
+            return Err(fail(SPAWN_CANCELLED_MESSAGE));
+        }
         let mut child = self
             .command()
             .stdout(Stdio::piped())
@@ -214,6 +269,10 @@ impl IsolatedCommand {
         let err_reader = std::thread::spawn(move || read_capped(stderr, cap));
         let deadline = Instant::now() + timeout;
         loop {
+            if cancel.is_cancelled() {
+                drop((child.kill(), child.wait(), out_reader, err_reader));
+                return Err(fail(SPAWN_CANCELLED_MESSAGE));
+            }
             let status = child.try_wait().map_err(|err| fail(&err.to_string()))?;
             if let Some(status) = status {
                 let (out, out_capped) = out_reader
@@ -238,7 +297,8 @@ impl IsolatedCommand {
             }
             if Instant::now() >= deadline {
                 drop((child.kill(), child.wait(), out_reader, err_reader));
-                return Err(fail(&format!("timeout_after_secs:{}", timeout.as_secs())));
+                let message = format!("{SPAWN_TIMEOUT_MESSAGE_PREFIX}{}", timeout.as_secs());
+                return Err(fail(&message));
             }
             std::thread::sleep(Duration::from_millis(5));
         }

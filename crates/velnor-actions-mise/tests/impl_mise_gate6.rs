@@ -1,5 +1,7 @@
 //! Gate-6 enablement cases: qualified runs and fixture tokens.
 use velnor_actions_mise::cache::{QualifiedTaskDef, TaskCacheMode};
+use velnor_actions_mise::command::EnvPolicy;
+use velnor_actions_mise::gate6::{CUSTOM_TASK_OPT_IN_KEY, CustomTaskEffects, CustomTaskGrant};
 use velnor_actions_mise::{
     Gate6Fixture, MiseError, qualified_task_run_argv, render_gated_task_toml,
 };
@@ -156,4 +158,61 @@ fn gated_render_configures_no_remote_cache() -> Result<(), String> {
         );
     }
     Ok(())
+}
+
+fn hermetic_effects() -> CustomTaskEffects {
+    CustomTaskEffects {
+        network: false,
+        clock: false,
+        random: false,
+    }
+}
+
+#[test]
+fn custom_task_grant_requires_opt_in_and_declarations() -> Result<(), String> {
+    assert_eq!(CUSTOM_TASK_OPT_IN_KEY, "tasks.custom.enabled");
+    assert_eq!(CustomTaskGrant::opt_in_key(), CUSTOM_TASK_OPT_IN_KEY);
+    let inputs = vec!["src/**/*.rs".to_owned()];
+    let grant = CustomTaskGrant::new("lint", hermetic_effects(), &inputs, true)
+        .map_err(|err| err.to_string())?;
+    assert_eq!(grant.task(), "lint");
+    assert_eq!(grant.effects(), hermetic_effects());
+    assert_eq!(grant.inputs(), inputs.as_slice());
+    assert_eq!(grant.execution_policy(), EnvPolicy::RepoTask);
+    Ok(())
+}
+
+#[test]
+fn custom_task_without_opt_in_never_grants() {
+    let inputs = vec!["src/**/*.rs".to_owned()];
+    assert!(matches!(
+        CustomTaskGrant::new("lint", hermetic_effects(), &inputs, false),
+        Err(MiseError::CacheNotEligible { reason, .. })
+            if reason == "custom_task_opt_in_required"
+    ));
+}
+
+#[test]
+fn custom_task_bad_names_and_inputs_rejected() {
+    let inputs = vec!["src/**/*.rs".to_owned()];
+    for bad in ["", "  ", "has space", "path/task", "a/b"] {
+        assert!(
+            matches!(
+                CustomTaskGrant::new(bad, hermetic_effects(), &inputs, true),
+                Err(MiseError::CacheNotEligible { reason, .. })
+                    if reason == "custom_task_bad_name"
+            ),
+            "{bad:?} must fail closed"
+        );
+    }
+    for bad_inputs in [vec![String::new()], vec!["ok".to_owned(), "  ".to_owned()]] {
+        assert!(
+            matches!(
+                CustomTaskGrant::new("lint", hermetic_effects(), &bad_inputs, true),
+                Err(MiseError::CacheNotEligible { reason, .. })
+                    if reason == "custom_task_bad_input"
+            ),
+            "{bad_inputs:?} must fail closed"
+        );
+    }
 }
