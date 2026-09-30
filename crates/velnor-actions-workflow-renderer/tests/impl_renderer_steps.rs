@@ -1,5 +1,6 @@
 //! Fixed step-template and command-validation cases.
 use std::collections::BTreeMap;
+use velnor_actions_contract::workflow::ir::PermissionLevel;
 use velnor_actions_contract::{Concurrency, Job, Permissions, Trigger, WorkflowIr, WorkflowPolicy};
 use velnor_actions_workflow_renderer::steps::{
     has_bare_env_expansion, quote_env_path_for_run, quote_run_line_env_paths,
@@ -287,6 +288,8 @@ fn emit_triggers() -> Trigger {
             .collect(),
         push_branches: vec!["main".to_owned()],
         merge_group: true,
+        workflow_dispatch: None,
+        schedule: None,
     }
 }
 
@@ -307,6 +310,8 @@ fn rendered_run_steps_quote_runner_temp_paths() -> Result<(), RenderError> {
             runs_on: EMIT_LABEL.to_owned(),
             needs: Vec::new(),
             condition: None,
+            permissions: None,
+            environment: None,
             steps: vec![
                 checkout_step(&pin("actions/checkout"))?,
                 shell_step(
@@ -322,8 +327,10 @@ fn rendered_run_steps_quote_runner_temp_paths() -> Result<(), RenderError> {
         name: "CI".to_owned(),
         triggers: emit_triggers(),
         permissions: Permissions {
-            contents: "read".to_owned(),
-            actions: "read".to_owned(),
+            contents: PermissionLevel::Read,
+            pull_requests: PermissionLevel::None,
+            id_token: PermissionLevel::None,
+            actions: PermissionLevel::Read,
         },
         concurrency: emit_concurrency(),
         jobs,

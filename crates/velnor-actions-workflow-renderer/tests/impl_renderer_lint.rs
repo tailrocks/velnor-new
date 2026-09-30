@@ -1,5 +1,6 @@
 //! Always-on lint job cases: emitted from typed IR for both policies.
 use std::collections::BTreeMap;
+use velnor_actions_contract::workflow::ir::PermissionLevel;
 use velnor_actions_contract::{
     Concurrency, Job, Permissions, Trigger, VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
 };
@@ -36,6 +37,8 @@ fn lint_job() -> Result<Job, RenderError> {
         runs_on: LABEL.to_owned(),
         needs: Vec::new(),
         condition: None,
+        permissions: None,
+        environment: None,
         steps: vec![
             checkout_step(&checkout_pin())?,
             shell_step(
@@ -67,6 +70,8 @@ fn fixture_ir() -> Result<WorkflowIr, RenderError> {
             runs_on: LABEL.to_owned(),
             needs: Vec::new(),
             condition: None,
+            permissions: None,
+            environment: None,
             steps: vec![checkout_step(&checkout_pin())?],
         },
     );
@@ -77,6 +82,8 @@ fn fixture_ir() -> Result<WorkflowIr, RenderError> {
             runs_on: LABEL.to_owned(),
             needs: vec!["plan".to_owned(), LINT_ID.to_owned()],
             condition: Some("always()".to_owned()),
+            permissions: None,
+            environment: None,
             steps: vec![merge_step()],
         },
     );
@@ -90,10 +97,14 @@ fn fixture_ir() -> Result<WorkflowIr, RenderError> {
                 .collect(),
             push_branches: vec!["main".to_owned()],
             merge_group: true,
+            workflow_dispatch: None,
+            schedule: None,
         },
         permissions: Permissions {
-            contents: "read".to_owned(),
-            actions: "read".to_owned(),
+            contents: PermissionLevel::Read,
+            pull_requests: PermissionLevel::None,
+            id_token: PermissionLevel::None,
+            actions: PermissionLevel::Read,
         },
         concurrency: Concurrency {
             group: CONCURRENCY_GROUP.to_owned(),

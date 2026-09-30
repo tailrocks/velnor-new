@@ -55,9 +55,10 @@ pub use marker::{
 pub use preseed::{
     PRESEED_ARTIFACT_NAME, PRESEED_BUILD_NAME, PRESEED_BUILD_OUTPUT, PRESEED_DOWNLOAD_NAME,
     PRESEED_DOWNLOADED_BINARY, PRESEED_MANIFEST_FILE, PRESEED_MANIFEST_NAME, PRESEED_OUTPUT_DIR,
-    PRESEED_STAGE_DIR, PRESEED_STAGE_NAME, PRESEED_UPLOAD_NAME, PRESEED_VERIFY_NAME,
-    PreseedStageSource, preseed_build_step, preseed_download_step, preseed_manifest_script,
-    preseed_manifest_step, preseed_stage_step, preseed_upload_step, preseed_verify_step,
+    PRESEED_STAGE_DIR, PRESEED_STAGE_NAME, PRESEED_UPLOAD_NAME, PRESEED_VERIFY_MANIFEST_NAME,
+    PRESEED_VERIFY_NAME, PreseedStageSource, preseed_build_step, preseed_download_step,
+    preseed_manifest_script, preseed_manifest_step, preseed_manifest_verify_script,
+    preseed_manifest_verify_step, preseed_stage_step, preseed_upload_step, preseed_verify_step,
 };
 pub use render::{
     ACTIONLINT_PATH, ALINT_USES, CANDIDATE_JOB_ID, CONCURRENCY_CANCEL, CONCURRENCY_GROUP,
