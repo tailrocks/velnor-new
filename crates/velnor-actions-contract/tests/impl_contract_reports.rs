@@ -1,6 +1,7 @@
 //! Contract plan, report, and workflow cases.
 use crate::impl_contract_ids::{MANIFEST, TASK, sample_entry};
 use std::collections::BTreeMap;
+use velnor_actions_contract::workflow::ir::PermissionLevel;
 use velnor_actions_contract::{
     BaselineProof, CacheLayer, CacheOutcome, CacheResult, CandidateReport, CandidateStatus,
     Concurrency, ContractError, FinalCounts, FinalReport, FinalStatus, Job, MatrixReport,
@@ -219,6 +220,8 @@ fn workflow_ir_validates_pins_and_refs() -> Result<(), ContractError> {
         runs_on: "ubuntu-26.04".to_owned(),
         needs: vec![],
         condition: None,
+        permissions: None,
+        environment: None,
         steps: vec![Step {
             name: "Checkout".to_owned(),
             kind: StepKind::Shell {
@@ -233,10 +236,14 @@ fn workflow_ir_validates_pins_and_refs() -> Result<(), ContractError> {
             pull_request_types: vec!["opened".to_owned()],
             push_branches: vec!["main".to_owned()],
             merge_group: true,
+            workflow_dispatch: None,
+            schedule: None,
         },
         permissions: Permissions {
-            contents: "read".to_owned(),
-            actions: "read".to_owned(),
+            contents: PermissionLevel::Read,
+            pull_requests: PermissionLevel::None,
+            id_token: PermissionLevel::None,
+            actions: PermissionLevel::Read,
         },
         concurrency: Concurrency {
             group: "velnor-ci".to_owned(),
