@@ -16,7 +16,7 @@ use crate::impl_common::TestResult;
 
 fn binary_record(target: &str, sha: &str) -> String {
     format!(
-        "[[generator.binaries]]\ntarget = \"{target}\"\nartifact = \"https://example.invalid/r/{target}\"\nsha256 = \"{sha}\"\n"
+        "[[generator.binaries]]\ntarget = \"{target}\"\nartifact = \"https://github.com/tailrocks/velnor-new/releases/download/v0.1.0/velnor-actions-0.1.0-{target}\"\nsha256 = \"{sha}\"\n"
     )
 }
 
@@ -33,7 +33,7 @@ fn lock_text(sha: &str) -> String {
 fn manifest_text(sha: &str) -> String {
     let targets = ["x86_64-unknown-linux-gnu", "aarch64-apple-darwin", "x86_64-apple-darwin"]
         .iter()
-        .map(|t| format!("{{\"target\":\"{t}\",\"artifact\":\"https://example.invalid/r/{t}\",\"sha256\":\"{sha}\"}}"))
+        .map(|t| format!("{{\"target\":\"{t}\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v0.1.0/velnor-actions-0.1.0-{t}\",\"sha256\":\"{sha}\"}}"))
         .collect::<Vec<_>>()
         .join(",");
     format!(

@@ -3,12 +3,12 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use velnor_actions_contract::{ContractError, RustStackConfig, VelnorConfig, task_id_for_stack};
-use velnor_actions_mise::{ArchivePlan, NextestArchive, NextestDriver, SortedInventory};
+use velnor_actions_contract::{RustStackConfig, VelnorConfig};
+use velnor_actions_mise::ArchivePlan;
 use velnor_actions_rust::{
     DetectionStatus, FileIndex, Recommendation, RustExecutionProfile, TaskGroup, WorkspaceRecord,
     apply_stack_ignores, check_candidate_outcomes, check_duplicates, dedupe_workspaces,
-    expand_shards_for_group, to_detected_projects,
+    to_detected_projects,
 };
 
 use crate::OrchestratorError;
@@ -17,6 +17,7 @@ use crate::discover_index::build_file_index;
 use crate::evidence::profile_for_workspace;
 use crate::inventory::{qualify_workspaces, run_inventories};
 use crate::recommendations::collect_recommendations;
+use crate::safe_read::{MAX_REPO_FILE_BYTES, RepoRead, read_repo_file};
 use crate::toolcheck::{ToolInputCheck, check_tool_inputs};
 
 /// One workspace with its inventory, profile, and recommendations.
@@ -54,10 +55,16 @@ pub struct Discovery {
     pub recommendations: Vec<String>,
     /// Release-manifest text from the committed repo file.
     ///
-    /// Debug builds fall back to an `example.invalid` stand-in when the
-    /// file is absent; release builds keep `None` so generation fails
+    /// Debug builds fall back to a stand-in when the file is absent
+    /// (flagged by [`Discovery::consumer_manifest_stand_in`], warned at
+    /// generation); release builds keep `None` so generation fails
     /// closed with `consumer_requires_release_install`.
     pub consumer_manifest_json: Option<String>,
+    /// Whether the manifest text above is the debug-only stand-in.
+    ///
+    /// Always false in release builds (no fallback exists there).
+    /// `generate` warns loudly when this is set; `plan` stays silent.
+    pub consumer_manifest_stand_in: bool,
     /// Whether index enumeration skipped any non-UTF-8 name.
     ///
     /// Selection broadens explicitly on this: a skipped name cannot be
@@ -98,6 +105,7 @@ pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, 
     let tool_checks = check_tool_inputs(root);
     let clippy_memory = clippy_memory_groups(&task_groups);
     let recommendations = collect_recommendations(&index, &workspaces, &tool_checks);
+    let (consumer_manifest_json, consumer_manifest_stand_in) = consumer_manifest_text(root)?;
     Ok(Discovery {
         statuses,
         workspaces,
@@ -106,7 +114,8 @@ pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, 
         tool_checks,
         clippy_memory,
         recommendations,
-        consumer_manifest_json: consumer_manifest_text(root),
+        consumer_manifest_json,
+        consumer_manifest_stand_in,
         skipped_non_utf8,
     })
 }
@@ -133,24 +142,41 @@ pub(crate) fn detector_entries() -> Vec<(&'static str, u32)> {
         .collect()
 }
 
-/// Read the committed release-manifest file; absent/unreadable is `None`.
+/// Read the committed release-manifest file; absent is `None`.
 ///
 /// Cfg-independent so tests (debug assertions on) cover the exact read
 /// the release twin relies on; schema and version validation happen
-/// downstream in the consumer acquire gate.
-pub(crate) fn read_manifest_file(root: &Path) -> Option<String> {
-    std::fs::read_to_string(root.join(RELEASE_MANIFEST_REL)).ok()
+/// downstream in the consumer acquire gate. Present-but-unreadable
+/// files (symlink, escape, oversize, bad UTF-8) error: an unreadable
+/// manifest is never silently masked as absent (X6).
+/// # Errors
+///
+/// Returns IO or unsafe-path errors for present-but-unreadable files.
+pub(crate) fn read_manifest_file(root: &Path) -> Result<Option<String>, OrchestratorError> {
+    match read_repo_file(root, RELEASE_MANIFEST_REL, MAX_REPO_FILE_BYTES)? {
+        RepoRead::Absent => Ok(None),
+        RepoRead::Text(text) => Ok(Some(text)),
+    }
 }
 
-/// Consumer manifest text: committed file, else an embedded
-/// `example.invalid` stand-in (debug builds only).
+/// Consumer manifest text plus stand-in flag: committed file, else a
+/// debug-only stand-in.
+///
+/// Absent files fall back to the embedded stand-in (flagged so
+/// `generate` warns loudly); present-but-unreadable files error
+/// instead of masking. The stand-in carries the bound official-asset
+/// URL shape so the consumer gate validates it exactly like a
+/// committed file.
+/// # Errors
+///
+/// Returns IO or unsafe-path errors for present-but-unreadable files.
 #[cfg(debug_assertions)]
-#[expect(clippy::unnecessary_wraps, reason = "release twin returns None")]
-fn consumer_manifest_text(root: &Path) -> Option<String> {
-    if let Some(text) = read_manifest_file(root) {
-        return Some(text);
+fn consumer_manifest_text(root: &Path) -> Result<(Option<String>, bool), OrchestratorError> {
+    if let Some(text) = read_manifest_file(root)? {
+        return Ok((Some(text), false));
     }
     let sha = "a".repeat(64);
+    let version = env!("CARGO_PKG_VERSION");
     let mut targets = Vec::new();
     for target in [
         "x86_64-unknown-linux-gnu",
@@ -158,23 +184,29 @@ fn consumer_manifest_text(root: &Path) -> Option<String> {
         "x86_64-apple-darwin",
     ] {
         targets.push(format!(
-            "{{\"target\":\"{target}\",\"artifact\":\"https://example.invalid/r/{target}\",\"sha256\":\"{sha}\"}}"
+            "{{\"target\":\"{target}\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v{version}/velnor-actions-{version}-{target}\",\"sha256\":\"{sha}\"}}"
         ));
     }
     let targets = targets.join(",");
-    let version = env!("CARGO_PKG_VERSION");
-    Some(format!(
-        "{{\"schema\":1,\"version\":\"{version}\",\"repository\":\"tailrocks/velnor-new\",\"targets\":[{targets}]}}"
+    Ok((
+        Some(format!(
+            "{{\"schema\":1,\"version\":\"{version}\",\"repository\":\"tailrocks/velnor-new\",\"targets\":[{targets}]}}"
+        )),
+        true,
     ))
 }
 
-/// Consumer manifest text: the committed file, with no stand-in.
+/// Consumer manifest text plus stand-in flag: the committed file only.
 ///
-/// Absent or unreadable files stay `None`; the consumer acquire gate
-/// fails closed with `consumer_requires_release_install`.
+/// Absent files stay `None` (the consumer acquire gate fails closed
+/// with `consumer_requires_release_install`); unreadable files error.
+/// The flag is always false: release builds have no stand-in.
+/// # Errors
+///
+/// Returns IO or unsafe-path errors for present-but-unreadable files.
 #[cfg(not(debug_assertions))]
-fn consumer_manifest_text(root: &Path) -> Option<String> {
-    read_manifest_file(root)
+fn consumer_manifest_text(root: &Path) -> Result<(Option<String>, bool), OrchestratorError> {
+    read_manifest_file(root).map(|text| (text, false))
 }
 
 /// Sorted local dependency display names for one package.
@@ -268,87 +300,6 @@ fn derive_all(
     }
     groups.sort_by(|left, right| left.task_id.cmp(&right.task_id));
     Ok((groups, fallbacks))
-}
-
-/// Expand test groups into per-shard groups when sharding exceeds one.
-pub(crate) fn expand_shards(
-    config: &VelnorConfig,
-    group: &TaskGroup,
-    profile: &RustExecutionProfile,
-    archives: &mut ArchivePlan,
-) -> Result<Vec<TaskGroup>, ContractError> {
-    let shards = shard_count(config, group);
-    if !expand_shards_for_group(group.kind, group.test_runner, shards, group.no_test_targets)? {
-        return Ok(vec![group.clone()]);
-    }
-    plan_shard_archive(group, profile, archives);
-    let mut expanded = Vec::new();
-    for shard in 1..=shards {
-        let task_id = task_id_for_stack(
-            velnor_actions_rust::STACK_ID,
-            &group.manifest_key,
-            group.kind.as_str(),
-            &group.configuration,
-            Some((shard, shards)),
-        )?;
-        let mut sharded = group.clone();
-        sharded.task_id = task_id;
-        expanded.push(sharded);
-    }
-    let mut ids: Vec<String> = expanded.iter().map(|group| group.task_id.clone()).collect();
-    ids.sort();
-    SortedInventory::from_sorted(ids)
-        .map_err(|err| ContractError::identity("shard_inventory", err.to_string()))?;
-    Ok(expanded)
-}
-
-/// Record one archive per package/config under the resolved profile.
-fn plan_shard_archive(
-    group: &TaskGroup,
-    profile: &RustExecutionProfile,
-    archives: &mut ArchivePlan,
-) {
-    let driver = match group.compile_driver {
-        velnor_actions_rust::CompileDriver::Cargo => NextestDriver::Cargo,
-        velnor_actions_rust::CompileDriver::Mbx => NextestDriver::Mbx,
-    };
-    let target = if group.target == "host" {
-        None
-    } else {
-        Some(group.target.as_str())
-    };
-    let Ok(archive) = NextestArchive::with_profile(
-        driver,
-        &group.package_name,
-        &group.features,
-        target,
-        profile.nextest_profile.as_str(),
-    ) else {
-        return;
-    };
-    if archives.add(&archive).is_err() {
-        // Archive already planned for this package/config.
-    }
-}
-
-/// Shard count for one group from the sharding policy.
-fn shard_count(config: &VelnorConfig, group: &TaskGroup) -> u32 {
-    let manifest = manifest_for_key(&group.manifest_key);
-    let shards = &config.test_sharding;
-    shards
-        .by_manifest
-        .get(&manifest)
-        .copied()
-        .unwrap_or(shards.default_shards)
-}
-
-/// Manifest path for a manifest key.
-fn manifest_for_key(key: &str) -> String {
-    if key == "root" {
-        "Cargo.toml".to_owned()
-    } else {
-        format!("{key}/Cargo.toml")
-    }
 }
 
 /// Workspace-root manifest path for a workspace root.

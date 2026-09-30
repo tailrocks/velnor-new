@@ -49,6 +49,7 @@ mod release_steps;
 mod retrieve_reports;
 mod root;
 pub mod run_select;
+mod safe_read;
 pub mod schedule;
 mod select;
 mod select_affected;

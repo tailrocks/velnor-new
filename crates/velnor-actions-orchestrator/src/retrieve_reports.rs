@@ -15,7 +15,7 @@ use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
-use velnor_actions_contract::{task_report_id_for_task, validate_artifact_id};
+use velnor_actions_contract::{parse_strict_json, task_report_id_for_task, validate_artifact_id};
 use velnor_actions_mise::ToolCatalog;
 
 use crate::OrchestratorError;
@@ -62,6 +62,11 @@ pub(crate) fn retrieve_reports_to(run_id: u64, run_dir: &Path) -> usize {
     let catalog = ToolCatalog::pinned();
     let mut retrieved = 0usize;
     for artifact_id in expected_artifact_ids(&plan) {
+        // Validate BEFORE join/mkdir: a malformed ID must never become
+        // a path or a directory (X7).
+        if validate_artifact_id(artifact_id).is_err() {
+            continue;
+        }
         let dir = run_dir.join("reports").join(artifact_id);
         if fs::create_dir_all(&dir).is_err() {
             continue;
@@ -99,9 +104,12 @@ pub(crate) fn retrieve_args(
 }
 
 /// Parse the downloaded plan, if any.
+///
+/// Symlink-rejecting, size-bounded, duplicate-key-rejecting (X7); typed
+/// plan structs additionally carry `deny_unknown_fields`.
 fn read_plan(run_dir: &Path) -> Option<serde_json::Value> {
-    let text = fs::read_to_string(run_dir.join("plan.json")).ok()?;
-    serde_json::from_str(&text).ok()
+    let text = read_bounded(&run_dir.join("plan.json")).ok()?;
+    parse_strict_json(&text).ok()
 }
 
 /// Maximum bytes read from one staged report file (P01-6 size bound).

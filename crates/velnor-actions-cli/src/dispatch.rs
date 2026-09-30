@@ -278,9 +278,17 @@ fn run_generate(output_dir: Option<PathBuf>) -> ExitCode {
         Ok(root) => root,
         Err(error) => return fail_public(&error),
     };
-    let report = prepare(&root).and_then(|preparation| generate(&preparation, &options));
-    match report {
+    let preparation = match prepare(&root) {
+        Ok(preparation) => preparation,
+        Err(error) => return fail_public(&error),
+    };
+    match generate(&preparation, &options) {
         Ok(report) => {
+            if preparation.discovery.consumer_manifest_stand_in {
+                eprintln!(
+                    "velnor-actions: WARNING: .velnor/release-manifest.json is absent; generated workflows use a debug-only stand-in that MUST NOT ship"
+                );
+            }
             if let Some(dir) = &options.output_dir {
                 eprintln!("Preview: {}", absolute_preview(&cwd, dir).display());
                 eprintln!("Repository: {}", root.display());
@@ -320,6 +328,13 @@ fn working_dir() -> Option<PathBuf> {
 
 /// Report an orchestrator failure as exit 1.
 fn fail_public(error: &OrchestratorError) -> ExitCode {
-    eprintln!("velnor-actions: {error}");
+    eprintln!("velnor-actions: {}", single_line(&error.to_string()));
     ExitCode::from(1)
+}
+
+/// Collapse one error to a single log line (X8: values echoed into
+/// errors, such as `unsupported_label` or `bad_custom_task`, must not
+/// inject newlines into logs).
+fn single_line(text: &str) -> String {
+    text.replace(['\n', '\r'], " ")
 }

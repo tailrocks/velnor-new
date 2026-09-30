@@ -43,14 +43,39 @@ output follows by construction. The release manifest record is
 selected by exact version; generation MUST NOT query a floating
 `latest` endpoint.
 
-The committed file carries the same trust as `config.toml` and the
-committed workflow YAML: repository review gates its content, while
-the mechanism guarantees self-consistency (both sides read one file)
-and fail-closed behavior (absent, unreadable, or invalid files fail
-generation). This reverses the earlier debug-only posture, under
-which release builds never read the file: a binary cannot embed a
-manifest containing its own SHA-256, so a compile-time bake can never
-cover the seed binary, and seed and release assets need no bake.
+The committed file is supply-chain-critical: unlike `config.toml` or
+the workflow YAML, it selects executed code, so review MUST verify
+its version, repository, artifact URLs, and digests against the
+published release, not just its shape. The mechanism guarantees
+self-consistency (both sides read one file) and fail-closed behavior
+(absent, unreadable, or invalid files fail generation), and the
+manifest validation binds every artifact URL to the exact official
+release asset for its version and target. This reverses the earlier
+debug-only posture, under which release builds never read the file:
+a binary cannot embed a manifest containing its own SHA-256, so a
+compile-time bake can never cover the seed binary, and seed and
+release assets need no bake.
+
+Residual risks, explicitly scoped as future work (not silently
+dropped). Same-version seed rollback: URL binding proves an artifact
+URL names this version's official asset, but a committed seed
+replaced at the same version (or a re-published tag upstream) is
+caught only by reviewer comparison against the published release.
+Unsigned seeds: no signature or attestation is verified yet. The
+follow-ups are: Sigstore/SLSA attestation verification for release
+assets, a published-vs-committed comparison job proving the
+committed manifest is byte-identical to the published release, and
+CODEOWNERS ownership of `.velnor/release-manifest.json` so every
+seed change gets security review.
+
+Compromise rotation (X5 runbook note): a compromised seed poisons
+every cache entry its runs wrote, and entries persist after the seed
+is replaced. After confirming a seed compromise, rotate the cache
+namespace by bumping the key-version segment (`velnor-v1-` to
+`velnor-v2-`, with the same bump in every restore prefix), purge the
+old-namespace entries from the GitHub cache, and re-run a trusted
+default-branch build to repopulate before PRs restore again. Never
+reuse a pre-rotation restore prefix after rotation.
 
 A repository without the committed manifest MUST fail consumer
 workflow generation with a diagnostic recommending installation of

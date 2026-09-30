@@ -13,16 +13,16 @@
 
 use std::collections::BTreeSet;
 
-use velnor_actions_contract::{RustConfiguration, VelnorConfig};
-use velnor_actions_mise::ArchivePlan;
+use velnor_actions_contract::{ContractError, RustConfiguration, VelnorConfig, task_id_for_stack};
+use velnor_actions_mise::{ArchivePlan, NextestArchive, NextestDriver, SortedInventory};
 use velnor_actions_rust::{
-    DeriveInputs, RustExecutionProfile, TaskGroup, TaskKind, WorkspaceRecord, derive_task_groups,
-    derive_workspace_fmt_if_explicit,
+    CompileDriver, DeriveInputs, RustExecutionProfile, TaskGroup, TaskKind, WorkspaceRecord,
+    derive_task_groups, derive_workspace_fmt_if_explicit, expand_shards_for_group,
 };
 
 use crate::OrchestratorError;
 use crate::config::CONFIG_REL;
-use crate::discover::{PlannedWorkspace, expand_shards, workspace_manifest};
+use crate::discover::{PlannedWorkspace, workspace_manifest};
 
 /// One configuration whose applied features differ from the request.
 ///
@@ -188,4 +188,171 @@ fn resolve_features(
         applied: applied.clone(),
     };
     Ok((applied, Some(fallback)))
+}
+
+/// Expand test groups into per-shard groups when sharding exceeds one.
+pub(crate) fn expand_shards(
+    config: &VelnorConfig,
+    group: &TaskGroup,
+    profile: &RustExecutionProfile,
+    archives: &mut ArchivePlan,
+) -> Result<Vec<TaskGroup>, ContractError> {
+    let shards = shard_count(config, group);
+    if !expand_shards_for_group(group.kind, group.test_runner, shards, group.no_test_targets)? {
+        return Ok(vec![group.clone()]);
+    }
+    plan_shard_archive(group, profile, archives)?;
+    let mut expanded = Vec::new();
+    for shard in 1..=shards {
+        let task_id = task_id_for_stack(
+            velnor_actions_rust::STACK_ID,
+            &group.manifest_key,
+            group.kind.as_str(),
+            &group.configuration,
+            Some((shard, shards)),
+        )?;
+        let mut sharded = group.clone();
+        sharded.task_id = task_id;
+        expanded.push(sharded);
+    }
+    let mut ids: Vec<String> = expanded.iter().map(|group| group.task_id.clone()).collect();
+    ids.sort();
+    SortedInventory::from_sorted(ids)
+        .map_err(|err| ContractError::identity("shard_inventory", err.to_string()))?;
+    Ok(expanded)
+}
+
+/// Record one archive per package/config under the resolved profile.
+///
+/// # Errors
+///
+/// Returns a contract error for an unplannable archive (X9: never
+/// silently skip archive planning). The compile driver is a typed enum,
+/// so an unknown driver is unrepresentable.
+fn plan_shard_archive(
+    group: &TaskGroup,
+    profile: &RustExecutionProfile,
+    archives: &mut ArchivePlan,
+) -> Result<(), ContractError> {
+    let driver = match group.compile_driver {
+        CompileDriver::Cargo => NextestDriver::Cargo,
+        CompileDriver::Mbx => NextestDriver::Mbx,
+    };
+    let target = if group.target == "host" {
+        None
+    } else {
+        Some(group.target.as_str())
+    };
+    let archive = NextestArchive::with_profile(
+        driver,
+        &group.package_name,
+        &group.features,
+        target,
+        profile.nextest_profile.as_str(),
+    )
+    .map_err(|err| ContractError::identity("archive_plan", err.to_string()))?;
+    if archives.add(&archive).is_err() {
+        // Archive already planned for this package/config.
+    }
+    Ok(())
+}
+
+/// Shard count for one group from the sharding policy.
+fn shard_count(config: &VelnorConfig, group: &TaskGroup) -> u32 {
+    let manifest = manifest_for_key(&group.manifest_key);
+    let shards = &config.test_sharding;
+    shards
+        .by_manifest
+        .get(&manifest)
+        .copied()
+        .unwrap_or(shards.default_shards)
+}
+
+/// Manifest path for a manifest key.
+fn manifest_for_key(key: &str) -> String {
+    if key == "root" {
+        "Cargo.toml".to_owned()
+    } else {
+        format!("{key}/Cargo.toml")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use velnor_actions_mise::ArchivePlan;
+    use velnor_actions_rust::{
+        CompileDriver, NextestProfile, ProfileSource, RustExecutionProfile, TaskGroup, TaskKind,
+        TestRunner,
+    };
+
+    use super::plan_shard_archive;
+
+    /// Minimal group with driver, target, and package selectors.
+    fn group(driver: CompileDriver, target: &str) -> TaskGroup {
+        TaskGroup {
+            task_id: "stack/rust/root/nextest/default".to_owned(),
+            package_id: "demo".to_owned(),
+            package_name: "demo".to_owned(),
+            manifest_key: "root".to_owned(),
+            kind: TaskKind::Nextest,
+            configuration: "default".to_owned(),
+            features: Vec::new(),
+            target: target.to_owned(),
+            gated_by: Vec::new(),
+            depends_on: Vec::new(),
+            target_flags: Vec::new(),
+            no_test_targets: false,
+            package_arg: None,
+            compile_driver: driver,
+            test_runner: TestRunner::CargoNextest,
+            declared_inputs: Vec::new(),
+            undeclared_reads: false,
+            uses_network: false,
+            uses_clock: false,
+            uses_random: false,
+            nextest_profile: NextestProfile::Default,
+        }
+    }
+
+    /// Detected Cargo/Nextest profile selecting the default Nextest profile.
+    fn profile() -> RustExecutionProfile {
+        RustExecutionProfile {
+            compile_driver: CompileDriver::Cargo,
+            test_runner: TestRunner::CargoNextest,
+            evidence: Vec::new(),
+            driver_source: ProfileSource::Detected,
+            runner_source: ProfileSource::Detected,
+            nextest_profile: NextestProfile::Default,
+            nextest_config: None,
+        }
+    }
+
+    #[test]
+    fn archive_planning_errors_instead_of_skipping() {
+        let profile = profile();
+        let mut archives = ArchivePlan::new();
+        let err = plan_shard_archive(
+            &group(CompileDriver::Cargo, "${{ x }}"),
+            &profile,
+            &mut archives,
+        )
+        .expect_err("bad target fails");
+        assert!(err.to_string().contains("archive_plan"), "{err}");
+        assert!(archives.is_empty());
+        plan_shard_archive(
+            &group(CompileDriver::Cargo, "host"),
+            &profile,
+            &mut archives,
+        )
+        .expect("planned");
+        assert_eq!(archives.len(), 1);
+        // Re-planning the same configuration dedupes without error.
+        plan_shard_archive(
+            &group(CompileDriver::Cargo, "host"),
+            &profile,
+            &mut archives,
+        )
+        .expect("dedupe");
+        assert_eq!(archives.len(), 1);
+    }
 }

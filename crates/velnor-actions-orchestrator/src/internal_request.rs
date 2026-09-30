@@ -67,8 +67,10 @@ pub fn write_request() -> Result<PathBuf, OrchestratorError> {
     let Some(payload_path) = payload_path else {
         return Err(internal("missing_event_payload"));
     };
-    let payload_json =
-        fs::read_to_string(&payload_path).map_err(|_| internal("unreadable_event_payload"))?;
+    let payload_json = crate::safe_read::read_event_file(
+        Path::new(&payload_path),
+        crate::safe_read::MAX_REPO_FILE_BYTES,
+    )?;
     let sha = env::var("GITHUB_SHA").ok().filter(|sha| !sha.is_empty());
     write_request_parts(&path, &event_name, &payload_json, sha.as_deref())
 }
