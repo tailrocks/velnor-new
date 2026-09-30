@@ -258,7 +258,7 @@ fn intake_generated_workflow_uses_crate_jobs_not_native_parallel() -> TestResult
     let repo = make_repo(config_with_branch())?;
     let prep = prepare(repo.path())?;
     generate(&prep, &GenerateOptions { output_dir: None })?;
-    let yml = fs::read_to_string(repo.path().join(".github/workflows/velnor.yml"))?;
+    let yml = fs::read_to_string(repo.path().join(".github/workflows/ci.yml"))?;
     assert!(yml.contains("  rust-demo:"), "crate job:\n{yml}");
     assert!(!yml.contains("strategy:"), "static graph:\n{yml}");
     for line in yml.lines() {

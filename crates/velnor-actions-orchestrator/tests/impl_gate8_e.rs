@@ -48,7 +48,7 @@ fn ctx() -> RenderContext {
         staged_binary: "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0".to_owned(),
         request_dir: "${{ runner.temp }}/velnor/r".to_owned(),
         checkout_uses: format!("actions/checkout@{:040x}", 0),
-        policy_commands: Vec::new(),
+        validator_commands: Vec::new(),
         candidate: None,
         preseed: false,
     }
@@ -57,7 +57,7 @@ fn ctx() -> RenderContext {
 fn ir_with(steps: Vec<Step>) -> Result<WorkflowIr, Box<dyn std::error::Error>> {
     let mut jobs = BTreeMap::new();
     jobs.insert(
-        "velnor-plan".to_owned(),
+        "plan".to_owned(),
         Job {
             display_name: "P".to_owned(),
             runs_on: "ubuntu-26.04".to_owned(),
@@ -70,11 +70,11 @@ fn ir_with(steps: Vec<Step>) -> Result<WorkflowIr, Box<dyn std::error::Error>> {
         },
     );
     jobs.insert(
-        "velnor-candidate".to_owned(),
+        "candidate".to_owned(),
         Job {
             display_name: "C".to_owned(),
             runs_on: "ubuntu-26.04".to_owned(),
-            needs: vec!["velnor-plan".to_owned()],
+            needs: vec!["plan".to_owned()],
             condition: None,
             steps,
         },

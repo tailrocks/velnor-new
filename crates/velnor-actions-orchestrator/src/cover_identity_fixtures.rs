@@ -63,7 +63,7 @@ pub(super) fn manifest_with(entries: &[(&str, &str)]) -> BaselineManifest {
         source_commit: "a".repeat(40),
         ref_: "refs/heads/testmain".to_owned(),
         event: "push".to_owned(),
-        workflow_ref: "o/r/.github/workflows/velnor.yml@refs/heads/testmain".to_owned(),
+        workflow_ref: "o/r/.github/workflows/ci.yml@refs/heads/testmain".to_owned(),
         run_id: 7,
         run_attempt: 1,
         final_status: "passed".to_owned(),
@@ -139,7 +139,7 @@ pub(super) fn inputs<'a>(
     BaselineInputs {
         branch: "testmain",
         root,
-        workflow: ".github/workflows/velnor.yml",
+        workflow: ".github/workflows/ci.yml",
         catalog,
     }
 }

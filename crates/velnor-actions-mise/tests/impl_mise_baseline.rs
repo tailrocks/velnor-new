@@ -10,8 +10,7 @@ fn pinned() -> ToolCatalog {
 }
 
 fn lookup() -> Result<BaselineLookup, String> {
-    BaselineLookup::new(BASE, "velnor.yml", "main", "coverage-manifests")
-        .map_err(|err| err.to_string())
+    BaselineLookup::new(BASE, "ci.yml", "main", "coverage-manifests").map_err(|err| err.to_string())
 }
 
 fn strings(items: &[&str]) -> Vec<OsString> {
@@ -22,7 +21,7 @@ fn strings(items: &[&str]) -> Vec<OsString> {
 fn baseline_lookup_records_exact_inputs() -> Result<(), String> {
     let lookup = lookup()?;
     assert_eq!(lookup.base_sha(), BASE);
-    assert_eq!(lookup.workflow(), "velnor.yml");
+    assert_eq!(lookup.workflow(), "ci.yml");
     assert_eq!(lookup.branch(), "main");
     assert_eq!(lookup.artifact(), "coverage-manifests");
     Ok(())
@@ -36,7 +35,7 @@ fn baseline_list_args_are_fixed_and_exact() -> Result<(), String> {
             "run",
             "list",
             "--workflow",
-            "velnor.yml",
+            "ci.yml",
             "--branch",
             "main",
             "--json",
@@ -84,7 +83,7 @@ fn baseline_argv_runs_pinned_gh() -> Result<(), String> {
             "run",
             "list",
             "--workflow",
-            "velnor.yml",
+            "ci.yml",
             "--branch",
             "main",
             "--json",
@@ -124,10 +123,10 @@ fn baseline_argv_runs_pinned_gh() -> Result<(), String> {
 #[test]
 fn baseline_lookup_rejects_malformed_inputs() {
     for (base, workflow, branch, artifact) in [
-        ("abc123", "velnor.yml", "main", "coverage-manifests"),
+        ("abc123", "ci.yml", "main", "coverage-manifests"),
         (
             "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
-            "velnor.yml",
+            "ci.yml",
             "main",
             "coverage-manifests",
         ),
@@ -139,12 +138,12 @@ fn baseline_lookup_rejects_malformed_inputs() {
             "coverage-manifests",
         ),
         (BASE, "velnor*.yml", "main", "coverage-manifests"),
-        (BASE, "velnor.yml", "main;evil", "coverage-manifests"),
-        (BASE, "velnor.yml", "$BRANCH", "coverage-manifests"),
-        (BASE, "velnor.yml", "main", ""),
-        (BASE, "velnor.yml", "main", "coverage/*"),
-        (BASE, "velnor.yml", "main", "two names"),
-        (BASE, "velnor.yml", "main", "a/b"),
+        (BASE, "ci.yml", "main;evil", "coverage-manifests"),
+        (BASE, "ci.yml", "$BRANCH", "coverage-manifests"),
+        (BASE, "ci.yml", "main", ""),
+        (BASE, "ci.yml", "main", "coverage/*"),
+        (BASE, "ci.yml", "main", "two names"),
+        (BASE, "ci.yml", "main", "a/b"),
     ] {
         let err = BaselineLookup::new(base, workflow, branch, artifact)
             .expect_err("malformed lookup input must fail");

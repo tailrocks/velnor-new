@@ -72,7 +72,7 @@ fn orch_gen_plan_matches_generated_tree() -> TestResult {
     let parent = TempDir::new()?;
     let preview = parent.path().join("preview");
     let report = preview_into(&prep, preview.clone())?;
-    let yaml = fs::read_to_string(preview.join(".github/workflows/velnor.yml"))?;
+    let yaml = fs::read_to_string(preview.join(".github/workflows/ci.yml"))?;
     assert!(
         plan.contains(&format!("Runner: {}", prep.runner_label)),
         "runner:\n{plan}"
@@ -93,13 +93,13 @@ fn orch_gen_plan_matches_generated_tree() -> TestResult {
         );
         assert!(yaml.contains(&format!("\n  {id}:")), "yaml job {id}");
     }
-    for rel in [".github/actionlint.yaml", ".github/workflows/velnor.yml"] {
+    for rel in [".github/actionlint.yaml", ".github/workflows/ci.yml"] {
         assert!(plan.contains(rel), "plan lists {rel}");
         assert!(preview.join(rel).is_file(), "preview has {rel}");
     }
     assert_eq!(
         report.files_written,
-        [".github/actionlint.yaml", ".github/workflows/velnor.yml"]
+        [".github/actionlint.yaml", ".github/workflows/ci.yml"]
     );
     assert!(plan.contains("1 Rust crate job"), "crate wording:\n{plan}");
     assert!(yaml.contains("  rust-demo:"), "crate presence parity");
@@ -347,12 +347,9 @@ fn orch_gen_candidate_qualify_is_artifact_only() -> TestResult {
     // `sha`); flip back to `generate` once the renderer owner fixes it.
     let tree = render_staged_tree(&prep)?;
     let yaml = tree
-        .get(".github/workflows/velnor.yml")
+        .get(".github/workflows/ci.yml")
         .ok_or_else(|| std::io::Error::other("missing workflow"))?;
-    assert!(
-        yaml.contains("\n  velnor-candidate:"),
-        "candidate job present"
-    );
+    assert!(yaml.contains("\n  candidate:"), "candidate job present");
     let qualify = yaml
         .lines()
         .find(|line| {

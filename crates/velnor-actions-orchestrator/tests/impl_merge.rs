@@ -123,7 +123,7 @@ pub(crate) fn task_reports_for(
 
 /// One successful required job.
 pub(crate) fn success_jobs() -> serde_json::Value {
-    serde_json::json!([{"job_id": "velnor-plan", "conclusion": "success"}])
+    serde_json::json!([{"job_id": "plan", "conclusion": "success"}])
 }
 
 /// Rewrite the single task of a passing report, keeping counts coherent.
@@ -314,11 +314,11 @@ fn precedence_matrix() -> TestResult {
 
     // Required-job conclusions join the same precedence.
     let reports = passing_reports(&plan)?;
-    let failed_job = serde_json::json!([{"job_id": "velnor-plan", "conclusion": "failure"}]);
+    let failed_job = serde_json::json!([{"job_id": "plan", "conclusion": "failure"}]);
     assert_eq!(run(reports.clone(), failed_job)?, FinalStatus::Failed);
-    let cancelled_job = serde_json::json!([{"job_id": "velnor-plan", "conclusion": "cancelled"}]);
+    let cancelled_job = serde_json::json!([{"job_id": "plan", "conclusion": "cancelled"}]);
     assert_eq!(run(reports.clone(), cancelled_job)?, FinalStatus::Cancelled);
-    let skipped_job = serde_json::json!([{"job_id": "velnor-plan", "conclusion": "skipped"}]);
+    let skipped_job = serde_json::json!([{"job_id": "plan", "conclusion": "skipped"}]);
     assert_eq!(run(reports.clone(), skipped_job)?, FinalStatus::NotRun);
 
     // Duplicate reports are not-run, never success.

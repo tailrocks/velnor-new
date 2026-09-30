@@ -111,8 +111,7 @@ fn lockful_crate_window() -> Result<String, Box<dyn std::error::Error>> {
     let task_at = yaml
         .find("  rust-demo:")
         .ok_or_else(|| std::io::Error::other("missing crate job"))?;
-    let lint_at = yaml.find("  velnor-final:").unwrap_or(yaml.len());
-    Ok(yaml[task_at..lint_at].to_owned())
+    Ok(yaml[task_at..].to_owned())
 }
 
 #[test]

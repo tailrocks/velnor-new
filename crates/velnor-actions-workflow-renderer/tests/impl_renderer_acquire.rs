@@ -11,8 +11,8 @@ use super::impl_renderer_fixtures::*;
 #[test]
 fn strict_rejects_unstaged_internal() -> Result<(), RenderError> {
     let bare_plan = job(
-        "velnor-plan",
-        "Velnor Plan",
+        "plan",
+        "Plan",
         Vec::new(),
         vec![checkout_step(&checkout_pin())?, plan_step()],
     );
@@ -21,25 +21,20 @@ fn strict_rejects_unstaged_internal() -> Result<(), RenderError> {
             .is_err_and(|err| format!("{err:?}").contains("internal_without_acquire")),
         "unstaged plan must fail closed"
     );
-    let bare_final = job(
-        "velnor-final",
-        "Velnor / Required",
-        Vec::new(),
-        vec![merge_step()],
-    );
+    let bare_final = job("required", "Required", Vec::new(), vec![merge_step()]);
     let mut final_job = bare_final.1;
     final_job.condition = Some("always()".to_owned());
     assert!(
         strict(
-            &fixture_ir(vec![("velnor-final".to_owned(), final_job)]),
+            &fixture_ir(vec![("required".to_owned(), final_job)]),
             &fixture_ctx()
         )
         .is_err_and(|err| format!("{err:?}").contains("internal_without_acquire")),
         "unstaged merge must fail closed"
     );
     let staged = job(
-        "velnor-plan",
-        "Velnor Plan",
+        "plan",
+        "Plan",
         Vec::new(),
         vec![
             checkout_step(&checkout_pin())?,

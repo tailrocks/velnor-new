@@ -311,8 +311,8 @@ fn merge_flags_wrong_manifest_digest() -> TestResult {
     let request = serde_json::json!({
         "schema": 1, "run_key": "local", "plan": plan, "matrix": plan.matrix,
         "matrix_reports": reports, "baseline_manifest": manifest,
-        "required_job_ids": ["velnor-plan"],
-        "required_jobs": [{"job_id": "velnor-plan", "conclusion": "success"}],
+        "required_job_ids": ["plan"],
+        "required_jobs": [{"job_id": "plan", "conclusion": "success"}],
     });
     let final_report: velnor_actions_contract::FinalReport =
         serde_json::from_str(&merge_internal(&request.to_string())?)?;

@@ -20,7 +20,7 @@ pub const DECLARED_GITHUB_FORMATS: [GithubFormat; 2] = [
         owner: "velnor-actions-actionlint",
     },
     GithubFormat {
-        path: ".github/workflows/velnor.yml",
+        path: ".github/workflows/ci.yml",
         owner: "velnor-actions-workflow-renderer",
     },
 ];

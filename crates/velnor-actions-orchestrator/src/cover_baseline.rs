@@ -260,7 +260,7 @@ mod tests {
         let name = format!("velnor-baseline-{base}-{}", digest_b3(b"c"));
         let named: Vec<String> = baseline_download_args(
             &base,
-            ".github/workflows/velnor.yml",
+            ".github/workflows/ci.yml",
             "testmain",
             Some(&name),
             7,
@@ -298,7 +298,7 @@ mod tests {
             "source_commit": base,
             "ref": "refs/heads/testmain",
             "event": "push",
-            "workflow_ref": "o/r/.github/workflows/velnor.yml@refs/heads/testmain",
+            "workflow_ref": "o/r/.github/workflows/ci.yml@refs/heads/testmain",
             "run_id": 7,
             "run_attempt": 1,
             "final_status": "passed",

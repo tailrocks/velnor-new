@@ -23,7 +23,7 @@ fn fixture_ctx() -> RenderContext {
         staged_binary: format!("$RUNNER_TEMP/velnor/bin/velnor-actions-{VERSION}"),
         request_dir: "${{ runner.temp }}/velnor/r1-a1".to_owned(),
         checkout_uses: checkout_pin(),
-        policy_commands: Vec::new(),
+        validator_commands: Vec::new(),
         candidate: None,
         preseed: false,
     }
@@ -32,9 +32,9 @@ fn fixture_ctx() -> RenderContext {
 fn fixture_ir(task: Job) -> Result<WorkflowIr, RenderError> {
     let mut jobs = BTreeMap::new();
     jobs.insert(
-        "velnor-plan".to_owned(),
+        "plan".to_owned(),
         Job {
-            display_name: "Velnor Plan".to_owned(),
+            display_name: "Plan".to_owned(),
             runs_on: LABEL.to_owned(),
             needs: Vec::new(),
             condition: None,
@@ -67,7 +67,7 @@ fn fixture_ir(task: Job) -> Result<WorkflowIr, RenderError> {
 fn task_job(env: BTreeMap<String, String>, needs: Vec<String>) -> Result<Job, RenderError> {
     let argv = ["sh", "-c", "echo hi"].map(str::to_owned).to_vec();
     Ok(Job {
-        display_name: "Velnor Task".to_owned(),
+        display_name: "Task".to_owned(),
         runs_on: LABEL.to_owned(),
         needs,
         condition: None,
@@ -82,7 +82,7 @@ fn marker_env(max: &str) -> BTreeMap<String, String> {
     BTreeMap::from([
         ("VELNOR_TASK_ID".into(), "${{ matrix.task_id }}".into()),
         ("VELNOR_TASK_RUN".into(), "${{ matrix.run }}".into()),
-        (MATRIX_NEEDS_JOB_ENV.into(), "velnor-plan".into()),
+        (MATRIX_NEEDS_JOB_ENV.into(), "plan".into()),
         (MATRIX_OUTPUT_ENV.into(), "matrix".into()),
         (MATRIX_MAX_PARALLEL_ENV.into(), max.into()),
     ])
@@ -95,12 +95,12 @@ fn render(task: Job) -> Result<String, RenderError> {
 
 #[test]
 fn strategy_shape_exact_and_marker_stripped() -> Result<(), RenderError> {
-    let text = render(task_job(marker_env("2"), vec!["velnor-plan".to_owned()])?)?;
+    let text = render(task_job(marker_env("2"), vec!["plan".to_owned()])?)?;
     for line in [
         "    strategy:",
         "      fail-fast: false",
         "      max-parallel: 2",
-        "      matrix: ${{ fromJSON(needs.velnor-plan.outputs.matrix) }}",
+        "      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}",
         "    outputs:",
         "      matrix: ${{ steps.plan.outputs.matrix }}",
         "        id: plan",
@@ -113,14 +113,14 @@ fn strategy_shape_exact_and_marker_stripped() -> Result<(), RenderError> {
 
 #[test]
 fn max_parallel_honored() -> Result<(), RenderError> {
-    let text = render(task_job(marker_env("7"), vec!["velnor-plan".to_owned()])?)?;
+    let text = render(task_job(marker_env("7"), vec!["plan".to_owned()])?)?;
     assert!(text.contains("max-parallel: 7"), "cap:\n{text}");
     Ok(())
 }
 
 #[test]
 fn static_task_renders_no_strategy() -> Result<(), RenderError> {
-    let text = render(task_job(BTreeMap::new(), vec!["velnor-plan".to_owned()])?)?;
+    let text = render(task_job(BTreeMap::new(), vec!["plan".to_owned()])?)?;
     for absent in ["strategy:", "outputs:", "id: plan", "fromJSON"] {
         assert!(!text.contains(absent), "static hit {absent}:\n{text}");
     }
@@ -129,16 +129,12 @@ fn static_task_renders_no_strategy() -> Result<(), RenderError> {
 
 #[test]
 fn matrix_misuse_fails_closed() -> Result<(), RenderError> {
-    let partial = BTreeMap::from([(MATRIX_NEEDS_JOB_ENV.to_owned(), "velnor-plan".to_owned())]);
+    let partial = BTreeMap::from([(MATRIX_NEEDS_JOB_ENV.to_owned(), "plan".to_owned())]);
     for (env, needs, want) in [
-        (
-            partial,
-            vec!["velnor-plan".to_owned()],
-            "matrix_marker_partial",
-        ),
+        (partial, vec!["plan".to_owned()], "matrix_marker_partial"),
         (
             marker_env("0"),
-            vec!["velnor-plan".to_owned()],
+            vec!["plan".to_owned()],
             "matrix_bad_max_parallel",
         ),
         (marker_env("2"), Vec::new(), "matrix_without_producer_need"),

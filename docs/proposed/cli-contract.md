@@ -237,7 +237,7 @@ Detected stacks
 
 Workflow to generate
   .github/actionlint.yaml
-  .github/workflows/velnor.yml
+  .github/workflows/ci.yml
   Runner: ubuntu-26.04 (latest pinned default)
   Jobs:
     - plan and formatting
@@ -320,7 +320,7 @@ staged at `$RUNNER_TEMP`, never a repository path or a second
 executable. The helper version MUST equal the bootstrap descriptor
 selected in [workflow §3](workflow-contract.md), EXCEPT the enumerated
 candidate-qualification steps in candidate mode (`Check generated
-files` and the `velnor-candidate` qualification checks), which use the
+files` and the `candidate` qualification checks), which use the
 verified candidate artifact. No other step may invoke the candidate.
 
 ## 7. Output and exit status

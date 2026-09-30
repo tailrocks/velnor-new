@@ -270,8 +270,8 @@ fn merge_rejects_covered_claims_without_manifest() -> TestResult {
         "plan": plan,
         "matrix": plan.matrix,
         "matrix_reports": reports,
-        "required_job_ids": ["velnor-plan"],
-        "required_jobs": [{"job_id": "velnor-plan", "conclusion": "success"}],
+        "required_job_ids": ["plan"],
+        "required_jobs": [{"job_id": "plan", "conclusion": "success"}],
     });
     let final_report: velnor_actions_contract::FinalReport =
         serde_json::from_str(&merge_internal(&request.to_string())?)?;

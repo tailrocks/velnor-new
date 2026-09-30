@@ -169,7 +169,7 @@ fn final_and_candidate_reports_validate() -> Result<(), ContractError> {
             artifact_id_for_plan(&run_key)?,
         ],
         required_job_results: vec![RequiredJobResult {
-            job_id: "velnor-plan".to_owned(),
+            job_id: "plan".to_owned(),
             conclusion: "success".to_owned(),
         }],
         status: FinalStatus::Passed,
@@ -242,11 +242,11 @@ fn workflow_ir_validates_pins_and_refs() -> Result<(), ContractError> {
             group: "velnor-ci".to_owned(),
             cancel_in_progress: "true".to_owned(),
         },
-        jobs: BTreeMap::from([("velnor-plan".to_owned(), job)]),
+        jobs: BTreeMap::from([("plan".to_owned(), job)]),
     };
     ir.validate()?;
     let mut bad = ir.clone();
-    if let Some(job) = bad.jobs.get_mut("velnor-plan") {
+    if let Some(job) = bad.jobs.get_mut("plan") {
         job.runs_on = "ubuntu-latest".to_owned();
     }
     assert!(bad.validate().is_err());
@@ -337,11 +337,11 @@ fn final_without_plan_is_planning_failed() -> Result<(), ContractError> {
     let run_key = run_key_for_ci(9, 3);
     let jobs = vec![
         RequiredJobResult {
-            job_id: "velnor-plan".to_owned(),
+            job_id: "plan".to_owned(),
             conclusion: "failure".to_owned(),
         },
         RequiredJobResult {
-            job_id: "velnor-alint".to_owned(),
+            job_id: "alint".to_owned(),
             conclusion: "success".to_owned(),
         },
     ];
@@ -352,7 +352,7 @@ fn final_without_plan_is_planning_failed() -> Result<(), ContractError> {
     assert_eq!(report.plan_id, format!("plan-{run_key}"));
     assert!(report.expected_report_ids.is_empty());
     assert!(report.downloaded_artifact_ids.is_empty());
-    assert_eq!(report.required_job_results[0].job_id, "velnor-alint");
+    assert_eq!(report.required_job_results[0].job_id, "alint");
     assert_eq!(report.counts.selected, 0);
     assert!(FinalReport::without_plan("bogus", Vec::new()).is_err());
     Ok(())

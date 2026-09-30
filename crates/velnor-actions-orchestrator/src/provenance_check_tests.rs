@@ -20,7 +20,7 @@ fn manifest_and_expected(base: &str) -> (BaselineManifest, ProvenanceExpectation
         source_commit: base.to_owned(),
         ref_: "refs/heads/testmain".to_owned(),
         event: "push".to_owned(),
-        workflow_ref: "o/r/.github/workflows/velnor.yml@refs/heads/testmain".to_owned(),
+        workflow_ref: "o/r/.github/workflows/ci.yml@refs/heads/testmain".to_owned(),
         run_id: 7,
         run_attempt: 1,
         final_status: "passed".to_owned(),
@@ -35,7 +35,7 @@ fn manifest_and_expected(base: &str) -> (BaselineManifest, ProvenanceExpectation
     let expected = ProvenanceExpectations {
         base: base.to_owned(),
         branch: "testmain".to_owned(),
-        workflow_path: ".github/workflows/velnor.yml".to_owned(),
+        workflow_path: ".github/workflows/ci.yml".to_owned(),
         generator_version: "0.1.0".to_owned(),
         generator_sha256: "1".repeat(64),
         repository_id: Some(digest),

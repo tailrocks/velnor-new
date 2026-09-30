@@ -54,7 +54,7 @@ pub(crate) fn merge_request(
 
 /// One successful required job.
 pub(crate) fn success_jobs() -> serde_json::Value {
-    serde_json::json!([{"job_id": "velnor-plan", "conclusion": "success"}])
+    serde_json::json!([{"job_id": "plan", "conclusion": "success"}])
 }
 
 /// JSON helper result.

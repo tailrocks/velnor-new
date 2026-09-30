@@ -9,7 +9,7 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
-    Concurrency, Job, Trigger, VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
+    Concurrency, Job, Trigger, ValidatorKind, VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
 };
 
 use crate::{
@@ -46,10 +46,6 @@ pub const PLAN_JOB_ID: &str = "plan";
 pub const TASK_JOB_ID: &str = "velnor-task";
 /// Candidate validation job ID (Velnor policy only).
 pub const CANDIDATE_JOB_ID: &str = "candidate";
-/// Repository-structure lint job ID (Velnor policy only).
-pub const ALINT_JOB_ID: &str = "alint";
-/// Dependency/security policy job ID (Velnor policy only).
-pub const POLICY_JOB_ID: &str = "policy";
 /// Full-SHA Alint pin for the repository-policy `alint` job.
 pub const ALINT_USES: &str = "asamarts/alint@9f9d34ba0eae3888299b9e570f43338b0e7f2cdb";
 
@@ -66,9 +62,9 @@ pub struct RenderContext {
     pub request_dir: String,
     /// Pinned `actions/checkout` ref for rendered support jobs.
     pub checkout_uses: String,
-    /// Fixed shell steps for the `velnor-policy` job.
-    pub policy_commands: Vec<PolicyCommand>,
-    /// Fixed vectors for the `velnor-candidate` job, when enabled.
+    /// Fixed shell steps for repository validator jobs (P05-6: no umbrella).
+    pub validator_commands: Vec<ValidatorCommand>,
+    /// Fixed vectors for the `candidate` job, when enabled.
     pub candidate: Option<CandidateSpec>,
     /// Pre-seed mode: Velnor policy without a bootstrap lock (trust-on-
     /// review). Accepts fixed pre-seed staging for internal steps and
@@ -76,9 +72,11 @@ pub struct RenderContext {
     pub preseed: bool,
 }
 
-/// One fixed policy-job shell step: display name plus validated argv.
+/// One fixed validator-job shell step: kind plus display name plus argv.
 #[derive(Debug, Clone)]
-pub struct PolicyCommand {
+pub struct ValidatorCommand {
+    /// Repository validator owning this step's job.
+    pub validator: ValidatorKind,
     /// Step display name.
     pub name: String,
     /// Fixed argument vector.
@@ -133,9 +131,12 @@ impl RenderContext {
         validate_staged_binary(&self.staged_binary, &self.generator_version)?;
         validate_request_dir(&self.request_dir)?;
         steps::checkout_step(&self.checkout_uses).map(|_| ())?;
-        for command in &self.policy_commands {
+        for command in &self.validator_commands {
+            if command.validator == ValidatorKind::Actionlint {
+                return Err(RenderError::BadCommand("actionlint_not_support".to_owned()));
+            }
             if command.name.trim().is_empty() {
-                return Err(RenderError::BadCommand("empty_policy_name".to_owned()));
+                return Err(RenderError::BadCommand("empty_validator_name".to_owned()));
             }
             commands::validate_command_argv(&command.argv)?;
         }

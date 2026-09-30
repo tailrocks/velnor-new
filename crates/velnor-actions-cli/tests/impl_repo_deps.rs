@@ -235,7 +235,7 @@ fn lockfile_committed_and_locked_used() -> Result<(), Box<dyn Error>> {
     for file in [
         "crates/velnor-actions-mise/src/requests.rs",
         "crates/velnor-actions-orchestrator/src/vectors.rs",
-        ".github/workflows/velnor.yml",
+        ".github/workflows/ci.yml",
     ] {
         assert!(read(file)?.contains("--locked"), "{file} misses --locked");
     }

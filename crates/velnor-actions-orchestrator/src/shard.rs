@@ -351,7 +351,7 @@ mod tests {
     fn lookup_args_are_fixed_and_validated() {
         let base = "a".repeat(40);
         let lookup =
-            BaselineLookup::new(&base, ".github/workflows/velnor.yml", "testmain").expect("valid");
+            BaselineLookup::new(&base, ".github/workflows/ci.yml", "testmain").expect("valid");
         let list: Vec<String> = lookup
             .list_args()
             .iter()
