@@ -251,13 +251,13 @@ fn success_leaves_no_lock_and_no_warnings() -> TestResult {
 fn generate_leaves_tool_files_untouched() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     let root = repo.path();
-    fs::write(root.join("mise.toml"), "v1")?;
+    fs::write(root.join("mise.toml"), "[tools]\n")?;
     fs::write(root.join("mise.lock"), "lock-bytes")?;
     let snap = ToolSnapshot::capture(root);
     let prep = prepare(root)?;
     generate(&prep, &GenerateOptions { output_dir: None })?;
     assert!(snap.verify(root).is_ok(), "generate preserves tool files");
-    assert_eq!(fs::read(root.join("mise.toml"))?, b"v1");
+    assert_eq!(fs::read(root.join("mise.toml"))?, b"[tools]\n");
     Ok(())
 }
 
