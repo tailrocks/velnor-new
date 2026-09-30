@@ -14,6 +14,8 @@ use velnor_actions_contract::{Job, Step, StepKind};
 
 use crate::{MiseSetup, RenderError, setup::MISE_ACTION_NAME, steps::validate_uses};
 
+pub use crate::cache_elect::elect_mise_cache_writers;
+
 /// Display name of the shared sources restore step.
 pub const RESTORE_SOURCES_NAME: &str = "Restore Cargo sources";
 /// Display name of the shared sources save step.
