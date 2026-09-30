@@ -1,8 +1,10 @@
 //! Typed mise requests: metadata discovery, qualification, and pinned exec.
 //!
 //! Discovery uses Cargo even for MBX workspaces (metadata discovery is not
-//! compilation). Callers own parsing; discovery and qualification return the
-//! raw metadata JSON string, and pinned exec returns the typed output.
+//! compilation). Discovery never resolves (`--no-deps`: no fetch, no write);
+//! only lockful qualification resolves, `--locked --offline`. Callers own
+//! parsing; discovery and qualification return the raw metadata JSON string,
+//! and pinned exec returns the typed output.
 
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
@@ -21,7 +23,11 @@ const CARGO_METADATA: &str = "metadata";
 ///
 /// Exact payload: `cargo metadata --format-version 1 --no-deps
 /// --manifest-path <manifest>`. No `--locked`/`--offline`: discovery must not
-/// wait for full resolution.
+/// wait for full resolution. `--no-deps` skips resolution entirely, so the
+/// probe performs no index access, network fetch, or repository write --
+/// not even for lockless-with-dependencies manifests (poison-fixture proven;
+/// the orchestrator also brackets every run with a tool snapshot that fails
+/// closed on drift). Full resolution is qualification's job, lockful-only.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MetadataDiscovery {
     /// Manifest whose metadata is requested.

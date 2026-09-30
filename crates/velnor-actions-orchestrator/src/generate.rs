@@ -1,7 +1,6 @@
 //! Staged `.github` replacement and outside-repo preview writes.
-//!
-//! In-place commits use two renames with a visibility gap between
-//! them (a reader can transiently miss `.github`): staged, never atomic.
+//! In-place commits exchange atomically on Linux/macOS, else fall back
+//! to a guarded two-rename commit preserving old output on failure.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -54,9 +53,8 @@ pub struct GenerateReport {
 
 /// Render in memory, then replace `.github` or write a preview.
 ///
-/// In-place replacement stages under the root and commits with two renames,
-/// leaving the previous tree unchanged on failure. Preview writes
-/// `PATH/.github` only for an absent/empty outside-repo non-ancestor root.
+/// In-place replacement stages under the root and commits, leaving the
+/// previous tree unchanged on failure; previews write `PATH/.github`.
 ///
 /// # Errors
 ///
@@ -172,12 +170,10 @@ fn is_symlink(path: &Path) -> bool {
     std::fs::symlink_metadata(path).is_ok_and(|meta| meta.is_symlink())
 }
 
-/// Stage under the root and commit with two renames (staged, not atomic).
+/// Stage under the root, then commit under the ownership lock.
 ///
-/// Validation, staging, the same-filesystem check, and the commit run
-/// under the ownership lock; nothing before the first rename touches
-/// old output. Returns cleanup warnings when the commit lands but the
-/// backup removal fails.
+/// Nothing before the commit touches old output; success may carry
+/// old-tree-removal warnings.
 fn replace_in_place(
     prep: &GenerationPreparation,
     tree: &RenderedTree,
@@ -208,49 +204,56 @@ fn replace_in_place(
     swap_directories(root, &target, &staged)
 }
 
-/// Commit with two renames, restoring old output on failure.
-///
-/// `target -> backup`, then `staged -> target` (staged, never atomic:
-/// readers can transiently miss `.github`). Commit failure restores the
-/// backup and reports `commit_failed:{commit}; {outcome}` distinctly.
+/// Commit staged over target: fresh installs rename once (atomic), while
+/// existing targets exchange atomically on Linux/macOS; elsewhere, and
+/// where exchange is unsupported, the two-rename fallback keeps old output.
 fn swap_directories(
     root: &Path,
     target: &Path,
     staged: &Path,
 ) -> Result<Vec<String>, OrchestratorError> {
-    let backup = backup_path(root, target);
-    let had_target = target.exists();
-    if had_target {
-        std::fs::rename(target, &backup)
-            .map_err(|err| OrchestratorError::io(target.display().to_string(), err.to_string()))?;
+    let label = target.display().to_string();
+    if !target.exists() {
+        return match std::fs::rename(staged, target) {
+            Ok(()) => Ok(Vec::new()),
+            Err(err) => Err(OrchestratorError::io(label, err.to_string())),
+        };
     }
-    if let Err(commit) = std::fs::rename(staged, target) {
-        if !had_target {
-            return Err(OrchestratorError::io(
-                target.display().to_string(),
-                commit.to_string(),
-            ));
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    {
+        use rustix::fs::{CWD, RenameFlags, renameat_with};
+        use std::io::ErrorKind::{InvalidInput, PermissionDenied, Unsupported};
+        match renameat_with(CWD, staged, CWD, target, RenameFlags::EXCHANGE) {
+            Ok(()) => {
+                let old = staged.display().to_string();
+                return match std::fs::remove_dir_all(staged) {
+                    Ok(()) => Ok(Vec::new()),
+                    Err(cleanup) => Ok(vec![format!("backup_cleanup_failed:{old}:{cleanup}")]),
+                };
+            }
+            Err(err) if matches!(err.kind(), Unsupported | InvalidInput | PermissionDenied) => {}
+            Err(err) => return Err(OrchestratorError::io(label.clone(), err.to_string())),
         }
+    }
+    let backup = backup_path(root, target);
+    std::fs::rename(target, &backup)
+        .map_err(|err| OrchestratorError::io(label.clone(), err.to_string()))?;
+    if let Err(commit) = std::fs::rename(staged, target) {
         let outcome = restore_backup(&backup, target);
         return Err(OrchestratorError::io(
-            target.display().to_string(),
+            label,
             format!("commit_failed:{commit}; {outcome}"),
         ));
     }
-    if had_target && let Err(cleanup) = std::fs::remove_dir_all(&backup) {
-        return Ok(vec![format!(
-            "backup_cleanup_failed:{}:{cleanup}",
-            backup.display()
-        )]);
+    if let Err(cleanup) = std::fs::remove_dir_all(&backup) {
+        let at = backup.display().to_string();
+        return Ok(vec![format!("backup_cleanup_failed:{at}:{cleanup}")]);
     }
     Ok(Vec::new())
 }
 
-/// Restore `backup` to `target`, reporting the rollback outcome distinctly.
-///
-/// Rollback only fails under concurrent interference between the two
-/// renames (single-threaded it inverts a rename that just succeeded),
-/// so this keeps the `rolled_back` / `rollback_failed:{err}` contract.
+/// Restore `backup` to `target`, reporting `rolled_back` distinctly.
+/// Rollback fails only under concurrent interference, never alone.
 fn restore_backup(backup: &Path, target: &Path) -> String {
     match std::fs::rename(backup, target) {
         Ok(()) => "rolled_back".to_owned(),
@@ -283,12 +286,9 @@ fn write_preview(
     write_tree(&canonical.join(".github"), tree)
 }
 
-/// Write every rendered file under `github_dir`.
-///
-/// Parent chains are re-verified symlink-free immediately before use
-/// and leaves are created exclusively: an existing leaf refuses as an
-/// overwrite instead of truncating, and a swapped symlink refuses
-/// instead of diverting the write.
+/// Write every rendered file under `github_dir`, refusing symlinks.
+/// Parents are re-verified before use; leaves are created exclusively,
+/// so overwrites and swapped links refuse instead of diverting writes.
 pub(crate) fn write_tree(github_dir: &Path, tree: &RenderedTree) -> Result<(), OrchestratorError> {
     for file in &tree.files {
         let rel = file.path.strip_prefix(".github/").unwrap_or(&file.path);
@@ -352,20 +352,19 @@ mod tests {
     }
 
     #[test]
-    fn commit_failure_restores_backup_and_reports_both() {
-        let root = scratch("rollback").expect("scratch");
+    fn commit_failure_preserves_old_tree_without_partial_write() {
+        let root = scratch("commit_fail").expect("scratch");
         let target = root.join(".github");
         std::fs::create_dir_all(target.join("workflows")).expect("target");
         std::fs::write(target.join("workflows/old.yml"), "old: true\n").expect("old");
         let err =
             swap_directories(&root, &target, &root.join("missing-staged")).expect_err("fails");
-        let text = err.to_string();
         assert!(
-            text.contains("commit_failed") && text.contains("rolled_back"),
-            "{text}"
+            !target.join("actionlint.yaml").exists(),
+            "no partial write: {err}"
         );
         assert_eq!(
-            std::fs::read(target.join("workflows/old.yml")).expect("restored"),
+            std::fs::read(target.join("workflows/old.yml")).expect("kept"),
             b"old: true\n"
         );
     }
@@ -380,7 +379,6 @@ mod tests {
         assert!(!target.exists(), "nothing committed");
     }
 
-    /// Rollback failure keeps the live target and names the rollback error.
     #[test]
     fn rollback_failure_preserved() {
         let root = scratch("rollback_fail").expect("scratch");

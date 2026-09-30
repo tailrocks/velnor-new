@@ -1,4 +1,6 @@
 //! Cargo inventory fetching plus locked/offline qualification.
+//! Discovery never resolves (`--no-deps`); only lockful qualification
+//! does (`--locked --offline`). Tool snapshots bracket every fetch loop.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -9,6 +11,7 @@ use velnor_actions_rust::{CandidateOutcome, CargoCandidate, WorkspaceRecord, par
 use crate::OrchestratorError;
 use crate::decisions::{MetadataFailure, classify_metadata_failure};
 use crate::discover::{PlannedWorkspace, workspace_lock, workspace_manifest};
+use crate::generate::ToolSnapshot;
 
 /// Candidate outcomes plus successful manifest inventories.
 pub(crate) type Inventories = (Vec<CandidateOutcome>, Vec<(String, WorkspaceRecord)>);
@@ -33,7 +36,8 @@ pub(crate) fn run_inventories(
     })
 }
 
-/// Inventory loop over an immutable snapshot; `reuse=false` is the legacy path.
+/// Inventory loop over an immutable snapshot; `reuse=false` is legacy.
+/// A tool snapshot brackets the fetches, failing closed on tool drift.
 /// # Errors
 /// Returns `preparation_incomplete` when a fetch fails incompletely.
 fn run_with(
@@ -42,6 +46,7 @@ fn run_with(
     reuse: bool,
     load: &dyn Fn(&str) -> Result<WorkspaceRecord, FetchFailure>,
 ) -> Result<Inventories, OrchestratorError> {
+    let tools = ToolSnapshot::capture(root);
     let mut outcomes = Vec::with_capacity(candidates.len());
     let mut inventories = Vec::new();
     let mut index = MemberIndex::default();
@@ -70,6 +75,7 @@ fn run_with(
             }
         }
     }
+    tools.verify(root)?;
     Ok((outcomes, inventories))
 }
 
@@ -174,24 +180,21 @@ fn fetch_inventory(
 /// True when stderr reports a missing tool rather than a bad manifest.
 fn is_tool_missing(stderr: &str) -> bool {
     let text = stderr.to_lowercase();
-    [
-        "not installed",
-        "missing tool",
-        "tool missing",
-        "no such tool",
-    ]
-    .iter()
-    .any(|marker| text.contains(marker))
+    text.contains("not installed")
+        || text.contains("missing tool")
+        || text.contains("tool missing")
+        || text.contains("no such tool")
 }
 
-/// Qualify locked/offline resolution wherever a lockfile pins deps.
-/// Lockless workspaces have nothing pinned, so nothing to qualify.
+/// Qualify locked/offline resolution where a lockfile pins deps.
+/// A tool snapshot brackets the runs, failing closed on tool drift.
 /// # Errors
 /// Returns `preparation_incomplete` when a lockfile cannot be qualified.
 pub(crate) fn qualify_workspaces(
     root: &Path,
     workspaces: &[PlannedWorkspace],
 ) -> Result<(), OrchestratorError> {
+    let tools = ToolSnapshot::capture(root);
     let catalog = ToolCatalog::pinned();
     for workspace in workspaces {
         let prefix = workspace.record.workspace_root.clone();
@@ -207,20 +210,16 @@ pub(crate) fn qualify_workspaces(
             }
         })?;
         if let Err(err) = request.run(&catalog) {
-            let first = err.to_string();
-            let short: String = first
-                .lines()
-                .next()
-                .unwrap_or("metadata_offline")
-                .chars()
-                .take(160)
-                .collect();
+            let text = err.to_string();
+            let first = text.lines().next().unwrap_or("metadata_offline");
+            let short: String = first.chars().take(160).collect();
             return Err(OrchestratorError::PreparationIncomplete {
                 manifest,
                 problem: format!("metadata_offline:{short}"),
             });
         }
     }
+    tools.verify(root)?;
     Ok(())
 }
 
@@ -234,9 +233,7 @@ mod tests {
     fn tool_missing_markers_are_conservative() {
         assert!(is_tool_missing("mise ERROR Tool rust@1.2.3 not installed"));
         assert!(is_tool_missing("No such tool: nextest"));
-        assert!(!is_tool_missing(
-            "error: failed to parse manifest at Cargo.toml"
-        ));
+        assert!(!is_tool_missing("error: bad manifest"));
         assert!(!is_tool_missing(""));
     }
 
@@ -264,21 +261,21 @@ mod tests {
     }
 
     fn candidates(manifests: &[String]) -> Vec<CargoCandidate> {
-        manifests
-            .iter()
-            .map(|m| CargoCandidate {
-                manifest: m.clone(),
-            })
-            .collect()
+        let mut out = Vec::with_capacity(manifests.len());
+        for manifest in manifests {
+            out.push(CargoCandidate {
+                manifest: manifest.clone(),
+            });
+        }
+        out
     }
 
     fn fixture_dir(files: &[(&str, &str)]) -> Result<tempfile::TempDir, String> {
         let dir = tempfile::TempDir::new().map_err(|err| err.to_string())?;
         for (path, body) in files {
             let full = dir.path().join(path);
-            if let Some(parent) = full.parent() {
-                std::fs::create_dir_all(parent).map_err(|err| err.to_string())?;
-            }
+            let parent = full.parent().ok_or("fixture path lacks a parent")?;
+            std::fs::create_dir_all(parent).map_err(|err| err.to_string())?;
             std::fs::write(&full, body).map_err(|err| err.to_string())?;
         }
         Ok(dir)
@@ -288,18 +285,14 @@ mod tests {
     const NESTED_ROOT: &str = "[package]\nname = \"n\"\nversion = \"0.1.0\"\n[workspace]\n";
 
     /// Reuse matches legacy outcomes/inventories; fetches drop 6 to 4.
-    /// Each stub fetch stands for one `cargo metadata` subprocess. The outer
-    /// record lists the nested path, but its file declares `[workspace]`, so
-    /// the nested guard forces a fresh fetch on the reuse path too.
     #[test]
     fn reuse_matches_legacy_outcomes_and_inventories() -> Result<(), String> {
         let head = ["Cargo.toml", "crates/a/Cargo.toml", "crates/b/Cargo.toml"];
         let tail = ["nested/Cargo.toml", "other/Cargo.toml", "bad/Cargo.toml"];
         let names: Vec<&str> = head.into_iter().chain(tail).collect();
-        let files: Vec<(&str, &str)> = names.iter().map(|n| (*n, MEMBER)).collect();
+        let mut files: Vec<(&str, &str)> = names.iter().map(|n| (*n, MEMBER)).collect();
+        files[3] = (names[3], NESTED_ROOT);
         let dir = fixture_dir(&files)?;
-        let nested_path = dir.path().join(names[3]);
-        std::fs::write(&nested_path, NESTED_ROOT).map_err(|err| err.to_string())?;
         let outer = record("", &[names[0], names[1], names[2], names[3]]);
         let nested = record("nested", &names[3..4]);
         let other = record("other", &names[4..5]);
@@ -326,22 +319,34 @@ mod tests {
         assert_eq!(reuse_calls, 4, "members reuse the root record");
         assert_eq!(legacy.0, reused.0, "outcomes match");
         assert_eq!(legacy.1, reused.1, "inventories match");
-        let bad = reused
-            .0
-            .iter()
-            .any(|o| o.manifest == "bad/Cargo.toml" && !o.metadata_ok);
-        assert!(bad, "malformed outcome preserved");
-        let clean = reused.0.iter().all(|o| {
-            !o.diagnostic
-                .as_deref()
-                .unwrap_or_default()
-                .starts_with("unexpected")
-        });
-        assert!(clean, "no unexpected load happened");
-        assert_eq!(
-            reused.1[3].1.workspace_root, "nested",
-            "nested loaded fresh"
-        );
+        let bad = &reused.0[5];
+        assert!(!bad.metadata_ok, "malformed preserved");
+        assert_eq!(bad.manifest, "bad/Cargo.toml");
+        for outcome in &reused.0 {
+            if outcome.manifest != "bad/Cargo.toml" {
+                assert!(outcome.diagnostic.is_none(), "clean {}", outcome.manifest);
+            }
+        }
+        let nested = &reused.1[3].1;
+        assert_eq!(nested.workspace_root, "nested");
+        Ok(())
+    }
+
+    /// A tool write mid-fetch fails the run instead of slipping through.
+    #[test]
+    fn tool_mutation_mid_run_fails_closed() -> Result<(), String> {
+        let dir = fixture_dir(&[("Cargo.toml", MEMBER), ("mise.toml", "v1")])?;
+        let one = candidates(&["Cargo.toml".to_owned()]);
+        let loader = |manifest: &str| {
+            std::fs::write(dir.path().join("mise.toml"), "v2").expect("mutate tool");
+            Ok(record("", &[manifest]))
+        };
+        match run_with(dir.path(), &one, true, &loader) {
+            Err(OrchestratorError::Contract { problem })
+                if problem == "tool_files_changed:mise.toml" => {}
+            Err(other) => return Err(format!("wrong error: {other:?}")),
+            Ok(_) => return Err("expected tool drift failure".to_owned()),
+        }
         Ok(())
     }
 
