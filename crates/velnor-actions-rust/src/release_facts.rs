@@ -7,7 +7,8 @@
 
 use std::collections::BTreeMap;
 
-use crate::metadata::{DepKind, MetadataError};
+use crate::metadata::MetadataError;
+use crate::metadata_edges::DepKind;
 use crate::release_error::ReleaseError;
 
 /// Declared `publish` state of one package.

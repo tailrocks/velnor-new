@@ -9,7 +9,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::metadata::{DepKind, WorkspaceRecord};
+use crate::metadata::WorkspaceRecord;
+use crate::metadata_edges::DepKind;
 use crate::release_error::ReleaseError;
 use crate::release_facts::{DepFact, DepSource};
 use crate::release_select::{ReleaseSelection, supported_or_default};
