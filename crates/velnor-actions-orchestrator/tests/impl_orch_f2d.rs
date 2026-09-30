@@ -275,8 +275,7 @@ fn carried_proofs_execute_without_originating_attestation() -> TestResult {
     let mut tasks = entries_for(&nodiff);
     for task in tasks.as_array_mut().ok_or("tasks")? {
         task["proof_run_id"] = Json::from(5);
-        // The carrying manifest's own run (7) observed the entry, but
-        // observation is not success attestation for run 5.
+        // Observed by run 7, but observation is not success attestation.
         task["observed_run_id"] = Json::from(7);
     }
     let (plan, warnings) = plan_at(
@@ -285,21 +284,13 @@ fn carried_proofs_execute_without_originating_attestation() -> TestResult {
         &head,
         Some(manifest_for(&nodiff, &head, &tasks)),
     )?;
-    assert!(
-        plan.obligations
-            .iter()
-            .all(|ob| ob.decision == ObligationDecision::Execute)
-    );
-    assert_eq!(
-        plan.baseline.reason(),
-        Some("baseline_invalid:originating_run_unverified")
-    );
-    assert!(
-        warnings
-            .iter()
-            .any(|w| w == "baseline_miss:originating_run_unverified"),
-        "{warnings:?}"
-    );
+    for ob in &plan.obligations {
+        assert_eq!(ob.decision, ObligationDecision::Execute);
+    }
+    let reason = "baseline_invalid:originating_run_unverified";
+    assert_eq!(plan.baseline.reason(), Some(reason));
+    let missed = "baseline_miss:originating_run_unverified";
+    assert!(warnings.iter().any(|w| w == missed));
     Ok(())
 }
 
