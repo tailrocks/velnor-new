@@ -4,10 +4,10 @@
 //! `needs` channel (see `merge_request`); the plan declares its matrix
 //! legs and obligation dispositions. Merge proves the full expected set
 //! exists instead of judging supplied evidence alone: validator
-//! conclusions must cover the declared inventory exactly, candidate
-//! qualification evidence is required exactly when the candidate job
-//! gates, and every non-execute disposition must carry verifiable proof.
-//! Empty or partial evidence is `planning_failed`, never success.
+//! conclusions must cover the declared inventory exactly (the candidate
+//! job's conclusion is its qualification evidence when candidate mode
+//! gates), and every non-execute disposition must carry verifiable
+//! proof. Empty or partial evidence is `planning_failed`, never success.
 //!
 //! Diagnostics use the contract's closed `miss_reason` tokens only, so
 //! every diagnostic report validates. Assembly details stay in the
@@ -16,10 +16,7 @@
 use std::collections::BTreeSet;
 
 use serde::{Deserialize, Serialize};
-use velnor_actions_contract::{
-    CandidateReport, CandidateStatus, FinalReport, ObligationDecision, Plan, RequiredJobResult,
-};
-use velnor_actions_workflow_renderer::render::CANDIDATE_JOB_ID;
+use velnor_actions_contract::{FinalReport, ObligationDecision, Plan, RequiredJobResult};
 
 use super::MergeRequest;
 use crate::cover::Signals;
@@ -93,7 +90,7 @@ pub(crate) struct BaselineManifest {
 /// Conclusion marker for a declared validator that never reported.
 const MISSING_CONCLUSION: &str = "missing";
 
-/// Enforce the closed inventory: jobs, candidate, obligation proofs.
+/// Enforce the closed inventory: jobs and obligation proofs.
 ///
 /// Assembly failures recorded in the request fail here too, so a
 /// diagnostic verdict always explains the failed evidence class.
@@ -104,7 +101,6 @@ pub(crate) fn check_required_evidence(
     miss_reasons: &mut BTreeSet<String>,
 ) {
     check_job_inventory(request, signals, miss_reasons);
-    check_candidate_evidence(request, signals, miss_reasons);
     check_obligation_proofs(plan, signals, miss_reasons);
     if !request.assembly_errors.is_empty() {
         signals.planning_failed = true;
@@ -149,29 +145,6 @@ fn check_job_inventory(
     }
 }
 
-/// Candidate evidence exactly when the candidate job gates the verdict.
-fn check_candidate_evidence(
-    request: &MergeRequest,
-    signals: &mut Signals,
-    miss_reasons: &mut BTreeSet<String>,
-) {
-    let required = request
-        .required_job_ids
-        .iter()
-        .any(|id| id == CANDIDATE_JOB_ID);
-    match (required, request.candidate.as_ref()) {
-        (true, None) => {
-            signals.planning_failed = true;
-            miss_reasons.insert("source_missing".to_owned());
-        }
-        (false, Some(_)) => {
-            signals.planning_failed = true;
-            miss_reasons.insert("cache_corrupt".to_owned());
-        }
-        _ => {}
-    }
-}
-
 /// Every non-execute disposition carries verifiable proof.
 ///
 /// Baseline coverage revalidates against the manifest in
@@ -204,15 +177,6 @@ pub(crate) fn fold_jobs(jobs: &[RequiredJobResult], signals: &mut Signals) {
             "skipped" | "neutral" => signals.not_run = true,
             _ => signals.failed = true,
         }
-    }
-}
-
-/// Fold the candidate conclusion when qualification ran.
-pub(crate) fn fold_candidate(candidate: Option<&CandidateReport>, signals: &mut Signals) {
-    match candidate.map(|report| report.status) {
-        None | Some(CandidateStatus::Passed) => {}
-        Some(CandidateStatus::Failed) => signals.failed = true,
-        Some(CandidateStatus::Cancelled) => signals.cancelled = true,
     }
 }
 

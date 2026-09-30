@@ -2,16 +2,13 @@
 use crate::impl_contract_ids::{MANIFEST, TASK, sample_entry};
 use std::collections::BTreeMap;
 use velnor_actions_contract::{
-    BaselineProof, CacheLayer, CacheOutcome, CacheResult, CandidateReport, CandidateStatus,
-    Concurrency, ContractError, FinalCounts, FinalReport, FinalStatus, Job, MatrixReport,
-    MatrixStatus, NotSelectedReason, ObligationDecision, Permissions, Plan, PlanBaseline,
-    PlanGenerator, PlanMatrix, PlanObligation, PlanPackage, PlanRunner, RequiredJobResult,
-    RunnerSelection, Step, StepKind, TaskReport, TaskStatus, Trigger, Trust, WorkflowEvent,
-    WorkflowIr, artifact_id_for_candidate, artifact_id_for_matrix, artifact_id_for_plan,
-    candidate_report_id_for_run, canonical_json_bytes, digest_b3, final_report_id_for_run,
-    plan_id_for_run,
-    run_key_for_ci, task_report_id_for_task, validate_candidate_report_id,
-    validate_final_report_id,
+    BaselineProof, CacheLayer, CacheOutcome, CacheResult, Concurrency, ContractError, FinalCounts,
+    FinalReport, FinalStatus, Job, MatrixReport, MatrixStatus, NotSelectedReason,
+    ObligationDecision, Permissions, Plan, PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation,
+    PlanPackage, PlanRunner, RequiredJobResult, RunnerSelection, Step, StepKind, TaskReport,
+    TaskStatus, Trigger, Trust, WorkflowEvent, WorkflowIr, artifact_id_for_matrix,
+    artifact_id_for_plan, canonical_json_bytes, digest_b3, final_report_id_for_run,
+    plan_id_for_run, run_key_for_ci, task_report_id_for_task, validate_final_report_id,
 };
 
 #[test]
@@ -154,7 +151,7 @@ fn task_and_matrix_reports_validate() -> Result<(), ContractError> {
 }
 
 #[test]
-fn final_and_candidate_reports_validate() -> Result<(), ContractError> {
+fn final_reports_validate() -> Result<(), ContractError> {
     let run_key = run_key_for_ci(5, 3);
     let entry = sample_entry(&run_key)?;
     let report_id = final_report_id_for_run(&run_key)?;
@@ -191,24 +188,6 @@ fn final_and_candidate_reports_validate() -> Result<(), ContractError> {
     assert_eq!(
         final_report.artifact_id()?,
         format!("velnor-final-{run_key}")
-    );
-    let candidate_id = candidate_report_id_for_run(&run_key, "x86_64-unknown-linux-gnu")?;
-    validate_candidate_report_id(&candidate_id)?;
-    let candidate = CandidateReport {
-        schema: 1,
-        report_id: candidate_id,
-        run_key: run_key.clone(),
-        source_commit: "ab".repeat(20),
-        target: "x86_64-unknown-linux-gnu".to_owned(),
-        artifact_sha256: "cd".repeat(32),
-        generator_version: "0.1.0".to_owned(),
-        status: CandidateStatus::Passed,
-        checks: vec!["generate-check".to_owned()],
-    };
-    candidate.validate()?;
-    assert_eq!(
-        candidate.artifact_id()?,
-        artifact_id_for_candidate(&run_key, &candidate.target)?
     );
     Ok(())
 }

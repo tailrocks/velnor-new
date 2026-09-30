@@ -140,27 +140,15 @@ fn validator_states_fold_per_validator() -> TestResult {
 }
 
 #[test]
-fn candidate_evidence_closed() -> TestResult {
-    let (repo, plan) = plan_for_source_change()?;
-    let root = repo.path();
-    let output = std::process::Command::new("git")
-        .args(["rev-parse", "HEAD"])
-        .current_dir(root)
-        .output()?;
-    let head = String::from_utf8(output.stdout)?.trim().to_owned();
+fn candidate_evidence_is_its_needs_conclusion() -> TestResult {
+    let (_repo, plan) = plan_for_source_change()?;
     let reports = passing_reports(&plan)?;
     let plan_value = serde_json::to_value(&plan)?;
     let matrix = serde_json::to_value(&plan.matrix)?;
-    let candidate = |commit: &str, status: &str| {
-        json!({"schema": 1, "report_id": "candidate-local-x86-64-unknown-linux-gnu",
-        "run_key": "local", "source_commit": commit, "target": "x86_64-unknown-linux-gnu",
-        "artifact_sha256": "1".repeat(64), "generator_version": "0.1.0",
-        "status": status, "checks": []})
-    };
-    let gate = |request: &mut serde_json::Value| {
+    let gate = |request: &mut serde_json::Value, conclusion: &str| {
         request["required_job_ids"] = json!(["candidate", "plan"]);
         request["required_jobs"] = json!([
-            {"job_id": "candidate", "conclusion": "success"},
+            {"job_id": "candidate", "conclusion": conclusion},
             {"job_id": "plan", "conclusion": "success"},
         ]);
     };
@@ -173,47 +161,29 @@ fn candidate_evidence_closed() -> TestResult {
         )
     };
 
-    // A PR candidate qualifies when bound to the head: qualification is
-    // not promotion, so the event alone never rejects it.
-    let mut pr = base();
-    gate(&mut pr);
-    pr["candidate"] = candidate(&head, "passed");
-    assert_eq!(status_of(&pr)?, FinalStatus::Passed);
-
-    // A report without a gating candidate job is unexpected evidence.
-    let mut stray = base();
-    stray["candidate"] = candidate(&head, "passed");
-    assert_eq!(status_of(&stray)?, FinalStatus::PlanningFailed);
-
-    // A gating candidate job without its report fails closed.
-    let mut missing = base();
-    gate(&mut missing);
-    assert_eq!(status_of(&missing)?, FinalStatus::PlanningFailed);
-
-    // A proof bound to any other commit fails closed.
-    let mut wrong = base();
-    gate(&mut wrong);
-    wrong["candidate"] = candidate(&"0".repeat(40), "passed");
-    let report = merge(&wrong)?;
-    assert_eq!(report.status, FinalStatus::PlanningFailed);
-    assert!(
-        report
-            .miss_reasons
-            .contains(&"input_digest_mismatch".to_owned()),
-        "{:?}",
-        report.miss_reasons
-    );
+    // A gating candidate with a success conclusion passes: the needs
+    // conclusion is the qualification evidence, no report file needed.
+    let mut passing = base();
+    gate(&mut passing, "success");
+    assert_eq!(status_of(&passing)?, FinalStatus::Passed);
 
     // Failed and cancelled qualifications fail the verdict.
-    for (candidate_status, status) in [
-        ("failed", FinalStatus::Failed),
+    for (conclusion, status) in [
+        ("failure", FinalStatus::Failed),
         ("cancelled", FinalStatus::Cancelled),
     ] {
         let mut request = base();
-        gate(&mut request);
-        request["candidate"] = candidate(&head, candidate_status);
-        assert_eq!(status_of(&request)?, status, "{candidate_status}");
+        gate(&mut request, conclusion);
+        assert_eq!(status_of(&request)?, status, "{conclusion}");
     }
+
+    // A gating candidate without its conclusion fails closed.
+    let mut missing = base();
+    missing["required_job_ids"] = json!(["candidate", "plan"]);
+    missing["required_jobs"] = json!([
+        {"job_id": "plan", "conclusion": "success"},
+    ]);
+    assert_eq!(status_of(&missing)?, FinalStatus::PlanningFailed);
     Ok(())
 }
 

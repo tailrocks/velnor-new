@@ -3,7 +3,10 @@
 //! The final job downloads the plan artifact (`plan.json`, `matrix.json`)
 //! plus every matrix-report artifact under `reports/<artifact-id>/` before
 //! the merge step; this module assembles those files into the canonical
-//! merge-request JSON that [`crate::merge_internal`] consumes.
+//! merge-request JSON that [`crate::merge_internal`] consumes. Candidate
+//! qualification evidence is the candidate job's `needs` conclusion,
+//! not a separate report file: no producer ever wrote one, so requiring
+//! it failed candidate mode closed on every run.
 //!
 //! Required validator conclusions arrive through the `VELNOR_NEEDS_JSON`
 //! channel: a JSON object mapping each job in the final gate's `needs`
@@ -40,7 +43,7 @@ use crate::internal_request::resolve_run_key;
 /// `reports/<artifact-id>/matrix-report.json` files plus their
 /// `tasks/<task-report-id>.json` files (sorted by ID for determinism;
 /// anything else under `reports/` is ignored, never globbed), plus
-/// optional `baseline.json` and `candidate-report.json`.
+/// optional `baseline.json`.
 /// Validator inventory and conclusions come from `VELNOR_NEEDS_JSON`. Every
 /// missing or unparsable input is recorded in `assembly_errors`, never
 /// dropped, so the merge judges the gap explicitly.
@@ -79,13 +82,6 @@ pub(crate) fn assemble_with_needs(
         &mut errors,
     );
     let baseline = read_json(run_dir, "baseline.json", "baseline", false, &mut errors);
-    let candidate = read_json(
-        run_dir,
-        "candidate-report.json",
-        "candidate_report",
-        false,
-        &mut errors,
-    );
     let (inventory, jobs) = parse_needs(needs, expected, &mut errors);
     let request = serde_json::json!({
         "schema": 1,
@@ -98,7 +94,6 @@ pub(crate) fn assemble_with_needs(
         "required_jobs": jobs,
         "assembly_errors": errors,
         "baseline_manifest": baseline,
-        "candidate": candidate,
     });
     canonical_json_str(&request).map_err(internal_contract)
 }
