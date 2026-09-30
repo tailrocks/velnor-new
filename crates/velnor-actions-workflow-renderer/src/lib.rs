@@ -1,5 +1,4 @@
 //! Typed-IR to YAML rendering for CI and release workflows.
-//!
 //! Validated IR plus fixed argv in, marked YAML out: no subprocesses, no
 //! stack or tool branching, quoting-only shell shaping.
 
@@ -20,6 +19,7 @@ pub mod preseed;
 pub mod release_config;
 pub mod release_gates;
 pub mod release_jobs;
+pub mod release_permissions;
 pub mod release_spec;
 pub mod release_tree;
 pub mod render;

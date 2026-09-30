@@ -9,12 +9,11 @@ use velnor_actions_workflow_renderer::release_config::{
 const VERSION: &str = "0.1.0";
 const TAG: &str = "{{ package }}-v{{ version }}";
 
-/// Extract the `InvalidWorkflow` payload or fail the test.
-fn invalid(result: Result<(), RenderError>) -> String {
+/// Extract the `InvalidWorkflow` payload; `None` unless the exact rejection fired.
+fn invalid(result: Result<(), RenderError>) -> Option<String> {
     match result {
-        Err(RenderError::InvalidWorkflow(text)) => text,
-        Err(other) => panic!("wrong error: {other:?}"),
-        Ok(()) => panic!("expected rejection"),
+        Err(RenderError::InvalidWorkflow(text)) => Some(text),
+        Err(_) | Ok(()) => None,
     }
 }
 
@@ -47,7 +46,7 @@ fn feature_names_accept_cargo_charset_only() {
         "back\\slash",
     ] {
         assert_eq!(
-            invalid(validate_feature_name(feature)),
+            invalid(validate_feature_name(feature)).expect("reject"),
             format!("bad_feature:{feature}"),
             "for {feature:?}"
         );
@@ -69,7 +68,7 @@ fn tag_pattern_requires_both_placeholders() {
         "{{ package }}-v{{ version }}\\",
     ] {
         assert_eq!(
-            invalid(validate_tag_pattern(pattern)),
+            invalid(validate_tag_pattern(pattern)).expect("reject"),
             format!("bad_tag_pattern:{pattern}"),
             "for {pattern:?}"
         );
@@ -83,12 +82,18 @@ fn config_rejects_empty_duplicate_and_oversize_sets() {
         packages: Vec::new(),
         ..config()
     };
-    assert_eq!(invalid(empty.validate()), "no_release_packages");
+    assert_eq!(
+        invalid(empty.validate()).expect("reject"),
+        "no_release_packages"
+    );
     let duplicate = ReleasePlzConfig {
         packages: vec![package("alpha"), package("alpha")],
         ..config()
     };
-    assert_eq!(invalid(duplicate.validate()), "duplicate_package:alpha");
+    assert_eq!(
+        invalid(duplicate.validate()).expect("reject"),
+        "duplicate_package:alpha"
+    );
     let bad_feature = ReleasePlzConfig {
         packages: vec![ReleasePlzPackage {
             name: "alpha".to_owned(),
@@ -96,12 +101,19 @@ fn config_rejects_empty_duplicate_and_oversize_sets() {
         }],
         ..config()
     };
-    assert!(invalid(bad_feature.validate()).starts_with("bad_feature:"));
+    assert!(
+        invalid(bad_feature.validate())
+            .expect("reject")
+            .starts_with("bad_feature:")
+    );
     let oversize = ReleasePlzConfig {
         packages: (0..65).map(|n| package(&format!("p{n:02}"))).collect(),
         ..config()
     };
-    assert_eq!(invalid(oversize.validate()), "no_release_packages");
+    assert_eq!(
+        invalid(oversize.validate()).expect("reject"),
+        "no_release_packages"
+    );
 }
 
 #[test]

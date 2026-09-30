@@ -51,6 +51,8 @@ mod impl_renderer_release_snapshot;
 mod impl_renderer_release_spec;
 #[path = "impl_renderer_release_tree.rs"]
 mod impl_renderer_release_tree;
+#[path = "impl_renderer_release_units.rs"]
+mod impl_renderer_release_units;
 #[path = "impl_renderer_setup.rs"]
 mod impl_renderer_setup;
 #[path = "impl_renderer_steps.rs"]
@@ -65,5 +67,7 @@ mod impl_renderer_toolchain_contract;
 mod impl_renderer_tree;
 #[path = "impl_renderer_tree_policy.rs"]
 mod impl_renderer_tree_policy;
+#[path = "impl_renderer_typed_ir.rs"]
+mod impl_renderer_typed_ir;
 #[path = "impl_renderer_yaml.rs"]
 mod impl_renderer_yaml;

@@ -5,8 +5,6 @@
 //! the bootstrap exception. The bootstrap-only file needs the distinct
 //! [`BootstrapReleasePlzConfig`] type, so the normal path can never emit it.
 
-use std::fmt::Write as _;
-
 use crate::{
     RenderError, marker,
     release_spec::{is_clean_text, validate_package_name},
@@ -159,28 +157,39 @@ fn toml_escape(value: &str) -> String {
     value.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
+/// Render one TOML line; `String` writes are infallible in practice.
+fn toml_line(out: &mut String, args: std::fmt::Arguments<'_>) -> Result<(), RenderError> {
+    use std::fmt::Write as _;
+    out.write_fmt(args)
+        .map_err(|_| RenderError::InvalidWorkflow("toml_write".to_owned()))
+}
+
 /// Deterministic TOML body; only the bootstrap call passes `true`.
-fn toml_body(config: &ReleasePlzConfig, release_always: bool) -> String {
+///
+/// # Errors
+///
+/// Returns [`RenderError`] for malformed configs.
+fn toml_body(config: &ReleasePlzConfig, release_always: bool) -> Result<String, RenderError> {
     let mut out = String::from("[workspace]\nrelease = false\n");
-    append_toml(
+    toml_line(
         &mut out,
         format_args!("release_always = {release_always}\n"),
-    );
-    append_toml(
+    )?;
+    toml_line(
         &mut out,
         format_args!("semver_check = {}\n", config.semver_check),
-    );
+    )?;
     out.push_str("publish_no_verify = false\npublish_allow_dirty = false\n");
-    append_toml(
+    toml_line(
         &mut out,
         format_args!("git_tag_name = \"{}\"\n", toml_escape(&config.tag_pattern)),
-    );
+    )?;
     for package in &config.packages {
         out.push_str("\n[[package]]\n");
-        append_toml(
+        toml_line(
             &mut out,
             format_args!("name = \"{}\"\n", toml_escape(&package.name)),
-        );
+        )?;
         out.push_str("release = true\npublish = true\ngit_only = false\n");
         if !package.publish_features.is_empty() {
             let features: Vec<String> = package
@@ -188,20 +197,13 @@ fn toml_body(config: &ReleasePlzConfig, release_always: bool) -> String {
                 .iter()
                 .map(|feature| format!("\"{}\"", toml_escape(feature)))
                 .collect();
-            append_toml(
+            toml_line(
                 &mut out,
                 format_args!("publish_features = [{}]\n", features.join(", ")),
-            );
+            )?;
         }
     }
-    out
-}
-
-/// Append formatted TOML without an intermediate allocation.
-///
-/// `String` writes are infallible; the default maps the unrepresentable error.
-fn append_toml(out: &mut String, args: std::fmt::Arguments<'_>) {
-    write!(out, "{args}").unwrap_or_default();
+    Ok(out)
 }
 
 /// Render the effective normal-policy config with the marker line.
@@ -214,7 +216,7 @@ pub fn render_release_plz_config(
     version: &str,
 ) -> Result<String, RenderError> {
     config.validate()?;
-    let text = marker::with_marker(version, &toml_body(config, false))?;
+    let text = marker::with_marker(version, &toml_body(config, false)?)?;
     scan_for_private_subcommands(&text)?;
     Ok(text)
 }
@@ -228,7 +230,7 @@ pub fn render_bootstrap_release_plz_config(
     config: &BootstrapReleasePlzConfig,
     version: &str,
 ) -> Result<String, RenderError> {
-    let text = marker::with_marker(version, &toml_body(config.inner(), true))?;
+    let text = marker::with_marker(version, &toml_body(config.inner(), true)?)?;
     scan_for_private_subcommands(&text)?;
     Ok(text)
 }

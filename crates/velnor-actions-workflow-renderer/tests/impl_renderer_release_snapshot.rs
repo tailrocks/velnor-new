@@ -6,7 +6,7 @@ use velnor_actions_workflow_renderer::release_tree::render_release_workflow;
 #[test]
 fn golden_workflow_snapshot() -> Result<(), RenderError> {
     assert_eq!(
-        render_release_workflow(&spec(), &ctx())?,
+        render_release_workflow(&spec()?, &ctx())?,
         EXPECTED_YAML,
         "golden snapshot"
     );

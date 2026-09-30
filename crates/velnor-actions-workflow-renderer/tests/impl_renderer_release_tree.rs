@@ -6,8 +6,9 @@ use velnor_actions_workflow_renderer::release_config::{
     BootstrapReleasePlzConfig, ReleasePlzConfig, ReleasePlzPackage,
 };
 use velnor_actions_workflow_renderer::release_jobs::{
-    JobPermissions, ReleaseJobSpec, ReleaseRole, ReleaseWorkflowSpec,
+    ReleaseJobSpec, ReleaseRole, ReleaseWorkflowSpec,
 };
+use velnor_actions_workflow_renderer::release_permissions::JobPermissions;
 use velnor_actions_workflow_renderer::release_spec::{
     BootstrapPlan, DispatchInput, ReleaseConcurrency, ReleaseTriggers, publish_gate_condition,
 };
@@ -55,7 +56,7 @@ fn config() -> ReleasePlzConfig {
     }
 }
 
-fn exact_checkout() -> velnor_actions_contract::Step {
+fn exact_checkout() -> Result<velnor_actions_contract::Step, RenderError> {
     action_step(
         "Checkout",
         &checkout_uses(),
@@ -64,7 +65,6 @@ fn exact_checkout() -> velnor_actions_contract::Step {
             ("ref".to_owned(), SHA.to_owned()),
         ]),
     )
-    .expect("checkout")
 }
 
 fn plain_job(
@@ -90,9 +90,9 @@ fn publish_job(
     needs: &[&str],
     config_path: &str,
     env: &[(&str, &str)],
-) -> ReleaseJobSpec {
+) -> Result<ReleaseJobSpec, RenderError> {
     let gate = publish_gate_condition(REPO, &bootstrap());
-    let checkout = exact_checkout();
+    let checkout = exact_checkout()?;
     let publish = shell_step(
         "Publish",
         ["release-plz", "release", "--config", config_path]
@@ -102,9 +102,8 @@ fn publish_job(
         env.iter()
             .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
             .collect(),
-    )
-    .expect("publish argv");
-    ReleaseJobSpec {
+    )?;
+    Ok(ReleaseJobSpec {
         role,
         display_name: format!("Release {}", role.as_str()),
         runs_on: LABEL.to_owned(),
@@ -113,17 +112,16 @@ fn publish_job(
         environment: Some(ENV.to_owned()),
         permissions: JobPermissions::expected(role),
         steps: vec![checkout, publish],
-    }
+    })
 }
 
-pub(crate) fn spec() -> ReleaseWorkflowSpec {
-    let checkout = exact_checkout();
+pub(crate) fn spec() -> Result<ReleaseWorkflowSpec, RenderError> {
+    let checkout = exact_checkout()?;
     let run = shell_step(
         "Run",
         vec!["echo".to_owned(), "ok".to_owned()],
         BTreeMap::new(),
-    )
-    .expect("run");
+    )?;
     let jobs = BTreeMap::from([
         (
             "release-preparation".to_owned(),
@@ -145,7 +143,7 @@ pub(crate) fn spec() -> ReleaseWorkflowSpec {
                 &["release-preflight"],
                 RELEASE_CONFIG_PATH,
                 &[],
-            ),
+            )?,
         ),
         (
             "release-reconcile".to_owned(),
@@ -157,7 +155,7 @@ pub(crate) fn spec() -> ReleaseWorkflowSpec {
             ),
         ),
     ]);
-    ReleaseWorkflowSpec {
+    Ok(ReleaseWorkflowSpec {
         name: "Velnor Release".to_owned(),
         repository: REPO.to_owned(),
         triggers: ReleaseTriggers {
@@ -188,12 +186,12 @@ pub(crate) fn spec() -> ReleaseWorkflowSpec {
         bootstrap: bootstrap(),
         publish_environment: ENV.to_owned(),
         bootstrap_environment: "crates-io-bootstrap".to_owned(),
-    }
+    })
 }
 
 #[test]
 fn render_emits_marker_triggers_and_pinned_jobs() -> Result<(), RenderError> {
-    let text = render_release_workflow(&spec(), &ctx())?;
+    let text = render_release_workflow(&spec()?, &ctx())?;
     let first = text.lines().next().expect("marker line");
     assert_eq!(
         first,
@@ -233,8 +231,8 @@ fn render_emits_marker_triggers_and_pinned_jobs() -> Result<(), RenderError> {
 }
 
 #[test]
-fn render_rejects_label_mismatch_and_bad_context() {
-    let mut skewed = spec();
+fn render_rejects_label_mismatch_and_bad_context() -> Result<(), RenderError> {
+    let mut skewed = spec()?;
     skewed
         .jobs
         .get_mut("release-preflight")
@@ -249,20 +247,21 @@ fn render_rejects_label_mismatch_and_bad_context() {
         runs_on: LABEL.to_owned(),
     };
     assert!(matches!(
-        render_release_workflow(&spec(), &bad_version),
+        render_release_workflow(&spec()?, &bad_version),
         Err(RenderError::BadVersion(_))
     ));
     let bad_label = ReleaseRenderContext {
         generator_version: VERSION.to_owned(),
         runs_on: "ubuntu-latest".to_owned(),
     };
-    assert!(render_release_workflow(&spec(), &bad_label).is_err());
+    assert!(render_release_workflow(&spec()?, &bad_label).is_err());
+    Ok(())
 }
 
 #[test]
 fn files_carry_fixed_paths_sorted() -> Result<(), RenderError> {
     let wrapped = BootstrapReleasePlzConfig::new(config())?;
-    let files = render_release_files(&spec(), &ctx(), &config(), &wrapped)?;
+    let files = render_release_files(&spec()?, &ctx(), &config(), &wrapped)?;
     assert_eq!(files.workflow.path, RELEASE_WORKFLOW_PATH);
     assert_eq!(files.config.path, RELEASE_CONFIG_PATH);
     assert_eq!(files.bootstrap_config.path, RELEASE_BOOTSTRAP_CONFIG_PATH);
@@ -305,13 +304,13 @@ fn stale_paths_cover_the_release_family_for_cleanup() {
 #[test]
 fn rendering_is_deterministic_across_runs() -> Result<(), RenderError> {
     let wrapped = BootstrapReleasePlzConfig::new(config())?;
-    let first = render_release_files(&spec(), &ctx(), &config(), &wrapped)?;
+    let first = render_release_files(&spec()?, &ctx(), &config(), &wrapped)?;
     let wrapped = BootstrapReleasePlzConfig::new(config())?;
-    let second = render_release_files(&spec(), &ctx(), &config(), &wrapped)?;
+    let second = render_release_files(&spec()?, &ctx(), &config(), &wrapped)?;
     assert_eq!(first, second, "byte-identical files");
     assert_eq!(
-        render_release_workflow(&spec(), &ctx())?,
-        render_release_workflow(&spec(), &ctx())?,
+        render_release_workflow(&spec()?, &ctx())?,
+        render_release_workflow(&spec()?, &ctx())?,
         "byte-identical workflow"
     );
     Ok(())

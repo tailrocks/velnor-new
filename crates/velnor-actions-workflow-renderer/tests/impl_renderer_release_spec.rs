@@ -12,12 +12,11 @@ const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
 const OTHER_SHA: &str = "abcdef0123456789abcdef0123456789abcdef01";
 const REPO: &str = "acme/widgets";
 
-/// Extract the `InvalidWorkflow` payload or fail the test.
-fn invalid(result: Result<(), RenderError>) -> String {
+/// Extract the `InvalidWorkflow` payload; `None` unless the exact rejection fired.
+fn invalid(result: Result<(), RenderError>) -> Option<String> {
     match result {
-        Err(RenderError::InvalidWorkflow(text)) => text,
-        Err(other) => panic!("wrong error: {other:?}"),
-        Ok(()) => panic!("expected rejection"),
+        Err(RenderError::InvalidWorkflow(text)) => Some(text),
+        Err(_) | Ok(()) => None,
     }
 }
 
@@ -64,7 +63,7 @@ fn environment_names_pin_without_expressions() {
         "with\nnewline",
     ] {
         assert_eq!(
-            invalid(validate_environment(name)),
+            invalid(validate_environment(name)).expect("reject"),
             format!("bad_environment:{name}"),
             "for {name:?}"
         );
@@ -87,7 +86,7 @@ fn repository_identity_requires_exact_owner_repo() {
         "acme/widgets\n",
     ] {
         assert_eq!(
-            invalid(validate_repository(repo)),
+            invalid(validate_repository(repo)).expect("reject"),
             format!("bad_repository:{repo}"),
             "for {repo:?}"
         );
@@ -108,7 +107,7 @@ fn source_sha_requires_40_lowercase_hex() {
     ];
     for value in &bad {
         assert_eq!(
-            invalid(validate_source_sha(value)),
+            invalid(validate_source_sha(value)).expect("reject"),
             format!("bad_source_sha:{value}"),
             "for {value:?}"
         );
@@ -119,11 +118,19 @@ fn source_sha_requires_40_lowercase_hex() {
 fn plan_and_package_scalars_reject_shell_shapes() {
     assert!(validate_plan_id("plan-2026-09-30.1").is_ok());
     for id in ["", "has space", "a/b", "x${{y}}", "semi;colon"] {
-        assert!(invalid(validate_plan_id(id)).starts_with("bad_plan_id:"));
+        assert!(
+            invalid(validate_plan_id(id))
+                .expect("reject")
+                .starts_with("bad_plan_id:")
+        );
     }
     assert!(validate_package_name("widgets-2_x").is_ok());
     for name in ["", "-bad", "has space", "a/b", "bad!"] {
-        assert!(invalid(validate_package_name(name)).starts_with("bad_package_name:"));
+        assert!(
+            invalid(validate_package_name(name))
+                .expect("reject")
+                .starts_with("bad_package_name:")
+        );
     }
 }
 
@@ -141,7 +148,11 @@ fn package_version_requires_numeric_triple() {
         "a.b.c",
         "1.2.3 beta",
     ] {
-        assert!(invalid(validate_package_version(version)).starts_with("bad_package_version:"));
+        assert!(
+            invalid(validate_package_version(version))
+                .expect("reject")
+                .starts_with("bad_package_version:")
+        );
     }
 }
 
@@ -152,30 +163,34 @@ fn dispatch_inputs_bind_the_approved_plan_and_source() {
     let mut rebound = triggers();
     rebound.dispatch_inputs[0].default = Some("other-plan".to_owned());
     assert_eq!(
-        invalid(rebound.validate(&plan)),
+        invalid(rebound.validate(&plan)).expect("reject"),
         "dispatch_plan_mismatch:plan"
     );
     let mut rebound_sha = triggers();
     rebound_sha.dispatch_inputs[1].default = Some(OTHER_SHA.to_owned());
     assert_eq!(
-        invalid(rebound_sha.validate(&plan)),
+        invalid(rebound_sha.validate(&plan)).expect("reject"),
         "dispatch_plan_mismatch:source_sha"
     );
     let mut optional = triggers();
     optional.dispatch_inputs[0].required = false;
     assert_eq!(
-        invalid(optional.validate(&plan)),
+        invalid(optional.validate(&plan)).expect("reject"),
         "dispatch_plan_mismatch:plan"
     );
     let mut duplicate = triggers();
     duplicate
         .dispatch_inputs
         .push(dispatch("plan", false, None));
-    assert!(invalid(duplicate.validate(&plan)).starts_with("duplicate_dispatch_input:"));
+    assert!(
+        invalid(duplicate.validate(&plan))
+            .expect("reject")
+            .starts_with("duplicate_dispatch_input:")
+    );
     let mut missing = triggers();
     missing.dispatch_inputs.pop();
     assert_eq!(
-        invalid(missing.validate(&plan)),
+        invalid(missing.validate(&plan)).expect("reject"),
         "dispatch_plan_mismatch:source_sha"
     );
 }
@@ -184,13 +199,21 @@ fn dispatch_inputs_bind_the_approved_plan_and_source() {
 fn dispatch_names_reject_uppercase_and_shell_text() {
     for name in ["", "Plan", "has space", "bad!", "a/b", "UPPER"] {
         let input = dispatch(name, true, None);
-        assert!(invalid(input.validate()).starts_with("bad_dispatch_name:"));
+        assert!(
+            invalid(input.validate())
+                .expect("reject")
+                .starts_with("bad_dispatch_name:")
+        );
     }
     let newline = DispatchInput {
         description: "line\nbreak".to_owned(),
         ..dispatch("plan", true, Some("plan-2026-09-30.1"))
     };
-    assert!(invalid(newline.validate()).starts_with("bad_dispatch_description:"));
+    assert!(
+        invalid(newline.validate())
+            .expect("reject")
+            .starts_with("bad_dispatch_description:")
+    );
 }
 
 #[test]
@@ -201,7 +224,10 @@ fn triggers_pin_exact_branches_without_pr_or_fork_events() {
     assert!(many.validate(&plan).is_ok());
     let mut empty = triggers();
     empty.push_branches.clear();
-    assert_eq!(invalid(empty.validate(&plan)), "no_push_branch");
+    assert_eq!(
+        invalid(empty.validate(&plan)).expect("reject"),
+        "no_push_branch"
+    );
     for branch in [
         "main*",
         "release?",
@@ -213,7 +239,7 @@ fn triggers_pin_exact_branches_without_pr_or_fork_events() {
         let mut bad = triggers();
         bad.push_branches = vec![branch.to_owned()];
         assert_eq!(
-            invalid(bad.validate(&plan)),
+            invalid(bad.validate(&plan)).expect("reject"),
             format!("bad_push_branch:{branch}"),
             "for {branch:?}"
         );
@@ -241,7 +267,10 @@ fn concurrency_queues_on_a_stable_lock_and_never_cancels() {
         cancel_in_progress: true,
         ..stable.clone()
     };
-    assert_eq!(invalid(cancelling.validate()), "publisher_cancel");
+    assert_eq!(
+        invalid(cancelling.validate()).expect("reject"),
+        "publisher_cancel"
+    );
     for token in [
         "run_id",
         "run_attempt",
@@ -259,12 +288,15 @@ fn concurrency_queues_on_a_stable_lock_and_never_cancels() {
             cancel_in_progress: false,
         };
         assert_eq!(
-            invalid(unstable.validate()),
+            invalid(unstable.validate()).expect("reject"),
             format!("forbidden_lock_token:{token}"),
             "for {token}"
         );
     }
-    assert_eq!(invalid(stable_no_group().validate()), "bad_lock_group:");
+    assert_eq!(
+        invalid(stable_no_group().validate()).expect("reject"),
+        "bad_lock_group:"
+    );
 }
 
 fn stable_no_group() -> ReleaseConcurrency {
@@ -279,7 +311,7 @@ fn lock_anchor_requires_the_repository_identity() {
     assert!(check_lock_anchor("release-acme/widgets", REPO).is_ok());
     assert!(check_lock_anchor("release-github.repository-widgets", REPO).is_ok());
     assert_eq!(
-        invalid(check_lock_anchor("release-widgets-1", REPO)),
+        invalid(check_lock_anchor("release-widgets-1", REPO)).expect("reject"),
         "unstable_lock_anchor"
     );
 }
@@ -289,22 +321,45 @@ fn bootstrap_plan_validates_every_identity() {
     assert!(bootstrap().validate().is_ok());
     let mut bad_repo = bootstrap();
     bad_repo.repository = "no-slash".to_owned();
-    assert!(invalid(bad_repo.validate()).starts_with("bad_repository:"));
+    assert!(
+        invalid(bad_repo.validate())
+            .expect("reject")
+            .starts_with("bad_repository:")
+    );
     let mut bad_sha = bootstrap();
     bad_sha.source_sha = "short".to_owned();
-    assert!(invalid(bad_sha.validate()).starts_with("bad_source_sha:"));
+    assert!(
+        invalid(bad_sha.validate())
+            .expect("reject")
+            .starts_with("bad_source_sha:")
+    );
     let mut bad_registry = bootstrap();
     bad_registry.registry = "Crates!".to_owned();
-    assert!(invalid(bad_registry.validate()).starts_with("bad_registry:"));
+    assert!(
+        invalid(bad_registry.validate())
+            .expect("reject")
+            .starts_with("bad_registry:")
+    );
     let mut empty = bootstrap();
     empty.packages.clear();
-    assert_eq!(invalid(empty.validate()), "no_release_packages");
+    assert_eq!(
+        invalid(empty.validate()).expect("reject"),
+        "no_release_packages"
+    );
     let mut bad_member = bootstrap();
     bad_member.packages = BTreeMap::from([("bad name".to_owned(), "1.2.3".to_owned())]);
-    assert!(invalid(bad_member.validate()).starts_with("bad_package_name:"));
+    assert!(
+        invalid(bad_member.validate())
+            .expect("reject")
+            .starts_with("bad_package_name:")
+    );
     let mut bad_version = bootstrap();
     bad_version.packages = BTreeMap::from([("widgets".to_owned(), "1.0".to_owned())]);
-    assert!(invalid(bad_version.validate()).starts_with("bad_package_version:"));
+    assert!(
+        invalid(bad_version.validate())
+            .expect("reject")
+            .starts_with("bad_package_version:")
+    );
 }
 
 #[test]
