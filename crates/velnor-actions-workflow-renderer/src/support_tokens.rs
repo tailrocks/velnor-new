@@ -18,7 +18,7 @@ use crate::{
 /// repository task starts, credential variables are stripped from the
 /// child environment. The final job's report fetch needs the same
 /// read-only token for exact `gh` artifact downloads. Enforced here
-/// against the full seven-key credential set (single source:
+/// against the full nine-key credential set (single source:
 /// [`crate::toolchain_env::STEP_CREDENTIAL_DENYLIST`], never a local
 /// copy): any nonempty credential fails everywhere, `GH_TOKEN` carries
 /// the exact `${{ github.token }}` value only in the plan/final jobs,
@@ -70,9 +70,9 @@ fn check_step_tokens(id: &str, step: &Step) -> Result<(), RenderError> {
 /// on those keys is a leak. `MISE_GITHUB_TOKEN` contains `GITHUB_TOKEN`
 /// as a substring, so it needs no separate `names_token` arm.
 fn check_env_tokens(id: &str, env: &BTreeMap<String, String>) -> Result<(), RenderError> {
-    use crate::toolchain_env::STEP_CREDENTIAL_DENYLIST;
+    use crate::toolchain_env::is_denied_credential_key;
     for (key, value) in env {
-        if STEP_CREDENTIAL_DENYLIST.contains(&key.as_str()) {
+        if is_denied_credential_key(key) {
             if value.is_empty() {
                 continue;
             }
@@ -100,13 +100,15 @@ fn check_env_tokens(id: &str, env: &BTreeMap<String, String>) -> Result<(), Rend
 }
 
 /// True when text names a token handle (never printed or forwarded).
+///
+/// The `*_TOKEN` arm subsumes every `*_TOKEN` denylisted name plus npm
+/// and per-registry variants; the remaining arms cover the URL-shaped
+/// OIDC handle, registry prefixes without a token suffix, and the
+/// expression handles (`github.token`, secrets).
 fn names_token(text: &str) -> bool {
-    text.contains("GH_TOKEN")
-        || text.contains("GITHUB_TOKEN")
-        || text.contains("ACTIONS_RUNTIME_TOKEN")
-        || text.contains("ACTIONS_ID_TOKEN_REQUEST_TOKEN")
+    text.contains("_TOKEN")
         || text.contains("ACTIONS_ID_TOKEN_REQUEST_URL")
-        || text.contains("CARGO_REGISTRY_TOKEN")
+        || text.contains("CARGO_REGISTRIES_")
         || text.contains("github.token")
         || text.contains("secrets.GITHUB_TOKEN")
 }

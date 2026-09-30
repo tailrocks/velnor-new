@@ -211,6 +211,22 @@ fn denylist_pins_mise_strip_set() {
         let reserved = velnor_actions_mise::command::is_reserved_env_key(denied);
         assert!(reserved, "{denied} must be reserved in Mise too");
     }
+    for key in [
+        "GITHUB_TOKEN",
+        "NPM_TOKEN",
+        "CARGO_REGISTRIES_ACME_TOKEN",
+        "CARGO_REGISTRIES_ENTERPRISE",
+        "MY_REGISTRY_TOKEN",
+        "MISE_RUSTUP_HOME",
+        "TOKEN_COUNT",
+        "CARGO_REGISTRIES",
+    ] {
+        assert_eq!(
+            velnor_actions_workflow_renderer::toolchain_env::is_denied_credential_key(key),
+            velnor_actions_mise::command::is_denied_credential_key(key),
+            "credential pattern parity for {key}"
+        );
+    }
 }
 
 #[test]

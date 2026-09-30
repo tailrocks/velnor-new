@@ -312,7 +312,7 @@ fn token_hygiene_rejects_prints_and_task_tokens() -> Result<(), RenderError> {
 }
 
 #[test]
-fn token_hygiene_allows_empty_scrub_and_rejects_all_seven_keys() -> Result<(), RenderError> {
+fn token_hygiene_allows_empty_scrub_and_rejects_all_nine_keys() -> Result<(), RenderError> {
     use velnor_actions_workflow_renderer::toolchain_env::STEP_CREDENTIAL_DENYLIST;
     let scrub: BTreeMap<String, String> = STEP_CREDENTIAL_DENYLIST
         .iter()

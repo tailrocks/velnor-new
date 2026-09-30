@@ -15,10 +15,11 @@ pub const TOOLCHAIN_HOME_KEYS: [&str; 3] =
 /// Credential keys forbidden in any rendered step env.
 ///
 /// The Mise GitHub token, its `GITHUB_TOKEN`/`GH_TOKEN` aliases, the
-/// runner token, the OIDC token-request pair, and the registry token.
-/// Mirrors the Mise adapter's strip set element-for-element without
-/// depending on it; the orchestrator pins the two lists equal by test.
-pub const STEP_CREDENTIAL_DENYLIST: [&str; 7] = [
+/// runner token, the OIDC token-request pair, the registry token, and
+/// the npm auth pair. Mirrors the Mise adapter's strip set
+/// element-for-element without depending on it; the orchestrator pins
+/// the two lists equal by test.
+pub const STEP_CREDENTIAL_DENYLIST: [&str; 9] = [
     "MISE_GITHUB_TOKEN",
     "GITHUB_TOKEN",
     "GH_TOKEN",
@@ -26,7 +27,23 @@ pub const STEP_CREDENTIAL_DENYLIST: [&str; 7] = [
     "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
     "ACTIONS_ID_TOKEN_REQUEST_URL",
     "CARGO_REGISTRY_TOKEN",
+    "NPM_TOKEN",
+    "NODE_AUTH_TOKEN",
 ];
+
+/// True for a credential-shaped env key: the denylisted nine, any
+/// `CARGO_REGISTRIES_*` entry (per-registry tokens the fixed list can
+/// never enumerate), or any `*_TOKEN` name. Rejection is fail-closed:
+/// an unrecognized credential-shaped key in a rendered map errors,
+/// never passes through. Ambient keys the generator never emits stay
+/// unreachable: the generator owns the whole workflow file, and the
+/// freshness gate rejects hand edits carrying them.
+#[must_use]
+pub fn is_denied_credential_key(key: &str) -> bool {
+    STEP_CREDENTIAL_DENYLIST.contains(&key)
+        || key.starts_with("CARGO_REGISTRIES_")
+        || key.ends_with("_TOKEN")
+}
 
 /// Merge the toolchain-home triple into a step env map.
 #[must_use]
@@ -61,10 +78,13 @@ pub fn check_toolchain_homes(env: &BTreeMap<String, String>) -> Result<(), Rende
 }
 
 /// Reject denied credential keys in a step env map.
+///
+/// Pattern-matched, not list-matched: any credential-shaped key fails,
+/// including registry and enterprise variants the fixed list omits.
 /// # Errors
 pub fn reject_denied_step_keys(env: &BTreeMap<String, String>) -> Result<(), RenderError> {
-    for key in STEP_CREDENTIAL_DENYLIST {
-        if env.contains_key(key) {
+    for key in env.keys() {
+        if is_denied_credential_key(key) {
             return Err(RenderError::BadCommand(format!(
                 "credential_step_env:{key}"
             )));
@@ -75,13 +95,14 @@ pub fn reject_denied_step_keys(env: &BTreeMap<String, String>) -> Result<(), Ren
 
 /// Explicit empty credential values stopping ambient inheritance.
 ///
-/// GitHub injects token credentials into every step and repositories
-/// commonly export `MISE_GITHUB_TOKEN` at workflow scope; an absent key
-/// inherits all of that. Steps executing repository code (obligation
-/// steps run build scripts; custom tasks run repo Mise configuration)
-/// carry these empty values so inheritance stops at the step boundary.
-/// Empty is the only legal scrub value: the render gate rejects any
-/// nonempty credential as a leak.
+/// Workflow- and job-scope definitions inherit into every step unless
+/// a step key shadows them; these empty values are that shadow for the
+/// nine known keys. Runner-injected `GITHUB_TOKEN` and the OIDC pair
+/// are NOT shadowed (the runner overwrites step env after the workflow
+/// merge; see the D3 evidence note on [`CREDENTIAL_UNSET_VARS`]), so
+/// steps executing repository code pair this overlay with the unset
+/// wrapper. Empty is the only legal scrub value: the render gate
+/// rejects any nonempty credential as a leak.
 #[must_use]
 pub fn credential_scrub() -> BTreeMap<String, String> {
     STEP_CREDENTIAL_DENYLIST
@@ -94,12 +115,66 @@ pub fn credential_scrub() -> BTreeMap<String, String> {
 ///
 /// Callers validate the base first ([`checked_task_env`] rejects any
 /// caller-supplied credential, empty or not); the overlay then blanks
-/// all seven keys by construction, never from caller input.
+/// all nine keys by construction, never from caller input.
 #[must_use]
 pub fn with_credential_scrub(env: &BTreeMap<String, String>) -> BTreeMap<String, String> {
     let mut scrubbed = env.clone();
     scrubbed.extend(credential_scrub());
     scrubbed
+}
+
+/// Runner-controlled credentials no step env can shadow (D3).
+///
+/// Evidence (`actions/runner` `Runner.Worker/Handlers/ScriptHandler.cs`
+/// `RunAsync`, current `main`): the handler loads the workflow step
+/// env into `Environment`, then unconditionally overwrites every
+/// runtime-context variable (`Environment[env.Key] = env.Value`,
+/// covering `GITHUB_*`) plus `ACTIONS_ID_TOKEN_REQUEST_URL` and
+/// `ACTIONS_ID_TOKEN_REQUEST_TOKEN` from the system connection before
+/// spawning the step. The variables reference agrees: assignments to
+/// `GITHUB_*`/`RUNNER_*` defaults are ignored. `ACTIONS_RUNTIME_TOKEN`
+/// was not observed in the `run:`-step injection path (it is served to
+/// action handlers, not inline scripts); it stays listed defensively
+/// since unsetting an absent variable is a no-op.
+pub const CREDENTIAL_UNSET_VARS: [&str; 4] = [
+    "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
+    "ACTIONS_ID_TOKEN_REQUEST_URL",
+    "ACTIONS_RUNTIME_TOKEN",
+    "GITHUB_TOKEN",
+];
+
+/// Shell prelude unsetting the unshadowable credentials.
+///
+/// Prefixes `sh -c` scripts that execute repository code, before any
+/// repo-controlled byte runs. Each name is a fixed `A-Z_` literal, so
+/// the prelude embeds injection-free into any fixed script.
+#[must_use]
+pub fn credential_unset_prelude() -> String {
+    format!("unset {};", CREDENTIAL_UNSET_VARS.join(" "))
+}
+
+/// Prefix one `sh -c` script with the credential-unset prelude.
+#[must_use]
+pub fn with_credential_unset_script(script: &str) -> String {
+    format!("{} {script}", credential_unset_prelude())
+}
+
+/// Prefix one direct-exec argv with `env -u` for each unshadowable key.
+///
+/// For fixed vectors that exec a tool directly (`mise run`, `mise
+/// exec` builds): `env` unsets the runner-controlled credentials, then
+/// execs the original argv unchanged. `env -u` is POSIX 2018 and works
+/// on GNU and BSD userlands.
+#[must_use]
+pub fn with_env_unset_argv(argv: &[String]) -> Vec<String> {
+    let mut unset = Vec::with_capacity(argv.len() + 2 * CREDENTIAL_UNSET_VARS.len() + 1);
+    unset.push("env".to_owned());
+    for var in CREDENTIAL_UNSET_VARS {
+        unset.push("-u".to_owned());
+        unset.push(var.to_owned());
+    }
+    unset.extend(argv.iter().cloned());
+    unset
 }
 
 /// Isolation keys forbidden in project-task step env (P07-7 hook escape).
