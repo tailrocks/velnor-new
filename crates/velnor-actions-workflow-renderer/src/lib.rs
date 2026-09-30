@@ -19,6 +19,7 @@ pub mod msrv;
 pub mod overlap;
 pub mod plan_format;
 pub mod preseed;
+pub mod release_checkout_gates;
 pub mod release_config;
 pub mod release_gates;
 pub mod release_jobs;

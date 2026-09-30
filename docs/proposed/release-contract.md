@@ -297,6 +297,16 @@ headers, credential-provider output, or private key material.
 - For exact-source bootstrap, the config comes from the trusted
   workflow/policy checkout while release-plz operates on a separate clean
   source checkout; never dirty the release checkout to insert config.
+- Qualified release-plz 0.3.169 requirements (observed 2026-09-30): the
+  git token arrives via the `GIT_TOKEN` env binding (upstream never
+  reads `GITHUB_TOKEN`) and is required in every phase, including
+  `--dry-run`; `release-pr` pushes its branch and `release` pushes
+  tags, so those checkouts persist credentials while all others stay
+  credential-free; `--registry` is omitted for the cargo-implicit
+  default (upstream resolves the flag from Cargo config only, where
+  that name is absent); every release checkout fetches full history;
+  the policy checkout never pins `ref` (`release-pr` rejects a
+  detached HEAD).
 - The generator MUST NOT rewrite consumer Cargo manifests, Mise files,
   lockfiles, or toolchains. An explicit reviewed repository setup change may
   edit those inputs; generation itself cannot.

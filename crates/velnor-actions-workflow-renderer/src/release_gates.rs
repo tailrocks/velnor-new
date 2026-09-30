@@ -1,17 +1,28 @@
 //! Release step-content gates: authority separation and argv safety.
 //!
-//! Permissions prove the grant; these gates prove the steps honor it: no
-//! secrets outside the bootstrap env binding, no registry token on the
-//! OIDC path, exact-source checkouts, explicit config binding, and no
+//! Permissions prove the grant; these gates prove the steps honor it: the
+//! forge token only as the exact `GIT_TOKEN` env binding (plus the single
+//! bootstrap registry binding), no token material on the OIDC path,
+//! policy-plus-source checkouts with role-exact credentials, full history
+//! everywhere release-plz reads git, explicit config binding, and no
 //! verification bypasses or dispatch-input interpolation.
 
 use velnor_actions_contract::{Step, StepKind};
 
 use crate::{
     RenderError, commands,
+    release_checkout_gates::{check_checkout_shape, require_exact_checkout},
     release_jobs::{ReleaseJobSpec, ReleaseRole, ReleaseWorkflowSpec},
     steps,
 };
+
+/// Forge-token env key every release-plz step carries.
+///
+/// release-plz 0.3.169 reads `--git-token` from `GIT_TOKEN`, never from
+/// `GITHUB_TOKEN`; every phase (including `--dry-run`) requires it.
+pub const GIT_TOKEN_ENV: &str = "GIT_TOKEN";
+/// Exact secret reference bound to [`GIT_TOKEN_ENV`] (env-only, never argv).
+pub const GIT_TOKEN_REF: &str = "${{ secrets.GITHUB_TOKEN }}";
 
 /// Explicit config paths the publish argv must reference.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -33,8 +44,9 @@ pub fn check_release_jobs(
 ) -> Result<(), RenderError> {
     for (id, job) in &spec.jobs {
         check_job_steps(id, job)?;
+        require_forge_binding(id, &job.steps)?;
         match job.role {
-            ReleaseRole::Preparation => check_preparation(id, job)?,
+            ReleaseRole::Preparation => check_preparation(id, job, &spec.bootstrap.source_sha)?,
             ReleaseRole::Preflight => {
                 check_preflight(id, job, &spec.bootstrap.source_sha)?;
             }
@@ -44,7 +56,7 @@ pub fn check_release_jobs(
             ReleaseRole::PublishBootstrap => {
                 check_publish_bootstrap(id, job, &spec.bootstrap.source_sha, binding.bootstrap)?;
             }
-            ReleaseRole::Reconcile => check_reconcile(id, job)?,
+            ReleaseRole::Reconcile => check_reconcile(id, job, &spec.bootstrap.source_sha)?,
         }
     }
     Ok(())
@@ -101,9 +113,59 @@ fn forbid_substring(id: &str, steps: &[Step], needle: &str, code: &str) -> Resul
     Ok(())
 }
 
-/// Reject secret handles outside the bootstrap env binding.
-fn forbid_secrets(id: &str, steps: &[Step]) -> Result<(), RenderError> {
-    forbid_substring(id, steps, "secrets.", "secret_outside_bootstrap")
+/// True for the exact allowed forge-token env binding.
+fn is_forge_binding(key: &str, value: &str) -> bool {
+    key == GIT_TOKEN_ENV && value == GIT_TOKEN_REF
+}
+
+/// Reject secret handles outside the exact forge-token env binding.
+///
+/// Argv and action inputs carry no secrets anywhere; env values may only
+/// be the exact [`GIT_TOKEN_ENV`]/[`GIT_TOKEN_REF`] pair (the bootstrap
+/// registry binding is checked separately by its own role gate).
+fn forbid_unexpected_secrets(id: &str, steps: &[Step]) -> Result<(), RenderError> {
+    let rejected = || RenderError::InvalidWorkflow(format!("secret_outside_bootstrap:{id}"));
+    for step in steps {
+        match &step.kind {
+            StepKind::Action { with, .. } => {
+                if with.values().any(|value| value.contains("secrets.")) {
+                    return Err(rejected());
+                }
+            }
+            StepKind::Shell { run, env } => {
+                if run.iter().any(|arg| arg.contains("secrets.")) {
+                    return Err(rejected());
+                }
+                if env
+                    .iter()
+                    .any(|(key, value)| value.contains("secrets.") && !is_forge_binding(key, value))
+                {
+                    return Err(rejected());
+                }
+            }
+            StepKind::Internal { .. } => {}
+        }
+    }
+    Ok(())
+}
+
+/// Require the forge-token binding on every release-plz step.
+///
+/// release-plz fails without `--git-token` (env `GIT_TOKEN`) in every
+/// phase, so a step invoking it without the exact binding fails closed
+/// here instead of at runtime.
+fn require_forge_binding(id: &str, steps: &[Step]) -> Result<(), RenderError> {
+    for step in steps {
+        if let StepKind::Shell { run, env } = &step.kind
+            && run.iter().any(|arg| arg == "release-plz")
+            && !env.iter().any(|(key, value)| is_forge_binding(key, value))
+        {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "missing_forge_binding:{id}"
+            )));
+        }
+    }
+    Ok(())
 }
 
 /// Reject registry-token handles outside the bootstrap env binding.
@@ -122,55 +184,20 @@ fn forbid_inputs_interpolation(id: &str, steps: &[Step]) -> Result<(), RenderErr
     forbid_substring(id, steps, "inputs.", "dispatch_input_in_steps")
 }
 
-/// Require credential-free checkouts on every release checkout step.
-fn check_checkout_hygiene(id: &str, steps: &[Step]) -> Result<(), RenderError> {
-    for step in steps {
-        if let StepKind::Action { uses, with } = &step.kind
-            && uses.starts_with("actions/checkout@")
-            && with.get("persist-credentials").is_none_or(|v| v != "false")
-        {
-            return Err(RenderError::InvalidWorkflow(format!(
-                "checkout_with_credentials:{id}"
-            )));
-        }
-    }
-    Ok(())
-}
-
-/// True when a checkout step pins `ref` to the exact approved SHA.
-fn has_exact_checkout(steps: &[Step], sha: &str) -> bool {
-    steps.iter().any(|step| {
-        matches!(&step.kind, StepKind::Action { uses, with }
-            if uses.starts_with("actions/checkout@")
-                && with.get("ref").is_some_and(|value| value == sha))
-    })
-}
-
-/// Require an exact-source checkout (no fallback to unverified checkouts).
-fn require_exact_checkout(id: &str, steps: &[Step], sha: &str) -> Result<(), RenderError> {
-    if has_exact_checkout(steps, sha) {
-        Ok(())
-    } else {
-        Err(RenderError::InvalidWorkflow(format!(
-            "checkout_without_exact_source:{id}"
-        )))
-    }
-}
-
 /// Preparation: GitHub authority only, no registry token or secrets.
-fn check_preparation(id: &str, job: &ReleaseJobSpec) -> Result<(), RenderError> {
-    forbid_secrets(id, &job.steps)?;
+fn check_preparation(id: &str, job: &ReleaseJobSpec, sha: &str) -> Result<(), RenderError> {
+    forbid_unexpected_secrets(id, &job.steps)?;
     forbid_registry_token(id, &job.steps)?;
     forbid_inputs_interpolation(id, &job.steps)?;
-    check_checkout_hygiene(id, &job.steps)
+    check_checkout_shape(id, &job.steps, job.role, sha)
 }
 
 /// Preflight: read-only validation over the exact approved source.
 fn check_preflight(id: &str, job: &ReleaseJobSpec, sha: &str) -> Result<(), RenderError> {
-    forbid_secrets(id, &job.steps)?;
+    forbid_unexpected_secrets(id, &job.steps)?;
     forbid_registry_token(id, &job.steps)?;
     forbid_inputs_interpolation(id, &job.steps)?;
-    check_checkout_hygiene(id, &job.steps)?;
+    check_checkout_shape(id, &job.steps, job.role, sha)?;
     require_exact_checkout(id, &job.steps, sha)
 }
 
@@ -224,7 +251,7 @@ fn check_publish_common(
     config_path: &str,
 ) -> Result<(), RenderError> {
     forbid_inputs_interpolation(id, &job.steps)?;
-    check_checkout_hygiene(id, &job.steps)?;
+    check_checkout_shape(id, &job.steps, job.role, sha)?;
     require_exact_checkout(id, &job.steps, sha)?;
     require_config_binding(id, &job.steps, config_path)?;
     forbid_verify_bypass(id, &job.steps)
@@ -238,7 +265,7 @@ fn check_publish_oidc(
     config_path: &str,
 ) -> Result<(), RenderError> {
     check_publish_common(id, job, sha, config_path)?;
-    forbid_secrets(id, &job.steps)?;
+    forbid_unexpected_secrets(id, &job.steps)?;
     forbid_registry_token(id, &job.steps)
 }
 
@@ -255,7 +282,9 @@ fn is_secret_ref(value: &str) -> bool {
         })
 }
 
-/// Bootstrap publish: exactly one token binding, env-only, never argv.
+/// Bootstrap publish: exactly one registry binding plus the forge binding.
+///
+/// Both bindings are env-only, never argv; any other secret handle fails.
 fn check_publish_bootstrap(
     id: &str,
     job: &ReleaseJobSpec,
@@ -273,14 +302,15 @@ fn check_publish_bootstrap(
                     }
                 }
                 for (key, value) in env {
-                    if value.contains("secrets.") {
-                        if key != "CARGO_REGISTRY_TOKEN" || !is_secret_ref(value) {
-                            return Err(RenderError::InvalidWorkflow(format!(
-                                "bootstrap_token_binding:{id}"
-                            )));
-                        }
-                        bindings += 1;
+                    if !value.contains("secrets.") || is_forge_binding(key, value) {
+                        continue;
                     }
+                    if key != "CARGO_REGISTRY_TOKEN" || !is_secret_ref(value) {
+                        return Err(RenderError::InvalidWorkflow(format!(
+                            "bootstrap_token_binding:{id}"
+                        )));
+                    }
+                    bindings += 1;
                 }
             }
             StepKind::Action { with, .. } => {
@@ -308,10 +338,10 @@ fn check_publish_bootstrap(
     }
 }
 
-/// Reconciliation: independent read-only checks, no credentials.
-fn check_reconcile(id: &str, job: &ReleaseJobSpec) -> Result<(), RenderError> {
-    forbid_secrets(id, &job.steps)?;
+/// Reconciliation: independent read-only checks, no push credentials.
+fn check_reconcile(id: &str, job: &ReleaseJobSpec, sha: &str) -> Result<(), RenderError> {
+    forbid_unexpected_secrets(id, &job.steps)?;
     forbid_registry_token(id, &job.steps)?;
     forbid_inputs_interpolation(id, &job.steps)?;
-    check_checkout_hygiene(id, &job.steps)
+    check_checkout_shape(id, &job.steps, job.role, sha)
 }
