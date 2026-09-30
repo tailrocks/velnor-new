@@ -138,7 +138,7 @@ pub struct Job {
     pub steps: Vec<Step>,
 }
 /// One workflow step.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Step {
     /// Step name.
     pub name: String,
@@ -147,7 +147,7 @@ pub struct Step {
     pub kind: StepKind,
 }
 /// Step payload variants.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum StepKind {
     /// Pinned GitHub Action step.

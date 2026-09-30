@@ -1,7 +1,8 @@
-//! Release roles, permissions, job specs, and workflow assembly.
+//! Release roles, job specs, and workflow assembly.
 //!
-//! The exact least-privilege matrix per boundary role, the legal role set,
-//! the forward-only needs graph, and the exact role conditions.
+//! The legal role set, the forward-only needs graph, and the exact role
+//! conditions. The per-role permission matrix lives in
+//! [`crate::release_permissions`].
 
 use std::collections::BTreeMap;
 
@@ -9,6 +10,7 @@ use velnor_actions_contract::{Step, StepKind, validate_job_id};
 
 use crate::{
     RenderError,
+    release_permissions::JobPermissions,
     release_spec::{
         BootstrapPlan, ReleaseConcurrency, ReleaseTriggers, check_lock_anchor, is_clean_text,
         publish_gate_condition, validate_environment, validate_repository,
@@ -61,109 +63,8 @@ impl ReleaseRole {
     }
 }
 
-/// One GitHub permission level (typed, never a raw string).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PermissionLevel {
-    /// No access.
-    None,
-    /// Read access.
-    Read,
-    /// Write access.
-    Write,
-}
-
-impl PermissionLevel {
-    /// YAML spelling of the level.
-    #[must_use]
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::None => "none",
-            Self::Read => "read",
-            Self::Write => "write",
-        }
-    }
-}
-
-/// Per-job least-privilege permissions.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct JobPermissions {
-    /// Repository contents access.
-    pub contents: PermissionLevel,
-    /// Pull-request access.
-    pub pull_requests: PermissionLevel,
-    /// OIDC token access.
-    pub id_token: PermissionLevel,
-}
-
-impl JobPermissions {
-    /// Exact least-privilege matrix for one role.
-    #[must_use]
-    pub fn expected(role: ReleaseRole) -> Self {
-        use PermissionLevel::{None, Read, Write};
-        match role {
-            ReleaseRole::Preparation => Self {
-                contents: Write,
-                pull_requests: Write,
-                id_token: None,
-            },
-            ReleaseRole::Preflight => Self {
-                contents: Read,
-                pull_requests: None,
-                id_token: None,
-            },
-            ReleaseRole::PublishOidc => Self {
-                contents: Write,
-                pull_requests: Read,
-                id_token: Write,
-            },
-            ReleaseRole::PublishBootstrap => Self {
-                contents: Write,
-                pull_requests: Read,
-                id_token: None,
-            },
-            ReleaseRole::Reconcile => Self {
-                contents: Read,
-                pull_requests: Read,
-                id_token: None,
-            },
-        }
-    }
-
-    /// Enforce the matrix plus the two structural permission rules.
-    ///
-    /// `id-token: write` requires a pinned job environment, and validation
-    /// roles never hold `contents: write`.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`RenderError::InvalidWorkflow`] for rule or matrix drift.
-    pub fn validate(
-        &self,
-        role: ReleaseRole,
-        environment: Option<&str>,
-    ) -> Result<(), RenderError> {
-        if self.id_token == PermissionLevel::Write && environment.is_none() {
-            return Err(RenderError::InvalidWorkflow(
-                "id_token_without_environment".to_owned(),
-            ));
-        }
-        if role.is_validation() && self.contents == PermissionLevel::Write {
-            return Err(RenderError::InvalidWorkflow(
-                "contents_write_on_validation".to_owned(),
-            ));
-        }
-        if *self != Self::expected(role) {
-            return Err(RenderError::InvalidWorkflow(format!(
-                "permission_matrix:{}",
-                role.as_str()
-            )));
-        }
-        Ok(())
-    }
-}
-
 /// One release job: a contract step list plus typed role metadata.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct ReleaseJobSpec {
     /// Boundary role this job serves.
     pub role: ReleaseRole,
@@ -234,7 +135,7 @@ impl ReleaseJobSpec {
 }
 
 /// Complete typed release workflow: identity, triggers, jobs, plan.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct ReleaseWorkflowSpec {
     /// Workflow display name.
     pub name: String,

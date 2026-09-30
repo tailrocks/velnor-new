@@ -32,23 +32,45 @@ pub const RUSTUP_TOOLCHAIN_ENV: &str = "RUSTUP_TOOLCHAIN";
 /// Credential keys that must never reach a task environment.
 ///
 /// Static tokens (`MISE_GITHUB_TOKEN`, `GITHUB_TOKEN`/`GH_TOKEN`,
-/// `ACTIONS_RUNTIME_TOKEN`) plus the OIDC token-request pair: the URL
-/// mints tokens, so it is as sensitive as the token itself.
-pub const CREDENTIAL_ENV_KEYS: [&str; 6] = [
+/// `ACTIONS_RUNTIME_TOKEN`, `CARGO_REGISTRY_TOKEN`) plus the OIDC
+/// token-request pair: the URL mints tokens, so it is as sensitive
+/// as the token itself.
+pub const CREDENTIAL_ENV_KEYS: [&str; 7] = [
     "MISE_GITHUB_TOKEN",
     "GITHUB_TOKEN",
     "GH_TOKEN",
     "ACTIONS_RUNTIME_TOKEN",
     "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
     "ACTIONS_ID_TOKEN_REQUEST_URL",
+    "CARGO_REGISTRY_TOKEN",
 ];
 
 /// Whether a key is reserved: isolation, install disable, or credentials.
+/// Credentials are [`CREDENTIAL_ENV_KEYS`]; note `CARGO_REGISTRY_TOKEN`
+/// (a repo task carrying it would silently disable trusted publishing).
 #[must_use]
 pub fn is_reserved_env_key(key: &str) -> bool {
     ISOLATION_ENV.iter().any(|(own, _)| *own == key)
         || NO_AUTO_INSTALL_ENV.iter().any(|(own, _)| *own == key)
         || CREDENTIAL_ENV_KEYS.contains(&key)
+}
+
+/// Redact secret-looking values for `Debug`: names stay, values become
+/// `<redacted>` when [`velnor_actions_contract::is_secret_env_name`]
+/// matches. Non-secret pairs render unchanged.
+#[must_use]
+pub(crate) fn redact_env_for_debug(env: &[(OsString, OsString)]) -> Vec<(String, String)> {
+    env.iter()
+        .map(|(key, value)| {
+            let name = key.to_string_lossy().into_owned();
+            let shown = if velnor_actions_contract::is_secret_env_name(&name) {
+                "<redacted>".to_owned()
+            } else {
+                value.to_string_lossy().into_owned()
+            };
+            (name, shown)
+        })
+        .collect()
 }
 
 /// Which parent environment a child may see: bootstrap, verify, and

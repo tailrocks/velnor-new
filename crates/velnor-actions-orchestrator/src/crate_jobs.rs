@@ -273,6 +273,8 @@ fn render_job(
         runs_on: label.to_owned(),
         needs: vec![PLAN_JOB_ID.to_owned()],
         condition: None,
+        permissions: None,
+        environment: None,
         steps,
     })
 }

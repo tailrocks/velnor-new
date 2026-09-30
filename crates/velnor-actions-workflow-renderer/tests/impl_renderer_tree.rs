@@ -39,6 +39,8 @@ fn exact_triggers() -> Trigger {
             .collect(),
         push_branches: vec!["main".to_owned()],
         merge_group: true,
+        workflow_dispatch: None,
+        schedule: None,
     }
 }
 
@@ -55,6 +57,8 @@ fn plan_job() -> Result<Job, RenderError> {
         runs_on: LABEL.to_owned(),
         needs: Vec::new(),
         condition: None,
+        permissions: None,
+        environment: None,
         steps: vec![checkout_step(&checkout_pin())?, plan_step()],
     })
 }
@@ -65,10 +69,7 @@ fn fixture_ir() -> Result<WorkflowIr, RenderError> {
     Ok(WorkflowIr {
         name: "CI".to_owned(),
         triggers: exact_triggers(),
-        permissions: Permissions {
-            contents: "read".to_owned(),
-            actions: "read".to_owned(),
-        },
+        permissions: Permissions::default(),
         concurrency: exact_concurrency(),
         jobs,
     })

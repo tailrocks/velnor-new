@@ -154,9 +154,7 @@ permissions:
 
 All other permissions MUST be absent or `none`. `actions: read` is only for the exact trusted baseline
 artifact. Release publication uses a separate workflow with explicit permissions; fork pull requests receive
-no write access. When `[stacks.rust.release]` is enabled, the generator additionally emits
-`velnor-release.yml` as specified in the [release contract](release-contract.md); that workflow carries its
-own per-job permissions and MUST NOT weaken this default.
+no write access. `[stacks.rust.release]` adds `velnor-release.yml` (see [release contract](release-contract.md)) with per-job permissions that MUST NOT weaken this default.
 
 The workflow concurrency group MUST be:
 

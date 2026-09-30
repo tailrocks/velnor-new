@@ -38,6 +38,8 @@ fn fixture_ir(task: Job) -> Result<WorkflowIr, RenderError> {
             runs_on: LABEL.to_owned(),
             needs: Vec::new(),
             condition: None,
+            permissions: None,
+            environment: None,
             steps: vec![checkout_step(&checkout_pin())?, plan_step()],
         },
     );
@@ -51,11 +53,10 @@ fn fixture_ir(task: Job) -> Result<WorkflowIr, RenderError> {
                 .collect(),
             push_branches: vec!["main".to_owned()],
             merge_group: true,
+            workflow_dispatch: None,
+            schedule: None,
         },
-        permissions: Permissions {
-            contents: "read".to_owned(),
-            actions: "read".to_owned(),
-        },
+        permissions: Permissions::default(),
         concurrency: Concurrency {
             group: CONCURRENCY_GROUP.to_owned(),
             cancel_in_progress: CONCURRENCY_CANCEL.to_owned(),
@@ -71,6 +72,8 @@ fn task_job(env: BTreeMap<String, String>, needs: Vec<String>) -> Result<Job, Re
         runs_on: LABEL.to_owned(),
         needs,
         condition: None,
+        permissions: None,
+        environment: None,
         steps: vec![
             checkout_step(&checkout_pin())?,
             shell_step("Run task", argv, env)?,

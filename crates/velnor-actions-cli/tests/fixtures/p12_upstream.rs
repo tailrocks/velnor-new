@@ -13,8 +13,18 @@ use super::p12_harness as harness;
 
 const INVENTORY: &str = ".velnor/freshness-inventory.json";
 
+/// One probe row: inventory source URL, canned file, canned body.
+type ProbeRow = (&'static str, &'static str, &'static str);
+
 /// (inventory source URL, canned file, canned body) for every probe row.
-fn probe_rows() -> Vec<(&'static str, &'static str, &'static str)> {
+fn probe_rows() -> Vec<ProbeRow> {
+    let mut rows = probe_tool_rows();
+    rows.extend(probe_action_rows());
+    rows
+}
+
+/// Canned upstream bodies for tool inventory rows.
+fn probe_tool_rows() -> Vec<ProbeRow> {
     vec![
         (
             "https://api.github.com/repos/jdx/mise/releases/latest",
@@ -56,6 +66,17 @@ fn probe_rows() -> Vec<(&'static str, &'static str, &'static str)> {
             "nextest.json",
             "{\"crate\": {\"max_version\": \"0.9.146\"}}",
         ),
+        (
+            "https://crates.io/api/v1/crates/release-plz",
+            "release-plz.json",
+            "{\"crate\": {\"max_version\": \"0.3.169\"}}",
+        ),
+    ]
+}
+
+/// Canned upstream bodies for action inventory rows.
+fn probe_action_rows() -> Vec<ProbeRow> {
+    vec![
         (
             "https://api.github.com/repos/jdx/mise-action/releases/latest",
             "mise-action.json",
@@ -174,7 +195,7 @@ fn probe_rows_carry_source_and_check_time() -> Result<(), Box<dyn Error>> {
         .iter()
         .filter(|line| line.contains("\"check\":\"upstream-probe\""))
         .collect();
-    assert_eq!(probe.len(), 17, "16 rows + runner note:\n{}", run.stdout);
+    assert_eq!(probe.len(), 18, "17 rows + runner note:\n{}", run.stdout);
     for line in probe {
         if line.contains("\"subject\":\"runner\"") {
             assert!(

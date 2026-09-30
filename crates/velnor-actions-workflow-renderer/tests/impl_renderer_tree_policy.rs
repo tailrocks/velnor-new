@@ -38,6 +38,8 @@ fn exact_triggers() -> Trigger {
             .collect(),
         push_branches: vec!["main".to_owned()],
         merge_group: true,
+        workflow_dispatch: None,
+        schedule: None,
     }
 }
 
@@ -54,6 +56,8 @@ fn plan_job() -> Result<Job, RenderError> {
         runs_on: LABEL.to_owned(),
         needs: Vec::new(),
         condition: None,
+        permissions: None,
+        environment: None,
         steps: vec![checkout_step(&checkout_pin())?, plan_step()],
     })
 }
@@ -79,10 +83,7 @@ fn fixture_ir() -> Result<WorkflowIr, RenderError> {
     Ok(WorkflowIr {
         name: "CI".to_owned(),
         triggers: exact_triggers(),
-        permissions: Permissions {
-            contents: "read".to_owned(),
-            actions: "read".to_owned(),
-        },
+        permissions: Permissions::default(),
         concurrency: exact_concurrency(),
         jobs,
     })
@@ -98,6 +99,8 @@ fn simple_job(display: &str, needs: Vec<String>, steps: Vec<Step>) -> Job {
         runs_on: LABEL.to_owned(),
         needs,
         condition: None,
+        permissions: None,
+        environment: None,
         steps,
     }
 }
@@ -229,6 +232,8 @@ fn final_gate_keeps_exact_name_and_condition() -> Result<(), RenderError> {
             runs_on: LABEL.to_owned(),
             needs: vec!["plan".to_owned()],
             condition: Some("always()".to_owned()),
+            permissions: None,
+            environment: None,
             steps: vec![checkout_step(&checkout_pin())?, merge_step()],
         },
     );
@@ -241,6 +246,8 @@ fn final_gate_keeps_exact_name_and_condition() -> Result<(), RenderError> {
             runs_on: LABEL.to_owned(),
             needs: vec!["plan".to_owned()],
             condition: None,
+            permissions: None,
+            environment: None,
             steps: vec![checkout_step(&checkout_pin())?, merge_step()],
         },
     );
@@ -253,6 +260,8 @@ fn final_gate_keeps_exact_name_and_condition() -> Result<(), RenderError> {
             runs_on: LABEL.to_owned(),
             needs: vec!["plan".to_owned()],
             condition: Some("always()".to_owned()),
+            permissions: None,
+            environment: None,
             steps: vec![checkout_step(&checkout_pin())?, merge_step()],
         },
     );
@@ -262,61 +271,55 @@ fn final_gate_keeps_exact_name_and_condition() -> Result<(), RenderError> {
     Ok(())
 }
 
+fn task_job(step: Step) -> Job {
+    Job {
+        display_name: "Task".to_owned(),
+        runs_on: LABEL.to_owned(),
+        needs: vec!["plan".to_owned()],
+        condition: None,
+        permissions: None,
+        environment: None,
+        steps: vec![step],
+    }
+}
+
 #[test]
 fn renderer_rejects_unvalidated_steps_inside_ir() -> Result<(), RenderError> {
     let ctx = fixture_ctx();
     let mut ir = fixture_ir()?;
     ir.jobs.insert(
         "velnor-task".to_owned(),
-        Job {
-            display_name: "Task".to_owned(),
-            runs_on: LABEL.to_owned(),
-            needs: vec!["plan".to_owned()],
-            condition: None,
-            steps: vec![Step {
-                name: "Install".to_owned(),
-                kind: StepKind::Shell {
-                    run: vec!["cargo".to_owned(), "install".to_owned(), "x".to_owned()],
-                    env: BTreeMap::new(),
-                },
-            }],
-        },
+        task_job(Step {
+            name: "Install".to_owned(),
+            kind: StepKind::Shell {
+                run: vec!["cargo".to_owned(), "install".to_owned(), "x".to_owned()],
+                env: BTreeMap::new(),
+            },
+        }),
     );
     assert!(render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx).is_err());
     let mut ir = fixture_ir()?;
     ir.jobs.insert(
         "velnor-task".to_owned(),
-        Job {
-            display_name: "Task".to_owned(),
-            runs_on: LABEL.to_owned(),
-            needs: vec!["plan".to_owned()],
-            condition: None,
-            steps: vec![Step {
-                name: "Fetch".to_owned(),
-                kind: StepKind::Action {
-                    uses: "actions/checkout@main".to_owned(),
-                    with: BTreeMap::new(),
-                },
-            }],
-        },
+        task_job(Step {
+            name: "Fetch".to_owned(),
+            kind: StepKind::Action {
+                uses: "actions/checkout@main".to_owned(),
+                with: BTreeMap::new(),
+            },
+        }),
     );
     assert!(render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx).is_err());
     let mut ir = fixture_ir()?;
     ir.jobs.insert(
         "velnor-task".to_owned(),
-        Job {
-            display_name: "Task".to_owned(),
-            runs_on: LABEL.to_owned(),
-            needs: vec!["plan".to_owned()],
-            condition: None,
-            steps: vec![Step {
-                name: "Run Alint".to_owned(),
-                kind: StepKind::Action {
-                    uses: "asamarts/alint@v0.16.1".to_owned(),
-                    with: BTreeMap::new(),
-                },
-            }],
-        },
+        task_job(Step {
+            name: "Run Alint".to_owned(),
+            kind: StepKind::Action {
+                uses: "asamarts/alint@v0.16.1".to_owned(),
+                with: BTreeMap::new(),
+            },
+        }),
     );
     let err = render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx)
         .expect_err("alint tag ref must be rejected");
@@ -327,17 +330,11 @@ fn renderer_rejects_unvalidated_steps_inside_ir() -> Result<(), RenderError> {
     let mut ir = fixture_ir()?;
     ir.jobs.insert(
         "velnor-task".to_owned(),
-        Job {
-            display_name: "Task".to_owned(),
-            runs_on: LABEL.to_owned(),
-            needs: vec!["plan".to_owned()],
-            condition: None,
-            steps: vec![shell_step(
-                "Focused",
-                vec!["true".to_owned()],
-                BTreeMap::new(),
-            )?],
-        },
+        task_job(shell_step(
+            "Focused",
+            vec!["true".to_owned()],
+            BTreeMap::new(),
+        )?),
     );
     assert!(render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx).is_ok());
     Ok(())

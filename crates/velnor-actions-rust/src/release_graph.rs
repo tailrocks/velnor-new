@@ -196,17 +196,16 @@ fn check_dep_registry(
     fact: &DepFact,
     lookups: &GraphLookups<'_>,
 ) -> Result<(), ReleaseError> {
-    if let Some(registry) = fact.registry.as_deref() {
-        if !lookups
+    if let Some(registry) = fact.registry.as_deref()
+        && !lookups
             .supported
             .iter()
             .any(|supported| supported == registry)
-        {
-            return Err(ReleaseError::UnsupportedRegistry {
-                package: name.to_owned(),
-                registry: registry.to_owned(),
-            });
-        }
+    {
+        return Err(ReleaseError::UnsupportedRegistry {
+            package: name.to_owned(),
+            registry: registry.to_owned(),
+        });
     }
     Ok(())
 }
@@ -311,7 +310,7 @@ fn topo_order(
     }
     let mut ready: BTreeSet<&str> = pending
         .iter()
-        .filter_map(|(name, count)| if **count == 0 { Some(**name) } else { None })
+        .filter_map(|(name, count)| if *count == 0 { Some(*name) } else { None })
         .collect();
     let mut order = Vec::with_capacity(selected.len());
     while let Some(next) = ready.pop_first() {
