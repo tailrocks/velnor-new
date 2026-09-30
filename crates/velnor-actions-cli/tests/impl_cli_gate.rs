@@ -273,3 +273,52 @@ fn staged_merge_request_runs_json_protocol() -> Result<(), Box<dyn Error>> {
     cleanup(&tmp);
     Ok(())
 }
+
+#[test]
+fn report_op_needs_runner_temp_and_run_id() -> Result<(), Box<dyn Error>> {
+    let tmp = fresh_tempdir("gate-report")?;
+    let bare = spawn_isolated(&[], &[], &tmp)?;
+    for vars in [
+        vec![("VELNOR_INTERNAL_OP", "write-task-report-v1")],
+        vec![
+            ("VELNOR_INTERNAL_OP", "write-task-report-v1"),
+            ("GITHUB_RUN_ID", "7"),
+        ],
+        vec![
+            ("VELNOR_INTERNAL_OP", "write-task-report-v1"),
+            ("RUNNER_TEMP", tmp.to_str().unwrap_or("/")),
+        ],
+    ] {
+        let gated = spawn_isolated(&[], &vars, &tmp)?;
+        assert_eq!(code(&gated), 2);
+        assert_identical(&bare, &gated);
+    }
+    cleanup(&tmp);
+    Ok(())
+}
+
+#[test]
+fn report_op_without_plan_fails_internal_silently() -> Result<(), Box<dyn Error>> {
+    let tmp = fresh_tempdir("gate-report-run")?;
+    let runner = tmp.to_str().unwrap_or("/").to_owned();
+    let output = spawn_isolated(
+        &[],
+        &[
+            ("VELNOR_INTERNAL_OP", "write-task-report-v1"),
+            ("RUNNER_TEMP", runner.as_str()),
+            ("GITHUB_RUN_ID", "7"),
+            ("GITHUB_RUN_ATTEMPT", "2"),
+            ("VELNOR_TASK_ID", "stack/rust/demo/clippy/default"),
+            ("VELNOR_EXIT_CODE", "0"),
+        ],
+        &tmp,
+    )?;
+    assert_eq!(code(&output), 1);
+    assert!(output.stdout.is_empty(), "internal stdout must stay empty");
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+    assert!(stderr.contains("internal request failed"), "{stderr}");
+    assert!(!stderr.contains("write-task-report-v1"), "{stderr}");
+    assert!(!stderr.contains("VELNOR_INTERNAL"), "{stderr}");
+    cleanup(&tmp);
+    Ok(())
+}

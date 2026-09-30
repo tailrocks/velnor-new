@@ -107,7 +107,11 @@ fn orch_spawns_no_processes_and_confines_shell_wrappers() -> TestResult {
     // P08 C4: source_prep.rs emits one fixed `sh -c` probe-and-fetch template
     // (metadata probe, offline skip, explicit miss fetch) over validated roots.
     // Step IR has no conditions, so the shell conditional is required; roots
-    // are fail-closed validated, never arbitrary shell.
+    // are fail-closed validated, never arbitrary shell. P05 reports:
+    // matrix_step.rs emits the fixed obligation report-capture wrappers
+    // (`sh -c` over a joined validated argv plus the fixed helper call);
+    // exit capture needs one shell step, and the joined argv plus helper
+    // path are fixed generator values, never repository shell.
     let mut sh_files = std::collections::BTreeSet::new();
     for path in src_files()? {
         let text = std::fs::read_to_string(&path)?;
@@ -122,11 +126,12 @@ fn orch_spawns_no_processes_and_confines_shell_wrappers() -> TestResult {
     assert_eq!(
         sh_files,
         std::collections::BTreeSet::from([
+            "matrix_step.rs".to_owned(),
             "pins.rs".to_owned(),
             "qualify.rs".to_owned(),
             "source_prep.rs".to_owned(),
         ]),
-        "fixed sh wrappers live in pins/qualify/source_prep only"
+        "fixed sh wrappers live in matrix_step/pins/qualify/source_prep only"
     );
     Ok(())
 }

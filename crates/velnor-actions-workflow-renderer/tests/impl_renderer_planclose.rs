@@ -4,7 +4,8 @@ use velnor_actions_workflow_renderer::{
     ACQUIRE_NAME, CHECK_GENERATED_NAME, DOWNLOAD_PLAN_NAME, FRESHNESS_OUTDIR,
     MATRIX_REPORT_UPLOAD_NAME, MERGE_OPERATION, PUBLISH_PLAN_NAME, RUN_KEY_EXPR, RenderError,
     SETUP_MISE_NAME, checkout_step, download_plan_step, freshness_step, matrix_report_upload_step,
-    merge_step, plan_step, publish_plan_step, render_workflow_ir, write_request_step,
+    matrix_report_upload_step_for, merge_step, plan_step, publish_plan_step, render_workflow_ir,
+    write_request_step,
 };
 
 use super::impl_renderer_fixtures::*;
@@ -140,6 +141,29 @@ fn matrix_report_upload_names_derive_from_run_and_leg() -> Result<(), RenderErro
     );
     assert!(with["path"].contains("matrix.matrix_key"));
     assert_eq!(with["if-no-files-found"].as_str(), "error");
+    Ok(())
+}
+
+#[test]
+fn fixed_key_upload_names_derive_from_run_and_entry() -> Result<(), RenderError> {
+    let step =
+        matrix_report_upload_step_for("m-0123456789abcdef", "Upload matrix report (Clippy)")?;
+    assert_eq!(step.name, "Upload matrix report (Clippy)");
+    let velnor_actions_contract::StepKind::Action { uses, with } = &step.kind else {
+        panic!("matrix upload must be an action step");
+    };
+    assert!(uses.starts_with("actions/upload-artifact@"));
+    assert_eq!(
+        with["name"].as_str(),
+        "velnor-matrix-r${{ github.run_id }}-a${{ github.run_attempt }}-m-0123456789abcdef",
+    );
+    assert_eq!(
+        with["path"].as_str(),
+        "${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/m-0123456789abcdef",
+    );
+    assert_eq!(with["if-no-files-found"].as_str(), "error");
+    assert!(matrix_report_upload_step_for("bogus", "Upload matrix report (Clippy)").is_err());
+    assert!(matrix_report_upload_step_for("m-0123456789abcdef", "").is_err());
     Ok(())
 }
 
