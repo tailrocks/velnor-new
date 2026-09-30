@@ -21,8 +21,13 @@ pub(crate) fn task_driver_tools(use_mbx: bool) -> Vec<PinnedTool> {
 
 /// Typed `Prepare pinned tools` step for the crate-job tool set.
 ///
-/// Driver toolchain plus Nextest only: Actionlint, Shellcheck, and
-/// Zizmor run in their own validator jobs, never inside Rust jobs.
+/// Driver toolchain plus the `generate` validators plus Nextest when used.
+/// The validators install here because crate test suites execute `generate`
+/// (CLI parity) and staged-validation binaries (zizmor staging) directly:
+/// run 36751323928 failed every such leg with `couldn't exec process` when
+/// only the plan job carried them. Dedicated validator jobs remain the lint
+/// gates for the committed workflow; this set covers what the job executes,
+/// tests included. Order follows `PinnedTool::ALL`.
 ///
 /// # Errors
 ///
@@ -33,6 +38,11 @@ pub(crate) fn prepare_crate_tools_step(
     use_nextest: bool,
 ) -> Result<Step, OrchestratorError> {
     let mut tools = task_driver_tools(use_mbx);
+    tools.extend([
+        PinnedTool::Actionlint,
+        PinnedTool::Shellcheck,
+        PinnedTool::Zizmor,
+    ]);
     tools.extend(use_nextest.then_some(PinnedTool::Nextest));
     let prepare = PreparePinnedTools::new(tools, ToolHomes::runner_temp()).map_err(|err| {
         OrchestratorError::Contract {

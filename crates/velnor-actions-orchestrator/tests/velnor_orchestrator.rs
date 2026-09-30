@@ -1,4 +1,5 @@
 //! Integration test entry point; cases live in the sibling files.
+mod impl_bench_p13;
 mod impl_common;
 mod impl_config_internal;
 mod impl_crate_graph;
@@ -16,6 +17,7 @@ mod impl_git_paths_p10;
 mod impl_matrix;
 mod impl_merge;
 mod impl_merge_plan;
+mod impl_neg_pipeline_p13;
 mod impl_orch_broaden;
 mod impl_orch_core;
 mod impl_orch_f2a;
@@ -24,12 +26,14 @@ mod impl_orch_f2c;
 mod impl_orch_f2d;
 mod impl_orch_f2e;
 mod impl_orch_f2f;
+mod impl_orch_f2g;
 mod impl_orch_features;
 mod impl_orch_gen;
 mod impl_orch_gen2;
 mod impl_orch_intake;
 mod impl_orch_intake_deps;
 mod impl_orch_merge;
+mod impl_orch_p08;
 mod impl_orch_plansel;
 mod impl_orch_release_emit;
 mod impl_p03_identity;

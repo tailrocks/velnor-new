@@ -54,11 +54,15 @@ pub(crate) fn plan_job(
     use_nextest: bool,
     fetch_roots: &[String],
 ) -> Result<Job, OrchestratorError> {
-    let mut steps = vec![checkout_action()?];
+    let mut steps = vec![checkout_history_action()?];
     let prepare = prepare_pinned_tools_step(catalog, plan_tools(use_mbx, use_nextest))?;
     steps.push(prepare);
     steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
+    let cached =
+        crate::workflow_jobs_cache::cache_steps_for_plan(label, catalog, use_mbx, fetch_roots)?;
+    steps.extend(cached.restore);
     steps.extend(fetch_steps_for_plan(catalog, fetch_roots)?);
+    steps.extend(cached.save);
     steps.extend(acquire);
     steps.push(request_step(PLAN_OPERATION)?);
     steps.push(plan_step());
@@ -203,6 +207,11 @@ fn checkout_action() -> Result<Step, OrchestratorError> {
     crate::workflow::wire_w1::checkout_step()
 }
 
+/// Pinned checkout with full history for the plan job's git archaeology.
+fn checkout_history_action() -> Result<Step, OrchestratorError> {
+    crate::workflow::wire_w1::checkout_step_full()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -243,6 +252,28 @@ mod tests {
                 plan_job("ubuntu-26.04", acquire, &catalog, false, false, &[]).expect("plan job");
             assert_request_before(&job, "Plan", "write-request-v1:plan-v1", PLAN_OPERATION);
         }
+    }
+
+    #[test]
+    fn plan_job_checks_out_full_history_for_archaeology() {
+        let catalog = ToolCatalog::pinned();
+        let job = plan_job("ubuntu-26.04", None, &catalog, false, false, &[]).expect("plan job");
+        let StepKind::Action { with, .. } = &job.steps[0].kind else {
+            panic!("plan must start with checkout");
+        };
+        assert_eq!(
+            with.get("fetch-depth").map(String::as_str),
+            Some("0"),
+            "plan needs history for HEAD^2 + base diff: {with:?}"
+        );
+        let lint = lint_job("ubuntu-26.04", &catalog).expect("lint job");
+        let StepKind::Action { with, .. } = &lint.steps[0].kind else {
+            panic!("lint must start with checkout");
+        };
+        assert!(
+            !with.contains_key("fetch-depth"),
+            "lint stays shallow: {with:?}"
+        );
     }
 
     #[test]

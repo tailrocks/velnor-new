@@ -157,7 +157,7 @@ fn insert_format_step(plan: &mut Job, format: Step) {
 ///
 /// The plan job pre-installs the MBX driver only on detected project
 /// evidence, never by default; consumers without MBX stay Cargo-only.
-fn plan_uses_mbx(discovery: &Discovery) -> bool {
+pub(crate) fn plan_uses_mbx(discovery: &Discovery) -> bool {
     discovery
         .workspaces
         .iter()

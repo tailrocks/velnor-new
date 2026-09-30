@@ -237,12 +237,15 @@ pub fn preseed_download_step() -> Result<Step, RenderError> {
 /// Same shape as the candidate verification: schema 1, 40-hex commit
 /// equal to the checked-out `$GITHUB_SHA`, exact expected target,
 /// nonempty toolchain, 64-hex sha256 equal to the downloaded binary's
-/// recomputed digest. A tampered staged payload fails closed here, so
-/// the staging copy below never runs on attacker bytes.
+/// recomputed digest. Existence-only on the binary: artifact downloads
+/// do not preserve the exec bit, so `test -x` here would fail closed on
+/// every legitimate payload; executability is established by the staging
+/// copy's `chmod +x` below. A tampered staged payload fails closed here,
+/// so the staging copy below never runs on attacker bytes.
 #[must_use]
 pub fn preseed_manifest_verify_script(target: &str) -> String {
     format!(
-        "m=\"{PRESEED_STAGE_DIR}/{PRESEED_MANIFEST_FILE}\" && b=\"{PRESEED_STAGE_DIR}/velnor-actions\" && test -f \"$m\" && test -x \"$b\" && read line rest < \"$m\" || [ -n \"$line\" ] && v=${{line#*\\\"schema\\\":}} && v=${{v%%,*}} && [ \"$v\" = 1 ] && c=${{line#*\\\"commit\\\":\\\"}} && c=${{c%%\\\"*}} && [ \"${{#c}}\" = 40 ] && [ \"$c\" = \"$GITHUB_SHA\" ] && t=${{line#*\\\"target\\\":\\\"}} && t=${{t%%\\\"*}} && [ \"$t\" = \"{target}\" ] && tc=${{line#*\\\"toolchain\\\":\\\"}} && tc=${{tc%%\\\"*}} && [ -n \"$tc\" ] && s=${{line#*\\\"sha256\\\":\\\"}} && s=${{s%%\\\"*}} && [ \"${{#s}}\" = 64 ] && sha256sum \"$b\" > \"{PRESEED_STAGE_DIR}/got.txt\" && read got rest < \"{PRESEED_STAGE_DIR}/got.txt\" && [ \"$got\" = \"$s\" ]"
+        "m=\"{PRESEED_STAGE_DIR}/{PRESEED_MANIFEST_FILE}\" && b=\"{PRESEED_STAGE_DIR}/velnor-actions\" && test -f \"$m\" && test -f \"$b\" && read line rest < \"$m\" || [ -n \"$line\" ] && v=${{line#*\\\"schema\\\":}} && v=${{v%%,*}} && [ \"$v\" = 1 ] && c=${{line#*\\\"commit\\\":\\\"}} && c=${{c%%\\\"*}} && [ \"${{#c}}\" = 40 ] && [ \"$c\" = \"$GITHUB_SHA\" ] && t=${{line#*\\\"target\\\":\\\"}} && t=${{t%%\\\"*}} && [ \"$t\" = \"{target}\" ] && tc=${{line#*\\\"toolchain\\\":\\\"}} && tc=${{tc%%\\\"*}} && [ -n \"$tc\" ] && s=${{line#*\\\"sha256\\\":\\\"}} && s=${{s%%\\\"*}} && [ \"${{#s}}\" = 64 ] && sha256sum \"$b\" > \"{PRESEED_STAGE_DIR}/got.txt\" && read got rest < \"{PRESEED_STAGE_DIR}/got.txt\" && [ \"$got\" = \"$s\" ]"
     )
 }
 

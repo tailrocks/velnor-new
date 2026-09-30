@@ -2,9 +2,10 @@
 //!
 //! Root cause (P05): logical obligations were equated with execution
 //! jobs, so per-task fan-out and vendor-prefixed internals leaked into
-//! CI. The structural fix keeps obligations per task ([`CrateObligation`])
-//! and groups them into one ordered job per crate ([`CrateJob`]): a
-//! smaller job graph with identical check coverage.
+//! CI. The structural fix keeps obligations per task
+//! ([`super::crate_job::CrateObligation`]) and groups them into one
+//! ordered job per crate ([`super::crate_job::CrateJob`]): a smaller
+//! job graph with identical check coverage.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -132,7 +133,7 @@ pub const CRATE_JOB_ID_PREFIX: &str = "rust-";
 /// [`CRATE_JOB_ID_PREFIX`] keep their package names so self-hosting
 /// repositories validate. The legacy renderer constants keep working
 /// because this gate applies to producer constructors only, never
-/// [`Job::validate`].
+/// `Job::validate`.
 /// # Errors
 pub fn validate_job_id(id: &str) -> Result<(), ContractError> {
     if id.is_empty()

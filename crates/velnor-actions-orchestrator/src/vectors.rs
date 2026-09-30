@@ -34,9 +34,10 @@ const VALIDATOR_TOOL_SPECS: [&str; 2] = ["cargo-deny", "ubi:bnjbvr/cargo-machete
 
 /// Product crates scanned by the machete vector, in contract order.
 ///
-/// Fixed paths keep the intentional `fixtures/symlink-escape` negative
-/// fixture out of the scan: a bare `cargo machete` walk errors on the
-/// fixture's dangling `src` symlink instead of skipping it.
+/// Fixed paths keep the scan hermetic: it covers exactly the product
+/// crates, never fixtures or tooling trees (a bare walk previously
+/// errored on a symlink-hazard fixture; hazards now live only in
+/// TempDir-built tests, never in the tree).
 const MACHETE_SCAN_CRATES: [&str; 7] = [
     "crates/velnor-actions-contract",
     "crates/velnor-actions-rust",

@@ -305,3 +305,24 @@ fn rq66_rustfmt_baseline() -> Result<(), Box<dyn Error>> {
     );
     Ok(())
 }
+
+#[test]
+fn fixtures_hold_no_symlinks() -> Result<(), Box<dyn Error>> {
+    let root = repo_root().join("fixtures");
+    let mut pending = vec![root];
+    while let Some(dir) = pending.pop() {
+        for entry in std::fs::read_dir(&dir)? {
+            let entry = entry?;
+            let file_type = entry.file_type()?;
+            assert!(
+                !file_type.is_symlink(),
+                "committed symlink {} breaks generic tree-walkers (run 36753845572); build hazards in TempDirs",
+                entry.path().display()
+            );
+            if file_type.is_dir() {
+                pending.push(entry.path());
+            }
+        }
+    }
+    Ok(())
+}

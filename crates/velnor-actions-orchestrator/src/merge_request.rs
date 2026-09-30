@@ -40,7 +40,7 @@ use crate::internal_request::resolve_run_key;
 /// `tasks/<task-report-id>.json` files (sorted by ID for determinism;
 /// anything else under `reports/` is ignored, never globbed), plus
 /// optional `baseline.json` and `candidate-report.json`.
-/// Validator inventory and conclusions come from [`NEEDS_ENV`]. Every
+/// Validator inventory and conclusions come from `VELNOR_NEEDS_JSON`. Every
 /// missing or unparsable input is recorded in `assembly_errors`, never
 /// dropped, so the merge judges the gap explicitly.
 ///
@@ -54,7 +54,7 @@ pub fn assemble_merge_request(run_key: &str, run_dir: &Path) -> Result<String, O
 
 /// Assemble one merge request with an explicit needs channel.
 ///
-/// The public wrapper reads [`NEEDS_ENV`]; tests pass the channel
+/// The public wrapper reads `VELNOR_NEEDS_JSON`; tests pass the channel
 /// explicitly for determinism.
 ///
 /// # Errors

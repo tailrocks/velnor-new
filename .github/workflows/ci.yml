@@ -26,28 +26,18 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
-      - name: Restore Mise tools
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          key: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-actionlint-${{hashFiles('mise.toml','.mise.toml','mise.lock','.mise.lock','.tool-versions')}}
-          path: ~/.local/share/mise
-          restore-keys: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-actionlint-
       - name: Setup Mise
         uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
         with:
-          cache: "false"
-          cache_save: "false"
+          cache: "true"
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.16-75c77caa4018556f
+          cache_save: "true"
           env: "false"
           install: "false"
           sha256: b6f8757201f6a2ee799f45f3f52ef7ca0b4071523637dc3b0b24264dd3333518
           version: 2026.9.16
       - name: Run actionlint
         run: mise --no-config --no-env --no-hooks exec actionlint@1.7.12 shellcheck@0.11.0 -- actionlint -color
-      - name: Save Mise tools
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          key: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-actionlint-${{hashFiles('mise.toml','.mise.toml','mise.lock','.mise.lock','.tool-versions')}}
-          path: ~/.local/share/mise
   alint:
     name: Alint
     runs-on: ubuntu-26.04
@@ -71,28 +61,18 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
-      - name: Restore Mise tools
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          key: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-cargo-deny-${{hashFiles('mise.toml','.mise.toml','mise.lock','.mise.lock','.tool-versions')}}
-          path: ~/.local/share/mise
-          restore-keys: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-cargo-deny-
       - name: Setup Mise
         uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
         with:
-          cache: "false"
-          cache_save: "false"
+          cache: "true"
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.16-1e88d9dde00a53da
+          cache_save: "true"
           env: "false"
           install: "false"
           sha256: b6f8757201f6a2ee799f45f3f52ef7ca0b4071523637dc3b0b24264dd3333518
           version: 2026.9.16
       - name: Run cargo-deny
         run: mise --no-config --no-env --no-hooks exec cargo-deny@0.20.2 -- cargo deny --locked check
-      - name: Save Mise tools
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          key: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-cargo-deny-${{hashFiles('mise.toml','.mise.toml','mise.lock','.mise.lock','.tool-versions')}}
-          path: ~/.local/share/mise
   cargo-machete:
     name: Cargo Machete
     runs-on: ubuntu-26.04
@@ -101,28 +81,18 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
-      - name: Restore Mise tools
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          key: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-cargo-machete-${{hashFiles('mise.toml','.mise.toml','mise.lock','.mise.lock','.tool-versions')}}
-          path: ~/.local/share/mise
-          restore-keys: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-cargo-machete-
       - name: Setup Mise
         uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
         with:
-          cache: "false"
-          cache_save: "false"
+          cache: "true"
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.16-507563a85b3135e7
+          cache_save: "true"
           env: "false"
           install: "false"
           sha256: b6f8757201f6a2ee799f45f3f52ef7ca0b4071523637dc3b0b24264dd3333518
           version: 2026.9.16
       - name: Run cargo-machete
         run: mise --no-config --no-env --no-hooks exec ubi:bnjbvr/cargo-machete@0.9.2 -- cargo machete crates/velnor-actions-contract crates/velnor-actions-rust crates/velnor-actions-mise crates/velnor-actions-actionlint crates/velnor-actions-workflow-renderer crates/velnor-actions-orchestrator crates/velnor-actions-cli
-      - name: Save Mise tools
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          key: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-cargo-machete-${{hashFiles('mise.toml','.mise.toml','mise.lock','.mise.lock','.tool-versions')}}
-          path: ~/.local/share/mise
   plan:
     name: Plan
     runs-on: ubuntu-26.04
@@ -130,18 +100,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          fetch-depth: "0"
           persist-credentials: "false"
-      - name: Restore Mise tools
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          key: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-plan-${{hashFiles('mise.toml','.mise.toml','mise.lock','.mise.lock','.tool-versions')}}
-          path: ~/.local/share/mise
-          restore-keys: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-plan-
       - name: Setup Mise
         uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
         with:
-          cache: "false"
-          cache_save: "false"
+          cache: "true"
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.16-e9592c9b35b763fa
+          cache_save: "true"
           env: "false"
           install: "false"
           sha256: b6f8757201f6a2ee799f45f3f52ef7ca0b4071523637dc3b0b24264dd3333518
@@ -183,8 +149,29 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
         run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- rustup component add --toolchain 1.98.1-x86_64-unknown-linux-gnu clippy rustfmt
+      - name: Restore Cargo sources
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-${{hashFiles('Cargo.lock')}}
+          path: "${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin\n${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
+          restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
       - name: Fetch Cargo sources
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked
+        env:
+          MISE_AUTO_INSTALL: "false"
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_EXEC_AUTO_INSTALL: "false"
+          MISE_LOCKFILE: "0"
+          MISE_NO_CONFIG: "1"
+          MISE_NO_ENV: "1"
+          MISE_NO_HOOKS: "1"
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUSTUP_TOOLCHAIN: 1.98.1
+        run: "sh -c 'if mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo metadata --locked --offline >/dev/null 2>&1; then echo \"velnor: sources hit, skipping fetch\"; else echo \"velnor: sources miss (source_missing), fetching\"; mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked; fi'"
+      - name: Save Cargo sources
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-${{hashFiles('Cargo.lock')}}
+          path: "${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin\n${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
       - name: Write request
         env:
           VELNOR_INTERNAL_OP: write-request-v1
@@ -216,11 +203,6 @@ jobs:
           if-no-files-found: error
           name: velnor-plan-r${{ github.run_id }}-a${{ github.run_attempt }}
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
-      - name: Save Mise tools
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          key: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-plan-${{hashFiles('mise.toml','.mise.toml','mise.lock','.mise.lock','.tool-versions')}}
-          path: ~/.local/share/mise
   required:
     name: Required
     runs-on: ubuntu-26.04
@@ -240,17 +222,12 @@ jobs:
       - zizmor
     if: always()
     steps:
-      - name: Restore Mise tools
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          key: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-required-${{hashFiles('mise.toml','.mise.toml','mise.lock','.mise.lock','.tool-versions')}}
-          path: ~/.local/share/mise
-          restore-keys: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-required-
       - name: Setup Mise
         uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
         with:
-          cache: "false"
-          cache_save: "false"
+          cache: "true"
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.16-976d3023f73c2670
+          cache_save: "true"
           env: "false"
           install: "false"
           sha256: b6f8757201f6a2ee799f45f3f52ef7ca0b4071523637dc3b0b24264dd3333518
@@ -261,7 +238,7 @@ jobs:
           name: velnor-preseed-helper
           path: ${{ runner.temp }}/velnor/preseed
       - name: Verify helper manifest (pre-seed trust-on-review)
-        run: "sh -c 'm=\"$RUNNER_TEMP/velnor/preseed/preseed-manifest.json\" && b=\"$RUNNER_TEMP/velnor/preseed/velnor-actions\" && test -f \"$m\" && test -x \"$b\" && read line rest < \"$m\" || [ -n \"$line\" ] && v=${line#*\\\"schema\\\":} && v=${v%%,*} && [ \"$v\" = 1 ] && c=${line#*\\\"commit\\\":\\\"} && c=${c%%\\\"*} && [ \"${#c}\" = 40 ] && [ \"$c\" = \"$GITHUB_SHA\" ] && t=${line#*\\\"target\\\":\\\"} && t=${t%%\\\"*} && [ \"$t\" = \"x86_64-unknown-linux-gnu\" ] && tc=${line#*\\\"toolchain\\\":\\\"} && tc=${tc%%\\\"*} && [ -n \"$tc\" ] && s=${line#*\\\"sha256\\\":\\\"} && s=${s%%\\\"*} && [ \"${#s}\" = 64 ] && sha256sum \"$b\" > \"$RUNNER_TEMP/velnor/preseed/got.txt\" && read got rest < \"$RUNNER_TEMP/velnor/preseed/got.txt\" && [ \"$got\" = \"$s\" ]'"
+        run: "sh -c 'm=\"$RUNNER_TEMP/velnor/preseed/preseed-manifest.json\" && b=\"$RUNNER_TEMP/velnor/preseed/velnor-actions\" && test -f \"$m\" && test -f \"$b\" && read line rest < \"$m\" || [ -n \"$line\" ] && v=${line#*\\\"schema\\\":} && v=${v%%,*} && [ \"$v\" = 1 ] && c=${line#*\\\"commit\\\":\\\"} && c=${c%%\\\"*} && [ \"${#c}\" = 40 ] && [ \"$c\" = \"$GITHUB_SHA\" ] && t=${line#*\\\"target\\\":\\\"} && t=${t%%\\\"*} && [ \"$t\" = \"x86_64-unknown-linux-gnu\" ] && tc=${line#*\\\"toolchain\\\":\\\"} && tc=${tc%%\\\"*} && [ -n \"$tc\" ] && s=${line#*\\\"sha256\\\":\\\"} && s=${s%%\\\"*} && [ \"${#s}\" = 64 ] && sha256sum \"$b\" > \"$RUNNER_TEMP/velnor/preseed/got.txt\" && read got rest < \"$RUNNER_TEMP/velnor/preseed/got.txt\" && [ \"$got\" = \"$s\" ]'"
       - name: Stage helper (pre-seed trust-on-review)
         run: sh -c 'mkdir -p $RUNNER_TEMP/velnor/bin && cp $RUNNER_TEMP/velnor/preseed/velnor-actions $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0 && chmod +x $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0'
       - name: Prepare pinned tools
@@ -299,11 +276,6 @@ jobs:
           VELNOR_NEEDS_JSON: ${{ toJSON(needs) }}
           VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/merge-v1-request.json
         run: "\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\""
-      - name: Save Mise tools
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          key: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-required-${{hashFiles('mise.toml','.mise.toml','mise.lock','.mise.lock','.tool-versions')}}
-          path: ~/.local/share/mise
       - name: Publish final report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -321,17 +293,12 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
-      - name: Restore Mise tools
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          key: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-rust-velnor-actions-actionlint-${{hashFiles('mise.toml','.mise.toml','mise.lock','.mise.lock','.tool-versions')}}
-          path: ~/.local/share/mise
-          restore-keys: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-rust-velnor-actions-actionlint-
       - name: Setup Mise
         uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
         with:
-          cache: "false"
-          cache_save: "false"
+          cache: "true"
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.16-e9592c9b35b763fa
+          cache_save: "true"
           env: "false"
           install: "false"
           sha256: b6f8757201f6a2ee799f45f3f52ef7ca0b4071523637dc3b0b24264dd3333518
@@ -342,7 +309,7 @@ jobs:
           name: velnor-preseed-helper
           path: ${{ runner.temp }}/velnor/preseed
       - name: Verify helper manifest (pre-seed trust-on-review)
-        run: "sh -c 'm=\"$RUNNER_TEMP/velnor/preseed/preseed-manifest.json\" && b=\"$RUNNER_TEMP/velnor/preseed/velnor-actions\" && test -f \"$m\" && test -x \"$b\" && read line rest < \"$m\" || [ -n \"$line\" ] && v=${line#*\\\"schema\\\":} && v=${v%%,*} && [ \"$v\" = 1 ] && c=${line#*\\\"commit\\\":\\\"} && c=${c%%\\\"*} && [ \"${#c}\" = 40 ] && [ \"$c\" = \"$GITHUB_SHA\" ] && t=${line#*\\\"target\\\":\\\"} && t=${t%%\\\"*} && [ \"$t\" = \"x86_64-unknown-linux-gnu\" ] && tc=${line#*\\\"toolchain\\\":\\\"} && tc=${tc%%\\\"*} && [ -n \"$tc\" ] && s=${line#*\\\"sha256\\\":\\\"} && s=${s%%\\\"*} && [ \"${#s}\" = 64 ] && sha256sum \"$b\" > \"$RUNNER_TEMP/velnor/preseed/got.txt\" && read got rest < \"$RUNNER_TEMP/velnor/preseed/got.txt\" && [ \"$got\" = \"$s\" ]'"
+        run: "sh -c 'm=\"$RUNNER_TEMP/velnor/preseed/preseed-manifest.json\" && b=\"$RUNNER_TEMP/velnor/preseed/velnor-actions\" && test -f \"$m\" && test -f \"$b\" && read line rest < \"$m\" || [ -n \"$line\" ] && v=${line#*\\\"schema\\\":} && v=${v%%,*} && [ \"$v\" = 1 ] && c=${line#*\\\"commit\\\":\\\"} && c=${c%%\\\"*} && [ \"${#c}\" = 40 ] && [ \"$c\" = \"$GITHUB_SHA\" ] && t=${line#*\\\"target\\\":\\\"} && t=${t%%\\\"*} && [ \"$t\" = \"x86_64-unknown-linux-gnu\" ] && tc=${line#*\\\"toolchain\\\":\\\"} && tc=${tc%%\\\"*} && [ -n \"$tc\" ] && s=${line#*\\\"sha256\\\":\\\"} && s=${s%%\\\"*} && [ \"${#s}\" = 64 ] && sha256sum \"$b\" > \"$RUNNER_TEMP/velnor/preseed/got.txt\" && read got rest < \"$RUNNER_TEMP/velnor/preseed/got.txt\" && [ \"$got\" = \"$s\" ]'"
       - name: Stage helper (pre-seed trust-on-review)
         run: sh -c 'mkdir -p $RUNNER_TEMP/velnor/bin && cp $RUNNER_TEMP/velnor/preseed/velnor-actions $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0 && chmod +x $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0'
       - name: Prepare pinned tools
@@ -354,7 +321,7 @@ jobs:
           MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
-        run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
+        run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.19.0 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
       - name: Prepare Rust components
         env:
           MISE_AUTO_INSTALL: "false"
@@ -367,6 +334,16 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
         run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- rustup component add --toolchain 1.98.1-x86_64-unknown-linux-gnu clippy rustfmt
+      - name: Restore Cargo sources
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-${{hashFiles('Cargo.lock')}}
+          path: "${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin\n${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
+          restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
+      - name: Restore MBX objects
+        uses: jdx/mr-boxington-action@9df1d4b18b2147788a7ee7a2c7b84ecf62fd89d3
+        with:
+          github-cache-mode: objects
       - name: Fetch Cargo sources
         env:
           MISE_AUTO_INSTALL: "false"
@@ -378,11 +355,7 @@ jobs:
           MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked
-      - name: Restore MBX objects
-        uses: jdx/mr-boxington-action@9df1d4b18b2147788a7ee7a2c7b84ecf62fd89d3
-        with:
-          github-cache-mode: objects
+        run: "sh -c 'if mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo metadata --locked --offline >/dev/null 2>&1; then echo \"velnor: sources hit, skipping fetch\"; else echo \"velnor: sources miss (source_missing), fetching\"; mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked; fi'"
       - name: Format
         env:
           MISE_AUTO_INSTALL: "false"
@@ -479,11 +452,6 @@ jobs:
           VELNOR_TASK_DIGEST: b3-08719560696a571ed922eeb156e04354c57a96f84910aef3c6fd171ce47179b2
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-actionlint/doc/default
         run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx doc --locked --offline --manifest-path crates/velnor-actions-actionlint/Cargo.toml --package velnor-actions-actionlint --no-deps
-      - name: Save Mise tools
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          key: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-rust-velnor-actions-actionlint-${{hashFiles('mise.toml','.mise.toml','mise.lock','.mise.lock','.tool-versions')}}
-          path: ~/.local/share/mise
   rust-velnor-actions-cli:
     name: Rust / velnor-actions-cli
     runs-on: ubuntu-26.04
@@ -494,17 +462,12 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
-      - name: Restore Mise tools
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          key: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-rust-velnor-actions-cli-${{hashFiles('mise.toml','.mise.toml','mise.lock','.mise.lock','.tool-versions')}}
-          path: ~/.local/share/mise
-          restore-keys: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-rust-velnor-actions-cli-
       - name: Setup Mise
         uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
         with:
-          cache: "false"
-          cache_save: "false"
+          cache: "true"
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.16-e9592c9b35b763fa
+          cache_save: "true"
           env: "false"
           install: "false"
           sha256: b6f8757201f6a2ee799f45f3f52ef7ca0b4071523637dc3b0b24264dd3333518
@@ -515,7 +478,7 @@ jobs:
           name: velnor-preseed-helper
           path: ${{ runner.temp }}/velnor/preseed
       - name: Verify helper manifest (pre-seed trust-on-review)
-        run: "sh -c 'm=\"$RUNNER_TEMP/velnor/preseed/preseed-manifest.json\" && b=\"$RUNNER_TEMP/velnor/preseed/velnor-actions\" && test -f \"$m\" && test -x \"$b\" && read line rest < \"$m\" || [ -n \"$line\" ] && v=${line#*\\\"schema\\\":} && v=${v%%,*} && [ \"$v\" = 1 ] && c=${line#*\\\"commit\\\":\\\"} && c=${c%%\\\"*} && [ \"${#c}\" = 40 ] && [ \"$c\" = \"$GITHUB_SHA\" ] && t=${line#*\\\"target\\\":\\\"} && t=${t%%\\\"*} && [ \"$t\" = \"x86_64-unknown-linux-gnu\" ] && tc=${line#*\\\"toolchain\\\":\\\"} && tc=${tc%%\\\"*} && [ -n \"$tc\" ] && s=${line#*\\\"sha256\\\":\\\"} && s=${s%%\\\"*} && [ \"${#s}\" = 64 ] && sha256sum \"$b\" > \"$RUNNER_TEMP/velnor/preseed/got.txt\" && read got rest < \"$RUNNER_TEMP/velnor/preseed/got.txt\" && [ \"$got\" = \"$s\" ]'"
+        run: "sh -c 'm=\"$RUNNER_TEMP/velnor/preseed/preseed-manifest.json\" && b=\"$RUNNER_TEMP/velnor/preseed/velnor-actions\" && test -f \"$m\" && test -f \"$b\" && read line rest < \"$m\" || [ -n \"$line\" ] && v=${line#*\\\"schema\\\":} && v=${v%%,*} && [ \"$v\" = 1 ] && c=${line#*\\\"commit\\\":\\\"} && c=${c%%\\\"*} && [ \"${#c}\" = 40 ] && [ \"$c\" = \"$GITHUB_SHA\" ] && t=${line#*\\\"target\\\":\\\"} && t=${t%%\\\"*} && [ \"$t\" = \"x86_64-unknown-linux-gnu\" ] && tc=${line#*\\\"toolchain\\\":\\\"} && tc=${tc%%\\\"*} && [ -n \"$tc\" ] && s=${line#*\\\"sha256\\\":\\\"} && s=${s%%\\\"*} && [ \"${#s}\" = 64 ] && sha256sum \"$b\" > \"$RUNNER_TEMP/velnor/preseed/got.txt\" && read got rest < \"$RUNNER_TEMP/velnor/preseed/got.txt\" && [ \"$got\" = \"$s\" ]'"
       - name: Stage helper (pre-seed trust-on-review)
         run: sh -c 'mkdir -p $RUNNER_TEMP/velnor/bin && cp $RUNNER_TEMP/velnor/preseed/velnor-actions $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0 && chmod +x $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0'
       - name: Prepare pinned tools
@@ -527,7 +490,7 @@ jobs:
           MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
-        run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
+        run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.19.0 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
       - name: Prepare Rust components
         env:
           MISE_AUTO_INSTALL: "false"
@@ -540,6 +503,16 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
         run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- rustup component add --toolchain 1.98.1-x86_64-unknown-linux-gnu clippy rustfmt
+      - name: Restore Cargo sources
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-${{hashFiles('Cargo.lock')}}
+          path: "${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin\n${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
+          restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
+      - name: Restore MBX objects
+        uses: jdx/mr-boxington-action@9df1d4b18b2147788a7ee7a2c7b84ecf62fd89d3
+        with:
+          github-cache-mode: objects
       - name: Fetch Cargo sources
         env:
           MISE_AUTO_INSTALL: "false"
@@ -551,11 +524,7 @@ jobs:
           MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked
-      - name: Restore MBX objects
-        uses: jdx/mr-boxington-action@9df1d4b18b2147788a7ee7a2c7b84ecf62fd89d3
-        with:
-          github-cache-mode: objects
+        run: "sh -c 'if mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo metadata --locked --offline >/dev/null 2>&1; then echo \"velnor: sources hit, skipping fetch\"; else echo \"velnor: sources miss (source_missing), fetching\"; mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked; fi'"
       - name: Format
         env:
           MISE_AUTO_INSTALL: "false"
@@ -636,11 +605,6 @@ jobs:
           VELNOR_TASK_DIGEST: b3-b14be5744b1bd1bb41a9e28b5d86699118bc66f28c563d9ba5f72e4737043f9c
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-cli/doc/default
         run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx doc --locked --offline --manifest-path crates/velnor-actions-cli/Cargo.toml --package velnor-actions-cli --no-deps
-      - name: Save Mise tools
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          key: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-rust-velnor-actions-cli-${{hashFiles('mise.toml','.mise.toml','mise.lock','.mise.lock','.tool-versions')}}
-          path: ~/.local/share/mise
   rust-velnor-actions-contract:
     name: Rust / velnor-actions-contract
     runs-on: ubuntu-26.04
@@ -651,17 +615,12 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
-      - name: Restore Mise tools
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          key: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-rust-velnor-actions-contract-${{hashFiles('mise.toml','.mise.toml','mise.lock','.mise.lock','.tool-versions')}}
-          path: ~/.local/share/mise
-          restore-keys: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-rust-velnor-actions-contract-
       - name: Setup Mise
         uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
         with:
-          cache: "false"
-          cache_save: "false"
+          cache: "true"
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.16-e9592c9b35b763fa
+          cache_save: "true"
           env: "false"
           install: "false"
           sha256: b6f8757201f6a2ee799f45f3f52ef7ca0b4071523637dc3b0b24264dd3333518
@@ -672,7 +631,7 @@ jobs:
           name: velnor-preseed-helper
           path: ${{ runner.temp }}/velnor/preseed
       - name: Verify helper manifest (pre-seed trust-on-review)
-        run: "sh -c 'm=\"$RUNNER_TEMP/velnor/preseed/preseed-manifest.json\" && b=\"$RUNNER_TEMP/velnor/preseed/velnor-actions\" && test -f \"$m\" && test -x \"$b\" && read line rest < \"$m\" || [ -n \"$line\" ] && v=${line#*\\\"schema\\\":} && v=${v%%,*} && [ \"$v\" = 1 ] && c=${line#*\\\"commit\\\":\\\"} && c=${c%%\\\"*} && [ \"${#c}\" = 40 ] && [ \"$c\" = \"$GITHUB_SHA\" ] && t=${line#*\\\"target\\\":\\\"} && t=${t%%\\\"*} && [ \"$t\" = \"x86_64-unknown-linux-gnu\" ] && tc=${line#*\\\"toolchain\\\":\\\"} && tc=${tc%%\\\"*} && [ -n \"$tc\" ] && s=${line#*\\\"sha256\\\":\\\"} && s=${s%%\\\"*} && [ \"${#s}\" = 64 ] && sha256sum \"$b\" > \"$RUNNER_TEMP/velnor/preseed/got.txt\" && read got rest < \"$RUNNER_TEMP/velnor/preseed/got.txt\" && [ \"$got\" = \"$s\" ]'"
+        run: "sh -c 'm=\"$RUNNER_TEMP/velnor/preseed/preseed-manifest.json\" && b=\"$RUNNER_TEMP/velnor/preseed/velnor-actions\" && test -f \"$m\" && test -f \"$b\" && read line rest < \"$m\" || [ -n \"$line\" ] && v=${line#*\\\"schema\\\":} && v=${v%%,*} && [ \"$v\" = 1 ] && c=${line#*\\\"commit\\\":\\\"} && c=${c%%\\\"*} && [ \"${#c}\" = 40 ] && [ \"$c\" = \"$GITHUB_SHA\" ] && t=${line#*\\\"target\\\":\\\"} && t=${t%%\\\"*} && [ \"$t\" = \"x86_64-unknown-linux-gnu\" ] && tc=${line#*\\\"toolchain\\\":\\\"} && tc=${tc%%\\\"*} && [ -n \"$tc\" ] && s=${line#*\\\"sha256\\\":\\\"} && s=${s%%\\\"*} && [ \"${#s}\" = 64 ] && sha256sum \"$b\" > \"$RUNNER_TEMP/velnor/preseed/got.txt\" && read got rest < \"$RUNNER_TEMP/velnor/preseed/got.txt\" && [ \"$got\" = \"$s\" ]'"
       - name: Stage helper (pre-seed trust-on-review)
         run: sh -c 'mkdir -p $RUNNER_TEMP/velnor/bin && cp $RUNNER_TEMP/velnor/preseed/velnor-actions $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0 && chmod +x $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0'
       - name: Prepare pinned tools
@@ -684,7 +643,7 @@ jobs:
           MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
-        run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
+        run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.19.0 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
       - name: Prepare Rust components
         env:
           MISE_AUTO_INSTALL: "false"
@@ -697,6 +656,16 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
         run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- rustup component add --toolchain 1.98.1-x86_64-unknown-linux-gnu clippy rustfmt
+      - name: Restore Cargo sources
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-${{hashFiles('Cargo.lock')}}
+          path: "${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin\n${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
+          restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
+      - name: Restore MBX objects
+        uses: jdx/mr-boxington-action@9df1d4b18b2147788a7ee7a2c7b84ecf62fd89d3
+        with:
+          github-cache-mode: objects
       - name: Fetch Cargo sources
         env:
           MISE_AUTO_INSTALL: "false"
@@ -708,11 +677,7 @@ jobs:
           MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked
-      - name: Restore MBX objects
-        uses: jdx/mr-boxington-action@9df1d4b18b2147788a7ee7a2c7b84ecf62fd89d3
-        with:
-          github-cache-mode: objects
+        run: "sh -c 'if mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo metadata --locked --offline >/dev/null 2>&1; then echo \"velnor: sources hit, skipping fetch\"; else echo \"velnor: sources miss (source_missing), fetching\"; mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked; fi'"
       - name: Format
         env:
           MISE_AUTO_INSTALL: "false"
@@ -809,11 +774,6 @@ jobs:
           VELNOR_TASK_DIGEST: b3-a69fb78be39eb937203e6884d1bc501cbda6a0f031d0c8369d759ed4c1221f94
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-contract/doc/default
         run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx doc --locked --offline --manifest-path crates/velnor-actions-contract/Cargo.toml --package velnor-actions-contract --no-deps
-      - name: Save Mise tools
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          key: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-rust-velnor-actions-contract-${{hashFiles('mise.toml','.mise.toml','mise.lock','.mise.lock','.tool-versions')}}
-          path: ~/.local/share/mise
   rust-velnor-actions-mise:
     name: Rust / velnor-actions-mise
     runs-on: ubuntu-26.04
@@ -824,17 +784,12 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
-      - name: Restore Mise tools
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          key: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-rust-velnor-actions-mise-${{hashFiles('mise.toml','.mise.toml','mise.lock','.mise.lock','.tool-versions')}}
-          path: ~/.local/share/mise
-          restore-keys: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-rust-velnor-actions-mise-
       - name: Setup Mise
         uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
         with:
-          cache: "false"
-          cache_save: "false"
+          cache: "true"
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.16-e9592c9b35b763fa
+          cache_save: "true"
           env: "false"
           install: "false"
           sha256: b6f8757201f6a2ee799f45f3f52ef7ca0b4071523637dc3b0b24264dd3333518
@@ -845,7 +800,7 @@ jobs:
           name: velnor-preseed-helper
           path: ${{ runner.temp }}/velnor/preseed
       - name: Verify helper manifest (pre-seed trust-on-review)
-        run: "sh -c 'm=\"$RUNNER_TEMP/velnor/preseed/preseed-manifest.json\" && b=\"$RUNNER_TEMP/velnor/preseed/velnor-actions\" && test -f \"$m\" && test -x \"$b\" && read line rest < \"$m\" || [ -n \"$line\" ] && v=${line#*\\\"schema\\\":} && v=${v%%,*} && [ \"$v\" = 1 ] && c=${line#*\\\"commit\\\":\\\"} && c=${c%%\\\"*} && [ \"${#c}\" = 40 ] && [ \"$c\" = \"$GITHUB_SHA\" ] && t=${line#*\\\"target\\\":\\\"} && t=${t%%\\\"*} && [ \"$t\" = \"x86_64-unknown-linux-gnu\" ] && tc=${line#*\\\"toolchain\\\":\\\"} && tc=${tc%%\\\"*} && [ -n \"$tc\" ] && s=${line#*\\\"sha256\\\":\\\"} && s=${s%%\\\"*} && [ \"${#s}\" = 64 ] && sha256sum \"$b\" > \"$RUNNER_TEMP/velnor/preseed/got.txt\" && read got rest < \"$RUNNER_TEMP/velnor/preseed/got.txt\" && [ \"$got\" = \"$s\" ]'"
+        run: "sh -c 'm=\"$RUNNER_TEMP/velnor/preseed/preseed-manifest.json\" && b=\"$RUNNER_TEMP/velnor/preseed/velnor-actions\" && test -f \"$m\" && test -f \"$b\" && read line rest < \"$m\" || [ -n \"$line\" ] && v=${line#*\\\"schema\\\":} && v=${v%%,*} && [ \"$v\" = 1 ] && c=${line#*\\\"commit\\\":\\\"} && c=${c%%\\\"*} && [ \"${#c}\" = 40 ] && [ \"$c\" = \"$GITHUB_SHA\" ] && t=${line#*\\\"target\\\":\\\"} && t=${t%%\\\"*} && [ \"$t\" = \"x86_64-unknown-linux-gnu\" ] && tc=${line#*\\\"toolchain\\\":\\\"} && tc=${tc%%\\\"*} && [ -n \"$tc\" ] && s=${line#*\\\"sha256\\\":\\\"} && s=${s%%\\\"*} && [ \"${#s}\" = 64 ] && sha256sum \"$b\" > \"$RUNNER_TEMP/velnor/preseed/got.txt\" && read got rest < \"$RUNNER_TEMP/velnor/preseed/got.txt\" && [ \"$got\" = \"$s\" ]'"
       - name: Stage helper (pre-seed trust-on-review)
         run: sh -c 'mkdir -p $RUNNER_TEMP/velnor/bin && cp $RUNNER_TEMP/velnor/preseed/velnor-actions $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0 && chmod +x $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0'
       - name: Prepare pinned tools
@@ -857,7 +812,7 @@ jobs:
           MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
-        run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
+        run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.19.0 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
       - name: Prepare Rust components
         env:
           MISE_AUTO_INSTALL: "false"
@@ -870,6 +825,16 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
         run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- rustup component add --toolchain 1.98.1-x86_64-unknown-linux-gnu clippy rustfmt
+      - name: Restore Cargo sources
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-${{hashFiles('Cargo.lock')}}
+          path: "${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin\n${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
+          restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
+      - name: Restore MBX objects
+        uses: jdx/mr-boxington-action@9df1d4b18b2147788a7ee7a2c7b84ecf62fd89d3
+        with:
+          github-cache-mode: objects
       - name: Fetch Cargo sources
         env:
           MISE_AUTO_INSTALL: "false"
@@ -881,11 +846,7 @@ jobs:
           MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked
-      - name: Restore MBX objects
-        uses: jdx/mr-boxington-action@9df1d4b18b2147788a7ee7a2c7b84ecf62fd89d3
-        with:
-          github-cache-mode: objects
+        run: "sh -c 'if mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo metadata --locked --offline >/dev/null 2>&1; then echo \"velnor: sources hit, skipping fetch\"; else echo \"velnor: sources miss (source_missing), fetching\"; mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked; fi'"
       - name: Format
         env:
           MISE_AUTO_INSTALL: "false"
@@ -982,11 +943,6 @@ jobs:
           VELNOR_TASK_DIGEST: b3-96d4168c4aa93a328911a387319a39aa651367827881cc7b82a42b4cfd9a8f39
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-mise/doc/default
         run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx doc --locked --offline --manifest-path crates/velnor-actions-mise/Cargo.toml --package velnor-actions-mise --no-deps
-      - name: Save Mise tools
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          key: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-rust-velnor-actions-mise-${{hashFiles('mise.toml','.mise.toml','mise.lock','.mise.lock','.tool-versions')}}
-          path: ~/.local/share/mise
   rust-velnor-actions-orchestrator:
     name: Rust / velnor-actions-orchestrator
     runs-on: ubuntu-26.04
@@ -997,17 +953,12 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
-      - name: Restore Mise tools
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          key: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-rust-velnor-actions-orchestrator-${{hashFiles('mise.toml','.mise.toml','mise.lock','.mise.lock','.tool-versions')}}
-          path: ~/.local/share/mise
-          restore-keys: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-rust-velnor-actions-orchestrator-
       - name: Setup Mise
         uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
         with:
-          cache: "false"
-          cache_save: "false"
+          cache: "true"
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.16-e9592c9b35b763fa
+          cache_save: "true"
           env: "false"
           install: "false"
           sha256: b6f8757201f6a2ee799f45f3f52ef7ca0b4071523637dc3b0b24264dd3333518
@@ -1018,7 +969,7 @@ jobs:
           name: velnor-preseed-helper
           path: ${{ runner.temp }}/velnor/preseed
       - name: Verify helper manifest (pre-seed trust-on-review)
-        run: "sh -c 'm=\"$RUNNER_TEMP/velnor/preseed/preseed-manifest.json\" && b=\"$RUNNER_TEMP/velnor/preseed/velnor-actions\" && test -f \"$m\" && test -x \"$b\" && read line rest < \"$m\" || [ -n \"$line\" ] && v=${line#*\\\"schema\\\":} && v=${v%%,*} && [ \"$v\" = 1 ] && c=${line#*\\\"commit\\\":\\\"} && c=${c%%\\\"*} && [ \"${#c}\" = 40 ] && [ \"$c\" = \"$GITHUB_SHA\" ] && t=${line#*\\\"target\\\":\\\"} && t=${t%%\\\"*} && [ \"$t\" = \"x86_64-unknown-linux-gnu\" ] && tc=${line#*\\\"toolchain\\\":\\\"} && tc=${tc%%\\\"*} && [ -n \"$tc\" ] && s=${line#*\\\"sha256\\\":\\\"} && s=${s%%\\\"*} && [ \"${#s}\" = 64 ] && sha256sum \"$b\" > \"$RUNNER_TEMP/velnor/preseed/got.txt\" && read got rest < \"$RUNNER_TEMP/velnor/preseed/got.txt\" && [ \"$got\" = \"$s\" ]'"
+        run: "sh -c 'm=\"$RUNNER_TEMP/velnor/preseed/preseed-manifest.json\" && b=\"$RUNNER_TEMP/velnor/preseed/velnor-actions\" && test -f \"$m\" && test -f \"$b\" && read line rest < \"$m\" || [ -n \"$line\" ] && v=${line#*\\\"schema\\\":} && v=${v%%,*} && [ \"$v\" = 1 ] && c=${line#*\\\"commit\\\":\\\"} && c=${c%%\\\"*} && [ \"${#c}\" = 40 ] && [ \"$c\" = \"$GITHUB_SHA\" ] && t=${line#*\\\"target\\\":\\\"} && t=${t%%\\\"*} && [ \"$t\" = \"x86_64-unknown-linux-gnu\" ] && tc=${line#*\\\"toolchain\\\":\\\"} && tc=${tc%%\\\"*} && [ -n \"$tc\" ] && s=${line#*\\\"sha256\\\":\\\"} && s=${s%%\\\"*} && [ \"${#s}\" = 64 ] && sha256sum \"$b\" > \"$RUNNER_TEMP/velnor/preseed/got.txt\" && read got rest < \"$RUNNER_TEMP/velnor/preseed/got.txt\" && [ \"$got\" = \"$s\" ]'"
       - name: Stage helper (pre-seed trust-on-review)
         run: sh -c 'mkdir -p $RUNNER_TEMP/velnor/bin && cp $RUNNER_TEMP/velnor/preseed/velnor-actions $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0 && chmod +x $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0'
       - name: Prepare pinned tools
@@ -1030,7 +981,7 @@ jobs:
           MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
-        run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
+        run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.19.0 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
       - name: Prepare Rust components
         env:
           MISE_AUTO_INSTALL: "false"
@@ -1043,6 +994,16 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
         run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- rustup component add --toolchain 1.98.1-x86_64-unknown-linux-gnu clippy rustfmt
+      - name: Restore Cargo sources
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-${{hashFiles('Cargo.lock')}}
+          path: "${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin\n${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
+          restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
+      - name: Restore MBX objects
+        uses: jdx/mr-boxington-action@9df1d4b18b2147788a7ee7a2c7b84ecf62fd89d3
+        with:
+          github-cache-mode: objects
       - name: Fetch Cargo sources
         env:
           MISE_AUTO_INSTALL: "false"
@@ -1054,11 +1015,7 @@ jobs:
           MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked
-      - name: Restore MBX objects
-        uses: jdx/mr-boxington-action@9df1d4b18b2147788a7ee7a2c7b84ecf62fd89d3
-        with:
-          github-cache-mode: objects
+        run: "sh -c 'if mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo metadata --locked --offline >/dev/null 2>&1; then echo \"velnor: sources hit, skipping fetch\"; else echo \"velnor: sources miss (source_missing), fetching\"; mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked; fi'"
       - name: Format
         env:
           MISE_AUTO_INSTALL: "false"
@@ -1155,11 +1112,6 @@ jobs:
           VELNOR_TASK_DIGEST: b3-d7875fd0622727d23867d132e3cc1c4d508ea69f8995665ad85a6b2bea46a1fd
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-orchestrator/doc/default
         run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx doc --locked --offline --manifest-path crates/velnor-actions-orchestrator/Cargo.toml --package velnor-actions-orchestrator --no-deps
-      - name: Save Mise tools
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          key: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-rust-velnor-actions-orchestrator-${{hashFiles('mise.toml','.mise.toml','mise.lock','.mise.lock','.tool-versions')}}
-          path: ~/.local/share/mise
   rust-velnor-actions-rust:
     name: Rust / velnor-actions-rust
     runs-on: ubuntu-26.04
@@ -1170,17 +1122,12 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
-      - name: Restore Mise tools
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          key: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-rust-velnor-actions-rust-${{hashFiles('mise.toml','.mise.toml','mise.lock','.mise.lock','.tool-versions')}}
-          path: ~/.local/share/mise
-          restore-keys: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-rust-velnor-actions-rust-
       - name: Setup Mise
         uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
         with:
-          cache: "false"
-          cache_save: "false"
+          cache: "true"
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.16-e9592c9b35b763fa
+          cache_save: "true"
           env: "false"
           install: "false"
           sha256: b6f8757201f6a2ee799f45f3f52ef7ca0b4071523637dc3b0b24264dd3333518
@@ -1191,7 +1138,7 @@ jobs:
           name: velnor-preseed-helper
           path: ${{ runner.temp }}/velnor/preseed
       - name: Verify helper manifest (pre-seed trust-on-review)
-        run: "sh -c 'm=\"$RUNNER_TEMP/velnor/preseed/preseed-manifest.json\" && b=\"$RUNNER_TEMP/velnor/preseed/velnor-actions\" && test -f \"$m\" && test -x \"$b\" && read line rest < \"$m\" || [ -n \"$line\" ] && v=${line#*\\\"schema\\\":} && v=${v%%,*} && [ \"$v\" = 1 ] && c=${line#*\\\"commit\\\":\\\"} && c=${c%%\\\"*} && [ \"${#c}\" = 40 ] && [ \"$c\" = \"$GITHUB_SHA\" ] && t=${line#*\\\"target\\\":\\\"} && t=${t%%\\\"*} && [ \"$t\" = \"x86_64-unknown-linux-gnu\" ] && tc=${line#*\\\"toolchain\\\":\\\"} && tc=${tc%%\\\"*} && [ -n \"$tc\" ] && s=${line#*\\\"sha256\\\":\\\"} && s=${s%%\\\"*} && [ \"${#s}\" = 64 ] && sha256sum \"$b\" > \"$RUNNER_TEMP/velnor/preseed/got.txt\" && read got rest < \"$RUNNER_TEMP/velnor/preseed/got.txt\" && [ \"$got\" = \"$s\" ]'"
+        run: "sh -c 'm=\"$RUNNER_TEMP/velnor/preseed/preseed-manifest.json\" && b=\"$RUNNER_TEMP/velnor/preseed/velnor-actions\" && test -f \"$m\" && test -f \"$b\" && read line rest < \"$m\" || [ -n \"$line\" ] && v=${line#*\\\"schema\\\":} && v=${v%%,*} && [ \"$v\" = 1 ] && c=${line#*\\\"commit\\\":\\\"} && c=${c%%\\\"*} && [ \"${#c}\" = 40 ] && [ \"$c\" = \"$GITHUB_SHA\" ] && t=${line#*\\\"target\\\":\\\"} && t=${t%%\\\"*} && [ \"$t\" = \"x86_64-unknown-linux-gnu\" ] && tc=${line#*\\\"toolchain\\\":\\\"} && tc=${tc%%\\\"*} && [ -n \"$tc\" ] && s=${line#*\\\"sha256\\\":\\\"} && s=${s%%\\\"*} && [ \"${#s}\" = 64 ] && sha256sum \"$b\" > \"$RUNNER_TEMP/velnor/preseed/got.txt\" && read got rest < \"$RUNNER_TEMP/velnor/preseed/got.txt\" && [ \"$got\" = \"$s\" ]'"
       - name: Stage helper (pre-seed trust-on-review)
         run: sh -c 'mkdir -p $RUNNER_TEMP/velnor/bin && cp $RUNNER_TEMP/velnor/preseed/velnor-actions $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0 && chmod +x $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0'
       - name: Prepare pinned tools
@@ -1203,7 +1150,7 @@ jobs:
           MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
-        run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
+        run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.19.0 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
       - name: Prepare Rust components
         env:
           MISE_AUTO_INSTALL: "false"
@@ -1216,6 +1163,16 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
         run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- rustup component add --toolchain 1.98.1-x86_64-unknown-linux-gnu clippy rustfmt
+      - name: Restore Cargo sources
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-${{hashFiles('Cargo.lock')}}
+          path: "${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin\n${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
+          restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
+      - name: Restore MBX objects
+        uses: jdx/mr-boxington-action@9df1d4b18b2147788a7ee7a2c7b84ecf62fd89d3
+        with:
+          github-cache-mode: objects
       - name: Fetch Cargo sources
         env:
           MISE_AUTO_INSTALL: "false"
@@ -1227,11 +1184,7 @@ jobs:
           MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked
-      - name: Restore MBX objects
-        uses: jdx/mr-boxington-action@9df1d4b18b2147788a7ee7a2c7b84ecf62fd89d3
-        with:
-          github-cache-mode: objects
+        run: "sh -c 'if mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo metadata --locked --offline >/dev/null 2>&1; then echo \"velnor: sources hit, skipping fetch\"; else echo \"velnor: sources miss (source_missing), fetching\"; mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked; fi'"
       - name: Format
         env:
           MISE_AUTO_INSTALL: "false"
@@ -1328,11 +1281,6 @@ jobs:
           VELNOR_TASK_DIGEST: b3-b5c2fc43635cdd06dae29a2111deb2499cb62fc7c1bcdf870fa658e921d61796
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-rust/doc/default
         run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx doc --locked --offline --manifest-path crates/velnor-actions-rust/Cargo.toml --package velnor-actions-rust --no-deps
-      - name: Save Mise tools
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          key: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-rust-velnor-actions-rust-${{hashFiles('mise.toml','.mise.toml','mise.lock','.mise.lock','.tool-versions')}}
-          path: ~/.local/share/mise
   rust-velnor-actions-workflow-renderer:
     name: Rust / velnor-actions-workflow-renderer
     runs-on: ubuntu-26.04
@@ -1343,17 +1291,12 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
-      - name: Restore Mise tools
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          key: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-rust-velnor-actions-workflow-renderer-${{hashFiles('mise.toml','.mise.toml','mise.lock','.mise.lock','.tool-versions')}}
-          path: ~/.local/share/mise
-          restore-keys: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-rust-velnor-actions-workflow-renderer-
       - name: Setup Mise
         uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
         with:
-          cache: "false"
-          cache_save: "false"
+          cache: "true"
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.16-e9592c9b35b763fa
+          cache_save: "true"
           env: "false"
           install: "false"
           sha256: b6f8757201f6a2ee799f45f3f52ef7ca0b4071523637dc3b0b24264dd3333518
@@ -1364,7 +1307,7 @@ jobs:
           name: velnor-preseed-helper
           path: ${{ runner.temp }}/velnor/preseed
       - name: Verify helper manifest (pre-seed trust-on-review)
-        run: "sh -c 'm=\"$RUNNER_TEMP/velnor/preseed/preseed-manifest.json\" && b=\"$RUNNER_TEMP/velnor/preseed/velnor-actions\" && test -f \"$m\" && test -x \"$b\" && read line rest < \"$m\" || [ -n \"$line\" ] && v=${line#*\\\"schema\\\":} && v=${v%%,*} && [ \"$v\" = 1 ] && c=${line#*\\\"commit\\\":\\\"} && c=${c%%\\\"*} && [ \"${#c}\" = 40 ] && [ \"$c\" = \"$GITHUB_SHA\" ] && t=${line#*\\\"target\\\":\\\"} && t=${t%%\\\"*} && [ \"$t\" = \"x86_64-unknown-linux-gnu\" ] && tc=${line#*\\\"toolchain\\\":\\\"} && tc=${tc%%\\\"*} && [ -n \"$tc\" ] && s=${line#*\\\"sha256\\\":\\\"} && s=${s%%\\\"*} && [ \"${#s}\" = 64 ] && sha256sum \"$b\" > \"$RUNNER_TEMP/velnor/preseed/got.txt\" && read got rest < \"$RUNNER_TEMP/velnor/preseed/got.txt\" && [ \"$got\" = \"$s\" ]'"
+        run: "sh -c 'm=\"$RUNNER_TEMP/velnor/preseed/preseed-manifest.json\" && b=\"$RUNNER_TEMP/velnor/preseed/velnor-actions\" && test -f \"$m\" && test -f \"$b\" && read line rest < \"$m\" || [ -n \"$line\" ] && v=${line#*\\\"schema\\\":} && v=${v%%,*} && [ \"$v\" = 1 ] && c=${line#*\\\"commit\\\":\\\"} && c=${c%%\\\"*} && [ \"${#c}\" = 40 ] && [ \"$c\" = \"$GITHUB_SHA\" ] && t=${line#*\\\"target\\\":\\\"} && t=${t%%\\\"*} && [ \"$t\" = \"x86_64-unknown-linux-gnu\" ] && tc=${line#*\\\"toolchain\\\":\\\"} && tc=${tc%%\\\"*} && [ -n \"$tc\" ] && s=${line#*\\\"sha256\\\":\\\"} && s=${s%%\\\"*} && [ \"${#s}\" = 64 ] && sha256sum \"$b\" > \"$RUNNER_TEMP/velnor/preseed/got.txt\" && read got rest < \"$RUNNER_TEMP/velnor/preseed/got.txt\" && [ \"$got\" = \"$s\" ]'"
       - name: Stage helper (pre-seed trust-on-review)
         run: sh -c 'mkdir -p $RUNNER_TEMP/velnor/bin && cp $RUNNER_TEMP/velnor/preseed/velnor-actions $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0 && chmod +x $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0'
       - name: Prepare pinned tools
@@ -1376,7 +1319,7 @@ jobs:
           MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
-        run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
+        run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.19.0 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
       - name: Prepare Rust components
         env:
           MISE_AUTO_INSTALL: "false"
@@ -1389,6 +1332,16 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
         run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- rustup component add --toolchain 1.98.1-x86_64-unknown-linux-gnu clippy rustfmt
+      - name: Restore Cargo sources
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-${{hashFiles('Cargo.lock')}}
+          path: "${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin\n${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
+          restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
+      - name: Restore MBX objects
+        uses: jdx/mr-boxington-action@9df1d4b18b2147788a7ee7a2c7b84ecf62fd89d3
+        with:
+          github-cache-mode: objects
       - name: Fetch Cargo sources
         env:
           MISE_AUTO_INSTALL: "false"
@@ -1400,11 +1353,7 @@ jobs:
           MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked
-      - name: Restore MBX objects
-        uses: jdx/mr-boxington-action@9df1d4b18b2147788a7ee7a2c7b84ecf62fd89d3
-        with:
-          github-cache-mode: objects
+        run: "sh -c 'if mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo metadata --locked --offline >/dev/null 2>&1; then echo \"velnor: sources hit, skipping fetch\"; else echo \"velnor: sources miss (source_missing), fetching\"; mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked; fi'"
       - name: Format
         env:
           MISE_AUTO_INSTALL: "false"
@@ -1501,11 +1450,6 @@ jobs:
           VELNOR_TASK_DIGEST: b3-f2be8863eaeca3c79889bcb2e318d03417494806fcdf52084253500d6517e304
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-workflow-renderer/doc/default
         run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx doc --locked --offline --manifest-path crates/velnor-actions-workflow-renderer/Cargo.toml --package velnor-actions-workflow-renderer --no-deps
-      - name: Save Mise tools
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          key: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-rust-velnor-actions-workflow-renderer-${{hashFiles('mise.toml','.mise.toml','mise.lock','.mise.lock','.tool-versions')}}
-          path: ~/.local/share/mise
   zizmor:
     name: Zizmor
     runs-on: ubuntu-26.04
@@ -1514,25 +1458,15 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
-      - name: Restore Mise tools
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          key: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-zizmor-${{hashFiles('mise.toml','.mise.toml','mise.lock','.mise.lock','.tool-versions')}}
-          path: ~/.local/share/mise
-          restore-keys: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-zizmor-
       - name: Setup Mise
         uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
         with:
-          cache: "false"
-          cache_save: "false"
+          cache: "true"
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.16-8f52c1fc1d8f90d8
+          cache_save: "true"
           env: "false"
           install: "false"
           sha256: b6f8757201f6a2ee799f45f3f52ef7ca0b4071523637dc3b0b24264dd3333518
           version: 2026.9.16
       - name: Run zizmor
         run: mise --no-config --no-env --no-hooks exec zizmor@1.30.1 -- zizmor --no-online-audits --config .zizmor.yml .github/workflows
-      - name: Save Mise tools
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          key: mise-tools-v1-x86_64-unknown-linux-gnu-2026.9.16-0.1.0-zizmor-${{hashFiles('mise.toml','.mise.toml','mise.lock','.mise.lock','.tool-versions')}}
-          path: ~/.local/share/mise

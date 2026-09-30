@@ -60,6 +60,36 @@ pub(crate) fn checkout_step() -> Result<Step, OrchestratorError> {
     })
 }
 
+/// Checkout with full history for git-archaeology jobs (plan only).
+///
+/// Plan verifies the checkout against the PR head through the merge
+/// commit's second parent and diffs `base...head` for affected work;
+/// both need history the default depth-1 checkout never fetches, so a
+/// shallow plan checkout fails closed with `checkout_head_mismatch` on
+/// every pull-request run (CI run 36749240499).
+///
+/// # Errors
+///
+/// Returns a contract error when the fixed inputs fail schema validation.
+pub(crate) fn checkout_step_full() -> Result<Step, OrchestratorError> {
+    let with = BTreeMap::from([
+        ("persist-credentials".to_owned(), "false".to_owned()),
+        ("fetch-depth".to_owned(), "0".to_owned()),
+    ]);
+    validate_action_inputs(&checkout_inputs_schema(), &with).map_err(|err| {
+        OrchestratorError::Contract {
+            problem: err.to_string(),
+        }
+    })?;
+    Ok(Step {
+        name: "Checkout".to_owned(),
+        kind: StepKind::Action {
+            uses: PinnedActionRef::checkout().uses_value(),
+            with,
+        },
+    })
+}
+
 /// Reject workflow syntax the pinned actionlint cannot parse (PAR-6.1).
 ///
 /// Native step parallelism stays unqualified, so any future native-key
@@ -199,6 +229,29 @@ mod tests {
     }
 
     #[test]
+    fn checkout_full_provides_history_for_git_archaeology() {
+        let step = checkout_step_full().expect("full checkout step");
+        let StepKind::Action { uses, with } = &step.kind else {
+            panic!("checkout must be an action step");
+        };
+        assert_eq!(uses, &PinnedActionRef::checkout().uses_value());
+        assert_eq!(
+            with.get("fetch-depth").map(String::as_str),
+            Some("0"),
+            "plan checkout must clone full history: {with:?}"
+        );
+        assert!(validate_action_inputs(&checkout_inputs_schema(), with).is_ok());
+        let shallow = checkout_step().expect("shallow checkout step");
+        let StepKind::Action { with, .. } = &shallow.kind else {
+            panic!("checkout must be an action step");
+        };
+        assert!(
+            !with.contains_key("fetch-depth"),
+            "non-plan checkouts stay shallow: {with:?}"
+        );
+    }
+
+    #[test]
     fn syntax_gate_allows_matrix_and_rejects_native() {
         assert!(vet_step_syntax(StepSyntax::JobMatrix).is_ok());
         let err = vet_step_syntax(StepSyntax::NativeParallelism).expect_err("native gated");
@@ -228,7 +281,7 @@ mod tests {
     }
 
     #[test]
-    fn crate_tools_follow_selection_without_validators() {
+    fn crate_tools_follow_selection_with_validators() {
         use velnor_actions_mise::PinnedTool;
 
         use crate::matrix_step::{prepare_crate_tools_step, task_driver_tools};
@@ -249,8 +302,8 @@ mod tests {
                 PinnedTool::Zizmor,
             ] {
                 assert!(
-                    !run.contains(&catalog.tool_spec(tool)),
-                    "crate jobs never install {tool:?}: {run:?}"
+                    run.contains(&catalog.tool_spec(tool)),
+                    "crate jobs install {tool:?} for test-spawned generate: {run:?}"
                 );
             }
             let nextest = catalog.tool_spec(PinnedTool::Nextest);

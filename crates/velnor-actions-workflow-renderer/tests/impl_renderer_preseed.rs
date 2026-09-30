@@ -205,7 +205,7 @@ fn preseed_manifest_verify_pins_target_and_digest() -> Result<(), RenderError> {
     ] {
         assert!(script.contains(token), "missing {token}:\n{script}");
     }
-    for absent in ["$(", "`", "'", "sed", "python", "jq"] {
+    for absent in ["$(", "`", "'", "sed", "python", "jq", "test -x"] {
         assert!(!script.contains(absent), "banned {absent}:\n{script}");
     }
     assert!(preseed_manifest_verify_step("not-a-target").is_err());
@@ -227,11 +227,8 @@ fn preseed_verify_script_rejects_tampered_payload() -> Result<(), RenderError> {
         );
         std::fs::write(dir.join("preseed-manifest.json"), &manifest).expect("manifest fixture");
         std::fs::write(dir.join("velnor-actions"), []).expect("binary fixture");
-        Command::new("chmod")
-            .args(["+x", "velnor-actions"])
-            .current_dir(&dir)
-            .status()
-            .expect("chmod");
+        // No chmod: artifact downloads arrive without the exec bit, and the
+        // good case must verify in exactly that state (CI run 36749240499).
         Command::new("sh")
             .args(["-c", &script])
             .env("RUNNER_TEMP", &root)

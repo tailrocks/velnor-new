@@ -4,6 +4,7 @@
 //! stack or tool branching, quoting-only shell shaping.
 
 mod artifact_paths;
+pub mod cache_p08;
 mod cache_steps;
 mod candidate;
 pub mod closure;

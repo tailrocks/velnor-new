@@ -63,25 +63,26 @@ fn crate_job_fetches_lockful_sources_before_obligations() -> TestResult {
         .ok_or_else(|| std::io::Error::other("missing crate job"))?;
     let names: Vec<&str> = job.steps.iter().map(|step| step.name.as_str()).collect();
     let at = |name: &str| names.iter().position(|seen| *seen == name);
-    let (Some(prepare_at), Some(fetch_at), Some(run_at)) = (
+    // Cargo-only fixture: reader is `rust-cache` (no MBX, no shared save).
+    let (Some(prepare_at), Some(cache_at), Some(fetch_at), Some(run_at)) = (
         at("Prepare pinned tools"),
+        at("Restore Cargo registry"),
         at("Fetch Cargo sources"),
         at("Clippy"),
     ) else {
         return Err(format!("crate steps miss fetch ordering: {names:?}").into());
     };
     assert!(
-        prepare_at < fetch_at && fetch_at < run_at,
-        "fetch must precede obligations: {names:?}"
+        prepare_at < cache_at && cache_at < fetch_at && fetch_at < run_at,
+        "cache<fetch<obligations: {names:?}"
     );
     let StepKind::Shell { run, env } = &job.steps[fetch_at].kind else {
         return Err("fetch step must be a shell step".into());
     };
-    assert!(
-        run.windows(2).any(|pair| pair == ["cargo", "fetch"])
-            && run.contains(&"--locked".to_owned()),
-        "fetch argv must be cargo fetch --locked: {run:?}"
-    );
+    assert_eq!(&run[..2], ["sh", "-c"]);
+    for need in ["metadata --locked --offline", "cargo fetch --locked"] {
+        assert!(run[2].contains(need), "fetch script misses {need}");
+    }
     let StepKind::Shell { env: run_env, .. } = &job.steps[run_at].kind else {
         return Err("Clippy must be a shell step".into());
     };
@@ -158,7 +159,7 @@ fn crate_job_omits_fetch_without_lockfile() -> TestResult {
 }
 
 #[test]
-fn crate_fetch_precedes_mbx_objects_on_mbx_crates() -> TestResult {
+fn mbx_objects_precede_fetch_on_mbx_crates() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     let root = repo.path();
     fs::write(root.join("Cargo.lock"), demo_lock("demo"))?;
@@ -172,16 +173,22 @@ fn crate_fetch_precedes_mbx_objects_on_mbx_crates() -> TestResult {
         .ok_or_else(|| std::io::Error::other("missing crate job"))?;
     let names: Vec<&str> = job.steps.iter().map(|step| step.name.as_str()).collect();
     let at = |name: &str| names.iter().position(|seen| *seen == name);
-    let (Some(fetch_at), Some(objects_at), Some(run_at)) = (
-        at("Fetch Cargo sources"),
+    // P08: restore shared sources, configure MBX, then probe-and-fetch.
+    let (Some(restore_at), Some(objects_at), Some(fetch_at), Some(run_at)) = (
+        at("Restore Cargo sources"),
         at("Restore MBX objects"),
+        at("Fetch Cargo sources"),
         at("Clippy"),
     ) else {
         return Err(format!("mbx crate misses source/object order: {names:?}").into());
     };
     assert!(
-        fetch_at < objects_at && objects_at < run_at,
-        "sources before objects before obligations: {names:?}"
+        restore_at < objects_at && objects_at < fetch_at && fetch_at < run_at,
+        "restore<objects<fetch<obligations: {names:?}"
+    );
+    assert!(
+        names.iter().all(|name| *name != "Restore Cargo registry"),
+        "MBX crates never stack rust-cache: {names:?}"
     );
     Ok(())
 }
