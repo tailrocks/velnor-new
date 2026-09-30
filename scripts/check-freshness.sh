@@ -274,6 +274,7 @@ EXPECTED_ACTIONS = {
     "actions/cache/restore": "CACHE_ACTION",
     "actions/cache/save": "CACHE_ACTION",
     "jdx/mr-boxington-action": "MR_BOXINGTON_ACTION",
+    "asamarts/alint": "ALINT_ACTION",
 }
 
 
@@ -306,11 +307,6 @@ action_pinned = {}
 for action in inv.get("actions", []):
     key = action.get("key")
     action_pinned[key] = action
-    if key == "asamarts/alint":
-        pin_row(f"action {key} reviewed tag ({ACTIONS}::ALINT_REVIEWED_TAG)",
-                rust_const(ACTIONS, "ALINT_REVIEWED_TAG"),
-                action.get("pinned_tag"))
-        continue
     prefix = EXPECTED_ACTIONS.get(key)
     if prefix is None:
         fail_row("local-pin", f"action {key}",
@@ -322,8 +318,7 @@ for action in inv.get("actions", []):
     pin_row(f"action {key} sha ({ACTIONS}::{prefix}_SHA)",
             rust_const(ACTIONS, f"{prefix}_SHA"),
             action.get("pinned_sha"))
-for key in sorted((set(EXPECTED_ACTIONS) | {"asamarts/alint"})
-                    - set(action_pinned)):
+for key in sorted(set(EXPECTED_ACTIONS) - set(action_pinned)):
     fail_row("local-pin", f"action {key}", "inventory row missing")
 
 tool_pinned = {tool.get("name"): tool.get("pinned") for tool in tools}
@@ -387,7 +382,7 @@ if policy is not None:
                      f"entry must be a table, got {entry!r}")
             continue
         for key in sorted(entry):
-            if key not in ("name", "version", "sha", "tag", "reviewed"):
+            if key not in ("name", "version", "sha", "reviewed"):
                 fail_row("policy-mirror", f"action {entry.get('name')}",
                          f"unknown key rejected: {key}")
         name = entry.get("name")
@@ -410,15 +405,6 @@ if policy is not None:
             continue
         want = action_pinned[key]
         got = policy_actions[key]
-        if key == "asamarts/alint":
-            if got.get("tag") != want.get("pinned_tag"):
-                fail_row("policy-mirror", f"action {key}",
-                         f"policy tag={got.get('tag')!r} "
-                         f"inventory={want.get('pinned_tag')!r}")
-            else:
-                pass_row("policy-mirror", f"action {key}",
-                         str(got.get("tag")))
-            continue
         if got.get("version") != want.get("pinned_version") or \
                 got.get("sha") != want.get("pinned_sha"):
             fail_row("policy-mirror", f"action {key}",
@@ -749,22 +735,18 @@ for tool in tools:
     freshness_row(name, tool, tool.get("pinned"), tool.get("qualified"),
                   tool.get("latest"))
 for key, action in sorted(action_pinned.items()):
-    if key == "asamarts/alint":
-        freshness_row(key, action, action.get("pinned_tag"),
-                      action.get("qualified_tag"), action.get("latest"))
-    else:
-        pinned = (action.get("pinned_version"), action.get("pinned_sha"))
-        qualified = (action.get("qualified_version"),
-                     action.get("qualified_sha"))
-        freshness_row(key, action, pinned, qualified, action.get("latest"),
-                      action.get("pinned_version"))
+    pinned = (action.get("pinned_version"), action.get("pinned_sha"))
+    qualified = (action.get("qualified_version"),
+                 action.get("qualified_sha"))
+    freshness_row(key, action, pinned, qualified, action.get("latest"),
+                  action.get("pinned_version"))
 freshness_row("runner", runner, runner.get("default"), runner.get("default"))
 
 # --- Exceptions: hard maxima, full attribution, strict chronology (§1).
 today = datetime.date.today()
 lock_names = {entry.get("name") for entry in (locked or [])}
 known_subjects = set(EXPECTED_TOOLS) | set(EXPECTED_ACTIONS) | \
-    {"asamarts/alint"} | lock_names | set(supported)
+    lock_names | set(supported)
 if runner.get("default"):
     known_subjects.add(runner.get("default"))
 for hold in holds:
@@ -804,16 +786,9 @@ if not holds:
 for exc in inv.get("exceptions", []):
     subject = exc.get("key", "<unnamed exception>")
     if exc.get("expires") is None:
-        blessed = subject == "asamarts/alint" and \
-            exc.get("kind") == "reviewed_mutable_tag" and \
-            exc.get("expiry_policy") and exc.get("blessed_by")
-        if blessed:
-            pass_row("standing-exception", subject,
-                     "spec-blessed reviewed_mutable_tag")
-        else:
-            fail_row("standing-exception", subject,
-                     "standing hold without a spec blessing "
-                     "(only the reviewed asamarts/alint mutable tag)")
+        fail_row("standing-exception", subject,
+                 "standing hold without a spec blessing "
+                 "(no standing blessings exist)")
     else:
         expires = parse_iso_date(exc["expires"])
         if expires is None:
@@ -943,7 +918,7 @@ if check_upstream:
                      f"checked {stamp}")
     for key, action in sorted(action_pinned.items()):
         source = action.get("source", "")
-        pinned = action.get("pinned_tag", action.get("pinned_version"))
+        pinned = action.get("pinned_version")
         try:
             latest = sniff_latest(source, fetch_text(source))
         except Exception as err:  # noqa: BLE001 - probe maps all to failed
