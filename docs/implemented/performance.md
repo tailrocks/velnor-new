@@ -21,7 +21,7 @@ MBX hits/misses, task reuse) and implementation-plan §"Performance
 qualification" cases 1–7. Every figure is a measured wall time (`time -p`
 `real`); anything else is labeled UNMEASURED with the missing setup.
 
-## 1. Empty-cache cold run — 56.06 s
+## 1. Empty-cache cold run — 56.06 s (historical-partial: warm shared registry)
 
 Command (fresh clone, empty `target/`, direct cargo, warm shared registry):
 
@@ -197,3 +197,76 @@ A merge-queue run has no samples at all (merge path timing UNMEASURED).
   exits 0 (6 crates, 0 doctests; the former E0063 at
   `orchestrator/src/config.rs` no longer reproduces). Vacuous: no
   doctests exist yet.
+
+## P13 inventory reuse + perf foundations
+
+Commit measured: `c938a8c` (branch `docs/velnor-actions-spec`;
+working tree carried concurrent-builder uncommitted changes).
+Machine: `arm64`, macOS 27.0, Apple M5 Max, 128 GiB RAM.
+Toolchain: rustc/cargo 1.98.1, mise 2026.9.16, mbx 1.20.0,
+nextest 0.9.143, git 2.56.0, python 3.14.7.
+`CARGO_TARGET_DIR=/tmp/t-p13` for every build below.
+
+Method: `run_inventories` now reuses one fetched `cargo metadata`
+record for every member manifest after membership validation (a
+manifest declaring its own `[workspace]` root is never reused);
+lanes stay 1 by design (parallel metadata contends on Cargo's
+global package-cache lock). Fixture generator
+(`tests/perf_fixtures_p13.rs`) builds 1/10/100-crate workspaces;
+the harness (`tests/perf_harness_p13.rs`) times `prepare` /
+`plan` / `generate` and prints `perf:` lines. Subprocess counts
+come from a unit counting harness where one stub load equals one
+`cargo metadata` subprocess — exact, not sampled.
+
+Subprocess counts (exact): 1 member → 2 legacy / 1 reused;
+10 members → 11 / 1; 100 members → 101 / 1.
+Reuse premise verified on real output: root- vs member-manifest
+metadata differ only in `workspace_default_members`, which the
+parser never reads (`member_metadata_parses_to_same_record`
+asserts identical `WorkspaceRecord`s). Legacy-vs-reuse
+(outcomes, inventories) are asserted identical including
+nested/independent/malformed cases
+(`reuse_matches_legacy_outcomes_and_inventories`).
+
+Wall times, two runs each (`prepare`/`plan`/`generate` in ms;
+generate split as prepare+render; obligations/matrix in parens):
+
+| Crates | prepare | plan | generate |
+| --- | --- | --- | --- |
+| 1 | 52, 69 | 592, 611 (8 obl) | 50+776, 68+765 |
+| 10 | 52, 62 | 686, 718 (44 obl) | 56+783, 61+767 |
+| 40 | — | 1161, 1247 (164 obl) | — |
+| 100 | 86, 104 | budget (see below) | 79+774, 95+764 |
+
+Single direct-`cargo metadata --no-deps --offline` on the
+100-crate fixture: 0.04, 0.03, 0.04 s — a lower bound per
+eliminated subprocess; the mise-wrapped cost is UNMEASURED.
+A 100-crate full plan fails closed with
+`matrix_budget_exceeded:595321` (256 KiB cap, never truncates;
+60-wide already exceeds it by design), so plan scales to 40
+while `prepare` (discovery + graph construction) scales to 100.
+Complexity: metadata subprocesses O(workspaces) after reuse vs
+O(manifests) before; prepare sublinear (52→104 ms over 100x
+crates); plan ~linear in obligations; generate flat ~770 ms
+(validator-dominated, crate-count independent).
+
+Budgets status: no P13 budget PASSED — legacy-vs-reuse wall
+comparison explicitly UNPASSED (legacy path removed; counts
+exact, walls optimized-path only); mise-wrapped subprocess
+cost UNPASSED; CI-hosted numbers UNPASSED (no runs). Earlier
+budget verdicts above are unchanged and were not re-measured.
+
+`scripts/verify-local.sh` (new, sole P13 entrypoint; no new
+`velnor-actions` command) runs fmt, repo policy, generated-tree
+freshness, per-crate clippy/tests, and a nextest-`ci`
+integration pass, exiting nonzero with every failure listed. A
+full pass is currently blocked by concurrent-builder drift, not
+by P13 code: unformatted P03 files, 49.6 h-stale freshness
+evidence, generated-tree `MISE_*` drift, P03's clippy
+`too_many_lines` plus the pre-existing `shard.rs` dead-code
+warning, and one P03-domain test failure proven (reverted-tree
+rerun) independent of the reuse change.
+
+Deferred explicitly: end-to-end negative pipeline tests that
+need P05's crate graph (no P13 code depends on it);
+Nextest-archive/sharding stays off, unqualified.
