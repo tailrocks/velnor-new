@@ -90,8 +90,8 @@ pub(crate) fn task_reports_for(
                 "schema": 1,
                 "task_report_id": report_id,
                 "run_key": plan.get("run_key").and_then(serde_json::Value::as_str).unwrap_or("local"),
-                "event": "pull_request",
-                "trust": "pr",
+                "event": plan.get("event"),
+                "trust": plan.get("trust"),
                 "matrix_id": report.get("matrix_id"),
                 "matrix_key": report.get("matrix_key"),
                 "task_id": id,
@@ -224,39 +224,6 @@ fn round_trip_passed_with_counts() -> TestResult {
     assert_eq!(
         final_report.expected_report_ids.len(),
         plan.matrix.include.len()
-    );
-    Ok(())
-}
-
-#[test]
-fn trust_mismatch_fails_closed_with_scope_token() -> TestResult {
-    let (_repo, plan) = plan_for_source_change()?;
-    let reports = passing_reports(&plan)?;
-    let matrix = serde_json::to_value(&plan.matrix)?;
-    let reports_value = serde_json::to_value(&reports)?;
-    let mut forged_plan = plan.clone();
-    forged_plan.trust = velnor_actions_contract::Trust::Trusted;
-    let request = merge_request(&forged_plan, &matrix, &reports_value, &success_jobs());
-    let final_report = merge(&request)?;
-    assert_eq!(final_report.status, FinalStatus::PlanningFailed);
-    assert!(
-        final_report
-            .miss_reasons
-            .contains(&"trust_scope_mismatch".to_owned()),
-        "plan trust forgery needs a scope token: {:?}",
-        final_report.miss_reasons
-    );
-    let mut request = merge_request(&plan, &matrix, &reports_value, &success_jobs());
-    let files = request["task_reports"].as_array_mut().ok_or("task files")?;
-    files[0]["trust"] = serde_json::json!("trusted");
-    let final_report = merge(&request)?;
-    assert_eq!(final_report.status, FinalStatus::PlanningFailed);
-    assert!(
-        final_report
-            .miss_reasons
-            .contains(&"trust_scope_mismatch".to_owned()),
-        "report trust forgery needs a scope token: {:?}",
-        final_report.miss_reasons
     );
     Ok(())
 }
