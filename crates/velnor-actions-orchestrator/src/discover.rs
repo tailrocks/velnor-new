@@ -268,7 +268,7 @@ fn derive_for_config(
             explicit_fmt,
         };
         for group in derive_task_groups(&inputs)? {
-            groups.extend(expand_shards(config, &group, archives)?);
+            groups.extend(expand_shards(config, &group, profile, archives)?);
         }
     }
     let manifest = workspace_manifest(&record.workspace_root);
@@ -288,6 +288,7 @@ fn derive_for_config(
 fn expand_shards(
     config: &VelnorConfig,
     group: &TaskGroup,
+    profile: &RustExecutionProfile,
     archives: &mut ArchivePlan,
 ) -> Result<Vec<TaskGroup>, ContractError> {
     let shards = shard_count(config, group);
@@ -299,7 +300,7 @@ fn expand_shards(
     )? {
         return Ok(vec![group.clone()]);
     }
-    plan_shard_archive(group, archives);
+    plan_shard_archive(group, profile, archives);
     let mut expanded = Vec::new();
     for shard in 1..=shards {
         let task_id = task_id_for_stack(
@@ -320,8 +321,12 @@ fn expand_shards(
     Ok(expanded)
 }
 
-/// Record one archive per package/config; duplicates are already planned.
-fn plan_shard_archive(group: &TaskGroup, archives: &mut ArchivePlan) {
+/// Record one archive per package/config under the resolved profile.
+fn plan_shard_archive(
+    group: &TaskGroup,
+    profile: &RustExecutionProfile,
+    archives: &mut ArchivePlan,
+) {
     let driver = match group.compile_driver.as_str() {
         "cargo" => NextestDriver::Cargo,
         "mbx" => NextestDriver::Mbx,
@@ -332,8 +337,13 @@ fn plan_shard_archive(group: &TaskGroup, archives: &mut ArchivePlan) {
     } else {
         Some(group.target.as_str())
     };
-    let Ok(archive) = NextestArchive::new(driver, &group.package_name, &group.features, target)
-    else {
+    let Ok(archive) = NextestArchive::with_profile(
+        driver,
+        &group.package_name,
+        &group.features,
+        target,
+        profile.nextest_profile.as_str(),
+    ) else {
         return;
     };
     if archives.add(&archive).is_err() {

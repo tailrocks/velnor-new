@@ -6,8 +6,9 @@ use crate::metadata::PackageRecord;
 use crate::profile::{RustExecutionProfile, TestRunner};
 
 pub use crate::argv::{
-    EntryMetadata, ExtensionInputs, RustTaskIdentityExtension, cargo_payload_argv, entry_metadata,
-    evidence_id, parse_rerun_changed, require_nextest_for_shards, shard_task_id, shards_allowed,
+    EntryMetadata, ExtensionInputs, RustTaskIdentityExtension, cargo_payload_argv,
+    cargo_payload_with_profile, entry_metadata, evidence_id, parse_rerun_changed,
+    require_nextest_for_shards, shard_task_id, shards_allowed,
 };
 
 /// Rust task kinds derived per package.

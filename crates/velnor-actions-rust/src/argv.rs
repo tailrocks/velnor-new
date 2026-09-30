@@ -13,7 +13,7 @@ use serde::Serialize;
 use velnor_actions_contract::{ContractError, task_id_for_stack};
 
 use crate::evidence::Evidence;
-use crate::profile::TestRunner;
+use crate::profile::{NextestProfile, TestRunner};
 use crate::tasks::{TaskGroup, TaskKind};
 
 /// Typed Rust task-identity extension (cache §1); unknown schemas disable reuse.
@@ -263,6 +263,7 @@ pub fn evidence_id(evidence: &Evidence) -> String {
 /// execution via the Mise adapter; this crate builds no invocations.
 /// [`TaskKind::Nextest`](crate::tasks::TaskKind::Nextest) payloads require
 /// the pinned Nextest tool in that execution, not a preinstalled runner.
+/// Unprofiled legacy shape; resolved callers must use [`cargo_payload_with_profile`].
 #[must_use]
 pub fn cargo_payload_argv(group: &TaskGroup) -> Vec<OsString> {
     let manifest = manifest_for_key(&group.manifest_key);
@@ -274,6 +275,19 @@ pub fn cargo_payload_argv(group: &TaskGroup) -> Vec<OsString> {
         args.push(OsString::from(&group.target));
     }
     args
+}
+
+/// Payload argv with the resolved Nextest profile after `run`; others
+/// match [`cargo_payload_argv`] byte for byte (doctests stay separate).
+#[must_use]
+pub fn cargo_payload_with_profile(group: &TaskGroup, profile: NextestProfile) -> Vec<OsString> {
+    let mut argv = cargo_payload_argv(group);
+    if group.kind == TaskKind::Nextest {
+        let flag = OsString::from("--profile");
+        let name = OsString::from(profile.as_str());
+        argv.splice(2..2, [flag, name]);
+    }
+    argv
 }
 
 /// Append the per-kind fixed payload arguments.

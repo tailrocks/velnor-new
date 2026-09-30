@@ -341,6 +341,10 @@ fn four_combos_argv() -> TestResult {
         };
         assert_eq!(workspace.profile.compile_driver.as_str(), driver);
         assert_eq!(workspace.profile.test_runner.as_str(), runner);
+        let profile = workspace.profile.nextest_profile.as_str();
+        assert_eq!(profile, if use_nextest { "ci" } else { "default" });
+        let config = workspace.profile.nextest_config.as_deref();
+        assert_eq!(config, use_nextest.then_some(".config/nextest.toml"));
         let plan = plan_after_commits(root)?;
         let kind = if use_nextest { "nextest" } else { "test" };
         let run = entry_run(&plan, kind)?.to_owned();
@@ -350,15 +354,14 @@ fn four_combos_argv() -> TestResult {
         assert_eq!(run.contains(&nextest), use_nextest, "{run}");
         let program = if use_mbx { "-- mbx " } else { "-- cargo " };
         assert!(run.contains(program), "{run}");
-        let payload = if use_nextest {
-            "nextest run --locked"
-        } else {
-            "test --locked"
-        };
+        let payload = ["test --locked", "nextest run"][usize::from(use_nextest)];
         assert!(run.contains(payload), "{run}");
+        assert!(run.contains("--locked"), "{run}");
+        assert!(!run.contains("--profile") || use_nextest, "{run}");
         let doctest = entry_run(&plan, "doctest")?.to_owned();
         assert!(doctest.contains("--doc"), "{doctest}");
         assert!(doctest.contains(program), "{doctest}");
+        assert!(!doctest.contains("--profile"), "{doctest}");
     }
     Ok(())
 }
