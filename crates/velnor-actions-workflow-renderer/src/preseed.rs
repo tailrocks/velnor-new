@@ -9,6 +9,8 @@
 //! Every pre-seed step name carries the trust-on-review marker so the
 //! weaker provenance is visible in CI logs, not silently implied.
 
+use std::collections::BTreeMap;
+
 use velnor_actions_contract::{CRATE_JOB_ID_PREFIX, Job, Step};
 
 use crate::{
@@ -75,11 +77,17 @@ impl PreseedStageSource {
 /// Pre-seed build step over the caller-supplied fixed §4 vector.
 ///
 /// Argv arrives from the orchestrator's shared candidate-build constructor,
-/// so the pre-seed build is byte-identical to the candidate build.
+/// so the pre-seed build is byte-identical to the candidate build. Env
+/// arrives from the caller too: the build must run under the same owned
+/// homes as the fetch steps, or it resolves a split cargo home and the
+/// restored sources never warm it.
 /// # Errors
-pub fn preseed_build_step(build: Vec<String>) -> Result<Step, RenderError> {
+pub fn preseed_build_step(
+    build: Vec<String>,
+    env: BTreeMap<String, String>,
+) -> Result<Step, RenderError> {
     debug_assert!(PRESEED_BUILD_NAME.ends_with(TRUST_MARK));
-    steps::shell_step(PRESEED_BUILD_NAME, build, std::collections::BTreeMap::new())
+    steps::shell_step(PRESEED_BUILD_NAME, build, env)
 }
 
 /// Fixed MBX-compile verification: output executable plus pinned-route proof.
@@ -91,7 +99,11 @@ pub fn preseed_build_step(build: Vec<String>) -> Result<Step, RenderError> {
 /// resolves through Mise on every run, cold or warm; the script carries
 /// no quotes, substitution, or variables, keeping shellcheck quoting safe.
 /// # Errors
-pub fn preseed_verify_step(probe: &[String], mbx_version: &str) -> Result<Step, RenderError> {
+pub fn preseed_verify_step(
+    probe: &[String],
+    mbx_version: &str,
+    env: BTreeMap<String, String>,
+) -> Result<Step, RenderError> {
     debug_assert!(PRESEED_VERIFY_NAME.ends_with(TRUST_MARK));
     if !is_exact_version(mbx_version) {
         return Err(RenderError::BadCommand(format!(
@@ -106,7 +118,7 @@ pub fn preseed_verify_step(probe: &[String], mbx_version: &str) -> Result<Step, 
     steps::shell_step(
         PRESEED_VERIFY_NAME,
         vec!["sh".to_owned(), "-c".to_owned(), script],
-        std::collections::BTreeMap::new(),
+        env,
     )
 }
 

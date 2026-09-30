@@ -1,4 +1,5 @@
 //! Pre-seed mode: build-once templates plus strict closure gates.
+use std::collections::BTreeMap;
 use velnor_actions_contract::{Job, WorkflowPolicy};
 use velnor_actions_workflow_renderer::{
     PRESEED_VERIFY_MANIFEST_NAME, PreseedStageSource, RenderError, checkout_step, merge_step,
@@ -41,8 +42,8 @@ fn preseed_plan() -> Result<(String, Job), RenderError> {
         Vec::new(),
         vec![
             checkout_step(&checkout_pin())?,
-            preseed_build_step(build.clone())?,
-            preseed_verify_step(&mbx_probe(), MBX_VERSION)?,
+            preseed_build_step(build.clone(), BTreeMap::new())?,
+            preseed_verify_step(&mbx_probe(), MBX_VERSION, BTreeMap::new())?,
             preseed_manifest_step(&build, TARGET)?,
             preseed_upload_step()?,
             preseed_stage_step(PreseedStageSource::LocalBuild, STAGED)?,
@@ -71,9 +72,18 @@ fn preseed_final() -> Result<(String, Job), RenderError> {
 fn preseed_templates_carry_trust_mark_and_exact_artifact() -> Result<(), RenderError> {
     let build = build_argv();
     let manifest = preseed_manifest_step(&build, TARGET)?;
+    let build_step = preseed_build_step(
+        build.clone(),
+        BTreeMap::from([("MISE_CARGO_HOME".to_owned(), "owned".to_owned())]),
+    )?;
+    let velnor_actions_contract::StepKind::Shell { env, .. } = &build_step.kind else {
+        panic!("build must be a shell step");
+    };
+    let home = env.get("MISE_CARGO_HOME").map(String::as_str);
+    assert_eq!(home, Some("owned"), "build carries caller homes");
     for step in [
-        preseed_build_step(build.clone())?,
-        preseed_verify_step(&mbx_probe(), MBX_VERSION)?,
+        build_step,
+        preseed_verify_step(&mbx_probe(), MBX_VERSION, BTreeMap::new())?,
         manifest,
         preseed_upload_step()?,
         preseed_download_step()?,
@@ -145,10 +155,16 @@ fn preseed_manifest_printf_unescapes_to_valid_json() {
 
 #[test]
 fn preseed_verify_pins_binary_and_mbx_route() -> Result<(), RenderError> {
-    let step = preseed_verify_step(&mbx_probe(), MBX_VERSION)?;
-    let velnor_actions_contract::StepKind::Shell { run, .. } = &step.kind else {
+    let step = preseed_verify_step(
+        &mbx_probe(),
+        MBX_VERSION,
+        BTreeMap::from([("MISE_CARGO_HOME".to_owned(), "owned".to_owned())]),
+    )?;
+    let velnor_actions_contract::StepKind::Shell { run, env } = &step.kind else {
         panic!("verify must be a shell step");
     };
+    let home = env.get("MISE_CARGO_HOME").map(String::as_str);
+    assert_eq!(home, Some("owned"), "verify carries caller homes");
     assert_eq!((run[0].as_str(), run[1].as_str()), ("sh", "-c"));
     for need in [
         "test -x target/release/velnor-actions",
@@ -164,7 +180,7 @@ fn preseed_verify_pins_binary_and_mbx_route() -> Result<(), RenderError> {
     );
     for bad_version in ["", "latest", "1.19", "v1.19.0", "1.19.0 "] {
         assert!(
-            preseed_verify_step(&mbx_probe(), bad_version).is_err(),
+            preseed_verify_step(&mbx_probe(), bad_version, BTreeMap::new()).is_err(),
             "version accepted: {bad_version}"
         );
     }
@@ -175,7 +191,7 @@ fn preseed_verify_pins_binary_and_mbx_route() -> Result<(), RenderError> {
         mise_argv("mr-boxington@latest", "mbx", &["--version"]),
     ] {
         assert!(
-            preseed_verify_step(&bad_probe, MBX_VERSION).is_err(),
+            preseed_verify_step(&bad_probe, MBX_VERSION, BTreeMap::new()).is_err(),
             "probe accepted: {bad_probe:?}"
         );
     }
@@ -375,16 +391,5 @@ fn strict_rejects_stage_without_preseed_mode() {
     assert!(
         err.is_err_and(|err| err.to_string().contains("preseed_stage_without_mode")),
         "smuggled stage accepted"
-    );
-}
-
-#[test]
-fn preseed_requires_velnor_policy() {
-    let mut ctx = fixture_ctx();
-    ctx.preseed = true;
-    let err = strict(&fixture_ir(vec![minimal_plan_job().expect("plan")]), &ctx);
-    assert!(
-        err.is_err_and(|err| err.to_string().contains("preseed_requires_velnor_policy")),
-        "consumer pre-seed accepted"
     );
 }

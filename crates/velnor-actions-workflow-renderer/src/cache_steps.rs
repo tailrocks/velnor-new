@@ -133,6 +133,8 @@ fn uses_mbx_tool(step: &Step) -> bool {
 
 /// Env key the cache backend reads for its restore/save mode.
 pub const MBX_CACHE_MODE_ENV: &str = "ACTIONS_CACHE_MODE";
+/// Display name of the MBX objects restore step.
+pub const MBX_RESTORE_NAME: &str = "Restore MBX objects";
 
 /// Objects-mode MBX step; cargo profiles must never emit or install MBX.
 ///
@@ -173,7 +175,7 @@ pub fn mbx_objects_step(
         MBX_CACHE_MODE_ENV.to_owned(),
         velnor_actions_contract::workflow::ir::CACHE_MODE_PUSH_WRITE_EXPR.to_owned(),
     )]);
-    action_step_with_env("Restore MBX objects", uses, with, env)
+    action_step_with_env(MBX_RESTORE_NAME, uses, with, env)
 }
 
 /// Exact MBX versions: three nonempty numeric dot parts, nothing else.

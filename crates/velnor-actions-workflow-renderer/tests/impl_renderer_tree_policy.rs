@@ -373,3 +373,15 @@ fn tree_rejects_unmarked_inputs() -> Result<(), RenderError> {
     assert!(render_tree(&workflow, &actionlint_bytes()?, "9.9.9").is_err());
     Ok(())
 }
+
+#[test]
+fn preseed_requires_velnor_policy() {
+    use super::impl_renderer_fixtures::{fixture_ir, minimal_plan_job, strict};
+    let mut ctx = fixture_ctx();
+    ctx.preseed = true;
+    let err = strict(&fixture_ir(vec![minimal_plan_job().expect("plan")]), &ctx);
+    assert!(
+        err.is_err_and(|err| err.to_string().contains("preseed_requires_velnor_policy")),
+        "consumer pre-seed accepted"
+    );
+}
