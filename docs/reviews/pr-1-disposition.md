@@ -120,6 +120,11 @@ Classes: **D** = accepted design change · **B** = confirmed bug · **V** = pend
   cover_identity, internal_plan, closure, generator,
   provenance_check, snapshot). Queued behind it: P05 crate graph
   (needs internal_plan.rs), P11-types.
+- Hosted CI (run 36653922919 @ a40608f): Alint green after the
+  P10 test split; Plan freshness still red on velnor.yml drift
+  (reproduced locally: diff is exactly the P07 env-contract
+  vars; generation deterministic across two runs). Regeneration
+  deferred to P05's ci.yml migration — no velnor.yml refresh.
 
 ## PR state (2026-09-29, /tmp/pr1-state.md)
 
