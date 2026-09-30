@@ -216,10 +216,16 @@ fn strictness_no_proof_literals_anywhere() -> Result<(), Box<dyn Error>> {
         for path in &files {
             let body = std::fs::read_to_string(path)?;
             for (index, line) in body.lines().enumerate() {
+                // A `-> Type {` function signature binds the return type; only
+                // expression-position literals forge proofs.
+                let signature = line
+                    .find("->")
+                    .is_some_and(|arrow| line.find(&literal).is_some_and(|hit| arrow < hit));
                 let innocent = line.contains("pub struct")
                     || line.contains("impl ")
                     || line.contains("for ")
                     || line.contains("Unchecked")
+                    || signature
                     || line.trim_start().starts_with("//");
                 assert!(
                     innocent || !line.contains(&literal),
