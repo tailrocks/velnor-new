@@ -27,7 +27,10 @@ const MAX_BASE_MANIFEST_BATCH: usize = 512;
 /// added; the changed set keeps its own rename behavior untouched.
 /// Validation gates the untrusted range (flag-injection defense); `-z` is
 /// our own trusted constant added after, so output is NUL-delimited with
-/// no C-quoting or trimming, like `changed_files`.
+/// no C-quoting or trimming, like `changed_files`. Only validated manifests
+/// are ever matched against this set (non-ASCII names fail manifest-key
+/// validation at obligation time, before selection), so byte-exactness is
+/// enforced by construction and proven by the shared splitter unit tests.
 fn added_files(root: &Path, base: &str, head: &str) -> Result<BTreeSet<String>, String> {
     validate_diff_rev(base, "bad_base")?;
     validate_diff_rev(head, "bad_head")?;
