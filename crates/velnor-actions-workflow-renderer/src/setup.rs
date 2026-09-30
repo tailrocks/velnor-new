@@ -1,12 +1,12 @@
-//! Pinned Mise setup: template plus strict insertion gates.
+//! Pinned Mise setup pins plus the legacy cache-off template.
 //!
-//! Every job that invokes `mise` must be preceded by the pinned
-//! `jdx/mise-action` step (workflow-contract §3 steps 1-3, task prelude).
 //! Pins arrive as typed [`MiseSetup`] from the orchestrator's compiled
-//! catalog; the renderer never invents them and fails closed on malformed
-//! or misordered setup steps instead of emitting `mise`-less YAML.
+//! catalog; the renderer never invents them. Strict insertion with the
+//! qualified built-in cache lives in `cache_p08` (P08); this module keeps
+//! the pin type, its validation, and the legacy `cache:false` template
+//! for fixtures and upgrade inputs.
 
-use velnor_actions_contract::{Job, Step, StepKind};
+use velnor_actions_contract::Step;
 
 use crate::{RenderError, steps};
 
@@ -55,15 +55,14 @@ impl MiseSetup {
     }
 }
 
-/// Fixed `Setup Mise` step: exact `version`/`sha256`, no install, env, or cache.
+/// Legacy `Setup Mise` step: exact pins, `cache:false` (upgrade input).
 ///
 /// `install: false` keeps project tool files, tasks, and hooks from
 /// running; `env: false` keeps Mise env out of subsequent steps.
-/// `cache: false` (plus `cache_save: false`) pins the action's cache
-/// off: its default restore hashes the whole workspace for tool files
-/// and ELOOPs on symlink loops, while `install: false` means it never
-/// saves anyway. Tool reuse comes from the explicit tools-cache steps.
-/// The `with` map is exactly these six keys.
+/// Retained for fixtures and as the upgrade input that strict rendering
+/// replaces with the qualified built-in-cache shape (`cache:true` plus
+/// an explicit `cache_key`, never the workspace-hashing default that
+/// ELOOPs on symlink loops). The `with` map is exactly these six keys.
 /// # Errors
 pub fn mise_setup_step(setup: &MiseSetup) -> Result<Step, RenderError> {
     setup.validate()?;
@@ -79,122 +78,6 @@ pub fn mise_setup_step(setup: &MiseSetup) -> Result<Step, RenderError> {
             ("cache_save".to_owned(), "false".to_owned()),
         ]),
     )
-}
-
-/// True when any shell step invokes the `mise` program.
-pub(crate) fn job_uses_mise(job: &Job) -> bool {
-    job.steps.iter().any(|step| {
-        matches!(&step.kind, StepKind::Shell { run, .. } if run.iter().any(|arg| arg == "mise"))
-    })
-}
-
-/// Ensure a well-formed setup step precedes every `mise` use.
-///
-/// `always` covers jobs whose `mise` use is dynamic (matrix `run`
-/// payloads) or contract-mandated (plan/task preludes): they get the
-/// step even with no static `mise` argv. Present steps must be exactly
-/// one, well-formed, and before the first `mise` use; anything else
-/// fails closed instead of emitting a `mise: command not found` job.
-/// # Errors
-pub(crate) fn ensure_setup(
-    job_id: &str,
-    job: &mut Job,
-    setup: &MiseSetup,
-    always: bool,
-) -> Result<(), RenderError> {
-    setup.validate()?;
-    let present: Vec<usize> = job
-        .steps
-        .iter()
-        .enumerate()
-        .filter(|(_, step)| is_setup_step(step))
-        .map(|(index, _)| index)
-        .collect();
-    if present.len() > 1 {
-        return Err(RenderError::InvalidWorkflow(format!(
-            "duplicate_setup_mise:{job_id}"
-        )));
-    }
-    if let Some(&index) = present.first() {
-        check_setup_shape(job_id, &job.steps[index])?;
-        if let Some(first_mise) = first_mise_index(job)
-            && index > first_mise
-        {
-            return Err(RenderError::InvalidWorkflow(format!(
-                "setup_mise_misordered:{job_id}"
-            )));
-        }
-        return Ok(());
-    }
-    if always || job_uses_mise(job) {
-        let at = insert_at(job).min(job.steps.len());
-        job.steps.insert(at, setup_step(setup)?);
-    }
-    Ok(())
-}
-
-/// Build the validated setup step (shape checked once more on insert).
-fn setup_step(setup: &MiseSetup) -> Result<Step, RenderError> {
-    let step = mise_setup_step(setup)?;
-    debug_assert!(is_setup_step(&step));
-    Ok(step)
-}
-
-/// Insert after a leading Checkout step, else at the front.
-fn insert_at(job: &Job) -> usize {
-    job.steps
-        .first()
-        .filter(|step| step.name == "Checkout")
-        .map_or(0, |_| 1)
-}
-
-/// Index of the first shell step invoking `mise`, when any.
-fn first_mise_index(job: &Job) -> Option<usize> {
-    job.steps.iter().position(|step| {
-        matches!(&step.kind, StepKind::Shell { run, .. } if run.iter().any(|arg| arg == "mise"))
-    })
-}
-
-/// True for `jdx/mise-action` steps regardless of shape.
-fn is_setup_step(step: &Step) -> bool {
-    matches!(&step.kind, StepKind::Action { uses, .. } if uses.starts_with(&format!("{MISE_ACTION_NAME}@")))
-}
-
-/// Index of the setup step, when the job carries exactly the gate output.
-///
-/// Called after [`ensure_setup`], so any present step is already
-/// shape-checked; the tools cache anchors on it without revalidating.
-pub(crate) fn setup_index(job: &Job) -> Option<usize> {
-    job.steps.iter().position(is_setup_step)
-}
-
-/// Reject malformed setup steps: exact inputs, nothing else.
-fn check_setup_shape(job_id: &str, step: &Step) -> Result<(), RenderError> {
-    let StepKind::Action { uses, with } = &step.kind else {
-        return Err(setup_malformed(job_id));
-    };
-    if steps::validate_uses(uses).is_err() {
-        return Err(setup_malformed(job_id));
-    }
-    let shape_ok = with.len() == 6
-        && with.get("install").is_some_and(|v| v == "false")
-        && with.get("env").is_some_and(|v| v == "false")
-        && with.get("cache").is_some_and(|v| v == "false")
-        && with.get("cache_save").is_some_and(|v| v == "false")
-        && with.get("version").is_some_and(|v| is_catalog_version(v))
-        && with
-            .get("sha256")
-            .is_some_and(|v| v.len() == 64 && is_lower_hex(v));
-    if shape_ok {
-        Ok(())
-    } else {
-        Err(setup_malformed(job_id))
-    }
-}
-
-/// Shorthand for a malformed-setup failure.
-fn setup_malformed(job_id: &str) -> RenderError {
-    RenderError::InvalidWorkflow(format!("setup_mise_malformed:{job_id}"))
 }
 
 /// True for catalog version spellings (`2026.9.16`); never `latest`.

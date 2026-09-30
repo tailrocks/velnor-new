@@ -26,15 +26,17 @@ fn strict_plan_job_gets_full_prelude_in_order() -> Result<(), RenderError> {
         step_names(&text, "plan"),
         [
             "Checkout",
-            "Restore Mise tools",
             SETUP_MISE_NAME,
             ACQUIRE_NAME,
             CHECK_GENERATED_NAME,
             "Write request",
             "Plan",
             PUBLISH_PLAN_NAME,
-            "Save Mise tools",
         ]
+    );
+    assert!(
+        !text.contains("Restore Mise tools") && !text.contains("Save Mise tools"),
+        "P08: built-in cache only, no manual tools archives:\n{text}"
     );
     Ok(())
 }

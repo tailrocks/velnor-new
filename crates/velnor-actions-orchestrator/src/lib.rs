@@ -43,6 +43,7 @@ pub mod schedule;
 mod select;
 mod select_affected;
 mod select_edges;
+mod source_cache;
 mod source_prep;
 mod toolcheck;
 mod toolfindings;

@@ -5,6 +5,7 @@
 //! stack-specific logic: tool pins and command vectors arrive validated.
 
 mod artifact_paths;
+pub mod cache_p08;
 mod cache_steps;
 mod candidate;
 pub mod closure;

@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 /// `crates/velnor-actions-actionlint/src/actions.rs`; the shape rules below
 /// follow `overrides.rs` by convention (the contract cannot depend on
 /// actionlint, which owns the approved `(sha, version)` catalog check).
-pub const OVERRIDABLE_ACTIONS: [&str; 8] = [
+pub const OVERRIDABLE_ACTIONS: [&str; 9] = [
     "jdx/mise-action",
     "actions/checkout",
     "actions/download-artifact",
@@ -18,6 +18,7 @@ pub const OVERRIDABLE_ACTIONS: [&str; 8] = [
     "actions/cache/save",
     "jdx/mr-boxington-action",
     "asamarts/alint",
+    "Swatinem/rust-cache",
 ];
 
 /// `[actions]` section: exact action-pin overrides.

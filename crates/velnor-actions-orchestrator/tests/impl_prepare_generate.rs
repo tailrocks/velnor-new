@@ -232,27 +232,35 @@ fn plan_job_fetches_lockful_sources_before_generate_consumers() -> TestResult {
         .ok_or_else(|| std::io::Error::other("missing plan job"))?;
     let names: Vec<&str> = plan.steps.iter().map(|step| step.name.as_str()).collect();
     let at = |name: &str| names.iter().position(|seen| *seen == name);
-    let (Some(prepare_at), Some(fetch_at), Some(write_at), Some(plan_at)) = (
+    // Cargo-only fixture: the writer is one `rust-cache` step (its post
+    // action saves; no separate save step). MBX repos use restore/save.
+    let (Some(prepare_at), Some(cache_at), Some(fetch_at), Some(write_at)) = (
         at("Prepare pinned tools"),
+        at("Restore Cargo registry"),
         at("Fetch Cargo sources"),
         at("Write request"),
-        at("Plan"),
     ) else {
         return Err(format!("plan steps miss fetch ordering: {names:?}").into());
     };
     assert!(
-        prepare_at < fetch_at && fetch_at < write_at && write_at < plan_at,
-        "prep before request before plan: {names:?}"
+        prepare_at < cache_at && cache_at < fetch_at && fetch_at < write_at,
+        "cache<fetch<request: {names:?}"
     );
     let StepKind::Shell { run, env } = &plan.steps[fetch_at].kind else {
         return Err("fetch step must be a shell step".into());
     };
+    assert_eq!(&run[..2], ["sh", "-c"]);
+    for need in [
+        "metadata --locked --offline",
+        "cargo fetch --locked",
+        "sources miss (source_missing)",
+    ] {
+        assert!(run[2].contains(need), "fetch script misses {need}");
+    }
     assert!(
-        run.windows(2).any(|pair| pair == ["cargo", "fetch"])
-            && run.contains(&"--locked".to_owned()),
-        "fetch argv must be cargo fetch --locked: {run:?}"
+        env.get("MISE_CARGO_HOME").is_some_and(|v| !v.is_empty()),
+        "writer fetches to owned homes"
     );
-    assert!(env.is_empty());
     let tree = render_staged_tree(&prep)?;
     let yaml = tree
         .get(".github/workflows/ci.yml")
@@ -318,8 +326,7 @@ fn nested_lockful_workspace_gets_named_fetch() -> TestResult {
         return Err("fetch step must be a shell step".into());
     };
     assert!(
-        run.windows(2)
-            .any(|pair| pair == ["--manifest-path", "nested/Cargo.toml"]),
+        run[2].contains("--manifest-path 'nested/Cargo.toml'"),
         "nested fetch names its manifest: {run:?}"
     );
     assert!(
