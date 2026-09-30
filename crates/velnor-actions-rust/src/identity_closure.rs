@@ -8,7 +8,7 @@
 use velnor_actions_contract::{ContractError, normalize_posix_path};
 
 use super::GroupExtensionInputs;
-use crate::argv::RustTaskIdentityExtension;
+use crate::task_identity::RustTaskIdentityExtension;
 use crate::tasks::TaskGroup;
 
 /// One semantic input an extension leaves unresolved.

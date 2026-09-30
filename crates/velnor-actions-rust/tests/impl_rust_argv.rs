@@ -79,6 +79,119 @@ fn payload_features_and_target() {
 }
 
 #[test]
+fn clippy_keeps_feature_args_before_separator() {
+    for features in [vec!["serde".to_owned(), "cli".to_owned()], Vec::new()] {
+        let mut featured = group(TaskKind::Clippy);
+        featured.features = features;
+        let argv = text(&featured);
+        let sep = argv
+            .iter()
+            .position(|arg| arg == "--")
+            .expect("clippy separator");
+        let no_defaults = argv
+            .iter()
+            .position(|arg| arg == "--no-default-features")
+            .expect("feature flag");
+        assert!(no_defaults < sep, "cargo flags before `--`: {argv:?}");
+        if let Some(features) = argv.iter().position(|arg| arg == "--features") {
+            assert!(features < sep, "cargo flags before `--`: {argv:?}");
+        }
+        assert_eq!(
+            &argv[sep..],
+            ["--", "-D", "warnings"],
+            "only lint args after `--`: {argv:?}"
+        );
+    }
+}
+
+#[test]
+fn clippy_keeps_target_before_separator() {
+    let mut targeted = group(TaskKind::Clippy);
+    targeted.target = "x86_64-unknown-linux-gnu".to_owned();
+    let argv = text(&targeted);
+    let sep = argv
+        .iter()
+        .position(|arg| arg == "--")
+        .expect("clippy separator");
+    let target = argv
+        .iter()
+        .position(|arg| arg == "--target")
+        .expect("target flag");
+    assert!(target < sep, "cargo flags before `--`: {argv:?}");
+    assert!(
+        argv.windows(2)
+            .any(|w| w == ["--target", "x86_64-unknown-linux-gnu"]),
+        "target triple intact: {argv:?}"
+    );
+    assert_eq!(
+        &argv[sep..],
+        ["--", "-D", "warnings"],
+        "only lint args after `--`: {argv:?}"
+    );
+}
+
+#[test]
+fn clippy_featured_targeted_shape_is_exact() {
+    let mut custom = group(TaskKind::Clippy);
+    custom.features = vec!["serde".to_owned()];
+    custom.target = "x86_64-unknown-linux-gnu".to_owned();
+    assert_eq!(
+        text(&custom),
+        [
+            "clippy",
+            "--locked",
+            "--offline",
+            "--manifest-path",
+            "Cargo.toml",
+            "--package",
+            "demo",
+            "--all-targets",
+            "--no-default-features",
+            "--features",
+            "serde",
+            "--target",
+            "x86_64-unknown-linux-gnu",
+            "--",
+            "-D",
+            "warnings",
+        ]
+    );
+}
+
+#[test]
+fn cargo_kinds_carry_features_without_separator() {
+    for kind in [
+        TaskKind::Test,
+        TaskKind::Nextest,
+        TaskKind::Doctest,
+        TaskKind::Doc,
+        TaskKind::Build,
+    ] {
+        let mut custom = group(kind);
+        custom.features = vec!["serde".to_owned()];
+        custom.target = "x86_64-unknown-linux-gnu".to_owned();
+        let argv = text(&custom);
+        assert!(
+            !argv.contains(&"--".to_owned()),
+            "{kind:?} emits no separator: {argv:?}"
+        );
+        assert!(
+            argv.contains(&"--no-default-features".to_owned()),
+            "{kind:?} keeps feature flags: {argv:?}"
+        );
+        assert!(
+            argv.windows(2).any(|w| w == ["--features", "serde"]),
+            "{kind:?} keeps feature list: {argv:?}"
+        );
+        assert!(
+            argv.windows(2)
+                .any(|w| w == ["--target", "x86_64-unknown-linux-gnu"]),
+            "{kind:?} keeps target: {argv:?}"
+        );
+    }
+}
+
+#[test]
 fn payloads_never_emit_all_features() {
     let kinds = [
         TaskKind::Fmt,
