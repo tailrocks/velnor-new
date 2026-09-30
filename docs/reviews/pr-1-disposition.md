@@ -78,6 +78,11 @@ Classes: **D** = accepted design change · **B** = confirmed bug · **V** = pend
   440, merge.rs 429, impl_merge.rs 552, impl_select.rs 485; P06
   in-flight: nextest.rs 481, toml_scan.rs 507). Split agent spawned
   for landed files; P06 warned to split + fix clippy before handoff.
+- Size split (`abb5866`, pushed): command.rs 440->312 (+command_env,
+  command_output), merge.rs 429 split (+merge_checks), impl_merge 552
+  + impl_select 485 split by topic (+impl_merge_plan, +impl_select_base).
+  Behavior-preserving; mise allowlist updated. Standalone: mise 174,
+  orch 75+6+316, size_limits_hold green, clippy -D clean, fmt clean.
 
 ## PR state (2026-09-29, /tmp/pr1-state.md)
 
