@@ -95,7 +95,8 @@ it MUST NOT be reported as current (VER-3.4 gate rule).
 No scheduled producer exists today: no workflow runs this probe on a
 schedule. The generator CAN express a schedule trigger (contract
 `ScheduleTrigger` in `crates/velnor-actions-contract/src/workflow/`,
-rendered by `crates/velnor-actions-workflow-renderer/src/document.rs`),
+landed via P05 and rendered by
+`crates/velnor-actions-workflow-renderer/src/document.rs`),
 but the committed `.github/workflows/ci.yml` carries no schedule block
 and no read-only freshness job. Until that wiring lands, evidence
 timestamps advance only through reviewed update sets, and the real-root
