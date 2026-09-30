@@ -30,7 +30,7 @@ pub use jobs::{
 pub use permissions::{PermissionLevel, Permissions};
 pub use plan::{
     MatrixEntry, ObligationDecision, Plan, PlanGenerator, PlanMatrix, PlanObligation, PlanPackage,
-    PlanRunner, Trust, WorkflowEvent, validate_matrix_run,
+    PlanRunner, Trust, WorkflowEvent, trust_for_event, validate_matrix_run,
 };
 pub use qualification::{
     CandidateReport, CandidateStatus, FinalCounts, FinalReport, FinalStatus, RequiredJobResult,

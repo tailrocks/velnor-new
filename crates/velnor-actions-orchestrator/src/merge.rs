@@ -17,7 +17,8 @@ use velnor_actions_contract::{
 
 use self::merge_checks::{
     check_agreement, check_execute_inventory, check_plan_evidence, check_plan_shape,
-    expected_task_reports, partition_task_reports, plan_digests, plan_entries, shards_failed,
+    check_trust_coherence, expected_task_reports, partition_task_reports, plan_digests,
+    plan_entries, shards_failed,
 };
 pub(crate) use self::required_evidence::BaselineManifest;
 use self::required_evidence::{
@@ -187,6 +188,7 @@ fn build_final(request: &MergeRequest, plan: &Plan) -> Result<FinalReport, Orche
         &mut miss_reasons,
     )?;
     check_plan_shape(plan, &mut signals, &mut miss_reasons);
+    check_trust_coherence(plan, request, &mut signals, &mut miss_reasons);
     check_plan_evidence(plan, request, &mut signals, &mut miss_reasons);
     check_execute_inventory(plan, &mut signals, &mut miss_reasons);
     let entries = plan_entries(plan);

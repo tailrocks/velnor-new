@@ -310,5 +310,13 @@ fn merge_group_classifies_like_pull_request() -> TestResult {
         !group.task_ids.is_empty(),
         "merge group selects affected work"
     );
+    assert_eq!(pr.trust, velnor_actions_contract::Trust::Pr);
+    assert_eq!(
+        group.trust,
+        velnor_actions_contract::Trust::Pr,
+        "speculative merge content stays PR-scoped"
+    );
+    let push = plan_for("push")?;
+    assert_eq!(push.trust, velnor_actions_contract::Trust::Trusted);
     Ok(())
 }

@@ -92,8 +92,8 @@ pub use workflow::{
     WorkflowIr, assign_crate_job_ids, candidate_report_id_for_run, check_matrix_agreement,
     crate_display_label, crate_display_name, final_report_id_for_run, final_report_relpath,
     join_runner_temp, matrix_json_bytes, matrix_report_relpath, plan_json_bytes, slugify_segment,
-    task_report_relpath, validate_candidate_report_id, validate_final_report_id, validate_job_id,
-    validate_matrix_run,
+    task_report_relpath, trust_for_event, validate_candidate_report_id, validate_final_report_id,
+    validate_job_id, validate_matrix_run,
 };
 
 /// Version marker for the contract schema shell.
