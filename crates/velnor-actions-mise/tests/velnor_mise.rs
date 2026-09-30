@@ -39,6 +39,8 @@ mod impl_mise_nextest;
 mod impl_mise_nextest_plan;
 #[path = "impl_mise_p06.rs"]
 mod impl_mise_p06;
+#[path = "impl_mise_p08.rs"]
+mod impl_mise_p08;
 #[path = "impl_mise_policy.rs"]
 mod impl_mise_policy;
 #[path = "impl_mise_preflight.rs"]

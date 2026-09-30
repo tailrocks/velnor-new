@@ -20,7 +20,7 @@ use velnor_actions_contract::{
     CrateJob, CrateObligation, Job, Step, StepKind, assign_crate_job_ids, crate_display_name,
     matrix_id_for_task_group, matrix_key_for_id,
 };
-use velnor_actions_mise::{TaskCacheMode, ToolCatalog};
+use velnor_actions_mise::{PinnedTool, TaskCacheMode, ToolCatalog};
 use velnor_actions_rust::{CompileDriver as RustDriver, STACK_ID, TaskGroup, TaskKind, TestRunner};
 use velnor_actions_workflow_renderer::plan_format::FORMAT_STEP_NAME;
 use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
@@ -88,7 +88,16 @@ pub(crate) fn build_crate_jobs(
             obligations: obligations_for(groups, catalog)?,
         };
         model.validate()?;
-        let job = render_job(label, &model, catalog, fetch_roots, use_mbx, use_nextest)?;
+        let repo_has_mbx = crate::workflow::plan_uses_mbx(discovery);
+        let job = render_job(
+            label,
+            &model,
+            catalog,
+            fetch_roots,
+            use_mbx,
+            use_nextest,
+            repo_has_mbx,
+        )?;
         drivers.insert(job_id.clone(), driver);
         jobs.push((job_id, job));
     }
@@ -240,6 +249,9 @@ fn shard_suffix(task_id: &str) -> Option<(u32, u32)> {
 }
 
 /// Render one validated crate model to its fixed IR job.
+///
+/// P08 order: restore shared sources (or Cargo-only registry), then MBX
+/// objects, then probe-and-fetch, then obligations. Readers never save.
 fn render_job(
     label: &str,
     model: &CrateJob,
@@ -247,6 +259,7 @@ fn render_job(
     fetch_roots: &[String],
     use_mbx: bool,
     use_nextest: bool,
+    repo_has_mbx: bool,
 ) -> Result<Job, OrchestratorError> {
     let mut steps = vec![crate::workflow::wire_w1::checkout_step()?];
     steps.push(crate::matrix_step::prepare_crate_tools_step(
@@ -255,11 +268,18 @@ fn render_job(
         use_nextest,
     )?);
     steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
+    steps.extend(restore_step_for_crate(
+        label,
+        catalog,
+        fetch_roots,
+        use_mbx,
+        repo_has_mbx,
+    )?);
+    steps.extend(mbx_objects_step(use_mbx)?);
     steps.extend(crate::source_prep::fetch_steps_for_crate(
         catalog,
         fetch_roots,
     )?);
-    steps.extend(mbx_objects_step(use_mbx)?);
     steps.extend(crate::workflow::wire_w1::maybe_task_cache_steps(
         None,
         TaskCacheMode::Off,
@@ -299,6 +319,39 @@ fn obligation_step(
             env,
         },
     })
+}
+
+/// Restore step for one crate: shared sources, or Cargo-only registry.
+///
+/// Lockless emits nothing. Cargo-only repos (no MBX anywhere) restore via
+/// pinned `rust-cache` (read-only); every other lockful crate restores the
+/// shared `actions/cache` snapshot (read-only, never saves the shared key).
+fn restore_step_for_crate(
+    label: &str,
+    catalog: &ToolCatalog,
+    fetch_roots: &[String],
+    use_mbx: bool,
+    repo_has_mbx: bool,
+) -> Result<Option<Step>, OrchestratorError> {
+    if fetch_roots.is_empty() {
+        return Ok(None);
+    }
+    let target = velnor_actions_contract::target_for_runner_label(label).ok_or_else(|| {
+        OrchestratorError::Contract {
+            problem: format!("bad_label:{label}"),
+        }
+    })?;
+    let rust = catalog.version(PinnedTool::Rust);
+    if !use_mbx && !repo_has_mbx {
+        let shared = format!(
+            "{}-{target}-{rust}",
+            crate::source_cache::RUST_CACHE_SHARED_PREFIX
+        );
+        return crate::source_cache::rust_cache_step(&shared, false).map(Some);
+    }
+    let key = crate::source_cache::sources_cache_key(target, rust, fetch_roots)?;
+    let prefix = crate::source_cache::sources_restore_prefix(&key);
+    crate::source_cache::sources_restore_step(&key, &[prefix]).map(Some)
 }
 
 /// MBX objects restore for MBX crates only (WF-3.52).

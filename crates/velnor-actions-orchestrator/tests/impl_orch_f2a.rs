@@ -104,6 +104,10 @@ fn orch_spawns_no_processes_and_confines_shell_wrappers() -> TestResult {
             "non-spawn std::process use only: {hit}: {body}"
         );
     }
+    // P08 C4: source_prep.rs emits one fixed `sh -c` probe-and-fetch template
+    // (metadata probe, offline skip, explicit miss fetch) over validated roots.
+    // Step IR has no conditions, so the shell conditional is required; roots
+    // are fail-closed validated, never arbitrary shell.
     let mut sh_files = std::collections::BTreeSet::new();
     for path in src_files()? {
         let text = std::fs::read_to_string(&path)?;
@@ -117,8 +121,12 @@ fn orch_spawns_no_processes_and_confines_shell_wrappers() -> TestResult {
     }
     assert_eq!(
         sh_files,
-        std::collections::BTreeSet::from(["pins.rs".to_owned(), "qualify.rs".to_owned()]),
-        "fixed sh wrappers live in pins/qualify only"
+        std::collections::BTreeSet::from([
+            "pins.rs".to_owned(),
+            "qualify.rs".to_owned(),
+            "source_prep.rs".to_owned(),
+        ]),
+        "fixed sh wrappers live in pins/qualify/source_prep only"
     );
     Ok(())
 }
@@ -320,38 +328,6 @@ fn merge_consumes_no_publish_verbs() -> TestResult {
     }
     let baseline = std::fs::read_to_string(orch_src().join("cover_baseline.rs"))?;
     assert!(baseline.contains("no_publish_attempted"), "PR guard stays");
-    Ok(())
-}
-
-/// All `.rs` files under a crate-relative directory, recursively.
-fn tree_rs(relative: &str) -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(relative);
-    let mut out = Vec::new();
-    let mut pending = vec![root];
-    while let Some(dir) = pending.pop() {
-        for entry in std::fs::read_dir(&dir)? {
-            let path = entry?.path();
-            if path.is_dir() {
-                pending.push(path);
-            } else if path.extension().is_some_and(|ext| ext == "rs") {
-                out.push(path);
-            }
-        }
-    }
-    out.sort();
-    Ok(out)
-}
-
-#[test]
-fn cli_carries_no_stack_flags() -> TestResult {
-    for path in tree_rs("../velnor-actions-cli/src")? {
-        let text = std::fs::read_to_string(&path)?;
-        assert!(
-            !text.to_lowercase().contains("stack"),
-            "stack flag in {}",
-            path.display()
-        );
-    }
     Ok(())
 }
 

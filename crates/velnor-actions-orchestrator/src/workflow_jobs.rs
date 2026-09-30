@@ -58,7 +58,11 @@ pub(crate) fn plan_job(
     let prepare = prepare_pinned_tools_step(catalog, plan_tools(use_mbx, use_nextest))?;
     steps.push(prepare);
     steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
+    let cached =
+        crate::workflow_jobs_cache::cache_steps_for_plan(label, catalog, use_mbx, fetch_roots)?;
+    steps.extend(cached.restore);
     steps.extend(fetch_steps_for_plan(catalog, fetch_roots)?);
+    steps.extend(cached.save);
     steps.extend(acquire);
     steps.push(request_step(PLAN_OPERATION)?);
     steps.push(plan_step());

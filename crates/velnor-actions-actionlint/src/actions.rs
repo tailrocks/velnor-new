@@ -1,4 +1,4 @@
-//! Pinned action refs against the 8-entry allowlist.
+//! Pinned action refs against the 9-entry allowlist.
 //!
 //! Every ref pins `repo[/path]@sha` plus a `# vX.Y.Z` comment; no
 //! mutable-tag exceptions exist.
@@ -6,7 +6,7 @@
 use crate::ActionlintError;
 
 /// Exhaustive allowlist of `owner/repo[/path]` action keys.
-pub const ALLOWED_ACTIONS: [&str; 8] = [
+pub const ALLOWED_ACTIONS: [&str; 9] = [
     "jdx/mise-action",
     "actions/checkout",
     "actions/download-artifact",
@@ -15,6 +15,7 @@ pub const ALLOWED_ACTIONS: [&str; 8] = [
     "actions/cache/save",
     "jdx/mr-boxington-action",
     "asamarts/alint",
+    "Swatinem/rust-cache",
 ];
 
 /// Action key for the repository-policy Alint job's pinned ref.
@@ -59,6 +60,14 @@ pub const CACHE_ACTION_SHA: &str = "55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
 pub const MR_BOXINGTON_ACTION_VERSION: &str = "v1.5.0";
 /// Full commit SHA for [`MR_BOXINGTON_ACTION_VERSION`] (`v1` moves with it).
 pub const MR_BOXINGTON_ACTION_SHA: &str = "9df1d4b18b2147788a7ee7a2c7b84ecf62fd89d3";
+
+/// Action key for the Cargo-only Rust cache (P08-7, never with MBX).
+pub const RUST_CACHE_ACTION: &str = "Swatinem/rust-cache";
+/// Qualified `Swatinem/rust-cache` release.
+/// Source: `https://api.github.com/repos/Swatinem/rust-cache/tags`; checked 2026-09-30.
+pub const RUST_CACHE_ACTION_VERSION: &str = "v2.9.2";
+/// Full commit SHA for [`RUST_CACHE_ACTION_VERSION`].
+pub const RUST_CACHE_ACTION_SHA: &str = "6323deb102c322ba6fcbdcafc7e3dddab59af2b6";
 
 /// One pinned action reference: `repo[/path]@sha` plus version comment.
 #[derive(Debug, Clone, PartialEq, Eq)]

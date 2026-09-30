@@ -236,7 +236,7 @@ fn tools_restore_and_save_pin_mise_data_dir_only() {
 }
 
 #[test]
-fn strict_wraps_setup_with_tools_restore_and_save()
+fn strict_uses_builtin_cache_without_manual_tools_steps()
 -> Result<(), velnor_actions_workflow_renderer::RenderError> {
     use std::collections::BTreeMap;
     use velnor_actions_workflow_renderer::{checkout_step, shell_step};
@@ -255,16 +255,20 @@ fn strict_wraps_setup_with_tools_restore_and_save()
     );
     let text = strict(&fixture_ir(vec![lint]), &fixture_ctx())?;
     let names = step_names(&text, "actionlint");
-    let restore_at = names.iter().position(|s| s == TOOLS_RESTORE_NAME);
-    let setup_at = names.iter().position(|s| s == "Setup Mise");
-    let save_at = names.iter().position(|s| s == TOOLS_SAVE_NAME);
-    assert_eq!(
-        (restore_at, setup_at, save_at),
-        (Some(1), Some(2), names.len().checked_sub(1)),
-        "restore<setup<save(last): {names:?}"
+    assert!(
+        !names
+            .iter()
+            .any(|s| s == TOOLS_RESTORE_NAME || s == TOOLS_SAVE_NAME),
+        "P08: no manual tools archives: {names:?}"
     );
-    assert!(text.contains("actions/cache/restore@"), "{text}");
-    assert!(text.contains("actions/cache/save@"), "{text}");
+    assert_eq!(
+        names.iter().position(|s| s == "Setup Mise"),
+        Some(1),
+        "setup right after checkout: {names:?}"
+    );
+    for need in ["cache: \"true\"", "cache_key: mise-v1-"] {
+        assert!(text.contains(need), "built-in cache {need}:\n{text}");
+    }
     Ok(())
 }
 

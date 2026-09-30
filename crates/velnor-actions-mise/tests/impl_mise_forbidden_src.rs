@@ -13,6 +13,9 @@ fn expected_modules() -> Vec<&'static str> {
     vec![
         "build.rs",
         "cache.rs",
+        "cache_sources.rs",
+        "cache_transport.rs",
+        "cache_trust.rs",
         "catalog.rs",
         "catalog_mbx.rs",
         "command.rs",
@@ -33,6 +36,7 @@ fn expected_modules() -> Vec<&'static str> {
         "requests.rs",
         "restore.rs",
         "reuse.rs",
+        "runtime_paths.rs",
         "steps.rs",
         "template.rs",
         "toml_parser.rs",

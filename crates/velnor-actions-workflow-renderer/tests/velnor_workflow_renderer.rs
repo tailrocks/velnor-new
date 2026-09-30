@@ -29,6 +29,8 @@ mod impl_renderer_mbxgate;
 mod impl_renderer_msrv;
 #[path = "impl_renderer_overlap.rs"]
 mod impl_renderer_overlap;
+#[path = "impl_renderer_p08.rs"]
+mod impl_renderer_p08;
 #[path = "impl_renderer_planclose.rs"]
 mod impl_renderer_planclose;
 #[path = "impl_renderer_planformat.rs"]
