@@ -16,7 +16,7 @@ fn task_job_gains_matrix_report_upload() -> Result<(), RenderError> {
     )?;
     let start = text.find("velnor-task:").expect("task job");
     let end = text[start..]
-        .find("velnor-plan:")
+        .find("plan:")
         .map_or(text.len(), |at| start + at);
     let window = &text[start..end.min(text.len())];
     let full = if end <= start { &text[start..] } else { window };
@@ -52,9 +52,9 @@ fn matrix_upload_absent_without_task_job() -> Result<(), RenderError> {
 #[test]
 fn write_request_inserted_before_plan_and_merge() -> Result<(), RenderError> {
     let mut final_job = job(
-        "velnor-final",
-        "Velnor / Required",
-        vec!["velnor-plan".to_owned()],
+        "required",
+        "Required",
+        vec!["plan".to_owned()],
         vec![acquire_fixture()?, merge_step()],
     )
     .1;
@@ -62,7 +62,7 @@ fn write_request_inserted_before_plan_and_merge() -> Result<(), RenderError> {
     let text = render_workflow_ir(
         &fixture_ir(vec![
             minimal_plan_job()?,
-            ("velnor-final".to_owned(), final_job),
+            ("required".to_owned(), final_job),
         ]),
         WorkflowPolicy::ConsumerV1,
         None,
@@ -87,8 +87,8 @@ fn write_request_inserted_before_plan_and_merge() -> Result<(), RenderError> {
 #[test]
 fn write_request_insertion_idempotent() -> Result<(), RenderError> {
     let plan = job(
-        "velnor-plan",
-        "Velnor Plan",
+        "plan",
+        "Plan",
         Vec::new(),
         vec![
             checkout_step(&checkout_pin())?,

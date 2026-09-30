@@ -221,7 +221,7 @@ fn gh_pinned_exec_is_exact() -> Result<(), String> {
             "run",
             "list",
             "--workflow",
-            "velnor.yml",
+            "ci.yml",
             "--branch",
             "main",
             "--json",

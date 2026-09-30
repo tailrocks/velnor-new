@@ -40,7 +40,7 @@ fn committed_header_read_is_comparison_only() {
     assert!(is_generated_output(generated));
     let inputs = ProfileInputs {
         executables: vec![EvidenceFile {
-            path: ".github/workflows/velnor.yml",
+            path: ".github/workflows/ci.yml",
             content: generated,
         }],
         ..ProfileInputs::default()

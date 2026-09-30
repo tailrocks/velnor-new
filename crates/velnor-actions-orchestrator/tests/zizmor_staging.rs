@@ -7,7 +7,8 @@ use std::process::Command;
 
 use tempfile::TempDir;
 use velnor_actions_actionlint::actions::{
-    ALINT_ACTION, ALINT_ACTION_SHA, CHECKOUT_ACTION_SHA, CHECKOUT_ACTION_VERSION,
+    ALINT_ACTION, ALINT_ACTION_SHA, ALINT_ACTION_VERSION, CHECKOUT_ACTION_SHA,
+    CHECKOUT_ACTION_VERSION,
 };
 use velnor_actions_actionlint::config::{
     ZizmorConfigInput, ZizmorWorkflowText, render_zizmor_yaml,
@@ -55,7 +56,7 @@ fn binary_record(target: &str) -> String {
     )
 }
 
-/// Generator-lock fixture for velnor-policy `prepare`.
+/// Generator-lock fixture for Velnor-policy `prepare`.
 fn lock_text() -> String {
     let bins = binary_record("x86_64-unknown-linux-gnu")
         + &binary_record("aarch64-apple-darwin")
@@ -120,7 +121,7 @@ fn make_policy_repo() -> Result<TempDir, Box<dyn std::error::Error>> {
 /// Live dirs plus preview root, workflow bytes, and validators.
 type PolicyPreview = (TempDir, TempDir, PathBuf, String, Vec<String>);
 
-/// Green velnor-policy preview.
+/// Green Velnor-policy preview.
 fn policy_preview() -> Result<PolicyPreview, Box<dyn std::error::Error>> {
     let repo = make_policy_repo()?;
     let prep = prepare(repo.path())?;
@@ -189,7 +190,7 @@ fn streams(output: &ProcessOutput) -> String {
 }
 
 #[test]
-fn velnor_policy_blessed_tag_validates_green() -> TestResult {
+fn velnor_policy_blessed_sha_validates_green() -> TestResult {
     let (_repo, _parent, preview, yaml, validated_by) = policy_preview()?;
     assert_eq!(
         validated_by,
@@ -200,7 +201,7 @@ fn velnor_policy_blessed_tag_validates_green() -> TestResult {
         ]
     );
     let blessed = format!("uses: {ALINT_ACTION}@{ALINT_ACTION_SHA}");
-    assert!(yaml.contains(&blessed), "blessed tag rendered");
+    assert!(yaml.contains(&blessed), "blessed SHA rendered");
     assert!(
         !preview.join(".zizmor.yml").exists(),
         "no staging config in output"
@@ -213,7 +214,8 @@ fn velnor_policy_blessed_tag_validates_green() -> TestResult {
 }
 
 /// The 1 suppressed finding is `undocumented-permissions` (low,
-/// auditor/pedantic-only); it must stay suppressed, never ignored.
+/// auditor/pedantic-only); it must stay suppressed. Zero ignores: every
+/// emitted ref is hash-pinned.
 #[test]
 fn staging_suppressions_stable_no_new() -> TestResult {
     let (_repo, _parent, preview, yaml, _) = policy_preview()?;
@@ -277,12 +279,12 @@ fn different_unpinned_tag_still_fails() -> TestResult {
 }
 
 #[test]
-fn blessed_repo_wrong_tag_still_fails() -> TestResult {
+fn blessed_repo_tag_ref_still_fails() -> TestResult {
     let (_repo, _parent, preview, yaml, _) = policy_preview()?;
     let blessed = format!("{ALINT_ACTION}@{ALINT_ACTION_SHA}");
-    let wrong = format!("{ALINT_ACTION}@v0.17.0");
+    let wrong = format!("{ALINT_ACTION}@{ALINT_ACTION_VERSION}");
     let mutated = yaml.replacen(&blessed, &wrong, 1);
-    assert_ne!(mutated, yaml, "fixture still carries blessed tag");
+    assert_ne!(mutated, yaml, "fixture still carries blessed SHA");
     let staged = stage(&preview, &mutated)?;
     let output = run_zizmor(staged.path())?;
     let text = streams(&output);

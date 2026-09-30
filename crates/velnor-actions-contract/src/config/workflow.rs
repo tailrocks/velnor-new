@@ -1,5 +1,6 @@
 //! Workflow section of `.velnor/config.toml`: naming, policy, runner labels.
 use crate::errors::ContractError;
+use crate::workflow::ValidatorKind;
 use serde::{Deserialize, Serialize};
 
 /// Latest pinned runner label: the default when `workflow.runner_label` is absent.
@@ -69,21 +70,11 @@ pub enum RunnerSelection {
     ConfigOverride,
 }
 
-/// Policy job enabled only under `velnor-repository-v1`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum PolicyJob {
-    /// Repository-structure lint job.
-    Alint,
-    /// Dependency/security policy job.
-    Policy,
-}
-
 /// Support-job set derived from policy plus validation mode.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VelnorSupportWorkflow {
-    /// Extra policy jobs to emit.
-    pub policy_jobs: Vec<PolicyJob>,
+    /// Repository validators to emit as separate jobs (P05-6: no umbrella).
+    pub validators: Vec<ValidatorKind>,
     /// Whether to emit candidate validation.
     pub candidate_validation: bool,
 }
@@ -92,12 +83,12 @@ impl WorkflowPolicy {
     /// Derive the support-job set for this policy and validation mode.
     #[must_use]
     pub fn support_workflow(&self, validation: GeneratorValidation) -> VelnorSupportWorkflow {
-        let policy_jobs = match self {
+        let validators = match self {
             Self::ConsumerV1 => Vec::new(),
-            Self::VelnorRepositoryV1 => vec![PolicyJob::Alint, PolicyJob::Policy],
+            Self::VelnorRepositoryV1 => ValidatorKind::repository_validators().to_vec(),
         };
         VelnorSupportWorkflow {
-            policy_jobs,
+            validators,
             candidate_validation: validation == GeneratorValidation::Candidate,
         }
     }

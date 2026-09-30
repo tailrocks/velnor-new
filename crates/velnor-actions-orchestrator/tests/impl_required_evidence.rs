@@ -47,7 +47,7 @@ fn validator_results_must_match_inventory_exactly() -> TestResult {
     let (_repo, plan) = plan_for_source_change()?;
     let reports = passing_reports(&plan)?;
     let matrix = serde_json::to_value(&plan.matrix)?;
-    let inventory = json!(["velnor-plan", "velnor-workflow-lint"]);
+    let inventory = json!(["plan", "actionlint"]);
     let plan_value = serde_json::to_value(&plan)?;
     let run = |jobs: serde_json::Value| {
         let mut request = merge_request(
@@ -67,15 +67,15 @@ fn validator_results_must_match_inventory_exactly() -> TestResult {
         report
             .required_job_results
             .iter()
-            .any(|job| job.job_id == "velnor-workflow-lint" && job.conclusion == "missing"),
+            .any(|job| job.job_id == "actionlint" && job.conclusion == "missing"),
         "{:?}",
         report.required_job_results
     );
 
     // An unexpected validator fails as a corrupt evidence set.
     let extra = json!([
-        {"job_id": "velnor-plan", "conclusion": "success"},
-        {"job_id": "velnor-workflow-lint", "conclusion": "success"},
+        {"job_id": "plan", "conclusion": "success"},
+        {"job_id": "actionlint", "conclusion": "success"},
         {"job_id": "velnor-stray", "conclusion": "success"},
     ]);
     let report = run(extra)?;
@@ -88,16 +88,16 @@ fn validator_results_must_match_inventory_exactly() -> TestResult {
 
     // A duplicated validator fails the same way.
     let dupe = json!([
-        {"job_id": "velnor-plan", "conclusion": "success"},
-        {"job_id": "velnor-plan", "conclusion": "success"},
-        {"job_id": "velnor-workflow-lint", "conclusion": "success"},
+        {"job_id": "plan", "conclusion": "success"},
+        {"job_id": "plan", "conclusion": "success"},
+        {"job_id": "actionlint", "conclusion": "success"},
     ]);
     assert_eq!(run(dupe)?.status, FinalStatus::PlanningFailed);
 
     // Exact coverage passes.
     let full = json!([
-        {"job_id": "velnor-plan", "conclusion": "success"},
-        {"job_id": "velnor-workflow-lint", "conclusion": "success"},
+        {"job_id": "plan", "conclusion": "success"},
+        {"job_id": "actionlint", "conclusion": "success"},
     ]);
     assert_eq!(run(full)?.status, FinalStatus::Passed);
     Ok(())
@@ -108,13 +108,13 @@ fn validator_states_fold_per_validator() -> TestResult {
     let (_repo, plan) = plan_for_source_change()?;
     let reports = passing_reports(&plan)?;
     let matrix = serde_json::to_value(&plan.matrix)?;
-    for failing in ["velnor-plan", "velnor-workflow-lint"] {
+    for failing in ["plan", "actionlint"] {
         for (conclusion, status) in [
             ("failure", FinalStatus::Failed),
             ("cancelled", FinalStatus::Cancelled),
             ("skipped", FinalStatus::NotRun),
         ] {
-            let jobs: Vec<serde_json::Value> = ["velnor-plan", "velnor-workflow-lint"]
+            let jobs: Vec<serde_json::Value> = ["plan", "actionlint"]
                 .iter()
                 .map(|id| {
                     let result = if *id == failing {
@@ -132,7 +132,7 @@ fn validator_states_fold_per_validator() -> TestResult {
                 &serde_json::to_value(&reports)?,
                 &serde_json::Value::Array(jobs),
             );
-            request["required_job_ids"] = json!(["velnor-plan", "velnor-workflow-lint"]);
+            request["required_job_ids"] = json!(["plan", "actionlint"]);
             assert_eq!(status_of(&request)?, status, "{failing}={conclusion}");
         }
     }
@@ -158,10 +158,10 @@ fn candidate_evidence_closed() -> TestResult {
         "status": status, "checks": []})
     };
     let gate = |request: &mut serde_json::Value| {
-        request["required_job_ids"] = json!(["velnor-candidate", "velnor-plan"]);
+        request["required_job_ids"] = json!(["candidate", "plan"]);
         request["required_jobs"] = json!([
-            {"job_id": "velnor-candidate", "conclusion": "success"},
-            {"job_id": "velnor-plan", "conclusion": "success"},
+            {"job_id": "candidate", "conclusion": "success"},
+            {"job_id": "plan", "conclusion": "success"},
         ]);
     };
     let base = || {
@@ -272,8 +272,8 @@ fn missing_report_file_fails_closed() -> TestResult {
             .any(|e| e.as_str().is_some_and(|s| s.starts_with("missing_report:"))),
         "{errors:?}"
     );
-    value["required_job_ids"] = json!(["velnor-plan"]);
-    value["required_jobs"] = json!([{"job_id": "velnor-plan", "conclusion": "success"}]);
+    value["required_job_ids"] = json!(["plan"]);
+    value["required_jobs"] = json!([{"job_id": "plan", "conclusion": "success"}]);
     value["assembly_errors"] = serde_json::Value::Array(
         errors
             .into_iter()

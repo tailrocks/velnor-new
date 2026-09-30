@@ -77,7 +77,7 @@ fn all_mise_vectors() -> Result<Vec<Vec<OsString>>, String> {
     vectors.extend(verify.probes(&catalog));
     let lookup = BaselineLookup::new(
         "0123456789abcdef0123456789abcdef01234567",
-        "velnor.yml",
+        "ci.yml",
         "main",
         "coverage-manifests",
     )

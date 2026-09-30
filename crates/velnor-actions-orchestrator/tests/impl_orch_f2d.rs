@@ -136,7 +136,7 @@ fn cache_miss_cannot_fail_merge() -> TestResult {
 fn merge_without_reports_is_not_run() -> TestResult {
     let (_repo, plan) = plan_for_source_change()?;
     assert!(!plan.matrix.include.is_empty());
-    let request = serde_json::json!({"schema": 1, "run_key": "local", "plan": plan, "matrix": plan.matrix, "matrix_reports": [], "required_job_ids": ["velnor-plan"], "required_jobs": [{"job_id": "velnor-plan", "conclusion": "success"}]});
+    let request = serde_json::json!({"schema": 1, "run_key": "local", "plan": plan, "matrix": plan.matrix, "matrix_reports": [], "required_job_ids": ["plan"], "required_jobs": [{"job_id": "plan", "conclusion": "success"}]});
     let final_report: velnor_actions_contract::FinalReport =
         serde_json::from_str(&merge_internal(&request.to_string())?)?;
     assert_eq!(final_report.status, FinalStatus::NotRun);
@@ -165,8 +165,8 @@ fn undetected_stacks_plan_no_work() -> TestResult {
     let plan: Plan = serde_json::from_value(value["plan"].clone())?;
     assert!(plan.task_ids.is_empty(), "no inventory, no work");
     assert!(plan.packages.is_empty());
-    let jobs = serde_json::json!([{"job_id": "velnor-plan", "conclusion": "success"}, {"job_id": "velnor-workflow-lint", "conclusion": "success"}]);
-    let merge = serde_json::json!({"schema": 1, "run_key": "local", "plan": plan, "matrix": plan.matrix, "matrix_reports": [], "required_job_ids": ["velnor-plan", "velnor-workflow-lint"], "required_jobs": jobs});
+    let jobs = serde_json::json!([{"job_id": "plan", "conclusion": "success"}, {"job_id": "actionlint", "conclusion": "success"}]);
+    let merge = serde_json::json!({"schema": 1, "run_key": "local", "plan": plan, "matrix": plan.matrix, "matrix_reports": [], "required_job_ids": ["plan", "actionlint"], "required_jobs": jobs});
     let merged = merge_internal(&merge.to_string())?;
     let final_report: velnor_actions_contract::FinalReport = serde_json::from_str(&merged)?;
     assert_eq!(final_report.status, FinalStatus::NoWork);
@@ -236,7 +236,7 @@ fn global_config_changes_broaden_explicitly() -> TestResult {
         &[],
         &[],
         &[],
-        &[(".github/workflows/velnor.yml", "name: ci\n")],
+        &[(".github/workflows/ci.yml", "name: ci\n")],
     )?;
     assert!(has(&plan, "alpha") && has(&plan, "beta"));
     assert!(

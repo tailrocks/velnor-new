@@ -35,7 +35,7 @@ pub use canonical::{
     is_valid_digest, normalize_posix_path, validate_digest,
 };
 pub use config::{
-    DeclaredCompileDriver, DeclaredTestRunner, DiscoveryConfig, GeneratorValidation, PolicyJob,
+    DeclaredCompileDriver, DeclaredTestRunner, DiscoveryConfig, GeneratorValidation,
     ResourcesConfig, RunnerSelection, RustConfiguration, RustStackConfig, ShardTimingEvidence,
     StacksConfig, TestShardingConfig, VelnorConfig, VelnorSupportWorkflow, WorkflowConfig,
     WorkflowPolicy, validate_shard_changes_need_evidence,
@@ -78,9 +78,9 @@ pub use targets::{
 pub use tooling::ToolIdentity;
 pub use vcs::VcsInputs;
 pub use workflow::{
-    BaselineProof, BaselineStatus, CI_WORKFLOW_PATH, CacheLayer, CacheOutcome, CacheResult,
-    CandidateReport, CandidateStatus, Concurrency, CrateJob, CrateObligation, EntryCacheIds,
-    ExecuteTaskIds, ExecuteTaskRef, FINAL_JSON_FILENAME, FRESHNESS_CRON_WEEKLY,
+    BaselineProof, BaselineStatus, CI_WORKFLOW_PATH, CRATE_JOB_ID_PREFIX, CacheLayer, CacheOutcome,
+    CacheResult, CandidateReport, CandidateStatus, Concurrency, CrateJob, CrateObligation,
+    EntryCacheIds, ExecuteTaskIds, ExecuteTaskRef, FINAL_JSON_FILENAME, FRESHNESS_CRON_WEEKLY,
     FRESHNESS_WORKFLOW_PATH, FinalCounts, FinalReport, FinalStatus, Job, MATRIX_JSON_FILENAME,
     ManifestTaskProof, MatrixEntry, MatrixReport, MatrixStatus, MatrixTaskEntry, NEEDS_CHANNEL_ENV,
     NEEDS_CHANNEL_EXPRESSION, NeedsConclusions, NotSelectedReason, ObligationDecision,

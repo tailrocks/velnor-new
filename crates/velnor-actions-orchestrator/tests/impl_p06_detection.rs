@@ -311,7 +311,7 @@ fn preview_bytes(
             output_dir: Some(preview.clone()),
         },
     )?;
-    let workflow = fs::read(preview.join(".github/workflows/velnor.yml"))?;
+    let workflow = fs::read(preview.join(".github/workflows/ci.yml"))?;
     let actionlint = fs::read(preview.join(".github/actionlint.yaml"))?;
     Ok((workflow, actionlint))
 }

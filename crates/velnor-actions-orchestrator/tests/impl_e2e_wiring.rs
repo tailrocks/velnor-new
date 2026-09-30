@@ -283,14 +283,17 @@ fn emitted_yaml_wires_helpers_velnor_policy() -> TestResult {
         .get(WORKFLOW_PATH)
         .ok_or("missing workflow in staged tree")?;
     let jobs = check_tree(yaml).map_err(|err| format!("{err}:\n{yaml}"))?;
-    let policy = jobs
-        .iter()
-        .find(|job| job.id == "velnor-policy")
-        .ok_or("missing velnor-policy job")?;
-    for want in ["Run cargo-deny", "Run cargo-machete"] {
+    assert!(jobs.iter().all(|job| job.id != "policy"), "no umbrella");
+    for (id, want) in [
+        ("cargo-deny", "Run cargo-deny"),
+        ("cargo-machete", "Run cargo-machete"),
+        ("zizmor", "Run zizmor"),
+    ] {
+        let job = jobs.iter().find(|job| job.id == id);
+        let job = job.unwrap_or_else(|| panic!("missing {id} job"));
         assert!(
-            policy.steps.iter().any(|step| step.name == want),
-            "policy misses {want}:\n{yaml}"
+            job.steps.iter().any(|step| step.name == want),
+            "{id} misses {want}"
         );
     }
     Ok(())
@@ -325,7 +328,7 @@ fn emitted_yaml_preseed_builds_once_and_shares_artifact() -> TestResult {
         })
         .collect();
     assert_eq!(builds.len(), 1, "exactly one helper build:\n{yaml}");
-    assert_eq!(builds[0].0, "velnor-plan", "build lives in plan");
+    assert_eq!(builds[0].0, "plan", "build lives in plan");
     for fragment in [
         "rust@",
         "mr-boxington@",
@@ -338,8 +341,8 @@ fn emitted_yaml_preseed_builds_once_and_shares_artifact() -> TestResult {
     }
     let plan = jobs
         .iter()
-        .find(|job| job.id == "velnor-plan")
-        .ok_or("missing velnor-plan job")?;
+        .find(|job| job.id == "plan")
+        .ok_or("missing plan job")?;
     assert!(
         plan.steps
             .iter()
@@ -354,18 +357,15 @@ fn emitted_yaml_preseed_builds_once_and_shares_artifact() -> TestResult {
         !yaml.contains("pattern:"),
         "no wildcard artifact matching:\n{yaml}"
     );
-    for id in ["velnor-task", "velnor-final"] {
-        let job = jobs.iter().find(|job| job.id == id);
-        if id == "velnor-task" && job.is_none() {
-            continue;
-        }
-        let job = job.ok_or(format!("missing {id} job"))?;
-        assert!(
-            job.steps
-                .iter()
-                .any(|step| step.name.contains("Download helper")),
-            "{id} misses artifact download:\n{yaml}"
-        );
+    for job in jobs
+        .iter()
+        .filter(|job| job.id == "required" || job.id.starts_with("rust-"))
+    {
+        let has_dl = job
+            .steps
+            .iter()
+            .any(|step| step.name.contains("Download helper"));
+        assert!(has_dl, "{} misses download", job.id);
     }
     assert!(
         yaml.contains("pre-seed trust-on-review"),
@@ -387,9 +387,8 @@ fn emitted_yaml_wires_helpers_consumer() -> TestResult {
         .get(WORKFLOW_PATH)
         .ok_or("missing workflow in staged tree")?;
     let jobs = check_tree(yaml).map_err(|err| format!("{err}:\n{yaml}"))?;
-    assert!(
-        jobs.iter().all(|job| job.id != "velnor-policy"),
-        "consumer must not emit velnor-policy:\n{yaml}"
-    );
+    for id in ["alint", "cargo-deny", "cargo-machete", "zizmor"] {
+        assert!(jobs.iter().all(|job| job.id != id), "consumer emits {id}");
+    }
     Ok(())
 }

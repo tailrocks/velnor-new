@@ -4,17 +4,17 @@
 //! verify (bootstrap §4.1 pre-seed is trust-on-review). Pre-seed mode makes
 //! that explicit: the plan job builds the helper ONCE from the checked-out
 //! source with the fixed §4 candidate vector, records the source commit in
-//! a manifest, and shares the binary via an exactly-named artifact. Task
+//! a manifest, and shares the binary via an exactly-named artifact. Crate
 //! and final jobs download that artifact; nothing rebuilds it (Gap A).
 //! Every pre-seed step name carries the trust-on-review marker so the
 //! weaker provenance is visible in CI logs, not silently implied.
 
-use velnor_actions_contract::{Job, Step};
+use velnor_actions_contract::{CRATE_JOB_ID_PREFIX, Job, Step};
 
 use crate::{
     RenderError,
     artifact_paths::{PRESEED_OUTPUT_DIR_EXPR, PRESEED_STAGE_DIR_EXPR},
-    render::{FINAL_JOB_ID, PLAN_JOB_ID, TASK_JOB_ID},
+    render::{FINAL_JOB_ID, PLAN_JOB_ID},
     steps,
 };
 
@@ -297,7 +297,7 @@ pub(crate) fn check_preseed_closure(
         }
     }
     for (id, job) in jobs {
-        if id != TASK_JOB_ID && id != FINAL_JOB_ID {
+        if id != FINAL_JOB_ID && !id.starts_with(CRATE_JOB_ID_PREFIX) {
             continue;
         }
         for (name, kind) in [

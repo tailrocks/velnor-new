@@ -41,7 +41,7 @@ fn preview_bytes(
             output_dir: Some(preview.clone()),
         },
     )?;
-    let workflow = fs::read(preview.join(".github/workflows/velnor.yml"))?;
+    let workflow = fs::read(preview.join(".github/workflows/ci.yml"))?;
     let actionlint = fs::read(preview.join(".github/actionlint.yaml"))?;
     Ok((workflow, actionlint))
 }
@@ -199,7 +199,7 @@ fn generated_workflow_not_evidence() -> TestResult {
         let root = repo.path();
         fs::create_dir_all(root.join(".github/workflows"))?;
         fs::write(
-            root.join(".github/workflows/velnor.yml"),
+            root.join(".github/workflows/ci.yml"),
             format!(
                 "{marker}\nsteps:\n  - run: mbx clippy --package demo\n  - run: cargo nextest run\n"
             ),
@@ -237,7 +237,7 @@ fn durable_evidence_stable() -> TestResult {
     let before = plan_text(&prepare(root)?);
     assert!(before.contains("mbx compile driver (detected)"), "{before}");
     generate(&prepare(root)?, &GenerateOptions::default())?;
-    assert!(root.join(".github/workflows/velnor.yml").is_file());
+    assert!(root.join(".github/workflows/ci.yml").is_file());
     let after = plan_text(&prepare(root)?);
     assert_eq!(before, after, "plan identical after in-place regen");
     let prep = prepare(root)?;

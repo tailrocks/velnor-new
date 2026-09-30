@@ -179,7 +179,7 @@ fn gen_declared_github_formats_gate_new_writers() {
     assert_eq!(DECLARED_GITHUB_FORMATS.len(), 2);
     let actionlint = find_github_format(".github/actionlint.yaml").expect("actionlint");
     assert_eq!(actionlint.owner, "velnor-actions-actionlint");
-    let workflow = find_github_format(".github/workflows/velnor.yml").expect("workflow");
+    let workflow = find_github_format(".github/workflows/ci.yml").expect("workflow");
     assert_eq!(workflow.owner, "velnor-actions-workflow-renderer");
     assert!(find_github_format(".github/workflows/other.yml").is_none());
     assert!(is_declared_github_format(".github/actionlint.yaml"));

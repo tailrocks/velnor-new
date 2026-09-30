@@ -6,9 +6,8 @@ use velnor_actions_workflow_renderer::steps::{
 };
 use velnor_actions_workflow_renderer::{
     CANDIDATE_OUTPUT_DIR_EXPR, CANDIDATE_STAGE_DIR_EXPR, PRESEED_OUTPUT_DIR_EXPR,
-    PRESEED_STAGE_DIR_EXPR, PolicyCommand, RenderError, candidate_artifact_name, checkout_step,
-    merge_step, plan_step, preseed_download_step, preseed_upload_step, render_workflow_ir,
-    write_request_step,
+    PRESEED_STAGE_DIR_EXPR, RenderError, candidate_artifact_name, checkout_step, merge_step,
+    plan_step, preseed_download_step, preseed_upload_step, render_workflow_ir, write_request_step,
 };
 
 use super::impl_renderer_fixtures::*;
@@ -61,17 +60,14 @@ fn artifact_paths_reject_shell_expansions() {
 #[test]
 fn rendered_action_inputs_carry_no_shell_expansions() -> Result<(), RenderError> {
     let mut ctx = fixture_ctx();
-    ctx.policy_commands = vec![PolicyCommand {
-        name: "Deny".to_owned(),
-        argv: vec!["deny".to_owned()],
-    }];
+    ctx.validator_commands = validator_commands();
     ctx.candidate = Some(velnor_actions_workflow_renderer::CandidateSpec {
         build: mise_argv("rust@1.98.1", "mbx", &["build"]),
         qualify: vec!["sh".to_owned(), "-c".to_owned(), "true".to_owned()],
     });
     let plan = job(
-        "velnor-plan",
-        "Velnor Plan",
+        "plan",
+        "Plan",
         Vec::new(),
         vec![
             checkout_step(&checkout_pin())?,
@@ -82,9 +78,9 @@ fn rendered_action_inputs_carry_no_shell_expansions() -> Result<(), RenderError>
         ],
     );
     let mut final_job = job(
-        "velnor-final",
-        "Velnor / Required",
-        vec!["velnor-plan".to_owned()],
+        "required",
+        "Required",
+        vec!["plan".to_owned()],
         vec![
             preseed_download_step()?,
             acquire_fixture()?,

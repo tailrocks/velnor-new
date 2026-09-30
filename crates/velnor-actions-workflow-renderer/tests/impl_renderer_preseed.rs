@@ -35,8 +35,8 @@ fn build_argv() -> Vec<String> {
 fn preseed_plan() -> Result<(String, Job), RenderError> {
     let build = build_argv();
     Ok(job(
-        "velnor-plan",
-        "Velnor Plan",
+        "plan",
+        "Plan",
         Vec::new(),
         vec![
             checkout_step(&checkout_pin())?,
@@ -52,9 +52,9 @@ fn preseed_plan() -> Result<(String, Job), RenderError> {
 
 fn preseed_final() -> Result<(String, Job), RenderError> {
     let mut final_job = job(
-        "velnor-final",
-        "Velnor / Required",
-        vec!["velnor-plan".to_owned()],
+        "required",
+        "Required",
+        vec!["plan".to_owned()],
         vec![
             preseed_download_step()?,
             preseed_stage_step(PreseedStageSource::DownloadedArtifact, STAGED)?,
@@ -190,7 +190,7 @@ fn strict_preseed_accepts_staged_internal_steps() -> Result<(), RenderError> {
         &ctx,
         &mise(),
     )?;
-    let plan = step_names(&text, "velnor-plan");
+    let plan = step_names(&text, "plan");
     for name in [
         "Build helper",
         "Stage helper",
@@ -207,7 +207,7 @@ fn strict_preseed_accepts_staged_internal_steps() -> Result<(), RenderError> {
     let stage_at = plan.iter().position(|s| s.contains("Stage helper"));
     let check_at = plan.iter().position(|s| s.contains("Check generated"));
     assert!(build_at < stage_at && stage_at < check_at, "{plan:?}");
-    let final_steps = step_names(&text, "velnor-final");
+    let final_steps = step_names(&text, "required");
     let download_at = final_steps
         .iter()
         .position(|s| s.contains("Download helper"));

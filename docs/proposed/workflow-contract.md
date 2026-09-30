@@ -58,7 +58,7 @@ under `/tmp` or the runner temp directory.
 
 The CLI has no public scan, doctor, task, report, root, stack, profile, format, or check options. `plan`
 prints only the concise human report specified in the CLI contract; it does not expose internal JSON
-plan/report formats or execute tasks. The generated GitHub job named `velnor-plan` is an internal workflow
+plan/report formats or execute tasks. The generated GitHub job named `plan` is an internal workflow
 job, distinct from the local `velnor-actions plan` command. The public CLI MUST never hide an unbounded
 collection of commands behind a user-facing `run` subcommand.
 
@@ -165,59 +165,59 @@ group: velnor-${{ github.workflow }}-${{ github.event.pull_request.number || git
 cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 ```
 
-For `workflow.policy = "consumer-v1"`, compose detections into `velnor-plan`, `velnor-task`,
-`velnor-workflow-lint`, and `velnor-final`. V1 permits only Rust, so the selected set is empty or `{rust}`;
-future adapters add namespaced task entries to this composed task job without CLI selectors.
+For `workflow.policy = "consumer-v1"`, compose detections into `plan`, one `rust-<slug>` crate job
+per selected crate, `actionlint`, and `required`. V1 permits only Rust, so the selected set is empty or `{rust}`;
+future adapters add namespaced crate jobs without CLI selectors.
 
-The following `velnor-*` labels are GitHub Actions job IDs only. They are not Cargo packages, executable
+The following labels are GitHub Actions job IDs only. They are not Cargo packages, executable
 names, generated command labels, or CLI subcommands. The sole Velnor executable is `velnor-actions`.
 
-1. `velnor-plan`: checkout; setup Mise through its pinned action with exact catalog `version`/`sha256`; acquire
+1. `plan`: checkout; setup Mise through its pinned action with exact catalog `version`/`sha256`; acquire
    the bootstrap asset from the generated descriptor and verify it. Consumers embed the generating release version, target URL, and
    digest; Velnor uses the matching `.velnor/generator.lock` record and checks equality. Install exact tools
    from the embedded catalog, including GitHub CLI for trusted-baseline lookup. Discover obligations, resolve
    a valid baseline, classify every obligation, and emit the bounded matrix and complete plan report. In
    bootstrap validation mode, check generated files with the locked binary. In candidate mode, do not invoke
    the candidate or require the bootstrap to reproduce new generator output.
-2. `velnor-task`: one matrix entry per selected stack task-group/configuration
-obligation. It runs the focused steps in the [task execution contract](task-execution-contract.md) and uploads
+2. `rust-<slug>`: one job per selected crate, grouping that crate's
+obligations in contract order. It runs the focused steps in the [task execution contract](task-execution-contract.md) and uploads
 one stack-neutral report even after failure.
-3. `velnor-workflow-lint`: checkout without persisted credentials; setup Mise with pinned action, version,
+3. `actionlint`: checkout without persisted credentials; setup Mise with pinned action, version,
    and SHA-256; install exact
    Actionlint and ShellCheck versions with project config, env, and hooks disabled; run
    `mise exec --no-config actionlint@<exact> shellcheck@<exact> -- actionlint -color` from the root. This
    required job reads `.github/actionlint.yaml` and checks every generated workflow, even with no Rust stack.
-4. `velnor-final`: `if: always()`, depends on the base and enabled policy jobs, validates reports/conclusions,
+4. `required`: `if: always()`, depends on the base and enabled policy jobs, validates reports/conclusions,
 and is the required status check.
 
-Only for `workflow.policy = "velnor-repository-v1"`, emit two additional independent jobs plus generated `velnor-release.yml` and `velnor-qualification.yml` workflows rendered from typed workflow IR, each with an explicit `permissions:` block (least privilege for its role). `velnor-alint`
-checks out source with `persist-credentials: false` and runs `uses: asamarts/alint@v0.16.1` with `path: .`,
-`config: .alint.yml`, `format: github`, and `fail-on-warning: true`. `velnor-policy` runs the remaining
-dependency/security checks. The Alint tag is the explicit exception to Velnor's normal full-SHA action rule.
-Its job conclusion is the required evidence; Velnor does not assume an Alint-specific report artifact.
-Both repository-policy job conclusions are required even with an empty task matrix. `consumer-v1` MUST
-NOT assume `.alint.yml`, `deny.toml`, or Velnor's layout and MUST NOT emit `velnor-alint`. GitHub Action
+Only for `workflow.policy = "velnor-repository-v1"`, emit one independent job per repository validator plus generated `velnor-release.yml` and `velnor-qualification.yml` workflows rendered from typed workflow IR, each with an explicit `permissions:` block (least privilege for its role). `alint`
+checks out source with `persist-credentials: false` and runs the full-SHA-pinned `asamarts/alint` action with `path: .`,
+`config: .alint.yml`, `format: github`, and `fail-on-warning: true`. `cargo-deny`, `cargo-machete`, and `zizmor`
+each run their single dependency/security check in their own job; no umbrella grouping exists.
+Each job conclusion is required evidence; Velnor does not assume validator-specific report artifacts.
+All repository-policy job conclusions are required even with no crate selected. `consumer-v1` MUST
+NOT assume `.alint.yml`, `deny.toml`, or Velnor's layout and MUST NOT emit repository validators. GitHub Action
 steps use Velnor's compiled-in registry and exact config overrides; they are not Mise-managed tools.
 
-When `workflow.generator_validation = "candidate"`, the generator MUST also emit `velnor-candidate` between
-`velnor-plan` and `velnor-final`. It runs the fixed candidate-build Mise invocation specified in the
+When `workflow.generator_validation = "candidate"`, the generator MUST also emit `candidate` between
+`plan` and `required`. It runs the fixed candidate-build Mise invocation specified in the
 architecture contract; that invocation is a workflow step, not a separately named task or executable. The job
 uploads the candidate binary, runs generation/fixture qualification against that exact artifact, and uploads
-one candidate report. The candidate job MUST depend on `velnor-plan` but MUST NOT provide the matrix consumed
-by `velnor-task`; the matrix is always computed by the locked bootstrap binary. The candidate binary MUST NOT emit a matrix in any step. Consumer repositories do not
+one candidate report. The candidate job MUST depend on `plan` but MUST NOT provide execution inputs consumed
+by crate jobs; those always derive from the locked bootstrap binary. The candidate binary MUST NOT emit execution inputs in any step. Consumer repositories do not
 emit this job.
 
-Under `workflow.policy = "velnor-repository-v1"`, `velnor-policy` MUST run cargo-deny, cargo-machete, and
-zizmor, even when no stack task is selected; `velnor-alint` follows the separate contract above. actionlint
-remains in the always-on `velnor-workflow-lint` job. `velnor-plan` runs
+Under `workflow.policy = "velnor-repository-v1"`, the `cargo-deny`, `cargo-machete`, and `zizmor` jobs MUST run
+even when no crate is selected; `alint` follows the separate contract above. actionlint
+remains in the always-on `actionlint` job. `plan` runs
 formatting for each selected stack configuration. Rust documentation warnings run in each Rust task matrix
 after doctests. Clippy, the detected test runner, and rustdoc are package-scoped in the Rust adapter; a workspace-wide compile
 is not a default pull-request check. MSRV verification runs in the pinned toolchain-update qualification
 workflow, tests every product crate against the exact declared `rust-version`, and is not repeated on every
-pull request. `Velnor / Required` depends on the plan, every selected task result, exact baseline coverage
+pull request. `Required` depends on the plan, every crate job, the lint and validator conclusions, exact baseline coverage
 validation, and the candidate report when candidate mode is enabled.
 
-The final job MUST have stable display name `Velnor / Required`; branch protection requires that exact check.
+The final job MUST have stable display name `Required`; branch protection requires that exact check.
 Every generated job MUST use the same single literal, versioned Ubuntu label in `runs-on`. With no
 `workflow.runner_label` override, Velnor MUST use the latest pinned x64 label from [version
 policy](version-policy.md); the current snapshot selects `ubuntu-26.04`. An explicit older label is allowed
@@ -226,7 +226,7 @@ only when listed in the policy's supported-label set and named in `.velnor/confi
 aliases in every generated `runs-on` field. V1 emits no self-hosted labels. The plan records the selected
 label and whether it came from `latest_default` or `config_override`.
 
-`velnor-plan` MUST upload its plan report with `if: always()`. It MUST fail when its matrix JSON exceeds 256
+`plan` MUST upload its plan report with `if: always()`. It MUST fail when its matrix JSON exceeds 256
 KiB. It MUST report a clear planning error and request a broadened or reduced plan instead of truncating
 entries.
 
@@ -241,7 +241,7 @@ Mise task file. Checkout, artifact transfer, and Alint are fixed GitHub Actions 
 report aggregation are fixed internal workflow steps. Any helper binary is staged in runner temporary storage
 and never written to the repo.
 
-`velnor-plan` steps, in order:
+`plan` steps, in order:
 
 1. `Checkout`: `actions/checkout` at the event's intended commit with
 `persist-credentials: false`.
@@ -259,7 +259,7 @@ the detected Rust compile driver (MBX only when project evidence selects it).
 6. `Check generated files`: invoke the public `velnor-actions generate
 --output-dir "$RUNNER_TEMP/velnor-actions-\${GITHUB_RUN_ID}-\${GITHUB_RUN_ATTEMPT}"` in bootstrap mode;
 compare its `.github` tree byte-for-byte with the committed tree. Candidate mode performs the same check with
-the candidate binary. Only this step and the `velnor-candidate` qualification checks may invoke the candidate artifact; every other step uses the bootstrap-descriptor helper version (see [cli §1 and §6](cli-contract.md)).
+the candidate binary. Only this step and the `candidate` qualification checks may invoke the candidate artifact; every other step uses the bootstrap-descriptor helper version (see [cli §1 and §6](cli-contract.md)).
 7. `Plan`: run the generated fixed planner step with the exact event
 comparison refs. It writes the schema-1 plan to `$RUNNER_TEMP/velnor/<run-key>/plan.json`. Both refs MUST
 identify the exact event comparison, including the pull request merge result where applicable. The step uses
@@ -267,18 +267,18 @@ direct pinned Mise commands or a locked helper staged under the runner's tempora
 8. `Publish plan`: validate the plan, emit the bounded `matrix.include` output,
 and upload `velnor-plan-<run-key>` with `if: always()`.
 
-Under `velnor-repository-v1`, Alint uses the exact `asamarts/alint@v0.16.1` tag against Velnor's `.alint.yml`;
-the final gate checks its job conclusion. `velnor-policy` runs remaining dependency/security commands through
-pinned Mise. `consumer-v1` emits neither job and needs no policy-only files.
+Under `velnor-repository-v1`, Alint uses the full-SHA-pinned `asamarts/alint` action against Velnor's `.alint.yml`;
+the final gate checks its job conclusion. The `cargo-deny`, `cargo-machete`, and `zizmor` jobs run their
+dependency/security commands through pinned Mise. `consumer-v1` emits none of these jobs and needs no policy-only files.
 
-`velnor-task` steps are the named steps in the task execution contract. Each selected matrix entry consumes
-the exact matrix object from `velnor-plan`; it MUST NOT rediscover stacks or packages. `velnor-final` steps
+Crate-job steps are the named steps in the task execution contract. Each crate job consumes
+its obligations from `plan`; it MUST NOT rediscover stacks or packages. `required` steps
 are: `Download plan`, `Download every expected matrix artifact`, `Merge reports` through a fixed internal
-workflow step, and `Publish final report` with `if: always()`. The merge step MUST run even when a matrix job
+workflow step, and `Publish final report` with `if: always()`. The merge step MUST run even when a crate job
 failed or was cancelled. It uses direct pinned Mise commands or a locked helper staged under the runner's
 temporary directory.
 
-The workflow run key is `r<github.run_id>-a<github.run_attempt>`, created by `velnor-plan` and passed
+The workflow run key is `r<github.run_id>-a<github.run_attempt>`, created by `plan` and passed
 unchanged to every job. Local runs use `local` and do not upload artifacts. The key MUST NOT enter task or
 cache identities.
 
@@ -307,19 +307,19 @@ artifact actions for required reports or transferred outputs. It MUST emit
 `asamarts/alint` is limited to Velnor's own repository-policy job. Branches,
 moving refs, `pull_request_target`, `actions/setup-*`, and
 `taiki-e/install-action` MUST NOT appear. `actionlint` and `zizmor` MUST
-validate generated workflows. The Alint tag exception applies only to that
-action in `velnor-alint`; it MUST NOT weaken pin validation for other actions.
+validate generated workflows. No tag exception exists: `asamarts/alint` pins
+a full SHA in `alint` like every other action.
 
 `velnor-actions generate` MUST render a staging tree containing `.github/`,
 run the exact pinned actionlint binary through Mise with the staging tree as
 its working directory (so it loads that tree's `.github/actionlint.yaml`), and
 validate action/action-input schemas before replacing repository output.
 Any diagnostic fails generation and leaves the existing `.github` tree
-unchanged. The generated `velnor-workflow-lint` job repeats actionlint in CI.
+unchanged. The generated `actionlint` job repeats actionlint in CI.
 
 ## 4. Generic matrix contract and V1 Rust payload
 
-`velnor-plan` MUST emit a JSON array named `matrix.include`. Each entry MUST contain the generic fields below;
+`plan` MUST emit a JSON array named `matrix.include`. Each entry MUST contain the generic fields below;
 adapter metadata and task references are opaque to the planner and renderer. The example is V1's Rust payload;
 future stack adapters define their own versioned metadata:
 
@@ -382,7 +382,7 @@ obligations separately. The V1 Rust adapter MUST NOT generate `--all-features` c
 or cross-component integration tasks MUST be represented by explicit matrix entries. An intentionally empty
 test target MUST remain visible in the plan.
 
-The plan file written by `velnor-plan` MUST be `$RUNNER_TEMP/velnor/<run-key>/plan.json` and MUST contain the
+The plan file written by `plan` MUST be `$RUNNER_TEMP/velnor/<run-key>/plan.json` and MUST contain the
 same `matrix.include` array that is sent through `GITHUB_OUTPUT`. Its schema-1 shape is defined by the
 [architecture contract](architecture.md); baseline and obligation fields use the exact proof format in the
 [parallelism and affected-work contract](parallelism-and-selection-contract.md).

@@ -1,13 +1,14 @@
 //! Workflow/tree rendering and policy gating cases.
 use std::collections::BTreeMap;
 use velnor_actions_contract::{
-    Concurrency, GeneratorValidation, Job, Permissions, PolicyJob, Trigger, VelnorSupportWorkflow,
-    WorkflowIr, WorkflowPolicy,
+    Concurrency, GeneratorValidation, Job, Permissions, Trigger, ValidatorKind,
+    VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
 };
 use velnor_actions_workflow_renderer::{
     ACTIONLINT_PATH, ALINT_USES, CANDIDATE_JOB_ID, CONCURRENCY_CANCEL, CONCURRENCY_GROUP,
-    FORBIDDEN_TOKENS, INTERNAL_OP_ENV, PolicyCommand, REQUEST_FILE_ENV, RenderContext, RenderError,
-    WORKFLOW_PATH, checkout_step, plan_step, render_tree, render_workflow_ir, with_marker,
+    FORBIDDEN_TOKENS, INTERNAL_OP_ENV, REQUEST_FILE_ENV, RenderContext, RenderError,
+    ValidatorCommand, WORKFLOW_PATH, checkout_step, plan_step, render_tree, render_workflow_ir,
+    with_marker,
 };
 
 const VERSION: &str = "0.1.0";
@@ -24,7 +25,7 @@ fn fixture_ctx() -> RenderContext {
         staged_binary: format!("$RUNNER_TEMP/velnor/bin/velnor-actions-{VERSION}"),
         request_dir: "${{ runner.temp }}/velnor/r1-a1".to_owned(),
         checkout_uses: checkout_pin(),
-        policy_commands: Vec::new(),
+        validator_commands: Vec::new(),
         candidate: None,
         preseed: false,
     }
@@ -50,7 +51,7 @@ fn exact_concurrency() -> Concurrency {
 
 fn plan_job() -> Result<Job, RenderError> {
     Ok(Job {
-        display_name: "Velnor Plan".to_owned(),
+        display_name: "Plan".to_owned(),
         runs_on: LABEL.to_owned(),
         needs: Vec::new(),
         condition: None,
@@ -60,7 +61,7 @@ fn plan_job() -> Result<Job, RenderError> {
 
 fn fixture_ir() -> Result<WorkflowIr, RenderError> {
     let mut jobs = BTreeMap::new();
-    jobs.insert("velnor-plan".to_owned(), plan_job()?);
+    jobs.insert("plan".to_owned(), plan_job()?);
     Ok(WorkflowIr {
         name: "CI".to_owned(),
         triggers: exact_triggers(),
@@ -130,21 +131,21 @@ fn consumer_tree_has_no_codeowners_and_rejects_support_jobs() -> Result<(), Rend
     let ir = fixture_ir()?;
     let ctx = fixture_ctx();
     let with_support = VelnorSupportWorkflow {
-        policy_jobs: vec![PolicyJob::Alint],
+        validators: vec![ValidatorKind::Alint],
         candidate_validation: false,
     };
     assert!(
         render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, Some(&with_support), &ctx).is_err()
     );
     let with_candidate = VelnorSupportWorkflow {
-        policy_jobs: Vec::new(),
+        validators: Vec::new(),
         candidate_validation: true,
     };
     assert!(
         render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, Some(&with_candidate), &ctx).is_err()
     );
     let empty = VelnorSupportWorkflow {
-        policy_jobs: Vec::new(),
+        validators: Vec::new(),
         candidate_validation: false,
     };
     let text = render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, Some(&empty), &ctx)?;
@@ -155,10 +156,16 @@ fn consumer_tree_has_no_codeowners_and_rejects_support_jobs() -> Result<(), Rend
 }
 
 #[test]
-fn consumer_rejects_velnor_job_ids_in_ir() -> Result<(), RenderError> {
+fn consumer_rejects_support_job_ids_in_ir() -> Result<(), RenderError> {
     let mut ir = fixture_ir()?;
     let ctx = fixture_ctx();
-    for forbidden in ["velnor-alint", "velnor-policy", "velnor-candidate"] {
+    for forbidden in [
+        "alint",
+        "cargo-deny",
+        "cargo-machete",
+        "zizmor",
+        "candidate",
+    ] {
         let mut with_job = ir.clone();
         with_job.jobs.insert(forbidden.to_owned(), plan_job()?);
         assert!(
@@ -167,22 +174,31 @@ fn consumer_rejects_velnor_job_ids_in_ir() -> Result<(), RenderError> {
         );
     }
     assert!(render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx).is_ok());
-    ir.jobs.remove("velnor-plan");
+    ir.jobs.remove("plan");
     assert!(render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx).is_err());
     Ok(())
 }
 
+fn validator_commands() -> Vec<ValidatorCommand> {
+    [
+        ValidatorKind::CargoDeny,
+        ValidatorKind::CargoMachete,
+        ValidatorKind::Zizmor,
+    ]
+    .iter()
+    .map(|validator| ValidatorCommand {
+        validator: *validator,
+        name: "Deny".to_owned(),
+        argv: vec!["deny".to_owned()],
+    })
+    .collect()
+}
+
 #[test]
-fn velnor_policy_renders_alint_and_policy_only() -> Result<(), RenderError> {
+fn velnor_policy_renders_validators_only() -> Result<(), RenderError> {
     let ir = fixture_ir()?;
     let mut ctx = fixture_ctx();
-    ctx.policy_commands = vec![PolicyCommand {
-        name: "Deny".to_owned(),
-        argv: ["mise", "exec", "--", "deny"]
-            .iter()
-            .map(ToString::to_string)
-            .collect(),
-    }];
+    ctx.validator_commands = validator_commands();
     let support =
         WorkflowPolicy::VelnorRepositoryV1.support_workflow(GeneratorValidation::Bootstrap);
     let text = render_workflow_ir(
@@ -191,20 +207,18 @@ fn velnor_policy_renders_alint_and_policy_only() -> Result<(), RenderError> {
         Some(&support),
         &ctx,
     )?;
-    assert!(text.contains("velnor-alint:"));
-    assert!(text.contains("velnor-policy:"));
+    for id in ["alint:", "cargo-deny:", "cargo-machete:", "zizmor:"] {
+        assert!(text.contains(id), "missing {id}:\n{text}");
+    }
     assert!(text.contains(ALINT_USES));
     assert!(text.contains("fail-on-warning"));
     assert!(!text.contains("qualification"));
     assert!(!text.contains("toolchain"));
     assert!(!text.contains(CANDIDATE_JOB_ID));
     let mut dup_ctx = fixture_ctx();
-    dup_ctx.policy_commands = vec![PolicyCommand {
-        name: "Deny".to_owned(),
-        argv: vec!["deny".to_owned()],
-    }];
+    dup_ctx.validator_commands = validator_commands();
     let dup = VelnorSupportWorkflow {
-        policy_jobs: vec![PolicyJob::Alint, PolicyJob::Alint],
+        validators: vec![ValidatorKind::Alint, ValidatorKind::Alint],
         candidate_validation: false,
     };
     assert!(
@@ -223,10 +237,7 @@ fn velnor_policy_renders_alint_and_policy_only() -> Result<(), RenderError> {
 fn rendered_yaml_contains_no_private_subcommands() -> Result<(), RenderError> {
     let ir = fixture_ir()?;
     let mut ctx = fixture_ctx();
-    ctx.policy_commands = vec![PolicyCommand {
-        name: "Deny".to_owned(),
-        argv: vec!["deny".to_owned()],
-    }];
+    ctx.validator_commands = validator_commands();
     let support =
         WorkflowPolicy::VelnorRepositoryV1.support_workflow(GeneratorValidation::Bootstrap);
     let text = render_workflow_ir(

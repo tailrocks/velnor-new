@@ -155,27 +155,22 @@ fn cache_save_writes_task_artifacts_only() {
 
 #[test]
 fn tools_cache_key_scopes_target_mise_generator_job_and_toolfiles() {
-    let key = tools_cache_key(
-        "x86_64-unknown-linux-gnu",
-        "2026.9.16",
-        "0.1.0",
-        "velnor-plan",
-    )
-    .expect("tools key");
+    let key = tools_cache_key("x86_64-unknown-linux-gnu", "2026.9.16", "0.1.0", "plan")
+        .expect("tools key");
     assert!(key.starts_with("mise-tools-v1-"), "{key}");
     for part in [
         "x86_64-unknown-linux-gnu",
         "2026.9.16",
         "0.1.0",
-        "velnor-plan",
+        "plan",
         "hashFiles('mise.toml','.mise.toml','mise.lock','.mise.lock','.tool-versions')",
     ] {
         assert!(key.contains(part), "key misses {part}: {key}");
     }
     assert!(!key.contains(' ') && !key.contains('\n'), "{key}");
     for bad in [
-        ("", "2026.9.16", "0.1.0", "velnor-plan"),
-        ("x86_64-unknown-linux-gnu", "latest", "0.1.0", "velnor-plan"),
+        ("", "2026.9.16", "0.1.0", "plan"),
+        ("x86_64-unknown-linux-gnu", "latest", "0.1.0", "plan"),
         (
             "x86_64-unknown-linux-gnu",
             "2026.9.16",
@@ -188,12 +183,7 @@ fn tools_cache_key_scopes_target_mise_generator_job_and_toolfiles() {
             "0.1.0",
             "plan${{x}}",
         ),
-        (
-            "wasm32-unknown-unknown",
-            "2026.9.16",
-            "0.1.0",
-            "velnor-plan",
-        ),
+        ("wasm32-unknown-unknown", "2026.9.16", "0.1.0", "plan"),
     ] {
         assert!(
             tools_cache_key(bad.0, bad.1, bad.2, bad.3).is_err(),
@@ -204,13 +194,8 @@ fn tools_cache_key_scopes_target_mise_generator_job_and_toolfiles() {
 
 #[test]
 fn tools_restore_and_save_pin_mise_data_dir_only() {
-    let key = tools_cache_key(
-        "x86_64-unknown-linux-gnu",
-        "2026.9.16",
-        "0.1.0",
-        "velnor-plan",
-    )
-    .expect("tools key");
+    let key = tools_cache_key("x86_64-unknown-linux-gnu", "2026.9.16", "0.1.0", "plan")
+        .expect("tools key");
     let restore = tools_restore_step(&key).expect("restore");
     assert_eq!(restore.name, TOOLS_RESTORE_NAME);
     let StepKind::Action { uses, with } = &restore.kind else {
@@ -256,8 +241,8 @@ fn strict_wraps_setup_with_tools_restore_and_save()
     use std::collections::BTreeMap;
     use velnor_actions_workflow_renderer::{checkout_step, shell_step};
     let lint = job(
-        "velnor-workflow-lint",
-        "Velnor Workflow Lint",
+        "actionlint",
+        "Actionlint",
         Vec::new(),
         vec![
             checkout_step(&checkout_pin())?,
@@ -269,7 +254,7 @@ fn strict_wraps_setup_with_tools_restore_and_save()
         ],
     );
     let text = strict(&fixture_ir(vec![lint]), &fixture_ctx())?;
-    let names = step_names(&text, "velnor-workflow-lint");
+    let names = step_names(&text, "actionlint");
     let restore_at = names.iter().position(|s| s == TOOLS_RESTORE_NAME);
     let setup_at = names.iter().position(|s| s == "Setup Mise");
     let save_at = names.iter().position(|s| s == TOOLS_SAVE_NAME);
@@ -288,8 +273,8 @@ fn strict_leaves_setup_less_jobs_without_tools_cache()
 -> Result<(), velnor_actions_workflow_renderer::RenderError> {
     use velnor_actions_workflow_renderer::{checkout_step, merge_step, plan_step};
     let plan = job(
-        "velnor-plan",
-        "Velnor Plan",
+        "plan",
+        "Plan",
         Vec::new(),
         vec![
             checkout_step(&checkout_pin())?,
@@ -298,14 +283,14 @@ fn strict_leaves_setup_less_jobs_without_tools_cache()
         ],
     );
     let mut final_job = job(
-        "velnor-final",
-        "Velnor / Required",
-        vec!["velnor-plan".to_owned()],
+        "required",
+        "Required",
+        vec!["plan".to_owned()],
         vec![acquire_fixture()?, merge_step()],
     );
     final_job.1.condition = Some("always()".to_owned());
     let text = strict(&fixture_ir(vec![plan, final_job]), &fixture_ctx())?;
-    let names = step_names(&text, "velnor-final");
+    let names = step_names(&text, "required");
     assert!(
         !names
             .iter()

@@ -80,8 +80,8 @@ fn missing_plan_merges_to_planning_failed() -> TestResult {
         "plan": null,
         "matrix": null,
         "matrix_reports": [],
-        "required_job_ids": ["velnor-plan"],
-        "required_jobs": [{"job_id": "velnor-plan", "conclusion": "failure"}],
+        "required_job_ids": ["plan"],
+        "required_jobs": [{"job_id": "plan", "conclusion": "failure"}],
     });
     let final_report = merge(&request)?;
     final_report.validate()?;
@@ -98,8 +98,8 @@ fn missing_plan_merges_to_planning_failed() -> TestResult {
         "plan": plan,
         "matrix": null,
         "matrix_reports": [],
-        "required_job_ids": ["velnor-plan"],
-        "required_jobs": [{"job_id": "velnor-plan", "conclusion": "success"}],
+        "required_job_ids": ["plan"],
+        "required_jobs": [{"job_id": "plan", "conclusion": "success"}],
     });
     assert_eq!(merge(&request)?.status, FinalStatus::PlanningFailed);
     Ok(())

@@ -29,8 +29,8 @@ const CARGO_DENY_VERSION: &str = "0.20.2";
 /// cargo machete --version` probe reported 0.9.2.
 const CARGO_MACHETE_VERSION: &str = "0.9.2";
 
-/// Mise tool specs the policy vectors may select, without versions.
-const POLICY_TOOL_SPECS: [&str; 2] = ["cargo-deny", "ubi:bnjbvr/cargo-machete"];
+/// Mise tool specs the validator vectors may select, without versions.
+const VALIDATOR_TOOL_SPECS: [&str; 2] = ["cargo-deny", "ubi:bnjbvr/cargo-machete"];
 
 /// Product crates scanned by the machete vector, in contract order.
 ///
@@ -96,14 +96,9 @@ fn exec_argv(
     strings_of(exec.argv(catalog)).map_err(|problem| OrchestratorError::Contract { problem })
 }
 
-/// Fixed policy-job vector: a pinned `gh` version probe.
-pub(crate) fn verify_tools_argv(catalog: &ToolCatalog) -> Result<Vec<String>, OrchestratorError> {
-    exec_argv(vec![PinnedTool::Gh], "gh", &["--version"], catalog)
-}
-
-/// Fixed policy-job vector: `cargo deny --locked check` through pinned Mise.
+/// Fixed validator-job vector: `cargo deny --locked check` through pinned Mise.
 pub(crate) fn deny_argv() -> Result<Vec<String>, OrchestratorError> {
-    policy_argv(
+    validator_argv(
         "cargo-deny",
         CARGO_DENY_VERSION,
         "cargo",
@@ -124,7 +119,7 @@ const ZIZMOR_POLICY_INPUT: &str = ".github/workflows";
 /// the exception.
 const ZIZMOR_POLICY_CONFIG: &str = ".zizmor.yml";
 
-/// Fixed policy-job vector: offline zizmor audit through pinned Mise.
+/// Fixed validator-job vector: offline zizmor audit through pinned Mise.
 pub(crate) fn zizmor_argv(catalog: &ToolCatalog) -> Result<Vec<String>, OrchestratorError> {
     exec_argv(
         vec![PinnedTool::Zizmor],
@@ -139,11 +134,11 @@ pub(crate) fn zizmor_argv(catalog: &ToolCatalog) -> Result<Vec<String>, Orchestr
     )
 }
 
-/// Fixed policy-job vector: `cargo machete` over product crates via Mise.
+/// Fixed validator-job vector: `cargo machete` over product crates via Mise.
 pub(crate) fn machete_argv() -> Result<Vec<String>, OrchestratorError> {
     let mut args = vec!["machete"];
     args.extend(MACHETE_SCAN_CRATES);
-    policy_argv(
+    validator_argv(
         "ubi:bnjbvr/cargo-machete",
         CARGO_MACHETE_VERSION,
         "cargo",
@@ -151,21 +146,21 @@ pub(crate) fn machete_argv() -> Result<Vec<String>, OrchestratorError> {
     )
 }
 
-/// One policy vector: an allowlisted tool spec plus a fixed cargo payload.
+/// One validator vector: an allowlisted tool spec plus a fixed cargo payload.
 ///
 /// Built through the Mise adapter's isolated `exec` constructor, so the
 /// emitted shape (global flags, spec, `--` separator, payload) matches the
 /// typed `PinnedToolExec` vectors byte for byte. The spec name must be
 /// allowlisted and the version an exact pin; anything else fails closed.
-fn policy_argv(
+fn validator_argv(
     spec: &str,
     version: &str,
     program: &str,
     args: &[&str],
 ) -> Result<Vec<String>, OrchestratorError> {
-    if !POLICY_TOOL_SPECS.contains(&spec) {
+    if !VALIDATOR_TOOL_SPECS.contains(&spec) {
         return Err(OrchestratorError::Contract {
-            problem: format!("policy_tool_rejected:{spec}"),
+            problem: format!("validator_tool_rejected:{spec}"),
         });
     }
     validate_exact_version(spec, version).map_err(|err| OrchestratorError::Contract {
