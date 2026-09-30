@@ -1,5 +1,6 @@
 //! Stack selection and per-stack options.
 use super::VelnorConfig;
+use super::release::RustReleaseConfig;
 use crate::errors::ContractError;
 use crate::ids::is_component_byte;
 use serde::{Deserialize, Serialize};
@@ -50,6 +51,9 @@ pub struct RustStackConfig {
     /// Sticky declared test runner; conflicts with durable evidence fail closed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub test_runner: Option<DeclaredTestRunner>,
+    /// Rust release policy (`[stacks.rust.release]`); disabled by default.
+    #[serde(default)]
+    pub release: RustReleaseConfig,
 }
 
 /// Documented default: one `default` configuration variant list.
@@ -75,13 +79,15 @@ pub struct RustConfiguration {
 }
 
 impl RustStackConfig {
-    /// Documented default: one `default` configuration, no declarations.
+    /// Documented default: one `default` configuration, no declarations,
+    /// release disabled.
     #[must_use]
     pub fn default_config() -> Self {
         Self {
             configurations: default_configurations(),
             compile_driver: None,
             test_runner: None,
+            release: RustReleaseConfig::default(),
         }
     }
 }
@@ -165,6 +171,7 @@ impl RustStackConfig {
                 ));
             }
         }
+        self.release.validate(file)?;
         Ok(())
     }
 }

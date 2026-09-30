@@ -1,8 +1,7 @@
-//! Pure typed-IR to GitHub Actions YAML rendering.
+//! Typed-IR to YAML rendering for CI and release workflows.
 //!
-//! Consumes contract workflow IR plus validated command strings only. No
-//! subprocesses, no shell construction beyond quoting fixed argv, and no
-//! stack-specific logic: tool pins and command vectors arrive validated.
+//! Validated IR plus fixed argv in, marked YAML out: no subprocesses, no
+//! stack or tool branching, quoting-only shell shaping.
 
 mod artifact_paths;
 mod cache_steps;
@@ -18,6 +17,11 @@ pub mod msrv;
 pub mod overlap;
 pub mod plan_format;
 pub mod preseed;
+pub mod release_config;
+pub mod release_gates;
+pub mod release_jobs;
+pub mod release_spec;
+pub mod release_tree;
 pub mod render;
 pub mod setup;
 pub mod steps;

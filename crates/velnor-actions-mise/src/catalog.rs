@@ -1,8 +1,7 @@
 //! Pinned tool catalog: exact mise tool selectors for every Velnor command.
 //!
-//! Versions are qualified pins (primary sources rechecked 2026-09-28): Rust
-//! stable from `channel-rust-stable.toml`, the rest from GitHub releases or
-//! the mise registry. Project `mise.toml` selectors never alter these pins.
+//! Qualified pins (rechecked 2026-09-28/30); project `mise.toml` selectors
+//! never alter these pins.
 
 use velnor_actions_contract::{FreshnessRequirement, ToolIdentity, validate_freshness_class};
 
@@ -14,6 +13,10 @@ use crate::error::MiseError;
 /// the canonical path for lock parsing and catalog-equality checks.
 #[path = "lock.rs"]
 pub mod lock;
+
+/// Pinned release-plz coordinator argv (root frozen: `mise::catalog::release_plz`).
+#[path = "release_plz.rs"]
+pub mod release_plz;
 
 /// Qualified mise runner release (tag `v2026.9.16`).
 /// Source: `https://api.github.com/repos/jdx/mise/releases/latest`; checked 2026-09-28.
@@ -40,16 +43,13 @@ pub const ZIZMOR_VERSION: &str = "1.30.1";
 /// `cargo-nextest-0.9.146`, published 2026-09-21).
 /// Source: `https://crates.io/api/v1/crates/cargo-nextest`; checked 2026-09-29.
 pub const NEXTEST_VERSION: &str = "0.9.146";
+/// Qualified release-plz coordinator release (tag `release-plz-v0.3.169`).
+/// Source: `https://crates.io/api/v1/crates/release-plz`; checked 2026-09-30.
+pub const RELEASE_PLZ_VERSION: &str = "0.3.169";
 
-// Backend-qualified mise selector prefix for Nextest. The mise registry
-// has no `nextest` shorthand, so the catalog pins the aqua-registry path.
-// Qualified 2026-09-29: `mise ls-remote` lists 0.9.146, `mise install
-// aqua:nextest-rs/nextest/cargo-nextest@0.9.146` fetched the prebuilt
-// universal-apple-darwin tarball in ~3s, and the isolated
-// `mise --no-config --no-env --no-hooks exec rust@1.98.1 <spec> --
-// cargo nextest --version` probe reported cargo-nextest 0.9.146.
-// Rejected: `github:nextest-rs/nextest` tags carry a `cargo-nextest-`
-// prefix (not an exact pin); `cargo:cargo-nextest` compiles from source.
+// Nextest needs its backend-qualified aqua-registry path: no `nextest`
+// shorthand exists, `github:` tags carry a `cargo-nextest-` prefix, and
+// `cargo:` compiles from source. Qualified 2026-09-29 via isolated probe.
 const NEXTEST_TOOL_SPEC_PREFIX: &str = "aqua:nextest-rs/nextest/cargo-nextest";
 
 /// Pinned Rust target triple: the single Linux target the runner fleet
@@ -60,10 +60,7 @@ pub const RUST_TARGET_TRIPLE: &str = "x86_64-unknown-linux-gnu";
 /// Platforms every catalog tool supports (sorted, exact labels).
 const TOOL_PLATFORMS: [&str; 2] = ["ubuntu-24.04", "ubuntu-26.04"];
 
-/// Placeholder artifact digest pending live requalification (ver §2).
-///
-/// Shape-valid only: the freshness checker must replace this with each
-/// upstream release-artifact sha256 before digest enforcement.
+/// Placeholder digest (ver §2): freshness replaces it per upstream artifact sha256.
 const PLACEHOLDER_DIGEST: &str = "0000000000000000000000000000000000000000000000000000000000000000";
 
 /// Tools Velnor may select through mise, by registry name.
@@ -83,11 +80,13 @@ pub enum PinnedTool {
     Zizmor,
     /// Nextest test runner (`nextest`, invoked as `cargo nextest`).
     Nextest,
+    /// Release coordinator (`release-plz`, const-pinned: no catalog slot).
+    ReleasePlz,
 }
 
 impl PinnedTool {
     /// Every catalog tool in stable order.
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 8] = [
         Self::Rust,
         Self::MrBoxington,
         Self::Gh,
@@ -95,6 +94,7 @@ impl PinnedTool {
         Self::Shellcheck,
         Self::Zizmor,
         Self::Nextest,
+        Self::ReleasePlz,
     ];
 
     /// Mise registry name used in `<tool>@<version>` selectors.
@@ -108,6 +108,7 @@ impl PinnedTool {
             Self::Shellcheck => "shellcheck",
             Self::Zizmor => "zizmor",
             Self::Nextest => "nextest",
+            Self::ReleasePlz => "release-plz",
         }
     }
 
@@ -239,6 +240,7 @@ impl ToolCatalog {
             PinnedTool::Shellcheck => &self.shellcheck,
             PinnedTool::Zizmor => &self.zizmor,
             PinnedTool::Nextest => &self.nextest,
+            PinnedTool::ReleasePlz => RELEASE_PLZ_VERSION,
         }
     }
 
@@ -258,10 +260,8 @@ impl ToolCatalog {
         }
     }
 
-    /// Exact `rustup` toolchain name: `<rust-exact>-<target-triple>`.
-    ///
-    /// Addresses the toolchain `mise install rust@<exact>` creates, so the
-    /// fixed component step cannot resolve an ambient toolchain instead.
+    /// Exact `rustup` toolchain name (`<rust-exact>-<target-triple>`) that
+    /// `mise install rust@<exact>` creates; never an ambient toolchain.
     #[must_use]
     pub fn rust_toolchain_name(&self) -> String {
         format!("{}-{RUST_TARGET_TRIPLE}", self.version(PinnedTool::Rust))
@@ -332,8 +332,8 @@ impl MbxProvisioning {
 ///
 /// # Errors
 ///
-/// Returns [`MiseError::InvalidToolVersion`] for empty strings, a leading
-/// `v`, `latest`, two-part versions, or non-numeric components.
+/// Returns [`MiseError::InvalidToolVersion`] for empty, `v`-prefixed,
+/// `latest`, two-part, or non-numeric versions.
 pub fn validate_exact_version(tool: &str, version: &str) -> Result<(), MiseError> {
     let exact = version.split('.').collect::<Vec<_>>();
     let [major, minor, patch] = exact.as_slice() else {
@@ -375,6 +375,7 @@ fn tool_source(tool: PinnedTool, version: &str) -> String {
         PinnedTool::Nextest => {
             format!("https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-{version}")
         }
+        PinnedTool::ReleasePlz => format!("https://crates.io/api/v1/crates/release-plz/{version}"),
     }
 }
 

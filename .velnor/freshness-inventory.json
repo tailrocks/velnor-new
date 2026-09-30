@@ -157,6 +157,14 @@
       "qualified": "0.9.146",
       "source": "https://crates.io/api/v1/crates/cargo-nextest",
       "status": "current"
+    },
+    {
+      "checked_at": "2026-09-30",
+      "name": "release-plz",
+      "pinned": "0.3.169",
+      "qualified": "0.3.169",
+      "source": "https://crates.io/api/v1/crates/release-plz",
+      "status": "current"
     }
   ]
 }

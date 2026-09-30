@@ -25,6 +25,8 @@ mod impl_rust_negative;
 mod impl_rust_p03_identity;
 #[path = "impl_rust_p06.rs"]
 mod impl_rust_p06;
+#[path = "impl_rust_release.rs"]
+mod impl_rust_release;
 #[path = "impl_rust_tasks.rs"]
 mod impl_rust_tasks;
 #[path = "impl_rust_toolfiles.rs"]
