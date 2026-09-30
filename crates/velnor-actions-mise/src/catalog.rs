@@ -1,6 +1,6 @@
 //! Pinned tool catalog: exact mise tool selectors for every Velnor command.
 //!
-//! Qualified pins (rechecked 2026-09-28/30); project `mise.toml` selectors
+//! Qualified pins (rechecked 2026-09-30); project `mise.toml` selectors
 //! never alter these pins.
 
 use velnor_actions_contract::{FreshnessRequirement, ToolIdentity, validate_freshness_class};
@@ -23,18 +23,18 @@ pub mod release_plz;
 pub mod mbx;
 pub use mbx::MbxProvisioning;
 
-/// Qualified mise runner release (tag `v2026.9.16`).
-/// Source: `https://api.github.com/repos/jdx/mise/releases/latest`; checked 2026-09-28.
-pub const MISE_VERSION: &str = "2026.9.16";
+/// Qualified mise runner release (tag `v2026.9.18`).
+/// Source: `https://api.github.com/repos/jdx/mise/releases/latest`; checked 2026-09-30.
+pub const MISE_VERSION: &str = "2026.9.18";
 /// Qualified Rust stable toolchain.
 /// Source: `https://static.rust-lang.org/dist/channel-rust-stable.toml`; checked 2026-09-28.
 pub const RUST_VERSION: &str = "1.98.1";
-/// Qualified `mr-boxington` tool (binary on PATH is `mbx`; tag `v1.19.0`).
-/// Source: `https://api.github.com/repos/jdx/mr-boxington/releases/latest`; checked 2026-09-28.
-pub const MR_BOXINGTON_VERSION: &str = "1.19.0";
-/// Qualified GitHub CLI (tag `v2.101.0`).
-/// Source: `https://api.github.com/repos/cli/cli/releases/latest`; checked 2026-09-28.
-pub const GH_VERSION: &str = "2.101.0";
+/// Qualified `mr-boxington` tool (binary on PATH is `mbx`; tag `v1.21.0`).
+/// Source: `https://api.github.com/repos/jdx/mr-boxington/releases/latest`; checked 2026-09-30.
+pub const MR_BOXINGTON_VERSION: &str = "1.21.0";
+/// Qualified GitHub CLI (tag `v2.102.0`).
+/// Source: `https://api.github.com/repos/cli/cli/releases/latest`; checked 2026-09-30.
+pub const GH_VERSION: &str = "2.102.0";
 /// Qualified actionlint release (tag `v1.7.12`).
 /// Source: `https://api.github.com/repos/rhysd/actionlint/releases/latest`; checked 2026-09-28.
 pub const ACTIONLINT_VERSION: &str = "1.7.12";

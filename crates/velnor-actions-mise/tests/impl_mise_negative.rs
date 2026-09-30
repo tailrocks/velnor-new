@@ -197,7 +197,7 @@ fn candidate_build_vector_pins_implemented_trio_form() -> Result<(), String> {
             "--no-hooks",
             "exec",
             "rust@1.98.1",
-            "mr-boxington@1.19.0",
+            "mr-boxington@1.21.0",
             "--",
             "mbx",
             "build",
@@ -232,7 +232,7 @@ fn gh_pinned_exec_is_exact() -> Result<(), String> {
     )
     .map_err(|err| err.to_string())?;
     let argv = exec.argv(&pinned());
-    assert_eq!(argv[5], OsString::from("gh@2.101.0"));
+    assert_eq!(argv[5], OsString::from("gh@2.102.0"));
     assert_eq!(argv[7], OsString::from("gh"));
     Ok(())
 }

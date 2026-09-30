@@ -23,15 +23,15 @@ use crate::discover::Discovery;
 /// Override key selecting the Mise setup action pin.
 const MISE_ACTION_KEY: &str = "jdx/mise-action";
 
-/// Installed `mise` binary digest for mise 2026.9.16 on Linux x86-64.
+/// Installed `mise` binary digest for mise 2026.9.18 on Linux x86-64.
 ///
-/// Source: `SHASUMS256.txt` of the jdx/mise `v2026.9.16` release, verified
-/// 2026-09-29 by downloading `mise-v2026.9.16-linux-x64.tar.zst`, extracting
+/// Source: `SHASUMS256.txt` of the jdx/mise `v2026.9.18` release, verified
+/// 2026-09-30 by downloading `mise-v2026.9.18-linux-x64.tar.zst`, extracting
 /// `mise/bin/mise`, and hashing the extracted binary. The setup action
 /// compares its `sha256` input against the installed binary, not the archive,
 /// so only this digest is emitted, and only for x64-Linux runners.
 const MISE_BINARY_SHA256_LINUX_X64: &str =
-    "b6f8757201f6a2ee799f45f3f52ef7ca0b4071523637dc3b0b24264dd3333518";
+    "d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4";
 
 /// Runner target the compiled mise digest covers.
 const LINUX_X64_TARGET: &str = "x86_64-unknown-linux-gnu";

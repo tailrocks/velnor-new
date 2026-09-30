@@ -27,15 +27,15 @@ jobs:
         with:
           persist-credentials: "false"
       - name: Setup Mise
-        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
+        uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
           cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.16-75c77caa4018556f
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-75c77caa4018556f
           cache_save: "true"
           env: "false"
           install: "false"
-          sha256: b6f8757201f6a2ee799f45f3f52ef7ca0b4071523637dc3b0b24264dd3333518
-          version: 2026.9.16
+          sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
+          version: 2026.9.18
       - name: Run actionlint
         run: mise --no-config --no-env --no-hooks exec actionlint@1.7.12 shellcheck@0.11.0 -- actionlint -color
   alint:
@@ -62,15 +62,15 @@ jobs:
         with:
           persist-credentials: "false"
       - name: Setup Mise
-        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
+        uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
           cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.16-1e88d9dde00a53da
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-1e88d9dde00a53da
           cache_save: "true"
           env: "false"
           install: "false"
-          sha256: b6f8757201f6a2ee799f45f3f52ef7ca0b4071523637dc3b0b24264dd3333518
-          version: 2026.9.16
+          sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
+          version: 2026.9.18
       - name: Run cargo-deny
         run: mise --no-config --no-env --no-hooks exec cargo-deny@0.20.2 -- cargo deny --locked check
   cargo-machete:
@@ -82,15 +82,15 @@ jobs:
         with:
           persist-credentials: "false"
       - name: Setup Mise
-        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
+        uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
           cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.16-507563a85b3135e7
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-507563a85b3135e7
           cache_save: "true"
           env: "false"
           install: "false"
-          sha256: b6f8757201f6a2ee799f45f3f52ef7ca0b4071523637dc3b0b24264dd3333518
-          version: 2026.9.16
+          sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
+          version: 2026.9.18
       - name: Run cargo-machete
         run: mise --no-config --no-env --no-hooks exec ubi:bnjbvr/cargo-machete@0.9.2 -- cargo machete crates/velnor-actions-contract crates/velnor-actions-rust crates/velnor-actions-mise crates/velnor-actions-actionlint crates/velnor-actions-workflow-renderer crates/velnor-actions-orchestrator crates/velnor-actions-cli
   plan:
@@ -103,15 +103,15 @@ jobs:
           fetch-depth: "0"
           persist-credentials: "false"
       - name: Setup Mise
-        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
+        uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
           cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.16-e9592c9b35b763fa
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-6270601fa454da91
           cache_save: "true"
           env: "false"
           install: "false"
-          sha256: b6f8757201f6a2ee799f45f3f52ef7ca0b4071523637dc3b0b24264dd3333518
-          version: 2026.9.16
+          sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
+          version: 2026.9.18
       - name: Prepare pinned tools
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -121,13 +121,13 @@ jobs:
           MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
-        run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.19.0 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
+        run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.21.0 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
       - name: Build helper (pre-seed trust-on-review)
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 -- mbx build --release --locked --package velnor-actions-cli --bin velnor-actions
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.0 -- mbx build --release --locked --package velnor-actions-cli --bin velnor-actions
       - name: Verify MBX compile (pre-seed trust-on-review)
-        run: "sh -c 'test -x target/release/velnor-actions && mise --no-config --no-env --no-hooks exec mr-boxington@1.19.0 -- mbx --version | grep -qxF \"mbx 1.19.0\"'"
+        run: "sh -c 'test -x target/release/velnor-actions && mise --no-config --no-env --no-hooks exec mr-boxington@1.21.0 -- mbx --version | grep -qxF \"mbx 1.21.0\"'"
       - name: Write helper manifest (pre-seed trust-on-review)
-        run: "sh -c 'mkdir -p $RUNNER_TEMP/velnor/preseed-output && cp target/release/velnor-actions $RUNNER_TEMP/velnor/preseed-output/velnor-actions && sha256sum $RUNNER_TEMP/velnor/preseed-output/velnor-actions > $RUNNER_TEMP/velnor/preseed-output/sha.txt && read sha rest < $RUNNER_TEMP/velnor/preseed-output/sha.txt && printf \"{\\\"schema\\\":1,\\\"commit\\\":\\\"%s\\\",\\\"target\\\":\\\"x86_64-unknown-linux-gnu\\\",\\\"toolchain\\\":\\\"rust@1.98.1+mr-boxington@1.19.0\\\",\\\"sha256\\\":\\\"%s\\\"}\" \"$GITHUB_SHA\" \"$sha\" > $RUNNER_TEMP/velnor/preseed-output/preseed-manifest.json'"
+        run: "sh -c 'mkdir -p $RUNNER_TEMP/velnor/preseed-output && cp target/release/velnor-actions $RUNNER_TEMP/velnor/preseed-output/velnor-actions && sha256sum $RUNNER_TEMP/velnor/preseed-output/velnor-actions > $RUNNER_TEMP/velnor/preseed-output/sha.txt && read sha rest < $RUNNER_TEMP/velnor/preseed-output/sha.txt && printf \"{\\\"schema\\\":1,\\\"commit\\\":\\\"%s\\\",\\\"target\\\":\\\"x86_64-unknown-linux-gnu\\\",\\\"toolchain\\\":\\\"rust@1.98.1+mr-boxington@1.21.0\\\",\\\"sha256\\\":\\\"%s\\\"}\" \"$GITHUB_SHA\" \"$sha\" > $RUNNER_TEMP/velnor/preseed-output/preseed-manifest.json'"
       - name: Upload helper (pre-seed trust-on-review)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -188,7 +188,7 @@ jobs:
           MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx fmt --all --check --manifest-path Cargo.toml
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx fmt --all --check --manifest-path Cargo.toml
       - name: Check generated files
         env:
           MISE_AUTO_INSTALL: "false"
@@ -242,15 +242,15 @@ jobs:
     if: always()
     steps:
       - name: Setup Mise
-        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
+        uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
           cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.16-976d3023f73c2670
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-14ee3a9bbb90604c
           cache_save: "true"
           env: "false"
           install: "false"
-          sha256: b6f8757201f6a2ee799f45f3f52ef7ca0b4071523637dc3b0b24264dd3333518
-          version: 2026.9.16
+          sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
+          version: 2026.9.18
       - name: Download helper (pre-seed trust-on-review)
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
@@ -269,7 +269,7 @@ jobs:
           MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
-        run: mise --no-config --no-env --no-hooks install gh@2.101.0
+        run: mise --no-config --no-env --no-hooks install gh@2.102.0
       - name: Download plan
         continue-on-error: true
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
@@ -313,15 +313,15 @@ jobs:
         with:
           persist-credentials: "false"
       - name: Setup Mise
-        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
+        uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
           cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.16-e9592c9b35b763fa
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-6270601fa454da91
           cache_save: "true"
           env: "false"
           install: "false"
-          sha256: b6f8757201f6a2ee799f45f3f52ef7ca0b4071523637dc3b0b24264dd3333518
-          version: 2026.9.16
+          sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
+          version: 2026.9.18
       - name: Download helper (pre-seed trust-on-review)
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
@@ -340,7 +340,7 @@ jobs:
           MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
-        run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.19.0 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
+        run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.21.0 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
       - name: Prepare Rust components
         env:
           MISE_AUTO_INSTALL: "false"
@@ -363,7 +363,7 @@ jobs:
         uses: jdx/mr-boxington-action@9df1d4b18b2147788a7ee7a2c7b84ecf62fd89d3
         with:
           github-cache-mode: objects
-          version: 1.19.0
+          version: 1.21.0
       - name: Fetch Cargo sources
         env:
           MISE_AUTO_INSTALL: "false"
@@ -389,9 +389,9 @@ jobs:
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-actionlint/fmt/default
           VELNOR_MATRIX_KEY: m-93aa743354796b58
-          VELNOR_TASK_DIGEST: b3-ebe3453468c5e622b6a7b2e08d8441fc9fca4878a969c71d703ceb435b23980c
+          VELNOR_TASK_DIGEST: b3-1ac46b97417e2347a6873d8879f358aebbc54e3738d0890611963675b21fa526
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-actionlint/fmt/default
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx fmt --check --manifest-path crates/velnor-actions-actionlint/Cargo.toml
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx fmt --check --manifest-path crates/velnor-actions-actionlint/Cargo.toml
       - name: Clippy
         env:
           MISE_AUTO_INSTALL: "false"
@@ -405,9 +405,9 @@ jobs:
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-actionlint/clippy/default
           VELNOR_MATRIX_KEY: m-ecdec2e058a7da89
-          VELNOR_TASK_DIGEST: b3-2908ba10112de881077f7ea34d95bc5e25fda37f4a06a2bb9b2317645ff092bd
+          VELNOR_TASK_DIGEST: b3-483f820a076d5bc269f200a6346917e6ecc78e2f9acce62f178bdbce73fa0fb5
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-actionlint/clippy/default
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx clippy --locked --offline --manifest-path crates/velnor-actions-actionlint/Cargo.toml --package velnor-actions-actionlint --all-targets -- -D warnings
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx clippy --locked --offline --manifest-path crates/velnor-actions-actionlint/Cargo.toml --package velnor-actions-actionlint --all-targets -- -D warnings
       - name: Build test executables
         env:
           MISE_AUTO_INSTALL: "false"
@@ -421,9 +421,9 @@ jobs:
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-actionlint/build/default
           VELNOR_MATRIX_KEY: m-8887de4a4a14f095
-          VELNOR_TASK_DIGEST: b3-c84238cc92c5674b6615a856392d7514052782699147f9c382aa941c9e3f19f9
+          VELNOR_TASK_DIGEST: b3-5a417ece2fcfccda3dfad92f49932577fbc754ff752a086e8eecdf5ed5e75f73
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-actionlint/build/default
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx build --locked --offline --manifest-path crates/velnor-actions-actionlint/Cargo.toml --package velnor-actions-actionlint
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx build --locked --offline --manifest-path crates/velnor-actions-actionlint/Cargo.toml --package velnor-actions-actionlint
       - name: Unit and integration tests
         env:
           MISE_AUTO_INSTALL: "false"
@@ -437,9 +437,9 @@ jobs:
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-actionlint/nextest/default
           VELNOR_MATRIX_KEY: m-d39383082418218e
-          VELNOR_TASK_DIGEST: b3-0705beae03e357f7935e59dc2f5ceb905dff8ceeb921d628461cbb10408caab5
+          VELNOR_TASK_DIGEST: b3-488de2597d86c47eac8ef9e874cc072b84e42a076585ad19e4d3eed2d3f58c60
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-actionlint/nextest/default
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx nextest run --profile ci --locked --offline --manifest-path crates/velnor-actions-actionlint/Cargo.toml --package velnor-actions-actionlint --no-tests fail
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx nextest run --profile ci --locked --offline --manifest-path crates/velnor-actions-actionlint/Cargo.toml --package velnor-actions-actionlint --no-tests fail
       - name: Doctests
         env:
           MISE_AUTO_INSTALL: "false"
@@ -453,9 +453,9 @@ jobs:
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-actionlint/doctest/default
           VELNOR_MATRIX_KEY: m-648d9a1631425363
-          VELNOR_TASK_DIGEST: b3-5289156670586850a1cfd666f1edcd449507d994f4787ed9bdf187c7938e1a44
+          VELNOR_TASK_DIGEST: b3-ba980e08033ae19c4214a71a2426a73023736a7ace03d0d14c533fbc591d1049
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-actionlint/doctest/default
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx test --locked --offline --manifest-path crates/velnor-actions-actionlint/Cargo.toml --package velnor-actions-actionlint --doc
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx test --locked --offline --manifest-path crates/velnor-actions-actionlint/Cargo.toml --package velnor-actions-actionlint --doc
       - name: Documentation
         env:
           MISE_AUTO_INSTALL: "false"
@@ -469,9 +469,9 @@ jobs:
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-actionlint/doc/default
           VELNOR_MATRIX_KEY: m-81305c234c22a275
-          VELNOR_TASK_DIGEST: b3-08719560696a571ed922eeb156e04354c57a96f84910aef3c6fd171ce47179b2
+          VELNOR_TASK_DIGEST: b3-1df483d9fa96ce5333131b2e43fc6a4b16a656996de83b6774ce1ed307c0c24a
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-actionlint/doc/default
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx doc --locked --offline --manifest-path crates/velnor-actions-actionlint/Cargo.toml --package velnor-actions-actionlint --no-deps
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx doc --locked --offline --manifest-path crates/velnor-actions-actionlint/Cargo.toml --package velnor-actions-actionlint --no-deps
   rust-velnor-actions-cli:
     name: Rust / velnor-actions-cli
     runs-on: ubuntu-26.04
@@ -483,15 +483,15 @@ jobs:
         with:
           persist-credentials: "false"
       - name: Setup Mise
-        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
+        uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
           cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.16-e9592c9b35b763fa
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-6270601fa454da91
           cache_save: "true"
           env: "false"
           install: "false"
-          sha256: b6f8757201f6a2ee799f45f3f52ef7ca0b4071523637dc3b0b24264dd3333518
-          version: 2026.9.16
+          sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
+          version: 2026.9.18
       - name: Download helper (pre-seed trust-on-review)
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
@@ -510,7 +510,7 @@ jobs:
           MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
-        run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.19.0 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
+        run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.21.0 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
       - name: Prepare Rust components
         env:
           MISE_AUTO_INSTALL: "false"
@@ -533,7 +533,7 @@ jobs:
         uses: jdx/mr-boxington-action@9df1d4b18b2147788a7ee7a2c7b84ecf62fd89d3
         with:
           github-cache-mode: objects
-          version: 1.19.0
+          version: 1.21.0
       - name: Fetch Cargo sources
         env:
           MISE_AUTO_INSTALL: "false"
@@ -559,9 +559,9 @@ jobs:
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-cli/fmt/default
           VELNOR_MATRIX_KEY: m-7569343f915bb22f
-          VELNOR_TASK_DIGEST: b3-66486d9c365caec7a4427b288a644e42f77fb4d1faee8ef4879292330ebdda64
+          VELNOR_TASK_DIGEST: b3-5920bf8f824b2919aa2c21ef7532024b6d2dd08597ae4cac119fb078e1781ccf
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-cli/fmt/default
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx fmt --check --manifest-path crates/velnor-actions-cli/Cargo.toml
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx fmt --check --manifest-path crates/velnor-actions-cli/Cargo.toml
       - name: Clippy
         env:
           MISE_AUTO_INSTALL: "false"
@@ -575,9 +575,9 @@ jobs:
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-cli/clippy/default
           VELNOR_MATRIX_KEY: m-167c225e22fadf7f
-          VELNOR_TASK_DIGEST: b3-fc4c789aad77878bf82c9762663ac7b778e32333e68be13b115305b06c6011ce
+          VELNOR_TASK_DIGEST: b3-eacd4c8b17b03f34d5f685e2c6785201c9295fc6f87798a1522c51f4560c1b2c
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-cli/clippy/default
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx clippy --locked --offline --manifest-path crates/velnor-actions-cli/Cargo.toml --package velnor-actions-cli --all-targets -- -D warnings
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx clippy --locked --offline --manifest-path crates/velnor-actions-cli/Cargo.toml --package velnor-actions-cli --all-targets -- -D warnings
       - name: Build test executables
         env:
           MISE_AUTO_INSTALL: "false"
@@ -591,9 +591,9 @@ jobs:
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-cli/build/default
           VELNOR_MATRIX_KEY: m-7453ab9ff0d4f64d
-          VELNOR_TASK_DIGEST: b3-139299f1ff928f4f12e59368ba46c495cdf2e97519fcf420fd74b306962e536f
+          VELNOR_TASK_DIGEST: b3-cc351c685aaee713acdc810b5a9a91ff176cf673e6219885c34b665e9bf7facd
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-cli/build/default
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx build --locked --offline --manifest-path crates/velnor-actions-cli/Cargo.toml --package velnor-actions-cli
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx build --locked --offline --manifest-path crates/velnor-actions-cli/Cargo.toml --package velnor-actions-cli
       - name: Unit and integration tests
         env:
           MISE_AUTO_INSTALL: "false"
@@ -607,9 +607,9 @@ jobs:
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-cli/nextest/default
           VELNOR_MATRIX_KEY: m-67ee20a34e48b6e3
-          VELNOR_TASK_DIGEST: b3-24800c5960ece13678a11eba6c7c53802b0b28968e1caed781a784cf9358212b
+          VELNOR_TASK_DIGEST: b3-3f67ccdad07d446ef4c3167de991ec2422ddfcee7ec42a969191b1346d06a1e1
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-cli/nextest/default
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx nextest run --profile ci --locked --offline --manifest-path crates/velnor-actions-cli/Cargo.toml --package velnor-actions-cli --no-tests fail
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx nextest run --profile ci --locked --offline --manifest-path crates/velnor-actions-cli/Cargo.toml --package velnor-actions-cli --no-tests fail
       - name: Documentation
         env:
           MISE_AUTO_INSTALL: "false"
@@ -623,9 +623,9 @@ jobs:
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-cli/doc/default
           VELNOR_MATRIX_KEY: m-93a4593c9a3c3085
-          VELNOR_TASK_DIGEST: b3-b14be5744b1bd1bb41a9e28b5d86699118bc66f28c563d9ba5f72e4737043f9c
+          VELNOR_TASK_DIGEST: b3-926df2abc0ff2896861c57fdb241d2ddbf2b8daf1354ed91757fd38bd199f680
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-cli/doc/default
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx doc --locked --offline --manifest-path crates/velnor-actions-cli/Cargo.toml --package velnor-actions-cli --no-deps
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx doc --locked --offline --manifest-path crates/velnor-actions-cli/Cargo.toml --package velnor-actions-cli --no-deps
   rust-velnor-actions-contract:
     name: Rust / velnor-actions-contract
     runs-on: ubuntu-26.04
@@ -637,15 +637,15 @@ jobs:
         with:
           persist-credentials: "false"
       - name: Setup Mise
-        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
+        uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
           cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.16-e9592c9b35b763fa
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-6270601fa454da91
           cache_save: "true"
           env: "false"
           install: "false"
-          sha256: b6f8757201f6a2ee799f45f3f52ef7ca0b4071523637dc3b0b24264dd3333518
-          version: 2026.9.16
+          sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
+          version: 2026.9.18
       - name: Download helper (pre-seed trust-on-review)
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
@@ -664,7 +664,7 @@ jobs:
           MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
-        run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.19.0 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
+        run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.21.0 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
       - name: Prepare Rust components
         env:
           MISE_AUTO_INSTALL: "false"
@@ -687,7 +687,7 @@ jobs:
         uses: jdx/mr-boxington-action@9df1d4b18b2147788a7ee7a2c7b84ecf62fd89d3
         with:
           github-cache-mode: objects
-          version: 1.19.0
+          version: 1.21.0
       - name: Fetch Cargo sources
         env:
           MISE_AUTO_INSTALL: "false"
@@ -713,9 +713,9 @@ jobs:
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-contract/fmt/default
           VELNOR_MATRIX_KEY: m-c8b6d171011e01a9
-          VELNOR_TASK_DIGEST: b3-3005817cf1fec62889635ef22fd117a6076d922c318984d6e9b9e46e466261bf
+          VELNOR_TASK_DIGEST: b3-95d367b51ade18a1af9cd79e128d9150aa762d112ce7e7b8788d1287871e6bae
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-contract/fmt/default
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx fmt --check --manifest-path crates/velnor-actions-contract/Cargo.toml
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx fmt --check --manifest-path crates/velnor-actions-contract/Cargo.toml
       - name: Clippy
         env:
           MISE_AUTO_INSTALL: "false"
@@ -729,9 +729,9 @@ jobs:
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-contract/clippy/default
           VELNOR_MATRIX_KEY: m-904a957ae01ca7bb
-          VELNOR_TASK_DIGEST: b3-9e96374a0ce8d51a6fce6eac42e6e071855b64ac4eb85a30a48e77809b9ef2a4
+          VELNOR_TASK_DIGEST: b3-7f8e5f36c6c454aa7a6440d22909ce1a24676554939166165d57d2dbf21a8c93
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-contract/clippy/default
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx clippy --locked --offline --manifest-path crates/velnor-actions-contract/Cargo.toml --package velnor-actions-contract --all-targets -- -D warnings
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx clippy --locked --offline --manifest-path crates/velnor-actions-contract/Cargo.toml --package velnor-actions-contract --all-targets -- -D warnings
       - name: Build test executables
         env:
           MISE_AUTO_INSTALL: "false"
@@ -745,9 +745,9 @@ jobs:
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-contract/build/default
           VELNOR_MATRIX_KEY: m-9109428e72a8fcba
-          VELNOR_TASK_DIGEST: b3-1705cb43e75cf9268857df7a1d278ea8b9f8940c3e000af92cbc6565b225ae23
+          VELNOR_TASK_DIGEST: b3-5bb00f551c1c81feaf4e8f5260772855598bc0f48bdccead72d3a3c86f2d404c
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-contract/build/default
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx build --locked --offline --manifest-path crates/velnor-actions-contract/Cargo.toml --package velnor-actions-contract
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx build --locked --offline --manifest-path crates/velnor-actions-contract/Cargo.toml --package velnor-actions-contract
       - name: Unit and integration tests
         env:
           MISE_AUTO_INSTALL: "false"
@@ -761,9 +761,9 @@ jobs:
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-contract/nextest/default
           VELNOR_MATRIX_KEY: m-43550b2728a6bb47
-          VELNOR_TASK_DIGEST: b3-2edecf093bfc9c009eb487027ce5c9c498715468e47e7cb8de4d60b5b479f494
+          VELNOR_TASK_DIGEST: b3-202a23cd23dffaeedf31721dddf5b12027edb7872373224383de04bf7e4c159e
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-contract/nextest/default
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx nextest run --profile ci --locked --offline --manifest-path crates/velnor-actions-contract/Cargo.toml --package velnor-actions-contract --no-tests fail
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx nextest run --profile ci --locked --offline --manifest-path crates/velnor-actions-contract/Cargo.toml --package velnor-actions-contract --no-tests fail
       - name: Doctests
         env:
           MISE_AUTO_INSTALL: "false"
@@ -777,9 +777,9 @@ jobs:
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-contract/doctest/default
           VELNOR_MATRIX_KEY: m-2e184614bdff13d7
-          VELNOR_TASK_DIGEST: b3-f8b515eb68d9602dbac335c1adfbc3e26df7be40df357aafaddc74906e230faa
+          VELNOR_TASK_DIGEST: b3-105f7bc952c4b2cada5c36a38d37f57c1c7da866aebd59dcef662c57bfa32aa4
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-contract/doctest/default
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx test --locked --offline --manifest-path crates/velnor-actions-contract/Cargo.toml --package velnor-actions-contract --doc
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx test --locked --offline --manifest-path crates/velnor-actions-contract/Cargo.toml --package velnor-actions-contract --doc
       - name: Documentation
         env:
           MISE_AUTO_INSTALL: "false"
@@ -793,9 +793,9 @@ jobs:
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-contract/doc/default
           VELNOR_MATRIX_KEY: m-5bfa1ac4c56189d6
-          VELNOR_TASK_DIGEST: b3-a69fb78be39eb937203e6884d1bc501cbda6a0f031d0c8369d759ed4c1221f94
+          VELNOR_TASK_DIGEST: b3-7dd9cdd351c96b7c44dee7715f6d0928afb4d882bc5659f05c46ad1b57a30036
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-contract/doc/default
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx doc --locked --offline --manifest-path crates/velnor-actions-contract/Cargo.toml --package velnor-actions-contract --no-deps
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx doc --locked --offline --manifest-path crates/velnor-actions-contract/Cargo.toml --package velnor-actions-contract --no-deps
   rust-velnor-actions-mise:
     name: Rust / velnor-actions-mise
     runs-on: ubuntu-26.04
@@ -807,15 +807,15 @@ jobs:
         with:
           persist-credentials: "false"
       - name: Setup Mise
-        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
+        uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
           cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.16-e9592c9b35b763fa
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-6270601fa454da91
           cache_save: "true"
           env: "false"
           install: "false"
-          sha256: b6f8757201f6a2ee799f45f3f52ef7ca0b4071523637dc3b0b24264dd3333518
-          version: 2026.9.16
+          sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
+          version: 2026.9.18
       - name: Download helper (pre-seed trust-on-review)
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
@@ -834,7 +834,7 @@ jobs:
           MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
-        run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.19.0 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
+        run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.21.0 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
       - name: Prepare Rust components
         env:
           MISE_AUTO_INSTALL: "false"
@@ -857,7 +857,7 @@ jobs:
         uses: jdx/mr-boxington-action@9df1d4b18b2147788a7ee7a2c7b84ecf62fd89d3
         with:
           github-cache-mode: objects
-          version: 1.19.0
+          version: 1.21.0
       - name: Fetch Cargo sources
         env:
           MISE_AUTO_INSTALL: "false"
@@ -883,9 +883,9 @@ jobs:
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-mise/fmt/default
           VELNOR_MATRIX_KEY: m-163ef16efec7c4ef
-          VELNOR_TASK_DIGEST: b3-6b8725f4e5459d7c026bf1cade14f4a36082893a7727f62273ca31293ccbf8a6
+          VELNOR_TASK_DIGEST: b3-9ecf7ca67c29fa7b0f17aed0229a12e29c41c2e5de528e696123d463c8e26c36
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-mise/fmt/default
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx fmt --check --manifest-path crates/velnor-actions-mise/Cargo.toml
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx fmt --check --manifest-path crates/velnor-actions-mise/Cargo.toml
       - name: Clippy
         env:
           MISE_AUTO_INSTALL: "false"
@@ -899,9 +899,9 @@ jobs:
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-mise/clippy/default
           VELNOR_MATRIX_KEY: m-e4f4c72dff4c3345
-          VELNOR_TASK_DIGEST: b3-e41ae6bdfe00c83bb3978e2356f53072cec4263e57f5387e963cf45f93e0a4ad
+          VELNOR_TASK_DIGEST: b3-08d2ed458ed49ccd9aba0bd5bafcfc2826624190a1ed6ead8373026655e9fb73
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-mise/clippy/default
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx clippy --locked --offline --manifest-path crates/velnor-actions-mise/Cargo.toml --package velnor-actions-mise --all-targets -- -D warnings
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx clippy --locked --offline --manifest-path crates/velnor-actions-mise/Cargo.toml --package velnor-actions-mise --all-targets -- -D warnings
       - name: Build test executables
         env:
           MISE_AUTO_INSTALL: "false"
@@ -915,9 +915,9 @@ jobs:
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-mise/build/default
           VELNOR_MATRIX_KEY: m-1490dead3dc125c0
-          VELNOR_TASK_DIGEST: b3-187dcc6255f0320da3e80bb3e3722e6bcf4eba95b3fb5c8118868f1ad6961473
+          VELNOR_TASK_DIGEST: b3-b825269cb8faba57867fae843f2cf90c9761ac7a698fa3cf5b06cdcd58f4042d
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-mise/build/default
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx build --locked --offline --manifest-path crates/velnor-actions-mise/Cargo.toml --package velnor-actions-mise
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx build --locked --offline --manifest-path crates/velnor-actions-mise/Cargo.toml --package velnor-actions-mise
       - name: Unit and integration tests
         env:
           MISE_AUTO_INSTALL: "false"
@@ -931,9 +931,9 @@ jobs:
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-mise/nextest/default
           VELNOR_MATRIX_KEY: m-dc52cf6a2a0c1601
-          VELNOR_TASK_DIGEST: b3-72e29f4ecff204febd2efdcf816116dfb5458f44fc66f1b650b66820f4e4534a
+          VELNOR_TASK_DIGEST: b3-92bce8c9303a2c3482ec4b816aa466e1d6368d7915a6ea12a4a3255439f8da9b
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-mise/nextest/default
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx nextest run --profile ci --locked --offline --manifest-path crates/velnor-actions-mise/Cargo.toml --package velnor-actions-mise --no-tests fail
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx nextest run --profile ci --locked --offline --manifest-path crates/velnor-actions-mise/Cargo.toml --package velnor-actions-mise --no-tests fail
       - name: Doctests
         env:
           MISE_AUTO_INSTALL: "false"
@@ -947,9 +947,9 @@ jobs:
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-mise/doctest/default
           VELNOR_MATRIX_KEY: m-d527b3c2db3ecd48
-          VELNOR_TASK_DIGEST: b3-a55ea916d15c5347a9484546f414f6c2adb89f78e63147cc4eece08e369a80c8
+          VELNOR_TASK_DIGEST: b3-7498595bd272a3026764d1d60b986830d39fb9b16ac710243819853061eb4962
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-mise/doctest/default
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx test --locked --offline --manifest-path crates/velnor-actions-mise/Cargo.toml --package velnor-actions-mise --doc
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx test --locked --offline --manifest-path crates/velnor-actions-mise/Cargo.toml --package velnor-actions-mise --doc
       - name: Documentation
         env:
           MISE_AUTO_INSTALL: "false"
@@ -963,9 +963,9 @@ jobs:
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-mise/doc/default
           VELNOR_MATRIX_KEY: m-8265037fd459347e
-          VELNOR_TASK_DIGEST: b3-96d4168c4aa93a328911a387319a39aa651367827881cc7b82a42b4cfd9a8f39
+          VELNOR_TASK_DIGEST: b3-8b5f2ee847ba030d52f637c82cd47f76ff378f8dbcbd409e14ae2aca2e61fed3
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-mise/doc/default
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx doc --locked --offline --manifest-path crates/velnor-actions-mise/Cargo.toml --package velnor-actions-mise --no-deps
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx doc --locked --offline --manifest-path crates/velnor-actions-mise/Cargo.toml --package velnor-actions-mise --no-deps
   rust-velnor-actions-orchestrator:
     name: Rust / velnor-actions-orchestrator
     runs-on: ubuntu-26.04
@@ -977,15 +977,15 @@ jobs:
         with:
           persist-credentials: "false"
       - name: Setup Mise
-        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
+        uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
           cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.16-e9592c9b35b763fa
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-6270601fa454da91
           cache_save: "true"
           env: "false"
           install: "false"
-          sha256: b6f8757201f6a2ee799f45f3f52ef7ca0b4071523637dc3b0b24264dd3333518
-          version: 2026.9.16
+          sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
+          version: 2026.9.18
       - name: Download helper (pre-seed trust-on-review)
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
@@ -1004,7 +1004,7 @@ jobs:
           MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
-        run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.19.0 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
+        run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.21.0 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
       - name: Prepare Rust components
         env:
           MISE_AUTO_INSTALL: "false"
@@ -1027,7 +1027,7 @@ jobs:
         uses: jdx/mr-boxington-action@9df1d4b18b2147788a7ee7a2c7b84ecf62fd89d3
         with:
           github-cache-mode: objects
-          version: 1.19.0
+          version: 1.21.0
       - name: Fetch Cargo sources
         env:
           MISE_AUTO_INSTALL: "false"
@@ -1053,9 +1053,9 @@ jobs:
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-orchestrator/fmt/default
           VELNOR_MATRIX_KEY: m-de621063b566a463
-          VELNOR_TASK_DIGEST: b3-50c623e22bda0b29afd13eda3ee21325e8d3a1a7ffd11eb7daade0fb41589c80
+          VELNOR_TASK_DIGEST: b3-13de5c0e61f1a7bd43f6a6034bc53aa3eb9f1295a7a63364023b2e8c3f413e26
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-orchestrator/fmt/default
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx fmt --check --manifest-path crates/velnor-actions-orchestrator/Cargo.toml
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx fmt --check --manifest-path crates/velnor-actions-orchestrator/Cargo.toml
       - name: Clippy
         env:
           MISE_AUTO_INSTALL: "false"
@@ -1069,9 +1069,9 @@ jobs:
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-orchestrator/clippy/default
           VELNOR_MATRIX_KEY: m-fb610837e234df52
-          VELNOR_TASK_DIGEST: b3-ce182c73088caa9d456348ff3ffc5337c0751c7617a43339c08bb71a9441b72c
+          VELNOR_TASK_DIGEST: b3-edd48a570f0be759dc3aa277fe9c79c3a548d58370b33800350686078c8cb8f4
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-orchestrator/clippy/default
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx clippy --locked --offline --manifest-path crates/velnor-actions-orchestrator/Cargo.toml --package velnor-actions-orchestrator --all-targets -- -D warnings
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx clippy --locked --offline --manifest-path crates/velnor-actions-orchestrator/Cargo.toml --package velnor-actions-orchestrator --all-targets -- -D warnings
       - name: Build test executables
         env:
           MISE_AUTO_INSTALL: "false"
@@ -1085,9 +1085,9 @@ jobs:
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-orchestrator/build/default
           VELNOR_MATRIX_KEY: m-53482d622c7ec440
-          VELNOR_TASK_DIGEST: b3-e932b314ebeb56d53061d0e2cfc9dfee1f4f75ca02f9fb54952ad206aa1cd076
+          VELNOR_TASK_DIGEST: b3-93193f05f24addd0f3a6cb1b1320ed873747045ea2fab9811454e84fa2863b39
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-orchestrator/build/default
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx build --locked --offline --manifest-path crates/velnor-actions-orchestrator/Cargo.toml --package velnor-actions-orchestrator
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx build --locked --offline --manifest-path crates/velnor-actions-orchestrator/Cargo.toml --package velnor-actions-orchestrator
       - name: Unit and integration tests
         env:
           MISE_AUTO_INSTALL: "false"
@@ -1101,9 +1101,9 @@ jobs:
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-orchestrator/nextest/default
           VELNOR_MATRIX_KEY: m-8759f3cfd795025d
-          VELNOR_TASK_DIGEST: b3-fe53f1afc593338cb1603dcb4bf93f90c32a22a6265cec45806397086d601420
+          VELNOR_TASK_DIGEST: b3-97882173ceef101b01fc5dacd0499bda84af7968666d1bce6e394adc2aa3e436
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-orchestrator/nextest/default
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx nextest run --profile ci --locked --offline --manifest-path crates/velnor-actions-orchestrator/Cargo.toml --package velnor-actions-orchestrator --no-tests fail
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx nextest run --profile ci --locked --offline --manifest-path crates/velnor-actions-orchestrator/Cargo.toml --package velnor-actions-orchestrator --no-tests fail
       - name: Doctests
         env:
           MISE_AUTO_INSTALL: "false"
@@ -1117,9 +1117,9 @@ jobs:
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-orchestrator/doctest/default
           VELNOR_MATRIX_KEY: m-1e785f3f6e8a0aec
-          VELNOR_TASK_DIGEST: b3-d1cc870131761d918870da2c501afee129e8dcb87bb5ee83985c35448a23d955
+          VELNOR_TASK_DIGEST: b3-dcd8d0743ebeed116203187362980b794cb62cca4adaba5a57ff5c164560a9e7
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-orchestrator/doctest/default
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx test --locked --offline --manifest-path crates/velnor-actions-orchestrator/Cargo.toml --package velnor-actions-orchestrator --doc
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx test --locked --offline --manifest-path crates/velnor-actions-orchestrator/Cargo.toml --package velnor-actions-orchestrator --doc
       - name: Documentation
         env:
           MISE_AUTO_INSTALL: "false"
@@ -1133,9 +1133,9 @@ jobs:
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-orchestrator/doc/default
           VELNOR_MATRIX_KEY: m-f31fcb1a405715c5
-          VELNOR_TASK_DIGEST: b3-d7875fd0622727d23867d132e3cc1c4d508ea69f8995665ad85a6b2bea46a1fd
+          VELNOR_TASK_DIGEST: b3-ebf7972598e4f825484549b84e196d7a1352144f62a4fa5294858fa7384bae2f
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-orchestrator/doc/default
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx doc --locked --offline --manifest-path crates/velnor-actions-orchestrator/Cargo.toml --package velnor-actions-orchestrator --no-deps
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx doc --locked --offline --manifest-path crates/velnor-actions-orchestrator/Cargo.toml --package velnor-actions-orchestrator --no-deps
   rust-velnor-actions-rust:
     name: Rust / velnor-actions-rust
     runs-on: ubuntu-26.04
@@ -1147,15 +1147,15 @@ jobs:
         with:
           persist-credentials: "false"
       - name: Setup Mise
-        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
+        uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
           cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.16-e9592c9b35b763fa
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-6270601fa454da91
           cache_save: "true"
           env: "false"
           install: "false"
-          sha256: b6f8757201f6a2ee799f45f3f52ef7ca0b4071523637dc3b0b24264dd3333518
-          version: 2026.9.16
+          sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
+          version: 2026.9.18
       - name: Download helper (pre-seed trust-on-review)
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
@@ -1174,7 +1174,7 @@ jobs:
           MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
-        run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.19.0 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
+        run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.21.0 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
       - name: Prepare Rust components
         env:
           MISE_AUTO_INSTALL: "false"
@@ -1197,7 +1197,7 @@ jobs:
         uses: jdx/mr-boxington-action@9df1d4b18b2147788a7ee7a2c7b84ecf62fd89d3
         with:
           github-cache-mode: objects
-          version: 1.19.0
+          version: 1.21.0
       - name: Fetch Cargo sources
         env:
           MISE_AUTO_INSTALL: "false"
@@ -1223,9 +1223,9 @@ jobs:
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-rust/fmt/default
           VELNOR_MATRIX_KEY: m-708e095ab9f500b4
-          VELNOR_TASK_DIGEST: b3-bf26b0ca33e941d45b9147136508240c6d0d94126af5661303cdba6f1e7ae48a
+          VELNOR_TASK_DIGEST: b3-a6a58925fa38261b306ac39529136e6a51b37d14cb0a0a1a1ad00af462080593
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-rust/fmt/default
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx fmt --check --manifest-path crates/velnor-actions-rust/Cargo.toml
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx fmt --check --manifest-path crates/velnor-actions-rust/Cargo.toml
       - name: Clippy
         env:
           MISE_AUTO_INSTALL: "false"
@@ -1239,9 +1239,9 @@ jobs:
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-rust/clippy/default
           VELNOR_MATRIX_KEY: m-af2807043d348ff9
-          VELNOR_TASK_DIGEST: b3-c92f0128e504de94ac3ccbd9c182b545bc68c977cbb6fd0f763c9064e51c3903
+          VELNOR_TASK_DIGEST: b3-537e6e1dc17b72e1cce45e0b71cd5596bfd3a6e27fe965b0fa0e47669ab509a5
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-rust/clippy/default
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx clippy --locked --offline --manifest-path crates/velnor-actions-rust/Cargo.toml --package velnor-actions-rust --all-targets -- -D warnings
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx clippy --locked --offline --manifest-path crates/velnor-actions-rust/Cargo.toml --package velnor-actions-rust --all-targets -- -D warnings
       - name: Build test executables
         env:
           MISE_AUTO_INSTALL: "false"
@@ -1255,9 +1255,9 @@ jobs:
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-rust/build/default
           VELNOR_MATRIX_KEY: m-98b1e6d8c684a9d6
-          VELNOR_TASK_DIGEST: b3-d127329c2972bb26ad6ade03d59d31ad4c0d08f00d28f7a99d80b9ce81cfb00f
+          VELNOR_TASK_DIGEST: b3-ee28b93cd048404d0b4df0e2bfb25c1b9f86a5943094b5fcee724a61fcea02c0
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-rust/build/default
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx build --locked --offline --manifest-path crates/velnor-actions-rust/Cargo.toml --package velnor-actions-rust
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx build --locked --offline --manifest-path crates/velnor-actions-rust/Cargo.toml --package velnor-actions-rust
       - name: Unit and integration tests
         env:
           MISE_AUTO_INSTALL: "false"
@@ -1271,9 +1271,9 @@ jobs:
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-rust/nextest/default
           VELNOR_MATRIX_KEY: m-cb59aaefe5dfc948
-          VELNOR_TASK_DIGEST: b3-705c9a1e1c6835a64918550236ea4b159384746cd60d8173523bf4fcdcb91e39
+          VELNOR_TASK_DIGEST: b3-e077b4f900c317d39abcd5096dee164b54d3f4af7a1a6c8339ddc01c84613368
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-rust/nextest/default
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx nextest run --profile ci --locked --offline --manifest-path crates/velnor-actions-rust/Cargo.toml --package velnor-actions-rust --no-tests fail
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx nextest run --profile ci --locked --offline --manifest-path crates/velnor-actions-rust/Cargo.toml --package velnor-actions-rust --no-tests fail
       - name: Doctests
         env:
           MISE_AUTO_INSTALL: "false"
@@ -1287,9 +1287,9 @@ jobs:
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-rust/doctest/default
           VELNOR_MATRIX_KEY: m-7b460e04b25ef8f4
-          VELNOR_TASK_DIGEST: b3-5e553044fbf90e16f0fee5836e12755131c80dc4c5410d84c16f22e3ccd85722
+          VELNOR_TASK_DIGEST: b3-e882436c0c620e582286ad59f8f447e9d4a26d7c771b38ad014211c872fe78b6
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-rust/doctest/default
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx test --locked --offline --manifest-path crates/velnor-actions-rust/Cargo.toml --package velnor-actions-rust --doc
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx test --locked --offline --manifest-path crates/velnor-actions-rust/Cargo.toml --package velnor-actions-rust --doc
       - name: Documentation
         env:
           MISE_AUTO_INSTALL: "false"
@@ -1303,9 +1303,9 @@ jobs:
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-rust/doc/default
           VELNOR_MATRIX_KEY: m-b9195ee6ee4dd6e3
-          VELNOR_TASK_DIGEST: b3-b5c2fc43635cdd06dae29a2111deb2499cb62fc7c1bcdf870fa658e921d61796
+          VELNOR_TASK_DIGEST: b3-46c3cf2a154ca0d40ecc4f424c1197c0ddc56cd0fddf4f7da67a1ab054653989
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-rust/doc/default
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx doc --locked --offline --manifest-path crates/velnor-actions-rust/Cargo.toml --package velnor-actions-rust --no-deps
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx doc --locked --offline --manifest-path crates/velnor-actions-rust/Cargo.toml --package velnor-actions-rust --no-deps
   rust-velnor-actions-workflow-renderer:
     name: Rust / velnor-actions-workflow-renderer
     runs-on: ubuntu-26.04
@@ -1317,15 +1317,15 @@ jobs:
         with:
           persist-credentials: "false"
       - name: Setup Mise
-        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
+        uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
           cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.16-e9592c9b35b763fa
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-6270601fa454da91
           cache_save: "true"
           env: "false"
           install: "false"
-          sha256: b6f8757201f6a2ee799f45f3f52ef7ca0b4071523637dc3b0b24264dd3333518
-          version: 2026.9.16
+          sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
+          version: 2026.9.18
       - name: Download helper (pre-seed trust-on-review)
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
@@ -1344,7 +1344,7 @@ jobs:
           MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
-        run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.19.0 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
+        run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.21.0 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
       - name: Prepare Rust components
         env:
           MISE_AUTO_INSTALL: "false"
@@ -1367,7 +1367,7 @@ jobs:
         uses: jdx/mr-boxington-action@9df1d4b18b2147788a7ee7a2c7b84ecf62fd89d3
         with:
           github-cache-mode: objects
-          version: 1.19.0
+          version: 1.21.0
       - name: Fetch Cargo sources
         env:
           MISE_AUTO_INSTALL: "false"
@@ -1393,9 +1393,9 @@ jobs:
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-workflow-renderer/fmt/default
           VELNOR_MATRIX_KEY: m-5469534559a12d36
-          VELNOR_TASK_DIGEST: b3-e97f012200faf778efadd88c65f2685604ef348828cc2285fa38ebb9be0d4be1
+          VELNOR_TASK_DIGEST: b3-917725b8223934b9c8748d2ef32480fbdaca979f04a77c4668272e98ba6b4996
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-workflow-renderer/fmt/default
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx fmt --check --manifest-path crates/velnor-actions-workflow-renderer/Cargo.toml
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx fmt --check --manifest-path crates/velnor-actions-workflow-renderer/Cargo.toml
       - name: Clippy
         env:
           MISE_AUTO_INSTALL: "false"
@@ -1409,9 +1409,9 @@ jobs:
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-workflow-renderer/clippy/default
           VELNOR_MATRIX_KEY: m-bbe589a41e95aa9d
-          VELNOR_TASK_DIGEST: b3-a657911ec3308f663c2044d8872bde70099447128ea8de1e917d5d2a191724ba
+          VELNOR_TASK_DIGEST: b3-83cef8d0edda4aaa4d1ee9ba5de10e8aac1d1b2b56f938310d9e3188cef74bcd
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-workflow-renderer/clippy/default
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx clippy --locked --offline --manifest-path crates/velnor-actions-workflow-renderer/Cargo.toml --package velnor-actions-workflow-renderer --all-targets -- -D warnings
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx clippy --locked --offline --manifest-path crates/velnor-actions-workflow-renderer/Cargo.toml --package velnor-actions-workflow-renderer --all-targets -- -D warnings
       - name: Build test executables
         env:
           MISE_AUTO_INSTALL: "false"
@@ -1425,9 +1425,9 @@ jobs:
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-workflow-renderer/build/default
           VELNOR_MATRIX_KEY: m-db6a670047663c4c
-          VELNOR_TASK_DIGEST: b3-aefa973bf3943c8184a9796fbd710488c3be70f80ccdd0b880688c991211ea2a
+          VELNOR_TASK_DIGEST: b3-ccc5f413c1e27e6333a475907a1768700b76523f8af9f5f5f3ee63757ce14a7d
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-workflow-renderer/build/default
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx build --locked --offline --manifest-path crates/velnor-actions-workflow-renderer/Cargo.toml --package velnor-actions-workflow-renderer
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx build --locked --offline --manifest-path crates/velnor-actions-workflow-renderer/Cargo.toml --package velnor-actions-workflow-renderer
       - name: Unit and integration tests
         env:
           MISE_AUTO_INSTALL: "false"
@@ -1441,9 +1441,9 @@ jobs:
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-workflow-renderer/nextest/default
           VELNOR_MATRIX_KEY: m-81f6e0cba54c2186
-          VELNOR_TASK_DIGEST: b3-c59ba830a6ffc1ddd51d0e7d6582477655bc74cca8acb2c001602e77a97962a4
+          VELNOR_TASK_DIGEST: b3-4d8d6378d7d12bd39bacf7edb3a1a876d2f863b983ec3082e53e0a085b5639d0
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-workflow-renderer/nextest/default
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx nextest run --profile ci --locked --offline --manifest-path crates/velnor-actions-workflow-renderer/Cargo.toml --package velnor-actions-workflow-renderer --no-tests fail
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx nextest run --profile ci --locked --offline --manifest-path crates/velnor-actions-workflow-renderer/Cargo.toml --package velnor-actions-workflow-renderer --no-tests fail
       - name: Doctests
         env:
           MISE_AUTO_INSTALL: "false"
@@ -1457,9 +1457,9 @@ jobs:
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-workflow-renderer/doctest/default
           VELNOR_MATRIX_KEY: m-0a7a564168b37c36
-          VELNOR_TASK_DIGEST: b3-2edd5b9ab56a97b40ca1e3f8221f20c0a46dce4bcae009996ff96ebe8a995c7b
+          VELNOR_TASK_DIGEST: b3-f1673fd5d1a3c56a4c94661967a6e7cd2f0a9870b0b8a821865390bb7a80f177
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-workflow-renderer/doctest/default
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx test --locked --offline --manifest-path crates/velnor-actions-workflow-renderer/Cargo.toml --package velnor-actions-workflow-renderer --doc
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx test --locked --offline --manifest-path crates/velnor-actions-workflow-renderer/Cargo.toml --package velnor-actions-workflow-renderer --doc
       - name: Documentation
         env:
           MISE_AUTO_INSTALL: "false"
@@ -1473,9 +1473,9 @@ jobs:
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-workflow-renderer/doc/default
           VELNOR_MATRIX_KEY: m-d04b7f8f31103a5a
-          VELNOR_TASK_DIGEST: b3-f2be8863eaeca3c79889bcb2e318d03417494806fcdf52084253500d6517e304
+          VELNOR_TASK_DIGEST: b3-c9db5d3c3ef1e40f159e5aba6ed2ddcacd0a8fe5aba0a82508e7a5e20a83f8f9
           VELNOR_TASK_ID: stack/rust/crates/velnor-actions-workflow-renderer/doc/default
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx doc --locked --offline --manifest-path crates/velnor-actions-workflow-renderer/Cargo.toml --package velnor-actions-workflow-renderer --no-deps
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx doc --locked --offline --manifest-path crates/velnor-actions-workflow-renderer/Cargo.toml --package velnor-actions-workflow-renderer --no-deps
   zizmor:
     name: Zizmor
     runs-on: ubuntu-26.04
@@ -1485,14 +1485,14 @@ jobs:
         with:
           persist-credentials: "false"
       - name: Setup Mise
-        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
+        uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
           cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.16-8f52c1fc1d8f90d8
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-8f52c1fc1d8f90d8
           cache_save: "true"
           env: "false"
           install: "false"
-          sha256: b6f8757201f6a2ee799f45f3f52ef7ca0b4071523637dc3b0b24264dd3333518
-          version: 2026.9.16
+          sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
+          version: 2026.9.18
       - name: Run zizmor
         run: mise --no-config --no-env --no-hooks exec zizmor@1.30.1 -- zizmor --no-online-audits --config .zizmor.yml .github/workflows

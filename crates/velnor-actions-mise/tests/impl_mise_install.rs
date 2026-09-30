@@ -23,7 +23,7 @@ fn install_argv_is_byte_exact() -> Result<(), String> {
             "--no-hooks",
             "install",
             "rust@1.98.1",
-            "mr-boxington@1.19.0",
+            "mr-boxington@1.21.0",
         ])
     );
     Ok(())
@@ -40,8 +40,8 @@ fn install_carries_specs_only() -> Result<(), String> {
     );
     for spec in [
         "rust@1.98.1",
-        "mr-boxington@1.19.0",
-        "gh@2.101.0",
+        "mr-boxington@1.21.0",
+        "gh@2.102.0",
         "actionlint@1.7.12",
         "shellcheck@0.11.0",
         "zizmor@1.30.1",
@@ -135,6 +135,6 @@ fn mbx_install_carries_exact_mbx_spec() -> Result<(), String> {
     let request = MiseInstall::new(vec![PinnedTool::Rust, PinnedTool::MrBoxington])
         .map_err(|err| err.to_string())?;
     let argv = request.argv(&pinned());
-    assert!(argv.iter().any(|arg| arg == "mr-boxington@1.19.0"));
+    assert!(argv.iter().any(|arg| arg == "mr-boxington@1.21.0"));
     Ok(())
 }

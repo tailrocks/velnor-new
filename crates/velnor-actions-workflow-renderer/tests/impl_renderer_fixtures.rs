@@ -11,10 +11,10 @@ use velnor_actions_workflow_renderer::{
 
 pub(crate) const VERSION: &str = "0.1.0";
 pub(crate) const LABEL: &str = "ubuntu-26.04";
-pub(crate) const MISE_USES: &str = "jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c";
-pub(crate) const MISE_VERSION: &str = "2026.9.16";
+pub(crate) const MISE_USES: &str = "jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5";
+pub(crate) const MISE_VERSION: &str = "2026.9.18";
 pub(crate) const MISE_SHA256: &str =
-    "b6f8757201f6a2ee799f45f3f52ef7ca0b4071523637dc3b0b24264dd3333518";
+    "d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4";
 pub(crate) const STAGED: &str = "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0";
 
 pub(crate) fn checkout_pin() -> String {
