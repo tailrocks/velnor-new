@@ -169,10 +169,9 @@ impl PreparePinnedTools {
     /// Returns [`MiseError::EmptyToolchain`] only if the tool list were
     /// empty, which the constructor rules out.
     pub fn command(&self, catalog: &ToolCatalog) -> Result<IsolatedCommand, MiseError> {
-        Ok(self
-            .install
+        self.install
             .command(catalog)?
-            .with_env(&self.homes.env(catalog)))
+            .with_env(&self.homes.env(catalog))
     }
 }
 
@@ -258,8 +257,8 @@ impl PrepareRustComponents {
     /// empty, which construction rules out.
     pub fn command(&self, catalog: &ToolCatalog) -> Result<IsolatedCommand, MiseError> {
         let specs = catalog.tool_specs(&[PinnedTool::Rust]);
-        Ok(IsolatedCommand::mise_exec(&specs, &Self::payload(catalog))?
-            .with_env(&self.homes.env(catalog)))
+        IsolatedCommand::mise_exec(&specs, &Self::payload(catalog))?
+            .with_env(&self.homes.env(catalog))
     }
 
     /// Fixed payload: `rustup component add --toolchain <name> clippy rustfmt`.
@@ -347,10 +346,9 @@ impl VerifyPreparedInputs {
     /// Returns [`MiseError::EmptyCommand`] only if the fixed payload were
     /// empty, which the constructor rules out.
     pub fn command(&self, catalog: &ToolCatalog) -> Result<IsolatedCommand, MiseError> {
-        Ok(self
-            .qualification
+        self.qualification
             .command(catalog)?
-            .with_env(&self.homes.env(catalog)))
+            .with_env(&self.homes.env(catalog))
     }
 }
 

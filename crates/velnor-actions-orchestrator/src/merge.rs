@@ -11,7 +11,8 @@ use std::collections::BTreeSet;
 use serde::Deserialize;
 use velnor_actions_contract::{
     CandidateReport, FinalCounts, FinalReport, FinalStatus, MatrixReport, ObligationDecision, Plan,
-    PlanMatrix, RequiredJobResult, TaskReport, final_report_id_for_run, validate_run_key,
+    PlanMatrix, RequiredJobResult, TaskReport, final_report_id_for_run, parse_strict_json,
+    validate_run_key,
 };
 
 use self::merge_checks::{
@@ -84,8 +85,9 @@ pub(crate) struct MergeRequest {
 /// Returns [`OrchestratorError::Internal`] for malformed requests and
 /// response-encoding failures.
 pub fn merge_internal(request_json: &str) -> Result<String, OrchestratorError> {
+    let envelope = parse_strict_json(request_json).map_err(internal_contract)?;
     let mut request: MergeRequest =
-        serde_json::from_str(request_json).map_err(|err| OrchestratorError::Internal {
+        serde_json::from_value(envelope).map_err(|err| OrchestratorError::Internal {
             problem: format!("malformed_request:{err}"),
         })?;
     check_schema(request.schema)?;

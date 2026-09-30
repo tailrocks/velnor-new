@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::{
     ContractError, Plan, PlanBaseline, PlanGenerator, PlanMatrix, PlanRunner, RunnerSelection,
-    Trust, WorkflowEvent, canonical_json_bytes, plan_id_for_run,
+    Trust, WorkflowEvent, canonical_json_bytes, parse_strict_json, plan_id_for_run,
 };
 use velnor_actions_mise::ToolCatalog;
 use velnor_actions_rust::TaskGroup;
@@ -95,8 +95,9 @@ pub(crate) struct PlanResponse {
 /// Returns [`OrchestratorError::Internal`] for malformed requests and
 /// discovery, selection, or validation failures.
 pub fn plan_internal(request_json: &str) -> Result<String, OrchestratorError> {
+    let envelope = parse_strict_json(request_json).map_err(internal_contract)?;
     let mut request: PlanRequest =
-        serde_json::from_str(request_json).map_err(|err| OrchestratorError::Internal {
+        serde_json::from_value(envelope).map_err(|err| OrchestratorError::Internal {
             problem: format!("malformed_request:{err}"),
         })?;
     check_schema(request.schema)?;
