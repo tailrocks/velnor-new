@@ -66,6 +66,48 @@ pub(crate) fn workspace_repo(members: usize) -> Result<TempDir, Box<dyn std::err
     Ok(dir)
 }
 
+/// Workspace repo where every leaf depends on `c000` via a path edge.
+///
+/// Reverse-dep structure for the public-API case: editing `c000`'s API
+/// touches every leaf's reverse closure, editing one leaf touches none.
+/// Offline-safe: discovery never resolves (`--no-deps`), no lockfile.
+pub(crate) fn workspace_repo_linked(members: usize) -> Result<TempDir, Box<dyn std::error::Error>> {
+    let dir = TempDir::new()?;
+    let root = dir.path();
+    git_init(root)?;
+    write_velnor(root)?;
+    let mut manifest = String::from(
+        "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n[workspace]\nmembers = [\n",
+    );
+    for index in 0..members {
+        let name = format!("c{index:03}");
+        writeln!(manifest, "  \"crates/{name}\",")?;
+        let leaf = root.join("crates").join(&name);
+        write_crate(&leaf, &name)?;
+        if index > 0 {
+            let body = format!(
+                "[package]\nname = \"{name}\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\
+                 [dependencies]\nc000 = {{ path = \"../c000\" }}\n"
+            );
+            fs::write(leaf.join("Cargo.toml"), body)?;
+        }
+    }
+    manifest.push_str("]\n");
+    fs::write(root.join("Cargo.toml"), manifest)?;
+    fs::create_dir_all(root.join("src"))?;
+    fs::write(root.join("src/lib.rs"), "pub fn f() {}\n")?;
+    Ok(dir)
+}
+
+/// Append a path dependency edge `from` -> `to` (crate dir names).
+pub(crate) fn add_path_dep(root: &Path, from: &str, to: &str) -> TestResult {
+    let path = root.join("crates").join(from).join("Cargo.toml");
+    let mut body = fs::read_to_string(&path)?;
+    writeln!(body, "[dependencies]\n{to} = {{ path = \"../{to}\" }}")?;
+    fs::write(&path, body)?;
+    Ok(())
+}
+
 /// Repo with nested and independent workspaces beside the root workspace.
 ///
 /// Root excludes both; `nested/` is an explicit workspace root and

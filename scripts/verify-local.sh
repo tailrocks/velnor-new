@@ -11,6 +11,14 @@
 #                     "Check generated files" step)
 #   clippy-<crate>    per-crate `cargo clippy --all-targets -- -D warnings`
 #   test-<crate>      per-crate `cargo test` (unit plus integration plus doc)
+#   doctest-<crate>   per-crate `cargo test --doc` for crates with library
+#                     targets (mirrors the CI Doctests step; binary-only
+#                     crates have no doctests and are reported skipped)
+#   doc-<crate>       per-crate `cargo doc --no-deps` (mirrors the CI
+#                     Documentation step: rustdoc warnings fail the build)
+#   fixtures          fixture-consuming integration tests by name (currently
+#                     the f2-evasion fixture suite), proving the checked-in
+#                     `tests/fixtures` tree is exercised and green
 #   integration       whole-workspace pass: nextest `ci` profile when
 #                     `cargo nextest` is installed, else `cargo test`
 #
@@ -80,7 +88,7 @@ else
   rm -rf "$GEN_DIR"
 fi
 
-# --- per-crate clippy and tests ----------------------------------------------
+# --- per-crate clippy, tests, doctests, docs ---------------------------------
 MEMBERS=""
 MEMBERS="$(python3 -c 'import json,subprocess; print(" ".join(sorted(p["name"] for p in json.loads(subprocess.run(["cargo","metadata","--locked","--no-deps","--format-version","1","--offline"],capture_output=True,text=True,check=True).stdout)["packages"])))' 2>/tmp/verify-local-crate-list.log)"
 if [ -z "$MEMBERS" ]; then
@@ -94,6 +102,40 @@ else
     safe="$(printf '%s' "$member" | tr -c 'A-Za-z0-9' '_')"
     stage "test-$safe" cargo test --locked -p "$member"
   done
+  LIB_MEMBERS=""
+  LIB_MEMBERS="$(python3 -c 'import json,subprocess; print(" ".join(sorted(p["name"] for p in json.loads(subprocess.run(["cargo","metadata","--locked","--no-deps","--format-version","1","--offline"],capture_output=True,text=True,check=True).stdout)["packages"] if any("lib" in t.get("kind", []) for t in p["targets"]))))' 2>/tmp/verify-local-doctest-list.log)"
+  if [ -z "$LIB_MEMBERS" ]; then
+    fail "doctest-list (log: /tmp/verify-local-doctest-list.log)"
+  else
+    for member in $MEMBERS; do
+      safe="$(printf '%s' "$member" | tr -c 'A-Za-z0-9' '_')"
+      case " $LIB_MEMBERS " in
+        *" $member "*)
+          stage "doctest-$safe" cargo test --locked -p "$member" --doc
+          ;;
+        *)
+          echo "skip: doctest-$safe (no library targets)"
+          ;;
+      esac
+    done
+  fi
+  for member in $MEMBERS; do
+    safe="$(printf '%s' "$member" | tr -c 'A-Za-z0-9' '_')"
+    stage "doc-$safe" cargo doc --locked --offline -p "$member" --no-deps
+  done
+fi
+
+# --- checked-in integration fixtures -------------------------------------------
+# Runs the fixture-consuming suites by name so a stale or unexercised
+# `tests/fixtures` tree fails here even when the broad integration pass
+# below stays green (e.g. after a filter/rename silently drops them).
+echo "--- verify-local: fixtures"
+if cargo test --locked -p velnor-actions-orchestrator --test velnor_orchestrator \
+  evasion_fixtures_are_all_flagged \
+  >"/tmp/verify-local-fixtures.log" 2>&1; then
+  pass "fixtures"
+else
+  fail "fixtures (log: /tmp/verify-local-fixtures.log)"
 fi
 
 # --- whole-workspace integration pass ----------------------------------------

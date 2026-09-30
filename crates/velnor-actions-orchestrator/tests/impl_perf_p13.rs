@@ -5,10 +5,10 @@
 //! `#[path]` includes, so no other registration is needed.
 
 #[path = "perf_fixtures_p13.rs"]
-mod perf_fixtures_p13;
+pub(crate) mod perf_fixtures_p13;
 
 #[path = "perf_harness_p13.rs"]
-mod perf_harness_p13;
+pub(crate) mod perf_harness_p13;
 
 use velnor_actions_orchestrator::{
     GenerateOptions, OrchestratorError, generate, plan_internal, prepare,
