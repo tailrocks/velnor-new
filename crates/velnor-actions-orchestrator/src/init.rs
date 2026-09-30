@@ -114,6 +114,7 @@ const SAMPLE_BODY: &str = r#"schema = 1
 # configurations = [{ name = "default", features = ["default"], target = "host" }]
 # compile_driver = "cargo"         # Sticky override: "cargo" (default) or "mbx". Without it, a repo-local Mise Cargo wrapper selects MBX. Each key overrides its own axis only; conflicts with durable evidence fail closed.
 # test_runner = "cargo_test"       # Sticky override: "cargo_test" (default) or "cargo_nextest". Without it, .config/nextest.toml selects Nextest ([profile.ci] when declared, else the documented default profile).
+# custom_tasks = []                # Allowlisted Mise task names (sorted, unique); only these run as `mise run <name>` steps in crate jobs.
 
 # Optional repository-relative POSIX globs excluded before detector input.
 # [discovery]

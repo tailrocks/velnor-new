@@ -127,8 +127,7 @@ technical reason, `granted` and `expires` (YYYY-MM-DD), and is recorded in
 - The script fails once a hold expires. Renewal requires a NEW review and
   NEW evidence — never a date edit.
 - Standing exceptions (`expires: null`) are allowed ONLY for the one
-  spec-blessed slot: `key = "asamarts/alint"` (the reviewed mutable-tag
-  shape, version-policy §2/§4) carrying non-empty `kind`,
+  permitted slot: `key = "asamarts/alint"` carrying non-empty `kind`,
   `expiry_policy`, `blessed_by`, and a `tag` that equals the reviewed
   `pinned_version` of the inventory's `asamarts/alint` action row. A
   pin move without a re-blessing fails, as does any other key without

@@ -68,6 +68,7 @@ fn groups_obligations_into_one_ordered_job_per_crate() {
         &discovery(vec![test, doc, clippy, other]),
         &ToolCatalog::pinned(),
         &[],
+        &[],
     )
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 2, "one job per crate");
@@ -107,6 +108,7 @@ fn skips_testless_and_workspace_groups() {
         "ubuntu-26.04",
         &discovery(vec![testless, workspace_fmt, clippy]),
         &ToolCatalog::pinned(),
+        &[],
         &[],
     )
     .expect("crate jobs");
@@ -162,6 +164,7 @@ fn drivers_follow_per_crate_selection() {
         &discovery(vec![mbx, cargo]),
         &ToolCatalog::pinned(),
         &[],
+        &[],
     )
     .expect("crate jobs");
     assert_eq!(found.drivers["rust-demo"], RenderDriver::Mbx);
@@ -179,7 +182,37 @@ fn empty_groups_build_no_jobs() {
         &discovery(Vec::new()),
         &ToolCatalog::pinned(),
         &[],
+        &[],
     )
     .expect("empty build");
     assert!(found.jobs.is_empty() && found.drivers.is_empty());
+}
+
+#[test]
+fn allowlisted_custom_tasks_append_after_obligations() {
+    let clippy = group("demo", TaskKind::Clippy, &[]);
+    let allowlist = vec!["audit".to_owned()];
+    let found = build_crate_jobs(
+        "ubuntu-26.04",
+        &discovery(vec![clippy]),
+        &ToolCatalog::pinned(),
+        &[],
+        &allowlist,
+    )
+    .expect("crate jobs");
+    assert_eq!(found.jobs.len(), 1);
+    let steps = names(&found.jobs[0].1);
+    let lint = steps.iter().position(|seen| *seen == "Clippy");
+    let custom = steps.iter().position(|seen| *seen == "Custom task audit");
+    assert!(lint < custom, "{steps:?}");
+    let joined: Vec<String> = found.jobs[0]
+        .1
+        .steps
+        .iter()
+        .map(|step| format!("{} {:?}", step.name, step.kind))
+        .collect();
+    assert!(
+        !joined.join("\n").contains("undeclared-task"),
+        "undeclared names never emitted: {joined:?}"
+    );
 }

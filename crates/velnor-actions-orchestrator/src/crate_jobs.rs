@@ -57,6 +57,7 @@ pub(crate) fn build_crate_jobs(
     discovery: &Discovery,
     catalog: &ToolCatalog,
     fetch_roots: &[String],
+    custom_tasks: &[String],
 ) -> Result<CrateBuild, OrchestratorError> {
     let grouped = group_runnable(&discovery.task_groups);
     let assigned = assign_crate_job_ids(&id_inputs(&grouped));
@@ -89,7 +90,7 @@ pub(crate) fn build_crate_jobs(
         };
         model.validate()?;
         let repo_has_mbx = crate::workflow::plan_uses_mbx(discovery);
-        let job = render_job(
+        let mut job = render_job(
             label,
             &model,
             catalog,
@@ -98,6 +99,10 @@ pub(crate) fn build_crate_jobs(
             use_nextest,
             repo_has_mbx,
         )?;
+        // Allowlisted custom tasks run after the fixed obligations; an
+        // empty allowlist (the default) appends nothing.
+        job.steps
+            .extend(crate::vectors::custom_task_steps(custom_tasks)?);
         drivers.insert(job_id.clone(), driver);
         jobs.push((job_id, job));
     }

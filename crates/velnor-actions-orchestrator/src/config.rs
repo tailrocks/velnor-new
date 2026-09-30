@@ -171,6 +171,8 @@ struct PartialRustStack {
     test_runner: Option<DeclaredTestRunner>,
     /// Rust release policy; disabled by default.
     release: Option<RustReleaseConfig>,
+    /// Allowlisted Mise custom-task names; empty by default.
+    custom_tasks: Option<Vec<String>>,
 }
 
 /// Discovery section with every value optional.
@@ -255,6 +257,7 @@ impl PartialStacks {
                 compile_driver: stack.compile_driver,
                 test_runner: stack.test_runner,
                 release: stack.release.unwrap_or_default(),
+                custom_tasks: stack.custom_tasks.unwrap_or_default(),
             }
         });
         StacksConfig {
@@ -313,5 +316,31 @@ mod tests {
         let config = load(root.path()).expect("rust config");
         let rust = config.stacks.rust.expect("rust stack");
         assert!(!rust.release.enabled);
+    }
+
+    #[test]
+    fn custom_tasks_parse_and_default_empty() {
+        let load = load_config;
+        let root = rooted("schema = 1\n[stacks.rust]\ncustom_tasks = [\"audit\"]\n");
+        let config = load(root.path()).expect("custom tasks");
+        let rust = config.stacks.rust.expect("rust stack");
+        assert_eq!(rust.custom_tasks, ["audit".to_owned()]);
+        let root = rooted("schema = 1\n[stacks.rust]\n");
+        let config = load(root.path()).expect("rust config");
+        let rust = config.stacks.rust.expect("rust stack");
+        assert!(rust.custom_tasks.is_empty());
+    }
+
+    #[test]
+    fn unknown_rust_keys_are_rejected() {
+        let load = load_config;
+        for body in [
+            "schema = 1\n[stacks.rust]\ntasks = [\"audit\"]\n",
+            "schema = 1\n[stacks.rust]\ncustom = [\"audit\"]\n",
+        ] {
+            let root = rooted(body);
+            let err = load(root.path()).expect_err("unknown key must fail");
+            assert!(err.to_string().contains(CONFIG_REL), "got {err}");
+        }
     }
 }

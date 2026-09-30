@@ -803,11 +803,13 @@ for hold in holds:
 if not holds:
     pass_row("exception-expiry", "(none)", "no temporary holds")
 
-# The one spec-blessed standing record (version-policy §2/§4): the reviewed
-# `asamarts/alint` mutable tag. Its `tag` must equal the reviewed
-# `pinned_version` of the inventory's alint action row, so a pin move
-# without a re-blessing fails. Dated `exceptions` entries carry the same
-# full attribution as holds but never cover `status: held` rows.
+# The one permitted standing-record key: `asamarts/alint` only. No standing
+# record is present (inventory `exceptions: []`; the renderer pins Alint by
+# full SHA like every other action); this gate constrains any future record.
+# Its `tag` must equal the reviewed `pinned_version` of the inventory's
+# alint action row, so a pin move without a re-blessing fails. Dated
+# `exceptions` entries carry the same full attribution as holds but never
+# cover `status: held` rows.
 BLESSED_STANDING = "asamarts/alint"
 reviewed_alint = (action_pinned.get(BLESSED_STANDING) or {}).get(
     "pinned_version")

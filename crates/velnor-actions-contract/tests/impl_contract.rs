@@ -41,6 +41,7 @@ fn config_validation_reports_key_paths() {
                 }],
                 compile_driver: None,
                 test_runner: None,
+                custom_tasks: Vec::new(),
                 release: RustReleaseConfig::default(),
             }),
         },
@@ -170,6 +171,7 @@ fn uppercase_rust_config_name_rejected_with_key_path() {
                 }],
                 compile_driver: None,
                 test_runner: None,
+                custom_tasks: Vec::new(),
                 release: RustReleaseConfig::default(),
             }),
         },
@@ -306,4 +308,26 @@ fn manifest_schemas_validate_and_lookup_targets() -> Result<(), ContractError> {
     bad.actions[0].sha = "xyz".to_owned();
     assert!(bad.validate("generator.lock").is_err());
     Ok(())
+}
+
+#[test]
+fn custom_tasks_allowlist_validates_sorted_unique_names() {
+    use velnor_actions_contract::RustStackConfig;
+    let file = ".velnor/config.toml";
+    let stack = RustStackConfig::default_config();
+    assert_eq!(stack.validate(file), Ok(()));
+    let mut good = stack.clone();
+    good.custom_tasks = vec!["audit".to_owned(), "lint".to_owned()];
+    assert_eq!(good.validate(file), Ok(()));
+    let mut unsorted = stack.clone();
+    unsorted.custom_tasks = vec!["lint".to_owned(), "audit".to_owned()];
+    assert!(unsorted.validate(file).is_err(), "unsorted must fail");
+    let mut dup = stack.clone();
+    dup.custom_tasks = vec!["audit".to_owned(), "audit".to_owned()];
+    assert!(dup.validate(file).is_err(), "duplicate must fail");
+    for bad in ["", "  ", "two words", "a/b"] {
+        let mut named = stack.clone();
+        named.custom_tasks = vec![bad.to_owned()];
+        assert!(named.validate(file).is_err(), "{bad:?} must fail");
+    }
 }

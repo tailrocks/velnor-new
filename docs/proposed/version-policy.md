@@ -68,7 +68,7 @@ consumer workflow output.
 | Direct and transitive Rust crates | Workspace manifests, `Cargo.lock` | Newest stable graph; major updates included; all changed versions pass the full locked gate |
 | Velnor workflow bootstrap | Consumer output embeds the exact generating release version, immutable target asset URL, and binary SHA-256; Velnor dogfood also checks `.velnor/generator.lock` | Latest qualified stable Velnor release for each supported target |
 | GitHub Actions | Compiled-in Velnor action registry; optional exact overrides in `.velnor/config.toml` | Default record is the latest reviewed stable release; workflow uses immutable full commit SHA |
-| Alint GitHub Action | Compiled-in Velnor action registry; emitted as the reviewed `asamarts/alint@v0.16.1` tag | `v0.16.1` is the current reviewed default. This is the only mutable-tag exception to full-SHA action pins; changing it requires a reviewed Velnor version-policy update |
+| Alint GitHub Action | Compiled-in Velnor action registry; emitted as a full-SHA pin like every other action | `v0.16.1` (`9f9d34ba0eae3888299b9e570f43338b0e7f2cdb`) is the current reviewed default. No tag exception exists; changing the pin requires a reviewed Velnor version-policy update |
 | GitHub-hosted OS image | Generated `runs-on` label and recorded runner metadata | Latest stable supported Ubuntu image family after host qualification; exact versioned label is the pin. GitHub may update its image contents in place, so record `ImageOS` and `ImageVersion` as runtime evidence and cache identity, not as immutable pins |
 | Deferred V2/V3 runtime inputs | `.velnor/runner.lock` (created before runner implementation) | Latest qualified Docker Desktop/Engine, official runner, base-image digest, GitHub API version, protocol revision, and runner dependencies including Turso |
 
@@ -96,9 +96,8 @@ Velnor ships a compiled-in action registry so projects need no action-pin file
 to generate workflows. Each ordinary record contains the action repository,
 latest stable release, full commit SHA, required runner version, and verified
 input/output metadata. Generation emits the exact SHA and a matching version
-comment; it never queries a floating `latest` ref. Alint is the one explicit
-exception: generation emits the reviewed mutable tag
-`asamarts/alint@v0.16.1`.
+comment; it never queries a floating `latest` ref. No tag exception
+exists: `asamarts/alint` pins a full SHA like every other action.
 
 Verified defaults on 2026-09-28:
 
@@ -110,7 +109,7 @@ uses: jdx/mr-boxington-action@9df1d4b18b2147788a7ee7a2c7b84ecf62fd89d3 # v1.5.0
 uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
 uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
 uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-uses: asamarts/alint@v0.16.1 # v0.16.1 (reviewed mutable-tag exception)
+uses: asamarts/alint@9f9d34ba0eae3888299b9e570f43338b0e7f2cdb # v0.16.1
 ```
 
 Release records: [mise-action v4.3.0](https://github.com/jdx/mise-action/releases/tag/v4.3.0),
@@ -123,8 +122,8 @@ Release records: [mise-action v4.3.0](https://github.com/jdx/mise-action/release
 Checkout, Mise setup, cache restore/save, and artifact transfer are emitted
 where required by the workflow graph. The Mr. Boxington action is emitted only
 when Rust scanning detects project use of MBX. All references come from the
-registry. `asamarts/alint@v0.16.1` is emitted only by the separate Velnor
-repository-policy job and is the sole reviewed mutable-tag exception.
+registry. The full-SHA `asamarts/alint` pin is emitted only by the
+separate Velnor repository-policy job.
 `taiki-e/install-action`, `actions/setup-*`, branch refs, unapproved tag refs,
 and floating action refs are forbidden. `actionlint` v1.7.12 and
 ShellCheck v0.11.0 are the verified stable tool defaults on 2026-09-28. Both
@@ -138,13 +137,14 @@ and its matching stable version. Keys must be exact allowlisted action
 repositories, and the pair must appear in that action's bundled approved-pin
 catalog (latest release plus maintained compatibility pins). The Alint action
 is not a per-project override: Velnor emits exactly
-`asamarts/alint@v0.16.1`. Changing that tag is a Velnor version-policy change,
+`asamarts/alint@9f9d34ba0eae3888299b9e570f43338b0e7f2cdb` (`# v0.16.1`).
+Changing that pin is a Velnor version-policy change,
 not a consumer configuration change. Velnor validates every ordinary pair and
 the action's input/output schema before replacing generated output. Unknown
 actions, tags, mismatched SHA/version pairs, and invalid inputs fail
 generation. Omitted overrides always use compiled-in defaults. Velnor's
 scheduled freshness check compares bundled defaults with upstream latest stable
-releases. The Alint tag is checked as a reviewed version record; it is not
+releases. The Alint pin is checked as a reviewed version record; it is not
 silently rewritten during generation. A stale default blocks Velnor release
 unless an approved, expiring exception records the hold.
 
@@ -172,7 +172,7 @@ Alint runs as a separate job only in Velnor's `velnor-repository-v1` profile,
 using this exact generated step:
 
 ```yaml
-- uses: asamarts/alint@v0.16.1
+- uses: asamarts/alint@9f9d34ba0eae3888299b9e570f43338b0e7f2cdb # v0.16.1
 ```
 
 It reads `.alint.yml` and enforces only the rules supported and explicitly
@@ -237,8 +237,7 @@ identities under the cache contract.
 
 ## 4. Reproducibility boundaries
 
-Full-SHA GitHub Action pins, except the reviewed `asamarts/alint@v0.16.1`
-mutable-tag exception, exact crate/tool versions, immutable generator
+Full-SHA GitHub Action pins, exact crate/tool versions, immutable generator
 artifacts, and image digests are reproducible identities. GitHub-hosted VM
 images are not immutable: Velnor pins an explicit supported image family,
 records the concrete `ImageOS`/`ImageVersion` in task evidence, and qualifies
