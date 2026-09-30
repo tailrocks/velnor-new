@@ -233,7 +233,7 @@ fn terminal_task_report(
             miss_reason: None,
         },
         exit_code,
-        duration_ms: 0,
+        duration_ms: None,
         outputs: Vec::new(),
         lane: None,
         queue: None,
@@ -322,31 +322,20 @@ fn write_entry_reports(
         .join(&plan.run_key)
         .join(&entry.matrix_key);
     let task_files_dir = dir.join("tasks");
-    fs::create_dir_all(&task_files_dir).map_err(|err| {
-        OrchestratorError::io(task_files_dir.display().to_string(), err.to_string())
-    })?;
+    crate::exclusive_write::create_dir_no_symlink(runner_temp, &task_files_dir)?;
     let matrix_bytes = canonical_json_bytes(matrix).map_err(internal_contract)?;
     let task_bytes = canonical_json_bytes(task).map_err(internal_contract)?;
-    write_new(&dir.join("matrix-report.json"), &matrix_bytes)?;
-    write_new(
+    crate::exclusive_write::write_exclusive(
+        &dir.join("matrix-report.json"),
+        &matrix_bytes,
+        "report",
+    )?;
+    crate::exclusive_write::write_exclusive(
         &task_files_dir.join(format!("{}.json", task.task_report_id)),
         &task_bytes,
+        "report",
     )?;
     Ok(())
-}
-
-/// Exclusively write one report file; a pre-existing file errors.
-fn write_new(path: &Path, bytes: &[u8]) -> Result<(), OrchestratorError> {
-    fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(path)
-        .map_err(|_| internal("report_exists"))
-        .and_then(|mut file| {
-            use std::io::Write;
-            file.write_all(bytes)
-                .map_err(|_| internal("report_unwritable"))
-        })
 }
 
 /// Report every downstream ID as skipped behind a failure.

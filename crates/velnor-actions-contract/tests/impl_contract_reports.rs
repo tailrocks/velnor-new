@@ -2,15 +2,13 @@
 use crate::impl_contract_ids::{MANIFEST, TASK, sample_entry};
 use std::collections::BTreeMap;
 use velnor_actions_contract::{
-    BaselineProof, CacheLayer, CacheOutcome, CacheResult, CandidateReport, CandidateStatus,
-    Concurrency, ContractError, FinalCounts, FinalReport, FinalStatus, Job, MatrixReport,
-    MatrixStatus, NotSelectedReason, ObligationDecision, Permissions, Plan, PlanBaseline,
-    PlanGenerator, PlanMatrix, PlanObligation, PlanPackage, PlanRunner, RequiredJobResult,
-    RunnerSelection, Step, StepKind, TaskReport, TaskStatus, Trigger, Trust, WorkflowEvent,
-    WorkflowIr, artifact_id_for_candidate, artifact_id_for_matrix, artifact_id_for_plan,
-    candidate_report_id_for_run, digest_b3, final_report_id_for_run, plan_id_for_run,
-    run_key_for_ci, task_report_id_for_task, validate_candidate_report_id,
-    validate_final_report_id,
+    BaselineProof, CacheLayer, CacheOutcome, CacheResult, Concurrency, ContractError, FinalCounts,
+    FinalReport, FinalStatus, Job, MatrixReport, MatrixStatus, NotSelectedReason,
+    ObligationDecision, Permissions, Plan, PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation,
+    PlanPackage, PlanRunner, RequiredJobResult, RunnerSelection, Step, StepKind, TaskReport,
+    TaskStatus, Trigger, Trust, WorkflowEvent, WorkflowIr, artifact_id_for_matrix,
+    artifact_id_for_plan, canonical_json_bytes, digest_b3, final_report_id_for_run,
+    plan_id_for_run, run_key_for_ci, task_report_id_for_task, validate_final_report_id,
 };
 
 #[test]
@@ -104,7 +102,7 @@ fn task_and_matrix_reports_validate() -> Result<(), ContractError> {
             miss_reason: Some("no_entry".to_owned()),
         },
         exit_code: 0,
-        duration_ms: 12,
+        duration_ms: Some(12),
         outputs: vec![],
         lane: None,
         queue: None,
@@ -153,7 +151,7 @@ fn task_and_matrix_reports_validate() -> Result<(), ContractError> {
 }
 
 #[test]
-fn final_and_candidate_reports_validate() -> Result<(), ContractError> {
+fn final_reports_validate() -> Result<(), ContractError> {
     let run_key = run_key_for_ci(5, 3);
     let entry = sample_entry(&run_key)?;
     let report_id = final_report_id_for_run(&run_key)?;
@@ -190,24 +188,6 @@ fn final_and_candidate_reports_validate() -> Result<(), ContractError> {
     assert_eq!(
         final_report.artifact_id()?,
         format!("velnor-final-{run_key}")
-    );
-    let candidate_id = candidate_report_id_for_run(&run_key, "x86_64-unknown-linux-gnu")?;
-    validate_candidate_report_id(&candidate_id)?;
-    let candidate = CandidateReport {
-        schema: 1,
-        report_id: candidate_id,
-        run_key: run_key.clone(),
-        source_commit: "ab".repeat(20),
-        target: "x86_64-unknown-linux-gnu".to_owned(),
-        artifact_sha256: "cd".repeat(32),
-        generator_version: "0.1.0".to_owned(),
-        status: CandidateStatus::Passed,
-        checks: vec!["generate-check".to_owned()],
-    };
-    candidate.validate()?;
-    assert_eq!(
-        candidate.artifact_id()?,
-        artifact_id_for_candidate(&run_key, &candidate.target)?
     );
     Ok(())
 }
@@ -291,7 +271,7 @@ fn reports_validate_only_when_matrix_id_matches_entry() -> Result<(), ContractEr
             miss_reason: Some("no_entry".to_owned()),
         },
         exit_code: 0,
-        duration_ms: 12,
+        duration_ms: Some(12),
         outputs: vec![],
         lane: None,
         queue: None,
@@ -331,6 +311,34 @@ fn reports_validate_only_when_matrix_id_matches_entry() -> Result<(), ContractEr
     let mut bad_matrix = matrix.clone();
     bad_matrix.matrix_id = other;
     assert!(bad_matrix.validate().is_err());
+    Ok(())
+}
+
+#[test]
+fn absent_duration_deserializes_to_none_and_skips() -> Result<(), ContractError> {
+    let value = serde_json::json!({
+        "schema": 1,
+        "task_report_id": "task-local-m-0000000000000000-0000000000000000000000000000000000000000000000000000000000000000",
+        "run_key": "local",
+        "event": "pull_request",
+        "trust": "pr",
+        "matrix_id": "stack:rust|task:x",
+        "matrix_key": "m-0000000000000000",
+        "task_id": "stack/rust/x/build/default",
+        "task_digest": "b3-0000000000000000000000000000000000000000000000000000000000000000",
+        "status": "executed",
+        "cache": {"layer": "task", "key": "", "result": "not_attempted"},
+        "exit_code": 0,
+        "outputs": [],
+    });
+    let report: TaskReport = serde_json::from_value(value)
+        .map_err(|err| ContractError::identity("task", err.to_string()))?;
+    assert_eq!(report.duration_ms, None);
+    let bytes = canonical_json_bytes(&report)?;
+    assert!(
+        !String::from_utf8_lossy(&bytes).contains("duration_ms"),
+        "absent timing serializes absent"
+    );
     Ok(())
 }
 

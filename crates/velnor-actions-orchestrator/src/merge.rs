@@ -10,26 +10,25 @@ use std::collections::BTreeSet;
 
 use serde::Deserialize;
 use velnor_actions_contract::{
-    CandidateReport, FinalCounts, FinalReport, FinalStatus, MatrixReport, ObligationDecision, Plan,
-    PlanMatrix, RequiredJobResult, TaskReport, final_report_id_for_run, parse_strict_json,
-    validate_run_key,
+    FinalCounts, FinalReport, FinalStatus, MatrixReport, ObligationDecision, Plan, PlanMatrix,
+    RequiredJobResult, TaskReport, final_report_id_for_run, parse_strict_json, validate_run_key,
 };
 
 use self::merge_checks::{
     check_agreement, check_execute_inventory, check_plan_evidence, check_plan_shape,
-    expected_task_reports, partition_task_reports, plan_digests, plan_entries, shards_failed,
+    check_trust_coherence, expected_task_reports, partition_task_reports, plan_digests,
+    plan_entries, shards_failed,
 };
 pub(crate) use self::required_evidence::BaselineManifest;
 use self::required_evidence::{
-    check_required_evidence, diagnostic_without_plan, fold_candidate, fold_jobs,
-    reported_job_results,
+    check_required_evidence, diagnostic_without_plan, fold_jobs, reported_job_results,
 };
 use crate::OrchestratorError;
 use crate::cover::shard::{ResourceLimits, ShardProof};
 use crate::cover::{CoverSinks, Fold, Signals, cover_entry, partition_reports};
 use crate::internal::{SCHEMA, check_schema, internal_contract};
 
-/// `merge-v1` request: plan, matrix bytes, reports, jobs, and candidate.
+/// `merge-v1` request: plan, matrix bytes, reports, and jobs.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct MergeRequest {
@@ -55,9 +54,6 @@ pub(crate) struct MergeRequest {
     /// Assembly failure details; every entry fails the verdict.
     #[serde(default)]
     pub(crate) assembly_errors: Vec<String>,
-    /// Candidate report when candidate validation ran.
-    #[serde(default)]
-    candidate: Option<CandidateReport>,
     /// Trusted baseline manifest for coverage revalidation.
     #[serde(default)]
     baseline_manifest: Option<BaselineManifest>,
@@ -153,27 +149,7 @@ fn evidence_failure(request: &MergeRequest) -> Option<String> {
             return Some("trust_scope_mismatch".to_owned());
         }
     }
-    candidate_failure(request)
-}
-
-/// Candidate evidence failure token, if any.
-///
-/// Qualification accepts any event, so a required untrusted PR
-/// candidate qualifies here without promotion rights; promotion stays
-/// with the protected release job. The proof must bind the planned head.
-fn candidate_failure(request: &MergeRequest) -> Option<String> {
-    let candidate = request.candidate.as_ref()?;
-    if candidate.validate().is_err() {
-        return Some("cache_corrupt".to_owned());
-    }
-    if candidate.run_key != request.run_key {
-        return Some("trust_scope_mismatch".to_owned());
-    }
-    let bound = request
-        .plan
-        .as_ref()
-        .is_none_or(|plan| candidate.source_commit == plan.head);
-    (!bound).then_some("input_digest_mismatch".to_owned())
+    None
 }
 
 /// Aggregate one final report from validated plan plus reports.
@@ -187,6 +163,7 @@ fn build_final(request: &MergeRequest, plan: &Plan) -> Result<FinalReport, Orche
         &mut miss_reasons,
     )?;
     check_plan_shape(plan, &mut signals, &mut miss_reasons);
+    check_trust_coherence(plan, request, &mut signals, &mut miss_reasons);
     check_plan_evidence(plan, request, &mut signals, &mut miss_reasons);
     check_execute_inventory(plan, &mut signals, &mut miss_reasons);
     let entries = plan_entries(plan);
@@ -208,6 +185,7 @@ fn build_final(request: &MergeRequest, plan: &Plan) -> Result<FinalReport, Orche
         };
         if shards_failed(entry, report.empty_partition, plan, request) {
             signals.planning_failed = true;
+            miss_reasons.insert("cache_corrupt".to_owned());
             uncovered += 1;
             continue;
         }
@@ -225,7 +203,6 @@ fn build_final(request: &MergeRequest, plan: &Plan) -> Result<FinalReport, Orche
         }
     }
     fold_jobs(&request.required_jobs, &mut signals);
-    fold_candidate(request.candidate.as_ref(), &mut signals);
     downloaded.sort();
     let status = decide(&signals, plan);
     Ok(FinalReport {

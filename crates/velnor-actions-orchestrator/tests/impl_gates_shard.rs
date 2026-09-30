@@ -175,17 +175,14 @@ fn merge_with(
     for (key, value) in extra.as_object().ok_or("not an object")? {
         request[key] = value.clone();
     }
-    let final_report: velnor_actions_contract::FinalReport = serde_json::from_str(
-        &velnor_actions_orchestrator::merge_internal(&request.to_string())?,
-    )?;
-    Ok(final_report.status)
+    Ok(crate::impl_gates_shard_tokens::merge_report_with(plan, reports, proofs, extra)?.status)
 }
 
 /// Canonical sharded plan plus inventory, proofs, and passing reports.
 type ShardedCase =
     Result<(Plan, String, Vec<MatrixReport>, Vec<serde_json::Value>), Box<dyn std::error::Error>>;
 
-fn sharded_case() -> ShardedCase {
+pub(crate) fn sharded_case() -> ShardedCase {
     let (_repo, mut plan) = plan_for_source_change()?;
     let (_base, first, second) = shard_first_entry(&mut plan)?;
     let input = plan

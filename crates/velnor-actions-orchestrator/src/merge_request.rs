@@ -3,16 +3,20 @@
 //! The final job downloads the plan artifact (`plan.json`, `matrix.json`)
 //! plus every matrix-report artifact under `reports/<artifact-id>/` before
 //! the merge step; this module assembles those files into the canonical
-//! merge-request JSON that [`crate::merge_internal`] consumes.
+//! merge-request JSON that [`crate::merge_internal`] consumes. Candidate
+//! qualification evidence is the candidate job's `needs` conclusion,
+//! not a separate report file: no producer ever wrote one, so requiring
+//! it failed candidate mode closed on every run.
 //!
 //! Required validator conclusions arrive through the `VELNOR_NEEDS_JSON`
 //! channel: a JSON object mapping each job in the final gate's `needs`
 //! to its conclusion, either directly (`{"plan": "success"}`) or in
 //! `toJSON(needs)` shape (`{"plan": {"result": "success"}}`). The
-//! renderer emits the finalized `needs` set; assembly declares it as the
-//! required inventory (minus the matrix-driver job, whose legs prove
-//! themselves through per-leg reports) and fails closed on a missing or
-//! unparsable channel.
+//! renderer also emits the static expected inventory through
+//! `VELNOR_NEEDS_EXPECTED`; assembly declares it as the required
+//! inventory (minus the matrix-driver job, whose legs prove themselves
+//! through per-leg reports) and fails closed on a missing or unparsable
+//! channel or any observed-vs-expected divergence.
 //!
 //! Assembly never drops evidence silently: every missing or unparsable
 //! artifact becomes an explicit `assembly_errors` entry that fails the
@@ -28,7 +32,7 @@ use std::path::{Path, PathBuf};
 
 use velnor_actions_contract::canonical_json_str;
 
-use self::needs_channel::{NEEDS_ENV, parse_needs};
+use self::needs_channel::{NEEDS_ENV, NEEDS_EXPECTED_ENV, parse_needs};
 use crate::OrchestratorError;
 use crate::internal::{internal, internal_contract};
 use crate::internal_request::resolve_run_key;
@@ -39,7 +43,7 @@ use crate::internal_request::resolve_run_key;
 /// `reports/<artifact-id>/matrix-report.json` files plus their
 /// `tasks/<task-report-id>.json` files (sorted by ID for determinism;
 /// anything else under `reports/` is ignored, never globbed), plus
-/// optional `baseline.json` and `candidate-report.json`.
+/// optional `baseline.json`.
 /// Validator inventory and conclusions come from `VELNOR_NEEDS_JSON`. Every
 /// missing or unparsable input is recorded in `assembly_errors`, never
 /// dropped, so the merge judges the gap explicitly.
@@ -49,13 +53,15 @@ use crate::internal_request::resolve_run_key;
 /// Returns [`OrchestratorError::Internal`] for encoding failures.
 pub fn assemble_merge_request(run_key: &str, run_dir: &Path) -> Result<String, OrchestratorError> {
     let needs = std::env::var(NEEDS_ENV).ok();
-    assemble_with_needs(run_key, run_dir, needs.as_deref())
+    let expected = std::env::var(NEEDS_EXPECTED_ENV).ok();
+    assemble_with_needs(run_key, run_dir, needs.as_deref(), expected.as_deref())
 }
 
-/// Assemble one merge request with an explicit needs channel.
+/// Assemble one merge request with explicit needs channels.
 ///
-/// The public wrapper reads `VELNOR_NEEDS_JSON`; tests pass the channel
-/// explicitly for determinism.
+/// The public wrapper reads `VELNOR_NEEDS_JSON` plus
+/// `VELNOR_NEEDS_EXPECTED`; tests pass the channels explicitly for
+/// determinism.
 ///
 /// # Errors
 ///
@@ -64,6 +70,7 @@ pub(crate) fn assemble_with_needs(
     run_key: &str,
     run_dir: &Path,
     needs: Option<&str>,
+    expected: Option<&str>,
 ) -> Result<String, OrchestratorError> {
     let mut errors = Vec::new();
     let plan = read_json(run_dir, "plan.json", "plan", true, &mut errors);
@@ -75,14 +82,7 @@ pub(crate) fn assemble_with_needs(
         &mut errors,
     );
     let baseline = read_json(run_dir, "baseline.json", "baseline", false, &mut errors);
-    let candidate = read_json(
-        run_dir,
-        "candidate-report.json",
-        "candidate_report",
-        false,
-        &mut errors,
-    );
-    let (inventory, jobs) = parse_needs(needs, &mut errors);
+    let (inventory, jobs) = parse_needs(needs, expected, &mut errors);
     let request = serde_json::json!({
         "schema": 1,
         "run_key": run_key,
@@ -94,7 +94,6 @@ pub(crate) fn assemble_with_needs(
         "required_jobs": jobs,
         "assembly_errors": errors,
         "baseline_manifest": baseline,
-        "candidate": candidate,
     });
     canonical_json_str(&request).map_err(internal_contract)
 }
@@ -139,16 +138,7 @@ pub(crate) fn write_merge_request_to(
         fs::create_dir_all(parent)
             .map_err(|err| OrchestratorError::io(parent.display().to_string(), err.to_string()))?;
     }
-    fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&path)
-        .map_err(|_| internal("request_exists"))
-        .and_then(|mut file| {
-            use std::io::Write;
-            file.write_all(request.as_bytes())
-                .map_err(|_| internal("request_unwritable"))
-        })?;
+    crate::exclusive_write::write_exclusive(&path, request.as_bytes(), "request")?;
     Ok(path)
 }
 

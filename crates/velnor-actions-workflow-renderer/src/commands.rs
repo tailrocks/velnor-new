@@ -11,6 +11,9 @@ use crate::{RenderError, steps::scan_for_private_subcommands};
 ///
 /// Rejects empty argv, empty args, control characters, command substitution,
 /// `cargo install` sequences, absolute Cargo paths, and private tokens.
+/// GitHub `${{ }}` expressions stay constructible here: secret and
+/// input handles are diagnosed with specific tokens by the release
+/// gates, which run after this structural check.
 ///
 /// # Errors
 ///

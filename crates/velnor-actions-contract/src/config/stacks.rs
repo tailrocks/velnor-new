@@ -82,6 +82,44 @@ pub struct RustConfiguration {
     pub target: String,
 }
 
+/// True for a render-safe Rust target: `host` or triple characters only.
+///
+/// Targets flow into `--target` argv and quoted `run:` lines; the
+/// allowlist admits nothing the shell or `${{ }}` could evaluate.
+#[must_use]
+pub fn is_valid_rust_target(target: &str) -> bool {
+    !target.is_empty()
+        && target
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'_'))
+}
+
+/// True for a render-safe Cargo feature name.
+///
+/// Admits Cargo feature syntax (names plus `dep:`, weak `?`, and `/`
+/// qualifiers) and nothing the shell or `${{ }}` could evaluate.
+/// Unknown names still fail closed later against declared features.
+#[must_use]
+pub fn is_valid_feature_name(feature: &str) -> bool {
+    !feature.is_empty()
+        && feature.bytes().all(|b| {
+            b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'.' | b'+' | b'/' | b':' | b'?')
+        })
+}
+
+/// True for a render-safe Mise custom-task name.
+///
+/// Single source for the config allowlist, the fixed `mise run` argv,
+/// and the gate-6 grant: namespaced (`:`) task names plus safe
+/// punctuation, never whitespace, separators, or expansions.
+#[must_use]
+pub fn is_valid_custom_task_name(task: &str) -> bool {
+    !task.is_empty()
+        && task
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b':'))
+}
+
 impl RustStackConfig {
     /// Documented default: one `default` configuration, no declarations,
     /// release disabled.
@@ -168,12 +206,21 @@ impl RustStackConfig {
                     format!("duplicate_configuration:{}", config.name),
                 ));
             }
-            if config.target.trim().is_empty() {
+            if !is_valid_rust_target(&config.target) {
                 return Err(ContractError::config(
                     file,
                     "stacks.rust.configurations.target",
-                    "empty_target",
+                    format!("bad_target:{}", config.target),
                 ));
+            }
+            for feature in &config.features {
+                if !is_valid_feature_name(feature) {
+                    return Err(ContractError::config(
+                        file,
+                        "stacks.rust.configurations.features",
+                        format!("bad_feature:{feature}"),
+                    ));
+                }
             }
         }
         self.release.validate(file)?;
@@ -205,7 +252,7 @@ impl RustStackConfig {
             ));
         }
         for task in &self.custom_tasks {
-            if task.trim().is_empty() || task.contains('/') || task.contains(' ') {
+            if !is_valid_custom_task_name(task) {
                 return Err(ContractError::config(
                     file,
                     "stacks.rust.custom_tasks",

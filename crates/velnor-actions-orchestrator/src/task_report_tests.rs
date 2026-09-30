@@ -181,6 +181,8 @@ fn executed_report_binds_plan_identities() {
     assert_eq!(task.exit_code, 0);
     assert_eq!(task.task_digest, obligation.task_digest);
     assert_eq!(task.event, WorkflowEvent::PullRequest);
+    assert_eq!(task.duration_ms, None, "unmeasured timing stays absent");
+    assert_eq!(task.timing, None, "unmeasured timing stays absent");
     assert_eq!(matrix.status, MatrixStatus::Passed);
     assert_eq!(matrix.report_id, entry.report_id);
     assert_eq!(matrix.executed, 1);
@@ -274,6 +276,27 @@ fn unbound_inputs_fail_before_writing() {
     assert!(write_task_report_to("local", CLIPPY, 0, &[], rewrite.path()).is_err());
 }
 
+#[cfg(unix)]
+#[test]
+fn planted_symlink_at_report_path_refuses_without_writing() {
+    let plan = fixture_plan();
+    let temp = staged_run(&plan, "local");
+    let entry = &plan.matrix.include[0];
+    let dir = temp
+        .path()
+        .join("velnor")
+        .join("local")
+        .join(&entry.matrix_key);
+    let report_dir = dir.join("tasks");
+    fs::create_dir_all(&report_dir).expect("report dirs");
+    let loot = temp.path().join("loot.json");
+    std::os::unix::fs::symlink(&loot, dir.join("matrix-report.json")).expect("plant");
+    let err =
+        write_task_report_to("local", CLIPPY, 0, &[], temp.path()).expect_err("plant refused");
+    assert!(err.to_string().contains("symlink_refused"), "{err}");
+    assert!(!loot.exists(), "producer bytes never followed the plant");
+}
+
 #[test]
 fn ambiguous_entries_refuse_rather_than_guess() {
     let mut plan = fixture_plan();
@@ -326,8 +349,9 @@ fn merge_flips_not_run_to_executed_end_to_end() {
     let temp = staged_run(&plan, "local");
     let run = temp.path().join("velnor").join("local");
     let needs = Some(r#"{"plan":"success"}"#);
+    let expected = Some(r#"["plan"]"#);
 
-    let bare = assemble_with_needs("local", &run, needs).expect("assemble bare");
+    let bare = assemble_with_needs("local", &run, needs, expected).expect("assemble bare");
     let verdict: velnor_actions_contract::FinalReport =
         serde_json::from_str(&merge_internal(&bare).expect("merge bare")).expect("final json");
     eprintln!(
@@ -346,7 +370,7 @@ fn merge_flips_not_run_to_executed_end_to_end() {
     write_task_report_to("local", TEST, 0, &[], temp.path()).expect("test");
     stage_downloads(&plan, &temp);
 
-    let full = assemble_with_needs("local", &run, needs).expect("assemble full");
+    let full = assemble_with_needs("local", &run, needs, expected).expect("assemble full");
     assert!(
         !full.contains("missing_report"),
         "all artifacts staged: {full}"

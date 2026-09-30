@@ -42,7 +42,7 @@ fn merge_envelope_rejects_duplicate_keys() -> TestResult {
         err.to_string().contains("duplicate_key:schema"),
         "got {err}"
     );
-    let nested = r#"{"schema":1,"run_key":"local","matrix_reports":[],"required_job_ids":[],"required_jobs":[],"candidate":{"run_key":"local","run_key":"other"}}"#;
+    let nested = r#"{"schema":1,"run_key":"local","matrix_reports":[],"required_job_ids":[],"required_jobs":[],"plan":{"run_key":"local","run_key":"other"}}"#;
     let err = err_of(merge_internal(nested), "nested dup merge envelope")?;
     assert!(
         err.to_string().contains("duplicate_key:run_key"),

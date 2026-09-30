@@ -5,7 +5,8 @@ use crate::ids::{
     matrix_key_for_id, task_report_id_for_task, validate_matrix_key, validate_report_id,
     validate_run_key, validate_task_id, validate_task_report_id,
 };
-use crate::workflow::plan::{Trust, WorkflowEvent};
+use crate::workflow::plan::WorkflowEvent;
+use crate::workflow::trust::Trust;
 use serde::{Deserialize, Serialize};
 /// Per-task machine-readable report.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -37,8 +38,12 @@ pub struct TaskReport {
     pub cache: CacheOutcome,
     /// Process exit code.
     pub exit_code: i32,
-    /// Duration in milliseconds.
-    pub duration_ms: u64,
+    /// Measured wall time in milliseconds, when collected.
+    ///
+    /// Absent telemetry is `None`, never a fabricated zero: a missing
+    /// measurement must not read as an instant task.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub duration_ms: Option<u64>,
     /// Declared outputs only.
     #[serde(default)]
     pub outputs: Vec<String>,

@@ -6,10 +6,12 @@ pub mod crate_job;
 pub mod execute;
 pub mod ir;
 pub mod jobs;
+pub mod needs;
 pub mod permissions;
 pub mod plan;
 pub mod qualification;
 pub mod report;
+pub mod trust;
 pub use artifacts::{
     FINAL_JSON_FILENAME, MATRIX_JSON_FILENAME, PLAN_JSON_FILENAME, check_matrix_agreement,
     matrix_json_bytes, plan_json_bytes,
@@ -21,24 +23,26 @@ pub use execute::{ExecuteTaskIds, ExecuteTaskRef};
 pub use ir::{Concurrency, Job, Step, StepKind, Trigger, WorkflowIr};
 pub use jobs::{
     CI_WORKFLOW_PATH, CRATE_JOB_ID_PREFIX, FRESHNESS_CRON_WEEKLY, FRESHNESS_WORKFLOW_PATH,
-    NEEDS_CHANNEL_ENV, NEEDS_CHANNEL_EXPRESSION, NeedsConclusions, PLAN_DISPLAY_NAME, PLAN_JOB_ID,
-    REQUIRED_CONDITION, REQUIRED_DISPLAY_NAME, REQUIRED_JOB_ID, RequiredCheckMigration,
-    STALE_WORKFLOW_PATHS, ScheduleTrigger, ValidatorKind, WORKFLOW_DISPLAY_NAME,
-    assign_crate_job_ids, crate_display_label, crate_display_name, slugify_segment,
-    validate_job_id,
+    PLAN_DISPLAY_NAME, PLAN_JOB_ID, REQUIRED_CONDITION, REQUIRED_DISPLAY_NAME, REQUIRED_JOB_ID,
+    RequiredCheckMigration, STALE_WORKFLOW_PATHS, ScheduleTrigger, ValidatorKind,
+    WORKFLOW_DISPLAY_NAME, assign_crate_job_ids, crate_display_label, crate_display_name,
+    slugify_segment, validate_job_id,
+};
+pub use needs::{
+    NEEDS_CHANNEL_ENV, NEEDS_CHANNEL_EXPRESSION, NEEDS_EXPECTED_ENV, NeedsConclusions,
 };
 pub use permissions::{PermissionLevel, Permissions};
 pub use plan::{
     MatrixEntry, ObligationDecision, Plan, PlanGenerator, PlanMatrix, PlanObligation, PlanPackage,
-    PlanRunner, Trust, WorkflowEvent, validate_matrix_run,
+    PlanRunner, WorkflowEvent, validate_matrix_run,
 };
 pub use qualification::{
-    CandidateReport, CandidateStatus, FinalCounts, FinalReport, FinalStatus, RequiredJobResult,
-    candidate_report_id_for_run, final_report_id_for_run, final_report_relpath, join_runner_temp,
-    matrix_report_relpath, task_report_relpath, validate_candidate_report_id,
+    FinalCounts, FinalReport, FinalStatus, RequiredJobResult, final_report_id_for_run,
+    final_report_relpath, join_runner_temp, matrix_report_relpath, task_report_relpath,
     validate_final_report_id,
 };
 pub use report::{
     CacheLayer, CacheOutcome, CacheResult, MatrixReport, MatrixStatus, MatrixTaskEntry,
     NotSelectedReason, TaskReport, TaskStatus, TaskTiming,
 };
+pub use trust::{Trust, trust_for_event};
