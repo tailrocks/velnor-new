@@ -30,19 +30,33 @@ Every official Velnor release MUST publish:
 2. A versioned release manifest listing each target, exact asset URL, and
    SHA-256 digest.
 
-When a release-installed `velnor-actions` binary generates consumer workflows,
-its compiled-in manifest record for its own exact version MUST be validated —
-schema, version, repository, supported targets, immutable URLs — with no
-network access during generation; it then embeds the runner-target URL and
-digest in generated workflow steps. The workflow MUST download that exact
-asset and verify SHA-256 before invoking it. The release manifest record is
-selected by exact version; generation MUST NOT query a floating `latest` endpoint.
+Every consumer repository MUST commit a byte-identical copy of that
+published manifest at `.velnor/release-manifest.json`. When any
+`velnor-actions` binary generates consumer workflows, it reads the
+committed file and validates it — schema, version, repository,
+supported targets, immutable URLs — with no network access during
+generation; it then embeds the runner-target URL and digest in
+generated workflow steps. The workflow MUST download that exact
+asset and verify SHA-256 before invoking it. The generating binary
+and the checking binary read the same committed file, so identical
+output follows by construction. The release manifest record is
+selected by exact version; generation MUST NOT query a floating
+`latest` endpoint.
 
-A source build or binary without an official release version MUST fail
-consumer workflow generation with a diagnostic recommending installation of
-an official Velnor release. It MUST NOT emit an unverified download URL or a
-placeholder digest. The generated file remains deterministic for a given
-generator release, config, and repository state.
+The committed file carries the same trust as `config.toml` and the
+committed workflow YAML: repository review gates its content, while
+the mechanism guarantees self-consistency (both sides read one file)
+and fail-closed behavior (absent, unreadable, or invalid files fail
+generation). This reverses the earlier debug-only posture, under
+which release builds never read the file: a binary cannot embed a
+manifest containing its own SHA-256, so a compile-time bake can never
+cover the seed binary, and seed and release assets need no bake.
+
+A repository without the committed manifest MUST fail consumer
+workflow generation with a diagnostic recommending installation of
+an official Velnor release. It MUST NOT emit an unverified download
+URL or a placeholder digest. The generated file remains deterministic
+for a given generator release, config, and repository state.
 
 ## 3. Velnor-only bootstrap lock
 
@@ -119,6 +133,9 @@ NOT decide the graph that builds or promotes itself.
    immutable per-target assets and the versioned release manifest, verifies
    their digests, then updates `.velnor/generator.lock` in a separate reviewed
    change. Ordinary CI uses the previous bootstrap until that update lands.
+   Consumers adopt the release by committing a byte-identical copy of the
+   published manifest (§2); the release job never bakes the manifest into
+   the assets it describes.
 
 The candidate build command is:
 
