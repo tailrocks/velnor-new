@@ -14,6 +14,7 @@ mod cover_identity;
 mod crate_jobs;
 mod critical_path;
 pub mod decisions;
+mod derive_groups;
 mod discover;
 mod discover_index;
 mod error;
@@ -64,6 +65,7 @@ pub use critical_path::{
     CriticalPath, critical_path, critical_path_for_groups, critical_path_line,
     critical_path_structural, render_critical_path,
 };
+pub use derive_groups::FeatureFallback;
 pub use discover::{Discovery, PlannedWorkspace};
 pub use error::OrchestratorError;
 pub use extension_schemas::{

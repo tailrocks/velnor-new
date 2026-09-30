@@ -24,6 +24,7 @@ mod impl_orch_f2c;
 mod impl_orch_f2d;
 mod impl_orch_f2e;
 mod impl_orch_f2f;
+mod impl_orch_features;
 mod impl_orch_gen;
 mod impl_orch_gen2;
 mod impl_orch_intake;

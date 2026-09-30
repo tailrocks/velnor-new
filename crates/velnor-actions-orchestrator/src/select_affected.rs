@@ -110,6 +110,7 @@ mod tests {
         };
         Discovery {
             statuses: Vec::new(),
+            feature_fallbacks: Vec::new(),
             workspaces: vec![PlannedWorkspace {
                 record: WorkspaceRecord {
                     workspace_root: String::new(),
