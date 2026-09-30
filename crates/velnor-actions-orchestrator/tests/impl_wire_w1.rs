@@ -13,7 +13,7 @@ use velnor_actions_mise::{CandidateBuild, PinnedTool, ToolCatalog};
 use velnor_actions_orchestrator::{DEFAULT_RUNNER_LABEL, prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::render::{ACTIONLINT_PATH, WORKFLOW_PATH};
 
-use super::impl_common::{TestResult, config_with_branch, make_repo};
+use super::impl_common::{TestResult, config_with_branch, make_repo, make_virtual_repo};
 
 /// Staged workflow + actionlint bytes for one config.
 fn preview_both(config: &str) -> Result<(TempDir, String, String), Box<dyn std::error::Error>> {
@@ -249,6 +249,33 @@ fn w1_plan_format_runs_fmt_check() -> TestResult {
     // R28: per-package Fmt groups own every file, so the plan job carries no
     // overlapping `fmt --all` scope; the crate job keeps its Format step.
     let plan = window(yaml, "  plan:", "  required:")?;
+    assert!(
+        !plan.contains("- name: Format"),
+        "root package owns its fmt scope:\n{plan}"
+    );
+    let job = window(yaml, "  rust-demo:", "  required:")?;
+    assert!(job.contains("- name: Format"), "per-package scope:\n{job}");
+    {
+        // Virtual workspace with members: per-package groups still own every
+        // file, so no workspace `fmt --all` group exists and the plan job
+        // owns no Format scope either (R28/P05-5 no-overlap). The duplicate
+        // task id 6e2d4d4 fixed cannot recur: one group, one id.
+        let virtual_repo = make_virtual_repo(config_with_branch())?;
+        fs::write(virtual_repo.path().join("rustfmt.toml"), "[rustfmt]\n")?;
+        let prep = prepare(virtual_repo.path())?;
+        let tree = render_staged_tree(&prep)?;
+        let yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
+        // Validators sort before plan, so the plan window ends at required.
+        let plan = window(yaml, "  plan:", "  required:")?;
+        assert!(
+            !plan.contains("- name: Format"),
+            "no overlapping plan scope in virtual workspaces:\n{plan}"
+        );
+        assert!(
+            !yaml.contains("fmt --all --check"),
+            "no workspace-wide format in virtual workspaces:\n{yaml}"
+        );
+    }
     assert!(
         !plan.contains("- name: Format"),
         "no overlapping plan scope:\n{plan}"

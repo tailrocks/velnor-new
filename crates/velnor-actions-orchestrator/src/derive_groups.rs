@@ -107,7 +107,13 @@ pub(crate) fn derive_for_config(
     // Per-package Fmt groups already cover every file: a workspace Fmt group
     // for the same config would re-check them via plan `fmt --all` (R28).
     // Package-less workspaces derive no per-package groups, so their one
-    // distinct workspace scope still lands below.
+    // distinct workspace scope still lands below. Suppression also owns the
+    // root-manifest-once invariant: with no second group there is no second
+    // `stack/rust/<key>/fmt/<config>` id, so plan-v1 can never trip
+    // `duplicate_task_id` here. A manifest-ownership partition (emit unless
+    // a member owns the root manifest) agrees in every case except virtual
+    // workspaces with members, where it would re-add the overlapping
+    // whole-workspace check P05-5 forbids; per-package presence is the rule.
     let per_package_fmt = groups
         .iter()
         .any(|group| group.kind == TaskKind::Fmt && !group.package_name.is_empty());
