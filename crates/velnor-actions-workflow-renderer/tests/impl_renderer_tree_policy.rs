@@ -30,26 +30,6 @@ fn fixture_ctx() -> RenderContext {
     }
 }
 
-fn exact_triggers() -> Trigger {
-    Trigger {
-        pull_request_types: ["opened", "synchronize", "reopened", "ready_for_review"]
-            .iter()
-            .map(ToString::to_string)
-            .collect(),
-        push_branches: vec!["main".to_owned()],
-        merge_group: true,
-        workflow_dispatch: None,
-        schedule: None,
-    }
-}
-
-fn exact_concurrency() -> Concurrency {
-    Concurrency {
-        group: CONCURRENCY_GROUP.to_owned(),
-        cancel_in_progress: CONCURRENCY_CANCEL.to_owned(),
-    }
-}
-
 fn plan_job() -> Result<Job, RenderError> {
     Ok(Job {
         display_name: "Plan".to_owned(),
@@ -82,9 +62,21 @@ fn fixture_ir() -> Result<WorkflowIr, RenderError> {
     jobs.insert("plan".to_owned(), plan_job()?);
     Ok(WorkflowIr {
         name: "CI".to_owned(),
-        triggers: exact_triggers(),
+        triggers: Trigger {
+            pull_request_types: ["opened", "synchronize", "reopened", "ready_for_review"]
+                .iter()
+                .map(ToString::to_string)
+                .collect(),
+            push_branches: vec!["main".to_owned()],
+            merge_group: true,
+            workflow_dispatch: None,
+            schedule: None,
+        },
         permissions: Permissions::default(),
-        concurrency: exact_concurrency(),
+        concurrency: Concurrency {
+            group: CONCURRENCY_GROUP.to_owned(),
+            cancel_in_progress: CONCURRENCY_CANCEL.to_owned(),
+        },
         jobs,
     })
 }
@@ -272,19 +264,11 @@ fn final_gate_keeps_exact_name_and_condition() -> Result<(), RenderError> {
 }
 
 fn task_job(step: Step) -> Job {
-    Job {
-        display_name: "Task".to_owned(),
-        runs_on: LABEL.to_owned(),
-        needs: vec!["plan".to_owned()],
-        condition: None,
-        permissions: None,
-        environment: None,
-        steps: vec![step],
-    }
+    simple_job("Task", vec!["plan".to_owned()], vec![step])
 }
 
 #[test]
-fn renderer_rejects_unvalidated_steps_inside_ir() -> Result<(), RenderError> {
+fn renderer_rejects_bare_commands_inside_ir() -> Result<(), RenderError> {
     let ctx = fixture_ctx();
     let mut ir = fixture_ir()?;
     ir.jobs.insert(
@@ -337,6 +321,34 @@ fn renderer_rejects_unvalidated_steps_inside_ir() -> Result<(), RenderError> {
         )?),
     );
     assert!(render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx).is_ok());
+    Ok(())
+}
+
+#[test]
+fn renderer_rejects_unpinned_actions_inside_ir() -> Result<(), RenderError> {
+    let ctx = fixture_ctx();
+    for (name, uses) in [
+        ("Fetch", "actions/checkout@main"),
+        ("Run Alint", "asamarts/alint@v0.16.1"),
+    ] {
+        let mut ir = fixture_ir()?;
+        ir.jobs.insert(
+            "velnor-task".to_owned(),
+            task_job(Step {
+                name: name.to_owned(),
+                kind: StepKind::Action {
+                    uses: uses.to_owned(),
+                    with: BTreeMap::new(),
+                },
+            }),
+        );
+        let err = render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx)
+            .expect_err("unpinned ref must be rejected");
+        assert!(
+            format!("{err:?}").contains("unpinned_ref"),
+            "wrong rejection for {uses}: {err:?}"
+        );
+    }
     Ok(())
 }
 

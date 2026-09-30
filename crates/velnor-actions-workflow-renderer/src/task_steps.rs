@@ -63,32 +63,12 @@ pub const NOOP_MATRIX_ID_ENV: &str = "VELNOR_MATRIX_ID";
 pub const NOOP_EVENT_ENV: &str = "VELNOR_EVENT_NAME";
 /// Env key carrying the leg's task ID (`matrix.task_id`) into scripts.
 pub const LEG_TASK_ID_ENV: &str = "VELNOR_TASK_ID";
-/// Env key carrying the leg's command (`matrix.run`) into scripts.
-pub const LEG_TASK_RUN_ENV: &str = "VELNOR_TASK_RUN";
 /// Env key carrying the leg's obligation digest into scripts.
 pub const LEG_TASK_DIGEST_ENV: &str = "VELNOR_TASK_DIGEST";
 /// Exec-leg alias: matrix key env (shared with no-op report scripts).
 pub const LEG_MATRIX_KEY_ENV: &str = NOOP_MATRIX_KEY_ENV;
 /// Exec-leg alias: matrix ID env (shared with no-op report scripts).
 pub const LEG_MATRIX_ID_ENV: &str = NOOP_MATRIX_ID_ENV;
-/// Exec-leg alias: event-name env (shared with no-op report scripts).
-pub const LEG_EVENT_ENV: &str = NOOP_EVENT_ENV;
-
-/// Fixed exec-leg script: run the entry command, always write reports.
-///
-/// `matrix.run` executes first; its exit code is captured immediately and
-/// the leg then writes the task report plus `matrix-report.json` for its
-/// single scheduled obligation (real exit, `executed`/`failed` status)
-/// before exiting with that same code. Upload steps (`if: always()`) still
-/// ship the evidence when the task failed; cancelled legs write nothing
-/// and merge judges them `not_run` honestly. All identities arrive via
-/// step env (matrix context), never in `run:`.
-#[must_use]
-pub fn leg_execution_script() -> String {
-    format!(
-        "echo \"${LEG_TASK_ID_ENV}\" && : \"${{{LEG_TASK_RUN_ENV}:?matrix.run_missing}}\" && : \"${{{LEG_TASK_DIGEST_ENV}:?matrix.task_digest_missing}}\" && sh -c \"${LEG_TASK_RUN_ENV}\"; code=$?; run_key=r${{GITHUB_RUN_ID}}-a${{GITHUB_RUN_ATTEMPT}}; trust=\"pr\"; if [ \"${LEG_EVENT_ENV}\" = push ]; then trust=trusted; fi; dir=\"$RUNNER_TEMP/velnor/$run_key/${LEG_MATRIX_KEY_ENV}\"; mkdir -p \"$dir/tasks\"; printf %s \"${LEG_TASK_DIGEST_ENV}\" | cut -c4-19 > \"$dir/prefix\"; read prefix rest < \"$dir/prefix\"; rm -f \"$dir/prefix\"; report_id=task-$run_key-${LEG_MATRIX_KEY_ENV}-$prefix; if [ \"$code\" -eq 0 ]; then status=executed; mstatus=passed; exec=1; fail=0; else status=failed; mstatus=failed; exec=0; fail=1; fi; printf \"{{\\\"schema\\\":1,\\\"task_report_id\\\":\\\"$report_id\\\",\\\"run_key\\\":\\\"$run_key\\\",\\\"event\\\":\\\"${LEG_EVENT_ENV}\\\",\\\"trust\\\":\\\"$trust\\\",\\\"matrix_id\\\":\\\"${LEG_MATRIX_ID_ENV}\\\",\\\"matrix_key\\\":\\\"${LEG_MATRIX_KEY_ENV}\\\",\\\"task_id\\\":\\\"${LEG_TASK_ID_ENV}\\\",\\\"task_digest\\\":\\\"${LEG_TASK_DIGEST_ENV}\\\",\\\"status\\\":\\\"$status\\\",\\\"cache\\\":{{\\\"layer\\\":\\\"task\\\",\\\"key\\\":\\\"\\\",\\\"result\\\":\\\"not_attempted\\\",\\\"miss_reason\\\":null}},\\\"exit_code\\\":$code,\\\"duration_ms\\\":0,\\\"outputs\\\":[]}}\" > \"$dir/tasks/$report_id.json\"; printf \"{{\\\"schema\\\":1,\\\"report_id\\\":\\\"report-$run_key-${LEG_MATRIX_KEY_ENV}\\\",\\\"run_key\\\":\\\"$run_key\\\",\\\"matrix_id\\\":\\\"${LEG_MATRIX_ID_ENV}\\\",\\\"matrix_key\\\":\\\"${LEG_MATRIX_KEY_ENV}\\\",\\\"status\\\":\\\"$mstatus\\\",\\\"expected_task_ids\\\":[\\\"${LEG_TASK_ID_ENV}\\\"],\\\"task_report_ids\\\":[\\\"$report_id\\\"],\\\"tasks\\\":[{{\\\"task_report_id\\\":\\\"$report_id\\\",\\\"task_id\\\":\\\"${LEG_TASK_ID_ENV}\\\",\\\"status\\\":\\\"$status\\\",\\\"exit_code\\\":$code}}],\\\"selected\\\":1,\\\"reused\\\":0,\\\"executed\\\":$exec,\\\"empty_partition\\\":0,\\\"not_selected\\\":0,\\\"failed\\\":$fail,\\\"cancelled\\\":0}}\" > \"$dir/matrix-report.json\"; exit $code"
-    )
-}
 
 /// Typed no-op explanation: validated task identity plus reason enum.
 #[derive(Debug, Clone, PartialEq, Eq)]

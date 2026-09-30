@@ -743,7 +743,9 @@ for key, action in sorted(action_pinned.items()):
 freshness_row("runner", runner, runner.get("default"), runner.get("default"))
 
 # --- Exceptions: hard maxima, full attribution, strict chronology (§1).
-today = datetime.date.today()
+# UTC date from the single NOW source: local midnight differs from UTC
+# midnight, and expiry arithmetic must match UTC evidence timestamps.
+today = NOW.date()
 lock_names = {entry.get("name") for entry in (locked or [])}
 known_subjects = set(EXPECTED_TOOLS) | set(EXPECTED_ACTIONS) | \
     lock_names | set(supported)
