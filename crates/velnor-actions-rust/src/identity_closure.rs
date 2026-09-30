@@ -35,10 +35,13 @@ pub fn unresolved_inputs(ext: &RustTaskIdentityExtension) -> Vec<UnresolvedInput
     if ext.lock_digest.is_none() {
         unresolved.push(UnresolvedInput::Lockfile);
     }
-    if ext.kind == "nextest" && ext.nextest_digest.is_none() {
+    if ext.task_kind == crate::tasks::TaskKind::Nextest && ext.nextest_digest.is_none() {
         unresolved.push(UnresolvedInput::NextestConfig);
     }
-    if ext.kind == "build" && ext.driver.contains("nextest") && ext.archive.is_none() {
+    if ext.task_kind == crate::tasks::TaskKind::Build
+        && ext.test_runner == crate::profile::TestRunner::CargoNextest
+        && ext.archive.is_none()
+    {
         unresolved.push(UnresolvedInput::ArchiveSource);
     }
     if ext.undeclared_reads {
@@ -212,6 +215,28 @@ mod tests {
             true,
         ));
         assert!(unresolved_inputs(&script).contains(&UnresolvedInput::RerunInputs));
+    }
+
+    #[test]
+    fn unresolved_ignores_composite_spellings() {
+        let mut cargo = group(crate::tasks::TaskKind::Build);
+        cargo.test_runner = crate::profile::TestRunner::CargoTest;
+        let mut spoofed =
+            cargo.identity_extension(&inputs(Some("lock"), Some("nextest"), Some(&[]), false));
+        spoofed.driver = "cargo+nextest-spoof".to_owned();
+        spoofed.kind = "build".to_owned();
+        assert!(
+            !unresolved_inputs(&spoofed).contains(&UnresolvedInput::ArchiveSource),
+            "substring sniffing must not resurrect: {spoofed:?}"
+        );
+        let mut test = group(crate::tasks::TaskKind::Test);
+        test.test_runner = crate::profile::TestRunner::CargoTest;
+        let mut kind_spoof = test.identity_extension(&inputs(None, None, Some(&[]), false));
+        kind_spoof.kind = "nextest".to_owned();
+        assert_eq!(
+            unresolved_inputs(&kind_spoof),
+            vec![UnresolvedInput::Lockfile]
+        );
     }
 
     #[test]

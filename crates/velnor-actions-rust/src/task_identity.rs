@@ -30,12 +30,21 @@ pub struct RustTaskIdentityExtension {
     pub target: String,
     /// Compile driver plus test runner (`driver+runner`).
     pub driver: String,
+    /// Typed compile driver (serialization keeps the composite slot).
+    #[serde(skip_serializing)]
+    pub compile_driver: CompileDriver,
+    /// Typed test runner (serialization keeps the composite slot).
+    #[serde(skip_serializing)]
+    pub test_runner: TestRunner,
     /// Cargo config and build-script input digests.
     pub config_digest: String,
     /// `.config/nextest.toml` digest for Nextest profiles.
     pub nextest_digest: Option<String>,
     /// Rust task kind plus test/archive identity.
     pub kind: String,
+    /// Typed task kind (serialization keeps the string slot).
+    #[serde(skip_serializing)]
+    pub task_kind: TaskKind,
     /// Build script reads undeclared inputs; disables reuse and coverage.
     pub undeclared_reads: bool,
     /// `Cargo.lock` digest, when the lockfile is available.
@@ -135,9 +144,12 @@ impl RustTaskIdentityExtension {
             features: sorted_unique(inputs.features),
             target: inputs.target.to_owned(),
             driver: format!("{}+{}", inputs.driver.as_str(), inputs.runner.as_str()),
+            compile_driver: inputs.driver,
+            test_runner: inputs.runner,
             config_digest: inputs.config_digest.to_owned(),
             nextest_digest: inputs.nextest_digest.map(str::to_owned),
             kind: inputs.kind.as_str().to_owned(),
+            task_kind: inputs.kind,
             undeclared_reads: inputs.has_build_script && inputs.rerun_inputs.is_none(),
             lock_digest: inputs.lock_digest.map(str::to_owned),
             archive,
