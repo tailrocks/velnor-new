@@ -118,10 +118,19 @@ Classes: **D** = accepted design change · **B** = confirmed bug · **V** = pend
   clean. Type-hardening deferred to later P11 step.
 - In flight: P03-P04 identities/baselines (cover_baseline,
   cover_identity, internal_plan, closure, generator,
-  provenance_check, snapshot); P08-cache-probe (research-only,
-  /tmp/p08-probe/, plan completion pending); P13-perf-verify.
+  provenance_check, snapshot); P13-perf-verify.
   Queued behind P03: P05 crate graph (needs internal_plan.rs),
   P11-types.
+- P08-cache-probe (done, research-only, zero repo writes):
+  /tmp/p08-probe/P08-PLAN.md (257 lines, 10 sections). Measured
+  runtime path inventory; broken-symlink failure structurally
+  confirmed; quota 576MiB/10GB (~94% headroom); target
+  ownership table; race-safety argument (immutable entries +
+  plan-only writer); transport choice objects+shared-source;
+  red/green targets; 6 TDD work packages with named failing
+  tests; 8 open questions. P08 builder queued AFTER P05 +
+  P03/P04 proofs (restore verification, toolchain_id) per plan
+  §10 — no cache optimization before its correctness proofs.
 - Hosted CI (run 36653922919 @ a40608f): Alint green after the
   P10 test split; Plan freshness still red on velnor.yml drift
   (reproduced locally: diff is exactly the P07 env-contract
