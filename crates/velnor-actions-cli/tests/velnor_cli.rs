@@ -27,3 +27,5 @@ mod impl_repo_policy;
 mod impl_repo_shape;
 #[path = "impl_repo_strictness.rs"]
 mod impl_repo_strictness;
+#[path = "impl_repo_suppressions.rs"]
+mod impl_repo_suppressions;
