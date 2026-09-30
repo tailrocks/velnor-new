@@ -54,7 +54,7 @@ pub(crate) fn merge_request(
 
 /// One successful required job.
 pub(crate) fn success_jobs() -> serde_json::Value {
-    serde_json::json!([{"job_id": "velnor-plan", "conclusion": "success"}])
+    serde_json::json!([{"job_id": "plan", "conclusion": "success"}])
 }
 
 /// JSON helper result.
@@ -93,7 +93,7 @@ pub(crate) fn manifest_for(plan: &Plan, base: &str, branch: &str) -> WireResult 
     Ok(
         json!({"schema": 1, "repository_id": digest, "source_commit": base,
         "ref": format!("refs/heads/{branch}"), "event": "push",
-        "workflow_ref": format!("o/r/.github/workflows/velnor.yml@refs/heads/{branch}"),
+        "workflow_ref": format!("o/r/.github/workflows/ci.yml@refs/heads/{branch}"),
         "run_id": 7, "run_attempt": 1, "final_status": "passed",
         "generator_version": plan.generator.version, "generator_sha256": plan.generator.sha256,
         "compatibility_id": digest, "artifact_id": 9,
@@ -295,7 +295,7 @@ pub(crate) fn covered_plan(
         "source_commit": base,
         "ref": "refs/heads/testmain",
         "event": "push",
-        "workflow_ref": "o/r/.github/workflows/velnor.yml@refs/heads/testmain",
+        "workflow_ref": "o/r/.github/workflows/ci.yml@refs/heads/testmain",
         "run_id": 7,
         "run_attempt": 1,
         "final_status": "passed",

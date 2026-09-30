@@ -10,8 +10,8 @@ use std::collections::BTreeMap;
 
 use velnor_actions_actionlint::{ActionlintConfigInput, IgnorePolicy, StepSyntax};
 use velnor_actions_contract::{
-    Concurrency, GeneratorValidation, Job, Permissions, Step, StepKind, Trigger, VelnorConfig,
-    VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
+    Concurrency, GeneratorValidation, Job, Permissions, Step, StepKind, Trigger, ValidatorKind,
+    VelnorConfig, VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
 };
 use velnor_actions_mise::{
     PREPARE_RUST_COMPONENTS_STEP, PrepareRustComponents, ToolCatalog, ToolHomes,
@@ -19,7 +19,7 @@ use velnor_actions_mise::{
 use velnor_actions_rust::{CompileDriver, TestRunner};
 use velnor_actions_workflow_renderer::render::{
     CONCURRENCY_CANCEL, CONCURRENCY_GROUP, EXPECTED_PR_TYPES, FINAL_JOB_ID, PLAN_JOB_ID,
-    PolicyCommand, RenderContext, WORKFLOW_PATH,
+    RenderContext, ValidatorCommand, WORKFLOW_PATH,
 };
 use velnor_actions_workflow_renderer::steps::{
     DENY_STEP_NAME, MACHETE_STEP_NAME, PLAN_OPERATION, REQUEST_DIR_PREFIX, STAGED_BINARY_PREFIX,
@@ -29,9 +29,7 @@ use crate::OrchestratorError;
 use crate::discover::Discovery;
 use crate::pins::consumer_acquire_step;
 use crate::utf8::{strings_of, strings_of_env};
-use crate::vectors::{
-    ZIZMOR_STEP_NAME, candidate_spec, deny_argv, machete_argv, verify_tools_argv, zizmor_argv,
-};
+use crate::vectors::{ZIZMOR_STEP_NAME, candidate_spec, deny_argv, machete_argv, zizmor_argv};
 use crate::workflow_jobs::{final_job, lint_job, plan_job};
 
 pub(crate) use crate::workflow_jobs::LINT_JOB_ID;
@@ -211,21 +209,20 @@ fn render_context(
 ) -> Result<RenderContext, OrchestratorError> {
     debug_assert!(REQUEST_DIR.starts_with(REQUEST_DIR_PREFIX));
     let velnor = config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1;
-    let policy_commands = if velnor {
+    let validator_commands = if velnor {
         vec![
-            PolicyCommand {
-                name: "Verify pinned tools".to_owned(),
-                argv: verify_tools_argv(catalog)?,
-            },
-            PolicyCommand {
+            ValidatorCommand {
+                validator: ValidatorKind::CargoDeny,
                 name: DENY_STEP_NAME.to_owned(),
                 argv: deny_argv()?,
             },
-            PolicyCommand {
+            ValidatorCommand {
+                validator: ValidatorKind::CargoMachete,
                 name: MACHETE_STEP_NAME.to_owned(),
                 argv: machete_argv()?,
             },
-            PolicyCommand {
+            ValidatorCommand {
+                validator: ValidatorKind::Zizmor,
                 name: ZIZMOR_STEP_NAME.to_owned(),
                 argv: zizmor_argv(catalog)?,
             },
@@ -245,7 +242,7 @@ fn render_context(
         staged_binary: format!("{STAGED_BINARY_PREFIX}{version}"),
         request_dir: REQUEST_DIR.to_owned(),
         checkout_uses: CHECKOUT_USES.to_owned(),
-        policy_commands,
+        validator_commands,
         candidate,
         preseed: false,
     })

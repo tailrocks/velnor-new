@@ -163,8 +163,8 @@ fn internal_merge_aggregates_reports() -> TestResult {
         "plan": plan,
         "matrix": plan.matrix,
         "matrix_reports": [],
-        "required_job_ids": ["velnor-plan"],
-        "required_jobs": [{"job_id": "velnor-plan", "conclusion": "success"}],
+        "required_job_ids": ["plan"],
+        "required_jobs": [{"job_id": "plan", "conclusion": "success"}],
     });
     let merged = merge_internal(&merge_request.to_string())?;
     let final_report: FinalReport = serde_json::from_str(&merged)?;
@@ -184,8 +184,8 @@ fn internal_merge_aggregates_reports() -> TestResult {
         "matrix": plan.matrix,
         "matrix_reports": reports,
         "task_reports": task_files,
-        "required_job_ids": ["velnor-plan"],
-        "required_jobs": [{"job_id": "velnor-plan", "conclusion": "success"}],
+        "required_job_ids": ["plan"],
+        "required_jobs": [{"job_id": "plan", "conclusion": "success"}],
     });
     let merged = merge_internal(&merge_request.to_string())?;
     let final_report: FinalReport = serde_json::from_str(&merged)?;
@@ -283,11 +283,7 @@ fn unknown_override_key_rejected_with_key_path() -> TestResult {
     let repo = make_repo(
         "schema = 1\n[workflow]\ndefault_branch = \"testmain\"\n[actions.overrides]\n\"asamarts/alint\" = { version = \"v0.16.1\", sha = \"9f9d34ba0eae3888299b9e570f43338b0e7f2cdb\" }\n",
     )?;
-    let err = err_of(prepare(repo.path()), "alint override rejected")?;
-    assert!(
-        err.to_string().contains("actions.overrides.asamarts/alint"),
-        "got {err}"
-    );
+    prepare(repo.path()).map_err(|err| format!("alint approved pair accepted: {err}"))?;
     Ok(())
 }
 

@@ -28,7 +28,7 @@ fn prepare_plan_text_is_deterministic_and_write_free() -> TestResult {
     assert!(first.contains("Rust: selected"), "stack:\n{first}");
     assert!(first.contains("demo (Cargo.toml)"), "crate:\n{first}");
     assert!(
-        first.contains(".github/workflows/velnor.yml"),
+        first.contains(".github/workflows/ci.yml"),
         "paths:\n{first}"
     );
     assert!(first.contains("Runner: ubuntu-26.04"), "runner:\n{first}");
@@ -56,7 +56,7 @@ fn generate_preview_matches_in_place_and_preserves_repo() -> TestResult {
     assert_eq!(preview_report.files_written, inplace_report.files_written);
     assert_eq!(
         preview_report.files_written,
-        vec![".github/actionlint.yaml", ".github/workflows/velnor.yml"]
+        vec![".github/actionlint.yaml", ".github/workflows/ci.yml"]
     );
     for rel in &inplace_report.files_written {
         let preview_bytes = fs::read(preview_root.join(rel))?;
@@ -187,12 +187,9 @@ fn generated_workflow_has_always_on_lint_job() -> TestResult {
                 output_dir: Some(preview_root.clone()),
             },
         )?;
-        let text = fs::read_to_string(preview_root.join(".github/workflows/velnor.yml"))?;
-        assert!(text.contains("velnor-workflow-lint:"), "lint job:\n{text}");
-        assert!(
-            text.contains("Velnor Workflow Lint"),
-            "display name:\n{text}"
-        );
+        let text = fs::read_to_string(preview_root.join(".github/workflows/ci.yml"))?;
+        assert!(text.contains("actionlint:"), "lint job:\n{text}");
+        assert!(text.contains("Actionlint"), "display name:\n{text}");
         assert!(
             text.contains(
                 "mise --no-config --no-env --no-hooks exec actionlint@1.7.12 shellcheck@0.11.0 -- actionlint -color"
@@ -200,16 +197,17 @@ fn generated_workflow_has_always_on_lint_job() -> TestResult {
             "pinned actionlint run:\n{text}"
         );
         let (_, tail) = text
-            .split_once("velnor-final:")
+            .split_once("required:")
             .ok_or_else(|| std::io::Error::other("missing final job"))?;
-        assert!(
-            tail.contains("- velnor-workflow-lint"),
-            "final needs lint:\n{text}"
-        );
-        // Lint sorts last, so its block runs to the end without `needs:`.
-        let (_, lint) = text
-            .split_once("velnor-workflow-lint:")
+        assert!(tail.contains("- actionlint"), "final needs lint:\n{text}");
+        // Lint sorts first; its block ends at the plan job without `needs:`.
+        let start = text
+            .find("  actionlint:")
             .ok_or_else(|| std::io::Error::other("missing lint job"))?;
+        let end = text[start..]
+            .find("  plan:")
+            .map_or(text.len(), |at| start + at);
+        let lint = &text[start..end];
         assert!(!lint.contains("needs:"), "lint is independent:\n{text}");
     }
     Ok(())
@@ -230,7 +228,7 @@ fn plan_job_fetches_lockful_sources_before_generate_consumers() -> TestResult {
         .workflow
         .ir
         .jobs
-        .get("velnor-plan")
+        .get("plan")
         .ok_or_else(|| std::io::Error::other("missing plan job"))?;
     let names: Vec<&str> = plan.steps.iter().map(|step| step.name.as_str()).collect();
     let at = |name: &str| names.iter().position(|seen| *seen == name);
@@ -257,7 +255,7 @@ fn plan_job_fetches_lockful_sources_before_generate_consumers() -> TestResult {
     assert!(env.is_empty());
     let tree = render_staged_tree(&prep)?;
     let yaml = tree
-        .get(".github/workflows/velnor.yml")
+        .get(".github/workflows/ci.yml")
         .ok_or_else(|| std::io::Error::other("missing workflow"))?;
     let fetch_pos = yaml
         .find("Fetch Cargo sources")
@@ -278,7 +276,7 @@ fn plan_job_omits_fetch_without_lockfile() -> TestResult {
         .workflow
         .ir
         .jobs
-        .get("velnor-plan")
+        .get("plan")
         .ok_or_else(|| std::io::Error::other("missing plan job"))?;
     assert!(
         plan.steps
@@ -306,7 +304,7 @@ fn nested_lockful_workspace_gets_named_fetch() -> TestResult {
         .workflow
         .ir
         .jobs
-        .get("velnor-plan")
+        .get("plan")
         .ok_or_else(|| std::io::Error::other("missing plan job"))?;
     let mut nested = plan.steps.iter().filter(|step| {
         matches!(&step.kind, StepKind::Shell { .. })

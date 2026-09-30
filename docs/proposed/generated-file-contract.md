@@ -9,7 +9,7 @@ Velnor V1 generate writes one complete tree:
 .github/
 ├── actionlint.yaml
 └── workflows/
-    ├── velnor.yml
+    ├── ci.yml
     ├── velnor-release.yml        # velnor-repository-v1 only
     └── velnor-qualification.yml  # velnor-repository-v1 only
 ```

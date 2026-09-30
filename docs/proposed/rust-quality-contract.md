@@ -330,10 +330,11 @@ be added when dependency audit provenance justifies it.
 
 Velnor's own `.velnor/config.toml` MUST set
 `workflow.policy = "velnor-repository-v1"`, which emits a dedicated
-`velnor-alint` job. The job MUST use the configured Alint action, defaulting to:
+`alint` job. The job MUST use the configured Alint action, defaulting to the
+full-SHA pin:
 
 ```yaml
-- uses: asamarts/alint@v0.16.1
+- uses: asamarts/alint@9f9d34ba0eae3888299b9e570f43338b0e7f2cdb # v0.16.1
 ```
 
 It runs only the generic rules configured in `.alint.yml`: file/path rules,

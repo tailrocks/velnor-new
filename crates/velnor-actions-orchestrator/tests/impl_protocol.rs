@@ -214,9 +214,8 @@ fn merge_assembled_request_roundtrips_to_passed() -> TestResult {
     assert!(value.get("base").is_none(), "merge shape: {request}");
     // The needs channel is env-provided (unit-tested); patch it in to prove
     // artifact agreement end to end without racing process-global env.
-    value["required_job_ids"] = serde_json::json!(["velnor-plan"]);
-    value["required_jobs"] =
-        serde_json::json!([{"job_id": "velnor-plan", "conclusion": "success"}]);
+    value["required_job_ids"] = serde_json::json!(["plan"]);
+    value["required_jobs"] = serde_json::json!([{"job_id": "plan", "conclusion": "success"}]);
     value["assembly_errors"] = serde_json::json!([]);
     let final_report: velnor_actions_contract::FinalReport =
         serde_json::from_str(&merge_internal(&value.to_string())?)?;
@@ -337,9 +336,9 @@ fn render_gate_roundtrip_accepts_plan() -> TestResult {
     let pin = format!("actions/checkout@{:040x}", 0);
     let mut jobs = BTreeMap::new();
     jobs.insert(
-        "velnor-plan".to_owned(),
+        "plan".to_owned(),
         Job {
-            display_name: "Velnor Plan".to_owned(),
+            display_name: "Plan".to_owned(),
             runs_on: "ubuntu-26.04".to_owned(),
             needs: Vec::new(),
             condition: None,
@@ -376,7 +375,7 @@ fn render_gate_roundtrip_accepts_plan() -> TestResult {
         staged_binary: "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0".to_owned(),
         request_dir: "${{ runner.temp }}/velnor/request".to_owned(),
         checkout_uses: pin,
-        policy_commands: Vec::new(),
+        validator_commands: Vec::new(),
         candidate: None,
         preseed: false,
     };

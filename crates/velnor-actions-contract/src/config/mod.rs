@@ -17,7 +17,7 @@ pub use stacks::{
     DeclaredCompileDriver, DeclaredTestRunner, RustConfiguration, RustStackConfig, StacksConfig,
 };
 pub use workflow::{
-    GeneratorValidation, LATEST_RUNNER_LABEL, PolicyJob, RUNNER_LABEL_CATALOG, RunnerSelection,
+    GeneratorValidation, LATEST_RUNNER_LABEL, RUNNER_LABEL_CATALOG, RunnerSelection,
     VelnorSupportWorkflow, WorkflowConfig, WorkflowPolicy,
 };
 

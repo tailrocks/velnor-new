@@ -61,7 +61,7 @@ fn manifest_with(task_ids: &[&str]) -> BaselineManifest {
         source_commit: "a".repeat(40),
         ref_: "refs/heads/testmain".to_owned(),
         event: "push".to_owned(),
-        workflow_ref: "o/r/.github/workflows/velnor.yml@refs/heads/testmain".to_owned(),
+        workflow_ref: "o/r/.github/workflows/ci.yml@refs/heads/testmain".to_owned(),
         run_id: 7,
         run_attempt: 1,
         final_status: "passed".to_owned(),
@@ -133,7 +133,7 @@ fn inputs<'a>(root: &'a std::path::Path, catalog: &'a ToolCatalog) -> BaselineIn
     BaselineInputs {
         branch: "testmain",
         root,
-        workflow: ".github/workflows/velnor.yml",
+        workflow: ".github/workflows/ci.yml",
         catalog,
     }
 }

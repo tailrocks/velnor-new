@@ -65,8 +65,8 @@ fn setup_pins_reject_every_shape_violation() {
 #[test]
 fn strict_inserts_setup_before_mise_exec() -> Result<(), RenderError> {
     let lint = job(
-        "velnor-workflow-lint",
-        "Velnor Workflow Lint",
+        "actionlint",
+        "Actionlint",
         Vec::new(),
         vec![
             checkout_step(&checkout_pin())?,
@@ -98,8 +98,8 @@ fn strict_inserts_setup_before_mise_exec() -> Result<(), RenderError> {
 #[test]
 fn strict_task_job_always_gets_setup() -> Result<(), RenderError> {
     let plan = job(
-        "velnor-plan",
-        "Velnor Plan",
+        "plan",
+        "Plan",
         Vec::new(),
         vec![
             checkout_step(&checkout_pin())?,
@@ -109,8 +109,8 @@ fn strict_task_job_always_gets_setup() -> Result<(), RenderError> {
     );
     let task = job(
         "velnor-task",
-        "Velnor Task",
-        vec!["velnor-plan".to_owned()],
+        "Task",
+        vec!["plan".to_owned()],
         vec![
             checkout_step(&checkout_pin())?,
             shell_step(
@@ -132,8 +132,8 @@ fn strict_task_job_always_gets_setup() -> Result<(), RenderError> {
 #[test]
 fn strict_keeps_single_wellformed_setup() -> Result<(), RenderError> {
     let lint = job(
-        "velnor-workflow-lint",
-        "Velnor Workflow Lint",
+        "actionlint",
+        "Actionlint",
         Vec::new(),
         vec![
             checkout_step(&checkout_pin())?,
@@ -164,12 +164,7 @@ fn strict_rejects_setup_misuse() -> Result<(), RenderError> {
     };
     let render = |steps: Vec<Step>| {
         strict(
-            &fixture_ir(vec![job(
-                "velnor-workflow-lint",
-                "Velnor Workflow Lint",
-                Vec::new(),
-                steps,
-            )]),
+            &fixture_ir(vec![job("actionlint", "Actionlint", Vec::new(), steps)]),
             &fixture_ctx(),
         )
     };

@@ -5,9 +5,11 @@
 //! pre-seed build-once steps (trust-on-review) when it does not. Consumer
 //! generation never calls either.
 
-use velnor_actions_contract::{GeneratorLock, Step, WorkflowIr, target_for_runner_label};
+use velnor_actions_contract::{
+    CRATE_JOB_ID_PREFIX, GeneratorLock, Step, WorkflowIr, target_for_runner_label,
+};
 use velnor_actions_mise::{PREPARE_PINNED_TOOLS_STEP, PinnedTool, ToolCatalog};
-use velnor_actions_workflow_renderer::render::{FINAL_JOB_ID, PLAN_JOB_ID, TASK_JOB_ID};
+use velnor_actions_workflow_renderer::render::{FINAL_JOB_ID, PLAN_JOB_ID};
 use velnor_actions_workflow_renderer::steps::STAGED_BINARY_PREFIX;
 use velnor_actions_workflow_renderer::{
     PreseedStageSource, preseed_build_step, preseed_download_step, preseed_manifest_step,
@@ -56,9 +58,9 @@ pub(crate) fn attach_lock_acquire(
 /// The plan job builds the helper once from the checked-out source with
 /// the fixed §4 vector, verifies the MBX compile output plus its pinned
 /// route, records the source commit in a manifest, uploads the
-/// exactly-named artifact, and stages its local build; task (when
-/// present) and final jobs download that artifact and stage it instead
-/// of rebuilding. Sets the render context's pre-seed mode so the strict
+/// exactly-named artifact, and stages its local build; every crate job
+/// and the final job download that artifact and stage it instead of
+/// rebuilding. Sets the render context's pre-seed mode so the strict
 /// gates accept fixed pre-seed staging. Consumer generation never calls
 /// this.
 pub(crate) fn attach_preseed(
@@ -99,8 +101,11 @@ pub(crate) fn attach_preseed(
             preseed_stage_step(PreseedStageSource::DownloadedArtifact, &staged)?,
         ],
     );
-    if let Some(task) = workflow.ir.jobs.get_mut(TASK_JOB_ID) {
-        task.steps.splice(
+    for (id, job) in &mut workflow.ir.jobs {
+        if !id.starts_with(CRATE_JOB_ID_PREFIX) {
+            continue;
+        }
+        job.steps.splice(
             1..1,
             [
                 preseed_download_step()?,
@@ -132,10 +137,10 @@ mod tests {
     use velnor_actions_contract::{Concurrency, Job, Permissions, Trigger};
     use velnor_actions_workflow_renderer::render::{RenderContext, WORKFLOW_PATH};
 
-    /// Minimal legacy task job covering the task attach branch.
+    /// Minimal crate job covering the crate attach branch.
     fn legacy_task_job() -> Job {
         Job {
-            display_name: "Velnor Task".to_owned(),
+            display_name: "Rust / demo".to_owned(),
             runs_on: "ubuntu-26.04".to_owned(),
             needs: vec![PLAN_JOB_ID.to_owned()],
             condition: None,
@@ -257,7 +262,7 @@ mod tests {
                 staged_binary: format!("{STAGED_BINARY_PREFIX}0.1.0"),
                 request_dir: REQUEST_DIR.to_owned(),
                 checkout_uses: CHECKOUT_USES.to_owned(),
-                policy_commands: Vec::new(),
+                validator_commands: Vec::new(),
                 candidate: None,
                 preseed: false,
             },

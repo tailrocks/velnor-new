@@ -163,7 +163,7 @@ fn generate_keeps_recommendations_on_stderr() -> Result<(), Box<dyn Error>> {
             "generate stderr missing: {rec}"
         );
     }
-    assert!(preview.join(".github/workflows/velnor.yml").is_file());
+    assert!(preview.join(".github/workflows/ci.yml").is_file());
     cleanup(&tmp);
     cleanup(&outer);
     Ok(())
@@ -220,7 +220,7 @@ fn generate_writes_manual_change_suggestions_for_malformed_tools() -> Result<(),
         std::fs::read(tmp.join("rust-toolchain.toml"))?,
         toolchain_before
     );
-    assert!(preview.join(".github/workflows/velnor.yml").is_file());
+    assert!(preview.join(".github/workflows/ci.yml").is_file());
     cleanup(&tmp);
     cleanup(&outer);
     Ok(())
@@ -275,7 +275,7 @@ fn preview_prints_absolute_paths_and_files() -> Result<(), Box<dyn Error>> {
         "{stderr}"
     );
     assert!(stderr.contains(".github/actionlint.yaml"), "{stderr}");
-    assert!(stderr.contains(".github/workflows/velnor.yml"), "{stderr}");
+    assert!(stderr.contains(".github/workflows/ci.yml"), "{stderr}");
     cleanup(&tmp);
     cleanup(&outer);
     Ok(())
@@ -297,7 +297,7 @@ fn previews_use_unique_tmp_dirs_without_collision() -> Result<(), Box<dyn Error>
         )?;
         assert_eq!(code(&output), 0, "stderr: {:?}", output.stderr);
         assert!(preview.starts_with(std::env::temp_dir()));
-        assert!(preview.join(".github/workflows/velnor.yml").is_file());
+        assert!(preview.join(".github/workflows/ci.yml").is_file());
     }
     assert_same_tree(&first.join(".github"), &second.join(".github"))?;
     cleanup(&tmp);

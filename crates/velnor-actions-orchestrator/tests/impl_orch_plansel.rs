@@ -142,7 +142,7 @@ pub(crate) use crate::impl_common::{anchor_id, anchor_repo};
 /// Manifest binding `base` with `tasks` entries for the seed plan.
 pub(crate) fn manifest_for(plan: &Plan, base: &str, tasks: &Json) -> Json {
     let compat = velnor_actions_contract::digest_b3(b"compat");
-    serde_json::json!({"schema": 1, "repository_id": anchor_id(), "source_commit": base, "ref": "refs/heads/testmain", "event": "push", "workflow_ref": "o/r/.github/workflows/velnor.yml@refs/heads/testmain", "run_id": 7, "run_attempt": 1, "final_status": "passed", "generator_version": plan.generator.version, "generator_sha256": plan.generator.sha256, "compatibility_id": compat, "artifact_id": 9, "artifact_name": format!("velnor-baseline-{base}-{compat}"), "tasks": tasks})
+    serde_json::json!({"schema": 1, "repository_id": anchor_id(), "source_commit": base, "ref": "refs/heads/testmain", "event": "push", "workflow_ref": "o/r/.github/workflows/ci.yml@refs/heads/testmain", "run_id": 7, "run_attempt": 1, "final_status": "passed", "generator_version": plan.generator.version, "generator_sha256": plan.generator.sha256, "compatibility_id": compat, "artifact_id": 9, "artifact_name": format!("velnor-baseline-{base}-{compat}"), "tasks": tasks})
 }
 
 /// Task entries binding every seed obligation exactly.
@@ -256,7 +256,7 @@ pub(crate) fn merge_status(
         &plan_value,
         &serde_json::to_value(reports).unwrap_or(Json::Null),
     );
-    let mut request = serde_json::json!({"schema": 1, "run_key": "local", "plan": plan, "matrix": plan.matrix, "matrix_reports": reports, "task_reports": task_files, "required_job_ids": ["velnor-plan"], "required_jobs": [{"job_id": "velnor-plan", "conclusion": "success"}], "shard_proofs": proofs});
+    let mut request = serde_json::json!({"schema": 1, "run_key": "local", "plan": plan, "matrix": plan.matrix, "matrix_reports": reports, "task_reports": task_files, "required_job_ids": ["plan"], "required_jobs": [{"job_id": "plan", "conclusion": "success"}], "shard_proofs": proofs});
     for (key, value) in extra.as_object().ok_or("not an object")? {
         request[key] = value.clone();
     }

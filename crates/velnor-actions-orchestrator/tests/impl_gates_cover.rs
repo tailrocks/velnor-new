@@ -61,7 +61,7 @@ fn manifest_for(plan: &Plan, base: &str, tasks: &serde_json::Value) -> serde_jso
         "source_commit": base,
         "ref": "refs/heads/testmain",
         "event": "push",
-        "workflow_ref": "o/r/.github/workflows/velnor.yml@refs/heads/testmain",
+        "workflow_ref": "o/r/.github/workflows/ci.yml@refs/heads/testmain",
         "run_id": 7,
         "run_attempt": 1,
         "final_status": "passed",
@@ -268,8 +268,8 @@ fn merge_rejects_covered_claims_without_manifest() -> TestResult {
         "plan": plan,
         "matrix": plan.matrix,
         "matrix_reports": reports,
-        "required_job_ids": ["velnor-plan"],
-        "required_jobs": [{"job_id": "velnor-plan", "conclusion": "success"}],
+        "required_job_ids": ["plan"],
+        "required_jobs": [{"job_id": "plan", "conclusion": "success"}],
     });
     let final_report: velnor_actions_contract::FinalReport =
         serde_json::from_str(&merge_internal(&request.to_string())?)?;

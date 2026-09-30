@@ -26,18 +26,13 @@ fn cache_action_rejects_empty_paths_and_keys() {
 
 #[test]
 fn tools_key_bounded_and_hashed() -> Result<(), RenderError> {
-    let key = tools_cache_key(
-        "x86_64-unknown-linux-gnu",
-        "2026.9.16",
-        "0.1.0",
-        "velnor-plan",
-    )?;
+    let key = tools_cache_key("x86_64-unknown-linux-gnu", "2026.9.16", "0.1.0", "plan")?;
     for part in [
         "mise-tools-v1",
         "x86_64-unknown-linux-gnu",
         "2026.9.16",
         "0.1.0",
-        "velnor-plan",
+        "plan",
         "hashFiles(",
     ] {
         assert!(key.contains(part), "missing {part}:\n{key}");
@@ -45,11 +40,11 @@ fn tools_key_bounded_and_hashed() -> Result<(), RenderError> {
     assert!(!key.contains(' '), "spaces:\n{key}");
     for bad in ["latest", "", "has space"] {
         assert!(
-            tools_cache_key("x86_64-unknown-linux-gnu", bad, "0.1.0", "velnor-plan").is_err(),
+            tools_cache_key("x86_64-unknown-linux-gnu", bad, "0.1.0", "plan").is_err(),
             "version {bad} must fail"
         );
     }
-    assert!(tools_cache_key("riscv-none", "2026.9.16", "0.1.0", "velnor-plan").is_err());
+    assert!(tools_cache_key("riscv-none", "2026.9.16", "0.1.0", "plan").is_err());
     Ok(())
 }
 
@@ -75,7 +70,7 @@ fn cache_layers_restore_independently() -> Result<(), RenderError> {
         "x86_64-unknown-linux-gnu",
         "2026.9.16",
         "0.1.0",
-        "velnor-plan",
+        "plan",
     )?)?;
     for step in [&sources, &task, &tools] {
         let velnor_actions_contract::StepKind::Action { uses, .. } = &step.kind else {
@@ -103,9 +98,9 @@ fn render_carries_no_warmup_prune_or_invented_nextest() -> Result<(), RenderErro
     let support =
         WorkflowPolicy::VelnorRepositoryV1.support_workflow(GeneratorValidation::Candidate);
     let mut final_job = job(
-        "velnor-final",
-        "Velnor / Required",
-        vec!["velnor-plan".to_owned()],
+        "required",
+        "Required",
+        vec!["plan".to_owned()],
         vec![acquire_fixture()?, merge_step()],
     )
     .1;
@@ -114,7 +109,7 @@ fn render_carries_no_warmup_prune_or_invented_nextest() -> Result<(), RenderErro
         &fixture_ir(vec![
             minimal_plan_job()?,
             matrix_task_job()?,
-            ("velnor-final".to_owned(), final_job),
+            ("required".to_owned(), final_job),
         ]),
         WorkflowPolicy::VelnorRepositoryV1,
         Some(&support),
@@ -159,24 +154,11 @@ fn consumer_render_carries_no_repo_files_or_secrets() -> Result<(), RenderError>
 #[test]
 fn velnor_policy_renders_with_empty_matrix() -> Result<(), RenderError> {
     let mut ctx = fixture_ctx();
-    ctx.policy_commands = vec![
-        velnor_actions_workflow_renderer::PolicyCommand {
-            name: "Run cargo-deny".to_owned(),
-            argv: vec!["true".to_owned()],
-        },
-        velnor_actions_workflow_renderer::PolicyCommand {
-            name: "Run cargo-machete".to_owned(),
-            argv: vec!["true".to_owned()],
-        },
-        velnor_actions_workflow_renderer::PolicyCommand {
-            name: "Run zizmor".to_owned(),
-            argv: vec!["true".to_owned()],
-        },
-    ];
+    ctx.validator_commands = validator_commands();
     let mut final_job = job(
-        "velnor-final",
-        "Velnor / Required",
-        vec!["velnor-plan".to_owned()],
+        "required",
+        "Required",
+        vec!["plan".to_owned()],
         vec![merge_step()],
     )
     .1;
@@ -186,16 +168,18 @@ fn velnor_policy_renders_with_empty_matrix() -> Result<(), RenderError> {
     let text = render_workflow_ir(
         &fixture_ir(vec![
             minimal_plan_job()?,
-            ("velnor-final".to_owned(), final_job),
+            ("required".to_owned(), final_job),
         ]),
         WorkflowPolicy::VelnorRepositoryV1,
         Some(&support),
         &ctx,
     )?;
-    assert!(text.contains("velnor-alint:"), "alint:\n{text}");
-    assert!(text.contains("velnor-policy:"), "policy:\n{text}");
+    assert!(text.contains("alint:"), "alint:\n{text}");
+    for id in ["cargo-deny:", "cargo-machete:", "zizmor:"] {
+        assert!(text.contains(id), "{id}:\n{text}");
+    }
     assert!(!text.contains("velnor-task:"), "empty matrix:\n{text}");
-    let start = text.find("velnor-alint:").expect("alint job");
+    let start = text.find("alint:").expect("alint job");
     let window = snip(&text, start, 800);
     for input in [
         "path: .",
@@ -205,14 +189,18 @@ fn velnor_policy_renders_with_empty_matrix() -> Result<(), RenderError> {
     ] {
         assert!(window.contains(input), "missing {input}:\n{window}");
     }
-    let start = text.find("velnor-final:").expect("final job");
+    let start = text.find("required:").expect("final job");
     let window = snip(&text, start, 600);
-    for need in ["velnor-plan", "velnor-alint", "velnor-policy"] {
+    for need in ["plan", "alint", "cargo-deny", "cargo-machete", "zizmor"] {
         assert!(window.contains(need), "missing need {need}:\n{window}");
     }
-    let start = text.find("velnor-policy:").expect("policy job");
-    let window = snip(&text, start, 900);
-    for name in ["Run cargo-deny", "Run cargo-machete", "Run zizmor"] {
+    for (id, name) in [
+        ("cargo-deny:", "Run cargo-deny"),
+        ("cargo-machete:", "Run cargo-machete"),
+        ("zizmor:", "Run zizmor"),
+    ] {
+        let start = text.find(id).unwrap_or_else(|| panic!("{id} job:\n{text}"));
+        let window = snip(&text, start, 900);
         assert!(window.contains(name), "missing {name}:\n{window}");
     }
     assert!(text.contains(PUBLISH_PLAN_NAME), "publish:\n{text}");
@@ -225,8 +213,8 @@ fn token_plan_job(
     env: BTreeMap<String, String>,
 ) -> Result<(String, velnor_actions_contract::Job), RenderError> {
     Ok(job(
-        "velnor-plan",
-        "Velnor Plan",
+        "plan",
+        "Plan",
         Vec::new(),
         vec![
             checkout_step(&checkout_pin())?,
@@ -274,9 +262,9 @@ fn token_hygiene_scopes_gh_token_to_plan() -> Result<(), RenderError> {
 #[test]
 fn token_hygiene_allows_final_fetch_token() -> Result<(), RenderError> {
     let (id, mut final_job) = job(
-        "velnor-final",
-        "Velnor / Required",
-        vec!["velnor-plan".to_owned()],
+        "required",
+        "Required",
+        vec!["plan".to_owned()],
         vec![
             checkout_step(&checkout_pin())?,
             shell_step(
@@ -311,8 +299,8 @@ fn token_hygiene_rejects_prints_and_task_tokens() -> Result<(), RenderError> {
     render_fails_with(vec![printed], "token_in_run");
     let task_token = job(
         "velnor-task",
-        "Velnor Task",
-        vec!["velnor-plan".to_owned()],
+        "Task",
+        vec!["plan".to_owned()],
         vec![shell_step(
             "Run task",
             vec!["true".to_owned()],

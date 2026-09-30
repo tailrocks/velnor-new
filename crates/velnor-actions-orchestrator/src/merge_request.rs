@@ -229,7 +229,10 @@ mod tests {
         assert!(value.get("base").is_none(), "{request}");
         assert_eq!(value["schema"], 1);
         assert_eq!(value["matrix_reports"].as_array().map(Vec::len), Some(1));
-        assert_eq!(value["required_job_ids"], serde_json::json!(["plan"]));
+        assert_eq!(
+            value["required_job_ids"],
+            serde_json::json!(["plan", "rust-demo"])
+        );
         assert!(error_list(&request).is_empty(), "{request}");
     }
 

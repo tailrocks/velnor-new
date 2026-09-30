@@ -12,8 +12,8 @@ use super::impl_renderer_fixtures::*;
 #[test]
 fn strict_plan_job_gets_full_prelude_in_order() -> Result<(), RenderError> {
     let plan = job(
-        "velnor-plan",
-        "Velnor Plan",
+        "plan",
+        "Plan",
         Vec::new(),
         vec![
             checkout_step(&checkout_pin())?,
@@ -23,7 +23,7 @@ fn strict_plan_job_gets_full_prelude_in_order() -> Result<(), RenderError> {
     );
     let text = strict(&fixture_ir(vec![plan]), &fixture_ctx())?;
     assert_eq!(
-        step_names(&text, "velnor-plan"),
+        step_names(&text, "plan"),
         [
             "Checkout",
             "Restore Mise tools",
@@ -42,8 +42,8 @@ fn strict_plan_job_gets_full_prelude_in_order() -> Result<(), RenderError> {
 #[test]
 fn strict_rejects_anchorless_plan() -> Result<(), RenderError> {
     let anchorless = job(
-        "velnor-plan",
-        "Velnor Plan",
+        "plan",
+        "Plan",
         Vec::new(),
         vec![checkout_step(&checkout_pin())?, acquire_fixture()?],
     );
@@ -58,8 +58,8 @@ fn strict_rejects_anchorless_plan() -> Result<(), RenderError> {
 #[test]
 fn legacy_preserves_unstaged_render_and_closes_plan() -> Result<(), RenderError> {
     let plan = job(
-        "velnor-plan",
-        "Velnor Plan",
+        "plan",
+        "Plan",
         Vec::new(),
         vec![checkout_step(&checkout_pin())?, plan_step()],
     );
@@ -164,8 +164,8 @@ fn download_plan_shape_mirrors_publish() -> Result<(), RenderError> {
 #[test]
 fn final_job_gets_download_before_write_request() -> Result<(), RenderError> {
     let (id, mut final_job) = job(
-        "velnor-final",
-        "Velnor / Required",
+        "required",
+        "Required",
         Vec::new(),
         vec![
             acquire_fixture()?,
@@ -174,8 +174,18 @@ fn final_job_gets_download_before_write_request() -> Result<(), RenderError> {
         ],
     );
     final_job.condition = Some("always()".to_owned());
-    let text = strict(&fixture_ir(vec![(id, final_job)]), &fixture_ctx())?;
-    let names = step_names(&text, "velnor-final");
+    let plan = job(
+        "plan",
+        "Plan",
+        Vec::new(),
+        vec![
+            checkout_step(&checkout_pin())?,
+            acquire_fixture()?,
+            plan_step(),
+        ],
+    );
+    let text = strict(&fixture_ir(vec![plan, (id, final_job)]), &fixture_ctx())?;
+    let names = step_names(&text, "required");
     let count = names
         .iter()
         .filter(|name| name.as_str() == DOWNLOAD_PLAN_NAME)
@@ -202,8 +212,8 @@ fn final_job_gets_download_before_write_request() -> Result<(), RenderError> {
 #[test]
 fn uploads_carry_if_always_and_downloads_do_not() -> Result<(), RenderError> {
     let plan = job(
-        "velnor-plan",
-        "Velnor Plan",
+        "plan",
+        "Plan",
         Vec::new(),
         vec![
             checkout_step(&checkout_pin())?,

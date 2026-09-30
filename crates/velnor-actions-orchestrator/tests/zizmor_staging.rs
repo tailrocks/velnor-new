@@ -7,7 +7,8 @@ use std::process::Command;
 
 use tempfile::TempDir;
 use velnor_actions_actionlint::actions::{
-    ALINT_ACTION, ALINT_REVIEWED_TAG, CHECKOUT_ACTION_SHA, CHECKOUT_ACTION_VERSION,
+    ALINT_ACTION, ALINT_ACTION_SHA, ALINT_ACTION_VERSION, CHECKOUT_ACTION_SHA,
+    CHECKOUT_ACTION_VERSION,
 };
 use velnor_actions_actionlint::config::{
     ZizmorConfigInput, ZizmorWorkflowText, render_zizmor_yaml,
@@ -54,7 +55,7 @@ fn binary_record(target: &str) -> String {
     )
 }
 
-/// Generator-lock fixture for velnor-policy `prepare`.
+/// Generator-lock fixture for Velnor-policy `prepare`.
 fn lock_text() -> String {
     let bins = binary_record("x86_64-unknown-linux-gnu")
         + &binary_record("aarch64-apple-darwin")
@@ -119,7 +120,7 @@ fn make_policy_repo() -> Result<TempDir, Box<dyn std::error::Error>> {
 /// Live dirs plus preview root, workflow bytes, and validators.
 type PolicyPreview = (TempDir, TempDir, PathBuf, String, Vec<String>);
 
-/// Green velnor-policy preview.
+/// Green Velnor-policy preview.
 fn policy_preview() -> Result<PolicyPreview, Box<dyn std::error::Error>> {
     let repo = make_policy_repo()?;
     let prep = prepare(repo.path())?;
@@ -132,7 +133,7 @@ fn policy_preview() -> Result<PolicyPreview, Box<dyn std::error::Error>> {
         },
     )?;
     assert_eq!(report.files_written.len(), 2, "two generated files");
-    let yaml = fs::read_to_string(preview.join(".github/workflows/velnor.yml"))?;
+    let yaml = fs::read_to_string(preview.join(".github/workflows/ci.yml"))?;
     Ok((repo, parent, preview, yaml, report.validated_by))
 }
 
@@ -141,7 +142,7 @@ fn stage(preview: &Path, yaml: &str) -> Result<TempDir, Box<dyn std::error::Erro
     let dir = TempDir::new()?;
     let root = dir.path();
     fs::create_dir_all(root.join(".github/workflows"))?;
-    fs::write(root.join(".github/workflows/velnor.yml"), yaml)?;
+    fs::write(root.join(".github/workflows/ci.yml"), yaml)?;
     fs::write(
         root.join(".github/actionlint.yaml"),
         fs::read(preview.join(".github/actionlint.yaml"))?,
@@ -149,7 +150,7 @@ fn stage(preview: &Path, yaml: &str) -> Result<TempDir, Box<dyn std::error::Erro
     let input = ZizmorConfigInput {
         generator_version: env!("CARGO_PKG_VERSION").to_owned(),
         workflows: vec![ZizmorWorkflowText {
-            path: ".github/workflows/velnor.yml".to_owned(),
+            path: ".github/workflows/ci.yml".to_owned(),
             text: yaml.to_owned(),
         }],
     };
@@ -188,7 +189,7 @@ fn streams(output: &ProcessOutput) -> String {
 }
 
 #[test]
-fn velnor_policy_blessed_tag_validates_green() -> TestResult {
+fn velnor_policy_blessed_sha_validates_green() -> TestResult {
     let (_repo, _parent, preview, yaml, validated_by) = policy_preview()?;
     assert_eq!(
         validated_by,
@@ -198,8 +199,8 @@ fn velnor_policy_blessed_tag_validates_green() -> TestResult {
             "zizmor@1.30.1".to_owned(),
         ]
     );
-    let blessed = format!("uses: {ALINT_ACTION}@{ALINT_REVIEWED_TAG}");
-    assert!(yaml.contains(&blessed), "blessed tag rendered");
+    let blessed = format!("uses: {ALINT_ACTION}@{ALINT_ACTION_SHA}");
+    assert!(yaml.contains(&blessed), "blessed SHA rendered");
     assert!(
         !preview.join(".zizmor.yml").exists(),
         "no staging config in output"
@@ -212,7 +213,8 @@ fn velnor_policy_blessed_tag_validates_green() -> TestResult {
 }
 
 /// The 1 suppressed finding is `undocumented-permissions` (low,
-/// auditor/pedantic-only); it must stay suppressed, never ignored.
+/// auditor/pedantic-only); it must stay suppressed. Zero ignores: every
+/// emitted ref is hash-pinned.
 #[test]
 fn staging_suppressions_stable_no_new() -> TestResult {
     let (_repo, _parent, preview, yaml, _) = policy_preview()?;
@@ -220,10 +222,7 @@ fn staging_suppressions_stable_no_new() -> TestResult {
     let output = run_zizmor(staged.path())?;
     let text = streams(&output);
     assert!(output.success, "staged config greens zizmor: {text}");
-    assert!(
-        text.contains("1 ignored"),
-        "blessed finding ignored: {text}"
-    );
+    assert!(!text.contains("ignored"), "zero ignores expected: {text}");
     assert!(text.contains("1 suppressed"), "no new suppressions: {text}");
     Ok(())
 }
@@ -244,11 +243,11 @@ fn consumer_tree_unaffected() -> TestResult {
         !preview.join(".zizmor.yml").exists(),
         "no staging config in output"
     );
-    let yaml = fs::read_to_string(preview.join(".github/workflows/velnor.yml"))?;
+    let yaml = fs::read_to_string(preview.join(".github/workflows/ci.yml"))?;
     let input = ZizmorConfigInput {
         generator_version: env!("CARGO_PKG_VERSION").to_owned(),
         workflows: vec![ZizmorWorkflowText {
-            path: ".github/workflows/velnor.yml".to_owned(),
+            path: ".github/workflows/ci.yml".to_owned(),
             text: yaml,
         }],
     };
@@ -276,12 +275,12 @@ fn different_unpinned_tag_still_fails() -> TestResult {
 }
 
 #[test]
-fn blessed_repo_wrong_tag_still_fails() -> TestResult {
+fn blessed_repo_tag_ref_still_fails() -> TestResult {
     let (_repo, _parent, preview, yaml, _) = policy_preview()?;
-    let blessed = format!("{ALINT_ACTION}@{ALINT_REVIEWED_TAG}");
-    let wrong = format!("{ALINT_ACTION}@v0.17.0");
+    let blessed = format!("{ALINT_ACTION}@{ALINT_ACTION_SHA}");
+    let wrong = format!("{ALINT_ACTION}@{ALINT_ACTION_VERSION}");
     let mutated = yaml.replacen(&blessed, &wrong, 1);
-    assert_ne!(mutated, yaml, "fixture still carries blessed tag");
+    assert_ne!(mutated, yaml, "fixture still carries blessed SHA");
     let staged = stage(&preview, &mutated)?;
     let output = run_zizmor(staged.path())?;
     let text = streams(&output);

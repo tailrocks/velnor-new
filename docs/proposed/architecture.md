@@ -106,7 +106,7 @@ crates/velnor-actions-orchestrator/
 crates/velnor-actions-cli/
 fixtures/rust-workspaces/
 .github/actionlint.yaml
-.github/workflows/velnor.yml
+.github/workflows/ci.yml
 ```
 
 `rust-toolchain.toml`, `mise.toml`, and `mise.lock` are optional inputs, not

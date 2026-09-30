@@ -1,13 +1,13 @@
 //! Workflow/tree invariant cases (triggers, concurrency, candidate, gates).
 use std::collections::BTreeMap;
 use velnor_actions_contract::{
-    Concurrency, GeneratorValidation, Job, Permissions, Step, StepKind, Trigger, WorkflowIr,
-    WorkflowPolicy,
+    Concurrency, GeneratorValidation, Job, Permissions, Step, StepKind, Trigger, ValidatorKind,
+    WorkflowIr, WorkflowPolicy,
 };
 use velnor_actions_workflow_renderer::{
     ALINT_USES, CANDIDATE_JOB_ID, CONCURRENCY_CANCEL, CONCURRENCY_GROUP, CandidateSpec,
-    PolicyCommand, RenderContext, RenderError, checkout_step, merge_step, plan_step, render_tree,
-    render_workflow_ir, shell_step, with_marker,
+    RenderContext, RenderError, ValidatorCommand, checkout_step, merge_step, plan_step,
+    render_tree, render_workflow_ir, shell_step, with_marker,
 };
 
 const VERSION: &str = "0.1.0";
@@ -24,7 +24,7 @@ fn fixture_ctx() -> RenderContext {
         staged_binary: format!("$RUNNER_TEMP/velnor/bin/velnor-actions-{VERSION}"),
         request_dir: "${{ runner.temp }}/velnor/r1-a1".to_owned(),
         checkout_uses: checkout_pin(),
-        policy_commands: Vec::new(),
+        validator_commands: Vec::new(),
         candidate: None,
         preseed: false,
     }
@@ -50,7 +50,7 @@ fn exact_concurrency() -> Concurrency {
 
 fn plan_job() -> Result<Job, RenderError> {
     Ok(Job {
-        display_name: "Velnor Plan".to_owned(),
+        display_name: "Plan".to_owned(),
         runs_on: LABEL.to_owned(),
         needs: Vec::new(),
         condition: None,
@@ -58,9 +58,24 @@ fn plan_job() -> Result<Job, RenderError> {
     })
 }
 
+fn validator_commands() -> Vec<ValidatorCommand> {
+    [
+        ValidatorKind::CargoDeny,
+        ValidatorKind::CargoMachete,
+        ValidatorKind::Zizmor,
+    ]
+    .iter()
+    .map(|validator| ValidatorCommand {
+        validator: *validator,
+        name: "Deny".to_owned(),
+        argv: vec!["deny".to_owned()],
+    })
+    .collect()
+}
+
 fn fixture_ir() -> Result<WorkflowIr, RenderError> {
     let mut jobs = BTreeMap::new();
-    jobs.insert("velnor-plan".to_owned(), plan_job()?);
+    jobs.insert("plan".to_owned(), plan_job()?);
     Ok(WorkflowIr {
         name: "CI".to_owned(),
         triggers: exact_triggers(),
@@ -116,7 +131,7 @@ fn concurrency_and_label_must_be_exact() -> Result<(), RenderError> {
     ir.concurrency.group = "other".to_owned();
     assert!(render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx).is_err());
     let mut ir = fixture_ir()?;
-    if let Some(job) = ir.jobs.get_mut("velnor-plan") {
+    if let Some(job) = ir.jobs.get_mut("plan") {
         job.runs_on = "ubuntu-24.04".to_owned();
     }
     assert!(render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx).is_err());
@@ -146,7 +161,7 @@ fn candidate_never_plans_and_lock_matches_catalog_per_target() -> Result<(), Ren
         CANDIDATE_JOB_ID.to_owned(),
         simple_job(
             "Planning candidate",
-            vec!["velnor-plan".to_owned()],
+            vec!["plan".to_owned()],
             vec![checkout_step(&checkout_pin())?, plan_step()],
         ),
     );
@@ -164,7 +179,7 @@ fn candidate_never_plans_and_lock_matches_catalog_per_target() -> Result<(), Ren
         CANDIDATE_JOB_ID.to_owned(),
         simple_job(
             "Candidate",
-            vec!["velnor-plan".to_owned()],
+            vec!["plan".to_owned()],
             vec![checkout_step(&checkout_pin())?],
         ),
     );
@@ -175,10 +190,7 @@ fn candidate_never_plans_and_lock_matches_catalog_per_target() -> Result<(), Ren
 #[test]
 fn candidate_job_renders_with_plan_dependency() -> Result<(), RenderError> {
     let mut ctx = fixture_ctx();
-    ctx.policy_commands = vec![PolicyCommand {
-        name: "Deny".to_owned(),
-        argv: vec!["deny".to_owned()],
-    }];
+    ctx.validator_commands = validator_commands();
     ctx.candidate = Some(CandidateSpec {
         build: argv_of(&[
             "mise",
@@ -198,9 +210,9 @@ fn candidate_job_renders_with_plan_dependency() -> Result<(), RenderError> {
         Some(&support),
         &ctx,
     )?;
-    assert!(text.contains("velnor-candidate:"));
-    assert!(text.contains("velnor-plan"));
-    assert!(text.contains("velnor-release:"));
+    assert!(text.contains("candidate:"));
+    assert!(text.contains("plan"));
+    assert!(text.contains("release:"));
     assert!(text.contains("ref_protected"));
     assert!(text.contains("actions/download-artifact@"));
     Ok(())
@@ -211,11 +223,11 @@ fn final_gate_keeps_exact_name_and_condition() -> Result<(), RenderError> {
     let ctx = fixture_ctx();
     let mut ir = fixture_ir()?;
     ir.jobs.insert(
-        "velnor-final".to_owned(),
+        "required".to_owned(),
         Job {
             display_name: "Wrong Name".to_owned(),
             runs_on: LABEL.to_owned(),
-            needs: vec!["velnor-plan".to_owned()],
+            needs: vec!["plan".to_owned()],
             condition: Some("always()".to_owned()),
             steps: vec![checkout_step(&checkout_pin())?, merge_step()],
         },
@@ -223,11 +235,11 @@ fn final_gate_keeps_exact_name_and_condition() -> Result<(), RenderError> {
     assert!(render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx).is_err());
     let mut ir = fixture_ir()?;
     ir.jobs.insert(
-        "velnor-final".to_owned(),
+        "required".to_owned(),
         Job {
-            display_name: "Velnor / Required".to_owned(),
+            display_name: "Required".to_owned(),
             runs_on: LABEL.to_owned(),
-            needs: vec!["velnor-plan".to_owned()],
+            needs: vec!["plan".to_owned()],
             condition: None,
             steps: vec![checkout_step(&checkout_pin())?, merge_step()],
         },
@@ -235,17 +247,17 @@ fn final_gate_keeps_exact_name_and_condition() -> Result<(), RenderError> {
     assert!(render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx).is_err());
     let mut ir = fixture_ir()?;
     ir.jobs.insert(
-        "velnor-final".to_owned(),
+        "required".to_owned(),
         Job {
-            display_name: "Velnor / Required".to_owned(),
+            display_name: "Required".to_owned(),
             runs_on: LABEL.to_owned(),
-            needs: vec!["velnor-plan".to_owned()],
+            needs: vec!["plan".to_owned()],
             condition: Some("always()".to_owned()),
             steps: vec![checkout_step(&checkout_pin())?, merge_step()],
         },
     );
     let text = render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx)?;
-    assert!(text.contains("name: Velnor / Required"));
+    assert!(text.contains("name: Required"));
     assert!(text.contains("if: always()"));
     Ok(())
 }
@@ -259,7 +271,7 @@ fn renderer_rejects_unvalidated_steps_inside_ir() -> Result<(), RenderError> {
         Job {
             display_name: "Task".to_owned(),
             runs_on: LABEL.to_owned(),
-            needs: vec!["velnor-plan".to_owned()],
+            needs: vec!["plan".to_owned()],
             condition: None,
             steps: vec![Step {
                 name: "Install".to_owned(),
@@ -277,7 +289,7 @@ fn renderer_rejects_unvalidated_steps_inside_ir() -> Result<(), RenderError> {
         Job {
             display_name: "Task".to_owned(),
             runs_on: LABEL.to_owned(),
-            needs: vec!["velnor-plan".to_owned()],
+            needs: vec!["plan".to_owned()],
             condition: None,
             steps: vec![Step {
                 name: "Fetch".to_owned(),
@@ -295,7 +307,7 @@ fn renderer_rejects_unvalidated_steps_inside_ir() -> Result<(), RenderError> {
         Job {
             display_name: "Task".to_owned(),
             runs_on: LABEL.to_owned(),
-            needs: vec!["velnor-plan".to_owned()],
+            needs: vec!["plan".to_owned()],
             condition: None,
             steps: vec![Step {
                 name: "Run Alint".to_owned(),
@@ -318,7 +330,7 @@ fn renderer_rejects_unvalidated_steps_inside_ir() -> Result<(), RenderError> {
         Job {
             display_name: "Task".to_owned(),
             runs_on: LABEL.to_owned(),
-            needs: vec!["velnor-plan".to_owned()],
+            needs: vec!["plan".to_owned()],
             condition: None,
             steps: vec![shell_step(
                 "Focused",
@@ -334,10 +346,7 @@ fn renderer_rejects_unvalidated_steps_inside_ir() -> Result<(), RenderError> {
 #[test]
 fn velnor_policy_emits_full_sha_alint_pin() -> Result<(), RenderError> {
     let mut ctx = fixture_ctx();
-    ctx.policy_commands = vec![PolicyCommand {
-        name: "Deny".to_owned(),
-        argv: vec!["deny".to_owned()],
-    }];
+    ctx.validator_commands = validator_commands();
     let support =
         WorkflowPolicy::VelnorRepositoryV1.support_workflow(GeneratorValidation::Bootstrap);
     let text = render_workflow_ir(

@@ -10,8 +10,8 @@ use velnor_actions_workflow_renderer::{
 
 const VERSION: &str = "0.1.0";
 const LABEL: &str = "ubuntu-26.04";
-const LINT_ID: &str = "velnor-workflow-lint";
-const LINT_DISPLAY: &str = "Velnor Workflow Lint";
+const LINT_ID: &str = "actionlint";
+const LINT_DISPLAY: &str = "Actionlint";
 
 fn checkout_pin() -> String {
     format!("actions/checkout@{:040x}", 0)
@@ -24,7 +24,7 @@ fn fixture_ctx() -> RenderContext {
         staged_binary: format!("$RUNNER_TEMP/velnor/bin/velnor-actions-{VERSION}"),
         request_dir: "${{ runner.temp }}/velnor/r1-a1".to_owned(),
         checkout_uses: checkout_pin(),
-        policy_commands: Vec::new(),
+        validator_commands: Vec::new(),
         candidate: None,
         preseed: false,
     }
@@ -61,9 +61,9 @@ fn lint_job() -> Result<Job, RenderError> {
 fn fixture_ir() -> Result<WorkflowIr, RenderError> {
     let mut jobs = BTreeMap::new();
     jobs.insert(
-        "velnor-plan".to_owned(),
+        "plan".to_owned(),
         Job {
-            display_name: "Velnor Plan".to_owned(),
+            display_name: "Plan".to_owned(),
             runs_on: LABEL.to_owned(),
             needs: Vec::new(),
             condition: None,
@@ -71,11 +71,11 @@ fn fixture_ir() -> Result<WorkflowIr, RenderError> {
         },
     );
     jobs.insert(
-        "velnor-final".to_owned(),
+        "required".to_owned(),
         Job {
-            display_name: "Velnor / Required".to_owned(),
+            display_name: "Required".to_owned(),
             runs_on: LABEL.to_owned(),
-            needs: vec!["velnor-plan".to_owned(), LINT_ID.to_owned()],
+            needs: vec!["plan".to_owned(), LINT_ID.to_owned()],
             condition: Some("always()".to_owned()),
             steps: vec![merge_step()],
         },
@@ -105,7 +105,7 @@ fn fixture_ir() -> Result<WorkflowIr, RenderError> {
 
 fn velnor_support() -> VelnorSupportWorkflow {
     VelnorSupportWorkflow {
-        policy_jobs: Vec::new(),
+        validators: Vec::new(),
         candidate_validation: false,
     }
 }
@@ -118,16 +118,13 @@ fn consumer_emits_lint_from_typed_ir() -> Result<(), RenderError> {
         None,
         &fixture_ctx(),
     )?;
-    assert!(text.contains("velnor-workflow-lint:"), "job:\n{text}");
+    assert!(text.contains("actionlint:"), "job:\n{text}");
     assert!(text.contains(LINT_DISPLAY), "display:\n{text}");
     assert!(
         text.contains("actionlint@1.7.12 shellcheck@0.11.0 -- actionlint -color"),
         "run:\n{text}"
     );
-    assert!(
-        text.contains("- velnor-workflow-lint"),
-        "final needs lint:\n{text}"
-    );
+    assert!(text.contains("- actionlint"), "final needs lint:\n{text}");
     Ok(())
 }
 
@@ -140,12 +137,9 @@ fn velnor_emits_lint_from_typed_ir() -> Result<(), RenderError> {
         Some(&support),
         &fixture_ctx(),
     )?;
-    assert!(text.contains("velnor-workflow-lint:"), "job:\n{text}");
+    assert!(text.contains("actionlint:"), "job:\n{text}");
     assert!(text.contains(LINT_DISPLAY), "display:\n{text}");
-    assert!(
-        text.contains("- velnor-workflow-lint"),
-        "final needs lint:\n{text}"
-    );
+    assert!(text.contains("- actionlint"), "final needs lint:\n{text}");
     Ok(())
 }
 

@@ -35,7 +35,7 @@ fn generator_and_workflow_changes_broaden() -> TestResult {
         &[],
         &[],
         &[],
-        &[(".github/workflows/velnor.yml", "name: ci\n")],
+        &[(".github/workflows/ci.yml", "name: ci\n")],
     )?;
     assert!(
         has(&plan, "alpha") && has(&plan, "beta"),

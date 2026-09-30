@@ -1,12 +1,12 @@
 //! Shared fixtures for the strict-emission test family.
 use std::collections::BTreeMap;
 use velnor_actions_contract::{
-    Concurrency, Job, Permissions, Step, Trigger, WorkflowIr, WorkflowPolicy,
+    Concurrency, Job, Permissions, Step, Trigger, ValidatorKind, WorkflowIr, WorkflowPolicy,
 };
 use velnor_actions_workflow_renderer::{
     ASSET_SHA_ENV, ASSET_URL_ENV, CONCURRENCY_CANCEL, CONCURRENCY_GROUP, MiseSetup, RenderContext,
-    RenderError, STAGED_BINARY_PREFIX, acquire_velnor_step, checkout_step, plan_step,
-    render_workflow_ir_strict, shell_step,
+    RenderError, STAGED_BINARY_PREFIX, ValidatorCommand, acquire_velnor_step, checkout_step,
+    plan_step, render_workflow_ir_strict, shell_step,
 };
 
 pub(crate) const VERSION: &str = "0.1.0";
@@ -36,7 +36,7 @@ pub(crate) fn fixture_ctx() -> RenderContext {
         staged_binary: STAGED.to_owned(),
         request_dir: "${{ runner.temp }}/velnor/r1-a1".to_owned(),
         checkout_uses: checkout_pin(),
-        policy_commands: Vec::new(),
+        validator_commands: Vec::new(),
         candidate: None,
         preseed: false,
     }
@@ -137,20 +137,33 @@ pub(crate) fn snip(text: &str, at: usize, len: usize) -> &str {
 /// Smallest plan job: checkout plus the `plan-v1` anchor.
 pub(crate) fn minimal_plan_job() -> Result<(String, Job), RenderError> {
     Ok(job(
-        "velnor-plan",
-        "Velnor Plan",
+        "plan",
+        "Plan",
         Vec::new(),
         vec![checkout_step(&checkout_pin())?, plan_step()],
     ))
 }
 
-/// Candidate context: pinned-tools policy command plus build/qualify spec.
+/// One dummy shell command per repository validator needing one.
+pub(crate) fn validator_commands() -> Vec<ValidatorCommand> {
+    [
+        (ValidatorKind::CargoDeny, "Run cargo-deny"),
+        (ValidatorKind::CargoMachete, "Run cargo-machete"),
+        (ValidatorKind::Zizmor, "Run zizmor"),
+    ]
+    .iter()
+    .map(|(validator, name)| ValidatorCommand {
+        validator: *validator,
+        name: (*name).to_owned(),
+        argv: vec!["true".to_owned()],
+    })
+    .collect()
+}
+
+/// Candidate context: validator commands plus build/qualify spec.
 pub(crate) fn candidate_ctx() -> RenderContext {
     let mut ctx = fixture_ctx();
-    ctx.policy_commands = vec![velnor_actions_workflow_renderer::PolicyCommand {
-        name: "Verify pinned tools".to_owned(),
-        argv: vec!["true".to_owned()],
-    }];
+    ctx.validator_commands = validator_commands();
     ctx.candidate = Some(velnor_actions_workflow_renderer::CandidateSpec {
         build: mise_argv("mbx@1.0.0", "mbx", &["build"]),
         qualify: vec!["sh".to_owned(), "-c".to_owned(), "true".to_owned()],
@@ -168,7 +181,7 @@ pub(crate) fn matrix_task_job() -> Result<(String, velnor_actions_contract::Job)
         ("VELNOR_TASK_RUN".to_owned(), "${{ matrix.run }}".to_owned()),
         (
             velnor_actions_workflow_renderer::MATRIX_NEEDS_JOB_ENV.to_owned(),
-            "velnor-plan".to_owned(),
+            "plan".to_owned(),
         ),
         (
             velnor_actions_workflow_renderer::MATRIX_OUTPUT_ENV.to_owned(),
@@ -186,8 +199,8 @@ pub(crate) fn matrix_task_job() -> Result<(String, velnor_actions_contract::Job)
     )?;
     Ok(job(
         "velnor-task",
-        "Velnor Task",
-        vec!["velnor-plan".to_owned()],
+        "Task",
+        vec!["plan".to_owned()],
         vec![checkout_step(&checkout_pin())?, step],
     ))
 }

@@ -180,7 +180,7 @@ fn invalid_config_fails_with_key_path_and_no_replace() -> Result<(), Box<dyn Err
         std::fs::read_to_string(tmp.join(".github/workflows/old.yml"))?,
         "old: true\n"
     );
-    assert!(!tmp.join(".github/workflows/velnor.yml").exists());
+    assert!(!tmp.join(".github/workflows/ci.yml").exists());
     cleanup(&tmp);
     Ok(())
 }

@@ -29,7 +29,7 @@ fn no_nightly_toolchain() -> Result<(), Box<dyn Error>> {
         "Cargo.toml",
         "mise.toml",
         "crates/velnor-actions-mise/src/catalog.rs",
-        ".github/workflows/velnor.yml",
+        ".github/workflows/ci.yml",
     ] {
         assert!(!read(file)?.to_lowercase().contains("nightly"), "{file}");
     }

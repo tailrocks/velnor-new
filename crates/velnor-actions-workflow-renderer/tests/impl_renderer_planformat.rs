@@ -27,8 +27,8 @@ fn format_env() -> BTreeMap<String, String> {
 #[test]
 fn plan_format_inserts_between_staging_and_plan() -> Result<(), RenderError> {
     let plan = job(
-        "velnor-plan",
-        "Velnor Plan",
+        "plan",
+        "Plan",
         Vec::new(),
         vec![
             checkout_step(&checkout_pin())?,
@@ -42,7 +42,7 @@ fn plan_format_inserts_between_staging_and_plan() -> Result<(), RenderError> {
         mise_argv("rust@1.98.1", "cargo", &["fmt", "--check"]),
         format_env(),
     )?;
-    let names: Vec<&str> = jobs["velnor-plan"]
+    let names: Vec<&str> = jobs["plan"]
         .steps
         .iter()
         .map(|step| step.name.as_str())
@@ -51,7 +51,7 @@ fn plan_format_inserts_between_staging_and_plan() -> Result<(), RenderError> {
         names,
         ["Checkout", "Acquire Velnor", FORMAT_STEP_NAME, "Plan"]
     );
-    let format = jobs["velnor-plan"]
+    let format = jobs["plan"]
         .steps
         .iter()
         .find(|step| step.name == FORMAT_STEP_NAME)
@@ -65,7 +65,7 @@ fn plan_format_inserts_between_staging_and_plan() -> Result<(), RenderError> {
         assert_eq!(env.get(&key), Some(&value), "format env routes toolchain");
     }
     let text = strict(&fixture_ir(jobs.into_iter().collect()), &fixture_ctx())?;
-    let rendered = step_names(&text, "velnor-plan");
+    let rendered = step_names(&text, "plan");
     let format_at = rendered.iter().position(|name| name == FORMAT_STEP_NAME);
     let fresh_at = rendered
         .iter()
@@ -80,8 +80,8 @@ fn plan_format_inserts_between_staging_and_plan() -> Result<(), RenderError> {
 #[test]
 fn plan_format_is_idempotent_and_validates_shape() -> Result<(), RenderError> {
     let plan = job(
-        "velnor-plan",
-        "Velnor Plan",
+        "plan",
+        "Plan",
         Vec::new(),
         vec![checkout_step(&checkout_pin())?, plan_step()],
     );
@@ -89,15 +89,15 @@ fn plan_format_is_idempotent_and_validates_shape() -> Result<(), RenderError> {
     let argv = mise_argv("rust@1.98.1", "cargo", &["fmt", "--check"]);
     ensure_plan_format(&mut jobs, argv.clone(), format_env())?;
     ensure_plan_format(&mut jobs, argv, format_env())?;
-    let count = jobs["velnor-plan"]
+    let count = jobs["plan"]
         .steps
         .iter()
         .filter(|step| step.name == FORMAT_STEP_NAME)
         .count();
     assert_eq!(count, 1);
     let fresh = job(
-        "velnor-plan",
-        "Velnor Plan",
+        "plan",
+        "Plan",
         Vec::new(),
         vec![checkout_step(&checkout_pin())?, plan_step()],
     );
@@ -113,7 +113,7 @@ fn plan_format_is_idempotent_and_validates_shape() -> Result<(), RenderError> {
     );
     let lonely = job(
         "velnor-task",
-        "Velnor Task",
+        "Task",
         Vec::new(),
         vec![checkout_step(&checkout_pin())?],
     );
@@ -131,8 +131,8 @@ fn plan_format_rejects_non_shell_format() -> Result<(), RenderError> {
     let mut renamed = checkout_step(&checkout_pin())?;
     renamed.name = FORMAT_STEP_NAME.to_owned();
     let plan = job(
-        "velnor-plan",
-        "Velnor Plan",
+        "plan",
+        "Plan",
         Vec::new(),
         vec![checkout_step(&checkout_pin())?, renamed, plan_step()],
     );

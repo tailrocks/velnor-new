@@ -259,35 +259,23 @@ fn rq53_limits_discipline_no_baseline() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn policy_zizmor_config_matches_derived_ignores() -> Result<(), Box<dyn Error>> {
-    let yaml = read(".github/workflows/velnor.yml")?;
-    let mut derived = Vec::new();
-    for (index, line) in yaml.lines().enumerate() {
-        let Some(at) = line.find("uses: asamarts/alint@") else {
-            continue;
-        };
-        let col = at + "uses: ".len() + 1;
-        derived.push(format!("velnor.yml:{}:{col}", index + 1));
-    }
-    assert!(!derived.is_empty(), "blessed alint line must exist");
+    let yaml = read(".github/workflows/ci.yml")?;
+    assert!(
+        yaml.contains("uses: asamarts/alint@9f9d34ba0eae3888299b9e570f43338b0e7f2cdb"),
+        "full-SHA alint pin must exist"
+    );
+    assert!(
+        !yaml.contains("asamarts/alint@v"),
+        "no tag-pinned alint ref may remain"
+    );
     let config = read(".zizmor.yml")?;
-    let mut committed = Vec::new();
-    for line in config.lines() {
-        if let Some(rule) = line.trim_start().strip_prefix("- ") {
-            let rule = rule.split_whitespace().next().unwrap_or_default();
-            if !rule.is_empty() {
-                committed.push(rule.to_owned());
-            }
-        }
-    }
-    derived.sort();
-    committed.sort();
-    assert_eq!(
-        committed, derived,
-        "committed .zizmor.yml must equal derived ignores (re-derive after regen)"
+    assert!(
+        config.contains("ignore: []"),
+        "no unpinned-uses ignores may remain:\n{config}"
     );
     assert!(
         config.contains("version-policy §2"),
-        "config must cite the exception"
+        "config must cite the policy"
     );
     Ok(())
 }

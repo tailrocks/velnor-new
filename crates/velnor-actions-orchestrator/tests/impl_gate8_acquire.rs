@@ -35,12 +35,7 @@ fn repo_policy() -> Result<String, Box<dyn std::error::Error>> {
 fn consumer_plan_job_carries_acquire_step() -> TestResult {
     let repo = make_repo("schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n")?;
     let prep = prepare(repo.path())?;
-    let plan = prep
-        .workflow
-        .ir
-        .jobs
-        .get("velnor-plan")
-        .ok_or("no plan job")?;
+    let plan = prep.workflow.ir.jobs.get("plan").ok_or("no plan job")?;
     assert!(
         plan.steps.iter().any(|s| s.name == "Acquire Velnor"),
         "acquire wired"
@@ -50,8 +45,7 @@ fn consumer_plan_job_carries_acquire_step() -> TestResult {
 
 #[test]
 fn velnor_candidate_render_path_includes_release() -> TestResult {
-    // Render path only: full `generate` validation is blocked pre-existing
-    // by zizmor flagging the spec-blessed alint tag (see final report).
+    // Render path only: full `generate` runs staged validation.
     let repo = make_repo(
         "schema = 1\n[workflow]\nname = \"CI\"\npolicy = \"velnor-repository-v1\"\ngenerator_validation = \"candidate\"\ndefault_branch = \"testmain\"\n",
     )?;
@@ -78,8 +72,8 @@ fn velnor_candidate_render_path_includes_release() -> TestResult {
     )
     .map_err(|err| format!("render: {err}"))?;
     for want in [
-        "velnor-candidate:",
-        "velnor-release:",
+        "candidate:",
+        "release:",
         "ref_protected",
         "Upload candidate",
         "Download candidate",
@@ -87,10 +81,9 @@ fn velnor_candidate_render_path_includes_release() -> TestResult {
     ] {
         assert!(yaml.contains(want), "missing {want}");
     }
-    assert!(
-        yaml.contains("velnor-alint") && yaml.contains("velnor-policy"),
-        "policy jobs"
-    );
+    for want in ["alint:", "cargo-deny:", "cargo-machete:", "zizmor:"] {
+        assert!(yaml.contains(want), "validator {want}");
+    }
     Ok(())
 }
 
