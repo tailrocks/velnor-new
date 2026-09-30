@@ -127,8 +127,8 @@ fn sources_step(
         "Save Cargo sources".to_owned()
     };
     if !restore {
-        step.condition =
-            Some(velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION.to_owned());
+        let gate = velnor_actions_mise::cache_trust::authorize_trusted_save().map_err(wrap)?;
+        step.condition = Some(gate.to_owned());
     }
     Ok(step)
 }

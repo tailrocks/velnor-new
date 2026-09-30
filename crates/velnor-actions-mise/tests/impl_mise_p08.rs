@@ -209,6 +209,17 @@ fn c10_save_needs_success_delta_scope_and_writers() {
 }
 
 #[test]
+fn c10b_trusted_save_authorizes_only_the_push_only_gate() {
+    let gate = trust::authorize_trusted_save().expect("authorized");
+    assert_eq!(
+        gate,
+        velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION
+    );
+    let err = trust::authorize_trusted_save_for(true).expect_err("pr drift");
+    assert!(err.to_string().contains("save_policy_drift"), "{err}");
+}
+
+#[test]
 fn c11_quota_from_service_data_not_hardcoded() {
     let body = r#"[{"sizeInBytes":50513706},{"sizeInBytes":54077706}]"#;
     let usage = trust::parse_service_usage(body).expect("usage");
