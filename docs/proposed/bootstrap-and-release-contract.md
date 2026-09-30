@@ -27,18 +27,30 @@ consumer generation.
 Every official Velnor release MUST publish:
 
 1. One immutable `velnor-actions` binary asset per supported target.
-2. A versioned release manifest listing each target, exact asset URL, and
-   SHA-256 digest.
+2. A versioned `release-manifest.json` release asset listing each target,
+   exact asset URL, and SHA-256 digest.
 
-When a release-installed `velnor-actions` binary generates consumer workflows,
-its compiled-in manifest record for its own exact version MUST be validated —
-schema, version, repository, supported targets, immutable URLs — with no
-network access during generation; it then embeds the runner-target URL and
-digest in generated workflow steps. The workflow MUST download that exact
-asset and verify SHA-256 before invoking it. The release manifest record is
-selected by exact version; generation MUST NOT query a floating `latest` endpoint.
+Only the GENERATING binary needs manifest provenance: a compiled-in bake
+(`VELNOR_RELEASE_MANIFEST_JSON` at build time) or the same variable at
+runtime. Release and seed binary assets need NO bake — a binary cannot
+embed a manifest containing its own SHA-256, so baking release assets is
+infeasible by construction.
 
-A source build or binary without an official release version MUST fail
+When a provisioned `velnor-actions` binary generates consumer workflows,
+its manifest for its own exact version — runtime env first, then the bake —
+MUST be validated — schema, version, repository, supported targets,
+immutable URLs — with no network access during generation; it then embeds
+the runner-target URL and digest in the Acquire step. The runtime value
+wins over the bake because the staged binary regenerates with the
+committed manifest, which may be newer than its own bake. Generated
+consumer workflows embed the full manifest JSON in the Check/Plan step
+env (`VELNOR_RELEASE_MANIFEST_JSON`), so the staged binary — downloaded,
+never baked — regenerates from the same committed manifest. The workflow
+MUST download that exact asset and verify SHA-256 before invoking it. The
+release manifest record is selected by exact version; generation MUST NOT
+query a floating `latest` endpoint.
+
+A source build or binary with no manifest in either source MUST fail
 consumer workflow generation with a diagnostic recommending installation of
 an official Velnor release. It MUST NOT emit an unverified download URL or a
 placeholder digest. The generated file remains deterministic for a given
@@ -100,7 +112,9 @@ NOT decide the graph that builds or promotes itself.
 
 1. The protected lock points to an already published bootstrap release. Seed
    the first release with a manually reviewed binary built through pinned Mise
-   and MBX; no Velnor binary is needed for this seed.
+   and MBX; no Velnor binary is needed for this seed, and the seed binary
+   needs no manifest bake: the manifest flows at runtime from the committed
+   workflow's Check/Plan step env into every staged regeneration.
 2. The bootstrap selects the matching host-target lock record, verifies its
    digest, and produces the plan and matrix. Candidate changes cannot alter
    these obligations.

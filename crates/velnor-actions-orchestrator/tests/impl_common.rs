@@ -19,8 +19,9 @@ pub(crate) type Snapshot = BTreeMap<String, (Vec<u8>, SystemTime)>;
 /// Release-manifest fixture for consumer generation tests.
 ///
 /// Debug builds read `.velnor/release-manifest.json` as the provenance
-/// fixture; release binaries never read it and accept baked provenance
-/// alone. Every fixture repo carries it so consumer `prepare` succeeds.
+/// fixture; release binaries never read it and accept runtime-env or
+/// baked provenance alone. Every fixture repo carries it so consumer
+/// `prepare` succeeds.
 pub(crate) fn fixture_manifest_json() -> String {
     let targets = [
         "x86_64-unknown-linux-gnu",

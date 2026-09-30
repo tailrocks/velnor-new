@@ -27,7 +27,9 @@ use velnor_actions_workflow_renderer::steps::{
 
 use crate::OrchestratorError;
 use crate::discover::Discovery;
-use crate::pins::consumer_acquire_step;
+use crate::pins::{
+    MISSING_MANIFEST_PROBLEM, RELEASE_MANIFEST_ENV, consumer_acquire_step, release_manifest_json,
+};
 use crate::utf8::{strings_of, strings_of_env};
 use crate::vectors::{ZIZMOR_STEP_NAME, candidate_spec, deny_argv, machete_argv, zizmor_argv};
 use crate::workflow_jobs::{final_job, lint_job, plan_job};
@@ -127,7 +129,17 @@ pub(crate) fn build_workflow(
         },
         jobs,
     };
-    let context = render_context(config, label, &version, &catalog)?;
+    let consumer_manifest = match policy {
+        WorkflowPolicy::ConsumerV1 => release_manifest_json(discovery),
+        WorkflowPolicy::VelnorRepositoryV1 => None,
+    };
+    let context = render_context(
+        config,
+        label,
+        &version,
+        &catalog,
+        consumer_manifest.as_deref(),
+    )?;
     let actionlint = actionlint_input(policy, &version);
     Ok(WorkflowPlan {
         ir,
@@ -200,11 +212,19 @@ pub(crate) fn prepare_rust_components_step(
 }
 
 /// Renderer scalars: version, label, staged path, request dir, pins.
+///
+/// Consumer builds carry the resolved release manifest in the shared
+/// Check/Plan env so the staged binary regenerates without a bake; the
+/// acquire gate above already failed when no source held a manifest, so
+/// `None` here is unreachable and fails closed with the same diagnostic.
+/// Velnor builds never carry it: lock/preseed paths never call the
+/// consumer gate and dogfood goldens must not churn.
 fn render_context(
     config: &VelnorConfig,
     label: &str,
     version: &str,
     catalog: &ToolCatalog,
+    consumer_manifest: Option<&str>,
 ) -> Result<RenderContext, OrchestratorError> {
     debug_assert!(REQUEST_DIR.starts_with(REQUEST_DIR_PREFIX));
     let velnor = config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1;
@@ -235,6 +255,15 @@ fn render_context(
         } else {
             None
         };
+    let mut extra = BTreeMap::new();
+    if !velnor {
+        let Some(manifest) = consumer_manifest else {
+            return Err(OrchestratorError::Contract {
+                problem: MISSING_MANIFEST_PROBLEM.to_owned(),
+            });
+        };
+        extra.insert(RELEASE_MANIFEST_ENV.to_owned(), manifest.to_owned());
+    }
     Ok(RenderContext {
         generator_version: version.to_owned(),
         runs_on: label.to_owned(),
@@ -244,10 +273,7 @@ fn render_context(
         validator_commands,
         candidate,
         preseed: false,
-        plan_consumer_env: crate::matrix_step::task_step_env(
-            catalog,
-            &std::collections::BTreeMap::new(),
-        )?,
+        plan_consumer_env: crate::matrix_step::task_step_env(catalog, &extra)?,
     })
 }
 

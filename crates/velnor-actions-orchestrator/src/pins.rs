@@ -36,6 +36,13 @@ const MISE_BINARY_SHA256_LINUX_X64: &str =
 /// Runner target the compiled mise digest covers.
 const LINUX_X64_TARGET: &str = "x86_64-unknown-linux-gnu";
 
+/// Step-env key carrying the release manifest into Check/Plan steps.
+pub(crate) const RELEASE_MANIFEST_ENV: &str = "VELNOR_RELEASE_MANIFEST_JSON";
+
+/// Fail-closed diagnostic when no release manifest exists anywhere.
+pub(crate) const MISSING_MANIFEST_PROBLEM: &str =
+    "consumer_requires_release_install:install an official velnor-actions release";
+
 /// Resolve typed Mise setup pins: overrides plus the compiled catalog.
 ///
 /// The `uses` ref comes from `[actions.overrides]` when present (approved
@@ -77,8 +84,8 @@ fn mise_action_uses(config: &VelnorConfig) -> Result<String, OrchestratorError> 
 
 /// Consumer Acquire step from the release manifest of this exact version.
 ///
-/// Bootstrap contract §2: a source build (no embedded manifest) fails
-/// consumer generation with a provenance diagnostic recommending an
+/// Bootstrap contract §2: a source build (no manifest in any source)
+/// fails consumer generation with a provenance diagnostic recommending an
 /// official release; it never emits an unverified URL or placeholder digest.
 pub(crate) fn consumer_acquire_step(
     label: &str,
@@ -90,8 +97,8 @@ pub(crate) fn consumer_acquire_step(
 
 /// Consumer Acquire step from an explicit manifest (pure; `None` fails).
 ///
-/// A source build (no embedded manifest) fails consumer generation with a
-/// provenance diagnostic recommending an official release (boot §2).
+/// A source build (no manifest in any source) fails consumer generation
+/// with a provenance diagnostic recommending an official release (§2).
 ///
 /// # Errors
 ///
@@ -113,8 +120,7 @@ fn consumer_acquire_from(
 ) -> Result<Step, OrchestratorError> {
     let Some(json) = json else {
         return Err(OrchestratorError::Contract {
-            problem: "consumer_requires_release_install:install an official velnor-actions release"
-                .to_owned(),
+            problem: MISSING_MANIFEST_PROBLEM.to_owned(),
         });
     };
     let manifest = ReleaseManifest::parse_json(json, "release-manifest.json")?;
@@ -177,16 +183,27 @@ fn acquire_argv(staged: &str) -> Vec<String> {
     vec!["sh".to_owned(), "-c".to_owned(), script]
 }
 
-/// Embedded release-manifest JSON: compile-time release provenance.
+/// Release-manifest JSON: runtime env first, then bake, then fixture.
 ///
-/// Baked `VELNOR_RELEASE_MANIFEST_JSON` wins; otherwise the debug-only
-/// discovery fixture applies. Release builds have no fixture path, so a
-/// source build always fails the consumer gate.
-fn release_manifest_json(discovery: &Discovery) -> Option<String> {
-    if let Some(baked) = option_env!("VELNOR_RELEASE_MANIFEST_JSON") {
-        return Some(baked.to_owned());
-    }
-    discovery.consumer_manifest_json.clone()
+/// The runtime value wins over the bake on purpose: the staged binary
+/// regenerates with the committed manifest, which may be newer than its
+/// own bake (a binary cannot embed a manifest containing its own sha256).
+/// Absent everywhere still fails the consumer gate; nothing is invented.
+pub(crate) fn release_manifest_json(discovery: &Discovery) -> Option<String> {
+    let runtime = std::env::var(RELEASE_MANIFEST_ENV)
+        .ok()
+        .filter(|value| !value.is_empty());
+    let baked = option_env!("VELNOR_RELEASE_MANIFEST_JSON").map(str::to_owned);
+    select_manifest_source(runtime, baked, discovery.consumer_manifest_json.clone())
+}
+
+/// First present manifest source wins: runtime, bake, debug fixture.
+fn select_manifest_source(
+    runtime: Option<String>,
+    baked: Option<String>,
+    fixture: Option<String>,
+) -> Option<String> {
+    runtime.or(baked).or(fixture)
 }
 
 /// `cfg(test)`-only fixture manifest matching the workspace version.
@@ -256,6 +273,24 @@ mod tests {
             err.to_string()
                 .contains("consumer_requires_release_install")
         }));
+    }
+
+    #[test]
+    fn manifest_source_prefers_runtime_then_bake_then_fixture() {
+        let runtime = Some("runtime".to_owned());
+        let baked = Some("baked".to_owned());
+        let fixture = Some("fixture".to_owned());
+        assert_eq!(
+            select_manifest_source(runtime.clone(), baked.clone(), fixture.clone()),
+            runtime
+        );
+        assert_eq!(select_manifest_source(runtime.clone(), None, None), runtime);
+        assert_eq!(
+            select_manifest_source(None, baked.clone(), fixture.clone()),
+            baked
+        );
+        assert_eq!(select_manifest_source(None, None, fixture.clone()), fixture);
+        assert_eq!(select_manifest_source(None, None, None), None);
     }
 
     #[test]
