@@ -1,5 +1,7 @@
 //! Integration test entry point; cases live in the sibling files.
 mod impl_bench_p13;
+mod impl_cache_fixtures;
+mod impl_cache_warm;
 mod impl_common;
 mod impl_config_internal;
 mod impl_crate_graph;

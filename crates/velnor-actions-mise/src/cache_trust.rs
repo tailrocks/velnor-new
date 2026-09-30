@@ -143,6 +143,61 @@ pub fn headroom_bytes(active_bytes: u64, limit_bytes: u64) -> Result<u64, MiseEr
     }
 }
 
+/// Sequential-run cache report from live service data.
+///
+/// The single reporting path over [`parse_service_usage`],
+/// [`headroom_bytes`], and [`stored_vs_transfer`]: one `gh cache list
+/// --json` body plus a caller-supplied quota limit becomes the
+/// stored/transfer/headroom figures recorded for R11. The generator
+/// never calls this at render time (render is hermetic; service data
+/// exists only after hosted runs) — the measurement fixture and the
+/// documented `gh cache list` workflow are its callers.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CacheUsageReport {
+    /// Active stored bytes across the repo (service-measured).
+    pub active_bytes: u64,
+    /// Active cache entry count.
+    pub count: u64,
+    /// Caller-supplied quota limit (service config/docs, never literal).
+    pub limit_bytes: u64,
+    /// Remaining quota (`limit_bytes - active_bytes`).
+    pub headroom_bytes: u64,
+    /// Stored bytes of the measured layer.
+    pub stored_bytes: u64,
+    /// Jobs restoring the layer this run.
+    pub restoring_jobs: u64,
+    /// Aggregate bytes every restoring runner downloads.
+    pub aggregate_transfer_bytes: u64,
+}
+
+/// Report one layer against live service usage.
+///
+/// # Errors
+///
+/// Returns [`MiseError::Contract`] for a non-array body and
+/// [`MiseError::InvalidStepInput`] when active usage already exceeds
+/// the quota limit (over-quota stays loud: the report never prints a
+/// wrapped headroom).
+pub fn summarize_cache_usage(
+    json: &str,
+    limit_bytes: u64,
+    stored_bytes: u64,
+    restoring_jobs: u64,
+) -> Result<CacheUsageReport, MiseError> {
+    let usage = parse_service_usage(json)?;
+    let headroom = headroom_bytes(usage.active_bytes, limit_bytes)?;
+    let (stored, transfer) = stored_vs_transfer(stored_bytes, restoring_jobs);
+    Ok(CacheUsageReport {
+        active_bytes: usage.active_bytes,
+        count: usage.count,
+        limit_bytes,
+        headroom_bytes: headroom,
+        stored_bytes: stored,
+        restoring_jobs: restoring_jobs.max(1),
+        aggregate_transfer_bytes: transfer,
+    })
+}
+
 /// Stored vs unavoidable transfer: every restoring runner downloads.
 ///
 /// Returns `(stored_bytes, aggregate_transfer_bytes)`.

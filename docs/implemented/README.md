@@ -50,6 +50,8 @@ current on every change to the process they describe.
   MUST/MUST NOT + acceptance criterion → owning crate, files, tests, gate)
 - [Performance acceptance](performance.md) (measured timings + budget
   verdicts, including the explicitly unpassed small-fixture budget)
+- [P08 cache measurements](cache-measurements.md) (R11/R12 sequential-run
+  sizes, transfer, hit/miss, eviction, headroom + warm-reuse proof)
 
 ## Recording rule
 
