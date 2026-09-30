@@ -207,7 +207,11 @@ fn env_anchors_match_and_refuse_foreign() {
     let check = |label: &str, manifest: &BaselineManifest, anchors: &MergeAnchorExpectations| {
         let (signals, miss) = anchored_verdict(&plan, Some(manifest), anchors);
         assert!(signals.planning_failed, "{label}");
-        assert_eq!(miss, BTreeSet::from(["foreign_anchor".to_owned()]), "{label}");
+        assert_eq!(
+            miss,
+            BTreeSet::from(["foreign_anchor".to_owned()]),
+            "{label}"
+        );
     };
     let mut forked = anchors.clone();
     forked.repository_slug = Some("evil/fork".to_owned());

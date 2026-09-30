@@ -278,14 +278,8 @@ fn linked_worktree_anchor_shares_remote_identity() {
     assert!(wt.join(".git").is_file(), "linked worktree has a .git file");
     let main = repository_slug_from_origin(root).expect("main slug");
     assert_eq!(main, "o/r");
-    assert_eq!(
-        repository_anchor_for_slug(&main),
-        fixture_anchor()
-    );
-    assert_eq!(
-        repository_slug_from_origin(&wt).expect("wt slug"),
-        main
-    );
+    assert_eq!(repository_anchor_for_slug(&main), fixture_anchor());
+    assert_eq!(repository_slug_from_origin(&wt).expect("wt slug"), main);
 }
 
 #[test]

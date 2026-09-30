@@ -231,7 +231,12 @@ impl BaselineLookup {
     /// Build a lookup; rejects short SHAs, URLs, wildcards, shell, and
     /// malformed repo slugs.
     /// # Errors
-    pub(crate) fn new(base: &str, workflow: &str, branch: &str, repo: &str) -> Result<Self, String> {
+    pub(crate) fn new(
+        base: &str,
+        workflow: &str,
+        branch: &str,
+        repo: &str,
+    ) -> Result<Self, String> {
         Self::validate_inputs(base, workflow, branch)?;
         let Some(repo) = crate::origin::validate_repository_slug(repo) else {
             return Err("bad_lookup_repo".into());
@@ -412,8 +417,7 @@ pub(crate) fn resolve_manifests(
 /// before spawning anything, so no lookup ever queries a repo the
 /// runner did not bless or the checkout cannot name.
 fn resolve_lookup_repo(root: &Path) -> Result<String, String> {
-    let expected =
-        crate::cover_baseline::provenance_check::expected_repository_for_root(root);
+    let expected = crate::cover_baseline::provenance_check::expected_repository_for_root(root);
     if expected.conflict {
         return Err("baseline_repo_conflict".to_owned());
     }

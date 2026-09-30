@@ -97,10 +97,7 @@ pub(crate) fn apply_baseline(
         workflow_path: inputs.workflow.to_owned(),
         generator_version: plan.generator.version.clone(),
         generator_sha256: plan.generator.sha256.clone(),
-        repository_id: repo
-            .slug
-            .as_deref()
-            .map(repository_anchor_for_slug),
+        repository_id: repo.slug.as_deref().map(repository_anchor_for_slug),
         repository_slug: repo.slug,
         repository_conflict: repo.conflict,
     };

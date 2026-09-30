@@ -94,7 +94,10 @@ mod tests {
         assert_eq!(select_baseline_artifact(&listed.to_string(), "n"), Ok(10));
         for (label, entry) in [
             ("absent", serde_json::json!({"id": 11, "name": "n"})),
-            ("null", serde_json::json!({"id": 12, "name": "n", "expired": null})),
+            (
+                "null",
+                serde_json::json!({"id": 12, "name": "n", "expired": null}),
+            ),
             (
                 "true",
                 serde_json::json!({"id": 13, "name": "n", "expired": true}),

@@ -78,7 +78,11 @@ mod tests {
     /// two-block and million-byte cases are the published NIST values.
     #[test]
     fn sha256_matches_padding_edges_and_multiblock() {
-        let range = |n: usize| (0..n).map(|b| u8::try_from(b).unwrap_or(0)).collect::<Vec<_>>();
+        let range = |n: usize| {
+            (0..n)
+                .map(|b| u8::try_from(b).unwrap_or(0))
+                .collect::<Vec<_>>()
+        };
         for (len, hex) in [
             (
                 55,

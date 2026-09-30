@@ -207,18 +207,16 @@ fn forwarded_manifest(slug: &str, base: &str) -> BaselineManifest {
         compatibility_id: digest.clone(),
         artifact_id: 9,
         artifact_name: name,
-        tasks: vec![
-            crate::merge::required_evidence::BaselineTaskEntry {
-                task_id: "stack/rust/root/clippy/default".to_owned(),
-                task_digest: digest.clone(),
-                input_digest: digest.clone(),
-                closure_digest: digest,
-                proof_run_id: 5,
-                observed_run_id: 7,
-                external_data: None,
-                proof: None,
-            },
-        ],
+        tasks: vec![crate::merge::required_evidence::BaselineTaskEntry {
+            task_id: "stack/rust/root/clippy/default".to_owned(),
+            task_digest: digest.clone(),
+            input_digest: digest.clone(),
+            closure_digest: digest,
+            proof_run_id: 5,
+            observed_run_id: 7,
+            external_data: None,
+            proof: None,
+        }],
         expires_at_unix: None,
     }
 }

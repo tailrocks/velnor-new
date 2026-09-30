@@ -256,8 +256,8 @@ fn merge_anchors_match(manifest: &BaselineManifest, anchors: &MergeAnchorExpecta
         return false;
     }
     if let Some(expected) = anchors.workflow_path.as_deref() {
-        let path_ok = parse_workflow_ref(&manifest.workflow_ref)
-            .is_some_and(|(_, path, _)| path == expected);
+        let path_ok =
+            parse_workflow_ref(&manifest.workflow_ref).is_some_and(|(_, path, _)| path == expected);
         if !path_ok {
             return false;
         }

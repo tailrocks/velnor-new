@@ -86,10 +86,7 @@ pub(crate) fn resolve_expected_repository(
 /// [`resolve_expected_repository`].
 pub(crate) fn expected_repository_for_root(root: &std::path::Path) -> ExpectedRepository {
     let env = std::env::var(crate::origin::GITHUB_REPOSITORY_ENV).ok();
-    resolve_expected_repository(
-        repository_slug_from_origin(root).as_deref(),
-        env.as_deref(),
-    )
+    resolve_expected_repository(repository_slug_from_origin(root).as_deref(), env.as_deref())
 }
 
 /// Repository identity digest for one expected slug.

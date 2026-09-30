@@ -109,7 +109,10 @@ fn gh_stdout_cap_misses_before_parsing() {
         signal: None,
         success: true,
     };
-    assert_eq!(gh_stdout_checked(&output(b"[]".to_vec())), Ok("[]".to_owned()));
+    assert_eq!(
+        gh_stdout_checked(&output(b"[]".to_vec())),
+        Ok("[]".to_owned())
+    );
     let big = vec![b'x'; MAX_GH_STDOUT_BYTES + 1];
     assert_eq!(
         gh_stdout_checked(&output(big)),
