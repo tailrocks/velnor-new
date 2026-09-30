@@ -382,15 +382,47 @@ fn malformed_nextest_config_fails_closed() -> TestResult {
 }
 
 #[test]
-fn malformed_mise_wrapper_degrades_with_toolcheck() -> TestResult {
+fn malformed_mise_wrapper_fails_closed() -> TestResult {
+    for name in ["mise.toml", ".mise.toml"] {
+        for content in ["[tools\nrust = \n", "[wrappers.cargo]\ncommand = true\n"] {
+            let repo = make_repo(config_with_branch())?;
+            let root = repo.path();
+            write_file(root, name, content)?;
+            let before = snapshot(root)?;
+            let err = err_of(prepare(root).map(|_| ()), "malformed wrapper")?;
+            assert!(
+                err.to_string().contains("wrapper_invalid"),
+                "diagnostic: {err}"
+            );
+            assert!(err.to_string().contains(name), "file named: {err}");
+            assert_eq!(snapshot(root)?, before, ".github untouched");
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn valid_section_wrapper_selects_mbx() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     let root = repo.path();
-    write_file(root, "mise.toml", "[tools\nrust = \n")?;
+    write_file(
+        root,
+        "mise.toml",
+        "[wrappers.cargo]\ncommand = \"mbx\"\n[wrappers.cargo.env]\nMBX_CARGO_SHIM_MODE = \"1\"\n",
+    )?;
     let prep = prepare(root)?;
     let workspace = &prep.discovery.workspaces[0];
-    assert_eq!(workspace.profile.compile_driver.as_str(), "cargo");
-    let text = prep.discovery.recommendations.join("\n");
-    assert!(text.contains("tooling_input_invalid"), "{text}");
-    assert!(text.contains("mise.toml"), "{text}");
+    assert_eq!(workspace.profile.compile_driver.as_str(), "mbx");
+    assert_eq!(workspace.profile.driver_source.as_str(), "detected");
+    assert_eq!(workspace.profile.evidence.len(), 1);
+    let sighting = &workspace.profile.evidence[0];
+    assert_eq!(sighting.path, "mise.toml");
+    assert_eq!(sighting.line, 2);
+    assert!(
+        sighting
+            .command_or_setting
+            .contains("wrappers.cargo.command")
+    );
+    assert!(workspace.findings.is_empty());
     Ok(())
 }
