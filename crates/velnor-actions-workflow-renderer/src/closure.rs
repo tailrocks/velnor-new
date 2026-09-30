@@ -173,9 +173,16 @@ fn check_acquire_shape(job_id: &str, step: &Step) -> Result<(), RenderError> {
 /// Runs the public `generate --output-dir` of the given helper binary
 /// (bootstrap helper in plan, downloaded candidate in candidate mode)
 /// and diffs the preview tree against the committed tree; any delta
-/// fails the step. Paths are fixed; nothing is repo-supplied.
+/// fails the step. Paths are fixed; nothing is repo-supplied. `env`
+/// carries the caller-validated consumer environment verbatim: the
+/// helper's locked/offline qualification reads the Cargo home the
+/// Fetch step populated, so ambient homes fail closed here.
 /// # Errors
-pub fn freshness_step(binary: &str, output_dir: &str) -> Result<Step, RenderError> {
+pub fn freshness_step(
+    binary: &str,
+    output_dir: &str,
+    env: &std::collections::BTreeMap<String, String>,
+) -> Result<Step, RenderError> {
     validate_helper_path(binary)?;
     validate_output_dir(output_dir)?;
     let script = format!(
@@ -184,7 +191,7 @@ pub fn freshness_step(binary: &str, output_dir: &str) -> Result<Step, RenderErro
     steps::shell_step(
         CHECK_GENERATED_NAME,
         vec!["sh".to_owned(), "-c".to_owned(), script],
-        std::collections::BTreeMap::new(),
+        env.clone(),
     )
 }
 
@@ -280,7 +287,7 @@ pub(crate) fn insert_plan_closure(
         .iter()
         .any(|step| step.name == CHECK_GENERATED_NAME)
     {
-        let check = freshness_step(&ctx.staged_binary, FRESHNESS_OUTDIR)?;
+        let check = freshness_step(&ctx.staged_binary, FRESHNESS_OUTDIR, &ctx.plan_consumer_env)?;
         plan.steps.insert(at, check);
     }
     let Some(at) = plan.steps.iter().position(|step| {
