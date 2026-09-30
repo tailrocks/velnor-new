@@ -29,6 +29,10 @@ mod impl_rust_p06;
 mod impl_rust_release_emit;
 #[path = "impl_rust_release_graph.rs"]
 mod impl_rust_release_graph;
+#[path = "impl_rust_release_modes.rs"]
+mod impl_rust_release_modes;
+#[path = "impl_rust_release_order.rs"]
+mod impl_rust_release_order;
 #[path = "impl_rust_release_select.rs"]
 mod impl_rust_release_select;
 #[path = "impl_rust_tasks.rs"]
