@@ -158,7 +158,7 @@ pub(crate) fn plan_group(
     let _ = inputs.lane;
     let toolchain = toolchain_id(group, inputs.catalog).map_err(internal_contract)?;
     let argv = task_argv(group, inputs.catalog)?;
-    let platform_id = platform_id_for_group(inputs.label, group);
+    let platform_id = platform_id_for_group(inputs.label, group).map_err(internal_contract)?;
     let identity = planned_identity(inputs, &argv, &toolchain, &platform_id)?;
     let ext = group.identity_extension(&identity.bundle.inputs());
     let input_digest = identity.input_digest;

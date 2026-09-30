@@ -78,7 +78,9 @@ fn cover_closure_digest(
     let Ok(toolchain) = toolchain_id(group, catalog) else {
         return Err("toolchain_unresolvable".to_owned());
     };
-    let platform = platform_id_for_group(label, group);
+    let Ok(platform) = platform_id_for_group(label, group) else {
+        return Err("platform_unresolvable".to_owned());
+    };
     let closure = resolve_closure_at_root(
         root,
         group,

@@ -207,7 +207,7 @@ pub(super) fn live_closure_digest(
         nextest_config_for(discovery, group).as_deref(),
     );
     let toolchain = toolchain_id(group, catalog).expect("toolchain");
-    let platform = platform_id_for_group("ubuntu-26.04", group);
+    let platform = platform_id_for_group("ubuntu-26.04", group).expect("platform");
     let closure = resolve_closure_at_root(
         root,
         group,

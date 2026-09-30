@@ -201,8 +201,12 @@ fn compiler_spec_versions_flip_the_digest() {
         built.components,
         vec!["clippy".to_owned(), "rustfmt".to_owned()]
     );
-    let imaged = platform_id_for_group("ubuntu-26.04", &group);
-    let older = platform_id_for_group("ubuntu-24.04", &group);
+    let imaged = platform_id_for_group("ubuntu-26.04", &group).expect("platform");
+    let older = platform_id_for_group("ubuntu-24.04", &group).expect("platform");
     assert_ne!(imaged, older);
     assert!(validate_digest(&imaged).is_ok());
+    let mut alien = group.clone();
+    alien.target = "riscv64-unknown-linux-gnu".to_owned();
+    let err = platform_id_for_group("ubuntu-26.04", &alien).expect_err("target");
+    assert!(err.to_string().contains("unsupported_target"), "{err}");
 }

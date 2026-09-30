@@ -213,7 +213,14 @@ pub(crate) fn extension_bundle_with_snapshot(
 }
 
 /// Platform identity for one group via [`platform_id_for`].
-pub(crate) fn platform_id_for_group(label: &str, group: &TaskGroup) -> String {
+///
+/// # Errors
+///
+/// Returns [`ContractError`] for unsupported execution targets.
+pub(crate) fn platform_id_for_group(
+    label: &str,
+    group: &TaskGroup,
+) -> Result<String, ContractError> {
     let target = if group.target == "host" {
         velnor_actions_contract::target_for_runner_label(label).unwrap_or("host")
     } else {

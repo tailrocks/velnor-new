@@ -111,7 +111,7 @@ pub(crate) fn cache_ids_for(
     EntryCacheIds::new(
         &workspace_id,
         &identities::lane_id_for(group, &workspace_id),
-        &identities::platform_id_for_group(label, group),
+        &identities::platform_id_for_group(label, group)?,
         toolchain,
         &identities::cache_format_id_for(group.compile_driver),
     )
