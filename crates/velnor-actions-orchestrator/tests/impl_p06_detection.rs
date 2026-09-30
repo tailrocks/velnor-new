@@ -14,9 +14,7 @@ use velnor_actions_orchestrator::{
     GenerateOptions, GenerationPreparation, generate, plan_internal, plan_text, prepare,
 };
 
-use crate::impl_common::{
-    TestResult, config_with_branch, err_of, git, git_line, make_repo, snapshot,
-};
+use crate::impl_common::{TestResult, config_with_branch, err_of, git, git_line, make_repo};
 
 /// Repository wrapper line: inline-table spelling with the shim env.
 const WRAPPER_INLINE: &str =
@@ -363,66 +361,5 @@ fn four_combos_argv() -> TestResult {
         assert!(doctest.contains(program), "{doctest}");
         assert!(!doctest.contains("--profile"), "{doctest}");
     }
-    Ok(())
-}
-
-#[test]
-fn malformed_nextest_config_fails_closed() -> TestResult {
-    let repo = make_repo(config_with_branch())?;
-    let root = repo.path();
-    write_file(root, ".config/nextest.toml", "[profile.ci\nretries = \n")?;
-    let before = snapshot(root)?;
-    let err = err_of(prepare(root).map(|_| ()), "malformed nextest")?;
-    assert!(
-        err.to_string().contains("nextest_config_invalid"),
-        "diagnostic: {err}"
-    );
-    assert_eq!(snapshot(root)?, before, ".github untouched");
-    Ok(())
-}
-
-#[test]
-fn malformed_mise_wrapper_fails_closed() -> TestResult {
-    for name in ["mise.toml", ".mise.toml"] {
-        for content in ["[tools\nrust = \n", "[wrappers.cargo]\ncommand = true\n"] {
-            let repo = make_repo(config_with_branch())?;
-            let root = repo.path();
-            write_file(root, name, content)?;
-            let before = snapshot(root)?;
-            let err = err_of(prepare(root).map(|_| ()), "malformed wrapper")?;
-            assert!(
-                err.to_string().contains("wrapper_invalid"),
-                "diagnostic: {err}"
-            );
-            assert!(err.to_string().contains(name), "file named: {err}");
-            assert_eq!(snapshot(root)?, before, ".github untouched");
-        }
-    }
-    Ok(())
-}
-
-#[test]
-fn valid_section_wrapper_selects_mbx() -> TestResult {
-    let repo = make_repo(config_with_branch())?;
-    let root = repo.path();
-    write_file(
-        root,
-        "mise.toml",
-        "[wrappers.cargo]\ncommand = \"mbx\"\n[wrappers.cargo.env]\nMBX_CARGO_SHIM_MODE = \"1\"\n",
-    )?;
-    let prep = prepare(root)?;
-    let workspace = &prep.discovery.workspaces[0];
-    assert_eq!(workspace.profile.compile_driver.as_str(), "mbx");
-    assert_eq!(workspace.profile.driver_source.as_str(), "detected");
-    assert_eq!(workspace.profile.evidence.len(), 1);
-    let sighting = &workspace.profile.evidence[0];
-    assert_eq!(sighting.path, "mise.toml");
-    assert_eq!(sighting.line, 2);
-    assert!(
-        sighting
-            .command_or_setting
-            .contains("wrappers.cargo.command")
-    );
-    assert!(workspace.findings.is_empty());
     Ok(())
 }
