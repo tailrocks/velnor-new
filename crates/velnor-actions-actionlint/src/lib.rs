@@ -16,7 +16,8 @@ pub mod tools;
 pub mod zizmor;
 
 pub use actions::{
-    ALINT_ACTION, ALINT_REVIEWED_TAG, ALLOWED_ACTIONS, CHECKOUT_ACTION, PinnedActionRef,
+    ALINT_ACTION, ALINT_ACTION_SHA, ALINT_ACTION_VERSION, ALLOWED_ACTIONS, CHECKOUT_ACTION,
+    PinnedActionRef,
 };
 pub use capabilities::{
     ACTIONLINT_VERSION, ActionlintCapabilities, NativeParallelismConcerns, StepSyntax,

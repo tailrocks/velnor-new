@@ -157,7 +157,7 @@ pub(crate) fn insert_support_job(
     Ok(())
 }
 
-/// Fixed Alint job: checkout plus the pinned-tag Alint action.
+/// Fixed Alint job: checkout plus the full-SHA Alint action.
 pub(crate) fn alint_job(ctx: &RenderContext) -> Result<Job, RenderError> {
     let checkout = steps::checkout_step(&ctx.checkout_uses)?;
     let mut with = BTreeMap::new();
