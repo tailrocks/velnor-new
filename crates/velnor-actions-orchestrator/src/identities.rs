@@ -206,8 +206,8 @@ pub(crate) fn extension_bundle_with_snapshot(
         bundle.rerun_inputs = Some(Vec::new());
     }
     if let Some(root) = root {
-        bundle.lock_digest = super::closure::lock_digest_at_root(root, &bundle.manifest);
-        bundle.nextest_digest = super::closure::nextest_digest_at_root(root, nextest_config);
+        bundle.lock_digest = super::closure_slots::lock_digest_at_root(root, &bundle.manifest);
+        bundle.nextest_digest = super::closure_slots::nextest_digest_at_root(root, nextest_config);
     }
     bundle
 }

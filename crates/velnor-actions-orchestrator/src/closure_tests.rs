@@ -3,6 +3,7 @@
 //! Declared via `#[path]` from `internal_plan.rs` under `cfg(test)`.
 
 use super::closure::*;
+use super::closure_slots::{lock_digest_at_root, nextest_digest_at_root};
 use super::snapshot::canonical_digest;
 use velnor_actions_contract::digest_b3;
 use velnor_actions_rust::{CompileDriver, NextestProfile, TaskGroup, TaskKind, TestRunner};
