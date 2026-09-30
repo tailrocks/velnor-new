@@ -15,9 +15,9 @@ pub use self::identity_closure::{
 
 use velnor_actions_contract::ContractError;
 
-use crate::argv::{ExtensionInputs, shards_allowed};
-use crate::argv::{RustTaskIdentityExtension, entry_metadata, require_nextest_for_shards};
+use crate::argv::{entry_metadata, require_nextest_for_shards, shards_allowed};
 use crate::evidence::Evidence;
+use crate::task_identity::{ExtensionInputs, RustTaskIdentityExtension};
 use crate::tasks::{TaskGroup, TaskKind};
 
 /// Digests and build facts the orchestrator supplies per extension.

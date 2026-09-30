@@ -26,6 +26,7 @@ pub mod release_select;
 pub mod release_semver;
 pub mod scan;
 pub mod stability;
+mod task_identity;
 pub mod tasks;
 pub mod toolfiles;
 pub mod tracked;

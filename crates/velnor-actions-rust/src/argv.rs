@@ -1,4 +1,4 @@
-//! Fixed Cargo payload argv, sharding, and task-identity extension.
+//! Fixed Cargo payload argv, sharding, and entry metadata.
 //!
 //! Pure data helpers over [`TaskGroup`](crate::tasks::TaskGroup); the
 //! orchestrator wraps payloads in pinned-tool execution via the Mise adapter.
@@ -9,158 +9,11 @@
 
 use std::ffi::OsString;
 
-use serde::Serialize;
 use velnor_actions_contract::{ContractError, task_id_for_stack};
 
 use crate::evidence::Evidence;
-use crate::profile::{NextestProfile, TestRunner};
+use crate::profile::NextestProfile;
 use crate::tasks::{TaskGroup, TaskKind};
-
-/// Typed Rust task-identity extension (cache §1); unknown schemas disable reuse.
-#[derive(Debug, Clone, Serialize)]
-pub struct RustTaskIdentityExtension {
-    /// Cargo package ID.
-    pub package_id: String,
-    /// Workspace identity digest.
-    pub workspace_id: String,
-    /// Execution profile (configuration) name.
-    pub profile: String,
-    /// Normalized manifest path.
-    pub manifest: String,
-    /// Workspace/local-package graph digest.
-    pub graph_digest: String,
-    /// Target kinds and names, sorted.
-    pub targets: Vec<String>,
-    /// Enabled features, sorted.
-    pub features: Vec<String>,
-    /// Rust target and profile.
-    pub target: String,
-    /// Compile driver plus test runner (`driver+runner`).
-    pub driver: String,
-    /// Cargo config and build-script input digests.
-    pub config_digest: String,
-    /// `.config/nextest.toml` digest for Nextest profiles.
-    pub nextest_digest: Option<String>,
-    /// Rust task kind plus test/archive identity.
-    pub kind: String,
-    /// Build script reads undeclared inputs; disables reuse and coverage.
-    pub undeclared_reads: bool,
-    /// `Cargo.lock` digest, when the lockfile is available.
-    pub lock_digest: Option<String>,
-    /// Archive identity (producing build task id) for Nextest archives only.
-    pub archive: Option<String>,
-    /// Declared `rerun-if-changed` build inputs, sorted.
-    pub rerun_inputs: Vec<String>,
-    /// Declared non-Rust task inputs, sorted.
-    pub declared_inputs: Vec<String>,
-}
-
-/// Inputs for deriving one task-identity extension before selection.
-#[derive(Debug, Clone)]
-pub struct ExtensionInputs<'a> {
-    /// Cargo package ID.
-    pub package_id: &'a str,
-    /// Workspace identity digest.
-    pub workspace_id: &'a str,
-    /// Execution profile (configuration) name.
-    pub profile: &'a str,
-    /// Normalized manifest path.
-    pub manifest: &'a str,
-    /// Workspace/local-package graph digest.
-    pub graph_digest: &'a str,
-    /// Target kinds and names.
-    pub targets: &'a [String],
-    /// Enabled features.
-    pub features: &'a [String],
-    /// Rust target and profile.
-    pub target: &'a str,
-    /// Compile driver.
-    pub driver: &'a str,
-    /// Test runner.
-    pub runner: &'a str,
-    /// Cargo config and build-script input digests.
-    pub config_digest: &'a str,
-    /// `Cargo.lock` digest, when the lockfile is available.
-    pub lock_digest: Option<&'a str>,
-    /// `.config/nextest.toml` digest for Nextest profiles.
-    pub nextest_digest: Option<&'a str>,
-    /// Rust task kind.
-    pub kind: TaskKind,
-    /// Build task id producing the archive (Nextest `Build` only).
-    pub archive_source: Option<&'a str>,
-    /// Declared `rerun-if-changed` inputs (`None` means unknown).
-    pub rerun_inputs: Option<&'a [String]>,
-    /// Whether the package carries a build script.
-    pub has_build_script: bool,
-    /// Declared non-Rust task inputs.
-    pub declared_inputs: &'a [String],
-}
-
-impl RustTaskIdentityExtension {
-    /// Wrap the extension in the stack-neutral envelope.
-    #[must_use]
-    pub fn to_stack_extension(&self) -> velnor_actions_contract::StackExtension {
-        velnor_actions_contract::StackExtension {
-            schema: "rust-task-identity-v1".to_owned(),
-            data: serde_json::to_value(self).unwrap_or(serde_json::Value::Null),
-        }
-    }
-
-    /// Reject reuse when build inputs are undeclared or dynamic.
-    /// # Errors
-    pub fn reuse_eligible(&self) -> Result<(), ContractError> {
-        if self.undeclared_reads {
-            return Err(ContractError::identity(
-                "stack_extension",
-                "undeclared_inputs",
-            ));
-        }
-        Ok(())
-    }
-
-    /// Derive the extension for one task group before selection and reuse.
-    ///
-    /// Archives attach only to Nextest `Build` groups (cargo-test never
-    /// archives; the archive carries its producing build task id so trust
-    /// and retention follow the source). A build script with unknown
-    /// `rerun-if-changed` inputs conservatively disables reuse.
-    #[must_use]
-    pub fn for_task(inputs: &ExtensionInputs<'_>) -> Self {
-        let nextest = inputs.runner == TestRunner::CargoNextest.as_str();
-        let archive = if inputs.kind == TaskKind::Build && nextest {
-            inputs.archive_source.map(str::to_owned)
-        } else {
-            None
-        };
-        Self {
-            package_id: inputs.package_id.to_owned(),
-            workspace_id: inputs.workspace_id.to_owned(),
-            profile: inputs.profile.to_owned(),
-            manifest: inputs.manifest.to_owned(),
-            graph_digest: inputs.graph_digest.to_owned(),
-            targets: sorted_unique(inputs.targets),
-            features: sorted_unique(inputs.features),
-            target: inputs.target.to_owned(),
-            driver: format!("{}+{}", inputs.driver, inputs.runner),
-            config_digest: inputs.config_digest.to_owned(),
-            nextest_digest: inputs.nextest_digest.map(str::to_owned),
-            kind: inputs.kind.as_str().to_owned(),
-            undeclared_reads: inputs.has_build_script && inputs.rerun_inputs.is_none(),
-            lock_digest: inputs.lock_digest.map(str::to_owned),
-            archive,
-            rerun_inputs: inputs.rerun_inputs.map_or_else(Vec::new, sorted_unique),
-            declared_inputs: sorted_unique(inputs.declared_inputs),
-        }
-    }
-}
-
-/// Sorted deduped copy for identity stability.
-fn sorted_unique(values: &[String]) -> Vec<String> {
-    let mut out = values.to_vec();
-    out.sort();
-    out.dedup();
-    out
-}
 
 /// Derive one shard task ID from an unsharded base ID.
 /// # Errors
@@ -263,6 +116,9 @@ pub fn evidence_id(evidence: &Evidence) -> String {
 /// execution via the Mise adapter; this crate builds no invocations.
 /// [`TaskKind::Nextest`](crate::tasks::TaskKind::Nextest) payloads require
 /// the pinned Nextest tool in that execution, not a preinstalled runner.
+/// Cargo-side args (kind, features, target) always precede the `--`
+/// separator; only lint args (`-D warnings` for Clippy) follow it, so
+/// cargo never forwards feature or target flags to rustc.
 /// Unprofiled legacy shape; resolved callers must use [`cargo_payload_with_profile`].
 #[must_use]
 pub fn cargo_payload_argv(group: &TaskGroup) -> Vec<OsString> {
@@ -270,10 +126,8 @@ pub fn cargo_payload_argv(group: &TaskGroup) -> Vec<OsString> {
     let mut args: Vec<OsString> = Vec::new();
     push_kind_args(&mut args, group, &manifest);
     push_feature_args(&mut args, group);
-    if group.target != "host" {
-        args.push(OsString::from("--target"));
-        args.push(OsString::from(&group.target));
-    }
+    push_target_arg(&mut args, group);
+    push_lint_args(&mut args, group);
     args
 }
 
@@ -290,7 +144,7 @@ pub fn cargo_payload_with_profile(group: &TaskGroup, profile: NextestProfile) ->
     argv
 }
 
-/// Append the per-kind fixed payload arguments.
+/// Append the per-kind cargo-side payload arguments (never emits `--`).
 fn push_kind_args(args: &mut Vec<OsString>, group: &TaskGroup, manifest: &str) {
     let flag = OsString::from;
     match group.kind {
@@ -316,7 +170,6 @@ fn push_kind_args(args: &mut Vec<OsString>, group: &TaskGroup, manifest: &str) {
             ]);
             push_package(args, group);
             args.push(flag("--all-targets"));
-            args.extend([flag("--"), flag("-D"), flag("warnings")]);
         }
         TaskKind::Test => {
             args.extend([flag("test"), flag("--locked"), flag("--offline")]);
@@ -375,6 +228,8 @@ fn push_manifest(args: &mut Vec<OsString>, manifest: &str) {
 }
 
 /// Append feature flags unless the group uses default features.
+///
+/// Cargo-side: always before `--` (never forwarded to rustc).
 fn push_feature_args(args: &mut Vec<OsString>, group: &TaskGroup) {
     if group.kind == TaskKind::Fmt {
         return;
@@ -386,6 +241,28 @@ fn push_feature_args(args: &mut Vec<OsString>, group: &TaskGroup) {
     if !group.features.is_empty() {
         args.push(OsString::from("--features"));
         args.push(OsString::from(group.features.join(",")));
+    }
+}
+
+/// Append `--target <triple>` for non-host targets (cargo-side: before `--`).
+fn push_target_arg(args: &mut Vec<OsString>, group: &TaskGroup) {
+    if group.target != "host" {
+        args.push(OsString::from("--target"));
+        args.push(OsString::from(&group.target));
+    }
+}
+
+/// Append post-separator lint args (`-- -D warnings` for Clippy, none else).
+///
+/// This is the only helper allowed to emit `--`; every cargo-side flag
+/// (kind, features, target) is pushed before it.
+fn push_lint_args(args: &mut Vec<OsString>, group: &TaskGroup) {
+    if group.kind == TaskKind::Clippy {
+        args.extend([
+            OsString::from("--"),
+            OsString::from("-D"),
+            OsString::from("warnings"),
+        ]);
     }
 }
 
