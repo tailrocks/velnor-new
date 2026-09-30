@@ -267,7 +267,7 @@ fn generator_mismatch_executes_with_reason() -> TestResult {
 }
 
 #[test]
-fn carried_proofs_cover_with_original_run() -> TestResult {
+fn carried_proofs_execute_without_originating_attestation() -> TestResult {
     let (repo, seed) = plan_for_source_change()?;
     anchor_repo(repo.path())?;
     let head = seed.head.clone();
@@ -275,10 +275,11 @@ fn carried_proofs_cover_with_original_run() -> TestResult {
     let mut tasks = entries_for(&nodiff);
     for task in tasks.as_array_mut().ok_or("tasks")? {
         task["proof_run_id"] = Json::from(5);
-        // The carrying manifest's own run (7) revalidated the carried proof.
+        // The carrying manifest's own run (7) observed the entry, but
+        // observation is not success attestation for run 5.
         task["observed_run_id"] = Json::from(7);
     }
-    let (plan, _) = plan_at(
+    let (plan, warnings) = plan_at(
         repo.path(),
         Some(&head),
         &head,
@@ -287,12 +288,18 @@ fn carried_proofs_cover_with_original_run() -> TestResult {
     assert!(
         plan.obligations
             .iter()
-            .all(|ob| ob.decision == ObligationDecision::CoveredByTrustedBaseline)
+            .all(|ob| ob.decision == ObligationDecision::Execute)
     );
-    for obligation in &plan.obligations {
-        let proof = obligation.baseline_proof.as_ref().ok_or("proof")?;
-        assert_eq!(proof.run_id(), 5, "original proof retained");
-    }
+    assert_eq!(
+        plan.baseline.reason(),
+        Some("baseline_invalid:originating_run_unverified")
+    );
+    assert!(
+        warnings
+            .iter()
+            .any(|w| w == "baseline_miss:originating_run_unverified"),
+        "{warnings:?}"
+    );
     Ok(())
 }
 

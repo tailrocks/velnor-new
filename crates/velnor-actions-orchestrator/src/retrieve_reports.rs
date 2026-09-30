@@ -305,7 +305,6 @@ fn expected_file_ids(
     ids
 }
 
-
 /// Read one staged file with symlink rejection and a size bound.
 ///
 /// Symlinks reject without reading; reads stop one byte past the bound
@@ -314,7 +313,6 @@ fn expected_file_ids(
 fn read_bounded(path: &Path) -> Result<String, &'static str> {
     read_staged_text(path, MAX_STAGED_REPORT_BYTES)
 }
-
 
 /// Sort key for one staged value; empty when the ID is absent.
 fn staged_id<'a>(report: &'a serde_json::Value, field: &str) -> &'a str {
