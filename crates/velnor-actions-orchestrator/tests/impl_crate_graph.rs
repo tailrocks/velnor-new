@@ -157,8 +157,8 @@ fn w1_crate_prepare_and_obligations_share_toolchain_union() -> TestResult {
     ] {
         let spec = catalog.tool_spec(tool);
         assert!(
-            !task[prepare_at..run_at].contains(&spec),
-            "crate jobs never install {spec}:\n{task}"
+            task[prepare_at..run_at].contains(&spec),
+            "crate jobs install {spec} for test-spawned generate:\n{task}"
         );
     }
     for key in ["MISE_RUSTUP_HOME:", "MISE_CARGO_HOME:", "RUSTUP_TOOLCHAIN:"] {

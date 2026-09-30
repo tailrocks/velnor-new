@@ -281,7 +281,7 @@ mod tests {
     }
 
     #[test]
-    fn crate_tools_follow_selection_without_validators() {
+    fn crate_tools_follow_selection_with_validators() {
         use velnor_actions_mise::PinnedTool;
 
         use crate::matrix_step::{prepare_crate_tools_step, task_driver_tools};
@@ -302,8 +302,8 @@ mod tests {
                 PinnedTool::Zizmor,
             ] {
                 assert!(
-                    !run.contains(&catalog.tool_spec(tool)),
-                    "crate jobs never install {tool:?}: {run:?}"
+                    run.contains(&catalog.tool_spec(tool)),
+                    "crate jobs install {tool:?} for test-spawned generate: {run:?}"
                 );
             }
             let nextest = catalog.tool_spec(PinnedTool::Nextest);

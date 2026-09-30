@@ -183,7 +183,7 @@ fn c7_cargo_only_uses_pinned_rust_cache_never_with_mbx() -> TestResult {
 }
 
 #[test]
-fn c8_crate_jobs_never_install_validators() -> TestResult {
+fn c8_crate_jobs_install_validators_for_test_spawns() -> TestResult {
     for mbx in [false, true] {
         let repo = make_repo(config_with_branch())?;
         let root = repo.path();
@@ -208,8 +208,8 @@ fn c8_crate_jobs_never_install_validators() -> TestResult {
             let text = run.join(" ");
             for tool in ["actionlint@", "shellcheck@", "zizmor@"] {
                 assert!(
-                    !text.contains(tool),
-                    "crate prepare must not {tool}: {text}"
+                    text.contains(tool),
+                    "crate prepare must install {tool} for test-spawned generate: {text}"
                 );
             }
         }

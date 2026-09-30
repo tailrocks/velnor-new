@@ -5,7 +5,7 @@
 //! elsewhere (Mise settings, rustc wrappers, executable tasks and scripts
 //! outside `.github`) is [`EvidenceStrength::Durable`]. Generated workflows
 //! (current or historical marker) are never evidence. Line-local text
-//! scans live in [`crate::evidence_text`]; this module owns the sighting
+//! scans live in `crate::evidence_text` (private); this module owns the sighting
 //! types plus structurally resolved inputs (Mise wrappers, Nextest config).
 
 use velnor_actions_contract::is_generated_marker_line;

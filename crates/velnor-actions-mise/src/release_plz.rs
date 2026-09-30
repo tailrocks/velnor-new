@@ -2,19 +2,19 @@
 //!
 //! Pin: CLI `0.3.169` (crates.io `max_stable_version` plus tag
 //! `release-plz-v0.3.169`, published 2026-09-19; rechecked 2026-09-30).
-//! Cksum: [`RELEASE_PLZ_CKSUM`]. Install: mise `release-plz` shorthand via
+//! Cksum: [`crate::catalog::release_plz::RELEASE_PLZ_CKSUM`]. Install: mise `release-plz` shorthand via
 //! the aqua backend to the prebuilt GitHub tarball (isolated probe passed);
 //! `cargo:release-plz` fallback compiles the cksum-pinned `.crate`. No
 //! upstream per-asset SHA256 or sigstore exists, so pin plus cksum is the
 //! integrity anchor. Reference only (never an allowed action):
 //! `release-plz/action@v0.5.139` is `b8d6b54b02889ff2ae2bb82e8b57c3a8fc1683a5`.
-//! [`ReleasePrRequest`] and [`ReleaseRequest`] never share one call;
+//! [`crate::catalog::release_plz::ReleasePrRequest`] and [`crate::catalog::release_plz::ReleaseRequest`] never share one call;
 //! `--config` is always explicit (upstream would silently fall back to
 //! ambient files, then defaults); `release` has no `-p`, `release-pr -p`
 //! takes one package, and `--no-verify`/`--allow-dirty` constructors do
 //! not exist. `release --dry-run -o json` records nothing by design, so
-//! previews parse logs. [`ReleaseAuth::Oidc`] renders zero token material;
-//! the publish job then needs `id-token: write` and no [`REGISTRY_TOKEN_ENV`].
+//! previews parse logs. [`crate::catalog::release_plz::ReleaseAuth::Oidc`] renders zero token material;
+//! the publish job then needs `id-token: write` and no [`crate::catalog::release_plz::REGISTRY_TOKEN_ENV`].
 
 use std::ffi::{OsStr, OsString};
 use std::fmt::{Debug, Formatter, Result as FmtResult};
