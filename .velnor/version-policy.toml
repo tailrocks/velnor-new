@@ -73,7 +73,8 @@ reviewed = "2026-09-28"
 
 [[actions]]
 name = "asamarts/alint"
-tag = "v0.16.1"
+version = "v0.16.1"
+sha = "9f9d34ba0eae3888299b9e570f43338b0e7f2cdb"
 reviewed = "2026-09-28"
 
 [validation-tools]

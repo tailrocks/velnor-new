@@ -263,8 +263,8 @@ fn unblessed_standing_exception_fails() -> Result<(), Box<dyn Error>> {
     harness::mutate(
         &fixture.dir,
         INVENTORY,
-        "\"expires\":null}]}",
-        "\"expires\":null},{\"key\":\"gh\",\"kind\":\"handwave\",\"expires\":null}]}",
+        "\"exceptions\":[]",
+        "\"exceptions\":[{\"key\":\"gh\",\"kind\":\"handwave\",\"expires\":null}]",
     )?;
     let run = harness::run_script(&fixture.dir, &[])?;
     harness::assert_fail(&run, "without a spec blessing");

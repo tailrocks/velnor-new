@@ -30,7 +30,7 @@
       "enabled": false
     },
     {
-      "description": "The alint mutable tag is a reviewed policy exception, not a floating ref; changes need policy review.",
+      "description": "The alint pin is a reviewed policy pin; changes need policy review.",
       "matchManagers": ["github-actions"],
       "matchPackageNames": ["asamarts/alint"],
       "labels": ["dependencies", "policy-review"]

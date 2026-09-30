@@ -1,8 +1,8 @@
 //! Pinned action refs, override schema, and input validation cases.
 use std::collections::BTreeMap;
 use velnor_actions_actionlint::{
-    ALINT_REVIEWED_TAG, ALLOWED_ACTIONS, ActionInputSchema, ActionPinOverride, ActionlintError,
-    ApprovedPinCatalog, PinnedActionRef, validate_action_inputs,
+    ALINT_ACTION_SHA, ALINT_ACTION_VERSION, ALLOWED_ACTIONS, ActionInputSchema, ActionPinOverride,
+    ActionlintError, ApprovedPinCatalog, PinnedActionRef, validate_action_inputs,
 };
 
 /// Verified checkout pin from the version policy (test fixture).
@@ -73,31 +73,39 @@ fn forbidden_installer_actions_rejected() {
 }
 
 #[test]
-fn alint_tag_accepted() {
-    let uses = format!("asamarts/alint@{ALINT_REVIEWED_TAG}");
-    let parsed = PinnedActionRef::parse_uses(&uses, ALINT_REVIEWED_TAG);
+fn alint_sha_accepted() {
+    let uses = format!("asamarts/alint@{ALINT_ACTION_SHA}");
+    let parsed = PinnedActionRef::parse_uses(&uses, ALINT_ACTION_VERSION);
     assert_eq!(parsed, Ok(PinnedActionRef::alint()));
 }
 
 #[test]
-fn alint_wrong_tag_rejected() {
-    assert!(matches!(
-        PinnedActionRef::parse_uses("asamarts/alint@v0.17.0", "v0.17.0"),
-        Err(ActionlintError::InvalidPin { .. })
-    ));
+fn alint_tag_refs_rejected() {
+    for (uses, comment) in [
+        (
+            format!("asamarts/alint@{ALINT_ACTION_VERSION}"),
+            ALINT_ACTION_VERSION,
+        ),
+        ("asamarts/alint@v0.17.0".to_owned(), "v0.17.0"),
+    ] {
+        assert!(
+            matches!(
+                PinnedActionRef::parse_uses(&uses, comment),
+                Err(ActionlintError::InvalidPin { .. })
+            ),
+            "accepted {uses} # {comment}"
+        );
+    }
 }
 
 #[test]
-fn tag_exception_rejected_for_ordinary_action() {
-    let reference = PinnedActionRef {
-        repo: "actions/checkout".to_owned(),
-        path: None,
-        sha: None,
-        version_comment: CHECKOUT_VERSION.to_owned(),
-        tag_exception: true,
-    };
+fn malformed_sha_rejected_for_ordinary_action() {
     assert!(matches!(
-        reference.validate(),
+        PinnedActionRef::new("actions/checkout", None, "abc123", CHECKOUT_VERSION),
+        Err(ActionlintError::InvalidPin { .. })
+    ));
+    assert!(matches!(
+        PinnedActionRef::new("actions/checkout", None, CHECKOUT_SHA, "v7",),
         Err(ActionlintError::InvalidPin { .. })
     ));
 }
@@ -117,7 +125,7 @@ fn override_approved_pair_accepted() {
     let validated = catalog.validate_override(&request);
     assert!(validated.is_ok());
     if let Ok(reference) = validated {
-        assert_eq!(reference.sha, Some(CHECKOUT_SHA.to_owned()));
+        assert_eq!(reference.sha, CHECKOUT_SHA);
         assert_eq!(reference.version_comment, CHECKOUT_VERSION);
     }
 }
@@ -151,23 +159,31 @@ fn override_unknown_action_rejected() {
 }
 
 #[test]
-fn override_alint_rejected() {
-    let catalog = ApprovedPinCatalog::new();
+fn override_alint_approved_pair_accepted() {
+    let mut catalog = ApprovedPinCatalog::new();
+    assert_eq!(
+        catalog.insert("asamarts/alint", ALINT_ACTION_SHA, ALINT_ACTION_VERSION),
+        Ok(())
+    );
     let request = ActionPinOverride {
         action: "asamarts/alint".to_owned(),
+        sha: ALINT_ACTION_SHA.to_owned(),
+        version: ALINT_ACTION_VERSION.to_owned(),
+    };
+    let validated = catalog.validate_override(&request);
+    assert!(validated.is_ok());
+    if let Ok(reference) = validated {
+        assert_eq!(reference, PinnedActionRef::alint());
+    }
+    let foreign = ActionPinOverride {
+        action: "asamarts/alint".to_owned(),
         sha: CHECKOUT_SHA.to_owned(),
-        version: ALINT_REVIEWED_TAG.to_owned(),
+        version: ALINT_ACTION_VERSION.to_owned(),
     };
     assert!(matches!(
-        catalog.validate_override(&request),
+        catalog.validate_override(&foreign),
         Err(ActionlintError::OverrideRejected { .. })
     ));
-    let mut catalog = ApprovedPinCatalog::new();
-    assert!(
-        catalog
-            .insert("asamarts/alint", CHECKOUT_SHA, ALINT_REVIEWED_TAG)
-            .is_err()
-    );
 }
 
 #[test]

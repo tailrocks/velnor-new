@@ -5,8 +5,7 @@
 
 use crate::ActionlintError;
 use crate::actions::{
-    ALINT_ACTION, ALLOWED_ACTIONS, CHECKOUT_ACTION, PinnedActionRef, is_full_sha, is_version_tag,
-    split_key,
+    ALLOWED_ACTIONS, CHECKOUT_ACTION, PinnedActionRef, is_full_sha, is_version_tag, split_key,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -58,7 +57,7 @@ impl ApprovedPinCatalog {
         sha: &str,
         version: &str,
     ) -> Result<(), ActionlintError> {
-        if !ALLOWED_ACTIONS.contains(&action) || action == ALINT_ACTION {
+        if !ALLOWED_ACTIONS.contains(&action) {
             return Err(ActionlintError::OverrideRejected {
                 action: action.to_owned(),
                 problem: "action_not_overridable".to_owned(),
@@ -84,18 +83,12 @@ impl ApprovedPinCatalog {
     ///
     /// # Errors
     ///
-    /// Returns [`ActionlintError`] for unknown or Alint actions, malformed
+    /// Returns [`ActionlintError`] for unknown actions, malformed
     /// pairs, and pairs absent from the catalog.
     pub fn validate_override(
         &self,
         request: &ActionPinOverride,
     ) -> Result<PinnedActionRef, ActionlintError> {
-        if request.action == ALINT_ACTION {
-            return Err(ActionlintError::OverrideRejected {
-                action: request.action.clone(),
-                problem: "alint_not_overridable".to_owned(),
-            });
-        }
         if !ALLOWED_ACTIONS.contains(&request.action.as_str()) {
             return Err(ActionlintError::UnknownAction {
                 uses: request.action.clone(),
