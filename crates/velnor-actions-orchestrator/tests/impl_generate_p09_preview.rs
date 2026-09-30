@@ -194,12 +194,8 @@ fn fetch_matches_obligation_contract_by_construction() -> TestResult {
 fn denylist_pins_mise_strip_set() {
     assert_eq!(
         velnor_actions_workflow_renderer::toolchain_env::STEP_CREDENTIAL_DENYLIST,
-        [
-            "MISE_GITHUB_TOKEN",
-            "GITHUB_TOKEN",
-            "GH_TOKEN",
-            "ACTIONS_RUNTIME_TOKEN",
-        ]
+        velnor_actions_mise::CREDENTIAL_ENV_KEYS,
+        "rendered steps and local spawns share one credential contract"
     );
     for denied in velnor_actions_workflow_renderer::toolchain_env::STEP_CREDENTIAL_DENYLIST {
         let reserved = velnor_actions_mise::command::is_reserved_env_key(denied);

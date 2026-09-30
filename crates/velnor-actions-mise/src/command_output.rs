@@ -5,8 +5,39 @@
 //! re-exports the public surface so `command::X` paths keep working.
 
 use std::io::Read;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::error::MiseError;
+
+/// External cancellation handle for one subprocess run (P07-5).
+///
+/// Beyond the internal deadline: any thread holding a shared handle may
+/// abort the run, and the child is killed at the next poll. Cancellation
+/// surfaces as typed [`MiseError::SpawnFailed`], never as a task outcome.
+#[derive(Debug, Default)]
+pub struct CancelHandle {
+    /// Cancellation flag shared with the polling run loop.
+    cancelled: AtomicBool,
+}
+
+impl CancelHandle {
+    /// New uncancelled handle.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Request cancellation; the run loop kills the child at its next poll.
+    pub fn cancel(&self) {
+        self.cancelled.store(true, Ordering::SeqCst);
+    }
+
+    /// Whether cancellation was requested.
+    #[must_use]
+    pub fn is_cancelled(&self) -> bool {
+        self.cancelled.load(Ordering::SeqCst)
+    }
+}
 
 /// `SpawnFailed` message for external cancellation (P07-5).
 pub const SPAWN_CANCELLED_MESSAGE: &str = "cancelled";

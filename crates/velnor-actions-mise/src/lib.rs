@@ -47,8 +47,8 @@ pub use catalog::{
 pub use command::{
     ALLOWED_MISE_SUBCOMMANDS, CREDENTIAL_ENV_KEYS, ISOLATION_ENV, IsolatedCommand,
     MISE_CARGO_HOME_ENV, MISE_GLOBAL_FLAGS, MISE_RUSTUP_HOME_ENV, NO_AUTO_INSTALL_ENV,
-    ProcessOutput, RUSTUP_TOOLCHAIN_ENV, TOOL_COMMAND_SEPARATOR, is_allowed_mise_subcommand,
-    toolchain_env,
+    PROXY_ENV_KEYS, ProcessOutput, RUSTUP_TOOLCHAIN_ENV, TOOL_COMMAND_SEPARATOR,
+    is_allowed_mise_subcommand, toolchain_env,
 };
 pub use error::MiseError;
 pub use gate6::{Gate6Fixture, qualified_task_run_argv, render_gated_task_toml};
