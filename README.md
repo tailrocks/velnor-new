@@ -1,6 +1,6 @@
 # Velnor
 
-Velnor Actions is proposed as a stack-generic GitHub Actions workflow generator. It scans repositories for every registered stack and plans all detected, supported stacks unless `.velnor/config.toml` excludes them. V1 registers only the Rust/Cargo adapter; TypeScript, Bun, and other stacks can be added later through dedicated adapters. Rust analysis, Mise integration, generic workflow rendering, orchestration, and CLI are separate crates. Gates 0–8 are implemented on branch `docs/velnor-actions-spec` (unmerged; records in `docs/implemented/`, dogfood CI green 47/47 on HEAD — run `36569723507`).
+Velnor Actions is proposed as a stack-generic GitHub Actions workflow generator. It scans repositories for every registered stack and plans all detected, supported stacks unless `.velnor/config.toml` excludes them. V1 registers only the Rust/Cargo adapter; TypeScript, Bun, and other stacks can be added later through dedicated adapters. Rust analysis, Mise integration, generic workflow rendering, orchestration, and CLI are separate crates. Gates 0–8 are implemented on branch `docs/velnor-actions-spec` (unmerged; records in `docs/implemented/`, dogfood CI green 47/47 at `bdfffb9` — run `36569723507`).
 
 See the [documentation index](docs/README.md) for the proposed V1 specification, deferred runner roadmap, and implemented status.
 

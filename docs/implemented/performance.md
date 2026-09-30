@@ -111,8 +111,12 @@ Proves: a contract change rebuilds the whole workspace, as expected;
 
 ## 6. Budgeted concurrency — code bounds + one 2-lane run
 
-Bounds from code: `.github/workflows/velnor.yml` matrix strategy
-`max-parallel: 2`, `fail-fast: false`; `.config/nextest.toml`
+Bounds from code: the default crate-job path in
+`.github/workflows/ci.yml` carries no matrix strategy block; the
+`max-parallel: 2` bound lives in config (`workflow.max_parallel_jobs`,
+default 2 in `crates/velnor-actions-orchestrator/src/config.rs`) and
+still gates sharded fan-out (renderer `matrix.rs` emits
+`fail-fast: false` plus a capped `max-parallel`); `.config/nextest.toml`
 `test-threads = "num-cpus"`; CI profile `--no-tests fail` via CLI.
 Local 2-lane run (separate `CARGO_TARGET_DIR`s, cold targets, warm MBX):
 
