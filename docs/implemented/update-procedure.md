@@ -1,9 +1,10 @@
 # Update and exception procedure
 
-Mechanical procedure for version-policy §3 / §4, RQ-2.11, RQ-5.3, VER-2.27,
-VER-3.4, VER-3.7, VER-4.4. No updater binary exists: the mechanical maximum
-is `scripts/check-freshness.sh` (gates) + Renovate (proposals) + this
-procedure (human steps). Nothing here invents automation that is not wired.
+Mechanical procedure for version-policy §1–§4, RQ-2.11, RQ-5.3, RQ-9.8,
+VER-2.27, VER-3.2, VER-3.3, VER-3.4, VER-3.7, VER-4.4. No updater binary
+exists: the mechanical maximum is `scripts/check-freshness.sh` (gates) +
+Renovate (proposals) + this procedure (human steps). Nothing here invents
+automation that is not wired.
 
 ## Roles
 
@@ -12,9 +13,42 @@ procedure (human steps). Nothing here invents automation that is not wired.
 - Renovate: proposes version changes only; never merges (see `renovate.json`).
 - `scripts/check-freshness.sh`: fail-closed gate. Human `ok:` lines plus
   machine-readable `row: {...}` JSON lines (`check`/`subject`/`status`/
-  `detail`). Row-emitting checks: `policy-header`, `exception-expiry`,
-  `standing-exception`, `lock-staleness`, `lock-mtime` (info only).
-  Pin comparisons are human-only `check(...)` lines, not `row()` output.
+  `detail` with `status` one of `pass`/`fail`/`info`). Every fail row
+  exits the run nonzero. Row-emitting checks: `inventory-shape`,
+  `policy-header`, `policy-mirror`, `local-pin`, `lock-staleness`,
+  `lock-mtime` (info only), `upstream-freshness`, `upstream-probe`
+  (only with `--check-upstream`), `exception-expiry`,
+  `standing-exception`, `advisories`.
+- Usages: `scripts/check-freshness.sh` (offline gate),
+  `scripts/check-freshness.sh --with-advisories` (plus the live
+  `cargo deny` scan, 180 s bound),
+  `scripts/check-freshness.sh --check-upstream` (plus the bounded
+  read-only upstream probe; scheduled use, writes nothing),
+  `scripts/check-freshness.sh --root DIR` (validate a fixture tree; the
+  CLI policy suite uses this for every pass/fail case).
+
+## The four separated checks
+
+Local pin consistency, effective runtime identity, upstream freshness,
+and security advisories are separate checks with separate evidence.
+Local equality is never presented as an upstream freshness proof.
+
+- `local-pin` / `policy-mirror`: compiled-in constants equal the
+  reviewed inventory pins, and `.velnor/version-policy.toml` mirrors the
+  same pins (tools, runner default + supported labels, all eight action
+  records). The expected tool/action sets are asserted; a missing row
+  and an unmapped extra row both fail.
+- `lock-staleness`: effective identity. Every declared dependency in
+  every form (string, table, workspace-inherited, renamed via `package`)
+  and scope (`dependencies`, `dev-dependencies`, `build-dependencies`,
+  `target.*`) resolves to a locked identity by name+version+source.
+  Multiple locked versions of one name are retained, never overwritten
+  in a map. The reverse direction holds too: every locked package must
+  be reachable from a workspace member, and the local lock entries must
+  equal the member set.
+- `upstream-freshness` / `upstream-probe`: reviewed pins are backed by
+  upstream evidence (source URL + check timestamp). See below.
+- `advisories`: `deny.toml` policy plus the live scan. See below.
 
 ## Update set (VER-3.2 / VER-3.3)
 
@@ -35,12 +69,37 @@ procedure (human steps). Nothing here invents automation that is not wired.
 5. Any lock or platform-image change invalidates affected task-result and
    baseline identities (cache contract) — re-baseline deliberately.
 
-## Lock staleness (RQ-2.11)
+## Lock identity (RQ-2.11)
 
 `Cargo.lock` MUST NOT remain stale merely because the build passes. The
 script's `lock-staleness` probe gates this mechanically: every direct
 external dependency MUST declare exact `=x.y.z` (VER-2.26) and MUST equal
-the locked version. A passing build with a skewed lock still fails the gate.
+the locked version, compared by name+version+source. A passing build with
+a skewed lock still fails the gate. Git dependencies are forbidden; a
+`git =` declaration fails the probe.
+
+## Upstream evidence and the scheduled probe
+
+No claim of "latest" is valid unless the inventory says what was checked,
+where it was checked, and when. Each tool/action row carries `source`
+(the upstream releases endpoint), `status`, and a `checked_at` timestamp
+(per row, else the inventory top level). `status: current` requires
+`qualified == pinned` AND evidence newer than `check_interval_hours`.
+`status: held` requires a covering temporary hold. Any other status, any
+stale evidence, and any row whose recorded `latest` differs from the pin
+fails the gate. An operational lookup failure is a distinct failed check;
+it MUST NOT be reported as current (VER-3.4 gate rule).
+
+The scheduled job refreshes this evidence with read-only lookups and
+records the new timestamp plus version delta in the reviewed update set.
+`--check-upstream` is the bounded probe for that job: one GET per row
+(10 s timeout, 512 KiB cap, small fixed row count), parsing only
+GitHub-releases tags, `crates.io` `max_version`, and the rust channel
+manifest's `[pkg.rust]` version. It writes nothing. Stale pins and lookup
+failures fail as rows; they are signal for the next update set, not a
+build gate. The GitHub-hosted runner family has no releases API: its
+latest-family evidence comes from platform qualification, recorded as
+runtime `ImageOS`/`ImageVersion`, not from this probe.
 
 ## Exceptions (≤14 days)
 
@@ -49,16 +108,43 @@ technical reason, `granted` and `expires` (YYYY-MM-DD), and is recorded in
 `.velnor/freshness-inventory.json` under `temporary_holds`. Rules:
 
 - `expires - granted` MUST be ≤ `max_exception_days` (14). The script fails
-  longer spans.
+  longer spans, future `granted` dates, and inverted windows.
 - The script fails once a hold expires. Renewal requires a NEW review and
   NEW evidence — never a date edit.
 - Standing exceptions (`expires: null`) are allowed ONLY when spec-blessed
-  with `kind` + `expiry_policy` (currently: the reviewed
-  `asamarts/alint@v0.16.1` mutable tag). Anything else without an expiry
-  fails the gate.
+  (currently: the reviewed `asamarts/alint@v0.16.1` mutable tag with
+  `kind` + `expiry_policy` + `blessed_by`). Anything else without an
+  expiry fails the gate.
 - Security fixes use the expedited path: same-day update set, minimal scope,
   qualification MAY run the affected-subset first but the full gate MUST
   still pass before merge (VER-1.7).
+
+## Advisories
+
+`deny.toml` MUST keep `[advisories] ignore` empty: every ignored advisory
+fails the gate and must become a policy exception instead. The live
+`cargo deny check advisories` scan runs as the CI Cargo Deny job (or
+locally via `--with-advisories`); only findings it reports against this
+dependency graph count, each with its advisory id, package, and severity
+as evidence. Never invent vulnerability claims from version numbers or
+from the absence of a local audit tool. `cargo-deny` and `cargo-machete`
+remain separate security and unused-dependency checks and do not prove
+freshness.
+
+## Risk-triggered verification (RQ-9.8)
+
+Untrusted parsers, identities, obligation selection, aggregation, and the
+production wiring under review are covered by the mutation scope in
+`.cargo/mutants.toml` (manual runs only, NOT wired into CI). The activated
+tool is pinned first: `cargo-mutants = "27.1.0"` in
+`.velnor/version-policy.toml` `[validation-tools]`, mirrored by the
+`# pinned:` line in `.cargo/mutants.toml`, cross-checked by the gate.
+Install exactly that release (`cargo install --locked cargo-mutants
+--version 27.1.0`) and run `cargo mutants` from the repo root. Surviving
+mutants MUST be killed or justified before the change lands; before any
+scheduled/CI use, the tool must additionally be pinned in the Mise-managed
+catalog. Property, fuzz, Miri/Loom, and semver triggers live in
+`docs/implemented/verification-triggers.md`.
 
 ## Limits discipline (RQ-5.3)
 

@@ -8,6 +8,14 @@ use std::path::{Path, PathBuf};
 
 #[path = "alint_miniyaml.rs"]
 mod alint_miniyaml;
+#[path = "fixtures/p12_harness.rs"]
+mod p12_harness;
+#[path = "fixtures/p12_live.rs"]
+mod p12_live;
+#[path = "fixtures/p12_manifest.rs"]
+mod p12_manifest;
+#[path = "fixtures/p12_policy.rs"]
+mod p12_policy;
 
 /// Expected members as (directory, package name).
 pub(crate) const MEMBERS: [(&str, &str); 7] = [
