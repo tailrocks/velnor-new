@@ -23,6 +23,8 @@ mod impl_mise_forbidden_src;
 mod impl_mise_gate6;
 #[path = "impl_mise_git.rs"]
 mod impl_mise_git;
+#[path = "impl_mise_git_config.rs"]
+mod impl_mise_git_config;
 #[path = "impl_mise_install.rs"]
 mod impl_mise_install;
 #[path = "impl_mise_isolation.rs"]
