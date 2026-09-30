@@ -1,17 +1,16 @@
 //! Deterministic human-readable plan text (no JSON, YAML, or writes).
 
-use std::collections::BTreeSet;
-
 use velnor_actions_actionlint::ACTIONLINT_VERSION;
 use velnor_actions_contract::{RunnerSelection, WorkflowPolicy};
-use velnor_actions_rust::{DetectionStatus, TaskGroup, TaskKind};
+use velnor_actions_rust::{TaskGroup, TaskKind};
+use velnor_actions_workflow_renderer::release_tree::RELEASE_TREE_PATHS;
 use velnor_actions_workflow_renderer::render::{
     ACTIONLINT_PATH, FINAL_JOB_ID, PLAN_JOB_ID, WORKFLOW_PATH,
 };
 
 use crate::OrchestratorError;
-use crate::discover::local_dep_names;
 use crate::generate::render_staged_tree;
+use crate::plan_stacks::stacks_section;
 use crate::prepare::GenerationPreparation;
 use crate::workflow::{CHECKOUT_USES, LINT_JOB_ID};
 
@@ -47,131 +46,9 @@ pub fn plan_text(prep: &GenerationPreparation) -> String {
 }
 
 /// Append one line plus a newline.
-fn push(out: &mut String, line: &str) {
+pub(crate) fn push(out: &mut String, line: &str) {
     out.push_str(line);
     out.push('\n');
-}
-
-/// Detected stacks, crates, profiles, and evidence.
-fn stacks_section(out: &mut String, prep: &GenerationPreparation) {
-    push(out, "Detected stacks");
-    let ignored = prep
-        .discovery
-        .statuses
-        .iter()
-        .any(|status| matches!(status, DetectionStatus::Ignored { .. }));
-    if ignored {
-        push(out, "  Rust: ignored (config stacks.ignore)");
-        for status in &prep.discovery.statuses {
-            if let DetectionStatus::Ignored { project, reason } = status {
-                push(
-                    out,
-                    &format!("    - {}: ignored ({})", project.manifest, reason),
-                );
-            }
-        }
-    } else {
-        push(out, "  Rust: selected");
-    }
-    let crates = sorted_crates(prep);
-    push(out, &format!("  Workspace crates: {}", crates.len()));
-    for (name, manifest, detail) in &crates {
-        push(out, &format!("    - {name} ({manifest}) [{detail}]"));
-    }
-    for workspace in &prep.discovery.workspaces {
-        profile_lines(out, workspace);
-    }
-}
-
-/// Per-workspace profile provenance: drivers, sources, evidence, findings.
-fn profile_lines(out: &mut String, workspace: &crate::discover::PlannedWorkspace) {
-    let root = if workspace.record.workspace_root.is_empty() {
-        "."
-    } else {
-        workspace.record.workspace_root.as_str()
-    };
-    let profile = &workspace.profile;
-    push(
-        out,
-        &format!(
-            "  Profile {root}: {} compile driver ({}), {} test runner ({})",
-            profile.compile_driver.as_str(),
-            profile.driver_source.as_str(),
-            profile.test_runner.as_str(),
-            profile.runner_source.as_str()
-        ),
-    );
-    if profile.test_runner.as_str() == "cargo_nextest" {
-        let config = profile
-            .nextest_config
-            .as_deref()
-            .unwrap_or("no nextest config");
-        push(
-            out,
-            &format!(
-                "  Nextest profile {root}: {} ({config})",
-                profile.nextest_profile.as_str()
-            ),
-        );
-    }
-    for evidence in &profile.evidence {
-        push(
-            out,
-            &format!(
-                "    evidence {}:{} {} [{}]",
-                evidence.path,
-                evidence.line,
-                evidence.command_or_setting,
-                evidence.strength.as_str()
-            ),
-        );
-    }
-    for finding in &workspace.findings {
-        for sighting in &finding.evidence {
-            push(
-                out,
-                &format!(
-                    "    finding {} {}:{} {}: {}",
-                    finding.code,
-                    sighting.path,
-                    sighting.line,
-                    sighting.command_or_setting,
-                    finding.message
-                ),
-            );
-        }
-    }
-}
-
-/// Crates sorted by name then manifest with kind and dependency detail.
-fn sorted_crates(prep: &GenerationPreparation) -> Vec<(String, String, String)> {
-    let mut crates = Vec::new();
-    for workspace in &prep.discovery.workspaces {
-        for package in &workspace.record.packages {
-            if !package.in_workspace || package.external {
-                continue;
-            }
-            let mut kinds: BTreeSet<&str> = package
-                .targets
-                .iter()
-                .map(|target| target.kind.as_str())
-                .collect();
-            kinds.remove("custom-build");
-            if kinds.is_empty() {
-                kinds.insert("lib");
-            }
-            let kinds = kinds.into_iter().collect::<Vec<_>>().join(", ");
-            let deps = local_dep_names(&workspace.record, &package.id).join(", ");
-            let detail = if deps.is_empty() {
-                kinds
-            } else {
-                format!("{kinds}; depends on {deps}")
-            };
-            crates.push((package.name.clone(), package.manifest.clone(), detail));
-        }
-    }
-    crates.sort();
-    crates
 }
 
 /// Planned workflow files, jobs, matrix, runner, cache, and pins.
@@ -180,6 +57,7 @@ fn workflow_section(out: &mut String, prep: &GenerationPreparation) {
     push(out, "Workflow to generate");
     push(out, &format!("  {ACTIONLINT_PATH}"));
     push(out, &format!("  {WORKFLOW_PATH}"));
+    release_file_lines(out, prep);
     push(
         out,
         &format!(
@@ -224,6 +102,22 @@ fn workflow_section(out: &mut String, prep: &GenerationPreparation) {
         out,
         "  Pull-request execution narrows crate obligations through its event-time affected-work plan.",
     );
+}
+
+/// Release-owned tree paths, exactly what `generate` emits when enabled.
+///
+/// The checked plan entrypoint surfaces config errors from its discarded
+/// render pass first, so an error here means nothing is emitted.
+fn release_file_lines(out: &mut String, prep: &GenerationPreparation) {
+    let enabled = crate::release_emit::enabled_release(prep)
+        .ok()
+        .flatten()
+        .is_some();
+    if enabled {
+        for path in RELEASE_TREE_PATHS {
+            push(out, &format!("  {path}"));
+        }
+    }
 }
 
 /// IR crate-job IDs: every finalized job except plan, final, and lint.
@@ -302,7 +196,14 @@ fn present_kinds(groups: &[TaskGroup]) -> Vec<&'static str> {
 
 /// Structural critical path over the derived task groups.
 fn critical_path_lines(out: &mut String, prep: &GenerationPreparation) {
-    let path = crate::critical_path::critical_path_structural(&prep.discovery.task_groups);
+    let eligible: Vec<TaskGroup> = prep
+        .discovery
+        .task_groups
+        .iter()
+        .filter(|group| !group.no_test_targets)
+        .cloned()
+        .collect();
+    let path = crate::critical_path::critical_path_structural(&eligible);
     push(
         out,
         &format!("  {}", crate::critical_path::critical_path_line(&path)),

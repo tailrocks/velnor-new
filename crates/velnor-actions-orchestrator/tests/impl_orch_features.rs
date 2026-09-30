@@ -159,6 +159,19 @@ fn testless_crate_omits_test_runners() -> TestResult {
         plan.contains("Ineligible: stack/rust/crates/fuzz/nextest/full has no test targets"),
         "fuzz ineligibility recorded:\n{plan}"
     );
+    let critical = plan
+        .lines()
+        .find(|line| line.contains("Critical path:"))
+        .ok_or_else(|| std::io::Error::other("missing critical path"))?;
+    for group in &prep.discovery.task_groups {
+        if group.no_test_targets {
+            assert!(
+                !critical.contains(&group.task_id),
+                "ineligible {} excluded from critical path:{critical}",
+                group.task_id
+            );
+        }
+    }
     let tree = render_staged_tree(&prep)?;
     let yaml = tree
         .get(".github/workflows/ci.yml")
