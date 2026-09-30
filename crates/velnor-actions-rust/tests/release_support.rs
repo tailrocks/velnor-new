@@ -126,6 +126,8 @@ pub(crate) fn graph_of(
     root: &Path,
     state: &RegistryState,
 ) -> Result<PublicationGraph, ReleaseError> {
-    let record = parse_metadata_json(json, root, "Cargo.toml").map_err(ReleaseError::Metadata)?;
+    let known = std::collections::BTreeSet::new();
+    let record =
+        parse_metadata_json(json, root, "Cargo.toml", &known).map_err(ReleaseError::Metadata)?;
     publication_graph(selection, &record, state, &[])
 }
