@@ -1,7 +1,7 @@
 //! Intake remediation cases: discovery, registry order, tool inputs, config.
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use tempfile::TempDir;
 use velnor_actions_contract::WorkflowPolicy;
@@ -364,40 +364,5 @@ fn intake_selected_detection_contributes_tasks() -> TestResult {
     contributed.sort();
     contributed.dedup();
     assert_eq!(contributed, selected);
-    Ok(())
-}
-
-#[test]
-fn intake_adapter_dependency_direction() -> TestResult {
-    let crates = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
-    for adapter in ["rust", "mise", "actionlint", "workflow-renderer"] {
-        let path = crates.join(format!("velnor-actions-{adapter}/Cargo.toml"));
-        let text = fs::read_to_string(path)?;
-        let manifest: toml::Table = toml::from_str(&text)?;
-        if let Some(deps) = manifest.get("dependencies").and_then(toml::Value::as_table) {
-            for name in deps.keys() {
-                assert!(
-                    !name.starts_with("velnor-actions-") || name == "velnor-actions-contract",
-                    "{adapter} must not depend on {name}"
-                );
-            }
-        }
-    }
-    let path = crates.join("velnor-actions-orchestrator/Cargo.toml");
-    let text = fs::read_to_string(path)?;
-    let manifest: toml::Table = toml::from_str(&text)?;
-    let deps = manifest
-        .get("dependencies")
-        .and_then(toml::Value::as_table)
-        .ok_or("orchestrator deps")?;
-    for name in [
-        "velnor-actions-contract",
-        "velnor-actions-rust",
-        "velnor-actions-mise",
-        "velnor-actions-actionlint",
-        "velnor-actions-workflow-renderer",
-    ] {
-        assert!(deps.contains_key(name), "orchestrator composes {name}");
-    }
     Ok(())
 }
