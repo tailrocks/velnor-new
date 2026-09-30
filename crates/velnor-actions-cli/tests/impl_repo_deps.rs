@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use std::error::Error;
 
 use crate::impl_repo_policy::{
-    MEMBERS, dep_key, dep_lines, dep_referenced, manifest, read, repo_root, test_markers,
+    MEMBERS, dep_key, dep_lines, dep_referenced, manifest, p11_toml, read, repo_root, test_markers,
     tree_files,
 };
 
@@ -27,17 +27,16 @@ fn expected_internal(dir: &str) -> Vec<&str> {
 #[test]
 fn dependency_edges_match_ownership_table() -> Result<(), Box<dyn Error>> {
     for (dir, _) in MEMBERS {
-        let body = manifest(dir)?;
-        let mut in_deps = false;
-        let mut found = Vec::new();
-        for line in body.lines() {
-            let trimmed = line.trim();
-            if trimmed.starts_with('[') {
-                in_deps = trimmed == "[dependencies]";
-            } else if in_deps && trimmed.contains("velnor-actions-") {
-                found.push(dep_key(trimmed).to_owned());
-            }
-        }
+        let doc = p11_toml::parse(&manifest(dir)?)?;
+        let mut found: Vec<String> = p11_toml::section(&doc, "dependencies")
+            .map(|deps| {
+                deps.pairs
+                    .iter()
+                    .filter(|pair| pair.0.starts_with("velnor-actions"))
+                    .map(|pair| pair.0.clone())
+                    .collect()
+            })
+            .unwrap_or_default();
         found.sort();
         let mut want: Vec<String> = expected_internal(dir)
             .into_iter()

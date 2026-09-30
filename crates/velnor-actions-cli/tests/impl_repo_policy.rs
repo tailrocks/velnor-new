@@ -13,7 +13,7 @@ mod p11_compiler;
 #[path = "fixtures/p11_metadata.rs"]
 mod p11_metadata;
 #[path = "fixtures/p11_toml.rs"]
-mod p11_toml;
+pub(crate) mod p11_toml;
 #[path = "fixtures/p12_harness.rs"]
 mod p12_harness;
 #[path = "fixtures/p12_live.rs"]
