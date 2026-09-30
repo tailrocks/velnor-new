@@ -242,6 +242,11 @@ fn internal_env(
         env.push((key.clone(), Yaml::str(value.clone())));
     }
     env.push((REQUEST_FILE_ENV.to_owned(), Yaml::str(request)));
+    if op == steps::PLAN_OPERATION && target == steps::PLAN_OPERATION {
+        for (key, value) in &ctx.plan_consumer_env {
+            env.push((key.clone(), Yaml::str(value.clone())));
+        }
+    }
     Yaml::Map(env)
 }
 

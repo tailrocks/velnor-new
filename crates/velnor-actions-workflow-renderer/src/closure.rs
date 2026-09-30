@@ -7,6 +7,8 @@
 //! Provenance the contract does not allow fails closed with the
 //! documented seed remediation instead of emitting a dead helper call.
 
+use std::collections::BTreeMap;
+
 use velnor_actions_contract::{Job, Step, StepKind};
 
 use crate::{
@@ -170,22 +172,21 @@ fn check_acquire_shape(job_id: &str, step: &Step) -> Result<(), RenderError> {
 
 /// Fixed freshness step: regenerate into scratch, byte-compare `.github`.
 ///
-/// Runs the public `generate --output-dir` of the given helper binary
-/// (bootstrap helper in plan, downloaded candidate in candidate mode)
-/// and diffs the preview tree against the committed tree; any delta
-/// fails the step. Paths are fixed; nothing is repo-supplied.
+/// Runs the helper's `generate --output-dir`, diffs preview against
+/// committed `.github`; `env` is the caller-validated consumer env.
 /// # Errors
-pub fn freshness_step(binary: &str, output_dir: &str) -> Result<Step, RenderError> {
+pub fn freshness_step(
+    binary: &str,
+    output_dir: &str,
+    env: &BTreeMap<String, String>,
+) -> Result<Step, RenderError> {
     validate_helper_path(binary)?;
     validate_output_dir(output_dir)?;
     let script = format!(
         "{binary} generate --output-dir \"{output_dir}\" && diff -r --brief .github \"{output_dir}/.github\""
     );
-    steps::shell_step(
-        CHECK_GENERATED_NAME,
-        vec!["sh".to_owned(), "-c".to_owned(), script],
-        std::collections::BTreeMap::new(),
-    )
+    let argv = vec!["sh".to_owned(), "-c".to_owned(), script];
+    steps::shell_step(CHECK_GENERATED_NAME, argv, env.clone())
 }
 
 /// Fixed plan-report upload step (`velnor-plan-<run-key>`, fails loud).
@@ -280,7 +281,7 @@ pub(crate) fn insert_plan_closure(
         .iter()
         .any(|step| step.name == CHECK_GENERATED_NAME)
     {
-        let check = freshness_step(&ctx.staged_binary, FRESHNESS_OUTDIR)?;
+        let check = freshness_step(&ctx.staged_binary, FRESHNESS_OUTDIR, &ctx.plan_consumer_env)?;
         plan.steps.insert(at, check);
     }
     let Some(at) = plan.steps.iter().position(|step| {

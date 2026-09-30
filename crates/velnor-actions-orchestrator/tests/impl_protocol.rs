@@ -378,6 +378,7 @@ fn render_gate_roundtrip_accepts_plan() -> TestResult {
         validator_commands: Vec::new(),
         candidate: None,
         preseed: false,
+        plan_consumer_env: std::collections::BTreeMap::new(),
     };
     let text = render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx)?;
     let pairs = internal_env_pairs(&text);

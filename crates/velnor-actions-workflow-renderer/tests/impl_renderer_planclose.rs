@@ -82,7 +82,7 @@ fn legacy_preserves_unstaged_render_and_closes_plan() -> Result<(), RenderError>
 
 #[test]
 fn freshness_step_shape_exact() -> Result<(), RenderError> {
-    let step = freshness_step(STAGED, FRESHNESS_OUTDIR)?;
+    let step = freshness_step(STAGED, FRESHNESS_OUTDIR, &std::collections::BTreeMap::new())?;
     assert_eq!(step.name, CHECK_GENERATED_NAME);
     let velnor_actions_contract::StepKind::Shell { run, .. } = &step.kind else {
         panic!("freshness must be a shell step");
@@ -103,11 +103,11 @@ fn freshness_step_shape_exact() -> Result<(), RenderError> {
         "relative/path",
     ] {
         assert!(
-            freshness_step(bad, FRESHNESS_OUTDIR).is_err(),
+            freshness_step(bad, FRESHNESS_OUTDIR, &std::collections::BTreeMap::new()).is_err(),
             "binary: {bad}"
         );
     }
-    assert!(freshness_step(STAGED, ".github").is_err());
+    assert!(freshness_step(STAGED, ".github", &std::collections::BTreeMap::new()).is_err());
     Ok(())
 }
 

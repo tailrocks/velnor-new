@@ -176,6 +176,40 @@ fn ambient_identity_blocks() -> bool {
     std::env::var("GITHUB_REPOSITORY").is_ok_and(|hint| hint != "tailrocks/velnor-new")
 }
 
+/// `MISE_CARGO_HOME` value carried by one rendered step body, if any.
+fn cargo_home_of(body: &str) -> Option<String> {
+    body.lines().find_map(|line| {
+        line.trim()
+            .strip_prefix("MISE_CARGO_HOME:")
+            .map(|value| value.trim().trim_matches('"').to_owned())
+    })
+}
+
+#[test]
+fn plan_fetch_check_and_plan_share_one_cargo_home() -> TestResult {
+    let repo = make_repo(config_with_branch())?;
+    std::fs::write(
+        repo.path().join("Cargo.lock"),
+        "version = 4\n\n[[package]]\nname = \"demo\"\nversion = \"0.1.0\"\n",
+    )?;
+    let yaml = workflow_yaml(repo.path())?;
+    let steps = plan_steps(&yaml);
+    let fetch_at = step_index(&steps, "Fetch Cargo sources").ok_or("missing Fetch step")?;
+    let check_at = step_index(&steps, "Check generated files").ok_or("missing Check step")?;
+    let plan_at = step_index(&steps, "Plan").ok_or("missing Plan step")?;
+    let fetch_home = cargo_home_of(&steps[fetch_at].1).ok_or("fetch lacks cargo home")?;
+    assert!(!fetch_home.is_empty(), "fetch home empty");
+    for (name, at) in [("Check generated files", check_at), ("Plan", plan_at)] {
+        let home = cargo_home_of(&steps[at].1).ok_or(format!("{name} lacks cargo home"))?;
+        assert_eq!(
+            home, fetch_home,
+            "{name} must read the home Fetch populated (run 36754512444):\n{}",
+            steps[at].1
+        );
+    }
+    Ok(())
+}
+
 #[test]
 fn preseed_plan_installs_before_build_and_check_generated() -> TestResult {
     if ambient_identity_blocks() {
