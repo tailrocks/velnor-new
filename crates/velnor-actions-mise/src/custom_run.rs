@@ -8,21 +8,15 @@
 use crate::command::is_allowed_mise_subcommand;
 use crate::error::MiseError;
 
-/// Task-name rule shared with the config allowlist: non-blank, no path
-/// separator, no spaces (same rule as `CustomTaskGrant`/`task_run_argv`).
-fn is_valid_task_name(task: &str) -> bool {
-    !(task.trim().is_empty() || task.contains('/') || task.contains(' '))
-}
-
 /// Fixed `mise run <task>` argv for one allowlisted custom task.
 ///
 /// # Errors
 ///
-/// Returns [`MiseError::InvalidStepInput`] for a blank, path-bearing,
-/// or space-bearing task name.
+/// Returns [`MiseError::InvalidStepInput`] for a task name outside the
+/// contract allowlist.
 pub fn custom_task_run_argv(task: &str) -> Result<Vec<String>, MiseError> {
     debug_assert!(is_allowed_mise_subcommand("run"));
-    if !is_valid_task_name(task) {
+    if !velnor_actions_contract::config::is_valid_custom_task_name(task) {
         return Err(MiseError::InvalidStepInput {
             field: "task".to_owned(),
             value: format!("bad_task_name:{task}"),

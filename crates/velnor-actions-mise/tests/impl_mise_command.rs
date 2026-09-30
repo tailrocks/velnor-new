@@ -222,7 +222,20 @@ fn custom_task_run_shape_is_plain_mise_run() {
     use velnor_actions_mise::custom_run::custom_task_run_argv;
     let argv = custom_task_run_argv("audit").expect("custom argv");
     assert_eq!(argv.join(" "), "mise run audit");
-    for bad in ["", "  ", "two words", "a/b"] {
+    let namespaced = custom_task_run_argv("lint:strict").expect("namespaced task");
+    assert_eq!(namespaced.join(" "), "mise run lint:strict");
+    for bad in [
+        "",
+        "  ",
+        "two words",
+        "a/b",
+        "${{secrets.x}}",
+        "a;true",
+        "a`id`",
+        "$(id)",
+        "a'b",
+        "a\"b",
+    ] {
         assert!(
             custom_task_run_argv(bad).is_err(),
             "{bad:?} must fail closed"

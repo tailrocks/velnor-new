@@ -108,6 +108,27 @@ fn argv_validation_rejects_policy_violations() {
 }
 
 #[test]
+fn argv_and_names_reject_github_expressions() {
+    for arg in ["${{ secrets.x }}", "${{secrets.x}}", "${{ github.sha }}"] {
+        assert!(
+            validate_command_argv(&argv(&["echo", arg])).is_err(),
+            "{arg} must fail closed"
+        );
+    }
+    assert!(validate_command_argv(&argv(&["echo", "$RUNNER_TEMP/x"])).is_ok());
+    assert!(validate_command_argv(&argv(&["echo", "${x:-y}"])).is_ok());
+    assert!(
+        shell_step(
+            "Custom task ${{secrets.x}}",
+            argv(&["true"]),
+            BTreeMap::new(),
+        )
+        .is_err(),
+        "expression in step name must fail closed"
+    );
+}
+
+#[test]
 fn inline_shell_scripts_quote_whole_for_inner_expansion() {
     let line = join_argv_for_run(&argv(&["sh", "-c", "read sha rest < f && echo \"$sha\""]));
     assert_eq!(

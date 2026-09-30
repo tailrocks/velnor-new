@@ -165,6 +165,11 @@ pub fn shell_step(
     if name.trim().is_empty() {
         return Err(RenderError::BadCommand("empty_name".to_owned()));
     }
+    if name.contains("${{") {
+        return Err(RenderError::BadCommand(format!(
+            "expression_in_name:{name}"
+        )));
+    }
     commands::validate_command_argv(&argv)?;
     commands::validate_env(&env)?;
     scan_for_private_subcommands(name)?;
