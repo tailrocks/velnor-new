@@ -100,6 +100,10 @@ fn release_enabled_emits_family_oidc() -> TestResult {
         !yaml.contains("release-publish-bootstrap"),
         "oidc has no bootstrap job"
     );
+    assert!(
+        !yaml.contains("inputs.version"),
+        "oidc binds no generation-time version"
+    );
     let normal = fs::read_to_string(preview.join(".github/release-plz.toml"))?;
     assert!(normal.contains("release_always = false"), "normal policy");
     assert!(normal.contains("name = \"demo\""), "allowlist:\n{normal}");
@@ -178,6 +182,14 @@ fn release_bootstrap_mode_adds_token_job() -> TestResult {
         yaml.matches("CARGO_REGISTRY_TOKEN").count(),
         2,
         "exactly one token binding (key plus ref)"
+    );
+    assert!(
+        yaml.contains("github.event.inputs.version == '0.1.0'"),
+        "publishers gate on the bootstrap version:\n{yaml}"
+    );
+    assert!(
+        yaml.contains("version:") && yaml.contains("0.1.0"),
+        "dispatch carries the version input:\n{yaml}"
     );
     Ok(())
 }

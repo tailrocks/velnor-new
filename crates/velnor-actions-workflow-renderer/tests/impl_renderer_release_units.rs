@@ -149,6 +149,7 @@ fn release_workflow_spec_rejects_bad_identity() {
             source_sha: "a".repeat(40),
             registry: "crates-io".to_owned(),
             packages: BTreeMap::from([("demo".to_owned(), "0.1.0".to_owned())]),
+            version: None,
         },
         publish_environment: "release".to_owned(),
         bootstrap_environment: "release-bootstrap".to_owned(),
