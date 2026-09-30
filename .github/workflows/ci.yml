@@ -127,7 +127,13 @@ jobs:
       - name: Verify MBX compile (pre-seed trust-on-review)
         run: "sh -c 'test -x target/release/velnor-actions && mise --no-config --no-env --no-hooks exec mr-boxington@1.21.0 -- mbx --version | grep -qxF \"mbx 1.21.0\"'"
       - name: Write helper manifest (pre-seed trust-on-review)
-        run: "sh -c 'mkdir -p $RUNNER_TEMP/velnor/preseed-output && cp target/release/velnor-actions $RUNNER_TEMP/velnor/preseed-output/velnor-actions && sha256sum $RUNNER_TEMP/velnor/preseed-output/velnor-actions > $RUNNER_TEMP/velnor/preseed-output/sha.txt && read sha rest < $RUNNER_TEMP/velnor/preseed-output/sha.txt && printf \"{\\\"schema\\\":1,\\\"commit\\\":\\\"%s\\\",\\\"target\\\":\\\"x86_64-unknown-linux-gnu\\\",\\\"toolchain\\\":\\\"rust@1.98.1+mr-boxington@1.21.0\\\",\\\"sha256\\\":\\\"%s\\\"}\" \"$GITHUB_SHA\" \"$sha\" > $RUNNER_TEMP/velnor/preseed-output/preseed-manifest.json'"
+        env:
+          VELNOR_INTERNAL_OP: write-preseed-manifest-v1
+          VELNOR_PRESEED_BINARY: target/release/velnor-actions
+          VELNOR_PRESEED_OUT: ${{ runner.temp }}/velnor/preseed-output
+          VELNOR_PRESEED_TARGET: x86_64-unknown-linux-gnu
+          VELNOR_PRESEED_TOOLCHAIN: rust@1.98.1+mr-boxington@1.21.0
+        run: target/release/velnor-actions
       - name: Upload helper (pre-seed trust-on-review)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a

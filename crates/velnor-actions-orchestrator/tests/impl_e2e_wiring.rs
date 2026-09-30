@@ -10,7 +10,9 @@ use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::WORKFLOW_PATH;
 
-use crate::impl_common::{TestResult, config_with_branch, git, make_repo};
+use crate::impl_common::{
+    TestResult, config_with_branch, git, make_repo, without_ambient_identity,
+};
 
 /// One parsed step: display name plus full step body.
 struct StepText {
@@ -257,117 +259,113 @@ fn write_lock(repo: &tempfile::TempDir) -> Result<(), Box<dyn std::error::Error>
     Ok(())
 }
 
-/// Skip only when an ambient non-canonical identity would fail the fixture.
-fn ambient_identity_blocks() -> bool {
-    std::env::var("GITHUB_REPOSITORY").is_ok_and(|hint| hint != "tailrocks/velnor-new")
-}
-
 #[test]
 fn emitted_yaml_wires_helpers_velnor_policy() -> TestResult {
-    if ambient_identity_blocks() {
-        return Ok(());
-    }
-    let repo = make_velnor_repo()?;
-    write_lock(&repo)?;
-    let prep = prepare(repo.path())?;
-    let tree = render_staged_tree(&prep)?;
-    let yaml = tree
-        .get(WORKFLOW_PATH)
-        .ok_or("missing workflow in staged tree")?;
-    let jobs = check_tree(yaml).map_err(|err| format!("{err}:\n{yaml}"))?;
-    assert!(jobs.iter().all(|job| job.id != "policy"), "no umbrella");
-    for (id, want) in [
-        ("cargo-deny", "Run cargo-deny"),
-        ("cargo-machete", "Run cargo-machete"),
-        ("zizmor", "Run zizmor"),
-    ] {
-        let job = jobs.iter().find(|job| job.id == id);
-        let job = job.unwrap_or_else(|| panic!("missing {id} job"));
-        assert!(
-            job.steps.iter().any(|step| step.name == want),
-            "{id} misses {want}"
-        );
-    }
-    Ok(())
+    without_ambient_identity("emitted_yaml_wires_helpers_velnor_policy", || {
+        let repo = make_velnor_repo()?;
+        write_lock(&repo)?;
+        let prep = prepare(repo.path())?;
+        let tree = render_staged_tree(&prep)?;
+        let yaml = tree
+            .get(WORKFLOW_PATH)
+            .ok_or("missing workflow in staged tree")?;
+        let jobs = check_tree(yaml).map_err(|err| format!("{err}:\n{yaml}"))?;
+        assert!(jobs.iter().all(|job| job.id != "policy"), "no umbrella");
+        for (id, want) in [
+            ("cargo-deny", "Run cargo-deny"),
+            ("cargo-machete", "Run cargo-machete"),
+            ("zizmor", "Run zizmor"),
+        ] {
+            let job = jobs.iter().find(|job| job.id == id);
+            let job = job.unwrap_or_else(|| panic!("missing {id} job"));
+            assert!(
+                job.steps.iter().any(|step| step.name == want),
+                "{id} misses {want}"
+            );
+        }
+        Ok(())
+    })
 }
 
 #[test]
 fn emitted_yaml_preseed_builds_once_and_shares_artifact() -> TestResult {
-    if ambient_identity_blocks() {
-        return Ok(());
-    }
-    let repo = make_velnor_repo()?;
-    assert!(
-        !repo.path().join(".velnor/generator.lock").exists(),
-        "pre-seed fixture must not carry a lock"
-    );
-    let prep = prepare(repo.path())?;
-    let tree = render_staged_tree(&prep)?;
-    let yaml = tree
-        .get(WORKFLOW_PATH)
-        .ok_or("missing workflow in staged tree")?;
-    let jobs = check_tree(yaml).map_err(|err| format!("{err}:\n{yaml}"))?;
-    let builds: Vec<(&str, &str)> = jobs
-        .iter()
-        .flat_map(|job| {
-            job.steps.iter().filter_map(|step| {
-                if step.body.contains("mbx build --release --locked") {
-                    Some((job.id.as_str(), step.body.as_str()))
-                } else {
-                    None
-                }
-            })
-        })
-        .collect();
-    assert_eq!(builds.len(), 1, "exactly one helper build:\n{yaml}");
-    assert_eq!(builds[0].0, "plan", "build lives in plan");
-    for fragment in [
-        "rust@",
-        "mr-boxington@",
-        "--package velnor-actions-cli --bin velnor-actions",
-    ] {
-        assert!(
-            builds[0].1.contains(fragment),
-            "build misses {fragment}:\n{yaml}"
-        );
-    }
-    let plan = jobs
-        .iter()
-        .find(|job| job.id == "plan")
-        .ok_or("missing plan job")?;
-    assert!(
-        plan.steps
-            .iter()
-            .any(|step| step.body.contains("name: velnor-preseed-helper")),
-        "plan misses exact artifact upload:\n{yaml}"
-    );
-    let mbx = ToolCatalog::pinned()
-        .version(PinnedTool::MrBoxington)
-        .to_owned();
-    check_verify_mbx(plan, &mbx)?;
-    assert!(
-        !yaml.contains("pattern:"),
-        "no wildcard artifact matching:\n{yaml}"
-    );
-    for job in jobs
-        .iter()
-        .filter(|job| job.id == "required" || job.id.starts_with("rust-"))
-    {
-        let has_dl = job
-            .steps
-            .iter()
-            .any(|step| step.name.contains("Download helper"));
-        assert!(has_dl, "{} misses download", job.id);
-    }
-    assert!(
-        yaml.contains("pre-seed trust-on-review"),
-        "trust marking missing:\n{yaml}"
-    );
-    assert!(
-        !yaml.contains("Acquire Velnor"),
-        "no digest path exists pre-seed:\n{yaml}"
-    );
-    Ok(())
+    without_ambient_identity(
+        "emitted_yaml_preseed_builds_once_and_shares_artifact",
+        || {
+            let repo = make_velnor_repo()?;
+            assert!(
+                !repo.path().join(".velnor/generator.lock").exists(),
+                "pre-seed fixture must not carry a lock"
+            );
+            let prep = prepare(repo.path())?;
+            let tree = render_staged_tree(&prep)?;
+            let yaml = tree
+                .get(WORKFLOW_PATH)
+                .ok_or("missing workflow in staged tree")?;
+            let jobs = check_tree(yaml).map_err(|err| format!("{err}:\n{yaml}"))?;
+            let builds: Vec<(&str, &str)> = jobs
+                .iter()
+                .flat_map(|job| {
+                    job.steps.iter().filter_map(|step| {
+                        if step.body.contains("mbx build --release --locked") {
+                            Some((job.id.as_str(), step.body.as_str()))
+                        } else {
+                            None
+                        }
+                    })
+                })
+                .collect();
+            assert_eq!(builds.len(), 1, "exactly one helper build:\n{yaml}");
+            assert_eq!(builds[0].0, "plan", "build lives in plan");
+            for fragment in [
+                "rust@",
+                "mr-boxington@",
+                "--package velnor-actions-cli --bin velnor-actions",
+            ] {
+                assert!(
+                    builds[0].1.contains(fragment),
+                    "build misses {fragment}:\n{yaml}"
+                );
+            }
+            let plan = jobs
+                .iter()
+                .find(|job| job.id == "plan")
+                .ok_or("missing plan job")?;
+            assert!(
+                plan.steps
+                    .iter()
+                    .any(|step| step.body.contains("name: velnor-preseed-helper")),
+                "plan misses exact artifact upload:\n{yaml}"
+            );
+            let mbx = ToolCatalog::pinned()
+                .version(PinnedTool::MrBoxington)
+                .to_owned();
+            check_verify_mbx(plan, &mbx)?;
+            assert!(
+                !yaml.contains("pattern:"),
+                "no wildcard artifact matching:\n{yaml}"
+            );
+            for job in jobs
+                .iter()
+                .filter(|job| job.id == "required" || job.id.starts_with("rust-"))
+            {
+                let has_dl = job
+                    .steps
+                    .iter()
+                    .any(|step| step.name.contains("Download helper"));
+                assert!(has_dl, "{} misses download", job.id);
+            }
+            assert!(
+                yaml.contains("pre-seed trust-on-review"),
+                "trust marking missing:\n{yaml}"
+            );
+            assert!(
+                !yaml.contains("Acquire Velnor"),
+                "no digest path exists pre-seed:\n{yaml}"
+            );
+            Ok(())
+        },
+    )
 }
 
 #[test]

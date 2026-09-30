@@ -11,10 +11,12 @@ use std::path::Path;
 use velnor_actions_contract::Plan;
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_orchestrator::{
-    GenerateOptions, GenerationPreparation, generate, plan_internal, plan_text, prepare,
+    GenerateOptions, GenerationPreparation, generate, plan_internal, prepare,
 };
 
-use crate::impl_common::{TestResult, config_with_branch, err_of, git, git_line, make_repo};
+use crate::impl_common::{
+    TestResult, config_with_branch, err_of, git, git_line, make_repo, plan_for,
+};
 
 /// Repository wrapper line: inline-table spelling with the shim env.
 const WRAPPER_INLINE: &str =
@@ -101,7 +103,7 @@ fn wrapper_only_detects_mbx() -> TestResult {
             .contains("wrappers.cargo.command")
     );
     assert!(workspace.findings.is_empty());
-    let plan = plan_text(&prep);
+    let plan = plan_for(&prep)?;
     assert!(plan.contains("mbx compile driver (detected)"), "{plan}");
     Ok(())
 }
@@ -136,7 +138,7 @@ fn nextest_config_selects_ci_or_default() -> TestResult {
         );
         assert_eq!(workspace.profile.compile_driver.as_str(), "cargo");
         assert!(workspace.findings.is_empty());
-        let plan = plan_text(&prep);
+        let plan = plan_for(&prep)?;
         let line = format!("Nextest profile .: {profile} (.config/nextest.toml)");
         assert!(plan.contains(&line), "{plan}");
     }
@@ -285,14 +287,14 @@ fn repeated_generation_stable() -> TestResult {
     let root = repo.path();
     write_file(root, "mise.toml", WRAPPER_INLINE)?;
     write_file(root, ".config/nextest.toml", NEXTEST_CI)?;
-    let before = plan_text(&prepare(root)?);
+    let before = plan_for(&prepare(root)?)?;
     assert!(before.contains("mbx compile driver (detected)"), "{before}");
     let parent = tempfile::TempDir::new()?;
     let first = preview_bytes(&prepare(root)?, &parent, "one")?;
     let second = preview_bytes(&prepare(root)?, &parent, "two")?;
     assert_eq!(first, second, "generate twice byte-identical");
     generate(&prepare(root)?, &GenerateOptions::default())?;
-    assert_eq!(plan_text(&prepare(root)?), before, "plan stable");
+    assert_eq!(plan_for(&prepare(root)?)?, before, "plan stable");
     Ok(())
 }
 

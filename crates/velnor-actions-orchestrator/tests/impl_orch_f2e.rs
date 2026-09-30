@@ -12,7 +12,7 @@ use velnor_actions_orchestrator::{
 
 use crate::impl_common::{
     TestResult, config_with_branch, fixture_manifest_json, git, git_line, make_repo,
-    plan_for_source_change, snapshot,
+    plan_for_source_change, snapshot, without_ambient_identity,
 };
 
 /// Preview-generate `prep` into `dir`.
@@ -265,21 +265,23 @@ fn lint_freshness_and_advisory_run_every_generate() -> TestResult {
 
 #[test]
 fn validator_commands_stay_velnor_only() -> TestResult {
-    let velnor_config = "schema = 1\n[workflow]\nname = \"CI\"\npolicy = \"velnor-repository-v1\"\ndefault_branch = \"testmain\"\n";
-    let velnor = make_velnor_repo(velnor_config)?;
-    let prep = prepare(velnor.path())?;
-    let parent = TempDir::new()?;
-    let preview = parent.path().join("preview");
-    preview_into(&prep, preview.clone())?;
-    let yaml = fs::read_to_string(preview.join(".github/workflows/ci.yml"))?;
-    assert!(yaml.contains("cargo deny"), "velnor policy job");
-    let consumer = make_repo(config_with_branch())?;
-    let prep = prepare(consumer.path())?;
-    let preview = parent.path().join("consumer");
-    preview_into(&prep, preview.clone())?;
-    let yaml = fs::read_to_string(preview.join(".github/workflows/ci.yml"))?;
-    assert!(!yaml.contains("cargo deny"), "consumer has no policy job");
-    Ok(())
+    without_ambient_identity("validator_commands_stay_velnor_only", || {
+        let velnor_config = "schema = 1\n[workflow]\nname = \"CI\"\npolicy = \"velnor-repository-v1\"\ndefault_branch = \"testmain\"\n";
+        let velnor = make_velnor_repo(velnor_config)?;
+        let prep = prepare(velnor.path())?;
+        let parent = TempDir::new()?;
+        let preview = parent.path().join("preview");
+        preview_into(&prep, preview.clone())?;
+        let yaml = fs::read_to_string(preview.join(".github/workflows/ci.yml"))?;
+        assert!(yaml.contains("cargo deny"), "velnor policy job");
+        let consumer = make_repo(config_with_branch())?;
+        let prep = prepare(consumer.path())?;
+        let preview = parent.path().join("consumer");
+        preview_into(&prep, preview.clone())?;
+        let yaml = fs::read_to_string(preview.join(".github/workflows/ci.yml"))?;
+        assert!(!yaml.contains("cargo deny"), "consumer has no policy job");
+        Ok(())
+    })
 }
 
 #[test]

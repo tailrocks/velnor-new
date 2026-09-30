@@ -43,10 +43,27 @@ const NO_QUERY: [&str; 23] = [
 ///
 /// The `Repository:` echo is an OS path, not generator content, so it is
 /// dropped before the scan: temp segments could match tokens spuriously.
+/// The `Action pins:` list is dropped too: pinned `uses:` refs name the
+/// static actions `generate` embeds (including `download-artifact` and
+/// `cache/restore`), which declares content rather than querying caches
+/// or exposing the event-time protocol.
 fn assert_no_query_or_exposure(text: &str) {
+    let mut in_pins = false;
     let body: Vec<&str> = text
         .lines()
-        .filter(|line| !line.starts_with("Repository:"))
+        .filter(|line| {
+            if line.starts_with("  Action pins:") {
+                in_pins = true;
+                return false;
+            }
+            if in_pins {
+                if line.starts_with("    - ") {
+                    return false;
+                }
+                in_pins = false;
+            }
+            !line.starts_with("Repository:")
+        })
         .collect();
     let body = body.join("\n");
     for token in NO_QUERY {

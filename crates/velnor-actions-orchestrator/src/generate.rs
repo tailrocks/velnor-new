@@ -6,19 +6,17 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use velnor_actions_actionlint::render_actionlint_yaml;
-use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_workflow_renderer::guard::{self, SafeTreePath};
-use velnor_actions_workflow_renderer::render::{
-    RenderedTree, render_tree_with_extra, render_workflow_ir_strict,
-};
+use velnor_actions_workflow_renderer::render::{RenderedTree, render_workflow_ir_strict};
 use velnor_actions_workflow_renderer::steps::rehead_actionlint_marker;
+use velnor_actions_workflow_renderer::tree::render_tree_with_extra;
 
 use crate::OrchestratorError;
-use crate::attach::{attach_lock_acquire, attach_preseed};
+use crate::finalized::owned_preparation;
 use crate::pins::resolve_mise_setup;
 use crate::prepare::GenerationPreparation;
 use crate::provenance::{ProfileProvenance, profile_provenance};
-use crate::validate::{validate_staged, verify_velnor_repository_files};
+use crate::validate::validate_staged;
 
 /// Filesystem guards: snapshots, destination validation, and ownership.
 #[path = "generate_guards.rs"]
@@ -108,22 +106,7 @@ fn fail_on_blocking_findings(prep: &GenerationPreparation) -> Result<(), Orchest
 ///
 /// Returns lock, render, actionlint, or unsafe-path errors.
 pub fn render_staged_tree(prep: &GenerationPreparation) -> Result<RenderedTree, OrchestratorError> {
-    let mut owned = prep.clone();
-    if prep.config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1 {
-        match verify_velnor_repository_files(&prep.root)? {
-            Some(lock) => attach_lock_acquire(
-                &mut owned.workflow.ir,
-                &lock,
-                &prep.runner_label,
-                env!("CARGO_PKG_VERSION"),
-            )?,
-            None => attach_preseed(
-                &mut owned.workflow,
-                &prep.runner_label,
-                env!("CARGO_PKG_VERSION"),
-            )?,
-        }
-    }
+    let owned = owned_preparation(prep)?;
     let tree = render_all(&owned)?;
     check_tree_paths(&tree)?;
     Ok(tree)

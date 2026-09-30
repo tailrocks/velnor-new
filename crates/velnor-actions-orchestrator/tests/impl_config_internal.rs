@@ -5,12 +5,13 @@ use std::fs;
 use tempfile::TempDir;
 use velnor_actions_contract::{FinalReport, RunnerSelection};
 use velnor_actions_orchestrator::{
-    OrchestratorError, init_config, merge_internal, plan_internal, plan_text, prepare, resolve_root,
+    OrchestratorError, finalized_jobs, init_config, merge_internal, plan_internal, plan_text,
+    prepare, resolve_root,
 };
 
 use crate::impl_common::{
     TestResult, config_with_branch, err_of, fixture_manifest_json, git, make_repo, passing_reports,
-    plan_for_source_change,
+    plan_for_source_change, without_ambient_identity,
 };
 use crate::impl_merge::task_reports_for;
 
@@ -133,18 +134,17 @@ fn resolve_root_from_nested_subdir() -> TestResult {
 
 #[test]
 fn velnor_policy_rejected_without_identity() -> TestResult {
-    if std::env::var("GITHUB_REPOSITORY").is_ok() {
-        return Ok(()); // Precondition: no ambient repository identity.
-    }
-    let repo = make_repo(
-        "schema = 1\n[workflow]\npolicy = \"velnor-repository-v1\"\ndefault_branch = \"testmain\"\n",
-    )?;
-    let err = err_of(prepare(repo.path()), "identity rejected")?;
-    assert!(
-        matches!(err, OrchestratorError::IdentityRejected { .. }),
-        "got {err}"
-    );
-    Ok(())
+    without_ambient_identity("velnor_policy_rejected_without_identity", || {
+        let repo = make_repo(
+            "schema = 1\n[workflow]\npolicy = \"velnor-repository-v1\"\ndefault_branch = \"testmain\"\n",
+        )?;
+        let err = err_of(prepare(repo.path()), "identity rejected")?;
+        assert!(
+            matches!(err, OrchestratorError::IdentityRejected { .. }),
+            "got {err}"
+        );
+        Ok(())
+    })
 }
 
 #[test]
@@ -353,12 +353,13 @@ fn branch_failure_hints_default_branch_setting() -> TestResult {
 }
 
 #[test]
-fn plan_job_lines_come_from_ir_job_ids() -> TestResult {
+fn plan_job_lines_come_from_finalized_jobs() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     let prep = prepare(repo.path())?;
-    let text = plan_text(&prep);
-    assert!(!prep.workflow.ir.jobs.is_empty(), "IR has jobs");
-    for (id, job) in &prep.workflow.ir.jobs {
+    let jobs = finalized_jobs(&prep)?;
+    let text = plan_text(&prep, &jobs);
+    assert!(!jobs.is_empty(), "finalized jobs exist");
+    for (id, job) in &jobs {
         let line = format!("- {id} ({} steps)", job.steps.len());
         assert!(text.contains(&line), "missing {line}:\n{text}");
     }
@@ -368,29 +369,28 @@ fn plan_job_lines_come_from_ir_job_ids() -> TestResult {
 
 #[test]
 fn identity_ignores_decoy_lines_and_remotes() -> TestResult {
-    if std::env::var("GITHUB_REPOSITORY").is_ok() {
-        return Ok(()); // Precondition: no ambient repository identity.
-    }
-    let config = "schema = 1\n[workflow]\npolicy = \"velnor-repository-v1\"\ndefault_branch = \"testmain\"\n";
-    // Decoy: identity in another remote, in a non-url key, and in comments.
-    let repo = make_repo(config)?;
-    let git_config = repo.path().join(".git/config");
-    let mut text = fs::read_to_string(&git_config)?;
-    text.push_str(
+    without_ambient_identity("identity_ignores_decoy_lines_and_remotes", || {
+        let config = "schema = 1\n[workflow]\npolicy = \"velnor-repository-v1\"\ndefault_branch = \"testmain\"\n";
+        // Decoy: identity in another remote, in a non-url key, and in comments.
+        let repo = make_repo(config)?;
+        let git_config = repo.path().join(".git/config");
+        let mut text = fs::read_to_string(&git_config)?;
+        text.push_str(
         "[remote \"upstream\"]\n\turl = https://github.com/tailrocks/velnor-new.git\n[remote \"origin\"]\n\turl = https://example.com/other/repo.git\n\tpushurl = https://github.com/tailrocks/velnor-new.git\n# tailrocks/velnor-new\n",
     );
-    fs::write(&git_config, text)?;
-    let err = err_of(prepare(repo.path()), "decoys rejected")?;
-    assert!(
-        matches!(err, OrchestratorError::IdentityRejected { .. }),
-        "got {err}"
-    );
-    // Positive control: origin url grants the identity.
-    let repo = make_repo(config)?;
-    let git_config = repo.path().join(".git/config");
-    let mut text = fs::read_to_string(&git_config)?;
-    text.push_str("[remote \"origin\"]\n\turl = https://github.com/tailrocks/velnor-new.git\n");
-    fs::write(&git_config, text)?;
-    prepare(repo.path())?;
-    Ok(())
+        fs::write(&git_config, text)?;
+        let err = err_of(prepare(repo.path()), "decoys rejected")?;
+        assert!(
+            matches!(err, OrchestratorError::IdentityRejected { .. }),
+            "got {err}"
+        );
+        // Positive control: origin url grants the identity.
+        let repo = make_repo(config)?;
+        let git_config = repo.path().join(".git/config");
+        let mut text = fs::read_to_string(&git_config)?;
+        text.push_str("[remote \"origin\"]\n\turl = https://github.com/tailrocks/velnor-new.git\n");
+        fs::write(&git_config, text)?;
+        prepare(repo.path())?;
+        Ok(())
+    })
 }
