@@ -365,7 +365,10 @@ mod tests {
         );
         let config = load(root.path()).expect("safe values pass");
         let rust = config.stacks.rust.expect("rust stack");
-        assert_eq!(rust.custom_tasks, ["audit".to_owned(), "lint:strict".to_owned()]);
+        assert_eq!(
+            rust.custom_tasks,
+            ["audit".to_owned(), "lint:strict".to_owned()]
+        );
     }
 
     #[test]

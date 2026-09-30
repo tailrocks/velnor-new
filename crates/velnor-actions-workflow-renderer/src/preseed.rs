@@ -322,7 +322,7 @@ pub(crate) fn check_preseed_closure(
                 "preseed_incomplete:{id}:{kind}"
             )));
         };
-        if !(download_at < stage_at) {
+        if download_at >= stage_at {
             return Err(RenderError::InvalidWorkflow(format!(
                 "preseed_misordered:{id}"
             )));

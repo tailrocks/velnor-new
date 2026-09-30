@@ -232,7 +232,11 @@ pub fn publish_final_report(
     let dir = plan_artifact_dir(velnor_dir, &report.run_key)?;
     crate::exclusive_write::create_dir_no_symlink(velnor_dir, &dir)?;
     let bytes = canonical_json_bytes(&report).map_err(internal_contract)?;
-    crate::exclusive_write::write_exclusive(&dir.join(FINAL_JSON_FILENAME), &bytes, "plan_artifact")?;
+    crate::exclusive_write::write_exclusive(
+        &dir.join(FINAL_JSON_FILENAME),
+        &bytes,
+        "plan_artifact",
+    )?;
     Ok(dir)
 }
 

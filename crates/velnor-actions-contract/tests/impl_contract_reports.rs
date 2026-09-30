@@ -331,8 +331,8 @@ fn absent_duration_deserializes_to_none_and_skips() -> Result<(), ContractError>
         "exit_code": 0,
         "outputs": [],
     });
-    let report: TaskReport =
-        serde_json::from_value(value).map_err(|err| ContractError::identity("task", err.to_string()))?;
+    let report: TaskReport = serde_json::from_value(value)
+        .map_err(|err| ContractError::identity("task", err.to_string()))?;
     assert_eq!(report.duration_ms, None);
     let bytes = canonical_json_bytes(&report)?;
     assert!(

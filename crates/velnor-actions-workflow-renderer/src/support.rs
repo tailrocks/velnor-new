@@ -351,8 +351,8 @@ fn check_env_tokens(id: &str, env: &BTreeMap<String, String>) -> Result<(), Rend
                 continue;
             }
             if key == "GH_TOKEN" {
-                let scoped = (id == PLAN_JOB_ID || id == FINAL_JOB_ID)
-                    && value == "${{ github.token }}";
+                let scoped =
+                    (id == PLAN_JOB_ID || id == FINAL_JOB_ID) && value == "${{ github.token }}";
                 if scoped {
                     continue;
                 }

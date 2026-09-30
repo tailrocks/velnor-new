@@ -27,9 +27,7 @@ pub fn validate_command_argv(argv: &[String]) -> Result<(), RenderError> {
             return Err(RenderError::BadCommand("empty_arg".to_owned()));
         }
         if arg.contains("${{") {
-            return Err(RenderError::BadCommand(format!(
-                "expression_in_argv:{arg}"
-            )));
+            return Err(RenderError::BadCommand(format!("expression_in_argv:{arg}")));
         }
         if arg.chars().any(|ch| ch == '\0' || ch == '\n' || ch == '\r') {
             return Err(RenderError::BadCommand(format!("control_char:{arg}")));

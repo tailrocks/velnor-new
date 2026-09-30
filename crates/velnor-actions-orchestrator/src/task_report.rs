@@ -325,7 +325,11 @@ fn write_entry_reports(
     crate::exclusive_write::create_dir_no_symlink(runner_temp, &task_files_dir)?;
     let matrix_bytes = canonical_json_bytes(matrix).map_err(internal_contract)?;
     let task_bytes = canonical_json_bytes(task).map_err(internal_contract)?;
-    crate::exclusive_write::write_exclusive(&dir.join("matrix-report.json"), &matrix_bytes, "report")?;
+    crate::exclusive_write::write_exclusive(
+        &dir.join("matrix-report.json"),
+        &matrix_bytes,
+        "report",
+    )?;
     crate::exclusive_write::write_exclusive(
         &task_files_dir.join(format!("{}.json", task.task_report_id)),
         &task_bytes,

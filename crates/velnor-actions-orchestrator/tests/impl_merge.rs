@@ -247,9 +247,7 @@ fn trust_mismatch_fails_closed_with_scope_token() -> TestResult {
         final_report.miss_reasons
     );
     let mut request = merge_request(&plan, &matrix, &reports_value, &success_jobs());
-    let files = request["task_reports"]
-        .as_array_mut()
-        .ok_or("task files")?;
+    let files = request["task_reports"].as_array_mut().ok_or("task files")?;
     files[0]["trust"] = serde_json::json!("trusted");
     let final_report = merge(&request)?;
     assert_eq!(final_report.status, FinalStatus::PlanningFailed);

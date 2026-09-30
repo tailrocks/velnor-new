@@ -12,6 +12,7 @@
 //! plant, not a winning race.
 
 use std::fs;
+use std::io::Write;
 use std::path::Path;
 
 use crate::OrchestratorError;
@@ -46,7 +47,6 @@ pub(crate) fn write_exclusive(
     if !created_identity(&file, path) {
         return Err(internal("symlink_refused"));
     }
-    use std::io::Write;
     file.write_all(bytes)
         .map_err(|_| internal(&format!("{context}_unwritable")))
 }
@@ -71,9 +71,7 @@ pub(crate) fn create_dir_no_symlink(anchor: &Path, dir: &Path) -> Result<(), Orc
     let mut current = anchor.to_path_buf();
     for component in relative.components() {
         current.push(component);
-        if fs::symlink_metadata(&current)
-            .is_ok_and(|meta| meta.file_type().is_symlink())
-        {
+        if fs::symlink_metadata(&current).is_ok_and(|meta| meta.file_type().is_symlink()) {
             return Err(internal("symlink_refused"));
         }
     }

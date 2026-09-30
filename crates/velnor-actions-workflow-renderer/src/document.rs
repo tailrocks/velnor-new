@@ -138,9 +138,7 @@ fn triggers_to_yaml(triggers: &Trigger) -> Yaml {
 /// The inventory is every job except the gate itself; a lone gate has
 /// nothing to conclude over and fails closed instead of emitting a
 /// channel the merge would judge as `empty_needs`.
-fn needs_channel_envs(
-    jobs: &BTreeMap<String, Job>,
-) -> Result<Vec<(String, String)>, RenderError> {
+fn needs_channel_envs(jobs: &BTreeMap<String, Job>) -> Result<Vec<(String, String)>, RenderError> {
     if !jobs.contains_key(FINAL_JOB_ID) {
         return Ok(Vec::new());
     }

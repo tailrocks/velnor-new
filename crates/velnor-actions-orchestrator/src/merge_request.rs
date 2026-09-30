@@ -215,8 +215,8 @@ mod tests {
         );
         let needs = r#"{"plan":"success","rust-demo":"success"}"#;
         let expected = r#"["plan","rust-demo"]"#;
-        let request =
-            assemble_with_needs("local", dir.path(), Some(needs), Some(expected)).expect("assemble");
+        let request = assemble_with_needs("local", dir.path(), Some(needs), Some(expected))
+            .expect("assemble");
         let value: serde_json::Value = serde_json::from_str(&request).expect("json");
         assert!(value.get("base").is_none(), "{request}");
         assert_eq!(value["schema"], 1);
@@ -247,9 +247,8 @@ mod tests {
             ],
         );
         let needs = r#"{"plan":{"result":"success","outputs":{}}}"#;
-        let request =
-            assemble_with_needs("local", dir.path(), Some(needs), Some(r#"["plan"]"#))
-                .expect("assemble");
+        let request = assemble_with_needs("local", dir.path(), Some(needs), Some(r#"["plan"]"#))
+            .expect("assemble");
         let value: serde_json::Value = serde_json::from_str(&request).expect("json");
         let ids: Vec<&str> = value["matrix_reports"]
             .as_array()
@@ -264,8 +263,7 @@ mod tests {
     #[test]
     fn assembly_records_gaps_and_rejects_bad_report() {
         let empty = tempfile::TempDir::new().expect("tempdir");
-        let request =
-            assemble_with_needs("local", empty.path(), None, None).expect("null plan");
+        let request = assemble_with_needs("local", empty.path(), None, None).expect("null plan");
         let value: serde_json::Value = serde_json::from_str(&request).expect("json");
         assert!(value["plan"].is_null(), "{request}");
         assert!(value["matrix"].is_null(), "{request}");
@@ -282,13 +280,9 @@ mod tests {
                 "not json",
             )],
         );
-        let request = assemble_with_needs(
-            "local",
-            bad.path(),
-            Some(r#"{"a":"b"}"#),
-            Some(r#"["a"]"#),
-        )
-        .expect("diagnostic");
+        let request =
+            assemble_with_needs("local", bad.path(), Some(r#"{"a":"b"}"#), Some(r#"["a"]"#))
+                .expect("diagnostic");
         let errors = error_list(&request);
         assert!(
             errors
@@ -340,13 +334,8 @@ mod tests {
             serde_json::json!(["lint", "plan"]),
             "inventory binds to expected, not observed"
         );
-        let missing = assemble_with_needs(
-            "local",
-            dir.path(),
-            Some(r#"{"plan":"success"}"#),
-            None,
-        )
-        .expect("diagnostic");
+        let missing = assemble_with_needs("local", dir.path(), Some(r#"{"plan":"success"}"#), None)
+            .expect("diagnostic");
         let errors = error_list(&missing);
         assert!(
             errors.contains(&"missing_needs_expected".to_owned()),

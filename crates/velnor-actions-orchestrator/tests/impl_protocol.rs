@@ -66,10 +66,7 @@ fn write_request_routes_fork_pull_requests_to_fork() -> TestResult {
             },
         })
         .to_string();
-        let file = dir
-            .path()
-            .join(expected)
-            .join("plan-v1-request.json");
+        let file = dir.path().join(expected).join("plan-v1-request.json");
         write_request_parts(&file, "pull_request", &payload, None)?;
         let value: serde_json::Value = serde_json::from_str(&fs::read_to_string(&file)?)?;
         assert_eq!(value["event"], expected, "fork={fork}");

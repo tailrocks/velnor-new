@@ -103,8 +103,7 @@ pub fn is_valid_rust_target(target: &str) -> bool {
 pub fn is_valid_feature_name(feature: &str) -> bool {
     !feature.is_empty()
         && feature.bytes().all(|b| {
-            b.is_ascii_alphanumeric()
-                || matches!(b, b'_' | b'-' | b'.' | b'+' | b'/' | b':' | b'?')
+            b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'.' | b'+' | b'/' | b':' | b'?')
         })
 }
 
