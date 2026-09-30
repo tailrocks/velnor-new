@@ -5,4 +5,4 @@
 rules:
   unpinned-uses:
     ignore:
-      - velnor.yml:30:15  # expires: alint reviewed-tag exception review (version-policy §2)
+      - velnor.yml:1162:15  # expires: alint reviewed-tag exception review (version-policy §2)

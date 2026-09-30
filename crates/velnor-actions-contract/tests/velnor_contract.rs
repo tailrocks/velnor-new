@@ -9,6 +9,8 @@ mod impl_contract;
 mod impl_contract_ids;
 #[path = "impl_contract_release.rs"]
 mod impl_contract_release;
+#[path = "impl_contract_release_modes.rs"]
+mod impl_contract_release_modes;
 #[path = "impl_contract_reports.rs"]
 mod impl_contract_reports;
 #[path = "impl_contract_targets.rs"]

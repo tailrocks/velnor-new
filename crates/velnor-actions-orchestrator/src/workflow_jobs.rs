@@ -67,6 +67,8 @@ pub(crate) fn plan_job(
         runs_on: label.to_owned(),
         needs: Vec::new(),
         condition: None,
+        permissions: None,
+        environment: None,
         steps,
     })
 }
@@ -89,6 +91,8 @@ pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, Orches
         runs_on: label.to_owned(),
         needs: Vec::new(),
         condition: None,
+        permissions: None,
+        environment: None,
         steps: vec![
             checkout_action()?,
             Step {
@@ -137,6 +141,8 @@ pub(crate) fn final_job(
         runs_on: label.to_owned(),
         needs,
         condition: Some(FINAL_CONDITION.to_owned()),
+        permissions: None,
+        environment: None,
         steps,
     })
 }

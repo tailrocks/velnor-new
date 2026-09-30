@@ -119,11 +119,10 @@ pub(crate) fn build_workflow(
             pull_request_types: EXPECTED_PR_TYPES.iter().map(ToString::to_string).collect(),
             push_branches: vec![branch.to_owned()],
             merge_group: true,
+            workflow_dispatch: None,
+            schedule: None,
         },
-        permissions: Permissions {
-            contents: "read".to_owned(),
-            actions: "read".to_owned(),
-        },
+        permissions: Permissions::default(),
         concurrency: Concurrency {
             group: CONCURRENCY_GROUP.to_owned(),
             cancel_in_progress: CONCURRENCY_CANCEL.to_owned(),

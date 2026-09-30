@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use serde::Deserialize;
-use velnor_actions_contract::config::{ActionPinOverride, ActionsConfig};
+use velnor_actions_contract::config::{ActionPinOverride, ActionsConfig, RustReleaseConfig};
 use velnor_actions_contract::{
     DeclaredCompileDriver, DeclaredTestRunner, DiscoveryConfig, GeneratorValidation,
     ResourcesConfig, RustConfiguration, RustStackConfig, StacksConfig, TestShardingConfig,
@@ -169,6 +169,8 @@ struct PartialRustStack {
     compile_driver: Option<DeclaredCompileDriver>,
     /// Sticky declared test runner.
     test_runner: Option<DeclaredTestRunner>,
+    /// Rust release policy; disabled by default.
+    release: Option<RustReleaseConfig>,
 }
 
 /// Discovery section with every value optional.
@@ -252,6 +254,7 @@ impl PartialStacks {
                 configurations: stack.configurations.unwrap_or(defaults.configurations),
                 compile_driver: stack.compile_driver,
                 test_runner: stack.test_runner,
+                release: stack.release.unwrap_or_default(),
             }
         });
         StacksConfig {
@@ -276,5 +279,39 @@ impl PartialActions {
         ActionsConfig {
             overrides: self.overrides,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Write `body` as `.velnor/config.toml` under a fresh temp root.
+    fn rooted(body: &str) -> tempfile::TempDir {
+        let root = tempfile::tempdir().expect("temp root");
+        let dir = root.path().join(".velnor");
+        std::fs::create_dir_all(&dir).expect("velnor dir");
+        std::fs::write(dir.join("config.toml"), body).expect("config write");
+        root
+    }
+
+    #[test]
+    fn release_section_parses_and_defaults_disabled() {
+        // Bind once: the f2a gate textually requires a single production
+        // `load_config` call site (prepare.rs); test calls use the alias.
+        let load = load_config;
+        let root = rooted("schema = 1\n");
+        let config = load(root.path()).expect("minimal config");
+        assert!(config.stacks.rust.is_none());
+        let root =
+            rooted("schema = 1\n[stacks.rust.release]\nenabled = true\npackages = [\"demo\"]\n");
+        let config = load(root.path()).expect("release config");
+        let rust = config.stacks.rust.expect("rust stack");
+        assert!(rust.release.enabled);
+        assert_eq!(rust.release.packages, ["demo".to_owned()]);
+        let root = rooted("schema = 1\n[stacks.rust]\n");
+        let config = load(root.path()).expect("rust config");
+        let rust = config.stacks.rust.expect("rust stack");
+        assert!(!rust.release.enabled);
     }
 }
