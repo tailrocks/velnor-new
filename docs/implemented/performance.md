@@ -349,3 +349,35 @@ was needed.
 `scripts/verify-local.sh` now also pins per-crate `cargo test --doc`,
 per-crate `cargo doc --no-deps`, and the named fixture suite; every
 stage still runs and every failure is still listed.
+
+## P08 cache measurements + warm-reuse proof (R11/R12)
+
+Commit measured: `347976d`. Full evidence with per-dimension records
+(queue/setup/tool-install/transfer/compile/test/artifact/
+critical-path/sizes/bytes/reasons) lives in
+[cache-measurements.md](cache-measurements.md); this section holds
+the sequential-run table. Hosted seed run 36754512444 (plan-only) vs
+warm run 36760724180 (plan + 7 crates), `ubuntu-26.04`; service
+listing 21 entries / 1,325,342,795 B (== usage API exactly).
+
+| Layer | Seed (cold) | Warm (N+1) |
+| --- | --- | --- |
+| Mise tools | MISS, cold install ~14 s/job | MISS (no `mise-v1-*` entry saved; reason undetermined) |
+| Sources restore | MISS (~0.3 s) | HIT 17,568,922 B, exact seed key; plan 1.85 s, crate ~0.6 s |
+| Fetch | `sources miss`, 58 `Downloaded` | `sources hit, skipping fetch`, 0 `Downloaded` |
+| Sources save | SAVED ~2.0 s | SKIPPED (immutable entry kept, no duplicate) |
+| MBX objects | MISS (`no_entry`, no default-branch seed) | MISS (same; setup ~10.3 s) |
+| Aggregate transfer | — | 8 × 17,568,922 = 140,551,376 B for 17,568,922 B stored once |
+
+Headroom vs the documented 10 GB default (taken as 10 GiB):
+9,412,075,445 B free (12.3% used); R07→now delta +5 entries /
++281.69 MiB with zero evictions. Local replay (`cacheprobe`, 6
+locked packages): cold fetch 1.33 s → subset snapshot 557,269 B
+(0.58 s save) → restore 0.35 s → probe `sources hit` (0.05 s) →
+offline build 4.10 s, rerun 0.03 s, test 0.57 s, zero downloads.
+Static proof: `impl_cache_fixtures.rs` (per-job keys/paths, one
+shared sources key, single plan writer, restore<MBX<fetch) and
+`impl_cache_warm.rs` (identical re-renders, offline-skip branch,
+`--offline` obligations, disjoint MBX/Cargo shapes). Quota helpers
+are composed by `summarize_cache_usage` (post-hoc reporting path;
+render stays hermetic — see cache-measurements.md §4).

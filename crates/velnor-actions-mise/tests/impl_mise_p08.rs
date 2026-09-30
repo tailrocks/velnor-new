@@ -214,3 +214,20 @@ fn c12_remote_mbx_backends_rejected() {
         assert!(transport::assert_no_remote_cache(bad).is_err());
     }
 }
+
+#[test]
+fn c13_usage_report_composes_service_parse_quota_and_transfer() {
+    // Live `gh cache list --json` shape (fixed format sample, not a
+    // measurement): one shared sources entry plus two tools entries.
+    let body = r#"[{"key":"velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-aa","sizeInBytes":17568922},{"key":"mise-v1-x86_64-unknown-linux-gnu-2026.9.16-bb","sizeInBytes":65857248},{"key":"mise-v1-x86_64-unknown-linux-gnu-2026.9.16-cc","sizeInBytes":54077706}]"#;
+    let report = trust::summarize_cache_usage(body, 10_737_418_240, 17_568_922, 8).expect("report");
+    assert_eq!(report.active_bytes, 17_568_922 + 65_857_248 + 54_077_706);
+    assert_eq!(report.count, 3);
+    assert_eq!(report.limit_bytes, 10_737_418_240);
+    assert_eq!(report.headroom_bytes, 10_737_418_240 - report.active_bytes);
+    assert_eq!(report.stored_bytes, 17_568_922);
+    assert_eq!(report.restoring_jobs, 8);
+    assert_eq!(report.aggregate_transfer_bytes, 17_568_922 * 8);
+    assert!(trust::summarize_cache_usage("nope", 1000, 10, 1).is_err());
+    assert!(trust::summarize_cache_usage(body, 1, 10, 1).is_err());
+}
