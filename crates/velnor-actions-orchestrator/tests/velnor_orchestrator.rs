@@ -11,6 +11,7 @@ mod impl_gates_shard;
 mod impl_gen_gates;
 mod impl_generate_p09_preview;
 mod impl_git_authority_p10;
+mod impl_git_paths_p10;
 mod impl_matrix;
 mod impl_merge;
 mod impl_merge_plan;
