@@ -135,6 +135,10 @@ pub(crate) fn validate_provenance(
     validate_workflow_ref(manifest, expected)?;
     reject(manifest.artifact_name == expect, "artifact_mismatch")?;
     for task in &manifest.tasks {
+        reject(
+            validate_digest(&task.closure_digest).is_ok(),
+            "bad_task_identity",
+        )?;
         if let Some(proof) = &task.proof {
             proof.validate().map_err(|_| "bad_task_proof".to_owned())?;
             reject(proof_matches_task(proof, task), "proof_mismatch")?;

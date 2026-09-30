@@ -13,6 +13,7 @@ fn digest_full(
     toolchain: &str,
     platform: &str,
     argv: &[String],
+    closure: &str,
 ) -> String {
     let group = TaskGroup {
         task_id: format!("stack/rust/root/{}/default", kind.as_str()),
@@ -50,6 +51,7 @@ fn digest_full(
         manifest: "Cargo.toml",
         generator: &generator,
         extension,
+        closure_digest: closure,
     })
     .expect("digest")
 }
@@ -63,6 +65,7 @@ fn digest_for(package_id: &str, kind: TaskKind) -> String {
         &digest_b3(b"toolchain"),
         &digest_b3(b"platform"),
         &["clippy".to_owned()],
+        &digest_b3(b"closure"),
     )
 }
 
@@ -96,6 +99,7 @@ fn envelope_binds_platform_toolchain_config_argv() {
             toolchain,
             platform,
             argv,
+            &digest_b3(b"closure"),
         )
     };
     let toolchain = digest_b3(b"toolchain");
@@ -120,5 +124,23 @@ fn envelope_binds_platform_toolchain_config_argv() {
             &platform,
             &["clippy".to_owned(), "--fix".to_owned()]
         )
+    );
+}
+
+#[test]
+fn envelope_binds_input_closure_digest() {
+    let base = digest_for("demo@0.1.0", TaskKind::Clippy);
+    let edited = digest_full(
+        "demo@0.1.0",
+        TaskKind::Clippy,
+        "default",
+        &digest_b3(b"toolchain"),
+        &digest_b3(b"platform"),
+        &["clippy".to_owned()],
+        &digest_b3(b"closure-edited"),
+    );
+    assert_ne!(
+        base, edited,
+        "a source edit flips the closure digest and must flip input_digest"
     );
 }

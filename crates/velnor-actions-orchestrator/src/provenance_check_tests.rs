@@ -15,7 +15,7 @@ use super::*;
 fn manifest_and_expected(base: &str) -> (BaselineManifest, ProvenanceExpectations) {
     let digest = digest_b3(b"d");
     let manifest = BaselineManifest {
-        schema: 1,
+        schema: 2,
         repository_id: digest.clone(),
         source_commit: base.to_owned(),
         ref_: "refs/heads/testmain".to_owned(),
@@ -107,7 +107,7 @@ fn every_wrong_dimension_fails_validation() {
             reason.to_owned()
         );
     };
-    check(&|m| m.schema = 2, "stale_schema:migration_required:v2");
+    check(&|m| m.schema = 1, "stale_schema:migration_required:v1");
     check(&|m| m.schema = 0, "stale_schema:migration_required:v0");
     check(&|m| m.source_commit = "b".repeat(40), "wrong_commit");
     check(&|m| m.ref_ = "refs/heads/other".to_owned(), "wrong_ref");
