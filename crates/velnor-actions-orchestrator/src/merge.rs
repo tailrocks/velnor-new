@@ -1,28 +1,31 @@
 //! Event-time `merge-v1` JSON entrypoint (schema 1).
 
-// Inventory checks live beside the merge so `lib.rs` stays untouched.
+// Inventory and plan checks live beside the merge so `lib.rs` stays untouched.
+#[path = "merge_checks.rs"]
+pub(crate) mod merge_checks;
 #[path = "required_evidence.rs"]
 pub(crate) mod required_evidence;
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 use serde::Deserialize;
 use velnor_actions_contract::{
-    CandidateReport, ExecuteTaskRef, FinalCounts, FinalReport, FinalStatus, MatrixEntry,
-    MatrixReport, ObligationDecision, Plan, PlanMatrix, RequiredJobResult, canonical_json_bytes,
-    final_report_id_for_run, validate_run_key,
+    CandidateReport, FinalCounts, FinalReport, FinalStatus, MatrixReport, ObligationDecision, Plan,
+    PlanMatrix, RequiredJobResult, final_report_id_for_run, validate_run_key,
 };
 
+use self::merge_checks::{
+    check_agreement, check_execute_inventory, check_plan_evidence, check_plan_shape, plan_digests,
+    plan_entries, shards_failed,
+};
 pub(crate) use self::required_evidence::BaselineManifest;
 use self::required_evidence::{
     check_required_evidence, diagnostic_without_plan, fold_candidate, fold_jobs,
     reported_job_results,
 };
 use crate::OrchestratorError;
-use crate::cover::shard::{ResourceLimits, ShardProof, check_entry_shards, validate_budgets};
-use crate::cover::{
-    CoverSinks, Fold, Signals, cover_entry, partition_reports, revalidate_coverage,
-};
+use crate::cover::shard::{ResourceLimits, ShardProof};
+use crate::cover::{CoverSinks, Fold, Signals, cover_entry, partition_reports};
 use crate::internal::{SCHEMA, check_schema, internal_contract};
 
 /// `merge-v1` request: plan, matrix bytes, reports, jobs, and candidate.
@@ -241,160 +244,6 @@ fn build_final(request: &MergeRequest, plan: &Plan) -> Result<FinalReport, Orche
     })
 }
 
-/// Check 1: `matrix.json` agrees with the plan matrix (WF-4.16).
-fn check_agreement(
-    matrix: Option<&PlanMatrix>,
-    plan: &Plan,
-    signals: &mut Signals,
-    miss_reasons: &mut BTreeSet<String>,
-) -> Result<(), OrchestratorError> {
-    let Some(matrix) = matrix else {
-        signals.planning_failed = true;
-        miss_reasons.insert("source_missing".to_owned());
-        return Ok(());
-    };
-    let matrix_bytes = canonical_json_bytes(matrix).map_err(internal_contract)?;
-    if velnor_actions_contract::check_matrix_agreement(&plan.matrix, &matrix_bytes).is_err() {
-        signals.planning_failed = true;
-        miss_reasons.insert("cache_corrupt".to_owned());
-    }
-    Ok(())
-}
-
-/// The no-work decision needs obligations and task IDs to agree.
-fn check_plan_shape(plan: &Plan, signals: &mut Signals, miss_reasons: &mut BTreeSet<String>) {
-    if plan.obligations.is_empty() != plan.task_ids.is_empty() {
-        signals.planning_failed = true;
-        miss_reasons.insert("cache_corrupt".to_owned());
-    }
-}
-
-/// Every Execute obligation needs a matrix leg; hollow plans fail closed.
-///
-/// Coverage walks `matrix.include`, so an Execute obligation without a
-/// leg would pass with zero task evidence. Baseline-covered and
-/// cache-reused dispositions need no leg. The match stays exhaustive so
-/// a future decision variant fails to compile here instead of slipping
-/// through unchecked.
-fn check_execute_inventory(
-    plan: &Plan,
-    signals: &mut Signals,
-    miss_reasons: &mut BTreeSet<String>,
-) {
-    let mut leg_tasks = BTreeSet::new();
-    for entry in &plan.matrix.include {
-        for task_ref in entry.execute_task_ids.tasks.values() {
-            let ids: &[String] = match task_ref {
-                ExecuteTaskRef::Single(id) => std::slice::from_ref(id),
-                ExecuteTaskRef::Shards(ids) => ids.as_slice(),
-            };
-            // Leg IDs match obligation IDs verbatim: sharded obligations
-            // carry their full `/shard-N-of-M` IDs, never the bare base.
-            for id in ids {
-                leg_tasks.insert(id.as_str());
-            }
-        }
-    }
-    let mut hollow = false;
-    for obligation in &plan.obligations {
-        match obligation.decision {
-            ObligationDecision::Execute => {
-                hollow = hollow || !leg_tasks.contains(obligation.task_id.as_str());
-            }
-            ObligationDecision::ReusedFromTaskCache
-            | ObligationDecision::CoveredByTrustedBaseline => {}
-        }
-    }
-    if hollow {
-        signals.planning_failed = true;
-        miss_reasons.insert("no_entry".to_owned());
-    }
-}
-
-/// Expected entries keyed by report ID, sorted.
-fn plan_entries(plan: &Plan) -> BTreeMap<&str, &MatrixEntry> {
-    plan.matrix
-        .include
-        .iter()
-        .map(|entry| (entry.report_id.as_str(), entry))
-        .collect()
-}
-
-/// Compare the planned obligation set with the sequential reference.
-fn reference_matches(reference: &[String], planned: &[String]) -> bool {
-    let mut left = reference.to_vec();
-    let mut right = planned.to_vec();
-    left.sort();
-    right.sort();
-    left == right
-}
-
-/// Revalidate planner coverage, limits, and reference obligations.
-fn check_plan_evidence(
-    plan: &Plan,
-    request: &MergeRequest,
-    signals: &mut Signals,
-    miss_reasons: &mut BTreeSet<String>,
-) {
-    revalidate_coverage(
-        plan,
-        request.baseline_manifest.as_ref(),
-        signals,
-        miss_reasons,
-    );
-    if request
-        .limits
-        .as_ref()
-        .is_some_and(|limits| validate_budgets(limits).is_err())
-    {
-        signals.planning_failed = true;
-    }
-    if request
-        .reference_task_ids
-        .as_ref()
-        .is_some_and(|reference| !reference_matches(reference, &plan.task_ids))
-    {
-        signals.planning_failed = true;
-    }
-}
-
-/// True when an entry's shard proofs fail validation.
-fn shards_failed(entry: &MatrixEntry, empty: u32, plan: &Plan, request: &MergeRequest) -> bool {
-    let bases = sharded_bases(entry);
-    if bases.is_empty() {
-        return false;
-    }
-    let mut inputs = BTreeMap::new();
-    for ob in &plan.obligations {
-        inputs.insert(ob.task_id.clone(), ob.input_digest.clone());
-    }
-    check_entry_shards(&bases, empty, &request.shard_proofs, &inputs).is_err()
-}
-
-/// Base task IDs carrying shard suffixes in one entry.
-fn sharded_bases(entry: &MatrixEntry) -> BTreeSet<String> {
-    let mut bases = BTreeSet::new();
-    for task_ref in entry.execute_task_ids.tasks.values() {
-        let ids = match task_ref {
-            velnor_actions_contract::ExecuteTaskRef::Single(id) => std::slice::from_ref(id),
-            velnor_actions_contract::ExecuteTaskRef::Shards(ids) => ids.as_slice(),
-        };
-        for id in ids {
-            if let Some((base, _)) = id.split_once("/shard-") {
-                bases.insert(base.to_owned());
-            }
-        }
-    }
-    bases
-}
-
-/// Obligation task digests keyed by task ID.
-fn plan_digests(plan: &Plan) -> BTreeMap<&str, &str> {
-    plan.obligations
-        .iter()
-        .map(|obligation| (obligation.task_id.as_str(), obligation.task_digest.as_str()))
-        .collect()
-}
 /// Check 5: precedence over collected signals, then pass or no-work.
 fn decide(signals: &Signals, plan: &Plan) -> FinalStatus {
     if signals.planning_failed {

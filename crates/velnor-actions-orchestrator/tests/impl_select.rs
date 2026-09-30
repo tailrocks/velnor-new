@@ -25,7 +25,7 @@ fn scaffold(root: &Path) -> TestResult {
 }
 
 /// Two-member workspace fixture; root package included when asked.
-fn make_ws_repo(root_package: bool) -> Result<TempDir, Box<dyn std::error::Error>> {
+pub(crate) fn make_ws_repo(root_package: bool) -> Result<TempDir, Box<dyn std::error::Error>> {
     let dir = TempDir::new()?;
     let root = dir.path();
     scaffold(root)?;
@@ -77,7 +77,7 @@ fn make_mixed_repo() -> Result<TempDir, Box<dyn std::error::Error>> {
 }
 
 /// Commit everything and return the new HEAD.
-fn commit(root: &Path, message: &str) -> Result<String, Box<dyn std::error::Error>> {
+pub(crate) fn commit(root: &Path, message: &str) -> Result<String, Box<dyn std::error::Error>> {
     git(&["add", "."], root)?;
     git(&["commit", "-m", message], root)?;
     git_line(&["rev-parse", "HEAD"], root)
@@ -94,7 +94,7 @@ fn lockfile(root: &Path) -> TestResult {
 }
 
 /// Plan base..head as a pull request; return plan plus warnings.
-fn plan_pr(
+pub(crate) fn plan_pr(
     root: &Path,
     base: Option<&str>,
     head: &str,
@@ -115,7 +115,7 @@ fn plan_pr(
 }
 
 /// Plan base..head as a push; return plan plus warnings.
-fn plan_push(
+pub(crate) fn plan_push(
     root: &Path,
     base: Option<&str>,
     head: &str,
@@ -135,35 +135,14 @@ fn plan_push(
     Ok((plan, warnings))
 }
 
-/// Repo checked out at a merge commit; returns base, feature tip, merge HEAD.
-///
-/// The feature tip is `HEAD^2` of the checkout: the merge result GitHub
-/// checks out for pull requests.
-fn merge_checkout_repo() -> Result<(TempDir, String, String, String), Box<dyn std::error::Error>> {
-    let repo = make_ws_repo(false)?;
-    let root = repo.path();
-    let base = commit(root, "one")?;
-    git(&["checkout", "-b", "feature"], root)?;
-    fs::write(
-        root.join("beta/src/lib.rs"),
-        "pub fn f() {}\npub fn g() {}\n",
-    )?;
-    let feature = commit(root, "feat")?;
-    git(&["checkout", "testmain"], root)?;
-    git(&["merge", "--no-ff", "feature", "-m", "merge"], root)?;
-    let merge_head = git_line(&["rev-parse", "HEAD"], root)?;
-    assert_eq!(git_line(&["rev-parse", "HEAD^2"], root)?, feature);
-    Ok((repo, base, feature, merge_head))
-}
-
 /// True when both members have selected tasks.
-fn selects_both(plan: &Plan) -> bool {
+pub(crate) fn selects_both(plan: &Plan) -> bool {
     plan.task_ids.iter().any(|id| id.contains("alpha"))
         && plan.task_ids.iter().any(|id| id.contains("beta"))
 }
 
 /// Reasons of one member's obligations, non-empty by construction.
-fn reasons_for<'a>(plan: &'a Plan, member: &str) -> Vec<&'a str> {
+pub(crate) fn reasons_for<'a>(plan: &'a Plan, member: &str) -> Vec<&'a str> {
     let reasons: Vec<&str> = plan
         .obligations
         .iter()
@@ -175,7 +154,7 @@ fn reasons_for<'a>(plan: &'a Plan, member: &str) -> Vec<&'a str> {
 }
 
 /// Assert every obligation executes as changed.
-fn assert_all_changed(plan: &Plan) {
+pub(crate) fn assert_all_changed(plan: &Plan) {
     let changed = plan
         .obligations
         .iter()
@@ -344,142 +323,5 @@ fn unclassified_file_still_selects_all() -> TestResult {
         "tag: {warnings:?}"
     );
     assert_all_changed(&plan);
-    Ok(())
-}
-
-#[test]
-fn corrupt_base_manifest_tags_comparison_unavailable() -> TestResult {
-    let repo = make_ws_repo(false)?;
-    let root = repo.path();
-    fs::write(root.join("alpha/Cargo.toml"), "[[[broken\n")?;
-    let base = commit(root, "one")?;
-    fs::write(
-        root.join("alpha/Cargo.toml"),
-        "[package]\nname = \"alpha\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
-    )?;
-    let head = commit(root, "two")?;
-    let (plan, warnings) = plan_pr(root, Some(&base), &head)?;
-    assert!(
-        selects_both(&plan),
-        "missing base graph broadens: {:?}",
-        plan.task_ids
-    );
-    assert!(
-        warnings
-            .iter()
-            .any(|warning| warning.contains("comparison_unavailable")),
-        "tag: {warnings:?}"
-    );
-    Ok(())
-}
-
-#[test]
-fn removed_dependency_keeps_consumer_selected() -> TestResult {
-    let repo = make_ws_repo(false)?;
-    let root = repo.path();
-    fs::write(
-        root.join("alpha/Cargo.toml"),
-        "[package]\nname = \"alpha\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\nbeta = { path = \"../beta\" }\n",
-    )?;
-    let base = commit(root, "one")?;
-    fs::write(
-        root.join("alpha/Cargo.toml"),
-        "[package]\nname = \"alpha\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
-    )?;
-    fs::write(
-        root.join("beta/src/lib.rs"),
-        "pub fn f() {}\npub fn g() {}\n",
-    )?;
-    let head = commit(root, "two")?;
-    let (plan, warnings) = plan_pr(root, Some(&base), &head)?;
-    assert!(
-        selects_both(&plan),
-        "removed edge keeps consumer: {:?}",
-        plan.task_ids
-    );
-    let alpha = reasons_for(&plan, "alpha");
-    assert!(
-        alpha.iter().all(|r| *r == "affected_by_change"),
-        "{alpha:?}"
-    );
-    assert!(
-        !warnings
-            .iter()
-            .any(|warning| warning.contains("comparison_unavailable")),
-        "base graph fetched: {warnings:?}"
-    );
-    Ok(())
-}
-
-#[test]
-fn missing_or_bad_base_tags_comparison_unavailable() -> TestResult {
-    let repo = make_ws_repo(false)?;
-    let root = repo.path();
-    let head = commit(root, "one")?;
-    let (plan, warnings) = plan_pr(root, None, &head)?;
-    assert!(selects_both(&plan), "missing base broadens");
-    assert!(
-        warnings
-            .iter()
-            .any(|warning| warning == "comparison_unavailable:missing_base:all_changed"),
-        "tag: {warnings:?}"
-    );
-    assert_all_changed(&plan);
-    let (plan, warnings) = plan_pr(root, Some(&"0".repeat(40)), &head)?;
-    assert!(selects_both(&plan), "bad base broadens");
-    assert!(
-        warnings
-            .iter()
-            .any(|warning| warning.contains("comparison_unavailable")),
-        "tag: {warnings:?}"
-    );
-    Ok(())
-}
-
-#[test]
-fn push_missing_base_tags_comparison_unavailable() -> TestResult {
-    let repo = make_ws_repo(false)?;
-    let root = repo.path();
-    let head = commit(root, "one")?;
-    let (plan, warnings) = plan_push(root, None, &head)?;
-    assert!(selects_both(&plan), "missing base broadens");
-    assert!(
-        warnings
-            .iter()
-            .any(|warning| warning == "comparison_unavailable:missing_base:all_changed"),
-        "tag: {warnings:?}"
-    );
-    assert_all_changed(&plan);
-    Ok(())
-}
-
-#[test]
-fn merge_checkout_accepts_head2_for_pr() -> TestResult {
-    let (repo, base, feature, _merge) = merge_checkout_repo()?;
-    let root = repo.path();
-    let (plan, _warnings) = plan_pr(root, Some(&base), &feature)?;
-    assert_eq!(plan.head, feature, "planned the merge parent");
-    assert!(selects_both(&plan), "universe kept: {:?}", plan.task_ids);
-    plan.validate()?;
-    Ok(())
-}
-
-#[test]
-fn merge_checkout_rejects_head2_for_push() -> TestResult {
-    let (repo, _base, feature, merge_head) = merge_checkout_repo()?;
-    let root = repo.path();
-    let request = serde_json::json!({
-        "schema": 1,
-        "run_key": "local",
-        "base": None::<String>,
-        "head": feature,
-        "event": "push",
-        "root": root.display().to_string(),
-    });
-    let err = plan_internal(&request.to_string()).expect_err("push rejects merge checkout");
-    assert!(err.to_string().contains("checkout_head_mismatch"), "{err}");
-    // The merge commit itself plans normally under push.
-    let (plan, _warnings) = plan_push(root, None, &merge_head)?;
-    assert_eq!(plan.head, merge_head);
     Ok(())
 }
