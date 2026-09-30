@@ -108,15 +108,21 @@ fn argv_validation_rejects_policy_violations() {
 }
 
 #[test]
-fn argv_and_names_reject_github_expressions() {
+fn argv_accepts_expressions_for_gate_diagnosis() {
+    // `${{ }}` stays constructible in argv: the release gates diagnose
+    // secret/input handles with specific tokens after this check.
     for arg in ["${{ secrets.x }}", "${{secrets.x}}", "${{ github.sha }}"] {
         assert!(
-            validate_command_argv(&argv(&["echo", arg])).is_err(),
-            "{arg} must fail closed"
+            validate_command_argv(&argv(&["echo", arg])).is_ok(),
+            "{arg} must reach the gates"
         );
     }
     assert!(validate_command_argv(&argv(&["echo", "$RUNNER_TEMP/x"])).is_ok());
     assert!(validate_command_argv(&argv(&["echo", "${x:-y}"])).is_ok());
+}
+
+#[test]
+fn step_names_reject_github_expressions() {
     assert!(
         shell_step(
             "Custom task ${{secrets.x}}",
@@ -125,6 +131,10 @@ fn argv_and_names_reject_github_expressions() {
         )
         .is_err(),
         "expression in step name must fail closed"
+    );
+    assert!(
+        shell_step("Custom task lint", argv(&["true"]), BTreeMap::new()).is_ok(),
+        "plain step names stay constructible"
     );
 }
 

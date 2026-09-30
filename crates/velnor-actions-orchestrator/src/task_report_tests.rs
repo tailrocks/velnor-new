@@ -287,7 +287,8 @@ fn planted_symlink_at_report_path_refuses_without_writing() {
         .join("velnor")
         .join("local")
         .join(&entry.matrix_key);
-    fs::create_dir_all(dir.join("tasks")).expect("report dirs");
+    let report_dir = dir.join("tasks");
+    fs::create_dir_all(&report_dir).expect("report dirs");
     let loot = temp.path().join("loot.json");
     std::os::unix::fs::symlink(&loot, dir.join("matrix-report.json")).expect("plant");
     let err =

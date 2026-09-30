@@ -10,9 +10,10 @@ use crate::{RenderError, steps::scan_for_private_subcommands};
 /// Validate a fixed argument vector: nonempty, no shell fragments.
 ///
 /// Rejects empty argv, empty args, control characters, command substitution,
-/// GitHub `${{ }}` expressions (fixed vectors carry runner `$VAR` spans
-/// only; `${{ }}` appears solely in fixed action inputs), `cargo install`
-/// sequences, absolute Cargo paths, and private tokens.
+/// `cargo install` sequences, absolute Cargo paths, and private tokens.
+/// GitHub `${{ }}` expressions stay constructible here: secret and
+/// input handles are diagnosed with specific tokens by the release
+/// gates, which run after this structural check.
 ///
 /// # Errors
 ///
@@ -25,9 +26,6 @@ pub fn validate_command_argv(argv: &[String]) -> Result<(), RenderError> {
     for arg in argv {
         if arg.is_empty() {
             return Err(RenderError::BadCommand("empty_arg".to_owned()));
-        }
-        if arg.contains("${{") {
-            return Err(RenderError::BadCommand(format!("expression_in_argv:{arg}")));
         }
         if arg.chars().any(|ch| ch == '\0' || ch == '\n' || ch == '\r') {
             return Err(RenderError::BadCommand(format!("control_char:{arg}")));
