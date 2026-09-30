@@ -35,6 +35,7 @@ mod merge_request;
 mod origin;
 mod pins;
 mod plan;
+mod plan_stacks;
 mod prepare;
 mod provenance;
 mod qualify;

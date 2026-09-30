@@ -4,7 +4,7 @@ use std::fs;
 
 use tempfile::TempDir;
 use velnor_actions_orchestrator::{
-    GenerateOptions, OrchestratorError, generate, prepare, render_staged_tree,
+    GenerateOptions, OrchestratorError, generate, plan_text, prepare, render_staged_tree,
 };
 
 use crate::impl_common::{TestResult, config_with_branch, err_of, git, git_line, make_repo};
@@ -57,6 +57,26 @@ fn release_disabled_emits_base_tree_only() -> TestResult {
             "release absent without opt-in"
         );
     }
+    Ok(())
+}
+
+#[test]
+fn plan_lists_release_files_iff_enabled() -> TestResult {
+    let repo = release_repo(OIDC_CONFIG)?;
+    let plan = plan_text(&prepare(repo.path())?);
+    for path in [
+        ".github/release-plz-bootstrap.toml",
+        ".github/release-plz.toml",
+        ".github/workflows/velnor-release.yml",
+    ] {
+        assert!(plan.contains(path), "plan names {path}:\n{plan}");
+    }
+    let bare = make_repo(config_with_branch())?;
+    let bare_plan = plan_text(&prepare(bare.path())?);
+    assert!(
+        !bare_plan.contains("velnor-release.yml") && !bare_plan.contains("release-plz"),
+        "no release inventory without opt-in:\n{bare_plan}"
+    );
     Ok(())
 }
 
