@@ -17,7 +17,7 @@
 # alint-policy fixture: comments carry no policy weight.
 # alint-policy fixture: comments carry no policy weight.
 # alint-policy fixture: comments carry no policy weight.
-version: 1
+version: 1 # trailing probe
 
 # alint-policy fixture: comments carry no policy weight.
 # alint-policy fixture: comments carry no policy weight.
@@ -28,9 +28,9 @@ ignore:
 rules:
   # alint-policy fixture: comments carry no policy weight.
   - id: required-files
-    kind: file_exists
+    kind: file_exists # trailing probe
     paths:
-      - Cargo.toml
+      - Cargo.toml # trailing probe
       - Cargo.lock
       - clippy.toml
       - deny.toml

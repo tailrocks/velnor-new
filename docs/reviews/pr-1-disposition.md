@@ -153,3 +153,13 @@ Classes: **D** = accepted design change · **B** = confirmed bug · **V** = pend
 Head `8ccc60c`, 0 unresolved threads, no APPROVED/CHANGES_REQUESTED reviews.
 Run 36617447350: 45 success + 2 failure (rust nextest, Required aggregator).
 No green gates claimed; hosted qualification still pending.
+
+## P01-V4 caveat (exact-head propagation vs independent validators)
+
+The exact-head F2b failure propagating to a red Required exercises only the
+crate-report path (failed task report -> nonzero merge). It does NOT validate
+the independent-validator case: passing crate reports combined with a
+failed, missing, skipped, or cancelled *global* validator (Alint, Cargo
+Deny, Cargo Machete, Actionlint, Zizmor) must each force Required nonzero on
+its own evidence. That case needs dedicated fixtures per validator and stays
+unproven until they exist; do not cite F2b propagation as validator proof.
