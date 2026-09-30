@@ -94,6 +94,42 @@ fn enumeration_follows_plan_order() {
     assert!(expected_artifact_ids(&serde_json::json!({})).is_empty());
 }
 
+/// The shared byte reader opens `NOFOLLOW`, validates the handle,
+/// and bounds the read: every failure class reports its token.
+#[test]
+fn staged_bytes_cover_every_failure_class() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let file = tmp.path().join("f.bin");
+    std::fs::write(&file, b"bytes").expect("write");
+    assert_eq!(read_staged_bytes(&file, 16).expect("bytes"), b"bytes");
+    assert_eq!(
+        read_staged_bytes(&tmp.path().join("absent"), 16),
+        Err("missing")
+    );
+    assert_eq!(read_staged_bytes(&file, 2), Err("oversize"));
+    std::fs::create_dir(tmp.path().join("dir")).expect("dir");
+    assert_eq!(
+        read_staged_bytes(&tmp.path().join("dir"), 16),
+        Err("unreadable")
+    );
+    assert_eq!(read_staged_text(&file, 16).expect("text"), "bytes");
+    std::fs::write(&file, [0xff, 0xfe]).expect("binary");
+    assert_eq!(read_staged_text(&file, 16), Err("unreadable"));
+    #[cfg(unix)]
+    {
+        std::fs::write(&file, b"bytes").expect("rewrite");
+        std::os::unix::fs::symlink(&file, tmp.path().join("link")).expect("link");
+        assert_eq!(
+            read_staged_bytes(&tmp.path().join("link"), 16),
+            Err("symlink")
+        );
+        assert_eq!(
+            read_staged_text(&tmp.path().join("link"), 16),
+            Err("symlink")
+        );
+    }
+}
+
 /// Every staged-read failure class surfaces its explicit token.
 #[test]
 fn staged_tokens_cover_every_failure_class() {

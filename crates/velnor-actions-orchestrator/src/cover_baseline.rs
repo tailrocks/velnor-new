@@ -5,7 +5,6 @@
 pub(crate) mod provenance_check;
 
 use std::ffi::OsString;
-use std::io::Read as _;
 use std::path::{Path, PathBuf};
 
 use std::collections::BTreeSet;
@@ -222,10 +221,12 @@ pub(crate) fn baseline_download_args(
 ///
 /// The entry directory must carry exactly `baseline.json` (single-file
 /// bounded UTF-8, no other payload) with matching source commit, run,
-/// attempt, artifact id, and artifact name. Symlinks reject anywhere on
-/// the traversed path, reads stop past the size bound, duplicate JSON
-/// keys are rejected (never last-wins), and old canonical schemas fail
-/// closed via the migration gate.
+/// attempt, artifact id, and artifact name. The entry dir and the
+/// payload reject symlinks (the payload opens `NOFOLLOW` and validates
+/// via the open handle through the shared staged reader); reads stop
+/// past the size bound, duplicate JSON keys are rejected (never
+/// last-wins), and old canonical schemas fail closed via the migration
+/// gate.
 pub(crate) fn baseline_entry_for(
     dir: &Path,
     base: &str,
@@ -238,7 +239,7 @@ pub(crate) fn baseline_entry_for(
     if validate_digest(rest).is_err() {
         return None;
     }
-    if is_symlink(dir) {
+    if crate::retrieve_reports::path_is_symlink(dir) {
         return None;
     }
     let mut count = 0u32;
@@ -257,7 +258,8 @@ pub(crate) fn baseline_entry_for(
     if payload.file_name()?.to_str()? != "baseline.json" {
         return None;
     }
-    let bytes = read_bounded(&payload)?;
+    let bound = u64::try_from(MAX_BASELINE_MANIFEST_BYTES).unwrap_or(u64::MAX);
+    let bytes = crate::retrieve_reports::read_staged_bytes(&payload, bound).ok()?;
     let text = std::str::from_utf8(&bytes).ok()?;
     let value = crate::internal_plan::snapshot::parse_canonical_json(text).ok()?;
     let manifest: BaselineManifest = serde_json::from_value(value).ok()?;
@@ -274,36 +276,6 @@ pub(crate) fn baseline_entry_for(
     } else {
         None
     }
-}
-
-/// True when a traversed path is a symlink.
-///
-/// `symlink_metadata` never follows the final component: a symlink
-/// rejects even at a live target.
-fn is_symlink(path: &Path) -> bool {
-    std::fs::symlink_metadata(path).is_ok_and(|meta| meta.file_type().is_symlink())
-}
-
-/// Read one baseline payload with symlink rejection and a size bound.
-///
-/// Symlinks and non-files reject without reading; reads stop one byte
-/// past the bound so oversize files error instead of exhausting memory.
-fn read_bounded(path: &Path) -> Option<Vec<u8>> {
-    match std::fs::symlink_metadata(path) {
-        Ok(meta) if meta.file_type().is_symlink() => return None,
-        Ok(meta) if !meta.is_file() => return None,
-        Err(_) => return None,
-        Ok(_) => {}
-    }
-    let file = std::fs::File::open(path).ok()?;
-    let mut bytes = Vec::new();
-    std::io::Read::take(file, (MAX_BASELINE_MANIFEST_BYTES + 1) as u64)
-        .read_to_end(&mut bytes)
-        .ok()?;
-    if bytes.len() > MAX_BASELINE_MANIFEST_BYTES {
-        return None;
-    }
-    Some(bytes)
 }
 
 #[cfg(test)]

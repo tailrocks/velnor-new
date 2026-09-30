@@ -167,7 +167,7 @@ pub(crate) fn read_staged_reports(
         // expectation only; entries without that shape expect nothing
         // and the merge fails them closed on incoherence instead.
         let tasks_dir = home.join("tasks");
-        let linked = is_symlink(&tasks_dir);
+        let linked = path_is_symlink(&tasks_dir);
         for report_id in expected_file_ids(entry, run_key, &digests) {
             if linked {
                 errors.push(format!("symlink_task:{report_id}"));
@@ -212,8 +212,10 @@ fn obligation_digests(plan: &serde_json::Value) -> BTreeMap<&str, &str> {
 
 /// Read one artifact's matrix file; the home dir on success.
 ///
-/// The artifact directory itself must be a real directory: a symlink
-/// anywhere on a traversed path rejects, even at a live target.
+/// The artifact home, the nested parent, and the file itself reject
+/// symlinks (pre-checks plus a `NOFOLLOW` open validated via the
+/// handle), even at live targets. Ancestors above the staging root are
+/// trusted: the runner and the retrieve step create them.
 fn read_matrix_file(
     dir: &Path,
     artifact_id: &str,
@@ -221,7 +223,7 @@ fn read_matrix_file(
     errors: &mut Vec<String>,
 ) -> Option<PathBuf> {
     let home = dir.join(artifact_id);
-    if is_symlink(&home) {
+    if path_is_symlink(&home) {
         errors.push(format!("symlink_report:{artifact_id}"));
         return None;
     }
@@ -230,7 +232,7 @@ fn read_matrix_file(
     let (path, text) = match read_bounded(&direct) {
         Ok(text) => (direct, text),
         Err("missing") => {
-            if nested.parent().is_some_and(is_symlink) {
+            if nested.parent().is_some_and(path_is_symlink) {
                 errors.push(format!("symlink_report:{artifact_id}"));
                 return None;
             }
@@ -288,12 +290,12 @@ fn expected_file_ids(
     ids
 }
 
-/// True when a traversed path is a symlink.
+/// True when a traversed directory is a symlink.
 ///
 /// `symlink_metadata` never follows the final component: a symlink
 /// rejects even at a live target. Missing paths are not links; the
 /// bounded read below reports them as missing instead.
-fn is_symlink(path: &Path) -> bool {
+pub(crate) fn path_is_symlink(path: &Path) -> bool {
     fs::symlink_metadata(path).is_ok_and(|meta| meta.file_type().is_symlink())
 }
 
@@ -306,28 +308,56 @@ fn read_bounded(path: &Path) -> Result<String, &'static str> {
     read_staged_text(path, MAX_STAGED_REPORT_BYTES)
 }
 
-/// Read one file with symlink rejection and a caller size bound.
+/// Read one file's bytes with symlink rejection and a caller size bound.
 ///
-/// Shared by staged-report reads and merge-request assembly so every
-/// event-time read enforces the same gates: symlinks and non-files
-/// reject, missing files report, and oversize files error instead of
-/// exhausting memory.
-pub(crate) fn read_staged_text(path: &Path, bound: u64) -> Result<String, &'static str> {
-    match fs::symlink_metadata(path) {
-        Ok(meta) if meta.file_type().is_symlink() => return Err("symlink"),
-        Ok(meta) if !meta.is_file() => return Err("unreadable"),
-        Err(_) => return Err("missing"),
-        Ok(_) => {}
-    }
-    let file = fs::File::open(path).map_err(|_| "unreadable")?;
-    let mut text = String::new();
-    file.take(bound + 1)
-        .read_to_string(&mut text)
+/// Opens with `O_NOFOLLOW`, validates the open handle (`fstat` must
+/// report a regular file), and reads only through that handle with a
+/// `bound + 1` cap, so a symlink swapped in after any pre-check still
+/// fails the open instead of diverting the read. Missing files report
+/// `missing`, symlinks `symlink`, non-files `unreadable`, and
+/// over-bound reads `oversize`.
+pub(crate) fn read_staged_bytes(path: &Path, bound: u64) -> Result<Vec<u8>, &'static str> {
+    let fd = rustix::fs::open(
+        path,
+        rustix::fs::OFlags::RDONLY | rustix::fs::OFlags::NOFOLLOW | rustix::fs::OFlags::CLOEXEC,
+        rustix::fs::Mode::empty(),
+    )
+    .map_err(|err| {
+        if err == rustix::io::Errno::NOENT {
+            "missing"
+        } else if err == rustix::io::Errno::LOOP {
+            "symlink"
+        } else {
+            "unreadable"
+        }
+    })?;
+    let filetype = rustix::fs::fstat(&fd)
+        .map(|stat| rustix::fs::FileType::from_raw_mode(stat.st_mode))
         .map_err(|_| "unreadable")?;
-    if u64::try_from(text.len()).unwrap_or(u64::MAX) > bound {
+    if filetype != rustix::fs::FileType::RegularFile {
+        return Err("unreadable");
+    }
+    let mut bytes = Vec::new();
+    fs::File::from(fd)
+        .take(bound.saturating_add(1))
+        .read_to_end(&mut bytes)
+        .map_err(|_| "unreadable")?;
+    if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > bound {
         return Err("oversize");
     }
-    Ok(text)
+    Ok(bytes)
+}
+
+/// Read one file with symlink rejection and a caller size bound.
+///
+/// Shared by staged-report reads, merge-request assembly, and baseline
+/// entry reads so every event-time read enforces the same gates:
+/// symlinks and non-files reject, missing files report, and oversize
+/// files error instead of exhausting memory. Bytes decode as UTF-8;
+/// undecodable files report `unreadable`.
+pub(crate) fn read_staged_text(path: &Path, bound: u64) -> Result<String, &'static str> {
+    let bytes = read_staged_bytes(path, bound)?;
+    String::from_utf8(bytes).map_err(|_| "unreadable")
 }
 
 /// Sort key for one staged value; empty when the ID is absent.
