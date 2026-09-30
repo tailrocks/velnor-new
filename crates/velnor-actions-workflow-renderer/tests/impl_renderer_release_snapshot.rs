@@ -51,6 +51,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@0000000000000000000000000000000000000000
         with:
+          fetch-depth: "0"
+          persist-credentials: "false"
+      - name: Checkout exact source
+        uses: actions/checkout@0000000000000000000000000000000000000000
+        with:
+          fetch-depth: "0"
+          path: release-source
           persist-credentials: "false"
           ref: 0123456789abcdef0123456789abcdef01234567
       - name: Run
@@ -80,9 +87,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@0000000000000000000000000000000000000000
         with:
+          fetch-depth: "0"
           persist-credentials: "false"
+      - name: Checkout exact source
+        uses: actions/checkout@0000000000000000000000000000000000000000
+        with:
+          fetch-depth: "0"
+          path: release-source
+          persist-credentials: "true"
           ref: 0123456789abcdef0123456789abcdef01234567
       - name: Publish
+        env:
+          GIT_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: release-plz release --config .github/release-plz.toml
   release-reconcile:
     name: Release reconcile

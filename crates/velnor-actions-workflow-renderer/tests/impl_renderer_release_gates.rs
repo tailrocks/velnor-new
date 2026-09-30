@@ -33,13 +33,42 @@ pub(crate) fn checkout_uses() -> String {
     format!("actions/checkout@{:040x}", 0)
 }
 
-pub(crate) fn checkout_step(sha: &str, persist: Option<&str>) -> Result<Step, RenderError> {
-    let mut with = BTreeMap::new();
+/// Exact forge-token env binding every release-plz step carries.
+pub(crate) const FORGE_ENV: [(&str, &str); 1] = [("GIT_TOKEN", "${{ secrets.GITHUB_TOKEN }}")];
+
+/// Raw checkout step over an explicit input map (negative cases).
+pub(crate) fn checkout(with: &[(&str, &str)]) -> Result<Step, RenderError> {
+    action_step(
+        "Checkout",
+        &checkout_uses(),
+        with.iter()
+            .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
+            .collect(),
+    )
+}
+
+/// Policy checkout: event commit, full history, explicit credentials.
+pub(crate) fn policy_checkout(persist: Option<&str>) -> Result<Step, RenderError> {
+    let mut inputs = vec![];
     if let Some(value) = persist {
-        with.insert("persist-credentials".to_owned(), value.to_owned());
+        inputs.push(("persist-credentials", value));
     }
-    with.insert("ref".to_owned(), sha.to_owned());
-    action_step("Checkout", &checkout_uses(), with)
+    inputs.push(("fetch-depth", "0"));
+    checkout(&inputs)
+}
+
+/// Source checkout: approved SHA pin under the fixed path, full history.
+pub(crate) fn source_checkout(sha: &str, persist: Option<&str>) -> Result<Step, RenderError> {
+    let mut inputs = vec![];
+    if let Some(value) = persist {
+        inputs.push(("persist-credentials", value));
+    }
+    inputs.extend([
+        ("fetch-depth", "0"),
+        ("path", "release-source"),
+        ("ref", sha),
+    ]);
+    checkout(&inputs)
 }
 
 pub(crate) fn shell(name: &str, argv: &[&str], env: &[(&str, &str)]) -> Result<Step, RenderError> {
@@ -142,7 +171,8 @@ pub(crate) fn gated_spec() -> Result<ReleaseWorkflowSpec, RenderError> {
             job(
                 ReleaseRole::Preflight,
                 vec![
-                    checkout_step(SHA, Some("false"))?,
+                    policy_checkout(Some("false"))?,
+                    source_checkout(SHA, Some("false"))?,
                     shell("Run", &["echo", "ok"], &[])?,
                 ],
                 None,
@@ -154,8 +184,9 @@ pub(crate) fn gated_spec() -> Result<ReleaseWorkflowSpec, RenderError> {
             job(
                 ReleaseRole::PublishOidc,
                 vec![
-                    checkout_step(SHA, Some("false"))?,
-                    shell("Publish", &publish_argv(RELEASE_CONFIG_PATH), &[])?,
+                    policy_checkout(Some("false"))?,
+                    source_checkout(SHA, Some("true"))?,
+                    shell("Publish", &publish_argv(RELEASE_CONFIG_PATH), &FORGE_ENV)?,
                 ],
                 Some(&gate),
                 Some(ENV),
@@ -242,46 +273,30 @@ fn preflight_requires_the_exact_approved_source() -> Result<(), RenderError> {
             gated_spec()?,
             "release-preflight",
             vec![
-                checkout_step(sha, Some("false"))?,
+                policy_checkout(Some("false"))?,
+                source_checkout(sha, Some("false"))?,
                 shell("Run", &["echo", "ok"], &[])?,
             ],
         )
         .expect("job");
         assert_eq!(
             invalid(check_release_jobs(&rebound, &binding())).expect("reject"),
-            "checkout_without_exact_source:release-preflight",
+            "source_ref_mismatch:release-preflight",
             "for ref {sha}"
         );
     }
     let missing = with_steps(
         gated_spec()?,
         "release-preflight",
-        vec![shell("Run", &["echo", "ok"], &[])?],
+        vec![
+            policy_checkout(Some("false"))?,
+            shell("Run", &["echo", "ok"], &[])?,
+        ],
     )
     .expect("job");
     assert_eq!(
         invalid(check_release_jobs(&missing, &binding())).expect("reject"),
         "checkout_without_exact_source:release-preflight"
     );
-    Ok(())
-}
-
-#[test]
-fn checkouts_never_persist_credentials() -> Result<(), RenderError> {
-    for persist in [None, Some("true")] {
-        let dirty = with_steps(
-            gated_spec()?,
-            "release-preflight",
-            vec![
-                checkout_step(SHA, persist)?,
-                shell("Run", &["echo", "ok"], &[])?,
-            ],
-        )
-        .expect("job");
-        assert_eq!(
-            invalid(check_release_jobs(&dirty, &binding())).expect("reject"),
-            "checkout_with_credentials:release-preflight"
-        );
-    }
     Ok(())
 }

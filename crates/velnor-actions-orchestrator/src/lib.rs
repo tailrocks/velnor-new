@@ -42,6 +42,7 @@ mod prepare;
 mod provenance;
 mod qualify;
 mod recommendations;
+mod release_checkouts;
 mod release_emit;
 mod release_identity;
 mod release_steps;

@@ -2,10 +2,13 @@
 //!
 //! Every release-plz invocation runs through pinned Mise tools
 //! (`rust` plus `release-plz`, exact versions from the compiled
-//! catalog) with an explicit `--config` binding; no argv is invented
-//! here — shapes come from the Mise release-plz builders. OIDC mode
-//! assembles four jobs; bootstrap-token mode adds the fifth publish
-//! job carrying the single token binding.
+//! catalog) with an explicit `--config` binding plus the `GIT_TOKEN`
+//! forge binding; no argv is invented here — shapes come from the Mise
+//! release-plz builders. Jobs read configs from the policy checkout
+//! (event commit) while preflight and publishers run release-plz
+//! against the exact-source checkout. OIDC mode assembles four jobs;
+//! bootstrap-token mode adds the fifth publish job carrying the single
+//! registry-token binding.
 
 use std::collections::BTreeMap;
 use std::ffi::{OsStr, OsString};
@@ -20,11 +23,11 @@ use velnor_actions_workflow_renderer::release_permissions::JobPermissions;
 use velnor_actions_workflow_renderer::release_tree::{
     RELEASE_BOOTSTRAP_CONFIG_PATH, RELEASE_CONFIG_PATH,
 };
-use velnor_actions_workflow_renderer::{MiseSetup, action_step, mise_setup_step, shell_step};
+use velnor_actions_workflow_renderer::{MiseSetup, mise_setup_step, shell_step};
 
 use crate::OrchestratorError;
+use crate::release_checkouts::{forge_env, policy_checkout, source_checkout, source_manifest};
 use crate::utf8::strings_of;
-use crate::workflow::CHECKOUT_USES;
 
 /// Bootstrap token: env key plus its only secret binding.
 const BOOTSTRAP_TOKEN_ENV: &str = "CARGO_REGISTRY_TOKEN";
@@ -47,10 +50,11 @@ pub(crate) struct JobInputs<'a> {
     pub(crate) release: &'a RustReleaseConfig,
     /// Exact publish gate condition.
     pub(crate) gate: String,
-    /// Approved source SHA every checkout pins.
+    /// Approved source SHA every source checkout pins.
     pub(crate) sha: &'a str,
-    /// Plan registry for coordinator argv.
-    pub(crate) registry: &'a str,
+    /// `--registry` value; `None` omits the flag for the cargo-implicit
+    /// default (release-plz 0.3.169 cannot resolve that name from config).
+    pub(crate) registry: Option<&'a str>,
     /// Literal runner label.
     pub(crate) label: &'a str,
     /// Pinned Mise setup step inputs.
@@ -59,10 +63,16 @@ pub(crate) struct JobInputs<'a> {
     pub(crate) catalog: &'a ToolCatalog,
 }
 
-/// One job's assembled head (checkout plus setup) and bindings.
+/// One job's assembled head (checkouts plus setup) and bindings.
 struct JobParts<'a> {
-    /// Exact-source credential-free checkout.
-    checkout: Step,
+    /// Credential-free policy checkout (config reads only).
+    policy: Step,
+    /// Credentialed policy checkout (preparation pushes its branch).
+    policy_push: Step,
+    /// Credential-free exact-source checkout (dry-run validation).
+    source: Step,
+    /// Credentialed exact-source checkout (publishers push tags).
+    source_push: Step,
     /// Pinned Mise setup step.
     setup: Step,
     /// Literal runner label.
@@ -75,9 +85,10 @@ struct JobParts<'a> {
 
 /// Assemble the four (OIDC) or five (bootstrap) release jobs.
 ///
-/// Preparation runs `release-pr`, preflight and reconcile validate via
-/// `release --dry-run`, and each publish job runs `release` against
-/// its own generated config.
+/// Preparation runs `release-pr` on the policy checkout, preflight
+/// dry-runs the publish config against the exact source, each publish
+/// job releases its own generated config from the exact source, and
+/// reconcile dry-runs the normal config against the policy tree.
 ///
 /// # Errors
 ///
@@ -86,50 +97,63 @@ pub(crate) fn assemble_jobs(
     inputs: &JobInputs<'_>,
 ) -> Result<BTreeMap<String, ReleaseJobSpec>, OrchestratorError> {
     let parts = JobParts {
-        checkout: checkout_step(inputs.sha)?,
+        policy: policy_checkout(false)?,
+        policy_push: policy_checkout(true)?,
+        source: source_checkout(inputs.sha, false)?,
+        source_push: source_checkout(inputs.sha, true)?,
         setup: mise_setup_step(inputs.mise)?,
         label: inputs.label,
         gate: &inputs.gate,
         environment: &inputs.release.environment,
     };
+    let bootstrap = inputs.release.authentication == ReleaseAuthentication::BootstrapToken;
     let manifest = inputs.release.manifest_path.as_str();
-    let registry = inputs.registry;
-    let catalog = inputs.catalog;
+    let sourced = source_manifest(manifest);
     let mut jobs = BTreeMap::new();
     let (prepare, name) = if inputs.release.release_pr {
         (Phase::PreparePr, "Prepare release PR")
     } else {
         (Phase::DryRun, "Validate release")
     };
-    let argv = phase_argv(&prepare, RELEASE_CONFIG_PATH, manifest, registry, catalog)?;
+    let argv = phase_argv(
+        &prepare,
+        RELEASE_CONFIG_PATH,
+        manifest,
+        inputs.registry,
+        inputs.catalog,
+    )?;
     jobs.insert(
         "release-preparation".to_owned(),
         preparation_job(&parts, argv, name)?,
     );
+    let preflight_config = if bootstrap {
+        RELEASE_BOOTSTRAP_CONFIG_PATH
+    } else {
+        RELEASE_CONFIG_PATH
+    };
     let argv = phase_argv(
         &Phase::DryRun,
-        RELEASE_CONFIG_PATH,
-        manifest,
-        registry,
-        catalog,
+        preflight_config,
+        &sourced,
+        inputs.registry,
+        inputs.catalog,
     )?;
     jobs.insert("release-preflight".to_owned(), preflight_job(&parts, argv)?);
     let argv = phase_argv(
         &Phase::Publish,
         RELEASE_CONFIG_PATH,
-        manifest,
-        registry,
-        catalog,
+        &sourced,
+        inputs.registry,
+        inputs.catalog,
     )?;
     jobs.insert("release-publish".to_owned(), publish_job(&parts, argv)?);
-    let bootstrap = inputs.release.authentication == ReleaseAuthentication::BootstrapToken;
     if bootstrap {
         let argv = phase_argv(
             &Phase::Publish,
             RELEASE_BOOTSTRAP_CONFIG_PATH,
-            manifest,
-            registry,
-            catalog,
+            &sourced,
+            inputs.registry,
+            inputs.catalog,
         )?;
         jobs.insert(
             "release-publish-bootstrap".to_owned(),
@@ -140,8 +164,8 @@ pub(crate) fn assemble_jobs(
         &Phase::DryRun,
         RELEASE_CONFIG_PATH,
         manifest,
-        registry,
-        catalog,
+        inputs.registry,
+        inputs.catalog,
     )?;
     jobs.insert(
         "release-reconcile".to_owned(),
@@ -159,22 +183,22 @@ fn phase_argv(
     phase: &Phase,
     config: &str,
     manifest: &str,
-    registry: &str,
+    registry: Option<&str>,
     catalog: &ToolCatalog,
 ) -> Result<Vec<String>, OrchestratorError> {
     let path = PathBuf::from(config);
     let payload = match phase {
         Phase::PreparePr => ReleasePrRequest::new(path)
             .and_then(|request| request.with_manifest(PathBuf::from(manifest)))
-            .and_then(|request| request.with_registry(registry))
+            .and_then(|request| pr_registry(request, registry))
             .map(|request| request.release_pr_argv()),
         Phase::Publish => PlzRelease::release(path)
             .and_then(|request| request.with_manifest(PathBuf::from(manifest)))
-            .and_then(|request| request.with_registry(registry))
+            .and_then(|request| plz_registry(request, registry))
             .map(|request| request.release_argv()),
         Phase::DryRun => PlzRelease::dry_run(path)
             .and_then(|request| request.with_manifest(PathBuf::from(manifest)))
-            .and_then(|request| request.with_registry(registry))
+            .and_then(|request| plz_registry(request, registry))
             .map(|request| request.release_argv()),
     }
     .map_err(map_mise)?;
@@ -188,6 +212,28 @@ fn phase_argv(
     strings_of(exec.argv(catalog)).map_err(|problem| OrchestratorError::Contract { problem })
 }
 
+/// Bind `--registry` on a `release-pr` request unless it is the default.
+fn pr_registry(
+    request: ReleasePrRequest,
+    registry: Option<&str>,
+) -> Result<ReleasePrRequest, velnor_actions_mise::MiseError> {
+    match registry {
+        Some(name) => request.with_registry(name),
+        None => Ok(request),
+    }
+}
+
+/// Bind `--registry` on a `release` request unless it is the default.
+fn plz_registry(
+    request: PlzRelease,
+    registry: Option<&str>,
+) -> Result<PlzRelease, velnor_actions_mise::MiseError> {
+    match registry {
+        Some(name) => request.with_registry(name),
+        None => Ok(request),
+    }
+}
+
 /// Map a Mise builder failure onto the contract error channel.
 #[expect(clippy::needless_pass_by_value, reason = "map_err passes owned errors")]
 fn map_mise(err: velnor_actions_mise::MiseError) -> OrchestratorError {
@@ -196,23 +242,7 @@ fn map_mise(err: velnor_actions_mise::MiseError) -> OrchestratorError {
     }
 }
 
-/// Exact-source credential-free checkout shared by every release job.
-///
-/// # Errors
-///
-/// Returns render errors for invalid refs (ruled out: SHAs are validated).
-fn checkout_step(sha: &str) -> Result<Step, OrchestratorError> {
-    Ok(action_step(
-        "Checkout",
-        CHECKOUT_USES,
-        BTreeMap::from([
-            ("persist-credentials".to_owned(), "false".to_owned()),
-            ("ref".to_owned(), sha.to_owned()),
-        ]),
-    )?)
-}
-
-/// Preparation: no needs, no gate, GitHub authority only.
+/// Preparation: branch checkout, no gate, GitHub authority only.
 fn preparation_job(
     parts: &JobParts<'_>,
     argv: Vec<String>,
@@ -227,14 +257,14 @@ fn preparation_job(
         environment: None,
         permissions: JobPermissions::expected(ReleaseRole::Preparation),
         steps: vec![
-            parts.checkout.clone(),
+            parts.policy_push.clone(),
             parts.setup.clone(),
-            shell_step(name, argv, BTreeMap::new())?,
+            shell_step(name, argv, forge_env())?,
         ],
     })
 }
 
-/// Preflight: read-only validation after preparation.
+/// Preflight: dry-run validation against the exact source.
 fn preflight_job(
     parts: &JobParts<'_>,
     argv: Vec<String>,
@@ -248,14 +278,15 @@ fn preflight_job(
         environment: None,
         permissions: JobPermissions::expected(ReleaseRole::Preflight),
         steps: vec![
-            parts.checkout.clone(),
+            parts.policy.clone(),
+            parts.source.clone(),
             parts.setup.clone(),
-            shell_step("Validate exact source", argv, BTreeMap::new())?,
+            shell_step("Validate exact source", argv, forge_env())?,
         ],
     })
 }
 
-/// OIDC publish: gated, environment-pinned, zero token material.
+/// OIDC publish: gated, environment-pinned, zero registry-token material.
 fn publish_job(
     parts: &JobParts<'_>,
     argv: Vec<String>,
@@ -269,9 +300,10 @@ fn publish_job(
         environment: Some(parts.environment.to_owned()),
         permissions: JobPermissions::expected(ReleaseRole::PublishOidc),
         steps: vec![
-            parts.checkout.clone(),
+            parts.policy.clone(),
+            parts.source_push.clone(),
             parts.setup.clone(),
-            shell_step("Publish release", argv, BTreeMap::new())?,
+            shell_step("Publish release", argv, forge_env())?,
         ],
     })
 }
@@ -281,10 +313,11 @@ fn bootstrap_job(
     parts: &JobParts<'_>,
     argv: Vec<String>,
 ) -> Result<ReleaseJobSpec, OrchestratorError> {
-    let env = BTreeMap::from([(
+    let mut env = forge_env();
+    env.insert(
         BOOTSTRAP_TOKEN_ENV.to_owned(),
         BOOTSTRAP_SECRET_REF.to_owned(),
-    )]);
+    );
     Ok(ReleaseJobSpec {
         role: ReleaseRole::PublishBootstrap,
         display_name: "Release bootstrap publish".to_owned(),
@@ -294,7 +327,8 @@ fn bootstrap_job(
         environment: Some(parts.environment.to_owned()),
         permissions: JobPermissions::expected(ReleaseRole::PublishBootstrap),
         steps: vec![
-            parts.checkout.clone(),
+            parts.policy.clone(),
+            parts.source_push.clone(),
             parts.setup.clone(),
             shell_step("Publish first release", argv, env)?,
         ],
@@ -320,9 +354,9 @@ fn reconcile_job(
         environment: None,
         permissions: JobPermissions::expected(ReleaseRole::Reconcile),
         steps: vec![
-            parts.checkout.clone(),
+            parts.policy.clone(),
             parts.setup.clone(),
-            shell_step("Verify published state", argv, BTreeMap::new())?,
+            shell_step("Verify published state", argv, forge_env())?,
         ],
     })
 }

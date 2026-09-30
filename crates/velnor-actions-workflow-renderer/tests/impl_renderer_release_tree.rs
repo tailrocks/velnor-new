@@ -23,6 +23,7 @@ const REPO: &str = "acme/widgets";
 const LABEL: &str = "ubuntu-24.04";
 const ENV: &str = "crates-io";
 const VERSION: &str = "0.1.0";
+const FORGE: [(&str, &str); 1] = [("GIT_TOKEN", "${{ secrets.GITHUB_TOKEN }}")];
 
 fn checkout_uses() -> String {
     format!("actions/checkout@{:040x}", 0)
@@ -57,12 +58,25 @@ fn config() -> ReleasePlzConfig {
     }
 }
 
-fn exact_checkout() -> Result<velnor_actions_contract::Step, RenderError> {
+fn policy_checkout() -> Result<velnor_actions_contract::Step, RenderError> {
     action_step(
         "Checkout",
         &checkout_uses(),
         BTreeMap::from([
             ("persist-credentials".to_owned(), "false".to_owned()),
+            ("fetch-depth".to_owned(), "0".to_owned()),
+        ]),
+    )
+}
+
+fn source_checkout(persist: &str) -> Result<velnor_actions_contract::Step, RenderError> {
+    action_step(
+        "Checkout exact source",
+        &checkout_uses(),
+        BTreeMap::from([
+            ("persist-credentials".to_owned(), persist.to_owned()),
+            ("fetch-depth".to_owned(), "0".to_owned()),
+            ("path".to_owned(), "release-source".to_owned()),
             ("ref".to_owned(), SHA.to_owned()),
         ]),
     )
@@ -93,7 +107,8 @@ fn publish_job(
     env: &[(&str, &str)],
 ) -> Result<ReleaseJobSpec, RenderError> {
     let gate = publish_gate_condition(REPO, &bootstrap());
-    let checkout = exact_checkout()?;
+    let policy = policy_checkout()?;
+    let source = source_checkout("true")?;
     let publish = shell_step(
         "Publish",
         ["release-plz", "release", "--config", config_path]
@@ -112,12 +127,13 @@ fn publish_job(
         condition: Some(gate),
         environment: Some(ENV.to_owned()),
         permissions: JobPermissions::expected(role),
-        steps: vec![checkout, publish],
+        steps: vec![policy, source, publish],
     })
 }
 
 pub(crate) fn spec() -> Result<ReleaseWorkflowSpec, RenderError> {
-    let checkout = exact_checkout()?;
+    let policy = policy_checkout()?;
+    let source = source_checkout("false")?;
     let run = shell_step(
         "Run",
         vec!["echo".to_owned(), "ok".to_owned()],
@@ -134,7 +150,7 @@ pub(crate) fn spec() -> Result<ReleaseWorkflowSpec, RenderError> {
                 ReleaseRole::Preflight,
                 &["release-preparation"],
                 None,
-                vec![checkout, run.clone()],
+                vec![policy, source, run.clone()],
             ),
         ),
         (
@@ -143,7 +159,7 @@ pub(crate) fn spec() -> Result<ReleaseWorkflowSpec, RenderError> {
                 ReleaseRole::PublishOidc,
                 &["release-preflight"],
                 RELEASE_CONFIG_PATH,
-                &[],
+                &FORGE,
             )?,
         ),
         (
@@ -223,11 +239,19 @@ fn render_emits_marker_triggers_and_pinned_jobs() -> Result<(), RenderError> {
         "pull_request",
         "workflow_run",
         "pull_request_target",
-        "secrets.",
         "CARGO_REGISTRY_TOKEN",
     ] {
         assert!(!text.contains(forbidden), "leaked {forbidden}");
     }
+    assert_eq!(
+        text.matches("secrets.").count(),
+        1,
+        "only the forge binding:\n{text}"
+    );
+    assert!(
+        text.contains("GIT_TOKEN: ${{ secrets.GITHUB_TOKEN }}"),
+        "forge binding present:\n{text}"
+    );
     Ok(())
 }
 
