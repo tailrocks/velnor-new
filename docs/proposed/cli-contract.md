@@ -38,14 +38,20 @@ requests; the orchestrator MUST NOT launch processes or construct shell text.
 Internal workflow steps MUST NOT be exposed as subcommands. The sole
 non-CLI internal entrypoint is a bare invocation (no CLI arguments)
 with `VELNOR_INTERNAL_OP` naming a versioned typed operation
-(`write-request-v1`, `plan-v1`, `merge-v1`, or `fetch-reports-v1`) plus
-its gate inputs. `plan-v1` and `merge-v1` read schema-1 JSON from the
-existing request file at `VELNOR_REQUEST_FILE` and write the schema-1
-JSON result to the sibling `<op>-response.json` derived from the
-`<op>-request.json` file name; `write-request-v1` requires that path to
-be absent plus the GitHub event environment, and materializes the
-request file; `fetch-reports-v1` takes no request file and instead
-requires the runner-temp velnor directory plus the numeric run ID.
+(`write-request-v1`, `plan-v1`, `merge-v1`, `fetch-reports-v1`, or
+`write-task-report-v1`) plus its gate inputs. `plan-v1` and `merge-v1`
+read schema-1 JSON from the existing request file at
+`VELNOR_REQUEST_FILE` and write the schema-1 JSON result to the sibling
+`<op>-response.json` derived from the `<op>-request.json` file name;
+`write-request-v1` requires that path to be absent plus the GitHub event
+environment, and materializes the request file; `fetch-reports-v1`
+takes no request file and instead requires the runner-temp velnor
+directory plus the numeric run ID; `write-task-report-v1` takes no
+request file and instead requires the runner-temp velnor directory,
+the run environment, and the obligation env (`VELNOR_TASK_ID`,
+`VELNOR_EXIT_CODE`, optional `VELNOR_DOWNSTREAM_TASK_IDS`), resolving
+the obligation against the downloaded plan and writing the validated
+task plus single-task matrix reports.
 Versioned tags replace the earlier unversioned op vocabulary, which had
 no names for request materialization or report retrieval. Any CLI
 argument — including `--help`, `--version`, and public commands —
