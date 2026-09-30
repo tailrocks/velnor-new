@@ -95,15 +95,16 @@ pub fn write_request_parts(
     if op == MERGE_OP {
         return crate::merge_request::write_merge_request(&path);
     }
+    let payload: serde_json::Value =
+        serde_json::from_str(payload_json).map_err(|_| internal("malformed_event_payload"))?;
     let event = match event_name {
+        "pull_request" if is_fork_pull_request(&payload) => WorkflowEvent::Fork,
         "pull_request" => WorkflowEvent::PullRequest,
         "push" => WorkflowEvent::Push,
         "merge_group" => WorkflowEvent::MergeGroup,
         "local" => WorkflowEvent::Local,
         _ => return Err(internal("unsupported_event")),
     };
-    let payload: serde_json::Value =
-        serde_json::from_str(payload_json).map_err(|_| internal("malformed_event_payload"))?;
     let (base, head) = request_refs(event, &payload, github_sha)?;
     let request = EventRequest {
         schema: SCHEMA,
@@ -118,16 +119,7 @@ pub fn write_request_parts(
         fs::create_dir_all(parent)
             .map_err(|err| OrchestratorError::io(parent.display().to_string(), err.to_string()))?;
     }
-    fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&path)
-        .map_err(|_| internal("request_exists"))
-        .and_then(|mut file| {
-            use std::io::Write;
-            file.write_all(&bytes)
-                .map_err(|_| internal("request_unwritable"))
-        })?;
+    crate::exclusive_write::write_exclusive(&path, &bytes, "request")?;
     Ok(path)
 }
 
@@ -189,7 +181,7 @@ pub fn publish_plan_files(
         serde_json::from_str(response_json).map_err(|_| internal("malformed_response"))?;
     check_schema(response.schema)?;
     let dir = plan_artifact_dir(velnor_dir, &response.plan.run_key)?;
-    write_plan_files(&response, &dir)?;
+    write_plan_files(&response, velnor_dir, &dir)?;
     Ok(dir)
 }
 
@@ -204,14 +196,18 @@ pub fn publish_plan_files(
 /// [`OrchestratorError::Io`] for unwritable directories.
 pub(crate) fn write_plan_files(
     response: &PlanResponse,
+    anchor: &Path,
     dir: &Path,
 ) -> Result<(), OrchestratorError> {
-    fs::create_dir_all(dir)
-        .map_err(|err| OrchestratorError::io(dir.display().to_string(), err.to_string()))?;
+    crate::exclusive_write::create_dir_no_symlink(anchor, dir)?;
     let plan = plan_json_bytes(&response.plan).map_err(internal_contract)?;
     let matrix = matrix_json_bytes(&response.matrix).map_err(internal_contract)?;
-    write_new(&dir.join(PLAN_JSON_FILENAME), &plan)?;
-    write_new(&dir.join(MATRIX_JSON_FILENAME), &matrix)?;
+    crate::exclusive_write::write_exclusive(&dir.join(PLAN_JSON_FILENAME), &plan, "plan_artifact")?;
+    crate::exclusive_write::write_exclusive(
+        &dir.join(MATRIX_JSON_FILENAME),
+        &matrix,
+        "plan_artifact",
+    )?;
     Ok(())
 }
 
@@ -234,25 +230,14 @@ pub fn publish_final_report(
         serde_json::from_str(response_json).map_err(|_| internal("malformed_response"))?;
     check_schema(report.schema)?;
     let dir = plan_artifact_dir(velnor_dir, &report.run_key)?;
-    fs::create_dir_all(&dir)
-        .map_err(|err| OrchestratorError::io(dir.display().to_string(), err.to_string()))?;
+    crate::exclusive_write::create_dir_no_symlink(velnor_dir, &dir)?;
     let bytes = canonical_json_bytes(&report).map_err(internal_contract)?;
-    write_new(&dir.join(FINAL_JSON_FILENAME), &bytes)?;
+    crate::exclusive_write::write_exclusive(
+        &dir.join(FINAL_JSON_FILENAME),
+        &bytes,
+        "plan_artifact",
+    )?;
     Ok(dir)
-}
-
-/// Exclusively write one artifact file; a pre-existing file errors.
-fn write_new(path: &Path, bytes: &[u8]) -> Result<(), OrchestratorError> {
-    fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(path)
-        .map_err(|_| internal("plan_artifact_exists"))
-        .and_then(|mut file| {
-            use std::io::Write;
-            file.write_all(bytes)
-                .map_err(|_| internal("plan_artifact_unwritable"))
-        })
 }
 
 /// True when one `merge-v1` response is a passing verdict.
@@ -303,6 +288,18 @@ fn request_op(path: &Path) -> Result<String, OrchestratorError> {
     } else {
         Err(internal("unknown_request_op"))
     }
+}
+
+/// True when a `pull_request` payload comes from a forked repository.
+///
+/// GitHub sends fork PRs as `pull_request` events (no distinct event
+/// name); the head repo's `fork` flag is the only signal. Without this
+/// the `Fork` variant is unreachable and fork runs mislabel as same-repo
+/// PRs. A missing flag defaults to same-repo.
+fn is_fork_pull_request(payload: &serde_json::Value) -> bool {
+    payload["pull_request"]["head"]["repo"]["fork"]
+        .as_bool()
+        .unwrap_or(false)
 }
 
 /// Base/head refs for one event: PR `base.sha`/`head.sha`, merge-group

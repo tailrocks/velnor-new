@@ -1,9 +1,8 @@
 //! Pre-seed mode: build-once templates plus strict closure gates.
 use velnor_actions_contract::{Job, WorkflowPolicy};
 use velnor_actions_workflow_renderer::{
-    PRESEED_VERIFY_MANIFEST_NAME, PreseedStageSource, RenderError, checkout_step, merge_step,
-    plan_step, preseed_build_step, preseed_download_step, preseed_manifest_script,
-    preseed_manifest_step, preseed_manifest_verify_script, preseed_manifest_verify_step,
+    PRESEED_STAGE_NAME, PreseedStageSource, RenderError, checkout_step, merge_step, plan_step,
+    preseed_build_step, preseed_download_step, preseed_manifest_script, preseed_manifest_step,
     preseed_stage_step, preseed_upload_step, preseed_verify_step, render_workflow_ir_strict,
 };
 
@@ -58,7 +57,6 @@ fn preseed_final() -> Result<(String, Job), RenderError> {
         vec!["plan".to_owned()],
         vec![
             preseed_download_step()?,
-            preseed_manifest_verify_step(TARGET)?,
             preseed_stage_step(PreseedStageSource::DownloadedArtifact, STAGED)?,
             merge_step(),
         ],
@@ -77,7 +75,6 @@ fn preseed_templates_carry_trust_mark_and_exact_artifact() -> Result<(), RenderE
         manifest,
         preseed_upload_step()?,
         preseed_download_step()?,
-        preseed_manifest_verify_step(TARGET)?,
         preseed_stage_step(PreseedStageSource::LocalBuild, STAGED)?,
     ] {
         assert!(
@@ -183,74 +180,6 @@ fn preseed_verify_pins_binary_and_mbx_route() -> Result<(), RenderError> {
 }
 
 #[test]
-fn preseed_manifest_verify_pins_target_and_digest() -> Result<(), RenderError> {
-    let step = preseed_manifest_verify_step(TARGET)?;
-    assert_eq!(step.name, PRESEED_VERIFY_MANIFEST_NAME);
-    let velnor_actions_contract::StepKind::Shell { run, .. } = &step.kind else {
-        panic!("verify must be a shell step");
-    };
-    assert_eq!((run[0].as_str(), run[1].as_str()), ("sh", "-c"));
-    let script = preseed_manifest_verify_script(TARGET);
-    for token in [
-        "schema",
-        "commit",
-        "target",
-        "toolchain",
-        "sha256",
-        "GITHUB_SHA",
-        "sha256sum",
-        "velnor/preseed",
-        "preseed-manifest.json",
-        TARGET,
-    ] {
-        assert!(script.contains(token), "missing {token}:\n{script}");
-    }
-    for absent in ["$(", "`", "'", "sed", "python", "jq", "test -x"] {
-        assert!(!script.contains(absent), "banned {absent}:\n{script}");
-    }
-    assert!(preseed_manifest_verify_step("not-a-target").is_err());
-    Ok(())
-}
-
-#[test]
-#[cfg(unix)]
-fn preseed_verify_script_rejects_tampered_payload() -> Result<(), RenderError> {
-    use std::process::Command;
-    let script = preseed_manifest_verify_script(TARGET);
-    let root = std::env::temp_dir().join(format!("velnor-preseed-verify-{}", std::process::id()));
-    let dir = root.join("velnor/preseed");
-    std::fs::create_dir_all(&dir)
-        .map_err(|err| RenderError::InvalidWorkflow(format!("tmp:{err}")))?;
-    let run_case = |commit: &str, target: &str, sha: &str| {
-        let manifest = format!(
-            "{{\"schema\":1,\"commit\":\"{commit}\",\"target\":\"{target}\",\"toolchain\":\"rust@1.98.1+mbx@1.0.0\",\"sha256\":\"{sha}\"}}"
-        );
-        std::fs::write(dir.join("preseed-manifest.json"), &manifest).expect("manifest fixture");
-        std::fs::write(dir.join("velnor-actions"), []).expect("binary fixture");
-        // No chmod: artifact downloads arrive without the exec bit, and the
-        // good case must verify in exactly that state (CI run 36749240499).
-        Command::new("sh")
-            .args(["-c", &script])
-            .env("RUNNER_TEMP", &root)
-            .env("GITHUB_SHA", "f".repeat(40))
-            .status()
-            .expect("sh")
-            .success()
-    };
-    let empty_sha = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
-    let good = run_case(&"f".repeat(40), TARGET, empty_sha);
-    let tampered = run_case(&"f".repeat(40), TARGET, &"0".repeat(64));
-    let wrong_target = run_case(&"f".repeat(40), "aarch64-apple-darwin", empty_sha);
-    let wrong_commit = run_case(&"0".repeat(40), TARGET, empty_sha);
-    std::fs::remove_dir_all(&root).ok();
-    assert!(good, "good manifest must verify");
-    assert!(!tampered, "tampered sha must fail");
-    assert!(!wrong_target, "wrong target must fail");
-    assert!(!wrong_commit, "wrong commit must fail");
-    Ok(())
-}
-
-#[test]
 fn strict_preseed_accepts_staged_internal_steps() -> Result<(), RenderError> {
     let mut ctx = fixture_ctx();
     ctx.preseed = true;
@@ -323,29 +252,29 @@ fn strict_preseed_closure_rejects_gaps() {
         err.is_err_and(|err| err.to_string().contains("preseed_incomplete")),
         "final without download accepted"
     );
-    let (id, mut unverified) = preseed_final().expect("final");
-    unverified
+    let (id, mut unstaged) = preseed_final().expect("final");
+    unstaged
         .steps
-        .retain(|step| step.name != PRESEED_VERIFY_MANIFEST_NAME);
+        .retain(|step| step.name != PRESEED_STAGE_NAME);
     let err = render_workflow_ir_strict(
-        &fixture_ir(vec![preseed_plan().expect("plan"), (id, unverified)]),
+        &fixture_ir(vec![preseed_plan().expect("plan"), (id, unstaged)]),
         WorkflowPolicy::VelnorRepositoryV1,
         None,
         &ctx,
         &mise(),
     );
     assert!(
-        err.is_err_and(|err| err.to_string().contains("preseed_incomplete")),
-        "final without manifest verify accepted"
+        err.is_err_and(|err| err.to_string().contains("internal_without_acquire")),
+        "final without stage accepted"
     );
     let (id, mut misordered) = preseed_final().expect("final");
-    let verify_at = misordered
+    let stage_at = misordered
         .steps
         .iter()
-        .position(|step| step.name == PRESEED_VERIFY_MANIFEST_NAME)
-        .expect("verify step");
-    let verify = misordered.steps.remove(verify_at);
-    misordered.steps.push(verify);
+        .position(|step| step.name == PRESEED_STAGE_NAME)
+        .expect("stage step");
+    let stage = misordered.steps.remove(stage_at);
+    misordered.steps.insert(0, stage);
     let err = render_workflow_ir_strict(
         &fixture_ir(vec![preseed_plan().expect("plan"), (id, misordered)]),
         WorkflowPolicy::VelnorRepositoryV1,
@@ -355,7 +284,7 @@ fn strict_preseed_closure_rejects_gaps() {
     );
     assert!(
         err.is_err_and(|err| err.to_string().contains("preseed_misordered")),
-        "verify-after-stage accepted"
+        "stage-before-download accepted"
     );
 }
 

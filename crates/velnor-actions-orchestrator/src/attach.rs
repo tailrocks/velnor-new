@@ -13,7 +13,7 @@ use velnor_actions_workflow_renderer::render::{FINAL_JOB_ID, PLAN_JOB_ID};
 use velnor_actions_workflow_renderer::steps::STAGED_BINARY_PREFIX;
 use velnor_actions_workflow_renderer::{
     PreseedStageSource, preseed_build_step, preseed_download_step, preseed_manifest_step,
-    preseed_manifest_verify_step, preseed_stage_step, preseed_upload_step, preseed_verify_step,
+    preseed_stage_step, preseed_upload_step, preseed_verify_step,
 };
 
 use crate::OrchestratorError;
@@ -65,13 +65,13 @@ pub(crate) fn attach_lock_acquire(
 ///
 /// The plan job builds the helper once from the checked-out source with
 /// the fixed §4 vector, verifies the MBX compile output plus its pinned
-/// route, records the source commit in a manifest, uploads the
+/// route, records the source commit in an audit manifest, uploads the
 /// exactly-named artifact, and stages its local build; every crate job
-/// and the final job download that artifact, digest-verify its manifest
-/// against the recomputed binary hash, and stage it instead of
-/// rebuilding. Sets the render context's pre-seed mode so the strict
-/// gates accept fixed pre-seed staging. Consumer generation never calls
-/// this.
+/// and the final job download that artifact and stage it instead of
+/// rebuilding. There is no manifest self-verification: it would be
+/// circular trust (see the renderer's pre-seed docs). Sets the render
+/// context's pre-seed mode so the strict gates accept fixed pre-seed
+/// staging. Consumer generation never calls this.
 pub(crate) fn attach_preseed(
     workflow: &mut WorkflowPlan,
     label: &str,
@@ -107,7 +107,6 @@ pub(crate) fn attach_preseed(
         0..0,
         [
             preseed_download_step()?,
-            preseed_manifest_verify_step(target)?,
             preseed_stage_step(PreseedStageSource::DownloadedArtifact, &staged)?,
         ],
     );
@@ -119,7 +118,6 @@ pub(crate) fn attach_preseed(
             1..1,
             [
                 preseed_download_step()?,
-                preseed_manifest_verify_step(target)?,
                 preseed_stage_step(PreseedStageSource::DownloadedArtifact, &staged)?,
             ],
         );
@@ -252,7 +250,6 @@ mod tests {
         use velnor_actions_actionlint::ActionlintConfigInput;
         use velnor_actions_workflow_renderer::{
             PRESEED_BUILD_NAME, PRESEED_DOWNLOAD_NAME, PRESEED_STAGE_NAME,
-            PRESEED_VERIFY_MANIFEST_NAME,
         };
         let catalog = ToolCatalog::pinned();
         let mut plan = WorkflowPlan {
@@ -311,16 +308,15 @@ mod tests {
                 .map(|s| s.name.as_str())
                 .collect();
             let position = |name: &str| names.iter().position(|step| *step == name);
-            let (Some(download_at), Some(verify_at), Some(stage_at)) = (
+            let (Some(download_at), Some(stage_at)) = (
                 position(PRESEED_DOWNLOAD_NAME),
-                position(PRESEED_VERIFY_MANIFEST_NAME),
                 position(PRESEED_STAGE_NAME),
             ) else {
-                panic!("{id} misses download/verify/stage: {names:?}");
+                panic!("{id} misses download/stage: {names:?}");
             };
             assert!(
-                download_at < verify_at && verify_at < stage_at,
-                "{id} must verify before staging: {names:?}"
+                download_at < stage_at,
+                "{id} must download before staging: {names:?}"
             );
             assert!(
                 !names.contains(&PRESEED_BUILD_NAME),

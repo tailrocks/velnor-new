@@ -195,7 +195,18 @@ fn custom_task_without_opt_in_never_grants() {
 #[test]
 fn custom_task_bad_names_and_inputs_rejected() {
     let inputs = vec!["src/**/*.rs".to_owned()];
-    for bad in ["", "  ", "has space", "path/task", "a/b"] {
+    for bad in [
+        "",
+        "  ",
+        "has space",
+        "path/task",
+        "a/b",
+        "${{secrets.x}}",
+        "$(evil)",
+        "`evil`",
+        "lint;evil",
+        "lint|evil",
+    ] {
         assert!(
             matches!(
                 CustomTaskGrant::new(bad, hermetic_effects(), &inputs, true),

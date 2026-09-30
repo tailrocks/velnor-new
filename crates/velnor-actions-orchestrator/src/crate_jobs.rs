@@ -106,7 +106,7 @@ pub(crate) fn build_crate_jobs(
         // Allowlisted custom tasks run after the fixed obligations; an
         // empty allowlist (the default) appends nothing.
         job.steps
-            .extend(crate::vectors::custom_task_steps(custom_tasks)?);
+            .extend(crate::vectors::custom_task_steps(custom_tasks, catalog)?);
         drivers.insert(job_id.clone(), driver);
         jobs.push((job_id, job));
     }

@@ -13,7 +13,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::digest_b3;
 use crate::errors::ContractError;
-use crate::workflow::ir::{Job, WorkflowIr};
 
 /// Generated main workflow path (P05-8: `ci.yml`, display `CI`).
 pub const CI_WORKFLOW_PATH: &str = ".github/workflows/ci.yml";
@@ -41,12 +40,6 @@ pub const REQUIRED_DISPLAY_NAME: &str = "Required";
 
 /// Required-gate run condition: always runs, judges every conclusion.
 pub const REQUIRED_CONDITION: &str = "always()";
-
-/// Env key carrying the finalized `needs` conclusions payload.
-pub const NEEDS_CHANNEL_ENV: &str = "VELNOR_NEEDS_JSON";
-
-/// GitHub expression producing the `needs` conclusions payload.
-pub const NEEDS_CHANNEL_EXPRESSION: &str = "${{ toJSON(needs) }}";
 
 /// Weekly upstream-freshness schedule (Mondays 06:00 UTC).
 pub const FRESHNESS_CRON_WEEKLY: &str = "0 6 * * 1";
@@ -239,69 +232,6 @@ pub fn assign_crate_job_ids(
         assigned.insert((package_id.clone(), configuration.clone()), id);
     }
     assigned
-}
-
-/// Producer model of the final-gate `needs` channel (P01-3/4).
-///
-/// The required validator inventory derives from the finalized job set
-/// (every job except the gate itself); the renderer emits [`NEEDS_CHANNEL_ENV`]
-/// with [`NEEDS_CHANNEL_EXPRESSION`] so merge conclusions match the plan.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct NeedsConclusions {
-    /// Required-gate job ID.
-    pub required_job: String,
-    /// Sorted required validator IDs (the gate's `needs`).
-    pub inventory: Vec<String>,
-}
-
-impl NeedsConclusions {
-    /// Derive the inventory from the finalized workflow jobs.
-    /// # Errors
-    pub fn from_finalized_jobs(
-        required_job: &str,
-        jobs: &BTreeMap<String, Job>,
-    ) -> Result<Self, ContractError> {
-        if !jobs.contains_key(required_job) {
-            return Err(ContractError::identity(
-                "needs.inventory",
-                format!("missing_gate:{required_job}"),
-            ));
-        }
-        let inventory: Vec<String> = jobs
-            .keys()
-            .filter(|id| id.as_str() != required_job)
-            .cloned()
-            .collect();
-        if inventory.is_empty() {
-            return Err(ContractError::identity(
-                "needs.inventory",
-                "empty_inventory",
-            ));
-        }
-        Ok(Self {
-            required_job: required_job.to_owned(),
-            inventory,
-        })
-    }
-
-    /// Channel binding the renderer emits on the merge step.
-    #[must_use]
-    pub fn channel_env(&self) -> (String, String) {
-        (
-            NEEDS_CHANNEL_ENV.to_owned(),
-            NEEDS_CHANNEL_EXPRESSION.to_owned(),
-        )
-    }
-
-    /// True when the finalized gate needs exactly this inventory.
-    #[must_use]
-    pub fn gate_matches(&self, ir: &WorkflowIr) -> bool {
-        ir.jobs.get(&self.required_job).is_some_and(|job| {
-            let mut needs = job.needs.clone();
-            needs.sort();
-            needs == self.inventory
-        })
-    }
 }
 
 /// Cron schedule for a generated workflow (P12-4 contract half).

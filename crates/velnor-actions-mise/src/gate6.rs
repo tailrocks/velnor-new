@@ -40,7 +40,7 @@ pub struct CustomTaskEffects {
 /// cleared environment with no credentials and no privileged keys.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CustomTaskGrant {
-    /// Granted task name (same token rule as the fixed run argv).
+    /// Granted task name (contract allowlist, same as the run argv).
     task: String,
     /// Declared effects.
     effects: CustomTaskEffects,
@@ -54,7 +54,7 @@ impl CustomTaskGrant {
     /// # Errors
     ///
     /// Returns [`MiseError::CacheNotEligible`] without the opt-in, for a
-    /// blank or path-bearing task name, or for a blank declared input.
+    /// task name outside the contract allowlist, or for a blank input.
     pub fn new(
         task: &str,
         effects: CustomTaskEffects,
@@ -64,7 +64,7 @@ impl CustomTaskGrant {
         if !opt_in {
             return Err(Self::refused(task, "custom_task_opt_in_required"));
         }
-        if task.trim().is_empty() || task.contains('/') || task.contains(' ') {
+        if !velnor_actions_contract::config::is_valid_custom_task_name(task) {
             return Err(Self::refused(task, "custom_task_bad_name"));
         }
         if inputs.iter().any(|input| input.trim().is_empty()) {

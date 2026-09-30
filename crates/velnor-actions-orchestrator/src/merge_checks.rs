@@ -50,6 +50,32 @@ pub(crate) fn check_plan_shape(
     }
 }
 
+/// Plan trust must match its event, and every task report must match the plan.
+///
+/// Trust was stamped at plan time and never rechecked, so a forged plan
+/// or report could claim `Trusted` scope on PR content. The plan's trust
+/// must equal the canonical scope for its event, and each task file's
+/// event/trust pair must equal the plan's; anything else fails closed
+/// with a scope token, never silently.
+pub(crate) fn check_trust_coherence(
+    plan: &Plan,
+    request: &MergeRequest,
+    signals: &mut Signals,
+    miss_reasons: &mut BTreeSet<String>,
+) {
+    if plan.trust != velnor_actions_contract::trust_for_event(plan.event) {
+        signals.planning_failed = true;
+        miss_reasons.insert("trust_scope_mismatch".to_owned());
+    }
+    for report in &request.task_reports {
+        if report.event != plan.event || report.trust != plan.trust {
+            signals.planning_failed = true;
+            miss_reasons.insert("trust_scope_mismatch".to_owned());
+            return;
+        }
+    }
+}
+
 /// Every Execute obligation needs a matrix leg; hollow plans fail closed.
 ///
 /// Coverage walks `matrix.include`, so an Execute obligation without a
@@ -129,6 +155,7 @@ pub(crate) fn check_plan_evidence(
         .is_some_and(|limits| validate_budgets(limits).is_err())
     {
         signals.planning_failed = true;
+        miss_reasons.insert("cache_corrupt".to_owned());
     }
     if request
         .reference_task_ids
@@ -136,6 +163,7 @@ pub(crate) fn check_plan_evidence(
         .is_some_and(|reference| !reference_matches(reference, &plan.task_ids))
     {
         signals.planning_failed = true;
+        miss_reasons.insert("cache_corrupt".to_owned());
     }
 }
 

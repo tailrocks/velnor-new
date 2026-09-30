@@ -103,6 +103,27 @@ pub(crate) fn task_step_env(
         .map_err(OrchestratorError::from)
 }
 
+/// Validated env for steps executing repository code.
+///
+/// [`task_step_env`] plus the explicit empty credential scrub: absence
+/// would inherit ambient runner and workflow-scope tokens into build
+/// scripts and custom tasks. Fetch, prepare, and plan steps keep the
+/// unscrubbed base: they execute no repository code and need ambient
+/// auth for downloads and baseline lookups.
+///
+/// # Errors
+///
+/// Returns the same errors as [`task_step_env`].
+pub(crate) fn task_execution_env(
+    catalog: &ToolCatalog,
+    extra: &BTreeMap<String, String>,
+) -> Result<BTreeMap<String, String>, OrchestratorError> {
+    use velnor_actions_workflow_renderer::toolchain_env;
+    Ok(toolchain_env::with_credential_scrub(&task_step_env(
+        catalog, extra,
+    )?))
+}
+
 /// Fixed obligation identity env carried by every obligation step.
 ///
 /// Binds the step to its task, digest, and matrix coordinates with
@@ -161,7 +182,7 @@ pub(crate) fn obligation_step(
         identity.get(TASK_ID_ENV).map(String::as_str),
         Some(obligation.task_id.as_str())
     );
-    let env = task_step_env(catalog, &identity)?;
+    let env = task_execution_env(catalog, &identity)?;
     let joined =
         velnor_actions_workflow_renderer::join_argv_for_run(&obligation.run).map_err(|err| {
             OrchestratorError::Contract {

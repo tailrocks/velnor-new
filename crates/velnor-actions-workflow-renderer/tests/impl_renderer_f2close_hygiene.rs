@@ -312,6 +312,46 @@ fn token_hygiene_rejects_prints_and_task_tokens() -> Result<(), RenderError> {
 }
 
 #[test]
+fn token_hygiene_allows_empty_scrub_and_rejects_all_seven_keys() -> Result<(), RenderError> {
+    use velnor_actions_workflow_renderer::toolchain_env::STEP_CREDENTIAL_DENYLIST;
+    let scrub: BTreeMap<String, String> = STEP_CREDENTIAL_DENYLIST
+        .iter()
+        .map(|key| ((*key).to_owned(), String::new()))
+        .collect();
+    let scrubbed = job(
+        "velnor-task",
+        "Task",
+        vec!["plan".to_owned()],
+        vec![shell_step("Run task", vec!["true".to_owned()], scrub)?],
+    );
+    render_workflow_ir(
+        &fixture_ir(vec![minimal_plan_job()?, scrubbed]),
+        WorkflowPolicy::ConsumerV1,
+        None,
+        &fixture_ctx(),
+    )?;
+    for key in STEP_CREDENTIAL_DENYLIST {
+        let leaked = job(
+            "velnor-task",
+            "Task",
+            vec!["plan".to_owned()],
+            vec![shell_step(
+                "Run task",
+                vec!["true".to_owned()],
+                BTreeMap::from([(key.to_owned(), "x".to_owned())]),
+            )?],
+        );
+        let want = if key == "GH_TOKEN" {
+            "token_misplaced"
+        } else {
+            "credential_env"
+        };
+        render_fails_with(vec![minimal_plan_job()?, leaked], want);
+    }
+    Ok(())
+}
+
+#[test]
 fn repo_config_sets_velnor_repository_v1() -> Result<(), String> {
     let path = format!("{}/../../.velnor/config.toml", env!("CARGO_MANIFEST_DIR"));
     let text = std::fs::read_to_string(&path).map_err(|err| format!("config:{err}"))?;

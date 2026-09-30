@@ -332,6 +332,46 @@ mod tests {
     }
 
     #[test]
+    fn render_unsafe_stack_values_are_rejected() {
+        let load = load_config;
+        for (body, want) in [
+            (
+                "schema = 1\n[[stacks.rust.configurations]]\nname = \"x\"\ntarget = \"${{ secrets.x }}\"\n",
+                "bad_target",
+            ),
+            (
+                "schema = 1\n[[stacks.rust.configurations]]\nname = \"x\"\ntarget = \"a;true\"\n",
+                "bad_target",
+            ),
+            (
+                "schema = 1\n[[stacks.rust.configurations]]\nname = \"x\"\nfeatures = [\"${{ x }}\"]\ntarget = \"host\"\n",
+                "bad_feature",
+            ),
+            (
+                "schema = 1\n[stacks.rust]\ncustom_tasks = [\"${{secrets.x}}\"]\n",
+                "bad_custom_task",
+            ),
+            (
+                "schema = 1\n[stacks.rust]\ncustom_tasks = [\"a;true\"]\n",
+                "bad_custom_task",
+            ),
+        ] {
+            let root = rooted(body);
+            let err = load(root.path()).expect_err("unsafe value must fail");
+            assert!(err.to_string().contains(want), "got {err} want {want}");
+        }
+        let root = rooted(
+            "schema = 1\n[[stacks.rust.configurations]]\nname = \"x\"\nfeatures = [\"serde\", \"dep:foo\", \"bar?/baz\"]\ntarget = \"x86_64-unknown-linux-gnu\"\n[stacks.rust]\ncustom_tasks = [\"audit\", \"lint:strict\"]\n",
+        );
+        let config = load(root.path()).expect("safe values pass");
+        let rust = config.stacks.rust.expect("rust stack");
+        assert_eq!(
+            rust.custom_tasks,
+            ["audit".to_owned(), "lint:strict".to_owned()]
+        );
+    }
+
+    #[test]
     fn unknown_rust_keys_are_rejected() {
         let load = load_config;
         for body in [

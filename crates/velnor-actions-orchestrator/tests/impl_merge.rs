@@ -90,8 +90,8 @@ pub(crate) fn task_reports_for(
                 "schema": 1,
                 "task_report_id": report_id,
                 "run_key": plan.get("run_key").and_then(serde_json::Value::as_str).unwrap_or("local"),
-                "event": "pull_request",
-                "trust": "pr",
+                "event": plan.get("event"),
+                "trust": plan.get("trust"),
                 "matrix_id": report.get("matrix_id"),
                 "matrix_key": report.get("matrix_key"),
                 "task_id": id,
@@ -104,7 +104,7 @@ pub(crate) fn task_reports_for(
                 },
                 "cache": {"layer": "task", "key": "", "result": "not_attempted"},
                 "exit_code": task.get("exit_code"),
-                "duration_ms": 0,
+                "duration_ms": null,
                 "outputs": [],
             }));
         }

@@ -3,8 +3,8 @@ use std::collections::BTreeMap;
 
 use velnor_actions_workflow_renderer::toolchain_env::{
     STEP_CREDENTIAL_DENYLIST, STEP_ISOLATION_DENYLIST, TOOLCHAIN_HOME_KEYS,
-    checked_project_task_env, checked_task_env, reject_denied_step_keys,
-    reject_privileged_task_keys, with_toolchain_homes,
+    checked_project_task_env, checked_task_env, credential_scrub, reject_denied_step_keys,
+    reject_privileged_task_keys, with_credential_scrub, with_toolchain_homes,
 };
 
 #[test]
@@ -45,6 +45,32 @@ fn denied_keys_rejected_anywhere_in_map() {
             err.to_string()
                 .contains(&format!("credential_step_env:{denied}")),
             "got {err}"
+        );
+    }
+}
+
+#[test]
+fn credential_scrub_blanks_all_seven_keys() {
+    let scrub = credential_scrub();
+    assert_eq!(scrub.len(), STEP_CREDENTIAL_DENYLIST.len());
+    for denied in STEP_CREDENTIAL_DENYLIST {
+        assert_eq!(
+            scrub.get(denied).map(String::as_str),
+            Some(""),
+            "{denied} must scrub empty"
+        );
+    }
+    let base = BTreeMap::from([("MISE_NO_CONFIG".to_owned(), "1".to_owned())]);
+    let scrubbed = with_credential_scrub(&base);
+    assert_eq!(
+        scrubbed.get("MISE_NO_CONFIG").map(String::as_str),
+        Some("1")
+    );
+    for denied in STEP_CREDENTIAL_DENYLIST {
+        assert_eq!(
+            scrubbed.get(denied).map(String::as_str),
+            Some(""),
+            "{denied} must scrub empty"
         );
     }
 }

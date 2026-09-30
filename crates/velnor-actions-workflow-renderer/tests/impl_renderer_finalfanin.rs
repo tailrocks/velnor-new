@@ -118,6 +118,15 @@ fn merge_steps_carry_needs_channel_matching_final_needs() -> Result<(), RenderEr
         merge.contains("VELNOR_NEEDS_JSON: ${{ toJSON(needs) }}"),
         "merge lacks the channel:\n{merge}"
     );
+    assert!(
+        merge.contains("VELNOR_NEEDS_EXPECTED:"),
+        "merge lacks the expected inventory:\n{merge}"
+    );
+    assert_eq!(
+        text.matches("VELNOR_NEEDS_EXPECTED").count(),
+        2,
+        "write-request plus merge carry the expected inventory:\n{text}"
+    );
     let plan_region = text.split("  required:").next().unwrap_or_default();
     assert!(
         plan_region.contains("- name: Write request"),

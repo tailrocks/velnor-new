@@ -22,10 +22,10 @@ pub(crate) fn workflow_to_yaml(
     jobs: &BTreeMap<String, Job>,
     ctx: &RenderContext,
 ) -> Result<Yaml, RenderError> {
-    let needs_env = needs_channel_env(jobs)?;
+    let needs_env = needs_channel_envs(jobs)?;
     let mut rendered_jobs = Vec::with_capacity(jobs.len());
     for (id, job) in jobs {
-        rendered_jobs.push((id.clone(), job_to_yaml(id, job, ctx, needs_env.as_ref())?));
+        rendered_jobs.push((id.clone(), job_to_yaml(id, job, ctx, &needs_env)?));
     }
     Ok(Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(ir.name.clone())),
@@ -138,16 +138,14 @@ fn triggers_to_yaml(triggers: &Trigger) -> Yaml {
 /// The inventory is every job except the gate itself; a lone gate has
 /// nothing to conclude over and fails closed instead of emitting a
 /// channel the merge would judge as `empty_needs`.
-fn needs_channel_env(
-    jobs: &BTreeMap<String, Job>,
-) -> Result<Option<(String, String)>, RenderError> {
+fn needs_channel_envs(jobs: &BTreeMap<String, Job>) -> Result<Vec<(String, String)>, RenderError> {
     if !jobs.contains_key(FINAL_JOB_ID) {
-        return Ok(None);
+        return Ok(Vec::new());
     }
     let conclusions =
         velnor_actions_contract::NeedsConclusions::from_finalized_jobs(FINAL_JOB_ID, jobs)
             .map_err(RenderError::Contract)?;
-    Ok(Some(conclusions.channel_env()))
+    Ok(vec![conclusions.channel_env(), conclusions.expected_env()])
 }
 
 /// Render one typed dispatch input: fixed string type, required, default.
@@ -170,7 +168,7 @@ fn job_to_yaml(
     id: &str,
     job: &Job,
     ctx: &RenderContext,
-    needs_env: Option<&(String, String)>,
+    needs_envs: &[(String, String)],
 ) -> Result<Yaml, RenderError> {
     steps::scan_for_private_subcommands(&job.display_name)?;
     let mut entries = vec![
@@ -197,7 +195,7 @@ fn job_to_yaml(
     }
     let mut rendered_steps = Vec::with_capacity(job.steps.len());
     for step in &job.steps {
-        rendered_steps.push(step_to_yaml(id, step, ctx, needs_env)?);
+        rendered_steps.push(step_to_yaml(id, step, ctx, needs_envs)?);
     }
     entries.push(("steps".to_owned(), Yaml::Seq(rendered_steps)));
     Ok(Yaml::Map(entries))
@@ -222,12 +220,13 @@ fn is_verdict_download(step: &Step) -> bool {
 /// still gates IR-level `GH_TOKEN` (see `support`); this render-time
 /// pair is fixed by construction for the fetch step only. Merge-family
 /// steps in the final job additionally carry the finalized `needs`
-/// conclusions channel so the merge never sees `missing_needs_channel`.
+/// conclusions channel plus the rendered expected inventory, so the
+/// merge binds required validators to the committed workflow.
 fn internal_env(
     op: &str,
     target: &str,
     ctx: &RenderContext,
-    needs_env: Option<&(String, String)>,
+    needs_envs: &[(String, String)],
 ) -> Yaml {
     if op == steps::FETCH_OPERATION {
         return Yaml::Map(vec![
@@ -238,7 +237,7 @@ fn internal_env(
     }
     let request = format!("{}/{target}-request.json", ctx.request_dir);
     let mut env = vec![(INTERNAL_OP_ENV.to_owned(), Yaml::str(op.to_owned()))];
-    if let Some((key, value)) = needs_env {
+    for (key, value) in needs_envs {
         env.push((key.clone(), Yaml::str(value.clone())));
     }
     env.push((REQUEST_FILE_ENV.to_owned(), Yaml::str(request)));
@@ -256,7 +255,7 @@ fn step_to_yaml(
     job_id: &str,
     step: &Step,
     ctx: &RenderContext,
-    needs_env: Option<&(String, String)>,
+    needs_envs: &[(String, String)],
 ) -> Result<Yaml, RenderError> {
     steps::scan_for_private_subcommands(&step.name)?;
     match &step.kind {
@@ -320,9 +319,11 @@ fn step_to_yaml(
             if job_id == FINAL_JOB_ID && operation == steps::FETCH_OPERATION {
                 entries.push(("continue-on-error".to_owned(), Yaml::Bool(true)));
             }
-            let channel = (job_id == FINAL_JOB_ID && target == steps::MERGE_OPERATION)
-                .then_some(needs_env)
-                .flatten();
+            let channel = if job_id == FINAL_JOB_ID && target == steps::MERGE_OPERATION {
+                needs_envs
+            } else {
+                &[]
+            };
             entries.push(("env".to_owned(), internal_env(op, target, ctx, channel)));
             entries.push((
                 "run".to_owned(),

@@ -53,12 +53,12 @@ pub use graph::{
     validate_plan_edges,
 };
 pub use ids::{
-    artifact_id_for_baseline, artifact_id_for_candidate, artifact_id_for_final,
-    artifact_id_for_matrix, artifact_id_for_plan, manifest_key_for_cargo_manifest,
-    matrix_id_for_task_group, matrix_key_for_id, plan_id_for_run, report_id_for_matrix,
-    run_key_for_ci, target_key, task_id_for_internal, task_id_for_stack, task_report_id_for_task,
-    validate_artifact_id, validate_id, validate_matrix_key, validate_plan_id, validate_report_id,
-    validate_run_key, validate_task_id, validate_task_report_id,
+    artifact_id_for_baseline, artifact_id_for_final, artifact_id_for_matrix, artifact_id_for_plan,
+    manifest_key_for_cargo_manifest, matrix_id_for_task_group, matrix_key_for_id, plan_id_for_run,
+    report_id_for_matrix, run_key_for_ci, target_key, task_id_for_internal, task_id_for_stack,
+    task_report_id_for_task, validate_artifact_id, validate_id, validate_matrix_key,
+    validate_plan_id, validate_report_id, validate_run_key, validate_task_id,
+    validate_task_report_id,
 };
 pub use manifest::{
     ActionPin, CandidateArtifactManifest, GeneratorBinary, GeneratorLock, LockedGenerator,
@@ -79,20 +79,20 @@ pub use tooling::ToolIdentity;
 pub use vcs::VcsInputs;
 pub use workflow::{
     BaselineProof, BaselineStatus, CI_WORKFLOW_PATH, CRATE_JOB_ID_PREFIX, CacheLayer, CacheOutcome,
-    CacheResult, CandidateReport, CandidateStatus, Concurrency, CrateJob, CrateObligation,
-    EntryCacheIds, ExecuteTaskIds, ExecuteTaskRef, FINAL_JSON_FILENAME, FRESHNESS_CRON_WEEKLY,
-    FRESHNESS_WORKFLOW_PATH, FinalCounts, FinalReport, FinalStatus, Job, MATRIX_JSON_FILENAME,
-    ManifestTaskProof, MatrixEntry, MatrixReport, MatrixStatus, MatrixTaskEntry, NEEDS_CHANNEL_ENV,
-    NEEDS_CHANNEL_EXPRESSION, NeedsConclusions, NotSelectedReason, ObligationDecision,
-    PLAN_DISPLAY_NAME, PLAN_JOB_ID, PLAN_JSON_FILENAME, PermissionLevel, Permissions, Plan,
-    PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanPackage, PlanRunner,
-    REQUIRED_CONDITION, REQUIRED_DISPLAY_NAME, REQUIRED_JOB_ID, RequiredCheckMigration,
+    CacheResult, Concurrency, CrateJob, CrateObligation, EntryCacheIds, ExecuteTaskIds,
+    ExecuteTaskRef, FINAL_JSON_FILENAME, FRESHNESS_CRON_WEEKLY, FRESHNESS_WORKFLOW_PATH,
+    FinalCounts, FinalReport, FinalStatus, Job, MATRIX_JSON_FILENAME, ManifestTaskProof,
+    MatrixEntry, MatrixReport, MatrixStatus, MatrixTaskEntry, NEEDS_CHANNEL_ENV,
+    NEEDS_CHANNEL_EXPRESSION, NEEDS_EXPECTED_ENV, NeedsConclusions, NotSelectedReason,
+    ObligationDecision, PLAN_DISPLAY_NAME, PLAN_JOB_ID, PLAN_JSON_FILENAME, PermissionLevel,
+    Permissions, Plan, PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanPackage,
+    PlanRunner, REQUIRED_CONDITION, REQUIRED_DISPLAY_NAME, REQUIRED_JOB_ID, RequiredCheckMigration,
     RequiredJobResult, STALE_WORKFLOW_PATHS, ScheduleTrigger, Step, StepKind, TaskReport,
     TaskStatus, TaskTiming, Trigger, Trust, ValidatorKind, WORKFLOW_DISPLAY_NAME, WorkflowEvent,
-    WorkflowIr, assign_crate_job_ids, candidate_report_id_for_run, check_matrix_agreement,
-    crate_display_label, crate_display_name, final_report_id_for_run, final_report_relpath,
-    join_runner_temp, matrix_json_bytes, matrix_report_relpath, plan_json_bytes, slugify_segment,
-    task_report_relpath, validate_candidate_report_id, validate_final_report_id, validate_job_id,
+    WorkflowIr, assign_crate_job_ids, check_matrix_agreement, crate_display_label,
+    crate_display_name, final_report_id_for_run, final_report_relpath, join_runner_temp,
+    matrix_json_bytes, matrix_report_relpath, plan_json_bytes, slugify_segment,
+    task_report_relpath, trust_for_event, validate_final_report_id, validate_job_id,
     validate_matrix_run,
 };
 

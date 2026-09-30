@@ -3,13 +3,12 @@ use std::collections::BTreeMap;
 use velnor_actions_contract::{
     CompatibilityInputs, ContractError, ExecuteTaskIds, ExecuteTaskRef, MatrixEntry,
     StackExtension, TaskConfiguration, TaskGenerator, TaskIdentity, TaskInput, VcsInputs,
-    artifact_id_for_candidate, artifact_id_for_final, artifact_id_for_matrix, artifact_id_for_plan,
-    canonical_json_bytes, canonical_json_str, compatibility_id, digest_b3, input_digest,
-    manifest_key_for_cargo_manifest, matrix_id_for_task_group, matrix_key_for_id, plan_id_for_run,
-    report_id_for_matrix, run_key_for_ci, target_key, task_id_for_internal, task_id_for_stack,
-    task_report_id_for_task, validate_artifact_id, validate_digest, validate_id,
-    validate_matrix_key, validate_plan_id, validate_report_id, validate_run_key, validate_task_id,
-    validate_task_report_id,
+    artifact_id_for_final, artifact_id_for_matrix, artifact_id_for_plan, canonical_json_bytes,
+    canonical_json_str, compatibility_id, digest_b3, input_digest, manifest_key_for_cargo_manifest,
+    matrix_id_for_task_group, matrix_key_for_id, plan_id_for_run, report_id_for_matrix,
+    run_key_for_ci, target_key, task_id_for_internal, task_id_for_stack, task_report_id_for_task,
+    validate_artifact_id, validate_digest, validate_id, validate_matrix_key, validate_plan_id,
+    validate_report_id, validate_run_key, validate_task_id, validate_task_report_id,
 };
 
 /// Sample Cargo manifest path shared by contract cases.
@@ -109,21 +108,14 @@ fn identities_are_path_independent_and_artifact_id_is_derived_name() -> Result<(
     let plan_artifact = artifact_id_for_plan(&run_key)?;
     let matrix_artifact = artifact_id_for_matrix(&run_key, &matrix_key)?;
     let final_artifact = artifact_id_for_final(&run_key)?;
-    let candidate_artifact = artifact_id_for_candidate(&run_key, "x86_64-unknown-linux-gnu")?;
-    for artifact in [
-        &plan_artifact,
-        &matrix_artifact,
-        &final_artifact,
-        &candidate_artifact,
-    ] {
+    for artifact in [&plan_artifact, &matrix_artifact, &final_artifact] {
         validate_artifact_id(artifact)?;
         assert!(is_derived_artifact_name(artifact, &run_key));
     }
     assert_eq!(plan_artifact, format!("velnor-plan-{run_key}"));
-    assert_eq!(
-        candidate_artifact,
-        format!("velnor-candidate-{run_key}-x86-64-unknown-linux-gnu")
-    );
+    validate_artifact_id(&format!(
+        "velnor-candidate-{run_key}-x86-64-unknown-linux-gnu"
+    ))?;
     let preimage = canonical_json_str(&sample_identity())?;
     assert!(!preimage.contains(&run_key));
     assert!(!preimage.contains("/Users/"));

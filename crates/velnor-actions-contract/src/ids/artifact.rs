@@ -39,15 +39,6 @@ pub fn artifact_id_for_baseline(commit: &str, compat: &str) -> Result<String, Co
     Ok(super::ArtifactId::parse(&id)?.into_inner())
 }
 
-/// Derive `velnor-candidate-<run-key>-<target-key>` from a target triple.
-/// # Errors
-pub fn artifact_id_for_candidate(run_key: &str, target: &str) -> Result<String, ContractError> {
-    validate_run_key(run_key)?;
-    let key = target_key(target)?;
-    let id = format!("velnor-candidate-{run_key}-{key}");
-    Ok(super::ArtifactId::parse(&id)?.into_inner())
-}
-
 /// Validate a target-key shape (matches [`target_key`] output grammar).
 /// # Errors
 pub fn validate_target_key(value: &str) -> Result<(), ContractError> {

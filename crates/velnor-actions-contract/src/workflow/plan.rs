@@ -2,6 +2,7 @@
 use super::baseline::{BaselineProof, PlanBaseline};
 use super::cache_ids::EntryCacheIds;
 use super::execute::{ExecuteTaskIds, ExecuteTaskRef};
+use super::trust::Trust;
 use crate::canonical::{normalize_posix_path, validate_digest};
 use crate::config::{RUNNER_LABEL_CATALOG, RunnerSelection, VelnorConfig};
 use crate::errors::ContractError;
@@ -101,15 +102,6 @@ pub enum WorkflowEvent {
     Local,
     /// Fork pull-request run (untrusted, read-only caches).
     Fork,
-}
-/// Trust scope.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Trust {
-    /// Protected default-branch scope.
-    Trusted,
-    /// Pull-request scope.
-    Pr,
 }
 /// Selected runner record.
 #[derive(Debug, Clone, Serialize, Deserialize)]
