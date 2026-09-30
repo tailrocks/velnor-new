@@ -52,6 +52,7 @@ mod select_edges;
 mod source_cache;
 mod source_prep;
 mod task_report;
+mod task_report_write;
 mod toolcheck;
 mod toolfindings;
 mod utf8;

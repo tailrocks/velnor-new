@@ -21,14 +21,15 @@ use std::path::{Path, PathBuf};
 
 use velnor_actions_contract::{
     CacheLayer, CacheOutcome, CacheResult, ExecuteTaskRef, MatrixEntry, MatrixReport, MatrixStatus,
-    MatrixTaskEntry, NotSelectedReason, Plan, TaskReport, TaskStatus, canonical_json_bytes,
-    report_id_for_matrix, task_report_id_for_task, validate_run_key, validate_task_id,
+    MatrixTaskEntry, NotSelectedReason, Plan, TaskReport, TaskStatus, report_id_for_matrix,
+    task_report_id_for_task, validate_run_key, validate_task_id,
 };
 
 use crate::OrchestratorError;
 use crate::decisions::not_selected_report;
 use crate::internal::{internal, internal_contract};
 use crate::internal_request::resolve_run_key;
+use crate::task_report_write::write_entry_reports;
 
 /// Report-production operation tag.
 pub const REPORT_OP: &str = "write-task-report-v1";
@@ -38,6 +39,8 @@ pub(crate) const TASK_ID_ENV: &str = "VELNOR_TASK_ID";
 pub(crate) const EXIT_CODE_ENV: &str = "VELNOR_EXIT_CODE";
 /// Env key carrying comma-separated downstream task IDs for skip reports.
 pub(crate) const DOWNSTREAM_IDS_ENV: &str = "VELNOR_DOWNSTREAM_TASK_IDS";
+/// Env key carrying the wrapper-captured start time (unix millis).
+pub(crate) const START_MS_ENV: &str = "VELNOR_START_MS";
 
 /// Write the executed obligation's reports plus downstream skip reports.
 ///
@@ -65,10 +68,14 @@ pub fn write_task_report() -> Result<usize, OrchestratorError> {
         .ok_or_else(|| internal("missing_exit_code"))?;
     let downstream_env = env::var(DOWNSTREAM_IDS_ENV).ok();
     let downstream = parse_downstream(downstream_env.as_deref());
+    let start_ms = env::var(START_MS_ENV)
+        .ok()
+        .and_then(|raw| parse_start_ms(&raw));
     write_task_report_to(
         &run_key,
         &task_id,
         parse_exit_code(&exit_raw)?,
+        start_ms,
         &downstream,
         Path::new(&runner_temp),
     )
@@ -89,6 +96,7 @@ pub(crate) fn write_task_report_to(
     run_key: &str,
     task_id: &str,
     exit_code: i32,
+    start_ms: Option<u64>,
     downstream: &[String],
     runner_temp: &Path,
 ) -> Result<usize, OrchestratorError> {
@@ -98,7 +106,9 @@ pub(crate) fn write_task_report_to(
     }
     let plan = load_plan(run_key, runner_temp)?;
     let (entry, digest) = entry_and_digest(&plan, task_id)?;
-    let task = terminal_task_report(&plan, entry, digest, exit_code).map_err(internal_contract)?;
+    let duration_ms = elapsed_ms(start_ms);
+    let task = terminal_task_report(&plan, entry, digest, exit_code, duration_ms)
+        .map_err(internal_contract)?;
     let matrix = single_task_aggregate(&plan, entry, &task).map_err(internal_contract)?;
     write_entry_reports(runner_temp, &plan, entry, &task, &matrix)?;
     let mut reported = 1usize;
@@ -114,6 +124,34 @@ fn parse_exit_code(raw: &str) -> Result<i32, OrchestratorError> {
         .ok()
         .filter(|code| (0..=255).contains(code))
         .ok_or_else(|| internal("bad_exit_code"))
+}
+
+/// Parse a wrapper-captured unix-millis start; `None` when absent.
+///
+/// Garbage fails closed to unmeasured (`None`): a malformed stamp must
+/// never error the report nor fabricate a duration.
+fn parse_start_ms(raw: &str) -> Option<u64> {
+    raw.parse::<u64>().ok()
+}
+
+/// Wall-clock now in unix millis; `None` when the clock is unusable.
+fn now_ms() -> Option<u64> {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()
+        .and_then(|elapsed| u64::try_from(elapsed.as_millis()).ok())
+}
+
+/// Measured elapsed millis, or 0 when telemetry is absent.
+///
+/// A present, non-future start always measures at least 1ms, so 0
+/// unambiguously means unmeasured: absent, unparseable, future, or
+/// clockless telemetry is never labeled as measured.
+fn elapsed_ms(start_ms: Option<u64>) -> u64 {
+    let (Some(start), Some(now)) = (start_ms, now_ms()) else {
+        return 0;
+    };
+    now.checked_sub(start).map_or(0, |elapsed| elapsed.max(1))
 }
 
 /// Split downstream IDs on commas, dropping blanks and duplicates.
@@ -208,6 +246,7 @@ fn terminal_task_report(
     entry: &MatrixEntry,
     task_digest: &str,
     exit_code: i32,
+    duration_ms: u64,
 ) -> Result<TaskReport, velnor_actions_contract::ContractError> {
     let status = if exit_code == 0 {
         TaskStatus::Executed
@@ -233,7 +272,7 @@ fn terminal_task_report(
             miss_reason: None,
         },
         exit_code,
-        duration_ms: 0,
+        duration_ms,
         outputs: Vec::new(),
         lane: None,
         queue: None,
@@ -301,52 +340,6 @@ fn single_task_aggregate(
     }
     aggregate.validate()?;
     Ok(aggregate)
-}
-
-/// Write one entry's matrix report plus its task file as canonical JSON.
-///
-/// # Errors
-///
-/// Returns [`OrchestratorError::Internal`] for encoding failures and
-/// [`OrchestratorError::Io`] for unwritable directories; pre-existing
-/// files error, never overwrite.
-fn write_entry_reports(
-    runner_temp: &Path,
-    plan: &Plan,
-    entry: &MatrixEntry,
-    task: &TaskReport,
-    matrix: &MatrixReport,
-) -> Result<(), OrchestratorError> {
-    let dir = runner_temp
-        .join("velnor")
-        .join(&plan.run_key)
-        .join(&entry.matrix_key);
-    let task_files_dir = dir.join("tasks");
-    fs::create_dir_all(&task_files_dir).map_err(|err| {
-        OrchestratorError::io(task_files_dir.display().to_string(), err.to_string())
-    })?;
-    let matrix_bytes = canonical_json_bytes(matrix).map_err(internal_contract)?;
-    let task_bytes = canonical_json_bytes(task).map_err(internal_contract)?;
-    write_new(&dir.join("matrix-report.json"), &matrix_bytes)?;
-    write_new(
-        &task_files_dir.join(format!("{}.json", task.task_report_id)),
-        &task_bytes,
-    )?;
-    Ok(())
-}
-
-/// Exclusively write one report file; a pre-existing file errors.
-fn write_new(path: &Path, bytes: &[u8]) -> Result<(), OrchestratorError> {
-    fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(path)
-        .map_err(|_| internal("report_exists"))
-        .and_then(|mut file| {
-            use std::io::Write;
-            file.write_all(bytes)
-                .map_err(|_| internal("report_unwritable"))
-        })
 }
 
 /// Report every downstream ID as skipped behind a failure.

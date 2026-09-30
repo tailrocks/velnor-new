@@ -41,6 +41,25 @@ fn downstream_ids_split_dedupe_and_drop_blanks() {
     assert_eq!(parse_downstream(Some("b,a,b,, a ,")), ["b", "a"]);
 }
 
+#[test]
+fn start_stamps_parse_and_measure_or_fail_closed() {
+    assert_eq!(parse_start_ms("0"), Some(0));
+    assert_eq!(parse_start_ms("1759270000000"), Some(1_759_270_000_000));
+    assert_eq!(parse_start_ms("99999999999999999999999999"), None);
+    for bad in ["", " ", "-1", "12.5", "0x1", "abc", "1\n"] {
+        assert_eq!(parse_start_ms(bad), None, "must reject {bad:?}");
+    }
+    assert_eq!(elapsed_ms(None), 0, "absent telemetry stays unmeasured");
+    assert_eq!(
+        elapsed_ms(Some(u64::MAX)),
+        0,
+        "future stamps stay unmeasured"
+    );
+    assert!(elapsed_ms(Some(1)) >= 1, "past stamps measure");
+    let now = now_ms().expect("wall clock");
+    assert!(elapsed_ms(Some(now)) >= 1, "present stamps never read zero");
+}
+
 /// One `b3-` digest with every byte set to `byte`.
 fn digest(byte: u8) -> String {
     format!("b3-{}", format!("{byte:02x}").repeat(32))
@@ -168,7 +187,8 @@ fn executed_report_binds_plan_identities() {
     let temp = staged_run(&plan, "local");
     let entry = &plan.matrix.include[0];
     let obligation = &plan.obligations[0];
-    let reported = write_task_report_to("local", CLIPPY, 0, &[], temp.path()).expect("report");
+    let reported =
+        write_task_report_to("local", CLIPPY, 0, None, &[], temp.path()).expect("report");
     assert_eq!(reported, 1);
     let expect_id = velnor_actions_contract::task_report_id_for_task(
         "local",
@@ -179,6 +199,7 @@ fn executed_report_binds_plan_identities() {
     let (task, matrix) = read_entry(&temp, "local", &entry.matrix_key, &expect_id);
     assert_eq!(task.status, TaskStatus::Executed);
     assert_eq!(task.exit_code, 0);
+    assert_eq!(task.duration_ms, 0, "missing stamp stays unmeasured");
     assert_eq!(task.task_digest, obligation.task_digest);
     assert_eq!(task.event, WorkflowEvent::PullRequest);
     assert_eq!(matrix.status, MatrixStatus::Passed);
@@ -192,7 +213,8 @@ fn failed_report_marks_entry_failed() {
     let temp = staged_run(&plan, "local");
     let entry = &plan.matrix.include[0];
     let obligation = &plan.obligations[0];
-    let reported = write_task_report_to("local", CLIPPY, 3, &[], temp.path()).expect("report");
+    let reported =
+        write_task_report_to("local", CLIPPY, 3, Some(1), &[], temp.path()).expect("report");
     assert_eq!(reported, 1);
     let expect_id = velnor_actions_contract::task_report_id_for_task(
         "local",
@@ -203,6 +225,7 @@ fn failed_report_marks_entry_failed() {
     let (task, matrix) = read_entry(&temp, "local", &entry.matrix_key, &expect_id);
     assert_eq!(task.status, TaskStatus::Failed);
     assert_eq!(task.exit_code, 3);
+    assert!(task.duration_ms >= 1, "present stamp measures");
     assert_eq!(matrix.status, MatrixStatus::Failed);
     assert_eq!(matrix.failed, 1);
 }
@@ -211,8 +234,9 @@ fn failed_report_marks_entry_failed() {
 fn failure_reports_downstream_skips_and_success_reports_none() {
     let plan = fixture_plan();
     let failing = staged_run(&plan, "local");
-    let reported = write_task_report_to("local", CLIPPY, 1, &[TEST.to_owned()], failing.path())
-        .expect("report with skips");
+    let reported =
+        write_task_report_to("local", CLIPPY, 1, None, &[TEST.to_owned()], failing.path())
+            .expect("report with skips");
     assert_eq!(reported, 2);
     let entry = &plan.matrix.include[1];
     let obligation = &plan.obligations[1];
@@ -231,8 +255,9 @@ fn failure_reports_downstream_skips_and_success_reports_none() {
     assert_eq!(matrix.not_selected, 1);
 
     let passing = staged_run(&plan, "local");
-    let reported = write_task_report_to("local", CLIPPY, 0, &[TEST.to_owned()], passing.path())
-        .expect("clean report");
+    let reported =
+        write_task_report_to("local", CLIPPY, 0, None, &[TEST.to_owned()], passing.path())
+            .expect("clean report");
     assert_eq!(reported, 1);
     assert!(
         !passing
@@ -256,22 +281,22 @@ fn unbound_inputs_fail_before_writing() {
         ("r1-a1", CLIPPY, 0),
     ] {
         assert!(
-            write_task_report_to(run_key, task, exit, &[], temp.path()).is_err(),
+            write_task_report_to(run_key, task, exit, None, &[], temp.path()).is_err(),
             "must reject {run_key}/{task}/{exit}"
         );
     }
     let missing = TempDir::new().expect("tempdir");
-    assert!(write_task_report_to("local", CLIPPY, 0, &[], missing.path()).is_err());
+    assert!(write_task_report_to("local", CLIPPY, 0, None, &[], missing.path()).is_err());
     let corrupt = TempDir::new().expect("tempdir");
     let dir = corrupt.path().join("velnor").join("local");
     fs::create_dir_all(&dir).expect("run dir");
     fs::write(dir.join("plan.json"), "not json").expect("plan file");
-    assert!(write_task_report_to("local", CLIPPY, 0, &[], corrupt.path()).is_err());
+    assert!(write_task_report_to("local", CLIPPY, 0, None, &[], corrupt.path()).is_err());
     let drifted = staged_run(&plan, "r1-a1");
-    assert!(write_task_report_to("r1-a1", CLIPPY, 0, &[], drifted.path()).is_err());
+    assert!(write_task_report_to("r1-a1", CLIPPY, 0, None, &[], drifted.path()).is_err());
     let rewrite = staged_run(&plan, "local");
-    write_task_report_to("local", CLIPPY, 0, &[], rewrite.path()).expect("first write");
-    assert!(write_task_report_to("local", CLIPPY, 0, &[], rewrite.path()).is_err());
+    write_task_report_to("local", CLIPPY, 0, None, &[], rewrite.path()).expect("first write");
+    assert!(write_task_report_to("local", CLIPPY, 0, None, &[], rewrite.path()).is_err());
 }
 
 #[test]
@@ -282,20 +307,20 @@ fn ambiguous_entries_refuse_rather_than_guess() {
         .tasks
         .insert("extra".to_owned(), ExecuteTaskRef::Single(TEST.to_owned()));
     let multi = staged_run(&plan, "local");
-    assert!(write_task_report_to("local", CLIPPY, 0, &[], multi.path()).is_err());
+    assert!(write_task_report_to("local", CLIPPY, 0, None, &[], multi.path()).is_err());
 
     let mut plan = fixture_plan();
     plan.matrix.include[0].execute_task_ids.tasks =
         BTreeMap::from([("only".to_owned(), ExecuteTaskRef::Single(TEST.to_owned()))]);
     let dupe = staged_run(&plan, "local");
-    assert!(write_task_report_to("local", TEST, 0, &[], dupe.path()).is_err());
+    assert!(write_task_report_to("local", TEST, 0, None, &[], dupe.path()).is_err());
 
     let mut plan = fixture_plan();
     plan.obligations.clear();
     plan.task_ids.clear();
     plan.validate().expect("obligation-free plan validates");
     let orphan = staged_run(&plan, "local");
-    assert!(write_task_report_to("local", CLIPPY, 0, &[], orphan.path()).is_err());
+    assert!(write_task_report_to("local", CLIPPY, 0, None, &[], orphan.path()).is_err());
 }
 
 /// Stage producer output as final-job `reports/<artifact-id>/` downloads.
@@ -342,8 +367,9 @@ fn merge_flips_not_run_to_executed_end_to_end() {
     assert_eq!(verdict.counts.executed, 0);
     assert!(verdict.counts.not_run > 0);
 
-    write_task_report_to("local", CLIPPY, 0, &[TEST.to_owned()], temp.path()).expect("clippy");
-    write_task_report_to("local", TEST, 0, &[], temp.path()).expect("test");
+    write_task_report_to("local", CLIPPY, 0, None, &[TEST.to_owned()], temp.path())
+        .expect("clippy");
+    write_task_report_to("local", TEST, 0, None, &[], temp.path()).expect("test");
     stage_downloads(&plan, &temp);
 
     let full = assemble_with_needs("local", &run, needs).expect("assemble full");

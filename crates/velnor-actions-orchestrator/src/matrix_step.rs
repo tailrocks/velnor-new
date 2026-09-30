@@ -10,7 +10,7 @@ use velnor_actions_mise::{
 use velnor_actions_workflow_renderer::steps::{INTERNAL_OP_ENV, STAGED_BINARY_PREFIX};
 
 use crate::OrchestratorError;
-use crate::task_report::{DOWNSTREAM_IDS_ENV, EXIT_CODE_ENV, REPORT_OP, TASK_ID_ENV};
+use crate::task_report::{DOWNSTREAM_IDS_ENV, EXIT_CODE_ENV, REPORT_OP, START_MS_ENV, TASK_ID_ENV};
 use crate::utf8::{strings_of, strings_of_env};
 
 /// Crate-job driver tools: Rust plus MBX only on MBX evidence.
@@ -171,7 +171,8 @@ pub(crate) fn obligation_step(
                 problem: err.to_string(),
             }
         })?;
-    let run = report_wrapper_argv(&joined, &helper_path_for_version());
+    let start = start_path_for_key(&obligation.matrix_key);
+    let run = report_wrapper_argv(&joined, &helper_path_for_version(), &start);
     velnor_actions_workflow_renderer::validate_command_argv(&run).map_err(|err| {
         OrchestratorError::Contract {
             problem: err.to_string(),
@@ -191,15 +192,18 @@ pub(crate) fn helper_path_for_version() -> String {
 
 /// `sh -c` argv wrapping one joined command with report capture.
 ///
-/// Captures the obligation exit, reports through the staged helper,
-/// then exits with the obligation code (helper failure surfaces only
-/// on an otherwise passing obligation).
-pub(crate) fn report_wrapper_argv(joined: &str, helper: &str) -> Vec<String> {
+/// Stamps the wall-clock start to a per-entry file first (argv
+/// validation forbids `$(...)`, so the stamp travels via file, never
+/// substitution), runs the obligation, captures `$?`, reads the stamp
+/// back, reports through the staged helper's [`REPORT_OP`], then exits
+/// with the obligation code (helper failure surfaces only on an
+/// otherwise passing obligation, so failures never mask each other).
+pub(crate) fn report_wrapper_argv(joined: &str, helper: &str, start_path: &str) -> Vec<String> {
     vec![
         "sh".to_owned(),
         "-c".to_owned(),
         format!(
-            "{joined}; code=$?; {EXIT_CODE_ENV}=\"$code\" {INTERNAL_OP_ENV}={REPORT_OP} \"{helper}\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\""
+            "date +%s%3N > \"{start_path}\"; {joined}; code=$?; read -r start_ms rest < \"{start_path}\"; {EXIT_CODE_ENV}=\"$code\" {START_MS_ENV}=\"$start_ms\" {INTERNAL_OP_ENV}={REPORT_OP} \"{helper}\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\""
         ),
     ]
 }
@@ -207,27 +211,38 @@ pub(crate) fn report_wrapper_argv(joined: &str, helper: &str) -> Vec<String> {
 /// `sh -c` argv saving one joined command's exit to an outcome file.
 ///
 /// Two-phase shape for the plan-job workspace Format: the plan does
-/// not exist yet at format time, so the wrapper records `$?` and a
-/// post-plan step reports through [`deferred_report_argv`].
-pub(crate) fn outcome_wrapper_argv(joined: &str, outcome_path: &str) -> Vec<String> {
+/// not exist yet at format time, so the wrapper records `$?` plus the
+/// wall-clock start stamp, and a post-plan step reports through
+/// [`deferred_report_argv`].
+pub(crate) fn outcome_wrapper_argv(
+    joined: &str,
+    outcome_path: &str,
+    start_path: &str,
+) -> Vec<String> {
     vec![
         "sh".to_owned(),
         "-c".to_owned(),
-        format!("{joined}; code=$?; echo \"$code\" > \"{outcome_path}\"; exit \"$code\""),
+        format!(
+            "date +%s%3N > \"{start_path}\"; {joined}; code=$?; echo \"$code\" > \"{outcome_path}\"; exit \"$code\""
+        ),
     ]
 }
 
 /// `sh -c` argv reporting one saved outcome through the staged helper.
 ///
-/// Reads the exit code the outcome wrapper saved (a missing file
-/// leaves the code empty and the helper fails closed), then invokes
-/// [`REPORT_OP`]; the step exits with the helper's own code.
-pub(crate) fn deferred_report_argv(outcome_path: &str, helper: &str) -> Vec<String> {
+/// Reads the exit code and start stamp the outcome wrapper saved (a
+/// missing file leaves the value empty and the helper fails closed),
+/// then invokes [`REPORT_OP`]; the step exits with the helper's code.
+pub(crate) fn deferred_report_argv(
+    outcome_path: &str,
+    helper: &str,
+    start_path: &str,
+) -> Vec<String> {
     vec![
         "sh".to_owned(),
         "-c".to_owned(),
         format!(
-            "read -r code rest < \"{outcome_path}\"; {EXIT_CODE_ENV}=\"$code\" {INTERNAL_OP_ENV}={REPORT_OP} \"{helper}\""
+            "read -r code rest < \"{outcome_path}\"; read -r start_ms rest < \"{start_path}\"; {EXIT_CODE_ENV}=\"$code\" {START_MS_ENV}=\"$start_ms\" {INTERNAL_OP_ENV}={REPORT_OP} \"{helper}\""
         ),
     ]
 }
@@ -235,6 +250,11 @@ pub(crate) fn deferred_report_argv(outcome_path: &str, helper: &str) -> Vec<Stri
 /// Shell-spelled outcome file for one matrix key under runner temp.
 pub(crate) fn outcome_path_for_key(matrix_key: &str) -> String {
     format!("$RUNNER_TEMP/velnor/outcome-{matrix_key}")
+}
+
+/// Shell-spelled start-stamp file for one matrix key under runner temp.
+pub(crate) fn start_path_for_key(matrix_key: &str) -> String {
+    format!("$RUNNER_TEMP/velnor/start-{matrix_key}")
 }
 
 /// Plan-artifact download: report wrappers resolve identities from it.
@@ -258,3 +278,7 @@ pub(crate) fn matrix_upload_step(obligation: &CrateObligation) -> Result<Step, O
             problem: err.to_string(),
         })
 }
+
+#[cfg(test)]
+#[path = "matrix_step_tests.rs"]
+mod matrix_step_tests;

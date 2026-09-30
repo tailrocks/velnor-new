@@ -114,6 +114,13 @@ fn orch_spawns_no_processes_and_confines_shell_wrappers() -> TestResult {
     // path are fixed generator values, never repository shell.
     let mut sh_files = std::collections::BTreeSet::new();
     for path in src_files()? {
+        // Test companions assert wrapper shape; they never ship wrappers.
+        if path
+            .file_name()
+            .is_some_and(|name| name.to_string_lossy().ends_with("_tests.rs"))
+        {
+            continue;
+        }
         let text = std::fs::read_to_string(&path)?;
         if text.contains("\"sh\"") {
             sh_files.insert(
