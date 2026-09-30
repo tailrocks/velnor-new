@@ -12,6 +12,18 @@ use crate::RenderError;
 pub const TOOLCHAIN_HOME_KEYS: [&str; 3] =
     ["MISE_RUSTUP_HOME", "MISE_CARGO_HOME", "RUSTUP_TOOLCHAIN"];
 
+/// Credential keys forbidden in any rendered step env.
+///
+/// The Mise GitHub token, its `GITHUB_TOKEN`/`GH_TOKEN` aliases, and the
+/// runner token. Mirrors the Mise adapter's strip set without depending
+/// on it; the orchestrator pins the two lists equal by test.
+pub const STEP_CREDENTIAL_DENYLIST: [&str; 4] = [
+    "MISE_GITHUB_TOKEN",
+    "GITHUB_TOKEN",
+    "GH_TOKEN",
+    "ACTIONS_RUNTIME_TOKEN",
+];
+
 /// Merge the toolchain-home triple into a step env map.
 #[must_use]
 pub fn with_toolchain_homes(
@@ -42,4 +54,46 @@ pub fn check_toolchain_homes(env: &BTreeMap<String, String>) -> Result<(), Rende
         }
     }
     Ok(())
+}
+
+/// Reject denied credential keys in a step env map.
+/// # Errors
+pub fn reject_denied_step_keys(env: &BTreeMap<String, String>) -> Result<(), RenderError> {
+    for key in STEP_CREDENTIAL_DENYLIST {
+        if env.contains_key(key) {
+            return Err(RenderError::BadCommand(format!(
+                "credential_step_env:{key}"
+            )));
+        }
+    }
+    Ok(())
+}
+
+/// Merge the triple over a validated base, refusing blanks and credentials.
+///
+/// The base carries the caller's policy pairs plus step extras; blank
+/// triple inputs and denied credential keys anywhere in the merged map
+/// fail closed before any step renders.
+/// # Errors
+pub fn checked_task_env(
+    base: &BTreeMap<String, String>,
+    rustup_home: &str,
+    cargo_home: &str,
+    toolchain: &str,
+) -> Result<BTreeMap<String, String>, RenderError> {
+    for (key, value) in [
+        (TOOLCHAIN_HOME_KEYS[0], rustup_home),
+        (TOOLCHAIN_HOME_KEYS[1], cargo_home),
+        (TOOLCHAIN_HOME_KEYS[2], toolchain),
+    ] {
+        if value.is_empty() {
+            return Err(RenderError::BadCommand(format!(
+                "missing_toolchain_home:{key}"
+            )));
+        }
+    }
+    let merged = with_toolchain_homes(base, rustup_home, cargo_home, toolchain);
+    check_toolchain_homes(&merged)?;
+    reject_denied_step_keys(&merged)?;
+    Ok(merged)
 }

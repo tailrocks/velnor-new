@@ -16,7 +16,7 @@ use velnor_actions_workflow_renderer::steps::{
 };
 
 use crate::OrchestratorError;
-use crate::source_prep::fetch_steps;
+use crate::source_prep::fetch_steps_for_plan;
 use crate::utf8::{strings_of, strings_of_env};
 
 /// Always-on workflow-lint job ID, emitted for both policies.
@@ -57,7 +57,7 @@ pub(crate) fn plan_job(
     let prepare = prepare_pinned_tools_step(catalog, plan_tools(use_mbx, use_nextest))?;
     steps.push(prepare);
     steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
-    steps.extend(fetch_steps(catalog, fetch_roots, &BTreeMap::new())?);
+    steps.extend(fetch_steps_for_plan(catalog, fetch_roots)?);
     steps.extend(acquire);
     steps.push(request_step(PLAN_OPERATION)?);
     steps.push(plan_step());

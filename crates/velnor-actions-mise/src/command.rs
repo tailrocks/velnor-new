@@ -1,20 +1,15 @@
 //! Fixed subprocess wrapper: the sole `std::process::Command` constructor.
-//!
-//! Every spawned process inherits isolation from one place: the `MISE_*`
-//! environment quartet, mise global flags before the subcommand, a `--`
-//! separator between tool selectors and the payload, and byte-exact argument
-//! passthrough. No shell is ever involved.
+//! Trusted tooling inherits the parent env; repo-task children spawn cleared.
 
 use std::ffi::{OsStr, OsString};
+use std::io::Read;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
 
 use crate::error::MiseError;
 
 /// Isolation environment applied to every spawned process.
-///
-/// `MISE_LOCKFILE=0` disables lockfile maintenance; the `MISE_NO_*` trio
-/// blocks project config, env files, and hooks.
 pub const ISOLATION_ENV: [(&str, &str); 4] = [
     ("MISE_NO_CONFIG", "1"),
     ("MISE_NO_ENV", "1"),
@@ -28,22 +23,20 @@ pub const MISE_GLOBAL_FLAGS: [&str; 3] = ["--no-config", "--no-env", "--no-hooks
 /// Separator between mise tool selectors and the payload command.
 pub const TOOL_COMMAND_SEPARATOR: &str = "--";
 
-/// Mise subcommands Velnor may emit: `exec` for every verification and
-/// payload run, `install` for the bootstrap prepare step only, `run` for
-/// Gate-6 qualified task-cache invocations only. Tool-file management
-/// subcommands are never emitted.
+/// Mise subcommands Velnor may emit: `exec`, `install`, and `run`.
 pub const ALLOWED_MISE_SUBCOMMANDS: [&str; 3] = ["exec", "install", "run"];
 
 /// Environment disabling implicit tool installation for verification runs.
-///
-/// Qualified against mise 2026.9.14 (`mise settings ls -a`): `auto_install`
-/// and `exec_auto_install` both default to true. With both false, a missing
-/// tool fails the invocation instead of installing, so the failure surfaces
-/// as a preparation error. Explicit `mise install` still installs.
 pub const NO_AUTO_INSTALL_ENV: [(&str, &str); 2] = [
     ("MISE_AUTO_INSTALL", "false"),
     ("MISE_EXEC_AUTO_INSTALL", "false"),
 ];
+
+/// Captured bytes kept per stream; past this the run fails closed.
+pub const OUTPUT_CAPTURE_LIMIT_BYTES: usize = 8 * 1024 * 1024;
+
+/// Default run deadline in seconds; past this the child is killed.
+pub const RUN_TIMEOUT_SECS: u64 = 600;
 
 /// Environment name for the Velnor-owned mise Rust home.
 pub const MISE_RUSTUP_HOME_ENV: &str = "MISE_RUSTUP_HOME";
@@ -52,18 +45,7 @@ pub const MISE_RUSTUP_HOME_ENV: &str = "MISE_RUSTUP_HOME";
 pub const MISE_CARGO_HOME_ENV: &str = "MISE_CARGO_HOME";
 
 /// Environment name selecting the exact Rust toolchain for Cargo runs.
-///
-/// Rustup gives this override precedence over any directory toolchain file.
 pub const RUSTUP_TOOLCHAIN_ENV: &str = "RUSTUP_TOOLCHAIN";
-
-/// Program name for mise invocations.
-const MISE_PROGRAM: &str = "mise";
-
-/// Subcommand selecting pinned tools for one payload invocation.
-const MISE_EXEC_SUBCOMMAND: &str = "exec";
-
-/// Subcommand installing exact tool versions for the bootstrap prepare step.
-const MISE_INSTALL_SUBCOMMAND: &str = "install";
 
 /// Whether a subcommand is inside the Velnor mise allowlist.
 #[must_use]
@@ -71,15 +53,33 @@ pub fn is_allowed_mise_subcommand(subcommand: &str) -> bool {
     ALLOWED_MISE_SUBCOMMANDS.contains(&subcommand)
 }
 
+/// Whether a key is reserved: isolation, install disable, or credentials.
+/// Credentials are `MISE_GITHUB_TOKEN` plus the `GITHUB_TOKEN`/`GH_TOKEN`
+/// aliases and `ACTIONS_RUNTIME_TOKEN`.
+#[must_use]
+pub fn is_reserved_env_key(key: &str) -> bool {
+    ISOLATION_ENV.iter().any(|(own, _)| *own == key)
+        || NO_AUTO_INSTALL_ENV.iter().any(|(own, _)| *own == key)
+        || [
+            "MISE_GITHUB_TOKEN",
+            "GITHUB_TOKEN",
+            "GH_TOKEN",
+            "ACTIONS_RUNTIME_TOKEN",
+        ]
+        .contains(&key)
+}
+
 /// Typed child-process result: captured streams plus a typed exit.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProcessOutput {
-    /// Captured standard output bytes.
+    /// Captured standard output bytes (bounded by the spawn cap).
     pub stdout: Vec<u8>,
-    /// Captured standard error bytes.
+    /// Captured standard error bytes (bounded by the spawn cap).
     pub stderr: Vec<u8>,
-    /// Exit code when the platform reports one.
+    /// Exit code when the child exited normally.
     pub code: Option<i32>,
+    /// Terminating signal number when killed by a signal (Unix only).
+    pub signal: Option<i32>,
     /// Whether the exit status reports success.
     pub success: bool,
 }
@@ -89,17 +89,16 @@ impl ProcessOutput {
     ///
     /// # Errors
     ///
-    /// Returns the typed exit failure when `success` is false.
+    /// Returns [`MiseError::NonZeroExit`] when the status reports failure.
     pub fn require_success(&self, program: &str) -> Result<&Self, MiseError> {
         if self.success {
-            Ok(self)
-        } else {
-            Err(MiseError::NonZeroExit {
-                program: program.to_owned(),
-                code: self.code,
-                stderr: String::from_utf8_lossy(&self.stderr).into_owned(),
-            })
+            return Ok(self);
         }
+        Err(MiseError::NonZeroExit {
+            program: program.to_owned(),
+            code: self.code,
+            stderr: String::from_utf8_lossy(&self.stderr).into_owned(),
+        })
     }
 
     /// Decode standard output as UTF-8 text.
@@ -115,56 +114,88 @@ impl ProcessOutput {
     }
 }
 
+/// Which parent environment a child may see: bootstrap, verify, and
+/// discovery inherit; repo-task spawns from `env_clear` plus an explicit list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EnvPolicy {
+    /// Trusted tool download: inherits parent env plus isolation overlay.
+    Bootstrap,
+    /// Trusted evidence validation: inherits parent env plus isolation overlay.
+    Verify,
+    /// Read-only discovery probes: inherits parent env plus isolation overlay.
+    Discovery,
+    /// Repository task execution: cleared env plus declared inputs only.
+    RepoTask,
+}
+
 /// A fully isolated, shell-free child-process invocation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IsolatedCommand {
-    /// Program executed directly (never through a shell).
     program: OsString,
-    /// Arguments passed byte-exact to the program.
     args: Vec<OsString>,
-    /// Working directory override; none inherits the parent directory.
     cwd: Option<PathBuf>,
-    /// Extra environment pairs applied after [`Self::env_overlay`].
     extra_env: Vec<(OsString, OsString)>,
+    policy: EnvPolicy,
 }
 
 impl IsolatedCommand {
     /// Build `mise <globals> exec <specs> -- <payload>`.
     ///
-    /// Implicit tool installation is disabled: a missing tool fails instead
-    /// of installing, so verification surfaces preparation errors.
-    ///
     /// # Errors
     ///
-    /// Returns [`MiseError::EmptyCommand`] when the payload is empty.
+    /// Returns [`MiseError::EmptyCommand`] when `payload` is empty.
     pub fn mise_exec(tool_specs: &[String], payload: &[OsString]) -> Result<Self, MiseError> {
-        Self::mise_with_subcommand(MISE_EXEC_SUBCOMMAND, tool_specs, Some(payload), true)
+        Self::mise_with_subcommand("exec", tool_specs, Some(payload), true)
     }
 
-    /// Build `mise <globals> install <specs>` for the bootstrap prepare step.
-    ///
-    /// The only Velnor invocation that installs tools. It carries the
-    /// isolation quartet but no install disable, so explicit installation
-    /// always proceeds.
+    /// Build `mise <globals> install <specs>`.
     ///
     /// # Errors
     ///
-    /// Returns [`MiseError::EmptyToolchain`] when no tool is named.
+    /// Returns [`MiseError::EmptyToolchain`] when `tool_specs` is empty.
     pub fn mise_install(tool_specs: &[String]) -> Result<Self, MiseError> {
         if tool_specs.is_empty() {
             return Err(MiseError::EmptyToolchain);
         }
-        Self::mise_with_subcommand(MISE_INSTALL_SUBCOMMAND, tool_specs, None, false)
+        Self::mise_with_subcommand("install", tool_specs, None, false)
     }
 
-    /// Build a direct (non-mise) invocation with the same isolation env.
     pub(crate) fn direct(program: &str, args: Vec<OsString>) -> Self {
         Self {
             program: OsString::from(program),
             args,
             cwd: None,
             extra_env: Vec::new(),
+            policy: EnvPolicy::Discovery,
         }
+    }
+
+    /// Build a repo-task child: cleared env plus explicit declared inputs.
+    /// Reserved keys are rejected; platform values arrive only as declared inputs.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MiseError::InvalidStepInput`] when a declared key is reserved.
+    pub fn repo_task(
+        program: &str,
+        args: Vec<OsString>,
+        declared: &[(OsString, OsString)],
+    ) -> Result<Self, MiseError> {
+        for (key, _) in declared {
+            if is_reserved_env_key(&key.to_string_lossy()) {
+                return Err(MiseError::InvalidStepInput {
+                    field: key.to_string_lossy().into_owned(),
+                    value: "reserved_env_key".to_owned(),
+                });
+            }
+        }
+        Ok(Self {
+            program: OsString::from(program),
+            args,
+            cwd: None,
+            extra_env: declared.to_vec(),
+            policy: EnvPolicy::RepoTask,
+        })
     }
 
     /// Override the working directory for this invocation.
@@ -174,10 +205,14 @@ impl IsolatedCommand {
         self
     }
 
-    /// Append extra environment pairs applied after the isolation overlay.
+    /// Append extras; reserved keys are dropped fail-closed at construction.
     #[must_use]
     pub fn with_env(mut self, extra: &[(OsString, OsString)]) -> Self {
-        self.extra_env.extend(extra.iter().cloned());
+        for pair in extra {
+            if !is_reserved_env_key(&pair.0.to_string_lossy()) {
+                self.extra_env.push(pair.clone());
+            }
+        }
         self
     }
 
@@ -185,12 +220,6 @@ impl IsolatedCommand {
     #[must_use]
     pub fn program(&self) -> &OsStr {
         &self.program
-    }
-
-    /// Arguments passed byte-exact to the program.
-    #[must_use]
-    pub fn args(&self) -> &[OsString] {
-        &self.args
     }
 
     /// Working directory override when set.
@@ -208,26 +237,13 @@ impl IsolatedCommand {
         argv
     }
 
-    /// Environment overlay applied on top of the inherited environment.
-    ///
-    /// This is the single source read by the spawner, so tests observing it
-    /// cannot drift from what children receive.
+    /// Environment overlay applied by the spawner; tests read this.
     #[must_use]
     pub fn env_overlay() -> Vec<(OsString, OsString)> {
         pairs_of(&ISOLATION_ENV)
     }
 
-    /// Extra environment pairs appended via [`Self::with_env`] or the
-    /// constructor (verification runs carry the install disable here).
-    #[must_use]
-    pub fn extra_env(&self) -> &[(OsString, OsString)] {
-        &self.extra_env
-    }
-
     /// Full environment the spawner applies: overlay first, then extras.
-    ///
-    /// This is the single source read by the spawner, so tests observing it
-    /// cannot drift from what children receive.
     #[must_use]
     pub fn full_env(&self) -> Vec<(OsString, OsString)> {
         let mut env = Self::env_overlay();
@@ -235,48 +251,89 @@ impl IsolatedCommand {
         env
     }
 
-    /// Whether implicit tool installation is disabled for this command.
-    ///
-    /// Verification `exec` commands carry the disable pair, so a missing
-    /// tool fails instead of installing: the failure is a preparation
-    /// error, never a silent fetch.
+    /// Whether implicit installation is disabled (effective last-wins value).
     #[must_use]
     pub fn disables_auto_install(&self) -> bool {
         let full = self.full_env();
         NO_AUTO_INSTALL_ENV.iter().all(|(key, value)| {
             full.iter()
-                .any(|(found, seen)| found == key && seen == value)
+                .rev()
+                .find(|(found, _)| found == key)
+                .is_some_and(|(_, seen)| seen == value)
         })
     }
 
-    /// Spawn the child, capture both streams, and wait for its typed exit.
-    ///
-    /// Standard input is closed; no shell interprets any argument.
+    /// Spawn the child under default bounds and wait for its typed exit.
     ///
     /// # Errors
     ///
-    /// Returns [`MiseError::SpawnFailed`] when the child cannot be
-    /// spawned or reaped. A nonzero exit is returned as data, not an error.
+    /// Returns [`MiseError::SpawnFailed`] on spawn failure, output-limit
+    /// breach, reader failure, or timeout.
     pub fn run(&self) -> Result<ProcessOutput, MiseError> {
-        let output = self
-            .command()
-            .output()
-            .map_err(|err| MiseError::SpawnFailed {
-                program: self.program.to_string_lossy().into_owned(),
-                message: err.to_string(),
-            })?;
-        Ok(ProcessOutput {
-            stdout: output.stdout,
-            stderr: output.stderr,
-            code: output.status.code(),
-            success: output.status.success(),
-        })
+        let timeout = Duration::from_secs(RUN_TIMEOUT_SECS);
+        self.run_bounded(OUTPUT_CAPTURE_LIMIT_BYTES, timeout)
     }
 
-    /// The one `Command` constructor: direct spawn, piped streams, no shell.
+    /// Spawn the child under explicit bounds and wait for its typed exit.
+    /// Residual: grandchildren inheriting the pipes can delay EOF after kill.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MiseError::SpawnFailed`] on spawn failure, output-limit
+    /// breach, reader failure, or timeout.
+    pub fn run_bounded(&self, cap: usize, timeout: Duration) -> Result<ProcessOutput, MiseError> {
+        let program = self.program.to_string_lossy().into_owned();
+        let fail = |message: &str| MiseError::SpawnFailed {
+            program: program.clone(),
+            message: message.to_owned(),
+        };
+        let mut child = self
+            .command()
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|err| fail(&err.to_string()))?;
+        let (stdout, stderr) = (child.stdout.take(), child.stderr.take());
+        let out_reader = std::thread::spawn(move || read_capped(stdout, cap));
+        let err_reader = std::thread::spawn(move || read_capped(stderr, cap));
+        let deadline = Instant::now() + timeout;
+        loop {
+            let status = child.try_wait().map_err(|err| fail(&err.to_string()))?;
+            if let Some(status) = status {
+                let (out, out_capped) = out_reader
+                    .join()
+                    .map_err(|_| fail("reader_panicked:stdout"))?;
+                let (err, err_capped) = err_reader
+                    .join()
+                    .map_err(|_| fail("reader_panicked:stderr"))?;
+                if out_capped || err_capped {
+                    let stream = if out_capped { "stdout" } else { "stderr" };
+                    return Err(fail(&format!("{stream}_limit_exceeded:{cap}")));
+                }
+                let code = status.code();
+                let success = status.success();
+                return Ok(ProcessOutput {
+                    stdout: out,
+                    stderr: err,
+                    code,
+                    signal: signal_of(status),
+                    success,
+                });
+            }
+            if Instant::now() >= deadline {
+                drop((child.kill(), child.wait(), out_reader, err_reader));
+                return Err(fail(&format!("timeout_after_secs:{}", timeout.as_secs())));
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    }
+
     fn command(&self) -> Command {
         let mut command = Command::new(&self.program);
         command.args(&self.args);
+        if self.policy == EnvPolicy::RepoTask {
+            command.env_clear();
+        }
         for (key, value) in self.full_env() {
             command.env(key, value);
         }
@@ -287,11 +344,6 @@ impl IsolatedCommand {
         command
     }
 
-    /// Build a mise invocation for an allowlisted subcommand.
-    ///
-    /// `exec` takes a payload after `--` and disables implicit installs;
-    /// `install` takes specs only. Every call site passes a constant from
-    /// [`ALLOWED_MISE_SUBCOMMANDS`]; the predicate pins that surface.
     fn mise_with_subcommand(
         subcommand: &str,
         tool_specs: &[String],
@@ -303,42 +355,34 @@ impl IsolatedCommand {
             Some(payload) => {
                 if payload.is_empty() {
                     return Err(MiseError::EmptyCommand {
-                        program: MISE_PROGRAM.to_owned(),
+                        program: "mise".to_owned(),
                     });
                 }
                 mise_argv_tail(subcommand, tool_specs, payload)
             }
             None => mise_install_argv_tail(tool_specs),
         };
-        let extra_env = if disable_install {
-            pairs_of(&NO_AUTO_INSTALL_ENV)
+        let (extra_env, policy) = if disable_install {
+            (pairs_of(&NO_AUTO_INSTALL_ENV), EnvPolicy::Verify)
         } else {
-            Vec::new()
+            (Vec::new(), EnvPolicy::Bootstrap)
         };
         Ok(Self {
-            program: OsString::from(MISE_PROGRAM),
+            program: OsString::from("mise"),
             args,
             cwd: None,
             extra_env,
+            policy,
         })
     }
 }
 
 /// Velnor-owned toolchain environment for one Cargo invocation.
-///
-/// `rustup_home` and `cargo_home` are caller-supplied Velnor-owned persistent
-/// paths; `toolchain` is the exact pinned Rust version from the catalog.
-/// Renderers embed these pairs in generated steps; local spawns append them
-/// via [`IsolatedCommand::with_env`].
 #[must_use]
-pub fn toolchain_env(
-    rustup_home: &str,
-    cargo_home: &str,
-    toolchain: &str,
-) -> Vec<(OsString, OsString)> {
+pub fn toolchain_env(rustup: &str, cargo: &str, toolchain: &str) -> Vec<(OsString, OsString)> {
     [
-        (MISE_RUSTUP_HOME_ENV, rustup_home),
-        (MISE_CARGO_HOME_ENV, cargo_home),
+        (MISE_RUSTUP_HOME_ENV, rustup),
+        (MISE_CARGO_HOME_ENV, cargo),
         (RUSTUP_TOOLCHAIN_ENV, toolchain),
     ]
     .iter()
@@ -346,7 +390,6 @@ pub fn toolchain_env(
     .collect()
 }
 
-/// Convert a static string table into owned environment pairs.
 fn pairs_of<const N: usize>(table: &[(&str, &str); N]) -> Vec<(OsString, OsString)> {
     table
         .iter()
@@ -354,34 +397,44 @@ fn pairs_of<const N: usize>(table: &[(&str, &str); N]) -> Vec<(OsString, OsStrin
         .collect()
 }
 
-/// Assemble the mise argument tail: globals, subcommand, specs, `--`, payload.
-pub(crate) fn mise_argv_tail(
-    subcommand: &str,
-    tool_specs: &[String],
-    payload: &[OsString],
-) -> Vec<OsString> {
-    let mut args = Vec::with_capacity(tool_specs.len() + payload.len() + 6);
-    for flag in MISE_GLOBAL_FLAGS {
-        args.push(OsString::from(flag));
+fn read_capped<R: std::io::Read>(pipe: Option<R>, limit: usize) -> (Vec<u8>, bool) {
+    let Some(pipe) = pipe else {
+        return (Vec::new(), false);
+    };
+    let mut buf = Vec::new();
+    let capped = pipe
+        .take(limit.saturating_add(1).try_into().unwrap_or(u64::MAX))
+        .read_to_end(&mut buf)
+        .is_err()
+        || buf.len() > limit;
+    (buf, capped)
+}
+
+fn signal_of(status: std::process::ExitStatus) -> Option<i32> {
+    #[cfg(unix)]
+    {
+        std::os::unix::process::ExitStatusExt::signal(&status)
     }
-    args.push(OsString::from(subcommand));
-    for spec in tool_specs {
-        args.push(OsString::from(spec));
+    #[cfg(not(unix))]
+    {
+        None
     }
+}
+
+pub(crate) fn mise_argv_tail(sub: &str, specs: &[String], payload: &[OsString]) -> Vec<OsString> {
+    let mut args = Vec::with_capacity(specs.len() + payload.len() + 6);
+    args.extend(MISE_GLOBAL_FLAGS.iter().map(OsString::from));
+    args.push(OsString::from(sub));
+    args.extend(specs.iter().map(OsString::from));
     args.push(OsString::from(TOOL_COMMAND_SEPARATOR));
     args.extend(payload.iter().cloned());
     args
 }
 
-/// Assemble the install tail: globals, `install`, then exact specs only.
-pub(crate) fn mise_install_argv_tail(tool_specs: &[String]) -> Vec<OsString> {
-    let mut args = Vec::with_capacity(tool_specs.len() + 4);
-    for flag in MISE_GLOBAL_FLAGS {
-        args.push(OsString::from(flag));
-    }
-    args.push(OsString::from(MISE_INSTALL_SUBCOMMAND));
-    for spec in tool_specs {
-        args.push(OsString::from(spec));
-    }
+pub(crate) fn mise_install_argv_tail(specs: &[String]) -> Vec<OsString> {
+    let mut args = Vec::with_capacity(specs.len() + 4);
+    args.extend(MISE_GLOBAL_FLAGS.iter().map(OsString::from));
+    args.push(OsString::from("install"));
+    args.extend(specs.iter().map(OsString::from));
     args
 }

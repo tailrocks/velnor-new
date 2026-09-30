@@ -144,6 +144,7 @@ fn process_output_reports_typed_exit() {
         stdout: b"{}".to_vec(),
         stderr: Vec::new(),
         code: Some(0),
+        signal: None,
         success: true,
     };
     assert!(ok.require_success("mise").is_ok());
@@ -153,6 +154,7 @@ fn process_output_reports_typed_exit() {
         stdout: Vec::new(),
         stderr: b"boom".to_vec(),
         code: Some(1),
+        signal: None,
         success: false,
     };
     assert!(matches!(
@@ -164,6 +166,7 @@ fn process_output_reports_typed_exit() {
         stdout: vec![0xff, 0xfe],
         stderr: Vec::new(),
         code: Some(0),
+        signal: None,
         success: true,
     };
     assert!(matches!(

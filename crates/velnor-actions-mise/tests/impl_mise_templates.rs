@@ -52,6 +52,7 @@ fn template_execution_preserves_exit_status() {
         stdout: Vec::new(),
         stderr: b"clippy failed".to_vec(),
         code: Some(3),
+        signal: None,
         success: false,
     };
     let err = failed
@@ -69,6 +70,7 @@ fn template_execution_preserves_exit_status() {
         stdout: Vec::new(),
         stderr: Vec::new(),
         code: Some(0),
+        signal: None,
         success: true,
     };
     assert!(passed.require_success("mise").is_ok());

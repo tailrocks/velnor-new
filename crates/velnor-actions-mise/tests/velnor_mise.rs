@@ -25,6 +25,8 @@ mod impl_mise_gate6;
 mod impl_mise_git;
 #[path = "impl_mise_install.rs"]
 mod impl_mise_install;
+#[path = "impl_mise_isolation.rs"]
+mod impl_mise_isolation;
 #[path = "impl_mise_lock.rs"]
 mod impl_mise_lock;
 #[path = "impl_mise_negative.rs"]

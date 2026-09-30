@@ -45,6 +45,8 @@ mod impl_renderer_steps;
 mod impl_renderer_sweep;
 #[path = "impl_renderer_tasksteps.rs"]
 mod impl_renderer_tasksteps;
+#[path = "impl_renderer_toolchain_contract.rs"]
+mod impl_renderer_toolchain_contract;
 #[path = "impl_renderer_tree.rs"]
 mod impl_renderer_tree;
 #[path = "impl_renderer_tree_policy.rs"]

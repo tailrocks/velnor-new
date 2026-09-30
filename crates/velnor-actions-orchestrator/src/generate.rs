@@ -1,5 +1,9 @@
-//! Atomic `.github` replacement and outside-repo preview writes.
+//! Staged `.github` replacement and outside-repo preview writes.
+//!
+//! In-place commits use two renames with a visibility gap between
+//! them (a reader can transiently miss `.github`): staged, never atomic.
 
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use velnor_actions_actionlint::render_actionlint_yaml;
@@ -17,61 +21,20 @@ use crate::prepare::GenerationPreparation;
 use crate::provenance::{ProfileProvenance, profile_provenance};
 use crate::validate::{validate_staged, verify_velnor_repository_files};
 
+/// Filesystem guards: snapshots, destination validation, and ownership.
+#[path = "generate_guards.rs"]
+pub(crate) mod guards;
+
+/// Re-exported snapshot: the `generate::ToolSnapshot` path is stable API.
+pub use guards::ToolSnapshot;
+
+use guards::{GenerateOwnership, prepare_preview_dir, same_filesystem};
+
 /// Options for [`generate`].
 #[derive(Debug, Clone, Default)]
 pub struct GenerateOptions {
-    /// Preview root; `None` replaces the in-repo `.github` tree atomically.
+    /// Preview root; `None` replaces the in-repo `.github` tree.
     pub output_dir: Option<PathBuf>,
-}
-
-/// Read-only tool files generation must never modify (TOOL-2.10).
-const TOOL_FILES: [&str; 4] = [
-    "mise.toml",
-    ".mise.toml",
-    "mise.lock",
-    "rust-toolchain.toml",
-];
-
-/// Byte snapshot of the read-only tool files for drift detection.
-///
-/// Captured when [`generate`] starts and verified before any output
-/// replacement, so a mid-generation tool-file change fails closed.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ToolSnapshot {
-    /// One entry per [`TOOL_FILES`] path: bytes, or `None` when absent.
-    entries: Vec<(String, Option<Vec<u8>>)>,
-}
-
-impl ToolSnapshot {
-    /// Capture the current tool-file bytes under `root`.
-    #[must_use]
-    pub fn capture(root: &Path) -> Self {
-        let entries = TOOL_FILES
-            .iter()
-            .map(|rel| {
-                let bytes = std::fs::read(root.join(rel)).ok();
-                ((*rel).to_owned(), bytes)
-            })
-            .collect();
-        Self { entries }
-    }
-
-    /// Fail when any tool file differs from the captured bytes.
-    ///
-    /// # Errors
-    ///
-    /// Returns a contract error naming the first drifted file.
-    pub fn verify(&self, root: &Path) -> Result<(), OrchestratorError> {
-        let fresh = Self::capture(root);
-        for ((rel, want), (_, got)) in self.entries.iter().zip(fresh.entries.iter()) {
-            if want != got {
-                return Err(OrchestratorError::Contract {
-                    problem: format!("tool_files_changed:{rel}"),
-                });
-            }
-        }
-        Ok(())
-    }
 }
 
 /// Report for [`generate`].
@@ -85,21 +48,20 @@ pub struct GenerateReport {
     pub validated_by: Vec<String>,
     /// Per-workspace profile provenance.
     pub profiles: Vec<ProfileProvenance>,
+    /// Cleanup warnings on a committed success (empty when clean).
+    pub warnings: Vec<String>,
 }
 
-/// Render in memory, then replace `.github` atomically or write a preview.
+/// Render in memory, then replace `.github` or write a preview.
 ///
-/// In-place replacement stages under the root and swaps directories, so a
-/// failed render, validation, or swap leaves the previous tree unchanged.
-/// Preview mode writes `PATH/.github` only when `PATH` is absent or empty,
-/// outside the repository, and not an ancestor of it.
+/// In-place replacement stages under the root and commits with two renames,
+/// leaving the previous tree unchanged on failure. Preview writes
+/// `PATH/.github` only for an absent/empty outside-repo non-ancestor root.
 ///
 /// # Errors
 ///
-/// Returns profile errors on transient-only evidence or conflicts, plus
-/// render, actionlint, preview, unsafe-path, or IO errors. The profile gate
-/// runs before any render, validation, or write, so a blocked `generate`
-/// leaves every output untouched.
+/// Returns profile, render, actionlint, preview, unsafe-path, or IO
+/// errors; the profile gate runs before any write, leaving outputs untouched.
 pub fn generate(
     prep: &GenerationPreparation,
     opts: &GenerateOptions,
@@ -109,15 +71,19 @@ pub fn generate(
     let tree = render_staged_tree(prep)?;
     let validated_by = validate_staged(&tree)?;
     tools.verify(&prep.root)?;
-    match &opts.output_dir {
+    let warnings = match &opts.output_dir {
         None => replace_in_place(prep, &tree)?,
-        Some(dir) => write_preview(prep, dir, &tree)?,
-    }
+        Some(dir) => {
+            write_preview(prep, dir, &tree)?;
+            Vec::new()
+        }
+    };
     Ok(GenerateReport {
         files_written: tree.files.iter().map(|file| file.path.clone()).collect(),
         recommendations: prep.discovery.recommendations.clone(),
         validated_by,
         profiles: profile_provenance(prep),
+        warnings,
     })
 }
 
@@ -136,13 +102,7 @@ fn fail_on_blocking_findings(prep: &GenerationPreparation) -> Result<(), Orchest
     })
 }
 
-/// Render the validated two-file tree in memory, shared by `generate`.
-///
-/// Attaches the Velnor-repository lock steps when the bootstrap lock is
-/// present, explicit pre-seed build-once steps (trust-on-review) when it
-/// is absent, renders both files through the strict entrypoint, and
-/// lexically validates every tree path. Performs no writes and runs no
-/// validators.
+/// Render the validated two-file tree in memory; no writes, no validators.
 ///
 /// # Errors
 ///
@@ -170,10 +130,6 @@ pub fn render_staged_tree(prep: &GenerationPreparation) -> Result<RenderedTree, 
 }
 
 /// Render both files plus the marker-checked two-file tree, in memory only.
-///
-/// Strict rendering inserts the pinned Mise setup ahead of every `mise`
-/// use and rejects unstaged helper invocations instead of emitting dead
-/// `mise: command not found` or exit-127 CI jobs.
 fn render_all(prep: &GenerationPreparation) -> Result<RenderedTree, OrchestratorError> {
     let version = env!("CARGO_PKG_VERSION");
     let mise = resolve_mise_setup(&prep.config, &prep.runner_label)?;
@@ -216,12 +172,18 @@ fn is_symlink(path: &Path) -> bool {
     std::fs::symlink_metadata(path).is_ok_and(|meta| meta.is_symlink())
 }
 
-/// Atomically replace `<root>/.github` via staging plus directory swap.
+/// Stage under the root and commit with two renames (staged, not atomic).
+///
+/// Validation, staging, the same-filesystem check, and the commit run
+/// under the ownership lock; nothing before the first rename touches
+/// old output. Returns cleanup warnings when the commit lands but the
+/// backup removal fails.
 fn replace_in_place(
     prep: &GenerationPreparation,
     tree: &RenderedTree,
-) -> Result<(), OrchestratorError> {
+) -> Result<Vec<String>, OrchestratorError> {
     let root = &prep.root;
+    let _ownership = GenerateOwnership::acquire(root)?;
     let target = root.join(".github");
     reject_symlink(&target)?;
     reject_symlink(&target.join("workflows"))?;
@@ -238,37 +200,67 @@ fn replace_in_place(
         .map_err(|err| OrchestratorError::io(root.display().to_string(), err.to_string()))?;
     let staged = staging.path().join(".github");
     write_tree(&staged, tree)?;
+    if !same_filesystem(staging.path(), root)? {
+        return Err(OrchestratorError::Contract {
+            problem: "cross_filesystem_staging".to_owned(),
+        });
+    }
     swap_directories(root, &target, &staged)
 }
 
-/// Swap the staged tree into place, restoring the old tree on failure.
-fn swap_directories(root: &Path, target: &Path, staged: &Path) -> Result<(), OrchestratorError> {
+/// Commit with two renames, restoring old output on failure.
+///
+/// `target -> backup`, then `staged -> target` (staged, never atomic:
+/// readers can transiently miss `.github`). Commit failure restores the
+/// backup and reports `commit_failed:{commit}; {outcome}` distinctly.
+fn swap_directories(
+    root: &Path,
+    target: &Path,
+    staged: &Path,
+) -> Result<Vec<String>, OrchestratorError> {
     let backup = backup_path(root, target);
     let had_target = target.exists();
     if had_target {
         std::fs::rename(target, &backup)
             .map_err(|err| OrchestratorError::io(target.display().to_string(), err.to_string()))?;
     }
-    if let Err(err) = std::fs::rename(staged, target) {
-        if had_target && std::fs::rename(&backup, target).is_err() {
-            // Best-effort restore failed; the swap error below is reported.
+    if let Err(commit) = std::fs::rename(staged, target) {
+        if !had_target {
+            return Err(OrchestratorError::io(
+                target.display().to_string(),
+                commit.to_string(),
+            ));
         }
+        let outcome = restore_backup(&backup, target);
         return Err(OrchestratorError::io(
             target.display().to_string(),
-            err.to_string(),
+            format!("commit_failed:{commit}; {outcome}"),
         ));
     }
-    if had_target {
-        std::fs::remove_dir_all(&backup)
-            .map_err(|err| OrchestratorError::io(backup.display().to_string(), err.to_string()))?;
+    if had_target && let Err(cleanup) = std::fs::remove_dir_all(&backup) {
+        return Ok(vec![format!(
+            "backup_cleanup_failed:{}:{cleanup}",
+            backup.display()
+        )]);
     }
-    Ok(())
+    Ok(Vec::new())
+}
+
+/// Restore `backup` to `target`, reporting the rollback outcome distinctly.
+///
+/// Rollback only fails under concurrent interference between the two
+/// renames (single-threaded it inverts a rename that just succeeded),
+/// so this keeps the `rolled_back` / `rollback_failed:{err}` contract.
+fn restore_backup(backup: &Path, target: &Path) -> String {
+    match std::fs::rename(backup, target) {
+        Ok(()) => "rolled_back".to_owned(),
+        Err(rollback) => format!("rollback_failed:{rollback}"),
+    }
 }
 
 /// A sibling backup path that does not exist yet.
 fn backup_path(root: &Path, target: &Path) -> PathBuf {
-    let pid = std::process::id();
-    let base = format!(".github.velnor-backup.{pid}");
+    let base = format!(".github.velnor-backup.{}", std::process::id());
     let mut candidate = root.join(&base);
     let mut counter = 0u32;
     while candidate.exists() || candidate == *target {
@@ -291,52 +283,12 @@ fn write_preview(
     write_tree(&canonical.join(".github"), tree)
 }
 
-/// Create or validate the preview root, refusing unsafe destinations.
-fn prepare_preview_dir(root: &Path, dest: &Path) -> Result<PathBuf, OrchestratorError> {
-    let label = dest.display().to_string();
-    if let Ok(meta) = std::fs::symlink_metadata(dest) {
-        if meta.is_symlink() {
-            return Err(OrchestratorError::PreviewRefused {
-                path: label,
-                reason: "symlink_refused".to_owned(),
-            });
-        }
-        if !meta.is_dir() {
-            return Err(OrchestratorError::PreviewRefused {
-                path: label,
-                reason: "not_a_directory".to_owned(),
-            });
-        }
-        let mut entries = std::fs::read_dir(dest)
-            .map_err(|err| OrchestratorError::io(label.clone(), err.to_string()))?;
-        if entries.next().is_some() {
-            return Err(OrchestratorError::PreviewRefused {
-                path: label,
-                reason: "non_empty".to_owned(),
-            });
-        }
-    } else {
-        std::fs::create_dir_all(dest)
-            .map_err(|err| OrchestratorError::io(label.clone(), err.to_string()))?;
-    }
-    let canonical = dest
-        .canonicalize()
-        .map_err(|err| OrchestratorError::io(label.clone(), err.to_string()))?;
-    if canonical == *root || canonical.starts_with(root) {
-        return Err(OrchestratorError::PreviewRefused {
-            path: label,
-            reason: "inside_repository".to_owned(),
-        });
-    }
-    if root.starts_with(&canonical) {
-        return Err(OrchestratorError::PreviewRefused {
-            path: label,
-            reason: "ancestor_of_repository".to_owned(),
-        });
-    }
-    Ok(canonical)
-}
 /// Write every rendered file under `github_dir`.
+///
+/// Parent chains are re-verified symlink-free immediately before use
+/// and leaves are created exclusively: an existing leaf refuses as an
+/// overwrite instead of truncating, and a swapped symlink refuses
+/// instead of diverting the write.
 pub(crate) fn write_tree(github_dir: &Path, tree: &RenderedTree) -> Result<(), OrchestratorError> {
     for file in &tree.files {
         let rel = file.path.strip_prefix(".github/").unwrap_or(&file.path);
@@ -345,9 +297,101 @@ pub(crate) fn write_tree(github_dir: &Path, tree: &RenderedTree) -> Result<(), O
             std::fs::create_dir_all(parent).map_err(|err| {
                 OrchestratorError::io(parent.display().to_string(), err.to_string())
             })?;
+            let mut current = Some(parent);
+            while let Some(level) = current {
+                if !level.starts_with(github_dir) {
+                    break;
+                }
+                if std::fs::symlink_metadata(level).is_ok_and(|meta| meta.is_symlink()) {
+                    return Err(OrchestratorError::UnsafePath {
+                        path: level.display().to_string(),
+                        reason: "symlink_refused".to_owned(),
+                    });
+                }
+                current = if level == github_dir {
+                    None
+                } else {
+                    level.parent()
+                };
+            }
         }
-        std::fs::write(&dest, &file.bytes)
+        if std::fs::symlink_metadata(&dest).is_ok_and(|meta| meta.is_symlink()) {
+            return Err(OrchestratorError::UnsafePath {
+                path: dest.display().to_string(),
+                reason: "symlink_refused".to_owned(),
+            });
+        }
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&dest)
+            .map_err(|err| {
+                if err.kind() == std::io::ErrorKind::AlreadyExists {
+                    OrchestratorError::OverwriteRefused {
+                        path: dest.display().to_string(),
+                    }
+                } else {
+                    OrchestratorError::io(dest.display().to_string(), err.to_string())
+                }
+            })?
+            .write_all(file.bytes.as_bytes())
             .map_err(|err| OrchestratorError::io(dest.display().to_string(), err.to_string()))?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn scratch(test: &str) -> std::io::Result<PathBuf> {
+        let dir = std::env::temp_dir().join(format!("velnor-gen-{test}-{}", std::process::id()));
+        drop(std::fs::remove_dir_all(&dir));
+        std::fs::create_dir_all(&dir)?;
+        Ok(dir)
+    }
+
+    #[test]
+    fn commit_failure_restores_backup_and_reports_both() {
+        let root = scratch("rollback").expect("scratch");
+        let target = root.join(".github");
+        std::fs::create_dir_all(target.join("workflows")).expect("target");
+        std::fs::write(target.join("workflows/old.yml"), "old: true\n").expect("old");
+        let err =
+            swap_directories(&root, &target, &root.join("missing-staged")).expect_err("fails");
+        let text = err.to_string();
+        assert!(
+            text.contains("commit_failed") && text.contains("rolled_back"),
+            "{text}"
+        );
+        assert_eq!(
+            std::fs::read(target.join("workflows/old.yml")).expect("restored"),
+            b"old: true\n"
+        );
+    }
+
+    #[test]
+    fn fresh_target_commit_failure_reports_without_rollback() {
+        let root = scratch("fresh_commit_fail").expect("scratch");
+        let target = root.join(".github");
+        let err =
+            swap_directories(&root, &target, &root.join("missing-staged")).expect_err("fails");
+        assert!(!err.to_string().contains("rolled_back"), "{err}");
+        assert!(!target.exists(), "nothing committed");
+    }
+
+    /// Rollback failure keeps the live target and names the rollback error.
+    #[test]
+    fn rollback_failure_preserved() {
+        let root = scratch("rollback_fail").expect("scratch");
+        let target = root.join(".github");
+        std::fs::create_dir_all(&target).expect("target");
+        std::fs::write(target.join("old.yml"), "old: true\n").expect("old");
+        let outcome = restore_backup(&root.join("missing-backup"), &target);
+        assert!(outcome.starts_with("rollback_failed:"), "{outcome}");
+        assert_eq!(
+            std::fs::read(target.join("old.yml")).expect("kept"),
+            b"old: true\n"
+        );
+    }
 }

@@ -27,8 +27,8 @@ use velnor_actions_workflow_renderer::steps::{
 
 use crate::OrchestratorError;
 use crate::discover::Discovery;
-use crate::matrix_step::{matrix_task_step, prepare_task_tools_step, task_toolchain_env};
-use crate::source_prep::fetch_steps;
+use crate::matrix_step::{matrix_task_step, prepare_task_tools_step};
+use crate::source_prep::fetch_steps_for_task;
 use crate::utf8::strings_of_env;
 
 /// Declared repository configuration variable names (GEN-2.14).
@@ -102,14 +102,10 @@ pub(crate) fn build_task_job(
     let mut steps = vec![checkout_step()?];
     steps.push(prepare_task_tools_step(catalog, use_mbx, use_nextest)?);
     steps.push(super::prepare_rust_components_step(catalog)?);
-    steps.extend(fetch_steps(
-        catalog,
-        fetch_roots,
-        &task_toolchain_env(catalog),
-    )?);
+    steps.extend(fetch_steps_for_task(catalog, fetch_roots)?);
     steps.extend(mbx_task_step(use_mbx)?);
     steps.extend(maybe_task_cache_steps(None, TaskCacheMode::Off, "")?);
-    steps.push(matrix_task_step(max_parallel_jobs, catalog));
+    steps.push(matrix_task_step(max_parallel_jobs, catalog)?);
     Ok(Job {
         display_name: "Velnor Task".to_owned(),
         runs_on: label.to_owned(),

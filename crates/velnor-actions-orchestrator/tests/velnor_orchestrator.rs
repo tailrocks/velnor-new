@@ -9,6 +9,7 @@ mod impl_gate8_e;
 mod impl_gates_cover;
 mod impl_gates_shard;
 mod impl_gen_gates;
+mod impl_generate_p09_preview;
 mod impl_matrix;
 mod impl_merge;
 mod impl_orch_broaden;
