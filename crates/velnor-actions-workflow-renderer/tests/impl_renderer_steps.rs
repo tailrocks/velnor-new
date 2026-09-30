@@ -276,6 +276,7 @@ fn emit_ctx() -> RenderContext {
         validator_commands: Vec::new(),
         candidate: None,
         preseed: false,
+        plan_consumer_env: std::collections::BTreeMap::new(),
     }
 }
 

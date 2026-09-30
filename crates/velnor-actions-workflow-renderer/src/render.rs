@@ -70,6 +70,15 @@ pub struct RenderContext {
     /// review). Accepts fixed pre-seed staging for internal steps and
     /// requires the build-once artifact closure; never set for consumers.
     pub preseed: bool,
+    /// Caller-validated env for plan-job helper consumers: the freshness
+    /// step and the `plan-v1` internal step run the helper, whose
+    /// locked/offline qualification reads the Cargo home the Fetch step
+    /// populated. Opaque to the renderer (attached verbatim); the
+    /// orchestrator supplies the same validated constructor Fetch uses
+    /// so fetch and consumers match by construction (run 36754512444
+    /// failed `generate` on ambient homes after plan fetch moved to
+    /// owned homes).
+    pub plan_consumer_env: BTreeMap<String, String>,
 }
 
 /// One fixed validator-job shell step: kind plus display name plus argv.
