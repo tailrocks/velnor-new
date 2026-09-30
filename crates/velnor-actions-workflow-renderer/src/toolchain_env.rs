@@ -73,6 +73,35 @@ pub fn reject_denied_step_keys(env: &BTreeMap<String, String>) -> Result<(), Ren
     Ok(())
 }
 
+/// Explicit empty credential values stopping ambient inheritance.
+///
+/// GitHub injects token credentials into every step and repositories
+/// commonly export `MISE_GITHUB_TOKEN` at workflow scope; an absent key
+/// inherits all of that. Steps executing repository code (obligation
+/// steps run build scripts; custom tasks run repo Mise configuration)
+/// carry these empty values so inheritance stops at the step boundary.
+/// Empty is the only legal scrub value: the render gate rejects any
+/// nonempty credential as a leak.
+#[must_use]
+pub fn credential_scrub() -> BTreeMap<String, String> {
+    STEP_CREDENTIAL_DENYLIST
+        .iter()
+        .map(|key| ((*key).to_owned(), String::new()))
+        .collect()
+}
+
+/// Overlay the credential scrub onto a validated step env.
+///
+/// Callers validate the base first ([`checked_task_env`] rejects any
+/// caller-supplied credential, empty or not); the overlay then blanks
+/// all seven keys by construction, never from caller input.
+#[must_use]
+pub fn with_credential_scrub(env: &BTreeMap<String, String>) -> BTreeMap<String, String> {
+    let mut scrubbed = env.clone();
+    scrubbed.extend(credential_scrub());
+    scrubbed
+}
+
 /// Isolation keys forbidden in project-task step env (P07-7 hook escape).
 ///
 /// The isolation quartet plus the install-disable pair. Trusted generated

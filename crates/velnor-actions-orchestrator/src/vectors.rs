@@ -187,23 +187,26 @@ fn validator_argv(
 ///
 /// Only names in `allowlist` are emitted; there is no other path from a
 /// task name to a step, so undeclared names can never execute (R26).
+/// Every step carries the scrubbed execution env: custom tasks run
+/// repository Mise configuration, so ambient tokens must stop here.
 /// # Errors
 ///
 /// Returns a contract error when a name fails the task-name rule.
-pub(crate) fn custom_task_steps(allowlist: &[String]) -> Result<Vec<Step>, OrchestratorError> {
+pub(crate) fn custom_task_steps(
+    allowlist: &[String],
+    catalog: &ToolCatalog,
+) -> Result<Vec<Step>, OrchestratorError> {
     allowlist
         .iter()
         .map(|task| {
             let run = custom_task_run_argv(task).map_err(|err| OrchestratorError::Contract {
                 problem: err.to_string(),
             })?;
+            let env = crate::matrix_step::task_execution_env(catalog, &BTreeMap::new())?;
             Ok(Step {
                 name: format!("Custom task {task}"),
                 condition: None,
-                kind: StepKind::Shell {
-                    run,
-                    env: BTreeMap::new(),
-                },
+                kind: StepKind::Shell { run, env },
             })
         })
         .collect()

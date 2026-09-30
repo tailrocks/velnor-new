@@ -157,10 +157,11 @@ fn section4_build_vector_is_byte_exact() {
 
 #[test]
 fn custom_task_steps_emit_only_allowlisted() {
-    let steps = custom_task_steps(&[]).expect("empty allowlist");
+    let catalog = ToolCatalog::pinned();
+    let steps = custom_task_steps(&[], &catalog).expect("empty allowlist");
     assert!(steps.is_empty(), "empty emits nothing");
     let allowlist = argv_of(&["audit", "lint"]);
-    let steps = custom_task_steps(&allowlist).expect("custom steps");
+    let steps = custom_task_steps(&allowlist, &catalog).expect("custom steps");
     assert_eq!(steps.len(), 2);
     for (step, task) in steps.iter().zip(["audit", "lint"]) {
         assert_eq!(step.name, format!("Custom task {task}"));
@@ -168,7 +169,13 @@ fn custom_task_steps_emit_only_allowlisted() {
             panic!("custom step must be shell: {:?}", step.kind);
         };
         assert_eq!(*run, argv_of(&["mise", "run", task]));
-        assert!(env.is_empty());
+        for key in velnor_actions_workflow_renderer::toolchain_env::STEP_CREDENTIAL_DENYLIST {
+            assert_eq!(
+                env.get(key).map(String::as_str),
+                Some(""),
+                "custom task must scrub {key}"
+            );
+        }
     }
     let text = format!("{steps:?}");
     assert!(!text.contains("undeclared"), "{text}");
@@ -176,10 +183,11 @@ fn custom_task_steps_emit_only_allowlisted() {
 
 #[test]
 fn custom_task_steps_reject_bad_names() {
+    let catalog = ToolCatalog::pinned();
     for bad in ["", "  ", "two words", "a/b"] {
         let allowlist = argv_of(&[bad]);
         assert!(
-            custom_task_steps(&allowlist).is_err(),
+            custom_task_steps(&allowlist, &catalog).is_err(),
             "{bad:?} must fail closed"
         );
     }

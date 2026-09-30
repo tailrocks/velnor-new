@@ -130,11 +130,17 @@ fn rendered_crate_steps_carry_validated_contract() -> TestResult {
     }
     for key in [
         "MISE_GITHUB_TOKEN",
-        "GITHUB_TOKEN:",
-        "GH_TOKEN:",
+        "GITHUB_TOKEN",
+        "GH_TOKEN",
         "ACTIONS_RUNTIME_TOKEN",
+        "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
+        "ACTIONS_ID_TOKEN_REQUEST_URL",
+        "CARGO_REGISTRY_TOKEN",
     ] {
-        assert!(!task.contains(key), "crate job leaks {key}");
+        assert!(
+            run_block.contains(&format!("{key}: \"\"")),
+            "Clippy must scrub {key} empty"
+        );
     }
     Ok(())
 }
