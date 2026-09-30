@@ -2,6 +2,7 @@
 use crate::impl_contract_ids::{MANIFEST, TASK, sample_identity};
 use crate::impl_remed_contract::{sample_plan, valid_config};
 use std::collections::BTreeMap;
+use velnor_actions_contract::graph::{CpuMilli, MemoryMb};
 use velnor_actions_contract::{
     ArchiveInputs, CachePolicy, ContractError, EdgeKind, ManifestTaskProof, ResourceClass,
     ResourceDemand, ShardTimingEvidence, TaskEdge, TaskGraph, TaskNode, archive_id,
@@ -23,7 +24,7 @@ fn par_ignore_sorted_dup_unknown() {
 
 #[test]
 fn par_task_node_carries_thirteen_fields() {
-    let node = sample_node("stack/rust/root/clippy/default");
+    let node = sample_node("stack/rust/root/clippy/default").expect("node");
     assert_eq!(node.validate(), Ok(()));
     let keys: Vec<String> = serde_json::to_value(&node)
         .expect("value")
@@ -60,8 +61,8 @@ fn par_task_node_carries_thirteen_fields() {
 }
 
 /// Sample graph node shared by PAR cases.
-fn sample_node(task_id: &str) -> TaskNode {
-    TaskNode {
+fn sample_node(task_id: &str) -> Result<TaskNode, ContractError> {
+    Ok(TaskNode {
         task_id: task_id.to_owned(),
         stack_id: "rust".to_owned(),
         component_id: "demo 0.1.0".to_owned(),
@@ -75,8 +76,8 @@ fn sample_node(task_id: &str) -> TaskNode {
         outputs: vec!["target/report.json".to_owned()],
         resource: ResourceDemand {
             class: ResourceClass::Compiler,
-            cpu_milli: Some(2000),
-            memory_mb: Some(4096),
+            cpu_milli: Some(CpuMilli::new(2000)?),
+            memory_mb: Some(MemoryMb::new(4096)?),
             needs_network: false,
             service: None,
         },
@@ -85,16 +86,16 @@ fn sample_node(task_id: &str) -> TaskNode {
             allow_compilation_reuse: true,
             allow_task_reuse: true,
         },
-    }
+    })
 }
 
 #[test]
 fn par_edges_distinguish_four_kinds() {
     let clippy = "stack/rust/root/clippy/default";
     let test = "stack/rust/root/test/default";
-    let mut clippy_node = sample_node(clippy);
+    let mut clippy_node = sample_node(clippy).expect("node");
     clippy_node.outputs = vec!["target/clippy.json".to_owned()];
-    let mut test_node = sample_node(test);
+    let mut test_node = sample_node(test).expect("node");
     test_node.task_kind = "test".to_owned();
     test_node.depends_on = vec![clippy.to_owned()];
     test_node.gated_by = vec![clippy.to_owned()];
@@ -231,6 +232,9 @@ fn par_resource_classes_cover_six_kinds() {
         service: Some("db".to_owned()),
     };
     assert!(bad.validate().is_err());
+    assert!(CpuMilli::new(0).is_err());
+    assert!(MemoryMb::new(0).is_err());
+    assert_eq!(CpuMilli::new(2000).expect("cpu").get(), 2000);
 }
 
 #[test]
@@ -344,34 +348,22 @@ fn par_shard_changes_require_timing_evidence() {
 
 #[test]
 fn par_manifest_task_proof_binds_identities() {
-    let proof = ManifestTaskProof {
-        task_id: TASK.to_owned(),
-        task_digest: digest_b3(b"task"),
-        input_digest: digest_b3(b"inputs"),
-        graph_digest: digest_b3(b"graph"),
-        toolchain_id: digest_b3(b"toolchain"),
-        mbx_digest: digest_b3(b"mbx"),
-        platform_id: digest_b3(b"platform"),
-        profile: "test".to_owned(),
-        proof_run_id: 4242,
+    let task = digest_b3(b"task");
+    let inputs = digest_b3(b"inputs");
+    let graph = digest_b3(b"graph");
+    let toolchain = digest_b3(b"toolchain");
+    let mbx = digest_b3(b"mbx");
+    let platform = digest_b3(b"platform");
+    let build = |task_id: &str, digest: &str, run: u64| {
+        ManifestTaskProof::new(
+            task_id, digest, &inputs, &graph, &toolchain, &mbx, &platform, "test", run,
+        )
     };
+    let proof = build(TASK, &task, 4242).expect("valid proof");
     assert_eq!(proof.validate(), Ok(()));
-    let mut bad = proof.clone();
-    bad.graph_digest = "nope".to_owned();
-    assert!(bad.validate().is_err());
-    let mut bad = proof.clone();
-    bad.toolchain_id = "nope".to_owned();
-    assert!(bad.validate().is_err());
-    let mut bad = proof.clone();
-    bad.mbx_digest = "nope".to_owned();
-    assert!(bad.validate().is_err());
-    let mut bad = proof.clone();
-    bad.platform_id = "nope".to_owned();
-    assert!(bad.validate().is_err());
-    let mut bad = proof.clone();
-    bad.proof_run_id = 0;
-    assert!(bad.validate().is_err());
-    let mut bad = proof;
-    bad.task_id = "bogus".to_owned();
-    assert!(bad.validate().is_err());
+    assert_eq!(proof.task_id(), TASK);
+    assert_eq!(proof.proof_run_id(), 4242);
+    assert!(build(TASK, "nope", 4242).is_err());
+    assert!(build(TASK, &task, 0).is_err());
+    assert!(build("bogus", &task, 4242).is_err());
 }

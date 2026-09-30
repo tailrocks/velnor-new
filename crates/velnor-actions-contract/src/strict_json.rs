@@ -7,9 +7,35 @@ use std::collections::BTreeSet;
 
 use crate::errors::ContractError;
 
+/// Default bound for untrusted JSON/TOML documents (8 MiB).
+///
+/// Legitimate plan/matrix/report/manifest documents are kilobytes; the
+/// bound only stops hostile or runaway inputs before scanning. Callers
+/// with a justified larger document use an explicit override limit.
+pub const MAX_UNTRUSTED_DOCUMENT_BYTES: usize = 8 * 1024 * 1024;
+
+/// Reject a document whose byte length exceeds `limit`.
+/// # Errors
+pub fn check_document_size(len: usize, limit: usize) -> Result<(), ContractError> {
+    if len > limit {
+        return Err(ContractError::DocumentTooLarge { size: len, limit });
+    }
+    Ok(())
+}
+
 /// Parse JSON text, rejecting duplicate object keys at any depth.
 /// # Errors
 pub fn parse_strict_json(text: &str) -> Result<serde_json::Value, ContractError> {
+    parse_strict_json_with_limit(text, MAX_UNTRUSTED_DOCUMENT_BYTES)
+}
+
+/// Parse JSON text with an explicit per-caller size bound in bytes.
+/// # Errors
+pub fn parse_strict_json_with_limit(
+    text: &str,
+    limit: usize,
+) -> Result<serde_json::Value, ContractError> {
+    check_document_size(text.len(), limit)?;
     let mut scanner = Scanner {
         text,
         bytes: text.as_bytes(),
@@ -17,6 +43,18 @@ pub fn parse_strict_json(text: &str) -> Result<serde_json::Value, ContractError>
     };
     scanner.parse_document()?;
     serde_json::from_str(text).map_err(|err| ContractError::CanonicalJson(err.to_string()))
+}
+
+/// Parse JSON bytes, requiring UTF-8 plus the size bound and key check.
+/// # Errors
+pub fn parse_strict_json_bytes(
+    bytes: &[u8],
+    limit: usize,
+) -> Result<serde_json::Value, ContractError> {
+    check_document_size(bytes.len(), limit)?;
+    let text = std::str::from_utf8(bytes)
+        .map_err(|err| ContractError::CanonicalJson(format!("malformed_json:{err}")))?;
+    parse_strict_json_with_limit(text, limit)
 }
 
 /// Byte scanner that validates structure and key uniqueness.
@@ -267,4 +305,41 @@ impl Scanner<'_> {
 /// Build a malformed-JSON canonicalization error.
 fn malformed(problem: &str) -> ContractError {
     ContractError::CanonicalJson(format!("malformed_json:{problem}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        check_document_size, parse_strict_json, parse_strict_json_bytes,
+        parse_strict_json_with_limit,
+    };
+    use crate::errors::ContractError;
+
+    #[test]
+    fn default_bound_accepts_small_docs() {
+        let value = parse_strict_json(r#"{"a":1}"#).expect("small doc");
+        assert_eq!(value.get("a").and_then(serde_json::Value::as_u64), Some(1));
+    }
+
+    #[test]
+    fn oversize_doc_fails_with_size_detail() {
+        let big = format!(r#"{{"pad":"{}"}}"#, "x".repeat(100));
+        let err = parse_strict_json_with_limit(&big, 16).expect_err("oversize");
+        assert!(matches!(
+            err,
+            ContractError::DocumentTooLarge { size, limit: 16 } if size == big.len()
+        ));
+        assert!(parse_strict_json_with_limit(&big, big.len()).is_ok());
+        assert!(check_document_size(3, 3).is_ok());
+        assert!(check_document_size(4, 3).is_err());
+    }
+
+    #[test]
+    fn bytes_entry_rejects_bad_utf8_and_dup_keys() {
+        assert!(parse_strict_json_bytes(b"\xff", 64).is_err());
+        let dup = br#"{"a":1,"a":2}"#;
+        assert!(parse_strict_json_bytes(dup, 64).is_err());
+        assert!(parse_strict_json_bytes(br#"{"a":1}"#, 4).is_err());
+        assert!(parse_strict_json_bytes(br#"{"a":1}"#, 64).is_ok());
+    }
 }

@@ -1,15 +1,13 @@
 //! Repo-shape policy: workspace, manifests, lints, versions, sizes.
-//!
-//! Reads repository files through `CARGO_MANIFEST_DIR`-relative paths; the
-//! assertions below pin the must-clauses other streams implement.
+//! Reads repo files via `CARGO_MANIFEST_DIR`; pins must-clauses for streams.
 
 use std::error::Error;
 use std::path::{Path, PathBuf};
 
 #[path = "alint_miniyaml.rs"]
-mod alint_miniyaml;
+pub(crate) mod alint_miniyaml;
 #[path = "fixtures/p11_alint.rs"]
-mod p11_alint;
+pub(crate) mod p11_alint;
 #[path = "fixtures/p11_compiler.rs"]
 mod p11_compiler;
 #[path = "fixtures/p11_metadata.rs"]
@@ -24,6 +22,8 @@ mod p12_live;
 mod p12_manifest;
 #[path = "fixtures/p12_policy.rs"]
 mod p12_policy;
+#[path = "fixtures/p12_upstream.rs"]
+mod p12_upstream;
 
 /// Expected members as (directory, package name).
 pub(crate) const MEMBERS: [(&str, &str); 7] = [
@@ -233,14 +233,11 @@ fn rust_version_tracks_toolchain() -> Result<(), Box<dyn Error>> {
 fn members_inherit_workspace_settings() -> Result<(), Box<dyn Error>> {
     for (dir, _) in MEMBERS {
         let body = manifest(dir)?;
-        for key in [
-            "edition.workspace = true",
-            "rust-version.workspace = true",
-            "[lints]",
-            "workspace = true",
-        ] {
+        for key in ["edition.workspace = true", "rust-version.workspace = true"] {
             assert!(body.contains(key), "{dir} misses {key}");
         }
+        assert!(body.contains("[lints]"), "{dir} misses [lints]");
+        assert!(body.contains("workspace = true"), "{dir} misses workspace");
     }
     Ok(())
 }
@@ -304,94 +301,6 @@ fn clippy_toml_has_five_settings() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-#[test]
-fn no_restriction_or_nursery_groups() -> Result<(), Box<dyn Error>> {
-    for (dir, _) in MEMBERS {
-        let body = manifest(dir)?;
-        assert!(!body.contains("restriction"), "{dir}");
-        assert!(!body.contains("nursery"), "{dir}");
-    }
-    let root = read("Cargo.toml")?;
-    assert!(!root.contains("restriction"));
-    assert!(!root.contains("nursery"));
-    Ok(())
-}
-
-#[test]
-fn no_nightly_toolchain() -> Result<(), Box<dyn Error>> {
-    let mut files = vec![
-        "Cargo.toml".to_owned(),
-        "mise.toml".to_owned(),
-        "crates/velnor-actions-mise/src/catalog.rs".to_owned(),
-        ".github/workflows/velnor.yml".to_owned(),
-    ];
-    for (dir, _) in MEMBERS {
-        files.push(format!("{dir}/Cargo.toml"));
-    }
-    for file in files {
-        assert!(!read(&file)?.to_lowercase().contains("nightly"), "{file}");
-    }
-    Ok(())
-}
-
-#[test]
-fn no_git_dependencies() -> Result<(), Box<dyn Error>> {
-    for (dir, _) in MEMBERS {
-        let body = manifest(dir)?;
-        assert!(!body.contains("git="), "{dir}");
-        assert!(!body.contains("git ="), "{dir}");
-    }
-    let lock = read("Cargo.lock")?;
-    assert!(!lock.contains("git+"), "lockfile has git source");
-    Ok(())
-}
-
-#[test]
-fn alint_config_semantic_policy() -> Result<(), Box<dyn Error>> {
-    p11_alint::check_extended_policy(&read(".alint.yml")?)
-}
-
-#[test]
-fn alint_rule_fixtures_pass_fail_and_express_command() -> Result<(), Box<dyn Error>> {
-    for row in &alint_miniyaml::EXPECTED {
-        let id = row.id;
-        let pass = alint_miniyaml::parse(&alint_miniyaml::fixture(id, "pass")?)?;
-        alint_miniyaml::check_policy(&pass).map_err(|err| format!("{id} pass: {err}"))?;
-        let fail = alint_miniyaml::parse(&alint_miniyaml::fixture(id, "fail")?)?;
-        let failed = alint_miniyaml::check_policy(&fail).is_err();
-        assert!(failed, "{id} fail passed");
-    }
-    let extra = alint_miniyaml::parse(&alint_miniyaml::fixture("command", "expressible")?)?;
-    let added = alint_miniyaml::rule(&extra, "example-toml-edition-rule").ok_or("added rule")?;
-    alint_miniyaml::check_rule_shape(added)?;
-    let rejected = alint_miniyaml::check_policy(&extra).is_err();
-    assert!(rejected, "unknown id passed");
-    Ok(())
-}
-
-#[test]
-fn unsafe_forbidden_and_absent() -> Result<(), Box<dyn Error>> {
-    assert!(read("Cargo.toml")?.contains("unsafe_code = \"forbid\""));
-    let spellings = [
-        "unsafe {",
-        "unsafe{",
-        "unsafe fn",
-        "unsafe impl",
-        "unsafe trait",
-        "unsafe extern",
-        "#[unsafe",
-    ];
-    for (dir, _) in MEMBERS {
-        for path in tree_files(&format!("{dir}/src"), "rs")? {
-            let body = std::fs::read_to_string(&path)?;
-            for spelling in spellings {
-                assert!(
-                    !body.contains(spelling),
-                    "{} has {spelling}",
-                    path.display()
-                );
-            }
-        }
-    }
-    Ok(())
-}
+// Behavioral enforcement (forbidden groups, alint verdicts, unsafe
+// absence) and P11 strictness guarantees live in the sibling
+// `impl_repo_strictness` module, which shares the helpers above.

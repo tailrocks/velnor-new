@@ -25,3 +25,5 @@ mod impl_repo_freshness;
 mod impl_repo_policy;
 #[path = "impl_repo_shape.rs"]
 mod impl_repo_shape;
+#[path = "impl_repo_strictness.rs"]
+mod impl_repo_strictness;

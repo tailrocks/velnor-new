@@ -13,7 +13,8 @@ use crate::errors::ContractError;
 use crate::vcs::VcsInputs;
 
 /// A validated `b3-<64 lowercase hex>` digest.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(try_from = "String")]
 pub struct Digest(String);
 
 impl Digest {
@@ -37,10 +38,49 @@ impl Digest {
     }
 }
 
+impl TryFrom<String> for Digest {
+    type Error = ContractError;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::parse(&value)
+    }
+}
+
+/// A validated repository-relative POSIX path (no traversal, `/` separators).
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(try_from = "String")]
+pub struct PosixPath(String);
+
+impl PosixPath {
+    /// Parse and normalize (`\` becomes `/`).
+    /// # Errors
+    pub fn parse(value: &str) -> Result<Self, ContractError> {
+        Ok(Self(normalize_posix_path(value)?))
+    }
+
+    /// Borrow the normalized path.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl TryFrom<String> for PosixPath {
+    type Error = ContractError;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::parse(&value)
+    }
+}
+
+/// Compute the typed `b3-<hex>` digest over raw bytes.
+#[must_use]
+pub fn digest_b3_typed(bytes: &[u8]) -> Digest {
+    Digest(format!("b3-{}", blake3::hash(bytes).to_hex()))
+}
+
 /// Compute `b3-<hex>` over raw bytes.
 #[must_use]
 pub fn digest_b3(bytes: &[u8]) -> String {
-    format!("b3-{}", blake3::hash(bytes).to_hex())
+    digest_b3_typed(bytes).as_str().to_owned()
 }
 
 /// Serialize a value to canonical JSON bytes.
@@ -64,11 +104,9 @@ pub fn canonical_json_str<T: Serialize + ?Sized>(value: &T) -> Result<String, Co
 /// Validate a `b3-<64 lowercase hex>` digest string.
 /// # Errors
 pub fn validate_digest(value: &str) -> Result<(), ContractError> {
-    if is_valid_digest(value) {
-        Ok(())
-    } else {
-        Err(ContractError::identity("digest", "malformed_b3_digest"))
-    }
+    is_valid_digest(value)
+        .then_some(())
+        .ok_or_else(|| ContractError::identity("digest", "malformed_b3_digest"))
 }
 
 /// Check digest shape without allocating an error.

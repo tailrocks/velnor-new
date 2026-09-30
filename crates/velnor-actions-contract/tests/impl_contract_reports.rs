@@ -2,14 +2,14 @@
 use crate::impl_contract_ids::{MANIFEST, TASK, sample_entry};
 use std::collections::BTreeMap;
 use velnor_actions_contract::{
-    BaselineProof, BaselineStatus, CacheLayer, CacheOutcome, CacheResult, CandidateReport,
-    CandidateStatus, Concurrency, ContractError, FinalCounts, FinalReport, FinalStatus, Job,
-    MatrixReport, MatrixStatus, NotSelectedReason, ObligationDecision, Permissions, Plan,
-    PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanPackage, PlanRunner,
-    RequiredJobResult, RunnerSelection, Step, StepKind, TaskReport, TaskStatus, Trigger, Trust,
-    WorkflowEvent, WorkflowIr, artifact_id_for_candidate, artifact_id_for_matrix,
-    artifact_id_for_plan, candidate_report_id_for_run, digest_b3, final_report_id_for_run,
-    plan_id_for_run, run_key_for_ci, task_report_id_for_task, validate_candidate_report_id,
+    BaselineProof, CacheLayer, CacheOutcome, CacheResult, CandidateReport, CandidateStatus,
+    Concurrency, ContractError, FinalCounts, FinalReport, FinalStatus, Job, MatrixReport,
+    MatrixStatus, NotSelectedReason, ObligationDecision, Permissions, Plan, PlanBaseline,
+    PlanGenerator, PlanMatrix, PlanObligation, PlanPackage, PlanRunner, RequiredJobResult,
+    RunnerSelection, Step, StepKind, TaskReport, TaskStatus, Trigger, Trust, WorkflowEvent,
+    WorkflowIr, artifact_id_for_candidate, artifact_id_for_matrix, artifact_id_for_plan,
+    candidate_report_id_for_run, digest_b3, final_report_id_for_run, plan_id_for_run,
+    run_key_for_ci, task_report_id_for_task, validate_candidate_report_id,
     validate_final_report_id,
 };
 
@@ -29,15 +29,7 @@ fn plan_validates_sorting_and_matrix() -> Result<(), ContractError> {
             selection: RunnerSelection::LatestDefault,
         },
         trust: Trust::Pr,
-        baseline: PlanBaseline {
-            status: BaselineStatus::Unavailable,
-            base_commit: None,
-            run_id: None,
-            artifact_id: None,
-            artifact_name: None,
-            manifest_digest: None,
-            reason: Some("no_entry".to_owned()),
-        },
+        baseline: PlanBaseline::unavailable(Some("no_entry"))?,
         generator: PlanGenerator {
             version: "0.1.0".to_owned(),
             target: "x86_64-unknown-linux-gnu".to_owned(),
@@ -72,13 +64,13 @@ fn plan_validates_sorting_and_matrix() -> Result<(), ContractError> {
     assert!(bad.validate().is_err());
     let covered = PlanObligation {
         decision: ObligationDecision::CoveredByTrustedBaseline,
-        baseline_proof: Some(BaselineProof {
-            source_commit: "ab".repeat(20),
-            run_id: 99,
-            artifact_id: 4242,
-            artifact_name: artifact_id_for_plan(&run_key)?,
-            manifest_digest: digest_b3(b"manifest"),
-        }),
+        baseline_proof: Some(BaselineProof::new(
+            &"ab".repeat(20),
+            99,
+            4242,
+            &artifact_id_for_plan(&run_key)?,
+            &digest_b3(b"manifest"),
+        )?),
         ..plan.obligations[0].clone()
     };
     let mut plan2 = plan.clone();

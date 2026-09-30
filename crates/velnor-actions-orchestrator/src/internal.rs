@@ -9,8 +9,8 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::{
-    BaselineStatus, ContractError, Plan, PlanBaseline, PlanGenerator, PlanMatrix, PlanRunner,
-    RunnerSelection, Trust, WorkflowEvent, canonical_json_bytes, plan_id_for_run,
+    ContractError, Plan, PlanBaseline, PlanGenerator, PlanMatrix, PlanRunner, RunnerSelection,
+    Trust, WorkflowEvent, canonical_json_bytes, plan_id_for_run,
 };
 use velnor_actions_mise::ToolCatalog;
 use velnor_actions_rust::TaskGroup;
@@ -297,15 +297,7 @@ fn build_plan(
             WorkflowEvent::PullRequest | WorkflowEvent::Fork | WorkflowEvent::Local => Trust::Pr,
             WorkflowEvent::Push | WorkflowEvent::MergeGroup => Trust::Trusted,
         },
-        baseline: PlanBaseline {
-            status: BaselineStatus::Unavailable,
-            base_commit: None,
-            run_id: None,
-            artifact_id: None,
-            artifact_name: None,
-            manifest_digest: None,
-            reason: Some("baseline_lookup_deferred".to_owned()),
-        },
+        baseline: PlanBaseline::unavailable(Some("baseline_lookup_deferred"))?,
         generator,
         packages: plan_packages(discovery, &selected_ids),
         obligations,
