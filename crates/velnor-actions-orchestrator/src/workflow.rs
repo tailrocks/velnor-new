@@ -201,6 +201,7 @@ pub(crate) fn prepare_rust_components_step(
         .map_err(|problem| OrchestratorError::Contract { problem })?;
     Ok(Step {
         name: PREPARE_RUST_COMPONENTS_STEP.to_owned(),
+        condition: None,
         kind: StepKind::Shell { run, env },
     })
 }

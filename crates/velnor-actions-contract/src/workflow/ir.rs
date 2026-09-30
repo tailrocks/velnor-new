@@ -1,5 +1,6 @@
 //! Stack-neutral GitHub Actions workflow IR.
 use super::jobs::ScheduleTrigger;
+use super::permissions::{PermissionLevel, Permissions};
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -56,57 +57,6 @@ impl DispatchInput {
     pub const INPUT_TYPE: &'static str = "string";
 }
 
-/// One GitHub token permission scope level.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum PermissionLevel {
-    /// Read-only access.
-    Read,
-    /// Read-write access.
-    Write,
-    /// No access.
-    None,
-}
-
-/// Workflow or job permissions (typed scopes; renderer emits YAML).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Permissions {
-    /// Repository contents scope.
-    pub contents: PermissionLevel,
-    /// Pull-requests scope.
-    pub pull_requests: PermissionLevel,
-    /// OIDC token scope (trusted publishing only).
-    pub id_token: PermissionLevel,
-    /// Actions scope.
-    pub actions: PermissionLevel,
-}
-
-impl Permissions {
-    /// True when every scope is `write` (always rejected).
-    #[must_use]
-    pub fn is_write_all(&self) -> bool {
-        [
-            self.contents,
-            self.pull_requests,
-            self.id_token,
-            self.actions,
-        ]
-        .iter()
-        .all(|level| matches!(level, PermissionLevel::Write))
-    }
-}
-
-impl Default for Permissions {
-    /// CI default: `contents`/`actions` read, everything else none.
-    fn default() -> Self {
-        Self {
-            contents: PermissionLevel::Read,
-            pull_requests: PermissionLevel::None,
-            id_token: PermissionLevel::None,
-            actions: PermissionLevel::Read,
-        }
-    }
-}
 /// Concurrency group.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Concurrency {
@@ -137,11 +87,26 @@ pub struct Job {
     /// Ordered steps.
     pub steps: Vec<Step>,
 }
+/// Runtime gate for cache saves: pushes only (trusted writer scope).
+///
+/// `pull_request` runs — same-repo or fork — restore read-only: the pinned
+/// cache actions have no PR-scoped save support, so a PR save could never
+/// promote safely. Push runs save into the repository that owns the run
+/// (GitHub cache scope is per-repo), keeping fork pushes confined to the
+/// fork. The Mise adapter's trust predicates implement this same policy
+/// over runtime values; this string is its generation-time spelling.
+pub const CACHE_SAVE_CONDITION: &str = "github.event_name == 'push'";
+/// `with:` spelling of [`CACHE_SAVE_CONDITION`] for boolean action inputs.
+pub const CACHE_SAVE_CONDITION_EXPR: &str = "${{ github.event_name == 'push' }}";
+
 /// One workflow step.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Step {
     /// Step name.
     pub name: String,
+    /// Run condition (`if`), serialized by the workflow renderer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub condition: Option<String>,
     /// Step payload.
     #[serde(flatten)]
     pub kind: StepKind,
@@ -348,6 +313,14 @@ impl Step {
             return Err(ContractError::identity(
                 "step.name",
                 format!("empty_name:{job}"),
+            ));
+        }
+        if let Some(condition) = &self.condition
+            && (condition.trim().is_empty() || condition.bytes().any(|b| b == b'\n' || b == b'\r'))
+        {
+            return Err(ContractError::identity(
+                "step.condition",
+                format!("bad_condition:{job}"),
             ));
         }
         match &self.kind {

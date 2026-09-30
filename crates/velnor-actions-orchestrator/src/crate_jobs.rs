@@ -319,6 +319,7 @@ fn obligation_step(
     let env = crate::matrix_step::task_step_env(catalog, &identity)?;
     Ok(Step {
         name: obligation.step_name.clone(),
+        condition: None,
         kind: StepKind::Shell {
             run: obligation.run.clone(),
             env,

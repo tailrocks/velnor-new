@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
     Job, Permissions, Step, StepKind, Trigger, WorkflowIr,
-    workflow::ir::{DispatchInput, PermissionLevel},
+    workflow::{ir::DispatchInput, permissions::PermissionLevel},
 };
 
 use crate::{
@@ -267,7 +267,10 @@ fn step_to_yaml(
                 steps::scan_for_private_subcommands(value)?;
             }
             let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
-            if uses == steps::UPLOAD_ARTIFACT_USES {
+            if let Some(condition) = &step.condition {
+                steps::scan_for_private_subcommands(condition)?;
+                entries.push(("if".to_owned(), Yaml::str(condition.clone())));
+            } else if uses == steps::UPLOAD_ARTIFACT_USES {
                 entries.push((
                     "if".to_owned(),
                     Yaml::str(crate::render::FINAL_CONDITION.to_owned()),
@@ -290,6 +293,10 @@ fn step_to_yaml(
             commands::validate_command_argv(run)?;
             commands::validate_env(env)?;
             let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
+            if let Some(condition) = &step.condition {
+                steps::scan_for_private_subcommands(condition)?;
+                entries.push(("if".to_owned(), Yaml::str(condition.clone())));
+            }
             if !env.is_empty() {
                 let vars: Vec<(String, Yaml)> = env
                     .iter()
@@ -306,6 +313,10 @@ fn step_to_yaml(
         StepKind::Internal { operation } => {
             let (op, target) = steps::split_internal_operation(operation)?;
             let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
+            if let Some(condition) = &step.condition {
+                steps::scan_for_private_subcommands(condition)?;
+                entries.push(("if".to_owned(), Yaml::str(condition.clone())));
+            }
             if job_id == FINAL_JOB_ID && operation == steps::FETCH_OPERATION {
                 entries.push(("continue-on-error".to_owned(), Yaml::Bool(true)));
             }

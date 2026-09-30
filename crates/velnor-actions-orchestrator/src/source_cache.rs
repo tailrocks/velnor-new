@@ -126,6 +126,10 @@ fn sources_step(
     } else {
         "Save Cargo sources".to_owned()
     };
+    if !restore {
+        step.condition =
+            Some(velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION.to_owned());
+    }
     Ok(step)
 }
 
@@ -168,6 +172,7 @@ pub(crate) fn rust_cache_step(shared_key: &str, save_if: bool) -> Result<Step, O
     validate_action_inputs(&rust_cache_inputs_schema(), &with).map_err(OrchestratorError::from)?;
     Ok(Step {
         name: "Restore Cargo registry".to_owned(),
+        condition: None,
         kind: StepKind::Action { uses, with },
     })
 }

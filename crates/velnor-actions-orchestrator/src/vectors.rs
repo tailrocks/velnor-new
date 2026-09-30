@@ -199,6 +199,7 @@ pub(crate) fn custom_task_steps(allowlist: &[String]) -> Result<Vec<Step>, Orche
             })?;
             Ok(Step {
                 name: format!("Custom task {task}"),
+                condition: None,
                 kind: StepKind::Shell {
                     run,
                     env: BTreeMap::new(),

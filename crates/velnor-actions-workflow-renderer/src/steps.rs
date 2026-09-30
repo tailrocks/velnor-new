@@ -116,6 +116,7 @@ pub fn checkout_step(uses: &str) -> Result<Step, RenderError> {
     let with = BTreeMap::from([("persist-credentials".to_owned(), "false".to_owned())]);
     Ok(Step {
         name: "Checkout".to_owned(),
+        condition: None,
         kind: StepKind::Action {
             uses: uses.to_owned(),
             with,
@@ -141,6 +142,7 @@ pub fn action_step(
     }
     Ok(Step {
         name: name.to_owned(),
+        condition: None,
         kind: StepKind::Action {
             uses: uses.to_owned(),
             with,
@@ -163,6 +165,7 @@ pub fn shell_step(
     scan_for_private_subcommands(name)?;
     Ok(Step {
         name: name.to_owned(),
+        condition: None,
         kind: StepKind::Shell { run: argv, env },
     })
 }
@@ -320,6 +323,7 @@ pub fn internal_step(name: &str, operation: &str) -> Result<Step, RenderError> {
     scan_for_private_subcommands(name)?;
     Ok(Step {
         name: name.to_owned(),
+        condition: None,
         kind: StepKind::Internal {
             operation: operation.to_owned(),
         },
@@ -336,6 +340,7 @@ pub fn write_request_step(target: &str) -> Result<Step, RenderError> {
     }
     Ok(Step {
         name: "Write request".to_owned(),
+        condition: None,
         kind: StepKind::Internal {
             operation: format!("{WRITE_REQUEST_OPERATION}:{target}"),
         },
@@ -347,6 +352,7 @@ pub fn write_request_step(target: &str) -> Result<Step, RenderError> {
 pub fn plan_step() -> Step {
     Step {
         name: "Plan".to_owned(),
+        condition: None,
         kind: StepKind::Internal {
             operation: PLAN_OPERATION.to_owned(),
         },
@@ -358,6 +364,7 @@ pub fn plan_step() -> Step {
 pub fn merge_step() -> Step {
     Step {
         name: "Merge reports".to_owned(),
+        condition: None,
         kind: StepKind::Internal {
             operation: MERGE_OPERATION.to_owned(),
         },

@@ -88,7 +88,7 @@ fn strict_inserts_setup_before_mise_exec() -> Result<(), RenderError> {
         "install: \"false\"".to_owned(),
         "env: \"false\"".to_owned(),
         "cache: \"true\"".to_owned(),
-        "cache_save: \"true\"".to_owned(),
+        "cache_save: ${{ github.event_name == 'push' }}".to_owned(),
         "cache_key: mise-v1-".to_owned(),
     ] {
         assert!(text.contains(&line), "missing {line}:\n{text}");
@@ -188,6 +188,7 @@ fn strict_rejects_setup_misuse() -> Result<(), RenderError> {
     );
     let malformed = velnor_actions_contract::Step {
         name: SETUP_MISE_NAME.to_owned(),
+        condition: None,
         kind: velnor_actions_contract::StepKind::Action {
             uses: MISE_USES.to_owned(),
             with: BTreeMap::from([
