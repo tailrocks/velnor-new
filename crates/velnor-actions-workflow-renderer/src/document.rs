@@ -8,7 +8,7 @@ use velnor_actions_contract::{Job, Step, StepKind, Trigger, WorkflowIr};
 
 use crate::{
     RenderError, commands,
-    render::{ALINT_JOB_ID, ALINT_USES, FINAL_JOB_ID, RenderContext},
+    render::{FINAL_JOB_ID, RenderContext},
     steps::{self, INTERNAL_OP_ENV, REQUEST_FILE_ENV},
     yaml::Yaml,
 };
@@ -19,9 +19,10 @@ pub(crate) fn workflow_to_yaml(
     jobs: &BTreeMap<String, Job>,
     ctx: &RenderContext,
 ) -> Result<Yaml, RenderError> {
+    let needs_env = needs_channel_env(jobs)?;
     let mut rendered_jobs = Vec::with_capacity(jobs.len());
     for (id, job) in jobs {
-        rendered_jobs.push((id.clone(), job_to_yaml(id, job, ctx)?));
+        rendered_jobs.push((id.clone(), job_to_yaml(id, job, ctx, needs_env.as_ref())?));
     }
     Ok(Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(ir.name.clone())),
@@ -78,8 +79,30 @@ fn triggers_to_yaml(triggers: &Trigger) -> Yaml {
     ])
 }
 
+/// Derive the merge `needs` channel from the finalized job set.
+///
+/// The inventory is every job except the gate itself; a lone gate has
+/// nothing to conclude over and fails closed instead of emitting a
+/// channel the merge would judge as `empty_needs`.
+fn needs_channel_env(
+    jobs: &BTreeMap<String, Job>,
+) -> Result<Option<(String, String)>, RenderError> {
+    if !jobs.contains_key(FINAL_JOB_ID) {
+        return Ok(None);
+    }
+    let conclusions =
+        velnor_actions_contract::NeedsConclusions::from_finalized_jobs(FINAL_JOB_ID, jobs)
+            .map_err(RenderError::Contract)?;
+    Ok(Some(conclusions.channel_env()))
+}
+
 /// Render one job: name, runs-on, needs, condition, steps.
-fn job_to_yaml(id: &str, job: &Job, ctx: &RenderContext) -> Result<Yaml, RenderError> {
+fn job_to_yaml(
+    id: &str,
+    job: &Job,
+    ctx: &RenderContext,
+    needs_env: Option<&(String, String)>,
+) -> Result<Yaml, RenderError> {
     steps::scan_for_private_subcommands(&job.display_name)?;
     let mut entries = vec![
         ("name".to_owned(), Yaml::str(job.display_name.clone())),
@@ -99,7 +122,7 @@ fn job_to_yaml(id: &str, job: &Job, ctx: &RenderContext) -> Result<Yaml, RenderE
     }
     let mut rendered_steps = Vec::with_capacity(job.steps.len());
     for step in &job.steps {
-        rendered_steps.push(step_to_yaml(id, step, ctx)?);
+        rendered_steps.push(step_to_yaml(id, step, ctx, needs_env)?);
     }
     entries.push(("steps".to_owned(), Yaml::Seq(rendered_steps)));
     Ok(Yaml::Map(entries))
@@ -122,8 +145,15 @@ fn is_verdict_download(step: &Step) -> bool {
 /// run directory and authenticates `gh` with the job token plus the
 /// repository slug (fixed literals, never caller input). Token hygiene
 /// still gates IR-level `GH_TOKEN` (see `support`); this render-time
-/// pair is fixed by construction for the fetch step only.
-fn internal_env(op: &str, target: &str, ctx: &RenderContext) -> Yaml {
+/// pair is fixed by construction for the fetch step only. Merge-family
+/// steps in the final job additionally carry the finalized `needs`
+/// conclusions channel so the merge never sees `missing_needs_channel`.
+fn internal_env(
+    op: &str,
+    target: &str,
+    ctx: &RenderContext,
+    needs_env: Option<&(String, String)>,
+) -> Yaml {
     if op == steps::FETCH_OPERATION {
         return Yaml::Map(vec![
             ("GH_REPO".to_owned(), Yaml::str("${{ github.repository }}")),
@@ -132,23 +162,26 @@ fn internal_env(op: &str, target: &str, ctx: &RenderContext) -> Yaml {
         ]);
     }
     let request = format!("{}/{target}-request.json", ctx.request_dir);
-    Yaml::Map(vec![
-        (INTERNAL_OP_ENV.to_owned(), Yaml::str(op.to_owned())),
-        (REQUEST_FILE_ENV.to_owned(), Yaml::str(request)),
-    ])
+    let mut env = vec![(INTERNAL_OP_ENV.to_owned(), Yaml::str(op.to_owned()))];
+    if let Some((key, value)) = needs_env {
+        env.push((key.clone(), Yaml::str(value.clone())));
+    }
+    env.push((REQUEST_FILE_ENV.to_owned(), Yaml::str(request)));
+    Yaml::Map(env)
 }
 
 /// Render one step; internal ops become env plus request file, never argv.
-/// The pinned Alint tag is accepted only inside the `velnor-alint` job.
-fn step_to_yaml(job_id: &str, step: &Step, ctx: &RenderContext) -> Result<Yaml, RenderError> {
+/// Every action ref (including the Alint pin) must be a full-SHA pin.
+fn step_to_yaml(
+    job_id: &str,
+    step: &Step,
+    ctx: &RenderContext,
+    needs_env: Option<&(String, String)>,
+) -> Result<Yaml, RenderError> {
     steps::scan_for_private_subcommands(&step.name)?;
     match &step.kind {
         StepKind::Action { uses, with } => {
-            if uses == ALINT_USES && job_id == ALINT_JOB_ID {
-                steps::scan_for_private_subcommands(uses)?;
-            } else {
-                steps::validate_uses(uses)?;
-            }
+            steps::validate_uses(uses)?;
             for (key, value) in with {
                 steps::scan_for_private_subcommands(key)?;
                 steps::scan_for_private_subcommands(value)?;
@@ -196,7 +229,10 @@ fn step_to_yaml(job_id: &str, step: &Step, ctx: &RenderContext) -> Result<Yaml, 
             if job_id == FINAL_JOB_ID && operation == steps::FETCH_OPERATION {
                 entries.push(("continue-on-error".to_owned(), Yaml::Bool(true)));
             }
-            entries.push(("env".to_owned(), internal_env(op, target, ctx)));
+            let channel = (job_id == FINAL_JOB_ID && target == steps::MERGE_OPERATION)
+                .then_some(needs_env)
+                .flatten();
+            entries.push(("env".to_owned(), internal_env(op, target, ctx, channel)));
             entries.push((
                 "run".to_owned(),
                 Yaml::str(commands::quote_run_arg(&ctx.staged_binary)),

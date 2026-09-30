@@ -1,6 +1,6 @@
 //! Remediation cases: TOOL/VER audit rows.
 use velnor_actions_contract::cachekey::{PlatformInputs, platform_id};
-use velnor_actions_contract::config::{ALINT_ACTION_KEY, LATEST_RUNNER_LABEL, OVERRIDABLE_ACTIONS};
+use velnor_actions_contract::config::{LATEST_RUNNER_LABEL, OVERRIDABLE_ACTIONS};
 use velnor_actions_contract::{
     ContractError, FRESHNESS_CLASSES, Finding, FreshnessEntry, FreshnessRequirement,
     FreshnessStatus, GithubRunnerImages, NightlyRecord, PolicyException, RunnerImageEvidence,
@@ -191,8 +191,8 @@ fn ver_freshness_entry_schema() {
 }
 
 #[test]
-fn ver_overridable_actions_are_exact_seven() {
-    assert_eq!(OVERRIDABLE_ACTIONS.len(), 7);
+fn ver_overridable_actions_are_exact_eight() {
+    assert_eq!(OVERRIDABLE_ACTIONS.len(), 8);
     assert_eq!(
         OVERRIDABLE_ACTIONS,
         [
@@ -203,10 +203,9 @@ fn ver_overridable_actions_are_exact_seven() {
             "actions/cache/restore",
             "actions/cache/save",
             "jdx/mr-boxington-action",
+            "asamarts/alint",
         ]
     );
-    assert_eq!(ALINT_ACTION_KEY, "asamarts/alint");
-    assert!(!OVERRIDABLE_ACTIONS.contains(&ALINT_ACTION_KEY));
 }
 
 #[test]

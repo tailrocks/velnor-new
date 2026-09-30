@@ -1,4 +1,5 @@
 //! Final fan-in: fetch placement, publish, tolerant downloads, no wildcards.
+use velnor_actions_contract::NeedsConclusions;
 use velnor_actions_workflow_renderer::{
     RenderError, checkout_step, merge_step, plan_step, write_request_step,
 };
@@ -79,6 +80,59 @@ fn verdict_downloads_continue_and_publish_always_runs() -> Result<(), RenderErro
         "{publish}"
     );
     assert!(publish.contains("final-report.json"), "{publish}");
+    Ok(())
+}
+
+#[test]
+fn merge_steps_carry_needs_channel_matching_final_needs() -> Result<(), RenderError> {
+    let plan = job(
+        "plan",
+        "Plan",
+        Vec::new(),
+        vec![
+            checkout_step(&checkout_pin())?,
+            acquire_fixture()?,
+            plan_step(),
+        ],
+    );
+    let (final_id, mut final_job) = job(
+        "required",
+        "Required",
+        vec!["plan".to_owned()],
+        vec![
+            acquire_fixture()?,
+            write_request_step("merge-v1")?,
+            merge_step(),
+        ],
+    );
+    final_job.condition = Some("always()".to_owned());
+    let ir = fixture_ir(vec![plan, (final_id, final_job)]);
+    let text = strict(&ir, &fixture_ctx())?;
+    assert_eq!(
+        text.matches("VELNOR_NEEDS_JSON").count(),
+        2,
+        "write-request plus merge carry the channel:\n{text}"
+    );
+    let merge = step_block(&text, "Merge reports");
+    assert!(
+        merge.contains("VELNOR_NEEDS_JSON: ${{ toJSON(needs) }}"),
+        "merge lacks the channel:\n{merge}"
+    );
+    let plan_region = text.split("  required:").next().unwrap_or_default();
+    assert!(
+        plan_region.contains("- name: Write request"),
+        "plan has its own write-request:\n{text}"
+    );
+    assert!(
+        !plan_region.contains("VELNOR_NEEDS_JSON"),
+        "plan write-request must not carry the merge channel:\n{text}"
+    );
+    // Consumer IR carries no support jobs, so the fixture jobs are the
+    // finalized set the renderer derives the channel from.
+    let conclusions = NeedsConclusions::from_finalized_jobs("required", &ir.jobs)
+        .map_err(RenderError::Contract)?;
+    assert_eq!(conclusions.inventory, vec!["plan".to_owned()]);
+    assert!(conclusions.gate_matches(&ir));
     Ok(())
 }
 
