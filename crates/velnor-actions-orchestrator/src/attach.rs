@@ -188,7 +188,7 @@ mod tests {
                 }],
             },
             mise_bootstrap: MiseBootstrap {
-                version: "2026.9.16".to_owned(),
+                version: "2026.9.18".to_owned(),
                 artifact: "https://example.invalid/m".to_owned(),
                 sha256: "b".repeat(64),
             },

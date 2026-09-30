@@ -1,13 +1,13 @@
 {
   "actions": [
     {
-      "checked_at": "2026-09-30T17:59:44Z",
+      "checked_at": "2026-09-30T18:51:30Z",
       "key": "jdx/mise-action",
       "latest": "v5.0.0",
-      "pinned_sha": "c2a87611a18de5b3828c5652fe268e992400cb5c",
-      "pinned_version": "v4.3.0",
-      "qualified_sha": "c2a87611a18de5b3828c5652fe268e992400cb5c",
-      "qualified_version": "v4.3.0",
+      "pinned_sha": "9149ea85001c7435d5a66bb127d6a1b6227cb0a5",
+      "pinned_version": "v5.0.0",
+      "qualified_sha": "9149ea85001c7435d5a66bb127d6a1b6227cb0a5",
+      "qualified_version": "v5.0.0",
       "source": "https://api.github.com/repos/jdx/mise-action/releases/latest",
       "status": "current"
     },
@@ -90,7 +90,7 @@
     }
   ],
   "check_interval_hours": 24,
-  "checked_at": "2026-09-28",
+  "checked_at": "2026-09-30T18:51:30Z",
   "exceptions": [],
   "max_exception_days": 14,
   "runner": {
@@ -107,11 +107,11 @@
   "temporary_holds": [],
   "tools": [
     {
-      "checked_at": "2026-09-30T17:59:44Z",
+      "checked_at": "2026-09-30T18:51:30Z",
       "latest": "v2026.9.18",
       "name": "mise",
-      "pinned": "2026.9.16",
-      "qualified": "2026.9.16",
+      "pinned": "2026.9.18",
+      "qualified": "2026.9.18",
       "source": "https://api.github.com/repos/jdx/mise/releases/latest",
       "status": "current"
     },
@@ -125,20 +125,20 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-09-30T17:59:44Z",
+      "checked_at": "2026-09-30T18:51:30Z",
       "latest": "v1.21.0",
       "name": "mr-boxington",
-      "pinned": "1.19.0",
-      "qualified": "1.19.0",
+      "pinned": "1.21.0",
+      "qualified": "1.21.0",
       "source": "https://api.github.com/repos/jdx/mr-boxington/releases/latest",
       "status": "current"
     },
     {
-      "checked_at": "2026-09-30T17:59:44Z",
+      "checked_at": "2026-09-30T18:51:30Z",
       "latest": "v2.102.0",
       "name": "gh",
-      "pinned": "2.101.0",
-      "qualified": "2.101.0",
+      "pinned": "2.102.0",
+      "qualified": "2.102.0",
       "source": "https://api.github.com/repos/cli/cli/releases/latest",
       "status": "current"
     },

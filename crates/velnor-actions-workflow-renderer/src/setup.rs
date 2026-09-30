@@ -80,7 +80,7 @@ pub fn mise_setup_step(setup: &MiseSetup) -> Result<Step, RenderError> {
     )
 }
 
-/// True for catalog version spellings (`2026.9.16`); never `latest`.
+/// True for catalog version spellings (`2026.9.18`); never `latest`.
 fn is_catalog_version(value: &str) -> bool {
     !value.is_empty()
         && value != "latest"

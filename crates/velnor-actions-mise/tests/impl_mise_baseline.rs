@@ -77,7 +77,7 @@ fn baseline_argv_runs_pinned_gh() -> Result<(), String> {
             "--no-env",
             "--no-hooks",
             "exec",
-            "gh@2.101.0",
+            "gh@2.102.0",
             "--",
             "gh",
             "run",
@@ -97,7 +97,7 @@ fn baseline_argv_runs_pinned_gh() -> Result<(), String> {
         .download_argv(&catalog, 12345, &dir)
         .map_err(|err| err.to_string())?;
     assert_eq!(argv[0], OsString::from("mise"));
-    assert!(argv.iter().any(|arg| arg == "gh@2.101.0"));
+    assert!(argv.iter().any(|arg| arg == "gh@2.102.0"));
     let name = argv
         .iter()
         .position(|arg| arg == "--name")

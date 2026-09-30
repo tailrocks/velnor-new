@@ -49,10 +49,10 @@ fn mbx_proof_reports_tool_version_and_invocation() -> Result<(), String> {
     assert_eq!(proof.driver(), RouteDriver::Mbx);
     assert_eq!(
         proof.specs(),
-        &["rust@1.98.1".to_owned(), "mr-boxington@1.19.0".to_owned()]
+        &["rust@1.98.1".to_owned(), "mr-boxington@1.21.0".to_owned()]
     );
     let invocation = proof.invocation(&pinned());
-    assert!(invocation.iter().any(|arg| arg == "mr-boxington@1.19.0"));
+    assert!(invocation.iter().any(|arg| arg == "mr-boxington@1.21.0"));
     assert_eq!(
         invocation.last(),
         Some(&OsString::from("--version")),
