@@ -208,6 +208,7 @@ fn build_final(request: &MergeRequest, plan: &Plan) -> Result<FinalReport, Orche
         };
         if shards_failed(entry, report.empty_partition, plan, request) {
             signals.planning_failed = true;
+            miss_reasons.insert("cache_corrupt".to_owned());
             uncovered += 1;
             continue;
         }

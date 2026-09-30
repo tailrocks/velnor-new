@@ -129,6 +129,7 @@ pub(crate) fn check_plan_evidence(
         .is_some_and(|limits| validate_budgets(limits).is_err())
     {
         signals.planning_failed = true;
+        miss_reasons.insert("cache_corrupt".to_owned());
     }
     if request
         .reference_task_ids
@@ -136,6 +137,7 @@ pub(crate) fn check_plan_evidence(
         .is_some_and(|reference| !reference_matches(reference, &plan.task_ids))
     {
         signals.planning_failed = true;
+        miss_reasons.insert("cache_corrupt".to_owned());
     }
 }
 
