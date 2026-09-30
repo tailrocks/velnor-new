@@ -11,11 +11,14 @@ Each subdir is self-contained (<=15 small files, no target/).
 | handwritten-workflow/ | hand-written ci.yml w/ mbx | mbx pre-generation + warning |
 | hostile-config/ | unknown keys, bad types, traversal | REJECT validation |
 | conflicting-runners/ | cargo test AND nextest scripts | REJECT ambiguous_test_runner |
-| symlink-escape/ | outside + loop symlinks | refuse; plan byte-identical |
 | empty-suite/ | crate, no tests | valid_no_test_targets |
 
 Rules: valid TOML where expected-valid; hostile-config
 parses as TOML but MUST fail schema validation.
-Symlinks: escape -> /tmp/velnor-fixture-outside,
-loop -> loop (cycle). Recreate escape target with
-`mkdir -p /tmp/velnor-fixture-outside` if missing.
+No committed symlinks: symlink hazards (escape, loop)
+are built dynamically in TempDirs by
+`index_refuses_symlink_escape` / `index_refuses_symlink_loop`
+(`velnor-actions-rust` tests). A static loop previously broke
+every generic tree-walker (cargo-machete scan, mise-action
+`**` cache-key glob in run 36753845572), so hazards must
+never rest in the tree.
