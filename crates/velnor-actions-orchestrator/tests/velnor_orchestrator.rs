@@ -1,6 +1,7 @@
 //! Integration test entry point; cases live in the sibling files.
 mod impl_common;
 mod impl_config_internal;
+mod impl_crate_graph;
 mod impl_e2e_wiring;
 mod impl_final_orch;
 mod impl_gapc;

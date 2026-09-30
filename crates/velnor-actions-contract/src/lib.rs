@@ -78,16 +78,21 @@ pub use targets::{
 pub use tooling::ToolIdentity;
 pub use vcs::VcsInputs;
 pub use workflow::{
-    BaselineProof, BaselineStatus, CacheLayer, CacheOutcome, CacheResult, CandidateReport,
-    CandidateStatus, Concurrency, EntryCacheIds, ExecuteTaskIds, ExecuteTaskRef,
-    FINAL_JSON_FILENAME, FinalCounts, FinalReport, FinalStatus, Job, MATRIX_JSON_FILENAME,
-    ManifestTaskProof, MatrixEntry, MatrixReport, MatrixStatus, MatrixTaskEntry, NotSelectedReason,
-    ObligationDecision, PLAN_JSON_FILENAME, Permissions, Plan, PlanBaseline, PlanGenerator,
-    PlanMatrix, PlanObligation, PlanPackage, PlanRunner, RequiredJobResult, Step, StepKind,
-    TaskReport, TaskStatus, TaskTiming, Trigger, Trust, WorkflowEvent, WorkflowIr,
-    candidate_report_id_for_run, check_matrix_agreement, final_report_id_for_run,
-    final_report_relpath, join_runner_temp, matrix_json_bytes, matrix_report_relpath,
-    plan_json_bytes, task_report_relpath, validate_candidate_report_id, validate_final_report_id,
+    BaselineProof, BaselineStatus, CI_WORKFLOW_PATH, CacheLayer, CacheOutcome, CacheResult,
+    CandidateReport, CandidateStatus, Concurrency, CrateJob, CrateObligation, EntryCacheIds,
+    ExecuteTaskIds, ExecuteTaskRef, FINAL_JSON_FILENAME, FRESHNESS_CRON_WEEKLY,
+    FRESHNESS_WORKFLOW_PATH, FinalCounts, FinalReport, FinalStatus, Job, MATRIX_JSON_FILENAME,
+    ManifestTaskProof, MatrixEntry, MatrixReport, MatrixStatus, MatrixTaskEntry, NEEDS_CHANNEL_ENV,
+    NEEDS_CHANNEL_EXPRESSION, NeedsConclusions, NotSelectedReason, ObligationDecision,
+    PLAN_DISPLAY_NAME, PLAN_JOB_ID, PLAN_JSON_FILENAME, Permissions, Plan, PlanBaseline,
+    PlanGenerator, PlanMatrix, PlanObligation, PlanPackage, PlanRunner, REQUIRED_CONDITION,
+    REQUIRED_DISPLAY_NAME, REQUIRED_JOB_ID, RequiredCheckMigration, RequiredJobResult,
+    STALE_WORKFLOW_PATHS, ScheduleTrigger, Step, StepKind, TaskReport, TaskStatus, TaskTiming,
+    Trigger, Trust, ValidatorKind, WORKFLOW_DISPLAY_NAME, WorkflowEvent, WorkflowIr,
+    assign_crate_job_ids, candidate_report_id_for_run, check_matrix_agreement, crate_display_label,
+    crate_display_name, final_report_id_for_run, final_report_relpath, join_runner_temp,
+    matrix_json_bytes, matrix_report_relpath, plan_json_bytes, slugify_segment,
+    task_report_relpath, validate_candidate_report_id, validate_final_report_id, validate_job_id,
     validate_matrix_run,
 };
 

@@ -97,6 +97,7 @@ mod tests {
             uses_network: false,
             uses_clock: false,
             uses_random: false,
+            nextest_profile: "default".to_owned(),
         }
     }
 

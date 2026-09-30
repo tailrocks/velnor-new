@@ -101,11 +101,8 @@ fn orch_gen_plan_matches_generated_tree() -> TestResult {
         report.files_written,
         [".github/actionlint.yaml", ".github/workflows/velnor.yml"]
     );
-    assert!(
-        plan.contains("Rust crate matrix"),
-        "matrix wording:\n{plan}"
-    );
-    assert!(yaml.contains("matrix:"), "matrix presence parity");
+    assert!(plan.contains("1 Rust crate job"), "crate wording:\n{plan}");
+    assert!(yaml.contains("  rust-demo:"), "crate presence parity");
     Ok(())
 }
 

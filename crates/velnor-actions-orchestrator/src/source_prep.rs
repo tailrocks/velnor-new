@@ -1,4 +1,4 @@
-//! Plan- and task-job Cargo source preparation ahead of locked/offline consumers.
+//! Plan- and crate-job Cargo source preparation ahead of locked/offline consumers.
 //!
 //! Gate 1 orders resolution after preparation: `cargo fetch --locked`
 //! populates every target's sources from the network once, so the later
@@ -38,17 +38,17 @@ pub(crate) fn lockful_roots(root: &Path, workspaces: &[PlannedWorkspace]) -> Vec
     roots
 }
 
-/// One `cargo fetch --locked` step per lockful workspace root for task jobs.
+/// One `cargo fetch --locked` step per lockful workspace root for crate jobs.
 ///
 /// Fetched sources land in the `MISE_CARGO_HOME` this step runs with,
-/// so the env is built by the same validated constructor `Run task`
-/// uses: fetch and consumer match by construction, never by a caller
-/// passing the right map.
+/// so the env is built by the same validated constructor obligation
+/// steps use: fetch and consumer match by construction, never by a
+/// caller passing the right map.
 /// # Errors
 ///
 /// Returns contract/render errors when the Mise adapter or the step-env
 /// contract rejects the request.
-pub(crate) fn fetch_steps_for_task(
+pub(crate) fn fetch_steps_for_crate(
     catalog: &ToolCatalog,
     roots: &[String],
 ) -> Result<Vec<Step>, OrchestratorError> {
@@ -164,9 +164,9 @@ mod tests {
     }
 
     #[test]
-    fn task_fetch_carries_full_validated_contract() {
+    fn crate_fetch_carries_full_validated_contract() {
         let catalog = ToolCatalog::pinned();
-        let steps = fetch_steps_for_task(&catalog, &[String::new()]).expect("fetch steps");
+        let steps = fetch_steps_for_crate(&catalog, &[String::new()]).expect("fetch steps");
         let (_, got) = shell_parts(&steps[0].kind).expect("fetch must be a shell step");
         for (key, value) in [
             ("MISE_NO_CONFIG", "1"),
@@ -179,13 +179,13 @@ mod tests {
             assert_eq!(
                 got.get(key).map(String::as_str),
                 Some(value),
-                "task fetch must carry the validated policy pair {key}"
+                "crate fetch must carry the validated policy pair {key}"
             );
         }
         for key in ["MISE_RUSTUP_HOME", "MISE_CARGO_HOME", "RUSTUP_TOOLCHAIN"] {
             assert!(
                 got.get(key).is_some_and(|value| !value.is_empty()),
-                "task fetch must carry a non-empty {key}"
+                "crate fetch must carry a non-empty {key}"
             );
         }
         for key in [
@@ -196,12 +196,15 @@ mod tests {
         ] {
             assert!(
                 !got.contains_key(key),
-                "task fetch must never carry a credential {key}"
+                "crate fetch must never carry a credential {key}"
             );
         }
-        let shared =
-            crate::matrix_step::task_step_env(&catalog, &BTreeMap::new()).expect("shared task env");
-        assert_eq!(got, &shared, "fetch must match Run task by construction");
+        let shared = crate::matrix_step::task_step_env(&catalog, &BTreeMap::new())
+            .expect("shared crate env");
+        assert_eq!(
+            got, &shared,
+            "fetch must match obligation steps by construction"
+        );
     }
 
     #[test]
@@ -228,8 +231,8 @@ mod tests {
     #[test]
     fn lockless_roots_emit_no_steps() {
         let catalog = ToolCatalog::pinned();
-        let task = fetch_steps_for_task(&catalog, &[]).expect("task fetch steps");
+        let crates = fetch_steps_for_crate(&catalog, &[]).expect("crate fetch steps");
         let plan = fetch_steps_for_plan(&catalog, &[]).expect("plan fetch steps");
-        assert!(task.is_empty() && plan.is_empty());
+        assert!(crates.is_empty() && plan.is_empty());
     }
 }

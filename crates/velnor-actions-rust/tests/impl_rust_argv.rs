@@ -1,8 +1,9 @@
 //! Cargo payload argv shape cases (moved from the orchestrator).
 use velnor_actions_rust::tasks::{
-    TaskGroup, TaskKind, cargo_payload_argv, entry_metadata, evidence_id,
+    TaskGroup, TaskKind, cargo_payload_argv, cargo_payload_with_profile, entry_metadata,
+    evidence_id,
 };
-use velnor_actions_rust::{Evidence, EvidenceStrength};
+use velnor_actions_rust::{Evidence, EvidenceStrength, NextestProfile};
 
 fn group(kind: TaskKind) -> TaskGroup {
     TaskGroup {
@@ -26,11 +27,20 @@ fn group(kind: TaskKind) -> TaskGroup {
         uses_network: false,
         uses_clock: false,
         uses_random: false,
+        nextest_profile: "default".to_owned(),
     }
 }
 
 fn text(group: &TaskGroup) -> Vec<String> {
     cargo_payload_argv(group)
+        .iter()
+        .map(|s| s.to_string_lossy().into_owned())
+        .collect()
+}
+
+/// Profiled payload argv under an explicit resolved profile.
+fn profiled(group: &TaskGroup, profile: NextestProfile) -> Vec<String> {
+    cargo_payload_with_profile(group, profile)
         .iter()
         .map(|s| s.to_string_lossy().into_owned())
         .collect()
@@ -130,11 +140,16 @@ fn entry_metadata_carries_driver_runner_and_evidence() {
 
 #[test]
 fn nextest_payload_is_pinned_tool_input() {
+    let mut configured = group(TaskKind::Nextest);
+    configured.nextest_profile = "ci".to_owned();
+    let resolved = NextestProfile::parse(&configured.nextest_profile).expect("valid profile");
     assert_eq!(
-        text(&group(TaskKind::Nextest)),
+        profiled(&configured, resolved),
         [
             "nextest",
             "run",
+            "--profile",
+            "ci",
             "--locked",
             "--offline",
             "--manifest-path",
@@ -147,9 +162,28 @@ fn nextest_payload_is_pinned_tool_input() {
     );
     let mut custom = group(TaskKind::Nextest);
     custom.manifest_key = "crates/demo".to_owned();
+    let resolved = NextestProfile::parse(&custom.nextest_profile).expect("valid profile");
     assert!(
-        text(&custom)
+        profiled(&custom, resolved)
             .windows(2)
             .any(|w| w == ["--manifest-path", "crates/demo/Cargo.toml"])
     );
+    assert!(
+        profiled(&custom, resolved)
+            .windows(2)
+            .any(|w| w == ["--profile", "default"])
+    );
+}
+
+#[test]
+fn unknown_profile_token_fails_closed() {
+    assert_eq!(NextestProfile::parse("ci"), Ok(NextestProfile::Ci));
+    assert_eq!(
+        NextestProfile::parse("default"),
+        Ok(NextestProfile::Default)
+    );
+    for bad in ["", "nightly", "CI", "ci ", "default\n"] {
+        let err = NextestProfile::parse(bad).expect_err("unknown profile");
+        assert!(err.to_string().contains("unknown_profile"), "{err}");
+    }
 }

@@ -54,16 +54,21 @@ fn assert_no_query_or_exposure(text: &str) {
     }
 }
 
-/// Matrix entry count from the `Rust crate matrix: N entries` plan line.
-fn matrix_count(stdout: &str) -> Result<usize, Box<dyn Error>> {
+/// Crate-job count from the `- N Rust crate job(s)` plan line.
+fn crate_count(stdout: &str) -> Result<usize, Box<dyn Error>> {
     for line in stdout.lines() {
-        if let Some(rest) = line.trim().strip_prefix("- Rust crate matrix: ")
-            && let Some(count) = rest.strip_suffix(" entries")
-        {
-            return Ok(count.parse()?);
-        }
+        let Some(rest) = line.trim().strip_prefix("- ") else {
+            continue;
+        };
+        let Some(count) = rest
+            .strip_suffix(" Rust crate jobs")
+            .or_else(|| rest.strip_suffix(" Rust crate job"))
+        else {
+            continue;
+        };
+        return Ok(count.parse()?);
     }
-    Err("matrix count line missing".into())
+    Err("crate count line missing".into())
 }
 
 /// Snapshot every file under `dir` except `.git`, as relative path to bytes.
@@ -149,15 +154,15 @@ fn plan_job_ids_match_generated_workflow() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn plan_reports_full_configured_matrix_in_agreement_with_yaml() -> Result<(), Box<dyn Error>> {
+fn plan_reports_full_configured_crates_in_agreement_with_yaml() -> Result<(), Box<dyn Error>> {
     let tmp = fresh_tempdir("parity-matrix")?;
     init_repo(&tmp)?;
     add_crate_pair(&tmp)?;
     let stdout = plan_stdout(&tmp)?;
     // PAR-10.1 cli half: the full configured count (never narrowed here),
-    // the per-entry kind chain, and the event-time narrowing explanation.
-    let count = matrix_count(&stdout)?;
-    assert!(count > 0, "full matrix must be non-empty:\n{stdout}");
+    // the per-obligation kind chain, and the event-time narrowing explanation.
+    let count = crate_count(&stdout)?;
+    assert_eq!(count, 2, "both crates planned:\n{stdout}");
     assert!(stdout.contains("Each: "), "kind chain missing:\n{stdout}");
     assert!(
         stdout.contains(
@@ -165,7 +170,7 @@ fn plan_reports_full_configured_matrix_in_agreement_with_yaml() -> Result<(), Bo
         ),
         "{stdout}"
     );
-    assert_eq!(plan_stdout(&tmp)?, stdout, "matrix print not deterministic");
+    assert_eq!(plan_stdout(&tmp)?, stdout, "crate print not deterministic");
     let outer = fresh_tempdir("parity-matrix-preview")?;
     let preview = outer.join("preview");
     let output = spawn(
@@ -175,13 +180,16 @@ fn plan_reports_full_configured_matrix_in_agreement_with_yaml() -> Result<(), Bo
     )?;
     assert_eq!(code(&output), 0, "stderr: {:?}", output.stderr);
     let yaml = std::fs::read_to_string(preview.join(".github/workflows/velnor.yml"))?;
-    for marker in ["strategy:", "fail-fast: false", "fromJSON"] {
+    for marker in ["  rust-apple:", "  rust-zebra:", "name: Rust / apple"] {
         assert!(yaml.contains(marker), "yaml lacks {marker}:\n{yaml}");
     }
-    // Ignored work: no matrix in plan and none in YAML (both directions).
+    for marker in ["strategy:", "fail-fast: false", "fromJSON"] {
+        assert!(!yaml.contains(marker), "yaml keeps {marker}:\n{yaml}");
+    }
+    // Ignored work: no crates in plan and none in YAML (both directions).
     ignore_rust(&tmp)?;
     let ignored = plan_stdout(&tmp)?;
-    assert!(!ignored.contains("Rust crate matrix"), "{ignored}");
+    assert!(!ignored.contains("Rust crate job"), "{ignored}");
     assert!(ignored.contains("no matrix entries"), "{ignored}");
     let second = outer.join("second");
     let output = spawn(

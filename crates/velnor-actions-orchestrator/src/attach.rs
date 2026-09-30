@@ -127,10 +127,21 @@ fn after_prepare(steps: &[Step]) -> usize {
 mod tests {
     use super::*;
     use crate::workflow::{CHECKOUT_USES, REQUEST_DIR};
-    use crate::workflow_jobs::{final_job, plan_job, task_job};
+    use crate::workflow_jobs::{final_job, plan_job};
     use std::collections::BTreeMap;
-    use velnor_actions_contract::{Concurrency, Permissions, Trigger};
+    use velnor_actions_contract::{Concurrency, Job, Permissions, Trigger};
     use velnor_actions_workflow_renderer::render::{RenderContext, WORKFLOW_PATH};
+
+    /// Minimal legacy task job covering the task attach branch.
+    fn legacy_task_job() -> Job {
+        Job {
+            display_name: "Velnor Task".to_owned(),
+            runs_on: "ubuntu-26.04".to_owned(),
+            needs: vec![PLAN_JOB_ID.to_owned()],
+            condition: None,
+            steps: vec![crate::workflow::wire_w1::checkout_step().expect("checkout")],
+        }
+    }
 
     /// Bare IR shell shared by the attach fixtures.
     fn bare_ir(jobs: BTreeMap<String, velnor_actions_contract::Job>) -> WorkflowIr {
@@ -182,7 +193,7 @@ mod tests {
             ),
             (
                 "velnor-final".to_owned(),
-                final_job("ubuntu-26.04", false, None, &catalog).expect("final job"),
+                final_job("ubuntu-26.04", &[], None, &catalog).expect("final job"),
             ),
         ]));
         assert!(attach_lock_acquire(&mut ir, &lock, "ubuntu-26.04", "0.1.0").is_ok());
@@ -232,13 +243,11 @@ mod tests {
                     "velnor-plan".to_owned(),
                     plan_job("ubuntu-26.04", None, &catalog, false, false, &[]).expect("plan job"),
                 ),
-                (
-                    "velnor-task".to_owned(),
-                    task_job("ubuntu-26.04", 2, &catalog, false, false, &[]).expect("task job"),
-                ),
+                ("velnor-task".to_owned(), legacy_task_job()),
                 (
                     "velnor-final".to_owned(),
-                    final_job("ubuntu-26.04", true, None, &catalog).expect("final job"),
+                    final_job("ubuntu-26.04", &["rust-demo".to_owned()], None, &catalog)
+                        .expect("final job"),
                 ),
             ])),
             support: None,

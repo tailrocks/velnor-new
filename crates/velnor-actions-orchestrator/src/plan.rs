@@ -3,17 +3,17 @@
 use std::collections::BTreeSet;
 
 use velnor_actions_actionlint::ACTIONLINT_VERSION;
-use velnor_actions_contract::{RunnerSelection, StepKind, WorkflowPolicy};
+use velnor_actions_contract::{RunnerSelection, WorkflowPolicy};
 use velnor_actions_rust::{DetectionStatus, TaskGroup, TaskKind};
 use velnor_actions_workflow_renderer::render::{
-    ACTIONLINT_PATH, MATRIX_NEEDS_JOB_ENV, TASK_JOB_ID, WORKFLOW_PATH,
+    ACTIONLINT_PATH, FINAL_JOB_ID, PLAN_JOB_ID, WORKFLOW_PATH,
 };
 
 use crate::OrchestratorError;
 use crate::discover::local_dep_names;
 use crate::generate::render_staged_tree;
 use crate::prepare::GenerationPreparation;
-use crate::workflow::CHECKOUT_USES;
+use crate::workflow::{CHECKOUT_USES, LINT_JOB_ID};
 
 /// Render the concise deterministic `plan` report from a preparation,
 /// after rendering the full tree in memory and discarding the bytes.
@@ -201,17 +201,17 @@ fn workflow_section(out: &mut String, prep: &GenerationPreparation) {
     for (id, job) in &prep.workflow.ir.jobs {
         push(out, &format!("    - {} ({} steps)", id, job.steps.len()));
     }
-    matrix_lines(out, prep);
-    if has_task_matrix(prep) {
-        push(
+    crate_lines(out, prep);
+    match crate_job_ids(prep).len() {
+        0 => push(out, "  Parallel: single job; no matrix fan-out"),
+        1 => push(
             out,
-            &format!(
-                "  Parallel: up to {} matrix entries; independent crate entries",
-                prep.config.workflow.max_parallel_jobs
-            ),
-        );
-    } else {
-        push(out, "  Parallel: single job; no matrix fan-out");
+            "  Parallel: 1 independent crate job; no matrix fan-out",
+        ),
+        count => push(
+            out,
+            &format!("  Parallel: {count} independent crate jobs; no matrix fan-out"),
+        ),
     }
     critical_path_lines(out, prep);
     clippy_lines(out, prep);
@@ -225,46 +225,53 @@ fn workflow_section(out: &mut String, prep: &GenerationPreparation) {
     );
 }
 
-/// True when the IR task job carries the matrix marker trio.
-fn has_task_matrix(prep: &GenerationPreparation) -> bool {
-    prep.workflow.ir.jobs.get(TASK_JOB_ID).is_some_and(|job| {
-        job.steps.iter().any(|step| {
-            matches!(&step.kind, StepKind::Shell { env, .. } if env.contains_key(MATRIX_NEEDS_JOB_ENV))
+/// IR crate-job IDs: every finalized job except plan, final, and lint.
+fn crate_job_ids(prep: &GenerationPreparation) -> Vec<&str> {
+    prep.workflow
+        .ir
+        .jobs
+        .keys()
+        .filter(|id| {
+            id.as_str() != PLAN_JOB_ID && id.as_str() != FINAL_JOB_ID && id.as_str() != LINT_JOB_ID
         })
-    })
+        .map(String::as_str)
+        .collect()
 }
 
-/// Matrix entry count plus the per-entry kind chain.
+/// Crate-job count plus the per-obligation kind chain.
 ///
-/// Matrix wording appears only when the IR carries it; otherwise the
+/// Counts finalized IR crate jobs, never task groups; otherwise the
 /// static no-work line keeps plan and YAML in agreement.
-fn matrix_lines(out: &mut String, prep: &GenerationPreparation) {
-    let runnable = prep
-        .discovery
-        .task_groups
-        .iter()
-        .filter(|group| !group.no_test_targets)
-        .count();
-    if !has_task_matrix(prep) || runnable == 0 {
+fn crate_lines(out: &mut String, prep: &GenerationPreparation) {
+    let crates = crate_job_ids(prep);
+    if crates.is_empty() {
         push(out, "    - no matrix entries (no-work workflow)");
         return;
     }
-    push(out, &format!("    - Rust crate matrix: {runnable} entries"));
+    if crates.len() == 1 {
+        push(out, "    - 1 Rust crate job");
+    } else {
+        push(out, &format!("    - {} Rust crate jobs", crates.len()));
+    }
     let kinds = present_kinds(&prep.discovery.task_groups);
     if !kinds.is_empty() {
         push(out, &format!("      Each: {}", kinds.join(" -> ")));
     }
-    let mut ids: Vec<&str> = prep
+    push(out, "      Entries:");
+    for id in crates {
+        push(out, &format!("        - {id}"));
+    }
+    let mut obligations: Vec<&str> = prep
         .discovery
         .task_groups
         .iter()
         .filter(|group| !group.no_test_targets)
         .map(|group| group.task_id.as_str())
         .collect();
-    ids.sort_unstable();
-    ids.dedup();
-    push(out, "      Entries:");
-    for id in ids {
+    obligations.sort_unstable();
+    obligations.dedup();
+    push(out, "      Obligations:");
+    for id in obligations {
         push(out, &format!("        - {id}"));
     }
 }

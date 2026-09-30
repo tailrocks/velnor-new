@@ -1,4 +1,4 @@
-//! Matrix strategy cases: shape, max-parallel, plan agreement, consumption.
+//! Crate-graph cases: shape, static parallelism, plan agreement, identity.
 
 use std::fs;
 
@@ -24,58 +24,63 @@ fn preview_yml(config: &str) -> Result<(TempDir, TempDir, String), Box<dyn std::
 }
 
 #[test]
-fn matrix_yaml_shape_exact() -> TestResult {
+fn crate_yaml_shape_exact() -> TestResult {
     let (_repo, _parent, text) = preview_yml(config_with_branch())?;
     for line in [
-        "    strategy:",
-        "      fail-fast: false",
-        "      max-parallel: 2",
-        "      matrix: ${{ fromJSON(needs.velnor-plan.outputs.matrix) }}",
-        "    outputs:",
-        "      matrix: ${{ steps.plan.outputs.matrix }}",
-        "        id: plan",
+        "  rust-demo:",
+        "    name: Rust / demo",
+        "  velnor-final:",
+        "  velnor-plan:",
+        "  velnor-workflow-lint:",
+        "      - rust-demo",
     ] {
         assert!(text.contains(line), "missing {line}:\n{text}");
     }
     for marker in [
+        "strategy:",
+        "fromJSON",
+        "max-parallel:",
+        "velnor-task",
         "VELNOR_MATRIX_NEEDS_JOB",
         "VELNOR_MATRIX_OUTPUT",
         "VELNOR_MATRIX_MAX_PARALLEL",
     ] {
-        assert!(!text.contains(marker), "marker stripped:\n{text}");
+        assert!(!text.contains(marker), "matrix remnant {marker}:\n{text}");
     }
     Ok(())
 }
 
 #[test]
-fn max_parallel_honored() -> TestResult {
+fn crate_graph_ignores_matrix_cap() -> TestResult {
     let config = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\nmax_parallel_jobs = 3\n";
     let repo = make_repo(config)?;
     let prep = prepare(repo.path())?;
-    assert!(
-        plan_text(&prep).contains("up to 3 matrix entries"),
-        "plan cap"
-    );
+    assert!(plan_text(&prep).contains("1 Rust crate job"), "crate plan");
     let (_repo, _parent, text) = preview_yml(config)?;
-    assert!(text.contains("max-parallel: 3"), "yaml cap:\n{text}");
+    for marker in ["max-parallel:", "strategy:", "fromJSON"] {
+        assert!(
+            !text.contains(marker),
+            "static yaml keeps {marker}:\n{text}"
+        );
+    }
     Ok(())
 }
 
 #[test]
-fn plan_matrix_agreement() -> TestResult {
+fn plan_crate_agreement() -> TestResult {
     let repo = make_repo(config_with_branch())?;
-    assert!(
-        plan_text(&prepare(repo.path())?).contains("Rust crate matrix"),
-        "matrix plan"
-    );
+    let plan = plan_text(&prepare(repo.path())?);
+    assert!(plan.contains("1 Rust crate job"), "crate plan:\n{plan}");
+    assert!(plan.contains("rust-demo"), "crate entry:\n{plan}");
     let (_repo, _parent, text) = preview_yml(config_with_branch())?;
-    assert!(text.contains("strategy:"), "matrix yaml:\n{text}");
+    assert!(text.contains("  rust-demo:"), "crate yaml:\n{text}");
+    assert!(text.contains("name: Rust / demo"), "display yaml:\n{text}");
     let ignored =
         "schema = 1\n[workflow]\ndefault_branch = \"testmain\"\n[stacks]\nignore = [\"rust\"]\n";
     let repo = make_repo(ignored)?;
     let plan = plan_text(&prepare(repo.path())?);
     assert!(plan.contains("no-work workflow"), "static plan:\n{plan}");
-    assert!(!plan.contains("Rust crate matrix"), "static plan:\n{plan}");
+    assert!(!plan.contains("Rust crate job"), "static plan:\n{plan}");
     assert!(plan.contains("no matrix fan-out"), "static plan:\n{plan}");
     let (_repo, _parent, text) = preview_yml(ignored)?;
     assert!(!text.contains("strategy:"), "static yaml:\n{text}");
@@ -84,18 +89,21 @@ fn plan_matrix_agreement() -> TestResult {
 }
 
 #[test]
-fn task_consumes_matrix_context() -> TestResult {
+fn obligations_carry_fixed_identity() -> TestResult {
     let (_repo, _parent, text) = preview_yml(config_with_branch())?;
     for want in [
-        "- name: Run task",
-        "VELNOR_TASK_ID: ${{ matrix.task_id }}",
-        "VELNOR_TASK_RUN: ${{ matrix.run }}",
-        "$VELNOR_TASK_RUN",
-        ":?matrix.run_missing",
+        "- name: Clippy",
+        "VELNOR_TASK_ID: stack/rust/root/clippy/default",
+        "VELNOR_TASK_DIGEST: b3-",
+        "VELNOR_MATRIX_KEY: m-",
+        "cargo clippy --locked --offline",
     ] {
         assert!(text.contains(want), "missing {want}:\n{text}");
     }
-    assert!(!text.contains("(default)"), "no per-group steps:\n{text}");
+    assert!(
+        !text.contains("${{ matrix."),
+        "fixed identities, no matrix context:\n{text}"
+    );
     Ok(())
 }
 

@@ -195,6 +195,7 @@ mod tests {
             uses_network: false,
             uses_clock: false,
             uses_random: false,
+            nextest_profile: "default".to_owned(),
         }];
         let changed: BTreeSet<String> = ["docs/spec.md".to_owned()].into_iter().collect();
         let selected = affected_packages(&discovery, &changed, &[], &[]);

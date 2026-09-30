@@ -2,8 +2,10 @@
 
 use velnor_actions_contract::{ContractError, manifest_key_for_cargo_manifest, task_id_for_stack};
 
-use crate::metadata::PackageRecord;
-use crate::profile::{RustExecutionProfile, TestRunner};
+use crate::{
+    metadata::PackageRecord,
+    profile::{RustExecutionProfile, TestRunner},
+};
 
 pub use crate::argv::{
     EntryMetadata, ExtensionInputs, RustTaskIdentityExtension, cargo_payload_argv,
@@ -83,6 +85,8 @@ pub struct TaskGroup {
     pub compile_driver: String,
     /// Selected test runner.
     pub test_runner: String,
+    /// Resolved Nextest profile (`ci` or `default`).
+    pub nextest_profile: String,
     /// Declared non-Rust task inputs (sorted, deduped).
     pub declared_inputs: Vec<String>,
     /// Build script may read undeclared inputs (conservative at derive).
@@ -145,6 +149,7 @@ struct GroupBase<'a> {
     target: &'a str,
     driver: &'static str,
     runner: &'static str,
+    nextest_profile: &'static str,
     package: &'a PackageRecord,
 }
 
@@ -168,6 +173,7 @@ pub fn derive_task_groups(inputs: &DeriveInputs<'_>) -> Result<Vec<TaskGroup>, C
         target: inputs.target,
         driver: inputs.profile.compile_driver.as_str(),
         runner: inputs.profile.test_runner.as_str(),
+        nextest_profile: inputs.profile.nextest_profile.as_str(),
         package: inputs.package,
     };
     let clippy_id = task_id(&base, TaskKind::Clippy)?;
@@ -245,6 +251,7 @@ pub fn derive_workspace_fmt(
         package_arg: None,
         compile_driver: profile.compile_driver.as_str().to_owned(),
         test_runner: profile.test_runner.as_str().to_owned(),
+        nextest_profile: profile.nextest_profile.as_str().to_owned(),
         declared_inputs: Vec::new(),
         undeclared_reads: false,
         uses_network: false,
@@ -310,6 +317,7 @@ fn plain_group(
         package_arg: None,
         compile_driver: base.driver.to_owned(),
         test_runner: base.runner.to_owned(),
+        nextest_profile: base.nextest_profile.to_owned(),
         declared_inputs: Vec::new(),
         undeclared_reads: base.package.has_build_script,
         uses_network: false,
@@ -360,28 +368,20 @@ fn doctest_group(base: &GroupBase<'_>, id: &str, clippy_id: &str) -> TaskGroup {
 /// Existing non-doc target flags in canonical order.
 fn target_flags(package: &PackageRecord) -> Vec<String> {
     let mut flags = Vec::new();
-    if package.targets.iter().any(|target| target.kind == "lib") {
-        flags.push("--lib");
-    }
-    if package.targets.iter().any(|target| target.kind == "bin") {
-        flags.push("--bins");
-    }
-    if package.targets.iter().any(|target| target.kind == "test") {
-        flags.push("--tests");
-    }
-    if package
-        .targets
-        .iter()
-        .any(|target| target.kind == "example" && target.test)
-    {
-        flags.push("--examples");
-    }
-    if package
-        .targets
-        .iter()
-        .any(|target| target.kind == "bench" && target.test)
-    {
-        flags.push("--benches");
+    for (kind, flag, needs_test) in [
+        ("lib", "--lib", false),
+        ("bin", "--bins", false),
+        ("test", "--tests", false),
+        ("example", "--examples", true),
+        ("bench", "--benches", true),
+    ] {
+        let hit = package
+            .targets
+            .iter()
+            .any(|target| target.kind == kind && (!needs_test || target.test));
+        if hit {
+            flags.push(flag);
+        }
     }
     flags.into_iter().map(str::to_owned).collect()
 }

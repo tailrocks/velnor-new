@@ -9,6 +9,8 @@
 
 use std::fmt;
 
+use velnor_actions_contract::ContractError;
+
 use crate::evidence::{
     Evidence, EvidenceFile, MiseWrapperInput, NextestConfigInput, collect_evidence,
 };
@@ -88,6 +90,22 @@ impl NextestProfile {
         match self {
             Self::Ci => "ci",
             Self::Default => "default",
+        }
+    }
+
+    /// Parse a resolved profile token; unknown tokens fail closed.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ContractError`] for any token outside `ci`/`default`.
+    pub fn parse(value: &str) -> Result<Self, ContractError> {
+        match value {
+            "ci" => Ok(Self::Ci),
+            "default" => Ok(Self::Default),
+            _ => Err(ContractError::identity(
+                "nextest_profile",
+                format!("unknown_profile:{value}"),
+            )),
         }
     }
 }

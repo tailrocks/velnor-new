@@ -127,12 +127,7 @@ pub(crate) fn plan_group(
         }
         _ => reuse,
     };
-    let task_digest = digest_of(&TaskDigestInputs {
-        task_id: &group.task_id,
-        argv: &argv,
-        toolchain_id: &toolchain,
-    })
-    .map_err(internal_contract)?;
+    let task_digest = task_digest(&group.task_id, &argv, &toolchain).map_err(internal_contract)?;
     let obligation = PlanObligation {
         task_id: group.task_id.clone(),
         decision: reuse.decision,
@@ -183,6 +178,22 @@ fn record_lane_target_dir(metadata: &mut serde_json::Value, lane_id: &str) {
 /// Digest of canonical bytes for a serializable input struct.
 fn digest_of<T: Serialize>(inputs: &T) -> Result<String, velnor_actions_contract::ContractError> {
     Ok(digest_b3(&canonical_json_bytes(inputs)?))
+}
+
+/// Task digest binding argv plus toolchain for one obligation.
+///
+/// Shared by event-time plan obligations and static crate-job
+/// obligations so both judge the same digest.
+pub(crate) fn task_digest(
+    task_id: &str,
+    argv: &[String],
+    toolchain_id: &str,
+) -> Result<String, velnor_actions_contract::ContractError> {
+    digest_of(&TaskDigestInputs {
+        task_id,
+        argv,
+        toolchain_id,
+    })
 }
 
 /// Task-digest preimage fields.

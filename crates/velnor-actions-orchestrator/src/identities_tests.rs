@@ -32,6 +32,7 @@ fn group(kind: TaskKind, task_id: &str, driver: &str, runner: &str) -> TaskGroup
         uses_network: false,
         uses_clock: false,
         uses_random: false,
+        nextest_profile: "default".to_owned(),
     }
 }
 

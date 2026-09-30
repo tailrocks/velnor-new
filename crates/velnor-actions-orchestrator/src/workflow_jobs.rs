@@ -1,4 +1,7 @@
-//! Workflow job constructors: plan, task, lint, and final gate.
+//! Workflow job constructors: plan, lint, and final gate.
+//!
+//! Crate jobs live in [`crate::crate_jobs`]: one ordered IR job per
+//! crate, each needing the plan job; the final gate below needs them all.
 
 use std::collections::BTreeMap;
 use std::ffi::OsString;
@@ -8,9 +11,7 @@ use velnor_actions_mise::{
     PREPARE_PINNED_TOOLS_STEP, PinnedTool, PinnedToolExec, PreparePinnedTools, ToolCatalog,
     ToolHomes,
 };
-use velnor_actions_workflow_renderer::render::{
-    FINAL_CONDITION, FINAL_DISPLAY_NAME, PLAN_JOB_ID, TASK_JOB_ID,
-};
+use velnor_actions_workflow_renderer::render::{FINAL_CONDITION, FINAL_DISPLAY_NAME, PLAN_JOB_ID};
 use velnor_actions_workflow_renderer::steps::{
     MERGE_OPERATION, PLAN_OPERATION, merge_step, plan_step, write_request_step,
 };
@@ -70,33 +71,6 @@ pub(crate) fn plan_job(
     })
 }
 
-/// Matrix consumer job: checkout, pinned tools, sources, MBX, template.
-///
-/// No stack logic: every matrix leg runs the same template, which logs `matrix.task_id`
-/// and executes `matrix.run`. The marker trio directs the renderer to the producer; it
-/// never renders. `Fetch Cargo sources` runs `cargo fetch --locked` per lockful workspace
-/// ahead of `Run task` so locked/offline payloads resolve from a cold registry (Gate 1).
-/// # Errors
-///
-/// Returns a contract error when a typed step request is rejected.
-pub(crate) fn task_job(
-    label: &str,
-    max_parallel_jobs: u32,
-    catalog: &ToolCatalog,
-    use_mbx: bool,
-    use_nextest: bool,
-    fetch_roots: &[String],
-) -> Result<Job, OrchestratorError> {
-    crate::workflow::wire_w1::build_task_job(
-        label,
-        max_parallel_jobs,
-        catalog,
-        use_mbx,
-        use_nextest,
-        fetch_roots,
-    )
-}
-
 /// Always-on lint job: checkout plus pinned actionlint over the tree.
 pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, OrchestratorError> {
     let program = OsString::from("actionlint");
@@ -131,9 +105,9 @@ pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, Orches
 /// Final gate with the exact required-check name and `always()` condition.
 ///
 /// Needs decision (workflow-contract §4 "depends on the base and enabled
-/// policy jobs" + "`Velnor / Required` depends on the plan, every selected
-/// task result ... and the candidate report when candidate mode is
-/// enabled"): plan + task + lint always, plus alint/policy/candidate when
+/// policy jobs" + "`Velnor / Required` depends on the plan, every crate
+/// job ... and the candidate report when candidate mode is enabled"):
+/// plan + every crate job + lint always, plus alint/policy/candidate when
 /// those policy jobs exist. IR validation requires `needs` to name IR jobs
 /// only, so this builds the IR subset and the renderer appends the merged
 /// support IDs post-merge (see `support.rs`); the release job never gates.
@@ -146,12 +120,12 @@ pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, Orches
 /// Returns a contract error when a typed step request is rejected.
 pub(crate) fn final_job(
     label: &str,
-    with_task: bool,
+    crate_job_ids: &[String],
     acquire: Option<Step>,
     catalog: &ToolCatalog,
 ) -> Result<Job, OrchestratorError> {
     let mut needs = vec![PLAN_JOB_ID.to_owned()];
-    needs.extend(with_task.then_some(TASK_JOB_ID.to_owned()));
+    needs.extend(crate_job_ids.iter().cloned());
     needs.push(LINT_JOB_ID.to_owned());
     let mut steps = Vec::new();
     steps.extend(acquire);
@@ -326,7 +300,8 @@ mod tests {
     fn final_job_writes_request_before_merge() {
         let catalog = ToolCatalog::pinned();
         for acquire in [None, Some(checkout_action().expect("checkout step"))] {
-            let job = final_job("ubuntu-26.04", true, acquire, &catalog).expect("final job");
+            let job = final_job("ubuntu-26.04", &["rust-demo".to_owned()], acquire, &catalog)
+                .expect("final job");
             assert_request_before(
                 &job,
                 "Merge reports",
@@ -334,5 +309,28 @@ mod tests {
                 MERGE_OPERATION,
             );
         }
+    }
+
+    #[test]
+    fn final_job_needs_plan_crates_and_lint() {
+        let catalog = ToolCatalog::pinned();
+        let job = final_job(
+            "ubuntu-26.04",
+            &["rust-demo".to_owned(), "rust-nested".to_owned()],
+            None,
+            &catalog,
+        )
+        .expect("final job");
+        assert_eq!(
+            job.needs,
+            [
+                PLAN_JOB_ID.to_owned(),
+                "rust-demo".to_owned(),
+                "rust-nested".to_owned(),
+                LINT_JOB_ID.to_owned(),
+            ]
+        );
+        let job = final_job("ubuntu-26.04", &[], None, &catalog).expect("final job");
+        assert_eq!(job.needs, [PLAN_JOB_ID.to_owned(), LINT_JOB_ID.to_owned()]);
     }
 }

@@ -1,12 +1,14 @@
 //! V1 fixed command vectors built only through the Mise adapter.
 
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 
 use velnor_actions_mise::{
     CandidateBuild, IsolatedCommand, PinnedTool, PinnedToolExec, RouteDriver, ToolCatalog,
     validate_exact_version,
 };
-use velnor_actions_rust::{TaskGroup, TestRunner, tasks::cargo_payload_argv};
+use velnor_actions_rust::{
+    NextestProfile, TaskGroup, TestRunner, tasks::cargo_payload_with_profile,
+};
 use velnor_actions_workflow_renderer::render::CandidateSpec;
 
 use crate::{OrchestratorError, qualify::QualifyRequest};
@@ -62,7 +64,13 @@ pub(crate) fn task_argv(
         tools.push(PinnedTool::Nextest);
     }
     let program = OsString::from(driver.map_or("cargo", RouteDriver::program));
-    let exec = PinnedToolExec::new(tools, &program, cargo_payload_argv(group)).map_err(|err| {
+    let profile = NextestProfile::parse(&group.nextest_profile).map_err(|err| {
+        OrchestratorError::Contract {
+            problem: err.to_string(),
+        }
+    })?;
+    let payload = cargo_payload_with_profile(group, profile);
+    let exec = PinnedToolExec::new(tools, &program, payload).map_err(|err| {
         OrchestratorError::Contract {
             problem: err.to_string(),
         }
@@ -70,18 +78,27 @@ pub(crate) fn task_argv(
     strings_of(exec.argv(catalog)).map_err(|problem| OrchestratorError::Contract { problem })
 }
 
-/// Fixed policy-job vector: a pinned `gh` version probe.
-pub(crate) fn verify_tools_argv(catalog: &ToolCatalog) -> Result<Vec<String>, OrchestratorError> {
-    let program = OsString::from("gh");
+/// Fixed vector: pinned tools plus a literal payload through Mise.
+fn exec_argv(
+    tools: Vec<PinnedTool>,
+    program: &str,
+    args: &[&str],
+    catalog: &ToolCatalog,
+) -> Result<Vec<String>, OrchestratorError> {
     let exec = PinnedToolExec::new(
-        vec![PinnedTool::Gh],
-        &program,
-        vec![OsString::from("--version")],
+        tools,
+        OsStr::new(program),
+        args.iter().copied().map(OsString::from).collect(),
     )
     .map_err(|err| OrchestratorError::Contract {
         problem: err.to_string(),
     })?;
     strings_of(exec.argv(catalog)).map_err(|problem| OrchestratorError::Contract { problem })
+}
+
+/// Fixed policy-job vector: a pinned `gh` version probe.
+pub(crate) fn verify_tools_argv(catalog: &ToolCatalog) -> Result<Vec<String>, OrchestratorError> {
+    exec_argv(vec![PinnedTool::Gh], "gh", &["--version"], catalog)
 }
 
 /// Fixed policy-job vector: `cargo deny --locked check` through pinned Mise.
@@ -109,21 +126,17 @@ const ZIZMOR_POLICY_CONFIG: &str = ".zizmor.yml";
 
 /// Fixed policy-job vector: offline zizmor audit through pinned Mise.
 pub(crate) fn zizmor_argv(catalog: &ToolCatalog) -> Result<Vec<String>, OrchestratorError> {
-    let program = OsString::from("zizmor");
-    let exec = PinnedToolExec::new(
+    exec_argv(
         vec![PinnedTool::Zizmor],
-        &program,
-        vec![
-            OsString::from("--no-online-audits"),
-            OsString::from("--config"),
-            OsString::from(ZIZMOR_POLICY_CONFIG),
-            OsString::from(ZIZMOR_POLICY_INPUT),
+        "zizmor",
+        &[
+            "--no-online-audits",
+            "--config",
+            ZIZMOR_POLICY_CONFIG,
+            ZIZMOR_POLICY_INPUT,
         ],
+        catalog,
     )
-    .map_err(|err| OrchestratorError::Contract {
-        problem: err.to_string(),
-    })?;
-    strings_of(exec.argv(catalog)).map_err(|problem| OrchestratorError::Contract { problem })
 }
 
 /// Fixed policy-job vector: `cargo machete` over product crates via Mise.
@@ -181,16 +194,12 @@ fn policy_argv(
 ///
 /// Returns a contract error when the Mise adapter rejects the vector.
 pub(crate) fn mbx_probe_argv(catalog: &ToolCatalog) -> Result<Vec<String>, OrchestratorError> {
-    let program = OsString::from("mbx");
-    let exec = PinnedToolExec::new(
+    exec_argv(
         vec![PinnedTool::MrBoxington],
-        &program,
-        vec![OsString::from("--version")],
+        "mbx",
+        &["--version"],
+        catalog,
     )
-    .map_err(|err| OrchestratorError::Contract {
-        problem: err.to_string(),
-    })?;
-    strings_of(exec.argv(catalog)).map_err(|problem| OrchestratorError::Contract { problem })
 }
 
 /// Fixed bootstrap §4 build vector through pinned Mise.
@@ -217,184 +226,11 @@ pub(crate) fn candidate_spec(catalog: &ToolCatalog) -> Result<CandidateSpec, Orc
 
 /// Convert fixed argv to UTF-8 strings.
 fn strings_of(argv: Vec<OsString>) -> Result<Vec<String>, String> {
-    let mut out = Vec::with_capacity(argv.len());
-    for arg in argv {
-        match arg.into_string() {
-            Ok(text) => out.push(text),
-            Err(_) => return Err("non_utf8_argv".to_owned()),
-        }
-    }
-    Ok(out)
+    argv.into_iter()
+        .map(|arg| arg.into_string().map_err(|_| "non_utf8_argv".to_owned()))
+        .collect()
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// Owned argv expectation from literals.
-    fn argv_of(parts: &[&str]) -> Vec<String> {
-        parts.iter().map(ToString::to_string).collect()
-    }
-
-    #[test]
-    fn policy_vectors_pin_specs_and_payloads() {
-        let deny = deny_argv().expect("deny argv");
-        let want = argv_of(&[
-            "mise",
-            "--no-config",
-            "--no-env",
-            "--no-hooks",
-            "exec",
-            "cargo-deny@0.20.2",
-            "--",
-            "cargo",
-            "deny",
-            "--locked",
-            "check",
-        ]);
-        assert_eq!(deny, want);
-        let machete = machete_argv().expect("machete argv");
-        let want = argv_of(&[
-            "mise",
-            "--no-config",
-            "--no-env",
-            "--no-hooks",
-            "exec",
-            "ubi:bnjbvr/cargo-machete@0.9.2",
-            "--",
-            "cargo",
-            "machete",
-            "crates/velnor-actions-contract",
-            "crates/velnor-actions-rust",
-            "crates/velnor-actions-mise",
-            "crates/velnor-actions-actionlint",
-            "crates/velnor-actions-workflow-renderer",
-            "crates/velnor-actions-orchestrator",
-            "crates/velnor-actions-cli",
-        ]);
-        assert_eq!(machete, want);
-        assert!(policy_argv("evil-tool", "1.2.3", "cargo", &["deny"]).is_err());
-        assert!(policy_argv("cargo-deny", "latest", "cargo", &["deny"]).is_err());
-    }
-
-    #[test]
-    fn mbx_probe_vector_is_byte_exact() {
-        let probe = mbx_probe_argv(&ToolCatalog::pinned()).expect("probe argv");
-        let want = argv_of(&[
-            "mise",
-            "--no-config",
-            "--no-env",
-            "--no-hooks",
-            "exec",
-            "mr-boxington@1.19.0",
-            "--",
-            "mbx",
-            "--version",
-        ]);
-        assert_eq!(probe, want);
-    }
-
-    /// Minimal group with one compile-driver spelling.
-    fn group_with_driver(driver: &str) -> TaskGroup {
-        TaskGroup {
-            task_id: "stack/rust|task/t".to_owned(),
-            package_id: String::new(),
-            package_name: String::new(),
-            manifest_key: "root".to_owned(),
-            kind: velnor_actions_rust::TaskKind::Clippy,
-            configuration: "default".to_owned(),
-            features: Vec::new(),
-            target: "host".to_owned(),
-            gated_by: Vec::new(),
-            depends_on: Vec::new(),
-            target_flags: Vec::new(),
-            no_test_targets: false,
-            package_arg: None,
-            compile_driver: driver.to_owned(),
-            test_runner: "cargo_test".to_owned(),
-            declared_inputs: Vec::new(),
-            undeclared_reads: false,
-            uses_network: false,
-            uses_clock: false,
-            uses_random: false,
-        }
-    }
-
-    #[test]
-    fn task_payload_program_follows_route_driver() {
-        let catalog = ToolCatalog::pinned();
-        for (driver, program, mbx) in [
-            ("cargo", "cargo", false),
-            ("mbx", "mbx", true),
-            ("bogus", "cargo", false),
-        ] {
-            let argv = task_argv(&group_with_driver(driver), &catalog).expect("task argv");
-            let at = argv.iter().position(|arg| arg == "--").expect("separator");
-            assert_eq!(argv[at + 1], program, "{driver} program");
-            assert_eq!(
-                argv.iter().any(|arg| arg.contains("mr-boxington")),
-                mbx,
-                "{driver} tools"
-            );
-        }
-    }
-
-    #[test]
-    fn task_runner_tools_follow_test_runner() {
-        let catalog = ToolCatalog::pinned();
-        let nextest = catalog.tool_spec(PinnedTool::Nextest);
-        for (runner, want) in [("cargo_test", false), ("cargo_nextest", true)] {
-            let mut group = group_with_driver("cargo");
-            group.test_runner = runner.to_owned();
-            let argv = task_argv(&group, &catalog).expect("task argv");
-            assert_eq!(argv.contains(&nextest), want, "{runner} nextest");
-        }
-    }
-
-    #[test]
-    fn zizmor_vector_is_pinned_and_offline() {
-        let argv = zizmor_argv(&ToolCatalog::pinned()).expect("zizmor argv");
-        assert_eq!(
-            argv.join(" "),
-            "mise --no-config --no-env --no-hooks exec zizmor@1.30.1 -- zizmor \
-             --no-online-audits --config .zizmor.yml .github/workflows"
-        );
-    }
-
-    #[test]
-    fn section4_build_vector_is_byte_exact() {
-        let build = candidate_build_argv(&ToolCatalog::pinned()).expect("build argv");
-        let want = argv_of(&[
-            "mise",
-            "--no-config",
-            "--no-env",
-            "--no-hooks",
-            "exec",
-            "rust@1.98.1",
-            "mr-boxington@1.19.0",
-            "--",
-            "mbx",
-            "build",
-            "--release",
-            "--locked",
-            "--package",
-            "velnor-actions-cli",
-            "--bin",
-            "velnor-actions",
-        ]);
-        assert_eq!(build, want);
-    }
-
-    #[test]
-    fn candidate_build_delegates_to_mise_constructor() {
-        let catalog = ToolCatalog::pinned();
-        let mine = candidate_build_argv(&catalog).expect("build argv");
-        let owned = CandidateBuild::new()
-            .expect("mise build")
-            .argv(&catalog)
-            .into_iter()
-            .map(|arg| arg.into_string().expect("utf8"))
-            .collect::<Vec<_>>();
-        assert_eq!(mine, owned);
-    }
-}
+#[path = "vectors_tests.rs"]
+mod vectors_tests;

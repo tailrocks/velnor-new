@@ -115,6 +115,7 @@ fn discovery_with(task_ids: &[&str]) -> Discovery {
                 uses_network: false,
                 uses_clock: false,
                 uses_random: false,
+                nextest_profile: "default".to_owned(),
             })
             .collect(),
         tool_checks: Vec::new(),

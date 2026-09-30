@@ -46,17 +46,6 @@ fn ambient_identity_blocks() -> bool {
     std::env::var("GITHUB_REPOSITORY").is_ok_and(|hint| hint != "tailrocks/velnor-new")
 }
 
-/// Select MBX for the fixture crate via `rustc-wrapper` evidence.
-fn with_mbx(repo: &TempDir) -> Result<(), Box<dyn std::error::Error>> {
-    let cargo_dir = repo.path().join(".cargo");
-    fs::create_dir_all(&cargo_dir)?;
-    fs::write(
-        cargo_dir.join("config.toml"),
-        "[build]\nrustc-wrapper = \"mbx\"\n",
-    )?;
-    Ok(())
-}
-
 /// YAML slice between two markers (to end when `end` is absent).
 fn window<'a>(text: &'a str, start: &str, end: &str) -> Result<&'a str, &'static str> {
     let from = text.find(start).ok_or("window start")?;
@@ -163,71 +152,26 @@ fn w1_native_parallelism_unqualified() {
 }
 
 #[test]
-fn w1_task_job_prepares_pinned_tools() -> TestResult {
-    let (_repo, yaml, _alint) = preview_both(config_with_branch())?;
-    let task = window(&yaml, "  velnor-task:", "  velnor-workflow-lint:")?;
-    let checkout = task.find("- name: Checkout").ok_or("task checkout")?;
-    let prepare = task
-        .find("- name: Prepare pinned tools")
-        .ok_or("task prepare")?;
-    let run = task.find("- name: Run task").ok_or("task run")?;
-    assert!(checkout < prepare && prepare < run, "order:\n{task}");
-    let catalog = ToolCatalog::pinned();
-    assert!(
-        task.contains(&format!("install {}", catalog.tool_spec(PinnedTool::Rust))),
-        "install:\n{task}"
-    );
-    assert!(
-        !task.contains("mr-boxington"),
-        "cargo leg MBX-free:\n{task}"
-    );
-    Ok(())
-}
-
-#[test]
-fn w1_task_prepare_adds_mbx_driver() -> TestResult {
-    let repo = make_repo(config_with_branch())?;
-    with_mbx(&repo)?;
-    let prep = prepare(repo.path())?;
-    let tree = render_staged_tree(&prep)?;
-    let yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
-    let task = window(yaml, "  velnor-task:", "  velnor-workflow-lint:")?;
-    let catalog = ToolCatalog::pinned();
-    assert!(
-        task.contains(&catalog.tool_spec(PinnedTool::MrBoxington)),
-        "mbx spec:\n{task}"
-    );
-    assert_eq!(
-        task.matches("Restore MBX objects").count(),
-        1,
-        "one objects step:\n{task}"
-    );
-    assert!(
-        task.contains("github-cache-mode: objects")
-            || task.contains("github-cache-mode: \"objects\""),
-        "{task}"
-    );
-    Ok(())
-}
-
-#[test]
 fn w1_plan_prepare_index_and_contract_order() -> TestResult {
     let (_repo, yaml, _alint) = preview_both(config_with_branch())?;
-    let plan = window(&yaml, "  velnor-plan:", "  velnor-task:")?;
+    let plan = window(&yaml, "  velnor-plan:", "  velnor-workflow-lint:")?;
     let names: Vec<&str> = plan
         .lines()
         .filter_map(|line| line.trim().strip_prefix("- name: "))
         .collect();
     let at = |name: &'static str| names.iter().position(|step| *step == name).ok_or(name);
-    let (checkout, prepare, write, format, plan_step) = (
+    let (checkout, prepare, write, plan_step) = (
         at("Checkout")?,
         at("Prepare pinned tools")?,
         at("Write request")?,
-        at("Format")?,
         at("Plan")?,
     );
     assert!(checkout < prepare && prepare < write, "{names:?}");
-    assert!(write < format && format < plan_step, "{names:?}");
+    assert!(write < plan_step, "{names:?}");
+    assert!(
+        !names.contains(&"Format"),
+        "no workspace scope without rustfmt config: {names:?}"
+    );
     Ok(())
 }
 
@@ -259,7 +203,7 @@ fn w1_policy_carries_zizmor_after_machete() -> TestResult {
     let velnor = make_velnor_repo(VELNOR_CONFIG)?;
     let tree = render_staged_tree(&prepare(velnor.path())?)?;
     let yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
-    let policy = window(yaml, "  velnor-policy:", "  velnor-task:")?;
+    let policy = window(yaml, "  velnor-policy:", "  velnor-workflow-lint:")?;
     let deny = policy.find("Run cargo-deny").ok_or("deny")?;
     let machete = policy.find("Run cargo-machete").ok_or("machete")?;
     let zizmor = policy.find("Run zizmor").ok_or("zizmor")?;
@@ -280,13 +224,25 @@ fn w1_policy_carries_zizmor_after_machete() -> TestResult {
 #[test]
 fn w1_plan_format_runs_fmt_check() -> TestResult {
     let (_repo, yaml, _alint) = preview_both(config_with_branch())?;
-    let plan = window(&yaml, "  velnor-plan:", "  velnor-task:")?;
+    let plan = window(&yaml, "  velnor-plan:", "  velnor-workflow-lint:")?;
+    assert!(
+        !plan.contains("- name: Format"),
+        "no workspace scope without rustfmt config:\n{plan}"
+    );
+    let repo = make_repo(config_with_branch())?;
+    fs::write(repo.path().join("rustfmt.toml"), "[rustfmt]\n")?;
+    let prep = prepare(repo.path())?;
+    let tree = render_staged_tree(&prep)?;
+    let yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
+    let plan = window(yaml, "  velnor-plan:", "  velnor-workflow-lint:")?;
     assert!(plan.contains("- name: Format"), "format step:\n{plan}");
     assert!(
         plan.contains("mise ") && plan.contains("fmt --all --check"),
         "{plan}"
     );
     let format_at = plan.find("- name: Format").ok_or("format step")?;
+    let plan_at = plan.find("- name: Plan").ok_or("plan step")?;
+    assert!(format_at < plan_at, "format precedes plan:\n{plan}");
     let tail = &plan[format_at..];
     let block = &tail[..tail.len().min(900)];
     for key in [
@@ -298,6 +254,8 @@ fn w1_plan_format_runs_fmt_check() -> TestResult {
     ] {
         assert!(block.contains(key), "format env misses {key}:\n{block}");
     }
+    let job = window(yaml, "  rust-demo:", "  velnor-final:")?;
+    assert!(job.contains("- name: Format"), "per-package scope:\n{job}");
     let ignored =
         "schema = 1\n[workflow]\ndefault_branch = \"testmain\"\n[stacks]\nignore = [\"rust\"]\n";
     let (_repo, yaml, _alint) = preview_both(ignored)?;
@@ -342,56 +300,5 @@ fn w1_pr_workflows_carry_no_msrv() -> TestResult {
     for (name, yaml) in [("consumer", consumer.as_str()), ("velnor", velnor_yaml)] {
         assert!(!yaml.to_lowercase().contains("msrv"), "{name} leaks msrv");
     }
-    Ok(())
-}
-
-/// Trimmed `env:` line starting with `key` inside one rendered step block.
-fn env_line<'a>(block: &'a str, key: &str) -> Result<&'a str, &'static str> {
-    for line in block.lines() {
-        if line.trim().starts_with(key) {
-            return Ok(line.trim());
-        }
-    }
-    Err("env line")
-}
-
-#[test]
-fn w1_task_prepare_and_run_share_toolchain_union() -> TestResult {
-    let (_repo, yaml, _alint) = preview_both(config_with_branch())?;
-    let task = window(&yaml, "  velnor-task:", "  velnor-workflow-lint:")?;
-    let prepare_at = task.find("- name: Prepare pinned tools").ok_or("prepare")?;
-    let run_at = task.find("- name: Run task").ok_or("run task")?;
-    let catalog = ToolCatalog::pinned();
-    for tool in [
-        PinnedTool::Actionlint,
-        PinnedTool::Shellcheck,
-        PinnedTool::Zizmor,
-    ] {
-        let spec = catalog.tool_spec(tool);
-        assert!(
-            task[prepare_at..run_at].contains(&spec),
-            "prepare misses {spec}:\n{task}"
-        );
-    }
-    for key in ["MISE_RUSTUP_HOME:", "MISE_CARGO_HOME:", "RUSTUP_TOOLCHAIN:"] {
-        let line = env_line(&task[run_at..], key)?;
-        assert_eq!(
-            env_line(&task[prepare_at..run_at], key)?,
-            line,
-            "{key}:\n{task}"
-        );
-    }
-    Ok(())
-}
-
-#[test]
-fn w1_task_cache_v1_emits_no_cache_steps() -> TestResult {
-    let (_repo, yaml, _alint) = preview_both(config_with_branch())?;
-    let task = window(&yaml, "  velnor-task:", "  velnor-workflow-lint:")?;
-    assert!(
-        !task.contains("- name: Restore cache"),
-        "v1 no restore:\n{task}"
-    );
-    assert!(!task.contains("- name: Save cache"), "v1 no save:\n{task}");
     Ok(())
 }

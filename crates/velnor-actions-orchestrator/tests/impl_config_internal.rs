@@ -366,7 +366,7 @@ fn plan_job_lines_come_from_ir_job_ids() -> TestResult {
         let line = format!("- {id} ({} steps)", job.steps.len());
         assert!(text.contains(&line), "missing {line}:\n{text}");
     }
-    assert!(text.contains("Rust crate matrix"), "matrix detail:\n{text}");
+    assert!(text.contains("1 Rust crate job"), "crate detail:\n{text}");
     Ok(())
 }
 

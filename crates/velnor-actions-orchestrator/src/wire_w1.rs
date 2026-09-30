@@ -3,32 +3,26 @@
 //! Self-declared from `workflow.rs` (`#[path]`, no `lib.rs` edit) so the
 //! integrator only registers the companion test file. Every helper here
 //! answers one anchored EMIT entry: checkout provenance, step-syntax
-//! vetting, task-job prelude assembly, plan format, MBX gating, the
-//! Gate-6 task-cache gate, and the V1 actionlint variable set.
+//! vetting, the plan-job workspace Format step, MBX gating, the Gate-6
+//! task-cache gate, and the V1 actionlint variable set.
 
 use std::collections::BTreeMap;
 
 use velnor_actions_actionlint::{
     ActionlintCapabilities, PinnedActionRef, StepSyntax,
-    actions::{
-        CACHE_ACTION_SHA, CACHE_ACTION_VERSION, MR_BOXINGTON_ACTION_SHA,
-        MR_BOXINGTON_ACTION_VERSION,
-    },
+    actions::{CACHE_ACTION_SHA, CACHE_ACTION_VERSION},
     checkout_inputs_schema, validate_action_inputs,
 };
 use velnor_actions_contract::{Job, Step, StepKind};
 use velnor_actions_mise::{Gate6Fixture, TaskCacheMode, ToolCatalog, ToolHomes};
-use velnor_actions_rust::{TaskKind, derive_workspace_fmt};
+use velnor_actions_rust::TaskKind;
 use velnor_actions_workflow_renderer::plan_format;
-use velnor_actions_workflow_renderer::render::{PLAN_JOB_ID, TASK_JOB_ID};
 use velnor_actions_workflow_renderer::steps::{
-    CompileDriver, TASK_ARTIFACTS_DIR, cache_action_step, check_mbx_gating, mbx_step_for_driver,
+    CompileDriver, TASK_ARTIFACTS_DIR, cache_action_step, check_mbx_gating,
 };
 
 use crate::OrchestratorError;
 use crate::discover::Discovery;
-use crate::matrix_step::{matrix_task_step, prepare_task_tools_step};
-use crate::source_prep::fetch_steps_for_task;
 use crate::utf8::strings_of_env;
 
 /// Declared repository configuration variable names (GEN-2.14).
@@ -68,8 +62,8 @@ pub(crate) fn checkout_step() -> Result<Step, OrchestratorError> {
 
 /// Reject workflow syntax the pinned actionlint cannot parse (PAR-6.1).
 ///
-/// Called for `JobMatrix` on every generation; native step parallelism
-/// stays unqualified, so any future native-key emission fails here.
+/// Native step parallelism stays unqualified, so any future native-key
+/// emission fails here.
 ///
 /// # Errors
 ///
@@ -80,68 +74,12 @@ pub(crate) fn vet_step_syntax(syntax: StepSyntax) -> Result<(), OrchestratorErro
         .map_err(OrchestratorError::from)
 }
 
-/// Matrix consumer job: checkout, pinned tools, sources, MBX, template.
-///
-/// Order follows task-execution-contract §2: prepare, components, per-root
-/// `Fetch Cargo sources` (sharing the `Run task` toolchain env so cold
-/// locked/offline payloads resolve), MBX objects restore (MBX legs only),
-/// then the fixed matrix-entry template. Gate-6 cache steps stay absent
-/// until a qualification fixture enables them.
-///
-/// # Errors
-///
-/// Returns a contract error when a typed step request is rejected.
-pub(crate) fn build_task_job(
-    label: &str,
-    max_parallel_jobs: u32,
-    catalog: &ToolCatalog,
-    use_mbx: bool,
-    use_nextest: bool,
-    fetch_roots: &[String],
-) -> Result<Job, OrchestratorError> {
-    let mut steps = vec![checkout_step()?];
-    steps.push(prepare_task_tools_step(catalog, use_mbx, use_nextest)?);
-    steps.push(super::prepare_rust_components_step(catalog)?);
-    steps.extend(fetch_steps_for_task(catalog, fetch_roots)?);
-    steps.extend(mbx_task_step(use_mbx)?);
-    steps.extend(maybe_task_cache_steps(None, TaskCacheMode::Off, "")?);
-    steps.push(matrix_task_step(max_parallel_jobs, catalog)?);
-    Ok(Job {
-        display_name: "Velnor Task".to_owned(),
-        runs_on: label.to_owned(),
-        needs: vec![PLAN_JOB_ID.to_owned()],
-        condition: None,
-        steps,
-    })
-}
-
-/// MBX objects restore for MBX legs only (WF-3.52).
-///
-/// The `uses:` value comes from the compiled action-registry pin; Cargo
-/// legs carry neither the action nor the tool.
-///
-/// # Errors
-///
-/// Returns actionlint/render errors for a rejected pin or step shape.
-fn mbx_task_step(use_mbx: bool) -> Result<Option<Step>, OrchestratorError> {
-    if !use_mbx {
-        return Ok(None);
-    }
-    let uses = PinnedActionRef::new(
-        "jdx/mr-boxington-action",
-        None,
-        MR_BOXINGTON_ACTION_SHA,
-        MR_BOXINGTON_ACTION_VERSION,
-    )?
-    .uses_value();
-    Ok(mbx_step_for_driver(&uses, CompileDriver::Mbx)?)
-}
-
 /// Task-layer restore/save pair, gated on Gate-6 qualification.
 ///
-/// Emits the restore step before and the save step after the matrix
-/// payload only with a qualification fixture and a live cache mode;
-/// release legs (`Off`) and unqualified generation emit neither.
+/// Emits the restore step before and the save step after the
+/// obligation payload only with a qualification fixture and a live
+/// cache mode; release legs (`Off`) and unqualified generation emit
+/// neither.
 ///
 /// # Errors
 ///
@@ -175,52 +113,32 @@ pub(crate) fn maybe_task_cache_steps(
     ])
 }
 
-/// Insert the plan-job `Format` step for selected Rust work.
+/// Plan-job `Format` step for the workspace formatting scope only.
 ///
-/// Matrix fmt groups exist only with explicit `rustfmt` config
-/// (task-execution-contract: per-package formatting needs explicit
-/// configuration), but the plan-job `Format` step runs once per selected
-/// stack configuration by default (workflow-contract §3 plan step 5).
-/// With an explicit fmt group the argv comes from it; otherwise it is
-/// synthesized from the first planned workspace profile (MBX route when
-/// the profile selects it). The step carries the full `exec`
-/// verification env so it runs the prepared toolchain. Without selected
-/// Rust work there is nothing to format.
+/// Root cause (P05-5): the plan job duplicated the first crate's
+/// formatting and synthesized an overlapping whole-workspace format,
+/// so one scope had three owners. Per-package formatting lives in
+/// crate jobs; this returns a step only for a package-less workspace
+/// `Fmt` obligation (explicit root `rustfmt` config), the one distinct
+/// scope the plan job owns. No synthesis, no fallback.
 ///
 /// # Errors
 ///
 /// Returns contract/render errors for rejected vectors or step shapes.
-pub(crate) fn ensure_plan_format_step(
-    jobs: &mut BTreeMap<String, Job>,
+pub(crate) fn workspace_format_step(
     discovery: &Discovery,
     catalog: &ToolCatalog,
-) -> Result<(), OrchestratorError> {
-    let env = format_step_env(catalog)?;
-    if let Some(fmt) = discovery
-        .task_groups
-        .iter()
-        .find(|group| matches!(group.kind, TaskKind::Fmt))
-    {
-        let argv = crate::vectors::task_argv(fmt, catalog)?;
-        return plan_format::ensure_plan_format(jobs, argv, env).map_err(OrchestratorError::from);
-    }
-    let (Some(workspace), Some(template)) =
-        (discovery.workspaces.first(), discovery.task_groups.first())
-    else {
-        return Ok(());
+) -> Result<Option<Step>, OrchestratorError> {
+    let Some(fmt) = discovery.task_groups.iter().find(|group| {
+        group.kind == TaskKind::Fmt && group.package_id.is_empty() && group.package_name.is_empty()
+    }) else {
+        return Ok(None);
     };
-    let manifest = crate::discover::workspace_manifest(&workspace.record.workspace_root);
-    let fmt = derive_workspace_fmt(
-        &manifest,
-        &workspace.profile,
-        &template.configuration,
-        &template.target,
-    )
-    .map_err(|err| OrchestratorError::Contract {
-        problem: err.to_string(),
-    })?;
-    let argv = crate::vectors::task_argv(&fmt, catalog)?;
-    plan_format::ensure_plan_format(jobs, argv, env).map_err(OrchestratorError::from)
+    let argv = crate::vectors::task_argv(fmt, catalog)?;
+    let env = format_step_env(catalog)?;
+    plan_format::format_step(argv, env)
+        .map(Some)
+        .map_err(OrchestratorError::from)
 }
 
 /// Full `exec` verification env routing Format at the prepared toolchain.
@@ -234,29 +152,19 @@ fn format_step_env(catalog: &ToolCatalog) -> Result<BTreeMap<String, String>, Or
         .map_err(|problem| OrchestratorError::Contract { problem })
 }
 
-/// Gate MBX presence in the task job against its driver selection.
+/// Gate MBX presence in crate jobs against their driver selection.
 ///
-/// Cargo legs must be MBX-free; MBX legs carry exactly one
-/// objects-mode step. Jobs without a task job are vacuous.
+/// Cargo crates must be MBX-free; MBX crates carry exactly one
+/// objects-mode step each. Jobs outside the driver map are unchecked.
 ///
 /// # Errors
 ///
 /// Returns a render error when MBX presence mismatches the driver.
-pub(crate) fn check_task_mbx_gating(
+pub(crate) fn check_crate_mbx_gating(
     jobs: &BTreeMap<String, Job>,
-    task_present: bool,
-    use_mbx: bool,
+    drivers: &BTreeMap<String, CompileDriver>,
 ) -> Result<(), OrchestratorError> {
-    if !task_present {
-        return Ok(());
-    }
-    let driver = if use_mbx {
-        CompileDriver::Mbx
-    } else {
-        CompileDriver::Cargo
-    };
-    check_mbx_gating(jobs, &BTreeMap::from([(TASK_JOB_ID.to_owned(), driver)]))
-        .map_err(OrchestratorError::from)
+    check_mbx_gating(jobs, drivers).map_err(OrchestratorError::from)
 }
 
 #[cfg(test)]
@@ -320,45 +228,36 @@ mod tests {
     }
 
     #[test]
-    fn mbx_and_driver_tools_follow_selection() {
+    fn crate_tools_follow_selection_without_validators() {
         use velnor_actions_mise::PinnedTool;
 
-        use crate::matrix_step::task_driver_tools;
+        use crate::matrix_step::{prepare_crate_tools_step, task_driver_tools};
         assert_eq!(task_driver_tools(false), vec![PinnedTool::Rust]);
         assert_eq!(
             task_driver_tools(true),
             vec![PinnedTool::Rust, PinnedTool::MrBoxington]
         );
-        assert!(mbx_task_step(false).expect("cargo none").is_none());
-        let step = mbx_task_step(true).expect("mbx step").expect("mbx some");
-        let StepKind::Action { uses, with } = &step.kind else {
-            panic!("mbx must be an action step");
-        };
-        assert!(uses.starts_with("jdx/mr-boxington-action@"), "{uses}");
-        assert_eq!(
-            with.get("github-cache-mode").map(String::as_str),
-            Some("objects")
-        );
-        assert!(PinnedActionRef::parse_uses(uses, MR_BOXINGTON_ACTION_VERSION).is_ok());
-        assert!(declared_config_variables().is_empty());
-    }
-
-    #[test]
-    fn task_prepare_steps_carry_nextest_and_components() {
-        use velnor_actions_mise::{
-            PREPARE_PINNED_TOOLS_STEP, PREPARE_RUST_COMPONENTS_STEP, PinnedTool,
-        };
         let catalog = ToolCatalog::pinned();
-        for use_nextest in [false, true] {
-            let job = build_task_job("ubuntu-26.04", 2, &catalog, false, use_nextest, &[])
-                .expect("task job");
-            assert_eq!(job.steps[1].name, PREPARE_PINNED_TOOLS_STEP);
-            assert_eq!(job.steps[2].name, PREPARE_RUST_COMPONENTS_STEP);
-            let StepKind::Shell { run, .. } = &job.steps[1].kind else {
+        for (use_mbx, use_nextest) in [(false, false), (false, true), (true, false), (true, true)] {
+            let step = prepare_crate_tools_step(&catalog, use_mbx, use_nextest).expect("step");
+            let StepKind::Shell { run, .. } = &step.kind else {
                 panic!("prepare must be a shell step");
             };
+            for tool in [
+                PinnedTool::Actionlint,
+                PinnedTool::Shellcheck,
+                PinnedTool::Zizmor,
+            ] {
+                assert!(
+                    !run.contains(&catalog.tool_spec(tool)),
+                    "crate jobs never install {tool:?}: {run:?}"
+                );
+            }
             let nextest = catalog.tool_spec(PinnedTool::Nextest);
             assert_eq!(run.contains(&nextest), use_nextest);
+            let mbx = catalog.tool_spec(PinnedTool::MrBoxington);
+            assert_eq!(run.contains(&mbx), use_mbx);
+            assert!(declared_config_variables().is_empty());
         }
     }
 }

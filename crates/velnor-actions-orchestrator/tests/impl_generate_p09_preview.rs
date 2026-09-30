@@ -105,15 +105,15 @@ fn preview_twice_second_refused_nonempty() -> TestResult {
 }
 
 #[test]
-fn rendered_task_steps_carry_validated_contract() -> TestResult {
+fn rendered_crate_steps_carry_validated_contract() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     let prep = prepare(repo.path())?;
     let tree = render_staged_tree(&prep)?;
     let yaml = tree
         .get(WORKFLOW_PATH)
         .ok_or_else(|| std::io::Error::other("missing workflow"))?;
-    let task = window(yaml, "  velnor-task:", "  velnor-workflow-lint:")?;
-    let run_at = task.find("- name: Run task").ok_or("run task")?;
+    let task = window(yaml, "  rust-demo:", "  velnor-final:")?;
+    let run_at = task.find("- name: Clippy").ok_or("first obligation")?;
     let run_block = &task[run_at..];
     for key in [
         "MISE_NO_CONFIG:",
@@ -126,7 +126,7 @@ fn rendered_task_steps_carry_validated_contract() -> TestResult {
         "MISE_CARGO_HOME:",
         "RUSTUP_TOOLCHAIN:",
     ] {
-        assert!(run_block.contains(key), "Run task misses {key}");
+        assert!(run_block.contains(key), "Clippy misses {key}");
     }
     for key in [
         "MISE_GITHUB_TOKEN",
@@ -134,13 +134,13 @@ fn rendered_task_steps_carry_validated_contract() -> TestResult {
         "GH_TOKEN:",
         "ACTIONS_RUNTIME_TOKEN",
     ] {
-        assert!(!task.contains(key), "task leaks {key}");
+        assert!(!task.contains(key), "crate job leaks {key}");
     }
     Ok(())
 }
 
 #[test]
-fn fetch_matches_run_task_contract_by_construction() -> TestResult {
+fn fetch_matches_obligation_contract_by_construction() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     let root = repo.path();
     fs::write(
@@ -152,18 +152,18 @@ fn fetch_matches_run_task_contract_by_construction() -> TestResult {
         .workflow
         .ir
         .jobs
-        .get("velnor-task")
-        .ok_or_else(|| std::io::Error::other("missing task job"))?;
+        .get("rust-demo")
+        .ok_or_else(|| std::io::Error::other("missing crate job"))?;
     let names: Vec<&str> = task.steps.iter().map(|step| step.name.as_str()).collect();
     let at = |name: &str| names.iter().position(|seen| *seen == name);
-    let (Some(fetch_at), Some(run_at)) = (at("Fetch Cargo sources"), at("Run task")) else {
-        return Err("task steps miss fetch/run".into());
+    let (Some(fetch_at), Some(run_at)) = (at("Fetch Cargo sources"), at("Clippy")) else {
+        return Err("crate steps miss fetch/obligation".into());
     };
     let StepKind::Shell { env: fetch_env, .. } = &task.steps[fetch_at].kind else {
         return Err("fetch must be a shell step".into());
     };
     let StepKind::Shell { env: run_env, .. } = &task.steps[run_at].kind else {
-        return Err("Run task must be a shell step".into());
+        return Err("Clippy must be a shell step".into());
     };
     let mut keys: Vec<&str> = fetch_env.keys().map(String::as_str).collect();
     keys.sort_unstable();
@@ -184,7 +184,7 @@ fn fetch_matches_run_task_contract_by_construction() -> TestResult {
     );
     for (key, value) in fetch_env {
         let got = run_env.get(key);
-        assert_eq!(got, Some(value), "fetch key {key} must equal Run task");
+        assert_eq!(got, Some(value), "fetch key {key} must equal Clippy");
         assert!(!value.is_empty(), "fetch key {key} must be set");
     }
     Ok(())
