@@ -138,6 +138,7 @@ pub(super) fn discovery_with(task_ids: &[&str]) -> Discovery {
         },
         recommendations: Vec::new(),
         consumer_manifest_json: None,
+        skipped_non_utf8: false,
     }
 }
 

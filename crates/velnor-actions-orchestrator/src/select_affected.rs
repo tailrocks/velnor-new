@@ -94,6 +94,7 @@ mod tests {
 
     use super::*;
     use crate::discover::PlannedWorkspace;
+    use crate::select::classify_changed;
 
     /// Discovery with packages `a` and `b` under `a/` and `b/`.
     fn two_package_discovery() -> Discovery {
@@ -139,6 +140,7 @@ mod tests {
             },
             recommendations: Vec::new(),
             consumer_manifest_json: None,
+            skipped_non_utf8: false,
         }
     }
 
@@ -204,6 +206,27 @@ mod tests {
         assert!(
             selected.contains("a"),
             "declared input selects package a: {selected:?}"
+        );
+    }
+
+    #[test]
+    fn skipped_index_names_broaden_with_explicit_tag() {
+        use velnor_actions_contract::WorkflowEvent;
+        let mut discovery = two_package_discovery();
+        discovery.skipped_non_utf8 = true;
+        let mut warnings = Vec::new();
+        let changed = classify_changed(
+            std::path::Path::new("/nonexistent"),
+            WorkflowEvent::PullRequest,
+            Some("base"),
+            "head",
+            &discovery,
+            &mut warnings,
+        );
+        assert_eq!(changed, None, "skipped names broaden to all");
+        assert!(
+            warnings.iter().any(|w| w.contains("non_utf8_path")),
+            "explicit tag: {warnings:?}"
         );
     }
 }

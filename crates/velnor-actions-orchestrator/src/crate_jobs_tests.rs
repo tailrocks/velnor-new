@@ -47,6 +47,7 @@ fn discovery(groups: Vec<TaskGroup>) -> Discovery {
         },
         recommendations: Vec::new(),
         consumer_manifest_json: None,
+        skipped_non_utf8: false,
     }
 }
 

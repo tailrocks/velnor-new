@@ -16,7 +16,7 @@ use velnor_actions_rust::{FOREIGN_TOOL_FILES, RUST_TOOLCHAIN_FILE, TaskGroup};
 use crate::OrchestratorError;
 use crate::decisions::selection_broadens_for_path;
 use crate::discover::Discovery;
-use crate::git_paths::split_nul_paths;
+use crate::git_paths::{NON_UTF8_PATH, split_nul_paths};
 use crate::internal::internal;
 use crate::select_affected::{affected_packages, has_unowned_file};
 use crate::select_edges::{base_edges, head_edges};
@@ -57,6 +57,12 @@ pub(crate) fn classify_changed(
     discovery: &Discovery,
     warnings: &mut Vec<String>,
 ) -> Option<BTreeSet<String>> {
+    if discovery.skipped_non_utf8 {
+        warnings.push(format!(
+            "comparison_unavailable:{NON_UTF8_PATH}:all_changed"
+        ));
+        return None;
+    }
     if event == WorkflowEvent::Local {
         return classify_local(root, discovery, warnings);
     }

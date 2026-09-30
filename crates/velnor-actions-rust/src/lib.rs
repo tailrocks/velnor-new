@@ -13,6 +13,7 @@ mod evidence_text;
 pub mod graph;
 pub mod identity;
 pub mod index;
+mod index_glob;
 pub mod metadata;
 pub mod metadata_edges;
 pub mod profile;
@@ -44,9 +45,9 @@ pub use evidence::{
 pub use graph::{dedupe_workspaces, reverse_closure};
 pub use identity::{GroupExtensionInputs, adapter_entry_metadata, expand_shards_for_group};
 pub use index::{
-    BUILTIN_EXCLUSIONS, FileIndex, IndexError, build_index, build_index_from_list,
-    build_index_walk, is_excluded, matches_glob, validate_pattern,
+    BUILTIN_EXCLUSIONS, FileIndex, IndexError, build_index, build_index_from_list, build_index_walk,
 };
+pub use index_glob::{is_excluded, matches_glob, validate_pattern};
 pub use metadata::{
     METADATA_FORMAT_VERSION, MetadataError, PackageRecord, TargetRecord, WorkspaceRecord,
     parse_metadata_json,

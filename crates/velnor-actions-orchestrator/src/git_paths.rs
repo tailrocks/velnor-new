@@ -23,6 +23,27 @@ where
         .collect()
 }
 
+/// Split NUL-delimited git path bytes, skipping non-UTF-8 entries.
+///
+/// Returns the decodable paths plus whether any entry was skipped.
+/// Index enumeration uses this (a skipped entry cannot match an ASCII
+/// detector name); change-set callers keep fail-closed [`split_nul_paths`]
+/// because an undecodable changed path cannot be attributed.
+pub(crate) fn split_nul_paths_skipping(stdout: &[u8]) -> (Vec<String>, bool) {
+    let mut paths = Vec::new();
+    let mut skipped = false;
+    for chunk in stdout
+        .split(|byte| *byte == 0)
+        .filter(|entry| !entry.is_empty())
+    {
+        match String::from_utf8(chunk.to_vec()) {
+            Ok(path) => paths.push(path),
+            Err(_) => skipped = true,
+        }
+    }
+    (paths, skipped)
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeSet;
@@ -68,5 +89,17 @@ mod tests {
     fn collects_into_vec() {
         let paths: Vec<String> = split_nul_paths(b"b\0a\0").unwrap_or_default();
         assert_eq!(paths, vec!["b".to_owned(), "a".to_owned()]);
+    }
+
+    /// The skipping splitter keeps decodable entries and flags the rest.
+    #[test]
+    fn skipping_keeps_decodable_and_flags() {
+        let (paths, skipped) =
+            split_nul_paths_skipping(b"alpha/Cargo.toml\0alpha/src/\xffinvalid.rs\0");
+        assert_eq!(paths, vec!["alpha/Cargo.toml".to_owned()]);
+        assert!(skipped, "skip is explicit");
+        let (clean, skipped) = split_nul_paths_skipping(b"a\0b\0");
+        assert_eq!(clean, vec!["a".to_owned(), "b".to_owned()]);
+        assert!(!skipped, "no false flag");
     }
 }

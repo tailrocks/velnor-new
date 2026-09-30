@@ -55,6 +55,11 @@ pub struct Discovery {
     pub recommendations: Vec<String>,
     /// Debug-only release-manifest text; always `None` in release builds.
     pub consumer_manifest_json: Option<String>,
+    /// Whether index enumeration skipped any non-UTF-8 name.
+    ///
+    /// Selection broadens explicitly on this: a skipped name cannot be
+    /// attributed to an owning package.
+    pub skipped_non_utf8: bool,
 }
 
 /// Run file index, detection, inventory, profiles, and task derivation.
@@ -64,7 +69,7 @@ pub struct Discovery {
 /// Returns discovery, detection, inventory, profile, preparation, or
 /// contract errors when any stage fails.
 pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, OrchestratorError> {
-    let index = build_file_index(root, &config.discovery.exclude)?;
+    let (index, skipped_non_utf8) = build_file_index(root, &config.discovery.exclude)?;
     let mut candidates = Vec::new();
     let mut previous = "";
     for (stack_id, schema, detect) in DETECTORS {
@@ -99,6 +104,7 @@ pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, 
         clippy_memory,
         recommendations,
         consumer_manifest_json: debug_manifest_fixture(root),
+        skipped_non_utf8,
     })
 }
 
