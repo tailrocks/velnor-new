@@ -5,7 +5,8 @@ use crate::ids::{
     matrix_key_for_id, task_report_id_for_task, validate_matrix_key, validate_report_id,
     validate_run_key, validate_task_id, validate_task_report_id,
 };
-use crate::workflow::plan::{Trust, WorkflowEvent};
+use crate::workflow::plan::WorkflowEvent;
+use crate::workflow::trust::Trust;
 use serde::{Deserialize, Serialize};
 /// Per-task machine-readable report.
 #[derive(Debug, Clone, Serialize, Deserialize)]

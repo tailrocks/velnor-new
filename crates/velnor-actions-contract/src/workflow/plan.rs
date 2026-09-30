@@ -2,6 +2,7 @@
 use super::baseline::{BaselineProof, PlanBaseline};
 use super::cache_ids::EntryCacheIds;
 use super::execute::{ExecuteTaskIds, ExecuteTaskRef};
+use super::trust::Trust;
 use crate::canonical::{normalize_posix_path, validate_digest};
 use crate::config::{RUNNER_LABEL_CATALOG, RunnerSelection, VelnorConfig};
 use crate::errors::ContractError;
@@ -101,35 +102,6 @@ pub enum WorkflowEvent {
     Local,
     /// Fork pull-request run (untrusted, read-only caches).
     Fork,
-}
-/// Trust scope.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Trust {
-    /// Protected default-branch scope.
-    Trusted,
-    /// Pull-request scope.
-    Pr,
-}
-
-/// Canonical trust scope for one triggering event.
-///
-/// Only branch pushes run protected-branch content; pull requests,
-/// forks, local runs, and merge-group runs all execute unreviewed or
-/// speculative content under PR scope. Merge-group runs in particular
-/// test speculative merges of unreviewed PRs, so `Trusted` there would
-/// let PR content pollute trusted caches (consistent with baseline
-/// publish staying push-only). Single source for plan stamping and
-/// merge-time coherence.
-#[must_use]
-pub const fn trust_for_event(event: WorkflowEvent) -> Trust {
-    match event {
-        WorkflowEvent::Push => Trust::Trusted,
-        WorkflowEvent::PullRequest
-        | WorkflowEvent::Fork
-        | WorkflowEvent::Local
-        | WorkflowEvent::MergeGroup => Trust::Pr,
-    }
 }
 /// Selected runner record.
 #[derive(Debug, Clone, Serialize, Deserialize)]
