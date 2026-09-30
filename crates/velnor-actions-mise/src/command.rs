@@ -1,21 +1,27 @@
 //! Fixed subprocess wrapper: the sole `std::process::Command` constructor.
 //! Trusted tooling inherits the parent env; repo-task children spawn cleared.
 
+//! Environment policy lives in `command_env.rs` and the typed result in
+//! `command_output.rs`; both are declared here so `lib.rs` stays untouched.
+#[path = "command_env.rs"]
+mod env;
+#[path = "command_output.rs"]
+mod output;
+
+use self::env::pairs_of;
+pub use self::env::{
+    EnvPolicy, ISOLATION_ENV, MISE_CARGO_HOME_ENV, MISE_RUSTUP_HOME_ENV, NO_AUTO_INSTALL_ENV,
+    RUSTUP_TOOLCHAIN_ENV, is_reserved_env_key, toolchain_env,
+};
+pub use self::output::ProcessOutput;
+use self::output::{read_capped, signal_of};
+
 use std::ffi::{OsStr, OsString};
-use std::io::Read;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 use crate::error::MiseError;
-
-/// Isolation environment applied to every spawned process.
-pub const ISOLATION_ENV: [(&str, &str); 4] = [
-    ("MISE_NO_CONFIG", "1"),
-    ("MISE_NO_ENV", "1"),
-    ("MISE_NO_HOOKS", "1"),
-    ("MISE_LOCKFILE", "0"),
-];
 
 /// Mise global flags, always placed before the subcommand.
 pub const MISE_GLOBAL_FLAGS: [&str; 3] = ["--no-config", "--no-env", "--no-hooks"];
@@ -26,106 +32,16 @@ pub const TOOL_COMMAND_SEPARATOR: &str = "--";
 /// Mise subcommands Velnor may emit: `exec`, `install`, and `run`.
 pub const ALLOWED_MISE_SUBCOMMANDS: [&str; 3] = ["exec", "install", "run"];
 
-/// Environment disabling implicit tool installation for verification runs.
-pub const NO_AUTO_INSTALL_ENV: [(&str, &str); 2] = [
-    ("MISE_AUTO_INSTALL", "false"),
-    ("MISE_EXEC_AUTO_INSTALL", "false"),
-];
-
 /// Captured bytes kept per stream; past this the run fails closed.
 pub const OUTPUT_CAPTURE_LIMIT_BYTES: usize = 8 * 1024 * 1024;
 
 /// Default run deadline in seconds; past this the child is killed.
 pub const RUN_TIMEOUT_SECS: u64 = 600;
 
-/// Environment name for the Velnor-owned mise Rust home.
-pub const MISE_RUSTUP_HOME_ENV: &str = "MISE_RUSTUP_HOME";
-
-/// Environment name for the Velnor-owned mise Cargo home.
-pub const MISE_CARGO_HOME_ENV: &str = "MISE_CARGO_HOME";
-
-/// Environment name selecting the exact Rust toolchain for Cargo runs.
-pub const RUSTUP_TOOLCHAIN_ENV: &str = "RUSTUP_TOOLCHAIN";
-
 /// Whether a subcommand is inside the Velnor mise allowlist.
 #[must_use]
 pub fn is_allowed_mise_subcommand(subcommand: &str) -> bool {
     ALLOWED_MISE_SUBCOMMANDS.contains(&subcommand)
-}
-
-/// Whether a key is reserved: isolation, install disable, or credentials.
-/// Credentials are `MISE_GITHUB_TOKEN` plus the `GITHUB_TOKEN`/`GH_TOKEN`
-/// aliases and `ACTIONS_RUNTIME_TOKEN`.
-#[must_use]
-pub fn is_reserved_env_key(key: &str) -> bool {
-    ISOLATION_ENV.iter().any(|(own, _)| *own == key)
-        || NO_AUTO_INSTALL_ENV.iter().any(|(own, _)| *own == key)
-        || [
-            "MISE_GITHUB_TOKEN",
-            "GITHUB_TOKEN",
-            "GH_TOKEN",
-            "ACTIONS_RUNTIME_TOKEN",
-        ]
-        .contains(&key)
-}
-
-/// Typed child-process result: captured streams plus a typed exit.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProcessOutput {
-    /// Captured standard output bytes (bounded by the spawn cap).
-    pub stdout: Vec<u8>,
-    /// Captured standard error bytes (bounded by the spawn cap).
-    pub stderr: Vec<u8>,
-    /// Exit code when the child exited normally.
-    pub code: Option<i32>,
-    /// Terminating signal number when killed by a signal (Unix only).
-    pub signal: Option<i32>,
-    /// Whether the exit status reports success.
-    pub success: bool,
-}
-
-impl ProcessOutput {
-    /// Fail with [`MiseError::NonZeroExit`] unless the status reports success.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`MiseError::NonZeroExit`] when the status reports failure.
-    pub fn require_success(&self, program: &str) -> Result<&Self, MiseError> {
-        if self.success {
-            return Ok(self);
-        }
-        Err(MiseError::NonZeroExit {
-            program: program.to_owned(),
-            code: self.code,
-            stderr: String::from_utf8_lossy(&self.stderr).into_owned(),
-        })
-    }
-
-    /// Decode standard output as UTF-8 text.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`MiseError::InvalidUtf8`] when stdout is not valid UTF-8.
-    pub fn stdout_text(&self, program: &str) -> Result<String, MiseError> {
-        String::from_utf8(self.stdout.clone()).map_err(|_| MiseError::InvalidUtf8 {
-            program: program.to_owned(),
-            stream: "stdout".to_owned(),
-        })
-    }
-}
-
-/// Which parent environment a child may see: bootstrap, verify, and
-/// discovery inherit; repo-task spawns from `env_clear` plus an explicit list.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum EnvPolicy {
-    /// Trusted tool download: inherits parent env plus isolation overlay.
-    Bootstrap,
-    /// Trusted evidence validation: inherits parent env plus isolation overlay.
-    Verify,
-    /// Read-only discovery probes: inherits parent env plus isolation overlay.
-    Discovery,
-    /// Repository task execution: cleared env plus declared inputs only.
-    RepoTask,
 }
 
 /// A fully isolated, shell-free child-process invocation.
@@ -374,50 +290,6 @@ impl IsolatedCommand {
             extra_env,
             policy,
         })
-    }
-}
-
-/// Velnor-owned toolchain environment for one Cargo invocation.
-#[must_use]
-pub fn toolchain_env(rustup: &str, cargo: &str, toolchain: &str) -> Vec<(OsString, OsString)> {
-    [
-        (MISE_RUSTUP_HOME_ENV, rustup),
-        (MISE_CARGO_HOME_ENV, cargo),
-        (RUSTUP_TOOLCHAIN_ENV, toolchain),
-    ]
-    .iter()
-    .map(|(key, value)| (OsString::from(key), OsString::from(value)))
-    .collect()
-}
-
-fn pairs_of<const N: usize>(table: &[(&str, &str); N]) -> Vec<(OsString, OsString)> {
-    table
-        .iter()
-        .map(|(key, value)| (OsString::from(key), OsString::from(value)))
-        .collect()
-}
-
-fn read_capped<R: std::io::Read>(pipe: Option<R>, limit: usize) -> (Vec<u8>, bool) {
-    let Some(pipe) = pipe else {
-        return (Vec::new(), false);
-    };
-    let mut buf = Vec::new();
-    let capped = pipe
-        .take(limit.saturating_add(1).try_into().unwrap_or(u64::MAX))
-        .read_to_end(&mut buf)
-        .is_err()
-        || buf.len() > limit;
-    (buf, capped)
-}
-
-fn signal_of(status: std::process::ExitStatus) -> Option<i32> {
-    #[cfg(unix)]
-    {
-        std::os::unix::process::ExitStatusExt::signal(&status)
-    }
-    #[cfg(not(unix))]
-    {
-        None
     }
 }
 
