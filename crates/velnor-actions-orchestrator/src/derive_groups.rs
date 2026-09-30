@@ -16,7 +16,7 @@ use std::collections::BTreeSet;
 use velnor_actions_contract::{RustConfiguration, VelnorConfig};
 use velnor_actions_mise::ArchivePlan;
 use velnor_actions_rust::{
-    DeriveInputs, RustExecutionProfile, TaskGroup, WorkspaceRecord, derive_task_groups,
+    DeriveInputs, RustExecutionProfile, TaskGroup, TaskKind, WorkspaceRecord, derive_task_groups,
     derive_workspace_fmt_if_explicit,
 };
 
@@ -104,14 +104,22 @@ pub(crate) fn derive_for_config(
             groups.extend(expand_shards(config, &group, profile, archives)?);
         }
     }
-    let manifest = workspace_manifest(&record.workspace_root);
-    if let Some(fmt) = derive_workspace_fmt_if_explicit(
-        &manifest,
-        profile,
-        &rust_config.name,
-        &rust_config.target,
-        explicit_fmt,
-    )? {
+    // Per-package Fmt groups already cover every file: a workspace Fmt group
+    // for the same config would re-check them via plan `fmt --all` (R28).
+    // Package-less workspaces derive no per-package groups, so their one
+    // distinct workspace scope still lands below.
+    let per_package_fmt = groups
+        .iter()
+        .any(|group| group.kind == TaskKind::Fmt && !group.package_name.is_empty());
+    if !per_package_fmt
+        && let Some(fmt) = derive_workspace_fmt_if_explicit(
+            &workspace_manifest(&record.workspace_root),
+            profile,
+            &rust_config.name,
+            &rust_config.target,
+            explicit_fmt,
+        )?
+    {
         groups.push(fmt);
     }
     Ok((groups, fallbacks))

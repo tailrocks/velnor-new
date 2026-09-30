@@ -154,7 +154,7 @@ fn w1_native_parallelism_unqualified() {
 #[test]
 fn w1_plan_prepare_index_and_contract_order() -> TestResult {
     let (_repo, yaml, _alint) = preview_both(config_with_branch())?;
-    let plan = window(&yaml, "  plan:", "  actionlint:")?;
+    let plan = window(&yaml, "  plan:", "  required:")?;
     let names: Vec<&str> = plan
         .lines()
         .filter_map(|line| line.trim().strip_prefix("- name: "))
@@ -236,7 +236,7 @@ fn w1_validators_carry_deny_machete_zizmor_in_order() -> TestResult {
 #[test]
 fn w1_plan_format_runs_fmt_check() -> TestResult {
     let (_repo, yaml, _alint) = preview_both(config_with_branch())?;
-    let plan = window(&yaml, "  plan:", "  actionlint:")?;
+    let plan = window(&yaml, "  plan:", "  required:")?;
     assert!(
         !plan.contains("- name: Format"),
         "no workspace scope without rustfmt config:\n{plan}"
@@ -246,16 +246,21 @@ fn w1_plan_format_runs_fmt_check() -> TestResult {
     let prep = prepare(repo.path())?;
     let tree = render_staged_tree(&prep)?;
     let yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
-    let plan = window(yaml, "  plan:", "  actionlint:")?;
-    assert!(plan.contains("- name: Format"), "format step:\n{plan}");
+    // R28: per-package Fmt groups own every file, so the plan job carries no
+    // overlapping `fmt --all` scope; the crate job keeps its Format step.
+    let plan = window(yaml, "  plan:", "  required:")?;
     assert!(
-        plan.contains("mise ") && plan.contains("fmt --all --check"),
-        "{plan}"
+        !plan.contains("- name: Format"),
+        "no overlapping plan scope:\n{plan}"
     );
-    let format_at = plan.find("- name: Format").ok_or("format step")?;
-    let plan_at = plan.find("- name: Plan").ok_or("plan step")?;
-    assert!(format_at < plan_at, "format precedes plan:\n{plan}");
-    let tail = &plan[format_at..];
+    assert!(
+        !yaml.contains("fmt --all --check"),
+        "no workspace-wide format:\n{yaml}"
+    );
+    let job = window(yaml, "  rust-demo:", "  required:")?;
+    assert!(job.contains("- name: Format"), "per-package scope:\n{job}");
+    let format_at = job.find("- name: Format").ok_or("format step")?;
+    let tail = &job[format_at..];
     let block = &tail[..tail.len().min(900)];
     for key in [
         "MISE_RUSTUP_HOME:",
@@ -266,8 +271,17 @@ fn w1_plan_format_runs_fmt_check() -> TestResult {
     ] {
         assert!(block.contains(key), "format env misses {key}:\n{block}");
     }
-    let job = window(yaml, "  rust-demo:", "  required:")?;
-    assert!(job.contains("- name: Format"), "per-package scope:\n{job}");
+    // Regression: exactly one Format step per crate job, none in plan.
+    let formats = yaml.matches("- name: Format").count();
+    let crates = prep
+        .workflow
+        .ir
+        .jobs
+        .keys()
+        .filter(|id| id.starts_with("rust-"))
+        .count();
+    assert!(crates >= 1, "fixture needs a crate job");
+    assert_eq!(formats, crates, "one Format per crate, none elsewhere");
     let ignored =
         "schema = 1\n[workflow]\ndefault_branch = \"testmain\"\n[stacks]\nignore = [\"rust\"]\n";
     let (_repo, yaml, _alint) = preview_both(ignored)?;

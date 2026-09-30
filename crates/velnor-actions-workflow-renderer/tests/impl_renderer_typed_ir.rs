@@ -4,7 +4,7 @@
 //! per-job `environment`/`permissions` overrides and optional
 //! `workflow_dispatch`/`schedule` triggers render verbatim; `none`
 //! scopes stay absent.
-use velnor_actions_contract::{Permissions, workflow::ir::PermissionLevel};
+use velnor_actions_contract::{Permissions, workflow::permissions::PermissionLevel};
 use velnor_actions_workflow_renderer::{RenderError, checkout_step, plan_step};
 
 use super::impl_renderer_fixtures::*;

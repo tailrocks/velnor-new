@@ -92,7 +92,10 @@ fn setup_p08_enables_builtin_cache_with_key() {
         panic!("setup must be an action step");
     };
     assert_eq!(with.get("cache").map(String::as_str), Some("true"));
-    assert_eq!(with.get("cache_save").map(String::as_str), Some("true"));
+    assert_eq!(
+        with.get("cache_save").map(String::as_str),
+        Some(velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION_EXPR)
+    );
     assert_eq!(
         with.get("cache_key").map(String::as_str),
         Some(key.as_str())
@@ -142,6 +145,7 @@ fn rust_cache_never_stacks_over_mbx() {
     .expect("mbx");
     let rust_cache = velnor_actions_contract::Step {
         name: "Restore Cargo registry".to_owned(),
+        condition: None,
         kind: StepKind::Action {
             uses: format!("Swatinem/rust-cache@{sha}"),
             with: BTreeMap::new(),
@@ -173,6 +177,7 @@ fn rust_cache_never_stacks_over_mbx() {
 fn mbx_restore_precedes_fetch() {
     let fetch = velnor_actions_contract::Step {
         name: "Fetch Cargo sources".to_owned(),
+        condition: None,
         kind: StepKind::Shell {
             run: vec!["sh".to_owned()],
             env: BTreeMap::new(),
@@ -180,6 +185,7 @@ fn mbx_restore_precedes_fetch() {
     };
     let mbx = velnor_actions_contract::Step {
         name: "Restore MBX objects".to_owned(),
+        condition: None,
         kind: StepKind::Action {
             uses: format!("jdx/mr-boxington-action@{}", "d".repeat(40)),
             with: BTreeMap::new(),
@@ -200,4 +206,59 @@ fn mbx_restore_precedes_fetch() {
         ..good.clone()
     };
     assert!(check_mbx_before_fetch("demo", &bad).is_err());
+}
+
+#[test]
+fn step_conditions_serialize_as_if_with_upload_default()
+-> Result<(), velnor_actions_workflow_renderer::RenderError> {
+    use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
+    use velnor_actions_workflow_renderer::{action_step, matrix_report_upload_step, shell_step};
+    let mut save = action_step(
+        "Save Cargo sources",
+        &format!("actions/cache/save@{}", "c".repeat(40)),
+        BTreeMap::from([("key".to_owned(), "k".to_owned())]),
+    )?;
+    save.condition = Some(CACHE_SAVE_CONDITION.to_owned());
+    let mut check = shell_step(
+        "Check",
+        vec![
+            "mise".to_owned(),
+            "exec".to_owned(),
+            "rust@1.98.1".to_owned(),
+        ],
+        BTreeMap::new(),
+    )?;
+    check.condition = Some(CACHE_SAVE_CONDITION.to_owned());
+    let plain = shell_step("Plain", vec!["true".to_owned()], BTreeMap::new())?;
+    let upload = matrix_report_upload_step()?;
+    let text = strict(
+        &fixture_ir(vec![job(
+            "demo",
+            "Demo",
+            Vec::new(),
+            vec![save, check, plain, upload],
+        )]),
+        &fixture_ctx(),
+    )?;
+    let save_at = text.find("Save Cargo sources").expect("save step");
+    assert!(
+        text[save_at..].starts_with("Save Cargo sources\n        if: github.event_name == 'push'"),
+        "save carries push-only if:\n{text}"
+    );
+    let check_at = text.find("- name: Check\n").expect("check step");
+    assert!(
+        text[check_at..].starts_with("- name: Check\n        if: github.event_name == 'push'"),
+        "shell condition serializes:\n{text}"
+    );
+    let plain_at = text.find("- name: Plain\n").expect("plain step");
+    assert!(
+        !text[plain_at..].starts_with("- name: Plain\n        if:"),
+        "unconditioned steps stay if-free:\n{text}"
+    );
+    let upload_at = text.find("Upload matrix report").expect("upload step");
+    assert!(
+        text[upload_at..].starts_with("Upload matrix report\n        if: always()"),
+        "upload keeps always() default:\n{text}"
+    );
+    Ok(())
 }

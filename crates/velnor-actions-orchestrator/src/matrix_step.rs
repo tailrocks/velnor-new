@@ -55,6 +55,7 @@ pub(crate) fn prepare_crate_tools_step(
         .map_err(|problem| OrchestratorError::Contract { problem })?;
     Ok(Step {
         name: PREPARE_PINNED_TOOLS_STEP.to_owned(),
+        condition: None,
         kind: StepKind::Shell { run, env },
     })
 }

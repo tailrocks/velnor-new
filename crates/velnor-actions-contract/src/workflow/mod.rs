@@ -6,6 +6,7 @@ pub mod crate_job;
 pub mod execute;
 pub mod ir;
 pub mod jobs;
+pub mod permissions;
 pub mod plan;
 pub mod qualification;
 pub mod report;
@@ -17,7 +18,7 @@ pub use baseline::{BaselineProof, BaselineStatus, ManifestTaskProof, PlanBaselin
 pub use cache_ids::EntryCacheIds;
 pub use crate_job::{CrateJob, CrateObligation};
 pub use execute::{ExecuteTaskIds, ExecuteTaskRef};
-pub use ir::{Concurrency, Job, PermissionLevel, Permissions, Step, StepKind, Trigger, WorkflowIr};
+pub use ir::{Concurrency, Job, Step, StepKind, Trigger, WorkflowIr};
 pub use jobs::{
     CI_WORKFLOW_PATH, CRATE_JOB_ID_PREFIX, FRESHNESS_CRON_WEEKLY, FRESHNESS_WORKFLOW_PATH,
     NEEDS_CHANNEL_ENV, NEEDS_CHANNEL_EXPRESSION, NeedsConclusions, PLAN_DISPLAY_NAME, PLAN_JOB_ID,
@@ -26,6 +27,7 @@ pub use jobs::{
     assign_crate_job_ids, crate_display_label, crate_display_name, slugify_segment,
     validate_job_id,
 };
+pub use permissions::{PermissionLevel, Permissions};
 pub use plan::{
     MatrixEntry, ObligationDecision, Plan, PlanGenerator, PlanMatrix, PlanObligation, PlanPackage,
     PlanRunner, Trust, WorkflowEvent, validate_matrix_run,

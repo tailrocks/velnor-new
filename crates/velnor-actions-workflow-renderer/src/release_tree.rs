@@ -219,6 +219,10 @@ fn release_step_to_yaml(step: &Step) -> Result<Yaml, RenderError> {
                 steps::scan_for_private_subcommands(entry)?;
             }
             let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
+            if let Some(condition) = &step.condition {
+                steps::scan_for_private_subcommands(condition)?;
+                entries.push(("if".to_owned(), Yaml::str(condition.clone())));
+            }
             entries.push(("uses".to_owned(), Yaml::str(uses.clone())));
             if !with.is_empty() {
                 let inputs: Vec<(String, Yaml)> = with
@@ -233,6 +237,10 @@ fn release_step_to_yaml(step: &Step) -> Result<Yaml, RenderError> {
             commands::validate_command_argv(run)?;
             commands::validate_env(env)?;
             let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
+            if let Some(condition) = &step.condition {
+                steps::scan_for_private_subcommands(condition)?;
+                entries.push(("if".to_owned(), Yaml::str(condition.clone())));
+            }
             if !env.is_empty() {
                 let vars: Vec<(String, Yaml)> = env
                     .iter()

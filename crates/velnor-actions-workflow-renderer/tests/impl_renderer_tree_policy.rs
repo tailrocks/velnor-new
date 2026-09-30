@@ -276,6 +276,7 @@ fn renderer_rejects_bare_commands_inside_ir() -> Result<(), RenderError> {
         "velnor-task".to_owned(),
         task_job(Step {
             name: "Install".to_owned(),
+            condition: None,
             kind: StepKind::Shell {
                 run: vec!["cargo".to_owned(), "install".to_owned(), "x".to_owned()],
                 env: BTreeMap::new(),
@@ -288,6 +289,7 @@ fn renderer_rejects_bare_commands_inside_ir() -> Result<(), RenderError> {
         "velnor-task".to_owned(),
         task_job(Step {
             name: "Fetch".to_owned(),
+            condition: None,
             kind: StepKind::Action {
                 uses: "actions/checkout@main".to_owned(),
                 with: BTreeMap::new(),
@@ -300,6 +302,7 @@ fn renderer_rejects_bare_commands_inside_ir() -> Result<(), RenderError> {
         "velnor-task".to_owned(),
         task_job(Step {
             name: "Run Alint".to_owned(),
+            condition: None,
             kind: StepKind::Action {
                 uses: "asamarts/alint@v0.16.1".to_owned(),
                 with: BTreeMap::new(),
@@ -337,6 +340,7 @@ fn renderer_rejects_unpinned_actions_inside_ir() -> Result<(), RenderError> {
             "velnor-task".to_owned(),
             task_job(Step {
                 name: name.to_owned(),
+                condition: None,
                 kind: StepKind::Action {
                     uses: uses.to_owned(),
                     with: BTreeMap::new(),

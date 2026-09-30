@@ -101,6 +101,7 @@ pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, Orches
             checkout_action()?,
             Step {
                 name: "Run actionlint".to_owned(),
+                condition: None,
                 kind: StepKind::Shell {
                     run: argv,
                     env: BTreeMap::new(),
@@ -191,6 +192,7 @@ fn prepare_pinned_tools_step(
         .map_err(|problem| OrchestratorError::Contract { problem })?;
     Ok(Step {
         name: PREPARE_PINNED_TOOLS_STEP.to_owned(),
+        condition: None,
         kind: StepKind::Shell { run, env },
     })
 }

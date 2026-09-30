@@ -254,8 +254,8 @@ pub fn check_doc_after_doctest(job: &Job) -> Result<(), RenderError> {
 ///
 /// The vector must reference `matrix-report.json`: the step writes the
 /// cache-contract §3 aggregate for its leg. Per-step timing capture plus
-/// step-level `always()` (current step IR has no condition field) are
-/// orchestrator/contract work tracked alongside this constructor.
+/// step-level `always()` (via `Step.condition`, serialized by `document`)
+/// are orchestrator/contract work tracked alongside this constructor.
 /// # Errors
 pub fn timings_report_step(
     argv: Vec<String>,

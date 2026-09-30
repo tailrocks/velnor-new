@@ -53,6 +53,7 @@ pub(crate) fn checkout_step() -> Result<Step, OrchestratorError> {
     })?;
     Ok(Step {
         name: "Checkout".to_owned(),
+        condition: None,
         kind: StepKind::Action {
             uses: PinnedActionRef::checkout().uses_value(),
             with,
@@ -83,6 +84,7 @@ pub(crate) fn checkout_step_full() -> Result<Step, OrchestratorError> {
     })?;
     Ok(Step {
         name: "Checkout".to_owned(),
+        condition: None,
         kind: StepKind::Action {
             uses: PinnedActionRef::checkout().uses_value(),
             with,
@@ -150,7 +152,10 @@ pub(crate) fn maybe_task_cache_steps(
 /// so one scope had three owners. Per-package formatting lives in
 /// crate jobs; this returns a step only for a package-less workspace
 /// `Fmt` obligation (explicit root `rustfmt` config), the one distinct
-/// scope the plan job owns. No synthesis, no fallback.
+/// scope the plan job owns. Derivation (`derive_for_config`) suppresses
+/// the workspace group whenever per-package `Fmt` groups exist for the
+/// same config, so this step never re-checks crate-owned files (R28).
+/// No synthesis, no fallback.
 ///
 /// # Errors
 ///

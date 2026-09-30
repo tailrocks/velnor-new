@@ -152,6 +152,22 @@ fn c9_pr_save_needs_action_support_and_forks_stay_read_only() {
     assert!(!trust::is_read_only(false));
     assert!(trust::pr_outputs_trusted("trusted"));
     assert!(!trust::pr_outputs_trusted("pr"));
+    // R13: the pinned action cannot scope PR saves, so no pull_request run
+    // (same-repo or fork) may save — the emitted condition is push-only.
+    for fork in [false, true] {
+        assert!(
+            !trust::pr_save_allowed(trust::MBX_PR_SAVE_SUPPORTED, fork, "pull_request"),
+            "PR saves forbidden (fork={fork})"
+        );
+    }
+    assert_eq!(
+        velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION,
+        "github.event_name == 'push'"
+    );
+    assert_eq!(
+        velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION_EXPR,
+        "${{ github.event_name == 'push' }}"
+    );
 }
 
 #[test]

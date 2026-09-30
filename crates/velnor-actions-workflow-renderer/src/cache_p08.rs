@@ -106,6 +106,10 @@ fn specs_in_argv(run: &[String]) -> Vec<String> {
 
 /// Setup step with qualified built-in cache (`cache:true` + `cache_key`).
 ///
+/// Saves stay push-gated: every run restores the tools cache, but only
+/// push runs save it (same-repo and fork PRs restore read-only, since the
+/// pinned action has no PR-scoped save to promote into).
+///
 /// # Errors
 ///
 /// Returns [`RenderError`] for invalid pins or cache keys.
@@ -125,7 +129,10 @@ pub fn mise_setup_step_p08(setup: &MiseSetup, cache_key: &str) -> Result<Step, R
             ("install".to_owned(), "false".to_owned()),
             ("env".to_owned(), "false".to_owned()),
             ("cache".to_owned(), "true".to_owned()),
-            ("cache_save".to_owned(), "true".to_owned()),
+            (
+                "cache_save".to_owned(),
+                velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION_EXPR.to_owned(),
+            ),
             ("cache_key".to_owned(), cache_key.to_owned()),
         ]),
     )
@@ -310,7 +317,9 @@ fn setup_shape_ok(step: &Step, qualified: bool) -> bool {
     }
     if qualified {
         with.get("cache").is_some_and(|v| v == "true")
-            && with.get("cache_save").is_some_and(|v| v == "true")
+            && with.get("cache_save").is_some_and(|v| {
+                v == velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION_EXPR
+            })
             && with.get("cache_key").is_some_and(|v| is_cache_key(v))
     } else {
         with.get("cache").is_some_and(|v| v == "false")

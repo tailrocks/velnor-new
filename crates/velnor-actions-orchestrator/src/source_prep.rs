@@ -94,6 +94,7 @@ fn fetch_steps_with(
         };
         steps.push(Step {
             name,
+            condition: None,
             kind: StepKind::Shell {
                 run: vec!["sh".to_owned(), "-c".to_owned(), script],
                 env: env.clone(),

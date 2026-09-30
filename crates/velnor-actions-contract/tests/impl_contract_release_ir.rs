@@ -1,9 +1,9 @@
 //! Release IR cases: permissions, dispatch inputs, schedule, environment.
 use std::collections::BTreeMap;
 use velnor_actions_contract::workflow::ir::{
-    Concurrency, DispatchInput, Job, PermissionLevel, Permissions, Step, StepKind, Trigger,
-    WorkflowDispatch, WorkflowIr,
+    Concurrency, DispatchInput, Job, Step, StepKind, Trigger, WorkflowDispatch, WorkflowIr,
 };
+use velnor_actions_contract::workflow::permissions::{PermissionLevel, Permissions};
 use velnor_actions_contract::{ContractError, ScheduleTrigger};
 
 const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
@@ -45,6 +45,7 @@ fn ci_job() -> Job {
         environment: None,
         steps: vec![Step {
             name: "run".to_owned(),
+            condition: None,
             kind: StepKind::Internal {
                 operation: "demo".to_owned(),
             },
