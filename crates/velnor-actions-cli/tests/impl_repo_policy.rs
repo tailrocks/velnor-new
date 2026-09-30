@@ -8,6 +8,14 @@ use std::path::{Path, PathBuf};
 
 #[path = "alint_miniyaml.rs"]
 mod alint_miniyaml;
+#[path = "fixtures/p11_alint.rs"]
+mod p11_alint;
+#[path = "fixtures/p11_compiler.rs"]
+mod p11_compiler;
+#[path = "fixtures/p11_metadata.rs"]
+mod p11_metadata;
+#[path = "fixtures/p11_toml.rs"]
+mod p11_toml;
 #[path = "fixtures/p12_harness.rs"]
 mod p12_harness;
 #[path = "fixtures/p12_live.rs"]
@@ -164,24 +172,16 @@ fn package_names_use_purpose_suffix() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn generic_names_forbidden() -> Result<(), Box<dyn Error>> {
-    let banned = [
-        "velnor-model",
-        "velnor-core",
-        "velnor-common",
-        "velnor-utils",
-        "velnor-util",
-        "velnor-rust",
-        "velnor-actions-model",
-        "velnor-actions-core",
-        "velnor-actions-common",
-        "velnor-actions-utils",
-        "velnor-actions-util",
-    ];
+    let stems = ["model", "core", "common", "utils", "util"];
     for (dir, _) in MEMBERS {
         let body = manifest(dir)?;
-        for name in banned {
-            assert!(!body.contains(name), "{dir} uses {name}");
+        for prefix in ["velnor-", "velnor-actions-"] {
+            for stem in stems {
+                let name = format!("{prefix}{stem}");
+                assert!(!body.contains(&name), "{dir} uses {name}");
+            }
         }
+        assert!(!body.contains("velnor-rust"), "{dir} uses velnor-rust");
     }
     Ok(())
 }
@@ -348,9 +348,7 @@ fn no_git_dependencies() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn alint_config_semantic_policy() -> Result<(), Box<dyn Error>> {
-    assert_eq!(alint_miniyaml::ALLOWED_KINDS.len(), 6);
-    assert!(alint_miniyaml::ALLOWED_KINDS.contains(&"pair"));
-    alint_miniyaml::check_policy(&alint_miniyaml::parse(&read(".alint.yml")?)?)
+    p11_alint::check_extended_policy(&read(".alint.yml")?)
 }
 
 #[test]

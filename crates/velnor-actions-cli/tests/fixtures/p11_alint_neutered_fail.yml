@@ -1,3 +1,5 @@
+# NEGATIVE FIXTURE: copy of .alint.yml with the override regex neutered to
+# `.*` (must be rejected by the override pins; still parses as YAML).
 # Repository policy, enforced by asamarts/alint as its own CI job.
 # Local rules cover generic file/path requirements and agent-instruction
 # file integrity only. No dependency-architecture, Rust-syntax, or
@@ -141,7 +143,7 @@ rules:
       - .github/workflows/*.yml
       - .github/workflows/*.yaml
     path: $.jobs.*.steps[*].uses
-    matches: ^(\./.*|docker://[^@]+@sha256:[a-f0-9]{64}|[a-zA-Z0-9._/-]+@[a-f0-9]{40})$
+    matches: .*  # NEUTERED FIXTURE
     if_present: true
     level: info
     message: "Third-party action is not pinned to a commit SHA (reviewed-tag exception tracked in .zizmor.yml)"

@@ -1,3 +1,5 @@
+# NEGATIVE FIXTURE: copy of .alint.yml with the GHA bundle listed twice
+# (must be rejected by the deduped-extends pin; still parses as YAML).
 # Repository policy, enforced by asamarts/alint as its own CI job.
 # Local rules cover generic file/path requirements and agent-instruction
 # file integrity only. No dependency-architecture, Rust-syntax, or
@@ -40,6 +42,7 @@ ignore:
 
 extends:
   - alint://bundled/oss-baseline@v1
+  - alint://bundled/ci/github-actions@v1
   - alint://bundled/ci/github-actions@v1
   - alint://bundled/rust@v1
   - alint://bundled/hygiene/lockfiles@v1
