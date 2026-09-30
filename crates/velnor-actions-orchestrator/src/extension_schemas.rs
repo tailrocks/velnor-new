@@ -37,7 +37,9 @@ pub fn task_kind_segment(task_id: &str) -> Option<&str> {
             .then_some(kind);
     }
     let rest = task_id.strip_prefix("stack/")?;
-    let base = rest.split_once("/shard-").map_or(rest, |(base, _)| base);
+    let base = velnor_actions_contract::split_shard_suffix(task_id)
+        .and_then(|(base, _, _)| base.strip_prefix("stack/"))
+        .unwrap_or(rest);
     let parts: Vec<&str> = base.split('/').collect();
     if parts.len() < 4 || parts.iter().any(|part| part.is_empty()) {
         return None;

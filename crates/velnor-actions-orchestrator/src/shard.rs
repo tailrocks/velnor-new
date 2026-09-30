@@ -95,7 +95,10 @@ pub(crate) fn check_entry_shards(
     for base in bases {
         let group: Vec<&ShardProof> = proofs
             .iter()
-            .filter(|p| p.task_id.split("/shard-").next() == Some(base.as_str()))
+            .filter(|p| {
+                velnor_actions_contract::split_shard_suffix(&p.task_id)
+                    .is_some_and(|(proof_base, _, _)| proof_base == base.as_str())
+            })
             .collect();
         empty += check_group(&group, obligations)?;
     }

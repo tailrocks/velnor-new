@@ -228,11 +228,8 @@ pub(crate) fn platform_id_for_group(label: &str, group: &TaskGroup) -> String {
 /// schedule position yields the same lane, and distinct responsibilities
 /// (including sibling shards) never share one.
 pub(crate) fn writer_lane_for(task_id: &str) -> String {
-    if let Some((_, shard)) = task_id.split_once("/shard-")
-        && !shard.is_empty()
-        && !shard.contains('/')
-    {
-        return format!("shard-{shard}");
+    if let Some((_, index, count)) = velnor_actions_contract::split_shard_suffix(task_id) {
+        return format!("shard-{index}-of-{count}");
     }
     "primary".to_owned()
 }

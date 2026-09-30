@@ -118,15 +118,7 @@ pub(crate) fn plan_reuse_outcome(
 
 /// Shard index/count from a `/shard-<index>-of-<count>` task-ID suffix.
 fn parse_shard_suffix(task_id: &str) -> Option<(u32, u32)> {
-    let (_, shard) = task_id.split_once("/shard-")?;
-    if shard.contains('/') {
-        return None;
-    }
-    let (index, count) = shard.split_once("-of-")?;
-    let (index, count) = (index.parse::<u32>().ok()?, count.parse::<u32>().ok()?);
-    if index == 0 || count == 0 || index > count {
-        return None;
-    }
+    let (_, index, count) = velnor_actions_contract::split_shard_suffix(task_id)?;
     Some((index, count))
 }
 

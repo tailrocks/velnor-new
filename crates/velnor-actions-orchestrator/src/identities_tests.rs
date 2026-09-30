@@ -80,6 +80,14 @@ fn lanes_follow_responsibility_never_ordinals() {
     );
     assert_eq!(writer_lane_for(&clippy.task_id), "primary");
     assert_eq!(writer_lane_for(&shard_a.task_id), "shard-1-of-2");
+    for malformed in [
+        "stack/rust/root/nextest/default/shard-x",
+        "stack/rust/root/nextest/default/shard-0-of-2",
+        "stack/rust/root/nextest/default/shard-1-of-2/shard-3-of-4",
+        "stack/rust/root/nextest/shard-1-of-2/default",
+    ] {
+        assert_eq!(writer_lane_for(malformed), "primary", "{malformed}");
+    }
 }
 
 #[test]

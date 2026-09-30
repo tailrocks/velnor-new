@@ -9,7 +9,7 @@
 
 use std::ffi::OsString;
 
-use velnor_actions_contract::{ContractError, task_id_for_stack};
+use velnor_actions_contract::{ContractError, split_shard_suffix, task_id_for_stack};
 
 use crate::evidence::Evidence;
 use crate::profile::{CompileDriver, TestRunner};
@@ -22,7 +22,7 @@ pub fn shard_task_id(base: &str, index: u32, count: u32) -> Result<String, Contr
         .strip_prefix("stack/")
         .ok_or_else(|| ContractError::identity("task_id", "malformed_task_id"))?;
     let parts: Vec<&str> = rest.split('/').collect();
-    if parts.len() < 4 || rest.contains("shard-") {
+    if parts.len() < 4 || split_shard_suffix(base).is_some() {
         return Err(ContractError::identity("task_id", "bad_base_id"));
     }
     task_id_for_stack(
