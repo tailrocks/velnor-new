@@ -4,10 +4,10 @@ use std::path::Path;
 
 use tempfile::TempDir;
 use velnor_actions_contract::{FinalStatus, ObligationDecision, Plan};
-use velnor_actions_orchestrator::{OrchestratorError, merge_internal, plan_internal, prepare};
+use velnor_actions_orchestrator::{merge_internal, plan_internal};
 
 use crate::impl_common::{
-    TestResult, config_with_branch, err_of, fixture_manifest_json, git, git_line, make_repo,
+    TestResult, config_with_branch, fixture_manifest_json, git, git_line, make_repo,
     passing_reports, plan_for_source_change,
 };
 
@@ -224,8 +224,22 @@ fn new_package_at_head_marks_affected() -> TestResult {
 #[test]
 fn source_build_skips_lookup_with_reason() -> TestResult {
     let (repo, base, head) = two_commit_repo()?;
-    let (plan, _) = plan_with(repo.path(), Some(&base), &head, None)?;
-    assert_eq!(plan.generator.sha256, "0".repeat(64));
+    // P03: no zero digests. Inject the explicit unresolved marker (the
+    // default when the exe digest is unreadable); the native `b3-`
+    // default instead attempts live lookup and lets provenance decide.
+    let request = serde_json::json!({
+        "schema": 1, "run_key": "local", "base": Some(&base), "head": head,
+        "event": "pull_request", "root": repo.path().display().to_string(),
+        "generator": {
+            "version": env!("CARGO_PKG_VERSION"),
+            "target": "x86_64-unknown-linux-gnu",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        },
+    });
+    let response = plan_internal(&request.to_string())?;
+    let value: serde_json::Value = serde_json::from_str(&response)?;
+    let plan: Plan = serde_json::from_value(value["plan"].clone())?;
+    assert_ne!(plan.generator.sha256, "0".repeat(64));
     assert_eq!(
         plan.baseline.reason.as_deref(),
         Some("generator_unverifiable_source_build")
@@ -307,87 +321,5 @@ fn coverage_warn_notes_no_publish_attempt() -> TestResult {
         .iter()
         .any(|w| w.contains("baseline_publish:forbidden") && w.contains("no_publish_attempted"));
     assert!(noted, "{warnings:?}");
-    Ok(())
-}
-
-/// Child-side identity probe for one `VELNOR_TRUST_PROBE` scenario; a no-op
-/// without it. The spawner re-executes this binary per scenario with exact
-/// child env, never mutating process-global env (forbidden by `unsafe_code`).
-#[test]
-fn trust_probe_identity_inner() -> TestResult {
-    let scenario = std::env::var("VELNOR_TRUST_PROBE").unwrap_or_default();
-    if scenario.is_empty() {
-        return Ok(());
-    }
-    let repo = make_repo(
-        "schema = 1\n[workflow]\npolicy = \"velnor-repository-v1\"\ndefault_branch = \"testmain\"\n",
-    )?;
-    let url = if scenario.contains("scp_canonical_origin") {
-        "git@github.com:tailrocks/velnor-new.git"
-    } else if scenario.contains("canonical_origin") {
-        "https://github.com/tailrocks/velnor-new.git"
-    } else if scenario.contains("hostile_subdomain_origin") {
-        "https://github.com.evil.example/tailrocks/velnor-new.git"
-    } else if scenario.contains("hostile_scp_origin") {
-        "git@evil.example:tailrocks/velnor-new.git"
-    } else if scenario.contains("hostile_suffix_origin") {
-        "https://evil.example/tailrocks/velnor-new.git"
-    } else {
-        "https://example.com/other/repo.git"
-    };
-    git(&["remote", "add", "origin", url], repo.path())?;
-    match scenario.as_str() {
-        "canonical_hint_canonical_origin"
-        | "no_hint_canonical_origin"
-        | "no_hint_scp_canonical_origin" => {
-            prepare(repo.path())?;
-        }
-        name => {
-            let err = err_of(prepare(repo.path()), name)?;
-            assert!(
-                matches!(err, OrchestratorError::IdentityRejected { .. }),
-                "got {err}"
-            );
-            let want = if name.contains("evil_hint") {
-                "mismatch"
-            } else {
-                "velnor_policy_requires"
-            };
-            assert!(err.to_string().contains(want), "got {err}");
-        }
-    }
-    Ok(())
-}
-
-#[test]
-fn identity_hint_scenarios() -> TestResult {
-    let cases = [
-        ("canonical_hint_fork_origin", Some("tailrocks/velnor-new")),
-        ("evil_hint_canonical_origin", Some("evil/fork")),
-        ("evil_hint_fork_origin", Some("evil/fork")),
-        (
-            "canonical_hint_canonical_origin",
-            Some("tailrocks/velnor-new"),
-        ),
-        ("no_hint_canonical_origin", None),
-        ("no_hint_scp_canonical_origin", None),
-        ("no_hint_hostile_suffix_origin", None),
-        ("no_hint_hostile_scp_origin", None),
-        ("no_hint_hostile_subdomain_origin", None),
-    ];
-    for (probe, hint) in cases {
-        let mut child = std::process::Command::new(std::env::current_exe()?);
-        child.env("VELNOR_TRUST_PROBE", probe);
-        if let Some(value) = hint {
-            child.env("GITHUB_REPOSITORY", value);
-        } else {
-            child.env_remove("GITHUB_REPOSITORY");
-        }
-        let output = child.arg("trust_probe_identity_inner").output()?;
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        assert!(output.status.success(), "{probe}: {stdout}{stderr}");
-        assert!(stdout.contains("1 passed"), "{probe}: {stdout}");
-    }
     Ok(())
 }

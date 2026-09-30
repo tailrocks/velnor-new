@@ -1,4 +1,8 @@
-//! Baseline evidence: naming, validation, and coverage classification.
+//! Baseline evidence: resolution, validation, and coverage classification.
+
+// Wired here so provenance checks compile without touching `lib.rs`.
+#[path = "provenance_check.rs"]
+pub(crate) mod provenance_check;
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -11,6 +15,10 @@ use velnor_actions_contract::{
 };
 use velnor_actions_mise::BaselineLookup as MiseBaselineLookup;
 
+use self::provenance_check::{
+    ProvenanceExpectations, publish_event_eligible, repository_anchor_from_origin,
+    validate_provenance,
+};
 use crate::OrchestratorError;
 use crate::cover::shard;
 use crate::cover_identity::{
@@ -21,71 +29,8 @@ use crate::discover::Discovery;
 use crate::internal::internal_contract;
 use crate::merge::BaselineManifest;
 
-/// Derive `velnor-baseline-<commit>-<compat>` with full IDs.
-/// # Errors
-pub(crate) fn baseline_artifact_name(commit: &str, compat: &str) -> Result<String, String> {
-    let sha = commit.len() == 40 && commit.bytes().all(|b| b.is_ascii_hexdigit());
-    reject(sha, "bad_source_commit")?;
-    validate_digest(compat).map_err(|_| "bad_compatibility_id".to_owned())?;
-    Ok(format!("velnor-baseline-{commit}-{compat}"))
-}
-
-/// Validate evidence: source/ref/event/run/attempt/generator/schema/digests.
-pub(crate) fn validate_manifest(
-    manifest: &BaselineManifest,
-    base: &str,
-    branch: &str,
-    generator_version: &str,
-    generator_sha256: &str,
-) -> Result<(), String> {
-    let expect = baseline_artifact_name(&manifest.source_commit, &manifest.compatibility_id)?;
-    let identified = manifest.run_id > 0 && manifest.run_attempt > 0 && manifest.artifact_id > 0;
-    let trusted = manifest.event == "push" && manifest.final_status == "passed";
-    let generated = manifest.generator_version == generator_version
-        && manifest.generator_sha256 == generator_sha256;
-    let repo_ok = validate_digest(&manifest.repository_id).is_ok();
-    reject(manifest.schema == 1, "stale_schema")?;
-    reject(manifest.source_commit == base, "wrong_commit")?;
-    reject(manifest.ref_ == format!("refs/heads/{branch}"), "wrong_ref")?;
-    reject(trusted, "untrusted_proof")?;
-    reject(identified, "bad_proof_identity")?;
-    reject(generated, "generator_mismatch")?;
-    reject(repo_ok, "bad_repository_id")?;
-    reject(manifest.artifact_name == expect, "artifact_mismatch")?;
-    for task in &manifest.tasks {
-        if let Some(proof) = &task.proof {
-            proof.validate().map_err(|_| "bad_task_proof".to_owned())?;
-            let bound = proof.task_id == task.task_id
-                && proof.task_digest == task.task_digest
-                && proof.input_digest == task.input_digest
-                && proof.proof_run_id == task.proof_run_id;
-            reject(bound, "proof_mismatch")?;
-            continue;
-        }
-        let ids_ok = velnor_actions_contract::validate_task_id(&task.task_id).is_ok()
-            && validate_digest(&task.task_digest).is_ok()
-            && validate_digest(&task.input_digest).is_ok();
-        let runs_ok = task.proof_run_id > 0 && task.observed_run_id > 0;
-        let fresh_ok = task
-            .external_data
-            .as_ref()
-            .is_none_or(|proof| proof.validate().is_ok());
-        reject(ids_ok, "bad_task_identity")?;
-        reject(runs_ok, "bad_proof_identity")?;
-        reject(fresh_ok, "bad_external_data")?;
-    }
-    Ok(())
-}
-
-/// True only for protected pushes; PR/fork/merge-group runs never publish.
-pub(crate) fn publish_event_eligible(event: WorkflowEvent) -> bool {
-    event == WorkflowEvent::Push
-}
-
-/// Reject a failed evidence check with its reason.
-fn reject(ok: bool, reason: &str) -> Result<(), String> {
-    if ok { Ok(()) } else { Err(reason.to_owned()) }
-}
+/// Maximum accepted `baseline.json` bytes: evidence stays bounded.
+const MAX_BASELINE_MANIFEST_BYTES: usize = 1_048_576;
 
 /// Current Unix time; clock failure fails closed (all dated baselines expire).
 fn unix_now() -> u64 {
@@ -114,6 +59,8 @@ pub(crate) struct BaselineInputs<'a> {
 /// full execution and records its exact reason: cache misses, corruption,
 /// and expiry broaden instead of failing, while coverage that would
 /// invalidate the plan reverts to full execution with a warning.
+/// Validation runs fresh on every call; reports never replay cached
+/// verdicts.
 /// # Errors
 pub(crate) fn apply_baseline(
     plan: &mut Plan,
@@ -139,29 +86,38 @@ pub(crate) fn apply_baseline(
         plan.warnings.push("baseline_miss:missing_base".to_owned());
         return Ok(());
     };
-    if let Err(reason) = validate_manifest(
-        &manifest,
-        &base,
-        inputs.branch,
-        &plan.generator.version,
-        &plan.generator.sha256,
-    ) {
-        mark_unavailable(plan, &format!("baseline_invalid:{reason}"));
-        plan.warnings.push(format!("baseline_miss:{reason}"));
-        return Ok(());
+    let digest = digest_b3(&canonical_json_bytes(&manifest).map_err(internal_contract)?);
+    let expected = ProvenanceExpectations {
+        base: base.clone(),
+        branch: inputs.branch.to_owned(),
+        workflow_path: inputs.workflow.to_owned(),
+        generator_version: plan.generator.version.clone(),
+        generator_sha256: plan.generator.sha256.clone(),
+        repository_id: repository_anchor_from_origin(inputs.root),
+    };
+    let provenance = match validate_provenance(&manifest, &digest, &expected) {
+        Ok(provenance) => provenance,
+        Err(reason) => {
+            mark_unavailable(plan, &format!("baseline_invalid:{reason}"));
+            plan.warnings.push(format!("baseline_miss:{reason}"));
+            return Ok(());
+        }
+    };
+    if expected.repository_id.is_none() {
+        plan.warnings
+            .push("baseline_repository_unverified:no_git_origin".to_owned());
     }
     if baseline_expired(manifest.expires_at_unix, unix_now()) {
         mark_unavailable(plan, "baseline_expired");
         plan.warnings.push("baseline_miss:cache_expired".to_owned());
         return Ok(());
     }
-    let digest = digest_b3(&canonical_json_bytes(&manifest).map_err(internal_contract)?);
     let saved = (
         plan.obligations.clone(),
         plan.matrix.clone(),
         plan.packages.clone(),
     );
-    let covered = apply_coverage(plan, &manifest, &digest, discovery, changed);
+    let covered = apply_coverage(plan, &manifest, &provenance, discovery, changed, &inputs);
     if plan.validate().is_err() {
         (plan.obligations, plan.matrix, plan.packages) = saved;
         plan.warnings
@@ -172,11 +128,11 @@ pub(crate) fn apply_baseline(
     } else {
         plan.baseline = PlanBaseline {
             status: BaselineStatus::Used,
-            base_commit: Some(base),
-            run_id: Some(manifest.run_id),
-            artifact_id: Some(manifest.artifact_id),
-            artifact_name: Some(manifest.artifact_name.clone()),
-            manifest_digest: Some(digest),
+            base_commit: Some(provenance.source_commit),
+            run_id: Some(provenance.run_id),
+            artifact_id: Some(provenance.artifact_id),
+            artifact_name: Some(provenance.artifact_name),
+            manifest_digest: Some(provenance.manifest_digest),
             reason: None,
         };
     }
@@ -228,11 +184,11 @@ fn lookup_manifest(plan: &mut Plan, inputs: BaselineInputs<'_>) -> Option<Baseli
     }
 }
 
-/// Baseline download argv: exact-name when the artifact is known (PAR-5.10).
+/// Baseline download argv for one exact artifact (PAR-5.10).
 ///
-/// The expected name needs the compatibility digest, which is unknown
-/// until a manifest validates; without it the whole run downloads and
-/// exact filtering happens in [`baseline_entry_for`].
+/// Only exact-name downloads exist: without a known artifact name there
+/// is no bounded download, so no command is returned and the lookup
+/// fails closed to execute-all. The whole-run download fallback is gone.
 pub(crate) fn baseline_download_args(
     base: &str,
     workflow: &str,
@@ -246,13 +202,14 @@ pub(crate) fn baseline_download_args(
     {
         return lookup.download_args(run_id, dir);
     }
-    shard::BaselineLookup::download_args(run_id, dir)
+    Vec::new()
 }
 
 /// One exact-base baseline from a download entry (PAR-5.5).
 ///
 /// The entry directory must carry exactly `baseline.json` (single-file
-/// UTF-8, no other payload) with matching source commit and artifact name.
+/// bounded UTF-8, no other payload) with matching source commit and
+/// artifact name. Duplicate JSON keys are rejected, never last-wins.
 pub(crate) fn baseline_entry_for(dir: &Path, base: &str) -> Option<BaselineManifest> {
     let name = dir.file_name()?.to_str()?;
     let rest = name.strip_prefix(&format!("velnor-baseline-{base}-"))?;
@@ -271,8 +228,13 @@ pub(crate) fn baseline_entry_for(dir: &Path, base: &str) -> Option<BaselineManif
     if count != 1 {
         return None;
     }
-    let text = std::fs::read_to_string(payload?).ok()?;
-    let manifest: BaselineManifest = serde_json::from_str(&text).ok()?;
+    let bytes = std::fs::read(payload?).ok()?;
+    if bytes.len() > MAX_BASELINE_MANIFEST_BYTES {
+        return None;
+    }
+    let text = std::str::from_utf8(&bytes).ok()?;
+    let value = crate::internal_plan::snapshot::parse_canonical_json(text).ok()?;
+    let manifest: BaselineManifest = serde_json::from_value(value).ok()?;
     if manifest.source_commit == base && manifest.artifact_name == name {
         Some(manifest)
     } else {
@@ -285,17 +247,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn baseline_publish_and_naming_rules() {
+    fn baseline_publish_and_download_rules() {
         assert!(publish_event_eligible(WorkflowEvent::Push));
         assert!(!publish_event_eligible(WorkflowEvent::PullRequest));
         assert!(!publish_event_eligible(WorkflowEvent::MergeGroup));
-        let name = baseline_artifact_name(&"a".repeat(40), &digest_b3(b"compat")).expect("name");
-        assert!(name.starts_with("velnor-baseline-"));
-        assert!(baseline_artifact_name("short", &digest_b3(b"c")).is_err());
-    }
-
-    #[test]
-    fn download_args_name_exact_artifact_when_known() {
         let base = "a".repeat(40);
         let dir = Path::new("/tmp/x");
         let name = format!("velnor-baseline-{base}-{}", digest_b3(b"c"));
@@ -312,15 +267,12 @@ mod tests {
         .collect();
         assert_eq!(&named[0..4], &["run", "download", "7", "--name"]);
         assert_eq!(named[4], name);
-        let whole: Vec<String> = baseline_download_args(&base, "w", "b", None, 7, dir)
-            .iter()
-            .map(|arg| arg.to_string_lossy().into_owned())
-            .collect();
-        assert!(!whole.contains(&"--name".to_owned()));
+        assert!(baseline_download_args(&base, "w", "b", None, 7, dir).is_empty());
+        assert!(baseline_download_args(&base, "w", "b", Some(""), 7, dir).is_empty());
     }
 
     #[test]
-    fn baseline_entry_needs_single_utf8_payload() {
+    fn baseline_entry_needs_single_strict_payload() {
         let base = "a".repeat(40);
         let name = format!("velnor-baseline-{base}-{}", digest_b3(b"c"));
         let tmp = tempfile::tempdir().expect("tempdir");
@@ -330,6 +282,10 @@ mod tests {
         std::fs::write(entry.join("extra.json"), "{}").expect("extra");
         assert!(baseline_entry_for(&entry, &base).is_none());
         std::fs::remove_file(entry.join("extra.json")).expect("rm");
+        assert!(baseline_entry_for(&entry, &base).is_none());
+        std::fs::write(entry.join("baseline.json"), r#"{"schema": 1, "schema": 1}"#).expect("dup");
+        assert!(baseline_entry_for(&entry, &base).is_none());
+        std::fs::write(entry.join("baseline.json"), [0xff, 0xfe]).expect("bad");
         assert!(baseline_entry_for(&entry, &base).is_none());
         let digest = digest_b3(b"d");
         let manifest = serde_json::json!({

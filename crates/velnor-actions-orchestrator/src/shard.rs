@@ -270,20 +270,6 @@ impl BaselineLookup {
         .collect()
     }
 
-    /// Fixed `gh run download` args for one exact run into fresh temp.
-    #[must_use]
-    pub(crate) fn download_args(run_id: u64, dir: &Path) -> Vec<OsString> {
-        let id = run_id.to_string();
-        [
-            OsString::from("run"),
-            OsString::from("download"),
-            OsString::from(id),
-        ]
-        .into_iter()
-        .chain([OsString::from("--dir"), dir.as_os_str().to_owned()])
-        .collect()
-    }
-
     /// Run fixed `gh` args under the pinned catalog in `root`.
     pub(crate) fn run(
         catalog: &ToolCatalog,
@@ -372,11 +358,6 @@ mod tests {
             .map(|a| a.to_string_lossy().into_owned())
             .collect();
         assert_eq!(list[0..3], ["run", "list", "--workflow"]);
-        let dl: Vec<String> = BaselineLookup::download_args(7, std::path::Path::new("/tmp/x"))
-            .iter()
-            .map(|a| a.to_string_lossy().into_owned())
-            .collect();
-        assert_eq!(dl[0..3], ["run", "download", "7"]);
         assert!(BaselineLookup::new("short", "w", "b").is_err());
         assert!(BaselineLookup::new(&base, "https://evil/x", "b").is_err());
         let other = "b".repeat(40);
