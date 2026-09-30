@@ -2,14 +2,18 @@
 use std::collections::BTreeMap;
 use velnor_actions_contract::NotSelectedReason;
 use velnor_actions_workflow_renderer::task_steps::{
-    CLIPPY_NAME, DOCTESTS_NAME, DOCUMENTATION_NAME, NOOP_EVENT_ENV, NOOP_MATRIX_ID_ENV,
-    NOOP_MATRIX_KEY_ENV, NoOpReport, REPORT_TIMINGS_NAME, RESTORE_OBJECTS_NAME, TASK_STEP_NAMES,
+    CLIPPY_NAME, DOCTESTS_NAME, DOCUMENTATION_NAME, NOOP_DIGEST_ENV, NOOP_REASON_ENV,
+    NOOP_REPORT_OP, NoOpReport, REPORT_TIMINGS_NAME, RESTORE_OBJECTS_NAME, TASK_STEP_NAMES,
     TaskStepMode, TaskStepSpec, build_task_steps, check_doc_after_doctest, check_task_step_order,
     check_timings_report_last, noop_report_script, noop_step, timings_report_step,
 };
 use velnor_actions_workflow_renderer::{RenderError, checkout_step, shell_step};
 
 use super::impl_renderer_fixtures::*;
+
+fn helper() -> String {
+    "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0".to_owned()
+}
 
 fn noop_report() -> NoOpReport {
     NoOpReport {
@@ -58,55 +62,78 @@ fn task_steps_reject_misordered_or_missing() {
 }
 
 #[test]
-fn task_noop_step_writes_explanatory_report() -> Result<(), RenderError> {
-    let step = noop_step(RESTORE_OBJECTS_NAME, &noop_report())?;
+fn task_noop_step_invokes_the_typed_report_op() -> Result<(), RenderError> {
+    let step = noop_step(RESTORE_OBJECTS_NAME, &noop_report(), &helper())?;
     assert_eq!(step.name, RESTORE_OBJECTS_NAME);
     let velnor_actions_contract::StepKind::Shell { run, env } = &step.kind else {
         panic!("no-op must be a shell step");
     };
-    assert_eq!(
-        env[NOOP_MATRIX_KEY_ENV].as_str(),
-        "${{ matrix.matrix_key }}"
-    );
-    assert_eq!(env[NOOP_MATRIX_ID_ENV].as_str(), "${{ matrix.id }}");
-    assert_eq!(env[NOOP_EVENT_ENV].as_str(), "${{ github.event_name }}");
+    assert!(env.is_empty(), "identities resolve from the plan: {env:?}");
     let script = run[2].as_str();
     for token in [
         "stack/rust/crates/velnor-actions-contract/clippy/default",
-        "not_selected",
-        "not_selected_reason",
+        NOOP_REPORT_OP,
+        "VELNOR_INTERNAL_OP",
+        "VELNOR_TASK_ID",
+        "VELNOR_EXIT_CODE",
+        NOOP_DIGEST_ENV,
+        NOOP_REASON_ENV,
         "unsupported",
-        "schema",
-        "/tasks/",
-        "task_report_id",
-        "not_attempted",
+        "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0",
     ] {
         assert!(script.contains(token), "missing {token}:\n{script}");
+    }
+    for forbidden in [
+        "printf",
+        "not_selected",
+        "/tasks/",
+        "task_report_id",
+        "schema",
+    ] {
+        assert!(
+            !script.contains(forbidden),
+            "report bytes come from Rust, never shell: {forbidden}:\n{script}"
+        );
     }
     assert!(
         !script.contains('\''),
         "single quotes break quoting:\n{script}"
     );
     assert!(
-        noop_step("Ad hoc", &noop_report())
+        noop_step("Ad hoc", &noop_report(), &helper())
             .is_err_and(|err| format!("{err:?}").contains("noop_bad_name")),
         "ad-hoc no-op name must fail"
     );
     let mut bad_id = noop_report();
     bad_id.task_id = "not-a-task-id".to_owned();
     assert!(
-        matches!(noop_report_script(&bad_id), Err(RenderError::Contract(_))),
+        matches!(
+            noop_report_script(&bad_id, &helper()),
+            Err(RenderError::Contract(_))
+        ),
         "bad task id must fail"
     );
     let mut bad_digest = noop_report();
     bad_digest.task_digest = "b3-too-short".to_owned();
     assert!(
         matches!(
-            noop_report_script(&bad_digest),
+            noop_report_script(&bad_digest, &helper()),
             Err(RenderError::Contract(_))
         ),
         "bad digest must fail"
     );
+    for bad_helper in [
+        "/usr/local/bin/velnor-actions-0.1.0",
+        "$RUNNER_TEMP/velnor/bin/velnor-actions-",
+        "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0 ",
+        "$RUNNER_TEMP/velnor/bin/other-0.1.0",
+    ] {
+        assert!(
+            noop_report_script(&noop_report(), bad_helper)
+                .is_err_and(|err| format!("{err:?}").contains("noop_unstaged_binary")),
+            "unstaged helper must fail: {bad_helper}"
+        );
+    }
     Ok(())
 }
 
@@ -151,6 +178,7 @@ fn task_steps_render_in_order_with_mixed_modes() -> Result<(), RenderError> {
     let mut specs = execute_specs();
     specs[3].mode = TaskStepMode::NoOp {
         report: noop_report(),
+        helper: helper(),
     };
     let mut steps = vec![checkout_step(&checkout_pin())?];
     steps.extend(build_task_steps(&specs)?);
@@ -164,8 +192,8 @@ fn task_steps_render_in_order_with_mixed_modes() -> Result<(), RenderError> {
         .collect();
     assert_eq!(named, TASK_STEP_NAMES);
     assert!(
-        text.contains("not_selected_reason"),
-        "no-op report:\n{text}"
+        text.contains(NOOP_REPORT_OP),
+        "no-op report invokes the typed op:\n{text}"
     );
     Ok(())
 }

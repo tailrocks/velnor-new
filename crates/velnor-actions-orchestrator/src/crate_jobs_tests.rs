@@ -4,6 +4,7 @@
 
 use super::*;
 use crate::clippy_groups::ClippyMemoryPlan;
+use velnor_actions_rust::{CompileDriver, NextestProfile};
 
 /// Runnable fixture group for one package/kind pair.
 fn group(package: &str, kind: TaskKind, gated_by: &[&str]) -> TaskGroup {
@@ -22,9 +23,9 @@ fn group(package: &str, kind: TaskKind, gated_by: &[&str]) -> TaskGroup {
         target_flags: Vec::new(),
         no_test_targets: false,
         package_arg: None,
-        compile_driver: "cargo".to_owned(),
-        test_runner: "cargo_test".to_owned(),
-        nextest_profile: "default".to_owned(),
+        compile_driver: CompileDriver::Cargo,
+        test_runner: TestRunner::CargoTest,
+        nextest_profile: NextestProfile::Default,
         declared_inputs: Vec::new(),
         undeclared_reads: false,
         uses_network: false,
@@ -159,7 +160,7 @@ fn shards_name_their_index() {
 #[test]
 fn drivers_follow_per_crate_selection() {
     let mut mbx = group("demo", TaskKind::Clippy, &[]);
-    mbx.compile_driver = "mbx".to_owned();
+    mbx.compile_driver = CompileDriver::Mbx;
     let cargo = group("nested", TaskKind::Clippy, &[]);
     let found = build_crate_jobs(
         "ubuntu-26.04",

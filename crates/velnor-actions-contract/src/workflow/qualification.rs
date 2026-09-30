@@ -36,7 +36,63 @@ pub struct RequiredJobResult {
     /// Job ID.
     pub job_id: String,
     /// Job conclusion.
-    pub conclusion: String,
+    pub conclusion: JobConclusion,
+}
+/// Closed job-conclusion vocabulary shared by every merge path.
+///
+/// The needs channel admits successes, failures, cancellations, and
+/// skips; `Neutral` folds as not-run and `Missing` marks declared
+/// validators that never reported (failed, never silent).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum JobConclusion {
+    /// Validator succeeded.
+    Success,
+    /// Validator failed.
+    Failure,
+    /// Validator was cancelled.
+    Cancelled,
+    /// Validator was skipped.
+    Skipped,
+    /// Validator finished neutral; never success.
+    Neutral,
+    /// Declared validator never reported.
+    Missing,
+}
+
+impl JobConclusion {
+    /// Stable conclusion spelling.
+    #[must_use]
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Success => "success",
+            Self::Failure => "failure",
+            Self::Cancelled => "cancelled",
+            Self::Skipped => "skipped",
+            Self::Neutral => "neutral",
+            Self::Missing => "missing",
+        }
+    }
+
+    /// Parse a conclusion spelling; unknown tokens fail closed.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ContractError`] for spellings outside the vocabulary.
+    pub fn parse(value: &str) -> Result<Self, ContractError> {
+        match value {
+            "success" => Ok(Self::Success),
+            "failure" => Ok(Self::Failure),
+            "cancelled" => Ok(Self::Cancelled),
+            "skipped" => Ok(Self::Skipped),
+            "neutral" => Ok(Self::Neutral),
+            "missing" => Ok(Self::Missing),
+            _ => Err(ContractError::identity(
+                "conclusion",
+                format!("unknown_conclusion:{value}"),
+            )),
+        }
+    }
 }
 /// Final gate result.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

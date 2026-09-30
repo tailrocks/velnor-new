@@ -4,14 +4,14 @@ use velnor_actions_contract::{ContractError, manifest_key_for_cargo_manifest, ta
 
 use crate::{
     metadata::PackageRecord,
-    profile::{RustExecutionProfile, TestRunner},
+    profile::{CompileDriver, NextestProfile, RustExecutionProfile, TestRunner},
 };
 
 pub use crate::argv::{
     EntryMetadata, cargo_payload_argv, cargo_payload_with_profile, entry_metadata, evidence_id,
     parse_rerun_changed, require_nextest_for_shards, shard_task_id, shards_allowed,
 };
-pub use crate::task_identity::{ExtensionInputs, RustTaskIdentityExtension};
+pub use crate::task_identity::{DigestSlot, ExtensionInputs, RustTaskIdentityExtension};
 
 /// Rust task kinds derived per package.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -82,11 +82,11 @@ pub struct TaskGroup {
     /// Package named by Clippy (`clippy` kind only).
     pub package_arg: Option<String>,
     /// Selected compile driver.
-    pub compile_driver: String,
+    pub compile_driver: CompileDriver,
     /// Selected test runner.
-    pub test_runner: String,
-    /// Resolved Nextest profile (`ci` or `default`).
-    pub nextest_profile: String,
+    pub test_runner: TestRunner,
+    /// Resolved Nextest profile.
+    pub nextest_profile: NextestProfile,
     /// Declared non-Rust task inputs (sorted, deduped).
     pub declared_inputs: Vec<String>,
     /// Build script may read undeclared inputs (conservative at derive).
@@ -147,9 +147,9 @@ struct GroupBase<'a> {
     configuration: &'a str,
     features: &'a [String],
     target: &'a str,
-    driver: &'static str,
-    runner: &'static str,
-    nextest_profile: &'static str,
+    driver: CompileDriver,
+    runner: TestRunner,
+    nextest_profile: NextestProfile,
     package: &'a PackageRecord,
 }
 
@@ -171,9 +171,9 @@ pub fn derive_task_groups(inputs: &DeriveInputs<'_>) -> Result<Vec<TaskGroup>, C
         configuration: inputs.configuration,
         features: &features,
         target: inputs.target,
-        driver: inputs.profile.compile_driver.as_str(),
-        runner: inputs.profile.test_runner.as_str(),
-        nextest_profile: inputs.profile.nextest_profile.as_str(),
+        driver: inputs.profile.compile_driver,
+        runner: inputs.profile.test_runner,
+        nextest_profile: inputs.profile.nextest_profile,
         package: inputs.package,
     };
     let clippy_id = task_id(&base, TaskKind::Clippy)?;
@@ -249,9 +249,9 @@ pub fn derive_workspace_fmt(
         target_flags: Vec::new(),
         no_test_targets: false,
         package_arg: None,
-        compile_driver: profile.compile_driver.as_str().to_owned(),
-        test_runner: profile.test_runner.as_str().to_owned(),
-        nextest_profile: profile.nextest_profile.as_str().to_owned(),
+        compile_driver: profile.compile_driver,
+        test_runner: profile.test_runner,
+        nextest_profile: profile.nextest_profile,
         declared_inputs: Vec::new(),
         undeclared_reads: false,
         uses_network: false,
@@ -315,9 +315,9 @@ fn plain_group(
         target_flags: Vec::new(),
         no_test_targets: false,
         package_arg: None,
-        compile_driver: base.driver.to_owned(),
-        test_runner: base.runner.to_owned(),
-        nextest_profile: base.nextest_profile.to_owned(),
+        compile_driver: base.driver,
+        test_runner: base.runner,
+        nextest_profile: base.nextest_profile,
         declared_inputs: Vec::new(),
         undeclared_reads: base.package.has_build_script,
         uses_network: false,

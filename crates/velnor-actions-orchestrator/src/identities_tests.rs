@@ -7,10 +7,12 @@ use super::snapshot::normalized_component_id;
 use velnor_actions_contract::cachekey::{ToolchainInputs, toolchain_id};
 use velnor_actions_contract::{digest_b3, validate_digest};
 use velnor_actions_mise::ToolCatalog;
-use velnor_actions_rust::{LocalEdge, TaskGroup, TaskKind, WorkspaceRecord};
+use velnor_actions_rust::{
+    CompileDriver, LocalEdge, NextestProfile, TaskGroup, TaskKind, TestRunner, WorkspaceRecord,
+};
 
 /// Minimal group with kind, task ID, driver, and runner.
-fn group(kind: TaskKind, task_id: &str, driver: &str, runner: &str) -> TaskGroup {
+fn group(kind: TaskKind, task_id: &str, driver: CompileDriver, runner: TestRunner) -> TaskGroup {
     TaskGroup {
         task_id: task_id.to_owned(),
         package_id: "demo".to_owned(),
@@ -25,14 +27,14 @@ fn group(kind: TaskKind, task_id: &str, driver: &str, runner: &str) -> TaskGroup
         target_flags: Vec::new(),
         no_test_targets: false,
         package_arg: None,
-        compile_driver: driver.to_owned(),
-        test_runner: runner.to_owned(),
+        compile_driver: driver,
+        test_runner: runner,
         declared_inputs: Vec::new(),
         undeclared_reads: false,
         uses_network: false,
         uses_clock: false,
         uses_random: false,
-        nextest_profile: "default".to_owned(),
+        nextest_profile: NextestProfile::Default,
     }
 }
 
@@ -42,8 +44,8 @@ fn lanes_follow_responsibility_never_ordinals() {
     let clippy = group(
         TaskKind::Clippy,
         "stack/rust/root/clippy/default",
-        "cargo",
-        "cargo_test",
+        CompileDriver::Cargo,
+        TestRunner::CargoTest,
     );
     assert_eq!(
         lane_id_for(&clippy, &workspace),
@@ -53,8 +55,8 @@ fn lanes_follow_responsibility_never_ordinals() {
     let test = group(
         TaskKind::Test,
         "stack/rust/root/test/default",
-        "cargo",
-        "cargo_test",
+        CompileDriver::Cargo,
+        TestRunner::CargoTest,
     );
     assert_ne!(
         lane_id_for(&clippy, &workspace),
@@ -63,14 +65,14 @@ fn lanes_follow_responsibility_never_ordinals() {
     let shard_a = group(
         TaskKind::Nextest,
         "stack/rust/root/nextest/default/shard-1-of-2",
-        "cargo",
-        "cargo_nextest",
+        CompileDriver::Cargo,
+        TestRunner::CargoNextest,
     );
     let shard_b = group(
         TaskKind::Nextest,
         "stack/rust/root/nextest/default/shard-2-of-2",
-        "cargo",
-        "cargo_nextest",
+        CompileDriver::Cargo,
+        TestRunner::CargoNextest,
     );
     assert_ne!(
         lane_id_for(&shard_a, &workspace),
@@ -78,6 +80,14 @@ fn lanes_follow_responsibility_never_ordinals() {
     );
     assert_eq!(writer_lane_for(&clippy.task_id), "primary");
     assert_eq!(writer_lane_for(&shard_a.task_id), "shard-1-of-2");
+    for malformed in [
+        "stack/rust/root/nextest/default/shard-x",
+        "stack/rust/root/nextest/default/shard-0-of-2",
+        "stack/rust/root/nextest/default/shard-1-of-2/shard-3-of-4",
+        "stack/rust/root/nextest/shard-1-of-2/default",
+    ] {
+        assert_eq!(writer_lane_for(malformed), "primary", "{malformed}");
+    }
 }
 
 #[test]
@@ -86,8 +96,8 @@ fn toolchains_bind_sorted_specs_driver_runner() {
     let cargo = group(
         TaskKind::Clippy,
         "stack/rust/root/clippy/default",
-        "cargo",
-        "cargo_test",
+        CompileDriver::Cargo,
+        TestRunner::CargoTest,
     );
     let inputs = toolchain_inputs_for(&cargo, &catalog);
     let mut sorted = inputs.tools.clone();
@@ -97,15 +107,15 @@ fn toolchains_bind_sorted_specs_driver_runner() {
     let nextest = group(
         TaskKind::Nextest,
         "stack/rust/root/nextest/default",
-        "cargo",
-        "cargo_nextest",
+        CompileDriver::Cargo,
+        TestRunner::CargoNextest,
     );
     assert!(toolchain_inputs_for(&nextest, &catalog).tools.len() > inputs.tools.len());
     let mbx = group(
         TaskKind::Clippy,
         "stack/rust/root/clippy/default",
-        "mbx",
-        "cargo_test",
+        CompileDriver::Mbx,
+        TestRunner::CargoTest,
     );
     assert_ne!(
         toolchain_digest_for(&cargo, &catalog).expect("digest"),
@@ -119,10 +129,12 @@ fn toolchains_bind_sorted_specs_driver_runner() {
 
 #[test]
 fn formats_stay_single_and_graphs_relocate() {
-    assert_ne!(cache_format_id_for("cargo"), cache_format_id_for("mbx"));
-    assert!(validate_digest(&cache_format_id_for("cargo")).is_ok());
-    assert_eq!(cache_format_id_for("bogus"), cache_format_id_for("bogus"));
-    assert_ne!(cache_format_id_for("bogus"), cache_format_id_for("cargo"));
+    assert_ne!(
+        cache_format_id_for(CompileDriver::Cargo),
+        cache_format_id_for(CompileDriver::Mbx)
+    );
+    assert!(validate_digest(&cache_format_id_for(CompileDriver::Cargo)).is_ok());
+    assert!(validate_digest(&cache_format_id_for(CompileDriver::Mbx)).is_ok());
     let record = |id: &str| WorkspaceRecord {
         workspace_root: String::new(),
         members: vec![id.to_owned()],
@@ -176,8 +188,8 @@ fn compiler_spec_versions_flip_the_digest() {
     let group = group(
         TaskKind::Clippy,
         "stack/rust/root/clippy/default",
-        "cargo",
-        "cargo_test",
+        CompileDriver::Cargo,
+        TestRunner::CargoTest,
     );
     let built = toolchain_inputs_for(&group, &catalog);
     assert_eq!(
@@ -189,8 +201,19 @@ fn compiler_spec_versions_flip_the_digest() {
         built.components,
         vec!["clippy".to_owned(), "rustfmt".to_owned()]
     );
-    let imaged = platform_id_for_group("ubuntu-26.04", &group);
-    let older = platform_id_for_group("ubuntu-24.04", &group);
+    let imaged = platform_id_for_group("ubuntu-26.04", &group).expect("platform");
+    let older = platform_id_for_group("ubuntu-24.04", &group).expect("platform");
     assert_ne!(imaged, older);
     assert!(validate_digest(&imaged).is_ok());
+    let mut alien = group.clone();
+    alien.target = "riscv64-unknown-linux-gnu".to_owned();
+    let err = platform_id_for_group("ubuntu-26.04", &alien).expect_err("target");
+    assert!(err.to_string().contains("unsupported_target"), "{err}");
+    for label in ["ubuntu-26.04-arm", "macos-15", "windows-2025", ""] {
+        let err = platform_id_for_group(label, &group).expect_err("label");
+        assert!(
+            err.to_string().contains("unsupported_target_for_runner"),
+            "{err}"
+        );
+    }
 }

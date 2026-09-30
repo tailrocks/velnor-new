@@ -133,7 +133,7 @@ fn evidence_failure(request: &MergeRequest) -> Option<String> {
     let jobs_ok = request
         .required_jobs
         .iter()
-        .all(|job| !job.job_id.trim().is_empty() && !job.conclusion.trim().is_empty());
+        .all(|job| !job.job_id.trim().is_empty());
     let inventory_ok = request
         .required_job_ids
         .iter()

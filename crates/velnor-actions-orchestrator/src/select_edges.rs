@@ -254,7 +254,7 @@ pub(crate) fn plan_task_graph(
         for gate in &group.gated_by {
             push_edge(&mut edges, &ids, gate, &group.task_id, EdgeKind::Gate);
         }
-        if let Some((base, _)) = group.task_id.split_once("/shard-") {
+        if let Some((base, _, _)) = velnor_actions_contract::split_shard_suffix(&group.task_id) {
             push_edge(&mut edges, &ids, &group.task_id, base, EdgeKind::Report);
         }
     }

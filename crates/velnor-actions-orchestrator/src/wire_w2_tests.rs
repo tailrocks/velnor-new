@@ -5,6 +5,7 @@
 use super::reuse_stages::{ExpectedReuseIdentity, ObservedRestoreMeta};
 use super::*;
 use velnor_actions_mise::CachedTaskDescriptor;
+use velnor_actions_rust::{CompileDriver, NextestProfile, TestRunner};
 
 /// Minimal group with kind, task ID, and nondeterminism flags.
 fn group(kind: TaskKind, task_id: &str) -> TaskGroup {
@@ -22,14 +23,14 @@ fn group(kind: TaskKind, task_id: &str) -> TaskGroup {
         target_flags: Vec::new(),
         no_test_targets: false,
         package_arg: None,
-        compile_driver: "cargo".to_owned(),
-        test_runner: "cargo_nextest".to_owned(),
+        compile_driver: CompileDriver::Cargo,
+        test_runner: TestRunner::CargoNextest,
         declared_inputs: Vec::new(),
         undeclared_reads: false,
         uses_network: false,
         uses_clock: false,
         uses_random: false,
-        nextest_profile: "default".to_owned(),
+        nextest_profile: NextestProfile::Default,
     }
 }
 
@@ -159,11 +160,7 @@ fn archive_gate_binds_sources_and_refuses_unbound() {
         TaskKind::Nextest,
         "stack/rust/root/nextest/default/shard-1-of-2",
     );
-    sharded.compile_driver = "bogus".to_owned();
-    let err = check_archive_identity_with_source(&sharded, &digest, &digest, &digest, None)
-        .expect_err("driver");
-    assert!(err.to_string().contains("unknown_archive_driver"), "{err}");
-    sharded.compile_driver = "cargo".to_owned();
+    sharded.compile_driver = velnor_actions_rust::CompileDriver::Cargo;
     let check = |group: &TaskGroup, source: Option<&str>| {
         check_archive_identity_with_source(group, &digest, &digest, &digest, source)
     };

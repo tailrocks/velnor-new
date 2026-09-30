@@ -278,12 +278,7 @@ pub(crate) fn expand_shards(
     archives: &mut ArchivePlan,
 ) -> Result<Vec<TaskGroup>, ContractError> {
     let shards = shard_count(config, group);
-    if !expand_shards_for_group(
-        group.kind,
-        &group.test_runner,
-        shards,
-        group.no_test_targets,
-    )? {
+    if !expand_shards_for_group(group.kind, group.test_runner, shards, group.no_test_targets)? {
         return Ok(vec![group.clone()]);
     }
     plan_shard_archive(group, profile, archives);
@@ -313,10 +308,9 @@ fn plan_shard_archive(
     profile: &RustExecutionProfile,
     archives: &mut ArchivePlan,
 ) {
-    let driver = match group.compile_driver.as_str() {
-        "cargo" => NextestDriver::Cargo,
-        "mbx" => NextestDriver::Mbx,
-        _ => return,
+    let driver = match group.compile_driver {
+        velnor_actions_rust::CompileDriver::Cargo => NextestDriver::Cargo,
+        velnor_actions_rust::CompileDriver::Mbx => NextestDriver::Mbx,
     };
     let target = if group.target == "host" {
         None

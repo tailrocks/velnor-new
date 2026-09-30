@@ -4,6 +4,8 @@
 //! lookup module keeps the file size gate.
 
 use super::*;
+use crate::run_select::select_exact_base_run;
+use velnor_actions_mise::ToolCatalog;
 
 #[test]
 fn lookup_args_are_fixed_and_validated() {

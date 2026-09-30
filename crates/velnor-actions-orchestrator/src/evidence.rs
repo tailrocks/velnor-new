@@ -334,15 +334,21 @@ pub(crate) fn workspace_drift_warnings(
         return warnings;
     };
     for workspace in workspaces {
-        let driver = workspace.profile.compile_driver.as_str();
-        let runner = workspace.profile.test_runner.as_str();
+        let driver = workspace.profile.compile_driver;
+        let runner = workspace.profile.test_runner;
         let previous = velnor_actions_rust::read_committed_profile_for_comparison(bytes);
         if velnor_actions_rust::committed_profile_differs(previous.as_ref(), driver, runner) {
-            let prev = previous
-                .as_ref()
-                .map(|known| format!("{}/{}", known.compile_driver, known.test_runner));
+            let prev = previous.as_ref().map(|known| {
+                format!(
+                    "{}/{}",
+                    known.compile_driver.as_str(),
+                    known.test_runner.as_str()
+                )
+            });
             warnings.push(format!(
-                "committed_profile_drift:{driver}/{runner}:committed_{}:persist a durable signal",
+                "committed_profile_drift:{}/{}/committed_{}:persist a durable signal",
+                driver.as_str(),
+                runner.as_str(),
                 prev.as_deref().unwrap_or("unknown")
             ));
         }

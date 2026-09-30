@@ -7,11 +7,13 @@
 //! paths, or `run_key`.
 
 pub mod artifact;
+pub mod shard;
 
 pub use artifact::{
     artifact_id_for_baseline, artifact_id_for_final, artifact_id_for_matrix, artifact_id_for_plan,
     target_key, validate_artifact_id,
 };
+pub use shard::split_shard_suffix;
 
 use crate::canonical::validate_digest;
 use crate::errors::ContractError;
@@ -370,11 +372,10 @@ fn validate_stack_task_id(rest: &str) -> Result<(), ContractError> {
     }
     validate_component(parts[0], "stack_id")?;
     let mut tail = parts.as_slice();
-    if let Some(last) = tail.last()
-        && let Some(shard) = last.strip_prefix("shard-")
-    {
-        validate_shard_suffix(shard)?;
+    if split_shard_suffix(rest).is_some() {
         tail = &tail[..tail.len() - 1];
+    } else if tail.last().is_some_and(|last| last.starts_with("shard-")) {
+        return Err(ContractError::identity("task_id", "bad_shard_suffix"));
     }
     if tail.len() < 4 {
         return Err(ContractError::identity("task_id", "too_few_segments"));
@@ -385,15 +386,4 @@ fn validate_stack_task_id(rest: &str) -> Result<(), ContractError> {
     validate_component(config, "configuration")?;
     validate_path_segments(&tail[1..tail.len() - 2].join("/"), "manifest_key")?;
     Ok(())
-}
-
-/// Validate a `shard-<index>-of-<count>` suffix body.
-fn validate_shard_suffix(shard: &str) -> Result<(), ContractError> {
-    let Some((index, count)) = shard.split_once("-of-") else {
-        return Err(ContractError::identity("task_id", "bad_shard_suffix"));
-    };
-    let (Ok(index), Ok(count)) = (index.parse::<u32>(), count.parse::<u32>()) else {
-        return Err(ContractError::identity("task_id", "bad_shard_suffix"));
-    };
-    validate_shard(index, count).map_err(|_| ContractError::identity("task_id", "bad_shard_range"))
 }

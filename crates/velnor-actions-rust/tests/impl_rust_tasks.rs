@@ -344,8 +344,8 @@ fn workspace_fmt_carries_driver_runner() {
     let Ok(workspace) = workspace else {
         panic!("workspace fmt must succeed");
     };
-    assert_eq!(workspace.compile_driver, "mbx");
-    assert_eq!(workspace.test_runner, "cargo_nextest");
+    assert_eq!(workspace.compile_driver, CompileDriver::Mbx);
+    assert_eq!(workspace.test_runner, TestRunner::CargoNextest);
     assert!(workspace.declared_inputs.is_empty());
 }
 
@@ -391,8 +391,8 @@ fn carries_driver_runner_and_sorted_features() {
         panic!("derivation must succeed");
     };
     for group in &groups {
-        assert_eq!(group.compile_driver, "mbx");
-        assert_eq!(group.test_runner, "cargo_nextest");
+        assert_eq!(group.compile_driver, CompileDriver::Mbx);
+        assert_eq!(group.test_runner, TestRunner::CargoNextest);
         assert_eq!(group.features, vec!["alpha".to_owned(), "zeta".to_owned()]);
         assert_eq!(group.target, "host");
         assert_eq!(group.configuration, "default");

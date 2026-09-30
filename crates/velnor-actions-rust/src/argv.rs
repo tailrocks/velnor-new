@@ -9,10 +9,10 @@
 
 use std::ffi::OsString;
 
-use velnor_actions_contract::{ContractError, task_id_for_stack};
+use velnor_actions_contract::{ContractError, split_shard_suffix, task_id_for_stack};
 
 use crate::evidence::Evidence;
-use crate::profile::NextestProfile;
+use crate::profile::{CompileDriver, TestRunner};
 use crate::tasks::{TaskGroup, TaskKind};
 
 /// Derive one shard task ID from an unsharded base ID.
@@ -22,7 +22,7 @@ pub fn shard_task_id(base: &str, index: u32, count: u32) -> Result<String, Contr
         .strip_prefix("stack/")
         .ok_or_else(|| ContractError::identity("task_id", "malformed_task_id"))?;
     let parts: Vec<&str> = rest.split('/').collect();
-    if parts.len() < 4 || rest.contains("shard-") {
+    if parts.len() < 4 || split_shard_suffix(base).is_some() {
         return Err(ContractError::identity("task_id", "bad_base_id"));
     }
     task_id_for_stack(
@@ -36,8 +36,8 @@ pub fn shard_task_id(base: &str, index: u32, count: u32) -> Result<String, Contr
 
 /// True only for detected Nextest profiles; cargo-test never shards.
 #[must_use]
-pub fn shards_allowed(test_runner: &str) -> bool {
-    test_runner == "cargo_nextest"
+pub fn shards_allowed(test_runner: TestRunner) -> bool {
+    test_runner == TestRunner::CargoNextest
 }
 
 /// Reject sharded obligations for non-Nextest runners.
@@ -47,7 +47,7 @@ pub fn shards_allowed(test_runner: &str) -> bool {
 /// # Errors
 ///
 /// Returns [`ContractError`] when `count` exceeds one for cargo-test.
-pub fn require_nextest_for_shards(runner: &str, count: u32) -> Result<(), ContractError> {
+pub fn require_nextest_for_shards(runner: TestRunner, count: u32) -> Result<(), ContractError> {
     if count > 1 && !shards_allowed(runner) {
         return Err(ContractError::identity(
             "shard_count",
@@ -85,9 +85,9 @@ pub fn parse_rerun_changed(output: &str) -> Vec<String> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EntryMetadata {
     /// Detected compile driver.
-    pub compile_driver: String,
+    pub compile_driver: CompileDriver,
     /// Detected test runner.
-    pub test_runner: String,
+    pub test_runner: TestRunner,
     /// Stable evidence ids backing the selection, in evidence order.
     pub evidence_ids: Vec<String>,
 }
@@ -96,8 +96,8 @@ pub struct EntryMetadata {
 #[must_use]
 pub fn entry_metadata(group: &TaskGroup, evidence: &[Evidence]) -> EntryMetadata {
     EntryMetadata {
-        compile_driver: group.compile_driver.clone(),
-        test_runner: group.test_runner.clone(),
+        compile_driver: group.compile_driver,
+        test_runner: group.test_runner,
         evidence_ids: evidence.iter().map(evidence_id).collect(),
     }
 }
@@ -131,14 +131,16 @@ pub fn cargo_payload_argv(group: &TaskGroup) -> Vec<OsString> {
     args
 }
 
-/// Payload argv with the resolved Nextest profile after `run`; others
-/// match [`cargo_payload_argv`] byte for byte (doctests stay separate).
+/// Payload argv with the group's resolved Nextest profile after `run`;
+/// others match [`cargo_payload_argv`] byte for byte (doctests stay
+/// separate). The profile comes from the group itself, never a parallel
+/// argument that could disagree with it.
 #[must_use]
-pub fn cargo_payload_with_profile(group: &TaskGroup, profile: NextestProfile) -> Vec<OsString> {
+pub fn cargo_payload_with_profile(group: &TaskGroup) -> Vec<OsString> {
     let mut argv = cargo_payload_argv(group);
     if group.kind == TaskKind::Nextest {
         let flag = OsString::from("--profile");
-        let name = OsString::from(profile.as_str());
+        let name = OsString::from(group.nextest_profile.as_str());
         argv.splice(2..2, [flag, name]);
     }
     argv

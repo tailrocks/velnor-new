@@ -344,14 +344,14 @@ fn profile_group(kind: TaskKind, runner: TestRunner) -> TaskGroup {
         target_flags: Vec::new(),
         no_test_targets: false,
         package_arg: None,
-        compile_driver: "cargo".to_owned(),
-        test_runner: runner.as_str().to_owned(),
+        compile_driver: CompileDriver::Cargo,
+        test_runner: runner,
         declared_inputs: Vec::new(),
         undeclared_reads: false,
         uses_network: false,
         uses_clock: false,
         uses_random: false,
-        nextest_profile: "default".to_owned(),
+        nextest_profile: NextestProfile::Default,
     }
 }
 
@@ -377,14 +377,15 @@ fn resolved_profile_reaches_emission() {
     let default = outcome.profile.nextest_profile;
     assert_eq!((ci.as_str(), default.as_str()), ("ci", "default"));
     for profile in [ci, default] {
-        let group = profile_group(TaskKind::Nextest, TestRunner::CargoNextest);
-        let text = payload_text(&cargo_payload_with_profile(&group, profile));
+        let mut group = profile_group(TaskKind::Nextest, TestRunner::CargoNextest);
+        group.nextest_profile = profile;
+        let text = payload_text(&cargo_payload_with_profile(&group));
         assert_eq!(text[..4], ["nextest", "run", "--profile", profile.as_str()]);
     }
     let mut doctests = Vec::new();
     for runner in [TestRunner::CargoTest, TestRunner::CargoNextest] {
         let group = profile_group(TaskKind::Doctest, runner);
-        doctests.push(payload_text(&cargo_payload_with_profile(&group, ci)));
+        doctests.push(payload_text(&cargo_payload_with_profile(&group)));
     }
     assert_eq!(doctests[0], doctests[1]);
     assert!(doctests[0].contains(&"--doc".to_owned()));

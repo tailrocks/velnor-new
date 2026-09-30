@@ -213,14 +213,14 @@ fn clippy_group() -> velnor_actions_rust::TaskGroup {
         target_flags: Vec::new(),
         no_test_targets: false,
         package_arg: None,
-        compile_driver: "cargo".to_owned(),
-        test_runner: "cargo-test".to_owned(),
+        compile_driver: velnor_actions_rust::CompileDriver::Cargo,
+        test_runner: velnor_actions_rust::TestRunner::CargoTest,
         declared_inputs: Vec::new(),
         undeclared_reads: false,
         uses_network: false,
         uses_clock: false,
         uses_random: false,
-        nextest_profile: "default".to_owned(),
+        nextest_profile: velnor_actions_rust::NextestProfile::Default,
     }
 }
 
@@ -228,7 +228,7 @@ fn clippy_group() -> velnor_actions_rust::TaskGroup {
 fn extension_inputs<'a>(
     graph: &'a str,
     config: &'a str,
-    lock: Option<&'a str>,
+    lock: velnor_actions_rust::tasks::DigestSlot,
     targets: &'a [String],
 ) -> velnor_actions_rust::GroupExtensionInputs<'a> {
     velnor_actions_rust::GroupExtensionInputs {
@@ -240,7 +240,7 @@ fn extension_inputs<'a>(
         targets,
         config_digest: config,
         lock_digest: lock,
-        nextest_digest: None,
+        nextest_digest: velnor_actions_rust::tasks::DigestSlot::Unknown("unprobed".to_owned()),
         archive_source: None,
         rerun_inputs: None,
         has_build_script: false,
@@ -253,7 +253,12 @@ fn identity_extension_carries_no_tool_inputs() -> TestResult {
     let targets = Vec::new();
     let graph = velnor_actions_contract::digest_b3(b"graph");
     let config = velnor_actions_contract::digest_b3(b"config");
-    let inputs = extension_inputs(&graph, &config, None, &targets);
+    let inputs = extension_inputs(
+        &graph,
+        &config,
+        velnor_actions_rust::tasks::DigestSlot::Unknown("unprobed".to_owned()),
+        &targets,
+    );
     let data = serde_json::to_value(group.identity_extension(&inputs).to_stack_extension().data)?;
     let keys: std::collections::BTreeSet<String> = data
         .as_object()
@@ -295,20 +300,25 @@ fn platform_image_changes_invalidate_identity() -> TestResult {
 
 #[test]
 fn extension_identity_tracks_lock_digest() -> TestResult {
+    use velnor_actions_rust::tasks::DigestSlot;
     let group = clippy_group();
     let targets = Vec::new();
     let graph = velnor_actions_contract::digest_b3(b"graph");
     let config = velnor_actions_contract::digest_b3(b"config");
     let lock_a = velnor_actions_contract::digest_b3(b"lock-a");
     let lock_b = velnor_actions_contract::digest_b3(b"lock-b");
-    let json = |lock: Option<&str>| -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+    let json = |lock: DigestSlot| -> Result<serde_json::Value, Box<dyn std::error::Error>> {
         let inputs = extension_inputs(&graph, &config, lock, &targets);
         Ok(serde_json::to_value(
             group.identity_extension(&inputs).to_stack_extension().data,
         )?)
     };
-    assert_eq!(json(Some(&lock_a))?, json(Some(&lock_a))?);
-    assert_ne!(json(Some(&lock_a))?, json(Some(&lock_b))?);
-    assert_ne!(json(Some(&lock_a))?, json(None)?);
+    let known_a = || DigestSlot::Known(lock_a.clone());
+    assert_eq!(json(known_a())?, json(known_a())?);
+    assert_ne!(json(known_a())?, json(DigestSlot::Known(lock_b.clone()))?);
+    assert_ne!(
+        json(known_a())?,
+        json(DigestSlot::Unknown("unprobed".to_owned()))?
+    );
     Ok(())
 }

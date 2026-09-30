@@ -55,9 +55,9 @@ pub use graph::{
 pub use ids::{
     artifact_id_for_baseline, artifact_id_for_final, artifact_id_for_matrix, artifact_id_for_plan,
     manifest_key_for_cargo_manifest, matrix_id_for_task_group, matrix_key_for_id, plan_id_for_run,
-    report_id_for_matrix, run_key_for_ci, target_key, task_id_for_internal, task_id_for_stack,
-    task_report_id_for_task, validate_artifact_id, validate_id, validate_matrix_key,
-    validate_plan_id, validate_report_id, validate_run_key, validate_task_id,
+    report_id_for_matrix, run_key_for_ci, split_shard_suffix, target_key, task_id_for_internal,
+    task_id_for_stack, task_report_id_for_task, validate_artifact_id, validate_id,
+    validate_matrix_key, validate_plan_id, validate_report_id, validate_run_key, validate_task_id,
     validate_task_report_id,
 };
 pub use manifest::{
@@ -81,8 +81,8 @@ pub use workflow::{
     BaselineProof, BaselineStatus, CI_WORKFLOW_PATH, CRATE_JOB_ID_PREFIX, CacheLayer, CacheOutcome,
     CacheResult, Concurrency, CrateJob, CrateObligation, EntryCacheIds, ExecuteTaskIds,
     ExecuteTaskRef, FINAL_JSON_FILENAME, FRESHNESS_CRON_WEEKLY, FRESHNESS_WORKFLOW_PATH,
-    FinalCounts, FinalReport, FinalStatus, Job, MATRIX_JSON_FILENAME, ManifestTaskProof,
-    MatrixEntry, MatrixReport, MatrixStatus, MatrixTaskEntry, NEEDS_CHANNEL_ENV,
+    FinalCounts, FinalReport, FinalStatus, Job, JobConclusion, MATRIX_JSON_FILENAME,
+    ManifestTaskProof, MatrixEntry, MatrixReport, MatrixStatus, MatrixTaskEntry, NEEDS_CHANNEL_ENV,
     NEEDS_CHANNEL_EXPRESSION, NEEDS_EXPECTED_ENV, NeedsConclusions, NotSelectedReason,
     ObligationDecision, PLAN_DISPLAY_NAME, PLAN_JOB_ID, PLAN_JSON_FILENAME, PermissionLevel,
     Permissions, Plan, PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanPackage,

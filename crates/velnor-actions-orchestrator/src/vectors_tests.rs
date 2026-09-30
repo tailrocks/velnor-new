@@ -1,4 +1,5 @@
 use super::*;
+use velnor_actions_rust::CompileDriver;
 
 /// Owned argv expectation from literals.
 fn argv_of(parts: &[&str]) -> Vec<String> {
@@ -63,8 +64,8 @@ fn mbx_probe_vector_is_byte_exact() {
     assert_eq!(probe, want);
 }
 
-/// Minimal group with one compile-driver spelling.
-fn group_with_driver(driver: &str) -> TaskGroup {
+/// Minimal group with one compile driver.
+fn group_with_driver(driver: velnor_actions_rust::CompileDriver) -> TaskGroup {
     TaskGroup {
         task_id: "stack/rust|task/t".to_owned(),
         package_id: String::new(),
@@ -79,14 +80,14 @@ fn group_with_driver(driver: &str) -> TaskGroup {
         target_flags: Vec::new(),
         no_test_targets: false,
         package_arg: None,
-        compile_driver: driver.to_owned(),
-        test_runner: "cargo_test".to_owned(),
+        compile_driver: driver,
+        test_runner: TestRunner::CargoTest,
         declared_inputs: Vec::new(),
         undeclared_reads: false,
         uses_network: false,
         uses_clock: false,
         uses_random: false,
-        nextest_profile: "default".to_owned(),
+        nextest_profile: velnor_actions_rust::NextestProfile::Default,
     }
 }
 
@@ -94,17 +95,17 @@ fn group_with_driver(driver: &str) -> TaskGroup {
 fn task_payload_program_follows_route_driver() {
     let catalog = ToolCatalog::pinned();
     for (driver, program, mbx) in [
-        ("cargo", "cargo", false),
-        ("mbx", "mbx", true),
-        ("bogus", "cargo", false),
+        (CompileDriver::Cargo, "cargo", false),
+        (CompileDriver::Mbx, "mbx", true),
     ] {
         let argv = task_argv(&group_with_driver(driver), &catalog).expect("task argv");
         let at = argv.iter().position(|arg| arg == "--").expect("separator");
-        assert_eq!(argv[at + 1], program, "{driver} program");
+        assert_eq!(argv[at + 1], program, "{} program", driver.as_str());
         assert_eq!(
             argv.iter().any(|arg| arg.contains("mr-boxington")),
             mbx,
-            "{driver} tools"
+            "{} tools",
+            driver.as_str()
         );
     }
 }
@@ -113,11 +114,14 @@ fn task_payload_program_follows_route_driver() {
 fn task_runner_tools_follow_test_runner() {
     let catalog = ToolCatalog::pinned();
     let nextest = catalog.tool_spec(PinnedTool::Nextest);
-    for (runner, want) in [("cargo_test", false), ("cargo_nextest", true)] {
-        let mut group = group_with_driver("cargo");
-        group.test_runner = runner.to_owned();
+    for (runner, want) in [
+        (TestRunner::CargoTest, false),
+        (TestRunner::CargoNextest, true),
+    ] {
+        let mut group = group_with_driver(CompileDriver::Cargo);
+        group.test_runner = runner;
         let argv = task_argv(&group, &catalog).expect("task argv");
-        assert_eq!(argv.contains(&nextest), want, "{runner} nextest");
+        assert_eq!(argv.contains(&nextest), want, "{} nextest", runner.as_str());
     }
 }
 

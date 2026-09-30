@@ -7,7 +7,7 @@ use velnor_actions_contract::cachekey::{
 };
 use velnor_actions_contract::{ContractError, digest_b3};
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
-use velnor_actions_rust::{DepKind, TaskGroup, WorkspaceRecord};
+use velnor_actions_rust::{CompileDriver, DepKind, TaskGroup, TestRunner, WorkspaceRecord};
 
 use super::snapshot::{
     ExecutionSnapshot, canonical_digest, normalized_component_id, platform_id_for,
@@ -119,10 +119,10 @@ pub(crate) struct ExtensionBundle {
     config_digest: String,
     /// Whether the package carries a build script.
     has_build_script: bool,
-    /// Lockfile content digest, when resolved against the checkout.
-    lock_digest: Option<String>,
-    /// Nextest-config content digest, when resolved.
-    nextest_digest: Option<String>,
+    /// Lockfile slot, resolved against the checkout.
+    lock_digest: velnor_actions_rust::tasks::DigestSlot,
+    /// Nextest-config slot, resolved against the checkout.
+    nextest_digest: velnor_actions_rust::tasks::DigestSlot,
     /// Declared rerun inputs; `Some([])` proves no build script reads.
     rerun_inputs: Option<Vec<String>>,
 }
@@ -138,8 +138,8 @@ impl ExtensionBundle {
             graph_digest: &self.graph_digest,
             targets: &self.targets,
             config_digest: &self.config_digest,
-            lock_digest: self.lock_digest.as_deref(),
-            nextest_digest: self.nextest_digest.as_deref(),
+            lock_digest: self.lock_digest.clone(),
+            nextest_digest: self.nextest_digest.clone(),
             archive_source: None,
             rerun_inputs: self.rerun_inputs.as_deref(),
             has_build_script: self.has_build_script,
@@ -183,8 +183,8 @@ pub(crate) fn extension_bundle_with_snapshot(
         targets: Vec::new(),
         config_digest: tool_config_digest(&discovery.tool_checks),
         has_build_script: false,
-        lock_digest: None,
-        nextest_digest: None,
+        lock_digest: velnor_actions_rust::tasks::DigestSlot::Unknown("no_checkout".to_owned()),
+        nextest_digest: velnor_actions_rust::tasks::DigestSlot::Unknown("no_checkout".to_owned()),
         rerun_inputs: None,
     };
     for workspace in &discovery.workspaces {
@@ -206,16 +206,29 @@ pub(crate) fn extension_bundle_with_snapshot(
         bundle.rerun_inputs = Some(Vec::new());
     }
     if let Some(root) = root {
-        bundle.lock_digest = super::closure::lock_digest_at_root(root, &bundle.manifest);
-        bundle.nextest_digest = super::closure::nextest_digest_at_root(root, nextest_config);
+        bundle.lock_digest = super::closure_slots::lock_digest_at_root(root, &bundle.manifest);
+        bundle.nextest_digest = super::closure_slots::nextest_digest_at_root(root, nextest_config);
     }
     bundle
 }
 
 /// Platform identity for one group via [`platform_id_for`].
-pub(crate) fn platform_id_for_group(label: &str, group: &TaskGroup) -> String {
+///
+/// # Errors
+///
+/// Returns [`ContractError`] for unsupported runner labels and
+/// unsupported execution targets; neither ever defaults silently.
+pub(crate) fn platform_id_for_group(
+    label: &str,
+    group: &TaskGroup,
+) -> Result<String, ContractError> {
     let target = if group.target == "host" {
-        velnor_actions_contract::target_for_runner_label(label).unwrap_or("host")
+        velnor_actions_contract::target_for_runner_label(label).ok_or_else(|| {
+            ContractError::identity(
+                "runner_label",
+                format!("unsupported_target_for_runner:{label}"),
+            )
+        })?
     } else {
         group.target.as_str()
     };
@@ -228,11 +241,8 @@ pub(crate) fn platform_id_for_group(label: &str, group: &TaskGroup) -> String {
 /// schedule position yields the same lane, and distinct responsibilities
 /// (including sibling shards) never share one.
 pub(crate) fn writer_lane_for(task_id: &str) -> String {
-    if let Some((_, shard)) = task_id.split_once("/shard-")
-        && !shard.is_empty()
-        && !shard.contains('/')
-    {
-        return format!("shard-{shard}");
+    if let Some((_, index, count)) = velnor_actions_contract::split_shard_suffix(task_id) {
+        return format!("shard-{index}-of-{count}");
     }
     "primary".to_owned()
 }
@@ -248,8 +258,8 @@ fn lane_config_digest(group: &TaskGroup) -> String {
         "target": group.target,
         "features": features,
         "flags": flags,
-        "driver": group.compile_driver,
-        "runner": group.test_runner,
+        "driver": group.compile_driver.as_str(),
+        "runner": group.test_runner.as_str(),
     }))
     .unwrap_or_else(|_| digest_b3(b"lane_config_error"))
 }
@@ -284,10 +294,10 @@ pub(crate) fn lane_id_for(group: &TaskGroup, workspace_id: &str) -> String {
 /// Toolchain inputs with exact component evidence, never `unreported`.
 pub(crate) fn toolchain_inputs_for(group: &TaskGroup, catalog: &ToolCatalog) -> ToolchainInputs {
     let mut tools = vec![PinnedTool::Rust];
-    if group.compile_driver == "mbx" {
+    if group.compile_driver == CompileDriver::Mbx {
         tools.push(PinnedTool::MrBoxington);
     }
-    if group.test_runner == "cargo_nextest" {
+    if group.test_runner == TestRunner::CargoNextest {
         tools.push(PinnedTool::Nextest);
     }
     let mut specs = catalog.tool_specs(&tools);
@@ -295,8 +305,8 @@ pub(crate) fn toolchain_inputs_for(group: &TaskGroup, catalog: &ToolCatalog) -> 
     ToolchainInputs {
         tools: specs,
         components: velnor_actions_mise::PrepareRustComponents::components(),
-        compile_driver: group.compile_driver.clone(),
-        test_runner: group.test_runner.clone(),
+        compile_driver: group.compile_driver.as_str().to_owned(),
+        test_runner: group.test_runner.as_str().to_owned(),
     }
 }
 
@@ -314,21 +324,19 @@ pub(crate) fn toolchain_digest_for(
 
 /// Cache-format identity for one compile driver.
 ///
-/// The single cache format is versioned here; unknown drivers fall back
-/// to an explicit driver-labeled digest instead of guessing a format.
-pub(crate) fn cache_format_id_for(driver: &str) -> String {
-    if (driver == "cargo" || driver == "mbx")
-        && let Ok(id) = cache_format_id(&FormatInputs {
-            adapter: driver.to_owned(),
-            format: CACHE_FORMAT_LABEL.to_owned(),
-            generation: "1".to_owned(),
-        })
-    {
+/// The single cache format is versioned here; the typed driver admits
+/// no unknown spelling, so no fallback digest can ever trigger.
+pub(crate) fn cache_format_id_for(driver: CompileDriver) -> String {
+    if let Ok(id) = cache_format_id(&FormatInputs {
+        adapter: driver.as_str().to_owned(),
+        format: CACHE_FORMAT_LABEL.to_owned(),
+        generation: "1".to_owned(),
+    }) {
         return id;
     }
     canonical_digest(&serde_json::json!({
         "schema": "velnor-cache-format-fallback-v1",
-        "adapter": driver,
+        "adapter": driver.as_str(),
     }))
     .unwrap_or_else(|_| digest_b3(b"cache_format_error"))
 }

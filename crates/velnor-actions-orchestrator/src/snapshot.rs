@@ -131,35 +131,49 @@ pub(crate) fn check_canonical_version(found: u32) -> Result<(), ContractError> {
 /// `ubuntu` and version `26.04`; unversioned labels record `unknown`);
 /// OS/arch come from the release target mapping. Labels never fix
 /// package sets: the digest commits to exactly the observed triple.
-pub(crate) fn platform_inputs_for(label: &str, target: &str) -> PlatformInputs {
+///
+/// # Errors
+///
+/// Returns [`ContractError`] for targets outside the supported set;
+/// unknown targets never silently take the build host's arch/OS.
+pub(crate) fn platform_inputs_for(
+    label: &str,
+    target: &str,
+) -> Result<PlatformInputs, ContractError> {
     let (os, version) = match label.split_once('-') {
         Some((os, rest)) if !rest.is_empty() => (os, rest),
         _ => (label, "unknown"),
     };
     let (arch, os_name) = match target {
         "x86_64-unknown-linux-gnu" => ("x86_64", "linux"),
-        "aarch64-apple-darwin" | "x86_64-apple-darwin" => ("aarch64", "macos"),
-        _ => (std::env::consts::ARCH, std::env::consts::OS),
+        "aarch64-apple-darwin" => ("aarch64", "macos"),
+        "x86_64-apple-darwin" => ("x86_64", "macos"),
+        _ => {
+            return Err(ContractError::identity(
+                "target",
+                format!("unsupported_target:{target}"),
+            ));
+        }
     };
-    let arch = if target == "x86_64-apple-darwin" {
-        "x86_64"
-    } else {
-        arch
-    };
-    PlatformInputs {
+    Ok(PlatformInputs {
         os: os_name.to_owned(),
         arch: arch.to_owned(),
         runs_on: label.to_owned(),
         image_os: os.to_owned(),
         image_version: version.to_owned(),
         target: target.to_owned(),
-    }
+    })
 }
 
 /// Platform identity digest over runner image evidence (P03-4).
-pub(crate) fn platform_id_for(label: &str, target: &str) -> String {
-    let inputs = platform_inputs_for(label, target);
-    platform_id(&inputs).unwrap_or_else(|_| digest_b3(label.as_bytes()))
+///
+/// # Errors
+///
+/// Returns [`ContractError`] for unsupported targets and invalid
+/// platform inputs; no fallback digest is ever substituted.
+pub(crate) fn platform_id_for(label: &str, target: &str) -> Result<String, ContractError> {
+    let inputs = platform_inputs_for(label, target)?;
+    platform_id(&inputs)
 }
 
 /// One immutable execution snapshot per analysis (P03-1).
@@ -297,12 +311,27 @@ mod tests {
 
     #[test]
     fn platform_images_and_versions_flip() {
-        let linux = platform_id_for("ubuntu-26.04", "x86_64-unknown-linux-gnu");
-        let older = platform_id_for("ubuntu-24.04", "x86_64-unknown-linux-gnu");
+        let linux = platform_id_for("ubuntu-26.04", "x86_64-unknown-linux-gnu").expect("platform");
+        let older = platform_id_for("ubuntu-24.04", "x86_64-unknown-linux-gnu").expect("platform");
         assert_ne!(linux, older);
         assert!(velnor_actions_contract::validate_digest(&linux).is_ok());
         assert!(check_canonical_version(2).is_ok());
         assert!(check_canonical_version(0).is_err());
         assert!(check_canonical_version(1).is_err());
+    }
+
+    #[test]
+    fn unknown_targets_reject_instead_of_taking_host() {
+        for target in [
+            "host",
+            "riscv64-unknown-linux-gnu",
+            "x86_64-pc-windows-msvc",
+            "",
+        ] {
+            let err = platform_id_for("ubuntu-26.04", target).expect_err("target");
+            assert!(err.to_string().contains("unsupported_target"), "{err}");
+        }
+        let mac = platform_id_for("ubuntu-26.04", "aarch64-apple-darwin").expect("mac");
+        assert!(velnor_actions_contract::validate_digest(&mac).is_ok());
     }
 }

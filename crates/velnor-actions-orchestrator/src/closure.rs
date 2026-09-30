@@ -79,21 +79,7 @@ impl ClosureBuilder {
         }
     }
 }
-/// Digest of a [`Provenance`], when it binds content.
-fn known_digest(provenance: Provenance) -> Option<String> {
-    match provenance {
-        Provenance::Known { digest } => Some(digest),
-        _ => None,
-    }
-}
-/// Lockfile content digest at `root`, when the file exists and reads.
-pub(crate) fn lock_digest_at_root(root: &Path, manifest: &str) -> Option<String> {
-    known_digest(probe_lockfile(root, manifest))
-}
-/// Nextest-config content digest at `root`, when the file reads.
-pub(crate) fn nextest_digest_at_root(root: &Path, profile_config: Option<&str>) -> Option<String> {
-    known_digest(probe_nextest_config(root, profile_config))
-}
+
 /// Resolve one task group's closure against the checkout at `root`.
 pub(crate) fn resolve_closure_at_root(
     root: &Path,
@@ -123,8 +109,8 @@ pub(crate) fn resolve_closure_at_root(
         .value("features", &group.features.join(","))
         .value("target", &group.target)
         .value("profile", &group.configuration)
-        .value("driver", &group.compile_driver)
-        .value("runner", &group.test_runner)
+        .value("driver", group.compile_driver.as_str())
+        .value("runner", group.test_runner.as_str())
         .value("kind", group.kind.as_str());
     for (index, extra) in group.declared_inputs.iter().enumerate() {
         let name = format!("declared_extra:{index}:{extra}");
@@ -157,7 +143,7 @@ macro_rules! triage {
     };
 }
 /// Lockfile provenance, walking up from the manifest like Cargo does.
-fn probe_lockfile(root: &Path, manifest: &str) -> Provenance {
+pub(crate) fn probe_lockfile(root: &Path, manifest: &str) -> Provenance {
     let mut dir = package_dir(manifest).to_owned();
     let mut probed = Vec::new();
     loop {
@@ -177,7 +163,7 @@ fn probe_lockfile(root: &Path, manifest: &str) -> Provenance {
     absent(format!("not_found:{}", probed.join(",")))
 }
 /// Nextest-config provenance: profile path plus the conventional path.
-fn probe_nextest_config(root: &Path, profile_config: Option<&str>) -> Provenance {
+pub(crate) fn probe_nextest_config(root: &Path, profile_config: Option<&str>) -> Provenance {
     const CONVENTIONAL: &str = ".config/nextest.toml";
     if let Some(configured) = profile_config {
         triage!(root, configured);

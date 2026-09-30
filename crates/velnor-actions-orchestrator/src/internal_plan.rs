@@ -6,6 +6,8 @@ pub(crate) mod wire_w2;
 // P03 identity modules live here so no `lib.rs` edit can collide.
 #[path = "closure.rs"]
 pub(crate) mod closure;
+#[path = "closure_slots.rs"]
+pub(crate) mod closure_slots;
 #[cfg(test)]
 #[path = "closure_tests.rs"]
 mod closure_tests;
@@ -111,9 +113,9 @@ pub(crate) fn cache_ids_for(
     EntryCacheIds::new(
         &workspace_id,
         &identities::lane_id_for(group, &workspace_id),
-        &identities::platform_id_for_group(label, group),
+        &identities::platform_id_for_group(label, group)?,
         toolchain,
-        &identities::cache_format_id_for(&group.compile_driver),
+        &identities::cache_format_id_for(group.compile_driver),
     )
 }
 
@@ -215,8 +217,8 @@ pub(crate) fn task_identity_digest(inputs: &IdentityInputs<'_>) -> Result<String
             features,
             flags,
             task_contract: "task-execution-v1".to_owned(),
-            compile_driver: group.compile_driver.clone(),
-            test_runner: group.test_runner.clone(),
+            compile_driver: group.compile_driver.as_str().to_owned(),
+            test_runner: group.test_runner.as_str().to_owned(),
         },
         inputs: vec![TaskInput {
             path: CLOSURE_INPUT_PATH.to_owned(),

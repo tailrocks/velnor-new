@@ -33,6 +33,7 @@ mod inventory_reuse;
 mod matrix_step;
 mod merge;
 mod merge_request;
+mod noop_report;
 mod origin;
 mod pins;
 mod plan;

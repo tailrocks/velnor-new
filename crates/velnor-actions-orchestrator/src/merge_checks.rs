@@ -194,7 +194,7 @@ fn sharded_bases(entry: &MatrixEntry) -> BTreeSet<String> {
             velnor_actions_contract::ExecuteTaskRef::Shards(ids) => ids.as_slice(),
         };
         for id in ids {
-            if let Some((base, _)) = id.split_once("/shard-") {
+            if let Some((base, _, _)) = velnor_actions_contract::split_shard_suffix(id) {
                 bases.insert(base.to_owned());
             }
         }

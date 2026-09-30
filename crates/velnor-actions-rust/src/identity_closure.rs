@@ -32,13 +32,16 @@ pub enum UnresolvedInput {
 #[must_use]
 pub fn unresolved_inputs(ext: &RustTaskIdentityExtension) -> Vec<UnresolvedInput> {
     let mut unresolved = Vec::new();
-    if ext.lock_digest.is_none() {
+    if ext.lock_slot.is_unknown() {
         unresolved.push(UnresolvedInput::Lockfile);
     }
-    if ext.kind == "nextest" && ext.nextest_digest.is_none() {
+    if ext.task_kind == crate::tasks::TaskKind::Nextest && ext.nextest_slot.is_unknown() {
         unresolved.push(UnresolvedInput::NextestConfig);
     }
-    if ext.kind == "build" && ext.driver.contains("nextest") && ext.archive.is_none() {
+    if ext.task_kind == crate::tasks::TaskKind::Build
+        && ext.test_runner == crate::profile::TestRunner::CargoNextest
+        && ext.archive.is_none()
+    {
         unresolved.push(UnresolvedInput::ArchiveSource);
     }
     if ext.undeclared_reads {
@@ -125,14 +128,15 @@ impl TaskGroup {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::task_identity::DigestSlot;
 
     /// Extension inputs with `lock`, `nextest`, and `rerun` supplied.
-    fn inputs<'a>(
-        lock: Option<&'a str>,
-        nextest: Option<&'a str>,
-        rerun: Option<&'a [String]>,
+    fn inputs(
+        lock: crate::task_identity::DigestSlot,
+        nextest: crate::task_identity::DigestSlot,
+        rerun: Option<&[String]>,
         build_script: bool,
-    ) -> GroupExtensionInputs<'a> {
+    ) -> GroupExtensionInputs<'_> {
         GroupExtensionInputs {
             package_id: "demo",
             workspace_id: "workspace",
@@ -165,22 +169,22 @@ mod tests {
             target_flags: Vec::new(),
             no_test_targets: false,
             package_arg: None,
-            compile_driver: "cargo".to_owned(),
-            test_runner: "cargo_nextest".to_owned(),
+            compile_driver: crate::profile::CompileDriver::Cargo,
+            test_runner: crate::profile::TestRunner::CargoNextest,
             declared_inputs: Vec::new(),
             undeclared_reads: false,
             uses_network: false,
             uses_clock: false,
             uses_random: false,
-            nextest_profile: "default".to_owned(),
+            nextest_profile: crate::profile::NextestProfile::Default,
         }
     }
 
     #[test]
     fn unresolved_inventory_names_unknown_inputs() {
         let ext = group(crate::tasks::TaskKind::Nextest).identity_extension(&inputs(
-            None,
-            None,
+            DigestSlot::Unknown("unprobed".to_owned()),
+            DigestSlot::Unknown("unprobed".to_owned()),
             Some(&[]),
             false,
         ));
@@ -189,15 +193,15 @@ mod tests {
             vec![UnresolvedInput::Lockfile, UnresolvedInput::NextestConfig]
         );
         let ext = group(crate::tasks::TaskKind::Test).identity_extension(&inputs(
-            Some("lock"),
-            None,
+            DigestSlot::Known("lock".to_owned()),
+            DigestSlot::Unknown("unprobed".to_owned()),
             Some(&[]),
             false,
         ));
         assert!(unresolved_inputs(&ext).is_empty());
         let build = group(crate::tasks::TaskKind::Build).identity_extension(&inputs(
-            Some("lock"),
-            Some("nextest"),
+            DigestSlot::Known("lock".to_owned()),
+            DigestSlot::Known("nextest".to_owned()),
             Some(&[]),
             false,
         ));
@@ -206,12 +210,63 @@ mod tests {
             vec![UnresolvedInput::ArchiveSource]
         );
         let script = group(crate::tasks::TaskKind::Clippy).identity_extension(&inputs(
-            Some("lock"),
-            None,
+            DigestSlot::Known("lock".to_owned()),
+            DigestSlot::Unknown("unprobed".to_owned()),
             None,
             true,
         ));
         assert!(unresolved_inputs(&script).contains(&UnresolvedInput::RerunInputs));
+    }
+
+    #[test]
+    fn proven_absence_binds_without_blocking() {
+        let ext = group(crate::tasks::TaskKind::Nextest).identity_extension(&inputs(
+            DigestSlot::AbsentProven("not_found:Cargo.lock".to_owned()),
+            DigestSlot::AbsentProven("not_found:.config/nextest.toml".to_owned()),
+            Some(&[]),
+            false,
+        ));
+        assert!(unresolved_inputs(&ext).is_empty());
+        assert_eq!(ext.lock_digest, None);
+        assert_eq!(ext.nextest_digest, None);
+        let unknown = group(crate::tasks::TaskKind::Nextest).identity_extension(&inputs(
+            DigestSlot::Unknown("unprobed".to_owned()),
+            DigestSlot::AbsentProven("not_found:.config/nextest.toml".to_owned()),
+            Some(&[]),
+            false,
+        ));
+        assert_eq!(unresolved_inputs(&unknown), vec![UnresolvedInput::Lockfile]);
+    }
+
+    #[test]
+    fn unresolved_ignores_composite_spellings() {
+        let mut cargo = group(crate::tasks::TaskKind::Build);
+        cargo.test_runner = crate::profile::TestRunner::CargoTest;
+        let mut spoofed = cargo.identity_extension(&inputs(
+            DigestSlot::Known("lock".to_owned()),
+            DigestSlot::Known("nextest".to_owned()),
+            Some(&[]),
+            false,
+        ));
+        spoofed.driver = "cargo+nextest-spoof".to_owned();
+        spoofed.kind = "build".to_owned();
+        assert!(
+            !unresolved_inputs(&spoofed).contains(&UnresolvedInput::ArchiveSource),
+            "substring sniffing must not resurrect: {spoofed:?}"
+        );
+        let mut test = group(crate::tasks::TaskKind::Test);
+        test.test_runner = crate::profile::TestRunner::CargoTest;
+        let mut kind_spoof = test.identity_extension(&inputs(
+            DigestSlot::Unknown("unprobed".to_owned()),
+            DigestSlot::Unknown("unprobed".to_owned()),
+            Some(&[]),
+            false,
+        ));
+        kind_spoof.kind = "nextest".to_owned();
+        assert_eq!(
+            unresolved_inputs(&kind_spoof),
+            vec![UnresolvedInput::Lockfile]
+        );
     }
 
     #[test]
@@ -229,7 +284,12 @@ mod tests {
         let clippy = group(crate::tasks::TaskKind::Clippy);
         assert!(
             clippy
-                .identity_extension_verified(&inputs(Some("l"), None, Some(&[]), false))
+                .identity_extension_verified(&inputs(
+                    DigestSlot::Known("l".to_owned()),
+                    DigestSlot::Unknown("unprobed".to_owned()),
+                    Some(&[]),
+                    false
+                ))
                 .is_ok()
         );
         let group = TaskGroup {
@@ -238,7 +298,12 @@ mod tests {
         };
         assert!(
             group
-                .identity_extension_verified(&inputs(Some("l"), None, Some(&[]), false))
+                .identity_extension_verified(&inputs(
+                    DigestSlot::Known("l".to_owned()),
+                    DigestSlot::Unknown("unprobed".to_owned()),
+                    Some(&[]),
+                    false
+                ))
                 .is_err()
         );
         assert!(normalize_identity_path("Crates/Äpfel/x.proto").is_ok());

@@ -6,9 +6,10 @@ use velnor_actions_contract::{
     artifact_id_for_final, artifact_id_for_matrix, artifact_id_for_plan, canonical_json_bytes,
     canonical_json_str, compatibility_id, digest_b3, input_digest, manifest_key_for_cargo_manifest,
     matrix_id_for_task_group, matrix_key_for_id, plan_id_for_run, report_id_for_matrix,
-    run_key_for_ci, target_key, task_id_for_internal, task_id_for_stack, task_report_id_for_task,
-    validate_artifact_id, validate_digest, validate_id, validate_matrix_key, validate_plan_id,
-    validate_report_id, validate_run_key, validate_task_id, validate_task_report_id,
+    run_key_for_ci, split_shard_suffix, target_key, task_id_for_internal, task_id_for_stack,
+    task_report_id_for_task, validate_artifact_id, validate_digest, validate_id,
+    validate_matrix_key, validate_plan_id, validate_report_id, validate_run_key, validate_task_id,
+    validate_task_report_id,
 };
 
 /// Sample Cargo manifest path shared by contract cases.
@@ -200,6 +201,42 @@ fn task_id_grammar_accepts_valid_and_rejects_absolute() -> Result<(), ContractEr
         "internal/plan/default"
     );
     Ok(())
+}
+
+#[test]
+fn shard_suffix_parses_once_everywhere() {
+    let base = "stack/rust/root/nextest/default";
+    assert_eq!(
+        split_shard_suffix("stack/rust/root/nextest/default/shard-2-of-4"),
+        Some((base, 2, 4))
+    );
+    assert_eq!(split_shard_suffix(base), None);
+    // Previously divergent: split_once took the first suffix, rsplit_once
+    // the last. The canonical parser rejects every non-trailing shape.
+    for divergent in [
+        "stack/rust/root/nextest/default/shard-1-of-2/shard-3-of-4",
+        "stack/rust/root/nextest/shard-1-of-2/default",
+        "stack/rust/root/nextest/default/shard-1-of-2/extra",
+        "stack/rust/root/nextest/default/shard-x",
+        "stack/rust/root/nextest/default/shard-0-of-2",
+        "stack/rust/root/nextest/default/shard-1-of-0",
+        "stack/rust/root/nextest/default/shard-3-of-2",
+        "stack/rust/root/nextest/default/shard-1",
+        "stack/rust/root/nextest/default/shard-1-of-2-of-3",
+        "stack/rust/root/nextest/default/shard-4294967296-of-2",
+    ] {
+        assert_eq!(split_shard_suffix(divergent), None, "{divergent}");
+    }
+    // Validation agrees with the parser: canonical sharded IDs validate,
+    // doubled and malformed suffixes fail closed.
+    validate_task_id("stack/rust/root/nextest/default/shard-2-of-4")
+        .expect("canonical shard validates");
+    for bad in [
+        "stack/rust/root/nextest/default/shard-1-of-2/shard-3-of-4",
+        "stack/rust/root/nextest/default/shard-x",
+    ] {
+        assert!(validate_task_id(bad).is_err(), "{bad}");
+    }
 }
 
 #[test]

@@ -97,9 +97,11 @@ fn untestable_bin_omits_both_test_runners() {
                 TaskKind::Clippy | TaskKind::Build | TaskKind::Doc
             );
             assert_eq!(
-                group.no_test_targets, !runnable,
+                group.no_test_targets,
+                !runnable,
                 "kind {:?} under {}",
-                group.kind, group.test_runner
+                group.kind,
+                group.test_runner.as_str()
             );
         }
         let test = groups

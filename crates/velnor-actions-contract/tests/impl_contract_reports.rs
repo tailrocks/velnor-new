@@ -3,7 +3,7 @@ use crate::impl_contract_ids::{MANIFEST, TASK, sample_entry};
 use std::collections::BTreeMap;
 use velnor_actions_contract::{
     BaselineProof, CacheLayer, CacheOutcome, CacheResult, Concurrency, ContractError, FinalCounts,
-    FinalReport, FinalStatus, Job, MatrixReport, MatrixStatus, NotSelectedReason,
+    FinalReport, FinalStatus, Job, JobConclusion, MatrixReport, MatrixStatus, NotSelectedReason,
     ObligationDecision, Permissions, Plan, PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation,
     PlanPackage, PlanRunner, RequiredJobResult, RunnerSelection, Step, StepKind, TaskReport,
     TaskStatus, Trigger, Trust, WorkflowEvent, WorkflowIr, artifact_id_for_matrix,
@@ -168,7 +168,7 @@ fn final_reports_validate() -> Result<(), ContractError> {
         ],
         required_job_results: vec![RequiredJobResult {
             job_id: "plan".to_owned(),
-            conclusion: "success".to_owned(),
+            conclusion: JobConclusion::Success,
         }],
         status: FinalStatus::Passed,
         counts: FinalCounts {
@@ -348,11 +348,11 @@ fn final_without_plan_is_planning_failed() -> Result<(), ContractError> {
     let jobs = vec![
         RequiredJobResult {
             job_id: "plan".to_owned(),
-            conclusion: "failure".to_owned(),
+            conclusion: JobConclusion::Failure,
         },
         RequiredJobResult {
             job_id: "alint".to_owned(),
-            conclusion: "success".to_owned(),
+            conclusion: JobConclusion::Success,
         },
     ];
     let report = FinalReport::without_plan(&run_key, jobs)?;
@@ -366,4 +366,31 @@ fn final_without_plan_is_planning_failed() -> Result<(), ContractError> {
     assert_eq!(report.counts.selected, 0);
     assert!(FinalReport::without_plan("bogus", Vec::new()).is_err());
     Ok(())
+}
+
+#[test]
+fn job_conclusions_parse_and_serialize_closed() {
+    for (word, conclusion) in [
+        ("success", JobConclusion::Success),
+        ("failure", JobConclusion::Failure),
+        ("cancelled", JobConclusion::Cancelled),
+        ("skipped", JobConclusion::Skipped),
+        ("neutral", JobConclusion::Neutral),
+        ("missing", JobConclusion::Missing),
+    ] {
+        assert_eq!(JobConclusion::parse(word), Ok(conclusion));
+        assert_eq!(conclusion.as_str(), word);
+        let job = RequiredJobResult {
+            job_id: "plan".to_owned(),
+            conclusion,
+        };
+        let json = serde_json::to_value(&job).expect("serialize");
+        assert_eq!(json["conclusion"], word);
+        let back: RequiredJobResult = serde_json::from_value(json).expect("deserialize");
+        assert_eq!(back.conclusion, conclusion);
+    }
+    for bad in ["", "SUCCESS", "timed_out", "stale", "action_required"] {
+        let err = JobConclusion::parse(bad).expect_err("unknown");
+        assert!(err.to_string().contains("unknown_conclusion"), "{err}");
+    }
 }

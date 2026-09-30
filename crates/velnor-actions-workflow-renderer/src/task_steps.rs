@@ -69,6 +69,19 @@ pub const LEG_TASK_DIGEST_ENV: &str = "VELNOR_TASK_DIGEST";
 pub const LEG_MATRIX_KEY_ENV: &str = NOOP_MATRIX_KEY_ENV;
 /// Exec-leg alias: matrix ID env (shared with no-op report scripts).
 pub const LEG_MATRIX_ID_ENV: &str = NOOP_MATRIX_ID_ENV;
+/// Report-production operation invoked by no-op steps.
+pub const NOOP_REPORT_OP: &str = "write-task-report-v1";
+/// Env key carrying the no-op skip reason into the report op.
+pub const NOOP_REASON_ENV: &str = "VELNOR_NOT_SELECTED_REASON";
+/// Env key carrying the skipped obligation's expected digest.
+///
+/// Deliberately distinct from [`LEG_TASK_DIGEST_ENV`]: exec steps bake the
+/// leg digest into every obligation env, so aliasing would make the report
+/// op read an exec digest with no reason and fail `noop_half_present` on
+/// every executed obligation.
+pub const NOOP_DIGEST_ENV: &str = "VELNOR_NOOP_TASK_DIGEST";
+/// Env key carrying the fixed zero exit code into the report op.
+pub const NOOP_EXIT_ENV: &str = "VELNOR_EXIT_CODE";
 
 /// Typed no-op explanation: validated task identity plus reason enum.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -95,6 +108,8 @@ pub enum TaskStepMode {
     NoOp {
         /// Validated no-op identity plus reason.
         report: NoOpReport,
+        /// Staged-helper path serving the report op.
+        helper: String,
     },
 }
 
@@ -107,57 +122,72 @@ pub struct TaskStepSpec {
     pub mode: TaskStepMode,
 }
 
-/// Fixed schema-1 task-report script for one no-op step.
+/// Typed report-op invocation for one no-op step.
 ///
-/// Run key, matrix key/ID, and event resolve at runtime from default env
-/// plus matrix context (kept in step env, never in `run:`); trust maps
-/// `push` (this workflow's only push is the protected default branch) to
-/// `trusted` and every other event to `pr`. Duration is unmeasured until
-/// the orchestrator captures per-step timing (see timings TODO).
+/// The script carries only validated inputs (task identity, expected
+/// digest, closed-vocabulary reason) into the staged helper's
+/// [`NOOP_REPORT_OP`]; run key, matrix coordinates, event, and trust
+/// resolve from the downloaded plan inside the op, and report bytes
+/// are produced by Rust canonical JSON, never shell-composed.
 /// # Errors
-pub fn noop_report_script(report: &NoOpReport) -> Result<String, RenderError> {
+pub fn noop_report_script(report: &NoOpReport, helper: &str) -> Result<String, RenderError> {
     velnor_actions_contract::validate_task_id(&report.task_id).map_err(RenderError::Contract)?;
     velnor_actions_contract::validate_digest(&report.task_digest).map_err(RenderError::Contract)?;
-    let prefix = report
-        .task_digest
-        .strip_prefix("b3-")
-        .and_then(|hex| hex.get(..16))
-        .ok_or_else(|| RenderError::BadCommand("noop_bad_digest_prefix".to_owned()))?;
+    validate_noop_helper(helper)?;
     let reason = reason_name(report.reason);
     Ok(format!(
-        "run_key=r${{GITHUB_RUN_ID}}-a${{GITHUB_RUN_ATTEMPT}}; trust=\"pr\"; if [ \"${event_env}\" = push ]; then trust=trusted; fi; mkdir -p \"$RUNNER_TEMP/velnor/$run_key/${key_env}/tasks\" && printf \"{{\\\"schema\\\":1,\\\"task_report_id\\\":\\\"task-$run_key-${key_env}-{prefix}\\\",\\\"run_key\\\":\\\"$run_key\\\",\\\"event\\\":\\\"${event_env}\\\",\\\"trust\\\":\\\"$trust\\\",\\\"matrix_id\\\":\\\"${id_env}\\\",\\\"matrix_key\\\":\\\"${key_env}\\\",\\\"task_id\\\":\\\"{task_id}\\\",\\\"task_digest\\\":\\\"{digest}\\\",\\\"status\\\":\\\"not_selected\\\",\\\"not_selected_reason\\\":\\\"{reason}\\\",\\\"cache\\\":{{\\\"layer\\\":\\\"task\\\",\\\"key\\\":\\\"\\\",\\\"result\\\":\\\"not_attempted\\\",\\\"miss_reason\\\":null}},\\\"exit_code\\\":0,\\\"duration_ms\\\":null,\\\"outputs\\\":[]}}\" > \"$RUNNER_TEMP/velnor/$run_key/${key_env}/tasks/task-$run_key-${key_env}-{prefix}.json\"",
-        event_env = NOOP_EVENT_ENV,
-        key_env = NOOP_MATRIX_KEY_ENV,
-        id_env = NOOP_MATRIX_ID_ENV,
+        "{task_env}=\"{task_id}\" {exit_env}=\"0\" {digest_env}=\"{digest}\" {reason_env}=\"{reason}\" {op_env}={op} \"{helper}\"",
+        task_env = LEG_TASK_ID_ENV,
         task_id = report.task_id,
+        exit_env = NOOP_EXIT_ENV,
+        digest_env = NOOP_DIGEST_ENV,
         digest = report.task_digest,
+        reason_env = NOOP_REASON_ENV,
+        reason = reason,
+        op_env = steps::INTERNAL_OP_ENV,
+        op = NOOP_REPORT_OP,
     ))
 }
 
-/// One named no-op step: fixed name, matrix env, report script.
+/// Require a staged-helper path with a version-only suffix.
+///
+/// # Errors
+///
+/// Returns [`RenderError::BadCommand`] for unstaged paths and for
+/// suffixes outside the version charset.
+fn validate_noop_helper(helper: &str) -> Result<(), RenderError> {
+    let Some(suffix) = helper.strip_prefix(steps::STAGED_BINARY_PREFIX) else {
+        return Err(RenderError::BadCommand(format!(
+            "noop_unstaged_binary:{helper}"
+        )));
+    };
+    let version = !suffix.is_empty()
+        && suffix
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'_'));
+    if version {
+        Ok(())
+    } else {
+        Err(RenderError::BadCommand(format!(
+            "noop_unstaged_binary:{helper}"
+        )))
+    }
+}
+
+/// One named no-op step: fixed name, staged-helper report invocation.
 ///
 /// The name must be a contract named step; anything else fails closed so
 /// no-op reports cannot masquerade under ad-hoc labels.
 /// # Errors
-pub fn noop_step(name: &str, report: &NoOpReport) -> Result<Step, RenderError> {
+pub fn noop_step(name: &str, report: &NoOpReport, helper: &str) -> Result<Step, RenderError> {
     if !TASK_STEP_NAMES.contains(&name) {
         return Err(RenderError::BadCommand(format!("noop_bad_name:{name}")));
     }
-    let script = noop_report_script(report)?;
+    let script = noop_report_script(report, helper)?;
     steps::shell_step(
         name,
         vec!["sh".to_owned(), "-c".to_owned(), script],
-        BTreeMap::from([
-            (
-                NOOP_MATRIX_KEY_ENV.to_owned(),
-                "${{ matrix.matrix_key }}".to_owned(),
-            ),
-            (NOOP_MATRIX_ID_ENV.to_owned(), "${{ matrix.id }}".to_owned()),
-            (
-                NOOP_EVENT_ENV.to_owned(),
-                "${{ github.event_name }}".to_owned(),
-            ),
-        ]),
+        BTreeMap::new(),
     )
 }
 
@@ -186,7 +216,7 @@ pub fn build_task_steps(specs: &[TaskStepSpec]) -> Result<Vec<Step>, RenderError
             TaskStepMode::Execute { argv, env } => {
                 steps::shell_step(&spec.name, argv.clone(), env.clone())?
             }
-            TaskStepMode::NoOp { report } => noop_step(&spec.name, report)?,
+            TaskStepMode::NoOp { report, helper } => noop_step(&spec.name, report, helper)?,
         };
         built.push(step);
     }

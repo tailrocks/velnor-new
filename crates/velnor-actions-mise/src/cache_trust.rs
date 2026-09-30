@@ -64,6 +64,92 @@ pub fn save_after_success(gate: SaveGate) -> bool {
     gate.producer_passed && gate.useful_delta && gate.trust_scope_ok && gate.writers_finished
 }
 
+/// Authorize one trusted-layer save step; return its runtime gate.
+///
+/// Fails closed unless the save policy allows exactly protected pushes:
+/// [`save_after_success`] must still require all four gate conditions,
+/// [`crate::restore::save_decision`] must permit only the
+/// trusted/push/passed combination, [`crate::cache::save_allowed`] must
+/// agree, and PR saves must stay unsupported by the pinned action. The
+/// returned condition is the `if:` gate the emitted save step carries;
+/// policy drift fails generation instead of emitting a stale gate.
+///
+/// # Errors
+///
+/// Returns [`MiseError::Contract`] when the policy no longer matches
+/// the emitted push-only gate.
+pub fn authorize_trusted_save() -> Result<&'static str, MiseError> {
+    authorize_trusted_save_for(MBX_PR_SAVE_SUPPORTED)
+}
+
+/// Authorize one trusted-layer save step under an explicit PR policy.
+///
+/// The pinned-action capability arrives as a parameter so tests cover
+/// the drift rejection without flipping the production constant.
+///
+/// # Errors
+///
+/// Returns [`MiseError::Contract`] when the policy no longer matches
+/// the emitted push-only gate.
+pub fn authorize_trusted_save_for(pr_save_supported: bool) -> Result<&'static str, MiseError> {
+    use crate::restore::{SaveInputs, save_decision};
+    let open = SaveGate {
+        producer_passed: true,
+        useful_delta: true,
+        trust_scope_ok: true,
+        writers_finished: true,
+    };
+    if !save_after_success(open) {
+        return Err(contract("save_gate_weakened"));
+    }
+    if pr_save_supported {
+        return Err(contract("save_policy_drift:pr_save_supported"));
+    }
+    let allowed = SaveInputs {
+        layer_trust: "trusted",
+        event: "push",
+        passed: true,
+        unavailable: false,
+        active_writer: false,
+    };
+    if save_decision(&allowed).is_err() {
+        return Err(contract("save_policy_drift:push_denied"));
+    }
+    for denied in [
+        SaveInputs {
+            event: "pull_request",
+            ..allowed
+        },
+        SaveInputs {
+            event: "merge_group",
+            ..allowed
+        },
+        SaveInputs {
+            passed: false,
+            ..allowed
+        },
+        SaveInputs {
+            unavailable: true,
+            ..allowed
+        },
+        SaveInputs {
+            active_writer: true,
+            ..allowed
+        },
+    ] {
+        if save_decision(&denied).is_ok() {
+            return Err(contract("save_policy_drift:overpermissive"));
+        }
+    }
+    if !crate::cache::save_allowed("trusted", "push", true)
+        || crate::cache::save_allowed("trusted", "pull_request", true)
+        || crate::cache::save_allowed("trusted", "push", false)
+    {
+        return Err(contract("save_policy_drift:allowlist"));
+    }
+    Ok(velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION)
+}
+
 /// Cache errors never turn successful verification into failure.
 ///
 /// Returns false always: a cache failure leaves task success unchanged

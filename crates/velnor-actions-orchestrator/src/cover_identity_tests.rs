@@ -91,7 +91,7 @@ fn live_proof_dims(
     (
         bundle.graph_digest().to_owned(),
         toolchain_id(group, catalog).expect("toolchain"),
-        platform_id_for_group(label, group),
+        platform_id_for_group(label, group).expect("platform"),
     )
 }
 

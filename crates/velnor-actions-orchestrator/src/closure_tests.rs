@@ -3,9 +3,10 @@
 //! Declared via `#[path]` from `internal_plan.rs` under `cfg(test)`.
 
 use super::closure::*;
+use super::closure_slots::{lock_digest_at_root, nextest_digest_at_root};
 use super::snapshot::canonical_digest;
 use velnor_actions_contract::digest_b3;
-use velnor_actions_rust::{TaskGroup, TaskKind};
+use velnor_actions_rust::{CompileDriver, NextestProfile, TaskGroup, TaskKind, TestRunner};
 
 /// Minimal group with `declared` inputs and `reads` flag.
 fn group(declared: Vec<String>, reads: bool) -> TaskGroup {
@@ -23,14 +24,14 @@ fn group(declared: Vec<String>, reads: bool) -> TaskGroup {
         target_flags: Vec::new(),
         no_test_targets: false,
         package_arg: None,
-        compile_driver: "cargo".to_owned(),
-        test_runner: "cargo_test".to_owned(),
+        compile_driver: CompileDriver::Cargo,
+        test_runner: TestRunner::CargoTest,
         declared_inputs: declared,
         undeclared_reads: reads,
         uses_network: false,
         uses_clock: false,
         uses_random: false,
-        nextest_profile: "default".to_owned(),
+        nextest_profile: NextestProfile::Default,
     }
 }
 
@@ -228,4 +229,31 @@ fn source_edits_flip_and_classes_exclude_explicitly() {
         }
     }
     assert!(clippy.verify_complete().is_ok());
+}
+
+#[test]
+fn digest_slots_preserve_absence_distinctly() {
+    use velnor_actions_rust::tasks::DigestSlot;
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let root = tmp.path();
+    std::fs::write(root.join("Cargo.toml"), "[package]\n").expect("manifest");
+    assert!(matches!(
+        lock_digest_at_root(root, "Cargo.toml"),
+        DigestSlot::AbsentProven(_)
+    ));
+    assert!(matches!(
+        nextest_digest_at_root(root, None),
+        DigestSlot::AbsentProven(_)
+    ));
+    std::fs::write(root.join("Cargo.lock"), "lock-bytes").expect("lock");
+    assert!(matches!(
+        lock_digest_at_root(root, "Cargo.toml"),
+        DigestSlot::Known(_)
+    ));
+    std::fs::create_dir_all(root.join(".config")).expect("config dir");
+    std::fs::write(root.join(".config/nextest.toml"), "[profile.ci]\n").expect("nextest");
+    assert!(matches!(
+        nextest_digest_at_root(root, None),
+        DigestSlot::Known(_)
+    ));
 }

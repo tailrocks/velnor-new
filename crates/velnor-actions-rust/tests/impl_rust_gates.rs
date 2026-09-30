@@ -2,9 +2,10 @@
 
 use velnor_actions_contract::cachekey::stack_extension_id;
 use velnor_actions_rust::tasks::{
-    ExtensionInputs, RustTaskIdentityExtension, TaskKind, parse_rerun_changed,
+    DigestSlot, ExtensionInputs, RustTaskIdentityExtension, TaskKind, parse_rerun_changed,
     require_nextest_for_shards, shard_task_id, shards_allowed,
 };
+use velnor_actions_rust::{CompileDriver, TestRunner};
 
 /// Identity extension for one Nextest package task.
 fn extension() -> RustTaskIdentityExtension {
@@ -17,12 +18,17 @@ fn extension() -> RustTaskIdentityExtension {
         targets: vec!["lib".to_owned()],
         features: vec!["default".to_owned()],
         target: "host".to_owned(),
-        driver: "cargo".to_owned(),
+        driver: "cargo+cargo_nextest".to_owned(),
+        compile_driver: CompileDriver::Cargo,
+        test_runner: TestRunner::CargoNextest,
         config_digest: velnor_actions_contract::digest_b3(b"config"),
         nextest_digest: Some(velnor_actions_contract::digest_b3(b"nextest")),
+        nextest_slot: DigestSlot::Known(velnor_actions_contract::digest_b3(b"nextest")),
         kind: "nextest".to_owned(),
+        task_kind: TaskKind::Nextest,
         undeclared_reads: false,
         lock_digest: None,
+        lock_slot: DigestSlot::Unknown("unprobed".to_owned()),
         archive: None,
         rerun_inputs: Vec::new(),
         declared_inputs: Vec::new(),
@@ -74,9 +80,10 @@ fn shard_ids_derive_only_from_clean_bases() {
 
 #[test]
 fn only_nextest_shards() {
-    assert!(shards_allowed("cargo_nextest"));
-    assert!(!shards_allowed("cargo_test"));
-    assert!(!shards_allowed(""));
+    assert!(shards_allowed(TestRunner::CargoNextest));
+    assert!(!shards_allowed(TestRunner::CargoTest));
+    assert!(TestRunner::parse("").is_err());
+    assert!(TestRunner::parse("nextest").is_err());
 }
 
 /// Constructor inputs for one Nextest test task.
@@ -94,11 +101,11 @@ fn constructor_inputs<'a>(
         targets,
         features,
         target: "host",
-        driver: "cargo",
-        runner: "cargo_nextest",
+        driver: CompileDriver::Cargo,
+        runner: TestRunner::CargoNextest,
         config_digest: "config",
-        lock_digest: Some("lock"),
-        nextest_digest: Some("nextest"),
+        lock_digest: DigestSlot::Known("lock".to_owned()),
+        nextest_digest: DigestSlot::Known("nextest".to_owned()),
         kind: TaskKind::Nextest,
         archive_source: None,
         rerun_inputs: Some(&[]),
@@ -160,7 +167,7 @@ fn cargo_test_profiles_never_carry_archives() {
     let base = constructor_inputs(&targets, &features, &declared);
     let mut build = base.clone();
     build.kind = TaskKind::Build;
-    build.runner = "cargo_test";
+    build.runner = TestRunner::CargoTest;
     build.archive_source = Some("stack/rust/root/build/default");
     assert!(
         RustTaskIdentityExtension::for_task(&build)
@@ -170,7 +177,7 @@ fn cargo_test_profiles_never_carry_archives() {
     );
     let mut test = base.clone();
     test.kind = TaskKind::Test;
-    test.runner = "cargo_test";
+    test.runner = TestRunner::CargoTest;
     test.archive_source = Some("stack/rust/root/build/default");
     assert!(
         RustTaskIdentityExtension::for_task(&test).archive.is_none(),
@@ -188,10 +195,10 @@ fn cargo_test_profiles_never_carry_archives() {
 
 #[test]
 fn shards_require_nextest() {
-    assert!(require_nextest_for_shards("cargo_nextest", 4).is_ok());
-    assert!(require_nextest_for_shards("cargo_test", 1).is_ok());
-    assert!(require_nextest_for_shards("cargo_test", 2).is_err());
-    assert!(require_nextest_for_shards("", 2).is_err());
+    assert!(require_nextest_for_shards(TestRunner::CargoNextest, 4).is_ok());
+    assert!(require_nextest_for_shards(TestRunner::CargoTest, 1).is_ok());
+    assert!(require_nextest_for_shards(TestRunner::CargoTest, 2).is_err());
+    assert!(require_nextest_for_shards(TestRunner::CargoTest, 0).is_ok());
 }
 
 /// Serialize one derived extension for identity comparisons.
@@ -208,7 +215,7 @@ fn identity_differs_across_runner_features_target() {
     let base_json = json_of(&RustTaskIdentityExtension::for_task(&base));
     assert!(base_json.is_some(), "extension must serialize");
     let mut other = base.clone();
-    other.runner = "cargo_test";
+    other.runner = TestRunner::CargoTest;
     let runner_json = json_of(&RustTaskIdentityExtension::for_task(&other));
     assert_ne!(base_json, runner_json);
     let alt_features = vec!["extra".to_owned()];

@@ -151,14 +151,14 @@ fn id_inputs(
         .collect()
 }
 
-/// True when the group compiles through MBX (unknown spellings are Cargo).
+/// True when the group compiles through MBX.
 fn is_mbx(group: &TaskGroup) -> bool {
-    group.compile_driver == RustDriver::Mbx.as_str()
+    group.compile_driver == RustDriver::Mbx
 }
 
 /// True when the group runs tests through Nextest.
 fn is_nextest(group: &TaskGroup) -> bool {
-    group.test_runner == TestRunner::CargoNextest.as_str()
+    group.test_runner == TestRunner::CargoNextest
 }
 
 /// In-crate obligation order: Format, Clippy, build, tests, doctests, docs.
@@ -248,13 +248,8 @@ fn step_name_for(kind: TaskKind, task_id: &str) -> String {
 
 /// Shard index/count from a trailing `/shard-<index>-of-<count>` segment.
 fn shard_suffix(task_id: &str) -> Option<(u32, u32)> {
-    let (_, shard) = task_id.rsplit_once("/shard-")?;
-    if shard.contains('/') {
-        return None;
-    }
-    let (index, count) = shard.split_once("-of-")?;
-    let (index, count) = (index.parse::<u32>().ok()?, count.parse::<u32>().ok()?);
-    (count >= 1 && index >= 1 && index <= count).then_some((index, count))
+    let (_, index, count) = velnor_actions_contract::split_shard_suffix(task_id)?;
+    Some((index, count))
 }
 
 /// Render one validated crate model to its fixed IR job.

@@ -57,7 +57,7 @@ fn profile_lines(out: &mut String, workspace: &PlannedWorkspace) {
             profile.runner_source.as_str()
         ),
     );
-    if profile.test_runner.as_str() == "cargo_nextest" {
+    if profile.test_runner == velnor_actions_rust::TestRunner::CargoNextest {
         let config = profile
             .nextest_config
             .as_deref()

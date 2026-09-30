@@ -177,11 +177,7 @@ pub(crate) fn obligation_step(
     if !downstream.is_empty() {
         identity.insert(DOWNSTREAM_IDS_ENV.to_owned(), downstream.join(","));
     }
-    // Wrapper lookup keys must match the op's env contract exactly.
-    debug_assert_eq!(
-        identity.get(TASK_ID_ENV).map(String::as_str),
-        Some(obligation.task_id.as_str())
-    );
+    check_identity_env_contract(&identity, &obligation.task_id)?;
     let env = task_execution_env(catalog, &identity)?;
     let joined =
         velnor_actions_workflow_renderer::join_argv_for_run(&obligation.run).map_err(|err| {
@@ -200,6 +196,27 @@ pub(crate) fn obligation_step(
         condition: None,
         kind: StepKind::Shell { run, env },
     })
+}
+
+/// Require the obligation identity env to match the report op contract.
+///
+/// The wrapper resolves its obligation through [`TASK_ID_ENV`]; the
+/// emitted map must carry that key with the exact task ID in every
+/// build, or the report would bind the wrong obligation (or none).
+///
+/// # Errors
+///
+/// Returns a contract error when the lookup key is missing or differs.
+pub(crate) fn check_identity_env_contract(
+    identity: &BTreeMap<String, String>,
+    task_id: &str,
+) -> Result<(), OrchestratorError> {
+    if identity.get(TASK_ID_ENV).map(String::as_str) != Some(task_id) {
+        return Err(OrchestratorError::Contract {
+            problem: format!("obligation_identity_mismatch:{task_id}"),
+        });
+    }
+    Ok(())
 }
 
 /// Staged helper path for this generator version (uniform preseed/consumer).
@@ -276,3 +293,7 @@ pub(crate) fn matrix_upload_step(obligation: &CrateObligation) -> Result<Step, O
             problem: err.to_string(),
         })
 }
+
+#[cfg(test)]
+#[path = "matrix_step_tests.rs"]
+mod matrix_step_tests;

@@ -48,6 +48,22 @@ impl CompileDriver {
             Self::Mbx => "mbx",
         }
     }
+
+    /// Parse a driver token; unknown tokens fail closed.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ContractError`] for any token outside `cargo`/`mbx`.
+    pub fn parse(value: &str) -> Result<Self, ContractError> {
+        match value {
+            "cargo" => Ok(Self::Cargo),
+            "mbx" => Ok(Self::Mbx),
+            _ => Err(ContractError::identity(
+                "compile_driver",
+                format!("unknown_driver:{value}"),
+            )),
+        }
+    }
 }
 
 /// Selected test runner for one workspace.
@@ -66,6 +82,23 @@ impl TestRunner {
         match self {
             Self::CargoTest => "cargo_test",
             Self::CargoNextest => "cargo_nextest",
+        }
+    }
+
+    /// Parse a runner token; unknown tokens fail closed.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ContractError`] for any token outside
+    /// `cargo_test`/`cargo_nextest`.
+    pub fn parse(value: &str) -> Result<Self, ContractError> {
+        match value {
+            "cargo_test" => Ok(Self::CargoTest),
+            "cargo_nextest" => Ok(Self::CargoNextest),
+            _ => Err(ContractError::identity(
+                "test_runner",
+                format!("unknown_runner:{value}"),
+            )),
         }
     }
 }

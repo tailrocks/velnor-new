@@ -4,7 +4,7 @@
 //! (P09 pattern). Cases run through the public adapter API only.
 
 use velnor_actions_rust::identity::{UnresolvedInput, normalize_identity_path, unresolved_inputs};
-use velnor_actions_rust::tasks::{RustTaskIdentityExtension, parse_rerun_changed};
+use velnor_actions_rust::tasks::{DigestSlot, RustTaskIdentityExtension, parse_rerun_changed};
 use velnor_actions_rust::{
     CompileDriver, DeriveInputs, GroupExtensionInputs, PackageRecord, ProfileSource,
     RustExecutionProfile, TargetRecord, TaskGroup, TaskKind, TestRunner, derive_task_groups,
@@ -12,6 +12,16 @@ use velnor_actions_rust::{
 
 /// Test outcome boxing every error type.
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
+
+/// Known digest slot over a cloned digest.
+fn known(digest: &str) -> DigestSlot {
+    DigestSlot::Known(digest.to_owned())
+}
+
+/// Unknown digest slot.
+fn unknown() -> DigestSlot {
+    DigestSlot::Unknown("unprobed".to_owned())
+}
 
 /// Package fixture with lib target and no build script.
 fn package() -> PackageRecord {
@@ -73,7 +83,7 @@ fn clippy() -> TestResult<TaskGroup> {
 fn inputs<'a>(
     graph: &'a str,
     config: &'a str,
-    lock: Option<&'a str>,
+    lock: DigestSlot,
     targets: &'a [String],
 ) -> GroupExtensionInputs<'a> {
     GroupExtensionInputs {
@@ -85,7 +95,7 @@ fn inputs<'a>(
         targets,
         config_digest: config,
         lock_digest: lock,
-        nextest_digest: None,
+        nextest_digest: unknown(),
         archive_source: None,
         rerun_inputs: Some(&[]),
         has_build_script: false,
@@ -107,45 +117,61 @@ fn every_semantic_input_flips_the_extension() -> TestResult {
     let lock_a = velnor_actions_contract::digest_b3(b"lock-a");
     let lock_b = velnor_actions_contract::digest_b3(b"lock-b");
     let base =
-        data_of(&group.identity_extension(&inputs(&graph_a, &config, Some(&lock_a), &targets)))?;
+        data_of(&group.identity_extension(&inputs(&graph_a, &config, known(&lock_a), &targets)))?;
     assert_eq!(
         base,
-        data_of(&group.identity_extension(&inputs(&graph_a, &config, Some(&lock_a), &targets)))?
+        data_of(&group.identity_extension(&inputs(&graph_a, &config, known(&lock_a), &targets)))?
     );
     assert_ne!(
         base,
-        data_of(&group.identity_extension(&inputs(&graph_b, &config, Some(&lock_a), &targets)))?
+        data_of(&group.identity_extension(&inputs(&graph_b, &config, known(&lock_a), &targets)))?
     );
     assert_ne!(
         base,
-        data_of(&group.identity_extension(&inputs(&graph_a, &config, Some(&lock_b), &targets)))?
+        data_of(&group.identity_extension(&inputs(&graph_a, &config, known(&lock_b), &targets)))?
     );
     assert_ne!(
         base,
-        data_of(&group.identity_extension(&inputs(&graph_a, &config, None, &targets)))?
+        data_of(&group.identity_extension(&inputs(&graph_a, &config, unknown(), &targets)))?
     );
+    Ok(())
+}
+
+#[test]
+fn declared_inputs_and_profile_flip_the_extension() -> TestResult {
+    let group = clippy()?;
+    let targets = vec!["lib:a".to_owned()];
+    let graph_a = velnor_actions_contract::digest_b3(b"graph-a");
+    let config = velnor_actions_contract::digest_b3(b"config");
+    let lock_a = velnor_actions_contract::digest_b3(b"lock-a");
+    let base =
+        data_of(&group.identity_extension(&inputs(&graph_a, &config, known(&lock_a), &targets)))?;
     let rerun_a = parse_rerun_changed("cargo::rerun-if-changed=proto/a.proto\n");
     let rerun_b = parse_rerun_changed("cargo::rerun-if-changed=proto/b.proto\n");
     let one = group.clone().with_rerun_inputs(&rerun_a)?;
     let two = group.clone().with_rerun_inputs(&rerun_b)?;
     assert_ne!(
-        data_of(&one.identity_extension(&inputs(&graph_a, &config, Some(&lock_a), &targets)))?,
-        data_of(&two.identity_extension(&inputs(&graph_a, &config, Some(&lock_a), &targets)))?
+        data_of(&one.identity_extension(&inputs(&graph_a, &config, known(&lock_a), &targets)))?,
+        data_of(&two.identity_extension(&inputs(&graph_a, &config, known(&lock_a), &targets)))?
     );
     let mut featured = group.clone();
     featured.features = vec!["serde".to_owned()];
-    let featured_data =
-        data_of(&featured.identity_extension(&inputs(&graph_a, &config, Some(&lock_a), &targets)))?;
+    let featured_data = data_of(&featured.identity_extension(&inputs(
+        &graph_a,
+        &config,
+        known(&lock_a),
+        &targets,
+    )))?;
     assert_ne!(base, featured_data);
     let profiled = GroupExtensionInputs {
         profile: "ci",
-        ..inputs(&graph_a, &config, Some(&lock_a), &targets)
+        ..inputs(&graph_a, &config, known(&lock_a), &targets)
     };
     assert_ne!(base, data_of(&group.identity_extension(&profiled))?);
     let nextest = velnor_actions_contract::digest_b3(b"nextest");
     let with_nextest = GroupExtensionInputs {
-        nextest_digest: Some(&nextest),
-        ..inputs(&graph_a, &config, Some(&lock_a), &targets)
+        nextest_digest: known(&nextest),
+        ..inputs(&graph_a, &config, known(&lock_a), &targets)
     };
     assert_ne!(base, data_of(&group.identity_extension(&with_nextest))?);
     Ok(())
@@ -158,11 +184,11 @@ fn relocated_checkout_keeps_extension_identity() -> TestResult {
     let graph = velnor_actions_contract::digest_b3(b"graph");
     let config = velnor_actions_contract::digest_b3(b"config");
     let lock = velnor_actions_contract::digest_b3(b"lock");
-    let ext = group.identity_extension(&inputs(&graph, &config, Some(&lock), &targets));
+    let ext = group.identity_extension(&inputs(&graph, &config, known(&lock), &targets));
     assert_eq!(ext.manifest, "crates/a/Cargo.toml");
     assert_eq!(
         data_of(&ext)?,
-        data_of(&group.identity_extension(&inputs(&graph, &config, Some(&lock), &targets)))?
+        data_of(&group.identity_extension(&inputs(&graph, &config, known(&lock), &targets)))?
     );
     assert!(unresolved_inputs(&ext).is_empty());
     Ok(())
@@ -174,7 +200,7 @@ fn unknown_inputs_stay_explicit_never_absent() -> TestResult {
     let targets = Vec::new();
     let graph = velnor_actions_contract::digest_b3(b"graph");
     let config = velnor_actions_contract::digest_b3(b"config");
-    let ext = group.identity_extension(&inputs(&graph, &config, None, &targets));
+    let ext = group.identity_extension(&inputs(&graph, &config, unknown(), &targets));
     assert_eq!(unresolved_inputs(&ext), vec![UnresolvedInput::Lockfile]);
     let data = data_of(&ext)?;
     assert!(
@@ -199,7 +225,7 @@ fn identity_paths_preserve_case_unicode_and_reject_bad() -> TestResult {
     let config = velnor_actions_contract::digest_b3(b"config");
     assert!(
         group
-            .identity_extension_verified(&inputs(&graph, &config, None, &targets))
+            .identity_extension_verified(&inputs(&graph, &config, unknown(), &targets))
             .is_ok()
     );
     let hostile = TaskGroup {
@@ -208,7 +234,7 @@ fn identity_paths_preserve_case_unicode_and_reject_bad() -> TestResult {
     };
     assert!(
         hostile
-            .identity_extension_verified(&inputs(&graph, &config, None, &targets))
+            .identity_extension_verified(&inputs(&graph, &config, unknown(), &targets))
             .is_err()
     );
     Ok(())

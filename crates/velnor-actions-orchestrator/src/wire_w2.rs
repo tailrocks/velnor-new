@@ -137,15 +137,7 @@ pub(crate) fn plan_reuse_outcome(
 
 /// Shard index/count from a `/shard-<index>-of-<count>` task-ID suffix.
 fn parse_shard_suffix(task_id: &str) -> Option<(u32, u32)> {
-    let (_, shard) = task_id.split_once("/shard-")?;
-    if shard.contains('/') {
-        return None;
-    }
-    let (index, count) = shard.split_once("-of-")?;
-    let (index, count) = (index.parse::<u32>().ok()?, count.parse::<u32>().ok()?);
-    if index == 0 || count == 0 || index > count {
-        return None;
-    }
+    let (_, index, count) = velnor_actions_contract::split_shard_suffix(task_id)?;
     Some((index, count))
 }
 
@@ -182,10 +174,9 @@ pub(crate) fn check_archive_identity_with_source(
             group.task_id
         )));
     }
-    let driver = match group.compile_driver.as_str() {
-        "cargo" => NextestDriver::Cargo,
-        "mbx" => NextestDriver::Mbx,
-        other => return Err(internal(&format!("unknown_archive_driver:{other}"))),
+    let driver = match group.compile_driver {
+        velnor_actions_rust::CompileDriver::Cargo => NextestDriver::Cargo,
+        velnor_actions_rust::CompileDriver::Mbx => NextestDriver::Mbx,
     };
     let marker = digest_b3(crate::internal_plan::snapshot::UNKNOWN_ARCHIVE_SOURCE.as_bytes());
     let Some(source) =
@@ -199,7 +190,7 @@ pub(crate) fn check_archive_identity_with_source(
         &group.package_name,
         &group.features,
         target,
-        &group.nextest_profile,
+        group.nextest_profile.as_str(),
     )
     .map_err(|err| internal(&format!("archive_inputs_rejected:{err}")))?;
     let catalog = ToolCatalog::pinned();
@@ -207,7 +198,7 @@ pub(crate) fn check_archive_identity_with_source(
         source_digest: source,
         profile: &group.configuration,
         toolchain_id,
-        runtime: &group.compile_driver,
+        runtime: group.compile_driver.as_str(),
         test_runner: catalog.version(PinnedTool::Nextest),
         format: "tar.zst",
         platform_id,

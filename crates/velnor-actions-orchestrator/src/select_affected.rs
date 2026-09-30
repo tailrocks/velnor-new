@@ -176,7 +176,7 @@ mod tests {
 
     #[test]
     fn declared_inputs_select_their_package() {
-        use velnor_actions_rust::{TaskGroup, TaskKind};
+        use velnor_actions_rust::{CompileDriver, NextestProfile, TaskGroup, TaskKind, TestRunner};
         let mut discovery = two_package_discovery();
         discovery.task_groups = vec![TaskGroup {
             task_id: "stack/rust/a/clippy/default".to_owned(),
@@ -192,14 +192,14 @@ mod tests {
             target_flags: Vec::new(),
             no_test_targets: false,
             package_arg: None,
-            compile_driver: "cargo".to_owned(),
-            test_runner: "cargo_test".to_owned(),
+            compile_driver: CompileDriver::Cargo,
+            test_runner: TestRunner::CargoTest,
             declared_inputs: vec!["docs/spec.md".to_owned()],
             undeclared_reads: false,
             uses_network: false,
             uses_clock: false,
             uses_random: false,
-            nextest_profile: "default".to_owned(),
+            nextest_profile: NextestProfile::Default,
         }];
         let changed: BTreeSet<String> = ["docs/spec.md".to_owned()].into_iter().collect();
         let selected = affected_packages(&discovery, &changed, &[], &[]);

@@ -21,12 +21,11 @@ use std::path::{Path, PathBuf};
 
 use velnor_actions_contract::{
     CacheLayer, CacheOutcome, CacheResult, ExecuteTaskRef, MatrixEntry, MatrixReport, MatrixStatus,
-    MatrixTaskEntry, NotSelectedReason, Plan, TaskReport, TaskStatus, canonical_json_bytes,
-    report_id_for_matrix, task_report_id_for_task, validate_run_key, validate_task_id,
+    MatrixTaskEntry, Plan, TaskReport, TaskStatus, canonical_json_bytes, report_id_for_matrix,
+    task_report_id_for_task, validate_run_key, validate_task_id,
 };
 
 use crate::OrchestratorError;
-use crate::decisions::not_selected_report;
 use crate::internal::{internal, internal_contract};
 use crate::internal_request::resolve_run_key;
 
@@ -63,12 +62,26 @@ pub fn write_task_report() -> Result<usize, OrchestratorError> {
         .ok()
         .filter(|value| !value.is_empty())
         .ok_or_else(|| internal("missing_exit_code"))?;
+    let reason = crate::noop_report::noop_reason_present();
+    let digest = env::var(crate::noop_report::TASK_DIGEST_ENV).ok();
+    let exit_code = parse_exit_code(&exit_raw)?;
+    if let Some(request) =
+        crate::noop_report::parse_noop_request(reason.as_deref(), digest.as_deref())?
+    {
+        return crate::noop_report::write_noop_report_to(
+            &run_key,
+            &task_id,
+            exit_code,
+            &request,
+            Path::new(&runner_temp),
+        );
+    }
     let downstream_env = env::var(DOWNSTREAM_IDS_ENV).ok();
     let downstream = parse_downstream(downstream_env.as_deref());
     write_task_report_to(
         &run_key,
         &task_id,
-        parse_exit_code(&exit_raw)?,
+        exit_code,
         &downstream,
         Path::new(&runner_temp),
     )
@@ -103,7 +116,8 @@ pub(crate) fn write_task_report_to(
     write_entry_reports(runner_temp, &plan, entry, &task, &matrix)?;
     let mut reported = 1usize;
     if exit_code != 0 {
-        reported += write_skip_reports(&plan, task_id, downstream, runner_temp)?;
+        reported +=
+            crate::noop_report::write_skip_reports(&plan, task_id, downstream, runner_temp)?;
     }
     Ok(reported)
 }
@@ -130,7 +144,7 @@ fn parse_downstream(raw: Option<&str>) -> Vec<String> {
 }
 
 /// Load and validate the downloaded plan, bound to this run key.
-fn load_plan(run_key: &str, runner_temp: &Path) -> Result<Plan, OrchestratorError> {
+pub(crate) fn load_plan(run_key: &str, runner_temp: &Path) -> Result<Plan, OrchestratorError> {
     let path = plan_path(runner_temp, run_key);
     let text = fs::read_to_string(&path)
         .map_err(|err| OrchestratorError::io(path.display().to_string(), err.to_string()))?;
@@ -157,7 +171,7 @@ fn plan_path(runner_temp: &Path, run_key: &str) -> PathBuf {
 ///
 /// Returns [`OrchestratorError::Internal`] for unknown tasks, tasks
 /// without an obligation digest, and multi-task entries.
-fn entry_and_digest<'a>(
+pub(crate) fn entry_and_digest<'a>(
     plan: &'a Plan,
     task_id: &str,
 ) -> Result<(&'a MatrixEntry, &'a str), OrchestratorError> {
@@ -251,7 +265,7 @@ fn terminal_task_report(
 /// # Errors
 ///
 /// Returns [`ContractError`] for derivation or validation failures.
-fn single_task_aggregate(
+pub(crate) fn single_task_aggregate(
     plan: &Plan,
     entry: &MatrixEntry,
     task: &TaskReport,
@@ -310,7 +324,7 @@ fn single_task_aggregate(
 /// Returns [`OrchestratorError::Internal`] for encoding failures and
 /// [`OrchestratorError::Io`] for unwritable directories; pre-existing
 /// files error, never overwrite.
-fn write_entry_reports(
+pub(crate) fn write_entry_reports(
     runner_temp: &Path,
     plan: &Plan,
     entry: &MatrixEntry,
@@ -336,42 +350,6 @@ fn write_entry_reports(
         "report",
     )?;
     Ok(())
-}
-
-/// Report every downstream ID as skipped behind a failure.
-///
-/// # Errors
-///
-/// Returns [`OrchestratorError::Internal`] for unbound downstream IDs
-/// and unwritable paths.
-fn write_skip_reports(
-    plan: &Plan,
-    task_id: &str,
-    downstream: &[String],
-    runner_temp: &Path,
-) -> Result<usize, OrchestratorError> {
-    let mut reported = 0usize;
-    for downstream_id in downstream {
-        if downstream_id == task_id {
-            return Err(internal("downstream_self"));
-        }
-        let (entry, digest) = entry_and_digest(plan, downstream_id)?;
-        let task = not_selected_report(&crate::decisions::NotSelectedInputs {
-            run_key: &plan.run_key,
-            event: plan.event,
-            trust: plan.trust,
-            matrix_id: &entry.id,
-            matrix_key: &entry.matrix_key,
-            task_id: downstream_id,
-            task_digest: digest,
-            reason: NotSelectedReason::UpstreamFailed,
-        })
-        .map_err(internal_contract)?;
-        let matrix = single_task_aggregate(plan, entry, &task).map_err(internal_contract)?;
-        write_entry_reports(runner_temp, plan, entry, &task, &matrix)?;
-        reported += 1;
-    }
-    Ok(reported)
 }
 
 #[cfg(test)]

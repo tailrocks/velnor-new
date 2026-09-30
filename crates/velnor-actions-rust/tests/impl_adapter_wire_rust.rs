@@ -2,7 +2,7 @@
 //! derive signals, consumption, and index modes (F1R/F2 rust halves).
 use velnor_actions_contract::{ContractError, digest_b3, validate_rust_extension};
 use velnor_actions_rust::tasks::{
-    ExtensionInputs, RustTaskIdentityExtension, TaskGroup, TaskKind, cargo_payload_argv,
+    DigestSlot, ExtensionInputs, RustTaskIdentityExtension, TaskGroup, TaskKind, cargo_payload_argv,
 };
 use velnor_actions_rust::{
     CompileDriver, DeriveInputs, GroupExtensionInputs, IndexMode, NextestProfile, PackageRecord,
@@ -76,14 +76,14 @@ fn group(kind: TaskKind) -> TaskGroup {
         target_flags: Vec::new(),
         no_test_targets: false,
         package_arg: None,
-        compile_driver: "cargo".to_owned(),
-        test_runner: "cargo_test".to_owned(),
+        compile_driver: CompileDriver::Cargo,
+        test_runner: TestRunner::CargoTest,
         declared_inputs: Vec::new(),
         undeclared_reads: false,
         uses_network: false,
         uses_clock: false,
         uses_random: false,
-        nextest_profile: "default".to_owned(),
+        nextest_profile: NextestProfile::Default,
     }
 }
 
@@ -110,11 +110,11 @@ fn extension_carries_workspace_and_profile() {
         targets: &targets,
         features: &features,
         target: "host",
-        driver: "cargo",
-        runner: "cargo_test",
+        driver: CompileDriver::Cargo,
+        runner: TestRunner::CargoTest,
         config_digest: &config,
-        lock_digest: None,
-        nextest_digest: None,
+        lock_digest: DigestSlot::Unknown("unprobed".to_owned()),
+        nextest_digest: DigestSlot::Unknown("unprobed".to_owned()),
         kind: TaskKind::Test,
         archive_source: None,
         rerun_inputs: Some(&[]),
@@ -134,8 +134,8 @@ fn extension_carries_workspace_and_profile() {
         graph_digest: &graph,
         targets: &targets,
         config_digest: &config,
-        lock_digest: None,
-        nextest_digest: None,
+        lock_digest: DigestSlot::Unknown("unprobed".to_owned()),
+        nextest_digest: DigestSlot::Unknown("unprobed".to_owned()),
         archive_source: None,
         rerun_inputs: Some(&[]),
         has_build_script: false,

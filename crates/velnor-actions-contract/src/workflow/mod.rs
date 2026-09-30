@@ -37,9 +37,9 @@ pub use plan::{
     PlanRunner, WorkflowEvent, validate_matrix_run,
 };
 pub use qualification::{
-    FinalCounts, FinalReport, FinalStatus, RequiredJobResult, final_report_id_for_run,
-    final_report_relpath, join_runner_temp, matrix_report_relpath, task_report_relpath,
-    validate_final_report_id,
+    FinalCounts, FinalReport, FinalStatus, JobConclusion, RequiredJobResult,
+    final_report_id_for_run, final_report_relpath, join_runner_temp, matrix_report_relpath,
+    task_report_relpath, validate_final_report_id,
 };
 pub use report::{
     CacheLayer, CacheOutcome, CacheResult, MatrixReport, MatrixStatus, MatrixTaskEntry,
