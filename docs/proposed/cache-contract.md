@@ -351,6 +351,7 @@ The final gate computes exactly one result:
 | `passed` | Every obligation is `reused`, `executed`, validly `empty_partition`, or exactly `covered` by trusted baseline evidence | 0 |
 | `failed` | A valid required task report records failure, a nonzero child exit, or required candidate validation fails | 1 |
 | `cancelled` | Any required task was cancelled | 1 |
+| `blocked` | A required task was blocked (`not_selected`), below cancelled | 1 |
 | `not_run` | A selected matrix entry lacks a valid report and no task failure was reported | 1 |
 | `planning_failed` | Discovery, generation, formatting, matrix validation, or plan-report validation failed | 1 |
 
@@ -360,7 +361,7 @@ reused, executed, empty-partition, covered, failed, cancelled, blocked, and not-
 cache/baseline miss reason.
 
 If more than one result condition applies, choose the result in this order: `planning_failed`, `failed`,
-`cancelled`, `not_run`, then `passed` or `no_work`. A shard with `empty_partition` is valid only with its
+`cancelled`, `blocked`, `not_run`, then `passed` or `no_work`. A shard with `empty_partition` is valid only with its
 inventory proof and is counted separately in the final report. A real failed task takes precedence over
 dependent tasks blocked by that failure. If no task failure is reported, a missing, malformed, or duplicate
 matrix report is `not_run`.

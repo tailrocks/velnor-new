@@ -10,7 +10,8 @@ use crate::impl_common::{
     TestResult, config_with_branch, git, make_repo, passing_reports, plan_for_source_change,
 };
 use crate::impl_orch_plansel::{
-    BUMP, commit, entries_for, has, make_ws, manifest_for, merge_status, plan_at, plan_change, put,
+    BUMP, anchor_repo, commit, entries_for, has, make_ws, manifest_for, merge_status, plan_at,
+    plan_change, put,
 };
 
 #[test]
@@ -268,6 +269,7 @@ fn generator_mismatch_executes_with_reason() -> TestResult {
 #[test]
 fn carried_proofs_cover_with_original_run() -> TestResult {
     let (repo, seed) = plan_for_source_change()?;
+    anchor_repo(repo.path())?;
     let head = seed.head.clone();
     let (nodiff, _) = plan_at(repo.path(), Some(&head), &head, None)?;
     let mut tasks = entries_for(&nodiff);
@@ -288,7 +290,7 @@ fn carried_proofs_cover_with_original_run() -> TestResult {
     );
     for obligation in &plan.obligations {
         let proof = obligation.baseline_proof.as_ref().ok_or("proof")?;
-        assert_eq!(proof.run_id, 5, "original proof retained");
+        assert_eq!(proof.run_id(), 5, "original proof retained");
     }
     Ok(())
 }
@@ -310,6 +312,7 @@ fn shard_budgets_reject_at_plan_time() -> TestResult {
 #[test]
 fn expired_baselines_schedule_execution() -> TestResult {
     let (repo, seed) = plan_for_source_change()?;
+    anchor_repo(repo.path())?;
     let base = seed.base.clone().ok_or("missing base")?;
     let mut manifest = manifest_for(&seed, &base, &entries_for(&seed));
     manifest["expires_at_unix"] = Json::from(1);
@@ -346,15 +349,15 @@ fn entry_cache_ids_recorded_per_lane() -> TestResult {
         entry.validate("local")?;
         let ids = entry.cache_ids.as_ref().ok_or("cache ids recorded")?;
         ids.validate()?;
-        assert!(lanes.insert(ids.lane_id.clone()), "lanes distinct");
+        assert!(lanes.insert(ids.lane_id().to_owned()), "lanes distinct");
     }
     let first = plan.matrix.include[0].cache_ids.as_ref().ok_or("ids")?;
     for entry in &plan.matrix.include {
         let ids = entry.cache_ids.as_ref().ok_or("ids")?;
-        assert_eq!(ids.toolchain_id, first.toolchain_id);
-        assert_eq!(ids.platform_id, first.platform_id);
-        assert_eq!(ids.cache_format_id, first.cache_format_id);
-        assert_eq!(ids.workspace_id, first.workspace_id);
+        assert_eq!(ids.toolchain_id(), first.toolchain_id());
+        assert_eq!(ids.platform_id(), first.platform_id());
+        assert_eq!(ids.cache_format_id(), first.cache_format_id());
+        assert_eq!(ids.workspace_id(), first.workspace_id());
     }
     Ok(())
 }
@@ -376,10 +379,11 @@ fn adapter_metadata_forwards_adapter_value() -> TestResult {
             "test_runner",
             "evidence_ids",
             "task_cache_enabled",
+            "cargo_target_dir",
         ] {
             assert!(meta.contains_key(key), "{key} in {}", entry.id);
         }
-        assert_eq!(meta.len(), 10, "adapter shape only");
+        assert_eq!(meta.len(), 11, "adapter shape only");
         assert!(
             !meta["compile_driver"]
                 .as_str()

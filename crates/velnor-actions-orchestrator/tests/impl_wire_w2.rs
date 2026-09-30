@@ -10,8 +10,8 @@ use velnor_actions_orchestrator::{
 };
 
 use super::impl_common::{
-    TestResult, config_with_branch, err_of, git, git_line, make_repo, passing_reports,
-    plan_for_source_change, write_nextest_task,
+    TestResult, anchor_id, anchor_repo, config_with_branch, err_of, git, git_line, make_repo,
+    passing_reports, plan_for_source_change, write_nextest_task,
 };
 use super::impl_orch_core::{
     WireResult, has_warning, manifest_for, merge, merge_request, merge_request_for, plan_value,
@@ -39,11 +39,11 @@ fn v1_push_plan_wiring() -> TestResult {
     }
     for entry in &plan.matrix.include {
         let ids = entry.cache_ids.as_ref().expect("cache ids");
-        C::validate_digest(&ids.workspace_id)?;
-        C::validate_digest(&ids.lane_id)?;
-        C::validate_digest(&ids.platform_id)?;
-        C::validate_digest(&ids.toolchain_id)?;
-        C::validate_digest(&ids.cache_format_id)?;
+        C::validate_digest(ids.workspace_id())?;
+        C::validate_digest(ids.lane_id())?;
+        C::validate_digest(ids.platform_id())?;
+        C::validate_digest(ids.toolchain_id())?;
+        C::validate_digest(ids.cache_format_id())?;
         let meta = entry.adapter_metadata.as_object().expect("metadata");
         assert!(meta.contains_key("compile_driver") && meta.contains_key("test_runner"));
         assert!(meta.contains_key("evidence_ids"));
@@ -82,7 +82,9 @@ fn build_script_package_rejects_reuse_and_coverage() -> TestResult {
     for ob in &plan.obligations {
         assert_eq!(ob.reason, "task_not_eligible", "{}", ob.task_id);
     }
-    let m = manifest_for(&plan, &base, "testmain")?;
+    anchor_repo(root)?;
+    let mut m = manifest_for(&plan, &base, "testmain")?;
+    m["repository_id"] = json!(anchor_id());
     let warm = pr_value(root, &base, &head, Some(&m))?;
     let obs = warm["plan"]["obligations"].as_array().expect("obligations");
     assert!(obs.iter().all(|ob| ob["decision"] == "execute"));
@@ -158,7 +160,9 @@ fn manifest_task_proofs_validate_per_task() -> TestResult {
     let (repo, plan) = plan_for_source_change()?;
     let root = repo.path();
     let head = git_line(&["rev-parse", "HEAD"], root)?;
+    anchor_repo(root)?;
     let mut manifest = manifest_for(&plan, &head, "testmain")?;
+    manifest["repository_id"] = json!(anchor_id());
     let tasks = manifest["tasks"].as_array_mut().expect("tasks");
     for (task, ob) in tasks.iter_mut().zip(&plan.obligations) {
         task["proof"] = json!({"task_id": ob.task_id, "task_digest": ob.task_digest, "input_digest": ob.input_digest,
@@ -169,13 +173,27 @@ fn manifest_task_proofs_validate_per_task() -> TestResult {
     for ob in warm["plan"]["obligations"].as_array().expect("obligations") {
         assert_eq!(ob["decision"], "covered_by_trusted_baseline", "{ob}");
     }
+    // A proof that parses but no longer binds its entry fails per-task
+    // re-validation with a precise mismatch reason.
     let mut bad = manifest_for(&plan, &head, "testmain")?;
+    bad["repository_id"] = json!(anchor_id());
     let ob0 = &plan.obligations[0];
-    bad["tasks"][0]["proof"] = json!({"task_id": ob0.task_id, "task_digest": "bogus", "input_digest": ob0.input_digest,
-        "graph_digest": ob0.task_digest, "toolchain_id": ob0.task_digest, "mbx_digest": ob0.task_digest,
+    bad["tasks"][0]["proof"] = json!({"task_id": ob0.task_id, "task_digest": ob0.task_digest,
+        "input_digest": C::digest_b3(b"forged"), "graph_digest": ob0.task_digest,
+        "toolchain_id": ob0.task_digest, "mbx_digest": ob0.task_digest,
         "platform_id": ob0.task_digest, "profile": "default", "proof_run_id": 7});
     let cold = plan_value(root, "pull_request", Some(&head), &head, Some(&bad))?;
-    assert!(has_warning(&cold, "bad_task_proof"));
+    assert!(has_warning(&cold, "proof_mismatch"), "{cold}");
+    // An unparseable proof never reaches per-task validation: the
+    // boundary rejects the whole manifest as malformed.
+    let mut malformed = manifest_for(&plan, &head, "testmain")?;
+    malformed["repository_id"] = json!(anchor_id());
+    malformed["tasks"][0]["proof"] = json!({"task_id": ob0.task_id, "task_digest": "bogus",
+        "input_digest": ob0.input_digest, "graph_digest": ob0.task_digest,
+        "toolchain_id": ob0.task_digest, "mbx_digest": ob0.task_digest,
+        "platform_id": ob0.task_digest, "profile": "default", "proof_run_id": 7});
+    let rejected = plan_value(root, "pull_request", Some(&head), &head, Some(&malformed))?;
+    assert!(has_warning(&rejected, "malformed_manifest"), "{rejected}");
     Ok(())
 }
 
@@ -260,7 +278,7 @@ fn local_select_uses_working_tree() -> TestResult {
     assert!(
         obs.iter()
             .filter(|ob| ob["task_id"].as_str().is_some_and(|s| s.contains("/a/")))
-            .all(|ob| ob["reason"] == "unproven"),
+            .all(|ob| ob["reason"] == "forced_uncached"),
         "{obs:?}"
     );
     git(&["checkout", "--", "."], root)?;

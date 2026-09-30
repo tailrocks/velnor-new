@@ -163,7 +163,7 @@ fn short_sha_base_still_classifies() -> TestResult {
         let want = if member == "beta" {
             "affected_by_change"
         } else {
-            "unproven"
+            "forced_uncached"
         };
         assert!(
             !obs.is_empty() && obs.iter().all(|ob| ob.reason == want),
@@ -203,7 +203,7 @@ fn new_package_at_head_marks_affected() -> TestResult {
             .filter(|ob| ob.task_id.contains(member))
             .collect();
         let want = if member == "alpha" {
-            "unproven"
+            "forced_uncached"
         } else {
             "affected_by_change"
         };
@@ -241,7 +241,7 @@ fn source_build_skips_lookup_with_reason() -> TestResult {
     let plan: Plan = serde_json::from_value(value["plan"].clone())?;
     assert_ne!(plan.generator.sha256, "0".repeat(64));
     assert_eq!(
-        plan.baseline.reason.as_deref(),
+        plan.baseline.reason(),
         Some("generator_unverifiable_source_build")
     );
     Ok(())
@@ -264,9 +264,20 @@ fn release_lock_resolves_generator_identity() -> TestResult {
     );
     std::fs::write(repo.path().join(".velnor/generator.lock"), lock)?;
     let (plan, _) = plan_with(repo.path(), Some(&base), &head, None)?;
-    assert_eq!(plan.generator.sha256, sha);
+    // The observed exe SHA wins over the lock pin: a matching version
+    // never blesses a source build as a release.
     assert_ne!(
-        plan.baseline.reason.as_deref(),
+        plan.generator.sha256, sha,
+        "observed exe SHA wins over lock pin"
+    );
+    assert_eq!(plan.generator.sha256.len(), 64);
+    assert!(
+        plan.generator.sha256.bytes().all(|b| b.is_ascii_hexdigit()),
+        "observed exe SHA is real hex: {}",
+        plan.generator.sha256
+    );
+    assert_ne!(
+        plan.baseline.reason(),
         Some("generator_unverifiable_source_build")
     );
     Ok(())
@@ -286,13 +297,13 @@ fn merge_flags_wrong_manifest_digest() -> TestResult {
     let first = 0;
     plan.obligations[first].decision = ObligationDecision::CoveredByTrustedBaseline;
     plan.obligations[first].reason = "covered_by_trusted_baseline".to_owned();
-    plan.obligations[first].baseline_proof = Some(velnor_actions_contract::BaselineProof {
-        source_commit: base,
-        run_id: 7,
-        artifact_id: 9,
-        artifact_name: "velnor-plan-local".to_owned(),
-        manifest_digest: velnor_actions_contract::digest_b3(b"forged-manifest"),
-    });
+    plan.obligations[first].baseline_proof = Some(velnor_actions_contract::BaselineProof::new(
+        &base,
+        7,
+        9,
+        "velnor-plan-local",
+        &velnor_actions_contract::digest_b3(b"forged-manifest"),
+    )?);
     plan.validate()?;
     let reports = passing_reports(&plan)?;
     let request = serde_json::json!({

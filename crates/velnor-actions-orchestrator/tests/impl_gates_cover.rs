@@ -14,6 +14,10 @@ fn plan_with_manifest(
 ) -> Result<(tempfile::TempDir, Plan), Box<dyn std::error::Error>> {
     let repo = make_repo(config_with_branch())?;
     let root = repo.path();
+    git(
+        &["remote", "add", "origin", "https://github.com/o/r.git"],
+        root,
+    )?;
     git(&["add", "."], root)?;
     git(&["commit", "-m", "one"], root)?;
     std::fs::write(root.join("src/lib.rs"), "pub fn f() {}\npub fn g() {}\n")?;
@@ -53,7 +57,7 @@ fn manifest_for(plan: &Plan, base: &str, tasks: &serde_json::Value) -> serde_jso
     let compat = velnor_actions_contract::digest_b3(b"compat");
     serde_json::json!({
         "schema": 1,
-        "repository_id": velnor_actions_contract::digest_b3(b"repo"),
+        "repository_id": velnor_actions_contract::digest_b3(b"github.com/o/r"),
         "source_commit": base,
         "ref": "refs/heads/testmain",
         "event": "push",
@@ -111,7 +115,7 @@ fn wrong_base_manifest_schedules_everything() -> TestResult {
         plan.warnings
     );
     assert_eq!(
-        plan.baseline.status,
+        plan.baseline.status(),
         velnor_actions_contract::BaselineStatus::Unavailable
     );
     Ok(())
@@ -181,7 +185,7 @@ fn tampered_task_entry_executes_with_miss_warning() -> TestResult {
         plan.warnings
     );
     assert_eq!(
-        plan.baseline.status,
+        plan.baseline.status(),
         velnor_actions_contract::BaselineStatus::Used
     );
     Ok(())
@@ -205,9 +209,9 @@ fn valid_manifest_covers_exact_obligations() -> TestResult {
             "{ob:?}"
         );
         let proof = ob.baseline_proof.as_ref().expect("proof");
-        assert_eq!(proof.source_commit, head);
-        assert_eq!(proof.artifact_id, 9);
-        assert_eq!(proof.artifact_name, artifact_name);
+        assert_eq!(proof.source_commit(), head);
+        assert_eq!(proof.artifact_id(), 9);
+        assert_eq!(proof.artifact_name(), artifact_name);
     }
     assert!(plan.matrix.include.is_empty(), "{:?}", plan.matrix.include);
     assert!(
@@ -220,7 +224,7 @@ fn valid_manifest_covers_exact_obligations() -> TestResult {
     );
     plan.validate()?;
     assert_eq!(
-        plan.baseline.status,
+        plan.baseline.status(),
         velnor_actions_contract::BaselineStatus::Used
     );
     Ok(())
@@ -248,13 +252,14 @@ fn merge_rejects_covered_claims_without_manifest() -> TestResult {
     let first = 0;
     plan.obligations[first].decision = ObligationDecision::CoveredByTrustedBaseline;
     plan.obligations[first].reason = "covered_by_trusted_baseline".to_owned();
-    plan.obligations[first].baseline_proof = Some(velnor_actions_contract::BaselineProof {
-        source_commit: plan.base.clone().expect("base"),
-        run_id: 7,
-        artifact_id: 9,
-        artifact_name: "velnor-plan-local".to_owned(),
-        manifest_digest: velnor_actions_contract::digest_b3(b"manifest"),
-    });
+    let proof_base = plan.base.clone().expect("base");
+    plan.obligations[first].baseline_proof = Some(velnor_actions_contract::BaselineProof::new(
+        &proof_base,
+        7,
+        9,
+        "velnor-plan-local",
+        &velnor_actions_contract::digest_b3(b"manifest"),
+    )?);
     plan.validate()?;
     let reports = passing_reports(&plan)?;
     let request = serde_json::json!({

@@ -2,8 +2,8 @@
 
 use crate::impl_common::{TestResult, passing_reports, plan_for_source_change};
 use crate::impl_orch_plansel::{
-    BUMP, commit, entries_for, has, inv_digest, make_ws, manifest_for, merge_status, plan_at,
-    plan_change, proof, put, reasons_are, shard_plan, sharded_reports, test_value,
+    BUMP, anchor_repo, commit, entries_for, has, inv_digest, make_ws, manifest_for, merge_status,
+    plan_at, plan_change, proof, put, reasons_are, shard_plan, sharded_reports, test_value,
 };
 use serde_json::Value as Json;
 use velnor_actions_contract::{FinalStatus, ObligationDecision, Plan};
@@ -65,8 +65,8 @@ fn toolfile_edits_leave_universe_unproven() -> TestResult {
     assert!(
         plan.obligations
             .iter()
-            .all(|ob| ob.decision == ObligationDecision::Execute && ob.reason == "unproven"),
-        "all unproven: {:?}",
+            .all(|ob| ob.decision == ObligationDecision::Execute && ob.reason == "forced_uncached"),
+        "all forced_uncached: {:?}",
         plan.obligations
     );
     assert!(
@@ -87,8 +87,8 @@ fn toolfile_edits_leave_universe_unproven() -> TestResult {
         plan.obligations
     );
     assert!(
-        reasons_are(&plan, "alpha", "unproven"),
-        "alpha unproven: {:?}",
+        reasons_are(&plan, "alpha", "forced_uncached"),
+        "alpha forced_uncached: {:?}",
         plan.obligations
     );
     Ok(())
@@ -115,14 +115,15 @@ fn untracked_files_broaden() -> TestResult {
 #[test]
 fn exact_baseline_covers_unchanged() -> TestResult {
     let (repo, seed) = plan_for_source_change()?;
+    anchor_repo(repo.path())?;
     let head = seed.head.clone();
     let (bare, _) = plan_at(repo.path(), Some(&head), &head, None)?;
     assert!(!bare.task_ids.is_empty(), "empty diff keeps universe");
     assert!(
         bare.obligations
             .iter()
-            .all(|ob| ob.decision == ObligationDecision::Execute && ob.reason == "unproven"),
-        "empty diff unproven without baseline: {:?}",
+            .all(|ob| ob.decision == ObligationDecision::Execute && ob.reason == "forced_uncached"),
+        "empty diff forced_uncached without baseline: {:?}",
         bare.obligations
     );
     let manifest = manifest_for(&bare, &head, &entries_for(&bare));
@@ -135,7 +136,7 @@ fn exact_baseline_covers_unchanged() -> TestResult {
     assert!(plan.matrix.include.is_empty(), "matrix pruned");
     assert_eq!(plan.task_ids, bare.task_ids, "plan retains all");
     assert_eq!(
-        plan.baseline.status,
+        plan.baseline.status(),
         velnor_actions_contract::BaselineStatus::Used
     );
     assert!(
@@ -175,6 +176,7 @@ fn baseline_miss_reasons_are_precise() -> TestResult {
 #[test]
 fn carried_proof_revalidated_by_exact_identity() -> TestResult {
     let (repo, seed) = plan_for_source_change()?;
+    anchor_repo(repo.path())?;
     let head = seed.head.clone();
     let (bare, _) = plan_at(repo.path(), Some(&head), &head, None)?;
     let mut tasks = entries_for(&bare);
@@ -192,7 +194,7 @@ fn carried_proof_revalidated_by_exact_identity() -> TestResult {
     assert!(
         plan.obligations
             .iter()
-            .all(|ob| ob.baseline_proof.as_ref().is_some_and(|p| p.run_id == 5))
+            .all(|ob| ob.baseline_proof.as_ref().is_some_and(|p| p.run_id() == 5))
     );
     Ok(())
 }
@@ -208,10 +210,7 @@ fn gh_failure_schedules_normally() -> TestResult {
             .iter()
             .all(|ob| ob.decision == ObligationDecision::Execute)
     );
-    assert_eq!(
-        plan.baseline.reason.as_deref(),
-        Some("baseline_unavailable")
-    );
+    assert_eq!(plan.baseline.reason(), Some("baseline_unavailable"));
     Ok(())
 }
 

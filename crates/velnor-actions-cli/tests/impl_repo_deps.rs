@@ -63,6 +63,9 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
         "anyhow",
         "tracing",
         "tempfile",
+        // Reviewed OS shim for the P09 atomic directory exchange; already
+        // in the lockfile via tempfile, zero new crates.
+        "rustix",
     ];
     for (dir, _) in MEMBERS {
         let body = manifest(dir)?;
@@ -76,7 +79,10 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
             if let Some(index) = line.find("features") {
                 let quoted: Vec<&str> = line[index..].split('"').collect();
                 for feature in quoted.into_iter().skip(1).step_by(2) {
-                    assert_eq!(feature, "derive", "{dir}/{key} feature {feature}");
+                    // Only `derive` globally, plus `fs` on rustix for the
+                    // P09 atomic directory exchange (no net/pty/terminal).
+                    let narrow = feature == "derive" || (key == "rustix" && feature == "fs");
+                    assert!(narrow, "{dir}/{key} feature {feature}");
                 }
             }
             assert!(dep_referenced(dir, key)?, "{dir} never uses {key}");

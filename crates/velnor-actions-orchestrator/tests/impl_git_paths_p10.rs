@@ -28,7 +28,7 @@ fn plan_local(root: &Path, head: &str) -> Result<(Plan, Vec<String>), Box<dyn st
     Ok((plan, warnings))
 }
 
-/// Assert one member changed and the other stayed unproven.
+/// Assert one member changed and the other stayed forced-uncached.
 fn assert_narrow(plan: &Plan, changed: &str, other: &str) {
     let hit = reasons_for(plan, changed);
     assert!(
@@ -36,7 +36,10 @@ fn assert_narrow(plan: &Plan, changed: &str, other: &str) {
         "{changed}: {hit:?}"
     );
     let miss = reasons_for(plan, other);
-    assert!(miss.iter().all(|r| *r == "unproven"), "{other}: {miss:?}");
+    assert!(
+        miss.iter().all(|r| *r == "forced_uncached"),
+        "{other}: {miss:?}"
+    );
 }
 
 #[test]
