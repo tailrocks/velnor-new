@@ -74,6 +74,7 @@ pub(crate) fn sample_plan(run_key: &str) -> Result<Plan, ContractError> {
             reason: "changed".to_owned(),
             task_digest: digest_b3(b"task"),
             input_digest: digest_b3(b"inputs"),
+            closure_digest: digest_b3(b"closure"),
             baseline_proof: None,
         }],
         matrix: PlanMatrix {

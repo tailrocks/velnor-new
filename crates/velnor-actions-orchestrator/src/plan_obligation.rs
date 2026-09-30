@@ -7,6 +7,7 @@
 //! eligible for later baseline coverage.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::Path;
 
 use serde::Serialize;
 use velnor_actions_contract::{MatrixEntry, PlanObligation, canonical_json_bytes, digest_b3};
@@ -17,11 +18,13 @@ use velnor_actions_rust::TaskGroup;
 use crate::OrchestratorError;
 use crate::discover::Discovery;
 use crate::internal::{internal, internal_contract};
-use crate::internal_plan::identities::platform_id_for_group;
+use crate::internal_plan::closure::resolve_closure_at_root;
+use crate::internal_plan::identities::{extension_bundle_with_snapshot, platform_id_for_group};
+use crate::internal_plan::snapshot::{ExecutionSnapshot, canonical_digest};
 use crate::internal_plan::wire_w2::{self, GroupWire};
 use crate::internal_plan::{
     IdentityInputs, adapter_metadata, cache_ids_for, evidence_for_group, execute_ids,
-    extension_bundle, manifest_for_key, record_task_cache, task_identity_digest, toolchain_id,
+    manifest_for_key, nextest_config_for, record_task_cache, task_identity_digest, toolchain_id,
 };
 use crate::schedule::assign_lanes;
 use crate::select::group_changed;
@@ -49,6 +52,10 @@ pub(crate) struct GroupInputs<'a> {
     pub(crate) wire: GroupWire<'a>,
     /// Changed-work classification for the group.
     pub(crate) changed: bool,
+    /// Once-built execution snapshot for graph lookups (P03-1).
+    pub(crate) snapshot: &'a ExecutionSnapshot,
+    /// Repository checkout the closure resolves against.
+    pub(crate) root: &'a Path,
 }
 
 /// Deterministic lane per universe task ID.
@@ -91,9 +98,25 @@ pub(crate) fn plan_group(
     let toolchain = toolchain_id(group, inputs.catalog).map_err(internal_contract)?;
     let argv = task_argv(group, inputs.catalog)?;
     let manifest = manifest_for_key(&group.manifest_key);
-    let bundle = extension_bundle(inputs.discovery, group);
+    let nextest_config = nextest_config_for(inputs.discovery, group);
+    let bundle = extension_bundle_with_snapshot(
+        inputs.snapshot,
+        inputs.discovery,
+        group,
+        Some(inputs.root),
+        nextest_config.as_deref(),
+    );
     let ext = group.identity_extension(&bundle.inputs());
     let platform_id = platform_id_for_group(inputs.label, group);
+    let closure = resolve_closure_at_root(
+        inputs.root,
+        group,
+        nextest_config.as_deref(),
+        bundle.graph_digest(),
+        &toolchain,
+        &platform_id,
+    );
+    let closure_digest = canonical_digest(&closure).map_err(internal_contract)?;
     let input_digest = task_identity_digest(&IdentityInputs {
         group,
         argv: &argv,
@@ -102,6 +125,7 @@ pub(crate) fn plan_group(
         manifest: &manifest,
         generator: inputs.wire.generator,
         extension: ext.to_stack_extension(),
+        closure_digest: &closure_digest,
     })
     .map_err(internal_contract)?;
     let reuse = if inputs.changed {
@@ -134,6 +158,7 @@ pub(crate) fn plan_group(
         reason: reuse.reason,
         task_digest: task_digest.clone(),
         input_digest: input_digest.clone(),
+        closure_digest,
         baseline_proof: None,
     };
     let mut metadata = adapter_metadata(group, evidence_for_group(inputs.discovery, group));

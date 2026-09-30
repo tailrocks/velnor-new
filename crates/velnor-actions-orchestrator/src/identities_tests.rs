@@ -145,9 +145,12 @@ fn formats_stay_single_and_graphs_relocate() {
             target: None,
         }],
     };
+    let digest_of = |id: &str| {
+        super::snapshot::canonical_digest(&snapshot_graph_for(&record(id))).expect("digest")
+    };
     assert_eq!(
-        graph_digest_for(&record("path+file:///old#a@0.1.0")),
-        graph_digest_for(&record("path+file:///new#a@0.1.0"))
+        digest_of("path+file:///old#a@0.1.0"),
+        digest_of("path+file:///new#a@0.1.0")
     );
     assert_eq!(normalized_component_id("a-id", "a/Cargo.toml"), "a-id");
 }

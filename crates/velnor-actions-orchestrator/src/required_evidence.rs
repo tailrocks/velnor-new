@@ -34,6 +34,11 @@ pub(crate) struct BaselineTaskEntry {
     pub(crate) task_digest: String,
     /// Covered input digest.
     pub(crate) input_digest: String,
+    /// Canonical digest over the task's complete input closure.
+    ///
+    /// Required with no default: entries recorded before closure binding
+    /// (schema 1) fail deserialization instead of covering blindly.
+    pub(crate) closure_digest: String,
     /// Original direct-execution proof run.
     pub(crate) proof_run_id: u64,
     /// Carrying run that revalidated the proof.
@@ -49,7 +54,7 @@ pub(crate) struct BaselineTaskEntry {
 /// Trusted `baseline.json`: minimum shape plus artifact binding.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct BaselineManifest {
-    /// Manifest schema; must be 1.
+    /// Manifest schema; must be 2 (closure-bound entries).
     pub(crate) schema: u32,
     /// Repository identity digest.
     pub(crate) repository_id: String,

@@ -55,13 +55,14 @@ fn plan_at(
 /// Minimal manifest JSON for one base commit; tasks filled by callers.
 fn manifest_for(plan: &Plan, base: &str, tasks: &serde_json::Value) -> serde_json::Value {
     let compat = velnor_actions_contract::digest_b3(b"compat");
+    let workflow = velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
     serde_json::json!({
-        "schema": 1,
+        "schema": 2,
         "repository_id": velnor_actions_contract::digest_b3(b"github.com/o/r"),
         "source_commit": base,
         "ref": "refs/heads/testmain",
         "event": "push",
-        "workflow_ref": "o/r/.github/workflows/velnor.yml@refs/heads/testmain",
+        "workflow_ref": format!("o/r/{workflow}@refs/heads/testmain"),
         "run_id": 7,
         "run_attempt": 1,
         "final_status": "passed",
@@ -84,6 +85,7 @@ fn entries_for(plan: &Plan) -> serde_json::Value {
                 "task_id": ob.task_id,
                 "task_digest": ob.task_digest,
                 "input_digest": ob.input_digest,
+                "closure_digest": ob.closure_digest,
                 "proof_run_id": 7,
                 "observed_run_id": 7,
             })
@@ -141,7 +143,7 @@ fn malformed_manifest_is_a_miss_not_a_failure() -> TestResult {
     let (repo, seed) = plan_with_manifest(None)?;
     let base = seed.base.clone().expect("base");
     let mut stale = manifest_for(&seed, &base, &entries_for(&seed));
-    stale["schema"] = serde_json::json!(2);
+    stale["schema"] = serde_json::json!(1);
     let plan = plan_at(repo.path(), &base, &seed.head, Some(stale))?;
     assert!(
         plan.warnings

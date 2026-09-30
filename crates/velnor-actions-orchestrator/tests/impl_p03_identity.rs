@@ -121,27 +121,48 @@ fn lanes_follow_responsibility() -> TestResult {
 }
 
 #[test]
-fn changed_source_executes_despite_matching_digests() -> TestResult {
+fn source_edit_with_empty_changed_set_executes() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     let root = repo.path();
     git(&["add", "."], root)?;
     git(&["commit", "-m", "one"], root)?;
-    let base = git_line(&["rev-parse", "HEAD"], root)?;
-    std::fs::write(root.join("src/lib.rs"), "pub fn f() {}\npub fn g() {}\n")?;
-    git(&["add", "."], root)?;
-    git(&["commit", "-m", "two"], root)?;
     let head = git_line(&["rev-parse", "HEAD"], root)?;
     anchor_repo(root)?;
-    let seed = typed(&plan_value(root, "pull_request", Some(&base), &head, None)?)?;
-    let mut manifest = manifest_for(&seed, &base, "testmain")?;
+    // Baseline recorded over the clean tree.
+    let clean = typed(&plan_value(root, "pull_request", Some(&head), &head, None)?)?;
+    let stale: std::collections::BTreeMap<&str, &str> = clean
+        .obligations
+        .iter()
+        .map(|ob| (ob.task_id.as_str(), ob.closure_digest.as_str()))
+        .collect();
+    // Uncommitted source edit: invisible to the base==head diff, visible
+    // to the closure resolved against the checkout.
+    std::fs::write(root.join("src/lib.rs"), "pub fn f() {}\npub fn g() {}\n")?;
+    // Manifest with matching input digests but stale closure digests:
+    // only the closure comparison can refuse coverage here.
+    let edited = typed(&plan_value(root, "pull_request", Some(&head), &head, None)?)?;
+    assert!(
+        clean
+            .obligations
+            .iter()
+            .zip(&edited.obligations)
+            .any(|(before, after)| before.input_digest != after.input_digest),
+        "plan-time input_digest must bind source bytes"
+    );
+    let mut manifest = manifest_for(&edited, &head, "testmain")?;
     manifest["repository_id"] = serde_json::Value::String(anchor_id());
-    let plan = typed(&plan_value(
-        root,
-        "pull_request",
-        Some(&base),
-        &head,
-        Some(&manifest),
-    )?)?;
+    for task in manifest["tasks"].as_array_mut().ok_or("tasks")? {
+        let id = task["task_id"].as_str().ok_or("task id")?;
+        let digest = stale.get(id).copied().ok_or("stale closure")?;
+        task["closure_digest"] = serde_json::Value::String(digest.to_owned());
+    }
+    let value = plan_value(root, "pull_request", Some(&head), &head, Some(&manifest))?;
+    let plan = typed(&value)?;
+    assert!(
+        has_warning(&value, "no_affected_files:all_unchanged"),
+        "the changed set must be empty, not broadened: {:?}",
+        value["plan"]["warnings"]
+    );
     assert!(
         plan.obligations
             .iter()
@@ -152,6 +173,36 @@ fn changed_source_executes_despite_matching_digests() -> TestResult {
             .map(|ob| &ob.decision)
             .collect::<Vec<_>>()
     );
+    assert!(
+        has_warning(&value, "closure_mismatch"),
+        "{:?}",
+        value["plan"]["warnings"]
+    );
+    Ok(())
+}
+
+#[test]
+fn unchanged_inputs_with_valid_baseline_cover() -> TestResult {
+    let repo = make_repo(config_with_branch())?;
+    let root = repo.path();
+    git(&["add", "."], root)?;
+    git(&["commit", "-m", "one"], root)?;
+    let head = git_line(&["rev-parse", "HEAD"], root)?;
+    anchor_repo(root)?;
+    let seed = typed(&plan_value(root, "pull_request", Some(&head), &head, None)?)?;
+    let mut manifest = manifest_for(&seed, &head, "testmain")?;
+    manifest["repository_id"] = serde_json::Value::String(anchor_id());
+    let value = plan_value(root, "pull_request", Some(&head), &head, Some(&manifest))?;
+    let plan = typed(&value)?;
+    assert!(
+        plan.obligations
+            .iter()
+            .all(|ob| ob.decision == ObligationDecision::CoveredByTrustedBaseline),
+        "unchanged inputs stay coverable: {:?}",
+        value["plan"]["warnings"]
+    );
+    assert_eq!(plan.baseline.status(), BaselineStatus::Used);
+    assert!(plan.matrix.include.is_empty());
     Ok(())
 }
 

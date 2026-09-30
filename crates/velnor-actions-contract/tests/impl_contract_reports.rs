@@ -49,6 +49,7 @@ fn plan_validates_sorting_and_matrix() -> Result<(), ContractError> {
             reason: "changed".to_owned(),
             task_digest: digest_b3(b"task"),
             input_digest: digest_b3(b"inputs"),
+            closure_digest: digest_b3(b"closure"),
             baseline_proof: None,
         }],
         matrix: PlanMatrix {

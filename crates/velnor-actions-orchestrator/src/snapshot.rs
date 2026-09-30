@@ -25,7 +25,9 @@ pub(crate) const UNRESOLVED_GENERATOR_SHA: &str =
     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 /// Current canonical-schema version; evidence carrying any other version
 /// migrates explicitly or is rejected, never silently reinterpreted.
-pub(crate) const CANONICAL_SCHEMA_VERSION: u32 = 1;
+/// Version 2 records per-task input-closure digests in baseline entries;
+/// version 1 baselines bound no source bytes and are rejected outright.
+pub(crate) const CANONICAL_SCHEMA_VERSION: u32 = 2;
 
 /// BLAKE3 digest over canonical JSON bytes: the single digest function.
 ///
@@ -299,8 +301,8 @@ mod tests {
         let older = platform_id_for("ubuntu-24.04", "x86_64-unknown-linux-gnu");
         assert_ne!(linux, older);
         assert!(velnor_actions_contract::validate_digest(&linux).is_ok());
-        assert!(check_canonical_version(1).is_ok());
+        assert!(check_canonical_version(2).is_ok());
         assert!(check_canonical_version(0).is_err());
-        assert!(check_canonical_version(2).is_err());
+        assert!(check_canonical_version(1).is_err());
     }
 }
