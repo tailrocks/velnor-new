@@ -156,6 +156,36 @@ fn section4_build_vector_is_byte_exact() {
 }
 
 #[test]
+fn custom_task_steps_emit_only_allowlisted() {
+    let steps = custom_task_steps(&[]).expect("empty allowlist");
+    assert!(steps.is_empty(), "empty emits nothing");
+    let allowlist = argv_of(&["audit", "lint"]);
+    let steps = custom_task_steps(&allowlist).expect("custom steps");
+    assert_eq!(steps.len(), 2);
+    for (step, task) in steps.iter().zip(["audit", "lint"]) {
+        assert_eq!(step.name, format!("Custom task {task}"));
+        let StepKind::Shell { run, env } = &step.kind else {
+            panic!("custom step must be shell: {:?}", step.kind);
+        };
+        assert_eq!(*run, argv_of(&["mise", "run", task]));
+        assert!(env.is_empty());
+    }
+    let text = format!("{steps:?}");
+    assert!(!text.contains("undeclared"), "{text}");
+}
+
+#[test]
+fn custom_task_steps_reject_bad_names() {
+    for bad in ["", "  ", "two words", "a/b"] {
+        let allowlist = argv_of(&[bad]);
+        assert!(
+            custom_task_steps(&allowlist).is_err(),
+            "{bad:?} must fail closed"
+        );
+    }
+}
+
+#[test]
 fn candidate_build_delegates_to_mise_constructor() {
     let catalog = ToolCatalog::pinned();
     let mine = candidate_build_argv(&catalog).expect("build argv");

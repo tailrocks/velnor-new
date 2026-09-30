@@ -54,6 +54,10 @@ pub struct RustStackConfig {
     /// Rust release policy (`[stacks.rust.release]`); disabled by default.
     #[serde(default)]
     pub release: RustReleaseConfig,
+    /// Allowlisted Mise custom-task names; only these become `mise run`
+    /// steps. Sorted, duplicate-free; empty (the default) emits none.
+    #[serde(default)]
+    pub custom_tasks: Vec<String>,
 }
 
 /// Documented default: one `default` configuration variant list.
@@ -88,6 +92,7 @@ impl RustStackConfig {
             compile_driver: None,
             test_runner: None,
             release: RustReleaseConfig::default(),
+            custom_tasks: Vec::new(),
         }
     }
 }
@@ -172,6 +177,42 @@ impl RustStackConfig {
             }
         }
         self.release.validate(file)?;
+        self.validate_custom_tasks(file)?;
+        Ok(())
+    }
+
+    /// Validate the custom-task allowlist: sorted, unique, safe names.
+    ///
+    /// The name rule matches the `mise run` argv builder: non-blank, no
+    /// path separator, no spaces.
+    /// # Errors
+    fn validate_custom_tasks(&self, file: &str) -> Result<(), ContractError> {
+        let mut sorted = self.custom_tasks.clone();
+        sorted.sort();
+        if sorted != self.custom_tasks {
+            return Err(ContractError::config(
+                file,
+                "stacks.rust.custom_tasks",
+                "must_be_sorted",
+            ));
+        }
+        let unique: BTreeSet<&str> = self.custom_tasks.iter().map(String::as_str).collect();
+        if unique.len() != self.custom_tasks.len() {
+            return Err(ContractError::config(
+                file,
+                "stacks.rust.custom_tasks",
+                "duplicate_custom_task",
+            ));
+        }
+        for task in &self.custom_tasks {
+            if task.trim().is_empty() || task.contains('/') || task.contains(' ') {
+                return Err(ContractError::config(
+                    file,
+                    "stacks.rust.custom_tasks",
+                    format!("bad_custom_task:{task}"),
+                ));
+            }
+        }
         Ok(())
     }
 }

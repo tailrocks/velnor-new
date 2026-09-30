@@ -11,6 +11,7 @@ pub mod cache_transport;
 pub mod cache_trust;
 pub mod catalog;
 pub mod command;
+pub mod custom_run;
 pub mod error;
 pub mod gate6;
 pub mod gh;

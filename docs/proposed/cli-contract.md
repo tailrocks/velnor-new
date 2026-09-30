@@ -172,6 +172,7 @@ schema = 1
 # configurations = [{ name = "default", features = ["default"], target = "host" }]
 # compile_driver = "cargo"         # Sticky override: "cargo" or "mbx"; conflicts with durable evidence fail closed.
 # test_runner = "cargo_test"       # Sticky override: "cargo_test" or "cargo_nextest".
+# custom_tasks = []                # Allowlisted Mise task names (sorted, unique); only these run as `mise run <name>` steps in crate jobs.
 
 # Optional repository-relative POSIX globs excluded before detector input.
 # [discovery]

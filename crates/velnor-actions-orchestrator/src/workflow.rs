@@ -100,7 +100,13 @@ pub(crate) fn build_workflow(
         insert_format_step(&mut plan, format);
     }
     jobs.insert(PLAN_JOB_ID.to_owned(), plan);
-    let built = crate::crate_jobs::build_crate_jobs(label, discovery, &catalog, fetch_roots)?;
+    let custom_tasks: &[String] = config
+        .stacks
+        .rust
+        .as_ref()
+        .map_or(&[], |rust| &rust.custom_tasks);
+    let built =
+        crate::crate_jobs::build_crate_jobs(label, discovery, &catalog, fetch_roots, custom_tasks)?;
     let crate_ids: Vec<String> = built.jobs.iter().map(|(id, _)| id.clone()).collect();
     for (id, job) in built.jobs {
         jobs.insert(id, job);
