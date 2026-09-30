@@ -8,8 +8,8 @@ pub(crate) mod shard;
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{
-    ExecuteTaskRef, MatrixEntry, MatrixReport, MatrixStatus, ObligationDecision, Plan, TaskStatus,
-    canonical_json_bytes, digest_b3, task_report_id_for_task,
+    ExecuteTaskRef, MatrixEntry, MatrixReport, MatrixStatus, ObligationDecision, Plan, TaskReport,
+    TaskStatus, canonical_json_bytes, digest_b3, task_report_id_for_task,
 };
 
 use crate::OrchestratorError;
@@ -23,7 +23,7 @@ pub(crate) use crate::cover_baseline::{BaselineInputs, apply_baseline};
 #[derive(Debug, Default)]
 #[expect(
     clippy::struct_excessive_bools,
-    reason = "four precedence signals read clearest as named bools"
+    reason = "five precedence signals read clearest as named bools"
 )]
 pub(crate) struct Signals {
     /// Structural validation failed.
@@ -32,6 +32,8 @@ pub(crate) struct Signals {
     pub(crate) failed: bool,
     /// A required task, job, or candidate was cancelled.
     pub(crate) cancelled: bool,
+    /// A required task was blocked (`not_selected`).
+    pub(crate) blocked: bool,
     /// A report is missing, malformed, duplicated, skipped, or not run.
     pub(crate) not_run: bool,
 }
@@ -111,6 +113,8 @@ pub(crate) struct Fold {
 pub(crate) struct CoverSinks<'a> {
     /// Seen task-report IDs.
     pub(crate) seen_task_reports: &'a mut BTreeSet<String>,
+    /// Partitioned per-task files keyed by task-report ID.
+    pub(crate) task_files: &'a BTreeMap<&'a str, &'a TaskReport>,
     /// Folded task counts.
     pub(crate) fold: &'a mut Fold,
     /// Merge signals.
@@ -153,6 +157,9 @@ pub(crate) fn cover_entry(
         sinks.signals.not_run = true;
         return Ok(false);
     }
+    if !check_task_files(report, obligations, &entry.declared_outputs, &mut *sinks) {
+        return Ok(false);
+    }
     sinks.fold.reused += recount.reused;
     sinks.fold.executed += recount.executed;
     sinks.fold.empty_partition += recount.empty_partition;
@@ -167,7 +174,7 @@ pub(crate) fn cover_entry(
         sinks.signals.cancelled = true;
     }
     if recount.blocked > 0 {
-        sinks.signals.not_run = true;
+        sinks.signals.blocked = true;
     }
     Ok(true)
 }
@@ -252,6 +259,60 @@ fn check_digests(
     Ok(true)
 }
 
+/// Every aggregate task entry backed by its validated task file.
+///
+/// The aggregate alone never proves its tasks: each entry needs the
+/// partitioned file with matching task identity, plan digest, status,
+/// exit code, and declared-only outputs. A missing file is absent
+/// evidence; any contradiction corrupts the set. Exit coherence is
+/// structural: `Executed` must carry exit 0 and `Failed` a nonzero
+/// exit, and entry and file must agree on both fields.
+fn check_task_files(
+    report: &MatrixReport,
+    obligations: &BTreeMap<&str, &str>,
+    declared: &[String],
+    sinks: &mut CoverSinks<'_>,
+) -> bool {
+    for task in &report.tasks {
+        let Some(file) = sinks.task_files.get(task.task_report_id.as_str()) else {
+            sinks.signals.planning_failed = true;
+            sinks.miss_reasons.insert("source_missing".to_owned());
+            return false;
+        };
+        let digest_ok = obligations
+            .get(task.task_id.as_str())
+            .is_some_and(|digest| file.task_digest == **digest);
+        let coherent = file.task_id == task.task_id
+            && file.status == task.status
+            && file.exit_code == task.exit_code
+            && exit_coherent(file.status, file.exit_code)
+            && file.matrix_id == report.matrix_id
+            && file.matrix_key == report.matrix_key
+            && file.validate_outputs_declared(declared).is_ok();
+        if !digest_ok || !coherent {
+            sinks.signals.planning_failed = true;
+            sinks.miss_reasons.insert("cache_corrupt".to_owned());
+            return false;
+        }
+    }
+    true
+}
+
+/// Exit code coherent with the task status.
+///
+/// `Executed` proves exit 0; `Failed` proves a nonzero exit. Other
+/// statuses carry producer-defined exits and stay unconstrained here.
+fn exit_coherent(status: TaskStatus, exit_code: i32) -> bool {
+    match status {
+        TaskStatus::Executed => exit_code == 0,
+        TaskStatus::Failed => exit_code != 0,
+        TaskStatus::Reused
+        | TaskStatus::EmptyPartition
+        | TaskStatus::NotSelected
+        | TaskStatus::Cancelled => true,
+    }
+}
+
 /// Revalidate planner coverage claims against the trusted manifest.
 ///
 /// Every failure carries a miss token so diagnostics never emit bare
@@ -296,12 +357,13 @@ pub(crate) fn revalidate_coverage(
         };
         let bound = task.task_digest == obligation.task_digest
             && task.input_digest == obligation.input_digest
-            && proof.run_id == task.proof_run_id
-            && proof.artifact_name == manifest.artifact_name;
+            && proof.run_id() == task.proof_run_id
+            && proof.artifact_id() == manifest.artifact_id
+            && proof.artifact_name() == manifest.artifact_name;
         // A serialization failure is planning_failed, never a digest over an
         // empty default that could verify against a forged proof.
         match canonical_json_bytes(manifest) {
-            Ok(bytes) if bound && proof.manifest_digest == digest_b3(&bytes) => {}
+            Ok(bytes) if bound && proof.manifest_digest() == digest_b3(&bytes) => {}
             _ => {
                 signals.planning_failed = true;
                 miss_reasons.insert("cache_corrupt".to_owned());

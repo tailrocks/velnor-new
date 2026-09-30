@@ -1,13 +1,16 @@
 //! Orchestrator core rows: merge accounting, status tokens, budgets.
 
 use std::collections::BTreeSet;
+use std::fs;
 
+use tempfile::TempDir;
 use velnor_actions_contract::{ExecuteTaskRef, FinalStatus, MatrixStatus, Plan, TaskStatus};
-use velnor_actions_orchestrator::plan_internal;
+use velnor_actions_orchestrator::{assemble_merge_request, plan_internal};
 
 use crate::impl_common::{
     TestResult, err_of, git, git_line, passing_reports, plan_for_source_change,
 };
+use crate::impl_merge::task_reports_for;
 use crate::impl_orch_core::{
     committed_repo, covered_plan, merge, merge_request, plan_for_partial_change, push_request,
     set_task, success_jobs, wide_repo,
@@ -167,6 +170,166 @@ fn orch_core_plan_retains_all_package_tasks() -> TestResult {
             }
         }
     }
+    Ok(())
+}
+
+#[test]
+fn obligation_universe_matches_independent_oracle() -> TestResult {
+    use crate::impl_orch_plansel::{BUMP, commit, make_ws, plan_at, put};
+    use velnor_actions_contract::ObligationDecision::Execute;
+    let repo = make_ws(&["alpha", "beta"], &[])?;
+    let root = repo.path();
+    let base = commit(root, "one")?;
+    put(root, "beta/src/lib.rs", BUMP)?;
+    let head = commit(root, "two")?;
+    // Oracle inputs, independent of the planner: raw cargo metadata for
+    // members, fs checks for fmt evidence, documented kind rules.
+    assert!(!root.join("rustfmt.toml").exists() && !root.join(".rustfmt.toml").exists());
+    let root = std::fs::canonicalize(root).map_err(|_| "canon")?;
+    let output = std::process::Command::new("cargo")
+        .args(["metadata", "--no-deps", "--format-version", "1"])
+        .current_dir(&root)
+        .output()?;
+    assert!(output.status.success(), "cargo metadata failed");
+    let meta: serde_json::Value = serde_json::from_str(&String::from_utf8(output.stdout)?)?;
+    let members: BTreeSet<&str> = meta["workspace_members"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(serde_json::Value::as_str)
+        .collect();
+    let mut expected = BTreeSet::new();
+    for package in meta["packages"].as_array().into_iter().flatten() {
+        if !members.contains(package["id"].as_str().unwrap_or_default()) {
+            continue;
+        }
+        let manifest = package["manifest_path"].as_str().ok_or("manifest")?;
+        let rel = std::path::Path::new(manifest)
+            .strip_prefix(&root)
+            .map_err(|_| "rel")?;
+        let key = rel
+            .parent()
+            .and_then(|dir| dir.to_str())
+            .filter(|dir| !dir.is_empty())
+            .unwrap_or("root");
+        for kind in ["clippy", "test", "doctest", "doc"] {
+            expected.insert(format!("stack/rust/{key}/{kind}/default"));
+        }
+    }
+    let (plan, _) = plan_at(&root, Some(&base), &head, None)?;
+    let planned: BTreeSet<String> = plan.task_ids.iter().cloned().collect();
+    assert_eq!(planned, expected, "oracle set equals plan output");
+    assert!(plan.obligations.iter().all(|ob| ob.decision == Execute));
+    Ok(())
+}
+
+#[test]
+fn blocked_tasks_resolve_below_cancelled() -> TestResult {
+    let (_repo, plan) = plan_for_source_change()?;
+    let matrix = serde_json::to_value(&plan.matrix)?;
+    let mut reports = passing_reports(&plan)?;
+    for report in &mut reports {
+        set_task(report, TaskStatus::NotSelected, MatrixStatus::NotRun)?;
+    }
+    let run = |reports: &[velnor_actions_contract::MatrixReport]| -> Result<velnor_actions_contract::FinalReport, Box<dyn std::error::Error>> {
+        let request = merge_request(
+            &serde_json::to_value(&plan)?,
+            &matrix,
+            &serde_json::to_value(reports)?,
+            &success_jobs(),
+        );
+        merge(&request)
+    };
+    let final_report = run(&reports)?;
+    assert_eq!(final_report.status, FinalStatus::Blocked);
+    assert_eq!(final_report.counts.blocked as usize, reports.len());
+    assert_eq!(final_report.counts.not_run, 0);
+    set_task(
+        &mut reports[0],
+        TaskStatus::Cancelled,
+        MatrixStatus::Cancelled,
+    )?;
+    assert_eq!(run(&reports)?.status, FinalStatus::Cancelled);
+    set_task(&mut reports[0], TaskStatus::Failed, MatrixStatus::Failed)?;
+    assert_eq!(run(&reports)?.status, FinalStatus::Failed);
+    Ok(())
+}
+
+#[test]
+fn staged_symlinks_and_oversize_reports_reject() -> TestResult {
+    let (_repo, plan) = plan_for_source_change()?;
+    let reports = passing_reports(&plan)?;
+    let plan_value = serde_json::to_value(&plan)?;
+    let files = task_reports_for(&plan_value, &serde_json::to_value(&reports)?);
+    let entry = plan.matrix.include.first().ok_or("entry")?;
+    let report = reports
+        .iter()
+        .find(|report| report.report_id == entry.report_id)
+        .ok_or("report")?;
+    let dir = TempDir::new()?;
+    let run = dir.path().join("run");
+    let home = run.join("reports").join(&entry.artifact_id);
+    fs::create_dir_all(home.join("tasks"))?;
+    fs::write(run.join("plan.json"), serde_json::to_string(&plan)?)?;
+    fs::write(
+        run.join("matrix.json"),
+        serde_json::to_string(&plan.matrix)?,
+    )?;
+    fs::write(
+        home.join("matrix-report.json"),
+        serde_json::to_string(report)?,
+    )?;
+    for task in &report.tasks {
+        let want = Some(task.task_report_id.as_str());
+        let file = files
+            .as_array()
+            .and_then(|list| {
+                list.iter()
+                    .find(|file| file["task_report_id"].as_str() == want)
+            })
+            .ok_or("file")?;
+        fs::write(
+            home.join("tasks")
+                .join(format!("{}.json", task.task_report_id)),
+            serde_json::to_string(file)?,
+        )?;
+    }
+    let target = home
+        .join("tasks")
+        .join(format!("{}.json", report.tasks[0].task_report_id));
+    fs::remove_file(&target)?;
+    std::os::unix::fs::symlink(home.join("matrix-report.json"), &target)?;
+    let value: serde_json::Value = serde_json::from_str(&assemble_merge_request("local", &run)?)?;
+    let errors = value["assembly_errors"].as_array().ok_or("errors")?.clone();
+    assert!(
+        errors.iter().any(|error| error
+            .as_str()
+            .is_some_and(|s| s.starts_with("symlink_task:"))),
+        "{errors:?}"
+    );
+    fs::remove_file(&target)?;
+    let want = Some(report.tasks[0].task_report_id.as_str());
+    let file = files
+        .as_array()
+        .and_then(|list| {
+            list.iter()
+                .find(|file| file["task_report_id"].as_str() == want)
+        })
+        .ok_or("file")?;
+    fs::write(&target, serde_json::to_string(file)?)?;
+    let big = "x".repeat(1_048_577);
+    fs::write(
+        home.join("matrix-report.json"),
+        format!("{{\"pad\":\"{big}\"}}"),
+    )?;
+    let value: serde_json::Value = serde_json::from_str(&assemble_merge_request("local", &run)?)?;
+    let errors = value["assembly_errors"].as_array().ok_or("errors")?.clone();
+    assert!(
+        errors.iter().any(|error| error
+            .as_str()
+            .is_some_and(|s| s.starts_with("oversize_report:"))),
+        "{errors:?}"
+    );
     Ok(())
 }
 

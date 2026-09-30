@@ -11,12 +11,12 @@ use std::collections::BTreeSet;
 use serde::Deserialize;
 use velnor_actions_contract::{
     CandidateReport, FinalCounts, FinalReport, FinalStatus, MatrixReport, ObligationDecision, Plan,
-    PlanMatrix, RequiredJobResult, final_report_id_for_run, validate_run_key,
+    PlanMatrix, RequiredJobResult, TaskReport, final_report_id_for_run, validate_run_key,
 };
 
 use self::merge_checks::{
-    check_agreement, check_execute_inventory, check_plan_evidence, check_plan_shape, plan_digests,
-    plan_entries, shards_failed,
+    check_agreement, check_execute_inventory, check_plan_evidence, check_plan_shape,
+    expected_task_reports, partition_task_reports, plan_digests, plan_entries, shards_failed,
 };
 pub(crate) use self::required_evidence::BaselineManifest;
 use self::required_evidence::{
@@ -44,6 +44,9 @@ pub(crate) struct MergeRequest {
     matrix: Option<PlanMatrix>,
     /// Matrix reports to aggregate.
     pub(crate) matrix_reports: Vec<MatrixReport>,
+    /// Per-task report files backing every aggregate entry.
+    #[serde(default)]
+    pub(crate) task_reports: Vec<TaskReport>,
     /// Declared validator inventory from the workflow `needs` channel.
     pub(crate) required_job_ids: Vec<String>,
     /// Observed validator conclusions covering the inventory exactly.
@@ -187,6 +190,8 @@ fn build_final(request: &MergeRequest, plan: &Plan) -> Result<FinalReport, Orche
     let entries = plan_entries(plan);
     let obligations = plan_digests(plan);
     let partition = partition_reports(request, &entries, &mut signals, &mut miss_reasons);
+    let expected = expected_task_reports(plan, &request.run_key);
+    let tasks = partition_task_reports(request, &expected, &mut signals, &mut miss_reasons);
     let mut fold = Fold::default();
     let mut seen_task_reports = BTreeSet::new();
     let mut downloaded = Vec::new();
@@ -206,6 +211,7 @@ fn build_final(request: &MergeRequest, plan: &Plan) -> Result<FinalReport, Orche
         }
         let mut sinks = CoverSinks {
             seen_task_reports: &mut seen_task_reports,
+            task_files: &tasks.valid,
             fold: &mut fold,
             signals: &mut signals,
             miss_reasons: &mut miss_reasons,
@@ -238,13 +244,24 @@ fn build_final(request: &MergeRequest, plan: &Plan) -> Result<FinalReport, Orche
             failed: fold.failed,
             cancelled: fold.cancelled,
             blocked: fold.blocked,
-            not_run: uncovered + partition.malformed + partition.duplicates,
+            not_run: uncovered
+                + partition.malformed
+                + partition.duplicates
+                + tasks.malformed
+                + tasks.duplicates,
         },
         miss_reasons: miss_reasons.into_iter().collect(),
     })
 }
 
 /// Check 5: precedence over collected signals, then pass or no-work.
+///
+/// Documented precedence: `planning_failed` beats `failed` beats
+/// `cancelled` beats `blocked` beats `not_run`; an obligation-free
+/// plan is `no_work`, otherwise every signal clear is `passed`.
+/// Blocked (`not_selected`) stays distinct from missing evidence:
+/// collapsing it into `not_run` would hide a decided outcome behind
+/// an evidence gap.
 fn decide(signals: &Signals, plan: &Plan) -> FinalStatus {
     if signals.planning_failed {
         FinalStatus::PlanningFailed
@@ -252,6 +269,8 @@ fn decide(signals: &Signals, plan: &Plan) -> FinalStatus {
         FinalStatus::Failed
     } else if signals.cancelled {
         FinalStatus::Cancelled
+    } else if signals.blocked {
+        FinalStatus::Blocked
     } else if signals.not_run {
         FinalStatus::NotRun
     } else if plan.task_ids.is_empty() && plan.obligations.is_empty() {

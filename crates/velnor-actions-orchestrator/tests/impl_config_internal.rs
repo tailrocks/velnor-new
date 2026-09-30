@@ -12,6 +12,7 @@ use crate::impl_common::{
     TestResult, config_with_branch, err_of, fixture_manifest_json, git, make_repo, passing_reports,
     plan_for_source_change,
 };
+use crate::impl_merge::task_reports_for;
 
 #[test]
 fn init_creates_sample_and_refuses_overwrite() -> TestResult {
@@ -174,12 +175,15 @@ fn internal_merge_aggregates_reports() -> TestResult {
     );
 
     let reports = passing_reports(&plan)?;
+    let plan_value = serde_json::to_value(&plan)?;
+    let task_files = task_reports_for(&plan_value, &serde_json::to_value(&reports)?);
     let merge_request = serde_json::json!({
         "schema": 1,
         "run_key": "local",
         "plan": plan,
         "matrix": plan.matrix,
         "matrix_reports": reports,
+        "task_reports": task_files,
         "required_job_ids": ["velnor-plan"],
         "required_jobs": [{"job_id": "velnor-plan", "conclusion": "success"}],
     });

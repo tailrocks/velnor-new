@@ -15,6 +15,7 @@ use crate::impl_common::{
     TestResult, config_with_branch, fixture_manifest_json, git, git_line, make_repo,
     plan_for_source_change,
 };
+use crate::impl_merge::task_reports_for;
 
 /// Merge one request and parse the final report.
 pub(crate) fn merge(
@@ -45,6 +46,7 @@ pub(crate) fn merge_request(
         "plan": plan,
         "matrix": matrix,
         "matrix_reports": reports,
+        "task_reports": task_reports_for(plan, reports),
         "required_job_ids": ids,
         "required_jobs": jobs,
     })

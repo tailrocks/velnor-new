@@ -26,7 +26,7 @@ mod needs_channel;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use velnor_actions_contract::{canonical_json_str, validate_artifact_id};
+use velnor_actions_contract::canonical_json_str;
 
 use self::needs_channel::{NEEDS_ENV, parse_needs};
 use crate::OrchestratorError;
@@ -36,9 +36,10 @@ use crate::internal_request::resolve_run_key;
 /// Assemble one canonical merge request from a run directory.
 ///
 /// Reads `plan.json`, `matrix.json`, exactly the plan-expected
-/// `reports/<artifact-id>/matrix-report.json` files (sorted by report ID
-/// for determinism; anything else under `reports/` is ignored, never
-/// globbed), plus optional `baseline.json` and `candidate-report.json`.
+/// `reports/<artifact-id>/matrix-report.json` files plus their
+/// `tasks/<task-report-id>.json` files (sorted by ID for determinism;
+/// anything else under `reports/` is ignored, never globbed), plus
+/// optional `baseline.json` and `candidate-report.json`.
 /// Validator inventory and conclusions come from [`NEEDS_ENV`]. Every
 /// missing or unparsable input is recorded in `assembly_errors`, never
 /// dropped, so the merge judges the gap explicitly.
@@ -67,7 +68,12 @@ fn assemble_with_needs(
     let mut errors = Vec::new();
     let plan = read_json(run_dir, "plan.json", "plan", true, &mut errors);
     let matrix = read_json(run_dir, "matrix.json", "matrix", true, &mut errors);
-    let reports = read_expected_reports(&plan, &run_dir.join("reports"), &mut errors);
+    let (reports, task_reports) = crate::retrieve_reports::read_staged_reports(
+        run_key,
+        &plan,
+        &run_dir.join("reports"),
+        &mut errors,
+    );
     let baseline = read_json(run_dir, "baseline.json", "baseline", false, &mut errors);
     let candidate = read_json(
         run_dir,
@@ -83,6 +89,7 @@ fn assemble_with_needs(
         "plan": plan,
         "matrix": matrix,
         "matrix_reports": reports,
+        "task_reports": task_reports,
         "required_job_ids": inventory,
         "required_jobs": jobs,
         "assembly_errors": errors,
@@ -166,72 +173,6 @@ fn read_json(
         return serde_json::Value::Null;
     };
     value
-}
-
-/// Read exactly the plan-expected matrix reports, sorted by report ID.
-///
-/// Each `matrix.include` entry names its artifact; absent or unreadable
-/// files are recorded in `errors`, never skipped silently. Stray files
-/// are ignored. Both `gh` extract layouts are accepted (direct plus one
-/// nested artifact directory); both paths are exact, never globbed. An
-/// artifact ID that fails shape validation is recorded, never traversed.
-fn read_expected_reports(
-    plan: &serde_json::Value,
-    dir: &Path,
-    errors: &mut Vec<String>,
-) -> Vec<serde_json::Value> {
-    let mut expected = Vec::new();
-    if let Some(entries) = plan
-        .get("matrix")
-        .and_then(|matrix| matrix.get("include"))
-        .and_then(serde_json::Value::as_array)
-    {
-        for entry in entries {
-            match entry.get("artifact_id").and_then(serde_json::Value::as_str) {
-                Some(id) => match validate_artifact_id(id) {
-                    Ok(()) => expected.push(id),
-                    Err(_) => errors.push(format!("bad_artifact_id:{id}")),
-                },
-                None => errors.push("bad_artifact_id".to_owned()),
-            }
-        }
-    }
-    let mut reports = Vec::new();
-    for artifact_id in expected {
-        let direct = dir.join(artifact_id).join("matrix-report.json");
-        let nested = dir
-            .join(artifact_id)
-            .join(artifact_id)
-            .join("matrix-report.json");
-        let path = if direct.is_file() {
-            direct
-        } else if nested.is_file() {
-            nested
-        } else if direct.exists() || nested.exists() {
-            errors.push(format!("unreadable_report:{artifact_id}"));
-            continue;
-        } else {
-            errors.push(format!("missing_report:{artifact_id}"));
-            continue;
-        };
-        match fs::read_to_string(&path) {
-            Ok(text) => match serde_json::from_str(&text) {
-                Ok(report) => reports.push(report),
-                Err(_) => errors.push(format!("unparsable_report:{artifact_id}")),
-            },
-            Err(_) => errors.push(format!("unreadable_report:{artifact_id}")),
-        }
-    }
-    reports.sort_by(|left, right| report_id(left).cmp(report_id(right)));
-    reports
-}
-
-/// Sort key for one report value; empty when the ID is absent.
-fn report_id(report: &serde_json::Value) -> &str {
-    report
-        .get("report_id")
-        .and_then(serde_json::Value::as_str)
-        .unwrap_or_default()
 }
 
 #[cfg(test)]

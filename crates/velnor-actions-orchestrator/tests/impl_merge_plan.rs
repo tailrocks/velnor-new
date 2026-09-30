@@ -35,7 +35,9 @@ fn empty_diff_no_baseline_executes_all() -> TestResult {
     assert!(!plan.task_ids.is_empty(), "empty diff keeps universe");
     assert!(!plan.matrix.include.is_empty(), "empty diff executes");
     assert!(
-        plan.obligations.iter().all(|ob| ob.reason == "unproven"),
+        plan.obligations
+            .iter()
+            .all(|ob| ob.reason == "forced_uncached"),
         "nothing proven: {:?}",
         plan.obligations
     );
@@ -49,7 +51,7 @@ fn empty_diff_no_baseline_executes_all() -> TestResult {
     );
     assert_eq!(merge(&request)?.status, FinalStatus::Passed);
 
-    // Without reports the unproven legs are not-run, never no-work.
+    // Without reports the forced-uncached legs are not-run, never no-work.
     let request = merge_request(
         &plan,
         &serde_json::to_value(&plan.matrix)?,
@@ -201,6 +203,80 @@ fn agreement_failures_carry_miss_tokens() -> TestResult {
             .contains(&"cache_corrupt".to_owned()),
         "{:?}",
         final_report.miss_reasons
+    );
+    Ok(())
+}
+
+#[test]
+fn task_file_gaps_fail_closed() -> TestResult {
+    let (_repo, plan) = plan_for_source_change()?;
+    let matrix = serde_json::to_value(&plan.matrix)?;
+    let good = passing_reports(&plan)?;
+    let jobs = success_jobs();
+    let check = |request: &serde_json::Value, token: &str| -> TestResult {
+        let final_report = merge(request)?;
+        assert_eq!(final_report.status, FinalStatus::PlanningFailed);
+        assert!(final_report.miss_reasons.contains(&token.to_owned()));
+        Ok(())
+    };
+    let mut missing = merge_request(&plan, &matrix, &serde_json::to_value(&good)?, &jobs);
+    missing["task_reports"].as_array_mut().ok_or("tasks")?.pop();
+    check(&missing, "source_missing")?;
+    let mut contrary = merge_request(&plan, &matrix, &serde_json::to_value(&good)?, &jobs);
+    let files = contrary["task_reports"].as_array_mut().ok_or("tasks")?;
+    files[0]["status"] = serde_json::json!("failed");
+    files[0]["exit_code"] = serde_json::json!(1);
+    check(&contrary, "cache_corrupt")?;
+    let mut incoherent = good.clone();
+    incoherent[0].tasks[0].exit_code = 1;
+    let request = merge_request(&plan, &matrix, &serde_json::to_value(&incoherent)?, &jobs);
+    check(&request, "cache_corrupt")?;
+    let mut outputs = merge_request(&plan, &matrix, &serde_json::to_value(&good)?, &jobs);
+    outputs["task_reports"].as_array_mut().ok_or("tasks")?[0]["outputs"] =
+        serde_json::json!(["target/evil"]);
+    check(&outputs, "cache_corrupt")?;
+    let mut swapped = merge_request(&plan, &matrix, &serde_json::to_value(&good)?, &jobs);
+    let files = swapped["task_reports"].as_array_mut().ok_or("tasks")?;
+    assert!(files.len() > 1, "fixture needs two tasks");
+    let other = files[1]["task_id"].clone();
+    files[0]["task_id"] = other;
+    check(&swapped, "cache_corrupt")?;
+    let mut unexpected = merge_request(&plan, &matrix, &serde_json::to_value(&good)?, &jobs);
+    let matrix_id = "stack:rust|task:stack/rust/foreign/build/default";
+    let matrix_key = velnor_actions_contract::matrix_key_for_id(matrix_id)?;
+    let digest = velnor_actions_contract::digest_b3(b"foreign-task");
+    let report_id =
+        velnor_actions_contract::task_report_id_for_task("local", &matrix_key, &digest)?;
+    let foreign = serde_json::json!({"schema": 1, "task_report_id": report_id, "run_key": "local",
+        "event": "pull_request", "trust": "pr", "matrix_id": matrix_id, "matrix_key": matrix_key,
+        "task_id": "stack/rust/foreign/build/default", "task_digest": digest, "status": "executed",
+        "cache": {"layer": "task", "key": "", "result": "not_attempted"}, "exit_code": 0,
+        "duration_ms": 0, "outputs": []});
+    let parsed: velnor_actions_contract::TaskReport = serde_json::from_value(foreign.clone())?;
+    parsed.validate()?;
+    unexpected["task_reports"]
+        .as_array_mut()
+        .ok_or("tasks")?
+        .push(foreign);
+    check(&unexpected, "cache_corrupt")?;
+    Ok(())
+}
+
+#[test]
+fn covered_claim_binds_numeric_artifact_id() -> TestResult {
+    let (_repo, plan) = plan_for_source_change()?;
+    let (plan_json, mut manifest) = covered_plan(&plan)?;
+    manifest["artifact_id"] = serde_json::json!(10);
+    let matrix = plan_json["matrix"].clone();
+    let mut request =
+        core_merge_request(&plan_json, &matrix, &serde_json::json!([]), &success_jobs());
+    request["baseline_manifest"] = manifest;
+    let final_report = core_merge(&request)?;
+    assert_eq!(final_report.status, FinalStatus::PlanningFailed);
+    assert!(
+        final_report
+            .miss_reasons
+            .contains(&"cache_corrupt".to_owned())
     );
     Ok(())
 }

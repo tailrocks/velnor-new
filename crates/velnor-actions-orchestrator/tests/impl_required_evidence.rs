@@ -6,7 +6,9 @@ use velnor_actions_orchestrator::{assemble_merge_request, merge_internal};
 
 use crate::impl_common::{TestResult, make_repo, passing_reports, plan_for_source_change};
 use crate::impl_orch_core::{merge, merge_request, success_jobs};
-use crate::impl_orch_plansel::{BUMP, commit, entries_for, make_ws, manifest_for, plan_at, put};
+use crate::impl_orch_plansel::{
+    BUMP, anchor_repo, commit, entries_for, make_ws, manifest_for, plan_at, put,
+};
 
 /// Merge status for one hand-built request value.
 fn status_of(request: &serde_json::Value) -> Result<FinalStatus, Box<dyn std::error::Error>> {
@@ -216,6 +218,24 @@ fn candidate_evidence_closed() -> TestResult {
 }
 
 #[test]
+fn duplicate_matrix_reports_partition_to_not_run() -> TestResult {
+    let (_repo, plan) = plan_for_source_change()?;
+    let mut reports = passing_reports(&plan)?;
+    reports.push(reports[0].clone());
+    let request = merge_request(
+        &serde_json::to_value(&plan)?,
+        &serde_json::to_value(&plan.matrix)?,
+        &serde_json::to_value(&reports)?,
+        &success_jobs(),
+    );
+    let report = merge(&request)?;
+    assert_eq!(report.status, FinalStatus::NotRun);
+    assert!(report.miss_reasons.contains(&"cache_corrupt".to_owned()));
+    assert_eq!(report.counts.not_run, 2); // matrix plus task duplicates
+    Ok(())
+}
+
+#[test]
 fn missing_report_file_fails_closed() -> TestResult {
     let (_repo, plan) = plan_for_source_change()?;
     let reports = passing_reports(&plan)?;
@@ -303,6 +323,7 @@ fn leaf_edit_verifies_unproven_peers() -> TestResult {
 #[test]
 fn changed_obligations_never_baseline_cover() -> TestResult {
     let repo = make_ws(&["alpha", "beta"], &[])?;
+    anchor_repo(repo.path())?;
     let base = commit(repo.path(), "one")?;
     put(repo.path(), "beta/src/lib.rs", BUMP)?;
     let head = commit(repo.path(), "two")?;

@@ -22,6 +22,7 @@ use crate::impl_common::{
     TestResult, config_with_branch, err_of, git, git_line, make_repo, passing_reports,
     plan_for_source_change,
 };
+use crate::impl_merge::task_reports_for;
 
 #[test]
 fn write_request_materializes_pull_request() -> TestResult {
@@ -181,6 +182,8 @@ fn merge_assembled_request_roundtrips_to_passed() -> TestResult {
         run.join("matrix.json"),
         serde_json::to_string(&plan.matrix)?,
     )?;
+    let plan_value = serde_json::to_value(&plan)?;
+    let task_files = task_reports_for(&plan_value, &serde_json::to_value(&reports)?);
     for report in &reports {
         let entry = plan
             .matrix
@@ -189,11 +192,22 @@ fn merge_assembled_request_roundtrips_to_passed() -> TestResult {
             .find(|entry| entry.report_id == report.report_id)
             .ok_or_else(|| std::io::Error::other("report without entry"))?;
         let dir = run.join("reports").join(&entry.artifact_id);
-        fs::create_dir_all(&dir)?;
+        fs::create_dir_all(dir.join("tasks"))?;
         fs::write(
             dir.join("matrix-report.json"),
             serde_json::to_string(report)?,
         )?;
+        for task in &report.tasks {
+            let want = Some(task.task_report_id.as_str());
+            let file = task_files
+                .as_array()
+                .and_then(|files| files.iter().find(|f| f["task_report_id"].as_str() == want))
+                .ok_or_else(|| std::io::Error::other("task without file"))?;
+            let path = dir
+                .join("tasks")
+                .join(format!("{}.json", task.task_report_id));
+            fs::write(path, serde_json::to_string(file)?)?;
+        }
     }
     let request = assemble_merge_request("local", &run)?;
     let mut value: serde_json::Value = serde_json::from_str(&request)?;
@@ -290,6 +304,7 @@ fn merge_verdict_mapping() -> TestResult {
         ("no_work", false),
         ("failed", false),
         ("cancelled", false),
+        ("blocked", false),
         ("not_run", false),
         ("planning_failed", false),
     ] {
