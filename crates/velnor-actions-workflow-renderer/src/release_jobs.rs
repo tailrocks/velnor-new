@@ -163,7 +163,7 @@ impl JobPermissions {
 }
 
 /// One release job: a contract step list plus typed role metadata.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct ReleaseJobSpec {
     /// Boundary role this job serves.
     pub role: ReleaseRole,
@@ -234,7 +234,7 @@ impl ReleaseJobSpec {
 }
 
 /// Complete typed release workflow: identity, triggers, jobs, plan.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct ReleaseWorkflowSpec {
     /// Workflow display name.
     pub name: String,

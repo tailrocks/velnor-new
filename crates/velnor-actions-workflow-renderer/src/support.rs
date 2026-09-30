@@ -185,6 +185,8 @@ pub(crate) fn alint_job(ctx: &RenderContext) -> Result<Job, RenderError> {
         runs_on: ctx.runs_on.clone(),
         needs: Vec::new(),
         condition: None,
+        permissions: None,
+        environment: None,
         steps: vec![
             checkout,
             Step {
@@ -209,6 +211,8 @@ pub(crate) fn validator_job(
         runs_on: ctx.runs_on.clone(),
         needs: Vec::new(),
         condition: None,
+        permissions: None,
+        environment: None,
         steps: vec![
             steps::checkout_step(&ctx.checkout_uses)?,
             steps::shell_step(&command.name, command.argv.clone(), BTreeMap::new())?,

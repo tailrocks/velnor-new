@@ -7,7 +7,7 @@
 
 use crate::{
     RenderError, marker,
-    release_spec::{is_clean_text, validate_package_name, validate_package_version},
+    release_spec::{is_clean_text, validate_package_name},
     steps::scan_for_private_subcommands,
 };
 
@@ -158,18 +158,31 @@ fn toml_escape(value: &str) -> String {
 }
 
 /// Deterministic TOML body; only the bootstrap call passes `true`.
-fn toml_body(config: &ReleasePlzConfig, release_always: bool) -> String {
+///
+/// # Errors
+///
+/// Returns [`RenderError`] when the body cannot be written.
+fn toml_body(config: &ReleasePlzConfig, release_always: bool) -> Result<String, RenderError> {
+    use std::fmt::Write as _;
+    let failed = |_: std::fmt::Error| RenderError::InvalidWorkflow("toml_write".to_owned());
     let mut out = String::from("[workspace]\nrelease = false\n");
-    out.push_str(&format!("release_always = {release_always}\n"));
-    out.push_str(&format!("semver_check = {}\n", config.semver_check));
+    writeln!(out, "release_always = {release_always}").map_err(failed)?;
+    writeln!(
+        out,
+        "semver_check = {semver_check}",
+        semver_check = config.semver_check
+    )
+    .map_err(failed)?;
     out.push_str("publish_no_verify = false\npublish_allow_dirty = false\n");
-    out.push_str(&format!(
-        "git_tag_name = \"{}\"\n",
-        toml_escape(&config.tag_pattern)
-    ));
+    writeln!(
+        out,
+        "git_tag_name = \"{tag}\"",
+        tag = toml_escape(&config.tag_pattern)
+    )
+    .map_err(failed)?;
     for package in &config.packages {
         out.push_str("\n[[package]]\n");
-        out.push_str(&format!("name = \"{}\"\n", toml_escape(&package.name)));
+        writeln!(out, "name = \"{name}\"", name = toml_escape(&package.name)).map_err(failed)?;
         out.push_str("release = true\npublish = true\ngit_only = false\n");
         if !package.publish_features.is_empty() {
             let features: Vec<String> = package
@@ -177,10 +190,11 @@ fn toml_body(config: &ReleasePlzConfig, release_always: bool) -> String {
                 .iter()
                 .map(|feature| format!("\"{}\"", toml_escape(feature)))
                 .collect();
-            out.push_str(&format!("publish_features = [{}]\n", features.join(", ")));
+            let joined = features.join(", ");
+            writeln!(out, "publish_features = [{joined}]").map_err(failed)?;
         }
     }
-    out
+    Ok(out)
 }
 
 /// Render the effective normal-policy config with the marker line.
@@ -193,7 +207,7 @@ pub fn render_release_plz_config(
     version: &str,
 ) -> Result<String, RenderError> {
     config.validate()?;
-    let text = marker::with_marker(version, &toml_body(config, false))?;
+    let text = marker::with_marker(version, &toml_body(config, false)?)?;
     scan_for_private_subcommands(&text)?;
     Ok(text)
 }
@@ -207,7 +221,7 @@ pub fn render_bootstrap_release_plz_config(
     config: &BootstrapReleasePlzConfig,
     version: &str,
 ) -> Result<String, RenderError> {
-    let text = marker::with_marker(version, &toml_body(config.inner(), true))?;
+    let text = marker::with_marker(version, &toml_body(config.inner(), true)?)?;
     scan_for_private_subcommands(&text)?;
     Ok(text)
 }

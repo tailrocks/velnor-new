@@ -4,6 +4,7 @@
 
 use std::collections::BTreeMap;
 
+use velnor_actions_contract::workflow::ir::PermissionLevel;
 use velnor_actions_contract::{Job, Step, StepKind, Trigger, WorkflowIr};
 
 use crate::{
@@ -32,11 +33,11 @@ pub(crate) fn workflow_to_yaml(
             Yaml::Map(vec![
                 (
                     "contents".to_owned(),
-                    Yaml::str(ir.permissions.contents.clone()),
+                    Yaml::str(permission_name(ir.permissions.contents)),
                 ),
                 (
                     "actions".to_owned(),
-                    Yaml::str(ir.permissions.actions.clone()),
+                    Yaml::str(permission_name(ir.permissions.actions)),
                 ),
             ]),
         ),
@@ -52,6 +53,15 @@ pub(crate) fn workflow_to_yaml(
         ),
         ("jobs".to_owned(), Yaml::Map(rendered_jobs)),
     ]))
+}
+
+/// YAML spelling of one contract permission level.
+fn permission_name(level: PermissionLevel) -> &'static str {
+    match level {
+        PermissionLevel::Read => "read",
+        PermissionLevel::Write => "write",
+        PermissionLevel::None => "none",
+    }
 }
 
 /// Render triggers: PR types, one push branch, bare merge group.
