@@ -17,6 +17,8 @@ mod impl_mise_catalog;
 mod impl_mise_command;
 #[path = "impl_mise_env.rs"]
 mod impl_mise_env;
+#[path = "impl_mise_env_policy.rs"]
+mod impl_mise_env_policy;
 #[path = "impl_mise_forbidden_src.rs"]
 mod impl_mise_forbidden_src;
 #[path = "impl_mise_gate6.rs"]

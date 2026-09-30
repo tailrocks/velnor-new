@@ -54,12 +54,17 @@ pub enum CompileDriver {
 ///
 /// Workflow contract §3 emits `jdx/mr-boxington-action` only when the
 /// Rust detector selects MBX; Cargo legs carry neither the action nor
-/// the tool (task-execution contract prelude).
+/// the tool (task-execution contract prelude). `mbx_version` is the
+/// catalog pin the action installs (P07 effective-version closure).
 /// # Errors
-pub fn mbx_step_for_driver(uses: &str, driver: CompileDriver) -> Result<Option<Step>, RenderError> {
+pub fn mbx_step_for_driver(
+    uses: &str,
+    driver: CompileDriver,
+    mbx_version: &str,
+) -> Result<Option<Step>, RenderError> {
     match driver {
         CompileDriver::Cargo => Ok(None),
-        CompileDriver::Mbx => mbx_objects_step(uses, false).map(Some),
+        CompileDriver::Mbx => mbx_objects_step(uses, false, mbx_version).map(Some),
     }
 }
 
@@ -129,8 +134,18 @@ fn uses_mbx_tool(step: &Step) -> bool {
 }
 
 /// Objects-mode MBX step; cargo profiles must never emit or install MBX.
+///
+/// The action installs exactly `mbx_version` (the catalog pin): without
+/// the `version` input the action resolves `latest`, and an action-SHA
+/// pin never proves the installed executable (P07 effective-version
+/// defect; the action documents that setting `version` always installs
+/// that release: `https://github.com/jdx/mr-boxington-action`).
 /// # Errors
-pub fn mbx_objects_step(uses: &str, cargo_profile: bool) -> Result<Step, RenderError> {
+pub fn mbx_objects_step(
+    uses: &str,
+    cargo_profile: bool,
+    mbx_version: &str,
+) -> Result<Step, RenderError> {
     if cargo_profile {
         return Err(RenderError::BadCommand("cargo_profile_no_mbx".to_owned()));
     }
@@ -138,8 +153,25 @@ pub fn mbx_objects_step(uses: &str, cargo_profile: bool) -> Result<Step, RenderE
     if !uses.starts_with(&format!("{MBX_ACTION_NAME}@")) {
         return Err(RenderError::BadActionRef(format!("not_mbx_action:{uses}")));
     }
-    let with = BTreeMap::from([("github-cache-mode".to_owned(), "objects".to_owned())]);
+    if !is_exact_mbx_version(mbx_version) {
+        return Err(RenderError::BadCommand(format!(
+            "bad_mbx_version:{mbx_version}"
+        )));
+    }
+    let with = BTreeMap::from([
+        ("github-cache-mode".to_owned(), "objects".to_owned()),
+        ("version".to_owned(), mbx_version.to_owned()),
+    ]);
     action_step("Restore MBX objects", uses, with)
+}
+
+/// Exact MBX versions: three nonempty numeric dot parts, nothing else.
+fn is_exact_mbx_version(version: &str) -> bool {
+    let parts: Vec<&str> = version.split('.').collect();
+    parts.len() == 3
+        && parts
+            .iter()
+            .all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()))
 }
 
 /// Cache restore/save step over `actions/cache`; MBX never archives here.

@@ -137,6 +137,7 @@ fn rust_cache_never_stacks_over_mbx() {
     let mbx = velnor_actions_workflow_renderer::steps::mbx_objects_step(
         &format!("jdx/mr-boxington-action@{sha}"),
         false,
+        "1.19.0",
     )
     .expect("mbx");
     let rust_cache = velnor_actions_contract::Step {

@@ -130,6 +130,22 @@ fn with_env_appends_toolchain_pairs() -> Result<(), String> {
 }
 
 #[test]
+fn credential_strip_set_is_exact() {
+    assert_eq!(
+        CREDENTIAL_ENV_KEYS,
+        [
+            "MISE_GITHUB_TOKEN",
+            "GITHUB_TOKEN",
+            "GH_TOKEN",
+            "ACTIONS_RUNTIME_TOKEN",
+            "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
+            "ACTIONS_ID_TOKEN_REQUEST_URL",
+            "CARGO_REGISTRY_TOKEN",
+        ]
+    );
+}
+
+#[test]
 fn oidc_token_pair_never_reaches_task_env() -> Result<(), String> {
     for key in [
         "ACTIONS_ID_TOKEN_REQUEST_TOKEN",

@@ -36,7 +36,7 @@ fn step_kinds_have_no_parallel_syntax() {
 #[test]
 fn mbx_objects_step_pins_action_and_mode() {
     let uses = format!("jdx/mr-boxington-action@{}", sha());
-    let step = mbx_objects_step(&uses, false).expect("mbx");
+    let step = mbx_objects_step(&uses, false, "1.19.0").expect("mbx");
     assert_eq!(kind_name(&step), "action");
     match &step.kind {
         StepKind::Action { uses: got, with } => {
@@ -45,23 +45,34 @@ fn mbx_objects_step_pins_action_and_mode() {
                 with.get("github-cache-mode").map(String::as_str),
                 Some("objects")
             );
+            assert_eq!(
+                with.get("version").map(String::as_str),
+                Some("1.19.0"),
+                "action installs the exact catalog pin, never latest"
+            );
             assert!(!with.contains_key("mode"), "no such action input");
         }
         _ => panic!("mbx must be an action step"),
     }
     assert!(
-        mbx_objects_step(&uses, true).is_err(),
+        mbx_objects_step(&uses, true, "1.19.0").is_err(),
         "cargo profiles never emit MBX"
     );
     let other = format!("actions/cache/restore@{}", sha());
     assert!(
-        mbx_objects_step(&other, false).is_err(),
+        mbx_objects_step(&other, false, "1.19.0").is_err(),
         "wrong action rejected"
     );
     assert!(
-        mbx_objects_step("jdx/mr-boxington-action@main", false).is_err(),
+        mbx_objects_step("jdx/mr-boxington-action@main", false, "1.19.0").is_err(),
         "unpinned rejected"
     );
+    for bad in ["latest", "v1.19.0", "1.19", "1.19.0.1", "1.19.x", ""] {
+        assert!(
+            mbx_objects_step(&uses, false, bad).is_err(),
+            "loose mbx version {bad:?} must fail"
+        );
+    }
 }
 
 #[test]

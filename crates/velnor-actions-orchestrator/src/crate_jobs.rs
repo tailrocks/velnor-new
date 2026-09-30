@@ -275,7 +275,7 @@ fn render_job(
         use_mbx,
         repo_has_mbx,
     )?);
-    steps.extend(mbx_objects_step(use_mbx)?);
+    steps.extend(mbx_objects_step(catalog, use_mbx)?);
     steps.extend(crate::source_prep::fetch_steps_for_crate(
         catalog,
         fetch_roots,
@@ -355,7 +355,14 @@ fn restore_step_for_crate(
 }
 
 /// MBX objects restore for MBX crates only (WF-3.52).
-fn mbx_objects_step(use_mbx: bool) -> Result<Option<Step>, OrchestratorError> {
+///
+/// The action installs the catalog MBX pin through its `version` input,
+/// so action setup and the Mise-selected compiler share one proven
+/// identity instead of a floating `latest` executable.
+fn mbx_objects_step(
+    catalog: &ToolCatalog,
+    use_mbx: bool,
+) -> Result<Option<Step>, OrchestratorError> {
     if !use_mbx {
         return Ok(None);
     }
@@ -366,7 +373,8 @@ fn mbx_objects_step(use_mbx: bool) -> Result<Option<Step>, OrchestratorError> {
         MR_BOXINGTON_ACTION_VERSION,
     )?
     .uses_value();
-    Ok(mbx_step_for_driver(&uses, RenderDriver::Mbx)?)
+    let mbx = catalog.version(PinnedTool::MrBoxington);
+    Ok(mbx_step_for_driver(&uses, RenderDriver::Mbx, mbx)?)
 }
 
 #[cfg(test)]

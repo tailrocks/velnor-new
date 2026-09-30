@@ -14,14 +14,18 @@ pub const TOOLCHAIN_HOME_KEYS: [&str; 3] =
 
 /// Credential keys forbidden in any rendered step env.
 ///
-/// The Mise GitHub token, its `GITHUB_TOKEN`/`GH_TOKEN` aliases, and the
-/// runner token. Mirrors the Mise adapter's strip set without depending
-/// on it; the orchestrator pins the two lists equal by test.
-pub const STEP_CREDENTIAL_DENYLIST: [&str; 4] = [
+/// The Mise GitHub token, its `GITHUB_TOKEN`/`GH_TOKEN` aliases, the
+/// runner token, the OIDC token-request pair, and the registry token.
+/// Mirrors the Mise adapter's strip set element-for-element without
+/// depending on it; the orchestrator pins the two lists equal by test.
+pub const STEP_CREDENTIAL_DENYLIST: [&str; 7] = [
     "MISE_GITHUB_TOKEN",
     "GITHUB_TOKEN",
     "GH_TOKEN",
     "ACTIONS_RUNTIME_TOKEN",
+    "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
+    "ACTIONS_ID_TOKEN_REQUEST_URL",
+    "CARGO_REGISTRY_TOKEN",
 ];
 
 /// Merge the toolchain-home triple into a step env map.

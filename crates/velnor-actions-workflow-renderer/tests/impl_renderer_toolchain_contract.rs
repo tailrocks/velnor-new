@@ -16,6 +16,9 @@ fn denylist_names_exact_credential_set() {
             "GITHUB_TOKEN",
             "GH_TOKEN",
             "ACTIONS_RUNTIME_TOKEN",
+            "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
+            "ACTIONS_ID_TOKEN_REQUEST_URL",
+            "CARGO_REGISTRY_TOKEN",
         ]
     );
     for denied in STEP_CREDENTIAL_DENYLIST {

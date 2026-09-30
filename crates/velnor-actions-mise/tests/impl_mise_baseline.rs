@@ -121,6 +121,21 @@ fn baseline_argv_runs_pinned_gh() -> Result<(), String> {
 }
 
 #[test]
+fn baseline_lookup_commands_carry_baseline_policy() -> Result<(), String> {
+    let catalog = pinned();
+    let lookup = lookup()?;
+    let command = lookup
+        .command(&catalog, lookup.list_args())
+        .map_err(|err| err.to_string())?;
+    let debug = format!("{command:?}");
+    assert!(
+        debug.contains("Baseline"),
+        "baseline lookup must carry Baseline: {debug}"
+    );
+    Ok(())
+}
+
+#[test]
 fn baseline_lookup_rejects_malformed_inputs() {
     for (base, workflow, branch, artifact) in [
         ("abc123", "ci.yml", "main", "coverage-manifests"),

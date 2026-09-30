@@ -63,6 +63,7 @@ fn reserved_keys_cover_isolation_disable_and_credentials() {
         "ACTIONS_RUNTIME_TOKEN",
         "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
         "ACTIONS_ID_TOKEN_REQUEST_URL",
+        "CARGO_REGISTRY_TOKEN",
     ] {
         assert!(is_reserved_env_key(key), "{key} must be reserved");
     }
@@ -125,6 +126,7 @@ fn repo_task_rejects_reserved_declared_keys() {
         "ACTIONS_RUNTIME_TOKEN",
         "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
         "ACTIONS_ID_TOKEN_REQUEST_URL",
+        "CARGO_REGISTRY_TOKEN",
     ] {
         let declared = vec![(OsString::from(key), OsString::from("x"))];
         assert!(
@@ -169,6 +171,7 @@ fn sentinel_credential_absent() -> Result<(), String> {
         "ACTIONS_RUNTIME_TOKEN",
         "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
         "ACTIONS_ID_TOKEN_REQUEST_URL",
+        "CARGO_REGISTRY_TOKEN",
     ] {
         assert!(
             !text
@@ -371,6 +374,7 @@ fn hook_escape_privileged_declared_keys_never_run() {
         "ACTIONS_RUNTIME_TOKEN",
         "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
         "ACTIONS_ID_TOKEN_REQUEST_URL",
+        "CARGO_REGISTRY_TOKEN",
     ] {
         assert!(is_reserved_env_key(key), "{key} must be reserved");
         let declared = vec![(OsString::from(key), OsString::from("hostile"))];

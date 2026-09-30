@@ -1,5 +1,6 @@
 //! Fixed subprocess wrapper: the sole `std::process::Command` constructor.
-//! Trusted tooling inherits the parent env; repo-task children spawn cleared.
+//! Trusted tooling inherits the parent env minus policy-stripped
+//! credentials; repo-task children spawn cleared plus proxy passthrough.
 
 //! Environment policy lives in `command_env.rs` and the typed result in
 //! `command_output.rs`; both are declared here so `lib.rs` stays untouched.
@@ -9,20 +10,21 @@ mod env;
 mod output;
 
 pub use self::env::{
-    CREDENTIAL_ENV_KEYS, EnvPolicy, ISOLATION_ENV, MISE_CARGO_HOME_ENV, MISE_RUSTUP_HOME_ENV,
-    NO_AUTO_INSTALL_ENV, RUSTUP_TOOLCHAIN_ENV, is_reserved_env_key, toolchain_env,
+    CREDENTIAL_ALLOWLIST_BASELINE, CREDENTIAL_ALLOWLIST_BOOTSTRAP, CREDENTIAL_ENV_KEYS, EnvPolicy,
+    ISOLATION_ENV, MISE_CARGO_HOME_ENV, MISE_RUSTUP_HOME_ENV, NO_AUTO_INSTALL_ENV, PROXY_ENV_KEYS,
+    RUSTUP_TOOLCHAIN_ENV, is_reserved_env_key, proxy_passthrough, toolchain_env,
 };
-use self::env::{pairs_of, redact_env_for_debug};
+use self::env::{pairs_of, redact_env_for_debug, strip_credentials};
 pub(crate) use self::output::redact_argv_for_debug;
 pub use self::output::{
-    ProcessOutput, SPAWN_CANCELLED_MESSAGE, SPAWN_TIMEOUT_MESSAGE_PREFIX, is_cancel_or_timeout,
+    CancelHandle, ProcessOutput, SPAWN_CANCELLED_MESSAGE, SPAWN_TIMEOUT_MESSAGE_PREFIX,
+    is_cancel_or_timeout,
 };
 use self::output::{read_capped, signal_of};
 
 use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use crate::error::MiseError;
@@ -46,36 +48,6 @@ pub const RUN_TIMEOUT_SECS: u64 = 600;
 #[must_use]
 pub fn is_allowed_mise_subcommand(subcommand: &str) -> bool {
     ALLOWED_MISE_SUBCOMMANDS.contains(&subcommand)
-}
-
-/// External cancellation handle for one subprocess run (P07-5).
-///
-/// Beyond the internal deadline: any thread holding a shared handle may
-/// abort the run, and the child is killed at the next poll. Cancellation
-/// surfaces as typed [`MiseError::SpawnFailed`], never as a task outcome.
-#[derive(Debug, Default)]
-pub struct CancelHandle {
-    /// Cancellation flag shared with the polling run loop.
-    cancelled: AtomicBool,
-}
-
-impl CancelHandle {
-    /// New uncancelled handle.
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Request cancellation; the run loop kills the child at its next poll.
-    pub fn cancel(&self) {
-        self.cancelled.store(true, Ordering::SeqCst);
-    }
-
-    /// Whether cancellation was requested.
-    #[must_use]
-    pub fn is_cancelled(&self) -> bool {
-        self.cancelled.load(Ordering::SeqCst)
-    }
 }
 
 /// A fully isolated, shell-free child-process invocation.
@@ -193,6 +165,16 @@ impl IsolatedCommand {
         Ok(self)
     }
 
+    /// Reassign the typed env policy (crate-internal constructors only).
+    ///
+    /// The only caller is the pinned-exec constructor, which selects
+    /// [`EnvPolicy::Baseline`] for the `gh` baseline-lookup tool; every
+    /// other command keeps the policy its own constructor assigned.
+    pub(crate) fn with_policy(mut self, policy: EnvPolicy) -> Self {
+        self.policy = policy;
+        self
+    }
+
     /// Program executed directly.
     #[must_use]
     pub fn program(&self) -> &OsStr {
@@ -226,6 +208,16 @@ impl IsolatedCommand {
         let mut env = Self::env_overlay();
         env.extend(self.extra_env.iter().cloned());
         env
+    }
+
+    /// Full child environment over an explicit parent snapshot.
+    ///
+    /// The pure contract behind [`Self::run`]: per-policy credential
+    /// filtering plus repo-task proxy passthrough, testable without
+    /// spawning or touching process-global state.
+    #[must_use]
+    pub fn spawn_env(&self, parent: &[(OsString, OsString)]) -> Vec<(OsString, OsString)> {
+        self.policy.child_env(parent, &self.full_env())
     }
 
     /// Whether implicit installation is disabled (effective last-wins value).
@@ -337,6 +329,12 @@ impl IsolatedCommand {
         command.args(&self.args);
         if self.policy == EnvPolicy::RepoTask {
             command.env_clear();
+            let parent: Vec<(OsString, OsString)> = std::env::vars_os().collect();
+            for (key, value) in proxy_passthrough(&parent) {
+                command.env(key, value);
+            }
+        } else {
+            strip_credentials(&mut command, self.policy);
         }
         for (key, value) in self.full_env() {
             command.env(key, value);

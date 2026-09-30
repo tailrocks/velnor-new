@@ -273,7 +273,7 @@ impl PinnedToolExec {
         full_mise_argv(catalog, &self.tools, &self.payload())
     }
 
-    /// Isolated command running this pinned execution.
+    /// Isolated command running this pinned execution (`gh` selects Baseline).
     ///
     /// # Errors
     ///
@@ -281,7 +281,11 @@ impl PinnedToolExec {
     /// which the constructor rules out.
     pub fn command(&self, catalog: &ToolCatalog) -> Result<IsolatedCommand, MiseError> {
         let specs = catalog.tool_specs(&self.tools);
-        IsolatedCommand::mise_exec(&specs, &self.payload())
+        let command = IsolatedCommand::mise_exec(&specs, &self.payload())?;
+        if self.tools.as_slice() == [PinnedTool::Gh] {
+            return Ok(command.with_policy(crate::command::EnvPolicy::Baseline));
+        }
+        Ok(command)
     }
 
     /// Run the payload and return its typed output, whatever the exit is.
