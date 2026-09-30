@@ -216,6 +216,8 @@ pub fn render_workflow_ir_strict(
         cache_p08::check_mbx_before_fetch(id, job)?;
         closure::check_internal_staged(id, job, ctx.preseed)?;
     }
+    // Writer election needs every setup inserted: one saver per key.
+    cache_p08::elect_mise_cache_writers(&mut jobs);
     closure::check_plan_anchor(&jobs)?;
     preseed::check_preseed_closure(&jobs, ctx.preseed)?;
     closure::insert_plan_closure(&mut jobs, ctx)?;
