@@ -14,22 +14,22 @@ use crate::{
     candidate::{candidate_job, release_job},
     render::{
         ALINT_JOB_ID, ALINT_USES, CANDIDATE_JOB_ID, FINAL_CONDITION, FINAL_DISPLAY_NAME,
-        FINAL_JOB_ID, PLAN_JOB_ID, POLICY_JOB_ID, RenderContext, TASK_JOB_ID,
+        FINAL_JOB_ID, PLAN_JOB_ID, POLICY_JOB_ID, RenderContext,
     },
     steps,
 };
 
 /// Always-on workflow-lint job ID, emitted for both policies.
-pub(crate) const LINT_JOB_ID: &str = "velnor-workflow-lint";
+pub(crate) const LINT_JOB_ID: &str = "actionlint";
 
 /// Display name of the always-on workflow-lint job.
-pub(crate) const LINT_DISPLAY_NAME: &str = "Velnor Workflow Lint";
+pub(crate) const LINT_DISPLAY_NAME: &str = "Actionlint";
 
 /// Protected release job ID (Velnor policy, candidate mode only).
-pub(crate) const RELEASE_JOB_ID: &str = "velnor-release";
+pub(crate) const RELEASE_JOB_ID: &str = "release";
 
 /// Display name of the protected release job.
-pub(crate) const RELEASE_DISPLAY_NAME: &str = "Velnor Release";
+pub(crate) const RELEASE_DISPLAY_NAME: &str = "Release";
 
 /// Release ref gate: the job runs only on protected refs (tags/branches).
 pub(crate) const RELEASE_REF_CONDITION: &str = "github.ref_protected == true";
@@ -167,7 +167,7 @@ pub(crate) fn alint_job(ctx: &RenderContext) -> Result<Job, RenderError> {
     with.insert("fail-on-warning".to_owned(), "true".to_owned());
     steps::scan_for_private_subcommands(ALINT_USES)?;
     Ok(Job {
-        display_name: "Velnor Alint".to_owned(),
+        display_name: "Alint".to_owned(),
         runs_on: ctx.runs_on.clone(),
         needs: Vec::new(),
         condition: None,
@@ -201,7 +201,7 @@ pub(crate) fn policy_job(ctx: &RenderContext) -> Result<Job, RenderError> {
         )?);
     }
     Ok(Job {
-        display_name: "Velnor Policy".to_owned(),
+        display_name: "Policy".to_owned(),
         runs_on: ctx.runs_on.clone(),
         needs: Vec::new(),
         condition: None,
@@ -238,12 +238,12 @@ pub(crate) fn check_candidate_invariants(jobs: &BTreeMap<String, Job>) -> Result
             ));
         }
     }
-    if let Some(task) = jobs.get(TASK_JOB_ID)
-        && task.needs.contains(&CANDIDATE_JOB_ID.to_owned())
-    {
-        return Err(RenderError::InvalidWorkflow(
-            "task_must_not_consume_candidate".to_owned(),
-        ));
+    for (id, job) in jobs {
+        if id.as_str() != FINAL_JOB_ID && job.needs.contains(&CANDIDATE_JOB_ID.to_owned()) {
+            return Err(RenderError::InvalidWorkflow(
+                "task_must_not_consume_candidate".to_owned(),
+            ));
+        }
     }
     Ok(())
 }

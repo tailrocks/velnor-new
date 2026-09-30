@@ -21,10 +21,10 @@ use crate::source_prep::fetch_steps_for_plan;
 use crate::utf8::{strings_of, strings_of_env};
 
 /// Always-on workflow-lint job ID, emitted for both policies.
-pub(crate) const LINT_JOB_ID: &str = "velnor-workflow-lint";
+pub(crate) const LINT_JOB_ID: &str = "actionlint";
 
 /// Display name of the always-on workflow-lint job.
-pub(crate) const LINT_DISPLAY_NAME: &str = "Velnor Workflow Lint";
+pub(crate) const LINT_DISPLAY_NAME: &str = "Actionlint";
 
 /// Planner job: checkout, pinned-tool install, optional Acquire, request, plan.
 ///
@@ -63,7 +63,7 @@ pub(crate) fn plan_job(
     steps.push(request_step(PLAN_OPERATION)?);
     steps.push(plan_step());
     Ok(Job {
-        display_name: "Velnor Plan".to_owned(),
+        display_name: "Plan".to_owned(),
         runs_on: label.to_owned(),
         needs: Vec::new(),
         condition: None,
@@ -105,7 +105,7 @@ pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, Orches
 /// Final gate with the exact required-check name and `always()` condition.
 ///
 /// Needs decision (workflow-contract §4 "depends on the base and enabled
-/// policy jobs" + "`Velnor / Required` depends on the plan, every crate
+/// policy jobs" + "`Required` depends on the plan, every crate
 /// job ... and the candidate report when candidate mode is enabled"):
 /// plan + every crate job + lint always, plus alint/policy/candidate when
 /// those policy jobs exist. IR validation requires `needs` to name IR jobs

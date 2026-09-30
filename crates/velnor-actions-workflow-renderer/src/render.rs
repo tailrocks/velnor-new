@@ -24,7 +24,7 @@ pub use crate::matrix::{
 pub use crate::setup::MiseSetup;
 
 /// Generated workflow path inside the repository.
-pub const WORKFLOW_PATH: &str = ".github/workflows/velnor.yml";
+pub const WORKFLOW_PATH: &str = ".github/workflows/ci.yml";
 /// Generated actionlint config path inside the repository.
 pub const ACTIONLINT_PATH: &str = ".github/actionlint.yaml";
 /// Exact pull-request event types.
@@ -35,21 +35,21 @@ pub const CONCURRENCY_GROUP: &str =
 /// Exact cancel-in-progress expression (PR events only).
 pub const CONCURRENCY_CANCEL: &str = "${{ github.event_name == 'pull_request' }}";
 /// Final gate job ID.
-pub const FINAL_JOB_ID: &str = "velnor-final";
+pub const FINAL_JOB_ID: &str = "required";
 /// Exact required-check display name.
-pub const FINAL_DISPLAY_NAME: &str = "Velnor / Required";
+pub const FINAL_DISPLAY_NAME: &str = "Required";
 /// Final gate condition.
 pub const FINAL_CONDITION: &str = "always()";
 /// Planner job ID: the sole matrix producer.
-pub const PLAN_JOB_ID: &str = "velnor-plan";
+pub const PLAN_JOB_ID: &str = "plan";
 /// Matrix consumer job ID.
 pub const TASK_JOB_ID: &str = "velnor-task";
 /// Candidate validation job ID (Velnor policy only).
-pub const CANDIDATE_JOB_ID: &str = "velnor-candidate";
+pub const CANDIDATE_JOB_ID: &str = "candidate";
 /// Repository-structure lint job ID (Velnor policy only).
-pub const ALINT_JOB_ID: &str = "velnor-alint";
+pub const ALINT_JOB_ID: &str = "alint";
 /// Dependency/security policy job ID (Velnor policy only).
-pub const POLICY_JOB_ID: &str = "velnor-policy";
+pub const POLICY_JOB_ID: &str = "policy";
 /// Sole full-SHA exception: pinned Alint tag for `velnor-alint` only.
 pub const ALINT_USES: &str = "asamarts/alint@v0.16.1";
 

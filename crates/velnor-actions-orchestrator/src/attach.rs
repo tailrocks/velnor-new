@@ -188,16 +188,16 @@ mod tests {
         let catalog = ToolCatalog::pinned();
         let mut ir = bare_ir(BTreeMap::from([
             (
-                "velnor-plan".to_owned(),
+                "plan".to_owned(),
                 plan_job("ubuntu-26.04", None, &catalog, false, false, &[]).expect("plan job"),
             ),
             (
-                "velnor-final".to_owned(),
+                "required".to_owned(),
                 final_job("ubuntu-26.04", &[], None, &catalog).expect("final job"),
             ),
         ]));
         assert!(attach_lock_acquire(&mut ir, &lock, "ubuntu-26.04", "0.1.0").is_ok());
-        let names: Vec<&str> = ir.jobs["velnor-plan"]
+        let names: Vec<&str> = ir.jobs["plan"]
             .steps
             .iter()
             .map(|s| s.name.as_str())
@@ -213,7 +213,7 @@ mod tests {
                 "Plan"
             ]
         );
-        let names: Vec<&str> = ir.jobs["velnor-final"]
+        let names: Vec<&str> = ir.jobs["required"]
             .steps
             .iter()
             .map(|s| s.name.as_str())
@@ -240,12 +240,12 @@ mod tests {
         let mut plan = WorkflowPlan {
             ir: bare_ir(BTreeMap::from([
                 (
-                    "velnor-plan".to_owned(),
+                    "plan".to_owned(),
                     plan_job("ubuntu-26.04", None, &catalog, false, false, &[]).expect("plan job"),
                 ),
-                ("velnor-task".to_owned(), legacy_task_job()),
+                ("rust-demo".to_owned(), legacy_task_job()),
                 (
-                    "velnor-final".to_owned(),
+                    "required".to_owned(),
                     final_job("ubuntu-26.04", &["rust-demo".to_owned()], None, &catalog)
                         .expect("final job"),
                 ),
@@ -265,7 +265,7 @@ mod tests {
         };
         assert!(attach_preseed(&mut plan, "ubuntu-26.04", "0.1.0").is_ok());
         assert!(plan.context.preseed);
-        let names: Vec<&str> = plan.ir.jobs["velnor-plan"]
+        let names: Vec<&str> = plan.ir.jobs["plan"]
             .steps
             .iter()
             .map(|s| s.name.as_str())
@@ -285,7 +285,7 @@ mod tests {
                 "Plan",
             ]
         );
-        for id in ["velnor-task", "velnor-final"] {
+        for id in ["rust-demo", "required"] {
             let names: Vec<&str> = plan.ir.jobs[id]
                 .steps
                 .iter()

@@ -7,8 +7,8 @@
 //!
 //! Required validator conclusions arrive through the `VELNOR_NEEDS_JSON`
 //! channel: a JSON object mapping each job in the final gate's `needs`
-//! to its conclusion, either directly (`{"velnor-plan": "success"}`) or in
-//! `toJSON(needs)` shape (`{"velnor-plan": {"result": "success"}}`). The
+//! to its conclusion, either directly (`{"plan": "success"}`) or in
+//! `toJSON(needs)` shape (`{"plan": {"result": "success"}}`). The
 //! renderer emits the finalized `needs` set; assembly declares it as the
 //! required inventory (minus the matrix-driver job, whose legs prove
 //! themselves through per-leg reports) and fails closed on a missing or
@@ -223,16 +223,13 @@ mod tests {
                 r#"{"report_id":"b"}"#,
             )],
         );
-        let needs = r#"{"velnor-plan":"success","velnor-task":"success"}"#;
+        let needs = r#"{"plan":"success","rust-demo":"success"}"#;
         let request = assemble_with_needs("local", dir.path(), Some(needs)).expect("assemble");
         let value: serde_json::Value = serde_json::from_str(&request).expect("json");
         assert!(value.get("base").is_none(), "{request}");
         assert_eq!(value["schema"], 1);
         assert_eq!(value["matrix_reports"].as_array().map(Vec::len), Some(1));
-        assert_eq!(
-            value["required_job_ids"],
-            serde_json::json!(["velnor-plan"])
-        );
+        assert_eq!(value["required_job_ids"], serde_json::json!(["plan"]));
         assert!(error_list(&request).is_empty(), "{request}");
     }
 
@@ -254,7 +251,7 @@ mod tests {
                 ("reports/stray.json", r#"{"report_id":"stray"}"#),
             ],
         );
-        let needs = r#"{"velnor-plan":{"result":"success","outputs":{}}}"#;
+        let needs = r#"{"plan":{"result":"success","outputs":{}}}"#;
         let request = assemble_with_needs("local", dir.path(), Some(needs)).expect("assemble");
         let value: serde_json::Value = serde_json::from_str(&request).expect("json");
         let ids: Vec<&str> = value["matrix_reports"]
@@ -303,12 +300,8 @@ mod tests {
             "{errors:?}"
         );
         let missing = staged(&plan_with(&[aid]), &[]);
-        let request = assemble_with_needs(
-            "local",
-            missing.path(),
-            Some(r#"{"velnor-plan":"success"}"#),
-        )
-        .expect("diagnostic");
+        let request = assemble_with_needs("local", missing.path(), Some(r#"{"plan":"success"}"#))
+            .expect("diagnostic");
         let errors = error_list(&request);
         assert!(
             errors

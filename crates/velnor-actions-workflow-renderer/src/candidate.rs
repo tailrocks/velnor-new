@@ -99,7 +99,7 @@ pub(crate) fn candidate_job(ctx: &RenderContext, spec: &CandidateSpec) -> Result
     let artifact = candidate_artifact_name(target)?;
     let candidate_binary = format!("{}/velnor-actions", steps::CANDIDATE_STAGE_DIR);
     Ok(Job {
-        display_name: "Velnor Candidate".to_owned(),
+        display_name: "Candidate".to_owned(),
         runs_on: ctx.runs_on.clone(),
         needs: vec![PLAN_JOB_ID.to_owned()],
         condition: None,

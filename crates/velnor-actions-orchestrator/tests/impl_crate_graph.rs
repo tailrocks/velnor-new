@@ -66,7 +66,7 @@ fn w1_crate_jobs_group_obligations_per_crate() -> TestResult {
     assert!(!yaml.contains("velnor-task"), "no task job:\n{yaml}");
     assert!(!yaml.contains("strategy:"), "no matrix:\n{yaml}");
     assert!(!yaml.contains("fromJSON"), "no matrix ref:\n{yaml}");
-    let job = window(&yaml, "  rust-demo:", "  velnor-final:")?;
+    let job = window(&yaml, "  rust-demo:", "  required:")?;
     for step in [
         "Checkout",
         "Prepare pinned tools",
@@ -83,7 +83,7 @@ fn w1_crate_jobs_group_obligations_per_crate() -> TestResult {
         .find("- name: Unit and integration tests")
         .ok_or("run")?;
     assert!(lint_at < run_at, "clippy blocks tests:\n{job}");
-    let final_gate = window(&yaml, "  velnor-final:", "  velnor-plan:")?;
+    let final_gate = window(&yaml, "  required:", "  plan:")?;
     assert!(
         final_gate.contains("- rust-demo"),
         "final needs the crate:\n{final_gate}"
@@ -94,7 +94,7 @@ fn w1_crate_jobs_group_obligations_per_crate() -> TestResult {
 #[test]
 fn w1_crate_job_prepares_pinned_tools() -> TestResult {
     let (_repo, yaml) = preview_yaml(config_with_branch())?;
-    let task = window(&yaml, "  rust-demo:", "  velnor-final:")?;
+    let task = window(&yaml, "  rust-demo:", "  required:")?;
     let checkout = task.find("- name: Checkout").ok_or("task checkout")?;
     let prepare = task
         .find("- name: Prepare pinned tools")
@@ -120,7 +120,7 @@ fn w1_crate_prepare_adds_mbx_driver() -> TestResult {
     let prep = prepare(repo.path())?;
     let tree = render_staged_tree(&prep)?;
     let yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
-    let task = window(yaml, "  rust-demo:", "  velnor-final:")?;
+    let task = window(yaml, "  rust-demo:", "  required:")?;
     let catalog = ToolCatalog::pinned();
     assert!(
         task.contains(&catalog.tool_spec(PinnedTool::MrBoxington)),
@@ -142,7 +142,7 @@ fn w1_crate_prepare_adds_mbx_driver() -> TestResult {
 #[test]
 fn w1_crate_prepare_and_obligations_share_toolchain_union() -> TestResult {
     let (_repo, yaml) = preview_yaml(config_with_branch())?;
-    let task = window(&yaml, "  rust-demo:", "  velnor-final:")?;
+    let task = window(&yaml, "  rust-demo:", "  required:")?;
     let prepare_at = task.find("- name: Prepare pinned tools").ok_or("prepare")?;
     let run_at = task.find("- name: Clippy").ok_or("first obligation")?;
     let catalog = ToolCatalog::pinned();
@@ -175,7 +175,7 @@ fn w1_crate_prepare_and_obligations_share_toolchain_union() -> TestResult {
 #[test]
 fn w1_crate_cache_v1_emits_no_cache_steps() -> TestResult {
     let (_repo, yaml) = preview_yaml(config_with_branch())?;
-    let task = window(&yaml, "  rust-demo:", "  velnor-final:")?;
+    let task = window(&yaml, "  rust-demo:", "  required:")?;
     assert!(
         !task.contains("- name: Restore cache"),
         "v1 no restore:\n{task}"

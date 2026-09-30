@@ -4,10 +4,11 @@ use std::fs;
 
 use tempfile::TempDir;
 use velnor_actions_orchestrator::{GenerateOptions, generate, plan_text, prepare};
+use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
 use super::impl_common::{TestResult, config_with_branch, make_repo, plan_for_source_change};
 
-/// Preview `velnor.yml` text for one config; temps keep the dirs alive.
+/// Preview `ci.yml` text for one config; temps keep the dirs alive.
 fn preview_yml(config: &str) -> Result<(TempDir, TempDir, String), Box<dyn std::error::Error>> {
     let repo = make_repo(config)?;
     let prep = prepare(repo.path())?;
@@ -19,7 +20,7 @@ fn preview_yml(config: &str) -> Result<(TempDir, TempDir, String), Box<dyn std::
             output_dir: Some(preview.clone()),
         },
     )?;
-    let text = fs::read_to_string(preview.join(".github/workflows/velnor.yml"))?;
+    let text = fs::read_to_string(preview.join(WORKFLOW_PATH))?;
     Ok((repo, parent, text))
 }
 
@@ -29,9 +30,9 @@ fn crate_yaml_shape_exact() -> TestResult {
     for line in [
         "  rust-demo:",
         "    name: Rust / demo",
-        "  velnor-final:",
-        "  velnor-plan:",
-        "  velnor-workflow-lint:",
+        "  required:",
+        "  plan:",
+        "  actionlint:",
         "      - rust-demo",
     ] {
         assert!(text.contains(line), "missing {line}:\n{text}");
