@@ -158,6 +158,13 @@ pub struct PlanObligation {
     pub task_digest: String,
     /// Input digest.
     pub input_digest: String,
+    /// Canonical digest over the task's complete input closure.
+    ///
+    /// The plan path resolves the closure against the checkout and binds
+    /// this digest into `input_digest`; baseline publishers copy it into
+    /// their entries so coverage can compare closures explicitly instead
+    /// of trusting the changed-work hint.
+    pub closure_digest: String,
     /// Baseline proof (required when covered).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub baseline_proof: Option<BaselineProof>,
@@ -325,6 +332,7 @@ impl PlanObligation {
         validate_task_id(&self.task_id)?;
         validate_digest(&self.task_digest)?;
         validate_digest(&self.input_digest)?;
+        validate_digest(&self.closure_digest)?;
         if self.reason.trim().is_empty() {
             return Err(ContractError::identity(
                 "obligations.reason",

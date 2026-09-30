@@ -1,160 +1,19 @@
 //! Coverage application tests (P03/P04 matrix unit cases).
 //!
-//! Declared via `#[path]` from `cover_identity.rs` under `cfg(test)`.
+//! Declared via `#[path]` from `cover_identity.rs` under `cfg(test)`;
+//! fixtures live in the sibling `cover_identity_fixtures` module.
 
+use super::cover_identity_fixtures::*;
 use super::*;
-use crate::merge::required_evidence::BaselineTaskEntry;
-use velnor_actions_contract::{
-    PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanRunner, RunnerSelection, Trust,
-    WorkflowEvent, digest_b3,
-};
 use velnor_actions_mise::ToolCatalog;
-
-/// Plan carrying one execute obligation per `task_ids`.
-fn plan_with(task_ids: &[&str]) -> Plan {
-    let digest = digest_b3(b"digest");
-    Plan {
-        schema: 1,
-        run_key: "local".to_owned(),
-        plan_id: "plan-local".to_owned(),
-        base: None,
-        head: "head".to_owned(),
-        event: WorkflowEvent::PullRequest,
-        runner: PlanRunner {
-            label: "ubuntu-26.04".to_owned(),
-            selection: RunnerSelection::LatestDefault,
-        },
-        trust: Trust::Pr,
-        baseline: PlanBaseline::unavailable(None).expect("baseline"),
-        generator: PlanGenerator {
-            version: "0.1.0".to_owned(),
-            target: "x86_64-unknown-linux-gnu".to_owned(),
-            sha256: "1".repeat(64),
-        },
-        packages: Vec::new(),
-        obligations: task_ids
-            .iter()
-            .map(|id| PlanObligation {
-                task_id: (*id).to_owned(),
-                decision: ObligationDecision::Execute,
-                reason: "selected".to_owned(),
-                task_digest: digest.clone(),
-                input_digest: digest.clone(),
-                baseline_proof: None,
-            })
-            .collect(),
-        matrix: PlanMatrix {
-            include: Vec::new(),
-        },
-        task_ids: task_ids.iter().map(|id| (*id).to_owned()).collect(),
-        warnings: Vec::new(),
-        edges: Vec::new(),
-    }
-}
-
-/// Manifest binding every `task_ids` entry.
-fn manifest_with(task_ids: &[&str]) -> BaselineManifest {
-    let digest = digest_b3(b"digest");
-    BaselineManifest {
-        schema: 1,
-        repository_id: digest.clone(),
-        source_commit: "a".repeat(40),
-        ref_: "refs/heads/testmain".to_owned(),
-        event: "push".to_owned(),
-        workflow_ref: "o/r/.github/workflows/velnor.yml@refs/heads/testmain".to_owned(),
-        run_id: 7,
-        run_attempt: 1,
-        final_status: "passed".to_owned(),
-        generator_version: "0.1.0".to_owned(),
-        generator_sha256: "1".repeat(64),
-        compatibility_id: digest.clone(),
-        artifact_id: 9,
-        artifact_name: "velnor-baseline".to_owned(),
-        expires_at_unix: None,
-        tasks: task_ids
-            .iter()
-            .map(|id| BaselineTaskEntry {
-                task_id: (*id).to_owned(),
-                task_digest: digest.clone(),
-                input_digest: digest.clone(),
-                proof_run_id: 7,
-                observed_run_id: 7,
-                external_data: None,
-                proof: None,
-            })
-            .collect(),
-    }
-}
-
-/// Discovery with one plain group per task ID, all unchanged.
-fn discovery_with(task_ids: &[&str]) -> Discovery {
-    use velnor_actions_rust::{TaskGroup, TaskKind};
-    Discovery {
-        statuses: Vec::new(),
-        workspaces: Vec::new(),
-        task_groups: task_ids
-            .iter()
-            .map(|id| TaskGroup {
-                task_id: (*id).to_owned(),
-                package_id: "demo".to_owned(),
-                package_name: "demo".to_owned(),
-                manifest_key: "root".to_owned(),
-                kind: TaskKind::Clippy,
-                configuration: "default".to_owned(),
-                features: Vec::new(),
-                target: "host".to_owned(),
-                gated_by: Vec::new(),
-                depends_on: Vec::new(),
-                target_flags: Vec::new(),
-                no_test_targets: false,
-                package_arg: None,
-                compile_driver: "cargo".to_owned(),
-                test_runner: "cargo_test".to_owned(),
-                declared_inputs: Vec::new(),
-                undeclared_reads: false,
-                uses_network: false,
-                uses_clock: false,
-                uses_random: false,
-                nextest_profile: "default".to_owned(),
-            })
-            .collect(),
-        tool_checks: Vec::new(),
-        clippy_memory: crate::clippy_groups::ClippyMemoryPlan {
-            groups: Vec::new(),
-            barriers: 0,
-        },
-        recommendations: Vec::new(),
-        consumer_manifest_json: None,
-    }
-}
-
-/// Baseline inputs over a temp checkout root.
-fn inputs<'a>(root: &'a std::path::Path, catalog: &'a ToolCatalog) -> BaselineInputs<'a> {
-    BaselineInputs {
-        branch: "testmain",
-        root,
-        workflow: ".github/workflows/velnor.yml",
-        catalog,
-    }
-}
-
-/// Validated provenance for coverage tests.
-fn provenance() -> ValidatedProvenance {
-    ValidatedProvenance {
-        source_commit: "a".repeat(40),
-        run_id: 7,
-        artifact_name: format!("velnor-baseline-{}-{}", "a".repeat(40), digest_b3(b"m")),
-        artifact_id: 9,
-        manifest_digest: digest_b3(b"m"),
-    }
-}
 
 #[test]
 fn undiscovered_and_unknown_groups_never_cover() {
     let rust = "stack/rust/root/clippy/default";
     let unknown = "stack/unknown/root/test/default";
     let mut plan = plan_with(&[rust, unknown]);
-    let manifest = manifest_with(&[rust, unknown]);
+    let stale = stale_closure();
+    let manifest = manifest_with(&[(rust, &stale), (unknown, &stale)]);
     let unchanged = Some(BTreeSet::new());
     let tmp = tempfile::tempdir().expect("tempdir");
     let catalog = ToolCatalog::pinned();
@@ -181,27 +40,22 @@ fn undiscovered_and_unknown_groups_never_cover() {
     );
 }
 
-/// Source files backing a content-bound closure in `root`.
-fn seed_sources(root: &std::path::Path) {
-    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"demo\"\n").expect("manifest");
-    std::fs::create_dir(root.join("src")).expect("src");
-    std::fs::write(root.join("src/lib.rs"), "pub fn f() {}\n").expect("source");
-}
-
 #[test]
-fn complete_closure_covers_but_incomplete_refuses() {
+fn matching_closure_covers() {
     let rust = "stack/rust/root/clippy/default";
     let mut plan = plan_with(&[rust]);
-    let manifest = manifest_with(&[rust]);
     let unchanged = Some(BTreeSet::new());
     let tmp = tempfile::tempdir().expect("tempdir");
     seed_sources(tmp.path());
     let catalog = ToolCatalog::pinned();
+    let discovery = discovery_with(&[rust]);
+    let live = live_closure_digest(tmp.path(), &discovery, rust, &catalog);
+    let manifest = manifest_with(&[(rust, &live)]);
     let covered = apply_coverage(
         &mut plan,
         &manifest,
         &provenance(),
-        &discovery_with(&[rust]),
+        &discovery,
         unchanged.as_ref(),
         &inputs(tmp.path(), &catalog),
     );
@@ -211,10 +65,58 @@ fn complete_closure_covers_but_incomplete_refuses() {
         ObligationDecision::CoveredByTrustedBaseline
     );
     assert!(plan.obligations[0].baseline_proof.is_some());
+}
+
+#[test]
+fn stale_closure_with_empty_changed_set_executes() {
+    let rust = "stack/rust/root/clippy/default";
+    let unchanged = Some(BTreeSet::new());
+    let tmp = tempfile::tempdir().expect("tempdir");
+    seed_sources(tmp.path());
+    let catalog = ToolCatalog::pinned();
+    let discovery = discovery_with(&[rust]);
+    let before = live_closure_digest(tmp.path(), &discovery, rust, &catalog);
+    std::fs::write(
+        tmp.path().join("src/lib.rs"),
+        "pub fn f() {}\npub fn g() {}\n",
+    )
+    .expect("edit");
+    let after = live_closure_digest(tmp.path(), &discovery, rust, &catalog);
+    assert_ne!(before, after, "the edit must flip the live closure");
+    // Task and input digests still match and the changed set is empty:
+    // only the closure comparison refuses coverage.
+    let manifest = manifest_with(&[(rust, &before)]);
+    let mut plan = plan_with(&[rust]);
+    let covered = apply_coverage(
+        &mut plan,
+        &manifest,
+        &provenance(),
+        &discovery,
+        unchanged.as_ref(),
+        &inputs(tmp.path(), &catalog),
+    );
+    assert_eq!(covered, 0);
+    assert_eq!(plan.obligations[0].decision, ObligationDecision::Execute);
+    assert!(
+        plan.warnings.iter().any(|w| w.contains("closure_mismatch")),
+        "{:?}",
+        plan.warnings
+    );
+}
+
+#[test]
+fn incomplete_closure_refuses() {
+    let rust = "stack/rust/root/clippy/default";
     let mut broken = discovery_with(&[rust]);
     broken.task_groups[0]
         .declared_inputs
         .push("missing/input.proto".to_owned());
+    let stale = stale_closure();
+    let manifest = manifest_with(&[(rust, &stale)]);
+    let unchanged = Some(BTreeSet::new());
+    let tmp = tempfile::tempdir().expect("tempdir");
+    seed_sources(tmp.path());
+    let catalog = ToolCatalog::pinned();
     let mut plan = plan_with(&[rust]);
     let covered = apply_coverage(
         &mut plan,
@@ -240,7 +142,8 @@ fn undeclared_reads_refuse_with_warning() {
     let mut dirty = discovery_with(&[rust]);
     dirty.task_groups[0].undeclared_reads = true;
     let mut plan = plan_with(&[rust]);
-    let manifest = manifest_with(&[rust]);
+    let stale = stale_closure();
+    let manifest = manifest_with(&[(rust, &stale)]);
     let unchanged = Some(BTreeSet::new());
     let tmp = tempfile::tempdir().expect("tempdir");
     let catalog = ToolCatalog::pinned();
@@ -266,7 +169,8 @@ fn undeclared_reads_refuse_with_warning() {
 fn changed_work_executes_despite_identity_match() {
     let rust = "stack/rust/root/clippy/default";
     let mut plan = plan_with(&[rust]);
-    let manifest = manifest_with(&[rust]);
+    let stale = stale_closure();
+    let manifest = manifest_with(&[(rust, &stale)]);
     let changed = Some(BTreeSet::from(["demo".to_owned()]));
     let tmp = tempfile::tempdir().expect("tempdir");
     let catalog = ToolCatalog::pinned();
@@ -286,16 +190,18 @@ fn changed_work_executes_despite_identity_match() {
 fn advisory_needs_fresh_external_data() {
     let advisory = "stack/rust/root/advisory/default";
     let mut plan = plan_with(&[advisory]);
-    let manifest = manifest_with(&[advisory]);
     let unchanged = Some(BTreeSet::new());
     let tmp = tempfile::tempdir().expect("tempdir");
     seed_sources(tmp.path());
     let catalog = ToolCatalog::pinned();
+    let discovery = discovery_with(&[advisory]);
+    let live = live_closure_digest(tmp.path(), &discovery, advisory, &catalog);
+    let manifest = manifest_with(&[(advisory, &live)]);
     let covered = apply_coverage(
         &mut plan,
         &manifest,
         &provenance(),
-        &discovery_with(&[advisory]),
+        &discovery,
         unchanged.as_ref(),
         &inputs(tmp.path(), &catalog),
     );

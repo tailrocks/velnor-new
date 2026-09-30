@@ -82,20 +82,22 @@ fn plan_with(
 /// Baseline manifest JSON binding every plan obligation exactly.
 fn manifest_for(plan: &Plan, base: &str) -> serde_json::Value {
     let compat = velnor_actions_contract::digest_b3(b"compat");
+    let workflow = velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
     let tasks: Vec<serde_json::Value> = plan
         .obligations
         .iter()
         .map(|ob| {
             serde_json::json!({
                 "task_id": ob.task_id, "task_digest": ob.task_digest,
-                "input_digest": ob.input_digest, "proof_run_id": 7, "observed_run_id": 7,
+                "input_digest": ob.input_digest, "closure_digest": ob.closure_digest,
+                "proof_run_id": 7, "observed_run_id": 7,
             })
         })
         .collect();
     serde_json::json!({
-        "schema": 1, "repository_id": velnor_actions_contract::digest_b3(b"repo"),
+        "schema": 2, "repository_id": velnor_actions_contract::digest_b3(b"repo"),
         "source_commit": base, "ref": "refs/heads/testmain", "event": "push",
-        "workflow_ref": "o/r/.github/workflows/velnor.yml@refs/heads/testmain",
+        "workflow_ref": format!("o/r/{workflow}@refs/heads/testmain"),
         "run_id": 7, "run_attempt": 1, "final_status": "passed",
         "generator_version": plan.generator.version, "generator_sha256": plan.generator.sha256,
         "compatibility_id": compat, "artifact_id": 9,

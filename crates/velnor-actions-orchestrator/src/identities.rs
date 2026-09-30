@@ -82,11 +82,6 @@ fn edge_key(edge: &SnapshotEdge) -> (&String, &String, &String, &String) {
     (&edge.from, &edge.to, &edge.kind, &edge.target)
 }
 
-/// Canonical digest over the normalized workspace graph.
-pub(crate) fn graph_digest_for(record: &WorkspaceRecord) -> String {
-    canonical_digest(&snapshot_graph_for(record)).unwrap_or_else(|_| digest_b3(b"graph_error"))
-}
-
 /// Config digest over `(path, digest)` tool-input pairs.
 ///
 /// Consumed tool files are semantic inputs; parse values, finding codes,
@@ -162,74 +157,13 @@ impl ExtensionBundle {
     }
 }
 
-/// Extension bundle for one group from the prebuilt snapshot index.
-///
-/// The snapshot carries graph digests built once per analysis; this
-/// lookup is a map hit, never a per-group workspace rescan. Lockfile
-/// and Nextest digests resolve against `root` when supplied; rerun
-/// inputs are `Some([])` for script-less packages (proven empty) and
-/// `None` for build-script packages without rerun evidence (unknown,
-/// forbidding reuse) until the build-output parser feeds them.
-pub(crate) fn extension_bundle(discovery: &Discovery, group: &TaskGroup) -> ExtensionBundle {
-    extension_bundle_at_root(discovery, group, None, None)
-}
-
-/// Snapshot-indexed bundle with checkout-bound digests when `root` is set.
-pub(crate) fn extension_bundle_at_root(
-    discovery: &Discovery,
-    group: &TaskGroup,
-    root: Option<&std::path::Path>,
-    nextest_config: Option<&str>,
-) -> ExtensionBundle {
-    let manifest = super::manifest_for_key(&group.manifest_key);
-    let mut bundle = ExtensionBundle {
-        package_id: group.package_id.clone(),
-        workspace_id: digest_b3(b"no-workspace"),
-        profile: group.configuration.clone(),
-        manifest,
-        graph_digest: digest_b3(b"no-workspace"),
-        targets: Vec::new(),
-        config_digest: tool_config_digest(&discovery.tool_checks),
-        has_build_script: false,
-        lock_digest: None,
-        nextest_digest: None,
-        rerun_inputs: None,
-    };
-    for workspace in &discovery.workspaces {
-        for package in &workspace.record.packages {
-            let owned = package.id == group.package_id
-                || (group.package_id.is_empty() && package.manifest == bundle.manifest);
-            if !owned {
-                continue;
-            }
-            bundle.workspace_id = canonical_digest(&snapshot_graph_for(&workspace.record))
-                .unwrap_or_else(|_| digest_b3(b"workspace_error"));
-            bundle.graph_digest = graph_digest_for(&workspace.record);
-            bundle.targets = package
-                .targets
-                .iter()
-                .map(|target| format!("{}:{}", target.kind, target.name))
-                .collect();
-            bundle.has_build_script = package.has_build_script;
-        }
-    }
-    if !bundle.has_build_script {
-        bundle.rerun_inputs = Some(Vec::new());
-    }
-    if let Some(root) = root {
-        bundle.lock_digest = super::closure::lock_digest_at_root(root, &bundle.manifest);
-        bundle.nextest_digest = super::closure::nextest_digest_at_root(root, nextest_config);
-    }
-    bundle
-}
-
 /// Snapshot-indexed bundle from a prebuilt [`ExecutionSnapshot`].
 ///
 /// Graph and workspace digests come from the snapshot's once-built
-/// index; package targets and build-script facts still resolve from
-/// discovery. Prefer this over [`extension_bundle`] in per-analysis
-/// paths (baseline coverage) to stop per-group graph rebuilds.
-/// Lock and Nextest digests bind checkout content when `root` is set.
+/// index, never a per-group workspace rescan: every plan and coverage
+/// path threads the one snapshot built per analysis. Package targets
+/// and build-script facts still resolve from discovery. Lock and
+/// Nextest digests bind checkout content when `root` is set.
 pub(crate) fn extension_bundle_with_snapshot(
     snapshot: &ExecutionSnapshot,
     discovery: &Discovery,

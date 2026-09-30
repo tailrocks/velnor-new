@@ -7,6 +7,7 @@
 //! eligible for later baseline coverage.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::Path;
 
 use serde::Serialize;
 use velnor_actions_contract::{MatrixEntry, PlanObligation, canonical_json_bytes, digest_b3};
@@ -17,11 +18,15 @@ use velnor_actions_rust::TaskGroup;
 use crate::OrchestratorError;
 use crate::discover::Discovery;
 use crate::internal::{internal, internal_contract};
-use crate::internal_plan::identities::platform_id_for_group;
+use crate::internal_plan::closure::resolve_closure_at_root;
+use crate::internal_plan::identities::{
+    ExtensionBundle, extension_bundle_with_snapshot, platform_id_for_group,
+};
+use crate::internal_plan::snapshot::{ExecutionSnapshot, canonical_digest};
 use crate::internal_plan::wire_w2::{self, GroupWire};
 use crate::internal_plan::{
     IdentityInputs, adapter_metadata, cache_ids_for, evidence_for_group, execute_ids,
-    extension_bundle, manifest_for_key, record_task_cache, task_identity_digest, toolchain_id,
+    manifest_for_key, nextest_config_for, record_task_cache, task_identity_digest, toolchain_id,
 };
 use crate::schedule::assign_lanes;
 use crate::select::group_changed;
@@ -49,6 +54,10 @@ pub(crate) struct GroupInputs<'a> {
     pub(crate) wire: GroupWire<'a>,
     /// Changed-work classification for the group.
     pub(crate) changed: bool,
+    /// Once-built execution snapshot for graph lookups (P03-1).
+    pub(crate) snapshot: &'a ExecutionSnapshot,
+    /// Repository checkout the closure resolves against.
+    pub(crate) root: &'a Path,
 }
 
 /// Deterministic lane per universe task ID.
@@ -78,6 +87,65 @@ pub(crate) fn member_changed(
     changed.is_none_or(|set| group_changed(group, set, keys))
 }
 
+/// Extension bundle plus closure-bound identity digests for one group.
+struct PlannedIdentity {
+    /// Snapshot-indexed bundle with checkout-bound lock/Nextest digests.
+    bundle: ExtensionBundle,
+    /// Canonical digest over the complete input closure.
+    closure_digest: String,
+    /// Input digest with the closure digest bound into the envelope.
+    input_digest: String,
+}
+
+/// Snapshot bundle plus closure-bound identity digests for one group.
+///
+/// The closure resolves against the checkout and its digest binds into
+/// the identity envelope, so a source edit flips `input_digest` even
+/// when the changed-work hint misses it.
+fn planned_identity(
+    inputs: &GroupInputs<'_>,
+    argv: &[String],
+    toolchain: &str,
+    platform_id: &str,
+) -> Result<PlannedIdentity, OrchestratorError> {
+    let group = inputs.group;
+    let manifest = manifest_for_key(&group.manifest_key);
+    let nextest_config = nextest_config_for(inputs.discovery, group);
+    let bundle = extension_bundle_with_snapshot(
+        inputs.snapshot,
+        inputs.discovery,
+        group,
+        Some(inputs.root),
+        nextest_config.as_deref(),
+    );
+    let ext = group.identity_extension(&bundle.inputs());
+    let closure = resolve_closure_at_root(
+        inputs.root,
+        group,
+        nextest_config.as_deref(),
+        bundle.graph_digest(),
+        toolchain,
+        platform_id,
+    );
+    let closure_digest = canonical_digest(&closure).map_err(internal_contract)?;
+    let input_digest = task_identity_digest(&IdentityInputs {
+        group,
+        argv,
+        toolchain_id: toolchain,
+        platform_id,
+        manifest: &manifest,
+        generator: inputs.wire.generator,
+        extension: ext.to_stack_extension(),
+        closure_digest: &closure_digest,
+    })
+    .map_err(internal_contract)?;
+    Ok(PlannedIdentity {
+        bundle,
+        closure_digest,
+        input_digest,
+    })
+}
+
 /// Obligation plus matrix entry for one universe member.
 ///
 /// Identities attach first; changed members execute unconditionally
@@ -90,20 +158,11 @@ pub(crate) fn plan_group(
     let _ = inputs.lane;
     let toolchain = toolchain_id(group, inputs.catalog).map_err(internal_contract)?;
     let argv = task_argv(group, inputs.catalog)?;
-    let manifest = manifest_for_key(&group.manifest_key);
-    let bundle = extension_bundle(inputs.discovery, group);
-    let ext = group.identity_extension(&bundle.inputs());
     let platform_id = platform_id_for_group(inputs.label, group);
-    let input_digest = task_identity_digest(&IdentityInputs {
-        group,
-        argv: &argv,
-        toolchain_id: &toolchain,
-        platform_id: &platform_id,
-        manifest: &manifest,
-        generator: inputs.wire.generator,
-        extension: ext.to_stack_extension(),
-    })
-    .map_err(internal_contract)?;
+    let identity = planned_identity(inputs, &argv, &toolchain, &platform_id)?;
+    let ext = group.identity_extension(&identity.bundle.inputs());
+    let input_digest = identity.input_digest;
+    let closure_digest = identity.closure_digest;
     let reuse = if inputs.changed {
         wire_w2::ReuseOutcome::execute("affected_by_change")
     } else {
@@ -116,8 +175,12 @@ pub(crate) fn plan_group(
             ext.reuse_eligible().is_ok(),
         )?
     };
-    let gate =
-        wire_w2::check_archive_identity(group, &toolchain, &platform_id, bundle.config_digest())?;
+    let gate = wire_w2::check_archive_identity(
+        group,
+        &toolchain,
+        &platform_id,
+        identity.bundle.config_digest(),
+    )?;
     // Unbound archive sources refuse the task (execute with reason);
     // changed work already executes under its own reason. Malformed
     // specs stay hard errors: the planner generated them itself.
@@ -134,6 +197,7 @@ pub(crate) fn plan_group(
         reason: reuse.reason,
         task_digest: task_digest.clone(),
         input_digest: input_digest.clone(),
+        closure_digest,
         baseline_proof: None,
     };
     let mut metadata = adapter_metadata(group, evidence_for_group(inputs.discovery, group));

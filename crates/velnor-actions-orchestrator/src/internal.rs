@@ -20,6 +20,7 @@ use crate::OrchestratorError;
 use crate::cover::{BaselineInputs, apply_baseline};
 use crate::decisions::dedupe_sorted;
 use crate::discover::Discovery;
+use crate::internal_plan::snapshot::ExecutionSnapshot;
 use crate::internal_plan::wire_w2::GroupWire;
 use crate::internal_plan::{default_generator, plan_packages};
 use crate::internal_request::resolve_run_key;
@@ -131,6 +132,7 @@ pub fn plan_internal(request_json: &str) -> Result<String, OrchestratorError> {
     let mut plan = build_plan(
         &request,
         &prep.discovery,
+        &prep.root,
         &universe,
         changed.as_ref(),
         &prep.runner_label,
@@ -235,6 +237,7 @@ fn plan_root(override_root: Option<&Path>) -> Result<PathBuf, OrchestratorError>
 fn build_plan(
     request: &PlanRequest,
     discovery: &Discovery,
+    root: &Path,
     universe: &[&TaskGroup],
     changed: Option<&BTreeSet<String>>,
     label: &str,
@@ -251,6 +254,7 @@ fn build_plan(
         .map(|set| changed_keys(universe, set))
         .unwrap_or_default();
     let generator = request.generator.clone().unwrap_or_else(default_generator);
+    let snapshot = ExecutionSnapshot::build(discovery);
     for group in universe {
         let wire = GroupWire {
             event: request.event,
@@ -265,6 +269,8 @@ fn build_plan(
             catalog,
             wire,
             changed: member_changed(group, changed, &keys),
+            snapshot: &snapshot,
+            root,
         })?;
         task_ids.push(group.task_id.clone());
         digests.insert(group.task_id.clone(), obligation.input_digest.clone());

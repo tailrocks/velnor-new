@@ -90,16 +90,18 @@ pub(crate) fn manifest_for(plan: &Plan, base: &str, branch: &str) -> WireResult 
         .first()
         .ok_or_else(|| std::io::Error::other("obligation"))?;
     let digest = &first.task_digest;
+    let workflow = velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
     Ok(
-        json!({"schema": 1, "repository_id": digest, "source_commit": base,
+        json!({"schema": 2, "repository_id": digest, "source_commit": base,
         "ref": format!("refs/heads/{branch}"), "event": "push",
-        "workflow_ref": format!("o/r/.github/workflows/velnor.yml@refs/heads/{branch}"),
+        "workflow_ref": format!("o/r/{workflow}@refs/heads/{branch}"),
         "run_id": 7, "run_attempt": 1, "final_status": "passed",
         "generator_version": plan.generator.version, "generator_sha256": plan.generator.sha256,
         "compatibility_id": digest, "artifact_id": 9,
         "artifact_name": format!("velnor-baseline-{base}-{digest}"),
         "tasks": plan.obligations.iter().map(|ob| json!({"task_id": ob.task_id,
             "task_digest": ob.task_digest, "input_digest": ob.input_digest,
+            "closure_digest": ob.closure_digest,
             "proof_run_id": 7, "observed_run_id": 7})).collect::<Vec<_>>()}),
     )
 }
@@ -284,18 +286,20 @@ pub(crate) fn covered_plan(
                 "task_id": ob.task_id,
                 "task_digest": ob.task_digest,
                 "input_digest": ob.input_digest,
+                "closure_digest": ob.closure_digest,
                 "proof_run_id": 7,
                 "observed_run_id": 11,
             })
         })
         .collect();
+    let workflow = velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
     let manifest = serde_json::json!({
-        "schema": 1,
+        "schema": 2,
         "repository_id": digest_b3(b"repo"),
         "source_commit": base,
         "ref": "refs/heads/testmain",
         "event": "push",
-        "workflow_ref": "o/r/.github/workflows/velnor.yml@refs/heads/testmain",
+        "workflow_ref": format!("o/r/{workflow}@refs/heads/testmain"),
         "run_id": 7,
         "run_attempt": 1,
         "final_status": "passed",
@@ -384,6 +388,7 @@ fn orch_core_obligations_carry_valid_digests() -> TestResult {
     for obligation in &plan.obligations {
         validate_digest(&obligation.task_digest)?;
         validate_digest(&obligation.input_digest)?;
+        validate_digest(&obligation.closure_digest)?;
         assert!(seen.insert(obligation.task_digest.clone()), "distinct");
     }
     for entry in &plan.matrix.include {
