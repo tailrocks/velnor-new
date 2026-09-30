@@ -232,36 +232,14 @@ fn parse_workflow_ref(input: &str) -> Option<(String, String, String)> {
 
 /// Repository identity digest from the git origin URL, when configured.
 ///
-/// Returns `None` when no origin remote exists; unanchored checkouts
-/// fail closed in [`validate_repository`], never warn-and-proceed.
+/// Resolution runs through the shared [`crate::origin::origin_url_via_git`]
+/// helper, so linked worktrees, includes, and worktree configuration all
+/// follow Git semantics. Returns `None` when no origin remote exists;
+/// unanchored checkouts fail closed in [`validate_repository`], never
+/// warn-and-proceed.
 pub(crate) fn repository_anchor_from_origin(root: &std::path::Path) -> Option<String> {
-    let config = std::fs::read_to_string(root.join(".git/config")).ok()?;
-    let url = origin_url(&config)?;
+    let url = crate::origin::origin_url_via_git(root)?;
     normalize_origin_url(&url).map(|normalized| digest_b3(normalized.as_bytes()))
-}
-
-/// Origin URL from `.git/config` text, if an origin remote exists.
-fn origin_url(config: &str) -> Option<String> {
-    let mut in_origin = false;
-    for line in config.lines() {
-        let line = line.trim();
-        if line.starts_with('[') {
-            in_origin = line == "[remote \"origin\"]";
-            continue;
-        }
-        if !in_origin {
-            continue;
-        }
-        if let Some((key, value)) = line.split_once('=')
-            && key.trim() == "url"
-        {
-            let value = value.trim().trim_matches('"').trim().to_owned();
-            if !value.is_empty() {
-                return Some(value);
-            }
-        }
-    }
-    None
 }
 
 /// Normalize an origin URL to `host/path` for identity comparison.
