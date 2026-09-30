@@ -46,9 +46,9 @@ pub(crate) struct ProvenanceExpectations {
 /// validated-but-uncarried dimensions (event, ref, workflow, attempt,
 /// schema, generator, repository) are enforced by validation.
 /// Forwarded proof runs (originating run differs from the carrying run)
-/// cannot prove their originating success from the manifest; callers
-/// must surface [`ORIGINATING_RUN_SUCCESS_GAP`] instead of passing
-/// silently.
+/// fail validation outright: the manifest cannot prove the originating
+/// run succeeded, and warn-and-cover would grant coverage for success
+/// nobody attested.
 #[derive(Debug, Clone)]
 pub(crate) struct ValidatedProvenance {
     /// Exact trusted source commit.
@@ -61,18 +61,7 @@ pub(crate) struct ValidatedProvenance {
     pub(crate) artifact_id: u64,
     /// Manifest content digest.
     pub(crate) manifest_digest: String,
-    /// True when any task carries a forwarded proof run whose
-    /// originating success the manifest cannot prove.
-    pub(crate) originating_runs_unverified: bool,
 }
-
-/// Explicit unpassed acceptance: a task entry whose `proof_run_id`
-/// differs from the carrying manifest's run claims success for an
-/// originating run the data model records nowhere. Same-run proofs are
-/// success-bound by the manifest's own trusted checks; forwarded proofs
-/// carry this acceptance openly instead of passing silently.
-pub(crate) const ORIGINATING_RUN_SUCCESS_GAP: &str =
-    "unpassed:originating_proof_run_success_unrecorded";
 
 /// Derive `velnor-baseline-<commit>-<compat>` with full IDs.
 ///
@@ -157,13 +146,13 @@ pub(crate) fn validate_provenance(
         .tasks
         .iter()
         .any(|task| task.proof_run_id != manifest.run_id);
+    reject(!forwarded, "originating_run_unverified")?;
     Ok(ValidatedProvenance {
         source_commit: manifest.source_commit.clone(),
         run_id: manifest.run_id,
         artifact_name: manifest.artifact_name.clone(),
         artifact_id: manifest.artifact_id,
         manifest_digest: manifest_digest.to_owned(),
-        originating_runs_unverified: forwarded,
     })
 }
 
@@ -174,9 +163,8 @@ pub(crate) fn validate_provenance(
 /// checks. The observing run must be the carrying manifest's own run:
 /// an entry "observed" by any other run is a carried-proof identity
 /// mismatch. A same-run proof run is success-bound by the manifest's
-/// own trusted checks; a forwarded proof run stays a nonzero
-/// identifier only, and the caller surfaces
-/// [`ORIGINATING_RUN_SUCCESS_GAP`] for it instead of passing silently.
+/// own trusted checks; a forwarded proof run fails the manifest in
+/// [`validate_provenance`], never warn-and-cover.
 /// # Errors
 ///
 /// Returns the first failing check's reason.

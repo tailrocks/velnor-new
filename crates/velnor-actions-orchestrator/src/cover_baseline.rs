@@ -16,8 +16,8 @@ use velnor_actions_contract::{
 use velnor_actions_mise::BaselineLookup as MiseBaselineLookup;
 
 use self::provenance_check::{
-    ORIGINATING_RUN_SUCCESS_GAP, ProvenanceExpectations, publish_event_eligible,
-    repository_anchor_from_origin, repository_slug_from_origin, validate_provenance,
+    ProvenanceExpectations, publish_event_eligible, repository_anchor_from_origin,
+    repository_slug_from_origin, validate_provenance,
 };
 use crate::OrchestratorError;
 use crate::cover::shard;
@@ -108,10 +108,6 @@ pub(crate) fn apply_baseline(
             return Ok(());
         }
     };
-    if provenance.originating_runs_unverified {
-        plan.warnings
-            .push(format!("baseline_unpassed:{ORIGINATING_RUN_SUCCESS_GAP}"));
-    }
     if baseline_expired(manifest.expires_at_unix, unix_now()) {
         mark_unavailable(plan, "baseline_expired");
         plan.warnings.push("baseline_miss:cache_expired".to_owned());
