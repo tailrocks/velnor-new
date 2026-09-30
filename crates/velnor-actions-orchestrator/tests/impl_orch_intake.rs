@@ -148,7 +148,11 @@ fn intake_tool_changes_refresh_findings_not_tasks() -> TestResult {
     fs::write(root.join("mise.toml"), "!!! not toml {{{ \n")?;
     fs::write(root.join("rust-toolchain.toml"), "[[[ nope\n")?;
     fs::write(root.join("mise.lock"), "not json {{{\n")?;
-    assert_eq!(task_ids_for(root)?, tasks_before);
+    let err = err_of(prepare(root).map(|_| ()), "garbage wrapper")?;
+    assert!(
+        err.to_string().contains("wrapper_invalid"),
+        "diagnostic: {err}"
+    );
     fs::remove_file(root.join("mise.toml"))?;
     fs::remove_file(root.join("rust-toolchain.toml"))?;
     fs::remove_file(root.join("mise.lock"))?;
