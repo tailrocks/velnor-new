@@ -58,7 +58,8 @@ pub(crate) struct ValidatedProvenance {
 ///
 /// Returns the reason when the commit or compat ID is malformed.
 pub(crate) fn baseline_artifact_name(commit: &str, compat: &str) -> Result<String, String> {
-    let sha = commit.len() == 40 && commit.bytes().all(|b| b.is_ascii_hexdigit());
+    let lower_hex = |byte: &u8| matches!(byte, b'0'..=b'9' | b'a'..=b'f');
+    let sha = commit.len() == 40 && commit.bytes().all(|byte| lower_hex(&byte));
     reject(sha, "bad_source_commit")?;
     validate_digest(compat).map_err(|_| "bad_compatibility_id".to_owned())?;
     Ok(format!("velnor-baseline-{commit}-{compat}"))
@@ -76,23 +77,16 @@ fn reject(ok: bool, reason: &str) -> Result<(), String> {
 
 /// Carried proof binds the task entry's identity and originating run.
 ///
-/// `ManifestTaskProof` exposes no getters, so the comparison runs over its
-/// canonical serialization; a serialization failure never validates.
+/// Compared field by field over validated getters: a carried proof that
+/// no longer matches its entry's identity is a mismatch, never a pass.
 fn proof_matches_task(
     proof: &velnor_actions_contract::ManifestTaskProof,
     task: &crate::merge::required_evidence::BaselineTaskEntry,
 ) -> bool {
-    let Ok(value) = serde_json::to_value(proof) else {
-        return false;
-    };
-    let field = |name: &str| value.get(name).and_then(serde_json::Value::as_str);
-    field("task_id") == Some(task.task_id.as_str())
-        && field("task_digest") == Some(task.task_digest.as_str())
-        && field("input_digest") == Some(task.input_digest.as_str())
-        && value
-            .get("proof_run_id")
-            .and_then(serde_json::Value::as_u64)
-            == Some(task.proof_run_id)
+    proof.task_id() == task.task_id
+        && proof.task_digest() == task.task_digest
+        && proof.input_digest() == task.input_digest
+        && proof.proof_run_id() == task.proof_run_id
 }
 
 /// Validate evidence against expected values: repo, workflow, ref,
@@ -135,26 +129,7 @@ pub(crate) fn validate_provenance(
     validate_workflow_ref(manifest, expected)?;
     reject(manifest.artifact_name == expect, "artifact_mismatch")?;
     for task in &manifest.tasks {
-        reject(
-            validate_digest(&task.closure_digest).is_ok(),
-            "bad_task_identity",
-        )?;
-        if let Some(proof) = &task.proof {
-            proof.validate().map_err(|_| "bad_task_proof".to_owned())?;
-            reject(proof_matches_task(proof, task), "proof_mismatch")?;
-            continue;
-        }
-        let ids_ok = velnor_actions_contract::validate_task_id(&task.task_id).is_ok()
-            && validate_digest(&task.task_digest).is_ok()
-            && validate_digest(&task.input_digest).is_ok();
-        let runs_ok = task.proof_run_id > 0 && task.observed_run_id > 0;
-        let fresh_ok = task
-            .external_data
-            .as_ref()
-            .is_none_or(|proof| proof.validate().is_ok());
-        reject(ids_ok, "bad_task_identity")?;
-        reject(runs_ok, "bad_proof_identity")?;
-        reject(fresh_ok, "bad_external_data")?;
+        validate_task_entry(task, manifest.run_id)?;
     }
     Ok(ValidatedProvenance {
         source_commit: manifest.source_commit.clone(),
@@ -163,6 +138,43 @@ pub(crate) fn validate_provenance(
         artifact_id: manifest.artifact_id,
         manifest_digest: manifest_digest.to_owned(),
     })
+}
+
+/// Validate one task entry: identities, run binding, freshness, proof.
+///
+/// Every entry passes every check: a structured proof adds its binding
+/// check on top instead of replacing the identity, run, and freshness
+/// checks. The observing run must be the carrying manifest's own run:
+/// an entry "observed" by any other run is a carried-proof identity
+/// mismatch. The originating proof run stays a nonzero identifier only,
+/// so carried-forward proofs keep their original run.
+/// # Errors
+///
+/// Returns the first failing check's reason.
+fn validate_task_entry(
+    task: &crate::merge::required_evidence::BaselineTaskEntry,
+    run_id: u64,
+) -> Result<(), String> {
+    let ids_ok = velnor_actions_contract::validate_task_id(&task.task_id).is_ok()
+        && validate_digest(&task.task_digest).is_ok()
+        && validate_digest(&task.input_digest).is_ok()
+        && validate_digest(&task.closure_digest).is_ok();
+    reject(ids_ok, "bad_task_identity")?;
+    reject(
+        task.proof_run_id > 0 && task.observed_run_id > 0,
+        "bad_proof_identity",
+    )?;
+    reject(task.observed_run_id == run_id, "proof_mismatch")?;
+    let fresh_ok = task
+        .external_data
+        .as_ref()
+        .is_none_or(|proof| proof.validate().is_ok());
+    reject(fresh_ok, "bad_external_data")?;
+    if let Some(proof) = &task.proof {
+        proof.validate().map_err(|_| "bad_task_proof".to_owned())?;
+        reject(proof_matches_task(proof, task), "proof_mismatch")?;
+    }
+    Ok(())
 }
 
 /// True for generator SHAs no manifest may bind: empty, all-zero, or the

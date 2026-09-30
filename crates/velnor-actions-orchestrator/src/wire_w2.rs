@@ -139,18 +139,11 @@ pub(crate) enum ArchiveGate {
     SourceUnbound,
 }
 
-/// Archive gate for sharded Nextest groups; unbound sources refuse
-/// the task (execute with reason) instead of aborting the plan.
-pub(crate) fn check_archive_identity(
-    group: &TaskGroup,
-    toolchain_id: &str,
-    platform_id: &str,
-    config_digest: &str,
-) -> Result<ArchiveGate, OrchestratorError> {
-    check_archive_identity_with_source(group, toolchain_id, platform_id, config_digest, None)
-}
-
 /// Archive gate with an explicit content-bound source digest.
+///
+/// Sharded Nextest groups clear only on a content-bound source; unbound
+/// sources refuse the task (execute with reason) instead of aborting
+/// the plan.
 pub(crate) fn check_archive_identity_with_source(
     group: &TaskGroup,
     toolchain_id: &str,

@@ -20,7 +20,7 @@ fn undiscovered_and_unknown_groups_never_cover() {
     let covered = apply_coverage(
         &mut plan,
         &manifest,
-        &provenance(),
+        &provenance_for(&manifest),
         &discovery_with(&[]),
         unchanged.as_ref(),
         &inputs(tmp.path(), &catalog),
@@ -54,7 +54,7 @@ fn matching_closure_covers() {
     let covered = apply_coverage(
         &mut plan,
         &manifest,
-        &provenance(),
+        &provenance_for(&manifest),
         &discovery,
         unchanged.as_ref(),
         &inputs(tmp.path(), &catalog),
@@ -90,7 +90,7 @@ fn stale_closure_with_empty_changed_set_executes() {
     let covered = apply_coverage(
         &mut plan,
         &manifest,
-        &provenance(),
+        &provenance_for(&manifest),
         &discovery,
         unchanged.as_ref(),
         &inputs(tmp.path(), &catalog),
@@ -121,7 +121,7 @@ fn incomplete_closure_refuses() {
     let covered = apply_coverage(
         &mut plan,
         &manifest,
-        &provenance(),
+        &provenance_for(&manifest),
         &broken,
         unchanged.as_ref(),
         &inputs(tmp.path(), &catalog),
@@ -150,7 +150,7 @@ fn undeclared_reads_refuse_with_warning() {
     let covered = apply_coverage(
         &mut plan,
         &manifest,
-        &provenance(),
+        &provenance_for(&manifest),
         &dirty,
         unchanged.as_ref(),
         &inputs(tmp.path(), &catalog),
@@ -177,7 +177,7 @@ fn changed_work_executes_despite_identity_match() {
     let covered = apply_coverage(
         &mut plan,
         &manifest,
-        &provenance(),
+        &provenance_for(&manifest),
         &discovery_with(&[rust]),
         changed.as_ref(),
         &inputs(tmp.path(), &catalog),
@@ -200,7 +200,7 @@ fn advisory_needs_fresh_external_data() {
     let covered = apply_coverage(
         &mut plan,
         &manifest,
-        &provenance(),
+        &provenance_for(&manifest),
         &discovery,
         unchanged.as_ref(),
         &inputs(tmp.path(), &catalog),

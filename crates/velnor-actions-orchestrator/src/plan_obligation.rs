@@ -175,15 +175,18 @@ pub(crate) fn plan_group(
             ext.reuse_eligible().is_ok(),
         )?
     };
-    let gate = wire_w2::check_archive_identity(
+    let gate = wire_w2::check_archive_identity_with_source(
         group,
         &toolchain,
         &platform_id,
         identity.bundle.config_digest(),
+        Some(&closure_digest),
     )?;
-    // Unbound archive sources refuse the task (execute with reason);
-    // changed work already executes under its own reason. Malformed
-    // specs stay hard errors: the planner generated them itself.
+    // The archive identity binds the content closure, never a manifest
+    // pathname: a same-path source edit flips the closure and the
+    // identity with it. Unbound sources refuse the task (execute with
+    // reason); changed work already executes under its own reason.
+    // Malformed specs stay hard errors: the planner generated them.
     let reuse = match gate {
         wire_w2::ArchiveGate::SourceUnbound if !inputs.changed => {
             wire_w2::ReuseOutcome::execute("archive_source_unbound")

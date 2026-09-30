@@ -4,10 +4,13 @@
 //! helpers stay here so the test module keeps the file size gate.
 
 use super::*;
+use crate::cover_baseline::provenance_check::{
+    ProvenanceExpectations, ValidatedProvenance, validate_provenance,
+};
 use crate::merge::required_evidence::BaselineTaskEntry;
 use velnor_actions_contract::{
     PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanRunner, RunnerSelection, Trust,
-    WorkflowEvent, digest_b3,
+    WorkflowEvent, canonical_json_bytes, digest_b3,
 };
 use velnor_actions_mise::ToolCatalog;
 
@@ -55,12 +58,18 @@ pub(super) fn plan_with(task_ids: &[&str]) -> Plan {
 }
 
 /// Manifest binding every `(task_id, closure_digest)` entry.
+///
+/// The manifest validates end to end: source commit, artifact name,
+/// run binding, generator, and per-task identities all satisfy
+/// [`validate_provenance`], so fixture coverage never runs on evidence
+/// production would reject.
 pub(super) fn manifest_with(entries: &[(&str, &str)]) -> BaselineManifest {
     let digest = digest_b3(b"digest");
+    let commit = "a".repeat(40);
     BaselineManifest {
         schema: 2,
         repository_id: digest.clone(),
-        source_commit: "a".repeat(40),
+        source_commit: commit.clone(),
         ref_: "refs/heads/testmain".to_owned(),
         event: "push".to_owned(),
         workflow_ref: "o/r/.github/workflows/ci.yml@refs/heads/testmain".to_owned(),
@@ -71,7 +80,7 @@ pub(super) fn manifest_with(entries: &[(&str, &str)]) -> BaselineManifest {
         generator_sha256: "1".repeat(64),
         compatibility_id: digest.clone(),
         artifact_id: 9,
-        artifact_name: "velnor-baseline".to_owned(),
+        artifact_name: format!("velnor-baseline-{commit}-{digest}"),
         expires_at_unix: None,
         tasks: entries
             .iter()
@@ -144,15 +153,23 @@ pub(super) fn inputs<'a>(
     }
 }
 
-/// Validated provenance for coverage tests.
-pub(super) fn provenance() -> ValidatedProvenance {
-    ValidatedProvenance {
-        source_commit: "a".repeat(40),
-        run_id: 7,
-        artifact_name: format!("velnor-baseline-{}-{}", "a".repeat(40), digest_b3(b"m")),
-        artifact_id: 9,
-        manifest_digest: digest_b3(b"m"),
-    }
+/// Validated provenance for a fixture manifest, through real validation.
+///
+/// Coverage tests never run on hand-built provenance: the manifest
+/// must validate exactly like production evidence, and the digest
+/// binds its canonical bytes.
+pub(super) fn provenance_for(manifest: &BaselineManifest) -> ValidatedProvenance {
+    let expected = ProvenanceExpectations {
+        base: "a".repeat(40),
+        branch: "testmain".to_owned(),
+        workflow_path: ".github/workflows/ci.yml".to_owned(),
+        generator_version: "0.1.0".to_owned(),
+        generator_sha256: "1".repeat(64),
+        repository_id: Some(digest_b3(b"digest")),
+    };
+    let bytes = canonical_json_bytes(manifest).expect("canonical");
+    let digest = digest_b3(&bytes);
+    validate_provenance(manifest, &digest, &expected).expect("provenance")
 }
 
 /// Placeholder closure digest for entries that refuse before comparison.

@@ -295,9 +295,11 @@ impl BaselineLookup {
 
 /// Resolve exact-base manifests: list, select, download, exact-filter.
 ///
-/// Plan obligations do not carry per-task compatibility yet, so the expected
-/// artifact name is unformable; every run artifact downloads to fresh temp
-/// and only exact-base validated baselines survive. Temp is always removed.
+/// Only one exact named artifact ever downloads: without a known
+/// artifact name there is no bounded download, so the lookup misses
+/// before spawning anything. A whole-run download fallback does not
+/// exist. Survivors must match the exact base commit, the selected
+/// run, and the artifact directory name; temp is always removed.
 /// # Errors
 pub(crate) fn resolve_manifests(
     catalog: &ToolCatalog,
@@ -308,6 +310,9 @@ pub(crate) fn resolve_manifests(
     artifact: Option<&str>,
 ) -> Result<Vec<BaselineManifest>, String> {
     let lookup = BaselineLookup::new(base, workflow, branch)?;
+    let Some(artifact) = artifact.filter(|name| !name.is_empty()) else {
+        return Err("baseline_no_exact_artifact".to_owned());
+    };
     let text = BaselineLookup::run(catalog, root, lookup.list_args())?;
     let run_id = select_exact_base_run(&text, base, branch)?;
     let temp = tempfile::tempdir().map_err(|_| "baseline_unavailable".to_owned())?;
@@ -318,21 +323,23 @@ pub(crate) fn resolve_manifests(
             base,
             workflow,
             branch,
-            artifact,
+            Some(artifact),
             run_id,
             temp.path(),
         ),
     )?;
-    collect_manifests(temp.path(), base)
+    collect_manifests(temp.path(), base, run_id)
 }
 
-/// Keep temp artifacts matching the exact-base baseline shape.
-fn collect_manifests(dir: &Path, base: &str) -> Result<Vec<BaselineManifest>, String> {
+/// Keep temp artifacts matching the exact base, run, and directory shape.
+fn collect_manifests(dir: &Path, base: &str, run_id: u64) -> Result<Vec<BaselineManifest>, String> {
     let mut out = Vec::new();
     let entries = std::fs::read_dir(dir).map_err(|_| "baseline_unavailable".to_owned())?;
     for entry in entries {
         let entry = entry.map_err(|_| "baseline_unavailable".to_owned())?;
-        if let Some(manifest) = crate::cover_baseline::baseline_entry_for(&entry.path(), base) {
+        if let Some(manifest) =
+            crate::cover_baseline::baseline_entry_for(&entry.path(), base, run_id)
+        {
             out.push(manifest);
         }
     }
@@ -344,28 +351,5 @@ fn collect_manifests(dir: &Path, base: &str) -> Result<Vec<BaselineManifest>, St
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn lookup_args_are_fixed_and_validated() {
-        let base = "a".repeat(40);
-        let lookup =
-            BaselineLookup::new(&base, ".github/workflows/ci.yml", "testmain").expect("valid");
-        let list: Vec<String> = lookup
-            .list_args()
-            .iter()
-            .map(|a| a.to_string_lossy().into_owned())
-            .collect();
-        assert_eq!(list[0..3], ["run", "list", "--workflow"]);
-        assert!(BaselineLookup::new("short", "w", "b").is_err());
-        assert!(BaselineLookup::new(&base, "https://evil/x", "b").is_err());
-        let other = "b".repeat(40);
-        let runs = serde_json::json!([
-            {"databaseId": 1, "headSha": other, "headBranch": "t", "event": "push", "conclusion": "success"},
-            {"databaseId": 2, "headSha": base, "headBranch": "t", "event": "push", "conclusion": "success"},
-        ]);
-        assert_eq!(select_exact_base_run(&runs.to_string(), &base, "t"), Ok(2));
-        assert!(select_exact_base_run(&runs.to_string(), &"c".repeat(40), "t").is_err());
-    }
-}
+#[path = "shard_tests.rs"]
+mod tests;

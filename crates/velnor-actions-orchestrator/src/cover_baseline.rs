@@ -208,10 +208,15 @@ pub(crate) fn baseline_download_args(
 /// One exact-base baseline from a download entry (PAR-5.5).
 ///
 /// The entry directory must carry exactly `baseline.json` (single-file
-/// bounded UTF-8, no other payload) with matching source commit and
-/// artifact name. Duplicate JSON keys are rejected, never last-wins.
-/// Old canonical schemas fail closed here via the migration gate.
-pub(crate) fn baseline_entry_for(dir: &Path, base: &str) -> Option<BaselineManifest> {
+/// bounded UTF-8, no other payload) with matching source commit, run,
+/// and artifact name. Duplicate JSON keys are rejected, never
+/// last-wins. Old canonical schemas fail closed here via the migration
+/// gate.
+pub(crate) fn baseline_entry_for(
+    dir: &Path,
+    base: &str,
+    expected_run_id: u64,
+) -> Option<BaselineManifest> {
     let name = dir.file_name()?.to_str()?;
     let rest = name.strip_prefix(&format!("velnor-baseline-{base}-"))?;
     if validate_digest(rest).is_err() {
@@ -239,7 +244,10 @@ pub(crate) fn baseline_entry_for(dir: &Path, base: &str) -> Option<BaselineManif
     if crate::internal_plan::snapshot::check_canonical_version(manifest.schema).is_err() {
         return None;
     }
-    if manifest.source_commit == base && manifest.artifact_name == name {
+    if manifest.source_commit == base
+        && manifest.run_id == expected_run_id
+        && manifest.artifact_name == name
+    {
         Some(manifest)
     } else {
         None
@@ -284,13 +292,13 @@ mod tests {
         std::fs::create_dir(&entry).expect("entry");
         std::fs::write(entry.join("baseline.json"), "{}").expect("json");
         std::fs::write(entry.join("extra.json"), "{}").expect("extra");
-        assert!(baseline_entry_for(&entry, &base).is_none());
+        assert!(baseline_entry_for(&entry, &base, 7).is_none());
         std::fs::remove_file(entry.join("extra.json")).expect("rm");
-        assert!(baseline_entry_for(&entry, &base).is_none());
+        assert!(baseline_entry_for(&entry, &base, 7).is_none());
         std::fs::write(entry.join("baseline.json"), r#"{"schema": 1, "schema": 1}"#).expect("dup");
-        assert!(baseline_entry_for(&entry, &base).is_none());
+        assert!(baseline_entry_for(&entry, &base, 7).is_none());
         std::fs::write(entry.join("baseline.json"), [0xff, 0xfe]).expect("bad");
-        assert!(baseline_entry_for(&entry, &base).is_none());
+        assert!(baseline_entry_for(&entry, &base, 7).is_none());
         let digest = digest_b3(b"d");
         let manifest = serde_json::json!({
             "schema": 2,
@@ -310,13 +318,17 @@ mod tests {
             "tasks": [],
         });
         std::fs::write(entry.join("baseline.json"), manifest.to_string()).expect("manifest");
-        let found = baseline_entry_for(&entry, &base).expect("entry");
+        let found = baseline_entry_for(&entry, &base, 7).expect("entry");
         assert_eq!(found.artifact_name, name);
+        assert!(
+            baseline_entry_for(&entry, &base, 8).is_none(),
+            "a manifest claiming another run never loads from this download"
+        );
         let mut stale = manifest;
         stale["schema"] = serde_json::json!(1);
         std::fs::write(entry.join("baseline.json"), stale.to_string()).expect("stale");
         assert!(
-            baseline_entry_for(&entry, &base).is_none(),
+            baseline_entry_for(&entry, &base, 7).is_none(),
             "schema 1 baselines bound no source bytes and never load"
         );
     }
