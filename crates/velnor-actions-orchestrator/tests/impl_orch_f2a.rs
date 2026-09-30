@@ -380,7 +380,11 @@ fn offline_deps_fail_closed_without_fetch() -> TestResult {
                 // lives in source_prep.rs (scoped above, execution-free);
                 // analysis-time fetching stays forbidden.
                 .replace("fetch_steps", "")
-                .replace("fetch_roots", "");
+                .replace("fetch_roots", "")
+                // Plan checkout input emission: `fetch-depth: 0` is a
+                // workflow input literal (history for HEAD^2 + base diff),
+                // never an analysis-time fetch execution.
+                .replace("fetch-depth", "");
             assert!(
                 !scrubbed.contains("fetch"),
                 "fetch verb at {}:{line}: {code}",
