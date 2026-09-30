@@ -5,7 +5,8 @@ use velnor_actions_workflow_renderer::steps::{
     TOOLS_RESTORE_USES, cache_action_step, tools_cache_key,
 };
 use velnor_actions_workflow_renderer::task_steps::{
-    NOT_APPLICABLE_REASON, NoOpReport, RESTORE_OBJECTS_NAME, noop_step,
+    NOOP_REASON_ENV, NOOP_REPORT_OP, NOT_APPLICABLE_REASON, NoOpReport, RESTORE_OBJECTS_NAME,
+    noop_step,
 };
 use velnor_actions_workflow_renderer::{
     PUBLISH_PLAN_NAME, RenderError, checkout_step, merge_step, plan_step, render_workflow_ir,
@@ -338,12 +339,23 @@ fn not_applicable_maps_to_unsupported_report() -> Result<(), RenderError> {
         task_digest: format!("b3-{}", "a".repeat(64)),
         reason: NOT_APPLICABLE_REASON,
     };
-    let step = noop_step(RESTORE_OBJECTS_NAME, &report)?;
+    let step = noop_step(
+        RESTORE_OBJECTS_NAME,
+        &report,
+        "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0",
+    )?;
     let velnor_actions_contract::StepKind::Shell { run, .. } = &step.kind else {
         panic!("no-op must be a shell step");
     };
-    for token in ["not_selected", "unsupported", "/tasks/"] {
+    for token in [NOOP_REPORT_OP, NOOP_REASON_ENV, "unsupported"] {
         assert!(run[2].contains(token), "missing {token}:\n{}", run[2]);
+    }
+    for forbidden in ["not_selected", "/tasks/", "printf"] {
+        assert!(
+            !run[2].contains(forbidden),
+            "report bytes come from Rust: {forbidden}:\n{}",
+            run[2]
+        );
     }
     Ok(())
 }
