@@ -116,11 +116,22 @@ Classes: **D** = accepted design change · **B** = confirmed bug · **V** = pend
   lines, V1 boundaries first, runner pointer to docs/deferred.
   Standalone: CLI 170 incl. size green, clippy -D clean, fmt
   clean. Type-hardening deferred to later P11 step.
+- P13-perf (`32bf67e`, pushed): `MemberIndex` metadata reuse
+  (1 fetch/workspace after membership validation; explicit
+  roots never reused; lanes stay 1), 1/10/100-crate fixture
+  generator + timing/unit harness, `scripts/verify-local.sh`
+  entrypoint, performance.md P13 section with raw evidence
+  (historical §1 labeled partial, unmeasured budgets
+  unpassed). 3 unit + 8 integration tests (handoff claimed
+  4 unit — 1 pre-existing). Standalone: orch 78+6+352
+  green, clippy `-D` clean (parent fixed 1
+  format_push_string), fmt/shellcheck/shfmt clean. Deferred:
+  e2e negative pipeline tests (need P05 graph).
 - In flight: P03-P04 identities/baselines (cover_baseline,
   cover_identity, internal_plan, closure, generator,
-  provenance_check, snapshot); P13-perf-verify.
-  Queued behind P03: P05 crate graph (needs internal_plan.rs),
-  P11-types.
+  provenance_check, snapshot, identities, reuse_stages,
+  wire_w2, rust identity). Queued behind P03: P05 crate
+  graph (needs internal_plan.rs), P11-types.
 - P08-cache-probe (done, research-only, zero repo writes):
   /tmp/p08-probe/P08-PLAN.md (257 lines, 10 sections). Measured
   runtime path inventory; broken-symlink failure structurally
