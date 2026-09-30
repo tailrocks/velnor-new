@@ -29,20 +29,26 @@ pub const MISE_CARGO_HOME_ENV: &str = "MISE_CARGO_HOME";
 /// Environment name selecting the exact Rust toolchain for Cargo runs.
 pub const RUSTUP_TOOLCHAIN_ENV: &str = "RUSTUP_TOOLCHAIN";
 
+/// Credential keys that must never reach a task environment.
+///
+/// Static tokens (`MISE_GITHUB_TOKEN`, `GITHUB_TOKEN`/`GH_TOKEN`,
+/// `ACTIONS_RUNTIME_TOKEN`) plus the OIDC token-request pair: the URL
+/// mints tokens, so it is as sensitive as the token itself.
+pub const CREDENTIAL_ENV_KEYS: [&str; 6] = [
+    "MISE_GITHUB_TOKEN",
+    "GITHUB_TOKEN",
+    "GH_TOKEN",
+    "ACTIONS_RUNTIME_TOKEN",
+    "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
+    "ACTIONS_ID_TOKEN_REQUEST_URL",
+];
+
 /// Whether a key is reserved: isolation, install disable, or credentials.
-/// Credentials are `MISE_GITHUB_TOKEN` plus the `GITHUB_TOKEN`/`GH_TOKEN`
-/// aliases and `ACTIONS_RUNTIME_TOKEN`.
 #[must_use]
 pub fn is_reserved_env_key(key: &str) -> bool {
     ISOLATION_ENV.iter().any(|(own, _)| *own == key)
         || NO_AUTO_INSTALL_ENV.iter().any(|(own, _)| *own == key)
-        || [
-            "MISE_GITHUB_TOKEN",
-            "GITHUB_TOKEN",
-            "GH_TOKEN",
-            "ACTIONS_RUNTIME_TOKEN",
-        ]
-        .contains(&key)
+        || CREDENTIAL_ENV_KEYS.contains(&key)
 }
 
 /// Which parent environment a child may see: bootstrap, verify, and
