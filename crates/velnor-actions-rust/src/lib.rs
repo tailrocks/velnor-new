@@ -16,6 +16,12 @@ pub mod index;
 pub mod metadata;
 pub mod profile;
 mod profile_select;
+pub mod release_config;
+pub mod release_error;
+pub mod release_facts;
+pub mod release_graph;
+pub mod release_select;
+pub mod release_semver;
 pub mod scan;
 pub mod stability;
 pub mod tasks;
@@ -49,6 +55,20 @@ pub use profile::{
     PROFILE_CONFLICT_CODE, ProfileError, ProfileFinding, ProfileInputs, ProfileOutcome,
     ProfileSource, Recommendation, RustExecutionProfile, TRANSIENT_EVIDENCE_CODE, TestRunner,
     detect_profile,
+};
+pub use release_config::{
+    DEFAULT_TAG_PATTERN, EmitOptions, ExistingTag, TagOutcome, TagState, VersionGroup,
+    classify_tag, emit_bootstrap_config, emit_release_plz_config, resolve_version_groups,
+};
+pub use release_error::ReleaseError;
+pub use release_facts::{DepFact, DepSource, PublishSetting, ReleaseFacts};
+pub use release_graph::{PackagingEdge, PublicationGraph, RegistryState, publication_graph};
+pub use release_select::{
+    DEFAULT_REGISTRY, ReleaseRequest, ReleaseScope, ReleaseSelection, ResolvedScope,
+    SelectedPackage, select_release_set,
+};
+pub use release_semver::{
+    PreIdent, SemVersion, VersionReq, parse_req, parse_version, req_matches, version_satisfies,
 };
 pub use stability::{
     CommittedProfile, committed_profile_differs, read_committed_profile_for_comparison,

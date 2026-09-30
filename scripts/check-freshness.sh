@@ -264,6 +264,7 @@ EXPECTED_TOOLS = {
     "shellcheck": "SHELLCHECK_VERSION",
     "zizmor": "ZIZMOR_VERSION",
     "nextest": "NEXTEST_VERSION",
+    "release-plz": "RELEASE_PLZ_VERSION",
 }
 EXPECTED_ACTIONS = {
     "jdx/mise-action": "MISE_ACTION",
