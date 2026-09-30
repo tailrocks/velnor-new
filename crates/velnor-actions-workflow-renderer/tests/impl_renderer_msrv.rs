@@ -81,8 +81,8 @@ fn msrv_job_is_per_crate() -> Result<(), RenderError> {
 #[test]
 fn pr_render_rejects_msrv_steps() -> Result<(), RenderError> {
     let leaking = job(
-        "velnor-plan",
-        "Velnor Plan",
+        "plan",
+        "Plan",
         Vec::new(),
         vec![
             checkout_step(&checkout_pin())?,

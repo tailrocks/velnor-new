@@ -168,8 +168,8 @@ fn merge_with(
         "matrix": plan.matrix,
         "matrix_reports": reports,
         "task_reports": task_files,
-        "required_job_ids": ["velnor-plan"],
-        "required_jobs": [{"job_id": "velnor-plan", "conclusion": "success"}],
+        "required_job_ids": ["plan"],
+        "required_jobs": [{"job_id": "plan", "conclusion": "success"}],
         "shard_proofs": proofs,
     });
     for (key, value) in extra.as_object().ok_or("not an object")? {

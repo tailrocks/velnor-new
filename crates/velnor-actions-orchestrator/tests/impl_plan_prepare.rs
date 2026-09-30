@@ -12,7 +12,7 @@ use velnor_actions_workflow_renderer::WORKFLOW_PATH;
 use crate::impl_common::{TestResult, config_with_branch, git, make_repo};
 
 /// Emitted plan-job ID.
-const PLAN_JOB_ID: &str = "velnor-plan";
+const PLAN_JOB_ID: &str = "plan";
 
 /// Step names plus bodies of the emitted plan job, in render order.
 fn plan_steps(yaml: &str) -> Vec<(String, String)> {

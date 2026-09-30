@@ -8,9 +8,9 @@ use super::impl_renderer_fixtures::*;
 
 fn final_job() -> Result<(String, velnor_actions_contract::Job), RenderError> {
     let (id, mut job) = job(
-        "velnor-final",
-        "Velnor / Required",
-        vec!["velnor-plan".to_owned()],
+        "required",
+        "Required",
+        vec!["plan".to_owned()],
         vec![
             acquire_fixture()?,
             write_request_step("merge-v1")?,
@@ -23,8 +23,8 @@ fn final_job() -> Result<(String, velnor_actions_contract::Job), RenderError> {
 
 fn final_text() -> Result<String, RenderError> {
     let plan = job(
-        "velnor-plan",
-        "Velnor Plan",
+        "plan",
+        "Plan",
         Vec::new(),
         vec![
             checkout_step(&checkout_pin())?,

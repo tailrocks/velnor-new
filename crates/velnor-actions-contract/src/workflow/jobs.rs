@@ -51,7 +51,7 @@ pub const NEEDS_CHANNEL_EXPRESSION: &str = "${{ toJSON(needs) }}";
 pub const FRESHNESS_CRON_WEEKLY: &str = "0 6 * * 1";
 
 /// Independent validator jobs (P05-6: no Policy umbrella).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ValidatorKind {
     /// Repository-structure lint.
@@ -99,6 +99,19 @@ impl ValidatorKind {
             Self::CargoDeny,
             Self::CargoMachete,
             Self::Actionlint,
+            Self::Zizmor,
+        ]
+    }
+
+    /// Velnor-repository validators emitted as support jobs.
+    ///
+    /// Actionlint is always-on base IR on both policies, never support.
+    #[must_use]
+    pub fn repository_validators() -> [Self; 4] {
+        [
+            Self::Alint,
+            Self::CargoDeny,
+            Self::CargoMachete,
             Self::Zizmor,
         ]
     }

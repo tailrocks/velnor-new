@@ -131,14 +131,14 @@ fn plan_lists_full_field_set() -> Result<(), Box<dyn Error>> {
         "compile driver",
         "test runner",
         ".github/actionlint.yaml",
-        ".github/workflows/velnor.yml",
+        ".github/workflows/ci.yml",
         "Push branch: main",
         "Runner: ubuntu-",
         "Jobs:",
-        "velnor-plan",
+        "plan",
         "rust-apple",
         "rust-zebra",
-        "velnor-final",
+        "required",
         "steps)",
         "2 Rust crate jobs",
         "Entries:",
@@ -220,7 +220,7 @@ fn empty_repo_reports_no_work_and_final_check() -> Result<(), Box<dyn Error>> {
     init_repo(&tmp)?;
     let stdout = plan_stdout(&tmp)?;
     assert!(stdout.contains("no-work workflow"), "{stdout}");
-    assert!(stdout.contains("velnor-final"), "{stdout}");
+    assert!(stdout.contains("required"), "{stdout}");
     assert!(stdout.contains("Workspace crates: 0"), "{stdout}");
     cleanup(&tmp);
     Ok(())

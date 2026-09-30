@@ -325,7 +325,7 @@ fn emitted_yaml_preseed_builds_once_and_shares_artifact() -> TestResult {
         })
         .collect();
     assert_eq!(builds.len(), 1, "exactly one helper build:\n{yaml}");
-    assert_eq!(builds[0].0, "velnor-plan", "build lives in plan");
+    assert_eq!(builds[0].0, "plan", "build lives in plan");
     for fragment in [
         "rust@",
         "mr-boxington@",
@@ -338,8 +338,8 @@ fn emitted_yaml_preseed_builds_once_and_shares_artifact() -> TestResult {
     }
     let plan = jobs
         .iter()
-        .find(|job| job.id == "velnor-plan")
-        .ok_or("missing velnor-plan job")?;
+        .find(|job| job.id == "plan")
+        .ok_or("missing plan job")?;
     assert!(
         plan.steps
             .iter()
@@ -354,7 +354,7 @@ fn emitted_yaml_preseed_builds_once_and_shares_artifact() -> TestResult {
         !yaml.contains("pattern:"),
         "no wildcard artifact matching:\n{yaml}"
     );
-    for id in ["velnor-task", "velnor-final"] {
+    for id in ["velnor-task", "required"] {
         let job = jobs.iter().find(|job| job.id == id);
         if id == "velnor-task" && job.is_none() {
             continue;

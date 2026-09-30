@@ -163,8 +163,8 @@ fn internal_merge_aggregates_reports() -> TestResult {
         "plan": plan,
         "matrix": plan.matrix,
         "matrix_reports": [],
-        "required_job_ids": ["velnor-plan"],
-        "required_jobs": [{"job_id": "velnor-plan", "conclusion": "success"}],
+        "required_job_ids": ["plan"],
+        "required_jobs": [{"job_id": "plan", "conclusion": "success"}],
     });
     let merged = merge_internal(&merge_request.to_string())?;
     let final_report: FinalReport = serde_json::from_str(&merged)?;
@@ -184,8 +184,8 @@ fn internal_merge_aggregates_reports() -> TestResult {
         "matrix": plan.matrix,
         "matrix_reports": reports,
         "task_reports": task_files,
-        "required_job_ids": ["velnor-plan"],
-        "required_jobs": [{"job_id": "velnor-plan", "conclusion": "success"}],
+        "required_job_ids": ["plan"],
+        "required_jobs": [{"job_id": "plan", "conclusion": "success"}],
     });
     let merged = merge_internal(&merge_request.to_string())?;
     let final_report: FinalReport = serde_json::from_str(&merged)?;

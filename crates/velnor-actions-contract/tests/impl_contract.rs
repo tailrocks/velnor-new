@@ -49,10 +49,13 @@ fn config_validation_reports_key_paths() {
     };
     assert_eq!(valid.validate(".velnor/config.toml"), Ok(()));
     let support = WorkflowPolicy::ConsumerV1.support_workflow(GeneratorValidation::Bootstrap);
-    assert!(support.policy_jobs.is_empty() && !support.candidate_validation);
+    assert!(support.validators.is_empty() && !support.candidate_validation);
     let support =
         WorkflowPolicy::VelnorRepositoryV1.support_workflow(GeneratorValidation::Candidate);
-    assert_eq!(support.policy_jobs.len(), 2);
+    assert_eq!(
+        support.validators,
+        velnor_actions_contract::ValidatorKind::repository_validators().to_vec()
+    );
     assert!(support.candidate_validation);
     let mut bad = valid.clone();
     bad.schema = 2;

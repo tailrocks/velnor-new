@@ -116,7 +116,7 @@ fn task_noop_step_writes_explanatory_report() -> Result<(), RenderError> {
 fn task_doc_must_follow_doctests() -> Result<(), RenderError> {
     let full = job(
         "velnor-task",
-        "Velnor Task",
+        "Task",
         Vec::new(),
         build_task_steps(&execute_specs())?,
     );
@@ -125,7 +125,7 @@ fn task_doc_must_follow_doctests() -> Result<(), RenderError> {
     let argv = vec!["sh".to_owned(), "-c".to_owned(), "true".to_owned()];
     let flipped = job(
         "velnor-task",
-        "Velnor Task",
+        "Task",
         Vec::new(),
         vec![
             shell_step(DOCUMENTATION_NAME, argv.clone(), BTreeMap::new())?,
@@ -139,7 +139,7 @@ fn task_doc_must_follow_doctests() -> Result<(), RenderError> {
     );
     let missing = job(
         "velnor-task",
-        "Velnor Task",
+        "Task",
         Vec::new(),
         vec![shell_step(CLIPPY_NAME, argv, BTreeMap::new())?],
     );
@@ -157,7 +157,7 @@ fn task_steps_render_in_order_with_mixed_modes() -> Result<(), RenderError> {
     let mut steps = vec![checkout_step(&checkout_pin())?];
     steps.extend(build_task_steps(&specs)?);
     let text = strict(
-        &fixture_ir(vec![job("velnor-task", "Velnor Task", Vec::new(), steps)]),
+        &fixture_ir(vec![job("velnor-task", "Task", Vec::new(), steps)]),
         &fixture_ctx(),
     )?;
     let named: Vec<String> = step_names(&text, "velnor-task")
@@ -191,7 +191,7 @@ fn task_timings_report_is_last_and_names_matrix_report() -> Result<(), RenderErr
     );
     let full = job(
         "velnor-task",
-        "Velnor Task",
+        "Task",
         Vec::new(),
         build_task_steps(&execute_specs())?,
     );

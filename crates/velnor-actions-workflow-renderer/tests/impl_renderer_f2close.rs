@@ -55,7 +55,7 @@ fn candidate_job_verifies_manifest_before_running_binary() -> Result<(), RenderE
     let derived = candidate_artifact_name("x86_64-unknown-linux-gnu")?;
     assert!(text.contains(&derived), "derived name:\n{text}");
     assert!(
-        !text.contains("name: velnor-candidate\n"),
+        !text.contains("name: candidate\n"),
         "fixed name:\n{text}"
     );
     let script = candidate_manifest_verify_script("x86_64-unknown-linux-gnu");
@@ -129,13 +129,13 @@ fn release_job_uploads_once_without_rebuild() -> Result<(), RenderError> {
         Some(&support),
         &candidate_ctx(),
     )?;
-    let start = text.find("velnor-release:").expect("release job");
+    let start = text.find("release:").expect("release job");
     let end = text[start..]
         .find("\n  velnor-")
         .map_or(text.len(), |at| start + at);
     let window = &text[start..end];
     assert!(
-        window.contains("velnor-candidate"),
+        window.contains("candidate"),
         "needs candidate:\n{window}"
     );
     assert!(window.contains("ref_protected"), "ref gate:\n{window}");

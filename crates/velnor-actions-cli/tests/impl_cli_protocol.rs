@@ -172,7 +172,7 @@ fn merge_no_work_plan_reports_no_work() -> Result<(), Box<dyn Error>> {
     std::fs::write(
         &merge_request,
         format!(
-            "{{\"schema\":1,\"run_key\":\"r7-a2\",\"matrix_reports\":[],\"required_job_ids\":[\"velnor-plan\"],\"required_jobs\":[{{\"job_id\":\"velnor-plan\",\"conclusion\":\"success\"}}],{rest}"
+            "{{\"schema\":1,\"run_key\":\"r7-a2\",\"matrix_reports\":[],\"required_job_ids\":[\"plan\"],\"required_jobs\":[{{\"job_id\":\"plan\",\"conclusion\":\"success\"}}],{rest}"
         ),
     )?;
     let output = spawn_isolated(

@@ -39,7 +39,7 @@ fn consumer_plan_job_carries_acquire_step() -> TestResult {
         .workflow
         .ir
         .jobs
-        .get("velnor-plan")
+        .get("plan")
         .ok_or("no plan job")?;
     assert!(
         plan.steps.iter().any(|s| s.name == "Acquire Velnor"),
@@ -78,8 +78,8 @@ fn velnor_candidate_render_path_includes_release() -> TestResult {
     )
     .map_err(|err| format!("render: {err}"))?;
     for want in [
-        "velnor-candidate:",
-        "velnor-release:",
+        "candidate:",
+        "release:",
         "ref_protected",
         "Upload candidate",
         "Download candidate",
@@ -88,7 +88,7 @@ fn velnor_candidate_render_path_includes_release() -> TestResult {
         assert!(yaml.contains(want), "missing {want}");
     }
     assert!(
-        yaml.contains("velnor-alint") && yaml.contains("velnor-policy"),
+        yaml.contains("alint") && yaml.contains("velnor-policy"),
         "policy jobs"
     );
     Ok(())

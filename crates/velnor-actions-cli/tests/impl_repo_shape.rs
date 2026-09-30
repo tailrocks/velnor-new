@@ -259,14 +259,14 @@ fn rq53_limits_discipline_no_baseline() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn policy_zizmor_config_matches_derived_ignores() -> Result<(), Box<dyn Error>> {
-    let yaml = read(".github/workflows/velnor.yml")?;
+    let yaml = read(".github/workflows/ci.yml")?;
     let mut derived = Vec::new();
     for (index, line) in yaml.lines().enumerate() {
         let Some(at) = line.find("uses: asamarts/alint@") else {
             continue;
         };
         let col = at + "uses: ".len() + 1;
-        derived.push(format!("velnor.yml:{}:{col}", index + 1));
+        derived.push(format!("ci.yml:{}:{col}", index + 1));
     }
     assert!(!derived.is_empty(), "blessed alint line must exist");
     let config = read(".zizmor.yml")?;

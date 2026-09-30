@@ -42,8 +42,8 @@ fn policy_vectors_pin_specs_and_payloads() {
         "crates/velnor-actions-cli",
     ]);
     assert_eq!(machete, want);
-    assert!(policy_argv("evil-tool", "1.2.3", "cargo", &["deny"]).is_err());
-    assert!(policy_argv("cargo-deny", "latest", "cargo", &["deny"]).is_err());
+    assert!(validator_argv("evil-tool", "1.2.3", "cargo", &["deny"]).is_err());
+    assert!(validator_argv("cargo-deny", "latest", "cargo", &["deny"]).is_err());
 }
 
 #[test]

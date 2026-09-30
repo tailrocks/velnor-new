@@ -113,7 +113,7 @@ fn w1_runner_label_matches_actionlint_bridge() {
 #[test]
 fn w1_lint_run_embeds_crate_tool_specs() -> TestResult {
     let (_repo, yaml, _alint) = preview_both(config_with_branch())?;
-    let lint = window(&yaml, "  velnor-workflow-lint:", "  velnor-zzz:")?;
+    let lint = window(&yaml, "  actionlint:", "  velnor-zzz:")?;
     for spec in [
         ActionlintToolchain::pinned().mise_tool_spec(),
         ShellcheckToolchain::pinned().mise_tool_spec(),
@@ -154,7 +154,7 @@ fn w1_native_parallelism_unqualified() {
 #[test]
 fn w1_plan_prepare_index_and_contract_order() -> TestResult {
     let (_repo, yaml, _alint) = preview_both(config_with_branch())?;
-    let plan = window(&yaml, "  velnor-plan:", "  velnor-workflow-lint:")?;
+    let plan = window(&yaml, "  plan:", "  actionlint:")?;
     let names: Vec<&str> = plan
         .lines()
         .filter_map(|line| line.trim().strip_prefix("- name: "))
@@ -203,7 +203,7 @@ fn w1_policy_carries_zizmor_after_machete() -> TestResult {
     let velnor = make_velnor_repo(VELNOR_CONFIG)?;
     let tree = render_staged_tree(&prepare(velnor.path())?)?;
     let yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
-    let policy = window(yaml, "  velnor-policy:", "  velnor-workflow-lint:")?;
+    let policy = window(yaml, "  velnor-policy:", "  actionlint:")?;
     let deny = policy.find("Run cargo-deny").ok_or("deny")?;
     let machete = policy.find("Run cargo-machete").ok_or("machete")?;
     let zizmor = policy.find("Run zizmor").ok_or("zizmor")?;
@@ -224,7 +224,7 @@ fn w1_policy_carries_zizmor_after_machete() -> TestResult {
 #[test]
 fn w1_plan_format_runs_fmt_check() -> TestResult {
     let (_repo, yaml, _alint) = preview_both(config_with_branch())?;
-    let plan = window(&yaml, "  velnor-plan:", "  velnor-workflow-lint:")?;
+    let plan = window(&yaml, "  plan:", "  actionlint:")?;
     assert!(
         !plan.contains("- name: Format"),
         "no workspace scope without rustfmt config:\n{plan}"
@@ -234,7 +234,7 @@ fn w1_plan_format_runs_fmt_check() -> TestResult {
     let prep = prepare(repo.path())?;
     let tree = render_staged_tree(&prep)?;
     let yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
-    let plan = window(yaml, "  velnor-plan:", "  velnor-workflow-lint:")?;
+    let plan = window(yaml, "  plan:", "  actionlint:")?;
     assert!(plan.contains("- name: Format"), "format step:\n{plan}");
     assert!(
         plan.contains("mise ") && plan.contains("fmt --all --check"),
@@ -254,7 +254,7 @@ fn w1_plan_format_runs_fmt_check() -> TestResult {
     ] {
         assert!(block.contains(key), "format env misses {key}:\n{block}");
     }
-    let job = window(yaml, "  rust-demo:", "  velnor-final:")?;
+    let job = window(yaml, "  rust-demo:", "  required:")?;
     assert!(job.contains("- name: Format"), "per-package scope:\n{job}");
     let ignored =
         "schema = 1\n[workflow]\ndefault_branch = \"testmain\"\n[stacks]\nignore = [\"rust\"]\n";

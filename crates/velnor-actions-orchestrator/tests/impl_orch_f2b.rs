@@ -161,7 +161,7 @@ fn broaden_paths_classify_global_and_outside() {
     for path in [
         ".velnor/config.toml",
         ".velnor/",
-        ".github/workflows/velnor.yml",
+        ".github/workflows/ci.yml",
     ] {
         assert_eq!(
             selection_broadens_for_path(path),

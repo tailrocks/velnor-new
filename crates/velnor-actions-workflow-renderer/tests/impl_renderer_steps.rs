@@ -273,7 +273,7 @@ fn emit_ctx() -> RenderContext {
         staged_binary: format!("{STAGED_BINARY_PREFIX}{EMIT_VERSION}"),
         request_dir: "${{ runner.temp }}/velnor/r1-a1".to_owned(),
         checkout_uses: pin("actions/checkout"),
-        policy_commands: Vec::new(),
+        validator_commands: Vec::new(),
         candidate: None,
         preseed: false,
     }
@@ -301,9 +301,9 @@ fn emit_concurrency() -> Concurrency {
 fn rendered_run_steps_quote_runner_temp_paths() -> Result<(), RenderError> {
     let mut jobs = BTreeMap::new();
     jobs.insert(
-        "velnor-plan".to_owned(),
+        "plan".to_owned(),
         Job {
-            display_name: "Velnor Plan".to_owned(),
+            display_name: "Plan".to_owned(),
             runs_on: EMIT_LABEL.to_owned(),
             needs: Vec::new(),
             condition: None,

@@ -106,7 +106,7 @@ fn final_report_miss_reasons_validate() -> Result<(), ContractError> {
             artifact_id_for_plan(&run_key)?,
         ],
         required_job_results: vec![RequiredJobResult {
-            job_id: "velnor-plan".to_owned(),
+            job_id: "plan".to_owned(),
             conclusion: "success".to_owned(),
         }],
         status: FinalStatus::Passed,

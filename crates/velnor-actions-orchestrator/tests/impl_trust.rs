@@ -95,7 +95,7 @@ fn manifest_for(plan: &Plan, base: &str) -> serde_json::Value {
     serde_json::json!({
         "schema": 1, "repository_id": velnor_actions_contract::digest_b3(b"repo"),
         "source_commit": base, "ref": "refs/heads/testmain", "event": "push",
-        "workflow_ref": "o/r/.github/workflows/velnor.yml@refs/heads/testmain",
+        "workflow_ref": "o/r/.github/workflows/ci.yml@refs/heads/testmain",
         "run_id": 7, "run_attempt": 1, "final_status": "passed",
         "generator_version": plan.generator.version, "generator_sha256": plan.generator.sha256,
         "compatibility_id": compat, "artifact_id": 9,
@@ -309,8 +309,8 @@ fn merge_flags_wrong_manifest_digest() -> TestResult {
     let request = serde_json::json!({
         "schema": 1, "run_key": "local", "plan": plan, "matrix": plan.matrix,
         "matrix_reports": reports, "baseline_manifest": manifest,
-        "required_job_ids": ["velnor-plan"],
-        "required_jobs": [{"job_id": "velnor-plan", "conclusion": "success"}],
+        "required_job_ids": ["plan"],
+        "required_jobs": [{"job_id": "plan", "conclusion": "success"}],
     });
     let final_report: velnor_actions_contract::FinalReport =
         serde_json::from_str(&merge_internal(&request.to_string())?)?;
