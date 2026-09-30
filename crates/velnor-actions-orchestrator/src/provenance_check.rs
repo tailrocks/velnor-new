@@ -38,6 +38,63 @@ pub(crate) struct ProvenanceExpectations {
     /// Lowercase `owner/repo` slug from the git origin, when the origin
     /// is a `github.com` remote the workflow slug can name.
     pub(crate) repository_slug: Option<String>,
+    /// True when the runner-owned env slug disagrees with the git
+    /// origin: validation fails closed, never picks a side.
+    pub(crate) repository_conflict: bool,
+}
+
+/// Expected repository resolution: immutable CI env wins over the
+/// mutable git origin; disagreement fails closed at the caller.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ExpectedRepository {
+    /// Lowercase `owner/repo` slug, env-first then origin fallback.
+    pub(crate) slug: Option<String>,
+    /// True when a well-formed env slug disagrees with the git origin.
+    pub(crate) conflict: bool,
+}
+
+/// Resolve the expected repository slug from an origin slug and raw env.
+///
+/// A well-formed env slug always wins; the origin slug is the
+/// local-run fallback when no env slug is set. A well-formed env slug
+/// that disagrees with the origin is a conflict (a step may have
+/// rewritten the origin): the env slug still resolves, but the caller
+/// must fail closed on the flag. Malformed env text is ignored —
+/// shape alone never invents an expectation.
+pub(crate) fn resolve_expected_repository(
+    origin_slug: Option<&str>,
+    env_slug: Option<&str>,
+) -> ExpectedRepository {
+    let env = env_slug.and_then(crate::origin::validate_repository_slug);
+    let Some(env) = env else {
+        return ExpectedRepository {
+            slug: origin_slug.map(str::to_owned),
+            conflict: false,
+        };
+    };
+    let conflict = origin_slug.is_some_and(|origin| origin != env);
+    ExpectedRepository {
+        slug: Some(env),
+        conflict,
+    }
+}
+
+/// Expected repository for `root`: env slug plus origin fallback.
+///
+/// Reads [`GITHUB_REPOSITORY_ENV`](crate::origin::GITHUB_REPOSITORY_ENV)
+/// and the git origin, then resolves through
+/// [`resolve_expected_repository`].
+pub(crate) fn expected_repository_for_root(root: &std::path::Path) -> ExpectedRepository {
+    let env = std::env::var(crate::origin::GITHUB_REPOSITORY_ENV).ok();
+    resolve_expected_repository(
+        repository_slug_from_origin(root).as_deref(),
+        env.as_deref(),
+    )
+}
+
+/// Repository identity digest for one expected slug.
+pub(crate) fn repository_anchor_for_slug(slug: &str) -> String {
+    digest_b3(format!("github.com/{slug}").as_bytes())
 }
 
 /// Provenance validated against [`ProvenanceExpectations`].
@@ -202,16 +259,19 @@ fn is_unverifiable_generator_sha(sha: &str) -> bool {
         || (sha.len() == 64 && sha.bytes().all(|b| b == b'0'))
 }
 
-/// Repository check: exact match against the git-origin anchor.
+/// Repository check: exact match against the expected anchor.
 ///
-/// An unanchored checkout (no git origin) FAILS CLOSED with
-/// `repository_unanchored`: a digest-shaped repository ID is not proof
-/// it is this repository, and no shape-only fallback can bless it.
-/// The old warning-suffices path is deleted, not deprecated.
+/// A conflicted expectation (env slug disagrees with the git origin)
+/// FAILS CLOSED with `wrong_repository`: neither side is trusted once
+/// they disagree. An unanchored checkout (no slug anywhere) FAILS
+/// CLOSED with `repository_unanchored`: a digest-shaped repository ID
+/// is not proof it is this repository, and no shape-only fallback can
+/// bless it. The old warning-suffices path is deleted, not deprecated.
 fn validate_repository(
     manifest: &BaselineManifest,
     expected: &ProvenanceExpectations,
 ) -> Result<(), String> {
+    reject(!expected.repository_conflict, "wrong_repository")?;
     let Some(anchored) = &expected.repository_id else {
         return Err("repository_unanchored".to_owned());
     };
@@ -276,24 +336,14 @@ pub(crate) fn parse_workflow_ref(input: &str) -> Option<(String, String, String)
     ))
 }
 
-/// Repository identity digest from the git origin URL, when configured.
-///
-/// Resolution runs through the shared [`crate::origin::origin_url_via_git`]
-/// helper, so linked worktrees, includes, and worktree configuration all
-/// follow Git semantics. Returns `None` when no origin remote exists;
-/// unanchored checkouts fail closed in [`validate_repository`], never
-/// warn-and-proceed.
-pub(crate) fn repository_anchor_from_origin(root: &std::path::Path) -> Option<String> {
-    let url = crate::origin::origin_url_via_git(root)?;
-    normalize_origin_url(&url).map(|normalized| digest_b3(normalized.as_bytes()))
-}
-
 /// Lowercase `owner/repo` slug from the git origin URL, when the origin
 /// is a `github.com` remote a workflow slug can name.
 ///
-/// Other hosts have no slug form comparable to `owner/repo`; those
-/// checkouts fail closed in [`validate_workflow_ref`], never
-/// warn-and-proceed.
+/// Resolution runs through the shared [`crate::origin::origin_url_via_git`]
+/// helper, so linked worktrees, includes, and worktree configuration all
+/// follow Git semantics. Other hosts have no slug form comparable to
+/// `owner/repo`; those checkouts fail closed in [`validate_repository`],
+/// never warn-and-proceed.
 pub(crate) fn repository_slug_from_origin(root: &std::path::Path) -> Option<String> {
     let url = crate::origin::origin_url_via_git(root)?;
     normalize_origin_url(&url).and_then(|normalized| {

@@ -19,14 +19,20 @@ fn baseline_publish_and_download_rules() {
         Some(&name),
         7,
         dir,
+        "o/r",
     )
     .iter()
     .map(|arg| arg.to_string_lossy().into_owned())
     .collect();
     assert_eq!(&named[0..4], &["run", "download", "7", "--name"]);
     assert_eq!(named[4], name);
-    assert!(baseline_download_args(&base, "w", "b", None, 7, dir).is_empty());
-    assert!(baseline_download_args(&base, "w", "b", Some(""), 7, dir).is_empty());
+    assert_eq!(&named[named.len() - 2..], &["--repo", "o/r"]);
+    assert!(baseline_download_args(&base, "w", "b", None, 7, dir, "o/r").is_empty());
+    assert!(baseline_download_args(&base, "w", "b", Some(""), 7, dir, "o/r").is_empty());
+    assert!(
+        baseline_download_args(&base, "w", "b", Some(&name), 7, dir, "not-a-slug").is_empty(),
+        "a malformed repo yields no unscoped command"
+    );
 }
 
 /// Minimal valid manifest JSON for `base`/`name`, run 7 attempt 1 id 9.

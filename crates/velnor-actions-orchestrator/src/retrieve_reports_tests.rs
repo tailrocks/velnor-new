@@ -33,6 +33,7 @@ fn retrieve_argv_names_exact_artifact() {
         7,
         "velnor-matrix-r7-a2-m-0123456789abcdef",
         Path::new("/tmp/x"),
+        "o/r",
     )
     .expect("argv");
     let text: Vec<String> = args
@@ -48,11 +49,23 @@ fn retrieve_argv_names_exact_artifact() {
             "--name",
             "velnor-matrix-r7-a2-m-0123456789abcdef",
             "--dir",
-            "/tmp/x"
+            "/tmp/x",
+            "--repo",
+            "o/r"
         ]
     );
-    assert!(retrieve_args(7, "velnor-matrix-*", Path::new("/tmp/x")).is_err());
-    assert!(retrieve_args(7, "../escape", Path::new("/tmp/x")).is_err());
+    assert!(retrieve_args(7, "velnor-matrix-*", Path::new("/tmp/x"), "o/r").is_err());
+    assert!(retrieve_args(7, "../escape", Path::new("/tmp/x"), "o/r").is_err());
+    assert!(
+        retrieve_args(
+            7,
+            "velnor-matrix-r7-a2-m-0123456789abcdef",
+            Path::new("/tmp/x"),
+            "not-a-slug",
+        )
+        .is_err(),
+        "a malformed repo never builds an unscoped command"
+    );
 }
 
 #[test]

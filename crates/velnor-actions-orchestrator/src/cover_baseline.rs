@@ -16,8 +16,8 @@ use velnor_actions_contract::{
 use velnor_actions_mise::BaselineLookup as MiseBaselineLookup;
 
 use self::provenance_check::{
-    ProvenanceExpectations, publish_event_eligible, repository_anchor_from_origin,
-    repository_slug_from_origin, validate_provenance,
+    ProvenanceExpectations, expected_repository_for_root, publish_event_eligible,
+    repository_anchor_for_slug, validate_provenance,
 };
 use crate::OrchestratorError;
 use crate::cover::shard;
@@ -91,14 +91,19 @@ pub(crate) fn apply_baseline(
         return Ok(());
     };
     let digest = digest_b3(&canonical_json_bytes(&manifest).map_err(internal_contract)?);
+    let repo = expected_repository_for_root(inputs.root);
     let expected = ProvenanceExpectations {
         base: base.clone(),
         branch: inputs.branch.to_owned(),
         workflow_path: inputs.workflow.to_owned(),
         generator_version: plan.generator.version.clone(),
         generator_sha256: plan.generator.sha256.clone(),
-        repository_id: repository_anchor_from_origin(inputs.root),
-        repository_slug: repository_slug_from_origin(inputs.root),
+        repository_id: repo
+            .slug
+            .as_deref()
+            .map(repository_anchor_for_slug),
+        repository_slug: repo.slug,
+        repository_conflict: repo.conflict,
     };
     let provenance = match validate_provenance(&manifest, &digest, &expected) {
         Ok(provenance) => provenance,
@@ -190,6 +195,8 @@ fn lookup_manifest(plan: &mut Plan, inputs: BaselineInputs<'_>) -> Option<Baseli
 /// Only exact-name downloads exist: without a known artifact name there
 /// is no bounded download, so no command is returned and the lookup
 /// fails closed to execute-all. The whole-run download fallback is gone.
+/// `--repo` pins the download to the expected repository, and a
+/// malformed repo slug yields no command instead of an unscoped one.
 pub(crate) fn baseline_download_args(
     base: &str,
     workflow: &str,
@@ -197,11 +204,16 @@ pub(crate) fn baseline_download_args(
     artifact: Option<&str>,
     run_id: u64,
     dir: &Path,
+    repo: &str,
 ) -> Vec<OsString> {
     if let Some(name) = artifact.filter(|name| !name.is_empty())
         && let Ok(lookup) = MiseBaselineLookup::new(base, workflow, branch, name)
+        && let Some(repo) = crate::origin::validate_repository_slug(repo)
     {
-        return lookup.download_args(run_id, dir);
+        let mut args = lookup.download_args(run_id, dir);
+        args.push(OsString::from("--repo"));
+        args.push(OsString::from(repo));
+        return args;
     }
     Vec::new()
 }

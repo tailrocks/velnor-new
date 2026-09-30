@@ -36,6 +36,7 @@ fn manifest_and_expected(base: &str) -> (BaselineManifest, ProvenanceExpectation
         generator_sha256: "1".repeat(64),
         repository_id: Some(anchor),
         repository_slug: Some("o/r".to_owned()),
+        repository_conflict: false,
     };
     (manifest, expected)
 }

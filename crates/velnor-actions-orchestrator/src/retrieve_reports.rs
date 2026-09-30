@@ -59,6 +59,12 @@ pub(crate) fn retrieve_reports_to(run_id: u64, run_dir: &Path) -> usize {
     let Some(plan) = plan else {
         return 0;
     };
+    let repo = std::env::var(crate::origin::GITHUB_REPOSITORY_ENV)
+        .ok()
+        .and_then(|raw| crate::origin::validate_repository_slug(&raw));
+    let Some(repo) = repo else {
+        return 0;
+    };
     let catalog = ToolCatalog::pinned();
     let mut retrieved = 0usize;
     for artifact_id in expected_artifact_ids(&plan) {
@@ -66,7 +72,7 @@ pub(crate) fn retrieve_reports_to(run_id: u64, run_dir: &Path) -> usize {
         if fs::create_dir_all(&dir).is_err() {
             continue;
         }
-        let Ok(args) = retrieve_args(run_id, artifact_id, &dir) else {
+        let Ok(args) = retrieve_args(run_id, artifact_id, &dir, &repo) else {
             continue;
         };
         if crate::cover::shard::BaselineLookup::run(&catalog, run_dir, args).is_ok() {
@@ -78,15 +84,26 @@ pub(crate) fn retrieve_reports_to(run_id: u64, run_dir: &Path) -> usize {
 
 /// Fixed `gh run download` argv for one exact artifact (no wildcards).
 ///
+/// `--repo` pins the download to the expected repository: without it
+/// `gh` would resolve the repo from the working directory's git
+/// origin, which a prior step may have rewritten.
+///
 /// # Errors
 ///
-/// Returns [`OrchestratorError::Internal`] for a malformed artifact ID.
+/// Returns [`OrchestratorError::Internal`] for a malformed artifact ID
+/// or a malformed repository slug.
 pub(crate) fn retrieve_args(
     run_id: u64,
     artifact_id: &str,
     dir: &Path,
+    repo: &str,
 ) -> Result<Vec<OsString>, OrchestratorError> {
     validate_artifact_id(artifact_id).map_err(internal_contract)?;
+    let Some(repo) = crate::origin::validate_repository_slug(repo) else {
+        return Err(internal_contract(
+            velnor_actions_contract::ContractError::identity("repository", "bad_lookup_repo"),
+        ));
+    };
     Ok(vec![
         OsString::from("run"),
         OsString::from("download"),
@@ -95,6 +112,8 @@ pub(crate) fn retrieve_args(
         OsString::from(artifact_id),
         OsString::from("--dir"),
         dir.as_os_str().to_owned(),
+        OsString::from("--repo"),
+        OsString::from(repo),
     ])
 }
 
