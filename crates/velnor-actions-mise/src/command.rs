@@ -10,8 +10,8 @@ mod output;
 
 use self::env::pairs_of;
 pub use self::env::{
-    EnvPolicy, ISOLATION_ENV, MISE_CARGO_HOME_ENV, MISE_RUSTUP_HOME_ENV, NO_AUTO_INSTALL_ENV,
-    RUSTUP_TOOLCHAIN_ENV, is_reserved_env_key, toolchain_env,
+    CREDENTIAL_ENV_KEYS, EnvPolicy, ISOLATION_ENV, MISE_CARGO_HOME_ENV, MISE_RUSTUP_HOME_ENV,
+    NO_AUTO_INSTALL_ENV, RUSTUP_TOOLCHAIN_ENV, is_reserved_env_key, toolchain_env,
 };
 pub use self::output::{
     ProcessOutput, SPAWN_CANCELLED_MESSAGE, SPAWN_TIMEOUT_MESSAGE_PREFIX, is_cancel_or_timeout,
@@ -154,15 +154,27 @@ impl IsolatedCommand {
         self
     }
 
-    /// Append extras; reserved keys are dropped fail-closed at construction.
-    #[must_use]
-    pub fn with_env(mut self, extra: &[(OsString, OsString)]) -> Self {
+    /// Append extras; reserved keys fail loud, never silent-drop.
+    ///
+    /// A dropped override would run with different env than the caller
+    /// requested; the typed error names the key so the caller fixes the
+    /// request instead of debugging a silently altered child.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MiseError::InvalidStepInput`] naming the first reserved key.
+    pub fn with_env(mut self, extra: &[(OsString, OsString)]) -> Result<Self, MiseError> {
         for pair in extra {
-            if !is_reserved_env_key(&pair.0.to_string_lossy()) {
-                self.extra_env.push(pair.clone());
+            let key = pair.0.to_string_lossy();
+            if is_reserved_env_key(&key) {
+                return Err(MiseError::InvalidStepInput {
+                    field: key.into_owned(),
+                    value: "reserved_env_key".to_owned(),
+                });
             }
+            self.extra_env.push(pair.clone());
         }
-        self
+        Ok(self)
     }
 
     /// Program executed directly.

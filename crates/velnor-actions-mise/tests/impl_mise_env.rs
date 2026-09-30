@@ -1,9 +1,10 @@
 //! Toolchain environment and subcommand allowlist cases.
 use std::ffi::OsString;
+use velnor_actions_mise::command::is_reserved_env_key;
 use velnor_actions_mise::{
-    ALLOWED_MISE_SUBCOMMANDS, GitRequest, IsolatedCommand, MISE_CARGO_HOME_ENV,
-    MISE_RUSTUP_HOME_ENV, NO_AUTO_INSTALL_ENV, RUSTUP_TOOLCHAIN_ENV, ToolCatalog,
-    is_allowed_mise_subcommand, toolchain_env,
+    ALLOWED_MISE_SUBCOMMANDS, CREDENTIAL_ENV_KEYS, GitRequest, IsolatedCommand,
+    MISE_CARGO_HOME_ENV, MISE_RUSTUP_HOME_ENV, MiseError, NO_AUTO_INSTALL_ENV,
+    RUSTUP_TOOLCHAIN_ENV, ToolCatalog, is_allowed_mise_subcommand, toolchain_env,
 };
 
 #[test]
@@ -82,7 +83,9 @@ fn auto_install_predicate_separates_exec_from_install() -> Result<(), String> {
     let install = IsolatedCommand::mise_install(&["rust@1.98.1".to_owned()])
         .map_err(|err| err.to_string())?;
     assert!(!install.disables_auto_install());
-    let extended = exec.with_env(&toolchain_env("/velnor/rustup", "/velnor/cargo", "1.98.1"));
+    let extended = exec
+        .with_env(&toolchain_env("/velnor/rustup", "/velnor/cargo", "1.98.1"))
+        .map_err(|err| err.to_string())?;
     assert!(extended.disables_auto_install());
     Ok(())
 }
@@ -116,12 +119,48 @@ fn with_env_appends_toolchain_pairs() -> Result<(), String> {
     )
     .map_err(|err| err.to_string())?;
     let extra = toolchain_env("/velnor/rustup", "/velnor/cargo", "1.98.1");
-    let extended = command.with_env(&extra);
+    let extended = command.with_env(&extra).map_err(|err| err.to_string())?;
     let full = extended.full_env();
     assert_eq!(&full[full.len() - 3..], extra.as_slice());
     assert!(
         full.iter().any(|(key, _)| key == "MISE_EXEC_AUTO_INSTALL"),
         "verification disable survives extension: {full:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn oidc_token_pair_never_reaches_task_env() -> Result<(), String> {
+    for key in [
+        "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
+        "ACTIONS_ID_TOKEN_REQUEST_URL",
+    ] {
+        assert!(CREDENTIAL_ENV_KEYS.contains(&key), "{key} in strip set");
+        assert!(is_reserved_env_key(key), "{key} reserved");
+        let pair = [(OsString::from(key), OsString::from("sentinel"))];
+        let exec =
+            IsolatedCommand::mise_exec(&["rust@1.98.1".to_owned()], &[OsString::from("cargo")])
+                .map_err(|err| err.to_string())?;
+        assert!(
+            matches!(
+                exec.with_env(&pair),
+                Err(MiseError::InvalidStepInput { .. })
+            ),
+            "{key} must fail loud via with_env"
+        );
+        let declared = vec![(OsString::from(key), OsString::from("sentinel"))];
+        assert!(
+            IsolatedCommand::repo_task("sh", Vec::new(), &declared).is_err(),
+            "{key} must fail loud via repo_task"
+        );
+    }
+    let task = IsolatedCommand::repo_task("sh", Vec::new(), &[]).map_err(|err| err.to_string())?;
+    assert!(
+        !task.full_env().iter().any(|(key, _)| {
+            key == "ACTIONS_ID_TOKEN_REQUEST_TOKEN" || key == "ACTIONS_ID_TOKEN_REQUEST_URL"
+        }),
+        "task env carries no OIDC pair: {:?}",
+        task.full_env()
     );
     Ok(())
 }
