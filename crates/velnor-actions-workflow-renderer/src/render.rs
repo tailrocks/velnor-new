@@ -50,8 +50,8 @@ pub const CANDIDATE_JOB_ID: &str = "candidate";
 pub const ALINT_JOB_ID: &str = "alint";
 /// Dependency/security policy job ID (Velnor policy only).
 pub const POLICY_JOB_ID: &str = "policy";
-/// Sole full-SHA exception: pinned Alint tag for `velnor-alint` only.
-pub const ALINT_USES: &str = "asamarts/alint@v0.16.1";
+/// Full-SHA Alint pin for the repository-policy `alint` job.
+pub const ALINT_USES: &str = "asamarts/alint@9f9d34ba0eae3888299b9e570f43338b0e7f2cdb";
 
 /// Caller-supplied validated scalars the IR cannot carry.
 #[derive(Debug, Clone)]

@@ -198,6 +198,16 @@ fn actions_overrides_validate_allowlist_and_pin_shape() {
     };
     assert_eq!(good.validate("cfg"), Ok(()));
     assert_eq!(ActionsConfig::default().validate("cfg"), Ok(()));
+    let alint = ActionsConfig {
+        overrides: BTreeMap::from([(
+            "asamarts/alint".to_owned(),
+            ActionPinOverride {
+                sha: "9f9d34ba0eae3888299b9e570f43338b0e7f2cdb".to_owned(),
+                version: "v0.16.1".to_owned(),
+            },
+        )]),
+    };
+    assert_eq!(alint.validate("cfg"), Ok(()));
     for (action, pin, problem) in [
         (
             "bogus/action",
@@ -206,14 +216,6 @@ fn actions_overrides_validate_allowlist_and_pin_shape() {
                 version: "v1.2.3".to_owned(),
             },
             "unknown_action",
-        ),
-        (
-            "asamarts/alint",
-            ActionPinOverride {
-                sha: sha.to_owned(),
-                version: "v0.16.1".to_owned(),
-            },
-            "alint_not_overridable",
         ),
         (
             "actions/checkout",

@@ -5,11 +5,11 @@ use std::collections::BTreeMap;
 
 /// Actions accepting per-project pin overrides (`[actions.overrides]` keys).
 ///
-/// Mirrors `ALLOWED_ACTIONS` minus the Alint tag exception in
+/// Mirrors `ALLOWED_ACTIONS` in
 /// `crates/velnor-actions-actionlint/src/actions.rs`; the shape rules below
 /// follow `overrides.rs` by convention (the contract cannot depend on
 /// actionlint, which owns the approved `(sha, version)` catalog check).
-pub const OVERRIDABLE_ACTIONS: [&str; 7] = [
+pub const OVERRIDABLE_ACTIONS: [&str; 8] = [
     "jdx/mise-action",
     "actions/checkout",
     "actions/download-artifact",
@@ -17,9 +17,8 @@ pub const OVERRIDABLE_ACTIONS: [&str; 7] = [
     "actions/cache/restore",
     "actions/cache/save",
     "jdx/mr-boxington-action",
+    "asamarts/alint",
 ];
-/// Action key that is never a per-project override (reviewed tag only).
-pub const ALINT_ACTION_KEY: &str = "asamarts/alint";
 
 /// `[actions]` section: exact action-pin overrides.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -44,19 +43,12 @@ impl ActionsConfig {
     /// Validate override keys (allowlist) and pin shapes.
     ///
     /// Catalog membership (approved `(sha, version)` pairs) is enforced by
-    /// actionlint at generation time; the contract rejects unknown keys,
-    /// the Alint key, and malformed pins here.
+    /// actionlint at generation time; the contract rejects unknown keys
+    /// and malformed pins here.
     /// # Errors
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
         for (action, pin) in &self.overrides {
             let key_path = format!("actions.overrides.{action}");
-            if action == ALINT_ACTION_KEY {
-                return Err(ContractError::config(
-                    file,
-                    key_path,
-                    "alint_not_overridable",
-                ));
-            }
             if !OVERRIDABLE_ACTIONS.contains(&action.as_str()) {
                 return Err(ContractError::config(file, key_path, "unknown_action"));
             }

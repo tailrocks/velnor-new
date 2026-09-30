@@ -8,7 +8,7 @@ mod resources;
 mod stacks;
 mod workflow;
 
-pub use actions::{ALINT_ACTION_KEY, ActionPinOverride, ActionsConfig, OVERRIDABLE_ACTIONS};
+pub use actions::{ActionPinOverride, ActionsConfig, OVERRIDABLE_ACTIONS};
 pub use discovery::DiscoveryConfig;
 pub use resources::{
     ResourcesConfig, ShardTimingEvidence, TestShardingConfig, validate_shard_changes_need_evidence,

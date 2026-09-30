@@ -1,7 +1,7 @@
 //! Pinned action refs against the 8-entry allowlist.
 //!
-//! Ordinary refs pin `repo[/path]@sha` plus a `# vX.Y.Z` comment; the
-//! Alint tag is the sole reviewed mutable-tag exception.
+//! Every ref pins `repo[/path]@sha` plus a `# vX.Y.Z` comment; no
+//! mutable-tag exceptions exist.
 
 use crate::ActionlintError;
 
@@ -17,16 +17,17 @@ pub const ALLOWED_ACTIONS: [&str; 8] = [
     "asamarts/alint",
 ];
 
-/// Action key holding the sole mutable-tag exception.
+/// Action key for the repository-policy Alint job's pinned ref.
 pub const ALINT_ACTION: &str = "asamarts/alint";
 
 /// Action key for the no-credentials checkout every job embeds.
 pub const CHECKOUT_ACTION: &str = "actions/checkout";
 
-/// Reviewed Alint tag; changing it is a version-policy update, not config.
-/// Sole spec-blessed mutable-tag exception (`docs/proposed/version-policy.md` §2).
+/// Qualified `asamarts/alint` release.
 /// Source: `https://api.github.com/repos/asamarts/alint/releases/latest`; checked 2026-09-28.
-pub const ALINT_REVIEWED_TAG: &str = "v0.16.1";
+pub const ALINT_ACTION_VERSION: &str = "v0.16.1";
+/// Full commit SHA for [`ALINT_ACTION_VERSION`] (verified upstream tag `v0.16.1`, 2026-09-04).
+pub const ALINT_ACTION_SHA: &str = "9f9d34ba0eae3888299b9e570f43338b0e7f2cdb";
 
 /// Qualified `jdx/mise-action` release.
 /// Source: `https://api.github.com/repos/jdx/mise-action/releases/latest`; checked 2026-09-28.
@@ -66,12 +67,10 @@ pub struct PinnedActionRef {
     pub repo: String,
     /// Sub-action path (e.g. `restore` for `actions/cache/restore`).
     pub path: Option<String>,
-    /// Full 40-char SHA; `None` only for the Alint tag exception.
-    pub sha: Option<String>,
+    /// Full 40-char commit SHA.
+    pub sha: String,
     /// Matching `# vX.Y.Z` comment text.
     pub version_comment: String,
-    /// True only for the reviewed Alint mutable tag.
-    pub tag_exception: bool,
 }
 
 impl PinnedActionRef {
@@ -90,23 +89,24 @@ impl PinnedActionRef {
         let candidate = Self {
             repo: repo.to_owned(),
             path: path.map(str::to_owned),
-            sha: Some(sha.to_owned()),
+            sha: sha.to_owned(),
             version_comment: version_comment.to_owned(),
-            tag_exception: false,
         };
         candidate.validate()?;
         Ok(candidate)
     }
 
-    /// Build the reviewed Alint mutable-tag ref.
+    /// Canonical qualified Alint ref for the repository-policy job.
+    ///
+    /// Binds [`ALINT_ACTION_SHA`] to [`ALINT_ACTION_VERSION`] so
+    /// emitters never hand-write the pin. Valid by construction.
     #[must_use]
     pub fn alint() -> Self {
         Self {
-            repo: "asamarts".to_owned(),
-            path: Some("alint".to_owned()),
-            sha: None,
-            version_comment: ALINT_REVIEWED_TAG.to_owned(),
-            tag_exception: true,
+            repo: ALINT_ACTION.to_owned(),
+            path: None,
+            sha: ALINT_ACTION_SHA.to_owned(),
+            version_comment: ALINT_ACTION_VERSION.to_owned(),
         }
     }
 
@@ -119,9 +119,8 @@ impl PinnedActionRef {
         Self {
             repo: CHECKOUT_ACTION.to_owned(),
             path: None,
-            sha: Some(CHECKOUT_ACTION_SHA.to_owned()),
+            sha: CHECKOUT_ACTION_SHA.to_owned(),
             version_comment: CHECKOUT_ACTION_VERSION.to_owned(),
-            tag_exception: false,
         }
     }
 
@@ -140,11 +139,7 @@ impl PinnedActionRef {
     /// scalar, so emitters must pass it through unmodified.
     #[must_use]
     pub fn uses_value(&self) -> String {
-        let reference = self
-            .sha
-            .clone()
-            .unwrap_or_else(|| ALINT_REVIEWED_TAG.to_owned());
-        format!("{}@{reference}", self.uses_key())
+        format!("{}@{}", self.uses_key(), self.sha)
     }
 
     /// Render the deterministic `uses:` line with version comment.
@@ -184,9 +179,6 @@ impl PinnedActionRef {
                 problem: format!("invalid_version_comment:{version_comment}"),
             });
         }
-        if key == ALINT_ACTION {
-            return Self::parse_alint(value, reference, version_comment);
-        }
         if !is_full_sha(reference) {
             return Err(ActionlintError::InvalidPin {
                 uses: value.to_owned(),
@@ -202,13 +194,10 @@ impl PinnedActionRef {
     /// # Errors
     ///
     /// Returns [`ActionlintError`] for unknown actions, malformed SHAs,
-    /// misplaced tag exceptions, and bad version comments.
+    /// and bad version comments.
     pub fn validate(&self) -> Result<(), ActionlintError> {
         let key = self.uses_key();
-        let uses = format!(
-            "{key}@{}",
-            self.sha.as_deref().unwrap_or(ALINT_REVIEWED_TAG)
-        );
+        let uses = format!("{key}@{}", self.sha);
         if !ALLOWED_ACTIONS.contains(&key.as_str()) {
             return Err(ActionlintError::UnknownAction { uses });
         }
@@ -218,48 +207,13 @@ impl PinnedActionRef {
                 problem: format!("invalid_version_comment:{}", self.version_comment),
             });
         }
-        if self.tag_exception {
-            return self.validate_tag_exception(&uses);
-        }
-        match &self.sha {
-            Some(sha) if is_full_sha(sha) => Ok(()),
-            _ => Err(ActionlintError::InvalidPin {
+        if !is_full_sha(&self.sha) {
+            return Err(ActionlintError::InvalidPin {
                 uses,
                 problem: "ref_must_be_full_sha".to_owned(),
-            }),
-        }
-    }
-
-    /// Validate the Alint-only tag exception fields.
-    fn validate_tag_exception(&self, uses: &str) -> Result<(), ActionlintError> {
-        if self.uses_key() != ALINT_ACTION || self.sha.is_some() {
-            return Err(ActionlintError::InvalidPin {
-                uses: uses.to_owned(),
-                problem: "tag_exception_alint_only".to_owned(),
-            });
-        }
-        if self.version_comment != ALINT_REVIEWED_TAG {
-            return Err(ActionlintError::InvalidPin {
-                uses: uses.to_owned(),
-                problem: format!("alint_tag_must_be:{ALINT_REVIEWED_TAG}"),
             });
         }
         Ok(())
-    }
-
-    /// Parse the Alint `uses:` value against the reviewed tag.
-    fn parse_alint(
-        value: &str,
-        reference: &str,
-        version_comment: &str,
-    ) -> Result<Self, ActionlintError> {
-        if reference != ALINT_REVIEWED_TAG || version_comment != ALINT_REVIEWED_TAG {
-            return Err(ActionlintError::InvalidPin {
-                uses: value.to_owned(),
-                problem: format!("alint_tag_must_be:{ALINT_REVIEWED_TAG}"),
-            });
-        }
-        Ok(Self::alint())
     }
 }
 
