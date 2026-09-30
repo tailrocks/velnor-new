@@ -171,19 +171,22 @@ fn check_candidate_evidence(
 ///
 /// Baseline coverage revalidates against the manifest in
 /// `revalidate_coverage`; task-cache reuse has no restore-proof channel
-/// yet (P04), so any reuse decision fails closed here.
+/// yet (P04), so any reuse decision fails closed here. The match stays
+/// exhaustive so a future decision variant fails to compile here
+/// instead of slipping through unchecked.
 fn check_obligation_proofs(
     plan: &Plan,
     signals: &mut Signals,
     miss_reasons: &mut BTreeSet<String>,
 ) {
-    if plan
-        .obligations
-        .iter()
-        .any(|ob| ob.decision == ObligationDecision::ReusedFromTaskCache)
-    {
-        signals.planning_failed = true;
-        miss_reasons.insert("no_entry".to_owned());
+    for obligation in &plan.obligations {
+        match obligation.decision {
+            ObligationDecision::ReusedFromTaskCache => {
+                signals.planning_failed = true;
+                miss_reasons.insert("no_entry".to_owned());
+            }
+            ObligationDecision::Execute | ObligationDecision::CoveredByTrustedBaseline => {}
+        }
     }
 }
 

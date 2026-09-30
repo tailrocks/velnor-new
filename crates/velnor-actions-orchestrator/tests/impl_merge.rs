@@ -1,13 +1,16 @@
 //! Merge gate cases: round-trip, precedence, tamper rejection, no-work.
 
 use velnor_actions_contract::{
-    FinalReport, FinalStatus, MatrixReport, MatrixStatus, Plan, TaskStatus,
+    FinalReport, FinalStatus, MatrixReport, MatrixStatus, ObligationDecision, Plan, TaskStatus,
 };
 use velnor_actions_orchestrator::merge_internal;
 
 use crate::impl_common::{
     TestResult, config_with_branch, err_of, git, git_line, make_repo, passing_reports,
     plan_for_source_change,
+};
+use crate::impl_orch_core::{
+    covered_plan, merge as core_merge, merge_request as core_merge_request,
 };
 
 /// Merge one request and parse the final report.
@@ -375,5 +378,175 @@ fn missing_plan_merges_to_planning_failed() -> TestResult {
         "required_jobs": [{"job_id": "velnor-plan", "conclusion": "success"}],
     });
     assert_eq!(merge(&request)?.status, FinalStatus::PlanningFailed);
+    Ok(())
+}
+
+#[test]
+fn hollow_plan_with_zero_entries_fails_closed() -> TestResult {
+    let (_repo, mut plan) = plan_for_source_change()?;
+    assert!(
+        !plan.obligations.is_empty()
+            && plan
+                .obligations
+                .iter()
+                .all(|ob| ob.decision == ObligationDecision::Execute),
+        "fixture must be all-Execute: {:?}",
+        plan.obligations
+    );
+    plan.matrix.include.clear();
+    plan.validate()?;
+    let matrix = serde_json::to_value(&plan.matrix)?;
+    let request = merge_request(&plan, &matrix, &serde_json::json!([]), &success_jobs());
+    let final_report = merge(&request)?;
+    final_report.validate()?;
+    assert_eq!(final_report.status, FinalStatus::PlanningFailed);
+    assert!(
+        final_report.miss_reasons.contains(&"no_entry".to_owned()),
+        "hollow legs diagnosed: {:?}",
+        final_report.miss_reasons
+    );
+    Ok(())
+}
+
+#[test]
+fn partial_hollow_plan_with_dropped_leg_fails_closed() -> TestResult {
+    let (_repo, mut plan) = plan_for_source_change()?;
+    assert!(plan.matrix.include.len() > 1, "fixture needs two entries");
+    plan.matrix.include.pop();
+    plan.validate()?;
+    // Reports cover every remaining leg exactly; the dropped Execute
+    // obligation has zero task evidence and must fail the verdict.
+    let reports = passing_reports(&plan)?;
+    assert!(!reports.is_empty(), "remaining legs stay covered");
+    let matrix = serde_json::to_value(&plan.matrix)?;
+    let request = merge_request(
+        &plan,
+        &matrix,
+        &serde_json::to_value(&reports)?,
+        &success_jobs(),
+    );
+    let final_report = merge(&request)?;
+    final_report.validate()?;
+    assert_eq!(final_report.status, FinalStatus::PlanningFailed);
+    assert!(
+        final_report.miss_reasons.contains(&"no_entry".to_owned()),
+        "dropped leg diagnosed: {:?}",
+        final_report.miss_reasons
+    );
+    Ok(())
+}
+
+#[test]
+fn agreement_failures_carry_miss_tokens() -> TestResult {
+    let (_repo, plan) = plan_for_source_change()?;
+    let matrix = serde_json::to_value(&plan.matrix)?;
+    let reports = passing_reports(&plan)?;
+
+    // A missing matrix.json never landed: source_missing.
+    let request = merge_request(
+        &plan,
+        &serde_json::Value::Null,
+        &serde_json::to_value(&reports)?,
+        &success_jobs(),
+    );
+    let final_report = merge(&request)?;
+    assert_eq!(final_report.status, FinalStatus::PlanningFailed);
+    assert!(
+        final_report
+            .miss_reasons
+            .contains(&"source_missing".to_owned()),
+        "{:?}",
+        final_report.miss_reasons
+    );
+
+    // A disagreeing matrix.json corrupts the evidence set: cache_corrupt.
+    let mut trimmed = matrix.clone();
+    trimmed["include"]
+        .as_array_mut()
+        .ok_or_else(|| std::io::Error::other("matrix shape"))?
+        .pop();
+    let request = merge_request(
+        &plan,
+        &trimmed,
+        &serde_json::to_value(&reports)?,
+        &success_jobs(),
+    );
+    let final_report = merge(&request)?;
+    assert_eq!(final_report.status, FinalStatus::PlanningFailed);
+    assert!(
+        final_report
+            .miss_reasons
+            .contains(&"cache_corrupt".to_owned()),
+        "{:?}",
+        final_report.miss_reasons
+    );
+    Ok(())
+}
+
+#[test]
+fn uncovered_leg_carries_miss_token() -> TestResult {
+    let (_repo, plan) = plan_for_source_change()?;
+    let matrix = serde_json::to_value(&plan.matrix)?;
+    let mut reports = passing_reports(&plan)?;
+    reports.pop();
+    let request = merge_request(
+        &plan,
+        &matrix,
+        &serde_json::to_value(&reports)?,
+        &success_jobs(),
+    );
+    let final_report = merge(&request)?;
+    assert_eq!(final_report.status, FinalStatus::NotRun);
+    assert!(
+        final_report.miss_reasons.contains(&"no_entry".to_owned()),
+        "{:?}",
+        final_report.miss_reasons
+    );
+    Ok(())
+}
+
+#[test]
+fn revalidate_failures_carry_miss_tokens() -> TestResult {
+    let (_repo, plan) = plan_for_source_change()?;
+
+    // Covered claims without a manifest have no proof source: source_missing.
+    let (plan_json, _manifest) = covered_plan(&plan)?;
+    let covered_matrix = plan_json["matrix"].clone();
+    let request = core_merge_request(
+        &plan_json,
+        &covered_matrix,
+        &serde_json::json!([]),
+        &success_jobs(),
+    );
+    let final_report = core_merge(&request)?;
+    assert_eq!(final_report.status, FinalStatus::PlanningFailed);
+    assert!(
+        final_report
+            .miss_reasons
+            .contains(&"source_missing".to_owned()),
+        "{:?}",
+        final_report.miss_reasons
+    );
+
+    // Covered claims bound to a tampered proof run: cache_corrupt.
+    let (mut plan_json, manifest) = covered_plan(&plan)?;
+    plan_json["obligations"][0]["baseline_proof"]["run_id"] = serde_json::json!(8);
+    let covered_matrix = plan_json["matrix"].clone();
+    let mut request = core_merge_request(
+        &plan_json,
+        &covered_matrix,
+        &serde_json::json!([]),
+        &success_jobs(),
+    );
+    request["baseline_manifest"] = manifest;
+    let final_report = core_merge(&request)?;
+    assert_eq!(final_report.status, FinalStatus::PlanningFailed);
+    assert!(
+        final_report
+            .miss_reasons
+            .contains(&"cache_corrupt".to_owned()),
+        "{:?}",
+        final_report.miss_reasons
+    );
     Ok(())
 }

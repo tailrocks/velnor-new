@@ -8,8 +8,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::Deserialize;
 use velnor_actions_contract::{
-    CandidateReport, FinalCounts, FinalReport, FinalStatus, MatrixEntry, MatrixReport,
-    ObligationDecision, Plan, PlanMatrix, RequiredJobResult, canonical_json_bytes,
+    CandidateReport, ExecuteTaskRef, FinalCounts, FinalReport, FinalStatus, MatrixEntry,
+    MatrixReport, ObligationDecision, Plan, PlanMatrix, RequiredJobResult, canonical_json_bytes,
     final_report_id_for_run, validate_run_key,
 };
 
@@ -171,12 +171,18 @@ fn candidate_failure(request: &MergeRequest) -> Option<String> {
 /// Aggregate one final report from validated plan plus reports.
 fn build_final(request: &MergeRequest, plan: &Plan) -> Result<FinalReport, OrchestratorError> {
     let mut signals = Signals::default();
-    check_agreement(request.matrix.as_ref(), plan, &mut signals)?;
-    check_plan_shape(plan, &mut signals);
-    check_plan_evidence(plan, request, &mut signals);
+    let mut miss_reasons = BTreeSet::new();
+    check_agreement(
+        request.matrix.as_ref(),
+        plan,
+        &mut signals,
+        &mut miss_reasons,
+    )?;
+    check_plan_shape(plan, &mut signals, &mut miss_reasons);
+    check_plan_evidence(plan, request, &mut signals, &mut miss_reasons);
+    check_execute_inventory(plan, &mut signals, &mut miss_reasons);
     let entries = plan_entries(plan);
     let obligations = plan_digests(plan);
-    let mut miss_reasons = BTreeSet::new();
     let partition = partition_reports(request, &entries, &mut signals, &mut miss_reasons);
     let mut fold = Fold::default();
     let mut seen_task_reports = BTreeSet::new();
@@ -187,6 +193,7 @@ fn build_final(request: &MergeRequest, plan: &Plan) -> Result<FinalReport, Orche
         let Some(report) = partition.valid.get(entry.report_id.as_str()) else {
             uncovered += 1;
             signals.not_run = true;
+            miss_reasons.insert("no_entry".to_owned());
             continue;
         };
         if shards_failed(entry, report.empty_partition, plan, request) {
@@ -239,22 +246,68 @@ fn check_agreement(
     matrix: Option<&PlanMatrix>,
     plan: &Plan,
     signals: &mut Signals,
+    miss_reasons: &mut BTreeSet<String>,
 ) -> Result<(), OrchestratorError> {
     let Some(matrix) = matrix else {
         signals.planning_failed = true;
+        miss_reasons.insert("source_missing".to_owned());
         return Ok(());
     };
     let matrix_bytes = canonical_json_bytes(matrix).map_err(internal_contract)?;
     if velnor_actions_contract::check_matrix_agreement(&plan.matrix, &matrix_bytes).is_err() {
         signals.planning_failed = true;
+        miss_reasons.insert("cache_corrupt".to_owned());
     }
     Ok(())
 }
 
 /// The no-work decision needs obligations and task IDs to agree.
-fn check_plan_shape(plan: &Plan, signals: &mut Signals) {
+fn check_plan_shape(plan: &Plan, signals: &mut Signals, miss_reasons: &mut BTreeSet<String>) {
     if plan.obligations.is_empty() != plan.task_ids.is_empty() {
         signals.planning_failed = true;
+        miss_reasons.insert("cache_corrupt".to_owned());
+    }
+}
+
+/// Every Execute obligation needs a matrix leg; hollow plans fail closed.
+///
+/// Coverage walks `matrix.include`, so an Execute obligation without a
+/// leg would pass with zero task evidence. Baseline-covered and
+/// cache-reused dispositions need no leg. The match stays exhaustive so
+/// a future decision variant fails to compile here instead of slipping
+/// through unchecked.
+fn check_execute_inventory(
+    plan: &Plan,
+    signals: &mut Signals,
+    miss_reasons: &mut BTreeSet<String>,
+) {
+    let mut leg_tasks = BTreeSet::new();
+    for entry in &plan.matrix.include {
+        for task_ref in entry.execute_task_ids.tasks.values() {
+            let ids: &[String] = match task_ref {
+                ExecuteTaskRef::Single(id) => std::slice::from_ref(id),
+                ExecuteTaskRef::Shards(ids) => ids.as_slice(),
+            };
+            // Leg IDs match obligation IDs verbatim: sharded obligations
+            // carry their full `/shard-N-of-M` IDs, never the bare base.
+            for id in ids {
+                leg_tasks.insert(id.as_str());
+            }
+        }
+    }
+    let mut hollow = false;
+    for obligation in &plan.obligations {
+        match obligation.decision {
+            ObligationDecision::Execute => {
+                hollow = hollow || !leg_tasks.contains(obligation.task_id.as_str());
+            }
+            ObligationDecision::ReusedFromTaskCache
+            | ObligationDecision::CoveredByTrustedBaseline => {}
+        }
+    }
+    if hollow {
+        signals.planning_failed = true;
+        miss_reasons.insert("no_entry".to_owned());
     }
 }
 
@@ -277,8 +330,18 @@ fn reference_matches(reference: &[String], planned: &[String]) -> bool {
 }
 
 /// Revalidate planner coverage, limits, and reference obligations.
-fn check_plan_evidence(plan: &Plan, request: &MergeRequest, signals: &mut Signals) {
-    revalidate_coverage(plan, request.baseline_manifest.as_ref(), signals);
+fn check_plan_evidence(
+    plan: &Plan,
+    request: &MergeRequest,
+    signals: &mut Signals,
+    miss_reasons: &mut BTreeSet<String>,
+) {
+    revalidate_coverage(
+        plan,
+        request.baseline_manifest.as_ref(),
+        signals,
+        miss_reasons,
+    );
     if request
         .limits
         .as_ref()
@@ -350,12 +413,17 @@ fn decide(signals: &Signals, plan: &Plan) -> FinalStatus {
 }
 
 /// Obligations covered without execution.
+///
+/// The match stays exhaustive so a future decision variant fails to
+/// compile here instead of silently joining one side of the count.
 fn covered_count(plan: &Plan) -> u32 {
-    u32::try_from(
-        plan.obligations
-            .iter()
-            .filter(|obligation| obligation.decision != ObligationDecision::Execute)
-            .count(),
-    )
-    .unwrap_or(u32::MAX)
+    let mut covered = 0usize;
+    for obligation in &plan.obligations {
+        match obligation.decision {
+            ObligationDecision::Execute => {}
+            ObligationDecision::ReusedFromTaskCache
+            | ObligationDecision::CoveredByTrustedBaseline => covered += 1,
+        }
+    }
+    u32::try_from(covered).unwrap_or(u32::MAX)
 }

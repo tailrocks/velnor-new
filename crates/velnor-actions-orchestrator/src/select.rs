@@ -62,7 +62,10 @@ pub(crate) fn classify_changed(
     let Some(base) = base else {
         if matches!(
             event,
-            WorkflowEvent::PullRequest | WorkflowEvent::MergeGroup | WorkflowEvent::Fork
+            WorkflowEvent::PullRequest
+                | WorkflowEvent::MergeGroup
+                | WorkflowEvent::Fork
+                | WorkflowEvent::Push
         ) {
             warnings.push("comparison_unavailable:missing_base:all_changed".to_owned());
         }

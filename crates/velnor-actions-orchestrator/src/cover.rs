@@ -8,8 +8,8 @@ pub(crate) mod shard;
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{
-    ExecuteTaskRef, MatrixEntry, MatrixReport, MatrixStatus, ObligationDecision, Plan,
-    PlanObligation, TaskStatus, canonical_json_bytes, digest_b3, task_report_id_for_task,
+    ExecuteTaskRef, MatrixEntry, MatrixReport, MatrixStatus, ObligationDecision, Plan, TaskStatus,
+    canonical_json_bytes, digest_b3, task_report_id_for_task,
 };
 
 use crate::OrchestratorError;
@@ -253,26 +253,36 @@ fn check_digests(
 }
 
 /// Revalidate planner coverage claims against the trusted manifest.
+///
+/// Every failure carries a miss token so diagnostics never emit bare
+/// `planning_failed` verdicts. The disposition match stays exhaustive so
+/// a future decision variant fails to compile here instead of silently
+/// skipping revalidation.
 pub(crate) fn revalidate_coverage(
     plan: &Plan,
     manifest: Option<&BaselineManifest>,
     signals: &mut Signals,
+    miss_reasons: &mut BTreeSet<String>,
 ) {
-    let covered: Vec<&PlanObligation> = plan
-        .obligations
-        .iter()
-        .filter(|ob| ob.decision == ObligationDecision::CoveredByTrustedBaseline)
-        .collect();
+    let mut covered = Vec::new();
+    for obligation in &plan.obligations {
+        match obligation.decision {
+            ObligationDecision::CoveredByTrustedBaseline => covered.push(obligation),
+            ObligationDecision::Execute | ObligationDecision::ReusedFromTaskCache => {}
+        }
+    }
     if covered.is_empty() {
         return;
     }
     let Some(manifest) = manifest else {
         signals.planning_failed = true;
+        miss_reasons.insert("source_missing".to_owned());
         return;
     };
     for obligation in covered {
         let Some(proof) = &obligation.baseline_proof else {
             signals.planning_failed = true;
+            miss_reasons.insert("cache_corrupt".to_owned());
             continue;
         };
         let hit = manifest
@@ -281,6 +291,7 @@ pub(crate) fn revalidate_coverage(
             .find(|task| task.task_id == obligation.task_id);
         let Some(task) = hit else {
             signals.planning_failed = true;
+            miss_reasons.insert("cache_corrupt".to_owned());
             continue;
         };
         let bound = task.task_digest == obligation.task_digest
@@ -291,7 +302,10 @@ pub(crate) fn revalidate_coverage(
         // empty default that could verify against a forged proof.
         match canonical_json_bytes(manifest) {
             Ok(bytes) if bound && proof.manifest_digest == digest_b3(&bytes) => {}
-            _ => signals.planning_failed = true,
+            _ => {
+                signals.planning_failed = true;
+                miss_reasons.insert("cache_corrupt".to_owned());
+            }
         }
     }
 }

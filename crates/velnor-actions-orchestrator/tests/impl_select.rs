@@ -114,6 +114,48 @@ fn plan_pr(
     Ok((plan, warnings))
 }
 
+/// Plan base..head as a push; return plan plus warnings.
+fn plan_push(
+    root: &Path,
+    base: Option<&str>,
+    head: &str,
+) -> Result<(Plan, Vec<String>), Box<dyn std::error::Error>> {
+    let request = serde_json::json!({
+        "schema": 1,
+        "run_key": "local",
+        "base": base,
+        "head": head,
+        "event": "push",
+        "root": root.display().to_string(),
+    });
+    let response = plan_internal(&request.to_string())?;
+    let value: serde_json::Value = serde_json::from_str(&response)?;
+    let plan: Plan = serde_json::from_value(value["plan"].clone())?;
+    let warnings: Vec<String> = serde_json::from_value(value["plan"]["warnings"].clone())?;
+    Ok((plan, warnings))
+}
+
+/// Repo checked out at a merge commit; returns base, feature tip, merge HEAD.
+///
+/// The feature tip is `HEAD^2` of the checkout: the merge result GitHub
+/// checks out for pull requests.
+fn merge_checkout_repo() -> Result<(TempDir, String, String, String), Box<dyn std::error::Error>> {
+    let repo = make_ws_repo(false)?;
+    let root = repo.path();
+    let base = commit(root, "one")?;
+    git(&["checkout", "-b", "feature"], root)?;
+    fs::write(
+        root.join("beta/src/lib.rs"),
+        "pub fn f() {}\npub fn g() {}\n",
+    )?;
+    let feature = commit(root, "feat")?;
+    git(&["checkout", "testmain"], root)?;
+    git(&["merge", "--no-ff", "feature", "-m", "merge"], root)?;
+    let merge_head = git_line(&["rev-parse", "HEAD"], root)?;
+    assert_eq!(git_line(&["rev-parse", "HEAD^2"], root)?, feature);
+    Ok((repo, base, feature, merge_head))
+}
+
 /// True when both members have selected tasks.
 fn selects_both(plan: &Plan) -> bool {
     plan.task_ids.iter().any(|id| id.contains("alpha"))
@@ -391,5 +433,53 @@ fn missing_or_bad_base_tags_comparison_unavailable() -> TestResult {
             .any(|warning| warning.contains("comparison_unavailable")),
         "tag: {warnings:?}"
     );
+    Ok(())
+}
+
+#[test]
+fn push_missing_base_tags_comparison_unavailable() -> TestResult {
+    let repo = make_ws_repo(false)?;
+    let root = repo.path();
+    let head = commit(root, "one")?;
+    let (plan, warnings) = plan_push(root, None, &head)?;
+    assert!(selects_both(&plan), "missing base broadens");
+    assert!(
+        warnings
+            .iter()
+            .any(|warning| warning == "comparison_unavailable:missing_base:all_changed"),
+        "tag: {warnings:?}"
+    );
+    assert_all_changed(&plan);
+    Ok(())
+}
+
+#[test]
+fn merge_checkout_accepts_head2_for_pr() -> TestResult {
+    let (repo, base, feature, _merge) = merge_checkout_repo()?;
+    let root = repo.path();
+    let (plan, _warnings) = plan_pr(root, Some(&base), &feature)?;
+    assert_eq!(plan.head, feature, "planned the merge parent");
+    assert!(selects_both(&plan), "universe kept: {:?}", plan.task_ids);
+    plan.validate()?;
+    Ok(())
+}
+
+#[test]
+fn merge_checkout_rejects_head2_for_push() -> TestResult {
+    let (repo, _base, feature, merge_head) = merge_checkout_repo()?;
+    let root = repo.path();
+    let request = serde_json::json!({
+        "schema": 1,
+        "run_key": "local",
+        "base": None::<String>,
+        "head": feature,
+        "event": "push",
+        "root": root.display().to_string(),
+    });
+    let err = plan_internal(&request.to_string()).expect_err("push rejects merge checkout");
+    assert!(err.to_string().contains("checkout_head_mismatch"), "{err}");
+    // The merge commit itself plans normally under push.
+    let (plan, _warnings) = plan_push(root, None, &merge_head)?;
+    assert_eq!(plan.head, merge_head);
     Ok(())
 }
