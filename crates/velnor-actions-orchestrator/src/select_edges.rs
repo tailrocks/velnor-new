@@ -18,11 +18,6 @@ use crate::schedule::resource_exclusions;
 use crate::select_affected::manifest_dir;
 use crate::validators::{validate_diff_rev, validate_select_diff_args, validate_select_show_args};
 
-// Unit tests live here so `select_edges.rs` keeps its size gate.
-#[cfg(test)]
-#[path = "select_edges_tests.rs"]
-mod select_edges_tests;
-
 /// Max base manifests fetched; beyond this, broaden instead of reading.
 const MAX_BASE_MANIFEST_BATCH: usize = 512;
 

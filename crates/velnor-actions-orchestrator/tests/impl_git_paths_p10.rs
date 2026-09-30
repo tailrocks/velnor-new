@@ -219,6 +219,24 @@ fn added_member_manifest_narrows_without_broaden() -> TestResult {
     Ok(())
 }
 
+/// An added source file with a quotepath-triggering name narrows exactly.
+///
+/// Display parsing would return the C-quoted `"alpha/src/h\\303\\251llo.rs"`
+/// form, which never matches the owning member prefix and would broaden.
+/// NUL-delimited `added_files` reports exact bytes, so the owner narrows.
+#[test]
+fn added_quotepath_source_narrows_without_broaden() -> TestResult {
+    let repo = make_ws_repo(false)?;
+    let root = repo.path();
+    let base = commit(root, "one")?;
+    fs::write(root.join("alpha/src/h\u{e9}llo.rs"), "pub fn f() {}\n")?;
+    let head = commit(root, "two")?;
+    let (plan, warnings) = plan_pr(root, Some(&base), &head)?;
+    assert_narrow(&plan, "alpha", "beta");
+    assert!(warnings.is_empty(), "no warnings: {warnings:?}");
+    Ok(())
+}
+
 #[test]
 #[cfg(unix)]
 fn untracked_non_utf8_broadens_with_explicit_tag() -> TestResult {
