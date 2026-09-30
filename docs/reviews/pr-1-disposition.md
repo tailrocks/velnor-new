@@ -83,6 +83,43 @@ Classes: **D** = accepted design change · **B** = confirmed bug · **V** = pend
   + impl_select 485 split by topic (+impl_merge_plan, +impl_select_base).
   Behavior-preserving; mise allowlist updated. Standalone: mise 174,
   orch 75+6+316, size_limits_hold green, clippy -D clean, fmt clean.
+- P10 (`d8a26a6`, pushed): origin identity via `git config --get
+  remote.origin.url` in-tree (linked worktrees, includes, worktree
+  config); NUL `-z` path bytes via `split_nul_paths`, non-UTF-8 ->
+  explicit `non_utf8_path` broaden; mise git allowlist gains `config`.
+  20 new tests (7 true fix-proofs). Standalone: mise 178, orch
+  75+6+332, clippy -D clean, fmt clean. Residual: select_edges +
+  validators still line-parse; select.rs at 398 lines.
+- P06 (`8087fbc`, pushed): structural Mise TOML-subset parser +
+  `wrappers.cargo.command` (exact-`mbx` only) and `[profile.ci]`
+  inspectors in mise; independent driver/runner dimensions,
+  `NextestProfile`, ambiguity/conflict fail-closed codes in rust;
+  per-workspace nearest-first discovery in orch. 45 new tests incl.
+  4-combo argv. Standalone: mise 195, rust 124, orch 75+6+344,
+  clippy -D clean, fmt clean. Residual: Nextest argv lacks
+  `--profile` (needs argv.rs/tasks.rs); `nextest_digest` None;
+  custom-task opt-in key undefined.
+- P10 test split (`e64d8c9`, pushed): 403-line
+  impl_git_authority_p10 tripped size_limits_hold (P10 verify never
+  ran the CLI suite — process gap, now closed). Split by
+  responsibility: identity cases stay (203 lines), NUL-path cases
+  to impl_git_paths_p10 (211 lines), zero helper duplication. All
+  16 tests preserved; orch 344 green.
+- P11-policy (`f63e04f`, pushed): five R04 bundles deduped in
+  .alint.yml (53 rules on pinned alint 0.16.1, independently
+  re-verified: `check --fail-on-warning` exit 0, 4 info-only);
+  same-id gha-pin override demoted to info with exact
+  paths/query/regex pinned in tests; edition decision documented
+  (adoption §4). Structured enforcement: p11_toml, p11_metadata
+  (cargo metadata effective edition/MSRV), p11_compiler
+  (baseline-clean + deny-flag rejects), p11_alint. AGENTS.md -> 46
+  lines, V1 boundaries first, runner pointer to docs/deferred.
+  Standalone: CLI 170 incl. size green, clippy -D clean, fmt
+  clean. Type-hardening deferred to later P11 step.
+- In flight: P03-P04 identities/baselines (cover_baseline,
+  cover_identity, internal_plan, closure, generator,
+  provenance_check, snapshot). Queued behind it: P05 crate graph
+  (needs internal_plan.rs), P11-types.
 
 ## PR state (2026-09-29, /tmp/pr1-state.md)
 
