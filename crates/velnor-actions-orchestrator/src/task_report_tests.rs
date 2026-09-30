@@ -276,6 +276,26 @@ fn unbound_inputs_fail_before_writing() {
     assert!(write_task_report_to("local", CLIPPY, 0, &[], rewrite.path()).is_err());
 }
 
+#[cfg(unix)]
+#[test]
+fn planted_symlink_at_report_path_refuses_without_writing() {
+    let plan = fixture_plan();
+    let temp = staged_run(&plan, "local");
+    let entry = &plan.matrix.include[0];
+    let dir = temp
+        .path()
+        .join("velnor")
+        .join("local")
+        .join(&entry.matrix_key);
+    fs::create_dir_all(dir.join("tasks")).expect("report dirs");
+    let loot = temp.path().join("loot.json");
+    std::os::unix::fs::symlink(&loot, dir.join("matrix-report.json")).expect("plant");
+    let err =
+        write_task_report_to("local", CLIPPY, 0, &[], temp.path()).expect_err("plant refused");
+    assert!(err.to_string().contains("symlink_refused"), "{err}");
+    assert!(!loot.exists(), "producer bytes never followed the plant");
+}
+
 #[test]
 fn ambiguous_entries_refuse_rather_than_guess() {
     let mut plan = fixture_plan();

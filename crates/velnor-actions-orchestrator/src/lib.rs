@@ -19,6 +19,7 @@ mod discover;
 mod discover_index;
 mod error;
 mod evidence;
+mod exclusive_write;
 mod extension_schemas;
 mod external_data;
 mod generate;

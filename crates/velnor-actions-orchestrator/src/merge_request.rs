@@ -139,16 +139,7 @@ pub(crate) fn write_merge_request_to(
         fs::create_dir_all(parent)
             .map_err(|err| OrchestratorError::io(parent.display().to_string(), err.to_string()))?;
     }
-    fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&path)
-        .map_err(|_| internal("request_exists"))
-        .and_then(|mut file| {
-            use std::io::Write;
-            file.write_all(request.as_bytes())
-                .map_err(|_| internal("request_unwritable"))
-        })?;
+    crate::exclusive_write::write_exclusive(&path, request.as_bytes(), "request")?;
     Ok(path)
 }
 
