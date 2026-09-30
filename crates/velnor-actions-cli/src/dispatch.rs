@@ -3,9 +3,9 @@
 //! The private gate requires `VELNOR_INTERNAL_OP` plus the exact request file
 //! in `VELNOR_REQUEST_FILE`: `write-request-v1` needs GitHub event env and no
 //! pre-existing file, `plan-v1`/`merge-v1` need a pre-existing request file,
-//! `fetch-reports-v1` needs runner temp plus the numeric run ID instead.
-//! Anything else falls through to Clap, so public behavior is byte-identical
-//! with or without the environment set.
+//! `fetch-reports-v1`/`write-task-report-v1` need runner temp plus the
+//! numeric run ID instead. Anything else falls through to Clap, so public
+//! behavior is byte-identical with or without the environment set.
 
 use std::env;
 use std::fs;
@@ -14,10 +14,10 @@ use std::process::ExitCode;
 
 use clap::Parser;
 use velnor_actions_orchestrator::{
-    FETCH_OP, GenerateOptions, MERGE_OP, OrchestratorError, PLAN_OP, REQUEST_FILE_ENV,
+    FETCH_OP, GenerateOptions, MERGE_OP, OrchestratorError, PLAN_OP, REPORT_OP, REQUEST_FILE_ENV,
     WRITE_REQUEST_OP, generate, init_config, merge_internal, merge_passed, plan_internal,
     plan_outputs, plan_text_checked, prepare, publish_final_report, publish_plan_files,
-    resolve_root, response_path_for, retrieve_reports, write_request,
+    resolve_root, response_path_for, retrieve_reports, write_request, write_task_report,
 };
 
 use crate::args::{Cli, Command};
@@ -44,6 +44,8 @@ enum InternalOp {
     Merge,
     /// Matrix-report fetch operation.
     Fetch,
+    /// Task-report production operation.
+    Report,
 }
 
 /// Validated private request: operation plus exact request-file path.
@@ -78,17 +80,18 @@ pub(crate) fn try_internal() -> Option<ExitCode> {
 
 /// Check the private gate: known op plus request-file presence by op.
 ///
-/// Fetch takes no request file: it needs the runner-temp velnor
-/// directory plus the numeric run ID instead.
+/// Fetch and report take no request file: they need the runner-temp
+/// velnor directory plus the numeric run ID instead.
 fn gate_request() -> Option<InternalRequest> {
     let op = match env::var(OP_ENV).as_deref() {
         Ok(tag) if tag == WRITE_REQUEST_OP => InternalOp::WriteRequest,
         Ok(tag) if tag == PLAN_OP => InternalOp::Plan,
         Ok(tag) if tag == MERGE_OP => InternalOp::Merge,
         Ok(tag) if tag == FETCH_OP => InternalOp::Fetch,
+        Ok(tag) if tag == REPORT_OP => InternalOp::Report,
         _ => return None,
     };
-    if op == InternalOp::Fetch {
+    if op == InternalOp::Fetch || op == InternalOp::Report {
         let temp = env::var_os(RUNNER_TEMP_ENV).filter(|value| !value.is_empty())?;
         if env::var("GITHUB_RUN_ID").is_ok_and(|id| !id.is_empty()) {
             return Some(InternalRequest {
@@ -118,7 +121,7 @@ fn gate_request() -> Option<InternalRequest> {
                 return None;
             }
         }
-        InternalOp::Fetch => {}
+        InternalOp::Fetch | InternalOp::Report => {}
     }
     Some(InternalRequest { op, path })
 }
@@ -133,6 +136,10 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
         InternalOp::Plan => run_plan_internal(&request.path),
         InternalOp::Merge => run_merge_internal(&request.path),
         InternalOp::Fetch => match retrieve_reports() {
+            Ok(_) => ExitCode::SUCCESS,
+            Err(error) => fail_internal(&error.to_string()),
+        },
+        InternalOp::Report => match write_task_report() {
             Ok(_) => ExitCode::SUCCESS,
             Err(error) => fail_internal(&error.to_string()),
         },

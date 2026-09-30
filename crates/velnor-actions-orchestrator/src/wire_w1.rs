@@ -145,6 +145,9 @@ pub(crate) fn maybe_task_cache_steps(
     ])
 }
 
+/// Display name of the plan-job deferred format-report step.
+pub(crate) const REPORT_FORMAT_NAME: &str = "Report Format";
+
 /// Plan-job `Format` step for the workspace formatting scope only.
 ///
 /// Root cause (P05-5): the plan job duplicated the first crate's
@@ -157,6 +160,11 @@ pub(crate) fn maybe_task_cache_steps(
 /// same config, so this step never re-checks crate-owned files (R28).
 /// No synthesis, no fallback.
 ///
+/// The step saves its exit code to an outcome file instead of
+/// reporting directly: the workflow contract fixes `Format` before
+/// `Plan`, so the plan the report binds does not exist yet. The
+/// post-plan steps from [`workspace_format_report_steps`] report it.
+///
 /// # Errors
 ///
 /// Returns contract/render errors for rejected vectors or step shapes.
@@ -164,16 +172,83 @@ pub(crate) fn workspace_format_step(
     discovery: &Discovery,
     catalog: &ToolCatalog,
 ) -> Result<Option<Step>, OrchestratorError> {
-    let Some(fmt) = discovery.task_groups.iter().find(|group| {
-        group.kind == TaskKind::Fmt && group.package_id.is_empty() && group.package_name.is_empty()
-    }) else {
+    let Some(fmt) = workspace_fmt_group(discovery) else {
         return Ok(None);
     };
     let argv = crate::vectors::task_argv(fmt, catalog)?;
+    if argv.first().is_none_or(|program| program != "mise") {
+        return Err(OrchestratorError::Contract {
+            problem: "format_without_mise".to_owned(),
+        });
+    }
+    let joined = velnor_actions_workflow_renderer::join_argv_for_run(&argv).map_err(|err| {
+        OrchestratorError::Contract {
+            problem: err.to_string(),
+        }
+    })?;
+    let outcome = crate::matrix_step::outcome_path_for_key(&matrix_key_for(fmt)?);
+    let run = crate::matrix_step::outcome_wrapper_argv(&joined, &outcome);
     let env = format_step_env(catalog)?;
-    plan_format::format_step(argv, env)
+    velnor_actions_workflow_renderer::shell_step(plan_format::FORMAT_STEP_NAME, run, env)
         .map(Some)
         .map_err(OrchestratorError::from)
+}
+
+/// Post-plan report steps for the workspace `Fmt` obligation.
+///
+/// Reports the saved `Format` outcome through the staged helper once
+/// the plan exists, then uploads the entry's matrix artifact. Empty
+/// when the plan job owns no format scope.
+///
+/// # Errors
+///
+/// Returns contract/render errors for rejected vectors or step shapes.
+pub(crate) fn workspace_format_report_steps(
+    discovery: &Discovery,
+) -> Result<Vec<Step>, OrchestratorError> {
+    let Some(fmt) = workspace_fmt_group(discovery) else {
+        return Ok(Vec::new());
+    };
+    let matrix_key = matrix_key_for(fmt)?;
+    let outcome = crate::matrix_step::outcome_path_for_key(&matrix_key);
+    let helper = crate::matrix_step::helper_path_for_version();
+    let report = velnor_actions_workflow_renderer::shell_step(
+        REPORT_FORMAT_NAME,
+        crate::matrix_step::deferred_report_argv(&outcome, &helper),
+        BTreeMap::from([(
+            crate::task_report::TASK_ID_ENV.to_owned(),
+            fmt.task_id.clone(),
+        )]),
+    )
+    .map_err(OrchestratorError::from)?;
+    let upload = velnor_actions_workflow_renderer::matrix_report_upload_step_for(
+        &matrix_key,
+        &format!(
+            "{} ({})",
+            velnor_actions_workflow_renderer::MATRIX_REPORT_UPLOAD_NAME,
+            plan_format::FORMAT_STEP_NAME
+        ),
+    )
+    .map_err(OrchestratorError::from)?;
+    Ok(vec![report, upload])
+}
+
+/// Package-less workspace `Fmt` group, when the plan job owns one.
+fn workspace_fmt_group(discovery: &Discovery) -> Option<&velnor_actions_rust::TaskGroup> {
+    discovery.task_groups.iter().find(|group| {
+        group.kind == TaskKind::Fmt && group.package_id.is_empty() && group.package_name.is_empty()
+    })
+}
+
+/// Stable matrix key for one workspace group.
+fn matrix_key_for(group: &velnor_actions_rust::TaskGroup) -> Result<String, OrchestratorError> {
+    let matrix_id = velnor_actions_contract::matrix_id_for_task_group(
+        velnor_actions_rust::STACK_ID,
+        &group.task_id,
+    )
+    .map_err(crate::internal::internal_contract)?;
+    velnor_actions_contract::matrix_key_for_id(&matrix_id)
+        .map_err(crate::internal::internal_contract)
 }
 
 /// Full `exec` verification env routing Format at the prepared toolchain.

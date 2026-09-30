@@ -17,7 +17,7 @@ use velnor_actions_actionlint::{
     actions::{MR_BOXINGTON_ACTION_SHA, MR_BOXINGTON_ACTION_VERSION},
 };
 use velnor_actions_contract::{
-    CrateJob, CrateObligation, Job, Step, StepKind, assign_crate_job_ids, crate_display_name,
+    CrateJob, CrateObligation, Job, Step, assign_crate_job_ids, crate_display_name,
     matrix_id_for_task_group, matrix_key_for_id,
 };
 use velnor_actions_mise::{PinnedTool, TaskCacheMode, ToolCatalog};
@@ -47,7 +47,9 @@ pub(crate) struct CrateBuild {
 /// package-less workspace Format scope belongs to the plan job, so its
 /// groups stay out too. Obligations order Format, Clippy, build, tests,
 /// doctests, docs (shards by task ID); gates keep same-crate edges
-/// only, so every gate references a strictly earlier obligation.
+/// only, so every gate references a strictly earlier obligation. The
+/// acquire step stages the helper every report wrapper invokes;
+/// callers without one (pre-seed, lock attach) provision separately.
 ///
 /// # Errors
 ///
@@ -58,6 +60,7 @@ pub(crate) fn build_crate_jobs(
     catalog: &ToolCatalog,
     fetch_roots: &[String],
     custom_tasks: &[String],
+    acquire: Option<&Step>,
 ) -> Result<CrateBuild, OrchestratorError> {
     let grouped = group_runnable(&discovery.task_groups);
     let assigned = assign_crate_job_ids(&id_inputs(&grouped));
@@ -98,6 +101,7 @@ pub(crate) fn build_crate_jobs(
             use_mbx,
             use_nextest,
             repo_has_mbx,
+            acquire,
         )?;
         // Allowlisted custom tasks run after the fixed obligations; an
         // empty allowlist (the default) appends nothing.
@@ -255,8 +259,15 @@ fn shard_suffix(task_id: &str) -> Option<(u32, u32)> {
 
 /// Render one validated crate model to its fixed IR job.
 ///
-/// P08 order: restore shared sources (or Cargo-only registry), then MBX
-/// objects, then probe-and-fetch, then obligations. Readers never save.
+/// P08 order: helper staging, plan download (report identities bind
+/// the plan), restore shared sources (or Cargo-only registry), then
+/// MBX objects, then probe-and-fetch, then report-wrapped
+/// obligations, then one always-on matrix-report upload per
+/// obligation. Readers never save.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "one call site threads job scope plus driver selection"
+)]
 fn render_job(
     label: &str,
     model: &CrateJob,
@@ -265,8 +276,11 @@ fn render_job(
     use_mbx: bool,
     use_nextest: bool,
     repo_has_mbx: bool,
+    acquire: Option<&Step>,
 ) -> Result<Job, OrchestratorError> {
     let mut steps = vec![crate::workflow::wire_w1::checkout_step()?];
+    steps.extend(acquire.cloned());
+    steps.push(crate::matrix_step::download_plan_step()?);
     steps.push(crate::matrix_step::prepare_crate_tools_step(
         catalog,
         use_mbx,
@@ -290,8 +304,19 @@ fn render_job(
         TaskCacheMode::Off,
         "",
     )?);
+    for (index, obligation) in model.obligations.iter().enumerate() {
+        let downstream: Vec<String> = model.obligations[index + 1..]
+            .iter()
+            .map(|later| later.task_id.clone())
+            .collect();
+        steps.push(crate::matrix_step::obligation_step(
+            obligation,
+            catalog,
+            &downstream,
+        )?);
+    }
     for obligation in &model.obligations {
-        steps.push(obligation_step(obligation, catalog)?);
+        steps.push(crate::matrix_step::matrix_upload_step(obligation)?);
     }
     Ok(Job {
         display_name: model.display_name.clone(),
@@ -301,29 +326,6 @@ fn render_job(
         permissions: None,
         environment: None,
         steps,
-    })
-}
-
-/// One obligation shell step: fixed argv plus validated identity env.
-fn obligation_step(
-    obligation: &CrateObligation,
-    catalog: &ToolCatalog,
-) -> Result<Step, OrchestratorError> {
-    let matrix_id = matrix_id_for_task_group(STACK_ID, &obligation.task_id)?;
-    let identity = crate::matrix_step::obligation_identity_env(
-        &obligation.task_id,
-        &obligation.task_digest,
-        &matrix_id,
-        &obligation.matrix_key,
-    );
-    let env = crate::matrix_step::task_step_env(catalog, &identity)?;
-    Ok(Step {
-        name: obligation.step_name.clone(),
-        condition: None,
-        kind: StepKind::Shell {
-            run: obligation.run.clone(),
-            env,
-        },
     })
 }
 

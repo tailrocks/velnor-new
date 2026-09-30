@@ -99,14 +99,24 @@ pub(crate) fn build_workflow(
     if let Some(format) = wire_w1::workspace_format_step(discovery, &catalog)? {
         insert_format_step(&mut plan, format);
     }
+    insert_format_report_steps(
+        &mut plan,
+        wire_w1::workspace_format_report_steps(discovery)?,
+    );
     jobs.insert(PLAN_JOB_ID.to_owned(), plan);
     let custom_tasks: &[String] = config
         .stacks
         .rust
         .as_ref()
         .map_or(&[], |rust| &rust.custom_tasks);
-    let built =
-        crate::crate_jobs::build_crate_jobs(label, discovery, &catalog, fetch_roots, custom_tasks)?;
+    let built = crate::crate_jobs::build_crate_jobs(
+        label,
+        discovery,
+        &catalog,
+        fetch_roots,
+        custom_tasks,
+        acquire.as_ref(),
+    )?;
     let crate_ids: Vec<String> = built.jobs.iter().map(|(id, _)| id.clone()).collect();
     for (id, job) in built.jobs {
         jobs.insert(id, job);
@@ -141,6 +151,26 @@ pub(crate) fn build_workflow(
         context,
         actionlint,
     })
+}
+
+/// Insert deferred format-report steps immediately after `Plan`.
+///
+/// The plan exists only after the planner runs; the publish closure
+/// later lands between `Plan` and these steps, so the plan artifact
+/// carries plan and matrix only, never the format entry's reports.
+/// Without a `plan-v1` anchor the steps close the job.
+fn insert_format_report_steps(plan: &mut Job, reports: Vec<Step>) {
+    if reports.is_empty() {
+        return;
+    }
+    let at = plan
+        .steps
+        .iter()
+        .position(|step| {
+            matches!(&step.kind, StepKind::Internal { operation } if operation == PLAN_OPERATION)
+        })
+        .map_or(plan.steps.len(), |plan_at| plan_at + 1);
+    plan.steps.splice(at..at, reports);
 }
 
 /// Insert the workspace `Format` step immediately before `Plan`.

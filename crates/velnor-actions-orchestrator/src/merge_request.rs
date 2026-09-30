@@ -60,7 +60,7 @@ pub fn assemble_merge_request(run_key: &str, run_dir: &Path) -> Result<String, O
 /// # Errors
 ///
 /// Returns [`OrchestratorError::Internal`] for encoding failures.
-fn assemble_with_needs(
+pub(crate) fn assemble_with_needs(
     run_key: &str,
     run_dir: &Path,
     needs: Option<&str>,

@@ -51,6 +51,7 @@ mod select_affected;
 mod select_edges;
 mod source_cache;
 mod source_prep;
+mod task_report;
 mod toolcheck;
 mod toolfindings;
 mod utf8;
@@ -95,6 +96,7 @@ pub use provenance::{EvidenceProvenance, ProfileProvenance};
 pub use qualify::qualify_argv_staged;
 pub use retrieve_reports::{FETCH_OP, retrieve_reports};
 pub use root::resolve_root;
+pub use task_report::{REPORT_OP, write_task_report};
 pub use toolcheck::{TOOL_INPUT_PATHS, ToolInputCheck, ToolParse, check_tool_inputs};
 pub use toolfindings::{
     CONFLICTING_TOOL_VALUES, UNSUPPORTED_TOOL_VALUE, finding_line, tool_check_lines, tool_conflicts,

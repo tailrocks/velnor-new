@@ -21,13 +21,14 @@ use crate::pins::lock_acquire_step;
 use crate::vectors::{candidate_build_argv, mbx_probe_argv};
 use crate::workflow::WorkflowPlan;
 
-/// Attach lock-backed Acquire steps to the plan and final jobs.
+/// Attach lock-backed Acquire steps to plan, final, and crate jobs.
 ///
 /// Reads the runner-target record from an already-verified lock, stages the
 /// digest-verified binary under `$RUNNER_TEMP`, and inserts the step between
-/// checkout and plan plus ahead of the report merge. Consumer generation
-/// never calls this: it embeds the release manifest instead, and never
-/// reads the lock.
+/// checkout and plan plus ahead of the report merge; every crate job stages
+/// right after checkout because its obligation wrappers invoke the helper.
+/// Consumer generation never calls this: it embeds the release manifest
+/// instead, and never reads the lock.
 pub(crate) fn attach_lock_acquire(
     ir: &mut WorkflowIr,
     lock: &GeneratorLock,
@@ -50,6 +51,13 @@ pub(crate) fn attach_lock_acquire(
         });
     };
     final_gate.steps.insert(0, final_step);
+    for (id, job) in &mut ir.jobs {
+        if !id.starts_with(CRATE_JOB_ID_PREFIX) {
+            continue;
+        }
+        let step = lock_acquire_step(lock, label, &staged)?;
+        job.steps.insert(1, step);
+    }
     Ok(())
 }
 

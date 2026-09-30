@@ -2,13 +2,15 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Step, StepKind};
+use velnor_actions_contract::{CrateObligation, Step, StepKind};
 use velnor_actions_mise::{
     ISOLATION_ENV, NO_AUTO_INSTALL_ENV, PREPARE_PINNED_TOOLS_STEP, PinnedTool, PreparePinnedTools,
     ToolCatalog, ToolHomes,
 };
+use velnor_actions_workflow_renderer::steps::{INTERNAL_OP_ENV, STAGED_BINARY_PREFIX};
 
 use crate::OrchestratorError;
+use crate::task_report::{DOWNSTREAM_IDS_ENV, EXIT_CODE_ENV, REPORT_OP, TASK_ID_ENV};
 use crate::utf8::{strings_of, strings_of_env};
 
 /// Crate-job driver tools: Rust plus MBX only on MBX evidence.
@@ -104,8 +106,10 @@ pub(crate) fn task_step_env(
 /// Fixed obligation identity env carried by every obligation step.
 ///
 /// Binds the step to its task, digest, and matrix coordinates with
-/// fixed values (never `${{ }}` expressions), so the renderer wraps
-/// each obligation with report capture and merge locates its evidence.
+/// fixed values (never `${{ }}` expressions), so the report wrapper
+/// invokes the helper for the right obligation and merge locates its
+/// evidence. Downstream same-job task IDs ride along so a failure
+/// reports its skipped successors; empty downstream stays absent.
 pub(crate) fn obligation_identity_env(
     task_id: &str,
     task_digest: &str,
@@ -119,4 +123,135 @@ pub(crate) fn obligation_identity_env(
         (legs::LEG_MATRIX_ID_ENV.to_owned(), matrix_id.to_owned()),
         (legs::LEG_MATRIX_KEY_ENV.to_owned(), matrix_key.to_owned()),
     ])
+}
+
+/// One obligation shell step: fixed argv wrapped with report capture.
+///
+/// The wrapper runs the obligation, captures `$?`, invokes the staged
+/// helper's [`REPORT_OP`] with the exit code, then exits with the
+/// obligation's own code (a report failure surfaces only when the
+/// obligation itself passed, so failures never mask each other).
+/// Identity env doubles as the report lookup key; the plan binds the
+/// digests, never these baked values.
+///
+/// # Errors
+///
+/// Returns contract errors for invalid argv, joins, or wrapper shapes.
+pub(crate) fn obligation_step(
+    obligation: &CrateObligation,
+    catalog: &ToolCatalog,
+    downstream: &[String],
+) -> Result<Step, OrchestratorError> {
+    let matrix_id = velnor_actions_contract::matrix_id_for_task_group(
+        velnor_actions_rust::STACK_ID,
+        &obligation.task_id,
+    )
+    .map_err(crate::internal::internal_contract)?;
+    let mut identity = obligation_identity_env(
+        &obligation.task_id,
+        &obligation.task_digest,
+        &matrix_id,
+        &obligation.matrix_key,
+    );
+    if !downstream.is_empty() {
+        identity.insert(DOWNSTREAM_IDS_ENV.to_owned(), downstream.join(","));
+    }
+    // Wrapper lookup keys must match the op's env contract exactly.
+    debug_assert_eq!(
+        identity.get(TASK_ID_ENV).map(String::as_str),
+        Some(obligation.task_id.as_str())
+    );
+    let env = task_step_env(catalog, &identity)?;
+    let joined =
+        velnor_actions_workflow_renderer::join_argv_for_run(&obligation.run).map_err(|err| {
+            OrchestratorError::Contract {
+                problem: err.to_string(),
+            }
+        })?;
+    let run = report_wrapper_argv(&joined, &helper_path_for_version());
+    velnor_actions_workflow_renderer::validate_command_argv(&run).map_err(|err| {
+        OrchestratorError::Contract {
+            problem: err.to_string(),
+        }
+    })?;
+    Ok(Step {
+        name: obligation.step_name.clone(),
+        condition: None,
+        kind: StepKind::Shell { run, env },
+    })
+}
+
+/// Staged helper path for this generator version (uniform preseed/consumer).
+pub(crate) fn helper_path_for_version() -> String {
+    format!("{STAGED_BINARY_PREFIX}{}", env!("CARGO_PKG_VERSION"))
+}
+
+/// `sh -c` argv wrapping one joined command with report capture.
+///
+/// Captures the obligation exit, reports through the staged helper,
+/// then exits with the obligation code (helper failure surfaces only
+/// on an otherwise passing obligation).
+pub(crate) fn report_wrapper_argv(joined: &str, helper: &str) -> Vec<String> {
+    vec![
+        "sh".to_owned(),
+        "-c".to_owned(),
+        format!(
+            "{joined}; code=$?; {EXIT_CODE_ENV}=\"$code\" {INTERNAL_OP_ENV}={REPORT_OP} \"{helper}\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\""
+        ),
+    ]
+}
+
+/// `sh -c` argv saving one joined command's exit to an outcome file.
+///
+/// Two-phase shape for the plan-job workspace Format: the plan does
+/// not exist yet at format time, so the wrapper records `$?` and a
+/// post-plan step reports through [`deferred_report_argv`].
+pub(crate) fn outcome_wrapper_argv(joined: &str, outcome_path: &str) -> Vec<String> {
+    vec![
+        "sh".to_owned(),
+        "-c".to_owned(),
+        format!("{joined}; code=$?; echo \"$code\" > \"{outcome_path}\"; exit \"$code\""),
+    ]
+}
+
+/// `sh -c` argv reporting one saved outcome through the staged helper.
+///
+/// Reads the exit code the outcome wrapper saved (a missing file
+/// leaves the code empty and the helper fails closed), then invokes
+/// [`REPORT_OP`]; the step exits with the helper's own code.
+pub(crate) fn deferred_report_argv(outcome_path: &str, helper: &str) -> Vec<String> {
+    vec![
+        "sh".to_owned(),
+        "-c".to_owned(),
+        format!(
+            "read -r code rest < \"{outcome_path}\"; {EXIT_CODE_ENV}=\"$code\" {INTERNAL_OP_ENV}={REPORT_OP} \"{helper}\""
+        ),
+    ]
+}
+
+/// Shell-spelled outcome file for one matrix key under runner temp.
+pub(crate) fn outcome_path_for_key(matrix_key: &str) -> String {
+    format!("$RUNNER_TEMP/velnor/outcome-{matrix_key}")
+}
+
+/// Plan-artifact download: report wrappers resolve identities from it.
+pub(crate) fn download_plan_step() -> Result<Step, OrchestratorError> {
+    velnor_actions_workflow_renderer::download_plan_step().map_err(|err| {
+        OrchestratorError::Contract {
+            problem: err.to_string(),
+        }
+    })
+}
+
+/// One always-on matrix-report upload for an obligation's entry.
+pub(crate) fn matrix_upload_step(obligation: &CrateObligation) -> Result<Step, OrchestratorError> {
+    let name = format!(
+        "{} ({})",
+        velnor_actions_workflow_renderer::MATRIX_REPORT_UPLOAD_NAME,
+        obligation.step_name
+    );
+    velnor_actions_workflow_renderer::matrix_report_upload_step_for(&obligation.matrix_key, &name)
+        .map_err(|err| OrchestratorError::Contract {
+            problem: err.to_string(),
+        })
 }
