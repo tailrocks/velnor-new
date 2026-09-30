@@ -1,9 +1,5 @@
 //! Group identities: canonical graph, bundles, lanes, toolchains (P03).
-//!
 //! Declared via `#[path]` from `internal_plan.rs` (no `lib.rs` edit).
-//! Lane identity derives from responsibility and config, never from
-//! schedule ordinals; toolchain identity binds sorted exact specs
-//! plus driver and runner over the centralized cache-key inputs.
 
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::cachekey::{
@@ -13,14 +9,14 @@ use velnor_actions_contract::{ContractError, digest_b3};
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_rust::{DepKind, TaskGroup, WorkspaceRecord};
 
-use super::snapshot::{canonical_digest, normalized_component_id};
+use super::snapshot::{
+    ExecutionSnapshot, canonical_digest, normalized_component_id, platform_id_for,
+};
 use crate::discover::Discovery;
 use crate::toolcheck::ToolInputCheck;
 
 /// Cache-format label for the single Velnor cache payload version.
 const CACHE_FORMAT_LABEL: &str = "velnor-cache-v1";
-/// Explicit marker for unreported toolchain components (P06 follow-up).
-const COMPONENTS_UNREPORTED: &str = "unreported";
 
 /// Canonical package/workspace graph over normalized manifests.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -77,15 +73,13 @@ pub(crate) fn snapshot_graph_for(record: &WorkspaceRecord) -> SnapshotGraph {
             target: edge.target.clone().unwrap_or_else(|| "-".to_owned()),
         })
         .collect();
-    edges.sort_by(|left, right| {
-        (&left.from, &left.to, &left.kind, &left.target).cmp(&(
-            &right.from,
-            &right.to,
-            &right.kind,
-            &right.target,
-        ))
-    });
+    edges.sort_by(|left, right| edge_key(left).cmp(&edge_key(right)));
     SnapshotGraph { members, edges }
+}
+
+/// Sort key for one normalized dependency edge.
+fn edge_key(edge: &SnapshotEdge) -> (&String, &String, &String, &String) {
+    (&edge.from, &edge.to, &edge.kind, &edge.target)
 }
 
 /// Canonical digest over the normalized workspace graph.
@@ -130,12 +124,16 @@ pub(crate) struct ExtensionBundle {
     config_digest: String,
     /// Whether the package carries a build script.
     has_build_script: bool,
+    /// Lockfile content digest, when resolved against the checkout.
+    lock_digest: Option<String>,
+    /// Nextest-config content digest, when resolved.
+    nextest_digest: Option<String>,
+    /// Declared rerun inputs; `Some([])` proves no build script reads.
+    rerun_inputs: Option<Vec<String>>,
 }
 
 impl ExtensionBundle {
-    /// Borrow the bundle as adapter inputs; lock/nextest/rerun digests
-    /// stay unknown at plan time (P06 discovery follow-up) and the
-    /// coverage gate resolves them against the checkout (see `closure`).
+    /// Borrow the bundle as adapter inputs with resolved digests bound.
     pub(crate) fn inputs(&self) -> velnor_actions_rust::GroupExtensionInputs<'_> {
         velnor_actions_rust::GroupExtensionInputs {
             package_id: &self.package_id,
@@ -145,10 +143,10 @@ impl ExtensionBundle {
             graph_digest: &self.graph_digest,
             targets: &self.targets,
             config_digest: &self.config_digest,
-            lock_digest: None,
-            nextest_digest: None,
+            lock_digest: self.lock_digest.as_deref(),
+            nextest_digest: self.nextest_digest.as_deref(),
             archive_source: None,
-            rerun_inputs: None,
+            rerun_inputs: self.rerun_inputs.as_deref(),
             has_build_script: self.has_build_script,
         }
     }
@@ -164,8 +162,25 @@ impl ExtensionBundle {
     }
 }
 
-/// Extension bundle for one group from discovery facts.
+/// Extension bundle for one group from the prebuilt snapshot index.
+///
+/// The snapshot carries graph digests built once per analysis; this
+/// lookup is a map hit, never a per-group workspace rescan. Lockfile
+/// and Nextest digests resolve against `root` when supplied; rerun
+/// inputs are `Some([])` for script-less packages (proven empty) and
+/// `None` for build-script packages without rerun evidence (unknown,
+/// forbidding reuse) until the build-output parser feeds them.
 pub(crate) fn extension_bundle(discovery: &Discovery, group: &TaskGroup) -> ExtensionBundle {
+    extension_bundle_at_root(discovery, group, None, None)
+}
+
+/// Snapshot-indexed bundle with checkout-bound digests when `root` is set.
+pub(crate) fn extension_bundle_at_root(
+    discovery: &Discovery,
+    group: &TaskGroup,
+    root: Option<&std::path::Path>,
+    nextest_config: Option<&str>,
+) -> ExtensionBundle {
     let manifest = super::manifest_for_key(&group.manifest_key);
     let mut bundle = ExtensionBundle {
         package_id: group.package_id.clone(),
@@ -176,6 +191,9 @@ pub(crate) fn extension_bundle(discovery: &Discovery, group: &TaskGroup) -> Exte
         targets: Vec::new(),
         config_digest: tool_config_digest(&discovery.tool_checks),
         has_build_script: false,
+        lock_digest: None,
+        nextest_digest: None,
+        rerun_inputs: None,
     };
     for workspace in &discovery.workspaces {
         for package in &workspace.record.packages {
@@ -195,7 +213,79 @@ pub(crate) fn extension_bundle(discovery: &Discovery, group: &TaskGroup) -> Exte
             bundle.has_build_script = package.has_build_script;
         }
     }
+    if !bundle.has_build_script {
+        bundle.rerun_inputs = Some(Vec::new());
+    }
+    if let Some(root) = root {
+        bundle.lock_digest = super::closure::lock_digest_at_root(root, &bundle.manifest);
+        bundle.nextest_digest = super::closure::nextest_digest_at_root(root, nextest_config);
+    }
     bundle
+}
+
+/// Snapshot-indexed bundle from a prebuilt [`ExecutionSnapshot`].
+///
+/// Graph and workspace digests come from the snapshot's once-built
+/// index; package targets and build-script facts still resolve from
+/// discovery. Prefer this over [`extension_bundle`] in per-analysis
+/// paths (baseline coverage) to stop per-group graph rebuilds.
+/// Lock and Nextest digests bind checkout content when `root` is set.
+pub(crate) fn extension_bundle_with_snapshot(
+    snapshot: &ExecutionSnapshot,
+    discovery: &Discovery,
+    group: &TaskGroup,
+    root: Option<&std::path::Path>,
+    nextest_config: Option<&str>,
+) -> ExtensionBundle {
+    let manifest = super::manifest_for_key(&group.manifest_key);
+    let workspace_id = snapshot.workspace_id_for(&group.package_id, &manifest);
+    let graph_digest = snapshot.graph_digest_for(&group.package_id, &manifest);
+    let mut bundle = ExtensionBundle {
+        package_id: group.package_id.clone(),
+        workspace_id,
+        profile: group.configuration.clone(),
+        manifest,
+        graph_digest,
+        targets: Vec::new(),
+        config_digest: tool_config_digest(&discovery.tool_checks),
+        has_build_script: false,
+        lock_digest: None,
+        nextest_digest: None,
+        rerun_inputs: None,
+    };
+    for workspace in &discovery.workspaces {
+        for package in &workspace.record.packages {
+            let owned = package.id == group.package_id
+                || (group.package_id.is_empty() && package.manifest == bundle.manifest);
+            if !owned {
+                continue;
+            }
+            bundle.targets = package
+                .targets
+                .iter()
+                .map(|target| format!("{}:{}", target.kind, target.name))
+                .collect();
+            bundle.has_build_script = package.has_build_script;
+        }
+    }
+    if !bundle.has_build_script {
+        bundle.rerun_inputs = Some(Vec::new());
+    }
+    if let Some(root) = root {
+        bundle.lock_digest = super::closure::lock_digest_at_root(root, &bundle.manifest);
+        bundle.nextest_digest = super::closure::nextest_digest_at_root(root, nextest_config);
+    }
+    bundle
+}
+
+/// Platform identity for one group via [`platform_id_for`].
+pub(crate) fn platform_id_for_group(label: &str, group: &TaskGroup) -> String {
+    let target = if group.target == "host" {
+        velnor_actions_contract::target_for_runner_label(label).unwrap_or("host")
+    } else {
+        group.target.as_str()
+    };
+    platform_id_for(label, target)
 }
 
 /// Writer lane from responsibility: shard suffix when sharded, else primary.
@@ -257,7 +347,7 @@ pub(crate) fn lane_id_for(group: &TaskGroup, workspace_id: &str) -> String {
     canonical_digest(&inputs).unwrap_or_else(|_| digest_b3(b"lane_error"))
 }
 
-/// Toolchain identity inputs: sorted exact specs plus driver and runner.
+/// Toolchain inputs with exact component evidence, never `unreported`.
 pub(crate) fn toolchain_inputs_for(group: &TaskGroup, catalog: &ToolCatalog) -> ToolchainInputs {
     let mut tools = vec![PinnedTool::Rust];
     if group.compile_driver == "mbx" {
@@ -270,7 +360,7 @@ pub(crate) fn toolchain_inputs_for(group: &TaskGroup, catalog: &ToolCatalog) -> 
     specs.sort();
     ToolchainInputs {
         tools: specs,
-        components: vec![COMPONENTS_UNREPORTED.to_owned()],
+        components: velnor_actions_mise::PrepareRustComponents::components(),
         compile_driver: group.compile_driver.clone(),
         test_runner: group.test_runner.clone(),
     }

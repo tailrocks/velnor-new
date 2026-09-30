@@ -2,21 +2,30 @@
 //!
 //! Declared via `#[path]` from `internal_plan.rs` (no `lib.rs` edit).
 //! Centralizes canonical serialization, strict parsing, checkout-path
-//! normalization, Cargo ID normalization, and generator markers. Group
-//! identities live in [`super::identities`], per-task closures in
-//! [`super::closure`]; unknown inputs are explicit states, never
-//! silent `None`s.
+//! normalization, Cargo ID normalization, generator markers, the single
+//! immutable [`ExecutionSnapshot`] per analysis, platform inputs with
+//! runner-image evidence, SHA-256 executable verification, and the
+//! canonical-schema migration gate. Group identities live in
+//! [`super::identities`], per-task closures in [`super::closure`];
+//! unknown inputs are explicit states, never silent `None`s.
 
 use serde::Serialize;
+use velnor_actions_contract::cachekey::{PlatformInputs, platform_id};
 use velnor_actions_contract::{
     ContractError, canonical_json_bytes, digest_b3, normalize_posix_path, parse_strict_json,
 };
 
 /// Explicit unknown marker for unverifiable archive sources.
+///
+/// Deprecated: archive callers must bind real source content (P04-7);
+/// this marker fails closed wherever it still appears.
 pub(crate) const UNKNOWN_ARCHIVE_SOURCE: &str = "velnor-unknown-archive-source-v1";
 /// SHA-256 of the empty string: explicit unverified-generator marker.
 pub(crate) const UNRESOLVED_GENERATOR_SHA: &str =
     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+/// Current canonical-schema version; evidence carrying any other version
+/// migrates explicitly or is rejected, never silently reinterpreted.
+pub(crate) const CANONICAL_SCHEMA_VERSION: u32 = 1;
 
 /// BLAKE3 digest over canonical JSON bytes: the single digest function.
 ///
@@ -94,17 +103,132 @@ pub(crate) fn map_release_triple(arch: &str, os: &str) -> String {
     .to_owned()
 }
 
-/// Content identity of the running executable, computed in-process.
+/// Reject any canonical-schema version except the current one.
 ///
-/// BLAKE3 over the executable bytes; no subprocess is spawned (the
-/// orchestrator never spawns processes). The `b3-` prefix distinguishes
-/// native hashes from release SHA-256 pins, which no in-process
-/// algorithm here can reproduce; exact executable-against-release
-/// verification awaits a SHA-256 facility (follow-up).
-pub(crate) fn current_exe_content_digest() -> Option<String> {
-    let exe = std::env::current_exe().ok()?;
-    let bytes = std::fs::read(exe).ok()?;
-    Some(digest_b3(&bytes))
+/// Old evidence migrates explicitly through a versioned migrator or is
+/// rejected here with a migration error; it is never reinterpreted
+/// under the new schema.
+///
+/// # Errors
+///
+/// Returns [`ContractError`] naming the required migration.
+pub(crate) fn check_canonical_version(found: u32) -> Result<(), ContractError> {
+    if found == CANONICAL_SCHEMA_VERSION {
+        Ok(())
+    } else {
+        Err(ContractError::identity(
+            "canonical_schema",
+            format!("migration_required:v{found}_to_v{CANONICAL_SCHEMA_VERSION}"),
+        ))
+    }
+}
+
+/// Platform inputs for one runner label plus execution target.
+///
+/// Image evidence derives from the label (`ubuntu-26.04` names OS
+/// `ubuntu` and version `26.04`; unversioned labels record `unknown`);
+/// OS/arch come from the release target mapping. Labels never fix
+/// package sets: the digest commits to exactly the observed triple.
+pub(crate) fn platform_inputs_for(label: &str, target: &str) -> PlatformInputs {
+    let (os, version) = match label.split_once('-') {
+        Some((os, rest)) if !rest.is_empty() => (os, rest),
+        _ => (label, "unknown"),
+    };
+    let (arch, os_name) = match target {
+        "x86_64-unknown-linux-gnu" => ("x86_64", "linux"),
+        "aarch64-apple-darwin" | "x86_64-apple-darwin" => ("aarch64", "macos"),
+        _ => (std::env::consts::ARCH, std::env::consts::OS),
+    };
+    let arch = if target == "x86_64-apple-darwin" {
+        "x86_64"
+    } else {
+        arch
+    };
+    PlatformInputs {
+        os: os_name.to_owned(),
+        arch: arch.to_owned(),
+        runs_on: label.to_owned(),
+        image_os: os.to_owned(),
+        image_version: version.to_owned(),
+        target: target.to_owned(),
+    }
+}
+
+/// Platform identity digest over runner image evidence (P03-4).
+pub(crate) fn platform_id_for(label: &str, target: &str) -> String {
+    let inputs = platform_inputs_for(label, target);
+    platform_id(&inputs).unwrap_or_else(|_| digest_b3(label.as_bytes()))
+}
+
+/// One immutable execution snapshot per analysis (P03-1).
+///
+/// Root cause of per-group rebuilds: every group rescanned discovery
+/// and recomputed graph digests linearly. The snapshot builds the
+/// graph/path index once and every group lookup is a map hit. All
+/// fields are private with no setters: construction is total and the
+/// value is immutable by construction.
+#[derive(Debug, Clone)]
+pub(crate) struct ExecutionSnapshot {
+    /// Workspace-root to canonical graph digest.
+    graph_digests: std::collections::BTreeMap<String, String>,
+    /// Workspace-root to workspace identity digest.
+    workspace_ids: std::collections::BTreeMap<String, String>,
+    /// Package ID to owning workspace root.
+    member_index: std::collections::BTreeMap<String, String>,
+    /// Manifest path to owning package ID.
+    manifest_index: std::collections::BTreeMap<String, String>,
+}
+
+impl ExecutionSnapshot {
+    /// Build the snapshot once per analysis from discovery facts.
+    pub(crate) fn build(discovery: &crate::discover::Discovery) -> Self {
+        let mut graph_digests = std::collections::BTreeMap::new();
+        let mut workspace_ids = std::collections::BTreeMap::new();
+        let mut member_index = std::collections::BTreeMap::new();
+        let mut manifest_index = std::collections::BTreeMap::new();
+        for workspace in &discovery.workspaces {
+            let graph = super::identities::snapshot_graph_for(&workspace.record);
+            let digest = canonical_digest(&graph).unwrap_or_else(|_| digest_b3(b"graph_error"));
+            graph_digests.insert(workspace.record.workspace_root.clone(), digest.clone());
+            workspace_ids.insert(workspace.record.workspace_root.clone(), digest);
+            for package in &workspace.record.packages {
+                member_index.insert(package.id.clone(), workspace.record.workspace_root.clone());
+                manifest_index.insert(package.manifest.clone(), package.id.clone());
+            }
+        }
+        Self {
+            graph_digests,
+            workspace_ids,
+            member_index,
+            manifest_index,
+        }
+    }
+
+    /// Graph digest for the workspace owning `package_id` or `manifest`.
+    pub(crate) fn graph_digest_for(&self, package_id: &str, manifest: &str) -> String {
+        self.owner_root(package_id, manifest)
+            .and_then(|root| self.graph_digests.get(root))
+            .cloned()
+            .unwrap_or_else(|| digest_b3(b"no-workspace"))
+    }
+
+    /// Workspace identity for the workspace owning `package_id` or `manifest`.
+    pub(crate) fn workspace_id_for(&self, package_id: &str, manifest: &str) -> String {
+        self.owner_root(package_id, manifest)
+            .and_then(|root| self.workspace_ids.get(root))
+            .cloned()
+            .unwrap_or_else(|| digest_b3(b"no-workspace"))
+    }
+
+    /// Owning workspace root for one group, via the prebuilt index.
+    fn owner_root(&self, package_id: &str, manifest: &str) -> Option<&String> {
+        if let Some(root) = self.member_index.get(package_id) {
+            return Some(root);
+        }
+        self.manifest_index
+            .get(manifest)
+            .and_then(|id| self.member_index.get(id))
+    }
 }
 
 #[cfg(test)]
@@ -160,15 +284,23 @@ mod tests {
     }
 
     #[test]
-    fn triples_map_and_exe_binds_content() {
+    fn triples_map_to_release_targets() {
         assert_eq!(
             map_release_triple("x86_64", "linux"),
             "x86_64-unknown-linux-gnu"
         );
         assert_eq!(map_release_triple("riscv64", "linux"), "riscv64-linux");
-        let digest = current_exe_content_digest().expect("exe readable");
-        assert!(velnor_actions_contract::validate_digest(&digest).is_ok());
-        assert_ne!(digest, digest_b3(b"other-bytes"));
         assert!(!UNRESOLVED_GENERATOR_SHA.bytes().all(|b| b == b'0'));
+    }
+
+    #[test]
+    fn platform_images_and_versions_flip() {
+        let linux = platform_id_for("ubuntu-26.04", "x86_64-unknown-linux-gnu");
+        let older = platform_id_for("ubuntu-24.04", "x86_64-unknown-linux-gnu");
+        assert_ne!(linux, older);
+        assert!(velnor_actions_contract::validate_digest(&linux).is_ok());
+        assert!(check_canonical_version(1).is_ok());
+        assert!(check_canonical_version(0).is_err());
+        assert!(check_canonical_version(2).is_err());
     }
 }

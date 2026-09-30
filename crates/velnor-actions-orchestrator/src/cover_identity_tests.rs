@@ -5,8 +5,8 @@
 use super::*;
 use crate::merge::required_evidence::BaselineTaskEntry;
 use velnor_actions_contract::{
-    BaselineStatus, PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanRunner,
-    RunnerSelection, Trust, WorkflowEvent,
+    PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanRunner, RunnerSelection, Trust,
+    WorkflowEvent, digest_b3,
 };
 use velnor_actions_mise::ToolCatalog;
 
@@ -25,15 +25,7 @@ fn plan_with(task_ids: &[&str]) -> Plan {
             selection: RunnerSelection::LatestDefault,
         },
         trust: Trust::Pr,
-        baseline: PlanBaseline {
-            status: BaselineStatus::Unavailable,
-            base_commit: None,
-            run_id: None,
-            artifact_id: None,
-            artifact_name: None,
-            manifest_digest: None,
-            reason: None,
-        },
+        baseline: PlanBaseline::unavailable(None).expect("baseline"),
         generator: PlanGenerator {
             version: "0.1.0".to_owned(),
             target: "x86_64-unknown-linux-gnu".to_owned(),
@@ -150,7 +142,7 @@ fn provenance() -> ValidatedProvenance {
     ValidatedProvenance {
         source_commit: "a".repeat(40),
         run_id: 7,
-        artifact_name: "velnor-baseline".to_owned(),
+        artifact_name: format!("velnor-baseline-{}-{}", "a".repeat(40), digest_b3(b"m")),
         artifact_id: 9,
         manifest_digest: digest_b3(b"m"),
     }
@@ -188,6 +180,13 @@ fn undiscovered_and_unknown_groups_never_cover() {
     );
 }
 
+/// Source files backing a content-bound closure in `root`.
+fn seed_sources(root: &std::path::Path) {
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"demo\"\n").expect("manifest");
+    std::fs::create_dir(root.join("src")).expect("src");
+    std::fs::write(root.join("src/lib.rs"), "pub fn f() {}\n").expect("source");
+}
+
 #[test]
 fn complete_closure_covers_but_incomplete_refuses() {
     let rust = "stack/rust/root/clippy/default";
@@ -195,6 +194,7 @@ fn complete_closure_covers_but_incomplete_refuses() {
     let manifest = manifest_with(&[rust]);
     let unchanged = Some(BTreeSet::new());
     let tmp = tempfile::tempdir().expect("tempdir");
+    seed_sources(tmp.path());
     let catalog = ToolCatalog::pinned();
     let covered = apply_coverage(
         &mut plan,
@@ -288,6 +288,7 @@ fn advisory_needs_fresh_external_data() {
     let manifest = manifest_with(&[advisory]);
     let unchanged = Some(BTreeSet::new());
     let tmp = tempfile::tempdir().expect("tempdir");
+    seed_sources(tmp.path());
     let catalog = ToolCatalog::pinned();
     let covered = apply_coverage(
         &mut plan,

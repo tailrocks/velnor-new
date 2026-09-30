@@ -10,8 +10,7 @@ use std::path::{Path, PathBuf};
 use std::collections::BTreeSet;
 
 use velnor_actions_contract::{
-    BaselineStatus, Plan, PlanBaseline, WorkflowEvent, canonical_json_bytes, digest_b3,
-    validate_digest,
+    Plan, PlanBaseline, WorkflowEvent, canonical_json_bytes, digest_b3, validate_digest,
 };
 use velnor_actions_mise::BaselineLookup as MiseBaselineLookup;
 
@@ -73,7 +72,12 @@ pub(crate) fn apply_baseline(
     resolve_generator_identity(plan, inputs.root);
     let manifest = manifest.or_else(|| lookup_manifest(plan, inputs));
     let Some(manifest) = manifest else {
-        plan.baseline.status = BaselineStatus::Unavailable;
+        // `lookup_manifest` already recorded the precise miss reason
+        // (`baseline_no_base`, source-build, lookup error); only fall back
+        // to `baseline_not_found` when it marked nothing.
+        if plan.baseline.reason().is_none() {
+            mark_unavailable(plan, "baseline_not_found");
+        }
         return Ok(());
     };
     if !publish_event_eligible(event) {
@@ -103,10 +107,6 @@ pub(crate) fn apply_baseline(
             return Ok(());
         }
     };
-    if expected.repository_id.is_none() {
-        plan.warnings
-            .push("baseline_repository_unverified:no_git_origin".to_owned());
-    }
     if baseline_expired(manifest.expires_at_unix, unix_now()) {
         mark_unavailable(plan, "baseline_expired");
         plan.warnings.push("baseline_miss:cache_expired".to_owned());
@@ -126,23 +126,23 @@ pub(crate) fn apply_baseline(
     } else if covered == 0 {
         mark_unavailable(plan, "baseline_no_entries_matched");
     } else {
-        plan.baseline = PlanBaseline {
-            status: BaselineStatus::Used,
-            base_commit: Some(provenance.source_commit),
-            run_id: Some(provenance.run_id),
-            artifact_id: Some(provenance.artifact_id),
-            artifact_name: Some(provenance.artifact_name),
-            manifest_digest: Some(provenance.manifest_digest),
-            reason: None,
-        };
+        plan.baseline = PlanBaseline::used(
+            &provenance.source_commit,
+            provenance.run_id,
+            provenance.artifact_id,
+            &provenance.artifact_name,
+            &provenance.manifest_digest,
+        )
+        .map_err(internal_contract)?;
     }
     Ok(())
 }
 
 /// Mark baseline evidence unavailable with an explicit reason.
 fn mark_unavailable(plan: &mut Plan, reason: &str) {
-    plan.baseline.status = BaselineStatus::Unavailable;
-    plan.baseline.reason = Some(reason.to_owned());
+    if plan.baseline.mark_unavailable(reason).is_err() {
+        plan.warnings.push("baseline_mark_failed".to_owned());
+    }
 }
 
 /// Live exact-base lookup when the caller supplied no manifest.
@@ -210,6 +210,7 @@ pub(crate) fn baseline_download_args(
 /// The entry directory must carry exactly `baseline.json` (single-file
 /// bounded UTF-8, no other payload) with matching source commit and
 /// artifact name. Duplicate JSON keys are rejected, never last-wins.
+/// Old canonical schemas fail closed here via the migration gate.
 pub(crate) fn baseline_entry_for(dir: &Path, base: &str) -> Option<BaselineManifest> {
     let name = dir.file_name()?.to_str()?;
     let rest = name.strip_prefix(&format!("velnor-baseline-{base}-"))?;
@@ -235,6 +236,9 @@ pub(crate) fn baseline_entry_for(dir: &Path, base: &str) -> Option<BaselineManif
     let text = std::str::from_utf8(&bytes).ok()?;
     let value = crate::internal_plan::snapshot::parse_canonical_json(text).ok()?;
     let manifest: BaselineManifest = serde_json::from_value(value).ok()?;
+    if crate::internal_plan::snapshot::check_canonical_version(manifest.schema).is_err() {
+        return None;
+    }
     if manifest.source_commit == base && manifest.artifact_name == name {
         Some(manifest)
     } else {

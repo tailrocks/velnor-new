@@ -10,12 +10,14 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::Serialize;
 use velnor_actions_contract::{MatrixEntry, PlanObligation, canonical_json_bytes, digest_b3};
-use velnor_actions_mise::{ToolAvailability, ToolCatalog};
+use velnor_actions_mise::ToolCatalog;
+use velnor_actions_mise::restore::probe_tool_availability;
 use velnor_actions_rust::TaskGroup;
 
 use crate::OrchestratorError;
 use crate::discover::Discovery;
 use crate::internal::{internal, internal_contract};
+use crate::internal_plan::identities::platform_id_for_group;
 use crate::internal_plan::wire_w2::{self, GroupWire};
 use crate::internal_plan::{
     IdentityInputs, adapter_metadata, cache_ids_for, evidence_for_group, execute_ids,
@@ -35,7 +37,11 @@ pub(crate) struct GroupInputs<'a> {
     pub(crate) run_key: &'a str,
     /// Runner label.
     pub(crate) label: &'a str,
-    /// Assigned execution lane.
+    /// Deprecated ordinal lane from the caller; ignored.
+    ///
+    /// Lane identity derives from responsibility and config (see
+    /// `cache_ids_for`); this field stays only because the non-owned
+    /// plan caller still supplies it. Removal awaits that migration.
     pub(crate) lane: u32,
     /// Pinned tool catalog.
     pub(crate) catalog: &'a ToolCatalog,
@@ -81,12 +87,13 @@ pub(crate) fn plan_group(
     inputs: &GroupInputs<'_>,
 ) -> Result<(PlanObligation, MatrixEntry), OrchestratorError> {
     let group = inputs.group;
+    let _ = inputs.lane;
     let toolchain = toolchain_id(group, inputs.catalog).map_err(internal_contract)?;
     let argv = task_argv(group, inputs.catalog)?;
     let manifest = manifest_for_key(&group.manifest_key);
     let bundle = extension_bundle(inputs.discovery, group);
     let ext = group.identity_extension(&bundle.inputs());
-    let platform_id = digest_b3(inputs.label.as_bytes());
+    let platform_id = platform_id_for_group(inputs.label, group);
     let input_digest = task_identity_digest(&IdentityInputs {
         group,
         argv: &argv,
@@ -103,13 +110,23 @@ pub(crate) fn plan_group(
         wire_w2::plan_reuse_outcome(
             group,
             inputs.wire.event,
-            ToolAvailability::Missing,
+            probe_tool_availability(false, false),
             &toolchain,
             &input_digest,
             ext.reuse_eligible().is_ok(),
         )?
     };
-    wire_w2::check_archive_identity(group, &toolchain, &platform_id, bundle.config_digest())?;
+    let gate =
+        wire_w2::check_archive_identity(group, &toolchain, &platform_id, bundle.config_digest())?;
+    // Unbound archive sources refuse the task (execute with reason);
+    // changed work already executes under its own reason. Malformed
+    // specs stay hard errors: the planner generated them itself.
+    let reuse = match gate {
+        wire_w2::ArchiveGate::SourceUnbound if !inputs.changed => {
+            wire_w2::ReuseOutcome::execute("archive_source_unbound")
+        }
+        _ => reuse,
+    };
     let task_digest = digest_of(&TaskDigestInputs {
         task_id: &group.task_id,
         argv: &argv,
@@ -143,8 +160,24 @@ pub(crate) fn plan_group(
         inputs.run_key,
     )
     .map_err(internal_contract)?;
-    entry.cache_ids = Some(cache_ids_for(group, inputs.label, inputs.lane, &toolchain));
+    let cache_ids = cache_ids_for(group, inputs.label, &toolchain).map_err(internal_contract)?;
+    record_lane_target_dir(&mut entry.adapter_metadata, cache_ids.lane_id());
+    entry.cache_ids = Some(cache_ids);
     Ok((obligation, entry))
+}
+
+/// Record the lane's isolated `CARGO_TARGET_DIR` on entry metadata.
+///
+/// Generated legs read this path for their step env; the value derives
+/// from the responsibility-based lane digest via `target_dir_for_lane`.
+fn record_lane_target_dir(metadata: &mut serde_json::Value, lane_id: &str) {
+    let Some(object) = metadata.as_object_mut() else {
+        return;
+    };
+    object.insert(
+        "cargo_target_dir".to_owned(),
+        serde_json::Value::String(crate::internal_plan::target_dir_for_lane_id(lane_id)),
+    );
 }
 
 /// Digest of canonical bytes for a serializable input struct.

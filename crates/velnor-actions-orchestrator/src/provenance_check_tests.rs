@@ -31,7 +31,7 @@ fn manifest_and_expected(base: &str) -> (BaselineManifest, ProvenanceExpectation
         workflow_path: ".github/workflows/velnor.yml".to_owned(),
         generator_version: "0.1.0".to_owned(),
         generator_sha256: "1".repeat(64),
-        repository_id: None,
+        repository_id: Some(digest),
     };
     (manifest, expected)
 }
@@ -49,7 +49,8 @@ fn every_wrong_dimension_fails_validation() {
             reason.to_owned()
         );
     };
-    check(&|m| m.schema = 2, "stale_schema");
+    check(&|m| m.schema = 2, "stale_schema:migration_required:v2");
+    check(&|m| m.schema = 0, "stale_schema:migration_required:v0");
     check(&|m| m.source_commit = "b".repeat(40), "wrong_commit");
     check(&|m| m.ref_ = "refs/heads/other".to_owned(), "wrong_ref");
     check(&|m| m.event = "pull_request".to_owned(), "untrusted_proof");
@@ -102,5 +103,10 @@ fn repository_anchor_and_origins_normalize() {
     assert_eq!(
         validate_provenance(&manifest, &digest_b3(b"m"), &expected).expect_err("repo"),
         "wrong_repository".to_owned()
+    );
+    expected.repository_id = None;
+    assert_eq!(
+        validate_provenance(&manifest, &digest_b3(b"m"), &expected).expect_err("unanchored"),
+        "repository_unanchored".to_owned()
     );
 }

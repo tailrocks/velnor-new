@@ -20,14 +20,10 @@ use velnor_actions_rust::{TaskGroup, TaskKind};
 use self::reuse_stages::verify_reused_pipeline;
 use crate::OrchestratorError;
 use crate::internal::internal;
-use crate::internal_plan::snapshot::UNKNOWN_ARCHIVE_SOURCE;
-
 /// Wiring inputs for one group: event plus generator identity.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct GroupWire<'a> {
-    /// Workflow event driving reuse.
     pub(crate) event: WorkflowEvent,
-    /// Generator identity for digests.
     pub(crate) generator: &'a PlanGenerator,
 }
 
@@ -59,36 +55,28 @@ pub(crate) fn reuse_qualification(group: &TaskGroup, event: WorkflowEvent) -> Re
 
 /// Reuse outcome for one plan obligation.
 pub(crate) struct ReuseOutcome {
-    /// Obligation decision.
     pub(crate) decision: ObligationDecision,
-    /// Precise decision reason.
     pub(crate) reason: String,
-    /// Task-cache key digest, when reuse was granted.
     pub(crate) task_cache_key: Option<String>,
-    /// Gate-6 task-layer enablement for the obligation.
     pub(crate) task_cache_enabled: bool,
 }
-
 impl ReuseOutcome {
-    /// Forced execution with an explicit reason (changed work).
-    pub(crate) fn execute(reason: &str) -> Self {
+    fn execute_with(reason: String) -> Self {
         Self {
             decision: ObligationDecision::Execute,
-            reason: reason.to_owned(),
+            reason,
             task_cache_key: None,
             task_cache_enabled: false,
         }
     }
+    /// Forced execution with an explicit reason (changed work).
+    pub(crate) fn execute(reason: &str) -> Self {
+        Self::execute_with(reason.to_owned())
+    }
 }
-
 /// Decide reuse eligibility for one group (REUSE-1/6/7, PAR-3.4).
-///
-/// Plan time establishes eligibility only: presence, restore, and
-/// verification need execution evidence that exists solely at merge
-/// time, so this never grants `ReusedFromTaskCache` (merge rejects
-/// plan-time reuse claims). Eligible groups execute with `no_entry`;
-/// the pinned Mise task-cache feature stays disabled until Gate-6
-/// qualification plus the opaque transport exist (follow-up).
+/// Plan time never grants reuse: merge-time evidence required, so eligible
+/// groups execute with `no_entry` and task-cache stays disabled.
 pub(crate) fn plan_reuse_outcome(
     group: &TaskGroup,
     event: WorkflowEvent,
@@ -100,36 +88,30 @@ pub(crate) fn plan_reuse_outcome(
     validate_digest(toolchain_id).map_err(|err| internal(&err.to_string()))?;
     validate_digest(input_digest).map_err(|err| internal(&err.to_string()))?;
     if !reuse_eligible {
-        return Ok(ReuseOutcome {
-            decision: ObligationDecision::Execute,
-            reason: MissReason::TASK_NOT_ELIGIBLE.as_str().to_owned(),
-            task_cache_key: None,
-            task_cache_enabled: false,
-        });
+        return Ok(ReuseOutcome::execute_with(
+            MissReason::TASK_NOT_ELIGIBLE.as_str().to_owned(),
+        ));
     }
-    if availability != ToolAvailability::Ready {
-        return Ok(ReuseOutcome {
-            decision: ObligationDecision::Execute,
-            reason: "unproven".to_owned(),
-            task_cache_key: None,
-            task_cache_enabled: false,
-        });
+    match availability {
+        ToolAvailability::Ready => {}
+        ToolAvailability::Unqualified => {
+            return Ok(ReuseOutcome::execute_with(
+                MissReason::FORCED_UNCACHED.as_str().to_owned(),
+            ));
+        }
+        ToolAvailability::Missing => {
+            return Ok(ReuseOutcome::execute_with("unproven".to_owned()));
+        }
     }
     let mode = mode_for_event(reuse_event_name(event))
         .map_err(|err| internal(&format!("reuse_mode_rejected:{err}")))?;
     match plan_reuse(availability, &reuse_qualification(group, event), mode) {
-        ReusePlan::Reuse(_) => Ok(ReuseOutcome {
-            decision: ObligationDecision::Execute,
-            reason: MissReason::NO_ENTRY.as_str().to_owned(),
-            task_cache_key: None,
-            task_cache_enabled: false,
-        }),
-        ReusePlan::Execute(fallback) => Ok(ReuseOutcome {
-            decision: ObligationDecision::Execute,
-            reason: fallback.reason().as_str().to_owned(),
-            task_cache_key: None,
-            task_cache_enabled: false,
-        }),
+        ReusePlan::Reuse(_) => Ok(ReuseOutcome::execute_with(
+            MissReason::NO_ENTRY.as_str().to_owned(),
+        )),
+        ReusePlan::Execute(fallback) => Ok(ReuseOutcome::execute_with(
+            fallback.reason().as_str().to_owned(),
+        )),
     }
 }
 
@@ -147,24 +129,39 @@ fn parse_shard_suffix(task_id: &str) -> Option<(u32, u32)> {
     Some((index, count))
 }
 
-/// Archive identity gate for sharded Nextest groups (PAR-8.3).
-///
-/// Unsharded groups run in place and need no archive; sharded groups
-/// must carry well-formed archive inputs over the real platform/config
-/// digests. The source slot commits to the explicit unknown marker:
-/// content bytes are unavailable at plan time, so pathnames never
-/// stand in for content (content binding is a follow-up).
+/// Archive-gate verdict for one group.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ArchiveGate {
+    /// No archive to verify, or the archive identity verified.
+    Clear,
+    /// Sharded archive with unbound source: execute with reason, never abort.
+    SourceUnbound,
+}
+
+/// Archive gate for sharded Nextest groups; unbound sources refuse
+/// the task (execute with reason) instead of aborting the plan.
 pub(crate) fn check_archive_identity(
     group: &TaskGroup,
     toolchain_id: &str,
     platform_id: &str,
     config_digest: &str,
-) -> Result<(), OrchestratorError> {
+) -> Result<ArchiveGate, OrchestratorError> {
+    check_archive_identity_with_source(group, toolchain_id, platform_id, config_digest, None)
+}
+
+/// Archive gate with an explicit content-bound source digest.
+pub(crate) fn check_archive_identity_with_source(
+    group: &TaskGroup,
+    toolchain_id: &str,
+    platform_id: &str,
+    config_digest: &str,
+    source_digest: Option<&str>,
+) -> Result<ArchiveGate, OrchestratorError> {
     if group.kind != TaskKind::Nextest {
-        return Ok(());
+        return Ok(ArchiveGate::Clear);
     }
     if !group.task_id.contains("/shard-") {
-        return Ok(());
+        return Ok(ArchiveGate::Clear);
     }
     if parse_shard_suffix(&group.task_id).is_none() {
         return Err(internal(&format!(
@@ -177,17 +174,18 @@ pub(crate) fn check_archive_identity(
         "mbx" => NextestDriver::Mbx,
         other => return Err(internal(&format!("unknown_archive_driver:{other}"))),
     };
-    let target = if group.target == "host" {
-        None
-    } else {
-        Some(group.target.as_str())
+    let marker = digest_b3(crate::internal_plan::snapshot::UNKNOWN_ARCHIVE_SOURCE.as_bytes());
+    let Some(source) =
+        source_digest.filter(|digest| validate_digest(digest).is_ok() && *digest != marker)
+    else {
+        return Ok(ArchiveGate::SourceUnbound);
     };
+    let target = (group.target != "host").then_some(group.target.as_str());
     let archive = NextestArchive::new(driver, &group.package_name, &group.features, target)
         .map_err(|err| internal(&format!("archive_inputs_rejected:{err}")))?;
     let catalog = ToolCatalog::pinned();
-    let source_digest = digest_b3(UNKNOWN_ARCHIVE_SOURCE.as_bytes());
     let inputs = ArchiveIdentityInputs {
-        source_digest: &source_digest,
+        source_digest: source,
         profile: &group.configuration,
         toolchain_id,
         runtime: &group.compile_driver,
@@ -197,17 +195,13 @@ pub(crate) fn check_archive_identity(
         config_digest,
     };
     archive_identity(&archive, &inputs)
-        .map(|_| ())
+        .map(|_| ArchiveGate::Clear)
         .map_err(|err| internal(&format!("archive_identity_rejected:{err}")))
 }
 
-/// Verify a `reused` task through the reuse stages (REUSE-5).
-///
-/// Runs the full presence/eligibility/restored/verified pipeline over
-/// the declared and observed outputs. Merge-time calls carry no
-/// descriptor, expectations, or restore metadata, so verification of
-/// outputs is real but the trust gate always fails closed until the
-/// report contract carries restore observations (P04 follow-up).
+/// Verify a `reused` task; fails closed without restore observations.
+/// `Verified` needs [`verify_reused_pipeline`] with all three observation
+/// arguments once reports carry restore metadata.
 pub(crate) fn verify_reused_task(
     _task_id: &str,
     declared: &[String],
@@ -215,10 +209,11 @@ pub(crate) fn verify_reused_task(
 ) -> Result<(), MissReason> {
     verify_reused_pipeline(declared, observed, None, None, None)
 }
-
 #[cfg(test)]
 mod tests {
+    use super::reuse_stages::{ExpectedReuseIdentity, ObservedRestoreMeta};
     use super::*;
+    use velnor_actions_mise::CachedTaskDescriptor;
 
     /// Minimal group with kind, task ID, and nondeterminism flags.
     fn group(kind: TaskKind, task_id: &str) -> TaskGroup {
@@ -250,46 +245,35 @@ mod tests {
     fn reuse_outcomes_execute_with_precise_reasons() {
         let group = group(TaskKind::Nextest, "stack/rust/root/nextest/default");
         let digest = digest_b3(b"toolchain");
-        let missing = plan_reuse_outcome(
-            &group,
-            WorkflowEvent::PullRequest,
-            ToolAvailability::Missing,
-            &digest,
-            &digest,
-            true,
-        )
-        .expect("missing");
-        assert_eq!(missing.decision, ObligationDecision::Execute);
+        let outcome = |availability, eligible: bool| {
+            plan_reuse_outcome(
+                &group,
+                WorkflowEvent::PullRequest,
+                availability,
+                &digest,
+                &digest,
+                eligible,
+            )
+            .expect("outcome")
+        };
+        let missing = outcome(ToolAvailability::Missing, true);
         assert_eq!(missing.reason, "unproven");
-        assert!(missing.task_cache_key.is_none());
         assert!(!missing.task_cache_enabled);
-        let eligible = plan_reuse_outcome(
-            &group,
-            WorkflowEvent::PullRequest,
-            ToolAvailability::Ready,
-            &digest,
-            &digest,
-            true,
-        )
-        .expect("eligible");
-        assert_eq!(eligible.decision, ObligationDecision::Execute);
+        let gated = outcome(ToolAvailability::Unqualified, true);
+        assert_eq!(gated.reason, MissReason::FORCED_UNCACHED.as_str());
+        assert!(!gated.task_cache_enabled);
+        let eligible = outcome(ToolAvailability::Ready, true);
         assert_eq!(eligible.reason, MissReason::NO_ENTRY.as_str());
         assert!(!eligible.task_cache_enabled);
+        let refused = outcome(ToolAvailability::Ready, false);
+        assert_eq!(refused.reason, MissReason::TASK_NOT_ELIGIBLE.as_str());
+        for result in [&missing, &gated, &eligible, &refused] {
+            assert_eq!(result.decision, ObligationDecision::Execute);
+            assert!(result.task_cache_key.is_none());
+        }
         let mut dirty = group;
         dirty.undeclared_reads = true;
-        let refused = plan_reuse_outcome(
-            &dirty,
-            WorkflowEvent::PullRequest,
-            ToolAvailability::Ready,
-            &digest,
-            &digest,
-            false,
-        )
-        .expect("refused");
-        assert_eq!(refused.decision, ObligationDecision::Execute);
-        assert_eq!(refused.reason, MissReason::TASK_NOT_ELIGIBLE.as_str());
-        let signals = reuse_qualification(&dirty, WorkflowEvent::Push);
-        assert!(signals.always_run());
+        assert!(reuse_qualification(&dirty, WorkflowEvent::Push).always_run());
         assert!(
             plan_reuse_outcome(
                 &dirty,
@@ -338,10 +322,12 @@ mod tests {
     }
 
     #[test]
-    fn archive_gate_validates_shards_without_path_sources() {
+    fn archive_gate_binds_sources_and_refuses_unbound() {
         let digest = digest_b3(b"d");
+        let source = digest_b3(b"package-sources");
         let plain = group(TaskKind::Nextest, "stack/rust/root/nextest/default");
-        assert!(check_archive_identity(&plain, &digest, &digest, &digest).is_ok());
+        let gate = check_archive_identity(&plain, &digest, &digest, &digest);
+        assert!(matches!(gate, Ok(ArchiveGate::Clear)));
         let mut sharded = group(
             TaskKind::Nextest,
             "stack/rust/root/nextest/default/shard-1-of-2",
@@ -350,10 +336,64 @@ mod tests {
         let err = check_archive_identity(&sharded, &digest, &digest, &digest).expect_err("driver");
         assert!(err.to_string().contains("unknown_archive_driver"), "{err}");
         sharded.compile_driver = "cargo".to_owned();
-        assert!(check_archive_identity(&sharded, &digest, &digest, &digest).is_ok());
+        let check = |group: &TaskGroup, source: Option<&str>| {
+            check_archive_identity_with_source(group, &digest, &digest, &digest, source)
+        };
+        let unbound = check(&sharded, None);
+        assert!(matches!(unbound, Ok(ArchiveGate::SourceUnbound)));
+        let bound = check(&sharded, Some(&source));
+        assert!(matches!(bound, Ok(ArchiveGate::Clear)));
+        let bogus = check(&sharded, Some("bogus"));
+        assert!(matches!(bogus, Ok(ArchiveGate::SourceUnbound)));
         let malformed = group(TaskKind::Nextest, "stack/rust/root/nextest/default/shard-x");
-        let err =
-            check_archive_identity(&malformed, &digest, &digest, &digest).expect_err("malformed");
+        let err = check(&malformed, Some(&source)).expect_err("malformed");
         assert!(err.to_string().contains("malformed_shard_suffix"), "{err}");
+    }
+
+    #[test]
+    fn observations_thread_to_verified_or_precise_miss() {
+        let bytes = b"report-bytes".to_vec();
+        let digest = digest_b3(&bytes);
+        let observed = vec![("out/report.json".to_owned(), bytes, digest)];
+        let descriptor = CachedTaskDescriptor {
+            task_name: "clippy".to_owned(),
+            sources: vec!["Cargo.toml".to_owned()],
+            outputs: vec!["out/report.json".to_owned()],
+            command_inputs: Vec::new(),
+            env: std::collections::BTreeMap::new(),
+            tools: vec!["rust@1.98.1".to_owned()],
+            dep_keys: Vec::new(),
+        };
+        let (key, compat) = (digest_b3(b"key"), digest_b3(b"compat"));
+        let expected = ExpectedReuseIdentity {
+            cache_key: key.clone(),
+            compatibility_id: compat.clone(),
+            owner_scope: "trusted".to_owned(),
+        };
+        let declared = vec!["out/report.json".to_owned()];
+        let good = ObservedRestoreMeta {
+            key: key.clone(),
+            compat: compat.clone(),
+            owner: "trusted".to_owned(),
+        };
+        let bad = ObservedRestoreMeta {
+            key,
+            compat: digest_b3(b"other"),
+            owner: "trusted".to_owned(),
+        };
+        let run = |restore: &ObservedRestoreMeta| {
+            verify_reused_pipeline(
+                &declared,
+                &observed,
+                Some(&descriptor),
+                Some(&expected),
+                Some(restore),
+            )
+        };
+        assert!(run(&good).is_ok());
+        assert_eq!(
+            run(&bad).expect_err("compat"),
+            MissReason::COMPATIBILITY_MISMATCH
+        );
     }
 }

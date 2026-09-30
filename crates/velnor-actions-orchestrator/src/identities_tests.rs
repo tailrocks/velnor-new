@@ -180,4 +180,12 @@ fn compiler_spec_versions_flip_the_digest() {
         toolchain_digest_for(&group, &catalog).expect("digest")
     );
     assert!(built.tools.iter().any(|spec| spec.starts_with("rust@")));
+    assert_eq!(
+        built.components,
+        vec!["clippy".to_owned(), "rustfmt".to_owned()]
+    );
+    let imaged = platform_id_for_group("ubuntu-26.04", &group);
+    let older = platform_id_for_group("ubuntu-24.04", &group);
+    assert_ne!(imaged, older);
+    assert!(validate_digest(&imaged).is_ok());
 }

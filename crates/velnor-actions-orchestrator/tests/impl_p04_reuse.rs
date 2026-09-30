@@ -3,10 +3,27 @@
 //! Unregistered: the parent wires this module into `velnor_orchestrator.rs`
 //! (P09 pattern). Cases run through the public plan API only.
 
-use velnor_actions_contract::{BaselineStatus, ObligationDecision, Plan};
+use velnor_actions_contract::{BaselineStatus, ObligationDecision, Plan, digest_b3};
 
 use super::impl_common::{TestResult, config_with_branch, git, make_repo, plan_for_source_change};
 use super::impl_orch_core::{has_warning, manifest_for, plan_value};
+
+/// Anchor test repos to a fixed origin so provenance can validate.
+///
+/// Fail-closed anchoring refuses coverage for origin-less checkouts; every
+/// unsafe-case test below must anchor first so the specific miss reason —
+/// not `repository_unanchored` — is what the test exercises.
+fn anchor_repo(root: &std::path::Path) -> TestResult {
+    git(
+        &["remote", "add", "origin", "https://github.com/o/r.git"],
+        root,
+    )
+}
+
+/// Manifest `repository_id` matching [`anchor_repo`].
+fn anchor_id() -> String {
+    digest_b3(b"github.com/o/r")
+}
 
 /// Typed plan from a plan-response value.
 fn typed(value: &serde_json::Value) -> Result<Plan, Box<dyn std::error::Error>> {
@@ -21,6 +38,7 @@ fn plan_with_mutation(
     mutate: &dyn Fn(&mut serde_json::Value),
 ) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
     let mut manifest = manifest_for(seed, base, "testmain")?;
+    manifest["repository_id"] = serde_json::Value::String(anchor_id());
     mutate(&mut manifest);
     plan_value(
         root,
@@ -44,7 +62,7 @@ fn assert_miss(value: &serde_json::Value, reason: &str) -> TestResult {
             .map(|ob| &ob.decision)
             .collect::<Vec<_>>()
     );
-    assert_eq!(plan.baseline.status, BaselineStatus::Unavailable);
+    assert_eq!(plan.baseline.status(), BaselineStatus::Unavailable);
     assert!(
         has_warning(value, reason),
         "{reason}: {:?}",
@@ -60,6 +78,7 @@ type ManifestCase = (&'static str, Box<dyn Fn(&mut serde_json::Value)>);
 fn every_unsafe_manifest_executes() -> TestResult {
     let (repo, seed) = plan_for_source_change()?;
     let root = repo.path();
+    anchor_repo(root)?;
     let base = seed.base.clone().ok_or("base")?;
     let cases: Vec<ManifestCase> = vec![
         (
@@ -130,6 +149,7 @@ fn every_unsafe_manifest_executes() -> TestResult {
 fn carried_proof_binding_mismatch_executes() -> TestResult {
     let (repo, seed) = plan_for_source_change()?;
     let root = repo.path();
+    anchor_repo(root)?;
     let base = seed.base.clone().ok_or("base")?;
     let ob = seed.obligations.first().ok_or("obligation")?;
     let value = plan_with_mutation(root, &seed, &base, &|m| {
@@ -160,7 +180,7 @@ fn missing_base_is_a_miss_not_a_failure() -> TestResult {
 }
 
 #[test]
-fn anchored_repository_binds_and_unanchored_warns() -> TestResult {
+fn anchored_repository_binds_and_unanchored_fails_closed() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     let root = repo.path();
     git(&["add", "."], root)?;
@@ -168,28 +188,16 @@ fn anchored_repository_binds_and_unanchored_warns() -> TestResult {
     let head = super::impl_common::git_line(&["rev-parse", "HEAD"], root)?;
     let seed = typed(&plan_value(root, "pull_request", Some(&head), &head, None)?)?;
     let mut manifest = manifest_for(&seed, &head, "testmain")?;
-    // No origin remote: shape-only repository check with an explicit warning.
-    let value = plan_value(root, "pull_request", Some(&head), &head, Some(&manifest))?;
-    assert!(
-        has_warning(&value, "baseline_repository_unverified"),
-        "{:?}",
-        value["plan"]["warnings"]
-    );
-    assert!(
-        typed(&value)?
-            .obligations
-            .iter()
-            .all(|ob| ob.decision == ObligationDecision::CoveredByTrustedBaseline)
-    );
-    // Anchored origin: exact repository binding enforced.
-    git(
-        &["remote", "add", "origin", "https://github.com/o/r.git"],
-        root,
+    manifest["repository_id"] = serde_json::Value::String(anchor_id());
+    // No origin remote: fail closed, never warn-and-cover.
+    assert_miss(
+        &plan_value(root, "pull_request", Some(&head), &head, Some(&manifest))?,
+        "repository_unanchored",
     )?;
-    manifest["repository_id"] =
-        serde_json::Value::String(velnor_actions_contract::digest_b3(b"github.com/o/r"));
+    // Anchored origin: exact repository binding enforced.
+    anchor_repo(root)?;
     let value = plan_value(root, "pull_request", Some(&head), &head, Some(&manifest))?;
-    assert!(!has_warning(&value, "baseline_repository_unverified"));
+    assert!(!has_warning(&value, "repository_unanchored"));
     assert!(
         typed(&value)?
             .obligations

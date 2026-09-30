@@ -15,7 +15,7 @@ mod cover_identity_tests;
 use std::collections::BTreeSet;
 
 use velnor_actions_contract::{
-    BaselineProof, ObligationDecision, Plan, PlanObligation, digest_b3, validate_rust_extension,
+    BaselineProof, ObligationDecision, Plan, PlanObligation, validate_rust_extension,
 };
 
 use crate::cover_baseline::BaselineInputs;
@@ -27,7 +27,9 @@ use crate::external_data::{
 };
 use crate::internal::plan_obligation::{changed_keys, member_changed};
 use crate::internal_plan::closure::resolve_closure_at_root;
-use crate::internal_plan::{extension_bundle, nextest_config_for, toolchain_id};
+use crate::internal_plan::identities::{extension_bundle_with_snapshot, platform_id_for_group};
+use crate::internal_plan::snapshot::ExecutionSnapshot;
+use crate::internal_plan::{nextest_config_for, toolchain_id};
 use crate::merge::BaselineManifest;
 
 pub(crate) use self::generator::{
@@ -40,8 +42,10 @@ pub(crate) use self::generator::{
 /// conservative execution refuse as before; extension bytes must
 /// validate (schema plus slots, not just the task-ID prefix); and the
 /// input closure must resolve completely against the checkout, with
-/// unknown inputs forbidding coverage.
+/// unknown inputs forbidding coverage. Graph digests come from the
+/// once-built snapshot index, never a per-group rescan.
 fn coverage_refusal(
+    snapshot: &ExecutionSnapshot,
     discovery: &Discovery,
     task_id: &str,
     root: &std::path::Path,
@@ -55,7 +59,13 @@ fn coverage_refusal(
     if group.undeclared_reads {
         return Some("undeclared_inputs".to_owned());
     }
-    let bundle = extension_bundle(discovery, group);
+    let bundle = extension_bundle_with_snapshot(
+        snapshot,
+        discovery,
+        group,
+        Some(root),
+        nextest_config_for(discovery, group).as_deref(),
+    );
     let ext = group.identity_extension(&bundle.inputs());
     if ext.coverage_eligible().is_err() || ext.conservative_execution_required() {
         return Some("undeclared_inputs".to_owned());
@@ -66,7 +76,7 @@ fn coverage_refusal(
     let Ok(toolchain) = toolchain_id(group, catalog) else {
         return Some("toolchain_unresolvable".to_owned());
     };
-    let platform = digest_b3(label.as_bytes());
+    let platform = platform_id_for_group(label, group);
     let closure = resolve_closure_at_root(
         root,
         group,
@@ -85,20 +95,28 @@ fn coverage_refusal(
 }
 
 /// Mark one obligation covered from validated provenance only.
+///
+/// Returns false when the proof constructor rejects its inputs; the
+/// caller keeps the obligation executing instead of storing a forged
+/// or partial proof.
 fn mark_covered(
     obligation: &mut PlanObligation,
     task: &crate::merge::required_evidence::BaselineTaskEntry,
     provenance: &ValidatedProvenance,
-) {
+) -> bool {
+    let Ok(proof) = BaselineProof::new(
+        &provenance.source_commit,
+        task.proof_run_id,
+        provenance.artifact_id,
+        &provenance.artifact_name,
+        &provenance.manifest_digest,
+    ) else {
+        return false;
+    };
     obligation.decision = ObligationDecision::CoveredByTrustedBaseline;
     obligation.reason = String::from("covered_by_trusted_baseline");
-    obligation.baseline_proof = Some(BaselineProof {
-        source_commit: provenance.source_commit.clone(),
-        run_id: task.proof_run_id,
-        artifact_id: provenance.artifact_id,
-        artifact_name: provenance.artifact_name.clone(),
-        manifest_digest: provenance.manifest_digest.clone(),
-    });
+    obligation.baseline_proof = Some(proof);
+    true
 }
 
 /// Mark covered obligations and prune the matrix; returns covered count.
@@ -118,6 +136,7 @@ pub(crate) fn apply_coverage(
     let keys = changed
         .map(|set| changed_keys(&universe, set))
         .unwrap_or_default();
+    let snapshot = ExecutionSnapshot::build(discovery);
     let mut covered = 0u32;
     for obligation in &mut plan.obligations {
         let group = discovery
@@ -145,6 +164,7 @@ pub(crate) fn apply_coverage(
             continue;
         }
         if let Some(reason) = coverage_refusal(
+            &snapshot,
             discovery,
             &obligation.task_id,
             inputs.root,
@@ -175,9 +195,21 @@ pub(crate) fn apply_coverage(
             ));
             continue;
         }
-        mark_covered(obligation, task, provenance);
-        covered += 1;
+        if mark_covered(obligation, task, provenance) {
+            covered += 1;
+        } else {
+            plan.warnings.push(format!(
+                "baseline_miss:{}:proof_unconstructible",
+                obligation.task_id
+            ));
+        }
     }
+    prune_to_execute(plan);
+    covered
+}
+
+/// Drop covered matrix entries and deselect fully-covered packages.
+fn prune_to_execute(plan: &mut Plan) {
     plan.matrix.include.retain(|entry| {
         plan.obligations
             .iter()
@@ -188,5 +220,4 @@ pub(crate) fn apply_coverage(
             ob.decision == ObligationDecision::Execute && package.tasks.contains(&ob.task_id)
         });
     }
-    covered
 }

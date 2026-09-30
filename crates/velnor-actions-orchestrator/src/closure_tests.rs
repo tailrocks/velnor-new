@@ -40,7 +40,7 @@ fn digest_of(closure: &TaskInputClosure) -> String {
 
 #[test]
 fn each_input_flips_the_closure_digest() {
-    let base = ClosureBuilder::new("t")
+    let base = ClosureBuilder::new()
         .value("features", "")
         .input(
             "lockfile",
@@ -48,8 +48,8 @@ fn each_input_flips_the_closure_digest() {
                 evidence: "none".to_owned(),
             },
         )
-        .build();
-    let flipped = ClosureBuilder::new("t")
+        .build("t");
+    let flipped = ClosureBuilder::new()
         .value("features", "serde")
         .input(
             "lockfile",
@@ -57,9 +57,9 @@ fn each_input_flips_the_closure_digest() {
                 evidence: "none".to_owned(),
             },
         )
-        .build();
+        .build("t");
     assert_ne!(digest_of(&base), digest_of(&flipped));
-    let known = ClosureBuilder::new("t")
+    let known = ClosureBuilder::new()
         .value("features", "")
         .input(
             "lockfile",
@@ -67,9 +67,9 @@ fn each_input_flips_the_closure_digest() {
                 digest: digest_b3(b"lock"),
             },
         )
-        .build();
+        .build("t");
     assert_ne!(digest_of(&base), digest_of(&known));
-    let unknown = ClosureBuilder::new("t")
+    let unknown = ClosureBuilder::new()
         .value("features", "")
         .input(
             "lockfile",
@@ -77,7 +77,7 @@ fn each_input_flips_the_closure_digest() {
                 reason: "unreadable".to_owned(),
             },
         )
-        .build();
+        .build("t");
     assert_ne!(digest_of(&base), digest_of(&unknown));
     assert_ne!(digest_of(&known), digest_of(&unknown));
     assert!(base.verify_complete().is_ok());
@@ -88,35 +88,35 @@ fn each_input_flips_the_closure_digest() {
 
 #[test]
 fn same_path_with_changed_source_flips() {
-    let before = ClosureBuilder::new("t")
+    let before = ClosureBuilder::new()
         .input(
             "manifest",
             Provenance::Known {
                 digest: digest_b3(b"[package]\nname = \"a\"\n"),
             },
         )
-        .build();
-    let after = ClosureBuilder::new("t")
+        .build("t");
+    let after = ClosureBuilder::new()
         .input(
             "manifest",
             Provenance::Known {
                 digest: digest_b3(b"[package]\nname = \"b\"\n"),
             },
         )
-        .build();
+        .build("t");
     assert_ne!(digest_of(&before), digest_of(&after));
 }
 
 #[test]
 fn unrelated_tasks_stay_isolated() {
-    let left = ClosureBuilder::new("a").value("features", "").build();
-    let right = ClosureBuilder::new("b").value("features", "").build();
+    let left = ClosureBuilder::new().value("features", "").build("a");
+    let right = ClosureBuilder::new().value("features", "").build("b");
     assert_ne!(digest_of(&left), digest_of(&right));
-    let changed = ClosureBuilder::new("a").value("features", "x").build();
+    let changed = ClosureBuilder::new().value("features", "x").build("a");
     assert_ne!(digest_of(&left), digest_of(&changed));
     assert_eq!(
         digest_of(&right),
-        digest_of(&ClosureBuilder::new("b").value("features", "").build())
+        digest_of(&ClosureBuilder::new().value("features", "").build("b"))
     );
 }
 
@@ -126,6 +126,8 @@ fn checkout_resolution_binds_content_and_absence() {
     let root = tmp.path();
     std::fs::write(root.join("Cargo.toml"), "[package]\n").expect("manifest");
     std::fs::write(root.join("Cargo.lock"), "lock-bytes").expect("lock");
+    std::fs::create_dir(root.join("src")).expect("src");
+    std::fs::write(root.join("src/lib.rs"), "pub fn f() {}\n").expect("source");
     let graph = digest_b3(b"graph");
     let toolchain = digest_b3(b"toolchain");
     let platform = digest_b3(b"platform");
@@ -147,12 +149,18 @@ fn checkout_resolution_binds_content_and_absence() {
         Provenance::Known { .. }
     ));
     assert!(matches!(
+        closure.inputs["source_tree"],
+        Provenance::Known { .. }
+    ));
+    assert!(matches!(
         closure.inputs["nextest_config"],
         Provenance::AbsentProven { .. }
     ));
     let relocated = tempfile::tempdir().expect("tempdir");
     std::fs::write(relocated.path().join("Cargo.toml"), "[package]\n").expect("manifest");
     std::fs::write(relocated.path().join("Cargo.lock"), "lock-bytes").expect("lock");
+    std::fs::create_dir(relocated.path().join("src")).expect("src");
+    std::fs::write(relocated.path().join("src/lib.rs"), "pub fn f() {}\n").expect("source");
     let again = resolve_closure_at_root(
         relocated.path(),
         &group(Vec::new(), false),
@@ -181,4 +189,42 @@ fn checkout_resolution_binds_content_and_absence() {
     );
     assert!(dirty.verify_complete().is_err());
     assert!(dirty.unknown_inputs().contains(&"vcs"));
+}
+
+#[test]
+fn source_edits_flip_and_classes_exclude_explicitly() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let root = tmp.path();
+    std::fs::write(root.join("Cargo.toml"), "[package]\n").expect("manifest");
+    std::fs::create_dir(root.join("src")).expect("src");
+    std::fs::write(root.join("src/lib.rs"), "pub fn f() {}\n").expect("source");
+    let graph = digest_b3(b"graph");
+    let toolchain = digest_b3(b"toolchain");
+    let platform = digest_b3(b"platform");
+    let resolve = |root: &std::path::Path| {
+        resolve_closure_at_root(
+            root,
+            &group(Vec::new(), false),
+            None,
+            &graph,
+            &toolchain,
+            &platform,
+        )
+    };
+    let before = digest_of(&resolve(root));
+    std::fs::write(root.join("src/lib.rs"), "pub fn f() {}\npub fn g() {}\n").expect("edit");
+    assert_ne!(before, digest_of(&resolve(root)));
+    let clippy = resolve(root);
+    for (name, marker) in [
+        ("docs", "kind_does_not_render_docs"),
+        ("fixtures", "kind_does_not_execute_tests"),
+    ] {
+        match &clippy.inputs[name] {
+            Provenance::AbsentProven { evidence } => {
+                assert!(evidence.contains(marker), "{evidence}");
+            }
+            other => panic!("{name} must exclude explicitly: {other:?}"),
+        }
+    }
+    assert!(clippy.verify_complete().is_ok());
 }

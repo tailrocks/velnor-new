@@ -16,6 +16,19 @@ fn typed(value: &serde_json::Value) -> Result<Plan, Box<dyn std::error::Error>> 
     Ok(serde_json::from_value(value["plan"].clone())?)
 }
 
+/// Anchor a fixture repo so fail-closed provenance can validate it.
+fn anchor_repo(root: &std::path::Path) -> TestResult {
+    git(
+        &["remote", "add", "origin", "https://github.com/o/r.git"],
+        root,
+    )
+}
+
+/// Manifest `repository_id` matching [`anchor_repo`].
+fn anchor_id() -> String {
+    velnor_actions_contract::digest_b3(b"github.com/o/r")
+}
+
 #[test]
 fn generator_identity_has_no_zero_digest() -> TestResult {
     let (_repo, plan) = plan_for_source_change()?;
@@ -24,6 +37,12 @@ fn generator_identity_has_no_zero_digest() -> TestResult {
     assert!(
         !plan.generator.sha256.bytes().all(|b| b == b'0'),
         "zero digest: {}",
+        plan.generator.sha256
+    );
+    assert!(
+        plan.generator.sha256.len() == 64
+            && plan.generator.sha256.bytes().all(|b| b.is_ascii_hexdigit()),
+        "generator sha is real SHA-256 hex, never a b3- native hash: {}",
         plan.generator.sha256
     );
     assert!(!plan.generator.target.is_empty());
@@ -53,10 +72,16 @@ fn relocated_checkout_keeps_identities() -> TestResult {
             entry.cache_ids.as_ref().ok_or("ids")?,
             other.cache_ids.as_ref().ok_or("ids")?,
         );
-        assert_eq!(left.lane_id, right.lane_id, "{}", entry.task_id);
-        assert_eq!(left.toolchain_id, right.toolchain_id, "{}", entry.task_id);
+        assert_eq!(left.lane_id(), right.lane_id(), "{}", entry.task_id);
         assert_eq!(
-            left.cache_format_id, right.cache_format_id,
+            left.toolchain_id(),
+            right.toolchain_id(),
+            "{}",
+            entry.task_id
+        );
+        assert_eq!(
+            left.cache_format_id(),
+            right.cache_format_id(),
             "{}",
             entry.task_id
         );
@@ -71,12 +96,7 @@ fn lanes_follow_responsibility() -> TestResult {
         .matrix
         .include
         .iter()
-        .map(|entry| {
-            entry
-                .cache_ids
-                .as_ref()
-                .map_or("", |ids| ids.lane_id.as_str())
-        })
+        .map(|entry| entry.cache_ids.as_ref().map_or("", |ids| ids.lane_id()))
         .collect();
     assert!(!lanes.is_empty());
     assert!(lanes.iter().all(|lane| !lane.is_empty()));
@@ -93,8 +113,8 @@ fn lanes_follow_responsibility() -> TestResult {
         .find(|entry| entry.task_id.contains("/test/") || entry.task_id.contains("/nextest/"))
         .ok_or("test entry")?;
     assert_ne!(
-        clippy.cache_ids.as_ref().ok_or("ids")?.lane_id,
-        test.cache_ids.as_ref().ok_or("ids")?.lane_id,
+        clippy.cache_ids.as_ref().ok_or("ids")?.lane_id(),
+        test.cache_ids.as_ref().ok_or("ids")?.lane_id(),
         "distinct responsibilities never share a lane (or target dir)"
     );
     Ok(())
@@ -111,8 +131,10 @@ fn changed_source_executes_despite_matching_digests() -> TestResult {
     git(&["add", "."], root)?;
     git(&["commit", "-m", "two"], root)?;
     let head = git_line(&["rev-parse", "HEAD"], root)?;
+    anchor_repo(root)?;
     let seed = typed(&plan_value(root, "pull_request", Some(&base), &head, None)?)?;
-    let manifest = manifest_for(&seed, &base, "testmain")?;
+    let mut manifest = manifest_for(&seed, &base, "testmain")?;
+    manifest["repository_id"] = serde_json::Value::String(anchor_id());
     let plan = typed(&plan_value(
         root,
         "pull_request",
@@ -180,13 +202,15 @@ fn known_lockfile_covers_and_nextest_binds_toolchain() -> TestResult {
     git(&["add", "."], root)?;
     git(&["commit", "-m", "one"], root)?;
     let head = git_line(&["rev-parse", "HEAD"], root)?;
+    anchor_repo(root)?;
     let seed = typed(&plan_value(root, "pull_request", Some(&head), &head, None)?)?;
     assert!(
         seed.task_ids.iter().any(|id| id.contains("/nextest/")),
         "{:?}",
         seed.task_ids
     );
-    let manifest = manifest_for(&seed, &head, "testmain")?;
+    let mut manifest = manifest_for(&seed, &head, "testmain")?;
+    manifest["repository_id"] = serde_json::Value::String(anchor_id());
     let plan = typed(&plan_value(
         root,
         "pull_request",
@@ -201,7 +225,7 @@ fn known_lockfile_covers_and_nextest_binds_toolchain() -> TestResult {
         "known lockfile plus nextest still covers: {:?}",
         plan.warnings
     );
-    assert_eq!(plan.baseline.status, BaselineStatus::Used);
+    assert_eq!(plan.baseline.status(), BaselineStatus::Used);
     let (_plain_repo, unseeded) = plan_for_source_change()?;
     let nextest_toolchain = seed
         .matrix
@@ -209,7 +233,7 @@ fn known_lockfile_covers_and_nextest_binds_toolchain() -> TestResult {
         .iter()
         .find(|entry| entry.task_id.contains("/nextest/"))
         .and_then(|entry| entry.cache_ids.as_ref())
-        .map(|ids| ids.toolchain_id.clone())
+        .map(|ids| ids.toolchain_id().to_owned())
         .ok_or("nextest toolchain")?;
     assert!(
         unseeded
@@ -217,7 +241,7 @@ fn known_lockfile_covers_and_nextest_binds_toolchain() -> TestResult {
             .include
             .iter()
             .filter_map(|entry| entry.cache_ids.as_ref())
-            .all(|ids| ids.toolchain_id != nextest_toolchain),
+            .all(|ids| ids.toolchain_id() != nextest_toolchain),
         "nextest selection changes the toolchain identity"
     );
     Ok(())
@@ -227,9 +251,11 @@ fn known_lockfile_covers_and_nextest_binds_toolchain() -> TestResult {
 fn reports_stay_fresh_per_run() -> TestResult {
     let (repo, seed) = plan_for_source_change()?;
     let root = repo.path();
+    anchor_repo(root)?;
     let head = seed.head.clone();
     let nodiff = typed(&plan_value(root, "pull_request", Some(&head), &head, None)?)?;
-    let manifest = manifest_for(&nodiff, &head, "testmain")?;
+    let mut manifest = manifest_for(&nodiff, &head, "testmain")?;
+    manifest["repository_id"] = serde_json::Value::String(anchor_id());
     let warm = typed(&plan_value(
         root,
         "pull_request",
@@ -243,6 +269,7 @@ fn reports_stay_fresh_per_run() -> TestResult {
             .all(|ob| ob.decision == ObligationDecision::CoveredByTrustedBaseline)
     );
     let mut tampered = manifest_for(&nodiff, &head, "testmain")?;
+    tampered["repository_id"] = serde_json::Value::String(anchor_id());
     tampered["tasks"][0]["input_digest"] =
         serde_json::Value::String(velnor_actions_contract::digest_b3(b"tampered"));
     let cold = plan_value(root, "pull_request", Some(&head), &head, Some(&tampered))?;

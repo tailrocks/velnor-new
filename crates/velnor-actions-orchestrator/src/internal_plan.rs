@@ -88,24 +88,37 @@ pub(crate) fn nextest_config_for(discovery: &Discovery, group: &TaskGroup) -> Op
 
 /// Orchestrator-recorded cache identities for one entry (cache §2).
 ///
-/// Lane identity derives from responsibility and config, never from the
-/// schedule ordinal: `_lane` is accepted for call compatibility and
-/// ignored, so relocated schedules keep every lane (and target dir).
+/// Lane identity derives from responsibility and config, never from a
+/// schedule ordinal (ordinals are removed: no lane parameter exists).
+/// Platform identity binds runner image evidence; every digest is
+/// validated at construction, never stored raw.
+///
+/// # Errors
+///
+/// Returns [`ContractError`] when any digest fails validation.
 pub(crate) fn cache_ids_for(
     group: &TaskGroup,
     label: &str,
-    _lane: u32,
     toolchain: &str,
-) -> EntryCacheIds {
+) -> Result<EntryCacheIds, ContractError> {
     let manifest = manifest_for_key(&group.manifest_key);
     let workspace_id = digest_b3(manifest.as_bytes());
-    EntryCacheIds {
-        workspace_id: workspace_id.clone(),
-        lane_id: identities::lane_id_for(group, &workspace_id),
-        platform_id: digest_b3(label.as_bytes()),
-        toolchain_id: toolchain.to_owned(),
-        cache_format_id: identities::cache_format_id_for(&group.compile_driver),
-    }
+    EntryCacheIds::new(
+        &workspace_id,
+        &identities::lane_id_for(group, &workspace_id),
+        &identities::platform_id_for_group(label, group),
+        toolchain,
+        &identities::cache_format_id_for(&group.compile_driver),
+    )
+}
+
+/// Isolated `CARGO_TARGET_DIR` for one lane identity (P03-7).
+///
+/// Production wiring helper: generated legs set `CARGO_TARGET_DIR` to
+/// this path so concurrent writers never share a target dir. The path
+/// derives from the responsibility-based lane digest, never an ordinal.
+pub(crate) fn target_dir_for_lane_id(lane_id: &str) -> String {
+    velnor_actions_workflow_renderer::steps::target_dir_for_lane(lane_id)
 }
 
 /// Toolchain identity digest for one group.
@@ -247,13 +260,15 @@ pub(crate) fn execute_ids(group: &TaskGroup) -> ExecuteTaskIds {
 /// Default generator identity when the request omits it.
 ///
 /// The target is a release triple when the host maps to one; the SHA is
-/// the running executable's content digest when its bytes are readable,
-/// else the explicit unresolved marker (never all-zero).
+/// the running executable's real SHA-256 (release-comparable) when its
+/// bytes are readable, else the explicit unresolved marker (never
+/// all-zero, never a `b3-` hash: native hashes are incomparable with
+/// release pins and fail closed).
 pub(crate) fn default_generator() -> PlanGenerator {
     PlanGenerator {
         version: env!("CARGO_PKG_VERSION").to_owned(),
         target: snapshot::map_release_triple(std::env::consts::ARCH, std::env::consts::OS),
-        sha256: snapshot::current_exe_content_digest()
+        sha256: crate::cover_identity::generator::current_exe_sha256()
             .unwrap_or_else(|| snapshot::UNRESOLVED_GENERATOR_SHA.to_owned()),
     }
 }

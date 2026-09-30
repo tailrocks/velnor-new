@@ -74,6 +74,27 @@ fn reject(ok: bool, reason: &str) -> Result<(), String> {
     if ok { Ok(()) } else { Err(reason.to_owned()) }
 }
 
+/// Carried proof binds the task entry's identity and originating run.
+///
+/// `ManifestTaskProof` exposes no getters, so the comparison runs over its
+/// canonical serialization; a serialization failure never validates.
+fn proof_matches_task(
+    proof: &velnor_actions_contract::ManifestTaskProof,
+    task: &crate::merge::required_evidence::BaselineTaskEntry,
+) -> bool {
+    let Ok(value) = serde_json::to_value(proof) else {
+        return false;
+    };
+    let field = |name: &str| value.get(name).and_then(serde_json::Value::as_str);
+    field("task_id") == Some(task.task_id.as_str())
+        && field("task_digest") == Some(task.task_digest.as_str())
+        && field("input_digest") == Some(task.input_digest.as_str())
+        && value
+            .get("proof_run_id")
+            .and_then(serde_json::Value::as_u64)
+            == Some(task.proof_run_id)
+}
+
 /// Validate evidence against expected values: repo, workflow, ref,
 /// event, base, run/attempt, artifact, manifest, schema, generator.
 ///
@@ -92,7 +113,12 @@ pub(crate) fn validate_provenance(
     let trusted = manifest.event == "push" && manifest.final_status == "passed";
     let generated = manifest.generator_version == expected.generator_version
         && manifest.generator_sha256 == expected.generator_sha256;
-    reject(manifest.schema == 1, "stale_schema")?;
+    if crate::internal_plan::snapshot::check_canonical_version(manifest.schema).is_err() {
+        return Err(format!(
+            "stale_schema:migration_required:v{}",
+            manifest.schema
+        ));
+    }
     reject(manifest.source_commit == expected.base, "wrong_commit")?;
     reject(
         manifest.ref_ == format!("refs/heads/{}", expected.branch),
@@ -111,11 +137,7 @@ pub(crate) fn validate_provenance(
     for task in &manifest.tasks {
         if let Some(proof) = &task.proof {
             proof.validate().map_err(|_| "bad_task_proof".to_owned())?;
-            let bound = proof.task_id == task.task_id
-                && proof.task_digest == task.task_digest
-                && proof.input_digest == task.input_digest
-                && proof.proof_run_id == task.proof_run_id;
-            reject(bound, "proof_mismatch")?;
+            reject(proof_matches_task(proof, task), "proof_mismatch")?;
             continue;
         }
         let ids_ok = velnor_actions_contract::validate_task_id(&task.task_id).is_ok()
@@ -147,20 +169,20 @@ fn is_unverifiable_generator_sha(sha: &str) -> bool {
         || (sha.len() == 64 && sha.bytes().all(|b| b == b'0'))
 }
 
-/// Repository check: exact match when anchored, shape-only otherwise.
+/// Repository check: exact match against the git-origin anchor.
 ///
-/// An unanchored repository (no git origin) cannot fail validation for
-/// want of an expectation; the caller warns explicitly instead.
+/// An unanchored checkout (no git origin) FAILS CLOSED with
+/// `repository_unanchored`: a digest-shaped repository ID is not proof
+/// it is this repository, and no shape-only fallback can bless it.
+/// The old warning-suffices path is deleted, not deprecated.
 fn validate_repository(
     manifest: &BaselineManifest,
     expected: &ProvenanceExpectations,
 ) -> Result<(), String> {
-    if let Some(anchored) = &expected.repository_id {
-        reject(manifest.repository_id == *anchored, "wrong_repository")?;
-    } else {
-        let shape = validate_digest(&manifest.repository_id).is_ok();
-        reject(shape, "bad_repository_id")?;
-    }
+    let Some(anchored) = &expected.repository_id else {
+        return Err("repository_unanchored".to_owned());
+    };
+    reject(manifest.repository_id == *anchored, "wrong_repository")?;
     Ok(())
 }
 
@@ -210,8 +232,8 @@ fn parse_workflow_ref(input: &str) -> Option<(String, String, String)> {
 
 /// Repository identity digest from the git origin URL, when configured.
 ///
-/// Returns `None` when no origin remote exists: unanchored checkouts
-/// validate repository shape only, with an explicit caller warning.
+/// Returns `None` when no origin remote exists; unanchored checkouts
+/// fail closed in [`validate_repository`], never warn-and-proceed.
 pub(crate) fn repository_anchor_from_origin(root: &std::path::Path) -> Option<String> {
     let config = std::fs::read_to_string(root.join(".git/config")).ok()?;
     let url = origin_url(&config)?;
