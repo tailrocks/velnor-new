@@ -24,15 +24,20 @@ fn expected_modules() -> Vec<&'static str> {
         "lib.rs",
         "lock.rs",
         "nextest.rs",
+        "nextest_config.rs",
         "nextest_plan.rs",
+        "nextest_shapes.rs",
         "preflight.rs",
         "requests.rs",
         "restore.rs",
         "reuse.rs",
         "steps.rs",
         "template.rs",
+        "toml_parser.rs",
+        "toml_scan.rs",
         "toolfiles.rs",
         "verify.rs",
+        "wrappers.rs",
     ]
 }
 

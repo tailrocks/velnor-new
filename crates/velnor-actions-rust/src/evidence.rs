@@ -4,19 +4,22 @@
 //! the generated `.github` tree is [`EvidenceStrength::Transient`]; evidence
 //! elsewhere (Mise settings, rustc wrappers, executable tasks and scripts
 //! outside `.github`) is [`EvidenceStrength::Durable`]. Generated workflows
-//! (current or historical marker) are never evidence.
+//! (current or historical marker) are never evidence. Line-local text
+//! scans live in [`crate::evidence_text`]; this module owns the sighting
+//! types plus structurally resolved inputs (Mise wrappers, Nextest config).
 
 use velnor_actions_contract::is_generated_marker_line;
 
-use crate::scan::{
-    has_adjacent, has_command, has_setting, line_no, snippet, starts_with_word, strip_comment,
-};
+use crate::evidence_text::{scan_cargo_config, scan_command_text, scan_tool_config};
 
 /// Recommendation code for the default-runner notice.
 pub const NEXTEST_RECOMMENDATION: &str = "nextest_recommendation";
 
 /// Recommendation code for persisting a durable signal.
 pub const PERSIST_EVIDENCE: &str = "persist_evidence";
+
+/// Recommendation code when a farther Nextest config is shadowed.
+pub const SHADOWED_NEXTEST_CONFIG: &str = "shadowed_nextest_config";
 
 /// Evidence durability; only durable evidence selects profiles silently.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -58,6 +61,39 @@ pub struct EvidenceFile<'a> {
     pub path: &'a str,
     /// File content.
     pub content: &'a str,
+}
+
+/// Structurally resolved Mise Cargo wrapper offered as evidence.
+///
+/// The Mise adapter resolves `wrappers.cargo.command` plus the
+/// `MBX_CARGO_SHIM_MODE` env value from TOML structure; only the exact
+/// command `mbx` selects MBX, every other command is an explicit
+/// non-MBX wrapper.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MiseWrapperInput {
+    /// Repository-relative file that supplied the wrapper.
+    pub path: String,
+    /// One-based line of the `wrappers.cargo.command` assignment.
+    pub line: u32,
+    /// Exact structural command value.
+    pub command: String,
+    /// `MBX_CARGO_SHIM_MODE` value when structurally present.
+    pub shim_mode: Option<String>,
+}
+
+/// Structurally resolved Nextest config offered as evidence.
+///
+/// File presence is durable Nextest evidence; CI selects `[profile.ci]`
+/// when present and Nextest's documented `default` profile otherwise.
+/// Inputs arrive nearest-first when several configs exist.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NextestConfigInput {
+    /// Repository-relative config path.
+    pub path: String,
+    /// Sorted profile names declared under `[profile.*]`.
+    pub profiles: Vec<String>,
+    /// One-based `[profile.ci]` line when present.
+    pub ci_line: Option<u32>,
 }
 
 /// Whether content is generated output (never evidence).
@@ -120,7 +156,7 @@ fn is_lock_path(path: &str) -> bool {
 }
 
 /// Durability for one file: `.github`-rooted sightings are always transient.
-fn strength_for(file: &EvidenceFile<'_>, base: EvidenceStrength) -> EvidenceStrength {
+pub(crate) fn strength_for(file: &EvidenceFile<'_>, base: EvidenceStrength) -> EvidenceStrength {
     if is_github_path(file.path) {
         EvidenceStrength::Transient
     } else {
@@ -128,122 +164,70 @@ fn strength_for(file: &EvidenceFile<'_>, base: EvidenceStrength) -> EvidenceStre
     }
 }
 
-/// Scan tool-config content for the Rust `mr_boxington` setting.
-pub(crate) fn scan_tool_config(file: &EvidenceFile<'_>) -> Vec<Evidence> {
-    if is_generated_output(file.content) {
-        return Vec::new();
-    }
-    let strength = strength_for(file, EvidenceStrength::Durable);
-    let mut out = Vec::new();
-    for (index, line) in file.content.lines().enumerate() {
-        let code = strip_comment(line);
-        if has_setting(code, "mr_boxington", "true") {
-            out.push(sighting(file, index, code, strength));
-        }
-    }
-    out
-}
-
-/// Scan Cargo config content for `rustc-wrapper` naming MBX.
-pub(crate) fn scan_cargo_config(file: &EvidenceFile<'_>) -> Vec<Evidence> {
-    if is_generated_output(file.content) {
-        return Vec::new();
-    }
-    let strength = strength_for(file, EvidenceStrength::Durable);
-    let mut out = Vec::new();
-    for (index, line) in file.content.lines().enumerate() {
-        let code = strip_comment(line);
-        if mentions_wrapper(code) && mentions_mbx(code) {
-            out.push(sighting(file, index, code, strength));
-        }
-    }
-    out
-}
-
-fn mentions_wrapper(code: &str) -> bool {
-    code.contains("rustc-wrapper")
-        || code.contains("rustc_wrapper")
-        || code.contains("RUSTC_WRAPPER")
-}
-
-fn mentions_mbx(code: &str) -> bool {
-    has_command(code, "mbx") || code.contains("boxington")
-}
-
-/// Scan task, script, or workflow text for driver and runner invocations.
+/// Build MBX and non-MBX sightings from resolved wrappers.
 ///
-/// Callers pass [`EvidenceStrength::Durable`] for executable tasks and
-/// scripts, [`EvidenceStrength::Transient`] for hand-written workflows;
-/// `.github`-rooted files are transient either way.
-pub(crate) fn scan_command_text(
-    file: &EvidenceFile<'_>,
-    base: EvidenceStrength,
-) -> (Vec<Evidence>, Vec<Evidence>, Vec<Evidence>) {
-    if is_generated_output(file.content) {
-        return (Vec::new(), Vec::new(), Vec::new());
-    }
-    let strength = strength_for(file, base);
+/// Only the exact command `mbx` counts as MBX evidence; every other
+/// command is an explicit durable non-MBX signal (used for conflict
+/// and ambiguity checks, never silently dropped).
+pub(crate) fn wrapper_sightings(wrappers: &[MiseWrapperInput]) -> (Vec<Evidence>, Vec<Evidence>) {
     let mut mbx = Vec::new();
-    let mut nextest = Vec::new();
-    let mut cargo_test = Vec::new();
-    for (index, line) in file.content.lines().enumerate() {
-        let code = strip_comment(line);
-        if code.trim().is_empty() {
-            continue;
-        }
-        if invokes_mbx(code) {
-            mbx.push(sighting(file, index, code, strength));
-        }
-        if invokes_nextest(code) {
-            nextest.push(sighting(file, index, code, strength));
-        }
-        if invokes_cargo_test(code) {
-            cargo_test.push(sighting(file, index, code, strength));
+    let mut other = Vec::new();
+    for input in wrappers {
+        let file = EvidenceFile {
+            path: &input.path,
+            content: "",
+        };
+        let strength = strength_for(&file, EvidenceStrength::Durable);
+        let sighting = Evidence {
+            path: input.path.clone(),
+            line: input.line,
+            command_or_setting: wrapper_text(input),
+            strength,
+        };
+        if input.command == "mbx" {
+            mbx.push(sighting);
+        } else {
+            other.push(sighting);
         }
     }
-    (mbx, nextest, cargo_test)
+    (mbx, other)
 }
 
-fn invokes_mbx(code: &str) -> bool {
-    has_command(code, "mbx")
-        || has_command(code, "mr-boxington")
-        || has_command(code, "mr_boxington")
-}
-
-fn invokes_nextest(code: &str) -> bool {
-    if has_adjacent(code, "cargo", "nextest") || has_command(code, "cargo-nextest") {
-        return true;
+/// Sighting text for one resolved wrapper, naming the consumed setting.
+fn wrapper_text(input: &MiseWrapperInput) -> String {
+    match &input.shim_mode {
+        Some(mode) => format!(
+            "wrappers.cargo.command = {:?} (MBX_CARGO_SHIM_MODE = {mode:?})",
+            input.command
+        ),
+        None => format!("wrappers.cargo.command = {:?}", input.command),
     }
-    let mut search = code;
-    while let Some(pos) = crate::scan::find_word(search, "nextest") {
-        let rest = search[pos + "nextest".len()..].trim_start();
-        if starts_with_word(rest, "run")
-            || starts_with_word(rest, "archive")
-            || starts_with_word(rest, "list")
-        {
-            return true;
-        }
-        search = &search[pos + "nextest".len()..];
-    }
-    false
 }
 
-fn invokes_cargo_test(code: &str) -> bool {
-    has_adjacent(code, "cargo", "test") || has_adjacent(code, "mbx", "test")
-}
-
-fn sighting(
-    file: &EvidenceFile<'_>,
-    index: usize,
-    code: &str,
-    strength: EvidenceStrength,
-) -> Evidence {
-    Evidence {
-        path: file.path.to_owned(),
-        line: line_no(index),
-        command_or_setting: snippet(code),
-        strength,
-    }
+/// Build durable Nextest sightings from resolved configs.
+///
+/// Each config is one sighting: `[profile.ci]` when the section is
+/// present, else the documented default-profile selection.
+pub(crate) fn nextest_config_sightings(configs: &[NextestConfigInput]) -> Vec<Evidence> {
+    configs
+        .iter()
+        .map(|input| {
+            let file = EvidenceFile {
+                path: &input.path,
+                content: "",
+            };
+            Evidence {
+                path: input.path.clone(),
+                line: input.ci_line.unwrap_or(1),
+                command_or_setting: if input.ci_line.is_some() {
+                    "[profile.ci]".to_owned()
+                } else {
+                    "nextest default profile (no [profile.ci])".to_owned()
+                },
+                strength: strength_for(&file, EvidenceStrength::Durable),
+            }
+        })
+        .collect()
 }
 
 /// Evidence grouped by durability for selection.
@@ -261,6 +245,8 @@ pub(crate) struct Seen {
     pub(crate) cargo_durable: Vec<Evidence>,
     /// Transient `cargo test` sightings.
     pub(crate) cargo_transient: Vec<Evidence>,
+    /// Explicit non-MBX wrapper sightings (Cargo-side signals).
+    pub(crate) wrapper_other: Vec<Evidence>,
 }
 
 impl Seen {
@@ -269,6 +255,7 @@ impl Seen {
         !self.mbx_durable.is_empty()
             || !self.nextest_durable.is_empty()
             || !self.cargo_durable.is_empty()
+            || !self.wrapper_other.is_empty()
     }
 
     /// Whether no sighting of any kind exists.
@@ -279,6 +266,7 @@ impl Seen {
             && self.nextest_transient.is_empty()
             && self.cargo_durable.is_empty()
             && self.cargo_transient.is_empty()
+            && self.wrapper_other.is_empty()
     }
 
     /// Whether any runner sighting (durable or transient) exists.
@@ -297,6 +285,7 @@ impl Seen {
         out.append(&mut self.nextest_transient);
         out.append(&mut self.cargo_durable);
         out.append(&mut self.cargo_transient);
+        out.append(&mut self.wrapper_other);
         out.sort();
         out
     }
@@ -308,6 +297,8 @@ pub(crate) fn collect_evidence(
     cargo_configs: &[EvidenceFile<'_>],
     executables: &[EvidenceFile<'_>],
     handwritten: &[EvidenceFile<'_>],
+    mise_wrappers: &[MiseWrapperInput],
+    nextest_configs: &[NextestConfigInput],
 ) -> Seen {
     let mut seen = Seen::default();
     if let Some(config) = tool_config {
@@ -326,7 +317,26 @@ pub(crate) fn collect_evidence(
         push_mbx(&mut seen, mbx);
         push_runner(&mut seen, nextest, cargo);
     }
+    let (mbx, other) = wrapper_sightings(mise_wrappers);
+    push_mbx(&mut seen, mbx);
+    push_other(&mut seen, other);
+    push_nextest_configs(&mut seen, nextest_config_sightings(nextest_configs));
     seen
+}
+
+/// Sort non-MBX wrapper sightings into the explicit-Cargo bucket.
+fn push_other(seen: &mut Seen, sightings: Vec<Evidence>) {
+    seen.wrapper_other.extend(sightings);
+}
+
+/// Sort Nextest-config sightings into the durable Nextest bucket.
+fn push_nextest_configs(seen: &mut Seen, sightings: Vec<Evidence>) {
+    for sighting in sightings {
+        match sighting.strength {
+            EvidenceStrength::Durable => seen.nextest_durable.push(sighting),
+            EvidenceStrength::Transient => seen.nextest_transient.push(sighting),
+        }
+    }
 }
 
 /// Sort MBX sightings into the durable/transient buckets.

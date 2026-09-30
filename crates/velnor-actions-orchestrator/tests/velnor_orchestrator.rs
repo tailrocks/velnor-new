@@ -27,6 +27,7 @@ mod impl_orch_gen2;
 mod impl_orch_intake;
 mod impl_orch_merge;
 mod impl_orch_plansel;
+mod impl_p06_detection;
 mod impl_plan_prepare;
 mod impl_prepare_generate;
 mod impl_protocol;

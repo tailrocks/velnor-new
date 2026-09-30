@@ -5,9 +5,10 @@ use std::path::Path;
 use velnor_actions_contract::{
     DeclaredCompileDriver, DeclaredTestRunner, RustStackConfig, is_generated_marker_line,
 };
+use velnor_actions_mise::{parse_cargo_wrapper, parse_nextest_config};
 use velnor_actions_rust::{
-    CompileDriver, EvidenceFile, FileIndex, ProfileInputs, TestRunner, WorkspaceRecord,
-    detect_profile,
+    CompileDriver, EvidenceFile, FileIndex, MiseWrapperInput, NextestConfigInput, ProfileInputs,
+    TestRunner, WorkspaceRecord, detect_profile, is_generated_output,
 };
 
 use crate::OrchestratorError;
@@ -18,20 +19,24 @@ use crate::discover::PlannedWorkspace;
 /// Generated workflow output (current or historical marker) is never
 /// evidence. Durable signals outside `.github` select profiles silently;
 /// hand-written workflows inside `.github` are transient and yield blocking
-/// findings unless `[stacks.rust]` declares the profile.
+/// findings unless `[stacks.rust]` declares the profile. Mise wrappers
+/// resolve structurally per workspace (root plus workspace-root files);
+/// Nextest configs resolve nearest-first. Machine-global settings are
+/// never consulted: without repo-local evidence the Cargo default holds
+/// unless `[stacks.rust]` declares otherwise.
 ///
 /// # Errors
 ///
-/// Returns [`OrchestratorError::Profile`] on ambiguous test runners or when
-/// durable evidence contradicts a declared key.
+/// Returns [`OrchestratorError::Profile`] on ambiguous runners or
+/// drivers, when durable evidence contradicts a declared key, or when a
+/// present Nextest config is malformed.
 pub(crate) fn profile_for_workspace(
     root: &Path,
     index: &FileIndex,
     record: &WorkspaceRecord,
     rust: Option<&RustStackConfig>,
 ) -> Result<velnor_actions_rust::ProfileOutcome, OrchestratorError> {
-    let _ = record;
-    let tool_text = read_optional(root, "mise.toml").or(read_optional(root, ".mise.toml"));
+    let tool_config = tool_config_input(root);
     let cargo_a = read_optional(root, ".cargo/config.toml");
     let cargo_b = read_optional(root, ".cargo/config");
     let exec_texts = collect_executables(root, index);
@@ -51,8 +56,8 @@ pub(crate) fn profile_for_workspace(
         });
     }
     let inputs = ProfileInputs {
-        tool_config: tool_text.as_ref().map(|text| EvidenceFile {
-            path: "mise.toml",
+        tool_config: tool_config.as_ref().map(|(path, text)| EvidenceFile {
+            path,
             content: text,
         }),
         cargo_configs: cargo_files(cargo_a.as_ref(), cargo_b.as_ref()),
@@ -60,10 +65,102 @@ pub(crate) fn profile_for_workspace(
         handwritten_workflows: flows,
         declared_driver: rust.and_then(|stack| stack.compile_driver.map(map_driver)),
         declared_runner: rust.and_then(|stack| stack.test_runner.map(map_runner)),
+        mise_wrappers: wrapper_inputs(root, &record.workspace_root),
+        nextest_configs: nextest_inputs(root, &record.workspace_root)?,
     };
     detect_profile(&inputs).map_err(|err| OrchestratorError::Profile {
         problem: err.to_string(),
     })
+}
+
+/// Tool-config bytes with the supplying file's real label.
+///
+/// `mise.toml` wins when both spellings exist; `.mise.toml` content is
+/// labeled `.mise.toml`, never misattributed.
+fn tool_config_input(root: &Path) -> Option<(String, String)> {
+    for name in ["mise.toml", ".mise.toml"] {
+        if let Some(text) = read_optional(root, name) {
+            return Some((name.to_owned(), text));
+        }
+    }
+    None
+}
+
+/// Structurally resolved wrappers for one workspace.
+///
+/// Inspects the repository-root and workspace-root Mise files. Malformed
+/// TOML yields no wrapper from that file (toolcheck reports the
+/// defect); generated output never feeds discovery.
+fn wrapper_inputs(root: &Path, workspace_root: &str) -> Vec<MiseWrapperInput> {
+    let mut out = Vec::new();
+    for relative in mise_candidates(workspace_root) {
+        let Some(text) = read_optional(root, &relative) else {
+            continue;
+        };
+        if is_generated_output(&text) {
+            continue;
+        }
+        let Ok(Some(wrapper)) = parse_cargo_wrapper(&text) else {
+            continue;
+        };
+        out.push(MiseWrapperInput {
+            path: relative,
+            line: wrapper.line,
+            command: wrapper.command,
+            shim_mode: wrapper.shim_mode,
+        });
+    }
+    out
+}
+
+/// Mise files inspected per workspace: the root pair plus the nested pair.
+fn mise_candidates(workspace_root: &str) -> Vec<String> {
+    let mut out = vec!["mise.toml".to_owned(), ".mise.toml".to_owned()];
+    if !workspace_root.is_empty() {
+        out.push(format!("{workspace_root}/mise.toml"));
+        out.push(format!("{workspace_root}/.mise.toml"));
+    }
+    out
+}
+
+/// Structurally resolved Nextest configs, nearest first.
+///
+/// # Errors
+///
+/// Returns [`OrchestratorError::Profile`] when a present config is
+/// malformed: the profile cannot be honestly selected from broken bytes.
+fn nextest_inputs(
+    root: &Path,
+    workspace_root: &str,
+) -> Result<Vec<NextestConfigInput>, OrchestratorError> {
+    let mut out = Vec::new();
+    for relative in nextest_candidates(workspace_root) {
+        let Some(text) = read_optional(root, &relative) else {
+            continue;
+        };
+        if is_generated_output(&text) {
+            continue;
+        }
+        let config = parse_nextest_config(&text).map_err(|failed| OrchestratorError::Profile {
+            problem: format!("{failed}:{relative}"),
+        })?;
+        out.push(NextestConfigInput {
+            path: relative,
+            profiles: config.profiles,
+            ci_line: config.ci_line,
+        });
+    }
+    Ok(out)
+}
+
+/// Nextest configs per workspace, nearest first.
+fn nextest_candidates(workspace_root: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    if !workspace_root.is_empty() {
+        out.push(format!("{workspace_root}/.config/nextest.toml"));
+    }
+    out.push(".config/nextest.toml".to_owned());
+    out
 }
 
 /// Collect executable task bytes under `.mise/tasks/`.

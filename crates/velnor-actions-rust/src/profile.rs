@@ -10,7 +10,10 @@
 use std::fmt;
 
 use crate::evidence::{
-    Evidence, EvidenceFile, NEXTEST_RECOMMENDATION, PERSIST_EVIDENCE, Seen, collect_evidence,
+    Evidence, EvidenceFile, MiseWrapperInput, NextestConfigInput, collect_evidence,
+};
+use crate::profile_select::{
+    check_driver_ambiguity, recommend, select_driver, select_nextest_profile, select_runner,
 };
 
 /// Finding when transient-only evidence selects a non-default profile.
@@ -21,6 +24,9 @@ pub const PROFILE_CONFLICT_CODE: &str = "profile_conflict";
 
 /// Error when both test runners are explicitly used.
 pub const AMBIGUOUS_RUNNER_CODE: &str = "ambiguous_test_runner";
+
+/// Error when compile-driver signals contradict each other.
+pub const AMBIGUOUS_DRIVER_CODE: &str = "ambiguous_compile_driver";
 
 /// Selected compile driver for one workspace.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -62,6 +68,30 @@ impl TestRunner {
     }
 }
 
+/// Selected Nextest profile for one workspace.
+///
+/// Meaningful when the test runner is Nextest: `ci` when the nearest
+/// `.config/nextest.toml` declares `[profile.ci]`, else Nextest's
+/// documented `default` profile.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NextestProfile {
+    /// `[profile.ci]` declared in the nearest Nextest config.
+    Ci,
+    /// Documented default (no `[profile.ci]` in the nearest config).
+    Default,
+}
+
+impl NextestProfile {
+    /// Stable profile name.
+    #[must_use]
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Ci => "ci",
+            Self::Default => "default",
+        }
+    }
+}
+
 /// Where one profile axis came from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProfileSource {
@@ -95,6 +125,10 @@ pub struct RustExecutionProfile {
     pub driver_source: ProfileSource,
     /// Provenance of the test runner.
     pub runner_source: ProfileSource,
+    /// Selected Nextest profile (meaningful for Nextest runners).
+    pub nextest_profile: NextestProfile,
+    /// Nearest consumed `.config/nextest.toml`, when any exists.
+    pub nextest_config: Option<String>,
 }
 
 /// Blocking finding: transient-only evidence needs an explicit declaration.
@@ -143,6 +177,10 @@ pub struct ProfileInputs<'a> {
     pub declared_driver: Option<CompileDriver>,
     /// Declared `[stacks.rust] test_runner`, if any.
     pub declared_runner: Option<TestRunner>,
+    /// Structurally resolved Mise Cargo wrappers (all inspected files).
+    pub mise_wrappers: Vec<MiseWrapperInput>,
+    /// Structurally resolved Nextest configs, nearest first.
+    pub nextest_configs: Vec<NextestConfigInput>,
 }
 
 /// Profile detection failure.
@@ -150,6 +188,11 @@ pub struct ProfileInputs<'a> {
 pub enum ProfileError {
     /// Both test runners are explicitly used.
     AmbiguousTestRunner {
+        /// Conflicting evidence, sorted.
+        evidence: Vec<Evidence>,
+    },
+    /// Compile-driver signals contradict each other.
+    AmbiguousDriver {
         /// Conflicting evidence, sorted.
         evidence: Vec<Evidence>,
     },
@@ -167,6 +210,9 @@ impl fmt::Display for ProfileError {
         match self {
             Self::AmbiguousTestRunner { evidence } => {
                 write!(f, "{AMBIGUOUS_RUNNER_CODE}: {} sightings", evidence.len())
+            }
+            Self::AmbiguousDriver { evidence } => {
+                write!(f, "{AMBIGUOUS_DRIVER_CODE}: {} sightings", evidence.len())
             }
             Self::ProfileConflict { declared, evidence } => {
                 write!(
@@ -193,14 +239,17 @@ impl std::error::Error for ProfileError {}
 /// # Errors
 ///
 /// Returns [`ProfileError::AmbiguousTestRunner`] when both test runners are
-/// durably used, and [`ProfileError::ProfileConflict`] when durable evidence
-/// contradicts a declared key.
+/// durably used, [`ProfileError::AmbiguousDriver`] when driver signals
+/// contradict, and [`ProfileError::ProfileConflict`] when durable
+/// evidence contradicts a declared key.
 pub fn detect_profile(inputs: &ProfileInputs<'_>) -> Result<ProfileOutcome, ProfileError> {
     let seen = collect_evidence(
         inputs.tool_config.as_ref(),
         &inputs.cargo_configs,
         &inputs.executables,
         &inputs.handwritten_workflows,
+        &inputs.mise_wrappers,
+        &inputs.nextest_configs,
     );
     if !seen.nextest_durable.is_empty() && !seen.cargo_durable.is_empty() {
         let mut conflicting = seen.nextest_durable.clone();
@@ -210,9 +259,11 @@ pub fn detect_profile(inputs: &ProfileInputs<'_>) -> Result<ProfileOutcome, Prof
             evidence: conflicting,
         });
     }
+    check_driver_ambiguity(&seen, &inputs.mise_wrappers)?;
     let mut findings = Vec::new();
     let (compile_driver, driver_source) = select_driver(&seen, inputs, &mut findings)?;
     let (test_runner, runner_source) = select_runner(&seen, inputs, &mut findings)?;
+    let (nextest_profile, nextest_config) = select_nextest_profile(inputs);
     let recommendations = recommend(inputs, &seen);
     let evidence = seen.all_sorted();
     Ok(ProfileOutcome {
@@ -222,133 +273,10 @@ pub fn detect_profile(inputs: &ProfileInputs<'_>) -> Result<ProfileOutcome, Prof
             evidence,
             driver_source,
             runner_source,
+            nextest_profile,
+            nextest_config,
         },
         recommendations,
         findings,
     })
-}
-
-/// Select the compile driver: declared wins, else durable, else transient+finding.
-fn select_driver(
-    seen: &Seen,
-    inputs: &ProfileInputs<'_>,
-    findings: &mut Vec<ProfileFinding>,
-) -> Result<(CompileDriver, ProfileSource), ProfileError> {
-    if let Some(declared) = inputs.declared_driver {
-        if declared == CompileDriver::Cargo && !seen.mbx_durable.is_empty() {
-            return Err(ProfileError::ProfileConflict {
-                declared: "compile_driver = \"cargo\"".to_owned(),
-                evidence: sorted(seen.mbx_durable.clone()),
-            });
-        }
-        return Ok((declared, ProfileSource::Declared));
-    }
-    if !seen.mbx_durable.is_empty() {
-        return Ok((CompileDriver::Mbx, ProfileSource::Detected));
-    }
-    if !seen.mbx_transient.is_empty() {
-        findings.push(transient_finding(
-            "compile driver",
-            "compile_driver",
-            CompileDriver::Mbx.as_str(),
-            sorted(seen.mbx_transient.clone()),
-        ));
-        return Ok((CompileDriver::Mbx, ProfileSource::Detected));
-    }
-    Ok((CompileDriver::Cargo, ProfileSource::Detected))
-}
-
-/// Select the test runner: declared wins, else durable, else transient+finding.
-fn select_runner(
-    seen: &Seen,
-    inputs: &ProfileInputs<'_>,
-    findings: &mut Vec<ProfileFinding>,
-) -> Result<(TestRunner, ProfileSource), ProfileError> {
-    if let Some(declared) = inputs.declared_runner {
-        check_runner_conflict(seen, declared)?;
-        return Ok((declared, ProfileSource::Declared));
-    }
-    if !seen.nextest_durable.is_empty() {
-        return Ok((TestRunner::CargoNextest, ProfileSource::Detected));
-    }
-    if !seen.cargo_durable.is_empty() {
-        return Ok((TestRunner::CargoTest, ProfileSource::Detected));
-    }
-    if !seen.nextest_transient.is_empty() {
-        findings.push(transient_finding(
-            "test runner",
-            "test_runner",
-            TestRunner::CargoNextest.as_str(),
-            sorted(seen.nextest_transient.clone()),
-        ));
-        return Ok((TestRunner::CargoNextest, ProfileSource::Detected));
-    }
-    Ok((TestRunner::CargoTest, ProfileSource::Detected))
-}
-
-/// Fail when durable runner evidence contradicts the declared runner.
-fn check_runner_conflict(seen: &Seen, declared: TestRunner) -> Result<(), ProfileError> {
-    let (key, contradicting) = match declared {
-        TestRunner::CargoTest => ("test_runner = \"cargo_test\"", seen.nextest_durable.clone()),
-        TestRunner::CargoNextest => (
-            "test_runner = \"cargo_nextest\"",
-            seen.cargo_durable.clone(),
-        ),
-    };
-    if contradicting.is_empty() {
-        return Ok(());
-    }
-    Err(ProfileError::ProfileConflict {
-        declared: key.to_owned(),
-        evidence: sorted(contradicting),
-    })
-}
-
-/// Sort one evidence bucket.
-fn sorted(mut evidence: Vec<Evidence>) -> Vec<Evidence> {
-    evidence.sort();
-    evidence
-}
-
-/// Build the blocking finding for a transient-only non-default selection.
-fn transient_finding(
-    axis: &str,
-    key: &str,
-    value: &str,
-    mut evidence: Vec<Evidence>,
-) -> ProfileFinding {
-    evidence.sort();
-    ProfileFinding {
-        code: TRANSIENT_EVIDENCE_CODE.to_owned(),
-        message: format!(
-            "{axis} rests on transient evidence only ({} sightings); \
-(a) declare [stacks.rust] {key} = \"{value}\", \
-or (b) move the invocation to a durable executable task outside .github",
-            evidence.len()
-        ),
-        evidence,
-    }
-}
-
-fn recommend(inputs: &ProfileInputs<'_>, seen: &Seen) -> Vec<Recommendation> {
-    let mut out = Vec::new();
-    if inputs.declared_runner.is_none() && !seen.has_runner() {
-        out.push(Recommendation {
-            code: NEXTEST_RECOMMENDATION.to_owned(),
-            message: "no explicit test-runner usage; defaulting to `cargo test`".to_owned(),
-        });
-    }
-    let declared = inputs.declared_driver.is_some() && inputs.declared_runner.is_some();
-    if !seen.has_durable() && !declared {
-        let message = if seen.is_empty() {
-            "no MBX or Nextest usage detected; to adopt either, add a durable signal"
-        } else {
-            "profile rests on hand-written workflows that generation replaces; persist a durable signal"
-        };
-        out.push(Recommendation {
-            code: PERSIST_EVIDENCE.to_owned(),
-            message: message.to_owned(),
-        });
-    }
-    out
 }

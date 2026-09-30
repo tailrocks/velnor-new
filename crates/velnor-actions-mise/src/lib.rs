@@ -13,15 +13,20 @@ pub mod gate6;
 pub mod gh;
 pub mod git;
 pub mod nextest;
+pub mod nextest_config;
 pub mod nextest_plan;
+pub mod nextest_shapes;
 pub mod preflight;
 pub mod requests;
 pub mod restore;
 pub mod reuse;
 pub mod steps;
 pub mod template;
+mod toml_parser;
+mod toml_scan;
 pub mod toolfiles;
 pub mod verify;
+pub mod wrappers;
 
 pub use build::{CANDIDATE_BUILD_BIN, CANDIDATE_BUILD_PACKAGE, CandidateBuild};
 pub use cache::{
@@ -44,14 +49,16 @@ pub use error::MiseError;
 pub use gate6::{Gate6Fixture, qualified_task_run_argv, render_gated_task_toml};
 pub use gh::BaselineLookup;
 pub use git::{ALLOWED_GIT_VERBS, GitRequest, is_allowed_git_verb};
-pub use nextest::{
-    ARCHIVE_FILE, NEXTEST_EXTRACT_BASE, NextestArchive, NextestDriver, NextestList,
-    NextestPartition, NextestRun,
+pub use nextest::{ARCHIVE_FILE, NEXTEST_EXTRACT_BASE, NextestDriver, NextestPartition};
+pub use nextest_config::{
+    CI_PROFILE_NAME, DEFAULT_PROFILE_NAME, NEXTEST_CONFIG_REL, NextestConfig, NextestDiagnostic,
+    parse_nextest_config,
 };
 pub use nextest_plan::{
     ArchiveIdentityInputs, ArchivePlan, SortedInventory, archive_identity, archive_write_required,
     count_inventory_tests, requires_archive_transfer,
 };
+pub use nextest_shapes::{NextestArchive, NextestList, NextestRun};
 pub use preflight::{RouteDriver, RouteProof, prove_route};
 pub use requests::{MetadataDiscovery, MetadataQualification, MiseInstall, PinnedToolExec};
 pub use restore::{
@@ -75,6 +82,9 @@ pub use toolfiles::{
     lock_tool_versions, stack_for_symbol,
 };
 pub use verify::{TestRunner, VERIFY_TOOLCHAIN_STEP, VerifySpec, VerifyToolchain};
+pub use wrappers::{
+    CargoWrapper, MBX_COMMAND, MBX_SHIM_ENV, WrapperDiagnostic, is_mbx_command, parse_cargo_wrapper,
+};
 
 /// Stable identifier for the Mise tool wrapper.
 pub const TOOL_ID: &str = "mise";

@@ -101,6 +101,19 @@ fn profile_lines(out: &mut String, workspace: &crate::discover::PlannedWorkspace
             profile.runner_source.as_str()
         ),
     );
+    if profile.test_runner.as_str() == "cargo_nextest" {
+        let config = profile
+            .nextest_config
+            .as_deref()
+            .unwrap_or("no nextest config");
+        push(
+            out,
+            &format!(
+                "  Nextest profile {root}: {} ({config})",
+                profile.nextest_profile.as_str()
+            ),
+        );
+    }
     for evidence in &profile.evidence {
         push(
             out,

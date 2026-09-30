@@ -1,8 +1,9 @@
 //! Task-group derivation cases.
 use velnor_actions_contract::validate_task_id;
 use velnor_actions_rust::{
-    CompileDriver, DeriveInputs, PackageRecord, ProfileSource, RustExecutionProfile, TargetRecord,
-    TaskKind, TestRunner, derive_task_groups, derive_workspace_fmt,
+    CompileDriver, DeriveInputs, NextestProfile, PackageRecord, ProfileSource,
+    RustExecutionProfile, TargetRecord, TaskKind, TestRunner, derive_task_groups,
+    derive_workspace_fmt,
 };
 
 /// Target entry for fixtures.
@@ -64,6 +65,8 @@ fn cargo_profile() -> RustExecutionProfile {
         evidence: Vec::new(),
         driver_source: ProfileSource::Detected,
         runner_source: ProfileSource::Detected,
+        nextest_profile: NextestProfile::Default,
+        nextest_config: None,
     }
 }
 
@@ -75,6 +78,8 @@ fn nextest_profile() -> RustExecutionProfile {
         evidence: Vec::new(),
         driver_source: ProfileSource::Detected,
         runner_source: ProfileSource::Detected,
+        nextest_profile: NextestProfile::Ci,
+        nextest_config: Some(".config/nextest.toml".to_owned()),
     }
 }
 
@@ -371,13 +376,8 @@ fn declared_inputs_accept_non_rust_and_reject_bad() {
         ]
     );
     for bad in ["", "/absolute/path.md", "a/../../escape.md"] {
-        assert!(
-            groups[1]
-                .clone()
-                .with_declared_inputs(&[bad.to_owned()])
-                .is_err(),
-            "bad input must be rejected: {bad}"
-        );
+        let attempt = groups[1].clone().with_declared_inputs(&[bad.to_owned()]);
+        assert!(attempt.is_err(), "bad input must be rejected: {bad}");
     }
 }
 

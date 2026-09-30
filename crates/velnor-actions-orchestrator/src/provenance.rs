@@ -28,6 +28,10 @@ pub struct ProfileProvenance {
     pub test_runner: String,
     /// Runner provenance (`declared` or `detected`).
     pub runner_source: String,
+    /// Selected Nextest profile (`ci` or `default`).
+    pub nextest_profile: String,
+    /// Nearest consumed `.config/nextest.toml`, when any exists.
+    pub nextest_config: Option<String>,
     /// Evidence backing the selection, sorted.
     pub evidence: Vec<EvidenceProvenance>,
 }
@@ -45,6 +49,8 @@ pub(crate) fn profile_provenance(prep: &GenerationPreparation) -> Vec<ProfilePro
                 driver_source: profile.driver_source.as_str().to_owned(),
                 test_runner: profile.test_runner.as_str().to_owned(),
                 runner_source: profile.runner_source.as_str().to_owned(),
+                nextest_profile: profile.nextest_profile.as_str().to_owned(),
+                nextest_config: profile.nextest_config.clone(),
                 evidence: profile
                     .evidence
                     .iter()
