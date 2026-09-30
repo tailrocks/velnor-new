@@ -7,6 +7,7 @@ use velnor_actions_mise::GitRequest;
 use velnor_actions_rust::{FileIndex, build_index, build_index_from_list};
 
 use crate::OrchestratorError;
+use crate::git_paths::split_nul_paths;
 
 /// Build the file index: `git ls-files` plus an untracked pass in git
 /// repositories, filesystem walk only for non-git roots.
@@ -45,10 +46,5 @@ fn ls_files(root: &Path, args: Vec<std::ffi::OsString>) -> Option<Vec<String>> {
     if !output.success {
         return None;
     }
-    output
-        .stdout
-        .split(|byte| *byte == 0)
-        .filter(|entry| !entry.is_empty())
-        .map(|entry| String::from_utf8(entry.to_vec()).ok())
-        .collect()
+    split_nul_paths(&output.stdout).ok()
 }

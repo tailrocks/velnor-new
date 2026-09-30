@@ -21,6 +21,7 @@ mod evidence;
 mod extension_schemas;
 mod external_data;
 mod generate;
+mod git_paths;
 mod init;
 mod internal;
 mod internal_plan;

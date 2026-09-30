@@ -16,6 +16,7 @@ use velnor_actions_rust::{FOREIGN_TOOL_FILES, RUST_TOOLCHAIN_FILE, TaskGroup};
 use crate::OrchestratorError;
 use crate::decisions::selection_broadens_for_path;
 use crate::discover::Discovery;
+use crate::git_paths::split_nul_paths;
 use crate::internal::internal;
 use crate::select_affected::{affected_packages, has_unowned_file};
 use crate::select_edges::{base_edges, head_edges};
@@ -239,16 +240,6 @@ fn changed_files(root: &Path, base: &str, head: &str) -> Result<BTreeSet<String>
     split_nul_paths(&output.stdout)
 }
 
-/// Split NUL-delimited git path bytes; empty chunks drop, the rest keeps
-/// exact bytes. Non-UTF-8 fails explicitly so the caller broadens.
-fn split_nul_paths(stdout: &[u8]) -> Result<BTreeSet<String>, String> {
-    let mut out = BTreeSet::new();
-    for chunk in stdout.split(|b| *b == 0).filter(|e| !e.is_empty()) {
-        out.insert(String::from_utf8(chunk.to_vec()).map_err(|_| "non_utf8_path".to_owned())?);
-    }
-    Ok(out)
-}
-
 /// Committed change set minus advisory tool files, or `None` to broaden.
 ///
 /// Git failures and non-ignored untracked files broaden with a recorded
@@ -372,16 +363,7 @@ fn untracked_files(root: &Path) -> Result<BTreeSet<String>, String> {
     output
         .require_success("git")
         .map_err(|err| err.to_string())?;
-    let mut out = BTreeSet::new();
-    for chunk in output
-        .stdout
-        .split(|byte| *byte == 0)
-        .filter(|entry| !entry.is_empty())
-    {
-        let path = String::from_utf8(chunk.to_vec()).map_err(|err| err.to_string())?;
-        out.insert(path);
-    }
-    Ok(out)
+    split_nul_paths(&output.stdout)
 }
 
 /// True for advisory tool files: findings-only, never select or broaden.
