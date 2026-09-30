@@ -61,6 +61,8 @@ fn reserved_keys_cover_isolation_disable_and_credentials() {
         "GITHUB_TOKEN",
         "GH_TOKEN",
         "ACTIONS_RUNTIME_TOKEN",
+        "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
+        "ACTIONS_ID_TOKEN_REQUEST_URL",
     ] {
         assert!(is_reserved_env_key(key), "{key} must be reserved");
     }
@@ -77,40 +79,36 @@ fn reserved_keys_cover_isolation_disable_and_credentials() {
 
 #[test]
 fn reserved_override_rejected() -> Result<(), String> {
-    let exec = IsolatedCommand::mise_exec(&specs(), &payload()).map_err(|err| err.to_string())?;
-    let hostile: Vec<(OsString, OsString)> = [
+    for (key, value) in [
         ("MISE_NO_CONFIG", "0"),
         ("MISE_AUTO_INSTALL", "true"),
         ("MISE_EXEC_AUTO_INSTALL", "true"),
         ("MISE_GITHUB_TOKEN", "sentinel"),
         ("GITHUB_TOKEN", "sentinel"),
-    ]
-    .iter()
-    .map(|(key, value)| (OsString::from(key), OsString::from(value)))
-    .collect();
-    let extended = exec.with_env(&hostile);
-    let full = extended.full_env();
-    for (key, value) in [
-        ("MISE_NO_CONFIG", "1"),
-        ("MISE_AUTO_INSTALL", "false"),
-        ("MISE_EXEC_AUTO_INSTALL", "false"),
+        ("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "sentinel"),
+        ("ACTIONS_ID_TOKEN_REQUEST_URL", "https://oidc.example/token"),
     ] {
-        let hits: Vec<&OsString> = full
-            .iter()
-            .filter(|(found, _)| found == key)
-            .map(|(_, seen)| seen)
-            .collect();
-        assert_eq!(
-            hits.as_slice(),
-            [value],
-            "reserved {key} must keep its value"
+        let exec =
+            IsolatedCommand::mise_exec(&specs(), &payload()).map_err(|err| err.to_string())?;
+        let hostile = [(OsString::from(key), OsString::from(value))];
+        assert!(
+            matches!(
+                exec.with_env(&hostile),
+                Err(MiseError::InvalidStepInput { field, value })
+                    if field == key && value == "reserved_env_key"
+            ),
+            "{key} override must fail loud, never silent-drop"
         );
     }
+    let exec = IsolatedCommand::mise_exec(&specs(), &payload()).map_err(|err| err.to_string())?;
+    let allowed = [(OsString::from("VELNOR_EXTRA"), OsString::from("ok"))];
+    let extended = exec.with_env(&allowed).map_err(|err| err.to_string())?;
     assert!(
-        !full
+        extended
+            .full_env()
             .iter()
-            .any(|(key, _)| key == "MISE_GITHUB_TOKEN" || key == "GITHUB_TOKEN"),
-        "credentials must never enter extras: {full:?}"
+            .any(|(key, value)| key == "VELNOR_EXTRA" && value == "ok"),
+        "allowed extras still append"
     );
     assert!(extended.disables_auto_install());
     Ok(())
@@ -125,6 +123,8 @@ fn repo_task_rejects_reserved_declared_keys() {
         "GITHUB_TOKEN",
         "GH_TOKEN",
         "ACTIONS_RUNTIME_TOKEN",
+        "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
+        "ACTIONS_ID_TOKEN_REQUEST_URL",
     ] {
         let declared = vec![(OsString::from(key), OsString::from("x"))];
         assert!(
@@ -167,6 +167,8 @@ fn sentinel_credential_absent() -> Result<(), String> {
         "GITHUB_TOKEN",
         "GH_TOKEN",
         "ACTIONS_RUNTIME_TOKEN",
+        "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
+        "ACTIONS_ID_TOKEN_REQUEST_URL",
     ] {
         assert!(
             !text
@@ -367,6 +369,8 @@ fn hook_escape_privileged_declared_keys_never_run() {
         "GITHUB_TOKEN",
         "GH_TOKEN",
         "ACTIONS_RUNTIME_TOKEN",
+        "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
+        "ACTIONS_ID_TOKEN_REQUEST_URL",
     ] {
         assert!(is_reserved_env_key(key), "{key} must be reserved");
         let declared = vec![(OsString::from(key), OsString::from("hostile"))];

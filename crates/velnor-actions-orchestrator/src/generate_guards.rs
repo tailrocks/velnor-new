@@ -12,10 +12,12 @@ use std::path::{Component, Path, PathBuf};
 use crate::OrchestratorError;
 
 /// Read-only tool files generation must never modify (TOOL-2.10).
-const TOOL_FILES: [&str; 4] = [
+const TOOL_FILES: [&str; 6] = [
     "mise.toml",
     ".mise.toml",
     "mise.lock",
+    ".mise.lock",
+    ".mise-version",
     "rust-toolchain.toml",
 ];
 
