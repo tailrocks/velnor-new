@@ -270,3 +270,78 @@ rerun) independent of the reuse change.
 Deferred explicitly: end-to-end negative pipeline tests that
 need P05's crate graph (no P13 code depends on it);
 Nextest-archive/sharding stays off, unqualified.
+
+## P13 benchmark cases 1–7 (bench harness)
+
+Commit measured: P13 working tree atop `444c88e` (this commit).
+Machine: `arm64`, macOS 27.0, Apple M5 Max, 128 GiB RAM.
+Toolchain: rustc/cargo 1.98.1 (48a229cea/797e8a9bc), mise 2026.9.16,
+mbx 1.19.0, nextest 0.9.143, git 2.56.0, python 3.14.7; case 7 second
+toolchain: rustc 1.97.1 (8bab26f4f).
+
+Method: `impl_bench_p13` plans the same 10-crate fixture shape in
+every case (44 obligations, under the 256 KiB matrix budget);
+`digest=` hashes the sorted obligation task IDs, so equal digests
+prove the same obligation set. `setup_ms` builds the fixture,
+`plan_ms` runs `plan_internal`, `metadata_ms` is a direct-`cargo
+metadata` lower-bound proxy for the compiler-subprocess cost inside
+`plan`; `rss_kb` is sampled test-process peak RSS (whole test
+binary, not isolated plan RSS). Queue/transfer are local no-ops
+(`queue=na transfer_b=0`); CI values need hosted runs. Raw lines:
+`cargo test -p velnor-actions-orchestrator --test velnor_orchestrator
+impl_bench_p13 -- --nocapture` (`bench:` lines on stderr). Two runs
+each; figures are run1/run2.
+
+| Case | plan_ms | setup_ms | metadata_ms | rss_kb | Digest |
+| --- | --- | --- | --- | --- | --- |
+| 1 cold (empty caches) | 1095, 1081 | 73, 40 | 16, 19 | 343520, 343904 | cd8b34ba18f0982d |
+| 2 warm restore | 952, 969 (cold 996, 990) | 73, 40 | 15, 15 | 345312, 345728 | same |
+| 3 unchanged repeat | 945, 961 | 72, 41 | 16, 16 | 345264, 345760 | same |
+| 4 leaf edit (c009) | 1096, 1080 | 73, 41 | 18, 19 | 343232, 343216 | same |
+| 5 API edit (c000) | 991, 987 | 74, 41 | 16, 16 | 345312, 345488 | same |
+| 7 dep edge c009→c008 | 1079, 1079 | 72, 40 | 15, 16 | 345312, 345648 | same |
+
+Case 6 lanes (sequential sum vs parallel wall):
+
+| Lanes | sequential_ms | parallel_ms | lane_ms | contention |
+| --- | --- | --- | --- | --- |
+| 2 | 1931, 1949 | 944, 951 | [943,944], [950,951] | 0% |
+| 4 | 3626, 3689 | 945, 957 | [945,943,942,942], [956,955,957,956] | 0% |
+
+Speedup 2.0x/3.9x; every lane matches its sequential digest.
+
+Case 7 toolchain: `cargo metadata` under 1.97.1 vs 1.98.1 parses to
+identical `WorkspaceRecord`s (walls [42,14]/[16,16] ms, 11
+packages). The dep half asserts 0→1 edges on a real manifest change.
+
+Findings, not verdicts: selection marks all 44 obligations in every
+mutation case (fail-open broad); plan walls cluster ~1 s regardless
+of touch site, so plan cost is discovery-dominated.
+
+Budgets:
+
+- Same obligation set across all 7 cases: PASSED (digest
+  `cd8b34ba18f0982d` in all 16 samples).
+- Inventory reuse op counts: PASSED (exact: 1/10/100 members →
+  2/11/101 legacy subprocesses vs 1 reused).
+- Concurrent lanes without contention: PASSED (0% at 2 and 4 lanes;
+  metadata lanes stay 1 by design, plans parallelize above that).
+- Toolchain-change inventory stability: PASSED (identical records
+  1.97.1 vs 1.98.1).
+- Per-stage wall/memory split: PARTIAL — setup/plan/metadata-proxy
+  recorded; RSS is test-process peak, not isolated plan RSS; the
+  in-plan compiler cost is a proxy, not traced.
+- CI-hosted walls, queue, cache transfer: UNMEASURED (no runs).
+- Two-minute warm SMALL-FIXTURE path: still UNPASSED (unchanged).
+
+Negative pipeline: `impl_neg_pipeline_p13` (9 tests) drives
+config→discovery→plan→IR→workflow→reports→Required; every stage
+fails closed (missing/invalid config, malformed member, empty head,
+tampered IR, unwritable output, missing leg → NotRun, failed leg →
+red verdict). Unknown/malformed bases broaden by design, never
+error. The P05-gated deferral above is lifted: no P05 crate graph
+was needed.
+
+`scripts/verify-local.sh` now also pins per-crate `cargo test --doc`,
+per-crate `cargo doc --no-deps`, and the named fixture suite; every
+stage still runs and every failure is still listed.
