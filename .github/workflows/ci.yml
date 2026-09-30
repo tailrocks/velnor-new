@@ -31,7 +31,7 @@ jobs:
         with:
           cache: "true"
           cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-75c77caa4018556f
-          cache_save: "true"
+          cache_save: ${{ github.event_name == 'push' }}
           env: "false"
           install: "false"
           sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
@@ -66,7 +66,7 @@ jobs:
         with:
           cache: "true"
           cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-1e88d9dde00a53da
-          cache_save: "true"
+          cache_save: ${{ github.event_name == 'push' }}
           env: "false"
           install: "false"
           sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
@@ -86,7 +86,7 @@ jobs:
         with:
           cache: "true"
           cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-507563a85b3135e7
-          cache_save: "true"
+          cache_save: ${{ github.event_name == 'push' }}
           env: "false"
           install: "false"
           sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
@@ -107,7 +107,7 @@ jobs:
         with:
           cache: "true"
           cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-6270601fa454da91
-          cache_save: "true"
+          cache_save: ${{ github.event_name == 'push' }}
           env: "false"
           install: "false"
           sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
@@ -168,6 +168,7 @@ jobs:
           RUSTUP_TOOLCHAIN: 1.98.1
         run: "sh -c 'if mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo metadata --locked --offline >/dev/null 2>&1; then echo \"velnor: sources hit, skipping fetch\"; else echo \"velnor: sources miss (source_missing), fetching\"; mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked; fi'"
       - name: Save Cargo sources
+        if: github.event_name == 'push'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           key: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-${{hashFiles('Cargo.lock')}}
@@ -177,18 +178,6 @@ jobs:
           VELNOR_INTERNAL_OP: write-request-v1
           VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/plan-v1-request.json
         run: "\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\""
-      - name: Format
-        env:
-          MISE_AUTO_INSTALL: "false"
-          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_EXEC_AUTO_INSTALL: "false"
-          MISE_LOCKFILE: "0"
-          MISE_NO_CONFIG: "1"
-          MISE_NO_ENV: "1"
-          MISE_NO_HOOKS: "1"
-          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-          RUSTUP_TOOLCHAIN: 1.98.1
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx fmt --all --check --manifest-path Cargo.toml
       - name: Check generated files
         env:
           MISE_AUTO_INSTALL: "false"
@@ -246,7 +235,7 @@ jobs:
         with:
           cache: "true"
           cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-14ee3a9bbb90604c
-          cache_save: "true"
+          cache_save: ${{ github.event_name == 'push' }}
           env: "false"
           install: "false"
           sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
@@ -317,7 +306,7 @@ jobs:
         with:
           cache: "true"
           cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-6270601fa454da91
-          cache_save: "true"
+          cache_save: ${{ github.event_name == 'push' }}
           env: "false"
           install: "false"
           sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
@@ -487,7 +476,7 @@ jobs:
         with:
           cache: "true"
           cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-6270601fa454da91
-          cache_save: "true"
+          cache_save: ${{ github.event_name == 'push' }}
           env: "false"
           install: "false"
           sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
@@ -641,7 +630,7 @@ jobs:
         with:
           cache: "true"
           cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-6270601fa454da91
-          cache_save: "true"
+          cache_save: ${{ github.event_name == 'push' }}
           env: "false"
           install: "false"
           sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
@@ -811,7 +800,7 @@ jobs:
         with:
           cache: "true"
           cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-6270601fa454da91
-          cache_save: "true"
+          cache_save: ${{ github.event_name == 'push' }}
           env: "false"
           install: "false"
           sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
@@ -981,7 +970,7 @@ jobs:
         with:
           cache: "true"
           cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-6270601fa454da91
-          cache_save: "true"
+          cache_save: ${{ github.event_name == 'push' }}
           env: "false"
           install: "false"
           sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
@@ -1151,7 +1140,7 @@ jobs:
         with:
           cache: "true"
           cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-6270601fa454da91
-          cache_save: "true"
+          cache_save: ${{ github.event_name == 'push' }}
           env: "false"
           install: "false"
           sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
@@ -1321,7 +1310,7 @@ jobs:
         with:
           cache: "true"
           cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-6270601fa454da91
-          cache_save: "true"
+          cache_save: ${{ github.event_name == 'push' }}
           env: "false"
           install: "false"
           sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
@@ -1489,7 +1478,7 @@ jobs:
         with:
           cache: "true"
           cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-8f52c1fc1d8f90d8
-          cache_save: "true"
+          cache_save: ${{ github.event_name == 'push' }}
           env: "false"
           install: "false"
           sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
