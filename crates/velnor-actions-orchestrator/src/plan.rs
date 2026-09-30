@@ -226,12 +226,9 @@ fn clippy_lines(out: &mut String, prep: &GenerationPreparation) {
 /// Cache layers derived from selected drivers.
 fn cache_layers(prep: &GenerationPreparation) -> String {
     let mut layers = vec!["Mise tools", "Cargo sources"];
-    if prep
-        .discovery
-        .workspaces
-        .iter()
-        .any(|workspace| workspace.profile.compile_driver.as_str() == "mbx")
-    {
+    if prep.discovery.workspaces.iter().any(|workspace| {
+        workspace.profile.compile_driver == velnor_actions_rust::CompileDriver::Mbx
+    }) {
         layers.push("MBX compilation objects");
     }
     layers.join(", ")

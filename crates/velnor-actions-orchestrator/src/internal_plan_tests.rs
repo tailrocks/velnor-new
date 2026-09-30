@@ -3,7 +3,7 @@
 //! Declared via `#[path]` from `internal_plan.rs` under `cfg(test)`.
 
 use super::*;
-use velnor_actions_rust::TaskKind;
+use velnor_actions_rust::{CompileDriver, NextestProfile, TaskGroup, TaskKind, TestRunner};
 
 /// Digest over every envelope dimension for flip comparisons.
 fn digest_full(
@@ -29,14 +29,14 @@ fn digest_full(
         target_flags: Vec::new(),
         no_test_targets: false,
         package_arg: None,
-        compile_driver: "cargo".to_owned(),
-        test_runner: "cargo_test".to_owned(),
+        compile_driver: CompileDriver::Cargo,
+        test_runner: TestRunner::CargoTest,
         declared_inputs: Vec::new(),
         undeclared_reads: false,
         uses_network: false,
         uses_clock: false,
         uses_random: false,
-        nextest_profile: "default".to_owned(),
+        nextest_profile: NextestProfile::Default,
     };
     let generator = default_generator();
     let extension = StackExtension {

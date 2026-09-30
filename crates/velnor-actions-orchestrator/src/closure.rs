@@ -123,8 +123,8 @@ pub(crate) fn resolve_closure_at_root(
         .value("features", &group.features.join(","))
         .value("target", &group.target)
         .value("profile", &group.configuration)
-        .value("driver", &group.compile_driver)
-        .value("runner", &group.test_runner)
+        .value("driver", group.compile_driver.as_str())
+        .value("runner", group.test_runner.as_str())
         .value("kind", group.kind.as_str());
     for (index, extra) in group.declared_inputs.iter().enumerate() {
         let name = format!("declared_extra:{index}:{extra}");

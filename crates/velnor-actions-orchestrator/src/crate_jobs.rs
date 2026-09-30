@@ -151,14 +151,14 @@ fn id_inputs(
         .collect()
 }
 
-/// True when the group compiles through MBX (unknown spellings are Cargo).
+/// True when the group compiles through MBX.
 fn is_mbx(group: &TaskGroup) -> bool {
-    group.compile_driver == RustDriver::Mbx.as_str()
+    group.compile_driver == RustDriver::Mbx
 }
 
 /// True when the group runs tests through Nextest.
 fn is_nextest(group: &TaskGroup) -> bool {
-    group.test_runner == TestRunner::CargoNextest.as_str()
+    group.test_runner == TestRunner::CargoNextest
 }
 
 /// In-crate obligation order: Format, Clippy, build, tests, doctests, docs.

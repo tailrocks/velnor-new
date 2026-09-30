@@ -163,10 +163,9 @@ pub(crate) fn check_archive_identity_with_source(
             group.task_id
         )));
     }
-    let driver = match group.compile_driver.as_str() {
-        "cargo" => NextestDriver::Cargo,
-        "mbx" => NextestDriver::Mbx,
-        other => return Err(internal(&format!("unknown_archive_driver:{other}"))),
+    let driver = match group.compile_driver {
+        velnor_actions_rust::CompileDriver::Cargo => NextestDriver::Cargo,
+        velnor_actions_rust::CompileDriver::Mbx => NextestDriver::Mbx,
     };
     let marker = digest_b3(crate::internal_plan::snapshot::UNKNOWN_ARCHIVE_SOURCE.as_bytes());
     let Some(source) =
@@ -180,7 +179,7 @@ pub(crate) fn check_archive_identity_with_source(
         &group.package_name,
         &group.features,
         target,
-        &group.nextest_profile,
+        group.nextest_profile.as_str(),
     )
     .map_err(|err| internal(&format!("archive_inputs_rejected:{err}")))?;
     let catalog = ToolCatalog::pinned();
@@ -188,7 +187,7 @@ pub(crate) fn check_archive_identity_with_source(
         source_digest: source,
         profile: &group.configuration,
         toolchain_id,
-        runtime: &group.compile_driver,
+        runtime: group.compile_driver.as_str(),
         test_runner: catalog.version(PinnedTool::Nextest),
         format: "tar.zst",
         platform_id,

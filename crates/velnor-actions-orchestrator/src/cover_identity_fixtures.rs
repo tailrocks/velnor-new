@@ -100,7 +100,7 @@ pub(super) fn manifest_with(entries: &[(&str, &str)]) -> BaselineManifest {
 
 /// Discovery with one plain group per task ID, all unchanged.
 pub(super) fn discovery_with(task_ids: &[&str]) -> Discovery {
-    use velnor_actions_rust::{TaskGroup, TaskKind};
+    use velnor_actions_rust::{CompileDriver, NextestProfile, TaskGroup, TaskKind, TestRunner};
     Discovery {
         statuses: Vec::new(),
         workspaces: Vec::new(),
@@ -120,14 +120,14 @@ pub(super) fn discovery_with(task_ids: &[&str]) -> Discovery {
                 target_flags: Vec::new(),
                 no_test_targets: false,
                 package_arg: None,
-                compile_driver: "cargo".to_owned(),
-                test_runner: "cargo_test".to_owned(),
+                compile_driver: CompileDriver::Cargo,
+                test_runner: TestRunner::CargoTest,
                 declared_inputs: Vec::new(),
                 undeclared_reads: false,
                 uses_network: false,
                 uses_clock: false,
                 uses_random: false,
-                nextest_profile: "default".to_owned(),
+                nextest_profile: NextestProfile::Default,
             })
             .collect(),
         feature_fallbacks: Vec::new(),

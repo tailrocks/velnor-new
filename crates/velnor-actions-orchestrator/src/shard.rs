@@ -122,7 +122,9 @@ fn check_group(
             return Err("shard_input_mismatch".into());
         }
     }
-    if first.runner != "cargo_nextest" {
+    let nextest = velnor_actions_rust::TestRunner::parse(&first.runner)
+        .is_ok_and(|runner| runner == velnor_actions_rust::TestRunner::CargoNextest);
+    if !nextest {
         return Err("sharding_requires_nextest".into());
     }
     if velnor_actions_mise::requires_archive_transfer(first.shard_count)

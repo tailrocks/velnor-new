@@ -17,6 +17,7 @@ use velnor_actions_contract::ContractError;
 
 use crate::argv::{entry_metadata, require_nextest_for_shards, shards_allowed};
 use crate::evidence::Evidence;
+use crate::profile::TestRunner;
 use crate::task_identity::{ExtensionInputs, RustTaskIdentityExtension};
 use crate::tasks::{TaskGroup, TaskKind};
 
@@ -71,8 +72,8 @@ impl TaskGroup {
             targets: inputs.targets,
             features: &self.features,
             target: &self.target,
-            driver: &self.compile_driver,
-            runner: &self.test_runner,
+            driver: self.compile_driver,
+            runner: self.test_runner,
             config_digest: inputs.config_digest,
             lock_digest: inputs.lock_digest,
             nextest_digest: inputs.nextest_digest,
@@ -155,7 +156,7 @@ impl RustTaskIdentityExtension {
 /// Returns [`ContractError`] when `count` exceeds one for cargo-test.
 pub fn expand_shards_for_group(
     kind: TaskKind,
-    runner: &str,
+    runner: TestRunner,
     count: u32,
     no_test_targets: bool,
 ) -> Result<bool, ContractError> {
@@ -178,8 +179,8 @@ pub fn adapter_entry_metadata(group: &TaskGroup, evidence: &[Evidence]) -> serde
         "kind": group.kind.as_str(),
         "configuration": group.configuration,
         "target": group.target,
-        "compile_driver": meta.compile_driver,
-        "test_runner": meta.test_runner,
+        "compile_driver": meta.compile_driver.as_str(),
+        "test_runner": meta.test_runner.as_str(),
         "evidence_ids": meta.evidence_ids,
     })
 }

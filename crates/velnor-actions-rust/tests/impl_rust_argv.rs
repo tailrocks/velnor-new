@@ -3,7 +3,7 @@ use velnor_actions_rust::tasks::{
     TaskGroup, TaskKind, cargo_payload_argv, cargo_payload_with_profile, entry_metadata,
     evidence_id,
 };
-use velnor_actions_rust::{Evidence, EvidenceStrength, NextestProfile};
+use velnor_actions_rust::{CompileDriver, Evidence, EvidenceStrength, NextestProfile, TestRunner};
 
 fn group(kind: TaskKind) -> TaskGroup {
     TaskGroup {
@@ -20,14 +20,14 @@ fn group(kind: TaskKind) -> TaskGroup {
         target_flags: vec!["--lib".to_owned()],
         no_test_targets: false,
         package_arg: None,
-        compile_driver: "cargo".to_owned(),
-        test_runner: "cargo_test".to_owned(),
+        compile_driver: CompileDriver::Cargo,
+        test_runner: TestRunner::CargoTest,
         declared_inputs: Vec::new(),
         undeclared_reads: false,
         uses_network: false,
         uses_clock: false,
         uses_random: false,
-        nextest_profile: "default".to_owned(),
+        nextest_profile: NextestProfile::Default,
     }
 }
 
@@ -38,9 +38,9 @@ fn text(group: &TaskGroup) -> Vec<String> {
         .collect()
 }
 
-/// Profiled payload argv under an explicit resolved profile.
-fn profiled(group: &TaskGroup, profile: NextestProfile) -> Vec<String> {
-    cargo_payload_with_profile(group, profile)
+/// Profiled payload argv with the group's resolved profile.
+fn profiled(group: &TaskGroup) -> Vec<String> {
+    cargo_payload_with_profile(group)
         .iter()
         .map(|s| s.to_string_lossy().into_owned())
         .collect()
@@ -238,8 +238,8 @@ fn entry_metadata_carries_driver_runner_and_evidence() {
         },
     ];
     let metadata = entry_metadata(&group_case, &sightings);
-    assert_eq!(metadata.compile_driver, "cargo");
-    assert_eq!(metadata.test_runner, "cargo_test");
+    assert_eq!(metadata.compile_driver, CompileDriver::Cargo);
+    assert_eq!(metadata.test_runner, TestRunner::CargoTest);
     assert_eq!(metadata.evidence_ids.len(), 2);
     assert!(metadata.evidence_ids[0].starts_with("scripts/test.sh:2:"));
     assert!(metadata.evidence_ids[1].starts_with("mise.toml:4:"));
@@ -254,10 +254,9 @@ fn entry_metadata_carries_driver_runner_and_evidence() {
 #[test]
 fn nextest_payload_is_pinned_tool_input() {
     let mut configured = group(TaskKind::Nextest);
-    configured.nextest_profile = "ci".to_owned();
-    let resolved = NextestProfile::parse(&configured.nextest_profile).expect("valid profile");
+    configured.nextest_profile = NextestProfile::Ci;
     assert_eq!(
-        profiled(&configured, resolved),
+        profiled(&configured),
         [
             "nextest",
             "run",
@@ -275,14 +274,13 @@ fn nextest_payload_is_pinned_tool_input() {
     );
     let mut custom = group(TaskKind::Nextest);
     custom.manifest_key = "crates/demo".to_owned();
-    let resolved = NextestProfile::parse(&custom.nextest_profile).expect("valid profile");
     assert!(
-        profiled(&custom, resolved)
+        profiled(&custom)
             .windows(2)
             .any(|w| w == ["--manifest-path", "crates/demo/Cargo.toml"])
     );
     assert!(
-        profiled(&custom, resolved)
+        profiled(&custom)
             .windows(2)
             .any(|w| w == ["--profile", "default"])
     );
@@ -298,5 +296,30 @@ fn unknown_profile_token_fails_closed() {
     for bad in ["", "nightly", "CI", "ci ", "default\n"] {
         let err = NextestProfile::parse(bad).expect_err("unknown profile");
         assert!(err.to_string().contains("unknown_profile"), "{err}");
+    }
+}
+
+#[test]
+fn driver_runner_tokens_parse_strictly() {
+    assert_eq!(CompileDriver::parse("cargo"), Ok(CompileDriver::Cargo));
+    assert_eq!(CompileDriver::parse("mbx"), Ok(CompileDriver::Mbx));
+    assert_eq!(TestRunner::parse("cargo_test"), Ok(TestRunner::CargoTest));
+    assert_eq!(
+        TestRunner::parse("cargo_nextest"),
+        Ok(TestRunner::CargoNextest)
+    );
+    for bad in ["", "bogus", "Cargo", "cargo ", "nextest", "cargo-nextest"] {
+        let driver = CompileDriver::parse(bad).expect_err("unknown driver");
+        assert!(driver.to_string().contains("unknown_driver"), "{driver}");
+        let runner = TestRunner::parse(bad).expect_err("unknown runner");
+        assert!(runner.to_string().contains("unknown_runner"), "{runner}");
+    }
+    for (parsed, spelling) in [
+        (CompileDriver::Cargo.as_str(), "cargo"),
+        (CompileDriver::Mbx.as_str(), "mbx"),
+        (TestRunner::CargoTest.as_str(), "cargo_test"),
+        (TestRunner::CargoNextest.as_str(), "cargo_nextest"),
+    ] {
+        assert_eq!(parsed, spelling);
     }
 }

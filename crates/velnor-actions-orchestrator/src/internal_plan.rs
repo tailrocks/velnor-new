@@ -113,7 +113,7 @@ pub(crate) fn cache_ids_for(
         &identities::lane_id_for(group, &workspace_id),
         &identities::platform_id_for_group(label, group),
         toolchain,
-        &identities::cache_format_id_for(&group.compile_driver),
+        &identities::cache_format_id_for(group.compile_driver),
     )
 }
 
@@ -215,8 +215,8 @@ pub(crate) fn task_identity_digest(inputs: &IdentityInputs<'_>) -> Result<String
             features,
             flags,
             task_contract: "task-execution-v1".to_owned(),
-            compile_driver: group.compile_driver.clone(),
-            test_runner: group.test_runner.clone(),
+            compile_driver: group.compile_driver.as_str().to_owned(),
+            test_runner: group.test_runner.as_str().to_owned(),
         },
         inputs: vec![TaskInput {
             path: CLOSURE_INPUT_PATH.to_owned(),

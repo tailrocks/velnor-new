@@ -165,14 +165,14 @@ mod tests {
             target_flags: Vec::new(),
             no_test_targets: false,
             package_arg: None,
-            compile_driver: "cargo".to_owned(),
-            test_runner: "cargo_nextest".to_owned(),
+            compile_driver: crate::profile::CompileDriver::Cargo,
+            test_runner: crate::profile::TestRunner::CargoNextest,
             declared_inputs: Vec::new(),
             undeclared_reads: false,
             uses_network: false,
             uses_clock: false,
             uses_random: false,
-            nextest_profile: "default".to_owned(),
+            nextest_profile: crate::profile::NextestProfile::Default,
         }
     }
 

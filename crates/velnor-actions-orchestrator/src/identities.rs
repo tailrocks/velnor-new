@@ -7,7 +7,7 @@ use velnor_actions_contract::cachekey::{
 };
 use velnor_actions_contract::{ContractError, digest_b3};
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
-use velnor_actions_rust::{DepKind, TaskGroup, WorkspaceRecord};
+use velnor_actions_rust::{CompileDriver, DepKind, TaskGroup, TestRunner, WorkspaceRecord};
 
 use super::snapshot::{
     ExecutionSnapshot, canonical_digest, normalized_component_id, platform_id_for,
@@ -248,8 +248,8 @@ fn lane_config_digest(group: &TaskGroup) -> String {
         "target": group.target,
         "features": features,
         "flags": flags,
-        "driver": group.compile_driver,
-        "runner": group.test_runner,
+        "driver": group.compile_driver.as_str(),
+        "runner": group.test_runner.as_str(),
     }))
     .unwrap_or_else(|_| digest_b3(b"lane_config_error"))
 }
@@ -284,10 +284,10 @@ pub(crate) fn lane_id_for(group: &TaskGroup, workspace_id: &str) -> String {
 /// Toolchain inputs with exact component evidence, never `unreported`.
 pub(crate) fn toolchain_inputs_for(group: &TaskGroup, catalog: &ToolCatalog) -> ToolchainInputs {
     let mut tools = vec![PinnedTool::Rust];
-    if group.compile_driver == "mbx" {
+    if group.compile_driver == CompileDriver::Mbx {
         tools.push(PinnedTool::MrBoxington);
     }
-    if group.test_runner == "cargo_nextest" {
+    if group.test_runner == TestRunner::CargoNextest {
         tools.push(PinnedTool::Nextest);
     }
     let mut specs = catalog.tool_specs(&tools);
@@ -295,8 +295,8 @@ pub(crate) fn toolchain_inputs_for(group: &TaskGroup, catalog: &ToolCatalog) -> 
     ToolchainInputs {
         tools: specs,
         components: velnor_actions_mise::PrepareRustComponents::components(),
-        compile_driver: group.compile_driver.clone(),
-        test_runner: group.test_runner.clone(),
+        compile_driver: group.compile_driver.as_str().to_owned(),
+        test_runner: group.test_runner.as_str().to_owned(),
     }
 }
 
@@ -314,21 +314,19 @@ pub(crate) fn toolchain_digest_for(
 
 /// Cache-format identity for one compile driver.
 ///
-/// The single cache format is versioned here; unknown drivers fall back
-/// to an explicit driver-labeled digest instead of guessing a format.
-pub(crate) fn cache_format_id_for(driver: &str) -> String {
-    if (driver == "cargo" || driver == "mbx")
-        && let Ok(id) = cache_format_id(&FormatInputs {
-            adapter: driver.to_owned(),
-            format: CACHE_FORMAT_LABEL.to_owned(),
-            generation: "1".to_owned(),
-        })
-    {
+/// The single cache format is versioned here; the typed driver admits
+/// no unknown spelling, so no fallback digest can ever trigger.
+pub(crate) fn cache_format_id_for(driver: CompileDriver) -> String {
+    if let Ok(id) = cache_format_id(&FormatInputs {
+        adapter: driver.as_str().to_owned(),
+        format: CACHE_FORMAT_LABEL.to_owned(),
+        generation: "1".to_owned(),
+    }) {
         return id;
     }
     canonical_digest(&serde_json::json!({
         "schema": "velnor-cache-format-fallback-v1",
-        "adapter": driver,
+        "adapter": driver.as_str(),
     }))
     .unwrap_or_else(|_| digest_b3(b"cache_format_error"))
 }

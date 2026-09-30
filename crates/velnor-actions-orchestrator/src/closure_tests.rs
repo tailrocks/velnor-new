@@ -5,7 +5,7 @@
 use super::closure::*;
 use super::snapshot::canonical_digest;
 use velnor_actions_contract::digest_b3;
-use velnor_actions_rust::{TaskGroup, TaskKind};
+use velnor_actions_rust::{CompileDriver, NextestProfile, TaskGroup, TaskKind, TestRunner};
 
 /// Minimal group with `declared` inputs and `reads` flag.
 fn group(declared: Vec<String>, reads: bool) -> TaskGroup {
@@ -23,14 +23,14 @@ fn group(declared: Vec<String>, reads: bool) -> TaskGroup {
         target_flags: Vec::new(),
         no_test_targets: false,
         package_arg: None,
-        compile_driver: "cargo".to_owned(),
-        test_runner: "cargo_test".to_owned(),
+        compile_driver: CompileDriver::Cargo,
+        test_runner: TestRunner::CargoTest,
         declared_inputs: declared,
         undeclared_reads: reads,
         uses_network: false,
         uses_clock: false,
         uses_random: false,
-        nextest_profile: "default".to_owned(),
+        nextest_profile: NextestProfile::Default,
     }
 }
 

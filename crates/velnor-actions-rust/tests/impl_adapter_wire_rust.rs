@@ -76,14 +76,14 @@ fn group(kind: TaskKind) -> TaskGroup {
         target_flags: Vec::new(),
         no_test_targets: false,
         package_arg: None,
-        compile_driver: "cargo".to_owned(),
-        test_runner: "cargo_test".to_owned(),
+        compile_driver: CompileDriver::Cargo,
+        test_runner: TestRunner::CargoTest,
         declared_inputs: Vec::new(),
         undeclared_reads: false,
         uses_network: false,
         uses_clock: false,
         uses_random: false,
-        nextest_profile: "default".to_owned(),
+        nextest_profile: NextestProfile::Default,
     }
 }
 
@@ -110,8 +110,8 @@ fn extension_carries_workspace_and_profile() {
         targets: &targets,
         features: &features,
         target: "host",
-        driver: "cargo",
-        runner: "cargo_test",
+        driver: CompileDriver::Cargo,
+        runner: TestRunner::CargoTest,
         config_digest: &config,
         lock_digest: None,
         nextest_digest: None,

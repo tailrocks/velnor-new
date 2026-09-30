@@ -8,9 +8,7 @@ use velnor_actions_mise::{
     CandidateBuild, IsolatedCommand, PinnedTool, PinnedToolExec, RouteDriver, ToolCatalog,
     custom_run::custom_task_run_argv, validate_exact_version,
 };
-use velnor_actions_rust::{
-    NextestProfile, TaskGroup, TestRunner, tasks::cargo_payload_with_profile,
-};
+use velnor_actions_rust::{TaskGroup, TestRunner, tasks::cargo_payload_with_profile};
 use velnor_actions_workflow_renderer::render::CandidateSpec;
 
 use crate::{OrchestratorError, qualify::QualifyRequest};
@@ -61,18 +59,13 @@ pub(crate) fn task_argv(
     group: &TaskGroup,
     catalog: &ToolCatalog,
 ) -> Result<Vec<String>, OrchestratorError> {
-    let driver = RouteDriver::from_compile_driver(&group.compile_driver);
+    let driver = RouteDriver::from_compile_driver(group.compile_driver.as_str());
     let mut tools = driver.map_or(vec![PinnedTool::Rust], RouteDriver::tools);
-    if group.test_runner == TestRunner::CargoNextest.as_str() {
+    if group.test_runner == TestRunner::CargoNextest {
         tools.push(PinnedTool::Nextest);
     }
     let program = OsString::from(driver.map_or("cargo", RouteDriver::program));
-    let profile = NextestProfile::parse(&group.nextest_profile).map_err(|err| {
-        OrchestratorError::Contract {
-            problem: err.to_string(),
-        }
-    })?;
-    let payload = cargo_payload_with_profile(group, profile);
+    let payload = cargo_payload_with_profile(group);
     let exec = PinnedToolExec::new(tools, &program, payload).map_err(|err| {
         OrchestratorError::Contract {
             problem: err.to_string(),

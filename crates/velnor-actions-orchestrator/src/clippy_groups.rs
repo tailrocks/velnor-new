@@ -73,6 +73,7 @@ fn wave_owns(group: &TaskGroup, config: Option<&str>, first: bool) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use velnor_actions_rust::{CompileDriver, NextestProfile, TestRunner};
 
     /// Minimal group with `kind`, `configuration`, and `task_id`.
     fn group(kind: TaskKind, configuration: &str, task_id: &str) -> TaskGroup {
@@ -90,14 +91,14 @@ mod tests {
             target_flags: Vec::new(),
             no_test_targets: false,
             package_arg: None,
-            compile_driver: "cargo".to_owned(),
-            test_runner: "cargo_test".to_owned(),
+            compile_driver: CompileDriver::Cargo,
+            test_runner: TestRunner::CargoTest,
             declared_inputs: Vec::new(),
             undeclared_reads: false,
             uses_network: false,
             uses_clock: false,
             uses_random: false,
-            nextest_profile: "default".to_owned(),
+            nextest_profile: NextestProfile::Default,
         }
     }
 

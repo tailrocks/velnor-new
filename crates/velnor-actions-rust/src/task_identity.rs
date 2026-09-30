@@ -6,7 +6,7 @@
 use serde::Serialize;
 use velnor_actions_contract::ContractError;
 
-use crate::profile::TestRunner;
+use crate::profile::{CompileDriver, TestRunner};
 use crate::tasks::TaskKind;
 
 /// Typed Rust task-identity extension (cache §1); unknown schemas disable reuse.
@@ -68,9 +68,9 @@ pub struct ExtensionInputs<'a> {
     /// Rust target and profile.
     pub target: &'a str,
     /// Compile driver.
-    pub driver: &'a str,
+    pub driver: CompileDriver,
     /// Test runner.
-    pub runner: &'a str,
+    pub runner: TestRunner,
     /// Cargo config and build-script input digests.
     pub config_digest: &'a str,
     /// `Cargo.lock` digest, when the lockfile is available.
@@ -119,7 +119,7 @@ impl RustTaskIdentityExtension {
     /// `rerun-if-changed` inputs conservatively disables reuse.
     #[must_use]
     pub fn for_task(inputs: &ExtensionInputs<'_>) -> Self {
-        let nextest = inputs.runner == TestRunner::CargoNextest.as_str();
+        let nextest = inputs.runner == TestRunner::CargoNextest;
         let archive = if inputs.kind == TaskKind::Build && nextest {
             inputs.archive_source.map(str::to_owned)
         } else {
@@ -134,7 +134,7 @@ impl RustTaskIdentityExtension {
             targets: sorted_unique(inputs.targets),
             features: sorted_unique(inputs.features),
             target: inputs.target.to_owned(),
-            driver: format!("{}+{}", inputs.driver, inputs.runner),
+            driver: format!("{}+{}", inputs.driver.as_str(), inputs.runner.as_str()),
             config_digest: inputs.config_digest.to_owned(),
             nextest_digest: inputs.nextest_digest.map(str::to_owned),
             kind: inputs.kind.as_str().to_owned(),

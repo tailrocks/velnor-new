@@ -245,8 +245,8 @@ fn archive_trust_follows_source_build() {
         targets: &targets,
         features: &features,
         target: "host",
-        driver: "cargo",
-        runner: "cargo_nextest",
+        driver: CompileDriver::Cargo,
+        runner: TestRunner::CargoNextest,
         config_digest: "config",
         lock_digest: Some("lock"),
         nextest_digest: Some("nextest"),
@@ -262,7 +262,7 @@ fn archive_trust_follows_source_build() {
         Some("stack/rust/root/build/default")
     );
     let mut cargo = base.clone();
-    cargo.runner = "cargo_test";
+    cargo.runner = TestRunner::CargoTest;
     assert!(
         RustTaskIdentityExtension::for_task(&cargo)
             .archive_trust_source()
@@ -286,17 +286,28 @@ fn archive_trust_follows_source_build() {
 
 #[test]
 fn shard_expansion_is_nextest_only() {
-    assert!(expand_shards_for_group(TaskKind::Nextest, "cargo_nextest", 2, false).expect("expand"));
     assert!(
-        !expand_shards_for_group(TaskKind::Nextest, "cargo_nextest", 1, false).expect("single")
+        expand_shards_for_group(TaskKind::Nextest, TestRunner::CargoNextest, 2, false)
+            .expect("expand")
     );
-    assert!(!expand_shards_for_group(TaskKind::Nextest, "cargo_nextest", 2, true).expect("empty"));
     assert!(
-        !expand_shards_for_group(TaskKind::Test, "cargo_nextest", 2, false).expect("test-kind")
+        !expand_shards_for_group(TaskKind::Nextest, TestRunner::CargoNextest, 1, false)
+            .expect("single")
     );
-    assert!(!expand_shards_for_group(TaskKind::Clippy, "cargo_test", 1, false).expect("clippy"));
-    assert!(expand_shards_for_group(TaskKind::Test, "cargo_test", 2, false).is_err());
-    assert!(expand_shards_for_group(TaskKind::Nextest, "cargo_test", 2, false).is_err());
+    assert!(
+        !expand_shards_for_group(TaskKind::Nextest, TestRunner::CargoNextest, 2, true)
+            .expect("empty")
+    );
+    assert!(
+        !expand_shards_for_group(TaskKind::Test, TestRunner::CargoNextest, 2, false)
+            .expect("test-kind")
+    );
+    assert!(
+        !expand_shards_for_group(TaskKind::Clippy, TestRunner::CargoTest, 1, false)
+            .expect("clippy")
+    );
+    assert!(expand_shards_for_group(TaskKind::Test, TestRunner::CargoTest, 2, false).is_err());
+    assert!(expand_shards_for_group(TaskKind::Nextest, TestRunner::CargoTest, 2, false).is_err());
 }
 
 #[test]
