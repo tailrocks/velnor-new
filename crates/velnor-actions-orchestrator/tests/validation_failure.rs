@@ -143,7 +143,7 @@ exec \"$VELNOR_REAL_MISE\" \"$@\"
         .iter()
         .map(|target| {
             format!(
-                "{{\"target\":\"{target}\",\"artifact\":\"https://example.invalid/r/{target}\",\"sha256\":\"{}\"}}",
+                "{{\"target\":\"{target}\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v0.1.0/velnor-actions-0.1.0-{target}\",\"sha256\":\"{}\"}}",
                 "a".repeat(64)
             )
         })

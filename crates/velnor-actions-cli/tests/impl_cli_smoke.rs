@@ -306,6 +306,23 @@ fn previews_use_unique_tmp_dirs_without_collision() -> Result<(), Box<dyn Error>
 }
 
 #[test]
+fn public_failures_collapse_to_one_stderr_line() -> Result<(), Box<dyn Error>> {
+    let tmp = fresh_tempdir("smoke-single-line")?;
+    init_repo(&tmp)?;
+    let config = tmp.join(".velnor").join("config.toml");
+    let mut body = std::fs::read_to_string(&config)?;
+    body.push_str("runner_label = \"x\\ny\"\n");
+    std::fs::write(&config, body)?;
+    let plan = spawn(&["plan"], &[], &tmp)?;
+    assert_eq!(code(&plan), 1);
+    let stderr = String::from_utf8_lossy(&plan.stderr).into_owned();
+    assert!(stderr.contains("unsupported_label"), "{stderr:?}");
+    assert_eq!(stderr.lines().count(), 1, "{stderr:?}");
+    cleanup(&tmp);
+    Ok(())
+}
+
+#[test]
 fn help_is_identical_with_and_without_env() -> Result<(), Box<dyn Error>> {
     let tmp = fresh_tempdir("smoke-help")?;
     let plain = spawn(&["--help"], &[], &tmp)?;

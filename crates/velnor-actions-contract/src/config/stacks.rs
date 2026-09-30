@@ -60,6 +60,35 @@ pub struct RustStackConfig {
     pub custom_tasks: Vec<String>,
 }
 
+/// True for a Mise task name over `[A-Za-z0-9_:.-]` (X2 fail-closed charset).
+///
+/// Single source for the config allowlist, the `mise run` argv builder,
+/// and the qualified-task paths: one grammar, no drift. The charset
+/// rejects `/`, spaces, `$`, backtick, `${{`, and newlines, so a hostile
+/// task name can never become a path, flag split, or expression.
+#[must_use]
+pub fn is_valid_mise_task_name(task: &str) -> bool {
+    !task.is_empty()
+        && task
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b':' | b'.' | b'-'))
+}
+
+/// True for a configuration target: literal `host` or a triple over
+/// `[a-z0-9_.+-]` that never starts with `-` (X2: `$`/backtick/`${{`
+/// and flag-shaped values fail closed at config load).
+#[must_use]
+pub fn is_valid_config_target(target: &str) -> bool {
+    if target == "host" {
+        return true;
+    }
+    !target.is_empty()
+        && !target.starts_with('-')
+        && target
+            .bytes()
+            .all(|b| matches!(b, b'a'..=b'z' | b'0'..=b'9' | b'_' | b'.' | b'+' | b'-'))
+}
+
 /// Documented default: one `default` configuration variant list.
 fn default_configurations() -> Vec<RustConfiguration> {
     vec![RustConfiguration {
@@ -168,11 +197,11 @@ impl RustStackConfig {
                     format!("duplicate_configuration:{}", config.name),
                 ));
             }
-            if config.target.trim().is_empty() {
+            if !is_valid_config_target(&config.target) {
                 return Err(ContractError::config(
                     file,
                     "stacks.rust.configurations.target",
-                    "empty_target",
+                    format!("malformed_target:{}", config.target),
                 ));
             }
         }
@@ -183,8 +212,8 @@ impl RustStackConfig {
 
     /// Validate the custom-task allowlist: sorted, unique, safe names.
     ///
-    /// The name rule matches the `mise run` argv builder: non-blank, no
-    /// path separator, no spaces.
+    /// The name rule is [`is_valid_mise_task_name`], shared with the
+    /// `mise run` argv builder and the qualified-task paths.
     /// # Errors
     fn validate_custom_tasks(&self, file: &str) -> Result<(), ContractError> {
         let mut sorted = self.custom_tasks.clone();
@@ -205,7 +234,7 @@ impl RustStackConfig {
             ));
         }
         for task in &self.custom_tasks {
-            if task.trim().is_empty() || task.contains('/') || task.contains(' ') {
+            if !is_valid_mise_task_name(task) {
                 return Err(ContractError::config(
                     file,
                     "stacks.rust.custom_tasks",
@@ -214,5 +243,58 @@ impl RustStackConfig {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{RustConfiguration, is_valid_config_target, is_valid_mise_task_name};
+    use crate::config::RustStackConfig;
+
+    #[test]
+    fn target_grammar_accepts_host_and_triples_only() {
+        for target in ["host", "x86_64-unknown-linux-gnu", "aarch64-apple-darwin"] {
+            assert!(is_valid_config_target(target), "{target}");
+        }
+        // Proven X2 PoC plus metacharacter and flag-shaped values.
+        for target in [
+            "",
+            " ",
+            "${{ secrets.CARGO_REGISTRY_TOKEN }}",
+            "$TRIPLE",
+            "`id`",
+            "-foo",
+            "HOST",
+            "x86_64 unknown",
+            "a/b",
+        ] {
+            assert!(!is_valid_config_target(target), "{target:?}");
+        }
+    }
+
+    #[test]
+    fn task_name_grammar_matches_mise_tasks() {
+        for task in ["audit", "build:all", "a-b_c.d:e", "Test123"] {
+            assert!(is_valid_mise_task_name(task), "{task}");
+        }
+        for task in ["", "a b", "a/b", "${{ x }}", "$t", "`t`", "a\nb"] {
+            assert!(!is_valid_mise_task_name(task), "{task:?}");
+        }
+    }
+
+    #[test]
+    fn hostile_target_and_task_fail_validation() {
+        let mut stack = RustStackConfig::default_config();
+        stack.configurations = vec![RustConfiguration {
+            name: "default".to_owned(),
+            features: Vec::new(),
+            target: "${{ secrets.CARGO_REGISTRY_TOKEN }}".to_owned(),
+        }];
+        let err = stack.validate("config.toml").expect_err("PoC target fails");
+        assert!(err.to_string().contains("malformed_target"), "{err}");
+        let mut stack = RustStackConfig::default_config();
+        stack.custom_tasks = vec!["audit".to_owned(), "evil task".to_owned()];
+        let err = stack.validate("config.toml").expect_err("bad task fails");
+        assert!(err.to_string().contains("bad_custom_task"), "{err}");
     }
 }

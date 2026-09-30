@@ -5,13 +5,15 @@
 //! `--no-config` would hide them. The safety boundary is the explicit
 //! `[stacks.rust] custom_tasks` allowlist, never flag isolation.
 
+use velnor_actions_contract::is_valid_mise_task_name;
+
 use crate::command::is_allowed_mise_subcommand;
 use crate::error::MiseError;
 
-/// Task-name rule shared with the config allowlist: non-blank, no path
-/// separator, no spaces (same rule as `CustomTaskGrant`/`task_run_argv`).
+/// Task-name rule shared with the config allowlist: [`is_valid_mise_task_name`]
+/// (same rule as `CustomTaskGrant`/`task_run_argv`).
 fn is_valid_task_name(task: &str) -> bool {
-    !(task.trim().is_empty() || task.contains('/') || task.contains(' '))
+    is_valid_mise_task_name(task)
 }
 
 /// Fixed `mise run <task>` argv for one allowlisted custom task.

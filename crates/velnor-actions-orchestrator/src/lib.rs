@@ -45,6 +45,7 @@ mod release_identity;
 mod release_steps;
 mod retrieve_reports;
 mod root;
+mod safe_read;
 pub mod schedule;
 mod select;
 mod select_affected;

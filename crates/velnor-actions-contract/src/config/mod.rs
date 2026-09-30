@@ -17,6 +17,7 @@ pub use resources::{
 };
 pub use stacks::{
     DeclaredCompileDriver, DeclaredTestRunner, RustConfiguration, RustStackConfig, StacksConfig,
+    is_valid_config_target, is_valid_mise_task_name,
 };
 pub use workflow::{
     GeneratorValidation, LATEST_RUNNER_LABEL, RUNNER_LABEL_CATALOG, RunnerSelection,

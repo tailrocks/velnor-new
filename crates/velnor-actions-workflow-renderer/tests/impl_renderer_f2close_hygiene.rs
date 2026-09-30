@@ -347,3 +347,49 @@ fn not_applicable_maps_to_unsupported_report() -> Result<(), RenderError> {
     }
     Ok(())
 }
+
+#[test]
+fn token_hygiene_rejects_any_casing_of_secrets() -> Result<(), RenderError> {
+    for leak in [
+        "${{ secrets.CARGO_REGISTRY_TOKEN }}",
+        "${{ Secrets.CARGO_REGISTRY_TOKEN }}",
+        "${{ SECRETS.CARGO_REGISTRY_TOKEN }}",
+    ] {
+        let env = BTreeMap::from([("TOKEN_COPY".to_owned(), leak.to_owned())]);
+        let leaked = shell_step(
+            "Run audit",
+            ["mise", "run", "audit"]
+                .iter()
+                .map(ToString::to_string)
+                .collect(),
+            env,
+        )?;
+        let task = job("task", "Task", vec!["plan".to_owned()], vec![leaked]);
+        let err = render_workflow_ir(
+            &fixture_ir(vec![minimal_plan_job()?, task]),
+            WorkflowPolicy::ConsumerV1,
+            None,
+            &fixture_ctx(),
+        )
+        .expect_err("secrets leak must fail");
+        assert!(err.to_string().contains("token_in_env"), "{err}");
+    }
+    let run = shell_step(
+        "Run audit",
+        ["echo", "${{ secrets.TOKEN }}"]
+            .iter()
+            .map(ToString::to_string)
+            .collect(),
+        BTreeMap::new(),
+    )?;
+    let task = job("task", "Task", vec!["plan".to_owned()], vec![run]);
+    let err = render_workflow_ir(
+        &fixture_ir(vec![minimal_plan_job()?, task]),
+        WorkflowPolicy::ConsumerV1,
+        None,
+        &fixture_ctx(),
+    )
+    .expect_err("run leak must fail");
+    assert!(err.to_string().contains("token_in_run"), "{err}");
+    Ok(())
+}

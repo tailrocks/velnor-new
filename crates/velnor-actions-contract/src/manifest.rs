@@ -135,15 +135,20 @@ impl ReleaseManifest {
     }
 
     /// Validate schema, version, repository, and every target record.
+    ///
+    /// The repository is pinned to the canonical identity and every
+    /// artifact URL is bound to this exact version and target (X1); a
+    /// shape-only URL here would let a merged manifest redirect the
+    /// Acquire step at attacker infrastructure.
     /// # Errors
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
         check_schema(self.schema)?;
         check_semver(&self.version, file, "version")?;
-        if self.repository.trim().is_empty() {
+        if self.repository != crate::targets::EXPECTED_REPOSITORY {
             return Err(ContractError::config(
                 file,
                 "repository",
-                "empty_repository",
+                "unexpected_repository",
             ));
         }
         if self.targets.is_empty() {
@@ -152,7 +157,13 @@ impl ReleaseManifest {
         let mut seen = BTreeSet::new();
         for record in &self.targets {
             check_target(&record.target, file, "targets.target")?;
-            check_immutable_url(&record.artifact, file, "targets.artifact")?;
+            crate::targets::check_release_artifact(
+                &record.artifact,
+                &self.version,
+                &record.target,
+                file,
+                "targets.artifact",
+            )?;
             check_sha256(&record.sha256, file, "targets.sha256")?;
             if !seen.insert(record.target.as_str()) {
                 return Err(ContractError::config(

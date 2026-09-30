@@ -39,3 +39,69 @@ pub fn target_for_runner_label(label: &str) -> Option<&'static str> {
         _ => None,
     }
 }
+
+/// Canonical repository identity every release manifest MUST carry.
+pub const EXPECTED_REPOSITORY: &str = "tailrocks/velnor-new";
+
+/// Asset host allowlist: exactly `github.com`, never anything else.
+const ASSET_HOST: &str = "github.com";
+
+/// Fixed release-asset path prefix under the host.
+const ASSET_PREFIX: &str = "/tailrocks/velnor-new/releases/download/";
+
+/// Validate one release-asset URL against its manifest version and target.
+///
+/// Bootstrap/release contract §2: the URL MUST be
+/// `https://github.com/tailrocks/velnor-new/releases/download/<tag>/
+/// <asset>` where `<asset>` is exactly [`asset_filename`] for this
+/// version and target and `<tag>` is non-empty without a `latest`
+/// segment. Shape-only `https://` checks would let a merged manifest
+/// redirect the Acquire step at attacker infrastructure. Userinfo,
+/// query, fragment, `$`, backtick, and whitespace all fail closed.
+///
+/// Residual (X1/X4): same-version seed rollback stays review-gated. The
+/// binding proves the URL names this version's official asset, but an
+/// attacker who replaces the committed seed bytes at the same version
+/// (or re-publishes the tag upstream) is caught only by reviewer
+/// comparison against the published release. Follow-ups (scoped, not
+/// dropped): Sigstore/SLSA attestation verification, a
+/// published-vs-committed comparison job, and CODEOWNERS on the
+/// committed manifest (bootstrap-and-release-contract §2).
+/// # Errors
+pub fn check_release_artifact(
+    url: &str,
+    version: &str,
+    target: &str,
+    file: &str,
+    key: &str,
+) -> Result<(), crate::errors::ContractError> {
+    let bad = || crate::errors::ContractError::config(file, key, "unexpected_artifact_url");
+    if url.bytes().any(|b| {
+        b.is_ascii_whitespace() || b.is_ascii_control() || matches!(b, b'$' | b'`' | b'?' | b'#')
+    }) {
+        return Err(bad());
+    }
+    let Some(rest) = url.strip_prefix("https://") else {
+        return Err(bad());
+    };
+    let Some((host, path)) = rest.split_once('/') else {
+        return Err(bad());
+    };
+    if host != ASSET_HOST {
+        return Err(bad());
+    }
+    let path = format!("/{path}");
+    let Some(trailer) = path.strip_prefix(ASSET_PREFIX) else {
+        return Err(bad());
+    };
+    let Some((tag, asset)) = trailer.split_once('/') else {
+        return Err(bad());
+    };
+    if tag.is_empty() || tag == "latest" || asset.contains('/') {
+        return Err(bad());
+    }
+    if asset != asset_filename(version, target) {
+        return Err(bad());
+    }
+    Ok(())
+}

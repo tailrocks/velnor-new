@@ -10,7 +10,8 @@ use velnor_actions_actionlint::overrides::{
     ActionPinOverride as ApprovedOverride, ApprovedPinCatalog,
 };
 use velnor_actions_contract::{
-    GeneratorLock, ReleaseManifest, Step, VelnorConfig, target_for_runner_label,
+    GeneratorLock, ReleaseManifest, Step, VelnorConfig, check_release_artifact,
+    target_for_runner_label,
 };
 use velnor_actions_mise::MISE_VERSION;
 use velnor_actions_workflow_renderer::{
@@ -135,6 +136,15 @@ fn consumer_acquire_from(
         .ok_or_else(|| OrchestratorError::Contract {
             problem: format!("manifest_missing_target:{target}"),
         })?;
+    // Defense in depth: re-bind the consumed record's URL even though
+    // `validate` already bound every record (X1).
+    check_release_artifact(
+        &record.artifact,
+        &manifest.version,
+        target,
+        "release-manifest.json",
+        "targets.artifact",
+    )?;
     acquire_step(
         &record.artifact,
         &record.sha256,
@@ -169,10 +179,13 @@ fn acquire_step(url: &str, sha: &str, staged: &str) -> Result<Step, Orchestrator
 }
 
 /// Fixed acquisition argv over the staged path plus asset env references.
+///
+/// Curl is pinned to HTTPS-only (`--proto '=https'`) over TLS 1.2+ and
+/// the staged path is defensively double-quoted (X12).
 fn acquire_argv(staged: &str) -> Vec<String> {
     let dir = staged.rsplit_once('/').map_or(staged, |(head, _)| head);
     let script = format!(
-        "mkdir -p {dir} && curl -fsSL \"$VELNOR_ASSET_URL\" -o {staged} && echo \"$VELNOR_ASSET_SHA256  {staged}\" | sha256sum -c - && chmod +x {staged}"
+        "mkdir -p \"{dir}\" && curl -fsSL --proto '=https' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"{staged}\" && echo \"$VELNOR_ASSET_SHA256  {staged}\" | sha256sum -c - && chmod +x \"{staged}\""
     );
     vec!["sh".to_owned(), "-c".to_owned(), script]
 }
@@ -185,7 +198,7 @@ fn test_manifest_json() -> String {
         .iter()
         .map(|target| {
             format!(
-                "{{\"target\":\"{target}\",\"artifact\":\"https://example.invalid/releases/download/{version}/velnor-actions-{version}-{target}\",\"sha256\":\"{}\"}}",
+                "{{\"target\":\"{target}\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v{version}/velnor-actions-{version}-{target}\",\"sha256\":\"{}\"}}",
                 "a".repeat(64)
             )
         })
@@ -254,6 +267,34 @@ mod tests {
         assert!(err.is_err_and(|err| err.to_string().contains("unsupported_target_for_runner")));
         let err = consumer_acquire_from("ubuntu-26.04", "0.1.0", Some("not json"));
         assert!(err.is_err());
+    }
+
+    #[test]
+    fn consumer_gate_rejects_attacker_manifests() {
+        let version = env!("CARGO_PKG_VERSION");
+        let sha = "a".repeat(64);
+        let manifest = |repository: &str, artifact: &str| {
+            format!(
+                "{{\"schema\":1,\"version\":\"{version}\",\"repository\":\"{repository}\",\"targets\":[{{\"target\":\"x86_64-unknown-linux-gnu\",\"artifact\":\"{artifact}\",\"sha256\":\"{sha}\"}}]}}"
+            )
+        };
+        let bound = format!(
+            "https://github.com/tailrocks/velnor-new/releases/download/v{version}/velnor-actions-{version}-x86_64-unknown-linux-gnu"
+        );
+        for (repository, artifact) in [
+            ("evil/velnor-new", bound.as_str()),
+            (
+                "tailrocks/velnor-new",
+                "https://evil.example/r/velnor-actions-0.1.0-x86_64-unknown-linux-gnu",
+            ),
+            ("tailrocks/velnor-new", "https://github.com@evil.example/x"),
+        ] {
+            let json = manifest(repository, artifact);
+            assert!(
+                consumer_acquire_from("ubuntu-26.04", version, Some(&json)).is_err(),
+                "accepted {repository} {artifact}"
+            );
+        }
     }
 
     #[test]

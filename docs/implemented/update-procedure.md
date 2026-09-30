@@ -206,6 +206,13 @@ the full update-set list above:
    property path alone), plus `cargo fmt` and `cargo clippy` for any
    touched Rust files.
 
+Formatting posture (X11): the CI gate is whole-tree (`cargo fmt --all
+-- --check`), and rustfmt is deterministic, so contributors working
+incrementally run `cargo fmt` scoped to the files they touched; there
+is no partial-file or per-hunk formatting mode. A focused change that
+leaves the rest of the tree untouched cannot introduce whole-tree fmt
+drift, and the full gate re-verifies on every PR.
+
 ## Limits discipline (RQ-5.3)
 
 No update or exception may raise a §5 limit, add an arbitrary exclusion,

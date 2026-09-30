@@ -101,6 +101,9 @@ impl WorkflowConfig {
         if self.name.trim().is_empty() {
             return Err(ContractError::config(file, "workflow.name", "empty_name"));
         }
+        if self.name.contains("${{") || self.name.chars().any(char::is_control) {
+            return Err(ContractError::config(file, "workflow.name", "bad_name"));
+        }
         if self.max_parallel_jobs < 1 {
             return Err(ContractError::config(
                 file,
@@ -127,5 +130,33 @@ impl WorkflowConfig {
             ));
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{GeneratorValidation, WorkflowConfig, WorkflowPolicy};
+
+    /// Workflow config carrying `name`, all else default.
+    fn named(name: &str) -> WorkflowConfig {
+        WorkflowConfig {
+            name: name.to_owned(),
+            policy: WorkflowPolicy::ConsumerV1,
+            default_branch: None,
+            generator_validation: GeneratorValidation::Bootstrap,
+            max_parallel_jobs: 2,
+            runner_label: None,
+        }
+    }
+
+    #[test]
+    fn workflow_name_rejects_expressions_and_controls() {
+        assert!(named("CI").validate("config.toml").is_ok());
+        for name in ["${{ github.ref }}", "a\nb", "a\rb", "a\tb"] {
+            let err = named(name)
+                .validate("config.toml")
+                .expect_err("bad name fails");
+            assert!(err.to_string().contains("bad_name"), "{err}");
+        }
     }
 }

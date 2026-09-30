@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 /// One `matrix.include` entry.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct MatrixEntry {
     /// Stable matrix ID (`stack:<sid>|task:<tgid>`).
     pub id: String,
@@ -51,6 +52,7 @@ pub struct MatrixEntry {
 }
 /// Schema-1 affected plan.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Plan {
     /// Plan schema version; must be 1.
     pub schema: u32,
@@ -113,6 +115,7 @@ pub enum Trust {
 }
 /// Selected runner record.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct PlanRunner {
     /// Literal runner label.
     pub label: String,
@@ -121,6 +124,7 @@ pub struct PlanRunner {
 }
 /// Generator identity record.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct PlanGenerator {
     /// Exact generator version.
     pub version: String,
@@ -131,6 +135,7 @@ pub struct PlanGenerator {
 }
 /// One inventoried package.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct PlanPackage {
     /// Cargo package ID.
     pub package_id: String,
@@ -147,6 +152,7 @@ pub struct PlanPackage {
 }
 /// One planned obligation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct PlanObligation {
     /// Obligation task ID.
     pub task_id: String,
@@ -182,6 +188,7 @@ pub enum ObligationDecision {
 }
 /// Bounded matrix payload.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct PlanMatrix {
     /// Matrix entries (sorted by `id`).
     pub include: Vec<MatrixEntry>,

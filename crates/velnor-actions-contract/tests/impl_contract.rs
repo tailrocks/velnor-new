@@ -268,7 +268,8 @@ fn manifest_schemas_validate_and_lookup_targets() -> Result<(), ContractError> {
         repository: "tailrocks/velnor-new".to_owned(),
         targets: vec![TargetRecord {
             target: "x86_64-unknown-linux-gnu".to_owned(),
-            artifact: "https://example.com/velnor-actions-0.1.0-x86_64".to_owned(),
+            artifact: "https://github.com/tailrocks/velnor-new/releases/download/v0.1.0/velnor-actions-0.1.0-x86_64-unknown-linux-gnu"
+                .to_owned(),
             sha256: sha.clone(),
         }],
     };
