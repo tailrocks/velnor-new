@@ -28,6 +28,7 @@ pub mod release_tree;
 pub mod render;
 pub mod setup;
 pub mod steps;
+mod steps_artifact;
 mod support;
 pub mod task_steps;
 pub mod toolchain_env;
@@ -78,8 +79,8 @@ pub use steps::{
     REQUEST_DIR_PREFIX, REQUEST_FILE_ENV, RUN_KEY_EXPR, STAGED_BINARY_PREFIX,
     WRITE_REQUEST_OPERATION, acquire_velnor_step, action_step, check_cache_step_order,
     check_mbx_gating, checkout_step, internal_step, lane_cargo_target_env,
-    matrix_report_upload_step, mbx_step_for_driver, merge_step, plan_step,
-    scan_for_private_subcommands, shell_step, validate_uses, write_request_step,
+    matrix_report_upload_step, matrix_report_upload_step_for, mbx_step_for_driver, merge_step,
+    plan_step, scan_for_private_subcommands, shell_step, validate_uses, write_request_step,
 };
 pub use yaml::{Yaml, quote_scalar, render_yaml};
 

@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract::{Step, StepKind};
 
-use crate::{RenderError, artifact_paths, commands, marker};
+use crate::{RenderError, commands, marker};
 
 pub use crate::cache_steps::{
     CACHE_RESTORE_NAME, CACHE_SAVE_NAME, CompileDriver, MBX_ACTION_NAME, TARGET_DIR_PREFIX,
@@ -14,6 +14,11 @@ pub use crate::cache_steps::{
     TOOLS_SAVE_NAME, TOOLS_SAVE_USES, cache_action_step, check_cache_step_order, check_mbx_gating,
     lane_cargo_target_env, mbx_objects_step, mbx_step_for_driver, target_dir_for_lane,
     tools_cache_key, tools_restore_step, tools_save_step,
+};
+
+pub use crate::steps_artifact::{
+    download_artifact_step, matrix_report_upload_step, matrix_report_upload_step_for,
+    upload_artifact_step,
 };
 
 /// Env key selecting the staged-binary internal operation.
@@ -183,68 +188,6 @@ pub fn rehead_actionlint_marker(yaml: &str, version: &str) -> Result<String, Ren
         ));
     };
     Ok(format!("{}\n{body}", marker::marker_for_version(version)?))
-}
-
-/// Candidate-artifact upload step over the pinned upload action.
-/// # Errors
-pub fn upload_artifact_step(name: &str, path: &str) -> Result<Step, RenderError> {
-    if name.trim().is_empty() || path.trim().is_empty() {
-        return Err(RenderError::BadActionRef("empty_artifact_io".to_owned()));
-    }
-    artifact_paths::check_artifact_path(path)?;
-    action_step(
-        "Upload candidate",
-        UPLOAD_ARTIFACT_USES,
-        BTreeMap::from([
-            ("name".to_owned(), name.to_owned()),
-            ("path".to_owned(), path.to_owned()),
-            ("if-no-files-found".to_owned(), "error".to_owned()),
-        ]),
-    )
-}
-
-/// Candidate-artifact download step over the pinned download action.
-/// # Errors
-pub fn download_artifact_step(name: &str, path: &str) -> Result<Step, RenderError> {
-    if name.trim().is_empty() || path.trim().is_empty() {
-        return Err(RenderError::BadActionRef("empty_artifact_io".to_owned()));
-    }
-    artifact_paths::check_artifact_path(path)?;
-    action_step(
-        "Download candidate",
-        DOWNLOAD_ARTIFACT_USES,
-        BTreeMap::from([
-            ("name".to_owned(), name.to_owned()),
-            ("path".to_owned(), path.to_owned()),
-        ]),
-    )
-}
-
-/// Matrix-report upload step (`velnor-matrix-<run-key>-<matrix-key>`).
-///
-/// Carries the leg's `matrix-report.json` plus `tasks/` files; the
-/// matrix key resolves from the leg's matrix context at runtime, so
-/// this step belongs in the matrix task template only. `if: always()`
-/// is attached at render.
-/// # Errors
-pub fn matrix_report_upload_step() -> Result<Step, RenderError> {
-    action_step(
-        MATRIX_REPORT_UPLOAD_NAME,
-        UPLOAD_ARTIFACT_USES,
-        BTreeMap::from([
-            (
-                "name".to_owned(),
-                format!("velnor-matrix-{RUN_KEY_EXPR}-${{{{ matrix.matrix_key }}}}"),
-            ),
-            (
-                "path".to_owned(),
-                format!(
-                    "${{{{ runner.temp }}}}/velnor/{RUN_KEY_EXPR}/${{{{ matrix.matrix_key }}}}"
-                ),
-            ),
-            ("if-no-files-found".to_owned(), "error".to_owned()),
-        ]),
-    )
 }
 
 /// Fixed script writing the per-target candidate manifest JSON.
