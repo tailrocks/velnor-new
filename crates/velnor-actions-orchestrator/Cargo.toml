@@ -12,6 +12,7 @@ velnor-actions-contract = { version = "=0.1.0", path = "../velnor-actions-contra
 velnor-actions-mise = { version = "=0.1.0", path = "../velnor-actions-mise" }
 velnor-actions-rust = { version = "=0.1.0", path = "../velnor-actions-rust" }
 velnor-actions-workflow-renderer = { version = "=0.1.0", path = "../velnor-actions-workflow-renderer" }
+rustix = { version = "=1.1.5", features = ["fs"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tempfile = { version = "=3.27.0" }
