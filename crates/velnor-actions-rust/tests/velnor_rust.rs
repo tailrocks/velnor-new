@@ -21,6 +21,8 @@ mod impl_rust_gates;
 mod impl_rust_metadata;
 #[path = "impl_rust_negative.rs"]
 mod impl_rust_negative;
+#[path = "impl_rust_nested.rs"]
+mod impl_rust_nested;
 #[path = "impl_rust_p03_identity.rs"]
 mod impl_rust_p03_identity;
 #[path = "impl_rust_p06.rs"]

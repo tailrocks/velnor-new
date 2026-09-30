@@ -2,7 +2,7 @@
 //! Discovery never resolves (`--no-deps`); only lockful qualification
 //! does (`--locked --offline`). Tool snapshots bracket every fetch loop.
 
-use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use velnor_actions_mise::{MetadataDiscovery, MetadataQualification, ToolCatalog};
@@ -12,6 +12,7 @@ use crate::OrchestratorError;
 use crate::decisions::{MetadataFailure, classify_metadata_failure};
 use crate::discover::{PlannedWorkspace, workspace_lock, workspace_manifest};
 use crate::generate::ToolSnapshot;
+use crate::inventory_reuse::MemberIndex;
 
 /// Candidate outcomes plus successful manifest inventories.
 pub(crate) type Inventories = (Vec<CandidateOutcome>, Vec<(String, WorkspaceRecord)>);
@@ -31,8 +32,12 @@ pub(crate) fn run_inventories(
     candidates: &[CargoCandidate],
 ) -> Result<Inventories, OrchestratorError> {
     let catalog = ToolCatalog::pinned();
+    let known: BTreeSet<String> = candidates
+        .iter()
+        .map(|candidate| candidate.manifest.clone())
+        .collect();
     run_with(root, candidates, true, &|manifest| {
-        fetch_inventory(root, manifest, &catalog)
+        fetch_inventory(root, manifest, &catalog, &known)
     })
 }
 
@@ -79,51 +84,12 @@ fn run_with(
     Ok((outcomes, inventories))
 }
 
-/// Manifest-to-slot index; each record indexed once, lookups `O(log n)`.
-#[derive(Debug, Default)]
-struct MemberIndex {
-    slots: BTreeMap<String, usize>,
-}
-
 fn ok_outcome(manifest: String) -> CandidateOutcome {
     CandidateOutcome {
         manifest,
         metadata_ok: true,
         diagnostic: None,
     }
-}
-
-impl MemberIndex {
-    /// Index one fetched record's in-workspace member manifests.
-    fn insert(&mut self, slot: usize, record: &WorkspaceRecord) {
-        for package in &record.packages {
-            if package.in_workspace && !package.external {
-                self.slots.entry(package.manifest.clone()).or_insert(slot);
-            }
-        }
-    }
-
-    /// Reuse a validated member record; `None` fetches fresh. Never reuses a
-    /// manifest declaring its own `[workspace]` root.
-    fn reuse_for(
-        &self,
-        root: &Path,
-        manifest: &str,
-        inventories: &[(String, WorkspaceRecord)],
-    ) -> Option<WorkspaceRecord> {
-        let slot = *self.slots.get(manifest)?;
-        if declares_workspace_root(&root.join(manifest)) {
-            return None;
-        }
-        inventories.get(slot).map(|(_, record)| record.clone())
-    }
-}
-
-/// True when the manifest parses with a top-level `[workspace]` table.
-/// Unreadable files read as empty: the fresh fetch reports the real error.
-fn declares_workspace_root(path: &Path) -> bool {
-    let text = std::fs::read_to_string(path).unwrap_or_default();
-    toml::from_str::<toml::Table>(&text).is_ok_and(|table| table.contains_key("workspace"))
 }
 
 /// Why one manifest produced no inventory.
@@ -145,10 +111,15 @@ fn classify_exit_failure(stderr: &str) -> FetchFailure {
 }
 
 /// Discover and parse one manifest through pinned Cargo.
+///
+/// `known` holds every discovered candidate manifest: path targets naming
+/// one are real packages outside this workspace (nested, parent, or
+/// sibling members) and skip instead of failing. Unknown targets fail.
 fn fetch_inventory(
     root: &Path,
     manifest: &str,
     catalog: &ToolCatalog,
+    known: &BTreeSet<String>,
 ) -> Result<WorkspaceRecord, FetchFailure> {
     let path: PathBuf = root.join(manifest);
     let request = MetadataDiscovery::new(path)
@@ -173,7 +144,7 @@ fn fetch_inventory(
     let json = output
         .stdout_text("mise")
         .map_err(|err| FetchFailure::Incomplete(err.to_string()))?;
-    parse_metadata_json(&json, root, manifest)
+    parse_metadata_json(&json, root, manifest, known)
         .map_err(|err| FetchFailure::Malformed(err.to_string()))
 }
 
@@ -257,6 +228,7 @@ mod tests {
             members: manifests.iter().map(|m| format!("pkg {m}")).collect(),
             packages: manifests.iter().map(|m| package(m)).collect(),
             edges: Vec::new(),
+            skipped_edges: Vec::new(),
         }
     }
 

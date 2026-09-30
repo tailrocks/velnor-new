@@ -116,6 +116,7 @@ mod tests {
                     members: vec!["a".to_owned(), "b".to_owned()],
                     packages: vec![package("a"), package("b")],
                     edges: Vec::new(),
+                    skipped_edges: Vec::new(),
                 },
                 profile: RustExecutionProfile {
                     compile_driver: CompileDriver::Cargo,
