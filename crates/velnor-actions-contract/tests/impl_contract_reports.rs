@@ -8,7 +8,8 @@ use velnor_actions_contract::{
     PlanGenerator, PlanMatrix, PlanObligation, PlanPackage, PlanRunner, RequiredJobResult,
     RunnerSelection, Step, StepKind, TaskReport, TaskStatus, Trigger, Trust, WorkflowEvent,
     WorkflowIr, artifact_id_for_candidate, artifact_id_for_matrix, artifact_id_for_plan,
-    candidate_report_id_for_run, digest_b3, final_report_id_for_run, plan_id_for_run,
+    candidate_report_id_for_run, canonical_json_bytes, digest_b3, final_report_id_for_run,
+    plan_id_for_run,
     run_key_for_ci, task_report_id_for_task, validate_candidate_report_id,
     validate_final_report_id,
 };
@@ -104,7 +105,7 @@ fn task_and_matrix_reports_validate() -> Result<(), ContractError> {
             miss_reason: Some("no_entry".to_owned()),
         },
         exit_code: 0,
-        duration_ms: 12,
+        duration_ms: Some(12),
         outputs: vec![],
         lane: None,
         queue: None,
@@ -291,7 +292,7 @@ fn reports_validate_only_when_matrix_id_matches_entry() -> Result<(), ContractEr
             miss_reason: Some("no_entry".to_owned()),
         },
         exit_code: 0,
-        duration_ms: 12,
+        duration_ms: Some(12),
         outputs: vec![],
         lane: None,
         queue: None,
@@ -331,6 +332,34 @@ fn reports_validate_only_when_matrix_id_matches_entry() -> Result<(), ContractEr
     let mut bad_matrix = matrix.clone();
     bad_matrix.matrix_id = other;
     assert!(bad_matrix.validate().is_err());
+    Ok(())
+}
+
+#[test]
+fn absent_duration_deserializes_to_none_and_skips() -> Result<(), ContractError> {
+    let value = serde_json::json!({
+        "schema": 1,
+        "task_report_id": "task-local-m-0000000000000000-0000000000000000000000000000000000000000000000000000000000000000",
+        "run_key": "local",
+        "event": "pull_request",
+        "trust": "pr",
+        "matrix_id": "stack:rust|task:x",
+        "matrix_key": "m-0000000000000000",
+        "task_id": "stack/rust/x/build/default",
+        "task_digest": "b3-0000000000000000000000000000000000000000000000000000000000000000",
+        "status": "executed",
+        "cache": {"layer": "task", "key": "", "result": "not_attempted"},
+        "exit_code": 0,
+        "outputs": [],
+    });
+    let report: TaskReport =
+        serde_json::from_value(value).map_err(|err| ContractError::identity("task", err.to_string()))?;
+    assert_eq!(report.duration_ms, None);
+    let bytes = canonical_json_bytes(&report)?;
+    assert!(
+        !String::from_utf8_lossy(&bytes).contains("duration_ms"),
+        "absent timing serializes absent"
+    );
     Ok(())
 }
 

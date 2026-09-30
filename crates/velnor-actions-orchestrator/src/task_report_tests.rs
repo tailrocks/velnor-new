@@ -181,6 +181,8 @@ fn executed_report_binds_plan_identities() {
     assert_eq!(task.exit_code, 0);
     assert_eq!(task.task_digest, obligation.task_digest);
     assert_eq!(task.event, WorkflowEvent::PullRequest);
+    assert_eq!(task.duration_ms, None, "unmeasured timing stays absent");
+    assert_eq!(task.timing, None, "unmeasured timing stays absent");
     assert_eq!(matrix.status, MatrixStatus::Passed);
     assert_eq!(matrix.report_id, entry.report_id);
     assert_eq!(matrix.executed, 1);

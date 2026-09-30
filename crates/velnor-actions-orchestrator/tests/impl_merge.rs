@@ -104,7 +104,7 @@ pub(crate) fn task_reports_for(
                 },
                 "cache": {"layer": "task", "key": "", "result": "not_attempted"},
                 "exit_code": task.get("exit_code"),
-                "duration_ms": 0,
+                "duration_ms": null,
                 "outputs": [],
             }));
         }

@@ -236,7 +236,7 @@ fn cache_key_shape_and_bound() -> Result<(), ContractError> {
             miss_reason: None,
         },
         exit_code: 0,
-        duration_ms: 1,
+        duration_ms: Some(1),
         outputs: vec![],
         lane: None,
         queue: None,

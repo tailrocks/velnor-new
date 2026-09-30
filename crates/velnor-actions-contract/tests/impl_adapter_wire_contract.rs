@@ -172,7 +172,7 @@ fn task_report_schedule_fields_validate() -> Result<(), ContractError> {
             miss_reason: None,
         },
         exit_code: 0,
-        duration_ms: 244,
+        duration_ms: Some(244),
         outputs: vec![],
         lane: Some(2),
         queue: Some("compiler-shared".to_owned()),

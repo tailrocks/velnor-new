@@ -37,8 +37,12 @@ pub struct TaskReport {
     pub cache: CacheOutcome,
     /// Process exit code.
     pub exit_code: i32,
-    /// Duration in milliseconds.
-    pub duration_ms: u64,
+    /// Measured wall time in milliseconds, when collected.
+    ///
+    /// Absent telemetry is `None`, never a fabricated zero: a missing
+    /// measurement must not read as an instant task.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub duration_ms: Option<u64>,
     /// Declared outputs only.
     #[serde(default)]
     pub outputs: Vec<String>,

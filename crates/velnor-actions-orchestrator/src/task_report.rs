@@ -233,7 +233,7 @@ fn terminal_task_report(
             miss_reason: None,
         },
         exit_code,
-        duration_ms: 0,
+        duration_ms: None,
         outputs: Vec::new(),
         lane: None,
         queue: None,
