@@ -48,6 +48,15 @@ pub const NEEDS_CHANNEL_ENV: &str = "VELNOR_NEEDS_JSON";
 /// GitHub expression producing the `needs` conclusions payload.
 pub const NEEDS_CHANNEL_EXPRESSION: &str = "${{ toJSON(needs) }}";
 
+/// Env key carrying the rendered expected validator inventory.
+///
+/// Static JSON array of the finalized gate's `needs`, emitted beside
+/// the runtime conclusions so the merge binds the required inventory
+/// to the committed workflow instead of deriving it from whatever the
+/// run happened to observe (a dropped validator would otherwise shrink
+/// both sides of the check and pass silently).
+pub const NEEDS_EXPECTED_ENV: &str = "VELNOR_NEEDS_EXPECTED";
+
 /// Weekly upstream-freshness schedule (Mondays 06:00 UTC).
 pub const FRESHNESS_CRON_WEEKLY: &str = "0 6 * * 1";
 
@@ -290,6 +299,21 @@ impl NeedsConclusions {
         (
             NEEDS_CHANNEL_ENV.to_owned(),
             NEEDS_CHANNEL_EXPRESSION.to_owned(),
+        )
+    }
+
+    /// Expected-inventory binding the renderer emits on the merge step.
+    ///
+    /// Static JSON array of the finalized inventory (sorted by
+    /// construction from the ordered job map), so the merge compares
+    /// observed conclusions against the committed workflow.
+    #[must_use]
+    pub fn expected_env(&self) -> (String, String) {
+        let mut inventory = self.inventory.clone();
+        inventory.sort();
+        (
+            NEEDS_EXPECTED_ENV.to_owned(),
+            serde_json::to_string(&inventory).unwrap_or_else(|_| "[]".to_owned()),
         )
     }
 

@@ -9,10 +9,11 @@
 //! channel: a JSON object mapping each job in the final gate's `needs`
 //! to its conclusion, either directly (`{"plan": "success"}`) or in
 //! `toJSON(needs)` shape (`{"plan": {"result": "success"}}`). The
-//! renderer emits the finalized `needs` set; assembly declares it as the
-//! required inventory (minus the matrix-driver job, whose legs prove
-//! themselves through per-leg reports) and fails closed on a missing or
-//! unparsable channel.
+//! renderer also emits the static expected inventory through
+//! `VELNOR_NEEDS_EXPECTED`; assembly declares it as the required
+//! inventory (minus the matrix-driver job, whose legs prove themselves
+//! through per-leg reports) and fails closed on a missing or unparsable
+//! channel or any observed-vs-expected divergence.
 //!
 //! Assembly never drops evidence silently: every missing or unparsable
 //! artifact becomes an explicit `assembly_errors` entry that fails the
@@ -28,7 +29,7 @@ use std::path::{Path, PathBuf};
 
 use velnor_actions_contract::canonical_json_str;
 
-use self::needs_channel::{NEEDS_ENV, parse_needs};
+use self::needs_channel::{NEEDS_ENV, NEEDS_EXPECTED_ENV, parse_needs};
 use crate::OrchestratorError;
 use crate::internal::{internal, internal_contract};
 use crate::internal_request::resolve_run_key;
@@ -49,13 +50,15 @@ use crate::internal_request::resolve_run_key;
 /// Returns [`OrchestratorError::Internal`] for encoding failures.
 pub fn assemble_merge_request(run_key: &str, run_dir: &Path) -> Result<String, OrchestratorError> {
     let needs = std::env::var(NEEDS_ENV).ok();
-    assemble_with_needs(run_key, run_dir, needs.as_deref())
+    let expected = std::env::var(NEEDS_EXPECTED_ENV).ok();
+    assemble_with_needs(run_key, run_dir, needs.as_deref(), expected.as_deref())
 }
 
-/// Assemble one merge request with an explicit needs channel.
+/// Assemble one merge request with explicit needs channels.
 ///
-/// The public wrapper reads `VELNOR_NEEDS_JSON`; tests pass the channel
-/// explicitly for determinism.
+/// The public wrapper reads `VELNOR_NEEDS_JSON` plus
+/// `VELNOR_NEEDS_EXPECTED`; tests pass the channels explicitly for
+/// determinism.
 ///
 /// # Errors
 ///
@@ -64,6 +67,7 @@ pub(crate) fn assemble_with_needs(
     run_key: &str,
     run_dir: &Path,
     needs: Option<&str>,
+    expected: Option<&str>,
 ) -> Result<String, OrchestratorError> {
     let mut errors = Vec::new();
     let plan = read_json(run_dir, "plan.json", "plan", true, &mut errors);
@@ -82,7 +86,7 @@ pub(crate) fn assemble_with_needs(
         false,
         &mut errors,
     );
-    let (inventory, jobs) = parse_needs(needs, &mut errors);
+    let (inventory, jobs) = parse_needs(needs, expected, &mut errors);
     let request = serde_json::json!({
         "schema": 1,
         "run_key": run_key,
@@ -215,7 +219,9 @@ mod tests {
             )],
         );
         let needs = r#"{"plan":"success","rust-demo":"success"}"#;
-        let request = assemble_with_needs("local", dir.path(), Some(needs)).expect("assemble");
+        let expected = r#"["plan","rust-demo"]"#;
+        let request =
+            assemble_with_needs("local", dir.path(), Some(needs), Some(expected)).expect("assemble");
         let value: serde_json::Value = serde_json::from_str(&request).expect("json");
         assert!(value.get("base").is_none(), "{request}");
         assert_eq!(value["schema"], 1);
@@ -246,7 +252,9 @@ mod tests {
             ],
         );
         let needs = r#"{"plan":{"result":"success","outputs":{}}}"#;
-        let request = assemble_with_needs("local", dir.path(), Some(needs)).expect("assemble");
+        let request =
+            assemble_with_needs("local", dir.path(), Some(needs), Some(r#"["plan"]"#))
+                .expect("assemble");
         let value: serde_json::Value = serde_json::from_str(&request).expect("json");
         let ids: Vec<&str> = value["matrix_reports"]
             .as_array()
@@ -261,7 +269,8 @@ mod tests {
     #[test]
     fn assembly_records_gaps_and_rejects_bad_report() {
         let empty = tempfile::TempDir::new().expect("tempdir");
-        let request = assemble_with_needs("local", empty.path(), None).expect("null plan");
+        let request =
+            assemble_with_needs("local", empty.path(), None, None).expect("null plan");
         let value: serde_json::Value = serde_json::from_str(&request).expect("json");
         assert!(value["plan"].is_null(), "{request}");
         assert!(value["matrix"].is_null(), "{request}");
@@ -278,8 +287,13 @@ mod tests {
                 "not json",
             )],
         );
-        let request =
-            assemble_with_needs("local", bad.path(), Some(r#"{"a":"b"}"#)).expect("diagnostic");
+        let request = assemble_with_needs(
+            "local",
+            bad.path(),
+            Some(r#"{"a":"b"}"#),
+            Some(r#"["a"]"#),
+        )
+        .expect("diagnostic");
         let errors = error_list(&request);
         assert!(
             errors
@@ -294,13 +308,53 @@ mod tests {
             "{errors:?}"
         );
         let missing = staged(&plan_with(&[aid]), &[]);
-        let request = assemble_with_needs("local", missing.path(), Some(r#"{"plan":"success"}"#))
-            .expect("diagnostic");
+        let request = assemble_with_needs(
+            "local",
+            missing.path(),
+            Some(r#"{"plan":"success"}"#),
+            Some(r#"["plan"]"#),
+        )
+        .expect("diagnostic");
         let errors = error_list(&request);
         assert!(
             errors
                 .iter()
                 .any(|error| error.starts_with("missing_report:")),
+            "{errors:?}"
+        );
+    }
+
+    #[test]
+    fn dropped_or_missing_expected_inventory_fails_closed() {
+        let dir = staged(&plan_with(&[]), &[]);
+        let dropped = assemble_with_needs(
+            "local",
+            dir.path(),
+            Some(r#"{"plan":"success"}"#),
+            Some(r#"["lint","plan"]"#),
+        )
+        .expect("diagnostic");
+        let errors = error_list(&dropped);
+        assert!(
+            errors.contains(&"needs_inventory_mismatch".to_owned()),
+            "{errors:?}"
+        );
+        let value: serde_json::Value = serde_json::from_str(&dropped).expect("json");
+        assert_eq!(
+            value["required_job_ids"],
+            serde_json::json!(["lint", "plan"]),
+            "inventory binds to expected, not observed"
+        );
+        let missing = assemble_with_needs(
+            "local",
+            dir.path(),
+            Some(r#"{"plan":"success"}"#),
+            None,
+        )
+        .expect("diagnostic");
+        let errors = error_list(&missing);
+        assert!(
+            errors.contains(&"missing_needs_expected".to_owned()),
             "{errors:?}"
         );
     }
