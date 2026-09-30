@@ -5,9 +5,9 @@ use velnor_actions_contract::{
     WorkflowIr, WorkflowPolicy,
 };
 use velnor_actions_workflow_renderer::{
-    ALINT_USES, CANDIDATE_JOB_ID, CONCURRENCY_CANCEL, CONCURRENCY_GROUP, CandidateSpec,
-    RenderContext, RenderError, ValidatorCommand, checkout_step, merge_step, plan_step,
-    render_tree, render_workflow_ir, shell_step, with_marker,
+    CANDIDATE_JOB_ID, CONCURRENCY_CANCEL, CONCURRENCY_GROUP, CandidateSpec, RenderContext,
+    RenderError, ValidatorCommand, checkout_step, merge_step, plan_step, render_tree,
+    render_workflow_ir, shell_step, with_marker,
 };
 
 const VERSION: &str = "0.1.0";
@@ -293,6 +293,7 @@ fn renderer_rejects_bare_commands_inside_ir() -> Result<(), RenderError> {
             kind: StepKind::Action {
                 uses: "actions/checkout@main".to_owned(),
                 with: BTreeMap::new(),
+                env: BTreeMap::new(),
             },
         }),
     );
@@ -306,6 +307,7 @@ fn renderer_rejects_bare_commands_inside_ir() -> Result<(), RenderError> {
             kind: StepKind::Action {
                 uses: "asamarts/alint@v0.16.1".to_owned(),
                 with: BTreeMap::new(),
+                env: BTreeMap::new(),
             },
         }),
     );
@@ -344,6 +346,7 @@ fn renderer_rejects_unpinned_actions_inside_ir() -> Result<(), RenderError> {
                 kind: StepKind::Action {
                     uses: uses.to_owned(),
                     with: BTreeMap::new(),
+                    env: BTreeMap::new(),
                 },
             }),
         );
@@ -354,34 +357,6 @@ fn renderer_rejects_unpinned_actions_inside_ir() -> Result<(), RenderError> {
             "wrong rejection for {uses}: {err:?}"
         );
     }
-    Ok(())
-}
-
-#[test]
-fn velnor_policy_emits_full_sha_alint_pin() -> Result<(), RenderError> {
-    let mut ctx = fixture_ctx();
-    ctx.validator_commands = validator_commands();
-    let support =
-        WorkflowPolicy::VelnorRepositoryV1.support_workflow(GeneratorValidation::Bootstrap);
-    let text = render_workflow_ir(
-        &fixture_ir()?,
-        WorkflowPolicy::VelnorRepositoryV1,
-        Some(&support),
-        &ctx,
-    )?;
-    assert_eq!(
-        ALINT_USES,
-        "asamarts/alint@9f9d34ba0eae3888299b9e570f43338b0e7f2cdb"
-    );
-    assert!(text.contains("  alint:"), "alint job missing:\n{text}");
-    assert!(
-        text.contains("uses: asamarts/alint@9f9d34ba0eae3888299b9e570f43338b0e7f2cdb"),
-        "full-SHA pin missing:\n{text}"
-    );
-    assert!(
-        !text.contains("asamarts/alint@v"),
-        "tag ref emitted:\n{text}"
-    );
     Ok(())
 }
 

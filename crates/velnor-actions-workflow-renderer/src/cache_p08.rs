@@ -299,13 +299,15 @@ fn insert_at(job: &Job) -> usize {
 
 /// True for qualified (`cache:true`+key) or legacy (`cache:false`) shapes.
 fn setup_shape_ok(step: &Step, qualified: bool) -> bool {
-    let StepKind::Action { uses, with } = &step.kind else {
+    let StepKind::Action { uses, with, env } = &step.kind else {
         return false;
     };
     if validate_uses(uses).is_err() {
         return false;
     }
-    let base = with.len() == usize::from(qualified) + 6
+    // Setup steps carry no step env; anything attached is foreign shape.
+    let base = env.is_empty()
+        && with.len() == usize::from(qualified) + 6
         && with.get("install").is_some_and(|v| v == "false")
         && with.get("env").is_some_and(|v| v == "false")
         && with.get("version").is_some_and(|v| is_catalog_version(v))

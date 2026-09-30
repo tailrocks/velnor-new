@@ -98,6 +98,14 @@ pub struct Job {
 pub const CACHE_SAVE_CONDITION: &str = "github.event_name == 'push'";
 /// `with:` spelling of [`CACHE_SAVE_CONDITION`] for boolean action inputs.
 pub const CACHE_SAVE_CONDITION_EXPR: &str = "${{ github.event_name == 'push' }}";
+/// `env:` spelling of the push-only writer policy for cache-mode inputs.
+///
+/// Evaluates to `write` on push runs and `read` everywhere else, so a
+/// cache action that saves from its post step restores on every event
+/// but only ever writes on push (same policy as
+/// [`CACHE_SAVE_CONDITION`], in the value position the mode supports).
+pub const CACHE_MODE_PUSH_WRITE_EXPR: &str =
+    "${{ github.event_name == 'push' && 'write' || 'read' }}";
 
 /// One workflow step.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -122,6 +130,9 @@ pub enum StepKind {
         /// Action inputs.
         #[serde(default)]
         with: BTreeMap<String, String>,
+        /// Step environment (applies to main and post phases alike).
+        #[serde(default)]
+        env: BTreeMap<String, String>,
     },
     /// Fixed shell argv step.
     Shell {

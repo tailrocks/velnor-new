@@ -149,6 +149,7 @@ fn rust_cache_never_stacks_over_mbx() {
         kind: StepKind::Action {
             uses: format!("Swatinem/rust-cache@{sha}"),
             with: BTreeMap::new(),
+            env: BTreeMap::new(),
         },
     };
     let both = Job {
@@ -189,6 +190,7 @@ fn mbx_restore_precedes_fetch() {
         kind: StepKind::Action {
             uses: format!("jdx/mr-boxington-action@{}", "d".repeat(40)),
             with: BTreeMap::new(),
+            env: BTreeMap::new(),
         },
     };
     let good = Job {

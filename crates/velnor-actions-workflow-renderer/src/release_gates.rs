@@ -54,11 +54,12 @@ pub fn check_release_jobs(
 fn check_job_steps(id: &str, job: &ReleaseJobSpec) -> Result<(), RenderError> {
     for step in &job.steps {
         match &step.kind {
-            StepKind::Action { uses, with } => {
+            StepKind::Action { uses, with, env } => {
                 steps::validate_uses(uses)?;
                 for entry in with.keys().chain(with.values()) {
                     steps::scan_for_private_subcommands(entry)?;
                 }
+                commands::validate_env(env)?;
             }
             StepKind::Shell { run, env } => {
                 commands::validate_command_argv(run)?;
@@ -77,9 +78,11 @@ fn check_job_steps(id: &str, job: &ReleaseJobSpec) -> Result<(), RenderError> {
 /// All scannable step payload texts (argv, env, action inputs).
 fn payload_texts(step: &Step) -> Vec<&str> {
     match &step.kind {
-        StepKind::Action { uses, with } => std::iter::once(uses.as_str())
+        StepKind::Action { uses, with, env } => std::iter::once(uses.as_str())
             .chain(with.keys().map(String::as_str))
             .chain(with.values().map(String::as_str))
+            .chain(env.keys().map(String::as_str))
+            .chain(env.values().map(String::as_str))
             .collect(),
         StepKind::Shell { run, env } => run
             .iter()
@@ -125,7 +128,7 @@ fn forbid_inputs_interpolation(id: &str, steps: &[Step]) -> Result<(), RenderErr
 /// Require credential-free checkouts on every release checkout step.
 fn check_checkout_hygiene(id: &str, steps: &[Step]) -> Result<(), RenderError> {
     for step in steps {
-        if let StepKind::Action { uses, with } = &step.kind
+        if let StepKind::Action { uses, with, .. } = &step.kind
             && uses.starts_with("actions/checkout@")
             && with.get("persist-credentials").is_none_or(|v| v != "false")
         {
@@ -140,7 +143,7 @@ fn check_checkout_hygiene(id: &str, steps: &[Step]) -> Result<(), RenderError> {
 /// True when a checkout step pins `ref` to the exact approved SHA.
 fn has_exact_checkout(steps: &[Step], sha: &str) -> bool {
     steps.iter().any(|step| {
-        matches!(&step.kind, StepKind::Action { uses, with }
+        matches!(&step.kind, StepKind::Action { uses, with, .. }
             if uses.starts_with("actions/checkout@")
                 && with.get("ref").is_some_and(|value| value == sha))
     })

@@ -9,7 +9,7 @@ use velnor_actions_contract::{Job, Step, StepKind};
 
 use crate::{
     RenderError,
-    steps::{action_step, validate_uses},
+    steps::{action_step, action_step_with_env, validate_uses},
 };
 
 /// Pinned mr-boxington action name (objects mode).
@@ -20,8 +20,6 @@ pub const CACHE_RESTORE_NAME: &str = "actions/cache/restore";
 pub const CACHE_SAVE_NAME: &str = "actions/cache/save";
 /// Task-artifacts dir archived for task-result reuse.
 pub const TASK_ARTIFACTS_DIR: &str = "$MISE_TASK_CACHE_DIR/task-artifacts/v2";
-/// Target-directory prefix isolating one lane.
-pub const TARGET_DIR_PREFIX: &str = "$RUNNER_TEMP/velnor/target/";
 /// Pinned `actions/cache/restore` ref (v6.1.0, qualified 2026-09-28).
 pub const TOOLS_RESTORE_USES: &str =
     "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
@@ -133,6 +131,9 @@ fn uses_mbx_tool(step: &Step) -> bool {
     matches!(&step.kind, velnor_actions_contract::StepKind::Shell { run, .. } if run.iter().any(|arg| arg == "mbx" || arg.contains("mr-boxington")))
 }
 
+/// Env key the cache backend reads for its restore/save mode.
+pub const MBX_CACHE_MODE_ENV: &str = "ACTIONS_CACHE_MODE";
+
 /// Objects-mode MBX step; cargo profiles must never emit or install MBX.
 ///
 /// The action installs exactly `mbx_version` (the catalog pin): without
@@ -140,6 +141,12 @@ fn uses_mbx_tool(step: &Step) -> bool {
 /// pin never proves the installed executable (P07 effective-version
 /// defect; the action documents that setting `version` always installs
 /// that release: `https://github.com/jdx/mr-boxington-action`).
+/// The bundled `@actions/cache` client saves from the action's post
+/// step on success; the step-level [`MBX_CACHE_MODE_ENV`] pins the
+/// push-only writer policy at generation time (`write` on push,
+/// `read` elsewhere, restore always) instead of relying on the
+/// action's internal event check, so a future action release can
+/// never widen PR runs into writers.
 /// # Errors
 pub fn mbx_objects_step(
     uses: &str,
@@ -162,7 +169,11 @@ pub fn mbx_objects_step(
         ("github-cache-mode".to_owned(), "objects".to_owned()),
         ("version".to_owned(), mbx_version.to_owned()),
     ]);
-    action_step("Restore MBX objects", uses, with)
+    let env = BTreeMap::from([(
+        MBX_CACHE_MODE_ENV.to_owned(),
+        velnor_actions_contract::workflow::ir::CACHE_MODE_PUSH_WRITE_EXPR.to_owned(),
+    )]);
+    action_step_with_env("Restore MBX objects", uses, with, env)
 }
 
 /// Exact MBX versions: three nonempty numeric dot parts, nothing else.
@@ -350,18 +361,6 @@ fn is_key_segment(value: &str) -> bool {
         && value
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'_'))
-}
-
-/// Isolated target directory for one lane.
-#[must_use]
-pub fn target_dir_for_lane(lane_id: &str) -> String {
-    format!("{TARGET_DIR_PREFIX}{lane_id}")
-}
-
-/// `CARGO_TARGET_DIR` env pair isolating one lane (CACHE-1.20).
-#[must_use]
-pub fn lane_cargo_target_env(lane_id: &str) -> (String, String) {
-    ("CARGO_TARGET_DIR".to_owned(), target_dir_for_lane(lane_id))
 }
 
 /// Check restore-before/save-after ordering over cache action steps.
