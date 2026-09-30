@@ -1,7 +1,5 @@
 //! Repo-shape policy: workspace, manifests, lints, versions, sizes.
-//!
-//! Reads repository files through `CARGO_MANIFEST_DIR`-relative paths; the
-//! assertions below pin the must-clauses other streams implement.
+//! Reads repo files via `CARGO_MANIFEST_DIR`; pins must-clauses for streams.
 
 use std::error::Error;
 use std::path::{Path, PathBuf};
@@ -27,22 +25,13 @@ mod p12_policy;
 
 /// Expected members as (directory, package name).
 pub(crate) const MEMBERS: [(&str, &str); 7] = [
-    (
-        "crates/velnor-actions-actionlint",
-        "velnor-actions-actionlint",
-    ),
+    ("crates/velnor-actions-actionlint", "velnor-actions-actionlint"),
     ("crates/velnor-actions-cli", "velnor-actions-cli"),
     ("crates/velnor-actions-contract", "velnor-actions-contract"),
     ("crates/velnor-actions-mise", "velnor-actions-mise"),
-    (
-        "crates/velnor-actions-orchestrator",
-        "velnor-actions-orchestrator",
-    ),
+    ("crates/velnor-actions-orchestrator", "velnor-actions-orchestrator"),
     ("crates/velnor-actions-rust", "velnor-actions-rust"),
-    (
-        "crates/velnor-actions-workflow-renderer",
-        "velnor-actions-workflow-renderer",
-    ),
+    ("crates/velnor-actions-workflow-renderer", "velnor-actions-workflow-renderer"),
 ];
 
 /// Repo root: two levels above this crate's manifest directory.
@@ -233,14 +222,11 @@ fn rust_version_tracks_toolchain() -> Result<(), Box<dyn Error>> {
 fn members_inherit_workspace_settings() -> Result<(), Box<dyn Error>> {
     for (dir, _) in MEMBERS {
         let body = manifest(dir)?;
-        for key in [
-            "edition.workspace = true",
-            "rust-version.workspace = true",
-            "[lints]",
-            "workspace = true",
-        ] {
+        for key in ["edition.workspace = true", "rust-version.workspace = true"] {
             assert!(body.contains(key), "{dir} misses {key}");
         }
+        assert!(body.contains("[lints]"), "{dir} misses [lints]");
+        assert!(body.contains("workspace = true"), "{dir} misses workspace");
     }
     Ok(())
 }
@@ -319,17 +305,16 @@ fn no_restriction_or_nursery_groups() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn no_nightly_toolchain() -> Result<(), Box<dyn Error>> {
-    let mut files = vec![
-        "Cargo.toml".to_owned(),
-        "mise.toml".to_owned(),
-        "crates/velnor-actions-mise/src/catalog.rs".to_owned(),
-        ".github/workflows/velnor.yml".to_owned(),
-    ];
-    for (dir, _) in MEMBERS {
-        files.push(format!("{dir}/Cargo.toml"));
+    for file in [
+        "Cargo.toml",
+        "mise.toml",
+        "crates/velnor-actions-mise/src/catalog.rs",
+        ".github/workflows/velnor.yml",
+    ] {
+        assert!(!read(file)?.to_lowercase().contains("nightly"), "{file}");
     }
-    for file in files {
-        assert!(!read(&file)?.to_lowercase().contains("nightly"), "{file}");
+    for (dir, _) in MEMBERS {
+        assert!(!manifest(dir)?.to_lowercase().contains("nightly"), "{dir}");
     }
     Ok(())
 }
@@ -366,6 +351,22 @@ fn alint_rule_fixtures_pass_fail_and_express_command() -> Result<(), Box<dyn Err
     alint_miniyaml::check_rule_shape(added)?;
     let rejected = alint_miniyaml::check_policy(&extra).is_err();
     assert!(rejected, "unknown id passed");
+    Ok(())
+}
+
+#[test]
+fn alint_comment_only_edits_keep_verdicts() -> Result<(), Box<dyn Error>> {
+    let live = read(".alint.yml")?;
+    assert!(live.contains("\nversion: 1\n"), "anchor for inline probes");
+    let inline = live.replacen("\nversion: 1\n", "\n# probe\nversion: 1 # probe\n# probe\n", 1);
+    for mutated in [format!("# probe\n{live}"), format!("{live}\n# probe\n"), inline] {
+        p11_alint::check_extended_policy(&mutated)?;
+    }
+    for row in &alint_miniyaml::EXPECTED {
+        let wrapped = format!("# probe\n{}", alint_miniyaml::fixture(row.id, "pass")?);
+        let parsed = alint_miniyaml::parse(&wrapped)?;
+        alint_miniyaml::check_policy(&parsed).map_err(|err| format!("{}: {err}", row.id))?;
+    }
     Ok(())
 }
 

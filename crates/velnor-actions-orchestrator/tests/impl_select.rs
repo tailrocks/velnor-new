@@ -189,6 +189,24 @@ fn narrow_change_keeps_universe_with_reasons() -> TestResult {
 }
 
 #[test]
+fn md_in_package_selects_narrowly() -> TestResult {
+    let repo = make_ws_repo(false)?;
+    let root = repo.path();
+    let base = commit(root, "one")?;
+    fs::create_dir_all(root.join("alpha/docs"))?;
+    fs::write(root.join("alpha/docs/notes.md"), "# notes\n")?;
+    let head = commit(root, "two")?;
+    let (plan, warnings) = plan_pr(root, Some(&base), &head)?;
+    assert!(selects_both(&plan), "universe kept: {:?}", plan.task_ids);
+    let alpha = reasons_for(&plan, "alpha");
+    assert!(alpha.iter().all(|r| *r == "affected_by_change"), "{alpha:?}");
+    let beta = reasons_for(&plan, "beta");
+    assert!(beta.iter().all(|r| *r == "unproven"), "{beta:?}");
+    assert!(warnings.is_empty(), "no warnings: {warnings:?}");
+    Ok(())
+}
+
+#[test]
 fn bin_only_package_omits_doctest_with_reason() -> TestResult {
     let repo = make_mixed_repo()?;
     let root = repo.path();

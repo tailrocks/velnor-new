@@ -96,6 +96,68 @@ fn removed_dependency_keeps_consumer_selected() -> TestResult {
     Ok(())
 }
 
+/// Workspace where `alpha` depends on `beta` through one manifest section.
+///
+/// Commits the dependency as `base`, then changes only `beta` sources as
+/// `head`, so `alpha` selects exclusively through reverse closure.
+fn make_dep_kind_repo(
+    section: &str,
+) -> Result<(TempDir, String, String), Box<dyn std::error::Error>> {
+    let repo = make_ws_repo(false)?;
+    let root = repo.path();
+    fs::write(
+        root.join("alpha/Cargo.toml"),
+        format!("[package]\nname = \"alpha\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n{section}"),
+    )?;
+    let base = commit(root, "one")?;
+    fs::write(
+        root.join("beta/src/lib.rs"),
+        "pub fn f() {}\npub fn g() {}\n",
+    )?;
+    let head = commit(root, "two")?;
+    Ok((repo, base, head))
+}
+
+/// Consumer reachable only through `kind` selects with an affected reason.
+fn assert_kind_selects(section: &str, kind: &str) -> TestResult {
+    let (repo, base, head) = make_dep_kind_repo(section)?;
+    let (plan, warnings) = plan_pr(repo.path(), Some(&base), &head)?;
+    assert!(selects_both(&plan), "{kind}: universe kept");
+    let alpha = reasons_for(&plan, "alpha");
+    assert!(
+        alpha.iter().all(|r| *r == "affected_by_change"),
+        "{kind}: {alpha:?}"
+    );
+    assert!(warnings.is_empty(), "{kind}: narrow, got {warnings:?}");
+    Ok(())
+}
+
+#[test]
+fn build_only_edge_selects_consumer() -> TestResult {
+    assert_kind_selects("[build-dependencies]\nbeta = { path = \"../beta\" }\n", "build")
+}
+
+#[test]
+fn dev_only_edge_selects_consumer() -> TestResult {
+    assert_kind_selects("[dev-dependencies]\nbeta = { path = \"../beta\" }\n", "dev")
+}
+
+#[test]
+fn optional_edge_selects_consumer() -> TestResult {
+    assert_kind_selects(
+        "[dependencies]\nbeta = { path = \"../beta\", optional = true }\n",
+        "optional",
+    )
+}
+
+#[test]
+fn target_cfg_edge_selects_consumer() -> TestResult {
+    assert_kind_selects(
+        "[target.'cfg(windows)'.dependencies]\nbeta = { path = \"../beta\" }\n",
+        "target-cfg",
+    )
+}
+
 #[test]
 fn missing_or_bad_base_tags_comparison_unavailable() -> TestResult {
     let repo = make_ws_repo(false)?;
