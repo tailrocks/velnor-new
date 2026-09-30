@@ -200,7 +200,7 @@ fn carried_proof_revalidated_by_exact_identity() -> TestResult {
 }
 
 #[test]
-fn gh_failure_schedules_normally() -> TestResult {
+fn lookup_without_exact_artifact_schedules_normally() -> TestResult {
     let (repo, seed) = plan_for_source_change()?;
     let request = serde_json::json!({"schema": 1, "run_key": "local", "base": seed.base, "head": seed.head, "event": "pull_request", "root": repo.path().display().to_string(), "generator": {"version": seed.generator.version, "target": seed.generator.target, "sha256": "e".repeat(64)}});
     let value: Json = serde_json::from_str(&plan_internal(&request.to_string())?)?;
@@ -210,7 +210,10 @@ fn gh_failure_schedules_normally() -> TestResult {
             .iter()
             .all(|ob| ob.decision == ObligationDecision::Execute)
     );
-    assert_eq!(plan.baseline.reason(), Some("baseline_unavailable"));
+    // No exact artifact name is formable without per-task compatibility,
+    // so the live lookup misses before spawning anything: execute-all
+    // with the precise miss reason, never a whole-run download.
+    assert_eq!(plan.baseline.reason(), Some("baseline_no_exact_artifact"));
     Ok(())
 }
 

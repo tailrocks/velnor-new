@@ -110,11 +110,21 @@ fn every_wrong_dimension_fails_validation() {
     check(&|m| m.schema = 1, "stale_schema:migration_required:v1");
     check(&|m| m.schema = 0, "stale_schema:migration_required:v0");
     check(&|m| m.source_commit = "b".repeat(40), "wrong_commit");
+    check(&|m| m.source_commit = "A".repeat(40), "bad_source_commit");
     check(&|m| m.ref_ = "refs/heads/other".to_owned(), "wrong_ref");
     check(&|m| m.event = "pull_request".to_owned(), "untrusted_proof");
+    check(&|m| m.event = "merge_group".to_owned(), "untrusted_proof");
+    check(&|m| m.event = "fork".to_owned(), "untrusted_proof");
+    check(&|m| m.final_status = "failed".to_owned(), "untrusted_proof");
     check(&|m| m.run_id = 0, "bad_proof_identity");
+    check(&|m| m.run_attempt = 0, "bad_proof_identity");
+    check(&|m| m.artifact_id = 0, "bad_proof_identity");
     check(
         &|m| m.generator_version = "9.9.9".to_owned(),
+        "generator_mismatch",
+    );
+    check(
+        &|m| m.generator_sha256 = "f".repeat(64),
         "generator_mismatch",
     );
     check(
@@ -197,6 +207,109 @@ fn include_defined_origin_resolves() {
     assert_eq!(
         repository_anchor_from_origin(root).expect("anchor"),
         fixture_anchor()
+    );
+}
+
+/// Valid task entry over `digest`, observed by the manifest run.
+fn task_entry(digest: &str) -> crate::merge::required_evidence::BaselineTaskEntry {
+    crate::merge::required_evidence::BaselineTaskEntry {
+        task_id: "stack/rust/root/clippy/default".to_owned(),
+        task_digest: digest.to_owned(),
+        input_digest: digest.to_owned(),
+        closure_digest: digest.to_owned(),
+        proof_run_id: 7,
+        observed_run_id: 7,
+        external_data: None,
+        proof: None,
+    }
+}
+
+/// Structured proof binding `entry`, with `input_digest` overridden.
+fn task_proof(
+    entry: &crate::merge::required_evidence::BaselineTaskEntry,
+    input_digest: &str,
+) -> velnor_actions_contract::ManifestTaskProof {
+    velnor_actions_contract::ManifestTaskProof::new(
+        &entry.task_id,
+        &entry.task_digest,
+        input_digest,
+        &entry.task_digest,
+        &entry.task_digest,
+        &entry.task_digest,
+        &entry.task_digest,
+        "default",
+        entry.proof_run_id,
+    )
+    .expect("proof")
+}
+
+/// Stale external-data freshness with a malformed identity digest.
+fn stale_external_data() -> crate::external_data::ExternalDataFreshness {
+    crate::external_data::ExternalDataFreshness {
+        source: "advisory-db".to_owned(),
+        identity: "bogus".to_owned(),
+        age_secs: 60,
+    }
+}
+
+#[test]
+fn task_entries_validate_identity_runs_freshness_and_proof_binding() {
+    let base = "a".repeat(40);
+    let digest = digest_b3(b"d");
+    let run = |entry: &crate::merge::required_evidence::BaselineTaskEntry| {
+        let (mut manifest, expected) = manifest_and_expected(&base);
+        manifest.tasks = vec![entry.clone()];
+        validate_provenance(&manifest, &digest_b3(b"m"), &expected)
+    };
+    let valid = task_entry(&digest);
+    assert!(run(&valid).is_ok());
+    let proven = crate::merge::required_evidence::BaselineTaskEntry {
+        proof: Some(task_proof(&valid, &valid.input_digest)),
+        ..valid.clone()
+    };
+    assert!(run(&proven).is_ok());
+    let check = |mutate: &dyn Fn(&mut crate::merge::required_evidence::BaselineTaskEntry),
+                 reason: &str| {
+        let mut entry = valid.clone();
+        mutate(&mut entry);
+        assert_eq!(run(&entry).expect_err(reason), reason.to_owned());
+    };
+    check(
+        &|entry| entry.closure_digest = "bogus".to_owned(),
+        "bad_task_identity",
+    );
+    check(
+        &|entry| entry.task_id = "bogus".to_owned(),
+        "bad_task_identity",
+    );
+    check(&|entry| entry.proof_run_id = 0, "bad_proof_identity");
+    check(&|entry| entry.observed_run_id = 0, "bad_proof_identity");
+    check(&|entry| entry.observed_run_id = 8, "proof_mismatch");
+    check(
+        &|entry| entry.external_data = Some(stale_external_data()),
+        "bad_external_data",
+    );
+    let mut mismatched = valid.clone();
+    mismatched.proof = Some(task_proof(&valid, &digest_b3(b"forged")));
+    assert_eq!(
+        run(&mismatched).expect_err("proof"),
+        "proof_mismatch".to_owned()
+    );
+    // A structured proof adds its binding check on top: identity, run,
+    // and freshness checks still run instead of being skipped.
+    let mut unobserved = valid.clone();
+    unobserved.proof = Some(task_proof(&valid, &valid.input_digest));
+    unobserved.observed_run_id = 0;
+    assert_eq!(
+        run(&unobserved).expect_err("runs"),
+        "bad_proof_identity".to_owned()
+    );
+    let mut stale = valid;
+    stale.proof = Some(task_proof(&stale.clone(), &stale.input_digest));
+    stale.external_data = Some(stale_external_data());
+    assert_eq!(
+        run(&stale).expect_err("freshness"),
+        "bad_external_data".to_owned()
     );
 }
 

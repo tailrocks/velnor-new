@@ -275,7 +275,8 @@ fn carried_proofs_cover_with_original_run() -> TestResult {
     let mut tasks = entries_for(&nodiff);
     for task in tasks.as_array_mut().ok_or("tasks")? {
         task["proof_run_id"] = Json::from(5);
-        task["observed_run_id"] = Json::from(9);
+        // The carrying manifest's own run (7) revalidated the carried proof.
+        task["observed_run_id"] = Json::from(7);
     }
     let (plan, _) = plan_at(
         repo.path(),

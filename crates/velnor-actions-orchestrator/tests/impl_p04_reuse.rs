@@ -5,7 +5,10 @@
 
 use velnor_actions_contract::{BaselineStatus, ObligationDecision, Plan, digest_b3};
 
-use super::impl_common::{TestResult, config_with_branch, git, make_repo, plan_for_source_change};
+use super::impl_common::{
+    TestResult, config_with_branch, git, git_line, make_repo, plan_for_source_change,
+    write_nextest_task,
+};
 use super::impl_orch_core::{has_warning, manifest_for, plan_value};
 
 /// Anchor test repos to a fixed origin so provenance can validate.
@@ -74,13 +77,27 @@ fn assert_miss(value: &serde_json::Value, reason: &str) -> TestResult {
 /// One manifest mutation plus the reason its reuse must report.
 type ManifestCase = (&'static str, Box<dyn Fn(&mut serde_json::Value)>);
 
-#[test]
-fn every_unsafe_manifest_executes() -> TestResult {
-    let (repo, seed) = plan_for_source_change()?;
-    let root = repo.path();
-    anchor_repo(root)?;
-    let base = seed.base.clone().ok_or("base")?;
-    let cases: Vec<ManifestCase> = vec![
+/// Run every case: each mutation must execute everything with its reason.
+fn run_cases(
+    root: &std::path::Path,
+    seed: &Plan,
+    base: &str,
+    cases: &[ManifestCase],
+) -> TestResult {
+    for (reason, mutate) in cases {
+        assert_miss(&plan_with_mutation(root, seed, base, mutate)?, reason)?;
+    }
+    Ok(())
+}
+
+/// Mutations breaking manifest-level provenance (commit, ref, event, run,
+/// artifact, workflow, compat, generator).
+fn manifest_identity_cases() -> Vec<ManifestCase> {
+    vec![
+        (
+            "wrong_commit",
+            Box::new(|m| m["source_commit"] = serde_json::Value::String("b".repeat(40))),
+        ),
         (
             "wrong_ref",
             Box::new(|m| m["ref"] = serde_json::Value::String("refs/heads/other".to_owned())),
@@ -88,6 +105,10 @@ fn every_unsafe_manifest_executes() -> TestResult {
         (
             "untrusted_proof",
             Box::new(|m| m["event"] = serde_json::Value::String("pull_request".to_owned())),
+        ),
+        (
+            "untrusted_proof",
+            Box::new(|m| m["event"] = serde_json::Value::String("merge_group".to_owned())),
         ),
         (
             "untrusted_proof",
@@ -100,6 +121,10 @@ fn every_unsafe_manifest_executes() -> TestResult {
         (
             "bad_proof_identity",
             Box::new(|m| m["run_attempt"] = serde_json::Value::from(0)),
+        ),
+        (
+            "bad_proof_identity",
+            Box::new(|m| m["artifact_id"] = serde_json::Value::from(0)),
         ),
         (
             "artifact_mismatch",
@@ -132,17 +157,51 @@ fn every_unsafe_manifest_executes() -> TestResult {
             "bad_compatibility_id",
             Box::new(|m| m["compatibility_id"] = serde_json::Value::String("bogus".to_owned())),
         ),
+    ]
+}
+
+/// Mutations breaking per-task entry binding (identity, run, freshness).
+fn task_entry_cases() -> Vec<ManifestCase> {
+    vec![
         (
             "bad_task_identity",
             Box::new(|m| {
                 m["tasks"][0]["task_digest"] = serde_json::Value::String("bogus".to_owned());
             }),
         ),
-    ];
-    for (reason, mutate) in &cases {
-        assert_miss(&plan_with_mutation(root, &seed, &base, mutate)?, reason)?;
-    }
-    Ok(())
+        (
+            "proof_mismatch",
+            Box::new(|m| m["tasks"][0]["observed_run_id"] = serde_json::Value::from(8)),
+        ),
+        (
+            "bad_external_data",
+            Box::new(|m| {
+                m["tasks"][0]["external_data"] = serde_json::json!({
+                    "source": "advisory-db",
+                    "identity": "bogus",
+                    "age_secs": 60,
+                });
+            }),
+        ),
+    ]
+}
+
+#[test]
+fn every_unsafe_manifest_executes() -> TestResult {
+    let (repo, seed) = plan_for_source_change()?;
+    let root = repo.path();
+    anchor_repo(root)?;
+    let base = seed.base.clone().ok_or("base")?;
+    run_cases(root, &seed, &base, &manifest_identity_cases())
+}
+
+#[test]
+fn every_unsafe_task_entry_executes() -> TestResult {
+    let (repo, seed) = plan_for_source_change()?;
+    let root = repo.path();
+    anchor_repo(root)?;
+    let base = seed.base.clone().ok_or("base")?;
+    run_cases(root, &seed, &base, &task_entry_cases())
 }
 
 #[test]
@@ -210,5 +269,35 @@ fn anchored_repository_binds_and_unanchored_fails_closed() -> TestResult {
         &plan_value(root, "pull_request", Some(&head), &head, Some(&manifest))?,
         "wrong_repository",
     )?;
+    Ok(())
+}
+
+#[test]
+fn sharded_plan_binds_archive_content_and_executes() -> TestResult {
+    let config = format!(
+        "{}\n[test_sharding]\ndefault_shards = 2\n",
+        config_with_branch()
+    );
+    let dir = make_repo(&config)?;
+    let root = dir.path();
+    write_nextest_task(root)?;
+    git(&["add", "."], root)?;
+    git(&["commit", "-m", "one"], root)?;
+    let head = git_line(&["rev-parse", "HEAD"], root)?;
+    let plan = typed(&plan_value(root, "push", Some(&head), &head, None)?)?;
+    let mut shards = 0u32;
+    for ob in &plan.obligations {
+        if !ob.task_id.contains("/shard-") {
+            continue;
+        }
+        shards += 1;
+        // The archive identity binds the content closure, so the gate
+        // clears on content instead of refusing as source-unbound; the
+        // unqualified task cache still executes with its own reason.
+        assert_eq!(ob.decision, ObligationDecision::Execute, "{ob:?}");
+        assert_ne!(ob.reason, "archive_source_unbound", "{ob:?}");
+        assert_eq!(ob.reason, "forced_uncached", "{ob:?}");
+    }
+    assert!(shards > 0, "{:?}", plan.task_ids);
     Ok(())
 }

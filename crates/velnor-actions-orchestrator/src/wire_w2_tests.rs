@@ -118,14 +118,15 @@ fn archive_gate_binds_sources_and_refuses_unbound() {
     let digest = digest_b3(b"d");
     let source = digest_b3(b"package-sources");
     let plain = group(TaskKind::Nextest, "stack/rust/root/nextest/default");
-    let gate = check_archive_identity(&plain, &digest, &digest, &digest);
+    let gate = check_archive_identity_with_source(&plain, &digest, &digest, &digest, None);
     assert!(matches!(gate, Ok(ArchiveGate::Clear)));
     let mut sharded = group(
         TaskKind::Nextest,
         "stack/rust/root/nextest/default/shard-1-of-2",
     );
     sharded.compile_driver = "bogus".to_owned();
-    let err = check_archive_identity(&sharded, &digest, &digest, &digest).expect_err("driver");
+    let err = check_archive_identity_with_source(&sharded, &digest, &digest, &digest, None)
+        .expect_err("driver");
     assert!(err.to_string().contains("unknown_archive_driver"), "{err}");
     sharded.compile_driver = "cargo".to_owned();
     let check = |group: &TaskGroup, source: Option<&str>| {
@@ -140,6 +141,37 @@ fn archive_gate_binds_sources_and_refuses_unbound() {
     let malformed = group(TaskKind::Nextest, "stack/rust/root/nextest/default/shard-x");
     let err = check(&malformed, Some(&source)).expect_err("malformed");
     assert!(err.to_string().contains("malformed_shard_suffix"), "{err}");
+}
+
+#[test]
+fn archive_identity_binds_content_not_path() {
+    let digest = digest_b3(b"d");
+    let source_before = digest_b3(b"package-sources-v1");
+    let source_after = digest_b3(b"package-sources-v2");
+    let archive = NextestArchive::with_profile(NextestDriver::Cargo, "demo", &[], None, "default")
+        .expect("archive");
+    let catalog = ToolCatalog::pinned();
+    let identity = |source: &str| {
+        archive_identity(
+            &archive,
+            &ArchiveIdentityInputs {
+                source_digest: source,
+                profile: "default",
+                toolchain_id: &digest,
+                runtime: "cargo",
+                test_runner: catalog.version(PinnedTool::Nextest),
+                format: "tar.zst",
+                platform_id: &digest,
+                config_digest: &digest,
+            },
+        )
+        .expect("identity")
+    };
+    // Same configuration and path, changed source bytes: the identity
+    // must flip, so a same-path edit can never silently reuse an
+    // archive built from stale bytes.
+    assert_ne!(identity(&source_before), identity(&source_after));
+    assert_eq!(identity(&source_before), identity(&source_before));
 }
 
 #[test]
