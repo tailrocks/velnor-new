@@ -75,23 +75,23 @@ fn mise_action_uses(config: &VelnorConfig) -> Result<String, OrchestratorError> 
     Ok(format!("{}@{}", approved.uses_key(), pin.sha))
 }
 
-/// Consumer Acquire step from the release manifest of this exact version.
+/// Consumer Acquire step from the committed release manifest.
 ///
-/// Bootstrap contract §2: a source build (no embedded manifest) fails
-/// consumer generation with a provenance diagnostic recommending an
-/// official release; it never emits an unverified URL or placeholder digest.
+/// Bootstrap contract §2: a repo without the committed manifest file
+/// fails consumer generation with a provenance diagnostic recommending
+/// an official release; it never emits an unverified URL or digest.
 pub(crate) fn consumer_acquire_step(
     label: &str,
     version: &str,
     discovery: &Discovery,
 ) -> Result<Step, OrchestratorError> {
-    consumer_acquire_from(label, version, release_manifest_json(discovery).as_deref())
+    consumer_acquire_from(label, version, discovery.consumer_manifest_json.as_deref())
 }
 
 /// Consumer Acquire step from an explicit manifest (pure; `None` fails).
 ///
-/// A source build (no embedded manifest) fails consumer generation with a
-/// provenance diagnostic recommending an official release (boot §2).
+/// A repo without the committed manifest file fails consumer generation
+/// with a provenance diagnostic recommending an official release (§2).
 ///
 /// # Errors
 ///
@@ -175,18 +175,6 @@ fn acquire_argv(staged: &str) -> Vec<String> {
         "mkdir -p {dir} && curl -fsSL \"$VELNOR_ASSET_URL\" -o {staged} && echo \"$VELNOR_ASSET_SHA256  {staged}\" | sha256sum -c - && chmod +x {staged}"
     );
     vec!["sh".to_owned(), "-c".to_owned(), script]
-}
-
-/// Embedded release-manifest JSON: compile-time release provenance.
-///
-/// Baked `VELNOR_RELEASE_MANIFEST_JSON` wins; otherwise the debug-only
-/// discovery fixture applies. Release builds have no fixture path, so a
-/// source build always fails the consumer gate.
-fn release_manifest_json(discovery: &Discovery) -> Option<String> {
-    if let Some(baked) = option_env!("VELNOR_RELEASE_MANIFEST_JSON") {
-        return Some(baked.to_owned());
-    }
-    discovery.consumer_manifest_json.clone()
 }
 
 /// `cfg(test)`-only fixture manifest matching the workspace version.

@@ -32,8 +32,7 @@ pub struct PlannedWorkspace {
     pub findings: Vec<velnor_actions_rust::ProfileFinding>,
 }
 
-/// Debug-only consumer-manifest fixture filename under `.velnor`.
-#[cfg(debug_assertions)]
+/// Committed consumer-manifest filename under `.velnor`.
 const RELEASE_MANIFEST_REL: &str = ".velnor/release-manifest.json";
 
 /// Full detection output feeding planning and rendering.
@@ -53,7 +52,11 @@ pub struct Discovery {
     pub clippy_memory: ClippyMemoryPlan,
     /// Sorted unique recommendations.
     pub recommendations: Vec<String>,
-    /// Debug-only release-manifest text; always `None` in release builds.
+    /// Release-manifest text from the committed repo file.
+    ///
+    /// Debug builds fall back to an `example.invalid` stand-in when the
+    /// file is absent; release builds keep `None` so generation fails
+    /// closed with `consumer_requires_release_install`.
     pub consumer_manifest_json: Option<String>,
     /// Whether index enumeration skipped any non-UTF-8 name.
     ///
@@ -103,7 +106,7 @@ pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, 
         tool_checks,
         clippy_memory,
         recommendations,
-        consumer_manifest_json: debug_manifest_fixture(root),
+        consumer_manifest_json: consumer_manifest_text(root),
         skipped_non_utf8,
     })
 }
@@ -130,13 +133,21 @@ pub(crate) fn detector_entries() -> Vec<(&'static str, u32)> {
         .collect()
 }
 
-/// Debug-only manifest fixture: explicit file, else an embedded
-/// `example.invalid` stand-in. Release builds never read the file and
-/// have no injection path.
+/// Read the committed release-manifest file; absent/unreadable is `None`.
+///
+/// Cfg-independent so tests (debug assertions on) cover the exact read
+/// the release twin relies on; schema and version validation happen
+/// downstream in the consumer acquire gate.
+pub(crate) fn read_manifest_file(root: &Path) -> Option<String> {
+    std::fs::read_to_string(root.join(RELEASE_MANIFEST_REL)).ok()
+}
+
+/// Consumer manifest text: committed file, else an embedded
+/// `example.invalid` stand-in (debug builds only).
 #[cfg(debug_assertions)]
 #[expect(clippy::unnecessary_wraps, reason = "release twin returns None")]
-fn debug_manifest_fixture(root: &Path) -> Option<String> {
-    if let Ok(text) = std::fs::read_to_string(root.join(RELEASE_MANIFEST_REL)) {
+fn consumer_manifest_text(root: &Path) -> Option<String> {
+    if let Some(text) = read_manifest_file(root) {
         return Some(text);
     }
     let sha = "a".repeat(64);
@@ -157,10 +168,13 @@ fn debug_manifest_fixture(root: &Path) -> Option<String> {
     ))
 }
 
-/// Release builds have no manifest injection path.
+/// Consumer manifest text: the committed file, with no stand-in.
+///
+/// Absent or unreadable files stay `None`; the consumer acquire gate
+/// fails closed with `consumer_requires_release_install`.
 #[cfg(not(debug_assertions))]
-fn debug_manifest_fixture(_root: &Path) -> Option<String> {
-    None
+fn consumer_manifest_text(root: &Path) -> Option<String> {
+    read_manifest_file(root)
 }
 
 /// Sorted local dependency display names for one package.
@@ -363,3 +377,7 @@ pub(crate) fn workspace_lock(workspace_root: &str) -> String {
         format!("{workspace_root}/Cargo.lock")
     }
 }
+
+#[cfg(test)]
+#[path = "discover_manifest_tests.rs"]
+mod tests;
