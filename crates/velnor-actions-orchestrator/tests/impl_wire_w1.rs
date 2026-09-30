@@ -13,7 +13,7 @@ use velnor_actions_mise::{CandidateBuild, PinnedTool, ToolCatalog};
 use velnor_actions_orchestrator::{DEFAULT_RUNNER_LABEL, prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::render::{ACTIONLINT_PATH, WORKFLOW_PATH};
 
-use super::impl_common::{TestResult, config_with_branch, make_repo};
+use super::impl_common::{TestResult, config_with_branch, make_repo, make_virtual_repo};
 
 /// Staged workflow + actionlint bytes for one config.
 fn preview_both(config: &str) -> Result<(TempDir, String, String), Box<dyn std::error::Error>> {
@@ -246,6 +246,18 @@ fn w1_plan_format_runs_fmt_check() -> TestResult {
     let prep = prepare(repo.path())?;
     let tree = render_staged_tree(&prep)?;
     let yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
+    let plan = window(yaml, "  plan:", "  required:")?;
+    assert!(
+        !plan.contains("- name: Format"),
+        "root package owns its fmt scope:\n{plan}"
+    );
+    let job = window(yaml, "  rust-demo:", "  required:")?;
+    assert!(job.contains("- name: Format"), "per-package scope:\n{job}");
+    let virtual_repo = make_virtual_repo(config_with_branch())?;
+    fs::write(virtual_repo.path().join("rustfmt.toml"), "[rustfmt]\n")?;
+    let prep = prepare(virtual_repo.path())?;
+    let tree = render_staged_tree(&prep)?;
+    let yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
     let plan = window(yaml, "  plan:", "  actionlint:")?;
     assert!(plan.contains("- name: Format"), "format step:\n{plan}");
     assert!(
@@ -266,8 +278,6 @@ fn w1_plan_format_runs_fmt_check() -> TestResult {
     ] {
         assert!(block.contains(key), "format env misses {key}:\n{block}");
     }
-    let job = window(yaml, "  rust-demo:", "  required:")?;
-    assert!(job.contains("- name: Format"), "per-package scope:\n{job}");
     let ignored =
         "schema = 1\n[workflow]\ndefault_branch = \"testmain\"\n[stacks]\nignore = [\"rust\"]\n";
     let (_repo, yaml, _alint) = preview_both(ignored)?;

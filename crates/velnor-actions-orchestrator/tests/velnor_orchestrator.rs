@@ -6,6 +6,7 @@ mod impl_consumer_manifest_file;
 mod impl_crate_graph;
 mod impl_e2e_wiring;
 mod impl_final_orch;
+mod impl_fmt_scope;
 mod impl_gapc;
 mod impl_gate8_acquire;
 mod impl_gate8_e;

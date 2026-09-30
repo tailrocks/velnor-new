@@ -69,6 +69,11 @@ pub(crate) fn declared_union(workspaces: &[PlannedWorkspace]) -> BTreeSet<String
 ///
 /// Resolves per-crate features before derivation and returns every
 /// fallback alongside; unknown features fail closed naming the crate.
+/// The workspace fmt group exists only when no member owns the
+/// workspace manifest: a root package's per-package fmt group already
+/// carries that (`manifest_key`, `fmt`, configuration) task id, so a
+/// workspace group alongside it would duplicate the id. Per-package
+/// formatting lives in crate jobs either way, so no scope is lost.
 ///
 /// # Errors
 ///
@@ -85,10 +90,13 @@ pub(crate) fn derive_for_config(
 ) -> Result<(Vec<TaskGroup>, Vec<FeatureFallback>), OrchestratorError> {
     let mut groups = Vec::new();
     let mut fallbacks = Vec::new();
+    let manifest = workspace_manifest(&record.workspace_root);
+    let mut root_package = false;
     for package in &record.packages {
         if !package.in_workspace || package.external {
             continue;
         }
+        root_package = root_package || package.manifest == manifest;
         let (features, fallback) =
             resolve_features(package, &rust_config.features, union, &rust_config.name)?;
         fallbacks.extend(fallback);
@@ -104,14 +112,15 @@ pub(crate) fn derive_for_config(
             groups.extend(expand_shards(config, &group, profile, archives)?);
         }
     }
-    let manifest = workspace_manifest(&record.workspace_root);
-    if let Some(fmt) = derive_workspace_fmt_if_explicit(
-        &manifest,
-        profile,
-        &rust_config.name,
-        &rust_config.target,
-        explicit_fmt,
-    )? {
+    if !root_package
+        && let Some(fmt) = derive_workspace_fmt_if_explicit(
+            &manifest,
+            profile,
+            &rust_config.name,
+            &rust_config.target,
+            explicit_fmt,
+        )?
+    {
         groups.push(fmt);
     }
     Ok((groups, fallbacks))
