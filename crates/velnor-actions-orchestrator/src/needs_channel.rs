@@ -4,6 +4,7 @@
 //! declares it as the required validator inventory. No hardcoded job
 //! list lives here: whatever the workflow needs, the merge requires.
 
+use velnor_actions_contract::JobConclusion;
 use velnor_actions_workflow_renderer::render::TASK_JOB_ID;
 
 /// Environment channel carrying the final gate's `needs` conclusions.
@@ -50,7 +51,7 @@ pub(crate) fn parse_needs(
             continue;
         };
         inventory.push(job_id.clone());
-        results.push(serde_json::json!({"job_id": job_id, "conclusion": conclusion}));
+        results.push(serde_json::json!({"job_id": job_id, "conclusion": conclusion.as_str()}));
     }
     inventory.sort();
     results.sort_by(|left, right| report_job(left).cmp(report_job(right)));
@@ -61,11 +62,17 @@ pub(crate) fn parse_needs(
 ///
 /// Only the closed GitHub `needs` result vocabulary passes; anything
 /// else is a corrupt channel, never folded as success or failure.
-fn needs_conclusion(entry: &serde_json::Value) -> Option<&str> {
+fn needs_conclusion(entry: &serde_json::Value) -> Option<JobConclusion> {
     let raw = entry
         .as_str()
         .or_else(|| entry.get("result").and_then(serde_json::Value::as_str))?;
-    matches!(raw, "success" | "failure" | "cancelled" | "skipped").then_some(raw)
+    match raw {
+        "success" => Some(JobConclusion::Success),
+        "failure" => Some(JobConclusion::Failure),
+        "cancelled" => Some(JobConclusion::Cancelled),
+        "skipped" => Some(JobConclusion::Skipped),
+        _ => None,
+    }
 }
 
 /// Sort key for one assembled job result; empty when the ID is absent.

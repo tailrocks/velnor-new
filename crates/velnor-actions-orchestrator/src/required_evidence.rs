@@ -17,7 +17,8 @@ use std::collections::BTreeSet;
 
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::{
-    CandidateReport, CandidateStatus, FinalReport, ObligationDecision, Plan, RequiredJobResult,
+    CandidateReport, CandidateStatus, FinalReport, JobConclusion, ObligationDecision, Plan,
+    RequiredJobResult,
 };
 use velnor_actions_workflow_renderer::render::CANDIDATE_JOB_ID;
 
@@ -89,9 +90,6 @@ pub(crate) struct BaselineManifest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) expires_at_unix: Option<u64>,
 }
-
-/// Conclusion marker for a declared validator that never reported.
-const MISSING_CONCLUSION: &str = "missing";
 
 /// Enforce the closed inventory: jobs, candidate, obligation proofs.
 ///
@@ -198,11 +196,11 @@ fn check_obligation_proofs(
 /// Fold required job conclusions; skipped is never success.
 pub(crate) fn fold_jobs(jobs: &[RequiredJobResult], signals: &mut Signals) {
     for job in jobs {
-        match job.conclusion.as_str() {
-            "success" => {}
-            "cancelled" => signals.cancelled = true,
-            "skipped" | "neutral" => signals.not_run = true,
-            _ => signals.failed = true,
+        match job.conclusion {
+            JobConclusion::Success => {}
+            JobConclusion::Cancelled => signals.cancelled = true,
+            JobConclusion::Skipped | JobConclusion::Neutral => signals.not_run = true,
+            JobConclusion::Failure | JobConclusion::Missing => signals.failed = true,
         }
     }
 }
@@ -226,7 +224,7 @@ pub(crate) fn reported_job_results(request: &MergeRequest) -> Vec<RequiredJobRes
         if !reported.iter().any(|job| &job.job_id == id) {
             reported.push(RequiredJobResult {
                 job_id: id.clone(),
-                conclusion: MISSING_CONCLUSION.to_owned(),
+                conclusion: JobConclusion::Missing,
             });
         }
     }

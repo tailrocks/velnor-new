@@ -1,7 +1,7 @@
 //! P01/P02 regression tests: closed required evidence, obligation universe.
 
 use serde_json::json;
-use velnor_actions_contract::{FinalStatus, ObligationDecision};
+use velnor_actions_contract::{FinalStatus, JobConclusion, ObligationDecision};
 use velnor_actions_orchestrator::{assemble_merge_request, merge_internal};
 
 use crate::impl_common::{TestResult, make_repo, passing_reports, plan_for_source_change};
@@ -67,7 +67,7 @@ fn validator_results_must_match_inventory_exactly() -> TestResult {
         report
             .required_job_results
             .iter()
-            .any(|job| job.job_id == "actionlint" && job.conclusion == "missing"),
+            .any(|job| job.job_id == "actionlint" && job.conclusion == JobConclusion::Missing),
         "{:?}",
         report.required_job_results
     );
