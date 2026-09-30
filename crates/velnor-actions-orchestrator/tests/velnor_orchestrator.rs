@@ -30,6 +30,7 @@ mod impl_orch_intake;
 mod impl_orch_intake_deps;
 mod impl_orch_merge;
 mod impl_orch_plansel;
+mod impl_orch_release_emit;
 mod impl_p03_identity;
 mod impl_p04_reuse;
 mod impl_p06_detection;
