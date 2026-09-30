@@ -30,6 +30,7 @@ mod inventory;
 mod matrix_step;
 mod merge;
 mod merge_request;
+mod origin;
 mod pins;
 mod plan;
 mod prepare;
