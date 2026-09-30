@@ -219,21 +219,35 @@ fn added_member_manifest_narrows_without_broaden() -> TestResult {
     Ok(())
 }
 
-/// An added source file with a quotepath-triggering name narrows exactly.
+/// An added manifest with a quotepath-triggering name fails closed explicitly.
 ///
-/// Display parsing would return the C-quoted `"alpha/src/h\\303\\251llo.rs"`
-/// form, which never matches the owning member prefix and would broaden.
-/// NUL-delimited `added_files` reports exact bytes, so the owner narrows.
+/// Non-ASCII members are rejected by obligation-time manifest-key validation
+/// before selection runs, so this pins the explicit error (not silent
+/// broaden) for unsupported member names. Byte-exactness of `added_files`
+/// itself is enforced by construction (trusted `-z` + shared splitter) and
+/// proven at the splitter unit level, since only validated manifests are
+/// ever matched against the added set.
 #[test]
-fn added_quotepath_source_narrows_without_broaden() -> TestResult {
+fn added_quotepath_manifest_fails_closed() -> TestResult {
     let repo = make_ws_repo(false)?;
     let root = repo.path();
+    fs::write(
+        root.join("Cargo.toml"),
+        "[workspace]\nmembers = [\"alpha\", \"beta\", \"gamm\u{e1}\"]\n",
+    )?;
     let base = commit(root, "one")?;
-    fs::write(root.join("alpha/src/h\u{e9}llo.rs"), "pub fn f() {}\n")?;
+    fs::create_dir_all(root.join("gamm\u{e1}/src"))?;
+    fs::write(
+        root.join("gamm\u{e1}/Cargo.toml"),
+        "[package]\nname = \"gamma\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+    )?;
+    fs::write(root.join("gamm\u{e1}/src/lib.rs"), "pub fn f() {}\n")?;
     let head = commit(root, "two")?;
-    let (plan, warnings) = plan_pr(root, Some(&base), &head)?;
-    assert_narrow(&plan, "alpha", "beta");
-    assert!(warnings.is_empty(), "no warnings: {warnings:?}");
+    let error = plan_pr(root, Some(&base), &head).expect_err("must fail closed");
+    assert!(
+        error.to_string().contains("bad_component"),
+        "names the problem: {error}"
+    );
     Ok(())
 }
 
