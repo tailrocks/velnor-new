@@ -50,6 +50,9 @@ pub struct RustReleaseConfig {
     /// Explicit package allowlist; sorted, unique, never auto-expanded.
     #[serde(default)]
     pub packages: Vec<String>,
+    /// Explicit publishable-workspace opt-in; exclusive with `packages`.
+    #[serde(default)]
+    pub publishable_workspace: bool,
     /// Protected GitHub environment bound to publishing jobs.
     #[serde(default = "default_environment")]
     pub environment: String,
@@ -67,7 +70,8 @@ pub struct RustReleaseConfig {
     pub bootstrap: Option<BootstrapRelease>,
     /// Named version groups with non-lockstep semantics: members coordinate
     /// versioning through release-plz, but unchanged members are not forced
-    /// to release. Every member must be listed in `packages`.
+    /// to release. Members must be listed in `packages`; under the
+    /// publishable-workspace opt-in, emission enforces set membership.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub version_groups: BTreeMap<String, Vec<String>>,
 }
@@ -99,6 +103,7 @@ impl Default for RustReleaseConfig {
             enabled: false,
             manifest_path: default_manifest_path(),
             packages: Vec::new(),
+            publishable_workspace: false,
             environment: default_environment(),
             authentication: ReleaseAuthentication::default(),
             release_pr: true,
@@ -113,18 +118,29 @@ impl RustReleaseConfig {
     /// Validate shape, safety, and mode coherence.
     ///
     /// Runs whether enabled or not so drafted config stays safe; `enabled`
-    /// additionally requires a nonempty package allowlist. Never expands it.
+    /// additionally requires one scope: an allowlist or the publishable
+    /// opt-in. Never expands either.
     /// # Errors
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
         validate_manifest_path(file, &self.manifest_path)?;
-        validate_packages(file, &self.packages, self.enabled)?;
+        validate_packages(
+            file,
+            &self.packages,
+            self.enabled,
+            self.publishable_workspace,
+        )?;
         validate_environment(file, &self.environment)?;
         self.validate_authentication(file)?;
         validate_tag_name(file, &self.tag_name)?;
         if let Some(bootstrap) = &self.bootstrap {
             validate_bootstrap(file, bootstrap)?;
         }
-        validate_version_groups(file, &self.version_groups, &self.packages)?;
+        validate_version_groups(
+            file,
+            &self.version_groups,
+            &self.packages,
+            self.publishable_workspace,
+        )?;
         Ok(())
     }
 
@@ -167,10 +183,22 @@ fn validate_manifest_path(file: &str, path: &str) -> Result<(), ContractError> {
     Ok(())
 }
 
-/// Validate the package allowlist (sorted, unique, safe names).
-fn validate_packages(file: &str, packages: &[String], enabled: bool) -> Result<(), ContractError> {
+/// Validate the package scope (allowlist or publishable opt-in, never both).
+fn validate_packages(
+    file: &str,
+    packages: &[String],
+    enabled: bool,
+    publishable: bool,
+) -> Result<(), ContractError> {
     let key = "stacks.rust.release.packages";
-    if enabled && packages.is_empty() {
+    if publishable && !packages.is_empty() {
+        return Err(ContractError::config(
+            file,
+            "stacks.rust.release.publishable_workspace",
+            "packages_with_publishable",
+        ));
+    }
+    if enabled && packages.is_empty() && !publishable {
         return Err(ContractError::config(file, key, "empty_packages"));
     }
     let mut sorted = packages.to_vec();
@@ -267,10 +295,14 @@ fn validate_bootstrap(file: &str, bootstrap: &BootstrapRelease) -> Result<(), Co
 }
 
 /// Validate version groups (known members, each in at most one group).
+///
+/// Under the publishable opt-in the allowlist is empty, so set membership
+/// is deferred to emission; every other check still applies.
 fn validate_version_groups(
     file: &str,
     groups: &BTreeMap<String, Vec<String>>,
     packages: &[String],
+    publishable: bool,
 ) -> Result<(), ContractError> {
     let allowed: BTreeSet<&str> = packages.iter().map(String::as_str).collect();
     let mut seen: BTreeSet<&str> = BTreeSet::new();
@@ -299,7 +331,7 @@ fn validate_version_groups(
                     format!("unsafe_package:{member}"),
                 ));
             }
-            if !allowed.contains(member.as_str()) {
+            if !publishable && !allowed.contains(member.as_str()) {
                 return Err(ContractError::config(
                     file,
                     key,

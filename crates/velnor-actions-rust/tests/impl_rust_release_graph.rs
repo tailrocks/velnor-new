@@ -1,77 +1,98 @@
-//! Release graph: dependency order, edge kinds, and fail-closed sets.
-use crate::impl_rust_release_modes::{
+//! Publication-graph cases (deps, dev edges, registries, cycles).
+use std::collections::BTreeSet;
+
+use serde_json::Value;
+
+use crate::release_support::{
     DepOpt, dep, doc, graph_of, manifest, pkg, registry, root_of, select_of,
 };
 use crate::support::{Outcome, TempDir};
-use serde_json::{Value, json};
 use velnor_actions_rust::{DepKind, ReleaseError, ReleaseScope};
 
 #[test]
-fn dependency_chain_publishes_leaves_first() -> Outcome {
-    let dir = TempDir::create("release-chain")?;
+fn unparseable_and_unsatisfied_requirements_fail() -> Outcome {
+    let dir = TempDir::create("release-reqs")?;
     let root = root_of(&dir)?;
-    let json = doc(
+    let alpha = pkg(
         &root,
-        vec!["a-id", "b-id", "c-id"],
-        vec![
-            pkg(
-                &root,
-                "a-id",
-                "aaa",
-                "1.0.0",
-                "crates/a/Cargo.toml",
-                Value::Null,
-                vec![],
-            ),
-            pkg(
-                &root,
-                "b-id",
-                "bbb",
-                "1.0.0",
-                "crates/b/Cargo.toml",
-                Value::Null,
-                vec![dep(
-                    "aaa",
-                    "^1",
-                    DepOpt {
-                        path: Some(manifest(&root, "crates/a")),
-                        ..Default::default()
-                    },
-                )],
-            ),
-            pkg(
-                &root,
-                "c-id",
-                "ccc",
-                "1.0.0",
-                "crates/c/Cargo.toml",
-                Value::Null,
-                vec![dep(
-                    "bbb",
-                    "^1",
-                    DepOpt {
-                        path: Some(manifest(&root, "crates/b")),
-                        ..Default::default()
-                    },
-                )],
-            ),
-        ],
+        "a-id",
+        "alpha",
+        "1.0.0",
+        "crates/a/Cargo.toml",
+        Value::Null,
+        vec![],
     );
-    let scope = ReleaseScope::Packages(vec!["ccc".to_owned(), "bbb".to_owned(), "aaa".to_owned()]);
-    let selection = select_of(&json, &root, &scope, &[])?;
-    let graph = graph_of(&selection, &json, &root, &registry(&[]))?;
-    assert_eq!(
-        graph.order,
-        vec!["aaa".to_owned(), "bbb".to_owned(), "ccc".to_owned()]
+    let bad_dep = dep(
+        "alpha",
+        "bogus!!",
+        DepOpt {
+            path: Some(manifest(&root, "crates/a")),
+            ..Default::default()
+        },
     );
-    assert_eq!(graph.edges.len(), 2);
+    let beta = pkg(
+        &root,
+        "b-id",
+        "beta",
+        "1.0.0",
+        "crates/b/Cargo.toml",
+        Value::Null,
+        vec![bad_dep],
+    );
+    let json = doc(&root, vec!["a-id", "b-id"], vec![alpha, beta]);
+    let scope = ReleaseScope::Packages(vec!["alpha".to_owned(), "beta".to_owned()]);
+    let selection = select_of(&json, &root, &scope, &BTreeSet::new(), &[])?;
+    assert!(matches!(
+        graph_of(&selection, &json, &root, &registry(&[])),
+        Err(ReleaseError::InvalidRequirement { .. })
+    ));
+    let mismatch_dep = dep(
+        "alpha",
+        "^9",
+        DepOpt {
+            path: Some(manifest(&root, "crates/a")),
+            ..Default::default()
+        },
+    );
+    let beta = pkg(
+        &root,
+        "b-id",
+        "beta",
+        "1.0.0",
+        "crates/b/Cargo.toml",
+        Value::Null,
+        vec![mismatch_dep],
+    );
+    let alpha = pkg(
+        &root,
+        "a-id",
+        "alpha",
+        "1.0.0",
+        "crates/a/Cargo.toml",
+        Value::Null,
+        vec![],
+    );
+    let json = doc(&root, vec!["a-id", "b-id"], vec![alpha, beta]);
+    let selection = select_of(&json, &root, &scope, &BTreeSet::new(), &[])?;
+    assert!(matches!(
+        graph_of(&selection, &json, &root, &registry(&[])),
+        Err(ReleaseError::RequirementMismatch { .. })
+    ));
     Ok(())
 }
 
 #[test]
-fn optional_build_and_target_edges_constrain_order() -> Outcome {
-    let dir = TempDir::create("release-edgekinds")?;
+fn unpublished_local_dep_names_fix_or_uses_registry() -> Outcome {
+    let dir = TempDir::create("release-missing")?;
     let root = root_of(&dir)?;
+    let need = dep(
+        "alpha",
+        "^1",
+        DepOpt {
+            path: Some(manifest(&root, "crates/a")),
+            ..Default::default()
+        },
+    );
     let json = doc(
         &root,
         vec!["a-id", "b-id"],
@@ -80,7 +101,7 @@ fn optional_build_and_target_edges_constrain_order() -> Outcome {
                 &root,
                 "a-id",
                 "alpha",
-                "1.0.0",
+                "1.2.0",
                 "crates/a/Cargo.toml",
                 Value::Null,
                 vec![],
@@ -92,160 +113,146 @@ fn optional_build_and_target_edges_constrain_order() -> Outcome {
                 "1.0.0",
                 "crates/b/Cargo.toml",
                 Value::Null,
-                vec![
-                    dep(
-                        "alpha",
-                        "^1",
-                        DepOpt {
-                            path: Some(manifest(&root, "crates/a")),
-                            optional: true,
-                            ..Default::default()
-                        },
-                    ),
-                    dep(
-                        "alpha",
-                        "^1",
-                        DepOpt {
-                            kind: Some("build".to_owned()),
-                            path: Some(manifest(&root, "crates/a")),
-                            ..Default::default()
-                        },
-                    ),
-                    dep(
-                        "alpha",
-                        "^1",
-                        DepOpt {
-                            path: Some(manifest(&root, "crates/a")),
-                            target: Some("cfg(unix)".to_owned()),
-                            ..Default::default()
-                        },
-                    ),
-                ],
+                vec![need],
+            ),
+        ],
+    );
+    let scope = ReleaseScope::Packages(vec!["beta".to_owned()]);
+    let selection = select_of(&json, &root, &scope, &BTreeSet::new(), &[])?;
+    let Err(error) = graph_of(&selection, &json, &root, &registry(&[])) else {
+        return Err("unpublished local dep must fail".into());
+    };
+    let text = error.to_string();
+    assert!(
+        text.contains("unpublished_local_dep:beta"),
+        "unexpected: {text}"
+    );
+    assert!(
+        text.contains("add \"alpha\" to release.packages"),
+        "unexpected: {text}"
+    );
+    let published = registry(&[("alpha", &["1.2.0"])]);
+    let graph = graph_of(&selection, &json, &root, &published)?;
+    assert_eq!(graph.order, vec!["beta".to_owned()]);
+    assert!(graph.edges.is_empty());
+    Ok(())
+}
+
+#[test]
+fn dev_edges_cannot_invent_publish_cycles() -> Outcome {
+    let dir = TempDir::create("release-dev")?;
+    let root = root_of(&dir)?;
+    let a_path = manifest(&root, "crates/a");
+    let b_path = manifest(&root, "crates/b");
+    let dev_on_b = dep(
+        "beta",
+        "^1",
+        DepOpt {
+            kind: Some("dev".to_owned()),
+            path: Some(b_path),
+            ..Default::default()
+        },
+    );
+    let use_a = dep(
+        "alpha",
+        "^1",
+        DepOpt {
+            path: Some(a_path),
+            ..Default::default()
+        },
+    );
+    let json = doc(
+        &root,
+        vec!["a-id", "b-id"],
+        vec![
+            pkg(
+                &root,
+                "a-id",
+                "alpha",
+                "1.0.0",
+                "crates/a/Cargo.toml",
+                Value::Null,
+                vec![dev_on_b],
+            ),
+            pkg(
+                &root,
+                "b-id",
+                "beta",
+                "1.0.0",
+                "crates/b/Cargo.toml",
+                Value::Null,
+                vec![use_a],
             ),
         ],
     );
     let scope = ReleaseScope::Packages(vec!["alpha".to_owned(), "beta".to_owned()]);
-    let selection = select_of(&json, &root, &scope, &[])?;
+    let selection = select_of(&json, &root, &scope, &BTreeSet::new(), &[])?;
     let graph = graph_of(&selection, &json, &root, &registry(&[]))?;
     assert_eq!(graph.order, vec!["alpha".to_owned(), "beta".to_owned()]);
-    assert_eq!(graph.edges.len(), 3);
-    assert!(graph.edges.iter().any(|edge| edge.optional));
-    assert!(graph.edges.iter().any(|edge| edge.kind == DepKind::Build));
-    assert!(
-        graph
-            .edges
-            .iter()
-            .any(|edge| edge.target.as_deref() == Some("cfg(unix)"))
-    );
+    assert_eq!(graph.edges.len(), 1);
+    assert_eq!(graph.edges[0].kind, DepKind::Normal);
     Ok(())
 }
 
 #[test]
-fn publishable_workspace_fails_on_restricted_registries() -> Outcome {
-    let dir = TempDir::create("release-restricted")?;
+fn registry_deps_need_published_satisfying_versions() -> Outcome {
+    let dir = TempDir::create("release-regdep")?;
     let root = root_of(&dir)?;
+    let need = dep("serde", "^1", DepOpt::default());
     let json = doc(
         &root,
-        vec!["a-id"],
+        vec!["b-id"],
         vec![pkg(
             &root,
-            "a-id",
-            "alpha",
-            "0.2.0",
+            "b-id",
+            "beta",
+            "1.0.0",
             "Cargo.toml",
-            json!(["other-reg"]),
-            vec![],
+            Value::Null,
+            vec![need],
         )],
     );
-    let scope = ReleaseScope::PublishableWorkspace;
-    assert!(matches!(
-        select_of(&json, &root, &scope, &[]),
-        Err(ReleaseError::UnsupportedRegistry { .. })
-    ));
-    let supported = vec!["other-reg".to_owned()];
-    let selection = select_of(&json, &root, &scope, &supported)?;
-    assert_eq!(selection.names(), vec!["alpha"]);
+    let scope = ReleaseScope::Packages(vec!["beta".to_owned()]);
+    let selection = select_of(&json, &root, &scope, &BTreeSet::new(), &[])?;
+    assert!(graph_of(&selection, &json, &root, &registry(&[])).is_err());
+    let stale = registry(&[("serde", &["0.9.0"])]);
+    assert!(graph_of(&selection, &json, &root, &stale).is_err());
+    let fresh = registry(&[("serde", &["1.0.0"])]);
+    let graph = graph_of(&selection, &json, &root, &fresh)?;
+    assert_eq!(graph.order, vec!["beta".to_owned()]);
     Ok(())
 }
 
 #[test]
-fn ambiguous_workspace_names_and_cycles_fail_closed() -> Outcome {
-    let dir = TempDir::create("release-ambiguous")?;
+fn git_only_dependencies_are_rejected() -> Outcome {
+    let dir = TempDir::create("release-git")?;
     let root = root_of(&dir)?;
+    let need = dep(
+        "tool",
+        "^1",
+        DepOpt {
+            source: Some("git+https://example.invalid/tool".to_owned()),
+            ..Default::default()
+        },
+    );
     let json = doc(
         &root,
-        vec!["a-id", "b-id"],
-        vec![
-            pkg(
-                &root,
-                "a-id",
-                "same",
-                "1.0.0",
-                "crates/a/Cargo.toml",
-                Value::Null,
-                vec![],
-            ),
-            pkg(
-                &root,
-                "b-id",
-                "same",
-                "1.0.0",
-                "crates/b/Cargo.toml",
-                Value::Null,
-                vec![],
-            ),
-        ],
+        vec!["b-id"],
+        vec![pkg(
+            &root,
+            "b-id",
+            "beta",
+            "1.0.0",
+            "Cargo.toml",
+            Value::Null,
+            vec![need],
+        )],
     );
-    let scope = ReleaseScope::Packages(vec!["same".to_owned()]);
-    assert!(matches!(
-        select_of(&json, &root, &scope, &[]),
-        Err(ReleaseError::AmbiguousPackageName { .. })
-    ));
-    let cycle = doc(
-        &root,
-        vec!["a-id", "b-id"],
-        vec![
-            pkg(
-                &root,
-                "a-id",
-                "alpha",
-                "1.0.0",
-                "crates/a/Cargo.toml",
-                Value::Null,
-                vec![dep(
-                    "beta",
-                    "^1",
-                    DepOpt {
-                        path: Some(manifest(&root, "crates/b")),
-                        ..Default::default()
-                    },
-                )],
-            ),
-            pkg(
-                &root,
-                "b-id",
-                "beta",
-                "1.0.0",
-                "crates/b/Cargo.toml",
-                Value::Null,
-                vec![dep(
-                    "alpha",
-                    "^1",
-                    DepOpt {
-                        path: Some(manifest(&root, "crates/a")),
-                        ..Default::default()
-                    },
-                )],
-            ),
-        ],
-    );
-    let scope = ReleaseScope::Packages(vec!["alpha".to_owned(), "beta".to_owned()]);
-    let selection = select_of(&cycle, &root, &scope, &[])?;
-    let Err(ReleaseError::PublishCycle { members }) =
-        graph_of(&selection, &cycle, &root, &registry(&[]))
-    else {
-        return Err("publish cycle must fail".into());
+    let scope = ReleaseScope::Packages(vec!["beta".to_owned()]);
+    let selection = select_of(&json, &root, &scope, &BTreeSet::new(), &[])?;
+    let Err(error) = graph_of(&selection, &json, &root, &registry(&[])) else {
+        return Err("git-only dep must fail".into());
     };
-    assert_eq!(members, vec!["alpha".to_owned(), "beta".to_owned()]);
+    assert!(error.to_string().contains("git_only_dep:beta:tool"));
     Ok(())
 }

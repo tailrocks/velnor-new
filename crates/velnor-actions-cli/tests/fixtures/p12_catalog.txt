@@ -6,3 +6,4 @@ pub const ACTIONLINT_VERSION: &str = "1.7.12";
 pub const SHELLCHECK_VERSION: &str = "0.11.0";
 pub const ZIZMOR_VERSION: &str = "1.30.1";
 pub const NEXTEST_VERSION: &str = "0.9.146";
+pub const RELEASE_PLZ_VERSION: &str = "0.3.169";

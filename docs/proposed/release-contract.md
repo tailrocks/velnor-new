@@ -41,7 +41,9 @@ unsafe names, contradictory authentication modes, and raw shell/YAML/`uses`
 overrides. Generic product logic MUST NOT hard-code any consumer package,
 organization, account, or version. `packages` accepts one name, an explicit
 list, or an explicitly opted-in publishable-workspace mode; all three use the
-same selection mechanism (§3).
+same selection mechanism (§3). The workspace mode is selected with
+`publishable_workspace = true`, which is mutually exclusive with `packages`;
+an enabled section requires exactly one of the two.
 
 ## 2. Pinned release-plz toolchain selection
 

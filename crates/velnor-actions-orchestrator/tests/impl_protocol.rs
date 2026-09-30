@@ -12,10 +12,9 @@ use velnor_actions_orchestrator::{
     assemble_merge_request, merge_internal, merge_passed, plan_internal, plan_outputs,
     publish_plan_files, response_path_for, write_request_parts,
 };
-use velnor_actions_workflow_renderer::render::RenderContext;
-use velnor_actions_workflow_renderer::steps::write_request_step;
 use velnor_actions_workflow_renderer::{
-    CONCURRENCY_CANCEL, CONCURRENCY_GROUP, checkout_step, plan_step, render_workflow_ir,
+    CONCURRENCY_CANCEL, CONCURRENCY_GROUP, checkout_step, plan_step, render::RenderContext,
+    render_workflow_ir, steps::write_request_step,
 };
 
 use crate::impl_common::{
@@ -343,6 +342,8 @@ fn render_gate_roundtrip_accepts_plan() -> TestResult {
             runs_on: "ubuntu-26.04".to_owned(),
             needs: Vec::new(),
             condition: None,
+            permissions: None,
+            environment: None,
             steps: vec![
                 checkout_step(&pin)?,
                 write_request_step("plan-v1")?,
@@ -359,11 +360,10 @@ fn render_gate_roundtrip_accepts_plan() -> TestResult {
                 .collect(),
             push_branches: vec!["main".to_owned()],
             merge_group: true,
+            workflow_dispatch: None,
+            schedule: None,
         },
-        permissions: Permissions {
-            contents: "read".to_owned(),
-            actions: "read".to_owned(),
-        },
+        permissions: Permissions::default(),
         concurrency: Concurrency {
             group: CONCURRENCY_GROUP.to_owned(),
             cancel_in_progress: CONCURRENCY_CANCEL.to_owned(),

@@ -15,6 +15,7 @@ fn valid_release() -> RustReleaseConfig {
         enabled: true,
         manifest_path: "Cargo.toml".to_owned(),
         packages: vec!["demo-crate".to_owned()],
+        publishable_workspace: false,
         environment: "demo-publish".to_owned(),
         authentication: ReleaseAuthentication::TrustedPublishing,
         release_pr: true,
