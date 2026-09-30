@@ -24,8 +24,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{
     ContractError, EntryCacheIds, ExecuteTaskIds, ExecuteTaskRef, PlanGenerator, PlanPackage,
-    StackExtension, TaskConfiguration, TaskGenerator, TaskIdentity, VcsInputs, digest_b3,
-    input_digest,
+    StackExtension, TaskConfiguration, TaskGenerator, TaskIdentity, TaskInput, VcsInputs,
+    digest_b3, input_digest,
 };
 use velnor_actions_mise::ToolCatalog;
 use velnor_actions_rust::{
@@ -34,7 +34,12 @@ use velnor_actions_rust::{
 
 use crate::discover::Discovery;
 
-pub(crate) use self::identities::extension_bundle;
+/// Synthetic identity-input path carrying the input-closure digest.
+///
+/// The closure digest is content, not a file: this path never resolves
+/// against the checkout. It only names the [`TaskInput`] slot so the
+/// closure binds into `input_digest` through the standard envelope.
+pub(crate) const CLOSURE_INPUT_PATH: &str = "velnor/input-closure";
 
 /// Manifest path for a manifest key.
 pub(crate) fn manifest_for_key(key: &str) -> String {
@@ -166,15 +171,17 @@ pub(crate) struct IdentityInputs<'a> {
     pub(crate) generator: &'a PlanGenerator,
     /// Typed adapter extension.
     pub(crate) extension: StackExtension,
+    /// Canonical digest over the task's complete input closure.
+    pub(crate) closure_digest: &'a str,
 }
 
 /// Input digest over the contract identity envelope.
 ///
 /// The envelope binds argv, configuration, toolchain, platform, the
-/// behavior-affecting environment contract, and the full adapter
-/// extension; content the plan path cannot observe (source bytes,
-/// lockfile bytes) is resolved by the coverage closure instead of
-/// being fabricated here.
+/// behavior-affecting environment contract, the full adapter extension,
+/// and the canonical input-closure digest resolved against the checkout:
+/// a source edit flips `input_digest` even when the changed-work hint
+/// misses it.
 pub(crate) fn task_identity_digest(inputs: &IdentityInputs<'_>) -> Result<String, ContractError> {
     let group = inputs.group;
     let mut dependencies = group.depends_on.clone();
@@ -211,7 +218,10 @@ pub(crate) fn task_identity_digest(inputs: &IdentityInputs<'_>) -> Result<String
             compile_driver: group.compile_driver.clone(),
             test_runner: group.test_runner.clone(),
         },
-        inputs: Vec::new(),
+        inputs: vec![TaskInput {
+            path: CLOSURE_INPUT_PATH.to_owned(),
+            digest: inputs.closure_digest.to_owned(),
+        }],
         dependencies,
         vcs: VcsInputs {
             commit: None,

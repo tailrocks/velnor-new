@@ -293,7 +293,7 @@ mod tests {
         assert!(baseline_entry_for(&entry, &base).is_none());
         let digest = digest_b3(b"d");
         let manifest = serde_json::json!({
-            "schema": 1,
+            "schema": 2,
             "repository_id": digest,
             "source_commit": base,
             "ref": "refs/heads/testmain",
@@ -312,5 +312,12 @@ mod tests {
         std::fs::write(entry.join("baseline.json"), manifest.to_string()).expect("manifest");
         let found = baseline_entry_for(&entry, &base).expect("entry");
         assert_eq!(found.artifact_name, name);
+        let mut stale = manifest;
+        stale["schema"] = serde_json::json!(1);
+        std::fs::write(entry.join("baseline.json"), stale.to_string()).expect("stale");
+        assert!(
+            baseline_entry_for(&entry, &base).is_none(),
+            "schema 1 baselines bound no source bytes and never load"
+        );
     }
 }

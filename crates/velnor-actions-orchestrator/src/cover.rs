@@ -340,6 +340,11 @@ pub(crate) fn revalidate_coverage(
         miss_reasons.insert("source_missing".to_owned());
         return;
     };
+    if manifest.schema != crate::internal_plan::snapshot::CANONICAL_SCHEMA_VERSION {
+        signals.planning_failed = true;
+        miss_reasons.insert("cache_corrupt".to_owned());
+        return;
+    }
     for obligation in covered {
         let Some(proof) = &obligation.baseline_proof else {
             signals.planning_failed = true;
@@ -357,6 +362,7 @@ pub(crate) fn revalidate_coverage(
         };
         let bound = task.task_digest == obligation.task_digest
             && task.input_digest == obligation.input_digest
+            && task.closure_digest == obligation.closure_digest
             && proof.run_id() == task.proof_run_id
             && proof.artifact_id() == manifest.artifact_id
             && proof.artifact_name() == manifest.artifact_name;

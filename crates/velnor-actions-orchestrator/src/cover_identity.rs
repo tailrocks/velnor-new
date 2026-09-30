@@ -11,6 +11,10 @@ pub(crate) mod generator;
 #[cfg(test)]
 #[path = "cover_identity_tests.rs"]
 mod cover_identity_tests;
+// Test fixtures live apart so the test module keeps its size gate.
+#[cfg(test)]
+#[path = "cover_identity_fixtures.rs"]
+mod cover_identity_fixtures;
 
 use std::collections::BTreeSet;
 
@@ -28,7 +32,7 @@ use crate::external_data::{
 use crate::internal::plan_obligation::{changed_keys, member_changed};
 use crate::internal_plan::closure::resolve_closure_at_root;
 use crate::internal_plan::identities::{extension_bundle_with_snapshot, platform_id_for_group};
-use crate::internal_plan::snapshot::ExecutionSnapshot;
+use crate::internal_plan::snapshot::{ExecutionSnapshot, canonical_digest};
 use crate::internal_plan::{nextest_config_for, toolchain_id};
 use crate::merge::BaselineManifest;
 
@@ -36,28 +40,26 @@ pub(crate) use self::generator::{
     SOURCE_BUILD_REASON, is_source_build, resolve_generator_identity,
 };
 
-/// Refusal reason when the adapter extension forbids coverage, if any.
+/// Cover-time closure digest for one group, or the refusal reason.
 ///
-/// Groups missing from discovery refuse outright; undeclared reads and
-/// conservative execution refuse as before; extension bytes must
-/// validate (schema plus slots, not just the task-ID prefix); and the
-/// input closure must resolve completely against the checkout, with
-/// unknown inputs forbidding coverage. Graph digests come from the
-/// once-built snapshot index, never a per-group rescan.
-fn coverage_refusal(
+/// Undeclared reads and conservative execution refuse as before;
+/// extension bytes must validate (schema plus slots, not just the
+/// task-ID prefix); and the input closure must resolve completely
+/// against the checkout, with unknown inputs forbidding coverage.
+/// Graph digests come from the once-built snapshot index, never a
+/// per-group rescan. The caller compares the returned live digest
+/// against the baseline entry: only an exact match covers, so a source
+/// edit refuses even when the changed-work hint misses it.
+fn cover_closure_digest(
     snapshot: &ExecutionSnapshot,
     discovery: &Discovery,
-    task_id: &str,
+    group: &velnor_actions_rust::TaskGroup,
     root: &std::path::Path,
     catalog: &velnor_actions_mise::ToolCatalog,
     label: &str,
-) -> Option<String> {
-    let group = discovery
-        .task_groups
-        .iter()
-        .find(|group| group.task_id == task_id)?;
+) -> Result<String, String> {
     if group.undeclared_reads {
-        return Some("undeclared_inputs".to_owned());
+        return Err("undeclared_inputs".to_owned());
     }
     let bundle = extension_bundle_with_snapshot(
         snapshot,
@@ -68,13 +70,13 @@ fn coverage_refusal(
     );
     let ext = group.identity_extension(&bundle.inputs());
     if ext.coverage_eligible().is_err() || ext.conservative_execution_required() {
-        return Some("undeclared_inputs".to_owned());
+        return Err("undeclared_inputs".to_owned());
     }
     if let Err(err) = validate_rust_extension(&ext.to_stack_extension()) {
-        return Some(format!("extension_unverified:{err}"));
+        return Err(format!("extension_unverified:{err}"));
     }
     let Ok(toolchain) = toolchain_id(group, catalog) else {
-        return Some("toolchain_unresolvable".to_owned());
+        return Err("toolchain_unresolvable".to_owned());
     };
     let platform = platform_id_for_group(label, group);
     let closure = resolve_closure_at_root(
@@ -86,12 +88,34 @@ fn coverage_refusal(
         &platform,
     );
     if closure.verify_complete().is_err() {
-        return Some(format!(
+        return Err(format!(
             "incomplete_inputs:{}",
             closure.unknown_inputs().join(",")
         ));
     }
-    None
+    canonical_digest(&closure).map_err(|_| "closure_digest_failed".to_owned())
+}
+
+/// Live closure digest verified against the baseline entry.
+///
+/// Resolves the cover-time closure (refusing unknown inputs, undeclared
+/// reads, and unverified extensions) and requires an exact match with
+/// the recorded entry digest; any drift executes instead of covering.
+fn verified_closure_digest(
+    snapshot: &ExecutionSnapshot,
+    discovery: &Discovery,
+    group: &velnor_actions_rust::TaskGroup,
+    entry_digest: &str,
+    root: &std::path::Path,
+    catalog: &velnor_actions_mise::ToolCatalog,
+    label: &str,
+) -> Result<String, String> {
+    let live = cover_closure_digest(snapshot, discovery, group, root, catalog, label)?;
+    if entry_digest == live {
+        Ok(live)
+    } else {
+        Err("closure_mismatch".to_owned())
+    }
 }
 
 /// Mark one obligation covered from validated provenance only.
@@ -121,9 +145,10 @@ fn mark_covered(
 
 /// Mark covered obligations and prune the matrix; returns covered count.
 ///
-/// Changed obligations never cover, even on identity match: the
-/// changed hint guards identities that may miss semantic inputs.
-/// Baseline provenance is set by the caller from the returned count.
+/// Coverage needs an exact closure-digest match against the checkout:
+/// the changed hint stays as defense-in-depth only and never decides
+/// soundness alone. Baseline provenance is set by the caller from the
+/// returned count.
 pub(crate) fn apply_coverage(
     plan: &mut Plan,
     manifest: &BaselineManifest,
@@ -163,10 +188,11 @@ pub(crate) fn apply_coverage(
         if member_changed(group, changed, &keys) {
             continue;
         }
-        if let Some(reason) = coverage_refusal(
+        if let Err(reason) = verified_closure_digest(
             &snapshot,
             discovery,
-            &obligation.task_id,
+            group,
+            &task.closure_digest,
             inputs.root,
             inputs.catalog,
             &plan.runner.label,
