@@ -137,10 +137,10 @@ fn plan_json_matches_github_outputs() -> TestResult {
 }
 
 #[test]
-fn malformed_toolfiles_recommend_without_writes() -> TestResult {
+fn malformed_toolchain_recommends_without_writes() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     let root = repo.path();
-    fs::write(root.join("mise.toml"), "[tools\nrust = \n")?;
+    fs::write(root.join("mise.toml"), "[tools]\n")?;
     fs::write(root.join("rust-toolchain.toml"), "[[[\n")?;
     let before = snapshot(root)?;
     let prep = prepare(root)?;
@@ -148,7 +148,6 @@ fn malformed_toolfiles_recommend_without_writes() -> TestResult {
     let report = preview_into(&prep, parent.path().join("preview"))?;
     let text = report.recommendations.join("\n");
     assert!(text.contains("tooling_input_invalid"), "{text}");
-    assert!(text.contains("mise.toml"), "{text}");
     assert!(text.contains("rust-toolchain.toml"), "{text}");
     assert!(text.contains("continues with its pinned tools"), "{text}");
     assert_eq!(report.files_written.len(), 2);

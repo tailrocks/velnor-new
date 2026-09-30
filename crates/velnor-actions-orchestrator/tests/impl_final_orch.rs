@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 use std::fs;
 
-use crate::impl_common::{TestResult, config_with_branch, make_repo};
+use crate::impl_common::{TestResult, config_with_branch, err_of, make_repo};
 use velnor_actions_orchestrator::{
     CONFLICTING_TOOL_VALUES, DEFAULT_EXTERNAL_DATA_MAX_AGE_SECS, ExternalDataFreshness, ToolParse,
     UNSUPPORTED_TOOL_VALUE, check_tool_inputs, coverage_schema_known, critical_path_for_groups,
@@ -64,28 +64,21 @@ fn tool_inputs_report_presence_parse_values_digests() -> TestResult {
 }
 
 #[test]
-fn malformed_tool_inputs_reported_invalid() -> TestResult {
+fn malformed_mise_wrapper_fails_closed_before_toolcheck() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     let root = repo.path();
     fs::write(root.join("mise.toml"), "[tools\nrust = \n")?;
-    let prep = prepare(root)?;
-    let mise = prep
-        .discovery
-        .tool_checks
-        .iter()
+    let err = err_of(prepare(root).map(|_| ()), "malformed wrapper")?;
+    assert!(
+        err.to_string().contains("wrapper_invalid"),
+        "diagnostic: {err}"
+    );
+    let mise = check_tool_inputs(root)
+        .into_iter()
         .find(|check| check.path == "mise.toml")
         .ok_or("missing mise check")?;
     assert!(matches!(mise.parse, ToolParse::Invalid { .. }));
     assert!(mise.digest.is_some());
-    assert!(
-        prep.discovery
-            .recommendations
-            .iter()
-            .any(|line| line.contains("tooling_input_invalid") && line.contains("mise.toml")),
-        "{:?}",
-        prep.discovery.recommendations
-    );
-    assert!(!prep.discovery.task_groups.is_empty(), "own pins continue");
     Ok(())
 }
 
