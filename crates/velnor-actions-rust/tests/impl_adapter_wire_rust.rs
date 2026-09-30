@@ -2,7 +2,7 @@
 //! derive signals, consumption, and index modes (F1R/F2 rust halves).
 use velnor_actions_contract::{ContractError, digest_b3, validate_rust_extension};
 use velnor_actions_rust::tasks::{
-    ExtensionInputs, RustTaskIdentityExtension, TaskGroup, TaskKind, cargo_payload_argv,
+    DigestSlot, ExtensionInputs, RustTaskIdentityExtension, TaskGroup, TaskKind, cargo_payload_argv,
 };
 use velnor_actions_rust::{
     CompileDriver, DeriveInputs, GroupExtensionInputs, IndexMode, NextestProfile, PackageRecord,
@@ -113,8 +113,8 @@ fn extension_carries_workspace_and_profile() {
         driver: CompileDriver::Cargo,
         runner: TestRunner::CargoTest,
         config_digest: &config,
-        lock_digest: None,
-        nextest_digest: None,
+        lock_digest: DigestSlot::Unknown("unprobed".to_owned()),
+        nextest_digest: DigestSlot::Unknown("unprobed".to_owned()),
         kind: TaskKind::Test,
         archive_source: None,
         rerun_inputs: Some(&[]),
@@ -134,8 +134,8 @@ fn extension_carries_workspace_and_profile() {
         graph_digest: &graph,
         targets: &targets,
         config_digest: &config,
-        lock_digest: None,
-        nextest_digest: None,
+        lock_digest: DigestSlot::Unknown("unprobed".to_owned()),
+        nextest_digest: DigestSlot::Unknown("unprobed".to_owned()),
         archive_source: None,
         rerun_inputs: Some(&[]),
         has_build_script: false,

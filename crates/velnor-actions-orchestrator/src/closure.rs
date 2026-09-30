@@ -79,20 +79,34 @@ impl ClosureBuilder {
         }
     }
 }
-/// Digest of a [`Provenance`], when it binds content.
-fn known_digest(provenance: Provenance) -> Option<String> {
+/// Digest slot of a [`Provenance`], preserving absence distinctly.
+///
+/// Externally guarded inputs have no producer today; if one ever
+/// appears it maps to unknown (fail-closed: unverified by us).
+fn digest_slot(provenance: Provenance) -> velnor_actions_rust::tasks::DigestSlot {
+    use velnor_actions_rust::tasks::DigestSlot;
     match provenance {
-        Provenance::Known { digest } => Some(digest),
-        _ => None,
+        Provenance::Known { digest } => DigestSlot::Known(digest),
+        Provenance::AbsentProven { evidence } => DigestSlot::AbsentProven(evidence),
+        Provenance::Unknown { reason } => DigestSlot::Unknown(reason),
+        Provenance::GuardedExternally { guard } => {
+            DigestSlot::Unknown(format!("guarded_externally:{guard}"))
+        }
     }
 }
-/// Lockfile content digest at `root`, when the file exists and reads.
-pub(crate) fn lock_digest_at_root(root: &Path, manifest: &str) -> Option<String> {
-    known_digest(probe_lockfile(root, manifest))
+/// Lockfile slot at `root`: content, proven absence, or unknown.
+pub(crate) fn lock_digest_at_root(
+    root: &Path,
+    manifest: &str,
+) -> velnor_actions_rust::tasks::DigestSlot {
+    digest_slot(probe_lockfile(root, manifest))
 }
-/// Nextest-config content digest at `root`, when the file reads.
-pub(crate) fn nextest_digest_at_root(root: &Path, profile_config: Option<&str>) -> Option<String> {
-    known_digest(probe_nextest_config(root, profile_config))
+/// Nextest-config slot at `root`: content, proven absence, or unknown.
+pub(crate) fn nextest_digest_at_root(
+    root: &Path,
+    profile_config: Option<&str>,
+) -> velnor_actions_rust::tasks::DigestSlot {
+    digest_slot(probe_nextest_config(root, profile_config))
 }
 /// Resolve one task group's closure against the checkout at `root`.
 pub(crate) fn resolve_closure_at_root(

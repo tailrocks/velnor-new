@@ -1,7 +1,9 @@
 //! F2 closure cases: identity attachment, rerun producer, shards, archives.
 use std::collections::BTreeSet;
 
-use velnor_actions_rust::tasks::{ExtensionInputs, RustTaskIdentityExtension, parse_rerun_changed};
+use velnor_actions_rust::tasks::{
+    DigestSlot, ExtensionInputs, RustTaskIdentityExtension, parse_rerun_changed,
+};
 use velnor_actions_rust::{
     CompileDriver, DepKind, DeriveInputs, Evidence, EvidenceStrength, GroupExtensionInputs,
     LocalEdge, NextestProfile, PackageRecord, ProfileSource, RustExecutionProfile, TargetRecord,
@@ -94,8 +96,8 @@ fn digests<'a>(
         graph_digest: "graph",
         targets,
         config_digest: "config",
-        lock_digest: Some("lock"),
-        nextest_digest: Some("nextest"),
+        lock_digest: DigestSlot::Known("lock".to_owned()),
+        nextest_digest: DigestSlot::Known("nextest".to_owned()),
         archive_source: Some("stack/rust/crates/a/build/default"),
         rerun_inputs: rerun,
         has_build_script: package.has_build_script,
@@ -248,8 +250,8 @@ fn archive_trust_follows_source_build() {
         driver: CompileDriver::Cargo,
         runner: TestRunner::CargoNextest,
         config_digest: "config",
-        lock_digest: Some("lock"),
-        nextest_digest: Some("nextest"),
+        lock_digest: DigestSlot::Known("lock".to_owned()),
+        nextest_digest: DigestSlot::Known("nextest".to_owned()),
         kind: TaskKind::Build,
         archive_source: Some("stack/rust/root/build/default"),
         rerun_inputs: Some(&[]),

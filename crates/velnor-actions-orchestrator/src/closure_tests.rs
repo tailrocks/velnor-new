@@ -229,3 +229,30 @@ fn source_edits_flip_and_classes_exclude_explicitly() {
     }
     assert!(clippy.verify_complete().is_ok());
 }
+
+#[test]
+fn digest_slots_preserve_absence_distinctly() {
+    use velnor_actions_rust::tasks::DigestSlot;
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let root = tmp.path();
+    std::fs::write(root.join("Cargo.toml"), "[package]\n").expect("manifest");
+    assert!(matches!(
+        lock_digest_at_root(root, "Cargo.toml"),
+        DigestSlot::AbsentProven(_)
+    ));
+    assert!(matches!(
+        nextest_digest_at_root(root, None),
+        DigestSlot::AbsentProven(_)
+    ));
+    std::fs::write(root.join("Cargo.lock"), "lock-bytes").expect("lock");
+    assert!(matches!(
+        lock_digest_at_root(root, "Cargo.toml"),
+        DigestSlot::Known(_)
+    ));
+    std::fs::create_dir_all(root.join(".config")).expect("config dir");
+    std::fs::write(root.join(".config/nextest.toml"), "[profile.ci]\n").expect("nextest");
+    assert!(matches!(
+        nextest_digest_at_root(root, None),
+        DigestSlot::Known(_)
+    ));
+}

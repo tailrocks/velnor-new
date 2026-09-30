@@ -1,7 +1,7 @@
 //! F2 closure cases: committed-header comparison, alint content, ownership.
 use std::path::PathBuf;
 
-use velnor_actions_rust::tasks::parse_rerun_changed;
+use velnor_actions_rust::tasks::{DigestSlot, parse_rerun_changed};
 use velnor_actions_rust::{
     CompileDriver, EvidenceFile, NextestProfile, ProfileInputs, TaskGroup, TaskKind, TestRunner,
     committed_profile_differs, detect_profile, inspect_toolchain_file, is_generated_output,
@@ -87,8 +87,8 @@ fn declared_inputs_shift_extension_identity() {
             graph_digest: "graph",
             targets: &targets,
             config_digest: "config",
-            lock_digest: None,
-            nextest_digest: None,
+            lock_digest: DigestSlot::Unknown("unprobed".to_owned()),
+            nextest_digest: DigestSlot::Unknown("unprobed".to_owned()),
             archive_source: None,
             rerun_inputs: Some(&[]),
             has_build_script: false,

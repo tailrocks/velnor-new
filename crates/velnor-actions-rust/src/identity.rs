@@ -18,7 +18,7 @@ use velnor_actions_contract::ContractError;
 use crate::argv::{entry_metadata, require_nextest_for_shards, shards_allowed};
 use crate::evidence::Evidence;
 use crate::profile::TestRunner;
-use crate::task_identity::{ExtensionInputs, RustTaskIdentityExtension};
+use crate::task_identity::{DigestSlot, ExtensionInputs, RustTaskIdentityExtension};
 use crate::tasks::{TaskGroup, TaskKind};
 
 /// Digests and build facts the orchestrator supplies per extension.
@@ -38,10 +38,10 @@ pub struct GroupExtensionInputs<'a> {
     pub targets: &'a [String],
     /// Cargo config and build-script input digests.
     pub config_digest: &'a str,
-    /// `Cargo.lock` digest, when the lockfile is available.
-    pub lock_digest: Option<&'a str>,
-    /// `.config/nextest.toml` digest for Nextest profiles.
-    pub nextest_digest: Option<&'a str>,
+    /// `Cargo.lock` slot, resolved against the checkout.
+    pub lock_digest: DigestSlot,
+    /// `.config/nextest.toml` slot for Nextest profiles.
+    pub nextest_digest: DigestSlot,
     /// Build task id producing the archive (Nextest `Build` only).
     pub archive_source: Option<&'a str>,
     /// Declared `rerun-if-changed` inputs (`None` means unknown).
@@ -75,8 +75,8 @@ impl TaskGroup {
             driver: self.compile_driver,
             runner: self.test_runner,
             config_digest: inputs.config_digest,
-            lock_digest: inputs.lock_digest,
-            nextest_digest: inputs.nextest_digest,
+            lock_digest: inputs.lock_digest.clone(),
+            nextest_digest: inputs.nextest_digest.clone(),
             kind: self.kind,
             archive_source: inputs.archive_source,
             rerun_inputs: inputs.rerun_inputs,

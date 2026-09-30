@@ -2,7 +2,7 @@
 
 use velnor_actions_contract::cachekey::stack_extension_id;
 use velnor_actions_rust::tasks::{
-    ExtensionInputs, RustTaskIdentityExtension, TaskKind, parse_rerun_changed,
+    DigestSlot, ExtensionInputs, RustTaskIdentityExtension, TaskKind, parse_rerun_changed,
     require_nextest_for_shards, shard_task_id, shards_allowed,
 };
 use velnor_actions_rust::{CompileDriver, TestRunner};
@@ -23,10 +23,12 @@ fn extension() -> RustTaskIdentityExtension {
         test_runner: TestRunner::CargoNextest,
         config_digest: velnor_actions_contract::digest_b3(b"config"),
         nextest_digest: Some(velnor_actions_contract::digest_b3(b"nextest")),
+        nextest_slot: DigestSlot::Known(velnor_actions_contract::digest_b3(b"nextest")),
         kind: "nextest".to_owned(),
         task_kind: TaskKind::Nextest,
         undeclared_reads: false,
         lock_digest: None,
+        lock_slot: DigestSlot::Unknown("unprobed".to_owned()),
         archive: None,
         rerun_inputs: Vec::new(),
         declared_inputs: Vec::new(),
@@ -102,8 +104,8 @@ fn constructor_inputs<'a>(
         driver: CompileDriver::Cargo,
         runner: TestRunner::CargoNextest,
         config_digest: "config",
-        lock_digest: Some("lock"),
-        nextest_digest: Some("nextest"),
+        lock_digest: DigestSlot::Known("lock".to_owned()),
+        nextest_digest: DigestSlot::Known("nextest".to_owned()),
         kind: TaskKind::Nextest,
         archive_source: None,
         rerun_inputs: Some(&[]),

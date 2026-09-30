@@ -9,6 +9,40 @@ use velnor_actions_contract::ContractError;
 use crate::profile::{CompileDriver, TestRunner};
 use crate::tasks::TaskKind;
 
+/// Provenance of one digest slot (lockfile, Nextest config).
+///
+/// Only [`DigestSlot::Known`] binds content; [`DigestSlot::AbsentProven`]
+/// binds proven absence, and [`DigestSlot::Unknown`] blocks reuse and
+/// coverage until the orchestrator resolves the slot. Absence and
+/// ignorance never collapse: an unobserved lockfile is unknown, never
+/// proven absent.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DigestSlot {
+    /// Content digest bound.
+    Known(String),
+    /// Proven absent, with evidence.
+    AbsentProven(String),
+    /// Unresolved, with reason; blocks reuse and coverage.
+    Unknown(String),
+}
+
+impl DigestSlot {
+    /// The bound digest, when this slot binds content.
+    #[must_use]
+    pub fn as_known(&self) -> Option<&str> {
+        match self {
+            Self::Known(digest) => Some(digest),
+            Self::AbsentProven(_) | Self::Unknown(_) => None,
+        }
+    }
+
+    /// Whether this slot blocks reuse and coverage (unknown only).
+    #[must_use]
+    pub fn is_unknown(&self) -> bool {
+        matches!(self, Self::Unknown(_))
+    }
+}
+
 /// Typed Rust task-identity extension (cache §1); unknown schemas disable reuse.
 #[derive(Debug, Clone, Serialize)]
 pub struct RustTaskIdentityExtension {
@@ -40,6 +74,9 @@ pub struct RustTaskIdentityExtension {
     pub config_digest: String,
     /// `.config/nextest.toml` digest for Nextest profiles.
     pub nextest_digest: Option<String>,
+    /// Typed Nextest-config slot (serialization keeps the digest slot).
+    #[serde(skip_serializing)]
+    pub nextest_slot: DigestSlot,
     /// Rust task kind plus test/archive identity.
     pub kind: String,
     /// Typed task kind (serialization keeps the string slot).
@@ -49,6 +86,9 @@ pub struct RustTaskIdentityExtension {
     pub undeclared_reads: bool,
     /// `Cargo.lock` digest, when the lockfile is available.
     pub lock_digest: Option<String>,
+    /// Typed lockfile slot (serialization keeps the digest slot).
+    #[serde(skip_serializing)]
+    pub lock_slot: DigestSlot,
     /// Archive identity (producing build task id) for Nextest archives only.
     pub archive: Option<String>,
     /// Declared `rerun-if-changed` build inputs, sorted.
@@ -82,10 +122,10 @@ pub struct ExtensionInputs<'a> {
     pub runner: TestRunner,
     /// Cargo config and build-script input digests.
     pub config_digest: &'a str,
-    /// `Cargo.lock` digest, when the lockfile is available.
-    pub lock_digest: Option<&'a str>,
-    /// `.config/nextest.toml` digest for Nextest profiles.
-    pub nextest_digest: Option<&'a str>,
+    /// `Cargo.lock` slot, resolved against the checkout.
+    pub lock_digest: DigestSlot,
+    /// `.config/nextest.toml` slot for Nextest profiles.
+    pub nextest_digest: DigestSlot,
     /// Rust task kind.
     pub kind: TaskKind,
     /// Build task id producing the archive (Nextest `Build` only).
@@ -147,11 +187,13 @@ impl RustTaskIdentityExtension {
             compile_driver: inputs.driver,
             test_runner: inputs.runner,
             config_digest: inputs.config_digest.to_owned(),
-            nextest_digest: inputs.nextest_digest.map(str::to_owned),
+            nextest_digest: inputs.nextest_digest.as_known().map(str::to_owned),
+            nextest_slot: inputs.nextest_digest.clone(),
             kind: inputs.kind.as_str().to_owned(),
             task_kind: inputs.kind,
             undeclared_reads: inputs.has_build_script && inputs.rerun_inputs.is_none(),
-            lock_digest: inputs.lock_digest.map(str::to_owned),
+            lock_digest: inputs.lock_digest.as_known().map(str::to_owned),
+            lock_slot: inputs.lock_digest.clone(),
             archive,
             rerun_inputs: inputs.rerun_inputs.map_or_else(Vec::new, sorted_unique),
             declared_inputs: sorted_unique(inputs.declared_inputs),

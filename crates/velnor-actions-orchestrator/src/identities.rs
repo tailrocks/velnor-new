@@ -119,10 +119,10 @@ pub(crate) struct ExtensionBundle {
     config_digest: String,
     /// Whether the package carries a build script.
     has_build_script: bool,
-    /// Lockfile content digest, when resolved against the checkout.
-    lock_digest: Option<String>,
-    /// Nextest-config content digest, when resolved.
-    nextest_digest: Option<String>,
+    /// Lockfile slot, resolved against the checkout.
+    lock_digest: velnor_actions_rust::tasks::DigestSlot,
+    /// Nextest-config slot, resolved against the checkout.
+    nextest_digest: velnor_actions_rust::tasks::DigestSlot,
     /// Declared rerun inputs; `Some([])` proves no build script reads.
     rerun_inputs: Option<Vec<String>>,
 }
@@ -138,8 +138,8 @@ impl ExtensionBundle {
             graph_digest: &self.graph_digest,
             targets: &self.targets,
             config_digest: &self.config_digest,
-            lock_digest: self.lock_digest.as_deref(),
-            nextest_digest: self.nextest_digest.as_deref(),
+            lock_digest: self.lock_digest.clone(),
+            nextest_digest: self.nextest_digest.clone(),
             archive_source: None,
             rerun_inputs: self.rerun_inputs.as_deref(),
             has_build_script: self.has_build_script,
@@ -183,8 +183,8 @@ pub(crate) fn extension_bundle_with_snapshot(
         targets: Vec::new(),
         config_digest: tool_config_digest(&discovery.tool_checks),
         has_build_script: false,
-        lock_digest: None,
-        nextest_digest: None,
+        lock_digest: velnor_actions_rust::tasks::DigestSlot::Unknown("no_checkout".to_owned()),
+        nextest_digest: velnor_actions_rust::tasks::DigestSlot::Unknown("no_checkout".to_owned()),
         rerun_inputs: None,
     };
     for workspace in &discovery.workspaces {
