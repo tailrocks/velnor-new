@@ -1,7 +1,7 @@
-//! Baseline lookup and shard-proof selection tests.
+//! Baseline lookup selection tests.
 //!
-//! Declared via `#[path]` from `shard.rs` under `cfg(test)` so the
-//! lookup module keeps the file size gate.
+//! Declared via `#[path]` from `shard_lookup.rs` under `cfg(test)` so
+//! the lookup module keeps the file size gate.
 
 use super::*;
 

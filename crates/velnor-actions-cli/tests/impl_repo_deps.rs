@@ -65,6 +65,10 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
         // Reviewed OS shim for the P09 atomic directory exchange; already
         // in the lockfile via tempfile, zero new crates.
         "rustix",
+        // Reviewed hash primitive for generator SHA-256 identity; replaces
+        // hand-rolled SHA-256 so release-pin comparison cannot drift from
+        // the audited implementation. Default features only.
+        "sha2",
     ];
     for (dir, _) in MEMBERS {
         let body = manifest(dir)?;

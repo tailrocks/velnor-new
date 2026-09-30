@@ -19,6 +19,10 @@ mod provenance_check_tests;
 #[cfg(test)]
 #[path = "provenance_proof_tests.rs"]
 mod provenance_proof_tests;
+// Expected-repository resolution tests live apart as well.
+#[cfg(test)]
+#[path = "provenance_resolve_tests.rs"]
+mod provenance_resolve_tests;
 
 /// Expected provenance values the manifest must match exactly.
 #[derive(Debug, Clone)]

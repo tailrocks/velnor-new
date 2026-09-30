@@ -11,6 +11,10 @@ pub(crate) mod generator;
 #[cfg(test)]
 #[path = "cover_identity_tests.rs"]
 mod cover_identity_tests;
+// Structured-proof tests live apart for the same reason.
+#[cfg(test)]
+#[path = "cover_proof_tests.rs"]
+mod cover_proof_tests;
 // Test fixtures live apart so the test module keeps its size gate.
 #[cfg(test)]
 #[path = "cover_identity_fixtures.rs"]
