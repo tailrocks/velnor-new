@@ -1,6 +1,13 @@
 //! Provenance validation tests (P04 matrix unit cases).
 //!
 //! Declared via `#[path]` from `provenance_check.rs` under `cfg(test)`.
+//! Anchor cases build minimal git fixtures on disk and resolve them
+//! through the real `git config` query in
+//! [`crate::origin::origin_url_via_git`]: nothing here spawns git
+//! (orchestrator sources never spawn), and nothing hand-reads the
+//! fixture config back.
+
+use std::path::Path;
 
 use super::*;
 
@@ -34,6 +41,57 @@ fn manifest_and_expected(base: &str) -> (BaselineManifest, ProvenanceExpectation
         repository_id: Some(digest),
     };
     (manifest, expected)
+}
+
+/// Minimal git dir: HEAD, config, and the object/ref scaffolding real
+/// `git config` needs for repository discovery.
+fn write_git_dir(root: &Path, config: &str) {
+    let git = root.join(".git");
+    std::fs::create_dir_all(git.join("objects")).expect("objects");
+    std::fs::create_dir_all(git.join("refs")).expect("refs");
+    std::fs::write(git.join("HEAD"), "ref: refs/heads/testmain\n").expect("HEAD");
+    std::fs::write(git.join("config"), config).expect("config");
+}
+
+/// Fresh git fixture whose origin is `url`, when given.
+fn make_git_repo(url: Option<&str>) -> tempfile::TempDir {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let config = match url {
+        Some(url) => {
+            format!("[core]\n\trepositoryformatversion = 0\n[remote \"origin\"]\n\turl = {url}\n")
+        }
+        None => "[core]\n\trepositoryformatversion = 0\n".to_owned(),
+    };
+    write_git_dir(tmp.path(), &config);
+    tmp
+}
+
+/// Point an existing fixture's origin at `url`.
+fn set_origin(root: &Path, url: &str) {
+    let config =
+        format!("[core]\n\trepositoryformatversion = 0\n[remote \"origin\"]\n\turl = {url}\n");
+    std::fs::write(root.join(".git/config"), config).expect("config");
+}
+
+/// Link `wt` to the fixture at `main` the way `git worktree add` does:
+/// a `.git` file plus the administrative dir under the common git dir.
+fn link_worktree(main: &Path, wt: &Path) {
+    let admin = main.join(".git/worktrees/wt");
+    std::fs::create_dir_all(&admin).expect("worktrees");
+    std::fs::create_dir_all(wt).expect("wt");
+    std::fs::write(wt.join(".git"), format!("gitdir: {}\n", admin.display())).expect("wt git");
+    std::fs::write(
+        admin.join("gitdir"),
+        format!("{}\n", wt.join(".git").display()),
+    )
+    .expect("gitdir");
+    std::fs::write(admin.join("commondir"), "../..\n").expect("commondir");
+    std::fs::write(admin.join("HEAD"), "ref: refs/heads/testmain\n").expect("wt HEAD");
+}
+
+/// Expected anchor for the `o/r` fixture origin.
+fn fixture_anchor() -> String {
+    digest_b3("github.com/o/r".as_bytes())
 }
 
 #[test]
@@ -84,16 +142,12 @@ fn repository_anchor_and_origins_normalize() {
         Some("github.com/o/r".to_owned())
     );
     assert!(normalize_origin_url("not-a-url").is_none());
-    let tmp = tempfile::tempdir().expect("tempdir");
-    assert!(repository_anchor_from_origin(tmp.path()).is_none());
-    std::fs::create_dir(tmp.path().join(".git")).expect("git");
-    std::fs::write(
-        tmp.path().join(".git/config"),
-        "[remote \"origin\"]\n\turl = https://github.com/o/r.git\n",
-    )
-    .expect("config");
-    let anchor = repository_anchor_from_origin(tmp.path()).expect("anchor");
-    assert_eq!(anchor, digest_b3("github.com/o/r".as_bytes()));
+    let repo = make_git_repo(Some("https://github.com/o/r.git"));
+    let root = repo.path();
+    let anchor = repository_anchor_from_origin(root).expect("anchor");
+    assert_eq!(anchor, fixture_anchor());
+    set_origin(root, "git@github.com:O/R.git");
+    assert_eq!(repository_anchor_from_origin(root).expect("scp"), anchor);
     let base = "a".repeat(40);
     let (mut manifest, mut expected) = manifest_and_expected(&base);
     expected.repository_id = Some(anchor.clone());
@@ -109,4 +163,55 @@ fn repository_anchor_and_origins_normalize() {
         validate_provenance(&manifest, &digest_b3(b"m"), &expected).expect_err("unanchored"),
         "repository_unanchored".to_owned()
     );
+}
+
+#[test]
+fn linked_worktree_anchor_shares_remote_identity() {
+    let repo = make_git_repo(Some("https://github.com/o/r.git"));
+    let root = repo.path();
+    let holder = tempfile::tempdir().expect("holder");
+    let wt = holder.path().join("wt");
+    link_worktree(root, &wt);
+    assert!(wt.join(".git").is_file(), "linked worktree has a .git file");
+    let main = repository_anchor_from_origin(root).expect("main anchor");
+    assert_eq!(main, fixture_anchor());
+    assert_eq!(repository_anchor_from_origin(&wt).expect("wt anchor"), main);
+}
+
+#[test]
+fn include_defined_origin_resolves() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let root = tmp.path();
+    let inc = root.join("shared.inc");
+    std::fs::write(
+        &inc,
+        "[remote \"origin\"]\n\turl = https://github.com/o/r.git\n",
+    )
+    .expect("include");
+    write_git_dir(root, &format!("[include]\n\tpath = {}\n", inc.display()));
+    let local = std::fs::read_to_string(root.join(".git/config")).expect("config");
+    assert!(
+        !local.contains("[remote \"origin\"]"),
+        "origin must live only in the include"
+    );
+    assert_eq!(
+        repository_anchor_from_origin(root).expect("anchor"),
+        fixture_anchor()
+    );
+}
+
+#[test]
+fn missing_and_mismatched_origins_fail_closed() {
+    let plain = tempfile::tempdir().expect("tempdir");
+    assert!(repository_anchor_from_origin(plain.path()).is_none());
+    let repo = make_git_repo(None);
+    let root = repo.path();
+    assert!(repository_anchor_from_origin(root).is_none());
+    set_origin(root, "https://github.com/o/r.git");
+    let anchor = repository_anchor_from_origin(root).expect("anchor");
+    set_origin(root, "https://github.com/evil/other.git");
+    let other = repository_anchor_from_origin(root).expect("other anchor");
+    assert_ne!(anchor, other);
+    set_origin(root, "not-a-url");
+    assert!(repository_anchor_from_origin(root).is_none());
 }

@@ -157,26 +157,13 @@ fn check_velnor_identity(root: &Path, config: &VelnorConfig) -> Result<(), Orche
 
 /// True when the local `origin` URL normalizes to the canonical identity.
 ///
-/// Git itself resolves `remote.origin.url` in the working tree, so linked
-/// worktrees (shared config outside their git dir), includes, and worktree
-/// configuration all follow Git semantics. Only that one key counts; other
-/// sections, other keys, and decoy remotes never grant the identity.
-/// A missing or mismatched origin fails; nothing is fetched.
+/// Resolution runs through the shared [`crate::origin::origin_url_via_git`]
+/// helper, so linked worktrees, includes, and worktree configuration all
+/// follow Git semantics. Only that one key counts; other sections, other
+/// keys, and decoy remotes never grant the identity. A missing or
+/// mismatched origin fails; nothing is fetched.
 fn origin_matches(root: &Path) -> bool {
-    let Ok(output) = GitRequest::config(vec![
-        OsString::from("--get"),
-        OsString::from("remote.origin.url"),
-    ])
-    .run_in(root) else {
-        return false;
-    };
-    if !output.success {
-        return false;
-    }
-    let Ok(url) = output.stdout_text("git") else {
-        return false;
-    };
-    url_matches_identity(url.trim())
+    crate::origin::origin_url_via_git(root).is_some_and(|url| url_matches_identity(&url))
 }
 
 /// True when a remote URL normalizes to the canonical identity.
