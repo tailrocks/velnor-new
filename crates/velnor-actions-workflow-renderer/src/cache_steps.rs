@@ -5,11 +5,10 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, Step, StepKind, target_for_runner_label};
+use velnor_actions_contract::{Job, Step, StepKind};
 
 use crate::{
     RenderError,
-    setup::MiseSetup,
     steps::{action_step, validate_uses},
 };
 
@@ -191,8 +190,8 @@ pub fn cache_action_step(
 
 fn validate_cache_path(layer: &str, path: &str) -> Result<(), RenderError> {
     let second = path.split('/').nth(1);
-    let sources_ok = path.starts_with("$CARGO_HOME/") && matches!(second, Some("registry" | "git"));
-    if layer == "sources" && sources_ok
+    let legacy_ok = path.starts_with("$CARGO_HOME/") && matches!(second, Some("registry" | "git"));
+    if layer == "sources" && (legacy_ok || sources_subset_ok(path))
         || layer == "task" && path == TASK_ARTIFACTS_DIR
         || layer == "tools" && path == TOOLS_CACHE_PATH
     {
@@ -200,6 +199,27 @@ fn validate_cache_path(layer: &str, path: &str) -> Result<(), RenderError> {
     } else {
         Err(RenderError::BadCommand(format!("bad_cache_path:{path}")))
     }
+}
+
+/// P08 sources subset under the owned Cargo home expression.
+fn sources_subset_ok(path: &str) -> bool {
+    const HOME: &str = "${{ runner.temp }}/velnor/cargo";
+    if path.contains("..") || path.contains("credentials") {
+        return false;
+    }
+    let Some(suffix) = path.strip_prefix(&format!("{HOME}/")) else {
+        return false;
+    };
+    if suffix.starts_with("registry/src") {
+        return false;
+    }
+    matches!(
+        suffix,
+        ".crates.toml" | ".crates2.json" | "bin" | "registry/index" | "registry/cache" | "git/db"
+    ) || suffix.starts_with("registry/index/")
+        || suffix.starts_with("registry/cache/")
+        || suffix.starts_with("git/db/")
+        || suffix.starts_with("bin/")
 }
 
 /// Tools-cache key: target, mise, generator, job, plus tool-file hash.
@@ -286,40 +306,10 @@ fn rename_step(mut step: Step, name: &str) -> Result<Step, RenderError> {
     Ok(step)
 }
 
-/// Wrap the setup step with tools restore (before) and save (last).
-///
-/// Restore precedes setup so the `sha256`-verified mise binary is
-/// installed after any cached bytes; save closes the job so every
-/// on-demand install lands in the cache. Setup-less jobs are
-/// untouched; tools-named steps already present fail closed.
-/// # Errors
-pub(crate) fn ensure_tools_cache(
-    job_id: &str,
-    job: &mut Job,
-    mise: &MiseSetup,
-    generator_version: &str,
-    runs_on: &str,
-) -> Result<(), RenderError> {
-    let Some(setup_at) = crate::setup::setup_index(job) else {
-        return Ok(());
-    };
-    if job
-        .steps
-        .iter()
-        .any(|step| step.name == TOOLS_RESTORE_NAME || step.name == TOOLS_SAVE_NAME)
-    {
-        return Err(RenderError::InvalidWorkflow(format!(
-            "duplicate_tools_cache:{job_id}"
-        )));
-    }
-    let target = target_for_runner_label(runs_on).ok_or_else(|| {
-        RenderError::InvalidWorkflow(format!("tools_cache_unsupported_target:{job_id}"))
-    })?;
-    let key = tools_cache_key(target, &mise.version, generator_version, job_id)?;
-    job.steps.insert(setup_at, tools_restore_step(&key)?);
-    job.steps.push(tools_save_step(&key)?);
-    Ok(())
-}
+// P08: the manual `ensure_tools_cache` wrapper is removed. Tools use the
+// Mise action's built-in cache (`cache_p08::ensure_setup_p08`); the
+// `tools_*` constructors above remain for unit-test compatibility only
+// and are never emitted into strict workflows.
 
 /// Key segments: nonempty alphanumerics plus `.-_`, never `latest`.
 fn is_key_segment(value: &str) -> bool {

@@ -191,8 +191,8 @@ fn ver_freshness_entry_schema() {
 }
 
 #[test]
-fn ver_overridable_actions_are_exact_eight() {
-    assert_eq!(OVERRIDABLE_ACTIONS.len(), 8);
+fn ver_overridable_actions_are_exact_nine() {
+    assert_eq!(OVERRIDABLE_ACTIONS.len(), 9);
     assert_eq!(
         OVERRIDABLE_ACTIONS,
         [
@@ -204,6 +204,7 @@ fn ver_overridable_actions_are_exact_eight() {
             "actions/cache/save",
             "jdx/mr-boxington-action",
             "asamarts/alint",
+            "Swatinem/rust-cache",
         ]
     );
 }

@@ -6,6 +6,9 @@
 
 pub mod build;
 pub mod cache;
+pub mod cache_sources;
+pub mod cache_transport;
+pub mod cache_trust;
 pub mod catalog;
 pub mod command;
 pub mod error;
@@ -20,6 +23,7 @@ pub mod preflight;
 pub mod requests;
 pub mod restore;
 pub mod reuse;
+pub mod runtime_paths;
 pub mod steps;
 pub mod template;
 mod toml_parser;

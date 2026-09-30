@@ -104,6 +104,10 @@ fn orch_spawns_no_processes_and_confines_shell_wrappers() -> TestResult {
             "non-spawn std::process use only: {hit}: {body}"
         );
     }
+    // P08 C4: source_prep.rs emits one fixed `sh -c` probe-and-fetch template
+    // (metadata probe, offline skip, explicit miss fetch) over validated roots.
+    // Step IR has no conditions, so the shell conditional is required; roots
+    // are fail-closed validated, never arbitrary shell.
     let mut sh_files = std::collections::BTreeSet::new();
     for path in src_files()? {
         let text = std::fs::read_to_string(&path)?;
@@ -117,8 +121,12 @@ fn orch_spawns_no_processes_and_confines_shell_wrappers() -> TestResult {
     }
     assert_eq!(
         sh_files,
-        std::collections::BTreeSet::from(["pins.rs".to_owned(), "qualify.rs".to_owned()]),
-        "fixed sh wrappers live in pins/qualify only"
+        std::collections::BTreeSet::from([
+            "pins.rs".to_owned(),
+            "qualify.rs".to_owned(),
+            "source_prep.rs".to_owned(),
+        ]),
+        "fixed sh wrappers live in pins/qualify/source_prep only"
     );
     Ok(())
 }

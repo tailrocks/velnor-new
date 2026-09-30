@@ -117,50 +117,42 @@ fn check_setup_first(job: &JobText) -> Result<(), String> {
     }
 }
 
-/// Setup position is legal at 0-1, or at 2 behind the tools restore.
-fn setup_is_early(job: &JobText, at: usize) -> bool {
-    at <= 1 || (at == 2 && job.steps[1].name == RESTORE_TOOLS_TEXT)
+/// Setup position is legal at 0-1 (right after Checkout; P08 has no
+/// manual tools restore ahead of it).
+fn setup_is_early(_job: &JobText, at: usize) -> bool {
+    at <= 1
 }
 
-/// Setup Mise must pin the action cache off: default `cache:true` walks the
-/// workspace hashing tool files and ELOOPs on the symlink-loop fixture.
-fn check_setup_cache_off(job: &JobText) -> Result<(), String> {
+/// Setup Mise must enable the qualified built-in cache: `cache:true` with
+/// an explicit tool-union `cache_key` (never the workspace-hashing default
+/// that ELOOPs on the symlink-loop fixture, never a job-role suffix).
+fn check_setup_cache_on(job: &JobText) -> Result<(), String> {
     for step in job.steps.iter().filter(|s| s.name == "Setup Mise") {
-        for need in ["cache: \"false\"", "cache_save: \"false\""] {
+        for need in [
+            "cache: \"true\"",
+            "cache_save: \"true\"",
+            "cache_key: mise-v1-",
+        ] {
             if !step.body.contains(need) {
                 return Err(format!("{}: Setup Mise misses {need}", job.id));
             }
+        }
+        if step.body.contains("hashFiles(") {
+            return Err(format!("{}: Setup Mise must not hashFiles", job.id));
         }
     }
     Ok(())
 }
 
-/// Every setup job must restore tools before setup and save after it, over
-/// the mise data dir only with a tool-file-hashed key.
-fn check_tools_cache(job: &JobText) -> Result<(), String> {
-    let Some(setup_at) = job.steps.iter().position(|s| s.name == "Setup Mise") else {
-        return Ok(());
-    };
-    let Some(restore_at) = job.steps.iter().position(|s| s.name == RESTORE_TOOLS_TEXT) else {
-        return Err(format!("{}: Setup Mise without tools restore", job.id));
-    };
-    let Some(save_at) = job.steps.iter().position(|s| s.name == SAVE_TOOLS_TEXT) else {
-        return Err(format!("{}: Setup Mise without tools save", job.id));
-    };
-    if !(restore_at < setup_at && setup_at < save_at) {
-        return Err(format!("{}: {restore_at} {setup_at} {save_at}", job.id));
-    }
-    for (name, at) in [(RESTORE_TOOLS_TEXT, restore_at), (SAVE_TOOLS_TEXT, save_at)] {
-        let step = &job.steps[at];
-        for need in [
-            "actions/cache/",
-            "key: mise-tools-v1-",
-            "hashFiles(",
-            "path: ~/.local/share/mise",
-        ] {
-            if !step.body.contains(need) {
-                return Err(format!("{}: {name} misses {need}:\n{}", job.id, step.body));
-            }
+/// No manual tools archives: the built-in Mise cache owns the Mise data
+/// dir exactly once (P08: one owner per path, no role-suffixed copies).
+fn check_no_manual_tools_cache(job: &JobText) -> Result<(), String> {
+    for step in &job.steps {
+        if step.name == RESTORE_TOOLS_TEXT || step.name == SAVE_TOOLS_TEXT {
+            return Err(format!("{}: manual tools cache must go", job.id));
+        }
+        if step.body.contains("key: mise-tools-v1-") {
+            return Err(format!("{}: role-suffixed tools key must go", job.id));
         }
     }
     Ok(())
@@ -220,8 +212,8 @@ fn check_tree(yaml: &str) -> Result<Vec<JobText>, String> {
     }
     for job in &jobs {
         check_setup_first(job)?;
-        check_setup_cache_off(job)?;
-        check_tools_cache(job)?;
+        check_setup_cache_on(job)?;
+        check_no_manual_tools_cache(job)?;
         check_provisioned(job)?;
         check_named(job)?;
     }
