@@ -2,7 +2,7 @@
 //!
 //! Typed levels only: raw permission strings never cross this boundary.
 //! [`JobPermissions::expected`] fixes the exact matrix per
-//! [`ReleaseRole`](crate::release_jobs::ReleaseRole); [`JobPermissions::validate`]
+//! [`crate::release_jobs::ReleaseRole`]; [`JobPermissions::validate`]
 //! enforces it plus the two structural rules (`id-token: write` needs a
 //! pinned environment, validation roles never hold `contents: write`).
 

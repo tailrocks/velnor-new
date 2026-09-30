@@ -135,6 +135,31 @@ pub(crate) fn nested_repo() -> Result<TempDir, Box<dyn std::error::Error>> {
     Ok(dir)
 }
 
+/// Repo mirroring the termpane shape: a root package plus a nested `fuzz`
+/// workspace with a path dependency on its parent.
+///
+/// `cargo metadata --no-deps` omits cross-workspace targets from
+/// `packages`; discovery must skip and record the edge, never fail.
+pub(crate) fn nested_path_dep_repo() -> Result<TempDir, Box<dyn std::error::Error>> {
+    let dir = TempDir::new()?;
+    let root = dir.path();
+    git_init(root)?;
+    write_velnor(root)?;
+    fs::write(
+        root.join("Cargo.toml"),
+        "[package]\nname = \"termpane\"\nversion = \"0.1.0\"\nedition = \"2021\"\n[workspace]\nexclude = [\"fuzz\"]\n",
+    )?;
+    fs::create_dir_all(root.join("src"))?;
+    fs::write(root.join("src/lib.rs"), "pub fn f() {}\n")?;
+    fs::create_dir_all(root.join("fuzz/src"))?;
+    fs::write(
+        root.join("fuzz/Cargo.toml"),
+        "[package]\nname = \"fuzz\"\nversion = \"0.0.0\"\nedition = \"2021\"\n[workspace]\n[dependencies]\ntermpane = { path = \"..\" }\n",
+    )?;
+    fs::write(root.join("fuzz/src/lib.rs"), "pub fn f() {}\n")?;
+    Ok(dir)
+}
+
 /// Repo whose root manifest is not parseable TOML.
 pub(crate) fn malformed_repo() -> Result<TempDir, Box<dyn std::error::Error>> {
     let dir = TempDir::new()?;

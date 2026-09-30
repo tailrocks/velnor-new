@@ -39,6 +39,7 @@ fn discovery(groups: Vec<TaskGroup>) -> Discovery {
         statuses: Vec::new(),
         workspaces: Vec::new(),
         task_groups: groups,
+        feature_fallbacks: Vec::new(),
         tool_checks: Vec::new(),
         clippy_memory: ClippyMemoryPlan {
             groups: Vec::new(),

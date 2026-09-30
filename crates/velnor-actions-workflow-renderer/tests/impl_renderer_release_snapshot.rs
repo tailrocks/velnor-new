@@ -83,7 +83,7 @@ jobs:
           persist-credentials: "false"
           ref: 0123456789abcdef0123456789abcdef01234567
       - name: Publish
-        run: release-plz release --config .github/velnor-release-plz.toml
+        run: release-plz release --config .github/release-plz.toml
   release-reconcile:
     name: Release reconcile
     runs-on: ubuntu-24.04

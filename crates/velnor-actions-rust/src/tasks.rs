@@ -365,20 +365,20 @@ fn doctest_group(base: &GroupBase<'_>, id: &str, clippy_id: &str) -> TaskGroup {
     group
 }
 
-/// Existing non-doc target flags in canonical order.
+/// Test-bearing non-doc target flags; `test = false` targets get none.
 fn target_flags(package: &PackageRecord) -> Vec<String> {
     let mut flags = Vec::new();
-    for (kind, flag, needs_test) in [
-        ("lib", "--lib", false),
-        ("bin", "--bins", false),
-        ("test", "--tests", false),
-        ("example", "--examples", true),
-        ("bench", "--benches", true),
+    for (kind, flag) in [
+        ("lib", "--lib"),
+        ("bin", "--bins"),
+        ("test", "--tests"),
+        ("example", "--examples"),
+        ("bench", "--benches"),
     ] {
         let hit = package
             .targets
             .iter()
-            .any(|target| target.kind == kind && (!needs_test || target.test));
+            .any(|target| target.kind == kind && target.test);
         if hit {
             flags.push(flag);
         }
@@ -386,10 +386,13 @@ fn target_flags(package: &PackageRecord) -> Vec<String> {
     flags.into_iter().map(str::to_owned).collect()
 }
 
-/// Whether any target can carry unit or integration tests.
+/// Whether any target is exercised by `cargo test` (mirrors `test`).
 fn has_test_targets(package: &PackageRecord) -> bool {
     package.targets.iter().any(|target| {
-        matches!(target.kind.as_str(), "lib" | "bin" | "test")
-            || ((target.kind == "example" || target.kind == "bench") && target.test)
+        target.test
+            && matches!(
+                target.kind.as_str(),
+                "lib" | "bin" | "test" | "example" | "bench"
+            )
     })
 }

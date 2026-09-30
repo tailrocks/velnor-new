@@ -137,10 +137,13 @@ pub fn select_release_set(request: &ReleaseRequest<'_>) -> Result<ReleaseSelecti
             },
         });
     }
+    // Release resolves one workspace without the discovery candidate list,
+    // so every unresolvable path edge fails closed here, as before.
     let record = parse_metadata_json(
         request.metadata_json,
         request.repo_root,
         request.manifest_hint,
+        &BTreeSet::new(),
     )
     .map_err(ReleaseError::Metadata)?;
     let facts = parse_release_facts(request.metadata_json, request.manifest_hint)?;

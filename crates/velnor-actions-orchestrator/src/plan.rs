@@ -219,6 +219,7 @@ fn workflow_section(out: &mut String, prep: &GenerationPreparation) {
     push(out, &format!("  Actionlint: {ACTIONLINT_VERSION} pinned"));
     push(out, &format!("  Action pins: {CHECKOUT_USES}"));
     ineligible_lines(out, prep);
+    feature_lines(out, prep);
     push(
         out,
         "  Pull-request execution narrows crate obligations through its event-time affected-work plan.",
@@ -344,6 +345,31 @@ fn ineligible_lines(out: &mut String, prep: &GenerationPreparation) {
                 &format!(
                     "  Ineligible: {} has no test targets; no test command emitted",
                     group.task_id
+                ),
+            );
+        }
+    }
+}
+
+/// Per-crate feature narrowing, never silent.
+fn feature_lines(out: &mut String, prep: &GenerationPreparation) {
+    for fallback in &prep.discovery.feature_fallbacks {
+        let requested = fallback.requested.join(",");
+        if fallback.used_defaults() {
+            push(
+                out,
+                &format!(
+                    "  Features: {} [{}] declares none of [{requested}]; using default features",
+                    fallback.package_name, fallback.configuration
+                ),
+            );
+        } else {
+            let applied = fallback.applied.join(",");
+            push(
+                out,
+                &format!(
+                    "  Features: {} [{}] requested [{requested}]; applied [{applied}]",
+                    fallback.package_name, fallback.configuration
                 ),
             );
         }

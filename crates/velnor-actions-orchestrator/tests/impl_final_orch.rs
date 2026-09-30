@@ -274,6 +274,10 @@ fn external_data_skip_needs_declared_fresh_identity() -> TestResult {
 #[test]
 fn clippy_configs_schedule_in_separate_groups() -> TestResult {
     let repo = make_repo(TWO_CONFIG)?;
+    fs::write(
+        repo.path().join("Cargo.toml"),
+        "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n[features]\nall = []\n",
+    )?;
     let prep = prepare(repo.path())?;
     let memory = &prep.discovery.clippy_memory;
     assert_eq!(memory.groups.len(), 2);

@@ -15,7 +15,7 @@ use velnor_actions_orchestrator::{
 };
 use velnor_actions_rust::parse_metadata_json;
 
-use self::perf_fixtures_p13::{malformed_repo, nested_repo, workspace_repo};
+use self::perf_fixtures_p13::{malformed_repo, nested_path_dep_repo, nested_repo, workspace_repo};
 use self::perf_harness_p13::{
     commit_two, obligation_task_ids, perf_line, plan_at, plan_two_commits, timed,
 };
@@ -127,6 +127,32 @@ fn detection_preserved_for_nested_and_independent() -> TestResult {
     Ok(())
 }
 
+/// A nested workspace with a path dependency on its parent skips the
+/// cross-workspace edge instead of failing discovery (termpane shape).
+#[test]
+fn nested_cross_workspace_path_dep_skips_not_fails() -> TestResult {
+    let repo = nested_path_dep_repo()?;
+    let root = repo.path();
+    let prep = prepare(root)?;
+    let mut roots: Vec<String> = prep
+        .discovery
+        .workspaces
+        .iter()
+        .map(|w| w.record.workspace_root.clone())
+        .collect();
+    roots.sort();
+    assert_eq!(roots, ["", "fuzz"]);
+    for workspace in &prep.discovery.workspaces {
+        if workspace.record.workspace_root == "fuzz" {
+            assert_eq!(workspace.record.members.len(), 1);
+            assert_eq!(workspace.record.skipped_edges.len(), 1);
+        } else {
+            assert!(workspace.record.skipped_edges.is_empty());
+        }
+    }
+    Ok(())
+}
+
 /// Member-manifest metadata parses to the same record as root metadata.
 ///
 /// Proves the reuse premise on real `cargo metadata` output: the only
@@ -152,8 +178,9 @@ fn member_metadata_parses_to_same_record() -> TestResult {
         }
         Ok(String::from_utf8(output.stdout)?)
     };
-    let from_root = parse_metadata_json(&run("Cargo.toml")?, root, "Cargo.toml")?;
-    let from_member = parse_metadata_json(&run("crates/c001/Cargo.toml")?, root, "member")?;
+    let known = std::collections::BTreeSet::new();
+    let from_root = parse_metadata_json(&run("Cargo.toml")?, root, "Cargo.toml", &known)?;
+    let from_member = parse_metadata_json(&run("crates/c001/Cargo.toml")?, root, "member", &known)?;
     assert_eq!(from_root, from_member, "parsed records identical");
     Ok(())
 }

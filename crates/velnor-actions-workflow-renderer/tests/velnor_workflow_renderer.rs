@@ -57,6 +57,8 @@ mod impl_renderer_release_spec;
 mod impl_renderer_release_tree;
 #[path = "impl_renderer_release_units.rs"]
 mod impl_renderer_release_units;
+#[path = "impl_renderer_release_version.rs"]
+mod impl_renderer_release_version;
 #[path = "impl_renderer_setup.rs"]
 mod impl_renderer_setup;
 #[path = "impl_renderer_steps.rs"]

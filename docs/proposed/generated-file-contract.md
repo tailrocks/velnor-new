@@ -8,23 +8,38 @@ Velnor V1 generate writes one complete tree:
 ```text
 .github/
 ├── actionlint.yaml
+├── release-plz-bootstrap.toml   # consumer-v1 only, release enabled
+├── release-plz.toml             # consumer-v1 only, release enabled
 └── workflows/
     ├── ci.yml
-    ├── velnor-release.yml        # velnor-repository-v1 only
-    └── velnor-qualification.yml  # velnor-repository-v1 only
+    ├── velnor-qualification.yml  # velnor-repository-v1 only
+    └── velnor-release.yml        # velnor-repository-v1, or consumer-v1 with release enabled
 ```
 
-The release and qualification workflows are emitted only for
+The qualification workflow is emitted only for
 `workflow.policy = "velnor-repository-v1"`; `consumer-v1` MUST NOT emit
-them. All three workflow files are rendered from typed workflow IR by
+it. `velnor-release.yml` is emitted for `velnor-repository-v1` (keeping
+its existing Velnor-internal meaning) and for `consumer-v1` when
+`[stacks.rust.release].enabled = true`, together with the two effective
+release-plz configs; with release disabled, `consumer-v1` emits none of
+the three. All workflow files are rendered from typed workflow IR by
 `velnor-actions-workflow-renderer`, each with an explicit `permissions:`
 block (least privilege for its role); see [workflow
 §3](workflow-contract.md).
+
+> Amendment 2026-09-30: the consumer release scope ([release
+> §11](release-contract.md)) overrides the earlier blanket
+> prohibition on consumer release emission. `consumer-v1` MUST emit
+> `velnor-release.yml` plus `.github/release-plz.toml` and
+> `.github/release-plz-bootstrap.toml` when
+> `[stacks.rust.release].enabled = true`, and MUST emit none of them
+> otherwise.
 
 | Output | Produces format | Write coordinator | Ownership rule |
 |---|---|---|---|
 | .github/actionlint.yaml | velnor-actions-actionlint | velnor-actions-orchestrator | Generated actionlint config; replaced with the complete .github tree |
 | .github/workflows/** | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Generated workflows; replaced with the complete .github tree |
+| .github/release-plz*.toml | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Generated effective release-plz configs (consumer-v1, release enabled); replaced with the complete .github tree |
 | mise.toml, mise.lock, rust-toolchain.toml | None | None | Repository-owned read-only inputs; never create or modify |
 
 Velnor V1 MUST NOT create .mise/tasks files or any other generated task

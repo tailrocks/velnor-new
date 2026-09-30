@@ -23,9 +23,9 @@ use crate::{
 /// Generated release workflow path inside the repository.
 pub const RELEASE_WORKFLOW_PATH: &str = ".github/workflows/velnor-release.yml";
 /// Generated effective normal-policy release-plz config path.
-pub const RELEASE_CONFIG_PATH: &str = ".github/velnor-release-plz.toml";
+pub const RELEASE_CONFIG_PATH: &str = ".github/release-plz.toml";
 /// Generated bootstrap-only release-plz config path.
-pub const RELEASE_BOOTSTRAP_CONFIG_PATH: &str = ".github/velnor-release-plz-bootstrap.toml";
+pub const RELEASE_BOOTSTRAP_CONFIG_PATH: &str = ".github/release-plz-bootstrap.toml";
 /// Every release-owned tree path, sorted.
 pub const RELEASE_TREE_PATHS: &[&str] = &[
     RELEASE_BOOTSTRAP_CONFIG_PATH,

@@ -191,7 +191,7 @@ fn url_matches_identity(value: &str) -> bool {
 }
 
 /// Split a remote URL into `(host, path)` for `scheme://` and scp forms.
-fn split_host_path(url: &str) -> Option<(&str, &str)> {
+pub(crate) fn split_host_path(url: &str) -> Option<(&str, &str)> {
     if let Some((_scheme, rest)) = url.split_once("://") {
         let after_user = rest.rsplit('@').next().unwrap_or(rest);
         let (host, path) = after_user.split_once('/')?;

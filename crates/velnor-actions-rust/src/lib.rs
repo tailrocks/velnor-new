@@ -14,6 +14,7 @@ pub mod graph;
 pub mod identity;
 pub mod index;
 pub mod metadata;
+pub mod metadata_edges;
 pub mod profile;
 mod profile_select;
 pub mod release_config;
@@ -47,9 +48,10 @@ pub use index::{
     build_index_walk, is_excluded, matches_glob, validate_pattern,
 };
 pub use metadata::{
-    DepKind, LocalEdge, METADATA_FORMAT_VERSION, MetadataError, PackageRecord, TargetRecord,
-    WorkspaceRecord, parse_metadata_json,
+    METADATA_FORMAT_VERSION, MetadataError, PackageRecord, TargetRecord, WorkspaceRecord,
+    parse_metadata_json,
 };
+pub use metadata_edges::{DepKind, LocalEdge, SkippedPathEdge};
 pub use profile::{
     AMBIGUOUS_DRIVER_CODE, AMBIGUOUS_RUNNER_CODE, CompileDriver, NextestProfile,
     PROFILE_CONFLICT_CODE, ProfileError, ProfileFinding, ProfileInputs, ProfileOutcome,

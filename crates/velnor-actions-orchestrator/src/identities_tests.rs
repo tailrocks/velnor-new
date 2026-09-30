@@ -144,6 +144,7 @@ fn formats_stay_single_and_graphs_relocate() {
             optional: false,
             target: None,
         }],
+        skipped_edges: Vec::new(),
     };
     let digest_of = |id: &str| {
         super::snapshot::canonical_digest(&snapshot_graph_for(&record(id))).expect("digest")
