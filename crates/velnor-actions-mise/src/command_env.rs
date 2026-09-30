@@ -30,8 +30,9 @@ pub const MISE_CARGO_HOME_ENV: &str = "MISE_CARGO_HOME";
 pub const RUSTUP_TOOLCHAIN_ENV: &str = "RUSTUP_TOOLCHAIN";
 
 /// Whether a key is reserved: isolation, install disable, or credentials.
-/// Credentials are `MISE_GITHUB_TOKEN` plus the `GITHUB_TOKEN`/`GH_TOKEN`
-/// aliases and `ACTIONS_RUNTIME_TOKEN`.
+/// Credentials are `MISE_GITHUB_TOKEN`, the `GITHUB_TOKEN`/`GH_TOKEN`
+/// aliases, `ACTIONS_RUNTIME_TOKEN`, and `CARGO_REGISTRY_TOKEN` (a repo
+/// task carrying it would silently disable trusted publishing).
 #[must_use]
 pub fn is_reserved_env_key(key: &str) -> bool {
     ISOLATION_ENV.iter().any(|(own, _)| *own == key)
@@ -41,8 +42,27 @@ pub fn is_reserved_env_key(key: &str) -> bool {
             "GITHUB_TOKEN",
             "GH_TOKEN",
             "ACTIONS_RUNTIME_TOKEN",
+            "CARGO_REGISTRY_TOKEN",
         ]
         .contains(&key)
+}
+
+/// Redact secret-looking values for `Debug`: names stay, values become
+/// `<redacted>` when [`velnor_actions_contract::is_secret_env_name`]
+/// matches. Non-secret pairs render unchanged.
+#[must_use]
+pub(crate) fn redact_env_for_debug(env: &[(OsString, OsString)]) -> Vec<(String, String)> {
+    env.iter()
+        .map(|(key, value)| {
+            let name = key.to_string_lossy().into_owned();
+            let shown = if velnor_actions_contract::is_secret_env_name(&name) {
+                "<redacted>".to_owned()
+            } else {
+                value.to_string_lossy().into_owned()
+            };
+            (name, shown)
+        })
+        .collect()
 }
 
 /// Which parent environment a child may see: bootstrap, verify, and

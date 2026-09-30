@@ -8,11 +8,12 @@ mod env;
 #[path = "command_output.rs"]
 mod output;
 
-use self::env::pairs_of;
 pub use self::env::{
     EnvPolicy, ISOLATION_ENV, MISE_CARGO_HOME_ENV, MISE_RUSTUP_HOME_ENV, NO_AUTO_INSTALL_ENV,
     RUSTUP_TOOLCHAIN_ENV, is_reserved_env_key, toolchain_env,
 };
+use self::env::{pairs_of, redact_env_for_debug};
+pub(crate) use self::output::redact_argv_for_debug;
 pub use self::output::{
     ProcessOutput, SPAWN_CANCELLED_MESSAGE, SPAWN_TIMEOUT_MESSAGE_PREFIX, is_cancel_or_timeout,
 };
@@ -78,13 +79,28 @@ impl CancelHandle {
 }
 
 /// A fully isolated, shell-free child-process invocation.
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// `Debug` redacts `--token` values and secret-looking env values so
+/// logs never carry credential material; shape stays visible.
+#[derive(Clone, PartialEq, Eq)]
 pub struct IsolatedCommand {
     program: OsString,
     args: Vec<OsString>,
     cwd: Option<PathBuf>,
     extra_env: Vec<(OsString, OsString)>,
     policy: EnvPolicy,
+}
+
+impl std::fmt::Debug for IsolatedCommand {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("IsolatedCommand")
+            .field("program", &self.program)
+            .field("args", &redact_argv_for_debug(&self.args))
+            .field("cwd", &self.cwd)
+            .field("extra_env", &redact_env_for_debug(&self.extra_env))
+            .field("policy", &self.policy)
+            .finish()
+    }
 }
 
 impl IsolatedCommand {

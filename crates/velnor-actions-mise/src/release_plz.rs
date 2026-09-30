@@ -166,6 +166,10 @@ pub struct ReleaseRequest {
     auth: ReleaseAuth,
 }
 
+#[expect(
+    clippy::missing_fields_in_debug,
+    reason = "token field redacted by design; Debug must never print it"
+)]
 impl Debug for ReleaseRequest {
     /// Debug without token material: only auth mode plus non-secret fields print.
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
@@ -176,7 +180,7 @@ impl Debug for ReleaseRequest {
             .field("dry_run", &self.dry_run)
             .field("json", &self.json)
             .field("auth", &self.auth)
-            .finish_non_exhaustive()
+            .finish()
     }
 }
 
