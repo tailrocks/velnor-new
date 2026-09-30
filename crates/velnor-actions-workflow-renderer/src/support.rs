@@ -171,6 +171,8 @@ pub(crate) fn alint_job(ctx: &RenderContext) -> Result<Job, RenderError> {
         runs_on: ctx.runs_on.clone(),
         needs: Vec::new(),
         condition: None,
+        permissions: None,
+        environment: None,
         steps: vec![
             checkout,
             Step {
@@ -205,6 +207,8 @@ pub(crate) fn policy_job(ctx: &RenderContext) -> Result<Job, RenderError> {
         runs_on: ctx.runs_on.clone(),
         needs: Vec::new(),
         condition: None,
+        permissions: None,
+        environment: None,
         steps: rendered,
     })
 }

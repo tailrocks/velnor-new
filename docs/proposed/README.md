@@ -67,5 +67,8 @@ V1 MUST NOT implement Docker, self-hosted runner registration, GitHub runner pro
 11. [Tooling input contract](tooling-input-contract.md) defines read-only inspection and human recommendations for Rust/Mise tool files.
 12. [Version policy](version-policy.md) defines latest-stable tool pins, freshness checks, exception expiry, and V2 version inventory.
 13. [Implementation plan](implementation-plan.md) defines the ordered work packages and merge gates.
+14. [Release contract](release-contract.md) defines consumer release-plz preparation, validation, protected publishing, and reconciliation.
+15. [Release config schema](release-config-schema.md) defines the exact `[stacks.rust.release]` fields, defaults, and validation errors.
+16. [Release coverage](release-coverage.md) maps release behaviors to their tests and snapshots.
 
 The listed documents are intended to be implementable without inventing behavior. If a behavior is not specified, fail with a clear error and add a decision to the spec before implementing it. Do not silently broaden V1.

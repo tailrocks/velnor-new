@@ -40,6 +40,8 @@ fn fixture_ir(steps: Vec<velnor_actions_contract::Step>) -> WorkflowIr {
             runs_on: LABEL.to_owned(),
             needs: Vec::new(),
             condition: None,
+            permissions: None,
+            environment: None,
             steps,
         },
     );
@@ -52,11 +54,10 @@ fn fixture_ir(steps: Vec<velnor_actions_contract::Step>) -> WorkflowIr {
                 .collect(),
             push_branches: vec!["main".to_owned()],
             merge_group: true,
+            workflow_dispatch: None,
+            schedule: None,
         },
-        permissions: Permissions {
-            contents: "read".to_owned(),
-            actions: "read".to_owned(),
-        },
+        permissions: Permissions::default(),
         concurrency: Concurrency {
             group: CONCURRENCY_GROUP.to_owned(),
             cancel_in_progress: CONCURRENCY_CANCEL.to_owned(),

@@ -102,6 +102,8 @@ pub fn msrv_job(
         runs_on: label.to_owned(),
         needs: Vec::new(),
         condition: None,
+        permissions: None,
+        environment: None,
         steps: vec![
             steps::checkout_step(checkout_uses)?,
             msrv_step(spec, argv, env)?,

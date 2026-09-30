@@ -1,0 +1,269 @@
+//! Release step-content gate cases (authority separation, argv safety).
+use std::collections::BTreeMap;
+use velnor_actions_contract::Step;
+use velnor_actions_workflow_renderer::RenderError;
+use velnor_actions_workflow_renderer::release_gates::{ReleaseConfigBinding, check_release_jobs};
+use velnor_actions_workflow_renderer::release_jobs::{
+    JobPermissions, ReleaseJobSpec, ReleaseRole, ReleaseWorkflowSpec,
+};
+use velnor_actions_workflow_renderer::release_spec::{
+    BootstrapPlan, DispatchInput, ReleaseConcurrency, ReleaseTriggers, publish_gate_condition,
+};
+use velnor_actions_workflow_renderer::release_tree::{
+    RELEASE_BOOTSTRAP_CONFIG_PATH, RELEASE_CONFIG_PATH,
+};
+use velnor_actions_workflow_renderer::{action_step, shell_step};
+
+pub(crate) const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
+pub(crate) const OTHER_SHA: &str = "abcdef0123456789abcdef0123456789abcdef01";
+pub(crate) const REPO: &str = "acme/widgets";
+pub(crate) const LABEL: &str = "ubuntu-24.04";
+pub(crate) const ENV: &str = "crates-io";
+
+/// Extract the `InvalidWorkflow` payload or fail the test.
+pub(crate) fn invalid(result: Result<(), RenderError>) -> String {
+    match result {
+        Err(RenderError::InvalidWorkflow(text)) => text,
+        Err(other) => panic!("wrong error: {other:?}"),
+        Ok(()) => panic!("expected rejection"),
+    }
+}
+
+pub(crate) fn checkout_uses() -> String {
+    format!("actions/checkout@{:040x}", 0)
+}
+
+pub(crate) fn checkout_step(sha: &str, persist: Option<&str>) -> Step {
+    let mut with = BTreeMap::new();
+    if let Some(value) = persist {
+        with.insert("persist-credentials".to_owned(), value.to_owned());
+    }
+    with.insert("ref".to_owned(), sha.to_owned());
+    action_step("Checkout", &checkout_uses(), with).expect("checkout")
+}
+
+pub(crate) fn shell(name: &str, argv: &[&str], env: &[(&str, &str)]) -> Step {
+    shell_step(
+        name,
+        argv.iter().map(ToString::to_string).collect(),
+        env.iter()
+            .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
+            .collect(),
+    )
+    .expect("fixed argv")
+}
+
+pub(crate) fn publish_argv(config: &str) -> Vec<&str> {
+    vec!["release-plz", "release", "--config", config]
+}
+
+pub(crate) fn bootstrap() -> BootstrapPlan {
+    BootstrapPlan {
+        plan_id: "plan-1".to_owned(),
+        repository: REPO.to_owned(),
+        source_sha: SHA.to_owned(),
+        registry: "crates_io".to_owned(),
+        packages: BTreeMap::from([("widgets".to_owned(), "1.2.3".to_owned())]),
+    }
+}
+
+pub(crate) fn job(
+    role: ReleaseRole,
+    steps: Vec<Step>,
+    condition: Option<&str>,
+    env: Option<&str>,
+) -> ReleaseJobSpec {
+    ReleaseJobSpec {
+        role,
+        display_name: format!("Release {}", role.as_str()),
+        runs_on: LABEL.to_owned(),
+        needs: Vec::new(),
+        condition: condition.map(str::to_owned),
+        environment: env.map(str::to_owned),
+        permissions: JobPermissions::expected(role),
+        steps,
+    }
+}
+
+pub(crate) fn spec(jobs: BTreeMap<String, ReleaseJobSpec>) -> ReleaseWorkflowSpec {
+    ReleaseWorkflowSpec {
+        name: "Velnor Release".to_owned(),
+        repository: REPO.to_owned(),
+        triggers: ReleaseTriggers {
+            push_branches: vec!["main".to_owned()],
+            schedule: None,
+            dispatch_inputs: vec![
+                DispatchInput {
+                    name: "plan".to_owned(),
+                    description: "approved plan".to_owned(),
+                    required: true,
+                    default: Some("plan-1".to_owned()),
+                },
+                DispatchInput {
+                    name: "source_sha".to_owned(),
+                    description: "approved source".to_owned(),
+                    required: true,
+                    default: Some(SHA.to_owned()),
+                },
+            ],
+        },
+        concurrency: ReleaseConcurrency {
+            group: "release-acme/widgets".to_owned(),
+            cancel_in_progress: false,
+        },
+        jobs,
+        bootstrap: bootstrap(),
+        publish_environment: ENV.to_owned(),
+        bootstrap_environment: "crates-io-bootstrap".to_owned(),
+    }
+}
+
+pub(crate) fn binding() -> ReleaseConfigBinding<'static> {
+    ReleaseConfigBinding {
+        effective: RELEASE_CONFIG_PATH,
+        bootstrap: RELEASE_BOOTSTRAP_CONFIG_PATH,
+    }
+}
+
+pub(crate) fn gated_spec() -> ReleaseWorkflowSpec {
+    let gate = publish_gate_condition(REPO, &bootstrap());
+    spec(BTreeMap::from([
+        (
+            "release-preparation".to_owned(),
+            job(
+                ReleaseRole::Preparation,
+                vec![shell("Run", &["echo", "ok"], &[])],
+                None,
+                None,
+            ),
+        ),
+        (
+            "release-preflight".to_owned(),
+            job(
+                ReleaseRole::Preflight,
+                vec![
+                    checkout_step(SHA, Some("false")),
+                    shell("Run", &["echo", "ok"], &[]),
+                ],
+                None,
+                None,
+            ),
+        ),
+        (
+            "release-publish".to_owned(),
+            job(
+                ReleaseRole::PublishOidc,
+                vec![
+                    checkout_step(SHA, Some("false")),
+                    shell("Publish", &publish_argv(RELEASE_CONFIG_PATH), &[]),
+                ],
+                Some(&gate),
+                Some(ENV),
+            ),
+        ),
+        (
+            "release-reconcile".to_owned(),
+            job(
+                ReleaseRole::Reconcile,
+                vec![shell("Run", &["echo", "ok"], &[])],
+                Some("always()"),
+                None,
+            ),
+        ),
+    ]))
+}
+
+pub(crate) fn job_steps(spec: &ReleaseWorkflowSpec, id: &str) -> Vec<Step> {
+    spec.jobs.get(id).expect("job").steps.clone()
+}
+
+pub(crate) fn with_steps(
+    mut spec: ReleaseWorkflowSpec,
+    id: &str,
+    steps: Vec<Step>,
+) -> ReleaseWorkflowSpec {
+    spec.jobs.get_mut(id).expect("job").steps = steps;
+    spec
+}
+
+#[test]
+fn preparation_forbids_secrets_tokens_and_inputs() {
+    assert!(check_release_jobs(&gated_spec(), &binding()).is_ok());
+    let leaked = with_steps(
+        gated_spec(),
+        "release-preparation",
+        vec![shell("Run", &["echo", "${{ secrets.TOKEN }}"], &[])],
+    );
+    assert!(
+        invalid(check_release_jobs(&leaked, &binding())).starts_with("secret_outside_bootstrap:")
+    );
+    let tokened = with_steps(
+        gated_spec(),
+        "release-preparation",
+        vec![shell(
+            "Run",
+            &["echo", "ok"],
+            &[("CARGO_REGISTRY_TOKEN", "x")],
+        )],
+    );
+    assert!(
+        invalid(check_release_jobs(&tokened, &binding()))
+            .starts_with("registry_token_outside_bootstrap:")
+    );
+    let interpolated = with_steps(
+        gated_spec(),
+        "release-preparation",
+        vec![shell("Run", &["echo", "github.event.inputs.plan"], &[])],
+    );
+    assert!(
+        invalid(check_release_jobs(&interpolated, &binding()))
+            .starts_with("dispatch_input_in_steps:")
+    );
+}
+
+#[test]
+fn preflight_requires_the_exact_approved_source() {
+    assert!(check_release_jobs(&gated_spec(), &binding()).is_ok());
+    for sha in [OTHER_SHA, "main", "v1.2.3"] {
+        let rebound = with_steps(
+            gated_spec(),
+            "release-preflight",
+            vec![
+                checkout_step(sha, Some("false")),
+                shell("Run", &["echo", "ok"], &[]),
+            ],
+        );
+        assert_eq!(
+            invalid(check_release_jobs(&rebound, &binding())),
+            "checkout_without_exact_source:release-preflight",
+            "for ref {sha}"
+        );
+    }
+    let missing = with_steps(
+        gated_spec(),
+        "release-preflight",
+        vec![shell("Run", &["echo", "ok"], &[])],
+    );
+    assert_eq!(
+        invalid(check_release_jobs(&missing, &binding())),
+        "checkout_without_exact_source:release-preflight"
+    );
+}
+
+#[test]
+fn checkouts_never_persist_credentials() {
+    for persist in [None, Some("true")] {
+        let dirty = with_steps(
+            gated_spec(),
+            "release-preflight",
+            vec![
+                checkout_step(SHA, persist),
+                shell("Run", &["echo", "ok"], &[]),
+            ],
+        );
+        assert_eq!(
+            invalid(check_release_jobs(&dirty, &binding())),
+            "checkout_with_credentials:release-preflight"
+        );
+    }
+}

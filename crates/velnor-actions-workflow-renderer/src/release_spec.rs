@@ -14,7 +14,7 @@ pub(crate) fn is_clean_text(value: &str, limit: usize) -> bool {
     !value.is_empty()
         && value.len() <= limit
         && !value.contains("${{")
-        && !value.chars().any(|ch| ch.is_control())
+        && !value.chars().any(char::is_control)
 }
 
 /// Validate a pinned environment name (charset, no expressions).

@@ -38,6 +38,8 @@ fn exact_triggers() -> Trigger {
             .collect(),
         push_branches: vec!["main".to_owned()],
         merge_group: true,
+        workflow_dispatch: None,
+        schedule: None,
     }
 }
 
@@ -54,6 +56,8 @@ fn plan_job() -> Result<Job, RenderError> {
         runs_on: LABEL.to_owned(),
         needs: Vec::new(),
         condition: None,
+        permissions: None,
+        environment: None,
         steps: vec![checkout_step(&checkout_pin())?, plan_step()],
     })
 }
@@ -64,10 +68,7 @@ fn fixture_ir() -> Result<WorkflowIr, RenderError> {
     Ok(WorkflowIr {
         name: "CI".to_owned(),
         triggers: exact_triggers(),
-        permissions: Permissions {
-            contents: "read".to_owned(),
-            actions: "read".to_owned(),
-        },
+        permissions: Permissions::default(),
         concurrency: exact_concurrency(),
         jobs,
     })
@@ -83,6 +84,8 @@ fn simple_job(display: &str, needs: Vec<String>, steps: Vec<Step>) -> Job {
         runs_on: LABEL.to_owned(),
         needs,
         condition: None,
+        permissions: None,
+        environment: None,
         steps,
     }
 }
@@ -217,6 +220,8 @@ fn final_gate_keeps_exact_name_and_condition() -> Result<(), RenderError> {
             runs_on: LABEL.to_owned(),
             needs: vec!["velnor-plan".to_owned()],
             condition: Some("always()".to_owned()),
+            permissions: None,
+            environment: None,
             steps: vec![checkout_step(&checkout_pin())?, merge_step()],
         },
     );
@@ -229,6 +234,8 @@ fn final_gate_keeps_exact_name_and_condition() -> Result<(), RenderError> {
             runs_on: LABEL.to_owned(),
             needs: vec!["velnor-plan".to_owned()],
             condition: None,
+            permissions: None,
+            environment: None,
             steps: vec![checkout_step(&checkout_pin())?, merge_step()],
         },
     );
@@ -241,6 +248,8 @@ fn final_gate_keeps_exact_name_and_condition() -> Result<(), RenderError> {
             runs_on: LABEL.to_owned(),
             needs: vec!["velnor-plan".to_owned()],
             condition: Some("always()".to_owned()),
+            permissions: None,
+            environment: None,
             steps: vec![checkout_step(&checkout_pin())?, merge_step()],
         },
     );
@@ -261,6 +270,8 @@ fn renderer_rejects_unvalidated_steps_inside_ir() -> Result<(), RenderError> {
             runs_on: LABEL.to_owned(),
             needs: vec!["velnor-plan".to_owned()],
             condition: None,
+            permissions: None,
+            environment: None,
             steps: vec![Step {
                 name: "Install".to_owned(),
                 kind: StepKind::Shell {
@@ -279,6 +290,8 @@ fn renderer_rejects_unvalidated_steps_inside_ir() -> Result<(), RenderError> {
             runs_on: LABEL.to_owned(),
             needs: vec!["velnor-plan".to_owned()],
             condition: None,
+            permissions: None,
+            environment: None,
             steps: vec![Step {
                 name: "Fetch".to_owned(),
                 kind: StepKind::Action {
@@ -297,6 +310,8 @@ fn renderer_rejects_unvalidated_steps_inside_ir() -> Result<(), RenderError> {
             runs_on: LABEL.to_owned(),
             needs: vec!["velnor-plan".to_owned()],
             condition: None,
+            permissions: None,
+            environment: None,
             steps: vec![shell_step(
                 "Focused",
                 vec!["true".to_owned()],

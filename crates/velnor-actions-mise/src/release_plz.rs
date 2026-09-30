@@ -176,7 +176,7 @@ impl Debug for ReleaseRequest {
             .field("dry_run", &self.dry_run)
             .field("json", &self.json)
             .field("auth", &self.auth)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 

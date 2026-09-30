@@ -76,7 +76,7 @@ fn doc(root: &Path, members: Vec<&str>, packages: Vec<Value>) -> String {
 }
 
 /// Root path helper (canonicalized temp dir).
-fn root_of(dir: &TempDir) -> Outcome<PathBuf> {
+fn root_of(dir: &TempDir) -> Result<PathBuf, Box<dyn std::error::Error>> {
     Ok(dir.path().canonicalize()?)
 }
 

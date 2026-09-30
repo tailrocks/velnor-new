@@ -49,33 +49,32 @@ fn input(name: &str, required: bool, default: Option<&str>) -> DispatchInput {
     }
 }
 
-fn config_problem(config: &RustReleaseConfig) -> String {
-    let Err(ContractError::Config {
-        key_path, problem, ..
-    }) = config.validate(FILE)
-    else {
-        panic!("release config must be rejected");
-    };
-    format!("{key_path} {problem}")
+fn config_problem(config: &RustReleaseConfig) -> Option<String> {
+    match config.validate(FILE) {
+        Err(ContractError::Config {
+            key_path, problem, ..
+        }) => Some(format!("{key_path} {problem}")),
+        _ => None,
+    }
 }
 
-fn identity_problem(workflow: &WorkflowIr) -> String {
-    let Err(ContractError::InvalidIdentity { field, problem }) = workflow.validate() else {
-        panic!("workflow IR must be rejected");
-    };
-    format!("{field} {problem}")
+fn identity_problem(workflow: &WorkflowIr) -> Option<String> {
+    match workflow.validate() {
+        Err(ContractError::InvalidIdentity { field, problem }) => {
+            Some(format!("{field} {problem}"))
+        }
+        _ => None,
+    }
 }
 
-fn decode_problem(document: &str) -> String {
+fn decode_problem(document: &str) -> Option<String> {
     let Err(decode) = serde_json::from_str::<RustReleaseConfig>(document) else {
-        panic!("document must be rejected: {document}");
+        return None;
     };
-    let ContractError::Config { problem, .. } =
-        ContractError::map_decode_error(FILE, &decode.to_string())
-    else {
-        panic!("decode failure must map to a config error");
-    };
-    problem
+    match ContractError::map_decode_error(FILE, &decode.to_string()) {
+        ContractError::Config { problem, .. } => Some(problem),
+        _ => None,
+    }
 }
 
 #[test]
@@ -91,7 +90,7 @@ fn release_disabled_by_default_and_enabled_needs_allowlist() {
     assert_eq!(valid_release().validate(FILE), Ok(()));
     let mut empty = valid_release();
     empty.packages.clear();
-    let got = config_problem(&empty);
+    let got = config_problem(&empty).expect("must reject");
     assert_eq!(got, "stacks.rust.release.packages empty_packages");
 }
 
@@ -104,7 +103,7 @@ fn release_rejects_unknown_fields_without_shell_yaml_uses() {
         r#"{"enabled":true,"bootstrap":{"package":"demo-crate","token":"abc"}}"#,
     ] {
         assert_eq!(
-            decode_problem(document),
+            decode_problem(document).expect("must reject"),
             "unknown_config_field",
             "for {document}"
         );
@@ -115,14 +114,22 @@ fn release_rejects_unknown_fields_without_shell_yaml_uses() {
 fn release_rejects_duplicate_unsorted_and_unsafe_selection() {
     let mut duplicate = valid_release();
     duplicate.packages = vec!["demo-crate".to_owned(), "demo-crate".to_owned()];
-    assert!(config_problem(&duplicate).ends_with("duplicate_package"));
+    assert!(
+        config_problem(&duplicate)
+            .expect("must reject")
+            .ends_with("duplicate_package")
+    );
     let mut unsorted = valid_release();
     unsorted.packages = vec!["demo-crate".to_owned(), "aaa-crate".to_owned()];
-    assert!(config_problem(&unsorted).ends_with("must_be_sorted"));
+    assert!(
+        config_problem(&unsorted)
+            .expect("must reject")
+            .ends_with("must_be_sorted")
+    );
     for name in "|../escape|a/b|has space|9bad|-bad|bad!|bad;run|bad$(x)|..".split('|') {
         let mut unsafe_name = valid_release();
         unsafe_name.packages = vec![name.to_owned()];
-        let got = config_problem(&unsafe_name);
+        let got = config_problem(&unsafe_name).expect("must reject");
         assert_eq!(
             got,
             format!("stacks.rust.release.packages unsafe_package:{name}")
@@ -134,14 +141,14 @@ fn release_rejects_duplicate_unsorted_and_unsafe_selection() {
 fn release_rejects_contradictory_authentication_modes() {
     let mut missing = valid_release();
     missing.authentication = ReleaseAuthentication::BootstrapToken;
-    let got = config_problem(&missing);
+    let got = config_problem(&missing).expect("must reject");
     assert_eq!(
         got,
         "stacks.rust.release.bootstrap missing_bootstrap_record"
     );
     let mut contradictory = valid_release();
     contradictory.bootstrap = Some(valid_bootstrap());
-    let got = config_problem(&contradictory);
+    let got = config_problem(&contradictory).expect("must reject");
     assert_eq!(
         got,
         "stacks.rust.release.bootstrap contradictory_authentication"
@@ -152,10 +159,14 @@ fn release_rejects_contradictory_authentication_modes() {
 #[test]
 fn release_rejects_bootstrap_mismatch_fail_closed() {
     let bad_package = bootstrap_release(|bootstrap| bootstrap.package = "../evil".to_owned());
-    assert!(config_problem(&bad_package).contains("unsafe_package:"));
+    assert!(
+        config_problem(&bad_package)
+            .expect("must reject")
+            .contains("unsafe_package:")
+    );
     for version in ["1.0", "v1.2.3", "1.2.3-beta", "1.2.3+build", "a.b.c", ""] {
         let bad = bootstrap_release(|bootstrap| bootstrap.version = version.to_owned());
-        let got = config_problem(&bad);
+        let got = config_problem(&bad).expect("must reject");
         let want = format!("stacks.rust.release.bootstrap.version bad_version:{version}");
         assert_eq!(got, want, "for {version:?}");
     }
@@ -163,7 +174,7 @@ fn release_rejects_bootstrap_mismatch_fail_closed() {
     let upper = SHA.to_uppercase();
     for sha in ["abc", non_hex.as_str(), upper.as_str(), ""] {
         let bad = bootstrap_release(|bootstrap| bootstrap.source_sha = sha.to_owned());
-        let got = config_problem(&bad);
+        let got = config_problem(&bad).expect("must reject");
         assert_eq!(
             got,
             "stacks.rust.release.bootstrap.source_sha bad_source_sha"
@@ -176,7 +187,11 @@ fn release_validates_manifest_environment_and_tag() {
     for path in "|/abs/Cargo.toml|../up/Cargo.toml|crates/a|a\\Cargo.toml".split('|') {
         let mut bad = valid_release();
         bad.manifest_path = path.to_owned();
-        assert!(config_problem(&bad).starts_with("stacks.rust.release.manifest_path "));
+        assert!(
+            config_problem(&bad)
+                .expect("must reject")
+                .starts_with("stacks.rust.release.manifest_path ")
+        );
     }
     let mut nested = valid_release();
     nested.manifest_path = "crates/demo/Cargo.toml".to_owned();
@@ -184,12 +199,16 @@ fn release_validates_manifest_environment_and_tag() {
     for env in ["", " padded", "bad env!", "../x", "a//b"] {
         let mut bad = valid_release();
         bad.environment = env.to_owned();
-        assert!(config_problem(&bad).starts_with("stacks.rust.release.environment "));
+        assert!(
+            config_problem(&bad)
+                .expect("must reject")
+                .starts_with("stacks.rust.release.environment ")
+        );
     }
     for tag in "v{{ version }}|{{ package }}-v1.0||{{ package }}-$(x)-{{ version }}|{{ package }}-`x`-{{ version }}|{{ package }}-v{{ version }".split('|') {
         let mut bad = valid_release();
         bad.tag_name = tag.to_owned();
-        assert!(config_problem(&bad).starts_with("stacks.rust.release.tag_name "));
+        assert!(config_problem(&bad).expect("must reject").starts_with("stacks.rust.release.tag_name "));
     }
 }
 
@@ -204,20 +223,36 @@ fn release_version_groups_are_non_lockstep_and_allowlist_bound() {
     assert_eq!(grouped.validate(FILE), Ok(()));
     let mut unknown = grouped.clone();
     unknown.version_groups = BTreeMap::from([("core".to_owned(), vec!["ghost".to_owned()])]);
-    assert!(config_problem(&unknown).ends_with("unknown_package:ghost"));
+    assert!(
+        config_problem(&unknown)
+            .expect("must reject")
+            .ends_with("unknown_package:ghost")
+    );
     let mut split = grouped.clone();
     split.version_groups = BTreeMap::from([
         ("one".to_owned(), vec!["demo-crate".to_owned()]),
         ("two".to_owned(), vec!["demo-crate".to_owned()]),
     ]);
-    assert!(config_problem(&split).ends_with("member_in_two_groups:demo-crate"));
+    assert!(
+        config_problem(&split)
+            .expect("must reject")
+            .ends_with("member_in_two_groups:demo-crate")
+    );
     let mut empty = grouped.clone();
     empty.version_groups = BTreeMap::from([("core".to_owned(), vec![])]);
-    assert!(config_problem(&empty).ends_with("empty_group"));
+    assert!(
+        config_problem(&empty)
+            .expect("must reject")
+            .ends_with("empty_group")
+    );
     let mut bad_group = grouped;
     let groups = BTreeMap::from([("Bad group".to_owned(), vec!["demo-crate".to_owned()])]);
     bad_group.version_groups = groups;
-    assert!(config_problem(&bad_group).ends_with("unsafe_group:Bad group"));
+    assert!(
+        config_problem(&bad_group)
+            .expect("must reject")
+            .ends_with("unsafe_group:Bad group")
+    );
 }
 
 #[test]
@@ -293,17 +328,16 @@ fn ci_workflow() -> WorkflowIr {
     }
 }
 
-fn check_job(workflow: &mut WorkflowIr) -> &mut Job {
-    workflow.jobs.get_mut("check").expect("job")
+fn check_job(workflow: &mut WorkflowIr) -> Option<&mut Job> {
+    workflow.jobs.get_mut("check")
 }
 
-fn dispatch_inputs(workflow: &mut WorkflowIr) -> &mut Vec<DispatchInput> {
-    let dispatch = workflow
+fn dispatch_inputs(workflow: &mut WorkflowIr) -> Option<&mut Vec<DispatchInput>> {
+    workflow
         .triggers
         .workflow_dispatch
         .as_mut()
-        .expect("dispatch");
-    &mut dispatch.inputs
+        .map(|dispatch| &mut dispatch.inputs)
 }
 
 #[test]
@@ -321,13 +355,13 @@ fn ir_default_permissions_preserve_read_read_ci() {
 fn ir_rejects_permission_violations() {
     let mut id_token = ci_workflow();
     id_token.permissions.id_token = PermissionLevel::Write;
-    let got = identity_problem(&id_token);
+    let got = identity_problem(&id_token).expect("must reject");
     assert_eq!(
         got,
         "job.environment id_token_write_needs_environment:check"
     );
     let mut bound = id_token.clone();
-    check_job(&mut bound).environment = Some("demo-publish".to_owned());
+    check_job(&mut bound).expect("job").environment = Some("demo-publish".to_owned());
     bound.triggers.pull_request_types.clear();
     assert_eq!(bound.validate(), Ok(()));
     let mut on_pr = ci_workflow();
@@ -335,8 +369,8 @@ fn ir_rejects_permission_violations() {
         contents: PermissionLevel::Write,
         ..Permissions::default()
     };
-    check_job(&mut on_pr).permissions = Some(scoped);
-    let got = identity_problem(&on_pr);
+    check_job(&mut on_pr).expect("job").permissions = Some(scoped);
+    let got = identity_problem(&on_pr).expect("must reject");
     assert_eq!(got, "job.permissions contents_write_on_pr:check");
     let write_all = Permissions {
         contents: PermissionLevel::Write,
@@ -347,12 +381,16 @@ fn ir_rejects_permission_violations() {
     let mut workflow_all = ci_workflow();
     workflow_all.permissions = write_all.clone();
     assert_eq!(
-        identity_problem(&workflow_all),
+        identity_problem(&workflow_all).expect("must reject"),
         "workflow.permissions write_all"
     );
     let mut job_all = ci_workflow();
-    check_job(&mut job_all).permissions = Some(write_all);
-    assert!(identity_problem(&job_all).ends_with("write_all:check"));
+    check_job(&mut job_all).expect("job").permissions = Some(write_all);
+    assert!(
+        identity_problem(&job_all)
+            .expect("must reject")
+            .ends_with("write_all:check")
+    );
 }
 
 #[test]
@@ -369,19 +407,33 @@ fn ir_validates_dispatch_input_charset_and_order() {
     assert_eq!(workflow.validate(), Ok(()));
     for name in ["", "Bad", "has space", "bad!", "bad/x", "UPPER"] {
         let mut bad = workflow.clone();
-        dispatch_inputs(&mut bad)[0].name = name.to_owned();
-        let got = identity_problem(&bad);
+        dispatch_inputs(&mut bad).expect("dispatch")[0].name = name.to_owned();
+        let got = identity_problem(&bad).expect("must reject");
         assert_eq!(got, format!("trigger.dispatch.inputs.name bad_name:{name}"));
     }
     let mut duplicate = workflow.clone();
-    dispatch_inputs(&mut duplicate)[1].name = "package".to_owned();
-    assert!(identity_problem(&duplicate).ends_with("duplicate_input"));
+    dispatch_inputs(&mut duplicate).expect("dispatch")[1].name = "package".to_owned();
+    assert!(
+        identity_problem(&duplicate)
+            .expect("must reject")
+            .ends_with("duplicate_input")
+    );
     let mut unsorted = workflow.clone();
-    *dispatch_inputs(&mut unsorted) = vec![input("zz", true, None), input("aa", true, None)];
-    assert!(identity_problem(&unsorted).ends_with("must_be_sorted"));
+    *dispatch_inputs(&mut unsorted).expect("dispatch") =
+        vec![input("zz", true, None), input("aa", true, None)];
+    assert!(
+        identity_problem(&unsorted)
+            .expect("must reject")
+            .ends_with("must_be_sorted")
+    );
     let mut bad_default = workflow;
-    dispatch_inputs(&mut bad_default)[1].default = Some("has\nnewline".to_owned());
-    assert!(identity_problem(&bad_default).ends_with("bad_default:source-sha"));
+    dispatch_inputs(&mut bad_default).expect("dispatch")[1].default =
+        Some("has\nnewline".to_owned());
+    assert!(
+        identity_problem(&bad_default)
+            .expect("must reject")
+            .ends_with("bad_default:source-sha")
+    );
 }
 
 #[test]
@@ -395,6 +447,10 @@ fn ir_validates_schedule_and_environment_safety() {
     bad_cron.triggers.schedule.as_mut().expect("schedule").cron = vec!["nope".to_owned()];
     assert!(bad_cron.validate().is_err());
     let mut bad_env = scheduled;
-    check_job(&mut bad_env).environment = Some("../evil".to_owned());
-    assert!(identity_problem(&bad_env).ends_with("bad_environment:check"));
+    check_job(&mut bad_env).expect("job").environment = Some("../evil".to_owned());
+    assert!(
+        identity_problem(&bad_env)
+            .expect("must reject")
+            .ends_with("bad_environment:check")
+    );
 }
