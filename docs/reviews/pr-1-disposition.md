@@ -64,6 +64,20 @@ Classes: **D** = accepted design change · **B** = confirmed bug · **V** = pend
   tokens), F4 (HEAD^2 accept path untested); should-fix F3 (Push
   broadening silent), F5 (disposition checks by equality). Fix agent
   spawned; P05 must not build on merge until F1 lands.
+- Review fix (`9626071`, pushed): F1 exact-set Execute⊆matrix check,
+  F2 miss tokens at all 4 sites, F4 HEAD^2 accept/reject tests, F3 Push
+  warning, F5 exhaustive matches. 8 new tests; orchestrator 75+6+316
+  green standalone. R02-merge-side now PASS; P05 unblocked on merge.
+- P12 (`08bfd4c`, pushed): 4-namespace freshness script, validated
+  exceptions, 26-glob pinned mutation scope. 35 p12_ tests green
+  standalone; shellcheck/shfmt/clippy/fmt clean. Real-root gate
+  honestly red: no scheduled producer (17 stale-evidence rows) + 3
+  genuinely stale pins (mise 2026.9.17, mr-boxington v1.21.0,
+  mise-action v5.0.0) — follow-ups.
+- Red flag: `size_limits_hold` failing on 6 files (landed: command.rs
+  440, merge.rs 429, impl_merge.rs 552, impl_select.rs 485; P06
+  in-flight: nextest.rs 481, toml_scan.rs 507). Split agent spawned
+  for landed files; P06 warned to split + fix clippy before handoff.
 
 ## PR state (2026-09-29, /tmp/pr1-state.md)
 
