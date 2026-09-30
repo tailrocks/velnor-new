@@ -22,6 +22,8 @@ mod p12_live;
 mod p12_manifest;
 #[path = "fixtures/p12_policy.rs"]
 mod p12_policy;
+#[path = "fixtures/p12_policy_b.rs"]
+mod p12_policy_b;
 #[path = "fixtures/p12_upstream.rs"]
 mod p12_upstream;
 

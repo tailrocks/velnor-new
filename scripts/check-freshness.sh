@@ -126,16 +126,16 @@ def info_row(check, subject, detail=""):
 
 
 def rust_const(path, name):
-    """Extract `pub const NAME: &str = "value";` or record a failure."""
+    """Extract `pub const NAME: &str = "value";` or emit a fail row."""
     try:
         with open(f"{root}/{path}", encoding="utf-8") as handle:
             text = handle.read()
     except OSError as err:
-        failures.append(f"{path}: unreadable ({err})")
+        fail_row("local-pin", f"{path}::{name}", f"unreadable ({err})")
         return None
     match = re.search(rf'pub const {name}:\s*&str\s*=\s*"([^"]*)";', text)
     if not match:
-        failures.append(f"{path}: missing const {name}")
+        fail_row("local-pin", f"{path}::{name}", f"missing const {name}")
         return None
     return match.group(1)
 
@@ -280,7 +280,7 @@ EXPECTED_ACTIONS = {
 
 def pin_row(subject, actual, expected):
     if actual is None:
-        return  # rust_const already recorded the failure
+        return  # rust_const already emitted the fail row
     if actual != expected:
         fail_row("local-pin", subject,
                  f"code={actual!r} inventory={expected!r}")
@@ -291,6 +291,10 @@ def pin_row(subject, actual, expected):
 tools = inv.get("tools", [])
 seen_tools = set()
 for tool in tools:
+    if not isinstance(tool, dict):
+        fail_row("inventory-shape", "(inventory tools)",
+                 f"entry must be an object, got {tool!r}")
+        continue
     name = tool.get("name")
     seen_tools.add(name)
     const = EXPECTED_TOOLS.get(name)
@@ -305,6 +309,10 @@ for name in sorted(set(EXPECTED_TOOLS) - seen_tools):
 
 action_pinned = {}
 for action in inv.get("actions", []):
+    if not isinstance(action, dict):
+        fail_row("inventory-shape", "(inventory actions)",
+                 f"entry must be an object, got {action!r}")
+        continue
     key = action.get("key")
     action_pinned[key] = action
     prefix = EXPECTED_ACTIONS.get(key)
@@ -541,6 +549,9 @@ if locked is not None and inherited is not None:
                     declared.append((subject, real, spec["version"], None))
                 elif spec.get("workspace") is True:
                     base = inherited.get(real, inherited.get(alias))
+                    if isinstance(base, dict) and \
+                            isinstance(base.get("package"), str):
+                        real = base["package"]
                     req = None
                     if isinstance(base, str):
                         req = base
@@ -751,55 +762,83 @@ known_subjects = set(EXPECTED_TOOLS) | set(EXPECTED_ACTIONS) | \
     lock_names | set(supported)
 if runner.get("default"):
     known_subjects.add(runner.get("default"))
-for hold in holds:
-    subject = hold.get("key", "<unnamed hold>")
+def check_dated(entry, check):
+    """Full attribution + chronology gate for dated exceptions/holds."""
+    if not isinstance(entry, dict):
+        fail_row(check, "(inventory exceptions)",
+                 f"entry must be an object, got {entry!r}")
+        return
+    subject = entry.get("key", "<unnamed hold>")
     missing = [key for key in ("held_version", "owner", "issue", "reason",
-                               "granted", "expires") if not hold.get(key)]
+                               "granted", "expires") if not entry.get(key)]
     if missing:
-        fail_row("exception-expiry", subject,
-                 f"missing {','.join(missing)}")
-        continue
-    granted = parse_iso_date(hold["granted"])
-    expires = parse_iso_date(hold["expires"])
+        fail_row(check, subject, f"missing {','.join(missing)}")
+        return
+    granted = parse_iso_date(entry["granted"])
+    expires = parse_iso_date(entry["expires"])
     if granted is None or expires is None:
-        fail_row("exception-expiry", subject,
-                 "granted/expires must be YYYY-MM-DD")
-        continue
+        fail_row(check, subject, "granted/expires must be YYYY-MM-DD")
+        return
     if granted > today:
-        fail_row("exception-expiry", subject,
-                 f"granted {granted} is in the future")
+        fail_row(check, subject, f"granted {granted} is in the future")
     elif expires <= granted:
-        fail_row("exception-expiry", subject,
+        fail_row(check, subject,
                  f"inverted window: expires {expires} <= granted {granted}")
     elif (expires - granted).days > max_days:
-        fail_row("exception-expiry", subject,
+        fail_row(check, subject,
                  f"span {(expires - granted).days}d exceeds max {max_days}d")
     elif expires < today:
-        fail_row("exception-expiry", subject,
+        fail_row(check, subject,
                  f"expired {expires} (renewal needs new review + evidence)")
     elif subject not in known_subjects:
-        fail_row("exception-expiry", subject,
+        fail_row(check, subject,
                  "hold subject matches no inventoried tool, action, "
                  "runner label, or locked package")
     else:
-        pass_row("exception-expiry", subject, f"expires {expires}")
+        pass_row(check, subject, f"expires {expires}")
+
+
+for hold in holds:
+    check_dated(hold, "exception-expiry")
 if not holds:
     pass_row("exception-expiry", "(none)", "no temporary holds")
+
+# The one spec-blessed standing record (version-policy §2/§4): the reviewed
+# `asamarts/alint` mutable tag. Its `tag` must equal the reviewed
+# `pinned_version` of the inventory's alint action row, so a pin move
+# without a re-blessing fails. Dated `exceptions` entries carry the same
+# full attribution as holds but never cover `status: held` rows.
+BLESSED_STANDING = "asamarts/alint"
+reviewed_alint = (action_pinned.get(BLESSED_STANDING) or {}).get(
+    "pinned_version")
 for exc in inv.get("exceptions", []):
-    subject = exc.get("key", "<unnamed exception>")
+    if not isinstance(exc, dict):
+        fail_row("standing-exception", "(inventory exceptions)",
+                 f"entry must be an object, got {exc!r}")
+        continue
+    subject = exc.get("key", "<unnamed hold>")
     if exc.get("expires") is None:
-        fail_row("standing-exception", subject,
-                 "standing hold without a spec blessing "
-                 "(no standing blessings exist)")
-    else:
-        expires = parse_iso_date(exc["expires"])
-        if expires is None:
+        if subject != BLESSED_STANDING:
             fail_row("standing-exception", subject,
-                     "expires must be YYYY-MM-DD or null")
-        elif expires < today:
-            fail_row("standing-exception", subject, f"expired {expires}")
+                     "standing hold without a spec blessing "
+                     "(only asamarts/alint is blessed)")
         else:
-            pass_row("standing-exception", subject, f"expires {expires}")
+            missing = [key for key in ("kind", "expiry_policy",
+                                       "blessed_by", "tag")
+                       if not exc.get(key)]
+            if missing:
+                fail_row("standing-exception", subject,
+                         f"blessed standing exception lacks "
+                         f"{','.join(missing)}")
+            elif exc.get("tag") != reviewed_alint:
+                fail_row("standing-exception", subject,
+                         f"blessed tag {exc.get('tag')!r} != reviewed pin "
+                         f"{reviewed_alint!r}: re-bless on pin moves")
+            else:
+                pass_row("standing-exception", subject,
+                         f"blessed mutable tag {exc.get('tag')}")
+    else:
+        check_dated(exc, "standing-exception")
 
 # --- Advisories: deny policy plus the optional live scan.
 try:

@@ -130,6 +130,52 @@ fn stranded_lock_package_fails() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn workspace_package_rename_inherits() -> Result<(), Box<dyn Error>> {
+    let fixture = harness::passing("p12-ws-rename")?;
+    harness::mutate(
+        &fixture.dir,
+        "crates/aaa/Cargo.toml",
+        "js = { package = \"serde_json\", version = \"=1.0.100\" }",
+        "js = { package = \"serde_json\", version = \"=1.0.100\" }\njs2 = { workspace = true }",
+    )?;
+    harness::mutate(
+        &fixture.dir,
+        "Cargo.toml",
+        "toml = { version = \"=0.9.0\" }",
+        "toml = { version = \"=0.9.0\" }\njs2 = { package = \"serde_json\", version = \"=1.0.100\" }",
+    )?;
+    let run = harness::run_script(&fixture.dir, &[])?;
+    harness::assert_clean(&run);
+    assert!(
+        run.stdout.contains("aaa:dependencies:js2"),
+        "renamed inherit not resolved:\n{}",
+        run.stdout
+    );
+    harness::cleanup(&fixture);
+    Ok(())
+}
+
+#[test]
+fn target_scope_inexact_fails() -> Result<(), Box<dyn Error>> {
+    let fixture = harness::passing("p12-target-inexact")?;
+    harness::mutate(
+        &fixture.dir,
+        "crates/aaa/Cargo.toml",
+        "globset = \"=0.4.10\"",
+        "globset = \"0.4.10\"",
+    )?;
+    let run = harness::run_script(&fixture.dir, &[])?;
+    harness::assert_fail(&run, "aaa:target.cfg(unix).dependencies:globset");
+    assert!(
+        run.stdout.contains("exact `=x.y.z` (VER-2.26)"),
+        "{}",
+        run.stdout
+    );
+    harness::cleanup(&fixture);
+    Ok(())
+}
+
+#[test]
 fn dangling_lock_edge_fails() -> Result<(), Box<dyn Error>> {
     let fixture = harness::passing("p12-dangling")?;
     harness::mutate(
