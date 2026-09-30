@@ -50,6 +50,20 @@ Classes: **D** = accepted design change · **B** = confirmed bug · **V** = pend
   Open gaps: renderer must emit VELNOR_NEEDS_JSON + download
   candidate-report/baseline artifacts (P05); `HEAD^2` checkout assumption
   needs W5 confirmation.
+- P07+P09 (`093b8ad`, pushed): EnvPolicy per purpose, RepoTask env_clear,
+  reserved-key rejection, bounded subprocess execution with real
+  exit/signal; generated steps share the validated env contract
+  (STEP_CREDENTIAL_DENYLIST). Preview/generate validates before creating,
+  reports commit/rollback distinctly, refuses concurrent generates.
+  Standalone-verified: mise 174, renderer 156, orchestrator 75+6+308
+  green; clippy `-D warnings` clean; fmt clean. Residual: two-rename
+  visibility gap; rollback_failed unreachable single-threaded.
+- Independent review of `6d142e4`: FAIL (R02-merge-side) with must-fixes
+  F1 (Execute obligations without matrix legs pass: needs exact-set
+  Execute⊆matrix check), F2 (planning_failed sites with empty miss
+  tokens), F4 (HEAD^2 accept path untested); should-fix F3 (Push
+  broadening silent), F5 (disposition checks by equality). Fix agent
+  spawned; P05 must not build on merge until F1 lands.
 
 ## PR state (2026-09-29, /tmp/pr1-state.md)
 
