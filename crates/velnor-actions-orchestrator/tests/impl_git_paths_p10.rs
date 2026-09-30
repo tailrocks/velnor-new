@@ -187,6 +187,67 @@ fn nested_subdir_resolves_repo_root() -> TestResult {
 }
 
 #[test]
+fn added_member_manifest_narrows_without_broaden() -> TestResult {
+    let repo = make_ws_repo(false)?;
+    let root = repo.path();
+    fs::write(
+        root.join("Cargo.toml"),
+        "[workspace]\nmembers = [\"alpha\", \"beta\", \"gamma\"]\n",
+    )?;
+    let base = commit(root, "one")?;
+    fs::create_dir_all(root.join("gamma/src"))?;
+    fs::write(
+        root.join("gamma/Cargo.toml"),
+        "[package]\nname = \"gamma\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+    )?;
+    fs::write(root.join("gamma/src/lib.rs"), "pub fn f() {}\n")?;
+    let head = commit(root, "two")?;
+    let (plan, warnings) = plan_pr(root, Some(&base), &head)?;
+    let hit = reasons_for(&plan, "gamma");
+    assert!(
+        hit.iter().all(|r| *r == "affected_by_change"),
+        "gamma: {hit:?}"
+    );
+    for other in ["alpha", "beta"] {
+        let miss = reasons_for(&plan, other);
+        assert!(
+            miss.iter().all(|r| *r == "forced_uncached"),
+            "{other}: {miss:?}"
+        );
+    }
+    assert!(warnings.is_empty(), "no warnings: {warnings:?}");
+    Ok(())
+}
+
+#[test]
+#[cfg(unix)]
+fn untracked_non_utf8_broadens_with_explicit_tag() -> TestResult {
+    use std::os::unix::ffi::OsStrExt;
+    let repo = make_ws_repo(false)?;
+    let root = repo.path();
+    let base = commit(root, "one")?;
+    let raw = b"\xffuntracked.rs";
+    let path = root.join(std::ffi::OsStr::from_bytes(raw));
+    if fs::write(&path, "pub fn f() {}\n").is_err() {
+        return Ok(());
+    }
+    let (plan, warnings) = plan_pr(root, Some(&base), &base)?;
+    assert!(
+        plan.task_ids.iter().any(|id| id.contains("alpha"))
+            && plan.task_ids.iter().any(|id| id.contains("beta")),
+        "broadens: {:?}",
+        plan.task_ids
+    );
+    assert!(
+        warnings
+            .iter()
+            .any(|w| w == "comparison_unavailable:non_utf8_path:all_changed"),
+        "explicit tag: {warnings:?}"
+    );
+    Ok(())
+}
+
+#[test]
 #[cfg(unix)]
 fn non_utf8_path_broadens_explicitly() -> TestResult {
     use std::os::unix::ffi::OsStrExt;
