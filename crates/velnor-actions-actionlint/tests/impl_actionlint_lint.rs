@@ -1,9 +1,11 @@
 //! Lint-audit cases: manifest purity, bridge exactness, canonical refs,
 //! input schemas, and stable rejection codes.
 use std::collections::{BTreeMap, BTreeSet};
-use velnor_actions_actionlint::actions::{CHECKOUT_ACTION_SHA, CHECKOUT_ACTION_VERSION};
+use velnor_actions_actionlint::actions::{
+    ALINT_ACTION_SHA, ALINT_ACTION_VERSION, CHECKOUT_ACTION_SHA, CHECKOUT_ACTION_VERSION,
+};
 use velnor_actions_actionlint::{
-    ActionlintCapabilities, ActionlintConfigInput, ActionlintError, CHECKOUT_ACTION,
+    ALINT_ACTION, ActionlintCapabilities, ActionlintConfigInput, ActionlintError, CHECKOUT_ACTION,
     PinnedActionRef, RUNNER_LABEL_BRIDGE, StepSyntax, checkout_inputs_schema,
     render_actionlint_yaml, validate_action_inputs,
 };
@@ -170,9 +172,8 @@ fn checkout_ref_is_canonical_pin() {
     let reference = PinnedActionRef::checkout();
     assert_eq!(reference.validate(), Ok(()));
     assert_eq!(reference.uses_key(), CHECKOUT_ACTION);
-    assert_eq!(reference.sha.as_deref(), Some(CHECKOUT_ACTION_SHA));
+    assert_eq!(reference.sha, CHECKOUT_ACTION_SHA);
     assert_eq!(reference.version_comment, CHECKOUT_ACTION_VERSION);
-    assert!(!reference.tag_exception);
     let value = format!("{CHECKOUT_ACTION}@{CHECKOUT_ACTION_SHA}");
     assert_eq!(reference.uses_value(), value);
     assert_eq!(
@@ -181,6 +182,25 @@ fn checkout_ref_is_canonical_pin() {
     );
     assert_eq!(
         PinnedActionRef::parse_uses(&value, CHECKOUT_ACTION_VERSION),
+        Ok(reference)
+    );
+}
+
+#[test]
+fn alint_ref_is_canonical_full_sha_pin() {
+    let reference = PinnedActionRef::alint();
+    assert_eq!(reference.validate(), Ok(()));
+    assert_eq!(reference.uses_key(), ALINT_ACTION);
+    assert_eq!(reference.sha, ALINT_ACTION_SHA);
+    assert_eq!(reference.version_comment, ALINT_ACTION_VERSION);
+    let value = format!("{ALINT_ACTION}@{ALINT_ACTION_SHA}");
+    assert_eq!(reference.uses_value(), value);
+    assert_eq!(
+        reference.render_uses(),
+        format!("uses: {value} # {ALINT_ACTION_VERSION}")
+    );
+    assert_eq!(
+        PinnedActionRef::parse_uses(&value, ALINT_ACTION_VERSION),
         Ok(reference)
     );
 }

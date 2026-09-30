@@ -64,30 +64,18 @@
       "status": "current"
     },
     {
-      "exception": {
-        "blessed_by": "docs/proposed/version-policy.md section 2 (Alint GitHub Action row + GitHub Action defaults)",
-        "kind": "reviewed_mutable_tag",
-        "note": "Standing spec-blessed exception: generation emits the reviewed tag, never a SHA. Changing the tag is a Velnor version-policy update, not a consumer config change. Not a temporary hold, so max_exception_days does not apply."
-      },
       "key": "asamarts/alint",
-      "pinned_tag": "v0.16.1",
-      "qualified_tag": "v0.16.1",
+      "pinned_sha": "9f9d34ba0eae3888299b9e570f43338b0e7f2cdb",
+      "pinned_version": "v0.16.1",
+      "qualified_sha": "9f9d34ba0eae3888299b9e570f43338b0e7f2cdb",
+      "qualified_version": "v0.16.1",
       "source": "https://api.github.com/repos/asamarts/alint/releases/latest",
       "status": "current"
     }
   ],
   "check_interval_hours": 24,
   "checked_at": "2026-09-28",
-  "exceptions": [
-    {
-      "blessed_by": "docs/proposed/version-policy.md section 2",
-      "expires": null,
-      "expiry_policy": "standing spec-blessed exception; changes require a reviewed Velnor version-policy update, not a 14-day renewal",
-      "key": "asamarts/alint",
-      "kind": "reviewed_mutable_tag",
-      "pinned_tag": "v0.16.1"
-    }
-  ],
+  "exceptions": [],
   "max_exception_days": 14,
   "runner": {
     "default": "ubuntu-26.04",
