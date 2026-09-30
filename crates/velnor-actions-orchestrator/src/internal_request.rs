@@ -95,15 +95,16 @@ pub fn write_request_parts(
     if op == MERGE_OP {
         return crate::merge_request::write_merge_request(&path);
     }
+    let payload: serde_json::Value =
+        serde_json::from_str(payload_json).map_err(|_| internal("malformed_event_payload"))?;
     let event = match event_name {
+        "pull_request" if is_fork_pull_request(&payload) => WorkflowEvent::Fork,
         "pull_request" => WorkflowEvent::PullRequest,
         "push" => WorkflowEvent::Push,
         "merge_group" => WorkflowEvent::MergeGroup,
         "local" => WorkflowEvent::Local,
         _ => return Err(internal("unsupported_event")),
     };
-    let payload: serde_json::Value =
-        serde_json::from_str(payload_json).map_err(|_| internal("malformed_event_payload"))?;
     let (base, head) = request_refs(event, &payload, github_sha)?;
     let request = EventRequest {
         schema: SCHEMA,
@@ -303,6 +304,18 @@ fn request_op(path: &Path) -> Result<String, OrchestratorError> {
     } else {
         Err(internal("unknown_request_op"))
     }
+}
+
+/// True when a `pull_request` payload comes from a forked repository.
+///
+/// GitHub sends fork PRs as `pull_request` events (no distinct event
+/// name); the head repo's `fork` flag is the only signal. Without this
+/// the `Fork` variant is unreachable and fork runs mislabel as same-repo
+/// PRs. A missing flag defaults to same-repo.
+fn is_fork_pull_request(payload: &serde_json::Value) -> bool {
+    payload["pull_request"]["head"]["repo"]["fork"]
+        .as_bool()
+        .unwrap_or(false)
 }
 
 /// Base/head refs for one event: PR `base.sha`/`head.sha`, merge-group
