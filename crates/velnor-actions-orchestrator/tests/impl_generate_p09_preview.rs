@@ -21,19 +21,15 @@ fn preview(
     prep: &GenerationPreparation,
     dir: &std::path::Path,
 ) -> Result<GenerateReport, OrchestratorError> {
-    generate(
-        prep,
-        &GenerateOptions {
-            output_dir: Some(dir.to_path_buf()),
-        },
-    )
+    let opts = GenerateOptions {
+        output_dir: Some(dir.to_path_buf()),
+    };
+    generate(prep, &opts)
 }
 
 /// Rendered workflow text window between two job markers.
 fn window<'a>(yaml: &'a str, from: &str, to: &str) -> Result<&'a str, Box<dyn std::error::Error>> {
-    let start = yaml
-        .find(from)
-        .ok_or_else(|| std::io::Error::other("missing window start"))?;
+    let start = yaml.find(from).ok_or("missing window start")?;
     let end = yaml[start..].find(to).map_or(yaml.len(), |at| start + at);
     Ok(&yaml[start..end])
 }
@@ -49,10 +45,8 @@ fn preview_inside_repo_leaves_nothing() -> TestResult {
         root.join("new-nested/deep"),
     ] {
         let err = err_of(preview(&prep, &dest), "inside refused")?;
-        assert!(
-            matches!(err, OrchestratorError::PreviewRefused { .. }),
-            "got {err}"
-        );
+        let refused = matches!(err, OrchestratorError::PreviewRefused { .. });
+        assert!(refused, "got {err}");
     }
     assert!(!root.join("sub").exists(), "refused preview made sub/");
     assert!(
@@ -73,13 +67,9 @@ fn preview_dotdot_through_missing_refused_without_litter() -> TestResult {
     let err = err_of(preview(&prep, &dest), "dotdot refused")?;
     assert!(err.to_string().contains("traversal"), "got {err}");
     assert!(!root.join("a").exists(), "no litter from dotdot");
-    let parent = root
-        .parent()
-        .ok_or_else(|| std::io::Error::other("no parent"))?;
-    assert!(
-        !parent.join("sibling-preview").exists(),
-        "nothing outside either"
-    );
+    let parent = root.parent().ok_or("no parent")?;
+    let preview = parent.join("sibling-preview");
+    assert!(!preview.exists(), "nothing outside either");
     Ok(())
 }
 
@@ -92,14 +82,10 @@ fn preview_symlink_chain_refused() -> TestResult {
     let parent = TempDir::new()?;
     let link = parent.path().join("link");
     std::os::unix::fs::symlink(root, &link)?;
-    let err = err_of(
-        preview(&prep, &link.join("preview")),
-        "chained link refused",
-    )?;
-    assert!(
-        matches!(err, OrchestratorError::PreviewRefused { .. }),
-        "got {err}"
-    );
+    let dest = link.join("preview");
+    let err = err_of(preview(&prep, &dest), "chained link refused")?;
+    let refused = matches!(err, OrchestratorError::PreviewRefused { .. });
+    assert!(refused, "got {err}");
     assert!(!link.join("preview").exists(), "nothing through the link");
     Ok(())
 }
@@ -113,10 +99,8 @@ fn preview_twice_second_refused_nonempty() -> TestResult {
     let dest = parent.path().join("preview");
     preview(&prep, &dest)?;
     let err = err_of(preview(&prep, &dest), "second refused")?;
-    assert!(
-        matches!(err, OrchestratorError::PreviewRefused { .. }),
-        "got {err}"
-    );
+    let refused = matches!(err, OrchestratorError::PreviewRefused { .. });
+    assert!(refused, "got {err}");
     Ok(())
 }
 
@@ -199,11 +183,8 @@ fn fetch_matches_run_task_contract_by_construction() -> TestResult {
         "fetch carries exactly the validated contract"
     );
     for (key, value) in fetch_env {
-        assert_eq!(
-            run_env.get(key),
-            Some(value),
-            "fetch key {key} must equal Run task"
-        );
+        let got = run_env.get(key);
+        assert_eq!(got, Some(value), "fetch key {key} must equal Run task");
         assert!(!value.is_empty(), "fetch key {key} must be set");
     }
     Ok(())
@@ -221,10 +202,12 @@ fn denylist_pins_mise_strip_set() {
         ]
     );
     for denied in velnor_actions_workflow_renderer::toolchain_env::STEP_CREDENTIAL_DENYLIST {
-        assert!(
-            velnor_actions_mise::command::is_reserved_env_key(denied),
-            "{denied} must be reserved in Mise too"
-        );
+        let reserved = velnor_actions_mise::command::is_reserved_env_key(denied);
+        assert!(reserved, "{denied} must be reserved in Mise too");
+    }
+    for denied in velnor_actions_workflow_renderer::toolchain_env::STEP_ISOLATION_DENYLIST {
+        let reserved = velnor_actions_mise::command::is_reserved_env_key(denied);
+        assert!(reserved, "{denied} must be reserved in Mise too");
     }
 }
 
@@ -237,14 +220,12 @@ fn concurrent_generate_lock_refused() -> TestResult {
     fs::write(github.join("workflows/old.yml"), "old: true\n")?;
     fs::create_dir(root.join(".github.velnor-generate.lock"))?;
     let prep = prepare(root)?;
-    let err = err_of(
-        generate(&prep, &GenerateOptions { output_dir: None }),
-        "locked",
-    )?;
+    let opts = GenerateOptions { output_dir: None };
+    let err = err_of(generate(&prep, &opts), "locked")?;
     assert!(err.to_string().contains("concurrent_generate"), "got {err}");
     assert_eq!(fs::read(github.join("workflows/old.yml"))?, b"old: true\n");
     fs::remove_dir(root.join(".github.velnor-generate.lock"))?;
-    let report = generate(&prep, &GenerateOptions { output_dir: None })?;
+    let report = generate(&prep, &opts)?;
     assert_eq!(report.files_written.len(), 2, "lock removal unblocks");
     Ok(())
 }
@@ -299,9 +280,10 @@ fn tool_snapshot_unreadable_fails_closed() -> TestResult {
         return Ok(()); // Privileged runner: permission bits do not bind.
     }
     let err = err_of(err, "unreadable tool file")?;
+    let text = err.to_string();
     assert!(
-        err.to_string().contains("tool_files_unreadable:mise.toml"),
-        "got {err}"
+        text.contains("tool_files_unreadable:mise.toml"),
+        "got {text}"
     );
     Ok(())
 }
@@ -317,10 +299,8 @@ fn in_place_symlink_target_refused() -> TestResult {
     std::os::unix::fs::symlink(&real, root.join(".github"))?;
     let prep = prepare(root)?;
     let before = snapshot(root)?;
-    let err = err_of(
-        generate(&prep, &GenerateOptions { output_dir: None }),
-        "link refused",
-    )?;
+    let opts = GenerateOptions { output_dir: None };
+    let err = err_of(generate(&prep, &opts), "link refused")?;
     assert!(err.to_string().contains("symlink_refused"), "{err}");
     assert_eq!(before, snapshot(root)?, "refusal writes nothing");
     assert!(fs::symlink_metadata(root.join(".github"))?.is_symlink());
@@ -333,11 +313,86 @@ fn in_place_file_target_refused() -> TestResult {
     let root = repo.path();
     fs::write(root.join(".github"), "not a dir")?;
     let prep = prepare(root)?;
-    let err = err_of(
-        generate(&prep, &GenerateOptions { output_dir: None }),
-        "file refused",
-    )?;
+    let opts = GenerateOptions { output_dir: None };
+    let err = err_of(generate(&prep, &opts), "file refused")?;
     assert!(err.to_string().contains("not_a_directory"), "{err}");
     assert_eq!(fs::read(root.join(".github"))?, b"not a dir");
+    Ok(())
+}
+
+#[test]
+fn atomic_commit_never_exposes_missing_tree() -> TestResult {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let repo = make_repo(config_with_branch())?;
+    let root = repo.path();
+    let prep = prepare(root)?;
+    let opts = GenerateOptions { output_dir: None };
+    generate(&prep, &opts)?;
+    let live = root.join(".github/workflows/velnor.yml");
+    let misses = AtomicUsize::new(0);
+    let done = AtomicUsize::new(0);
+    std::thread::scope(|scope| {
+        scope.spawn(|| {
+            for _ in 0..8 {
+                generate(&prep, &opts).expect("rewrite commits");
+            }
+            done.store(1, Ordering::Relaxed);
+        });
+        for _ in 0..4 {
+            scope.spawn(|| {
+                while done.load(Ordering::Relaxed) == 0 {
+                    if live.symlink_metadata().is_err() {
+                        misses.fetch_add(1, Ordering::Relaxed);
+                    }
+                }
+            });
+        }
+    });
+    assert!(live.is_file(), "final tree live");
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    assert_eq!(
+        misses.load(Ordering::Relaxed),
+        0,
+        "exchange must never expose a gap"
+    );
+    Ok(())
+}
+
+#[test]
+fn concurrent_generate_never_writes_partially() -> TestResult {
+    use std::sync::Barrier;
+    let repo = make_repo(config_with_branch())?;
+    let root = repo.path();
+    let prep = prepare(root)?;
+    let gate = Barrier::new(8);
+    let mut outcomes = Vec::new();
+    std::thread::scope(|scope| {
+        let mut handles = Vec::new();
+        for _ in 0..8 {
+            handles.push(scope.spawn(|| {
+                gate.wait();
+                generate(&prep, &GenerateOptions { output_dir: None })
+            }));
+        }
+        for handle in handles {
+            outcomes.push(handle.join().expect("thread joined"));
+        }
+    });
+    let mut won = 0;
+    for outcome in outcomes {
+        match outcome {
+            Ok(_) => won += 1,
+            Err(OrchestratorError::Contract { problem })
+                if problem.contains("concurrent_generate") => {}
+            Err(other) => return Err(format!("unexpected outcome: {other}").into()),
+        }
+    }
+    assert!(won >= 1, "someone committed");
+    let text = fs::read_to_string(root.join(".github/workflows/velnor.yml"))?;
+    assert!(
+        text.starts_with("# Generated by Velnor Actions "),
+        "complete tree"
+    );
+    assert!(!root.join(".github.velnor-generate.lock").exists());
     Ok(())
 }
