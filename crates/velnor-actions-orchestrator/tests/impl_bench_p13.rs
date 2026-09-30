@@ -6,6 +6,8 @@
 //! proxy for the compiler-subprocess cost inside `plan`. Queue/transfer are
 //! local no-ops (`queue=na transfer_b=0`); CI values need hosted runs.
 
+use std::collections::BTreeSet;
+
 use velnor_actions_orchestrator::prepare;
 use velnor_actions_rust::parse_metadata_json;
 
@@ -343,7 +345,12 @@ fn toolchain_case(root: &std::path::Path) -> TestResult {
         let start = std::time::Instant::now();
         let json = toolchain_metadata(root, toolchain)?;
         walls.push(start.elapsed().as_millis());
-        records.push(parse_metadata_json(&json, root, "toolchain")?);
+        records.push(parse_metadata_json(
+            &json,
+            root,
+            "toolchain",
+            &BTreeSet::new(),
+        )?);
     }
     assert_eq!(records[0], records[1], "inventory stable across toolchains");
     eprintln!(

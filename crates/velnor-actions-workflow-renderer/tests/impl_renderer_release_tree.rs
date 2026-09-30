@@ -35,6 +35,7 @@ fn bootstrap() -> BootstrapPlan {
         source_sha: SHA.to_owned(),
         registry: "crates_io".to_owned(),
         packages: BTreeMap::from([("widgets".to_owned(), "1.2.3".to_owned())]),
+        version: None,
     }
 }
 
@@ -227,6 +228,35 @@ fn render_emits_marker_triggers_and_pinned_jobs() -> Result<(), RenderError> {
     ] {
         assert!(!text.contains(forbidden), "leaked {forbidden}");
     }
+    Ok(())
+}
+
+#[test]
+fn render_binds_bootstrap_version_in_dispatch_and_gate() -> Result<(), RenderError> {
+    let mut workflow = spec()?;
+    workflow.bootstrap.version = Some("1.2.3".to_owned());
+    workflow.triggers.dispatch_inputs.push(DispatchInput {
+        name: "version".to_owned(),
+        description: "approved version".to_owned(),
+        required: true,
+        default: Some("1.2.3".to_owned()),
+    });
+    let gate = publish_gate_condition(REPO, &workflow.bootstrap);
+    for job in workflow.jobs.values_mut() {
+        if matches!(
+            job.role,
+            ReleaseRole::PublishOidc | ReleaseRole::PublishBootstrap
+        ) {
+            job.condition = Some(gate.clone());
+        }
+    }
+    let text = render_release_workflow(&workflow, &ctx())?;
+    assert!(
+        text.contains("inputs.version == '1.2.3'"),
+        "gate binds version:\n{text}"
+    );
+    assert!(text.contains("version:"), "dispatch input present:\n{text}");
+    assert!(text.contains("1.2.3"), "version default present:\n{text}");
     Ok(())
 }
 

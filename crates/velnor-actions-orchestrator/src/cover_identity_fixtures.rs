@@ -121,6 +121,7 @@ pub(super) fn discovery_with(task_ids: &[&str]) -> Discovery {
                 nextest_profile: "default".to_owned(),
             })
             .collect(),
+        feature_fallbacks: Vec::new(),
         tool_checks: Vec::new(),
         clippy_memory: crate::clippy_groups::ClippyMemoryPlan {
             groups: Vec::new(),

@@ -28,7 +28,7 @@ pub use lock::{ReleaseConcurrency, check_lock_anchor};
 /// One typed `workflow_dispatch` input (plan reference, never free shell).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DispatchInput {
-    /// Input name (`plan`, `source_sha`, or a validated extra).
+    /// Input name (`plan`, `source_sha`, `version`, or a validated extra).
     pub name: String,
     /// Single-line description.
     pub description: String,
@@ -121,6 +121,10 @@ impl ReleaseTriggers {
     }
 
     /// Require unique inputs plus required `plan`/`source_sha` binding.
+    ///
+    /// An approved bootstrap version additionally binds a required
+    /// `version` input; without one, a `version` input is rejected as
+    /// an unbound version claim.
     fn check_dispatch_binding(&self, bootstrap: &BootstrapPlan) -> Result<(), RenderError> {
         let mut names = BTreeSet::new();
         for input in &self.dispatch_inputs {
@@ -134,6 +138,10 @@ impl ReleaseTriggers {
         }
         check_bound_input(&self.dispatch_inputs, "plan", &bootstrap.plan_id)?;
         check_bound_input(&self.dispatch_inputs, "source_sha", &bootstrap.source_sha)?;
+        match &bootstrap.version {
+            Some(version) => check_bound_input(&self.dispatch_inputs, "version", version)?,
+            None => check_absent_input(&self.dispatch_inputs, "version")?,
+        }
         Ok(())
     }
 }
@@ -156,6 +164,17 @@ fn check_bound_input(
     }
 }
 
+/// Reject a dispatch input with no approved plan value behind it.
+fn check_absent_input(inputs: &[DispatchInput], name: &str) -> Result<(), RenderError> {
+    let present = inputs.iter().any(|input| input.name == name);
+    if present {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "dispatch_plan_mismatch:{name}"
+        )));
+    }
+    Ok(())
+}
+
 /// Approved exact-source bootstrap plan (identities only, no credentials).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BootstrapPlan {
@@ -169,6 +188,8 @@ pub struct BootstrapPlan {
     pub registry: String,
     /// Approved package-to-version map.
     pub packages: BTreeMap<String, String>,
+    /// Approved exact bootstrap version (`None` outside bootstrap mode).
+    pub version: Option<String>,
 }
 
 impl BootstrapPlan {
@@ -198,18 +219,28 @@ impl BootstrapPlan {
             validate_package_name(name)?;
             validate_package_version(version)?;
         }
+        if let Some(version) = &self.version {
+            validate_package_version(version)?;
+        }
         Ok(())
     }
 }
 
-/// Exact publish gate: repo identity plus approved plan and source binding.
+/// Exact publish gate: repo identity plus approved plan, source, and version.
 ///
 /// Forks and rebound dispatches fail this condition at runtime; publish
-/// jobs must carry exactly this string (see role-condition checks).
+/// jobs must carry exactly this string (see role-condition checks). The
+/// version clause binds only in bootstrap mode, where the exact first
+/// version is the authorization; routine publishers resolve versions at
+/// runtime and carry no generation-time version.
 #[must_use]
 pub fn publish_gate_condition(repository: &str, bootstrap: &BootstrapPlan) -> String {
-    format!(
+    let base = format!(
         "github.repository == '{repository}' && github.event.inputs.plan == '{}' && github.event.inputs.source_sha == '{}'",
         bootstrap.plan_id, bootstrap.source_sha
-    )
+    );
+    match &bootstrap.version {
+        Some(version) => format!("{base} && github.event.inputs.version == '{version}'"),
+        None => base,
+    }
 }

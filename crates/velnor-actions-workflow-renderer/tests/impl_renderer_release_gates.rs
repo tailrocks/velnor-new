@@ -63,6 +63,7 @@ pub(crate) fn bootstrap() -> BootstrapPlan {
         source_sha: SHA.to_owned(),
         registry: "crates_io".to_owned(),
         packages: BTreeMap::from([("widgets".to_owned(), "1.2.3".to_owned())]),
+        version: None,
     }
 }
 

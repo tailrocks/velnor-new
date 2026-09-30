@@ -9,7 +9,7 @@ use velnor_actions_actionlint::render_actionlint_yaml;
 use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_workflow_renderer::guard::{self, SafeTreePath};
 use velnor_actions_workflow_renderer::render::{
-    RenderedTree, render_tree, render_workflow_ir_strict,
+    RenderedTree, render_tree_with_extra, render_workflow_ir_strict,
 };
 use velnor_actions_workflow_renderer::steps::rehead_actionlint_marker;
 
@@ -100,7 +100,9 @@ fn fail_on_blocking_findings(prep: &GenerationPreparation) -> Result<(), Orchest
     })
 }
 
-/// Render the validated two-file tree in memory; no writes, no validators.
+/// Render the validated tree (base files plus release extras) in memory.
+///
+/// No writes, no validators.
 ///
 /// # Errors
 ///
@@ -127,7 +129,7 @@ pub fn render_staged_tree(prep: &GenerationPreparation) -> Result<RenderedTree, 
     Ok(tree)
 }
 
-/// Render both files plus the marker-checked two-file tree, in memory only.
+/// Render base files plus release extras into the marker-checked tree, in memory only.
 fn render_all(prep: &GenerationPreparation) -> Result<RenderedTree, OrchestratorError> {
     let version = env!("CARGO_PKG_VERSION");
     let mise = resolve_mise_setup(&prep.config, &prep.runner_label)?;
@@ -140,7 +142,9 @@ fn render_all(prep: &GenerationPreparation) -> Result<RenderedTree, Orchestrator
     )?;
     let actionlint = render_actionlint_yaml(&prep.workflow.actionlint)?;
     let actionlint = rehead_actionlint_marker(&actionlint.yaml, version)?;
-    Ok(render_tree(&workflow, &actionlint, version)?)
+    let release = crate::release_emit::release_files(prep, &mise)?;
+    let tree = render_tree_with_extra(&workflow, &actionlint, &release, version)?;
+    Ok(tree)
 }
 
 /// Validate every rendered path lexically plus symlink-prefix probing.

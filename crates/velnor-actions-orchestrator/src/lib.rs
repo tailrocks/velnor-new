@@ -14,6 +14,7 @@ mod cover_identity;
 mod crate_jobs;
 mod critical_path;
 pub mod decisions;
+mod derive_groups;
 mod discover;
 mod discover_index;
 mod error;
@@ -27,6 +28,7 @@ mod internal;
 mod internal_plan;
 mod internal_request;
 mod inventory;
+mod inventory_reuse;
 mod matrix_step;
 mod merge;
 mod merge_request;
@@ -37,6 +39,9 @@ mod prepare;
 mod provenance;
 mod qualify;
 mod recommendations;
+mod release_emit;
+mod release_identity;
+mod release_steps;
 mod retrieve_reports;
 mod root;
 pub mod schedule;
@@ -62,6 +67,7 @@ pub use critical_path::{
     CriticalPath, critical_path, critical_path_for_groups, critical_path_line,
     critical_path_structural, render_critical_path,
 };
+pub use derive_groups::FeatureFallback;
 pub use discover::{Discovery, PlannedWorkspace};
 pub use error::OrchestratorError;
 pub use extension_schemas::{
