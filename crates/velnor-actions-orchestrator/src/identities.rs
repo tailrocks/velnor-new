@@ -216,13 +216,19 @@ pub(crate) fn extension_bundle_with_snapshot(
 ///
 /// # Errors
 ///
-/// Returns [`ContractError`] for unsupported execution targets.
+/// Returns [`ContractError`] for unsupported runner labels and
+/// unsupported execution targets; neither ever defaults silently.
 pub(crate) fn platform_id_for_group(
     label: &str,
     group: &TaskGroup,
 ) -> Result<String, ContractError> {
     let target = if group.target == "host" {
-        velnor_actions_contract::target_for_runner_label(label).unwrap_or("host")
+        velnor_actions_contract::target_for_runner_label(label).ok_or_else(|| {
+            ContractError::identity(
+                "runner_label",
+                format!("unsupported_target_for_runner:{label}"),
+            )
+        })?
     } else {
         group.target.as_str()
     };
