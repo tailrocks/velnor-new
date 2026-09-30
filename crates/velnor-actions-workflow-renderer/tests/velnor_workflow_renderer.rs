@@ -43,6 +43,8 @@ mod impl_renderer_release_config;
 mod impl_renderer_release_gates;
 #[path = "impl_renderer_release_jobs.rs"]
 mod impl_renderer_release_jobs;
+#[path = "impl_renderer_release_lock.rs"]
+mod impl_renderer_release_lock;
 #[path = "impl_renderer_release_publish.rs"]
 mod impl_renderer_release_publish;
 #[path = "impl_renderer_release_snapshot.rs"]

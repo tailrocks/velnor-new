@@ -19,6 +19,12 @@ pub use validators::{
     validate_repository, validate_source_sha,
 };
 
+/// Publisher lock and release-event eligibility (`#[path]`, no `lib.rs` edit);
+/// re-exported below so `release_spec::X` paths keep working.
+#[path = "release_lock.rs"]
+pub mod lock;
+pub use lock::{ReleaseConcurrency, check_lock_anchor};
+
 /// One typed `workflow_dispatch` input (plan reference, never free shell).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DispatchInput {
@@ -33,6 +39,9 @@ pub struct DispatchInput {
 }
 
 impl DispatchInput {
+    /// Rendered input type: always `string`, never boolean/choice.
+    pub const INPUT_TYPE: &'static str = "string";
+
     /// Validate name charset plus single-line clean description/default.
     ///
     /// # Errors
@@ -147,73 +156,6 @@ fn check_bound_input(
     }
 }
 
-/// Stable serialized lock: fixed key, publishers never cancel.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ReleaseConcurrency {
-    /// Lock group expression (stable per repository/workspace).
-    pub group: String,
-    /// Must always be false: never cancel an active publisher.
-    pub cancel_in_progress: bool,
-}
-
-/// Tokens that would make the lock run-, version-, or source-unique.
-const FORBIDDEN_LOCK_TOKENS: &[&str] = &[
-    "run_id",
-    "run_attempt",
-    "run_number",
-    "github.sha",
-    "github.ref",
-    "github.event",
-    "inputs.",
-    "matrix.",
-    "version",
-    "strategy",
-];
-
-impl ReleaseConcurrency {
-    /// Validate the stable group plus the never-cancel invariant.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`RenderError::InvalidWorkflow`] or
-    /// [`RenderError::PrivateSubcommand`] for unstable groups or cancel.
-    pub fn validate(&self) -> Result<(), RenderError> {
-        if !is_clean_text(&self.group, 256) {
-            return Err(RenderError::InvalidWorkflow(format!(
-                "bad_lock_group:{}",
-                self.group
-            )));
-        }
-        for token in FORBIDDEN_LOCK_TOKENS {
-            if self.group.contains(token) {
-                return Err(RenderError::InvalidWorkflow(format!(
-                    "forbidden_lock_token:{token}"
-                )));
-            }
-        }
-        scan_for_private_subcommands(&self.group)?;
-        if self.cancel_in_progress {
-            return Err(RenderError::InvalidWorkflow("publisher_cancel".to_owned()));
-        }
-        Ok(())
-    }
-}
-
-/// Require the lock key to anchor on the repository identity.
-///
-/// # Errors
-///
-/// Returns [`RenderError::InvalidWorkflow`] for unanchored groups.
-pub fn check_lock_anchor(group: &str, repository: &str) -> Result<(), RenderError> {
-    if group.contains("github.repository") || group.contains(repository) {
-        Ok(())
-    } else {
-        Err(RenderError::InvalidWorkflow(
-            "unstable_lock_anchor".to_owned(),
-        ))
-    }
-}
-
 /// Approved exact-source bootstrap plan (identities only, no credentials).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BootstrapPlan {
@@ -239,7 +181,8 @@ impl BootstrapPlan {
         validate_plan_id(&self.plan_id)?;
         validate_repository(&self.repository)?;
         validate_source_sha(&self.source_sha)?;
-        let charset = |b: u8| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_';
+        let charset =
+            |b: u8| b.is_ascii_lowercase() || b.is_ascii_digit() || matches!(b, b'-' | b'_');
         if !is_clean_text(&self.registry, 64) || !self.registry.bytes().all(charset) {
             return Err(RenderError::InvalidWorkflow(format!(
                 "bad_registry:{}",
