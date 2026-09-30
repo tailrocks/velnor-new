@@ -50,32 +50,30 @@ fn input(name: &str, required: bool, default: Option<&str>) -> DispatchInput {
 }
 
 fn config_problem(config: &RustReleaseConfig) -> String {
-    let Err(ContractError::Config {
-        key_path, problem, ..
-    }) = config.validate(FILE)
-    else {
-        panic!("release config must be rejected");
-    };
-    format!("{key_path} {problem}")
+    match config.validate(FILE) {
+        Err(ContractError::Config {
+            key_path, problem, ..
+        }) => format!("{key_path} {problem}"),
+        _ => "unexpectedly_valid".to_owned(),
+    }
 }
 
 fn identity_problem(workflow: &WorkflowIr) -> String {
-    let Err(ContractError::InvalidIdentity { field, problem }) = workflow.validate() else {
-        panic!("workflow IR must be rejected");
-    };
-    format!("{field} {problem}")
+    if let Err(ContractError::InvalidIdentity { field, problem }) = workflow.validate() {
+        format!("{field} {problem}")
+    } else {
+        "unexpectedly_valid".to_owned()
+    }
 }
 
 fn decode_problem(document: &str) -> String {
     let Err(decode) = serde_json::from_str::<RustReleaseConfig>(document) else {
-        panic!("document must be rejected: {document}");
+        return "unexpectedly_valid".to_owned();
     };
-    let ContractError::Config { problem, .. } =
-        ContractError::map_decode_error(FILE, &decode.to_string())
-    else {
-        panic!("decode failure must map to a config error");
-    };
-    problem
+    match ContractError::map_decode_error(FILE, &decode.to_string()) {
+        ContractError::Config { problem, .. } => problem,
+        other => format!("unexpectedly_mapped:{other:?}"),
+    }
 }
 
 #[test]
@@ -294,16 +292,18 @@ fn ci_workflow() -> WorkflowIr {
 }
 
 fn check_job(workflow: &mut WorkflowIr) -> &mut Job {
-    workflow.jobs.get_mut("check").expect("job")
+    workflow
+        .jobs
+        .entry("check".to_owned())
+        .or_insert_with(ci_job)
 }
 
 fn dispatch_inputs(workflow: &mut WorkflowIr) -> &mut Vec<DispatchInput> {
-    let dispatch = workflow
+    &mut workflow
         .triggers
         .workflow_dispatch
-        .as_mut()
-        .expect("dispatch");
-    &mut dispatch.inputs
+        .get_or_insert_with(|| WorkflowDispatch { inputs: Vec::new() })
+        .inputs
 }
 
 #[test]

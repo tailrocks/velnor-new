@@ -40,6 +40,7 @@ fn config_validation_reports_key_paths() {
                 }],
                 compile_driver: None,
                 test_runner: None,
+                release: velnor_actions_contract::config::RustReleaseConfig::default(),
             }),
         },
         discovery: DiscoveryConfig {
@@ -164,6 +165,7 @@ fn uppercase_rust_config_name_rejected_with_key_path() {
                 }],
                 compile_driver: None,
                 test_runner: None,
+                release: velnor_actions_contract::config::RustReleaseConfig::default(),
             }),
         },
         discovery: DiscoveryConfig { exclude: vec![] },

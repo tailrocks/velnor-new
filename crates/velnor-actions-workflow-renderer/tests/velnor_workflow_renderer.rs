@@ -37,6 +37,14 @@ mod impl_renderer_planformat;
 mod impl_renderer_preseed;
 #[path = "impl_renderer_protocol.rs"]
 mod impl_renderer_protocol;
+#[path = "impl_renderer_release_lock.rs"]
+mod impl_renderer_release_lock;
+#[path = "impl_renderer_release_render.rs"]
+mod impl_renderer_release_render;
+#[path = "impl_renderer_release_spec.rs"]
+mod impl_renderer_release_spec;
+#[path = "impl_renderer_release_tree.rs"]
+mod impl_renderer_release_tree;
 #[path = "impl_renderer_setup.rs"]
 mod impl_renderer_setup;
 #[path = "impl_renderer_steps.rs"]

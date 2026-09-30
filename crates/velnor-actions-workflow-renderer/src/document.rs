@@ -4,7 +4,9 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, Step, StepKind, Trigger, WorkflowIr};
+use velnor_actions_contract::{
+    Job, PermissionLevel, Permissions, Step, StepKind, Trigger, WorkflowIr,
+};
 
 use crate::{
     RenderError, commands,
@@ -28,16 +30,7 @@ pub(crate) fn workflow_to_yaml(
         ("on".to_owned(), triggers_to_yaml(&ir.triggers)),
         (
             "permissions".to_owned(),
-            Yaml::Map(vec![
-                (
-                    "contents".to_owned(),
-                    Yaml::str(ir.permissions.contents.clone()),
-                ),
-                (
-                    "actions".to_owned(),
-                    Yaml::str(ir.permissions.actions.clone()),
-                ),
-            ]),
+            permissions_to_yaml(&ir.permissions),
         ),
         (
             "concurrency".to_owned(),
@@ -78,13 +71,53 @@ fn triggers_to_yaml(triggers: &Trigger) -> Yaml {
     ])
 }
 
-/// Render one job: name, runs-on, needs, condition, steps.
+/// YAML spelling of one typed permission level.
+fn permission_spelling(level: PermissionLevel) -> &'static str {
+    match level {
+        PermissionLevel::Read => "read",
+        PermissionLevel::Write => "write",
+        PermissionLevel::None => "none",
+    }
+}
+
+/// Render one permission set: `contents`/`actions` always, the other
+/// scopes only when granted (absent reads as `none` downstream).
+fn permissions_to_yaml(permissions: &Permissions) -> Yaml {
+    let mut scopes = vec![
+        (
+            "contents".to_owned(),
+            Yaml::str(permission_spelling(permissions.contents).to_owned()),
+        ),
+        (
+            "actions".to_owned(),
+            Yaml::str(permission_spelling(permissions.actions).to_owned()),
+        ),
+    ];
+    for (name, level) in [
+        ("pull-requests", permissions.pull_requests),
+        ("id-token", permissions.id_token),
+    ] {
+        if level != PermissionLevel::None {
+            scopes.push((name.to_owned(), Yaml::str(permission_spelling(level))));
+        }
+    }
+    Yaml::Map(scopes)
+}
+
+/// Render one job: name, runs-on, environment, permissions, needs, condition, steps.
 fn job_to_yaml(id: &str, job: &Job, ctx: &RenderContext) -> Result<Yaml, RenderError> {
     steps::scan_for_private_subcommands(&job.display_name)?;
     let mut entries = vec![
         ("name".to_owned(), Yaml::str(job.display_name.clone())),
         ("runs-on".to_owned(), Yaml::str(job.runs_on.clone())),
     ];
+    if let Some(environment) = &job.environment {
+        steps::scan_for_private_subcommands(environment)?;
+        entries.push(("environment".to_owned(), Yaml::str(environment.clone())));
+    }
+    if let Some(permissions) = &job.permissions {
+        entries.push(("permissions".to_owned(), permissions_to_yaml(permissions)));
+    }
     if !job.needs.is_empty() {
         let needs: Vec<Yaml> = job
             .needs

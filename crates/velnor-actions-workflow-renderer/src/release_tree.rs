@@ -149,6 +149,10 @@ fn release_triggers_to_yaml(triggers: &ReleaseTriggers) -> Yaml {
                 Yaml::str(input.description.clone()),
             ),
             ("required".to_owned(), Yaml::Bool(input.required)),
+            (
+                "type".to_owned(),
+                Yaml::str(crate::release_spec::DispatchInput::INPUT_TYPE.to_owned()),
+            ),
         ];
         if let Some(default) = &input.default {
             fields.push(("default".to_owned(), Yaml::str(default.clone())));

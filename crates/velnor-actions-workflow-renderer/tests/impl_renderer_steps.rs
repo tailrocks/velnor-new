@@ -285,6 +285,8 @@ fn emit_triggers() -> Trigger {
             .collect(),
         push_branches: vec!["main".to_owned()],
         merge_group: true,
+        workflow_dispatch: None,
+        schedule: None,
     }
 }
 
@@ -305,6 +307,8 @@ fn rendered_run_steps_quote_runner_temp_paths() -> Result<(), RenderError> {
             runs_on: EMIT_LABEL.to_owned(),
             needs: Vec::new(),
             condition: None,
+            permissions: None,
+            environment: None,
             steps: vec![
                 checkout_step(&pin("actions/checkout"))?,
                 shell_step(
@@ -319,10 +323,7 @@ fn rendered_run_steps_quote_runner_temp_paths() -> Result<(), RenderError> {
     let ir = WorkflowIr {
         name: "CI".to_owned(),
         triggers: emit_triggers(),
-        permissions: Permissions {
-            contents: "read".to_owned(),
-            actions: "read".to_owned(),
-        },
+        permissions: Permissions::default(),
         concurrency: emit_concurrency(),
         jobs,
     };

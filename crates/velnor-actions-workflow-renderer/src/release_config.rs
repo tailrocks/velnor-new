@@ -7,7 +7,7 @@
 
 use crate::{
     RenderError, marker,
-    release_spec::{is_clean_text, validate_package_name, validate_package_version},
+    release_spec::{is_clean_text, validate_package_name},
     steps::scan_for_private_subcommands,
 };
 
@@ -160,16 +160,17 @@ fn toml_escape(value: &str) -> String {
 /// Deterministic TOML body; only the bootstrap call passes `true`.
 fn toml_body(config: &ReleasePlzConfig, release_always: bool) -> String {
     let mut out = String::from("[workspace]\nrelease = false\n");
-    out.push_str(&format!("release_always = {release_always}\n"));
-    out.push_str(&format!("semver_check = {}\n", config.semver_check));
+    let always = format!("release_always = {release_always}\n");
+    out.push_str(&always);
+    let semver = format!("semver_check = {}\n", config.semver_check);
+    out.push_str(&semver);
     out.push_str("publish_no_verify = false\npublish_allow_dirty = false\n");
-    out.push_str(&format!(
-        "git_tag_name = \"{}\"\n",
-        toml_escape(&config.tag_pattern)
-    ));
+    let tag = format!("git_tag_name = \"{}\"\n", toml_escape(&config.tag_pattern));
+    out.push_str(&tag);
     for package in &config.packages {
         out.push_str("\n[[package]]\n");
-        out.push_str(&format!("name = \"{}\"\n", toml_escape(&package.name)));
+        let name = format!("name = \"{}\"\n", toml_escape(&package.name));
+        out.push_str(&name);
         out.push_str("release = true\npublish = true\ngit_only = false\n");
         if !package.publish_features.is_empty() {
             let features: Vec<String> = package
@@ -177,7 +178,8 @@ fn toml_body(config: &ReleasePlzConfig, release_always: bool) -> String {
                 .iter()
                 .map(|feature| format!("\"{}\"", toml_escape(feature)))
                 .collect();
-            out.push_str(&format!("publish_features = [{}]\n", features.join(", ")));
+            let line = format!("publish_features = [{}]\n", features.join(", "));
+            out.push_str(&line);
         }
     }
     out
