@@ -105,7 +105,11 @@ GitHub-releases tags, `crates.io` `max_version`, and the rust channel
 manifest's `[pkg.rust]` version. It writes nothing. Every probe row
 records its source URL and check timestamp; stale pins and lookup
 failures fail as rows — signal for the next update set, not a build
-gate. The GitHub-hosted runner family has no releases API: its
+gate. A `lookup_failed` row is fail-closed signal, never current:
+re-run the probe to separate a transient fetch fault (a retry resolves
+clean) from a persistent upstream change (repeated runs agree); both
+fail, and only agreeing runs back an evidence refresh. The
+GitHub-hosted runner family has no releases API: its
 latest-family evidence comes from platform qualification, recorded as
 runtime `ImageOS`/`ImageVersion`, not from this probe.
 
@@ -119,10 +123,18 @@ technical reason, `granted` and `expires` (YYYY-MM-DD), and is recorded in
   longer spans, future `granted` dates, and inverted windows.
 - The script fails once a hold expires. Renewal requires a NEW review and
   NEW evidence — never a date edit.
-- Standing exceptions (`expires: null`) are allowed ONLY when spec-blessed
-  (currently: the reviewed `asamarts/alint@v0.16.1` mutable tag with
-  `kind` + `expiry_policy` + `blessed_by`). Anything else without an
-  expiry fails the gate.
+- Standing exceptions (`expires: null`) are allowed ONLY for the one
+  spec-blessed record: `key = "asamarts/alint"` (the reviewed
+  `asamarts/alint@v0.16.1` mutable-tag exception, version-policy §2/§4)
+  carrying non-empty `kind`, `expiry_policy`, `blessed_by`, and a `tag`
+  that equals the reviewed `pinned_version` of the inventory's
+  `asamarts/alint` action row. A pin move without a re-blessing fails,
+  as does any other key without an expiry.
+- Dated entries under `exceptions` carry the same full attribution as
+  holds (`held_version`, `owner`, `issue`, `reason`, `granted`,
+  `expires`) and the same ≤14-day, chronology, and known-subject rules.
+  They are independent records: only `temporary_holds` covers a
+  `status: held` row.
 - Security fixes use the expedited path: same-day update set, minimal scope,
   qualification MAY run the affected-subset first but the full gate MUST
   still pass before merge (VER-1.7).
@@ -171,6 +183,23 @@ manifests exist, and manifest/version-policy edits belong to the parent,
 not this change. The designated target when wiring lands is the
 final-gate merge entrypoint over untrusted request JSON. Miri/Loom and
 semver triggers live in `docs/implemented/verification-triggers.md`.
+
+## Focused verification (policy-only changes)
+
+A change touching only this procedure's owned files (the gate script,
+`version-policy.toml`, the inventory, the `p12_*` CLI suites,
+`mutants.toml`, this doc) qualifies with this focused path instead of
+the full update-set list above:
+
+1. `bash -n scripts/check-freshness.sh` plus `shellcheck` on the script.
+2. `bash scripts/check-freshness.sh` (offline gate; exit 0 only with
+   fresh evidence for every row) and
+   `bash scripts/check-freshness.sh --check-upstream` as the bounded
+   non-gating signal for the next update set.
+3. `cargo nextest run --locked -p velnor-actions-cli -E 'test(p12_)'`
+   (CLI policy suites; narrow to `test(p12_property)` for the seeded
+   property path alone), plus `cargo fmt` and `cargo clippy` for any
+   touched Rust files.
 
 ## Limits discipline (RQ-5.3)
 
