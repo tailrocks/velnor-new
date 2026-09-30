@@ -96,22 +96,28 @@ fn live_proof_dims(
 }
 
 /// Structured proof over the entry digests with live identity dims.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "a proof carries nine bound values at once"
+)]
 fn live_proof(
     task_id: &str,
     digest: &str,
     graph: &str,
     toolchain: &str,
     platform: &str,
+    profile: &str,
+    mbx: &str,
 ) -> velnor_actions_contract::ManifestTaskProof {
     velnor_actions_contract::ManifestTaskProof::new(
-        task_id, digest, digest, graph, toolchain, digest, platform, "default", 7,
+        task_id, digest, digest, graph, toolchain, mbx, platform, profile, 7,
     )
     .expect("proof")
 }
 
-/// Structured proofs compare their carried identity against live
-/// values: drifted graph, toolchain, or platform refuses coverage,
-/// while a matching proof covers and records the mbx/profile gap.
+/// Structured proofs compare all five carried dims against live values:
+/// drifted graph, toolchain, platform, profile, or mbx refuses
+/// coverage, while a fully matching proof covers silently.
 #[test]
 fn structured_proof_dimensions_compare_live() {
     let rust = "stack/rust/root/clippy/default";
@@ -124,6 +130,13 @@ fn structured_proof_dimensions_compare_live() {
     let live = live_closure_digest(tmp.path(), &discovery, rust, &catalog);
     let (graph, toolchain, platform) =
         live_proof_dims(tmp.path(), &discovery, rust, &catalog, "ubuntu-26.04");
+    let group = discovery
+        .task_groups
+        .iter()
+        .find(|group| group.task_id == rust)
+        .expect("group");
+    let profile = group.configuration.clone();
+    let mbx = live_mbx_digest(group, &catalog);
     let contracted = digest.clone();
     let cover = |proof: velnor_actions_contract::ManifestTaskProof| {
         let mut manifest = manifest_with(&[(rust, &live)]);
@@ -139,23 +152,26 @@ fn structured_proof_dimensions_compare_live() {
         );
         (covered, plan.warnings)
     };
-    let (covered, warnings) = cover(live_proof(rust, &digest, &graph, &toolchain, &platform));
+    let (covered, warnings) = cover(live_proof(
+        rust, &digest, &graph, &toolchain, &platform, &profile, &mbx,
+    ));
     assert_eq!(covered, 1);
     assert!(
-        warnings
-            .iter()
-            .any(|w| w.contains(PROOF_DIM_COMPARISON_GAP)),
-        "{warnings:?}"
+        warnings.iter().all(|w| !w.contains("baseline_note")),
+        "a matching proof covers silently: {warnings:?}"
     );
+    let other = |seed: &[u8]| velnor_actions_contract::digest_b3(seed);
     for (label, proof) in [
         (
             "proof_graph_mismatch",
             live_proof(
                 rust,
                 &contracted,
-                &velnor_actions_contract::digest_b3(b"other-graph"),
+                &other(b"other-graph"),
                 &toolchain,
                 &platform,
+                &profile,
+                &mbx,
             ),
         ),
         (
@@ -164,8 +180,10 @@ fn structured_proof_dimensions_compare_live() {
                 rust,
                 &contracted,
                 &graph,
-                &velnor_actions_contract::digest_b3(b"other-toolchain"),
+                &other(b"other-toolchain"),
                 &platform,
+                &profile,
+                &mbx,
             ),
         ),
         (
@@ -175,7 +193,33 @@ fn structured_proof_dimensions_compare_live() {
                 &contracted,
                 &graph,
                 &toolchain,
-                &velnor_actions_contract::digest_b3(b"other-platform"),
+                &other(b"other-platform"),
+                &profile,
+                &mbx,
+            ),
+        ),
+        (
+            "proof_profile_mismatch",
+            live_proof(
+                rust,
+                &contracted,
+                &graph,
+                &toolchain,
+                &platform,
+                "other-profile",
+                &mbx,
+            ),
+        ),
+        (
+            "proof_mbx_mismatch",
+            live_proof(
+                rust,
+                &contracted,
+                &graph,
+                &toolchain,
+                &platform,
+                &profile,
+                &other(b"other-mbx"),
             ),
         ),
     ] {
@@ -186,6 +230,31 @@ fn structured_proof_dimensions_compare_live() {
             "{label}: {warnings:?}"
         );
     }
+}
+
+/// The live mbx dimension binds the driver plus the catalog pin for
+/// mbx-driven groups only: cargo groups ignore pin drift, mbx groups
+/// refuse proofs from another driver.
+#[test]
+fn live_mbx_binds_driver_and_pin() {
+    let catalog = ToolCatalog::pinned();
+    let discovery = discovery_with(&["stack/rust/root/clippy/default"]);
+    let cargo = &discovery.task_groups[0];
+    assert_eq!(cargo.compile_driver, "cargo");
+    let mut mbx = cargo.clone();
+    mbx.compile_driver = "mbx".to_owned();
+    assert_ne!(
+        live_mbx_digest(cargo, &catalog),
+        live_mbx_digest(&mbx, &catalog),
+        "driver drift changes the live mbx dim"
+    );
+    let mut renamed = cargo.clone();
+    renamed.task_id = "stack/rust/root/other/default".to_owned();
+    assert_eq!(
+        live_mbx_digest(cargo, &catalog),
+        live_mbx_digest(&renamed, &catalog),
+        "unrelated group facts leave the live mbx dim alone"
+    );
 }
 
 #[test]
