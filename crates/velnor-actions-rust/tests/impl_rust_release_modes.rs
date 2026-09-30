@@ -18,6 +18,10 @@ pub(crate) fn manifest(root: &Path, relative: &str) -> String {
 }
 
 /// Minimal package value; `publish` is raw JSON (null or an array).
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "owned temporaries keep call sites terse"
+)]
 pub(crate) fn pkg(
     root: &Path,
     id: &str,
@@ -66,6 +70,10 @@ pub(crate) fn dep(name: &str, req: &str, opt: DepOpt) -> Value {
 }
 
 /// Minimal `cargo metadata` document text.
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "owned vecs keep call sites terse"
+)]
 pub(crate) fn doc(root: &Path, members: Vec<&str>, packages: Vec<Value>) -> String {
     let root_text = root.to_string_lossy().into_owned();
     json!({
