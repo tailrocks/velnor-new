@@ -169,8 +169,7 @@ fn anchor_slug() -> String {
     std::env::var("GITHUB_REPOSITORY")
         .ok()
         .filter(|slug| shaped(slug))
-        .map(|slug| slug.to_lowercase())
-        .unwrap_or_else(|| "o/r".to_owned())
+        .map_or_else(|| "o/r".to_owned(), |slug| slug.to_lowercase())
 }
 
 /// Minimal git checkout anchoring `slug` as its origin.

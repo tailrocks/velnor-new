@@ -96,10 +96,6 @@ fn live_proof_dims(
 }
 
 /// Structured proof over the entry digests with live identity dims.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "a proof carries nine bound values at once"
-)]
 fn live_proof(
     task_id: &str,
     digest: &str,
@@ -115,14 +111,30 @@ fn live_proof(
     .expect("proof")
 }
 
-/// Structured proofs compare all five carried dims against live values:
-/// drifted graph, toolchain, platform, profile, or mbx refuses
-/// coverage, while a fully matching proof covers silently.
-#[test]
-fn structured_proof_dimensions_compare_live() {
+/// Live closure plus all five live proof dims for the fixture group.
+#[derive(Debug)]
+struct LiveFixture {
+    /// Scratch checkout root backing live resolution.
+    tmp: tempfile::TempDir,
+    /// Discovery with the single fixture group.
+    discovery: Discovery,
+    /// Live closure digest the entries bind.
+    live: String,
+    /// Live graph digest.
+    graph: String,
+    /// Live toolchain identity.
+    toolchain: String,
+    /// Live platform identity.
+    platform: String,
+    /// Live execution profile.
+    profile: String,
+    /// Live mbx dimension.
+    mbx: String,
+}
+
+/// Live fixture plus the pinned catalog behind it.
+fn live_fixture() -> (LiveFixture, ToolCatalog) {
     let rust = "stack/rust/root/clippy/default";
-    let digest = velnor_actions_contract::digest_b3(b"digest");
-    let unchanged = Some(BTreeSet::new());
     let tmp = tempfile::tempdir().expect("tempdir");
     seed_sources(tmp.path());
     let catalog = ToolCatalog::pinned();
@@ -137,93 +149,155 @@ fn structured_proof_dimensions_compare_live() {
         .expect("group");
     let profile = group.configuration.clone();
     let mbx = live_mbx_digest(group, &catalog);
-    let contracted = digest.clone();
-    let cover = |proof: velnor_actions_contract::ManifestTaskProof| {
-        let mut manifest = manifest_with(&[(rust, &live)]);
-        manifest.tasks[0].proof = Some(proof);
-        let mut plan = plan_with(&[rust]);
-        let covered = apply_coverage(
-            &mut plan,
-            &manifest,
-            &provenance_for(&manifest),
-            &discovery,
-            unchanged.as_ref(),
-            &inputs(tmp.path(), &catalog),
-        );
-        (covered, plan.warnings)
-    };
-    let (covered, warnings) = cover(live_proof(
-        rust, &digest, &graph, &toolchain, &platform, &profile, &mbx,
-    ));
+    (
+        LiveFixture {
+            tmp,
+            discovery,
+            live,
+            graph,
+            toolchain,
+            platform,
+            profile,
+            mbx,
+        },
+        catalog,
+    )
+}
+
+/// Coverage verdict for one carried proof over the live fixture.
+fn cover_with(
+    fixture: &LiveFixture,
+    catalog: &ToolCatalog,
+    proof: velnor_actions_contract::ManifestTaskProof,
+) -> (u32, Vec<String>) {
+    let rust = "stack/rust/root/clippy/default";
+    let mut manifest = manifest_with(&[(rust, &fixture.live)]);
+    manifest.tasks[0].proof = Some(proof);
+    let mut plan = plan_with(&[rust]);
+    let unchanged = BTreeSet::new();
+    let covered = apply_coverage(
+        &mut plan,
+        &manifest,
+        &provenance_for(&manifest),
+        &fixture.discovery,
+        Some(&unchanged),
+        &inputs(fixture.tmp.path(), catalog),
+    );
+    (covered, plan.warnings)
+}
+
+/// A proof matching all five live dims covers silently: no gap note,
+/// no miss warning.
+#[test]
+fn structured_proof_match_covers_silently() {
+    let rust = "stack/rust/root/clippy/default";
+    let digest = velnor_actions_contract::digest_b3(b"digest");
+    let (fixture, catalog) = live_fixture();
+    let proof = live_proof(
+        rust,
+        &digest,
+        &fixture.graph,
+        &fixture.toolchain,
+        &fixture.platform,
+        &fixture.profile,
+        &fixture.mbx,
+    );
+    let (covered, warnings) = cover_with(&fixture, &catalog, proof);
     assert_eq!(covered, 1);
     assert!(
         warnings.iter().all(|w| !w.contains("baseline_note")),
         "a matching proof covers silently: {warnings:?}"
     );
+}
+
+/// One drifted proof per dimension, each labeled by its miss token.
+fn drifted_proofs(
+    rust: &str,
+    digest: &str,
+    fixture: &LiveFixture,
+) -> Vec<(&'static str, velnor_actions_contract::ManifestTaskProof)> {
+    let LiveFixture {
+        graph,
+        toolchain,
+        platform,
+        profile,
+        mbx,
+        ..
+    } = fixture;
     let other = |seed: &[u8]| velnor_actions_contract::digest_b3(seed);
-    for (label, proof) in [
+    vec![
         (
             "proof_graph_mismatch",
             live_proof(
                 rust,
-                &contracted,
+                digest,
                 &other(b"other-graph"),
-                &toolchain,
-                &platform,
-                &profile,
-                &mbx,
+                toolchain,
+                platform,
+                profile,
+                mbx,
             ),
         ),
         (
             "proof_toolchain_mismatch",
             live_proof(
                 rust,
-                &contracted,
-                &graph,
+                digest,
+                graph,
                 &other(b"other-toolchain"),
-                &platform,
-                &profile,
-                &mbx,
+                platform,
+                profile,
+                mbx,
             ),
         ),
         (
             "proof_platform_mismatch",
             live_proof(
                 rust,
-                &contracted,
-                &graph,
-                &toolchain,
+                digest,
+                graph,
+                toolchain,
                 &other(b"other-platform"),
-                &profile,
-                &mbx,
+                profile,
+                mbx,
             ),
         ),
         (
             "proof_profile_mismatch",
             live_proof(
                 rust,
-                &contracted,
-                &graph,
-                &toolchain,
-                &platform,
+                digest,
+                graph,
+                toolchain,
+                platform,
                 "other-profile",
-                &mbx,
+                mbx,
             ),
         ),
         (
             "proof_mbx_mismatch",
             live_proof(
                 rust,
-                &contracted,
-                &graph,
-                &toolchain,
-                &platform,
-                &profile,
+                digest,
+                graph,
+                toolchain,
+                platform,
+                profile,
                 &other(b"other-mbx"),
             ),
         ),
-    ] {
-        let (covered, warnings) = cover(proof);
+    ]
+}
+
+/// Drift in any one of the five carried dims refuses coverage with
+/// its own miss token.
+#[test]
+fn structured_proof_drift_refuses_per_dimension() {
+    let rust = "stack/rust/root/clippy/default";
+    let digest = velnor_actions_contract::digest_b3(b"digest");
+    let (fixture, catalog) = live_fixture();
+    for (label, proof) in drifted_proofs(rust, &digest, &fixture) {
+        let (covered, warnings) = cover_with(&fixture, &catalog, proof);
         assert_eq!(covered, 0, "{label}");
         assert!(
             warnings.iter().any(|w| w.contains(label)),
