@@ -224,33 +224,31 @@ fn new_package_at_head_marks_affected() -> TestResult {
 }
 
 #[test]
-fn source_build_skips_lookup_with_reason() -> TestResult {
+fn plan_rejects_claimed_generator_identity() -> TestResult {
+    use crate::impl_common::err_of;
     let (repo, base, head) = two_commit_repo()?;
-    // P03: no zero digests. Inject the explicit unresolved marker (the
-    // default when the exe digest is unreadable); the native `b3-`
-    // default instead attempts live lookup and lets provenance decide.
+    // A hand-written request claiming a release pin fails: the plan
+    // always names the running binary, so no request field can bless a
+    // source build as a release.
     let request = serde_json::json!({
         "schema": 1, "run_key": "local", "base": Some(&base), "head": head,
         "event": "pull_request", "root": repo.path().display().to_string(),
         "generator": {
             "version": env!("CARGO_PKG_VERSION"),
             "target": "x86_64-unknown-linux-gnu",
-            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "sha256": "e".repeat(64),
         },
     });
-    let response = plan_internal(&request.to_string())?;
-    let value: serde_json::Value = serde_json::from_str(&response)?;
-    let plan: Plan = serde_json::from_value(value["plan"].clone())?;
-    assert_ne!(plan.generator.sha256, "0".repeat(64));
-    assert_eq!(
-        plan.baseline.reason(),
-        Some("generator_unverifiable_source_build")
+    let err = err_of(plan_internal(&request.to_string()), "claimed generator")?;
+    assert!(
+        err.to_string().contains("malformed_request"),
+        "hand-written release pin rejected: {err}"
     );
     Ok(())
 }
 
 #[test]
-fn release_lock_resolves_generator_identity() -> TestResult {
+fn release_lock_never_resolves_generator_identity() -> TestResult {
     let (repo, base, head) = two_commit_repo()?;
     let sha = "e".repeat(64);
     let version = env!("CARGO_PKG_VERSION");
@@ -266,12 +264,9 @@ fn release_lock_resolves_generator_identity() -> TestResult {
     );
     std::fs::write(repo.path().join(".velnor/generator.lock"), lock)?;
     let (plan, _) = plan_with(repo.path(), Some(&base), &head, None)?;
-    // The observed exe SHA wins over the lock pin: a matching version
-    // never blesses a source build as a release.
-    assert_ne!(
-        plan.generator.sha256, sha,
-        "observed exe SHA wins over lock pin"
-    );
+    // The running binary names itself: the lock pin is never adopted,
+    // so a source build can never emit a release-pinned identity.
+    assert_ne!(plan.generator.sha256, sha, "lock pin never adopted");
     assert_eq!(plan.generator.sha256.len(), 64);
     assert!(
         plan.generator.sha256.bytes().all(|b| b.is_ascii_hexdigit()),

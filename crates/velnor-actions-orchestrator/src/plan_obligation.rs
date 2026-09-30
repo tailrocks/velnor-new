@@ -194,12 +194,19 @@ pub(crate) fn plan_group(
         _ => reuse,
     };
     let task_digest = task_digest(&group.task_id, &argv, &toolchain).map_err(internal_contract)?;
+    // The persisted input digest flows through the validated reuse
+    // outcome when one exists, so merge-time live comparison judges the
+    // exact recorded value; forced-execution paths carry the identity.
+    let recorded = reuse
+        .recorded_input_digest
+        .clone()
+        .unwrap_or_else(|| input_digest.clone());
     let obligation = PlanObligation {
         task_id: group.task_id.clone(),
         decision: reuse.decision,
         reason: reuse.reason,
         task_digest: task_digest.clone(),
-        input_digest: input_digest.clone(),
+        input_digest: recorded,
         closure_digest,
         baseline_proof: None,
     };

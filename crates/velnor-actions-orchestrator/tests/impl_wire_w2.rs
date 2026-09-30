@@ -169,10 +169,14 @@ fn manifest_task_proofs_validate_per_task() -> TestResult {
             "graph_digest": ob.task_digest, "toolchain_id": ob.task_digest, "mbx_digest": ob.task_digest,
             "platform_id": ob.task_digest, "profile": "default", "proof_run_id": 7});
     }
+    // Placeholder identity dimensions (graph/toolchain/platform set to
+    // the task digest) no longer bind: live comparison refuses coverage
+    // per task with a precise mismatch reason.
     let warm = plan_value(root, "pull_request", Some(&head), &head, Some(&manifest))?;
     for ob in warm["plan"]["obligations"].as_array().expect("obligations") {
-        assert_eq!(ob["decision"], "covered_by_trusted_baseline", "{ob}");
+        assert_eq!(ob["decision"], "execute", "{ob}");
     }
+    assert!(has_warning(&warm, "proof_graph_mismatch"), "{warm}");
     // A proof that parses but no longer binds its entry fails per-task
     // re-validation with a precise mismatch reason.
     let mut bad = manifest_for(&plan, &head, "testmain")?;

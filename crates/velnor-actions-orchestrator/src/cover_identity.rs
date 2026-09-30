@@ -17,10 +17,13 @@ mod cover_identity_tests;
 mod cover_identity_fixtures;
 
 use std::collections::BTreeSet;
+use std::path::Path;
 
 use velnor_actions_contract::{
-    BaselineProof, ObligationDecision, Plan, PlanObligation, validate_rust_extension,
+    BaselineProof, ManifestTaskProof, ObligationDecision, Plan, PlanObligation,
+    validate_rust_extension,
 };
+use velnor_actions_rust::TaskGroup;
 
 use crate::cover_baseline::BaselineInputs;
 use crate::cover_baseline::provenance_check::ValidatedProvenance;
@@ -36,9 +39,14 @@ use crate::internal_plan::snapshot::{ExecutionSnapshot, canonical_digest};
 use crate::internal_plan::{nextest_config_for, toolchain_id};
 use crate::merge::BaselineManifest;
 
-pub(crate) use self::generator::{
-    SOURCE_BUILD_REASON, is_source_build, resolve_generator_identity,
-};
+pub(crate) use self::generator::{SOURCE_BUILD_REASON, is_source_build};
+
+/// Explicit unpassed acceptance: a structured task proof carries `mbx`
+/// and `profile` dimensions for which the data model defines no live
+/// source (no publisher binds them), so coverage compares the
+/// graph/toolchain/platform dimensions and records these two openly
+/// instead of passing silently.
+pub(crate) const PROOF_DIM_COMPARISON_GAP: &str = "unpassed:proof_mbx_profile_have_no_live_source";
 
 /// Cover-time closure digest for one group, or the refusal reason.
 ///
@@ -96,6 +104,43 @@ fn cover_closure_digest(
     canonical_digest(&closure).map_err(|_| "closure_digest_failed".to_owned())
 }
 
+/// Structured proof verified against live task identity.
+///
+/// Compares the carried graph, toolchain, and platform dimensions
+/// against the values resolved live for this group; any drift refuses
+/// coverage. The `mbx` and `profile` dimensions have no defined live
+/// source (see [`PROOF_DIM_COMPARISON_GAP`]) and stay uncompared but
+/// explicitly recorded by the caller.
+fn verify_proof_live(
+    snapshot: &ExecutionSnapshot,
+    discovery: &Discovery,
+    group: &TaskGroup,
+    proof: &ManifestTaskProof,
+    root: &Path,
+    catalog: &velnor_actions_mise::ToolCatalog,
+    label: &str,
+) -> Result<(), String> {
+    let bundle = extension_bundle_with_snapshot(
+        snapshot,
+        discovery,
+        group,
+        Some(root),
+        nextest_config_for(discovery, group).as_deref(),
+    );
+    if proof.graph_digest() != bundle.graph_digest() {
+        return Err("proof_graph_mismatch".to_owned());
+    }
+    let toolchain =
+        toolchain_id(group, catalog).map_err(|_| "toolchain_unresolvable".to_owned())?;
+    if proof.toolchain_id() != toolchain {
+        return Err("proof_toolchain_mismatch".to_owned());
+    }
+    if proof.platform_id() != platform_id_for_group(label, group) {
+        return Err("proof_platform_mismatch".to_owned());
+    }
+    Ok(())
+}
+
 /// Live closure digest verified against the baseline entry.
 ///
 /// Resolves the cover-time closure (refusing unknown inputs, undeclared
@@ -143,6 +188,68 @@ fn mark_covered(
     true
 }
 
+/// Structured proof gate for one candidate entry.
+///
+/// A carried proof compares against live identity; drift refuses with
+/// its miss warning, and a match records the mbx/profile comparison
+/// gap openly. Entries without a proof pass through untouched.
+fn gate_proof(
+    warnings: &mut Vec<String>,
+    label: &str,
+    task: &crate::merge::required_evidence::BaselineTaskEntry,
+    group: &TaskGroup,
+    snapshot: &ExecutionSnapshot,
+    discovery: &Discovery,
+    inputs: &BaselineInputs<'_>,
+) -> bool {
+    let Some(proof) = &task.proof else {
+        return true;
+    };
+    if let Err(reason) = verify_proof_live(
+        snapshot,
+        discovery,
+        group,
+        proof,
+        inputs.root,
+        inputs.catalog,
+        label,
+    ) {
+        warnings.push(format!("baseline_miss:{}:{reason}", group.task_id));
+        return false;
+    }
+    warnings.push(format!(
+        "baseline_note:{}:{PROOF_DIM_COMPARISON_GAP}",
+        group.task_id
+    ));
+    true
+}
+
+/// Schema and external-data gates for one candidate entry.
+///
+/// Unknown extension schemas never cover, and advisory external data
+/// forces a rerun unless fresh enough to skip.
+fn gate_guards(
+    warnings: &mut Vec<String>,
+    task_id: &str,
+    task: &crate::merge::required_evidence::BaselineTaskEntry,
+) -> bool {
+    if !coverage_schema_known(task_id) {
+        warnings.push(format!("baseline_miss:{task_id}:unknown_extension_schema"));
+        return false;
+    }
+    if external_data_kind(task_id).is_some()
+        && !may_skip_external_data(
+            true,
+            task.external_data.as_ref(),
+            DEFAULT_EXTERNAL_DATA_MAX_AGE_SECS,
+        )
+    {
+        warnings.push(format!("baseline_miss:{task_id}:external_data_rerun"));
+        return false;
+    }
+    true
+}
+
 /// Mark covered obligations and prune the matrix; returns covered count.
 ///
 /// Coverage needs an exact closure-digest match against the checkout:
@@ -185,6 +292,17 @@ pub(crate) fn apply_coverage(
             ));
             continue;
         };
+        if !gate_proof(
+            &mut plan.warnings,
+            &plan.runner.label,
+            task,
+            group,
+            &snapshot,
+            discovery,
+            inputs,
+        ) {
+            continue;
+        }
         if member_changed(group, changed, &keys) {
             continue;
         }
@@ -201,24 +319,7 @@ pub(crate) fn apply_coverage(
                 .push(format!("baseline_miss:{}:{reason}", obligation.task_id));
             continue;
         }
-        if !coverage_schema_known(&obligation.task_id) {
-            plan.warnings.push(format!(
-                "baseline_miss:{}:unknown_extension_schema",
-                obligation.task_id
-            ));
-            continue;
-        }
-        if external_data_kind(&obligation.task_id).is_some()
-            && !may_skip_external_data(
-                true,
-                task.external_data.as_ref(),
-                DEFAULT_EXTERNAL_DATA_MAX_AGE_SECS,
-            )
-        {
-            plan.warnings.push(format!(
-                "baseline_miss:{}:external_data_rerun",
-                obligation.task_id
-            ));
+        if !gate_guards(&mut plan.warnings, &obligation.task_id, task) {
             continue;
         }
         if mark_covered(obligation, task, provenance) {

@@ -310,6 +310,36 @@ impl ManifestTaskProof {
         self.input_digest.as_str()
     }
 
+    /// Graph digest.
+    #[must_use]
+    pub fn graph_digest(&self) -> &str {
+        self.graph_digest.as_str()
+    }
+
+    /// Toolchain identity digest.
+    #[must_use]
+    pub fn toolchain_id(&self) -> &str {
+        self.toolchain_id.as_str()
+    }
+
+    /// MBX digest.
+    #[must_use]
+    pub fn mbx_digest(&self) -> &str {
+        self.mbx_digest.as_str()
+    }
+
+    /// Platform identity digest.
+    #[must_use]
+    pub fn platform_id(&self) -> &str {
+        self.platform_id.as_str()
+    }
+
+    /// Profile name.
+    #[must_use]
+    pub fn profile(&self) -> &str {
+        &self.profile
+    }
+
     /// Numeric proof run ID.
     #[must_use]
     pub fn proof_run_id(&self) -> u64 {

@@ -49,6 +49,7 @@ mod impl_plan_prepare;
 mod impl_prepare_generate;
 mod impl_protocol;
 mod impl_required_evidence;
+mod impl_required_reports;
 mod impl_select;
 mod impl_select_base;
 mod impl_strict_envelope;

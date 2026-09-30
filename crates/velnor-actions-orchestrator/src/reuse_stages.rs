@@ -11,8 +11,10 @@ use velnor_actions_contract::validate_digest;
 use velnor_actions_mise::CachedTaskDescriptor;
 use velnor_actions_mise::cache::verify_artifact_digest;
 use velnor_actions_mise::restore::MissReason;
+use velnor_actions_mise::restore_evidence::output_bytes_complete;
 
-/// Exact identity a reuse must match: key, compatibility, trust scope.
+/// Exact identity a reuse must match: key, compatibility, trust scope,
+/// and the recorded input digest the live digest must still equal.
 #[derive(Debug, Clone)]
 pub(crate) struct ExpectedReuseIdentity {
     /// Expected cache-key digest over the complete descriptor.
@@ -21,11 +23,15 @@ pub(crate) struct ExpectedReuseIdentity {
     pub(crate) compatibility_id: String,
     /// Expected owner trust scope.
     pub(crate) owner_scope: String,
+    /// Recorded input digest over task content at plan time.
+    pub(crate) input_digest: String,
 }
 
-/// Observed restore outcome: entry key, compatibility, owner.
+/// Observed restore outcome: task, entry key, compatibility, owner.
 #[derive(Debug, Clone)]
 pub(crate) struct ObservedRestoreMeta {
+    /// Task the restore evidence was observed for.
+    pub(crate) task_id: String,
     /// Observed entry cache-key digest.
     pub(crate) key: String,
     /// Observed entry compatibility digest.
@@ -73,12 +79,14 @@ fn check_presence(observed: &[ObservedOutput]) -> Result<(), MissReason> {
 
 /// Restored: every observed output verifies against its claimed digest.
 ///
-/// Zero-byte declared outputs are incomplete; malformed digests and
-/// byte mismatches are corruption. Verification always hashes the
-/// observed bytes; claimed digests are never trusted.
+/// Zero-byte declared outputs are incomplete under the single P04 rule
+/// in [`output_bytes_complete`], shared with the mise layer so both
+/// layers always agree; malformed digests and byte mismatches are
+/// corruption. Verification always hashes the observed bytes; claimed
+/// digests are never trusted.
 fn check_restored(declared: &[String], observed: &[ObservedOutput]) -> Result<(), MissReason> {
     for (_, bytes, digest) in observed {
-        if bytes.is_empty() {
+        if !output_bytes_complete(bytes) {
             return Err(MissReason::TASK_RESULT_INCOMPLETE);
         }
         if validate_digest(digest).is_err() {
@@ -99,16 +107,25 @@ fn check_restored(declared: &[String], observed: &[ObservedOutput]) -> Result<()
 /// Verified: observed restore matches the exact expected identity.
 ///
 /// Missing expectations or restore metadata fail closed: reuse without
-/// a trust anchor is incomplete evidence, never a pass.
+/// a trust anchor is incomplete evidence, never a pass. The restore
+/// must name this task, and the live input digest must still equal the
+/// recorded plan-time digest: a same-path source edit flips the live
+/// digest and rejects the reuse even when every other stage passes.
 fn check_verified(
     expected: Option<&ExpectedReuseIdentity>,
     restore: Option<&ObservedRestoreMeta>,
+    task_id: &str,
+    live_input_digest: Option<&str>,
 ) -> Result<(), MissReason> {
     let (Some(expected), Some(restore)) = (expected, restore) else {
         return Err(MissReason::TASK_RESULT_INCOMPLETE);
     };
+    if task_id.is_empty() || restore.task_id != task_id {
+        return Err(MissReason::NO_ENTRY);
+    }
     if validate_digest(&expected.cache_key).is_err()
         || validate_digest(&expected.compatibility_id).is_err()
+        || validate_digest(&expected.input_digest).is_err()
         || expected.owner_scope.is_empty()
     {
         return Err(MissReason::INPUT_DIGEST_MISMATCH);
@@ -128,13 +145,20 @@ fn check_verified(
     if restore.owner != expected.owner_scope {
         return Err(MissReason::TRUST_SCOPE_MISMATCH);
     }
+    let Some(live) = live_input_digest else {
+        return Err(MissReason::TASK_RESULT_INCOMPLETE);
+    };
+    if validate_digest(live).is_err() || live != expected.input_digest {
+        return Err(MissReason::INPUT_DIGEST_MISMATCH);
+    }
     Ok(())
 }
 
 /// Verify a reuse through every stage: presence, eligibility, restored
-/// outputs, then the exact expected identity. Only a fully validated
-/// restore passes; every unsafe case fails with a precise reason and
-/// the caller executes instead (misses stay nonfatal optimizations).
+/// outputs, then the exact expected identity plus the live input
+/// binding. Only a fully validated restore passes; every unsafe case
+/// fails with a precise reason and the caller executes instead (misses
+/// stay nonfatal optimizations).
 ///
 /// # Errors
 ///
@@ -145,191 +169,15 @@ pub(crate) fn verify_reused_pipeline(
     descriptor: Option<&CachedTaskDescriptor>,
     expected: Option<&ExpectedReuseIdentity>,
     restore: Option<&ObservedRestoreMeta>,
+    task_id: &str,
+    live_input_digest: Option<&str>,
 ) -> Result<(), MissReason> {
     check_presence(observed)?;
     check_eligibility(declared, descriptor)?;
     check_restored(declared, observed)?;
-    check_verified(expected, restore)
+    check_verified(expected, restore, task_id, live_input_digest)
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use std::collections::BTreeMap;
-    use velnor_actions_contract::digest_b3;
-
-    /// Complete descriptor over one source, output, env entry, and tool.
-    fn descriptor() -> CachedTaskDescriptor {
-        CachedTaskDescriptor {
-            task_name: "clippy".to_owned(),
-            sources: vec!["Cargo.toml".to_owned()],
-            outputs: vec!["out/report.json".to_owned()],
-            command_inputs: Vec::new(),
-            env: BTreeMap::from([("RUSTFLAGS".to_owned(), "--deny warnings".to_owned())]),
-            tools: vec!["rust@1.98.1".to_owned()],
-            dep_keys: Vec::new(),
-        }
-    }
-
-    /// Expected identity plus matching restore metadata.
-    fn identity() -> (ExpectedReuseIdentity, ObservedRestoreMeta) {
-        let key = digest_b3(b"key");
-        let compat = digest_b3(b"compat");
-        (
-            ExpectedReuseIdentity {
-                cache_key: key.clone(),
-                compatibility_id: compat.clone(),
-                owner_scope: "trusted".to_owned(),
-            },
-            ObservedRestoreMeta {
-                key,
-                compat,
-                owner: "trusted".to_owned(),
-            },
-        )
-    }
-
-    /// Declared outputs plus matching byte-verified observations.
-    fn outputs() -> (Vec<String>, Vec<ObservedOutput>) {
-        let bytes = b"report-bytes".to_vec();
-        let digest = digest_b3(&bytes);
-        (
-            vec!["out/report.json".to_owned()],
-            vec![("out/report.json".to_owned(), bytes, digest)],
-        )
-    }
-
-    #[test]
-    fn full_restore_verifies_and_stages_stay_separate() {
-        let (declared, observed) = outputs();
-        let (expected, restore) = identity();
-        assert!(
-            verify_reused_pipeline(
-                &declared,
-                &observed,
-                Some(&descriptor()),
-                Some(&expected),
-                Some(&restore)
-            )
-            .is_ok()
-        );
-        assert_eq!(
-            verify_reused_pipeline(&declared, &[], None, None, None).expect_err("presence"),
-            MissReason::TASK_RESULT_INCOMPLETE
-        );
-        assert_eq!(
-            verify_reused_pipeline(&[], &observed, None, None, None).expect_err("eligibility"),
-            MissReason::TASK_NOT_ELIGIBLE
-        );
-        let mut bare = descriptor();
-        bare.outputs.clear();
-        assert_eq!(
-            verify_reused_pipeline(
-                &declared,
-                &observed,
-                Some(&bare),
-                Some(&expected),
-                Some(&restore)
-            )
-            .expect_err("descriptor"),
-            MissReason::TASK_NOT_ELIGIBLE
-        );
-        assert_eq!(
-            verify_reused_pipeline(&declared, &observed, None, None, None).expect_err("trust gate"),
-            MissReason::TASK_RESULT_INCOMPLETE
-        );
-    }
-
-    #[test]
-    fn identity_mismatches_fail_with_precise_reasons() {
-        let (declared, observed) = outputs();
-        let (expected, mut restore) = identity();
-        restore.key = digest_b3(b"other");
-        assert_eq!(
-            verify_reused_pipeline(
-                &declared,
-                &observed,
-                Some(&descriptor()),
-                Some(&expected),
-                Some(&restore)
-            )
-            .expect_err("key"),
-            MissReason::INPUT_DIGEST_MISMATCH
-        );
-        let (_, mut restore) = identity();
-        restore.compat = digest_b3(b"other");
-        assert_eq!(
-            verify_reused_pipeline(
-                &declared,
-                &observed,
-                Some(&descriptor()),
-                Some(&expected),
-                Some(&restore)
-            )
-            .expect_err("compat"),
-            MissReason::COMPATIBILITY_MISMATCH
-        );
-        let (_, mut restore) = identity();
-        restore.owner = "pr".to_owned();
-        assert_eq!(
-            verify_reused_pipeline(
-                &declared,
-                &observed,
-                Some(&descriptor()),
-                Some(&expected),
-                Some(&restore)
-            )
-            .expect_err("owner"),
-            MissReason::TRUST_SCOPE_MISMATCH
-        );
-        let (_, restore) = identity();
-        let mut tampered = observed.clone();
-        tampered[0].1 = b"forged".to_vec();
-        assert_eq!(
-            verify_reused_pipeline(
-                &declared,
-                &tampered,
-                Some(&descriptor()),
-                Some(&expected),
-                Some(&restore)
-            )
-            .expect_err("bytes"),
-            MissReason::CACHE_CORRUPT
-        );
-    }
-
-    #[test]
-    fn missing_and_malformed_outputs_fail() {
-        let (declared, _) = outputs();
-        let (expected, restore) = identity();
-        let run = |observed: &[ObservedOutput]| {
-            verify_reused_pipeline(
-                &declared,
-                observed,
-                Some(&descriptor()),
-                Some(&expected),
-                Some(&restore),
-            )
-            .expect_err("output")
-        };
-        assert_eq!(
-            run(&[("out/report.json".to_owned(), Vec::new(), digest_b3(b"x"))]),
-            MissReason::TASK_RESULT_INCOMPLETE
-        );
-        assert_eq!(
-            run(&[(
-                "out/report.json".to_owned(),
-                b"report-bytes".to_vec(),
-                "bogus".to_owned()
-            )]),
-            MissReason::CACHE_CORRUPT
-        );
-        let other = b"report-bytes".to_vec();
-        let other_digest = digest_b3(&other);
-        assert_eq!(
-            run(&[("out/other.json".to_owned(), other, other_digest)]),
-            MissReason::TASK_RESULT_INCOMPLETE
-        );
-        assert_eq!(run(&[]), MissReason::TASK_RESULT_INCOMPLETE);
-    }
-}
+#[path = "reuse_stages_tests.rs"]
+mod reuse_stages_tests;

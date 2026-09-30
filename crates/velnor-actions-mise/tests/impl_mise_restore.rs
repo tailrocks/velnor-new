@@ -6,13 +6,32 @@ use velnor_actions_mise::restore::{
     MissReason, RestoreCheck, RestoreEvidence, ReuseFallback, fallback_for_error,
     verify_restored_task_result,
 };
+use velnor_actions_mise::restore_evidence::RestoreObservation;
+
+/// Fully observed restore: real path, bytes, and matching digests.
+fn observed_restore() -> RestoreObservation {
+    let bytes = b"entry bytes".to_vec();
+    RestoreObservation {
+        entry_path: "task-artifacts/v2/clippy/entry".to_owned(),
+        entry_bytes: bytes.clone(),
+        expected_digest: digest_b3(&bytes),
+        expected_compat: digest_b3(b"compat"),
+        observed_compat: digest_b3(b"compat"),
+        expected_owner: "trusted".to_owned(),
+        observed_owner: "trusted".to_owned(),
+        expected_inputs: digest_b3(b"inputs"),
+        observed_inputs: digest_b3(b"inputs"),
+    }
+}
 
 /// REUSE-5: evidence checks run present/digest/compat/owner/inputs, then
 /// every declared output must be present and verified. Evidence builds
-/// only from real observations via `verify` (no `intact()` shortcut).
+/// only from observed restores via `verify` (no `intact()` shortcut, no
+/// bare-bool constructor): a real observed restore passes, and each
+/// unverified input fails with its precise reason.
 #[test]
 fn restore_verification_orders_evidence_then_outputs() {
-    let verified = RestoreEvidence::verify([true; 5]);
+    let verified = RestoreEvidence::verify(&observed_restore());
     assert!(verified.check().is_ok());
     let cases = [
         (RestoreCheck::EntryPresent, MissReason::NO_ENTRY),
@@ -27,16 +46,24 @@ fn restore_verification_orders_evidence_then_outputs() {
     for (check, reason) in cases {
         assert_eq!(verified.fail(check).check(), Err(reason), "evidence order");
     }
-    assert!(
-        RestoreEvidence::verify([false, true, true, true, true])
-            .check()
-            .is_err()
-    );
-    assert!(
-        RestoreEvidence::verify([true, true, false, true, true])
-            .check()
-            .is_err()
-    );
+    let check = |label: &str, obs: &RestoreObservation, reason: MissReason| {
+        assert_eq!(RestoreEvidence::verify(obs).check(), Err(reason), "{label}");
+    };
+    let mut obs = observed_restore();
+    obs.entry_path.clear();
+    check("missing entry", &obs, MissReason::NO_ENTRY);
+    let mut obs = observed_restore();
+    obs.entry_bytes = b"forged".to_vec();
+    check("tampered bytes", &obs, MissReason::CACHE_CORRUPT);
+    let mut obs = observed_restore();
+    obs.observed_compat = digest_b3(b"other");
+    check("compat drift", &obs, MissReason::COMPATIBILITY_MISMATCH);
+    let mut obs = observed_restore();
+    obs.observed_owner = "pr".to_owned();
+    check("owner drift", &obs, MissReason::TRUST_SCOPE_MISMATCH);
+    let mut obs = observed_restore();
+    obs.observed_inputs = digest_b3(b"other");
+    check("input drift", &obs, MissReason::INPUT_DIGEST_MISMATCH);
     let bytes = b"output bytes".to_vec();
     let observed = vec![("out.json".to_owned(), bytes.clone(), digest_b3(&bytes))];
     let declared = vec!["out.json".to_owned()];

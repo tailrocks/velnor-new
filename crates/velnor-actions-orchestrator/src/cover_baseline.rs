@@ -5,6 +5,7 @@
 pub(crate) mod provenance_check;
 
 use std::ffi::OsString;
+use std::io::Read as _;
 use std::path::{Path, PathBuf};
 
 use std::collections::BTreeSet;
@@ -15,14 +16,12 @@ use velnor_actions_contract::{
 use velnor_actions_mise::BaselineLookup as MiseBaselineLookup;
 
 use self::provenance_check::{
-    ProvenanceExpectations, publish_event_eligible, repository_anchor_from_origin,
-    validate_provenance,
+    ORIGINATING_RUN_SUCCESS_GAP, ProvenanceExpectations, publish_event_eligible,
+    repository_anchor_from_origin, repository_slug_from_origin, validate_provenance,
 };
 use crate::OrchestratorError;
 use crate::cover::shard;
-use crate::cover_identity::{
-    SOURCE_BUILD_REASON, apply_coverage, is_source_build, resolve_generator_identity,
-};
+use crate::cover_identity::{SOURCE_BUILD_REASON, apply_coverage, is_source_build};
 use crate::decisions::baseline_expired;
 use crate::discover::Discovery;
 use crate::internal::internal_contract;
@@ -69,7 +68,8 @@ pub(crate) fn apply_baseline(
     discovery: &Discovery,
     changed: Option<&BTreeSet<String>>,
 ) -> Result<(), OrchestratorError> {
-    resolve_generator_identity(plan, inputs.root);
+    // No lock fill: the plan generator always names the running binary,
+    // so a source build can never emit a release-pinned identity.
     let manifest = manifest.or_else(|| lookup_manifest(plan, inputs));
     let Some(manifest) = manifest else {
         // `lookup_manifest` already recorded the precise miss reason
@@ -98,6 +98,7 @@ pub(crate) fn apply_baseline(
         generator_version: plan.generator.version.clone(),
         generator_sha256: plan.generator.sha256.clone(),
         repository_id: repository_anchor_from_origin(inputs.root),
+        repository_slug: repository_slug_from_origin(inputs.root),
     };
     let provenance = match validate_provenance(&manifest, &digest, &expected) {
         Ok(provenance) => provenance,
@@ -107,6 +108,10 @@ pub(crate) fn apply_baseline(
             return Ok(());
         }
     };
+    if provenance.originating_runs_unverified {
+        plan.warnings
+            .push(format!("baseline_unpassed:{ORIGINATING_RUN_SUCCESS_GAP}"));
+    }
     if baseline_expired(manifest.expires_at_unix, unix_now()) {
         mark_unavailable(plan, "baseline_expired");
         plan.warnings.push("baseline_miss:cache_expired".to_owned());
@@ -209,17 +214,23 @@ pub(crate) fn baseline_download_args(
 ///
 /// The entry directory must carry exactly `baseline.json` (single-file
 /// bounded UTF-8, no other payload) with matching source commit, run,
-/// and artifact name. Duplicate JSON keys are rejected, never
-/// last-wins. Old canonical schemas fail closed here via the migration
-/// gate.
+/// attempt, artifact id, and artifact name. Symlinks reject anywhere on
+/// the traversed path, reads stop past the size bound, duplicate JSON
+/// keys are rejected (never last-wins), and old canonical schemas fail
+/// closed via the migration gate.
 pub(crate) fn baseline_entry_for(
     dir: &Path,
     base: &str,
     expected_run_id: u64,
+    expected_attempt: u64,
+    expected_artifact_id: u64,
 ) -> Option<BaselineManifest> {
     let name = dir.file_name()?.to_str()?;
     let rest = name.strip_prefix(&format!("velnor-baseline-{base}-"))?;
     if validate_digest(rest).is_err() {
+        return None;
+    }
+    if is_symlink(dir) {
         return None;
     }
     let mut count = 0u32;
@@ -234,10 +245,11 @@ pub(crate) fn baseline_entry_for(
     if count != 1 {
         return None;
     }
-    let bytes = std::fs::read(payload?).ok()?;
-    if bytes.len() > MAX_BASELINE_MANIFEST_BYTES {
+    let payload = payload?;
+    if payload.file_name()?.to_str()? != "baseline.json" {
         return None;
     }
+    let bytes = read_bounded(&payload)?;
     let text = std::str::from_utf8(&bytes).ok()?;
     let value = crate::internal_plan::snapshot::parse_canonical_json(text).ok()?;
     let manifest: BaselineManifest = serde_json::from_value(value).ok()?;
@@ -246,6 +258,8 @@ pub(crate) fn baseline_entry_for(
     }
     if manifest.source_commit == base
         && manifest.run_id == expected_run_id
+        && manifest.run_attempt == expected_attempt
+        && manifest.artifact_id == expected_artifact_id
         && manifest.artifact_name == name
     {
         Some(manifest)
@@ -254,82 +268,36 @@ pub(crate) fn baseline_entry_for(
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn baseline_publish_and_download_rules() {
-        assert!(publish_event_eligible(WorkflowEvent::Push));
-        assert!(!publish_event_eligible(WorkflowEvent::PullRequest));
-        assert!(!publish_event_eligible(WorkflowEvent::MergeGroup));
-        let base = "a".repeat(40);
-        let dir = Path::new("/tmp/x");
-        let name = format!("velnor-baseline-{base}-{}", digest_b3(b"c"));
-        let named: Vec<String> = baseline_download_args(
-            &base,
-            ".github/workflows/ci.yml",
-            "testmain",
-            Some(&name),
-            7,
-            dir,
-        )
-        .iter()
-        .map(|arg| arg.to_string_lossy().into_owned())
-        .collect();
-        assert_eq!(&named[0..4], &["run", "download", "7", "--name"]);
-        assert_eq!(named[4], name);
-        assert!(baseline_download_args(&base, "w", "b", None, 7, dir).is_empty());
-        assert!(baseline_download_args(&base, "w", "b", Some(""), 7, dir).is_empty());
-    }
-
-    #[test]
-    fn baseline_entry_needs_single_strict_payload() {
-        let base = "a".repeat(40);
-        let name = format!("velnor-baseline-{base}-{}", digest_b3(b"c"));
-        let tmp = tempfile::tempdir().expect("tempdir");
-        let entry = tmp.path().join(&name);
-        std::fs::create_dir(&entry).expect("entry");
-        std::fs::write(entry.join("baseline.json"), "{}").expect("json");
-        std::fs::write(entry.join("extra.json"), "{}").expect("extra");
-        assert!(baseline_entry_for(&entry, &base, 7).is_none());
-        std::fs::remove_file(entry.join("extra.json")).expect("rm");
-        assert!(baseline_entry_for(&entry, &base, 7).is_none());
-        std::fs::write(entry.join("baseline.json"), r#"{"schema": 1, "schema": 1}"#).expect("dup");
-        assert!(baseline_entry_for(&entry, &base, 7).is_none());
-        std::fs::write(entry.join("baseline.json"), [0xff, 0xfe]).expect("bad");
-        assert!(baseline_entry_for(&entry, &base, 7).is_none());
-        let digest = digest_b3(b"d");
-        let manifest = serde_json::json!({
-            "schema": 2,
-            "repository_id": digest,
-            "source_commit": base,
-            "ref": "refs/heads/testmain",
-            "event": "push",
-            "workflow_ref": "o/r/.github/workflows/ci.yml@refs/heads/testmain",
-            "run_id": 7,
-            "run_attempt": 1,
-            "final_status": "passed",
-            "generator_version": "0.1.0",
-            "generator_sha256": "1".repeat(64),
-            "compatibility_id": digest,
-            "artifact_id": 9,
-            "artifact_name": name,
-            "tasks": [],
-        });
-        std::fs::write(entry.join("baseline.json"), manifest.to_string()).expect("manifest");
-        let found = baseline_entry_for(&entry, &base, 7).expect("entry");
-        assert_eq!(found.artifact_name, name);
-        assert!(
-            baseline_entry_for(&entry, &base, 8).is_none(),
-            "a manifest claiming another run never loads from this download"
-        );
-        let mut stale = manifest;
-        stale["schema"] = serde_json::json!(1);
-        std::fs::write(entry.join("baseline.json"), stale.to_string()).expect("stale");
-        assert!(
-            baseline_entry_for(&entry, &base, 7).is_none(),
-            "schema 1 baselines bound no source bytes and never load"
-        );
-    }
+/// True when a traversed path is a symlink.
+///
+/// `symlink_metadata` never follows the final component: a symlink
+/// rejects even at a live target.
+fn is_symlink(path: &Path) -> bool {
+    std::fs::symlink_metadata(path).is_ok_and(|meta| meta.file_type().is_symlink())
 }
+
+/// Read one baseline payload with symlink rejection and a size bound.
+///
+/// Symlinks and non-files reject without reading; reads stop one byte
+/// past the bound so oversize files error instead of exhausting memory.
+fn read_bounded(path: &Path) -> Option<Vec<u8>> {
+    match std::fs::symlink_metadata(path) {
+        Ok(meta) if meta.file_type().is_symlink() => return None,
+        Ok(meta) if !meta.is_file() => return None,
+        Err(_) => return None,
+        Ok(_) => {}
+    }
+    let file = std::fs::File::open(path).ok()?;
+    let mut bytes = Vec::new();
+    std::io::Read::take(file, (MAX_BASELINE_MANIFEST_BYTES + 1) as u64)
+        .read_to_end(&mut bytes)
+        .ok()?;
+    if bytes.len() > MAX_BASELINE_MANIFEST_BYTES {
+        return None;
+    }
+    Some(bytes)
+}
+
+#[cfg(test)]
+#[path = "cover_baseline_tests.rs"]
+mod cover_baseline_tests;

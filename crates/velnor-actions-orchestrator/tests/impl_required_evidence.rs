@@ -290,7 +290,6 @@ fn missing_report_file_fails_closed() -> TestResult {
     );
     Ok(())
 }
-
 #[test]
 fn leaf_edit_verifies_unproven_peers() -> TestResult {
     let repo = make_ws(&["alpha", "beta"], &[])?;

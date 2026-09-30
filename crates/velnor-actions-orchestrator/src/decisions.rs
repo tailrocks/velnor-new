@@ -4,7 +4,8 @@
 //! classification, three-way obligation decisions, restore ownership,
 //! `not_selected` report creation, broaden-path classification, the
 //! omission ledger, the detector registry, plan-artifact paths, baseline
-//! expiry, duplicate detection, and exact-base run selection.
+//! expiry, and duplicate detection. Exact-base run selection lives in
+//! [`crate::run_select`].
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -51,11 +52,23 @@ pub fn classify_metadata_failure(stderr: &str) -> MetadataFailure {
     }
 }
 
+/// Task-cache hit evidence for one obligation decision.
+///
+/// A bare bool cannot carry a hit: only [`CacheHit::Verified`] reuses,
+/// constructed solely alongside the verified restore evidence it names.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CacheHit {
+    /// No verified hit; execute instead.
+    Execute,
+    /// A verified task-cache hit is in hand.
+    Verified,
+}
+
 /// Inputs for one three-way obligation decision (par §5).
 #[derive(Debug, Clone)]
 #[expect(
     clippy::struct_excessive_bools,
-    reason = "six independent decision signals read clearest as named bools"
+    reason = "five independent decision signals read clearest as named bools"
 )]
 pub struct ObligationInputs {
     /// Task carries a known adapter extension schema.
@@ -66,8 +79,8 @@ pub struct ObligationInputs {
     pub nondeterministic: bool,
     /// Dynamic inputs are controlled and recorded.
     pub inputs_controlled: bool,
-    /// Verified task-cache hit in hand.
-    pub cache_hit_verified: bool,
+    /// Verified task-cache hit evidence, or execution.
+    pub cache_hit: CacheHit,
     /// Trusted-baseline proof covers the obligation.
     pub baseline_covered: bool,
     /// Precise restore miss reason, if a restore was attempted.
@@ -90,7 +103,7 @@ pub fn classify_obligation(inputs: &ObligationInputs) -> (ObligationDecision, &'
     if inputs.nondeterministic && !inputs.inputs_controlled {
         return (ObligationDecision::Execute, "always_run_dynamic_inputs");
     }
-    if inputs.cache_hit_verified {
+    if inputs.cache_hit == CacheHit::Verified {
         return (
             ObligationDecision::ReusedFromTaskCache,
             "reused_from_task_cache",
@@ -110,20 +123,21 @@ pub fn classify_obligation(inputs: &ObligationInputs) -> (ObligationDecision, &'
 
 /// Restore classification with ownership as an explicit check (cache §2).
 ///
-/// Ownership failure reports `ownership_mismatch`; otherwise the Mise
-/// ordered checks (present, digest, compat, trust, inputs) decide.
+/// The live trust scope must match the observed owner first
+/// (`ownership_mismatch`); otherwise the Mise ordered checks over
+/// observed evidence (present, digest, compat, trust, inputs) decide.
 ///
 /// # Errors
 ///
 /// Returns the precise miss reason when ownership or any check fails.
 pub fn classify_restore_with_ownership(
-    ownership_ok: bool,
-    checks: [bool; 5],
+    live_scope: &str,
+    obs: &velnor_actions_mise::restore_evidence::RestoreObservation,
 ) -> Result<(), &'static str> {
-    if !ownership_ok {
+    if obs.observed_owner != live_scope {
         return Err("ownership_mismatch");
     }
-    velnor_actions_mise::cache::classify_restore(checks)
+    velnor_actions_mise::restore_evidence::classify_restore(obs)
 }
 
 /// Inputs for one `not_selected` report (task §6).
@@ -307,29 +321,6 @@ pub fn dedupe_sorted(ids: &[String]) -> (Vec<String>, Vec<String>) {
         }
     }
     (unique, duplicates)
-}
-
-/// Select the newest exact-base successful push run.
-///
-/// The service lists newest first, so the first entry matching the base
-/// SHA, branch, push event, and success conclusion wins; any other
-/// commit, event, or conclusion never selects.
-///
-/// # Errors
-///
-/// Returns `baseline_unavailable` unless at least one run matches.
-pub fn select_exact_base_run(text: &str, base: &str, branch: &str) -> Result<u64, String> {
-    let runs: Vec<serde_json::Value> =
-        serde_json::from_str(text).map_err(|_| "baseline_unavailable".to_owned())?;
-    runs.iter()
-        .find(|run| {
-            run["headSha"] == base
-                && run["headBranch"] == branch
-                && run["event"] == "push"
-                && run["conclusion"] == "success"
-        })
-        .and_then(|run| run["databaseId"].as_u64())
-        .ok_or_else(|| "baseline_unavailable".to_owned())
 }
 
 /// Monotonic suffix keeping preview dirs unique per process.

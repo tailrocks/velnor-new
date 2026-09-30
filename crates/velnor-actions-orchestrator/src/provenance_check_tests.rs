@@ -12,11 +12,15 @@ use std::path::Path;
 use super::*;
 
 /// Valid manifest plus matching expectations over `base`.
+///
+/// The repository id anchors `github.com/o/r` and the workflow slug
+/// names `o/r`, so slug, anchor, and manifest binding all agree.
 fn manifest_and_expected(base: &str) -> (BaselineManifest, ProvenanceExpectations) {
     let digest = digest_b3(b"d");
+    let anchor = digest_b3("github.com/o/r".as_bytes());
     let manifest = BaselineManifest {
         schema: 2,
-        repository_id: digest.clone(),
+        repository_id: anchor.clone(),
         source_commit: base.to_owned(),
         ref_: "refs/heads/testmain".to_owned(),
         event: "push".to_owned(),
@@ -38,7 +42,8 @@ fn manifest_and_expected(base: &str) -> (BaselineManifest, ProvenanceExpectation
         workflow_path: ".github/workflows/ci.yml".to_owned(),
         generator_version: "0.1.0".to_owned(),
         generator_sha256: "1".repeat(64),
-        repository_id: Some(digest),
+        repository_id: Some(anchor),
+        repository_slug: Some("o/r".to_owned()),
     };
     (manifest, expected)
 }
@@ -136,6 +141,22 @@ fn every_wrong_dimension_fails_validation() {
         "wrong_workflow",
     );
     check(
+        &|m| m.workflow_ref = "evil/fork/.github/workflows/ci.yml@refs/heads/testmain".to_owned(),
+        "wrong_repository",
+    );
+    check(
+        &|m| m.workflow_ref = "o/r/.github/workflows/ci.yml@refs/heads/other".to_owned(),
+        "wrong_workflow",
+    );
+    check(
+        &|m| m.workflow_ref = "not-a-ref".to_owned(),
+        "bad_workflow_ref",
+    );
+    check(
+        &|m| m.repository_id = digest_b3(b"evil"),
+        "wrong_repository",
+    );
+    check(
         &|m| m.artifact_name = "forged".to_owned(),
         "artifact_mismatch",
     );
@@ -156,8 +177,10 @@ fn repository_anchor_and_origins_normalize() {
     let root = repo.path();
     let anchor = repository_anchor_from_origin(root).expect("anchor");
     assert_eq!(anchor, fixture_anchor());
+    assert_eq!(repository_slug_from_origin(root).as_deref(), Some("o/r"));
     set_origin(root, "git@github.com:O/R.git");
     assert_eq!(repository_anchor_from_origin(root).expect("scp"), anchor);
+    assert_eq!(repository_slug_from_origin(root).as_deref(), Some("o/r"));
     let base = "a".repeat(40);
     let (mut manifest, mut expected) = manifest_and_expected(&base);
     expected.repository_id = Some(anchor.clone());
@@ -317,14 +340,27 @@ fn task_entries_validate_identity_runs_freshness_and_proof_binding() {
 fn missing_and_mismatched_origins_fail_closed() {
     let plain = tempfile::tempdir().expect("tempdir");
     assert!(repository_anchor_from_origin(plain.path()).is_none());
+    assert!(repository_slug_from_origin(plain.path()).is_none());
     let repo = make_git_repo(None);
     let root = repo.path();
     assert!(repository_anchor_from_origin(root).is_none());
+    assert!(repository_slug_from_origin(root).is_none());
     set_origin(root, "https://github.com/o/r.git");
     let anchor = repository_anchor_from_origin(root).expect("anchor");
     set_origin(root, "https://github.com/evil/other.git");
     let other = repository_anchor_from_origin(root).expect("other anchor");
     assert_ne!(anchor, other);
+    assert_eq!(
+        repository_slug_from_origin(root).as_deref(),
+        Some("evil/other")
+    );
+    set_origin(root, "https://ghe.example.com/o/r.git");
+    assert!(repository_anchor_from_origin(root).is_some());
+    assert!(
+        repository_slug_from_origin(root).is_none(),
+        "non-github origins have no comparable slug"
+    );
     set_origin(root, "not-a-url");
     assert!(repository_anchor_from_origin(root).is_none());
+    assert!(repository_slug_from_origin(root).is_none());
 }

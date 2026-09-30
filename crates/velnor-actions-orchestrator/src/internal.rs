@@ -9,8 +9,8 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::{
-    ContractError, Plan, PlanBaseline, PlanGenerator, PlanMatrix, PlanRunner, RunnerSelection,
-    Trust, WorkflowEvent, canonical_json_bytes, parse_strict_json, plan_id_for_run,
+    ContractError, Plan, PlanBaseline, PlanMatrix, PlanRunner, RunnerSelection, Trust,
+    WorkflowEvent, canonical_json_bytes, parse_strict_json, plan_id_for_run,
 };
 use velnor_actions_mise::ToolCatalog;
 use velnor_actions_rust::TaskGroup;
@@ -49,7 +49,12 @@ pub const PLAN_OP: &str = "plan-v1";
 /// Merge operation tag.
 pub const MERGE_OP: &str = "merge-v1";
 
-/// `plan-v1` request: run scope plus optional repo root and generator.
+/// `plan-v1` request: run scope plus optional repo root.
+///
+/// The request carries no generator identity: the plan always names the
+/// running binary, so a hand-written request can never claim a release
+/// pin for a source build. Unknown fields (including `generator`)
+/// reject via `deny_unknown_fields`.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct PlanRequest {
@@ -70,9 +75,6 @@ struct PlanRequest {
     /// Repository root override; defaults to the resolved root.
     #[serde(default)]
     root: Option<PathBuf>,
-    /// Generator identity override.
-    #[serde(default)]
-    generator: Option<PlanGenerator>,
     /// Trusted baseline evidence for coverage classification.
     #[serde(default)]
     baseline_manifest: Option<serde_json::Value>,
@@ -253,7 +255,9 @@ fn build_plan(
     let keys = changed
         .map(|set| changed_keys(universe, set))
         .unwrap_or_default();
-    let generator = request.generator.clone().unwrap_or_else(default_generator);
+    // The running binary names itself: no request override, no lock
+    // fill, so a source build can never emit a release-pinned identity.
+    let generator = default_generator();
     let snapshot = ExecutionSnapshot::build(discovery);
     for group in universe {
         let wire = GroupWire {

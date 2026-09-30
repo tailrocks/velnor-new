@@ -3,11 +3,12 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use velnor_actions_mise::cache::{CachedTaskDescriptor, TaskCacheMode};
-use velnor_actions_mise::restore::{MissReason, ReusePlan, ToolAvailability, plan_reuse};
+use velnor_actions_mise::restore::{MissReason, ToolAvailability};
 use velnor_actions_mise::reuse::{
     ReuseGrant, ReuseQualification, ReuseSignal, TaskArtifactTransport, TaskCacheKey,
     TaskReuseRequest,
 };
+use velnor_actions_mise::reuse::{ReusePlan, plan_reuse};
 use velnor_actions_mise::{Gate6Fixture, MiseError};
 
 fn descriptor(task: &str) -> CachedTaskDescriptor {
