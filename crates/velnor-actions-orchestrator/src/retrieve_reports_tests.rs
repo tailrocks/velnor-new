@@ -76,6 +76,34 @@ fn missing_plan_retrieves_zero_without_spawning() {
     assert!(!run.join("reports").exists(), "no downloads attempted");
 }
 
+/// The retrieve-step plan read is bounded like every other event-time
+/// read: small plans parse, giant plans yield nothing (so nothing
+/// downloads), and missing plans stay missing.
+#[test]
+fn retrieve_plan_read_is_bounded() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let run = tmp.path().join("r7-a2");
+    std::fs::create_dir_all(&run).expect("run dir");
+    assert!(read_plan(&run).is_none(), "missing plan");
+    std::fs::write(run.join("plan.json"), r#"{"matrix":{"include":[]}}"#).expect("plan");
+    let plan = read_plan(&run).expect("small plan parses");
+    assert_eq!(plan["matrix"]["include"].as_array().map(Vec::len), Some(0));
+    let big = format!(
+        r#"{{"matrix":{{"include":[]}},"pad":"{}"}}"#,
+        "p".repeat(usize::try_from(MAX_RETRIEVE_PLAN_BYTES).expect("bound"))
+    );
+    std::fs::write(run.join("plan.json"), big).expect("big plan");
+    assert!(
+        read_plan(&run).is_none(),
+        "an oversize plan parses to nothing"
+    );
+    assert_eq!(
+        retrieve_reports_to(7, &run),
+        0,
+        "an oversize plan downloads nothing"
+    );
+}
+
 #[test]
 fn enumeration_follows_plan_order() {
     let plan = serde_json::json!({

@@ -96,6 +96,31 @@ fn lookup_repo_resolution_is_env_hermetic() {
     }
 }
 
+/// `gh` stdout decodes under its explicit cap only: small listings
+/// pass through, runaway output and undecodable bytes miss before
+/// any JSON parsing.
+#[test]
+fn gh_stdout_cap_misses_before_parsing() {
+    use velnor_actions_mise::ProcessOutput;
+    let output = |stdout: Vec<u8>| ProcessOutput {
+        stdout,
+        stderr: Vec::new(),
+        code: Some(0),
+        signal: None,
+        success: true,
+    };
+    assert_eq!(gh_stdout_checked(&output(b"[]".to_vec())), Ok("[]".to_owned()));
+    let big = vec![b'x'; MAX_GH_STDOUT_BYTES + 1];
+    assert_eq!(
+        gh_stdout_checked(&output(big)),
+        Err("baseline_unavailable".to_owned())
+    );
+    assert_eq!(
+        gh_stdout_checked(&output(vec![0xff, 0xfe])),
+        Err("baseline_unavailable".to_owned())
+    );
+}
+
 #[test]
 fn lookup_without_exact_artifact_misses_before_spawning() {
     let base = "a".repeat(40);

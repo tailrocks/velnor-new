@@ -117,9 +117,20 @@ pub(crate) fn retrieve_args(
     ])
 }
 
+/// Maximum bytes read for the retrieve-step plan.
+///
+/// Matches the merge-request assembly bound: the same `plan.json`
+/// parses identically at retrieve and merge time, and a giant plan
+/// downloads nothing instead of exhausting the final job's memory.
+pub(crate) const MAX_RETRIEVE_PLAN_BYTES: u64 = 4 << 20;
+
 /// Parse the downloaded plan, if any.
+///
+/// Bounded like every other event-time read: a missing, oversize, or
+/// unparsable plan downloads nothing, and the merge still reaches its
+/// `planning_failed` verdict.
 fn read_plan(run_dir: &Path) -> Option<serde_json::Value> {
-    let text = fs::read_to_string(run_dir.join("plan.json")).ok()?;
+    let text = read_staged_text(&run_dir.join("plan.json"), MAX_RETRIEVE_PLAN_BYTES).ok()?;
     serde_json::from_str(&text).ok()
 }
 

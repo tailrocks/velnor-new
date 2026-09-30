@@ -328,10 +328,29 @@ impl BaselineLookup {
         if !output.success {
             return Err("baseline_unavailable".to_owned());
         }
-        output
-            .stdout_text("gh")
-            .map_err(|_| "baseline_unavailable".to_owned())
+        gh_stdout_checked(&output)
     }
+}
+
+/// Maximum accepted `gh` stdout bytes for lookup and retrieve calls.
+///
+/// Listings and download receipts are kilobytes; one megabyte fails
+/// closed on runaway output before JSON parsing instead of buffering
+/// megabytes the selectors never need. (The spawn layer caps pipes at
+/// 8 MiB; this is the tighter call-site bound.)
+const MAX_GH_STDOUT_BYTES: usize = 1 << 20;
+
+/// Decode `gh` stdout with an explicit size cap.
+///
+/// Over-bound output misses before parsing; undecodable output misses
+/// the same way.
+fn gh_stdout_checked(output: &velnor_actions_mise::ProcessOutput) -> Result<String, String> {
+    if output.stdout.len() > MAX_GH_STDOUT_BYTES {
+        return Err("baseline_unavailable".to_owned());
+    }
+    output
+        .stdout_text("gh")
+        .map_err(|_| "baseline_unavailable".to_owned())
 }
 
 /// Resolve exact-base manifests: list, select, pin, download, filter.
