@@ -270,6 +270,7 @@ mod tests {
                 validator_commands: Vec::new(),
                 candidate: None,
                 preseed: false,
+                plan_consumer_env: std::collections::BTreeMap::new(),
             },
             actionlint: ActionlintConfigInput::new("0.1.0").with_workflow_path(WORKFLOW_PATH),
         };

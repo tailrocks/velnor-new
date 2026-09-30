@@ -116,7 +116,7 @@ pub(crate) fn candidate_job(ctx: &RenderContext, spec: &CandidateSpec) -> Result
             steps::upload_artifact_step(&artifact, CANDIDATE_OUTPUT_DIR_EXPR)?,
             steps::download_artifact_step(&artifact, CANDIDATE_STAGE_DIR_EXPR)?,
             candidate_manifest_verify_step(target)?,
-            freshness_step(&candidate_binary, FRESHNESS_OUTDIR)?,
+            freshness_step(&candidate_binary, FRESHNESS_OUTDIR, &ctx.plan_consumer_env)?,
             steps::shell_step("Qualify candidate", spec.qualify.clone(), BTreeMap::new())?,
         ],
     })
