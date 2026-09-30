@@ -1,7 +1,15 @@
 # Velnor consumer fixtures
 
-Minimal consumer repos for detector/validator tests.
+Minimal consumer repos mirroring detector/validator cases.
 Each subdir is self-contained (<=15 small files, no target/).
+Detector/validator behavior itself is proven by synthetic
+`TempDir`/`ProfileInputs` cases (e.g.
+`handwritten_workflow_invoking_mbx_is_strong_evidence`,
+`conflicting_runners_rejected` in
+`crates/velnor-actions-rust/tests/impl_rust_evidence.rs`),
+not by reading these dirs; only `alint-negative/*` is
+consumed directly (via `include_str!` in
+`crates/velnor-actions-contract/tests/impl_alint_negative.rs`).
 
 | Fixture | Intent | Expected outcome |
 |---|---|---|

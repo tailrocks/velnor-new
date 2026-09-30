@@ -8,7 +8,7 @@ before approval. No new infrastructure: manual runs with pinned tools only.
 
 | Trigger (touched code) | Technique | How |
 |---|---|---|
-| Parsers: `contract/src/config/**`, `workflow/plan.rs`, `rust/src/metadata.rs`, `mise/src/lock.rs` | Mutation testing | `cargo mutants` (scope: `.cargo/mutants.toml`); surviving mutants MUST be killed or justified |
+| Parsers: `contract/src/config/**`, `orchestrator/src/plan.rs`, `rust/src/metadata.rs`, `mise/src/lock.rs` | Mutation testing | `cargo mutants` (scope: `.cargo/mutants.toml`); surviving mutants MUST be killed or justified |
 | Selection: `orchestrator/src/select.rs` | Mutation testing | Same run; selection mutants are release-blocking |
 | Aggregation: `orchestrator/src/cover.rs`, `merge.rs` | Mutation testing | Same run |
 | Parsers/planners/invariants, new grammar or ID rule | Property testing | `proptest` cases (see RQ-4.7 deviation: scheduled, not yet a dependency) |

@@ -16,7 +16,8 @@ automation that is not wired.
   `detail` with `status` one of `pass`/`fail`/`info`). Every fail row
   exits the run nonzero. Row-emitting checks: `inventory-shape`,
   `policy-header`, `policy-mirror`, `local-pin`, `lock-staleness`,
-  `lock-mtime` (info only), `upstream-freshness`, `upstream-probe`
+  `lock-mtime` (info only), `upstream-freshness` (tool/action rows plus
+  the `runner` default-label row), `upstream-probe`
   (only with `--check-upstream`), `exception-expiry`,
   `standing-exception`, `advisories`.
 - Usages: `scripts/check-freshness.sh` (offline gate),
@@ -92,11 +93,12 @@ fails the gate. An operational lookup failure is a distinct failed check;
 it MUST NOT be reported as current (VER-3.4 gate rule).
 
 No scheduled producer exists today: no workflow runs this probe on a
-schedule, and the generator cannot express a schedule trigger (its
-triggers are pull-request, push, and merge-group only). Until the
-remaining wiring step lands — P05's `ci.yml` migration adds schedule
-trigger support plus a read-only freshness job — evidence timestamps
-advance only through reviewed update sets, and the real-root
+schedule. The generator CAN express a schedule trigger (contract
+`ScheduleTrigger` in `crates/velnor-actions-contract/src/workflow/`,
+rendered by `crates/velnor-actions-workflow-renderer/src/document.rs`),
+but the committed `.github/workflows/ci.yml` carries no schedule block
+and no read-only freshness job. Until that wiring lands, evidence
+timestamps advance only through reviewed update sets, and the real-root
 `upstream-freshness` rows stay honestly red once `checked_at` ages past
 `check_interval_hours`.
 `--check-upstream` is the bounded probe that future job runs: one GET per
@@ -124,12 +126,15 @@ technical reason, `granted` and `expires` (YYYY-MM-DD), and is recorded in
 - The script fails once a hold expires. Renewal requires a NEW review and
   NEW evidence — never a date edit.
 - Standing exceptions (`expires: null`) are allowed ONLY for the one
-  spec-blessed record: `key = "asamarts/alint"` (the reviewed
-  `asamarts/alint@v0.16.1` mutable-tag exception, version-policy §2/§4)
-  carrying non-empty `kind`, `expiry_policy`, `blessed_by`, and a `tag`
-  that equals the reviewed `pinned_version` of the inventory's
-  `asamarts/alint` action row. A pin move without a re-blessing fails,
-  as does any other key without an expiry.
+  spec-blessed slot: `key = "asamarts/alint"` (the reviewed mutable-tag
+  shape, version-policy §2/§4) carrying non-empty `kind`,
+  `expiry_policy`, `blessed_by`, and a `tag` that equals the reviewed
+  `pinned_version` of the inventory's `asamarts/alint` action row. A
+  pin move without a re-blessing fails, as does any other key without
+  an expiry. No standing record is present at HEAD (inventory
+  `exceptions: []`; the renderer pins Alint by full SHA and
+  `.zizmor.yml` carries `ignore: []`) — the gate above constrains any
+  future record, it does not grandfather a live one.
 - Dated entries under `exceptions` carry the same full attribution as
   holds (`held_version`, `owner`, `issue`, `reason`, `granted`,
   `expires`) and the same ≤14-day, chronology, and known-subject rules.

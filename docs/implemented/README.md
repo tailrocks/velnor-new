@@ -5,10 +5,12 @@ acceptance checks. It is not a proposal or a list of work in progress.
 
 ## Implementation records (Velnor Actions V1, Gates 0–8)
 
-Recorded on unmerged branch `docs/velnor-actions-spec` (HEAD `bdfffb9`).
+Recorded on unmerged branch `docs/velnor-actions-spec` (suite counts and
+CI links below are historical evidence at `bdfffb9` unless a record says
+otherwise; behavior descriptions and test citations track current code).
 Per the recording rule below, these describe the change being merged and
 become implemented records only when that change merges with its required
-checks passing; those checks are green on HEAD (dogfood CI run
+checks passing; those checks were green at `bdfffb9` (dogfood CI run
 `36569723507`, 47/47 —
 `https://github.com/tailrocks/velnor-new/actions/runs/36569723507`).
 
@@ -22,7 +24,7 @@ checks passing; those checks are green on HEAD (dogfood CI run
 - [Gate 7: parallel test fan-out](gate-7-parallel-fanout.md)
 - [Gate 8: Velnor dogfooding](gate-8-dogfooding.md)
 
-Shared acceptance state: local workspace suite green at HEAD (1048
+Shared acceptance state: local workspace suite green at `bdfffb9` (1048
 pass/0 fail: 978 integration + 70 src-unit, 21 binaries; clippy clean,
 fmt clean, deny ok; identical in a clean checkout). Seed approvals and
 release publication are NEEDS-HUMAN and unproved
