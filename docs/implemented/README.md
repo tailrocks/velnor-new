@@ -43,6 +43,8 @@ current on every change to the process they describe.
 - [Update and exception procedure](update-procedure.md) (VER §3–§4)
 - [Risk-triggered verification](verification-triggers.md) (RQ-9.8)
 - [Release gates: NEEDS-HUMAN unblock conditions](release-gates.md)
+- [Required-check migration procedure](required-check-migration.md)
+  (P05-9 `Velnor / Required` to `Required`)
 
 ## Evidence companions
 

@@ -9,7 +9,11 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
-    Concurrency, Job, Trigger, ValidatorKind, VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
+    CI_WORKFLOW_PATH, Concurrency, Job, PLAN_JOB_ID as CONTRACT_PLAN_JOB_ID,
+    REQUIRED_CONDITION as CONTRACT_REQUIRED_CONDITION,
+    REQUIRED_DISPLAY_NAME as CONTRACT_REQUIRED_DISPLAY_NAME,
+    REQUIRED_JOB_ID as CONTRACT_REQUIRED_JOB_ID, Trigger, ValidatorKind, VelnorSupportWorkflow,
+    WorkflowIr, WorkflowPolicy,
 };
 
 use crate::{
@@ -24,7 +28,11 @@ pub use crate::matrix::{
 pub use crate::setup::MiseSetup;
 
 /// Generated workflow path inside the repository.
-pub const WORKFLOW_PATH: &str = ".github/workflows/ci.yml";
+///
+/// Alias of the contract's [`CI_WORKFLOW_PATH`]: the migration plan
+/// ([`velnor_actions_contract::RequiredCheckMigration`]) and the
+/// emitted tree share one source of truth, never retyped mirrors.
+pub const WORKFLOW_PATH: &str = CI_WORKFLOW_PATH;
 /// Generated actionlint config path inside the repository.
 pub const ACTIONLINT_PATH: &str = ".github/actionlint.yaml";
 /// Exact pull-request event types.
@@ -34,14 +42,14 @@ pub const CONCURRENCY_GROUP: &str =
     "velnor-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}";
 /// Exact cancel-in-progress expression (PR events only).
 pub const CONCURRENCY_CANCEL: &str = "${{ github.event_name == 'pull_request' }}";
-/// Final gate job ID.
-pub const FINAL_JOB_ID: &str = "required";
-/// Exact required-check display name.
-pub const FINAL_DISPLAY_NAME: &str = "Required";
-/// Final gate condition.
-pub const FINAL_CONDITION: &str = "always()";
-/// Planner job ID: the sole matrix producer.
-pub const PLAN_JOB_ID: &str = "plan";
+/// Final gate job ID (contract [`CONTRACT_REQUIRED_JOB_ID`] alias).
+pub const FINAL_JOB_ID: &str = CONTRACT_REQUIRED_JOB_ID;
+/// Exact required-check display name (contract alias).
+pub const FINAL_DISPLAY_NAME: &str = CONTRACT_REQUIRED_DISPLAY_NAME;
+/// Final gate condition (contract [`CONTRACT_REQUIRED_CONDITION`] alias).
+pub const FINAL_CONDITION: &str = CONTRACT_REQUIRED_CONDITION;
+/// Planner job ID: the sole matrix producer (contract alias).
+pub const PLAN_JOB_ID: &str = CONTRACT_PLAN_JOB_ID;
 /// Matrix consumer job ID.
 pub const TASK_JOB_ID: &str = "velnor-task";
 /// Candidate validation job ID (Velnor policy only).

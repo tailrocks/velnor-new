@@ -3,7 +3,9 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_actionlint::ACTIONLINT_VERSION;
-use velnor_actions_contract::{CRATE_JOB_ID_PREFIX, Job, RunnerSelection, WorkflowPolicy};
+use velnor_actions_contract::{
+    CRATE_JOB_ID_PREFIX, Job, RequiredCheckMigration, RunnerSelection, WorkflowPolicy,
+};
 use velnor_actions_rust::{TaskGroup, TaskKind};
 use velnor_actions_workflow_renderer::action_pins;
 use velnor_actions_workflow_renderer::release_tree::RELEASE_TREE_PATHS;
@@ -49,6 +51,7 @@ pub fn plan_text(prep: &GenerationPreparation, jobs: &BTreeMap<String, Job>) -> 
     out.push('\n');
     stacks_section(&mut out, prep);
     workflow_section(&mut out, prep, jobs);
+    migration_section(&mut out);
     recommendations_section(&mut out, prep);
     out
 }
@@ -297,6 +300,41 @@ fn feature_lines(out: &mut String, prep: &GenerationPreparation) {
                 ),
             );
         }
+    }
+}
+
+/// Required-check migration from the branded gate to `Required`.
+///
+/// Surfaces [`RequiredCheckMigration::velnor_to_ci`] so `plan` names
+/// the same old/new checks the procedure doc gives admins. The final
+/// step is an external branch-protection flip: the generator can only
+/// print it, never perform it.
+fn migration_section(out: &mut String) {
+    let migration = RequiredCheckMigration::velnor_to_ci();
+    let steps = migration.steps();
+    out.push('\n');
+    push(out, "Required-check migration");
+    push(
+        out,
+        &format!(
+            "  Old: {} (check: {})",
+            migration.old_workflow, migration.old_check
+        ),
+    );
+    push(
+        out,
+        &format!(
+            "  New: {} (check: {})",
+            migration.new_workflow, migration.new_check
+        ),
+    );
+    for (index, step) in steps.iter().enumerate() {
+        let external = if index + 1 == steps.len() {
+            " [EXTERNAL: repository admin]"
+        } else {
+            ""
+        };
+        push(out, &format!("  {}. {step}{external}", index + 1));
     }
 }
 
