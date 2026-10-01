@@ -88,8 +88,8 @@ pub fn validate_env(env: &BTreeMap<String, String>) -> Result<(), RenderError> {
 /// `sh -c`/`bash -c` is single-quoted whole instead: inner-shell
 /// variables (assigned or inherited) must survive the outer shell, and
 /// the script's own quotes must stay syntactic, not literal. The
-/// credential-unset prefix ([`crate::toolchain_env::unset_prefix_len`])
-/// is transparent to the shape check: a wrapped `sh -c` still quotes
+/// credential-unset prefix (shared `env -u` length predicate) is
+/// transparent to the shape check: a wrapped `sh -c` still quotes
 /// its script, at its shifted index.
 ///
 /// # Errors
