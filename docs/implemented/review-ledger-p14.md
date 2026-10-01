@@ -137,8 +137,10 @@ counter-evidence after a tried-and-reverted implementation (see below).
   'push'`; PRs (same-repo or fork) restore read-only; policy recorded in
   the Gate 4 doc; tests `c11_cache_saves_push_only_prs_and_forks_read_only`,
   `step_conditions_serialize_as_if_with_upload_default`.
-- R14: tree is `ci.yml` only, `name: CI`; stale removal by whole-tree swap
-  (`generate.rs:208`); test `impl_renderer_tree.rs:116`.
+- R14: main tree is `ci.yml` only, `name: CI`; stale removal by whole-tree
+  swap (`generate.rs:208`); test `impl_renderer_tree.rs:116`. The scheduled
+  `freshness.yml` probe (P12-4) stands alongside under the Velnor policy;
+  consumers still get exactly `ci.yml` + `actionlint.yaml`.
 - R15: `Rust / <label>` display, `rust-<slug>`+digest8 on collision
   (`contract/src/workflow/jobs.rs:183,201,216`); tests `crate_jobs_tests.rs:73`,
   `impl_crate_graph.rs:61`; dedicated collision test added (`86a6223`).

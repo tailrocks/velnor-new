@@ -15,7 +15,8 @@ the branch. Follow the order below exactly.
 - `velnor-actions plan` prints the same migration under
   `Required-check migration`; the last step carries
   `[EXTERNAL: repository admin]`.
-- The committed tree holds `ci.yml` only; no `velnor.yml` remains.
+- The committed main tree holds `ci.yml` only; no `velnor.yml` remains
+  (the scheduled `freshness.yml` probe is a separate workflow).
 
 ## Procedure
 
