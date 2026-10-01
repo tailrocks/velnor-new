@@ -11,15 +11,14 @@
 //! malformed: those stay hard `malformed_request` errors.
 //!
 //! The shape mirrors [`super::MergeRequest`] exactly except that staged
-//! evidence (`plan`, `matrix`, reports) stays untyped; keep the two in
-//! sync. The strict path runs first, so well-formed requests never
-//! reach this fallback.
+//! evidence (`plan`, `matrix`, reports, baseline, attestation) stays
+//! untyped; keep the two in sync. The strict path runs first, so
+//! well-formed requests never reach this fallback.
 
 use serde::Deserialize;
 use velnor_actions_contract::{RequiredJobResult, WorkflowEvent};
 
-use super::merge_checks::CandidateAttestation;
-use super::{BaselineManifest, MergeRequest};
+use super::MergeRequest;
 use crate::cover::shard::{ResourceLimits, ShardProof};
 
 /// `merge-v1` request with staged evidence as untyped values.
@@ -35,7 +34,7 @@ struct LenientRequest {
     actual_event: Option<WorkflowEvent>,
     /// Head-bound candidate attestation; required in candidate mode.
     #[serde(default)]
-    candidate_attestation: Option<CandidateAttestation>,
+    candidate_attestation: Option<serde_json::Value>,
     /// Validated plan; absent when the plan artifact never landed.
     #[serde(default)]
     plan: Option<serde_json::Value>,
@@ -56,7 +55,7 @@ struct LenientRequest {
     assembly_errors: Vec<String>,
     /// Trusted baseline manifest for coverage revalidation.
     #[serde(default)]
-    baseline_manifest: Option<BaselineManifest>,
+    baseline_manifest: Option<serde_json::Value>,
     /// Shard proofs for partitioned test entries.
     #[serde(default)]
     shard_proofs: Vec<ShardProof>,
@@ -76,6 +75,16 @@ struct LenientRequest {
 pub(crate) fn lenient_request(envelope: &serde_json::Value) -> Option<MergeRequest> {
     let raw: LenientRequest = serde_json::from_value(envelope.clone()).ok()?;
     let mut assembly_errors = raw.assembly_errors;
+    let candidate_attestation = untyped_option(
+        raw.candidate_attestation,
+        "unparsable_candidate_attestation",
+        &mut assembly_errors,
+    );
+    let baseline_manifest = untyped_option(
+        raw.baseline_manifest,
+        "unparsable_baseline",
+        &mut assembly_errors,
+    );
     let plan = untyped_option(raw.plan, "unparsable_plan", &mut assembly_errors);
     let matrix = untyped_option(raw.matrix, "unparsable_matrix", &mut assembly_errors);
     let matrix_reports = untyped_list(
@@ -92,7 +101,7 @@ pub(crate) fn lenient_request(envelope: &serde_json::Value) -> Option<MergeReque
         schema: raw.schema,
         run_key: raw.run_key,
         actual_event: raw.actual_event,
-        candidate_attestation: raw.candidate_attestation,
+        candidate_attestation,
         plan,
         matrix,
         matrix_reports,
@@ -100,7 +109,7 @@ pub(crate) fn lenient_request(envelope: &serde_json::Value) -> Option<MergeReque
         required_job_ids: raw.required_job_ids,
         required_jobs: raw.required_jobs,
         assembly_errors,
-        baseline_manifest: raw.baseline_manifest,
+        baseline_manifest,
         shard_proofs: raw.shard_proofs,
         limits: raw.limits,
         reference_task_ids: raw.reference_task_ids,
