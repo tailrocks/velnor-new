@@ -40,7 +40,7 @@ pub use config::{
     StacksConfig, TestShardingConfig, VelnorConfig, VelnorSupportWorkflow, WorkflowConfig,
     WorkflowPolicy, validate_shard_changes_need_evidence,
 };
-pub use errors::ContractError;
+pub use errors::{ContractError, sanitize_error_detail};
 pub use extensions::{RUST_EXTENSION_REQUIRED_SLOTS, validate_rust_extension};
 pub use finding::Finding;
 pub use formats::{DECLARED_GITHUB_FORMATS, find_github_format, is_declared_github_format};
