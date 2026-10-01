@@ -27,6 +27,15 @@ pub(crate) fn plan_for(prep: &GenerationPreparation) -> Result<String, Box<dyn s
 /// Marker proving the current process already scrubbed ambient identity.
 const SCRUBBED_ENV: &str = "VELNOR_TEST_SCRUBBED_IDENTITY";
 
+/// Anchor-bearing CI vars scrubbed for local-semantics merge tests.
+const ANCHOR_ENV_VARS: [&str; 5] = [
+    "GITHUB_REPOSITORY",
+    "GITHUB_BASE_REF",
+    "GITHUB_REF",
+    "GITHUB_WORKFLOW_REF",
+    "GITHUB_ACTIONS",
+];
+
 /// True when ambient `GITHUB_REPOSITORY` names a non-canonical repo.
 ///
 /// Fork CI exports the fork identity; Velnor-policy fixtures carry the
@@ -55,6 +64,37 @@ pub(crate) fn without_ambient_identity(
             .env(SCRUBBED_ENV, "1")
             .env_remove("GITHUB_REPOSITORY")
             .output()?;
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(output.status.success(), "{test}: {stdout}{stderr}");
+        assert!(stdout.contains("1 passed"), "{test}: {stdout}");
+        return Ok(());
+    }
+    inner()
+}
+
+/// Run merge assertions with ambient CI anchors scrubbed.
+///
+/// Merge revalidates covered claims against runner ground truth, so a
+/// fixture manifest (anchored to `o/r`) disagrees with any ambient CI
+/// identity — canonical included. When any anchor var is set,
+/// re-executes the calling test in a child with all five removed
+/// (child env needs no `unsafe`, barred even in tests) and requires
+/// exactly one passing child run. Otherwise runs `inner` in-process.
+/// `test` is the bare test name, which must be unique in the binary.
+/// Anchor enforcement itself is covered hermetically by the pure
+/// `revalidate_coverage_with_anchors` unit tests.
+pub(crate) fn without_ambient_ci_env(test: &str, inner: impl FnOnce() -> TestResult) -> TestResult {
+    let anchored = ANCHOR_ENV_VARS
+        .iter()
+        .any(|var| std::env::var_os(var).is_some());
+    if std::env::var(SCRUBBED_ENV).is_err() && anchored {
+        let mut command = StdCommand::new(std::env::current_exe()?);
+        command.arg(test).env(SCRUBBED_ENV, "1");
+        for var in ANCHOR_ENV_VARS {
+            command.env_remove(var);
+        }
+        let output = command.output()?;
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
         assert!(output.status.success(), "{test}: {stdout}{stderr}");

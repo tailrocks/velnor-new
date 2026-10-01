@@ -177,7 +177,11 @@ pub(crate) fn revalidate_coverage_with_anchors(
     }
     if !merge_anchors_match(manifest, anchors) {
         signals.planning_failed = true;
-        miss_reasons.insert("foreign_anchor".to_owned());
+        // Contract cache §3 vocabulary: a manifest whose anchors
+        // disagree with runner ground truth is a trust-scope mismatch,
+        // never a novel token (an unlisted token fails FinalReport
+        // validation and corrupts the verdict into Internal).
+        miss_reasons.insert("trust_scope_mismatch".to_owned());
         return;
     }
     for obligation in covered {

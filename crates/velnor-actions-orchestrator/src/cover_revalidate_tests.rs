@@ -139,7 +139,7 @@ fn env_anchors_match_and_refuse_foreign() {
         assert!(signals.planning_failed, "{label}");
         assert_eq!(
             miss,
-            BTreeSet::from(["foreign_anchor".to_owned()]),
+            BTreeSet::from(["trust_scope_mismatch".to_owned()]),
             "{label}"
         );
     };
@@ -150,7 +150,7 @@ fn env_anchors_match_and_refuse_foreign() {
     let unanchored_plan = plan_for(&unanchored, Some(&commit));
     let (signals, miss) = anchored_verdict(&unanchored_plan, Some(&unanchored), &anchors);
     assert!(signals.planning_failed, "unbound repository id");
-    assert!(miss.contains("foreign_anchor"), "{miss:?}");
+    assert!(miss.contains("trust_scope_mismatch"), "{miss:?}");
     let mut other_ref = anchors.clone();
     other_ref.protected_ref = Some("refs/heads/other".to_owned());
     check("foreign ref", &manifest, &other_ref);
@@ -167,7 +167,7 @@ fn env_anchors_match_and_refuse_foreign() {
     assert!(!signals.planning_failed, "plan checks alone pass the pair");
     let (signals, miss) = anchored_verdict(&evil_plan, Some(&evil), &anchors);
     assert!(signals.planning_failed, "self-consistent foreign pair");
-    assert_eq!(miss, BTreeSet::from(["foreign_anchor".to_owned()]));
+    assert_eq!(miss, BTreeSet::from(["trust_scope_mismatch".to_owned()]));
 }
 
 /// Environment values map to anchor expectations: base branch and push
@@ -240,7 +240,7 @@ fn ci_missing_any_anchor_fails_closed() {
     ] {
         let (signals, miss) = anchored_verdict(&plan, Some(&manifest), &anchors);
         assert!(signals.planning_failed, "CI without {label} must fail");
-        assert_eq!(miss, BTreeSet::from(["foreign_anchor".to_owned()]));
+        assert_eq!(miss, BTreeSet::from(["trust_scope_mismatch".to_owned()]));
     }
     let (signals, _) = verdict(&plan, Some(&manifest));
     assert!(
@@ -264,4 +264,41 @@ fn merge_rejects_expired_manifest() {
     let plan = plan_for(&manifest, Some(&commit));
     let (signals, miss) = verdict(&plan, Some(&manifest));
     assert!(!signals.planning_failed, "{miss:?}");
+}
+
+/// Every token the anchor path emits validates against the contract vocabulary.
+///
+/// A novel token compiles and passes producer-side asserts but fails
+/// FinalReport validation at merge, corrupting a PlanningFailed
+/// verdict into Internal (CI once ran `foreign_anchor` into exactly
+/// this). This test pins the producer to the contract's closed set.
+#[test]
+fn anchor_tokens_validate_against_contract_vocabulary() {
+    use velnor_actions_contract::cachekey::validate_miss_reason;
+    let commit = "a".repeat(40);
+    let manifest = anchored_manifest(&commit);
+    let plan = plan_for(&manifest, Some(&commit));
+    let anchors = fixture_anchors();
+    let mut forked = anchors.clone();
+    forked.repository_slug = Some("evil/fork".to_owned());
+    let mut other_ref = anchors.clone();
+    other_ref.protected_ref = Some("refs/heads/other".to_owned());
+    let mut other_path = anchors.clone();
+    other_path.workflow_path = Some("other.yml".to_owned());
+    let mut strict_missing = anchors.clone();
+    strict_missing.ci_strict_anchors = true;
+    strict_missing.workflow_path = None;
+    for (label, anchors) in [
+        ("foreign slug", forked),
+        ("foreign ref", other_ref),
+        ("foreign workflow path", other_path),
+        ("strict missing anchor", strict_missing),
+    ] {
+        let (signals, miss) = anchored_verdict(&plan, Some(&manifest), &anchors);
+        assert!(signals.planning_failed, "{label}");
+        assert!(!miss.is_empty(), "{label}");
+        for token in &miss {
+            assert!(validate_miss_reason(token).is_ok(), "{label}: {token}");
+        }
+    }
 }

@@ -9,6 +9,7 @@ use velnor_actions_orchestrator::{assemble_merge_request, plan_internal};
 
 use crate::impl_common::{
     TestResult, err_of, git, git_line, passing_reports, plan_for_source_change,
+    without_ambient_ci_env,
 };
 use crate::impl_merge::task_reports_for;
 use crate::impl_orch_core::{
@@ -73,17 +74,20 @@ fn orch_core_merge_counts_cover_five_states() -> TestResult {
 
 #[test]
 fn orch_core_all_covered_merges_passed() -> TestResult {
-    let (_repo, plan) = plan_for_source_change()?;
-    assert!(!plan.task_ids.is_empty(), "fixture must select work");
-    let (plan_json, manifest) = covered_plan(&plan)?;
-    let matrix = plan_json["matrix"].clone();
-    let mut request = merge_request(&plan_json, &matrix, &serde_json::json!([]), &success_jobs());
-    request["baseline_manifest"] = manifest;
-    let final_report = merge(&request)?;
-    assert_eq!(final_report.status, FinalStatus::Passed);
-    assert_eq!(final_report.counts.covered as usize, plan.task_ids.len());
-    assert_eq!(final_report.counts.not_run, 0);
-    Ok(())
+    without_ambient_ci_env("orch_core_all_covered_merges_passed", || {
+        let (_repo, plan) = plan_for_source_change()?;
+        assert!(!plan.task_ids.is_empty(), "fixture must select work");
+        let (plan_json, manifest) = covered_plan(&plan)?;
+        let matrix = plan_json["matrix"].clone();
+        let mut request =
+            merge_request(&plan_json, &matrix, &serde_json::json!([]), &success_jobs());
+        request["baseline_manifest"] = manifest;
+        let final_report = merge(&request)?;
+        assert_eq!(final_report.status, FinalStatus::Passed);
+        assert_eq!(final_report.counts.covered as usize, plan.task_ids.len());
+        assert_eq!(final_report.counts.not_run, 0);
+        Ok(())
+    })
 }
 
 #[test]

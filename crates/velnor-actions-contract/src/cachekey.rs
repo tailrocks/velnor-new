@@ -46,7 +46,10 @@ pub fn validate_miss_reason(reason: &str) -> Result<(), ContractError> {
     if MISS_REASONS.contains(&reason) {
         Ok(())
     } else {
-        Err(ContractError::identity("miss_reason", "unknown_reason"))
+        Err(ContractError::identity(
+            "miss_reason",
+            format!("unknown_reason:{reason}"),
+        ))
     }
 }
 
