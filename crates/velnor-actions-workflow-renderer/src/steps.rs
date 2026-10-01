@@ -130,6 +130,9 @@ pub fn checkout_step(uses: &str) -> Result<Step, RenderError> {
 }
 
 /// Validated pinned-action step.
+///
+/// Names share the step-name gate (no expressions); `with:` keys never
+/// carry expressions and values only allowlisted runner spans.
 /// # Errors
 pub fn action_step(
     name: &str,
@@ -139,11 +142,15 @@ pub fn action_step(
     if name.trim().is_empty() {
         return Err(RenderError::BadActionRef("empty_name".to_owned()));
     }
+    crate::expressions::check_name_content(name)?;
     validate_uses(uses)?;
     scan_for_private_subcommands(name)?;
     scan_for_private_subcommands(uses)?;
-    for entry in with.iter().flat_map(|(key, value)| [key, value]) {
-        scan_for_private_subcommands(entry)?;
+    for (key, value) in &with {
+        crate::expressions::check_with_key(key)?;
+        crate::expressions::check_with_value(key, value)?;
+        scan_for_private_subcommands(key)?;
+        scan_for_private_subcommands(value)?;
     }
     Ok(Step {
         name: name.to_owned(),
@@ -165,11 +172,7 @@ pub fn shell_step(
     if name.trim().is_empty() {
         return Err(RenderError::BadCommand("empty_name".to_owned()));
     }
-    if name.contains("${{") {
-        return Err(RenderError::BadCommand(format!(
-            "expression_in_name:{name}"
-        )));
-    }
+    crate::expressions::check_name_content(name)?;
     commands::validate_command_argv(&argv)?;
     commands::validate_env(&env)?;
     scan_for_private_subcommands(name)?;
@@ -274,6 +277,7 @@ pub fn internal_step(name: &str, operation: &str) -> Result<Step, RenderError> {
     if name.trim().is_empty() {
         return Err(RenderError::BadCommand("empty_name".to_owned()));
     }
+    crate::expressions::check_name_content(name)?;
     split_internal_operation(operation)?;
     scan_for_private_subcommands(name)?;
     Ok(Step {

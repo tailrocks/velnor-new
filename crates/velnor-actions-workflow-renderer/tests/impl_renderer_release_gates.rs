@@ -1,6 +1,6 @@
 //! Release step-content gate cases (authority separation, argv safety).
 use std::collections::BTreeMap;
-use velnor_actions_contract::Step;
+use velnor_actions_contract::{Step, StepKind};
 use velnor_actions_workflow_renderer::RenderError;
 use velnor_actions_workflow_renderer::release_gates::{ReleaseConfigBinding, check_release_jobs};
 use velnor_actions_workflow_renderer::release_jobs::{
@@ -13,7 +13,7 @@ use velnor_actions_workflow_renderer::release_spec::{
 use velnor_actions_workflow_renderer::release_tree::{
     RELEASE_BOOTSTRAP_CONFIG_PATH, RELEASE_CONFIG_PATH,
 };
-use velnor_actions_workflow_renderer::{action_step, shell_step};
+use velnor_actions_workflow_renderer::action_step;
 
 pub(crate) const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
 pub(crate) const OTHER_SHA: &str = "abcdef0123456789abcdef0123456789abcdef01";
@@ -43,13 +43,19 @@ pub(crate) fn checkout_step(sha: &str, persist: Option<&str>) -> Result<Step, Re
 }
 
 pub(crate) fn shell(name: &str, argv: &[&str], env: &[(&str, &str)]) -> Result<Step, RenderError> {
-    shell_step(
-        name,
-        argv.iter().map(ToString::to_string).collect(),
-        env.iter()
-            .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
-            .collect(),
-    )
+    // Direct IR: these tests pin the release gates as the enforcing
+    // layer, so construction bypasses the constructor gates.
+    Ok(Step {
+        name: name.to_owned(),
+        condition: None,
+        kind: StepKind::Shell {
+            run: argv.iter().map(ToString::to_string).collect(),
+            env: env
+                .iter()
+                .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
+                .collect(),
+        },
+    })
 }
 
 pub(crate) fn publish_argv(config: &str) -> Vec<&str> {

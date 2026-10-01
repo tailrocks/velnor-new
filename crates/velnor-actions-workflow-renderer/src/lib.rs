@@ -11,6 +11,7 @@ pub mod closure;
 mod commands;
 mod document;
 mod error;
+mod expressions;
 mod final_steps;
 pub mod guard;
 pub mod marker;

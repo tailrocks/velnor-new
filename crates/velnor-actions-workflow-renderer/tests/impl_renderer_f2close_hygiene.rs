@@ -249,19 +249,41 @@ fn render_fails_with(jobs: Vec<(String, velnor_actions_contract::Job)>, want: &s
 
 #[test]
 fn token_hygiene_scopes_gh_token_to_plan() -> Result<(), RenderError> {
-    use velnor_actions_workflow_renderer::toolchain_env::{
-        STEP_CREDENTIAL_DENYLIST, with_credential_scrub,
-    };
+    use velnor_actions_contract::{Step, StepKind};
+    use velnor_actions_workflow_renderer::toolchain_env::with_credential_scrub;
+    // The shell constructor rejects `github.token` env values outright:
+    // only the render-time fetch binding may carry one.
+    let err = shell_step(
+        "Plan",
+        vec!["true".to_owned()],
+        BTreeMap::from([("GH_TOKEN".to_owned(), "${{ github.token }}".to_owned())]),
+    )
+    .expect_err("github.token in constructor env must fail");
+    assert!(
+        format!("{err:?}").contains("bad_env_expression"),
+        "wrong rejection: {err:?}"
+    );
+    // Hand-built IR carrying the scoped shape still fails at render.
     let mut scrubbed = with_credential_scrub(&BTreeMap::new());
     scrubbed.insert("GH_TOKEN".to_owned(), "${{ github.token }}".to_owned());
-    assert_eq!(scrubbed.len(), STEP_CREDENTIAL_DENYLIST.len());
-    let scoped = token_plan_job("Plan", vec!["true".to_owned()], scrubbed)?;
-    render_workflow_ir(
-        &fixture_ir(vec![scoped]),
-        WorkflowPolicy::ConsumerV1,
-        None,
-        &fixture_ctx(),
-    )?;
+    let scoped = job(
+        "plan",
+        "Plan",
+        Vec::new(),
+        vec![
+            checkout_step(&checkout_pin())?,
+            Step {
+                name: "Plan".to_owned(),
+                condition: None,
+                kind: StepKind::Shell {
+                    run: vec!["true".to_owned()],
+                    env: scrubbed,
+                },
+            },
+            plan_step(),
+        ],
+    );
+    render_fails_with(vec![scoped], "bad_env_expression");
     let bad_env = token_plan_job(
         "Leak",
         vec!["true".to_owned()],
@@ -273,27 +295,30 @@ fn token_hygiene_scopes_gh_token_to_plan() -> Result<(), RenderError> {
 
 #[test]
 fn token_hygiene_allows_final_fetch_token() -> Result<(), RenderError> {
+    use velnor_actions_workflow_renderer::steps::{FETCH_OPERATION, internal_step};
+    // The fetch binding is render-time only: the internal op renders
+    // its fixed `GH_TOKEN`, never carried through IR env.
     let (id, mut final_job) = job(
         "required",
         "Required",
         vec!["plan".to_owned()],
         vec![
             checkout_step(&checkout_pin())?,
-            shell_step(
-                "Prepare pinned tools",
-                vec!["true".to_owned()],
-                BTreeMap::from([("GH_TOKEN".to_owned(), "${{ github.token }}".to_owned())]),
-            )?,
+            internal_step("Download every expected matrix artifact", FETCH_OPERATION)?,
             merge_step(),
         ],
     );
     final_job.condition = Some("always()".to_owned());
-    render_workflow_ir(
+    let text = render_workflow_ir(
         &fixture_ir(vec![minimal_plan_job()?, (id, final_job)]),
         WorkflowPolicy::ConsumerV1,
         None,
         &fixture_ctx(),
     )?;
+    assert!(
+        text.contains("GH_TOKEN: ${{ github.token }}"),
+        "fetch must bind the token:\n{text}"
+    );
     Ok(())
 }
 
@@ -313,11 +338,14 @@ fn token_hygiene_rejects_prints_and_task_tokens() -> Result<(), RenderError> {
         "velnor-task",
         "Task",
         vec!["plan".to_owned()],
-        vec![shell_step(
-            "Run task",
-            vec!["true".to_owned()],
-            BTreeMap::from([("GH_TOKEN".to_owned(), "${{ github.token }}".to_owned())]),
-        )?],
+        vec![velnor_actions_contract::Step {
+            name: "Run task".to_owned(),
+            condition: None,
+            kind: velnor_actions_contract::StepKind::Shell {
+                run: vec!["true".to_owned()],
+                env: BTreeMap::from([("GH_TOKEN".to_owned(), "${{ github.token }}".to_owned())]),
+            },
+        }],
     );
     render_fails_with(vec![minimal_plan_job()?, task_token], "token_misplaced");
     Ok(())
