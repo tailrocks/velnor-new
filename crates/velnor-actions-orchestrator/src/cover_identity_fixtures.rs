@@ -99,36 +99,41 @@ pub(super) fn manifest_with(entries: &[(&str, &str)]) -> BaselineManifest {
     }
 }
 
-/// Discovery with one plain group per task ID, all unchanged.
+/// Discovery with one plain proposal per task ID, all unchanged.
 pub(super) fn discovery_with(task_ids: &[&str]) -> Discovery {
     use velnor_actions_rust::{CompileDriver, NextestProfile, TaskGroup, TaskKind, TestRunner};
     Discovery {
         statuses: Vec::new(),
         workspaces: Vec::new(),
-        task_groups: task_ids
+        proposals: task_ids
             .iter()
-            .map(|id| TaskGroup {
-                task_id: (*id).to_owned(),
-                package_id: "demo".to_owned(),
-                package_name: "demo".to_owned(),
-                manifest_key: "root".to_owned(),
-                kind: TaskKind::Clippy,
-                configuration: "default".to_owned(),
-                features: Vec::new(),
-                target: "host".to_owned(),
-                gated_by: Vec::new(),
-                depends_on: Vec::new(),
-                target_flags: Vec::new(),
-                no_test_targets: false,
-                package_arg: None,
-                compile_driver: CompileDriver::Cargo,
-                test_runner: TestRunner::CargoTest,
-                declared_inputs: Vec::new(),
-                undeclared_reads: false,
-                uses_network: false,
-                uses_clock: false,
-                uses_random: false,
-                nextest_profile: NextestProfile::Default,
+            .map(|id| {
+                let group = TaskGroup {
+                    task_id: (*id).to_owned(),
+                    package_id: "demo".to_owned(),
+                    package_name: "demo".to_owned(),
+                    manifest_key: "root".to_owned(),
+                    kind: TaskKind::Clippy,
+                    configuration: "default".to_owned(),
+                    features: Vec::new(),
+                    target: "host".to_owned(),
+                    gated_by: Vec::new(),
+                    depends_on: Vec::new(),
+                    target_flags: Vec::new(),
+                    no_test_targets: false,
+                    package_arg: None,
+                    compile_driver: CompileDriver::Cargo,
+                    test_runner: TestRunner::CargoTest,
+                    declared_inputs: Vec::new(),
+                    undeclared_reads: false,
+                    uses_network: false,
+                    uses_clock: false,
+                    uses_random: false,
+                    nextest_profile: NextestProfile::Default,
+                };
+                let task = velnor_actions_rust::propose_task(&group).expect("fixture proposes");
+                task.validate().expect("fixture valid");
+                task
             })
             .collect(),
         feature_fallbacks: Vec::new(),
@@ -198,28 +203,29 @@ pub(super) fn live_closure_digest(
     task_id: &str,
     catalog: &ToolCatalog,
 ) -> String {
-    let group = discovery
-        .task_groups
+    let task = discovery
+        .proposals
         .iter()
-        .find(|group| group.task_id == task_id)
-        .expect("group");
+        .find(|task| task.task_id == task_id)
+        .expect("task");
     let snapshot = ExecutionSnapshot::build(discovery);
     let bundle = extension_bundle_with_snapshot(
         &snapshot,
         discovery,
-        group,
+        task,
         Some(root),
-        nextest_config_for(discovery, group).as_deref(),
+        nextest_config_for(discovery, task).as_deref(),
     );
-    let toolchain = toolchain_id(group, catalog).expect("toolchain");
-    let platform = platform_id_for_group("ubuntu-26.04", group).expect("platform");
+    let toolchain = toolchain_id(task, catalog).expect("toolchain");
+    let platform = platform_id_for_group("ubuntu-26.04", task).expect("platform");
     let closure = resolve_closure_at_root(
         root,
-        group,
-        nextest_config_for(discovery, group).as_deref(),
+        task,
+        nextest_config_for(discovery, task).as_deref(),
         bundle.graph_digest(),
         &toolchain,
         &platform,
-    );
+    )
+    .expect("closure");
     canonical_digest(&closure).expect("digest")
 }

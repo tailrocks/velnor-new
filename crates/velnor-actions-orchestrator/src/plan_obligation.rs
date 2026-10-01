@@ -10,10 +10,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use serde::Serialize;
-use velnor_actions_contract::{MatrixEntry, PlanObligation, canonical_json_bytes, digest_b3};
+use velnor_actions_contract::{
+    MatrixEntry, PlanObligation, ProposedTask, canonical_json_bytes, digest_b3,
+};
 use velnor_actions_mise::ToolCatalog;
 use velnor_actions_mise::restore::probe_tool_availability;
-use velnor_actions_rust::TaskGroup;
+use velnor_actions_rust::extension_for_proposal;
 
 use crate::OrchestratorError;
 use crate::discover::Discovery;
@@ -26,7 +28,7 @@ use crate::internal_plan::snapshot::{ExecutionSnapshot, canonical_digest};
 use crate::internal_plan::wire_w2::{self, GroupWire};
 use crate::internal_plan::{
     IdentityInputs, adapter_metadata, cache_ids_for, evidence_for_group, execute_ids,
-    manifest_for_key, nextest_config_for, record_task_cache, task_identity_digest, toolchain_id,
+    nextest_config_for, record_task_cache, task_identity_digest, toolchain_id,
 };
 use crate::schedule::assign_lanes;
 use crate::select::group_changed;
@@ -37,7 +39,7 @@ pub(crate) struct GroupInputs<'a> {
     /// Validated discovery inventory.
     pub(crate) discovery: &'a Discovery,
     /// Universe member to plan.
-    pub(crate) group: &'a TaskGroup,
+    pub(crate) task: &'a ProposedTask,
     /// Run key.
     pub(crate) run_key: &'a str,
     /// Runner label.
@@ -61,33 +63,33 @@ pub(crate) struct GroupInputs<'a> {
 }
 
 /// Deterministic lane per universe task ID.
-pub(crate) fn lane_table(universe: &[&TaskGroup]) -> BTreeMap<String, u32> {
-    let ids: Vec<String> = universe.iter().map(|group| group.task_id.clone()).collect();
+pub(crate) fn lane_table(universe: &[&ProposedTask]) -> BTreeMap<String, u32> {
+    let ids: Vec<String> = universe.iter().map(|task| task.task_id.clone()).collect();
     assign_lanes(&ids).into_iter().collect()
 }
 
-/// Changed manifest keys for groups with empty package IDs.
+/// Changed unit keys for tasks with empty unit IDs.
 pub(crate) fn changed_keys(
-    universe: &[&TaskGroup],
+    universe: &[&ProposedTask],
     changed: &BTreeSet<String>,
 ) -> BTreeSet<String> {
     universe
         .iter()
-        .filter(|group| changed.contains(&group.package_id))
-        .map(|group| group.manifest_key.clone())
+        .filter(|task| changed.contains(&task.identity.unit_id))
+        .map(|task| task.identity.unit_key.clone())
         .collect()
 }
 
 /// True when one universe member counts as changed.
 pub(crate) fn member_changed(
-    group: &TaskGroup,
+    task: &ProposedTask,
     changed: Option<&BTreeSet<String>>,
     keys: &BTreeSet<String>,
 ) -> bool {
-    changed.is_none_or(|set| group_changed(group, set, keys))
+    changed.is_none_or(|set| group_changed(task, set, keys))
 }
 
-/// Extension bundle plus closure-bound identity digests for one group.
+/// Extension bundle plus closure-bound identity digests for one task.
 struct PlannedIdentity {
     /// Snapshot-indexed bundle with checkout-bound lock/Nextest digests.
     bundle: ExtensionBundle,
@@ -97,7 +99,7 @@ struct PlannedIdentity {
     input_digest: String,
 }
 
-/// Snapshot bundle plus closure-bound identity digests for one group.
+/// Snapshot bundle plus closure-bound identity digests for one task.
 ///
 /// The closure resolves against the checkout and its digest binds into
 /// the identity envelope, so a source edit flips `input_digest` even
@@ -108,28 +110,29 @@ fn planned_identity(
     toolchain: &str,
     platform_id: &str,
 ) -> Result<PlannedIdentity, OrchestratorError> {
-    let group = inputs.group;
-    let manifest = manifest_for_key(&group.manifest_key);
-    let nextest_config = nextest_config_for(inputs.discovery, group);
+    let task = inputs.task;
+    let manifest = task.identity.unit_path.clone();
+    let nextest_config = nextest_config_for(inputs.discovery, task);
     let bundle = extension_bundle_with_snapshot(
         inputs.snapshot,
         inputs.discovery,
-        group,
+        task,
         Some(inputs.root),
         nextest_config.as_deref(),
     );
-    let ext = group.identity_extension(&bundle.inputs());
+    let ext = extension_for_proposal(task, &bundle.inputs()).map_err(internal_contract)?;
     let closure = resolve_closure_at_root(
         inputs.root,
-        group,
+        task,
         nextest_config.as_deref(),
         bundle.graph_digest(),
         toolchain,
         platform_id,
-    );
+    )
+    .map_err(internal_contract)?;
     let closure_digest = canonical_digest(&closure).map_err(internal_contract)?;
     let input_digest = task_identity_digest(&IdentityInputs {
-        group,
+        task,
         argv,
         toolchain_id: toolchain,
         platform_id,
@@ -154,20 +157,20 @@ fn planned_identity(
 pub(crate) fn plan_group(
     inputs: &GroupInputs<'_>,
 ) -> Result<(PlanObligation, MatrixEntry), OrchestratorError> {
-    let group = inputs.group;
+    let task = inputs.task;
     let _ = inputs.lane;
-    let toolchain = toolchain_id(group, inputs.catalog).map_err(internal_contract)?;
-    let argv = task_argv(group, inputs.catalog)?;
-    let platform_id = platform_id_for_group(inputs.label, group).map_err(internal_contract)?;
+    let toolchain = toolchain_id(task, inputs.catalog).map_err(internal_contract)?;
+    let argv = task_argv(task, inputs.catalog)?;
+    let platform_id = platform_id_for_group(inputs.label, task).map_err(internal_contract)?;
     let identity = planned_identity(inputs, &argv, &toolchain, &platform_id)?;
-    let ext = group.identity_extension(&identity.bundle.inputs());
+    let ext = extension_for_proposal(task, &identity.bundle.inputs()).map_err(internal_contract)?;
     let input_digest = identity.input_digest;
     let closure_digest = identity.closure_digest;
     let reuse = if inputs.changed {
         wire_w2::ReuseOutcome::execute("affected_by_change")
     } else {
         wire_w2::plan_reuse_outcome(
-            group,
+            task,
             inputs.wire.event,
             probe_tool_availability(false, false),
             &toolchain,
@@ -176,7 +179,7 @@ pub(crate) fn plan_group(
         )?
     };
     let gate = wire_w2::check_archive_identity_with_source(
-        group,
+        task,
         &toolchain,
         &platform_id,
         identity.bundle.config_digest(),
@@ -193,7 +196,7 @@ pub(crate) fn plan_group(
         }
         _ => reuse,
     };
-    let task_digest = task_digest(&group.task_id, &argv, &toolchain).map_err(internal_contract)?;
+    let task_digest = task_digest(&task.task_id, &argv, &toolchain).map_err(internal_contract)?;
     // The persisted input digest flows through the validated reuse
     // outcome when one exists, so merge-time live comparison judges the
     // exact recorded value; forced-execution paths carry the identity.
@@ -202,7 +205,7 @@ pub(crate) fn plan_group(
         .clone()
         .unwrap_or_else(|| input_digest.clone());
     let obligation = PlanObligation {
-        task_id: group.task_id.clone(),
+        task_id: task.task_id.clone(),
         decision: reuse.decision,
         reason: reuse.reason,
         task_digest: task_digest.clone(),
@@ -210,7 +213,8 @@ pub(crate) fn plan_group(
         closure_digest,
         baseline_proof: None,
     };
-    let mut metadata = adapter_metadata(group, evidence_for_group(inputs.discovery, group));
+    let mut metadata = adapter_metadata(task, evidence_for_group(inputs.discovery, task))
+        .map_err(internal_contract)?;
     record_task_cache(
         &mut metadata,
         reuse.task_cache_enabled,
@@ -218,21 +222,21 @@ pub(crate) fn plan_group(
     );
     let run = velnor_actions_workflow_renderer::join_argv_for_run(&argv)
         .map_err(|err| internal(&err.to_string()))?;
-    let job_id = crate::crate_job_ids::job_id_for_member(&inputs.discovery.task_groups, group)
+    let job_id = crate::crate_job_ids::job_id_for_member(&inputs.discovery.proposals, task)
         .ok_or_else(|| internal("crate_job_id_missing"))?;
     let mut entry = MatrixEntry::derive(
-        velnor_actions_rust::STACK_ID,
-        &group.task_id,
+        &task.stack_id,
+        &task.task_id,
         &run,
         &task_digest,
         metadata,
-        execute_ids(group),
+        execute_ids(task),
         &input_digest,
         inputs.run_key,
         &job_id,
     )
     .map_err(internal_contract)?;
-    let cache_ids = cache_ids_for(group, inputs.label, &toolchain).map_err(internal_contract)?;
+    let cache_ids = cache_ids_for(task, inputs.label, &toolchain).map_err(internal_contract)?;
     record_lane_target_dir(&mut entry.adapter_metadata, cache_ids.lane_id());
     entry.cache_ids = Some(cache_ids);
     Ok((obligation, entry))

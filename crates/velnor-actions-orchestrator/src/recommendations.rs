@@ -6,7 +6,7 @@
 
 use std::collections::BTreeSet;
 
-use velnor_actions_rust::FileIndex;
+use velnor_actions_contract::FileIndex;
 
 use crate::discover::PlannedWorkspace;
 use crate::toolcheck::ToolInputCheck;

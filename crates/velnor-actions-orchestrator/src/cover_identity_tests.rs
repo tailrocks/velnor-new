@@ -108,7 +108,8 @@ fn stale_closure_with_empty_changed_set_executes() {
 fn incomplete_closure_refuses() {
     let rust = "stack/rust/root/clippy/default";
     let mut broken = discovery_with(&[rust]);
-    broken.task_groups[0]
+    broken.proposals[0]
+        .identity
         .declared_inputs
         .push("missing/input.proto".to_owned());
     let stale = stale_closure();
@@ -140,7 +141,7 @@ fn incomplete_closure_refuses() {
 fn undeclared_reads_refuse_with_warning() {
     let rust = "stack/rust/root/clippy/default";
     let mut dirty = discovery_with(&[rust]);
-    dirty.task_groups[0].undeclared_reads = true;
+    dirty.proposals[0].identity.undeclared_reads = true;
     let mut plan = plan_with(&[rust]);
     let stale = stale_closure();
     let manifest = manifest_with(&[(rust, &stale)]);

@@ -316,8 +316,8 @@ fn matrix_reports_entries_per_task() -> TestResult {
     let prep = prepare(dir.path())?;
     let text = plan_for(&prep)?;
     assert!(text.contains("Entries:"), "{text}");
-    for g in &prep.discovery.task_groups {
-        assert!(g.no_test_targets || text.contains(&g.task_id), "{text}");
+    for g in &prep.discovery.proposals {
+        assert!(g.no_targets || text.contains(&g.task_id), "{text}");
     }
     Ok(())
 }
@@ -374,11 +374,11 @@ fn cargo_test_shards_reject_config() -> TestResult {
 fn fmt_needs_explicit_config() -> TestResult {
     let dir = make_repo(config_with_branch())?;
     let prep = prepare(dir.path())?;
-    let groups = &prep.discovery.task_groups;
+    let groups = &prep.discovery.proposals;
     assert!(!groups.iter().any(|g| g.task_id.contains("/fmt/")));
     fs::write(dir.path().join("rustfmt.toml"), "")?;
     let prep = prepare(dir.path())?;
-    let groups = &prep.discovery.task_groups;
+    let groups = &prep.discovery.proposals;
     assert!(groups.iter().any(|g| g.task_id.contains("/fmt/")));
     Ok(())
 }

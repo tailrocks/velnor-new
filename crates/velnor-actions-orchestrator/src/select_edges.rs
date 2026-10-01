@@ -5,15 +5,13 @@ use std::ffi::OsString;
 use std::path::Path;
 
 use velnor_actions_contract::{
-    CachePolicy, ContractError, EdgeKind, ResourceClass, ResourceDemand, TaskEdge, TaskGraph,
-    TaskNode, digest_b3,
+    ContractError, EdgeKind, ProposedTask, TaskEdge, TaskGraph, TaskNode, digest_b3,
 };
 use velnor_actions_mise::GitRequest;
-use velnor_actions_rust::{DepKind, LocalEdge, STACK_ID, TaskGroup, TaskKind};
+use velnor_actions_rust::{DepKind, LocalEdge};
 
 use crate::discover::Discovery;
 use crate::git_paths::split_nul_paths;
-use crate::internal_plan::{component_id_of, manifest_for_key};
 use crate::schedule::resource_exclusions;
 use crate::select_affected::manifest_dir;
 use crate::validators::{validate_diff_rev, validate_select_diff_args, validate_select_show_args};
@@ -223,39 +221,36 @@ fn join_dir(dir: &str, path: &str) -> String {
     parts.join("/")
 }
 
-/// Validated plan graph: nodes per group plus sorted unique edges (PAR-3.1/3.2).
+/// Validated plan graph: nodes per task plus sorted unique edges (PAR-3.1/3.2).
 ///
 /// Data edges follow `depends_on`, gate edges follow `gated_by`, report
 /// edges bind shard legs to their base task, and resource exclusions come
 /// from the lane assignment. Endpoints outside the selection are dropped:
 /// plan edges must name planned obligations.
 pub(crate) fn plan_task_graph(
-    selected: &[&TaskGroup],
+    selected: &[&ProposedTask],
     lanes: &BTreeMap<String, u32>,
     digests: &BTreeMap<String, String>,
 ) -> Result<Vec<TaskEdge>, ContractError> {
-    let ids: BTreeSet<&str> = selected
-        .iter()
-        .map(|group| group.task_id.as_str())
-        .collect();
+    let ids: BTreeSet<&str> = selected.iter().map(|task| task.task_id.as_str()).collect();
     let mut nodes = Vec::with_capacity(selected.len());
-    for group in selected {
-        let mut node = task_node(group, lanes, digests);
+    for task in selected {
+        let mut node = task_node(task, lanes, digests);
         node.depends_on.retain(|dep| ids.contains(dep.as_str()));
         node.gated_by.retain(|gate| ids.contains(gate.as_str()));
         nodes.push(node);
     }
     nodes.sort_by(|left, right| left.task_id.cmp(&right.task_id));
     let mut edges = Vec::new();
-    for group in selected {
-        for dep in &group.depends_on {
-            push_edge(&mut edges, &ids, dep, &group.task_id, EdgeKind::Data);
+    for task in selected {
+        for dep in &task.depends_on {
+            push_edge(&mut edges, &ids, dep, &task.task_id, EdgeKind::Data);
         }
-        for gate in &group.gated_by {
-            push_edge(&mut edges, &ids, gate, &group.task_id, EdgeKind::Gate);
+        for gate in &task.gated_by {
+            push_edge(&mut edges, &ids, gate, &task.task_id, EdgeKind::Gate);
         }
-        if let Some((base, _, _)) = velnor_actions_contract::split_shard_suffix(&group.task_id) {
-            push_edge(&mut edges, &ids, &group.task_id, base, EdgeKind::Report);
+        if let Some((base, _, _)) = velnor_actions_contract::split_shard_suffix(&task.task_id) {
+            push_edge(&mut edges, &ids, &task.task_id, base, EdgeKind::Report);
         }
     }
     exclusion_edges(selected, lanes, &mut edges);
@@ -265,53 +260,27 @@ pub(crate) fn plan_task_graph(
     Ok(graph.edges)
 }
 
-/// One graph node for one selected group.
+/// One graph node for one selected task.
+///
+/// The orchestrator computes only `input_digest`/`lane_id`; every
+/// other field moves from the validated proposal through the single
+/// [`into_task_node`](ProposedTask::into_task_node) completion, never
+/// recomputed (edge lists sort defensively first, as before).
 fn task_node(
-    group: &TaskGroup,
+    task: &ProposedTask,
     lanes: &BTreeMap<String, u32>,
     digests: &BTreeMap<String, String>,
 ) -> TaskNode {
-    let lane = lanes.get(&group.task_id).copied().unwrap_or(0);
-    let mut depends_on = group.depends_on.clone();
-    depends_on.sort();
-    depends_on.dedup();
-    let mut gated_by = group.gated_by.clone();
-    gated_by.sort();
-    gated_by.dedup();
-    TaskNode {
-        task_id: group.task_id.clone(),
-        stack_id: STACK_ID.to_owned(),
-        component_id: component_id_of(&group.package_id),
-        task_kind: group.kind.as_str().to_owned(),
-        configuration: group.configuration.clone(),
-        input_digest: digests.get(&group.task_id).cloned().unwrap_or_default(),
-        depends_on,
-        gated_by,
-        reads: vec![manifest_for_key(&group.manifest_key)],
-        writes: Vec::new(),
-        outputs: Vec::new(),
-        resource: ResourceDemand {
-            class: resource_class_for(group.kind),
-            cpu_milli: None,
-            memory_mb: None,
-            needs_network: group.uses_network,
-            service: None,
-        },
-        lane_id: digest_b3(lane.to_string().as_bytes()),
-        cache_policy: CachePolicy {
-            allow_compilation_reuse: true,
-            allow_task_reuse: !group.undeclared_reads,
-        },
-    }
-}
-
-/// Resource class for one task kind.
-fn resource_class_for(kind: TaskKind) -> ResourceClass {
-    match kind {
-        TaskKind::Clippy | TaskKind::Build => ResourceClass::Compiler,
-        TaskKind::Test | TaskKind::Nextest | TaskKind::Doctest => ResourceClass::Test,
-        TaskKind::Doc | TaskKind::Fmt => ResourceClass::Lightweight,
-    }
+    let lane = lanes.get(&task.task_id).copied().unwrap_or(0);
+    let mut owned = task.clone();
+    owned.depends_on.sort();
+    owned.depends_on.dedup();
+    owned.gated_by.sort();
+    owned.gated_by.dedup();
+    owned.into_task_node(
+        digests.get(&task.task_id).cloned().unwrap_or_default(),
+        digest_b3(lane.to_string().as_bytes()),
+    )
 }
 
 /// Push one edge when both endpoints are planned and distinct.
@@ -333,16 +302,16 @@ fn push_edge(
 
 /// Resource-exclusion edges for lane-sharing pairs (PAR-7.2).
 fn exclusion_edges(
-    selected: &[&TaskGroup],
+    selected: &[&ProposedTask],
     lanes: &BTreeMap<String, u32>,
     edges: &mut Vec<TaskEdge>,
 ) {
     let assignments: Vec<(&str, u32)> = selected
         .iter()
-        .map(|group| {
+        .map(|task| {
             (
-                group.task_id.as_str(),
-                lanes.get(&group.task_id).copied().unwrap_or(0),
+                task.task_id.as_str(),
+                lanes.get(&task.task_id).copied().unwrap_or(0),
             )
         })
         .collect();

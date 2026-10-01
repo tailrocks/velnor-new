@@ -5,8 +5,9 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
+use velnor_actions_contract::{CandidateOutcome, Stack, StackCandidate};
 use velnor_actions_mise::{MetadataDiscovery, MetadataQualification, ToolCatalog};
-use velnor_actions_rust::{CandidateOutcome, CargoCandidate, WorkspaceRecord, parse_metadata_json};
+use velnor_actions_rust::{WorkspaceRecord, parse_metadata_json};
 
 use crate::OrchestratorError;
 use crate::decisions::{MetadataFailure, classify_metadata_failure};
@@ -29,16 +30,29 @@ const MAX_METADATA_LANES: usize = 1;
 /// Returns `preparation_incomplete` when a fetch fails incompletely.
 pub(crate) fn run_inventories(
     root: &Path,
-    candidates: &[CargoCandidate],
+    candidates: &[StackCandidate],
 ) -> Result<Inventories, OrchestratorError> {
     let catalog = ToolCatalog::pinned();
-    let known: BTreeSet<String> = candidates
-        .iter()
-        .map(|candidate| candidate.manifest.clone())
-        .collect();
-    run_with(root, candidates, true, &|manifest| {
+    let mut manifests = Vec::with_capacity(candidates.len());
+    for candidate in candidates {
+        manifests.push(manifest_for_candidate(candidate)?);
+    }
+    let known: BTreeSet<String> = manifests.iter().cloned().collect();
+    run_with(root, &manifests, true, &|manifest| {
         fetch_inventory(root, manifest, &catalog, &known)
     })
+}
+
+/// Manifest path for one neutral candidate via closed stack dispatch.
+fn manifest_for_candidate(candidate: &StackCandidate) -> Result<String, OrchestratorError> {
+    match Stack::require_known(&candidate.stack_id) {
+        Ok(Stack::Rust) => Ok(velnor_actions_rust::manifest_for_unit_root(
+            &candidate.unit_root,
+        )),
+        Err(err) => Err(OrchestratorError::Detection {
+            problem: err.to_string(),
+        }),
+    }
 }
 
 /// Inventory loop over an immutable snapshot; `reuse=false` is legacy.
@@ -47,17 +61,17 @@ pub(crate) fn run_inventories(
 /// Returns `preparation_incomplete` when a fetch fails incompletely.
 fn run_with(
     root: &Path,
-    candidates: &[CargoCandidate],
+    manifests: &[String],
     reuse: bool,
     load: &dyn Fn(&str) -> Result<WorkspaceRecord, FetchFailure>,
 ) -> Result<Inventories, OrchestratorError> {
     let tools = ToolSnapshot::capture(root);
-    let mut outcomes = Vec::with_capacity(candidates.len());
+    let mut outcomes = Vec::with_capacity(manifests.len());
     let mut inventories = Vec::new();
     let mut index = MemberIndex::default();
-    for lane in candidates.chunks(MAX_METADATA_LANES) {
-        for candidate in lane {
-            let manifest = candidate.manifest.clone();
+    for lane in manifests.chunks(MAX_METADATA_LANES) {
+        for manifest in lane {
+            let manifest = manifest.clone();
             if reuse && let Some(record) = index.reuse_for(root, &manifest, &inventories) {
                 outcomes.push(ok_outcome(manifest.clone()));
                 inventories.push((manifest, record));
@@ -232,14 +246,8 @@ mod tests {
         }
     }
 
-    fn candidates(manifests: &[String]) -> Vec<CargoCandidate> {
-        let mut out = Vec::with_capacity(manifests.len());
-        for manifest in manifests {
-            out.push(CargoCandidate {
-                manifest: manifest.clone(),
-            });
-        }
-        out
+    fn candidates(manifests: &[String]) -> Vec<String> {
+        manifests.to_vec()
     }
 
     fn fixture_dir(files: &[(&str, &str)]) -> Result<tempfile::TempDir, String> {

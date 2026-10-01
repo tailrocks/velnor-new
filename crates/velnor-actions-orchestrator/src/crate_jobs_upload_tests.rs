@@ -5,6 +5,7 @@
 
 use super::crate_jobs_tests::{discovery, group, names};
 use super::*;
+use velnor_actions_rust::TaskKind;
 
 /// True for the `sh -c` argv head wrapping one script.
 ///
