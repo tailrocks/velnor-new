@@ -246,7 +246,7 @@ Single direct-`cargo metadata --no-deps --offline` on the
 100-crate fixture: 0.04, 0.03, 0.04 s — a lower bound per
 eliminated subprocess; the mise-wrapped cost is UNMEASURED.
 A 100-crate full plan fails closed with
-`matrix_budget_exceeded:595321` (256 KiB cap, never truncates;
+`matrix_budget_exceeded:595321` (320 KiB cap, never truncates;
 60-wide already exceeds it by design), so plan scales to 40
 while `prepare` (discovery + graph construction) scales to 100.
 Complexity: metadata subprocesses O(workspaces) after reuse vs
@@ -284,7 +284,7 @@ mbx 1.19.0, nextest 0.9.143, git 2.56.0, python 3.14.7; case 7 second
 toolchain: rustc 1.97.1 (8bab26f4f).
 
 Method: `impl_bench_p13` plans the same 10-crate fixture shape in
-every case (44 obligations, under the 256 KiB matrix budget);
+every case (44 obligations, under the 320 KiB matrix budget);
 `digest=` hashes the sorted obligation task IDs, so equal digests
 prove the same obligation set. `setup_ms` builds the fixture,
 `plan_ms` runs `plan_internal`, `metadata_ms` is a direct-`cargo

@@ -1,11 +1,11 @@
 //! Plan closure: freshness gate, publish upload, anchor, legacy path.
 use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_workflow_renderer::{
-    ACQUIRE_NAME, CHECK_GENERATED_NAME, DOWNLOAD_PLAN_NAME, FRESHNESS_OUTDIR,
-    MATRIX_REPORT_UPLOAD_NAME, MERGE_OPERATION, PUBLISH_PLAN_NAME, RUN_KEY_EXPR, RenderError,
-    SETUP_MISE_NAME, checkout_step, download_plan_step, freshness_step, matrix_report_upload_step,
-    matrix_report_upload_step_for, merge_step, plan_step, publish_plan_step, render_workflow_ir,
-    write_request_step,
+    ACQUIRE_NAME, CHECK_GENERATED_NAME, CRATE_REPORT_UPLOAD_NAME, DOWNLOAD_PLAN_NAME,
+    FRESHNESS_OUTDIR, MATRIX_REPORT_UPLOAD_NAME, MERGE_OPERATION, PUBLISH_PLAN_NAME, RUN_KEY_EXPR,
+    RenderError, SETUP_MISE_NAME, checkout_step, crate_job_report_upload_step, download_plan_step,
+    freshness_step, matrix_report_upload_step, merge_step, plan_step, publish_plan_step,
+    render_workflow_ir, write_request_step,
 };
 
 use super::impl_renderer_fixtures::*;
@@ -145,25 +145,24 @@ fn matrix_report_upload_names_derive_from_run_and_leg() -> Result<(), RenderErro
 }
 
 #[test]
-fn fixed_key_upload_names_derive_from_run_and_entry() -> Result<(), RenderError> {
-    let step =
-        matrix_report_upload_step_for("m-0123456789abcdef", "Upload matrix report (Clippy)")?;
-    assert_eq!(step.name, "Upload matrix report (Clippy)");
+fn crate_upload_names_derive_from_run_and_job() -> Result<(), RenderError> {
+    let step = crate_job_report_upload_step("crate_foo")?;
+    assert_eq!(step.name, CRATE_REPORT_UPLOAD_NAME);
     let velnor_actions_contract::StepKind::Action { uses, with, .. } = &step.kind else {
-        panic!("matrix upload must be an action step");
+        panic!("crate upload must be an action step");
     };
     assert!(uses.starts_with("actions/upload-artifact@"));
     assert_eq!(
         with["name"].as_str(),
-        "velnor-matrix-r${{ github.run_id }}-a${{ github.run_attempt }}-m-0123456789abcdef",
+        "velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-crate_foo",
     );
     assert_eq!(
         with["path"].as_str(),
-        "${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/m-0123456789abcdef",
+        "${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}",
     );
     assert_eq!(with["if-no-files-found"].as_str(), "error");
-    assert!(matrix_report_upload_step_for("bogus", "Upload matrix report (Clippy)").is_err());
-    assert!(matrix_report_upload_step_for("m-0123456789abcdef", "").is_err());
+    assert!(crate_job_report_upload_step("").is_err());
+    assert!(crate_job_report_upload_step("Has Space").is_err());
     Ok(())
 }
 

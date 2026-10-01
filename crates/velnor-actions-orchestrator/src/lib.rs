@@ -11,6 +11,7 @@ mod config;
 mod cover;
 mod cover_baseline;
 mod cover_identity;
+mod crate_job_ids;
 mod crate_jobs;
 mod critical_path;
 pub mod decisions;

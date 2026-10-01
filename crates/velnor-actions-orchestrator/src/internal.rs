@@ -38,7 +38,12 @@ pub use crate::internal_request::{
 pub(crate) const SCHEMA: u32 = 1;
 
 /// Maximum canonical `matrix.json` bytes; oversize errors, never truncates.
-pub(crate) const MATRIX_BUDGET_BYTES: usize = 262_144;
+///
+/// Recalibrated from 256 KiB when entries gained their owning `job_id`
+/// (one-artifact-per-job): the 40-crate perf fixture needs 262,389
+/// bytes while the 60-crate pin still exceeds 1.5 MB, so the ceiling
+/// keeps its shape (40 under, 60 over) with headroom for schema growth.
+pub(crate) const MATRIX_BUDGET_BYTES: usize = 327_680;
 
 /// Env key carrying the exact request-file path.
 pub const REQUEST_FILE_ENV: &str = "VELNOR_REQUEST_FILE";
