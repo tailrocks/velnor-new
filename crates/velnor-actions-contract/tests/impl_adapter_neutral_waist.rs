@@ -104,8 +104,8 @@ fn waist_is_opaque_to_adapter_spellings() {
 
 #[test]
 fn closed_registry_rejects_unregistered_stack_at_wire_gates() {
-    assert!(Stack::require_known("tofu").is_err());
-    let proposal = proposal("tofu", "validate", "tofu", "tofu", &["tofu"]).expect("builds");
+    assert!(Stack::require_known("cobol").is_err());
+    let proposal = proposal("cobol", "validate", "cobol", "cobol", &["cobol"]).expect("builds");
     assert!(proposal.validate().is_err());
     let node = proposal.into_task_node(digest_b3(b"input"), digest_b3(b"lane"));
     assert!(node.validate().is_err());

@@ -21,13 +21,15 @@ pub const DETECTION_SCHEMA: u32 = 1;
 pub enum Stack {
     /// Rust/Cargo stack (`rust`).
     Rust,
+    /// `OpenTofu` stack (`tofu`).
+    Tofu,
 }
 
 impl Stack {
     /// Every known stack, in registry (ascending id) order.
     #[must_use]
     pub fn all() -> &'static [Self] {
-        &[Self::Rust]
+        &[Self::Rust, Self::Tofu]
     }
 
     /// Registered stack id for this stack.
@@ -35,6 +37,7 @@ impl Stack {
     pub const fn id(self) -> &'static str {
         match self {
             Self::Rust => "rust",
+            Self::Tofu => "tofu",
         }
     }
 
@@ -67,6 +70,6 @@ mod tests {
         sorted.sort_unstable();
         assert_eq!(ids, sorted, "registry runs ascending");
         assert_eq!(Stack::require_known("rust"), Ok(Stack::Rust));
-        assert!(Stack::require_known("tofu").is_err());
+        assert_eq!(Stack::require_known("tofu"), Ok(Stack::Tofu));
     }
 }

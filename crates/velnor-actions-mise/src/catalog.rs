@@ -3,7 +3,7 @@
 //! Qualified pins (rechecked 2026-09-30); project `mise.toml` selectors
 //! never alter these pins.
 
-use velnor_actions_contract::{FreshnessRequirement, ToolIdentity, validate_freshness_class};
+use velnor_actions_contract::ToolIdentity;
 
 use crate::error::MiseError;
 
@@ -25,6 +25,12 @@ pub mod release_plz;
 #[path = "catalog_mbx.rs"]
 pub mod mbx;
 pub use mbx::MbxProvisioning;
+
+/// Exact-version validation plus qualification sources (split for size).
+#[path = "catalog_versions.rs"]
+mod versions;
+pub use versions::{check_freshness_requirements, validate_exact_version};
+use versions::{invalid_version, tool_source};
 
 /// Qualified mise runner release (tag `v2026.9.18`).
 /// Source: `https://api.github.com/repos/jdx/mise/releases/latest`; checked 2026-09-30.
@@ -51,6 +57,9 @@ pub const ZIZMOR_VERSION: &str = "1.30.1";
 /// `cargo-nextest-0.9.146`, published 2026-09-21).
 /// Source: `https://crates.io/api/v1/crates/cargo-nextest`; checked 2026-09-29.
 pub const NEXTEST_VERSION: &str = "0.9.146";
+/// Qualified `OpenTofu` engine release (tag `v1.13.1`).
+/// Source: `https://github.com/opentofu/opentofu/releases/tag/v1.13.1`; checked 2026-10-02.
+pub const OPENTOFU_VERSION: &str = "1.13.1";
 /// Qualified release-plz coordinator release (tag `release-plz-v0.3.169`).
 /// Source: `https://crates.io/api/v1/crates/release-plz`; checked 2026-09-30.
 pub const RELEASE_PLZ_VERSION: &str = "0.3.169";
@@ -89,13 +98,15 @@ pub enum PinnedTool {
     Zizmor,
     /// Nextest test runner (`nextest`, invoked as `cargo nextest`).
     Nextest,
+    /// `OpenTofu` engine (`opentofu`, invoked as `tofu`).
+    Opentofu,
     /// Release coordinator (`release-plz`, const-pinned: no catalog slot).
     ReleasePlz,
 }
 
 impl PinnedTool {
     /// Every catalog tool in stable order.
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 9] = [
         Self::Rust,
         Self::MrBoxington,
         Self::Gh,
@@ -103,6 +114,7 @@ impl PinnedTool {
         Self::Shellcheck,
         Self::Zizmor,
         Self::Nextest,
+        Self::Opentofu,
         Self::ReleasePlz,
     ];
 
@@ -117,6 +129,7 @@ impl PinnedTool {
             Self::Shellcheck => "shellcheck",
             Self::Zizmor => "zizmor",
             Self::Nextest => "nextest",
+            Self::Opentofu => "opentofu",
             Self::ReleasePlz => "release-plz",
         }
     }
@@ -156,6 +169,8 @@ pub struct ToolCatalog {
     zizmor: String,
     /// Pinned Nextest runner version.
     nextest: String,
+    /// Pinned `OpenTofu` engine version.
+    opentofu: String,
 }
 
 impl ToolCatalog {
@@ -175,6 +190,7 @@ impl ToolCatalog {
             shellcheck: SHELLCHECK_VERSION.to_owned(),
             zizmor: ZIZMOR_VERSION.to_owned(),
             nextest: NEXTEST_VERSION.to_owned(),
+            opentofu: OPENTOFU_VERSION.to_owned(),
         }
     }
 
@@ -188,6 +204,10 @@ impl ToolCatalog {
     ///
     /// Returns [`MiseError::InvalidToolVersion`] for the first version
     /// that is not exact `major.minor.patch`.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "catalog carries eight exact pins at once"
+    )]
     pub fn new(
         rust: &str,
         mr_boxington: &str,
@@ -196,6 +216,7 @@ impl ToolCatalog {
         shellcheck: &str,
         zizmor: &str,
         nextest: &str,
+        opentofu: &str,
     ) -> Result<Self, MiseError> {
         validate_exact_version(PinnedTool::Rust.tool_name(), rust)?;
         validate_exact_version(PinnedTool::MrBoxington.tool_name(), mr_boxington)?;
@@ -204,6 +225,7 @@ impl ToolCatalog {
         validate_exact_version(PinnedTool::Shellcheck.tool_name(), shellcheck)?;
         validate_exact_version(PinnedTool::Zizmor.tool_name(), zizmor)?;
         validate_exact_version(PinnedTool::Nextest.tool_name(), nextest)?;
+        validate_exact_version(PinnedTool::Opentofu.tool_name(), opentofu)?;
         Ok(Self {
             rust: rust.to_owned(),
             mr_boxington: mr_boxington.to_owned(),
@@ -212,6 +234,7 @@ impl ToolCatalog {
             shellcheck: shellcheck.to_owned(),
             zizmor: zizmor.to_owned(),
             nextest: nextest.to_owned(),
+            opentofu: opentofu.to_owned(),
         })
     }
 
@@ -263,6 +286,7 @@ impl ToolCatalog {
             PinnedTool::Shellcheck => &self.shellcheck,
             PinnedTool::Zizmor => &self.zizmor,
             PinnedTool::Nextest => &self.nextest,
+            PinnedTool::Opentofu => &self.opentofu,
             PinnedTool::ReleasePlz => RELEASE_PLZ_VERSION,
         }
     }
@@ -316,76 +340,4 @@ impl ToolCatalog {
             .then_some(())
             .ok_or_else(|| invalid_version(PinnedTool::MrBoxington.tool_name(), reported))
     }
-}
-
-/// Reject loose selectors: only exact `major.minor.patch` pins qualify.
-///
-/// # Errors
-///
-/// Returns [`MiseError::InvalidToolVersion`] for empty, `v`-prefixed,
-/// `latest`, two-part, or non-numeric versions.
-pub fn validate_exact_version(tool: &str, version: &str) -> Result<(), MiseError> {
-    let exact = version.split('.').collect::<Vec<_>>();
-    let [major, minor, patch] = exact.as_slice() else {
-        return Err(invalid_version(tool, version));
-    };
-    for part in [major, minor, patch] {
-        if part.is_empty() || !part.bytes().all(|byte| byte.is_ascii_digit()) {
-            return Err(invalid_version(tool, version));
-        }
-    }
-    Ok(())
-}
-
-/// Build the shared rejection for a non-exact version string.
-fn invalid_version(tool: &str, version: &str) -> MiseError {
-    MiseError::InvalidToolVersion {
-        tool: tool.to_owned(),
-        version: version.to_owned(),
-    }
-}
-
-/// Immutable qualification source for one tool at an exact version.
-fn tool_source(tool: PinnedTool, version: &str) -> String {
-    match tool {
-        PinnedTool::Rust => "https://static.rust-lang.org/dist/channel-rust-stable.toml".to_owned(),
-        PinnedTool::MrBoxington => {
-            format!("https://github.com/jdx/mr-boxington/releases/tag/v{version}")
-        }
-        PinnedTool::Gh => format!("https://github.com/cli/cli/releases/tag/v{version}"),
-        PinnedTool::Actionlint => {
-            format!("https://github.com/rhysd/actionlint/releases/tag/v{version}")
-        }
-        PinnedTool::Shellcheck => {
-            format!("https://github.com/koalaman/shellcheck/releases/tag/v{version}")
-        }
-        PinnedTool::Zizmor => {
-            format!("https://github.com/zizmorcore/zizmor/releases/tag/v{version}")
-        }
-        PinnedTool::Nextest => {
-            format!("https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-{version}")
-        }
-        PinnedTool::ReleasePlz => format!("https://crates.io/api/v1/crates/release-plz/{version}"),
-    }
-}
-
-/// Enforce per-class freshness requirements in Rust (ver §2).
-///
-/// # Errors
-///
-/// Returns [`MiseError::Contract`] for an unknown class or a violated bound.
-pub fn check_freshness_requirements(
-    requirements: &[FreshnessRequirement],
-) -> Result<(), MiseError> {
-    for requirement in requirements {
-        validate_freshness_class(&requirement.class).map_err(|err| MiseError::Contract {
-            problem: err.to_string(),
-        })?;
-        requirement
-            .validate("freshness")
-            .map_err(|err| MiseError::Contract {
-                problem: err.to_string(),
-            })?;
-    }
-    Ok(())
 }

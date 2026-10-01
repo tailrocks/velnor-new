@@ -44,11 +44,17 @@ pub(crate) fn run_inventories(
 }
 
 /// Manifest path for one neutral candidate via closed stack dispatch.
+///
+/// Tofu is registered but candidate-free until T09, so a tofu
+/// candidate here fails closed instead of resolving silently.
 fn manifest_for_candidate(candidate: &StackCandidate) -> Result<String, OrchestratorError> {
     match Stack::require_known(&candidate.stack_id) {
         Ok(Stack::Rust) => Ok(velnor_actions_rust::manifest_for_unit_root(
             &candidate.unit_root,
         )),
+        Ok(Stack::Tofu) => Err(OrchestratorError::Detection {
+            problem: "tofu_pending_t09".to_owned(),
+        }),
         Err(err) => Err(OrchestratorError::Detection {
             problem: err.to_string(),
         }),

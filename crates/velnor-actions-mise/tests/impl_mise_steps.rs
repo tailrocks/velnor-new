@@ -99,7 +99,7 @@ fn prepare_pinned_tools_rejects_empty_toolchain() -> Result<(), String> {
 #[test]
 fn prepare_pinned_tools_specs_come_only_from_catalog() -> Result<(), String> {
     let catalog = ToolCatalog::new(
-        "1.97.0", "1.18.0", "2.100.0", "1.7.11", "0.10.0", "1.30.0", "0.9.145",
+        "1.97.0", "1.18.0", "2.100.0", "1.7.11", "0.10.0", "1.30.0", "0.9.145", "1.13.0",
     )
     .map_err(|err| err.to_string())?;
     let step =

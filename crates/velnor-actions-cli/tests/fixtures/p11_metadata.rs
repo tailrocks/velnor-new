@@ -2,7 +2,7 @@
 //!
 //! The resolver — not manifest substrings — is the source of truth here:
 //! effective edition and MSRV per package (inheritance resolved), the
-//! exact seven-member set, and the locked dependency graph (registry-only
+//! exact eight-member set, and the locked dependency graph (registry-only
 //! sources, exact requirements). Runs fully offline: any unlocked input
 //! fails the command instead of fetching.
 
@@ -251,7 +251,7 @@ fn json_parser_reads_every_shape() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn metadata_members_match_seven() -> Result<(), Box<dyn Error>> {
+fn metadata_members_match_eight() -> Result<(), Box<dyn Error>> {
     let doc = metadata()?;
     let mut names: Vec<&str> = workspace_packages(&doc)?
         .iter()

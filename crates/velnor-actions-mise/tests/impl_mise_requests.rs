@@ -145,7 +145,7 @@ fn pinned_exec_selects_exact_tools() -> Result<(), String> {
 }
 
 #[test]
-fn pinned_exec_accepts_all_seven_tools() -> Result<(), String> {
+fn pinned_exec_accepts_all_catalog_tools() -> Result<(), String> {
     let request = PinnedToolExec::new(
         PinnedTool::ALL.to_vec(),
         OsStr::new("gh"),
@@ -161,6 +161,7 @@ fn pinned_exec_accepts_all_seven_tools() -> Result<(), String> {
         "shellcheck@0.11.0",
         "zizmor@1.30.1",
         "aqua:nextest-rs/nextest/cargo-nextest@0.9.146",
+        "opentofu@1.13.1",
     ] {
         assert!(argv.iter().any(|arg| arg == spec), "missing spec: {spec}");
     }

@@ -7,11 +7,14 @@ use velnor_actions_contract::Stack;
 use velnor_actions_contract::cachekey::{RUST_EXTENSION_SCHEMA, is_known_stack_extension_schema};
 
 /// Adapter extension schema for one stack ID, if the stack is known.
+///
+/// Tofu has no adapter schema until T09, so it maps to `None`
+/// (unknown), disabling reuse and baseline coverage for tofu tasks.
 #[must_use]
 pub fn extension_schema_for_stack(stack_id: &str) -> Option<&'static str> {
     match Stack::from_id(stack_id) {
         Some(Stack::Rust) => Some(RUST_EXTENSION_SCHEMA),
-        None => None,
+        Some(Stack::Tofu) | None => None,
     }
 }
 

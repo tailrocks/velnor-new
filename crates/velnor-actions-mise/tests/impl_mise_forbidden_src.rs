@@ -18,6 +18,7 @@ fn expected_modules() -> Vec<&'static str> {
         "cache_trust.rs",
         "catalog.rs",
         "catalog_mbx.rs",
+        "catalog_versions.rs",
         "command.rs",
         "command_env.rs",
         "command_output.rs",

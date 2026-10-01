@@ -219,6 +219,7 @@ fn validator_installs_follow_executed_suite_per_policy() {
         "velnor-actions-contract",
         "velnor-actions-mise",
         "velnor-actions-rust",
+        "velnor-actions-tofu",
         "velnor-actions-workflow-renderer",
         "velnor-actions-actionlint",
         "demo",
@@ -271,6 +272,7 @@ fn every_workspace_member_is_classified() {
             "velnor-actions-contract",
             "velnor-actions-mise",
             "velnor-actions-rust",
+            "velnor-actions-tofu",
             "velnor-actions-workflow-renderer",
             "velnor-actions-actionlint",
         ]
