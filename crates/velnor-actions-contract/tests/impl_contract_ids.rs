@@ -7,9 +7,9 @@ use velnor_actions_contract::{
     canonical_json_str, compatibility_id, digest_b3, input_digest, manifest_key_for_cargo_manifest,
     matrix_id_for_task_group, matrix_key_for_id, plan_id_for_run, report_id_for_matrix,
     run_key_for_ci, split_shard_suffix, target_key, task_id_for_internal, task_id_for_stack,
-    task_report_id_for_task, validate_artifact_id, validate_digest, validate_id,
-    validate_matrix_key, validate_plan_id, validate_report_id, validate_run_key, validate_task_id,
-    validate_task_report_id,
+    task_report_id_for_task, validate_artifact_id, validate_digest, validate_fetch_root,
+    validate_id, validate_matrix_key, validate_plan_id, validate_report_id, validate_run_key,
+    validate_task_id, validate_task_report_id,
 };
 
 /// Sample Cargo manifest path shared by contract cases.
@@ -341,4 +341,20 @@ fn matrix_entry_rejects_bad_run_and_digest() -> Result<(), ContractError> {
     entry.run.clear();
     assert!(entry.validate(&run_key).is_err());
     Ok(())
+}
+
+#[test]
+fn fetch_roots_accept_safe_and_reject_hostile() {
+    for root in ["", "nested", "a/b", "crate-1_x.y"] {
+        assert!(validate_fetch_root(root).is_ok(), "{root}");
+    }
+    for root in [
+        "..", "a/../b", "a'b", "a\"b", "$HOME", "a`b", "a\\b", "a\nb", "/abs",
+    ] {
+        let err = validate_fetch_root(root).expect_err("hostile root");
+        assert!(
+            err.to_string().contains("unsafe_fetch_root"),
+            "{root}: {err}"
+        );
+    }
 }

@@ -336,6 +336,30 @@ fn plan_dir(body: &str) -> (tempfile::TempDir, std::path::PathBuf) {
     (dir, run)
 }
 
+/// A duplicated critical key in a staged task file records
+/// explicitly instead of collapsing last-wins into evidence.
+#[test]
+fn staged_task_file_rejects_duplicate_keys() {
+    let aid = "velnor-matrix-r7-a2-m-0123456789abcdef";
+    let task_id = "stack/rust/root/clippy/default";
+    let digest = digest_b3(b"task");
+    let plan = plan_for(aid, task_id, &digest);
+    let file_id = task_file_id(&digest);
+    let tmp = tempfile::TempDir::new().expect("tempdir");
+    let home = tmp.path().join(aid).join("m-0123456789abcdef");
+    ensure_dir(&home.join("tasks"));
+    std::fs::write(home.join("matrix-report.json"), r#"{"report_id":"m"}"#).expect("report");
+    std::fs::write(
+        home.join("tasks").join(format!("{file_id}.json")),
+        r#"{"task_report_id":"a","task_report_id":"b"}"#,
+    )
+    .expect("task");
+    let mut errors = Vec::new();
+    let (_, tasks) = read_staged_reports("local", &plan, tmp.path(), &mut errors);
+    assert!(tasks.is_empty());
+    assert_eq!(errors, [format!("unparsable_task:{file_id}")]);
+}
+
 #[test]
 fn malformed_ids_skip_before_join_and_mkdir() {
     let (_dir, run) = plan_dir(

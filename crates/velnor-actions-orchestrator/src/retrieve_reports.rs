@@ -215,7 +215,7 @@ pub(crate) fn read_staged_reports(
                 continue;
             }
             match read_bounded(&tasks_dir.join(format!("{report_id}.json"))) {
-                Ok(text) => match serde_json::from_str(&text) {
+                Ok(text) => match parse_strict_json(&text) {
                     Ok(task) => tasks.push(task),
                     Err(_) => errors.push(format!("unparsable_task:{report_id}")),
                 },
@@ -299,7 +299,7 @@ fn read_matrix_file(
             return None;
         }
     };
-    let Ok(report) = serde_json::from_str(&text) else {
+    let Ok(report) = parse_strict_json(&text) else {
         errors.push(format!("unparsable_report:{artifact_id}"));
         return None;
     };

@@ -262,7 +262,7 @@ fn scrub_coverage_allows_ambient_auth_steps_and_release() -> Result<(), RenderEr
         "Prepare pinned tools",
         "Prepare Rust components",
         "Fetch Cargo sources",
-        "Fetch Cargo sources (Cargo.lock)",
+        "Fetch Cargo sources (nested/Cargo.toml)",
         DENY_STEP_NAME,
         MACHETE_STEP_NAME,
         "Run zizmor",

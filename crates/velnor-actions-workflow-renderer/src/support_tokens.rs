@@ -59,10 +59,34 @@ const AMBIENT_AUTH_STEPS: [&str; 7] = [
 
 /// True when a step name carries ambient-auth permission.
 ///
-/// Exact match, except nested fetch names (`Fetch Cargo sources
-/// (<manifest>)`), which share the root fetch purpose.
+/// Exact match, except genuine generator nested-fetch names, which
+/// share the root fetch purpose.
 fn is_ambient_auth_step(name: &str) -> bool {
-    AMBIENT_AUTH_STEPS.contains(&name) || name.starts_with("Fetch Cargo sources (")
+    AMBIENT_AUTH_STEPS.contains(&name) || is_generator_nested_fetch(name)
+}
+
+/// Prefix of generator nested-fetch names (`Fetch Cargo sources (<root>/Cargo.toml)`).
+const FETCH_SOURCES_PREFIX: &str = "Fetch Cargo sources (";
+
+/// True for genuine generator nested-fetch names only.
+///
+/// The generator emits `Fetch Cargo sources (<root>/Cargo.toml)` for
+/// roots passing [`velnor_actions_contract::validate_fetch_root`]; the
+/// exemption requires the exact shape — prefix, `/Cargo.toml)`
+/// suffix, and a validated root — so a crafted lookalike (unclosed
+/// paren, trailing text, `..`, `$`, quotes) never inherits ambient
+/// auth through a bare prefix match.
+fn is_generator_nested_fetch(name: &str) -> bool {
+    let Some(inner) = name
+        .strip_prefix(FETCH_SOURCES_PREFIX)
+        .and_then(|rest| rest.strip_suffix(')'))
+    else {
+        return false;
+    };
+    let Some(root) = inner.strip_suffix("/Cargo.toml") else {
+        return false;
+    };
+    !root.is_empty() && velnor_actions_contract::validate_fetch_root(root).is_ok()
 }
 
 /// Reject credential leaks in one step's env, argv, and action inputs.
@@ -83,11 +107,19 @@ fn check_step_tokens(id: &str, step: &Step) -> Result<(), RenderError> {
             }
             check_scrub_coverage(id, &step.name, env)?;
         }
-        StepKind::Action { with, .. } => {
+        StepKind::Action { with, env, .. } => {
             for value in with.values() {
                 if names_token(value) {
                     return Err(RenderError::InvalidWorkflow(format!(
                         "token_in_action_input:{id}:{}",
+                        step.name
+                    )));
+                }
+            }
+            for value in env.values() {
+                if names_token(value) {
+                    return Err(RenderError::InvalidWorkflow(format!(
+                        "token_in_action_env:{id}:{}",
                         step.name
                     )));
                 }

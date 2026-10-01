@@ -32,9 +32,9 @@ mod needs_channel;
 
 use std::path::{Path, PathBuf};
 
-use velnor_actions_contract::canonical_json_str;
+use velnor_actions_contract::{NEEDS_EXPECTED_ENV, canonical_json_str, parse_strict_json};
 
-use self::needs_channel::{NEEDS_ENV, NEEDS_EXPECTED_ENV, parse_needs};
+use self::needs_channel::{NEEDS_ENV, parse_needs};
 use crate::OrchestratorError;
 use crate::internal::{internal, internal_contract};
 use crate::internal_request::resolve_run_key;
@@ -250,10 +250,11 @@ const MAX_ASSEMBLY_JSON_BYTES: u64 = 4 << 20;
 
 /// Read one JSON artifact; failures become null plus an explicit error.
 ///
-/// Absence errors only for required artifacts; corruption, symlinks,
-/// unreadable paths, and oversize payloads always error. Reads enforce
-/// the shared staged-text gates (symlink rejection plus size bound),
-/// so `baseline.json` and every other assembly input harden alike.
+/// Absence errors only for required artifacts; corruption, duplicate
+/// keys, symlinks, unreadable paths, and oversize payloads always
+/// error. Reads enforce the shared staged-text gates (symlink rejection
+/// plus size bound) and the strict key check, so `baseline.json` and
+/// every other assembly input hardens alike.
 fn read_json(
     run_dir: &Path,
     name: &str,
@@ -263,7 +264,7 @@ fn read_json(
 ) -> serde_json::Value {
     match crate::retrieve_reports::read_staged_text(&run_dir.join(name), MAX_ASSEMBLY_JSON_BYTES) {
         Ok(text) => {
-            if let Ok(value) = serde_json::from_str(&text) {
+            if let Ok(value) = parse_strict_json(&text) {
                 value
             } else {
                 errors.push(format!("unparsable_{kind}"));

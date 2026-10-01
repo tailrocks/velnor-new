@@ -14,6 +14,15 @@ use crate::errors::ContractError;
 /// with a justified larger document use an explicit override limit.
 pub const MAX_UNTRUSTED_DOCUMENT_BYTES: usize = 8 * 1024 * 1024;
 
+/// Nesting budget for untrusted JSON, mirroring `serde_json`.
+///
+/// `serde_json` starts `remaining_depth` at 128 and trips on the 128th
+/// nested container (127 containers plus a scalar — 128-deep
+/// root-to-leaf — is the deepest accepted shape). The scanner enforces
+/// the identical boundary first, so hostile depth fails typed here
+/// instead of overflowing the stack in either parser.
+pub const MAX_JSON_NESTING_DEPTH: usize = 128;
+
 /// Reject a document whose byte length exceeds `limit`.
 /// # Errors
 pub fn check_document_size(len: usize, limit: usize) -> Result<(), ContractError> {
@@ -68,7 +77,7 @@ impl Scanner<'_> {
     /// Parse one document plus trailing-whitespace check.
     fn parse_document(&mut self) -> Result<(), ContractError> {
         self.skip_ws();
-        self.parse_value()?;
+        self.parse_value(0)?;
         self.skip_ws();
         if self.pos == self.bytes.len() {
             Ok(())
@@ -77,11 +86,27 @@ impl Scanner<'_> {
         }
     }
 
-    /// Parse one value by its leading byte.
-    fn parse_value(&mut self) -> Result<(), ContractError> {
+    /// Parse one value by its leading byte; `depth` counts enclosing containers.
+    ///
+    /// Container entries spend the nesting budget: the 128th nested
+    /// container trips, exactly where `serde_json` trips, so the scanner
+    /// can never recurse past the bound on hostile input.
+    fn parse_value(&mut self, depth: usize) -> Result<(), ContractError> {
         match self.peek() {
-            Some(b'{') => self.parse_object(),
-            Some(b'[') => self.parse_array(),
+            Some(b'{') => {
+                let nested = depth + 1;
+                if nested >= MAX_JSON_NESTING_DEPTH {
+                    return Err(too_deep(nested));
+                }
+                self.parse_object(nested)
+            }
+            Some(b'[') => {
+                let nested = depth + 1;
+                if nested >= MAX_JSON_NESTING_DEPTH {
+                    return Err(too_deep(nested));
+                }
+                self.parse_array(nested)
+            }
             Some(b'"') => self.parse_string().map(|_| ()),
             Some(b't') => self.parse_literal("true"),
             Some(b'f') => self.parse_literal("false"),
@@ -91,8 +116,8 @@ impl Scanner<'_> {
         }
     }
 
-    /// Parse an object, rejecting duplicate keys.
-    fn parse_object(&mut self) -> Result<(), ContractError> {
+    /// Parse an object, rejecting duplicate keys; `depth` includes this object.
+    fn parse_object(&mut self, depth: usize) -> Result<(), ContractError> {
         self.pos += 1;
         let mut keys = BTreeSet::new();
         self.skip_ws();
@@ -113,7 +138,7 @@ impl Scanner<'_> {
                 return Err(malformed("expected_colon"));
             }
             self.skip_ws();
-            self.parse_value()?;
+            self.parse_value(depth)?;
             self.skip_ws();
             if self.consume(b',') {
                 continue;
@@ -125,8 +150,8 @@ impl Scanner<'_> {
         }
     }
 
-    /// Parse an array.
-    fn parse_array(&mut self) -> Result<(), ContractError> {
+    /// Parse an array; `depth` includes this array.
+    fn parse_array(&mut self, depth: usize) -> Result<(), ContractError> {
         self.pos += 1;
         self.skip_ws();
         if self.consume(b']') {
@@ -134,7 +159,7 @@ impl Scanner<'_> {
         }
         loop {
             self.skip_ws();
-            self.parse_value()?;
+            self.parse_value(depth)?;
             self.skip_ws();
             if self.consume(b',') {
                 continue;
@@ -307,39 +332,14 @@ fn malformed(problem: &str) -> ContractError {
     ContractError::CanonicalJson(format!("malformed_json:{problem}"))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::{
-        check_document_size, parse_strict_json, parse_strict_json_bytes,
-        parse_strict_json_with_limit,
-    };
-    use crate::errors::ContractError;
-
-    #[test]
-    fn default_bound_accepts_small_docs() {
-        let value = parse_strict_json(r#"{"a":1}"#).expect("small doc");
-        assert_eq!(value.get("a").and_then(serde_json::Value::as_u64), Some(1));
-    }
-
-    #[test]
-    fn oversize_doc_fails_with_size_detail() {
-        let big = format!(r#"{{"pad":"{}"}}"#, "x".repeat(100));
-        let err = parse_strict_json_with_limit(&big, 16).expect_err("oversize");
-        assert!(matches!(
-            err,
-            ContractError::DocumentTooLarge { size, limit: 16 } if size == big.len()
-        ));
-        assert!(parse_strict_json_with_limit(&big, big.len()).is_ok());
-        assert!(check_document_size(3, 3).is_ok());
-        assert!(check_document_size(4, 3).is_err());
-    }
-
-    #[test]
-    fn bytes_entry_rejects_bad_utf8_and_dup_keys() {
-        assert!(parse_strict_json_bytes(b"\xff", 64).is_err());
-        let dup = br#"{"a":1,"a":2}"#;
-        assert!(parse_strict_json_bytes(dup, 64).is_err());
-        assert!(parse_strict_json_bytes(br#"{"a":1}"#, 4).is_err());
-        assert!(parse_strict_json_bytes(br#"{"a":1}"#, 64).is_ok());
+/// Build a nesting-budget error for the tripping container level.
+fn too_deep(depth: usize) -> ContractError {
+    ContractError::DocumentTooDeep {
+        depth,
+        limit: MAX_JSON_NESTING_DEPTH,
     }
 }
+
+#[cfg(test)]
+#[path = "strict_json_tests.rs"]
+mod strict_json_tests;

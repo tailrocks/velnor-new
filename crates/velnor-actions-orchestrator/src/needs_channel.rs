@@ -22,8 +22,9 @@ use velnor_actions_workflow_renderer::render::TASK_JOB_ID;
 
 /// Environment channel carrying the final gate's `needs` conclusions.
 pub(crate) const NEEDS_ENV: &str = "VELNOR_NEEDS_JSON";
-/// Environment channel carrying the rendered expected inventory.
-pub(crate) const NEEDS_EXPECTED_ENV: &str = "VELNOR_NEEDS_EXPECTED";
+// The expected-inventory channel (`VELNOR_NEEDS_EXPECTED`) is the
+// contract single source [`velnor_actions_contract::NEEDS_EXPECTED_ENV`],
+// imported by consumers directly; no local copy lives here.
 
 /// Required inventory plus observed results from the needs channel.
 ///

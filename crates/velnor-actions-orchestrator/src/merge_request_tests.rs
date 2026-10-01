@@ -283,6 +283,50 @@ fn dropped_or_missing_expected_inventory_fails_closed() {
 }
 
 #[test]
+fn assembly_rejects_duplicate_keys_in_staged_json() {
+    let aid = "velnor-crate-local-crate_demo";
+    let key = "m-0123456789abcdef";
+    // A duplicated critical key in plan.json collapses under lenient
+    // parsing; strict assembly records it instead of judging the
+    // winner.
+    let dir = staged(r#"{"matrix":{"include":[]},"matrix":{"include":[]}}"#, &[]);
+    let request = assemble_with_needs(
+        "local",
+        dir.path(),
+        Some(r#"{"plan":"success"}"#),
+        Some(r#"["plan"]"#),
+        Some("push"),
+        Some("{}"),
+    )
+    .expect("diagnostic");
+    assert!(
+        error_list(&request).contains(&"unparsable_plan".to_owned()),
+        "dup-key plan must fail assembly: {request}"
+    );
+    // Same for a staged matrix report: last-wins is never evidence.
+    let dir = staged(
+        &plan_with(&[(aid, key)]),
+        &[(
+            "reports/velnor-crate-local-crate_demo/m-0123456789abcdef/matrix-report.json",
+            r#"{"report_id":"a","report_id":"b"}"#,
+        )],
+    );
+    let request = assemble_with_needs(
+        "local",
+        dir.path(),
+        Some(r#"{"plan":"success"}"#),
+        Some(r#"["plan"]"#),
+        Some("push"),
+        Some("{}"),
+    )
+    .expect("diagnostic");
+    assert!(
+        error_list(&request).contains(&format!("unparsable_report:{aid}")),
+        "dup-key report must fail assembly: {request}"
+    );
+}
+
+#[test]
 fn request_file_writes_exclusively() {
     let dir = staged("{}", &[]);
     let file = dir.path().join("sub").join("merge-v1-request.json");

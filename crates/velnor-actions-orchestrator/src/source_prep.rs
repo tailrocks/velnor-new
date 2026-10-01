@@ -173,21 +173,14 @@ fn fetch_script(catalog: &ToolCatalog, root: &str) -> String {
 }
 
 /// Reject roots unsafe for shell interpolation or cache keys.
+///
+/// Thin error mapping over the contract single source (shared with the
+/// renderer's ambient-auth exemption, so both sides agree by
+/// construction instead of mirroring the predicate).
 pub(crate) fn validate_root(root: &str) -> Result<(), OrchestratorError> {
-    let bad = root.contains("..")
-        || root.contains('\'')
-        || root.contains('"')
-        || root.contains('$')
-        || root.contains('`')
-        || root.contains('\\')
-        || root.contains('\n')
-        || root.starts_with('/');
-    if bad {
-        return Err(OrchestratorError::Contract {
-            problem: format!("unsafe_fetch_root:{root}"),
-        });
-    }
-    Ok(())
+    velnor_actions_contract::validate_fetch_root(root).map_err(|err| OrchestratorError::Contract {
+        problem: err.to_string(),
+    })
 }
 
 #[cfg(test)]

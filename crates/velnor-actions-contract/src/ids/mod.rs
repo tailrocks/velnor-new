@@ -362,3 +362,29 @@ fn validate_path_segments(path: &str, field: &'static str) -> Result<(), Contrac
     }
     Ok(())
 }
+
+/// Validate a fetch workspace root for shell interpolation.
+///
+/// Single source shared by the fetch-step generator (orchestrator) and
+/// the render-time ambient-auth exemption (renderer): both agree on
+/// which roots are safe by construction. Empty is the root workspace.
+/// Rejects parent traversal, quoting and expansion characters,
+/// backslashes, newlines, and absolute paths.
+/// # Errors
+pub fn validate_fetch_root(root: &str) -> Result<(), ContractError> {
+    let bad = root.contains("..")
+        || root.contains('\'')
+        || root.contains('"')
+        || root.contains('$')
+        || root.contains('`')
+        || root.contains('\\')
+        || root.contains('\n')
+        || root.starts_with('/');
+    if bad {
+        return Err(ContractError::identity(
+            "fetch.root",
+            format!("unsafe_fetch_root:{root}"),
+        ));
+    }
+    Ok(())
+}

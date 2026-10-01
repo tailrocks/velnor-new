@@ -48,6 +48,14 @@ pub enum ContractError {
         /// Enforced limit in bytes.
         limit: usize,
     },
+    /// An untrusted JSON document nests deeper than the depth budget.
+    #[error("json_too_deep: depth {depth} exceeds limit {limit}")]
+    DocumentTooDeep {
+        /// Observed nesting depth in containers.
+        depth: usize,
+        /// Enforced nesting budget in containers.
+        limit: usize,
+    },
 }
 
 impl ContractError {

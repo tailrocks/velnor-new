@@ -326,12 +326,20 @@ fn strictness_negative_coverage_pinned() -> Result<(), Box<dyn Error>> {
             "digest_and_path_newtypes_validate",
         ),
         (
-            "crates/velnor-actions-contract/src/strict_json.rs",
+            "crates/velnor-actions-contract/src/strict_json_tests.rs",
             "oversize_doc_fails_with_size_detail",
         ),
         (
-            "crates/velnor-actions-contract/src/strict_json.rs",
+            "crates/velnor-actions-contract/src/strict_json_tests.rs",
             "bytes_entry_rejects_bad_utf8_and_dup_keys",
+        ),
+        (
+            "crates/velnor-actions-contract/src/strict_json_tests.rs",
+            "nesting_boundary_matches_serde_json",
+        ),
+        (
+            "crates/velnor-actions-contract/src/strict_json_tests.rs",
+            "nesting_budget_counts_objects_and_mixed_shapes",
         ),
         (
             "crates/velnor-actions-contract/src/workflow/artifacts.rs",
