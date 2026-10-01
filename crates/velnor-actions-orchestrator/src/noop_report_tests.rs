@@ -210,6 +210,25 @@ fn noop_rejects_contradictions() {
 }
 
 #[test]
+fn noop_rejects_malformed_run_key_before_path_join() {
+    let (plan, task_digest) = fixture_plan();
+    let temp = staged_run(&plan);
+    let request = NoOpRequest {
+        reason: NotSelectedReason::Unsupported,
+        task_digest,
+    };
+    // Symmetry with the exec path: the run key is validated before
+    // `load_plan` joins it into a path, so traversal keys never reach
+    // the filesystem (unreachable via `resolve_run_key` today, which
+    // validates or re-derives digits-only keys).
+    for bad in ["", "LOCAL", "r1-a", "../evil", "local/../../evil", "r1-a1/x"] {
+        let err =
+            write_noop_report_to(bad, CLIPPY, 0, &request, temp.path()).expect_err("run key");
+        assert!(err.to_string().contains("malformed_run_key"), "{bad}: {err}");
+    }
+}
+
+#[test]
 fn renderer_noop_consts_match_op_contract() {
     assert_eq!(legs::NOOP_REPORT_OP, REPORT_OP);
     assert_eq!(legs::NOOP_REASON_ENV, NOT_SELECTED_REASON_ENV);
