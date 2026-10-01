@@ -9,7 +9,11 @@ use velnor_actions_contract::{
 };
 
 use crate::cover::Signals;
-use crate::cover_baseline::provenance_check::parse_workflow_ref;
+use crate::cover_baseline::provenance_check::{
+    baseline_artifact_name, is_unverifiable_generator_sha, parse_workflow_ref, task_run_ids_bound,
+};
+use crate::cover_baseline::unix_now;
+use crate::decisions::baseline_expired;
 use crate::merge::BaselineManifest;
 
 /// Merge-time anchor expectations from runner-owned environment.
@@ -18,7 +22,10 @@ use crate::merge::BaselineManifest;
 /// instead of the possibly attacker-influenced plan: an evil-fork plan
 /// paired with a self-consistent evil manifest fails here even though
 /// it matches the plan. `None` fields skip their check (local runs
-/// without CI env); the plan-anchored invariants below still apply.
+/// without CI env), except the repository slug when
+/// `ci_requires_repository` is set: CI always provides
+/// `GITHUB_REPOSITORY`, so a missing slug there fails closed instead
+/// of skipping. The plan-anchored invariants below still apply.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct MergeAnchorExpectations {
     /// Lowercase `owner/repo` slug from `GITHUB_REPOSITORY`.
@@ -27,6 +34,8 @@ pub(crate) struct MergeAnchorExpectations {
     pub(crate) protected_ref: Option<String>,
     /// Generated workflow path from `GITHUB_WORKFLOW_REF`.
     pub(crate) workflow_path: Option<String>,
+    /// Fail closed when the repository slug is absent (CI only).
+    pub(crate) ci_requires_repository: bool,
 }
 
 /// Anchor expectations from the runner-owned environment.
@@ -35,13 +44,17 @@ pub(crate) struct MergeAnchorExpectations {
 /// requests) or a `refs/heads/` `GITHUB_REF` (pushes) names the
 /// protected ref; `GITHUB_WORKFLOW_REF` (`<repo>/<path>@<ref>`) names
 /// the workflow path. Malformed values yield `None`, never guesses.
+/// Under `GITHUB_ACTIONS` the repository slug is mandatory: the runner
+/// always sets it, so absence means tampering, never a local run.
 pub(crate) fn merge_anchors_from_env() -> MergeAnchorExpectations {
-    merge_anchors_from_parts(
+    let mut anchors = merge_anchors_from_parts(
         std::env::var("GITHUB_REPOSITORY").ok().as_deref(),
         std::env::var("GITHUB_BASE_REF").ok().as_deref(),
         std::env::var("GITHUB_REF").ok().as_deref(),
         std::env::var("GITHUB_WORKFLOW_REF").ok().as_deref(),
-    )
+    );
+    anchors.ci_requires_repository = std::env::var("GITHUB_ACTIONS").as_deref() == Ok("true");
+    anchors
 }
 
 /// Anchor expectations from explicit environment values.
@@ -60,6 +73,7 @@ fn merge_anchors_from_parts(
         workflow_path: workflow_ref
             .and_then(parse_workflow_ref)
             .map(|(_, path, _)| path),
+        ci_requires_repository: false,
     }
 }
 
@@ -118,19 +132,22 @@ pub(crate) fn revalidate_coverage(
         signals,
         miss_reasons,
         &merge_anchors_from_env(),
+        unix_now(),
     );
 }
 
 /// Revalidate coverage against explicit anchor expectations.
 ///
-/// Pure over `anchors` so tests cover every field hermetically;
-/// [`revalidate_coverage`] is the production reader over this function.
+/// Pure over `anchors` and `now_unix` so tests cover every field
+/// hermetically; [`revalidate_coverage`] is the production reader over
+/// this function.
 pub(crate) fn revalidate_coverage_with_anchors(
     plan: &Plan,
     manifest: Option<&BaselineManifest>,
     signals: &mut Signals,
     miss_reasons: &mut BTreeSet<String>,
     anchors: &MergeAnchorExpectations,
+    now_unix: u64,
 ) {
     let mut covered = Vec::new();
     for obligation in &plan.obligations {
@@ -152,7 +169,7 @@ pub(crate) fn revalidate_coverage_with_anchors(
         miss_reasons.insert("cache_corrupt".to_owned());
         return;
     }
-    if !manifest_provenance_matches_plan(plan, manifest) {
+    if !manifest_provenance_matches_plan(plan, manifest, now_unix) {
         signals.planning_failed = true;
         miss_reasons.insert("cache_corrupt".to_owned());
         return;
@@ -199,16 +216,44 @@ pub(crate) fn revalidate_coverage_with_anchors(
 /// Plan-anchored provenance: base, generator, trusted invariant, shapes.
 ///
 /// A covered plan without a base can prove nothing; every other field
-/// compares against the plan value or the trusted invariant.
-fn manifest_provenance_matches_plan(plan: &Plan, manifest: &BaselineManifest) -> bool {
+/// compares against the plan value or the trusted invariant. Mirrors the
+/// plan-time [`validate_provenance`](crate::cover_baseline::provenance_check::validate_provenance)
+/// manifest checks (identified run, verifiable generator, derived
+/// artifact name, per-task run binding, freshness) so a manifest the
+/// plan rejects can never pass at merge.
+///
+/// `source_commit` binds to `plan.base`, not to a checkout: the merge
+/// job renders no checkout step, and no CI variable carries the base
+/// SHA, so checkout-anchoring is infeasible here. Replay is still
+/// constrained: per-obligation digests bind every covered task to
+/// byte-identical inputs, and expiry below refuses stale manifests.
+fn manifest_provenance_matches_plan(
+    plan: &Plan,
+    manifest: &BaselineManifest,
+    now_unix: u64,
+) -> bool {
     let Some(base) = plan.base.as_deref() else {
         return false;
     };
+    if baseline_expired(manifest.expires_at_unix, now_unix) {
+        return false;
+    }
+    let identified = manifest.run_id > 0 && manifest.run_attempt > 0 && manifest.artifact_id > 0;
+    let derived_name = baseline_artifact_name(&manifest.source_commit, &manifest.compatibility_id)
+        .is_ok_and(|expect| manifest.artifact_name == expect);
+    let run_bound = manifest
+        .tasks
+        .iter()
+        .all(|task| task_run_ids_bound(task, manifest.run_id));
     manifest.source_commit == base
         && manifest.generator_version == plan.generator.version
         && manifest.generator_sha256 == plan.generator.sha256
+        && !is_unverifiable_generator_sha(&manifest.generator_sha256)
         && manifest.event == "push"
         && manifest.final_status == "passed"
+        && identified
+        && derived_name
+        && run_bound
         && validate_digest(&manifest.repository_id).is_ok()
         && ref_shape_ok(&manifest.ref_)
         && workflow_ref_consistent(manifest)
@@ -237,6 +282,9 @@ fn workflow_ref_consistent(manifest: &BaselineManifest) -> bool {
 /// workflow-ref path. Absent fields skip; a plan-consistent but
 /// environment-foreign manifest fails.
 fn merge_anchors_match(manifest: &BaselineManifest, anchors: &MergeAnchorExpectations) -> bool {
+    if anchors.ci_requires_repository && anchors.repository_slug.is_none() {
+        return false;
+    }
     if let Some(slug) = anchors.repository_slug.as_deref() {
         let bound = digest_b3(format!("github.com/{slug}").as_bytes());
         if manifest.repository_id != bound {

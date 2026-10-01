@@ -44,7 +44,8 @@ fn manifest_and_expected(base: &str) -> (BaselineManifest, ProvenanceExpectation
 }
 
 /// Expected slug resolution: the env slug wins, the origin slug is the
-/// fallback, disagreement conflicts, and malformed env never invents.
+/// unset-env fallback, disagreement conflicts, and malformed env
+/// conflicts with no trusted slug (never a silent origin fallback).
 #[test]
 fn expected_repository_resolution_matrix() {
     let resolve = resolve_expected_repository;
@@ -86,15 +87,28 @@ fn expected_repository_resolution_matrix() {
     assert_eq!(
         resolve(Some("o/r"), Some("not-a-slug")),
         ExpectedRepository {
-            slug: Some("o/r".to_owned()),
-            conflict: false,
+            slug: None,
+            conflict: true,
         }
     );
     assert_eq!(
         resolve(None, Some("not-a-slug")),
         ExpectedRepository {
             slug: None,
-            conflict: false,
+            conflict: true,
+        }
+    );
+}
+
+/// Malformed env plus an evil origin resolves to no trusted slug: the
+/// origin must not launder through behind mangled env text.
+#[test]
+fn malformed_env_with_evil_origin_trusts_neither() {
+    assert_eq!(
+        resolve_expected_repository(Some("evil/fork"), Some("evil repo")),
+        ExpectedRepository {
+            slug: None,
+            conflict: true,
         }
     );
 }
