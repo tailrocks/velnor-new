@@ -13,12 +13,12 @@ Velnor V1 generate writes one complete tree:
 └── workflows/
     ├── ci.yml
     ├── velnor-qualification.yml  # velnor-repository-v1 only
-    └── velnor-release.yml        # velnor-repository-v1, or consumer-v1 with release enabled
+    └── release.yml               # velnor-repository-v1, or consumer-v1 with release enabled
 ```
 
 The qualification workflow is emitted only for
 `workflow.policy = "velnor-repository-v1"`; `consumer-v1` MUST NOT emit
-it. `velnor-release.yml` is emitted for `velnor-repository-v1` (keeping
+it. `release.yml` is emitted for `velnor-repository-v1` (keeping
 its existing Velnor-internal meaning) and for `consumer-v1` when
 `[stacks.rust.release].enabled = true`, together with the two effective
 release-plz configs; with release disabled, `consumer-v1` emits none of
@@ -30,7 +30,7 @@ block (least privilege for its role); see [workflow
 > Amendment 2026-09-30: the consumer release scope ([release
 > §11](release-contract.md)) overrides the earlier blanket
 > prohibition on consumer release emission. `consumer-v1` MUST emit
-> `velnor-release.yml` plus `.github/release-plz.toml` and
+> `release.yml` plus `.github/release-plz.toml` and
 > `.github/release-plz-bootstrap.toml` when
 > `[stacks.rust.release].enabled = true`, and MUST emit none of them
 > otherwise.

@@ -1,6 +1,6 @@
 //! Consumer release emission: selection plus release-tree assembly.
 //!
-//! Builds the release family (`velnor-release.yml` plus both effective
+//! Builds the release family (`release.yml` plus both effective
 //! configs) when `[stacks.rust.release].enabled` under `consumer-v1`;
 //! anything else yields no files. Selection reuses the Rust adapter's
 //! allowlist resolution over pinned `cargo metadata`; identities the

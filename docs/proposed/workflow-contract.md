@@ -154,7 +154,7 @@ permissions:
 
 All other permissions MUST be absent or `none`. `actions: read` is only for the exact trusted baseline
 artifact. Release publication uses a separate workflow with explicit permissions; fork pull requests receive
-no write access. `[stacks.rust.release]` adds `velnor-release.yml` (see [release contract](release-contract.md)) with per-job permissions that MUST NOT weaken this default.
+no write access. `[stacks.rust.release]` adds `release.yml` (see [release contract](release-contract.md)) with per-job permissions that MUST NOT weaken this default.
 
 The workflow concurrency group MUST be:
 
@@ -188,7 +188,7 @@ one stack-neutral report even after failure.
 4. `required`: `if: always()`, depends on the base and enabled policy jobs, validates reports/conclusions,
 and is the required status check.
 
-Only for `workflow.policy = "velnor-repository-v1"`, emit one independent job per repository validator plus generated `velnor-release.yml` and `velnor-qualification.yml` workflows rendered from typed workflow IR, each with an explicit `permissions:` block (least privilege for its role). `alint`
+Only for `workflow.policy = "velnor-repository-v1"`, emit one independent job per repository validator plus generated `release.yml` and `velnor-qualification.yml` workflows rendered from typed workflow IR, each with an explicit `permissions:` block (least privilege for its role). `alint`
 checks out source with `persist-credentials: false` and runs the full-SHA-pinned `asamarts/alint` action with `path: .`,
 `config: .alint.yml`, `format: github`, and `fail-on-warning: true`. `cargo-deny`, `cargo-machete`, and `zizmor`
 each run their single dependency/security check in their own job; no umbrella grouping exists.
