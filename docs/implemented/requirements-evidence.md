@@ -2,8 +2,8 @@
 
 Scope: every MUST/MUST NOT + acceptance criterion in `docs/proposed/` (13 contracts),
 grouped one row per clause cluster. Terse per RQ §5 (this doc ≤400 lines).
-HEAD: branch `docs/velnor-actions-spec` @ `bdfffb9` (unmerged; dogfood CI
-green 47/47 — run `36569723507`, `https://github.com/tailrocks/velnor-new/actions/runs/36569723507`).
+Measured at: branch `docs/velnor-actions-spec` @ `bdfffb9` (unmerged; dogfood CI
+green 47/47 — run `36569723507`, `https://github.com/tailrocks/velnor-new/actions/runs/36569723507`; re-verified 2026-10-01: run head is `bdfffb9`, conclusion `success`, 47/47 jobs green).
 Tree note: evidence ran on clean HEAD (only untracked root scratch
 `velnor-actions-v1-goal.md`, excluded from commits); clean-checkout
 re-verification at HEAD passed identically.

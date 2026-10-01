@@ -180,9 +180,9 @@ toolchain mise 2026.9.18 / rust 1.98.1 / mbx 1.21.0 / nextest
 | Segment | Wall | Notes |
 | --- | --- | --- |
 | Queue (created → first job start) | 91 s | 21:04:36→21:06:07, all wave-1 jobs |
-| Velnor Plan | 88 s | tools 15 s (cold install, rust dominates) + Build helper 59 s (53 setup downloads, own cargo home) + restore/fetch 1 s + Check generated files 2.14 s (generate+diff) + Plan 0.27 s + Publish plan 0.66 s (22,860 B) |
+| Plan | 88 s | tools 15 s (cold install, rust dominates) + Build helper 59 s (53 setup downloads, own cargo home) + restore/fetch 1 s + Check generated files 2.14 s (generate+diff) + Plan 0.27 s + Publish plan 0.66 s (22,860 B) |
 | Crate wave (plan end → orch end) | 818 s | 6 jobs start within 2 s; orchestrator 37 s later (scheduling gap, undetermined) |
-| Velnor / Required | 46 s | fetch-reports 33 s (silent op, 41 reports) + write/merge/publish 2 s + setup 8 s + runner 3 s |
+| Required | 46 s | fetch-reports 33 s (silent op, 41 reports) + write/merge/publish 2 s + setup 8 s + runner 3 s |
 | Validators (Zizmor/Actionlint/Machete/Deny/Alint) | ≤ 20 s each | parallel with Plan, off the critical path |
 
 Plan→crate gap 2 s, crate→Required gap 5 s, tail 0 s:
@@ -328,7 +328,7 @@ on it); Nextest-archive/sharding stays off, unqualified.
 
 ## P13 benchmark cases 1–7 (bench harness)
 
-Commit measured: P13 working tree atop `444c88e` (this commit).
+Commit measured: P13 working tree atop `444c88e` — DANGLING (local-only commit, contained in no branch, absent from origin; figures below are historical and not reproducible from any branch head).
 Machine: `arm64`, macOS 27.0, Apple M5 Max, 128 GiB RAM.
 Toolchain: rustc/cargo 1.98.1 (48a229cea/797e8a9bc), mise 2026.9.16,
 mbx 1.19.0, nextest 0.9.143, git 2.56.0, python 3.14.7; case 7 second
@@ -372,7 +372,7 @@ Budgets:
 
 - Same obligation set across all 7 cases: PASSED (digest
   `cd8b34ba18f0982d` in all 16 samples).
-- B1 true-cold/install, B7 resolution effects, P13-3 hosted negatives: UNPASSED/UNMEASURED, no controlled runs (bench cases are planner-level; 124 hosted runs all same-repo PR CI).
+- B1 true-cold/install, B7 resolution effects, P13-3 hosted negatives: UNPASSED/UNMEASURED, no controlled runs (bench cases are planner-level; 134 hosted runs, all same-repo `pull_request`, 0 fork-origin, per 2026-10-01 API census).
 - Inventory reuse op counts: PASSED (exact: 1/10/100 members →
   2/11/101 legacy subprocesses vs 1 reused).
 - Concurrent validation lanes without contention: UNPASSED as a
