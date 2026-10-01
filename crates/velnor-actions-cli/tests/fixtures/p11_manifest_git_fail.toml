@@ -1,0 +1,7 @@
+# Negative fixture: git dependency (rejected: registry-only sources,
+# exact pins, no git/branch/rev/tag shapes).
+[package]
+name = "p11-git-fail"
+
+[dependencies]
+demo-dep = { git = "https://example.com/demo.git", rev = "abc123" }
