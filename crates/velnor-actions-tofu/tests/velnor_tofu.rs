@@ -1,6 +1,12 @@
 //! Integration test entry point; cases live in the sibling files.
 #[path = "impl_tofu_detect.rs"]
 mod impl_tofu_detect;
+#[path = "impl_tofu_effective.rs"]
+mod impl_tofu_effective;
+#[path = "impl_tofu_evidence.rs"]
+mod impl_tofu_evidence;
+#[path = "impl_tofu_roots.rs"]
+mod impl_tofu_roots;
 
 /// Shared inline-fixture support (no fixture files outside `tests/`).
 mod support {
