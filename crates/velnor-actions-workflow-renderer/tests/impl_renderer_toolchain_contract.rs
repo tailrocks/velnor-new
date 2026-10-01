@@ -2,10 +2,11 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_workflow_renderer::toolchain_env::{
-    CREDENTIAL_UNSET_VARS, STEP_CREDENTIAL_DENYLIST, STEP_ISOLATION_DENYLIST, TOOLCHAIN_HOME_KEYS,
-    checked_project_task_env, checked_task_env, credential_scrub, is_denied_credential_key,
-    reject_denied_step_keys, reject_privileged_task_keys, with_credential_scrub,
-    with_credential_unset_script, with_env_unset_argv, with_toolchain_homes,
+    CREDENTIAL_UNSET_VARS, STEP_CREDENTIAL_DENYLIST, STEP_ENDPOINT_DENYLIST,
+    STEP_ISOLATION_DENYLIST, TOOLCHAIN_HOME_KEYS, checked_project_task_env, checked_task_env,
+    credential_scrub, is_denied_credential_key, is_denied_endpoint_key, reject_denied_step_keys,
+    reject_privileged_task_keys, with_credential_scrub, with_credential_unset_script,
+    with_env_unset_argv, with_toolchain_homes,
 };
 
 #[test]
@@ -53,10 +54,16 @@ fn denied_keys_rejected_anywhere_in_map() {
 }
 
 #[test]
-fn credential_scrub_blanks_all_nine_keys() {
+fn credential_scrub_blanks_all_denied_keys() {
     let scrub = credential_scrub();
-    assert_eq!(scrub.len(), STEP_CREDENTIAL_DENYLIST.len());
-    for denied in STEP_CREDENTIAL_DENYLIST {
+    assert_eq!(
+        scrub.len(),
+        STEP_CREDENTIAL_DENYLIST.len() + STEP_ENDPOINT_DENYLIST.len()
+    );
+    for denied in STEP_CREDENTIAL_DENYLIST
+        .into_iter()
+        .chain(STEP_ENDPOINT_DENYLIST)
+    {
         assert_eq!(
             scrub.get(denied).map(String::as_str),
             Some(""),
@@ -69,11 +76,34 @@ fn credential_scrub_blanks_all_nine_keys() {
         scrubbed.get("MISE_NO_CONFIG").map(String::as_str),
         Some("1")
     );
-    for denied in STEP_CREDENTIAL_DENYLIST {
+    for denied in STEP_CREDENTIAL_DENYLIST
+        .into_iter()
+        .chain(STEP_ENDPOINT_DENYLIST)
+    {
         assert_eq!(
             scrubbed.get(denied).map(String::as_str),
             Some(""),
             "{denied} must scrub empty"
+        );
+    }
+}
+
+#[test]
+fn endpoint_denylist_names_exact_selector_set() {
+    assert_eq!(STEP_ENDPOINT_DENYLIST, ["GH_HOST", "GH_CONFIG_DIR"]);
+    for denied in STEP_ENDPOINT_DENYLIST {
+        assert!(is_denied_endpoint_key(denied), "{denied} must match");
+        assert!(
+            !TOOLCHAIN_HOME_KEYS.contains(&denied),
+            "{denied} must not collide with the triple"
+        );
+        let mut dirty = BTreeMap::new();
+        dirty.insert(denied.to_owned(), "sentinel".to_owned());
+        let err = reject_denied_step_keys(&dirty).expect_err("endpoint key must fail");
+        assert!(
+            err.to_string()
+                .contains(&format!("endpoint_step_env:{denied}")),
+            "got {err}"
         );
     }
 }

@@ -203,7 +203,15 @@ fn denylist_pins_mise_strip_set() {
         velnor_actions_mise::CREDENTIAL_ENV_KEYS,
         "rendered steps and local spawns share one credential contract"
     );
-    for denied in velnor_actions_workflow_renderer::toolchain_env::STEP_CREDENTIAL_DENYLIST {
+    assert_eq!(
+        velnor_actions_workflow_renderer::toolchain_env::STEP_ENDPOINT_DENYLIST,
+        velnor_actions_mise::ENDPOINT_ENV_KEYS,
+        "rendered steps and local spawns share one endpoint contract"
+    );
+    for denied in velnor_actions_workflow_renderer::toolchain_env::STEP_CREDENTIAL_DENYLIST
+        .iter()
+        .chain(velnor_actions_workflow_renderer::toolchain_env::STEP_ENDPOINT_DENYLIST.iter())
+    {
         let reserved = velnor_actions_mise::command::is_reserved_env_key(denied);
         assert!(reserved, "{denied} must be reserved in Mise too");
     }

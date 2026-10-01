@@ -199,6 +199,34 @@ fn oidc_token_pair_never_reaches_task_env() -> Result<(), String> {
 }
 
 #[test]
+fn endpoint_selectors_are_reserved_and_unsettable() -> Result<(), String> {
+    use velnor_actions_mise::ENDPOINT_ENV_KEYS;
+    use velnor_actions_mise::command::is_denied_endpoint_key;
+    assert_eq!(ENDPOINT_ENV_KEYS, ["GH_HOST", "GH_CONFIG_DIR"]);
+    for key in ENDPOINT_ENV_KEYS {
+        assert!(is_denied_endpoint_key(key), "{key} must match");
+        assert!(is_reserved_env_key(key), "{key} reserved");
+        let pair = [(OsString::from(key), OsString::from("sentinel"))];
+        let exec =
+            IsolatedCommand::mise_exec(&["rust@1.98.1".to_owned()], &[OsString::from("cargo")])
+                .map_err(|err| err.to_string())?;
+        assert!(
+            matches!(
+                exec.with_env(&pair),
+                Err(MiseError::InvalidStepInput { .. })
+            ),
+            "{key} must fail loud via with_env"
+        );
+        let declared = vec![(OsString::from(key), OsString::from("sentinel"))];
+        assert!(
+            IsolatedCommand::repo_task("sh", Vec::new(), &declared).is_err(),
+            "{key} must fail loud via repo_task"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn subcommand_allowlist_is_exec_install_run() {
     assert_eq!(ALLOWED_MISE_SUBCOMMANDS, ["exec", "install", "run"]);
     for allowed in ["exec", "install", "run"] {

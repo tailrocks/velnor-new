@@ -31,6 +31,15 @@ pub const STEP_CREDENTIAL_DENYLIST: [&str; 9] = [
     "NODE_AUTH_TOKEN",
 ];
 
+/// Endpoint-selector keys forbidden in any rendered step env.
+///
+/// `GH_HOST` would reroute `gh` — and any kept token — to an
+/// attacker host; `GH_CONFIG_DIR` would load attacker-controlled
+/// auth. Mirrors the Mise adapter's endpoint strip set
+/// element-for-element without depending on it; the orchestrator pins
+/// the two lists equal by test.
+pub const STEP_ENDPOINT_DENYLIST: [&str; 2] = ["GH_HOST", "GH_CONFIG_DIR"];
+
 /// True for a credential-shaped env key: the denylisted nine, any
 /// `CARGO_REGISTRIES_*` entry (per-registry tokens the fixed list can
 /// never enumerate), or any `*_TOKEN` name. Rejection is fail-closed:
@@ -43,6 +52,13 @@ pub fn is_denied_credential_key(key: &str) -> bool {
     STEP_CREDENTIAL_DENYLIST.contains(&key)
         || key.starts_with("CARGO_REGISTRIES_")
         || key.ends_with("_TOKEN")
+}
+
+/// True for an endpoint-selector key: never emitted into rendered
+/// step env.
+#[must_use]
+pub fn is_denied_endpoint_key(key: &str) -> bool {
+    STEP_ENDPOINT_DENYLIST.contains(&key)
 }
 
 /// Merge the toolchain-home triple into a step env map.
@@ -77,7 +93,7 @@ pub fn check_toolchain_homes(env: &BTreeMap<String, String>) -> Result<(), Rende
     Ok(())
 }
 
-/// Reject denied credential keys in a step env map.
+/// Reject denied credential and endpoint keys in a step env map.
 ///
 /// Pattern-matched, not list-matched: any credential-shaped key fails,
 /// including registry and enterprise variants the fixed list omits.
@@ -89,24 +105,29 @@ pub fn reject_denied_step_keys(env: &BTreeMap<String, String>) -> Result<(), Ren
                 "credential_step_env:{key}"
             )));
         }
+        if is_denied_endpoint_key(key) {
+            return Err(RenderError::BadCommand(format!("endpoint_step_env:{key}")));
+        }
     }
     Ok(())
 }
 
-/// Explicit empty credential values stopping ambient inheritance.
+/// Explicit empty credential/endpoint values stopping ambient inheritance.
 ///
 /// Workflow- and job-scope definitions inherit into every step unless
 /// a step key shadows them; these empty values are that shadow for the
-/// nine known keys. Runner-injected `GITHUB_TOKEN` and the OIDC pair
-/// are NOT shadowed (the runner overwrites step env after the workflow
-/// merge; see the D3 evidence note on [`CREDENTIAL_UNSET_VARS`]), so
-/// steps executing repository code pair this overlay with the unset
-/// wrapper. Empty is the only legal scrub value: the render gate
-/// rejects any nonempty credential as a leak.
+/// nine credential keys plus the two endpoint keys. Runner-injected
+/// `GITHUB_TOKEN` and the OIDC pair are NOT shadowed (the runner
+/// overwrites step env after the workflow merge; see the D3 evidence
+/// note on [`CREDENTIAL_UNSET_VARS`]), so steps executing repository
+/// code pair this overlay with the unset wrapper. Empty is the only
+/// legal scrub value: the render gate rejects any nonempty credential
+/// as a leak.
 #[must_use]
 pub fn credential_scrub() -> BTreeMap<String, String> {
     STEP_CREDENTIAL_DENYLIST
         .iter()
+        .chain(STEP_ENDPOINT_DENYLIST.iter())
         .map(|key| ((*key).to_owned(), String::new()))
         .collect()
 }
@@ -115,7 +136,7 @@ pub fn credential_scrub() -> BTreeMap<String, String> {
 ///
 /// Callers validate the base first ([`checked_task_env`] rejects any
 /// caller-supplied credential, empty or not); the overlay then blanks
-/// all nine keys by construction, never from caller input.
+/// all eleven keys by construction, never from caller input.
 #[must_use]
 pub fn with_credential_scrub(env: &BTreeMap<String, String>) -> BTreeMap<String, String> {
     let mut scrubbed = env.clone();

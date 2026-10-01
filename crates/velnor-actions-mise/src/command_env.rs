@@ -56,8 +56,16 @@ pub const CREDENTIAL_ENV_KEYS: [&str; 9] = [
 /// auth. Stripped for every policy: this tool only talks to
 /// `github.com`. (`GH_ENTERPRISE_TOKEN` already strips as a
 /// `*_TOKEN` credential unless a policy allowlists it, and none
-/// does.)
-const ENDPOINT_ENV_KEYS: [&str; 2] = ["GH_HOST", "GH_CONFIG_DIR"];
+/// does.) Mirrored by the renderer's endpoint denylist; the
+/// orchestrator pins the two lists equal by test.
+pub const ENDPOINT_ENV_KEYS: [&str; 2] = ["GH_HOST", "GH_CONFIG_DIR"];
+
+/// True for an endpoint-selector key: never inherited, never
+/// overridable, never emitted into rendered step env.
+#[must_use]
+pub fn is_denied_endpoint_key(key: &str) -> bool {
+    ENDPOINT_ENV_KEYS.contains(&key)
+}
 
 /// True for a credential-shaped env key: the nine known names, any
 /// `CARGO_REGISTRIES_*` entry, or any `*_TOKEN` name.
@@ -113,6 +121,7 @@ pub fn is_reserved_env_key(key: &str) -> bool {
     ISOLATION_ENV.iter().any(|(own, _)| *own == key)
         || NO_AUTO_INSTALL_ENV.iter().any(|(own, _)| *own == key)
         || is_denied_credential_key(key)
+        || is_denied_endpoint_key(key)
 }
 
 /// Redact secret-looking values for `Debug`: names stay, values become
