@@ -1,13 +1,14 @@
 //! Dialect evidence: STRONG / WEAK / CONFLICT classification.
 //!
-//! T09 signals are filename- and toolname-based only. Content signals
-//! (E4 `required_version`/`terraform` blocks plus legacy CLI refs, and
-//! terraform-only version constraints) need the T10 parser and are
-//! deferred there. `.terraform/` working dirs are shared by both
-//! dialects, so they never count as markers.
+//! Filename and toolname signals (E1–E3) classify without content;
+//! E4 content signals (`required_version` + legacy CLI refs, and
+//! terraform-only version constraints) need bounded file text via
+//! [`classify_with_contents`]. `.terraform/` working dirs are shared
+//! by both dialects, so they never count as markers.
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use crate::content::signals_for;
 use crate::effective::{config_shape, effective_set};
 
 /// Mise tool selecting `OpenTofu` (STRONG E3).
@@ -82,10 +83,26 @@ pub fn mise_tool_selected(values: &BTreeMap<String, String>, tool: &str) -> bool
 
 /// Classify repo-wide evidence from index files plus mise selections.
 ///
-/// The caller handles the explicit-table (E1) path separately; this
-/// classifies the table-less case only.
+/// Filename/toolname signals only; content stays unread. The caller
+/// handles the explicit-table (E1) path separately; this classifies
+/// the table-less case only.
 #[must_use]
 pub fn classify(files: &[String], mise_values: &BTreeMap<String, String>) -> Evidence {
+    classify_with_contents(files, &BTreeMap::new(), mise_values)
+}
+
+/// Classify with E4 content signals from bounded `contents` text.
+///
+/// `contents` maps repo-relative config paths to bounded text;
+/// malformed entries contribute no signals (no table, no claim).
+/// `required_version` TOGETHER with a legacy ref is STRONG;
+/// terraform-only pins are markers (CONFLICT when STRONG holds).
+#[must_use]
+pub fn classify_with_contents(
+    files: &[String],
+    contents: &BTreeMap<String, String>,
+    mise_values: &BTreeMap<String, String>,
+) -> Evidence {
     let mut native = Vec::new();
     let mut legacy = Vec::new();
     for path in files {
@@ -98,6 +115,27 @@ pub fn classify(files: &[String], mise_values: &BTreeMap<String, String>) -> Evi
             }
         }
     }
+    let mut versioned = Vec::new();
+    let mut legacy_refs = Vec::new();
+    let mut pinned = Vec::new();
+    for (path, text) in contents {
+        let name = path.rsplit('/').next().unwrap_or(path);
+        let Some(shape) = config_shape(name) else {
+            continue;
+        };
+        let Ok(signals) = signals_for(text, shape.dialect) else {
+            continue;
+        };
+        if !signals.required_versions.is_empty() {
+            versioned.push(path.clone());
+        }
+        if signals.has_legacy_ref {
+            legacy_refs.push(path.clone());
+        }
+        if signals.terraform_only {
+            pinned.push(path.clone());
+        }
+    }
     let strong_tool = mise_tool_selected(mise_values, MISE_OPENTOFU_TOOL);
     let terraform_tool = mise_tool_selected(mise_values, MISE_TERRAFORM_TOOL);
     let terraform_dirs: Vec<String> = files
@@ -108,8 +146,9 @@ pub fn classify(files: &[String], mise_values: &BTreeMap<String, String>) -> Evi
         })
         .cloned()
         .collect();
-    let strong = !native.is_empty() || strong_tool;
-    let markers = terraform_tool || !terraform_dirs.is_empty();
+    let strong =
+        !native.is_empty() || strong_tool || (!versioned.is_empty() && !legacy_refs.is_empty());
+    let markers = terraform_tool || !terraform_dirs.is_empty() || !pinned.is_empty();
     let level = if markers && strong {
         EvidenceLevel::Conflict
     } else if strong {
@@ -127,6 +166,8 @@ pub fn classify(files: &[String], mise_values: &BTreeMap<String, String>) -> Evi
     if strong_tool {
         signals.push("mise-tool:opentofu".to_owned());
     }
+    push_sightings(&mut signals, "content:required-version", &versioned);
+    push_sightings(&mut signals, "content:legacy-ref", &legacy_refs);
     if matches!(level, EvidenceLevel::Weak) {
         push_sightings(&mut signals, "legacy-only", &legacy);
     }
@@ -134,6 +175,7 @@ pub fn classify(files: &[String], mise_values: &BTreeMap<String, String>) -> Evi
         signals.push("terraform-marker:mise-tool:terraform".to_owned());
     }
     push_sightings(&mut signals, "terraform-marker:path", &terraform_dirs);
+    push_sightings(&mut signals, "terraform-marker:required-version", &pinned);
     Evidence {
         level,
         signals,

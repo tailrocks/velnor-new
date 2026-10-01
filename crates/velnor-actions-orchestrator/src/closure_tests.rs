@@ -265,3 +265,84 @@ fn digest_slots_preserve_absence_distinctly() {
         DigestSlot::Known(_)
     ));
 }
+
+/// Minimal tofu proposal for `kind` in `unit`.
+fn tofu_task(kind: &str, unit: &str) -> ProposedTask {
+    use std::collections::BTreeMap;
+    use std::ffi::OsString;
+    use velnor_actions_contract::{CachePolicy, IdentityInputs, ResourceClass, ResourceDemand};
+    ProposedTask {
+        task_id: format!("stack/tofu/root/{kind}/default"),
+        stack_id: "tofu".to_owned(),
+        component_id: format!("tofu:{unit}"),
+        task_kind: kind.to_owned(),
+        configuration: "default".to_owned(),
+        depends_on: Vec::new(),
+        gated_by: Vec::new(),
+        reads: Vec::new(),
+        writes: Vec::new(),
+        outputs: Vec::new(),
+        resource: ResourceDemand {
+            class: ResourceClass::Compiler,
+            cpu_milli: None,
+            memory_mb: None,
+            needs_network: false,
+            service: None,
+        },
+        cache_policy: CachePolicy {
+            allow_compilation_reuse: false,
+            allow_task_reuse: false,
+        },
+        identity: IdentityInputs {
+            unit_id: String::new(),
+            unit_key: "root".to_owned(),
+            unit_path: unit.to_owned(),
+            project_root: ".".to_owned(),
+            target: "host".to_owned(),
+            features: Vec::new(),
+            flags: Vec::new(),
+            compile_driver: "tofu".to_owned(),
+            test_runner: "tofu".to_owned(),
+            environment: BTreeMap::new(),
+            declared_inputs: Vec::new(),
+            undeclared_reads: false,
+        },
+        payload: vec![OsString::from("tofu")],
+        display_name: String::new(),
+        uses_clock: false,
+        uses_random: false,
+        no_targets: false,
+        runner_profile: "default".to_owned(),
+    }
+}
+
+#[test]
+fn tofu_dispatch_resolves_closure() {
+    let dir = tempfile::TempDir::new().expect("temp root");
+    std::fs::write(dir.path().join("main.tf"), "variable \"x\" {}\n").expect("seed");
+    let closure =
+        resolve_closure_at_root(dir.path(), &tofu_task("validate", ""), None, "g", "t", "p")
+            .expect("tofu converts");
+    assert!(closure.unknown_inputs().is_empty());
+    assert!(matches!(
+        closure.inputs.get("source_tree"),
+        Some(Provenance::Known { .. })
+    ));
+}
+
+#[test]
+fn tofu_dispatch_rejects_unknown_kind() {
+    let dir = tempfile::TempDir::new().expect("temp root");
+    let err = resolve_closure_at_root(dir.path(), &tofu_task("plan", ""), None, "g", "t", "p")
+        .expect_err("unknown kind");
+    assert!(err.to_string().contains("unknown_kind"), "{err}");
+}
+
+#[test]
+fn closure_dispatch_rejects_unregistered_stack() {
+    let dir = tempfile::TempDir::new().expect("temp root");
+    let mut task = tofu_task("validate", "");
+    task.stack_id = "cobol".to_owned();
+    let err = resolve_closure_at_root(dir.path(), &task, None, "g", "t", "p").expect_err("bogus");
+    assert!(err.to_string().contains("unregistered_stack"), "{err}");
+}

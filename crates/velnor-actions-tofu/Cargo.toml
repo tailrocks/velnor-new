@@ -11,6 +11,8 @@ workspace = true
 
 [dependencies]
 velnor-actions-contract = { version = "=0.1.0", path = "../velnor-actions-contract" }
+hcl = { version = "=0.19.8", package = "hcl-rs" }
+serde_json = { workspace = true }
 
 [[test]]
 name = "velnor_tofu"

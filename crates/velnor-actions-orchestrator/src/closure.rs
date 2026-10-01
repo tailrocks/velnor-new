@@ -12,8 +12,7 @@ use velnor_actions_contract::{ContractError, ProposedTask, Stack, TaskInputClosu
 ///
 /// Closed per-stack dispatch: each adapter resolves its own tasks.
 /// Callers pass validated proposals, so unknown stacks and kind
-/// spellings fail closed here instead of resolving silently. Tofu is
-/// registered but behaviorless until T09, so tofu tasks fail closed.
+/// spellings fail closed here instead of resolving silently.
 ///
 /// # Errors
 ///
@@ -36,6 +35,12 @@ pub(crate) fn resolve_closure_at_root(
             toolchain_id,
             platform_id,
         ),
-        Stack::Tofu => Err(ContractError::identity("stack_id", "tofu_pending_t09")),
+        Stack::Tofu => velnor_actions_tofu::resolve_closure_at_root(
+            root,
+            task,
+            graph_digest,
+            toolchain_id,
+            platform_id,
+        ),
     }
 }

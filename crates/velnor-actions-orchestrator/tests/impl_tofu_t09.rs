@@ -38,14 +38,27 @@ fn config_with(extra: &str) -> String {
 }
 
 #[test]
-fn configured_roots_trip_pending_arm_until_t10() -> TestResult {
+fn configured_roots_convert_to_selected_projects() -> TestResult {
     let dir = make_tofu_repo(
         &config_with("[stacks.tofu]\nroots = [\".\"]\n"),
         &[("main.tf", "")],
         None,
     )?;
-    let err = prepare(dir.path()).expect_err("conversion stays pending");
-    assert!(err.to_string().contains("tofu_pending_t09"), "{err}");
+    let prep = prepare(dir.path())?;
+    let selected: Vec<_> = prep
+        .discovery
+        .statuses
+        .iter()
+        .filter_map(|status| match status {
+            velnor_actions_contract::DetectionStatus::Selected(project) => Some(project),
+            velnor_actions_contract::DetectionStatus::Ignored { .. } => None,
+        })
+        .collect();
+    assert_eq!(selected.len(), 1, "one tofu project selected");
+    assert_eq!(selected[0].stack_id, "tofu");
+    assert_eq!(selected[0].project_root, "");
+    let plan = plan_for(&prep)?;
+    assert!(plan.contains("Tofu: selected (roots: [.])"), "{plan}");
     Ok(())
 }
 
@@ -201,5 +214,141 @@ fn clean_repo_plan_has_no_tofu_line() -> TestResult {
     let plan = plan_for(&prep)?;
     assert!(!plan.contains("Tofu:"), "{plan}");
     assert!(plan.contains("Rust: none detected"), "{plan}");
+    Ok(())
+}
+
+#[test]
+fn malformed_root_errors_naming_the_file() -> TestResult {
+    let dir = make_tofu_repo(
+        &config_with("[stacks.tofu]\nroots = [\".\"]\n"),
+        &[("main.tf", "variable \"x\" {\n")],
+        None,
+    )?;
+    let err = prepare(dir.path()).expect_err("malformed fails");
+    let text = err.to_string();
+    assert!(text.contains("malformed_manifest"), "{text}");
+    assert!(text.contains("main.tf"), "{text}");
+    Ok(())
+}
+
+#[test]
+fn unknown_block_root_errors() -> TestResult {
+    let dir = make_tofu_repo(
+        &config_with("[stacks.tofu]\nroots = [\".\"]\n"),
+        &[("main.tf", "frobnicate \"x\" {}\n")],
+        None,
+    )?;
+    let err = prepare(dir.path()).expect_err("unknown block fails");
+    assert!(err.to_string().contains("unknown_block"), "{err}");
+    Ok(())
+}
+
+#[test]
+fn duplicate_declaration_root_errors() -> TestResult {
+    let dir = make_tofu_repo(
+        &config_with("[stacks.tofu]\nroots = [\".\"]\n"),
+        &[
+            ("a.tf", "variable \"dup\" {}\n"),
+            ("b.tf", "variable \"dup\" {}\n"),
+        ],
+        None,
+    )?;
+    let err = prepare(dir.path()).expect_err("duplicate fails");
+    assert!(err.to_string().contains("duplicate"), "{err}");
+    Ok(())
+}
+
+#[test]
+fn shadowed_garbage_passes_conversion() -> TestResult {
+    let dir = make_tofu_repo(
+        &config_with("[stacks.tofu]\nroots = [\".\"]\n"),
+        &[
+            ("main.tf", "((( garbage"),
+            ("main.tofu", "variable \"x\" {}\n"),
+        ],
+        None,
+    )?;
+    let prep = prepare(dir.path())?;
+    let plan = plan_for(&prep)?;
+    assert!(plan.contains("Tofu: selected (roots: [.])"), "{plan}");
+    Ok(())
+}
+
+#[test]
+fn json_root_converts() -> TestResult {
+    let dir = make_tofu_repo(
+        &config_with("[stacks.tofu]\nroots = [\".\"]\n"),
+        &[("main.tf.json", "{\"variable\": {\"x\": {}}}")],
+        None,
+    )?;
+    let prep = prepare(dir.path())?;
+    let plan = plan_for(&prep)?;
+    assert!(plan.contains("Tofu: selected (roots: [.])"), "{plan}");
+    Ok(())
+}
+
+#[test]
+fn multiroot_converts_with_sorted_plan_line() -> TestResult {
+    let dir = make_tofu_repo(
+        &config_with("[stacks.tofu]\nroots = [\".\", \"infra\"]\n"),
+        &[
+            ("main.tf", "variable \"a\" {}\n"),
+            ("infra/main.tf", "variable \"b\" {}\n"),
+        ],
+        None,
+    )?;
+    let prep = prepare(dir.path())?;
+    let selected = prep
+        .discovery
+        .statuses
+        .iter()
+        .filter(|status| {
+            matches!(
+                status,
+                velnor_actions_contract::DetectionStatus::Selected(_)
+            )
+        })
+        .count();
+    assert_eq!(selected, 2);
+    let plan = plan_for(&prep)?;
+    assert!(
+        plan.contains("Tofu: selected (roots: [., infra])"),
+        "{plan}"
+    );
+    Ok(())
+}
+
+#[test]
+fn e4_content_advises_strong_without_table() -> TestResult {
+    let dir = make_tofu_repo(
+        &config_with(""),
+        &[(
+            "main.tf",
+            "terraform {\n  required_version = \">= 1.6\"\n}\nlocals {\n  cmd = \"terraform plan\"\n}\n",
+        )],
+        None,
+    )?;
+    let prep = prepare(dir.path())?;
+    let plan = plan_for(&prep)?;
+    assert!(
+        plan.contains("Tofu: not detected (strong evidence"),
+        "{plan}"
+    );
+    assert!(plan.contains("content:required-version:main.tf"), "{plan}");
+    Ok(())
+}
+
+#[test]
+fn terraform_only_pin_conflicts_with_strong_spelling() -> TestResult {
+    let dir = make_tofu_repo(
+        &config_with(""),
+        &[(
+            "main.tofu",
+            "terraform {\n  required_version = \"= 1.5.7\"\n}\n",
+        )],
+        None,
+    )?;
+    let err = prepare(dir.path()).expect_err("pin conflict fails");
+    assert!(err.to_string().contains("tofu_dialect_conflict"), "{err}");
     Ok(())
 }

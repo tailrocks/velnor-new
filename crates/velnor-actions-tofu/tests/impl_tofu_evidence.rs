@@ -175,3 +175,197 @@ fn test_and_var_files_are_not_evidence() {
     );
     assert_eq!(evidence.level, EvidenceLevel::None);
 }
+
+/// Bounded contents map from path/text entries.
+fn contents(entries: &[(&str, &str)]) -> BTreeMap<String, String> {
+    entries
+        .iter()
+        .map(|(path, text)| ((*path).to_owned(), (*text).to_owned()))
+        .collect()
+}
+
+#[test]
+fn version_plus_legacy_is_strong() {
+    use velnor_actions_tofu::evidence::classify_with_contents;
+    let evidence = classify_with_contents(
+        &files(&["main.tf"]),
+        &contents(&[(
+            "main.tf",
+            "terraform {\n  required_version = \">= 1.6\"\n}\nresource \"t\" \"n\" {\n  cmd = \"terraform plan\"\n}\n",
+        )]),
+        &mise(&[]),
+    );
+    assert_eq!(evidence.level, EvidenceLevel::Strong);
+    assert!(
+        evidence
+            .signals
+            .iter()
+            .any(|signal| signal.starts_with("content:required-version:")),
+        "{:?}",
+        evidence.signals
+    );
+    assert!(
+        evidence
+            .signals
+            .iter()
+            .any(|signal| signal.starts_with("content:legacy-ref:")),
+        "{:?}",
+        evidence.signals
+    );
+}
+
+#[test]
+fn version_alone_stays_weak() {
+    use velnor_actions_tofu::evidence::classify_with_contents;
+    let evidence = classify_with_contents(
+        &files(&["main.tf"]),
+        &contents(&[(
+            "main.tf",
+            "terraform {\n  required_version = \">= 1.6\"\n}\n",
+        )]),
+        &mise(&[]),
+    );
+    assert_eq!(evidence.level, EvidenceLevel::Weak);
+    assert!(
+        evidence
+            .signals
+            .iter()
+            .any(|signal| signal.starts_with("content:required-version:")),
+        "{:?}",
+        evidence.signals
+    );
+}
+
+#[test]
+fn legacy_alone_stays_weak() {
+    use velnor_actions_tofu::evidence::classify_with_contents;
+    let evidence = classify_with_contents(
+        &files(&["main.tf"]),
+        &contents(&[("main.tf", "locals {\n  cmd = \"terraform plan\"\n}\n")]),
+        &mise(&[]),
+    );
+    assert_eq!(evidence.level, EvidenceLevel::Weak);
+}
+
+#[test]
+fn terraform_only_pin_is_a_marker() {
+    use velnor_actions_tofu::evidence::classify_with_contents;
+    let evidence = classify_with_contents(
+        &files(&["main.tofu"]),
+        &contents(&[(
+            "main.tofu",
+            "terraform {\n  required_version = \"= 1.5.7\"\n}\n",
+        )]),
+        &mise(&[]),
+    );
+    assert_eq!(evidence.level, EvidenceLevel::Conflict);
+    assert!(
+        evidence
+            .signals
+            .iter()
+            .any(|signal| signal.starts_with("terraform-marker:required-version:")),
+        "{:?}",
+        evidence.signals
+    );
+}
+
+#[test]
+fn terraform_only_pin_alone_stays_silent() {
+    use velnor_actions_tofu::evidence::classify_with_contents;
+    let evidence = classify_with_contents(
+        &files(&["main.tf"]),
+        &contents(&[(
+            "main.tf",
+            "terraform {\n  required_version = \"= 1.5.7\"\n}\n",
+        )]),
+        &mise(&[]),
+    );
+    assert_eq!(evidence.level, EvidenceLevel::None);
+}
+
+#[test]
+fn malformed_content_contributes_no_signals() {
+    use velnor_actions_tofu::evidence::classify_with_contents;
+    let evidence = classify_with_contents(
+        &files(&["main.tf"]),
+        &contents(&[("main.tf", "variable \"x\" {")]),
+        &mise(&[]),
+    );
+    assert_eq!(evidence.level, EvidenceLevel::Weak);
+    assert!(
+        evidence
+            .signals
+            .iter()
+            .all(|signal| !signal.starts_with("content:")),
+        "{:?}",
+        evidence.signals
+    );
+}
+
+#[test]
+fn non_config_content_ignored() {
+    use velnor_actions_tofu::evidence::classify_with_contents;
+    let evidence = classify_with_contents(
+        &files(&["main.tf"]),
+        &contents(&[(
+            "notes.txt",
+            "terraform {\n  required_version = \"= 1.5.7\"\n}\n",
+        )]),
+        &mise(&[]),
+    );
+    assert_eq!(evidence.level, EvidenceLevel::Weak);
+}
+
+#[test]
+fn json_content_signals_fire() {
+    use velnor_actions_tofu::evidence::classify_with_contents;
+    let evidence = classify_with_contents(
+        &files(&["main.tf"]),
+        &contents(&[(
+            "main.tf",
+            "terraform {\n  required_version = \">= 1.6\"\n}\n",
+        )]),
+        &mise(&[]),
+    );
+    assert_eq!(evidence.level, EvidenceLevel::Weak);
+    let evidence = classify_with_contents(
+        &files(&["config.tf.json"]),
+        &contents(&[(
+            "config.tf.json",
+            "{\"terraform\": {\"required_version\": \">= 1.6\"}, \"locals\": {\"cmd\": \"terraform plan\"}}",
+        )]),
+        &mise(&[]),
+    );
+    assert_eq!(evidence.level, EvidenceLevel::Strong);
+}
+
+#[test]
+fn bare_classify_reads_no_content() {
+    let evidence = classify(&files(&["main.tf"]), &mise(&[]));
+    assert_eq!(evidence.level, EvidenceLevel::Weak);
+    assert!(
+        evidence
+            .signals
+            .iter()
+            .all(|signal| !signal.starts_with("content:")),
+        "{:?}",
+        evidence.signals
+    );
+}
+
+#[test]
+fn e4_strong_advises_in_plan_note() {
+    use velnor_actions_tofu::evidence::classify_with_contents;
+    let evidence = classify_with_contents(
+        &files(&["main.tf"]),
+        &contents(&[(
+            "main.tf",
+            "terraform {\n  required_version = \">= 1.6\"\n}\nlocals {\n  cmd = \"terraform plan\"\n}\n",
+        )]),
+        &mise(&[]),
+    );
+    match plan_note(&evidence) {
+        Some(TofuNote::Advisory(advisory)) => assert!(advisory.strong),
+        other => panic!("expected strong advisory, got {other:?}"),
+    }
+}

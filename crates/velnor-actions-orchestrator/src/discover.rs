@@ -75,7 +75,7 @@ pub struct Discovery {
     /// Tofu plan note: ignore marker or table-less evidence advisory.
     ///
     /// `None` when the tofu table is absent and no evidence exists, or
-    /// when configured roots proceed to the pending conversion arms.
+    /// when configured roots convert to selected projects.
     pub tofu_note: Option<velnor_actions_tofu::TofuNote>,
 }
 
@@ -103,7 +103,7 @@ pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, 
         problem: err.to_string(),
     })?;
     let initial = apply_stack_ignores(projects, &config.stacks.ignore);
-    let (outcomes, inventories) = run_inventories(root, &candidates)?;
+    let (outcomes, inventories) = run_inventories(root, &candidates, index.files())?;
     let statuses = check_candidate_outcomes(initial, &outcomes).map_err(|err| {
         OrchestratorError::Detection {
             problem: err.to_string(),
@@ -149,19 +149,25 @@ const DETECTORS: [DetectorEntry; 2] = [
 ///
 /// Candidates group by stack in first-seen order; each stack converts
 /// its own units. Single-stack runs preserve candidate order exactly.
-/// Tofu is registered but candidate-free until T09, so a tofu
-/// candidate here fails closed instead of converting silently.
 fn detected_projects(
     candidates: &[StackCandidate],
 ) -> Result<Vec<DetectedProject>, OrchestratorError> {
     let mut rust = Vec::new();
+    let mut tofu = Vec::new();
+    let mut order: Vec<Stack> = Vec::new();
     for candidate in candidates {
         match Stack::require_known(&candidate.stack_id) {
-            Ok(Stack::Rust) => rust.push(candidate.clone()),
-            Ok(Stack::Tofu) => {
-                return Err(OrchestratorError::Detection {
-                    problem: "tofu_pending_t09".to_owned(),
-                });
+            Ok(stack @ Stack::Rust) => {
+                if !order.contains(&stack) {
+                    order.push(stack);
+                }
+                rust.push(candidate.clone());
+            }
+            Ok(stack @ Stack::Tofu) => {
+                if !order.contains(&stack) {
+                    order.push(stack);
+                }
+                tofu.push(candidate.clone());
             }
             Err(err) => {
                 return Err(OrchestratorError::Detection {
@@ -170,7 +176,16 @@ fn detected_projects(
             }
         }
     }
-    Ok(velnor_actions_rust::detected_projects_for_units(&rust))
+    let rust_projects = velnor_actions_rust::detected_projects_for_units(&rust);
+    let tofu_projects = velnor_actions_tofu::detected_projects_for_units(&tofu);
+    let mut projects = Vec::with_capacity(rust_projects.len() + tofu_projects.len());
+    for stack in order {
+        match stack {
+            Stack::Rust => projects.extend(rust_projects.clone()),
+            Stack::Tofu => projects.extend(tofu_projects.clone()),
+        }
+    }
+    Ok(projects)
 }
 
 /// Registered detectors as (stack ID, record schema), ascending.
