@@ -1,4 +1,4 @@
-//! Typed-IR to YAML rendering for CI and release workflows.
+//! Typed-IR to YAML rendering for CI, release, and freshness workflows.
 //!
 //! Validated IR plus fixed argv in, marked YAML out: no subprocesses, no
 //! stack or tool branching, quoting-only shell shaping.
@@ -16,6 +16,7 @@ mod document;
 mod error;
 mod expressions;
 mod final_steps;
+pub mod freshness;
 pub mod guard;
 pub mod marker;
 mod matrix;
@@ -36,6 +37,7 @@ pub mod setup;
 pub mod steps;
 mod steps_artifact;
 mod steps_internal;
+mod steps_plain;
 mod support;
 pub mod toolchain_env;
 pub mod tree;

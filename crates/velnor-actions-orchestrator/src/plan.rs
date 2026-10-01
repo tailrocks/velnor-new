@@ -4,7 +4,8 @@ use std::collections::BTreeMap;
 
 use velnor_actions_actionlint::ACTIONLINT_VERSION;
 use velnor_actions_contract::{
-    CRATE_JOB_ID_PREFIX, Job, RequiredCheckMigration, RunnerSelection, WorkflowPolicy,
+    CRATE_JOB_ID_PREFIX, FRESHNESS_WORKFLOW_PATH, Job, RequiredCheckMigration, RunnerSelection,
+    WorkflowPolicy,
 };
 use velnor_actions_rust::{TaskGroup, TaskKind};
 use velnor_actions_workflow_renderer::action_pins;
@@ -69,6 +70,7 @@ fn workflow_section(out: &mut String, prep: &GenerationPreparation, jobs: &BTree
     push(out, &format!("  {ACTIONLINT_PATH}"));
     push(out, &format!("  {WORKFLOW_PATH}"));
     release_file_lines(out, prep);
+    freshness_file_lines(out, prep);
     push(
         out,
         &format!(
@@ -140,6 +142,13 @@ fn release_file_lines(out: &mut String, prep: &GenerationPreparation) {
         for path in RELEASE_TREE_PATHS {
             push(out, &format!("  {path}"));
         }
+    }
+}
+
+/// Freshness workflow path, exactly when `generate` emits it.
+fn freshness_file_lines(out: &mut String, prep: &GenerationPreparation) {
+    if crate::freshness_emit::freshness_enabled(prep) {
+        push(out, &format!("  {FRESHNESS_WORKFLOW_PATH}"));
     }
 }
 

@@ -27,6 +27,7 @@ mod exclusive_write;
 mod extension_schemas;
 mod external_data;
 mod finalized;
+mod freshness_emit;
 mod generate;
 mod git_paths;
 mod init;

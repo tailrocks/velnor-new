@@ -12,6 +12,7 @@ mod impl_e2e_tools_save;
 mod impl_e2e_wiring;
 mod impl_final_orch;
 mod impl_fmt_scope;
+mod impl_freshness_emit;
 mod impl_gapc;
 mod impl_gate8_acquire;
 mod impl_gate8_e;

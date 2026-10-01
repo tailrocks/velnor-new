@@ -25,7 +25,8 @@
 #   --check-upstream   bounded read-only upstream probe: refetch each row's
 #                      latest stable release (10 s timeout and 512 KiB cap
 #                      per request) and fail stale pins and lookup failures.
-#                      Writes nothing; for the future scheduled job, not gating builds.
+#                      Writes nothing; run by the generated weekly
+#                      `.github/workflows/freshness.yml`, never gating builds.
 #   --with-advisories  run the live `cargo deny check advisories` scan
 #                      (180 s timeout) in addition to the deny-policy checks.
 set -euo pipefail
@@ -890,7 +891,7 @@ else:
     info_row("advisories", "live scan",
              "runs as the CI Cargo Deny job; --with-advisories runs it here")
 
-# --- Bounded read-only upstream probe (future scheduled job; writes nothing).
+# --- Bounded read-only upstream probe (weekly freshness.yml; writes nothing).
 FETCH_TIMEOUT = 10
 FETCH_CAP = 512 * 1024
 
