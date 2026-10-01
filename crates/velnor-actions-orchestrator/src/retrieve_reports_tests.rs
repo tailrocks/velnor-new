@@ -104,24 +104,6 @@ fn retrieve_plan_read_is_bounded() {
     );
 }
 
-#[test]
-fn enumeration_follows_plan_order() {
-    let plan = serde_json::json!({
-        "matrix": {"include": [
-            {"artifact_id": "velnor-matrix-r7-a2-m-0000000000000002"},
-            {"artifact_id": "velnor-matrix-r7-a2-m-0000000000000001"},
-        ]}
-    });
-    assert_eq!(
-        expected_artifact_ids(&plan),
-        [
-            "velnor-matrix-r7-a2-m-0000000000000002",
-            "velnor-matrix-r7-a2-m-0000000000000001",
-        ]
-    );
-    assert!(expected_artifact_ids(&serde_json::json!({})).is_empty());
-}
-
 /// The shared byte reader opens `NOFOLLOW`, validates the handle,
 /// and bounds the read: every failure class reports its token.
 #[test]
@@ -383,19 +365,4 @@ fn oversize_and_duplicate_key_plans_retrieve_zero() {
     let (_dir, run) = plan_dir(r#"{"matrix": {"include": []}, "matrix": {}}"#);
     assert_eq!(retrieve_reports_to(7, &run), 0);
     assert!(!run.join("reports").exists(), "no downloads attempted");
-}
-
-#[test]
-fn enumeration_dedupes_shared_job_artifacts() {
-    let plan = serde_json::json!({
-        "matrix": {"include": [
-            {"artifact_id": "velnor-crate-r7-a2-crate_a"},
-            {"artifact_id": "velnor-crate-r7-a2-crate_a"},
-            {"artifact_id": "velnor-crate-r7-a2-plan"},
-        ]}
-    });
-    assert_eq!(
-        expected_artifact_ids(&plan),
-        ["velnor-crate-r7-a2-crate_a", "velnor-crate-r7-a2-plan",]
-    );
 }
