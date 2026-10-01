@@ -81,3 +81,53 @@ fn detector_empty_under_exclusions() -> Outcome {
     assert!(discover_stack_candidates(&index).is_empty());
     Ok(())
 }
+
+#[test]
+fn units_convert_to_detector_records() {
+    use velnor_actions_contract::StackCandidate;
+    use velnor_actions_tofu::{detected_projects_for_units, manifest_for_unit_root};
+    let candidates = vec![
+        StackCandidate {
+            stack_id: STACK_ID.to_owned(),
+            unit_root: String::new(),
+        },
+        StackCandidate {
+            stack_id: STACK_ID.to_owned(),
+            unit_root: "infra".to_owned(),
+        },
+    ];
+    let projects = detected_projects_for_units(&candidates);
+    assert_eq!(projects.len(), 2);
+    assert_eq!(projects[0].stack_id, "tofu");
+    assert_eq!(projects[0].project_root, "");
+    assert_eq!(projects[0].manifest, "");
+    assert_eq!(projects[1].project_root, "infra");
+    assert_eq!(projects[1].manifest, "infra");
+    assert_eq!(manifest_for_unit_root(""), "");
+    assert_eq!(manifest_for_unit_root("infra"), "infra");
+}
+
+#[test]
+fn conversion_preserves_candidate_order() {
+    use velnor_actions_contract::StackCandidate;
+    use velnor_actions_tofu::detected_projects_for_units;
+    let candidates = vec![
+        StackCandidate {
+            stack_id: STACK_ID.to_owned(),
+            unit_root: "zebra".to_owned(),
+        },
+        StackCandidate {
+            stack_id: STACK_ID.to_owned(),
+            unit_root: "alpha".to_owned(),
+        },
+    ];
+    let projects = detected_projects_for_units(&candidates);
+    assert_eq!(projects[0].project_root, "zebra");
+    assert_eq!(projects[1].project_root, "alpha");
+}
+
+#[test]
+fn conversion_of_empty_is_empty() {
+    use velnor_actions_tofu::detected_projects_for_units;
+    assert!(detected_projects_for_units(&[]).is_empty());
+}

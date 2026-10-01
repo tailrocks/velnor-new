@@ -221,3 +221,64 @@ fn compiler_spec_versions_flip_the_digest() {
         );
     }
 }
+
+/// Minimal tofu proposal with `kind` and driver spellings.
+fn tofu_task(kind: &str) -> ProposedTask {
+    use std::collections::BTreeMap;
+    use std::ffi::OsString;
+    use velnor_actions_contract::{CachePolicy, IdentityInputs, ResourceClass, ResourceDemand};
+    ProposedTask {
+        task_id: format!("stack/tofu/root/{kind}/default"),
+        stack_id: "tofu".to_owned(),
+        component_id: "tofu:".to_owned(),
+        task_kind: kind.to_owned(),
+        configuration: "default".to_owned(),
+        depends_on: Vec::new(),
+        gated_by: Vec::new(),
+        reads: Vec::new(),
+        writes: Vec::new(),
+        outputs: Vec::new(),
+        resource: ResourceDemand {
+            class: ResourceClass::Compiler,
+            cpu_milli: None,
+            memory_mb: None,
+            needs_network: false,
+            service: None,
+        },
+        cache_policy: CachePolicy {
+            allow_compilation_reuse: false,
+            allow_task_reuse: false,
+        },
+        identity: IdentityInputs {
+            unit_id: String::new(),
+            unit_key: "root".to_owned(),
+            unit_path: String::new(),
+            project_root: ".".to_owned(),
+            target: "host".to_owned(),
+            features: Vec::new(),
+            flags: Vec::new(),
+            compile_driver: "tofu".to_owned(),
+            test_runner: "tofu".to_owned(),
+            environment: BTreeMap::new(),
+            declared_inputs: Vec::new(),
+            undeclared_reads: false,
+        },
+        payload: vec![OsString::from("tofu")],
+        display_name: String::new(),
+        uses_clock: false,
+        uses_random: false,
+        no_targets: false,
+        runner_profile: "default".to_owned(),
+    }
+}
+
+#[test]
+fn tofu_toolchain_pins_opentofu_alone() {
+    let inputs = toolchain_inputs_for(&tofu_task("validate"), &ToolCatalog::pinned())
+        .expect("tofu converts");
+    assert_eq!(inputs.tools, vec!["opentofu@1.13.1".to_owned()]);
+    assert!(inputs.components.is_empty());
+    assert_eq!(inputs.compile_driver, "tofu");
+    assert_eq!(inputs.test_runner, "tofu");
+    assert!(toolchain_id(&inputs).is_ok());
+}

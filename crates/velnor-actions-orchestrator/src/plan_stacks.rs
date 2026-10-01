@@ -34,6 +34,30 @@ pub(crate) fn stacks_section(out: &mut String, prep: &GenerationPreparation) {
     if let Some(note) = &prep.discovery.tofu_note {
         tofu_lines(out, note);
     }
+    let mut roots: Vec<String> = prep
+        .discovery
+        .statuses
+        .iter()
+        .filter_map(|status| match status {
+            DetectionStatus::Selected(project)
+                if project.stack_id == velnor_actions_tofu::STACK_ID =>
+            {
+                Some(if project.project_root.is_empty() {
+                    ".".to_owned()
+                } else {
+                    project.project_root.clone()
+                })
+            }
+            _ => None,
+        })
+        .collect();
+    if !roots.is_empty() {
+        roots.sort();
+        push(
+            out,
+            &format!("  Tofu: selected (roots: [{}])", roots.join(", ")),
+        );
+    }
     let crates = sorted_crates(prep);
     push(out, &format!("  Workspace crates: {}", crates.len()));
     for (name, manifest, detail) in &crates {

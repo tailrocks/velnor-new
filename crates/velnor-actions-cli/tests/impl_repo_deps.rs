@@ -71,6 +71,11 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
         // hand-rolled SHA-256 so release-pin comparison cannot drift from
         // the audited implementation); pure Rust, default features only.
         "sha2",
+        // Reviewed HCL structural parser for the tofu stack (T10, S8):
+        // `hcl` renames `hcl-rs` 0.19.8 (Q1 pre-qualified; MSRV
+        // compile-gated at 1.98.1); default features only, facade-owned
+        // byte/count/depth caps, no expression evaluation.
+        "hcl",
     ];
     for (dir, _) in MEMBERS {
         let body = manifest(dir)?;

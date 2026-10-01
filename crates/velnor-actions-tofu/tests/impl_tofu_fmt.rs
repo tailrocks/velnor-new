@@ -1,0 +1,127 @@
+//! Formatting-scope (S2) inclusion, exclusion, and per-root sets.
+use velnor_actions_tofu::fmt_scope::{
+    fmt_scope_for_root, fmt_set, is_excluded_name, is_fmt_file, under_hidden_dir,
+};
+
+/// Repo-relative path list from names.
+fn paths(names: &[&str]) -> Vec<String> {
+    names.iter().map(|name| (*name).to_owned()).collect()
+}
+
+#[test]
+fn inclusion_covers_s2_set_only() {
+    for name in [
+        "main.tf",
+        "main.tofu",
+        "terraform.tfvars",
+        "custom.tfvars",
+        "main.tftest.hcl",
+        "main.tofutest.hcl",
+    ] {
+        assert!(is_fmt_file(name), "{name}");
+    }
+    for name in [
+        "main.tf.json",
+        "main.tofu.json",
+        "custom.tofuvars",
+        "values.tfvars.json",
+        ".terraform.lock.hcl",
+        "README.md",
+        "main.tf.example",
+        "terraform.tfvars.example",
+    ] {
+        assert!(!is_fmt_file(name), "{name}");
+    }
+}
+
+#[test]
+fn bare_suffixes_never_format() {
+    for name in [".tf", ".tofu", ".tfvars", ".tftest.hcl", ".tofutest.hcl"] {
+        assert!(!is_fmt_file(name), "{name}");
+    }
+}
+
+#[test]
+fn exclusion_predicate_marks_dot_tilde_hash() {
+    assert!(is_excluded_name(".foo.tf"));
+    assert!(is_excluded_name("~draft.tf"));
+    assert!(is_excluded_name("#main.tf#"));
+    assert!(is_excluded_name("#"));
+    assert!(!is_excluded_name("main.tf"));
+    assert!(!is_excluded_name("#main.tf"));
+    assert!(!is_excluded_name("main.tf#"));
+    assert!(!is_excluded_name("a#b.tf"));
+}
+
+#[test]
+fn excluded_names_never_format() {
+    assert!(!is_fmt_file(".foo.tf"));
+    assert!(!is_fmt_file("~draft.tofu"));
+    assert!(!is_fmt_file("#main.tf#"));
+}
+
+#[test]
+fn hidden_dirs_excluded_at_any_depth() {
+    assert!(under_hidden_dir(".terraform/modules/x/main.tf"));
+    assert!(under_hidden_dir("infra/.cache/a.tfvars"));
+    assert!(!under_hidden_dir("infra/main.tf"));
+    assert!(!under_hidden_dir("main.tf"));
+}
+
+#[test]
+fn fmt_set_skips_hidden_dirs_and_json() {
+    let selected = fmt_set(&paths(&[
+        "main.tf",
+        ".terraform/modules/x/main.tf",
+        "infra/main.tofu.json",
+        "infra/vars.tfvars",
+    ]));
+    assert_eq!(selected, paths(&["infra/vars.tfvars", "main.tf"]));
+}
+
+#[test]
+fn fmt_set_is_sorted_and_precedence_free() {
+    let selected = fmt_set(&paths(&["main.tf", "main.tofu", "extra.tf"]));
+    assert_eq!(selected, paths(&["extra.tf", "main.tf", "main.tofu"]));
+}
+
+#[test]
+fn root_scope_covers_the_repo_recursively() {
+    let selected = fmt_scope_for_root(&paths(&["main.tf", "infra/a.tofu", "infra/deep/b.tf"]), "");
+    assert_eq!(
+        selected,
+        paths(&["infra/a.tofu", "infra/deep/b.tf", "main.tf"])
+    );
+}
+
+#[test]
+fn nested_scope_selects_its_subtree_only() {
+    let files = paths(&["main.tf", "infra/a.tofu", "infra/deep/b.tf", "other/c.tf"]);
+    assert_eq!(
+        fmt_scope_for_root(&files, "infra"),
+        paths(&["infra/a.tofu", "infra/deep/b.tf"])
+    );
+}
+
+#[test]
+fn scope_prefix_never_matches_siblings() {
+    let files = paths(&["infra2/a.tf", "infra/a.tf"]);
+    assert_eq!(fmt_scope_for_root(&files, "infra"), paths(&["infra/a.tf"]));
+}
+
+#[test]
+fn override_and_test_files_format() {
+    let selected = fmt_set(&paths(&[
+        "a_override.tf",
+        "override.tofu",
+        "check.tftest.hcl",
+        "check.tofutest.hcl",
+    ]));
+    assert_eq!(selected.len(), 4);
+}
+
+#[test]
+fn empty_selection_stays_empty() {
+    assert!(fmt_set(&[]).is_empty());
+    assert!(fmt_scope_for_root(&paths(&["main.tf.json"]), ".").is_empty());
+}

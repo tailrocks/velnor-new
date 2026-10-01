@@ -94,16 +94,19 @@ fn unregistered_stack_candidate_fails_closed() {
     assert!(err.to_string().contains("unregistered_stack"), "{err}");
 }
 
-/// T08: registered-but-behaviorless tofu candidates fail closed at dispatch.
+/// T10: registered tofu candidates convert to detector records.
 ///
-/// Tofu detection lands in T09; until then a tofu candidate converts
-/// nowhere and must error, never skip silently.
+/// The T09 pending arm is open: conversion is real (stack, root, and
+/// unit-root evidence path), never a silent skip.
 #[test]
-fn tofu_candidate_fails_closed_before_t09() {
+fn tofu_candidate_converts_to_project() {
     let candidate = StackCandidate {
         stack_id: "tofu".to_owned(),
         unit_root: String::new(),
     };
-    let err = detected_projects(std::slice::from_ref(&candidate)).expect_err("must fail");
-    assert!(err.to_string().contains("tofu_pending_t09"), "{err}");
+    let projects = detected_projects(std::slice::from_ref(&candidate)).expect("converts");
+    assert_eq!(projects.len(), 1);
+    assert_eq!(projects[0].stack_id, "tofu");
+    assert_eq!(projects[0].project_root, "");
+    assert_eq!(projects[0].manifest, "");
 }

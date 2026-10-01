@@ -1,10 +1,10 @@
-//! Tofu roots + evidence step (T09): configured candidates, plan notes.
+//! Tofu roots + evidence step (T09/T10): configured candidates, plan notes.
 //!
 //! Configured roots qualify against the checkout (grammar, canonical
-//! containment, effective config) and emit one candidate each; the
-//! T10+ conversion arms stay fail-closed downstream. Without a table,
-//! filename evidence classifies to a plan advisory (never a silent
-//! claim, never an auto-detection); dialect conflict is a hard error.
+//! containment, effective config) and emit one candidate each for the
+//! conversion arms. Without a table, filename plus E4 content
+//! evidence classifies to a plan advisory (never a silent claim,
+//! never an auto-detection); dialect conflict is a hard error.
 //! `stacks.ignore = ["tofu"]` suppresses emission, advisories, and
 //! conflict: ignoring is the explicit choice to skip the stack.
 
@@ -12,10 +12,13 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use velnor_actions_contract::{ContractError, FileIndex, StackCandidate, VelnorConfig};
-use velnor_actions_tofu::{EvidenceLevel, TofuNote, classify, plan_note, qualify_roots};
+use velnor_actions_tofu::{
+    EvidenceLevel, TofuNote, classify_with_contents, effective_set, plan_note, qualify_roots,
+};
 
 use crate::OrchestratorError;
 use crate::config::CONFIG_REL;
+use crate::safe_read::{RepoRead, read_repo_file};
 use crate::toolcheck::{TOOL_INPUT_PATHS, ToolInputCheck};
 
 /// Tofu step output: configured candidates plus an optional plan note.
@@ -46,7 +49,11 @@ pub(crate) fn qualify_tofu_step(
     if let Some(tofu) = &config.stacks.tofu {
         return qualify_configured(root, tofu, index, ignored);
     }
-    let evidence = classify(index.files(), &mise_toml_values(tool_checks));
+    let evidence = classify_with_contents(
+        index.files(),
+        &config_contents(root, index),
+        &mise_toml_values(tool_checks),
+    );
     if evidence.level == EvidenceLevel::Conflict && !ignored {
         return Err(OrchestratorError::Detection {
             problem: format!("tofu_dialect_conflict:{}", evidence.signals.join(",")),
@@ -93,6 +100,25 @@ fn map_roots_error(err: ContractError) -> OrchestratorError {
             problem: other.to_string(),
         },
     }
+}
+
+/// Bounded text of effective config files for E4 content signals.
+///
+/// Capped in count and bytes; unreadable entries contribute no
+/// signals (no table, no claim).
+fn config_contents(root: &Path, index: &FileIndex) -> BTreeMap<String, String> {
+    let mut contents = BTreeMap::new();
+    for path in effective_set(index.files())
+        .iter()
+        .take(velnor_actions_tofu::MAX_FILES_PER_UNIT)
+    {
+        if let Ok(RepoRead::Text(text)) =
+            read_repo_file(root, path, velnor_actions_tofu::MAX_FILE_BYTES)
+        {
+            contents.insert(path.clone(), text);
+        }
+    }
+    contents
 }
 
 /// Flattened `mise.toml` values (empty when missing or malformed).

@@ -290,14 +290,14 @@ pub(crate) fn lane_id_for(task: &ProposedTask, workspace_id: &str) -> String {
 
 /// Toolchain inputs with exact component evidence, never `unreported`.
 ///
-/// Rust-only: hardcodes the Rust/MBX/Nextest pinned tools. A future
-/// stack gets its own toolchain/format-identity path and dispatch arm;
-/// it must never reuse this function or [`cache_format_id_for`]. Tofu
-/// is registered but behaviorless until T09, so tofu tasks fail closed.
+/// Rust hardcodes the Rust/MBX/Nextest pinned tools; tofu pins
+/// `opentofu` alone with no subcomponents (providers resolve
+/// per-root in a later task). Neither stack may reuse the other's
+/// path or [`cache_format_id_for`].
 ///
 /// # Errors
 ///
-/// Returns [`ContractError`] for proposals outside the rust stack.
+/// Returns [`ContractError`] for proposals outside a registered stack.
 pub(crate) fn toolchain_inputs_for(
     task: &ProposedTask,
     catalog: &ToolCatalog,
@@ -305,7 +305,14 @@ pub(crate) fn toolchain_inputs_for(
     match Stack::require_known(&task.stack_id)? {
         Stack::Rust => {}
         Stack::Tofu => {
-            return Err(ContractError::identity("stack_id", "tofu_pending_t09"));
+            let mut specs = catalog.tool_specs(&[PinnedTool::Opentofu]);
+            specs.sort();
+            return Ok(ToolchainInputs {
+                tools: specs,
+                components: Vec::new(),
+                compile_driver: task.identity.compile_driver.clone(),
+                test_runner: task.identity.test_runner.clone(),
+            });
         }
     }
     let needs = tool_needs(&task.identity.compile_driver, &task.identity.test_runner);
