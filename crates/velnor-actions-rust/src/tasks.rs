@@ -11,7 +11,7 @@ pub use crate::argv::{
     EntryMetadata, cargo_payload_argv, cargo_payload_with_profile, entry_metadata, evidence_id,
     parse_rerun_changed, require_nextest_for_shards, shard_task_id, shards_allowed,
 };
-pub use crate::task_identity::{DigestSlot, ExtensionInputs, RustTaskIdentityExtension};
+pub use crate::task_identity::{DigestSlot, ExtensionInputs, RustTaskIdentityExtension, SlotState};
 
 /// Rust task kinds derived per package.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

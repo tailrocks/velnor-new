@@ -2,8 +2,8 @@
 
 use velnor_actions_contract::cachekey::stack_extension_id;
 use velnor_actions_rust::tasks::{
-    DigestSlot, ExtensionInputs, RustTaskIdentityExtension, TaskKind, parse_rerun_changed,
-    require_nextest_for_shards, shard_task_id, shards_allowed,
+    DigestSlot, ExtensionInputs, RustTaskIdentityExtension, SlotState, TaskKind,
+    parse_rerun_changed, require_nextest_for_shards, shard_task_id, shards_allowed,
 };
 use velnor_actions_rust::{CompileDriver, TestRunner};
 
@@ -23,11 +23,13 @@ fn extension() -> RustTaskIdentityExtension {
         test_runner: TestRunner::CargoNextest,
         config_digest: velnor_actions_contract::digest_b3(b"config"),
         nextest_digest: Some(velnor_actions_contract::digest_b3(b"nextest")),
+        nextest_state: SlotState::Known,
         nextest_slot: DigestSlot::Known(velnor_actions_contract::digest_b3(b"nextest")),
         kind: "nextest".to_owned(),
         task_kind: TaskKind::Nextest,
         undeclared_reads: false,
         lock_digest: None,
+        lock_state: SlotState::Unknown,
         lock_slot: DigestSlot::Unknown("unprobed".to_owned()),
         archive: None,
         rerun_inputs: Vec::new(),
@@ -38,18 +40,55 @@ fn extension() -> RustTaskIdentityExtension {
 #[test]
 fn extension_serializes_and_gates_reuse() {
     let ext = extension();
-    assert!(ext.reuse_eligible().is_ok());
-    let wrapped = ext.to_stack_extension();
+    // Unknown lock slot blocks reuse and coverage until resolved.
+    let err = ext.reuse_eligible().expect_err("unknown lock blocks reuse");
+    assert!(
+        err.to_string().contains("unresolved_input:lockfile"),
+        "{err}"
+    );
+    assert!(ext.coverage_eligible().is_err());
+    assert!(ext.conservative_execution_required());
+    let resolved = RustTaskIdentityExtension {
+        lock_digest: Some(velnor_actions_contract::digest_b3(b"lock")),
+        lock_state: SlotState::Known,
+        lock_slot: DigestSlot::Known(velnor_actions_contract::digest_b3(b"lock")),
+        ..ext
+    };
+    assert!(resolved.reuse_eligible().is_ok());
+    assert!(resolved.coverage_eligible().is_ok());
+    assert!(!resolved.conservative_execution_required());
+    let wrapped = resolved.to_stack_extension();
     assert_eq!(wrapped.schema, "rust-task-identity-v1");
     assert!(stack_extension_id(&wrapped).is_ok());
     let dirty = RustTaskIdentityExtension {
         undeclared_reads: true,
-        ..ext
+        ..resolved
     };
     assert!(
         dirty.reuse_eligible().is_err(),
         "undeclared reads disable reuse"
     );
+}
+
+#[test]
+fn slot_states_survive_serialization_distinctly() {
+    let ext = extension();
+    let value = serde_json::to_value(&ext).expect("serialize");
+    assert_eq!(value["lock_state"], "unknown");
+    assert_eq!(value["nextest_state"], "known");
+    // Unknown and proven-absent share `lock_digest: null` but differ in
+    // state, so downstream readers never conflate ignorance with absence.
+    let absent = RustTaskIdentityExtension {
+        lock_state: SlotState::AbsentProven,
+        lock_slot: DigestSlot::AbsentProven("not_found:Cargo.lock".to_owned()),
+        ..extension()
+    };
+    let absent_value = serde_json::to_value(&absent).expect("serialize");
+    assert_eq!(absent_value["lock_digest"], serde_json::Value::Null);
+    assert_eq!(absent_value["lock_state"], "absent_proven");
+    assert_ne!(value["lock_state"], absent_value["lock_state"]);
+    assert!(absent.reuse_eligible().is_ok());
+    assert!(absent.coverage_eligible().is_ok());
 }
 
 #[test]
@@ -191,6 +230,50 @@ fn cargo_test_profiles_never_carry_archives() {
         Some("stack/rust/root/build/default".to_owned()),
         "nextest archive names its source build"
     );
+}
+
+#[test]
+fn unknown_nextest_config_blocks_nextest_only() {
+    let targets = vec!["lib".to_owned()];
+    let features = vec!["default".to_owned()];
+    let declared: Vec<String> = Vec::new();
+    let mut inputs = constructor_inputs(&targets, &features, &declared);
+    inputs.lock_digest = DigestSlot::Known("lock".to_owned());
+    inputs.nextest_digest = DigestSlot::Unknown("unprobed".to_owned());
+    inputs.kind = TaskKind::Nextest;
+    let nextest = RustTaskIdentityExtension::for_task(&inputs);
+    let err = nextest.reuse_eligible().expect_err("nextest config blocks");
+    assert!(
+        err.to_string().contains("unresolved_input:nextest_config"),
+        "{err}"
+    );
+    assert!(nextest.coverage_eligible().is_err());
+    let mut cargo = inputs.clone();
+    cargo.kind = TaskKind::Test;
+    cargo.runner = TestRunner::CargoTest;
+    let test = RustTaskIdentityExtension::for_task(&cargo);
+    assert!(test.reuse_eligible().is_ok());
+    assert!(test.coverage_eligible().is_ok());
+}
+
+#[test]
+fn unbound_archive_source_reports_without_blocking() {
+    // Production never populates `archive_source` and binds archives
+    // through `check_archive_identity_with_source`; the inventory
+    // reports the gap but the gates must not refuse every Nextest
+    // `Build` for it (see `known_lockfile_covers...` orchestration).
+    let targets = vec!["lib".to_owned()];
+    let features = vec!["default".to_owned()];
+    let declared: Vec<String> = Vec::new();
+    let mut inputs = constructor_inputs(&targets, &features, &declared);
+    inputs.kind = TaskKind::Build;
+    inputs.runner = TestRunner::CargoNextest;
+    inputs.archive_source = None;
+    let build = RustTaskIdentityExtension::for_task(&inputs);
+    assert!(build.archive.is_none());
+    assert!(build.reuse_eligible().is_ok());
+    assert!(build.coverage_eligible().is_ok());
+    assert!(!build.conservative_execution_required());
 }
 
 #[test]
