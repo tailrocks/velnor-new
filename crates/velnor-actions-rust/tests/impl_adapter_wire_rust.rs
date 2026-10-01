@@ -1,14 +1,15 @@
 //! Adapter-wire cases: extension slots, payload argv/env, gates, fmt scope,
 //! derive signals, consumption, and index modes (F1R/F2 rust halves).
-use velnor_actions_contract::{ContractError, digest_b3, validate_rust_extension};
+use velnor_actions_contract::{
+    ContractError, IndexMode, build_index_from_tracked, digest_b3, validate_rust_extension,
+};
 use velnor_actions_rust::tasks::{
     DigestSlot, ExtensionInputs, RustTaskIdentityExtension, TaskGroup, TaskKind, cargo_payload_argv,
 };
 use velnor_actions_rust::{
-    CompileDriver, DeriveInputs, GroupExtensionInputs, IndexMode, NextestProfile, PackageRecord,
+    CompileDriver, DeriveInputs, GroupExtensionInputs, NextestProfile, PackageRecord,
     ProfileSource, RUSTDOCFLAGS_ENV, RustExecutionProfile, TargetRecord, TestRunner,
-    build_index_from_tracked, cargo_payload_env, derive_task_groups,
-    derive_workspace_fmt_if_explicit,
+    cargo_payload_env, derive_task_groups, derive_workspace_fmt_if_explicit,
 };
 
 fn target(kind: &str) -> TargetRecord {

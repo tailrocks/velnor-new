@@ -6,7 +6,7 @@
 
 use std::path::Path;
 
-use crate::index::{FileIndex, IndexError, build_index_from_list};
+use super::index::{FileIndex, IndexError, build_index_from_list};
 
 /// Which caller-enumerated file lists enter the index.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

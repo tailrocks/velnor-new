@@ -7,7 +7,7 @@
 pub(crate) mod reuse_stages;
 
 use velnor_actions_contract::{
-    ObligationDecision, PlanGenerator, WorkflowEvent, digest_b3, validate_digest,
+    ObligationDecision, PlanGenerator, ProposedTask, WorkflowEvent, digest_b3, validate_digest,
 };
 use velnor_actions_mise::{
     ArchiveIdentityInputs, NextestArchive, NextestDriver, PinnedTool, ReuseQualification,
@@ -18,11 +18,11 @@ use velnor_actions_mise::{
     restore::MissReason,
     reuse::{ReusePlan, plan_reuse},
 };
-use velnor_actions_rust::{TaskGroup, TaskKind};
+use velnor_actions_rust::{CompileDriver, is_nextest_kind};
 
 use self::reuse_stages::{ExpectedReuseIdentity, ObservedRestoreMeta, verify_reused_pipeline};
 use crate::{OrchestratorError, internal::internal};
-/// Wiring inputs for one group: event plus generator identity.
+/// Wiring inputs for one task: event plus generator identity.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct GroupWire<'a> {
     pub(crate) event: WorkflowEvent,
@@ -44,14 +44,14 @@ pub(crate) fn reuse_event_name(event: WorkflowEvent) -> &'static str {
     }
 }
 
-/// Qualification for one group: kind plus event plus adapter signals.
-pub(crate) fn reuse_qualification(group: &TaskGroup, event: WorkflowEvent) -> ReuseQualification {
-    let mut qualification = ReuseQualification::new(group.kind.as_str(), reuse_event_name(event));
+/// Qualification for one task: kind plus event plus adapter signals.
+pub(crate) fn reuse_qualification(task: &ProposedTask, event: WorkflowEvent) -> ReuseQualification {
+    let mut qualification = ReuseQualification::new(&task.task_kind, reuse_event_name(event));
     for (flag, signal) in [
-        (group.uses_network, ReuseSignal::Network),
-        (group.uses_clock, ReuseSignal::Clock),
-        (group.uses_random, ReuseSignal::Random),
-        (group.undeclared_reads, ReuseSignal::UndeclaredState),
+        (task.resource.needs_network, ReuseSignal::Network),
+        (task.uses_clock, ReuseSignal::Clock),
+        (task.uses_random, ReuseSignal::Random),
+        (task.identity.undeclared_reads, ReuseSignal::UndeclaredState),
     ] {
         if flag {
             qualification = qualification.with_signal(signal);
@@ -86,14 +86,14 @@ impl ReuseOutcome {
         Self::execute_with(reason.to_owned(), None)
     }
 }
-/// Decide reuse eligibility for one group (REUSE-1/6/7, PAR-3.4).
+/// Decide reuse eligibility for one task (REUSE-1/6/7, PAR-3.4).
 /// Plan time never grants reuse: merge-time evidence required, so eligible
-/// groups execute with `no_entry` and task-cache stays disabled. The
+/// tasks execute with `no_entry` and task-cache stays disabled. The
 /// validated input digest is recorded on the outcome so the persisted
 /// obligation carries the exact value the merge-time live digest must
 /// still equal (same-path source edits flip the live digest and reject).
 pub(crate) fn plan_reuse_outcome(
-    group: &TaskGroup,
+    task: &ProposedTask,
     event: WorkflowEvent,
     availability: ToolAvailability,
     toolchain_id: &str,
@@ -123,7 +123,7 @@ pub(crate) fn plan_reuse_outcome(
     }
     let mode = mode_for_event(reuse_event_name(event))
         .map_err(|err| internal(&format!("reuse_mode_rejected:{err}")))?;
-    match plan_reuse(availability, &reuse_qualification(group, event), mode) {
+    match plan_reuse(availability, &reuse_qualification(task, event), mode) {
         ReusePlan::Reuse(_) => Ok(ReuseOutcome::execute_with(
             MissReason::NO_ENTRY.as_str().to_owned(),
             recorded,
@@ -141,7 +141,7 @@ fn parse_shard_suffix(task_id: &str) -> Option<(u32, u32)> {
     Some((index, count))
 }
 
-/// Archive-gate verdict for one group.
+/// Archive-gate verdict for one task.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ArchiveGate {
     /// No archive to verify, or the archive identity verified.
@@ -152,31 +152,31 @@ pub(crate) enum ArchiveGate {
 
 /// Archive gate with an explicit content-bound source digest.
 ///
-/// Sharded Nextest groups clear only on a content-bound source; unbound
+/// Sharded Nextest tasks clear only on a content-bound source; unbound
 /// sources refuse the task (execute with reason) instead of aborting
 /// the plan.
 pub(crate) fn check_archive_identity_with_source(
-    group: &TaskGroup,
+    task: &ProposedTask,
     toolchain_id: &str,
     platform_id: &str,
     config_digest: &str,
     source_digest: Option<&str>,
 ) -> Result<ArchiveGate, OrchestratorError> {
-    if group.kind != TaskKind::Nextest {
+    if !is_nextest_kind(&task.task_kind) {
         return Ok(ArchiveGate::Clear);
     }
-    if !group.task_id.contains("/shard-") {
+    if !task.task_id.contains("/shard-") {
         return Ok(ArchiveGate::Clear);
     }
-    if parse_shard_suffix(&group.task_id).is_none() {
+    if parse_shard_suffix(&task.task_id).is_none() {
         return Err(internal(&format!(
             "malformed_shard_suffix:{}",
-            group.task_id
+            task.task_id
         )));
     }
-    let driver = match group.compile_driver {
-        velnor_actions_rust::CompileDriver::Cargo => NextestDriver::Cargo,
-        velnor_actions_rust::CompileDriver::Mbx => NextestDriver::Mbx,
+    let driver = match CompileDriver::parse(&task.identity.compile_driver)? {
+        CompileDriver::Cargo => NextestDriver::Cargo,
+        CompileDriver::Mbx => NextestDriver::Mbx,
     };
     let marker = digest_b3(crate::internal_plan::snapshot::UNKNOWN_ARCHIVE_SOURCE.as_bytes());
     let Some(source) =
@@ -184,21 +184,21 @@ pub(crate) fn check_archive_identity_with_source(
     else {
         return Ok(ArchiveGate::SourceUnbound);
     };
-    let target = (group.target != "host").then_some(group.target.as_str());
+    let target = (task.identity.target != "host").then_some(task.identity.target.as_str());
     let archive = NextestArchive::with_profile(
         driver,
-        &group.package_name,
-        &group.features,
+        &task.display_name,
+        &task.identity.features,
         target,
-        group.nextest_profile.as_str(),
+        &task.runner_profile,
     )
     .map_err(|err| internal(&format!("archive_inputs_rejected:{err}")))?;
     let catalog = ToolCatalog::pinned();
     let inputs = ArchiveIdentityInputs {
         source_digest: source,
-        profile: &group.configuration,
+        profile: &task.configuration,
         toolchain_id,
-        runtime: group.compile_driver.as_str(),
+        runtime: &task.identity.compile_driver,
         test_runner: catalog.version(PinnedTool::Nextest),
         format: "tar.zst",
         platform_id,

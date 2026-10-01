@@ -5,8 +5,9 @@ use std::path::Path;
 use serde_json::json;
 
 use crate::support::{Outcome, TempDir};
+use velnor_actions_contract::reverse_closure;
 use velnor_actions_rust::{
-    DepKind, LocalEdge, MetadataError, dedupe_workspaces, parse_metadata_json, reverse_closure,
+    DepKind, LocalEdge, MetadataError, dedupe_workspaces, local_edge_pairs, parse_metadata_json,
 };
 
 /// Absolute manifest path text for `relative` under `root`.
@@ -249,13 +250,18 @@ fn reverse_closure_unions_base_and_head() {
     let base = vec![edge("b", "a"), edge("c", "b")];
     let head = vec![edge("c", "b")];
     let changed = BTreeSet::from(["a".to_owned()]);
-    let selected = reverse_closure(&base, &head, &changed);
+    let base_pairs = local_edge_pairs(&base);
+    let head_pairs = local_edge_pairs(&head);
+    let selected = reverse_closure(&base_pairs, &head_pairs, &changed);
     assert_eq!(
         selected,
         BTreeSet::from(["a".to_owned(), "b".to_owned(), "c".to_owned()])
     );
     let changed_leaf = BTreeSet::from(["c".to_owned()]);
-    assert_eq!(reverse_closure(&base, &head, &changed_leaf), changed_leaf);
+    assert_eq!(
+        reverse_closure(&base_pairs, &head_pairs, &changed_leaf),
+        changed_leaf
+    );
 }
 
 #[test]
@@ -269,8 +275,9 @@ fn chain_selects_transitive_consumers() {
     };
     let chain = vec![edge("b", "a"), edge("c", "b"), edge("d", "c")];
     let changed = BTreeSet::from(["a".to_owned()]);
+    let chain_pairs = local_edge_pairs(&chain);
     assert_eq!(
-        reverse_closure(&chain, &chain, &changed),
+        reverse_closure(&chain_pairs, &chain_pairs, &changed),
         BTreeSet::from([
             "a".to_owned(),
             "b".to_owned(),
@@ -281,8 +288,10 @@ fn chain_selects_transitive_consumers() {
     let renamed_base = vec![edge("b", "old-a")];
     let renamed_head = vec![edge("b", "new-a")];
     let renamed = BTreeSet::from(["old-a".to_owned(), "new-a".to_owned()]);
+    let renamed_base_pairs = local_edge_pairs(&renamed_base);
+    let renamed_head_pairs = local_edge_pairs(&renamed_head);
     assert_eq!(
-        reverse_closure(&renamed_base, &renamed_head, &renamed),
+        reverse_closure(&renamed_base_pairs, &renamed_head_pairs, &renamed),
         BTreeSet::from(["b".to_owned(), "new-a".to_owned(), "old-a".to_owned()]),
         "renamed edges select consumers from both graphs"
     );

@@ -6,6 +6,14 @@
 //! stops one byte past the bound so oversize files error instead of
 //! exhausting memory. Absent files report [`RepoRead::Absent`]; every
 //! other failure is an error, never silently masked as absent.
+//!
+//! Reads are handle-pinned: the final open uses `O_NOFOLLOW`, the open
+//! handle must `fstat` as a regular file, and bytes flow only through
+//! that handle, so a final-component swap after any pre-check fails
+//! the open instead of diverting the read (W6a-G2). Accepted residual:
+//! a parent component swapped between containment resolution and the
+//! open can divert the open itself; plan-time, same-user only, and the
+//! read still matches exactly what was opened.
 
 use std::fs;
 use std::io::Read;
@@ -76,11 +84,35 @@ pub(crate) fn read_event_file(path: &Path, max_bytes: u64) -> Result<String, Orc
     read_capped(path, max_bytes).map_err(|_| internal("unreadable_event_payload"))
 }
 
-/// Read one file, stopping one byte past `max_bytes`.
+/// Read one file through a pinned handle, stopping past `max_bytes`.
+///
+/// Opens with `O_NOFOLLOW`, requires the open handle to `fstat` as a
+/// regular file, and reads only through that handle. Open/fstat
+/// failures keep the historical [`std::io::Error`] strings; a symlink
+/// swapped in after the pre-checks refuses exactly like a pre-check
+/// symlink.
 fn read_capped(path: &Path, max_bytes: u64) -> Result<String, OrchestratorError> {
-    let file = fs::File::open(path).map_err(|err| unreadable(path, err.to_string()))?;
+    let fd = rustix::fs::open(
+        path,
+        rustix::fs::OFlags::RDONLY | rustix::fs::OFlags::NOFOLLOW | rustix::fs::OFlags::CLOEXEC,
+        rustix::fs::Mode::empty(),
+    )
+    .map_err(|err| {
+        if err == rustix::io::Errno::LOOP {
+            unsafe_path(path, "symlink_refused")
+        } else {
+            unreadable(path, std::io::Error::from(err).to_string())
+        }
+    })?;
+    let filetype = rustix::fs::fstat(&fd)
+        .map(|stat| rustix::fs::FileType::from_raw_mode(stat.st_mode))
+        .map_err(|err| unreadable(path, std::io::Error::from(err).to_string()))?;
+    if filetype != rustix::fs::FileType::RegularFile {
+        return Err(unreadable(path, "not_a_file"));
+    }
+    let file = fs::File::from(fd);
     let mut text = String::new();
-    file.take(max_bytes + 1)
+    file.take(max_bytes.saturating_add(1))
         .read_to_string(&mut text)
         .map_err(|err| unreadable(path, err.to_string()))?;
     if u64::try_from(text.len()).unwrap_or(u64::MAX) > max_bytes {
@@ -139,6 +171,42 @@ mod tests {
         let err = read_event_file(&outside.path().join("config.toml"), MAX_REPO_FILE_BYTES)
             .expect("outside payload reads");
         assert_eq!(err, "schema = 1\n");
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn repo_symlink_refused_names_reason() {
+        let dir = tempfile::TempDir::new().expect("temp root");
+        let target = dir.path().join("real.toml");
+        fs::write(&target, "schema = 1\n").expect("target");
+        let link = dir.path().join("link.toml");
+        std::os::unix::fs::symlink(&target, &link).expect("symlink");
+        let err = read_repo_file(dir.path(), "link.toml", MAX_REPO_FILE_BYTES)
+            .expect_err("symlink refused");
+        assert!(err.to_string().contains("symlink_refused"), "{err}");
+    }
+
+    #[test]
+    fn repo_directory_reports_not_a_file() {
+        let dir = tempfile::TempDir::new().expect("temp root");
+        fs::create_dir_all(dir.path().join("sub")).expect("subdir");
+        let err = read_repo_file(dir.path(), "sub", MAX_REPO_FILE_BYTES).expect_err("dir refused");
+        assert!(err.to_string().contains("not_a_file"), "{err}");
+    }
+
+    #[test]
+    fn repo_oversize_and_bad_utf8_stay_errors() {
+        let dir = tempfile::TempDir::new().expect("temp root");
+        fs::write(dir.path().join("big.txt"), "0123456789").expect("big");
+        let err = read_repo_file(dir.path(), "big.txt", 4).expect_err("oversize refused");
+        assert!(err.to_string().contains("oversize"), "{err}");
+        fs::write(dir.path().join("bad.txt"), [0xff, 0xfe]).expect("bad");
+        let err = read_repo_file(dir.path(), "bad.txt", MAX_REPO_FILE_BYTES)
+            .expect_err("bad utf-8 refused");
+        assert!(
+            !matches!(err, crate::OrchestratorError::UnsafePath { .. }),
+            "{err}"
+        );
     }
 
     #[test]

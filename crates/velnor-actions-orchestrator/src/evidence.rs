@@ -2,13 +2,14 @@
 
 use std::path::Path;
 
+use velnor_actions_contract::FileIndex;
 use velnor_actions_contract::{
     DeclaredCompileDriver, DeclaredTestRunner, RustStackConfig, is_generated_marker_line,
 };
 use velnor_actions_mise::{parse_cargo_wrapper, parse_nextest_config};
 use velnor_actions_rust::{
-    CompileDriver, EvidenceFile, FileIndex, MiseWrapperInput, NextestConfigInput, ProfileInputs,
-    TestRunner, WorkspaceRecord, detect_profile, is_generated_output,
+    CompileDriver, EvidenceFile, MiseWrapperInput, NextestConfigInput, ProfileInputs, TestRunner,
+    WorkspaceRecord, detect_profile, is_generated_output,
 };
 
 use crate::OrchestratorError;

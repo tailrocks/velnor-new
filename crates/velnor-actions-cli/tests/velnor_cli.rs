@@ -11,6 +11,10 @@ mod impl_cli_gate_preseed;
 mod impl_cli_init;
 #[path = "impl_cli_parity.rs"]
 mod impl_cli_parity;
+#[path = "impl_cli_parity_golden.rs"]
+mod impl_cli_parity_golden;
+#[path = "impl_cli_parity_golden_normalize.rs"]
+mod impl_cli_parity_golden_normalize;
 #[path = "impl_cli_protocol.rs"]
 mod impl_cli_protocol;
 #[path = "impl_cli_report.rs"]
