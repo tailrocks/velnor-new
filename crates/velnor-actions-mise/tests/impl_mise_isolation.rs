@@ -180,10 +180,14 @@ fn sentinel_credential_absent() -> Result<(), String> {
             "credential {key} must be absent:\n{text}"
         );
         if let Ok(value) = std::env::var(key) {
-            assert!(
-                !text.contains(&value),
-                "ambient {key} value must be absent:\n{text}"
-            );
+            // An empty ambient value carries no secret; `contains("")`
+            // is vacuously true, so only non-empty values are probed.
+            if !value.is_empty() {
+                assert!(
+                    !text.contains(&value),
+                    "ambient {key} value must be absent:\n{text}"
+                );
+            }
         }
     }
     assert!(
