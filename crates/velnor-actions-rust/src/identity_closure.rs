@@ -24,6 +24,48 @@ pub enum UnresolvedInput {
     RerunInputs,
 }
 
+impl UnresolvedInput {
+    /// Stable vocabulary word for error codes and logs.
+    #[must_use]
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Lockfile => "lockfile",
+            Self::NextestConfig => "nextest_config",
+            Self::ArchiveSource => "archive_source",
+            Self::RerunInputs => "rerun_inputs",
+        }
+    }
+
+    /// Whether this input blocks reuse and coverage decisions.
+    ///
+    /// Only [`UnresolvedInput::ArchiveSource`] reports without
+    /// blocking: production never populates `archive_source`
+    /// (`ExtensionBundle::inputs` hardcodes `None`) and binds
+    /// archives through the dedicated
+    /// `check_archive_identity_with_source` gate instead, so
+    /// treating it as blocking here would refuse every Nextest
+    /// `Build` unconditionally.
+    #[must_use]
+    pub fn blocks_gates(&self) -> bool {
+        !matches!(self, Self::ArchiveSource)
+    }
+}
+
+impl RustTaskIdentityExtension {
+    /// First gate-blocking unresolved input, in stable inventory order.
+    ///
+    /// The single enforcement point behind [`unresolved_inputs`]:
+    /// reuse and coverage gates call this instead of reimplementing
+    /// the slot checks, so the inventory and the gates cannot drift.
+    /// [`UnresolvedInput::blocks_gates`] names the blocking subset.
+    #[must_use]
+    pub fn first_blocking_input(&self) -> Option<UnresolvedInput> {
+        unresolved_inputs(self)
+            .into_iter()
+            .find(UnresolvedInput::blocks_gates)
+    }
+}
+
 /// Semantic inputs `ext` leaves unresolved, in stable order.
 ///
 /// Unknown means unobserved: the orchestrator resolves each against

@@ -242,12 +242,15 @@ fn step_conditions_serialize_as_if_with_upload_default()
     )?;
     let save_at = text.find("Save Cargo sources").expect("save step");
     assert!(
-        text[save_at..].starts_with("Save Cargo sources\n        if: github.event_name == 'push'"),
+        text[save_at..].starts_with(
+            "Save Cargo sources\n        if: success() && github.event_name == 'push'",
+        ),
         "save carries push-only if:\n{text}"
     );
     let check_at = text.find("- name: Check\n").expect("check step");
     assert!(
-        text[check_at..].starts_with("- name: Check\n        if: github.event_name == 'push'"),
+        text[check_at..]
+            .starts_with("- name: Check\n        if: success() && github.event_name == 'push'"),
         "shell condition serializes:\n{text}"
     );
     let plain_at = text.find("- name: Plain\n").expect("plain step");

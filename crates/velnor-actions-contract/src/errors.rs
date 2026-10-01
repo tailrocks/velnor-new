@@ -52,11 +52,15 @@ pub enum ContractError {
 
 impl ContractError {
     /// Build an identity validation error.
+    ///
+    /// The problem is sanitized ([`sanitize_error_detail`]): fail-closed
+    /// errors embed untrusted values (`unknown_conclusion:{value}`),
+    /// and raw newlines would let a hostile value forge log lines.
     #[must_use]
     pub fn identity(field: &'static str, problem: impl Into<String>) -> Self {
         Self::InvalidIdentity {
             field,
-            problem: problem.into(),
+            problem: sanitize_error_detail(&problem.into()),
         }
     }
 
@@ -82,6 +86,9 @@ impl ContractError {
     }
 
     /// Build a config validation error.
+    ///
+    /// The problem is sanitized like [`Self::identity`]: config values
+    /// (`bad_target:{target}`) are attacker-adjacent in PR flows.
     #[must_use]
     pub fn config(
         file: impl Into<String>,
@@ -91,9 +98,25 @@ impl ContractError {
         Self::Config {
             file: file.into(),
             key_path: key_path.into(),
-            problem: problem.into(),
+            problem: sanitize_error_detail(&problem.into()),
         }
     }
+}
+
+/// Strip log-forging content from one embedded error detail.
+///
+/// Removes ASCII control characters (including CR/LF/TAB) and caps
+/// the detail at 120 chars so a hostile value renders as one
+/// truncated line. Callers embedding untrusted values in
+/// non-`ContractError` problems (orchestrator/renderer errors) must
+/// route the value through this helper.
+#[must_use]
+pub fn sanitize_error_detail(value: &str) -> String {
+    value
+        .chars()
+        .filter(|c| !c.is_ascii_control())
+        .take(120)
+        .collect()
 }
 
 /// Extract the offending key from unknown-field prose, if present.
@@ -123,4 +146,41 @@ fn single_line(message: &str) -> String {
         .chars()
         .take(300)
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn identity_problems_render_as_one_truncated_line() {
+        let forged = "evil\n::notice::spoofed\r\nnext";
+        let err = ContractError::identity("conclusion", format!("unknown_conclusion:{forged}"));
+        let text = err.to_string();
+        assert!(!text.contains('\n') && !text.contains('\r'), "{text}");
+        assert!(
+            text.contains("unknown_conclusion:evil::notice::spoofednext"),
+            "{text}"
+        );
+        let err = ContractError::identity("field", "clean_code");
+        assert_eq!(err.to_string(), "invalid field: clean_code");
+    }
+
+    #[test]
+    fn long_problems_truncate_at_120_chars() {
+        let long = format!("prefix:{}", "v".repeat(200));
+        let err = ContractError::identity("field", long);
+        let text = err.to_string();
+        let problem = text.strip_prefix("invalid field: ").expect("prefix");
+        assert_eq!(problem.chars().count(), 120, "{text}");
+        assert!(problem.starts_with("prefix:vv"), "{text}");
+    }
+
+    #[test]
+    fn config_problems_sanitize_the_same_way() {
+        let err = ContractError::config("f.toml", "k", "bad_target:x\n forged");
+        let text = err.to_string();
+        assert!(!text.contains('\n'), "{text}");
+        assert!(text.contains("bad_target:x forged"), "{text}");
+    }
 }

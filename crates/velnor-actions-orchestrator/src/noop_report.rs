@@ -10,7 +10,7 @@
 
 use std::path::Path;
 
-use velnor_actions_contract::{NotSelectedReason, Plan};
+use velnor_actions_contract::{NotSelectedReason, Plan, validate_run_key};
 
 use crate::task_report::{entry_and_digest, single_task_aggregate, write_entry_reports};
 
@@ -88,8 +88,9 @@ pub(crate) fn noop_reason_present() -> Option<String> {
 ///
 /// # Errors
 ///
-/// Returns [`OrchestratorError::Internal`] for contradictory exits,
-/// digest mismatches, and the plan-resolution failures of the base op.
+/// Returns [`OrchestratorError::Internal`] for malformed run keys,
+/// contradictory exits, digest mismatches, and the plan-resolution
+/// failures of the base op.
 pub(crate) fn write_noop_report_to(
     run_key: &str,
     task_id: &str,
@@ -97,6 +98,7 @@ pub(crate) fn write_noop_report_to(
     request: &NoOpRequest,
     runner_temp: &Path,
 ) -> Result<usize, OrchestratorError> {
+    validate_run_key(run_key).map_err(internal_contract)?;
     if exit_code != 0 {
         return Err(internal("reason_with_failure"));
     }

@@ -276,8 +276,9 @@ fn c11_cache_saves_push_only_prs_and_forks_read_only() -> TestResult {
     let yaml = yaml_for(true)?;
     let save_at = yaml.find("- name: Save Cargo sources").ok_or("save step")?;
     assert!(
-        yaml[save_at..]
-            .starts_with("- name: Save Cargo sources\n        if: github.event_name == 'push'"),
+        yaml[save_at..].starts_with(
+            "- name: Save Cargo sources\n        if: success() && github.event_name == 'push'",
+        ),
         "save renders push-only if:\n{yaml}"
     );
     assert_eq!(
@@ -286,7 +287,8 @@ fn c11_cache_saves_push_only_prs_and_forks_read_only() -> TestResult {
         "exactly one save transport:\n{yaml}"
     );
     assert_eq!(
-        yaml.matches("if: github.event_name == 'push'").count(),
+        yaml.matches("if: success() && github.event_name == 'push'")
+            .count(),
         1,
         "the save gate appears exactly once:\n{yaml}"
     );

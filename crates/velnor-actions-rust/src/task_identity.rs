@@ -41,6 +41,32 @@ impl DigestSlot {
     pub fn is_unknown(&self) -> bool {
         matches!(self, Self::Unknown(_))
     }
+
+    /// Serializable discriminant of this slot.
+    #[must_use]
+    pub fn state(&self) -> SlotState {
+        match self {
+            Self::Known(_) => SlotState::Known,
+            Self::AbsentProven(_) => SlotState::AbsentProven,
+            Self::Unknown(_) => SlotState::Unknown,
+        }
+    }
+}
+
+/// Serializable discriminant of one [`DigestSlot`].
+///
+/// Evidence and reasons stay diagnostic-only (never serialized into
+/// the identity preimage); the state preserves the Unknown-vs-absence
+/// distinction that `Option<digest>` erases.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SlotState {
+    /// Content digest bound.
+    Known,
+    /// Proven absent, with evidence.
+    AbsentProven,
+    /// Unresolved; blocks reuse and coverage.
+    Unknown,
 }
 
 /// Typed Rust task-identity extension (cache §1); unknown schemas disable reuse.
@@ -74,6 +100,8 @@ pub struct RustTaskIdentityExtension {
     pub config_digest: String,
     /// `.config/nextest.toml` digest for Nextest profiles.
     pub nextest_digest: Option<String>,
+    /// Nextest-config slot state (serialized; keeps Unknown distinct).
+    pub nextest_state: SlotState,
     /// Typed Nextest-config slot (serialization keeps the digest slot).
     #[serde(skip_serializing)]
     pub nextest_slot: DigestSlot,
@@ -86,6 +114,8 @@ pub struct RustTaskIdentityExtension {
     pub undeclared_reads: bool,
     /// `Cargo.lock` digest, when the lockfile is available.
     pub lock_digest: Option<String>,
+    /// Lockfile slot state (serialized; keeps Unknown distinct).
+    pub lock_state: SlotState,
     /// Typed lockfile slot (serialization keeps the digest slot).
     #[serde(skip_serializing)]
     pub lock_slot: DigestSlot,
@@ -148,13 +178,23 @@ impl RustTaskIdentityExtension {
         }
     }
 
-    /// Reject reuse when build inputs are undeclared or dynamic.
+    /// Reject reuse when build inputs are undeclared or unresolved.
+    ///
+    /// Unresolved slots fail closed through the same inventory
+    /// [`unresolved_inputs`](crate::identity::unresolved_inputs) reports,
+    /// so the gate and the inventory cannot drift apart.
     /// # Errors
     pub fn reuse_eligible(&self) -> Result<(), ContractError> {
         if self.undeclared_reads {
             return Err(ContractError::identity(
                 "stack_extension",
                 "undeclared_inputs",
+            ));
+        }
+        if let Some(input) = self.first_blocking_input() {
+            return Err(ContractError::identity(
+                "stack_extension",
+                format!("unresolved_input:{}", input.as_str()),
             ));
         }
         Ok(())
@@ -188,11 +228,13 @@ impl RustTaskIdentityExtension {
             test_runner: inputs.runner,
             config_digest: inputs.config_digest.to_owned(),
             nextest_digest: inputs.nextest_digest.as_known().map(str::to_owned),
+            nextest_state: inputs.nextest_digest.state(),
             nextest_slot: inputs.nextest_digest.clone(),
             kind: inputs.kind.as_str().to_owned(),
             task_kind: inputs.kind,
             undeclared_reads: inputs.has_build_script && inputs.rerun_inputs.is_none(),
             lock_digest: inputs.lock_digest.as_known().map(str::to_owned),
+            lock_state: inputs.lock_digest.state(),
             lock_slot: inputs.lock_digest.clone(),
             archive,
             rerun_inputs: inputs.rerun_inputs.map_or_else(Vec::new, sorted_unique),

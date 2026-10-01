@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{CrateObligation, Step, StepKind};
+use velnor_actions_contract::{CrateObligation, Step, StepKind, sanitize_error_detail};
 use velnor_actions_mise::{
     ISOLATION_ENV, NO_AUTO_INSTALL_ENV, PREPARE_PINNED_TOOLS_STEP, PinnedTool, PreparePinnedTools,
     ToolCatalog, ToolHomes,
@@ -259,7 +259,10 @@ pub(crate) fn check_identity_env_contract(
 ) -> Result<(), OrchestratorError> {
     if identity.get(TASK_ID_ENV).map(String::as_str) != Some(task_id) {
         return Err(OrchestratorError::Contract {
-            problem: format!("obligation_identity_mismatch:{task_id}"),
+            problem: format!(
+                "obligation_identity_mismatch:{}",
+                sanitize_error_detail(task_id)
+            ),
         });
     }
     Ok(())

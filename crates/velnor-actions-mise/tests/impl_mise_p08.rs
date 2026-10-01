@@ -162,7 +162,7 @@ fn c9_pr_save_needs_action_support_and_forks_stay_read_only() {
     }
     assert_eq!(
         velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION,
-        "github.event_name == 'push'"
+        "success() && github.event_name == 'push'"
     );
     assert_eq!(
         velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION_EXPR,
@@ -214,6 +214,13 @@ fn c10b_trusted_save_authorizes_only_the_push_only_gate() {
     assert_eq!(
         gate,
         velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION
+    );
+    // Step-level `if:` replaces the default `success()`; without it the
+    // save would run after a failed producer and poison the trusted
+    // layer with failed output.
+    assert!(
+        gate.contains("success()"),
+        "emitted gate restates success(): {gate}"
     );
     let err = trust::authorize_trusted_save_for(true).expect_err("pr drift");
     assert!(err.to_string().contains("save_policy_drift"), "{err}");
