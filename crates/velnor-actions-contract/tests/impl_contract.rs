@@ -44,6 +44,7 @@ fn config_validation_reports_key_paths() {
                 custom_tasks: Vec::new(),
                 release: RustReleaseConfig::default(),
             }),
+            tofu: None,
         },
         discovery: DiscoveryConfig {
             exclude: vec!["vendor/**".to_owned()],
@@ -103,6 +104,7 @@ fn runner_label_uses_exact_catalog_match() {
         stacks: StacksConfig {
             ignore: vec![],
             rust: None,
+            tofu: None,
         },
         discovery: DiscoveryConfig { exclude: vec![] },
         actions: ActionsConfig::default(),
@@ -174,6 +176,7 @@ fn uppercase_rust_config_name_rejected_with_key_path() {
                 custom_tasks: Vec::new(),
                 release: RustReleaseConfig::default(),
             }),
+            tofu: None,
         },
         discovery: DiscoveryConfig { exclude: vec![] },
         actions: ActionsConfig::default(),
@@ -196,24 +199,19 @@ fn uppercase_rust_config_name_rejected_with_key_path() {
 fn actions_overrides_validate_allowlist_and_pin_shape() {
     use velnor_actions_contract::config::{ActionPinOverride, ActionsConfig};
     let sha = "3d3c42e5aac5ba805825da76410c181273ba90b1";
+    let pin = |sha: &str, version: &str| ActionPinOverride {
+        sha: sha.to_owned(),
+        version: version.to_owned(),
+    };
     let good = ActionsConfig {
-        overrides: BTreeMap::from([(
-            "actions/checkout".to_owned(),
-            ActionPinOverride {
-                sha: sha.to_owned(),
-                version: "v7.0.1".to_owned(),
-            },
-        )]),
+        overrides: BTreeMap::from([("actions/checkout".to_owned(), pin(sha, "v7.0.1"))]),
     };
     assert_eq!(good.validate("cfg"), Ok(()));
     assert_eq!(ActionsConfig::default().validate("cfg"), Ok(()));
     let alint = ActionsConfig {
         overrides: BTreeMap::from([(
             "asamarts/alint".to_owned(),
-            ActionPinOverride {
-                sha: "9f9d34ba0eae3888299b9e570f43338b0e7f2cdb".to_owned(),
-                version: "v0.16.1".to_owned(),
-            },
+            pin("9f9d34ba0eae3888299b9e570f43338b0e7f2cdb", "v0.16.1"),
         )]),
     };
     // Alint pin is policy-owned, not overridable (version-policy.md §2, GitHub Action defaults).
@@ -221,34 +219,17 @@ fn actions_overrides_validate_allowlist_and_pin_shape() {
         alint.validate("cfg"),
         Err(ContractError::Config { problem, .. }) if problem == "unknown_action"
     ));
-    for (action, pin, problem) in [
-        (
-            "bogus/action",
-            ActionPinOverride {
-                sha: sha.to_owned(),
-                version: "v1.2.3".to_owned(),
-            },
-            "unknown_action",
-        ),
+    for (action, override_pin, problem) in [
+        ("bogus/action", pin(sha, "v1.2.3"), "unknown_action"),
         (
             "actions/checkout",
-            ActionPinOverride {
-                sha: "abc123".to_owned(),
-                version: "v7.0.1".to_owned(),
-            },
+            pin("abc123", "v7.0.1"),
             "ref_must_be_full_sha",
         ),
-        (
-            "actions/checkout",
-            ActionPinOverride {
-                sha: sha.to_owned(),
-                version: "v7".to_owned(),
-            },
-            "invalid_version:v7",
-        ),
+        ("actions/checkout", pin(sha, "v7"), "invalid_version:v7"),
     ] {
         let config = ActionsConfig {
-            overrides: BTreeMap::from([(action.to_owned(), pin)]),
+            overrides: BTreeMap::from([(action.to_owned(), override_pin)]),
         };
         let Err(velnor_actions_contract::ContractError::Config {
             key_path,

@@ -7,6 +7,7 @@ mod discovery;
 mod release;
 mod resources;
 mod stacks;
+mod tofu;
 mod workflow;
 
 pub use actions::{ActionPinOverride, ActionsConfig, OVERRIDABLE_ACTIONS};
@@ -19,6 +20,7 @@ pub use stacks::{
     DeclaredCompileDriver, DeclaredTestRunner, RustConfiguration, RustStackConfig, StacksConfig,
     is_valid_custom_task_name, is_valid_feature_name, is_valid_rust_target,
 };
+pub use tofu::{RootProblem, TofuStackConfig, Utf8RepoRelDir};
 pub use workflow::{
     GeneratorValidation, LATEST_RUNNER_LABEL, RUNNER_LABEL_CATALOG, RunnerSelection,
     VelnorSupportWorkflow, WorkflowConfig, WorkflowPolicy,

@@ -72,6 +72,11 @@ pub struct Discovery {
     /// Selection broadens explicitly on this: a skipped name cannot be
     /// attributed to an owning package.
     pub skipped_non_utf8: bool,
+    /// Tofu plan note: ignore marker or table-less evidence advisory.
+    ///
+    /// `None` when the tofu table is absent and no evidence exists, or
+    /// when configured roots proceed to the pending conversion arms.
+    pub tofu_note: Option<velnor_actions_tofu::TofuNote>,
 }
 
 /// Run file index, detection, inventory, profiles, and task derivation.
@@ -90,6 +95,9 @@ pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, 
         previous = stack_id;
         candidates.extend(detect(&index));
     }
+    let tool_checks = check_tool_inputs(root);
+    let tofu_step = crate::discover_tofu::qualify_tofu_step(root, config, &index, &tool_checks)?;
+    candidates.extend(tofu_step.candidates);
     let projects = detected_projects(&candidates)?;
     check_duplicates(&projects).map_err(|err| OrchestratorError::Detection {
         problem: err.to_string(),
@@ -104,7 +112,6 @@ pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, 
     let workspaces = plan_workspaces(root, &index, &statuses, inventories, config)?;
     qualify_workspaces(root, &workspaces)?;
     let (proposals, fallbacks) = derive_all(config, &index, &workspaces)?;
-    let tool_checks = check_tool_inputs(root);
     let clippy_memory = clippy_memory_groups(&proposals);
     let recommendations = collect_recommendations(&index, &workspaces, &tool_checks);
     let (consumer_manifest_json, consumer_manifest_stand_in) = consumer_manifest_text(root)?;
@@ -119,6 +126,7 @@ pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, 
         consumer_manifest_json,
         consumer_manifest_stand_in,
         skipped_non_utf8,
+        tofu_note: tofu_step.note,
     })
 }
 

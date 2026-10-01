@@ -33,6 +33,7 @@ pub(crate) fn valid_config() -> VelnorConfig {
         stacks: StacksConfig {
             ignore: vec![],
             rust: None,
+            tofu: None,
         },
         discovery: DiscoveryConfig { exclude: vec![] },
         actions: ActionsConfig::default(),

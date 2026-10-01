@@ -146,6 +146,7 @@ pub(super) fn discovery_with(task_ids: &[&str]) -> Discovery {
         consumer_manifest_json: None,
         consumer_manifest_stand_in: false,
         skipped_non_utf8: false,
+        tofu_note: None,
     }
 }
 

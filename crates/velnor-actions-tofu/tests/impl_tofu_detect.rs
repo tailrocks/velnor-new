@@ -37,7 +37,7 @@ fn require_known_admits_both_stacks() {
 }
 
 #[test]
-fn detector_emits_no_candidates_before_t09() -> Outcome {
+fn detector_emits_no_candidates_from_markers_alone() -> Outcome {
     let dir = TempDir::create("tofu-detect-empty")?;
     dir.write("main.tf", "resource \"null_resource\" \"demo\" {}\n")?;
     dir.write("nested/stacks.tf", "")?;

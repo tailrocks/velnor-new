@@ -41,10 +41,10 @@ pub use canonical::{
 pub use closure::{ClosureBuilder, Provenance, TaskInputClosure};
 pub use config::{
     DeclaredCompileDriver, DeclaredTestRunner, DiscoveryConfig, GeneratorValidation,
-    ResourcesConfig, RunnerSelection, RustConfiguration, RustStackConfig, ShardTimingEvidence,
-    StacksConfig, TestShardingConfig, VelnorConfig, VelnorSupportWorkflow, WorkflowConfig,
-    WorkflowPolicy, is_valid_custom_task_name, is_valid_feature_name, is_valid_rust_target,
-    validate_shard_changes_need_evidence,
+    ResourcesConfig, RootProblem, RunnerSelection, RustConfiguration, RustStackConfig,
+    ShardTimingEvidence, StacksConfig, TestShardingConfig, TofuStackConfig, Utf8RepoRelDir,
+    VelnorConfig, VelnorSupportWorkflow, WorkflowConfig, WorkflowPolicy, is_valid_custom_task_name,
+    is_valid_feature_name, is_valid_rust_target, validate_shard_changes_need_evidence,
 };
 pub use discover::{
     BUILTIN_EXCLUSIONS, DETECTION_SCHEMA, DetectError, DetectedProject, DetectionStatus,
