@@ -123,17 +123,26 @@ pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, 
 }
 
 /// Detector registry (stack id, record schema, implementation), ascending.
-/// V1 registers rust; schema 1 is `{ stack_id, project_root, manifest }`.
-const DETECTORS: [DetectorEntry; 1] = [(
-    Stack::Rust.id(),
-    DETECTION_SCHEMA,
-    velnor_actions_rust::discover_stack_candidates,
-)];
+/// V1 registers rust and tofu; schema 1 is `{ stack_id, project_root, manifest }`.
+const DETECTORS: [DetectorEntry; 2] = [
+    (
+        Stack::Rust.id(),
+        DETECTION_SCHEMA,
+        velnor_actions_rust::discover_stack_candidates,
+    ),
+    (
+        Stack::Tofu.id(),
+        DETECTION_SCHEMA,
+        velnor_actions_tofu::discover_stack_candidates,
+    ),
+];
 
 /// Convert neutral candidates to detected projects via closed dispatch.
 ///
 /// Candidates group by stack in first-seen order; each stack converts
 /// its own units. Single-stack runs preserve candidate order exactly.
+/// Tofu is registered but candidate-free until T09, so a tofu
+/// candidate here fails closed instead of converting silently.
 fn detected_projects(
     candidates: &[StackCandidate],
 ) -> Result<Vec<DetectedProject>, OrchestratorError> {
@@ -141,6 +150,11 @@ fn detected_projects(
     for candidate in candidates {
         match Stack::require_known(&candidate.stack_id) {
             Ok(Stack::Rust) => rust.push(candidate.clone()),
+            Ok(Stack::Tofu) => {
+                return Err(OrchestratorError::Detection {
+                    problem: "tofu_pending_t09".to_owned(),
+                });
+            }
             Err(err) => {
                 return Err(OrchestratorError::Detection {
                     problem: err.to_string(),

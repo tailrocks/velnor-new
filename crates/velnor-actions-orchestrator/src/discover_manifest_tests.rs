@@ -87,9 +87,23 @@ fn oversize_file_errors() {
 #[test]
 fn unregistered_stack_candidate_fails_closed() {
     let candidate = StackCandidate {
-        stack_id: "tofu".to_owned(),
+        stack_id: "cobol".to_owned(),
         unit_root: String::new(),
     };
     let err = detected_projects(std::slice::from_ref(&candidate)).expect_err("must fail");
     assert!(err.to_string().contains("unregistered_stack"), "{err}");
+}
+
+/// T08: registered-but-behaviorless tofu candidates fail closed at dispatch.
+///
+/// Tofu detection lands in T09; until then a tofu candidate converts
+/// nowhere and must error, never skip silently.
+#[test]
+fn tofu_candidate_fails_closed_before_t09() {
+    let candidate = StackCandidate {
+        stack_id: "tofu".to_owned(),
+        unit_root: String::new(),
+    };
+    let err = detected_projects(std::slice::from_ref(&candidate)).expect_err("must fail");
+    assert!(err.to_string().contains("tofu_pending_t09"), "{err}");
 }

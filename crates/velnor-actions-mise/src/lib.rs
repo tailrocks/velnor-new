@@ -42,8 +42,8 @@ pub use cache::{
     verify_artifact_digest,
 };
 pub use catalog::{
-    ACTIONLINT_VERSION, GH_VERSION, MISE_VERSION, MR_BOXINGTON_VERSION, PinnedTool,
-    RUST_TARGET_TRIPLE, RUST_VERSION, SHELLCHECK_VERSION, ToolCatalog, ZIZMOR_VERSION,
+    ACTIONLINT_VERSION, GH_VERSION, MISE_VERSION, MR_BOXINGTON_VERSION, OPENTOFU_VERSION,
+    PinnedTool, RUST_TARGET_TRIPLE, RUST_VERSION, SHELLCHECK_VERSION, ToolCatalog, ZIZMOR_VERSION,
     check_freshness_requirements, validate_exact_version,
 };
 pub use command::{

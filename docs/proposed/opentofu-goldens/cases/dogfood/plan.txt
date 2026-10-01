@@ -3,13 +3,14 @@ Repository: <repo>
 
 Detected stacks
   Rust: selected
-  Workspace crates: 7
+  Workspace crates: 8
     - velnor-actions-actionlint (crates/velnor-actions-actionlint/Cargo.toml) [lib, test; depends on velnor-actions-contract]
     - velnor-actions-cli (crates/velnor-actions-cli/Cargo.toml) [bin, test; depends on velnor-actions-orchestrator]
     - velnor-actions-contract (crates/velnor-actions-contract/Cargo.toml) [lib, test]
     - velnor-actions-mise (crates/velnor-actions-mise/Cargo.toml) [lib, test; depends on velnor-actions-contract]
-    - velnor-actions-orchestrator (crates/velnor-actions-orchestrator/Cargo.toml) [lib, test; depends on velnor-actions-actionlint, velnor-actions-contract, velnor-actions-mise, velnor-actions-rust, velnor-actions-workflow-renderer]
+    - velnor-actions-orchestrator (crates/velnor-actions-orchestrator/Cargo.toml) [lib, test; depends on velnor-actions-actionlint, velnor-actions-contract, velnor-actions-mise, velnor-actions-rust, velnor-actions-tofu, velnor-actions-workflow-renderer]
     - velnor-actions-rust (crates/velnor-actions-rust/Cargo.toml) [lib, test; depends on velnor-actions-contract]
+    - velnor-actions-tofu (crates/velnor-actions-tofu/Cargo.toml) [lib, test; depends on velnor-actions-contract]
     - velnor-actions-workflow-renderer (crates/velnor-actions-workflow-renderer/Cargo.toml) [lib, test; depends on velnor-actions-contract]
   Profile .: mbx compile driver (declared), cargo_nextest test runner (declared)
   Nextest profile .: ci (.config/nextest.toml)
@@ -38,9 +39,10 @@ Workflow to generate
     - rust-velnor-actions-mise (18 steps)
     - rust-velnor-actions-orchestrator (18 steps)
     - rust-velnor-actions-rust (18 steps)
+    - rust-velnor-actions-tofu (18 steps)
     - rust-velnor-actions-workflow-renderer (18 steps)
     - zizmor (4 steps)
-    - 7 Rust crate jobs
+    - 8 Rust crate jobs
       Each: Clippy -> build -> run tests -> doctests -> doc build -> format check
       Entries:
         - rust-velnor-actions-actionlint
@@ -49,6 +51,7 @@ Workflow to generate
         - rust-velnor-actions-mise
         - rust-velnor-actions-orchestrator
         - rust-velnor-actions-rust
+        - rust-velnor-actions-tofu
         - rust-velnor-actions-workflow-renderer
       Obligations:
         - stack/rust/crates/velnor-actions-actionlint/build/default
@@ -86,13 +89,19 @@ Workflow to generate
         - stack/rust/crates/velnor-actions-rust/doctest/default
         - stack/rust/crates/velnor-actions-rust/fmt/default
         - stack/rust/crates/velnor-actions-rust/nextest/default
+        - stack/rust/crates/velnor-actions-tofu/build/default
+        - stack/rust/crates/velnor-actions-tofu/clippy/default
+        - stack/rust/crates/velnor-actions-tofu/doc/default
+        - stack/rust/crates/velnor-actions-tofu/doctest/default
+        - stack/rust/crates/velnor-actions-tofu/fmt/default
+        - stack/rust/crates/velnor-actions-tofu/nextest/default
         - stack/rust/crates/velnor-actions-workflow-renderer/build/default
         - stack/rust/crates/velnor-actions-workflow-renderer/clippy/default
         - stack/rust/crates/velnor-actions-workflow-renderer/doc/default
         - stack/rust/crates/velnor-actions-workflow-renderer/doctest/default
         - stack/rust/crates/velnor-actions-workflow-renderer/fmt/default
         - stack/rust/crates/velnor-actions-workflow-renderer/nextest/default
-  Parallel: 7 independent crate jobs; no matrix fan-out
+  Parallel: 8 independent crate jobs; no matrix fan-out
   Critical path: stack/rust/crates/velnor-actions-actionlint/clippy/default -> stack/rust/crates/velnor-actions-actionlint/build/default -> stack/rust/crates/velnor-actions-actionlint/nextest/default (3 tasks)
   Clippy memory groups: 1; barriers: 0
   Cache layers: Mise tools, Cargo sources, MBX compilation objects

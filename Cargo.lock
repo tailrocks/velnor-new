@@ -563,6 +563,7 @@ dependencies = [
  "velnor-actions-contract",
  "velnor-actions-mise",
  "velnor-actions-rust",
+ "velnor-actions-tofu",
  "velnor-actions-workflow-renderer",
 ]
 
@@ -573,6 +574,13 @@ dependencies = [
  "serde",
  "serde_json",
  "toml",
+ "velnor-actions-contract",
+]
+
+[[package]]
+name = "velnor-actions-tofu"
+version = "0.1.0"
+dependencies = [
  "velnor-actions-contract",
 ]
 

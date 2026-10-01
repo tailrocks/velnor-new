@@ -52,7 +52,7 @@ impl VelnorConfig {
     /// Schema version this contract accepts.
     pub const SCHEMA: u32 = 1;
     /// Stack IDs registered in V1.
-    pub const REGISTERED_STACKS: &'static [&'static str] = &["rust"];
+    pub const REGISTERED_STACKS: &'static [&'static str] = &["rust", "tofu"];
     /// Validate every field; failures name file, key path, and problem.
     /// # Errors
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {

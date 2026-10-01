@@ -258,7 +258,8 @@ pub fn selection_broadens_for_path(path: &str) -> Option<&'static str> {
 /// Broadening class one changed path triggers, unioned over stacks.
 ///
 /// Each stack classifies its own lock/root-config paths; the orchestrator
-/// only unions the verdicts and owns the warning vocabulary.
+/// only unions the verdicts and owns the warning vocabulary. Tofu owns
+/// no paths until T09, so its arm contributes nothing.
 #[must_use]
 pub(crate) fn broadening_for_path(path: &str) -> Option<SelectionBroadening> {
     for stack in Stack::all() {
@@ -268,6 +269,7 @@ pub(crate) fn broadening_for_path(path: &str) -> Option<SelectionBroadening> {
                     return Some(class);
                 }
             }
+            Stack::Tofu => {}
         }
     }
     None
@@ -309,7 +311,7 @@ pub struct DetectorInfo {
     pub schema: u32,
 }
 
-/// Detector registry in ascending stack-ID order; V1 holds `rust` only.
+/// Detector registry in ascending stack-ID order; V1 holds `rust` and `tofu`.
 #[must_use]
 pub fn detector_registry() -> Vec<DetectorInfo> {
     crate::discover::detector_entries()

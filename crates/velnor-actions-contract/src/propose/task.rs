@@ -189,7 +189,7 @@ mod tests {
     fn validation_pins_proposal_shape() {
         assert!(proposal().validate().is_ok());
         let unregistered = ProposedTask {
-            stack_id: "tofu".to_owned(),
+            stack_id: "cobol".to_owned(),
             ..proposal()
         };
         assert!(unregistered.validate().is_err());

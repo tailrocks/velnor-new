@@ -45,6 +45,7 @@ fn policy_vectors_pin_specs_and_payloads() {
         "machete",
         "crates/velnor-actions-contract",
         "crates/velnor-actions-rust",
+        "crates/velnor-actions-tofu",
         "crates/velnor-actions-mise",
         "crates/velnor-actions-actionlint",
         "crates/velnor-actions-workflow-renderer",

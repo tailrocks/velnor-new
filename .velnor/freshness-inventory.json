@@ -218,6 +218,15 @@
       "status": "current"
     },
     {
+      "checked_at": "2026-10-01T21:05:00Z",
+      "latest": "v1.13.1",
+      "name": "opentofu",
+      "pinned": "1.13.1",
+      "qualified": "1.13.1",
+      "source": "https://api.github.com/repos/opentofu/opentofu/releases/latest",
+      "status": "current"
+    },
+    {
       "checked_at": "2026-10-01T18:39:41Z",
       "latest": "0.3.169",
       "name": "release-plz",

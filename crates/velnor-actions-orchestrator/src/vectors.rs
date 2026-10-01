@@ -53,9 +53,10 @@ const VALIDATOR_TOOL_SPECS: [&str; 2] = ["cargo-deny", "ubi:bnjbvr/cargo-machete
 /// crates, never fixtures or tooling trees (a bare walk previously
 /// errored on a symlink-hazard fixture; hazards now live only in
 /// TempDir-built tests, never in the tree).
-const MACHETE_SCAN_CRATES: [&str; 7] = [
+const MACHETE_SCAN_CRATES: [&str; 8] = [
     "crates/velnor-actions-contract",
     "crates/velnor-actions-rust",
+    "crates/velnor-actions-tofu",
     "crates/velnor-actions-mise",
     "crates/velnor-actions-actionlint",
     "crates/velnor-actions-workflow-renderer",

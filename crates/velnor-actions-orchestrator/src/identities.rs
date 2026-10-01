@@ -292,7 +292,8 @@ pub(crate) fn lane_id_for(task: &ProposedTask, workspace_id: &str) -> String {
 ///
 /// Rust-only: hardcodes the Rust/MBX/Nextest pinned tools. A future
 /// stack gets its own toolchain/format-identity path and dispatch arm;
-/// it must never reuse this function or [`cache_format_id_for`].
+/// it must never reuse this function or [`cache_format_id_for`]. Tofu
+/// is registered but behaviorless until T09, so tofu tasks fail closed.
 ///
 /// # Errors
 ///
@@ -303,6 +304,9 @@ pub(crate) fn toolchain_inputs_for(
 ) -> Result<ToolchainInputs, ContractError> {
     match Stack::require_known(&task.stack_id)? {
         Stack::Rust => {}
+        Stack::Tofu => {
+            return Err(ContractError::identity("stack_id", "tofu_pending_t09"));
+        }
     }
     let needs = tool_needs(&task.identity.compile_driver, &task.identity.test_runner);
     let mut tools = vec![PinnedTool::Rust];

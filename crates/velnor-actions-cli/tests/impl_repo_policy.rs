@@ -20,6 +20,8 @@ mod p12_harness;
 mod p12_live;
 #[path = "fixtures/p12_manifest.rs"]
 mod p12_manifest;
+#[path = "fixtures/p12_mutants.rs"]
+mod p12_mutants;
 #[path = "fixtures/p12_policy.rs"]
 mod p12_policy;
 #[path = "fixtures/p12_policy_b.rs"]
@@ -28,7 +30,7 @@ mod p12_policy_b;
 mod p12_upstream;
 
 /// Expected members as (directory, package name).
-pub(crate) const MEMBERS: [(&str, &str); 7] = [
+pub(crate) const MEMBERS: [(&str, &str); 8] = [
     (
         "crates/velnor-actions-actionlint",
         "velnor-actions-actionlint",
@@ -41,6 +43,7 @@ pub(crate) const MEMBERS: [(&str, &str); 7] = [
         "velnor-actions-orchestrator",
     ),
     ("crates/velnor-actions-rust", "velnor-actions-rust"),
+    ("crates/velnor-actions-tofu", "velnor-actions-tofu"),
     (
         "crates/velnor-actions-workflow-renderer",
         "velnor-actions-workflow-renderer",
@@ -138,11 +141,11 @@ pub(crate) fn dep_referenced(dir: &str, dep: &str) -> Result<bool, Box<dyn Error
 }
 
 #[test]
-fn workspace_lists_exactly_seven_members() -> Result<(), Box<dyn Error>> {
+fn workspace_lists_exactly_eight_members() -> Result<(), Box<dyn Error>> {
     let root = read("Cargo.toml")?;
     let start = root.find("members = [").ok_or("members block")?;
     let block = root[start..].split(']').next().ok_or("members end")?;
-    assert_eq!(block.matches("crates/").count(), 7, "{block}");
+    assert_eq!(block.matches("crates/").count(), 8, "{block}");
     for (dir, _) in MEMBERS {
         assert!(block.contains(&format!("\"{dir}\"")), "{dir} not listed");
     }
