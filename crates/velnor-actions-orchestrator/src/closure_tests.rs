@@ -5,7 +5,7 @@
 use super::closure::*;
 use super::closure_slots::{lock_digest_at_root, nextest_digest_at_root};
 use super::snapshot::canonical_digest;
-use velnor_actions_contract::{ProposedTask, digest_b3};
+use velnor_actions_contract::{ProposedTask, Provenance, TaskInputClosure, digest_b3};
 use velnor_actions_rust::{CompileDriver, NextestProfile, TaskGroup, TaskKind, TestRunner};
 
 /// Minimal proposal with `declared` inputs and `reads` flag.
