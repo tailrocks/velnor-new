@@ -216,7 +216,12 @@ fn actions_overrides_validate_allowlist_and_pin_shape() {
             },
         )]),
     };
-    assert_eq!(alint.validate("cfg"), Ok(()));
+    // The Alint pin is policy-owned, not consumer-overridable
+    // (docs/proposed/version-policy.md §2.3).
+    assert!(matches!(
+        alint.validate("cfg"),
+        Err(ContractError::Config { problem, .. }) if problem == "unknown_action"
+    ));
     for (action, pin, problem) in [
         (
             "bogus/action",

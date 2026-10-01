@@ -81,6 +81,7 @@ pub(crate) fn run_shellcheck_bodies(
     let mut args = vec![
         OsString::from("-S"),
         OsString::from("warning"),
+        OsString::from("--enable=SC2086"),
         OsString::from("--format=gcc"),
     ];
     args.extend(files);
@@ -191,7 +192,9 @@ mod tests {
         let (clean, workflows) = staged_run("echo \"hi\"")?;
         run_shellcheck_bodies(&catalog, clean.path(), &workflows).map_err(|err| err.to_string())?;
         // SC2086 is info-level in shellcheck 0.11 (below `-S warning`), so the
-        // violation pairs an unquoted var with error-level SC2070 to trip `-S warning`.
+        // staged gate explicitly enables it (see `--enable=SC2086` above).
+        // The violation pairs an unquoted var with error-level SC2070 to keep
+        // tripping the gate even if the enable flag regresses.
         let (dirty, workflows) = staged_run("echo $FOO/bar && [ -n $BAZ ]")?;
         assert!(
             run_shellcheck_bodies(&catalog, dirty.path(), &workflows).is_err_and(|err| {

@@ -25,7 +25,7 @@
     },
     {
       "description": "Refresh only Velnor-owned pins/locks; never propose tool-input edits (VER-3.4).",
-      "matchManagers": ["cargo"],
+      "matchManagers": ["mise"],
       "matchFileNames": ["mise.toml", "mise.lock", "rust-toolchain.toml"],
       "enabled": false
     },
