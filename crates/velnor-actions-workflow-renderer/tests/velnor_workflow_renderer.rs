@@ -71,6 +71,8 @@ mod impl_renderer_release_version;
 mod impl_renderer_setup;
 #[path = "impl_renderer_steps.rs"]
 mod impl_renderer_steps;
+#[path = "impl_renderer_steps_env.rs"]
+mod impl_renderer_steps_env;
 #[path = "impl_renderer_sweep.rs"]
 mod impl_renderer_sweep;
 #[path = "impl_renderer_token_hygiene.rs"]

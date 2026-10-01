@@ -24,6 +24,7 @@ mod impl_git_paths_p10;
 mod impl_matrix;
 mod impl_merge;
 mod impl_merge_plan;
+mod impl_merge_tamper;
 mod impl_merge_trust;
 mod impl_neg_pipeline_p13;
 mod impl_orch_broaden;
