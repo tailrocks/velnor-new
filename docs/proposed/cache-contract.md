@@ -304,7 +304,8 @@ ID `velnor-candidate-<run-key>-<target-key>`. Its schema-1 shape is:
 The candidate artifact contains the executable and a manifest with the same source commit, target, version,
 and SHA-256. The report MUST verify the manifest before running any candidate command. Candidate artifacts are
 run-scoped qualification outputs and MUST NOT be restored by ordinary cache keys or treated as a promoted
-generator binary.
+generator binary. The merge re-checks the head-bound attestation (`commit == plan.head`) in candidate mode;
+manifest fields beyond the commit are consumer-asserted audit data at merge time (S10/D6 residual).
 
 Field grammars here are normative over examples. `*_digest` fields are
 path-independent semantic identities: BLAKE3 over canonical JSON with

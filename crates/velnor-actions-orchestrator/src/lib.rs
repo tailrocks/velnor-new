@@ -48,6 +48,7 @@ mod release_checkouts;
 mod release_emit;
 mod release_identity;
 mod release_steps;
+mod request_event;
 mod retrieve_reports;
 mod root;
 pub mod run_select;

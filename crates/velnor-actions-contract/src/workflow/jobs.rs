@@ -171,17 +171,46 @@ pub fn slugify_segment(name: &str) -> String {
     slug
 }
 
+/// True when a display name renders safely: no expression opener, no
+/// control characters (newlines included).
+///
+/// Job `name:` fields evaluate `${{ }}` expressions, and a control byte
+/// would break YAML structure; both fail closed at the `Job` gate, and
+/// constructors sanitize through [`sanitize_display_text`] so generated
+/// names never reach the gate dirty.
+#[must_use]
+pub fn is_safe_display_name(name: &str) -> bool {
+    !name.contains("${{") && !name.chars().any(char::is_control)
+}
+
+/// Sanitize one display label: controls become `?`, `${{` breaks open.
+///
+/// Cargo names can never trigger this (charset-limited); the manifest
+/// folder fallback can (directory names are unconstrained), so the
+/// constructor neutralizes rather than trusts. Idempotent.
+fn sanitize_display_text(label: &str) -> String {
+    let mut out = String::with_capacity(label.len());
+    for ch in label.chars() {
+        if ch.is_control() {
+            out.push('?');
+        } else {
+            out.push(ch);
+        }
+    }
+    out.replace("${{", "$?{{")
+}
+
 /// Display label for one crate: package name, folder fallback when missing.
 #[must_use]
 pub fn crate_display_label(package_name: &str, manifest: &str) -> String {
     if !package_name.trim().is_empty() {
-        return package_name.to_owned();
+        return sanitize_display_text(package_name);
     }
     let parent = manifest.rsplit('/').nth(1).unwrap_or_default();
     if parent.is_empty() || parent == "." {
         "workspace".to_owned()
     } else {
-        parent.to_owned()
+        sanitize_display_text(parent)
     }
 }
 
@@ -189,15 +218,17 @@ pub fn crate_display_label(package_name: &str, manifest: &str) -> String {
 ///
 /// The default configuration shows the bare label; extra feature
 /// configurations append ` (<config>)` so variants never silently drop
-/// checks or multiply default jobs (P05-4).
+/// checks or multiply default jobs (P05-4). The composed name is
+/// sanitized whole so the configuration suffix is covered too.
 #[must_use]
 pub fn crate_display_name(package_name: &str, manifest: &str, configuration: &str) -> String {
     let label = crate_display_label(package_name, manifest);
-    if configuration == "default" {
+    let composed = if configuration == "default" {
         format!("Rust / {label}")
     } else {
         format!("Rust / {label} ({configuration})")
-    }
+    };
+    sanitize_display_text(&composed)
 }
 
 /// Assign stable collision-safe crate job IDs for one package set.
@@ -315,7 +346,41 @@ impl RequiredCheckMigration {
 
 #[cfg(test)]
 mod tests {
-    use super::validate_job_id;
+    use super::{crate_display_label, crate_display_name, is_safe_display_name, validate_job_id};
+
+    #[test]
+    fn display_names_reject_expressions_and_controls() {
+        assert!(is_safe_display_name("Rust / demo"));
+        assert!(is_safe_display_name("Plan"));
+        for bad in [
+            "Rust / ${{ secrets.x }}",
+            "x\ny",
+            "x\ry",
+            "x\ty",
+            "x\x07y",
+            "${{",
+        ] {
+            assert!(!is_safe_display_name(bad), "{bad:?} must fail");
+        }
+        assert_eq!(
+            crate_display_label("demo", "crates/demo/Cargo.toml"),
+            "demo"
+        );
+        assert_eq!(
+            crate_display_label("", "crates/${{x}}/Cargo.toml"),
+            "$?{{x}}"
+        );
+        assert_eq!(crate_display_label("", "crates/a\nb/Cargo.toml"), "a?b");
+        assert_eq!(
+            crate_display_name("", "crates/a/Cargo.toml", "default"),
+            "Rust / a"
+        );
+        assert!(is_safe_display_name(&crate_display_name(
+            "",
+            "crates/${{x}}/Cargo.toml",
+            "evil\ncfg"
+        )));
+    }
 
     #[test]
     fn branding_gate_skips_package_slugs_only() {

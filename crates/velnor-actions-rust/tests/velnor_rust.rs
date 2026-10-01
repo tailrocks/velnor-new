@@ -27,6 +27,8 @@ mod impl_rust_nested;
 mod impl_rust_p03_identity;
 #[path = "impl_rust_p06.rs"]
 mod impl_rust_p06;
+#[path = "impl_rust_profile_emit.rs"]
+mod impl_rust_profile_emit;
 #[path = "impl_rust_release_emit.rs"]
 mod impl_rust_release_emit;
 #[path = "impl_rust_release_graph.rs"]

@@ -267,6 +267,7 @@ fn merge_rejects_covered_claims_without_manifest() -> TestResult {
     let request = serde_json::json!({
         "schema": 1,
         "run_key": "local",
+        "actual_event": "pull_request",
         "plan": plan,
         "matrix": plan.matrix,
         "matrix_reports": reports,

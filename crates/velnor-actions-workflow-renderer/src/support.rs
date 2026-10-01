@@ -208,6 +208,9 @@ pub(crate) fn alint_job(ctx: &RenderContext) -> Result<Job, RenderError> {
 }
 
 /// Fixed validator job: checkout plus its caller-supplied command.
+///
+/// The validator runs its pinned tool over the checkout with the scrub
+/// overlay: static analysis needs no ambient auth.
 pub(crate) fn validator_job(
     ctx: &RenderContext,
     validator: ValidatorKind,
@@ -222,7 +225,11 @@ pub(crate) fn validator_job(
         environment: None,
         steps: vec![
             steps::checkout_step(&ctx.checkout_uses)?,
-            steps::shell_step(&command.name, command.argv.clone(), BTreeMap::new())?,
+            steps::shell_step(
+                &command.name,
+                command.argv.clone(),
+                crate::toolchain_env::with_credential_scrub(&BTreeMap::new()),
+            )?,
         ],
     })
 }

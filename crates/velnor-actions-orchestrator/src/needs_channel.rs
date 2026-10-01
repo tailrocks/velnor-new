@@ -6,6 +6,16 @@
 //! required validator inventory and fails closed when observed
 //! conclusions diverge from it. No hardcoded job list lives here:
 //! whatever the committed workflow needs, the merge requires.
+//!
+//! D7 process control: the expected inventory is generated YAML, and
+//! the freshness gate that would catch hand edits lives in the same
+//! file it verifies — so a workflow edit that shrinks the inventory
+//! AND neuters the freshness check is self-consistent. The control is
+//! outside the code: generated workflow files change only through
+//! reviewed PRs (repo `CODEOWNERS` plus branch protection), and
+//! reviewers treat inventory/condition edits as security-sensitive.
+//! The merge cannot distinguish legit regeneration from tampering;
+//! review is the trust root for the committed `needs` set.
 
 use velnor_actions_contract::JobConclusion;
 use velnor_actions_workflow_renderer::render::TASK_JOB_ID;

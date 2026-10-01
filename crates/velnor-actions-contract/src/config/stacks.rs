@@ -117,13 +117,18 @@ pub fn is_valid_feature_name(feature: &str) -> bool {
 ///
 /// Single source for the config allowlist, the fixed `mise run` argv,
 /// and the gate-6 grant: namespaced (`:`) task names plus safe
-/// punctuation, never whitespace, separators, or expansions.
+/// punctuation, never whitespace, separators, or expansions. The first
+/// byte must be alphanumeric or `_`: a leading `-` would parse as a
+/// `mise run` flag and a leading `.` as a relative path, so both fail
+/// closed here before any argv is built.
 #[must_use]
 pub fn is_valid_custom_task_name(task: &str) -> bool {
-    !task.is_empty()
-        && task
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b':'))
+    let mut bytes = task.bytes();
+    match bytes.next() {
+        Some(first) if first.is_ascii_alphanumeric() || first == b'_' => {}
+        _ => return false,
+    }
+    bytes.all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b':'))
 }
 
 impl RustStackConfig {

@@ -19,13 +19,17 @@ pub const FORMAT_STEP_NAME: &str = "Format";
 /// The vector must start with `mise`: plan formatting runs through
 /// pinned Mise, never a bare toolchain or ad-hoc installer. The env
 /// routes the step at the prepared toolchain (owned homes plus the
-/// exact `RUSTUP_TOOLCHAIN` pin).
+/// exact `RUSTUP_TOOLCHAIN` pin), scrubbed since fmt needs no auth.
 /// # Errors
-pub fn format_step(argv: Vec<String>, env: BTreeMap<String, String>) -> Result<Step, RenderError> {
+pub fn format_step(argv: Vec<String>, env: &BTreeMap<String, String>) -> Result<Step, RenderError> {
     if argv.first().is_none_or(|program| program != "mise") {
         return Err(RenderError::BadCommand("format_without_mise".to_owned()));
     }
-    steps::shell_step(FORMAT_STEP_NAME, argv, env)
+    steps::shell_step(
+        FORMAT_STEP_NAME,
+        argv,
+        crate::toolchain_env::with_credential_scrub(env),
+    )
 }
 
 /// Insert `Format` into the plan job between staging and freshness.
@@ -37,7 +41,7 @@ pub fn format_step(argv: Vec<String>, env: BTreeMap<String, String>) -> Result<S
 pub fn ensure_plan_format(
     jobs: &mut BTreeMap<String, Job>,
     argv: Vec<String>,
-    env: BTreeMap<String, String>,
+    env: &BTreeMap<String, String>,
 ) -> Result<(), RenderError> {
     let Some(plan) = jobs.get_mut(PLAN_JOB_ID) else {
         return Ok(());

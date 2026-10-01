@@ -212,24 +212,23 @@ fn mbx_restore_precedes_fetch() {
 fn step_conditions_serialize_as_if_with_upload_default()
 -> Result<(), velnor_actions_workflow_renderer::RenderError> {
     use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
-    use velnor_actions_workflow_renderer::{action_step, matrix_report_upload_step, shell_step};
+    use velnor_actions_workflow_renderer::{action_step, matrix_report_upload_step};
     let mut save = action_step(
         "Save Cargo sources",
         &format!("actions/cache/save@{}", "c".repeat(40)),
         BTreeMap::from([("key".to_owned(), "k".to_owned())]),
     )?;
     save.condition = Some(CACHE_SAVE_CONDITION.to_owned());
-    let mut check = shell_step(
+    let mut check = scrubbed_shell_step(
         "Check",
         vec![
             "mise".to_owned(),
             "exec".to_owned(),
             "rust@1.98.1".to_owned(),
         ],
-        BTreeMap::new(),
     )?;
     check.condition = Some(CACHE_SAVE_CONDITION.to_owned());
-    let plain = shell_step("Plain", vec!["true".to_owned()], BTreeMap::new())?;
+    let plain = scrubbed_shell_step("Plain", vec!["true".to_owned()])?;
     let upload = matrix_report_upload_step()?;
     let text = strict(
         &fixture_ir(vec![job(

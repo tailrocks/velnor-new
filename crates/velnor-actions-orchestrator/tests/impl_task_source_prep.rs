@@ -49,7 +49,7 @@ fn crate_job_fetches_lockful_sources_before_obligations() -> TestResult {
         .iter()
         .filter(|group| !group.no_test_targets && group.kind != TaskKind::Fmt)
     {
-        let argv = args_of(&cargo_payload_argv(group));
+        let argv = args_of(&cargo_payload_argv(group).expect("valid payload"));
         assert!(
             argv.contains(&"--locked".to_owned()) && argv.contains(&"--offline".to_owned()),
             "payload stays locked/offline; fetch fixes cold: {argv:?}"

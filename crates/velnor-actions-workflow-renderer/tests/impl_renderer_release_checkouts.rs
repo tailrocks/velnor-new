@@ -49,7 +49,7 @@ fn checkout_credentials_follow_role_and_kind() -> Result<(), RenderError> {
             vec![
                 policy_checkout(Some("false"))?,
                 source_checkout(SHA, Some("false"))?,
-                shell("Publish", &publish_argv(RELEASE_CONFIG_PATH), &FORGE_ENV)?,
+                shell("Publish", &publish_argv(RELEASE_CONFIG_PATH), &FORGE_ENV),
             ],
             Some("checkout_with_credentials:release-publish"),
         ),
@@ -58,7 +58,7 @@ fn checkout_credentials_follow_role_and_kind() -> Result<(), RenderError> {
             vec![
                 policy_checkout(Some("true"))?,
                 source_checkout(SHA, Some("true"))?,
-                shell("Publish", &publish_argv(RELEASE_CONFIG_PATH), &FORGE_ENV)?,
+                shell("Publish", &publish_argv(RELEASE_CONFIG_PATH), &FORGE_ENV),
             ],
             Some("checkout_with_credentials:release-publish"),
         ),

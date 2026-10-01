@@ -8,6 +8,7 @@
 
 pub mod artifact;
 pub mod shard;
+mod task_ids;
 
 pub use artifact::{
     artifact_id_for_baseline, artifact_id_for_final, artifact_id_for_matrix, artifact_id_for_plan,
@@ -17,6 +18,7 @@ pub use shard::split_shard_suffix;
 
 use crate::canonical::validate_digest;
 use crate::errors::ContractError;
+use task_ids::{validate_shard, validate_stack_task_id};
 
 /// Define a validated identifier newtype with a private constructor.
 ///
@@ -89,6 +91,12 @@ pub fn validate_run_key(value: &str) -> Result<(), ContractError> {
 /// Strips the trailing `/Cargo.toml`; the root manifest maps to `root`.
 /// # Errors
 pub fn manifest_key_for_cargo_manifest(manifest: &str) -> Result<String, ContractError> {
+    if manifest.starts_with('-') {
+        return Err(ContractError::identity(
+            "manifest_key",
+            "leading_dash_manifest",
+        ));
+    }
     if manifest.is_empty()
         || manifest.starts_with('/')
         || manifest.contains('\\')
@@ -352,38 +360,5 @@ fn validate_path_segments(path: &str, field: &'static str) -> Result<(), Contrac
     for segment in path.split('/') {
         validate_component(segment, field)?;
     }
-    Ok(())
-}
-
-/// Validate shard index/count (`shard-<index>-of-<count>` inputs).
-fn validate_shard(index: u32, count: u32) -> Result<(), ContractError> {
-    if count >= 1 && index >= 1 && index <= count {
-        Ok(())
-    } else {
-        Err(ContractError::identity("shard", "bad_shard_range"))
-    }
-}
-
-/// Validate the tail of a `stack/` task ID.
-fn validate_stack_task_id(rest: &str) -> Result<(), ContractError> {
-    let parts: Vec<&str> = rest.split('/').collect();
-    if parts.len() < 4 {
-        return Err(ContractError::identity("task_id", "too_few_segments"));
-    }
-    validate_component(parts[0], "stack_id")?;
-    let mut tail = parts.as_slice();
-    if split_shard_suffix(rest).is_some() {
-        tail = &tail[..tail.len() - 1];
-    } else if tail.last().is_some_and(|last| last.starts_with("shard-")) {
-        return Err(ContractError::identity("task_id", "bad_shard_suffix"));
-    }
-    if tail.len() < 4 {
-        return Err(ContractError::identity("task_id", "too_few_segments"));
-    }
-    let config = tail[tail.len() - 1];
-    let kind = tail[tail.len() - 2];
-    validate_component(kind, "task_kind")?;
-    validate_component(config, "configuration")?;
-    validate_path_segments(&tail[1..tail.len() - 2].join("/"), "manifest_key")?;
     Ok(())
 }

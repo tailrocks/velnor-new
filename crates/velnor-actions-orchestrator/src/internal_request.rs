@@ -1,7 +1,6 @@
 //! Request-file materialization and response splitting for internal ops.
 
 use std::env;
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -16,6 +15,7 @@ use crate::decisions::plan_artifact_dir;
 use crate::internal::{
     MERGE_OP, PLAN_OP, PlanResponse, SCHEMA, check_schema, internal, internal_contract,
 };
+use crate::request_event::{request_refs, workflow_event_for};
 
 /// Plan-time request: `{schema, op, event, base, head, root}` (schema 1).
 #[derive(Debug, Serialize)]
@@ -51,17 +51,24 @@ pub struct PlanOutputs {
 ///
 /// Reads the exact path from `VELNOR_REQUEST_FILE`, the event name from
 /// `GITHUB_EVENT_NAME`, and the payload from `GITHUB_EVENT_PATH`, then
-/// delegates to [`write_request_parts`].
+/// delegates to [`write_request_parts`]. The request file must sit under
+/// `RUNNER_TEMP`: the runner owns that directory, so it anchors the
+/// symlink-safe parent creation.
 ///
 /// # Errors
 ///
 /// Returns [`OrchestratorError::Internal`] for missing env, malformed
-/// payloads, or unwritable paths; [`OrchestratorError::Io`] for IO failures.
+/// payloads, anchor escapes, or unwritable paths;
+/// [`OrchestratorError::Io`] for IO failures.
 pub fn write_request() -> Result<PathBuf, OrchestratorError> {
     let path = env::var_os(crate::internal::REQUEST_FILE_ENV)
         .filter(|value| !value.is_empty())
         .map(PathBuf::from)
         .ok_or_else(|| internal("missing_request_file"))?;
+    let anchor = env::var_os("RUNNER_TEMP")
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .ok_or_else(|| internal("missing_runner_temp"))?;
     let event_name = env::var("GITHUB_EVENT_NAME").unwrap_or_default();
     let payload_path = env::var_os("GITHUB_EVENT_PATH").filter(|value| !value.is_empty());
     let Some(payload_path) = payload_path else {
@@ -72,7 +79,7 @@ pub fn write_request() -> Result<PathBuf, OrchestratorError> {
         crate::safe_read::MAX_REPO_FILE_BYTES,
     )?;
     let sha = env::var("GITHUB_SHA").ok().filter(|sha| !sha.is_empty());
-    write_request_parts(&path, &event_name, &payload_json, sha.as_deref())
+    write_request_parts(&path, &event_name, &payload_json, sha.as_deref(), &anchor)
 }
 
 /// Materialize one canonical request file from explicit inputs.
@@ -80,17 +87,20 @@ pub fn write_request() -> Result<PathBuf, OrchestratorError> {
 /// The consuming op comes from the `<op>-request.json` file name; the file
 /// is written exclusively (a pre-existing file errors, never overwritten).
 /// The merge target assembles its request from downloaded artifacts and
-/// ignores the event payload.
+/// ignores the event payload. Parent directories are created under
+/// `anchor` with symlink refusal; the caller passes the runner-owned
+/// directory the request path must stay inside.
 ///
 /// # Errors
 ///
 /// Returns [`OrchestratorError::Internal`] for unknown ops, unsupported
-/// events, malformed payloads, or unwritable paths.
+/// events, malformed payloads, anchor escapes, or unwritable paths.
 pub fn write_request_parts(
     request_path: &Path,
     event_name: &str,
     payload_json: &str,
     github_sha: Option<&str>,
+    anchor: &Path,
 ) -> Result<PathBuf, OrchestratorError> {
     let path = request_path.to_path_buf();
     let op = request_op(&path)?;
@@ -99,14 +109,7 @@ pub fn write_request_parts(
     }
     let payload: serde_json::Value =
         serde_json::from_str(payload_json).map_err(|_| internal("malformed_event_payload"))?;
-    let event = match event_name {
-        "pull_request" if is_fork_pull_request(&payload) => WorkflowEvent::Fork,
-        "pull_request" => WorkflowEvent::PullRequest,
-        "push" => WorkflowEvent::Push,
-        "merge_group" => WorkflowEvent::MergeGroup,
-        "local" => WorkflowEvent::Local,
-        _ => return Err(internal("unsupported_event")),
-    };
+    let event = workflow_event_for(event_name, &payload)?;
     let (base, head) = request_refs(event, &payload, github_sha)?;
     let request = EventRequest {
         schema: SCHEMA,
@@ -118,8 +121,7 @@ pub fn write_request_parts(
     };
     let bytes = canonical_json_bytes(&request).map_err(internal_contract)?;
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|err| OrchestratorError::io(parent.display().to_string(), err.to_string()))?;
+        crate::exclusive_write::create_dir_no_symlink(anchor, parent)?;
     }
     crate::exclusive_write::write_exclusive(&path, &bytes, "request")?;
     Ok(path)
@@ -198,10 +200,10 @@ pub fn publish_plan_files(
 /// [`OrchestratorError::Io`] for unwritable directories.
 pub(crate) fn write_plan_files(
     response: &PlanResponse,
-    anchor: &Path,
+    velnor_dir: &Path,
     dir: &Path,
 ) -> Result<(), OrchestratorError> {
-    crate::exclusive_write::create_dir_no_symlink(anchor, dir)?;
+    crate::exclusive_write::create_dir_no_symlink(artifact_anchor(velnor_dir)?, dir)?;
     let plan = plan_json_bytes(&response.plan).map_err(internal_contract)?;
     let matrix = matrix_json_bytes(&response.matrix).map_err(internal_contract)?;
     crate::exclusive_write::write_exclusive(&dir.join(PLAN_JSON_FILENAME), &plan, "plan_artifact")?;
@@ -232,7 +234,7 @@ pub fn publish_final_report(
         serde_json::from_str(response_json).map_err(|_| internal("malformed_response"))?;
     check_schema(report.schema)?;
     let dir = plan_artifact_dir(velnor_dir, &report.run_key)?;
-    crate::exclusive_write::create_dir_no_symlink(velnor_dir, &dir)?;
+    crate::exclusive_write::create_dir_no_symlink(artifact_anchor(velnor_dir)?, &dir)?;
     let bytes = canonical_json_bytes(&report).map_err(internal_contract)?;
     crate::exclusive_write::write_exclusive(
         &dir.join(FINAL_JSON_FILENAME),
@@ -278,6 +280,18 @@ pub(crate) fn resolve_run_key(explicit: Option<&str>) -> Result<String, Orchestr
     Ok(run_key_for_ci(id, attempt))
 }
 
+/// Trust root for artifact dirs: the runner-owned parent of `velnor_dir`.
+///
+/// `velnor_dir` itself (`$RUNNER_TEMP/velnor`) is first created by a
+/// producer, so it cannot anchor: a planted symlink there would sail
+/// through its own anchor check. Its parent is runner-created (or
+/// test-staged) and exists before any producer runs.
+fn artifact_anchor(velnor_dir: &Path) -> Result<&Path, OrchestratorError> {
+    velnor_dir
+        .parent()
+        .ok_or_else(|| internal("missing_dir_anchor"))
+}
+
 /// Consuming op from one `<op>-request.json` file name.
 fn request_op(path: &Path) -> Result<String, OrchestratorError> {
     let name = path
@@ -290,83 +304,4 @@ fn request_op(path: &Path) -> Result<String, OrchestratorError> {
     } else {
         Err(internal("unknown_request_op"))
     }
-}
-
-/// True when a `pull_request` payload comes from a forked repository.
-///
-/// GitHub sends fork PRs as `pull_request` events (no distinct event
-/// name); the head repo's `fork` flag is the only signal. Without this
-/// the `Fork` variant is unreachable and fork runs mislabel as same-repo
-/// PRs. A missing flag defaults to same-repo.
-fn is_fork_pull_request(payload: &serde_json::Value) -> bool {
-    payload["pull_request"]["head"]["repo"]["fork"]
-        .as_bool()
-        .unwrap_or(false)
-}
-
-/// Base/head refs for one event: PR `base.sha`/`head.sha`, merge-group
-/// `base_sha`/`head_sha`, push `before`/`after` (SHA fallback).
-fn request_refs(
-    event: WorkflowEvent,
-    payload: &serde_json::Value,
-    github_sha: Option<&str>,
-) -> Result<(Option<String>, String), OrchestratorError> {
-    match event {
-        WorkflowEvent::PullRequest => {
-            let pr = &payload["pull_request"];
-            Ok((
-                Some(
-                    nonempty(pr["base"]["sha"].as_str())
-                        .ok_or_else(|| internal("missing_pr_base"))?,
-                ),
-                nonempty(pr["head"]["sha"].as_str()).ok_or_else(|| internal("missing_pr_head"))?,
-            ))
-        }
-        WorkflowEvent::MergeGroup => {
-            let group = &payload["merge_group"];
-            Ok((
-                Some(
-                    nonempty(group["base_sha"].as_str())
-                        .ok_or_else(|| internal("missing_merge_base"))?,
-                ),
-                nonempty(group["head_sha"].as_str())
-                    .ok_or_else(|| internal("missing_merge_head"))?,
-            ))
-        }
-        WorkflowEvent::Push => {
-            let base = nonempty(payload["before"].as_str()).filter(|sha| !is_zero_sha(sha));
-            let head = nonempty(payload["after"].as_str())
-                .filter(|sha| !is_zero_sha(sha))
-                .or_else(|| nonempty(github_sha))
-                .ok_or_else(|| internal("missing_push_head"))?;
-            Ok((base, head))
-        }
-        WorkflowEvent::Fork => {
-            let pr = &payload["pull_request"];
-            Ok((
-                Some(
-                    nonempty(pr["base"]["sha"].as_str())
-                        .ok_or_else(|| internal("missing_pr_base"))?,
-                ),
-                nonempty(pr["head"]["sha"].as_str()).ok_or_else(|| internal("missing_pr_head"))?,
-            ))
-        }
-        WorkflowEvent::Local => {
-            let head = nonempty(github_sha).unwrap_or_else(|| "HEAD".to_owned());
-            Ok((None, head))
-        }
-    }
-}
-
-/// Trimmed non-empty string, if any.
-fn nonempty(value: Option<&str>) -> Option<String> {
-    value
-        .map(str::trim)
-        .filter(|text| !text.is_empty())
-        .map(str::to_owned)
-}
-
-/// True for an all-zero (null) commit SHA.
-fn is_zero_sha(sha: &str) -> bool {
-    !sha.is_empty() && sha.bytes().all(|byte| byte == b'0')
 }

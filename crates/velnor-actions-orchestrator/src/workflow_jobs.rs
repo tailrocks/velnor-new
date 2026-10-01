@@ -104,7 +104,9 @@ pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, Orches
                 condition: None,
                 kind: StepKind::Shell {
                     run: argv,
-                    env: BTreeMap::new(),
+                    env: velnor_actions_workflow_renderer::toolchain_env::with_credential_scrub(
+                        &BTreeMap::new(),
+                    ),
                 },
             },
         ],

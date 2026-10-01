@@ -56,11 +56,14 @@ fn render_consumer_yaml(manifest: &str) -> Result<String, Box<dyn std::error::Er
 }
 
 /// Golden Acquire step: URL plus digest copied from the committed file.
+///
+/// The scrub overlay renders its nine empty keys ahead of the asset
+/// env (sorted map order); the download itself stays unchanged.
 fn expected_acquire_block() -> String {
     let version = env!("CARGO_PKG_VERSION");
     let sha = "c".repeat(64);
     format!(
-        "- name: Acquire Velnor\n        env:\n          VELNOR_ASSET_SHA256: {sha}\n          VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v{version}/velnor-actions-{version}-x86_64-unknown-linux-gnu\n        run: \"sh -c 'mkdir -p \\\"$RUNNER_TEMP/velnor/bin\\\" && curl -fsSL --proto '\\\\''=https'\\\\'' --tlsv1.2 \\\"$VELNOR_ASSET_URL\\\" -o \\\"$RUNNER_TEMP/velnor/bin/velnor-actions-{version}\\\" && echo \\\"$VELNOR_ASSET_SHA256  $RUNNER_TEMP/velnor/bin/velnor-actions-{version}\\\" | sha256sum -c - && chmod +x \\\"$RUNNER_TEMP/velnor/bin/velnor-actions-{version}\\\"'\"",
+        "- name: Acquire Velnor\n        env:\n          ACTIONS_ID_TOKEN_REQUEST_TOKEN: \"\"\n          ACTIONS_ID_TOKEN_REQUEST_URL: \"\"\n          ACTIONS_RUNTIME_TOKEN: \"\"\n          CARGO_REGISTRY_TOKEN: \"\"\n          GH_TOKEN: \"\"\n          GITHUB_TOKEN: \"\"\n          MISE_GITHUB_TOKEN: \"\"\n          NODE_AUTH_TOKEN: \"\"\n          NPM_TOKEN: \"\"\n          VELNOR_ASSET_SHA256: {sha}\n          VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v{version}/velnor-actions-{version}-x86_64-unknown-linux-gnu\n        run: \"sh -c 'mkdir -p \\\"$RUNNER_TEMP/velnor/bin\\\" && curl -fsSL --proto '\\\\''=https'\\\\'' --tlsv1.2 \\\"$VELNOR_ASSET_URL\\\" -o \\\"$RUNNER_TEMP/velnor/bin/velnor-actions-{version}\\\" && echo \\\"$VELNOR_ASSET_SHA256  $RUNNER_TEMP/velnor/bin/velnor-actions-{version}\\\" | sha256sum -c - && chmod +x \\\"$RUNNER_TEMP/velnor/bin/velnor-actions-{version}\\\"'\"",
     )
 }
 

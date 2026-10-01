@@ -11,13 +11,14 @@ use std::collections::BTreeSet;
 use serde::Deserialize;
 use velnor_actions_contract::{
     FinalCounts, FinalReport, FinalStatus, MatrixReport, ObligationDecision, Plan, PlanMatrix,
-    RequiredJobResult, TaskReport, final_report_id_for_run, parse_strict_json, validate_run_key,
+    RequiredJobResult, TaskReport, WorkflowEvent, final_report_id_for_run, parse_strict_json,
+    validate_run_key,
 };
 
 use self::merge_checks::{
-    check_agreement, check_execute_inventory, check_plan_evidence, check_plan_shape,
-    check_trust_coherence, expected_task_reports, partition_task_reports, plan_digests,
-    plan_entries, shards_failed,
+    CandidateAttestation, check_agreement, check_candidate_binding, check_execute_inventory,
+    check_plan_evidence, check_plan_shape, check_trust_coherence, expected_task_reports,
+    partition_task_reports, plan_digests, plan_entries, shards_failed,
 };
 pub(crate) use self::required_evidence::BaselineManifest;
 use self::required_evidence::{
@@ -36,6 +37,14 @@ pub(crate) struct MergeRequest {
     schema: u32,
     /// Run key.
     pub(crate) run_key: String,
+    /// Merge-time triggering event captured at assembly; the plan's
+    /// stamped event must match it exactly (a forged plan claiming a
+    /// stronger event fails closed instead of inheriting its stamp).
+    #[serde(default)]
+    actual_event: Option<WorkflowEvent>,
+    /// Head-bound candidate attestation; required in candidate mode.
+    #[serde(default)]
+    candidate_attestation: Option<CandidateAttestation>,
     /// Validated plan; absent when the plan artifact never landed.
     #[serde(default)]
     plan: Option<Plan>,
@@ -164,6 +173,7 @@ fn build_final(request: &MergeRequest, plan: &Plan) -> Result<FinalReport, Orche
     )?;
     check_plan_shape(plan, &mut signals, &mut miss_reasons);
     check_trust_coherence(plan, request, &mut signals, &mut miss_reasons);
+    check_candidate_binding(plan, request, &mut signals, &mut miss_reasons);
     check_plan_evidence(plan, request, &mut signals, &mut miss_reasons);
     check_execute_inventory(plan, &mut signals, &mut miss_reasons);
     let entries = plan_entries(plan);

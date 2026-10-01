@@ -1,12 +1,11 @@
 //! Pre-seed mode: build-once templates plus strict closure gates.
-use velnor_actions_contract::{Job, WorkflowPolicy};
+use velnor_actions_contract::Job;
 use velnor_actions_workflow_renderer::{
     INTERNAL_OP_ENV, PRESEED_BUILD_OUTPUT, PRESEED_MANIFEST_BINARY_ENV, PRESEED_MANIFEST_OUT_ENV,
-    PRESEED_MANIFEST_TARGET_ENV, PRESEED_MANIFEST_TOOLCHAIN_ENV, PRESEED_STAGE_NAME,
-    PRESEED_VERIFY_MANIFEST_NAME, PreseedStageSource, RenderError,
+    PRESEED_MANIFEST_TARGET_ENV, PRESEED_MANIFEST_TOOLCHAIN_ENV, PreseedStageSource, RenderError,
     WRITE_PRESEED_MANIFEST_OPERATION, checkout_step, merge_step, plan_step, preseed_build_step,
     preseed_download_step, preseed_manifest_step, preseed_manifest_verify_step, preseed_stage_step,
-    preseed_upload_step, preseed_verify_step, render_workflow_ir_strict,
+    preseed_upload_step, preseed_verify_step,
 };
 
 use super::impl_renderer_fixtures::*;
@@ -35,7 +34,7 @@ fn build_argv() -> Vec<String> {
     )
 }
 
-fn preseed_plan() -> Result<(String, Job), RenderError> {
+pub(crate) fn preseed_plan() -> Result<(String, Job), RenderError> {
     let build = build_argv();
     Ok(job(
         "plan",
@@ -43,7 +42,7 @@ fn preseed_plan() -> Result<(String, Job), RenderError> {
         Vec::new(),
         vec![
             checkout_step(&checkout_pin())?,
-            preseed_build_step(build.clone())?,
+            preseed_build_step(&build)?,
             preseed_verify_step(&mbx_probe(), MBX_VERSION)?,
             preseed_manifest_step(&build, TARGET)?,
             preseed_upload_step()?,
@@ -53,7 +52,7 @@ fn preseed_plan() -> Result<(String, Job), RenderError> {
     ))
 }
 
-fn preseed_final() -> Result<(String, Job), RenderError> {
+pub(crate) fn preseed_final() -> Result<(String, Job), RenderError> {
     let mut final_job = job(
         "required",
         "Required",
@@ -73,8 +72,23 @@ fn preseed_final() -> Result<(String, Job), RenderError> {
 fn preseed_templates_carry_trust_mark_and_exact_artifact() -> Result<(), RenderError> {
     let build = build_argv();
     let manifest = preseed_manifest_step(&build, TARGET)?;
+    // S1: the helper build compiles PR source, so it unsets runner
+    // credentials before exec and scrubs the step env.
+    let built_step = preseed_build_step(&build)?;
+    let velnor_actions_contract::StepKind::Shell { run, env } = &built_step.kind else {
+        panic!("pre-seed build must be shell: {:?}", built_step.kind);
+    };
+    assert_eq!(run.first().map(String::as_str), Some("env"));
+    assert!(run.contains(&"GITHUB_TOKEN".to_owned()), "{run:?}");
+    for key in velnor_actions_workflow_renderer::toolchain_env::STEP_CREDENTIAL_DENYLIST {
+        assert_eq!(
+            env.get(key).map(String::as_str),
+            Some(""),
+            "pre-seed build must scrub {key}"
+        );
+    }
     for step in [
-        preseed_build_step(build.clone())?,
+        preseed_build_step(&build)?,
         preseed_verify_step(&mbx_probe(), MBX_VERSION)?,
         manifest,
         preseed_upload_step()?,
@@ -185,194 +199,6 @@ fn preseed_verify_pins_binary_and_mbx_route() -> Result<(), RenderError> {
         );
     }
     Ok(())
-}
-
-#[test]
-fn strict_preseed_accepts_staged_internal_steps() -> Result<(), RenderError> {
-    let mut ctx = fixture_ctx();
-    ctx.preseed = true;
-    let text = render_workflow_ir_strict(
-        &fixture_ir(vec![preseed_plan()?, preseed_final()?]),
-        WorkflowPolicy::VelnorRepositoryV1,
-        None,
-        &ctx,
-        &mise(),
-    )?;
-    let plan = step_names(&text, "plan");
-    for name in [
-        "Build helper",
-        "Stage helper",
-        "Check generated files",
-        "Plan",
-        "Publish plan",
-    ] {
-        assert!(
-            plan.iter().any(|step| step.contains(name)),
-            "plan misses {name}: {plan:?}"
-        );
-    }
-    let build_at = plan.iter().position(|s| s.contains("Build helper"));
-    let stage_at = plan.iter().position(|s| s.contains("Stage helper"));
-    let check_at = plan.iter().position(|s| s.contains("Check generated"));
-    assert!(build_at < stage_at && stage_at < check_at, "{plan:?}");
-    let final_steps = step_names(&text, "required");
-    let download_at = final_steps
-        .iter()
-        .position(|s| s.contains("Download helper"));
-    let merge_at = final_steps.iter().position(|s| s.contains("Merge reports"));
-    assert!(
-        download_at.is_some() && download_at < merge_at,
-        "final downloads before merge: {final_steps:?}"
-    );
-    Ok(())
-}
-
-#[test]
-fn strict_preseed_closure_rejects_gaps() {
-    let mut ctx = fixture_ctx();
-    ctx.preseed = true;
-    let (id, mut plan) = preseed_plan().expect("plan");
-    plan.steps
-        .retain(|step| step.name != "Upload helper (pre-seed trust-on-review)");
-    let err = render_workflow_ir_strict(
-        &fixture_ir(vec![(id, plan), preseed_final().expect("final")]),
-        WorkflowPolicy::VelnorRepositoryV1,
-        None,
-        &ctx,
-        &mise(),
-    );
-    assert!(
-        err.is_err_and(|err| err.to_string().contains("preseed_incomplete")),
-        "plan without upload accepted"
-    );
-    let (id, mut final_job) = preseed_final().expect("final");
-    final_job
-        .steps
-        .retain(|step| step.name != "Download helper (pre-seed trust-on-review)");
-    let err = render_workflow_ir_strict(
-        &fixture_ir(vec![preseed_plan().expect("plan"), (id, final_job)]),
-        WorkflowPolicy::VelnorRepositoryV1,
-        None,
-        &ctx,
-        &mise(),
-    );
-    assert!(
-        err.is_err_and(|err| err.to_string().contains("preseed_incomplete")),
-        "final without download accepted"
-    );
-    let (id, mut unstaged) = preseed_final().expect("final");
-    unstaged
-        .steps
-        .retain(|step| step.name != PRESEED_STAGE_NAME);
-    let err = render_workflow_ir_strict(
-        &fixture_ir(vec![preseed_plan().expect("plan"), (id, unstaged)]),
-        WorkflowPolicy::VelnorRepositoryV1,
-        None,
-        &ctx,
-        &mise(),
-    );
-    assert!(
-        err.is_err_and(|err| err.to_string().contains("internal_without_acquire")),
-        "final without stage accepted"
-    );
-    let (id, mut misordered) = preseed_final().expect("final");
-    let stage_at = misordered
-        .steps
-        .iter()
-        .position(|step| step.name == PRESEED_STAGE_NAME)
-        .expect("stage step");
-    let stage = misordered.steps.remove(stage_at);
-    misordered.steps.insert(0, stage);
-    let err = render_workflow_ir_strict(
-        &fixture_ir(vec![preseed_plan().expect("plan"), (id, misordered)]),
-        WorkflowPolicy::VelnorRepositoryV1,
-        None,
-        &ctx,
-        &mise(),
-    );
-    assert!(
-        err.is_err_and(|err| err.to_string().contains("preseed_misordered")),
-        "stage-before-download accepted"
-    );
-}
-
-#[test]
-fn strict_preseed_closure_rejects_plan_manifest_gap() {
-    let mut ctx = fixture_ctx();
-    ctx.preseed = true;
-    let (id, mut plan) = preseed_plan().expect("plan");
-    plan.steps
-        .retain(|step| step.name != "Write helper manifest (pre-seed trust-on-review)");
-    let err = render_workflow_ir_strict(
-        &fixture_ir(vec![(id, plan), preseed_final().expect("final")]),
-        WorkflowPolicy::VelnorRepositoryV1,
-        None,
-        &ctx,
-        &mise(),
-    );
-    assert!(
-        err.is_err_and(|err| err.to_string().contains("preseed_incomplete:plan:manifest")),
-        "plan without manifest accepted"
-    );
-}
-
-#[test]
-fn strict_preseed_closure_rejects_verify_gaps() {
-    let mut ctx = fixture_ctx();
-    ctx.preseed = true;
-    let (id, mut unverified) = preseed_final().expect("final");
-    unverified
-        .steps
-        .retain(|step| step.name != PRESEED_VERIFY_MANIFEST_NAME);
-    let err = render_workflow_ir_strict(
-        &fixture_ir(vec![preseed_plan().expect("plan"), (id, unverified)]),
-        WorkflowPolicy::VelnorRepositoryV1,
-        None,
-        &ctx,
-        &mise(),
-    );
-    assert!(
-        err.is_err_and(|err| err.to_string().contains("preseed_incomplete")),
-        "final without manifest verify accepted"
-    );
-    let (id, mut verify_late) = preseed_final().expect("final");
-    let verify_at = verify_late
-        .steps
-        .iter()
-        .position(|step| step.name == PRESEED_VERIFY_MANIFEST_NAME)
-        .expect("verify step");
-    let verify = verify_late.steps.remove(verify_at);
-    verify_late.steps.push(verify);
-    let err = render_workflow_ir_strict(
-        &fixture_ir(vec![preseed_plan().expect("plan"), (id, verify_late)]),
-        WorkflowPolicy::VelnorRepositoryV1,
-        None,
-        &ctx,
-        &mise(),
-    );
-    assert!(
-        err.is_err_and(|err| err.to_string().contains("preseed_misordered")),
-        "verify-after-stage accepted"
-    );
-}
-
-#[test]
-fn strict_rejects_stage_without_preseed_mode() {
-    let ctx = fixture_ctx();
-    let err = render_workflow_ir_strict(
-        &fixture_ir(vec![
-            preseed_plan().expect("plan"),
-            preseed_final().expect("final"),
-        ]),
-        WorkflowPolicy::VelnorRepositoryV1,
-        None,
-        &ctx,
-        &mise(),
-    );
-    assert!(
-        err.is_err_and(|err| err.to_string().contains("preseed_stage_without_mode")),
-        "smuggled stage accepted"
-    );
 }
 
 #[test]

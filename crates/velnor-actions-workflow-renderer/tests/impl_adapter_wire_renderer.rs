@@ -11,10 +11,10 @@ use velnor_actions_workflow_renderer::toolchain_env::{
 };
 use velnor_actions_workflow_renderer::{
     RenderError, check_cache_step_order, check_no_bare_cargo, check_release_build,
-    lane_cargo_target_env, render_workflow_ir, shell_step,
+    lane_cargo_target_env, render_workflow_ir,
 };
 
-use super::impl_renderer_fixtures::{fixture_ctx, fixture_ir, job, mise_argv};
+use super::impl_renderer_fixtures::{fixture_ctx, fixture_ir, job, mise_argv, scrubbed_shell_step};
 
 #[test]
 fn toolchain_homes_merge_and_validate() {
@@ -54,14 +54,13 @@ fn bare_cargo_scan_rejects_unpinned_rust() {
 fn bare_cargo_scan_covers_rendered_workflow() -> Result<(), RenderError> {
     let ctx = fixture_ctx();
     let argv = mise_argv("rust@1.98.1", "cargo", &["--version"]);
-    let step = shell_step("Run cargo", argv, BTreeMap::new())?;
+    let step = scrubbed_shell_step("Run cargo", argv)?;
     let ir = fixture_ir(vec![job("task", "Task", Vec::new(), vec![step])]);
     let rendered = render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx)?;
     assert_eq!(check_no_bare_cargo(&rendered), Ok(()));
-    let bare = shell_step(
+    let bare = scrubbed_shell_step(
         "Run cargo",
         vec!["cargo".to_owned(), "--version".to_owned()],
-        BTreeMap::new(),
     )?;
     let ir = fixture_ir(vec![job("task", "Task", Vec::new(), vec![bare])]);
     let rendered = render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx)?;

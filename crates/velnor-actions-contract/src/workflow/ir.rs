@@ -1,5 +1,5 @@
 //! Stack-neutral GitHub Actions workflow IR.
-use super::jobs::ScheduleTrigger;
+use super::jobs::{ScheduleTrigger, is_safe_display_name};
 use super::permissions::{PermissionLevel, Permissions};
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
@@ -258,6 +258,12 @@ impl Job {
     ) -> Result<(), ContractError> {
         if self.display_name.trim().is_empty() {
             return Err(ContractError::identity("job.display_name", "empty_name"));
+        }
+        if !is_safe_display_name(&self.display_name) {
+            return Err(ContractError::identity(
+                "job.display_name",
+                format!("bad_display_name:{id}"),
+            ));
         }
         if !is_pinned_label(&self.runs_on) {
             return Err(ContractError::identity(

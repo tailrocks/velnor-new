@@ -262,6 +262,8 @@ fn step_to_yaml(
         StepKind::Action { uses, with } => {
             steps::validate_uses(uses)?;
             for (key, value) in with {
+                crate::expressions::check_with_key(key)?;
+                crate::expressions::check_with_value(key, value)?;
                 steps::scan_for_private_subcommands(key)?;
                 steps::scan_for_private_subcommands(value)?;
             }

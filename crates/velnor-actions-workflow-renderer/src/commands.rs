@@ -54,6 +54,9 @@ pub fn validate_command_argv(argv: &[String]) -> Result<(), RenderError> {
 
 /// Validate a fixed env map: `A-Z0-9_` keys, single-line clean values.
 ///
+/// Expressions stay allowlisted, never blanket-banned: only fixed
+/// runner-provided spans pass (see [`crate::expressions`]).
+///
 /// # Errors
 ///
 /// Returns [`RenderError::BadCommand`] or [`RenderError::PrivateSubcommand`].
@@ -72,6 +75,7 @@ pub fn validate_env(env: &BTreeMap<String, String>) -> Result<(), RenderError> {
         {
             return Err(RenderError::BadCommand(format!("bad_env_value:{key}")));
         }
+        crate::expressions::check_env_value(key, value)?;
         scan_for_private_subcommands(key)?;
         scan_for_private_subcommands(value)?;
     }

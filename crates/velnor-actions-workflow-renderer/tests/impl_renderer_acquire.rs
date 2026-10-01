@@ -80,7 +80,7 @@ fn acquire_requires_verify_wiring() {
     ]);
     let bare = vec!["fetch".to_owned(), staged];
     assert!(
-        acquire_velnor_step(bare, env.clone())
+        acquire_velnor_step(bare, &env)
             .is_err_and(|err| { format!("{err:?}").contains("acquire_without_verify") })
     );
 }

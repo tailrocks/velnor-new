@@ -37,6 +37,8 @@ mod impl_renderer_planclose;
 mod impl_renderer_planformat;
 #[path = "impl_renderer_preseed.rs"]
 mod impl_renderer_preseed;
+#[path = "impl_renderer_preseed_strict.rs"]
+mod impl_renderer_preseed_strict;
 #[path = "impl_renderer_preseed_verify.rs"]
 mod impl_renderer_preseed_verify;
 #[path = "impl_renderer_protocol.rs"]
@@ -77,6 +79,8 @@ mod impl_renderer_toolchain_contract;
 mod impl_renderer_tree;
 #[path = "impl_renderer_tree_policy.rs"]
 mod impl_renderer_tree_policy;
+#[path = "impl_renderer_tree_rejections.rs"]
+mod impl_renderer_tree_rejections;
 #[path = "impl_renderer_typed_ir.rs"]
 mod impl_renderer_typed_ir;
 #[path = "impl_renderer_yaml.rs"]

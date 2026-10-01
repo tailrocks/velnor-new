@@ -33,10 +33,11 @@ pub const RUSTUP_TOOLCHAIN_ENV: &str = "RUSTUP_TOOLCHAIN";
 /// Credential keys that must never reach a task environment.
 ///
 /// Static tokens (`MISE_GITHUB_TOKEN`, `GITHUB_TOKEN`/`GH_TOKEN`,
-/// `ACTIONS_RUNTIME_TOKEN`, `CARGO_REGISTRY_TOKEN`) plus the OIDC
-/// token-request pair: the URL mints tokens, so it is as sensitive
-/// as the token itself.
-pub const CREDENTIAL_ENV_KEYS: [&str; 7] = [
+/// `ACTIONS_RUNTIME_TOKEN`, `CARGO_REGISTRY_TOKEN`, the npm pair) plus
+/// the OIDC token-request pair: the URL mints tokens, so it is as
+/// sensitive as the token itself. Mirrors the renderer's scrub list
+/// element-for-element; the orchestrator pins the two equal by test.
+pub const CREDENTIAL_ENV_KEYS: [&str; 9] = [
     "MISE_GITHUB_TOKEN",
     "GITHUB_TOKEN",
     "GH_TOKEN",
@@ -44,7 +45,22 @@ pub const CREDENTIAL_ENV_KEYS: [&str; 7] = [
     "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
     "ACTIONS_ID_TOKEN_REQUEST_URL",
     "CARGO_REGISTRY_TOKEN",
+    "NPM_TOKEN",
+    "NODE_AUTH_TOKEN",
 ];
+
+/// True for a credential-shaped env key: the nine known names, any
+/// `CARGO_REGISTRIES_*` entry, or any `*_TOKEN` name.
+///
+/// Mirrors the renderer's predicate exactly (same three clauses, same
+/// order); the orchestrator parity test asserts agreement on a corpus
+/// covering exact, prefix, suffix, and clean keys.
+#[must_use]
+pub fn is_denied_credential_key(key: &str) -> bool {
+    CREDENTIAL_ENV_KEYS.contains(&key)
+        || key.starts_with("CARGO_REGISTRIES_")
+        || key.ends_with("_TOKEN")
+}
 
 /// Proxy/network keys a repo-task child inherits from its parent.
 ///
@@ -79,13 +95,14 @@ pub const CREDENTIAL_ALLOWLIST_BOOTSTRAP: [&str; 3] =
 pub const CREDENTIAL_ALLOWLIST_BASELINE: [&str; 2] = ["GITHUB_TOKEN", "GH_TOKEN"];
 
 /// Whether a key is reserved: isolation, install disable, or credentials.
-/// Credentials are [`CREDENTIAL_ENV_KEYS`]; note `CARGO_REGISTRY_TOKEN`
-/// (a repo task carrying it would silently disable trusted publishing).
+/// Credentials are pattern-matched ([`is_denied_credential_key`]); note
+/// `CARGO_REGISTRY_TOKEN` (a repo task carrying it would silently
+/// disable trusted publishing) and its `CARGO_REGISTRIES_*` siblings.
 #[must_use]
 pub fn is_reserved_env_key(key: &str) -> bool {
     ISOLATION_ENV.iter().any(|(own, _)| *own == key)
         || NO_AUTO_INSTALL_ENV.iter().any(|(own, _)| *own == key)
-        || CREDENTIAL_ENV_KEYS.contains(&key)
+        || is_denied_credential_key(key)
 }
 
 /// Redact secret-looking values for `Debug`: names stay, values become
@@ -166,8 +183,7 @@ impl EnvPolicy {
             let allowed = self.allowed_credentials();
             for (key, value) in parent {
                 let name = key.to_string_lossy();
-                let stripped = CREDENTIAL_ENV_KEYS.contains(&name.as_ref())
-                    && !allowed.contains(&name.as_ref());
+                let stripped = is_denied_credential_key(&name) && !allowed.contains(&name.as_ref());
                 if !stripped {
                     env.push((key.clone(), value.clone()));
                 }
@@ -193,10 +209,23 @@ pub fn proxy_passthrough(parent: &[(OsString, OsString)]) -> Vec<(OsString, OsSt
 }
 
 /// Remove every credential key the policy does not allow (P07-1).
+///
+/// The nine known names strip unconditionally; pattern-shaped names
+/// (`CARGO_REGISTRIES_*`, `*_TOKEN`) strip by scanning the live parent
+/// environment, since the fixed list can never enumerate them.
 pub(crate) fn strip_credentials(command: &mut Command, policy: EnvPolicy) {
     let allowed = policy.allowed_credentials();
     for key in CREDENTIAL_ENV_KEYS {
         if !allowed.contains(&key) {
+            command.env_remove(key);
+        }
+    }
+    for (key, _) in std::env::vars_os() {
+        let name = key.to_string_lossy();
+        if is_denied_credential_key(&name)
+            && !CREDENTIAL_ENV_KEYS.contains(&name.as_ref())
+            && !allowed.contains(&name.as_ref())
+        {
             command.env_remove(key);
         }
     }

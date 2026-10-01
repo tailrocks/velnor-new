@@ -16,7 +16,7 @@ use crate::OrchestratorError;
 use crate::cover::Signals;
 use crate::cover::revalidate_coverage;
 use crate::cover::shard::{check_entry_shards, validate_budgets};
-use crate::internal::internal_contract;
+use crate::internal::{SCHEMA, internal_contract};
 
 /// Check 1: `matrix.json` agrees with the plan matrix (WF-4.16).
 pub(crate) fn check_agreement(
@@ -50,20 +50,28 @@ pub(crate) fn check_plan_shape(
     }
 }
 
-/// Plan trust must match its event, and every task report must match the plan.
+/// Plan event/trust must match the merge-time actual event.
 ///
-/// Trust was stamped at plan time and never rechecked, so a forged plan
-/// or report could claim `Trusted` scope on PR content. The plan's trust
-/// must equal the canonical scope for its event, and each task file's
-/// event/trust pair must equal the plan's; anything else fails closed
-/// with a scope token, never silently.
+/// Trust was stamped at plan time and only checked for self-consistency,
+/// so a forged plan artifact could claim `Push` with `Trusted` scope on
+/// PR content and pass. The plan's event must equal the actual event
+/// captured at merge assembly (same run, runner ground truth), and the
+/// plan's trust must equal the canonical scope for that actual event;
+/// every task file's event/trust pair must still equal the plan's.
+/// Anything else fails closed with a scope token, never silently.
 pub(crate) fn check_trust_coherence(
     plan: &Plan,
     request: &MergeRequest,
     signals: &mut Signals,
     miss_reasons: &mut BTreeSet<String>,
 ) {
-    if plan.trust != velnor_actions_contract::trust_for_event(plan.event) {
+    let coherent = match request.actual_event {
+        Some(actual) => {
+            plan.event == actual && plan.trust == velnor_actions_contract::trust_for_event(actual)
+        }
+        None => false,
+    };
+    if !coherent {
         signals.planning_failed = true;
         miss_reasons.insert("trust_scope_mismatch".to_owned());
     }
@@ -73,6 +81,56 @@ pub(crate) fn check_trust_coherence(
             miss_reasons.insert("trust_scope_mismatch".to_owned());
             return;
         }
+    }
+}
+
+/// Head-bound candidate attestation written by the candidate job.
+///
+/// The candidate job observes the plan head from its downloaded plan
+/// artifact and embeds it as `commit`; the merge re-checks equality
+/// against its own plan head, so a stale or cross-plan candidate
+/// artifact fails closed instead of qualifying the wrong commit.
+/// Tokens reuse the closed miss set: absent is `source_missing`,
+/// mismatched is `trust_scope_mismatch`.
+#[derive(Debug, serde::Deserialize)]
+pub(crate) struct CandidateAttestation {
+    /// Attestation schema; must be 1.
+    schema: u32,
+    /// Plan head observed by the candidate job.
+    commit: String,
+}
+
+/// In candidate mode the attestation must bind the candidate to the plan head.
+///
+/// Candidate mode is the candidate job's presence in the required
+/// inventory (the final gate needs it exactly when the workflow was
+/// generated with candidate validation). Outside candidate mode there
+/// is no attestation to check.
+pub(crate) fn check_candidate_binding(
+    plan: &Plan,
+    request: &MergeRequest,
+    signals: &mut Signals,
+    miss_reasons: &mut BTreeSet<String>,
+) {
+    use velnor_actions_workflow_renderer::render::CANDIDATE_JOB_ID;
+    if !request
+        .required_job_ids
+        .iter()
+        .any(|id| id == CANDIDATE_JOB_ID)
+    {
+        return;
+    }
+    let bound = request.candidate_attestation.as_ref().is_some_and(|att| {
+        att.schema == SCHEMA && !att.commit.trim().is_empty() && att.commit == plan.head
+    });
+    if !bound {
+        signals.planning_failed = true;
+        let token = if request.candidate_attestation.is_none() {
+            "source_missing"
+        } else {
+            "trust_scope_mismatch"
+        };
+        miss_reasons.insert(token.to_owned());
     }
 }
 

@@ -1,7 +1,7 @@
 //! Final fan-in: fetch placement, publish, tolerant downloads, no wildcards.
-use velnor_actions_contract::NeedsConclusions;
+use velnor_actions_contract::{GeneratorValidation, NeedsConclusions, WorkflowPolicy};
 use velnor_actions_workflow_renderer::{
-    RenderError, checkout_step, merge_step, plan_step, write_request_step,
+    RenderError, checkout_step, merge_step, plan_step, render_workflow_ir, write_request_step,
 };
 
 use super::impl_renderer_fixtures::*;
@@ -142,6 +142,64 @@ fn merge_steps_carry_needs_channel_matching_final_needs() -> Result<(), RenderEr
         .map_err(RenderError::Contract)?;
     assert_eq!(conclusions.inventory, vec!["plan".to_owned()]);
     assert!(conclusions.gate_matches(&ir));
+    Ok(())
+}
+
+#[test]
+fn candidate_mode_downloads_attestation_before_merge() -> Result<(), RenderError> {
+    let plan = job(
+        "plan",
+        "Plan",
+        Vec::new(),
+        vec![
+            checkout_step(&checkout_pin())?,
+            acquire_fixture()?,
+            plan_step(),
+        ],
+    );
+    let support =
+        WorkflowPolicy::VelnorRepositoryV1.support_workflow(GeneratorValidation::Candidate);
+    let text = render_workflow_ir(
+        &fixture_ir(vec![plan, final_job()?]),
+        WorkflowPolicy::VelnorRepositoryV1,
+        Some(&support),
+        &candidate_ctx(),
+    )?;
+    let download = step_block(&text, "Download candidate attestation");
+    assert!(
+        download.contains("velnor-candidate-r${{ github.run_id }}-a${{ github.run_attempt }}"),
+        "candidate artifact name:\n{download}"
+    );
+    assert!(
+        download.contains("/candidate"),
+        "evidence subdir path:\n{download}"
+    );
+    let final_at = text.find("required:").expect("final job");
+    let mut at = final_at;
+    for name in [
+        "Download plan",
+        "Download candidate attestation",
+        "Merge reports",
+    ] {
+        let next = text[at..]
+            .find(&format!("- name: {name}"))
+            .unwrap_or_else(|| panic!("missing {name}:\n{text}"));
+        at += next + name.len();
+    }
+    let baseline_support =
+        WorkflowPolicy::VelnorRepositoryV1.support_workflow(GeneratorValidation::Bootstrap);
+    let mut baseline_ctx = fixture_ctx();
+    baseline_ctx.validator_commands = validator_commands();
+    let baseline = render_workflow_ir(
+        &fixture_ir(vec![minimal_plan_job()?, final_job()?]),
+        WorkflowPolicy::VelnorRepositoryV1,
+        Some(&baseline_support),
+        &baseline_ctx,
+    )?;
+    assert!(
+        !baseline.contains("Download candidate attestation"),
+        "non-candidate mode fetches no attestation:\n{baseline}"
+    );
     Ok(())
 }
 

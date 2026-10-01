@@ -87,11 +87,11 @@ fn group(kind: TaskKind) -> TaskGroup {
     }
 }
 
-fn text(group: &TaskGroup) -> Vec<String> {
-    cargo_payload_argv(group)
+fn text(group: &TaskGroup) -> Result<Vec<String>, ContractError> {
+    Ok(cargo_payload_argv(group)?
         .iter()
         .map(|s| s.to_string_lossy().into_owned())
-        .collect()
+        .collect())
 }
 
 #[test]
@@ -147,14 +147,15 @@ fn extension_carries_workspace_and_profile() {
 }
 
 #[test]
-fn clippy_denies_warnings_after_all_targets() {
-    let argv = text(&group(TaskKind::Clippy));
+fn clippy_denies_warnings_after_all_targets() -> Result<(), ContractError> {
+    let argv = text(&group(TaskKind::Clippy))?;
     let tail = argv.iter().map(String::as_str).collect::<Vec<_>>();
     assert!(tail.ends_with(&["--all-targets", "--", "-D", "warnings"]));
+    Ok(())
 }
 
 #[test]
-fn test_kinds_scope_to_package() {
+fn test_kinds_scope_to_package() -> Result<(), ContractError> {
     for kind in [
         TaskKind::Test,
         TaskKind::Nextest,
@@ -162,20 +163,22 @@ fn test_kinds_scope_to_package() {
         TaskKind::Doc,
         TaskKind::Build,
     ] {
-        let argv = text(&group(kind));
+        let argv = text(&group(kind))?;
         assert!(
             argv.windows(2).any(|w| w == ["--package", "demo"]),
             "{kind:?} misses --package"
         );
     }
-    assert!(!text(&group(TaskKind::Fmt)).contains(&"--package".to_owned()));
+    assert!(!text(&group(TaskKind::Fmt))?.contains(&"--package".to_owned()));
+    Ok(())
 }
 
 #[test]
-fn nextest_fails_on_no_tests() {
-    let argv = text(&group(TaskKind::Nextest));
+fn nextest_fails_on_no_tests() -> Result<(), ContractError> {
+    let argv = text(&group(TaskKind::Nextest))?;
     let tail = argv.iter().map(String::as_str).collect::<Vec<_>>();
     assert!(tail.ends_with(&["--no-tests", "fail"]));
+    Ok(())
 }
 
 #[test]

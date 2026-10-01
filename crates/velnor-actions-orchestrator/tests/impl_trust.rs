@@ -304,7 +304,8 @@ fn merge_flags_wrong_manifest_digest() -> TestResult {
     plan.validate()?;
     let reports = passing_reports(&plan)?;
     let request = serde_json::json!({
-        "schema": 1, "run_key": "local", "plan": plan, "matrix": plan.matrix,
+        "schema": 1, "run_key": "local", "actual_event": "pull_request",
+        "plan": plan, "matrix": plan.matrix,
         "matrix_reports": reports, "baseline_manifest": manifest,
         "required_job_ids": ["plan"],
         "required_jobs": [{"job_id": "plan", "conclusion": "success"}],

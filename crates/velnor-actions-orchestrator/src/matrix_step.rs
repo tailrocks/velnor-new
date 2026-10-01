@@ -277,14 +277,17 @@ pub(crate) fn helper_path_for_version() -> String {
 ///
 /// Captures the obligation exit, reports through the staged helper,
 /// then exits with the obligation code (helper failure surfaces only
-/// on an otherwise passing obligation).
+/// on an otherwise passing obligation). The unset prelude runs first:
+/// obligations execute repository code (build scripts), and the step
+/// env cannot shadow runner-injected credentials (D3).
 pub(crate) fn report_wrapper_argv(joined: &str, helper: &str) -> Vec<String> {
+    use velnor_actions_workflow_renderer::toolchain_env::with_credential_unset_script;
     vec![
         "sh".to_owned(),
         "-c".to_owned(),
-        format!(
+        with_credential_unset_script(&format!(
             "{joined}; code=$?; {EXIT_CODE_ENV}=\"$code\" {INTERNAL_OP_ENV}={REPORT_OP} \"{helper}\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\""
-        ),
+        )),
     ]
 }
 

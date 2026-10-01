@@ -43,6 +43,7 @@ pub(crate) fn merge_request(
     serde_json::json!({
         "schema": 1,
         "run_key": "local",
+        "actual_event": plan.get("event").cloned().unwrap_or(serde_json::Value::Null),
         "plan": plan,
         "matrix": matrix,
         "matrix_reports": reports,

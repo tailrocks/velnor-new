@@ -232,6 +232,17 @@ fn workflow_ir_validates_pins_and_refs() -> Result<(), ContractError> {
         job.runs_on = "ubuntu-latest".to_owned();
     }
     assert!(bad.validate().is_err());
+    for display in ["Plan ${{ secrets.x }}", "Plan\nInjected: true", "Plan\tx"] {
+        let mut bad = ir.clone();
+        if let Some(job) = bad.jobs.get_mut("plan") {
+            job.display_name = display.to_owned();
+        }
+        let err = bad.validate().expect_err("display must fail closed");
+        assert!(
+            err.to_string().contains("bad_display_name"),
+            "{display:?}: {err}"
+        );
+    }
     Ok(())
 }
 
@@ -366,31 +377,4 @@ fn final_without_plan_is_planning_failed() -> Result<(), ContractError> {
     assert_eq!(report.counts.selected, 0);
     assert!(FinalReport::without_plan("bogus", Vec::new()).is_err());
     Ok(())
-}
-
-#[test]
-fn job_conclusions_parse_and_serialize_closed() {
-    for (word, conclusion) in [
-        ("success", JobConclusion::Success),
-        ("failure", JobConclusion::Failure),
-        ("cancelled", JobConclusion::Cancelled),
-        ("skipped", JobConclusion::Skipped),
-        ("neutral", JobConclusion::Neutral),
-        ("missing", JobConclusion::Missing),
-    ] {
-        assert_eq!(JobConclusion::parse(word), Ok(conclusion));
-        assert_eq!(conclusion.as_str(), word);
-        let job = RequiredJobResult {
-            job_id: "plan".to_owned(),
-            conclusion,
-        };
-        let json = serde_json::to_value(&job).expect("serialize");
-        assert_eq!(json["conclusion"], word);
-        let back: RequiredJobResult = serde_json::from_value(json).expect("deserialize");
-        assert_eq!(back.conclusion, conclusion);
-    }
-    for bad in ["", "SUCCESS", "timed_out", "stale", "action_required"] {
-        let err = JobConclusion::parse(bad).expect_err("unknown");
-        assert!(err.to_string().contains("unknown_conclusion"), "{err}");
-    }
 }

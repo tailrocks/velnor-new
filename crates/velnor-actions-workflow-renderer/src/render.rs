@@ -14,7 +14,7 @@ use velnor_actions_contract::{
 
 use crate::{
     RenderError, cache_p08, closure, commands, document, final_steps, guard, marker, matrix, msrv,
-    preseed, steps, support, yaml::render_yaml,
+    preseed_closure, steps, support, yaml::render_yaml,
 };
 
 pub use crate::matrix::{
@@ -179,7 +179,7 @@ pub fn render_workflow_ir(
     closure::insert_request_closure(&mut jobs)?;
     closure::insert_task_closure(&mut jobs)?;
     closure::insert_final_closure(&mut jobs)?;
-    final_steps::insert_final_fanin(&mut jobs)?;
+    final_steps::insert_final_fanin(&mut jobs, ctx)?;
     render_merged(ir, &jobs, ctx)
 }
 
@@ -239,12 +239,12 @@ pub fn finalize_jobs(
         closure::check_internal_staged(id, job, ctx.preseed)?;
     }
     closure::check_plan_anchor(&jobs)?;
-    preseed::check_preseed_closure(&jobs, ctx.preseed)?;
+    preseed_closure::check_preseed_closure(&jobs, ctx.preseed)?;
     closure::insert_plan_closure(&mut jobs, ctx)?;
     closure::insert_request_closure(&mut jobs)?;
     closure::insert_task_closure(&mut jobs)?;
     closure::insert_final_closure(&mut jobs)?;
-    final_steps::insert_final_fanin(&mut jobs)?;
+    final_steps::insert_final_fanin(&mut jobs, ctx)?;
     Ok(jobs)
 }
 

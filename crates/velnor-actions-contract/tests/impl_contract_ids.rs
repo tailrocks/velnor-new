@@ -189,6 +189,8 @@ fn task_id_grammar_accepts_valid_and_rejects_absolute() -> Result<(), ContractEr
     );
     assert!(manifest_key_for_cargo_manifest("/abs/Cargo.toml").is_err());
     assert!(manifest_key_for_cargo_manifest("Cargo.lock").is_err());
+    assert!(manifest_key_for_cargo_manifest("-evil/Cargo.toml").is_err());
+    assert!(manifest_key_for_cargo_manifest("--help").is_err());
     let shard = task_id_for_stack("rust", "root", "test-run", "default", Some((2, 4)))?;
     assert_eq!(shard, "stack/rust/root/test-run/default/shard-2-of-4");
     validate_task_id(&shard)?;

@@ -25,8 +25,11 @@ fn oidc_publish_carries_zero_token_material() -> Result<(), RenderError> {
             shell(
                 "Publish",
                 &publish_argv(RELEASE_CONFIG_PATH),
-                &[("TOKEN", "${{ secrets.X }}"), FORGE_ENV[0]],
-            )?,
+                &[
+                    ("TOKEN", "${{ secrets.CARGO_REGISTRY_TOKEN }}"),
+                    FORGE_ENV[0],
+                ],
+            ),
         ],
     )
     .expect("job");
@@ -45,7 +48,7 @@ fn oidc_publish_carries_zero_token_material() -> Result<(), RenderError> {
                 "Publish",
                 &publish_argv(RELEASE_CONFIG_PATH),
                 &[("CARGO_REGISTRY_TOKEN", "x"), FORGE_ENV[0]],
-            )?,
+            ),
         ],
     )
     .expect("job");
@@ -65,7 +68,7 @@ fn publish_binds_the_exact_generated_config() -> Result<(), RenderError> {
         vec![
             policy_checkout(Some("false"))?,
             source_checkout(SHA, Some("true"))?,
-            shell("Publish", &["release-plz", "release"], &FORGE_ENV)?,
+            shell("Publish", &["release-plz", "release"], &FORGE_ENV),
         ],
     )
     .expect("job");
@@ -83,7 +86,7 @@ fn publish_binds_the_exact_generated_config() -> Result<(), RenderError> {
                 "Publish",
                 &publish_argv(RELEASE_BOOTSTRAP_CONFIG_PATH),
                 &FORGE_ENV,
-            )?,
+            ),
         ],
     )
     .expect("job");
@@ -101,13 +104,13 @@ fn release_plz_steps_require_the_forge_binding() -> Result<(), RenderError> {
             vec![
                 policy_checkout(Some("false"))?,
                 source_checkout(SHA, Some("true"))?,
-                shell("Publish", &publish_argv(RELEASE_CONFIG_PATH), &[])?,
+                shell("Publish", &publish_argv(RELEASE_CONFIG_PATH), &[]),
             ]
         } else {
             vec![
                 policy_checkout(Some("false"))?,
                 source_checkout(SHA, Some("false"))?,
-                shell("Run", &publish_argv(RELEASE_CONFIG_PATH), &[])?,
+                shell("Run", &publish_argv(RELEASE_CONFIG_PATH), &[]),
             ]
         };
         let unbound = with_steps(gated_spec()?, job_id, steps).expect("job");
@@ -133,7 +136,7 @@ fn release_plz_steps_require_the_forge_binding() -> Result<(), RenderError> {
                     "${{ secrets.GITHUB_TOKEN }}",
                 ],
                 &FORGE_ENV,
-            )?,
+            ),
         ],
     )
     .expect("job");
@@ -157,10 +160,13 @@ fn bootstrap_binds_exactly_one_env_token() -> Result<(), RenderError> {
                 "Publish",
                 &publish_argv(RELEASE_BOOTSTRAP_CONFIG_PATH),
                 &[
-                    ("CARGO_REGISTRY_TOKEN", "${{ secrets.BOOTSTRAP_TOKEN }}"),
+                    (
+                        "CARGO_REGISTRY_TOKEN",
+                        "${{ secrets.CARGO_REGISTRY_TOKEN }}",
+                    ),
                     FORGE_ENV[0],
                 ],
-            )?,
+            ),
         ],
         Some(&gate),
         Some(ENV),
@@ -178,7 +184,7 @@ fn bootstrap_binds_exactly_one_env_token() -> Result<(), RenderError> {
             "${{ secrets.X }}",
         ],
         &FORGE_ENV,
-    )?;
+    );
     let mut leaked = jobs.clone();
     leaked.get_mut("release-bootstrap").expect("job").steps = vec![
         policy_checkout(Some("false"))?,
@@ -198,7 +204,7 @@ fn bootstrap_binds_exactly_one_env_token() -> Result<(), RenderError> {
             "Publish",
             &publish_argv(RELEASE_BOOTSTRAP_CONFIG_PATH),
             &FORGE_ENV,
-        )?,
+        ),
     ];
     assert!(
         invalid(check_release_jobs(&spec(unbound), &binding()))
@@ -212,8 +218,11 @@ fn bootstrap_binds_exactly_one_env_token() -> Result<(), RenderError> {
         shell(
             "Publish",
             &publish_argv(RELEASE_BOOTSTRAP_CONFIG_PATH),
-            &[("TOKEN", "${{ secrets.BOOTSTRAP_TOKEN }}"), FORGE_ENV[0]],
-        )?,
+            &[
+                ("TOKEN", "${{ secrets.CARGO_REGISTRY_TOKEN }}"),
+                FORGE_ENV[0],
+            ],
+        ),
     ];
     assert!(
         invalid(check_release_jobs(&spec(wrong_key), &binding()))
@@ -244,7 +253,7 @@ fn verification_bypasses_are_rejected_on_publish_argv() -> Result<(), RenderErro
             vec![
                 policy_checkout(Some("false"))?,
                 source_checkout(SHA, Some("true"))?,
-                shell("Publish", &argv, &FORGE_ENV)?,
+                shell("Publish", &argv, &FORGE_ENV),
             ],
         )
         .expect("job");
@@ -275,7 +284,7 @@ fn dispatch_inputs_stay_out_of_publish_steps() -> Result<(), RenderError> {
                     "inputs.plan",
                 ],
                 &FORGE_ENV,
-            )?,
+            ),
         ],
     )
     .expect("job");
@@ -292,7 +301,7 @@ fn reconcile_is_credential_free_and_internal_ops_rejected() -> Result<(), Render
     let leaked = with_steps(
         gated_spec()?,
         "release-reconcile",
-        vec![shell("Run", &["echo", "${{ secrets.TOKEN }}"], &[])?],
+        vec![shell("Run", &["echo", "${{ secrets.TOKEN }}"], &[])],
     )
     .expect("job");
     assert!(

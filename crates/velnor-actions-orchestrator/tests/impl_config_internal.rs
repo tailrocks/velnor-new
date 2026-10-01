@@ -160,6 +160,7 @@ fn internal_merge_aggregates_reports() -> TestResult {
     let merge_request = serde_json::json!({
         "schema": 1,
         "run_key": "local",
+        "actual_event": "pull_request",
         "plan": plan,
         "matrix": plan.matrix,
         "matrix_reports": [],
@@ -180,6 +181,7 @@ fn internal_merge_aggregates_reports() -> TestResult {
     let merge_request = serde_json::json!({
         "schema": 1,
         "run_key": "local",
+        "actual_event": "pull_request",
         "plan": plan,
         "matrix": plan.matrix,
         "matrix_reports": reports,

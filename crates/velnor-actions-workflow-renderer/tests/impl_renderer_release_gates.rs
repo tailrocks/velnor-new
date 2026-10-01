@@ -1,7 +1,8 @@
 //! Release step-content gate cases (authority separation, argv safety).
 use std::collections::BTreeMap;
-use velnor_actions_contract::Step;
+use velnor_actions_contract::{Step, StepKind};
 use velnor_actions_workflow_renderer::RenderError;
+use velnor_actions_workflow_renderer::action_step;
 use velnor_actions_workflow_renderer::release_gates::{ReleaseConfigBinding, check_release_jobs};
 use velnor_actions_workflow_renderer::release_jobs::{
     ReleaseJobSpec, ReleaseRole, ReleaseWorkflowSpec,
@@ -13,7 +14,6 @@ use velnor_actions_workflow_renderer::release_spec::{
 use velnor_actions_workflow_renderer::release_tree::{
     RELEASE_BOOTSTRAP_CONFIG_PATH, RELEASE_CONFIG_PATH,
 };
-use velnor_actions_workflow_renderer::{action_step, shell_step};
 
 pub(crate) const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
 pub(crate) const OTHER_SHA: &str = "abcdef0123456789abcdef0123456789abcdef01";
@@ -71,14 +71,20 @@ pub(crate) fn source_checkout(sha: &str, persist: Option<&str>) -> Result<Step, 
     checkout(&inputs)
 }
 
-pub(crate) fn shell(name: &str, argv: &[&str], env: &[(&str, &str)]) -> Result<Step, RenderError> {
-    shell_step(
-        name,
-        argv.iter().map(ToString::to_string).collect(),
-        env.iter()
-            .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
-            .collect(),
-    )
+pub(crate) fn shell(name: &str, argv: &[&str], env: &[(&str, &str)]) -> Step {
+    // Direct IR: these tests pin the release gates as the enforcing
+    // layer, so construction bypasses the constructor gates.
+    Step {
+        name: name.to_owned(),
+        condition: None,
+        kind: StepKind::Shell {
+            run: argv.iter().map(ToString::to_string).collect(),
+            env: env
+                .iter()
+                .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
+                .collect(),
+        },
+    }
 }
 
 pub(crate) fn publish_argv(config: &str) -> Vec<&str> {
@@ -161,7 +167,7 @@ pub(crate) fn gated_spec() -> Result<ReleaseWorkflowSpec, RenderError> {
             "release-preparation".to_owned(),
             job(
                 ReleaseRole::Preparation,
-                vec![shell("Run", &["echo", "ok"], &[])?],
+                vec![shell("Run", &["echo", "ok"], &[])],
                 None,
                 None,
             ),
@@ -173,7 +179,7 @@ pub(crate) fn gated_spec() -> Result<ReleaseWorkflowSpec, RenderError> {
                 vec![
                     policy_checkout(Some("false"))?,
                     source_checkout(SHA, Some("false"))?,
-                    shell("Run", &["echo", "ok"], &[])?,
+                    shell("Run", &["echo", "ok"], &[]),
                 ],
                 None,
                 None,
@@ -186,7 +192,7 @@ pub(crate) fn gated_spec() -> Result<ReleaseWorkflowSpec, RenderError> {
                 vec![
                     policy_checkout(Some("false"))?,
                     source_checkout(SHA, Some("true"))?,
-                    shell("Publish", &publish_argv(RELEASE_CONFIG_PATH), &FORGE_ENV)?,
+                    shell("Publish", &publish_argv(RELEASE_CONFIG_PATH), &FORGE_ENV),
                 ],
                 Some(&gate),
                 Some(ENV),
@@ -196,7 +202,7 @@ pub(crate) fn gated_spec() -> Result<ReleaseWorkflowSpec, RenderError> {
             "release-reconcile".to_owned(),
             job(
                 ReleaseRole::Reconcile,
-                vec![shell("Run", &["echo", "ok"], &[])?],
+                vec![shell("Run", &["echo", "ok"], &[])],
                 Some("always()"),
                 None,
             ),
@@ -228,7 +234,7 @@ fn preparation_forbids_secrets_tokens_and_inputs() -> Result<(), RenderError> {
     let leaked = with_steps(
         gated_spec()?,
         "release-preparation",
-        vec![shell("Run", &["echo", "${{ secrets.TOKEN }}"], &[])?],
+        vec![shell("Run", &["echo", "${{ secrets.TOKEN }}"], &[])],
     )
     .expect("job");
     assert!(
@@ -243,7 +249,7 @@ fn preparation_forbids_secrets_tokens_and_inputs() -> Result<(), RenderError> {
             "Run",
             &["echo", "ok"],
             &[("CARGO_REGISTRY_TOKEN", "x")],
-        )?],
+        )],
     )
     .expect("job");
     assert!(
@@ -254,7 +260,7 @@ fn preparation_forbids_secrets_tokens_and_inputs() -> Result<(), RenderError> {
     let interpolated = with_steps(
         gated_spec()?,
         "release-preparation",
-        vec![shell("Run", &["echo", "github.event.inputs.plan"], &[])?],
+        vec![shell("Run", &["echo", "github.event.inputs.plan"], &[])],
     )
     .expect("job");
     assert!(
@@ -275,7 +281,7 @@ fn preflight_requires_the_exact_approved_source() -> Result<(), RenderError> {
             vec![
                 policy_checkout(Some("false"))?,
                 source_checkout(sha, Some("false"))?,
-                shell("Run", &["echo", "ok"], &[])?,
+                shell("Run", &["echo", "ok"], &[]),
             ],
         )
         .expect("job");
@@ -290,7 +296,7 @@ fn preflight_requires_the_exact_approved_source() -> Result<(), RenderError> {
         "release-preflight",
         vec![
             policy_checkout(Some("false"))?,
-            shell("Run", &["echo", "ok"], &[])?,
+            shell("Run", &["echo", "ok"], &[]),
         ],
     )
     .expect("job");

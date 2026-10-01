@@ -1,6 +1,6 @@
 //! Toolchain environment and subcommand allowlist cases.
 use std::ffi::OsString;
-use velnor_actions_mise::command::is_reserved_env_key;
+use velnor_actions_mise::command::{is_denied_credential_key, is_reserved_env_key};
 use velnor_actions_mise::{
     ALLOWED_MISE_SUBCOMMANDS, CREDENTIAL_ENV_KEYS, GitRequest, IsolatedCommand,
     MISE_CARGO_HOME_ENV, MISE_RUSTUP_HOME_ENV, MiseError, NO_AUTO_INSTALL_ENV,
@@ -141,8 +141,25 @@ fn credential_strip_set_is_exact() {
             "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
             "ACTIONS_ID_TOKEN_REQUEST_URL",
             "CARGO_REGISTRY_TOKEN",
+            "NPM_TOKEN",
+            "NODE_AUTH_TOKEN",
         ]
     );
+}
+
+#[test]
+fn credential_pattern_catches_registry_and_token_variants() {
+    for denied in [
+        "CARGO_REGISTRIES_ACME_TOKEN",
+        "NPM_TOKEN",
+        "MY_REGISTRY_TOKEN",
+    ] {
+        assert!(is_denied_credential_key(denied), "{denied} must match");
+        assert!(is_reserved_env_key(denied), "{denied} must be reserved");
+    }
+    for clean in ["MISE_RUSTUP_HOME", "TOKEN_COUNT", "CARGO_REGISTRIES"] {
+        assert!(!is_denied_credential_key(clean), "{clean} must pass");
+    }
 }
 
 #[test]

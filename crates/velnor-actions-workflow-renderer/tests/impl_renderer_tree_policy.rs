@@ -5,9 +5,9 @@ use velnor_actions_contract::{
     WorkflowIr, WorkflowPolicy,
 };
 use velnor_actions_workflow_renderer::{
-    ALINT_USES, CANDIDATE_JOB_ID, CONCURRENCY_CANCEL, CONCURRENCY_GROUP, CandidateSpec,
-    RenderContext, RenderError, ValidatorCommand, checkout_step, merge_step, plan_step,
-    render_tree, render_workflow_ir, shell_step, with_marker,
+    CANDIDATE_JOB_ID, CONCURRENCY_CANCEL, CONCURRENCY_GROUP, CandidateSpec, RenderContext,
+    RenderError, ValidatorCommand, checkout_step, merge_step, plan_step, render_workflow_ir,
+    shell_step, with_marker,
 };
 
 const VERSION: &str = "0.1.0";
@@ -17,7 +17,7 @@ fn checkout_pin() -> String {
     format!("actions/checkout@{:040x}", 0)
 }
 
-fn fixture_ctx() -> RenderContext {
+pub(crate) fn fixture_ctx() -> RenderContext {
     RenderContext {
         generator_version: VERSION.to_owned(),
         runs_on: LABEL.to_owned(),
@@ -43,7 +43,7 @@ fn plan_job() -> Result<Job, RenderError> {
     })
 }
 
-fn validator_commands() -> Vec<ValidatorCommand> {
+pub(crate) fn validator_commands() -> Vec<ValidatorCommand> {
     [
         ValidatorKind::CargoDeny,
         ValidatorKind::CargoMachete,
@@ -58,7 +58,7 @@ fn validator_commands() -> Vec<ValidatorCommand> {
     .collect()
 }
 
-fn fixture_ir() -> Result<WorkflowIr, RenderError> {
+pub(crate) fn fixture_ir() -> Result<WorkflowIr, RenderError> {
     let mut jobs = BTreeMap::new();
     jobs.insert("plan".to_owned(), plan_job()?);
     Ok(WorkflowIr {
@@ -82,7 +82,7 @@ fn fixture_ir() -> Result<WorkflowIr, RenderError> {
     })
 }
 
-fn actionlint_bytes() -> Result<String, RenderError> {
+pub(crate) fn actionlint_bytes() -> Result<String, RenderError> {
     with_marker(VERSION, "config-variables: []\n")
 }
 
@@ -211,7 +211,52 @@ fn candidate_job_renders_with_plan_dependency() -> Result<(), RenderError> {
     assert!(text.contains("release:"));
     assert!(text.contains("ref_protected"));
     assert!(text.contains("actions/download-artifact@"));
+    // S1: the build compiles PR source and qualification executes the
+    // PR-built binary, so both steps unset runner credentials first.
+    assert!(
+        text.contains("env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN"),
+        "build must unset:\n{text}"
+    );
+    assert!(
+        text.contains("unset ACTIONS_ID_TOKEN_REQUEST_TOKEN"),
+        "qualify must unset:\n{text}"
+    );
+    assert!(
+        text.contains("GITHUB_TOKEN: \"\""),
+        "candidate steps must scrub:\n{text}"
+    );
     Ok(())
+}
+
+#[test]
+fn candidate_qualify_rejects_non_shell_vectors() {
+    let mut ctx = fixture_ctx();
+    ctx.validator_commands = validator_commands();
+    ctx.candidate = Some(CandidateSpec {
+        build: argv_of(&[
+            "mise",
+            "exec",
+            "rust@1.98.1",
+            "mr-boxington@1.19.0",
+            "--",
+            "build",
+        ]),
+        qualify: argv_of(&["mise", "run", "qualify"]),
+    });
+    let support =
+        WorkflowPolicy::VelnorRepositoryV1.support_workflow(GeneratorValidation::Candidate);
+    let ir = fixture_ir().expect("ir");
+    let err = render_workflow_ir(
+        &ir,
+        WorkflowPolicy::VelnorRepositoryV1,
+        Some(&support),
+        &ctx,
+    )
+    .expect_err("non-shell qualify must fail");
+    assert!(
+        format!("{err:?}").contains("qualify_without_unset"),
+        "wrong rejection: {err:?}"
+    );
 }
 
 #[test]
@@ -264,7 +309,7 @@ fn final_gate_keeps_exact_name_and_condition() -> Result<(), RenderError> {
     Ok(())
 }
 
-fn task_job(step: Step) -> Job {
+pub(crate) fn task_job(step: Step) -> Job {
     simple_job("Task", vec!["plan".to_owned()], vec![step])
 }
 
@@ -321,80 +366,11 @@ fn renderer_rejects_bare_commands_inside_ir() -> Result<(), RenderError> {
         task_job(shell_step(
             "Focused",
             vec!["true".to_owned()],
-            BTreeMap::new(),
+            velnor_actions_workflow_renderer::toolchain_env::with_credential_scrub(
+                &BTreeMap::new(),
+            ),
         )?),
     );
     assert!(render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx).is_ok());
-    Ok(())
-}
-
-#[test]
-fn renderer_rejects_unpinned_actions_inside_ir() -> Result<(), RenderError> {
-    let ctx = fixture_ctx();
-    for (name, uses) in [
-        ("Fetch", "actions/checkout@main"),
-        ("Run Alint", "asamarts/alint@v0.16.1"),
-    ] {
-        let mut ir = fixture_ir()?;
-        ir.jobs.insert(
-            "velnor-task".to_owned(),
-            task_job(Step {
-                name: name.to_owned(),
-                condition: None,
-                kind: StepKind::Action {
-                    uses: uses.to_owned(),
-                    with: BTreeMap::new(),
-                },
-            }),
-        );
-        let err = render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx)
-            .expect_err("unpinned ref must be rejected");
-        assert!(
-            format!("{err:?}").contains("unpinned_ref"),
-            "wrong rejection for {uses}: {err:?}"
-        );
-    }
-    Ok(())
-}
-
-#[test]
-fn velnor_policy_emits_full_sha_alint_pin() -> Result<(), RenderError> {
-    let mut ctx = fixture_ctx();
-    ctx.validator_commands = validator_commands();
-    let support =
-        WorkflowPolicy::VelnorRepositoryV1.support_workflow(GeneratorValidation::Bootstrap);
-    let text = render_workflow_ir(
-        &fixture_ir()?,
-        WorkflowPolicy::VelnorRepositoryV1,
-        Some(&support),
-        &ctx,
-    )?;
-    assert_eq!(
-        ALINT_USES,
-        "asamarts/alint@9f9d34ba0eae3888299b9e570f43338b0e7f2cdb"
-    );
-    assert!(text.contains("  alint:"), "alint job missing:\n{text}");
-    assert!(
-        text.contains("uses: asamarts/alint@9f9d34ba0eae3888299b9e570f43338b0e7f2cdb"),
-        "full-SHA pin missing:\n{text}"
-    );
-    assert!(
-        !text.contains("asamarts/alint@v"),
-        "tag ref emitted:\n{text}"
-    );
-    Ok(())
-}
-
-#[test]
-fn tree_rejects_unmarked_inputs() -> Result<(), RenderError> {
-    let workflow = render_workflow_ir(
-        &fixture_ir()?,
-        WorkflowPolicy::ConsumerV1,
-        None,
-        &fixture_ctx(),
-    )?;
-    assert!(render_tree(&workflow, "config-variables: []\n", VERSION).is_err());
-    assert!(render_tree("name: x\n", &actionlint_bytes()?, VERSION).is_err());
-    assert!(render_tree(&workflow, &actionlint_bytes()?, "9.9.9").is_err());
     Ok(())
 }

@@ -249,18 +249,16 @@ fn tools_restore_and_save_pin_mise_data_dir_only() {
 #[test]
 fn strict_uses_builtin_cache_without_manual_tools_steps()
 -> Result<(), velnor_actions_workflow_renderer::RenderError> {
-    use std::collections::BTreeMap;
-    use velnor_actions_workflow_renderer::{checkout_step, shell_step};
+    use velnor_actions_workflow_renderer::checkout_step;
     let lint = job(
         "actionlint",
         "Actionlint",
         Vec::new(),
         vec![
             checkout_step(&checkout_pin())?,
-            shell_step(
+            scrubbed_shell_step(
                 "Run actionlint",
                 mise_argv("actionlint@1.7.12", "actionlint", &["-color"]),
-                BTreeMap::new(),
             )?,
         ],
     );

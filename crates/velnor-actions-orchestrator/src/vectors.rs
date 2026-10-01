@@ -65,7 +65,9 @@ pub(crate) fn task_argv(
         tools.push(PinnedTool::Nextest);
     }
     let program = OsString::from(driver.map_or("cargo", RouteDriver::program));
-    let payload = cargo_payload_with_profile(group);
+    let payload = cargo_payload_with_profile(group).map_err(|err| OrchestratorError::Contract {
+        problem: err.to_string(),
+    })?;
     let exec = PinnedToolExec::new(tools, &program, payload).map_err(|err| {
         OrchestratorError::Contract {
             problem: err.to_string(),
@@ -180,8 +182,10 @@ fn validator_argv(
 ///
 /// Only names in `allowlist` are emitted; there is no other path from a
 /// task name to a step, so undeclared names can never execute (R26).
-/// Every step carries the scrubbed execution env: custom tasks run
-/// repository Mise configuration, so ambient tokens must stop here.
+/// Every step carries the scrubbed execution env plus the unset wrapper:
+/// custom tasks run repository Mise configuration, so ambient tokens
+/// must stop here; the step env alone cannot shadow runner-injected
+/// credentials (D3).
 /// # Errors
 ///
 /// Returns a contract error when a name fails the task-name rule.
@@ -189,12 +193,14 @@ pub(crate) fn custom_task_steps(
     allowlist: &[String],
     catalog: &ToolCatalog,
 ) -> Result<Vec<Step>, OrchestratorError> {
+    use velnor_actions_workflow_renderer::toolchain_env::with_env_unset_argv;
     allowlist
         .iter()
         .map(|task| {
             let run = custom_task_run_argv(task).map_err(|err| OrchestratorError::Contract {
                 problem: err.to_string(),
             })?;
+            let run = with_env_unset_argv(&run);
             let env = crate::matrix_step::task_execution_env(catalog, &BTreeMap::new())?;
             Ok(Step {
                 name: format!("Custom task {task}"),

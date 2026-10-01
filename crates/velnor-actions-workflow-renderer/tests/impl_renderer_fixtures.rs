@@ -50,7 +50,7 @@ pub(crate) fn acquire_fixture() -> Result<Step, RenderError> {
     );
     acquire_velnor_step(
         vec!["sh".to_owned(), "-c".to_owned(), script],
-        BTreeMap::from([
+        &BTreeMap::from([
             (ASSET_SHA_ENV.to_owned(), "a".repeat(64)),
             (
                 ASSET_URL_ENV.to_owned(),
@@ -197,7 +197,7 @@ pub(crate) fn matrix_task_job() -> Result<(String, velnor_actions_contract::Job)
     let step = shell_step(
         "Run task",
         vec!["sh".to_owned(), "-c".to_owned(), "echo hi".to_owned()],
-        env,
+        velnor_actions_workflow_renderer::toolchain_env::with_credential_scrub(&env),
     )?;
     Ok(job(
         "velnor-task",
@@ -205,4 +205,13 @@ pub(crate) fn matrix_task_job() -> Result<(String, velnor_actions_contract::Job)
         vec!["plan".to_owned()],
         vec![checkout_step(&checkout_pin())?, step],
     ))
+}
+
+/// Shell fixture carrying the credential scrub overlay (D1 gate input).
+pub(crate) fn scrubbed_shell_step(name: &str, argv: Vec<String>) -> Result<Step, RenderError> {
+    shell_step(
+        name,
+        argv,
+        velnor_actions_workflow_renderer::toolchain_env::with_credential_scrub(&BTreeMap::new()),
+    )
 }

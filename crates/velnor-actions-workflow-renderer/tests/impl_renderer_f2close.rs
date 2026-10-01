@@ -1,7 +1,8 @@
 //! F2 closure: candidate artifacts, verify-before-run, release.
 use velnor_actions_contract::{GeneratorValidation, WorkflowPolicy};
 use velnor_actions_workflow_renderer::steps::{
-    download_artifact_step, matrix_report_upload_step, upload_artifact_step,
+    candidate_attestation_script, download_artifact_step, matrix_report_upload_step,
+    upload_artifact_step,
 };
 use velnor_actions_workflow_renderer::{
     CHECK_GENERATED_NAME, RenderError, VERIFY_MANIFEST_NAME, candidate_artifact_name,
@@ -114,6 +115,111 @@ fn candidate_verify_script_checks_live_manifest() -> Result<(), RenderError> {
     assert!(!tampered, "tampered sha must fail");
     assert!(!wrong_target, "wrong target must fail");
     assert!(!wrong_commit, "wrong commit must fail");
+    Ok(())
+}
+
+#[test]
+#[cfg(unix)]
+fn candidate_attestation_script_attests_live_plan() -> Result<(), RenderError> {
+    use std::process::Command;
+    let script = candidate_attestation_script();
+    for banned in ["$(", "`", "\n"] {
+        assert!(!script.contains(banned), "banned {banned:?}:\n{script}");
+    }
+    let root = std::env::temp_dir().join(format!("velnor-attest-{}", std::process::id()));
+    let run = root.join("velnor/r7-a2");
+    let out = root.join("velnor/candidate-output");
+    std::fs::create_dir_all(&run)
+        .map_err(|err| RenderError::InvalidWorkflow(format!("tmp:{err}")))?;
+    std::fs::create_dir_all(&out)
+        .map_err(|err| RenderError::InvalidWorkflow(format!("tmp:{err}")))?;
+    let run_case = |plan: Option<&str>| {
+        let plan_path = run.join("plan.json");
+        match plan {
+            Some(body) => std::fs::write(&plan_path, body).expect("plan fixture"),
+            None => {
+                std::fs::remove_file(&plan_path).ok();
+            }
+        }
+        std::fs::remove_file(out.join("candidate-attestation.json")).ok();
+        let ok = Command::new("sh")
+            .args(["-c", &script])
+            .env("RUNNER_TEMP", &root)
+            .env("GITHUB_RUN_ID", "7")
+            .env("GITHUB_RUN_ATTEMPT", "2")
+            .status()
+            .expect("sh")
+            .success();
+        let attested = std::fs::read_to_string(out.join("candidate-attestation.json")).ok();
+        (ok, attested)
+    };
+    let head = "a".repeat(40);
+    let plan = format!(
+        "{{\"schema\":1,\"run_key\":\"r7-a2\",\"plan_id\":\"plan-r7-a2\",\"base\":null,\"head\":\"{head}\",\"event\":\"push\"}}"
+    );
+    let (ok, attested) = run_case(Some(&plan));
+    assert!(ok, "good plan must attest");
+    assert_eq!(
+        attested.as_deref(),
+        Some(format!("{{\"schema\":1,\"commit\":\"{head}\"}}").as_str()),
+        "attestation binds the head"
+    );
+    let (ok, _) = run_case(None);
+    assert!(!ok, "missing plan must fail");
+    let (ok, _) = run_case(Some("{\"schema\":1,\"head\":\"\"}"));
+    assert!(!ok, "empty head must fail");
+    // A quoted head truncates at extraction: whatever the script emits
+    // must not equal the binding for the real head (merge closes it).
+    let (ok, attested) = run_case(Some("{\"schema\":1,\"head\":\"ab\\\"cd\"}"));
+    assert!(
+        !ok || attested.as_deref() != Some("{\"schema\":1,\"commit\":\"ab\\\"cd\"}"),
+        "quoted head must not bind: {attested:?}"
+    );
+    std::fs::remove_dir_all(&root).ok();
+    Ok(())
+}
+
+#[test]
+fn candidate_job_downloads_plan_and_attests_before_upload() -> Result<(), RenderError> {
+    let support =
+        WorkflowPolicy::VelnorRepositoryV1.support_workflow(GeneratorValidation::Candidate);
+    let text = render_workflow_ir(
+        &fixture_ir(vec![minimal_plan_job()?]),
+        WorkflowPolicy::VelnorRepositoryV1,
+        Some(&support),
+        &candidate_ctx(),
+    )?;
+    let order = [
+        "Download plan",
+        "Write candidate manifest",
+        "Write candidate attestation",
+        "Upload candidate",
+        "Download candidate",
+        VERIFY_MANIFEST_NAME,
+        "Qualify candidate",
+    ];
+    let candidate_at = text.find("candidate:").expect("candidate job");
+    let mut at = candidate_at;
+    for name in order {
+        let found = text[at..]
+            .find(name)
+            .unwrap_or_else(|| panic!("missing {name}:\n{text}"));
+        at += found + name.len();
+    }
+    let plain_support =
+        WorkflowPolicy::VelnorRepositoryV1.support_workflow(GeneratorValidation::Bootstrap);
+    let mut plain_ctx = fixture_ctx();
+    plain_ctx.validator_commands = validator_commands();
+    let plain = render_workflow_ir(
+        &fixture_ir(vec![minimal_plan_job()?]),
+        WorkflowPolicy::VelnorRepositoryV1,
+        Some(&plain_support),
+        &plain_ctx,
+    )?;
+    assert!(
+        !plain.contains("Write candidate attestation"),
+        "non-candidate mode emits no attestation:\n{plain}"
+    );
     Ok(())
 }
 

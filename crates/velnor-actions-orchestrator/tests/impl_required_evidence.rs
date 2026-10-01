@@ -153,12 +153,17 @@ fn candidate_evidence_is_its_needs_conclusion() -> TestResult {
         ]);
     };
     let base = || {
-        merge_request(
+        let mut request = merge_request(
             &plan_value,
             &matrix,
             &serde_json::to_value(&reports).expect("reports"),
             &success_jobs(),
-        )
+        );
+        // S3 binds the candidate to the plan head independently of the
+        // needs conclusion under test; stage the matching attestation
+        // so this test isolates the conclusion dimension.
+        request["candidate_attestation"] = serde_json::json!({"schema": 1, "commit": plan.head});
+        request
     };
 
     // A gating candidate with a success conclusion passes: the needs
@@ -250,6 +255,7 @@ fn missing_report_file_fails_closed() -> TestResult {
             .filter(|e| e.as_str() != Some("missing_needs_channel"))
             .collect(),
     );
+    value["actual_event"] = value["plan"]["event"].clone();
     let report: velnor_actions_contract::FinalReport =
         serde_json::from_str(&merge_internal(&value.to_string())?)?;
     assert_eq!(report.status, FinalStatus::PlanningFailed);

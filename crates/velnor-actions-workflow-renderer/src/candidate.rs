@@ -12,9 +12,10 @@ use velnor_actions_contract::{Job, Step};
 use crate::{
     RenderError,
     artifact_paths::{CANDIDATE_OUTPUT_DIR_EXPR, CANDIDATE_STAGE_DIR_EXPR},
-    closure::{FRESHNESS_OUTDIR, freshness_step},
+    closure::{FRESHNESS_OUTDIR, download_plan_step, freshness_step},
     render::{CANDIDATE_JOB_ID, CandidateSpec, PLAN_JOB_ID, RenderContext},
     steps,
+    toolchain_env::{with_credential_scrub, with_credential_unset_script, with_env_unset_argv},
 };
 
 /// Display name of the candidate-manifest verification step.
@@ -62,7 +63,8 @@ pub fn candidate_manifest_verify_script(target: &str) -> String {
 ///
 /// Cache-contract §3: the report MUST verify the manifest before running
 /// any candidate command. The expected target is the literal triple the
-/// candidate job builds for (never the manifest's own claim).
+/// candidate job builds for (never the manifest's own claim). Scrubbed:
+/// fixed `test`/`sha256sum` only, no auth needed.
 /// # Errors
 pub fn candidate_manifest_verify_step(target: &str) -> Result<Step, RenderError> {
     if !velnor_actions_contract::is_supported_target(target) {
@@ -77,17 +79,25 @@ pub fn candidate_manifest_verify_step(target: &str) -> Result<Step, RenderError>
             "-c".to_owned(),
             candidate_manifest_verify_script(target),
         ],
-        BTreeMap::new(),
+        with_credential_scrub(&BTreeMap::new()),
     )
 }
 
-/// Candidate job: build once, upload with manifest, download, verify, qualify.
+/// Candidate job: build once, attest the plan head, upload, verify, qualify.
 ///
 /// Qualification runs against the downloaded artifact and never rebuilds
 /// it (bootstrap contract §4 steps 4-5). Needs plan; feeds nothing.
-/// Candidate mode verifies the downloaded manifest, then performs the
-/// generated-files check with the downloaded candidate binary, after the
-/// download and before qualification.
+/// Candidate mode downloads the plan, writes the head-bound attestation
+/// beside the manifest (same artifact), verifies the downloaded
+/// manifest, then performs the generated-files check with the downloaded
+/// candidate binary, after the download and before qualification.
+///
+/// Credential posture: the build compiles PR source (build scripts run)
+/// and qualification executes the PR-built binary, so both steps carry
+/// the scrub overlay plus the unset wrapper. Neither needs auth: tool
+/// and crate downloads are unauthenticated public fetches, so a cold
+/// cache slows down (rate limits) instead of failing. A future private
+/// registry would need an explicit scoped binding here, never ambient.
 /// # Errors
 pub(crate) fn candidate_job(ctx: &RenderContext, spec: &CandidateSpec) -> Result<Job, RenderError> {
     let target =
@@ -107,19 +117,58 @@ pub(crate) fn candidate_job(ctx: &RenderContext, spec: &CandidateSpec) -> Result
         environment: None,
         steps: vec![
             steps::checkout_step(&ctx.checkout_uses)?,
-            steps::shell_step("Build candidate", spec.build.clone(), BTreeMap::new())?,
+            steps::shell_step(
+                "Build candidate",
+                with_env_unset_argv(&spec.build),
+                with_credential_scrub(&BTreeMap::new()),
+            )?,
+            download_plan_step()?,
             steps::shell_step(
                 "Write candidate manifest",
                 vec!["sh".to_owned(), "-c".to_owned(), manifest],
-                BTreeMap::new(),
+                with_credential_scrub(&BTreeMap::new()),
+            )?,
+            steps::shell_step(
+                "Write candidate attestation",
+                vec![
+                    "sh".to_owned(),
+                    "-c".to_owned(),
+                    steps::candidate_attestation_script(),
+                ],
+                with_credential_scrub(&BTreeMap::new()),
             )?,
             steps::upload_artifact_step(&artifact, CANDIDATE_OUTPUT_DIR_EXPR)?,
             steps::download_artifact_step(&artifact, CANDIDATE_STAGE_DIR_EXPR)?,
             candidate_manifest_verify_step(target)?,
             freshness_step(&candidate_binary, FRESHNESS_OUTDIR, &ctx.plan_consumer_env)?,
-            steps::shell_step("Qualify candidate", spec.qualify.clone(), BTreeMap::new())?,
+            steps::shell_step(
+                "Qualify candidate",
+                qualify_scrubbed_argv(&spec.qualify)?,
+                with_credential_scrub(&BTreeMap::new()),
+            )?,
         ],
     })
+}
+
+/// Qualification argv with the credential-unset prelude injected.
+///
+/// The qualify vector is a fixed `sh -c` script executing the PR-built
+/// binary; the prelude unsets the unshadowable runner credentials
+/// before the first artifact byte runs. Anything else is not a qualify
+/// vector and fails closed.
+/// # Errors
+fn qualify_scrubbed_argv(argv: &[String]) -> Result<Vec<String>, RenderError> {
+    let [shell, flag, script] = argv else {
+        return Err(RenderError::BadCommand("qualify_without_unset".to_owned()));
+    };
+    if shell != "sh" || flag != "-c" {
+        return Err(RenderError::BadCommand("qualify_without_unset".to_owned()));
+    }
+    Ok(vec![
+        shell.clone(),
+        flag.clone(),
+        with_credential_unset_script(script),
+    ])
 }
 
 /// Protected release job: publish assets plus manifest, verify digests.

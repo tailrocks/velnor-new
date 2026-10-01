@@ -120,34 +120,47 @@ pub fn evidence_id(evidence: &Evidence) -> String {
 /// separator; only lint args (`-D warnings` for Clippy) follow it, so
 /// cargo never forwards feature or target flags to rustc.
 /// Unprofiled legacy shape; resolved callers must use [`cargo_payload_with_profile`].
-#[must_use]
-pub fn cargo_payload_argv(group: &TaskGroup) -> Vec<OsString> {
+///
+/// # Errors
+///
+/// Returns [`ContractError`] when a repo/config-derived value (package,
+/// manifest, features, target) starts with `-`: the separate `--opt
+/// <value>` form would let clap reparse it as flags.
+pub fn cargo_payload_argv(group: &TaskGroup) -> Result<Vec<OsString>, ContractError> {
     let manifest = manifest_for_key(&group.manifest_key);
     let mut args: Vec<OsString> = Vec::new();
-    push_kind_args(&mut args, group, &manifest);
-    push_feature_args(&mut args, group);
-    push_target_arg(&mut args, group);
+    push_kind_args(&mut args, group, &manifest)?;
+    push_feature_args(&mut args, group)?;
+    push_target_arg(&mut args, group)?;
     push_lint_args(&mut args, group);
-    args
+    Ok(args)
 }
 
 /// Payload argv with the group's resolved Nextest profile after `run`;
 /// others match [`cargo_payload_argv`] byte for byte (doctests stay
 /// separate). The profile comes from the group itself, never a parallel
 /// argument that could disagree with it.
-#[must_use]
-pub fn cargo_payload_with_profile(group: &TaskGroup) -> Vec<OsString> {
-    let mut argv = cargo_payload_argv(group);
+///
+/// # Errors
+///
+/// Returns [`ContractError`] for the same leading-dash values as
+/// [`cargo_payload_argv`].
+pub fn cargo_payload_with_profile(group: &TaskGroup) -> Result<Vec<OsString>, ContractError> {
+    let mut argv = cargo_payload_argv(group)?;
     if group.kind == TaskKind::Nextest {
         let flag = OsString::from("--profile");
         let name = OsString::from(group.nextest_profile.as_str());
         argv.splice(2..2, [flag, name]);
     }
-    argv
+    Ok(argv)
 }
 
 /// Append the per-kind cargo-side payload arguments (never emits `--`).
-fn push_kind_args(args: &mut Vec<OsString>, group: &TaskGroup, manifest: &str) {
+fn push_kind_args(
+    args: &mut Vec<OsString>,
+    group: &TaskGroup,
+    manifest: &str,
+) -> Result<(), ContractError> {
     let flag = OsString::from;
     match group.kind {
         TaskKind::Fmt => {
@@ -160,23 +173,19 @@ fn push_kind_args(args: &mut Vec<OsString>, group: &TaskGroup, manifest: &str) {
             if group.package_name.is_empty() {
                 args.push(flag("--all"));
             }
-            args.extend([flag("--check"), flag("--manifest-path"), flag(manifest)]);
+            args.push(flag("--check"));
+            push_manifest(args, manifest)?;
         }
         TaskKind::Clippy => {
-            args.extend([
-                flag("clippy"),
-                flag("--locked"),
-                flag("--offline"),
-                flag("--manifest-path"),
-                flag(manifest),
-            ]);
-            push_package(args, group);
+            args.extend([flag("clippy"), flag("--locked"), flag("--offline")]);
+            push_manifest(args, manifest)?;
+            push_package(args, group)?;
             args.push(flag("--all-targets"));
         }
         TaskKind::Test => {
             args.extend([flag("test"), flag("--locked"), flag("--offline")]);
-            push_manifest(args, manifest);
-            push_package(args, group);
+            push_manifest(args, manifest)?;
+            push_package(args, group)?;
             for target_flag in &group.target_flags {
                 args.push(flag(target_flag));
             }
@@ -190,68 +199,90 @@ fn push_kind_args(args: &mut Vec<OsString>, group: &TaskGroup, manifest: &str) {
                 flag("--locked"),
                 flag("--offline"),
             ]);
-            push_manifest(args, manifest);
-            push_package(args, group);
+            push_manifest(args, manifest)?;
+            push_package(args, group)?;
             args.extend([flag("--no-tests"), flag("fail")]);
         }
         TaskKind::Doctest => {
             args.extend([flag("test"), flag("--locked"), flag("--offline")]);
-            push_manifest(args, manifest);
-            push_package(args, group);
+            push_manifest(args, manifest)?;
+            push_package(args, group)?;
             args.push(flag("--doc"));
         }
         TaskKind::Doc => {
             args.extend([flag("doc"), flag("--locked"), flag("--offline")]);
-            push_manifest(args, manifest);
-            push_package(args, group);
+            push_manifest(args, manifest)?;
+            push_package(args, group)?;
             args.push(flag("--no-deps"));
         }
         TaskKind::Build => {
             args.extend([flag("build"), flag("--locked"), flag("--offline")]);
-            push_manifest(args, manifest);
-            push_package(args, group);
+            push_manifest(args, manifest)?;
+            push_package(args, group)?;
         }
     }
+    Ok(())
+}
+
+/// Reject one cargo-side value starting with `-` (clap would reparse it).
+fn reject_leading_dash(value: &str, what: &str) -> Result<(), ContractError> {
+    if value.starts_with('-') {
+        return Err(ContractError::identity(
+            "cargo_argv",
+            format!("leading_dash_{what}"),
+        ));
+    }
+    Ok(())
 }
 
 /// Append `--package <name>` unless the group names no package.
-fn push_package(args: &mut Vec<OsString>, group: &TaskGroup) {
+fn push_package(args: &mut Vec<OsString>, group: &TaskGroup) -> Result<(), ContractError> {
     if group.package_name.is_empty() {
-        return;
+        return Ok(());
     }
+    reject_leading_dash(&group.package_name, "package")?;
     args.push(OsString::from("--package"));
     args.push(OsString::from(&group.package_name));
+    Ok(())
 }
 
 /// Append `--manifest-path <manifest>`.
-fn push_manifest(args: &mut Vec<OsString>, manifest: &str) {
+fn push_manifest(args: &mut Vec<OsString>, manifest: &str) -> Result<(), ContractError> {
+    reject_leading_dash(manifest, "manifest")?;
     args.push(OsString::from("--manifest-path"));
     args.push(OsString::from(manifest));
+    Ok(())
 }
 
 /// Append feature flags unless the group uses default features.
 ///
 /// Cargo-side: always before `--` (never forwarded to rustc).
-fn push_feature_args(args: &mut Vec<OsString>, group: &TaskGroup) {
+fn push_feature_args(args: &mut Vec<OsString>, group: &TaskGroup) -> Result<(), ContractError> {
     if group.kind == TaskKind::Fmt {
-        return;
+        return Ok(());
     }
     if group.features.len() == 1 && group.features[0] == "default" {
-        return;
+        return Ok(());
     }
     args.push(OsString::from("--no-default-features"));
     if !group.features.is_empty() {
+        let joined = group.features.join(",");
+        reject_leading_dash(&joined, "features")?;
         args.push(OsString::from("--features"));
-        args.push(OsString::from(group.features.join(",")));
+        args.push(OsString::from(joined));
     }
+    Ok(())
 }
 
 /// Append `--target <triple>` for non-host targets (cargo-side: before `--`).
-fn push_target_arg(args: &mut Vec<OsString>, group: &TaskGroup) {
-    if group.target != "host" {
-        args.push(OsString::from("--target"));
-        args.push(OsString::from(&group.target));
+fn push_target_arg(args: &mut Vec<OsString>, group: &TaskGroup) -> Result<(), ContractError> {
+    if group.target == "host" {
+        return Ok(());
     }
+    reject_leading_dash(&group.target, "target")?;
+    args.push(OsString::from("--target"));
+    args.push(OsString::from(&group.target));
+    Ok(())
 }
 
 /// Append post-separator lint args (`-- -D warnings` for Clippy, none else).

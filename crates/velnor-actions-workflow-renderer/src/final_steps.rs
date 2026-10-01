@@ -12,7 +12,11 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract::{Job, Step};
 
-use crate::{RenderError, render::FINAL_JOB_ID, steps};
+use crate::{
+    RenderError,
+    render::{CANDIDATE_JOB_ID, FINAL_JOB_ID, RenderContext},
+    steps,
+};
 
 /// Contract-fixed display name of the matrix fan-in fetch step.
 pub(crate) const FETCH_REPORTS_NAME: &str = "Download every expected matrix artifact";
@@ -57,13 +61,28 @@ pub(crate) fn publish_final_report_step() -> Result<Step, RenderError> {
 ///
 /// The fetch lands after `Download plan` (it enumerates the plan) and
 /// before the merge write-request; the publish closes the job after
-/// `Merge reports`. Without a final job there is nothing to close over.
+/// `Merge reports`. In candidate mode the candidate artifact downloads
+/// beside the fetch so the merge can re-check the head-bound
+/// attestation. Without a final job there is nothing to close over.
 /// Re-running never dupes.
 /// # Errors
-pub(crate) fn insert_final_fanin(jobs: &mut BTreeMap<String, Job>) -> Result<(), RenderError> {
+pub(crate) fn insert_final_fanin(
+    jobs: &mut BTreeMap<String, Job>,
+    ctx: &RenderContext,
+) -> Result<(), RenderError> {
+    let candidate = jobs.contains_key(CANDIDATE_JOB_ID);
     let Some(final_job) = jobs.get_mut(FINAL_JOB_ID) else {
         return Ok(());
     };
+    if candidate
+        && !final_job
+            .steps
+            .iter()
+            .any(|step| step.name == ATTESTATION_DOWNLOAD_NAME)
+    {
+        let at = fetch_insert_at(final_job);
+        final_job.steps.insert(at, download_attestation_step(ctx)?);
+    }
     if !final_job
         .steps
         .iter()
@@ -80,6 +99,33 @@ pub(crate) fn insert_final_fanin(jobs: &mut BTreeMap<String, Job>) -> Result<(),
         final_job.steps.push(publish_final_report_step()?);
     }
     Ok(())
+}
+
+/// Contract-fixed display name of the candidate-artifact download step.
+pub(crate) const ATTESTATION_DOWNLOAD_NAME: &str = "Download candidate attestation";
+
+/// Candidate-artifact download step for the head-bound attestation.
+///
+/// Downloads the whole candidate artifact (binary, manifest, plus the
+/// attestation the candidate job wrote beside the manifest) into the
+/// run-key directory under the evidence subdir, before the merge
+/// write-request assembles it. The single-label workflow invariant
+/// makes the artifact name derivable from the context runs-on.
+/// # Errors
+fn download_attestation_step(ctx: &RenderContext) -> Result<Step, RenderError> {
+    let target =
+        velnor_actions_contract::target_for_runner_label(&ctx.runs_on).ok_or_else(|| {
+            RenderError::InvalidWorkflow(format!("unsupported_target_for_runner:{}", ctx.runs_on))
+        })?;
+    let artifact = crate::candidate_artifact_name(target)?;
+    let path = format!(
+        "{}/{}",
+        crate::closure::PLAN_ARTIFACT_PATH,
+        velnor_actions_contract::CANDIDATE_EVIDENCE_SUBDIR
+    );
+    let mut step = steps::download_artifact_step(&artifact, &path)?;
+    ATTESTATION_DOWNLOAD_NAME.clone_into(&mut step.name);
+    Ok(step)
 }
 
 /// Insert after `Download plan`, else before write-request/merge, else end.

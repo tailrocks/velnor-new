@@ -1,5 +1,7 @@
-//! Token hygiene: credential scoping and scrub gates.
+//! Token hygiene: credential scoping, scrub coverage, unset-wrapper gates.
+
 use std::collections::BTreeMap;
+
 use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_workflow_renderer::{
     RenderError, checkout_step, merge_step, plan_step, render_workflow_ir, shell_step,
@@ -39,17 +41,41 @@ fn render_fails_with(jobs: Vec<(String, velnor_actions_contract::Job)>, want: &s
 
 #[test]
 fn token_hygiene_scopes_gh_token_to_plan() -> Result<(), RenderError> {
-    let scoped = token_plan_job(
+    use velnor_actions_contract::{Step, StepKind};
+    use velnor_actions_workflow_renderer::toolchain_env::with_credential_scrub;
+    // The shell constructor rejects `github.token` env values outright:
+    // only the render-time fetch binding may carry one.
+    let err = shell_step(
         "Plan",
         vec!["true".to_owned()],
         BTreeMap::from([("GH_TOKEN".to_owned(), "${{ github.token }}".to_owned())]),
-    )?;
-    render_workflow_ir(
-        &fixture_ir(vec![scoped]),
-        WorkflowPolicy::ConsumerV1,
-        None,
-        &fixture_ctx(),
-    )?;
+    )
+    .expect_err("github.token in constructor env must fail");
+    assert!(
+        format!("{err:?}").contains("bad_env_expression"),
+        "wrong rejection: {err:?}"
+    );
+    // Hand-built IR carrying the scoped shape still fails at render.
+    let mut scrubbed = with_credential_scrub(&BTreeMap::new());
+    scrubbed.insert("GH_TOKEN".to_owned(), "${{ github.token }}".to_owned());
+    let scoped = job(
+        "plan",
+        "Plan",
+        Vec::new(),
+        vec![
+            checkout_step(&checkout_pin())?,
+            Step {
+                name: "Plan".to_owned(),
+                condition: None,
+                kind: StepKind::Shell {
+                    run: vec!["true".to_owned()],
+                    env: scrubbed,
+                },
+            },
+            plan_step(),
+        ],
+    );
+    render_fails_with(vec![scoped], "bad_env_expression");
     let bad_env = token_plan_job(
         "Leak",
         vec!["true".to_owned()],
@@ -61,27 +87,30 @@ fn token_hygiene_scopes_gh_token_to_plan() -> Result<(), RenderError> {
 
 #[test]
 fn token_hygiene_allows_final_fetch_token() -> Result<(), RenderError> {
+    use velnor_actions_workflow_renderer::steps::{FETCH_OPERATION, internal_step};
+    // The fetch binding is render-time only: the internal op renders
+    // its fixed `GH_TOKEN`, never carried through IR env.
     let (id, mut final_job) = job(
         "required",
         "Required",
         vec!["plan".to_owned()],
         vec![
             checkout_step(&checkout_pin())?,
-            shell_step(
-                "Prepare pinned tools",
-                vec!["true".to_owned()],
-                BTreeMap::from([("GH_TOKEN".to_owned(), "${{ github.token }}".to_owned())]),
-            )?,
+            internal_step("Download every expected matrix artifact", FETCH_OPERATION)?,
             merge_step(),
         ],
     );
     final_job.condition = Some("always()".to_owned());
-    render_workflow_ir(
+    let text = render_workflow_ir(
         &fixture_ir(vec![minimal_plan_job()?, (id, final_job)]),
         WorkflowPolicy::ConsumerV1,
         None,
         &fixture_ctx(),
     )?;
+    assert!(
+        text.contains("GH_TOKEN: ${{ github.token }}"),
+        "fetch must bind the token:\n{text}"
+    );
     Ok(())
 }
 
@@ -101,18 +130,21 @@ fn token_hygiene_rejects_prints_and_task_tokens() -> Result<(), RenderError> {
         "velnor-task",
         "Task",
         vec!["plan".to_owned()],
-        vec![shell_step(
-            "Run task",
-            vec!["true".to_owned()],
-            BTreeMap::from([("GH_TOKEN".to_owned(), "${{ github.token }}".to_owned())]),
-        )?],
+        vec![velnor_actions_contract::Step {
+            name: "Run task".to_owned(),
+            condition: None,
+            kind: velnor_actions_contract::StepKind::Shell {
+                run: vec!["true".to_owned()],
+                env: BTreeMap::from([("GH_TOKEN".to_owned(), "${{ github.token }}".to_owned())]),
+            },
+        }],
     );
     render_fails_with(vec![minimal_plan_job()?, task_token], "token_misplaced");
     Ok(())
 }
 
 #[test]
-fn token_hygiene_allows_empty_scrub_and_rejects_all_seven_keys() -> Result<(), RenderError> {
+fn token_hygiene_allows_empty_scrub_and_rejects_all_nine_keys() -> Result<(), RenderError> {
     use velnor_actions_workflow_renderer::toolchain_env::STEP_CREDENTIAL_DENYLIST;
     let scrub: BTreeMap<String, String> = STEP_CREDENTIAL_DENYLIST
         .iter()
@@ -148,5 +180,105 @@ fn token_hygiene_allows_empty_scrub_and_rejects_all_seven_keys() -> Result<(), R
         };
         render_fails_with(vec![minimal_plan_job()?, leaked], want);
     }
+    Ok(())
+}
+
+#[test]
+fn scrub_coverage_rejects_bare_and_partial_shell_env() -> Result<(), RenderError> {
+    let bare = token_plan_job("Run task", vec!["true".to_owned()], BTreeMap::new())?;
+    render_fails_with(vec![bare], "missing_scrub");
+    let partial = token_plan_job(
+        "Run task",
+        vec!["true".to_owned()],
+        BTreeMap::from([("GITHUB_TOKEN".to_owned(), String::new())]),
+    )?;
+    render_fails_with(vec![partial], "missing_scrub");
+    Ok(())
+}
+
+#[test]
+fn scrub_coverage_allows_ambient_auth_steps_and_release() -> Result<(), RenderError> {
+    for name in [
+        "Prepare pinned tools",
+        "Prepare Rust components",
+        "Fetch Cargo sources",
+    ] {
+        let allowed = token_plan_job(name, vec!["true".to_owned()], BTreeMap::new())?;
+        render_workflow_ir(
+            &fixture_ir(vec![allowed]),
+            WorkflowPolicy::ConsumerV1,
+            None,
+            &fixture_ctx(),
+        )?;
+    }
+    let release = job(
+        "release",
+        "Release",
+        vec!["plan".to_owned()],
+        vec![shell_step(
+            "Publish release assets",
+            vec!["true".to_owned()],
+            BTreeMap::new(),
+        )?],
+    );
+    render_workflow_ir(
+        &fixture_ir(vec![minimal_plan_job()?, release]),
+        WorkflowPolicy::VelnorRepositoryV1,
+        None,
+        &fixture_ctx(),
+    )?;
+    Ok(())
+}
+
+#[test]
+fn unset_wrapper_passes_but_exfil_behind_it_fails() -> Result<(), RenderError> {
+    use velnor_actions_workflow_renderer::toolchain_env::{
+        with_credential_unset_script, with_env_unset_argv,
+    };
+    let scrub_of = |extra: BTreeMap<String, String>| {
+        velnor_actions_workflow_renderer::toolchain_env::with_credential_scrub(&extra)
+    };
+    let wrapped = token_plan_job(
+        "Run task",
+        with_env_unset_argv(&["mise".to_owned(), "run".to_owned(), "x".to_owned()]),
+        scrub_of(BTreeMap::new()),
+    )?;
+    render_workflow_ir(
+        &fixture_ir(vec![wrapped]),
+        WorkflowPolicy::ConsumerV1,
+        None,
+        &fixture_ctx(),
+    )?;
+    let scripted = token_plan_job(
+        "Run task",
+        vec![
+            "sh".to_owned(),
+            "-c".to_owned(),
+            with_credential_unset_script("true"),
+        ],
+        scrub_of(BTreeMap::new()),
+    )?;
+    render_workflow_ir(
+        &fixture_ir(vec![scripted]),
+        WorkflowPolicy::ConsumerV1,
+        None,
+        &fixture_ctx(),
+    )?;
+    let smuggled = token_plan_job(
+        "Run task",
+        with_env_unset_argv(&["echo".to_owned(), "$GH_TOKEN".to_owned()]),
+        scrub_of(BTreeMap::new()),
+    )?;
+    render_fails_with(vec![smuggled], "token_in_run");
+    let fake_prelude = token_plan_job(
+        "Run task",
+        vec![
+            "sh".to_owned(),
+            "-c".to_owned(),
+            "unset FOO; echo $GH_TOKEN".to_owned(),
+        ],
+        scrub_of(BTreeMap::new()),
+    )?;
+    render_fails_with(vec![fake_prelude], "token_in_run");
     Ok(())
 }

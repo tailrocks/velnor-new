@@ -1,9 +1,8 @@
 //! Emission sweeps: step names, policy order, candidate check, tree shape.
-use std::collections::BTreeMap;
 use velnor_actions_contract::{GeneratorValidation, WorkflowPolicy};
 use velnor_actions_workflow_renderer::{
     CHECK_GENERATED_NAME, RenderError, checkout_step, merge_step, plan_step, render_tree,
-    render_workflow_ir, render_workflow_ir_strict, shell_step, with_marker,
+    render_workflow_ir, render_workflow_ir_strict, with_marker,
 };
 
 use super::impl_renderer_fixtures::*;
@@ -32,10 +31,9 @@ fn every_emitted_step_has_name() -> Result<(), RenderError> {
         vec!["plan".to_owned()],
         vec![
             checkout_step(&checkout_pin())?,
-            shell_step(
+            scrubbed_shell_step(
                 "Run task",
                 vec!["sh".to_owned(), "-c".to_owned(), "echo hi".to_owned()],
-                BTreeMap::new(),
             )?,
         ],
     );
@@ -45,10 +43,9 @@ fn every_emitted_step_has_name() -> Result<(), RenderError> {
         Vec::new(),
         vec![
             checkout_step(&checkout_pin())?,
-            shell_step(
+            scrubbed_shell_step(
                 "Run actionlint",
                 mise_argv("actionlint@1.7.12", "actionlint", &["-color"]),
-                BTreeMap::new(),
             )?,
         ],
     );

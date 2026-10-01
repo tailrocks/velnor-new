@@ -1,4 +1,5 @@
 //! Cargo payload argv shape cases (moved from the orchestrator).
+use velnor_actions_contract::ContractError;
 use velnor_actions_rust::tasks::{
     TaskGroup, TaskKind, cargo_payload_argv, cargo_payload_with_profile, entry_metadata,
     evidence_id,
@@ -31,59 +32,61 @@ fn group(kind: TaskKind) -> TaskGroup {
     }
 }
 
-fn text(group: &TaskGroup) -> Vec<String> {
-    cargo_payload_argv(group)
+fn text(group: &TaskGroup) -> Result<Vec<String>, ContractError> {
+    Ok(cargo_payload_argv(group)?
         .iter()
         .map(|s| s.to_string_lossy().into_owned())
-        .collect()
+        .collect())
 }
 
 /// Profiled payload argv with the group's resolved profile.
-fn profiled(group: &TaskGroup) -> Vec<String> {
-    cargo_payload_with_profile(group)
+fn profiled(group: &TaskGroup) -> Result<Vec<String>, ContractError> {
+    Ok(cargo_payload_with_profile(group)?
         .iter()
         .map(|s| s.to_string_lossy().into_owned())
-        .collect()
+        .collect())
 }
 
 #[test]
-fn payload_shapes_per_kind() {
+fn payload_shapes_per_kind() -> Result<(), ContractError> {
     assert_eq!(
-        text(&group(TaskKind::Fmt))[..3],
+        text(&group(TaskKind::Fmt))?[..3],
         ["fmt", "--check", "--manifest-path"]
     );
     let mut workspace = group(TaskKind::Fmt);
     workspace.package_name.clear();
     assert_eq!(
-        text(&workspace)[..4],
+        text(&workspace)?[..4],
         ["fmt", "--all", "--check", "--manifest-path"]
     );
-    let clippy = text(&group(TaskKind::Clippy));
+    let clippy = text(&group(TaskKind::Clippy))?;
     assert!(clippy.contains(&"--all-targets".to_owned()) && clippy.contains(&"demo".to_owned()));
-    assert!(text(&group(TaskKind::Test)).contains(&"--lib".to_owned()));
-    assert!(text(&group(TaskKind::Doctest)).contains(&"--doc".to_owned()));
+    assert!(text(&group(TaskKind::Test))?.contains(&"--lib".to_owned()));
+    assert!(text(&group(TaskKind::Doctest))?.contains(&"--doc".to_owned()));
+    Ok(())
 }
 
 #[test]
-fn payload_features_and_target() {
+fn payload_features_and_target() -> Result<(), ContractError> {
     let mut custom = group(TaskKind::Test);
     custom.features = vec!["serde".to_owned(), "cli".to_owned()];
     custom.target = "x86_64-unknown-linux-gnu".to_owned();
-    let argv = text(&custom);
+    let argv = text(&custom)?;
     assert!(argv.contains(&"--no-default-features".to_owned()));
     assert!(
         argv.windows(2)
             .any(|w| w == ["--target", "x86_64-unknown-linux-gnu"])
     );
-    assert!(!text(&group(TaskKind::Fmt)).contains(&"--no-default-features".to_owned()));
+    assert!(!text(&group(TaskKind::Fmt))?.contains(&"--no-default-features".to_owned()));
+    Ok(())
 }
 
 #[test]
-fn clippy_keeps_feature_args_before_separator() {
+fn clippy_keeps_feature_args_before_separator() -> Result<(), ContractError> {
     for features in [vec!["serde".to_owned(), "cli".to_owned()], Vec::new()] {
         let mut featured = group(TaskKind::Clippy);
         featured.features = features;
-        let argv = text(&featured);
+        let argv = text(&featured)?;
         let sep = argv
             .iter()
             .position(|arg| arg == "--")
@@ -102,13 +105,14 @@ fn clippy_keeps_feature_args_before_separator() {
             "only lint args after `--`: {argv:?}"
         );
     }
+    Ok(())
 }
 
 #[test]
-fn clippy_keeps_target_before_separator() {
+fn clippy_keeps_target_before_separator() -> Result<(), ContractError> {
     let mut targeted = group(TaskKind::Clippy);
     targeted.target = "x86_64-unknown-linux-gnu".to_owned();
-    let argv = text(&targeted);
+    let argv = text(&targeted)?;
     let sep = argv
         .iter()
         .position(|arg| arg == "--")
@@ -128,15 +132,16 @@ fn clippy_keeps_target_before_separator() {
         ["--", "-D", "warnings"],
         "only lint args after `--`: {argv:?}"
     );
+    Ok(())
 }
 
 #[test]
-fn clippy_featured_targeted_shape_is_exact() {
+fn clippy_featured_targeted_shape_is_exact() -> Result<(), ContractError> {
     let mut custom = group(TaskKind::Clippy);
     custom.features = vec!["serde".to_owned()];
     custom.target = "x86_64-unknown-linux-gnu".to_owned();
     assert_eq!(
-        text(&custom),
+        text(&custom)?,
         [
             "clippy",
             "--locked",
@@ -156,10 +161,11 @@ fn clippy_featured_targeted_shape_is_exact() {
             "warnings",
         ]
     );
+    Ok(())
 }
 
 #[test]
-fn cargo_kinds_carry_features_without_separator() {
+fn cargo_kinds_carry_features_without_separator() -> Result<(), ContractError> {
     for kind in [
         TaskKind::Test,
         TaskKind::Nextest,
@@ -170,7 +176,7 @@ fn cargo_kinds_carry_features_without_separator() {
         let mut custom = group(kind);
         custom.features = vec!["serde".to_owned()];
         custom.target = "x86_64-unknown-linux-gnu".to_owned();
-        let argv = text(&custom);
+        let argv = text(&custom)?;
         assert!(
             !argv.contains(&"--".to_owned()),
             "{kind:?} emits no separator: {argv:?}"
@@ -189,10 +195,11 @@ fn cargo_kinds_carry_features_without_separator() {
             "{kind:?} keeps target: {argv:?}"
         );
     }
+    Ok(())
 }
 
 #[test]
-fn payloads_never_emit_all_features() {
+fn payloads_never_emit_all_features() -> Result<(), ContractError> {
     let kinds = [
         TaskKind::Fmt,
         TaskKind::Clippy,
@@ -210,7 +217,7 @@ fn payloads_never_emit_all_features() {
         ] {
             let mut group_case = group(kind);
             group_case.features = features;
-            for arg in text(&group_case) {
+            for arg in text(&group_case)? {
                 assert!(
                     !arg.contains("all-features"),
                     "forbidden flag for {kind:?}: {arg}"
@@ -218,6 +225,7 @@ fn payloads_never_emit_all_features() {
             }
         }
     }
+    Ok(())
 }
 
 #[test]
@@ -252,11 +260,11 @@ fn entry_metadata_carries_driver_runner_and_evidence() {
 }
 
 #[test]
-fn nextest_payload_is_pinned_tool_input() {
+fn nextest_payload_is_pinned_tool_input() -> Result<(), ContractError> {
     let mut configured = group(TaskKind::Nextest);
     configured.nextest_profile = NextestProfile::Ci;
     assert_eq!(
-        profiled(&configured),
+        profiled(&configured)?,
         [
             "nextest",
             "run",
@@ -275,15 +283,16 @@ fn nextest_payload_is_pinned_tool_input() {
     let mut custom = group(TaskKind::Nextest);
     custom.manifest_key = "crates/demo".to_owned();
     assert!(
-        profiled(&custom)
+        profiled(&custom)?
             .windows(2)
             .any(|w| w == ["--manifest-path", "crates/demo/Cargo.toml"])
     );
     assert!(
-        profiled(&custom)
+        profiled(&custom)?
             .windows(2)
             .any(|w| w == ["--profile", "default"])
     );
+    Ok(())
 }
 
 #[test]
@@ -322,4 +331,30 @@ fn driver_runner_tokens_parse_strictly() {
     ] {
         assert_eq!(parsed, spelling);
     }
+}
+
+#[test]
+fn leading_dash_values_fail_closed() {
+    let mut package = group(TaskKind::Clippy);
+    package.package_name = "-evil".to_owned();
+    let err = cargo_payload_argv(&package).expect_err("dash package");
+    assert!(err.to_string().contains("leading_dash_package"), "{err}");
+
+    let mut manifest = group(TaskKind::Clippy);
+    manifest.manifest_key = "-evil".to_owned();
+    let err = cargo_payload_argv(&manifest).expect_err("dash manifest");
+    assert!(err.to_string().contains("leading_dash_manifest"), "{err}");
+
+    let mut features = group(TaskKind::Test);
+    features.features = vec!["-evil".to_owned()];
+    let err = cargo_payload_argv(&features).expect_err("dash features");
+    assert!(err.to_string().contains("leading_dash_features"), "{err}");
+
+    let mut target = group(TaskKind::Build);
+    target.target = "--help".to_owned();
+    let err = cargo_payload_argv(&target).expect_err("dash target");
+    assert!(err.to_string().contains("leading_dash_target"), "{err}");
+
+    let err = cargo_payload_with_profile(&target).expect_err("profiled dash target");
+    assert!(err.to_string().contains("leading_dash_target"), "{err}");
 }

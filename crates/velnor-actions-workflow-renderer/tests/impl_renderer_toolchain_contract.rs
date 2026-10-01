@@ -2,9 +2,10 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_workflow_renderer::toolchain_env::{
-    STEP_CREDENTIAL_DENYLIST, STEP_ISOLATION_DENYLIST, TOOLCHAIN_HOME_KEYS,
-    checked_project_task_env, checked_task_env, credential_scrub, reject_denied_step_keys,
-    reject_privileged_task_keys, with_credential_scrub, with_toolchain_homes,
+    CREDENTIAL_UNSET_VARS, STEP_CREDENTIAL_DENYLIST, STEP_ISOLATION_DENYLIST, TOOLCHAIN_HOME_KEYS,
+    checked_project_task_env, checked_task_env, credential_scrub, is_denied_credential_key,
+    reject_denied_step_keys, reject_privileged_task_keys, with_credential_scrub,
+    with_credential_unset_script, with_env_unset_argv, with_toolchain_homes,
 };
 
 #[test]
@@ -19,6 +20,8 @@ fn denylist_names_exact_credential_set() {
             "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
             "ACTIONS_ID_TOKEN_REQUEST_URL",
             "CARGO_REGISTRY_TOKEN",
+            "NPM_TOKEN",
+            "NODE_AUTH_TOKEN",
         ]
     );
     for denied in STEP_CREDENTIAL_DENYLIST {
@@ -50,7 +53,7 @@ fn denied_keys_rejected_anywhere_in_map() {
 }
 
 #[test]
-fn credential_scrub_blanks_all_seven_keys() {
+fn credential_scrub_blanks_all_nine_keys() {
     let scrub = credential_scrub();
     assert_eq!(scrub.len(), STEP_CREDENTIAL_DENYLIST.len());
     for denied in STEP_CREDENTIAL_DENYLIST {
@@ -193,6 +196,60 @@ fn project_task_env_rejects_hook_escape_keys() {
             "project task smuggling {denied} must fail"
         );
     }
+}
+
+#[test]
+fn credential_pattern_catches_registry_and_enterprise_variants() {
+    for denied in [
+        "CARGO_REGISTRIES_ACME_TOKEN",
+        "CARGO_REGISTRIES_ENTERPRISE",
+        "NPM_TOKEN",
+        "NODE_AUTH_TOKEN",
+        "MY_REGISTRY_TOKEN",
+        "GITHUB_TOKEN",
+    ] {
+        assert!(is_denied_credential_key(denied), "{denied} must match");
+        let base = BTreeMap::from([(denied.to_owned(), "sentinel".to_owned())]);
+        assert!(
+            reject_denied_step_keys(&base).is_err(),
+            "{denied} must fail in a step map"
+        );
+    }
+    for clean in [
+        "MISE_RUSTUP_HOME",
+        "VELNOR_TASK_RUN",
+        "TOKEN_COUNT",
+        "MY_TOKENS",
+        "CARGO_REGISTRIES",
+    ] {
+        assert!(!is_denied_credential_key(clean), "{clean} must pass");
+    }
+    assert!(reject_denied_step_keys(&BTreeMap::new()).is_ok());
+}
+
+#[test]
+fn unset_wrappers_cover_every_unshadowable_var() {
+    assert_eq!(
+        CREDENTIAL_UNSET_VARS,
+        [
+            "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
+            "ACTIONS_ID_TOKEN_REQUEST_URL",
+            "ACTIONS_RUNTIME_TOKEN",
+            "GITHUB_TOKEN",
+        ]
+    );
+    let script = with_credential_unset_script("mise run x");
+    for var in CREDENTIAL_UNSET_VARS {
+        assert!(script.contains(var), "{var} must unset in scripts");
+    }
+    assert!(script.ends_with("mise run x"), "payload must survive");
+    let argv = with_env_unset_argv(&["mise".to_owned(), "run".to_owned(), "x".to_owned()]);
+    assert_eq!(argv.first().map(String::as_str), Some("env"));
+    for var in CREDENTIAL_UNSET_VARS {
+        let at = argv.iter().position(|arg| arg == var).expect(var);
+        assert_eq!(argv[at - 1], "-u", "{var} must pair with -u");
+    }
+    assert_eq!(&argv[argv.len() - 3..], ["mise", "run", "x"]);
 }
 
 #[test]

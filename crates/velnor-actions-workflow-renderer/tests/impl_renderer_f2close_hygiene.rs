@@ -9,6 +9,7 @@ use velnor_actions_workflow_renderer::{
 };
 
 use super::impl_renderer_fixtures::*;
+
 #[test]
 fn cache_action_rejects_empty_paths_and_keys() {
     assert!(
@@ -137,12 +138,22 @@ fn consumer_render_carries_no_repo_files_or_secrets() -> Result<(), RenderError>
         "deny.toml",
         "secrets.",
         "github.token",
-        "GH_TOKEN",
-        "GITHUB_TOKEN",
-        "ACTIONS_RUNTIME_TOKEN",
         "pull_request_target",
     ] {
         assert!(!text.contains(absent), "forbidden {absent}:\n{text}");
+    }
+    // Scrub overlay keys render by construction, but only ever empty.
+    for key in ["GH_TOKEN", "GITHUB_TOKEN", "ACTIONS_RUNTIME_TOKEN"] {
+        let mut seen = 0_u32;
+        for line in text.lines() {
+            let Some(rest) = line.trim_start().strip_prefix(key) else {
+                continue;
+            };
+            let rest = rest.strip_prefix(':').unwrap_or(rest).trim();
+            assert_eq!(rest, "\"\"", "nonempty {key} binding:\n{text}");
+            seen += 1;
+        }
+        assert!(seen > 0, "missing scrub {key}:\n{text}");
     }
     Ok(())
 }
@@ -224,20 +235,31 @@ fn repo_config_sets_velnor_repository_v1() -> Result<(), String> {
 
 #[test]
 fn token_hygiene_rejects_any_casing_of_secrets() -> Result<(), RenderError> {
+    // Every casing fails closed; only the layer differs. The canonical
+    // lowercase binding is constructor-allowlisted, so it must reach
+    // the render gate (`token_in_env`); other casings may already fail
+    // at construction (`bad_env_expression`).
+    let mut render_checked = false;
     for leak in [
         "${{ secrets.CARGO_REGISTRY_TOKEN }}",
         "${{ Secrets.CARGO_REGISTRY_TOKEN }}",
         "${{ SECRETS.CARGO_REGISTRY_TOKEN }}",
     ] {
         let env = BTreeMap::from([("TOKEN_COPY".to_owned(), leak.to_owned())]);
-        let leaked = shell_step(
-            "Run audit",
-            ["mise", "run", "audit"]
-                .iter()
-                .map(ToString::to_string)
-                .collect(),
-            env,
-        )?;
+        let argv: Vec<String> = ["mise", "run", "audit"]
+            .iter()
+            .map(ToString::to_string)
+            .collect();
+        let leaked = match shell_step("Run audit", argv, env) {
+            Ok(step) => step,
+            Err(err) => {
+                assert!(
+                    format!("{err:?}").contains("bad_env_expression"),
+                    "wrong rejection: {err:?}"
+                );
+                continue;
+            }
+        };
         let task = job("task", "Task", vec!["plan".to_owned()], vec![leaked]);
         let err = render_workflow_ir(
             &fixture_ir(vec![minimal_plan_job()?, task]),
@@ -247,7 +269,9 @@ fn token_hygiene_rejects_any_casing_of_secrets() -> Result<(), RenderError> {
         )
         .expect_err("secrets leak must fail");
         assert!(err.to_string().contains("token_in_env"), "{err}");
+        render_checked = true;
     }
+    assert!(render_checked, "canonical binding must reach render");
     let run = shell_step(
         "Run audit",
         ["echo", "${{ secrets.TOKEN }}"]

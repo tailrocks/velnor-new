@@ -16,6 +16,15 @@ pub const PLAN_JSON_FILENAME: &str = "plan.json";
 pub const MATRIX_JSON_FILENAME: &str = "matrix.json";
 /// Final verdict filename written by merge, uploaded by the final job.
 pub const FINAL_JSON_FILENAME: &str = "final-report.json";
+/// Head-bound candidate attestation filename (S3).
+///
+/// Written by the candidate job beside the candidate manifest (same
+/// artifact), downloaded by the final job under
+/// [`CANDIDATE_EVIDENCE_SUBDIR`], and re-checked at merge: its
+/// `commit` must equal the plan head.
+pub const CANDIDATE_ATTESTATION_FILENAME: &str = "candidate-attestation.json";
+/// Run-dir subdirectory receiving the downloaded candidate artifact.
+pub const CANDIDATE_EVIDENCE_SUBDIR: &str = "candidate";
 
 /// Render the canonical `plan.json` bytes for a validated plan.
 /// # Errors

@@ -132,6 +132,9 @@ pub fn checkout_step(uses: &str) -> Result<Step, RenderError> {
 }
 
 /// Validated pinned-action step.
+///
+/// Names share the step-name gate (no expressions); `with:` keys never
+/// carry expressions and values only allowlisted runner spans.
 /// # Errors
 pub fn action_step(
     name: &str,
@@ -141,11 +144,15 @@ pub fn action_step(
     if name.trim().is_empty() {
         return Err(RenderError::BadActionRef("empty_name".to_owned()));
     }
+    crate::expressions::check_name_content(name)?;
     validate_uses(uses)?;
     scan_for_private_subcommands(name)?;
     scan_for_private_subcommands(uses)?;
-    for entry in with.iter().flat_map(|(key, value)| [key, value]) {
-        scan_for_private_subcommands(entry)?;
+    for (key, value) in &with {
+        crate::expressions::check_with_key(key)?;
+        crate::expressions::check_with_value(key, value)?;
+        scan_for_private_subcommands(key)?;
+        scan_for_private_subcommands(value)?;
     }
     Ok(Step {
         name: name.to_owned(),
@@ -167,11 +174,7 @@ pub fn shell_step(
     if name.trim().is_empty() {
         return Err(RenderError::BadCommand("empty_name".to_owned()));
     }
-    if name.contains("${{") {
-        return Err(RenderError::BadCommand(format!(
-            "expression_in_name:{name}"
-        )));
-    }
+    crate::expressions::check_name_content(name)?;
     commands::validate_command_argv(&argv)?;
     commands::validate_env(&env)?;
     scan_for_private_subcommands(name)?;
@@ -208,14 +211,38 @@ pub fn candidate_manifest_script(target: &str, toolchain: &str) -> String {
     )
 }
 
+/// Shell spelling of the run-key dir holding the downloaded plan.
+pub const RUN_DIR_SHELL: &str = "$RUNNER_TEMP/velnor/r$GITHUB_RUN_ID-a$GITHUB_RUN_ATTEMPT";
+
+/// Head-bound candidate attestation writer: `commit` is the plan head.
+///
+/// Reads the downloaded plan's `head` with the manifest-verify idiom
+/// (first `"head":"` match, parameter expansion only, no command
+/// substitution) and writes `{"schema":1,"commit":"<head>"}` beside
+/// the candidate manifest so the same artifact carries it to the
+/// final job. Fails closed when the plan is missing or the head is
+/// empty/oversize; the merge re-checks `commit == plan.head` after
+/// parsing both sides, so a truncation or misparse can only fail a
+/// run, never forge a binding.
+#[must_use]
+pub fn candidate_attestation_script() -> String {
+    let attestation = velnor_actions_contract::CANDIDATE_ATTESTATION_FILENAME;
+    format!(
+        "p=\"{RUN_DIR_SHELL}/plan.json\" && test -f \"$p\" && read line rest < \"$p\" || [ -n \"$line\" ] && h=${{line#*\\\"head\\\":\\\"}} && h=${{h%%\\\"*}} && [ -n \"$h\" ] && [ \"${{#h}}\" -le 64 ] && printf '{{\"schema\":1,\"commit\":\"%s\"}}' \"$h\" > {CANDIDATE_OUTPUT_DIR}/{attestation}"
+    )
+}
+
 /// Acquire-Velnor step: digest-verified staging under runner temp.
+///
+/// The asset download is an unauthenticated public fetch over a pinned
+/// URL, so the step carries the scrub overlay on top of its asset env.
 /// # Errors
 pub fn acquire_velnor_step(
     argv: Vec<String>,
-    env: BTreeMap<String, String>,
+    env: &BTreeMap<String, String>,
 ) -> Result<Step, RenderError> {
     commands::validate_command_argv(&argv)?;
-    commands::validate_env(&env)?;
+    commands::validate_env(env)?;
     if env
         .get(ASSET_SHA_ENV)
         .is_none_or(|sha| sha.len() != 64 || !is_lower_hex(sha))
@@ -236,7 +263,11 @@ pub fn acquire_velnor_step(
     if !downloads || !verifies {
         return Err(RenderError::BadCommand("acquire_without_verify".to_owned()));
     }
-    shell_step(ACQUIRE_NAME, argv, env)
+    shell_step(
+        ACQUIRE_NAME,
+        argv,
+        crate::toolchain_env::with_credential_scrub(env),
+    )
 }
 
 /// Split an internal operation into env op plus request-file target op.
@@ -269,6 +300,7 @@ pub fn internal_step(name: &str, operation: &str) -> Result<Step, RenderError> {
     if name.trim().is_empty() {
         return Err(RenderError::BadCommand("empty_name".to_owned()));
     }
+    crate::expressions::check_name_content(name)?;
     split_internal_operation(operation)?;
     scan_for_private_subcommands(name)?;
     Ok(Step {
