@@ -189,7 +189,7 @@ fn staged_tokens_cover_every_failure_class() {
     );
     // Unparsable and oversize legs report explicitly.
     let tmp = tempfile::tempdir().expect("tempdir");
-    let home = tmp.path().join(aid);
+    let home = tmp.path().join(aid).join("m-0123456789abcdef");
     std::fs::create_dir_all(&home).expect("home");
     std::fs::write(home.join("matrix-report.json"), "not json").expect("bad");
     let (_, _, errors) = read(tmp.path());
@@ -223,7 +223,11 @@ fn staged_symlinks_reject_and_nested_layout_reads() {
     };
     // Nested layout: the report reads from the exact nested path.
     let tmp = tempfile::tempdir().expect("tempdir");
-    let nested = tmp.path().join(aid).join(aid);
+    let nested = tmp
+        .path()
+        .join(aid)
+        .join(aid)
+        .join("m-0123456789abcdef");
     std::fs::create_dir_all(&nested).expect("nested");
     std::fs::write(nested.join("matrix-report.json"), r#"{"report_id":"n"}"#).expect("report");
     let (reports, _, _) = read(tmp.path());
@@ -249,7 +253,7 @@ fn staged_symlinks_reject_and_nested_layout_reads() {
         assert_eq!(errors, [format!("symlink_report:{aid}")]);
         // A symlinked matrix file rejects without reading.
         let tmp = tempfile::tempdir().expect("tempdir");
-        let home = tmp.path().join(aid);
+        let home = tmp.path().join(aid).join("m-0123456789abcdef");
         std::fs::create_dir_all(&home).expect("home");
         std::fs::write(tmp.path().join("real.json"), "{}").expect("real");
         std::os::unix::fs::symlink(
@@ -279,7 +283,7 @@ fn staged_task_files_cover_success_and_tokens() {
     };
     let staged = || {
         let tmp = tempfile::TempDir::new().expect("tempdir");
-        let home = tmp.path().join(aid);
+        let home = tmp.path().join(aid).join("m-0123456789abcdef");
         ensure_dir(&home.join("tasks"));
         std::fs::write(home.join("matrix-report.json"), r#"{"report_id":"m"}"#).expect("report");
         (tmp, home)
@@ -383,4 +387,19 @@ fn oversize_and_duplicate_key_plans_retrieve_zero() {
     let (_dir, run) = plan_dir(r#"{"matrix": {"include": []}, "matrix": {}}"#);
     assert_eq!(retrieve_reports_to(7, &run), 0);
     assert!(!run.join("reports").exists(), "no downloads attempted");
+}
+
+#[test]
+fn enumeration_dedupes_shared_job_artifacts() {
+    let plan = serde_json::json!({
+        "matrix": {"include": [
+            {"artifact_id": "velnor-crate-r7-a2-crate_a"},
+            {"artifact_id": "velnor-crate-r7-a2-crate_a"},
+            {"artifact_id": "velnor-crate-r7-a2-plan"},
+        ]}
+    });
+    assert_eq!(
+        expected_artifact_ids(&plan),
+        ["velnor-crate-r7-a2-crate_a", "velnor-crate-r7-a2-plan",]
+    );
 }

@@ -55,6 +55,7 @@ mod impl_prepare_generate;
 mod impl_preseed_manifest;
 mod impl_protocol;
 mod impl_protocol_fork;
+mod impl_protocol_render;
 mod impl_protocol_render_gate;
 mod impl_required_evidence;
 mod impl_required_reports;

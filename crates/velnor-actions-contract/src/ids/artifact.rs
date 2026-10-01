@@ -27,6 +27,21 @@ pub fn artifact_id_for_final(run_key: &str) -> Result<String, ContractError> {
     Ok(super::ArtifactId::parse(&id)?.into_inner())
 }
 
+/// Derive one job's report artifact `velnor-crate-<run-key>-<job-id>`.
+///
+/// Each matrix job uploads exactly one artifact carrying every entry's
+/// matrix report plus task reports (implementation-plan contract); the
+/// job ID is the stable crate-job (or plan-job) ID, validated by the
+/// job-ID grammar so the name round-trips through validation.
+/// # Errors
+pub fn artifact_id_for_crate_job(run_key: &str, job_id: &str) -> Result<String, ContractError> {
+    validate_run_key(run_key)?;
+    crate::workflow::jobs::validate_job_id(job_id)
+        .map_err(|_| ContractError::identity("artifact_id", "bad_job_artifact"))?;
+    let id = format!("velnor-crate-{run_key}-{job_id}");
+    Ok(super::ArtifactId::parse(&id)?.into_inner())
+}
+
 /// Derive `velnor-baseline-<commit>-<compat>` with full IDs (par §5).
 /// # Errors
 pub fn artifact_id_for_baseline(commit: &str, compat: &str) -> Result<String, ContractError> {
@@ -52,7 +67,7 @@ pub fn validate_target_key(value: &str) -> Result<(), ContractError> {
     }
 }
 
-/// Validate a derived artifact name (plan/matrix/final/candidate).
+/// Validate a derived artifact name (plan/matrix/final/crate/candidate).
 /// # Errors
 pub fn validate_artifact_id(value: &str) -> Result<(), ContractError> {
     if let Some(run_key) = value.strip_prefix("velnor-plan-") {
@@ -74,6 +89,9 @@ pub fn validate_artifact_id(value: &str) -> Result<(), ContractError> {
             .map_err(|_| ContractError::identity("artifact_id", "bad_matrix_artifact"))?;
         return validate_matrix_key(&format!("m-{hex}"))
             .map_err(|_| ContractError::identity("artifact_id", "bad_matrix_artifact"));
+    }
+    if let Some(rest) = value.strip_prefix("velnor-crate-") {
+        return validate_job_artifact(rest);
     }
     if let Some(rest) = value.strip_prefix("velnor-candidate-") {
         return validate_candidate_artifact(rest);
@@ -111,6 +129,22 @@ pub fn target_key(target: &str) -> Result<String, ContractError> {
         return Err(ContractError::identity("target_key", "empty_target_key"));
     }
     Ok(super::TargetKey::parse(&key)?.into_inner())
+}
+
+/// Validate the run-key/job-ID tail of a crate-job artifact name.
+///
+/// Both halves admit `-`, so every split is tried (same approach as
+/// the candidate tail): the name validates when some split yields a
+/// valid run key plus a valid job ID.
+fn validate_job_artifact(rest: &str) -> Result<(), ContractError> {
+    for (index, _) in rest.match_indices('-') {
+        let head = &rest[..index];
+        let tail = &rest[index + 1..];
+        if validate_run_key(head).is_ok() && crate::workflow::jobs::validate_job_id(tail).is_ok() {
+            return Ok(());
+        }
+    }
+    Err(ContractError::identity("artifact_id", "bad_job_artifact"))
 }
 
 /// Validate the run-key/target-key tail of a candidate artifact name.
@@ -163,7 +197,8 @@ mod tests {
         ArtifactId, ManifestKey, MatrixId, MatrixKey, PlanId, ReportId, RunKey, TargetKey, TaskId,
         TaskReportId,
     };
-    use super::{artifact_id_for_plan, target_key};
+    use super::validate_artifact_id;
+    use super::{artifact_id_for_crate_job, artifact_id_for_plan, target_key};
     use crate::canonical::{Digest, PosixPath, digest_b3, digest_b3_typed};
     use crate::workflow::baseline::{
         BaselineProof, BaselineStatus, ManifestTaskProof, PlanBaseline,
@@ -216,6 +251,31 @@ mod tests {
             artifact_id_for_plan("local").expect("plan"),
             "velnor-plan-local"
         );
+    }
+
+    #[test]
+    fn crate_job_artifacts_derive_and_validate_per_job() {
+        let id = artifact_id_for_crate_job("local", "rust-demo").expect("derive");
+        assert_eq!(id, "velnor-crate-local-rust-demo");
+        assert_eq!(
+            artifact_id_for_crate_job("r7-a2", "plan").expect("plan job"),
+            "velnor-crate-r7-a2-plan"
+        );
+        assert!(validate_artifact_id(&id).is_ok());
+        assert!(validate_artifact_id("velnor-crate-r7-a2-rust-demo").is_ok());
+        for bad in [
+            "velnor-crate-local",
+            "velnor-crate-",
+            "velnor-crate-local-",
+            "velnor-crate-Local-rust-demo",
+            "velnor-crate-local-RUST-DEMO",
+            "velnor-crate-local-velnor-plan",
+        ] {
+            assert!(validate_artifact_id(bad).is_err(), "accepted {bad}");
+        }
+        assert!(artifact_id_for_crate_job("Local", "rust-demo").is_err());
+        assert!(artifact_id_for_crate_job("local", "").is_err());
+        assert!(artifact_id_for_crate_job("local", "velnor-plan").is_err());
     }
 
     #[test]

@@ -42,6 +42,7 @@ fn fixture_plan() -> (Plan, String) {
         },
         &digest(11),
         "local",
+        "rust-demo",
     )
     .expect("entry derives");
     let plan = Plan {
