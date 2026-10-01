@@ -55,37 +55,44 @@ fn check_shellcheck_version(output: &str, pinned: &str) -> Result<(), Orchestrat
     }
 }
 
-/// Lint every staged `run:` body with pinned shellcheck; fail closed.
+/// Lint every staged `run:` body with one pinned shellcheck run; fail closed.
+///
+/// Bodies ride one argv (shellcheck checks each file and reports per-file
+/// gcc diagnostics), so per-crate jobs add files, not subprocesses.
 pub(crate) fn run_shellcheck_bodies(
     catalog: &ToolCatalog,
     staging: &Path,
     workflows: &[String],
 ) -> Result<(), OrchestratorError> {
-    for (index, body) in staged_run_bodies(staging, workflows)?.iter().enumerate() {
+    let bodies = staged_run_bodies(staging, workflows)?;
+    let mut files: Vec<OsString> = Vec::new();
+    for (index, body) in bodies.iter().enumerate() {
         if body.trim().is_empty() {
             continue;
         }
         let path = staging.join(format!("shellcheck-{index}.sh"));
         std::fs::write(&path, format!("#!/bin/sh\n{body}\n"))
             .map_err(|err| OrchestratorError::io(path.display().to_string(), err.to_string()))?;
-        let output = shellcheck_output(
-            catalog,
-            vec![
-                OsString::from("-S"),
-                OsString::from("warning"),
-                OsString::from("--format=gcc"),
-                path.into_os_string(),
-            ],
-            staging,
-        )?;
-        if !output.success {
-            return Err(OrchestratorError::Validation {
-                tool: "shellcheck".to_owned(),
-                problem: diagnose(&output),
-            });
-        }
+        files.push(path.into_os_string());
     }
-    Ok(())
+    if files.is_empty() {
+        return Ok(());
+    }
+    let mut args = vec![
+        OsString::from("-S"),
+        OsString::from("warning"),
+        OsString::from("--format=gcc"),
+    ];
+    args.extend(files);
+    let output = shellcheck_output(catalog, args, staging)?;
+    if output.success {
+        Ok(())
+    } else {
+        Err(OrchestratorError::Validation {
+            tool: "shellcheck".to_owned(),
+            problem: diagnose(&output),
+        })
+    }
 }
 
 /// Extract `run:` bodies from staged workflows; block scalars fail closed.
@@ -159,15 +166,22 @@ mod tests {
 
     /// One staged workflow carrying a single `run:` line, renderer-shaped.
     fn staged_run(run: &str) -> Result<(tempfile::TempDir, Vec<String>), String> {
+        staged_runs(std::slice::from_ref(&run))
+    }
+
+    /// One staged workflow carrying one `run:` line per entry, in order.
+    fn staged_runs(runs: &[&str]) -> Result<(tempfile::TempDir, Vec<String>), String> {
         let dir = tempfile::tempdir().map_err(|err| err.to_string())?;
         let rel = ".github/workflows/t.yml".to_owned();
         std::fs::create_dir_all(dir.path().join(".github/workflows"))
             .map_err(|err| err.to_string())?;
-        std::fs::write(
-            dir.path().join(&rel),
-            format!("jobs:\n  a:\n    steps:\n      - name: t\n        run: {run}\n"),
-        )
-        .map_err(|err| err.to_string())?;
+        let mut yaml = String::from("jobs:\n  a:\n    steps:\n");
+        for (index, run) in runs.iter().enumerate() {
+            use std::fmt::Write as _;
+            writeln!(yaml, "      - name: t{index}\n        run: {run}")
+                .map_err(|err| err.to_string())?;
+        }
+        std::fs::write(dir.path().join(&rel), yaml).map_err(|err| err.to_string())?;
         Ok((dir, vec![rel]))
     }
 
@@ -190,6 +204,25 @@ mod tests {
             run_shellcheck_bodies(&catalog, blocked.path(), &workflows)
                 .is_err_and(|err| { err.to_string().contains("run_block_scalar_unlintable") })
         );
+        Ok(())
+    }
+
+    #[test]
+    fn shellcheck_batch_lints_every_body() -> Result<(), String> {
+        let catalog = ToolCatalog::pinned();
+        let (clean, workflows) = staged_runs(&["echo \"one\"", "echo \"two\""])?;
+        run_shellcheck_bodies(&catalog, clean.path(), &workflows).map_err(|err| err.to_string())?;
+        // A violation in a later body still fails the single batched run.
+        let (dirty, workflows) = staged_runs(&["echo \"one\"", "echo $FOO/bar && [ -n $BAZ ]"])?;
+        assert!(
+            run_shellcheck_bodies(&catalog, dirty.path(), &workflows).is_err_and(|err| {
+                matches!(&err, OrchestratorError::Validation { tool, .. } if tool == "shellcheck")
+                    && err.to_string().contains("SC2070")
+            })
+        );
+        // All-empty bodies lint nothing and pass.
+        let (empty, workflows) = staged_runs(&["\"\""])?;
+        run_shellcheck_bodies(&catalog, empty.path(), &workflows).map_err(|err| err.to_string())?;
         Ok(())
     }
 

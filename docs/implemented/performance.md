@@ -288,10 +288,25 @@ generate split as prepare+render; obligations/matrix in parens):
 
 | Crates | prepare | plan | generate |
 | --- | --- | --- | --- |
-| 1 | 52, 69 | 592, 611 (8 obl) | 50+776, 68+765 |
-| 10 | 52, 62 | 686, 718 (44 obl) | 56+783, 61+767 |
+| 1 | 52, 69 | 592, 611 (8 obl) | 43+183, 41+183 |
+| 10 | 52, 62 | 686, 718 (44 obl) | 45+311, 45+314 |
 | 40 | — | 1161, 1247 (164 obl) | — |
-| 100 | 86, 104 | budget (see below) | 79+774, 95+764 |
+| 100 | 86, 104 | budget (see below) | 110+1742, 107+1713 |
+
+Generate column re-measured at `cf8d762`+shellcheck-batch (local
+arm64, rustc 1.98.1, `generate_scales_with_crate_count`,
+`--test-threads=1`, n=2; prepare/plan columns unchanged,
+earlier machine). History: the old ~770 ms flat row dated from
+`c938a8c`-era single-matrix-job renders. P05 (`7a2cc3a`,
+crate-job graph) grew staged `run:` bodies 16 → 24/78/618 and
+`run_shellcheck_bodies` spawned one pinned-shellcheck
+subprocess per body — a ~27 s storm at 100 crates (bisected,
+phase-split probe: shellcheck-bodies ~90% of generate).
+`validate_shell.rs` now lints all bodies in one shellcheck argv
+(same flags/files/diagnostics, still fail-closed), restoring
+sub-2 s at 100. Residual 100-crate scaling (~1.7 s) is
+actionlint's single subprocess over a larger YAML — inherent
+file-size cost, not a storm.
 
 Direct `cargo metadata --no-deps --offline` on the 100-crate
 fixture: 0.04, 0.03, 0.04 s — a lower bound per eliminated
@@ -300,7 +315,8 @@ full plan fails closed with `matrix_budget_exceeded:595321`
 (320 KiB cap, never truncates), so plan scales to 40 while
 `prepare` scales to 100. Counts are O(workspaces) vs
 O(manifests) by construction; wall shapes (prepare 52→104 ms,
-plan rising with obligations, generate ~770 ms flat) are n=2
+plan rising with obligations, generate ~180 ms → ~1.7 s across
+1→100 crates after the shellcheck batching) are n=2
 observations, not fitted complexity (UNMEASURED — the old
 "sublinear/linear/flat" wording overclaimed).
 
