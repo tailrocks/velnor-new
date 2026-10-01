@@ -189,8 +189,10 @@ pub(crate) fn workspace_format_step(
             problem: err.to_string(),
         }
     })?;
-    let outcome = crate::matrix_step::outcome_path_for_key(&matrix_key_for(fmt)?);
-    let run = crate::matrix_step::outcome_wrapper_argv(&joined, &outcome);
+    let matrix_key = matrix_key_for(fmt)?;
+    let outcome = crate::matrix_step::outcome_path_for_key(&matrix_key);
+    let start = crate::matrix_step::start_path_for_key(&matrix_key);
+    let run = crate::matrix_step::outcome_wrapper_argv(&joined, &outcome, &start);
     let env = format_step_env(catalog)?;
     velnor_actions_workflow_renderer::shell_step(plan_format::FORMAT_STEP_NAME, run, env)
         .map(Some)
@@ -214,11 +216,13 @@ pub(crate) fn workspace_format_report_steps(
     };
     let matrix_key = matrix_key_for(fmt)?;
     let outcome = crate::matrix_step::outcome_path_for_key(&matrix_key);
+    let start = crate::matrix_step::start_path_for_key(&matrix_key);
     let helper = crate::matrix_step::helper_path_for_version();
     let report = velnor_actions_workflow_renderer::shell_step(
         REPORT_FORMAT_NAME,
-        crate::matrix_step::deferred_report_argv(&outcome, &helper),
+        crate::matrix_step::deferred_report_argv(&outcome, &helper, &start),
         with_credential_scrub(&BTreeMap::from([(
+
             crate::task_report::TASK_ID_ENV.to_owned(),
             fmt.task_id.clone(),
         )])),
