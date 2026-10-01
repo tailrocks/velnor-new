@@ -186,19 +186,19 @@ fn candidate_mode_downloads_attestation_before_merge() -> Result<(), RenderError
             .unwrap_or_else(|| panic!("missing {name}:\n{text}"));
         at += next + name.len();
     }
-    let plain_support =
+    let baseline_support =
         WorkflowPolicy::VelnorRepositoryV1.support_workflow(GeneratorValidation::Bootstrap);
-    let mut plain_ctx = fixture_ctx();
-    plain_ctx.validator_commands = validator_commands();
-    let plain = render_workflow_ir(
+    let mut baseline_ctx = fixture_ctx();
+    baseline_ctx.validator_commands = validator_commands();
+    let baseline = render_workflow_ir(
         &fixture_ir(vec![minimal_plan_job()?, final_job()?]),
         WorkflowPolicy::VelnorRepositoryV1,
-        Some(&plain_support),
-        &plain_ctx,
+        Some(&baseline_support),
+        &baseline_ctx,
     )?;
     assert!(
-        !plain.contains("Download candidate attestation"),
-        "non-candidate mode fetches no attestation:\n{plain}"
+        !baseline.contains("Download candidate attestation"),
+        "non-candidate mode fetches no attestation:\n{baseline}"
     );
     Ok(())
 }

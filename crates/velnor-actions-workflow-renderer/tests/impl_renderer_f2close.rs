@@ -139,7 +139,7 @@ fn candidate_attestation_script_attests_live_plan() -> Result<(), RenderError> {
             None => {
                 std::fs::remove_file(&plan_path).ok();
             }
-        };
+        }
         std::fs::remove_file(out.join("candidate-attestation.json")).ok();
         let ok = Command::new("sh")
             .args(["-c", &script])

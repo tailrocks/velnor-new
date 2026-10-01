@@ -67,7 +67,7 @@ fn fixture_ir(task: Job) -> Result<WorkflowIr, RenderError> {
     })
 }
 
-fn task_job(env: BTreeMap<String, String>, needs: Vec<String>) -> Result<Job, RenderError> {
+fn task_job(env: &BTreeMap<String, String>, needs: Vec<String>) -> Result<Job, RenderError> {
     let argv = ["sh", "-c", "echo hi"].map(str::to_owned).to_vec();
     Ok(Job {
         display_name: "Task".to_owned(),
@@ -78,7 +78,7 @@ fn task_job(env: BTreeMap<String, String>, needs: Vec<String>) -> Result<Job, Re
         environment: None,
         steps: vec![
             checkout_step(&checkout_pin())?,
-            shell_step("Run task", argv, with_credential_scrub(&env))?,
+            shell_step("Run task", argv, with_credential_scrub(env))?,
         ],
     })
 }
@@ -100,7 +100,7 @@ fn render(task: Job) -> Result<String, RenderError> {
 
 #[test]
 fn strategy_shape_exact_and_marker_stripped() -> Result<(), RenderError> {
-    let text = render(task_job(marker_env("2"), vec!["plan".to_owned()])?)?;
+    let text = render(task_job(&marker_env("2"), vec!["plan".to_owned()])?)?;
     for line in [
         "    strategy:",
         "      fail-fast: false",
@@ -118,14 +118,14 @@ fn strategy_shape_exact_and_marker_stripped() -> Result<(), RenderError> {
 
 #[test]
 fn max_parallel_honored() -> Result<(), RenderError> {
-    let text = render(task_job(marker_env("7"), vec!["plan".to_owned()])?)?;
+    let text = render(task_job(&marker_env("7"), vec!["plan".to_owned()])?)?;
     assert!(text.contains("max-parallel: 7"), "cap:\n{text}");
     Ok(())
 }
 
 #[test]
 fn static_task_renders_no_strategy() -> Result<(), RenderError> {
-    let text = render(task_job(BTreeMap::new(), vec!["plan".to_owned()])?)?;
+    let text = render(task_job(&BTreeMap::new(), vec!["plan".to_owned()])?)?;
     for absent in ["strategy:", "outputs:", "id: plan", "fromJSON"] {
         assert!(!text.contains(absent), "static hit {absent}:\n{text}");
     }
@@ -144,7 +144,7 @@ fn matrix_misuse_fails_closed() -> Result<(), RenderError> {
         ),
         (marker_env("2"), Vec::new(), "matrix_without_producer_need"),
     ] {
-        assert!(render(task_job(env, needs)?).is_err_and(|err| format!("{err:?}").contains(want)));
+        assert!(render(task_job(&env, needs)?).is_err_and(|err| format!("{err:?}").contains(want)));
     }
     Ok(())
 }

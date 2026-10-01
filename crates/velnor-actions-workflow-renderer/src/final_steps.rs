@@ -124,7 +124,7 @@ fn download_attestation_step(ctx: &RenderContext) -> Result<Step, RenderError> {
         velnor_actions_contract::CANDIDATE_EVIDENCE_SUBDIR
     );
     let mut step = steps::download_artifact_step(&artifact, &path)?;
-    step.name = ATTESTATION_DOWNLOAD_NAME.to_owned();
+    ATTESTATION_DOWNLOAD_NAME.clone_into(&mut step.name);
     Ok(step)
 }
 

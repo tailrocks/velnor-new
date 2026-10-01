@@ -240,7 +240,7 @@ pub fn acquire_velnor_step(
     env: &BTreeMap<String, String>,
 ) -> Result<Step, RenderError> {
     commands::validate_command_argv(&argv)?;
-    commands::validate_env(&env)?;
+    commands::validate_env(env)?;
     if env
         .get(ASSET_SHA_ENV)
         .is_none_or(|sha| sha.len() != 64 || !is_lower_hex(sha))

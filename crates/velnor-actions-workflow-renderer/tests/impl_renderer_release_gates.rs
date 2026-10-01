@@ -42,10 +42,10 @@ pub(crate) fn checkout_step(sha: &str, persist: Option<&str>) -> Result<Step, Re
     action_step("Checkout", &checkout_uses(), with)
 }
 
-pub(crate) fn shell(name: &str, argv: &[&str], env: &[(&str, &str)]) -> Result<Step, RenderError> {
+pub(crate) fn shell(name: &str, argv: &[&str], env: &[(&str, &str)]) -> Step {
     // Direct IR: these tests pin the release gates as the enforcing
     // layer, so construction bypasses the constructor gates.
-    Ok(Step {
+    Step {
         name: name.to_owned(),
         condition: None,
         kind: StepKind::Shell {
@@ -55,7 +55,7 @@ pub(crate) fn shell(name: &str, argv: &[&str], env: &[(&str, &str)]) -> Result<S
                 .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
                 .collect(),
         },
-    })
+    }
 }
 
 pub(crate) fn publish_argv(config: &str) -> Vec<&str> {
@@ -138,7 +138,7 @@ pub(crate) fn gated_spec() -> Result<ReleaseWorkflowSpec, RenderError> {
             "release-preparation".to_owned(),
             job(
                 ReleaseRole::Preparation,
-                vec![shell("Run", &["echo", "ok"], &[])?],
+                vec![shell("Run", &["echo", "ok"], &[])],
                 None,
                 None,
             ),
@@ -149,7 +149,7 @@ pub(crate) fn gated_spec() -> Result<ReleaseWorkflowSpec, RenderError> {
                 ReleaseRole::Preflight,
                 vec![
                     checkout_step(SHA, Some("false"))?,
-                    shell("Run", &["echo", "ok"], &[])?,
+                    shell("Run", &["echo", "ok"], &[]),
                 ],
                 None,
                 None,
@@ -161,7 +161,7 @@ pub(crate) fn gated_spec() -> Result<ReleaseWorkflowSpec, RenderError> {
                 ReleaseRole::PublishOidc,
                 vec![
                     checkout_step(SHA, Some("false"))?,
-                    shell("Publish", &publish_argv(RELEASE_CONFIG_PATH), &[])?,
+                    shell("Publish", &publish_argv(RELEASE_CONFIG_PATH), &[]),
                 ],
                 Some(&gate),
                 Some(ENV),
@@ -171,7 +171,7 @@ pub(crate) fn gated_spec() -> Result<ReleaseWorkflowSpec, RenderError> {
             "release-reconcile".to_owned(),
             job(
                 ReleaseRole::Reconcile,
-                vec![shell("Run", &["echo", "ok"], &[])?],
+                vec![shell("Run", &["echo", "ok"], &[])],
                 Some("always()"),
                 None,
             ),
@@ -203,7 +203,7 @@ fn preparation_forbids_secrets_tokens_and_inputs() -> Result<(), RenderError> {
     let leaked = with_steps(
         gated_spec()?,
         "release-preparation",
-        vec![shell("Run", &["echo", "${{ secrets.TOKEN }}"], &[])?],
+        vec![shell("Run", &["echo", "${{ secrets.TOKEN }}"], &[])],
     )
     .expect("job");
     assert!(
@@ -218,7 +218,7 @@ fn preparation_forbids_secrets_tokens_and_inputs() -> Result<(), RenderError> {
             "Run",
             &["echo", "ok"],
             &[("CARGO_REGISTRY_TOKEN", "x")],
-        )?],
+        )],
     )
     .expect("job");
     assert!(
@@ -229,7 +229,7 @@ fn preparation_forbids_secrets_tokens_and_inputs() -> Result<(), RenderError> {
     let interpolated = with_steps(
         gated_spec()?,
         "release-preparation",
-        vec![shell("Run", &["echo", "github.event.inputs.plan"], &[])?],
+        vec![shell("Run", &["echo", "github.event.inputs.plan"], &[])],
     )
     .expect("job");
     assert!(
@@ -249,7 +249,7 @@ fn preflight_requires_the_exact_approved_source() -> Result<(), RenderError> {
             "release-preflight",
             vec![
                 checkout_step(sha, Some("false"))?,
-                shell("Run", &["echo", "ok"], &[])?,
+                shell("Run", &["echo", "ok"], &[]),
             ],
         )
         .expect("job");
@@ -262,7 +262,7 @@ fn preflight_requires_the_exact_approved_source() -> Result<(), RenderError> {
     let missing = with_steps(
         gated_spec()?,
         "release-preflight",
-        vec![shell("Run", &["echo", "ok"], &[])?],
+        vec![shell("Run", &["echo", "ok"], &[])],
     )
     .expect("job");
     assert_eq!(
@@ -280,7 +280,7 @@ fn checkouts_never_persist_credentials() -> Result<(), RenderError> {
             "release-preflight",
             vec![
                 checkout_step(SHA, persist)?,
-                shell("Run", &["echo", "ok"], &[])?,
+                shell("Run", &["echo", "ok"], &[]),
             ],
         )
         .expect("job");

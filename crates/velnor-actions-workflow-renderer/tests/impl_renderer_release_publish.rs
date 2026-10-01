@@ -25,7 +25,7 @@ fn oidc_publish_carries_zero_token_material() -> Result<(), RenderError> {
                 "Publish",
                 &publish_argv(RELEASE_CONFIG_PATH),
                 &[("TOKEN", "${{ secrets.CARGO_REGISTRY_TOKEN }}")],
-            )?,
+            ),
         ],
     )
     .expect("job");
@@ -43,7 +43,7 @@ fn oidc_publish_carries_zero_token_material() -> Result<(), RenderError> {
                 "Publish",
                 &publish_argv(RELEASE_CONFIG_PATH),
                 &[("CARGO_REGISTRY_TOKEN", "x")],
-            )?,
+            ),
         ],
     )
     .expect("job");
@@ -62,7 +62,7 @@ fn publish_binds_the_exact_generated_config() -> Result<(), RenderError> {
         "release-publish",
         vec![
             checkout_step(SHA, Some("false"))?,
-            shell("Publish", &["release-plz", "release"], &[])?,
+            shell("Publish", &["release-plz", "release"], &[]),
         ],
     )
     .expect("job");
@@ -75,7 +75,7 @@ fn publish_binds_the_exact_generated_config() -> Result<(), RenderError> {
         "release-publish",
         vec![
             checkout_step(SHA, Some("false"))?,
-            shell("Publish", &publish_argv(RELEASE_BOOTSTRAP_CONFIG_PATH), &[])?,
+            shell("Publish", &publish_argv(RELEASE_BOOTSTRAP_CONFIG_PATH), &[]),
         ],
     )
     .expect("job");
@@ -100,7 +100,7 @@ fn bootstrap_binds_exactly_one_env_token() -> Result<(), RenderError> {
                     "CARGO_REGISTRY_TOKEN",
                     "${{ secrets.CARGO_REGISTRY_TOKEN }}",
                 )],
-            )?,
+            ),
         ],
         Some(&gate),
         Some(ENV),
@@ -118,7 +118,7 @@ fn bootstrap_binds_exactly_one_env_token() -> Result<(), RenderError> {
             "${{ secrets.X }}",
         ],
         &[],
-    )?;
+    );
     let mut leaked = jobs.clone();
     leaked.get_mut("release-bootstrap").expect("job").steps =
         vec![checkout_step(SHA, Some("false"))?, argv_secret];
@@ -130,7 +130,7 @@ fn bootstrap_binds_exactly_one_env_token() -> Result<(), RenderError> {
     let mut unbound = jobs.clone();
     unbound.get_mut("release-bootstrap").expect("job").steps = vec![
         checkout_step(SHA, Some("false"))?,
-        shell("Publish", &publish_argv(RELEASE_BOOTSTRAP_CONFIG_PATH), &[])?,
+        shell("Publish", &publish_argv(RELEASE_BOOTSTRAP_CONFIG_PATH), &[]),
     ];
     assert!(
         invalid(check_release_jobs(&spec(unbound), &binding()))
@@ -144,7 +144,7 @@ fn bootstrap_binds_exactly_one_env_token() -> Result<(), RenderError> {
             "Publish",
             &publish_argv(RELEASE_BOOTSTRAP_CONFIG_PATH),
             &[("TOKEN", "${{ secrets.CARGO_REGISTRY_TOKEN }}")],
-        )?,
+        ),
     ];
     assert!(
         invalid(check_release_jobs(&spec(wrong_key), &binding()))
@@ -174,7 +174,7 @@ fn verification_bypasses_are_rejected_on_publish_argv() -> Result<(), RenderErro
             "release-publish",
             vec![
                 checkout_step(SHA, Some("false"))?,
-                shell("Publish", &argv, &[])?,
+                shell("Publish", &argv, &[]),
             ],
         )
         .expect("job");
@@ -204,7 +204,7 @@ fn dispatch_inputs_stay_out_of_publish_steps() -> Result<(), RenderError> {
                     "inputs.plan",
                 ],
                 &[],
-            )?,
+            ),
         ],
     )
     .expect("job");
@@ -221,7 +221,7 @@ fn reconcile_is_credential_free_and_internal_ops_rejected() -> Result<(), Render
     let leaked = with_steps(
         gated_spec()?,
         "release-reconcile",
-        vec![shell("Run", &["echo", "${{ secrets.TOKEN }}"], &[])?],
+        vec![shell("Run", &["echo", "${{ secrets.TOKEN }}"], &[])],
     )
     .expect("job");
     assert!(

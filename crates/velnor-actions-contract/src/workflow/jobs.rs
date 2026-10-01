@@ -180,7 +180,7 @@ pub fn slugify_segment(name: &str) -> String {
 /// names never reach the gate dirty.
 #[must_use]
 pub fn is_safe_display_name(name: &str) -> bool {
-    !name.contains("${{") && !name.chars().any(|ch| ch.is_control())
+    !name.contains("${{") && !name.chars().any(char::is_control)
 }
 
 /// Sanitize one display label: controls become `?`, `${{` breaks open.

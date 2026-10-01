@@ -158,13 +158,14 @@ fn resolve_actual_event(
         return None;
     };
     let payload = match event_payload {
-        Some(text) => match serde_json::from_str(text) {
-            Ok(payload) => payload,
-            Err(_) => {
+        Some(text) => {
+            if let Ok(payload) = serde_json::from_str(text) {
+                payload
+            } else {
                 errors.push("malformed_actual_payload".to_owned());
                 return None;
             }
-        },
+        }
         None if name == "pull_request" => {
             errors.push("missing_actual_payload".to_owned());
             return None;
