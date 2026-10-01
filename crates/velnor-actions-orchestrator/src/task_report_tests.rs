@@ -323,9 +323,8 @@ fn planted_symlink_at_report_path_refuses_without_writing() {
     fs::create_dir_all(&report_dir).expect("report dirs");
     let loot = temp.path().join("loot.json");
     std::os::unix::fs::symlink(&loot, dir.join("matrix-report.json")).expect("plant");
-    let err =
-        write_task_report_to("local", CLIPPY, 0, None, &[], temp.path())
-            .expect_err("plant refused");
+    let err = write_task_report_to("local", CLIPPY, 0, None, &[], temp.path())
+        .expect_err("plant refused");
     assert!(err.to_string().contains("symlink_refused"), "{err}");
     assert!(!loot.exists(), "producer bytes never followed the plant");
 }

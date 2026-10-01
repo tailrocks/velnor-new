@@ -223,11 +223,7 @@ fn staged_symlinks_reject_and_nested_layout_reads() {
     };
     // Nested layout: the report reads from the exact nested path.
     let tmp = tempfile::tempdir().expect("tempdir");
-    let nested = tmp
-        .path()
-        .join(aid)
-        .join(aid)
-        .join("m-0123456789abcdef");
+    let nested = tmp.path().join(aid).join(aid).join("m-0123456789abcdef");
     std::fs::create_dir_all(&nested).expect("nested");
     std::fs::write(nested.join("matrix-report.json"), r#"{"report_id":"n"}"#).expect("report");
     let (reports, _, _) = read(tmp.path());
