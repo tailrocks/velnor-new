@@ -33,11 +33,12 @@ fn strict_plan_job_gets_full_prelude_in_order() -> Result<(), RenderError> {
             "Write request",
             "Plan",
             PUBLISH_PLAN_NAME,
+            "Save Mise tools",
         ]
     );
     assert!(
-        !text.contains("Restore Mise tools") && !text.contains("Save Mise tools"),
-        "P08: built-in cache only, no manual tools archives:\n{text}"
+        !text.contains("Restore Mise tools"),
+        "P08: restores stay built-in:\n{text}"
     );
     Ok(())
 }

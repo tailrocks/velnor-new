@@ -99,15 +99,6 @@ pub struct Job {
 /// fork. The Mise adapter's trust predicates implement this same policy
 /// over runtime values; this string is its generation-time spelling.
 pub const CACHE_SAVE_CONDITION: &str = "success() && github.event_name == 'push'";
-/// `with:` spelling of the push-only event check for boolean action inputs.
-///
-/// This intentionally omits `success()`: `with:` inputs evaluate when the
-/// step starts (Setup Mise runs before any producer, and with
-/// `install: false` never saves at all), so a status check there is
-/// vacuous — status-check functions belong in `if:` conditionals.
-/// Producer-success gating lives on the save step's `if:`
-/// ([`CACHE_SAVE_CONDITION`]).
-pub const CACHE_SAVE_CONDITION_EXPR: &str = "${{ github.event_name == 'push' }}";
 /// `env:` spelling of the push-only writer policy for cache-mode inputs.
 ///
 /// Evaluates to `write` on push runs and `read` everywhere else, so a

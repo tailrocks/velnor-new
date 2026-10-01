@@ -1,7 +1,6 @@
 //! P08 renderer cases: built-in Mise cache, sources paths, rust-cache gates.
 
 use std::collections::BTreeMap;
-use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION_EXPR;
 use velnor_actions_contract::{Job, StepKind};
 use velnor_actions_workflow_renderer::cache_p08::{
     check_mbx_before_fetch, check_no_rust_cache_with_mbx, infer_job_tools,
@@ -150,7 +149,8 @@ fn setup_p08_enables_builtin_cache_with_key() {
     assert_eq!(with.get("cache").map(String::as_str), Some("true"));
     assert_eq!(
         with.get("cache_save").map(String::as_str),
-        Some(velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION_EXPR)
+        Some("false"),
+        "setups restore-only: the action saves only inside its disabled install leg"
     );
     assert_eq!(
         with.get("cache_key").map(String::as_str),
@@ -360,17 +360,25 @@ fn strict_render_elects_single_writer_per_shared_key()
     let (plan_block, crate_block) = text.split_at(crate_at);
     let plan_block = &plan_block[plan_at..];
     assert!(
-        plan_block.contains(CACHE_SAVE_CONDITION_EXPR),
+        plan_block.contains("- name: Save Mise tools"),
         "plan wins the shared key:\n{text}"
     );
     assert!(
-        crate_block.contains("cache_save: \"false\""),
-        "crate stands down to restore-only:\n{text}"
+        plan_block.contains("if: success() && github.event_name == 'push'"),
+        "winner saves push-only:\n{text}"
+    );
+    assert!(
+        !crate_block.contains("Save Mise tools"),
+        "crate restores read-only:\n{text}"
     );
     assert_eq!(
-        text.matches(CACHE_SAVE_CONDITION_EXPR).count(),
+        text.matches("- name: Save Mise tools").count(),
         1,
         "exactly one saver per key:\n{text}"
+    );
+    assert!(
+        !text.contains("cache_save: ${{"),
+        "no setup promises a built-in save:\n{text}"
     );
     Ok(())
 }

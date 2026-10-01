@@ -252,7 +252,7 @@ fn tools_restore_and_save_pin_mise_data_dir_only() {
 }
 
 #[test]
-fn strict_uses_builtin_cache_without_manual_tools_steps()
+fn strict_restores_builtin_and_saves_on_elected_writer()
 -> Result<(), velnor_actions_workflow_renderer::RenderError> {
     use velnor_actions_workflow_renderer::checkout_step;
     let lint = job(
@@ -270,10 +270,13 @@ fn strict_uses_builtin_cache_without_manual_tools_steps()
     let text = strict(&fixture_ir(vec![lint]), &fixture_ctx())?;
     let names = step_names(&text, "actionlint");
     assert!(
-        !names
-            .iter()
-            .any(|s| s == TOOLS_RESTORE_NAME || s == TOOLS_SAVE_NAME),
-        "P08: no manual tools archives: {names:?}"
+        !names.iter().any(|s| s == TOOLS_RESTORE_NAME),
+        "P08: restores stay built-in: {names:?}"
+    );
+    assert_eq!(
+        names.iter().filter(|s| *s == TOOLS_SAVE_NAME).count(),
+        1,
+        "P08: sole owner saves once: {names:?}"
     );
     assert_eq!(
         names.iter().position(|s| s == "Setup Mise"),

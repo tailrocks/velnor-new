@@ -1,45 +1,50 @@
 //! Per-key Mise-cache writer election (P08 race closure).
 //!
-//! Split from `cache_p08` (size gate): exactly one saver per built-in
-//! cache key, elected after every setup step is inserted.
+//! Exactly one saver per built-in cache key, elected after every setup
+//! step is inserted. Split from `cache_p08` (size gate).
 
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{Job, StepKind};
 
-use crate::setup::MISE_ACTION_NAME;
+use crate::{RenderError, setup::MISE_ACTION_NAME};
 
 /// Elect one Mise-cache writer per cache key across jobs.
 ///
-/// Every qualified setup saves on push by default, so jobs sharing one
-/// key race concurrent saves of the same entry. Exactly one job per key
-/// keeps the push-gated `cache_save`; the rest stand down to
-/// restore-only (`cache_save: "false"`). The plan job wins a shared key
-/// (it runs first and owns the trusted-writer role); a sole owner's key
-/// keeps its writer; any other shared key goes to the lowest job ID, so
-/// the election stays deterministic across renders.
-pub fn elect_mise_cache_writers(jobs: &mut BTreeMap<String, Job>) {
+/// Every qualified setup restores read-only (`cache_save: "false"`: the
+/// pinned action saves only inside its `install` leg, which Velnor
+/// disables), so without an explicit saver no run would ever warm the
+/// shared entries. Exactly one job per key gets a push-gated `Save Mise
+/// tools` step over that key; every other sharer restores it read-only.
+/// The plan job wins a shared key (it runs first and owns the
+/// trusted-writer role); a sole owner's key keeps its writer; any other
+/// shared key goes to the lowest job ID, so the election stays
+/// deterministic across renders. Setups are never rewritten; reruns add
+/// no second save to a job that already carries one.
+///
+/// # Errors
+///
+/// Returns [`RenderError`] when a winner's save step fails to build
+/// (unreachable for keys read back from valid setups).
+pub fn elect_mise_cache_writers(jobs: &mut BTreeMap<String, Job>) -> Result<(), RenderError> {
     let mut by_key: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for (id, job) in jobs.iter() {
         if let Some(key) = setup_cache_key(job) {
             by_key.entry(key).or_default().push(id.clone());
         }
     }
-    for owners in by_key.values() {
+    for (key, owners) in &by_key {
         let winner = owners
             .iter()
             .find(|id| id.as_str() == crate::render::PLAN_JOB_ID)
             .or_else(|| owners.iter().min())
             .map(String::as_str)
             .unwrap_or_default();
-        for id in owners {
-            if id != winner
-                && let Some(job) = jobs.get_mut(id)
-            {
-                demote_setup_writer(job);
-            }
+        if let Some(job) = jobs.get_mut(winner) {
+            append_tools_save(job, key)?;
         }
     }
+    Ok(())
 }
 
 /// This job's Mise built-in cache key, when its setup carries one.
@@ -55,22 +60,23 @@ fn setup_cache_key(job: &Job) -> Option<String> {
     })
 }
 
-/// Stand one setup down to restore-only (`cache_save: "false"`).
+/// Append the push-gated tools save over `key` to one writer job.
 ///
-/// Only a push-gated saver demotes; foreign or already-false values
-/// stay untouched so the election never rewrites unknown shapes.
-fn demote_setup_writer(job: &mut Job) {
-    for step in &mut job.steps {
-        let StepKind::Action { uses, with, .. } = &mut step.kind else {
-            continue;
-        };
-        if !uses.starts_with(&format!("{MISE_ACTION_NAME}@")) {
-            continue;
-        }
-        if with.get("cache_save").is_some_and(|value| {
-            value == velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION_EXPR
-        }) {
-            with.insert("cache_save".to_owned(), "false".to_owned());
-        }
+/// Mirrors `Save Cargo sources`: the trusted save gate keeps PR runs
+/// read-only, and the step archives the default mise data dir the
+/// built-in restore reads, so a push-seeded entry warms every later
+/// restore of the key. Closures and fan-in steps added after the
+/// election install no tools, so the capture stays complete.
+fn append_tools_save(job: &mut Job, key: &str) -> Result<(), RenderError> {
+    if job
+        .steps
+        .iter()
+        .any(|step| step.name == crate::cache_steps::TOOLS_SAVE_NAME)
+    {
+        return Ok(());
     }
+    let mut save = crate::cache_steps::tools_save_step(key)?;
+    save.condition = Some(velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION.to_owned());
+    job.steps.push(save);
+    Ok(())
 }
