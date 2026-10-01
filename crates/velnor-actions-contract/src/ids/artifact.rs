@@ -45,7 +45,7 @@ pub fn artifact_id_for_crate_job(run_key: &str, job_id: &str) -> Result<String, 
 /// Derive `velnor-baseline-<commit>-<compat>` with full IDs (par §5).
 /// # Errors
 pub fn artifact_id_for_baseline(commit: &str, compat: &str) -> Result<String, ContractError> {
-    if commit.len() != 40 || !is_lower_hex(commit) {
+    if !super::is_lower_hex_len(commit, 40) {
         return Err(ContractError::identity("artifact_id", "bad_source_commit"));
     }
     crate::canonical::validate_digest(compat)
@@ -168,16 +168,10 @@ fn validate_baseline_artifact(rest: &str) -> Result<(), ContractError> {
     let Some((commit, compat)) = rest.split_once('-') else {
         return Err(bad());
     };
-    if commit.len() != 40 || !is_lower_hex(commit) {
+    if !super::is_lower_hex_len(commit, 40) {
         return Err(bad());
     }
     crate::canonical::validate_digest(compat).map_err(|_| bad())
-}
-
-/// Check lowercase hex.
-fn is_lower_hex(text: &str) -> bool {
-    text.bytes()
-        .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
 }
 
 /// Check target-key shape (matches [`target_key`] output grammar).
@@ -372,5 +366,21 @@ mod tests {
         assert!(serde_json::from_str::<ManifestTaskProof>(&json).is_ok());
         let forged = json.replace(&good, "b3-nope");
         assert!(serde_json::from_str::<ManifestTaskProof>(&forged).is_err());
+    }
+
+    #[test]
+    fn canonical_hex_pins_charset_and_rejects_empty_at_width() {
+        use super::super::{is_lower_hex, is_lower_hex_len, validate_matrix_key};
+        assert!(is_lower_hex("0123456789abcdef"));
+        assert!(is_lower_hex(""), "charset-only vacuity is deliberate");
+        for bad in ["ABCDEF", "ab cd", "ab\n", "xyz"] {
+            assert!(!is_lower_hex(bad), "charset must reject {bad:?}");
+        }
+        assert!(is_lower_hex_len(&"a".repeat(40), 40));
+        assert!(!is_lower_hex_len("", 40), "empty fails every width");
+        assert!(!is_lower_hex_len(&"a".repeat(39), 40));
+        assert!(!is_lower_hex_len(&"A".repeat(40), 40));
+        assert!(validate_matrix_key("m-").is_err(), "empty hex fails");
+        assert!(validate_matrix_key("m-0123456789ABCDEF").is_err());
     }
 }

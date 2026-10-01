@@ -10,6 +10,7 @@ use crate::workflow::trust::Trust;
 use serde::{Deserialize, Serialize};
 /// Per-task machine-readable report.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct TaskReport {
     /// Report schema version; must be 1.
     pub schema: u32,
@@ -145,6 +146,7 @@ pub enum NotSelectedReason {
 }
 /// Cache outcome record.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CacheOutcome {
     /// Cache layer.
     pub layer: CacheLayer,
@@ -180,6 +182,7 @@ pub enum CacheResult {
 }
 /// Per-matrix aggregate report.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct MatrixReport {
     /// Report schema version; must be 1.
     pub schema: u32,
@@ -216,6 +219,7 @@ pub struct MatrixReport {
 }
 /// One task entry in a matrix report.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct MatrixTaskEntry {
     /// Task-report ID.
     pub task_report_id: String,

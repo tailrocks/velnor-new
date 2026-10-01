@@ -220,7 +220,7 @@ pub fn validate_matrix_key(value: &str) -> Result<(), ContractError> {
             "malformed_matrix_key",
         ));
     };
-    if hex.len() == 16 && is_lower_hex(hex) {
+    if is_lower_hex_len(hex, 16) {
         Ok(())
     } else {
         Err(ContractError::identity(
@@ -295,7 +295,7 @@ pub fn validate_task_report_id(value: &str) -> Result<(), ContractError> {
     let Some((head, prefix)) = rest.rsplit_once('-') else {
         return Err(bad());
     };
-    if prefix.len() != 16 || !is_lower_hex(prefix) {
+    if !is_lower_hex_len(prefix, 16) {
         return Err(ContractError::identity(
             "task_report_id",
             "bad_digest_prefix",
@@ -323,10 +323,18 @@ pub(crate) fn is_component_byte(byte: u8) -> bool {
     byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'.' | b'-' | b'_')
 }
 
-/// Check lowercase hex.
-fn is_lower_hex(text: &str) -> bool {
+/// Canonical lowercase-hex charset check (empty passes vacuously;
+/// fixed-width callers must use [`is_lower_hex_len`] instead).
+#[must_use]
+pub fn is_lower_hex(text: &str) -> bool {
     text.bytes()
         .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+}
+
+/// Check exactly `len` lowercase-hex chars (empty always fails).
+#[must_use]
+pub fn is_lower_hex_len(text: &str, len: usize) -> bool {
+    text.len() == len && is_lower_hex(text)
 }
 
 /// Check the `r<digits>-a<digits>` CI run-key shape.

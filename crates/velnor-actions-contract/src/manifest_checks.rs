@@ -7,6 +7,8 @@
 
 use crate::errors::ContractError;
 
+pub(crate) use crate::ids::is_lower_hex;
+
 /// Check a document schema version.
 pub(crate) fn check_schema(schema: u32) -> Result<(), ContractError> {
     if schema != 1 {
@@ -64,7 +66,7 @@ pub(crate) fn check_immutable_url(url: &str, file: &str, key: &str) -> Result<()
 
 /// Check a SHA-256 hex digest.
 pub(crate) fn check_sha256(sha: &str, file: &str, key: &str) -> Result<(), ContractError> {
-    if sha.len() == 64 && is_lower_hex(sha) {
+    if crate::ids::is_lower_hex_len(sha, 64) {
         Ok(())
     } else {
         Err(ContractError::config(file, key, "malformed_sha256"))
@@ -74,17 +76,11 @@ pub(crate) fn check_sha256(sha: &str, file: &str, key: &str) -> Result<(), Contr
 /// Check a 40-char lowercase-hex source commit (F3: one predicate for the
 /// release manifest, the generator lock, and the candidate manifest).
 pub(crate) fn check_commit(commit: &str, file: &str, key: &str) -> Result<(), ContractError> {
-    if commit.len() == 40 && is_lower_hex(commit) {
+    if crate::ids::is_lower_hex_len(commit, 40) {
         Ok(())
     } else {
         Err(ContractError::config(file, key, "malformed_commit"))
     }
-}
-
-/// Check lowercase hex.
-pub(crate) fn is_lower_hex(text: &str) -> bool {
-    text.bytes()
-        .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
 }
 
 /// Check a `YYYY-MM-DD` review date (range-checked, not calendar-exact).

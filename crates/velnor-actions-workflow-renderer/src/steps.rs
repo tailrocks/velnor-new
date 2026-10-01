@@ -129,7 +129,7 @@ pub fn validate_uses(uses: &str) -> Result<(), RenderError> {
             "forbidden_action:{uses}"
         )));
     }
-    if sha.len() != 40 || !is_lower_hex(sha) {
+    if !velnor_actions_contract::ids::is_lower_hex_len(sha, 40) {
         return Err(RenderError::BadActionRef(format!("unpinned_ref:{uses}")));
     }
     Ok(())
@@ -296,6 +296,11 @@ pub fn rehead_actionlint_marker(yaml: &str, version: &str) -> Result<String, Ren
 ///
 /// Emits exactly the contract keys: source commit, target triple,
 /// toolchain identity, and binary SHA-256 (computed at runtime).
+///
+/// Contract exception (shell writer, kept deliberately): no trusted
+/// executor exists yet in the candidate job — the only Rust binary
+/// present is the just-built, still-unverified candidate, which §3
+/// verify-before-run forbids running before `candidate_manifest_verify_step`.
 #[must_use]
 pub fn candidate_manifest_script(target: &str, toolchain: &str) -> String {
     format!(
@@ -316,6 +321,10 @@ pub const RUN_DIR_SHELL: &str = "$RUNNER_TEMP/velnor/r$GITHUB_RUN_ID-a$GITHUB_RU
 /// empty/oversize; the merge re-checks `commit == plan.head` after
 /// parsing both sides, so a truncation or misparse can only fail a
 /// run, never forge a binding.
+///
+/// Contract exception (shell writer, kept deliberately): same job,
+/// same bar — no trusted executor pre-verification, so the plan head
+/// is scraped in shell and re-checked by the merge (see above).
 #[must_use]
 pub fn candidate_attestation_script() -> String {
     let attestation = velnor_actions_contract::CANDIDATE_ATTESTATION_FILENAME;
@@ -337,7 +346,7 @@ pub fn acquire_velnor_step(
     commands::validate_env(env)?;
     if env
         .get(ASSET_SHA_ENV)
-        .is_none_or(|sha| sha.len() != 64 || !is_lower_hex(sha))
+        .is_none_or(|sha| !velnor_actions_contract::ids::is_lower_hex_len(sha, 64))
     {
         return Err(RenderError::BadCommand("bad_asset_sha256".to_owned()));
     }
@@ -349,7 +358,7 @@ pub fn acquire_velnor_step(
     }
     if env
         .get(RELEASE_COMMIT_ENV)
-        .is_none_or(|commit| commit.len() != 40 || !is_lower_hex(commit))
+        .is_none_or(|commit| !velnor_actions_contract::ids::is_lower_hex_len(commit, 40))
     {
         return Err(RenderError::BadCommand("bad_release_commit".to_owned()));
     }
@@ -370,13 +379,6 @@ fn is_action_name(name: &str) -> bool {
         && name
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'/' | b'.' | b'-' | b'_'))
-}
-
-/// True for 64-char lowercase hex.
-fn is_lower_hex(value: &str) -> bool {
-    value
-        .bytes()
-        .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
 }
 
 /// Target-directory prefix isolating one lane.

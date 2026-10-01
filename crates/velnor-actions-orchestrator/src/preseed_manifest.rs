@@ -116,7 +116,7 @@ pub(crate) fn write_preseed_manifest_to(
     if !velnor_actions_contract::is_supported_target(target) {
         return Err(internal(&format!("preseed_unsupported_target:{target}")));
     }
-    if !is_lower_hex(commit, 40) {
+    if !velnor_actions_contract::ids::is_lower_hex_len(commit, 40) {
         return Err(internal("preseed_bad_commit"));
     }
     if toolchain.is_empty() || toolchain.bytes().any(|b| b < 0x20 || b == 0x7f) {
@@ -170,14 +170,6 @@ fn hex_lower(bytes: &[u8]) -> String {
         out.push(HEX[(byte & 0xf) as usize] as char);
     }
     out
-}
-
-/// True for exactly `len` lowercase hex bytes.
-fn is_lower_hex(value: &str, len: usize) -> bool {
-    value.len() == len
-        && value
-            .bytes()
-            .all(|b| b.is_ascii_digit() || matches!(b, b'a'..=b'f'))
 }
 
 #[cfg(test)]
@@ -298,6 +290,13 @@ mod tests {
             assert!(
                 write_preseed_manifest_to(b, o, t, tc, c, &temp).is_err(),
                 "{case} must fail closed"
+            );
+        }
+        let upper = "A".repeat(40);
+        for bad in ["", upper.as_str(), "ab cd"] {
+            assert!(
+                write_preseed_manifest_to(&binary, &out, &target, &toolchain, bad, &temp).is_err(),
+                "commit {bad:?} must fail closed"
             );
         }
     }

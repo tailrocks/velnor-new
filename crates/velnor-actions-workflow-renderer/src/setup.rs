@@ -48,7 +48,7 @@ impl MiseSetup {
                 self.version
             )));
         }
-        if self.sha256.len() != 64 || !is_lower_hex(&self.sha256) {
+        if !velnor_actions_contract::ids::is_lower_hex_len(&self.sha256, 64) {
             return Err(RenderError::BadCommand("bad_mise_sha256".to_owned()));
         }
         Ok(())
@@ -90,12 +90,4 @@ fn is_catalog_version(value: &str) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'_'))
         && value.contains('.')
         && !value.contains("${{")
-}
-
-/// True for lowercase hex (any length; callers fix the length).
-fn is_lower_hex(value: &str) -> bool {
-    !value.is_empty()
-        && value
-            .bytes()
-            .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
 }

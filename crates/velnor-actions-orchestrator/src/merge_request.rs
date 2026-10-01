@@ -170,7 +170,7 @@ fn resolve_actual_event(
     };
     let payload = match event_payload {
         Some(text) => {
-            if let Ok(payload) = serde_json::from_str(text) {
+            if let Ok(payload) = parse_strict_json(text) {
                 payload
             } else {
                 errors.push("malformed_actual_payload".to_owned());
@@ -298,3 +298,23 @@ mod merge_event_tests;
 #[cfg(test)]
 #[path = "merge_request_tests.rs"]
 mod merge_request_tests;
+
+#[cfg(test)]
+mod actual_event_strict_tests {
+    use super::*;
+
+    #[test]
+    fn duplicate_payload_keys_fail_closed() {
+        let mut errors = Vec::new();
+        let dup = r#"{"pull_request":{"head":{"repo":{"fork":false}}},"pull_request":{}}"#;
+        assert!(resolve_actual_event(Some("pull_request"), Some(dup), &mut errors).is_none());
+        assert!(
+            errors.iter().any(|err| err == "malformed_actual_payload"),
+            "{errors:?}"
+        );
+        let mut errors = Vec::new();
+        let valid = r#"{"pull_request":{"head":{"repo":{"fork":true}}}}"#;
+        assert!(resolve_actual_event(Some("pull_request"), Some(valid), &mut errors).is_some());
+        assert!(errors.is_empty(), "{errors:?}");
+    }
+}

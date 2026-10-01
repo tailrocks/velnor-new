@@ -16,13 +16,12 @@
 //! later steps and nothing else could speak for them.
 
 use std::env;
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use velnor_actions_contract::{
     CacheLayer, CacheOutcome, CacheResult, ExecuteTaskRef, MatrixEntry, MatrixReport, Plan,
-    TaskReport, TaskStatus, canonical_json_bytes, task_report_id_for_task, validate_run_key,
-    validate_task_id,
+    TaskReport, TaskStatus, canonical_json_bytes, parse_strict_json, task_report_id_for_task,
+    validate_run_key, validate_task_id,
 };
 
 use crate::OrchestratorError;
@@ -189,11 +188,26 @@ fn parse_downstream(raw: Option<&str>) -> Vec<String> {
 }
 
 /// Load and validate the downloaded plan, bound to this run key.
+///
+/// Reads through the shared staged-text gate (symlink rejection plus
+/// the retrieve-side bound for this same `plan.json`) and the strict
+/// duplicate-rejecting parser, so a hostile plan fails closed instead
+/// of exhausting memory or smuggling shadowed keys.
 pub(crate) fn load_plan(run_key: &str, runner_temp: &Path) -> Result<Plan, OrchestratorError> {
     let path = plan_path(runner_temp, run_key);
-    let text = fs::read_to_string(&path)
-        .map_err(|err| OrchestratorError::io(path.display().to_string(), err.to_string()))?;
-    let plan: Plan = serde_json::from_str(&text).map_err(|_| internal("unparsable_plan"))?;
+    let bound = crate::retrieve_reports::MAX_RETRIEVE_PLAN_BYTES;
+    let text = match crate::retrieve_reports::read_staged_text(&path, bound) {
+        Ok(text) => text,
+        Err("missing") => {
+            return Err(OrchestratorError::io(
+                path.display().to_string(),
+                "not_found",
+            ));
+        }
+        Err(kind) => return Err(internal(&format!("unreadable_plan:{kind}"))),
+    };
+    let value = parse_strict_json(&text).map_err(|_| internal("unparsable_plan"))?;
+    let plan: Plan = serde_json::from_value(value).map_err(|_| internal("unparsable_plan"))?;
     plan.validate().map_err(internal_contract)?;
     if plan.run_key != run_key {
         return Err(internal("report_run_mismatch"));
@@ -350,3 +364,36 @@ mod task_report_merge_tests;
 #[cfg(test)]
 #[path = "task_report_tests.rs"]
 mod task_report_tests;
+
+#[cfg(test)]
+mod load_plan_strict_tests {
+    use tempfile::TempDir;
+
+    use super::load_plan;
+    use super::task_report_tests::fixture_plan;
+
+    /// Stage one `plan.json` under a fake runner temp.
+    fn stage(text: &str) -> TempDir {
+        let dir = TempDir::new().expect("temp");
+        let run = dir.path().join("velnor").join("local");
+        std::fs::create_dir_all(&run).expect("run dir");
+        std::fs::write(run.join("plan.json"), text).expect("plan");
+        dir
+    }
+
+    #[test]
+    fn plan_read_is_bounded_and_duplicate_rejecting() {
+        let valid = serde_json::to_string(&fixture_plan()).expect("valid plan");
+        assert!(load_plan("local", stage(&valid).path()).is_ok());
+        let mut dup = valid;
+        dup.pop();
+        dup.push_str(r#","schema":1}"#);
+        let err = load_plan("local", stage(&dup).path()).expect_err("dup keys reject");
+        assert!(err.to_string().contains("unparsable_plan"), "{err}");
+        let bound = usize::try_from(crate::retrieve_reports::MAX_RETRIEVE_PLAN_BYTES)
+            .expect("bound fits pointer width");
+        let err =
+            load_plan("local", stage(&" ".repeat(bound + 1)).path()).expect_err("oversize rejects");
+        assert!(err.to_string().contains("oversize"), "{err}");
+    }
+}
