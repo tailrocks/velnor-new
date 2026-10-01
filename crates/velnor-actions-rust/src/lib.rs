@@ -34,8 +34,8 @@ pub mod toolfiles;
 pub use cargo_env::{DENY_WARNINGS, RUSTDOCFLAGS_ENV, cargo_payload_env};
 pub use closure::{lock_digest_at_root, nextest_digest_at_root, resolve_closure_at_root};
 pub use detect::{
-    CargoCandidate, REGISTERED_STACKS, detected_projects_for_units, discover_candidates,
-    discover_stack_candidates, manifest_for_key, manifest_for_unit_root, project_root_for_manifest,
+    CargoCandidate, detected_projects_for_units, discover_candidates, discover_stack_candidates,
+    manifest_for_key, manifest_for_unit_root, project_root_for_manifest,
 };
 pub use evidence::{
     Evidence, EvidenceFile, EvidenceStrength, MiseWrapperInput, NEXTEST_RECOMMENDATION,
