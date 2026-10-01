@@ -81,9 +81,10 @@ fn default_manifest_path() -> String {
     "Cargo.toml".to_owned()
 }
 
-/// Default protected publishing environment name.
+/// Default protected publishing environment name: `release`, matching the
+/// crates.io trusted-publishing docs and majority ecosystem practice.
 fn default_environment() -> String {
-    "crates-io".to_owned()
+    "release".to_owned()
 }
 
 /// Default `release_pr` value.

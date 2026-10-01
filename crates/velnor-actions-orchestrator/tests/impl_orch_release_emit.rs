@@ -148,7 +148,7 @@ fn release_enabled_emits_family_oidc() -> TestResult {
         yaml.contains("--config .github/release-plz.toml"),
         "explicit config"
     );
-    assert!(yaml.contains("environment: crates-io"), "pinned env");
+    assert!(yaml.contains("environment: release"), "pinned env");
     assert!(yaml.contains("id-token: write"), "oidc grant");
     assert!(
         !yaml.contains("CARGO_REGISTRY_TOKEN"),

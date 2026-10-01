@@ -30,7 +30,7 @@ keys — not claimed to exist yet):
 enabled = true
 manifest_path = "Cargo.toml"
 packages = ["termpane"]
-environment = "crates-io"
+environment = "release"
 authentication = "trusted-publishing"
 release_pr = true
 tag_name = "{{ package }}-v{{ version }}"
