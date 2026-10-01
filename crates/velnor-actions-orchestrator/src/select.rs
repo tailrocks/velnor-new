@@ -9,9 +9,9 @@ use std::collections::BTreeSet;
 use std::ffi::OsString;
 use std::path::Path;
 
-use velnor_actions_contract::{ProposedTask, WorkflowEvent};
+use velnor_actions_contract::{ProposedTask, Stack, WorkflowEvent};
 use velnor_actions_mise::GitRequest;
-use velnor_actions_rust::{FOREIGN_TOOL_FILES, RUST_TOOLCHAIN_FILE};
+use velnor_actions_rust::SelectionBroadening;
 
 use crate::OrchestratorError;
 use crate::decisions::selection_broadens_for_path;
@@ -134,11 +134,17 @@ fn affected_from_changed(
         );
         return BTreeSet::new();
     }
-    if changed.iter().any(|path| path == "Cargo.lock") {
+    if changed
+        .iter()
+        .any(|path| broadening_for_path(path) == Some(SelectionBroadening::Lockfile))
+    {
         warnings.push("cargo_lock_changed:all_changed".to_owned());
         return all_packages;
     }
-    if changed.iter().any(|path| is_root_config(path)) {
+    if changed
+        .iter()
+        .any(|path| broadening_for_path(path) == Some(SelectionBroadening::RootConfig))
+    {
         warnings.push("root_config_changed:all_changed".to_owned());
         return all_packages;
     }
@@ -381,10 +387,22 @@ fn untracked_files(root: &Path) -> Result<BTreeSet<String>, String> {
 /// Generated execution uses Velnor's exact pins, so these repository inputs
 /// feed inspection findings only; a task consuming one must declare it.
 fn is_advisory_toolfile(path: &str) -> bool {
-    path == RUST_TOOLCHAIN_FILE || path == ".mise.toml" || FOREIGN_TOOL_FILES.contains(&path)
+    path == ".mise.toml" || velnor_actions_rust::is_known_toolfile(path)
 }
 
-/// True for root Cargo config paths: root manifest or cargo config.
-fn is_root_config(path: &str) -> bool {
-    path == "Cargo.toml" || path == ".cargo/config.toml" || path == ".cargo/config"
+/// Broadening class one changed path triggers, unioned over stacks.
+///
+/// Each stack classifies its own lock/root-config paths; the orchestrator
+/// only unions the verdicts and owns the warning vocabulary.
+fn broadening_for_path(path: &str) -> Option<SelectionBroadening> {
+    for stack in Stack::all() {
+        match stack {
+            Stack::Rust => {
+                if let Some(class) = velnor_actions_rust::selection_broadening(path) {
+                    return Some(class);
+                }
+            }
+        }
+    }
+    None
 }
