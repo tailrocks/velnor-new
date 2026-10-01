@@ -9,7 +9,9 @@ use velnor_actions_contract::{
 };
 
 use crate::cover::Signals;
-use crate::cover_baseline::provenance_check::parse_workflow_ref;
+use crate::cover_baseline::provenance_check::{
+    baseline_artifact_name, is_unverifiable_generator_sha, parse_workflow_ref, task_run_ids_bound,
+};
 use crate::merge::BaselineManifest;
 
 /// Merge-time anchor expectations from runner-owned environment.
@@ -199,16 +201,31 @@ pub(crate) fn revalidate_coverage_with_anchors(
 /// Plan-anchored provenance: base, generator, trusted invariant, shapes.
 ///
 /// A covered plan without a base can prove nothing; every other field
-/// compares against the plan value or the trusted invariant.
+/// compares against the plan value or the trusted invariant. Mirrors the
+/// plan-time [`validate_provenance`](crate::cover_baseline::provenance_check::validate_provenance)
+/// manifest checks (identified run, verifiable generator, derived
+/// artifact name, per-task run binding) so a manifest the plan rejects
+/// can never pass at merge.
 fn manifest_provenance_matches_plan(plan: &Plan, manifest: &BaselineManifest) -> bool {
     let Some(base) = plan.base.as_deref() else {
         return false;
     };
+    let identified = manifest.run_id > 0 && manifest.run_attempt > 0 && manifest.artifact_id > 0;
+    let derived_name = baseline_artifact_name(&manifest.source_commit, &manifest.compatibility_id)
+        .is_ok_and(|expect| manifest.artifact_name == expect);
+    let run_bound = manifest
+        .tasks
+        .iter()
+        .all(|task| task_run_ids_bound(task, manifest.run_id));
     manifest.source_commit == base
         && manifest.generator_version == plan.generator.version
         && manifest.generator_sha256 == plan.generator.sha256
+        && !is_unverifiable_generator_sha(&manifest.generator_sha256)
         && manifest.event == "push"
         && manifest.final_status == "passed"
+        && identified
+        && derived_name
+        && run_bound
         && validate_digest(&manifest.repository_id).is_ok()
         && ref_shape_ok(&manifest.ref_)
         && workflow_ref_consistent(manifest)
