@@ -3,19 +3,19 @@
 use std::collections::BTreeSet;
 
 use velnor_actions_contract::reverse_closure;
-use velnor_actions_rust::{LocalEdge, local_edge_pairs};
 
 use crate::discover::Discovery;
 
 /// Package IDs owning changed files plus their reverse closure.
 ///
 /// The closure runs over the union of the base and head graphs, so edges
-/// removed or renamed at head still select their consumers.
+/// removed or renamed at head still select their consumers. Graphs arrive
+/// as neutral `(from, to)` pairs converted at the owning adapter boundary.
 pub(crate) fn affected_packages(
     discovery: &Discovery,
     changed: &BTreeSet<String>,
-    base_edges: &[LocalEdge],
-    head_edges: &[LocalEdge],
+    base_edges: &[(String, String)],
+    head_edges: &[(String, String)],
 ) -> BTreeSet<String> {
     let mut owners: Vec<(String, String)> = Vec::new();
     for workspace in &discovery.workspaces {
@@ -33,9 +33,7 @@ pub(crate) fn affected_packages(
         owned.extend(declared_owners(discovery, path));
     }
     let mut selected = owned.clone();
-    let base = local_edge_pairs(base_edges);
-    let head = local_edge_pairs(head_edges);
-    selected.extend(reverse_closure(&base, &head, &owned));
+    selected.extend(reverse_closure(base_edges, head_edges, &owned));
     selected
 }
 
@@ -110,7 +108,7 @@ pub(crate) fn manifest_dir(manifest: &str) -> String {
 #[cfg(test)]
 mod tests {
     use velnor_actions_rust::{
-        CompileDriver, DepKind, NextestProfile, PackageRecord, ProfileSource, RustExecutionProfile,
+        CompileDriver, NextestProfile, PackageRecord, ProfileSource, RustExecutionProfile,
         TestRunner, WorkspaceRecord,
     };
 
@@ -167,14 +165,8 @@ mod tests {
         }
     }
 
-    fn edge(from: &str, to: &str) -> LocalEdge {
-        LocalEdge {
-            from: from.to_owned(),
-            to: to.to_owned(),
-            kind: DepKind::Normal,
-            optional: false,
-            target: None,
-        }
+    fn edge(from: &str, to: &str) -> (String, String) {
+        (from.to_owned(), to.to_owned())
     }
 
     /// Discovery with the given `(id, manifest)` packages in one workspace.
@@ -282,7 +274,7 @@ mod tests {
         let discovery = two_package_discovery();
         let changed: BTreeSet<String> = ["b/src/lib.rs".to_owned()].into_iter().collect();
         let base = vec![edge("a", "b")];
-        let head: Vec<LocalEdge> = Vec::new();
+        let head: Vec<(String, String)> = Vec::new();
         let selected = affected_packages(&discovery, &changed, &base, &head);
         assert_eq!(
             selected,

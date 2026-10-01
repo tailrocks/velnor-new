@@ -8,7 +8,7 @@ use velnor_actions_contract::{
     ContractError, EdgeKind, ProposedTask, TaskEdge, TaskGraph, TaskNode, digest_b3,
 };
 use velnor_actions_mise::GitRequest;
-use velnor_actions_rust::{LocalEdge, manifest_edges};
+use velnor_actions_rust::{local_edge_pairs, manifest_edges};
 
 use crate::discover::Discovery;
 use crate::git_paths::split_nul_paths;
@@ -51,11 +51,14 @@ fn added_files(root: &Path, base: &str, head: &str) -> Result<BTreeSet<String>, 
     split_nul_paths(&output.stdout)
 }
 
-/// Head local-path edges from discovery records.
-pub(crate) fn head_edges(discovery: &Discovery) -> Vec<LocalEdge> {
+/// Head local-path edges from discovery records, as neutral pairs.
+///
+/// Converted at the rust boundary via [`local_edge_pairs`]; selection
+/// never sees adapter edge types.
+pub(crate) fn head_edges(discovery: &Discovery) -> Vec<(String, String)> {
     let mut edges = Vec::new();
     for workspace in &discovery.workspaces {
-        edges.extend(workspace.record.edges.iter().cloned());
+        edges.extend(local_edge_pairs(&workspace.record.edges));
     }
     edges
 }
@@ -72,7 +75,7 @@ pub(crate) fn base_edges(
     base: &str,
     head: &str,
     discovery: &Discovery,
-) -> Result<Vec<LocalEdge>, String> {
+) -> Result<Vec<(String, String)>, String> {
     let mut packages: Vec<(String, String)> = Vec::new();
     let mut wanted: Vec<(String, String)> = Vec::new();
     for workspace in &discovery.workspaces {
@@ -102,7 +105,7 @@ pub(crate) fn base_edges(
             &packages,
         )?);
     }
-    Ok(edges)
+    Ok(local_edge_pairs(&edges))
 }
 
 /// Base contents of every wanted manifest via one `git show` each.
