@@ -118,7 +118,7 @@ fn obligations_upload_one_artifact_per_entry() {
             .iter()
             .find(|step| step.name == name)
             .unwrap_or_else(|| panic!("missing {name}"));
-        let velnor_actions_contract::StepKind::Action { uses, with } = &step.kind else {
+        let velnor_actions_contract::StepKind::Action { uses, with, .. } = &step.kind else {
             panic!("{name} must be an action step");
         };
         assert!(uses.starts_with("actions/upload-artifact@"), "{uses}");

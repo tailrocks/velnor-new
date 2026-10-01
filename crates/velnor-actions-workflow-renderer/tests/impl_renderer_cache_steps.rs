@@ -1,10 +1,13 @@
 //! Gate 4 renderer cases: MBX objects, cache actions, lane target dirs.
 
-use velnor_actions_contract::{Step, StepKind};
+use velnor_actions_contract::workflow::ir::CACHE_MODE_PUSH_WRITE_EXPR;
+use velnor_actions_contract::{Step, StepKind, WorkflowPolicy};
 use velnor_actions_workflow_renderer::steps::{
-    TOOLS_CACHE_PATH, TOOLS_RESTORE_NAME, TOOLS_SAVE_NAME, cache_action_step, mbx_objects_step,
-    target_dir_for_lane, tools_cache_key, tools_restore_step, tools_save_step,
+    CompileDriver, MBX_CACHE_MODE_ENV, TOOLS_CACHE_PATH, TOOLS_RESTORE_NAME, TOOLS_SAVE_NAME,
+    cache_action_step, checkout_step, mbx_objects_step, mbx_step_for_driver, target_dir_for_lane,
+    tools_cache_key, tools_restore_step, tools_save_step,
 };
+use velnor_actions_workflow_renderer::{RenderError, render_workflow_ir};
 
 use super::impl_renderer_fixtures::*;
 
@@ -39,7 +42,9 @@ fn mbx_objects_step_pins_action_and_mode() {
     let step = mbx_objects_step(&uses, false, "1.19.0").expect("mbx");
     assert_eq!(kind_name(&step), "action");
     match &step.kind {
-        StepKind::Action { uses: got, with } => {
+        StepKind::Action {
+            uses: got, with, ..
+        } => {
             assert!(got.starts_with("jdx/mr-boxington-action@"), "{got}");
             assert_eq!(
                 with.get("github-cache-mode").map(String::as_str),
@@ -209,7 +214,7 @@ fn tools_restore_and_save_pin_mise_data_dir_only() {
         .expect("tools key");
     let restore = tools_restore_step(&key).expect("restore");
     assert_eq!(restore.name, TOOLS_RESTORE_NAME);
-    let StepKind::Action { uses, with } = &restore.kind else {
+    let StepKind::Action { uses, with, .. } = &restore.kind else {
         panic!("restore must be an action step");
     };
     assert!(uses.starts_with("actions/cache/restore@"), "{uses}");
@@ -222,7 +227,7 @@ fn tools_restore_and_save_pin_mise_data_dir_only() {
     );
     let save = tools_save_step(&key).expect("save");
     assert_eq!(save.name, TOOLS_SAVE_NAME);
-    let StepKind::Action { uses, with } = &save.kind else {
+    let StepKind::Action { uses, with, .. } = &save.kind else {
         panic!("save must be an action step");
     };
     assert!(uses.starts_with("actions/cache/save@"), "{uses}");
@@ -319,4 +324,59 @@ fn lane_target_dirs_stay_isolated() {
     let two = target_dir_for_lane("lane-two");
     assert!(one.starts_with("$RUNNER_TEMP/velnor/target/"), "{one}");
     assert_ne!(one, two, "lanes never share a target dir");
+}
+
+#[test]
+fn mbx_objects_step_gates_save_to_push_via_cache_mode() {
+    let uses = format!("jdx/mr-boxington-action@{}", sha());
+    let direct = mbx_objects_step(&uses, false, "1.19.0").expect("mbx");
+    let driven = mbx_step_for_driver(&uses, CompileDriver::Mbx, "1.19.0")
+        .expect("driver mbx")
+        .expect("mbx driver emits");
+    for step in [&direct, &driven] {
+        let StepKind::Action { env, .. } = &step.kind else {
+            panic!("mbx must be an action step");
+        };
+        assert_eq!(
+            env.get(MBX_CACHE_MODE_ENV).map(String::as_str),
+            Some(CACHE_MODE_PUSH_WRITE_EXPR),
+            "every MBX step pins the push-only cache mode"
+        );
+    }
+    assert!(
+        mbx_step_for_driver(&uses, CompileDriver::Cargo, "1.19.0")
+            .expect("cargo driver")
+            .is_none(),
+        "cargo drivers emit no MBX step to gate"
+    );
+    // The mode expression must branch on the event: a constant `write`
+    // would reopen PR saves, a constant `read` would break push saves.
+    assert!(CACHE_MODE_PUSH_WRITE_EXPR.contains("github.event_name == 'push'"));
+    assert!(CACHE_MODE_PUSH_WRITE_EXPR.contains("'write'"));
+    assert!(CACHE_MODE_PUSH_WRITE_EXPR.contains("'read'"));
+}
+
+#[test]
+fn action_step_env_renders_only_when_present() -> Result<(), RenderError> {
+    let uses = format!("jdx/mr-boxington-action@{}", sha());
+    let mbx = mbx_objects_step(&uses, false, "1.19.0")?;
+    let plain = checkout_step(&checkout_pin())?;
+    let text = render_workflow_ir(
+        &fixture_ir(vec![job("demo", "Demo", Vec::new(), vec![plain, mbx])]),
+        WorkflowPolicy::ConsumerV1,
+        None,
+        &fixture_ctx(),
+    )?;
+    assert!(
+        text.contains(&format!(
+            "{MBX_CACHE_MODE_ENV}: {CACHE_MODE_PUSH_WRITE_EXPR}"
+        )),
+        "mbx mode renders on the step:\n{text}"
+    );
+    assert_eq!(
+        text.matches("env:").count(),
+        1,
+        "env-less action steps render no env map:\n{text}"
+    );
+    Ok(())
 }

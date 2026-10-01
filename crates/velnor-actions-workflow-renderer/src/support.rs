@@ -201,6 +201,7 @@ pub(crate) fn alint_job(ctx: &RenderContext) -> Result<Job, RenderError> {
                 kind: StepKind::Action {
                     uses: ALINT_USES.to_owned(),
                     with,
+                    env: BTreeMap::new(),
                 },
             },
         ],

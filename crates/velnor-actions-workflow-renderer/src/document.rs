@@ -249,6 +249,57 @@ fn internal_env(
     Yaml::Map(env)
 }
 
+/// Render one action step: name, condition, pin, inputs, step env.
+///
+/// Step env (cache modes) renders after `with:`; absent env renders
+/// nothing, so env-less steps keep their exact historical bytes.
+fn action_step_to_yaml(
+    job_id: &str,
+    step: &Step,
+    uses: &str,
+    with: &BTreeMap<String, String>,
+    env: &BTreeMap<String, String>,
+) -> Result<Yaml, RenderError> {
+    steps::validate_uses(uses)?;
+    for (key, value) in with {
+        crate::expressions::check_with_key(key)?;
+        crate::expressions::check_with_value(key, value)?;
+        steps::scan_for_private_subcommands(key)?;
+        steps::scan_for_private_subcommands(value)?;
+    }
+    commands::validate_env(env)?;
+    let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
+    if let Some(condition) = &step.condition {
+        steps::scan_for_private_subcommands(condition)?;
+        entries.push(("if".to_owned(), Yaml::str(condition.clone())));
+    } else if uses == steps::UPLOAD_ARTIFACT_USES {
+        entries.push((
+            "if".to_owned(),
+            Yaml::str(crate::render::FINAL_CONDITION.to_owned()),
+        ));
+    }
+    if job_id == FINAL_JOB_ID && is_verdict_download(step) {
+        entries.push(("continue-on-error".to_owned(), Yaml::Bool(true)));
+    }
+    entries.push(("uses".to_owned(), Yaml::str(uses.to_owned())));
+    if !with.is_empty() {
+        entries.push(("with".to_owned(), string_map_yaml(with)));
+    }
+    if !env.is_empty() {
+        entries.push(("env".to_owned(), string_map_yaml(env)));
+    }
+    Ok(Yaml::Map(entries))
+}
+
+/// Sorted string map as YAML (shared by `with:` and `env:` emission).
+fn string_map_yaml(map: &BTreeMap<String, String>) -> Yaml {
+    Yaml::Map(
+        map.iter()
+            .map(|(key, value)| (key.clone(), Yaml::str(value.clone())))
+            .collect(),
+    )
+}
+
 /// Render one step; internal ops become env plus request file, never argv.
 /// Every action ref (including the Alint pin) must be a full-SHA pin.
 fn step_to_yaml(
@@ -259,37 +310,7 @@ fn step_to_yaml(
 ) -> Result<Yaml, RenderError> {
     steps::scan_for_private_subcommands(&step.name)?;
     match &step.kind {
-        StepKind::Action { uses, with } => {
-            steps::validate_uses(uses)?;
-            for (key, value) in with {
-                crate::expressions::check_with_key(key)?;
-                crate::expressions::check_with_value(key, value)?;
-                steps::scan_for_private_subcommands(key)?;
-                steps::scan_for_private_subcommands(value)?;
-            }
-            let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
-            if let Some(condition) = &step.condition {
-                steps::scan_for_private_subcommands(condition)?;
-                entries.push(("if".to_owned(), Yaml::str(condition.clone())));
-            } else if uses == steps::UPLOAD_ARTIFACT_USES {
-                entries.push((
-                    "if".to_owned(),
-                    Yaml::str(crate::render::FINAL_CONDITION.to_owned()),
-                ));
-            }
-            if job_id == FINAL_JOB_ID && is_verdict_download(step) {
-                entries.push(("continue-on-error".to_owned(), Yaml::Bool(true)));
-            }
-            entries.push(("uses".to_owned(), Yaml::str(uses.clone())));
-            if !with.is_empty() {
-                let inputs: Vec<(String, Yaml)> = with
-                    .iter()
-                    .map(|(key, value)| (key.clone(), Yaml::str(value.clone())))
-                    .collect();
-                entries.push(("with".to_owned(), Yaml::Map(inputs)));
-            }
-            Ok(Yaml::Map(entries))
-        }
+        StepKind::Action { uses, with, env } => action_step_to_yaml(job_id, step, uses, with, env),
         StepKind::Shell { run, env } => {
             commands::validate_command_argv(run)?;
             commands::validate_env(env)?;

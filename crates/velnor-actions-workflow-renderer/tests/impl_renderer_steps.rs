@@ -6,10 +6,10 @@ use velnor_actions_workflow_renderer::steps::{
 };
 use velnor_actions_workflow_renderer::{
     ASSET_SHA_ENV, ASSET_URL_ENV, CONCURRENCY_CANCEL, CONCURRENCY_GROUP, RenderContext,
-    RenderError, STAGED_BINARY_PREFIX, acquire_velnor_step, action_step, checkout_step,
-    internal_step, join_argv_for_run, merge_step, plan_step, quote_run_arg, quote_scalar,
-    render_workflow_ir, scan_for_private_subcommands, shell_step, validate_command_argv,
-    validate_uses,
+    RenderError, STAGED_BINARY_PREFIX, acquire_velnor_step, action_step, action_step_with_env,
+    checkout_step, internal_step, join_argv_for_run, merge_step, plan_step, quote_run_arg,
+    quote_scalar, render_workflow_ir, scan_for_private_subcommands, shell_step,
+    validate_command_argv, validate_uses,
 };
 
 fn pin(name: &str) -> String {
@@ -26,7 +26,7 @@ fn checkout_template_pins_action_without_credentials() -> Result<(), RenderError
     assert_eq!(step.name, "Checkout");
     assert!(matches!(
         &step.kind,
-        velnor_actions_contract::StepKind::Action { uses, with }
+        velnor_actions_contract::StepKind::Action { uses, with, .. }
             if uses == &pin("actions/checkout")
                 && with.get("persist-credentials").is_some_and(|v| v == "false")
     ));
@@ -396,4 +396,27 @@ fn private_subcommand_scan_finds_hidden_tokens() {
     assert!(scan_for_private_subcommands("velnor-actions run x").is_err());
     assert!(scan_for_private_subcommands("prefix __internal suffix").is_err());
     assert!(action_step("x", "velnor-actions __y", BTreeMap::new()).is_err());
+}
+
+#[test]
+fn action_step_with_env_validates_env_keys_and_values() {
+    let env = BTreeMap::from([("MODE".to_owned(), "read".to_owned())]);
+    let step = action_step_with_env("Env action", &pin("actions/checkout"), BTreeMap::new(), env)
+        .expect("valid env");
+    assert!(matches!(
+        &step.kind,
+        velnor_actions_contract::StepKind::Action { env, .. }
+            if env.get("MODE").is_some_and(|v| v == "read")
+    ));
+    for bad in [
+        BTreeMap::from([("lower".to_owned(), "read".to_owned())]),
+        BTreeMap::from([("MODE".to_owned(), "a\nb".to_owned())]),
+        BTreeMap::from([("MODE".to_owned(), "velnor-actions __x".to_owned())]),
+    ] {
+        assert!(
+            action_step_with_env("Env action", &pin("actions/checkout"), BTreeMap::new(), bad)
+                .is_err(),
+            "malformed action env must fail"
+        );
+    }
 }

@@ -9,11 +9,10 @@ use velnor_actions_contract::{Step, StepKind};
 use crate::{RenderError, commands, marker};
 
 pub use crate::cache_steps::{
-    CACHE_RESTORE_NAME, CACHE_SAVE_NAME, CompileDriver, MBX_ACTION_NAME, TARGET_DIR_PREFIX,
+    CACHE_RESTORE_NAME, CACHE_SAVE_NAME, CompileDriver, MBX_ACTION_NAME, MBX_CACHE_MODE_ENV,
     TASK_ARTIFACTS_DIR, TOOLS_CACHE_PATH, TOOLS_KEY_PREFIX, TOOLS_RESTORE_NAME, TOOLS_RESTORE_USES,
     TOOLS_SAVE_NAME, TOOLS_SAVE_USES, cache_action_step, check_cache_step_order, check_mbx_gating,
-    lane_cargo_target_env, mbx_objects_step, mbx_step_for_driver, target_dir_for_lane,
-    tools_cache_key, tools_restore_step, tools_save_step,
+    mbx_objects_step, mbx_step_for_driver, tools_cache_key, tools_restore_step, tools_save_step,
 };
 
 pub use crate::steps_artifact::{
@@ -121,14 +120,7 @@ pub fn checkout_step(uses: &str) -> Result<Step, RenderError> {
         return Err(RenderError::BadActionRef(format!("not_checkout:{uses}")));
     }
     let with = BTreeMap::from([("persist-credentials".to_owned(), "false".to_owned())]);
-    Ok(Step {
-        name: "Checkout".to_owned(),
-        condition: None,
-        kind: StepKind::Action {
-            uses: uses.to_owned(),
-            with,
-        },
-    })
+    action_step("Checkout", uses, with)
 }
 
 /// Validated pinned-action step.
@@ -140,6 +132,22 @@ pub fn action_step(
     name: &str,
     uses: &str,
     with: BTreeMap<String, String>,
+) -> Result<Step, RenderError> {
+    action_step_with_env(name, uses, with, BTreeMap::new())
+}
+
+/// Validated action step with step-level environment.
+///
+/// Same gates as [`action_step`]; `env` renders as the step's `env:`
+/// map and applies to the action's main and post phases alike, which
+/// is what lets a cache mode gate the post-step save while the
+/// restore still runs on every event.
+/// # Errors
+pub fn action_step_with_env(
+    name: &str,
+    uses: &str,
+    with: BTreeMap<String, String>,
+    env: BTreeMap<String, String>,
 ) -> Result<Step, RenderError> {
     if name.trim().is_empty() {
         return Err(RenderError::BadActionRef("empty_name".to_owned()));
@@ -154,12 +162,14 @@ pub fn action_step(
         scan_for_private_subcommands(key)?;
         scan_for_private_subcommands(value)?;
     }
+    crate::commands::validate_env(&env)?;
     Ok(Step {
         name: name.to_owned(),
         condition: None,
         kind: StepKind::Action {
             uses: uses.to_owned(),
             with,
+            env,
         },
     })
 }
@@ -366,4 +376,19 @@ fn is_lower_hex(value: &str) -> bool {
     value
         .bytes()
         .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+}
+
+/// Target-directory prefix isolating one lane.
+pub const TARGET_DIR_PREFIX: &str = "$RUNNER_TEMP/velnor/target/";
+
+/// Isolated target directory for one lane.
+#[must_use]
+pub fn target_dir_for_lane(lane_id: &str) -> String {
+    format!("{TARGET_DIR_PREFIX}{lane_id}")
+}
+
+/// `CARGO_TARGET_DIR` env pair isolating one lane (CACHE-1.20).
+#[must_use]
+pub fn lane_cargo_target_env(lane_id: &str) -> (String, String) {
+    ("CARGO_TARGET_DIR".to_owned(), target_dir_for_lane(lane_id))
 }

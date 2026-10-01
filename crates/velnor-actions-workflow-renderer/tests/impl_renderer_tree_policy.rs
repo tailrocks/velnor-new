@@ -338,6 +338,7 @@ fn renderer_rejects_bare_commands_inside_ir() -> Result<(), RenderError> {
             kind: StepKind::Action {
                 uses: "actions/checkout@main".to_owned(),
                 with: BTreeMap::new(),
+                env: BTreeMap::new(),
             },
         }),
     );
@@ -351,6 +352,7 @@ fn renderer_rejects_bare_commands_inside_ir() -> Result<(), RenderError> {
             kind: StepKind::Action {
                 uses: "asamarts/alint@v0.16.1".to_owned(),
                 with: BTreeMap::new(),
+                env: BTreeMap::new(),
             },
         }),
     );

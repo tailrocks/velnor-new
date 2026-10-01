@@ -44,7 +44,7 @@ pub fn check_checkout_shape(
     sha: &str,
 ) -> Result<(), RenderError> {
     for step in steps {
-        let StepKind::Action { uses, with } = &step.kind else {
+        let StepKind::Action { uses, with, .. } = &step.kind else {
             continue;
         };
         if !uses.starts_with("actions/checkout@") {
@@ -92,7 +92,7 @@ pub fn check_checkout_shape(
 /// True when a source checkout pins `path` plus `ref` to the approved source.
 fn has_exact_checkout(steps: &[Step], sha: &str) -> bool {
     steps.iter().any(|step| {
-        matches!(&step.kind, StepKind::Action { uses, with }
+        matches!(&step.kind, StepKind::Action { uses, with, .. }
             if uses.starts_with("actions/checkout@")
                 && with.get("path").is_some_and(|value| value == RELEASE_SOURCE_DIR)
                 && with.get("ref").is_some_and(|value| value == sha))
