@@ -1,0 +1,4 @@
+# Velnor repository ownership. Velnor never reads or writes this file;
+# it lives at the repo root (outside generated `.github/`) per Gap B.
+# Replace the user owner with a `@tailrocks/<team>` slug when one exists.
+* @donbeave

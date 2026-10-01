@@ -1,0 +1,151 @@
+{
+  "version": 1,
+  "workspace_root": "@ROOT@",
+  "workspace_members": ["app-id", "lib-id", "codec-id", "help-id"],
+  "packages": [
+    {
+      "name": "app",
+      "version": "1.0.0",
+      "id": "app-id",
+      "manifest_path": "@ROOT@/crates/app/Cargo.toml",
+      "publish": null,
+      "targets": [
+        {
+          "kind": ["lib"],
+          "name": "app",
+          "test": true,
+          "doctest": true,
+          "required_features": []
+        }
+      ],
+      "features": {},
+      "dependencies": [
+        {
+          "name": "lib",
+          "req": "^1",
+          "kind": null,
+          "optional": false,
+          "target": null,
+          "source": null,
+          "registry": null,
+          "path": "@ROOT@/crates/lib"
+        },
+        {
+          "name": "lib",
+          "req": "^1",
+          "kind": "build",
+          "optional": false,
+          "target": null,
+          "source": null,
+          "registry": null,
+          "path": "@ROOT@/crates/lib"
+        },
+        {
+          "name": "lib",
+          "req": "^1",
+          "kind": null,
+          "optional": false,
+          "target": "cfg(unix)",
+          "source": null,
+          "registry": null,
+          "path": "@ROOT@/crates/lib"
+        },
+        {
+          "name": "lib",
+          "req": "^1",
+          "kind": "dev",
+          "optional": false,
+          "target": null,
+          "source": null,
+          "registry": null,
+          "path": "@ROOT@/crates/lib"
+        },
+        {
+          "name": "codec",
+          "req": "^0.5",
+          "kind": null,
+          "optional": true,
+          "target": null,
+          "source": null,
+          "registry": null,
+          "path": "@ROOT@/crates/codec"
+        },
+        {
+          "name": "serde",
+          "req": "^1",
+          "kind": null,
+          "optional": false,
+          "target": null,
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "registry": null,
+          "path": null
+        }
+      ]
+    },
+    {
+      "name": "lib",
+      "version": "1.2.0",
+      "id": "lib-id",
+      "manifest_path": "@ROOT@/crates/lib/Cargo.toml",
+      "publish": null,
+      "targets": [
+        {
+          "kind": ["lib"],
+          "name": "lib",
+          "test": true,
+          "doctest": true,
+          "required_features": []
+        }
+      ],
+      "features": {},
+      "dependencies": [
+        {
+          "name": "serde",
+          "req": "^1",
+          "kind": null,
+          "optional": false,
+          "target": null,
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "registry": null,
+          "path": null
+        }
+      ]
+    },
+    {
+      "name": "codec",
+      "version": "0.5.0",
+      "id": "codec-id",
+      "manifest_path": "@ROOT@/crates/codec/Cargo.toml",
+      "publish": null,
+      "targets": [
+        {
+          "kind": ["lib"],
+          "name": "codec",
+          "test": true,
+          "doctest": true,
+          "required_features": []
+        }
+      ],
+      "features": {},
+      "dependencies": []
+    },
+    {
+      "name": "helper",
+      "version": "2.0.0",
+      "id": "help-id",
+      "manifest_path": "@ROOT@/crates/helper/Cargo.toml",
+      "publish": [],
+      "targets": [
+        {
+          "kind": ["lib"],
+          "name": "helper",
+          "test": true,
+          "doctest": true,
+          "required_features": []
+        }
+      ],
+      "features": {},
+      "dependencies": []
+    }
+  ]
+}
