@@ -244,11 +244,22 @@ Red run: cache-hit evidence only, never a green verdict.
   doc 2) + uploads 5 s + runner overhead 6 s; run queue 91 s
   reported separately per contract. Warmth is warm-sources /
   cold-target / no-MBX (no seed exists). Local pinned leaf
-  recompile 0.87 s (cli only) corroborates. Whole-workspace test
-  execution (~2 min local pinned nextest; 686 s hosted
-  orchestrator) is explicitly outside this budget — per-crate
-  obligations are the conforming unit, and the contract never
-  defined "validation" beyond it.
+  recompile 0.87 s (cli only) corroborates. Hosted leaf-edit
+  datapoint: run `36874320163` at `3a98511` (`pull_request`,
+  cli-only semantic edit — the `runner_velnor_dir` refactor):
+  `Rust / velnor-actions-cli` success, 87 s end-to-end
+  (14:13:10→14:14:37Z) = setup 2 s + checkout 1 s + mise 2 s +
+  helper/plan 1 s + pinned tools 13 s + sources restore 1 s +
+  MBX restore 10 s (MISS overhead) + fetch 1 s + format 0 s +
+  clippy 14 s + build 16 s + tests 13 s + doc 5 s + upload/post
+  2 s (step walls sum 81 s + 6 s runner overhead); 137 s
+  run-queue-to-job-start (includes the Plan gate) reported
+  separately. Local rebuild-set probe at the same commit:
+  touching `dispatch.rs` recompiles `velnor-actions-cli` only.
+  Whole-workspace test execution (~2 min local pinned nextest;
+  686 s hosted orchestrator) is explicitly outside this budget —
+  per-crate obligations are the conforming unit, and the
+  contract never defined "validation" beyond it.
 - Two-minute warm SMALL-FIXTURE path on a named runner: explicitly
   UNPASSED — no small-fixture CI run exists. (Full-dogfood green run
   is 17 m 30 s for 14 jobs; the contract budgets the small fixture,

@@ -37,10 +37,11 @@ clause-by-clause proof lives in
 [requirements-evidence.md](requirements-evidence.md).
 
 Current runs (2026-10-01, branch `docs/velnor-actions-spec`): last green
-is run `36870627159` at `0c9a6a7`
-(`https://github.com/tailrocks/velnor-new/actions/runs/36870627159`,
+is run `36874320163` at `3a98511`
+(`https://github.com/tailrocks/velnor-new/actions/runs/36874320163`,
 success: 14 jobs green + `Publish baseline` skipped push-only).
-Previous greens: run `36865471829` at `93dd3d4`, run `36864280056`
+Previous greens: run `36870627159` at `0c9a6a7`, run `36865471829`
+at `93dd3d4`, run `36864280056`
 at `3054c3e`, run `36862207497` at `34550e8` (each 14 green +
 `Publish baseline` skipped), run `36836254328` at `644fdf5`
 (`https://github.com/tailrocks/velnor-new/actions/runs/36836254328`,

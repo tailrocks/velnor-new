@@ -296,9 +296,10 @@ counter-evidence after a tried-and-reverted implementation (see below).
 
 ## Current hosted runs at this revision
 
-- Green: `36870627159` @`0c9a6a7` (2026-10-01, success: 14 jobs green +
-  `Publish baseline` skipped push-only) — last green.
-- Previous greens: `36865471829` @`93dd3d4`, `36864280056` @`3054c3e`,
+- Green: `36874320163` @`3a98511` (2026-10-01, success: 14 jobs green +
+  `Publish baseline` skipped push-only) — last green; carries the
+  hosted leaf-edit datapoint (cli job 87 s).
+- Previous greens: `36870627159` @`0c9a6a7`, `36865471829` @`93dd3d4`,
   `36862207497` @`34550e8` (each 14 green + `Publish baseline`
   skipped), `36836254328` @`644fdf5` (success 14/14).
 - Red: `36860814112` @`395d4bf` (2026-10-01, failure: `Rust /
