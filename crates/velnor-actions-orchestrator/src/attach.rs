@@ -95,8 +95,8 @@ pub(crate) fn attach_preseed(
     let staged = format!("{STAGED_BINARY_PREFIX}{version}");
     let homes = crate::matrix_step::task_step_env(&catalog, &BTreeMap::new())?;
     let plan_steps = vec![
-        preseed_build_step(&build, homes.clone())?,
-        preseed_verify_step(&probe, catalog.version(PinnedTool::MrBoxington), homes)?,
+        preseed_build_step(&build, &homes)?,
+        preseed_verify_step(&probe, catalog.version(PinnedTool::MrBoxington), &homes)?,
         preseed_manifest_step(&build, target)?,
         preseed_upload_step()?,
         preseed_stage_step(PreseedStageSource::LocalBuild, &staged)?,

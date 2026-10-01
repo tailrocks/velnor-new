@@ -199,7 +199,7 @@ fn merge_rejects_plan_rejected_manifest_invariants() {
     };
     check("forwarded proof run", &|m| m.tasks[0].proof_run_id = 123);
     check("foreign observed run", &|m| {
-        m.tasks[0].observed_run_id = 456
+        m.tasks[0].observed_run_id = 456;
     });
     check("zero run id", &|m| m.run_id = 0);
     check("zero run attempt", &|m| m.run_attempt = 0);
