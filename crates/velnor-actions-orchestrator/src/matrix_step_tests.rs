@@ -127,3 +127,49 @@ fn outcome_and_deferred_share_one_start_file() {
         assert!(!argv[2].contains("$("), "file handoff only: {}", argv[2]);
     }
 }
+
+#[test]
+fn doc_obligation_step_carries_typed_rustdocflags() {
+    use velnor_actions_rust::{DENY_WARNINGS, RUSTDOCFLAGS_ENV};
+    let mut doc = obligation();
+    doc.task_id = "stack/rust/demo/doc/default".to_owned();
+    doc.kind = TaskKind::Doc.as_str().to_owned();
+    doc.step_name = DOCUMENTATION_NAME.to_owned();
+    let step = obligation_step(&doc, &ToolCatalog::pinned(), &[]).expect("step");
+    let velnor_actions_contract::StepKind::Shell { env, .. } = &step.kind else {
+        panic!("obligation must be a shell step");
+    };
+    let typed: Vec<(String, String)> = cargo_payload_env(TaskKind::Doc)
+        .into_iter()
+        .map(|(key, value)| {
+            (
+                key.to_string_lossy().into_owned(),
+                value.to_string_lossy().into_owned(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        env.get(RUSTDOCFLAGS_ENV).map(String::as_str),
+        Some(DENY_WARNINGS),
+        "rendered doc step must deny warnings"
+    );
+    assert!(
+        typed
+            .iter()
+            .all(|(key, value)| env.get(key).is_some_and(|seen| seen == value)),
+        "rendered env must match the typed payload: {typed:?}"
+    );
+}
+
+#[test]
+fn non_doc_obligation_steps_carry_no_rustdocflags() {
+    use velnor_actions_rust::RUSTDOCFLAGS_ENV;
+    let step = obligation_step(&obligation(), &ToolCatalog::pinned(), &[]).expect("step");
+    let velnor_actions_contract::StepKind::Shell { env, .. } = &step.kind else {
+        panic!("obligation must be a shell step");
+    };
+    assert!(
+        !env.contains_key(RUSTDOCFLAGS_ENV),
+        "clippy must not carry doc env"
+    );
+}

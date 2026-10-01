@@ -3,11 +3,14 @@
 //! The final job's retrieve step runs before request assembly: it reads
 //! the downloaded plan, then downloads each expected crate artifact by exact
 //! derived name with pinned `gh` (`gh run download <run-id> --name
-//! <artifact-id> --dir reports/<artifact-id>`), never a wildcard. One
-//! failed download skips that job's entries (merge judges `not_run`); a
-//! missing or unparsable plan downloads nothing and still exits success
-//! so the merge reaches its `planning_failed` verdict. Only unusable
-//! environment (no runner temp, no numeric run ID) fails outright.
+//! <artifact-id> --dir reports/<artifact-id>`), never a wildcard. Each
+//! leg retries transient failures up to
+//! [`crate::retrieve_retry::MAX_DOWNLOAD_ATTEMPTS`];
+//! persistent failure skips that job's entries (merge judges
+//! `not_run`). A missing or unparsable plan downloads nothing and
+//! still exits success so the merge reaches its `planning_failed`
+//! verdict. Only unusable environment (no runner temp, no numeric
+//! run ID) fails outright.
 
 // Wired here so the shared reader compiles without touching `lib.rs`.
 #[path = "staged_reads.rs"]
@@ -26,6 +29,7 @@ use velnor_actions_mise::ToolCatalog;
 
 use crate::OrchestratorError;
 use crate::internal::{internal, internal_contract};
+use crate::retrieve_retry::download_with_retry;
 
 /// Retrieve operation tag (single-sourced from the renderer protocol).
 pub use velnor_actions_workflow_renderer::steps::FETCH_OPERATION as FETCH_OP;
@@ -86,7 +90,10 @@ pub(crate) fn retrieve_reports_to(run_id: u64, run_dir: &Path) -> usize {
         let Ok(args) = retrieve_args(run_id, artifact_id, &dir, &repo) else {
             continue;
         };
-        if crate::cover::shard::BaselineLookup::run(&catalog, run_dir, args).is_ok() {
+        let (downloaded, _) = download_with_retry(|| {
+            crate::cover::shard::BaselineLookup::run(&catalog, run_dir, args.clone()).is_ok()
+        });
+        if downloaded {
             retrieved += 1;
         }
     }

@@ -231,6 +231,7 @@ jobs:
           if-no-files-found: error
           name: velnor-preseed-helper
           path: ${{ runner.temp }}/velnor/preseed-output
+          retention-days: "30"
       - name: Stage helper (pre-seed trust-on-review)
         env:
           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
@@ -300,6 +301,7 @@ jobs:
           if-no-files-found: error
           name: velnor-plan-r${{ github.run_id }}-a${{ github.run_attempt }}
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
+          retention-days: "30"
   required:
     name: Required
     runs-on: ubuntu-26.04
@@ -379,7 +381,6 @@ jobs:
           name: velnor-plan-r${{ github.run_id }}-a${{ github.run_attempt }}
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
       - name: Download every expected matrix artifact
-        continue-on-error: true
         env:
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
@@ -406,6 +407,7 @@ jobs:
           if-no-files-found: error
           name: velnor-final-r${{ github.run_id }}-a${{ github.run_attempt }}
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/final-report.json
+          retention-days: "30"
   rust-velnor-actions-actionlint:
     name: Rust / velnor-actions-actionlint
     runs-on: ubuntu-26.04
@@ -672,6 +674,7 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           NODE_AUTH_TOKEN: ""
           NPM_TOKEN: ""
+          RUSTDOCFLAGS: "-D warnings"
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-actionlint/doc/default
           VELNOR_MATRIX_KEY: m-81305c234c22a275
@@ -685,6 +688,7 @@ jobs:
           if-no-files-found: error
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-velnor-actions-actionlint
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
+          retention-days: "30"
   rust-velnor-actions-cli:
     name: Rust / velnor-actions-cli
     runs-on: ubuntu-26.04
@@ -923,6 +927,7 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           NODE_AUTH_TOKEN: ""
           NPM_TOKEN: ""
+          RUSTDOCFLAGS: "-D warnings"
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-cli/doc/default
           VELNOR_MATRIX_KEY: m-93a4593c9a3c3085
@@ -936,6 +941,7 @@ jobs:
           if-no-files-found: error
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-velnor-actions-cli
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
+          retention-days: "30"
   rust-velnor-actions-contract:
     name: Rust / velnor-actions-contract
     runs-on: ubuntu-26.04
@@ -1202,6 +1208,7 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           NODE_AUTH_TOKEN: ""
           NPM_TOKEN: ""
+          RUSTDOCFLAGS: "-D warnings"
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-contract/doc/default
           VELNOR_MATRIX_KEY: m-5bfa1ac4c56189d6
@@ -1215,6 +1222,7 @@ jobs:
           if-no-files-found: error
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-velnor-actions-contract
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
+          retention-days: "30"
   rust-velnor-actions-mise:
     name: Rust / velnor-actions-mise
     runs-on: ubuntu-26.04
@@ -1481,6 +1489,7 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           NODE_AUTH_TOKEN: ""
           NPM_TOKEN: ""
+          RUSTDOCFLAGS: "-D warnings"
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-mise/doc/default
           VELNOR_MATRIX_KEY: m-8265037fd459347e
@@ -1494,6 +1503,7 @@ jobs:
           if-no-files-found: error
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-velnor-actions-mise
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
+          retention-days: "30"
   rust-velnor-actions-orchestrator:
     name: Rust / velnor-actions-orchestrator
     runs-on: ubuntu-26.04
@@ -1760,6 +1770,7 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           NODE_AUTH_TOKEN: ""
           NPM_TOKEN: ""
+          RUSTDOCFLAGS: "-D warnings"
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-orchestrator/doc/default
           VELNOR_MATRIX_KEY: m-f31fcb1a405715c5
@@ -1773,6 +1784,7 @@ jobs:
           if-no-files-found: error
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-velnor-actions-orchestrator
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
+          retention-days: "30"
   rust-velnor-actions-rust:
     name: Rust / velnor-actions-rust
     runs-on: ubuntu-26.04
@@ -2039,6 +2051,7 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           NODE_AUTH_TOKEN: ""
           NPM_TOKEN: ""
+          RUSTDOCFLAGS: "-D warnings"
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-rust/doc/default
           VELNOR_MATRIX_KEY: m-b9195ee6ee4dd6e3
@@ -2052,6 +2065,7 @@ jobs:
           if-no-files-found: error
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-velnor-actions-rust
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
+          retention-days: "30"
   rust-velnor-actions-workflow-renderer:
     name: Rust / velnor-actions-workflow-renderer
     runs-on: ubuntu-26.04
@@ -2318,6 +2332,7 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           NODE_AUTH_TOKEN: ""
           NPM_TOKEN: ""
+          RUSTDOCFLAGS: "-D warnings"
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-workflow-renderer/doc/default
           VELNOR_MATRIX_KEY: m-d04b7f8f31103a5a
@@ -2331,6 +2346,7 @@ jobs:
           if-no-files-found: error
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-velnor-actions-workflow-renderer
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
+          retention-days: "30"
   zizmor:
     name: Zizmor
     runs-on: ubuntu-26.04

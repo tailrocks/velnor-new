@@ -51,6 +51,7 @@ mod release_identity;
 mod release_steps;
 mod request_event;
 mod retrieve_reports;
+mod retrieve_retry;
 mod root;
 pub mod run_select;
 mod safe_read;

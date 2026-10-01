@@ -74,8 +74,9 @@ fn runner_label_catalog_maps_or_fails_closed() {
 #[test]
 fn release_manifest_json_round_trip_and_tamper() -> Result<(), ContractError> {
     let sha = "ab".repeat(32);
+    let commit = "ab".repeat(20);
     let json = format!(
-        "{{\"schema\":1,\"version\":\"0.1.0\",\"repository\":\"tailrocks/velnor-new\",\"targets\":[{{\"target\":\"x86_64-unknown-linux-gnu\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v0.1.0/velnor-actions-0.1.0-x86_64-unknown-linux-gnu\",\"sha256\":\"{sha}\"}}]}}"
+        "{{\"schema\":1,\"version\":\"0.1.0\",\"repository\":\"tailrocks/velnor-new\",\"commit\":\"{commit}\",\"targets\":[{{\"target\":\"x86_64-unknown-linux-gnu\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v0.1.0/velnor-actions-0.1.0-x86_64-unknown-linux-gnu\",\"sha256\":\"{sha}\"}}]}}"
     );
     let manifest = ReleaseManifest::parse_json(&json, "m.json")?;
     manifest.validate("m.json")?;
@@ -92,7 +93,8 @@ fn release_manifest_json_round_trip_and_tamper() -> Result<(), ContractError> {
 /// One-target manifest at `version` with `repository` and `artifact`.
 fn manifest_json(version: &str, repository: &str, artifact: &str) -> String {
     format!(
-        "{{\"schema\":1,\"version\":\"{version}\",\"repository\":\"{repository}\",\"targets\":[{{\"target\":\"x86_64-unknown-linux-gnu\",\"artifact\":\"{artifact}\",\"sha256\":\"{}\"}}]}}",
+        "{{\"schema\":1,\"version\":\"{version}\",\"repository\":\"{repository}\",\"commit\":\"{}\",\"targets\":[{{\"target\":\"x86_64-unknown-linux-gnu\",\"artifact\":\"{artifact}\",\"sha256\":\"{}\"}}]}}",
+        "ab".repeat(20),
         "ab".repeat(32)
     )
 }
@@ -168,17 +170,51 @@ fn release_manifest_binds_repository_and_artifact_urls() -> Result<(), ContractE
     Ok(())
 }
 
+#[test]
+fn release_manifest_requires_commit() -> Result<(), ContractError> {
+    let good = manifest_json("0.1.0", "tailrocks/velnor-new", &bound_artifact("0.1.0"));
+    let manifest = ReleaseManifest::parse_json(&good, "m.json")?;
+    manifest.validate("m.json")?;
+    assert_eq!(manifest.commit, "ab".repeat(20));
+    // Missing commit rejected at parse.
+    let segment = format!("\"commit\":\"{}\",", "ab".repeat(20));
+    let missing = good.replace(&segment, "");
+    assert!(
+        !missing.contains("\"commit\""),
+        "fixture must drop the field"
+    );
+    let err = ReleaseManifest::parse_json(&missing, "m.json").expect_err("commit required");
+    assert!(err.to_string().contains("commit"), "{err}");
+    // Malformed commit rejected at validation.
+    for bad in [
+        String::new(),
+        "xyz".to_owned(),
+        "A".repeat(40),
+        "a".repeat(39),
+    ] {
+        let json = good.replace(&segment, &format!("\"commit\":\"{bad}\","));
+        assert!(
+            ReleaseManifest::parse_json(&json, "m.json")?
+                .validate("m.json")
+                .is_err_and(|err| err.to_string().contains("malformed_commit")),
+            "commit accepted: {bad:?}"
+        );
+    }
+    Ok(())
+}
+
 /// Seed tags are namespaced (`seed/…`) yet bound to the manifest version.
 ///
 /// Regression: the X1 validator split tag/asset at the first `/`, so it
 /// rejected every real seed manifest (seed5's own manifest failed `plan`
-/// with `unexpected_artifact_url`). The exact published seed5 bytes must
-/// validate; version-mismatched or malformed seed tags must not.
+/// with `unexpected_artifact_url`). Seed grammar binding must validate;
+/// version-mismatched or malformed seed tags must not.
 #[test]
 fn seed_tag_artifacts_bind_to_manifest_version() -> Result<(), ContractError> {
-    // Exact bytes of seed/velnor-actions-0.1.0-5 seed-release-manifest.json
-    // (sha256 6b3a5d71…cb05932 on the release).
-    let seed5 = "{\"schema\":1,\"version\":\"0.1.0\",\"repository\":\"tailrocks/velnor-new\",\"targets\":[{\"target\":\"x86_64-unknown-linux-gnu\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/seed/velnor-actions-0.1.0-5/velnor-actions-0.1.0-x86_64-unknown-linux-gnu\",\"sha256\":\"1fa12f9e5c06dcbb65b6dc9ebb4295e69606460b37c0a441a256d1b31276ff97\"}]}";
+    // Seed/velnor-actions-0.1.0-5 seed-release-manifest.json bytes, plus
+    // the now-required `commit` field (F3 breaks the historical shape:
+    // pre-commit manifests no longer validate).
+    let seed5 = "{\"schema\":1,\"version\":\"0.1.0\",\"repository\":\"tailrocks/velnor-new\",\"commit\":\"abababababababababababababababababababab\",\"targets\":[{\"target\":\"x86_64-unknown-linux-gnu\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/seed/velnor-actions-0.1.0-5/velnor-actions-0.1.0-x86_64-unknown-linux-gnu\",\"sha256\":\"1fa12f9e5c06dcbb65b6dc9ebb4295e69606460b37c0a441a256d1b31276ff97\"}]}";
     ReleaseManifest::parse_json(seed5, "m.json")?.validate("m.json")?;
     // Uncountered seed tag of the same version also validates.
     let uncountered = manifest_json(

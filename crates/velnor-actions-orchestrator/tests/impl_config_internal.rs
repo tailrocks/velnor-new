@@ -237,7 +237,7 @@ fn uncommented_init_sample_parses_with_overrides() -> TestResult {
     );
     fs::write(root.join(".velnor/config.toml"), &live)?;
     let prep = prepare(root)?;
-    assert_eq!(prep.config.actions.overrides.len(), 7);
+    assert_eq!(prep.config.actions.overrides.len(), 8);
     assert_eq!(
         prep.config.actions.overrides["actions/checkout"].version,
         "v7.0.1"

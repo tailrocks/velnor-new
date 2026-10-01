@@ -27,7 +27,8 @@ fn manifest_text(sha: &str) -> String {
         .collect::<Vec<_>>()
         .join(",");
     format!(
-        "{{\"schema\":1,\"version\":\"0.1.0\",\"repository\":\"tailrocks/velnor-new\",\"targets\":[{targets}]}}"
+        "{{\"schema\":1,\"version\":\"0.1.0\",\"repository\":\"tailrocks/velnor-new\",\"commit\":\"{}\",\"targets\":[{targets}]}}",
+        "a".repeat(40)
     )
 }
 

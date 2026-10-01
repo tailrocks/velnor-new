@@ -137,8 +137,7 @@ fn arch_unknown_keys_fail_with_unknown_config_field() {
         err.to_string(),
         "cfg.toml: stacks.rust.shell: unknown_config_field"
     );
-    let json =
-        "{\"schema\":1,\"version\":\"0.1.0\",\"repository\":\"r\",\"shell\":\"x\",\"targets\":[]}";
+    let json = "{\"schema\":1,\"version\":\"0.1.0\",\"repository\":\"r\",\"commit\":\"ab00000000000000000000000000000000000000\",\"shell\":\"x\",\"targets\":[]}";
     let Err(ContractError::Config {
         problem, key_path, ..
     }) = velnor_actions_contract::ReleaseManifest::parse_json(json, "m.json")

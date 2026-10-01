@@ -83,13 +83,13 @@ pub use setup::{MISE_ACTION_NAME, SETUP_MISE_NAME, mise_setup_step};
 pub use steps::{
     ACQUIRE_NAME, ASSET_SHA_ENV, ASSET_URL_ENV, CRATE_REPORT_UPLOAD_NAME, CompileDriver,
     DENY_STEP_NAME, FORBIDDEN_TOKENS, INTERNAL_OP_ENV, MACHETE_STEP_NAME,
-    MATRIX_REPORT_UPLOAD_NAME, MERGE_OPERATION, PLAN_OPERATION, REQUEST_DIR_PREFIX,
-    REQUEST_FILE_ENV, RUN_KEY_EXPR, STAGED_BINARY_PREFIX, WRITE_PRESEED_MANIFEST_OPERATION,
-    WRITE_REQUEST_OPERATION, acquire_velnor_step, action_step, action_step_with_env,
-    ambient_shell_step, check_cache_step_order, check_mbx_gating, checkout_step,
-    crate_job_report_upload_step, internal_step, lane_cargo_target_env, matrix_report_upload_step,
-    mbx_step_for_driver, merge_step, plan_step, scan_for_private_subcommands, shell_step,
-    validate_uses, write_request_step,
+    MATRIX_REPORT_UPLOAD_NAME, MERGE_OPERATION, PLAN_OPERATION, RELEASE_COMMIT_ENV,
+    REQUEST_DIR_PREFIX, REQUEST_FILE_ENV, RUN_KEY_EXPR, STAGED_BINARY_PREFIX,
+    WRITE_PRESEED_MANIFEST_OPERATION, WRITE_REQUEST_OPERATION, acquire_velnor_step, action_step,
+    action_step_with_env, ambient_shell_step, check_cache_step_order, check_mbx_gating,
+    checkout_step, crate_job_report_upload_step, internal_step, lane_cargo_target_env,
+    matrix_report_upload_step, mbx_step_for_driver, merge_step, plan_step,
+    scan_for_private_subcommands, shell_step, validate_uses, write_request_step,
 };
 pub use tree::{render_tree, render_tree_with_extra};
 pub use yaml::{Yaml, quote_scalar, render_yaml};

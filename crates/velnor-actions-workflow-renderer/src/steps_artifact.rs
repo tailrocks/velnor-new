@@ -8,8 +8,8 @@ use std::collections::BTreeMap;
 use velnor_actions_contract::Step;
 
 use super::steps::{
-    CRATE_REPORT_UPLOAD_NAME, DOWNLOAD_ARTIFACT_USES, MATRIX_REPORT_UPLOAD_NAME, RUN_KEY_EXPR,
-    UPLOAD_ARTIFACT_USES, action_step,
+    ARTIFACT_RETENTION_DAYS, CRATE_REPORT_UPLOAD_NAME, DOWNLOAD_ARTIFACT_USES,
+    MATRIX_REPORT_UPLOAD_NAME, RUN_KEY_EXPR, UPLOAD_ARTIFACT_USES, action_step,
 };
 use crate::{RenderError, artifact_paths};
 
@@ -27,6 +27,10 @@ pub fn upload_artifact_step(name: &str, path: &str) -> Result<Step, RenderError>
             ("name".to_owned(), name.to_owned()),
             ("path".to_owned(), path.to_owned()),
             ("if-no-files-found".to_owned(), "error".to_owned()),
+            (
+                "retention-days".to_owned(),
+                ARTIFACT_RETENTION_DAYS.to_string(),
+            ),
         ]),
     )
 }
@@ -81,6 +85,10 @@ pub fn crate_job_report_upload_step(job_id: &str) -> Result<Step, RenderError> {
                 format!("${{{{ runner.temp }}}}/velnor/{RUN_KEY_EXPR}"),
             ),
             ("if-no-files-found".to_owned(), "error".to_owned()),
+            (
+                "retention-days".to_owned(),
+                ARTIFACT_RETENTION_DAYS.to_string(),
+            ),
         ]),
     )
 }
@@ -100,6 +108,10 @@ fn matrix_report_upload_raw(key: &str, name: &str) -> Result<Step, RenderError> 
                 format!("${{{{ runner.temp }}}}/velnor/{RUN_KEY_EXPR}/{key}"),
             ),
             ("if-no-files-found".to_owned(), "error".to_owned()),
+            (
+                "retention-days".to_owned(),
+                ARTIFACT_RETENTION_DAYS.to_string(),
+            ),
         ]),
     )
 }

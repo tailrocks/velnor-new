@@ -186,6 +186,13 @@ fn custom_task_steps_emit_only_allowlisted() {
                 "custom task must scrub {key}"
             );
         }
+        // F6 (tooling-input §1.1): custom steps load project config yet
+        // keep lockfile writes disabled, like every generated step.
+        assert_eq!(
+            env.get("MISE_LOCKFILE").map(String::as_str),
+            Some("0"),
+            "custom task must not write the project lockfile"
+        );
     }
     let text = format!("{steps:?}");
     assert!(!text.contains("undeclared"), "{text}");

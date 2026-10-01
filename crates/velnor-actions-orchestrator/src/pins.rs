@@ -148,6 +148,7 @@ fn consumer_acquire_from(
     acquire_step(
         &record.artifact,
         &record.sha256,
+        Some(&manifest.commit),
         &format!("{STAGED_BINARY_PREFIX}{version}"),
     )
 }
@@ -166,14 +167,20 @@ pub(crate) fn lock_acquire_step(
         .ok_or_else(|| OrchestratorError::Contract {
             problem: format!("lock_missing_target:{target}"),
         })?;
-    acquire_step(&record.artifact, &record.sha256, staged)
+    acquire_step(&record.artifact, &record.sha256, None, staged)
 }
 
 /// Digest-verified staging step: fetch URL, check SHA-256, make executable.
-fn acquire_step(url: &str, sha: &str, staged: &str) -> Result<Step, OrchestratorError> {
+fn acquire_step(
+    url: &str,
+    sha: &str,
+    commit: Option<&str>,
+    staged: &str,
+) -> Result<Step, OrchestratorError> {
     let provenance = HelperProvenance::ReleaseAsset {
         url: url.to_owned(),
         sha256: sha.to_owned(),
+        commit: commit.map(str::to_owned),
     };
     Ok(provision_acquire_step(&provenance, acquire_argv(staged))?)
 }
@@ -205,7 +212,8 @@ fn test_manifest_json() -> String {
         .collect::<Vec<_>>()
         .join(",");
     format!(
-        "{{\"schema\":1,\"version\":\"{version}\",\"repository\":\"tailrocks/velnor-new\",\"targets\":[{targets}]}}"
+        "{{\"schema\":1,\"version\":\"{version}\",\"repository\":\"tailrocks/velnor-new\",\"commit\":\"{}\",\"targets\":[{targets}]}}",
+        "a".repeat(40)
     )
 }
 
@@ -275,7 +283,8 @@ mod tests {
         let sha = "a".repeat(64);
         let manifest = |repository: &str, artifact: &str| {
             format!(
-                "{{\"schema\":1,\"version\":\"{version}\",\"repository\":\"{repository}\",\"targets\":[{{\"target\":\"x86_64-unknown-linux-gnu\",\"artifact\":\"{artifact}\",\"sha256\":\"{sha}\"}}]}}"
+                "{{\"schema\":1,\"version\":\"{version}\",\"repository\":\"{repository}\",\"commit\":\"{}\",\"targets\":[{{\"target\":\"x86_64-unknown-linux-gnu\",\"artifact\":\"{artifact}\",\"sha256\":\"{sha}\"}}]}}",
+                "a".repeat(40)
             )
         };
         let bound = format!(
@@ -295,6 +304,22 @@ mod tests {
                 "accepted {repository} {artifact}"
             );
         }
+    }
+
+    #[test]
+    fn consumer_manifest_without_commit_fails() {
+        let full = test_manifest_json();
+        let segment = format!("\"commit\":\"{}\",", "a".repeat(40));
+        assert!(full.contains(&segment), "fixture must carry commit");
+        let missing = full.replace(&segment, "");
+        let err = consumer_acquire_from("ubuntu-26.04", env!("CARGO_PKG_VERSION"), Some(&missing))
+            .expect_err("commit required");
+        assert!(err.to_string().contains("commit"), "{err}");
+        let malformed = full.replace(&segment, "\"commit\":\"xyz\",");
+        let err =
+            consumer_acquire_from("ubuntu-26.04", env!("CARGO_PKG_VERSION"), Some(&malformed))
+                .expect_err("malformed commit fails");
+        assert!(err.to_string().contains("malformed_commit"), "{err}");
     }
 
     #[test]

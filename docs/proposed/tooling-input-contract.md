@@ -40,6 +40,30 @@ These files are not task inputs by default: changing them refreshes inspection
 findings, but does not rerun crate checks when Velnor's actual tool pins and
 task inputs are unchanged.
 
+## 1.1. `MISE_LOCKFILE=0` in fixed versus custom steps (F6)
+
+Every generated step that invokes Mise carries `MISE_LOCKFILE=0` from the
+shared validated step-env constructor, but the rationale differs by step
+class; the split is intentional, not drift:
+
+- Fixed generated steps (`Prepare pinned tools`, obligation steps, fetch
+  steps) run fully hermetic: `MISE_LOCKFILE=0` plus `MISE_NO_CONFIG=1`
+  (and the `--no-config` / `--no-env` / `--no-hooks` argv flags). The
+  compiled catalog's exact pins are the sole tool authority; the
+  project's lockfile is neither read (moot under `--no-config`) nor
+  written. Removing `MISE_LOCKFILE=0` here would be theater that
+  weakens defense-in-depth, so fixed steps keep it.
+- Custom `mise run` allowlist steps intentionally load the repository's
+  own Mise configuration (no `--no-config` flags), yet inherit the same
+  `MISE_LOCKFILE=0`: CI MUST NOT create or update the project's
+  lockfile as a side effect, so lockfile writes stay disabled while
+  project tool versions resolve from the committed `mise.toml`.
+
+Determinism follows per class: fixed steps from exact catalog pins,
+custom steps from the committed project configuration. See
+[task-execution §2](task-execution-contract.md) for the fixed vectors
+and [workflow §3](workflow-contract.md) for the prepare step.
+
 ## 2. Read-only command contract
 
 `plan` and `generate` MUST ask all registered adapters to check their respective

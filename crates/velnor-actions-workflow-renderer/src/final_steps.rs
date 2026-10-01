@@ -32,8 +32,9 @@ pub(crate) const FINAL_ARTIFACT_PATH: &str =
 /// Matrix fan-in fetch step (fixed internal `fetch-reports-v1` op).
 ///
 /// The helper enumerates expected artifact IDs from the downloaded plan
-/// and fetches each by exact name; absent artifacts stay absent and the
-/// merge judges them honestly. `continue-on-error` attaches at render.
+/// and fetches each by exact name with bounded per-leg retry; absent
+/// artifacts stay absent and the merge judges them honestly. No
+/// `continue-on-error` (F5): hard failures fail the job, unmasked.
 /// # Errors
 pub(crate) fn fetch_reports_step() -> Result<Step, RenderError> {
     steps::internal_step(FETCH_REPORTS_NAME, steps::FETCH_OPERATION)
@@ -53,6 +54,10 @@ pub(crate) fn publish_final_report_step() -> Result<Step, RenderError> {
             ("name".to_owned(), FINAL_ARTIFACT_NAME.to_owned()),
             ("path".to_owned(), FINAL_ARTIFACT_PATH.to_owned()),
             ("if-no-files-found".to_owned(), "error".to_owned()),
+            (
+                "retention-days".to_owned(),
+                steps::ARTIFACT_RETENTION_DAYS.to_string(),
+            ),
         ]),
     )
 }

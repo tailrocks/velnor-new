@@ -46,11 +46,22 @@ pub const REQUEST_DIR_PREFIX: &str = "${{ runner.temp }}/velnor/";
 pub const ASSET_SHA_ENV: &str = "VELNOR_ASSET_SHA256";
 /// Env key carrying the downloaded asset URL.
 pub const ASSET_URL_ENV: &str = "VELNOR_ASSET_URL";
+/// Env key recording the release-manifest source commit (F3).
+///
+/// Present on consumer Acquire steps only: the lock-backed Velnor path
+/// carries no manifest commit. Reviewers verify it against the release.
+pub const RELEASE_COMMIT_ENV: &str = "VELNOR_RELEASE_COMMIT";
 /// Substrings that must never appear in rendered YAML.
 pub const FORBIDDEN_TOKENS: &[&str] = &["__internal", "velnor-actions __", "velnor-actions run"];
 /// Pinned `actions/upload-artifact` ref (v7.0.1, qualified 2026-09-28).
 pub const UPLOAD_ARTIFACT_USES: &str =
     "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a";
+/// Retention for every rendered `upload-artifact` step, in days.
+///
+/// Run-scoped evidence reproducible by rerun; bounded well under the
+/// 90-day platform default to cap stored bytes. Every constructor
+/// below emits this value as `retention-days`; no site retypes it.
+pub const ARTIFACT_RETENTION_DAYS: u32 = 30;
 /// Pinned `actions/download-artifact` ref (v8.0.1, qualified 2026-09-28).
 pub const DOWNLOAD_ARTIFACT_USES: &str =
     "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c";
@@ -328,6 +339,11 @@ pub fn acquire_velnor_step(
         .is_none_or(|url| !url.starts_with("https://"))
     {
         return Err(RenderError::BadCommand("bad_asset_url".to_owned()));
+    }
+    if let Some(commit) = env.get(RELEASE_COMMIT_ENV)
+        && (commit.len() != 40 || !is_lower_hex(commit))
+    {
+        return Err(RenderError::BadCommand("bad_release_commit".to_owned()));
     }
     if !argv.iter().any(|arg| arg.contains(STAGED_BINARY_PREFIX)) {
         return Err(RenderError::BadCommand("unstaged_binary".to_owned()));

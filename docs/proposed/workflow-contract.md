@@ -241,17 +241,15 @@ and never written to the repo.
 
 `plan` steps, in order:
 
-1. `Checkout`: `actions/checkout` at the event's intended commit with
-`persist-credentials: false`.
+1. `Checkout`: `actions/checkout` at the event's intended commit with `persist-credentials: false`.
 2. `Setup Mise`: use the bundled full-SHA-pinned `jdx/mise-action` with exact catalog `version` and `sha256`,
 `install: false`, and `env: false`; project tool files, task definitions, and hooks must not run.
 3. `Prepare pinned tools`: run `MISE_LOCKFILE=0 mise install --no-config
 --no-env --no-hooks <tool>@<exact>...` using exact versions embedded in the
 generator release catalog; set Velnor-owned
 `MISE_RUSTUP_HOME`/`MISE_CARGO_HOME`. Project config, env, hooks, and lockfile writes are disabled.
-4. `Acquire Velnor`: for consumers, download the exact target asset and
-verify SHA-256 from the embedded release descriptor; for Velnor, use and verify
-the matching `.velnor/generator.lock` record.
+4. `Acquire Velnor`: for consumers, download the exact target asset and verify SHA-256 from the embedded
+release descriptor; for Velnor, use and verify the matching `.velnor/generator.lock` record.
 5. `Format`: run the generated fixed format command through pinned Mise; use
 the detected Rust compile driver (MBX only when project evidence selects it).
 6. `Check generated files`: invoke the public `velnor-actions generate
@@ -291,6 +289,7 @@ actions/cache/save
 actions/upload-artifact
 actions/download-artifact
 asamarts/alint
+Swatinem/rust-cache
 ```
 
 Velnor's compiled-in action registry supplies the latest stable release, full
@@ -301,7 +300,8 @@ the [version policy](version-policy.md). The workflow renderer MUST emit
 `jdx/mise-action` for Mise setup, `actions/checkout` for source access,
 cache restore/save for their respective cache phases, and upload/download
 artifact actions for required reports or transferred outputs. It MUST emit
-`jdx/mr-boxington-action` only when the Rust detector selects MBX.
+`jdx/mr-boxington-action` only when the Rust detector selects MBX, and `Swatinem/rust-cache` only for
+Cargo-only repositories (registry-only, shared key, never over MBX-owned paths).
 `asamarts/alint` is limited to Velnor's own repository-policy job. Branches,
 moving refs, `pull_request_target`, `actions/setup-*`, and
 `taiki-e/install-action` MUST NOT appear. `actionlint` and `zizmor` MUST
