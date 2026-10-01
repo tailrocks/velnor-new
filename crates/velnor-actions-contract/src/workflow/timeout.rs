@@ -17,8 +17,8 @@ use crate::errors::ContractError;
 ///
 /// Private minutes: only [`Self::new`] (fallible) and the audited
 /// per-kind constants below construct values. Serde derive bypasses
-/// validation, so [`crate::workflow::ir::Job::validate`] re-checks
-/// every deserialized value through [`Self::validate`].
+/// validation, so [`crate::workflow::ir::WorkflowIr::validate`]
+/// re-checks every deserialized value through [`Self::validate`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct JobTimeout(u16);
