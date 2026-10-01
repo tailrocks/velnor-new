@@ -63,17 +63,24 @@ pub(crate) struct ExpectedRepository {
 /// local-run fallback when no env slug is set. A well-formed env slug
 /// that disagrees with the origin is a conflict (a step may have
 /// rewritten the origin): the env slug still resolves, but the caller
-/// must fail closed on the flag. Malformed env text is ignored —
-/// shape alone never invents an expectation.
+/// must fail closed on the flag. A *malformed* env slug is also a
+/// conflict with no trusted slug: falling back to the origin would let
+/// a prior step launder an evil origin behind mangled env text, so
+/// callers fail closed instead of trusting either side.
 pub(crate) fn resolve_expected_repository(
     origin_slug: Option<&str>,
     env_slug: Option<&str>,
 ) -> ExpectedRepository {
-    let env = env_slug.and_then(crate::origin::validate_repository_slug);
-    let Some(env) = env else {
+    let Some(raw) = env_slug else {
         return ExpectedRepository {
             slug: origin_slug.map(str::to_owned),
             conflict: false,
+        };
+    };
+    let Some(env) = crate::origin::validate_repository_slug(raw) else {
+        return ExpectedRepository {
+            slug: None,
+            conflict: true,
         };
     };
     let conflict = origin_slug.is_some_and(|origin| origin != env);
@@ -200,11 +207,11 @@ pub(crate) fn validate_provenance(
     for task in &manifest.tasks {
         validate_task_entry(task, manifest.run_id)?;
     }
-    let forwarded = manifest
+    let bound = manifest
         .tasks
         .iter()
-        .any(|task| task.proof_run_id != manifest.run_id);
-    reject(!forwarded, "originating_run_unverified")?;
+        .all(|task| task_run_ids_bound(task, manifest.run_id));
+    reject(bound, "originating_run_unverified")?;
     Ok(ValidatedProvenance {
         source_commit: manifest.source_commit.clone(),
         run_id: manifest.run_id,
@@ -212,6 +219,17 @@ pub(crate) fn validate_provenance(
         artifact_id: manifest.artifact_id,
         manifest_digest: manifest_digest.to_owned(),
     })
+}
+
+/// Shared run-binding predicate: a task entry is bound to the carrying
+/// manifest's own run only. Plan-time [`validate_provenance`] and
+/// merge-time revalidation call this one predicate so a forwarded proof
+/// the plan rejects can never pass at merge.
+pub(crate) fn task_run_ids_bound(
+    task: &crate::merge::required_evidence::BaselineTaskEntry,
+    run_id: u64,
+) -> bool {
+    run_id > 0 && task.proof_run_id == run_id && task.observed_run_id == run_id
 }
 
 /// Validate one task entry: identities, run binding, freshness, proof.
@@ -253,8 +271,8 @@ fn validate_task_entry(
 }
 
 /// True for generator SHAs no manifest may bind: empty, all-zero, or the
-/// explicit unresolved marker.
-fn is_unverifiable_generator_sha(sha: &str) -> bool {
+/// explicit unresolved marker. Shared with merge-time revalidation.
+pub(crate) fn is_unverifiable_generator_sha(sha: &str) -> bool {
     sha.is_empty()
         || sha == UNRESOLVED_GENERATOR_SHA
         || (sha.len() == 64 && sha.bytes().all(|b| b == b'0'))

@@ -21,6 +21,7 @@ fn digests() -> (String, String, String) {
 /// Trusted manifest with one entry over `commit`.
 fn manifest_for(commit: &str) -> BaselineManifest {
     let (task, inputs, closure) = digests();
+    let compat = digest_b3(b"compat");
     BaselineManifest {
         schema: 2,
         repository_id: digest_b3(b"repo"),
@@ -33,9 +34,9 @@ fn manifest_for(commit: &str) -> BaselineManifest {
         final_status: "passed".to_owned(),
         generator_version: "0.1.0".to_owned(),
         generator_sha256: "1".repeat(64),
-        compatibility_id: digest_b3(b"compat"),
+        compatibility_id: compat.clone(),
         artifact_id: 9,
-        artifact_name: "velnor-plan-local".to_owned(),
+        artifact_name: format!("velnor-baseline-{commit}-{compat}"),
         tasks: vec![crate::merge::required_evidence::BaselineTaskEntry {
             task_id: "stack/rust/root/clippy/default".to_owned(),
             task_digest: task,
@@ -103,6 +104,9 @@ fn plan_for(manifest: &BaselineManifest, base: Option<&str>) -> Plan {
 ///
 /// Explicit empty anchors keep these hermetic: the env-reading
 /// production entry would compare against CI ground truth instead.
+/// Fixed merge-time clock: fixtures without expiry pass at any `now`.
+const NOW: u64 = 1_800_000_000;
+
 fn verdict(plan: &Plan, manifest: Option<&BaselineManifest>) -> (Signals, BTreeSet<String>) {
     anchored_verdict(plan, manifest, &MergeAnchorExpectations::default())
 }
@@ -115,7 +119,7 @@ fn anchored_verdict(
 ) -> (Signals, BTreeSet<String>) {
     let mut signals = Signals::default();
     let mut miss = BTreeSet::new();
-    revalidate_coverage_with_anchors(plan, manifest, &mut signals, &mut miss, anchors);
+    revalidate_coverage_with_anchors(plan, manifest, &mut signals, &mut miss, anchors, NOW);
     (signals, miss)
 }
 
@@ -176,9 +180,50 @@ fn wrong_provenance_fails_per_field() {
     assert!(signals.planning_failed, "missing manifest");
 }
 
+/// Merge enforces the plan-time manifest invariants: every mutation
+/// below re-binds the plan (`plan_for` over the mutated manifest) so the
+/// manifest digest still verifies — only the named conjunct can fail.
+/// Pre-fix these verdicts passed; a forwarded proof the plan rejects
+/// must fail at merge too.
+#[test]
+fn merge_rejects_plan_rejected_manifest_invariants() {
+    let commit = "a".repeat(40);
+    let check = |label: &str, mutate: &dyn Fn(&mut BaselineManifest)| {
+        let manifest = manifest_for(&commit);
+        let mut mutated = manifest.clone();
+        mutate(&mut mutated);
+        let plan = plan_for(&mutated, Some(&commit));
+        let (signals, miss) = verdict(&plan, Some(&mutated));
+        assert!(signals.planning_failed, "{label}");
+        assert!(miss.contains("cache_corrupt"), "{label}: {miss:?}");
+    };
+    check("forwarded proof run", &|m| m.tasks[0].proof_run_id = 123);
+    check("foreign observed run", &|m| {
+        m.tasks[0].observed_run_id = 456
+    });
+    check("zero run id", &|m| m.run_id = 0);
+    check("zero run attempt", &|m| m.run_attempt = 0);
+    check("zero artifact id", &|m| m.artifact_id = 0);
+    check("underived artifact name", &|m| {
+        // Well-formed baseline grammar for the WRONG commit: passes the
+        // proof constructor, must fail the derived-name conjunct.
+        m.artifact_name = format!("velnor-baseline-{}-{}", "b".repeat(40), m.compatibility_id);
+    });
+    // Unverifiable generator with a matching plan pin: equality passes,
+    // the verifiability conjunct must still fail.
+    let mut manifest = manifest_for(&commit);
+    manifest.generator_sha256 = "0".repeat(64);
+    let mut plan = plan_for(&manifest, Some(&commit));
+    plan.generator.sha256 = "0".repeat(64);
+    let (signals, miss) = verdict(&plan, Some(&manifest));
+    assert!(signals.planning_failed, "unverifiable generator");
+    assert!(miss.contains("cache_corrupt"), "{miss:?}");
+}
+
 /// Expectations matching the `o/r` fixture manifest's anchors.
 fn fixture_anchors() -> MergeAnchorExpectations {
     MergeAnchorExpectations {
+        ci_requires_repository: false,
         repository_slug: Some("o/r".to_owned()),
         protected_ref: Some("refs/heads/testmain".to_owned()),
         workflow_path: Some(".github/workflows/ci.yml".to_owned()),
@@ -260,6 +305,7 @@ fn anchor_parts_map_env_values() {
             repository_slug: None,
             protected_ref: Some("refs/heads/testmain".to_owned()),
             workflow_path: None,
+            ci_requires_repository: false,
         },
         "push jobs read the protected ref from GITHUB_REF"
     );
@@ -280,4 +326,43 @@ fn anchor_parts_map_env_values() {
             .is_none(),
         "malformed base branches yield no expectation"
     );
+}
+
+/// CI requires the repository slug: all-`None` anchors fail closed
+/// instead of skipping every check. Local runs (flag clear) keep the
+/// skip behavior.
+#[test]
+fn ci_missing_repository_slug_fails_closed() {
+    let commit = "a".repeat(40);
+    let manifest = manifest_for(&commit);
+    let plan = plan_for(&manifest, Some(&commit));
+    let ci_unanchored = MergeAnchorExpectations {
+        ci_requires_repository: true,
+        ..MergeAnchorExpectations::default()
+    };
+    let (signals, miss) = anchored_verdict(&plan, Some(&manifest), &ci_unanchored);
+    assert!(signals.planning_failed, "CI without slug must fail");
+    assert_eq!(miss, BTreeSet::from(["foreign_anchor".to_owned()]));
+    let (signals, _) = verdict(&plan, Some(&manifest));
+    assert!(
+        !signals.planning_failed,
+        "local runs still skip absent anchors"
+    );
+}
+
+/// Merge refuses expired manifests even when the plan re-binds to
+/// them, and accepts unexpired ones.
+#[test]
+fn merge_rejects_expired_manifest() {
+    let commit = "a".repeat(40);
+    let mut manifest = manifest_for(&commit);
+    manifest.expires_at_unix = Some(NOW - 1);
+    let plan = plan_for(&manifest, Some(&commit));
+    let (signals, miss) = verdict(&plan, Some(&manifest));
+    assert!(signals.planning_failed, "expired manifest must fail");
+    assert!(miss.contains("cache_corrupt"), "{miss:?}");
+    manifest.expires_at_unix = Some(NOW + 10_000);
+    let plan = plan_for(&manifest, Some(&commit));
+    let (signals, miss) = verdict(&plan, Some(&manifest));
+    assert!(!signals.planning_failed, "{miss:?}");
 }

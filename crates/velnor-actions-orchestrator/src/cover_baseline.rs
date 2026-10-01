@@ -30,7 +30,7 @@ use crate::merge::BaselineManifest;
 const MAX_BASELINE_MANIFEST_BYTES: usize = 1_048_576;
 
 /// Current Unix time; clock failure fails closed (all dated baselines expire).
-fn unix_now() -> u64 {
+pub(crate) fn unix_now() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(u64::MAX, |elapsed| elapsed.as_secs())

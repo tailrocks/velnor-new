@@ -290,7 +290,7 @@ pub(crate) fn covered_plan(
                 "input_digest": ob.input_digest,
                 "closure_digest": ob.closure_digest,
                 "proof_run_id": 7,
-                "observed_run_id": 11,
+                "observed_run_id": 7,
             })
         })
         .collect();
