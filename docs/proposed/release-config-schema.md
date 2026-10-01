@@ -12,7 +12,7 @@ Reference for the typed config in `velnor-actions-contract`
 | `enabled` | bool | `false` | `false` emits no release work; `true` requires a nonempty `packages` allowlist (`empty_packages`). |
 | `manifest_path` | string | `"Cargo.toml"` | Repo-relative, `[A-Za-z0-9/._-]`, no leading `/`, no empty/`..` segments, must be or end with `/Cargo.toml`. |
 | `packages` | string list | `[]` | Sorted, unique, never auto-expanded; each matches Cargo name shape (letter/`_` start, then alnum/`-`/`_`). |
-| `environment` | string | `"crates-io"` | Nonempty, unpadded, `[A-Za-z0-9-_/]` plus `.`, no empty/`..` segments. Binds the publish jobs. |
+| `environment` | string | `"release"` | Nonempty, unpadded, `[A-Za-z0-9-_/]` plus `.`, no empty/`..` segments. Binds the publish jobs. |
 | `authentication` | enum | `"trusted-publishing"` | `"trusted-publishing"` or `"bootstrap-token"` (kebab-case). Exactly one mode; modes never mix. |
 | `release_pr` | bool | `true` | Whether release-plz preparation PRs run. |
 | `tag_name` | string | `"{{ package }}-v{{ version }}"` | Safe charset, balanced braces, must contain both `{{package}}` and `{{version}}` (whitespace-insensitive). |
@@ -48,7 +48,7 @@ Single crate on trusted publishing:
 enabled = true
 manifest_path = "Cargo.toml"
 packages = ["termpane"]
-environment = "crates-io"
+environment = "release"
 authentication = "trusted-publishing"
 release_pr = true
 tag_name = "{{ package }}-v{{ version }}"
