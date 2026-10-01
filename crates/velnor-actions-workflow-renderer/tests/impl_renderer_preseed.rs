@@ -1,4 +1,6 @@
 //! Pre-seed mode: build-once templates plus strict closure gates.
+use std::collections::BTreeMap;
+
 use velnor_actions_contract::Job;
 use velnor_actions_workflow_renderer::{
     INTERNAL_OP_ENV, PRESEED_BUILD_OUTPUT, PRESEED_MANIFEST_BINARY_ENV, PRESEED_MANIFEST_OUT_ENV,
@@ -42,8 +44,8 @@ pub(crate) fn preseed_plan() -> Result<(String, Job), RenderError> {
         Vec::new(),
         vec![
             checkout_step(&checkout_pin())?,
-            preseed_build_step(&build)?,
-            preseed_verify_step(&mbx_probe(), MBX_VERSION)?,
+            preseed_build_step(&build, BTreeMap::new())?,
+            preseed_verify_step(&mbx_probe(), MBX_VERSION, BTreeMap::new())?,
             preseed_manifest_step(&build, TARGET)?,
             preseed_upload_step()?,
             preseed_stage_step(PreseedStageSource::LocalBuild, STAGED)?,
@@ -72,11 +74,14 @@ pub(crate) fn preseed_final() -> Result<(String, Job), RenderError> {
 fn preseed_templates_carry_trust_mark_and_exact_artifact() -> Result<(), RenderError> {
     let build = build_argv();
     let manifest = preseed_manifest_step(&build, TARGET)?;
+    let build_step = preseed_build_step(
+        &build,
+        BTreeMap::from([("MISE_CARGO_HOME".to_owned(), "owned".to_owned())]),
+    )?;
     // S1: the helper build compiles PR source, so it unsets runner
     // credentials before exec and scrubs the step env.
-    let built_step = preseed_build_step(&build)?;
-    let velnor_actions_contract::StepKind::Shell { run, env } = &built_step.kind else {
-        panic!("pre-seed build must be shell: {:?}", built_step.kind);
+    let velnor_actions_contract::StepKind::Shell { run, env } = &build_step.kind else {
+        panic!("pre-seed build must be shell: {:?}", build_step.kind);
     };
     assert_eq!(run.first().map(String::as_str), Some("env"));
     assert!(run.contains(&"GITHUB_TOKEN".to_owned()), "{run:?}");
@@ -87,9 +92,11 @@ fn preseed_templates_carry_trust_mark_and_exact_artifact() -> Result<(), RenderE
             "pre-seed build must scrub {key}"
         );
     }
+    let home = env.get("MISE_CARGO_HOME").map(String::as_str);
+    assert_eq!(home, Some("owned"), "build carries caller homes");
     for step in [
-        preseed_build_step(&build)?,
-        preseed_verify_step(&mbx_probe(), MBX_VERSION)?,
+        build_step,
+        preseed_verify_step(&mbx_probe(), MBX_VERSION, BTreeMap::new())?,
         manifest,
         preseed_upload_step()?,
         preseed_download_step()?,
@@ -164,10 +171,16 @@ fn preseed_manifest_step_runs_fresh_binary_with_op() -> Result<(), RenderError> 
 
 #[test]
 fn preseed_verify_pins_binary_and_mbx_route() -> Result<(), RenderError> {
-    let step = preseed_verify_step(&mbx_probe(), MBX_VERSION)?;
-    let velnor_actions_contract::StepKind::Shell { run, .. } = &step.kind else {
+    let step = preseed_verify_step(
+        &mbx_probe(),
+        MBX_VERSION,
+        BTreeMap::from([("MISE_CARGO_HOME".to_owned(), "owned".to_owned())]),
+    )?;
+    let velnor_actions_contract::StepKind::Shell { run, env } = &step.kind else {
         panic!("verify must be a shell step");
     };
+    let home = env.get("MISE_CARGO_HOME").map(String::as_str);
+    assert_eq!(home, Some("owned"), "verify carries caller homes");
     assert_eq!((run[0].as_str(), run[1].as_str()), ("sh", "-c"));
     for need in [
         "test -x target/release/velnor-actions",
@@ -183,7 +196,7 @@ fn preseed_verify_pins_binary_and_mbx_route() -> Result<(), RenderError> {
     );
     for bad_version in ["", "latest", "1.19", "v1.19.0", "1.19.0 "] {
         assert!(
-            preseed_verify_step(&mbx_probe(), bad_version).is_err(),
+            preseed_verify_step(&mbx_probe(), bad_version, BTreeMap::new()).is_err(),
             "version accepted: {bad_version}"
         );
     }
@@ -194,7 +207,7 @@ fn preseed_verify_pins_binary_and_mbx_route() -> Result<(), RenderError> {
         mise_argv("mr-boxington@latest", "mbx", &["--version"]),
     ] {
         assert!(
-            preseed_verify_step(&bad_probe, MBX_VERSION).is_err(),
+            preseed_verify_step(&bad_probe, MBX_VERSION, BTreeMap::new()).is_err(),
             "probe accepted: {bad_probe:?}"
         );
     }
