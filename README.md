@@ -1,6 +1,6 @@
 # Velnor
 
-Velnor Actions is proposed as a stack-generic GitHub Actions workflow generator. It scans repositories for every registered stack and plans all detected, supported stacks unless `.velnor/config.toml` excludes them. V1 registers only the Rust/Cargo adapter; TypeScript, Bun, and other stacks can be added later through dedicated adapters. Rust analysis, Mise integration, generic workflow rendering, orchestration, and CLI are separate crates. Gates 0–8 are implemented on branch `docs/velnor-actions-spec` (unmerged; records in `docs/implemented/`, generated tree is 14 jobs in `.github/workflows/ci.yml` only).
+Velnor Actions is proposed as a stack-generic GitHub Actions workflow generator. It scans repositories for every registered stack and plans all detected, supported stacks unless `.velnor/config.toml` excludes them. V1 registers only the Rust/Cargo adapter; TypeScript, Bun, and other stacks can be added later through dedicated adapters. Rust analysis, Mise integration, generic workflow rendering, orchestration, and CLI are separate crates. Gates 0–8 are implemented on branch `docs/velnor-actions-spec` (unmerged; records in `docs/implemented/`, generated tree is 15 jobs in `.github/workflows/ci.yml` only).
 
 See the [documentation index](docs/README.md) for the proposed V1 specification, deferred runner roadmap, and implemented status.
 
@@ -19,6 +19,33 @@ the repository.
 `plan` reports detected stacks, Rust workspaces/crates, and the jobs and steps
 Velnor would generate. It uses the same analysis and renderer as generation,
 prints concise text instead of YAML, and writes no repository files.
+
+## Local build from a clean checkout
+
+No ambient Cargo, Rust, or MBX is required: `mise.toml` pins every tool
+(Rust 1.98.1, MBX 1.21.0, Nextest 0.9.146) and `mise install` resolves them.
+Proved 2026-10-01 at `34550e8` in a fresh clone with `cargo`/`mbx` absent
+from `PATH`:
+
+```sh
+git clone https://github.com/tailrocks/velnor-new.git
+cd velnor-new && git checkout docs/velnor-actions-spec
+mise install
+mise exec -- cargo --version   # cargo 1.98.1
+mise exec -- mbx --version      # mbx 1.21.0
+mise exec -- cargo build --locked -p velnor-actions-cli
+./target/debug/velnor-actions --help
+./target/debug/velnor-actions plan
+./target/debug/velnor-actions generate --output-dir /private/tmp/velnor-preview
+diff -r .github /private/tmp/velnor-preview/.github  # no output: preview matches
+```
+
+Notes: `plan`/`generate` require the checkout's origin to be
+`tailrocks/velnor-new` (a local-path clone is identity-rejected until its
+origin is set); the preview directory must not be a symlink (`/tmp` on
+macOS is one — use `/private/tmp` or another real directory). The full
+gated local pass is `scripts/verify-local.sh` (fmt, policy, freshness,
+per-crate clippy/tests/doctests/docs, fixtures, Nextest `ci` profile).
 
 ## Consumer installation
 

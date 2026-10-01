@@ -1,37 +1,44 @@
 # P14 review-feedback verdict ledger
 
-Audited head: `48af7743e9e3d30f6c87d4484a48e83074a995b6` (`docs/velnor-actions-spec`).
+Audited head: `34550e889b82d5586120fb40da5522cb5e4d0509` (`docs/velnor-actions-spec`).
 Requirements: `docs/reviews/pr-1.md` §5; adoption: `docs/reviews/pr-1-adoption.md`;
 prior skeleton: `docs/reviews/pr-1-disposition.md` (stale in places — see verdicts).
+Prior audit: same file at `48af774` (2026-09-30); this revision re-verifies
+every row at the new head and adds the F1–F7 + G1–G7 consumer rounds.
 Method: each verdict from implementation/test bodies opened at the audited head,
 fixing SHA via blame/log. No code changed for this ledger.
 
-PR #1 state (fetched 2026-09-30): OPEN, head `48af774`, 0 unresolved threads,
-no APPROVED/CHANGES_REQUESTED. 3 inline threads, all resolved 2026-09-28
-(G01/G03 outdated, G02 current). No new reviewer feedback since `2a162ac`;
-issue comments are agent coordination notes (see N01–N02).
+PR #1 state (fetched 2026-10-01): OPEN, head `34550e8`, 0 unresolved threads,
+no APPROVED/CHANGES_REQUESTED (4 Codex COMMENTED reviews, 2026-09-28 only).
+3 inline threads, all resolved 2026-09-28 (G01/G03 outdated, G02 current).
+Two consumer finding comments since `48af774`: F1–F7 (`5921204817`,
+2026-09-30) with maintainer reply `5927509300`, and G1–G7 (`5925973373`,
+2026-10-01) with maintainer reply `5931252884`. All other issue comments
+are agent coordination notes.
 
-Counts: fixed 28 (R26 has an open residual) · superseded 0 · still-open 5.
+Counts: R fixed 30/30 (R26 residual closed) · G01–G03 fixed ·
+F fixed 7/7 (F3 keeps an external release-infra residual) ·
+G fixed/documented 6 + rejected-with-evidence 1 (G2) · still-open 0.
 
-## Verdict table
+## Verdict table (R + original G)
 
 | ID | Requirement | Verdict | Commit |
 |----|-------------|---------|--------|
 | R01 | 7 Rust crate jobs + separate global validators | fixed | `7a2cc3a` |
 | R02 | Validators own jobs; no per-task fan-out | fixed | `6d142e4`+`7a2cc3a` |
 | R03 | No Policy/Workflow-Lint umbrella | fixed | `ac3d185` |
-| R04 | Alint bundles + edition-2024 enforcement | fixed | `f63e04f` |
+| R04 | Alint bundles + edition-2024 enforcement | fixed | `f63e04f`+`cf8d762` |
 | R05 | Per-job caches; MBX before Cargo ops | fixed | `9861cdf` |
 | R06 | Single Mise cache identity | fixed | `9861cdf` |
 | R07 | Measured Rust-cache payload choice | fixed | `9861cdf` |
 | R08 | No overlapping cache owners | fixed | `9861cdf` |
 | R09 | Race-safe shared-cache writer | fixed | `9861cdf` |
 | R10 | Real Cargo home; offline warm; cold fetch | fixed | `9861cdf` |
-| R11 | Whole-workflow sizes/transfer/eviction/quota | OPEN | — |
-| R12 | Warm run reuses; deltas rebuild | OPEN | — |
-| R13 | PR-scoped save; fork read-only | OPEN | — |
+| R11 | Whole-workflow sizes/transfer/eviction/quota | fixed | `33b3178` |
+| R12 | Warm run reuses; deltas rebuild | fixed | `33b3178` |
+| R13 | PR-scoped save; fork read-only | fixed | `b94fe9e`+`d2eae99` |
 | R14 | `ci.yml` + display `CI`; responsibility names | fixed | `16a25a9` |
-| R15 | Rust grouping, package display, collision IDs | fixed | `7a2cc3a` |
+| R15 | Rust grouping, package display, collision IDs | fixed | `7a2cc3a`+`86a6223` |
 | R16 | fmt+clippy+test inside crate jobs | fixed | `7a2cc3a` |
 | R17 | Nextest config + CI profile + overrides | fixed | `8087fbc`+`755d5a6` |
 | R18 | Mise detection → setup in needing jobs | fixed | `9861cdf` |
@@ -42,16 +49,40 @@ Counts: fixed 28 (R26 has an open residual) · superseded 0 · still-open 5.
 | R23 | Wrapper selects MBX; absence→Cargo | fixed | `8087fbc` |
 | R24 | MBX action/cmds only for MBX | fixed | `8087fbc`+`b911e01` |
 | R25 | Explicit MBX+Nextest command/profile rule | fixed | `8087fbc`+`755d5a6` |
-| R26 | No task-name auto-execution | fixed* | `8087fbc` |
+| R26 | No task-name auto-execution | fixed | `8087fbc`+`442fa8b` |
 | R27 | No Velnor prefix in IDs/names | fixed | `16a25a9`+`ac3d185` |
-| R28 | Formatting once per scope | OPEN | — |
-| R29 | Accurate local/consumer docs | OPEN | — |
+| R28 | Formatting once per scope | fixed | `b94fe9e`+`d2eae99` |
+| R29 | Accurate local/consumer docs | fixed | `442fa8b`(+this rev) |
 | R30 | Proposal-to-contract adoption recorded | fixed | `8529f1d` |
 | G01 | Consumer bootstrap w/o Velnor-only lock | fixed | `ac12e92` (+replies) |
 | G02 | Self-contained consumer tool catalog | fixed | `ee8ab98` (+replies) |
 | G03 | Mise owns subprocess effects | fixed | `fa961ee` (+replies) |
 
-*R26 requirement holds; opt-in-key residual open (see below).
+## Verdict table (consumer rounds F + G)
+
+Source: issue comments `5921204817` (F1–F7) and `5925973373` (G1–G7);
+maintainer replies `5927509300` and `5931252884`. Re-verified at `34550e8`.
+
+| ID | Requirement | Verdict | Commit |
+|----|-------------|---------|--------|
+| F1 | `RUSTDOCFLAGS` on native doc steps | fixed | `e474dd4` |
+| F2 | `actionlint.yaml` honors `runner_label` | fixed | `e474dd4` |
+| F3 | Release provenance (manifest commit) | fixed* | `e474dd4`+`2922794` |
+| F4 | `Swatinem/rust-cache` documented set | fixed | `e474dd4` |
+| F5 | Bounded fetch retry, no silent tail | fixed | `e474dd4` |
+| F6 | `MISE_LOCKFILE` split documented | fixed | `e474dd4` |
+| F7 | `retention-days` on uploads | fixed | `e474dd4` |
+| G1 | Fork-PR trust model | documented | `90789f5` |
+| G2 | Honor `mise.lock` at install | rejected† | `2922794` |
+| G3 | Merge fail-closed contract | fixed | `90789f5`+`2922794` |
+| G4 | Per-job `timeout-minutes` | fixed | `2922794` |
+| G5 | Zizmor installed-but-never-run | fixed | `ba18ad2`(+regen) |
+| G6 | Gate-class variances | documented | `90789f5`+`e474dd4` |
+| G7 | Actionlint allowlist drift | fixed | `e474dd4` |
+
+\*F3 in-repo work complete; immutable tags + attestations need release
+infrastructure outside the repo (see residuals). †G2 rejected with
+counter-evidence after a tried-and-reverted implementation (see below).
 
 ## Fixed evidence (compact)
 
@@ -69,8 +100,7 @@ Counts: fixed 28 (R26 has an open residual) · superseded 0 · still-open 5.
 - R04: 5 deduped bundles (`.alint.yml:41`); `alint check` green;
   inheritance-aware edition tests (`p11_toml.rs:240,247`,
   `p11_metadata.rs:268`); literal rule correctly rejected per adoption §4.
-  Nit: `.alint.yml:136` gha-pin demote is stale (renderer pins SHA since
-  `94f1a59`) — may revert to error.
+  The stale gha-pin demote is gone (`cf8d762`); `.zizmor.yml` has no ignore.
 - R05: restore→MBX→fetch→obligations (`crate_jobs.rs:255`,
   `source_prep.rs:106`, renderer order gates); tests `impl_orch_p08.rs:116`,
   `impl_mise_p08.rs:66`; all 7 crate jobs conform in `ci.yml`.
@@ -79,23 +109,41 @@ Counts: fixed 28 (R26 has an open residual) · superseded 0 · still-open 5.
   `impl_renderer_p08.rs:14`, `impl_orch_p08.rs:66`.
 - R07: measured 7-crate table, `QUALIFIED_TRANSPORT=ObjectsPlusSharedSources`
   (`mise/src/cache_transport.rs:3`); applied in all 7 jobs; tests
-  `impl_mise_p08.rs:99`, `impl_orch_p08.rs:146`. Static estimates; live numbers
-  belong to R11.
+  `impl_mise_p08.rs:99`, `impl_orch_p08.rs:146`. Live numbers live in R11.
 - R08: one owner per path (`mise/src/runtime_paths.rs:45`) + subset validation
   wired at render; tests `impl_mise_p08.rs:9`, `impl_renderer_p08.rs:106`.
 - R09: plan-only save (`workflow_jobs_cache.rs:27`), readers restore-only
-  (`crate_jobs.rs:329`); exactly one `Save Cargo sources` (`ci.yml:170`);
-  tests `impl_orch_p08.rs:87`.
+  (`crate_jobs.rs:329`); push-gated saves only (`ci.yml`); tests
+  `impl_orch_p08.rs:87`, `c11_cache_saves_push_only_prs_and_forks_read_only`.
 - R10: owned-home subset rejecting `~/.cargo`/credentials
   (`mise/src/cache_sources.rs:47`); offline-probe→skip else explicit fetch
   (`source_prep.rs:106`); `--offline` on cargo cmds in `ci.yml`.
+- R11: per-job cache fixture (`impl_cache_fixtures.rs`: shared sources
+  keys/paths, qualified Mise identities, single plan writer,
+  restore<MBX<fetch order); sequential-run evidence in
+  `cache-measurements.md` (seed `36754512444`, warm `36760724180`, green
+  `36777030585` @`695752e`: 21 entries / 1263.95 MiB stored, 12.3% of the
+  assumed 10 GiB quota, zero evictions, per-job transfer/durations);
+  `summarize_cache_usage` reporting path (`cache_trust.rs`, post-hoc by
+  design — render stays hermetic).
+- R12: `impl_cache_warm.rs` renders twice with identical inputs and asserts
+  byte-identical workflows + identical keys, the offline-skip branch in
+  every crate fetch step, `--offline` on every obligation, and disjoint
+  MBX/Cargo shapes; hosted warm/green show zero fetch re-download;
+  local `cacheprobe` fixture replays both branches verbatim.
+- R13: `Step.condition` in contract IR with validation, serialized as
+  step-level `if:` in both renderers (`document.rs`); Save Cargo sources
+  plus every Setup Mise `cache_save` gated on `github.event_name ==
+  'push'`; PRs (same-repo or fork) restore read-only; policy recorded in
+  the Gate 4 doc; tests `c11_cache_saves_push_only_prs_and_forks_read_only`,
+  `step_conditions_serialize_as_if_with_upload_default`.
 - R14: tree is `ci.yml` only, `name: CI`; stale removal by whole-tree swap
   (`generate.rs:208`); test `impl_renderer_tree.rs:116`.
 - R15: `Rust / <label>` display, `rust-<slug>`+digest8 on collision
   (`contract/src/workflow/jobs.rs:183,201,216`); tests `crate_jobs_tests.rs:73`,
-  `impl_crate_graph.rs:61`. Gap: no dedicated collision unit test.
-- R16: all 7 crate jobs hold Format/Clippy/Build/Test/Doctests/Doc steps; 14
-  jobs total; tests `crate_jobs_tests.rs:81`, `impl_crate_graph.rs:70`.
+  `impl_crate_graph.rs:61`; dedicated collision test added (`86a6223`).
+- R16: all 7 crate jobs hold Format/Clippy/Build/Test/Doctests/Doc steps;
+  tests `crate_jobs_tests.rs:81`, `impl_crate_graph.rs:70`.
 - R17: `[profile.ci]` parse (`mise/src/nextest_config.rs:72`) → nearest-first
   select (`rust/src/profile_select.rs:203`), declared>detected (`:55`);
   `--profile` spliced at emission (`rust/src/argv.rs:283`); real
@@ -127,11 +175,26 @@ Counts: fixed 28 (R26 has an open residual) · superseded 0 · still-open 5.
 - R26: content-only scan, filenames never consulted
   (`evidence_text.rs:58`); misleading names tested
   (`impl_p06_detection.rs:249`, `impl_rust_evidence.rs:163`).
-  Residual: no explicit custom-task opt-in key exists — see fix spec R26-R.
+  Opt-in key shipped (`442fa8b`): `[stacks.rust] custom_tasks`
+  allowlist (contract `stacks.rs` + orch `config.rs` + `init.rs`
+  template); `mise run` steps emitted only for allowlisted names
+  (`custom_run.rs`, `crate_jobs.rs`); negative tests both sides.
 - R27: branding gate (`contract/src/workflow/jobs.rs:138`); unbranded IDs/names
   in `ci.yml`; tests `jobs.rs:390`, `crate_jobs_tests.rs:75`. Latent:
   `TASK_JOB_ID="velnor-task"` (`render.rs:46`) never emitted.
-- R30: `docs/reviews/pr-1-adoption.md` (89 lines, §§1–7) intact since `8529f1d`.
+- R28: `derive_for_config` suppresses the workspace `Fmt` group when
+  per-package `Fmt` groups exist for the same config. At HEAD: exactly 7
+  `Format` steps (`ci.yml:622…2327`, one per crate), none in `plan`
+  (`:119–337`); Format-count regression test green.
+- R29: `README.md` documents the implemented CLI (`init`/`plan`/`generate
+  --output-dir` + `--help`), the stale 47/47 dogfood line is gone, the
+  MBX/Nextest detection model matches `workflow-contract.md:16`, the
+  Alint pin is full-SHA on both sides (`version-policy.md:71,100` agrees
+  with `workflow-contract.md:308`), and a consumer-installation section
+  states no official release exists yet (source builds fail
+  consumer-policy generation by design). This revision adds the 15-job
+  count and tested clean-env local commands.
+- R30: `docs/reviews/pr-1-adoption.md` (§§1–7) intact since `8529f1d`.
 - G01: consumer embed release version/URL/digest
   (`workflow-contract.md:173`); impl `workflow.rs:86`, `pins.rs:83`,
   `generate.rs:112` (lock Velnor-only), `attach.rs:28`; tests `pins.rs:253`,
@@ -142,95 +205,99 @@ Counts: fixed 28 (R26 has an open residual) · superseded 0 · still-open 5.
 - G03: sole `Command` constructor (`mise/src/command.rs:1,327`); zero
   `Command::new` in orchestrator `src/`; forbidden-token sweep + evasion
   fixtures (`impl_orch_f2f.rs:145`). Reply `4119261980`.
+- F1: typed cargo `RUSTDOCFLAGS=-D warnings` env into every `TaskKind::Doc`
+  leg (`matrix_step.rs`); 7/7 Documentation steps in `ci.yml` carry it;
+  2 tests. Reply `5927509300`.
+- F2: configured `runner_label` threaded into the actionlint bridge
+  (`workflow.rs::actionlint_input`), fail-closed `InvalidRunnerLabel` on
+  unlisted labels, no hardcoded distro in the render path; e2e test
+  asserts no `ubuntu-26.04` leak under a 24.04 config. At HEAD all jobs
+  run `ubuntu-26.04` and `actionlint.yaml` allows exactly that.
+- F3: manifest parse requires the 40-hex commit (`manifest.rs`,
+  `check_commit`); recorded as `VELNOR_RELEASE_COMMIT`; lock-backed
+  attach path carries `generator.commit` (G-round batch); 3+ tests.
+  Immutable-tag/SLSA process documented; tags + attestations need
+  release infrastructure (external residual, see below).
+- F4: `Swatinem/rust-cache` in both action allowlists, sample config
+  (`cli-contract.md:197`), emission rule (`workflow-contract.md:303`),
+  pins, policy doc, and freshness inventory; SHA consistent; Cargo-only
+  gating tested.
+- F5: fetch `continue-on-error` replaced by bounded `MAX_DOWNLOAD_ATTEMPTS=3`
+  in-helper retry (`retrieve_retry.rs`); only the plan download retains
+  `continue-on-error` so the gap reaches the merge verdict (exactly one
+  occurrence in `ci.yml:477`); merge gating untouched; documented in
+  `merge-report-contract.md`.
+- F6: `MISE_LOCKFILE=0` split documented (`tooling-input-contract.md` §1.1,
+  `task-execution-contract.md:144`): fixed steps never read repo config;
+  custom tasks use the project lockfile.
+- F7: typed `ARTIFACT_RETENTION_DAYS=30` on all upload constructors
+  (`steps_artifact.rs` + 4 call sites); 11/11 `upload-artifact` steps in
+  `ci.yml` carry `retention-days` (the 90-day baseline value is typed
+  `BASELINE_RETENTION_DAYS` by design, not a leak).
+- G1: took the "document" branch: `fork-pr-trust-model.md` specifies
+  triggers, PR-tree execution, the self-attestation limit with code refs,
+  what malicious regen can/cannot do (asset re-bind + sha256 fail-closed,
+  push-gated saves, `needs` cross-check, plan-stamp re-check), and the
+  trust root (CODEOWNERS + branch protection). No base-pinned validator
+  exists; the doc specifies it with 4 acceptance criteria as future work.
+  Reply `5931252884`.
+- G2: REJECTED with counter-evidence. Config-visible installs (so mise
+  would enforce the lock) were tried, then independently probed: mise
+  loads 9+ config paths no scanner can enumerate, `[plugins]` shadows
+  backends and executes `bin/install` even for untrusted configs,
+  installs ignore trust, and a lone `mise.lock` is unenforced (tamper
+  ignored). All installs carry `--no-config` + `MISE_NO_CONFIG=1` again
+  (the finding's own first suggested fix); the lock audit is rescoped to
+  local-dev lock-file hygiene; checksums are documented TOFU
+  (`tooling-input-contract.md` §1.1). Proofs:
+  `every_emitted_install_argv_carries_no_config`,
+  `hostile_config_ignored_by_isolated_installs`.
+- G3: fixed + documented. `continue-on-error` exactly once
+  (`ci.yml:477`, plan download); missing reports → `planning_failed`;
+  `needs` exact-inventory cross-check now derives from
+  `required.needs` (also fixing the live bug where downstream
+  `publish-baseline` broke every `Required` run), enforced at
+  generation time and e2e-pinned. Behavior in `merge-report-contract.md`.
+- G4: 15/15 jobs carry typed per-kind `timeout-minutes` (10 infra +
+  validators, 30 crates), e2e-pinned.
+- G5: zizmor installed in 3 jobs (plan + the 2 crates whose suites spawn
+  generate-validation, down from 19) and RUN by the dedicated Zizmor job
+  (`ci.yml:2528`); install set is exact and test-pinned
+  (`crate_tools_install_exact_pinned_set`); `generate` shells out to all
+  three validators via staged validation (`validate.rs:45-46`).
+- G6: `gate-class-variances.md`: MSRV PR-exclusion permanent with a
+  planned qualification workflow; schedule renders when present
+  (emitters currently `None`); ruleset reads specified as a future
+  validator shape; per-config doc env shipped (F1: `RUSTDOCFLAGS` on all
+  doc legs, all configs).
+- G7: same `runner_label` threading as F2, fail-closed
+  `InvalidRunnerLabel`, e2e-pinned.
 
-## Still-open fix specs
+## Accepted residuals (not still-open requirements)
 
-### R11 — whole-workflow cache measurements
-No sequential-run size/hit/miss/duration/eviction/quota evidence for the P08
-design. `docs/implemented/performance.md` has plan/compile/test walls only;
-`parse_service_usage`/`headroom_bytes` (`mise/src/cache_trust.rs:92`) have zero
-production callers; no cache integration fixture exists.
-Fix: (1) new fixture (e.g.
-`crates/velnor-actions-orchestrator/tests/impl_cache_fixtures.rs`) asserting
-per-job keys/paths and recording `gh cache list` sizes + run timings;
-(2) sequential-run table (stored/transfer/restore/save durations, hit/miss,
-eviction, headroom) in `docs/implemented/performance.md`; (3) wire the quota
-helpers into a reporting path or document why static.
+- F3-external: immutable release tags need a repo tag-protection ruleset
+  (admin op, no release infra in-repo yet); attested builds ride future
+  release automation. In-repo provenance (commit field, `VELNOR_RELEASE_COMMIT`,
+  lock-backed commit) is shipped and tested.
+- G1-future: base-pinned fork-PR validator is specified with 4 acceptance
+  criteria in `fork-pr-trust-model.md`, unbuilt. The finding's either/or
+  was satisfied by the documentation branch.
 
-### R12 — warm-reuse proof
-No warm-reuse test: `warm_rerun_reuses_identical_extension`
-(`rust/tests/impl_rust_f2a.rs:111`) checks identity eligibility only; gate-4's
-47/47 run predates P08 `ci.yml`.
-Fix: (1) warm-reuse test (new `impl_cache_warm.rs` or extend
-`impl_orch_p08.rs`): render twice with identical inputs, assert identical keys
-+ offline-skip branch; (2) hosted evidence — seed run N, run N+1 shows
-`sources hit, skipping fetch` with no `Downloading`/dep-compile — recorded in
-`performance.md` or the gate-4 doc.
-
-### R13 — PR-scoped save; fork read-only
-`Save Cargo sources` emitted unconditionally (`ci.yml:170`, no `if:`);
-`pr_save_allowed`/`is_read_only`/`save_after_success`
-(`mise/src/cache_trust.rs:18`) have zero production callers; sources key has
-no trust component. (Correction to probe notes: contract `Step` HAS
-`condition: Option<String>` (`contract/src/workflow/ir.rs:130`), but
-`step_to_yaml` never serializes it — `document.rs:194` covers job-level only,
-`:272` is a hardcoded upload-artifact `if:`.)
-Fix: (1) serialize `step.condition` in `step_to_yaml`
-(`workflow-renderer/src/document.rs:255`) for Action/Shell steps;
-(2) set a push-only/trust condition on the save step in
-`orchestrator/src/source_cache.rs` (+ gate mise `cache_save`);
-(3) wire fork→read-only into generation with `impl_orch_p08.rs` assertions on
-emitted conditions; (4) document the PR-scoping policy.
-
-### R26-R — custom-task opt-in key (residual; requirement itself holds)
-`PartialRustStack` (`orchestrator/src/config.rs:165`) has no tasks key under
-`deny_unknown_fields`; no `tasks`/`custom` key in `init.rs` or
-`contract/src/config/`.
-Fix: (1) define e.g. `[stacks.rust] custom_tasks = [...]` allowlist in
-`contract/src/config/stacks.rs` + `orchestrator/src/config.rs` + `init.rs`
-template; (2) emit `mise run` steps only for allowlisted names in
-`orchestrator/src/crate_jobs.rs` (or `vectors.rs`); (3) negative tests
-(undeclared names never emitted; unknown keys rejected).
-
-### R28 — formatting once per scope
-8 overlapping executions: plan `Format` (`ci.yml:180`,
-`mbx fmt --all --check` on the virtual workspace manifest = union of crates)
-+ 7 per-crate `Format` steps (`ci.yml:379…1383`) — every file checked twice.
-Single `explicit_fmt` (`orchestrator/src/discover.rs:226`) feeds both
-per-package groups (`rust/src/tasks.rs:212`) and the workspace group
-(`rust/src/tasks.rs:279`) → plan step (`orchestrator/src/wire_w1.rs:158`).
-Fix: in `derive_for_config` (`orchestrator/src/derive_groups.rs:107`) skip the
-workspace `Fmt` group when per-package `Fmt` groups exist for the same config
-(keep the 7 per-crate steps per pr-1, drop plan `--all`); or return `None` in
-`workspace_format_step` (`wire_w1.rs:162`) under the same condition. Add a
-regression test: with `rustfmt.toml` present, total `Format` steps == 7, none
-in `plan`.
-
-### R29 — accurate docs
-(1) `README.md:7` "The proposed CLI is:" → CLI is implemented
-(`cli/src/args.rs:18`, `dispatch.rs:58`); document actual
-`cargo run -p velnor-actions-cli -- {init,plan,generate --output-dir}` +
-`--help`. (2) `README.md:3` "dogfood CI green 47/47 … run 36569723507" is
-old-topology stale (47-job matrix deleted; tree is 14 jobs in `ci.yml` only) —
-update or drop. (3) `README.md:25-26` blanket "Use MBX…" contradicts the
-detection model (`workflow-contract.md:16`: Cargo-vs-MBX and runner selected
-independently from evidence). (4) Alint-pin contradiction:
-`version-policy.md:71,101,113` claims reviewed mutable-tag exception, but
-`workflow-contract.md:308` says "No tag exception exists" and `ci.yml:50`
-emits full SHA — one side must change. (5) Add a consumer installation doc
-(release asset URL/SHA-256 route per bootstrap §2; honestly state no official
-release exists yet — source builds fail consumer generation by design).
-
-## New feedback since the reviewed head
-
-No new reviewer feedback: no reviews beyond the 2026-09-28 Codex pass, no new
-inline threads, no new general comments except donbeave agent-coordination
-notes. Two coordination-note follow-ups (not review verdicts):
+## Prior coordination notes (closed)
 
 - N01: `non_utf8_path_broadens_explicitly` failed on Linux at `a74dd7f`
-  (run 36759633324); no commit since touches
-  `orchestrator/tests/impl_git_paths_p10.rs` or the walker guard. Owner:
-  verify/fix on Linux; close the loop on the PR thread.
+  (run 36759633324). Closed: green Linux run `36836254328` @`644fdf5`
+  (success 14/14) executes the orchestrator suite including that test.
 - N02: runner-side `actionlint@1.7.12` missing at `c8b3a89` (run 36751323928).
-  `ci.yml:124,343` now installs actionlint via mise in plan/crate jobs —
-  likely addressed; needs a hosted green run as proof.
+  Closed: actionlint installs via mise in plan/validating jobs, and the
+  same green run proves it end to end.
+
+## Current hosted runs at this revision
+
+- Green: `36862207497` @`34550e8` (2026-10-01, success: 14 jobs green +
+  `Publish baseline` skipped push-only) — last green.
+- Previous green: `36836254328` @`644fdf5` (2026-10-01, success 14/14).
+- Red: `36860814112` @`395d4bf` (2026-10-01, failure: `Rust /
+  velnor-actions-contract` rustdoc intra-doc link + dependent `Required`).
+  Cause matches the `34550e8` fix (public `WorkflowIr::validate` link);
+  all other 13 jobs green, `Publish baseline` skipped (push-only).
