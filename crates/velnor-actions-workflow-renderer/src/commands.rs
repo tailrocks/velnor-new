@@ -55,7 +55,7 @@ pub fn validate_command_argv(argv: &[String]) -> Result<(), RenderError> {
 /// Validate a fixed env map: `A-Z0-9_` keys, single-line clean values.
 ///
 /// Expressions stay allowlisted, never blanket-banned: only fixed
-/// runner-provided spans pass (see [`crate::expressions`]).
+/// runner-provided spans pass (see the private `expressions` module).
 ///
 /// # Errors
 ///

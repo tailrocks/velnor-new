@@ -176,7 +176,7 @@ pub fn slugify_segment(name: &str) -> String {
 ///
 /// Job `name:` fields evaluate `${{ }}` expressions, and a control byte
 /// would break YAML structure; both fail closed at the `Job` gate, and
-/// constructors sanitize through [`sanitize_display_text`] so generated
+/// constructors sanitize through `sanitize_display_text` so generated
 /// names never reach the gate dirty.
 #[must_use]
 pub fn is_safe_display_name(name: &str) -> bool {
