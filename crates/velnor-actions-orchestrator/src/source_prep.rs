@@ -12,7 +12,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use velnor_actions_contract::{Step, StepKind};
+use velnor_actions_contract::Step;
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 
 use crate::OrchestratorError;
@@ -92,14 +92,16 @@ fn fetch_steps_with(
         } else {
             format!("{FETCH_SOURCES_STEP} ({manifest})")
         };
-        steps.push(Step {
-            name,
-            condition: None,
-            kind: StepKind::Shell {
-                run: vec!["sh".to_owned(), "-c".to_owned(), script],
-                env: env.clone(),
-            },
-        });
+        steps.push(
+            velnor_actions_workflow_renderer::ambient_shell_step(
+                &name,
+                vec!["sh".to_owned(), "-c".to_owned(), script],
+                env.clone(),
+            )
+            .map_err(|err| OrchestratorError::Contract {
+                problem: err.to_string(),
+            })?,
+        );
     }
     Ok(steps)
 }
@@ -141,6 +143,7 @@ pub(crate) fn validate_root(root: &str) -> Result<(), OrchestratorError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use velnor_actions_contract::StepKind;
 
     fn shell_parts(kind: &StepKind) -> Option<(&Vec<String>, &BTreeMap<String, String>)> {
         match kind {

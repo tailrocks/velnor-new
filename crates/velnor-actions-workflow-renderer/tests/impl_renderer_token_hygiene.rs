@@ -4,7 +4,8 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_workflow_renderer::{
-    RenderError, checkout_step, merge_step, plan_step, render_workflow_ir, shell_step,
+    RenderError, ambient_shell_step, checkout_step, merge_step, plan_step, render_workflow_ir,
+    shell_step,
 };
 
 use super::impl_renderer_fixtures::*;
@@ -76,11 +77,36 @@ fn token_hygiene_scopes_gh_token_to_plan() -> Result<(), RenderError> {
         ],
     );
     render_fails_with(vec![scoped], "bad_env_expression");
-    let bad_env = token_plan_job(
+    // A nonempty denied value trips the constructor first ...
+    let err = shell_step(
         "Leak",
         vec!["true".to_owned()],
         BTreeMap::from([("GITHUB_TOKEN".to_owned(), "x".to_owned())]),
-    )?;
+    )
+    .expect_err("nonempty denied key must trip constructor");
+    assert!(
+        format!("{err:?}").contains("credential_step_env"),
+        "wrong rejection: {err:?}"
+    );
+    // ... and a hand-built literal bypassing the constructor still
+    // trips the render-time gate.
+    let bad_env = job(
+        "plan",
+        "Plan",
+        Vec::new(),
+        vec![
+            checkout_step(&checkout_pin())?,
+            Step {
+                name: "Leak".to_owned(),
+                condition: None,
+                kind: StepKind::Shell {
+                    run: vec!["true".to_owned()],
+                    env: BTreeMap::from([("GITHUB_TOKEN".to_owned(), "x".to_owned())]),
+                },
+            },
+            plan_step(),
+        ],
+    );
     render_fails_with(vec![bad_env], "credential_env");
     Ok(())
 }
@@ -144,34 +170,63 @@ fn token_hygiene_rejects_prints_and_task_tokens() -> Result<(), RenderError> {
 }
 
 #[test]
-fn token_hygiene_allows_empty_scrub_and_rejects_all_nine_keys() -> Result<(), RenderError> {
+fn token_hygiene_constructor_owns_overlay_and_rejects_all_nine_keys() -> Result<(), RenderError> {
+    use velnor_actions_contract::{Step, StepKind};
     use velnor_actions_workflow_renderer::toolchain_env::STEP_CREDENTIAL_DENYLIST;
-    let scrub: BTreeMap<String, String> = STEP_CREDENTIAL_DENYLIST
-        .iter()
-        .map(|key| ((*key).to_owned(), String::new()))
-        .collect();
-    let scrubbed = job(
+    // Bare env: the constructor scrubs shut, so it renders clean.
+    let clean = job(
         "velnor-task",
         "Task",
         vec!["plan".to_owned()],
-        vec![shell_step("Run task", vec!["true".to_owned()], scrub)?],
+        vec![shell_step(
+            "Run task",
+            vec!["true".to_owned()],
+            BTreeMap::new(),
+        )?],
     );
     render_workflow_ir(
-        &fixture_ir(vec![minimal_plan_job()?, scrubbed]),
+        &fixture_ir(vec![minimal_plan_job()?, clean]),
         WorkflowPolicy::ConsumerV1,
         None,
         &fixture_ctx(),
     )?;
+    // Caller-supplied denied keys fail loud even when empty: the
+    // constructor alone owns the overlay, never the caller.
+    let scrub: BTreeMap<String, String> = STEP_CREDENTIAL_DENYLIST
+        .iter()
+        .map(|key| ((*key).to_owned(), String::new()))
+        .collect();
+    let err = shell_step("Run task", vec!["true".to_owned()], scrub)
+        .expect_err("caller-supplied denied keys must trip constructor");
+    assert!(
+        format!("{err:?}").contains("credential_step_env"),
+        "wrong rejection: {err:?}"
+    );
     for key in STEP_CREDENTIAL_DENYLIST {
+        let err = shell_step(
+            "Run task",
+            vec!["true".to_owned()],
+            BTreeMap::from([(key.to_owned(), "x".to_owned())]),
+        )
+        .expect_err("nonempty sensitive key must trip constructor");
+        assert!(
+            format!("{err:?}").contains("credential_step_env"),
+            "key {key} denied at constructor: {err:?}"
+        );
+        // Defense in depth: a Step literal bypassing the constructor
+        // still trips the render-time gate.
         let leaked = job(
             "velnor-task",
             "Task",
             vec!["plan".to_owned()],
-            vec![shell_step(
-                "Run task",
-                vec!["true".to_owned()],
-                BTreeMap::from([(key.to_owned(), "x".to_owned())]),
-            )?],
+            vec![Step {
+                name: "Run task".to_owned(),
+                condition: None,
+                kind: StepKind::Shell {
+                    run: vec!["true".to_owned()],
+                    env: BTreeMap::from([(key.to_owned(), "x".to_owned())]),
+                },
+            }],
         );
         let want = if key == "GH_TOKEN" {
             "token_misplaced"
@@ -185,25 +240,74 @@ fn token_hygiene_allows_empty_scrub_and_rejects_all_nine_keys() -> Result<(), Re
 
 #[test]
 fn scrub_coverage_rejects_bare_and_partial_shell_env() -> Result<(), RenderError> {
-    let bare = token_plan_job("Run task", vec!["true".to_owned()], BTreeMap::new())?;
-    render_fails_with(vec![bare], "missing_scrub");
-    let partial = token_plan_job(
-        "Run task",
-        vec!["true".to_owned()],
-        BTreeMap::from([("GITHUB_TOKEN".to_owned(), String::new())]),
-    )?;
-    render_fails_with(vec![partial], "missing_scrub");
+    use velnor_actions_contract::{Step, StepKind};
+    // Hand-built literals: the constructor would scrub these shut, so
+    // only a literal bypassing it reaches the gate uncovered.
+    for (label, env) in [
+        ("bare", BTreeMap::new()),
+        (
+            "partial",
+            BTreeMap::from([("GITHUB_TOKEN".to_owned(), String::new())]),
+        ),
+    ] {
+        let uncovered = job(
+            "plan",
+            "Plan",
+            Vec::new(),
+            vec![
+                checkout_step(&checkout_pin())?,
+                Step {
+                    name: "Run task".to_owned(),
+                    condition: None,
+                    kind: StepKind::Shell {
+                        run: vec!["true".to_owned()],
+                        env,
+                    },
+                },
+                plan_step(),
+            ],
+        );
+        let err = render_workflow_ir(
+            &fixture_ir(vec![uncovered]),
+            WorkflowPolicy::ConsumerV1,
+            None,
+            &fixture_ctx(),
+        )
+        .expect_err("bare or partial env must fail coverage");
+        assert!(
+            format!("{err:?}").contains("missing_scrub"),
+            "{label}: {err:?}"
+        );
+    }
     Ok(())
 }
 
 #[test]
 fn scrub_coverage_allows_ambient_auth_steps_and_release() -> Result<(), RenderError> {
+    use velnor_actions_workflow_renderer::steps::{DENY_STEP_NAME, MACHETE_STEP_NAME};
+    // Ambient constructor (no scrub overlay): the gate must exempt by
+    // allowlisted name, or these fail. A scrubbed step would pass
+    // without touching the allowlist, proving nothing.
     for name in [
         "Prepare pinned tools",
         "Prepare Rust components",
         "Fetch Cargo sources",
+        "Fetch Cargo sources (Cargo.lock)",
+        DENY_STEP_NAME,
+        MACHETE_STEP_NAME,
+        "Run zizmor",
+        "Run actionlint",
     ] {
-        let allowed = token_plan_job(name, vec!["true".to_owned()], BTreeMap::new())?;
+        let allowed = job(
+            "plan",
+            "Plan",
+            Vec::new(),
+            vec![
+                checkout_step(&checkout_pin())?,
+                ambient_shell_step(name, vec!["true".to_owned()], BTreeMap::new())?,
+                plan_step(),
+            ],
+        );
         render_workflow_ir(
             &fixture_ir(vec![allowed]),
             WorkflowPolicy::ConsumerV1,
@@ -215,7 +319,7 @@ fn scrub_coverage_allows_ambient_auth_steps_and_release() -> Result<(), RenderEr
         "release",
         "Release",
         vec!["plan".to_owned()],
-        vec![shell_step(
+        vec![ambient_shell_step(
             "Publish release assets",
             vec!["true".to_owned()],
             BTreeMap::new(),
@@ -232,16 +336,12 @@ fn scrub_coverage_allows_ambient_auth_steps_and_release() -> Result<(), RenderEr
 
 #[test]
 fn unset_wrapper_passes_but_exfil_behind_it_fails() -> Result<(), RenderError> {
-    use velnor_actions_workflow_renderer::toolchain_env::{
-        with_credential_unset_script, with_env_unset_argv,
-    };
-    let scrub_of = |extra: BTreeMap<String, String>| {
-        velnor_actions_workflow_renderer::toolchain_env::with_credential_scrub(&extra)
-    };
+    // The step constructor applies the argv wrapper itself; bare payloads
+    // must scan clean while exfil behind the wrapper still fails.
     let wrapped = token_plan_job(
         "Run task",
-        with_env_unset_argv(&["mise".to_owned(), "run".to_owned(), "x".to_owned()]),
-        scrub_of(BTreeMap::new()),
+        ["mise".to_owned(), "run".to_owned(), "x".to_owned()].to_vec(),
+        BTreeMap::new(),
     )?;
     render_workflow_ir(
         &fixture_ir(vec![wrapped]),
@@ -249,14 +349,13 @@ fn unset_wrapper_passes_but_exfil_behind_it_fails() -> Result<(), RenderError> {
         None,
         &fixture_ctx(),
     )?;
+    // Bare script: the constructor preludes once, and the single
+    // prelude strips clean. (A caller-preluded script would double the
+    // prelude and trip the scanner — fail-closed by design.)
     let scripted = token_plan_job(
         "Run task",
-        vec![
-            "sh".to_owned(),
-            "-c".to_owned(),
-            with_credential_unset_script("true"),
-        ],
-        scrub_of(BTreeMap::new()),
+        vec!["sh".to_owned(), "-c".to_owned(), "true".to_owned()],
+        BTreeMap::new(),
     )?;
     render_workflow_ir(
         &fixture_ir(vec![scripted]),
@@ -266,8 +365,8 @@ fn unset_wrapper_passes_but_exfil_behind_it_fails() -> Result<(), RenderError> {
     )?;
     let smuggled = token_plan_job(
         "Run task",
-        with_env_unset_argv(&["echo".to_owned(), "$GH_TOKEN".to_owned()]),
-        scrub_of(BTreeMap::new()),
+        ["echo".to_owned(), "$GH_TOKEN".to_owned()].to_vec(),
+        BTreeMap::new(),
     )?;
     render_fails_with(vec![smuggled], "token_in_run");
     let fake_prelude = token_plan_job(
@@ -277,7 +376,7 @@ fn unset_wrapper_passes_but_exfil_behind_it_fails() -> Result<(), RenderError> {
             "-c".to_owned(),
             "unset FOO; echo $GH_TOKEN".to_owned(),
         ],
-        scrub_of(BTreeMap::new()),
+        BTreeMap::new(),
     )?;
     render_fails_with(vec![fake_prelude], "token_in_run");
     Ok(())

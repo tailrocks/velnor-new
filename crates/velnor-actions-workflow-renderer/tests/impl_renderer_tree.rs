@@ -182,15 +182,16 @@ fn consumer_rejects_support_job_ids_in_ir() -> Result<(), RenderError> {
 }
 
 fn validator_commands() -> Vec<ValidatorCommand> {
+    // Production names: the scrub gate allowlists these exactly.
     [
-        ValidatorKind::CargoDeny,
-        ValidatorKind::CargoMachete,
-        ValidatorKind::Zizmor,
+        (ValidatorKind::CargoDeny, "Run cargo-deny"),
+        (ValidatorKind::CargoMachete, "Run cargo-machete"),
+        (ValidatorKind::Zizmor, "Run zizmor"),
     ]
     .iter()
-    .map(|validator| ValidatorCommand {
+    .map(|(validator, name)| ValidatorCommand {
         validator: *validator,
-        name: "Deny".to_owned(),
+        name: (*name).to_owned(),
         argv: vec!["deny".to_owned()],
     })
     .collect()

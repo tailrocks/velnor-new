@@ -241,7 +241,8 @@ fn candidate_check_uses_downloaded_binary() -> Result<(), RenderError> {
         1,
         "candidate uploads exactly once:\n{text}"
     );
-    let window = snip(&text, check, 600);
+    // Wide enough to clear the constructor's unset prelude.
+    let window = snip(&text, check, 1000);
     assert!(
         window.contains("velnor/candidate/velnor-actions"),
         "{window}"

@@ -15,7 +15,6 @@ use crate::{
     closure::{FRESHNESS_OUTDIR, download_plan_step, freshness_step},
     render::{CANDIDATE_JOB_ID, CandidateSpec, PLAN_JOB_ID, RenderContext},
     steps,
-    toolchain_env::{with_credential_scrub, with_credential_unset_script, with_env_unset_argv},
 };
 
 /// Display name of the candidate-manifest verification step.
@@ -79,7 +78,7 @@ pub fn candidate_manifest_verify_step(target: &str) -> Result<Step, RenderError>
             "-c".to_owned(),
             candidate_manifest_verify_script(target),
         ],
-        with_credential_scrub(&BTreeMap::new()),
+        BTreeMap::new(),
     )
 }
 
@@ -117,16 +116,12 @@ pub(crate) fn candidate_job(ctx: &RenderContext, spec: &CandidateSpec) -> Result
         environment: None,
         steps: vec![
             steps::checkout_step(&ctx.checkout_uses)?,
-            steps::shell_step(
-                "Build candidate",
-                with_env_unset_argv(&spec.build),
-                with_credential_scrub(&BTreeMap::new()),
-            )?,
+            steps::shell_step("Build candidate", spec.build.clone(), BTreeMap::new())?,
             download_plan_step()?,
             steps::shell_step(
                 "Write candidate manifest",
                 vec!["sh".to_owned(), "-c".to_owned(), manifest],
-                with_credential_scrub(&BTreeMap::new()),
+                BTreeMap::new(),
             )?,
             steps::shell_step(
                 "Write candidate attestation",
@@ -135,7 +130,7 @@ pub(crate) fn candidate_job(ctx: &RenderContext, spec: &CandidateSpec) -> Result
                     "-c".to_owned(),
                     steps::candidate_attestation_script(),
                 ],
-                with_credential_scrub(&BTreeMap::new()),
+                BTreeMap::new(),
             )?,
             steps::upload_artifact_step(&artifact, CANDIDATE_OUTPUT_DIR_EXPR)?,
             steps::download_artifact_step(&artifact, CANDIDATE_STAGE_DIR_EXPR)?,
@@ -144,31 +139,27 @@ pub(crate) fn candidate_job(ctx: &RenderContext, spec: &CandidateSpec) -> Result
             steps::shell_step(
                 "Qualify candidate",
                 qualify_scrubbed_argv(&spec.qualify)?,
-                with_credential_scrub(&BTreeMap::new()),
+                BTreeMap::new(),
             )?,
         ],
     })
 }
 
-/// Qualification argv with the credential-unset prelude injected.
+/// Qualification argv shape check: fixed `sh -c` script only.
 ///
-/// The qualify vector is a fixed `sh -c` script executing the PR-built
-/// binary; the prelude unsets the unshadowable runner credentials
-/// before the first artifact byte runs. Anything else is not a qualify
-/// vector and fails closed.
+/// The qualify vector executes the PR-built binary; anything else is
+/// not a qualify vector and fails closed. Credential removal is
+/// [`steps::shell_step`]'s job (argv-wide `env -u` prefix), not a
+/// script prelude's, so this only gates the shape.
 /// # Errors
 fn qualify_scrubbed_argv(argv: &[String]) -> Result<Vec<String>, RenderError> {
-    let [shell, flag, script] = argv else {
+    let [shell, flag, _script] = argv else {
         return Err(RenderError::BadCommand("qualify_without_unset".to_owned()));
     };
     if shell != "sh" || flag != "-c" {
         return Err(RenderError::BadCommand("qualify_without_unset".to_owned()));
     }
-    Ok(vec![
-        shell.clone(),
-        flag.clone(),
-        with_credential_unset_script(script),
-    ])
+    Ok(argv.to_vec())
 }
 
 /// Protected release job: publish assets plus manifest, verify digests.
@@ -193,7 +184,7 @@ pub(crate) fn release_job(ctx: &RenderContext) -> Result<Job, RenderError> {
         steps: vec![
             steps::checkout_step(&ctx.checkout_uses)?,
             steps::download_artifact_step(&artifact, CANDIDATE_STAGE_DIR_EXPR)?,
-            steps::shell_step(
+            steps::ambient_shell_step(
                 "Publish release assets",
                 vec![
                     "sh".to_owned(),
@@ -202,7 +193,7 @@ pub(crate) fn release_job(ctx: &RenderContext) -> Result<Job, RenderError> {
                 ],
                 release_env(),
             )?,
-            steps::shell_step(
+            steps::ambient_shell_step(
                 "Verify release digests",
                 vec![
                     "sh".to_owned(),
@@ -216,6 +207,10 @@ pub(crate) fn release_job(ctx: &RenderContext) -> Result<Job, RenderError> {
 }
 
 /// Shared release-step env: release tag plus the staged candidate dir.
+///
+/// No credential keys: both `gh` steps run ambient (see
+/// [`steps::ambient_shell_step`]) because publishing and verifying
+/// release assets needs live forge auth. No repository code executes.
 fn release_env() -> BTreeMap<String, String> {
     BTreeMap::from([
         (

@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{CrateObligation, Step, StepKind, sanitize_error_detail};
+use velnor_actions_contract::{CrateObligation, Step, sanitize_error_detail};
 use velnor_actions_mise::{
     ISOLATION_ENV, NO_AUTO_INSTALL_ENV, PREPARE_PINNED_TOOLS_STEP, PinnedTool, PreparePinnedTools,
     ToolCatalog, ToolHomes,
@@ -102,11 +102,8 @@ pub(crate) fn prepare_crate_tools_step(
         .map_err(|problem| OrchestratorError::Contract { problem })?;
     let env = strings_of_env(&prepare.env(catalog))
         .map_err(|problem| OrchestratorError::Contract { problem })?;
-    Ok(Step {
-        name: PREPARE_PINNED_TOOLS_STEP.to_owned(),
-        condition: None,
-        kind: StepKind::Shell { run, env },
-    })
+    velnor_actions_workflow_renderer::ambient_shell_step(PREPARE_PINNED_TOOLS_STEP, run, env)
+        .map_err(OrchestratorError::from)
 }
 
 /// Validated env every crate-job Cargo step runs with.
@@ -148,27 +145,6 @@ pub(crate) fn task_step_env(
     let toolchain = catalog.rustup_toolchain();
     toolchain_env::checked_task_env(&base, homes.rustup_home(), homes.cargo_home(), &toolchain)
         .map_err(OrchestratorError::from)
-}
-
-/// Validated env for steps executing repository code.
-///
-/// [`task_step_env`] plus the explicit empty credential scrub: absence
-/// would inherit ambient runner and workflow-scope tokens into build
-/// scripts and custom tasks. Fetch, prepare, and plan steps keep the
-/// unscrubbed base: they execute no repository code and need ambient
-/// auth for downloads and baseline lookups.
-///
-/// # Errors
-///
-/// Returns the same errors as [`task_step_env`].
-pub(crate) fn task_execution_env(
-    catalog: &ToolCatalog,
-    extra: &BTreeMap<String, String>,
-) -> Result<BTreeMap<String, String>, OrchestratorError> {
-    use velnor_actions_workflow_renderer::toolchain_env;
-    Ok(toolchain_env::with_credential_scrub(&task_step_env(
-        catalog, extra,
-    )?))
 }
 
 /// Fixed obligation identity env carried by every obligation step.
@@ -227,7 +203,7 @@ pub(crate) fn obligation_step(
         identity.insert(DOWNSTREAM_IDS_ENV.to_owned(), downstream.join(","));
     }
     check_identity_env_contract(&identity, &obligation.task_id)?;
-    let env = task_execution_env(catalog, &identity)?;
+    let env = task_step_env(catalog, &identity)?;
     let joined =
         velnor_actions_workflow_renderer::join_argv_for_run(&obligation.run).map_err(|err| {
             OrchestratorError::Contract {
@@ -236,16 +212,8 @@ pub(crate) fn obligation_step(
         })?;
     let start = start_path_for_key(&obligation.matrix_key);
     let run = report_wrapper_argv(&joined, &helper_path_for_version(), &start);
-    velnor_actions_workflow_renderer::validate_command_argv(&run).map_err(|err| {
-        OrchestratorError::Contract {
-            problem: err.to_string(),
-        }
-    })?;
-    Ok(Step {
-        name: obligation.step_name.clone(),
-        condition: None,
-        kind: StepKind::Shell { run, env },
-    })
+    velnor_actions_workflow_renderer::shell_step(&obligation.step_name, run, env)
+        .map_err(OrchestratorError::from)
 }
 
 /// Require the obligation identity env to match the report op contract.
@@ -285,17 +253,17 @@ pub(crate) fn helper_path_for_version() -> String {
 /// back, reports through the staged helper's [`REPORT_OP`], then exits
 /// with the obligation code (helper failure surfaces only on an
 /// otherwise passing obligation, so failures never mask each other).
-/// The unset prelude runs first: obligations execute repository code
-/// (build scripts), and the step env cannot shadow runner-injected
-/// credentials (D3).
+/// Credential removal is the step constructor's job (`shell_step`
+/// prefixes argv-wide `env -u`), not a script prelude's: obligations
+/// execute repository code (build scripts), and the step env cannot
+/// shadow runner-injected credentials (D3).
 pub(crate) fn report_wrapper_argv(joined: &str, helper: &str, start_path: &str) -> Vec<String> {
-    use velnor_actions_workflow_renderer::toolchain_env::with_credential_unset_script;
     vec![
         "sh".to_owned(),
         "-c".to_owned(),
-        with_credential_unset_script(&format!(
+        format!(
             "date +%s%3N > \"{start_path}\"; {joined}; code=$?; read -r start_ms rest < \"{start_path}\"; {EXIT_CODE_ENV}=\"$code\" {START_MS_ENV}=\"$start_ms\" {INTERNAL_OP_ENV}={REPORT_OP} \"{helper}\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\""
-        )),
+        ),
     ]
 }
 

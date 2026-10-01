@@ -194,10 +194,11 @@ pub(crate) fn matrix_task_job() -> Result<(String, velnor_actions_contract::Job)
             "2".to_owned(),
         ),
     ]);
+    // Unscrubbed base: the constructor owns the overlay.
     let step = shell_step(
         "Run task",
         vec!["sh".to_owned(), "-c".to_owned(), "echo hi".to_owned()],
-        velnor_actions_workflow_renderer::toolchain_env::with_credential_scrub(&env),
+        env,
     )?;
     Ok(job(
         "velnor-task",
@@ -208,10 +209,8 @@ pub(crate) fn matrix_task_job() -> Result<(String, velnor_actions_contract::Job)
 }
 
 /// Shell fixture carrying the credential scrub overlay (D1 gate input).
+///
+/// The constructor applies the overlay; callers pass the bare base.
 pub(crate) fn scrubbed_shell_step(name: &str, argv: Vec<String>) -> Result<Step, RenderError> {
-    shell_step(
-        name,
-        argv,
-        velnor_actions_workflow_renderer::toolchain_env::with_credential_scrub(&BTreeMap::new()),
-    )
+    shell_step(name, argv, BTreeMap::new())
 }

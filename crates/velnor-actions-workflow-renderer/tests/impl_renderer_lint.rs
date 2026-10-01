@@ -4,7 +4,6 @@ use velnor_actions_contract::{
     Concurrency, GeneratorValidation, Job, Permissions, Trigger, ValidatorKind,
     VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
 };
-use velnor_actions_workflow_renderer::toolchain_env::with_credential_scrub;
 use velnor_actions_workflow_renderer::{
     ALINT_USES, CONCURRENCY_CANCEL, CONCURRENCY_GROUP, RenderContext, RenderError,
     ValidatorCommand, checkout_step, merge_step, render_workflow_ir, shell_step,
@@ -57,7 +56,7 @@ fn lint_job() -> Result<Job, RenderError> {
                     "actionlint".to_owned(),
                     "-color".to_owned(),
                 ],
-                with_credential_scrub(&BTreeMap::new()),
+                BTreeMap::new(),
             )?,
         ],
     })
@@ -119,15 +118,16 @@ fn velnor_support() -> VelnorSupportWorkflow {
 }
 
 fn validator_commands() -> Vec<ValidatorCommand> {
+    // Production names: the scrub gate allowlists these exactly.
     [
-        ValidatorKind::CargoDeny,
-        ValidatorKind::CargoMachete,
-        ValidatorKind::Zizmor,
+        (ValidatorKind::CargoDeny, "Run cargo-deny"),
+        (ValidatorKind::CargoMachete, "Run cargo-machete"),
+        (ValidatorKind::Zizmor, "Run zizmor"),
     ]
     .iter()
-    .map(|validator| ValidatorCommand {
+    .map(|(validator, name)| ValidatorCommand {
         validator: *validator,
-        name: "Deny".to_owned(),
+        name: (*name).to_owned(),
         argv: vec!["deny".to_owned()],
     })
     .collect()

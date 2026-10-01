@@ -87,18 +87,23 @@ pub fn validate_env(env: &BTreeMap<String, String>) -> Result<(), RenderError> {
 /// character is quoted. See [`quote_run_arg`]. The inline script of
 /// `sh -c`/`bash -c` is single-quoted whole instead: inner-shell
 /// variables (assigned or inherited) must survive the outer shell, and
-/// the script's own quotes must stay syntactic, not literal.
+/// the script's own quotes must stay syntactic, not literal. The
+/// credential-unset prefix ([`crate::toolchain_env::unset_prefix_len`])
+/// is transparent to the shape check: a wrapped `sh -c` still quotes
+/// its script, at its shifted index.
 ///
 /// # Errors
 ///
 /// Returns [`RenderError::BadCommand`] when argv validation fails.
 pub fn join_argv_for_run(argv: &[String]) -> Result<String, RenderError> {
     validate_command_argv(argv)?;
+    let prefix = crate::toolchain_env::unset_prefix_len(argv);
+    let script_at = is_inline_shell(&argv[prefix..]).then_some(prefix + 2);
     Ok(argv
         .iter()
         .enumerate()
         .map(|(index, arg)| {
-            if index == 2 && is_inline_shell(argv) {
+            if script_at == Some(index) {
                 quote_script_arg(arg)
             } else {
                 quote_run_arg(arg)
@@ -109,7 +114,7 @@ pub fn join_argv_for_run(argv: &[String]) -> Result<String, RenderError> {
 }
 
 /// True for `sh -c <script>`/`bash -c <script>` vectors.
-fn is_inline_shell(argv: &[String]) -> bool {
+pub(crate) fn is_inline_shell(argv: &[String]) -> bool {
     argv.len() > 2 && matches!(argv[0].as_str(), "sh" | "bash") && argv[1].as_str() == "-c"
 }
 

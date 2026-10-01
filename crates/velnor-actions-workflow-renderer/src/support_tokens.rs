@@ -34,21 +34,36 @@ pub(crate) fn check_token_hygiene(jobs: &BTreeMap<String, Job>) -> Result<(), Re
     Ok(())
 }
 
-/// Shell steps allowed ambient auth, by exact step name.
+/// Shell steps allowed ambient auth, by step name.
 ///
-/// The renderer must not depend on the Mise adapter, so these mirror
-/// the adapter's `PREPARE_*` names plus the orchestrator's fetch name
-/// as literals; end-to-end generation tests render the real steps
-/// through this gate, so a drifted literal fails there, not here.
-/// Fetch and prepare download tools and sources (registry auth is
-/// their purpose); plan and fetch-reports are internal steps with no
-/// shell env to gate, and release publishes through `gh`
-/// (allowlisted by job ID below).
-const AMBIENT_AUTH_STEPS: [&str; 3] = [
+/// The renderer must not depend on the Mise adapter, so externally
+/// owned names mirror as literals; end-to-end generation tests render
+/// the real steps through this gate, so a drifted literal fails there,
+/// not here. Fetch and prepare download tools and sources (registry
+/// auth is their purpose); nested fetch names carry a manifest suffix.
+/// The pinned offline analyzers (deny, machete, zizmor, actionlint)
+/// execute no repository code and cold-install their tools, so they
+/// run ambient: scrubbing broke `ubi:` installs (API 401) and zizmor
+/// (empty-token abort), CI run 36815180228. Plan and fetch-reports are
+/// internal steps with no shell env to gate, and release publishes
+/// through `gh` (allowlisted by job ID below).
+const AMBIENT_AUTH_STEPS: [&str; 7] = [
     "Prepare pinned tools",
     "Prepare Rust components",
     "Fetch Cargo sources",
+    crate::steps::DENY_STEP_NAME,
+    crate::steps::MACHETE_STEP_NAME,
+    "Run zizmor",
+    "Run actionlint",
 ];
+
+/// True when a step name carries ambient-auth permission.
+///
+/// Exact match, except nested fetch names (`Fetch Cargo sources
+/// (<manifest>)`), which share the root fetch purpose.
+fn is_ambient_auth_step(name: &str) -> bool {
+    AMBIENT_AUTH_STEPS.contains(&name) || name.starts_with("Fetch Cargo sources (")
+}
 
 /// Reject credential leaks in one step's env, argv, and action inputs.
 ///
@@ -138,7 +153,7 @@ fn check_scrub_coverage(
     env: &BTreeMap<String, String>,
 ) -> Result<(), RenderError> {
     use crate::toolchain_env::STEP_CREDENTIAL_DENYLIST;
-    if id == super::RELEASE_JOB_ID || AMBIENT_AUTH_STEPS.contains(&name) {
+    if id == super::RELEASE_JOB_ID || is_ambient_auth_step(name) {
         return Ok(());
     }
     let scoped = is_scoped_gh_token(id, env);
@@ -161,18 +176,7 @@ fn check_scrub_coverage(
 /// anything else (including `-u` with a non-fixed name) still scans,
 /// and the payload after the prefix always scans.
 fn strip_unset_argv(run: &[String]) -> &[String] {
-    use crate::toolchain_env::CREDENTIAL_UNSET_VARS;
-    let mut rest = run;
-    if rest.first().is_some_and(|arg| arg == "env") {
-        rest = &rest[1..];
-        while rest.len() >= 2
-            && rest[0] == "-u"
-            && CREDENTIAL_UNSET_VARS.contains(&rest[1].as_str())
-        {
-            rest = &rest[2..];
-        }
-    }
-    rest
+    &run[crate::toolchain_env::unset_prefix_len(run)..]
 }
 
 /// Script with the exact credential-unset prelude stripped for scanning.

@@ -73,6 +73,8 @@ mod impl_renderer_setup;
 mod impl_renderer_steps;
 #[path = "impl_renderer_steps_env.rs"]
 mod impl_renderer_steps_env;
+#[path = "impl_renderer_steps_quote.rs"]
+mod impl_renderer_steps_quote;
 #[path = "impl_renderer_sweep.rs"]
 mod impl_renderer_sweep;
 #[path = "impl_renderer_token_hygiene.rs"]

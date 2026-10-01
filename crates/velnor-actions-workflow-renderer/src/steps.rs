@@ -20,6 +20,8 @@ pub use crate::steps_artifact::{
     crate_job_report_upload_step, download_artifact_step, matrix_report_upload_step,
     upload_artifact_step,
 };
+pub(crate) use crate::steps_internal::split_internal_operation;
+pub use crate::steps_internal::{internal_step, merge_step, plan_step, write_request_step};
 
 /// Env key selecting the staged-binary internal operation.
 pub const INTERNAL_OP_ENV: &str = "VELNOR_INTERNAL_OP";
@@ -177,9 +179,68 @@ pub fn action_step_with_env(
     })
 }
 
-/// Validated fixed-argv shell step.
+/// Validated fixed-argv shell step, scrubbed and unset by construction.
+///
+/// The default posture for every `run:` step: env leaves carrying the
+/// empty-string scrub overlay, and credentials leave truly removed by
+/// the mechanism matching the argv shape — an `unset` prelude inside
+/// `sh -c`/`bash -c` scripts, an `env -u` prefix on direct-exec
+/// vectors — so a step that forgets credential handling fails safe
+/// instead of leaking. The split is load-bearing: shellcheck cannot
+/// see through `env … sh -c` (SC2016 on the script's `$`), while the
+/// in-script prelude keeps the recognized `sh -c '…'` shape. Callers
+/// pass the unscrubbed base env (validated before the overlay lands);
+/// the overlay overwrites any caller-supplied denied key rather than
+/// trusting it: any denied key in the base fails loud, so the
+/// constructor alone owns the scrub overlay. Steps that genuinely
+/// need ambient auth (tool acquisition, `gh` publishing, forge-bound
+/// release phases) use [`ambient_shell_step`] instead, keeping the
+/// exception greppable.
 /// # Errors
 pub fn shell_step(
+    name: &str,
+    argv: Vec<String>,
+    env: BTreeMap<String, String>,
+) -> Result<Step, RenderError> {
+    if name.trim().is_empty() {
+        return Err(RenderError::BadCommand("empty_name".to_owned()));
+    }
+    crate::expressions::check_name_content(name)?;
+    commands::validate_command_argv(&argv)?;
+    commands::validate_env(&env)?;
+    crate::toolchain_env::reject_denied_step_keys(&env)?;
+    scan_for_private_subcommands(name)?;
+    let run = if commands::is_inline_shell(&argv) {
+        let mut scripted = argv;
+        let preluded = crate::toolchain_env::with_credential_unset_script(&scripted[2]);
+        scripted[2] = preluded;
+        scripted
+    } else {
+        let mut run = crate::toolchain_env::with_env_unset_argv(&[]);
+        run.extend(argv);
+        run
+    };
+    let mut env_map = env;
+    env_map.extend(crate::toolchain_env::credential_scrub());
+    Ok(Step {
+        name: name.to_owned(),
+        condition: None,
+        kind: StepKind::Shell { run, env: env_map },
+    })
+}
+
+/// Validated fixed-argv shell step with ambient credentials intact.
+///
+/// The explicit exception to [`shell_step`]: no `env -u` prefix, no
+/// scrub overlay. Allowed only when the step executes no repository
+/// code and needs network auth to function: pinned-tool acquisition
+/// (`mise install`, where authenticated quota beats flaky anonymous
+/// limits), offline pinned analyzers over the checkout (deny, machete,
+/// zizmor, actionlint — scrubbing broke their tool bootstrap, CI run
+/// 36815180228), and `gh` release publishing. Anything compiling or
+/// running repository code must use [`shell_step`].
+/// # Errors
+pub fn ambient_shell_step(
     name: &str,
     argv: Vec<String>,
     env: BTreeMap<String, String>,
@@ -276,94 +337,7 @@ pub fn acquire_velnor_step(
     if !downloads || !verifies {
         return Err(RenderError::BadCommand("acquire_without_verify".to_owned()));
     }
-    shell_step(
-        ACQUIRE_NAME,
-        argv,
-        crate::toolchain_env::with_credential_scrub(env),
-    )
-}
-
-/// Split an internal operation into env op plus request-file target op.
-///
-/// `plan-v1`/`merge-v1`/`fetch-reports-v1` target themselves (fetch takes
-/// no request file; its input root is the runner-temp velnor directory);
-/// `write-request-v1:<target>` gates on `write-request-v1` while
-/// materializing the target's request file.
-/// # Errors
-pub(crate) fn split_internal_operation(operation: &str) -> Result<(&str, &str), RenderError> {
-    if operation == PLAN_OPERATION || operation == MERGE_OPERATION || operation == FETCH_OPERATION {
-        return Ok((operation, operation));
-    }
-    let rest = operation
-        .strip_prefix(WRITE_REQUEST_OPERATION)
-        .and_then(|rest| rest.strip_prefix(':'));
-    if let Some(target) = rest
-        && (target == PLAN_OPERATION || target == MERGE_OPERATION)
-    {
-        return Ok((WRITE_REQUEST_OPERATION, target));
-    }
-    Err(RenderError::BadCommand(format!(
-        "unknown_internal_op:{operation}"
-    )))
-}
-
-/// Internal plan/merge/write-request step; operation travels via env, never argv.
-/// # Errors
-pub fn internal_step(name: &str, operation: &str) -> Result<Step, RenderError> {
-    if name.trim().is_empty() {
-        return Err(RenderError::BadCommand("empty_name".to_owned()));
-    }
-    crate::expressions::check_name_content(name)?;
-    split_internal_operation(operation)?;
-    scan_for_private_subcommands(name)?;
-    Ok(Step {
-        name: name.to_owned(),
-        condition: None,
-        kind: StepKind::Internal {
-            operation: operation.to_owned(),
-        },
-    })
-}
-
-/// Fixed write-request step materializing `<target>-request.json` at event time.
-/// # Errors
-pub fn write_request_step(target: &str) -> Result<Step, RenderError> {
-    if target != PLAN_OPERATION && target != MERGE_OPERATION {
-        return Err(RenderError::BadCommand(format!(
-            "unknown_internal_op:{target}"
-        )));
-    }
-    Ok(Step {
-        name: "Write request".to_owned(),
-        condition: None,
-        kind: StepKind::Internal {
-            operation: format!("{WRITE_REQUEST_OPERATION}:{target}"),
-        },
-    })
-}
-
-/// Fixed planner step (`plan-v1`).
-#[must_use]
-pub fn plan_step() -> Step {
-    Step {
-        name: "Plan".to_owned(),
-        condition: None,
-        kind: StepKind::Internal {
-            operation: PLAN_OPERATION.to_owned(),
-        },
-    }
-}
-
-/// Fixed report-merge step (`merge-v1`).
-#[must_use]
-pub fn merge_step() -> Step {
-    Step {
-        name: "Merge reports".to_owned(),
-        condition: None,
-        kind: StepKind::Internal {
-            operation: MERGE_OPERATION.to_owned(),
-        },
-    }
+    shell_step(ACQUIRE_NAME, argv, env.clone())
 }
 
 /// True for `owner/repo` over alphanumerics plus `.-_`.

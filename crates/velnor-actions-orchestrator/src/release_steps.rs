@@ -23,7 +23,7 @@ use velnor_actions_workflow_renderer::release_permissions::JobPermissions;
 use velnor_actions_workflow_renderer::release_tree::{
     RELEASE_BOOTSTRAP_CONFIG_PATH, RELEASE_CONFIG_PATH,
 };
-use velnor_actions_workflow_renderer::{MiseSetup, mise_setup_step, shell_step};
+use velnor_actions_workflow_renderer::{MiseSetup, ambient_shell_step, mise_setup_step};
 
 use crate::OrchestratorError;
 use crate::release_checkouts::{forge_env, policy_checkout, source_checkout, source_manifest};
@@ -259,7 +259,7 @@ fn preparation_job(
         steps: vec![
             parts.policy_push.clone(),
             parts.setup.clone(),
-            shell_step(name, argv, forge_env())?,
+            ambient_shell_step(name, argv, forge_env())?,
         ],
     })
 }
@@ -281,7 +281,7 @@ fn preflight_job(
             parts.policy.clone(),
             parts.source.clone(),
             parts.setup.clone(),
-            shell_step("Validate exact source", argv, forge_env())?,
+            ambient_shell_step("Validate exact source", argv, forge_env())?,
         ],
     })
 }
@@ -303,7 +303,7 @@ fn publish_job(
             parts.policy.clone(),
             parts.source_push.clone(),
             parts.setup.clone(),
-            shell_step("Publish release", argv, forge_env())?,
+            ambient_shell_step("Publish release", argv, forge_env())?,
         ],
     })
 }
@@ -330,7 +330,7 @@ fn bootstrap_job(
             parts.policy.clone(),
             parts.source_push.clone(),
             parts.setup.clone(),
-            shell_step("Publish first release", argv, env)?,
+            ambient_shell_step("Publish first release", argv, env)?,
         ],
     })
 }
@@ -356,7 +356,7 @@ fn reconcile_job(
         steps: vec![
             parts.policy.clone(),
             parts.setup.clone(),
-            shell_step("Verify published state", argv, forge_env())?,
+            ambient_shell_step("Verify published state", argv, forge_env())?,
         ],
     })
 }

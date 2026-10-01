@@ -44,15 +44,16 @@ fn plan_job() -> Result<Job, RenderError> {
 }
 
 pub(crate) fn validator_commands() -> Vec<ValidatorCommand> {
+    // Production names: the scrub gate allowlists these exactly.
     [
-        ValidatorKind::CargoDeny,
-        ValidatorKind::CargoMachete,
-        ValidatorKind::Zizmor,
+        (ValidatorKind::CargoDeny, "Run cargo-deny"),
+        (ValidatorKind::CargoMachete, "Run cargo-machete"),
+        (ValidatorKind::Zizmor, "Run zizmor"),
     ]
     .iter()
-    .map(|validator| ValidatorCommand {
+    .map(|(validator, name)| ValidatorCommand {
         validator: *validator,
-        name: "Deny".to_owned(),
+        name: (*name).to_owned(),
         argv: vec!["deny".to_owned()],
     })
     .collect()
@@ -368,9 +369,7 @@ fn renderer_rejects_bare_commands_inside_ir() -> Result<(), RenderError> {
         task_job(shell_step(
             "Focused",
             vec!["true".to_owned()],
-            velnor_actions_workflow_renderer::toolchain_env::with_credential_scrub(
-                &BTreeMap::new(),
-            ),
+            BTreeMap::new(),
         )?),
     );
     assert!(render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx).is_ok());

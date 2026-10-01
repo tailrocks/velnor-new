@@ -25,11 +25,7 @@ pub fn format_step(argv: Vec<String>, env: &BTreeMap<String, String>) -> Result<
     if argv.first().is_none_or(|program| program != "mise") {
         return Err(RenderError::BadCommand("format_without_mise".to_owned()));
     }
-    steps::shell_step(
-        FORMAT_STEP_NAME,
-        argv,
-        crate::toolchain_env::with_credential_scrub(env),
-    )
+    steps::shell_step(FORMAT_STEP_NAME, argv, env.clone())
 }
 
 /// Insert `Format` into the plan job between staging and freshness.

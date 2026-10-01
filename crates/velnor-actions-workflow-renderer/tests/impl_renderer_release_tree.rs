@@ -16,7 +16,7 @@ use velnor_actions_workflow_renderer::release_tree::{
     RELEASE_BOOTSTRAP_CONFIG_PATH, RELEASE_CONFIG_PATH, RELEASE_TREE_PATHS, RELEASE_WORKFLOW_PATH,
     ReleaseRenderContext, release_stale_paths, render_release_files, render_release_workflow,
 };
-use velnor_actions_workflow_renderer::{action_step, shell_step};
+use velnor_actions_workflow_renderer::{action_step, ambient_shell_step};
 
 const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
 const REPO: &str = "acme/widgets";
@@ -109,7 +109,7 @@ fn publish_job(
     let gate = publish_gate_condition(REPO, &bootstrap());
     let policy = policy_checkout()?;
     let source = source_checkout("true")?;
-    let publish = shell_step(
+    let publish = ambient_shell_step(
         "Publish",
         ["release-plz", "release", "--config", config_path]
             .iter()
@@ -134,7 +134,7 @@ fn publish_job(
 pub(crate) fn spec() -> Result<ReleaseWorkflowSpec, RenderError> {
     let policy = policy_checkout()?;
     let source = source_checkout("false")?;
-    let run = shell_step(
+    let run = ambient_shell_step(
         "Run",
         vec!["echo".to_owned(), "ok".to_owned()],
         BTreeMap::new(),

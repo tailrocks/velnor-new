@@ -229,11 +229,8 @@ pub(crate) fn prepare_rust_components_step(
         .map_err(|problem| OrchestratorError::Contract { problem })?;
     let env = strings_of_env(&request.env(catalog))
         .map_err(|problem| OrchestratorError::Contract { problem })?;
-    Ok(Step {
-        name: PREPARE_RUST_COMPONENTS_STEP.to_owned(),
-        condition: None,
-        kind: StepKind::Shell { run, env },
-    })
+    velnor_actions_workflow_renderer::ambient_shell_step(PREPARE_RUST_COMPONENTS_STEP, run, env)
+        .map_err(OrchestratorError::from)
 }
 
 /// Renderer scalars: version, label, staged path, request dir, pins.

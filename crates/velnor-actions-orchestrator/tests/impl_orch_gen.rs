@@ -358,9 +358,12 @@ fn orch_gen_candidate_qualify_is_artifact_only() -> TestResult {
                     && line.contains("generate --output-dir")
             })
             .ok_or_else(|| std::io::Error::other("missing qualify line"))?;
+        // Payload only: the constructor's `unset` prelude names
+        // MISE_GITHUB_TOKEN, which is not a rebuild marker.
+        let payload = qualify.split_once("; ").map_or(qualify, |(_, tail)| tail);
         for marker in ["cargo", "mbx", "rustc", "mise", "build"] {
             assert!(
-                !qualify.to_lowercase().contains(marker),
+                !payload.to_lowercase().contains(marker),
                 "no rebuild marker {marker}:{qualify}"
             );
         }

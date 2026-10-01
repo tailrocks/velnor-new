@@ -27,7 +27,6 @@ use crate::{
     RenderError,
     artifact_paths::{PRESEED_OUTPUT_DIR_EXPR, PRESEED_STAGE_DIR_EXPR},
     steps,
-    toolchain_env::{with_credential_scrub, with_env_unset_argv},
 };
 
 /// Exact pre-seed helper artifact name (run-scoped, no wildcards).
@@ -104,11 +103,7 @@ pub fn preseed_build_step(
     env: &BTreeMap<String, String>,
 ) -> Result<Step, RenderError> {
     debug_assert!(PRESEED_BUILD_NAME.ends_with(TRUST_MARK));
-    steps::shell_step(
-        PRESEED_BUILD_NAME,
-        with_env_unset_argv(build),
-        with_credential_scrub(env),
-    )
+    steps::shell_step(PRESEED_BUILD_NAME, build.to_vec(), env.clone())
 }
 
 /// Fixed MBX-compile verification: output executable plus pinned-route proof.
@@ -139,7 +134,7 @@ pub fn preseed_verify_step(
     steps::shell_step(
         PRESEED_VERIFY_NAME,
         vec!["sh".to_owned(), "-c".to_owned(), script],
-        with_credential_scrub(env),
+        env.clone(),
     )
 }
 
@@ -224,7 +219,7 @@ pub fn preseed_manifest_step(build: &[String], target: &str) -> Result<Step, Ren
     steps::shell_step(
         PRESEED_MANIFEST_NAME,
         vec![PRESEED_BUILD_OUTPUT.to_owned()],
-        with_credential_scrub(&std::collections::BTreeMap::from([
+        std::collections::BTreeMap::from([
             (
                 steps::INTERNAL_OP_ENV.to_owned(),
                 steps::WRITE_PRESEED_MANIFEST_OPERATION.to_owned(),
@@ -239,7 +234,7 @@ pub fn preseed_manifest_step(build: &[String], target: &str) -> Result<Step, Ren
             ),
             (PRESEED_MANIFEST_TARGET_ENV.to_owned(), target.to_owned()),
             (PRESEED_MANIFEST_TOOLCHAIN_ENV.to_owned(), toolchain),
-        ])),
+        ]),
     )
 }
 
@@ -316,7 +311,7 @@ pub fn preseed_manifest_verify_step(target: &str) -> Result<Step, RenderError> {
             "-c".to_owned(),
             preseed_manifest_verify_script(target),
         ],
-        with_credential_scrub(&std::collections::BTreeMap::new()),
+        std::collections::BTreeMap::new(),
     )
 }
 
@@ -337,7 +332,7 @@ pub fn preseed_stage_step(source: PreseedStageSource, staged: &str) -> Result<St
     steps::shell_step(
         PRESEED_STAGE_NAME,
         vec!["sh".to_owned(), "-c".to_owned(), script],
-        with_credential_scrub(&std::collections::BTreeMap::new()),
+        std::collections::BTreeMap::new(),
     )
 }
 

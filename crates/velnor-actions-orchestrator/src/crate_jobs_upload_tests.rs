@@ -8,15 +8,19 @@ use super::*;
 
 /// True for the `sh -c` argv head wrapping one script.
 ///
-/// Spelled via chars: the repo policy scanner reserves the quoted
-/// shell literal for wrapper-constructing files, and this helper
-/// only asserts shape without constructing a wrapper.
+/// The step constructor preludes the script with the credential
+/// unset; the script itself carries the wrapper. Spelled via chars:
+/// the repo policy scanner reserves the quoted shell literal for
+/// wrapper-constructing files, and this helper only asserts shape
+/// without constructing a wrapper.
 fn is_sh_head(argv: &[String]) -> bool {
+    use velnor_actions_workflow_renderer::toolchain_env::credential_unset_prelude;
     argv.len() == 3
         && argv[0].len() == 2
         && argv[0].starts_with('s')
         && argv[0].ends_with('h')
         && argv[1] == "-c"
+        && argv[2].starts_with(&credential_unset_prelude())
 }
 
 /// Shell `run` of one named step.

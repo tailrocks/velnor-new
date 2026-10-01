@@ -130,10 +130,17 @@ fn preseed_manifest_step_runs_fresh_binary_with_op() -> Result<(), RenderError> 
     let velnor_actions_contract::StepKind::Shell { run, env } = &step.kind else {
         panic!("manifest must be a shell step");
     };
+    // Fresh binary, no sh -c wrapper: just the constructor's `env -u`
+    // unset prefix ahead of the payload.
     assert_eq!(
-        run,
-        &vec![PRESEED_BUILD_OUTPUT.to_owned()],
-        "fresh binary, no sh -c wrapper: {run:?}"
+        run.last().map(String::as_str),
+        Some(PRESEED_BUILD_OUTPUT),
+        "fresh binary payload: {run:?}"
+    );
+    assert_eq!(
+        run.first().map(String::as_str),
+        Some("env"),
+        "unset prefix head: {run:?}"
     );
     assert_eq!(
         env.get(INTERNAL_OP_ENV).map(String::as_str),

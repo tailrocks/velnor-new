@@ -21,7 +21,6 @@ use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
 use velnor_actions_workflow_renderer::steps::{
     CompileDriver, TASK_ARTIFACTS_DIR, cache_action_step, check_mbx_gating,
 };
-use velnor_actions_workflow_renderer::toolchain_env::with_credential_scrub;
 
 use crate::OrchestratorError;
 use crate::discover::Discovery;
@@ -222,10 +221,10 @@ pub(crate) fn workspace_format_report_steps(
     let report = velnor_actions_workflow_renderer::shell_step(
         REPORT_FORMAT_NAME,
         crate::matrix_step::deferred_report_argv(&outcome, &helper, &start),
-        with_credential_scrub(&BTreeMap::from([(
+        BTreeMap::from([(
             crate::task_report::TASK_ID_ENV.to_owned(),
             fmt.task_id.clone(),
-        )])),
+        )]),
     )
     .map_err(OrchestratorError::from)?;
     let upload = crate::matrix_step::crate_upload_step(PLAN_JOB_ID)?;
@@ -257,9 +256,8 @@ fn matrix_key_for(group: &velnor_actions_rust::TaskGroup) -> Result<String, Orch
 /// them it runs the `Prepare pinned tools` toolchain, and a missing tool
 /// fails as a preparation error instead of installing.
 fn format_step_env(catalog: &ToolCatalog) -> Result<BTreeMap<String, String>, OrchestratorError> {
-    let env = strings_of_env(&ToolHomes::runner_temp().exec_env(catalog))
-        .map_err(|problem| OrchestratorError::Contract { problem })?;
-    Ok(with_credential_scrub(&env))
+    strings_of_env(&ToolHomes::runner_temp().exec_env(catalog))
+        .map_err(|problem| OrchestratorError::Contract { problem })
 }
 
 /// Gate MBX presence in crate jobs against their driver selection.

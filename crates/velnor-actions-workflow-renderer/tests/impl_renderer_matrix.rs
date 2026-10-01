@@ -4,7 +4,6 @@ use velnor_actions_contract::{Concurrency, Job, Permissions, Trigger, WorkflowIr
 use velnor_actions_workflow_renderer::render::{
     MATRIX_MAX_PARALLEL_ENV, MATRIX_NEEDS_JOB_ENV, MATRIX_OUTPUT_ENV,
 };
-use velnor_actions_workflow_renderer::toolchain_env::with_credential_scrub;
 use velnor_actions_workflow_renderer::{
     CONCURRENCY_CANCEL, CONCURRENCY_GROUP, RenderContext, RenderError, checkout_step, plan_step,
     render_workflow_ir, shell_step,
@@ -78,7 +77,7 @@ fn task_job(env: &BTreeMap<String, String>, needs: Vec<String>) -> Result<Job, R
         environment: None,
         steps: vec![
             checkout_step(&checkout_pin())?,
-            shell_step("Run task", argv, with_credential_scrub(env))?,
+            shell_step("Run task", argv, env.clone())?,
         ],
     })
 }

@@ -4,8 +4,8 @@ use std::collections::BTreeMap;
 use velnor_actions_workflow_renderer::toolchain_env::{
     CREDENTIAL_UNSET_VARS, STEP_CREDENTIAL_DENYLIST, STEP_ENDPOINT_DENYLIST,
     STEP_ISOLATION_DENYLIST, TOOLCHAIN_HOME_KEYS, checked_project_task_env, checked_task_env,
-    credential_scrub, is_denied_credential_key, is_denied_endpoint_key, reject_denied_step_keys,
-    reject_privileged_task_keys, with_credential_scrub, with_credential_unset_script,
+    credential_scrub, credential_unset_prelude, is_denied_credential_key, is_denied_endpoint_key,
+    reject_denied_step_keys, reject_privileged_task_keys, with_credential_scrub,
     with_env_unset_argv, with_toolchain_homes,
 };
 
@@ -266,13 +266,17 @@ fn unset_wrappers_cover_every_unshadowable_var() {
             "ACTIONS_ID_TOKEN_REQUEST_URL",
             "ACTIONS_RUNTIME_TOKEN",
             "GITHUB_TOKEN",
+            "MISE_GITHUB_TOKEN",
+            "GH_TOKEN",
+            "GH_HOST",
+            "GH_CONFIG_DIR",
         ]
     );
-    let script = with_credential_unset_script("mise run x");
+    let prelude = credential_unset_prelude();
+    assert!(prelude.starts_with("unset "), "prelude must unset");
     for var in CREDENTIAL_UNSET_VARS {
-        assert!(script.contains(var), "{var} must unset in scripts");
+        assert!(prelude.contains(var), "{var} must unset in scripts");
     }
-    assert!(script.ends_with("mise run x"), "payload must survive");
     let argv = with_env_unset_argv(&["mise".to_owned(), "run".to_owned(), "x".to_owned()]);
     assert_eq!(argv.first().map(String::as_str), Some("env"));
     for var in CREDENTIAL_UNSET_VARS {

@@ -144,11 +144,14 @@ pub fn with_credential_scrub(env: &BTreeMap<String, String>) -> BTreeMap<String,
     scrubbed
 }
 
-/// Runner-controlled credentials no step env can shadow (D3).
+/// Credentials no rendered step may observe, even as empty strings (D3).
 ///
-/// Evidence (`actions/runner` `Runner.Worker/Handlers/ScriptHandler.cs`
-/// `RunAsync`, current `main`): the handler loads the workflow step
-/// env into `Environment`, then unconditionally overwrites every
+/// Two independent reasons force true removal (`env -u` / `unset`) over
+/// the empty-string scrub overlay. First, runner-controlled credentials
+/// cannot be shadowed: evidence (`actions/runner`
+/// `Runner.Worker/Handlers/ScriptHandler.cs` `RunAsync`, current
+/// `main`) shows the handler loads the workflow step env into
+/// `Environment`, then unconditionally overwrites every
 /// runtime-context variable (`Environment[env.Key] = env.Value`,
 /// covering `GITHUB_*`) plus `ACTIONS_ID_TOKEN_REQUEST_URL` and
 /// `ACTIONS_ID_TOKEN_REQUEST_TOKEN` from the system connection before
@@ -157,11 +160,25 @@ pub fn with_credential_scrub(env: &BTreeMap<String, String>) -> BTreeMap<String,
 /// was not observed in the `run:`-step injection path (it is served to
 /// action handlers, not inline scripts); it stays listed defensively
 /// since unsetting an absent variable is a no-op.
-pub const CREDENTIAL_UNSET_VARS: [&str; 4] = [
+///
+/// Second, empty is poison for GitHub-auth consumers: CI run
+/// 36815180228 proved `MISE_GITHUB_TOKEN=""` makes Mise send an empty
+/// bearer (GitHub API 401, breaking `ubi:` tool installs) and
+/// `GH_TOKEN=""` makes zizmor abort (`GitHub token cannot be empty`),
+/// while truly-absent variables fall back to clean unauthenticated
+/// fetches. `GH_HOST`/`GH_CONFIG_DIR` join the set for the same
+/// reason: an empty endpoint selector misroutes or breaks `gh`-family
+/// tools instead of selecting the default host. Absence also matches
+/// the Mise adapter, whose local spawns strip these keys outright.
+pub const CREDENTIAL_UNSET_VARS: [&str; 8] = [
     "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
     "ACTIONS_ID_TOKEN_REQUEST_URL",
     "ACTIONS_RUNTIME_TOKEN",
     "GITHUB_TOKEN",
+    "MISE_GITHUB_TOKEN",
+    "GH_TOKEN",
+    "GH_HOST",
+    "GH_CONFIG_DIR",
 ];
 
 /// Shell prelude unsetting the unshadowable credentials.
@@ -180,12 +197,12 @@ pub fn with_credential_unset_script(script: &str) -> String {
     format!("{} {script}", credential_unset_prelude())
 }
 
-/// Prefix one direct-exec argv with `env -u` for each unshadowable key.
+/// Prefix one direct-exec argv with `env -u` for each unset key.
 ///
 /// For fixed vectors that exec a tool directly (`mise run`, `mise
-/// exec` builds): `env` unsets the runner-controlled credentials, then
-/// execs the original argv unchanged. `env -u` is POSIX 2018 and works
-/// on GNU and BSD userlands.
+/// exec` builds): `env` removes every [`CREDENTIAL_UNSET_VARS`] entry,
+/// then execs the original argv unchanged. `env -u` is POSIX 2018 and
+/// works on GNU and BSD userlands.
 #[must_use]
 pub fn with_env_unset_argv(argv: &[String]) -> Vec<String> {
     let mut unset = Vec::with_capacity(argv.len() + 2 * CREDENTIAL_UNSET_VARS.len() + 1);
@@ -196,6 +213,28 @@ pub fn with_env_unset_argv(argv: &[String]) -> Vec<String> {
     }
     unset.extend(argv.iter().cloned());
     unset
+}
+
+/// Length of the exact `env -u` unset prefix heading argv, else zero.
+///
+/// The emitter ([`with_env_unset_argv`]) and every prefix consumer
+/// (run-line joining, token scanning) agree on this shape: `env`
+/// followed by `-u` pairs naming only [`CREDENTIAL_UNSET_VARS`]
+/// members. A bare `env` with no pairs still strips its one word;
+/// `-u` with a non-fixed name stops the prefix (payload, not wrapper).
+#[must_use]
+pub(crate) fn unset_prefix_len(argv: &[String]) -> usize {
+    if argv.first().is_none_or(|arg| arg != "env") {
+        return 0;
+    }
+    let mut len = 1;
+    while argv.len() >= len + 2
+        && argv[len] == "-u"
+        && CREDENTIAL_UNSET_VARS.contains(&argv[len + 1].as_str())
+    {
+        len += 2;
+    }
+    len
 }
 
 /// Isolation keys forbidden in project-task step env (P07-7 hook escape).

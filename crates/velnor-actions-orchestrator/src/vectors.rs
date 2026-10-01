@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 use std::ffi::{OsStr, OsString};
 
-use velnor_actions_contract::{Step, StepKind};
+use velnor_actions_contract::Step;
 use velnor_actions_mise::{
     CandidateBuild, IsolatedCommand, PinnedTool, PinnedToolExec, RouteDriver, ToolCatalog,
     custom_run::custom_task_run_argv, validate_exact_version,
@@ -193,20 +193,17 @@ pub(crate) fn custom_task_steps(
     allowlist: &[String],
     catalog: &ToolCatalog,
 ) -> Result<Vec<Step>, OrchestratorError> {
-    use velnor_actions_workflow_renderer::toolchain_env::with_env_unset_argv;
     allowlist
         .iter()
         .map(|task| {
             let run = custom_task_run_argv(task).map_err(|err| OrchestratorError::Contract {
                 problem: err.to_string(),
             })?;
-            let run = with_env_unset_argv(&run);
-            let env = crate::matrix_step::task_execution_env(catalog, &BTreeMap::new())?;
-            Ok(Step {
-                name: format!("Custom task {task}"),
-                condition: None,
-                kind: StepKind::Shell { run, env },
-            })
+            let env = crate::matrix_step::task_step_env(catalog, &BTreeMap::new())?;
+            velnor_actions_workflow_renderer::shell_step(&format!("Custom task {task}"), run, env)
+                .map_err(|err| OrchestratorError::Contract {
+                    problem: err.to_string(),
+                })
         })
         .collect()
 }

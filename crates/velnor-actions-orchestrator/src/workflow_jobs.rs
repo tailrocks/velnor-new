@@ -6,7 +6,7 @@
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 
-use velnor_actions_contract::{Job, Step, StepKind};
+use velnor_actions_contract::{Job, Step};
 use velnor_actions_mise::{
     PREPARE_PINNED_TOOLS_STEP, PinnedTool, PinnedToolExec, PreparePinnedTools, ToolCatalog,
     ToolHomes,
@@ -99,16 +99,14 @@ pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, Orches
         environment: None,
         steps: vec![
             checkout_action()?,
-            Step {
-                name: "Run actionlint".to_owned(),
-                condition: None,
-                kind: StepKind::Shell {
-                    run: argv,
-                    env: velnor_actions_workflow_renderer::toolchain_env::with_credential_scrub(
-                        &BTreeMap::new(),
-                    ),
-                },
-            },
+            velnor_actions_workflow_renderer::ambient_shell_step(
+                "Run actionlint",
+                argv,
+                BTreeMap::new(),
+            )
+            .map_err(|err| OrchestratorError::Contract {
+                problem: err.to_string(),
+            })?,
         ],
     })
 }
@@ -192,11 +190,10 @@ fn prepare_pinned_tools_step(
         .map_err(|problem| OrchestratorError::Contract { problem })?;
     let env = strings_of_env(&prepare.env(catalog))
         .map_err(|problem| OrchestratorError::Contract { problem })?;
-    Ok(Step {
-        name: PREPARE_PINNED_TOOLS_STEP.to_owned(),
-        condition: None,
-        kind: StepKind::Shell { run, env },
-    })
+    velnor_actions_workflow_renderer::ambient_shell_step(PREPARE_PINNED_TOOLS_STEP, run, env)
+        .map_err(|err| OrchestratorError::Contract {
+            problem: err.to_string(),
+        })
 }
 
 /// Typed write-request step for one internal target, mapped to contract errors.
@@ -219,6 +216,7 @@ fn checkout_history_action() -> Result<Step, OrchestratorError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use velnor_actions_contract::StepKind;
 
     /// Internal operation of one step, if any.
     fn operation_of(step: &Step) -> Option<&str> {

@@ -189,11 +189,7 @@ pub fn freshness_step(
         "{binary} generate --output-dir \"{output_dir}\" && diff -r --brief .github \"{output_dir}/.github\""
     );
     let argv = vec!["sh".to_owned(), "-c".to_owned(), script];
-    steps::shell_step(
-        CHECK_GENERATED_NAME,
-        argv,
-        crate::toolchain_env::with_credential_scrub(env),
-    )
+    steps::shell_step(CHECK_GENERATED_NAME, argv, env.clone())
 }
 
 /// Fixed plan-report upload step (`velnor-plan-<run-key>`, fails loud).
