@@ -37,7 +37,7 @@ Local equality is never presented as an upstream freshness proof.
 
 - `local-pin` / `policy-mirror`: compiled-in constants equal the
   reviewed inventory pins, and `.velnor/version-policy.toml` mirrors the
-  same pins (tools, runner default + supported labels, all eight action
+  same pins (tools, runner default + supported labels, all nine action
   records). The expected tool/action sets are asserted; a missing row
   and an unmapped extra row both fail.
 - `lock-staleness`: effective identity. Every declared dependency in
@@ -92,17 +92,19 @@ stale evidence, and any row whose recorded `latest` differs from the pin
 fails the gate. An operational lookup failure is a distinct failed check;
 it MUST NOT be reported as current (VER-3.4 gate rule).
 
-No scheduled producer exists today: no workflow runs this probe on a
-schedule. The generator CAN express a schedule trigger (contract
-`ScheduleTrigger` in `crates/velnor-actions-contract/src/workflow/`,
-landed via P05 and rendered by
-`crates/velnor-actions-workflow-renderer/src/document.rs`),
-but the committed `.github/workflows/ci.yml` carries no schedule block
-and no read-only freshness job. Until that wiring lands, evidence
-timestamps advance only through reviewed update sets, and the real-root
+The scheduled producer is `.github/workflows/freshness.yml` (weekly
+`cron: 0 6 * * 1` plus `workflow_dispatch`), generated from the
+`ScheduleTrigger` contract
+(`crates/velnor-actions-contract/src/workflow/`, landed via P05, built
+by `crates/velnor-actions-workflow-renderer/src/freshness.rs` with
+schedule wiring in
+`crates/velnor-actions-orchestrator/src/freshness_emit.rs`). It runs
+`scripts/check-freshness.sh --check-upstream` as a probe-only signal: it
+writes nothing back to the repository, so evidence timestamps still
+advance only through reviewed update sets, and the real-root
 `upstream-freshness` rows stay honestly red once `checked_at` ages past
 `check_interval_hours`.
-`--check-upstream` is the bounded probe that future job runs: one GET per
+`--check-upstream` is the bounded probe that the freshness job runs: one GET per
 row (10 s timeout, 512 KiB cap, small fixed row count), parsing only
 GitHub-releases tags, `crates.io` `max_version`, and the rust channel
 manifest's `[pkg.rust]` version. It writes nothing. Every probe row

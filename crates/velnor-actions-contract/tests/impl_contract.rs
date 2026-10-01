@@ -216,7 +216,11 @@ fn actions_overrides_validate_allowlist_and_pin_shape() {
             },
         )]),
     };
-    assert_eq!(alint.validate("cfg"), Ok(()));
+    // Alint pin is policy-owned, not overridable (version-policy.md §2, GitHub Action defaults).
+    assert!(matches!(
+        alint.validate("cfg"),
+        Err(ContractError::Config { problem, .. }) if problem == "unknown_action"
+    ));
     for (action, pin, problem) in [
         (
             "bogus/action",

@@ -78,10 +78,27 @@ pub(crate) fn run_shellcheck_bodies(
     if files.is_empty() {
         return Ok(());
     }
+    // `-S warning` pass. SC2086 (unquoted expansion) is info-level in
+    // shellcheck 0.11, so it sits below this floor; `--enable` cannot
+    // promote it (it only switches on default-off optional checks).
     let mut args = vec![
         OsString::from("-S"),
         OsString::from("warning"),
         OsString::from("--format=gcc"),
+    ];
+    args.extend(files.iter().cloned());
+    let output = shellcheck_output(catalog, args, staging)?;
+    if !output.success {
+        return Err(OrchestratorError::Validation {
+            tool: "shellcheck".to_owned(),
+            problem: diagnose(&output),
+        });
+    }
+    // Targeted SC2086 pass: `--include` restricts output to that code, so
+    // with no severity floor the exit status reflects SC2086 alone.
+    let mut args = vec![
+        OsString::from("--format=gcc"),
+        OsString::from("--include=SC2086"),
     ];
     args.extend(files);
     let output = shellcheck_output(catalog, args, staging)?;
@@ -190,8 +207,8 @@ mod tests {
         let catalog = ToolCatalog::pinned();
         let (clean, workflows) = staged_run("echo \"hi\"")?;
         run_shellcheck_bodies(&catalog, clean.path(), &workflows).map_err(|err| err.to_string())?;
-        // SC2086 is info-level in shellcheck 0.11 (below `-S warning`), so the
-        // violation pairs an unquoted var with error-level SC2070 to trip `-S warning`.
+        // Error-level SC2070 trips the `-S warning` pass (see
+        // `shellcheck_pure_sc2086_body_fails` for the targeted SC2086 pass).
         let (dirty, workflows) = staged_run("echo $FOO/bar && [ -n $BAZ ]")?;
         assert!(
             run_shellcheck_bodies(&catalog, dirty.path(), &workflows).is_err_and(|err| {
@@ -203,6 +220,22 @@ mod tests {
         assert!(
             run_shellcheck_bodies(&catalog, blocked.path(), &workflows)
                 .is_err_and(|err| { err.to_string().contains("run_block_scalar_unlintable") })
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn shellcheck_pure_sc2086_body_fails() -> Result<(), String> {
+        // SC2086 is info-level in shellcheck 0.11, so a pure-SC2086 body
+        // passes `-S warning` and only the targeted `--include=SC2086`
+        // pass fails it: deleting that pass turns this test green-on-red.
+        let catalog = ToolCatalog::pinned();
+        let (dirty, workflows) = staged_run("echo $FOO/bar")?;
+        assert!(
+            run_shellcheck_bodies(&catalog, dirty.path(), &workflows).is_err_and(|err| {
+                matches!(&err, OrchestratorError::Validation { tool, .. } if tool == "shellcheck")
+                    && err.to_string().contains("SC2086")
+            })
         );
         Ok(())
     }
