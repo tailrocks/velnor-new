@@ -3,12 +3,17 @@
 use std::fs;
 
 use tempfile::TempDir;
-use velnor_actions_orchestrator::{GenerateOptions, generate, prepare};
+use velnor_actions_contract::{FinalStatus, Plan};
+use velnor_actions_orchestrator::{
+    GenerateOptions, generate, merge_internal, merge_passed, plan_internal, prepare,
+};
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
 use super::impl_common::{
-    TestResult, config_with_branch, make_repo, plan_for, plan_for_source_change,
+    TestResult, config_with_branch, git, git_line, make_repo, passing_reports, plan_for,
+    plan_for_source_change,
 };
+use crate::impl_merge::{merge, merge_request, success_jobs};
 
 /// Preview `ci.yml` text for one config; temps keep the dirs alive.
 fn preview_yml(config: &str) -> Result<(TempDir, TempDir, String), Box<dyn std::error::Error>> {
@@ -88,6 +93,73 @@ fn plan_crate_agreement() -> TestResult {
     let (_repo, _parent, text) = preview_yml(ignored)?;
     assert!(!text.contains("strategy:"), "static yaml:\n{text}");
     assert!(!text.contains("fromJSON"), "static yaml:\n{text}");
+    Ok(())
+}
+
+#[test]
+fn ignored_rust_merges_to_no_work_never_passes() -> TestResult {
+    let ignored =
+        "schema = 1\n[workflow]\ndefault_branch = \"testmain\"\n[stacks]\nignore = [\"rust\"]\n";
+    let repo = make_repo(ignored)?;
+    let root = repo.path();
+    git(&["add", "."], root)?;
+    git(&["commit", "-m", "one"], root)?;
+    let head = git_line(&["rev-parse", "HEAD"], root)?;
+    let request = serde_json::json!({
+        "schema": 1,
+        "run_key": "local",
+        "base": head,
+        "head": head,
+        "event": "pull_request",
+        "root": root.display().to_string(),
+    });
+    let response = plan_internal(&request.to_string())?;
+    let value: serde_json::Value = serde_json::from_str(&response)?;
+    let plan: Plan = serde_json::from_value(value["plan"].clone())?;
+    plan.validate()?;
+    assert!(plan.task_ids.is_empty(), "ignored Rust plans zero work");
+    assert!(plan.obligations.is_empty(), "ignored Rust plans zero work");
+    assert!(
+        plan.matrix.include.is_empty(),
+        "ignored Rust plans zero legs"
+    );
+
+    // Zero obligations with green validators merge to no_work, and the
+    // required gate stays red: no_work proves nothing validated.
+    let matrix = serde_json::to_value(&plan.matrix)?;
+    let request = merge_request(&plan, &matrix, &serde_json::json!([]), &success_jobs());
+    let final_report = merge(&request)?;
+    final_report.validate()?;
+    assert_eq!(final_report.status, FinalStatus::NoWork);
+    assert!(final_report.expected_report_ids.is_empty());
+    assert_eq!(final_report.counts.selected, 0);
+    assert_eq!(final_report.counts.executed, 0);
+    assert_eq!(final_report.counts.covered, 0);
+    assert_eq!(final_report.counts.failed, 0);
+    assert_eq!(final_report.counts.blocked, 0);
+    assert_eq!(final_report.counts.not_run, 0);
+    let merged = merge_internal(&request.to_string())?;
+    assert!(
+        !merge_passed(&merged)?,
+        "no work proves nothing, gate stays red"
+    );
+
+    // Contrast: the same fixture without the ignore selects obligations
+    // whose passing reports merge to passed with a green gate.
+    let (_repo, plan) = plan_for_source_change()?;
+    assert!(!plan.task_ids.is_empty(), "fixture must select work");
+    let reports = passing_reports(&plan)?;
+    let matrix = serde_json::to_value(&plan.matrix)?;
+    let request = merge_request(
+        &plan,
+        &matrix,
+        &serde_json::to_value(&reports)?,
+        &success_jobs(),
+    );
+    let final_report = merge(&request)?;
+    assert_eq!(final_report.status, FinalStatus::Passed);
+    let merged = merge_internal(&request.to_string())?;
+    assert!(merge_passed(&merged)?, "passing work greens the gate");
     Ok(())
 }
 
