@@ -95,6 +95,32 @@ fn merge_with_validator(
     merge(&request)
 }
 
+/// Merge verdict over passing crates with `missing` never reporting.
+///
+/// The inventory still declares the validator, so merge marks it
+/// `missing` and fails closed with `planning_failed`.
+fn merge_omitting_validator(
+    plan: &Plan,
+    inventory: &[String],
+    missing: &str,
+) -> Result<FinalReport, Box<dyn std::error::Error>> {
+    let reports = passing_reports(plan)?;
+    let jobs: Vec<serde_json::Value> = inventory
+        .iter()
+        .filter(|id| id.as_str() != missing)
+        .map(|id| serde_json::json!({"job_id": id, "conclusion": "success"}))
+        .collect();
+    let plan_value = serde_json::to_value(plan)?;
+    let mut request = merge_request(
+        &plan_value,
+        &plan_value["matrix"].clone(),
+        &serde_json::to_value(&reports)?,
+        &serde_json::Value::Array(jobs),
+    );
+    request["required_job_ids"] = serde_json::to_value(inventory)?;
+    merge(&request)
+}
+
 /// Assert the verdict blames `failing` with `conclusion`.
 fn assert_validator_blamed(
     report: &FinalReport,
@@ -168,6 +194,87 @@ fn rendered_inventory_validator_failure_fails_required() -> TestResult {
             Ok(())
         },
     )
+}
+
+/// Every Required-gating validator job ID in the rendered workflow.
+fn required_validators() -> [&'static str; 6] {
+    [
+        "plan",
+        "actionlint",
+        "alint",
+        "cargo-deny",
+        "cargo-machete",
+        "zizmor",
+    ]
+}
+
+/// Drive one validator through every negative conclusion.
+///
+/// Each case runs against passing crate reports with a nonempty
+/// Required inventory; the verdict must fail and blame the validator.
+fn assert_validator_negatives(
+    plan: &Plan,
+    inventory: &[String],
+    validator: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    for (conclusion, verdict, blame) in [
+        ("failure", FinalStatus::Failed, JobConclusion::Failure),
+        (
+            "cancelled",
+            FinalStatus::Cancelled,
+            JobConclusion::Cancelled,
+        ),
+        ("skipped", FinalStatus::NotRun, JobConclusion::Skipped),
+    ] {
+        let report = merge_with_validator(plan, inventory, validator, conclusion)?;
+        assert!(
+            !report.required_job_results.is_empty(),
+            "{validator} keeps a nonempty Required"
+        );
+        assert_validator_blamed(&report, validator, blame, verdict);
+    }
+    let report = merge_omitting_validator(plan, inventory, validator)?;
+    assert!(
+        !report.required_job_results.is_empty(),
+        "{validator} keeps a nonempty Required"
+    );
+    assert_validator_blamed(
+        &report,
+        validator,
+        JobConclusion::Missing,
+        FinalStatus::PlanningFailed,
+    );
+    Ok(())
+}
+
+#[test]
+fn rendered_inventory_each_validator_fails_required() -> TestResult {
+    without_ambient_identity("rendered_inventory_each_validator_fails_required", || {
+        let (repo, base, head) = velnor_repo_with_work()?;
+        let root = repo.path();
+
+        let yaml = rendered_workflow(&prepare(root)?)?;
+        let inventory = rendered_needs_inventory(&yaml)?;
+        for validator in required_validators() {
+            assert!(
+                inventory.contains(&validator.to_owned()),
+                "{validator} gates Required: {inventory:?}"
+            );
+        }
+
+        let request = serde_json::json!({
+            "schema": 1, "run_key": "local", "base": base, "head": head,
+            "event": "pull_request", "root": root.display().to_string(),
+        });
+        let response = plan_internal(&request.to_string())?;
+        let plan: Plan = serde_json::from_value(
+            serde_json::from_str::<serde_json::Value>(&response)?["plan"].clone(),
+        )?;
+        for validator in required_validators() {
+            assert_validator_negatives(&plan, &inventory, validator)?;
+        }
+        Ok(())
+    })
 }
 
 /// Velnor-policy repo with one source change plus its base/head revisions.
