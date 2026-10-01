@@ -1,12 +1,13 @@
 //! Always-on lint job cases: emitted from typed IR for both policies.
 use std::collections::BTreeMap;
 use velnor_actions_contract::{
-    Concurrency, Job, Permissions, Trigger, VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
+    Concurrency, GeneratorValidation, Job, Permissions, Trigger, ValidatorKind,
+    VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
 };
 use velnor_actions_workflow_renderer::toolchain_env::with_credential_scrub;
 use velnor_actions_workflow_renderer::{
-    CONCURRENCY_CANCEL, CONCURRENCY_GROUP, RenderContext, RenderError, checkout_step, merge_step,
-    render_workflow_ir, shell_step,
+    ALINT_USES, CONCURRENCY_CANCEL, CONCURRENCY_GROUP, RenderContext, RenderError,
+    ValidatorCommand, checkout_step, merge_step, render_workflow_ir, shell_step,
 };
 
 const VERSION: &str = "0.1.0";
@@ -117,6 +118,21 @@ fn velnor_support() -> VelnorSupportWorkflow {
     }
 }
 
+fn validator_commands() -> Vec<ValidatorCommand> {
+    [
+        ValidatorKind::CargoDeny,
+        ValidatorKind::CargoMachete,
+        ValidatorKind::Zizmor,
+    ]
+    .iter()
+    .map(|validator| ValidatorCommand {
+        validator: *validator,
+        name: "Deny".to_owned(),
+        argv: vec!["deny".to_owned()],
+    })
+    .collect()
+}
+
 #[test]
 fn consumer_emits_lint_from_typed_ir() -> Result<(), RenderError> {
     let text = render_workflow_ir(
@@ -170,5 +186,33 @@ fn bad_lint_display_rejected_on_both_policies() -> Result<(), RenderError> {
     .err()
     .ok_or_else(|| RenderError::InvalidWorkflow("velnor accepted".to_owned()))?;
     assert!(err.to_string().contains("bad_lint_name"), "got {err}");
+    Ok(())
+}
+
+#[test]
+fn velnor_policy_emits_full_sha_alint_pin() -> Result<(), RenderError> {
+    let mut ctx = fixture_ctx();
+    ctx.validator_commands = validator_commands();
+    let support =
+        WorkflowPolicy::VelnorRepositoryV1.support_workflow(GeneratorValidation::Bootstrap);
+    let text = render_workflow_ir(
+        &fixture_ir()?,
+        WorkflowPolicy::VelnorRepositoryV1,
+        Some(&support),
+        &ctx,
+    )?;
+    assert_eq!(
+        ALINT_USES,
+        "asamarts/alint@9f9d34ba0eae3888299b9e570f43338b0e7f2cdb"
+    );
+    assert!(text.contains("  alint:"), "alint job missing:\n{text}");
+    assert!(
+        text.contains("uses: asamarts/alint@9f9d34ba0eae3888299b9e570f43338b0e7f2cdb"),
+        "full-SHA pin missing:\n{text}"
+    );
+    assert!(
+        !text.contains("asamarts/alint@v"),
+        "tag ref emitted:\n{text}"
+    );
     Ok(())
 }

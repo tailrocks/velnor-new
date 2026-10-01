@@ -48,15 +48,19 @@ fn expression_spans(text: &str) -> Option<Vec<&str>> {
 
 /// Exact `${{ }}` inners permitted in shell-step env values.
 ///
-/// Runner paths, the release tag, plan-matrix coordinates, and the two
-/// fixed secret bindings: bootstrap registry plus the release forge
-/// token (whose placements the release gates still police separately).
+/// Runner paths, the release tag, plan-matrix coordinates, the two
+/// fixed secret bindings (bootstrap registry plus the release forge
+/// token, whose placements the release gates still police separately),
+/// and the push-gated cache-mode selector (a pure function of the
+/// event name over string literals; the generator pins it on MBX
+/// restore steps so PR runs can never become cache writers).
 /// Notably absent: `github.token` (render-time fetch binding only)
 /// and run IDs (never in env).
-const ENV_EXPRESSIONS: [&str; 5] = [
+const ENV_EXPRESSIONS: [&str; 6] = [
     "runner.temp",
     "github.ref_name",
     "github.event_name",
+    "github.event_name == 'push' && 'write' || 'read'",
     "secrets.CARGO_REGISTRY_TOKEN",
     "secrets.GITHUB_TOKEN",
 ];

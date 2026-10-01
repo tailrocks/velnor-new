@@ -222,11 +222,12 @@ fn release_job_to_yaml(job: &ReleaseJobSpec) -> Result<Yaml, RenderError> {
 fn release_step_to_yaml(step: &Step) -> Result<Yaml, RenderError> {
     steps::scan_for_private_subcommands(&step.name)?;
     match &step.kind {
-        StepKind::Action { uses, with } => {
+        StepKind::Action { uses, with, env } => {
             steps::validate_uses(uses)?;
             for entry in with.keys().chain(with.values()) {
                 steps::scan_for_private_subcommands(entry)?;
             }
+            commands::validate_env(env)?;
             let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
             if let Some(condition) = &step.condition {
                 steps::scan_for_private_subcommands(condition)?;
@@ -239,6 +240,13 @@ fn release_step_to_yaml(step: &Step) -> Result<Yaml, RenderError> {
                     .map(|(key, value)| (key.clone(), Yaml::str(value.clone())))
                     .collect();
                 entries.push(("with".to_owned(), Yaml::Map(inputs)));
+            }
+            if !env.is_empty() {
+                let vars: Vec<(String, Yaml)> = env
+                    .iter()
+                    .map(|(key, value)| (key.clone(), Yaml::str(value.clone())))
+                    .collect();
+                entries.push(("env".to_owned(), Yaml::Map(vars)));
             }
             Ok(Yaml::Map(entries))
         }
