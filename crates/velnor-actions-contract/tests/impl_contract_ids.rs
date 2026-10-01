@@ -211,6 +211,10 @@ fn shard_suffix_parses_once_everywhere() {
         Some((base, 2, 4))
     );
     assert_eq!(split_shard_suffix(base), None);
+    assert_eq!(
+        split_shard_suffix("stack/rust/root/nextest/default/shard-12-of-34"),
+        Some((base, 12, 34))
+    );
     // Previously divergent: split_once took the first suffix, rsplit_once
     // the last. The canonical parser rejects every non-trailing shape.
     for divergent in [
@@ -224,6 +228,14 @@ fn shard_suffix_parses_once_everywhere() {
         "stack/rust/root/nextest/default/shard-1",
         "stack/rust/root/nextest/default/shard-1-of-2-of-3",
         "stack/rust/root/nextest/default/shard-4294967296-of-2",
+        // Non-canonical numerals alias canonical shards (`u32::from_str`
+        // accepts `+1` and `01`); validated must equal canonical.
+        "stack/rust/root/nextest/default/shard-+1-of-2",
+        "stack/rust/root/nextest/default/shard-1-of-02",
+        "stack/rust/root/nextest/default/shard-01-of-02",
+        "stack/rust/root/nextest/default/shard-1-of-+2",
+        "stack/rust/root/nextest/default/shard-0-of-2",
+        "stack/rust/root/nextest/default/shard-1-of-2 ",
     ] {
         assert_eq!(split_shard_suffix(divergent), None, "{divergent}");
     }
