@@ -6,6 +6,8 @@
 
 use std::ffi::OsString;
 
+use velnor_actions_contract::is_valid_feature_name;
+
 use crate::catalog::ToolCatalog;
 use crate::command::IsolatedCommand;
 use crate::error::MiseError;
@@ -56,7 +58,9 @@ impl NextestArchive {
     /// # Errors
     ///
     /// Returns [`MiseError::InvalidNextestInput`] for an empty or malformed
-    /// package, feature, target, or profile value.
+    /// package, feature, target, or profile value. Feature values use the
+    /// contract feature-name charset, so config-accepted weak-dependency
+    /// syntax (`dep?/feat`, `dep:feat`) survives archive construction.
     pub fn with_profile(
         driver: NextestDriver,
         package: &str,
@@ -68,7 +72,12 @@ impl NextestArchive {
         let mut sorted = features.to_vec();
         sorted.sort();
         for feature in &sorted {
-            check_token("feature", feature)?;
+            if !is_valid_feature_name(feature) {
+                return Err(MiseError::InvalidNextestInput {
+                    field: "feature".to_owned(),
+                    value: feature.to_owned(),
+                });
+            }
         }
         let triple = target
             .map(|value| check_token("target", value).map(|()| value.to_owned()))
