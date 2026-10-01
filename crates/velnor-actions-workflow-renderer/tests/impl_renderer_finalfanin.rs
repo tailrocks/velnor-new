@@ -251,6 +251,88 @@ fn candidate_mode_downloads_attestation_before_merge() -> Result<(), RenderError
 }
 
 #[test]
+fn expected_inventory_excludes_post_gate_jobs() -> Result<(), RenderError> {
+    use velnor_actions_contract::NEEDS_EXPECTED_ENV;
+    use velnor_actions_workflow_renderer::render::{
+        FINAL_CONDITION, FINAL_JOB_ID, PLAN_JOB_ID, PUBLISH_JOB_ID,
+    };
+    let plan = job(
+        PLAN_JOB_ID,
+        "Plan",
+        Vec::new(),
+        vec![
+            checkout_step(&checkout_pin())?,
+            acquire_fixture()?,
+            plan_step(),
+        ],
+    );
+    let (final_id, mut final_job) = job(
+        FINAL_JOB_ID,
+        "Required",
+        vec![PLAN_JOB_ID.to_owned()],
+        vec![
+            acquire_fixture()?,
+            write_request_step("merge-v1")?,
+            merge_step(),
+        ],
+    );
+    final_job.condition = Some(FINAL_CONDITION.to_owned());
+    // Downstream of the gate by construction: needs the gate, push-gated
+    // like the real baseline publisher, so PR runs always skip it.
+    let (publish_id, mut publish) = job(
+        PUBLISH_JOB_ID,
+        "Publish baseline",
+        vec![FINAL_JOB_ID.to_owned()],
+        vec![checkout_step(&checkout_pin())?],
+    );
+    publish.condition =
+        Some("github.event_name == 'push' && github.ref == 'refs/heads/main'".to_owned());
+    let ir = fixture_ir(vec![plan, (final_id, final_job), (publish_id, publish)]);
+    // Acyclic by construction: the gate needs upstream only, the
+    // downstream job needs the gate.
+    assert_eq!(ir.jobs[FINAL_JOB_ID].needs, [PLAN_JOB_ID.to_owned()]);
+    assert!(
+        !ir.jobs[FINAL_JOB_ID]
+            .needs
+            .contains(&PUBLISH_JOB_ID.to_owned())
+    );
+    assert_eq!(ir.jobs[PUBLISH_JOB_ID].needs, [FINAL_JOB_ID.to_owned()]);
+    let text = strict(&ir, &fixture_ctx())?;
+    assert!(
+        text.contains(&format!("  {PUBLISH_JOB_ID}:")),
+        "downstream job renders: {text}"
+    );
+    let conclusions = NeedsConclusions::from_finalized_jobs(FINAL_JOB_ID, &ir.jobs)
+        .map_err(RenderError::Contract)?;
+    assert_eq!(conclusions.inventory, vec![PLAN_JOB_ID.to_owned()]);
+    assert!(conclusions.gate_matches(&ir.jobs));
+    let (key, value) = conclusions.expected_env();
+    assert_eq!(key, NEEDS_EXPECTED_ENV);
+    let merge = step_block(&text, "Merge reports");
+    let line = merge
+        .lines()
+        .find(|line| line.contains(NEEDS_EXPECTED_ENV))
+        .unwrap_or_else(|| panic!("merge lacks the expected line:\n{merge}"));
+    let scalar = line
+        .split_once(NEEDS_EXPECTED_ENV)
+        .unwrap_or(("", ""))
+        .1
+        .trim()
+        .trim_start_matches(':')
+        .trim();
+    let unquoted = scalar
+        .strip_prefix('"')
+        .and_then(|inner| inner.strip_suffix('"'))
+        .unwrap_or_default();
+    assert_eq!(unquoted.replace("\\\"", "\""), value);
+    assert!(
+        !merge.contains(PUBLISH_JOB_ID),
+        "merge expects upstream only:\n{merge}"
+    );
+    Ok(())
+}
+
+#[test]
 fn fetch_step_carries_auth_without_request_file() -> Result<(), RenderError> {
     let text = final_text()?;
     let fetch = step_block(&text, "Download every expected matrix artifact");
