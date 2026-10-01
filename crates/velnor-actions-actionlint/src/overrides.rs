@@ -5,8 +5,8 @@
 
 use crate::ActionlintError;
 use crate::actions::{
-    ALLOWED_ACTIONS, CHECKOUT_ACTION, PinnedActionRef, RUST_CACHE_ACTION, is_full_sha,
-    is_version_tag, split_key,
+    ALINT_ACTION, ALLOWED_ACTIONS, CHECKOUT_ACTION, PinnedActionRef, RUST_CACHE_ACTION,
+    is_full_sha, is_version_tag, split_key,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -47,18 +47,19 @@ impl ApprovedPinCatalog {
         Self::default()
     }
 
-    /// Insert one approved pair for an allowlisted action.
+    /// Insert one approved pair for an overridable action.
     ///
     /// # Errors
     ///
-    /// Returns [`ActionlintError`] for unknown actions or malformed pairs.
+    /// Returns [`ActionlintError`] for unknown or policy-owned actions
+    /// and for malformed pairs.
     pub fn insert(
         &mut self,
         action: &str,
         sha: &str,
         version: &str,
     ) -> Result<(), ActionlintError> {
-        if !ALLOWED_ACTIONS.contains(&action) {
+        if !ALLOWED_ACTIONS.contains(&action) || is_policy_owned(action) {
             return Err(ActionlintError::OverrideRejected {
                 action: action.to_owned(),
                 problem: "action_not_overridable".to_owned(),
@@ -84,8 +85,8 @@ impl ApprovedPinCatalog {
     ///
     /// # Errors
     ///
-    /// Returns [`ActionlintError`] for unknown actions, malformed
-    /// pairs, and pairs absent from the catalog.
+    /// Returns [`ActionlintError`] for unknown actions, policy-owned
+    /// actions, malformed pairs, and pairs absent from the catalog.
     pub fn validate_override(
         &self,
         request: &ActionPinOverride,
@@ -93,6 +94,12 @@ impl ApprovedPinCatalog {
         if !ALLOWED_ACTIONS.contains(&request.action.as_str()) {
             return Err(ActionlintError::UnknownAction {
                 uses: request.action.clone(),
+            });
+        }
+        if is_policy_owned(&request.action) {
+            return Err(ActionlintError::OverrideRejected {
+                action: request.action.clone(),
+                problem: "action_not_overridable".to_owned(),
             });
         }
         if !is_full_sha(&request.sha) {
@@ -218,6 +225,13 @@ pub fn validate_action_inputs(
         check_input_value(&schema.action, name, value)?;
     }
     Ok(())
+}
+
+/// Policy-owned actions are emittable but never consumer-overridable
+/// (version-policy §2, GitHub Action defaults); mirrors the contract's
+/// exclusion of alint from `OVERRIDABLE_ACTIONS`.
+fn is_policy_owned(action: &str) -> bool {
+    action == ALINT_ACTION
 }
 
 /// Reject empty and multi-line input values (YAML-injection safety).

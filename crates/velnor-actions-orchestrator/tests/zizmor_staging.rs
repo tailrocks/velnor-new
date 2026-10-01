@@ -1,4 +1,4 @@
-//! Staging-only zizmor config cases: blessed-tag green, targeted ignore.
+//! Staging-only zizmor config cases: zero-ignore staging config over full-SHA refs.
 
 use std::ffi::OsString;
 use std::fs;

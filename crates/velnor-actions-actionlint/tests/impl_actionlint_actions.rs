@@ -160,31 +160,28 @@ fn override_unknown_action_rejected() {
 }
 
 #[test]
-fn override_alint_approved_pair_accepted() {
+fn override_alint_approved_pair_rejected() {
+    // The Alint pin is policy-owned, not consumer-overridable
+    // (docs/proposed/version-policy.md §2 (GitHub Action defaults)).
     let mut catalog = ApprovedPinCatalog::new();
-    assert_eq!(
-        catalog.insert("asamarts/alint", ALINT_ACTION_SHA, ALINT_ACTION_VERSION),
-        Ok(())
-    );
-    let request = ActionPinOverride {
-        action: "asamarts/alint".to_owned(),
-        sha: ALINT_ACTION_SHA.to_owned(),
-        version: ALINT_ACTION_VERSION.to_owned(),
-    };
-    let validated = catalog.validate_override(&request);
-    assert!(validated.is_ok());
-    if let Ok(reference) = validated {
-        assert_eq!(reference, PinnedActionRef::alint());
-    }
-    let foreign = ActionPinOverride {
-        action: "asamarts/alint".to_owned(),
-        sha: CHECKOUT_SHA.to_owned(),
-        version: ALINT_ACTION_VERSION.to_owned(),
-    };
     assert!(matches!(
-        catalog.validate_override(&foreign),
+        catalog.insert("asamarts/alint", ALINT_ACTION_SHA, ALINT_ACTION_VERSION),
         Err(ActionlintError::OverrideRejected { .. })
     ));
+    for (sha, version) in [
+        (ALINT_ACTION_SHA, ALINT_ACTION_VERSION),
+        (CHECKOUT_SHA, ALINT_ACTION_VERSION),
+    ] {
+        let request = ActionPinOverride {
+            action: "asamarts/alint".to_owned(),
+            sha: sha.to_owned(),
+            version: version.to_owned(),
+        };
+        assert!(matches!(
+            catalog.validate_override(&request),
+            Err(ActionlintError::OverrideRejected { .. })
+        ));
+    }
 }
 
 #[test]

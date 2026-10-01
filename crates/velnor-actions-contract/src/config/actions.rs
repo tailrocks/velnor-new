@@ -5,11 +5,13 @@ use std::collections::BTreeMap;
 
 /// Actions accepting per-project pin overrides (`[actions.overrides]` keys).
 ///
-/// Mirrors `ALLOWED_ACTIONS` in
-/// `crates/velnor-actions-actionlint/src/actions.rs`; the shape rules below
+/// Intentional subset of `ALLOWED_ACTIONS` in
+/// `crates/velnor-actions-actionlint/src/actions.rs`: the policy-owned
+/// `asamarts/alint` pin is emittable but not consumer-overridable
+/// (version-policy §2, GitHub Action defaults). The shape rules below
 /// follow `overrides.rs` by convention (the contract cannot depend on
 /// actionlint, which owns the approved `(sha, version)` catalog check).
-pub const OVERRIDABLE_ACTIONS: [&str; 9] = [
+pub const OVERRIDABLE_ACTIONS: [&str; 8] = [
     "jdx/mise-action",
     "actions/checkout",
     "actions/download-artifact",
@@ -17,7 +19,6 @@ pub const OVERRIDABLE_ACTIONS: [&str; 9] = [
     "actions/cache/restore",
     "actions/cache/save",
     "jdx/mr-boxington-action",
-    "asamarts/alint",
     "Swatinem/rust-cache",
 ];
 
