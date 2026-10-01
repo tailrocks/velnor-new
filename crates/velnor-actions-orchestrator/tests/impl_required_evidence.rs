@@ -232,6 +232,7 @@ fn missing_report_file_fails_closed() -> TestResult {
             .find(|entry| entry.report_id == report.report_id)
             .ok_or_else(|| std::io::Error::other("report without entry"))?;
         let leg = run.join("reports").join(&entry.artifact_id);
+        let leg = leg.join(&entry.matrix_key);
         std::fs::create_dir_all(&leg)?;
         std::fs::write(
             leg.join("matrix-report.json"),

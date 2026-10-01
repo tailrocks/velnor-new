@@ -218,6 +218,8 @@ pub(crate) fn plan_group(
     );
     let run = velnor_actions_workflow_renderer::join_argv_for_run(&argv)
         .map_err(|err| internal(&err.to_string()))?;
+    let job_id = crate::crate_job_ids::job_id_for_member(&inputs.discovery.task_groups, group)
+        .ok_or_else(|| internal("crate_job_id_missing"))?;
     let mut entry = MatrixEntry::derive(
         velnor_actions_rust::STACK_ID,
         &group.task_id,
@@ -227,6 +229,7 @@ pub(crate) fn plan_group(
         execute_ids(group),
         &input_digest,
         inputs.run_key,
+        &job_id,
     )
     .map_err(internal_contract)?;
     let cache_ids = cache_ids_for(group, inputs.label, &toolchain).map_err(internal_contract)?;

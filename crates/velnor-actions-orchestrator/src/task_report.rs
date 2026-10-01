@@ -391,5 +391,8 @@ pub(crate) fn write_entry_reports(
 }
 
 #[cfg(test)]
+#[path = "task_report_merge_tests.rs"]
+mod task_report_merge_tests;
+#[cfg(test)]
 #[path = "task_report_tests.rs"]
 mod task_report_tests;

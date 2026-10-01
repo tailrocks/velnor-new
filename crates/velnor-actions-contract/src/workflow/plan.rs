@@ -10,7 +10,7 @@ use crate::graph::{
     TaskEdge, check_sorted, check_sorted_by, check_sorted_unique, validate_plan_edges,
 };
 use crate::ids::{
-    artifact_id_for_matrix, matrix_id_for_task_group, matrix_key_for_id, plan_id_for_run,
+    artifact_id_for_crate_job, matrix_id_for_task_group, matrix_key_for_id, plan_id_for_run,
     report_id_for_matrix, validate_id, validate_run_key, validate_task_id,
 };
 use serde::{Deserialize, Serialize};
@@ -39,7 +39,9 @@ pub struct MatrixEntry {
     pub input_digest: String,
     /// Derived report ID.
     pub report_id: String,
-    /// Derived artifact name.
+    /// Owning job ID (crate job or plan job); selects the artifact below.
+    pub job_id: String,
+    /// Derived job artifact name carrying this entry's reports.
     pub artifact_id: String,
     /// Cache identity digests recorded in the plan (cache §1).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -190,7 +192,7 @@ impl MatrixEntry {
     /// # Errors
     #[expect(
         clippy::too_many_arguments,
-        reason = "entry identity needs all eight inputs at once"
+        reason = "entry identity needs all nine inputs at once"
     )]
     pub fn derive(
         stack_id: &str,
@@ -201,6 +203,7 @@ impl MatrixEntry {
         execute_task_ids: ExecuteTaskIds,
         input_digest: &str,
         run_key: &str,
+        job_id: &str,
     ) -> Result<Self, ContractError> {
         let id = matrix_id_for_task_group(stack_id, task_group_id)?;
         let matrix_key = matrix_key_for_id(&id)?;
@@ -211,9 +214,10 @@ impl MatrixEntry {
         execute_task_ids.validate()?;
         Ok(Self {
             report_id: report_id_for_matrix(run_key, &matrix_key)?,
-            artifact_id: artifact_id_for_matrix(run_key, &matrix_key)?,
+            artifact_id: artifact_id_for_crate_job(run_key, job_id)?,
             id,
             matrix_key,
+            job_id: job_id.to_owned(),
             stack_id: stack_id.to_owned(),
             task_id: task_group_id.to_owned(),
             run: run.to_owned(),
@@ -238,7 +242,7 @@ impl MatrixEntry {
         if report_id_for_matrix(run_key, &self.matrix_key)? != self.report_id {
             return Err(ContractError::identity("report_id", "report_mismatch"));
         }
-        if artifact_id_for_matrix(run_key, &self.matrix_key)? != self.artifact_id {
+        if artifact_id_for_crate_job(run_key, &self.job_id)? != self.artifact_id {
             return Err(ContractError::identity("artifact_id", "artifact_mismatch"));
         }
         validate_digest(&self.input_digest)?;

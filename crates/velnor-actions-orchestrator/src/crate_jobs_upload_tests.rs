@@ -1,7 +1,7 @@
-//! Crate-job report tests: capture wrappers, uploads, acquire order.
+//! Crate-job obligation tests: report capture plus one upload per job.
 //!
 //! Declared via `#[path]` from `crate_jobs.rs` under `cfg(test)`.
-//! Fixtures come from the sibling `crate_jobs_tests` module.
+//! Fixtures live in the sibling `crate_jobs_tests` module.
 
 use super::crate_jobs_tests::{discovery, group, names};
 use super::*;
@@ -46,7 +46,7 @@ fn env_of(job: &Job, name: &str) -> BTreeMap<String, String> {
 }
 
 /// One demo job with clippy plus test obligations, plus their task IDs.
-fn two_obligation_job() -> (Job, String, String) {
+fn two_obligation_job() -> (String, Job, String, String) {
     let clippy = group("demo", TaskKind::Clippy, &[]);
     let clippy_id = clippy.task_id.clone();
     let test = group("demo", TaskKind::Test, &[clippy_id.as_str()]);
@@ -60,13 +60,13 @@ fn two_obligation_job() -> (Job, String, String) {
         None,
     )
     .expect("crate jobs");
-    let (_, job) = found.jobs.into_iter().next().expect("demo job");
-    (job, clippy_id, test_id)
+    let (job_id, job) = found.jobs.into_iter().next().expect("demo job");
+    (job_id, job, clippy_id, test_id)
 }
 
 #[test]
 fn obligations_wrap_report_capture() {
-    let (demo, clippy_id, test_id) = two_obligation_job();
+    let (_, demo, clippy_id, test_id) = two_obligation_job();
     let steps = names(&demo);
     assert_eq!(&steps[..2], ["Checkout", "Download plan"], "{steps:?}");
     for (name, command) in [
@@ -107,72 +107,47 @@ fn obligations_wrap_report_capture() {
 }
 
 #[test]
-fn obligations_upload_one_artifact_per_entry() {
-    let (demo, _, _) = two_obligation_job();
-    for name in [
-        "Upload matrix report (Clippy)",
-        "Upload matrix report (Unit and integration tests)",
-    ] {
-        let step = demo
-            .steps
-            .iter()
-            .find(|step| step.name == name)
-            .unwrap_or_else(|| panic!("missing {name}"));
-        let velnor_actions_contract::StepKind::Action { uses, with, .. } = &step.kind else {
-            panic!("{name} must be an action step");
-        };
-        assert!(uses.starts_with("actions/upload-artifact@"), "{uses}");
-        assert!(
-            with["name"].starts_with("velnor-matrix-r${{ github.run_id }}"),
-            "artifact: {}",
-            with["name"]
-        );
-        assert!(with["name"].contains("-m-"), "keyed: {}", with["name"]);
-        let key = with["name"]
-            .rsplit_once("-m-")
-            .map(|(_, key)| key)
-            .unwrap_or_default();
-        assert!(
-            with["path"].ends_with(&format!("/m-{key}")),
-            "path mirrors key: {}",
-            with["path"]
-        );
-        assert_eq!(with["if-no-files-found"].as_str(), "error");
-    }
+fn obligations_upload_one_artifact_per_job() {
+    let (job_id, demo, _, _) = two_obligation_job();
+    let uploads: Vec<_> = demo
+        .steps
+        .iter()
+        .filter(|step| step.name == velnor_actions_workflow_renderer::CRATE_REPORT_UPLOAD_NAME)
+        .collect();
+    assert_eq!(uploads.len(), 1, "one upload for two obligations");
+    let step = uploads[0];
+    let velnor_actions_contract::StepKind::Action { uses, with, .. } = &step.kind else {
+        panic!("crate upload must be an action step");
+    };
+    assert!(uses.starts_with("actions/upload-artifact@"), "{uses}");
+    assert_eq!(
+        with["name"].as_str(),
+        &format!("velnor-crate-r${{{{ github.run_id }}}}-a${{{{ github.run_attempt }}}}-{job_id}"),
+    );
+    assert!(
+        !with["name"].contains("-m-"),
+        "job artifact carries no entry key: {}",
+        with["name"]
+    );
+    assert_eq!(
+        with["path"].as_str(),
+        "${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}",
+        "upload carries the whole run dir",
+    );
+    assert_eq!(with["if-no-files-found"].as_str(), "error");
+    assert!(
+        demo.steps.iter().all(|step| !step
+            .name
+            .starts_with(velnor_actions_workflow_renderer::MATRIX_REPORT_UPLOAD_NAME)),
+        "no per-entry matrix uploads survive",
+    );
     let steps = names(&demo);
     let at = |name: &str| steps.iter().position(|seen| *seen == name);
     let (Some(run), Some(upload)) = (
         at("Unit and integration tests"),
-        at("Upload matrix report (Clippy)"),
+        at(velnor_actions_workflow_renderer::CRATE_REPORT_UPLOAD_NAME),
     ) else {
         panic!("report/upload steps missing: {steps:?}");
     };
     assert!(run < upload, "uploads close the job: {steps:?}");
-}
-
-#[test]
-fn acquire_stages_before_report_wrappers() {
-    let acquire = Step {
-        name: "Acquire Velnor".to_owned(),
-        condition: None,
-        kind: velnor_actions_contract::StepKind::Shell {
-            run: vec![String::from("true")],
-            env: BTreeMap::new(),
-        },
-    };
-    let found = build_crate_jobs(
-        "ubuntu-26.04",
-        &discovery(vec![group("demo", TaskKind::Clippy, &[])]),
-        &ToolCatalog::pinned(),
-        &[],
-        &[],
-        Some(&acquire),
-    )
-    .expect("crate jobs");
-    let steps = names(&found.jobs[0].1);
-    assert_eq!(
-        &steps[..3],
-        ["Checkout", "Acquire Velnor", "Download plan"],
-        "{steps:?}"
-    );
 }

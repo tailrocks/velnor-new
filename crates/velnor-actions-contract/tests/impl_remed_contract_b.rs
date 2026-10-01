@@ -139,6 +139,7 @@ fn wf_matrix_entry_requires_registered_stack() -> Result<(), ContractError> {
         },
         &digest_b3(b"entry-inputs"),
         &run_key,
+        "plan",
     )?;
     let err = bogus.validate(&run_key).expect_err("bogus stack");
     assert_eq!(

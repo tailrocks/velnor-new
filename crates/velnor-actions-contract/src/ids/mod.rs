@@ -11,8 +11,8 @@ pub mod shard;
 mod task_ids;
 
 pub use artifact::{
-    artifact_id_for_baseline, artifact_id_for_final, artifact_id_for_matrix, artifact_id_for_plan,
-    target_key, validate_artifact_id,
+    artifact_id_for_baseline, artifact_id_for_crate_job, artifact_id_for_final,
+    artifact_id_for_matrix, artifact_id_for_plan, target_key, validate_artifact_id,
 };
 pub use shard::split_shard_suffix;
 

@@ -84,6 +84,7 @@ pub(crate) fn sample_entry(run_key: &str) -> Result<MatrixEntry, ContractError> 
         ExecuteTaskIds { tasks },
         &digest_b3(b"entry-inputs"),
         run_key,
+        "plan",
     )
 }
 
@@ -330,6 +331,7 @@ fn matrix_entry_rejects_bad_run_and_digest() -> Result<(), ContractError> {
             },
             &digest_b3(b"entry-inputs"),
             &run_key,
+            "plan",
         )
     };
     assert!(derive("", &digest_b3(b"task-bytes")).is_err());

@@ -17,6 +17,7 @@ use velnor_actions_contract::{Job, Step, StepKind};
 use velnor_actions_mise::{Gate6Fixture, TaskCacheMode, ToolCatalog, ToolHomes};
 use velnor_actions_rust::TaskKind;
 use velnor_actions_workflow_renderer::plan_format;
+use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
 use velnor_actions_workflow_renderer::steps::{
     CompileDriver, TASK_ARTIFACTS_DIR, cache_action_step, check_mbx_gating,
 };
@@ -202,8 +203,8 @@ pub(crate) fn workspace_format_step(
 /// Post-plan report steps for the workspace `Fmt` obligation.
 ///
 /// Reports the saved `Format` outcome through the staged helper once
-/// the plan exists, then uploads the entry's matrix artifact. Empty
-/// when the plan job owns no format scope.
+/// the plan exists, then uploads the plan job's one crate artifact.
+/// Empty when the plan job owns no format scope.
 ///
 /// # Errors
 ///
@@ -228,15 +229,7 @@ pub(crate) fn workspace_format_report_steps(
         )])),
     )
     .map_err(OrchestratorError::from)?;
-    let upload = velnor_actions_workflow_renderer::matrix_report_upload_step_for(
-        &matrix_key,
-        &format!(
-            "{} ({})",
-            velnor_actions_workflow_renderer::MATRIX_REPORT_UPLOAD_NAME,
-            plan_format::FORMAT_STEP_NAME
-        ),
-    )
-    .map_err(OrchestratorError::from)?;
+    let upload = crate::matrix_step::crate_upload_step(PLAN_JOB_ID)?;
     Ok(vec![report, upload])
 }
 

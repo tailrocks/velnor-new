@@ -26,6 +26,7 @@ use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
 use velnor_actions_workflow_renderer::steps::{CompileDriver as RenderDriver, mbx_step_for_driver};
 
 use crate::OrchestratorError;
+use crate::crate_job_ids::{group_runnable, id_inputs};
 use crate::discover::Discovery;
 use crate::internal::internal;
 use crate::matrix_step::step_name_for;
@@ -120,44 +121,7 @@ pub(crate) fn is_runnable(group: &TaskGroup) -> bool {
     !group.no_test_targets && !group.package_id.is_empty()
 }
 
-/// Runnable groups by `(package_id, configuration)` in sorted order.
-///
-/// Skips groups without test targets (no command is emitted for them)
-/// and package-less workspace groups (the plan job owns that scope).
-fn group_runnable(groups: &[TaskGroup]) -> BTreeMap<(String, String), Vec<&TaskGroup>> {
-    let mut grouped: BTreeMap<(String, String), Vec<&TaskGroup>> = BTreeMap::new();
-    for group in groups {
-        if !is_runnable(group) {
-            continue;
-        }
-        grouped
-            .entry((group.package_id.clone(), group.configuration.clone()))
-            .or_default()
-            .push(group);
-    }
-    grouped
-}
-
-/// ID-assignment inputs: one `(package_id, package_name, configuration)`
-/// triple per crate group, named by its first member.
-fn id_inputs(
-    grouped: &BTreeMap<(String, String), Vec<&TaskGroup>>,
-) -> BTreeSet<(String, String, String)> {
-    grouped
-        .iter()
-        .filter_map(|((package_id, configuration), members)| {
-            members.first().map(|first| {
-                (
-                    package_id.clone(),
-                    first.package_name.clone(),
-                    configuration.clone(),
-                )
-            })
-        })
-        .collect()
-}
-
-/// True when the group compiles through MBX.
+/// True when the group compiles through MBX (unknown spellings are Cargo).
 fn is_mbx(group: &TaskGroup) -> bool {
     group.compile_driver == RustDriver::Mbx
 }
@@ -241,8 +205,8 @@ fn gates_for(group: &TaskGroup, executed: &BTreeSet<&str>) -> Vec<String> {
 /// P08 order: helper staging, plan download (report identities bind
 /// the plan), restore shared sources (or Cargo-only registry), then
 /// MBX objects, then probe-and-fetch, then report-wrapped
-/// obligations, then one always-on matrix-report upload per
-/// obligation. Readers never save.
+/// obligations, then one always-on crate-report upload carrying every
+/// entry. Readers never save.
 #[expect(
     clippy::too_many_arguments,
     reason = "one call site threads job scope plus driver selection"
@@ -294,9 +258,7 @@ fn render_job(
             &downstream,
         )?);
     }
-    for obligation in &model.obligations {
-        steps.push(crate::matrix_step::matrix_upload_step(obligation)?);
-    }
+    steps.push(crate::matrix_step::crate_upload_step(&model.job_id)?);
     Ok(Job {
         display_name: model.display_name.clone(),
         runs_on: label.to_owned(),
@@ -369,5 +331,5 @@ fn mbx_objects_step(
 mod crate_jobs_tests;
 
 #[cfg(test)]
-#[path = "crate_jobs_reports_tests.rs"]
-mod crate_jobs_reports_tests;
+#[path = "crate_jobs_upload_tests.rs"]
+mod crate_jobs_upload_tests;

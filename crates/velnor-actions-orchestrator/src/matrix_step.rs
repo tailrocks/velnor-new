@@ -361,17 +361,13 @@ pub(crate) fn download_plan_step() -> Result<Step, OrchestratorError> {
     })
 }
 
-/// One always-on matrix-report upload for an obligation's entry.
-pub(crate) fn matrix_upload_step(obligation: &CrateObligation) -> Result<Step, OrchestratorError> {
-    let name = format!(
-        "{} ({})",
-        velnor_actions_workflow_renderer::MATRIX_REPORT_UPLOAD_NAME,
-        obligation.step_name
-    );
-    velnor_actions_workflow_renderer::matrix_report_upload_step_for(&obligation.matrix_key, &name)
-        .map_err(|err| OrchestratorError::Contract {
+/// One always-on crate-report upload carrying a job's every entry.
+pub(crate) fn crate_upload_step(job_id: &str) -> Result<Step, OrchestratorError> {
+    velnor_actions_workflow_renderer::crate_job_report_upload_step(job_id).map_err(|err| {
+        OrchestratorError::Contract {
             problem: err.to_string(),
-        })
+        }
+    })
 }
 
 #[cfg(test)]

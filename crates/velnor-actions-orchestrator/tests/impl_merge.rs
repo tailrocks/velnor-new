@@ -221,6 +221,7 @@ fn round_trip_passed_with_counts() -> TestResult {
         .map(|entry| entry.artifact_id.clone())
         .collect();
     artifacts.sort();
+    artifacts.dedup();
     assert_eq!(final_report.downloaded_artifact_ids, artifacts);
     assert_eq!(
         final_report.expected_report_ids.len(),
