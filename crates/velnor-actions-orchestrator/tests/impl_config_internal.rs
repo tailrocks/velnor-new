@@ -285,7 +285,15 @@ fn unknown_override_key_rejected_with_key_path() -> TestResult {
     let repo = make_repo(
         "schema = 1\n[workflow]\ndefault_branch = \"testmain\"\n[actions.overrides]\n\"asamarts/alint\" = { version = \"v0.16.1\", sha = \"9f9d34ba0eae3888299b9e570f43338b0e7f2cdb\" }\n",
     )?;
-    prepare(repo.path()).map_err(|err| format!("alint approved pair accepted: {err}"))?;
+    // The Alint pin is policy-owned, not a per-project override
+    // (docs/proposed/version-policy.md §2.3): even the approved pair is
+    // rejected with unknown_action.
+    let err = err_of(prepare(repo.path()), "alint override rejected")?;
+    assert!(
+        err.to_string().contains("actions.overrides.asamarts/alint"),
+        "got {err}"
+    );
+    assert!(err.to_string().contains("unknown_action"), "got {err}");
     Ok(())
 }
 
