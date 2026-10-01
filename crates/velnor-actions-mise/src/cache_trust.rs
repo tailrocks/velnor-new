@@ -115,15 +115,8 @@ pub fn authorize_trusted_save_for(pr_save_supported: bool) -> Result<&'static st
     if save_decision(&allowed).is_err() {
         return Err(contract("save_policy_drift:push_denied"));
     }
+    deny_non_push_variants(&allowed)?;
     for denied in [
-        SaveInputs {
-            event: "pull_request",
-            ..allowed
-        },
-        SaveInputs {
-            event: "merge_group",
-            ..allowed
-        },
         SaveInputs {
             passed: false,
             ..allowed
@@ -142,12 +135,57 @@ pub fn authorize_trusted_save_for(pr_save_supported: bool) -> Result<&'static st
         }
     }
     if !crate::cache::save_allowed("trusted", "push", true)
-        || crate::cache::save_allowed("trusted", "pull_request", true)
         || crate::cache::save_allowed("trusted", "push", false)
     {
         return Err(contract("save_policy_drift:allowlist"));
     }
-    Ok(velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION)
+    let gate = velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
+    if !gate.contains("success()") {
+        return Err(contract("save_gate_missing_success"));
+    }
+    Ok(gate)
+}
+
+/// Deny every non-push event and unknown trust spelling around `allowed`.
+///
+/// The allowlist is `push` only; `schedule`, `workflow_dispatch`, and
+/// any future trigger stay denied, as do unknown trust spellings and
+/// case variants. Both the decision model and the raw predicate must
+/// agree, or the emitted gate is stale.
+///
+/// # Errors
+///
+/// Returns [`MiseError::Contract`] when any variant would save.
+fn deny_non_push_variants(allowed: &crate::restore::SaveInputs<'_>) -> Result<(), MiseError> {
+    use crate::restore::save_decision;
+    for event in [
+        "pull_request",
+        "pull_request_target",
+        "merge_group",
+        "schedule",
+        "workflow_dispatch",
+        "workflow_call",
+        "",
+        "Push",
+    ] {
+        let denied = crate::restore::SaveInputs { event, ..*allowed };
+        if save_decision(&denied).is_ok() {
+            return Err(contract("save_policy_drift:event_allowed"));
+        }
+        if crate::cache::save_allowed("trusted", event, true) {
+            return Err(contract("save_policy_drift:allowlist"));
+        }
+    }
+    for layer_trust in ["", "untrusted", "prerelease"] {
+        let denied = crate::restore::SaveInputs {
+            layer_trust,
+            ..*allowed
+        };
+        if save_decision(&denied).is_ok() {
+            return Err(contract("save_policy_drift:trust_allowed"));
+        }
+    }
+    Ok(())
 }
 
 /// Cache errors never turn successful verification into failure.

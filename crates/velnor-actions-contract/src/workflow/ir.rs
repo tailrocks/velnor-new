@@ -87,16 +87,26 @@ pub struct Job {
     /// Ordered steps.
     pub steps: Vec<Step>,
 }
-/// Runtime gate for cache saves: pushes only (trusted writer scope).
+/// Runtime gate for cache saves: producer success on pushes (trusted scope).
 ///
+/// A step-level `if:` REPLACES GitHub's default `success()`, so the gate
+/// must restate it: without `success()`, the save step would run after a
+/// failed producer and poison the trusted layer with failed output.
 /// `pull_request` runs — same-repo or fork — restore read-only: the pinned
 /// cache actions have no PR-scoped save support, so a PR save could never
 /// promote safely. Push runs save into the repository that owns the run
 /// (GitHub cache scope is per-repo), keeping fork pushes confined to the
 /// fork. The Mise adapter's trust predicates implement this same policy
 /// over runtime values; this string is its generation-time spelling.
-pub const CACHE_SAVE_CONDITION: &str = "github.event_name == 'push'";
-/// `with:` spelling of [`CACHE_SAVE_CONDITION`] for boolean action inputs.
+pub const CACHE_SAVE_CONDITION: &str = "success() && github.event_name == 'push'";
+/// `with:` spelling of the push-only event check for boolean action inputs.
+///
+/// This intentionally omits `success()`: `with:` inputs evaluate when the
+/// step starts (Setup Mise runs before any producer, and with
+/// `install: false` never saves at all), so a status check there is
+/// vacuous — status-check functions belong in `if:` conditionals.
+/// Producer-success gating lives on the save step's `if:`
+/// ([`CACHE_SAVE_CONDITION`]).
 pub const CACHE_SAVE_CONDITION_EXPR: &str = "${{ github.event_name == 'push' }}";
 
 /// One workflow step.
