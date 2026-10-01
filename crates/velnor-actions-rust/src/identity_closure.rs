@@ -24,6 +24,31 @@ pub enum UnresolvedInput {
     RerunInputs,
 }
 
+impl UnresolvedInput {
+    /// Stable vocabulary word for error codes and logs.
+    #[must_use]
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Lockfile => "lockfile",
+            Self::NextestConfig => "nextest_config",
+            Self::ArchiveSource => "archive_source",
+            Self::RerunInputs => "rerun_inputs",
+        }
+    }
+}
+
+impl RustTaskIdentityExtension {
+    /// First unresolved semantic input, in stable inventory order.
+    ///
+    /// The single enforcement point behind [`unresolved_inputs`]:
+    /// reuse and coverage gates call this instead of reimplementing
+    /// the slot checks, so the inventory and the gates cannot drift.
+    #[must_use]
+    pub fn first_unresolved_input(&self) -> Option<UnresolvedInput> {
+        unresolved_inputs(self).into_iter().next()
+    }
+}
+
 /// Semantic inputs `ext` leaves unresolved, in stable order.
 ///
 /// Unknown means unobserved: the orchestrator resolves each against
