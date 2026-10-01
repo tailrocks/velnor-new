@@ -128,16 +128,24 @@ fn setup_is_early(_job: &JobText, at: usize) -> bool {
 /// Setup Mise must enable the qualified built-in cache: `cache:true` with
 /// an explicit tool-union `cache_key` (never the workspace-hashing default
 /// that ELOOPs on the symlink-loop fixture, never a job-role suffix).
+/// Saves are push-gated on the elected writer only; demoted sharers
+/// stand down to `cache_save: "false"` (exactly one saver per key).
 fn check_setup_cache_on(job: &JobText) -> Result<(), String> {
     for step in job.steps.iter().filter(|s| s.name == "Setup Mise") {
-        for need in [
-            "cache: \"true\"",
-            "cache_save: ${{ github.event_name == 'push' }}",
-            "cache_key: mise-v1-",
-        ] {
+        for need in ["cache: \"true\"", "cache_key: mise-v1-"] {
             if !step.body.contains(need) {
                 return Err(format!("{}: Setup Mise misses {need}", job.id));
             }
+        }
+        let gated = step
+            .body
+            .contains("cache_save: ${{ github.event_name == 'push' }}");
+        let demoted = step.body.contains("cache_save: \"false\"");
+        if gated == demoted {
+            return Err(format!(
+                "{}: Setup Mise needs exactly one cache_save mode",
+                job.id
+            ));
         }
         if step.body.contains("hashFiles(") {
             return Err(format!("{}: Setup Mise must not hashFiles", job.id));
