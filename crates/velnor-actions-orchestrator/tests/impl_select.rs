@@ -346,3 +346,46 @@ fn unclassified_file_still_selects_all() -> TestResult {
     assert_all_changed(&plan);
     Ok(())
 }
+
+#[test]
+fn root_package_does_not_mask_unclassified_files() -> TestResult {
+    let repo = make_ws_repo(true)?;
+    let root = repo.path();
+    let base = commit(root, "one")?;
+    fs::write(root.join("README.md"), "# demo\n")?;
+    let head = commit(root, "two")?;
+    let (plan, warnings) = plan_pr(root, Some(&base), &head)?;
+    assert!(
+        selects_both(&plan),
+        "unclassified broadens: {:?}",
+        plan.task_ids
+    );
+    assert!(
+        warnings
+            .iter()
+            .any(|warning| warning == "unclassified_files:all_changed"),
+        "root must not classify stray files: {warnings:?}"
+    );
+    assert_all_changed(&plan);
+    Ok(())
+}
+
+#[test]
+fn nested_change_stays_narrow_with_root_package() -> TestResult {
+    let repo = make_ws_repo(true)?;
+    let root = repo.path();
+    let base = commit(root, "one")?;
+    fs::write(
+        root.join("beta/src/lib.rs"),
+        "pub fn f() {}\npub fn g() {}\n",
+    )?;
+    let head = commit(root, "two")?;
+    let (plan, warnings) = plan_pr(root, Some(&base), &head)?;
+    assert!(selects_both(&plan), "universe kept: {:?}", plan.task_ids);
+    let beta = reasons_for(&plan, "beta");
+    assert!(beta.iter().all(|r| *r == "affected_by_change"), "{beta:?}");
+    let alpha = reasons_for(&plan, "alpha");
+    assert!(alpha.iter().all(|r| *r == "forced_uncached"), "{alpha:?}");
+    assert!(warnings.is_empty(), "no warnings: {warnings:?}");
+    Ok(())
+}
