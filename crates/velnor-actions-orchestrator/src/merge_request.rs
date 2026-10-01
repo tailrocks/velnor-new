@@ -37,7 +37,8 @@ use velnor_actions_contract::canonical_json_str;
 use self::needs_channel::{NEEDS_ENV, NEEDS_EXPECTED_ENV, parse_needs};
 use crate::OrchestratorError;
 use crate::internal::{internal, internal_contract};
-use crate::internal_request::{resolve_run_key, workflow_event_for};
+use crate::internal_request::resolve_run_key;
+use crate::request_event::workflow_event_for;
 
 /// Assemble one canonical merge request from a run directory.
 ///
@@ -280,6 +281,9 @@ fn read_json(
     }
 }
 
+#[cfg(test)]
+#[path = "merge_event_tests.rs"]
+mod merge_event_tests;
 #[cfg(test)]
 #[path = "merge_request_tests.rs"]
 mod merge_request_tests;

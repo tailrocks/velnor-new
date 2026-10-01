@@ -5,7 +5,7 @@
 use super::*;
 
 /// Minimal plan JSON naming the given artifact IDs.
-fn plan_with(artifact_ids: &[&str]) -> String {
+pub(crate) fn plan_with(artifact_ids: &[&str]) -> String {
     let include: Vec<String> = artifact_ids
         .iter()
         .map(|id| format!(r#"{{"artifact_id":"{id}","report_id":"report-for-{id}"}}"#))
@@ -14,7 +14,7 @@ fn plan_with(artifact_ids: &[&str]) -> String {
 }
 
 /// Run directory with caller-supplied plan plus caller-supplied files.
-fn staged(plan: &str, files: &[(&str, &str)]) -> tempfile::TempDir {
+pub(crate) fn staged(plan: &str, files: &[(&str, &str)]) -> tempfile::TempDir {
     let dir = tempfile::TempDir::new().expect("tempdir");
     std::fs::write(dir.path().join("plan.json"), plan).expect("plan");
     std::fs::write(dir.path().join("matrix.json"), "{}").expect("matrix");
@@ -29,7 +29,7 @@ fn staged(plan: &str, files: &[(&str, &str)]) -> tempfile::TempDir {
 }
 
 /// Error strings of one assembled request.
-fn error_list(request: &str) -> Vec<String> {
+pub(crate) fn error_list(request: &str) -> Vec<String> {
     serde_json::from_str::<serde_json::Value>(request).expect("json")["assembly_errors"]
         .as_array()
         .expect("errors")
@@ -270,126 +270,6 @@ fn dropped_or_missing_expected_inventory_fails_closed() {
         errors.contains(&"missing_needs_expected".to_owned()),
         "{errors:?}"
     );
-}
-
-#[test]
-fn assembly_captures_actual_event() {
-    let dir = staged(&plan_with(&[]), &[]);
-    let needs = Some(r#"{"plan":"success"}"#);
-    let expected = Some(r#"["plan"]"#);
-    let actual_of = |request: &str| {
-        serde_json::from_str::<serde_json::Value>(request).expect("json")["actual_event"].clone()
-    };
-    for (name, want) in [
-        ("push", "push"),
-        ("merge_group", "merge_group"),
-        ("local", "local"),
-    ] {
-        let request = assemble_with_needs("local", dir.path(), needs, expected, Some(name), None)
-            .expect("assemble");
-        assert_eq!(actual_of(&request), serde_json::json!(want), "{name}");
-        assert!(error_list(&request).is_empty(), "{request}");
-    }
-    for (fork, want) in [(true, "fork"), (false, "pull_request")] {
-        let payload = format!(r#"{{"pull_request":{{"head":{{"repo":{{"fork":{fork}}}}}}}}}"#);
-        let request = assemble_with_needs(
-            "local",
-            dir.path(),
-            needs,
-            expected,
-            Some("pull_request"),
-            Some(&payload),
-        )
-        .expect("assemble");
-        assert_eq!(actual_of(&request), serde_json::json!(want), "fork={fork}");
-        assert!(error_list(&request).is_empty(), "{request}");
-    }
-    for (name, payload, want) in [
-        (None, None, "missing_actual_event"),
-        (Some("push"), Some("not json"), "malformed_actual_payload"),
-        (Some("schedule"), Some("{}"), "unsupported_event"),
-        (Some("pull_request"), None, "missing_actual_payload"),
-        (Some("pull_request"), Some("{}"), "indeterminate_fork"),
-    ] {
-        let request = assemble_with_needs("local", dir.path(), needs, expected, name, payload)
-            .expect("assemble");
-        assert!(actual_of(&request).is_null(), "{name:?}");
-        assert!(
-            error_list(&request).contains(&want.to_owned()),
-            "{name:?}: {}",
-            error_list(&request).join(",")
-        );
-    }
-}
-
-#[test]
-fn assembly_reads_attestation_in_candidate_mode() {
-    let file = |body: &str| {
-        staged(
-            &plan_with(&[]),
-            &[("candidate/candidate-attestation.json", body)],
-        )
-    };
-    let needs = Some(r#"{"candidate":"success","plan":"success"}"#);
-    let expected = Some(r#"["candidate","plan"]"#);
-    let dir = file(r#"{"schema":1,"commit":"abc"}"#);
-    let request = assemble_with_needs(
-        "local",
-        dir.path(),
-        needs,
-        expected,
-        Some("push"),
-        Some("{}"),
-    )
-    .expect("assemble");
-    let value: serde_json::Value = serde_json::from_str(&request).expect("json");
-    assert_eq!(value["candidate_attestation"]["commit"], "abc");
-    assert!(error_list(&request).is_empty(), "{request}");
-
-    let bare = staged(&plan_with(&[]), &[]);
-    let request = assemble_with_needs(
-        "local",
-        bare.path(),
-        needs,
-        expected,
-        Some("push"),
-        Some("{}"),
-    )
-    .expect("assemble");
-    let value: serde_json::Value = serde_json::from_str(&request).expect("json");
-    assert!(value["candidate_attestation"].is_null(), "{request}");
-    assert!(
-        error_list(&request).contains(&"missing_candidate_attestation".to_owned()),
-        "{request}"
-    );
-
-    let dir = file("not json");
-    let request = assemble_with_needs(
-        "local",
-        dir.path(),
-        needs,
-        expected,
-        Some("push"),
-        Some("{}"),
-    )
-    .expect("assemble");
-    assert!(
-        error_list(&request).contains(&"unparsable_candidate_attestation".to_owned()),
-        "{request}"
-    );
-
-    let request = assemble_with_needs(
-        "local",
-        bare.path(),
-        Some(r#"{"plan":"success"}"#),
-        Some(r#"["plan"]"#),
-        Some("push"),
-        Some("{}"),
-    )
-    .expect("assemble");
-    let value: serde_json::Value = serde_json::from_str(&request).expect("json");
-    assert!(value["candidate_attestation"].is_null(), "{request}");
-    assert!(error_list(&request).is_empty(), "{request}");
 }
 
 #[test]

@@ -12,7 +12,9 @@ use std::collections::BTreeMap;
 use velnor_actions_contract::{Job, Step, StepKind};
 
 use crate::{
-    RenderError, preseed,
+    RenderError,
+    closure_paths::{validate_helper_path, validate_output_dir},
+    preseed,
     render::{PLAN_JOB_ID, RenderContext},
     steps,
 };
@@ -373,32 +375,5 @@ pub(crate) fn check_plan_anchor(
         Err(RenderError::InvalidWorkflow(
             "plan_job_without_plan_step".to_owned(),
         ))
-    }
-}
-
-/// Helper binaries live staged under runner temp, never in the repo.
-fn validate_helper_path(path: &str) -> Result<(), RenderError> {
-    let ok = path.starts_with("$RUNNER_TEMP/velnor/")
-        && !path.contains(' ')
-        && !path.contains('\n')
-        && !path.split('/').any(|seg| seg.is_empty() || seg == "..")
-        && !path.contains("${{");
-    if ok {
-        Ok(())
-    } else {
-        Err(RenderError::BadCommand(format!("bad_helper_path:{path}")))
-    }
-}
-
-/// Preview roots are fixed runner-temp templates, never the repo.
-fn validate_output_dir(dir: &str) -> Result<(), RenderError> {
-    let ok = dir.starts_with("$RUNNER_TEMP/")
-        && !dir.contains(' ')
-        && !dir.contains('\n')
-        && !dir.split('/').any(|seg| seg.is_empty() || seg == "..");
-    if ok {
-        Ok(())
-    } else {
-        Err(RenderError::BadCommand(format!("bad_output_dir:{dir}")))
     }
 }
