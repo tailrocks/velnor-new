@@ -1,9 +1,13 @@
 //! Expected-repository resolution tests.
 //!
-//! Declared via `#[path]` from `provenance_check.rs` under `cfg(test)`;
+//! Declared via `#[path]` from `provenance_resolve.rs` under `cfg(test)`;
 //! builders stay local so the dimension-matrix file keeps its size gate.
 
+use super::super::provenance_check::{
+    ProvenanceExpectations, baseline_artifact_name, validate_provenance,
+};
 use super::*;
+use crate::merge::BaselineManifest;
 
 /// Valid manifest plus matching expectations over `base`.
 ///

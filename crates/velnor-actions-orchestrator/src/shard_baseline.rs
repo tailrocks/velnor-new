@@ -215,7 +215,7 @@ pub(crate) fn resolve_manifests(
 /// before spawning anything, so no lookup ever queries a repo the
 /// runner did not bless or the checkout cannot name.
 fn resolve_lookup_repo(root: &Path) -> Result<String, String> {
-    let expected = crate::cover_baseline::provenance_check::expected_repository_for_root(root);
+    let expected = crate::cover_baseline::provenance_resolve::expected_repository_for_root(root);
     if expected.conflict {
         return Err("baseline_repo_conflict".to_owned());
     }

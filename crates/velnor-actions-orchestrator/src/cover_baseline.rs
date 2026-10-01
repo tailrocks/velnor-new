@@ -3,6 +3,8 @@
 // Wired here so provenance checks compile without touching `lib.rs`.
 #[path = "provenance_check.rs"]
 pub(crate) mod provenance_check;
+#[path = "provenance_resolve.rs"]
+pub(crate) mod provenance_resolve;
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -14,10 +16,8 @@ use velnor_actions_contract::{
 };
 use velnor_actions_mise::BaselineLookup as MiseBaselineLookup;
 
-use self::provenance_check::{
-    ProvenanceExpectations, expected_repository_for_root, publish_event_eligible,
-    repository_anchor_for_slug, validate_provenance,
-};
+use self::provenance_check::{ProvenanceExpectations, publish_event_eligible, validate_provenance};
+use self::provenance_resolve::{expected_repository_for_root, repository_anchor_for_slug};
 use crate::OrchestratorError;
 use crate::cover::shard;
 use crate::cover_identity::{SOURCE_BUILD_REASON, apply_coverage, is_source_build};

@@ -9,6 +9,7 @@
 
 use std::path::Path;
 
+use super::super::provenance_resolve::repository_anchor_for_slug;
 use super::*;
 
 /// Valid manifest plus matching expectations over `base`.
