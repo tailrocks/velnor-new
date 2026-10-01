@@ -37,6 +37,8 @@ pub(crate) const TASK_ID_ENV: &str = "VELNOR_TASK_ID";
 pub(crate) const EXIT_CODE_ENV: &str = "VELNOR_EXIT_CODE";
 /// Env key carrying comma-separated downstream task IDs for skip reports.
 pub(crate) const DOWNSTREAM_IDS_ENV: &str = "VELNOR_DOWNSTREAM_TASK_IDS";
+/// Env key carrying the wrapper-captured start time (unix millis).
+pub(crate) const START_MS_ENV: &str = "VELNOR_START_MS";
 
 /// Write the executed obligation's reports plus downstream skip reports.
 ///
@@ -78,10 +80,14 @@ pub fn write_task_report() -> Result<usize, OrchestratorError> {
     }
     let downstream_env = env::var(DOWNSTREAM_IDS_ENV).ok();
     let downstream = parse_downstream(downstream_env.as_deref());
+    let start_ms = env::var(START_MS_ENV)
+        .ok()
+        .and_then(|raw| parse_start_ms(&raw));
     write_task_report_to(
         &run_key,
         &task_id,
         exit_code,
+        start_ms,
         &downstream,
         Path::new(&runner_temp),
     )
@@ -102,6 +108,7 @@ pub(crate) fn write_task_report_to(
     run_key: &str,
     task_id: &str,
     exit_code: i32,
+    start_ms: Option<u64>,
     downstream: &[String],
     runner_temp: &Path,
 ) -> Result<usize, OrchestratorError> {
@@ -111,7 +118,9 @@ pub(crate) fn write_task_report_to(
     }
     let plan = load_plan(run_key, runner_temp)?;
     let (entry, digest) = entry_and_digest(&plan, task_id)?;
-    let task = terminal_task_report(&plan, entry, digest, exit_code).map_err(internal_contract)?;
+    let duration_ms = elapsed_ms(start_ms);
+    let task = terminal_task_report(&plan, entry, digest, exit_code, duration_ms)
+        .map_err(internal_contract)?;
     let matrix = single_task_aggregate(&plan, entry, &task).map_err(internal_contract)?;
     write_entry_reports(runner_temp, &plan, entry, &task, &matrix)?;
     let mut reported = 1usize;
@@ -128,6 +137,34 @@ fn parse_exit_code(raw: &str) -> Result<i32, OrchestratorError> {
         .ok()
         .filter(|code| (0..=255).contains(code))
         .ok_or_else(|| internal("bad_exit_code"))
+}
+
+/// Parse a wrapper-captured unix-millis start; `None` when absent.
+///
+/// Garbage fails closed to unmeasured (`None`): a malformed stamp must
+/// never error the report nor fabricate a duration.
+fn parse_start_ms(raw: &str) -> Option<u64> {
+    raw.parse::<u64>().ok()
+}
+
+/// Wall-clock now in unix millis; `None` when the clock is unusable.
+fn now_ms() -> Option<u64> {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()
+        .and_then(|elapsed| u64::try_from(elapsed.as_millis()).ok())
+}
+
+/// Measured elapsed millis, or `None` when telemetry is absent.
+///
+/// A present, non-future start always measures at least 1ms: absent,
+/// unparseable, future, or clockless telemetry stays unmeasured and
+/// is never labeled as measured.
+fn elapsed_ms(start_ms: Option<u64>) -> Option<u64> {
+    let (Some(start), Some(now)) = (start_ms, now_ms()) else {
+        return None;
+    };
+    now.checked_sub(start).map(|elapsed| elapsed.max(1))
 }
 
 /// Split downstream IDs on commas, dropping blanks and duplicates.
@@ -222,6 +259,7 @@ fn terminal_task_report(
     entry: &MatrixEntry,
     task_digest: &str,
     exit_code: i32,
+    duration_ms: Option<u64>,
 ) -> Result<TaskReport, velnor_actions_contract::ContractError> {
     let status = if exit_code == 0 {
         TaskStatus::Executed
@@ -247,7 +285,7 @@ fn terminal_task_report(
             miss_reason: None,
         },
         exit_code,
-        duration_ms: None,
+        duration_ms,
         outputs: Vec::new(),
         lane: None,
         queue: None,
