@@ -375,5 +375,8 @@ fn expected_artifact_ids(plan: &serde_json::Value) -> Vec<&str> {
 }
 
 #[cfg(test)]
+#[path = "retrieve_reports_enumeration_tests.rs"]
+mod retrieve_reports_enumeration_tests;
+#[cfg(test)]
 #[path = "retrieve_reports_tests.rs"]
 mod retrieve_reports_tests;

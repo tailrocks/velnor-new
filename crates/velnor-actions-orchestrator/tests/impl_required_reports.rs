@@ -29,7 +29,10 @@ fn unparsable_report_carries_to_verdict() -> TestResult {
             .iter()
             .find(|entry| entry.report_id == report.report_id)
             .ok_or_else(|| std::io::Error::other("report without entry"))?;
-        let leg = run.join("reports").join(&entry.artifact_id);
+        let leg = run
+            .join("reports")
+            .join(&entry.artifact_id)
+            .join(&entry.matrix_key);
         std::fs::create_dir_all(&leg)?;
         let body = if index == 0 {
             "not json".to_owned()
