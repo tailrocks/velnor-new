@@ -19,6 +19,8 @@ mod impl_cli_report;
 mod impl_cli_smoke;
 #[path = "impl_cli_tmp.rs"]
 mod impl_cli_tmp;
+#[path = "impl_cli_verify_local.rs"]
+mod impl_cli_verify_local;
 #[path = "impl_repo_deps.rs"]
 mod impl_repo_deps;
 #[path = "impl_repo_freshness.rs"]
