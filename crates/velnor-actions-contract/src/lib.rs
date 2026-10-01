@@ -74,7 +74,7 @@ pub use secrets::is_secret_env_name;
 pub use strict_json::parse_strict_json;
 pub use targets::{
     EXPECTED_REPOSITORY, RELEASE_MANIFEST_FILENAME, SUPPORTED_TARGETS, asset_filename,
-    check_release_artifact, is_supported_target, target_for_runner_label,
+    check_release_artifact, is_seed_tag_for_version, is_supported_target, target_for_runner_label,
 };
 pub use tooling::ToolIdentity;
 pub use vcs::VcsInputs;

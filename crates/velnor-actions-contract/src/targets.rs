@@ -54,10 +54,12 @@ const ASSET_PREFIX: &str = "/tailrocks/velnor-new/releases/download/";
 /// Bootstrap/release contract §2: the URL MUST be
 /// `https://github.com/tailrocks/velnor-new/releases/download/<tag>/
 /// <asset>` where `<asset>` is exactly [`asset_filename`] for this
-/// version and target and `<tag>` is non-empty without a `latest`
-/// segment. Shape-only `https://` checks would let a merged manifest
-/// redirect the Acquire step at attacker infrastructure. Userinfo,
-/// query, fragment, `$`, backtick, and whitespace all fail closed.
+/// version and target and `<tag>` is either a single non-`latest`
+/// segment or a seed tag bound to this version
+/// ([`is_seed_tag_for_version`]). Shape-only `https://` checks would
+/// let a merged manifest redirect the Acquire step at attacker
+/// infrastructure. Userinfo, query, fragment, `$`, backtick, and
+/// whitespace all fail closed.
 ///
 /// Residual (X1/X4): same-version seed rollback stays review-gated. The
 /// binding proves the URL names this version's official asset, but an
@@ -94,14 +96,47 @@ pub fn check_release_artifact(
     let Some(trailer) = path.strip_prefix(ASSET_PREFIX) else {
         return Err(bad());
     };
-    let Some((tag, asset)) = trailer.split_once('/') else {
+    // Split from the right: the asset is always the last segment, and
+    // seed tags legitimately contain slashes (see below).
+    let Some((tag, asset)) = trailer.rsplit_once('/') else {
         return Err(bad());
     };
-    if tag.is_empty() || tag == "latest" || asset.contains('/') {
+    if asset.is_empty() {
+        return Err(bad());
+    }
+    let single = !tag.is_empty() && !tag.contains('/') && tag != "latest";
+    if !single && !is_seed_tag_for_version(tag, version) {
         return Err(bad());
     }
     if asset != asset_filename(version, target) {
         return Err(bad());
     }
     Ok(())
+}
+
+/// Seed tag prefix: immutable `seed/`-namespaced generator pre-releases.
+const SEED_TAG_PREFIX: &str = "seed/velnor-actions-";
+
+/// True for a seed tag bound to `version`.
+///
+/// Accepts exactly `seed/velnor-actions-<version>` or
+/// `seed/velnor-actions-<version>-<N>` with a numeric counter (seed
+/// tags are immutable and never re-pointed; `-N` distinguishes seed
+/// builds of one generator version). Both callers pass a
+/// semver-checked `version`, so the literal match cannot smuggle path
+/// metacharacters; anything else, including a version-mismatched seed
+/// tag, fails closed.
+#[must_use]
+pub fn is_seed_tag_for_version(tag: &str, version: &str) -> bool {
+    let Some(rest) = tag.strip_prefix(SEED_TAG_PREFIX) else {
+        return false;
+    };
+    if rest == version {
+        return true;
+    }
+    rest.strip_prefix(version).is_some_and(|suffix| {
+        suffix.len() > 1
+            && suffix.starts_with('-')
+            && suffix[1..].bytes().all(|b| b.is_ascii_digit())
+    })
 }
