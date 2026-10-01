@@ -29,6 +29,8 @@ mod impl_rust_p03_identity;
 mod impl_rust_p06;
 #[path = "impl_rust_profile_emit.rs"]
 mod impl_rust_profile_emit;
+#[path = "impl_rust_propose_parity.rs"]
+mod impl_rust_propose_parity;
 #[path = "impl_rust_release_emit.rs"]
 mod impl_rust_release_emit;
 #[path = "impl_rust_release_graph.rs"]

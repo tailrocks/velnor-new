@@ -1,6 +1,6 @@
 //! Exclusion-glob validation and matching for the file index.
 
-use crate::index::IndexError;
+use super::index::IndexError;
 
 /// Validate one exclusion glob (relative, no traversal, well-formed).
 ///

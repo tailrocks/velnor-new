@@ -10,7 +10,9 @@ pub mod archive;
 pub mod cachekey;
 pub mod candidate_manifest;
 pub mod canonical;
+pub mod closure;
 pub mod config;
+pub mod discover;
 pub mod errors;
 pub mod extensions;
 pub mod finding;
@@ -22,6 +24,7 @@ pub mod manifest;
 pub(crate) mod manifest_checks;
 pub mod marker;
 pub mod policy;
+pub mod propose;
 pub mod secrets;
 pub mod strict_json;
 pub mod targets;
@@ -35,12 +38,20 @@ pub use canonical::{
     TaskInput, canonical_json_bytes, canonical_json_str, compatibility_id, digest_b3, input_digest,
     is_valid_digest, normalize_posix_path, validate_digest,
 };
+pub use closure::{ClosureBuilder, Provenance, TaskInputClosure};
 pub use config::{
     DeclaredCompileDriver, DeclaredTestRunner, DiscoveryConfig, GeneratorValidation,
     ResourcesConfig, RunnerSelection, RustConfiguration, RustStackConfig, ShardTimingEvidence,
     StacksConfig, TestShardingConfig, VelnorConfig, VelnorSupportWorkflow, WorkflowConfig,
     WorkflowPolicy, is_valid_custom_task_name, is_valid_feature_name, is_valid_rust_target,
     validate_shard_changes_need_evidence,
+};
+pub use discover::{
+    BUILTIN_EXCLUSIONS, DETECTION_SCHEMA, DetectError, DetectedProject, DetectionStatus,
+    DetectorEntry, FileIndex, IGNORED_REASON, IndexError, IndexMode, Stack, apply_stack_ignores,
+    build_index, build_index_from_list, build_index_from_tracked, build_index_walk,
+    check_duplicates, is_excluded, matches_glob, reverse_closure, selected_projects,
+    validate_pattern,
 };
 pub use errors::{ContractError, sanitize_error_detail};
 pub use extensions::{RUST_EXTENSION_REQUIRED_SLOTS, validate_rust_extension};
@@ -71,6 +82,10 @@ pub use marker::{MARKER_PREFIX, OLD_MARKER_PREFIX, is_generated_marker_line};
 pub use policy::{
     FreshnessEntry, FreshnessStatus, GithubRunnerImages, NightlyRecord, PolicyException,
     RunnerInventory, VersionPolicy, days_between,
+};
+pub use propose::{
+    CandidateOutcome, IdentityInputs, ProposedTask, StackCandidate, check_candidate_outcomes,
+    component_id_for_unit, project_root_for_unit_path,
 };
 pub use secrets::is_secret_env_name;
 pub use strict_json::parse_strict_json;

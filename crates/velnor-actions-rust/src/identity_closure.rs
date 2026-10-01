@@ -92,33 +92,6 @@ pub fn unresolved_inputs(ext: &RustTaskIdentityExtension) -> Vec<UnresolvedInput
     unresolved
 }
 
-/// Stable component identity from a raw Cargo package ID plus manifest.
-///
-/// Raw Cargo IDs are diagnostic-only: absolute checkout paths embedded
-/// in `path+file://` or `registry+` qualifiers never enter an identity,
-/// so relocated checkouts keep every digest. Plain IDs pass through
-/// verbatim; qualified IDs reduce to their trailing `name@version`
-/// fragment; empty IDs anchor to the owning manifest.
-#[must_use]
-pub fn normalize_component_id(package_id: &str, manifest: &str) -> String {
-    if package_id.is_empty() {
-        let root = manifest
-            .rsplit_once('/')
-            .map_or("", |(dir, _)| if dir.is_empty() { "" } else { dir });
-        if root.is_empty() {
-            return "workspace".to_owned();
-        }
-        return root.to_owned();
-    }
-    if let Some(fragment) = package_id.rsplit('#').next()
-        && fragment.contains('@')
-        && package_id.contains("://")
-    {
-        return fragment.to_owned();
-    }
-    package_id.to_owned()
-}
-
 /// Normalize one identity path: repo-relative, explicit rejects.
 ///
 /// Case and Unicode pass through byte-for-byte; empty, absolute,
@@ -309,16 +282,6 @@ mod tests {
             unresolved_inputs(&kind_spoof),
             vec![UnresolvedInput::Lockfile]
         );
-    }
-
-    #[test]
-    fn component_ids_shed_checkout_paths() {
-        assert_eq!(normalize_component_id("a-id", "a/Cargo.toml"), "a-id");
-        assert_eq!(
-            normalize_component_id("path+file:///tmp/x#a@0.1.0", "a/Cargo.toml"),
-            "a@0.1.0"
-        );
-        assert_eq!(normalize_component_id("", "Cargo.toml"), "workspace");
     }
 
     #[test]

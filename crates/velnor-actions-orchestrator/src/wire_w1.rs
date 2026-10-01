@@ -13,9 +13,9 @@ use velnor_actions_actionlint::{
     actions::{CACHE_ACTION_SHA, CACHE_ACTION_VERSION},
     checkout_inputs_schema, validate_action_inputs,
 };
-use velnor_actions_contract::{Job, Step, StepKind};
+use velnor_actions_contract::{Job, ProposedTask, Step, StepKind};
 use velnor_actions_mise::{Gate6Fixture, TaskCacheMode, ToolCatalog, ToolHomes};
-use velnor_actions_rust::TaskKind;
+use velnor_actions_rust::is_workspace_fmt_task;
 use velnor_actions_workflow_renderer::plan_format;
 use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
 use velnor_actions_workflow_renderer::steps::{
@@ -159,7 +159,7 @@ pub(crate) const REPORT_FORMAT_NAME: &str = "Report Format";
 /// crate jobs; this returns a step only for a package-less workspace
 /// `Fmt` obligation (explicit root `rustfmt` config), the one distinct
 /// scope the plan job owns. Derivation (`derive_for_config`) suppresses
-/// the workspace group whenever per-package `Fmt` groups exist for the
+/// the workspace task whenever per-package `Fmt` tasks exist for the
 /// same config, so this step never re-checks crate-owned files (R28).
 /// No synthesis, no fallback.
 ///
@@ -231,20 +231,18 @@ pub(crate) fn workspace_format_report_steps(
     Ok(vec![report, upload])
 }
 
-/// Package-less workspace `Fmt` group, when the plan job owns one.
-fn workspace_fmt_group(discovery: &Discovery) -> Option<&velnor_actions_rust::TaskGroup> {
-    discovery.task_groups.iter().find(|group| {
-        group.kind == TaskKind::Fmt && group.package_id.is_empty() && group.package_name.is_empty()
+/// Package-less workspace `Fmt` task, when the plan job owns one.
+fn workspace_fmt_group(discovery: &Discovery) -> Option<&ProposedTask> {
+    discovery.proposals.iter().find(|task| {
+        is_workspace_fmt_task(&task.task_kind, &task.identity.unit_id, &task.display_name)
     })
 }
 
-/// Stable matrix key for one workspace group.
-fn matrix_key_for(group: &velnor_actions_rust::TaskGroup) -> Result<String, OrchestratorError> {
-    let matrix_id = velnor_actions_contract::matrix_id_for_task_group(
-        velnor_actions_rust::STACK_ID,
-        &group.task_id,
-    )
-    .map_err(crate::internal::internal_contract)?;
+/// Stable matrix key for one workspace task.
+fn matrix_key_for(task: &ProposedTask) -> Result<String, OrchestratorError> {
+    let matrix_id =
+        velnor_actions_contract::matrix_id_for_task_group(&task.stack_id, &task.task_id)
+            .map_err(crate::internal::internal_contract)?;
     velnor_actions_contract::matrix_key_for_id(&matrix_id)
         .map_err(crate::internal::internal_contract)
 }

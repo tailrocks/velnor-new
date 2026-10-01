@@ -9,9 +9,9 @@ use std::collections::BTreeSet;
 use std::ffi::OsString;
 use std::path::Path;
 
-use velnor_actions_contract::WorkflowEvent;
+use velnor_actions_contract::{ProposedTask, WorkflowEvent};
 use velnor_actions_mise::GitRequest;
-use velnor_actions_rust::{FOREIGN_TOOL_FILES, RUST_TOOLCHAIN_FILE, TaskGroup};
+use velnor_actions_rust::{FOREIGN_TOOL_FILES, RUST_TOOLCHAIN_FILE};
 
 use crate::OrchestratorError;
 use crate::decisions::selection_broadens_for_path;
@@ -22,22 +22,22 @@ use crate::select_affected::{affected_packages, has_unowned_file};
 use crate::select_edges::{base_edges, head_edges};
 use crate::validators::{validate_diff_rev, validate_select_diff_args};
 
-/// Full obligation universe: every group with applicable targets.
+/// Full obligation universe: every task with applicable targets.
 ///
-/// Groups without applicable targets are never obligations: scheduling
+/// Tasks without applicable targets are never obligations: scheduling
 /// them would emit impossible work (for example `cargo test --doc` for a
 /// package with no doctest-able target). Each omission is recorded as a
 /// `valid_no_test_targets:<task-id>` warning, never silent.
 pub(crate) fn select_universe<'a>(
     discovery: &'a Discovery,
     warnings: &mut Vec<String>,
-) -> Vec<&'a TaskGroup> {
+) -> Vec<&'a ProposedTask> {
     let mut kept = Vec::new();
-    for group in &discovery.task_groups {
-        if group.no_test_targets {
-            warnings.push(format!("valid_no_test_targets:{}", group.task_id));
+    for task in &discovery.proposals {
+        if task.no_targets {
+            warnings.push(format!("valid_no_test_targets:{}", task.task_id));
         } else {
-            kept.push(group);
+            kept.push(task);
         }
     }
     kept
@@ -118,10 +118,10 @@ fn affected_from_changed(
     head: &str,
     warnings: &mut Vec<String>,
 ) -> BTreeSet<String> {
-    let groups = &discovery.task_groups;
-    let all_packages: BTreeSet<String> = groups
+    let tasks = &discovery.proposals;
+    let all_packages: BTreeSet<String> = tasks
         .iter()
-        .map(|group| group.package_id.clone())
+        .map(|task| task.identity.unit_id.clone())
         .collect();
     if changed.is_empty() {
         warnings.push(
@@ -163,17 +163,17 @@ fn affected_from_changed(
     }
 }
 
-/// True when one group counts as changed under the affected packages.
+/// True when one task counts as changed under the affected packages.
 ///
-/// Groups with an empty package ID follow their manifest siblings: a
+/// Tasks with an empty unit ID follow their manifest siblings: a
 /// workspace-level task is affected when any same-manifest package is.
 pub(crate) fn group_changed(
-    group: &TaskGroup,
+    task: &ProposedTask,
     changed: &BTreeSet<String>,
     changed_keys: &BTreeSet<String>,
 ) -> bool {
-    changed.contains(&group.package_id)
-        || (group.package_id.is_empty() && changed_keys.contains(&group.manifest_key))
+    changed.contains(&task.identity.unit_id)
+        || (task.identity.unit_id.is_empty() && changed_keys.contains(&task.identity.unit_key))
 }
 
 /// Verify the analyzed checkout matches the intended head.

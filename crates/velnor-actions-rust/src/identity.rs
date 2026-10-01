@@ -9,15 +9,13 @@
 #[path = "identity_closure.rs"]
 mod identity_closure;
 
-pub use self::identity_closure::{
-    UnresolvedInput, normalize_component_id, normalize_identity_path, unresolved_inputs,
-};
+pub use self::identity_closure::{UnresolvedInput, normalize_identity_path, unresolved_inputs};
 
-use velnor_actions_contract::ContractError;
+use velnor_actions_contract::{ContractError, ProposedTask, component_id_for_unit};
 
 use crate::argv::{entry_metadata, require_nextest_for_shards, shards_allowed};
 use crate::evidence::Evidence;
-use crate::profile::TestRunner;
+use crate::profile::{CompileDriver, TestRunner};
 use crate::task_identity::{DigestSlot, ExtensionInputs, RustTaskIdentityExtension};
 use crate::tasks::{TaskGroup, TaskKind};
 
@@ -62,7 +60,7 @@ impl TaskGroup {
         &self,
         inputs: &GroupExtensionInputs<'_>,
     ) -> RustTaskIdentityExtension {
-        let package_id = normalize_component_id(inputs.package_id, inputs.manifest);
+        let package_id = component_id_for_unit(inputs.package_id, inputs.manifest);
         let derived = ExtensionInputs {
             package_id: &package_id,
             workspace_id: inputs.workspace_id,
@@ -179,15 +177,106 @@ pub fn expand_shards_for_group(
 #[must_use]
 pub fn adapter_entry_metadata(group: &TaskGroup, evidence: &[Evidence]) -> serde_json::Value {
     let meta = entry_metadata(group, evidence);
+    entry_metadata_json(
+        &group.package_id,
+        &group.package_name,
+        &group.manifest_key,
+        group.kind.as_str(),
+        &group.configuration,
+        &group.target,
+        &meta,
+    )
+}
+
+/// Full adapter entry metadata for one neutral proposal.
+///
+/// Byte-identical to [`adapter_entry_metadata`]; driver/runner spellings
+/// parse fail-closed (validated proposals always parse).
+///
+/// # Errors
+///
+/// Returns [`ContractError`] for driver/runner spellings outside the
+/// known tokens.
+pub fn entry_metadata_for_task(
+    task: &ProposedTask,
+    evidence: &[Evidence],
+) -> Result<serde_json::Value, ContractError> {
+    let meta = crate::tasks::EntryMetadata {
+        compile_driver: CompileDriver::parse(&task.identity.compile_driver)?,
+        test_runner: TestRunner::parse(&task.identity.test_runner)?,
+        evidence_ids: evidence.iter().map(crate::tasks::evidence_id).collect(),
+    };
+    Ok(entry_metadata_json(
+        &task.identity.unit_id,
+        &task.display_name,
+        &task.identity.unit_key,
+        &task.task_kind,
+        &task.configuration,
+        &task.identity.target,
+        &meta,
+    ))
+}
+
+/// Entry metadata JSON over scalar fields plus typed driver/runner/evidence.
+///
+/// Single owner of the metadata shape for group and proposal inputs.
+fn entry_metadata_json(
+    package_id: &str,
+    package_name: &str,
+    manifest_key: &str,
+    kind: &str,
+    configuration: &str,
+    target: &str,
+    meta: &crate::tasks::EntryMetadata,
+) -> serde_json::Value {
     serde_json::json!({
-        "package_id": group.package_id,
-        "package_name": group.package_name,
-        "manifest_key": group.manifest_key,
-        "kind": group.kind.as_str(),
-        "configuration": group.configuration,
-        "target": group.target,
+        "package_id": package_id,
+        "package_name": package_name,
+        "manifest_key": manifest_key,
+        "kind": kind,
+        "configuration": configuration,
+        "target": target,
         "compile_driver": meta.compile_driver.as_str(),
         "test_runner": meta.test_runner.as_str(),
         "evidence_ids": meta.evidence_ids,
     })
+}
+
+/// Derive one proposal's identity extension before selection and reuse.
+///
+/// Proposal-owned facts (kind, features, target, drivers, declared
+/// inputs) come from `identity`; workspace digests come from `inputs`.
+/// Spellings parse fail-closed (validated proposals always parse).
+///
+/// # Errors
+///
+/// Returns [`ContractError`] for kind/driver/runner spellings outside
+/// the known tokens.
+pub fn extension_for_proposal(
+    task: &ProposedTask,
+    inputs: &GroupExtensionInputs<'_>,
+) -> Result<RustTaskIdentityExtension, ContractError> {
+    let package_id = component_id_for_unit(inputs.package_id, inputs.manifest);
+    let identity = &task.identity;
+    let derived = ExtensionInputs {
+        package_id: &package_id,
+        workspace_id: inputs.workspace_id,
+        profile: inputs.profile,
+        manifest: inputs.manifest,
+        graph_digest: inputs.graph_digest,
+        targets: inputs.targets,
+        features: &identity.features,
+        target: &identity.target,
+        driver: CompileDriver::parse(&identity.compile_driver)?,
+        runner: TestRunner::parse(&identity.test_runner)?,
+        config_digest: inputs.config_digest,
+        lock_digest: inputs.lock_digest.clone(),
+        nextest_digest: inputs.nextest_digest.clone(),
+        kind: TaskKind::parse(&task.task_kind)?,
+        archive_source: inputs.archive_source,
+        rerun_inputs: inputs.rerun_inputs,
+        has_build_script: inputs.has_build_script,
+        declared_inputs: &identity.declared_inputs,
+    };
+    Ok(RustTaskIdentityExtension::for_task(&derived))
 }

@@ -2,7 +2,7 @@
 
 use std::collections::BTreeSet;
 
-use velnor_actions_rust::DetectionStatus;
+use velnor_actions_contract::DetectionStatus;
 
 use crate::discover::{PlannedWorkspace, local_dep_names};
 use crate::plan::push;

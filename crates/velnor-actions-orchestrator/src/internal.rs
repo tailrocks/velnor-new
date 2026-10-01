@@ -9,11 +9,10 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::{
-    ContractError, Plan, PlanBaseline, PlanMatrix, PlanRunner, RunnerSelection, WorkflowEvent,
-    canonical_json_bytes, parse_strict_json, plan_id_for_run,
+    ContractError, Plan, PlanBaseline, PlanMatrix, PlanRunner, ProposedTask, RunnerSelection,
+    WorkflowEvent, canonical_json_bytes, parse_strict_json, plan_id_for_run,
 };
 use velnor_actions_mise::ToolCatalog;
-use velnor_actions_rust::TaskGroup;
 
 use self::plan_obligation::{GroupInputs, changed_keys, lane_table, member_changed, plan_group};
 use crate::OrchestratorError;
@@ -271,7 +270,7 @@ fn build_plan(
     request: &PlanRequest,
     discovery: &Discovery,
     root: &Path,
-    universe: &[&TaskGroup],
+    universe: &[&ProposedTask],
     changed: Option<&BTreeSet<String>>,
     label: &str,
     selection: RunnerSelection,
@@ -290,25 +289,25 @@ fn build_plan(
     // fill, so a source build can never emit a release-pinned identity.
     let generator = default_generator();
     let snapshot = ExecutionSnapshot::build(discovery);
-    for group in universe {
+    for task in universe {
         let wire = GroupWire {
             event: request.event,
             generator: &generator,
         };
         let (obligation, entry) = plan_group(&GroupInputs {
             discovery,
-            group,
+            task,
             run_key: &request.run_key,
             label,
-            lane: lanes.get(&group.task_id).copied().unwrap_or(0),
+            lane: lanes.get(&task.task_id).copied().unwrap_or(0),
             catalog,
             wire,
-            changed: member_changed(group, changed, &keys),
+            changed: member_changed(task, changed, &keys),
             snapshot: &snapshot,
             root,
         })?;
-        task_ids.push(group.task_id.clone());
-        digests.insert(group.task_id.clone(), obligation.input_digest.clone());
+        task_ids.push(task.task_id.clone());
+        digests.insert(task.task_id.clone(), obligation.input_digest.clone());
         obligations.push(obligation);
         entries.push(entry);
     }
@@ -322,7 +321,7 @@ fn build_plan(
     }
     let selected_ids: BTreeSet<&str> = universe
         .iter()
-        .map(|group| group.package_id.as_str())
+        .map(|task| task.identity.unit_id.as_str())
         .collect();
     Ok(Plan {
         schema: SCHEMA,

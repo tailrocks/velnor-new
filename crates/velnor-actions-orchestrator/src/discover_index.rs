@@ -3,8 +3,8 @@
 
 use std::path::Path;
 
+use velnor_actions_contract::{FileIndex, build_index, build_index_from_list};
 use velnor_actions_mise::GitRequest;
-use velnor_actions_rust::{FileIndex, build_index, build_index_from_list};
 
 use crate::OrchestratorError;
 use crate::git_paths::split_nul_paths_skipping;

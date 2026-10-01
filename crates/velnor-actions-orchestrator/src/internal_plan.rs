@@ -26,13 +26,11 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{
     ContractError, EntryCacheIds, ExecuteTaskIds, ExecuteTaskRef, PlanGenerator, PlanPackage,
-    StackExtension, TaskConfiguration, TaskGenerator, TaskIdentity, TaskInput, VcsInputs,
-    digest_b3, input_digest,
+    ProposedTask, StackExtension, TaskConfiguration, TaskGenerator, TaskIdentity, TaskInput,
+    VcsInputs, component_id_for_unit, digest_b3, input_digest,
 };
 use velnor_actions_mise::ToolCatalog;
-use velnor_actions_rust::{
-    Evidence, STACK_ID, TaskGroup, adapter_entry_metadata, cargo_payload_env,
-};
+use velnor_actions_rust::{CompileDriver, Evidence, entry_metadata_for_task};
 
 use crate::discover::Discovery;
 
@@ -43,34 +41,33 @@ use crate::discover::Discovery;
 /// closure binds into `input_digest` through the standard envelope.
 pub(crate) const CLOSURE_INPUT_PATH: &str = "velnor/input-closure";
 
-/// Manifest path for a manifest key.
-pub(crate) fn manifest_for_key(key: &str) -> String {
-    if key == "root" {
-        "Cargo.toml".to_owned()
-    } else {
-        format!("{key}/Cargo.toml")
-    }
-}
-
 /// Opaque adapter metadata for one matrix entry, forwarded uninterpreted.
 ///
-/// The Rust adapter constructs the value (legacy fields plus detected
+/// The owning adapter constructs the value (legacy fields plus detected
 /// driver/runner/evidence); the orchestrator only carries the bytes.
-pub(crate) fn adapter_metadata(group: &TaskGroup, evidence: &[Evidence]) -> serde_json::Value {
-    adapter_entry_metadata(group, evidence)
+///
+/// # Errors
+///
+/// Returns [`ContractError`] for driver/runner spellings outside the
+/// known tokens.
+pub(crate) fn adapter_metadata(
+    task: &ProposedTask,
+    evidence: &[Evidence],
+) -> Result<serde_json::Value, ContractError> {
+    entry_metadata_for_task(task, evidence)
 }
 
-/// Profile evidence backing one group: its workspace sightings, if any.
+/// Profile evidence backing one task: its workspace sightings, if any.
 pub(crate) fn evidence_for_group<'a>(
     discovery: &'a Discovery,
-    group: &TaskGroup,
+    task: &ProposedTask,
 ) -> &'a [Evidence] {
     for workspace in &discovery.workspaces {
         let owns = workspace
             .record
             .packages
             .iter()
-            .any(|package| package.id == group.package_id);
+            .any(|package| package.id == task.identity.unit_id);
         if owns {
             return &workspace.profile.evidence;
         }
@@ -78,14 +75,14 @@ pub(crate) fn evidence_for_group<'a>(
     &[]
 }
 
-/// Nextest config path backing one group, if the profile names one.
-pub(crate) fn nextest_config_for(discovery: &Discovery, group: &TaskGroup) -> Option<String> {
+/// Nextest config path backing one task, if the profile names one.
+pub(crate) fn nextest_config_for(discovery: &Discovery, task: &ProposedTask) -> Option<String> {
     for workspace in &discovery.workspaces {
         let owns = workspace
             .record
             .packages
             .iter()
-            .any(|package| package.id == group.package_id);
+            .any(|package| package.id == task.identity.unit_id);
         if owns {
             return workspace.profile.nextest_config.clone();
         }
@@ -104,18 +101,17 @@ pub(crate) fn nextest_config_for(discovery: &Discovery, group: &TaskGroup) -> Op
 ///
 /// Returns [`ContractError`] when any digest fails validation.
 pub(crate) fn cache_ids_for(
-    group: &TaskGroup,
+    task: &ProposedTask,
     label: &str,
     toolchain: &str,
 ) -> Result<EntryCacheIds, ContractError> {
-    let manifest = manifest_for_key(&group.manifest_key);
-    let workspace_id = digest_b3(manifest.as_bytes());
+    let workspace_id = digest_b3(task.identity.unit_path.as_bytes());
     EntryCacheIds::new(
         &workspace_id,
-        &identities::lane_id_for(group, &workspace_id),
-        &identities::platform_id_for_group(label, group)?,
+        &identities::lane_id_for(task, &workspace_id),
+        &identities::platform_id_for_group(label, task)?,
         toolchain,
-        &identities::cache_format_id_for(group.compile_driver),
+        &identities::cache_format_id_for(CompileDriver::parse(&task.identity.compile_driver)?),
     )
 }
 
@@ -128,12 +124,12 @@ pub(crate) fn target_dir_for_lane_id(lane_id: &str) -> String {
     velnor_actions_workflow_renderer::steps::target_dir_for_lane(lane_id)
 }
 
-/// Toolchain identity digest for one group.
+/// Toolchain identity digest for one task.
 pub(crate) fn toolchain_id(
-    group: &TaskGroup,
+    task: &ProposedTask,
     catalog: &ToolCatalog,
 ) -> Result<String, ContractError> {
-    identities::toolchain_digest_for(group, catalog)
+    identities::toolchain_digest_for(task, catalog)
 }
 
 /// Record task-cache reuse outputs on entry metadata (REUSE-3, CACHE-2.8).
@@ -157,10 +153,10 @@ pub(crate) fn record_task_cache(
     }
 }
 
-/// Contract identity preimage for one group (CACHE-1.17, TASK-4.2).
+/// Contract identity preimage for one task (CACHE-1.17, TASK-4.2).
 pub(crate) struct IdentityInputs<'a> {
-    /// Derived task group.
-    pub(crate) group: &'a TaskGroup,
+    /// Adapter task proposal.
+    pub(crate) task: &'a ProposedTask,
     /// Fixed argument vector.
     pub(crate) argv: &'a [String],
     /// Toolchain identity digest.
@@ -185,40 +181,31 @@ pub(crate) struct IdentityInputs<'a> {
 /// a source edit flips `input_digest` even when the changed-work hint
 /// misses it.
 pub(crate) fn task_identity_digest(inputs: &IdentityInputs<'_>) -> Result<String, ContractError> {
-    let group = inputs.group;
-    let mut dependencies = group.depends_on.clone();
+    let task = inputs.task;
+    let mut dependencies = task.depends_on.clone();
     dependencies.sort();
-    let mut features = group.features.clone();
+    let mut features = task.identity.features.clone();
     features.sort();
-    let mut flags = group.target_flags.clone();
+    let mut flags = task.identity.flags.clone();
     flags.sort();
     let root = project_root_of(inputs.manifest);
-    let environment: BTreeMap<String, String> = cargo_payload_env(group.kind)
-        .into_iter()
-        .map(|(name, value)| {
-            (
-                name.to_string_lossy().into_owned(),
-                value.to_string_lossy().into_owned(),
-            )
-        })
-        .collect();
     let identity = TaskIdentity {
         schema_version: 1,
-        stack_id: STACK_ID.to_owned(),
+        stack_id: task.stack_id.clone(),
         project_root: root.to_owned(),
-        component_id: snapshot::normalized_component_id(&group.package_id, inputs.manifest),
-        task_kind: group.kind.as_str().to_owned(),
-        task_id: group.task_id.clone(),
+        component_id: component_id_for_unit(&task.identity.unit_id, inputs.manifest),
+        task_kind: task.task_kind.clone(),
+        task_id: task.task_id.clone(),
         argv: inputs.argv.to_vec(),
         working_dir: root.to_owned(),
         configuration: TaskConfiguration {
-            target: group.target.clone(),
-            profile: group.configuration.clone(),
+            target: task.identity.target.clone(),
+            profile: task.configuration.clone(),
             features,
             flags,
             task_contract: "task-execution-v1".to_owned(),
-            compile_driver: group.compile_driver.as_str().to_owned(),
-            test_runner: group.test_runner.as_str().to_owned(),
+            compile_driver: task.identity.compile_driver.clone(),
+            test_runner: task.identity.test_runner.clone(),
         },
         inputs: vec![TaskInput {
             path: CLOSURE_INPUT_PATH.to_owned(),
@@ -232,7 +219,7 @@ pub(crate) fn task_identity_digest(inputs: &IdentityInputs<'_>) -> Result<String
         },
         toolchain_id: inputs.toolchain_id.to_owned(),
         platform_id: inputs.platform_id.to_owned(),
-        environment,
+        environment: task.identity.environment.clone(),
         output_contract: "task-report-v1".to_owned(),
         generator: TaskGenerator {
             version: inputs.generator.version.clone(),
@@ -250,21 +237,12 @@ fn project_root_of(manifest: &str) -> &str {
         .map_or(".", |(dir, _)| if dir.is_empty() { "." } else { dir })
 }
 
-/// Component identity: the package, or `workspace` for workspace-level groups.
-pub(crate) fn component_id_of(package_id: &str) -> String {
-    if package_id.is_empty() {
-        "workspace".to_owned()
-    } else {
-        package_id.to_owned()
-    }
-}
-
 /// Single executable obligation named by kind.
-pub(crate) fn execute_ids(group: &TaskGroup) -> ExecuteTaskIds {
+pub(crate) fn execute_ids(task: &ProposedTask) -> ExecuteTaskIds {
     ExecuteTaskIds {
         tasks: BTreeMap::from([(
-            group.kind.as_str().to_owned(),
-            ExecuteTaskRef::Single(group.task_id.clone()),
+            task.task_kind.clone(),
+            ExecuteTaskRef::Single(task.task_id.clone()),
         )]),
     }
 }
@@ -295,10 +273,10 @@ pub(crate) fn plan_packages(discovery: &Discovery, selected: &BTreeSet<&str>) ->
             }
             let is_selected = selected.contains(package.id.as_str());
             let mut tasks: Vec<String> = discovery
-                .task_groups
+                .proposals
                 .iter()
-                .filter(|group| group.package_id == package.id)
-                .map(|group| group.task_id.clone())
+                .filter(|task| task.identity.unit_id == package.id)
+                .map(|task| task.task_id.clone())
                 .collect();
             tasks.sort();
             packages.push(PlanPackage {

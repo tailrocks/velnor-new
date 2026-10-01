@@ -1,6 +1,7 @@
 //! F2 closure cases: identity attachment, rerun producer, shards, archives.
 use std::collections::BTreeSet;
 
+use velnor_actions_contract::reverse_closure;
 use velnor_actions_rust::tasks::{
     DigestSlot, ExtensionInputs, RustTaskIdentityExtension, parse_rerun_changed,
 };
@@ -8,7 +9,7 @@ use velnor_actions_rust::{
     CompileDriver, DepKind, DeriveInputs, Evidence, EvidenceStrength, GroupExtensionInputs,
     LocalEdge, NextestProfile, PackageRecord, ProfileSource, RustExecutionProfile, TargetRecord,
     TaskKind, TestRunner, adapter_entry_metadata, derive_task_groups, evidence_scan_excluded,
-    expand_shards_for_group, reverse_closure,
+    expand_shards_for_group, local_edge_pairs,
 };
 
 /// Target entry for fixtures.
@@ -223,12 +224,12 @@ fn closure_propagates_through_all_edge_kinds() {
         edge("targeted", DepKind::Normal, false, Some("cfg(windows)")),
     ];
     let changed = BTreeSet::from(["a".to_owned()]);
-    let selected = reverse_closure(&[], &head, &changed);
+    let selected = reverse_closure(&local_edge_pairs(&[]), &local_edge_pairs(&head), &changed);
     for consumer in ["a", "normal", "build", "dev", "optional", "targeted"] {
         assert!(selected.contains(consumer), "{consumer} must be selected");
     }
     let base = vec![edge("removed-opt", DepKind::Normal, true, None)];
-    let selected = reverse_closure(&base, &[], &changed);
+    let selected = reverse_closure(&local_edge_pairs(&base), &local_edge_pairs(&[]), &changed);
     assert!(selected.contains("removed-opt"));
     assert!(selected.contains("a"));
 }

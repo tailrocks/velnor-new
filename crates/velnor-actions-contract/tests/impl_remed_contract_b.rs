@@ -57,6 +57,11 @@ fn wf_contract_surface_has_no_utility_fields() {
             && root.contains("CLI"),
         "crate ownership forbids must stay documented"
     );
+    assert_contract_modules(root);
+}
+
+/// Exactly the contract's public modules, sorted: additions deliberate.
+fn assert_contract_modules(root: &str) {
     let mut modules: Vec<&str> = root
         .lines()
         .filter_map(|line| line.strip_prefix("pub mod "))
@@ -70,7 +75,9 @@ fn wf_contract_surface_has_no_utility_fields() {
             "cachekey",
             "candidate_manifest",
             "canonical",
+            "closure",
             "config",
+            "discover",
             "errors",
             "extensions",
             "finding",
@@ -81,6 +88,7 @@ fn wf_contract_surface_has_no_utility_fields() {
             "manifest",
             "marker",
             "policy",
+            "propose",
             "secrets",
             "strict_json",
             "targets",
