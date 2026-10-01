@@ -68,7 +68,8 @@ pub const RUST_TARGET_TRIPLE: &str = "x86_64-unknown-linux-gnu";
 /// Platforms every catalog tool supports (sorted, exact labels).
 const TOOL_PLATFORMS: [&str; 2] = ["ubuntu-24.04", "ubuntu-26.04"];
 
-/// Placeholder digest (ver §2): freshness replaces it per upstream artifact sha256.
+/// Unqualified digest placeholder (ver §2): freshness replaces it per
+/// upstream artifact sha256. Trusted validation rejects this value.
 const PLACEHOLDER_DIGEST: &str = "0000000000000000000000000000000000000000000000000000000000000000";
 
 /// Tools Velnor may select through mise, by registry name.
@@ -159,9 +160,14 @@ pub struct ToolCatalog {
 
 impl ToolCatalog {
     /// Catalog holding the qualified pins.
+    ///
+    /// Versions are compile-time literals, so no fallible check runs
+    /// here; trusted identity validation is the separate
+    /// [`Self::validate_identities`] gate, which fails until freshness
+    /// binds real artifact digests (P03-8b).
     #[must_use]
     pub fn pinned() -> Self {
-        let catalog = Self {
+        Self {
             rust: RUST_VERSION.to_owned(),
             mr_boxington: MR_BOXINGTON_VERSION.to_owned(),
             gh: GH_VERSION.to_owned(),
@@ -169,12 +175,14 @@ impl ToolCatalog {
             shellcheck: SHELLCHECK_VERSION.to_owned(),
             zizmor: ZIZMOR_VERSION.to_owned(),
             nextest: NEXTEST_VERSION.to_owned(),
-        };
-        debug_assert!(catalog.validate_identities().is_ok());
-        catalog
+        }
     }
 
     /// Catalog with explicit versions; every version must be an exact pin.
+    ///
+    /// Only version exactness is enforced here: the catalog owns pins,
+    /// not artifact trust. Trusted identity validation is the separate
+    /// [`Self::validate_identities`] gate (P03-8b).
     ///
     /// # Errors
     ///
@@ -196,7 +204,7 @@ impl ToolCatalog {
         validate_exact_version(PinnedTool::Shellcheck.tool_name(), shellcheck)?;
         validate_exact_version(PinnedTool::Zizmor.tool_name(), zizmor)?;
         validate_exact_version(PinnedTool::Nextest.tool_name(), nextest)?;
-        let catalog = Self {
+        Ok(Self {
             rust: rust.to_owned(),
             mr_boxington: mr_boxington.to_owned(),
             gh: gh.to_owned(),
@@ -204,12 +212,15 @@ impl ToolCatalog {
             shellcheck: shellcheck.to_owned(),
             zizmor: zizmor.to_owned(),
             nextest: nextest.to_owned(),
-        };
-        catalog.validate_identities()?;
-        Ok(catalog)
+        })
     }
 
     /// Pinned identity record for one tool (ver §2).
+    ///
+    /// The digest is an explicitly unqualified placeholder until
+    /// freshness binds the real upstream artifact SHA-256, so this
+    /// record never validates as trusted and no trust decision may
+    /// consume it (P03-8b).
     #[must_use]
     pub fn tool_identity(&self, tool: PinnedTool) -> ToolIdentity {
         ToolIdentity {
@@ -221,7 +232,11 @@ impl ToolCatalog {
         }
     }
 
-    /// Validate every catalog identity record.
+    /// Trusted gate over every catalog identity record.
+    ///
+    /// Fails closed with `placeholder_digest` until freshness binds a
+    /// real artifact SHA-256 per tool; it flips to `Ok` only then, so
+    /// callers can treat success as qualified trust (P03-8b).
     ///
     /// # Errors
     ///

@@ -59,3 +59,14 @@ fn restore_checks_ownership_explicitly() {
         Err("trust_scope_mismatch")
     );
 }
+
+/// Generation-time image evidence is unobserved, never label-split.
+#[test]
+fn runner_image_evidence_is_unobserved() {
+    let evidence = runner_image_evidence();
+    assert!(evidence.is_unobserved());
+    assert!(evidence.validate().is_ok());
+    assert!(RunnerImageEvidence::observed("ubuntu", "26.04").is_ok());
+    assert!(RunnerImageEvidence::observed("unknown", "20260928.1.0").is_err());
+    assert!(RunnerImageEvidence::observed("ubuntu26", "unknown").is_err());
+}

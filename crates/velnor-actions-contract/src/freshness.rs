@@ -36,11 +36,18 @@ pub struct FreshnessRequirement {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RunnerImageEvidence {
-    /// Runner `ImageOS` value.
+    /// Runner `ImageOS` value; `unknown` when unobserved.
     pub image_os: String,
-    /// Runner `ImageVersion` value.
+    /// Runner `ImageVersion` value; `unknown` when unobserved.
     pub image_version: String,
 }
+
+/// Marker for image fields the generator could not observe.
+///
+/// The generator never sees the provisioned runner, so label text is
+/// never split into these fields: observed facts arrive only through
+/// [`RunnerImageEvidence::observed`], everything else is unobserved.
+pub const UNOBSERVED_IMAGE_VALUE: &str = "unknown";
 
 impl FreshnessRequirement {
     /// Validate class membership and a positive age bound.
@@ -59,6 +66,40 @@ impl FreshnessRequirement {
 }
 
 impl RunnerImageEvidence {
+    /// Record genuinely observed provisioner facts.
+    ///
+    /// Both values must be semantic and neither may be the
+    /// [`UNOBSERVED_IMAGE_VALUE`] marker, so observed and unobserved
+    /// records are disjoint by construction (P03-4).
+    /// # Errors
+    pub fn observed(os: &str, version: &str) -> Result<Self, ContractError> {
+        for (field, value) in [("image_os", os), ("image_version", version)] {
+            crate::cachekey::validate_semantic_text(field, value)?;
+            if value == UNOBSERVED_IMAGE_VALUE {
+                return Err(ContractError::identity(field, "unobserved_marker"));
+            }
+        }
+        Ok(Self {
+            image_os: os.to_owned(),
+            image_version: version.to_owned(),
+        })
+    }
+
+    /// Record explicitly unobserved image evidence (generation time).
+    #[must_use]
+    pub fn unobserved() -> Self {
+        Self {
+            image_os: UNOBSERVED_IMAGE_VALUE.to_owned(),
+            image_version: UNOBSERVED_IMAGE_VALUE.to_owned(),
+        }
+    }
+
+    /// True when both fields carry the unobserved marker.
+    #[must_use]
+    pub fn is_unobserved(&self) -> bool {
+        self.image_os == UNOBSERVED_IMAGE_VALUE && self.image_version == UNOBSERVED_IMAGE_VALUE
+    }
+
     /// Validate observed image values are present and semantic.
     /// # Errors
     pub fn validate(&self) -> Result<(), ContractError> {

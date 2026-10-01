@@ -12,7 +12,8 @@
 use serde::Serialize;
 use velnor_actions_contract::cachekey::{PlatformInputs, platform_id};
 use velnor_actions_contract::{
-    ContractError, canonical_json_bytes, digest_b3, normalize_posix_path, parse_strict_json,
+    ContractError, UNOBSERVED_IMAGE_VALUE, canonical_json_bytes, digest_b3, normalize_posix_path,
+    parse_strict_json,
 };
 
 /// Explicit unknown marker for unverifiable archive sources.
@@ -127,10 +128,13 @@ pub(crate) fn check_canonical_version(found: u32) -> Result<(), ContractError> {
 
 /// Platform inputs for one runner label plus execution target.
 ///
-/// Image evidence derives from the label (`ubuntu-26.04` names OS
-/// `ubuntu` and version `26.04`; unversioned labels record `unknown`);
-/// OS/arch come from the release target mapping. Labels never fix
-/// package sets: the digest commits to exactly the observed triple.
+/// The label is recorded verbatim in `runs_on` (a genuine request
+/// input); image evidence is explicitly unobserved. The generator
+/// never sees the provisioned runner, so label text is never split
+/// into `ImageOS`/`ImageVersion` facts: real values arrive only as
+/// observed provisioner evidence, and until then the digest commits
+/// to the label plus the target triple, nothing more (P03-4).
+/// OS/arch come from the release target mapping.
 ///
 /// # Errors
 ///
@@ -140,10 +144,6 @@ pub(crate) fn platform_inputs_for(
     label: &str,
     target: &str,
 ) -> Result<PlatformInputs, ContractError> {
-    let (os, version) = match label.split_once('-') {
-        Some((os, rest)) if !rest.is_empty() => (os, rest),
-        _ => (label, "unknown"),
-    };
     let (arch, os_name) = match target {
         "x86_64-unknown-linux-gnu" => ("x86_64", "linux"),
         "aarch64-apple-darwin" => ("aarch64", "macos"),
@@ -159,8 +159,8 @@ pub(crate) fn platform_inputs_for(
         os: os_name.to_owned(),
         arch: arch.to_owned(),
         runs_on: label.to_owned(),
-        image_os: os.to_owned(),
-        image_version: version.to_owned(),
+        image_os: UNOBSERVED_IMAGE_VALUE.to_owned(),
+        image_version: UNOBSERVED_IMAGE_VALUE.to_owned(),
         target: target.to_owned(),
     })
 }
@@ -318,6 +318,27 @@ mod tests {
         assert!(check_canonical_version(2).is_ok());
         assert!(check_canonical_version(0).is_err());
         assert!(check_canonical_version(1).is_err());
+    }
+
+    #[test]
+    fn platform_image_evidence_is_unobserved_not_label_split() {
+        for label in ["ubuntu-26.04", "ubuntu-24.04", "self-hosted"] {
+            let inputs = platform_inputs_for(label, "x86_64-unknown-linux-gnu").expect("platform");
+            assert_eq!(inputs.runs_on, label);
+            assert_eq!(inputs.image_os, UNOBSERVED_IMAGE_VALUE, "{label}");
+            assert_eq!(inputs.image_version, UNOBSERVED_IMAGE_VALUE, "{label}");
+        }
+        let fabricated = PlatformInputs {
+            os: "linux".to_owned(),
+            arch: "x86_64".to_owned(),
+            runs_on: "ubuntu-26.04".to_owned(),
+            image_os: "ubuntu".to_owned(),
+            image_version: "26.04".to_owned(),
+            target: "x86_64-unknown-linux-gnu".to_owned(),
+        };
+        let honest = platform_id_for("ubuntu-26.04", "x86_64-unknown-linux-gnu").expect("id");
+        let fake = platform_id(&fabricated).expect("id");
+        assert_ne!(honest, fake);
     }
 
     #[test]

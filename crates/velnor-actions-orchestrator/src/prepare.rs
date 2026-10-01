@@ -7,7 +7,7 @@ use velnor_actions_contract::{RunnerImageEvidence, RunnerSelection, VelnorConfig
 use velnor_actions_mise::GitRequest;
 
 use crate::OrchestratorError;
-use crate::config::{CONFIG_REL, load_config};
+use crate::config::load_config;
 use crate::decisions::runner_image_evidence;
 use crate::discover::{Discovery, discover};
 use crate::source_prep::lockful_roots;
@@ -33,7 +33,8 @@ pub struct GenerationPreparation {
     pub discovery: Discovery,
     /// Workflow IR plus renderer inputs.
     pub workflow: WorkflowPlan,
-    /// Observed runner-image evidence for the label (VER-4.2).
+    /// Runner-image evidence for the label: explicitly unobserved at
+    /// generation time; observed provisioner facts bind later (VER-4.2).
     pub runner_image: RunnerImageEvidence,
     /// Install lockfile audit blockers (G2): CI-platform holes and
     /// corrupt checksums. `generate` fails closed on any entry while
@@ -68,8 +69,7 @@ pub fn prepare(root: &Path) -> Result<GenerationPreparation, OrchestratorError> 
         &discovery,
         &fetch_roots,
     )?;
-    let runner_image = runner_image_evidence(&runner_label)
-        .map_err(|err| OrchestratorError::config(CONFIG_REL, "workflow", err.to_string()))?;
+    let runner_image = runner_image_evidence();
     let audit = crate::lock_audit::audit_prepare_installs(
         &canonical,
         &workflow.ir,

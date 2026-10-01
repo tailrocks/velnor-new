@@ -37,12 +37,11 @@ fn release_plz_pin_is_exact() {
         Ok(PinnedTool::ReleasePlz)
     );
     assert!(validate_exact_version("release-plz", RELEASE_PLZ_VERSION).is_ok());
-    assert!(
-        pinned()
-            .tool_identity(PinnedTool::ReleasePlz)
-            .validate("catalog")
-            .is_ok()
-    );
+    let err = pinned()
+        .tool_identity(PinnedTool::ReleasePlz)
+        .validate("catalog")
+        .expect_err("placeholder digests never validate as trusted");
+    assert!(err.to_string().contains("placeholder_digest"), "{err}");
 }
 
 #[test]
