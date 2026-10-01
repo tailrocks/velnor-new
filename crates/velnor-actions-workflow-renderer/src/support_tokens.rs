@@ -74,7 +74,7 @@ fn check_step_tokens(id: &str, step: &Step) -> Result<(), RenderError> {
         StepKind::Shell { run, env } => {
             check_env_tokens(id, env)?;
             for arg in strip_unset_argv(run) {
-                if names_token(strip_unset_prelude(arg)) {
+                if names_token(&strip_unset_prelude(arg)) {
                     return Err(RenderError::InvalidWorkflow(format!(
                         "token_in_run:{id}:{}",
                         step.name
@@ -181,14 +181,37 @@ fn strip_unset_argv(run: &[String]) -> &[String] {
 
 /// Script with the exact credential-unset prelude stripped for scanning.
 ///
-/// Only the fixed prelude text strips; a script merely starting with
-/// `unset` (or embedding token names elsewhere) still scans whole.
-fn strip_unset_prelude(script: &str) -> &str {
+/// The first prelude occurrence forming a shell command unit strips:
+/// at the start or after a separator (`&&`, `;`, newline, `{`, `(`),
+/// followed by a separator or the end. Only the exact fixed text
+/// strips, and only once: a script merely starting with `unset`,
+/// quoting the prelude (an `echo` of token names is still exfil),
+/// embedding token names elsewhere, or doubling the prelude
+/// (caller/render drift) still scans whole and trips fail-closed.
+fn strip_unset_prelude(script: &str) -> String {
     use crate::toolchain_env::credential_unset_prelude;
-    script
-        .strip_prefix(&credential_unset_prelude())
-        .and_then(|rest| rest.strip_prefix(' '))
-        .unwrap_or(script)
+    let prelude = credential_unset_prelude();
+    for (at, _) in script.match_indices(prelude.as_str()) {
+        if is_prelude_command_unit(&script[..at], &script[at + prelude.len()..]) {
+            let mut stripped = String::with_capacity(script.len() - prelude.len());
+            stripped.push_str(&script[..at]);
+            stripped.push_str(&script[at + prelude.len()..]);
+            return stripped;
+        }
+    }
+    script.to_owned()
+}
+
+/// True when a prelude occurrence sits in command position.
+///
+/// The left edge must be the script start or follow a separator; the
+/// right edge must be the end or lead a separator. A quoted or
+/// suffixed occurrence (an `echo` of the text) is not a command.
+fn is_prelude_command_unit(before: &str, after: &str) -> bool {
+    const LEFT: [&str; 6] = ["&& ", "; ", "{ ", "\n", "( ", "("];
+    const RIGHT: [char; 8] = [' ', ';', '&', '\n', '|', ')', '}', '\t'];
+    (before.is_empty() || LEFT.iter().any(|sep| before.ends_with(sep)))
+        && (after.is_empty() || after.starts_with(RIGHT))
 }
 
 /// True when text names a token handle (never printed or forwarded).

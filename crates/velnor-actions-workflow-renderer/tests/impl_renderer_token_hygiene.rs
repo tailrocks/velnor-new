@@ -10,36 +10,6 @@ use velnor_actions_workflow_renderer::{
 
 use super::impl_renderer_fixtures::*;
 
-fn token_plan_job(
-    name: &str,
-    argv: Vec<String>,
-    env: BTreeMap<String, String>,
-) -> Result<(String, velnor_actions_contract::Job), RenderError> {
-    Ok(job(
-        "plan",
-        "Plan",
-        Vec::new(),
-        vec![
-            checkout_step(&checkout_pin())?,
-            shell_step(name, argv, env)?,
-            plan_step(),
-        ],
-    ))
-}
-
-fn render_fails_with(jobs: Vec<(String, velnor_actions_contract::Job)>, want: &str) {
-    assert!(
-        render_workflow_ir(
-            &fixture_ir(jobs),
-            WorkflowPolicy::ConsumerV1,
-            None,
-            &fixture_ctx(),
-        )
-        .is_err_and(|err| format!("{err:?}").contains(want)),
-        "must fail with {want}"
-    );
-}
-
 #[test]
 fn token_hygiene_scopes_gh_token_to_plan() -> Result<(), RenderError> {
     use velnor_actions_contract::{Step, StepKind};

@@ -210,11 +210,14 @@ pub(crate) fn alint_job(ctx: &RenderContext) -> Result<Job, RenderError> {
 
 /// Fixed validator job: checkout plus its caller-supplied command.
 ///
-/// The validator runs its pinned offline analyzer over the checkout
-/// with ambient auth: no repository code executes, and the cold tool
-/// bootstrap needs authenticated quota (the scrub overlay broke
+/// The validator runs its pinned analyzer with ambient auth: the cold
+/// tool bootstrap needs authenticated quota (the scrub overlay broke
 /// `ubi:` installs with API 401s and zizmor with empty-token aborts,
-/// CI run 36815180228). The step carries no scrub keys at all.
+/// CI run 36815180228). Static analyzers execute no repository code;
+/// cargo-backed validators (deny) run from the cargo isolation dir
+/// with an absolute manifest path, so repo `.cargo/config.toml`
+/// providers never execute while ambient auth is in scope. The step
+/// carries no scrub keys at all.
 pub(crate) fn validator_job(
     ctx: &RenderContext,
     validator: ValidatorKind,

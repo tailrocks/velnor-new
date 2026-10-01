@@ -94,14 +94,60 @@ fn exec_argv(
     strings_of(exec.argv(catalog)).map_err(|problem| OrchestratorError::Contract { problem })
 }
 
-/// Fixed validator-job vector: `cargo deny --locked check` through pinned Mise.
+/// Fixed validator-job vector: privilege-dropping `cargo deny`.
+///
+/// Deny shells `cargo metadata`, which reads repo `.cargo/config.toml`
+/// even from outside the checkout (deny resolves config from the
+/// manifest side), so cwd isolation alone cannot starve repo
+/// credential-providers. The script therefore drops privilege first:
+/// an ambient `mise install` warms the pinned tool, then the shared
+/// credential-unset prelude removes every ambient secret, and only
+/// then does the isolated deny payload run (absolute
+/// `--manifest-path` spliced before the trailing `check`: deny takes
+/// global flags pre-subcommand). A repo provider executing past this
+/// point observes an empty credential environment. A drifted payload
+/// shape fails closed instead of splicing into the wrong position.
+/// Shell assembly lives in [`crate::source_prep::privilege_drop_argv`]:
+/// this module composes typed argv only, keeping the orchestrator's
+/// `sh` confinement set closed.
 pub(crate) fn deny_argv() -> Result<Vec<String>, OrchestratorError> {
-    validator_argv(
+    let mut inner = validator_argv(
         "cargo-deny",
         CARGO_DENY_VERSION,
         "cargo",
         &["deny", "--locked", "check"],
-    )
+    )?;
+    if inner.pop().as_deref() != Some("check") {
+        return Err(OrchestratorError::Contract {
+            problem: "deny_vector_shape_drift".to_owned(),
+        });
+    }
+    let install = IsolatedCommand::mise_install(&[format!("cargo-deny@{CARGO_DENY_VERSION}")])
+        .map_err(|err| OrchestratorError::Contract {
+            problem: err.to_string(),
+        })?;
+    let install_argv =
+        strings_of(install.argv()).map_err(|problem| OrchestratorError::Contract { problem })?;
+    let mut payload = join_quoted_argv(&inner);
+    payload.push(' ');
+    payload.push_str(&crate::source_prep::isolated_manifest_flag(""));
+    payload.push_str(" check");
+    Ok(crate::source_prep::privilege_drop_argv(
+        &join_quoted_argv(&install_argv),
+        &payload,
+    ))
+}
+
+/// Join fixed argv elements with the renderer's POSIX quoter.
+///
+/// Every current element is a plain token (identity join); quoting
+/// through the one authority keeps future drift exact instead of
+/// silently mis-spliced.
+fn join_quoted_argv(argv: &[String]) -> String {
+    argv.iter()
+        .map(|element| velnor_actions_workflow_renderer::quote_run_arg(element))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// Policy zizmor scan target: generated workflows only.
