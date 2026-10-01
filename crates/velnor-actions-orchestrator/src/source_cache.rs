@@ -173,7 +173,11 @@ pub(crate) fn rust_cache_step(shared_key: &str, save_if: bool) -> Result<Step, O
     Ok(Step {
         name: "Restore Cargo registry".to_owned(),
         condition: None,
-        kind: StepKind::Action { uses, with },
+        kind: StepKind::Action {
+            uses,
+            with,
+            env: BTreeMap::new(),
+        },
     })
 }
 

@@ -11,7 +11,7 @@ use super::impl_renderer_fixtures::*;
 fn setup_step_shape_exact() -> Result<(), RenderError> {
     let step = mise_setup_step(&mise())?;
     assert_eq!(step.name, SETUP_MISE_NAME);
-    let velnor_actions_contract::StepKind::Action { uses, with } = &step.kind else {
+    let velnor_actions_contract::StepKind::Action { uses, with, .. } = &step.kind else {
         panic!("setup must be an action step");
     };
     assert_eq!(uses, MISE_USES);
@@ -191,6 +191,7 @@ fn strict_rejects_setup_misuse() -> Result<(), RenderError> {
                 ("version".to_owned(), MISE_VERSION.to_owned()),
                 ("install".to_owned(), "true".to_owned()),
             ]),
+            env: BTreeMap::new(),
         },
     };
     let mut steps = lint_steps()?;

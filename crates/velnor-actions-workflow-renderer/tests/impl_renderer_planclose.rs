@@ -116,7 +116,7 @@ fn freshness_step_shape_exact() -> Result<(), RenderError> {
 fn publish_plan_upload_shape_exact() -> Result<(), RenderError> {
     let step = publish_plan_step()?;
     assert_eq!(step.name, PUBLISH_PLAN_NAME);
-    let velnor_actions_contract::StepKind::Action { uses, with } = &step.kind else {
+    let velnor_actions_contract::StepKind::Action { uses, with, .. } = &step.kind else {
         panic!("publish must be an action step");
     };
     assert!(uses.starts_with("actions/upload-artifact@"));
@@ -131,7 +131,7 @@ fn publish_plan_upload_shape_exact() -> Result<(), RenderError> {
 fn matrix_report_upload_names_derive_from_run_and_leg() -> Result<(), RenderError> {
     let step = matrix_report_upload_step()?;
     assert_eq!(step.name, MATRIX_REPORT_UPLOAD_NAME);
-    let velnor_actions_contract::StepKind::Action { uses, with } = &step.kind else {
+    let velnor_actions_contract::StepKind::Action { uses, with, .. } = &step.kind else {
         panic!("matrix upload must be an action step");
     };
     assert!(uses.starts_with("actions/upload-artifact@"));
@@ -149,7 +149,7 @@ fn fixed_key_upload_names_derive_from_run_and_entry() -> Result<(), RenderError>
     let step =
         matrix_report_upload_step_for("m-0123456789abcdef", "Upload matrix report (Clippy)")?;
     assert_eq!(step.name, "Upload matrix report (Clippy)");
-    let velnor_actions_contract::StepKind::Action { uses, with } = &step.kind else {
+    let velnor_actions_contract::StepKind::Action { uses, with, .. } = &step.kind else {
         panic!("matrix upload must be an action step");
     };
     assert!(uses.starts_with("actions/upload-artifact@"));
@@ -171,7 +171,7 @@ fn fixed_key_upload_names_derive_from_run_and_entry() -> Result<(), RenderError>
 fn download_plan_shape_mirrors_publish() -> Result<(), RenderError> {
     let download = download_plan_step()?;
     assert_eq!(download.name, DOWNLOAD_PLAN_NAME);
-    let velnor_actions_contract::StepKind::Action { uses, with } = &download.kind else {
+    let velnor_actions_contract::StepKind::Action { uses, with, .. } = &download.kind else {
         panic!("download must be an action step");
     };
     assert!(uses.starts_with("actions/download-artifact@"));
