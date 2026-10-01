@@ -4,10 +4,8 @@
 //! spec plus fixed argv into `release.yml`, and
 //! [`render_release_files`] adds the two effective release-plz configs.
 
-use velnor_actions_contract::{Step, StepKind};
-
 use crate::{
-    RenderError, commands, guard, marker,
+    RenderError, guard, marker,
     release_config::{
         BootstrapReleasePlzConfig, ReleasePlzConfig, render_bootstrap_release_plz_config,
         render_release_plz_config,
@@ -216,69 +214,10 @@ fn release_job_to_yaml(job: &ReleaseJobSpec) -> Result<Yaml, RenderError> {
     }
     let mut rendered = Vec::with_capacity(job.steps.len());
     for step in &job.steps {
-        rendered.push(release_step_to_yaml(step)?);
+        rendered.push(crate::steps_plain::plain_step_to_yaml(step)?);
     }
     entries.push(("steps".to_owned(), Yaml::Seq(rendered)));
     Ok(Yaml::Map(entries))
-}
-
-/// Render one release step; internal ops are rejected fail-closed.
-fn release_step_to_yaml(step: &Step) -> Result<Yaml, RenderError> {
-    steps::scan_for_private_subcommands(&step.name)?;
-    match &step.kind {
-        StepKind::Action { uses, with, env } => {
-            steps::validate_uses(uses)?;
-            for entry in with.keys().chain(with.values()) {
-                steps::scan_for_private_subcommands(entry)?;
-            }
-            commands::validate_env(env)?;
-            let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
-            if let Some(condition) = &step.condition {
-                steps::scan_for_private_subcommands(condition)?;
-                entries.push(("if".to_owned(), Yaml::str(condition.clone())));
-            }
-            entries.push(("uses".to_owned(), Yaml::str(uses.clone())));
-            if !with.is_empty() {
-                let inputs: Vec<(String, Yaml)> = with
-                    .iter()
-                    .map(|(key, value)| (key.clone(), Yaml::str(value.clone())))
-                    .collect();
-                entries.push(("with".to_owned(), Yaml::Map(inputs)));
-            }
-            if !env.is_empty() {
-                let vars: Vec<(String, Yaml)> = env
-                    .iter()
-                    .map(|(key, value)| (key.clone(), Yaml::str(value.clone())))
-                    .collect();
-                entries.push(("env".to_owned(), Yaml::Map(vars)));
-            }
-            Ok(Yaml::Map(entries))
-        }
-        StepKind::Shell { run, env } => {
-            commands::validate_command_argv(run)?;
-            commands::validate_env(env)?;
-            let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
-            if let Some(condition) = &step.condition {
-                steps::scan_for_private_subcommands(condition)?;
-                entries.push(("if".to_owned(), Yaml::str(condition.clone())));
-            }
-            if !env.is_empty() {
-                let vars: Vec<(String, Yaml)> = env
-                    .iter()
-                    .map(|(key, value)| (key.clone(), Yaml::str(value.clone())))
-                    .collect();
-                entries.push(("env".to_owned(), Yaml::Map(vars)));
-            }
-            entries.push((
-                "run".to_owned(),
-                Yaml::str(commands::join_argv_for_run(run)?),
-            ));
-            Ok(Yaml::Map(entries))
-        }
-        StepKind::Internal { .. } => Err(RenderError::InvalidWorkflow(
-            "release_internal_op".to_owned(),
-        )),
-    }
 }
 
 /// The three rendered release files with their fixed tree paths.

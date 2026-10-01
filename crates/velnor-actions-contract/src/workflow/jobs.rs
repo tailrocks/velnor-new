@@ -23,7 +23,7 @@ pub const STALE_WORKFLOW_PATHS: [&str; 1] = [".github/workflows/velnor.yml"];
 /// Generated main workflow display name.
 pub const WORKFLOW_DISPLAY_NAME: &str = "CI";
 
-/// Scheduled upstream-freshness workflow path (renderer emits it later).
+/// Scheduled upstream-freshness workflow path (emitted under velnor-repository-v1).
 pub const FRESHNESS_WORKFLOW_PATH: &str = ".github/workflows/freshness.yml";
 
 /// Canonical orchestration job ID for the planner.

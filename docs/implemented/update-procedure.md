@@ -24,8 +24,8 @@ automation that is not wired.
   `scripts/check-freshness.sh --with-advisories` (plus the live
   `cargo deny` scan, 180 s bound),
   `scripts/check-freshness.sh --check-upstream` (plus the bounded
-  read-only upstream probe; intended for the future scheduled job, writes
-  nothing),
+  read-only upstream probe; run by the generated weekly
+  `.github/workflows/freshness.yml`, writes nothing),
   `scripts/check-freshness.sh --root DIR` (validate a fixture tree; the
   CLI policy suite uses this for every pass/fail case).
 
