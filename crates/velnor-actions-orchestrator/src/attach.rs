@@ -12,7 +12,7 @@ use velnor_actions_contract::{
 };
 use velnor_actions_mise::{PREPARE_PINNED_TOOLS_STEP, PinnedTool, ToolCatalog};
 use velnor_actions_workflow_renderer::cache_p08::{RESTORE_SOURCES_NAME, RUST_CACHE_NAME};
-use velnor_actions_workflow_renderer::render::{FINAL_JOB_ID, PLAN_JOB_ID};
+use velnor_actions_workflow_renderer::render::{FINAL_JOB_ID, PLAN_JOB_ID, PUBLISH_JOB_ID};
 use velnor_actions_workflow_renderer::steps::{MBX_RESTORE_NAME, STAGED_BINARY_PREFIX};
 use velnor_actions_workflow_renderer::{
     PreseedStageSource, preseed_build_step, preseed_download_step, preseed_manifest_step,
@@ -24,14 +24,15 @@ use crate::pins::lock_acquire_step;
 use crate::vectors::{candidate_build_argv, mbx_probe_argv};
 use crate::workflow::WorkflowPlan;
 
-/// Attach lock-backed Acquire steps to plan, final, and crate jobs.
+/// Attach lock-backed Acquire steps to plan, final, publish, and crate jobs.
 ///
 /// Reads the runner-target record from an already-verified lock, stages the
 /// digest-verified binary under `$RUNNER_TEMP`, and inserts the step between
-/// checkout and plan plus ahead of the report merge; every crate job stages
-/// right after checkout because its obligation wrappers invoke the helper.
-/// Consumer generation never calls this: it embeds the release manifest
-/// instead, and never reads the lock.
+/// checkout and plan plus ahead of the report merge and the baseline
+/// publish; every crate job stages right after checkout because its
+/// obligation wrappers invoke the helper. Consumer generation never
+/// calls this: it embeds the release manifest instead, and never reads
+/// the lock.
 pub(crate) fn attach_lock_acquire(
     ir: &mut WorkflowIr,
     lock: &GeneratorLock,
@@ -54,6 +55,13 @@ pub(crate) fn attach_lock_acquire(
         });
     };
     final_gate.steps.insert(0, final_step);
+    // The publish job invokes the staged helper too; absent jobs stay
+    // untouched like zero-crate plans.
+    if let Some(publish) = ir.jobs.get_mut(PUBLISH_JOB_ID) {
+        publish
+            .steps
+            .insert(0, lock_acquire_step(lock, label, &staged)?);
+    }
     for (id, job) in &mut ir.jobs {
         if !id.starts_with(CRATE_JOB_ID_PREFIX) {
             continue;
@@ -71,8 +79,9 @@ pub(crate) fn attach_lock_acquire(
 /// vector after the fetch steps that guarantee sources present, verifies
 /// the MBX compile output plus its pinned route, records the source
 /// commit in a manifest, uploads the exactly-named artifact, and stages
-/// its local build; every crate job and the final job download that
-/// artifact, verify the manifest (commit anchored to this run's
+/// its local build; every crate job, the final job, and the publish
+/// job download that artifact, verify the manifest (commit anchored
+/// to this run's
 /// `$GITHUB_SHA`, generator-rendered target, recomputed sha256), and
 /// stage it instead of rebuilding. Build and verify run under the same
 /// owned homes as the fetch steps. The gate binds staged bytes to this
@@ -122,6 +131,19 @@ pub(crate) fn attach_preseed(
             preseed_stage_step(PreseedStageSource::DownloadedArtifact, &staged)?,
         ],
     );
+    // The publish job invokes the staged helper too; without the
+    // triple its internal steps fail the staged gate. Absent jobs
+    // stay untouched like zero-crate plans.
+    if let Some(publish) = workflow.ir.jobs.get_mut(PUBLISH_JOB_ID) {
+        publish.steps.splice(
+            0..0,
+            [
+                preseed_download_step()?,
+                preseed_manifest_verify_step(target)?,
+                preseed_stage_step(PreseedStageSource::DownloadedArtifact, &staged)?,
+            ],
+        );
+    }
     for (id, job) in &mut workflow.ir.jobs {
         if !id.starts_with(CRATE_JOB_ID_PREFIX) {
             continue;

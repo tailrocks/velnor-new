@@ -35,9 +35,10 @@ fn baseline_publish_and_download_rules() {
     );
 }
 
-/// Minimal valid manifest JSON for `base`/`name`, run 7 attempt 1 id 9.
+/// Minimal valid manifest JSON for `base`/`name`, run 7 attempt 1.
 fn manifest_json(base: &str, name: &str) -> serde_json::Value {
     let digest = digest_b3(b"d");
+    let numeric = crate::cover_compat::baseline_artifact_numeric_id(name);
     serde_json::json!({
         "schema": 2,
         "repository_id": digest,
@@ -51,7 +52,7 @@ fn manifest_json(base: &str, name: &str) -> serde_json::Value {
         "generator_version": "0.1.0",
         "generator_sha256": "1".repeat(64),
         "compatibility_id": digest,
-        "artifact_id": 9,
+        "artifact_id": numeric,
         "artifact_name": name,
         "tasks": [],
     })
@@ -61,31 +62,32 @@ fn manifest_json(base: &str, name: &str) -> serde_json::Value {
 fn baseline_entry_needs_single_strict_payload() {
     let base = "a".repeat(40);
     let name = format!("velnor-baseline-{base}-{}", digest_b3(b"c"));
+    let numeric = crate::cover_compat::baseline_artifact_numeric_id(&name);
     let tmp = tempfile::tempdir().expect("tempdir");
     let entry = tmp.path().join(&name);
     std::fs::create_dir(&entry).expect("entry");
     std::fs::write(entry.join("baseline.json"), "{}").expect("json");
     std::fs::write(entry.join("extra.json"), "{}").expect("extra");
-    assert!(baseline_entry_for(&entry, &base, 7, 1, 9).is_none());
+    assert!(baseline_entry_for(&entry, &base, 7, 1, numeric).is_none());
     std::fs::remove_file(entry.join("extra.json")).expect("rm");
-    assert!(baseline_entry_for(&entry, &base, 7, 1, 9).is_none());
+    assert!(baseline_entry_for(&entry, &base, 7, 1, numeric).is_none());
     std::fs::write(entry.join("baseline.json"), r#"{"schema": 1, "schema": 1}"#).expect("dup");
-    assert!(baseline_entry_for(&entry, &base, 7, 1, 9).is_none());
+    assert!(baseline_entry_for(&entry, &base, 7, 1, numeric).is_none());
     std::fs::write(entry.join("baseline.json"), [0xff, 0xfe]).expect("bad");
-    assert!(baseline_entry_for(&entry, &base, 7, 1, 9).is_none());
+    assert!(baseline_entry_for(&entry, &base, 7, 1, numeric).is_none());
     let manifest = manifest_json(&base, &name);
     std::fs::write(entry.join("baseline.json"), manifest.to_string()).expect("manifest");
-    let found = baseline_entry_for(&entry, &base, 7, 1, 9).expect("entry");
+    let found = baseline_entry_for(&entry, &base, 7, 1, numeric).expect("entry");
     assert_eq!(found.artifact_name, name);
     assert!(
-        baseline_entry_for(&entry, &base, 8, 1, 9).is_none(),
+        baseline_entry_for(&entry, &base, 8, 1, numeric).is_none(),
         "a manifest claiming another run never loads from this download"
     );
     let mut stale = manifest;
     stale["schema"] = serde_json::json!(1);
     std::fs::write(entry.join("baseline.json"), stale.to_string()).expect("stale");
     assert!(
-        baseline_entry_for(&entry, &base, 7, 1, 9).is_none(),
+        baseline_entry_for(&entry, &base, 7, 1, numeric).is_none(),
         "schema 1 baselines bound no source bytes and never load"
     );
 }
@@ -205,7 +207,7 @@ fn forwarded_manifest(slug: &str, base: &str) -> BaselineManifest {
         generator_version: env!("CARGO_PKG_VERSION").to_owned(),
         generator_sha256: "1".repeat(64),
         compatibility_id: digest.clone(),
-        artifact_id: 9,
+        artifact_id: crate::cover_compat::baseline_artifact_numeric_id(&name),
         artifact_name: name,
         tasks: vec![crate::merge::required_evidence::BaselineTaskEntry {
             task_id: "stack/rust/root/clippy/default".to_owned(),
@@ -319,20 +321,21 @@ fn source_build_keeps_marker_without_lock_fill() {
 fn baseline_entry_pins_attempt_and_artifact() {
     let base = "a".repeat(40);
     let name = format!("velnor-baseline-{base}-{}", digest_b3(b"c"));
+    let numeric = crate::cover_compat::baseline_artifact_numeric_id(&name);
     let tmp = tempfile::tempdir().expect("tempdir");
     let entry = tmp.path().join(&name);
     std::fs::create_dir(&entry).expect("entry");
     let manifest = manifest_json(&base, &name);
     std::fs::write(entry.join("baseline.json"), manifest.to_string()).expect("manifest");
     assert!(
-        baseline_entry_for(&entry, &base, 7, 3, 9).is_none(),
+        baseline_entry_for(&entry, &base, 7, 3, numeric).is_none(),
         "claims attempt 1, success on 3"
     );
     assert!(
-        baseline_entry_for(&entry, &base, 7, 1, 10).is_none(),
+        baseline_entry_for(&entry, &base, 7, 1, numeric.wrapping_add(1)).is_none(),
         "foreign artifact id"
     );
-    assert!(baseline_entry_for(&entry, &base, 7, 1, 9).is_some());
+    assert!(baseline_entry_for(&entry, &base, 7, 1, numeric).is_some());
 }
 
 /// Symlink, traversal, and size gates: a linked payload, a linked entry
@@ -342,6 +345,7 @@ fn baseline_entry_pins_attempt_and_artifact() {
 fn baseline_entry_rejects_links_and_oversize() {
     let base = "a".repeat(40);
     let name = format!("velnor-baseline-{base}-{}", digest_b3(b"c"));
+    let numeric = crate::cover_compat::baseline_artifact_numeric_id(&name);
     #[cfg(unix)]
     {
         let manifest = manifest_json(&base, &name).to_string();
@@ -352,7 +356,7 @@ fn baseline_entry_rejects_links_and_oversize() {
         std::os::unix::fs::symlink(tmp.path().join("real.json"), linked.join("baseline.json"))
             .expect("link");
         assert!(
-            baseline_entry_for(&linked, &base, 7, 1, 9).is_none(),
+            baseline_entry_for(&linked, &base, 7, 1, numeric).is_none(),
             "symlinked payload rejects even at a live target"
         );
         let tmp = tempfile::tempdir().expect("tempdir");
@@ -362,7 +366,7 @@ fn baseline_entry_rejects_links_and_oversize() {
         let via = tmp.path().join(&name);
         std::os::unix::fs::symlink(&target, &via).expect("dir link");
         assert!(
-            baseline_entry_for(&via, &base, 7, 1, 9).is_none(),
+            baseline_entry_for(&via, &base, 7, 1, numeric).is_none(),
             "symlinked entry dir rejects"
         );
     }
@@ -371,7 +375,7 @@ fn baseline_entry_rejects_links_and_oversize() {
     std::fs::create_dir(&entry).expect("entry");
     std::fs::create_dir(entry.join("baseline.json")).expect("dir payload");
     assert!(
-        baseline_entry_for(&entry, &base, 7, 1, 9).is_none(),
+        baseline_entry_for(&entry, &base, 7, 1, numeric).is_none(),
         "directory payload rejects"
     );
     std::fs::remove_dir(entry.join("baseline.json")).expect("rmdir");
@@ -381,7 +385,7 @@ fn baseline_entry_rejects_links_and_oversize() {
     );
     std::fs::write(entry.join("baseline.json"), big).expect("big");
     assert!(
-        baseline_entry_for(&entry, &base, 7, 1, 9).is_none(),
+        baseline_entry_for(&entry, &base, 7, 1, numeric).is_none(),
         "oversize payload rejects"
     );
 }

@@ -102,6 +102,13 @@ pub(crate) struct PlanResponse {
     pub(crate) plan: Plan,
     /// Matrix copy, byte-identical to the embedded matrix.
     pub(crate) matrix: PlanMatrix,
+    /// Trusted manifest behind covered obligations, when any covered.
+    ///
+    /// The plan artifact stages these bytes as `baseline.json` so the
+    /// merge revalidates covered claims against the exact evidence the
+    /// planner used; absent when nothing covered.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) baseline_manifest: Option<BaselineManifest>,
 }
 
 /// Compute the affected plan plus matrix for one event (schema-1 JSON).
@@ -173,20 +180,30 @@ pub fn plan_internal(request_json: &str) -> Result<String, OrchestratorError> {
             catalog: &catalog,
             repository: request.repository.as_deref(),
         },
-        manifest,
+        manifest.clone(),
         &prep.discovery,
         changed.as_ref(),
     )?;
     plan.validate().map_err(internal_contract)?;
     check_matrix_budget(&plan.matrix)?;
-    let response = PlanResponse {
-        schema: SCHEMA,
-        matrix: plan.matrix.clone(),
-        plan,
-    };
+    let response = plan_response(plan, manifest);
     serde_json::to_string(&response).map_err(|err| OrchestratorError::Internal {
         problem: format!("response_encode:{err}"),
     })
+}
+
+/// Assemble the `plan-v1` response, staging trusted bytes when covered.
+///
+/// The manifest rides along only behind covered obligations: a
+/// rejected manifest must never reach the plan artifact.
+fn plan_response(plan: Plan, manifest: Option<BaselineManifest>) -> PlanResponse {
+    let covered = crate::covered_tasks::plan_has_covered(&plan);
+    PlanResponse {
+        schema: SCHEMA,
+        matrix: plan.matrix.clone(),
+        plan,
+        baseline_manifest: covered.then_some(manifest).flatten(),
+    }
 }
 
 /// Reject a matrix whose canonical bytes exceed the budget.

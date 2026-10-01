@@ -14,6 +14,7 @@ use crate::impl_common::{
     plan_for_source_change,
 };
 use crate::impl_merge::task_reports_for;
+use crate::impl_orch_core_cover::covered_plan;
 
 #[test]
 fn write_request_materializes_pull_request() -> TestResult {
@@ -203,7 +204,33 @@ fn plan_outputs_agree_with_plan_matrix() -> TestResult {
     assert_eq!(outputs.matrix, canonical_json_str(&value["matrix"])?);
     assert!(!outputs.matrix.contains('\n'));
     assert!(outputs.plan.contains(&outputs.matrix));
+    assert!(
+        outputs.covered_tasks.is_empty(),
+        "execute-all plans emit no channel"
+    );
     assert!(err_of(plan_outputs("not json"), "outputs reject garbage").is_ok());
+    Ok(())
+}
+
+#[test]
+fn plan_outputs_encode_covered_tasks() -> TestResult {
+    let (_repo, plan) = plan_for_source_change()?;
+    assert!(!plan.task_ids.is_empty(), "fixture must select work");
+    let (plan_json, _) = covered_plan(&plan)?;
+    let response = serde_json::json!({
+        "schema": 1,
+        "plan": plan_json,
+        "matrix": plan_json["matrix"],
+    });
+    let outputs = plan_outputs(&response.to_string())?;
+    let mut ids: Vec<&str> = plan
+        .obligations
+        .iter()
+        .map(|obligation| obligation.task_id.as_str())
+        .collect();
+    ids.sort_unstable();
+    ids.dedup();
+    assert_eq!(outputs.covered_tasks, format!(",{},", ids.join(",")));
     Ok(())
 }
 

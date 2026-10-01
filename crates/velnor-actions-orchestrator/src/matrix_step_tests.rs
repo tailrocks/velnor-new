@@ -64,6 +64,25 @@ fn obligation_step_carries_the_report_lookup_key() {
 }
 
 #[test]
+fn obligation_step_skips_when_plan_covered_it() {
+    let obligation = obligation();
+    let step = obligation_step(&obligation, &ToolCatalog::pinned(), &[]).expect("step");
+    assert_eq!(
+        step.condition.as_deref(),
+        Some("!contains(needs.plan.outputs.covered_tasks, ',stack/rust/demo/clippy/default,')")
+    );
+    let mut forged = obligation.clone();
+    forged.task_id = "not-a-task".to_owned();
+    assert!(
+        obligation_step(&forged, &ToolCatalog::pinned(), &[])
+            .expect_err("malformed id")
+            .to_string()
+            .contains("malformed_task_id"),
+        "malformed IDs never reach generated expressions"
+    );
+}
+
+#[test]
 fn report_wrapper_stamps_start_and_hands_env_to_helper() {
     let argv = report_wrapper_argv("true", "/tmp/h", "/tmp/start");
     assert_eq!(&argv[..2], ["sh".to_owned(), "-c".to_owned()]);

@@ -6,11 +6,14 @@
 //! Mise, vectors to `vectors` via Mise requests, text to the renderer.
 
 mod attach;
+mod baseline_publish;
 mod clippy_groups;
 mod config;
 mod cover;
 mod cover_baseline;
+mod cover_compat;
 mod cover_identity;
+mod covered_tasks;
 mod crate_job_ids;
 mod crate_jobs;
 mod critical_path;
@@ -43,6 +46,7 @@ mod plan_stacks;
 mod prepare;
 mod preseed_manifest;
 mod provenance;
+mod publish_job;
 mod qualify;
 mod recommendations;
 mod release_checkouts;
@@ -50,6 +54,7 @@ mod release_emit;
 mod release_identity;
 mod release_steps;
 mod request_event;
+mod retrieve_baseline;
 mod retrieve_reports;
 mod retrieve_retry;
 mod root;
@@ -62,6 +67,7 @@ mod select_edges;
 mod source_cache;
 mod source_prep;
 mod task_report;
+mod task_report_aggregate;
 mod toolcheck;
 mod toolfindings;
 mod utf8;
@@ -74,7 +80,10 @@ mod workflow;
 mod workflow_jobs;
 mod workflow_jobs_cache;
 
+pub use baseline_publish::{PUBLISH_OP, PublishOutputs, baseline_publish};
 pub use clippy_groups::{ClippyMemoryPlan, clippy_memory_groups};
+pub use cover_compat::baseline_artifact_numeric_id;
+pub use covered_tasks::COVERED_TASKS_OUTPUT;
 pub use critical_path::{
     CriticalPath, critical_path, critical_path_for_groups, critical_path_line,
     critical_path_structural, render_critical_path,

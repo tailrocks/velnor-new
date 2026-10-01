@@ -125,8 +125,12 @@ fn max_parallel_honored() -> Result<(), RenderError> {
 #[test]
 fn static_task_renders_no_strategy() -> Result<(), RenderError> {
     let text = render(task_job(&BTreeMap::new(), vec!["plan".to_owned()])?)?;
+    // The plan job legitimately publishes `covered_tasks`; only the
+    // static task job must stay free of matrix machinery.
+    let start = text.find("velnor-task:").expect("task job renders");
+    let task = &text[start..];
     for absent in ["strategy:", "outputs:", "id: plan", "fromJSON"] {
-        assert!(!text.contains(absent), "static hit {absent}:\n{text}");
+        assert!(!task.contains(absent), "static hit {absent}:\n{text}");
     }
     Ok(())
 }

@@ -1,7 +1,7 @@
 //! Gate 5 cases: baseline misses schedule work; claims revalidate at merge.
 
 use velnor_actions_contract::{FinalStatus, ObligationDecision, Plan};
-use velnor_actions_orchestrator::{merge_internal, plan_internal};
+use velnor_actions_orchestrator::{baseline_artifact_numeric_id, merge_internal, plan_internal};
 
 use crate::impl_common::{
     TestResult, config_with_branch, git, git_line, make_repo, passing_reports,
@@ -79,6 +79,7 @@ pub(crate) fn manifest_for(
 ) -> serde_json::Value {
     let compat = velnor_actions_contract::digest_b3(b"compat");
     let workflow = velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
+    let name = format!("velnor-baseline-{base}-{compat}");
     serde_json::json!({
         "schema": 2,
         "repository_id": velnor_actions_contract::digest_b3(b"github.com/o/r"),
@@ -92,8 +93,8 @@ pub(crate) fn manifest_for(
         "generator_version": plan.generator.version,
         "generator_sha256": plan.generator.sha256,
         "compatibility_id": compat,
-        "artifact_id": 9,
-        "artifact_name": format!("velnor-baseline-{base}-{compat}"),
+        "artifact_id": baseline_artifact_numeric_id(&name),
+        "artifact_name": name,
         "tasks": tasks,
     })
 }
@@ -235,7 +236,10 @@ fn valid_manifest_covers_exact_obligations() -> TestResult {
         );
         let proof = ob.baseline_proof.as_ref().expect("proof");
         assert_eq!(proof.source_commit(), head);
-        assert_eq!(proof.artifact_id(), 9);
+        assert_eq!(
+            proof.artifact_id(),
+            baseline_artifact_numeric_id(&artifact_name)
+        );
         assert_eq!(proof.artifact_name(), artifact_name);
     }
     assert!(plan.matrix.include.is_empty(), "{:?}", plan.matrix.include);

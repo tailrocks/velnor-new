@@ -7,9 +7,11 @@ use serde_json::{Value, json};
 use tempfile::TempDir;
 use velnor_actions_contract::{
     FinalReport, MatrixReport, MatrixStatus, ObligationDecision, Plan, TaskStatus,
-    canonical_json_bytes, canonical_json_str, digest_b3, validate_digest,
+    canonical_json_str, validate_digest,
 };
-use velnor_actions_orchestrator::{merge_internal, plan_internal, plan_outputs};
+use velnor_actions_orchestrator::{
+    baseline_artifact_numeric_id, merge_internal, plan_internal, plan_outputs,
+};
 
 use crate::impl_common::{
     TestResult, config_with_branch, fixture_manifest_json, git, git_line, make_repo,
@@ -92,14 +94,16 @@ pub(crate) fn manifest_for(plan: &Plan, base: &str, branch: &str) -> WireResult 
         .ok_or_else(|| std::io::Error::other("obligation"))?;
     let digest = &first.task_digest;
     let workflow = velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
+    let name = format!("velnor-baseline-{base}-{digest}");
+    let numeric = baseline_artifact_numeric_id(&name);
     Ok(
         json!({"schema": 2, "repository_id": digest, "source_commit": base,
         "ref": format!("refs/heads/{branch}"), "event": "push",
         "workflow_ref": format!("o/r/{workflow}@refs/heads/{branch}"),
         "run_id": 7, "run_attempt": 1, "final_status": "passed",
         "generator_version": plan.generator.version, "generator_sha256": plan.generator.sha256,
-        "compatibility_id": digest, "artifact_id": 9,
-        "artifact_name": format!("velnor-baseline-{base}-{digest}"),
+        "compatibility_id": digest, "artifact_id": numeric,
+        "artifact_name": name,
         "tasks": plan.obligations.iter().map(|ob| json!({"task_id": ob.task_id,
             "task_digest": ob.task_digest, "input_digest": ob.input_digest,
             "closure_digest": ob.closure_digest,
@@ -270,65 +274,6 @@ pub(crate) fn plan_for_partial_change() -> Result<(TempDir, Plan), Box<dyn std::
     let plan: Plan = serde_json::from_value(value["plan"].clone())?;
     plan.validate()?;
     Ok((dir, plan))
-}
-
-/// Plan JSON with every obligation covered plus its matching manifest.
-pub(crate) fn covered_plan(
-    plan: &Plan,
-) -> Result<(serde_json::Value, serde_json::Value), Box<dyn std::error::Error>> {
-    let base = plan.base.clone();
-    let base = base.ok_or_else(|| std::io::Error::other("base"))?;
-    let compat = digest_b3(b"compat");
-    let artifact_name = format!("velnor-baseline-{base}-{compat}");
-    let tasks: Vec<serde_json::Value> = plan
-        .obligations
-        .iter()
-        .map(|ob| {
-            serde_json::json!({
-                "task_id": ob.task_id,
-                "task_digest": ob.task_digest,
-                "input_digest": ob.input_digest,
-                "closure_digest": ob.closure_digest,
-                "proof_run_id": 7,
-                "observed_run_id": 7,
-            })
-        })
-        .collect();
-    let workflow = velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
-    let manifest = serde_json::json!({
-        "schema": 2,
-        "repository_id": digest_b3(b"repo"),
-        "source_commit": base,
-        "ref": "refs/heads/testmain",
-        "event": "push",
-        "workflow_ref": format!("o/r/{workflow}@refs/heads/testmain"),
-        "run_id": 7,
-        "run_attempt": 1,
-        "final_status": "passed",
-        "generator_version": plan.generator.version,
-        "generator_sha256": plan.generator.sha256,
-        "compatibility_id": compat,
-        "artifact_id": 9,
-        "artifact_name": artifact_name,
-        "tasks": tasks,
-    });
-    let manifest_digest = digest_b3(&canonical_json_bytes(&manifest)?);
-    let mut plan_json = serde_json::to_value(plan)?;
-    let obligations = plan_json["obligations"]
-        .as_array_mut()
-        .ok_or_else(|| std::io::Error::other("obligations shape"))?;
-    for obligation in obligations {
-        obligation["decision"] = serde_json::json!("covered_by_trusted_baseline");
-        obligation["baseline_proof"] = serde_json::json!({
-            "source_commit": base,
-            "run_id": 7,
-            "artifact_id": 9,
-            "artifact_name": artifact_name,
-            "manifest_digest": manifest_digest,
-        });
-    }
-    plan_json["matrix"]["include"] = serde_json::json!([]);
-    Ok((plan_json, manifest))
 }
 
 #[test]

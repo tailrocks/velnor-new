@@ -208,7 +208,7 @@ fn carried_proof_fails_closed_without_originating_attestation() -> TestResult {
 }
 
 #[test]
-fn lookup_without_exact_artifact_schedules_normally() -> TestResult {
+fn lookup_without_repo_scope_misses_before_spawn() -> TestResult {
     let (repo, seed) = plan_for_source_change()?;
     let request = serde_json::json!({"schema": 1, "run_key": "local", "base": seed.base, "head": seed.head, "event": "pull_request", "root": repo.path().display().to_string()});
     let value: Json = serde_json::from_str(&plan_internal(&request.to_string())?)?;
@@ -218,10 +218,11 @@ fn lookup_without_exact_artifact_schedules_normally() -> TestResult {
             .iter()
             .all(|ob| ob.decision == ObligationDecision::Execute)
     );
-    // No exact artifact name is formable without per-task compatibility,
-    // so the live lookup misses before spawning anything: execute-all
-    // with the precise miss reason, never a whole-run download.
-    assert_eq!(plan.baseline.reason(), Some("baseline_no_exact_artifact"));
+    // The exact artifact name always forms from the plan; with no
+    // repository scope (no origin, no request slug) the live lookup
+    // misses before spawning anything: execute-all with the precise
+    // miss reason, never a whole-run download.
+    assert_eq!(plan.baseline.reason(), Some("baseline_repo_unresolved"));
     Ok(())
 }
 

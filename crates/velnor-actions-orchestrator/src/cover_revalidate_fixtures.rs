@@ -28,6 +28,7 @@ pub(crate) fn digests() -> (String, String, String) {
 pub(crate) fn manifest_for(commit: &str) -> BaselineManifest {
     let (task, inputs, closure) = digests();
     let compat = digest_b3(b"compat");
+    let name = format!("velnor-baseline-{commit}-{compat}");
     BaselineManifest {
         schema: 2,
         repository_id: digest_b3(b"repo"),
@@ -41,8 +42,8 @@ pub(crate) fn manifest_for(commit: &str) -> BaselineManifest {
         generator_version: "0.1.0".to_owned(),
         generator_sha256: "1".repeat(64),
         compatibility_id: compat.clone(),
-        artifact_id: 9,
-        artifact_name: format!("velnor-baseline-{commit}-{compat}"),
+        artifact_id: crate::cover_compat::baseline_artifact_numeric_id(&name),
+        artifact_name: name,
         tasks: vec![crate::merge::required_evidence::BaselineTaskEntry {
             task_id: "stack/rust/root/clippy/default".to_owned(),
             task_digest: task,
@@ -61,10 +62,12 @@ pub(crate) fn manifest_for(commit: &str) -> BaselineManifest {
 pub(crate) fn plan_for(manifest: &BaselineManifest, base: Option<&str>) -> Plan {
     let (task, inputs, closure) = digests();
     let digest = digest_b3(&canonical_json_bytes(manifest).expect("canonical"));
+    // The proof constructor rejects zero, so the zero-id mutation case
+    // proves rejection via the manifest conjuncts, never a forged proof.
     let proof = BaselineProof::new(
         &manifest.source_commit,
         7,
-        9,
+        manifest.artifact_id.max(1),
         &manifest.artifact_name,
         &digest,
     )

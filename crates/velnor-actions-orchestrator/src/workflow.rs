@@ -19,7 +19,7 @@ use velnor_actions_mise::{
 use velnor_actions_rust::{CompileDriver, TestRunner};
 use velnor_actions_workflow_renderer::render::{
     CONCURRENCY_CANCEL, CONCURRENCY_GROUP, EXPECTED_PR_TYPES, FINAL_JOB_ID, PLAN_JOB_ID,
-    RenderContext, ValidatorCommand, WORKFLOW_PATH,
+    PUBLISH_JOB_ID, RenderContext, ValidatorCommand, WORKFLOW_PATH,
 };
 use velnor_actions_workflow_renderer::steps::{
     DENY_STEP_NAME, MACHETE_STEP_NAME, PLAN_OPERATION, REQUEST_DIR_PREFIX, STAGED_BINARY_PREFIX,
@@ -121,11 +121,7 @@ pub(crate) fn build_workflow(
     for (id, job) in built.jobs {
         jobs.insert(id, job);
     }
-    jobs.insert(LINT_JOB_ID.to_owned(), lint_job(label, &catalog)?);
-    jobs.insert(
-        FINAL_JOB_ID.to_owned(),
-        final_job(label, &crate_ids, acquire, &catalog)?,
-    );
+    insert_gate_jobs(&mut jobs, label, branch, &crate_ids, acquire, &catalog)?;
     wire_w1::check_crate_mbx_gating(&jobs, &built.drivers)?;
     let ir = WorkflowIr {
         name: config.workflow.name.clone(),
@@ -151,6 +147,34 @@ pub(crate) fn build_workflow(
         context,
         actionlint,
     })
+}
+
+/// Insert the lint, final-gate, and baseline-publish jobs.
+///
+/// The publish job closes the graph after the final gate: it needs
+/// Required, so it runs only when the gate passed.
+///
+/// # Errors
+///
+/// Returns contract, render-context, or tool-request errors.
+fn insert_gate_jobs(
+    jobs: &mut BTreeMap<String, Job>,
+    label: &str,
+    branch: &str,
+    crate_ids: &[String],
+    acquire: Option<Step>,
+    catalog: &ToolCatalog,
+) -> Result<(), OrchestratorError> {
+    jobs.insert(LINT_JOB_ID.to_owned(), lint_job(label, catalog)?);
+    jobs.insert(
+        FINAL_JOB_ID.to_owned(),
+        final_job(label, crate_ids, acquire.clone(), catalog)?,
+    );
+    jobs.insert(
+        PUBLISH_JOB_ID.to_owned(),
+        crate::publish_job::baseline_publish_job(label, branch, acquire)?,
+    );
+    Ok(())
 }
 
 /// Insert deferred format-report steps immediately after `Plan`.

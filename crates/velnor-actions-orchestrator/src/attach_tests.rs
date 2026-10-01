@@ -3,6 +3,7 @@
 //! Declared via `#[path]` from `attach.rs` under `cfg(test)`.
 
 use super::*;
+use crate::publish_job::baseline_publish_job;
 use crate::workflow::{CHECKOUT_USES, REQUEST_DIR};
 use crate::workflow_jobs::{final_job, plan_job};
 use std::collections::BTreeMap;
@@ -73,8 +74,13 @@ fn lock_acquire_inserts_digest_verified_stage() {
             "required".to_owned(),
             final_job("ubuntu-26.04", &[], None, &catalog).expect("final job"),
         ),
+        (
+            "publish-baseline".to_owned(),
+            baseline_publish_job("ubuntu-26.04", "main", None).expect("publish job"),
+        ),
     ]));
     assert!(attach_lock_acquire(&mut ir, &lock, "ubuntu-26.04", "0.1.0").is_ok());
+    assert_eq!(ir.jobs["publish-baseline"].steps[0].name, "Acquire Velnor");
     let names: Vec<&str> = ir.jobs["plan"]
         .steps
         .iter()
@@ -111,9 +117,7 @@ fn lock_acquire_inserts_digest_verified_stage() {
 #[test]
 fn preseed_attach_builds_once_and_sets_mode() {
     use velnor_actions_actionlint::ActionlintConfigInput;
-    use velnor_actions_workflow_renderer::{
-        PRESEED_BUILD_NAME, PRESEED_DOWNLOAD_NAME, PRESEED_STAGE_NAME, PRESEED_VERIFY_MANIFEST_NAME,
-    };
+    use velnor_actions_workflow_renderer::{PRESEED_BUILD_NAME, PRESEED_STAGE_NAME};
     let catalog = ToolCatalog::pinned();
     let mut plan = WorkflowPlan {
         ir: bare_ir(BTreeMap::from([
@@ -126,6 +130,10 @@ fn preseed_attach_builds_once_and_sets_mode() {
                 "required".to_owned(),
                 final_job("ubuntu-26.04", &["rust-demo".to_owned()], None, &catalog)
                     .expect("final job"),
+            ),
+            (
+                "publish-baseline".to_owned(),
+                baseline_publish_job("ubuntu-26.04", "main", None).expect("publish job"),
             ),
         ])),
         support: None,
@@ -164,30 +172,38 @@ fn preseed_attach_builds_once_and_sets_mode() {
             "Plan",
         ]
     );
-    for id in ["rust-demo", "required"] {
+    for id in ["rust-demo", "required", "publish-baseline"] {
         let names: Vec<&str> = plan.ir.jobs[id]
             .steps
             .iter()
             .map(|s| s.name.as_str())
             .collect();
-        let position = |name: &str| names.iter().position(|step| *step == name);
-        let (Some(download_at), Some(verify_at), Some(stage_at)) = (
-            position(PRESEED_DOWNLOAD_NAME),
-            position(PRESEED_VERIFY_MANIFEST_NAME),
-            position(PRESEED_STAGE_NAME),
-        ) else {
-            panic!("{id} misses download/verify/stage: {names:?}");
-        };
-        assert!(
-            download_at < verify_at && verify_at < stage_at,
-            "{id} must download, verify, then stage: {names:?}"
-        );
-        assert!(
-            !names.contains(&PRESEED_BUILD_NAME),
-            "{id} must not rebuild: {names:?}"
-        );
+        assert_consumer_triple(id, &names);
     }
     assert!(attach_preseed(&mut plan, "ubuntu-26.04-arm", "0.1.0").is_err());
+}
+
+/// Download, verify, then stage exactly once; never rebuild.
+fn assert_consumer_triple(id: &str, names: &[&str]) {
+    use velnor_actions_workflow_renderer::{
+        PRESEED_BUILD_NAME, PRESEED_DOWNLOAD_NAME, PRESEED_STAGE_NAME, PRESEED_VERIFY_MANIFEST_NAME,
+    };
+    let position = |name: &str| names.iter().position(|step| *step == name);
+    let (Some(download_at), Some(verify_at), Some(stage_at)) = (
+        position(PRESEED_DOWNLOAD_NAME),
+        position(PRESEED_VERIFY_MANIFEST_NAME),
+        position(PRESEED_STAGE_NAME),
+    ) else {
+        panic!("{id} misses download/verify/stage: {names:?}");
+    };
+    assert!(
+        download_at < verify_at && verify_at < stage_at,
+        "{id} must download, verify, then stage: {names:?}"
+    );
+    assert!(
+        !names.contains(&PRESEED_BUILD_NAME),
+        "{id} must not rebuild: {names:?}"
+    );
 }
 
 /// Pre-seed fixture plan over one plan job plus the final gate.

@@ -20,14 +20,16 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use velnor_actions_contract::{
-    CacheLayer, CacheOutcome, CacheResult, ExecuteTaskRef, MatrixEntry, MatrixReport, MatrixStatus,
-    MatrixTaskEntry, Plan, TaskReport, TaskStatus, canonical_json_bytes, report_id_for_matrix,
-    task_report_id_for_task, validate_run_key, validate_task_id,
+    CacheLayer, CacheOutcome, CacheResult, ExecuteTaskRef, MatrixEntry, MatrixReport, Plan,
+    TaskReport, TaskStatus, canonical_json_bytes, task_report_id_for_task, validate_run_key,
+    validate_task_id,
 };
 
 use crate::OrchestratorError;
 use crate::internal::{internal, internal_contract};
 use crate::internal_request::resolve_run_key;
+
+pub(crate) use crate::task_report_aggregate::single_task_aggregate;
 
 /// Report-production operation tag.
 pub const REPORT_OP: &str = "write-task-report-v1";
@@ -98,7 +100,10 @@ pub fn write_task_report() -> Result<usize, OrchestratorError> {
 /// The plan at `$RUNNER_TEMP/velnor/<run-key>/plan.json` binds every
 /// identity: task digest, matrix coordinates, event, and trust. A nonzero
 /// exit additionally reports each downstream ID as skipped; anything the
-/// plan cannot bind errors instead of emitting unbound bytes.
+/// plan cannot bind errors instead of emitting unbound bytes. A
+/// baseline-covered obligation proves nothing here: the merge
+/// revalidates it against the manifest, so this op succeeds silently
+/// with zero reports instead of failing `task_not_in_plan`.
 ///
 /// # Errors
 ///
@@ -117,6 +122,9 @@ pub(crate) fn write_task_report_to(
         return Err(internal("bad_exit_code"));
     }
     let plan = load_plan(run_key, runner_temp)?;
+    if crate::covered_tasks::covered_by_baseline(&plan, task_id) {
+        return Ok(0);
+    }
     let (entry, digest) = entry_and_digest(&plan, task_id)?;
     let duration_ms = elapsed_ms(start_ms);
     let task = terminal_task_report(&plan, entry, digest, exit_code, duration_ms)
@@ -298,63 +306,6 @@ fn terminal_task_report(
     Ok(report)
 }
 
-/// Validated single-task aggregate over one written task report.
-///
-/// # Errors
-///
-/// Returns [`ContractError`] for derivation or validation failures.
-pub(crate) fn single_task_aggregate(
-    plan: &Plan,
-    entry: &MatrixEntry,
-    task: &TaskReport,
-) -> Result<MatrixReport, velnor_actions_contract::ContractError> {
-    let mut aggregate = MatrixReport {
-        schema: MatrixReport::SCHEMA,
-        report_id: report_id_for_matrix(&plan.run_key, &entry.matrix_key)?,
-        run_key: plan.run_key.clone(),
-        matrix_id: entry.id.clone(),
-        matrix_key: entry.matrix_key.clone(),
-        status: MatrixStatus::Passed,
-        expected_task_ids: vec![task.task_id.clone()],
-        task_report_ids: vec![task.task_report_id.clone()],
-        tasks: vec![MatrixTaskEntry {
-            task_report_id: task.task_report_id.clone(),
-            task_id: task.task_id.clone(),
-            status: task.status,
-            exit_code: task.exit_code,
-        }],
-        selected: 1,
-        reused: 0,
-        executed: 0,
-        empty_partition: 0,
-        not_selected: 0,
-        failed: 0,
-        cancelled: 0,
-    };
-    match task.status {
-        TaskStatus::Reused => aggregate.reused = 1,
-        TaskStatus::Executed => aggregate.executed = 1,
-        TaskStatus::EmptyPartition => aggregate.empty_partition = 1,
-        TaskStatus::NotSelected => aggregate.not_selected = 1,
-        TaskStatus::Failed => {
-            aggregate.failed = 1;
-            aggregate.status = MatrixStatus::Failed;
-        }
-        TaskStatus::Cancelled => {
-            aggregate.cancelled = 1;
-            aggregate.status = MatrixStatus::Cancelled;
-        }
-    }
-    if aggregate.report_id != entry.report_id {
-        return Err(velnor_actions_contract::ContractError::identity(
-            "report_id",
-            "report_mismatch",
-        ));
-    }
-    aggregate.validate()?;
-    Ok(aggregate)
-}
-
 /// Write one entry's matrix report plus its task file as canonical JSON.
 ///
 /// # Errors
@@ -390,6 +341,9 @@ pub(crate) fn write_entry_reports(
     Ok(())
 }
 
+#[cfg(test)]
+#[path = "task_report_cover_tests.rs"]
+mod task_report_cover_tests;
 #[cfg(test)]
 #[path = "task_report_merge_tests.rs"]
 mod task_report_merge_tests;

@@ -180,11 +180,14 @@ pub(crate) fn obligation_identity_env(
 /// Identity env doubles as the report lookup key; the plan binds the
 /// digests, never these baked values. Doc obligations additionally
 /// carry the typed `cargo_payload_env` pairs (`RUSTDOCFLAGS=-D
-/// warnings`), matching the plan identity envelope.
+/// warnings`), matching the plan identity envelope. The step skips via
+/// `if:` when the plan covered this obligation; unknown coverage
+/// executes.
 ///
 /// # Errors
 ///
-/// Returns contract errors for invalid argv, joins, or wrapper shapes.
+/// Returns contract errors for invalid argv, joins, wrapper shapes, or
+/// task IDs unfit for the generated skip gate.
 pub(crate) fn obligation_step(
     obligation: &CrateObligation,
     catalog: &ToolCatalog,
@@ -222,8 +225,16 @@ pub(crate) fn obligation_step(
         })?;
     let start = start_path_for_key(&obligation.matrix_key);
     let run = report_wrapper_argv(&joined, &helper_path_for_version(), &start);
-    velnor_actions_workflow_renderer::shell_step(&obligation.step_name, run, env)
-        .map_err(OrchestratorError::from)
+    let mut step = velnor_actions_workflow_renderer::shell_step(&obligation.step_name, run, env)
+        .map_err(OrchestratorError::from)?;
+    // Skip when the plan covered this obligation: unknown coverage
+    // (absent output) executes, so the gate can only skip proven work.
+    //
+    // Task IDs reaching here validated at obligation construction, and
+    // the grammar admits no quotes or commas, so the generated
+    // expression cannot break out of its string literal.
+    step.condition = Some(crate::covered_tasks::skip_condition(&obligation.task_id)?);
+    Ok(step)
 }
 
 /// Require the obligation identity env to match the report op contract.

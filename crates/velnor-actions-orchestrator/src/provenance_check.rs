@@ -59,7 +59,11 @@ pub(crate) struct ValidatedProvenance {
     pub(crate) run_id: u64,
     /// Derived baseline artifact name.
     pub(crate) artifact_name: String,
-    /// Numeric baseline artifact ID.
+    /// Manifest-assigned numeric fingerprint of the artifact name.
+    ///
+    /// Never the service-assigned artifact ID: the publisher writes the
+    /// manifest before uploading, so no manifest can carry an ID the
+    /// service assigns at upload time.
     pub(crate) artifact_id: u64,
     /// Manifest content digest.
     pub(crate) manifest_digest: String,
@@ -141,6 +145,11 @@ pub(crate) fn validate_provenance(
     validate_repository(manifest, expected)?;
     validate_workflow_ref(manifest, expected)?;
     reject(manifest.artifact_name == expect, "artifact_mismatch")?;
+    reject(
+        manifest.artifact_id
+            == crate::cover_compat::baseline_artifact_numeric_id(&manifest.artifact_name),
+        "artifact_mismatch",
+    )?;
     for task in &manifest.tasks {
         validate_task_entry(task, manifest.run_id)?;
     }

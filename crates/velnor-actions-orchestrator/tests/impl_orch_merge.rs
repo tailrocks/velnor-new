@@ -13,9 +13,10 @@ use crate::impl_common::{
 };
 use crate::impl_merge::task_reports_for;
 use crate::impl_orch_core::{
-    committed_repo, covered_plan, merge, merge_request, plan_for_partial_change, push_request,
-    set_task, success_jobs, wide_repo,
+    committed_repo, merge, merge_request, plan_for_partial_change, push_request, set_task,
+    success_jobs, wide_repo,
 };
+use crate::impl_orch_core_cover::covered_plan;
 
 #[test]
 fn orch_core_merge_counts_cover_five_states() -> TestResult {

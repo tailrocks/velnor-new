@@ -17,11 +17,14 @@ pub use crate::cache_steps::{
 };
 
 pub use crate::steps_artifact::{
-    crate_job_report_upload_step, download_artifact_step, matrix_report_upload_step,
-    upload_artifact_step,
+    ARTIFACT_NAME_OUTPUT, BASELINE_PUBLISH_UPLOAD_NAME, BASELINE_RETENTION_DAYS, PUBLISH_STEP_ID,
+    baseline_publish_upload_step, crate_job_report_upload_step, download_artifact_step,
+    matrix_report_upload_step, upload_artifact_step,
 };
 pub(crate) use crate::steps_internal::split_internal_operation;
-pub use crate::steps_internal::{internal_step, merge_step, plan_step, write_request_step};
+pub use crate::steps_internal::{
+    internal_step, merge_step, plan_step, publish_step, write_request_step,
+};
 
 /// Env key selecting the staged-binary internal operation.
 pub const INTERNAL_OP_ENV: &str = "VELNOR_INTERNAL_OP";
@@ -33,6 +36,8 @@ pub const PLAN_OPERATION: &str = "plan-v1";
 pub const WRITE_PRESEED_MANIFEST_OPERATION: &str = "write-preseed-manifest-v1";
 /// Report-merge operation name.
 pub const MERGE_OPERATION: &str = "merge-v1";
+/// Baseline-publish operation: `publish-baseline-v1`.
+pub const PUBLISH_OPERATION: &str = "publish-baseline-v1";
 /// Matrix-report fetch operation name.
 pub const FETCH_OPERATION: &str = "fetch-reports-v1";
 /// Write-request operation name.

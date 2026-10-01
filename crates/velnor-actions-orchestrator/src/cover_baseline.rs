@@ -152,6 +152,18 @@ pub(crate) fn apply_baseline(
     Ok(())
 }
 
+/// Exact baseline artifact name for one plan over its base.
+///
+/// Compatibility derives from the plan's obligation set alone, so the
+/// lookup names the same artifact the protected push published without
+/// caller input. A malformed base or an underivable shape misses
+/// before spawning anything.
+pub(crate) fn lookup_artifact_name(plan: &Plan, base: &str) -> Result<String, String> {
+    let compat = crate::cover_compat::baseline_compat_for_plan(plan)?;
+    velnor_actions_contract::artifact_id_for_baseline(base, &compat)
+        .map_err(|_| "baseline_no_exact_artifact".to_owned())
+}
+
 /// Mark baseline evidence unavailable with an explicit reason.
 fn mark_unavailable(plan: &mut Plan, reason: &str) {
     if plan.baseline.mark_unavailable(reason).is_err() {
@@ -175,13 +187,20 @@ fn lookup_manifest(plan: &mut Plan, inputs: BaselineInputs<'_>) -> Option<Baseli
         mark_unavailable(plan, SOURCE_BUILD_REASON);
         return None;
     }
+    let artifact = match lookup_artifact_name(plan, &base) {
+        Ok(name) => name,
+        Err(reason) => {
+            mark_unavailable(plan, &reason);
+            return None;
+        }
+    };
     match shard::resolve_manifests(
         inputs.catalog,
         inputs.root,
         &base,
         inputs.workflow,
         inputs.branch,
-        None,
+        Some(&artifact),
         inputs.repository,
     ) {
         Ok(found) => {
@@ -288,6 +307,9 @@ pub(crate) fn baseline_entry_for(
     }
 }
 
+#[cfg(test)]
+#[path = "cover_baseline_lookup_tests.rs"]
+mod cover_baseline_lookup_tests;
 #[cfg(test)]
 #[path = "cover_baseline_tests.rs"]
 mod cover_baseline_tests;

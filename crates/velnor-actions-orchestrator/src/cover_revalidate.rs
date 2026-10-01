@@ -267,6 +267,8 @@ fn manifest_provenance_matches_plan(
     let identified = manifest.run_id > 0 && manifest.run_attempt > 0 && manifest.artifact_id > 0;
     let derived_name = baseline_artifact_name(&manifest.source_commit, &manifest.compatibility_id)
         .is_ok_and(|expect| manifest.artifact_name == expect);
+    let derived_id = manifest.artifact_id
+        == crate::cover_compat::baseline_artifact_numeric_id(&manifest.artifact_name);
     let run_bound = manifest
         .tasks
         .iter()
@@ -283,6 +285,7 @@ fn manifest_provenance_matches_plan(
         && manifest.final_status == "passed"
         && identified
         && derived_name
+        && derived_id
         && run_bound
         && entries_ok
         && validate_digest(&manifest.repository_id).is_ok()
@@ -353,7 +356,7 @@ fn merge_anchors_match(manifest: &BaselineManifest, anchors: &MergeAnchorExpecta
 mod cover_revalidate_entry_tests;
 #[cfg(test)]
 #[path = "cover_revalidate_fixtures.rs"]
-mod cover_revalidate_fixtures;
+pub(crate) mod cover_revalidate_fixtures;
 #[cfg(test)]
 #[path = "cover_revalidate_tests.rs"]
 mod cover_revalidate_tests;

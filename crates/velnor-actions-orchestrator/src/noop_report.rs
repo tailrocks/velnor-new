@@ -84,7 +84,9 @@ pub(crate) fn noop_reason_present() -> Option<String> {
 ///
 /// The exit code must be zero (a reason plus a failure is
 /// contradictory) and the expected digest must match the plan binding;
-/// anything else errors instead of emitting unbound bytes.
+/// anything else errors instead of emitting unbound bytes. A
+/// baseline-covered obligation succeeds silently with zero reports:
+/// the merge revalidates it against the manifest.
 ///
 /// # Errors
 ///
@@ -103,6 +105,9 @@ pub(crate) fn write_noop_report_to(
         return Err(internal("reason_with_failure"));
     }
     let plan = crate::task_report::load_plan(run_key, runner_temp)?;
+    if crate::covered_tasks::covered_by_baseline(&plan, task_id) {
+        return Ok(0);
+    }
     let (entry, digest) = entry_and_digest(&plan, task_id)?;
     if digest != request.task_digest {
         return Err(internal("noop_digest_mismatch"));
@@ -125,6 +130,11 @@ pub(crate) fn write_noop_report_to(
 
 /// Report every downstream ID as skipped behind a failure.
 ///
+/// Baseline-covered downstream IDs prove nothing here: the merge
+/// revalidates them against the manifest, so they pass through
+/// silently instead of failing `task_not_in_plan` and hiding the
+/// later skips behind them.
+///
 /// # Errors
 ///
 /// Returns [`OrchestratorError::Internal`] for unbound downstream IDs
@@ -139,6 +149,9 @@ pub(crate) fn write_skip_reports(
     for downstream_id in downstream {
         if downstream_id == task_id {
             return Err(internal("downstream_self"));
+        }
+        if crate::covered_tasks::covered_by_baseline(plan, downstream_id) {
+            continue;
         }
         let (entry, digest) = entry_and_digest(plan, downstream_id)?;
         let task = not_selected_report(&NotSelectedInputs {

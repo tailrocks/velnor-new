@@ -165,7 +165,7 @@ fn gh_stdout_checked(output: &velnor_actions_mise::ProcessOutput) -> Result<Stri
 /// a conflicted or unresolvable repo misses before spawning anything.
 /// The selected run pins its successful attempt and the exact
 /// artifact must exist unexpired before the download; survivors must
-/// match the exact base commit, run, attempt, artifact id, and
+/// match the exact base commit, run, attempt, name fingerprint, and
 /// directory name; temp is always removed.
 /// # Errors
 pub(crate) fn resolve_manifests(
@@ -186,7 +186,12 @@ pub(crate) fn resolve_manifests(
     let text = BaselineLookup::run(catalog, root, lookup.list_args())?;
     let selected = select_exact_base_run(&text, base, branch)?;
     let listed = BaselineLookup::run(catalog, root, lookup.artifacts_args(selected.run_id))?;
-    let artifact_id = select_baseline_artifact(&listed, artifact)?;
+    // Existence plus freshness only: the listing proves the exact
+    // artifact is present unexpired in the exact run. Its numeric
+    // service ID never enters the manifest binding: the manifest
+    // carries the name fingerprint, which the publisher can derive
+    // before uploading and the service ID can never satisfy.
+    select_baseline_artifact(&listed, artifact)?;
     let temp = tempfile::tempdir().map_err(|_| "baseline_unavailable".to_owned())?;
     BaselineLookup::run(
         catalog,
@@ -206,7 +211,7 @@ pub(crate) fn resolve_manifests(
         base,
         selected.run_id,
         selected.attempt,
-        artifact_id,
+        artifact,
     )
 }
 
@@ -230,13 +235,18 @@ fn resolve_lookup_repo(root: &Path, repository: Option<&str>) -> Result<String, 
 }
 
 /// Keep temp artifacts matching the exact base, run, attempt, id, shape.
+///
+/// The expected numeric ID derives from the artifact name, matching
+/// the publisher-written fingerprint; the service listing ID never
+/// binds manifest bytes.
 fn collect_manifests(
     dir: &Path,
     base: &str,
     run_id: u64,
     attempt: u64,
-    artifact_id: u64,
+    artifact: &str,
 ) -> Result<Vec<BaselineManifest>, String> {
+    let expected = crate::cover_compat::baseline_artifact_numeric_id(artifact);
     let mut out = Vec::new();
     let entries = std::fs::read_dir(dir).map_err(|_| "baseline_unavailable".to_owned())?;
     for entry in entries {
@@ -246,7 +256,7 @@ fn collect_manifests(
             base,
             run_id,
             attempt,
-            artifact_id,
+            expected,
         ) {
             out.push(manifest);
         }

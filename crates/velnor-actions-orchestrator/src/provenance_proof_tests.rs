@@ -10,6 +10,7 @@ use crate::merge::required_evidence::BaselineTaskEntry;
 fn manifest_and_expected(base: &str) -> (BaselineManifest, ProvenanceExpectations) {
     let digest = digest_b3(b"d");
     let anchor = digest_b3("github.com/o/r".as_bytes());
+    let name = baseline_artifact_name(base, &digest).expect("name");
     let manifest = BaselineManifest {
         schema: 2,
         repository_id: anchor.clone(),
@@ -23,8 +24,8 @@ fn manifest_and_expected(base: &str) -> (BaselineManifest, ProvenanceExpectation
         generator_version: "0.1.0".to_owned(),
         generator_sha256: "1".repeat(64),
         compatibility_id: digest,
-        artifact_id: 9,
-        artifact_name: baseline_artifact_name(base, &digest_b3(b"d")).expect("name"),
+        artifact_id: crate::cover_compat::baseline_artifact_numeric_id(&name),
+        artifact_name: name,
         tasks: Vec::new(),
         expires_at_unix: None,
     };

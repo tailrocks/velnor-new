@@ -9,9 +9,8 @@ use crate::impl_common::{
     plan_for_source_change, without_ambient_ci_env,
 };
 use crate::impl_merge::{merge, merge_request, success_jobs};
-use crate::impl_orch_core::{
-    covered_plan, merge as core_merge, merge_request as core_merge_request,
-};
+use crate::impl_orch_core::{merge as core_merge, merge_request as core_merge_request};
+use crate::impl_orch_core_cover::covered_plan;
 
 #[test]
 fn empty_diff_no_baseline_executes_all() -> TestResult {

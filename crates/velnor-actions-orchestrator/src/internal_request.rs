@@ -52,6 +52,8 @@ pub struct PlanOutputs {
     pub plan_id: String,
     /// Run key for step outputs (WF-4.15).
     pub run_key: String,
+    /// Comma-wrapped covered task IDs (empty when none covered).
+    pub covered_tasks: String,
 }
 
 /// Materialize the canonical request file from the GitHub environment.
@@ -104,9 +106,11 @@ pub fn write_request() -> Result<PathBuf, OrchestratorError> {
 /// The consuming op comes from the `<op>-request.json` file name; the file
 /// is written exclusively (a pre-existing file errors, never overwritten).
 /// The merge target assembles its request from downloaded artifacts and
-/// ignores the event payload. Parent directories are created under
-/// `anchor` with symlink refusal; the caller passes the runner-owned
-/// directory the request path must stay inside.
+/// ignores the event payload; the publish target records the push
+/// refs plus the protected-branch evidence for the publish gate.
+/// Parent directories are created under `anchor` with symlink refusal;
+/// the caller passes the runner-owned directory the request path must
+/// stay inside.
 ///
 /// # Errors
 ///
@@ -124,6 +128,16 @@ pub fn write_request_parts(
     let op = request_op(&path)?;
     if op == MERGE_OP {
         return crate::merge_request::write_merge_request(&path);
+    }
+    if op == crate::baseline_publish::PUBLISH_OP {
+        return crate::baseline_publish::write_publish_request(
+            &path,
+            event_name,
+            payload_json,
+            github_sha,
+            repository,
+            anchor,
+        );
     }
     let payload: serde_json::Value =
         serde_json::from_str(payload_json).map_err(|_| internal("malformed_event_payload"))?;
@@ -183,6 +197,7 @@ pub fn plan_outputs(response_json: &str) -> Result<PlanOutputs, OrchestratorErro
         matrix: canonical_json_str(&response.matrix).map_err(internal_contract)?,
         plan_id: response.plan.plan_id.clone(),
         run_key: response.plan.run_key.clone(),
+        covered_tasks: crate::covered_tasks::CoveredTasks::for_plan(&response.plan).encode(),
     })
 }
 
@@ -213,7 +228,9 @@ pub fn publish_plan_files(
 /// Write canonical `plan.json` plus `matrix.json` into one directory.
 ///
 /// `matrix.json` is exactly `{"include": [...]}`: the same matrix the
-/// plan step emits through `$GITHUB_OUTPUT`.
+/// plan step emits through `$GITHUB_OUTPUT`. When obligations covered,
+/// the trusted `baseline.json` rides along so the merge revalidates
+/// covered claims against the exact planner evidence.
 ///
 /// # Errors
 ///
@@ -233,6 +250,14 @@ pub(crate) fn write_plan_files(
         &matrix,
         "plan_artifact",
     )?;
+    if let Some(manifest) = response.baseline_manifest.as_ref() {
+        let bytes = canonical_json_bytes(manifest).map_err(internal_contract)?;
+        crate::exclusive_write::write_exclusive(
+            &dir.join(crate::baseline_publish::BASELINE_FILENAME),
+            &bytes,
+            "plan_artifact",
+        )?;
+    }
     Ok(())
 }
 
@@ -320,7 +345,7 @@ fn request_op(path: &Path) -> Result<String, OrchestratorError> {
         .and_then(|name| name.to_str())
         .unwrap_or_default();
     let op = name.strip_suffix("-request.json").unwrap_or_default();
-    if op == PLAN_OP || op == MERGE_OP {
+    if op == PLAN_OP || op == MERGE_OP || op == crate::baseline_publish::PUBLISH_OP {
         Ok(op.to_owned())
     } else {
         Err(internal("unknown_request_op"))

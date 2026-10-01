@@ -66,6 +66,7 @@ pub(super) fn plan_with(task_ids: &[&str]) -> Plan {
 pub(super) fn manifest_with(entries: &[(&str, &str)]) -> BaselineManifest {
     let digest = digest_b3(b"digest");
     let commit = "a".repeat(40);
+    let name = format!("velnor-baseline-{commit}-{digest}");
     BaselineManifest {
         schema: 2,
         repository_id: digest_b3("github.com/o/r".as_bytes()),
@@ -79,8 +80,8 @@ pub(super) fn manifest_with(entries: &[(&str, &str)]) -> BaselineManifest {
         generator_version: "0.1.0".to_owned(),
         generator_sha256: "1".repeat(64),
         compatibility_id: digest.clone(),
-        artifact_id: 9,
-        artifact_name: format!("velnor-baseline-{commit}-{digest}"),
+        artifact_id: crate::cover_compat::baseline_artifact_numeric_id(&name),
+        artifact_name: name,
         expires_at_unix: None,
         tasks: entries
             .iter()

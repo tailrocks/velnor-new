@@ -56,6 +56,45 @@ fn lookup_repo_resolution_is_request_hermetic() {
     );
 }
 
+/// Resolution misses before spawning without a known artifact name.
+///
+/// The repo, base, and workflow all validate, so only the missing
+/// name can fail: no `gh` process ever starts on this path.
+#[test]
+fn resolve_manifests_requires_exact_artifact_before_spawn() {
+    let catalog = ToolCatalog::pinned();
+    let checkout = git_checkout_with_origin("https://github.com/o/r.git");
+    let base = "a".repeat(40);
+    for artifact in [None, Some("")] {
+        assert_eq!(
+            resolve_manifests(
+                &catalog,
+                checkout.path(),
+                &base,
+                ".github/workflows/ci.yml",
+                "testmain",
+                artifact,
+                Some("o/r"),
+            )
+            .expect_err("must miss"),
+            "baseline_no_exact_artifact".to_owned()
+        );
+    }
+    assert_eq!(
+        resolve_manifests(
+            &catalog,
+            checkout.path(),
+            "short",
+            ".github/workflows/ci.yml",
+            "testmain",
+            Some("velnor-baseline-x"),
+            Some("o/r"),
+        )
+        .expect_err("must miss"),
+        "base_must_be_full_sha".to_owned()
+    );
+}
+
 /// `gh` stdout decodes under its explicit cap only: small listings
 /// pass through, runaway output and undecodable bytes miss before
 /// any JSON parsing.

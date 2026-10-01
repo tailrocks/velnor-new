@@ -58,6 +58,22 @@ fn merge_rejects_advisory_without_external_data() {
     assert!(miss.contains("cache_corrupt"), "{miss:?}");
 }
 
+/// Merge rejects a numeric ID that is not the name fingerprint.
+///
+/// The manifest author read a service-assigned ID back after upload;
+/// the fingerprint conjunct fails exactly like the derived name does.
+#[test]
+fn merge_rejects_underived_numeric_id() {
+    let commit = "a".repeat(40);
+    let mut manifest = manifest_for(&commit);
+    manifest.artifact_id = manifest.artifact_id.wrapping_add(1).max(1);
+    let plan = plan_for(&manifest, Some(&commit));
+    assert!(!manifest_provenance_matches_plan(&plan, &manifest, NOW));
+    let (signals, miss) = verdict(&plan, Some(&manifest));
+    assert!(signals.planning_failed, "fingerprint mismatch must fail");
+    assert!(miss.contains("cache_corrupt"), "{miss:?}");
+}
+
 /// Merge accepts a covered advisory claim with fresh external data.
 #[test]
 fn merge_accepts_advisory_with_fresh_external_data() {

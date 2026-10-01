@@ -10,14 +10,14 @@ use crate::{
         PRESEED_BUILD_NAME, PRESEED_DOWNLOAD_NAME, PRESEED_MANIFEST_NAME, PRESEED_STAGE_NAME,
         PRESEED_UPLOAD_NAME, PRESEED_VERIFY_MANIFEST_NAME,
     },
-    render::{FINAL_JOB_ID, PLAN_JOB_ID},
+    render::{FINAL_JOB_ID, PLAN_JOB_ID, PUBLISH_JOB_ID},
 };
 
 /// Pre-seed closure: single plan build plus artifact sharing (Gap A).
 ///
 /// In pre-seed mode the plan job must build, upload, and stage the helper
-/// while every present task/final job downloads, digest-verifies, and
-/// stages it in that order; anything less would rebuild per job, stage
+/// while every present task/final/publish job downloads, digest-verifies,
+/// and stages it in that order; anything less would rebuild per job, stage
 /// unverified bytes, or invoke an unstaged helper. Outside pre-seed
 /// mode there is nothing to close over.
 /// # Errors
@@ -44,7 +44,7 @@ pub(crate) fn check_preseed_closure(
         }
     }
     for (id, job) in jobs {
-        if id != FINAL_JOB_ID && !id.starts_with(CRATE_JOB_ID_PREFIX) {
+        if id != FINAL_JOB_ID && id != PUBLISH_JOB_ID && !id.starts_with(CRATE_JOB_ID_PREFIX) {
             continue;
         }
         let position = |name: &str| job.steps.iter().position(|step| step.name == name);

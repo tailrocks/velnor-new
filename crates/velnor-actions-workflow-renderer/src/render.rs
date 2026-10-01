@@ -18,8 +18,8 @@ use crate::{
 };
 
 pub use crate::matrix::{
-    MATRIX_MAX_PARALLEL_ENV, MATRIX_NEEDS_JOB_ENV, MATRIX_OUTPUT_ENV, MatrixSource, PLAN_ID_OUTPUT,
-    PLAN_STEP_ID, RUN_KEY_OUTPUT,
+    COVERED_TASKS_OUTPUT, MATRIX_MAX_PARALLEL_ENV, MATRIX_NEEDS_JOB_ENV, MATRIX_OUTPUT_ENV,
+    MatrixSource, PLAN_ID_OUTPUT, PLAN_STEP_ID, RUN_KEY_OUTPUT,
 };
 pub use crate::setup::MiseSetup;
 
@@ -46,6 +46,8 @@ pub const PLAN_JOB_ID: &str = "plan";
 pub const TASK_JOB_ID: &str = "velnor-task";
 /// Candidate validation job ID (Velnor policy only).
 pub const CANDIDATE_JOB_ID: &str = "candidate";
+/// Baseline-publish job ID: runs after the final gate passes.
+pub const PUBLISH_JOB_ID: &str = "publish-baseline";
 /// Full-SHA Alint pin for the repository-policy `alint` job.
 pub const ALINT_USES: &str = "asamarts/alint@9f9d34ba0eae3888299b9e570f43338b0e7f2cdb";
 /// Pinned Alint binary release tag for the step's `version:` input.
@@ -318,7 +320,10 @@ fn render_merged(
     let mut document = document::workflow_to_yaml(ir, &jobs, ctx)?;
     if let Some((source, max_parallel)) = &matrix {
         matrix::attach_task_matrix(&mut document, source, *max_parallel)?;
+    } else {
+        matrix::attach_plan_outputs(&mut document)?;
     }
+    matrix::insert_publish_step_id(&mut document)?;
     let document = crate::yaml::quote_run_values_in_yaml(document);
     let text = marker::with_marker(&ctx.generator_version, &render_yaml(&document))?;
     steps::scan_for_private_subcommands(&text)?;

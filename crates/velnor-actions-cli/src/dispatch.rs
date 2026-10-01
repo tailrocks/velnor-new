@@ -2,11 +2,12 @@
 //!
 //! The private gate requires `VELNOR_INTERNAL_OP` plus the exact request file
 //! in `VELNOR_REQUEST_FILE`: `write-request-v1` needs GitHub event env and no
-//! pre-existing file, `plan-v1`/`merge-v1` need a pre-existing request file,
-//! `fetch-reports-v1`/`write-task-report-v1` need runner temp plus the
-//! numeric run ID instead, and `write-preseed-manifest-v1` needs runner
-//! temp only. Anything else falls through to Clap, so public behavior is
-//! byte-identical with or without the environment set.
+//! pre-existing file, `plan-v1`/`merge-v1`/`publish-baseline-v1` need a
+//! pre-existing request file, `fetch-reports-v1`/`write-task-report-v1`
+//! need runner temp plus the numeric run ID instead, and
+//! `write-preseed-manifest-v1` needs runner temp only. Anything else falls
+//! through to Clap, so public behavior is byte-identical with or without
+//! the environment set.
 
 use std::env;
 use std::fs;
@@ -15,14 +16,15 @@ use std::process::ExitCode;
 
 use clap::Parser;
 use velnor_actions_orchestrator::{
-    FETCH_OP, GenerateOptions, MERGE_OP, OrchestratorError, PLAN_OP, PRESEED_MANIFEST_OP,
-    REPORT_OP, REQUEST_FILE_ENV, WRITE_REQUEST_OP, generate, init_config, merge_internal,
-    merge_passed, plan_internal, plan_outputs, plan_text_checked, prepare, publish_final_report,
-    publish_plan_files, resolve_root, response_path_for, retrieve_reports, write_preseed_manifest,
-    write_request, write_task_report,
+    COVERED_TASKS_OUTPUT, FETCH_OP, GenerateOptions, MERGE_OP, OrchestratorError, PLAN_OP,
+    PRESEED_MANIFEST_OP, PUBLISH_OP, REPORT_OP, REQUEST_FILE_ENV, WRITE_REQUEST_OP, generate,
+    init_config, merge_internal, merge_passed, plan_internal, plan_outputs, plan_text_checked,
+    prepare, publish_final_report, publish_plan_files, resolve_root, response_path_for,
+    retrieve_reports, write_preseed_manifest, write_request, write_task_report,
 };
 
 use crate::args::{Cli, Command};
+use crate::dispatch_publish::run_publish_internal;
 
 /// Environment variable selecting the private operation. Never printed.
 const OP_ENV: &str = "VELNOR_INTERNAL_OP";
@@ -50,6 +52,8 @@ enum InternalOp {
     Report,
     /// Pre-seed manifest-writing operation.
     PreseedManifest,
+    /// Baseline-publish operation.
+    Publish,
 }
 
 /// Validated private request: operation plus exact request-file path.
@@ -95,6 +99,7 @@ fn gate_request() -> Option<InternalRequest> {
         Ok(tag) if tag == FETCH_OP => InternalOp::Fetch,
         Ok(tag) if tag == REPORT_OP => InternalOp::Report,
         Ok(tag) if tag == PRESEED_MANIFEST_OP => InternalOp::PreseedManifest,
+        Ok(tag) if tag == PUBLISH_OP => InternalOp::Publish,
         _ => return None,
     };
     if op == InternalOp::Fetch || op == InternalOp::Report {
@@ -129,7 +134,7 @@ fn gate_request() -> Option<InternalRequest> {
                 return None;
             }
         }
-        InternalOp::Plan | InternalOp::Merge => {
+        InternalOp::Plan | InternalOp::Merge | InternalOp::Publish => {
             if !path.is_file() {
                 return None;
             }
@@ -160,6 +165,7 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
             Ok(()) => ExitCode::SUCCESS,
             Err(error) => fail_internal(&error.to_string()),
         },
+        InternalOp::Publish => run_publish_internal(&request.path),
     }
 }
 
@@ -193,7 +199,14 @@ fn run_plan_internal(path: &Path) -> ExitCode {
     let Some(output_path) = env::var_os(GITHUB_OUTPUT_ENV).filter(|value| !value.is_empty()) else {
         return fail_internal("missing github output");
     };
-    let body = format!("matrix={}\nplan={}\n", outputs.matrix, outputs.plan);
+    let mut body = format!("matrix={}\nplan={}\n", outputs.matrix, outputs.plan);
+    // Always emitted, even when empty: the skip gate reads this output
+    // through GitHub's evaluator, so an explicitly empty value keeps
+    // the contract independent of unset-output semantics.
+    body.push_str(COVERED_TASKS_OUTPUT);
+    body.push('=');
+    body.push_str(&outputs.covered_tasks);
+    body.push('\n');
     match fs::OpenOptions::new()
         .append(true)
         .create(true)

@@ -78,7 +78,7 @@ pub(crate) struct BaselineManifest {
     pub generator_sha256: String,
     /// Compatibility identity.
     pub(crate) compatibility_id: String,
-    /// Numeric baseline artifact ID.
+    /// Manifest-assigned numeric fingerprint of the artifact name.
     pub(crate) artifact_id: u64,
     /// Derived baseline artifact name.
     pub(crate) artifact_name: String,

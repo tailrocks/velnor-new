@@ -9,7 +9,12 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract::{Job, StepKind};
 
-use crate::{RenderError, render::TASK_JOB_ID, steps, yaml::Yaml};
+use crate::{
+    RenderError,
+    render::{PLAN_JOB_ID, PUBLISH_JOB_ID, TASK_JOB_ID},
+    steps,
+    yaml::Yaml,
+};
 
 /// Matrix marker: producer job backing `needs.<job>.outputs.<output>`.
 pub const MATRIX_NEEDS_JOB_ENV: &str = "VELNOR_MATRIX_NEEDS_JOB";
@@ -23,6 +28,8 @@ pub const PLAN_STEP_ID: &str = "plan";
 pub const PLAN_ID_OUTPUT: &str = "plan_id";
 /// Job-output name carrying the run key (`r<run-id>-a<run-attempt>`).
 pub const RUN_KEY_OUTPUT: &str = "run_key";
+/// Job-output name carrying the comma-wrapped covered task IDs.
+pub const COVERED_TASKS_OUTPUT: &str = "covered_tasks";
 
 /// Typed matrix source for the task job's `strategy.matrix`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -156,7 +163,7 @@ pub(crate) fn attach_task_matrix(
         output.clone(),
         Yaml::str(format!("${{{{ steps.{PLAN_STEP_ID}.outputs.{output} }}}}")),
     )];
-    for name in [PLAN_ID_OUTPUT, RUN_KEY_OUTPUT] {
+    for name in [PLAN_ID_OUTPUT, RUN_KEY_OUTPUT, COVERED_TASKS_OUTPUT] {
         if name != output {
             outputs.push((
                 name.to_owned(),
@@ -166,6 +173,63 @@ pub(crate) fn attach_task_matrix(
     }
     insert_job_key(jobs, needs_job, "outputs", Yaml::Map(outputs))?;
     insert_plan_step_id(jobs, needs_job, output)
+}
+
+/// Emit the plan job's `covered_tasks` output plus the plan step ID.
+///
+/// Static (non-matrix) workflows still gate obligation steps on plan
+/// coverage, so the plan job always exports the covered set; without
+/// a plan job or plan step there is nothing to export.
+pub(crate) fn attach_plan_outputs(document: &mut Yaml) -> Result<(), RenderError> {
+    let Yaml::Map(entries) = document else {
+        return Err(matrix_invalid("matrix_without_document"));
+    };
+    let Some(Yaml::Map(jobs)) = entries
+        .iter_mut()
+        .find(|entry| entry.0 == "jobs")
+        .map(|entry| &mut entry.1)
+    else {
+        return Err(matrix_invalid("matrix_without_jobs"));
+    };
+    if !tag_op_step(jobs, PLAN_JOB_ID, steps::PLAN_OPERATION, PLAN_STEP_ID) {
+        return Ok(());
+    }
+    insert_job_key(
+        jobs,
+        PLAN_JOB_ID,
+        "outputs",
+        Yaml::Map(vec![(
+            COVERED_TASKS_OUTPUT.to_owned(),
+            Yaml::str(format!(
+                "${{{{ steps.{PLAN_STEP_ID}.outputs.{COVERED_TASKS_OUTPUT} }}}}"
+            )),
+        )]),
+    )
+}
+
+/// Tag the publish job's publish step with its step ID.
+///
+/// The upload step names the artifact through the publish step's
+/// outputs; without the tag the reference dangles. No-op without a
+/// publish job.
+pub(crate) fn insert_publish_step_id(document: &mut Yaml) -> Result<(), RenderError> {
+    let Yaml::Map(entries) = document else {
+        return Err(matrix_invalid("matrix_without_document"));
+    };
+    let Some(Yaml::Map(jobs)) = entries
+        .iter_mut()
+        .find(|entry| entry.0 == "jobs")
+        .map(|entry| &mut entry.1)
+    else {
+        return Err(matrix_invalid("matrix_without_jobs"));
+    };
+    tag_op_step(
+        jobs,
+        PUBLISH_JOB_ID,
+        steps::PUBLISH_OPERATION,
+        steps::PUBLISH_STEP_ID,
+    );
+    Ok(())
 }
 
 /// Insert a job key directly before its `steps` entry.
@@ -198,6 +262,20 @@ fn insert_plan_step_id(
     id: &str,
     output: &str,
 ) -> Result<(), RenderError> {
+    if tag_op_step(jobs, id, steps::PLAN_OPERATION, PLAN_STEP_ID) {
+        Ok(())
+    } else {
+        Err(matrix_invalid(&format!(
+            "matrix_without_plan_step:{output}"
+        )))
+    }
+}
+
+/// Tag one internal step with its step ID, after its name.
+///
+/// Returns false when the job or the operation step is absent, so
+/// optional passes no-op while required passes fail closed.
+fn tag_op_step(jobs: &mut [(String, Yaml)], id: &str, operation: &str, step_id: &str) -> bool {
     let steps = jobs
         .iter_mut()
         .find_map(|(name, job)| (name == id).then_some(job))
@@ -211,25 +289,20 @@ fn insert_plan_step_id(
             }
         });
     let Some(Yaml::Seq(items)) = steps else {
-        return Err(matrix_invalid(&format!(
-            "matrix_without_plan_step:{output}"
-        )));
+        return false;
     };
     for item in items {
         let Yaml::Map(step) = item else { continue };
-        let planned = step.iter().any(|(name, env)| {
+        let targeted = step.iter().any(|(name, env)| {
             name == "env"
                 && matches!(env, Yaml::Map(vars) if vars.iter().any(|(var, val)| {
-                    var == steps::INTERNAL_OP_ENV
-                        && matches!(val, Yaml::Str(op) if op == steps::PLAN_OPERATION)
+                    var == steps::INTERNAL_OP_ENV && matches!(val, Yaml::Str(op) if op == operation)
                 }))
         });
-        if planned {
-            step.insert(1, ("id".to_owned(), Yaml::str(PLAN_STEP_ID)));
-            return Ok(());
+        if targeted {
+            step.insert(1, ("id".to_owned(), Yaml::str(step_id.to_owned())));
+            return true;
         }
     }
-    Err(matrix_invalid(&format!(
-        "matrix_without_plan_step:{output}"
-    )))
+    false
 }

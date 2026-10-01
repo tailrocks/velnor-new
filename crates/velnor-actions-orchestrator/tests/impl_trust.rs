@@ -4,7 +4,7 @@ use std::path::Path;
 
 use tempfile::TempDir;
 use velnor_actions_contract::{FinalStatus, ObligationDecision, Plan};
-use velnor_actions_orchestrator::{merge_internal, plan_internal};
+use velnor_actions_orchestrator::{baseline_artifact_numeric_id, merge_internal, plan_internal};
 
 use crate::impl_common::{
     TestResult, config_with_branch, fixture_manifest_json, git, git_line, make_repo,
@@ -83,6 +83,7 @@ fn plan_with(
 fn manifest_for(plan: &Plan, base: &str) -> serde_json::Value {
     let compat = velnor_actions_contract::digest_b3(b"compat");
     let workflow = velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
+    let name = format!("velnor-baseline-{base}-{compat}");
     let tasks: Vec<serde_json::Value> = plan
         .obligations
         .iter()
@@ -100,8 +101,8 @@ fn manifest_for(plan: &Plan, base: &str) -> serde_json::Value {
         "workflow_ref": format!("o/r/{workflow}@refs/heads/testmain"),
         "run_id": 7, "run_attempt": 1, "final_status": "passed",
         "generator_version": plan.generator.version, "generator_sha256": plan.generator.sha256,
-        "compatibility_id": compat, "artifact_id": 9,
-        "artifact_name": format!("velnor-baseline-{base}-{compat}"), "tasks": tasks,
+        "compatibility_id": compat, "artifact_id": baseline_artifact_numeric_id(&name),
+        "artifact_name": name, "tasks": tasks,
     })
 }
 
