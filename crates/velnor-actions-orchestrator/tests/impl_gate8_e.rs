@@ -2,7 +2,7 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
-    Concurrency, Job, Permissions, Step, Trigger, WorkflowIr, WorkflowPolicy,
+    Concurrency, Job, JobTimeout, Permissions, Step, Trigger, WorkflowIr, WorkflowPolicy,
 };
 use velnor_actions_mise::catalog::lock::{
     parse_generator_lock, parse_release_manifest, verify_lock_against_manifest,
@@ -25,7 +25,8 @@ fn lock_text(sha: &str) -> String {
         + &binary_record("aarch64-apple-darwin", sha)
         + &binary_record("x86_64-apple-darwin", sha);
     format!(
-        "schema = 1\n[generator]\nbinary = \"velnor-actions\"\nversion = \"0.1.0\"\n{bins}[mise-bootstrap]\nversion = \"2026.9.18\"\nartifact = \"https://example.invalid/mise\"\nsha256 = \"{}\"\n",
+        "schema = 1\n[generator]\nbinary = \"velnor-actions\"\nversion = \"0.1.0\"\ncommit = \"{}\"\n{bins}[mise-bootstrap]\nversion = \"2026.9.18\"\nartifact = \"https://example.invalid/mise\"\nsha256 = \"{}\"\n",
+        "a".repeat(40),
         "c".repeat(64)
     )
 }
@@ -63,6 +64,7 @@ fn ir_with(steps: Vec<Step>) -> Result<WorkflowIr, Box<dyn std::error::Error>> {
         Job {
             display_name: "P".to_owned(),
             runs_on: "ubuntu-26.04".to_owned(),
+            timeout_minutes: JobTimeout::CRATE,
             needs: Vec::new(),
             condition: None,
             permissions: None,
@@ -78,6 +80,7 @@ fn ir_with(steps: Vec<Step>) -> Result<WorkflowIr, Box<dyn std::error::Error>> {
         Job {
             display_name: "C".to_owned(),
             runs_on: "ubuntu-26.04".to_owned(),
+            timeout_minutes: JobTimeout::CRATE,
             needs: vec!["plan".to_owned()],
             condition: None,
             permissions: None,

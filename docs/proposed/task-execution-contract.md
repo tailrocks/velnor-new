@@ -30,8 +30,10 @@ absent. `actions/cache/restore` and `actions/cache/save` handle Cargo source
 archives and qualified Mise task artifacts, never MBX data.
 
 1. `Prepare pinned tools`: install exact Velnor policy tools through a fixed
-   Mise invocation with project config/env/hooks/lock writes disabled and
-   Velnor-owned tool homes.
+   Mise invocation that loads no project config (`--no-config` plus
+   `MISE_NO_CONFIG=1`; project env/hooks disabled, Velnor-owned tool
+   homes). Download bytes trust upstream TLS plus exact catalog pins;
+   the committed `mise.lock` is never consulted at install time.
 2. `Verify toolchain`: verify Rust, selected compile driver, selected test
    runner, target, runner platform, and report optional tool-file findings.
 3. `Restore Cargo sources`: restore only the Cargo source cache owned by Velnor.
@@ -144,8 +146,12 @@ mise exec --no-config <tool>@<exact-version>... -- <fixed executable> <fixed arg
 ```
 
 The generated workflow sets `MISE_RUSTUP_HOME`, `MISE_CARGO_HOME`, and exact
-`RUSTUP_TOOLCHAIN`, then runs the fixed command vector. It MUST NOT load or
-modify consumer `mise.toml`, `mise.lock`, or environment files. Each
+`RUSTUP_TOOLCHAIN`, then runs the fixed command vector. Exec steps MUST NOT
+load or modify consumer `mise.toml`, `mise.lock`, or environment files;
+the install step loads no config either, so no generated step reads
+any repository config path. The lock audit is hygiene for local-dev
+`mise install`, never runtime verification (checksums are TOFU; see
+[tooling-input §1.1](tooling-input-contract.md)). Each
 obligation writes one task report under
 `$RUNNER_TEMP/velnor/<run-key>/<matrix-key>/tasks/<task-report-id>.json`. The generated
 workflow then writes `matrix-report.json` under

@@ -14,7 +14,9 @@ pub(crate) use tokens::check_token_hygiene;
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_actions_contract::{Job, Step, StepKind, ValidatorKind, VelnorSupportWorkflow};
+use velnor_actions_contract::{
+    Job, JobTimeout, Step, StepKind, ValidatorKind, VelnorSupportWorkflow,
+};
 
 use crate::{
     RenderError,
@@ -190,6 +192,7 @@ pub(crate) fn alint_job(ctx: &RenderContext) -> Result<Job, RenderError> {
     Ok(Job {
         display_name: ValidatorKind::Alint.display_name().to_owned(),
         runs_on: ctx.runs_on.clone(),
+        timeout_minutes: JobTimeout::VALIDATOR,
         needs: Vec::new(),
         condition: None,
         permissions: None,
@@ -227,6 +230,7 @@ pub(crate) fn validator_job(
     Ok(Job {
         display_name: validator.display_name().to_owned(),
         runs_on: ctx.runs_on.clone(),
+        timeout_minutes: JobTimeout::VALIDATOR,
         needs: Vec::new(),
         condition: None,
         permissions: None,

@@ -129,6 +129,7 @@ schema = 1
 [generator]
 binary = "velnor-actions"
 version = "<exact-semver>"
+commit = "<40-lowercase-hex-source-commit>"
 
 [[generator.binaries]]
 target = "x86_64-unknown-linux-gnu"
@@ -158,9 +159,12 @@ reviewed = "YYYY-MM-DD"
 ```
 
 There MUST be one binary record per supported target. Targets, immutable URLs,
-digests, action names, and pins MUST match the compiled release catalog. CI
-verifies the lock and manifest before use. Consumer workflows MUST NOT read,
-require, or generate this file.
+digests, action names, and pins MUST match the compiled release catalog. The
+`[generator]` `commit` is required with the same 40-lowercase-hex strictness as
+the release manifest (F3): the lock-backed `Acquire Velnor` records it as
+`VELNOR_RELEASE_COMMIT` exactly like the manifest path. CI verifies the lock
+and manifest before use. Consumer workflows MUST NOT read, require, or
+generate this file.
 
 The Velnor repository's `.mise-version` and lock's `mise-bootstrap` record
 MUST pin the same exact Mise release and SHA-256. Velnor Actions never creates

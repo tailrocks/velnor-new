@@ -53,8 +53,10 @@ pub const ASSET_SHA_ENV: &str = "VELNOR_ASSET_SHA256";
 pub const ASSET_URL_ENV: &str = "VELNOR_ASSET_URL";
 /// Env key recording the release-manifest source commit (F3).
 ///
-/// Present on consumer Acquire steps only: the lock-backed Velnor path
-/// carries no manifest commit. Reviewers verify it against the release.
+/// Required on every Acquire step: the manifest path records the
+/// manifest commit and the lock-backed Velnor path records the lock
+/// commit with identical strictness. Reviewers verify it against the
+/// release.
 pub const RELEASE_COMMIT_ENV: &str = "VELNOR_RELEASE_COMMIT";
 /// Substrings that must never appear in rendered YAML.
 pub const FORBIDDEN_TOKENS: &[&str] = &["__internal", "velnor-actions __", "velnor-actions run"];
@@ -345,8 +347,9 @@ pub fn acquire_velnor_step(
     {
         return Err(RenderError::BadCommand("bad_asset_url".to_owned()));
     }
-    if let Some(commit) = env.get(RELEASE_COMMIT_ENV)
-        && (commit.len() != 40 || !is_lower_hex(commit))
+    if env
+        .get(RELEASE_COMMIT_ENV)
+        .is_none_or(|commit| commit.len() != 40 || !is_lower_hex(commit))
     {
         return Err(RenderError::BadCommand("bad_release_commit".to_owned()));
     }

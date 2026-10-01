@@ -52,8 +52,11 @@ pub(crate) fn isolated_manifest_flag(root: &str) -> String {
 /// Privilege-dropping cargo script over fixed parts (deny template).
 ///
 /// `{ <install> && <prelude> } && <isolation> <payload>`: the ambient
-/// install warms the pinned tool (no repo code can run: mise ignores
-/// repo config), the shared credential-unset prelude removes every
+/// install warms the pinned tool (no repo code can run: the install
+/// carries `--no-config`, so mise loads no repo config to read hooks,
+/// tasks, or plugins from; the step env stays ambient for
+/// authenticated quota, so the flag alone bars repo config), the
+/// shared credential-unset prelude removes every
 /// ambient secret, and only then does the payload run from the cargo
 /// isolation dir. Both parts are fixed generator values, never
 /// repository shell; the brace group fails closed on install failure

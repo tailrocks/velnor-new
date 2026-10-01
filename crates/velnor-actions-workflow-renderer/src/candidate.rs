@@ -7,7 +7,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, Step};
+use velnor_actions_contract::{Job, JobTimeout, Step};
 
 use crate::{
     RenderError,
@@ -110,6 +110,7 @@ pub(crate) fn candidate_job(ctx: &RenderContext, spec: &CandidateSpec) -> Result
     Ok(Job {
         display_name: "Candidate".to_owned(),
         runs_on: ctx.runs_on.clone(),
+        timeout_minutes: JobTimeout::CANDIDATE,
         needs: vec![PLAN_JOB_ID.to_owned()],
         condition: None,
         permissions: None,
@@ -177,6 +178,7 @@ pub(crate) fn release_job(ctx: &RenderContext) -> Result<Job, RenderError> {
     Ok(Job {
         display_name: super::support::RELEASE_DISPLAY_NAME.to_owned(),
         runs_on: ctx.runs_on.clone(),
+        timeout_minutes: JobTimeout::RELEASE,
         needs: vec![CANDIDATE_JOB_ID.to_owned()],
         condition: Some(super::support::RELEASE_REF_CONDITION.to_owned()),
         permissions: None,

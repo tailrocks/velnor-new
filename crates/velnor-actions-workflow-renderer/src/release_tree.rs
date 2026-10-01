@@ -177,6 +177,10 @@ fn release_job_to_yaml(job: &ReleaseJobSpec) -> Result<Yaml, RenderError> {
     let mut entries = vec![
         ("name".to_owned(), Yaml::str(job.display_name.clone())),
         ("runs-on".to_owned(), Yaml::str(job.runs_on.clone())),
+        (
+            "timeout-minutes".to_owned(),
+            Yaml::Int(i64::from(job.timeout_minutes.minutes())),
+        ),
     ];
     if let Some(environment) = &job.environment {
         entries.push(("environment".to_owned(), Yaml::str(environment.clone())));

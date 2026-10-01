@@ -3,12 +3,13 @@ use crate::impl_contract_ids::{MANIFEST, TASK, sample_entry};
 use std::collections::BTreeMap;
 use velnor_actions_contract::{
     BaselineProof, CacheLayer, CacheOutcome, CacheResult, Concurrency, ContractError, FinalCounts,
-    FinalReport, FinalStatus, Job, JobConclusion, MatrixReport, MatrixStatus, NotSelectedReason,
-    ObligationDecision, Permissions, Plan, PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation,
-    PlanPackage, PlanRunner, RequiredJobResult, RunnerSelection, Step, StepKind, TaskReport,
-    TaskStatus, Trigger, Trust, WorkflowEvent, WorkflowIr, artifact_id_for_matrix,
-    artifact_id_for_plan, canonical_json_bytes, digest_b3, final_report_id_for_run,
-    plan_id_for_run, run_key_for_ci, task_report_id_for_task, validate_final_report_id,
+    FinalReport, FinalStatus, Job, JobConclusion, JobTimeout, MatrixReport, MatrixStatus,
+    NotSelectedReason, ObligationDecision, Permissions, Plan, PlanBaseline, PlanGenerator,
+    PlanMatrix, PlanObligation, PlanPackage, PlanRunner, RequiredJobResult, RunnerSelection, Step,
+    StepKind, TaskReport, TaskStatus, Trigger, Trust, WorkflowEvent, WorkflowIr,
+    artifact_id_for_matrix, artifact_id_for_plan, canonical_json_bytes, digest_b3,
+    final_report_id_for_run, plan_id_for_run, run_key_for_ci, task_report_id_for_task,
+    validate_final_report_id,
 };
 
 #[test]
@@ -197,6 +198,7 @@ fn workflow_ir_validates_pins_and_refs() -> Result<(), ContractError> {
     let job = Job {
         display_name: "Plan".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
+        timeout_minutes: JobTimeout::PLAN,
         needs: vec![],
         condition: None,
         permissions: None,

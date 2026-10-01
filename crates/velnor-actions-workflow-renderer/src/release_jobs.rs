@@ -6,7 +6,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Step, StepKind, validate_job_id};
+use velnor_actions_contract::{JobTimeout, Step, StepKind, validate_job_id};
 
 use crate::{
     RenderError,
@@ -72,6 +72,9 @@ pub struct ReleaseJobSpec {
     pub display_name: String,
     /// Literal versioned Ubuntu label.
     pub runs_on: String,
+    /// Required per-job bound (G4): release jobs are generated jobs,
+    /// so they carry `timeout-minutes` by construction like CI jobs.
+    pub timeout_minutes: JobTimeout,
     /// Job dependencies (forward-only by role rank).
     pub needs: Vec<String>,
     /// Run condition (`if`); publish/reconcile roles carry exact gates.

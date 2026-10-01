@@ -221,12 +221,13 @@ Every generated job MUST use the same single literal, versioned Ubuntu label in 
 policy](version-policy.md); the current snapshot selects `ubuntu-26.04`. An explicit older label is allowed
 only when listed in the policy's supported-label set and named in `.velnor/config.toml`. Velnor MUST reject
 `ubuntu-latest`, every `*-latest` alias, unversioned labels, unsupported labels, expressions, matrices, and
-aliases in every generated `runs-on` field. V1 emits no self-hosted labels. The plan records the selected
-label and whether it came from `latest_default` or `config_override`.
+aliases in every generated `runs-on` field. V1 emits no self-hosted labels. The plan records the selected label and whether it came from `latest_default` or `config_override`.
+
+Every generated job MUST carry a per-job `timeout-minutes` below GitHub's 360 minute default; the bound is a required typed Job IR field (1–360 minutes),
+rendered right after `runs-on`. Per-kind defaults follow the measured green-run walls in `docs/implemented/performance.md`: 30 minutes for crate-shaped jobs, 10 minutes for `plan`, `required`, validator, and release jobs.
 
 `plan` MUST upload its plan report with `if: always()`. It MUST fail when its matrix JSON exceeds 256
-KiB. It MUST report a clear planning error and request a broadened or reduced plan instead of truncating
-entries.
+KiB. It MUST report a clear planning error and request a broadened or reduced plan instead of truncating entries.
 
 The generated jobs MUST use these step sequences and commands. Action steps are the pinned allowlisted actions
 above; every shell step is generated with fixed arguments and may not contain repository-provided shell text.
@@ -244,10 +245,9 @@ and never written to the repo.
 1. `Checkout`: `actions/checkout` at the event's intended commit with `persist-credentials: false`.
 2. `Setup Mise`: use the bundled full-SHA-pinned `jdx/mise-action` with exact catalog `version` and `sha256`,
 `install: false`, and `env: false`; project tool files, task definitions, and hooks must not run.
-3. `Prepare pinned tools`: run `MISE_LOCKFILE=0 mise install --no-config
---no-env --no-hooks <tool>@<exact>...` using exact versions embedded in the
-generator release catalog; set Velnor-owned
-`MISE_RUSTUP_HOME`/`MISE_CARGO_HOME`. Project config, env, hooks, and lockfile writes are disabled.
+3. `Prepare pinned tools`: run `mise install --no-env --no-hooks <tool>@<exact>...` using exact versions
+embedded in the generator release catalog; set Velnor-owned `MISE_RUSTUP_HOME`/`MISE_CARGO_HOME`. The committed
+`mise.lock` is verified (see [tooling-input §1.1](tooling-input-contract.md)); project env and hooks stay disabled.
 4. `Acquire Velnor`: for consumers, download the exact target asset and verify SHA-256 from the embedded
 release descriptor; for Velnor, use and verify the matching `.velnor/generator.lock` record.
 5. `Format`: run the generated fixed format command through pinned Mise; use

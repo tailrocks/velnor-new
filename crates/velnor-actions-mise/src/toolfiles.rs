@@ -5,6 +5,11 @@
 //! file; missing or malformed files yield findings plus manual
 //! recommendations, never repairs (tooling-input §1-§3). Reported tool
 //! selectors are observations only and never become catalog pins.
+//!
+//! Install-verification audit lives in [`lockfile`] (declared here so
+//! `lib.rs` stays untouched).
+#[path = "mise_lockfile.rs"]
+pub mod lockfile;
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -14,6 +19,8 @@ use crate::wrappers::parse_cargo_wrapper;
 
 /// Tool-file name owned by the Mise adapter.
 pub const MISE_TOML_FILE: &str = "mise.toml";
+/// Hidden tool-file name mise also loads; scanned like the plain one.
+pub const DOT_MISE_TOML_FILE: &str = ".mise.toml";
 /// Lock-file name owned by the Mise adapter.
 pub const MISE_LOCK_FILE: &str = "mise.lock";
 
@@ -332,7 +339,10 @@ fn parse_string(value: &str, index: usize) -> Result<String, String> {
 }
 
 /// Strip a trailing `#` comment outside quotes.
-fn strip_comment(line: &str) -> &str {
+///
+/// One comment rule for every `mise.toml` reader, so a `#`-hidden
+/// key cannot dodge one.
+pub(crate) fn strip_comment(line: &str) -> &str {
     let mut quoted = false;
     let mut current = '"';
     for (index, char) in line.char_indices() {

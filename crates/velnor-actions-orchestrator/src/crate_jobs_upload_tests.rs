@@ -57,6 +57,7 @@ fn two_obligation_job() -> (String, Job, String, String) {
     let test_id = test.task_id.clone();
     let found = build_crate_jobs(
         "ubuntu-26.04",
+        WorkflowPolicy::ConsumerV1,
         &discovery(vec![test, clippy]),
         &ToolCatalog::pinned(),
         &[],

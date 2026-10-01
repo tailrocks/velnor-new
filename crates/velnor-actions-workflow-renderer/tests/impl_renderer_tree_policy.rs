@@ -1,8 +1,8 @@
 //! Workflow/tree invariant cases (triggers, concurrency, candidate, gates).
 use std::collections::BTreeMap;
 use velnor_actions_contract::{
-    Concurrency, GeneratorValidation, Job, Permissions, Step, StepKind, Trigger, ValidatorKind,
-    WorkflowIr, WorkflowPolicy,
+    Concurrency, GeneratorValidation, Job, JobTimeout, Permissions, Step, StepKind, Trigger,
+    ValidatorKind, WorkflowIr, WorkflowPolicy,
 };
 use velnor_actions_workflow_renderer::{
     CANDIDATE_JOB_ID, CONCURRENCY_CANCEL, CONCURRENCY_GROUP, CandidateSpec, RenderContext,
@@ -35,6 +35,7 @@ fn plan_job() -> Result<Job, RenderError> {
     Ok(Job {
         display_name: "Plan".to_owned(),
         runs_on: LABEL.to_owned(),
+        timeout_minutes: JobTimeout::PLAN,
         needs: Vec::new(),
         condition: None,
         permissions: None,
@@ -91,6 +92,7 @@ fn simple_job(display: &str, needs: Vec<String>, steps: Vec<Step>) -> Job {
     Job {
         display_name: display.to_owned(),
         runs_on: LABEL.to_owned(),
+        timeout_minutes: JobTimeout::CRATE,
         needs,
         condition: None,
         permissions: None,
@@ -269,6 +271,7 @@ fn final_gate_keeps_exact_name_and_condition() -> Result<(), RenderError> {
         Job {
             display_name: "Wrong Name".to_owned(),
             runs_on: LABEL.to_owned(),
+            timeout_minutes: JobTimeout::CRATE,
             needs: vec!["plan".to_owned()],
             condition: Some("always()".to_owned()),
             permissions: None,
@@ -283,6 +286,7 @@ fn final_gate_keeps_exact_name_and_condition() -> Result<(), RenderError> {
         Job {
             display_name: "Required".to_owned(),
             runs_on: LABEL.to_owned(),
+            timeout_minutes: JobTimeout::REQUIRED,
             needs: vec!["plan".to_owned()],
             condition: None,
             permissions: None,
@@ -297,6 +301,7 @@ fn final_gate_keeps_exact_name_and_condition() -> Result<(), RenderError> {
         Job {
             display_name: "Required".to_owned(),
             runs_on: LABEL.to_owned(),
+            timeout_minutes: JobTimeout::REQUIRED,
             needs: vec!["plan".to_owned()],
             condition: Some("always()".to_owned()),
             permissions: None,

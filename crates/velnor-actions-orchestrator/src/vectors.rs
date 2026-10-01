@@ -18,7 +18,22 @@ use crate::{OrchestratorError, qualify::QualifyRequest};
 /// The mise registry shorthand `cargo-deny` resolves it (aqua backend); the
 /// isolated `mise exec cargo-deny@0.20.2 -- cargo deny --version` probe
 /// reported cargo-deny 0.20.2.
-const CARGO_DENY_VERSION: &str = "0.20.2";
+pub(crate) const CARGO_DENY_VERSION: &str = "0.20.2";
+
+/// Resolve an emitted validator install spec to its pinned name and version.
+///
+/// Only `cargo-deny` installs (machete and zizmor run through isolated
+/// `exec`, never `install`); the version must equal the pinned const or
+/// the emitted shape drifted and the audit fails closed.
+#[must_use]
+pub(crate) fn validator_install_pin(spec: &str) -> Option<(&'static str, &'static str)> {
+    let (key, version) = spec.split_once('@')?;
+    if key == "cargo-deny" && version == CARGO_DENY_VERSION {
+        Some(("cargo-deny", CARGO_DENY_VERSION))
+    } else {
+        None
+    }
+}
 
 /// Qualified cargo-machete release.
 /// Source: `https://crates.io/api/v1/crates/cargo-machete`; checked 2026-09-29.
@@ -100,7 +115,8 @@ fn exec_argv(
 /// even from outside the checkout (deny resolves config from the
 /// manifest side), so cwd isolation alone cannot starve repo
 /// credential-providers. The script therefore drops privilege first:
-/// an ambient `mise install` warms the pinned tool, then the shared
+/// an ambient-credential `mise install` (isolation trio, so no repo
+/// config loads) warms the pinned tool, then the shared
 /// credential-unset prelude removes every ambient secret, and only
 /// then does the isolated deny payload run (absolute
 /// `--manifest-path` spliced before the trailing `check`: deny takes
@@ -226,20 +242,29 @@ fn validator_argv(
 
 /// Shell steps running each allowlisted custom task via `mise run`.
 ///
-/// Only names in `allowlist` are emitted; there is no other path from a
-/// task name to a step, so undeclared names can never execute (R26).
-/// Every step carries the scrubbed execution env plus the unset wrapper:
-/// custom tasks run repository Mise configuration, so ambient tokens
-/// must stop here; the step env alone cannot shadow runner-injected
-/// credentials (D3). The env also inherits `MISE_LOCKFILE=0` (F6,
-/// tooling-input §1.1): CI never writes the project's lockfile.
+/// Rejected while non-empty: the emitted steps cannot work as built
+/// (the step env carries `MISE_NO_CONFIG=1`, under which mise reports
+/// `no tasks defined`), so any non-empty allowlist fails `generate`
+/// instead of shipping dead steps. Enabling this path needs a
+/// redesign (a qualified config-visible execution boundary plus the
+/// corrected `mise run <task>` argv), not a flag flip: dropping
+/// `MISE_NO_CONFIG` from the step env would let repository task
+/// bodies execute with the job's credentials and checkout. An empty
+/// allowlist (the default) emits nothing.
 /// # Errors
 ///
-/// Returns a contract error when a name fails the task-name rule.
+/// Returns `custom_tasks_unqualified` for any non-empty allowlist, or
+/// a contract error when a name fails the task-name rule.
 pub(crate) fn custom_task_steps(
     allowlist: &[String],
     catalog: &ToolCatalog,
 ) -> Result<Vec<Step>, OrchestratorError> {
+    if !allowlist.is_empty() {
+        return Err(OrchestratorError::Contract {
+            problem: "custom_tasks_unqualified:custom_tasks is rejected until the config-visible execution path is redesigned; see custom_task_steps docs"
+                .to_owned(),
+        });
+    }
     allowlist
         .iter()
         .map(|task| {

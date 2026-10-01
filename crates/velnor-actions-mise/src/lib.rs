@@ -83,10 +83,10 @@ pub use steps::{
 };
 pub use template::TaskTemplate;
 pub use toolfiles::{
-    FOREIGN_TOOL_FILES, MISE_ENV_PREFIX, MISE_LOCK_FILE, MISE_TOML_FILE, MISSING_RECOMMENDED_INPUT,
-    MiseInspection, MiseSpec, OWNED_SYMBOLS, TOOLING_INPUT_INVALID, ToolFile, ToolFinding,
-    ToolInspectError, inspect_mise_file, is_mise_env_symbol, is_owned_mise_file,
-    lock_tool_versions, stack_for_symbol,
+    DOT_MISE_TOML_FILE, FOREIGN_TOOL_FILES, MISE_ENV_PREFIX, MISE_LOCK_FILE, MISE_TOML_FILE,
+    MISSING_RECOMMENDED_INPUT, MiseInspection, MiseSpec, OWNED_SYMBOLS, TOOLING_INPUT_INVALID,
+    ToolFile, ToolFinding, ToolInspectError, inspect_mise_file, is_mise_env_symbol,
+    is_owned_mise_file, lock_tool_versions, stack_for_symbol,
 };
 pub use verify::{TestRunner, VERIFY_TOOLCHAIN_STEP, VerifySpec, VerifyToolchain};
 pub use wrappers::{

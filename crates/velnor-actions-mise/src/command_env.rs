@@ -112,16 +112,33 @@ pub const CREDENTIAL_ALLOWLIST_BOOTSTRAP: [&str; 3] =
 /// registry token are stripped.
 pub const CREDENTIAL_ALLOWLIST_BASELINE: [&str; 2] = ["GITHUB_TOKEN", "GH_TOKEN"];
 
-/// Whether a key is reserved: isolation, install disable, or credentials.
-/// Credentials are pattern-matched ([`is_denied_credential_key`]); note
+/// Velnor-owned `MISE_*` keys that declared extras may still carry.
+///
+/// The owned tool homes flow through [`crate::command::IsolatedCommand::with_env`]
+/// as declared extras, so they stay allowed; every other `MISE_*` name is
+/// reserved. Isolation ([`ISOLATION_ENV`]) and install-disable
+/// ([`NO_AUTO_INSTALL_ENV`]) keys arrive via the fixed overlays only, never
+/// as caller extras, so the prefix rule keeps them reserved without
+/// enumerating them.
+const MISE_ALLOWED_EXTRAS: [&str; 2] = [MISE_RUSTUP_HOME_ENV, MISE_CARGO_HOME_ENV];
+
+/// Whether a key is reserved: the `MISE_*` prefix (minus the owned-homes
+/// allowlist), credentials, or endpoint selectors. Credentials are
+/// pattern-matched ([`is_denied_credential_key`]); note
 /// `CARGO_REGISTRY_TOKEN` (a repo task carrying it would silently
 /// disable trusted publishing) and its `CARGO_REGISTRIES_*` siblings.
+/// The prefix rule closes the override hole whole: any `MISE_*` name
+/// mise reads (`MISE_ENV`, `MISE_CONFIG_FILE`, `MISE_TRUSTED_CONFIG_PATHS`,
+/// `MISE_DATA_DIR`, ...) fails loud instead of only the enumerated few.
 #[must_use]
 pub fn is_reserved_env_key(key: &str) -> bool {
-    ISOLATION_ENV.iter().any(|(own, _)| *own == key)
-        || NO_AUTO_INSTALL_ENV.iter().any(|(own, _)| *own == key)
-        || is_denied_credential_key(key)
-        || is_denied_endpoint_key(key)
+    if MISE_ALLOWED_EXTRAS.contains(&key) {
+        return false;
+    }
+    if key.starts_with("MISE_") {
+        return true;
+    }
+    is_denied_credential_key(key) || is_denied_endpoint_key(key)
 }
 
 /// Redact secret-looking values for `Debug`: names stay, values become
@@ -148,7 +165,9 @@ pub(crate) fn redact_env_for_debug(env: &[(OsString, OsString)]) -> Vec<(String,
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EnvPolicy {
     /// Trusted tool download: inherits minus everything outside the
-    /// download allowlist, plus the isolation overlay.
+    /// download allowlist, plus the full isolation overlay. Installs
+    /// never load repo config (`MISE_NO_CONFIG=1` always); explicit
+    /// `tool@exact` specs are the sole version authority.
     Bootstrap,
     /// Exact-base baseline lookup via `gh`: inherits minus everything
     /// outside the baseline allowlist, plus the isolation overlay.

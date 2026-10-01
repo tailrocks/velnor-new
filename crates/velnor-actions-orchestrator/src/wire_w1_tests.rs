@@ -93,8 +93,14 @@ fn crate_tools_follow_selection_with_validators() {
         vec![PinnedTool::Rust, PinnedTool::MrBoxington]
     );
     let catalog = ToolCatalog::pinned();
-    for (use_mbx, use_nextest) in [(false, false), (false, true), (true, false), (true, true)] {
-        let step = prepare_crate_tools_step(&catalog, use_mbx, use_nextest).expect("step");
+    for (use_mbx, use_nextest, needs_validators) in [
+        (false, false, false),
+        (false, true, true),
+        (true, false, true),
+        (true, true, false),
+    ] {
+        let step = prepare_crate_tools_step(&catalog, use_mbx, use_nextest, needs_validators)
+            .expect("step");
         let StepKind::Shell { run, .. } = &step.kind else {
             panic!("prepare must be a shell step");
         };
@@ -103,9 +109,10 @@ fn crate_tools_follow_selection_with_validators() {
             PinnedTool::Shellcheck,
             PinnedTool::Zizmor,
         ] {
-            assert!(
+            assert_eq!(
                 run.contains(&catalog.tool_spec(tool)),
-                "crate jobs install {tool:?} for test-spawned generate: {run:?}"
+                needs_validators,
+                "trio installs only for validator-spawning suites: {run:?}"
             );
         }
         let nextest = catalog.tool_spec(PinnedTool::Nextest);
@@ -122,38 +129,43 @@ fn crate_tools_install_exact_pinned_set() {
 
     use crate::matrix_step::prepare_crate_tools_step;
     let catalog = ToolCatalog::pinned();
-    for (use_mbx, use_nextest) in [(false, false), (false, true), (true, false), (true, true)] {
-        let step = prepare_crate_tools_step(&catalog, use_mbx, use_nextest).expect("step");
-        let StepKind::Shell { run, .. } = &step.kind else {
-            panic!("prepare must be a shell step");
-        };
-        let at = run
-            .iter()
-            .position(|arg| arg == "install")
-            .expect("install argv");
-        let specs = &run[at + 1..];
-        let mut expected = vec![catalog.tool_spec(PinnedTool::Rust)];
-        if use_mbx {
-            expected.push(catalog.tool_spec(PinnedTool::MrBoxington));
-        }
-        expected.extend([
-            catalog.tool_spec(PinnedTool::Actionlint),
-            catalog.tool_spec(PinnedTool::Shellcheck),
-            catalog.tool_spec(PinnedTool::Zizmor),
-        ]);
-        if use_nextest {
-            expected.push(catalog.tool_spec(PinnedTool::Nextest));
-        }
-        assert_eq!(
-            specs,
-            expected.as_slice(),
-            "exact crate install set (mbx={use_mbx}, nextest={use_nextest})"
-        );
-        for absent in [PinnedTool::Gh, PinnedTool::ReleasePlz] {
-            assert!(
-                !specs.contains(&catalog.tool_spec(absent)),
-                "crate jobs never install {absent:?}: {specs:?}"
+    for needs_validators in [false, true] {
+        for (use_mbx, use_nextest) in [(false, false), (false, true), (true, false), (true, true)] {
+            let step = prepare_crate_tools_step(&catalog, use_mbx, use_nextest, needs_validators)
+                .expect("step");
+            let StepKind::Shell { run, .. } = &step.kind else {
+                panic!("prepare must be a shell step");
+            };
+            let at = run
+                .iter()
+                .position(|arg| arg == "install")
+                .expect("install argv");
+            let specs = &run[at + 1..];
+            let mut expected = vec![catalog.tool_spec(PinnedTool::Rust)];
+            if use_mbx {
+                expected.push(catalog.tool_spec(PinnedTool::MrBoxington));
+            }
+            if needs_validators {
+                expected.extend([
+                    catalog.tool_spec(PinnedTool::Actionlint),
+                    catalog.tool_spec(PinnedTool::Shellcheck),
+                    catalog.tool_spec(PinnedTool::Zizmor),
+                ]);
+            }
+            if use_nextest {
+                expected.push(catalog.tool_spec(PinnedTool::Nextest));
+            }
+            assert_eq!(
+                specs,
+                expected.as_slice(),
+                "exact crate install set (mbx={use_mbx}, nextest={use_nextest}, validators={needs_validators})"
             );
+            for absent in [PinnedTool::Gh, PinnedTool::ReleasePlz] {
+                assert!(
+                    !specs.contains(&catalog.tool_spec(absent)),
+                    "crate jobs never install {absent:?}: {specs:?}"
+                );
+            }
         }
     }
 }

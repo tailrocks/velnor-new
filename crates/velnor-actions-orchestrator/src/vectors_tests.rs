@@ -1,5 +1,4 @@
 use super::*;
-use velnor_actions_contract::StepKind;
 use velnor_actions_rust::CompileDriver;
 
 /// Owned argv expectation from literals.
@@ -170,41 +169,20 @@ fn section4_build_vector_is_byte_exact() {
 }
 
 #[test]
-fn custom_task_steps_emit_only_allowlisted() {
+fn custom_task_steps_emit_nothing_and_reject_nonempty() {
     let catalog = ToolCatalog::pinned();
     let steps = custom_task_steps(&[], &catalog).expect("empty allowlist");
     assert!(steps.is_empty(), "empty emits nothing");
-    let allowlist = argv_of(&["audit", "lint"]);
-    let steps = custom_task_steps(&allowlist, &catalog).expect("custom steps");
-    assert_eq!(steps.len(), 2);
-    for (step, task) in steps.iter().zip(["audit", "lint"]) {
-        assert_eq!(step.name, format!("Custom task {task}"));
-        let StepKind::Shell { run, env } = &step.kind else {
-            panic!("custom step must be shell: {:?}", step.kind);
-        };
-        assert_eq!(
-            *run,
-            velnor_actions_workflow_renderer::toolchain_env::with_env_unset_argv(&argv_of(&[
-                "mise", "run", "--", task
-            ]))
-        );
-        for key in velnor_actions_workflow_renderer::toolchain_env::STEP_CREDENTIAL_DENYLIST {
-            assert_eq!(
-                env.get(key).map(String::as_str),
-                Some(""),
-                "custom task must scrub {key}"
-            );
-        }
-        // F6 (tooling-input §1.1): custom steps load project config yet
-        // keep lockfile writes disabled, like every generated step.
-        assert_eq!(
-            env.get("MISE_LOCKFILE").map(String::as_str),
-            Some("0"),
-            "custom task must not write the project lockfile"
+    // Non-empty allowlists fail generate: the emitted steps cannot
+    // work as built (`MISE_NO_CONFIG=1` hides every task), so they
+    // must never ship silently.
+    for allowlist in [argv_of(&["audit", "lint"]), argv_of(&["audit"])] {
+        let err = custom_task_steps(&allowlist, &catalog).expect_err("must reject");
+        assert!(
+            err.to_string().contains("custom_tasks_unqualified"),
+            "{err}"
         );
     }
-    let text = format!("{steps:?}");
-    assert!(!text.contains("undeclared"), "{text}");
 }
 
 #[test]

@@ -28,6 +28,8 @@ fn expected_modules() -> Vec<&'static str> {
         "git.rs",
         "lib.rs",
         "lock.rs",
+        "lock_verify.rs",
+        "mise_lockfile.rs",
         "nextest.rs",
         "nextest_config.rs",
         "nextest_plan.rs",

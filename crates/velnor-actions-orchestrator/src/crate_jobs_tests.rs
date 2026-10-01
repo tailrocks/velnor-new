@@ -70,6 +70,7 @@ fn groups_obligations_into_one_ordered_job_per_crate() {
     let other = group("nested", TaskKind::Clippy, &[]);
     let found = build_crate_jobs(
         "ubuntu-26.04",
+        WorkflowPolicy::ConsumerV1,
         &discovery(vec![test, doc, doctest, clippy, other]),
         &ToolCatalog::pinned(),
         &[],
@@ -125,6 +126,7 @@ fn skips_testless_and_workspace_groups() {
     let clippy = group("demo", TaskKind::Clippy, &[]);
     let found = build_crate_jobs(
         "ubuntu-26.04",
+        WorkflowPolicy::ConsumerV1,
         &discovery(vec![testless, workspace_fmt, clippy]),
         &ToolCatalog::pinned(),
         &[],
@@ -149,6 +151,7 @@ fn member_binding_agrees_with_built_jobs() {
     let groups = vec![clippy, test, workspace_fmt];
     let found = build_crate_jobs(
         "ubuntu-26.04",
+        WorkflowPolicy::ConsumerV1,
         &discovery(groups.clone()),
         &ToolCatalog::pinned(),
         &[],
@@ -216,6 +219,7 @@ fn drivers_follow_per_crate_selection() {
     let cargo = group("nested", TaskKind::Clippy, &[]);
     let found = build_crate_jobs(
         "ubuntu-26.04",
+        WorkflowPolicy::ConsumerV1,
         &discovery(vec![mbx, cargo]),
         &ToolCatalog::pinned(),
         &[],
@@ -235,6 +239,7 @@ fn drivers_follow_per_crate_selection() {
 fn empty_groups_build_no_jobs() {
     let found = build_crate_jobs(
         "ubuntu-26.04",
+        WorkflowPolicy::ConsumerV1,
         &discovery(Vec::new()),
         &ToolCatalog::pinned(),
         &[],
@@ -246,32 +251,43 @@ fn empty_groups_build_no_jobs() {
 }
 
 #[test]
-fn allowlisted_custom_tasks_append_after_obligations() {
+fn nonempty_custom_tasks_reject_until_redesigned() {
     let clippy = group("demo", TaskKind::Clippy, &[]);
     let allowlist = vec!["audit".to_owned()];
-    let found = build_crate_jobs(
+    let Err(err) = build_crate_jobs(
         "ubuntu-26.04",
+        WorkflowPolicy::ConsumerV1,
         &discovery(vec![clippy]),
         &ToolCatalog::pinned(),
         &[],
         &allowlist,
         None,
-    )
-    .expect("crate jobs");
-    assert_eq!(found.jobs.len(), 1);
-    let steps = names(&found.jobs[0].1);
-    let lint = steps.iter().position(|seen| *seen == "Clippy");
-    let custom = steps.iter().position(|seen| *seen == "Custom task audit");
-    assert!(lint < custom, "{steps:?}");
-    let joined: Vec<String> = found.jobs[0]
-        .1
-        .steps
-        .iter()
-        .map(|step| format!("{} {:?}", step.name, step.kind))
-        .collect();
+    ) else {
+        panic!("non-empty custom_tasks must fail");
+    };
     assert!(
-        !joined.join("\n").contains("undeclared-task"),
-        "undeclared names never emitted: {joined:?}"
+        err.to_string().contains("custom_tasks_unqualified"),
+        "{err}"
+    );
+}
+
+#[test]
+fn nonempty_custom_tasks_reject_with_zero_groups() {
+    let allowlist = vec!["audit".to_owned()];
+    let Err(err) = build_crate_jobs(
+        "ubuntu-26.04",
+        WorkflowPolicy::ConsumerV1,
+        &discovery(Vec::new()),
+        &ToolCatalog::pinned(),
+        &[],
+        &allowlist,
+        None,
+    ) else {
+        panic!("non-empty custom_tasks must fail with zero groups");
+    };
+    assert!(
+        err.to_string().contains("custom_tasks_unqualified"),
+        "{err}"
     );
 }
 
@@ -287,6 +303,7 @@ fn acquire_stages_before_report_wrappers() {
     };
     let found = build_crate_jobs(
         "ubuntu-26.04",
+        WorkflowPolicy::ConsumerV1,
         &discovery(vec![group("demo", TaskKind::Clippy, &[])]),
         &ToolCatalog::pinned(),
         &[],
@@ -300,4 +317,59 @@ fn acquire_stages_before_report_wrappers() {
         ["Checkout", "Acquire Velnor", "Download plan"],
         "{steps:?}"
     );
+}
+
+/// `Prepare pinned tools` argv of one built job.
+fn prepare_run(job: &Job) -> Vec<String> {
+    use velnor_actions_mise::PREPARE_PINNED_TOOLS_STEP;
+    let step = job
+        .steps
+        .iter()
+        .find(|step| step.name == PREPARE_PINNED_TOOLS_STEP)
+        .expect("prepare step");
+    let velnor_actions_contract::StepKind::Shell { run, .. } = &step.kind else {
+        panic!("prepare must be a shell step");
+    };
+    run.clone()
+}
+
+#[test]
+fn velnor_policy_trims_trio_except_validator_spawning_suites() {
+    use velnor_actions_mise::PinnedTool;
+    let catalog = ToolCatalog::pinned();
+    let trio = [
+        catalog.tool_spec(PinnedTool::Actionlint),
+        catalog.tool_spec(PinnedTool::Shellcheck),
+        catalog.tool_spec(PinnedTool::Zizmor),
+    ];
+    let found = build_crate_jobs(
+        "ubuntu-26.04",
+        WorkflowPolicy::VelnorRepositoryV1,
+        &discovery(vec![
+            group("velnor-actions-orchestrator", TaskKind::Test, &[]),
+            group("velnor-actions-cli", TaskKind::Test, &[]),
+            group("velnor-actions-contract", TaskKind::Test, &[]),
+        ]),
+        &catalog,
+        &[],
+        &[],
+        None,
+    )
+    .expect("crate jobs");
+    assert_eq!(found.jobs.len(), 3);
+    for (id, job) in &found.jobs {
+        let run = prepare_run(job);
+        let spawning = id == "rust-velnor-actions-orchestrator" || id == "rust-velnor-actions-cli";
+        for spec in &trio {
+            assert_eq!(
+                run.contains(spec),
+                spawning,
+                "{id} trio membership follows its executed suite: {run:?}"
+            );
+        }
+        assert!(
+            run.contains(&catalog.tool_spec(PinnedTool::Rust)),
+            "{id} keeps its driver: {run:?}"
+        );
+    }
 }

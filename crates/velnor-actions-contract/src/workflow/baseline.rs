@@ -371,7 +371,7 @@ impl TryFrom<ManifestTaskProofUnchecked> for ManifestTaskProof {
 }
 /// Check a 40-char lowercase hex source commit.
 fn check_commit(commit: &str) -> Result<(), ContractError> {
-    if commit.len() == 40 && crate::manifest::is_lower_hex(commit) {
+    if commit.len() == 40 && crate::manifest_checks::is_lower_hex(commit) {
         Ok(())
     } else {
         Err(ContractError::identity("source_commit", "malformed_commit"))

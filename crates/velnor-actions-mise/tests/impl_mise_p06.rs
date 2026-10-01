@@ -328,7 +328,7 @@ fn repo_wrapper_reconciles_with_local_mbx_pin() {
     assert_eq!(argv[0], "mise");
     assert!(
         argv.contains(&"--no-config".to_owned()),
-        "clean-env: {argv:?}"
+        "isolated install never loads config: {argv:?}"
     );
     assert!(argv.contains(&"--no-env".to_owned()), "clean-env: {argv:?}");
     assert!(

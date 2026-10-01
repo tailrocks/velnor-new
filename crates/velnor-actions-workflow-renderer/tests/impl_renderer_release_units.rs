@@ -109,6 +109,7 @@ fn release_job_shape_roundtrip() -> Result<(), RenderError> {
         role: ReleaseRole::Preflight,
         display_name: "Preflight".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
+        timeout_minutes: velnor_actions_contract::JobTimeout::RELEASE,
         needs: vec!["preparation".to_owned()],
         condition: None,
         environment: None,

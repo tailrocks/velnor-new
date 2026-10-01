@@ -122,7 +122,12 @@ fn all_mise_vectors_invoke_mise_program() -> Result<(), String> {
     assert!(!vectors.is_empty());
     for argv in &vectors {
         assert_eq!(argv[0], OsString::from("mise"), "mise-only: {argv:?}");
-        let subcommand = argv[4].to_string_lossy().into_owned();
+        let subcommand = argv
+            .iter()
+            .skip(1)
+            .find(|arg| !arg.to_string_lossy().starts_with("--"))
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .ok_or_else(|| format!("missing subcommand: {argv:?}"))?;
         assert!(
             is_allowed_mise_subcommand(&subcommand),
             "allowlisted subcommand: {subcommand}"

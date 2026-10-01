@@ -1,9 +1,5 @@
 //! Fixed subprocess wrapper: the sole `std::process::Command` constructor.
-//! Trusted tooling inherits the parent env minus policy-stripped
-//! credentials; repo-task children spawn cleared plus proxy passthrough.
-
-//! Environment policy lives in `command_env.rs` and the typed result in
-//! `command_output.rs`; both are declared here so `lib.rs` stays untouched.
+//! Policy (`command_env.rs`) and output (`command_output.rs`) declare here.
 #[path = "command_env.rs"]
 mod env;
 #[path = "command_output.rs"]
@@ -31,6 +27,10 @@ use std::time::{Duration, Instant};
 use crate::error::MiseError;
 
 /// Mise global flags, always placed before the subcommand.
+///
+/// Every mise invocation carries all three, installs included: no mise
+/// command ever loads repo config, env files, or hooks. Explicit
+/// `tool@exact` specs are the sole version authority.
 pub const MISE_GLOBAL_FLAGS: [&str; 3] = ["--no-config", "--no-env", "--no-hooks"];
 
 /// Separator between mise tool selectors and the payload command.
@@ -51,10 +51,7 @@ pub fn is_allowed_mise_subcommand(subcommand: &str) -> bool {
     ALLOWED_MISE_SUBCOMMANDS.contains(&subcommand)
 }
 
-/// A fully isolated, shell-free child-process invocation.
-///
-/// `Debug` redacts `--token` values and secret-looking env values so
-/// logs never carry credential material; shape stays visible.
+/// Fully isolated, shell-free child invocation (`Debug` redacts secrets).
 #[derive(Clone, PartialEq, Eq)]
 pub struct IsolatedCommand {
     program: OsString,
@@ -108,12 +105,9 @@ impl IsolatedCommand {
         }
     }
 
-    /// Build a repo-task child: cleared env plus explicit declared inputs.
-    /// Reserved keys are rejected; platform values arrive only as declared inputs.
-    ///
+    /// Build a repo-task child: cleared env plus declared inputs.
     /// # Errors
-    ///
-    /// Returns [`MiseError::InvalidStepInput`] when a declared key is reserved.
+    /// Returns [`MiseError::InvalidStepInput`] on a reserved declared key.
     pub fn repo_task(
         program: &str,
         args: Vec<OsString>,
@@ -143,15 +137,9 @@ impl IsolatedCommand {
         self
     }
 
-    /// Append extras; reserved keys fail loud, never silent-drop.
-    ///
-    /// A dropped override would run with different env than the caller
-    /// requested; the typed error names the key so the caller fixes the
-    /// request instead of debugging a silently altered child.
-    ///
+    /// Append extras; reserved keys fail loud naming the key.
     /// # Errors
-    ///
-    /// Returns [`MiseError::InvalidStepInput`] naming the first reserved key.
+    /// Returns [`MiseError::InvalidStepInput`] on the first reserved key.
     pub fn with_env(mut self, extra: &[(OsString, OsString)]) -> Result<Self, MiseError> {
         for pair in extra {
             let key = pair.0.to_string_lossy();
@@ -204,6 +192,10 @@ impl IsolatedCommand {
     }
 
     /// Full environment the spawner applies: overlay first, then extras.
+    ///
+    /// Every policy takes the full isolation overlay: no mise command
+    /// ever loads repo config, so installs and execs share one hermetic
+    /// base and differ only in parent inheritance and extras.
     #[must_use]
     pub fn full_env(&self) -> Vec<(OsString, OsString)> {
         let mut env = Self::env_overlay();
@@ -211,11 +203,7 @@ impl IsolatedCommand {
         env
     }
 
-    /// Full child environment over an explicit parent snapshot.
-    ///
-    /// The pure contract behind [`Self::run`]: per-policy credential
-    /// filtering plus repo-task proxy passthrough, testable without
-    /// spawning or touching process-global state.
+    /// Full child env over a parent snapshot (pure [`Self::run`] contract).
     #[must_use]
     pub fn spawn_env(&self, parent: &[(OsString, OsString)]) -> Vec<(OsString, OsString)> {
         self.policy.child_env(parent, &self.full_env())
@@ -234,22 +222,16 @@ impl IsolatedCommand {
     }
 
     /// Spawn the child under default bounds and wait for its typed exit.
-    ///
     /// # Errors
-    ///
-    /// Returns [`MiseError::SpawnFailed`] on spawn failure, output-limit
-    /// breach, reader failure, or timeout.
+    /// Returns [`MiseError::SpawnFailed`] on spawn/output/timeout failure.
     pub fn run(&self) -> Result<ProcessOutput, MiseError> {
         let timeout = Duration::from_secs(RUN_TIMEOUT_SECS);
         self.run_bounded(OUTPUT_CAPTURE_LIMIT_BYTES, timeout)
     }
 
     /// Spawn the child under explicit bounds and wait for its typed exit.
-    ///
     /// # Errors
-    ///
-    /// Returns [`MiseError::SpawnFailed`] on spawn failure, output-limit
-    /// breach, reader failure, or timeout.
+    /// Returns [`MiseError::SpawnFailed`] on spawn/output/timeout failure.
     pub fn run_bounded(&self, cap: usize, timeout: Duration) -> Result<ProcessOutput, MiseError> {
         self.run_cancellable(cap, timeout, &CancelHandle::new())
     }

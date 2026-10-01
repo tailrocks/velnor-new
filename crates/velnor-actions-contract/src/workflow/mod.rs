@@ -11,6 +11,7 @@ pub mod permissions;
 pub mod plan;
 pub mod qualification;
 pub mod report;
+pub mod timeout;
 pub mod trust;
 pub use artifacts::{
     CANDIDATE_ATTESTATION_FILENAME, CANDIDATE_EVIDENCE_SUBDIR, FINAL_JSON_FILENAME,
@@ -46,4 +47,5 @@ pub use report::{
     CacheLayer, CacheOutcome, CacheResult, MatrixReport, MatrixStatus, MatrixTaskEntry,
     NotSelectedReason, TaskReport, TaskStatus, TaskTiming,
 };
+pub use timeout::JobTimeout;
 pub use trust::{Trust, trust_for_event};

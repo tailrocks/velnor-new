@@ -1,7 +1,7 @@
 //! Workflow/tree rendering and policy gating cases.
 use std::collections::BTreeMap;
 use velnor_actions_contract::{
-    Concurrency, GeneratorValidation, Job, Permissions, Trigger, ValidatorKind,
+    Concurrency, GeneratorValidation, Job, JobTimeout, Permissions, Trigger, ValidatorKind,
     VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
 };
 use velnor_actions_workflow_renderer::{
@@ -56,6 +56,7 @@ fn plan_job() -> Result<Job, RenderError> {
     Ok(Job {
         display_name: "Plan".to_owned(),
         runs_on: LABEL.to_owned(),
+        timeout_minutes: JobTimeout::PLAN,
         needs: Vec::new(),
         condition: None,
         permissions: None,

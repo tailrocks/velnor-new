@@ -8,7 +8,7 @@
 //! outside merge consumption: the merge never publishes, and this job
 //! never judges evidence.
 
-use velnor_actions_contract::{Job, Step};
+use velnor_actions_contract::{Job, JobTimeout, Step};
 use velnor_actions_workflow_renderer::render::FINAL_JOB_ID;
 use velnor_actions_workflow_renderer::steps::{
     PUBLISH_OPERATION, publish_step, write_request_step,
@@ -51,6 +51,7 @@ pub(crate) fn baseline_publish_job(
     Ok(Job {
         display_name: PUBLISH_DISPLAY_NAME.to_owned(),
         runs_on: label.to_owned(),
+        timeout_minutes: JobTimeout::PUBLISH,
         needs: vec![FINAL_JOB_ID.to_owned()],
         condition: Some(publish_gate_condition(branch)?),
         permissions: None,

@@ -133,7 +133,14 @@ fn bootstrap_keeps_only_download_credentials() -> Result<(), String> {
         assert!(!has(&env, key), "{key} must be stripped: {env:?}");
     }
     assert!(has(&env, "PATH"), "non-credential parent survives");
-    assert!(has(&env, "MISE_NO_CONFIG"), "overlay applies: {env:?}");
+    for key in [
+        "MISE_NO_CONFIG",
+        "MISE_NO_ENV",
+        "MISE_NO_HOOKS",
+        "MISE_LOCKFILE",
+    ] {
+        assert!(has(&env, key), "full isolation applies: {env:?}");
+    }
     Ok(())
 }
 

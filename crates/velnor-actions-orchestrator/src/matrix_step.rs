@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{CrateObligation, Step, sanitize_error_detail};
+use velnor_actions_contract::{CrateObligation, Step, WorkflowPolicy, sanitize_error_detail};
 use velnor_actions_mise::{
     ISOLATION_ENV, NO_AUTO_INSTALL_ENV, PREPARE_PINNED_TOOLS_STEP, PinnedTool, PreparePinnedTools,
     ToolCatalog, ToolHomes,
@@ -65,18 +65,44 @@ pub(crate) fn task_driver_tools(use_mbx: bool) -> Vec<PinnedTool> {
     tools
 }
 
+/// Velnor-repository suites that shell out to the `generate` validators.
+///
+/// Only the orchestrator suite (validating `generate` plus zizmor
+/// staging) and the CLI suite (parity runs `generate`) execute the
+/// trio; every other suite only asserts argv, never spawns validators.
+///
+/// Re-audit when a suite starts spawning validators: grep its tests
+/// for `generate()` executions and `PinnedToolExec` trio runs
+/// (actionlint, shellcheck, zizmor); a suite that executes any of
+/// them joins this list, anything else stays trimmed. Adding a
+/// workspace crate fails `every_workspace_member_is_classified`
+/// until it is classified here or in the trimmed set.
+const GENERATE_VALIDATOR_SUITES: [&str; 2] = ["velnor-actions-orchestrator", "velnor-actions-cli"];
+
+/// Whether one crate job installs the `generate` validators.
+///
+/// Velnor-policy jobs trim by executed suite: only the two suites above
+/// install the trio, the rest install drivers plus Nextest. Consumer
+/// suites are opaque to the generator, so consumer jobs keep the trio
+/// fail-safe: dropping an install a suite needs fails CI with
+/// `couldn't exec process` (run 36751323928), while an unneeded
+/// install only costs seconds. Dedicated validator jobs remain the
+/// lint gates for the committed workflow either way.
+#[must_use]
+pub(crate) fn crate_needs_generate_validators(policy: WorkflowPolicy, package: &str) -> bool {
+    match policy {
+        WorkflowPolicy::ConsumerV1 => true,
+        WorkflowPolicy::VelnorRepositoryV1 => GENERATE_VALIDATOR_SUITES.contains(&package),
+    }
+}
+
 /// Typed `Prepare pinned tools` step for the crate-job tool set.
 ///
-/// Driver toolchain plus the `generate` validators plus Nextest when used.
-/// The validators install here because crate test suites execute `generate`
-/// (CLI parity) and staged-validation binaries (zizmor staging) directly,
-/// and `generate` shells out to all three validators (actionlint,
-/// shellcheck, zizmor): run 36751323928 failed every such leg with
-/// `couldn't exec process` when only the plan job carried them. Dedicated
-/// validator jobs remain the lint gates for the committed workflow; this
-/// set covers what the job executes, tests included. The set is exact and
-/// pinned by test: driver, validators, optional Nextest, nothing else.
-/// Order follows `PinnedTool::ALL`.
+/// Driver toolchain plus Nextest when used, plus the `generate`
+/// validators only when `needs_validators` holds (see
+/// [`crate_needs_generate_validators`]). The set is exact and pinned
+/// by test: driver, conditional validators, optional Nextest, nothing
+/// else. Order follows `PinnedTool::ALL`.
 ///
 /// # Errors
 ///
@@ -85,13 +111,16 @@ pub(crate) fn prepare_crate_tools_step(
     catalog: &ToolCatalog,
     use_mbx: bool,
     use_nextest: bool,
+    needs_validators: bool,
 ) -> Result<Step, OrchestratorError> {
     let mut tools = task_driver_tools(use_mbx);
-    tools.extend([
-        PinnedTool::Actionlint,
-        PinnedTool::Shellcheck,
-        PinnedTool::Zizmor,
-    ]);
+    if needs_validators {
+        tools.extend([
+            PinnedTool::Actionlint,
+            PinnedTool::Shellcheck,
+            PinnedTool::Zizmor,
+        ]);
+    }
     tools.extend(use_nextest.then_some(PinnedTool::Nextest));
     let prepare = PreparePinnedTools::new(tools, ToolHomes::runner_temp()).map_err(|err| {
         OrchestratorError::Contract {

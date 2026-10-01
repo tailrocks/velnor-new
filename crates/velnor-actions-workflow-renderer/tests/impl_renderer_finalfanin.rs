@@ -168,7 +168,7 @@ fn merge_steps_carry_needs_channel_matching_final_needs() -> Result<(), RenderEr
     let conclusions = NeedsConclusions::from_finalized_jobs("required", &ir.jobs)
         .map_err(RenderError::Contract)?;
     assert_eq!(conclusions.inventory, vec!["plan".to_owned()]);
-    assert!(conclusions.gate_matches(&ir));
+    assert!(conclusions.gate_matches(&ir.jobs));
     // The emitted inventory value equals the finalized derivation, not
     // just its presence: parse the merge step scalar back to JSON.
     let (key, value) = conclusions.expected_env();

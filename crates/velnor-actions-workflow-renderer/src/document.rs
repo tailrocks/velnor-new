@@ -133,11 +133,13 @@ fn triggers_to_yaml(triggers: &Trigger) -> Yaml {
     Yaml::Map(entries)
 }
 
-/// Derive the merge `needs` channel from the finalized job set.
+/// Derive the merge `needs` channel from the gate job's `needs`.
 ///
-/// The inventory is every job except the gate itself; a lone gate has
-/// nothing to conclude over and fails closed instead of emitting a
-/// channel the merge would judge as `empty_needs`.
+/// The inventory is exactly what `toJSON(needs)` can observe at
+/// runtime; a lone gate has nothing to conclude over and fails closed
+/// instead of emitting a channel the merge would judge as
+/// `empty_needs`. The `gate_matches` check fails generation closed if
+/// the derivation ever diverges from the gate list again.
 fn needs_channel_envs(jobs: &BTreeMap<String, Job>) -> Result<Vec<(String, String)>, RenderError> {
     if !jobs.contains_key(FINAL_JOB_ID) {
         return Ok(Vec::new());
@@ -145,6 +147,11 @@ fn needs_channel_envs(jobs: &BTreeMap<String, Job>) -> Result<Vec<(String, Strin
     let conclusions =
         velnor_actions_contract::NeedsConclusions::from_finalized_jobs(FINAL_JOB_ID, jobs)
             .map_err(RenderError::Contract)?;
+    if !conclusions.gate_matches(jobs) {
+        return Err(RenderError::InvalidWorkflow(
+            "needs_inventory_gate_mismatch".to_owned(),
+        ));
+    }
     Ok(vec![conclusions.channel_env(), conclusions.expected_env()])
 }
 
@@ -163,7 +170,7 @@ fn dispatch_input_to_yaml(input: &DispatchInput) -> Yaml {
     Yaml::Map(fields)
 }
 
-/// Render one job: name, runs-on, environment, permissions, needs, if, steps.
+/// Render one job: name, runs-on, timeout, environment, permissions, needs, if, steps.
 fn job_to_yaml(
     id: &str,
     job: &Job,
@@ -174,6 +181,10 @@ fn job_to_yaml(
     let mut entries = vec![
         ("name".to_owned(), Yaml::str(job.display_name.clone())),
         ("runs-on".to_owned(), Yaml::str(job.runs_on.clone())),
+        (
+            "timeout-minutes".to_owned(),
+            Yaml::Int(i64::from(job.timeout_minutes.minutes())),
+        ),
     ];
     if let Some(environment) = &job.environment {
         entries.push(("environment".to_owned(), Yaml::str(environment.clone())));

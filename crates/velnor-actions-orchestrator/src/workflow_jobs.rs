@@ -6,7 +6,7 @@
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 
-use velnor_actions_contract::{Job, Step};
+use velnor_actions_contract::{Job, JobTimeout, Step};
 use velnor_actions_mise::{
     PREPARE_PINNED_TOOLS_STEP, PinnedTool, PinnedToolExec, PreparePinnedTools, ToolCatalog,
     ToolHomes,
@@ -69,6 +69,7 @@ pub(crate) fn plan_job(
     Ok(Job {
         display_name: "Plan".to_owned(),
         runs_on: label.to_owned(),
+        timeout_minutes: JobTimeout::PLAN,
         needs: Vec::new(),
         condition: None,
         permissions: None,
@@ -93,6 +94,7 @@ pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, Orches
     Ok(Job {
         display_name: LINT_DISPLAY_NAME.to_owned(),
         runs_on: label.to_owned(),
+        timeout_minutes: JobTimeout::VALIDATOR,
         needs: Vec::new(),
         condition: None,
         permissions: None,
@@ -144,6 +146,7 @@ pub(crate) fn final_job(
     Ok(Job {
         display_name: FINAL_DISPLAY_NAME.to_owned(),
         runs_on: label.to_owned(),
+        timeout_minutes: JobTimeout::REQUIRED,
         needs,
         condition: Some(FINAL_CONDITION.to_owned()),
         permissions: None,
@@ -324,14 +327,19 @@ mod tests {
                 "install specs: {run:?}"
             );
             let keys = [
+                "MISE_NO_CONFIG",
                 "MISE_RUSTUP_HOME",
                 "MISE_CARGO_HOME",
                 "RUSTUP_TOOLCHAIN",
-                "MISE_LOCKFILE",
             ];
             for key in keys {
                 assert!(env.contains_key(key), "env misses {key}: {env:?}");
             }
+            assert_eq!(
+                env.get("MISE_LOCKFILE").map(String::as_str),
+                Some("0"),
+                "prepare pins the lockfile off so installs never rewrite it: {env:?}"
+            );
         }
     }
 

@@ -77,6 +77,8 @@ mod impl_renderer_steps_env;
 mod impl_renderer_steps_quote;
 #[path = "impl_renderer_sweep.rs"]
 mod impl_renderer_sweep;
+#[path = "impl_renderer_timeout.rs"]
+mod impl_renderer_timeout;
 #[path = "impl_renderer_token_hygiene.rs"]
 mod impl_renderer_token_hygiene;
 #[path = "impl_renderer_token_hygiene_env.rs"]

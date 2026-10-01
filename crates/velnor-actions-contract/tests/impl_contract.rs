@@ -286,6 +286,7 @@ fn manifest_schemas_validate_and_lookup_targets() -> Result<(), ContractError> {
         generator: LockedGenerator {
             binary: "velnor-actions".to_owned(),
             version: "0.1.0".to_owned(),
+            commit: "ab".repeat(20),
             binaries: vec![GeneratorBinary {
                 target: "x86_64-unknown-linux-gnu".to_owned(),
                 artifact: "https://example.com/velnor-actions-0.1.0".to_owned(),
@@ -309,6 +310,19 @@ fn manifest_schemas_validate_and_lookup_targets() -> Result<(), ContractError> {
     let mut bad = lock.clone();
     bad.actions[0].sha = "xyz".to_owned();
     assert!(bad.validate("generator.lock").is_err());
+    for commit in [
+        String::new(),
+        "xyz".to_owned(),
+        "A".repeat(40),
+        "c".repeat(39),
+    ] {
+        let mut bad = lock.clone();
+        bad.generator.commit = commit;
+        let err = bad
+            .validate("generator.lock")
+            .expect_err("lock commit shares manifest strictness");
+        assert!(err.to_string().contains("malformed_commit"), "{err}");
+    }
     Ok(())
 }
 

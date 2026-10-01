@@ -192,7 +192,7 @@ fn final_job_gets_download_before_write_request() -> Result<(), RenderError> {
     let (id, mut final_job) = job(
         "required",
         "Required",
-        Vec::new(),
+        vec!["plan".to_owned()],
         vec![
             acquire_fixture()?,
             write_request_step(MERGE_OPERATION)?,

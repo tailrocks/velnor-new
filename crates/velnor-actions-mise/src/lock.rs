@@ -1,10 +1,9 @@
 //! Bootstrap lock and version-policy IO plus verification.
 //!
-//! Parses `.velnor/generator.lock` (TOML subset: strings, integers, tables,
-//! arrays-of-tables) and the release-manifest JSON, then verifies the lock
-//! against the manifest per supported target (URL+SHA equality, immutable
-//! URLs) and the version-policy mirror against the compiled catalog. CI
-//! runs this verification before any bootstrap use. No `latest` anywhere.
+//! Parses `.velnor/generator.lock` (TOML subset) and the release-manifest
+//! JSON, then verifies the lock against the manifest per supported target
+//! (URL+SHA equality, immutable URLs) and the version-policy mirror
+//! against the compiled catalog. CI runs this before any bootstrap use.
 
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter, Result as FmtResult};
@@ -12,10 +11,12 @@ use std::path::Path;
 
 use velnor_actions_contract::{
     ActionPin, GeneratorBinary, GeneratorLock, GithubRunnerImages, LockedGenerator, MiseBootstrap,
-    ReleaseManifest, RunnerInventory, SUPPORTED_TARGETS, VersionPolicy,
+    ReleaseManifest, RunnerInventory, VersionPolicy,
 };
 
 use super::{MISE_VERSION, PinnedTool, ToolCatalog};
+
+pub use super::lock_verify::verify_lock_against_manifest;
 
 /// Lock, manifest, and version-policy verification failure.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -95,40 +96,6 @@ pub fn parse_release_manifest(text: &str) -> Result<ReleaseManifest, LockError> 
     Ok(manifest)
 }
 
-/// Verify lock against manifest: same version, equal URL+SHA per target.
-///
-/// Also pins the lock's Mise bootstrap record to the compiled [`MISE_VERSION`].
-/// # Errors
-pub fn verify_lock_against_manifest(
-    lock: &GeneratorLock,
-    manifest: &ReleaseManifest,
-) -> Result<(), LockError> {
-    if lock.generator.version != manifest.version {
-        return Err(mismatch(format!(
-            "version:{}:{}",
-            lock.generator.version, manifest.version
-        )));
-    }
-    for target in SUPPORTED_TARGETS {
-        let locked = lock
-            .binary_for_target(target)
-            .ok_or_else(|| mismatch(format!("missing_target:{target}")))?;
-        let released = manifest
-            .record_for_target(target)
-            .ok_or_else(|| mismatch(format!("manifest_missing_target:{target}")))?;
-        if locked.artifact != released.artifact || locked.sha256 != released.sha256 {
-            return Err(mismatch(format!("target_diverged:{target}")));
-        }
-    }
-    if lock.mise_bootstrap.version != MISE_VERSION {
-        return Err(mismatch(format!(
-            "mise_bootstrap:{}:{MISE_VERSION}",
-            lock.mise_bootstrap.version
-        )));
-    }
-    Ok(())
-}
-
 /// Verify the version-policy mirror equals the compiled catalog exactly.
 ///
 /// Every `[tools]` pin must match [`ToolCatalog::pinned`] (plus the Mise
@@ -198,7 +165,7 @@ pub fn verify_policy_header(text: &str) -> Result<(), LockError> {
 }
 
 /// Build a mismatch error.
-fn mismatch(problem: String) -> LockError {
+pub(crate) fn mismatch(problem: String) -> LockError {
     LockError::Mismatch { problem }
 }
 
@@ -388,6 +355,7 @@ fn lock_from_doc(doc: &TomlDoc) -> Result<GeneratorLock, LockError> {
         generator: LockedGenerator {
             binary: entry(&generator, "binary")?,
             version: entry(&generator, "version")?,
+            commit: entry(&generator, "commit")?,
             binaries,
         },
         mise_bootstrap: MiseBootstrap {

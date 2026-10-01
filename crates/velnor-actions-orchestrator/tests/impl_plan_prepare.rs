@@ -87,11 +87,12 @@ fn check_install_specs(body: &str, specs: &[String]) -> Result<(), String> {
     Ok(())
 }
 
-/// Install step must carry the isolation-plus-homes env.
+/// Install step must carry the verification-plus-homes env.
 fn check_install_env(body: &str) -> Result<(), String> {
     for key in [
         "MISE_NO_CONFIG:",
-        "MISE_LOCKFILE:",
+        "MISE_NO_ENV:",
+        "MISE_NO_HOOKS:",
         "MISE_RUSTUP_HOME:",
         "MISE_CARGO_HOME:",
         "RUSTUP_TOOLCHAIN:",
@@ -99,6 +100,9 @@ fn check_install_env(body: &str) -> Result<(), String> {
         if !body.contains(key) {
             return Err(format!("install env misses {key}:\n{body}"));
         }
+    }
+    if !body.contains("MISE_LOCKFILE: \"0\"") {
+        return Err(format!("install env must pin MISE_LOCKFILE off:\n{body}"));
     }
     Ok(())
 }

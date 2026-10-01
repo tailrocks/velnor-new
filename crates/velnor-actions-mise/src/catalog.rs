@@ -14,6 +14,9 @@ use crate::error::MiseError;
 #[path = "lock.rs"]
 pub mod lock;
 
+#[path = "lock_verify.rs"]
+mod lock_verify;
+
 /// Pinned release-plz coordinator argv (root frozen: `mise::catalog::release_plz`).
 #[path = "release_plz.rs"]
 pub mod release_plz;

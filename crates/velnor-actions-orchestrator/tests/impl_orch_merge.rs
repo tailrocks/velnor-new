@@ -1,7 +1,6 @@
 //! Orchestrator core rows: merge accounting, status tokens, budgets.
 
-use std::collections::BTreeSet;
-use std::fs;
+use std::{collections::BTreeSet, fs};
 
 use tempfile::TempDir;
 use velnor_actions_contract::{ExecuteTaskRef, FinalStatus, MatrixStatus, Plan, TaskStatus};
@@ -187,8 +186,7 @@ fn obligation_universe_matches_independent_oracle() -> TestResult {
     let base = commit(root, "one")?;
     put(root, "beta/src/lib.rs", BUMP)?;
     let head = commit(root, "two")?;
-    // Oracle inputs, independent of the planner: raw cargo metadata for
-    // members, fs checks for fmt evidence, documented kind rules.
+    // Oracle inputs, independent of the planner: raw cargo metadata, fs checks, documented kind rules.
     assert!(!root.join("rustfmt.toml").exists() && !root.join(".rustfmt.toml").exists());
     let root = std::fs::canonicalize(root).map_err(|_| "canon")?;
     let output = std::process::Command::new("cargo")
@@ -231,7 +229,6 @@ fn obligation_universe_matches_independent_oracle() -> TestResult {
 #[test]
 fn blocked_tasks_resolve_below_cancelled() -> TestResult {
     let (_repo, plan) = plan_for_source_change()?;
-    let matrix = serde_json::to_value(&plan.matrix)?;
     let mut reports = passing_reports(&plan)?;
     for report in &mut reports {
         set_task(report, TaskStatus::NotSelected, MatrixStatus::NotRun)?;
@@ -239,7 +236,7 @@ fn blocked_tasks_resolve_below_cancelled() -> TestResult {
     let run = |reports: &[velnor_actions_contract::MatrixReport]| -> Result<velnor_actions_contract::FinalReport, Box<dyn std::error::Error>> {
         let request = merge_request(
             &serde_json::to_value(&plan)?,
-            &matrix,
+            &serde_json::to_value(&plan.matrix)?,
             &serde_json::to_value(reports)?,
             &success_jobs(),
         );

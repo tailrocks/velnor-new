@@ -301,11 +301,13 @@ impl PinnedToolExec {
 
 /// Bootstrap installation of exact catalog tools (the `mise install` step).
 ///
-/// Exact argv: `mise install --no-config --no-env --no-hooks
-/// <tool>@<exact>...` under `MISE_LOCKFILE=0` plus Velnor-owned homes. This
-/// is the bootstrap exception: the only Velnor invocation that installs
-/// tools. Every later invocation runs through `exec` with implicit
-/// installation disabled, so a missing tool fails as a preparation error.
+/// Exact argv: `mise --no-config --no-env --no-hooks install
+/// <tool>@<exact>...` plus Velnor-owned homes, under the full isolation
+/// overlay. No repo config ever loads: explicit specs are the sole
+/// version authority. This is the bootstrap exception: the only Velnor
+/// invocation that installs tools. Every later invocation runs through
+/// `exec` with implicit installation disabled, so a missing tool fails
+/// as a preparation error.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MiseInstall {
     /// Tools installed as `<tool>@<exact>` selectors.

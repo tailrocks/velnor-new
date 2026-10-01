@@ -4,7 +4,7 @@ use velnor_actions_contract::workflow::ir::{
     Concurrency, DispatchInput, Job, Step, StepKind, Trigger, WorkflowDispatch, WorkflowIr,
 };
 use velnor_actions_contract::workflow::permissions::{PermissionLevel, Permissions};
-use velnor_actions_contract::{ContractError, ScheduleTrigger};
+use velnor_actions_contract::{ContractError, JobTimeout, ScheduleTrigger};
 
 const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
 
@@ -39,6 +39,7 @@ fn ci_job() -> Job {
     Job {
         display_name: "demo check".to_owned(),
         runs_on: "ubuntu-24.04".to_owned(),
+        timeout_minutes: JobTimeout::CRATE,
         needs: vec![],
         condition: None,
         permissions: None,

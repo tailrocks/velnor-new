@@ -87,7 +87,7 @@ pub(crate) fn parse_needs(
 
 /// Rendered expected inventory minus the matrix-driver job.
 ///
-/// The renderer lists every job except the gate; the driver job needs
+/// The renderer lists the gate's `needs`; the driver job needs
 /// no conclusion because per-leg reports prove its legs. Missing,
 /// unparsable, or empty expectations fail closed: without them the
 /// inventory would again derive from observation alone.

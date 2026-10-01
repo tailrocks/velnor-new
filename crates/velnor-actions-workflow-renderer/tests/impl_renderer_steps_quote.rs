@@ -1,6 +1,8 @@
 //! Run-string quoting and join cases (split from step templates).
 use std::collections::BTreeMap;
-use velnor_actions_contract::{Concurrency, Job, Permissions, Trigger, WorkflowIr, WorkflowPolicy};
+use velnor_actions_contract::{
+    Concurrency, Job, JobTimeout, Permissions, Trigger, WorkflowIr, WorkflowPolicy,
+};
 use velnor_actions_workflow_renderer::steps::{
     has_bare_env_expansion, quote_env_path_for_run, quote_run_line_env_paths,
 };
@@ -224,6 +226,7 @@ fn rendered_run_steps_quote_runner_temp_paths() -> Result<(), RenderError> {
         Job {
             display_name: "Plan".to_owned(),
             runs_on: EMIT_LABEL.to_owned(),
+            timeout_minutes: JobTimeout::PLAN,
             needs: Vec::new(),
             condition: None,
             permissions: None,

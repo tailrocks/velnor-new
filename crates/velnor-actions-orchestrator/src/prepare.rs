@@ -35,6 +35,10 @@ pub struct GenerationPreparation {
     pub workflow: WorkflowPlan,
     /// Observed runner-image evidence for the label (VER-4.2).
     pub runner_image: RunnerImageEvidence,
+    /// Install lockfile audit blockers (G2): CI-platform holes and
+    /// corrupt checksums. `generate` fails closed on any entry while
+    /// `plan` reports them; also mirrored into recommendations.
+    pub lock_audit_blocking: Vec<String>,
 }
 
 /// Build the shared preparation object for `root`.
@@ -54,7 +58,7 @@ pub fn prepare(root: &Path) -> Result<GenerationPreparation, OrchestratorError> 
     let config = load_config(&canonical)?;
     let default_branch = resolve_default_branch(&canonical, &config)?;
     check_velnor_identity(&canonical, &config)?;
-    let discovery = discover(&canonical, &config)?;
+    let mut discovery = discover(&canonical, &config)?;
     let fetch_roots = lockful_roots(&canonical, &discovery.workspaces);
     let (runner_label, runner_selection) = runner_label_for(&config);
     let workflow = build_workflow(
@@ -66,6 +70,18 @@ pub fn prepare(root: &Path) -> Result<GenerationPreparation, OrchestratorError> 
     )?;
     let runner_image = runner_image_evidence(&runner_label)
         .map_err(|err| OrchestratorError::config(CONFIG_REL, "workflow", err.to_string()))?;
+    let audit = crate::lock_audit::audit_prepare_installs(
+        &canonical,
+        &workflow.ir,
+        &runner_label,
+        &workflow.context.validator_commands,
+    );
+    discovery.recommendations.extend(audit.recommendation);
+    discovery
+        .recommendations
+        .extend(audit.blocking.iter().cloned());
+    discovery.recommendations.sort();
+    discovery.recommendations.dedup();
     Ok(GenerationPreparation {
         root: canonical,
         config,
@@ -75,6 +91,7 @@ pub fn prepare(root: &Path) -> Result<GenerationPreparation, OrchestratorError> 
         discovery,
         workflow,
         runner_image,
+        lock_audit_blocking: audit.blocking,
     })
 }
 

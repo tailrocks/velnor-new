@@ -86,16 +86,24 @@ pub fn generate(
 /// Fail closed on transient-only profile evidence before touching `.github`.
 fn fail_on_blocking_findings(prep: &GenerationPreparation) -> Result<(), OrchestratorError> {
     let blockers = crate::evidence::blocking_findings(&prep.discovery.workspaces);
-    if blockers.is_empty() {
-        return Ok(());
+    if !blockers.is_empty() {
+        return Err(OrchestratorError::Profile {
+            problem: format!(
+                "{}: {}",
+                velnor_actions_rust::TRANSIENT_EVIDENCE_CODE,
+                blockers.join("; ")
+            ),
+        });
     }
-    Err(OrchestratorError::Profile {
-        problem: format!(
-            "{}: {}",
-            velnor_actions_rust::TRANSIENT_EVIDENCE_CODE,
-            blockers.join("; ")
-        ),
-    })
+    if !prep.lock_audit_blocking.is_empty() {
+        return Err(OrchestratorError::Profile {
+            problem: format!(
+                "lock_audit_blocked: {}",
+                prep.lock_audit_blocking.join("; ")
+            ),
+        });
+    }
+    Ok(())
 }
 
 /// Render the validated tree (base files plus release extras) in memory.

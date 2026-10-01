@@ -14,8 +14,8 @@ use std::collections::BTreeMap;
 use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
 
-use velnor_actions_contract::Step;
 use velnor_actions_contract::config::{ReleaseAuthentication, RustReleaseConfig};
+use velnor_actions_contract::{JobTimeout, Step};
 use velnor_actions_mise::catalog::release_plz::{ReleasePrRequest, ReleaseRequest as PlzRelease};
 use velnor_actions_mise::{PinnedTool, PinnedToolExec, ToolCatalog};
 use velnor_actions_workflow_renderer::release_jobs::{ReleaseJobSpec, ReleaseRole};
@@ -252,6 +252,7 @@ fn preparation_job(
         role: ReleaseRole::Preparation,
         display_name: "Release preparation".to_owned(),
         runs_on: parts.label.to_owned(),
+        timeout_minutes: JobTimeout::RELEASE,
         needs: Vec::new(),
         condition: None,
         environment: None,
@@ -273,6 +274,7 @@ fn preflight_job(
         role: ReleaseRole::Preflight,
         display_name: "Release preflight".to_owned(),
         runs_on: parts.label.to_owned(),
+        timeout_minutes: JobTimeout::RELEASE,
         needs: vec!["release-preparation".to_owned()],
         condition: None,
         environment: None,
@@ -295,6 +297,7 @@ fn publish_job(
         role: ReleaseRole::PublishOidc,
         display_name: "Release publish".to_owned(),
         runs_on: parts.label.to_owned(),
+        timeout_minutes: JobTimeout::RELEASE,
         needs: vec!["release-preflight".to_owned()],
         condition: Some(parts.gate.to_owned()),
         environment: Some(parts.environment.to_owned()),
@@ -322,6 +325,7 @@ fn bootstrap_job(
         role: ReleaseRole::PublishBootstrap,
         display_name: "Release bootstrap publish".to_owned(),
         runs_on: parts.label.to_owned(),
+        timeout_minutes: JobTimeout::RELEASE,
         needs: vec!["release-preflight".to_owned()],
         condition: Some(parts.gate.to_owned()),
         environment: Some(parts.environment.to_owned()),
@@ -349,6 +353,7 @@ fn reconcile_job(
         role: ReleaseRole::Reconcile,
         display_name: "Release reconcile".to_owned(),
         runs_on: parts.label.to_owned(),
+        timeout_minutes: JobTimeout::RELEASE,
         needs,
         condition: Some("always()".to_owned()),
         environment: None,

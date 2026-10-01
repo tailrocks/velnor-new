@@ -92,6 +92,7 @@ fn plain_job(
         role,
         display_name: format!("Release {}", role.as_str()),
         runs_on: LABEL.to_owned(),
+        timeout_minutes: velnor_actions_contract::JobTimeout::RELEASE,
         needs: needs.iter().map(ToString::to_string).collect(),
         condition: condition.map(str::to_owned),
         environment: None,
@@ -123,6 +124,7 @@ fn publish_job(
         role,
         display_name: format!("Release {}", role.as_str()),
         runs_on: LABEL.to_owned(),
+        timeout_minutes: velnor_actions_contract::JobTimeout::RELEASE,
         needs: needs.iter().map(ToString::to_string).collect(),
         condition: Some(gate),
         environment: Some(ENV.to_owned()),
@@ -204,6 +206,22 @@ pub(crate) fn spec() -> Result<ReleaseWorkflowSpec, RenderError> {
         publish_environment: ENV.to_owned(),
         bootstrap_environment: "crates-io-bootstrap".to_owned(),
     })
+}
+
+#[test]
+fn release_jobs_carry_timeout_minutes_by_construction() -> Result<(), RenderError> {
+    let text = render_release_workflow(&spec()?, &ctx())?;
+    let jobs = spec()?.jobs.len();
+    assert!(
+        jobs > 0,
+        "fixture must carry jobs for the timeout audit to mean anything"
+    );
+    assert_eq!(
+        text.matches("timeout-minutes: 10").count(),
+        jobs,
+        "every release job carries the RELEASE bound"
+    );
+    Ok(())
 }
 
 #[test]

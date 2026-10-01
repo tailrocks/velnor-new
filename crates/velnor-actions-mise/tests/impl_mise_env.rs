@@ -227,6 +227,41 @@ fn endpoint_selectors_are_reserved_and_unsettable() -> Result<(), String> {
 }
 
 #[test]
+fn mise_prefix_is_reserved_except_owned_homes() -> Result<(), String> {
+    for key in [
+        "MISE_ENV",
+        "MISE_CONFIG_FILE",
+        "MISE_TRUSTED_CONFIG_PATHS",
+        "MISE_DATA_DIR",
+        "MISE_NO_CONFIG",
+        "MISE_LOCKFILE",
+        "MISE_SUDO",
+    ] {
+        assert!(is_reserved_env_key(key), "{key} reserved");
+        let pair = [(OsString::from(key), OsString::from("sentinel"))];
+        let exec =
+            IsolatedCommand::mise_exec(&["rust@1.98.1".to_owned()], &[OsString::from("cargo")])
+                .map_err(|err| err.to_string())?;
+        assert!(
+            matches!(
+                exec.with_env(&pair),
+                Err(MiseError::InvalidStepInput { .. })
+            ),
+            "{key} must fail loud via with_env"
+        );
+        let declared = vec![(OsString::from(key), OsString::from("sentinel"))];
+        assert!(
+            IsolatedCommand::repo_task("sh", Vec::new(), &declared).is_err(),
+            "{key} must fail loud via repo_task"
+        );
+    }
+    for key in ["MISE_RUSTUP_HOME", "MISE_CARGO_HOME"] {
+        assert!(!is_reserved_env_key(key), "{key} stays allowed");
+    }
+    Ok(())
+}
+
+#[test]
 fn subcommand_allowlist_is_exec_install_run() {
     assert_eq!(ALLOWED_MISE_SUBCOMMANDS, ["exec", "install", "run"]);
     for allowed in ["exec", "install", "run"] {
@@ -264,7 +299,12 @@ fn every_built_mise_subcommand_is_allowlisted() -> Result<(), String> {
         .map_err(|err| err.to_string())?;
     for argv in [exec.argv(), install.argv()] {
         assert_eq!(argv[0], OsString::from("mise"));
-        let subcommand = argv[4].to_string_lossy().into_owned();
+        let subcommand = argv
+            .iter()
+            .skip(1)
+            .find(|arg| !arg.to_string_lossy().starts_with("--"))
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .ok_or("missing subcommand")?;
         assert!(
             is_allowed_mise_subcommand(&subcommand),
             "unallowlisted subcommand: {subcommand}"

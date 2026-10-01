@@ -49,8 +49,8 @@ pub enum HelperProvenance {
         url: String,
         /// Expected lowercase hex SHA-256 of the asset.
         sha256: String,
-        /// Manifest source commit, when the consumer manifest supplies one.
-        commit: Option<String>,
+        /// Source commit (required, F3): manifest and lock paths both supply it.
+        commit: String,
     },
     /// No provenance: the bootstrap release is not seeded yet.
     SeedRequired,
@@ -72,13 +72,11 @@ pub fn provision_acquire_step(
             sha256,
             commit,
         } => {
-            let mut env = std::collections::BTreeMap::from([
+            let env = std::collections::BTreeMap::from([
                 (steps::ASSET_URL_ENV.to_owned(), url.clone()),
                 (steps::ASSET_SHA_ENV.to_owned(), sha256.clone()),
+                (steps::RELEASE_COMMIT_ENV.to_owned(), commit.clone()),
             ]);
-            if let Some(commit) = commit {
-                env.insert(steps::RELEASE_COMMIT_ENV.to_owned(), commit.clone());
-            }
             steps::acquire_velnor_step(argv, &env)
         }
         HelperProvenance::SeedRequired => {

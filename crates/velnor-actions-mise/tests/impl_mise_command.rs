@@ -221,9 +221,9 @@ fn cancel_or_timeout_classifier_separates_abortions_from_outcomes() {
 fn custom_task_run_shape_is_plain_mise_run() {
     use velnor_actions_mise::custom_run::custom_task_run_argv;
     let argv = custom_task_run_argv("audit").expect("custom argv");
-    assert_eq!(argv.join(" "), "mise run -- audit");
+    assert_eq!(argv.join(" "), "mise run audit");
     let namespaced = custom_task_run_argv("lint:strict").expect("namespaced task");
-    assert_eq!(namespaced.join(" "), "mise run -- lint:strict");
+    assert_eq!(namespaced.join(" "), "mise run lint:strict");
     for bad in [
         "",
         "  ",

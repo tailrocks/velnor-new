@@ -7,7 +7,7 @@ use crate::publish_job::baseline_publish_job;
 use crate::workflow::{CHECKOUT_USES, REQUEST_DIR};
 use crate::workflow_jobs::{final_job, plan_job};
 use std::collections::BTreeMap;
-use velnor_actions_contract::{Concurrency, Job, Permissions, Trigger};
+use velnor_actions_contract::{Concurrency, Job, JobTimeout, Permissions, Trigger};
 use velnor_actions_workflow_renderer::render::{RenderContext, WORKFLOW_PATH};
 
 /// Minimal crate job covering the crate attach branch.
@@ -15,6 +15,7 @@ fn legacy_task_job() -> Job {
     Job {
         display_name: "Rust / demo".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
+        timeout_minutes: JobTimeout::CRATE,
         needs: vec![PLAN_JOB_ID.to_owned()],
         condition: None,
         permissions: None,
@@ -51,6 +52,7 @@ fn lock_acquire_inserts_digest_verified_stage() {
         generator: LockedGenerator {
             binary: "velnor-actions".to_owned(),
             version: "0.1.0".to_owned(),
+            commit: "ab".repeat(20),
             binaries: vec![GeneratorBinary {
                 target: "x86_64-unknown-linux-gnu".to_owned(),
                 artifact: "https://example.invalid/r".to_owned(),
@@ -112,6 +114,56 @@ fn lock_acquire_inserts_digest_verified_stage() {
         ]
     );
     assert!(attach_lock_acquire(&mut ir, &lock, "ubuntu-26.04-arm", "0.1.0").is_err());
+}
+
+#[test]
+fn lock_acquire_records_source_commit() {
+    use velnor_actions_contract::{GeneratorBinary, LockedGenerator, MiseBootstrap, StepKind};
+    use velnor_actions_workflow_renderer::steps::RELEASE_COMMIT_ENV;
+    let lock = GeneratorLock {
+        schema: 1,
+        generator: LockedGenerator {
+            binary: "velnor-actions".to_owned(),
+            version: "0.1.0".to_owned(),
+            commit: "cd".repeat(20),
+            binaries: vec![GeneratorBinary {
+                target: "x86_64-unknown-linux-gnu".to_owned(),
+                artifact: "https://example.invalid/r".to_owned(),
+                sha256: "a".repeat(64),
+            }],
+        },
+        mise_bootstrap: MiseBootstrap {
+            version: "2026.9.18".to_owned(),
+            artifact: "https://example.invalid/m".to_owned(),
+            sha256: "b".repeat(64),
+        },
+        actions: Vec::new(),
+    };
+    let catalog = ToolCatalog::pinned();
+    let mut ir = bare_ir(BTreeMap::from([(
+        "plan".to_owned(),
+        plan_job("ubuntu-26.04", None, &catalog, false, false, &[]).expect("plan job"),
+    )]));
+    ir.jobs.insert(
+        "required".to_owned(),
+        final_job("ubuntu-26.04", &[], None, &catalog).expect("final job"),
+    );
+    attach_lock_acquire(&mut ir, &lock, "ubuntu-26.04", "0.1.0").expect("attach");
+    for id in ["plan", "required"] {
+        let acquire = ir.jobs[id]
+            .steps
+            .iter()
+            .find(|step| step.name == "Acquire Velnor")
+            .expect("acquire step");
+        let StepKind::Shell { env, .. } = &acquire.kind else {
+            panic!("acquire must be a shell step");
+        };
+        assert_eq!(
+            env.get(RELEASE_COMMIT_ENV).map(String::as_str),
+            Some("cd".repeat(20).as_str()),
+            "lock path must record the commit like the manifest path"
+        );
+    }
 }
 
 #[test]

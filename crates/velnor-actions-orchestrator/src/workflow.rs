@@ -59,6 +59,31 @@ pub struct WorkflowPlan {
     pub actionlint: ActionlintConfigInput,
 }
 
+/// Build the plan job with its deferred format steps attached.
+///
+/// # Errors
+///
+/// Returns tool-request or step-construction errors.
+fn build_plan_job(
+    label: &str,
+    acquire: Option<Step>,
+    catalog: &ToolCatalog,
+    use_mbx: bool,
+    use_nextest: bool,
+    fetch_roots: &[String],
+    discovery: &Discovery,
+) -> Result<Job, OrchestratorError> {
+    let mut plan = plan_job(label, acquire, catalog, use_mbx, use_nextest, fetch_roots)?;
+    if let Some(format) = wire_w1::workspace_format_step(discovery, catalog)? {
+        insert_format_step(&mut plan, format);
+    }
+    insert_format_report_steps(
+        &mut plan,
+        wire_w1::workspace_format_report_steps(discovery)?,
+    );
+    Ok(plan)
+}
+
 /// Build renderer input from config, branch, label, and discovery.
 ///
 /// # Errors
@@ -88,21 +113,15 @@ pub(crate) fn build_workflow(
         WorkflowPolicy::VelnorRepositoryV1 => None,
     };
     let use_nextest = plan_uses_nextest(discovery);
-    let mut plan = plan_job(
+    let plan = build_plan_job(
         label,
         acquire.clone(),
         &catalog,
         use_mbx,
         use_nextest,
         fetch_roots,
+        discovery,
     )?;
-    if let Some(format) = wire_w1::workspace_format_step(discovery, &catalog)? {
-        insert_format_step(&mut plan, format);
-    }
-    insert_format_report_steps(
-        &mut plan,
-        wire_w1::workspace_format_report_steps(discovery)?,
-    );
     jobs.insert(PLAN_JOB_ID.to_owned(), plan);
     let custom_tasks: &[String] = config
         .stacks
@@ -111,6 +130,7 @@ pub(crate) fn build_workflow(
         .map_or(&[], |rust| &rust.custom_tasks);
     let built = crate::crate_jobs::build_crate_jobs(
         label,
+        policy,
         discovery,
         &catalog,
         fetch_roots,

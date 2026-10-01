@@ -60,7 +60,7 @@ fn provenance_release_ok_seed_fails() -> Result<(), RenderError> {
     let provenance = HelperProvenance::ReleaseAsset {
         url: "https://example.invalid/r".to_owned(),
         sha256: "c".repeat(64),
-        commit: None,
+        commit: "c".repeat(40),
     };
     let step = provision_acquire_step(&provenance, argv)?;
     assert_eq!(step.name, ACQUIRE_NAME);
@@ -86,7 +86,7 @@ fn provenance_commit_records_and_validates() -> Result<(), RenderError> {
     let provenance = HelperProvenance::ReleaseAsset {
         url: "https://example.invalid/r".to_owned(),
         sha256: "c".repeat(64),
-        commit: Some(commit.clone()),
+        commit: commit.clone(),
     };
     let step = provision_acquire_step(&provenance, argv())?;
     let StepKind::Shell { env, .. } = &step.kind else {
@@ -105,7 +105,7 @@ fn provenance_commit_records_and_validates() -> Result<(), RenderError> {
         let provenance = HelperProvenance::ReleaseAsset {
             url: "https://example.invalid/r".to_owned(),
             sha256: "c".repeat(64),
-            commit: Some(bad.clone()),
+            commit: bad.clone(),
         };
         assert!(
             provision_acquire_step(&provenance, argv())
@@ -125,6 +125,7 @@ fn acquire_requires_verify_wiring() {
             ASSET_URL_ENV.to_owned(),
             "https://example.invalid/bin".to_owned(),
         ),
+        (RELEASE_COMMIT_ENV.to_owned(), "b".repeat(40)),
     ]);
     let bare = vec!["fetch".to_owned(), staged];
     assert!(

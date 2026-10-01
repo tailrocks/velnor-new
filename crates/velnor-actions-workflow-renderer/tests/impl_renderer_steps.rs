@@ -4,9 +4,9 @@
 //! `impl_renderer_steps_quote`.
 use std::collections::BTreeMap;
 use velnor_actions_workflow_renderer::{
-    ASSET_SHA_ENV, ASSET_URL_ENV, RenderError, STAGED_BINARY_PREFIX, acquire_velnor_step,
-    action_step, checkout_step, internal_step, merge_step, plan_step, scan_for_private_subcommands,
-    shell_step, validate_command_argv, validate_uses,
+    ASSET_SHA_ENV, ASSET_URL_ENV, RELEASE_COMMIT_ENV, RenderError, STAGED_BINARY_PREFIX,
+    acquire_velnor_step, action_step, checkout_step, internal_step, merge_step, plan_step,
+    scan_for_private_subcommands, shell_step, validate_command_argv, validate_uses,
 };
 
 fn pin(name: &str) -> String {
@@ -120,6 +120,7 @@ fn acquire_template_requires_digest_and_staging() {
         ASSET_URL_ENV.to_owned(),
         "https://example.invalid/v0.1.0/bin".to_owned(),
     );
+    env.insert(RELEASE_COMMIT_ENV.to_owned(), "b".repeat(40));
     let wired = argv(&[
         "sh",
         "-c",
@@ -142,6 +143,9 @@ fn acquire_template_requires_digest_and_staging() {
         "http://example.invalid/bin".to_owned(),
     );
     assert!(acquire_velnor_step(wired.clone(), &bad_url).is_err());
+    let mut no_commit = env.clone();
+    no_commit.remove(RELEASE_COMMIT_ENV);
+    assert!(acquire_velnor_step(wired.clone(), &no_commit).is_err());
     assert!(acquire_velnor_step(argv(&["fetch", "/tmp/bin"]), &env).is_err());
     assert!(acquire_velnor_step(argv(&["fetch", &staged]), &env).is_err());
 }

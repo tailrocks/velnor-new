@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::errors::ContractError;
-use crate::manifest::{check_schema, check_sha256, check_target, is_lower_hex};
+use crate::manifest_checks::{check_commit, check_schema, check_sha256, check_target};
 
 /// Per-target candidate artifact manifest (bootstrap contract §4 step 4).
 ///
@@ -47,9 +47,7 @@ impl CandidateArtifactManifest {
     /// # Errors
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
         check_schema(self.schema)?;
-        if self.commit.len() != 40 || !is_lower_hex(&self.commit) {
-            return Err(ContractError::config(file, "commit", "malformed_commit"));
-        }
+        check_commit(&self.commit, file, "commit")?;
         check_target(&self.target, file, "target")?;
         if !crate::targets::is_supported_target(&self.target) {
             return Err(ContractError::config(

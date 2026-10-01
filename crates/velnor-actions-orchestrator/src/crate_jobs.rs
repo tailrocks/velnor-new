@@ -17,8 +17,8 @@ use velnor_actions_actionlint::{
     actions::{MR_BOXINGTON_ACTION_SHA, MR_BOXINGTON_ACTION_VERSION},
 };
 use velnor_actions_contract::{
-    CrateJob, CrateObligation, Job, Step, assign_crate_job_ids, crate_display_name,
-    matrix_id_for_task_group, matrix_key_for_id,
+    CrateJob, CrateObligation, Job, JobTimeout, Step, WorkflowPolicy, assign_crate_job_ids,
+    crate_display_name, matrix_id_for_task_group, matrix_key_for_id,
 };
 use velnor_actions_mise::{PinnedTool, TaskCacheMode, ToolCatalog};
 use velnor_actions_rust::{CompileDriver as RustDriver, STACK_ID, TaskGroup, TaskKind, TestRunner};
@@ -54,6 +54,7 @@ pub(crate) struct CrateBuild {
 /// Returns contract, render-context, or tool-request errors.
 pub(crate) fn build_crate_jobs(
     label: &str,
+    policy: WorkflowPolicy,
     discovery: &Discovery,
     catalog: &ToolCatalog,
     fetch_roots: &[String],
@@ -62,6 +63,10 @@ pub(crate) fn build_crate_jobs(
 ) -> Result<CrateBuild, OrchestratorError> {
     let grouped = group_runnable(&discovery.task_groups);
     let assigned = assign_crate_job_ids(&id_inputs(&grouped));
+    // Reject a non-empty allowlist before the loop: with zero runnable
+    // groups the loop body (and its rejection) never runs, so the
+    // allowlist would be silently ignored instead of failing closed.
+    let custom_steps = crate::vectors::custom_task_steps(custom_tasks, catalog)?;
     let mut jobs = Vec::with_capacity(grouped.len());
     let mut drivers = BTreeMap::new();
     for ((package_id, configuration), groups) in &grouped {
@@ -93,6 +98,7 @@ pub(crate) fn build_crate_jobs(
         let repo_has_mbx = crate::workflow::plan_uses_mbx(discovery);
         let mut job = render_job(
             label,
+            policy,
             &model,
             catalog,
             fetch_roots,
@@ -101,10 +107,9 @@ pub(crate) fn build_crate_jobs(
             repo_has_mbx,
             acquire,
         )?;
-        // Allowlisted custom tasks run after the fixed obligations; an
-        // empty allowlist (the default) appends nothing.
-        job.steps
-            .extend(crate::vectors::custom_task_steps(custom_tasks, catalog)?);
+        // Allowlisted custom tasks run after the fixed obligations; the
+        // pre-loop rejection above guarantees this is empty today.
+        job.steps.extend(custom_steps.iter().cloned());
         drivers.insert(job_id.clone(), driver);
         jobs.push((job_id, job));
     }
@@ -213,6 +218,7 @@ fn gates_for(group: &TaskGroup, executed: &BTreeSet<&str>) -> Vec<String> {
 )]
 fn render_job(
     label: &str,
+    policy: WorkflowPolicy,
     model: &CrateJob,
     catalog: &ToolCatalog,
     fetch_roots: &[String],
@@ -224,10 +230,13 @@ fn render_job(
     let mut steps = vec![crate::workflow::wire_w1::checkout_step()?];
     steps.extend(acquire.cloned());
     steps.push(crate::matrix_step::download_plan_step()?);
+    let needs_validators =
+        crate::matrix_step::crate_needs_generate_validators(policy, &model.package_name);
     steps.push(crate::matrix_step::prepare_crate_tools_step(
         catalog,
         use_mbx,
         use_nextest,
+        needs_validators,
     )?);
     steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
     steps.extend(restore_step_for_crate(
@@ -262,6 +271,7 @@ fn render_job(
     Ok(Job {
         display_name: model.display_name.clone(),
         runs_on: label.to_owned(),
+        timeout_minutes: JobTimeout::CRATE,
         needs: vec![PLAN_JOB_ID.to_owned()],
         condition: None,
         permissions: None,

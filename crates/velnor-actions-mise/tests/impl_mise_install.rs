@@ -67,11 +67,17 @@ fn install_command_matches_argv_and_keeps_install_enabled() -> Result<(), String
     assert_eq!(command.argv(), request.argv(&pinned()));
     assert_eq!(command.program(), "mise");
     let env = command.full_env();
-    assert!(
-        env.iter()
-            .any(|(key, value)| { key == "MISE_LOCKFILE" && value == "0" }),
-        "lockfile writes stay disabled: {env:?}"
-    );
+    for present in [
+        "MISE_NO_CONFIG",
+        "MISE_NO_ENV",
+        "MISE_NO_HOOKS",
+        "MISE_LOCKFILE",
+    ] {
+        assert!(
+            env.iter().any(|(key, _)| key == present),
+            "isolated install keeps {present}: {env:?}"
+        );
+    }
     for blocked in ["MISE_AUTO_INSTALL", "MISE_EXEC_AUTO_INSTALL"] {
         assert!(
             !env.iter().any(|(key, _)| key == blocked),

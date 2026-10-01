@@ -1,6 +1,8 @@
 //! Matrix strategy emission: shape, caps, stripping, fail-closed.
 use std::collections::BTreeMap;
-use velnor_actions_contract::{Concurrency, Job, Permissions, Trigger, WorkflowIr, WorkflowPolicy};
+use velnor_actions_contract::{
+    Concurrency, Job, JobTimeout, Permissions, Trigger, WorkflowIr, WorkflowPolicy,
+};
 use velnor_actions_workflow_renderer::render::{
     MATRIX_MAX_PARALLEL_ENV, MATRIX_NEEDS_JOB_ENV, MATRIX_OUTPUT_ENV,
 };
@@ -37,6 +39,7 @@ fn fixture_ir(task: Job) -> Result<WorkflowIr, RenderError> {
         Job {
             display_name: "Plan".to_owned(),
             runs_on: LABEL.to_owned(),
+            timeout_minutes: JobTimeout::PLAN,
             needs: Vec::new(),
             condition: None,
             permissions: None,
@@ -71,6 +74,7 @@ fn task_job(env: &BTreeMap<String, String>, needs: Vec<String>) -> Result<Job, R
     Ok(Job {
         display_name: "Task".to_owned(),
         runs_on: LABEL.to_owned(),
+        timeout_minutes: JobTimeout::CRATE,
         needs,
         condition: None,
         permissions: None,

@@ -104,8 +104,9 @@ impl ToolHomes {
 /// Bootstrap installation of exact catalog tools as one named step.
 ///
 /// Fixed argv from [`MiseInstall`]; the step env adds the owned homes
-/// to the isolation quartet. Explicit installation stays enabled: no
-/// install-disable pair may appear here.
+/// to the full isolation overlay (config, env files, hooks, and
+/// lockfile writes all disabled). Explicit installation stays enabled:
+/// no install-disable pair may appear here.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PreparePinnedTools {
     /// Fixed install request selecting the exact specs.
@@ -151,7 +152,7 @@ impl PreparePinnedTools {
         self.install.argv(catalog)
     }
 
-    /// Full step env: isolation quartet plus the owned-homes triple.
+    /// Full step env: isolation overlay plus the owned-homes triple.
     ///
     /// Matches [`Self::command`]'s spawner env exactly; the
     /// correspondence is pinned by test, not by construction comment.

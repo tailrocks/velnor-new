@@ -1,7 +1,7 @@
 //! Always-on lint job cases: emitted from typed IR for both policies.
 use std::collections::BTreeMap;
 use velnor_actions_contract::{
-    Concurrency, GeneratorValidation, Job, Permissions, Trigger, ValidatorKind,
+    Concurrency, GeneratorValidation, Job, JobTimeout, Permissions, Trigger, ValidatorKind,
     VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
 };
 use velnor_actions_workflow_renderer::{
@@ -36,6 +36,7 @@ fn lint_job() -> Result<Job, RenderError> {
     Ok(Job {
         display_name: LINT_DISPLAY.to_owned(),
         runs_on: LABEL.to_owned(),
+        timeout_minutes: JobTimeout::VALIDATOR,
         needs: Vec::new(),
         condition: None,
         permissions: None,
@@ -69,6 +70,7 @@ fn fixture_ir() -> Result<WorkflowIr, RenderError> {
         Job {
             display_name: "Plan".to_owned(),
             runs_on: LABEL.to_owned(),
+            timeout_minutes: JobTimeout::PLAN,
             needs: Vec::new(),
             condition: None,
             permissions: None,
@@ -81,6 +83,7 @@ fn fixture_ir() -> Result<WorkflowIr, RenderError> {
         Job {
             display_name: "Required".to_owned(),
             runs_on: LABEL.to_owned(),
+            timeout_minutes: JobTimeout::REQUIRED,
             needs: vec!["plan".to_owned(), LINT_ID.to_owned()],
             condition: Some("always()".to_owned()),
             permissions: None,

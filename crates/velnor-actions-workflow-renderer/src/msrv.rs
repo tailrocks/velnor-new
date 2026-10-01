@@ -9,7 +9,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, Step};
+use velnor_actions_contract::{Job, JobTimeout, Step};
 
 use crate::{RenderError, steps};
 
@@ -100,6 +100,7 @@ pub fn msrv_job(
     Ok(Job {
         display_name: format!("MSRV {}", spec.package),
         runs_on: label.to_owned(),
+        timeout_minutes: JobTimeout::MSRV,
         needs: Vec::new(),
         condition: None,
         permissions: None,

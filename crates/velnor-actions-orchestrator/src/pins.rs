@@ -148,7 +148,7 @@ fn consumer_acquire_from(
     acquire_step(
         &record.artifact,
         &record.sha256,
-        Some(&manifest.commit),
+        &manifest.commit,
         &format!("{STAGED_BINARY_PREFIX}{version}"),
     )
 }
@@ -167,20 +167,26 @@ pub(crate) fn lock_acquire_step(
         .ok_or_else(|| OrchestratorError::Contract {
             problem: format!("lock_missing_target:{target}"),
         })?;
-    acquire_step(&record.artifact, &record.sha256, None, staged)
+    acquire_step(
+        &record.artifact,
+        &record.sha256,
+        &lock.generator.commit,
+        staged,
+    )
 }
 
-/// Digest-verified staging step: fetch URL, check SHA-256, make executable.
+/// Digest-verified staging step: fetch URL, check SHA-256, record the source
+/// commit, make executable. Both provenance paths supply the commit (F3).
 fn acquire_step(
     url: &str,
     sha: &str,
-    commit: Option<&str>,
+    commit: &str,
     staged: &str,
 ) -> Result<Step, OrchestratorError> {
     let provenance = HelperProvenance::ReleaseAsset {
         url: url.to_owned(),
         sha256: sha.to_owned(),
-        commit: commit.map(str::to_owned),
+        commit: commit.to_owned(),
     };
     Ok(provision_acquire_step(&provenance, acquire_argv(staged))?)
 }

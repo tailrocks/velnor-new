@@ -1,6 +1,7 @@
 //! Stack-neutral GitHub Actions workflow IR.
 use super::jobs::{ScheduleTrigger, is_safe_display_name};
 use super::permissions::{PermissionLevel, Permissions};
+use super::timeout::JobTimeout;
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -72,6 +73,8 @@ pub struct Job {
     pub display_name: String,
     /// Literal versioned Ubuntu label.
     pub runs_on: String,
+    /// Per-job timeout (required: no job inherits the 6 h default).
+    pub timeout_minutes: JobTimeout,
     /// Job dependencies.
     #[serde(default)]
     pub needs: Vec<String>,
@@ -273,6 +276,7 @@ impl Job {
                 format!("unpinned_label:{id}"),
             ));
         }
+        self.timeout_minutes.validate()?;
         for need in &self.needs {
             if !ids.contains(need.as_str()) {
                 return Err(ContractError::identity(

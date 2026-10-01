@@ -7,7 +7,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::errors::ContractError;
-use crate::manifest::check_sha256;
+use crate::manifest_checks::check_sha256;
 
 /// One workflow tool's pinned identity (ver §2).
 #[derive(Debug, Clone, Serialize, Deserialize)]

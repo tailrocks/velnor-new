@@ -5,7 +5,9 @@ use std::fs;
 use std::path::Path;
 
 use tempfile::TempDir;
-use velnor_actions_contract::{Concurrency, Job, Permissions, Trigger, WorkflowIr, WorkflowPolicy};
+use velnor_actions_contract::{
+    Concurrency, Job, JobTimeout, Permissions, Trigger, WorkflowIr, WorkflowPolicy,
+};
 use velnor_actions_orchestrator::write_request_parts;
 use velnor_actions_workflow_renderer::{
     CONCURRENCY_CANCEL, CONCURRENCY_GROUP, checkout_step, plan_step, render::RenderContext,
@@ -40,6 +42,7 @@ fn render_gate_roundtrip_accepts_plan() -> TestResult {
         Job {
             display_name: "Plan".to_owned(),
             runs_on: "ubuntu-26.04".to_owned(),
+            timeout_minutes: JobTimeout::PLAN,
             needs: Vec::new(),
             condition: None,
             permissions: None,

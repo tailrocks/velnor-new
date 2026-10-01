@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
-use velnor_actions_contract::{Job, Step, StepKind};
+use velnor_actions_contract::{Job, JobTimeout, Step, StepKind};
 use velnor_actions_workflow_renderer::RenderError;
 use velnor_actions_workflow_renderer::cache_p08::{elect_mise_cache_writers, mise_setup_step_p08};
 use velnor_actions_workflow_renderer::steps::{TOOLS_CACHE_PATH, TOOLS_SAVE_NAME, TOOLS_SAVE_USES};
@@ -32,6 +32,7 @@ fn keyed_job(key: &str) -> Result<Job, RenderError> {
     Ok(Job {
         display_name: "Keyed".to_owned(),
         runs_on: LABEL.to_owned(),
+        timeout_minutes: JobTimeout::CRATE,
         needs: Vec::new(),
         condition: None,
         permissions: None,
@@ -118,6 +119,7 @@ fn mise_cache_writer_election_skips_keyless_and_reruns() -> Result<(), RenderErr
     let bare = Job {
         display_name: "Bare".to_owned(),
         runs_on: LABEL.to_owned(),
+        timeout_minutes: JobTimeout::CRATE,
         needs: Vec::new(),
         condition: None,
         permissions: None,

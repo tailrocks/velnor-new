@@ -1,12 +1,14 @@
 //! Shared fixtures for the strict-emission test family.
 use std::collections::BTreeMap;
 use velnor_actions_contract::{
-    Concurrency, Job, Permissions, Step, Trigger, ValidatorKind, WorkflowIr, WorkflowPolicy,
+    Concurrency, Job, JobTimeout, Permissions, Step, Trigger, ValidatorKind, WorkflowIr,
+    WorkflowPolicy,
 };
 use velnor_actions_workflow_renderer::{
-    ASSET_SHA_ENV, ASSET_URL_ENV, CONCURRENCY_CANCEL, CONCURRENCY_GROUP, MiseSetup, RenderContext,
-    RenderError, STAGED_BINARY_PREFIX, ValidatorCommand, acquire_velnor_step, checkout_step,
-    plan_step, render_workflow_ir, render_workflow_ir_strict, shell_step,
+    ASSET_SHA_ENV, ASSET_URL_ENV, CONCURRENCY_CANCEL, CONCURRENCY_GROUP, MiseSetup,
+    RELEASE_COMMIT_ENV, RenderContext, RenderError, STAGED_BINARY_PREFIX, ValidatorCommand,
+    acquire_velnor_step, checkout_step, plan_step, render_workflow_ir, render_workflow_ir_strict,
+    shell_step,
 };
 
 pub(crate) const VERSION: &str = "0.1.0";
@@ -56,6 +58,7 @@ pub(crate) fn acquire_fixture() -> Result<Step, RenderError> {
                 ASSET_URL_ENV.to_owned(),
                 "https://example.invalid/releases/download/0.1.0/bin".to_owned(),
             ),
+            (RELEASE_COMMIT_ENV.to_owned(), "b".repeat(40)),
         ]),
     )
 }
@@ -81,6 +84,7 @@ pub(crate) fn job(id: &str, display: &str, needs: Vec<String>, steps: Vec<Step>)
         Job {
             display_name: display.to_owned(),
             runs_on: LABEL.to_owned(),
+            timeout_minutes: JobTimeout::CRATE,
             needs,
             condition: None,
             permissions: None,

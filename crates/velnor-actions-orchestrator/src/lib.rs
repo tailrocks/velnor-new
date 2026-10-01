@@ -35,6 +35,7 @@ mod internal_plan;
 mod internal_request;
 mod inventory;
 mod inventory_reuse;
+mod lock_audit;
 mod matrix_step;
 mod merge;
 mod merge_request;
