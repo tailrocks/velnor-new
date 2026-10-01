@@ -200,11 +200,34 @@ fn malformed_inputs_are_rejected() {
     assert!(NextestArchive::new(NextestDriver::Cargo, "", &[], None).is_err());
     assert!(NextestArchive::new(NextestDriver::Cargo, "a/b", &[], None).is_err());
     assert!(NextestArchive::new(NextestDriver::Cargo, "demo", &["a b".to_owned()], None).is_err());
+    assert!(matches!(
+        NextestArchive::new(NextestDriver::Cargo, "demo", &["a b".to_owned()], None),
+        Err(MiseError::InvalidNextestInput { field, .. }) if field == "feature"
+    ));
     assert!(NextestArchive::new(NextestDriver::Cargo, "demo", &[], Some("")).is_err());
     let partition = NextestPartition::new(1, 1).expect("partition");
     assert!(NextestRun::new(NextestDriver::Cargo, partition, "../escape", "p1").is_err());
     assert!(NextestRun::new(NextestDriver::Cargo, partition, "m-abc", "a/b").is_err());
     assert!(NextestRun::new(NextestDriver::Cargo, partition, "", "p1").is_err());
+}
+
+#[test]
+fn nextest_archive_accepts_config_feature_syntax() -> Result<(), String> {
+    // M1: the config gate accepts weak-dependency feature syntax; the archive
+    // must use the same contract charset instead of the narrower token set.
+    let archive = NextestArchive::new(
+        NextestDriver::Cargo,
+        "demo",
+        &[
+            "serde?/derive".to_owned(),
+            "tokio:rt".to_owned(),
+            "dep/feat".to_owned(),
+        ],
+        None,
+    )
+    .map_err(|err| err.to_string())?;
+    assert_eq!(archive.config_key().2.len(), 3);
+    Ok(())
 }
 
 #[test]
