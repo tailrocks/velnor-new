@@ -48,6 +48,7 @@ mod impl_perf_p13;
 mod impl_plan_prepare;
 mod impl_prepare_generate;
 mod impl_protocol;
+mod impl_protocol_render;
 mod impl_required_evidence;
 mod impl_select;
 mod impl_select_base;

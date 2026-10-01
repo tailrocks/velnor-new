@@ -1,21 +1,21 @@
-//! Event-time `fetch-reports-v1`: exact matrix-artifact retrieval.
+//! Event-time `fetch-reports-v1`: exact crate-artifact retrieval.
 //!
 //! The final job's retrieve step runs before request assembly: it reads
-//! the downloaded plan, then downloads each expected matrix artifact by exact
+//! the downloaded plan, then downloads each expected crate artifact by exact
 //! derived name with pinned `gh` (`gh run download <run-id> --name
 //! <artifact-id> --dir reports/<artifact-id>`), never a wildcard. One
-//! failed download skips that leg (merge judges `not_run`); a missing
-//! or unparsable plan downloads nothing and still exits success so the
-//! merge reaches its `planning_failed` verdict. Only unusable
+//! failed download skips that job's entries (merge judges `not_run`); a
+//! missing or unparsable plan downloads nothing and still exits success
+//! so the merge reaches its `planning_failed` verdict. Only unusable
 //! environment (no runner temp, no numeric run ID) fails outright.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
-use velnor_actions_contract::{task_report_id_for_task, validate_artifact_id};
+use velnor_actions_contract::{task_report_id_for_task, validate_artifact_id, validate_matrix_key};
 use velnor_actions_mise::ToolCatalog;
 
 use crate::OrchestratorError;
@@ -112,13 +112,14 @@ pub(crate) const MAX_STAGED_REPORT_BYTES: u64 = 1 << 20;
 
 /// Read exactly the plan-expected staged reports plus task files.
 ///
-/// Each `matrix.include` entry names its artifact; absent or unreadable
-/// files are recorded in `errors`, never skipped silently. Stray files
-/// are ignored. Both `gh` extract layouts are accepted (direct plus one
-/// nested artifact directory); both paths are exact, never globbed. An
-/// artifact ID that fails shape validation is recorded, never traversed.
-/// Task files come from `<report-dir>/tasks/<task-report-id>.json` for
-/// the plan-derived expectation only. Both lists sort by ID.
+/// Each `matrix.include` entry names its job's artifact and its own
+/// matrix key; absent or unreadable files are recorded in `errors`,
+/// never skipped silently. Stray files are ignored. Both `gh` extract
+/// layouts are accepted (direct plus one nested artifact directory);
+/// both paths are exact, never globbed. An artifact ID or matrix key
+/// that fails shape validation is recorded, never traversed. Task
+/// files come from `<report-dir>/tasks/<task-report-id>.json` for the
+/// plan-derived expectation only. Both lists sort by ID.
 pub(crate) fn read_staged_reports(
     run_key: &str,
     plan: &serde_json::Value,
@@ -141,7 +142,16 @@ pub(crate) fn read_staged_reports(
             errors.push(format!("bad_artifact_id:{artifact_id}"));
             continue;
         }
-        let Some(home) = read_matrix_file(dir, artifact_id, &mut reports, errors) else {
+        let Some(matrix_key) = entry.get("matrix_key").and_then(serde_json::Value::as_str) else {
+            errors.push(format!("bad_matrix_key:{artifact_id}"));
+            continue;
+        };
+        if validate_matrix_key(matrix_key).is_err() {
+            errors.push(format!("bad_matrix_key:{artifact_id}"));
+            continue;
+        }
+        let Some(home) = read_matrix_file(dir, artifact_id, matrix_key, &mut reports, errors)
+        else {
             continue;
         };
         // Task files beside the matrix file for the plan-derived
@@ -191,13 +201,16 @@ fn obligation_digests(plan: &serde_json::Value) -> BTreeMap<&str, &str> {
     digests
 }
 
-/// Read one artifact's matrix file; the home dir on success.
+/// Read one entry's matrix file from its job's artifact; home on success.
 ///
-/// The artifact directory itself must be a real directory: a symlink
-/// anywhere on a traversed path rejects, even at a live target.
+/// The job artifact carries the whole run directory, so the entry's
+/// report lives at `<matrix-key>/matrix-report.json` inside it. Every
+/// traversed directory must be real: a symlink anywhere on the path
+/// rejects, even at a live target.
 fn read_matrix_file(
     dir: &Path,
     artifact_id: &str,
+    matrix_key: &str,
     reports: &mut Vec<serde_json::Value>,
     errors: &mut Vec<String>,
 ) -> Option<PathBuf> {
@@ -206,12 +219,18 @@ fn read_matrix_file(
         errors.push(format!("symlink_report:{artifact_id}"));
         return None;
     }
-    let direct = home.join("matrix-report.json");
-    let nested = home.join(artifact_id).join("matrix-report.json");
+    let entry_dir = home.join(matrix_key);
+    if is_symlink(&entry_dir) {
+        errors.push(format!("symlink_report:{artifact_id}"));
+        return None;
+    }
+    let direct = entry_dir.join("matrix-report.json");
+    let nested_entry = home.join(artifact_id).join(matrix_key);
+    let nested = nested_entry.join("matrix-report.json");
     let (path, text) = match read_bounded(&direct) {
         Ok(text) => (direct, text),
         Err("missing") => {
-            if nested.parent().is_some_and(is_symlink) {
+            if is_symlink(&home.join(artifact_id)) || is_symlink(&nested_entry) {
                 errors.push(format!("symlink_report:{artifact_id}"));
                 return None;
             }
@@ -309,16 +328,23 @@ fn staged_id<'a>(report: &'a serde_json::Value, field: &str) -> &'a str {
         .unwrap_or_default()
 }
 
-/// Expected matrix artifact IDs from a plan value, in plan order.
+/// Expected job artifact IDs from a plan value, in plan order.
+///
+/// Sibling entries share their job's artifact, so the enumeration
+/// dedupes: each artifact downloads exactly once while first-seen
+/// plan order stays stable.
 fn expected_artifact_ids(plan: &serde_json::Value) -> Vec<&str> {
     let mut ids = Vec::new();
+    let mut seen = BTreeSet::new();
     if let Some(entries) = plan
         .get("matrix")
         .and_then(|matrix| matrix.get("include"))
         .and_then(serde_json::Value::as_array)
     {
         for entry in entries {
-            if let Some(id) = entry.get("artifact_id").and_then(serde_json::Value::as_str) {
+            if let Some(id) = entry.get("artifact_id").and_then(serde_json::Value::as_str)
+                && seen.insert(id)
+            {
                 ids.push(id);
             }
         }
@@ -327,60 +353,5 @@ fn expected_artifact_ids(plan: &serde_json::Value) -> Vec<&str> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn retrieve_argv_names_exact_artifact() {
-        let args = retrieve_args(
-            7,
-            "velnor-matrix-r7-a2-m-0123456789abcdef",
-            Path::new("/tmp/x"),
-        )
-        .expect("argv");
-        let text: Vec<String> = args
-            .iter()
-            .map(|arg| arg.to_string_lossy().into_owned())
-            .collect();
-        assert_eq!(
-            text,
-            [
-                "run",
-                "download",
-                "7",
-                "--name",
-                "velnor-matrix-r7-a2-m-0123456789abcdef",
-                "--dir",
-                "/tmp/x"
-            ]
-        );
-        assert!(retrieve_args(7, "velnor-matrix-*", Path::new("/tmp/x")).is_err());
-        assert!(retrieve_args(7, "../escape", Path::new("/tmp/x")).is_err());
-    }
-
-    #[test]
-    fn missing_plan_retrieves_zero_without_spawning() {
-        let dir = tempfile::TempDir::new().expect("tempdir");
-        let run = dir.path().join("r7-a2");
-        assert_eq!(retrieve_reports_to(7, &run), 0);
-        assert!(!run.join("reports").exists(), "no downloads attempted");
-    }
-
-    #[test]
-    fn enumeration_follows_plan_order() {
-        let plan = serde_json::json!({
-            "matrix": {"include": [
-                {"artifact_id": "velnor-matrix-r7-a2-m-0000000000000002"},
-                {"artifact_id": "velnor-matrix-r7-a2-m-0000000000000001"},
-            ]}
-        });
-        assert_eq!(
-            expected_artifact_ids(&plan),
-            [
-                "velnor-matrix-r7-a2-m-0000000000000002",
-                "velnor-matrix-r7-a2-m-0000000000000001",
-            ]
-        );
-        assert!(expected_artifact_ids(&serde_json::json!({})).is_empty());
-    }
-}
+#[path = "retrieve_reports_tests.rs"]
+mod retrieve_reports_tests;

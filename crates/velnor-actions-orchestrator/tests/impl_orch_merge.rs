@@ -268,7 +268,10 @@ fn staged_symlinks_and_oversize_reports_reject() -> TestResult {
         .ok_or("report")?;
     let dir = TempDir::new()?;
     let run = dir.path().join("run");
-    let home = run.join("reports").join(&entry.artifact_id);
+    let home = run
+        .join("reports")
+        .join(&entry.artifact_id)
+        .join(&entry.matrix_key);
     fs::create_dir_all(home.join("tasks"))?;
     fs::write(run.join("plan.json"), serde_json::to_string(&plan)?)?;
     fs::write(
