@@ -171,9 +171,15 @@ keys/paths, one shared sources key, one tools identity per tool
 union, a single plan writer, and restore<MBX<fetch order. Hosted §2
 shows the seed/warm/green branches with zero fetch re-download on
 warm and green. Local §3 replays both branches verbatim.
-UNMEASURED / open: why the Mise built-in cache never saved (no
-`mise-v1-*` entries after three P08 runs; no save lines in any log —
-restore MISS lines are the only evidence); MBX objects seed (needs
-a default-branch P08 run — until then every crate job recompiles
-from scratch and pays 10–14 s for an empty restore); eviction over
-time (needs a week-scale sequential sample).
+UNMEASURED / open: MBX objects seed (needs a default-branch P08 run
+— until then every crate job recompiles from scratch and pays 10–14 s
+for an empty restore); eviction over time (needs a week-scale
+sequential sample).
+ANSWERED: why the Mise built-in cache never saved — the pinned
+`jdx/mise-action` saves only inside its `install` leg, which Velnor
+disables (`install: false`), so the push-gated `cache_save`
+expression never saved on any event (all 110 runs to date are
+`pull_request`; push triggers only on `main`, unmerged). Setups are
+now restore-only and elected writers carry explicit push-gated `Save
+Mise tools` steps; warmth still needs one post-merge `main` push to
+seed the `mise-v1-*` entries.

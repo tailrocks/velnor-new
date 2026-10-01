@@ -63,12 +63,16 @@ fn job_names(job: &str, mbx: bool) -> Result<Vec<String>, Box<dyn std::error::Er
 }
 
 #[test]
-fn c2_builtin_mise_cache_without_manual_tools_archives() -> TestResult {
+fn c2_builtin_mise_restore_with_elected_tools_saves() -> TestResult {
     for mbx in [false, true] {
         let yaml = yaml_for(mbx)?;
         assert!(
-            !yaml.contains("Restore Mise tools") && !yaml.contains("Save Mise tools"),
-            "no manual tools steps (mbx={mbx})"
+            !yaml.contains("Restore Mise tools"),
+            "restores stay built-in (mbx={mbx})"
+        );
+        assert!(
+            yaml.contains("- name: Save Mise tools"),
+            "elected writers save (mbx={mbx})"
         );
         assert!(
             !yaml.contains("mise-tools-v1-"),
@@ -239,7 +243,7 @@ fn c10_only_plan_saves_producer_successful_deltas() -> TestResult {
 
 #[test]
 fn c11_cache_saves_push_only_prs_and_forks_read_only() -> TestResult {
-    use velnor_actions_contract::workflow::ir::{CACHE_SAVE_CONDITION, CACHE_SAVE_CONDITION_EXPR};
+    use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
     // IR: exactly one save step (plan writer), carrying the push-only gate;
     // every other plan step (restores, fetch, obligations) stays ungated.
     let repo = make_repo(config_with_branch())?;
@@ -281,44 +285,59 @@ fn c11_cache_saves_push_only_prs_and_forks_read_only() -> TestResult {
         ),
         "save renders push-only if:\n{yaml}"
     );
-    assert_eq!(
-        yaml.matches("actions/cache/save@").count(),
-        1,
-        "exactly one save transport:\n{yaml}"
-    );
-    assert_eq!(
-        yaml.matches("if: success() && github.event_name == 'push'")
-            .count(),
-        1,
-        "the save gate appears exactly once:\n{yaml}"
-    );
-    assert!(
-        !yaml.contains("- name: Restore Cargo sources\n        if:"),
-        "restores stay unconditional:\n{yaml}"
-    );
-    // Mise: every Setup Mise restores; exactly one writer per cache key
-    // saves push-only while demoted sharers stand down to "false".
-    assert!(
-        !yaml.contains("cache_save: \"true\""),
-        "no unconditional mise save:\n{yaml}"
-    );
-    let setups = yaml.matches("- name: Setup Mise").count();
-    let gated = yaml
-        .matches(&format!("cache_save: {CACHE_SAVE_CONDITION_EXPR}"))
-        .count();
-    let demoted = yaml.matches("cache_save: \"false\"").count();
-    assert_eq!(
-        setups,
-        gated + demoted,
-        "every setup gated or demoted:\n{yaml}"
-    );
+    assert_tools_saves_push_gated_per_key(&yaml);
+    Ok(())
+}
+
+/// YAML: one push-gated tools save per restored `mise-v1-` key (plus the
+/// sources save), every setup restore-only.
+fn assert_tools_saves_push_gated_per_key(yaml: &str) {
     let mut keys = std::collections::BTreeSet::new();
     for line in yaml.lines() {
         if let Some(key) = line.trim().strip_prefix("cache_key: ") {
             keys.insert(key.to_owned());
         }
     }
-    assert_eq!(gated, keys.len(), "exactly one writer per key:\n{yaml}");
-    assert!(gated >= 1, "at least one writer:\n{yaml}");
-    Ok(())
+    assert!(!keys.is_empty(), "at least one restored tools key:\n{yaml}");
+    assert_eq!(
+        yaml.matches("actions/cache/save@").count(),
+        1 + keys.len(),
+        "sources plus one tools save per key:\n{yaml}"
+    );
+    assert_eq!(
+        yaml.matches("if: success() && github.event_name == 'push'")
+            .count(),
+        1 + keys.len(),
+        "every save push-gated:\n{yaml}"
+    );
+    assert!(
+        !yaml.contains("- name: Restore Cargo sources\n        if:"),
+        "restores stay unconditional:\n{yaml}"
+    );
+    assert_eq!(
+        yaml.matches("- name: Save Mise tools").count(),
+        keys.len(),
+        "exactly one tools saver per key:\n{yaml}"
+    );
+    for line in yaml.lines() {
+        if let Some(key) = line.trim().strip_prefix("key: ")
+            && key.starts_with("mise-v1-")
+        {
+            assert!(
+                keys.contains(key),
+                "tools save archives a restored key:\n{yaml}"
+            );
+        }
+    }
+    assert!(
+        !yaml.contains("cache_save: \"true\""),
+        "no unconditional mise save:\n{yaml}"
+    );
+    assert!(
+        !yaml.contains("cache_save: ${{"),
+        "no promised built-in save:\n{yaml}"
+    );
+    let setups = yaml.matches("- name: Setup Mise").count();
+    let demoted = yaml.matches("cache_save: \"false\"").count();
+    assert_eq!(setups, demoted, "every setup restore-only:\n{yaml}");
 }

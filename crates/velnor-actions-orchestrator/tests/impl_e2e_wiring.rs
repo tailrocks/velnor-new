@@ -13,21 +13,22 @@ use velnor_actions_workflow_renderer::WORKFLOW_PATH;
 use crate::impl_common::{
     TestResult, config_with_branch, git, make_repo, without_ambient_identity,
 };
+use crate::impl_e2e_tools_save::{check_one_tools_saver_per_key, check_tools_save_shape};
 
 /// One parsed step: display name plus full step body.
-struct StepText {
+pub(crate) struct StepText {
     /// Step display name; empty when the entry carries no `name:`.
-    name: String,
+    pub(crate) name: String,
     /// First line plus every continuation line of the step.
-    body: String,
+    pub(crate) body: String,
 }
 
 /// One parsed job section in step order.
-struct JobText {
+pub(crate) struct JobText {
     /// Job ID from the section header.
-    id: String,
+    pub(crate) id: String,
     /// Steps in render order.
-    steps: Vec<StepText>,
+    pub(crate) steps: Vec<StepText>,
 }
 
 /// Parse every job section plus its steps from workflow text.
@@ -100,10 +101,6 @@ fn uses_staged_helper(step: &StepText) -> bool {
         && step.body.contains("$RUNNER_TEMP/velnor/bin")
 }
 
-/// Tools-cache step display names, asserted as emitted text.
-const RESTORE_TOOLS_TEXT: &str = "Restore Mise tools";
-const SAVE_TOOLS_TEXT: &str = "Save Mise tools";
-
 /// Setup Mise must be first (modulo Checkout plus tools restore) and precede every `mise` use.
 fn check_setup_first(job: &JobText) -> Result<(), String> {
     let setup = job.steps.iter().position(|s| s.name == "Setup Mise");
@@ -128,41 +125,26 @@ fn setup_is_early(_job: &JobText, at: usize) -> bool {
 /// Setup Mise must enable the qualified built-in cache: `cache:true` with
 /// an explicit tool-union `cache_key` (never the workspace-hashing default
 /// that ELOOPs on the symlink-loop fixture, never a job-role suffix).
-/// Saves are push-gated on the elected writer only; demoted sharers
-/// stand down to `cache_save: "false"` (exactly one saver per key).
+/// Every setup restores read-only (`cache_save: "false"`): the pinned
+/// action saves only inside its disabled `install` leg, so no setup may
+/// promise a built-in save. Push-gated saves are explicit `Save Mise
+/// tools` steps on the elected writer per key.
 fn check_setup_cache_on(job: &JobText) -> Result<(), String> {
     for step in job.steps.iter().filter(|s| s.name == "Setup Mise") {
-        for need in ["cache: \"true\"", "cache_key: mise-v1-"] {
+        for need in [
+            "cache: \"true\"",
+            "cache_key: mise-v1-",
+            "cache_save: \"false\"",
+        ] {
             if !step.body.contains(need) {
                 return Err(format!("{}: Setup Mise misses {need}", job.id));
             }
         }
-        let gated = step
-            .body
-            .contains("cache_save: ${{ github.event_name == 'push' }}");
-        let demoted = step.body.contains("cache_save: \"false\"");
-        if gated == demoted {
-            return Err(format!(
-                "{}: Setup Mise needs exactly one cache_save mode",
-                job.id
-            ));
+        if step.body.contains("cache_save: ${{") {
+            return Err(format!("{}: Setup Mise must not promise a save", job.id));
         }
         if step.body.contains("hashFiles(") {
             return Err(format!("{}: Setup Mise must not hashFiles", job.id));
-        }
-    }
-    Ok(())
-}
-
-/// No manual tools archives: the built-in Mise cache owns the Mise data
-/// dir exactly once (P08: one owner per path, no role-suffixed copies).
-fn check_no_manual_tools_cache(job: &JobText) -> Result<(), String> {
-    for step in &job.steps {
-        if step.name == RESTORE_TOOLS_TEXT || step.name == SAVE_TOOLS_TEXT {
-            return Err(format!("{}: manual tools cache must go", job.id));
-        }
-        if step.body.contains("key: mise-tools-v1-") {
-            return Err(format!("{}: role-suffixed tools key must go", job.id));
         }
     }
     Ok(())
@@ -223,10 +205,11 @@ fn check_tree(yaml: &str) -> Result<Vec<JobText>, String> {
     for job in &jobs {
         check_setup_first(job)?;
         check_setup_cache_on(job)?;
-        check_no_manual_tools_cache(job)?;
+        check_tools_save_shape(job)?;
         check_provisioned(job)?;
         check_named(job)?;
     }
+    check_one_tools_saver_per_key(&jobs)?;
     Ok(jobs)
 }
 
