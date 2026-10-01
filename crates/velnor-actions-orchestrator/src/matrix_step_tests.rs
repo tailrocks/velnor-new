@@ -3,6 +3,7 @@
 //! Declared via `#[path]` from `matrix_step.rs` under `cfg(test)`.
 
 use super::*;
+use velnor_actions_rust::{TaskKind, cargo_payload_env};
 
 /// Obligation fixture for step construction.
 fn obligation() -> CrateObligation {

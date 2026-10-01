@@ -11,6 +11,7 @@ use std::ffi::OsString;
 
 use velnor_actions_contract::{ContractError, split_shard_suffix, task_id_for_stack};
 
+use crate::detect::manifest_for_key;
 use crate::evidence::Evidence;
 use crate::profile::{CompileDriver, TestRunner};
 use crate::tasks::{TaskGroup, TaskKind};
@@ -296,14 +297,5 @@ fn push_lint_args(args: &mut Vec<OsString>, group: &TaskGroup) {
             OsString::from("-D"),
             OsString::from("warnings"),
         ]);
-    }
-}
-
-/// Manifest path for a manifest key.
-fn manifest_for_key(key: &str) -> String {
-    if key == "root" {
-        "Cargo.toml".to_owned()
-    } else {
-        format!("{key}/Cargo.toml")
     }
 }

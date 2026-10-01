@@ -6,6 +6,7 @@
 use super::cover_identity_fixtures::*;
 use super::*;
 use velnor_actions_mise::ToolCatalog;
+use velnor_actions_rust::CompileDriver;
 
 /// Live proof dimensions for `task_id`: graph, toolchain, platform.
 fn live_proof_dims(
@@ -15,23 +16,23 @@ fn live_proof_dims(
     catalog: &ToolCatalog,
     label: &str,
 ) -> (String, String, String) {
-    let group = discovery
-        .task_groups
+    let task = discovery
+        .proposals
         .iter()
-        .find(|group| group.task_id == task_id)
-        .expect("group");
+        .find(|task| task.task_id == task_id)
+        .expect("task");
     let snapshot = ExecutionSnapshot::build(discovery);
     let bundle = extension_bundle_with_snapshot(
         &snapshot,
         discovery,
-        group,
+        task,
         Some(root),
-        nextest_config_for(discovery, group).as_deref(),
+        nextest_config_for(discovery, task).as_deref(),
     );
     (
         bundle.graph_digest().to_owned(),
-        toolchain_id(group, catalog).expect("toolchain"),
-        platform_id_for_group(label, group).expect("platform"),
+        toolchain_id(task, catalog).expect("toolchain"),
+        platform_id_for_group(label, task).expect("platform"),
     )
 }
 
@@ -82,13 +83,13 @@ fn live_fixture() -> (LiveFixture, ToolCatalog) {
     let live = live_closure_digest(tmp.path(), &discovery, rust, &catalog);
     let (graph, toolchain, platform) =
         live_proof_dims(tmp.path(), &discovery, rust, &catalog, "ubuntu-26.04");
-    let group = discovery
-        .task_groups
+    let task = discovery
+        .proposals
         .iter()
-        .find(|group| group.task_id == rust)
-        .expect("group");
-    let profile = group.configuration.clone();
-    let mbx = live_mbx_digest(group, &catalog);
+        .find(|task| task.task_id == rust)
+        .expect("task");
+    let profile = task.configuration.clone();
+    let mbx = live_mbx_digest(task, &catalog);
     (
         LiveFixture {
             tmp,
@@ -253,10 +254,10 @@ fn structured_proof_drift_refuses_per_dimension() {
 fn live_mbx_binds_driver_and_pin() {
     let catalog = ToolCatalog::pinned();
     let discovery = discovery_with(&["stack/rust/root/clippy/default"]);
-    let cargo = &discovery.task_groups[0];
-    assert_eq!(cargo.compile_driver, CompileDriver::Cargo);
+    let cargo = &discovery.proposals[0];
+    assert_eq!(cargo.identity.compile_driver, CompileDriver::Cargo.as_str());
     let mut mbx = cargo.clone();
-    mbx.compile_driver = CompileDriver::Mbx;
+    mbx.identity.compile_driver = CompileDriver::Mbx.as_str().to_owned();
     assert_ne!(
         live_mbx_digest(cargo, &catalog),
         live_mbx_digest(&mbx, &catalog),

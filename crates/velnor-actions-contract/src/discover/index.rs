@@ -4,7 +4,7 @@ use std::collections::BTreeSet;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
-use crate::index_glob::{is_excluded, validate_pattern};
+use super::glob::{is_excluded, validate_pattern};
 
 /// Built-in exclusions applied before every detector runs.
 pub const BUILTIN_EXCLUSIONS: &[&str] = &[".git/**"];

@@ -92,7 +92,7 @@ impl TryFrom<u32> for MemoryMb {
 }
 
 /// Bounded resource demand for one node.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ResourceDemand {
     /// Resource class.
@@ -364,7 +364,7 @@ pub(crate) fn check_sorted_by<T>(
 }
 
 /// Check a task-ID list is sorted, unique, and well-formed.
-fn check_sorted_ids(list: &[String], field: &'static str) -> Result<(), ContractError> {
+pub(crate) fn check_sorted_ids(list: &[String], field: &'static str) -> Result<(), ContractError> {
     for id in list {
         validate_task_id(id)?;
     }

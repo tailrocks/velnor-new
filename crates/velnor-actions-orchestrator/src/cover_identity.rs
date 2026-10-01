@@ -1,7 +1,7 @@
 //! Baseline coverage application over verified task identities.
 //!
 //! Coverage grants only when the obligation's digests match, the task
-//! group is discovered, its extension bytes validate, and its input
+//! proposal is discovered, its extension bytes validate, and its input
 //! closure resolves completely against the checkout.
 
 // Wired here so generator resolution compiles without touching `lib.rs`.
@@ -24,10 +24,10 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 use velnor_actions_contract::{
-    BaselineProof, ManifestTaskProof, ObligationDecision, Plan, PlanObligation, digest_b3,
-    validate_rust_extension,
+    BaselineProof, ManifestTaskProof, ObligationDecision, Plan, PlanObligation, ProposedTask,
+    digest_b3, validate_rust_extension,
 };
-use velnor_actions_rust::{CompileDriver, TaskGroup};
+use velnor_actions_rust::{extension_for_proposal, tool_needs};
 
 use crate::cover_baseline::BaselineInputs;
 use crate::cover_baseline::provenance_check::ValidatedProvenance;
@@ -45,55 +45,59 @@ use crate::merge::BaselineManifest;
 
 pub(crate) use self::generator::{SOURCE_BUILD_REASON, is_source_build};
 
-/// Cover-time closure digest for one group, or the refusal reason.
+/// Cover-time closure digest for one task, or the refusal reason.
 ///
 /// Undeclared reads and conservative execution refuse as before;
 /// extension bytes must validate (schema plus slots, not just the
 /// task-ID prefix); and the input closure must resolve completely
 /// against the checkout, with unknown inputs forbidding coverage.
 /// Graph digests come from the once-built snapshot index, never a
-/// per-group rescan. The caller compares the returned live digest
+/// per-task rescan. The caller compares the returned live digest
 /// against the baseline entry: only an exact match covers, so a source
 /// edit refuses even when the changed-work hint misses it.
 fn cover_closure_digest(
     snapshot: &ExecutionSnapshot,
     discovery: &Discovery,
-    group: &velnor_actions_rust::TaskGroup,
+    task: &ProposedTask,
     root: &std::path::Path,
     catalog: &velnor_actions_mise::ToolCatalog,
     label: &str,
 ) -> Result<String, String> {
-    if group.undeclared_reads {
+    if task.identity.undeclared_reads {
         return Err("undeclared_inputs".to_owned());
     }
     let bundle = extension_bundle_with_snapshot(
         snapshot,
         discovery,
-        group,
+        task,
         Some(root),
-        nextest_config_for(discovery, group).as_deref(),
+        nextest_config_for(discovery, task).as_deref(),
     );
-    let ext = group.identity_extension(&bundle.inputs());
+    let Ok(ext) = extension_for_proposal(task, &bundle.inputs()) else {
+        return Err("extension_unverified:unparsable_spelling".to_owned());
+    };
     if ext.coverage_eligible().is_err() || ext.conservative_execution_required() {
         return Err("undeclared_inputs".to_owned());
     }
     if let Err(err) = validate_rust_extension(&ext.to_stack_extension()) {
         return Err(format!("extension_unverified:{err}"));
     }
-    let Ok(toolchain) = toolchain_id(group, catalog) else {
+    let Ok(toolchain) = toolchain_id(task, catalog) else {
         return Err("toolchain_unresolvable".to_owned());
     };
-    let Ok(platform) = platform_id_for_group(label, group) else {
+    let Ok(platform) = platform_id_for_group(label, task) else {
         return Err("platform_unresolvable".to_owned());
     };
-    let closure = resolve_closure_at_root(
+    let Ok(closure) = resolve_closure_at_root(
         root,
-        group,
-        nextest_config_for(discovery, group).as_deref(),
+        task,
+        nextest_config_for(discovery, task).as_deref(),
         bundle.graph_digest(),
         &toolchain,
         &platform,
-    );
+    ) else {
+        return Err("closure_unresolvable".to_owned());
+    };
     if closure.verify_complete().is_err() {
         return Err(format!(
             "incomplete_inputs:{}",
@@ -103,17 +107,19 @@ fn cover_closure_digest(
     canonical_digest(&closure).map_err(|_| "closure_digest_failed".to_owned())
 }
 
-/// Live mbx dimension for one group: the compile driver plus the
+/// Live mbx dimension for one task: the compile driver plus the
 /// catalog's mbx pin when the driver runs through mbx.
 ///
-/// Cargo-driven groups bind no mbx pin, so a pin bump never invalidates
-/// their proofs; mbx-driven groups bind the exact pin, so a proof from
+/// Cargo-driven tasks bind no mbx pin, so a pin bump never invalidates
+/// their proofs; mbx-driven tasks bind the exact pin, so a proof from
 /// another mbx version refuses.
-fn live_mbx_digest(group: &TaskGroup, catalog: &velnor_actions_mise::ToolCatalog) -> String {
-    let pin = (group.compile_driver == CompileDriver::Mbx)
+fn live_mbx_digest(task: &ProposedTask, catalog: &velnor_actions_mise::ToolCatalog) -> String {
+    let needs = tool_needs(&task.identity.compile_driver, &task.identity.test_runner);
+    let pin = needs
+        .mbx
         .then(|| catalog.version(velnor_actions_mise::PinnedTool::MrBoxington));
     canonical_digest(&serde_json::json!({
-        "driver": group.compile_driver.as_str(),
+        "driver": task.identity.compile_driver,
         "mbx_pin": pin,
     }))
     .unwrap_or_else(|_| digest_b3(b"mbx_error"))
@@ -122,12 +128,12 @@ fn live_mbx_digest(group: &TaskGroup, catalog: &velnor_actions_mise::ToolCatalog
 /// Structured proof verified against live task identity.
 ///
 /// Compares all five carried dimensions against the values resolved
-/// live for this group: graph, toolchain, platform, execution profile,
+/// live for this task: graph, toolchain, platform, execution profile,
 /// and mbx. Any drift refuses coverage; nothing compares-and-notes.
 fn verify_proof_live(
     snapshot: &ExecutionSnapshot,
     discovery: &Discovery,
-    group: &TaskGroup,
+    task: &ProposedTask,
     proof: &ManifestTaskProof,
     root: &Path,
     catalog: &velnor_actions_mise::ToolCatalog,
@@ -136,19 +142,18 @@ fn verify_proof_live(
     let bundle = extension_bundle_with_snapshot(
         snapshot,
         discovery,
-        group,
+        task,
         Some(root),
-        nextest_config_for(discovery, group).as_deref(),
+        nextest_config_for(discovery, task).as_deref(),
     );
     if proof.graph_digest() != bundle.graph_digest() {
         return Err("proof_graph_mismatch".to_owned());
     }
-    let toolchain =
-        toolchain_id(group, catalog).map_err(|_| "toolchain_unresolvable".to_owned())?;
+    let toolchain = toolchain_id(task, catalog).map_err(|_| "toolchain_unresolvable".to_owned())?;
     if proof.toolchain_id() != toolchain {
         return Err("proof_toolchain_mismatch".to_owned());
     }
-    let Ok(platform) = platform_id_for_group(label, group) else {
+    let Ok(platform) = platform_id_for_group(label, task) else {
         return Err("platform_unresolvable".to_owned());
     };
     if proof.platform_id() != platform {
@@ -157,7 +162,7 @@ fn verify_proof_live(
     if proof.profile() != bundle.inputs().profile {
         return Err("proof_profile_mismatch".to_owned());
     }
-    if proof.mbx_digest() != live_mbx_digest(group, catalog) {
+    if proof.mbx_digest() != live_mbx_digest(task, catalog) {
         return Err("proof_mbx_mismatch".to_owned());
     }
     Ok(())
@@ -171,13 +176,13 @@ fn verify_proof_live(
 fn verified_closure_digest(
     snapshot: &ExecutionSnapshot,
     discovery: &Discovery,
-    group: &velnor_actions_rust::TaskGroup,
+    task: &ProposedTask,
     entry_digest: &str,
     root: &std::path::Path,
     catalog: &velnor_actions_mise::ToolCatalog,
     label: &str,
 ) -> Result<String, String> {
-    let live = cover_closure_digest(snapshot, discovery, group, root, catalog, label)?;
+    let live = cover_closure_digest(snapshot, discovery, task, root, catalog, label)?;
     if entry_digest == live {
         Ok(live)
     } else {
@@ -219,7 +224,7 @@ fn gate_proof(
     warnings: &mut Vec<String>,
     label: &str,
     task: &crate::merge::required_evidence::BaselineTaskEntry,
-    group: &TaskGroup,
+    proposal: &ProposedTask,
     snapshot: &ExecutionSnapshot,
     discovery: &Discovery,
     inputs: &BaselineInputs<'_>,
@@ -230,13 +235,13 @@ fn gate_proof(
     if let Err(reason) = verify_proof_live(
         snapshot,
         discovery,
-        group,
+        proposal,
         proof,
         inputs.root,
         inputs.catalog,
         label,
     ) {
-        warnings.push(format!("baseline_miss:{}:{reason}", group.task_id));
+        warnings.push(format!("baseline_miss:{}:{reason}", proposal.task_id));
         return false;
     }
     true
@@ -282,17 +287,17 @@ pub(crate) fn apply_coverage(
     changed: Option<&BTreeSet<String>>,
     inputs: &BaselineInputs<'_>,
 ) -> u32 {
-    let universe: Vec<_> = discovery.task_groups.iter().collect();
+    let universe: Vec<_> = discovery.proposals.iter().collect();
     let keys = changed
         .map(|set| changed_keys(&universe, set))
         .unwrap_or_default();
     let snapshot = ExecutionSnapshot::build(discovery);
     let mut covered = 0u32;
     for obligation in &mut plan.obligations {
-        let group = discovery
-            .task_groups
+        let proposal = discovery
+            .proposals
             .iter()
-            .find(|group| group.task_id == obligation.task_id);
+            .find(|proposal| proposal.task_id == obligation.task_id);
         let hit = manifest.tasks.iter().find(|task| {
             task.task_id == obligation.task_id
                 && task.task_digest == obligation.task_digest
@@ -303,7 +308,7 @@ pub(crate) fn apply_coverage(
                 .push(format!("baseline_miss:{}:no_entry", obligation.task_id));
             continue;
         };
-        let Some(group) = group else {
+        let Some(proposal) = proposal else {
             plan.warnings.push(format!(
                 "baseline_miss:{}:undiscovered_task_group",
                 obligation.task_id
@@ -314,20 +319,20 @@ pub(crate) fn apply_coverage(
             &mut plan.warnings,
             &plan.runner.label,
             task,
-            group,
+            proposal,
             &snapshot,
             discovery,
             inputs,
         ) {
             continue;
         }
-        if member_changed(group, changed, &keys) {
+        if member_changed(proposal, changed, &keys) {
             continue;
         }
         if let Err(reason) = verified_closure_digest(
             &snapshot,
             discovery,
-            group,
+            proposal,
             &task.closure_digest,
             inputs.root,
             inputs.catalog,

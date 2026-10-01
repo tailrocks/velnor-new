@@ -6,12 +6,12 @@ use super::*;
 use crate::clippy_groups::ClippyMemoryPlan;
 use crate::crate_job_ids::job_id_for_member;
 use crate::matrix_step::shard_suffix;
-use velnor_actions_rust::{CompileDriver, NextestProfile};
+use velnor_actions_rust::{CompileDriver, NextestProfile, TaskGroup, TaskKind, TestRunner};
 
-/// Runnable fixture group for one package/kind pair.
-pub(super) fn group(package: &str, kind: TaskKind, gated_by: &[&str]) -> TaskGroup {
+/// Runnable fixture proposal for one package/kind pair.
+pub(super) fn group(package: &str, kind: TaskKind, gated_by: &[&str]) -> ProposedTask {
     let key = if package == "demo" { "root" } else { package };
-    TaskGroup {
+    let group = TaskGroup {
         task_id: format!("stack/rust/{key}/{}/default", kind.as_str()),
         package_id: format!("{package} 0.1.0"),
         package_name: package.to_owned(),
@@ -33,15 +33,18 @@ pub(super) fn group(package: &str, kind: TaskKind, gated_by: &[&str]) -> TaskGro
         uses_network: false,
         uses_clock: false,
         uses_random: false,
-    }
+    };
+    let task = velnor_actions_rust::propose_task(&group).expect("fixture proposes");
+    task.validate().expect("fixture valid");
+    task
 }
 
-/// Discovery shell carrying only task groups.
-pub(super) fn discovery(groups: Vec<TaskGroup>) -> Discovery {
+/// Discovery shell carrying only task proposals.
+pub(super) fn discovery(groups: Vec<ProposedTask>) -> Discovery {
     Discovery {
         statuses: Vec::new(),
         workspaces: Vec::new(),
-        task_groups: groups,
+        proposals: groups,
         feature_fallbacks: Vec::new(),
         tool_checks: Vec::new(),
         clippy_memory: ClippyMemoryPlan {
@@ -119,10 +122,10 @@ fn groups_obligations_into_one_ordered_job_per_crate() {
 #[test]
 fn skips_testless_and_workspace_groups() {
     let mut testless = group("demo", TaskKind::Doctest, &[]);
-    testless.no_test_targets = true;
+    testless.no_targets = true;
     let mut workspace_fmt = group("demo", TaskKind::Fmt, &[]);
-    workspace_fmt.package_id.clear();
-    workspace_fmt.package_name.clear();
+    workspace_fmt.identity.unit_id.clear();
+    workspace_fmt.display_name.clear();
     let clippy = group("demo", TaskKind::Clippy, &[]);
     let found = build_crate_jobs(
         "ubuntu-26.04",
@@ -146,8 +149,8 @@ fn member_binding_agrees_with_built_jobs() {
     let clippy = group("demo", TaskKind::Clippy, &[]);
     let test = group("demo", TaskKind::Test, &[]);
     let mut workspace_fmt = group("demo", TaskKind::Fmt, &[]);
-    workspace_fmt.package_id.clear();
-    workspace_fmt.package_name.clear();
+    workspace_fmt.identity.unit_id.clear();
+    workspace_fmt.display_name.clear();
     let groups = vec![clippy, test, workspace_fmt];
     let found = build_crate_jobs(
         "ubuntu-26.04",
@@ -200,14 +203,11 @@ fn shards_name_their_index() {
         Some((2, 4))
     );
     assert_eq!(
-        step_name_for(
-            TaskKind::Nextest,
-            "stack/rust/root/nextest/default/shard-2-of-4"
-        ),
+        step_name_for("nextest", "stack/rust/root/nextest/default/shard-2-of-4"),
         "Unit and integration tests (shard 2 of 4)"
     );
     assert_eq!(
-        step_name_for(TaskKind::Fmt, "stack/rust/root/fmt/default"),
+        step_name_for("fmt", "stack/rust/root/fmt/default"),
         "Format"
     );
 }
@@ -215,7 +215,7 @@ fn shards_name_their_index() {
 #[test]
 fn drivers_follow_per_crate_selection() {
     let mut mbx = group("demo", TaskKind::Clippy, &[]);
-    mbx.compile_driver = CompileDriver::Mbx;
+    mbx.identity.compile_driver = CompileDriver::Mbx.as_str().to_owned();
     let cargo = group("nested", TaskKind::Clippy, &[]);
     let found = build_crate_jobs(
         "ubuntu-26.04",

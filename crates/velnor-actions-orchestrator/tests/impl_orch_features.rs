@@ -50,7 +50,7 @@ fn feature_repo(config: &str) -> Result<TempDir, Box<dyn std::error::Error>> {
     Ok(dir)
 }
 
-/// Sorted features of every `kind` group for `package`.
+/// Sorted features of every `kind` task for `package`.
 fn features_of(
     prep: &velnor_actions_orchestrator::GenerationPreparation,
     package: &str,
@@ -58,10 +58,10 @@ fn features_of(
 ) -> Vec<Vec<String>> {
     let mut found: Vec<Vec<String>> = prep
         .discovery
-        .task_groups
+        .proposals
         .iter()
-        .filter(|group| group.package_name == package && group.kind == kind)
-        .map(|group| group.features.clone())
+        .filter(|task| task.display_name == package && task.task_kind == kind.as_str())
+        .map(|task| task.identity.features.clone())
         .collect();
     found.sort();
     found
@@ -127,35 +127,31 @@ fn config_features_intersect_per_crate() -> TestResult {
 fn testless_crate_omits_test_runners() -> TestResult {
     let repo = feature_repo(FULL_CONFIG)?;
     let prep = prepare(repo.path())?;
-    let fuzz_tests: Vec<&velnor_actions_rust::TaskGroup> = prep
+    let fuzz_tests: Vec<&velnor_actions_contract::ProposedTask> = prep
         .discovery
-        .task_groups
+        .proposals
         .iter()
-        .filter(|group| {
-            group.package_name == "fuzz"
-                && matches!(
-                    group.kind,
-                    velnor_actions_rust::TaskKind::Nextest
-                        | velnor_actions_rust::TaskKind::Test
-                        | velnor_actions_rust::TaskKind::Doctest
-                )
+        .filter(|task| {
+            task.display_name == "fuzz"
+                && matches!(task.task_kind.as_str(), "nextest" | "test" | "doctest")
         })
         .collect();
-    assert!(!fuzz_tests.is_empty(), "fuzz test groups derived");
+    assert!(!fuzz_tests.is_empty(), "fuzz test tasks derived");
     assert!(
-        fuzz_tests.iter().all(|group| group.no_test_targets),
-        "every fuzz test group ineligible"
+        fuzz_tests.iter().all(|task| task.no_targets),
+        "every fuzz test task ineligible"
     );
-    let app_nextest: Vec<&velnor_actions_rust::TaskGroup> = prep
+    let app_nextest: Vec<&velnor_actions_contract::ProposedTask> = prep
         .discovery
-        .task_groups
+        .proposals
         .iter()
-        .filter(|group| {
-            group.package_name == "app" && group.kind == velnor_actions_rust::TaskKind::Nextest
+        .filter(|task| {
+            task.display_name == "app"
+                && task.task_kind == velnor_actions_rust::TaskKind::Nextest.as_str()
         })
         .collect();
-    assert_eq!(app_nextest.len(), 1, "app keeps its nextest group");
-    assert!(!app_nextest[0].no_test_targets);
+    assert_eq!(app_nextest.len(), 1, "app keeps its nextest task");
+    assert!(!app_nextest[0].no_targets);
     let plan = plan_for(&prep)?;
     assert!(
         plan.contains("Ineligible: stack/rust/crates/fuzz/nextest/full has no test targets"),
@@ -165,12 +161,12 @@ fn testless_crate_omits_test_runners() -> TestResult {
         .lines()
         .find(|line| line.contains("Critical path:"))
         .ok_or_else(|| std::io::Error::other("missing critical path"))?;
-    for group in &prep.discovery.task_groups {
-        if group.no_test_targets {
+    for task in &prep.discovery.proposals {
+        if task.no_targets {
             assert!(
-                !critical.contains(&group.task_id),
+                !critical.contains(&task.task_id),
                 "ineligible {} excluded from critical path:{critical}",
-                group.task_id
+                task.task_id
             );
         }
     }

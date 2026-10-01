@@ -130,7 +130,7 @@ fn orch_gen_zero_candidate_repo_plans_no_work() -> TestResult {
     fs::remove_file(repo.path().join("Cargo.toml"))?;
     fs::remove_dir_all(repo.path().join("src"))?;
     let prep = prepare(repo.path())?;
-    assert!(prep.discovery.task_groups.is_empty(), "no inventory");
+    assert!(prep.discovery.proposals.is_empty(), "no inventory");
     let plan = plan_for(&prep)?;
     assert!(plan.contains("Workspace crates: 0"), "crates:\n{plan}");
     assert!(plan.contains("no-work workflow"), "no-work:\n{plan}");

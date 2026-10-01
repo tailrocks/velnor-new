@@ -8,7 +8,8 @@
 
 use std::collections::BTreeSet;
 
-use velnor_actions_rust::{TaskGroup, TaskKind};
+use velnor_actions_contract::ProposedTask;
+use velnor_actions_rust::is_clippy_kind;
 
 /// Barrier-separated Clippy schedule waves.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -25,17 +26,17 @@ pub struct ClippyMemoryPlan {
 /// configuration forms its own later wave. Input order is preserved
 /// inside every wave and every input task lands in exactly one wave.
 #[must_use]
-pub fn clippy_memory_groups(groups: &[TaskGroup]) -> ClippyMemoryPlan {
-    if groups.is_empty() {
+pub fn clippy_memory_groups(tasks: &[ProposedTask]) -> ClippyMemoryPlan {
+    if tasks.is_empty() {
         return ClippyMemoryPlan {
             groups: Vec::new(),
             barriers: 0,
         };
     }
     let mut configs: BTreeSet<&str> = BTreeSet::new();
-    for group in groups {
-        if group.kind == TaskKind::Clippy {
-            configs.insert(group.configuration.as_str());
+    for task in tasks {
+        if is_clippy_kind(&task.task_kind) {
+            configs.insert(task.configuration.as_str());
         }
     }
     let waves: Vec<Option<&str>> = if configs.is_empty() {
@@ -46,9 +47,9 @@ pub fn clippy_memory_groups(groups: &[TaskGroup]) -> ClippyMemoryPlan {
     let mut plan = Vec::with_capacity(waves.len());
     for (index, config) in waves.iter().enumerate() {
         let mut wave = Vec::new();
-        for group in groups {
-            if wave_owns(group, *config, index == 0) {
-                wave.push(group.task_id.clone());
+        for task in tasks {
+            if wave_owns(task, *config, index == 0) {
+                wave.push(task.task_id.clone());
             }
         }
         plan.push(wave);
@@ -59,55 +60,75 @@ pub fn clippy_memory_groups(groups: &[TaskGroup]) -> ClippyMemoryPlan {
     }
 }
 
-/// True when `group` belongs in the wave for `config`.
+/// True when `task` belongs in the wave for `config`.
 ///
 /// The first wave also carries every non-Clippy task; later waves
 /// carry only their configuration's Clippy tasks.
-fn wave_owns(group: &TaskGroup, config: Option<&str>, first: bool) -> bool {
-    if group.kind != TaskKind::Clippy {
+fn wave_owns(task: &ProposedTask, config: Option<&str>, first: bool) -> bool {
+    if !is_clippy_kind(&task.task_kind) {
         return first;
     }
-    config.is_some_and(|name| name == group.configuration.as_str())
+    config.is_some_and(|name| name == task.configuration.as_str())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use velnor_actions_rust::{CompileDriver, NextestProfile, TestRunner};
+    use velnor_actions_contract::{CachePolicy, IdentityInputs, ResourceClass, ResourceDemand};
 
-    /// Minimal group with `kind`, `configuration`, and `task_id`.
-    fn group(kind: TaskKind, configuration: &str, task_id: &str) -> TaskGroup {
-        TaskGroup {
+    /// Minimal proposal with `kind`, `configuration`, and `task_id`.
+    fn task(kind: &str, configuration: &str, task_id: &str) -> ProposedTask {
+        ProposedTask {
             task_id: task_id.to_owned(),
-            package_id: "pkg".to_owned(),
-            package_name: "pkg".to_owned(),
-            manifest_key: "root".to_owned(),
-            kind,
+            stack_id: "rust".to_owned(),
+            component_id: "pkg".to_owned(),
+            task_kind: kind.to_owned(),
             configuration: configuration.to_owned(),
-            features: Vec::new(),
-            target: "host".to_owned(),
-            gated_by: Vec::new(),
             depends_on: Vec::new(),
-            target_flags: Vec::new(),
-            no_test_targets: false,
-            package_arg: None,
-            compile_driver: CompileDriver::Cargo,
-            test_runner: TestRunner::CargoTest,
-            declared_inputs: Vec::new(),
-            undeclared_reads: false,
-            uses_network: false,
+            gated_by: Vec::new(),
+            reads: Vec::new(),
+            writes: Vec::new(),
+            outputs: Vec::new(),
+            resource: ResourceDemand {
+                class: ResourceClass::Compiler,
+                cpu_milli: None,
+                memory_mb: None,
+                needs_network: false,
+                service: None,
+            },
+            cache_policy: CachePolicy {
+                allow_compilation_reuse: true,
+                allow_task_reuse: true,
+            },
+            identity: IdentityInputs {
+                unit_id: "pkg".to_owned(),
+                unit_key: "root".to_owned(),
+                unit_path: "Cargo.toml".to_owned(),
+                project_root: ".".to_owned(),
+                target: "host".to_owned(),
+                features: Vec::new(),
+                flags: Vec::new(),
+                compile_driver: "cargo".to_owned(),
+                test_runner: "cargo_test".to_owned(),
+                environment: std::collections::BTreeMap::new(),
+                declared_inputs: Vec::new(),
+                undeclared_reads: false,
+            },
+            payload: vec![std::ffi::OsString::from("clippy")],
+            display_name: "pkg".to_owned(),
             uses_clock: false,
             uses_random: false,
-            nextest_profile: NextestProfile::Default,
+            no_targets: false,
+            runner_profile: "default".to_owned(),
         }
     }
 
     #[test]
     fn distinct_clippy_configs_separate_with_barrier() {
         let groups = vec![
-            group(TaskKind::Clippy, "default", "clippy-default"),
-            group(TaskKind::Clippy, "all-features", "clippy-all"),
-            group(TaskKind::Test, "default", "test-default"),
+            task("clippy", "default", "clippy-default"),
+            task("clippy", "all-features", "clippy-all"),
+            task("test", "default", "test-default"),
         ];
         let plan = clippy_memory_groups(&groups);
         assert_eq!(plan.barriers, 1);
@@ -125,8 +146,8 @@ mod tests {
     #[test]
     fn single_config_and_empty_need_no_barrier() {
         let groups = vec![
-            group(TaskKind::Clippy, "default", "clippy"),
-            group(TaskKind::Test, "default", "test"),
+            task("clippy", "default", "clippy"),
+            task("test", "default", "test"),
         ];
         let plan = clippy_memory_groups(&groups);
         assert_eq!(plan.barriers, 0);
@@ -137,7 +158,7 @@ mod tests {
         let empty = clippy_memory_groups(&[]);
         assert_eq!(empty.barriers, 0);
         assert!(empty.groups.is_empty());
-        let no_clippy = clippy_memory_groups(&[group(TaskKind::Test, "default", "test")]);
+        let no_clippy = clippy_memory_groups(&[task("test", "default", "test")]);
         assert_eq!(no_clippy.barriers, 0);
         assert_eq!(no_clippy.groups.len(), 1);
     }

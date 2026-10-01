@@ -2,12 +2,14 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{CrateObligation, Step, WorkflowPolicy, sanitize_error_detail};
+use velnor_actions_contract::{
+    CrateObligation, Stack, Step, WorkflowPolicy, sanitize_error_detail,
+};
 use velnor_actions_mise::{
     ISOLATION_ENV, NO_AUTO_INSTALL_ENV, PREPARE_PINNED_TOOLS_STEP, PinnedTool, PreparePinnedTools,
     ToolCatalog, ToolHomes,
 };
-use velnor_actions_rust::{TaskKind, cargo_payload_env};
+use velnor_actions_rust::{payload_env_for_kind, step_base_name};
 use velnor_actions_workflow_renderer::plan_format::FORMAT_STEP_NAME;
 use velnor_actions_workflow_renderer::steps::{INTERNAL_OP_ENV, STAGED_BINARY_PREFIX};
 
@@ -15,15 +17,8 @@ use crate::OrchestratorError;
 use crate::task_report::{DOWNSTREAM_IDS_ENV, EXIT_CODE_ENV, REPORT_OP, START_MS_ENV, TASK_ID_ENV};
 use crate::utf8::{strings_of, strings_of_env};
 
-/// `Clippy` obligation step name.
-pub(crate) const CLIPPY_NAME: &str = "Clippy";
-/// `Build test executables` obligation step name.
-pub(crate) const BUILD_TEST_NAME: &str = "Build test executables";
-/// `Unit and integration tests` obligation step name.
-pub(crate) const TEST_NAME: &str = "Unit and integration tests";
-/// `Doctests` obligation step name.
-pub(crate) const DOCTESTS_NAME: &str = "Doctests";
 /// `Documentation` obligation step name.
+#[cfg(test)]
 pub(crate) const DOCUMENTATION_NAME: &str = "Documentation";
 
 /// Env key carrying the obligation's task ID (report lookup key).
@@ -36,15 +31,8 @@ pub(crate) const OBLIGATION_MATRIX_ID_ENV: &str = "VELNOR_MATRIX_ID";
 pub(crate) const OBLIGATION_MATRIX_KEY_ENV: &str = "VELNOR_MATRIX_KEY";
 
 /// Human step name for one obligation; shards name their index.
-pub(crate) fn step_name_for(kind: TaskKind, task_id: &str) -> String {
-    let base = match kind {
-        TaskKind::Fmt => FORMAT_STEP_NAME,
-        TaskKind::Clippy => CLIPPY_NAME,
-        TaskKind::Build => BUILD_TEST_NAME,
-        TaskKind::Test | TaskKind::Nextest => TEST_NAME,
-        TaskKind::Doctest => DOCTESTS_NAME,
-        TaskKind::Doc => DOCUMENTATION_NAME,
-    };
+pub(crate) fn step_name_for(kind: &str, task_id: &str) -> String {
+    let base = step_base_name(kind, FORMAT_STEP_NAME);
     match shard_suffix(task_id) {
         Some((index, count)) => format!("{base} (shard {index} of {count})"),
         None => base.to_owned(),
@@ -208,7 +196,7 @@ pub(crate) fn obligation_identity_env(
 /// obligation itself passed, so failures never mask each other).
 /// Identity env doubles as the report lookup key; the plan binds the
 /// digests, never these baked values. Doc obligations additionally
-/// carry the typed `cargo_payload_env` pairs (`RUSTDOCFLAGS=-D
+/// carry the adapter `payload_env_for_kind` pairs (`RUSTDOCFLAGS=-D
 /// warnings`), matching the plan identity envelope. The step skips via
 /// `if:` when the plan covered this obligation; unknown coverage
 /// executes.
@@ -222,11 +210,9 @@ pub(crate) fn obligation_step(
     catalog: &ToolCatalog,
     downstream: &[String],
 ) -> Result<Step, OrchestratorError> {
-    let matrix_id = velnor_actions_contract::matrix_id_for_task_group(
-        velnor_actions_rust::STACK_ID,
-        &obligation.task_id,
-    )
-    .map_err(crate::internal::internal_contract)?;
+    let matrix_id =
+        velnor_actions_contract::matrix_id_for_task_group(Stack::Rust.id(), &obligation.task_id)
+            .map_err(crate::internal::internal_contract)?;
     let mut identity = obligation_identity_env(
         &obligation.task_id,
         &obligation.task_digest,
@@ -236,13 +222,11 @@ pub(crate) fn obligation_step(
     if !downstream.is_empty() {
         identity.insert(DOWNSTREAM_IDS_ENV.to_owned(), downstream.join(","));
     }
-    if obligation.kind == TaskKind::Doc.as_str() {
-        for (key, value) in cargo_payload_env(TaskKind::Doc) {
-            identity.insert(
-                key.to_string_lossy().into_owned(),
-                value.to_string_lossy().into_owned(),
-            );
-        }
+    for (key, value) in payload_env_for_kind(&obligation.kind) {
+        identity.insert(
+            key.to_string_lossy().into_owned(),
+            value.to_string_lossy().into_owned(),
+        );
     }
     check_identity_env_contract(&identity, &obligation.task_id)?;
     let env = task_step_env(catalog, &identity)?;

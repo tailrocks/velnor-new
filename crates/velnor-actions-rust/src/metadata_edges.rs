@@ -120,6 +120,19 @@ pub(crate) struct RawDependency {
     pub(crate) path: Option<String>,
 }
 
+/// Project local edges to `(from, to)` key pairs for the neutral closure.
+///
+/// Single owner of the [`LocalEdge`] projection into
+/// [`reverse_closure`](velnor_actions_contract::reverse_closure); kind,
+/// optionality, and target filters never affect selection.
+#[must_use]
+pub fn local_edge_pairs(edges: &[LocalEdge]) -> Vec<(String, String)> {
+    edges
+        .iter()
+        .map(|edge| (edge.from.clone(), edge.to.clone()))
+        .collect()
+}
+
 /// Map each package manifest directory to its package id.
 pub(crate) fn manifest_dirs(packages: &[RawPackage]) -> BTreeMap<String, String> {
     let mut dirs = BTreeMap::new();

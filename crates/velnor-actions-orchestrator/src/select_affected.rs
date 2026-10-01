@@ -2,7 +2,8 @@
 
 use std::collections::BTreeSet;
 
-use velnor_actions_rust::{LocalEdge, reverse_closure};
+use velnor_actions_contract::reverse_closure;
+use velnor_actions_rust::{LocalEdge, local_edge_pairs};
 
 use crate::discover::Discovery;
 
@@ -34,17 +35,24 @@ pub(crate) fn affected_packages(
         }
     }
     let mut selected = owned.clone();
-    selected.extend(reverse_closure(base_edges, head_edges, &owned));
+    let base = local_edge_pairs(base_edges);
+    let head = local_edge_pairs(head_edges);
+    selected.extend(reverse_closure(&base, &head, &owned));
     selected
 }
 
-/// Package whose group declares `path` as an input, if any (PAR-4.11).
+/// Package whose task declares `path` as an input, if any (PAR-4.11).
 fn declared_owner(discovery: &Discovery, path: &str) -> Option<String> {
     discovery
-        .task_groups
+        .proposals
         .iter()
-        .find(|group| group.declared_inputs.iter().any(|input| input == path))
-        .map(|group| group.package_id.clone())
+        .find(|task| {
+            task.identity
+                .declared_inputs
+                .iter()
+                .any(|input| input == path)
+        })
+        .map(|task| task.identity.unit_id.clone())
 }
 
 /// True when any changed file has no owning package.
@@ -132,7 +140,7 @@ mod tests {
                 recommendations: Vec::new(),
                 findings: Vec::new(),
             }],
-            task_groups: Vec::new(),
+            proposals: Vec::new(),
             tool_checks: Vec::new(),
             clippy_memory: crate::clippy_groups::ClippyMemoryPlan {
                 groups: Vec::new(),
@@ -179,7 +187,7 @@ mod tests {
     fn declared_inputs_select_their_package() {
         use velnor_actions_rust::{CompileDriver, NextestProfile, TaskGroup, TaskKind, TestRunner};
         let mut discovery = two_package_discovery();
-        discovery.task_groups = vec![TaskGroup {
+        let group = TaskGroup {
             task_id: "stack/rust/a/clippy/default".to_owned(),
             package_id: "a".to_owned(),
             package_name: "a".to_owned(),
@@ -201,7 +209,10 @@ mod tests {
             uses_clock: false,
             uses_random: false,
             nextest_profile: NextestProfile::Default,
-        }];
+        };
+        let task = velnor_actions_rust::propose_task(&group).expect("fixture proposes");
+        task.validate().expect("fixture valid");
+        discovery.proposals = vec![task];
         let changed: BTreeSet<String> = ["docs/spec.md".to_owned()].into_iter().collect();
         let selected = affected_packages(&discovery, &changed, &[], &[]);
         assert!(

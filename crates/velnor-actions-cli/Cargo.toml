@@ -20,3 +20,6 @@ workspace = true
 [[test]]
 name = "velnor_cli"
 path = "tests/velnor_cli.rs"
+
+[dev-dependencies]
+serde_json = { workspace = true }

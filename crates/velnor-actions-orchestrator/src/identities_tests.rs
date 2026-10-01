@@ -3,17 +3,17 @@
 //! Declared via `#[path]` from `internal_plan.rs` under `cfg(test)`.
 
 use super::identities::*;
-use super::snapshot::normalized_component_id;
 use velnor_actions_contract::cachekey::{ToolchainInputs, toolchain_id};
-use velnor_actions_contract::{digest_b3, validate_digest};
+use velnor_actions_contract::component_id_for_unit;
+use velnor_actions_contract::{ProposedTask, digest_b3, validate_digest};
 use velnor_actions_mise::ToolCatalog;
 use velnor_actions_rust::{
     CompileDriver, LocalEdge, NextestProfile, TaskGroup, TaskKind, TestRunner, WorkspaceRecord,
 };
 
-/// Minimal group with kind, task ID, driver, and runner.
-fn group(kind: TaskKind, task_id: &str, driver: CompileDriver, runner: TestRunner) -> TaskGroup {
-    TaskGroup {
+/// Minimal proposal with kind, task ID, driver, and runner.
+fn group(kind: TaskKind, task_id: &str, driver: CompileDriver, runner: TestRunner) -> ProposedTask {
+    let group = TaskGroup {
         task_id: task_id.to_owned(),
         package_id: "demo".to_owned(),
         package_name: "demo".to_owned(),
@@ -35,7 +35,10 @@ fn group(kind: TaskKind, task_id: &str, driver: CompileDriver, runner: TestRunne
         uses_clock: false,
         uses_random: false,
         nextest_profile: NextestProfile::Default,
-    }
+    };
+    let task = velnor_actions_rust::propose_task(&group).expect("fixture proposes");
+    task.validate().expect("fixture valid");
+    task
 }
 
 #[test]
@@ -99,7 +102,7 @@ fn toolchains_bind_sorted_specs_driver_runner() {
         CompileDriver::Cargo,
         TestRunner::CargoTest,
     );
-    let inputs = toolchain_inputs_for(&cargo, &catalog);
+    let inputs = toolchain_inputs_for(&cargo, &catalog).expect("rust toolchain inputs");
     let mut sorted = inputs.tools.clone();
     sorted.sort();
     assert_eq!(inputs.tools, sorted);
@@ -110,7 +113,8 @@ fn toolchains_bind_sorted_specs_driver_runner() {
         CompileDriver::Cargo,
         TestRunner::CargoNextest,
     );
-    assert!(toolchain_inputs_for(&nextest, &catalog).tools.len() > inputs.tools.len());
+    let nextest_inputs = toolchain_inputs_for(&nextest, &catalog).expect("nextest inputs");
+    assert!(nextest_inputs.tools.len() > inputs.tools.len());
     let mbx = group(
         TaskKind::Clippy,
         "stack/rust/root/clippy/default",
@@ -165,7 +169,7 @@ fn formats_stay_single_and_graphs_relocate() {
         digest_of("path+file:///old#a@0.1.0"),
         digest_of("path+file:///new#a@0.1.0")
     );
-    assert_eq!(normalized_component_id("a-id", "a/Cargo.toml"), "a-id");
+    assert_eq!(component_id_for_unit("a-id", "a/Cargo.toml"), "a-id");
 }
 
 #[test]
@@ -191,7 +195,7 @@ fn compiler_spec_versions_flip_the_digest() {
         CompileDriver::Cargo,
         TestRunner::CargoTest,
     );
-    let built = toolchain_inputs_for(&group, &catalog);
+    let built = toolchain_inputs_for(&group, &catalog).expect("rust toolchain inputs");
     assert_eq!(
         toolchain_id(&built).expect("digest"),
         toolchain_digest_for(&group, &catalog).expect("digest")
@@ -206,7 +210,7 @@ fn compiler_spec_versions_flip_the_digest() {
     assert_ne!(imaged, older);
     assert!(validate_digest(&imaged).is_ok());
     let mut alien = group.clone();
-    alien.target = "riscv64-unknown-linux-gnu".to_owned();
+    alien.identity.target = "riscv64-unknown-linux-gnu".to_owned();
     let err = platform_id_for_group("ubuntu-26.04", &alien).expect_err("target");
     assert!(err.to_string().contains("unsupported_target"), "{err}");
     for label in ["ubuntu-26.04-arm", "macos-15", "windows-2025", ""] {
