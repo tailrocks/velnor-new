@@ -261,6 +261,7 @@ fn reports_validate_only_when_matrix_id_matches_entry() -> Result<(), ContractEr
         ExecuteTaskIds { tasks },
         &digest_b3(b"entry-inputs"),
         &run_key,
+        "plan",
     )?;
     let task_digest = digest_b3(b"task-bytes");
     let report = TaskReport {

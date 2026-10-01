@@ -214,6 +214,7 @@ fn build_final(request: &MergeRequest, plan: &Plan) -> Result<FinalReport, Orche
     }
     fold_jobs(&request.required_jobs, &mut signals);
     downloaded.sort();
+    downloaded.dedup();
     let status = decide(&signals, plan);
     Ok(FinalReport {
         schema: SCHEMA,

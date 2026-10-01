@@ -4,11 +4,15 @@
 
 use super::*;
 
-/// Minimal plan JSON naming the given artifact IDs.
-pub(crate) fn plan_with(artifact_ids: &[&str]) -> String {
-    let include: Vec<String> = artifact_ids
+/// Minimal plan JSON naming `(artifact-id, matrix-key)` entries.
+pub(crate) fn plan_with(entries: &[(&str, &str)]) -> String {
+    let include: Vec<String> = entries
         .iter()
-        .map(|id| format!(r#"{{"artifact_id":"{id}","report_id":"report-for-{id}"}}"#))
+        .map(|(id, key)| {
+            format!(
+                r#"{{"artifact_id":"{id}","matrix_key":"{key}","report_id":"report-for-{id}-{key}"}}"#
+            )
+        })
         .collect();
     format!(r#"{{"matrix":{{"include":[{}]}}}}"#, include.join(","))
 }
@@ -40,11 +44,11 @@ pub(crate) fn error_list(request: &str) -> Vec<String> {
 
 #[test]
 fn assembly_shape_carries_no_base() {
-    let aid = "velnor-matrix-local-m-0123456789abcdef";
+    let aid = "velnor-crate-local-crate_demo";
     let dir = staged(
-        &plan_with(&[aid]),
+        &plan_with(&[(aid, "m-0123456789abcdef")]),
         &[(
-            "reports/velnor-matrix-local-m-0123456789abcdef/matrix-report.json",
+            "reports/velnor-crate-local-crate_demo/m-0123456789abcdef/matrix-report.json",
             r#"{"report_id":"b"}"#,
         )],
     );
@@ -72,17 +76,19 @@ fn assembly_shape_carries_no_base() {
 
 #[test]
 fn assembly_reads_expected_only_and_sorts_reports() {
-    let first = "velnor-matrix-local-m-0000000000000001";
-    let second = "velnor-matrix-local-m-0000000000000002";
+    let shared = "velnor-crate-local-crate_demo";
     let dir = staged(
-        &plan_with(&[first, second]),
+        &plan_with(&[
+            (shared, "m-0000000000000001"),
+            (shared, "m-0000000000000002"),
+        ]),
         &[
             (
-                "reports/velnor-matrix-local-m-0000000000000002/matrix-report.json",
+                "reports/velnor-crate-local-crate_demo/m-0000000000000002/matrix-report.json",
                 r#"{"report_id":"report-2"}"#,
             ),
             (
-                "reports/velnor-matrix-local-m-0000000000000001/matrix-report.json",
+                "reports/velnor-crate-local-crate_demo/m-0000000000000001/matrix-report.json",
                 r#"{"report_id":"report-1"}"#,
             ),
             ("reports/stray.json", r#"{"report_id":"stray"}"#),
@@ -122,11 +128,11 @@ fn assembly_records_gaps_and_rejects_bad_report() {
     for want in ["missing_plan", "missing_matrix", "missing_needs_channel"] {
         assert!(errors.contains(&want.to_owned()), "{errors:?}");
     }
-    let aid = "velnor-matrix-local-m-0123456789abcdef";
+    let aid = "velnor-crate-local-crate_demo";
     let bad = staged(
-        &plan_with(&[aid]),
+        &plan_with(&[(aid, "m-0123456789abcdef"), (aid, "bogus")]),
         &[(
-            "reports/velnor-matrix-local-m-0123456789abcdef/matrix-report.json",
+            "reports/velnor-crate-local-crate_demo/m-0123456789abcdef/matrix-report.json",
             "not json",
         )],
     );
@@ -147,12 +153,16 @@ fn assembly_records_gaps_and_rejects_bad_report() {
         "{errors:?}"
     );
     assert!(
+        errors.contains(&format!("bad_matrix_key:{aid}")),
+        "{errors:?}"
+    );
+    assert!(
         errors
             .iter()
             .any(|error| error.starts_with("bad_needs_result:")),
         "{errors:?}"
     );
-    let missing = staged(&plan_with(&[aid]), &[]);
+    let missing = staged(&plan_with(&[(aid, "m-0123456789abcdef")]), &[]);
     let request = assemble_with_needs(
         "local",
         missing.path(),

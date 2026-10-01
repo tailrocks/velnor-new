@@ -24,7 +24,7 @@ use crate::impl_common::err_of;
 
 /// Plan wall time plus obligation counts on 1/10/40-crate workspaces.
 ///
-/// 40 stays under the 256 KiB matrix budget; 60 already exceeds it by
+/// 40 stays under the 320 KiB matrix budget; 60 already exceeds it by
 /// design (`matrix_budget_enforced_never_truncated` pins that ceiling).
 #[test]
 fn plan_scales_with_crate_count() -> TestResult {

@@ -1,4 +1,4 @@
-//! Event-time protocol: request materialization, outputs, verdict, render gate.
+//! Event-time protocol: request materialization, outputs, verdict.
 
 use std::fs;
 
@@ -211,7 +211,10 @@ fn merge_assembled_request_roundtrips_to_passed() -> TestResult {
             .iter()
             .find(|entry| entry.report_id == report.report_id)
             .ok_or_else(|| std::io::Error::other("report without entry"))?;
-        let dir = run.join("reports").join(&entry.artifact_id);
+        let dir = run
+            .join("reports")
+            .join(&entry.artifact_id)
+            .join(&entry.matrix_key);
         fs::create_dir_all(dir.join("tasks"))?;
         fs::write(
             dir.join("matrix-report.json"),

@@ -9,20 +9,17 @@ use std::fs;
 
 use tempfile::TempDir;
 use velnor_actions_contract::{
-    ExecuteTaskIds, ExecuteTaskRef, FinalStatus, MatrixEntry, MatrixReport, MatrixStatus,
-    ObligationDecision, Plan, PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanRunner,
-    RunnerSelection, TaskReport, TaskStatus, Trust, WorkflowEvent, matrix_json_bytes,
-    plan_id_for_run,
+    ExecuteTaskIds, ExecuteTaskRef, MatrixEntry, MatrixReport, MatrixStatus, ObligationDecision,
+    Plan, PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanRunner, RunnerSelection,
+    TaskReport, TaskStatus, Trust, WorkflowEvent, matrix_json_bytes, plan_id_for_run,
 };
 
 use super::*;
-use crate::merge::merge_internal;
-use crate::merge_request::assemble_with_needs;
 
 /// Clippy fixture task ID.
-const CLIPPY: &str = "stack/rust/demo/clippy/default";
+pub(super) const CLIPPY: &str = "stack/rust/demo/clippy/default";
 /// Test fixture task ID.
-const TEST: &str = "stack/rust/demo/test/default";
+pub(super) const TEST: &str = "stack/rust/demo/test/default";
 
 #[test]
 fn exit_codes_accept_the_eight_bit_range() {
@@ -72,7 +69,7 @@ fn digest(byte: u8) -> String {
 }
 
 /// One single-task plan entry plus its obligation digest.
-fn entry_for(task_id: &str, kind: &str, seed: u8) -> (MatrixEntry, String) {
+fn entry_for(task_id: &str, kind: &str, seed: u8, job_id: &str) -> (MatrixEntry, String) {
     let task_digest = digest(seed);
     let entry = MatrixEntry::derive(
         "rust",
@@ -85,6 +82,7 @@ fn entry_for(task_id: &str, kind: &str, seed: u8) -> (MatrixEntry, String) {
         },
         &digest(seed + 10),
         "local",
+        job_id,
     )
     .expect("entry derives");
     (entry, task_digest)
@@ -104,9 +102,9 @@ fn obligation_for(task_id: &str, task_digest: String, seed: u8) -> PlanObligatio
 }
 
 /// Valid two-task fixture plan (clippy plus test).
-fn fixture_plan() -> Plan {
-    let (clippy_entry, clippy_digest) = entry_for(CLIPPY, "clippy", 1);
-    let (test_entry, test_digest) = entry_for(TEST, "test", 2);
+pub(super) fn fixture_plan() -> Plan {
+    let (clippy_entry, clippy_digest) = entry_for(CLIPPY, "clippy", 1, "crate_clippy");
+    let (test_entry, test_digest) = entry_for(TEST, "test", 2, "crate_test");
     let plan = Plan {
         schema: 1,
         run_key: "local".to_owned(),
@@ -142,7 +140,7 @@ fn fixture_plan() -> Plan {
 }
 
 /// Staged run dir: `velnor/<run-key>/plan.json` plus `matrix.json`.
-fn staged_run(plan: &Plan, run_key: &str) -> TempDir {
+pub(super) fn staged_run(plan: &Plan, run_key: &str) -> TempDir {
     let temp = TempDir::new().expect("tempdir");
     let dir = temp.path().join("velnor").join(run_key);
     fs::create_dir_all(&dir).expect("run dir");
@@ -354,77 +352,4 @@ fn ambiguous_entries_refuse_rather_than_guess() {
     plan.validate().expect("obligation-free plan validates");
     let orphan = staged_run(&plan, "local");
     assert!(write_task_report_to("local", CLIPPY, 0, None, &[], orphan.path()).is_err());
-}
-
-/// Stage producer output as final-job `reports/<artifact-id>/` downloads.
-fn stage_downloads(plan: &Plan, temp: &TempDir) {
-    let run = temp.path().join("velnor").join("local");
-    for entry in &plan.matrix.include {
-        let from = run.join(&entry.matrix_key);
-        let home = run.join("reports").join(&entry.artifact_id);
-        fs::create_dir_all(&home).expect("artifact dir");
-        fs::rename(
-            from.join("matrix-report.json"),
-            home.join("matrix-report.json"),
-        )
-        .expect("stage matrix");
-        let files = home.join("tasks");
-        fs::create_dir_all(&files).expect("files dir");
-        for file in fs::read_dir(from.join("tasks")).expect("tasks") {
-            let file = file.expect("task entry").path();
-            let name = file.file_name().expect("task name");
-            fs::rename(&file, home.join("tasks").join(name)).expect("stage task");
-        }
-    }
-}
-
-#[test]
-fn merge_flips_not_run_to_executed_end_to_end() {
-    let plan = fixture_plan();
-    let temp = staged_run(&plan, "local");
-    let run = temp.path().join("velnor").join("local");
-    let needs = Some(r#"{"plan":"success"}"#);
-    let expected = Some(r#"["plan"]"#);
-
-    let pr = Some(r#"{"pull_request":{"head":{"repo":{"fork":false}}}}"#);
-    let bare = assemble_with_needs("local", &run, needs, expected, Some("pull_request"), pr)
-        .expect("assemble bare");
-    let verdict: velnor_actions_contract::FinalReport =
-        serde_json::from_str(&merge_internal(&bare).expect("merge bare")).expect("final json");
-    eprintln!(
-        "e2e before: status={:?} executed={} not_run={} downloaded={:?} miss={:?}",
-        verdict.status,
-        verdict.counts.executed,
-        verdict.counts.not_run,
-        verdict.downloaded_artifact_ids,
-        verdict.miss_reasons
-    );
-    assert_eq!(verdict.status, FinalStatus::PlanningFailed);
-    assert_eq!(verdict.counts.executed, 0);
-    assert!(verdict.counts.not_run > 0);
-
-    write_task_report_to("local", CLIPPY, 0, None, &[TEST.to_owned()], temp.path())
-        .expect("clippy");
-    write_task_report_to("local", TEST, 0, None, &[], temp.path()).expect("test");
-    stage_downloads(&plan, &temp);
-
-    let full = assemble_with_needs("local", &run, needs, expected, Some("pull_request"), pr)
-        .expect("assemble full");
-    assert!(
-        !full.contains("missing_report"),
-        "all artifacts staged: {full}"
-    );
-    let verdict: velnor_actions_contract::FinalReport =
-        serde_json::from_str(&merge_internal(&full).expect("merge full")).expect("final json");
-    eprintln!(
-        "e2e after: status={:?} executed={} not_run={} downloaded={:?}",
-        verdict.status,
-        verdict.counts.executed,
-        verdict.counts.not_run,
-        verdict.downloaded_artifact_ids
-    );
-    assert_eq!(verdict.status, FinalStatus::Passed);
-    assert_eq!(verdict.counts.executed, 2);
-    assert_eq!(verdict.counts.not_run, 0);
-    assert_eq!(verdict.downloaded_artifact_ids.len(), 2);
 }

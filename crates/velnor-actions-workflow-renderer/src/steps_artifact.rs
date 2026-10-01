@@ -8,8 +8,8 @@ use std::collections::BTreeMap;
 use velnor_actions_contract::Step;
 
 use super::steps::{
-    DOWNLOAD_ARTIFACT_USES, MATRIX_REPORT_UPLOAD_NAME, RUN_KEY_EXPR, UPLOAD_ARTIFACT_USES,
-    action_step,
+    CRATE_REPORT_UPLOAD_NAME, DOWNLOAD_ARTIFACT_USES, MATRIX_REPORT_UPLOAD_NAME, RUN_KEY_EXPR,
+    UPLOAD_ARTIFACT_USES, action_step,
 };
 use crate::{RenderError, artifact_paths};
 
@@ -59,15 +59,30 @@ pub fn matrix_report_upload_step() -> Result<Step, RenderError> {
     matrix_report_upload_raw("${{ matrix.matrix_key }}", MATRIX_REPORT_UPLOAD_NAME)
 }
 
-/// Matrix-report upload for one fixed entry key (crate jobs, plan job).
+/// Crate-report upload for one job (`velnor-crate-<run-key>-<job-id>`).
 ///
-/// Same artifact shape as the leg template, but the matrix key is a
-/// generator-baked validated key instead of matrix context: one such
-/// step per executed obligation. `if: always()` attaches at render.
+/// Carries the job's whole run directory: every entry's
+/// `matrix-report.json` plus `tasks/` files. One such step per matrix
+/// job (crate jobs and the plan job alike); `if: always()` attaches
+/// at render.
 /// # Errors
-pub fn matrix_report_upload_step_for(matrix_key: &str, name: &str) -> Result<Step, RenderError> {
-    velnor_actions_contract::validate_matrix_key(matrix_key).map_err(RenderError::Contract)?;
-    matrix_report_upload_raw(matrix_key, name)
+pub fn crate_job_report_upload_step(job_id: &str) -> Result<Step, RenderError> {
+    velnor_actions_contract::validate_job_id(job_id).map_err(RenderError::Contract)?;
+    action_step(
+        CRATE_REPORT_UPLOAD_NAME,
+        UPLOAD_ARTIFACT_USES,
+        BTreeMap::from([
+            (
+                "name".to_owned(),
+                format!("velnor-crate-{RUN_KEY_EXPR}-{job_id}"),
+            ),
+            (
+                "path".to_owned(),
+                format!("${{{{ runner.temp }}}}/velnor/{RUN_KEY_EXPR}"),
+            ),
+            ("if-no-files-found".to_owned(), "error".to_owned()),
+        ]),
+    )
 }
 
 /// Matrix-report upload over one key expression plus step name.

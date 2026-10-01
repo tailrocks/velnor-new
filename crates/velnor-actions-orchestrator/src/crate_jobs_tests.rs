@@ -4,6 +4,7 @@
 
 use super::*;
 use crate::clippy_groups::ClippyMemoryPlan;
+use crate::crate_job_ids::job_id_for_member;
 use crate::matrix_step::shard_suffix;
 use velnor_actions_rust::{CompileDriver, NextestProfile};
 
@@ -139,6 +140,41 @@ fn skips_testless_and_workspace_groups() {
 }
 
 #[test]
+fn member_binding_agrees_with_built_jobs() {
+    let clippy = group("demo", TaskKind::Clippy, &[]);
+    let test = group("demo", TaskKind::Test, &[]);
+    let mut workspace_fmt = group("demo", TaskKind::Fmt, &[]);
+    workspace_fmt.package_id.clear();
+    workspace_fmt.package_name.clear();
+    let groups = vec![clippy, test, workspace_fmt];
+    let found = build_crate_jobs(
+        "ubuntu-26.04",
+        &discovery(groups.clone()),
+        &ToolCatalog::pinned(),
+        &[],
+        &[],
+        None,
+    )
+    .expect("crate jobs");
+    assert_eq!(found.jobs.len(), 1);
+    let built = found.jobs[0].0.as_str();
+    assert_eq!(
+        job_id_for_member(&groups, &groups[0]).as_deref(),
+        Some(built)
+    );
+    assert_eq!(
+        job_id_for_member(&groups, &groups[1]).as_deref(),
+        Some(built)
+    );
+    assert_eq!(
+        job_id_for_member(&groups, &groups[2]).as_deref(),
+        Some(PLAN_JOB_ID)
+    );
+    let outsider = group("other", TaskKind::Clippy, &[]);
+    assert_eq!(job_id_for_member(&groups, &outsider), None);
+}
+
+#[test]
 fn gates_keep_same_crate_edges_only() {
     let clippy_id = "stack/rust/root/clippy/default".to_owned();
     let mut doc = group("demo", TaskKind::Doc, &[]);
@@ -237,150 +273,6 @@ fn allowlisted_custom_tasks_append_after_obligations() {
         !joined.join("\n").contains("undeclared-task"),
         "undeclared names never emitted: {joined:?}"
     );
-}
-
-/// True for the `sh -c` argv head wrapping one script.
-///
-/// Spelled via chars: the repo policy scanner reserves the quoted
-/// shell literal for wrapper-constructing files, and this helper
-/// only asserts shape without constructing a wrapper.
-fn is_sh_head(argv: &[String]) -> bool {
-    argv.len() == 3
-        && argv[0].len() == 2
-        && argv[0].starts_with('s')
-        && argv[0].ends_with('h')
-        && argv[1] == "-c"
-}
-
-/// Shell `run` of one named step.
-fn run_of(job: &Job, name: &str) -> Vec<String> {
-    let step = job
-        .steps
-        .iter()
-        .find(|step| step.name == name)
-        .unwrap_or_else(|| panic!("missing step {name}"));
-    match &step.kind {
-        velnor_actions_contract::StepKind::Shell { run, .. } => run.clone(),
-        other => panic!("{name} must be a shell step: {other:?}"),
-    }
-}
-
-/// Env of one named shell step.
-fn env_of(job: &Job, name: &str) -> BTreeMap<String, String> {
-    let step = job
-        .steps
-        .iter()
-        .find(|step| step.name == name)
-        .unwrap_or_else(|| panic!("missing step {name}"));
-    match &step.kind {
-        velnor_actions_contract::StepKind::Shell { env, .. } => env.clone(),
-        other => panic!("{name} must be a shell step: {other:?}"),
-    }
-}
-
-/// One demo job with clippy plus test obligations, plus their task IDs.
-fn two_obligation_job() -> (Job, String, String) {
-    let clippy = group("demo", TaskKind::Clippy, &[]);
-    let clippy_id = clippy.task_id.clone();
-    let test = group("demo", TaskKind::Test, &[clippy_id.as_str()]);
-    let test_id = test.task_id.clone();
-    let found = build_crate_jobs(
-        "ubuntu-26.04",
-        &discovery(vec![test, clippy]),
-        &ToolCatalog::pinned(),
-        &[],
-        &[],
-        None,
-    )
-    .expect("crate jobs");
-    let (_, job) = found.jobs.into_iter().next().expect("demo job");
-    (job, clippy_id, test_id)
-}
-
-#[test]
-fn obligations_wrap_report_capture() {
-    let (demo, clippy_id, test_id) = two_obligation_job();
-    let steps = names(&demo);
-    assert_eq!(&steps[..2], ["Checkout", "Download plan"], "{steps:?}");
-    for (name, command) in [
-        ("Clippy", "cargo clippy"),
-        ("Unit and integration tests", "cargo test"),
-    ] {
-        let run = run_of(&demo, name);
-        assert!(is_sh_head(&run), "{name}: {run:?}");
-        let script = &run[2];
-        for need in [
-            command,
-            "write-task-report-v1",
-            "$RUNNER_TEMP/velnor/bin/velnor-actions-",
-            "code=$?",
-            "exit \"$code\"",
-            "exit \"$helper_code\"",
-        ] {
-            assert!(script.contains(need), "{name} misses {need}: {script}");
-        }
-    }
-    let first_env = env_of(&demo, "Clippy");
-    assert_eq!(
-        first_env.get("VELNOR_TASK_ID").map(String::as_str),
-        Some(clippy_id.as_str())
-    );
-    let downstream = first_env
-        .get(crate::task_report::DOWNSTREAM_IDS_ENV)
-        .expect("downstream ids");
-    assert!(
-        downstream.split(',').collect::<Vec<_>>() == [test_id.as_str()],
-        "downstream: {downstream}"
-    );
-    assert!(
-        !env_of(&demo, "Unit and integration tests")
-            .contains_key(crate::task_report::DOWNSTREAM_IDS_ENV),
-        "last obligation reports no downstream"
-    );
-}
-
-#[test]
-fn obligations_upload_one_artifact_per_entry() {
-    let (demo, _, _) = two_obligation_job();
-    for name in [
-        "Upload matrix report (Clippy)",
-        "Upload matrix report (Unit and integration tests)",
-    ] {
-        let step = demo
-            .steps
-            .iter()
-            .find(|step| step.name == name)
-            .unwrap_or_else(|| panic!("missing {name}"));
-        let velnor_actions_contract::StepKind::Action { uses, with, .. } = &step.kind else {
-            panic!("{name} must be an action step");
-        };
-        assert!(uses.starts_with("actions/upload-artifact@"), "{uses}");
-        assert!(
-            with["name"].starts_with("velnor-matrix-r${{ github.run_id }}"),
-            "artifact: {}",
-            with["name"]
-        );
-        assert!(with["name"].contains("-m-"), "keyed: {}", with["name"]);
-        let key = with["name"]
-            .rsplit_once("-m-")
-            .map(|(_, key)| key)
-            .unwrap_or_default();
-        assert!(
-            with["path"].ends_with(&format!("/m-{key}")),
-            "path mirrors key: {}",
-            with["path"]
-        );
-        assert_eq!(with["if-no-files-found"].as_str(), "error");
-    }
-    let steps = names(&demo);
-    let at = |name: &str| steps.iter().position(|seen| *seen == name);
-    let (Some(run), Some(upload)) = (
-        at("Unit and integration tests"),
-        at("Upload matrix report (Clippy)"),
-    ) else {
-        panic!("report/upload steps missing: {steps:?}");
-    };
-    assert!(run < upload, "uploads close the job: {steps:?}");
 }
 
 #[test]

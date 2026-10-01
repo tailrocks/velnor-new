@@ -17,7 +17,7 @@ pub use crate::cache_steps::{
 };
 
 pub use crate::steps_artifact::{
-    download_artifact_step, matrix_report_upload_step, matrix_report_upload_step_for,
+    crate_job_report_upload_step, download_artifact_step, matrix_report_upload_step,
     upload_artifact_step,
 };
 
@@ -70,6 +70,8 @@ pub const ACQUIRE_NAME: &str = "Acquire Velnor";
 pub const RUN_KEY_EXPR: &str = "r${{ github.run_id }}-a${{ github.run_attempt }}";
 /// Display name of the matrix-report upload step.
 pub const MATRIX_REPORT_UPLOAD_NAME: &str = "Upload matrix report";
+/// Display name of the per-job crate-report upload step.
+pub const CRATE_REPORT_UPLOAD_NAME: &str = "Upload crate reports";
 /// Contract-fixed display name of the policy cargo-deny step.
 pub const DENY_STEP_NAME: &str = "Run cargo-deny";
 /// Contract-fixed display name of the policy cargo-machete step.

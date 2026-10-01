@@ -1,12 +1,12 @@
-//! Event-time `fetch-reports-v1`: exact matrix-artifact retrieval.
+//! Event-time `fetch-reports-v1`: exact crate-artifact retrieval.
 //!
 //! The final job's retrieve step runs before request assembly: it reads
-//! the downloaded plan, then downloads each expected matrix artifact by exact
+//! the downloaded plan, then downloads each expected crate artifact by exact
 //! derived name with pinned `gh` (`gh run download <run-id> --name
 //! <artifact-id> --dir reports/<artifact-id>`), never a wildcard. One
-//! failed download skips that leg (merge judges `not_run`); a missing
-//! or unparsable plan downloads nothing and still exits success so the
-//! merge reaches its `planning_failed` verdict. Only unusable
+//! failed download skips that job's entries (merge judges `not_run`); a
+//! missing or unparsable plan downloads nothing and still exits success
+//! so the merge reaches its `planning_failed` verdict. Only unusable
 //! environment (no runner temp, no numeric run ID) fails outright.
 
 // Wired here so the shared reader compiles without touching `lib.rs`.
@@ -14,12 +14,14 @@
 pub(crate) mod staged_reads;
 pub(crate) use self::staged_reads::{path_is_symlink, read_staged_bytes, read_staged_text};
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use velnor_actions_contract::{parse_strict_json, task_report_id_for_task, validate_artifact_id};
+use velnor_actions_contract::{
+    parse_strict_json, task_report_id_for_task, validate_artifact_id, validate_matrix_key,
+};
 use velnor_actions_mise::ToolCatalog;
 
 use crate::OrchestratorError;
@@ -153,13 +155,14 @@ pub(crate) const MAX_STAGED_REPORT_BYTES: u64 = 1 << 20;
 
 /// Read exactly the plan-expected staged reports plus task files.
 ///
-/// Each `matrix.include` entry names its artifact; absent or unreadable
-/// files are recorded in `errors`, never skipped silently. Stray files
-/// are ignored. Both `gh` extract layouts are accepted (direct plus one
-/// nested artifact directory); both paths are exact, never globbed. An
-/// artifact ID that fails shape validation is recorded, never traversed.
-/// Task files come from `<report-dir>/tasks/<task-report-id>.json` for
-/// the plan-derived expectation only. Both lists sort by ID.
+/// Each `matrix.include` entry names its job's artifact and its own
+/// matrix key; absent or unreadable files are recorded in `errors`,
+/// never skipped silently. Stray files are ignored. Both `gh` extract
+/// layouts are accepted (direct plus one nested artifact directory);
+/// both paths are exact, never globbed. An artifact ID or matrix key
+/// that fails shape validation is recorded, never traversed. Task
+/// files come from `<report-dir>/tasks/<task-report-id>.json` for the
+/// plan-derived expectation only. Both lists sort by ID.
 pub(crate) fn read_staged_reports(
     run_key: &str,
     plan: &serde_json::Value,
@@ -182,7 +185,16 @@ pub(crate) fn read_staged_reports(
             errors.push(format!("bad_artifact_id:{artifact_id}"));
             continue;
         }
-        let Some(home) = read_matrix_file(dir, artifact_id, &mut reports, errors) else {
+        let Some(matrix_key) = entry.get("matrix_key").and_then(serde_json::Value::as_str) else {
+            errors.push(format!("bad_matrix_key:{artifact_id}"));
+            continue;
+        };
+        if validate_matrix_key(matrix_key).is_err() {
+            errors.push(format!("bad_matrix_key:{artifact_id}"));
+            continue;
+        }
+        let Some(home) = read_matrix_file(dir, artifact_id, matrix_key, &mut reports, errors)
+        else {
             continue;
         };
         // Task files beside the matrix file for the plan-derived
@@ -232,15 +244,18 @@ fn obligation_digests(plan: &serde_json::Value) -> BTreeMap<&str, &str> {
     digests
 }
 
-/// Read one artifact's matrix file; the home dir on success.
+/// Read one entry's matrix file from its job's artifact; home on success.
 ///
-/// The artifact home, the nested parent, and the file itself reject
+/// The job artifact carries the whole run directory, so the entry's
+/// report lives at `<matrix-key>/matrix-report.json` inside it. The
+/// artifact home, the nested parent, and the file itself reject
 /// symlinks (pre-checks plus a `NOFOLLOW` open validated via the
 /// handle), even at live targets. Ancestors above the staging root are
 /// trusted: the runner and the retrieve step create them.
 fn read_matrix_file(
     dir: &Path,
     artifact_id: &str,
+    matrix_key: &str,
     reports: &mut Vec<serde_json::Value>,
     errors: &mut Vec<String>,
 ) -> Option<PathBuf> {
@@ -249,12 +264,18 @@ fn read_matrix_file(
         errors.push(format!("symlink_report:{artifact_id}"));
         return None;
     }
-    let direct = home.join("matrix-report.json");
-    let nested = home.join(artifact_id).join("matrix-report.json");
+    let entry_dir = home.join(matrix_key);
+    if path_is_symlink(&entry_dir) {
+        errors.push(format!("symlink_report:{artifact_id}"));
+        return None;
+    }
+    let direct = entry_dir.join("matrix-report.json");
+    let nested_entry = home.join(artifact_id).join(matrix_key);
+    let nested = nested_entry.join("matrix-report.json");
     let (path, text) = match read_bounded(&direct) {
         Ok(text) => (direct, text),
         Err("missing") => {
-            if nested.parent().is_some_and(path_is_symlink) {
+            if path_is_symlink(&home.join(artifact_id)) || path_is_symlink(&nested_entry) {
                 errors.push(format!("symlink_report:{artifact_id}"));
                 return None;
             }
@@ -329,16 +350,23 @@ fn staged_id<'a>(report: &'a serde_json::Value, field: &str) -> &'a str {
         .unwrap_or_default()
 }
 
-/// Expected matrix artifact IDs from a plan value, in plan order.
+/// Expected job artifact IDs from a plan value, in plan order.
+///
+/// Sibling entries share their job's artifact, so the enumeration
+/// dedupes: each artifact downloads exactly once while first-seen
+/// plan order stays stable.
 fn expected_artifact_ids(plan: &serde_json::Value) -> Vec<&str> {
     let mut ids = Vec::new();
+    let mut seen = BTreeSet::new();
     if let Some(entries) = plan
         .get("matrix")
         .and_then(|matrix| matrix.get("include"))
         .and_then(serde_json::Value::as_array)
     {
         for entry in entries {
-            if let Some(id) = entry.get("artifact_id").and_then(serde_json::Value::as_str) {
+            if let Some(id) = entry.get("artifact_id").and_then(serde_json::Value::as_str)
+                && seen.insert(id)
+            {
                 ids.push(id);
             }
         }
