@@ -1,7 +1,7 @@
 //! Release workflow rendering and generated-tree assembly.
 //!
 //! Second render entrypoint: [`render_release_workflow`] turns a validated
-//! spec plus fixed argv into `velnor-release.yml`, and
+//! spec plus fixed argv into `release.yml`, and
 //! [`render_release_files`] adds the two effective release-plz configs.
 
 use velnor_actions_contract::{Step, StepKind};
@@ -21,7 +21,7 @@ use crate::{
 };
 
 /// Generated release workflow path inside the repository.
-pub const RELEASE_WORKFLOW_PATH: &str = ".github/workflows/velnor-release.yml";
+pub const RELEASE_WORKFLOW_PATH: &str = ".github/workflows/release.yml";
 /// Generated effective normal-policy release-plz config path.
 pub const RELEASE_CONFIG_PATH: &str = ".github/release-plz.toml";
 /// Generated bootstrap-only release-plz config path.
@@ -280,7 +280,7 @@ fn release_step_to_yaml(step: &Step) -> Result<Yaml, RenderError> {
 /// The three rendered release files with their fixed tree paths.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReleaseFiles {
-    /// `velnor-release.yml` workflow bytes.
+    /// `release.yml` workflow bytes.
     pub workflow: RenderedFile,
     /// Effective normal-policy config bytes.
     pub config: RenderedFile,

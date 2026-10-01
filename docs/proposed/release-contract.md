@@ -283,7 +283,7 @@ headers, credential-provider output, or private key material.
 
 ## 11. File ownership
 
-- `velnor-release.yml`: emitted for `consumer-v1` only when
+- `release.yml`: emitted for `consumer-v1` only when
   `[stacks.rust.release].enabled = true`, rendered from typed workflow IR
   with an explicit per-job `permissions:` block. (Under
   `velnor-repository-v1` the same filename keeps its existing Velnor-internal
