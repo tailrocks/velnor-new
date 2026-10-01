@@ -212,6 +212,7 @@ jobs:
           if-no-files-found: error
           name: velnor-preseed-helper
           path: ${{ runner.temp }}/velnor/preseed-output
+          retention-days: "30"
       - name: Stage helper (pre-seed trust-on-review)
         env:
           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
@@ -311,6 +312,7 @@ jobs:
           if-no-files-found: error
           name: velnor-plan-r${{ github.run_id }}-a${{ github.run_attempt }}
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
+          retention-days: "30"
   required:
     name: Required
     runs-on: ubuntu-26.04
@@ -390,7 +392,6 @@ jobs:
           name: velnor-plan-r${{ github.run_id }}-a${{ github.run_attempt }}
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
       - name: Download every expected matrix artifact
-        continue-on-error: true
         env:
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
@@ -417,6 +418,7 @@ jobs:
           if-no-files-found: error
           name: velnor-final-r${{ github.run_id }}-a${{ github.run_attempt }}
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/final-report.json
+          retention-days: "30"
   rust-velnor-actions-actionlint:
     name: Rust / velnor-actions-actionlint
     runs-on: ubuntu-26.04
@@ -681,6 +683,7 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           NODE_AUTH_TOKEN: ""
           NPM_TOKEN: ""
+          RUSTDOCFLAGS: "-D warnings"
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-actionlint/doc/default
           VELNOR_MATRIX_KEY: m-81305c234c22a275
@@ -694,6 +697,7 @@ jobs:
           if-no-files-found: error
           name: velnor-matrix-r${{ github.run_id }}-a${{ github.run_attempt }}-m-93aa743354796b58
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/m-93aa743354796b58
+          retention-days: "30"
       - name: Upload matrix report (Clippy)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -701,6 +705,7 @@ jobs:
           if-no-files-found: error
           name: velnor-matrix-r${{ github.run_id }}-a${{ github.run_attempt }}-m-ecdec2e058a7da89
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/m-ecdec2e058a7da89
+          retention-days: "30"
       - name: Upload matrix report (Build test executables)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -708,6 +713,7 @@ jobs:
           if-no-files-found: error
           name: velnor-matrix-r${{ github.run_id }}-a${{ github.run_attempt }}-m-8887de4a4a14f095
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/m-8887de4a4a14f095
+          retention-days: "30"
       - name: Upload matrix report (Unit and integration tests)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -715,6 +721,7 @@ jobs:
           if-no-files-found: error
           name: velnor-matrix-r${{ github.run_id }}-a${{ github.run_attempt }}-m-d39383082418218e
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/m-d39383082418218e
+          retention-days: "30"
       - name: Upload matrix report (Doctests)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -722,6 +729,7 @@ jobs:
           if-no-files-found: error
           name: velnor-matrix-r${{ github.run_id }}-a${{ github.run_attempt }}-m-648d9a1631425363
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/m-648d9a1631425363
+          retention-days: "30"
       - name: Upload matrix report (Documentation)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -729,6 +737,7 @@ jobs:
           if-no-files-found: error
           name: velnor-matrix-r${{ github.run_id }}-a${{ github.run_attempt }}-m-81305c234c22a275
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/m-81305c234c22a275
+          retention-days: "30"
   rust-velnor-actions-cli:
     name: Rust / velnor-actions-cli
     runs-on: ubuntu-26.04
@@ -965,6 +974,7 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           NODE_AUTH_TOKEN: ""
           NPM_TOKEN: ""
+          RUSTDOCFLAGS: "-D warnings"
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-cli/doc/default
           VELNOR_MATRIX_KEY: m-93a4593c9a3c3085
@@ -978,6 +988,7 @@ jobs:
           if-no-files-found: error
           name: velnor-matrix-r${{ github.run_id }}-a${{ github.run_attempt }}-m-7569343f915bb22f
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/m-7569343f915bb22f
+          retention-days: "30"
       - name: Upload matrix report (Clippy)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -985,6 +996,7 @@ jobs:
           if-no-files-found: error
           name: velnor-matrix-r${{ github.run_id }}-a${{ github.run_attempt }}-m-167c225e22fadf7f
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/m-167c225e22fadf7f
+          retention-days: "30"
       - name: Upload matrix report (Build test executables)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -992,6 +1004,7 @@ jobs:
           if-no-files-found: error
           name: velnor-matrix-r${{ github.run_id }}-a${{ github.run_attempt }}-m-7453ab9ff0d4f64d
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/m-7453ab9ff0d4f64d
+          retention-days: "30"
       - name: Upload matrix report (Unit and integration tests)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -999,6 +1012,7 @@ jobs:
           if-no-files-found: error
           name: velnor-matrix-r${{ github.run_id }}-a${{ github.run_attempt }}-m-67ee20a34e48b6e3
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/m-67ee20a34e48b6e3
+          retention-days: "30"
       - name: Upload matrix report (Documentation)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -1006,6 +1020,7 @@ jobs:
           if-no-files-found: error
           name: velnor-matrix-r${{ github.run_id }}-a${{ github.run_attempt }}-m-93a4593c9a3c3085
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/m-93a4593c9a3c3085
+          retention-days: "30"
   rust-velnor-actions-contract:
     name: Rust / velnor-actions-contract
     runs-on: ubuntu-26.04
@@ -1270,6 +1285,7 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           NODE_AUTH_TOKEN: ""
           NPM_TOKEN: ""
+          RUSTDOCFLAGS: "-D warnings"
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-contract/doc/default
           VELNOR_MATRIX_KEY: m-5bfa1ac4c56189d6
@@ -1283,6 +1299,7 @@ jobs:
           if-no-files-found: error
           name: velnor-matrix-r${{ github.run_id }}-a${{ github.run_attempt }}-m-c8b6d171011e01a9
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/m-c8b6d171011e01a9
+          retention-days: "30"
       - name: Upload matrix report (Clippy)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -1290,6 +1307,7 @@ jobs:
           if-no-files-found: error
           name: velnor-matrix-r${{ github.run_id }}-a${{ github.run_attempt }}-m-904a957ae01ca7bb
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/m-904a957ae01ca7bb
+          retention-days: "30"
       - name: Upload matrix report (Build test executables)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -1297,6 +1315,7 @@ jobs:
           if-no-files-found: error
           name: velnor-matrix-r${{ github.run_id }}-a${{ github.run_attempt }}-m-9109428e72a8fcba
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/m-9109428e72a8fcba
+          retention-days: "30"
       - name: Upload matrix report (Unit and integration tests)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -1304,6 +1323,7 @@ jobs:
           if-no-files-found: error
           name: velnor-matrix-r${{ github.run_id }}-a${{ github.run_attempt }}-m-43550b2728a6bb47
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/m-43550b2728a6bb47
+          retention-days: "30"
       - name: Upload matrix report (Doctests)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -1311,6 +1331,7 @@ jobs:
           if-no-files-found: error
           name: velnor-matrix-r${{ github.run_id }}-a${{ github.run_attempt }}-m-2e184614bdff13d7
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/m-2e184614bdff13d7
+          retention-days: "30"
       - name: Upload matrix report (Documentation)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -1318,6 +1339,7 @@ jobs:
           if-no-files-found: error
           name: velnor-matrix-r${{ github.run_id }}-a${{ github.run_attempt }}-m-5bfa1ac4c56189d6
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/m-5bfa1ac4c56189d6
+          retention-days: "30"
   rust-velnor-actions-mise:
     name: Rust / velnor-actions-mise
     runs-on: ubuntu-26.04
@@ -1582,6 +1604,7 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           NODE_AUTH_TOKEN: ""
           NPM_TOKEN: ""
+          RUSTDOCFLAGS: "-D warnings"
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-mise/doc/default
           VELNOR_MATRIX_KEY: m-8265037fd459347e
@@ -1595,6 +1618,7 @@ jobs:
           if-no-files-found: error
           name: velnor-matrix-r${{ github.run_id }}-a${{ github.run_attempt }}-m-163ef16efec7c4ef
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/m-163ef16efec7c4ef
+          retention-days: "30"
       - name: Upload matrix report (Clippy)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -1602,6 +1626,7 @@ jobs:
           if-no-files-found: error
           name: velnor-matrix-r${{ github.run_id }}-a${{ github.run_attempt }}-m-e4f4c72dff4c3345
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/m-e4f4c72dff4c3345
+          retention-days: "30"
       - name: Upload matrix report (Build test executables)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -1609,6 +1634,7 @@ jobs:
           if-no-files-found: error
           name: velnor-matrix-r${{ github.run_id }}-a${{ github.run_attempt }}-m-1490dead3dc125c0
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/m-1490dead3dc125c0
+          retention-days: "30"
       - name: Upload matrix report (Unit and integration tests)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -1616,6 +1642,7 @@ jobs:
           if-no-files-found: error
           name: velnor-matrix-r${{ github.run_id }}-a${{ github.run_attempt }}-m-dc52cf6a2a0c1601
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/m-dc52cf6a2a0c1601
+          retention-days: "30"
       - name: Upload matrix report (Doctests)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -1623,6 +1650,7 @@ jobs:
           if-no-files-found: error
           name: velnor-matrix-r${{ github.run_id }}-a${{ github.run_attempt }}-m-d527b3c2db3ecd48
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/m-d527b3c2db3ecd48
+          retention-days: "30"
       - name: Upload matrix report (Documentation)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -1630,6 +1658,7 @@ jobs:
           if-no-files-found: error
           name: velnor-matrix-r${{ github.run_id }}-a${{ github.run_attempt }}-m-8265037fd459347e
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/m-8265037fd459347e
+          retention-days: "30"
   rust-velnor-actions-orchestrator:
     name: Rust / velnor-actions-orchestrator
     runs-on: ubuntu-26.04
@@ -1894,6 +1923,7 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           NODE_AUTH_TOKEN: ""
           NPM_TOKEN: ""
+          RUSTDOCFLAGS: "-D warnings"
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-orchestrator/doc/default
           VELNOR_MATRIX_KEY: m-f31fcb1a405715c5
@@ -1907,6 +1937,7 @@ jobs:
           if-no-files-found: error
           name: velnor-matrix-r${{ github.run_id }}-a${{ github.run_attempt }}-m-de621063b566a463
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/m-de621063b566a463
+          retention-days: "30"
       - name: Upload matrix report (Clippy)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -1914,6 +1945,7 @@ jobs:
           if-no-files-found: error
           name: velnor-matrix-r${{ github.run_id }}-a${{ github.run_attempt }}-m-fb610837e234df52
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/m-fb610837e234df52
+          retention-days: "30"
       - name: Upload matrix report (Build test executables)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -1921,6 +1953,7 @@ jobs:
           if-no-files-found: error
           name: velnor-matrix-r${{ github.run_id }}-a${{ github.run_attempt }}-m-53482d622c7ec440
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/m-53482d622c7ec440
+          retention-days: "30"
       - name: Upload matrix report (Unit and integration tests)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -1928,6 +1961,7 @@ jobs:
           if-no-files-found: error
           name: velnor-matrix-r${{ github.run_id }}-a${{ github.run_attempt }}-m-8759f3cfd795025d
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/m-8759f3cfd795025d
+          retention-days: "30"
       - name: Upload matrix report (Doctests)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -1935,6 +1969,7 @@ jobs:
           if-no-files-found: error
           name: velnor-matrix-r${{ github.run_id }}-a${{ github.run_attempt }}-m-1e785f3f6e8a0aec
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/m-1e785f3f6e8a0aec
+          retention-days: "30"
       - name: Upload matrix report (Documentation)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -1942,6 +1977,7 @@ jobs:
           if-no-files-found: error
           name: velnor-matrix-r${{ github.run_id }}-a${{ github.run_attempt }}-m-f31fcb1a405715c5
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/m-f31fcb1a405715c5
+          retention-days: "30"
   rust-velnor-actions-rust:
     name: Rust / velnor-actions-rust
     runs-on: ubuntu-26.04
@@ -2206,6 +2242,7 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           NODE_AUTH_TOKEN: ""
           NPM_TOKEN: ""
+          RUSTDOCFLAGS: "-D warnings"
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-rust/doc/default
           VELNOR_MATRIX_KEY: m-b9195ee6ee4dd6e3
@@ -2219,6 +2256,7 @@ jobs:
           if-no-files-found: error
           name: velnor-matrix-r${{ github.run_id }}-a${{ github.run_attempt }}-m-708e095ab9f500b4
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/m-708e095ab9f500b4
+          retention-days: "30"
       - name: Upload matrix report (Clippy)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -2226,6 +2264,7 @@ jobs:
           if-no-files-found: error
           name: velnor-matrix-r${{ github.run_id }}-a${{ github.run_attempt }}-m-af2807043d348ff9
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/m-af2807043d348ff9
+          retention-days: "30"
       - name: Upload matrix report (Build test executables)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -2233,6 +2272,7 @@ jobs:
           if-no-files-found: error
           name: velnor-matrix-r${{ github.run_id }}-a${{ github.run_attempt }}-m-98b1e6d8c684a9d6
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/m-98b1e6d8c684a9d6
+          retention-days: "30"
       - name: Upload matrix report (Unit and integration tests)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -2240,6 +2280,7 @@ jobs:
           if-no-files-found: error
           name: velnor-matrix-r${{ github.run_id }}-a${{ github.run_attempt }}-m-cb59aaefe5dfc948
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/m-cb59aaefe5dfc948
+          retention-days: "30"
       - name: Upload matrix report (Doctests)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -2247,6 +2288,7 @@ jobs:
           if-no-files-found: error
           name: velnor-matrix-r${{ github.run_id }}-a${{ github.run_attempt }}-m-7b460e04b25ef8f4
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/m-7b460e04b25ef8f4
+          retention-days: "30"
       - name: Upload matrix report (Documentation)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -2254,6 +2296,7 @@ jobs:
           if-no-files-found: error
           name: velnor-matrix-r${{ github.run_id }}-a${{ github.run_attempt }}-m-b9195ee6ee4dd6e3
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/m-b9195ee6ee4dd6e3
+          retention-days: "30"
   rust-velnor-actions-workflow-renderer:
     name: Rust / velnor-actions-workflow-renderer
     runs-on: ubuntu-26.04
@@ -2518,6 +2561,7 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           NODE_AUTH_TOKEN: ""
           NPM_TOKEN: ""
+          RUSTDOCFLAGS: "-D warnings"
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-workflow-renderer/doc/default
           VELNOR_MATRIX_KEY: m-d04b7f8f31103a5a
@@ -2531,6 +2575,7 @@ jobs:
           if-no-files-found: error
           name: velnor-matrix-r${{ github.run_id }}-a${{ github.run_attempt }}-m-5469534559a12d36
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/m-5469534559a12d36
+          retention-days: "30"
       - name: Upload matrix report (Clippy)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -2538,6 +2583,7 @@ jobs:
           if-no-files-found: error
           name: velnor-matrix-r${{ github.run_id }}-a${{ github.run_attempt }}-m-bbe589a41e95aa9d
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/m-bbe589a41e95aa9d
+          retention-days: "30"
       - name: Upload matrix report (Build test executables)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -2545,6 +2591,7 @@ jobs:
           if-no-files-found: error
           name: velnor-matrix-r${{ github.run_id }}-a${{ github.run_attempt }}-m-db6a670047663c4c
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/m-db6a670047663c4c
+          retention-days: "30"
       - name: Upload matrix report (Unit and integration tests)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -2552,6 +2599,7 @@ jobs:
           if-no-files-found: error
           name: velnor-matrix-r${{ github.run_id }}-a${{ github.run_attempt }}-m-81f6e0cba54c2186
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/m-81f6e0cba54c2186
+          retention-days: "30"
       - name: Upload matrix report (Doctests)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -2559,6 +2607,7 @@ jobs:
           if-no-files-found: error
           name: velnor-matrix-r${{ github.run_id }}-a${{ github.run_attempt }}-m-0a7a564168b37c36
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/m-0a7a564168b37c36
+          retention-days: "30"
       - name: Upload matrix report (Documentation)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -2566,6 +2615,7 @@ jobs:
           if-no-files-found: error
           name: velnor-matrix-r${{ github.run_id }}-a${{ github.run_attempt }}-m-d04b7f8f31103a5a
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/m-d04b7f8f31103a5a
+          retention-days: "30"
   zizmor:
     name: Zizmor
     runs-on: ubuntu-26.04

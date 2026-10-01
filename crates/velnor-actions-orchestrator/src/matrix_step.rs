@@ -7,7 +7,7 @@ use velnor_actions_mise::{
     ISOLATION_ENV, NO_AUTO_INSTALL_ENV, PREPARE_PINNED_TOOLS_STEP, PinnedTool, PreparePinnedTools,
     ToolCatalog, ToolHomes,
 };
-use velnor_actions_rust::TaskKind;
+use velnor_actions_rust::{TaskKind, cargo_payload_env};
 use velnor_actions_workflow_renderer::plan_format::FORMAT_STEP_NAME;
 use velnor_actions_workflow_renderer::steps::{INTERNAL_OP_ENV, STAGED_BINARY_PREFIX};
 
@@ -199,7 +199,9 @@ pub(crate) fn obligation_identity_env(
 /// obligation's own code (a report failure surfaces only when the
 /// obligation itself passed, so failures never mask each other).
 /// Identity env doubles as the report lookup key; the plan binds the
-/// digests, never these baked values.
+/// digests, never these baked values. Doc obligations additionally
+/// carry the typed `cargo_payload_env` pairs (`RUSTDOCFLAGS=-D
+/// warnings`), matching the plan identity envelope.
 ///
 /// # Errors
 ///
@@ -222,6 +224,14 @@ pub(crate) fn obligation_step(
     );
     if !downstream.is_empty() {
         identity.insert(DOWNSTREAM_IDS_ENV.to_owned(), downstream.join(","));
+    }
+    if obligation.kind == TaskKind::Doc.as_str() {
+        for (key, value) in cargo_payload_env(TaskKind::Doc) {
+            identity.insert(
+                key.to_string_lossy().into_owned(),
+                value.to_string_lossy().into_owned(),
+            );
+        }
     }
     check_identity_env_contract(&identity, &obligation.task_id)?;
     let env = task_execution_env(catalog, &identity)?;

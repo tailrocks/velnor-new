@@ -66,13 +66,27 @@ fn final_steps_follow_contract_order() -> Result<(), RenderError> {
 }
 
 #[test]
-fn verdict_downloads_continue_and_publish_always_runs() -> Result<(), RenderError> {
+fn verdict_download_continues_fetch_retries_and_publish_always_runs() -> Result<(), RenderError> {
     let text = final_text()?;
+    // Only the plan download tolerates absence (a failed plan must
+    // still reach the merge verdict); the fetch step retries bounded
+    // in-helper instead of masking failures (F5).
     assert_eq!(
         text.matches("continue-on-error: true").count(),
-        2,
-        "plan plus fetch tolerate absence:\n{text}"
+        1,
+        "only the plan download tolerates absence:\n{text}"
     );
+    let plan = step_block(&text, "Download plan");
+    assert!(plan.contains("continue-on-error: true"), "{plan}");
+    let fetch = step_block(&text, "Download every expected matrix artifact");
+    assert!(
+        !fetch.contains("continue-on-error"),
+        "fetch must not mask failures:\n{fetch}"
+    );
+    // Fail-closed shape intact: merge runs and gates the verdict, the
+    // final report always publishes.
+    let merge = step_block(&text, "Merge reports");
+    assert!(merge.contains("VELNOR_INTERNAL_OP: merge-v1"), "{merge}");
     let publish = step_block(&text, "Publish final report");
     assert!(publish.contains("if: always()"), "{publish}");
     assert!(
@@ -80,6 +94,19 @@ fn verdict_downloads_continue_and_publish_always_runs() -> Result<(), RenderErro
         "{publish}"
     );
     assert!(publish.contains("final-report.json"), "{publish}");
+    Ok(())
+}
+
+#[test]
+fn rendered_final_publish_carries_retention_days() -> Result<(), RenderError> {
+    use velnor_actions_workflow_renderer::steps::ARTIFACT_RETENTION_DAYS;
+    let text = final_text()?;
+    let publish = step_block(&text, "Publish final report");
+    assert!(publish.contains("retention-days"), "{publish}");
+    assert!(
+        publish.contains(&ARTIFACT_RETENTION_DAYS.to_string()),
+        "{publish}"
+    );
     Ok(())
 }
 

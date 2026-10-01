@@ -85,6 +85,11 @@ pub enum ActionlintError {
         /// Requested syntax identifier.
         syntax: &'static str,
     },
+    /// The bridge runner label is missing or outside the label catalog.
+    InvalidRunnerLabel {
+        /// Rejected label (empty when unset).
+        label: String,
+    },
     /// A lint-tool version is not the required exact pin.
     InvalidToolVersion {
         /// Tool identifier.
@@ -130,6 +135,7 @@ impl Display for ActionlintError {
                 problem,
             } => write!(f, "invalid_action_input: {action}: {input}: {problem}"),
             Self::UnsupportedSyntax { syntax } => write!(f, "unsupported_syntax: {syntax}"),
+            Self::InvalidRunnerLabel { label } => write!(f, "invalid_runner_label: {label}"),
             Self::InvalidToolVersion { tool, version } => {
                 write!(f, "invalid_tool_version: {tool}: {version}")
             }

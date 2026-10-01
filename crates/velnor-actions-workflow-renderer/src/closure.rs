@@ -49,6 +49,8 @@ pub enum HelperProvenance {
         url: String,
         /// Expected lowercase hex SHA-256 of the asset.
         sha256: String,
+        /// Manifest source commit, when the consumer manifest supplies one.
+        commit: Option<String>,
     },
     /// No provenance: the bootstrap release is not seeded yet.
     SeedRequired,
@@ -65,11 +67,18 @@ pub fn provision_acquire_step(
     argv: Vec<String>,
 ) -> Result<Step, RenderError> {
     match provenance {
-        HelperProvenance::ReleaseAsset { url, sha256 } => {
-            let env = std::collections::BTreeMap::from([
+        HelperProvenance::ReleaseAsset {
+            url,
+            sha256,
+            commit,
+        } => {
+            let mut env = std::collections::BTreeMap::from([
                 (steps::ASSET_URL_ENV.to_owned(), url.clone()),
                 (steps::ASSET_SHA_ENV.to_owned(), sha256.clone()),
             ]);
+            if let Some(commit) = commit {
+                env.insert(steps::RELEASE_COMMIT_ENV.to_owned(), commit.clone());
+            }
             steps::acquire_velnor_step(argv, &env)
         }
         HelperProvenance::SeedRequired => {
@@ -210,6 +219,10 @@ pub fn publish_plan_step() -> Result<Step, RenderError> {
             ("name".to_owned(), PLAN_ARTIFACT_NAME.to_owned()),
             ("path".to_owned(), PLAN_ARTIFACT_PATH.to_owned()),
             ("if-no-files-found".to_owned(), "error".to_owned()),
+            (
+                "retention-days".to_owned(),
+                steps::ARTIFACT_RETENTION_DAYS.to_string(),
+            ),
         ]),
     )
 }

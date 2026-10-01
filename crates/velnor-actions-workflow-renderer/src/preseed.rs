@@ -242,6 +242,10 @@ pub fn preseed_upload_step() -> Result<Step, RenderError> {
             ("name".to_owned(), PRESEED_ARTIFACT_NAME.to_owned()),
             ("path".to_owned(), PRESEED_OUTPUT_DIR_EXPR.to_owned()),
             ("if-no-files-found".to_owned(), "error".to_owned()),
+            (
+                "retention-days".to_owned(),
+                steps::ARTIFACT_RETENTION_DAYS.to_string(),
+            ),
         ]),
     )
 }

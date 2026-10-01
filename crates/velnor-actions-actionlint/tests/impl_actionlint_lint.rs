@@ -111,8 +111,26 @@ fn config_rejection_codes_are_stable() {
 }
 
 #[test]
+fn bridge_block_carries_configured_label() {
+    for label in ["ubuntu-26.04", "ubuntu-24.04", "ubuntu-22.04"] {
+        let input = ActionlintConfigInput::new("0.1.0").with_runner_label(label);
+        let output = render_actionlint_yaml(&input).expect("renders");
+        assert!(
+            !output.yaml.contains("runs-on"),
+            "config must never carry job runner labels"
+        );
+        assert!(
+            output.yaml.contains(&format!("    - {label}\n")),
+            "bridge must emit the configured label {label}:\n{}",
+            output.yaml
+        );
+    }
+}
+
+#[test]
 fn bridge_block_carries_exact_compat_label() {
-    let output = render_actionlint_yaml(&ActionlintConfigInput::new("0.1.0")).expect("renders");
+    let input = ActionlintConfigInput::new("0.1.0").with_runner_label(RUNNER_LABEL_BRIDGE);
+    let output = render_actionlint_yaml(&input).expect("renders");
     assert!(
         !output.yaml.contains("runs-on"),
         "config must never carry job runner labels"
@@ -156,8 +174,28 @@ fn bridge_label_shape_is_hosted_ubuntu() {
 }
 
 #[test]
+fn bridge_label_missing_or_unlisted_fails_closed() {
+    let missing = render_actionlint_yaml(&ActionlintConfigInput::new("0.1.0"));
+    assert!(
+        matches!(missing, Err(ActionlintError::InvalidRunnerLabel { .. })),
+        "unset label must fail, never emit a hardcoded distro"
+    );
+    for label in ["ubuntu-latest", "ubuntu-99.04", "self-hosted", ""] {
+        let input = ActionlintConfigInput::new("0.1.0").with_runner_label(label);
+        assert!(
+            matches!(
+                render_actionlint_yaml(&input),
+                Err(ActionlintError::InvalidRunnerLabel { .. })
+            ),
+            "unlisted label must fail: {label}"
+        );
+    }
+}
+
+#[test]
 fn output_reports_bridge_state() {
-    let default = render_actionlint_yaml(&ActionlintConfigInput::new("0.1.0")).expect("renders");
+    let input = ActionlintConfigInput::new("0.1.0").with_runner_label(RUNNER_LABEL_BRIDGE);
+    let default = render_actionlint_yaml(&input).expect("renders");
     assert!(default.runner_bridge_emitted);
     assert!(default.yaml.contains("self-hosted-runner:"));
     let caps = ActionlintCapabilities::for_pinned().recognize_hosted_label_26_04();

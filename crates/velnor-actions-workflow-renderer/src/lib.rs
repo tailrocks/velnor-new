@@ -81,7 +81,7 @@ pub use setup::{MISE_ACTION_NAME, SETUP_MISE_NAME, mise_setup_step};
 pub use steps::{
     ACQUIRE_NAME, ASSET_SHA_ENV, ASSET_URL_ENV, CompileDriver, DENY_STEP_NAME, FORBIDDEN_TOKENS,
     INTERNAL_OP_ENV, MACHETE_STEP_NAME, MATRIX_REPORT_UPLOAD_NAME, MERGE_OPERATION, PLAN_OPERATION,
-    REQUEST_DIR_PREFIX, REQUEST_FILE_ENV, RUN_KEY_EXPR, STAGED_BINARY_PREFIX,
+    RELEASE_COMMIT_ENV, REQUEST_DIR_PREFIX, REQUEST_FILE_ENV, RUN_KEY_EXPR, STAGED_BINARY_PREFIX,
     WRITE_PRESEED_MANIFEST_OPERATION, WRITE_REQUEST_OPERATION, acquire_velnor_step, action_step,
     check_cache_step_order, check_mbx_gating, checkout_step, internal_step, lane_cargo_target_env,
     matrix_report_upload_step, matrix_report_upload_step_for, mbx_step_for_driver, merge_step,

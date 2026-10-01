@@ -188,9 +188,10 @@ fn consumer_manifest_text(root: &Path) -> Result<(Option<String>, bool), Orchest
         ));
     }
     let targets = targets.join(",");
+    let commit = "b".repeat(40);
     Ok((
         Some(format!(
-            "{{\"schema\":1,\"version\":\"{version}\",\"repository\":\"tailrocks/velnor-new\",\"targets\":[{targets}]}}"
+            "{{\"schema\":1,\"version\":\"{version}\",\"repository\":\"tailrocks/velnor-new\",\"commit\":\"{commit}\",\"targets\":[{targets}]}}"
         )),
         true,
     ))

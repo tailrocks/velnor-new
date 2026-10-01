@@ -1,7 +1,8 @@
 //! Helper provisioning: staged-helper gate plus provenance typing.
 use std::collections::BTreeMap;
+use velnor_actions_contract::StepKind;
 use velnor_actions_workflow_renderer::{
-    ACQUIRE_NAME, ASSET_SHA_ENV, ASSET_URL_ENV, HelperProvenance, RenderError,
+    ACQUIRE_NAME, ASSET_SHA_ENV, ASSET_URL_ENV, HelperProvenance, RELEASE_COMMIT_ENV, RenderError,
     STAGED_BINARY_PREFIX, acquire_velnor_step, checkout_step, merge_step, plan_step,
     provision_acquire_step,
 };
@@ -59,12 +60,59 @@ fn provenance_release_ok_seed_fails() -> Result<(), RenderError> {
     let provenance = HelperProvenance::ReleaseAsset {
         url: "https://example.invalid/r".to_owned(),
         sha256: "c".repeat(64),
+        commit: None,
     };
     let step = provision_acquire_step(&provenance, argv)?;
     assert_eq!(step.name, ACQUIRE_NAME);
     let err = provision_acquire_step(&HelperProvenance::SeedRequired, Vec::new())
         .expect_err("seed must fail closed");
     assert!(format!("{err:?}").contains("seed_required"), "{err:?}");
+    Ok(())
+}
+
+#[test]
+fn provenance_commit_records_and_validates() -> Result<(), RenderError> {
+    let staged = format!("{STAGED_BINARY_PREFIX}{VERSION}");
+    let argv = || {
+        vec![
+            "sh".to_owned(),
+            "-c".to_owned(),
+            format!(
+                "curl \"$VELNOR_ASSET_URL\" -o {staged} && echo \"$VELNOR_ASSET_SHA256\" | sha256sum -c -"
+            ),
+        ]
+    };
+    let commit = "d".repeat(40);
+    let provenance = HelperProvenance::ReleaseAsset {
+        url: "https://example.invalid/r".to_owned(),
+        sha256: "c".repeat(64),
+        commit: Some(commit.clone()),
+    };
+    let step = provision_acquire_step(&provenance, argv())?;
+    let StepKind::Shell { env, .. } = &step.kind else {
+        panic!("acquire must be a shell step");
+    };
+    assert_eq!(
+        env.get(RELEASE_COMMIT_ENV).map(String::as_str),
+        Some(commit.as_str())
+    );
+    for bad in [
+        String::new(),
+        "xyz".to_owned(),
+        "A".repeat(40),
+        "c".repeat(39),
+    ] {
+        let provenance = HelperProvenance::ReleaseAsset {
+            url: "https://example.invalid/r".to_owned(),
+            sha256: "c".repeat(64),
+            commit: Some(bad.clone()),
+        };
+        assert!(
+            provision_acquire_step(&provenance, argv())
+                .is_err_and(|err| format!("{err:?}").contains("bad_release_commit")),
+            "malformed commit must fail: {bad:?}"
+        );
+    }
     Ok(())
 }
 

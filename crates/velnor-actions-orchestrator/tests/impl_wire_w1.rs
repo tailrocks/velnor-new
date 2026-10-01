@@ -107,6 +107,25 @@ fn w1_runner_label_matches_actionlint_bridge() {
 }
 
 #[test]
+fn w1_actionlint_bridge_uses_configured_runner_label() -> TestResult {
+    let config = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\nrunner_label = \"ubuntu-24.04\"\n";
+    let (_repo, yaml, actionlint) = preview_both(config)?;
+    assert!(
+        yaml.contains("runs-on: ubuntu-24.04"),
+        "workflow must use the configured label"
+    );
+    assert!(
+        actionlint.contains("    - ubuntu-24.04\n"),
+        "bridge must emit the configured label, never a hardcoded distro:\n{actionlint}"
+    );
+    assert!(
+        !actionlint.contains("ubuntu-26.04"),
+        "bridge must not leak the default distro:\n{actionlint}"
+    );
+    Ok(())
+}
+
+#[test]
 fn w1_lint_run_embeds_crate_tool_specs() -> TestResult {
     let (_repo, yaml, _alint) = preview_both(config_with_branch())?;
     let lint = window(&yaml, "  actionlint:", "  velnor-zzz:")?;
@@ -326,6 +345,7 @@ fn w1_actionlint_vars_emit_exact_v1_set() -> TestResult {
     );
     let input = ActionlintConfigInput::new("0.1.0")
         .with_workflow_path(WORKFLOW_PATH)
+        .with_runner_label(RUNNER_LABEL_BRIDGE)
         .with_config_variables(["API_BASE"]);
     let yaml = render_actionlint_yaml(&input)?.yaml;
     assert_eq!(

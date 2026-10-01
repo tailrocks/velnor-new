@@ -144,7 +144,7 @@ pub(crate) fn build_workflow(
         jobs,
     };
     let context = render_context(config, label, &version, &catalog)?;
-    let actionlint = actionlint_input(policy, &version);
+    let actionlint = actionlint_input(policy, &version, label);
     Ok(WorkflowPlan {
         ir,
         support,
@@ -289,10 +289,15 @@ fn render_context(
 }
 
 /// Actionlint input: generated workflow path plus policy-graded ignores.
-fn actionlint_input(policy: WorkflowPolicy, version: &str) -> ActionlintConfigInput {
+///
+/// The bridge label is the effective configured runner label (F2):
+/// the emitted `self-hosted-runner` entry must match `runs-on`, never
+/// a hardcoded distro.
+fn actionlint_input(policy: WorkflowPolicy, version: &str, label: &str) -> ActionlintConfigInput {
     let mut input = ActionlintConfigInput::new(version)
         .with_workflow_path(WORKFLOW_PATH)
-        .with_config_variables(wire_w1::declared_config_variables());
+        .with_config_variables(wire_w1::declared_config_variables())
+        .with_runner_label(label);
     input.policy = match policy {
         WorkflowPolicy::ConsumerV1 => IgnorePolicy::Consumer,
         WorkflowPolicy::VelnorRepositoryV1 => IgnorePolicy::VelnorProtected,

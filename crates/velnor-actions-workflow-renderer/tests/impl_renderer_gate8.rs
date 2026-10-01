@@ -1,13 +1,15 @@
 //! Gate-8 renderer cases: artifacts, manifest script, rehead, release.
-use velnor_actions_contract::{GeneratorValidation, WorkflowPolicy};
+use velnor_actions_contract::{GeneratorValidation, StepKind, WorkflowPolicy};
 use velnor_actions_workflow_renderer::steps::{
-    candidate_manifest_script, download_artifact_step, rehead_actionlint_marker,
-    upload_artifact_step,
+    ARTIFACT_RETENTION_DAYS, candidate_manifest_script, download_artifact_step,
+    rehead_actionlint_marker, upload_artifact_step,
 };
 use velnor_actions_workflow_renderer::{
     CANDIDATE_OUTPUT_DIR_EXPR, CANDIDATE_STAGE_DIR_EXPR, PRESEED_OUTPUT_DIR_EXPR,
-    PRESEED_STAGE_DIR_EXPR, RenderError, candidate_artifact_name, checkout_step, merge_step,
-    plan_step, preseed_download_step, preseed_upload_step, render_workflow_ir, write_request_step,
+    PRESEED_STAGE_DIR_EXPR, RenderError, candidate_artifact_name, checkout_step,
+    matrix_report_upload_step, matrix_report_upload_step_for, merge_step, plan_step,
+    preseed_download_step, preseed_upload_step, publish_plan_step, render_workflow_ir,
+    write_request_step,
 };
 
 use super::impl_renderer_fixtures::*;
@@ -21,6 +23,32 @@ fn artifact_steps_pin_actions_and_reject_empty() -> Result<(), RenderError> {
     assert_eq!(down, Ok("Download candidate".to_owned()));
     assert!(upload_artifact_step("", "p").is_err());
     assert!(download_artifact_step("n", "").is_err());
+    Ok(())
+}
+
+#[test]
+fn every_upload_constructor_carries_typed_retention_days() -> Result<(), RenderError> {
+    let name = candidate_artifact_name("x86_64-unknown-linux-gnu")?;
+    let steps = [
+        upload_artifact_step(&name, "${{ runner.temp }}/velnor/out")?,
+        matrix_report_upload_step()?,
+        matrix_report_upload_step_for("m-0123456789abcdef", "Upload matrix report")?,
+        publish_plan_step()?,
+        preseed_upload_step()?,
+    ];
+    assert_eq!(ARTIFACT_RETENTION_DAYS, 30);
+    for step in &steps {
+        let StepKind::Action { uses, with } = &step.kind else {
+            panic!("upload must be an action step: {}", step.name);
+        };
+        assert!(uses.starts_with("actions/upload-artifact@"), "{uses}");
+        assert_eq!(
+            with.get("retention-days").map(String::as_str),
+            Some(ARTIFACT_RETENTION_DAYS.to_string()).as_deref(),
+            "{}",
+            step.name
+        );
+    }
     Ok(())
 }
 

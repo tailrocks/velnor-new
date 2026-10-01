@@ -3,11 +3,13 @@
 //! The final job's retrieve step runs before request assembly: it reads
 //! the downloaded plan, then downloads each expected matrix artifact by exact
 //! derived name with pinned `gh` (`gh run download <run-id> --name
-//! <artifact-id> --dir reports/<artifact-id>`), never a wildcard. One
-//! failed download skips that leg (merge judges `not_run`); a missing
-//! or unparsable plan downloads nothing and still exits success so the
-//! merge reaches its `planning_failed` verdict. Only unusable
-//! environment (no runner temp, no numeric run ID) fails outright.
+//! <artifact-id> --dir reports/<artifact-id>`), never a wildcard. Each
+//! leg retries transient failures up to [`MAX_DOWNLOAD_ATTEMPTS`];
+//! persistent failure skips that leg (merge judges `not_run`). A
+//! missing or unparsable plan downloads nothing and still exits
+//! success so the merge reaches its `planning_failed` verdict. Only
+//! unusable environment (no runner temp, no numeric run ID) fails
+//! outright.
 
 // Wired here so the shared reader compiles without touching `lib.rs`.
 #[path = "staged_reads.rs"]
@@ -27,6 +29,33 @@ use crate::internal::{internal, internal_contract};
 
 /// Retrieve operation tag (single-sourced from the renderer protocol).
 pub use velnor_actions_workflow_renderer::steps::FETCH_OPERATION as FETCH_OP;
+
+/// Bounded per-artifact download attempts (F5).
+///
+/// Transient `gh` failures retry up to this many attempts per leg;
+/// persistent failures skip the leg (the merge judges `not_run`).
+/// Replaces the old `continue-on-error` fetch tail: retries absorb
+/// flakes, while hard environment failures fail the job instead of
+/// being masked.
+pub(crate) const MAX_DOWNLOAD_ATTEMPTS: u32 = 3;
+
+/// Attempt one download up to the bounded retry limit.
+///
+/// Returns success plus the attempts spent (1 on first-try success,
+/// [`MAX_DOWNLOAD_ATTEMPTS`] on persistent failure). Pure over the
+/// attempt closure so the bound is unit-testable without `gh`.
+pub(crate) fn download_with_retry(mut attempt: impl FnMut() -> bool) -> (bool, u32) {
+    let mut attempts = 0u32;
+    loop {
+        attempts += 1;
+        if attempt() {
+            return (true, attempts);
+        }
+        if attempts >= MAX_DOWNLOAD_ATTEMPTS {
+            return (false, attempts);
+        }
+    }
+}
 
 /// Retrieve every plan-expected matrix artifact for this run.
 ///
@@ -84,7 +113,10 @@ pub(crate) fn retrieve_reports_to(run_id: u64, run_dir: &Path) -> usize {
         let Ok(args) = retrieve_args(run_id, artifact_id, &dir, &repo) else {
             continue;
         };
-        if crate::cover::shard::BaselineLookup::run(&catalog, run_dir, args).is_ok() {
+        let (downloaded, _) = download_with_retry(|| {
+            crate::cover::shard::BaselineLookup::run(&catalog, run_dir, args.clone()).is_ok()
+        });
+        if downloaded {
             retrieved += 1;
         }
     }
@@ -349,3 +381,6 @@ fn expected_artifact_ids(plan: &serde_json::Value) -> Vec<&str> {
 #[cfg(test)]
 #[path = "retrieve_reports_tests.rs"]
 mod retrieve_reports_tests;
+#[cfg(test)]
+#[path = "retrieve_retry_tests.rs"]
+mod retrieve_retry_tests;

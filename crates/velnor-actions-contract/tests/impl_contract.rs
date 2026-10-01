@@ -266,6 +266,7 @@ fn manifest_schemas_validate_and_lookup_targets() -> Result<(), ContractError> {
         schema: 1,
         version: "0.1.0".to_owned(),
         repository: "tailrocks/velnor-new".to_owned(),
+        commit: "ab".repeat(20),
         targets: vec![TargetRecord {
             target: "x86_64-unknown-linux-gnu".to_owned(),
             artifact: "https://github.com/tailrocks/velnor-new/releases/download/v0.1.0/velnor-actions-0.1.0-x86_64-unknown-linux-gnu"

@@ -37,7 +37,8 @@ fn manifest_with_version(version: &str) -> String {
     .collect::<Vec<_>>()
     .join(",");
     format!(
-        "{{\"schema\":1,\"version\":\"{version}\",\"repository\":\"tailrocks/velnor-new\",\"targets\":[{targets}]}}"
+        "{{\"schema\":1,\"version\":\"{version}\",\"repository\":\"tailrocks/velnor-new\",\"commit\":\"{}\",\"targets\":[{targets}]}}",
+        "d".repeat(40)
     )
 }
 
@@ -62,8 +63,9 @@ fn render_consumer_yaml(manifest: &str) -> Result<String, Box<dyn std::error::Er
 fn expected_acquire_block() -> String {
     let version = env!("CARGO_PKG_VERSION");
     let sha = "c".repeat(64);
+    let commit = "d".repeat(40);
     format!(
-        "- name: Acquire Velnor\n        env:\n          ACTIONS_ID_TOKEN_REQUEST_TOKEN: \"\"\n          ACTIONS_ID_TOKEN_REQUEST_URL: \"\"\n          ACTIONS_RUNTIME_TOKEN: \"\"\n          CARGO_REGISTRY_TOKEN: \"\"\n          GH_CONFIG_DIR: \"\"\n          GH_HOST: \"\"\n          GH_TOKEN: \"\"\n          GITHUB_TOKEN: \"\"\n          MISE_GITHUB_TOKEN: \"\"\n          NODE_AUTH_TOKEN: \"\"\n          NPM_TOKEN: \"\"\n          VELNOR_ASSET_SHA256: {sha}\n          VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v{version}/velnor-actions-{version}-x86_64-unknown-linux-gnu\n        run: \"sh -c 'mkdir -p \\\"$RUNNER_TEMP/velnor/bin\\\" && curl -fsSL --proto '\\\\''=https'\\\\'' --tlsv1.2 \\\"$VELNOR_ASSET_URL\\\" -o \\\"$RUNNER_TEMP/velnor/bin/velnor-actions-{version}\\\" && echo \\\"$VELNOR_ASSET_SHA256  $RUNNER_TEMP/velnor/bin/velnor-actions-{version}\\\" | sha256sum -c - && chmod +x \\\"$RUNNER_TEMP/velnor/bin/velnor-actions-{version}\\\"'\"",
+        "- name: Acquire Velnor\n        env:\n          ACTIONS_ID_TOKEN_REQUEST_TOKEN: \"\"\n          ACTIONS_ID_TOKEN_REQUEST_URL: \"\"\n          ACTIONS_RUNTIME_TOKEN: \"\"\n          CARGO_REGISTRY_TOKEN: \"\"\n          GH_CONFIG_DIR: \"\"\n          GH_HOST: \"\"\n          GH_TOKEN: \"\"\n          GITHUB_TOKEN: \"\"\n          MISE_GITHUB_TOKEN: \"\"\n          NODE_AUTH_TOKEN: \"\"\n          NPM_TOKEN: \"\"\n          VELNOR_ASSET_SHA256: {sha}\n          VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v{version}/velnor-actions-{version}-x86_64-unknown-linux-gnu\n          VELNOR_RELEASE_COMMIT: {commit}\n        run: \"sh -c 'mkdir -p \\\"$RUNNER_TEMP/velnor/bin\\\" && curl -fsSL --proto '\\\\''=https'\\\\'' --tlsv1.2 \\\"$VELNOR_ASSET_URL\\\" -o \\\"$RUNNER_TEMP/velnor/bin/velnor-actions-{version}\\\" && echo \\\"$VELNOR_ASSET_SHA256  $RUNNER_TEMP/velnor/bin/velnor-actions-{version}\\\" | sha256sum -c - && chmod +x \\\"$RUNNER_TEMP/velnor/bin/velnor-actions-{version}\\\"'\"",
     )
 }
 

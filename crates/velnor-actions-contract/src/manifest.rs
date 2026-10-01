@@ -21,6 +21,12 @@ pub struct ReleaseManifest {
     pub version: String,
     /// Canonical repository identity.
     pub repository: String,
+    /// Full 40-char source commit SHA (lowercase hex) the release was cut from.
+    ///
+    /// Required (F3): manifests without it are rejected at parse, and
+    /// malformed values fail validation. The Acquire step records this
+    /// commit so reviewers can verify the pinned source.
+    pub commit: String,
     /// Per-target asset records.
     pub targets: Vec<TargetRecord>,
 }
@@ -150,6 +156,9 @@ impl ReleaseManifest {
                 "repository",
                 "unexpected_repository",
             ));
+        }
+        if self.commit.len() != 40 || !is_lower_hex(&self.commit) {
+            return Err(ContractError::config(file, "commit", "malformed_commit"));
         }
         if self.targets.is_empty() {
             return Err(ContractError::config(file, "targets", "empty_targets"));

@@ -275,6 +275,7 @@ EXPECTED_ACTIONS = {
     "actions/cache/save": "CACHE_ACTION",
     "jdx/mr-boxington-action": "MR_BOXINGTON_ACTION",
     "asamarts/alint": "ALINT_ACTION",
+    "Swatinem/rust-cache": "RUST_CACHE_ACTION",
 }
 
 
@@ -904,10 +905,13 @@ def github_tag(payload):
         return payload["tag_name"]
     if isinstance(payload, list):
         for release in payload:
-            if isinstance(release, dict) and not release.get("draft") \
-                    and not release.get("prerelease") \
-                    and release.get("tag_name"):
-                return release["tag_name"]
+            if not isinstance(release, dict) or release.get("draft") \
+                    or release.get("prerelease"):
+                continue
+            # Release lists carry `tag_name`; tag lists carry `name`.
+            tag = release.get("tag_name") or release.get("name")
+            if tag:
+                return tag
     return None
 
 

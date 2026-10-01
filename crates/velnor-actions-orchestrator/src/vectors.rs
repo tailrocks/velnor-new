@@ -185,7 +185,8 @@ fn validator_argv(
 /// Every step carries the scrubbed execution env plus the unset wrapper:
 /// custom tasks run repository Mise configuration, so ambient tokens
 /// must stop here; the step env alone cannot shadow runner-injected
-/// credentials (D3).
+/// credentials (D3). The env also inherits `MISE_LOCKFILE=0` (F6,
+/// tooling-input §1.1): CI never writes the project's lockfile.
 /// # Errors
 ///
 /// Returns a contract error when a name fails the task-name rule.

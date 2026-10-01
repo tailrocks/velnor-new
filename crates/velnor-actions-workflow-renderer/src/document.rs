@@ -318,9 +318,10 @@ fn step_to_yaml(
                 steps::scan_for_private_subcommands(condition)?;
                 entries.push(("if".to_owned(), Yaml::str(condition.clone())));
             }
-            if job_id == FINAL_JOB_ID && operation == steps::FETCH_OPERATION {
-                entries.push(("continue-on-error".to_owned(), Yaml::Bool(true)));
-            }
+            // No `continue-on-error` on the fetch step (F5): the helper
+            // retries each leg bounded and still exits success on
+            // per-leg failure, so the merge judges honestly; only hard
+            // environment failures fail the job, unmasked.
             let channel = if job_id == FINAL_JOB_ID && target == steps::MERGE_OPERATION {
                 needs_envs
             } else {

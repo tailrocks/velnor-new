@@ -27,26 +27,28 @@ consumer generation.
 Every official Velnor release MUST publish:
 
 1. One immutable `velnor-actions` binary asset per supported target.
-2. A versioned release manifest listing each target, exact asset URL, and
-   SHA-256 digest.
+2. A versioned release manifest listing each target, exact asset URL,
+   SHA-256 digest, and the full source commit SHA the release was cut
+   from (`commit`, required since F3).
 
 Every consumer repository MUST commit a byte-identical copy of that
 published manifest at `.velnor/release-manifest.json`. When any
 `velnor-actions` binary generates consumer workflows, it reads the
 committed file and validates it — schema, version, repository,
-supported targets, immutable URLs — with no network access during
-generation; it then embeds the runner-target URL and digest in
-generated workflow steps. The workflow MUST download that exact
-asset and verify SHA-256 before invoking it. The generating binary
-and the checking binary read the same committed file, so identical
-output follows by construction. The release manifest record is
-selected by exact version; generation MUST NOT query a floating
-`latest` endpoint.
+commit, supported targets, immutable URLs — with no network access
+during generation; it then embeds the runner-target URL, digest, and
+recorded commit in generated workflow steps (`VELNOR_ASSET_URL`,
+`VELNOR_ASSET_SHA256`, `VELNOR_RELEASE_COMMIT` on `Acquire Velnor`).
+The workflow MUST download that exact asset and verify SHA-256
+before invoking it. The generating binary and the checking binary
+read the same committed file, so identical output follows by
+construction. The release manifest record is selected by exact
+version; generation MUST NOT query a floating `latest` endpoint.
 
 The committed file is supply-chain-critical: unlike `config.toml` or
 the workflow YAML, it selects executed code, so review MUST verify
-its version, repository, artifact URLs, and digests against the
-published release, not just its shape. The mechanism guarantees
+its version, repository, commit, artifact URLs, and digests against
+the published release, not just its shape. The mechanism guarantees
 self-consistency (both sides read one file) and fail-closed behavior
 (absent, unreadable, or invalid files fail generation), and the
 manifest validation binds every artifact URL to the exact official
@@ -56,12 +58,45 @@ a binary cannot embed a manifest containing its own SHA-256, so a
 compile-time bake can never cover the seed binary, and seed and
 release assets need no bake.
 
+## 2.1. Release process: immutable tags and attestations (F3)
+
+Code enforces the manifest shape (`commit` required, 40 lowercase
+hex) and records the pinned commit in generated steps; the rest is
+release PROCESS, documented here rather than faked in code. No
+generator code verifies signatures or attestations today.
+
+The release manager MUST follow this exact process for every
+official release:
+
+1. Cut the release from a known-good commit on the default branch;
+   record that full SHA as the manifest `commit`.
+2. Create the version tag (`vX.Y.Z`) pointing at that commit and push
+   it exactly once. Tags are IMMUTABLE: never move, delete, or
+   re-publish a version tag. A bad release gets a new patch version,
+   never a re-pointed tag. Same-version asset replacement is
+   forbidden for the same reason.
+3. Upload one binary asset per supported target plus the release
+   manifest; verify each asset's SHA-256 matches the manifest before
+   publishing.
+4. Produce Sigstore/SLSA provenance for every asset (build
+   attestation bound to the source commit and the release workflow)
+   and attach it to the release. Until generator-side attestation
+   verification lands, reviewers MUST manually verify each
+   attestation against the manifest `commit` before approving a
+   manifest update.
+5. Open the manifest-update change with the published manifest bytes;
+   a second reviewer MUST confirm the committed file is
+   byte-identical to the published release and that `commit` equals
+   the release tag's commit.
+
 Residual risks, explicitly scoped as future work (not silently
 dropped). Same-version seed rollback: URL binding proves an artifact
 URL names this version's official asset, but a committed seed
 replaced at the same version (or a re-published tag upstream) is
-caught only by reviewer comparison against the published release.
-Unsigned seeds: no signature or attestation is verified yet. The
+caught only by reviewer comparison against the published release
+(process step 5 until automated). Unsigned seeds: no signature or
+attestation is verified by code yet (process step 4 until
+generator-side Sigstore/SLSA verification lands). The remaining
 follow-ups are: Sigstore/SLSA attestation verification for release
 assets, a published-vs-committed comparison job proving the
 committed manifest is byte-identical to the published release, and
