@@ -69,11 +69,14 @@ pub(crate) fn task_driver_tools(use_mbx: bool) -> Vec<PinnedTool> {
 ///
 /// Driver toolchain plus the `generate` validators plus Nextest when used.
 /// The validators install here because crate test suites execute `generate`
-/// (CLI parity) and staged-validation binaries (zizmor staging) directly:
-/// run 36751323928 failed every such leg with `couldn't exec process` when
-/// only the plan job carried them. Dedicated validator jobs remain the lint
-/// gates for the committed workflow; this set covers what the job executes,
-/// tests included. Order follows `PinnedTool::ALL`.
+/// (CLI parity) and staged-validation binaries (zizmor staging) directly,
+/// and `generate` shells out to all three validators (actionlint,
+/// shellcheck, zizmor): run 36751323928 failed every such leg with
+/// `couldn't exec process` when only the plan job carried them. Dedicated
+/// validator jobs remain the lint gates for the committed workflow; this
+/// set covers what the job executes, tests included. The set is exact and
+/// pinned by test: driver, validators, optional Nextest, nothing else.
+/// Order follows `PinnedTool::ALL`.
 ///
 /// # Errors
 ///
