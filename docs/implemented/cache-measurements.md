@@ -176,10 +176,13 @@ UNMEASURED / open: MBX objects seed (needs a default-branch P08 run
 for an empty restore); eviction over time (needs a week-scale
 sequential sample).
 ANSWERED: why the Mise built-in cache never saved — the pinned
-`jdx/mise-action` saves only inside its `install` leg, which Velnor
-disables (`install: false`), so the push-gated `cache_save`
-expression never saved on any event (all 110 runs to date are
-`pull_request`; push triggers only on `main`, unmerged). Setups are
-now restore-only and elected writers carry explicit push-gated `Save
-Mise tools` steps; warmth still needs one post-merge `main` push to
-seed the `mise-v1-*` entries.
+`jdx/mise-action@v5.0.0` (`9149ea8`) saves only inside its `install`
+leg (`src/index.ts:run()` gates `saveCache` on the `install` input;
+`action.yml` offers no PR-scoped save input and the source has zero
+`pull_request` handling), which Velnor disables (`install: false`),
+so the push-gated `cache_save` expression never saved on any event
+(all 110 runs to date are `pull_request`; push triggers only on
+`main`, unmerged). Setups are now restore-only and elected writers
+carry explicit push-gated `Save Mise tools` steps; warmth still needs
+one post-merge `main` push to seed the `mise-v1-*` entries. Full
+per-action PR-save verdict: gate-4 doc R13 bullet.
