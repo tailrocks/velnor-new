@@ -29,7 +29,7 @@ fn write_request_materializes_pull_request() -> TestResult {
     let base = "b".repeat(64);
     let head = "a".repeat(64);
     let payload = format!(
-        "{{\"pull_request\":{{\"base\":{{\"sha\":\"{base}\"}},\"head\":{{\"sha\":\"{head}\"}}}}}}"
+        "{{\"pull_request\":{{\"base\":{{\"sha\":\"{base}\"}},\"head\":{{\"sha\":\"{head}\",\"repo\":{{\"fork\":false}}}}}}}}"
     );
     let file = dir
         .path()

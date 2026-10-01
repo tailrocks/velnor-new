@@ -29,3 +29,44 @@ fn write_request_routes_fork_pull_requests_to_fork() -> TestResult {
     }
     Ok(())
 }
+
+#[test]
+fn write_request_fails_closed_without_a_fork_flag() -> TestResult {
+    let dir = TempDir::new()?;
+    let base = "b".repeat(40);
+    let head = "a".repeat(40);
+    for (name, payload) in [
+        (
+            "missing",
+            serde_json::json!({"pull_request": {"base": {"sha": base}, "head": {"sha": head}}}),
+        ),
+        (
+            "non_bool",
+            serde_json::json!({"pull_request": {"base": {"sha": base}, "head": {"sha": head, "repo": {"fork": "no"}}}}),
+        ),
+    ] {
+        let file = dir.path().join(name).join("plan-v1-request.json");
+        let error = write_request_parts(&file, "pull_request", &payload.to_string(), None)
+            .expect_err("missing/non-bool fork flag must fail closed");
+        assert!(
+            error.to_string().contains("indeterminate_fork"),
+            "unexpected error for {name}: {error}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn write_request_rejects_comment_triggers() -> TestResult {
+    let dir = TempDir::new()?;
+    for event in ["issue_comment", "pull_request_review_comment"] {
+        let file = dir.path().join(event).join("plan-v1-request.json");
+        let error = write_request_parts(&file, event, "{}", None)
+            .expect_err("comment triggers must fail closed");
+        assert!(
+            error.to_string().contains("unsupported_event"),
+            "unexpected error for {event}: {error}"
+        );
+    }
+    Ok(())
+}

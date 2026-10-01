@@ -96,7 +96,10 @@ fn bootstrap_binds_exactly_one_env_token() -> Result<(), RenderError> {
             shell(
                 "Publish",
                 &publish_argv(RELEASE_BOOTSTRAP_CONFIG_PATH),
-                &[("CARGO_REGISTRY_TOKEN", "${{ secrets.CARGO_REGISTRY_TOKEN }}")],
+                &[(
+                    "CARGO_REGISTRY_TOKEN",
+                    "${{ secrets.CARGO_REGISTRY_TOKEN }}",
+                )],
             )?,
         ],
         Some(&gate),

@@ -97,14 +97,7 @@ pub fn write_request_parts(
     }
     let payload: serde_json::Value =
         serde_json::from_str(payload_json).map_err(|_| internal("malformed_event_payload"))?;
-    let event = match event_name {
-        "pull_request" if is_fork_pull_request(&payload) => WorkflowEvent::Fork,
-        "pull_request" => WorkflowEvent::PullRequest,
-        "push" => WorkflowEvent::Push,
-        "merge_group" => WorkflowEvent::MergeGroup,
-        "local" => WorkflowEvent::Local,
-        _ => return Err(internal("unsupported_event")),
-    };
+    let event = workflow_event_for(event_name, &payload)?;
     let (base, head) = request_refs(event, &payload, github_sha)?;
     let request = EventRequest {
         schema: SCHEMA,
@@ -290,16 +283,37 @@ fn request_op(path: &Path) -> Result<String, OrchestratorError> {
     }
 }
 
-/// True when a `pull_request` payload comes from a forked repository.
+/// Resolve one GitHub event name plus payload to a workflow event.
 ///
+/// Shared by plan-request materialization and merge-time actual-event
+/// capture so the two layers can never disagree about fork handling.
 /// GitHub sends fork PRs as `pull_request` events (no distinct event
-/// name); the head repo's `fork` flag is the only signal. Without this
-/// the `Fork` variant is unreachable and fork runs mislabel as same-repo
-/// PRs. A missing flag defaults to same-repo.
-fn is_fork_pull_request(payload: &serde_json::Value) -> bool {
-    payload["pull_request"]["head"]["repo"]["fork"]
-        .as_bool()
-        .unwrap_or(false)
+/// name); the head repo's `fork` flag is the only signal, and every
+/// real `pull_request` payload carries it. A missing or non-boolean
+/// flag fails closed (`indeterminate_fork`): defaulting to same-repo
+/// would launder an untrusted fork run into the trusted PR scope.
+/// Comment triggers (`issue_comment` and friends) have no mapping and
+/// fail closed as `unsupported_event`: no comment path is trusted.
+pub(crate) fn workflow_event_for(
+    event_name: &str,
+    payload: &serde_json::Value,
+) -> Result<WorkflowEvent, OrchestratorError> {
+    match event_name {
+        "pull_request" => match fork_flag(payload) {
+            Some(true) => Ok(WorkflowEvent::Fork),
+            Some(false) => Ok(WorkflowEvent::PullRequest),
+            None => Err(internal("indeterminate_fork")),
+        },
+        "push" => Ok(WorkflowEvent::Push),
+        "merge_group" => Ok(WorkflowEvent::MergeGroup),
+        "local" => Ok(WorkflowEvent::Local),
+        _ => Err(internal("unsupported_event")),
+    }
+}
+
+/// The head repo's `fork` flag, when present and boolean.
+fn fork_flag(payload: &serde_json::Value) -> Option<bool> {
+    payload["pull_request"]["head"]["repo"]["fork"].as_bool()
 }
 
 /// Base/head refs for one event: PR `base.sha`/`head.sha`, merge-group

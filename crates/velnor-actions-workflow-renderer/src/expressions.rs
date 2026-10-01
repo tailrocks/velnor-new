@@ -20,10 +20,11 @@ pub(crate) fn check_name_content(name: &str) -> Result<(), RenderError> {
             "expression_in_name:{name}"
         )));
     }
-    if name.chars().any(|ch| ch == '\0' || ch == '\n' || ch == '\r') {
-        return Err(RenderError::BadCommand(format!(
-            "control_in_name:{name}"
-        )));
+    if name
+        .chars()
+        .any(|ch| ch == '\0' || ch == '\n' || ch == '\r')
+    {
+        return Err(RenderError::BadCommand(format!("control_in_name:{name}")));
     }
     Ok(())
 }
@@ -72,9 +73,12 @@ const WITH_EXPRESSIONS: [&str; 4] = [
 
 /// True for a `matrix.*` field reference (both layers allow the family).
 fn is_matrix_field(inner: &str) -> bool {
-    inner
-        .strip_prefix("matrix.")
-        .is_some_and(|field| !field.is_empty() && field.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_'))
+    inner.strip_prefix("matrix.").is_some_and(|field| {
+        !field.is_empty()
+            && field
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'_')
+    })
 }
 
 /// True for a `hashFiles('...')` call over quoted fixed paths.
@@ -88,7 +92,8 @@ fn is_hash_files(inner: &str) -> bool {
         .is_some_and(|files| {
             !files.is_empty()
                 && files.bytes().all(|b| {
-                    b.is_ascii_alphanumeric() || matches!(b, b'\'' | b',' | b'.' | b'/' | b'-' | b'_')
+                    b.is_ascii_alphanumeric()
+                        || matches!(b, b'\'' | b',' | b'.' | b'/' | b'-' | b'_')
                 })
         })
 }
@@ -97,15 +102,11 @@ fn is_hash_files(inner: &str) -> bool {
 /// # Errors
 pub(crate) fn check_env_value(key: &str, value: &str) -> Result<(), RenderError> {
     let Some(spans) = expression_spans(value) else {
-        return Err(RenderError::BadCommand(format!(
-            "bad_env_expression:{key}"
-        )));
+        return Err(RenderError::BadCommand(format!("bad_env_expression:{key}")));
     };
     for inner in spans {
         if !ENV_EXPRESSIONS.contains(&inner) && !is_matrix_field(inner) {
-            return Err(RenderError::BadCommand(format!(
-                "bad_env_expression:{key}"
-            )));
+            return Err(RenderError::BadCommand(format!("bad_env_expression:{key}")));
         }
     }
     Ok(())
@@ -114,7 +115,10 @@ pub(crate) fn check_env_value(key: &str, value: &str) -> Result<(), RenderError>
 /// Reject bad action `with:` keys: empty, `${{`, or control characters.
 /// # Errors
 pub(crate) fn check_with_key(key: &str) -> Result<(), RenderError> {
-    if key.is_empty() || key.contains("${{") || key.chars().any(|ch| ch == '\0' || ch == '\n' || ch == '\r') {
+    if key.is_empty()
+        || key.contains("${{")
+        || key.chars().any(|ch| ch == '\0' || ch == '\n' || ch == '\r')
+    {
         return Err(RenderError::BadActionRef(format!("bad_with_key:{key}")));
     }
     Ok(())
