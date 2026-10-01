@@ -69,32 +69,6 @@ pub(crate) fn normalize_checkout_path(path: &str) -> Result<String, ContractErro
     normalize_posix_path(path)
 }
 
-/// Stable component identity from a raw Cargo package ID plus manifest.
-///
-/// Raw Cargo IDs are diagnostic-only: absolute checkout paths embedded in
-/// `path+file://` or `registry+` qualifiers never enter an identity.
-/// Plain IDs (`demo`, `demo 0.1.0`) pass through verbatim; qualified IDs
-/// reduce to their trailing `name@version` fragment; empty IDs anchor to
-/// the owning manifest (or `workspace` at the root).
-pub(crate) fn normalized_component_id(package_id: &str, manifest: &str) -> String {
-    if package_id.is_empty() {
-        let root = manifest
-            .rsplit_once('/')
-            .map_or("", |(dir, _)| if dir.is_empty() { "" } else { dir });
-        if root.is_empty() {
-            return "workspace".to_owned();
-        }
-        return root.to_owned();
-    }
-    if let Some(fragment) = package_id.rsplit('#').next()
-        && fragment.contains('@')
-        && package_id.contains("://")
-    {
-        return fragment.to_owned();
-    }
-    package_id.to_owned()
-}
-
 /// Release triple for the build host; unknown pairs keep `{arch}-{os}`.
 pub(crate) fn map_release_triple(arch: &str, os: &str) -> String {
     match (arch, os) {
@@ -272,31 +246,6 @@ mod tests {
         for bad in ["", "/abs/path", "a/../b", "a\\b", "a\0b", "a\nb"] {
             assert!(normalize_checkout_path(bad).is_err(), "{bad:?}");
         }
-    }
-
-    #[test]
-    fn component_ids_shed_checkout_paths() {
-        assert_eq!(normalized_component_id("demo", "Cargo.toml"), "demo");
-        assert_eq!(
-            normalized_component_id("demo 0.1.0", "Cargo.toml"),
-            "demo 0.1.0"
-        );
-        assert_eq!(
-            normalized_component_id("path+file:///Users/dev/proj#demo@0.1.0", "Cargo.toml"),
-            "demo@0.1.0"
-        );
-        assert_eq!(
-            normalized_component_id(
-                "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.0",
-                "Cargo.toml"
-            ),
-            "serde@1.0.0"
-        );
-        assert_eq!(normalized_component_id("", "Cargo.toml"), "workspace");
-        assert_eq!(
-            normalized_component_id("", "crates/a/Cargo.toml"),
-            "crates/a"
-        );
     }
 
     #[test]

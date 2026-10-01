@@ -1,17 +1,17 @@
-//! Group identities: canonical graph, bundles, lanes, toolchains (P03).
+//! Task identities: canonical graph, bundles, lanes, toolchains (P03).
 //! Declared via `#[path]` from `internal_plan.rs` (no `lib.rs` edit).
 
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::cachekey::{
     FormatInputs, LaneInputs, ToolchainInputs, cache_format_id, lane_id, toolchain_id,
 };
-use velnor_actions_contract::{ContractError, digest_b3};
-use velnor_actions_mise::{PinnedTool, ToolCatalog};
-use velnor_actions_rust::{CompileDriver, DepKind, TaskGroup, TestRunner, WorkspaceRecord};
-
-use super::snapshot::{
-    ExecutionSnapshot, canonical_digest, normalized_component_id, platform_id_for,
+use velnor_actions_contract::{
+    ContractError, ProposedTask, Stack, component_id_for_unit, digest_b3,
 };
+use velnor_actions_mise::{PinnedTool, ToolCatalog};
+use velnor_actions_rust::{CompileDriver, DepKind, WorkspaceRecord, tool_needs};
+
+use super::snapshot::{ExecutionSnapshot, canonical_digest, platform_id_for};
 use crate::discover::Discovery;
 use crate::toolcheck::ToolInputCheck;
 
@@ -50,8 +50,8 @@ pub(crate) fn snapshot_graph_for(record: &WorkspaceRecord) -> SnapshotGraph {
             .iter()
             .find(|package| package.id == id)
             .map_or_else(
-                || normalized_component_id(id, ""),
-                |package| normalized_component_id(id, &package.manifest),
+                || component_id_for_unit(id, ""),
+                |package| component_id_for_unit(id, &package.manifest),
             )
     };
     let mut members: Vec<String> = record.members.iter().map(|id| manifest_of(id)).collect();
@@ -100,7 +100,7 @@ pub(crate) fn tool_config_digest(checks: &[ToolInputCheck]) -> String {
     canonical_digest(&pairs).unwrap_or_else(|_| digest_b3(b"config_error"))
 }
 
-/// Owned identity-extension inputs for one group (PAR-3.4, PAR-4.8).
+/// Owned identity-extension inputs for one task (PAR-3.4, PAR-4.8).
 #[derive(Debug, Clone)]
 pub(crate) struct ExtensionBundle {
     /// Cargo package ID.
@@ -167,17 +167,17 @@ impl ExtensionBundle {
 pub(crate) fn extension_bundle_with_snapshot(
     snapshot: &ExecutionSnapshot,
     discovery: &Discovery,
-    group: &TaskGroup,
+    task: &ProposedTask,
     root: Option<&std::path::Path>,
     nextest_config: Option<&str>,
 ) -> ExtensionBundle {
-    let manifest = super::manifest_for_key(&group.manifest_key);
-    let workspace_id = snapshot.workspace_id_for(&group.package_id, &manifest);
-    let graph_digest = snapshot.graph_digest_for(&group.package_id, &manifest);
+    let manifest = task.identity.unit_path.clone();
+    let workspace_id = snapshot.workspace_id_for(&task.identity.unit_id, &manifest);
+    let graph_digest = snapshot.graph_digest_for(&task.identity.unit_id, &manifest);
     let mut bundle = ExtensionBundle {
-        package_id: group.package_id.clone(),
+        package_id: task.identity.unit_id.clone(),
         workspace_id,
-        profile: group.configuration.clone(),
+        profile: task.configuration.clone(),
         manifest,
         graph_digest,
         targets: Vec::new(),
@@ -189,8 +189,8 @@ pub(crate) fn extension_bundle_with_snapshot(
     };
     for workspace in &discovery.workspaces {
         for package in &workspace.record.packages {
-            let owned = package.id == group.package_id
-                || (group.package_id.is_empty() && package.manifest == bundle.manifest);
+            let owned = package.id == task.identity.unit_id
+                || (task.identity.unit_id.is_empty() && package.manifest == bundle.manifest);
             if !owned {
                 continue;
             }
@@ -212,7 +212,7 @@ pub(crate) fn extension_bundle_with_snapshot(
     bundle
 }
 
-/// Platform identity for one group via [`platform_id_for`].
+/// Platform identity for one task via [`platform_id_for`].
 ///
 /// # Errors
 ///
@@ -220,9 +220,9 @@ pub(crate) fn extension_bundle_with_snapshot(
 /// unsupported execution targets; neither ever defaults silently.
 pub(crate) fn platform_id_for_group(
     label: &str,
-    group: &TaskGroup,
+    task: &ProposedTask,
 ) -> Result<String, ContractError> {
-    let target = if group.target == "host" {
+    let target = if task.identity.target == "host" {
         velnor_actions_contract::target_for_runner_label(label).ok_or_else(|| {
             ContractError::identity(
                 "runner_label",
@@ -230,7 +230,7 @@ pub(crate) fn platform_id_for_group(
             )
         })?
     } else {
-        group.target.as_str()
+        task.identity.target.as_str()
     };
     platform_id_for(label, target)
 }
@@ -248,43 +248,40 @@ pub(crate) fn writer_lane_for(task_id: &str) -> String {
 }
 
 /// Configuration digest for lane identity: config plus target and flags.
-fn lane_config_digest(group: &TaskGroup) -> String {
-    let mut features = group.features.clone();
+fn lane_config_digest(task: &ProposedTask) -> String {
+    let mut features = task.identity.features.clone();
     features.sort();
-    let mut flags = group.target_flags.clone();
+    let mut flags = task.identity.flags.clone();
     flags.sort();
     canonical_digest(&serde_json::json!({
-        "configuration": group.configuration,
-        "target": group.target,
+        "configuration": task.configuration,
+        "target": task.identity.target,
         "features": features,
         "flags": flags,
-        "driver": group.compile_driver.as_str(),
-        "runner": group.test_runner.as_str(),
+        "driver": task.identity.compile_driver,
+        "runner": task.identity.test_runner,
     }))
     .unwrap_or_else(|_| digest_b3(b"lane_config_error"))
 }
 
-/// Lane identity inputs for one group: responsibility and config.
-pub(crate) fn lane_inputs_for(group: &TaskGroup, workspace_id: &str) -> LaneInputs {
+/// Lane identity inputs for one task: responsibility and config.
+pub(crate) fn lane_inputs_for(task: &ProposedTask, workspace_id: &str) -> LaneInputs {
     LaneInputs {
         workspace_id: workspace_id.to_owned(),
-        component_id: normalized_component_id(
-            &group.package_id,
-            &super::manifest_for_key(&group.manifest_key),
-        ),
-        task_kind: group.kind.as_str().to_owned(),
-        configuration: lane_config_digest(group),
-        writer_lane: writer_lane_for(&group.task_id),
+        component_id: component_id_for_unit(&task.identity.unit_id, &task.identity.unit_path),
+        task_kind: task.task_kind.clone(),
+        configuration: lane_config_digest(task),
+        writer_lane: writer_lane_for(&task.task_id),
     }
 }
 
-/// Lane identity digest, total over any group.
+/// Lane identity digest, total over any task.
 ///
 /// The centralized [`lane_id`] validates first; hostile inputs that fail
 /// validation fall back to a plain digest over the same fields so two
 /// distinct responsibilities still never collide.
-pub(crate) fn lane_id_for(group: &TaskGroup, workspace_id: &str) -> String {
-    let inputs = lane_inputs_for(group, workspace_id);
+pub(crate) fn lane_id_for(task: &ProposedTask, workspace_id: &str) -> String {
+    let inputs = lane_inputs_for(task, workspace_id);
     if let Ok(id) = lane_id(&inputs) {
         return id;
     }
@@ -292,22 +289,37 @@ pub(crate) fn lane_id_for(group: &TaskGroup, workspace_id: &str) -> String {
 }
 
 /// Toolchain inputs with exact component evidence, never `unreported`.
-pub(crate) fn toolchain_inputs_for(group: &TaskGroup, catalog: &ToolCatalog) -> ToolchainInputs {
+///
+/// Rust-only: hardcodes the Rust/MBX/Nextest pinned tools. A future
+/// stack gets its own toolchain/format-identity path and dispatch arm;
+/// it must never reuse this function or [`cache_format_id_for`].
+///
+/// # Errors
+///
+/// Returns [`ContractError`] for proposals outside the rust stack.
+pub(crate) fn toolchain_inputs_for(
+    task: &ProposedTask,
+    catalog: &ToolCatalog,
+) -> Result<ToolchainInputs, ContractError> {
+    match Stack::require_known(&task.stack_id)? {
+        Stack::Rust => {}
+    }
+    let needs = tool_needs(&task.identity.compile_driver, &task.identity.test_runner);
     let mut tools = vec![PinnedTool::Rust];
-    if group.compile_driver == CompileDriver::Mbx {
+    if needs.mbx {
         tools.push(PinnedTool::MrBoxington);
     }
-    if group.test_runner == TestRunner::CargoNextest {
+    if needs.nextest {
         tools.push(PinnedTool::Nextest);
     }
     let mut specs = catalog.tool_specs(&tools);
     specs.sort();
-    ToolchainInputs {
+    Ok(ToolchainInputs {
         tools: specs,
         components: velnor_actions_mise::PrepareRustComponents::components(),
-        compile_driver: group.compile_driver.as_str().to_owned(),
-        test_runner: group.test_runner.as_str().to_owned(),
-    }
+        compile_driver: task.identity.compile_driver.clone(),
+        test_runner: task.identity.test_runner.clone(),
+    })
 }
 
 /// Toolchain identity digest over the centralized toolchain inputs.
@@ -316,10 +328,10 @@ pub(crate) fn toolchain_inputs_for(group: &TaskGroup, catalog: &ToolCatalog) -> 
 ///
 /// Returns [`ContractError`] for invalid toolchain inputs.
 pub(crate) fn toolchain_digest_for(
-    group: &TaskGroup,
+    task: &ProposedTask,
     catalog: &ToolCatalog,
 ) -> Result<String, ContractError> {
-    toolchain_id(&toolchain_inputs_for(group, catalog))
+    toolchain_id(&toolchain_inputs_for(task, catalog)?)
 }
 
 /// Cache-format identity for one compile driver.

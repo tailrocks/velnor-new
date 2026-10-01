@@ -25,9 +25,9 @@ fn assert_unique_ids(root: &std::path::Path) -> Result<usize, Box<dyn std::error
     let prep = prepare(root)?;
     let mut ids: Vec<&str> = prep
         .discovery
-        .task_groups
+        .proposals
         .iter()
-        .map(|group| group.task_id.as_str())
+        .map(|task| task.task_id.as_str())
         .collect();
     ids.sort_unstable();
     let mut deduped = ids.clone();
@@ -35,9 +35,9 @@ fn assert_unique_ids(root: &std::path::Path) -> Result<usize, Box<dyn std::error
     assert_eq!(ids, deduped, "duplicate task ids");
     Ok(prep
         .discovery
-        .task_groups
+        .proposals
         .iter()
-        .filter(|group| group.task_id.contains("/fmt/"))
+        .filter(|task| task.task_id.contains("/fmt/"))
         .count())
 }
 
@@ -47,16 +47,16 @@ fn root_package_fmt_has_unique_task_ids() -> TestResult {
     fs::write(dir.path().join("rustfmt.toml"), "")?;
     assert_eq!(assert_unique_ids(dir.path())?, 2);
     let prep = prepare(dir.path())?;
-    for group in prep
+    for task in prep
         .discovery
-        .task_groups
+        .proposals
         .iter()
-        .filter(|group| group.task_id.contains("/fmt/"))
+        .filter(|task| task.task_id.contains("/fmt/"))
     {
         assert!(
-            !group.package_id.is_empty(),
+            !task.identity.unit_id.is_empty(),
             "root package keeps its per-package fmt group: {}",
-            group.task_id
+            task.task_id
         );
     }
     git(&["add", "."], dir.path())?;
@@ -79,10 +79,10 @@ fn virtual_workspace_fmt_has_unique_task_ids() -> TestResult {
     let prep = prepare(dir.path())?;
     assert!(
         prep.discovery
-            .task_groups
+            .proposals
             .iter()
-            .filter(|group| group.task_id.contains("/fmt/"))
-            .all(|group| !group.package_id.is_empty()),
+            .filter(|task| task.task_id.contains("/fmt/"))
+            .all(|task| !task.identity.unit_id.is_empty()),
         "no overlapping workspace fmt group alongside per-package groups"
     );
     git(&["add", "."], dir.path())?;

@@ -9,7 +9,6 @@ use std::fs;
 use velnor_actions_contract::StepKind;
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
 use velnor_actions_rust::TaskKind;
-use velnor_actions_rust::tasks::cargo_payload_argv;
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
 use super::impl_common::{TestResult, config_with_branch, make_repo};
@@ -43,13 +42,13 @@ fn crate_job_fetches_lockful_sources_before_obligations() -> TestResult {
     let root = repo.path();
     fs::write(root.join("Cargo.lock"), demo_lock("demo"))?;
     let prep = prepare(root)?;
-    for group in prep
+    for task in prep
         .discovery
-        .task_groups
+        .proposals
         .iter()
-        .filter(|group| !group.no_test_targets && group.kind != TaskKind::Fmt)
+        .filter(|task| !task.no_targets && task.task_kind != TaskKind::Fmt.as_str())
     {
-        let argv = args_of(&cargo_payload_argv(group).expect("valid payload"));
+        let argv = args_of(&task.payload);
         assert!(
             argv.contains(&"--locked".to_owned()) && argv.contains(&"--offline".to_owned()),
             "payload stays locked/offline; fetch fixes cold: {argv:?}"

@@ -5,12 +5,12 @@
 use super::closure::*;
 use super::closure_slots::{lock_digest_at_root, nextest_digest_at_root};
 use super::snapshot::canonical_digest;
-use velnor_actions_contract::digest_b3;
+use velnor_actions_contract::{ProposedTask, digest_b3};
 use velnor_actions_rust::{CompileDriver, NextestProfile, TaskGroup, TaskKind, TestRunner};
 
-/// Minimal group with `declared` inputs and `reads` flag.
-fn group(declared: Vec<String>, reads: bool) -> TaskGroup {
-    TaskGroup {
+/// Minimal proposal with `declared` inputs and `reads` flag.
+fn group(declared: Vec<String>, reads: bool) -> ProposedTask {
+    let group = TaskGroup {
         task_id: "stack/rust/root/clippy/default".to_owned(),
         package_id: "demo".to_owned(),
         package_name: "demo".to_owned(),
@@ -32,7 +32,10 @@ fn group(declared: Vec<String>, reads: bool) -> TaskGroup {
         uses_clock: false,
         uses_random: false,
         nextest_profile: NextestProfile::Default,
-    }
+    };
+    let task = velnor_actions_rust::propose_task(&group).expect("fixture proposes");
+    task.validate().expect("fixture valid");
+    task
 }
 
 /// Closure digest helper.
@@ -140,7 +143,8 @@ fn checkout_resolution_binds_content_and_absence() {
         &graph,
         &toolchain,
         &platform,
-    );
+    )
+    .expect("closure");
     assert!(
         closure.verify_complete().is_ok(),
         "{:?}",
@@ -170,7 +174,8 @@ fn checkout_resolution_binds_content_and_absence() {
         &graph,
         &toolchain,
         &platform,
-    );
+    )
+    .expect("closure");
     assert_eq!(digest_of(&closure), digest_of(&again));
     let missing = resolve_closure_at_root(
         root,
@@ -179,7 +184,8 @@ fn checkout_resolution_binds_content_and_absence() {
         &graph,
         &toolchain,
         &platform,
-    );
+    )
+    .expect("closure");
     assert!(missing.verify_complete().is_err());
     let dirty = resolve_closure_at_root(
         root,
@@ -188,7 +194,8 @@ fn checkout_resolution_binds_content_and_absence() {
         &graph,
         &toolchain,
         &platform,
-    );
+    )
+    .expect("closure");
     assert!(dirty.verify_complete().is_err());
     assert!(dirty.unknown_inputs().contains(&"vcs"));
 }
@@ -212,6 +219,7 @@ fn source_edits_flip_and_classes_exclude_explicitly() {
             &toolchain,
             &platform,
         )
+        .expect("closure")
     };
     let before = digest_of(&resolve(root));
     std::fs::write(root.join("src/lib.rs"), "pub fn f() {}\npub fn g() {}\n").expect("edit");

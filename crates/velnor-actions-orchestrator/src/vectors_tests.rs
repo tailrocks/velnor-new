@@ -1,5 +1,5 @@
 use super::*;
-use velnor_actions_rust::CompileDriver;
+use velnor_actions_rust::{CompileDriver, TestRunner};
 
 /// Owned argv expectation from literals.
 fn argv_of(parts: &[&str]) -> Vec<String> {
@@ -73,10 +73,10 @@ fn mbx_probe_vector_is_byte_exact() {
     assert_eq!(probe, want);
 }
 
-/// Minimal group with one compile driver.
-fn group_with_driver(driver: velnor_actions_rust::CompileDriver) -> TaskGroup {
-    TaskGroup {
-        task_id: "stack/rust|task/t".to_owned(),
+/// Minimal proposal with one compile driver.
+fn group_with_driver(driver: velnor_actions_rust::CompileDriver) -> ProposedTask {
+    let group = velnor_actions_rust::TaskGroup {
+        task_id: "stack/rust/root/clippy/default".to_owned(),
         package_id: String::new(),
         package_name: String::new(),
         manifest_key: "root".to_owned(),
@@ -90,14 +90,17 @@ fn group_with_driver(driver: velnor_actions_rust::CompileDriver) -> TaskGroup {
         no_test_targets: false,
         package_arg: None,
         compile_driver: driver,
-        test_runner: TestRunner::CargoTest,
+        test_runner: velnor_actions_rust::TestRunner::CargoTest,
         declared_inputs: Vec::new(),
         undeclared_reads: false,
         uses_network: false,
         uses_clock: false,
         uses_random: false,
         nextest_profile: velnor_actions_rust::NextestProfile::Default,
-    }
+    };
+    let task = velnor_actions_rust::propose_task(&group).expect("fixture proposes");
+    task.validate().expect("fixture valid");
+    task
 }
 
 #[test]
@@ -127,9 +130,9 @@ fn task_runner_tools_follow_test_runner() {
         (TestRunner::CargoTest, false),
         (TestRunner::CargoNextest, true),
     ] {
-        let mut group = group_with_driver(CompileDriver::Cargo);
-        group.test_runner = runner;
-        let argv = task_argv(&group, &catalog).expect("task argv");
+        let mut task = group_with_driver(CompileDriver::Cargo);
+        task.identity.test_runner = runner.as_str().to_owned();
+        let argv = task_argv(&task, &catalog).expect("task argv");
         assert_eq!(argv.contains(&nextest), want, "{} nextest", runner.as_str());
     }
 }

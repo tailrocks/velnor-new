@@ -4,12 +4,13 @@
 
 use super::reuse_stages::{ExpectedReuseIdentity, ObservedRestoreMeta};
 use super::*;
+use velnor_actions_contract::ProposedTask;
 use velnor_actions_mise::CachedTaskDescriptor;
-use velnor_actions_rust::{CompileDriver, NextestProfile, TestRunner};
+use velnor_actions_rust::{CompileDriver, NextestProfile, TaskGroup, TaskKind, TestRunner};
 
-/// Minimal group with kind, task ID, and nondeterminism flags.
-fn group(kind: TaskKind, task_id: &str) -> TaskGroup {
-    TaskGroup {
+/// Minimal proposal with kind, task ID, and nondeterminism flags.
+fn group(kind: TaskKind, task_id: &str) -> ProposedTask {
+    let group = TaskGroup {
         task_id: task_id.to_owned(),
         package_id: "demo".to_owned(),
         package_name: "demo".to_owned(),
@@ -31,7 +32,10 @@ fn group(kind: TaskKind, task_id: &str) -> TaskGroup {
         uses_clock: false,
         uses_random: false,
         nextest_profile: NextestProfile::Default,
-    }
+    };
+    let task = velnor_actions_rust::propose_task(&group).expect("fixture proposes");
+    task.validate().expect("fixture valid");
+    task
 }
 
 #[test]
@@ -73,7 +77,7 @@ fn reuse_outcomes_execute_with_precise_reasons() {
         None
     );
     let mut dirty = group;
-    dirty.undeclared_reads = true;
+    dirty.identity.undeclared_reads = true;
     assert!(reuse_qualification(&dirty, WorkflowEvent::Push).always_run());
     assert!(
         plan_reuse_outcome(
@@ -160,9 +164,11 @@ fn archive_gate_binds_sources_and_refuses_unbound() {
         TaskKind::Nextest,
         "stack/rust/root/nextest/default/shard-1-of-2",
     );
-    sharded.compile_driver = velnor_actions_rust::CompileDriver::Cargo;
-    let check = |group: &TaskGroup, source: Option<&str>| {
-        check_archive_identity_with_source(group, &digest, &digest, &digest, source)
+    sharded.identity.compile_driver = velnor_actions_rust::CompileDriver::Cargo
+        .as_str()
+        .to_owned();
+    let check = |task: &ProposedTask, source: Option<&str>| {
+        check_archive_identity_with_source(task, &digest, &digest, &digest, source)
     };
     let unbound = check(&sharded, None);
     assert!(matches!(unbound, Ok(ArchiveGate::SourceUnbound)));
@@ -170,7 +176,11 @@ fn archive_gate_binds_sources_and_refuses_unbound() {
     assert!(matches!(bound, Ok(ArchiveGate::Clear)));
     let bogus = check(&sharded, Some("bogus"));
     assert!(matches!(bogus, Ok(ArchiveGate::SourceUnbound)));
-    let malformed = group(TaskKind::Nextest, "stack/rust/root/nextest/default/shard-x");
+    let mut malformed = group(
+        TaskKind::Nextest,
+        "stack/rust/root/nextest/default/shard-1-of-2",
+    );
+    malformed.task_id = "stack/rust/root/nextest/default/shard-x".to_owned();
     let err = check(&malformed, Some(&source)).expect_err("malformed");
     assert!(err.to_string().contains("malformed_shard_suffix"), "{err}");
 }

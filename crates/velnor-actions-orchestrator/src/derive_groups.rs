@@ -13,7 +13,9 @@
 
 use std::collections::BTreeSet;
 
-use velnor_actions_contract::{ContractError, RustConfiguration, VelnorConfig, task_id_for_stack};
+use velnor_actions_contract::{
+    ContractError, RustConfiguration, Stack, VelnorConfig, task_id_for_stack,
+};
 use velnor_actions_mise::{ArchivePlan, NextestArchive, NextestDriver, SortedInventory};
 use velnor_actions_rust::{
     CompileDriver, DeriveInputs, RustExecutionProfile, TaskGroup, TaskKind, WorkspaceRecord,
@@ -205,7 +207,7 @@ pub(crate) fn expand_shards(
     let mut expanded = Vec::new();
     for shard in 1..=shards {
         let task_id = task_id_for_stack(
-            velnor_actions_rust::STACK_ID,
+            Stack::Rust.id(),
             &group.manifest_key,
             group.kind.as_str(),
             &group.configuration,

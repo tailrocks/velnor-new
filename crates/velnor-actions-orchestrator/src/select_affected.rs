@@ -2,7 +2,8 @@
 
 use std::collections::BTreeSet;
 
-use velnor_actions_rust::{LocalEdge, reverse_closure};
+use velnor_actions_contract::reverse_closure;
+use velnor_actions_rust::{LocalEdge, local_edge_pairs};
 
 use crate::discover::Discovery;
 
@@ -32,20 +33,27 @@ pub(crate) fn affected_packages(
         owned.extend(declared_owners(discovery, path));
     }
     let mut selected = owned.clone();
-    selected.extend(reverse_closure(base_edges, head_edges, &owned));
+    let base = local_edge_pairs(base_edges);
+    let head = local_edge_pairs(head_edges);
+    selected.extend(reverse_closure(&base, &head, &owned));
     selected
 }
 
-/// Packages whose groups declare `path` as an input (PAR-4.11).
+/// Packages whose tasks declare `path` as an input (PAR-4.11).
 ///
 /// Every declarer is affected: returning only the first would silently
 /// drop cross-package consumers of one shared input.
 fn declared_owners(discovery: &Discovery, path: &str) -> Vec<String> {
     discovery
-        .task_groups
+        .proposals
         .iter()
-        .filter(|group| group.declared_inputs.iter().any(|input| input == path))
-        .map(|group| group.package_id.clone())
+        .filter(|task| {
+            task.identity
+                .declared_inputs
+                .iter()
+                .any(|input| input == path)
+        })
+        .map(|task| task.identity.unit_id.clone())
         .collect()
 }
 
@@ -146,7 +154,7 @@ mod tests {
                 recommendations: Vec::new(),
                 findings: Vec::new(),
             }],
-            task_groups: Vec::new(),
+            proposals: Vec::new(),
             tool_checks: Vec::new(),
             clippy_memory: crate::clippy_groups::ClippyMemoryPlan {
                 groups: Vec::new(),
@@ -253,7 +261,14 @@ mod tests {
             uses_random: false,
             nextest_profile: NextestProfile::Default,
         };
-        discovery.task_groups = vec![group("a"), group("b")];
+        let mut proposals = Vec::new();
+        for package in ["a", "b"] {
+            let task =
+                velnor_actions_rust::propose_task(&group(package)).expect("fixture proposes");
+            task.validate().expect("fixture valid");
+            proposals.push(task);
+        }
+        discovery.proposals = proposals;
         let changed: BTreeSet<String> = ["docs/shared.md".to_owned()].into_iter().collect();
         let selected = affected_packages(&discovery, &changed, &[], &[]);
         assert!(
@@ -286,7 +301,7 @@ mod tests {
     fn declared_inputs_select_their_package() {
         use velnor_actions_rust::{CompileDriver, NextestProfile, TaskGroup, TaskKind, TestRunner};
         let mut discovery = two_package_discovery();
-        discovery.task_groups = vec![TaskGroup {
+        let group = TaskGroup {
             task_id: "stack/rust/a/clippy/default".to_owned(),
             package_id: "a".to_owned(),
             package_name: "a".to_owned(),
@@ -308,7 +323,10 @@ mod tests {
             uses_clock: false,
             uses_random: false,
             nextest_profile: NextestProfile::Default,
-        }];
+        };
+        let task = velnor_actions_rust::propose_task(&group).expect("fixture proposes");
+        task.validate().expect("fixture valid");
+        discovery.proposals = vec![task];
         let changed: BTreeSet<String> = ["docs/spec.md".to_owned()].into_iter().collect();
         let selected = affected_packages(&discovery, &changed, &[], &[]);
         assert!(

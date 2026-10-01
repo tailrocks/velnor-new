@@ -3,12 +3,12 @@
 use std::collections::BTreeMap;
 use std::ffi::{OsStr, OsString};
 
-use velnor_actions_contract::Step;
+use velnor_actions_contract::{ProposedTask, Step};
 use velnor_actions_mise::{
     CandidateBuild, IsolatedCommand, PinnedTool, PinnedToolExec, RouteDriver, ToolCatalog,
     custom_run::custom_task_run_argv, validate_exact_version,
 };
-use velnor_actions_rust::{TaskGroup, TestRunner, tasks::cargo_payload_with_profile};
+use velnor_actions_rust::tool_needs;
 use velnor_actions_workflow_renderer::render::CandidateSpec;
 
 use crate::{OrchestratorError, qualify::QualifyRequest};
@@ -66,24 +66,22 @@ const MACHETE_SCAN_CRATES: [&str; 7] = [
 /// Contract-fixed display name of the policy zizmor step.
 pub(crate) const ZIZMOR_STEP_NAME: &str = "Run zizmor";
 
-/// V1 fixed vector for one group: pinned `mise` payload plus kind args.
+/// V1 fixed vector for one task: pinned `mise` payload plus kind args.
 ///
 /// Program follows the compile route (`mbx` for MBX, `cargo` otherwise); Nextest
-/// profiles add the runner tool, `cargo_test` legs never carry it.
+/// profiles add the runner tool, `cargo_test` legs never carry it. The
+/// payload is the adapter-precomputed command, wrapped never edited.
 pub(crate) fn task_argv(
-    group: &TaskGroup,
+    task: &ProposedTask,
     catalog: &ToolCatalog,
 ) -> Result<Vec<String>, OrchestratorError> {
-    let driver = RouteDriver::from_compile_driver(group.compile_driver.as_str());
+    let driver = RouteDriver::from_compile_driver(&task.identity.compile_driver);
     let mut tools = driver.map_or(vec![PinnedTool::Rust], RouteDriver::tools);
-    if group.test_runner == TestRunner::CargoNextest {
+    if tool_needs(&task.identity.compile_driver, &task.identity.test_runner).nextest {
         tools.push(PinnedTool::Nextest);
     }
     let program = OsString::from(driver.map_or("cargo", RouteDriver::program));
-    let payload = cargo_payload_with_profile(group).map_err(|err| OrchestratorError::Contract {
-        problem: err.to_string(),
-    })?;
-    let exec = PinnedToolExec::new(tools, &program, payload).map_err(|err| {
+    let exec = PinnedToolExec::new(tools, &program, task.payload.clone()).map_err(|err| {
         OrchestratorError::Contract {
             problem: err.to_string(),
         }

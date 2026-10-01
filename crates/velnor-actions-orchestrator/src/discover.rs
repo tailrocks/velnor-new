@@ -1,14 +1,16 @@
-//! Detection, inventory, profile, and task-group coordination.
+//! Detection, inventory, profile, and task-proposal coordination.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use velnor_actions_contract::{RustStackConfig, VelnorConfig};
+use velnor_actions_contract::{
+    DETECTION_SCHEMA, DetectedProject, DetectionStatus, DetectorEntry, FileIndex, ProposedTask,
+    RustStackConfig, Stack, StackCandidate, VelnorConfig, apply_stack_ignores,
+    check_candidate_outcomes, check_duplicates, selected_projects,
+};
 use velnor_actions_mise::ArchivePlan;
 use velnor_actions_rust::{
-    DetectionStatus, FileIndex, Recommendation, RustExecutionProfile, TaskGroup, WorkspaceRecord,
-    apply_stack_ignores, check_candidate_outcomes, check_duplicates, dedupe_workspaces,
-    to_detected_projects,
+    Recommendation, RustExecutionProfile, WorkspaceRecord, dedupe_workspaces, propose_task,
 };
 
 use crate::OrchestratorError;
@@ -43,8 +45,8 @@ pub struct Discovery {
     pub statuses: Vec<DetectionStatus>,
     /// Selected workspaces with profiles.
     pub workspaces: Vec<PlannedWorkspace>,
-    /// Derived task groups sorted by task ID.
-    pub task_groups: Vec<TaskGroup>,
+    /// Validated adapter task proposals sorted by task ID.
+    pub proposals: Vec<ProposedTask>,
     /// Per-crate feature fallbacks in derivation order.
     pub feature_fallbacks: Vec<crate::derive_groups::FeatureFallback>,
     /// Tool-input checks: presence, parse, values, digests.
@@ -88,7 +90,7 @@ pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, 
         previous = stack_id;
         candidates.extend(detect(&index));
     }
-    let projects = to_detected_projects(&candidates);
+    let projects = detected_projects(&candidates)?;
     check_duplicates(&projects).map_err(|err| OrchestratorError::Detection {
         problem: err.to_string(),
     })?;
@@ -101,15 +103,15 @@ pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, 
     })?;
     let workspaces = plan_workspaces(root, &index, &statuses, inventories, config)?;
     qualify_workspaces(root, &workspaces)?;
-    let (task_groups, fallbacks) = derive_all(config, &index, &workspaces)?;
+    let (proposals, fallbacks) = derive_all(config, &index, &workspaces)?;
     let tool_checks = check_tool_inputs(root);
-    let clippy_memory = clippy_memory_groups(&task_groups);
+    let clippy_memory = clippy_memory_groups(&proposals);
     let recommendations = collect_recommendations(&index, &workspaces, &tool_checks);
     let (consumer_manifest_json, consumer_manifest_stand_in) = consumer_manifest_text(root)?;
     Ok(Discovery {
         statuses,
         workspaces,
-        task_groups,
+        proposals,
         feature_fallbacks: fallbacks,
         tool_checks,
         clippy_memory,
@@ -122,17 +124,32 @@ pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, 
 
 /// Detector registry (stack id, record schema, implementation), ascending.
 /// V1 registers rust; schema 1 is `{ stack_id, project_root, manifest }`.
-type DetectorEntry = (
-    &'static str,
-    u32,
-    fn(&FileIndex) -> Vec<velnor_actions_rust::CargoCandidate>,
-);
-const DETECTION_SCHEMA: u32 = 1;
 const DETECTORS: [DetectorEntry; 1] = [(
-    velnor_actions_rust::STACK_ID,
+    Stack::Rust.id(),
     DETECTION_SCHEMA,
-    velnor_actions_rust::discover_candidates,
+    velnor_actions_rust::discover_stack_candidates,
 )];
+
+/// Convert neutral candidates to detected projects via closed dispatch.
+///
+/// Candidates group by stack in first-seen order; each stack converts
+/// its own units. Single-stack runs preserve candidate order exactly.
+fn detected_projects(
+    candidates: &[StackCandidate],
+) -> Result<Vec<DetectedProject>, OrchestratorError> {
+    let mut rust = Vec::new();
+    for candidate in candidates {
+        match Stack::require_known(&candidate.stack_id) {
+            Ok(Stack::Rust) => rust.push(candidate.clone()),
+            Err(err) => {
+                return Err(OrchestratorError::Detection {
+                    problem: err.to_string(),
+                });
+            }
+        }
+    }
+    Ok(velnor_actions_rust::detected_projects_for_units(&rust))
+}
 
 /// Registered detectors as (stack ID, record schema), ascending.
 pub(crate) fn detector_entries() -> Vec<(&'static str, u32)> {
@@ -237,7 +254,7 @@ fn plan_workspaces(
     inventories: Vec<(String, WorkspaceRecord)>,
     config: &VelnorConfig,
 ) -> Result<Vec<PlannedWorkspace>, OrchestratorError> {
-    let selected = velnor_actions_rust::selected_projects(statuses);
+    let selected = selected_projects(statuses);
     let selected_manifests: BTreeSet<&str> = selected
         .iter()
         .map(|project| project.manifest.as_str())
@@ -265,12 +282,18 @@ fn plan_workspaces(
     Ok(planned)
 }
 
-/// Derive every task group plus feature fallbacks, expanding test shards.
+/// Derive every task proposal plus feature fallbacks, expanding test shards.
 fn derive_all(
     config: &VelnorConfig,
     index: &FileIndex,
     workspaces: &[PlannedWorkspace],
-) -> Result<(Vec<TaskGroup>, Vec<crate::derive_groups::FeatureFallback>), OrchestratorError> {
+) -> Result<
+    (
+        Vec<ProposedTask>,
+        Vec<crate::derive_groups::FeatureFallback>,
+    ),
+    OrchestratorError,
+> {
     let rust = config
         .stacks
         .rust
@@ -296,11 +319,14 @@ fn derive_all(
             fallbacks.extend(narrowed);
         }
     }
+    let mut proposals = Vec::with_capacity(groups.len());
     for group in &groups {
-        velnor_actions_contract::validate_task_id(&group.task_id)?;
+        let task = propose_task(group)?;
+        task.validate()?;
+        proposals.push(task);
     }
-    groups.sort_by(|left, right| left.task_id.cmp(&right.task_id));
-    Ok((groups, fallbacks))
+    proposals.sort_by(|left, right| left.task_id.cmp(&right.task_id));
+    Ok((proposals, fallbacks))
 }
 
 /// Workspace-root manifest path for a workspace root.

@@ -4,10 +4,10 @@ use std::collections::BTreeMap;
 
 use velnor_actions_actionlint::ACTIONLINT_VERSION;
 use velnor_actions_contract::{
-    CRATE_JOB_ID_PREFIX, FRESHNESS_WORKFLOW_PATH, Job, RequiredCheckMigration, RunnerSelection,
-    WorkflowPolicy,
+    CRATE_JOB_ID_PREFIX, FRESHNESS_WORKFLOW_PATH, Job, ProposedTask, RequiredCheckMigration,
+    RunnerSelection, WorkflowPolicy,
 };
-use velnor_actions_rust::{TaskGroup, TaskKind};
+use velnor_actions_rust::KIND_DISPLAY_WORDS;
 use velnor_actions_workflow_renderer::action_pins;
 use velnor_actions_workflow_renderer::release_tree::RELEASE_TREE_PATHS;
 use velnor_actions_workflow_renderer::render::{ACTIONLINT_PATH, WORKFLOW_PATH};
@@ -179,7 +179,7 @@ fn crate_lines(out: &mut String, prep: &GenerationPreparation, jobs: &BTreeMap<S
     } else {
         push(out, &format!("    - {} Rust crate jobs", crates.len()));
     }
-    let kinds = present_kinds(&prep.discovery.task_groups);
+    let kinds = present_kinds(&prep.discovery.proposals);
     if !kinds.is_empty() {
         push(out, &format!("      Each: {}", kinds.join(" -> ")));
     }
@@ -189,10 +189,10 @@ fn crate_lines(out: &mut String, prep: &GenerationPreparation, jobs: &BTreeMap<S
     }
     let mut obligations: Vec<&str> = prep
         .discovery
-        .task_groups
+        .proposals
         .iter()
-        .filter(|group| crate::crate_jobs::is_runnable(group))
-        .map(|group| group.task_id.as_str())
+        .filter(|task| crate::crate_jobs::is_runnable(task))
+        .map(|task| task.task_id.as_str())
         .collect();
     obligations.sort_unstable();
     obligations.dedup();
@@ -202,21 +202,13 @@ fn crate_lines(out: &mut String, prep: &GenerationPreparation, jobs: &BTreeMap<S
     }
 }
 
-/// Kind words in fixed order for the groups present.
-fn present_kinds(groups: &[TaskGroup]) -> Vec<&'static str> {
+/// Kind words in fixed order for the tasks present.
+fn present_kinds(tasks: &[ProposedTask]) -> Vec<&'static str> {
     let mut kinds = Vec::new();
-    for (kind, word) in [
-        (TaskKind::Clippy, "Clippy"),
-        (TaskKind::Build, "build"),
-        (TaskKind::Test, "run tests"),
-        (TaskKind::Nextest, "run tests"),
-        (TaskKind::Doctest, "doctests"),
-        (TaskKind::Doc, "doc build"),
-        (TaskKind::Fmt, "format check"),
-    ] {
-        if groups
+    for (kind, word) in KIND_DISPLAY_WORDS {
+        if tasks
             .iter()
-            .any(|group| group.kind == kind && crate::crate_jobs::is_runnable(group))
+            .any(|task| task.task_kind == kind && crate::crate_jobs::is_runnable(task))
             && !kinds.contains(&word)
         {
             kinds.push(word);
@@ -225,13 +217,13 @@ fn present_kinds(groups: &[TaskGroup]) -> Vec<&'static str> {
     kinds
 }
 
-/// Structural critical path over the derived task groups.
+/// Structural critical path over the derived task proposals.
 fn critical_path_lines(out: &mut String, prep: &GenerationPreparation) {
-    let eligible: Vec<TaskGroup> = prep
+    let eligible: Vec<ProposedTask> = prep
         .discovery
-        .task_groups
+        .proposals
         .iter()
-        .filter(|group| !group.no_test_targets)
+        .filter(|task| !task.no_targets)
         .cloned()
         .collect();
     let path = crate::critical_path::critical_path_structural(&eligible);
@@ -274,13 +266,13 @@ fn cache_layers(prep: &GenerationPreparation) -> String {
 
 /// Concise reasons for ineligible work.
 fn ineligible_lines(out: &mut String, prep: &GenerationPreparation) {
-    for group in &prep.discovery.task_groups {
-        if group.no_test_targets {
+    for task in &prep.discovery.proposals {
+        if task.no_targets {
             push(
                 out,
                 &format!(
                     "  Ineligible: {} has no test targets; no test command emitted",
-                    group.task_id
+                    task.task_id
                 ),
             );
         }

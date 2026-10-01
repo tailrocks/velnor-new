@@ -4,12 +4,12 @@ use std::fs;
 use std::path::Path;
 
 use tempfile::TempDir;
+use velnor_actions_contract::DetectionStatus;
 use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_mise::{GitRequest, is_allowed_git_verb};
 use velnor_actions_orchestrator::{
     GenerateOptions, OrchestratorError, generate, init_config, prepare, resolve_root,
 };
-use velnor_actions_rust::DetectionStatus;
 
 use crate::impl_common::{
     TestResult, config_with_branch, err_of, make_repo, plan_for, snapshot, write_nextest_task,
@@ -31,9 +31,9 @@ fn task_ids_for(root: &Path) -> Result<Vec<String>, Box<dyn std::error::Error>> 
     let prep = prepare(root)?;
     Ok(prep
         .discovery
-        .task_groups
+        .proposals
         .iter()
-        .map(|group| group.task_id.clone())
+        .map(|task| task.task_id.clone())
         .collect())
 }
 
@@ -89,7 +89,7 @@ fn intake_consumer_default_ignores_velnor_files() -> TestResult {
         prep.config.workflow.policy,
         WorkflowPolicy::ConsumerV1
     ));
-    assert!(!prep.discovery.task_groups.is_empty());
+    assert!(!prep.discovery.proposals.is_empty());
     generate(&prep, &GenerateOptions { output_dir: None })?;
     Ok(())
 }
@@ -220,9 +220,9 @@ fn intake_task_ids_are_valid_grammar_and_sorted() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     let prep = prepare(repo.path())?;
     let mut ids: Vec<&str> = Vec::new();
-    for group in &prep.discovery.task_groups {
-        velnor_actions_contract::validate_task_id(&group.task_id)?;
-        ids.push(group.task_id.as_str());
+    for task in &prep.discovery.proposals {
+        velnor_actions_contract::validate_task_id(&task.task_id)?;
+        ids.push(task.task_id.as_str());
     }
     assert!(!ids.is_empty(), "selected detection proposes tasks");
     let mut sorted = ids.clone();
@@ -297,9 +297,9 @@ fn intake_exclusions_apply_before_detection() -> TestResult {
     );
     assert!(
         prep.discovery
-            .task_groups
+            .proposals
             .iter()
-            .all(|group| group.manifest_key == "root")
+            .all(|task| task.identity.unit_key == "root")
     );
     Ok(())
 }
@@ -319,7 +319,7 @@ fn intake_default_budgets_are_conservative_and_reported() -> TestResult {
 #[test]
 fn intake_detection_without_tool_files() -> TestResult {
     let repo = make_repo(config_with_branch())?;
-    assert!(!prepare(repo.path())?.discovery.task_groups.is_empty());
+    assert!(!prepare(repo.path())?.discovery.proposals.is_empty());
     Ok(())
 }
 
@@ -354,9 +354,9 @@ fn intake_selected_detection_contributes_tasks() -> TestResult {
     selected.sort();
     let mut contributed: Vec<String> = prep
         .discovery
-        .task_groups
+        .proposals
         .iter()
-        .map(|group| match group.manifest_key.as_str() {
+        .map(|task| match task.identity.unit_key.as_str() {
             "root" => "Cargo.toml".to_owned(),
             key => format!("{key}/Cargo.toml"),
         })

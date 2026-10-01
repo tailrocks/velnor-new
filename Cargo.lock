@@ -526,6 +526,7 @@ name = "velnor-actions-cli"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "serde_json",
  "velnor-actions-orchestrator",
 ]
 
