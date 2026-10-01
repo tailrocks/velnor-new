@@ -13,6 +13,7 @@ use velnor_actions_actionlint::actions::{
 use velnor_actions_actionlint::config::{
     ZizmorConfigInput, ZizmorWorkflowText, render_zizmor_yaml,
 };
+use velnor_actions_contract::FRESHNESS_WORKFLOW_PATH;
 use velnor_actions_mise::{PinnedTool, PinnedToolExec, ProcessOutput, ToolCatalog};
 use velnor_actions_orchestrator::{GenerateOptions, generate, prepare};
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
@@ -135,7 +136,15 @@ fn policy_preview() -> Result<PolicyPreview, Box<dyn std::error::Error>> {
             output_dir: Some(preview.clone()),
         },
     )?;
-    assert_eq!(report.files_written.len(), 2, "two generated files");
+    assert_eq!(report.files_written.len(), 3, "three generated files");
+    assert!(
+        report
+            .files_written
+            .iter()
+            .any(|path| path == FRESHNESS_WORKFLOW_PATH),
+        "freshness probe emitted: {:?}",
+        report.files_written
+    );
     let yaml = fs::read_to_string(preview.join(WORKFLOW_PATH))?;
     Ok((repo, parent, preview, yaml, report.validated_by))
 }
@@ -150,12 +159,20 @@ fn stage(preview: &Path, yaml: &str) -> Result<TempDir, Box<dyn std::error::Erro
         root.join(".github/actionlint.yaml"),
         fs::read(preview.join(".github/actionlint.yaml"))?,
     )?;
+    let freshness = fs::read_to_string(preview.join(FRESHNESS_WORKFLOW_PATH))?;
+    fs::write(root.join(FRESHNESS_WORKFLOW_PATH), &freshness)?;
     let input = ZizmorConfigInput {
         generator_version: env!("CARGO_PKG_VERSION").to_owned(),
-        workflows: vec![ZizmorWorkflowText {
-            path: WORKFLOW_PATH.to_owned(),
-            text: yaml.to_owned(),
-        }],
+        workflows: vec![
+            ZizmorWorkflowText {
+                path: WORKFLOW_PATH.to_owned(),
+                text: yaml.to_owned(),
+            },
+            ZizmorWorkflowText {
+                path: FRESHNESS_WORKFLOW_PATH.to_owned(),
+                text: freshness,
+            },
+        ],
     };
     fs::write(root.join(".zizmor.yml"), render_zizmor_yaml(&input)?.yaml)?;
     Ok(dir)
