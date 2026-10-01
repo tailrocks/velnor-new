@@ -170,6 +170,59 @@ fn rendered_inventory_validator_failure_fails_required() -> TestResult {
     )
 }
 
+/// Velnor-policy repo with one source change plus its base/head revisions.
+fn velnor_repo_with_work() -> Result<(tempfile::TempDir, String, String), Box<dyn std::error::Error>>
+{
+    let repo = make_velnor_repo()?;
+    let root = repo.path();
+    git(&["add", "."], root)?;
+    git(&["commit", "-m", "one"], root)?;
+    fs::write(root.join("src/lib.rs"), "pub fn f() {}\npub fn g() {}\n")?;
+    git(&["add", "."], root)?;
+    git(&["commit", "-m", "two"], root)?;
+    let base = git_line(&["rev-parse", "HEAD~1"], root)?;
+    let head = git_line(&["rev-parse", "HEAD"], root)?;
+    Ok((repo, base, head))
+}
+
+#[test]
+fn rendered_inventory_all_success_passes_required() -> TestResult {
+    without_ambient_identity("rendered_inventory_all_success_passes_required", || {
+        let (repo, base, head) = velnor_repo_with_work()?;
+        let root = repo.path();
+
+        let yaml = rendered_workflow(&prepare(root)?)?;
+        let inventory = rendered_needs_inventory(&yaml)?;
+        assert!(
+            !inventory.contains(&"publish-baseline".to_owned()),
+            "downstream publish never gates Required: {inventory:?}"
+        );
+        assert!(
+            inventory.contains(&"plan".to_owned()) && inventory.contains(&"zizmor".to_owned()),
+            "upstream plan and validators still gate: {inventory:?}"
+        );
+
+        let request = serde_json::json!({
+            "schema": 1, "run_key": "local", "base": base, "head": head,
+            "event": "pull_request", "root": root.display().to_string(),
+        });
+        let response = plan_internal(&request.to_string())?;
+        let plan: Plan = serde_json::from_value(
+            serde_json::from_str::<serde_json::Value>(&response)?["plan"].clone(),
+        )?;
+        // Every validator succeeds (a skipped-by-condition downstream
+        // publish contributes no conclusion because it is not
+        // expected): Required must be satisfiable, not stuck red.
+        let report = merge_with_validator(&plan, &inventory, "zizmor", "success")?;
+        assert_eq!(report.status, FinalStatus::Passed, "clean tree passes");
+        assert!(
+            merge_passed(&serde_json::to_string(&report)?)?,
+            "clean tree reports passed"
+        );
+        Ok(())
+    })
+}
+
 #[test]
 fn rendered_inventory_validator_failure_fails_without_work() -> TestResult {
     without_ambient_identity(
