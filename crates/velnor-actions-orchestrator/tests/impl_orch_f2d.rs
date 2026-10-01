@@ -91,13 +91,12 @@ fn plan_digests_combine_deterministically() -> TestResult {
 
 #[test]
 fn cache_miss_cannot_fail_merge() -> TestResult {
-    use velnor_actions_contract::{CacheLayer, CacheResult, MatrixReport, TaskReport};
+    use velnor_actions_contract::{CacheLayer, CacheResult, TaskReport};
     let (_repo, plan) = plan_for_source_change()?;
     let reports = passing_reports(&plan)?;
-    let mut value = serde_json::to_value(&reports[0])?;
-    value["cache"] = serde_json::json!({"layer": "task", "key": "k", "result": "miss", "miss_reason": "no_entry"});
-    let tolerated: MatrixReport = serde_json::from_value(value)?;
-    tolerated.validate()?;
+    // Strict contract: `MatrixReport` carries no `cache` field, so the
+    // old staple-and-tolerate reparse is rejected. Cache-miss validity
+    // is pinned below on a real `TaskReport` with `CacheOutcome::Miss`.
     assert_eq!(
         merge_status(&plan, &reports, &[], &serde_json::json!({}))?,
         FinalStatus::Passed
