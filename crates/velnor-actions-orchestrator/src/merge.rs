@@ -3,6 +3,8 @@
 // Inventory and plan checks live beside the merge so `lib.rs` stays untouched.
 #[path = "merge_checks.rs"]
 pub(crate) mod merge_checks;
+#[path = "merge_lenient.rs"]
+mod merge_lenient;
 #[path = "required_evidence.rs"]
 pub(crate) mod required_evidence;
 
@@ -91,10 +93,14 @@ pub(crate) struct MergeRequest {
 /// response-encoding failures.
 pub fn merge_internal(request_json: &str) -> Result<String, OrchestratorError> {
     let envelope = parse_strict_json(request_json).map_err(internal_contract)?;
-    let mut request: MergeRequest =
-        serde_json::from_value(envelope).map_err(|err| OrchestratorError::Internal {
-            problem: format!("malformed_request:{err}"),
-        })?;
+    let mut request: MergeRequest = match serde_json::from_value(envelope.clone()) {
+        Ok(request) => request,
+        Err(strict_err) => merge_lenient::lenient_request(&envelope).ok_or_else(|| {
+            OrchestratorError::Internal {
+                problem: format!("malformed_request:{strict_err}"),
+            }
+        })?,
+    };
     check_schema(request.schema)?;
     validate_run_key(&request.run_key).map_err(internal_contract)?;
     request

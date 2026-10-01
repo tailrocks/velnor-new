@@ -29,33 +29,47 @@ pub(crate) fn affected_packages(
         if let Some(id) = deepest_owner(&owners, path) {
             owned.insert(id);
         }
-        if let Some(id) = declared_owner(discovery, path) {
-            owned.insert(id);
-        }
+        owned.extend(declared_owners(discovery, path));
     }
     let mut selected = owned.clone();
     selected.extend(reverse_closure(base_edges, head_edges, &owned));
     selected
 }
 
-/// Package whose group declares `path` as an input, if any (PAR-4.11).
-fn declared_owner(discovery: &Discovery, path: &str) -> Option<String> {
+/// Packages whose groups declare `path` as an input (PAR-4.11).
+///
+/// Every declarer is affected: returning only the first would silently
+/// drop cross-package consumers of one shared input.
+fn declared_owners(discovery: &Discovery, path: &str) -> Vec<String> {
     discovery
         .task_groups
         .iter()
-        .find(|group| group.declared_inputs.iter().any(|input| input == path))
+        .filter(|group| group.declared_inputs.iter().any(|input| input == path))
         .map(|group| group.package_id.clone())
+        .collect()
 }
 
 /// True when any changed file has no owning package.
+///
+/// Only nested manifest directories classify: the root package (empty
+/// directory) owns every path by prefix, so counting it would mask
+/// stray files and narrow selection to the root instead of broadening.
+/// With no nested packages every path is trivially classified —
+/// broadening and narrowing select the same single package.
 pub(crate) fn has_unowned_file(discovery: &Discovery, changed: &BTreeSet<String>) -> bool {
     let mut dirs = Vec::new();
     for workspace in &discovery.workspaces {
         for package in &workspace.record.packages {
             if package.in_workspace && !package.external {
-                dirs.push(manifest_dir(&package.manifest));
+                let dir = manifest_dir(&package.manifest);
+                if !dir.is_empty() {
+                    dirs.push(dir);
+                }
             }
         }
+    }
+    if dirs.is_empty() {
+        return false;
     }
     changed
         .iter()
@@ -153,6 +167,99 @@ mod tests {
             optional: false,
             target: None,
         }
+    }
+
+    /// Discovery with the given `(id, manifest)` packages in one workspace.
+    fn discovery_with(packages: &[(&str, &str)]) -> Discovery {
+        let mut discovery = two_package_discovery();
+        discovery.workspaces[0].record.packages = packages
+            .iter()
+            .map(|(id, manifest)| PackageRecord {
+                id: (*id).to_owned(),
+                name: (*id).to_owned(),
+                version: "0.1.0".to_owned(),
+                manifest: (*manifest).to_owned(),
+                external: false,
+                in_workspace: true,
+                targets: Vec::new(),
+                features: Vec::new(),
+                has_build_script: false,
+            })
+            .collect();
+        discovery.workspaces[0].record.members =
+            packages.iter().map(|(id, _)| (*id).to_owned()).collect();
+        discovery
+    }
+
+    #[test]
+    fn root_package_does_not_classify_stray_files() {
+        let discovery = discovery_with(&[("root", "Cargo.toml"), ("a", "crates/a/Cargo.toml")]);
+        let stray: BTreeSet<String> = ["docs/shared.md".to_owned()].into_iter().collect();
+        assert!(
+            has_unowned_file(&discovery, &stray),
+            "root prefix must not mask stray files"
+        );
+        let nested: BTreeSet<String> = ["crates/a/src/lib.rs".to_owned()].into_iter().collect();
+        assert!(
+            !has_unowned_file(&discovery, &nested),
+            "nested paths stay classified"
+        );
+    }
+
+    #[test]
+    fn lone_root_package_classifies_everything() {
+        let discovery = discovery_with(&[("root", "Cargo.toml")]);
+        let changed: BTreeSet<String> = ["docs/shared.md".to_owned()].into_iter().collect();
+        assert!(
+            !has_unowned_file(&discovery, &changed),
+            "one package selects itself either way"
+        );
+        let selected = affected_packages(&discovery, &changed, &[], &[]);
+        assert_eq!(selected, ["root".to_owned()].into_iter().collect());
+    }
+
+    #[test]
+    fn nested_change_selects_deepest_beside_root() {
+        let discovery = discovery_with(&[("root", "Cargo.toml"), ("a", "crates/a/Cargo.toml")]);
+        let changed: BTreeSet<String> = ["crates/a/src/lib.rs".to_owned()].into_iter().collect();
+        let selected = affected_packages(&discovery, &changed, &[], &[]);
+        assert_eq!(selected, ["a".to_owned()].into_iter().collect());
+    }
+
+    #[test]
+    fn shared_declared_input_selects_every_declarer() {
+        use velnor_actions_rust::{TaskGroup, TaskKind};
+        let mut discovery = two_package_discovery();
+        let group = |package: &str| TaskGroup {
+            task_id: format!("stack/rust/{package}/clippy/default"),
+            package_id: package.to_owned(),
+            package_name: package.to_owned(),
+            manifest_key: package.to_owned(),
+            kind: TaskKind::Clippy,
+            configuration: "default".to_owned(),
+            features: Vec::new(),
+            target: "host".to_owned(),
+            gated_by: Vec::new(),
+            depends_on: Vec::new(),
+            target_flags: Vec::new(),
+            no_test_targets: false,
+            package_arg: None,
+            compile_driver: CompileDriver::Cargo,
+            test_runner: TestRunner::CargoTest,
+            declared_inputs: vec!["docs/shared.md".to_owned()],
+            undeclared_reads: false,
+            uses_network: false,
+            uses_clock: false,
+            uses_random: false,
+            nextest_profile: NextestProfile::Default,
+        };
+        discovery.task_groups = vec![group("a"), group("b")];
+        let changed: BTreeSet<String> = ["docs/shared.md".to_owned()].into_iter().collect();
+        let selected = affected_packages(&discovery, &changed, &[], &[]);
+        assert!(
+            selected.contains("a") && selected.contains("b"),
+            "both declarers affected: {selected:?}"
+        );
     }
 
     #[test]
