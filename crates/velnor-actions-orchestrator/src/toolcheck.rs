@@ -22,8 +22,12 @@ const MAX_PROBLEM: usize = 120;
 /// Parse status of one tool-input file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ToolParse {
-    /// File is missing or unreadable.
+    /// File is absent (`NotFound`); never emitted for IO failures.
     Missing,
+    /// File exists but its bytes are inaccessible (P09-7: never
+    /// collapsed into [`ToolParse::Missing`]; the no-write proof
+    /// needs contents, so absence and inaccessibility differ).
+    Unreadable,
     /// File parsed; values extracted where the shape is known.
     Valid,
     /// File is present but malformed.
@@ -56,14 +60,42 @@ pub fn check_tool_inputs(root: &Path) -> Vec<ToolInputCheck> {
     TOOL_INPUT_PATHS
         .iter()
         .map(|path| {
-            let bytes = std::fs::read(root.join(path)).ok();
-            if *path == TOOL_INPUT_PATHS[0] {
-                check_toolchain(path, bytes.as_deref())
-            } else {
-                check_mise_file(path, bytes.as_deref(), *path == TOOL_INPUT_PATHS[2])
+            // P09-7: `NotFound` is missing; any other IO failure is
+            // unreadable. `.ok()` would collapse the two, hiding an
+            // inaccessible file behind a "not found" diagnosis.
+            let read = match std::fs::read(root.join(path)) {
+                Ok(bytes) => Ok(Some(bytes)),
+                Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(None),
+                Err(_) => Err(()),
+            };
+            match read {
+                Err(()) => inaccessible(path),
+                Ok(bytes) => {
+                    if *path == TOOL_INPUT_PATHS[0] {
+                        check_toolchain(path, bytes.as_deref())
+                    } else {
+                        check_mise_file(path, bytes.as_deref(), *path == TOOL_INPUT_PATHS[2])
+                    }
+                }
             }
         })
         .collect()
+}
+
+/// Check for a tool file that exists but cannot be read.
+///
+/// `present` stays false (no bytes were readable) while the parse
+/// status names the inaccessibility, so callers never mistake it
+/// for an absent file.
+fn inaccessible(path: &str) -> ToolInputCheck {
+    ToolInputCheck {
+        path: path.to_owned(),
+        present: false,
+        parse: ToolParse::Unreadable,
+        values: BTreeMap::new(),
+        digest: None,
+        codes: vec![TOOLING_INPUT_INVALID.to_owned()],
+    }
 }
 
 /// Check the Rust-owned toolchain file through the Rust adapter.
@@ -326,5 +358,40 @@ mod tests {
         let mise = checks.iter().find(|c| c.path == "mise.toml").expect("m");
         assert!(matches!(mise.parse, ToolParse::Invalid { .. }));
         assert!(mise.digest.is_some());
+    }
+
+    #[test]
+    fn unreadable_files_are_not_missing() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        // A directory where the tool file belongs: `read` fails with a
+        // non-`NotFound` IO error on every platform, even for root.
+        std::fs::create_dir(dir.path().join("mise.toml")).expect("dir");
+        let checks = check_tool_inputs(dir.path());
+        let mise = checks.iter().find(|c| c.path == "mise.toml").expect("m");
+        assert!(!mise.present, "no bytes were readable");
+        assert_eq!(
+            mise.parse,
+            ToolParse::Unreadable,
+            "inaccessible, not absent"
+        );
+        assert!(mise.digest.is_none(), "no digest without bytes");
+        assert!(
+            mise.codes.contains(&TOOLING_INPUT_INVALID.to_owned()),
+            "flagged: {:?}",
+            mise.codes
+        );
+        let lock = checks.iter().find(|c| c.path == "mise.lock").expect("l");
+        assert_eq!(lock.parse, ToolParse::Missing, "absent stays missing");
+        let lines = crate::toolfindings::tool_check_lines(&checks);
+        assert!(
+            lines
+                .iter()
+                .any(|line| line.contains("mise.toml") && line.contains("unreadable")),
+            "unreadable surfaces a line: {lines:?}"
+        );
+        assert!(
+            !lines.iter().any(|line| line.contains("mise.lock")),
+            "missing stays silent: {lines:?}"
+        );
     }
 }

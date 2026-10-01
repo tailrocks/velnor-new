@@ -14,12 +14,19 @@ pub const CONFLICTING_TOOL_VALUES: &str = "conflicting_tool_values";
 /// Finding code for a recognized but unsupported tool value.
 pub const UNSUPPORTED_TOOL_VALUE: &str = "unsupported_tool_value";
 
-/// Recommendation lines for invalid files and missing channel pins.
+/// Recommendation lines for invalid/unreadable files and missing channel pins.
 #[must_use]
 pub fn tool_check_lines(checks: &[ToolInputCheck]) -> Vec<String> {
     let mut lines = Vec::new();
     for check in checks {
-        if let ToolParse::Invalid { problem } = &check.parse {
+        // Exhaustive: every non-valid parse state must surface or be
+        // explicitly silent, so a new variant cannot slip through.
+        let problem = match &check.parse {
+            ToolParse::Invalid { problem } => Some(problem.as_str()),
+            ToolParse::Unreadable => Some("unreadable"),
+            ToolParse::Missing | ToolParse::Valid => None,
+        };
+        if let Some(problem) = problem {
             lines.push(format!(
                 "{}: {}: {problem}; fix it manually, Velnor continues with its pinned tools",
                 velnor_actions_rust::TOOLING_INPUT_INVALID,
