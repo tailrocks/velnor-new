@@ -14,6 +14,7 @@ mod impl_gapc;
 mod impl_gate8_acquire;
 mod impl_gate8_e;
 mod impl_gates_cover;
+mod impl_gates_cover_repository;
 mod impl_gates_shard;
 mod impl_gates_shard_tokens;
 mod impl_gen_gates;

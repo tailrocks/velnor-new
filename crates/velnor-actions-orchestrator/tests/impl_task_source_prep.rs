@@ -80,7 +80,13 @@ fn crate_job_fetches_lockful_sources_before_obligations() -> TestResult {
         return Err("fetch step must be a shell step".into());
     };
     assert_eq!(&run[..2], ["sh", "-c"]);
-    for need in ["metadata --locked --offline", "cargo fetch --locked"] {
+    for need in [
+        "metadata --locked --offline",
+        "cargo fetch --locked",
+        "mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\"",
+        "cd \"$RUNNER_TEMP/velnor/cargo-clean\"",
+        "--manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\"",
+    ] {
         assert!(run[2].contains(need), "fetch script misses {need}");
     }
     let StepKind::Shell { env: run_env, .. } = &job.steps[run_at].kind else {

@@ -9,7 +9,7 @@ use crate::impl_common::{
 };
 
 /// Plan the source-change fixture with an optional baseline manifest value.
-fn plan_with_manifest(
+pub(crate) fn plan_with_manifest(
     manifest: Option<serde_json::Value>,
 ) -> Result<(tempfile::TempDir, Plan), Box<dyn std::error::Error>> {
     let repo = make_repo(config_with_branch())?;
@@ -45,7 +45,7 @@ fn plan_at(
 /// the git origin; `None` models a local run (origin fallback).
 /// Ambient process env never participates, so these plans are
 /// identical under any runner environment.
-fn plan_at_with_repository(
+pub(crate) fn plan_at_with_repository(
     root: &std::path::Path,
     base: &str,
     head: &str,
@@ -72,7 +72,11 @@ fn plan_at_with_repository(
 }
 
 /// Minimal manifest JSON for one base commit; tasks filled by callers.
-fn manifest_for(plan: &Plan, base: &str, tasks: &serde_json::Value) -> serde_json::Value {
+pub(crate) fn manifest_for(
+    plan: &Plan,
+    base: &str,
+    tasks: &serde_json::Value,
+) -> serde_json::Value {
     let compat = velnor_actions_contract::digest_b3(b"compat");
     let workflow = velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
     serde_json::json!({
@@ -95,7 +99,7 @@ fn manifest_for(plan: &Plan, base: &str, tasks: &serde_json::Value) -> serde_jso
 }
 
 /// Task entries binding every plan obligation exactly.
-fn entries_for(plan: &Plan) -> serde_json::Value {
+pub(crate) fn entries_for(plan: &Plan) -> serde_json::Value {
     let tasks: Vec<serde_json::Value> = plan
         .obligations
         .iter()
@@ -338,65 +342,5 @@ fn merge_group_classifies_like_pull_request() -> TestResult {
     );
     let push = plan_for("push")?;
     assert_eq!(push.trust, velnor_actions_contract::Trust::Trusted);
-    Ok(())
-}
-
-/// An explicit repository slug agreeing with the origin covers.
-///
-/// The request capability `o/r` matches the fixture origin and the
-/// manifest anchor, so coverage applies exactly like the local-run
-/// fallback, under any ambient runner environment.
-#[test]
-fn explicit_matching_repository_covers() -> TestResult {
-    let (repo, seed) = plan_with_manifest(None)?;
-    let head = seed.head.clone();
-    let manifest = manifest_for(&seed, &head, &entries_for(&seed));
-    let plan = plan_at_with_repository(repo.path(), &head, &head, Some(manifest), Some("o/r"))?;
-    assert!(!plan.obligations.is_empty());
-    for ob in &plan.obligations {
-        assert_eq!(
-            ob.decision,
-            ObligationDecision::CoveredByTrustedBaseline,
-            "{ob:?}"
-        );
-    }
-    assert_eq!(
-        plan.baseline.status(),
-        velnor_actions_contract::BaselineStatus::Used
-    );
-    Ok(())
-}
-
-/// An explicit repository slug disagreeing with the origin fails closed.
-///
-/// The request capability names a different repository than the
-/// fixture checkout, so the manifest cannot validate: every
-/// obligation executes and the baseline records its invalid reason.
-/// This pins the fail-closed behavior CI once triggered by ambient
-/// runner env leaking into classification.
-#[test]
-fn explicit_conflicting_repository_executes() -> TestResult {
-    let (repo, seed) = plan_with_manifest(None)?;
-    let head = seed.head.clone();
-    let manifest = manifest_for(&seed, &head, &entries_for(&seed));
-    let plan = plan_at_with_repository(
-        repo.path(),
-        &head,
-        &head,
-        Some(manifest),
-        Some("someone/else"),
-    )?;
-    assert!(!plan.obligations.is_empty());
-    for ob in &plan.obligations {
-        assert_eq!(ob.decision, ObligationDecision::Execute, "{ob:?}");
-        assert!(ob.baseline_proof.is_none(), "{ob:?}");
-    }
-    assert!(
-        plan.baseline
-            .reason()
-            .is_some_and(|reason| reason.starts_with("baseline_invalid")),
-        "{:?}",
-        plan.baseline
-    );
     Ok(())
 }
