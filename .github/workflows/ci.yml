@@ -53,6 +53,7 @@ jobs:
           fail-on-warning: "true"
           format: github
           path: .
+          version: v0.16.1
   cargo-deny:
     name: Cargo Deny
     runs-on: ubuntu-26.04

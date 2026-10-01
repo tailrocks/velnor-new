@@ -20,8 +20,8 @@ use crate::{
     RenderError,
     candidate::{candidate_job, release_job},
     render::{
-        ALINT_USES, CANDIDATE_JOB_ID, FINAL_CONDITION, FINAL_DISPLAY_NAME, FINAL_JOB_ID,
-        PLAN_JOB_ID, RenderContext, ValidatorCommand,
+        ALINT_BINARY_VERSION, ALINT_USES, CANDIDATE_JOB_ID, FINAL_CONDITION, FINAL_DISPLAY_NAME,
+        FINAL_JOB_ID, PLAN_JOB_ID, RenderContext, ValidatorCommand,
     },
     steps,
 };
@@ -185,6 +185,7 @@ pub(crate) fn alint_job(ctx: &RenderContext) -> Result<Job, RenderError> {
     with.insert("config".to_owned(), ".alint.yml".to_owned());
     with.insert("format".to_owned(), "github".to_owned());
     with.insert("fail-on-warning".to_owned(), "true".to_owned());
+    with.insert("version".to_owned(), ALINT_BINARY_VERSION.to_owned());
     steps::scan_for_private_subcommands(ALINT_USES)?;
     Ok(Job {
         display_name: ValidatorKind::Alint.display_name().to_owned(),

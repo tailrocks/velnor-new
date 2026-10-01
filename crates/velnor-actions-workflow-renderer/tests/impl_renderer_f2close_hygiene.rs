@@ -5,7 +5,8 @@ use velnor_actions_workflow_renderer::steps::{
     TOOLS_RESTORE_USES, cache_action_step, tools_cache_key,
 };
 use velnor_actions_workflow_renderer::{
-    PUBLISH_PLAN_NAME, RenderError, merge_step, render_workflow_ir, shell_step,
+    ALINT_BINARY_VERSION, PUBLISH_PLAN_NAME, RenderError, merge_step, render_workflow_ir,
+    shell_step,
 };
 
 use super::impl_renderer_fixtures::*;
@@ -196,6 +197,10 @@ fn velnor_policy_renders_with_empty_matrix() -> Result<(), RenderError> {
     ] {
         assert!(window.contains(input), "missing {input}:\n{window}");
     }
+    // SHA-pinned `uses:` falls back to `latest` without `version:` (action.yml);
+    // the pin value itself is freshness-checked against the reviewed inventory.
+    let pinned = format!("version: {ALINT_BINARY_VERSION}");
+    assert!(window.contains(&pinned), "missing {pinned}:\n{window}");
     let start = text.find("required:").expect("final job");
     let window = snip(&text, start, 600);
     for need in ["plan", "alint", "cargo-deny", "cargo-machete", "zizmor"] {

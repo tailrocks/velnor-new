@@ -48,6 +48,15 @@ pub const TASK_JOB_ID: &str = "velnor-task";
 pub const CANDIDATE_JOB_ID: &str = "candidate";
 /// Full-SHA Alint pin for the repository-policy `alint` job.
 pub const ALINT_USES: &str = "asamarts/alint@9f9d34ba0eae3888299b9e570f43338b0e7f2cdb";
+/// Pinned Alint binary release tag for the step's `version:` input.
+///
+/// Per the action's `action.yml`, a SHA-pinned `uses:` falls back to
+/// installing `latest` unless `version:` is set — a floating binary. Mirror of
+/// `ALINT_ACTION_VERSION` (`velnor-actions-actionlint`, same qualified
+/// release); the renderer cannot depend on that crate, so
+/// `scripts/check-freshness.sh` pins this mirror to the reviewed
+/// `asamarts/alint` inventory row instead of trusting the duplication.
+pub const ALINT_BINARY_VERSION: &str = "v0.16.1";
 
 /// Caller-supplied validated scalars the IR cannot carry.
 #[derive(Debug, Clone)]
