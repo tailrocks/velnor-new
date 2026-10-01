@@ -323,6 +323,76 @@ fn assembly_captures_actual_event() {
 }
 
 #[test]
+fn assembly_reads_attestation_in_candidate_mode() {
+    let file = |body: &str| {
+        staged(
+            &plan_with(&[]),
+            &[("candidate/candidate-attestation.json", body)],
+        )
+    };
+    let needs = Some(r#"{"candidate":"success","plan":"success"}"#);
+    let expected = Some(r#"["candidate","plan"]"#);
+    let dir = file(r#"{"schema":1,"commit":"abc"}"#);
+    let request = assemble_with_needs(
+        "local",
+        dir.path(),
+        needs,
+        expected,
+        Some("push"),
+        Some("{}"),
+    )
+    .expect("assemble");
+    let value: serde_json::Value = serde_json::from_str(&request).expect("json");
+    assert_eq!(value["candidate_attestation"]["commit"], "abc");
+    assert!(error_list(&request).is_empty(), "{request}");
+
+    let bare = staged(&plan_with(&[]), &[]);
+    let request = assemble_with_needs(
+        "local",
+        bare.path(),
+        needs,
+        expected,
+        Some("push"),
+        Some("{}"),
+    )
+    .expect("assemble");
+    let value: serde_json::Value = serde_json::from_str(&request).expect("json");
+    assert!(value["candidate_attestation"].is_null(), "{request}");
+    assert!(
+        error_list(&request).contains(&"missing_candidate_attestation".to_owned()),
+        "{request}"
+    );
+
+    let dir = file("not json");
+    let request = assemble_with_needs(
+        "local",
+        dir.path(),
+        needs,
+        expected,
+        Some("push"),
+        Some("{}"),
+    )
+    .expect("assemble");
+    assert!(
+        error_list(&request).contains(&"unparsable_candidate_attestation".to_owned()),
+        "{request}"
+    );
+
+    let request = assemble_with_needs(
+        "local",
+        bare.path(),
+        Some(r#"{"plan":"success"}"#),
+        Some(r#"["plan"]"#),
+        Some("push"),
+        Some("{}"),
+    )
+    .expect("assemble");
+    let value: serde_json::Value = serde_json::from_str(&request).expect("json");
+    assert!(value["candidate_attestation"].is_null(), "{request}");
+    assert!(error_list(&request).is_empty(), "{request}");
+}
+
+#[test]
 fn request_file_writes_exclusively() {
     let dir = staged("{}", &[]);
     let file = dir.path().join("sub").join("merge-v1-request.json");

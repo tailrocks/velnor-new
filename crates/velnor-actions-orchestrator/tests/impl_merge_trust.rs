@@ -81,3 +81,52 @@ fn plan_event_must_match_merge_time_actual_event() -> TestResult {
     assert_eq!(merge(&request)?.status, FinalStatus::Passed);
     Ok(())
 }
+
+#[test]
+fn candidate_attestation_must_bind_the_plan_head() -> TestResult {
+    let (_repo, plan) = plan_for_source_change()?;
+    let reports = passing_reports(&plan)?;
+    let matrix = serde_json::to_value(&plan.matrix)?;
+    let reports_value = serde_json::to_value(&reports)?;
+    let jobs = serde_json::json!([
+        {"job_id": "candidate", "conclusion": "success"},
+        {"job_id": "plan", "conclusion": "success"},
+    ]);
+    let base = || {
+        let mut request = merge_request(&plan, &matrix, &reports_value, &jobs);
+        request["required_job_ids"] = serde_json::json!(["candidate", "plan"]);
+        request
+    };
+    // Matching attestation passes.
+    let mut request = base();
+    request["candidate_attestation"] = serde_json::json!({"schema": 1, "commit": plan.head});
+    assert_eq!(merge(&request)?.status, FinalStatus::Passed);
+    // Stale or cross-plan attestation fails with a scope token.
+    let mut request = base();
+    request["candidate_attestation"] = serde_json::json!({"schema": 1, "commit": "0".repeat(40)});
+    let final_report = merge(&request)?;
+    assert_eq!(final_report.status, FinalStatus::PlanningFailed);
+    assert!(
+        final_report
+            .miss_reasons
+            .contains(&"trust_scope_mismatch".to_owned()),
+        "stale attestation needs a scope token: {:?}",
+        final_report.miss_reasons
+    );
+    // Missing attestation in candidate mode fails as missing evidence.
+    let request = base();
+    let final_report = merge(&request)?;
+    assert_eq!(final_report.status, FinalStatus::PlanningFailed);
+    assert!(
+        final_report
+            .miss_reasons
+            .contains(&"source_missing".to_owned()),
+        "missing attestation needs a source token: {:?}",
+        final_report.miss_reasons
+    );
+    // Outside candidate mode a stray attestation is ignored, not judged.
+    let mut request = merge_request(&plan, &matrix, &reports_value, &success_jobs());
+    request["candidate_attestation"] = serde_json::json!({"schema": 1, "commit": "0".repeat(40)});
+    assert_eq!(merge(&request)?.status, FinalStatus::Passed);
+    Ok(())
+}

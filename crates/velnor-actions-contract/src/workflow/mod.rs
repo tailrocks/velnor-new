@@ -13,8 +13,9 @@ pub mod qualification;
 pub mod report;
 pub mod trust;
 pub use artifacts::{
-    FINAL_JSON_FILENAME, MATRIX_JSON_FILENAME, PLAN_JSON_FILENAME, check_matrix_agreement,
-    matrix_json_bytes, plan_json_bytes,
+    CANDIDATE_ATTESTATION_FILENAME, CANDIDATE_EVIDENCE_SUBDIR, FINAL_JSON_FILENAME,
+    MATRIX_JSON_FILENAME, PLAN_JSON_FILENAME, check_matrix_agreement, matrix_json_bytes,
+    plan_json_bytes,
 };
 pub use baseline::{BaselineProof, BaselineStatus, ManifestTaskProof, PlanBaseline};
 pub use cache_ids::EntryCacheIds;

@@ -96,10 +96,12 @@ pub(crate) fn assemble_with_needs(
     );
     let baseline = read_json(run_dir, "baseline.json", "baseline", false, &mut errors);
     let (inventory, jobs) = parse_needs(needs, expected, &mut errors);
+    let attestation = read_attestation(run_dir, &inventory, &mut errors);
     let request = serde_json::json!({
         "schema": 1,
         "run_key": run_key,
         "actual_event": actual_event,
+        "candidate_attestation": attestation,
         "plan": plan,
         "matrix": matrix,
         "matrix_reports": reports,
@@ -110,6 +112,26 @@ pub(crate) fn assemble_with_needs(
         "baseline_manifest": baseline,
     });
     canonical_json_str(&request).map_err(internal_contract)
+}
+
+/// Head-bound candidate attestation, required in candidate mode only.
+///
+/// Candidate mode is the candidate job's presence in the required
+/// inventory. Outside it the file is never read (no error); inside it
+/// a missing or unreadable attestation records an explicit error and
+/// the merge fails closed, never silent.
+fn read_attestation(
+    run_dir: &Path,
+    inventory: &[String],
+    errors: &mut Vec<String>,
+) -> serde_json::Value {
+    use velnor_actions_contract::{CANDIDATE_ATTESTATION_FILENAME, CANDIDATE_EVIDENCE_SUBDIR};
+    use velnor_actions_workflow_renderer::render::CANDIDATE_JOB_ID;
+    if !inventory.iter().any(|id| id == CANDIDATE_JOB_ID) {
+        return serde_json::Value::Null;
+    }
+    let relpath = format!("{CANDIDATE_EVIDENCE_SUBDIR}/{CANDIDATE_ATTESTATION_FILENAME}");
+    read_json(run_dir, &relpath, "candidate_attestation", true, errors)
 }
 
 /// Merge-time triggering event from explicit GitHub parts.

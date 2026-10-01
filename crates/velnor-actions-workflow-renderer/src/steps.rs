@@ -209,6 +209,27 @@ pub fn candidate_manifest_script(target: &str, toolchain: &str) -> String {
     )
 }
 
+/// Shell spelling of the run-key dir holding the downloaded plan.
+pub const RUN_DIR_SHELL: &str = "$RUNNER_TEMP/velnor/r$GITHUB_RUN_ID-a$GITHUB_RUN_ATTEMPT";
+
+/// Head-bound candidate attestation writer: `commit` is the plan head.
+///
+/// Reads the downloaded plan's `head` with the manifest-verify idiom
+/// (first `"head":"` match, parameter expansion only, no command
+/// substitution) and writes `{"schema":1,"commit":"<head>"}` beside
+/// the candidate manifest so the same artifact carries it to the
+/// final job. Fails closed when the plan is missing or the head is
+/// empty/oversize; the merge re-checks `commit == plan.head` after
+/// parsing both sides, so a truncation or misparse can only fail a
+/// run, never forge a binding.
+#[must_use]
+pub fn candidate_attestation_script() -> String {
+    let attestation = velnor_actions_contract::CANDIDATE_ATTESTATION_FILENAME;
+    format!(
+        "p=\"{RUN_DIR_SHELL}/plan.json\" && test -f \"$p\" && read line rest < \"$p\" || [ -n \"$line\" ] && h=${{line#*\\\"head\\\":\\\"}} && h=${{h%%\\\"*}} && [ -n \"$h\" ] && [ \"${{#h}}\" -le 64 ] && printf '{{\"schema\":1,\"commit\":\"%s\"}}' \"$h\" > {CANDIDATE_OUTPUT_DIR}/{attestation}"
+    )
+}
+
 /// Acquire-Velnor step: digest-verified staging under runner temp.
 ///
 /// The asset download is an unauthenticated public fetch over a pinned

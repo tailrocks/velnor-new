@@ -12,7 +12,7 @@ use velnor_actions_contract::{Job, Step};
 use crate::{
     RenderError,
     artifact_paths::{CANDIDATE_OUTPUT_DIR_EXPR, CANDIDATE_STAGE_DIR_EXPR},
-    closure::{FRESHNESS_OUTDIR, freshness_step},
+    closure::{FRESHNESS_OUTDIR, download_plan_step, freshness_step},
     render::{CANDIDATE_JOB_ID, CandidateSpec, PLAN_JOB_ID, RenderContext},
     steps,
     toolchain_env::{with_credential_scrub, with_credential_unset_script, with_env_unset_argv},
@@ -83,13 +83,14 @@ pub fn candidate_manifest_verify_step(target: &str) -> Result<Step, RenderError>
     )
 }
 
-/// Candidate job: build once, upload with manifest, download, verify, qualify.
+/// Candidate job: build once, attest the plan head, upload, verify, qualify.
 ///
 /// Qualification runs against the downloaded artifact and never rebuilds
 /// it (bootstrap contract §4 steps 4-5). Needs plan; feeds nothing.
-/// Candidate mode verifies the downloaded manifest, then performs the
-/// generated-files check with the downloaded candidate binary, after the
-/// download and before qualification.
+/// Candidate mode downloads the plan, writes the head-bound attestation
+/// beside the manifest (same artifact), verifies the downloaded
+/// manifest, then performs the generated-files check with the downloaded
+/// candidate binary, after the download and before qualification.
 ///
 /// Credential posture: the build compiles PR source (build scripts run)
 /// and qualification executes the PR-built binary, so both steps carry
@@ -121,9 +122,19 @@ pub(crate) fn candidate_job(ctx: &RenderContext, spec: &CandidateSpec) -> Result
                 with_env_unset_argv(&spec.build),
                 with_credential_scrub(&BTreeMap::new()),
             )?,
+            download_plan_step()?,
             steps::shell_step(
                 "Write candidate manifest",
                 vec!["sh".to_owned(), "-c".to_owned(), manifest],
+                with_credential_scrub(&BTreeMap::new()),
+            )?,
+            steps::shell_step(
+                "Write candidate attestation",
+                vec![
+                    "sh".to_owned(),
+                    "-c".to_owned(),
+                    steps::candidate_attestation_script(),
+                ],
                 with_credential_scrub(&BTreeMap::new()),
             )?,
             steps::upload_artifact_step(&artifact, CANDIDATE_OUTPUT_DIR_EXPR)?,
