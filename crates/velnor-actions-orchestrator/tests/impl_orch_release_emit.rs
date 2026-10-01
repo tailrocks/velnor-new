@@ -21,7 +21,7 @@ const RELEASE_FAMILY: [&str; 5] = [
     ".github/release-plz-bootstrap.toml",
     ".github/release-plz.toml",
     ".github/workflows/ci.yml",
-    ".github/workflows/velnor-release.yml",
+    ".github/workflows/release.yml",
 ];
 
 /// Committed fixture repo with a GitHub origin (release identity inputs).
@@ -106,14 +106,14 @@ fn plan_lists_release_files_iff_enabled() -> TestResult {
     for path in [
         ".github/release-plz-bootstrap.toml",
         ".github/release-plz.toml",
-        ".github/workflows/velnor-release.yml",
+        ".github/workflows/release.yml",
     ] {
         assert!(plan.contains(path), "plan names {path}:\n{plan}");
     }
     let bare = make_repo(config_with_branch())?;
     let bare_plan = plan_for(&prepare(bare.path())?)?;
     assert!(
-        !bare_plan.contains("velnor-release.yml") && !bare_plan.contains("release-plz"),
+        !bare_plan.contains("release.yml") && !bare_plan.contains("release-plz"),
         "no release inventory without opt-in:\n{bare_plan}"
     );
     Ok(())
@@ -134,7 +134,7 @@ fn release_enabled_emits_family_oidc() -> TestResult {
         },
     )?;
     assert_eq!(report.files_written, family_vec());
-    let yaml = fs::read_to_string(preview.join(".github/workflows/velnor-release.yml"))?;
+    let yaml = fs::read_to_string(preview.join(".github/workflows/release.yml"))?;
     assert!(
         yaml.contains("github.repository == 'acme/widgets'"),
         "repo gate"
@@ -220,7 +220,7 @@ fn release_bootstrap_mode_adds_token_job() -> TestResult {
         },
     )?;
     assert_eq!(report.files_written, family_vec());
-    let yaml = fs::read_to_string(preview.join(".github/workflows/velnor-release.yml"))?;
+    let yaml = fs::read_to_string(preview.join(".github/workflows/release.yml"))?;
     assert!(
         yaml.contains("release-publish-bootstrap"),
         "bootstrap job present"
@@ -277,7 +277,7 @@ fn release_without_release_pr_validates_instead() -> TestResult {
     let repo = release_repo(config)?;
     let tree = render_staged_tree(&prepare(repo.path())?)?;
     let yaml = tree
-        .get(".github/workflows/velnor-release.yml")
+        .get(".github/workflows/release.yml")
         .ok_or_else(|| std::io::Error::other("missing workflow"))?;
     assert!(yaml.contains("Validate release"), "dry-run preparation");
     assert!(!yaml.contains(" release-pr "), "no release-pr phase");
