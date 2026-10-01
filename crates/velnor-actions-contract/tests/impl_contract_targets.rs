@@ -1,10 +1,10 @@
 //! Release-target and candidate-manifest cases.
+use velnor_actions_contract::config::{
+    LATEST_RUNNER_LABEL, RUNNER_LABEL_CATALOG, is_valid_rust_target,
+};
 use velnor_actions_contract::{
     CandidateArtifactManifest, ContractError, RELEASE_MANIFEST_FILENAME, ReleaseManifest,
     SUPPORTED_TARGETS, asset_filename, is_supported_target, target_for_runner_label,
-};
-use velnor_actions_contract::config::{
-    LATEST_RUNNER_LABEL, RUNNER_LABEL_CATALOG, is_valid_rust_target,
 };
 
 #[test]
@@ -42,10 +42,7 @@ fn runner_label_catalog_maps_or_fails_closed() {
                     is_supported_target(target),
                     "{label} maps to supported {target}"
                 );
-                assert!(
-                    !label.ends_with("-arm"),
-                    "{label} is an x64 label"
-                );
+                assert!(!label.ends_with("-arm"), "{label} is an x64 label");
             }
             None => assert!(
                 label.ends_with("-arm"),
@@ -61,7 +58,11 @@ fn runner_label_catalog_maps_or_fails_closed() {
     // must hard-fail on them (platform identity, cache keys) rather
     // than mis-executing. See `sources_cache_key` and
     // `platform_inputs_for` rejection tests.
-    for other in ["host", "aarch64-unknown-linux-gnu", "x86_64-pc-windows-msvc"] {
+    for other in [
+        "host",
+        "aarch64-unknown-linux-gnu",
+        "x86_64-pc-windows-msvc",
+    ] {
         assert!(is_valid_rust_target(other), "{other} is config-accepted");
     }
     assert!(!is_supported_target("aarch64-unknown-linux-gnu"));

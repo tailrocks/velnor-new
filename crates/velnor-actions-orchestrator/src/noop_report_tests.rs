@@ -221,10 +221,19 @@ fn noop_rejects_malformed_run_key_before_path_join() {
     // `load_plan` joins it into a path, so traversal keys never reach
     // the filesystem (unreachable via `resolve_run_key` today, which
     // validates or re-derives digits-only keys).
-    for bad in ["", "LOCAL", "r1-a", "../evil", "local/../../evil", "r1-a1/x"] {
-        let err =
-            write_noop_report_to(bad, CLIPPY, 0, &request, temp.path()).expect_err("run key");
-        assert!(err.to_string().contains("malformed_run_key"), "{bad}: {err}");
+    for bad in [
+        "",
+        "LOCAL",
+        "r1-a",
+        "../evil",
+        "local/../../evil",
+        "r1-a1/x",
+    ] {
+        let err = write_noop_report_to(bad, CLIPPY, 0, &request, temp.path()).expect_err("run key");
+        assert!(
+            err.to_string().contains("malformed_run_key"),
+            "{bad}: {err}"
+        );
     }
 }
 

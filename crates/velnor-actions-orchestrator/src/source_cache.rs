@@ -191,7 +191,11 @@ mod tests {
         // Rust execution targets are charset-validated, so supported
         // configs can carry non-release triples; the cache path
         // hard-fails on them instead of keying a foreign toolchain.
-        for target in ["aarch64-unknown-linux-gnu", "wasm32-unknown-unknown", "host"] {
+        for target in [
+            "aarch64-unknown-linux-gnu",
+            "wasm32-unknown-unknown",
+            "host",
+        ] {
             let err = sources_cache_key(target, "1.98.1", &[]).expect_err("target");
             assert!(err.to_string().contains("bad_target"), "{target}: {err}");
         }

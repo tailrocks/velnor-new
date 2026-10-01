@@ -158,7 +158,10 @@ mod tests {
         let err = ContractError::identity("conclusion", format!("unknown_conclusion:{forged}"));
         let text = err.to_string();
         assert!(!text.contains('\n') && !text.contains('\r'), "{text}");
-        assert!(text.contains("unknown_conclusion:evil::notice::spoofednext"), "{text}");
+        assert!(
+            text.contains("unknown_conclusion:evil::notice::spoofednext"),
+            "{text}"
+        );
         let err = ContractError::identity("field", "clean_code");
         assert_eq!(err.to_string(), "invalid field: clean_code");
     }

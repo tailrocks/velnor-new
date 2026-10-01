@@ -43,7 +43,9 @@ fn identity_env_contract_enforces_in_every_build() {
     let text = err.to_string();
     assert!(!text.contains('\n'), "{text}");
     assert!(
-        text.contains("obligation_identity_mismatch:stack/rust/demo/clippy/default::notice::spoofed"),
+        text.contains(
+            "obligation_identity_mismatch:stack/rust/demo/clippy/default::notice::spoofed"
+        ),
         "{text}"
     );
 }
