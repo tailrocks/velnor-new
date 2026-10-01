@@ -11,6 +11,7 @@
 
 - Requirements: `docs/reviews/pr-1.md`, adopted in `docs/reviews/pr-1-adoption.md`, tracked in `docs/reviews/pr-1-disposition.md`.
 - Contracts: `docs/proposed/*`; implemented gates and procedures: `docs/implemented/*`.
+- OpenTofu: `docs/proposed/opentofu-contract.md`, tracked in `docs/reviews/opentofu-evidence.md`.
 - Pins and exceptions: `.velnor/version-policy.toml`, `.velnor/freshness-inventory.json`.
 
 ## Verify from the repo root
