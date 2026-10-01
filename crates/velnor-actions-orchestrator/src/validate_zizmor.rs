@@ -17,9 +17,9 @@ const ZIZMOR_CONFIG: &str = ".zizmor.yml";
 
 /// Emit the staging-only zizmor config into the staging root.
 ///
-/// Scans staged workflow bytes for the exact blessed Alint tag and
-/// ignores only those `unpinned-uses` locations; every other ref
-/// still requires a hash. Never touches the generated tree.
+/// Emits a zero-ignore staging config; every emitted ref is hash-pinned,
+/// so no `unpinned-uses` location needs an exception. Never touches the
+/// generated tree.
 pub(crate) fn write_zizmor_config(
     staging: &Path,
     tree: &RenderedTree,

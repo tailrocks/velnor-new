@@ -172,11 +172,11 @@ fn join_quoted_argv(argv: &[String]) -> String {
 /// workflows that must fail adapter tests, not the policy audit.
 const ZIZMOR_POLICY_INPUT: &str = ".github/workflows";
 
-/// Policy zizmor config: the committed reviewed-tag exception file.
+/// Policy zizmor config: the committed zero-ignore policy file.
 ///
-/// The config carries exactly the version-policy §2 `unpinned-uses`
-/// ignore; a missing file errors the scan instead of silently dropping
-/// the exception.
+/// Every emitted ref is hash-pinned, so the `unpinned-uses` ignore list
+/// is empty; a missing file errors the scan instead of silently dropping
+/// the policy.
 const ZIZMOR_POLICY_CONFIG: &str = ".zizmor.yml";
 
 /// Fixed validator-job vector: offline zizmor audit through pinned Mise.
