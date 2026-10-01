@@ -4,7 +4,8 @@
 //! `generate` YAML, the `plan-v1` response (plan JSON with obligations plus
 //! the matrix), the merge expected-report set, and one task report into a
 //! temp dir; every artifact must byte-match its golden (modulo documented
-//! normalization: repo path, head SHA, generator target/SHA). Malformed
+//! normalization: repo path, head SHA, generator target/SHA, and the
+//! input digests that embed the generator host triple). Malformed
 //! cases goldenize the failure (exit code plus the machine-readable
 //! `malformed_manifest:` token; the trailing Cargo diagnostic is toolchain
 //! wording, asserted non-empty but not byte-pinned).
@@ -101,44 +102,7 @@ fn normalized_plan(repo: &Path, head: &str, stdout: &[u8]) -> Result<Vec<u8>, Bo
         .into_bytes())
 }
 
-/// `plan-v1` response with volatile generator/head fields normalized.
-///
-/// The generator target triple and executable SHA are environment facts,
-/// not planning behavior; both must be present and well-formed, then are
-/// replaced so the remaining bytes (obligations, digests, matrix entries,
-/// cache IDs, metadata, run vectors) compare exactly.
-fn normalized_response(repo: &Path, head: &str, bytes: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
-    let value: serde_json::Value = serde_json::from_slice(bytes)?;
-    let generator = value
-        .pointer("/plan/generator")
-        .ok_or("response lacks plan.generator")?;
-    let target = generator
-        .get("target")
-        .and_then(serde_json::Value::as_str)
-        .ok_or("response lacks generator.target")?;
-    let sha = generator
-        .get("sha256")
-        .and_then(serde_json::Value::as_str)
-        .ok_or("response lacks generator.sha256")?;
-    if target.is_empty() || sha.len() != 64 || !sha.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-        return Err("generator identity malformed".into());
-    }
-    let text = String::from_utf8(bytes.to_vec())?;
-    if !text.contains(head) {
-        return Err("response lacks the head SHA".into());
-    }
-    // Raw Cargo package IDs embed the checkout path (both the temp path
-    // as passed and its canonicalization); digests never do. Normalize
-    // both spellings so package records compare exactly.
-    let canonical = repo.canonicalize().unwrap_or_else(|_| repo.to_path_buf());
-    Ok(text
-        .replace(sha, "<generator-sha>")
-        .replace(target, "<target>")
-        .replace(head, "<head>")
-        .replace(&canonical.display().to_string(), "<repo>")
-        .replace(&repo.display().to_string(), "<repo>")
-        .into_bytes())
-}
+use crate::impl_cli_parity_golden_normalize::normalized_response;
 
 /// Merge expected-report set derived from the response (mirrors the
 /// plan-derived expectation: report ID per matrix leg plus obligation
