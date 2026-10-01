@@ -20,9 +20,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use velnor_actions_contract::{
     CacheLayer, CacheOutcome, CacheResult, ContractError, NotSelectedReason, ObligationDecision,
-    RunnerImageEvidence, TaskReport, TaskStatus, Trust, WorkflowEvent, join_runner_temp,
+    RunnerImageEvidence, Stack, TaskReport, TaskStatus, Trust, WorkflowEvent, join_runner_temp,
     task_report_id_for_task, validate_run_key,
 };
+use velnor_actions_rust::SelectionBroadening;
 
 use crate::OrchestratorError;
 use crate::internal::internal_contract;
@@ -250,6 +251,24 @@ pub fn selection_broadens_for_path(path: &str) -> Option<&'static str> {
     }
     if path == ".velnor" || path.starts_with(".velnor/") || path.starts_with(".github/") {
         return Some("global_config_changed:selecting_all");
+    }
+    None
+}
+
+/// Broadening class one changed path triggers, unioned over stacks.
+///
+/// Each stack classifies its own lock/root-config paths; the orchestrator
+/// only unions the verdicts and owns the warning vocabulary.
+#[must_use]
+pub(crate) fn broadening_for_path(path: &str) -> Option<SelectionBroadening> {
+    for stack in Stack::all() {
+        match stack {
+            Stack::Rust => {
+                if let Some(class) = velnor_actions_rust::selection_broadening(path) {
+                    return Some(class);
+                }
+            }
+        }
     }
     None
 }

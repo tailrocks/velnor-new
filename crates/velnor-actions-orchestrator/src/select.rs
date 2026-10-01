@@ -9,12 +9,12 @@ use std::collections::BTreeSet;
 use std::ffi::OsString;
 use std::path::Path;
 
-use velnor_actions_contract::{ProposedTask, Stack, WorkflowEvent};
+use velnor_actions_contract::{ProposedTask, WorkflowEvent};
 use velnor_actions_mise::GitRequest;
 use velnor_actions_rust::SelectionBroadening;
 
 use crate::OrchestratorError;
-use crate::decisions::selection_broadens_for_path;
+use crate::decisions::{broadening_for_path, selection_broadens_for_path};
 use crate::discover::Discovery;
 use crate::git_paths::{NON_UTF8_PATH, split_nul_paths};
 use crate::internal::internal;
@@ -388,21 +388,4 @@ fn untracked_files(root: &Path) -> Result<BTreeSet<String>, String> {
 /// feed inspection findings only; a task consuming one must declare it.
 fn is_advisory_toolfile(path: &str) -> bool {
     path == ".mise.toml" || velnor_actions_rust::is_known_toolfile(path)
-}
-
-/// Broadening class one changed path triggers, unioned over stacks.
-///
-/// Each stack classifies its own lock/root-config paths; the orchestrator
-/// only unions the verdicts and owns the warning vocabulary.
-fn broadening_for_path(path: &str) -> Option<SelectionBroadening> {
-    for stack in Stack::all() {
-        match stack {
-            Stack::Rust => {
-                if let Some(class) = velnor_actions_rust::selection_broadening(path) {
-                    return Some(class);
-                }
-            }
-        }
-    }
-    None
 }
