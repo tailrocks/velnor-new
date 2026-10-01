@@ -5,15 +5,22 @@
 //! scripts, custom tasks) runs as the same user earlier in the job, so
 //! a planted symlink at a write path would redirect producer bytes.
 //! `O_EXCL` alone does not stop that: creating through a dangling final
-//! symlink still follows it. These writers reject symlinks at the final
-//! component before creation and verify the open file is the path that
-//! was created (dev/ino identity on unix). A same-user attacker can
-//! still race the check-use window; this closes the deterministic
-//! plant, not a winning race.
+//! symlink still follows it. Files therefore open relative to the
+//! parent dirfd with `O_NOFOLLOW|O_EXCL`, and parent chains are
+//! created per component under a caller-supplied anchor with a
+//! symlink check before and after each step. F6: a same-user attacker
+//! can still race any check-use window (parent swap between the pin
+//! and the open, swap after verification); this closes the
+//! deterministic plant, not a winning race. That residual is accepted:
+//! same-user, same-machine TOCTOU has no portable close (no `openat2`
+//! on macOS, no atomic pin-then-resolve in std).
 
 use std::fs;
 use std::io::Write;
-use std::path::Path;
+use std::path::{Component, Path};
+
+#[cfg(unix)]
+use rustix::fs::{Mode, OFlags, open, openat};
 
 use crate::OrchestratorError;
 use crate::internal::internal;
@@ -39,11 +46,7 @@ pub(crate) fn write_exclusive(
         Ok(_) => return Err(internal(&format!("{context}_exists"))),
         Err(_) => {}
     }
-    let mut file = fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(path)
-        .map_err(|_| internal(&format!("{context}_exists")))?;
+    let mut file = open_exclusive(path, context)?;
     if !created_identity(&file, path) {
         return Err(internal("symlink_refused"));
     }
@@ -51,29 +54,128 @@ pub(crate) fn write_exclusive(
         .map_err(|_| internal(&format!("{context}_unwritable")))
 }
 
+/// Open one new file relative to its parent dirfd, never following symlinks.
+///
+/// The parent opens with `O_DIRECTORY|O_NOFOLLOW` and the child creates
+/// through `openat` with a bare file name
+/// (`O_CREAT|O_EXCL|O_WRONLY|O_NOFOLLOW`), so no component is
+/// re-resolved after the parent is pinned: a symlink at the final
+/// component fails with `ELOOP`, a pre-existing file with `EEXIST`.
+/// Components above the immediate parent were pinned by
+/// [`create_dir_no_symlink`] at the call site, not here.
+#[cfg(unix)]
+fn open_exclusive(path: &Path, context: &str) -> Result<std::fs::File, OrchestratorError> {
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    let file_name = path
+        .file_name()
+        .map(Path::new)
+        .ok_or_else(|| internal(&format!("{context}_unwritable")))?;
+    let parent_fd = open(
+        parent,
+        OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC,
+        Mode::empty(),
+    )
+    .map_err(|_| parent_open_error(parent, context))?;
+    let created = openat(
+        &parent_fd,
+        file_name,
+        OFlags::CREATE | OFlags::EXCL | OFlags::WRONLY | OFlags::NOFOLLOW | OFlags::CLOEXEC,
+        file_mode(),
+    )
+    .map_err(|err| child_open_error(err, context))?;
+    Ok(std::fs::File::from(created))
+}
+
+/// Portable fallback: exclusive create without dirfd pinning (non-unix).
+#[cfg(not(unix))]
+fn open_exclusive(path: &Path, context: &str) -> Result<std::fs::File, OrchestratorError> {
+    fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+        .map_err(|_| internal(&format!("{context}_exists")))
+}
+
+/// Creation mode for producer files: `0666` under the umask, like std.
+#[cfg(unix)]
+fn file_mode() -> Mode {
+    Mode::RUSR | Mode::WUSR | Mode::RGRP | Mode::WGRP | Mode::ROTH | Mode::WOTH
+}
+
+/// Parent-open failure: a symlinked parent refuses, anything else is unwritable.
+#[cfg(unix)]
+fn parent_open_error(parent: &Path, context: &str) -> OrchestratorError {
+    if fs::symlink_metadata(parent).is_ok_and(|meta| meta.file_type().is_symlink()) {
+        return internal("symlink_refused");
+    }
+    internal(&format!("{context}_unwritable"))
+}
+
+/// Child-open failure: `EEXIST` exists, `ELOOP` refused, else unwritable.
+#[cfg(unix)]
+fn child_open_error(err: rustix::io::Errno, context: &str) -> OrchestratorError {
+    if err == rustix::io::Errno::EXIST {
+        return internal(&format!("{context}_exists"));
+    }
+    if err == rustix::io::Errno::LOOP {
+        return internal("symlink_refused");
+    }
+    internal(&format!("{context}_unwritable"))
+}
+
 /// Create one producer directory, refusing symlinked components.
 ///
 /// Every component from `anchor` (exclusive) through `dir` (inclusive)
-/// must exist as a real directory after creation; a symlink anywhere
-/// in that span refuses with `symlink_refused` instead of writing
-/// through it. `dir` must sit under `anchor`.
+/// is created one at a time with a symlink check before and after each
+/// step; a symlink anywhere in that span refuses with `symlink_refused`
+/// instead of writing through it. `dir` must sit under `anchor` with
+/// only normal components (`..` after the anchor is `anchor_escape`).
+/// `EEXIST` on creation retries as success (concurrent producers), and
+/// a file in the way fails closed with an IO error on the next step.
 ///
 /// # Errors
 ///
-/// Returns [`OrchestratorError::Internal`] for symlinks and paths
-/// outside the anchor; [`OrchestratorError::Io`] for mkdir failures.
+/// Returns [`OrchestratorError::Internal`] for symlinks and anchor
+/// escapes; [`OrchestratorError::Io`] for mkdir failures.
 pub(crate) fn create_dir_no_symlink(anchor: &Path, dir: &Path) -> Result<(), OrchestratorError> {
-    fs::create_dir_all(dir)
-        .map_err(|err| OrchestratorError::io(dir.display().to_string(), err.to_string()))?;
     let relative = dir
         .strip_prefix(anchor)
-        .map_err(|_| internal("symlink_refused"))?;
-    let mut current = anchor.to_path_buf();
+        .map_err(|_| internal("anchor_escape"))?;
+    let mut parts = Vec::new();
     for component in relative.components() {
-        current.push(component);
-        if fs::symlink_metadata(&current).is_ok_and(|meta| meta.file_type().is_symlink()) {
-            return Err(internal("symlink_refused"));
+        let Component::Normal(part) = component else {
+            return Err(internal("anchor_escape"));
+        };
+        parts.push(part);
+    }
+    let mut current = anchor.to_path_buf();
+    for part in parts {
+        current.push(part);
+        refuse_if_link(&current)?;
+        if !current.is_dir() {
+            match fs::create_dir(&current) {
+                Ok(()) => {}
+                Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {}
+                Err(err) => {
+                    return Err(OrchestratorError::io(
+                        current.display().to_string(),
+                        err.to_string(),
+                    ));
+                }
+            }
         }
+        // F6: the second check catches a link planted between the first
+        // check and creation; a swap after this check still wins
+        // (accepted same-user race, see the module docs).
+        refuse_if_link(&current)?;
+    }
+    Ok(())
+}
+
+/// Refuse one path that resolves to a symlink.
+fn refuse_if_link(path: &Path) -> Result<(), OrchestratorError> {
+    if fs::symlink_metadata(path).is_ok_and(|meta| meta.file_type().is_symlink()) {
+        return Err(internal("symlink_refused"));
     }
     Ok(())
 }
@@ -143,8 +245,52 @@ mod tests {
         let err = create_dir_no_symlink(temp.path(), &link.join("sub"))
             .expect_err("linked parent refused");
         assert!(err.to_string().contains("symlink_refused"), "{err}");
+        assert!(
+            !real.join("sub").exists(),
+            "refusal must not create through the plant"
+        );
         let clean = temp.path().join("a").join("b");
         create_dir_no_symlink(temp.path(), &clean).expect("clean parents pass");
         assert!(clean.is_dir());
+        create_dir_no_symlink(temp.path(), &clean).expect("re-create is idempotent");
+    }
+
+    #[test]
+    fn dir_creation_refuses_anchor_escapes() {
+        let temp = scratch("escape");
+        let elsewhere = scratch("elsewhere");
+        let err = create_dir_no_symlink(temp.path(), &elsewhere.path().join("sub"))
+            .expect_err("outside anchor refused");
+        assert!(err.to_string().contains("anchor_escape"), "{err}");
+        let err = create_dir_no_symlink(
+            temp.path(),
+            &temp.path().join("sub").join("..").join("sneaky"),
+        )
+        .expect_err("dot-dot refused");
+        assert!(err.to_string().contains("anchor_escape"), "{err}");
+        assert!(
+            !temp.path().join("sneaky").exists(),
+            "escape must not create"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn exclusive_write_refuses_symlinked_parent() {
+        let temp = scratch("parentlink");
+        let real = temp.path().join("real");
+        fs::create_dir(&real).expect("real dir");
+        let link = temp.path().join("link");
+        std::os::unix::fs::symlink(&real, &link).expect("symlink");
+        let err = write_exclusive(&link.join("report.json"), b"{}", "report")
+            .expect_err("linked parent refused");
+        assert!(err.to_string().contains("symlink_refused"), "{err}");
+        assert!(
+            !real.join("report.json").exists(),
+            "bytes never followed the plant"
+        );
+        let missing = temp.path().join("nope").join("report.json");
+        let err = write_exclusive(&missing, b"{}", "report").expect_err("missing parent refused");
+        assert!(err.to_string().contains("report_unwritable"), "{err}");
     }
 }

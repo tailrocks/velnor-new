@@ -44,7 +44,8 @@ read schema-1 JSON from the existing request file at
 `VELNOR_REQUEST_FILE` and write the schema-1 JSON result to the sibling
 `<op>-response.json` derived from the `<op>-request.json` file name;
 `write-request-v1` requires that path to be absent plus the GitHub event
-environment, and materializes the request file; `fetch-reports-v1`
+environment and the runner-temp anchor (`RUNNER_TEMP`, which the request
+path must sit under), and materializes the request file; `fetch-reports-v1`
 takes no request file and instead requires the runner-temp velnor
 directory plus the numeric run ID; `write-task-report-v1` takes no
 request file and instead requires the runner-temp velnor directory,

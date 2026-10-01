@@ -50,8 +50,15 @@ fn assembly_shape_carries_no_base() {
     );
     let needs = r#"{"plan":"success","rust-demo":"success"}"#;
     let expected = r#"["plan","rust-demo"]"#;
-    let request =
-        assemble_with_needs("local", dir.path(), Some(needs), Some(expected)).expect("assemble");
+    let request = assemble_with_needs(
+        "local",
+        dir.path(),
+        Some(needs),
+        Some(expected),
+        Some("push"),
+        Some("{}"),
+    )
+    .expect("assemble");
     let value: serde_json::Value = serde_json::from_str(&request).expect("json");
     assert!(value.get("base").is_none(), "{request}");
     assert_eq!(value["schema"], 1);
@@ -82,8 +89,15 @@ fn assembly_reads_expected_only_and_sorts_reports() {
         ],
     );
     let needs = r#"{"plan":{"result":"success","outputs":{}}}"#;
-    let request = assemble_with_needs("local", dir.path(), Some(needs), Some(r#"["plan"]"#))
-        .expect("assemble");
+    let request = assemble_with_needs(
+        "local",
+        dir.path(),
+        Some(needs),
+        Some(r#"["plan"]"#),
+        Some("push"),
+        Some("{}"),
+    )
+    .expect("assemble");
     let value: serde_json::Value = serde_json::from_str(&request).expect("json");
     let ids: Vec<&str> = value["matrix_reports"]
         .as_array()
@@ -98,7 +112,8 @@ fn assembly_reads_expected_only_and_sorts_reports() {
 #[test]
 fn assembly_records_gaps_and_rejects_bad_report() {
     let empty = tempfile::TempDir::new().expect("tempdir");
-    let request = assemble_with_needs("local", empty.path(), None, None).expect("null plan");
+    let request = assemble_with_needs("local", empty.path(), None, None, Some("push"), Some("{}"))
+        .expect("null plan");
     let value: serde_json::Value = serde_json::from_str(&request).expect("json");
     assert!(value["plan"].is_null(), "{request}");
     assert!(value["matrix"].is_null(), "{request}");
@@ -115,8 +130,15 @@ fn assembly_records_gaps_and_rejects_bad_report() {
             "not json",
         )],
     );
-    let request = assemble_with_needs("local", bad.path(), Some(r#"{"a":"b"}"#), Some(r#"["a"]"#))
-        .expect("diagnostic");
+    let request = assemble_with_needs(
+        "local",
+        bad.path(),
+        Some(r#"{"a":"b"}"#),
+        Some(r#"["a"]"#),
+        Some("push"),
+        Some("{}"),
+    )
+    .expect("diagnostic");
     let errors = error_list(&request);
     assert!(
         errors
@@ -136,6 +158,8 @@ fn assembly_records_gaps_and_rejects_bad_report() {
         missing.path(),
         Some(r#"{"plan":"success"}"#),
         Some(r#"["plan"]"#),
+        Some("push"),
+        Some("{}"),
     )
     .expect("diagnostic");
     let errors = error_list(&request);
@@ -164,6 +188,8 @@ fn assembly_rejects_links_oversize_and_unreadable_inputs() {
             dir.path(),
             Some(r#"{"plan":"success"}"#),
             Some(r#"["plan"]"#),
+            Some("push"),
+            Some("{}"),
         )
         .expect("asm");
         let errors = error_list(&request);
@@ -183,6 +209,8 @@ fn assembly_rejects_links_oversize_and_unreadable_inputs() {
         dir.path(),
         Some(r#"{"plan":"success"}"#),
         Some(r#"["plan"]"#),
+        Some("push"),
+        Some("{}"),
     )
     .expect("asm");
     let errors = error_list(&request);
@@ -194,6 +222,8 @@ fn assembly_rejects_links_oversize_and_unreadable_inputs() {
         dir.path(),
         Some(r#"{"plan":"success"}"#),
         Some(r#"["plan"]"#),
+        Some("push"),
+        Some("{}"),
     )
     .expect("asm");
     let errors = error_list(&request);
@@ -211,6 +241,8 @@ fn dropped_or_missing_expected_inventory_fails_closed() {
         dir.path(),
         Some(r#"{"plan":"success"}"#),
         Some(r#"["lint","plan"]"#),
+        Some("push"),
+        Some("{}"),
     )
     .expect("diagnostic");
     let errors = error_list(&dropped);
@@ -224,8 +256,15 @@ fn dropped_or_missing_expected_inventory_fails_closed() {
         serde_json::json!(["lint", "plan"]),
         "inventory binds to expected, not observed"
     );
-    let missing = assemble_with_needs("local", dir.path(), Some(r#"{"plan":"success"}"#), None)
-        .expect("diagnostic");
+    let missing = assemble_with_needs(
+        "local",
+        dir.path(),
+        Some(r#"{"plan":"success"}"#),
+        None,
+        Some("push"),
+        Some("{}"),
+    )
+    .expect("diagnostic");
     let errors = error_list(&missing);
     assert!(
         errors.contains(&"missing_needs_expected".to_owned()),
@@ -234,11 +273,61 @@ fn dropped_or_missing_expected_inventory_fails_closed() {
 }
 
 #[test]
+fn assembly_captures_actual_event() {
+    let dir = staged(&plan_with(&[]), &[]);
+    let needs = Some(r#"{"plan":"success"}"#);
+    let expected = Some(r#"["plan"]"#);
+    let actual_of = |request: &str| {
+        serde_json::from_str::<serde_json::Value>(request).expect("json")["actual_event"].clone()
+    };
+    for (name, want) in [
+        ("push", "push"),
+        ("merge_group", "merge_group"),
+        ("local", "local"),
+    ] {
+        let request = assemble_with_needs("local", dir.path(), needs, expected, Some(name), None)
+            .expect("assemble");
+        assert_eq!(actual_of(&request), serde_json::json!(want), "{name}");
+        assert!(error_list(&request).is_empty(), "{request}");
+    }
+    for (fork, want) in [(true, "fork"), (false, "pull_request")] {
+        let payload = format!(r#"{{"pull_request":{{"head":{{"repo":{{"fork":{fork}}}}}}}}}"#);
+        let request = assemble_with_needs(
+            "local",
+            dir.path(),
+            needs,
+            expected,
+            Some("pull_request"),
+            Some(&payload),
+        )
+        .expect("assemble");
+        assert_eq!(actual_of(&request), serde_json::json!(want), "fork={fork}");
+        assert!(error_list(&request).is_empty(), "{request}");
+    }
+    for (name, payload, want) in [
+        (None, None, "missing_actual_event"),
+        (Some("push"), Some("not json"), "malformed_actual_payload"),
+        (Some("schedule"), Some("{}"), "unsupported_event"),
+        (Some("pull_request"), None, "missing_actual_payload"),
+        (Some("pull_request"), Some("{}"), "indeterminate_fork"),
+    ] {
+        let request = assemble_with_needs("local", dir.path(), needs, expected, name, payload)
+            .expect("assemble");
+        assert!(actual_of(&request).is_null(), "{name:?}");
+        assert!(
+            error_list(&request).contains(&want.to_owned()),
+            "{name:?}: {}",
+            error_list(&request).join(",")
+        );
+    }
+}
+
+#[test]
 fn request_file_writes_exclusively() {
     let dir = staged("{}", &[]);
     let file = dir.path().join("sub").join("merge-v1-request.json");
-    let written = write_merge_request_to(&file, "local", dir.path()).expect("write");
+    let written = write_merge_request_to(&file, "local", dir.path(), dir.path()).expect("write");
     assert_eq!(written, file);
-    let err = write_merge_request_to(&file, "local", dir.path()).expect_err("exists");
+    let err = write_merge_request_to(&file, "local", dir.path(), dir.path()).expect_err("exists");
     assert!(err.to_string().contains("request_exists"), "{err}");
 }

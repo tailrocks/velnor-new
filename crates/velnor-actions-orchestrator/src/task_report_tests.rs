@@ -351,7 +351,9 @@ fn merge_flips_not_run_to_executed_end_to_end() {
     let needs = Some(r#"{"plan":"success"}"#);
     let expected = Some(r#"["plan"]"#);
 
-    let bare = assemble_with_needs("local", &run, needs, expected).expect("assemble bare");
+    let pr = Some(r#"{"pull_request":{"head":{"repo":{"fork":false}}}}"#);
+    let bare = assemble_with_needs("local", &run, needs, expected, Some("pull_request"), pr)
+        .expect("assemble bare");
     let verdict: velnor_actions_contract::FinalReport =
         serde_json::from_str(&merge_internal(&bare).expect("merge bare")).expect("final json");
     eprintln!(
@@ -370,7 +372,8 @@ fn merge_flips_not_run_to_executed_end_to_end() {
     write_task_report_to("local", TEST, 0, &[], temp.path()).expect("test");
     stage_downloads(&plan, &temp);
 
-    let full = assemble_with_needs("local", &run, needs, expected).expect("assemble full");
+    let full = assemble_with_needs("local", &run, needs, expected, Some("pull_request"), pr)
+        .expect("assemble full");
     assert!(
         !full.contains("missing_report"),
         "all artifacts staged: {full}"

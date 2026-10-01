@@ -50,20 +50,28 @@ pub(crate) fn check_plan_shape(
     }
 }
 
-/// Plan trust must match its event, and every task report must match the plan.
+/// Plan event/trust must match the merge-time actual event.
 ///
-/// Trust was stamped at plan time and never rechecked, so a forged plan
-/// or report could claim `Trusted` scope on PR content. The plan's trust
-/// must equal the canonical scope for its event, and each task file's
-/// event/trust pair must equal the plan's; anything else fails closed
-/// with a scope token, never silently.
+/// Trust was stamped at plan time and only checked for self-consistency,
+/// so a forged plan artifact could claim `Push` with `Trusted` scope on
+/// PR content and pass. The plan's event must equal the actual event
+/// captured at merge assembly (same run, runner ground truth), and the
+/// plan's trust must equal the canonical scope for that actual event;
+/// every task file's event/trust pair must still equal the plan's.
+/// Anything else fails closed with a scope token, never silently.
 pub(crate) fn check_trust_coherence(
     plan: &Plan,
     request: &MergeRequest,
     signals: &mut Signals,
     miss_reasons: &mut BTreeSet<String>,
 ) {
-    if plan.trust != velnor_actions_contract::trust_for_event(plan.event) {
+    let coherent = match request.actual_event {
+        Some(actual) => {
+            plan.event == actual && plan.trust == velnor_actions_contract::trust_for_event(actual)
+        }
+        None => false,
+    };
+    if !coherent {
         signals.planning_failed = true;
         miss_reasons.insert("trust_scope_mismatch".to_owned());
     }

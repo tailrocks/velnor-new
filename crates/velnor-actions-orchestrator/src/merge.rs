@@ -11,7 +11,8 @@ use std::collections::BTreeSet;
 use serde::Deserialize;
 use velnor_actions_contract::{
     FinalCounts, FinalReport, FinalStatus, MatrixReport, ObligationDecision, Plan, PlanMatrix,
-    RequiredJobResult, TaskReport, final_report_id_for_run, parse_strict_json, validate_run_key,
+    RequiredJobResult, TaskReport, WorkflowEvent, final_report_id_for_run, parse_strict_json,
+    validate_run_key,
 };
 
 use self::merge_checks::{
@@ -36,6 +37,11 @@ pub(crate) struct MergeRequest {
     schema: u32,
     /// Run key.
     pub(crate) run_key: String,
+    /// Merge-time triggering event captured at assembly; the plan's
+    /// stamped event must match it exactly (a forged plan claiming a
+    /// stronger event fails closed instead of inheriting its stamp).
+    #[serde(default)]
+    actual_event: Option<WorkflowEvent>,
     /// Validated plan; absent when the plan artifact never landed.
     #[serde(default)]
     plan: Option<Plan>,

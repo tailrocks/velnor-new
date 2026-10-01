@@ -55,6 +55,7 @@ fn unparsable_report_carries_to_verdict() -> TestResult {
             .filter(|e| e.as_str() != Some("missing_needs_channel"))
             .collect(),
     );
+    value["actual_event"] = value["plan"]["event"].clone();
     let report: velnor_actions_contract::FinalReport =
         serde_json::from_str(&merge_internal(&value.to_string())?)?;
     assert_eq!(report.status, FinalStatus::PlanningFailed);

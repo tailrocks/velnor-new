@@ -95,6 +95,7 @@ fn missing_plan_merges_to_planning_failed() -> TestResult {
     let request = serde_json::json!({
         "schema": 1,
         "run_key": "local",
+        "actual_event": "pull_request",
         "plan": plan,
         "matrix": null,
         "matrix_reports": [],

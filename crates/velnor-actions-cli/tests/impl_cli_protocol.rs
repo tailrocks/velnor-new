@@ -47,6 +47,7 @@ fn write_request_materializes_push_request() -> Result<(), Box<dyn Error>> {
             ("GITHUB_EVENT_NAME", "push"),
             ("GITHUB_EVENT_PATH", payload.to_str().unwrap_or("/")),
             ("GITHUB_SHA", &head),
+            ("RUNNER_TEMP", tmp.to_str().unwrap_or("/")),
         ],
         &tmp,
     )?;
@@ -74,6 +75,7 @@ fn write_request_rejects_malformed_payload() -> Result<(), Box<dyn Error>> {
             ("VELNOR_REQUEST_FILE", request.to_str().unwrap_or("/")),
             ("GITHUB_EVENT_NAME", "push"),
             ("GITHUB_EVENT_PATH", payload.to_str().unwrap_or("/")),
+            ("RUNNER_TEMP", tmp.to_str().unwrap_or("/")),
         ],
         &tmp,
     )?;
@@ -115,6 +117,7 @@ fn plan_writes_response_and_github_outputs() -> Result<(), Box<dyn Error>> {
     let outputs = repo.join("github-outputs");
     std::fs::write(&outputs, "seed=1\n")?;
     let runner_temp = repo.join("runner-temp");
+    std::fs::create_dir_all(&runner_temp)?;
     let output = spawn_isolated(
         &[],
         &[
@@ -151,6 +154,7 @@ fn merge_no_work_plan_reports_no_work() -> Result<(), Box<dyn Error>> {
     let request = stage_plan_request(&repo)?;
     let outputs = repo.join("github-outputs");
     let runner_temp = repo.join("runner-temp");
+    std::fs::create_dir_all(&runner_temp)?;
     let plan = spawn_isolated(
         &[],
         &[
@@ -206,6 +210,7 @@ fn plan_publishes_plan_artifact_files() -> Result<(), Box<dyn Error>> {
     let request = stage_plan_request(&repo)?;
     let outputs = repo.join("github-outputs");
     let runner_temp = repo.join("runner-temp");
+    std::fs::create_dir_all(&runner_temp)?;
     let output = spawn_isolated(
         &[],
         &[
