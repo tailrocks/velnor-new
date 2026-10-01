@@ -223,7 +223,6 @@ pub(crate) fn workspace_format_report_steps(
         REPORT_FORMAT_NAME,
         crate::matrix_step::deferred_report_argv(&outcome, &helper, &start),
         with_credential_scrub(&BTreeMap::from([(
-
             crate::task_report::TASK_ID_ENV.to_owned(),
             fmt.task_id.clone(),
         )])),
