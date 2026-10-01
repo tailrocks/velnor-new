@@ -204,7 +204,7 @@ NOT decide the graph that builds or promotes itself.
 The candidate build command is:
 
 ```text
-mise exec --no-config rust@<exact> mr-boxington@<exact> --
+mise --no-config exec rust@<exact> mr-boxington@<exact> --
   mbx build --release --locked --package velnor-actions-cli --bin velnor-actions
 ```
 

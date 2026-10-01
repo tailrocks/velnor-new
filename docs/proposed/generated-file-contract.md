@@ -97,7 +97,7 @@ This is the MBX form when repository evidence selected MBX:
 
 ```yaml
 - name: Clippy
-  run: mise exec --no-config mbx@<exact-version> -- mbx clippy --package <package> --all-targets --locked -- -D warnings
+  run: mise --no-config exec mbx@<exact-version> -- mbx clippy --package <package> --all-targets --locked -- -D warnings
 ```
 
 Rust command selection is per detected Rust workspace. The Rust adapter records

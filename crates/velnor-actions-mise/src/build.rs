@@ -3,8 +3,8 @@
 //! The candidate compiles `velnor-actions-cli` with the exact pinned
 //! toolchain; one byte-exact shape serves the candidate build and the
 //! pre-seed helper build. Global flags ride before the subcommand per
-//! the isolated wrapper; the spec's bare `--no-config` spelling is the
-//! one blessed deviation (see the F2 mise notes).
+//! the isolated wrapper, matching the contract spelling (`mise
+//! --no-config exec ...` — mise rejects flags after the subcommand).
 
 use std::ffi::OsString;
 

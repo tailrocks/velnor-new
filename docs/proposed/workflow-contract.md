@@ -183,7 +183,7 @@ one stack-neutral report even after failure.
 3. `actionlint`: checkout without persisted credentials; setup Mise with pinned action, version,
    and SHA-256; install exact
    Actionlint and ShellCheck versions with project config, env, and hooks disabled; run
-   `mise exec --no-config actionlint@<exact> shellcheck@<exact> -- actionlint -color` from the root. This
+   `mise --no-config exec actionlint@<exact> shellcheck@<exact> -- actionlint -color` from the root. This
    required job reads `.github/actionlint.yaml` and checks every generated workflow, even with no Rust stack.
 4. `required`: `if: always()`, depends on the base and enabled policy jobs, validates reports/conclusions,
 and is the required status check.
@@ -233,7 +233,7 @@ The generated jobs MUST use these step sequences and commands. Action steps are 
 above; every shell step is generated with fixed arguments and may not contain repository-provided shell text.
 
 Workflow shell may invoke Mise directly for exact tool installation, generated command steps, and the fixed
-candidate-build bootstrap. Every command step MUST use a fixed `mise exec --no-config` invocation with exact
+candidate-build bootstrap. Every command step MUST use a fixed `mise --no-config exec` invocation with exact
 tool pins, except a qualified Gate 6 task-cache step, which uses a Velnor-versioned task TOML under
 `$RUNNER_TEMP`. It MUST NOT invoke private or removed `velnor-actions` subcommands or look up a repository
 Mise task file. Checkout, artifact transfer, and Alint are fixed GitHub Actions primitives. Planning and

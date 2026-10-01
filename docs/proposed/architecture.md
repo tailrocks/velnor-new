@@ -218,7 +218,7 @@ a compilation task, so it always uses Cargo even when subsequent compilation
 uses MBX:
 
 ```text
-mise exec --no-config rust@<exact> -- cargo metadata --format-version 1 --no-deps --manifest-path <manifest>
+mise --no-config exec rust@<exact> -- cargo metadata --format-version 1 --no-deps --manifest-path <manifest>
 ```
 
 The output is Cargo metadata JSON format version 1. `--no-deps` avoids fetching third-party dependencies but sets the resolved `resolve` graph to null. It still exposes each workspace package's manifest dependency declarations, including local `path` values. Velnor MUST build its conservative local-package graph from those declarations and connect each path to the package whose manifest Cargo reports. It MUST include every declared local path edge, including optional and target-specific edges, so feature differences cannot omit a reverse dependent. The command MUST use exact tool arguments and MUST NOT read or write project Mise files. Nonzero status, invalid JSON, or unsupported metadata version fails that candidate and the plan; Velnor MUST NOT parse Cargo manifests or Rust source as fallback.
@@ -226,7 +226,7 @@ The output is Cargo metadata JSON format version 1. `--no-deps` avoids fetching 
 For qualification of the selected feature/target resolution, after dependency sources have been prepared, run:
 
 ```text
-mise exec --no-config rust@<exact> -- cargo metadata --format-version 1 --locked --offline --manifest-path <workspace-root>/Cargo.toml
+mise --no-config exec rust@<exact> -- cargo metadata --format-version 1 --locked --offline --manifest-path <workspace-root>/Cargo.toml
 ```
 
 This uses the same explicit tool pins and Cargo metadata command. Missing offline dependencies are `preparation_incomplete`, not a reason to fetch or produce a partial resolution. Velnor's own manifest-to-model adapter consumes the JSON; the `cargo_metadata` crate MAY deserialize it but MUST NOT execute Cargo. The plan job MUST NOT wait for full resolution merely to compute conservative local reverse dependencies.
