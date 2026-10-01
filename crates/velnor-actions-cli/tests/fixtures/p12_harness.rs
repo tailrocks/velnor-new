@@ -144,6 +144,10 @@ pub(crate) fn passing(prefix: &str) -> Result<Fixture, Box<dyn Error>> {
             include_str!("p12_config.txt"),
         ),
         (
+            "crates/velnor-actions-workflow-renderer/src/render.rs",
+            include_str!("p12_render.txt"),
+        ),
+        (
             ".velnor/version-policy.toml",
             include_str!("p12_policy.toml"),
         ),
