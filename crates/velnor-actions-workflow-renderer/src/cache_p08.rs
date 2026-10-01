@@ -12,7 +12,10 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{Job, Step, StepKind};
 
-use crate::{MiseSetup, RenderError, setup::MISE_ACTION_NAME, steps::validate_uses};
+use crate::{
+    MiseSetup, RenderError, cache_p08_detect::detector_words, setup::MISE_ACTION_NAME,
+    steps::validate_uses,
+};
 
 pub use crate::cache_elect::elect_mise_cache_writers;
 
@@ -90,7 +93,7 @@ pub fn infer_job_tools(job: &Job) -> Vec<String> {
 fn specs_in_argv(run: &[String]) -> Vec<String> {
     let mut out = Vec::new();
     let mut take = false;
-    for arg in run {
+    for arg in detector_words(run) {
         if arg == "install" || arg == "exec" {
             take = true;
             continue;
@@ -99,8 +102,8 @@ fn specs_in_argv(run: &[String]) -> Vec<String> {
             take = false;
             continue;
         }
-        if take && arg.contains('@') && is_tool_spec(arg) {
-            out.push(arg.clone());
+        if take && arg.contains('@') && is_tool_spec(&arg) {
+            out.push(arg);
         }
     }
     out
@@ -287,7 +290,7 @@ fn job_uses_mise(job: &Job) -> bool {
 /// Index of the first shell step invoking `mise`, when any.
 fn first_mise_index(job: &Job) -> Option<usize> {
     job.steps.iter().position(|step| {
-        matches!(&step.kind, StepKind::Shell { run, .. } if run.iter().any(|arg| arg == "mise"))
+        matches!(&step.kind, StepKind::Shell { run, .. } if detector_words(run).iter().any(|word| word == "mise"))
     })
 }
 

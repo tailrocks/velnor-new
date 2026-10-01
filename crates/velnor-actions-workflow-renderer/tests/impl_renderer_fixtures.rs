@@ -6,7 +6,7 @@ use velnor_actions_contract::{
 use velnor_actions_workflow_renderer::{
     ASSET_SHA_ENV, ASSET_URL_ENV, CONCURRENCY_CANCEL, CONCURRENCY_GROUP, MiseSetup, RenderContext,
     RenderError, STAGED_BINARY_PREFIX, ValidatorCommand, acquire_velnor_step, checkout_step,
-    plan_step, render_workflow_ir_strict, shell_step,
+    plan_step, render_workflow_ir, render_workflow_ir_strict, shell_step,
 };
 
 pub(crate) const VERSION: &str = "0.1.0";
@@ -213,4 +213,36 @@ pub(crate) fn matrix_task_job() -> Result<(String, velnor_actions_contract::Job)
 /// The constructor applies the overlay; callers pass the bare base.
 pub(crate) fn scrubbed_shell_step(name: &str, argv: Vec<String>) -> Result<Step, RenderError> {
     shell_step(name, argv, BTreeMap::new())
+}
+
+/// Minimal plan job with one caller-supplied shell step (hygiene input).
+pub(crate) fn token_plan_job(
+    name: &str,
+    argv: Vec<String>,
+    env: BTreeMap<String, String>,
+) -> Result<(String, Job), RenderError> {
+    Ok(job(
+        "plan",
+        "Plan",
+        Vec::new(),
+        vec![
+            checkout_step(&checkout_pin())?,
+            shell_step(name, argv, env)?,
+            plan_step(),
+        ],
+    ))
+}
+
+/// Assert a job set fails render with one error marker.
+pub(crate) fn render_fails_with(jobs: Vec<(String, Job)>, want: &str) {
+    assert!(
+        render_workflow_ir(
+            &fixture_ir(jobs),
+            WorkflowPolicy::ConsumerV1,
+            None,
+            &fixture_ctx(),
+        )
+        .is_err_and(|err| format!("{err:?}").contains(want)),
+        "must fail with {want}"
+    );
 }
