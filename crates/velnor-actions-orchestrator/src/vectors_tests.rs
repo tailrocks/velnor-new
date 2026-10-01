@@ -168,7 +168,12 @@ fn custom_task_steps_emit_only_allowlisted() {
         let StepKind::Shell { run, env } = &step.kind else {
             panic!("custom step must be shell: {:?}", step.kind);
         };
-        assert_eq!(*run, argv_of(&["mise", "run", task]));
+        assert_eq!(
+            *run,
+            velnor_actions_workflow_renderer::toolchain_env::with_env_unset_argv(&argv_of(&[
+                "mise", "run", task
+            ]))
+        );
         for key in velnor_actions_workflow_renderer::toolchain_env::STEP_CREDENTIAL_DENYLIST {
             assert_eq!(
                 env.get(key).map(String::as_str),

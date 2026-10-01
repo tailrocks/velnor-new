@@ -207,10 +207,13 @@ pub fn candidate_manifest_script(target: &str, toolchain: &str) -> String {
 }
 
 /// Acquire-Velnor step: digest-verified staging under runner temp.
+///
+/// The asset download is an unauthenticated public fetch over a pinned
+/// URL, so the step carries the scrub overlay on top of its asset env.
 /// # Errors
 pub fn acquire_velnor_step(
     argv: Vec<String>,
-    env: BTreeMap<String, String>,
+    env: &BTreeMap<String, String>,
 ) -> Result<Step, RenderError> {
     commands::validate_command_argv(&argv)?;
     commands::validate_env(&env)?;
@@ -234,7 +237,11 @@ pub fn acquire_velnor_step(
     if !downloads || !verifies {
         return Err(RenderError::BadCommand("acquire_without_verify".to_owned()));
     }
-    shell_step(ACQUIRE_NAME, argv, env)
+    shell_step(
+        ACQUIRE_NAME,
+        argv,
+        crate::toolchain_env::with_credential_scrub(env),
+    )
 }
 
 /// Split an internal operation into env op plus request-file target op.

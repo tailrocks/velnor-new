@@ -191,7 +191,7 @@ fn acquire_template_requires_digest_and_staging() {
             "curl -fsSL \"$VELNOR_ASSET_URL\" -o {staged} && echo \"$VELNOR_ASSET_SHA256\" | sha256sum -c -"
         ),
     ]);
-    let good = acquire_velnor_step(wired.clone(), env.clone());
+    let good = acquire_velnor_step(wired.clone(), &env);
     assert!(good.is_ok());
     assert_eq!(
         good.ok().map(|step| step.name),
@@ -199,15 +199,15 @@ fn acquire_template_requires_digest_and_staging() {
     );
     let mut bad_sha = env.clone();
     bad_sha.insert(ASSET_SHA_ENV.to_owned(), "zzz".to_owned());
-    assert!(acquire_velnor_step(wired.clone(), bad_sha).is_err());
+    assert!(acquire_velnor_step(wired.clone(), &bad_sha).is_err());
     let mut bad_url = env.clone();
     bad_url.insert(
         ASSET_URL_ENV.to_owned(),
         "http://example.invalid/bin".to_owned(),
     );
-    assert!(acquire_velnor_step(wired.clone(), bad_url).is_err());
-    assert!(acquire_velnor_step(argv(&["fetch", "/tmp/bin"]), env.clone()).is_err());
-    assert!(acquire_velnor_step(argv(&["fetch", &staged]), env).is_err());
+    assert!(acquire_velnor_step(wired.clone(), &bad_url).is_err());
+    assert!(acquire_velnor_step(argv(&["fetch", "/tmp/bin"]), &env).is_err());
+    assert!(acquire_velnor_step(argv(&["fetch", &staged]), &env).is_err());
 }
 
 #[test]
@@ -348,7 +348,9 @@ fn rendered_run_steps_quote_runner_temp_paths() -> Result<(), RenderError> {
                 shell_step(
                     "Run tool",
                     argv(&["$RUNNER_TEMP/velnor/bin/x", "--flag"]),
-                    BTreeMap::new(),
+                    velnor_actions_workflow_renderer::toolchain_env::with_credential_scrub(
+                        &BTreeMap::new(),
+                    ),
                 )?,
                 plan_step(),
             ],

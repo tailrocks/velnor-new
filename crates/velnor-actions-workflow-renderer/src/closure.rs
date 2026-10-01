@@ -68,7 +68,7 @@ pub fn provision_acquire_step(
                 (steps::ASSET_URL_ENV.to_owned(), url.clone()),
                 (steps::ASSET_SHA_ENV.to_owned(), sha256.clone()),
             ]);
-            steps::acquire_velnor_step(argv, env)
+            steps::acquire_velnor_step(argv, &env)
         }
         HelperProvenance::SeedRequired => {
             Err(RenderError::InvalidWorkflow(SEED_REMEDIATION.to_owned()))
@@ -173,7 +173,8 @@ fn check_acquire_shape(job_id: &str, step: &Step) -> Result<(), RenderError> {
 /// Fixed freshness step: regenerate into scratch, byte-compare `.github`.
 ///
 /// Runs the helper's `generate --output-dir`, diffs preview against
-/// committed `.github`; `env` is the caller-validated consumer env.
+/// committed `.github`; `env` is the caller-validated consumer env,
+/// scrubbed here since local generation needs no ambient auth.
 /// # Errors
 pub fn freshness_step(
     binary: &str,
@@ -186,7 +187,11 @@ pub fn freshness_step(
         "{binary} generate --output-dir \"{output_dir}\" && diff -r --brief .github \"{output_dir}/.github\""
     );
     let argv = vec!["sh".to_owned(), "-c".to_owned(), script];
-    steps::shell_step(CHECK_GENERATED_NAME, argv, env.clone())
+    steps::shell_step(
+        CHECK_GENERATED_NAME,
+        argv,
+        crate::toolchain_env::with_credential_scrub(env),
+    )
 }
 
 /// Fixed plan-report upload step (`velnor-plan-<run-key>`, fails loud).

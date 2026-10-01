@@ -40,7 +40,7 @@ fn plan_format_inserts_between_staging_and_plan() -> Result<(), RenderError> {
     ensure_plan_format(
         &mut jobs,
         mise_argv("rust@1.98.1", "cargo", &["fmt", "--check"]),
-        format_env(),
+        &format_env(),
     )?;
     let names: Vec<&str> = jobs["plan"]
         .steps
@@ -87,8 +87,8 @@ fn plan_format_is_idempotent_and_validates_shape() -> Result<(), RenderError> {
     );
     let mut jobs = fixture_ir(vec![plan]).jobs;
     let argv = mise_argv("rust@1.98.1", "cargo", &["fmt", "--check"]);
-    ensure_plan_format(&mut jobs, argv.clone(), format_env())?;
-    ensure_plan_format(&mut jobs, argv, format_env())?;
+    ensure_plan_format(&mut jobs, argv.clone(), &format_env())?;
+    ensure_plan_format(&mut jobs, argv, &format_env())?;
     let count = jobs["plan"]
         .steps
         .iter()
@@ -106,7 +106,7 @@ fn plan_format_is_idempotent_and_validates_shape() -> Result<(), RenderError> {
         ensure_plan_format(
             &mut fresh_jobs,
             vec!["cargo".to_owned(), "fmt".to_owned()],
-            format_env(),
+            &format_env(),
         )
         .is_err_and(|err| format!("{err:?}").contains("format_without_mise")),
         "bare-cargo format must fail"
@@ -121,7 +121,7 @@ fn plan_format_is_idempotent_and_validates_shape() -> Result<(), RenderError> {
     ensure_plan_format(
         &mut jobs,
         mise_argv("rust@1.98.1", "cargo", &["fmt"]),
-        format_env(),
+        &format_env(),
     )?;
     Ok(())
 }
@@ -141,7 +141,7 @@ fn plan_format_rejects_non_shell_format() -> Result<(), RenderError> {
         ensure_plan_format(
             &mut jobs,
             mise_argv("rust@1.98.1", "cargo", &["fmt"]),
-            format_env(),
+            &format_env(),
         )
         .is_err_and(|err| format!("{err:?}").contains("format_step_malformed")),
         "action-shaped format must fail"

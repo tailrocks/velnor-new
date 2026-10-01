@@ -146,6 +146,18 @@ fn task_doc_must_follow_doctests() -> Result<(), RenderError> {
     Ok(())
 }
 
+/// Overlay the credential scrub on fixture steps post-construction.
+///
+/// The `task_steps` constructors predate the scrub-coverage gate; the
+/// render test backfills the overlay the gate requires.
+fn backfill_scrub(steps: &mut [velnor_actions_contract::Step]) {
+    for step in steps {
+        if let velnor_actions_contract::StepKind::Shell { env, .. } = &mut step.kind {
+            env.extend(velnor_actions_workflow_renderer::toolchain_env::credential_scrub());
+        }
+    }
+}
+
 #[test]
 fn task_steps_render_in_order_with_mixed_modes() -> Result<(), RenderError> {
     let mut specs = execute_specs();
@@ -154,6 +166,7 @@ fn task_steps_render_in_order_with_mixed_modes() -> Result<(), RenderError> {
     };
     let mut steps = vec![checkout_step(&checkout_pin())?];
     steps.extend(build_task_steps(&specs)?);
+    backfill_scrub(&mut steps);
     let text = strict(
         &fixture_ir(vec![job("velnor-task", "Task", Vec::new(), steps)]),
         &fixture_ctx(),

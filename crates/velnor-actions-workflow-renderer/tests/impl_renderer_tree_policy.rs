@@ -211,7 +211,52 @@ fn candidate_job_renders_with_plan_dependency() -> Result<(), RenderError> {
     assert!(text.contains("release:"));
     assert!(text.contains("ref_protected"));
     assert!(text.contains("actions/download-artifact@"));
+    // S1: the build compiles PR source and qualification executes the
+    // PR-built binary, so both steps unset runner credentials first.
+    assert!(
+        text.contains("env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN"),
+        "build must unset:\n{text}"
+    );
+    assert!(
+        text.contains("unset ACTIONS_ID_TOKEN_REQUEST_TOKEN"),
+        "qualify must unset:\n{text}"
+    );
+    assert!(
+        text.contains("GITHUB_TOKEN: \"\""),
+        "candidate steps must scrub:\n{text}"
+    );
     Ok(())
+}
+
+#[test]
+fn candidate_qualify_rejects_non_shell_vectors() {
+    let mut ctx = fixture_ctx();
+    ctx.validator_commands = validator_commands();
+    ctx.candidate = Some(CandidateSpec {
+        build: argv_of(&[
+            "mise",
+            "exec",
+            "rust@1.98.1",
+            "mr-boxington@1.19.0",
+            "--",
+            "build",
+        ]),
+        qualify: argv_of(&["mise", "run", "qualify"]),
+    });
+    let support =
+        WorkflowPolicy::VelnorRepositoryV1.support_workflow(GeneratorValidation::Candidate);
+    let ir = fixture_ir().expect("ir");
+    let err = render_workflow_ir(
+        &ir,
+        WorkflowPolicy::VelnorRepositoryV1,
+        Some(&support),
+        &ctx,
+    )
+    .expect_err("non-shell qualify must fail");
+    assert!(
+        format!("{err:?}").contains("qualify_without_unset"),
+        "wrong rejection: {err:?}"
+    );
 }
 
 #[test]
@@ -321,7 +366,9 @@ fn renderer_rejects_bare_commands_inside_ir() -> Result<(), RenderError> {
         task_job(shell_step(
             "Focused",
             vec!["true".to_owned()],
-            BTreeMap::new(),
+            velnor_actions_workflow_renderer::toolchain_env::with_credential_scrub(
+                &BTreeMap::new(),
+            ),
         )?),
     );
     assert!(render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx).is_ok());

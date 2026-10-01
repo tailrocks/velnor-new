@@ -371,6 +371,27 @@ fn emitted_yaml_preseed_builds_once_and_shares_artifact() -> TestResult {
 }
 
 #[test]
+fn emitted_yaml_scrubs_repo_code_steps() -> TestResult {
+    let repo = make_repo(config_with_branch())?;
+    let prep = prepare(repo.path())?;
+    let tree = render_staged_tree(&prep)?;
+    let yaml = tree
+        .get(WORKFLOW_PATH)
+        .ok_or("missing workflow in staged tree")?;
+    // Obligation wrappers execute repository code: the unset prelude
+    // precedes the payload, and the scrub overlay blanks inheritance.
+    assert!(
+        yaml.contains("unset ACTIONS_ID_TOKEN_REQUEST_TOKEN"),
+        "wrapper must unset:\n{yaml}"
+    );
+    assert!(
+        yaml.contains("GITHUB_TOKEN: \"\""),
+        "steps must scrub:\n{yaml}"
+    );
+    Ok(())
+}
+
+#[test]
 fn emitted_yaml_wires_helpers_consumer() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     let prep = prepare(repo.path())?;

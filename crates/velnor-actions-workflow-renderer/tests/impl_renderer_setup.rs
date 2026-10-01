@@ -2,7 +2,7 @@
 use std::collections::BTreeMap;
 use velnor_actions_contract::Step;
 use velnor_actions_workflow_renderer::{
-    MiseSetup, RenderError, SETUP_MISE_NAME, checkout_step, mise_setup_step, plan_step, shell_step,
+    MiseSetup, RenderError, SETUP_MISE_NAME, checkout_step, mise_setup_step, plan_step,
 };
 
 use super::impl_renderer_fixtures::*;
@@ -70,10 +70,9 @@ fn strict_inserts_setup_before_mise_exec() -> Result<(), RenderError> {
         Vec::new(),
         vec![
             checkout_step(&checkout_pin())?,
-            shell_step(
+            scrubbed_shell_step(
                 "Run actionlint",
                 mise_argv("actionlint@1.7.12", "actionlint", &["-color"]),
-                BTreeMap::new(),
             )?,
         ],
     );
@@ -118,10 +117,9 @@ fn strict_task_job_always_gets_setup() -> Result<(), RenderError> {
         vec!["plan".to_owned()],
         vec![
             checkout_step(&checkout_pin())?,
-            shell_step(
+            scrubbed_shell_step(
                 "Run task",
                 vec!["sh".to_owned(), "-c".to_owned(), "echo hi".to_owned()],
-                BTreeMap::new(),
             )?,
         ],
     );
@@ -143,10 +141,9 @@ fn strict_keeps_single_wellformed_setup() -> Result<(), RenderError> {
         vec![
             checkout_step(&checkout_pin())?,
             mise_setup_step(&mise())?,
-            shell_step(
+            scrubbed_shell_step(
                 "Run actionlint",
                 mise_argv("actionlint@1.7.12", "actionlint", &["-color"]),
-                BTreeMap::new(),
             )?,
         ],
     );
@@ -160,10 +157,9 @@ fn strict_rejects_setup_misuse() -> Result<(), RenderError> {
     let lint_steps = || -> Result<Vec<Step>, RenderError> {
         Ok(vec![
             checkout_step(&checkout_pin())?,
-            shell_step(
+            scrubbed_shell_step(
                 "Run actionlint",
                 mise_argv("actionlint@1.7.12", "actionlint", &["-color"]),
-                BTreeMap::new(),
             )?,
         ])
     };

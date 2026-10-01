@@ -40,7 +40,7 @@ fn preseed_plan() -> Result<(String, Job), RenderError> {
         Vec::new(),
         vec![
             checkout_step(&checkout_pin())?,
-            preseed_build_step(build.clone())?,
+            preseed_build_step(&build)?,
             preseed_verify_step(&mbx_probe(), MBX_VERSION)?,
             preseed_manifest_step(&build, TARGET)?,
             preseed_upload_step()?,
@@ -69,8 +69,23 @@ fn preseed_final() -> Result<(String, Job), RenderError> {
 fn preseed_templates_carry_trust_mark_and_exact_artifact() -> Result<(), RenderError> {
     let build = build_argv();
     let manifest = preseed_manifest_step(&build, TARGET)?;
+    // S1: the helper build compiles PR source, so it unsets runner
+    // credentials before exec and scrubs the step env.
+    let built_step = preseed_build_step(&build)?;
+    let velnor_actions_contract::StepKind::Shell { run, env } = &built_step.kind else {
+        panic!("pre-seed build must be shell: {:?}", built_step.kind);
+    };
+    assert_eq!(run.first().map(String::as_str), Some("env"));
+    assert!(run.contains(&"GITHUB_TOKEN".to_owned()), "{run:?}");
+    for key in velnor_actions_workflow_renderer::toolchain_env::STEP_CREDENTIAL_DENYLIST {
+        assert_eq!(
+            env.get(key).map(String::as_str),
+            Some(""),
+            "pre-seed build must scrub {key}"
+        );
+    }
     for step in [
-        preseed_build_step(build.clone())?,
+        preseed_build_step(&build)?,
         preseed_verify_step(&mbx_probe(), MBX_VERSION)?,
         manifest,
         preseed_upload_step()?,
