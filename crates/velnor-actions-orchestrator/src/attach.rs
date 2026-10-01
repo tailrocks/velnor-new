@@ -5,12 +5,15 @@
 //! pre-seed build-once steps (trust-on-review) when it does not. Consumer
 //! generation never calls either.
 
+use std::collections::BTreeMap;
+
 use velnor_actions_contract::{
     CRATE_JOB_ID_PREFIX, GeneratorLock, Step, WorkflowIr, target_for_runner_label,
 };
 use velnor_actions_mise::{PREPARE_PINNED_TOOLS_STEP, PinnedTool, ToolCatalog};
+use velnor_actions_workflow_renderer::cache_p08::{RESTORE_SOURCES_NAME, RUST_CACHE_NAME};
 use velnor_actions_workflow_renderer::render::{FINAL_JOB_ID, PLAN_JOB_ID};
-use velnor_actions_workflow_renderer::steps::STAGED_BINARY_PREFIX;
+use velnor_actions_workflow_renderer::steps::{MBX_RESTORE_NAME, STAGED_BINARY_PREFIX};
 use velnor_actions_workflow_renderer::{
     PreseedStageSource, preseed_build_step, preseed_download_step, preseed_manifest_step,
     preseed_manifest_verify_step, preseed_stage_step, preseed_upload_step, preseed_verify_step,
@@ -63,16 +66,19 @@ pub(crate) fn attach_lock_acquire(
 
 /// Attach explicit pre-seed build-once steps (Velnor policy, no lock).
 ///
-/// The plan job builds the helper once from the checked-out source with
-/// the fixed §4 vector, verifies the MBX compile output plus its pinned
-/// route, records the source commit in a manifest, uploads the
-/// exactly-named artifact, and stages its local build; every crate job
-/// and the final job download that artifact, verify the manifest
-/// (commit anchored to this run's `$GITHUB_SHA`, generator-rendered
-/// target, recomputed sha256), and stage it instead of rebuilding.
-/// The gate binds staged bytes to this run's checkout and across
-/// artifact transit; it does not review the source (see the renderer's
-/// pre-seed docs for the trust boundary). Sets the render context's
+/// The plan job restores the MBX object store (shared-snapshot plans),
+/// builds the helper once from the checked-out source with the fixed §4
+/// vector after the fetch steps that guarantee sources present, verifies
+/// the MBX compile output plus its pinned route, records the source
+/// commit in a manifest, uploads the exactly-named artifact, and stages
+/// its local build; every crate job and the final job download that
+/// artifact, verify the manifest (commit anchored to this run's
+/// `$GITHUB_SHA`, generator-rendered target, recomputed sha256), and
+/// stage it instead of rebuilding. Build and verify run under the same
+/// owned homes as the fetch steps. The gate binds staged bytes to this
+/// run's checkout and across artifact transit; it does not review the
+/// source (see the renderer's pre-seed docs for the trust boundary).
+/// Sets the render context's
 /// pre-seed mode so the strict gates accept fixed pre-seed staging.
 /// Consumer generation never calls this.
 pub(crate) fn attach_preseed(
@@ -87,9 +93,10 @@ pub(crate) fn attach_preseed(
     let build = candidate_build_argv(&catalog)?;
     let probe = mbx_probe_argv(&catalog)?;
     let staged = format!("{STAGED_BINARY_PREFIX}{version}");
+    let homes = crate::matrix_step::task_step_env(&catalog, &BTreeMap::new())?;
     let plan_steps = vec![
-        preseed_build_step(&build)?,
-        preseed_verify_step(&probe, catalog.version(PinnedTool::MrBoxington))?,
+        preseed_build_step(&build, homes.clone())?,
+        preseed_verify_step(&probe, catalog.version(PinnedTool::MrBoxington), homes)?,
         preseed_manifest_step(&build, target)?,
         preseed_upload_step()?,
         preseed_stage_step(PreseedStageSource::LocalBuild, &staged)?,
@@ -99,7 +106,8 @@ pub(crate) fn attach_preseed(
             problem: "plan_job_missing".to_owned(),
         });
     };
-    let at = after_prepare(&plan.steps);
+    insert_plan_mbx_restore(&catalog, &mut plan.steps)?;
+    let at = preseed_anchor(&plan.steps);
     plan.steps.splice(at..at, plan_steps);
     let Some(final_gate) = workflow.ir.jobs.get_mut(FINAL_JOB_ID) else {
         return Err(OrchestratorError::Contract {
@@ -142,194 +150,68 @@ fn after_prepare(steps: &[Step]) -> usize {
         .map_or(1, |index| index + 1)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::workflow::{CHECKOUT_USES, REQUEST_DIR};
-    use crate::workflow_jobs::{final_job, plan_job};
-    use std::collections::BTreeMap;
-    use velnor_actions_contract::{Concurrency, Job, Permissions, Trigger};
-    use velnor_actions_workflow_renderer::render::{RenderContext, WORKFLOW_PATH};
-
-    /// Minimal crate job covering the crate attach branch.
-    fn legacy_task_job() -> Job {
-        Job {
-            display_name: "Rust / demo".to_owned(),
-            runs_on: "ubuntu-26.04".to_owned(),
-            needs: vec![PLAN_JOB_ID.to_owned()],
-            condition: None,
-            permissions: None,
-            environment: None,
-            steps: vec![crate::workflow::wire_w1::checkout_step().expect("checkout")],
-        }
-    }
-
-    /// Bare IR shell shared by the attach fixtures.
-    fn bare_ir(jobs: BTreeMap<String, velnor_actions_contract::Job>) -> WorkflowIr {
-        WorkflowIr {
-            name: "CI".to_owned(),
-            triggers: Trigger {
-                pull_request_types: Vec::new(),
-                push_branches: Vec::new(),
-                merge_group: false,
-                workflow_dispatch: None,
-                schedule: None,
-            },
-            permissions: Permissions::default(),
-            concurrency: Concurrency {
-                group: "g".to_owned(),
-                cancel_in_progress: "c".to_owned(),
-            },
-            jobs,
-        }
-    }
-
-    #[test]
-    fn lock_acquire_inserts_digest_verified_stage() {
-        use velnor_actions_contract::{GeneratorBinary, LockedGenerator, MiseBootstrap};
-        let lock = GeneratorLock {
-            schema: 1,
-            generator: LockedGenerator {
-                binary: "velnor-actions".to_owned(),
-                version: "0.1.0".to_owned(),
-                binaries: vec![GeneratorBinary {
-                    target: "x86_64-unknown-linux-gnu".to_owned(),
-                    artifact: "https://example.invalid/r".to_owned(),
-                    sha256: "a".repeat(64),
-                }],
-            },
-            mise_bootstrap: MiseBootstrap {
-                version: "2026.9.18".to_owned(),
-                artifact: "https://example.invalid/m".to_owned(),
-                sha256: "b".repeat(64),
-            },
-            actions: Vec::new(),
-        };
-        let catalog = ToolCatalog::pinned();
-        let mut ir = bare_ir(BTreeMap::from([
-            (
-                "plan".to_owned(),
-                plan_job("ubuntu-26.04", None, &catalog, false, false, &[]).expect("plan job"),
-            ),
-            (
-                "required".to_owned(),
-                final_job("ubuntu-26.04", &[], None, &catalog).expect("final job"),
-            ),
-        ]));
-        assert!(attach_lock_acquire(&mut ir, &lock, "ubuntu-26.04", "0.1.0").is_ok());
-        let names: Vec<&str> = ir.jobs["plan"]
-            .steps
-            .iter()
-            .map(|s| s.name.as_str())
-            .collect();
-        assert_eq!(
-            names,
-            [
-                "Checkout",
-                "Prepare pinned tools",
-                "Acquire Velnor",
-                "Prepare Rust components",
-                "Write request",
-                "Plan"
-            ]
-        );
-        let names: Vec<&str> = ir.jobs["required"]
-            .steps
-            .iter()
-            .map(|s| s.name.as_str())
-            .collect();
-        assert_eq!(
-            names,
-            [
-                "Acquire Velnor",
-                "Prepare pinned tools",
-                "Write request",
-                "Merge reports"
-            ]
-        );
-        assert!(attach_lock_acquire(&mut ir, &lock, "ubuntu-26.04-arm", "0.1.0").is_err());
-    }
-
-    #[test]
-    fn preseed_attach_builds_once_and_sets_mode() {
-        use velnor_actions_actionlint::ActionlintConfigInput;
-        use velnor_actions_workflow_renderer::{
-            PRESEED_BUILD_NAME, PRESEED_DOWNLOAD_NAME, PRESEED_STAGE_NAME,
-            PRESEED_VERIFY_MANIFEST_NAME,
-        };
-        let catalog = ToolCatalog::pinned();
-        let mut plan = WorkflowPlan {
-            ir: bare_ir(BTreeMap::from([
-                (
-                    "plan".to_owned(),
-                    plan_job("ubuntu-26.04", None, &catalog, false, false, &[]).expect("plan job"),
-                ),
-                ("rust-demo".to_owned(), legacy_task_job()),
-                (
-                    "required".to_owned(),
-                    final_job("ubuntu-26.04", &["rust-demo".to_owned()], None, &catalog)
-                        .expect("final job"),
-                ),
-            ])),
-            support: None,
-            context: RenderContext {
-                generator_version: "0.1.0".to_owned(),
-                runs_on: "ubuntu-26.04".to_owned(),
-                staged_binary: format!("{STAGED_BINARY_PREFIX}0.1.0"),
-                request_dir: REQUEST_DIR.to_owned(),
-                checkout_uses: CHECKOUT_USES.to_owned(),
-                validator_commands: Vec::new(),
-                candidate: None,
-                preseed: false,
-                plan_consumer_env: std::collections::BTreeMap::new(),
-            },
-            actionlint: ActionlintConfigInput::new("0.1.0").with_workflow_path(WORKFLOW_PATH),
-        };
-        assert!(attach_preseed(&mut plan, "ubuntu-26.04", "0.1.0").is_ok());
-        assert!(plan.context.preseed);
-        let names: Vec<&str> = plan.ir.jobs["plan"]
-            .steps
-            .iter()
-            .map(|s| s.name.as_str())
-            .collect();
-        assert_eq!(
-            names,
-            [
-                "Checkout",
-                "Prepare pinned tools",
-                PRESEED_BUILD_NAME,
-                "Verify MBX compile (pre-seed trust-on-review)",
-                "Write helper manifest (pre-seed trust-on-review)",
-                "Upload helper (pre-seed trust-on-review)",
-                PRESEED_STAGE_NAME,
-                "Prepare Rust components",
-                "Write request",
-                "Plan",
-            ]
-        );
-        for id in ["rust-demo", "required"] {
-            let names: Vec<&str> = plan.ir.jobs[id]
-                .steps
-                .iter()
-                .map(|s| s.name.as_str())
-                .collect();
-            let position = |name: &str| names.iter().position(|step| *step == name);
-            let (Some(download_at), Some(verify_at), Some(stage_at)) = (
-                position(PRESEED_DOWNLOAD_NAME),
-                position(PRESEED_VERIFY_MANIFEST_NAME),
-                position(PRESEED_STAGE_NAME),
-            ) else {
-                panic!("{id} misses download/verify/stage: {names:?}");
-            };
-            assert!(
-                download_at < verify_at && verify_at < stage_at,
-                "{id} must download, verify, then stage: {names:?}"
-            );
-            assert!(
-                !names.contains(&PRESEED_BUILD_NAME),
-                "{id} must not rebuild: {names:?}"
-            );
-        }
-        assert!(attach_preseed(&mut plan, "ubuntu-26.04-arm", "0.1.0").is_err());
-    }
+/// Insert the plan-job MBX objects restore ahead of fetch (pre-seed only).
+///
+/// The pre-seed build compiles through MBX on every repo, so the plan
+/// job warms the object store exactly like an MBX crate job: right after
+/// the shared-sources restore, ahead of fetch. Plans without a shared
+/// restore (cargo-only rust-cache writers, lockless) stay untouched: an
+/// MBX step beside a rust-cache writer would trip the P08 one-owner
+/// gate, and there is nothing to warm without sources.
+fn insert_plan_mbx_restore(
+    catalog: &ToolCatalog,
+    steps: &mut Vec<Step>,
+) -> Result<(), OrchestratorError> {
+    use velnor_actions_actionlint::PinnedActionRef;
+    use velnor_actions_actionlint::actions::{
+        MR_BOXINGTON_ACTION_SHA, MR_BOXINGTON_ACTION_VERSION,
+    };
+    let Some(restore_at) = steps
+        .iter()
+        .position(|step| step.name == RESTORE_SOURCES_NAME)
+    else {
+        return Ok(());
+    };
+    let uses = PinnedActionRef::new(
+        "jdx/mr-boxington-action",
+        None,
+        MR_BOXINGTON_ACTION_SHA,
+        MR_BOXINGTON_ACTION_VERSION,
+    )?
+    .uses_value();
+    let restore = velnor_actions_workflow_renderer::steps::mbx_objects_step(
+        &uses,
+        false,
+        catalog.version(PinnedTool::MrBoxington),
+    )?;
+    steps.insert(restore_at + 1, restore);
+    Ok(())
 }
+
+/// Insert index for the plan-job pre-seed build block.
+///
+/// The build compiles code, so it runs after the source-probing steps
+/// that guarantee sources present (which is after every restore);
+/// without them it anchors after the last restore, and the fallback
+/// covers lockless plans and hand-built fixtures without cache steps.
+fn preseed_anchor(steps: &[Step]) -> usize {
+    if let Some(last) = steps.iter().rposition(|step| {
+        step.name
+            .starts_with(crate::source_prep::FETCH_SOURCES_STEP)
+    }) {
+        return last + 1;
+    }
+    if let Some(last) = steps.iter().rposition(|step| is_plan_restore(&step.name)) {
+        return last + 1;
+    }
+    after_prepare(steps)
+}
+
+/// True for plan-job restore steps (shared, registry, MBX objects).
+fn is_plan_restore(name: &str) -> bool {
+    name == RESTORE_SOURCES_NAME || name == RUST_CACHE_NAME || name == MBX_RESTORE_NAME
+}
+
+#[cfg(test)]
+#[path = "attach_tests.rs"]
+mod attach_tests;
