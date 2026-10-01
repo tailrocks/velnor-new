@@ -352,10 +352,7 @@ fn ignored_rust_plans_no_work() -> TestResult {
         "schema = 1\n[workflow]\ndefault_branch = \"testmain\"\n[stacks]\nignore = [\"rust\"]\n",
     )?;
     let prep = prepare(repo.path())?;
-    assert!(
-        prep.discovery.task_groups.is_empty(),
-        "no tasks when ignored"
-    );
+    assert!(prep.discovery.proposals.is_empty(), "no tasks when ignored");
     let text = plan_for(&prep)?;
     assert!(text.contains("Rust: ignored"), "ignored:\n{text}");
     assert!(text.contains("no-work workflow"), "no-work:\n{text}");

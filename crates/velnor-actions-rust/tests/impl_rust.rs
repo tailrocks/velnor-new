@@ -1,13 +1,14 @@
 //! File-index builder cases.
 use crate::support::{Outcome, TempDir};
-use velnor_actions_rust::{
-    IndexError, build_index, build_index_from_list, build_index_walk, discover_candidates,
-    is_excluded, matches_glob, validate_pattern,
+use velnor_actions_contract::{
+    IndexError, Stack, build_index, build_index_from_list, build_index_walk, is_excluded,
+    matches_glob, validate_pattern,
 };
+use velnor_actions_rust::discover_candidates;
 
 #[test]
 fn stack_id_is_rust() {
-    assert_eq!(velnor_actions_rust::STACK_ID, "rust");
+    assert_eq!(Stack::Rust.id(), "rust");
 }
 
 #[test]

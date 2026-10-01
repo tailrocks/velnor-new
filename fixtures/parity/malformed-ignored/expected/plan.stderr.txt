@@ -1,0 +1,1 @@
+velnor-actions: detection: malformed_manifest:Cargo.toml: <cargo-diagnostic>

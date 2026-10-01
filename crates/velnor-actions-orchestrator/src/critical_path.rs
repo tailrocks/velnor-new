@@ -6,7 +6,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_actions_rust::TaskGroup;
+use velnor_actions_contract::ProposedTask;
 
 /// Longest chain through the obligation DAG.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -45,25 +45,25 @@ pub fn critical_path(
     }
 }
 
-/// Critical path for derived groups; missing durations count as zero.
+/// Critical path for derived tasks; missing durations count as zero.
 #[must_use]
 pub fn critical_path_for_groups(
-    groups: &[TaskGroup],
+    tasks: &[ProposedTask],
     durations: &BTreeMap<String, u64>,
 ) -> CriticalPath {
     let mut weights = BTreeMap::new();
     let mut edges: BTreeMap<String, Vec<String>> = BTreeMap::new();
-    for group in groups {
+    for task in tasks {
         weights.insert(
-            group.task_id.clone(),
-            durations.get(&group.task_id).copied().unwrap_or(0),
+            task.task_id.clone(),
+            durations.get(&task.task_id).copied().unwrap_or(0),
         );
         let mut preds: BTreeSet<&str> = BTreeSet::new();
-        for dep in group.gated_by.iter().chain(group.depends_on.iter()) {
+        for dep in task.gated_by.iter().chain(task.depends_on.iter()) {
             preds.insert(dep.as_str());
         }
         edges.insert(
-            group.task_id.clone(),
+            task.task_id.clone(),
             preds.into_iter().map(str::to_owned).collect(),
         );
     }
@@ -73,12 +73,10 @@ pub fn critical_path_for_groups(
 /// Structural critical path: every task weighs one, so the longest
 /// dependency chain wins. Used where durations are not yet measured.
 #[must_use]
-pub fn critical_path_structural(groups: &[TaskGroup]) -> CriticalPath {
-    let durations: BTreeMap<String, u64> = groups
-        .iter()
-        .map(|group| (group.task_id.clone(), 1))
-        .collect();
-    critical_path_for_groups(groups, &durations)
+pub fn critical_path_structural(tasks: &[ProposedTask]) -> CriticalPath {
+    let durations: BTreeMap<String, u64> =
+        tasks.iter().map(|task| (task.task_id.clone(), 1)).collect();
+    critical_path_for_groups(tasks, &durations)
 }
 
 /// One plan-text line for the structural critical path (no durations).

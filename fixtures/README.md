@@ -21,6 +21,29 @@ consumed directly (via `include_str!` in
 | conflicting-runners/ | cargo test AND nextest scripts | REJECT ambiguous_test_runner |
 | empty-suite/ | crate, no tests | valid_no_test_targets |
 
+## Parity corpus (`parity/`)
+
+Refactor-behavior corpus consumed by
+`crates/velnor-actions-cli/tests/impl_cli_parity_golden.rs`: each
+`<case>/input` is copied to a scratch git checkout, then `plan`,
+`generate`, and `plan-v1` outputs must byte-match `<case>/expected`
+(modulo documented normalization: repo path, head SHA, generator
+target/SHA). Regenerate only at a known-good commit with
+`VELNOR_UPDATE_GOLDENS=1`.
+
+| Case | Intent |
+|---|---|
+| minimal-cargo/ | single crate, cargo-only baseline |
+| multi-crate/ | workspace + path dep + declared mbx/nextest + 2 shards + lockfile + bin doctest-less crate |
+| ignored-stack/ | valid repo with `stacks.ignore = ["rust"]` |
+| malformed/ | invalid `Cargo.toml`; `plan` fails with `malformed_manifest:` |
+| malformed-ignored/ | invalid `Cargo.toml` plus ignore; still fails (ordering) |
+
+Package names must differ from their directory basenames: cargo
+elides `name@` from member IDs when they match, and the elided shape
+bypasses checkout-path normalization (absolute paths enter digests;
+pre-existing product bug, out of refactor scope).
+
 Rules: valid TOML where expected-valid; hostile-config
 parses as TOML but MUST fail schema validation.
 No committed symlinks: symlink hazards (escape, loop)

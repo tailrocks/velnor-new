@@ -17,11 +17,11 @@ use velnor_actions_actionlint::{
     actions::{MR_BOXINGTON_ACTION_SHA, MR_BOXINGTON_ACTION_VERSION},
 };
 use velnor_actions_contract::{
-    CrateJob, CrateObligation, Job, JobTimeout, Step, WorkflowPolicy, assign_crate_job_ids,
-    crate_display_name, matrix_id_for_task_group, matrix_key_for_id,
+    CrateJob, CrateObligation, Job, JobTimeout, ProposedTask, Step, WorkflowPolicy,
+    assign_crate_job_ids, crate_display_name, matrix_id_for_task_group, matrix_key_for_id,
 };
 use velnor_actions_mise::{PinnedTool, TaskCacheMode, ToolCatalog};
-use velnor_actions_rust::{CompileDriver as RustDriver, STACK_ID, TaskGroup, TaskKind, TestRunner};
+use velnor_actions_rust::{task_kind_rank, tool_needs};
 use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
 use velnor_actions_workflow_renderer::steps::{CompileDriver as RenderDriver, mbx_step_for_driver};
 
@@ -39,11 +39,11 @@ pub(crate) struct CrateBuild {
     pub(crate) drivers: BTreeMap<String, RenderDriver>,
 }
 
-/// Build one ordered IR job per runnable crate from discovery groups.
+/// Build one ordered IR job per runnable crate from discovery proposals.
 ///
-/// Groups without test targets carry no command and stay out; the
+/// Tasks without test targets carry no command and stay out; the
 /// package-less workspace Format scope belongs to the plan job, so its
-/// groups stay out too. Obligations order Format, Clippy, build, tests,
+/// tasks stay out too. Obligations order Format, Clippy, build, tests,
 /// doctests, docs (shards by task ID); gates keep same-crate edges
 /// only, so every gate references a strictly earlier obligation. The
 /// acquire step stages the helper every report wrapper invokes;
@@ -61,25 +61,25 @@ pub(crate) fn build_crate_jobs(
     custom_tasks: &[String],
     acquire: Option<&Step>,
 ) -> Result<CrateBuild, OrchestratorError> {
-    let grouped = group_runnable(&discovery.task_groups);
+    let grouped = group_runnable(&discovery.proposals);
     let assigned = assign_crate_job_ids(&id_inputs(&grouped));
     // Reject a non-empty allowlist before the loop: with zero runnable
-    // groups the loop body (and its rejection) never runs, so the
+    // tasks the loop body (and its rejection) never runs, so the
     // allowlist would be silently ignored instead of failing closed.
     let custom_steps = crate::vectors::custom_task_steps(custom_tasks, catalog)?;
     let mut jobs = Vec::with_capacity(grouped.len());
     let mut drivers = BTreeMap::new();
-    for ((package_id, configuration), groups) in &grouped {
-        let first = groups.first().ok_or_else(|| internal("crate_empty"))?;
+    for ((package_id, configuration), tasks) in &grouped {
+        let first = tasks.first().ok_or_else(|| internal("crate_empty"))?;
         let key = (package_id.clone(), configuration.clone());
         let job_id = assigned
             .get(&key)
             .ok_or_else(|| internal("crate_job_id_missing"))?
             .clone();
-        let manifest = crate::internal_plan::manifest_for_key(&first.manifest_key);
-        let display = crate_display_name(&first.package_name, &manifest, configuration);
-        let use_mbx = groups.iter().any(|group| is_mbx(group));
-        let use_nextest = groups.iter().any(|group| is_nextest(group));
+        let manifest = first.identity.unit_path.clone();
+        let display = crate_display_name(&first.display_name, &manifest, configuration);
+        let use_mbx = tasks.iter().any(|task| is_mbx(task));
+        let use_nextest = tasks.iter().any(|task| is_nextest(task));
         let driver = if use_mbx {
             RenderDriver::Mbx
         } else {
@@ -88,11 +88,11 @@ pub(crate) fn build_crate_jobs(
         let model = CrateJob {
             job_id: job_id.clone(),
             display_name: display,
-            package_name: first.package_name.clone(),
+            package_name: first.display_name.clone(),
             package_id: package_id.clone(),
             manifest,
             configuration: configuration.clone(),
-            obligations: obligations_for(groups, catalog)?,
+            obligations: obligations_for(tasks, catalog)?,
         };
         model.validate()?;
         let repo_has_mbx = crate::workflow::plan_uses_mbx(discovery);
@@ -117,70 +117,64 @@ pub(crate) fn build_crate_jobs(
     Ok(CrateBuild { jobs, drivers })
 }
 
-/// True when the group becomes a crate-job obligation.
+/// True when the task becomes a crate-job obligation.
 ///
-/// Test-less groups carry no command and package-less workspace groups
+/// Test-less tasks carry no command and package-less workspace tasks
 /// belong to the plan job, so neither is emitted as an obligation.
 /// Shared with `plan` so its obligation list matches emission exactly.
-pub(crate) fn is_runnable(group: &TaskGroup) -> bool {
-    !group.no_test_targets && !group.package_id.is_empty()
+pub(crate) fn is_runnable(task: &ProposedTask) -> bool {
+    !task.no_targets && !task.identity.unit_id.is_empty()
 }
 
-/// True when the group compiles through MBX (unknown spellings are Cargo).
-fn is_mbx(group: &TaskGroup) -> bool {
-    group.compile_driver == RustDriver::Mbx
+/// Tool needs backing one task's driver/runner selection.
+fn needs(task: &ProposedTask) -> velnor_actions_rust::ToolNeeds {
+    tool_needs(&task.identity.compile_driver, &task.identity.test_runner)
 }
 
-/// True when the group runs tests through Nextest.
-fn is_nextest(group: &TaskGroup) -> bool {
-    group.test_runner == TestRunner::CargoNextest
+/// True when the task compiles through MBX (unknown spellings are Cargo).
+fn is_mbx(task: &ProposedTask) -> bool {
+    needs(task).mbx
 }
 
-/// In-crate obligation order: Format, Clippy, build, tests, doctests, docs.
-fn kind_rank(kind: TaskKind) -> u8 {
-    match kind {
-        TaskKind::Fmt => 0,
-        TaskKind::Clippy => 1,
-        TaskKind::Build => 2,
-        TaskKind::Test | TaskKind::Nextest => 3,
-        TaskKind::Doctest => 4,
-        TaskKind::Doc => 5,
-    }
+/// True when the task runs tests through Nextest.
+fn is_nextest(task: &ProposedTask) -> bool {
+    needs(task).nextest
 }
 
-/// Ordered validated obligations for one crate's groups.
+/// Ordered validated obligations for one crate's tasks.
 fn obligations_for(
-    groups: &[&TaskGroup],
+    tasks: &[&ProposedTask],
     catalog: &ToolCatalog,
 ) -> Result<Vec<CrateObligation>, OrchestratorError> {
-    let executed: BTreeSet<&str> = groups.iter().map(|group| group.task_id.as_str()).collect();
-    let mut ordered = groups.to_vec();
+    let executed: BTreeSet<&str> = tasks.iter().map(|task| task.task_id.as_str()).collect();
+    let mut ordered = tasks.to_vec();
     ordered.sort_by(|left, right| {
-        (kind_rank(left.kind), &left.task_id).cmp(&(kind_rank(right.kind), &right.task_id))
+        (task_kind_rank(&left.task_kind), &left.task_id)
+            .cmp(&(task_kind_rank(&right.task_kind), &right.task_id))
     });
     let mut obligations = Vec::with_capacity(ordered.len());
-    for group in ordered {
-        obligations.push(obligation_for(group, &executed, catalog)?);
+    for task in ordered {
+        obligations.push(obligation_for(task, &executed, catalog)?);
     }
     Ok(obligations)
 }
 
 /// One obligation: identities, same-crate gates, fixed argv.
 fn obligation_for(
-    group: &TaskGroup,
+    task: &ProposedTask,
     executed: &BTreeSet<&str>,
     catalog: &ToolCatalog,
 ) -> Result<CrateObligation, OrchestratorError> {
-    let argv = crate::vectors::task_argv(group, catalog)?;
-    let toolchain = crate::internal_plan::toolchain_id(group, catalog)?;
-    let digest = crate::internal::plan_obligation::task_digest(&group.task_id, &argv, &toolchain)?;
-    let matrix_id = matrix_id_for_task_group(STACK_ID, &group.task_id)?;
+    let argv = crate::vectors::task_argv(task, catalog)?;
+    let toolchain = crate::internal_plan::toolchain_id(task, catalog)?;
+    let digest = crate::internal::plan_obligation::task_digest(&task.task_id, &argv, &toolchain)?;
+    let matrix_id = matrix_id_for_task_group(&task.stack_id, &task.task_id)?;
     let matrix_key = matrix_key_for_id(&matrix_id)?;
     Ok(CrateObligation {
-        task_id: group.task_id.clone(),
-        kind: group.kind.as_str().to_owned(),
-        step_name: step_name_for(group.kind, &group.task_id),
-        gated_by: gates_for(group, executed),
+        task_id: task.task_id.clone(),
+        kind: task.task_kind.clone(),
+        step_name: step_name_for(&task.task_kind, &task.task_id),
+        gated_by: gates_for(task, executed),
         matrix_key,
         task_digest: digest,
         run: argv,
@@ -189,14 +183,14 @@ fn obligation_for(
 
 /// Sorted same-crate gates: quality gates plus data producers.
 ///
-/// Gates naming skipped groups (test-less doctests) are vacuous: the
+/// Gates naming skipped tasks (test-less doctests) are vacuous: the
 /// kind order still sequences the survivors, and dangling references
 /// would fail the strictly-earlier validation.
-fn gates_for(group: &TaskGroup, executed: &BTreeSet<&str>) -> Vec<String> {
-    let mut gates: Vec<String> = group
+fn gates_for(task: &ProposedTask, executed: &BTreeSet<&str>) -> Vec<String> {
+    let mut gates: Vec<String> = task
         .gated_by
         .iter()
-        .chain(group.depends_on.iter())
+        .chain(task.depends_on.iter())
         .filter(|gate| executed.contains(gate.as_str()))
         .cloned()
         .collect();

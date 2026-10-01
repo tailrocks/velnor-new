@@ -8,42 +8,46 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_actions_contract::assign_crate_job_ids;
-use velnor_actions_rust::TaskGroup;
+use velnor_actions_contract::{ProposedTask, assign_crate_job_ids};
 use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
 
 /// Owning job ID for one plan-universe member.
 ///
-/// Package-less workspace groups belong to the plan job; every other
+/// Package-less workspace tasks belong to the plan job; every other
 /// member resolves through the same runnable grouping and ID
 /// assignment as the renderer, so the plan's job binding and the
 /// rendered jobs can never disagree. `None` only when the member
 /// is absent from the assignment inputs (never from the plan path).
-pub(crate) fn job_id_for_member(groups: &[TaskGroup], member: &TaskGroup) -> Option<String> {
-    if member.package_id.is_empty() {
+pub(crate) fn job_id_for_member(tasks: &[ProposedTask], member: &ProposedTask) -> Option<String> {
+    if member.identity.unit_id.is_empty() {
         return Some(PLAN_JOB_ID.to_owned());
     }
-    let grouped = group_runnable(groups);
+    let grouped = group_runnable(tasks);
     let assigned = assign_crate_job_ids(&id_inputs(&grouped));
     assigned
-        .get(&(member.package_id.clone(), member.configuration.clone()))
+        .get(&(
+            member.identity.unit_id.clone(),
+            member.configuration.clone(),
+        ))
         .cloned()
 }
 
-/// Runnable groups by `(package_id, configuration)` in sorted order.
+/// Runnable tasks by `(package_id, configuration)` in sorted order.
 ///
-/// Skips groups without test targets (no command is emitted for them)
-/// and package-less workspace groups (the plan job owns that scope).
-pub(crate) fn group_runnable(groups: &[TaskGroup]) -> BTreeMap<(String, String), Vec<&TaskGroup>> {
-    let mut grouped: BTreeMap<(String, String), Vec<&TaskGroup>> = BTreeMap::new();
-    for group in groups {
-        if !crate::crate_jobs::is_runnable(group) {
+/// Skips tasks without test targets (no command is emitted for them)
+/// and package-less workspace tasks (the plan job owns that scope).
+pub(crate) fn group_runnable(
+    tasks: &[ProposedTask],
+) -> BTreeMap<(String, String), Vec<&ProposedTask>> {
+    let mut grouped: BTreeMap<(String, String), Vec<&ProposedTask>> = BTreeMap::new();
+    for task in tasks {
+        if !crate::crate_jobs::is_runnable(task) {
             continue;
         }
         grouped
-            .entry((group.package_id.clone(), group.configuration.clone()))
+            .entry((task.identity.unit_id.clone(), task.configuration.clone()))
             .or_default()
-            .push(group);
+            .push(task);
     }
     grouped
 }
@@ -51,7 +55,7 @@ pub(crate) fn group_runnable(groups: &[TaskGroup]) -> BTreeMap<(String, String),
 /// ID-assignment inputs: one `(package_id, package_name, configuration)`
 /// triple per crate group, named by its first member.
 pub(crate) fn id_inputs(
-    grouped: &BTreeMap<(String, String), Vec<&TaskGroup>>,
+    grouped: &BTreeMap<(String, String), Vec<&ProposedTask>>,
 ) -> BTreeSet<(String, String, String)> {
     grouped
         .iter()
@@ -59,7 +63,7 @@ pub(crate) fn id_inputs(
             members.first().map(|first| {
                 (
                     package_id.clone(),
-                    first.package_name.clone(),
+                    first.display_name.clone(),
                     configuration.clone(),
                 )
             })

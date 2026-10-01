@@ -184,9 +184,9 @@ fn plan_reports_structural_critical_path() -> TestResult {
     for pair in chain.windows(2) {
         let next = prep
             .discovery
-            .task_groups
+            .proposals
             .iter()
-            .find(|group| group.task_id == pair[1])
+            .find(|task| task.task_id == pair[1])
             .ok_or("chain task missing")?;
         assert!(
             next.gated_by.iter().any(|dep| dep == pair[0])
@@ -204,17 +204,17 @@ fn critical_path_reports_task_durations() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     let prep = prepare(repo.path())?;
     let mut durations = BTreeMap::new();
-    for group in &prep.discovery.task_groups {
-        let weight = if group.task_id.contains("/test/") {
+    for task in &prep.discovery.proposals {
+        let weight = if task.task_id.contains("/test/") {
             500
-        } else if group.task_id.contains("/clippy/") {
+        } else if task.task_id.contains("/clippy/") {
             100
         } else {
             10
         };
-        durations.insert(group.task_id.clone(), weight);
+        durations.insert(task.task_id.clone(), weight);
     }
-    let path = critical_path_for_groups(&prep.discovery.task_groups, &durations);
+    let path = critical_path_for_groups(&prep.discovery.proposals, &durations);
     assert!(path.path.len() >= 2);
     assert!(path.path.last().is_some_and(|id| id.contains("/test/")));
     assert_eq!(path.total_duration_ms, 600);
@@ -284,10 +284,10 @@ fn clippy_configs_schedule_in_separate_groups() -> TestResult {
     assert_eq!(memory.barriers, 1);
     let mut clippy: Vec<&str> = prep
         .discovery
-        .task_groups
+        .proposals
         .iter()
-        .filter(|group| group.task_id.contains("/clippy/"))
-        .map(|group| group.task_id.as_str())
+        .filter(|task| task.task_id.contains("/clippy/"))
+        .map(|task| task.task_id.as_str())
         .collect();
     clippy.sort_unstable();
     assert_eq!(clippy.len(), 2);
@@ -304,9 +304,9 @@ fn clippy_configs_schedule_in_separate_groups() -> TestResult {
     union.sort_unstable();
     let mut all: Vec<&str> = prep
         .discovery
-        .task_groups
+        .proposals
         .iter()
-        .map(|group| group.task_id.as_str())
+        .map(|task| task.task_id.as_str())
         .collect();
     all.sort_unstable();
     assert_eq!(union, all, "no check removed");

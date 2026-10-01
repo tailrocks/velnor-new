@@ -38,13 +38,15 @@ fn digest_full(
         uses_random: false,
         nextest_profile: NextestProfile::Default,
     };
+    let task = velnor_actions_rust::propose_task(&group).expect("fixture proposes");
+    task.validate().expect("fixture valid");
     let generator = default_generator();
     let extension = StackExtension {
         schema: "rust-task-identity-v1".to_owned(),
         data: serde_json::json!({}),
     };
     task_identity_digest(&IdentityInputs {
-        group: &group,
+        task: &task,
         argv,
         toolchain_id: toolchain,
         platform_id: platform,
