@@ -23,17 +23,21 @@ pub(crate) const CONFIG_REL: &str = ".velnor/config.toml";
 /// Returns [`OrchestratorError::ConfigMissing`] when absent,
 /// [`OrchestratorError::Config`] with file plus key path on parse or
 /// validation failure, and [`OrchestratorError::Io`] on read failure.
+/// Symlinks and root escapes fail closed as unsafe paths (X6).
 pub(crate) fn load_config(root: &Path) -> Result<VelnorConfig, OrchestratorError> {
     let path = root.join(CONFIG_REL);
-    let text = std::fs::read_to_string(&path).map_err(|err| {
-        if err.kind() == std::io::ErrorKind::NotFound {
-            OrchestratorError::ConfigMissing {
+    let text = match crate::safe_read::read_repo_file(
+        root,
+        CONFIG_REL,
+        crate::safe_read::MAX_REPO_FILE_BYTES,
+    )? {
+        crate::safe_read::RepoRead::Absent => {
+            return Err(OrchestratorError::ConfigMissing {
                 path: path.display().to_string(),
-            }
-        } else {
-            OrchestratorError::io(path.display().to_string(), err.to_string())
+            });
         }
-    })?;
+        crate::safe_read::RepoRead::Text(text) => text,
+    };
     let partial: PartialConfig = toml::from_str(&text).map_err(|err| {
         config_error(velnor_actions_contract::ContractError::map_decode_error(
             CONFIG_REL,

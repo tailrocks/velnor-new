@@ -5,6 +5,8 @@
 //! `--no-config` would hide them. The safety boundary is the explicit
 //! `[stacks.rust] custom_tasks` allowlist, never flag isolation.
 
+use velnor_actions_contract::config::is_valid_custom_task_name;
+
 use crate::command::is_allowed_mise_subcommand;
 use crate::error::MiseError;
 
@@ -16,7 +18,7 @@ use crate::error::MiseError;
 /// contract allowlist.
 pub fn custom_task_run_argv(task: &str) -> Result<Vec<String>, MiseError> {
     debug_assert!(is_allowed_mise_subcommand("run"));
-    if !velnor_actions_contract::config::is_valid_custom_task_name(task) {
+    if !is_valid_custom_task_name(task) {
         return Err(MiseError::InvalidStepInput {
             field: "task".to_owned(),
             value: format!("bad_task_name:{task}"),

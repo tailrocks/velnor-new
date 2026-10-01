@@ -314,7 +314,7 @@ pub fn task_run_argv(
     file: &str,
 ) -> Result<Vec<String>, MiseError> {
     validate_task_def_path(file)?;
-    if task.trim().is_empty() || task.contains('/') || task.contains(' ') {
+    if !velnor_actions_contract::is_valid_custom_task_name(task) {
         return Err(ineligible(task, "bad_task_name"));
     }
     Ok([

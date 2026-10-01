@@ -16,7 +16,8 @@ use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_contract::config::{ReleaseAuthentication, RustReleaseConfig};
 use velnor_actions_mise::{MetadataDiscovery, ToolCatalog};
 use velnor_actions_rust::release_select::{
-    ReleaseRequest as SelectRequest, ReleaseScope, ReleaseSelection, select_release_set,
+    DEFAULT_REGISTRY, ReleaseRequest as SelectRequest, ReleaseScope, ReleaseSelection,
+    select_release_set,
 };
 use velnor_actions_workflow_renderer::release_config::{
     BootstrapReleasePlzConfig, ReleasePlzConfig, ReleasePlzPackage,
@@ -87,11 +88,14 @@ pub(crate) fn release_files(
     );
     let gate = publish_gate_condition(&repository, &bootstrap);
     let catalog = ToolCatalog::pinned();
+    // Omit `--registry` for the cargo-implicit default: release-plz 0.3.169
+    // resolves the flag value from Cargo config, where that name is absent.
+    let registry_arg = (registry != DEFAULT_REGISTRY).then_some(registry.as_str());
     let jobs = assemble_jobs(&JobInputs {
         release,
         gate,
         sha: &source_sha,
-        registry: &registry,
+        registry: registry_arg,
         label: &prep.runner_label,
         mise,
         catalog: &catalog,

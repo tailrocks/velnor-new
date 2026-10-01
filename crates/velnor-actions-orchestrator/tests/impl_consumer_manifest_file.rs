@@ -60,7 +60,7 @@ fn expected_acquire_block() -> String {
     let version = env!("CARGO_PKG_VERSION");
     let sha = "c".repeat(64);
     format!(
-        "- name: Acquire Velnor\n        env:\n          VELNOR_ASSET_SHA256: {sha}\n          VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v{version}/velnor-actions-{version}-x86_64-unknown-linux-gnu\n        run: \"sh -c 'mkdir -p $RUNNER_TEMP/velnor/bin && curl -fsSL \\\"$VELNOR_ASSET_URL\\\" -o $RUNNER_TEMP/velnor/bin/velnor-actions-{version} && echo \\\"$VELNOR_ASSET_SHA256  $RUNNER_TEMP/velnor/bin/velnor-actions-{version}\\\" | sha256sum -c - && chmod +x $RUNNER_TEMP/velnor/bin/velnor-actions-{version}'\"",
+        "- name: Acquire Velnor\n        env:\n          VELNOR_ASSET_SHA256: {sha}\n          VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v{version}/velnor-actions-{version}-x86_64-unknown-linux-gnu\n        run: \"sh -c 'mkdir -p \\\"$RUNNER_TEMP/velnor/bin\\\" && curl -fsSL --proto '\\\\''=https'\\\\'' --tlsv1.2 \\\"$VELNOR_ASSET_URL\\\" -o \\\"$RUNNER_TEMP/velnor/bin/velnor-actions-{version}\\\" && echo \\\"$VELNOR_ASSET_SHA256  $RUNNER_TEMP/velnor/bin/velnor-actions-{version}\\\" | sha256sum -c - && chmod +x \\\"$RUNNER_TEMP/velnor/bin/velnor-actions-{version}\\\"'\"",
     )
 }
 
@@ -135,9 +135,29 @@ fn debug_absent_file_keeps_standin() -> TestResult {
         &prep.workflow.context,
     )
     .map_err(|err| format!("render: {err}"))?;
+    let version = env!("CARGO_PKG_VERSION");
+    let expect = format!(
+        "https://github.com/tailrocks/velnor-new/releases/download/v{version}/velnor-actions-{version}-x86_64-unknown-linux-gnu"
+    );
     assert!(
-        acquire_block(&yaml)?.contains("https://example.invalid/r/"),
+        acquire_block(&yaml)?.contains(&expect),
         "debug stand-in preserved:\n{yaml}"
+    );
+    Ok(())
+}
+
+#[test]
+#[cfg(unix)]
+fn symlink_manifest_fails_closed() -> TestResult {
+    let repo = make_repo(config_with_branch())?;
+    let manifest = repo.path().join(".velnor/release-manifest.json");
+    let target = repo.path().join(".velnor/real-manifest.json");
+    fs::rename(&manifest, &target)?;
+    std::os::unix::fs::symlink(&target, &manifest)?;
+    let err = prepare(repo.path()).expect_err("symlink manifest fails");
+    assert!(
+        err.to_string().contains("symlink_refused"),
+        "unexpected: {err}"
     );
     Ok(())
 }

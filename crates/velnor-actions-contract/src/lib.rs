@@ -38,7 +38,8 @@ pub use config::{
     DeclaredCompileDriver, DeclaredTestRunner, DiscoveryConfig, GeneratorValidation,
     ResourcesConfig, RunnerSelection, RustConfiguration, RustStackConfig, ShardTimingEvidence,
     StacksConfig, TestShardingConfig, VelnorConfig, VelnorSupportWorkflow, WorkflowConfig,
-    WorkflowPolicy, validate_shard_changes_need_evidence,
+    WorkflowPolicy, is_valid_custom_task_name, is_valid_feature_name, is_valid_rust_target,
+    validate_shard_changes_need_evidence,
 };
 pub use errors::ContractError;
 pub use extensions::{RUST_EXTENSION_REQUIRED_SLOTS, validate_rust_extension};
@@ -72,8 +73,8 @@ pub use policy::{
 pub use secrets::is_secret_env_name;
 pub use strict_json::parse_strict_json;
 pub use targets::{
-    RELEASE_MANIFEST_FILENAME, SUPPORTED_TARGETS, asset_filename, is_supported_target,
-    target_for_runner_label,
+    EXPECTED_REPOSITORY, RELEASE_MANIFEST_FILENAME, SUPPORTED_TARGETS, asset_filename,
+    check_release_artifact, is_seed_tag_for_version, is_supported_target, target_for_runner_label,
 };
 pub use tooling::ToolIdentity;
 pub use vcs::VcsInputs;

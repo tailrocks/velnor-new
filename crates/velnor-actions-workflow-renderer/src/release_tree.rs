@@ -26,6 +26,15 @@ pub const RELEASE_WORKFLOW_PATH: &str = ".github/workflows/velnor-release.yml";
 pub const RELEASE_CONFIG_PATH: &str = ".github/release-plz.toml";
 /// Generated bootstrap-only release-plz config path.
 pub const RELEASE_BOOTSTRAP_CONFIG_PATH: &str = ".github/release-plz-bootstrap.toml";
+/// Workspace-relative directory of the exact-source checkout.
+///
+/// Jobs that run release-plz against the approved source check the
+/// policy tree out at the workspace root (event SHA: configs live
+/// there) plus the approved source SHA into this directory; release-plz
+/// then takes `--config` from the root and `--manifest-path` from here
+/// (release contract §11: never dirty the release checkout to insert
+/// config). Fixed so gates can bind argv to the source tree.
+pub const RELEASE_SOURCE_DIR: &str = "release-source";
 /// Every release-owned tree path, sorted.
 pub const RELEASE_TREE_PATHS: &[&str] = &[
     RELEASE_BOOTSTRAP_CONFIG_PATH,

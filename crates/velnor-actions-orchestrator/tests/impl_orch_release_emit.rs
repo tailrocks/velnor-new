@@ -47,6 +47,42 @@ fn family_vec() -> Vec<String> {
     RELEASE_FAMILY.iter().map(ToString::to_string).collect()
 }
 
+/// Forge bindings, omitted default registry, and checkout split (OIDC mode).
+fn assert_oidc_release_shape(yaml: &str, head: &str) {
+    assert_eq!(
+        yaml.matches("GIT_TOKEN: ${{ secrets.GITHUB_TOKEN }}")
+            .count(),
+        4,
+        "forge binding on every release-plz step:\n{yaml}"
+    );
+    assert_eq!(
+        yaml.matches("secrets.").count(),
+        4,
+        "no secret outside the forge binding:\n{yaml}"
+    );
+    assert!(
+        !yaml.contains("--registry"),
+        "default registry omits the flag:\n{yaml}"
+    );
+    assert_eq!(
+        yaml.matches(&format!("ref: {head}")).count(),
+        2,
+        "source pin on preflight plus publish only:\n{yaml}"
+    );
+    assert!(
+        yaml.contains("--manifest-path release-source/Cargo.toml"),
+        "source manifest binding:\n{yaml}"
+    );
+    assert!(
+        yaml.contains("--manifest-path Cargo.toml"),
+        "policy manifest binding:\n{yaml}"
+    );
+    assert!(
+        yaml.contains("fetch-depth: \"0\""),
+        "full history everywhere:\n{yaml}"
+    );
+}
+
 #[test]
 fn release_disabled_emits_base_tree_only() -> TestResult {
     let explicit = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[stacks.rust.release]\nenabled = false\n";
@@ -118,7 +154,7 @@ fn release_enabled_emits_family_oidc() -> TestResult {
         !yaml.contains("CARGO_REGISTRY_TOKEN"),
         "oidc carries no token"
     );
-    assert!(!yaml.contains("secrets."), "oidc carries no secrets");
+    assert_oidc_release_shape(&yaml, &head);
     assert!(
         !yaml.contains("release-publish-bootstrap"),
         "oidc has no bootstrap job"
@@ -189,22 +225,40 @@ fn release_bootstrap_mode_adds_token_job() -> TestResult {
         yaml.contains("release-publish-bootstrap"),
         "bootstrap job present"
     );
-    assert!(
-        yaml.contains("--config .github/release-plz-bootstrap.toml"),
-        "bootstrap binds its own config"
+    assert_eq!(
+        yaml.matches("--config .github/release-plz-bootstrap.toml")
+            .count(),
+        2,
+        "preflight plus bootstrap publish bind the bootstrap config:\n{yaml}"
     );
-    assert!(
-        yaml.contains("--config .github/release-plz.toml "),
-        "oidc keeps the normal config"
+    assert_eq!(
+        yaml.matches("--config .github/release-plz.toml").count(),
+        3,
+        "preparation, oidc publish, and reconcile keep the normal config:\n{yaml}"
     );
     assert!(
         yaml.contains("${{ secrets.CARGO_REGISTRY_TOKEN }}"),
-        "single secret binding"
+        "single registry binding"
     );
     assert_eq!(
         yaml.matches("CARGO_REGISTRY_TOKEN").count(),
         2,
-        "exactly one token binding (key plus ref)"
+        "exactly one registry binding (key plus ref)"
+    );
+    assert_eq!(
+        yaml.matches("GIT_TOKEN: ${{ secrets.GITHUB_TOKEN }}")
+            .count(),
+        5,
+        "forge binding on every release-plz step:\n{yaml}"
+    );
+    assert!(
+        !yaml.contains("--registry"),
+        "default registry omits the flag:\n{yaml}"
+    );
+    assert_eq!(
+        yaml.matches(&format!("ref: {head}")).count(),
+        3,
+        "source pin on preflight plus both publishers:\n{yaml}"
     );
     assert!(
         yaml.contains("github.event.inputs.version == '0.1.0'"),

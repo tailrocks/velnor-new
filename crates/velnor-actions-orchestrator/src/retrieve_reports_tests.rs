@@ -267,3 +267,43 @@ fn staged_task_files_cover_success_and_tokens() {
         assert_eq!(errors, [format!("symlink_task:{file_id}")]);
     }
 }
+
+/// Write `plan.json` under a fresh `run_dir` and return the temp dir.
+fn plan_dir(body: &str) -> (tempfile::TempDir, std::path::PathBuf) {
+    let dir = tempfile::TempDir::new().expect("tempdir");
+    let run = dir.path().join("r7-a2");
+    std::fs::create_dir_all(&run).expect("run dir");
+    std::fs::write(run.join("plan.json"), body).expect("plan write");
+    (dir, run)
+}
+
+#[test]
+fn malformed_ids_skip_before_join_and_mkdir() {
+    let (_dir, run) = plan_dir(
+        r#"{"matrix": {"include": [
+            {"artifact_id": "../escape"},
+            {"artifact_id": "velnor-matrix-*"},
+            {"artifact_id": ""}
+        ]}}"#,
+    );
+    assert_eq!(retrieve_reports_to(7, &run), 0);
+    assert!(
+        !run.join("reports").exists(),
+        "no directory for malformed IDs"
+    );
+    assert!(
+        !run.parent().expect("parent").join("escape").exists(),
+        "no traversal write"
+    );
+}
+
+#[test]
+fn oversize_and_duplicate_key_plans_retrieve_zero() {
+    let big = "x".repeat(usize::try_from(MAX_STAGED_REPORT_BYTES + 1).expect("bound fits"));
+    let (_dir, run) = plan_dir(&big);
+    assert_eq!(retrieve_reports_to(7, &run), 0);
+    assert!(!run.join("reports").exists(), "no downloads attempted");
+    let (_dir, run) = plan_dir(r#"{"matrix": {"include": []}, "matrix": {}}"#);
+    assert_eq!(retrieve_reports_to(7, &run), 0);
+    assert!(!run.join("reports").exists(), "no downloads attempted");
+}

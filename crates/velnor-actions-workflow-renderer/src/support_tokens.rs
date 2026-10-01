@@ -100,6 +100,9 @@ fn check_env_tokens(id: &str, env: &BTreeMap<String, String>) -> Result<(), Rend
 }
 
 /// True when text names a token handle (never printed or forwarded).
+///
+/// The `secrets.` match is case-insensitive and prefix-wide (X2): any
+/// casing or secret name fails closed, not just `GITHUB_TOKEN`.
 fn names_token(text: &str) -> bool {
     text.contains("GH_TOKEN")
         || text.contains("GITHUB_TOKEN")
@@ -108,5 +111,5 @@ fn names_token(text: &str) -> bool {
         || text.contains("ACTIONS_ID_TOKEN_REQUEST_URL")
         || text.contains("CARGO_REGISTRY_TOKEN")
         || text.contains("github.token")
-        || text.contains("secrets.GITHUB_TOKEN")
+        || text.to_ascii_lowercase().contains("secrets.")
 }

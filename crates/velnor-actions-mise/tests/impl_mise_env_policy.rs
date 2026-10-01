@@ -194,10 +194,14 @@ fn live_repo_task_keeps_ambient_proxy_only() -> Result<(), String> {
             "credential {key} must be absent:\n{text}"
         );
         if let Ok(value) = std::env::var(key) {
-            assert!(
-                !text.contains(&value),
-                "ambient {key} value must be absent:\n{text}"
-            );
+            // An empty ambient value carries no secret; `contains("")`
+            // is vacuously true, so only non-empty values are probed.
+            if !value.is_empty() {
+                assert!(
+                    !text.contains(&value),
+                    "ambient {key} value must be absent:\n{text}"
+                );
+            }
         }
     }
     for key in PROXY_ENV_KEYS {

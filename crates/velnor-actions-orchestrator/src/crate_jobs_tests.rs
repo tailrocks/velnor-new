@@ -49,6 +49,7 @@ pub(super) fn discovery(groups: Vec<TaskGroup>) -> Discovery {
         },
         recommendations: Vec::new(),
         consumer_manifest_json: None,
+        consumer_manifest_stand_in: false,
         skipped_non_utf8: false,
     }
 }

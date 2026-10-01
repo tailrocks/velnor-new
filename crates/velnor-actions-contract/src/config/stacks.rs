@@ -82,16 +82,22 @@ pub struct RustConfiguration {
     pub target: String,
 }
 
-/// True for a render-safe Rust target: `host` or triple characters only.
+/// True for a render-safe Rust target: `host` or a lowercase triple over
+/// `[a-z0-9_.+-]` that never starts with `-`.
 ///
 /// Targets flow into `--target` argv and quoted `run:` lines; the
-/// allowlist admits nothing the shell or `${{ }}` could evaluate.
+/// allowlist admits nothing the shell or `${{ }}` could evaluate, and
+/// flag-shaped values fail closed at config load.
 #[must_use]
 pub fn is_valid_rust_target(target: &str) -> bool {
+    if target == "host" {
+        return true;
+    }
     !target.is_empty()
+        && !target.starts_with('-')
         && target
             .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'_'))
+            .all(|b| matches!(b, b'a'..=b'z' | b'0'..=b'9' | b'_' | b'.' | b'+' | b'-'))
 }
 
 /// True for a render-safe Cargo feature name.
@@ -230,8 +236,8 @@ impl RustStackConfig {
 
     /// Validate the custom-task allowlist: sorted, unique, safe names.
     ///
-    /// The name rule matches the `mise run` argv builder: non-blank, no
-    /// path separator, no spaces.
+    /// The name rule is [`is_valid_custom_task_name`], shared with the
+    /// `mise run` argv builder and the qualified-task paths.
     /// # Errors
     fn validate_custom_tasks(&self, file: &str) -> Result<(), ContractError> {
         let mut sorted = self.custom_tasks.clone();
@@ -261,5 +267,58 @@ impl RustStackConfig {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{RustConfiguration, is_valid_custom_task_name, is_valid_rust_target};
+    use crate::config::RustStackConfig;
+
+    #[test]
+    fn target_grammar_accepts_host_and_triples_only() {
+        for target in ["host", "x86_64-unknown-linux-gnu", "aarch64-apple-darwin"] {
+            assert!(is_valid_rust_target(target), "{target}");
+        }
+        // Proven X2 PoC plus metacharacter and flag-shaped values.
+        for target in [
+            "",
+            " ",
+            "${{ secrets.CARGO_REGISTRY_TOKEN }}",
+            "$TRIPLE",
+            "`id`",
+            "-foo",
+            "HOST",
+            "x86_64 unknown",
+            "a/b",
+        ] {
+            assert!(!is_valid_rust_target(target), "{target:?}");
+        }
+    }
+
+    #[test]
+    fn task_name_grammar_matches_mise_tasks() {
+        for task in ["audit", "build:all", "a-b_c.d:e", "Test123"] {
+            assert!(is_valid_custom_task_name(task), "{task}");
+        }
+        for task in ["", "a b", "a/b", "${{ x }}", "$t", "`t`", "a\nb"] {
+            assert!(!is_valid_custom_task_name(task), "{task:?}");
+        }
+    }
+
+    #[test]
+    fn hostile_target_and_task_fail_validation() {
+        let mut stack = RustStackConfig::default_config();
+        stack.configurations = vec![RustConfiguration {
+            name: "default".to_owned(),
+            features: Vec::new(),
+            target: "${{ secrets.CARGO_REGISTRY_TOKEN }}".to_owned(),
+        }];
+        let err = stack.validate("config.toml").expect_err("PoC target fails");
+        assert!(err.to_string().contains("bad_target"), "{err}");
+        let mut stack = RustStackConfig::default_config();
+        stack.custom_tasks = vec!["audit".to_owned(), "evil task".to_owned()];
+        let err = stack.validate("config.toml").expect_err("bad task fails");
+        assert!(err.to_string().contains("bad_custom_task"), "{err}");
     }
 }
