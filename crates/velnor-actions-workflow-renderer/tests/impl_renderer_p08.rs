@@ -1,6 +1,7 @@
 //! P08 renderer cases: built-in Mise cache, sources paths, rust-cache gates.
 
 use std::collections::BTreeMap;
+use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION_EXPR;
 use velnor_actions_contract::{Job, StepKind};
 use velnor_actions_workflow_renderer::cache_p08::{
     check_mbx_before_fetch, check_no_rust_cache_with_mbx, infer_job_tools,
@@ -263,6 +264,58 @@ fn step_conditions_serialize_as_if_with_upload_default()
     assert!(
         text[upload_at..].starts_with("Upload matrix report\n        if: always()"),
         "upload keeps always() default:\n{text}"
+    );
+    Ok(())
+}
+
+#[test]
+fn strict_render_elects_single_writer_per_shared_key()
+-> Result<(), velnor_actions_workflow_renderer::RenderError> {
+    use velnor_actions_workflow_renderer::{plan_step, shell_step};
+    let prepare = || {
+        shell_step(
+            "Prepare pinned tools",
+            vec![
+                "mise".to_owned(),
+                "install".to_owned(),
+                "rust@1.98.1".to_owned(),
+            ],
+            BTreeMap::new(),
+        )
+    };
+    let text = strict(
+        &fixture_ir(vec![
+            job(
+                "plan",
+                "Plan",
+                Vec::new(),
+                vec![prepare()?, acquire_fixture()?, plan_step()],
+            ),
+            job(
+                "rust-demo",
+                "Rust / demo",
+                vec!["plan".to_owned()],
+                vec![prepare()?],
+            ),
+        ]),
+        &fixture_ctx(),
+    )?;
+    let plan_at = text.find("\n  plan:\n").expect("plan block");
+    let crate_at = text.find("\n  rust-demo:\n").expect("crate block");
+    let (plan_block, crate_block) = text.split_at(crate_at);
+    let plan_block = &plan_block[plan_at..];
+    assert!(
+        plan_block.contains(CACHE_SAVE_CONDITION_EXPR),
+        "plan wins the shared key:\n{text}"
+    );
+    assert!(
+        crate_block.contains("cache_save: \"false\""),
+        "crate stands down to restore-only:\n{text}"
+    );
+    assert_eq!(
+        text.matches(CACHE_SAVE_CONDITION_EXPR).count(),
+        1,
+        "exactly one saver per key:\n{text}"
     );
     Ok(())
 }
