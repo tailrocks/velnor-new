@@ -24,8 +24,8 @@
       "groupName": "cargo minor/patch"
     },
     {
-      "description": "Refresh only Velnor-owned pins/locks; never propose tool-input edits (VER-3.4).",
-      "matchManagers": ["cargo"],
+      "description": "Refresh only Velnor-owned pins/locks; never propose tool-input edits (VER-3.4). Defense-in-depth: mise is not in enabledManagers, so this rule only bites if mise is ever enabled.",
+      "matchManagers": ["mise"],
       "matchFileNames": ["mise.toml", "mise.lock", "rust-toolchain.toml"],
       "enabled": false
     },

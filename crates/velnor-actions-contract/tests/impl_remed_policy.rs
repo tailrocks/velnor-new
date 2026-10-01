@@ -191,8 +191,8 @@ fn ver_freshness_entry_schema() {
 }
 
 #[test]
-fn ver_overridable_actions_are_exact_nine() {
-    assert_eq!(OVERRIDABLE_ACTIONS.len(), 9);
+fn ver_overridable_actions_are_exact_eight() {
+    assert_eq!(OVERRIDABLE_ACTIONS.len(), 8);
     assert_eq!(
         OVERRIDABLE_ACTIONS,
         [
@@ -203,10 +203,12 @@ fn ver_overridable_actions_are_exact_nine() {
             "actions/cache/restore",
             "actions/cache/save",
             "jdx/mr-boxington-action",
-            "asamarts/alint",
             "Swatinem/rust-cache",
         ]
     );
+    // The Alint pin is policy-owned, not consumer-overridable
+    // (docs/proposed/version-policy.md §2 (GitHub Action defaults)).
+    assert!(!OVERRIDABLE_ACTIONS.contains(&"asamarts/alint"));
 }
 
 #[test]

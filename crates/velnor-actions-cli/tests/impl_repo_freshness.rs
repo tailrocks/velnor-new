@@ -224,6 +224,10 @@ fn ver34_tool_files_untouched() -> Result<(), Box<dyn Error>> {
         renovate.contains("\"enabled\": false"),
         "tool inputs must be disabled in renovate"
     );
+    assert!(
+        renovate.contains("\"matchManagers\": [\"mise\"]"),
+        "tool-input guard must match the mise manager that owns mise.toml/mise.lock"
+    );
     let procedure = read("docs/implemented/update-procedure.md")?;
     assert!(procedure.contains("VER-3.4"), "procedure must cite VER-3.4");
     assert!(

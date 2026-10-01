@@ -293,17 +293,20 @@ fn stale_evidence_names_source_and_timestamp() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn procedure_states_no_scheduled_producer() -> Result<(), Box<dyn Error>> {
+fn procedure_states_scheduled_producer() -> Result<(), Box<dyn Error>> {
     let procedure = crate::impl_repo_policy::read("docs/implemented/update-procedure.md")?;
     assert!(
         !procedure.contains("The scheduled job refreshes"),
         "procedure asserts automation that is not wired"
     );
     for marker in [
-        "No scheduled producer exists",
-        "schedule trigger",
+        "The scheduled producer is",
+        ".github/workflows/freshness.yml",
+        "cron: 0 6 * * 1",
+        "ScheduleTrigger",
         "P05",
         "--check-upstream",
+        "probe-only",
     ] {
         assert!(procedure.contains(marker), "procedure misses {marker}");
     }
