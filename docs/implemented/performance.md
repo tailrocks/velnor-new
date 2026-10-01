@@ -293,20 +293,12 @@ generate split as prepare+render; obligations/matrix in parens):
 | 40 | — | 1161, 1247 (164 obl) | — |
 | 100 | 86, 104 | budget (see below) | 110+1742, 107+1713 |
 
-Generate column re-measured at `cf8d762`+shellcheck-batch (local
-arm64, rustc 1.98.1, `generate_scales_with_crate_count`,
-`--test-threads=1`, n=2; prepare/plan columns unchanged,
-earlier machine). History: the old ~770 ms flat row dated from
-`c938a8c`-era single-matrix-job renders. P05 (`7a2cc3a`,
-crate-job graph) grew staged `run:` bodies 16 → 24/78/618 and
-`run_shellcheck_bodies` spawned one pinned-shellcheck
-subprocess per body — a ~27 s storm at 100 crates (bisected,
-phase-split probe: shellcheck-bodies ~90% of generate).
-`validate_shell.rs` now lints all bodies in one shellcheck argv
-(same flags/files/diagnostics, still fail-closed), restoring
-sub-2 s at 100. Residual 100-crate scaling (~1.7 s) is
-actionlint's single subprocess over a larger YAML — inherent
-file-size cost, not a storm.
+Generate column re-measured post-shellcheck-batch (local arm64,
+rustc 1.98.1, n=2; prepare/plan columns older). The old ~770 ms
+flat row dated from single-matrix-job renders; P05 grew staged
+bodies 16→618 while validation spawned one shellcheck per body
+(~27 s storm at 100, bisected to `7a2cc3a`). One argv restored
+sub-2 s; residual ~1.7 s is actionlint's single YAML pass.
 
 Direct `cargo metadata --no-deps --offline` on the 100-crate
 fixture: 0.04, 0.03, 0.04 s — a lower bound per eliminated
@@ -404,13 +396,4 @@ per-crate `cargo doc --no-deps`, and the named fixture suite.
 
 ## P08 cache measurements + warm-reuse proof (R11/R12)
 
-Full evidence lives in [cache-measurements.md](cache-measurements.md);
-headline: seed 36754512444 (cold, red) → warm 36760724180 (N+1,
-red) → green 36777030585 (N+2, success). Sources HIT 17,568,922 B
-in all 8 green-run restoring jobs (aggregate 140,551,376 B
-DERIVED); tools MISS every job (~114 s cold install run-wide);
-MBX `No mbx cache found` × 7 (10–14 s/job pure overhead,
-per-crate compile 13–46 s re-done 7×); fetch 0 downloads (53
-setup downloads in Build helper split out); service inventory
-byte-identical before/after (storage-neutral); headroom 12.3%
-used of assumed 10 GiB.
+Full evidence lives in [cache-measurements.md](cache-measurements.md).

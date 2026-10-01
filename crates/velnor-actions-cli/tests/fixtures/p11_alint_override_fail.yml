@@ -1,5 +1,6 @@
-# NEGATIVE FIXTURE: copy of .alint.yml with the override regex neutered to
-# `.*` (must be rejected by the override pins; still parses as YAML).
+# NEGATIVE FIXTURE: copy of .alint.yml plus a well-formed same-id override
+# of bundled `gha-pin-actions-to-sha` (must be rejected: overrides are
+# banned; still parses as YAML).
 # Repository policy, enforced by asamarts/alint as its own CI job.
 # Local rules cover generic file/path requirements and agent-instruction
 # file integrity only. No dependency-architecture, Rust-syntax, or
@@ -130,20 +131,16 @@ rules:
     level: error
     message: "src/lib.rs and src/main.rs MUST stay under 150 physical lines (§5)"
 
-  # Same-id override of bundled `gha-pin-actions-to-sha`: identical check
-  # (paths/query/regex copied from the 0.16.1 bundle), demoted to info.
-  # `uses: asamarts/alint@v0.16.1` is a recorded reviewed-tag exception
-  # (version-policy §2, line-scoped `.zizmor.yml` ignore pinned by the repo
-  # policy test); the finding must stay visible, but CI runs alint with
-  # `fail-on-warning`, so warning level would fail the gate until the
-  # renderer pins alint by SHA. Never weaken the query or regex here.
+  # BANNED FIXTURE: well-formed same-id override (rejected even though
+  # the check is intact, because overrides are banned while every action
+  # ref is a full SHA).
   - id: gha-pin-actions-to-sha
     kind: yaml_path_matches
     paths:
       - .github/workflows/*.yml
       - .github/workflows/*.yaml
     path: $.jobs.*.steps[*].uses
-    matches: .*  # NEUTERED FIXTURE
+    matches: ^(\\./.*|docker://[^@]+@sha256:[a-f0-9]{64}|[a-zA-Z0-9._/-]+@[a-f0-9]{40})$
     if_present: true
     level: info
-    message: "Third-party action is not pinned to a commit SHA (reviewed-tag exception tracked in .zizmor.yml)"
+    message: "Third-party action is not pinned to a commit SHA"
