@@ -43,6 +43,7 @@ mod impl_orch_gen2;
 mod impl_orch_intake;
 mod impl_orch_intake_deps;
 mod impl_orch_merge;
+mod impl_orch_merge_final;
 mod impl_orch_p08;
 mod impl_orch_plansel;
 mod impl_orch_release_emit;
