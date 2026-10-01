@@ -1,15 +1,16 @@
 //! Contract identity, digest, and derivation cases.
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use velnor_actions_contract::{
     CompatibilityInputs, ContractError, ExecuteTaskIds, ExecuteTaskRef, MatrixEntry,
     StackExtension, TaskConfiguration, TaskGenerator, TaskIdentity, TaskInput, VcsInputs,
-    artifact_id_for_final, artifact_id_for_matrix, artifact_id_for_plan, canonical_json_bytes,
-    canonical_json_str, compatibility_id, digest_b3, input_digest, manifest_key_for_cargo_manifest,
-    matrix_id_for_task_group, matrix_key_for_id, plan_id_for_run, report_id_for_matrix,
-    run_key_for_ci, split_shard_suffix, target_key, task_id_for_internal, task_id_for_stack,
-    task_report_id_for_task, validate_artifact_id, validate_digest, validate_fetch_root,
-    validate_id, validate_matrix_key, validate_plan_id, validate_report_id, validate_run_key,
-    validate_task_id, validate_task_report_id,
+    artifact_id_for_final, artifact_id_for_matrix, artifact_id_for_plan, assign_crate_job_ids,
+    canonical_json_bytes, canonical_json_str, compatibility_id, digest_b3, input_digest,
+    manifest_key_for_cargo_manifest, matrix_id_for_task_group, matrix_key_for_id, plan_id_for_run,
+    report_id_for_matrix, run_key_for_ci, slugify_segment, split_shard_suffix, target_key,
+    task_id_for_internal, task_id_for_stack, task_report_id_for_task, validate_artifact_id,
+    validate_digest, validate_fetch_root, validate_id, validate_job_id, validate_matrix_key,
+    validate_plan_id, validate_report_id, validate_run_key, validate_task_id,
+    validate_task_report_id,
 };
 
 /// Sample Cargo manifest path shared by contract cases.
@@ -341,6 +342,45 @@ fn matrix_entry_rejects_bad_run_and_digest() -> Result<(), ContractError> {
     entry.run.clear();
     assert!(entry.validate(&run_key).is_err());
     Ok(())
+}
+
+/// R15: names that slug identically still get distinct stable job IDs.
+#[test]
+fn colliding_slugs_get_distinct_stable_ids() {
+    assert_eq!(slugify_segment("my-crate"), "my-crate");
+    assert_eq!(slugify_segment("my_crate"), "my-crate");
+    assert_eq!(slugify_segment("My Crate"), "my-crate");
+    let crates: BTreeSet<(String, String, String)> = [
+        ("a", "my-crate", "default"),
+        ("b", "my_crate", "default"),
+        ("c", "My Crate", "nextest"),
+    ]
+    .into_iter()
+    .map(|(id, name, config)| (id.to_owned(), name.to_owned(), config.to_owned()))
+    .collect();
+    let first = assign_crate_job_ids(&crates);
+    let second = assign_crate_job_ids(&crates);
+    assert_eq!(first, second, "assignment is deterministic");
+    assert_eq!(first.len(), 3);
+    let ids: BTreeSet<&String> = first.values().collect();
+    assert_eq!(ids.len(), 3, "colliding slugs stay distinct: {first:?}");
+    for id in first.values() {
+        assert!(validate_job_id(id).is_ok(), "{id}");
+    }
+    assert_eq!(
+        first
+            .get(&("a".to_owned(), "default".to_owned()))
+            .map(String::as_str),
+        Some("rust-my-crate"),
+        "first key in sorted order keeps the base slug"
+    );
+    let digest = digest_b3("b\0default".as_bytes());
+    let want = format!("rust-my-crate-{}", &digest[..8]);
+    assert_eq!(
+        first.get(&("b".to_owned(), "default".to_owned())),
+        Some(&want),
+        "later colliding key takes package digest disambiguation"
+    );
 }
 
 #[test]
