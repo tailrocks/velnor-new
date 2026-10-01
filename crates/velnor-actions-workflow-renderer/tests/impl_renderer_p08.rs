@@ -81,6 +81,61 @@ fn job_tools_inferred_from_install_and_exec() {
 }
 
 #[test]
+fn job_tools_inferred_from_inline_shell_script() {
+    // Isolation steps join fixed `mise install`/`exec` argv into `sh -c`
+    // scripts (deny/fetch): the detectors must see inside, or the job
+    // loses its Setup Mise bootstrap and fails at runtime.
+    let script = "{ mise --no-config install cargo-deny@0.20.2 && unset GH_TOKEN; } \
+        && mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\" \
+        && cd \"$RUNNER_TEMP/velnor/cargo-clean\" \
+        && mise --no-config exec cargo-deny@0.20.2 -- cargo deny --locked check";
+    let job = Job {
+        display_name: "Cargo Deny".to_owned(),
+        runs_on: LABEL.to_owned(),
+        needs: Vec::new(),
+        condition: None,
+        permissions: None,
+        environment: None,
+        steps: vec![
+            velnor_actions_workflow_renderer::ambient_shell_step(
+                "Run cargo-deny",
+                vec!["sh".to_owned(), "-c".to_owned(), script.to_owned()],
+                BTreeMap::new(),
+            )
+            .expect("deny"),
+        ],
+    };
+    assert_eq!(infer_job_tools(&job), vec!["cargo-deny@0.20.2".to_owned()]);
+}
+
+#[test]
+fn job_tools_inferred_from_quoted_spec() {
+    // A drift into quoted specs must still bootstrap instead of
+    // silently dropping the setup step.
+    let job = Job {
+        display_name: "Demo".to_owned(),
+        runs_on: LABEL.to_owned(),
+        needs: Vec::new(),
+        condition: None,
+        permissions: None,
+        environment: None,
+        steps: vec![
+            velnor_actions_workflow_renderer::shell_step(
+                "Run task",
+                vec![
+                    "sh".to_owned(),
+                    "-c".to_owned(),
+                    "mise install 'quoted-tool@1.0'".to_owned(),
+                ],
+                BTreeMap::new(),
+            )
+            .expect("task"),
+        ],
+    };
+    assert_eq!(infer_job_tools(&job), vec!["quoted-tool@1.0".to_owned()]);
+}
+
+#[test]
 fn setup_p08_enables_builtin_cache_with_key() {
     let key = mise_cache_key_for_tools(
         "x86_64-unknown-linux-gnu",

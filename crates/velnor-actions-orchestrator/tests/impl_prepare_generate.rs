@@ -326,8 +326,8 @@ fn nested_lockful_workspace_gets_named_fetch() -> TestResult {
         return Err("fetch step must be a shell step".into());
     };
     assert!(
-        run[2].contains("--manifest-path 'nested/Cargo.toml'"),
-        "nested fetch names its manifest: {run:?}"
+        run[2].contains("--manifest-path \"$GITHUB_WORKSPACE/nested/Cargo.toml\""),
+        "nested fetch names its absolute manifest: {run:?}"
     );
     assert!(
         plan.steps

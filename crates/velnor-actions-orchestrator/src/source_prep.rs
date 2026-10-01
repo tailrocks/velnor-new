@@ -21,6 +21,55 @@ use crate::discover::{PlannedWorkspace, workspace_lock, workspace_manifest};
 /// Display name of the root-workspace fetch step.
 pub(crate) const FETCH_SOURCES_STEP: &str = "Fetch Cargo sources";
 
+/// Runner-owned scratch dir outside any checkout for ambient cargo.
+///
+/// Cargo discovers `.cargo/config.toml` from the working directory
+/// upward, never from `--manifest-path` (proven: a clean-cwd fetch
+/// ignores repo config and uses default sources). Ambient cargo runs
+/// here so repo credential-providers never execute with ambient auth.
+pub(crate) const CARGO_CLEAN_DIR: &str = "$RUNNER_TEMP/velnor/cargo-clean";
+
+/// Enter the cargo isolation dir, creating it first (script prefix).
+///
+/// Every ambient cargo script starts with this; the dir is runner-
+/// owned and outside the checkout, so no ancestor carries repo config.
+pub(crate) fn cargo_isolation_prefix() -> String {
+    format!("mkdir -p \"{CARGO_CLEAN_DIR}\" && cd \"{CARGO_CLEAN_DIR}\" && ")
+}
+
+/// Absolute `--manifest-path` flag for one validated fetch root.
+///
+/// The manifest anchors on `$GITHUB_WORKSPACE` (the runner-owned
+/// checkout root); roots pass [`validate_root`], which rejects every
+/// character unsafe inside double quotes.
+pub(crate) fn isolated_manifest_flag(root: &str) -> String {
+    format!(
+        "--manifest-path \"$GITHUB_WORKSPACE/{}\"",
+        workspace_manifest(root)
+    )
+}
+
+/// Privilege-dropping cargo script over fixed parts (deny template).
+///
+/// `{ <install> && <prelude> } && <isolation> <payload>`: the ambient
+/// install warms the pinned tool (no repo code can run: mise ignores
+/// repo config), the shared credential-unset prelude removes every
+/// ambient secret, and only then does the payload run from the cargo
+/// isolation dir. Both parts are fixed generator values, never
+/// repository shell; the brace group fails closed on install failure
+/// instead of degrading to an ambient payload. This is the second
+/// fixed `sh` template in this module (fetch probe-and-fetch is the
+/// first): shell sequencing for cargo isolation lives here, so the
+/// orchestrator's `sh` confinement set stays closed.
+pub(crate) fn privilege_drop_argv(install: &str, payload: &str) -> Vec<String> {
+    let prelude = velnor_actions_workflow_renderer::toolchain_env::credential_unset_prelude();
+    let script = format!(
+        "{{ {install} && {prelude} }} && {}{payload}",
+        cargo_isolation_prefix(),
+    );
+    vec!["sh".to_owned(), "-c".to_owned(), script]
+}
+
 /// Sorted workspace roots whose lockfile exists under `root`.
 ///
 /// Mirrors the gating in `inventory::qualify_workspaces` through the
@@ -107,18 +156,19 @@ fn fetch_steps_with(
 }
 
 /// Fixed probe-and-fetch script for one root (manifest quoted, no injection).
+///
+/// Runs from the cargo isolation dir with an absolute manifest path,
+/// so repo `.cargo/config.toml` (credential-providers, source
+/// replacement) is never read while ambient auth is in scope.
 fn fetch_script(catalog: &ToolCatalog, root: &str) -> String {
     let spec = catalog.tool_spec(PinnedTool::Rust);
     let base = format!("mise --no-config --no-env --no-hooks exec {spec} -- cargo");
-    let manifest = if root.is_empty() {
-        String::new()
-    } else {
-        format!(" --manifest-path '{}'", workspace_manifest(root))
-    };
+    let manifest = format!(" {}", isolated_manifest_flag(root));
     let probe = format!("{base} metadata --locked --offline{manifest} >/dev/null 2>&1");
     let fetch = format!("{base} fetch --locked{manifest}");
     format!(
-        "if {probe}; then echo \"velnor: sources hit, skipping fetch\"; else echo \"velnor: sources miss (source_missing), fetching\"; {fetch}; fi"
+        "{}if {probe}; then echo \"velnor: sources hit, skipping fetch\"; else echo \"velnor: sources miss (source_missing), fetching\"; {fetch}; fi",
+        cargo_isolation_prefix()
     )
 }
 
@@ -162,9 +212,12 @@ mod tests {
         assert_eq!(&run[..2], ["sh", "-c"]);
         let spec = catalog.tool_spec(PinnedTool::Rust);
         for need in [
+            "mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\"".to_owned(),
+            "cd \"$RUNNER_TEMP/velnor/cargo-clean\"".to_owned(),
             format!("mise --no-config --no-env --no-hooks exec {spec} -- cargo"),
             "metadata --locked --offline".to_owned(),
             "cargo fetch --locked".to_owned(),
+            "--manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\"".to_owned(),
             "sources hit, skipping fetch".to_owned(),
             "sources miss (source_missing)".to_owned(),
         ] {
@@ -241,8 +294,8 @@ mod tests {
         assert_eq!(steps[0].name, "Fetch Cargo sources (nested/Cargo.toml)");
         let (run, _) = shell_parts(&steps[0].kind).expect("fetch must be a shell step");
         assert!(
-            run[2].contains("--manifest-path 'nested/Cargo.toml'"),
-            "script names manifest: {}",
+            run[2].contains("--manifest-path \"$GITHUB_WORKSPACE/nested/Cargo.toml\""),
+            "script names absolute manifest: {}",
             run[2]
         );
     }

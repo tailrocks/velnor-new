@@ -10,20 +10,29 @@ fn argv_of(parts: &[&str]) -> Vec<String> {
 #[test]
 fn policy_vectors_pin_specs_and_payloads() {
     let deny = deny_argv().expect("deny argv");
-    let want = argv_of(&[
-        "mise",
-        "--no-config",
-        "--no-env",
-        "--no-hooks",
-        "exec",
-        "cargo-deny@0.20.2",
-        "--",
-        "cargo",
-        "deny",
-        "--locked",
-        "check",
-    ]);
-    assert_eq!(deny, want);
+    assert_eq!(&deny[..2], ["sh", "-c"], "deny runs isolated, not bare");
+    let script = &deny[2];
+    for need in [
+        "mise --no-config --no-env --no-hooks install cargo-deny@0.20.2",
+        "unset ACTIONS_ID_TOKEN_REQUEST_TOKEN",
+        "MISE_GITHUB_TOKEN",
+        "mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\"",
+        "cd \"$RUNNER_TEMP/velnor/cargo-clean\"",
+        "mise --no-config --no-env --no-hooks exec cargo-deny@0.20.2 -- cargo deny --locked",
+        "--manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\" check",
+    ] {
+        assert!(script.contains(need), "deny script misses {need}: {script}");
+    }
+    let at = |needle: &str| {
+        script
+            .find(needle)
+            .unwrap_or_else(|| panic!("deny script misses {needle}: {script}"))
+    };
+    assert!(
+        at("mise --no-config --no-env --no-hooks install") < at("unset ")
+            && at("unset ") < at("cargo deny"),
+        "deny must bootstrap, then drop creds, then run cargo: {script}"
+    );
     let machete = machete_argv().expect("machete argv");
     let want = argv_of(&[
         "mise",
