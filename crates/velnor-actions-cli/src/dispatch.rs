@@ -103,21 +103,13 @@ fn gate_request() -> Option<InternalRequest> {
         _ => return None,
     };
     if op == InternalOp::Fetch || op == InternalOp::Report {
-        let temp = env::var_os(RUNNER_TEMP_ENV).filter(|value| !value.is_empty())?;
         if env::var("GITHUB_RUN_ID").is_ok_and(|id| !id.is_empty()) {
-            return Some(InternalRequest {
-                op,
-                path: Path::new(&temp).join("velnor"),
-            });
+            return runner_velnor_dir().map(|path| InternalRequest { op, path });
         }
         return None;
     }
     if op == InternalOp::PreseedManifest {
-        let temp = env::var_os(RUNNER_TEMP_ENV).filter(|value| !value.is_empty())?;
-        return Some(InternalRequest {
-            op,
-            path: Path::new(&temp).join("velnor"),
-        });
+        return runner_velnor_dir().map(|path| InternalRequest { op, path });
     }
     let path = env::var_os(REQUEST_FILE_ENV)
         .filter(|value| !value.is_empty())
@@ -142,6 +134,17 @@ fn gate_request() -> Option<InternalRequest> {
         InternalOp::Fetch | InternalOp::Report | InternalOp::PreseedManifest => {}
     }
     Some(InternalRequest { op, path })
+}
+
+/// Runner-temp velnor directory for file-less private operations.
+///
+/// `None` when `RUNNER_TEMP` is unset or empty; shared by the fetch,
+/// report, and preseed-manifest gate branches so the scoping rule has
+/// one definition.
+fn runner_velnor_dir() -> Option<PathBuf> {
+    env::var_os(RUNNER_TEMP_ENV)
+        .filter(|value| !value.is_empty())
+        .map(|temp| Path::new(&temp).join("velnor"))
 }
 
 /// Run one validated private operation.
