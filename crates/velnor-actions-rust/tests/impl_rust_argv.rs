@@ -33,6 +33,7 @@ fn group(kind: TaskKind) -> TaskGroup {
 
 fn text(group: &TaskGroup) -> Vec<String> {
     cargo_payload_argv(group)
+        .expect("valid payload")
         .iter()
         .map(|s| s.to_string_lossy().into_owned())
         .collect()
@@ -41,6 +42,7 @@ fn text(group: &TaskGroup) -> Vec<String> {
 /// Profiled payload argv under an explicit resolved profile.
 fn profiled(group: &TaskGroup, profile: NextestProfile) -> Vec<String> {
     cargo_payload_with_profile(group, profile)
+        .expect("valid payload")
         .iter()
         .map(|s| s.to_string_lossy().into_owned())
         .collect()
@@ -299,4 +301,31 @@ fn unknown_profile_token_fails_closed() {
         let err = NextestProfile::parse(bad).expect_err("unknown profile");
         assert!(err.to_string().contains("unknown_profile"), "{err}");
     }
+}
+
+#[test]
+fn leading_dash_values_fail_closed() {
+    let mut package = group(TaskKind::Clippy);
+    package.package_name = "-evil".to_owned();
+    let err = cargo_payload_argv(&package).expect_err("dash package");
+    assert!(err.to_string().contains("leading_dash_package"), "{err}");
+
+    let mut manifest = group(TaskKind::Clippy);
+    manifest.manifest_key = "-evil".to_owned();
+    let err = cargo_payload_argv(&manifest).expect_err("dash manifest");
+    assert!(err.to_string().contains("leading_dash_manifest"), "{err}");
+
+    let mut features = group(TaskKind::Test);
+    features.features = vec!["-evil".to_owned()];
+    let err = cargo_payload_argv(&features).expect_err("dash features");
+    assert!(err.to_string().contains("leading_dash_features"), "{err}");
+
+    let mut target = group(TaskKind::Build);
+    target.target = "--help".to_owned();
+    let err = cargo_payload_argv(&target).expect_err("dash target");
+    assert!(err.to_string().contains("leading_dash_target"), "{err}");
+
+    let resolved = NextestProfile::parse("ci").expect("valid profile");
+    let err = cargo_payload_with_profile(&target, resolved).expect_err("profiled dash target");
+    assert!(err.to_string().contains("leading_dash_target"), "{err}");
 }

@@ -89,6 +89,7 @@ fn group(kind: TaskKind) -> TaskGroup {
 
 fn text(group: &TaskGroup) -> Vec<String> {
     cargo_payload_argv(group)
+        .expect("valid payload")
         .iter()
         .map(|s| s.to_string_lossy().into_owned())
         .collect()

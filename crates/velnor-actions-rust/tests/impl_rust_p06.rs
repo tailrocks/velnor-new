@@ -378,13 +378,15 @@ fn resolved_profile_reaches_emission() {
     assert_eq!((ci.as_str(), default.as_str()), ("ci", "default"));
     for profile in [ci, default] {
         let group = profile_group(TaskKind::Nextest, TestRunner::CargoNextest);
-        let text = payload_text(&cargo_payload_with_profile(&group, profile));
+        let text = payload_text(&cargo_payload_with_profile(&group, profile).expect("valid"));
         assert_eq!(text[..4], ["nextest", "run", "--profile", profile.as_str()]);
     }
     let mut doctests = Vec::new();
     for runner in [TestRunner::CargoTest, TestRunner::CargoNextest] {
         let group = profile_group(TaskKind::Doctest, runner);
-        doctests.push(payload_text(&cargo_payload_with_profile(&group, ci)));
+        doctests.push(payload_text(
+            &cargo_payload_with_profile(&group, ci).expect("valid"),
+        ));
     }
     assert_eq!(doctests[0], doctests[1]);
     assert!(doctests[0].contains(&"--doc".to_owned()));

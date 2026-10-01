@@ -87,6 +87,12 @@ pub fn validate_run_key(value: &str) -> Result<(), ContractError> {
 /// Strips the trailing `/Cargo.toml`; the root manifest maps to `root`.
 /// # Errors
 pub fn manifest_key_for_cargo_manifest(manifest: &str) -> Result<String, ContractError> {
+    if manifest.starts_with('-') {
+        return Err(ContractError::identity(
+            "manifest_key",
+            "leading_dash_manifest",
+        ));
+    }
     if manifest.is_empty()
         || manifest.starts_with('/')
         || manifest.contains('\\')

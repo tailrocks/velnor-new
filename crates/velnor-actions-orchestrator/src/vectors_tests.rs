@@ -171,7 +171,7 @@ fn custom_task_steps_emit_only_allowlisted() {
         assert_eq!(
             *run,
             velnor_actions_workflow_renderer::toolchain_env::with_env_unset_argv(&argv_of(&[
-                "mise", "run", task
+                "mise", "run", "--", task
             ]))
         );
         for key in velnor_actions_workflow_renderer::toolchain_env::STEP_CREDENTIAL_DENYLIST {
@@ -189,7 +189,7 @@ fn custom_task_steps_emit_only_allowlisted() {
 #[test]
 fn custom_task_steps_reject_bad_names() {
     let catalog = ToolCatalog::pinned();
-    for bad in ["", "  ", "two words", "a/b"] {
+    for bad in ["", "  ", "two words", "a/b", "--help", "-x", ".hidden"] {
         let allowlist = argv_of(&[bad]);
         assert!(
             custom_task_steps(&allowlist, &catalog).is_err(),

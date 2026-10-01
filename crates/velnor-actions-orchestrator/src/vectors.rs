@@ -72,7 +72,10 @@ pub(crate) fn task_argv(
             problem: err.to_string(),
         }
     })?;
-    let payload = cargo_payload_with_profile(group, profile);
+    let payload =
+        cargo_payload_with_profile(group, profile).map_err(|err| OrchestratorError::Contract {
+            problem: err.to_string(),
+        })?;
     let exec = PinnedToolExec::new(tools, &program, payload).map_err(|err| {
         OrchestratorError::Contract {
             problem: err.to_string(),
