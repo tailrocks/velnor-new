@@ -33,7 +33,8 @@ const SCRUBBED_ENV: &str = "VELNOR_TEST_SCRUBBED_IDENTITY";
 /// canonical origin, so an in-process `prepare` would fail closed on
 /// the ambient hint instead of exercising the fixture.
 pub(crate) fn ambient_identity_blocks() -> bool {
-    std::env::var("GITHUB_REPOSITORY").is_ok_and(|hint| hint != "tailrocks/velnor-new")
+    std::env::var("GITHUB_REPOSITORY")
+        .is_ok_and(|hint| hint.to_lowercase() != "tailrocks/velnor-new")
 }
 
 /// Run Velnor-policy assertions with ambient identity scrubbed.

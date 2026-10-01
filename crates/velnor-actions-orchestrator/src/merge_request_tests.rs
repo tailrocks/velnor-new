@@ -281,3 +281,16 @@ fn request_file_writes_exclusively() {
     let err = write_merge_request_to(&file, "local", dir.path(), dir.path()).expect_err("exists");
     assert!(err.to_string().contains("request_exists"), "{err}");
 }
+
+/// Symlinked event payloads read as absent: assembly records the gap
+/// instead of following the link.
+#[test]
+fn event_payload_refuses_symlink() {
+    let dir = tempfile::TempDir::new().expect("tempdir");
+    let real = dir.path().join("event.json");
+    std::fs::write(&real, "{}").expect("payload");
+    let via = dir.path().join("linked.json");
+    std::os::unix::fs::symlink(&real, &via).expect("link");
+    assert_eq!(event_payload_from(real.as_os_str()), Some("{}".to_owned()));
+    assert_eq!(event_payload_from(via.as_os_str()), None);
+}

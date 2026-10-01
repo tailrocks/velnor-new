@@ -62,6 +62,30 @@ fn repo_task() -> Result<IsolatedCommand, String> {
     IsolatedCommand::repo_task("sh", Vec::new(), &declared).map_err(|err| err.to_string())
 }
 
+/// Endpoint selectors never survive any policy: `GH_HOST` would
+/// reroute `gh` (and any kept token) to an attacker host, and
+/// `GH_CONFIG_DIR` would load attacker-controlled auth.
+#[test]
+fn endpoint_selectors_strip_for_every_policy() -> Result<(), String> {
+    let mut parent = parent_snapshot();
+    parent.push(pair("GH_HOST", "evil.example"));
+    parent.push(pair("GH_CONFIG_DIR", "/tmp/evil"));
+    parent.push(pair("GH_ENTERPRISE_TOKEN", "__SENTINEL__"));
+    let cases: Vec<(&str, Vec<(OsString, OsString)>)> = vec![
+        ("bootstrap", bootstrap()?.spawn_env(&parent)),
+        ("baseline", baseline()?.spawn_env(&parent)),
+        ("verify", verify()?.spawn_env(&parent)),
+        ("discovery", discovery().spawn_env(&parent)),
+        ("repo_task", repo_task()?.spawn_env(&parent)),
+    ];
+    for (label, env) in &cases {
+        for key in ["GH_HOST", "GH_CONFIG_DIR", "GH_ENTERPRISE_TOKEN"] {
+            assert!(!has(env, key), "{label}: {key} must strip: {env:?}");
+        }
+    }
+    Ok(())
+}
+
 #[test]
 fn proxy_allowlist_is_exact() {
     assert_eq!(

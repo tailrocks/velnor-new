@@ -181,7 +181,7 @@ pub(crate) fn task_run_ids_bound(
 /// # Errors
 ///
 /// Returns the first failing check's reason.
-fn validate_task_entry(
+pub(crate) fn validate_task_entry(
     task: &crate::merge::required_evidence::BaselineTaskEntry,
     run_id: u64,
 ) -> Result<(), String> {

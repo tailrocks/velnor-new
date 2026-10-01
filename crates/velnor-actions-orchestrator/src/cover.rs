@@ -140,15 +140,18 @@ pub(crate) fn cover_entry(
     if report.matrix_id != entry.id || report.matrix_key != entry.matrix_key {
         sinks.signals.planning_failed = true;
         sinks.signals.not_run = true;
+        sinks.miss_reasons.insert("cache_corrupt".to_owned());
         return Ok(false);
     }
     if report_tasks(report) != flattened(entry) {
         sinks.signals.planning_failed = true;
         sinks.signals.not_run = true;
+        sinks.miss_reasons.insert("cache_corrupt".to_owned());
         return Ok(false);
     }
     let Some(recount) = recount(report) else {
         sinks.signals.not_run = true;
+        sinks.miss_reasons.insert("cache_corrupt".to_owned());
         return Ok(false);
     };
     if !check_digests(
@@ -242,14 +245,17 @@ fn check_digests(
 ) -> Result<bool, OrchestratorError> {
     for task in &report.tasks {
         if !seen_task_reports.insert(task.task_report_id.clone()) {
+            miss_reasons.insert("cache_corrupt".to_owned());
             return Ok(false);
         }
         let Some(digest) = obligations.get(task.task_id.as_str()) else {
+            miss_reasons.insert("cache_corrupt".to_owned());
             return Ok(false);
         };
         let expected = task_report_id_for_task(&request.run_key, &report.matrix_key, digest)
             .map_err(internal_contract)?;
         if expected != task.task_report_id {
+            miss_reasons.insert("cache_corrupt".to_owned());
             return Ok(false);
         }
         // Task reports carry no restore observations yet (P04); reuse

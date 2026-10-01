@@ -26,12 +26,15 @@ fn trust_probe_identity_inner() -> TestResult {
         "git@evil.example:tailrocks/velnor-new.git"
     } else if scenario.contains("hostile_suffix_origin") {
         "https://evil.example/tailrocks/velnor-new.git"
+    } else if scenario.contains("bare_origin") {
+        "tailrocks/velnor-new"
     } else {
         "https://example.com/other/repo.git"
     };
     git(&["remote", "add", "origin", url], repo.path())?;
     match scenario.as_str() {
         "canonical_hint_canonical_origin"
+        | "canonical_upper_hint_canonical_origin"
         | "no_hint_canonical_origin"
         | "no_hint_scp_canonical_origin" => {
             prepare(repo.path())?;
@@ -63,11 +66,16 @@ fn identity_hint_scenarios() -> TestResult {
             "canonical_hint_canonical_origin",
             Some("tailrocks/velnor-new"),
         ),
+        (
+            "canonical_upper_hint_canonical_origin",
+            Some("Tailrocks/Velnor-New"),
+        ),
         ("no_hint_canonical_origin", None),
         ("no_hint_scp_canonical_origin", None),
         ("no_hint_hostile_suffix_origin", None),
         ("no_hint_hostile_scp_origin", None),
         ("no_hint_hostile_subdomain_origin", None),
+        ("no_hint_bare_origin", None),
     ];
     for (probe, hint) in cases {
         let mut child = std::process::Command::new(std::env::current_exe()?);

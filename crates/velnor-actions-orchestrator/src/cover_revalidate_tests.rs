@@ -1,127 +1,12 @@
 //! Merge-time revalidation tests.
 //!
 //! Declared via `#[path]` from `cover_revalidate.rs` under `cfg(test)`
-//! so the revalidation module keeps its size gate.
+//! so the revalidation module keeps its size gate. Builders live in
+//! `cover_revalidate_fixtures.rs`, shared with the entry-validation
+//! tests.
 
+use super::cover_revalidate_fixtures::{NOW, anchored_verdict, manifest_for, plan_for, verdict};
 use super::*;
-use velnor_actions_contract::{
-    BaselineProof, PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanRunner,
-    RunnerSelection, Trust, WorkflowEvent,
-};
-
-/// Task and input digests shared by obligation and entry.
-fn digests() -> (String, String, String) {
-    (
-        digest_b3(b"task"),
-        digest_b3(b"inputs"),
-        digest_b3(b"closure"),
-    )
-}
-
-/// Trusted manifest with one entry over `commit`.
-fn manifest_for(commit: &str) -> BaselineManifest {
-    let (task, inputs, closure) = digests();
-    let compat = digest_b3(b"compat");
-    BaselineManifest {
-        schema: 2,
-        repository_id: digest_b3(b"repo"),
-        source_commit: commit.to_owned(),
-        ref_: "refs/heads/testmain".to_owned(),
-        event: "push".to_owned(),
-        workflow_ref: "o/r/.github/workflows/ci.yml@refs/heads/testmain".to_owned(),
-        run_id: 7,
-        run_attempt: 1,
-        final_status: "passed".to_owned(),
-        generator_version: "0.1.0".to_owned(),
-        generator_sha256: "1".repeat(64),
-        compatibility_id: compat.clone(),
-        artifact_id: 9,
-        artifact_name: format!("velnor-baseline-{commit}-{compat}"),
-        tasks: vec![crate::merge::required_evidence::BaselineTaskEntry {
-            task_id: "stack/rust/root/clippy/default".to_owned(),
-            task_digest: task,
-            input_digest: inputs,
-            closure_digest: closure,
-            proof_run_id: 7,
-            observed_run_id: 7,
-            external_data: None,
-            proof: None,
-        }],
-        expires_at_unix: None,
-    }
-}
-
-/// Plan with one covered obligation bound to `manifest`.
-fn plan_for(manifest: &BaselineManifest, base: Option<&str>) -> Plan {
-    let (task, inputs, closure) = digests();
-    let digest = digest_b3(&canonical_json_bytes(manifest).expect("canonical"));
-    let proof = BaselineProof::new(
-        &manifest.source_commit,
-        7,
-        9,
-        &manifest.artifact_name,
-        &digest,
-    )
-    .expect("proof");
-    Plan {
-        schema: 1,
-        run_key: "local".to_owned(),
-        plan_id: "plan-local".to_owned(),
-        base: base.map(str::to_owned),
-        head: "head".to_owned(),
-        event: WorkflowEvent::PullRequest,
-        runner: PlanRunner {
-            label: "ubuntu-26.04".to_owned(),
-            selection: RunnerSelection::LatestDefault,
-        },
-        trust: Trust::Pr,
-        baseline: PlanBaseline::unavailable(None).expect("baseline"),
-        generator: PlanGenerator {
-            version: "0.1.0".to_owned(),
-            target: "x86_64-unknown-linux-gnu".to_owned(),
-            sha256: "1".repeat(64),
-        },
-        packages: Vec::new(),
-        obligations: vec![PlanObligation {
-            task_id: "stack/rust/root/clippy/default".to_owned(),
-            decision: ObligationDecision::CoveredByTrustedBaseline,
-            reason: "covered_by_trusted_baseline".to_owned(),
-            task_digest: task,
-            input_digest: inputs,
-            closure_digest: closure,
-            baseline_proof: Some(proof),
-        }],
-        matrix: PlanMatrix {
-            include: Vec::new(),
-        },
-        task_ids: vec!["stack/rust/root/clippy/default".to_owned()],
-        warnings: Vec::new(),
-        edges: Vec::new(),
-    }
-}
-
-/// Revalidation verdict for one plan/manifest pair without anchors.
-///
-/// Explicit empty anchors keep these hermetic: the env-reading
-/// production entry would compare against CI ground truth instead.
-/// Fixed merge-time clock: fixtures without expiry pass at any `now`.
-const NOW: u64 = 1_800_000_000;
-
-fn verdict(plan: &Plan, manifest: Option<&BaselineManifest>) -> (Signals, BTreeSet<String>) {
-    anchored_verdict(plan, manifest, &MergeAnchorExpectations::default())
-}
-
-/// Revalidation verdict for one plan/manifest/anchors triple.
-fn anchored_verdict(
-    plan: &Plan,
-    manifest: Option<&BaselineManifest>,
-    anchors: &MergeAnchorExpectations,
-) -> (Signals, BTreeSet<String>) {
-    let mut signals = Signals::default();
-    let mut miss = BTreeSet::new();
-    revalidate_coverage_with_anchors(plan, manifest, &mut signals, &mut miss, anchors, NOW);
-    (signals, miss)
-}
 
 #[test]
 fn bound_coverage_revalidates() {
@@ -223,7 +108,7 @@ fn merge_rejects_plan_rejected_manifest_invariants() {
 /// Expectations matching the `o/r` fixture manifest's anchors.
 fn fixture_anchors() -> MergeAnchorExpectations {
     MergeAnchorExpectations {
-        ci_requires_repository: false,
+        ci_strict_anchors: false,
         repository_slug: Some("o/r".to_owned()),
         protected_ref: Some("refs/heads/testmain".to_owned()),
         workflow_path: Some(".github/workflows/ci.yml".to_owned()),
@@ -305,7 +190,7 @@ fn anchor_parts_map_env_values() {
             repository_slug: None,
             protected_ref: Some("refs/heads/testmain".to_owned()),
             workflow_path: None,
-            ci_requires_repository: false,
+            ci_strict_anchors: false,
         },
         "push jobs read the protected ref from GITHUB_REF"
     );
@@ -328,21 +213,35 @@ fn anchor_parts_map_env_values() {
     );
 }
 
-/// CI requires the repository slug: all-`None` anchors fail closed
-/// instead of skipping every check. Local runs (flag clear) keep the
-/// skip behavior.
+/// CI requires every anchor: any absent anchor fails closed instead
+/// of skipping its check. Local runs (flag clear) keep the skip
+/// behavior.
 #[test]
-fn ci_missing_repository_slug_fails_closed() {
+fn ci_missing_any_anchor_fails_closed() {
     let commit = "a".repeat(40);
-    let manifest = manifest_for(&commit);
+    let manifest = anchored_manifest(&commit);
     let plan = plan_for(&manifest, Some(&commit));
-    let ci_unanchored = MergeAnchorExpectations {
-        ci_requires_repository: true,
-        ..MergeAnchorExpectations::default()
+    let full = MergeAnchorExpectations {
+        ci_strict_anchors: true,
+        ..fixture_anchors()
     };
-    let (signals, miss) = anchored_verdict(&plan, Some(&manifest), &ci_unanchored);
-    assert!(signals.planning_failed, "CI without slug must fail");
-    assert_eq!(miss, BTreeSet::from(["foreign_anchor".to_owned()]));
+    let (signals, _) = anchored_verdict(&plan, Some(&manifest), &full);
+    assert!(!signals.planning_failed, "full CI anchors pass");
+    let mut drop_slug = full.clone();
+    drop_slug.repository_slug = None;
+    let mut drop_ref = full.clone();
+    drop_ref.protected_ref = None;
+    let mut drop_path = full;
+    drop_path.workflow_path = None;
+    for (label, anchors) in [
+        ("repository", drop_slug),
+        ("protected ref", drop_ref),
+        ("workflow path", drop_path),
+    ] {
+        let (signals, miss) = anchored_verdict(&plan, Some(&manifest), &anchors);
+        assert!(signals.planning_failed, "CI without {label} must fail");
+        assert_eq!(miss, BTreeSet::from(["foreign_anchor".to_owned()]));
+    }
     let (signals, _) = verdict(&plan, Some(&manifest));
     assert!(
         !signals.planning_failed,

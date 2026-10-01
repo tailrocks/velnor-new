@@ -49,6 +49,16 @@ pub const CREDENTIAL_ENV_KEYS: [&str; 9] = [
     "NODE_AUTH_TOKEN",
 ];
 
+/// Endpoint-selector keys no spawned child ever inherits.
+///
+/// `GH_HOST` would reroute `gh` — and any kept token — to an
+/// attacker host; `GH_CONFIG_DIR` would load attacker-controlled
+/// auth. Stripped for every policy: this tool only talks to
+/// `github.com`. (`GH_ENTERPRISE_TOKEN` already strips as a
+/// `*_TOKEN` credential unless a policy allowlists it, and none
+/// does.)
+const ENDPOINT_ENV_KEYS: [&str; 2] = ["GH_HOST", "GH_CONFIG_DIR"];
+
 /// True for a credential-shaped env key: the nine known names, any
 /// `CARGO_REGISTRIES_*` entry, or any `*_TOKEN` name.
 ///
@@ -183,7 +193,9 @@ impl EnvPolicy {
             let allowed = self.allowed_credentials();
             for (key, value) in parent {
                 let name = key.to_string_lossy();
-                let stripped = is_denied_credential_key(&name) && !allowed.contains(&name.as_ref());
+                let stripped = (is_denied_credential_key(&name)
+                    && !allowed.contains(&name.as_ref()))
+                    || ENDPOINT_ENV_KEYS.contains(&name.as_ref());
                 if !stripped {
                     env.push((key.clone(), value.clone()));
                 }
@@ -219,6 +231,9 @@ pub(crate) fn strip_credentials(command: &mut Command, policy: EnvPolicy) {
         if !allowed.contains(&key) {
             command.env_remove(key);
         }
+    }
+    for key in ENDPOINT_ENV_KEYS {
+        command.env_remove(key);
     }
     for (key, _) in std::env::vars_os() {
         let name = key.to_string_lossy();

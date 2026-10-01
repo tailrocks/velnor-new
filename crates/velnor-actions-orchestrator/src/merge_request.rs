@@ -60,7 +60,8 @@ pub fn assemble_merge_request(run_key: &str, run_dir: &Path) -> Result<String, O
     let event_name = std::env::var("GITHUB_EVENT_NAME").ok();
     let event_payload = std::env::var_os("GITHUB_EVENT_PATH")
         .filter(|value| !value.is_empty())
-        .and_then(|path| std::fs::read_to_string(path).ok());
+        .as_deref()
+        .and_then(event_payload_from);
     assemble_with_needs(
         run_key,
         run_dir,
@@ -69,6 +70,15 @@ pub fn assemble_merge_request(run_key: &str, run_dir: &Path) -> Result<String, O
         event_name.as_deref(),
         event_payload.as_deref(),
     )
+}
+
+/// Event payload through the bounded, symlink-rejecting reader.
+///
+/// Unreadable payloads become `None` so assembly records the gap
+/// explicitly instead of failing the whole request; the plan side
+/// reads the same file through the same helper.
+fn event_payload_from(value: &std::ffi::OsStr) -> Option<String> {
+    crate::safe_read::read_event_file(Path::new(value), crate::safe_read::MAX_REPO_FILE_BYTES).ok()
 }
 
 /// Assemble one merge request with explicit needs and event channels.

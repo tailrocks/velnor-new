@@ -2,7 +2,7 @@
 
 use velnor_actions_contract::{FinalStatus, MatrixReport, Plan};
 
-use crate::impl_common::TestResult;
+use crate::impl_common::{TestResult, passing_reports, plan_for_source_change};
 use crate::impl_gates_shard::sharded_case;
 
 /// Full final report for one merge request (status plus miss tokens).
@@ -53,5 +53,26 @@ fn limits_reference_and_shard_failures_carry_miss_tokens() -> TestResult {
             "never-bare diagnostic required: {extra}"
         );
     }
+    Ok(())
+}
+
+/// Binding failures carry miss tokens: a report whose task set
+/// contradicts its entry fails with `cache_corrupt`, never bare.
+#[test]
+fn binding_failures_carry_miss_tokens() -> TestResult {
+    let (_repo, plan) = plan_for_source_change()?;
+    let mut reports = passing_reports(&plan)?;
+    assert!(!reports.is_empty(), "fixture needs a report");
+    // Internally coherent (shapes, counts, id multiset) but bound to a
+    // task the entry never scheduled: partition accepts it, the
+    // per-entry binding check rejects it.
+    reports[0].expected_task_ids = vec!["stack/rust/root/fmt/default".to_owned()];
+    let report = merge_report_with(&plan, &reports, &[], &serde_json::json!({}))?;
+    assert_eq!(report.status, FinalStatus::PlanningFailed);
+    assert!(
+        report.miss_reasons.iter().any(|r| r == "cache_corrupt"),
+        "{:?}",
+        report.miss_reasons
+    );
     Ok(())
 }

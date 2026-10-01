@@ -18,7 +18,8 @@ mod provenance_resolve_tests;
 pub(crate) struct ExpectedRepository {
     /// Lowercase `owner/repo` slug, env-first then origin fallback.
     pub(crate) slug: Option<String>,
-    /// True when a well-formed env slug disagrees with the git origin.
+    /// True when the env slug disagrees with the git origin, or the
+    /// env slug is malformed (no trusted slug then).
     pub(crate) conflict: bool,
 }
 

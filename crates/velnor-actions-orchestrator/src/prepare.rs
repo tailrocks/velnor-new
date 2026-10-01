@@ -140,7 +140,7 @@ fn check_velnor_identity(root: &Path, config: &VelnorConfig) -> Result<(), Orche
         return Ok(());
     }
     if let Ok(hint) = std::env::var("GITHUB_REPOSITORY")
-        && hint != VELNOR_IDENTITY
+        && crate::origin::validate_repository_slug(&hint).as_deref() != Some(VELNOR_IDENTITY)
     {
         return Err(OrchestratorError::IdentityRejected {
             problem: "github_repository_mismatch:velnor_policy_requires_tailrocks_velnor_new"
@@ -170,9 +170,10 @@ fn origin_matches(root: &Path) -> bool {
 ///
 /// Both host and path must match `github.com/tailrocks/velnor-new` exactly
 /// (after lowercasing and trimming an optional `.git` suffix and trailing
-/// slashes). A bare `tailrocks/velnor-new` also matches for local fixtures.
-/// A path-suffix match alone is rejected: any host that merely ends in the
-/// identity path (e.g. `evil.example/tailrocks/velnor-new`) grants nothing.
+/// slashes). A bare `tailrocks/velnor-new` grants nothing: a local-path
+/// remote is trivially forgeable via `git remote set-url`. A path-suffix
+/// match alone is rejected: any host that merely ends in the identity
+/// path (e.g. `evil.example/tailrocks/velnor-new`) grants nothing.
 fn url_matches_identity(value: &str) -> bool {
     let mut url = value.trim().to_lowercase();
     while url.ends_with('/') {
@@ -180,9 +181,6 @@ fn url_matches_identity(value: &str) -> bool {
     }
     if let Some(stripped) = url.strip_suffix(".git") {
         url = stripped.to_owned();
-    }
-    if url == VELNOR_IDENTITY {
-        return true;
     }
     let Some((host, path)) = split_host_path(&url) else {
         return false;
