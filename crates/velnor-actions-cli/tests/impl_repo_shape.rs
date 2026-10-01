@@ -94,8 +94,12 @@ fn arch112_alint_scopes_product_paths() -> Result<(), Box<dyn Error>> {
 fn arch15_single_explicit_stack() -> Result<(), Box<dyn Error>> {
     let detect = read("crates/velnor-actions-rust/src/detect.rs")?;
     assert!(
-        detect.contains("REGISTERED_STACKS: &[&str] = &[\"rust\"]"),
-        "only explicit stack must be rust"
+        !detect.contains("const REGISTERED_STACKS"),
+        "contract owns the single stack registry; no rust mirror"
+    );
+    assert!(
+        detect.contains("VelnorConfig::REGISTERED_STACKS"),
+        "detector self-check must read the contract registry"
     );
     let lib = read("crates/velnor-actions-rust/src/lib.rs")?;
     assert!(
