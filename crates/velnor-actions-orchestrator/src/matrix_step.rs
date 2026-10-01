@@ -288,11 +288,7 @@ pub(crate) fn helper_path_for_version() -> String {
 /// The unset prelude runs first: obligations execute repository code
 /// (build scripts), and the step env cannot shadow runner-injected
 /// credentials (D3).
-pub(crate) fn report_wrapper_argv(
-    joined: &str,
-    helper: &str,
-    start_path: &str,
-) -> Vec<String> {
+pub(crate) fn report_wrapper_argv(joined: &str, helper: &str, start_path: &str) -> Vec<String> {
     use velnor_actions_workflow_renderer::toolchain_env::with_credential_unset_script;
     vec![
         "sh".to_owned(),
