@@ -12,6 +12,7 @@ use super::task_report_tests::{CLIPPY, TEST, fixture_plan, staged_run};
 use super::*;
 use crate::merge::merge_internal;
 use crate::merge_request::assemble_with_needs;
+use crate::noop_report::{NoOpRequest, write_noop_report_to, write_skip_reports};
 
 /// Stage producer output as final-job `reports/<artifact-id>/` downloads.
 ///
@@ -107,6 +108,86 @@ fn merge_flips_not_run_to_executed_end_to_end() {
     assert_eq!(verdict.counts.executed, 2);
     assert_eq!(verdict.counts.not_run, 0);
     assert_eq!(verdict.downloaded_artifact_ids.len(), 2);
+}
+
+#[test]
+fn merge_fails_failing_obligation_and_blocks_downstream() {
+    let plan = fixture_plan();
+    let temp = staged_run(&plan, "local");
+    let run = temp.path().join("velnor").join("local");
+    let needs = Some(r#"{"plan":"success"}"#);
+
+    let reported =
+        write_task_report_to("local", CLIPPY, 1, None, &[], temp.path()).expect("clippy fails");
+    assert_eq!(reported, 1);
+    let skipped = write_skip_reports(&plan, CLIPPY, &[TEST.to_owned()], temp.path())
+        .expect("downstream skips");
+    assert_eq!(skipped, 1);
+    stage_downloads(&plan, &temp);
+
+    let full = assemble_with_needs(
+        "local",
+        &run,
+        needs,
+        Some(r#"["plan"]"#),
+        Some("pull_request"),
+        Some(PR_PAYLOAD),
+    )
+    .expect("assemble full");
+    assert!(
+        !full.contains("missing_report"),
+        "all artifacts staged: {full}"
+    );
+    let verdict: velnor_actions_contract::FinalReport =
+        serde_json::from_str(&merge_internal(&full).expect("merge full")).expect("final json");
+    eprintln!(
+        "e2e failure: status={:?} failed={} blocked={} not_run={}",
+        verdict.status, verdict.counts.failed, verdict.counts.blocked, verdict.counts.not_run
+    );
+    assert_eq!(verdict.status, FinalStatus::Failed);
+    assert_eq!(verdict.counts.failed, 1);
+    assert_eq!(verdict.counts.blocked, 1);
+    assert_eq!(verdict.counts.not_run, 0);
+    assert_eq!(verdict.downloaded_artifact_ids.len(), 2);
+}
+
+#[test]
+fn merge_blocks_all_skipped_noop_end_to_end() {
+    let plan = fixture_plan();
+    let temp = staged_run(&plan, "local");
+    let run = temp.path().join("velnor").join("local");
+    for (task, obligation) in [(CLIPPY, &plan.obligations[0]), (TEST, &plan.obligations[1])] {
+        let request = NoOpRequest {
+            reason: velnor_actions_contract::NotSelectedReason::NotInPlan,
+            task_digest: obligation.task_digest.clone(),
+        };
+        write_noop_report_to("local", task, 0, &request, temp.path()).expect("noop report");
+    }
+    stage_downloads(&plan, &temp);
+
+    let full = assemble_with_needs(
+        "local",
+        &run,
+        Some(r#"{"plan":"success"}"#),
+        Some(r#"["plan"]"#),
+        Some("pull_request"),
+        Some(PR_PAYLOAD),
+    )
+    .expect("assemble full");
+    assert!(
+        !full.contains("missing_report"),
+        "all artifacts staged: {full}"
+    );
+    let verdict: velnor_actions_contract::FinalReport =
+        serde_json::from_str(&merge_internal(&full).expect("merge full")).expect("final json");
+    eprintln!(
+        "e2e noop: status={:?} blocked={} not_run={}",
+        verdict.status, verdict.counts.blocked, verdict.counts.not_run
+    );
+    assert_eq!(verdict.status, FinalStatus::Blocked);
+    assert_eq!(verdict.counts.blocked, 2);
+    assert_eq!(verdict.counts.failed, 0);
+    assert_eq!(verdict.counts.not_run, 0);
 }
 
 #[test]

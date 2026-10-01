@@ -169,6 +169,26 @@ fn merge_steps_carry_needs_channel_matching_final_needs() -> Result<(), RenderEr
         .map_err(RenderError::Contract)?;
     assert_eq!(conclusions.inventory, vec!["plan".to_owned()]);
     assert!(conclusions.gate_matches(&ir));
+    // The emitted inventory value equals the finalized derivation, not
+    // just its presence: parse the merge step scalar back to JSON.
+    let (key, value) = conclusions.expected_env();
+    assert_eq!(key, "VELNOR_NEEDS_EXPECTED");
+    // JSON of the asserted `["plan"]` inventory above.
+    assert_eq!(value, "[\"plan\"]");
+    let line = merge
+        .lines()
+        .find(|line| line.contains("VELNOR_NEEDS_EXPECTED:"))
+        .unwrap_or_else(|| panic!("merge lacks the expected line:\n{merge}"));
+    let scalar = line
+        .split_once("VELNOR_NEEDS_EXPECTED:")
+        .unwrap_or(("", ""))
+        .1
+        .trim();
+    let unquoted = scalar
+        .strip_prefix('"')
+        .and_then(|inner| inner.strip_suffix('"'))
+        .unwrap_or_default();
+    assert_eq!(unquoted.replace("\\\"", "\""), value);
     Ok(())
 }
 

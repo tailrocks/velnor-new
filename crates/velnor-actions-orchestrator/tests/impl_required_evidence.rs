@@ -172,10 +172,11 @@ fn candidate_evidence_is_its_needs_conclusion() -> TestResult {
     gate(&mut passing, "success");
     assert_eq!(status_of(&passing)?, FinalStatus::Passed);
 
-    // Failed and cancelled qualifications fail the verdict.
+    // Failed, cancelled, and skipped qualifications fail the verdict.
     for (conclusion, status) in [
         ("failure", FinalStatus::Failed),
         ("cancelled", FinalStatus::Cancelled),
+        ("skipped", FinalStatus::NotRun),
     ] {
         let mut request = base();
         gate(&mut request, conclusion);

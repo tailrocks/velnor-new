@@ -98,3 +98,38 @@ impl NeedsConclusions {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Conclusions over one unsorted inventory.
+    fn conclusions(inventory: &[&str]) -> NeedsConclusions {
+        NeedsConclusions {
+            required_job: "required".to_owned(),
+            inventory: inventory.iter().map(ToString::to_string).collect(),
+        }
+    }
+
+    #[test]
+    fn expected_env_emits_sorted_inventory_json() {
+        let (key, value) = conclusions(&["zizmor", "plan", "alint"]).expected_env();
+        assert_eq!(key, NEEDS_EXPECTED_ENV);
+        assert_eq!(value, "[\"alint\",\"plan\",\"zizmor\"]");
+        assert_eq!(
+            serde_json::from_str::<Vec<String>>(&value).expect("valid json"),
+            ["alint", "plan", "zizmor"],
+        );
+    }
+
+    #[test]
+    fn expected_env_handles_edge_inventories() {
+        let (key, value) = conclusions(&["plan"]).expected_env();
+        assert_eq!(
+            (key.as_str(), value.as_str()),
+            (NEEDS_EXPECTED_ENV, "[\"plan\"]")
+        );
+        let (_, value) = conclusions(&[]).expected_env();
+        assert_eq!(value, "[]", "empty inventory stays explicit");
+    }
+}
