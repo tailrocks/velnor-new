@@ -1,0 +1,3 @@
+variable "b" {
+  default = "beta"
+}
