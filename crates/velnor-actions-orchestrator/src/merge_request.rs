@@ -6,7 +6,10 @@
 //! merge-request JSON that [`crate::merge_internal`] consumes. Candidate
 //! qualification evidence is the candidate job's `needs` conclusion,
 //! not a separate report file: no producer ever wrote one, so requiring
-//! it failed candidate mode closed on every run.
+//! it failed candidate mode closed on every run. The conclusion is
+//! bound to the plan head by the candidate attestation (S3), which the
+//! merge re-checks; the manifest's remaining fields stay consumer-side
+//! audit data (S10/D6).
 //!
 //! Required validator conclusions arrive through the `VELNOR_NEEDS_JSON`
 //! channel: a JSON object mapping each job in the final gate's `needs`

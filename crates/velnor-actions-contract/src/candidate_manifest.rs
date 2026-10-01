@@ -9,6 +9,15 @@ use crate::manifest::{check_schema, check_sha256, check_target, is_lower_hex};
 ///
 /// Written once by the candidate build; qualification downloads the exact
 /// bytes described here and never rebuilds them.
+///
+/// Enforcement split (S10/D6 residual): consumers verify this manifest
+/// with the emitted shell script before running any candidate command
+/// (cache-contract §4); the merge re-checks ONLY the commit binding
+/// through the head-bound attestation (`commit == plan.head`) plus the
+/// candidate job's needs conclusion. `sha256`/`toolchain`/`target` are
+/// consumer-asserted audit data at merge time — a consumer that skips
+/// verification is outside the merge's view, by design (the merge never
+/// executes the candidate and cannot recompute its digest).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CandidateArtifactManifest {

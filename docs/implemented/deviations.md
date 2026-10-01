@@ -60,3 +60,31 @@ Recorded here only to close the audit row explicitly.
 sections. The fuller §2 registry/source-rule prose lives in the normative
 spec, not duplicated into the file. No deviation is claimed: the file holds
 every machine-checked field, and the mirror equality test still passes.
+
+## S10/D6 — manifest content is consumer-asserted audit data (residual, not a deviation)
+
+Neither the pre-seed nor the candidate manifest is content-revalidated at
+merge. The pre-seed manifest is audit-only by design (pre-seed is
+trust-on-review: a PR self-check on its own bytes would be circular, so
+the trust root is human review of the pre-seed source and workflow).
+The candidate manifest is verified by consumers with the emitted shell
+script before any candidate command runs (cache-contract §4), and the
+merge re-checks the head binding via the S3 attestation
+(`commit == plan.head`) plus the candidate job's needs conclusion; the
+remaining fields (`sha256`/`toolchain`/`target`) are consumer-asserted
+at merge time. No deviation is claimed: every stated check runs where
+stated, and the policy texts (cache-contract §4, `candidate_manifest`
+docs, `preseed` docs, merge-request docs) agree on the split.
+
+## D7 — needs-inventory integrity rests on workflow review (residual, not a deviation)
+
+`VELNOR_NEEDS_EXPECTED` is generated YAML consumed as the merge's
+required-inventory ground truth. The freshness gate that would catch a
+hand edit lives in the same file it verifies, so an edit that shrinks
+the inventory and neuters the freshness check is self-consistent
+against every code check. The control is procedural: generated
+workflow files change only through reviewed PRs (repo `CODEOWNERS`
+covers `.github/workflows/`; branch protection enforces review), and
+inventory/condition edits are security-sensitive by policy
+([classification.md](classification.md)). No deviation is claimed: no
+code check promises tamper-evidence for the committed `needs` set.
