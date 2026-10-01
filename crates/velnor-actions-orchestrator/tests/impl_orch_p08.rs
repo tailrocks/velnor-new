@@ -296,22 +296,29 @@ fn c11_cache_saves_push_only_prs_and_forks_read_only() -> TestResult {
         !yaml.contains("- name: Restore Cargo sources\n        if:"),
         "restores stay unconditional:\n{yaml}"
     );
-    // Mise: every Setup Mise restores but saves push-only.
+    // Mise: every Setup Mise restores; exactly one writer per cache key
+    // saves push-only while demoted sharers stand down to "false".
     assert!(
         !yaml.contains("cache_save: \"true\""),
         "no unconditional mise save:\n{yaml}"
     );
+    let setups = yaml.matches("- name: Setup Mise").count();
+    let gated = yaml
+        .matches(&format!("cache_save: {CACHE_SAVE_CONDITION_EXPR}"))
+        .count();
+    let demoted = yaml.matches("cache_save: \"false\"").count();
     assert_eq!(
-        yaml.matches("- name: Setup Mise").count(),
-        yaml.matches(&format!("cache_save: {CACHE_SAVE_CONDITION_EXPR}"))
-            .count(),
-        "every setup gates its save:\n{yaml}"
+        setups,
+        gated + demoted,
+        "every setup gated or demoted:\n{yaml}"
     );
-    assert!(
-        yaml.matches(&format!("cache_save: {CACHE_SAVE_CONDITION_EXPR}"))
-            .count()
-            >= 2,
-        "plan and crate setups gated:\n{yaml}"
-    );
+    let mut keys = std::collections::BTreeSet::new();
+    for line in yaml.lines() {
+        if let Some(key) = line.trim().strip_prefix("cache_key: ") {
+            keys.insert(key.to_owned());
+        }
+    }
+    assert_eq!(gated, keys.len(), "exactly one writer per key:\n{yaml}");
+    assert!(gated >= 1, "at least one writer:\n{yaml}");
     Ok(())
 }

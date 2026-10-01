@@ -31,6 +31,8 @@ mod impl_renderer_msrv;
 mod impl_renderer_overlap;
 #[path = "impl_renderer_p08.rs"]
 mod impl_renderer_p08;
+#[path = "impl_renderer_p08_elect.rs"]
+mod impl_renderer_p08_elect;
 #[path = "impl_renderer_planclose.rs"]
 mod impl_renderer_planclose;
 #[path = "impl_renderer_planformat.rs"]
