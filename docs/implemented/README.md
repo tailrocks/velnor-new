@@ -27,9 +27,9 @@ checks passing; those checks were green at `bdfffb9` (dogfood CI run
 Shared acceptance state: local workspace suite green at `bdfffb9` (1048
 pass/0 fail: 978 integration + 70 src-unit, 21 binaries; clippy clean,
 fmt clean, deny ok; identical in a clean checkout). Latest measured suite:
-1954/1954 Nextest green (2026-10-01, pre-push tree of `34550e8`;
-exact-commit re-measurement on the final HEAD pending in the closing
-ladder). Seed approvals and
+1987/1987 Nextest green (2026-10-01, exact commit `4c0edc8`,
+0 skipped, `cargo nextest run --workspace --locked --profile ci`).
+Seed approvals and
 release publication are NEEDS-HUMAN and unproved
 ([release-gates.md](release-gates.md) BOOT rows). Measurements live in
 [performance.md](performance.md) (7 local cases + green-run timings);
@@ -37,15 +37,17 @@ clause-by-clause proof lives in
 [requirements-evidence.md](requirements-evidence.md).
 
 Current runs (2026-10-01, branch `docs/velnor-actions-spec`): last green
-is run `36862207497` at `34550e8`
-(`https://github.com/tailrocks/velnor-new/actions/runs/36862207497`,
+is run `36870627159` at `0c9a6a7`
+(`https://github.com/tailrocks/velnor-new/actions/runs/36870627159`,
 success: 14 jobs green + `Publish baseline` skipped push-only).
-Previous green: run `36836254328` at `644fdf5`
+Previous greens: run `36865471829` at `93dd3d4`, run `36864280056`
+at `3054c3e`, run `36862207497` at `34550e8` (each 14 green +
+`Publish baseline` skipped), run `36836254328` at `644fdf5`
 (`https://github.com/tailrocks/velnor-new/actions/runs/36836254328`,
 success 14/14 on the 14-job tree). Run `36860814112` at `395d4bf`
 (`https://github.com/tailrocks/velnor-new/actions/runs/36860814112`)
 failed exactly two jobs — `Rust / velnor-actions-contract` (rustdoc
-private intra-doc link) and dependent `Required`; all other 13 jobs
+private intra-doc link) and dependent `Required`; all other 12 jobs
 green, `Publish baseline` skipped (push-only). The fix is `34550e8`
 (public `WorkflowIr::validate` link). Per-record `bdfffb9` citations
 below are historical evidence and stay tied to that SHA.

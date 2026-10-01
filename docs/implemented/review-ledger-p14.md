@@ -290,16 +290,18 @@ counter-evidence after a tried-and-reverted implementation (see below).
 - N01: `non_utf8_path_broadens_explicitly` failed on Linux at `a74dd7f`
   (run 36759633324). Closed: green Linux run `36836254328` @`644fdf5`
   (success 14/14) executes the orchestrator suite including that test.
-- N02: runner-side `actionlint@1.7.12` missing at `c8b3a89` (run 36751323928).
+- N02: runner-side `actionlint@1.7.12` missing at `9e81355` (run 36751323928).
   Closed: actionlint installs via mise in plan/validating jobs, and the
   same green run proves it end to end.
 
 ## Current hosted runs at this revision
 
-- Green: `36862207497` @`34550e8` (2026-10-01, success: 14 jobs green +
+- Green: `36870627159` @`0c9a6a7` (2026-10-01, success: 14 jobs green +
   `Publish baseline` skipped push-only) — last green.
-- Previous green: `36836254328` @`644fdf5` (2026-10-01, success 14/14).
+- Previous greens: `36865471829` @`93dd3d4`, `36864280056` @`3054c3e`,
+  `36862207497` @`34550e8` (each 14 green + `Publish baseline`
+  skipped), `36836254328` @`644fdf5` (success 14/14).
 - Red: `36860814112` @`395d4bf` (2026-10-01, failure: `Rust /
   velnor-actions-contract` rustdoc intra-doc link + dependent `Required`).
   Cause matches the `34550e8` fix (public `WorkflowIr::validate` link);
-  all other 13 jobs green, `Publish baseline` skipped (push-only).
+  all other 12 jobs green, `Publish baseline` skipped (push-only).
