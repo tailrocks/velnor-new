@@ -101,13 +101,13 @@ impl PreseedStageSource {
 /// # Errors
 pub fn preseed_build_step(
     build: &[String],
-    env: BTreeMap<String, String>,
+    env: &BTreeMap<String, String>,
 ) -> Result<Step, RenderError> {
     debug_assert!(PRESEED_BUILD_NAME.ends_with(TRUST_MARK));
     steps::shell_step(
         PRESEED_BUILD_NAME,
         with_env_unset_argv(build),
-        with_credential_scrub(&env),
+        with_credential_scrub(env),
     )
 }
 
@@ -123,7 +123,7 @@ pub fn preseed_build_step(
 pub fn preseed_verify_step(
     probe: &[String],
     mbx_version: &str,
-    env: BTreeMap<String, String>,
+    env: &BTreeMap<String, String>,
 ) -> Result<Step, RenderError> {
     debug_assert!(PRESEED_VERIFY_NAME.ends_with(TRUST_MARK));
     if !is_exact_version(mbx_version) {
@@ -139,7 +139,7 @@ pub fn preseed_verify_step(
     steps::shell_step(
         PRESEED_VERIFY_NAME,
         vec!["sh".to_owned(), "-c".to_owned(), script],
-        with_credential_scrub(&env),
+        with_credential_scrub(env),
     )
 }
 

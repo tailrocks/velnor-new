@@ -44,8 +44,8 @@ pub(crate) fn preseed_plan() -> Result<(String, Job), RenderError> {
         Vec::new(),
         vec![
             checkout_step(&checkout_pin())?,
-            preseed_build_step(&build, BTreeMap::new())?,
-            preseed_verify_step(&mbx_probe(), MBX_VERSION, BTreeMap::new())?,
+            preseed_build_step(&build, &BTreeMap::new())?,
+            preseed_verify_step(&mbx_probe(), MBX_VERSION, &BTreeMap::new())?,
             preseed_manifest_step(&build, TARGET)?,
             preseed_upload_step()?,
             preseed_stage_step(PreseedStageSource::LocalBuild, STAGED)?,
@@ -76,7 +76,7 @@ fn preseed_templates_carry_trust_mark_and_exact_artifact() -> Result<(), RenderE
     let manifest = preseed_manifest_step(&build, TARGET)?;
     let build_step = preseed_build_step(
         &build,
-        BTreeMap::from([("MISE_CARGO_HOME".to_owned(), "owned".to_owned())]),
+        &BTreeMap::from([("MISE_CARGO_HOME".to_owned(), "owned".to_owned())]),
     )?;
     // S1: the helper build compiles PR source, so it unsets runner
     // credentials before exec and scrubs the step env.
@@ -96,7 +96,7 @@ fn preseed_templates_carry_trust_mark_and_exact_artifact() -> Result<(), RenderE
     assert_eq!(home, Some("owned"), "build carries caller homes");
     for step in [
         build_step,
-        preseed_verify_step(&mbx_probe(), MBX_VERSION, BTreeMap::new())?,
+        preseed_verify_step(&mbx_probe(), MBX_VERSION, &BTreeMap::new())?,
         manifest,
         preseed_upload_step()?,
         preseed_download_step()?,
@@ -174,7 +174,7 @@ fn preseed_verify_pins_binary_and_mbx_route() -> Result<(), RenderError> {
     let step = preseed_verify_step(
         &mbx_probe(),
         MBX_VERSION,
-        BTreeMap::from([("MISE_CARGO_HOME".to_owned(), "owned".to_owned())]),
+        &BTreeMap::from([("MISE_CARGO_HOME".to_owned(), "owned".to_owned())]),
     )?;
     let velnor_actions_contract::StepKind::Shell { run, env } = &step.kind else {
         panic!("verify must be a shell step");
@@ -196,7 +196,7 @@ fn preseed_verify_pins_binary_and_mbx_route() -> Result<(), RenderError> {
     );
     for bad_version in ["", "latest", "1.19", "v1.19.0", "1.19.0 "] {
         assert!(
-            preseed_verify_step(&mbx_probe(), bad_version, BTreeMap::new()).is_err(),
+            preseed_verify_step(&mbx_probe(), bad_version, &BTreeMap::new()).is_err(),
             "version accepted: {bad_version}"
         );
     }
@@ -207,7 +207,7 @@ fn preseed_verify_pins_binary_and_mbx_route() -> Result<(), RenderError> {
         mise_argv("mr-boxington@latest", "mbx", &["--version"]),
     ] {
         assert!(
-            preseed_verify_step(&bad_probe, MBX_VERSION, BTreeMap::new()).is_err(),
+            preseed_verify_step(&bad_probe, MBX_VERSION, &BTreeMap::new()).is_err(),
             "probe accepted: {bad_probe:?}"
         );
     }
