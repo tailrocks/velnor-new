@@ -226,12 +226,16 @@ fn second_parent(root: &Path) -> Option<String> {
 ///
 /// Validation gates the untrusted range (flag-injection defense); `-z` is
 /// our own trusted constant added after, so output is NUL-delimited with
-/// no C-quoting or trimming. Rename detection stays at its default.
+/// no C-quoting or trimming. Rename detection stays off: the output is a
+/// set of possibly-affected paths, and a collapsed R100 rename would drop
+/// the old path's owner from selection. Same convention as
+/// `tree_diff_names` and `added_files`.
 fn changed_files(root: &Path, base: &str, head: &str) -> Result<BTreeSet<String>, String> {
     validate_diff_rev(base, "bad_base")?;
     validate_diff_rev(head, "bad_head")?;
     let mut args = vec![
         OsString::from("--name-only"),
+        OsString::from("--no-renames"),
         OsString::from(format!("{base}...{head}")),
         OsString::from("--"),
     ];

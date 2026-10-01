@@ -147,3 +147,34 @@ fn moved_file_selects_old_and_new_owners() -> TestResult {
     assert!(warnings.is_empty(), "narrow, got {warnings:?}");
     Ok(())
 }
+
+#[test]
+fn pure_rename_selects_old_and_new_owners() -> TestResult {
+    let repo = make_nested_repo(&["alpha", "beta"])?;
+    let root = repo.path();
+    fs::write(
+        root.join("rust/alpha/src/shared.rs"),
+        "pub fn shared() {}\n",
+    )?;
+    let base = commit(root, "one")?;
+    // No modification: git reports an R100 rename, which default
+    // `--name-only` collapses to the new path only.
+    git(
+        &["mv", "rust/alpha/src/shared.rs", "rust/beta/src/shared.rs"],
+        root,
+    )?;
+    let head = commit(root, "two")?;
+    let (plan, warnings) = plan_pr(root, Some(&base), &head)?;
+    let alpha = reasons_for(&plan, "alpha");
+    assert!(
+        alpha.iter().all(|r| *r == "affected_by_change"),
+        "old-path owner stays selected: {alpha:?}"
+    );
+    let beta = reasons_for(&plan, "beta");
+    assert!(
+        beta.iter().all(|r| *r == "affected_by_change"),
+        "new-path owner selected: {beta:?}"
+    );
+    assert!(warnings.is_empty(), "narrow, got {warnings:?}");
+    Ok(())
+}

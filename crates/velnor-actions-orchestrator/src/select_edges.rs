@@ -24,7 +24,7 @@ const MAX_BASE_MANIFEST_BATCH: usize = 512;
 /// Head paths added since base: manifests absent at base, skipped by batch.
 ///
 /// Rename detection stays off so every head path missing at base reports as
-/// added; the changed set keeps its own rename behavior untouched.
+/// added; the committed change set uses the same no-rename convention.
 /// Validation gates the untrusted range (flag-injection defense); `-z` is
 /// our own trusted constant added after, so output is NUL-delimited with
 /// no C-quoting or trimming, like `changed_files`. Only validated manifests
