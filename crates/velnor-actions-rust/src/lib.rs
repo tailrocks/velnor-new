@@ -88,8 +88,9 @@ pub use tasks::{
 };
 pub use toolfiles::{
     FOREIGN_TOOL_FILES, MISSING_RECOMMENDED_INPUT, OWNED_SYMBOLS, RUST_TOOLCHAIN_FILE,
-    TOOLING_INPUT_INVALID, ToolFile, ToolFinding, ToolInspectError, ToolchainInspection,
-    ToolchainSpec, inspect_toolchain_file, is_owned_tool_file, stack_for_symbol,
+    SelectionBroadening, TOOLING_INPUT_INVALID, ToolFile, ToolFinding, ToolInspectError,
+    ToolchainInspection, ToolchainSpec, inspect_toolchain_file, is_known_toolfile,
+    is_owned_tool_file, selection_broadening, stack_for_symbol,
 };
 
 /// Stable identifier for the Rust stack.
