@@ -120,9 +120,10 @@ const SEED_TAG_PREFIX: &str = "seed/velnor-actions-";
 /// True for a seed tag bound to `version`.
 ///
 /// Accepts exactly `seed/velnor-actions-<version>` or
-/// `seed/velnor-actions-<version>-<N>` with a numeric counter (seed
-/// tags are immutable and never re-pointed; `-N` distinguishes seed
-/// builds of one generator version). Both callers pass a
+/// `seed/velnor-actions-<version>-<N>` with a numeric counter (`-N`
+/// distinguishes seed builds of one generator version). Seed tags are
+/// published as immutable releases, but same-version substitution
+/// stays review-gated. Both callers pass a
 /// semver-checked `version`, so the literal match cannot smuggle path
 /// metacharacters; anything else, including a version-mismatched seed
 /// tag, fails closed.

@@ -32,7 +32,9 @@ asset and verify its digest before invoking it.
 
 No official release exists yet (only the `seed/velnor-actions-0.1.0`
 bootstrap seed, which is not an official release). Until one does, build
-from source on this branch. A source build fails consumer-policy
+from source on this branch. Version-bound seed manifests remain accepted
+as review-gated bootstrap inputs on the consumer path until the first
+official release supersedes them. A source build fails consumer-policy
 generation by design (`consumer_requires_release_install`); it never emits
 an unverified download URL or a placeholder digest. Velnor's own
 repository instead uses the reserved `velnor-repository-v1` policy with
