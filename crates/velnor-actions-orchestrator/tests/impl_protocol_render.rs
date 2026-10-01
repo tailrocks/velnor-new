@@ -92,7 +92,14 @@ fn render_gate_roundtrip_accepts_plan() -> TestResult {
     let head = "f".repeat(40);
     let payload = format!("{{\"before\":null,\"after\":\"{head}\"}}");
     let file = request_template.replace("${{ runner.temp }}", &dir.path().display().to_string());
-    write_request_parts(Path::new(&file), "push", &payload, Some(&head), dir.path())?;
+    write_request_parts(
+        Path::new(&file),
+        "push",
+        &payload,
+        Some(&head),
+        None,
+        dir.path(),
+    )?;
     let value: serde_json::Value = serde_json::from_str(&fs::read_to_string(&file)?)?;
     assert_eq!(value["op"], "plan-v1");
     assert_eq!(value["event"], "push");

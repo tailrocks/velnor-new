@@ -175,12 +175,13 @@ pub(crate) fn resolve_manifests(
     workflow: &str,
     branch: &str,
     artifact: Option<&str>,
+    repository: Option<&str>,
 ) -> Result<Vec<BaselineManifest>, String> {
     BaselineLookup::validate_inputs(base, workflow, branch)?;
     let Some(artifact) = artifact.filter(|name| !name.is_empty()) else {
         return Err("baseline_no_exact_artifact".to_owned());
     };
-    let repo = resolve_lookup_repo(root)?;
+    let repo = resolve_lookup_repo(root, repository)?;
     let lookup = BaselineLookup::new(base, workflow, branch, &repo)?;
     let text = BaselineLookup::run(catalog, root, lookup.list_args())?;
     let selected = select_exact_base_run(&text, base, branch)?;
@@ -211,11 +212,15 @@ pub(crate) fn resolve_manifests(
 
 /// Repository slug scoping every lookup `gh` call.
 ///
-/// Env-first with origin fallback; a conflict or an absence misses
+/// Request-first with origin fallback; a conflict or an absence misses
 /// before spawning anything, so no lookup ever queries a repo the
 /// runner did not bless or the checkout cannot name.
-fn resolve_lookup_repo(root: &Path) -> Result<String, String> {
-    let expected = crate::cover_baseline::provenance_resolve::expected_repository_for_root(root);
+fn resolve_lookup_repo(root: &Path, repository: Option<&str>) -> Result<String, String> {
+    let origin = crate::cover_baseline::provenance_check::repository_slug_from_origin(root);
+    let expected = crate::cover_baseline::provenance_resolve::resolve_expected_repository(
+        origin.as_deref(),
+        repository,
+    );
     if expected.conflict {
         return Err("baseline_repo_conflict".to_owned());
     }

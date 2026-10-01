@@ -28,7 +28,7 @@ fn write_request_materializes_pull_request() -> TestResult {
         .join("velnor")
         .join("request")
         .join("plan-v1-request.json");
-    let written = write_request_parts(&file, "pull_request", &payload, None, dir.path())?;
+    let written = write_request_parts(&file, "pull_request", &payload, None, None, dir.path())?;
     assert_eq!(written, file);
     let value: serde_json::Value = serde_json::from_str(&fs::read_to_string(&file)?)?;
     assert_eq!(value["schema"], 1);
@@ -46,12 +46,31 @@ fn write_request_materializes_pull_request() -> TestResult {
 }
 
 #[test]
+fn write_request_captures_repository_capability() -> TestResult {
+    let dir = TempDir::new()?;
+    let head = "a".repeat(40);
+    let payload = format!("{{\"before\":null,\"after\":\"{head}\"}}");
+    let file = dir.path().join("plan-v1-request.json");
+    write_request_parts(&file, "push", &payload, None, Some("o/r"), dir.path())?;
+    let value: serde_json::Value = serde_json::from_str(&fs::read_to_string(&file)?)?;
+    assert_eq!(value["repository"], "o/r");
+    let bare = dir.path().join("bare").join("plan-v1-request.json");
+    write_request_parts(&bare, "push", &payload, None, None, dir.path())?;
+    let bare_value: serde_json::Value = serde_json::from_str(&fs::read_to_string(&bare)?)?;
+    assert!(
+        bare_value.get("repository").is_none(),
+        "unset slug stays omitted: {bare_value}"
+    );
+    Ok(())
+}
+
+#[test]
 fn write_request_materializes_push_without_base() -> TestResult {
     let dir = TempDir::new()?;
     let head = "c".repeat(40);
     let payload = format!("{{\"before\":\"{}\",\"after\":\"{head}\"}}", "0".repeat(40));
     let file = dir.path().join("plan-v1-request.json");
-    write_request_parts(&file, "push", &payload, Some(&head), dir.path())?;
+    write_request_parts(&file, "push", &payload, Some(&head), None, dir.path())?;
     let value: serde_json::Value = serde_json::from_str(&fs::read_to_string(&file)?)?;
     assert_eq!(value["event"], "push");
     assert!(value["base"].is_null(), "zero before maps to null");
@@ -64,7 +83,7 @@ fn write_request_materializes_push_without_base() -> TestResult {
         "0".repeat(40),
         "0".repeat(40)
     );
-    write_request_parts(&fallback, "push", &nulls, Some(&sha), dir.path())?;
+    write_request_parts(&fallback, "push", &nulls, Some(&sha), None, dir.path())?;
     let value: serde_json::Value = serde_json::from_str(&fs::read_to_string(&fallback)?)?;
     assert_eq!(value["head"], sha);
     Ok(())
@@ -78,7 +97,7 @@ fn write_request_materializes_merge_group() -> TestResult {
     let payload =
         format!("{{\"merge_group\":{{\"base_sha\":\"{base}\",\"head_sha\":\"{head}\"}}}}");
     let file = dir.path().join("plan-v1-request.json");
-    write_request_parts(&file, "merge_group", &payload, None, dir.path())?;
+    write_request_parts(&file, "merge_group", &payload, None, None, dir.path())?;
     let value: serde_json::Value = serde_json::from_str(&fs::read_to_string(&file)?)?;
     assert_eq!(value["op"], "plan-v1");
     assert_eq!(value["event"], "merge_group");
@@ -93,26 +112,26 @@ fn write_request_rejects_bad_inputs() -> TestResult {
     let payload = r#"{"before":"abc","after":"def"}"#;
     let bad_op = dir.path().join("bogus-v9-request.json");
     let err = err_of(
-        write_request_parts(&bad_op, "push", payload, None, dir.path()),
+        write_request_parts(&bad_op, "push", payload, None, None, dir.path()),
         "unknown op refused",
     )?;
     assert!(err.to_string().contains("unknown_request_op"), "{err}");
     assert!(!bad_op.exists());
     let bad_event = dir.path().join("plan-v1-request.json");
     let err = err_of(
-        write_request_parts(&bad_event, "schedule", payload, None, dir.path()),
+        write_request_parts(&bad_event, "schedule", payload, None, None, dir.path()),
         "unknown event refused",
     )?;
     assert!(err.to_string().contains("unsupported_event"), "{err}");
     let err = err_of(
-        write_request_parts(&bad_event, "push", "not json", None, dir.path()),
+        write_request_parts(&bad_event, "push", "not json", None, None, dir.path()),
         "malformed payload refused",
     )?;
     assert!(err.to_string().contains("malformed_event_payload"), "{err}");
 
     fs::write(&bad_event, "{}")?;
     let err = err_of(
-        write_request_parts(&bad_event, "push", payload, None, dir.path()),
+        write_request_parts(&bad_event, "push", payload, None, None, dir.path()),
         "existing file refused",
     )?;
     assert!(err.to_string().contains("request_exists"), "{err}");
@@ -127,7 +146,7 @@ fn write_request_pins_parents_to_the_anchor() -> TestResult {
     let elsewhere = TempDir::new()?;
     let escaped = elsewhere.path().join("plan-v1-request.json");
     let err = err_of(
-        write_request_parts(&escaped, "push", payload, None, dir.path()),
+        write_request_parts(&escaped, "push", payload, None, None, dir.path()),
         "anchor escape refused",
     )?;
     assert!(err.to_string().contains("anchor_escape"), "{err}");
@@ -140,7 +159,7 @@ fn write_request_pins_parents_to_the_anchor() -> TestResult {
         std::os::unix::fs::symlink(&real, &link)?;
         let planted = link.join("plan-v1-request.json");
         let err = err_of(
-            write_request_parts(&planted, "push", payload, None, dir.path()),
+            write_request_parts(&planted, "push", payload, None, None, dir.path()),
             "linked parent refused",
         )?;
         assert!(err.to_string().contains("symlink_refused"), "{err}");

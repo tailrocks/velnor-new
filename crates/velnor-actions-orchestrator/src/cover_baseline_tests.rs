@@ -240,6 +240,7 @@ fn forwarded_proof_marks_baseline_unavailable() {
         root: checkout.path(),
         workflow: ".github/workflows/ci.yml",
         catalog: &catalog,
+        repository: None,
     };
     apply_baseline(
         &mut plan,
@@ -294,6 +295,7 @@ fn source_build_keeps_marker_without_lock_fill() {
         root: tmp.path(),
         workflow: ".github/workflows/ci.yml",
         catalog: &catalog,
+        repository: None,
     };
     apply_baseline(
         &mut plan,

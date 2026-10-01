@@ -59,6 +59,7 @@ fn lookup_without_exact_artifact_misses_before_spawning() {
             ".github/workflows/ci.yml",
             "testmain",
             artifact,
+            None,
         )
         .expect_err("miss")
     };
@@ -70,6 +71,7 @@ fn lookup_without_exact_artifact_misses_before_spawning() {
         "short",
         ".github/workflows/ci.yml",
         "testmain",
+        None,
         None,
     )
     .expect_err("inputs");

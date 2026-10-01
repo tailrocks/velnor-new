@@ -83,6 +83,14 @@ struct PlanRequest {
     /// Trusted baseline evidence for coverage classification.
     #[serde(default)]
     baseline_manifest: Option<serde_json::Value>,
+    /// Runner-owned repository slug (`owner/repo`) for provenance.
+    ///
+    /// The request writer captures this from `GITHUB_REPOSITORY`; the
+    /// planner never reads ambient env itself, so classification stays
+    /// a pure function of request plus checkout. Absent means a local
+    /// run: the git origin is the fallback.
+    #[serde(default)]
+    repository: Option<String>,
 }
 
 /// `plan-v1` response: schema plus plan and matrix copies.
@@ -163,6 +171,7 @@ pub fn plan_internal(request_json: &str) -> Result<String, OrchestratorError> {
             root: &prep.root,
             workflow: velnor_actions_workflow_renderer::render::WORKFLOW_PATH,
             catalog: &catalog,
+            repository: request.repository.as_deref(),
         },
         manifest,
         &prep.discovery,

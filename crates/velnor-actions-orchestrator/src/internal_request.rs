@@ -32,6 +32,13 @@ struct EventRequest {
     head: String,
     /// Repository root; always `.` (the job checkout).
     root: String,
+    /// Runner-owned repository slug (`owner/repo`) for provenance.
+    ///
+    /// Captured from `GITHUB_REPOSITORY` at the env boundary so the
+    /// planner consumes an explicit capability instead of ambient env.
+    /// Omitted when unset (local runs fall back to the git origin).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    repository: Option<String>,
 }
 
 /// Canonical `plan`/`matrix` outputs for `$GITHUB_OUTPUT`.
@@ -79,7 +86,17 @@ pub fn write_request() -> Result<PathBuf, OrchestratorError> {
         crate::safe_read::MAX_REPO_FILE_BYTES,
     )?;
     let sha = env::var("GITHUB_SHA").ok().filter(|sha| !sha.is_empty());
-    write_request_parts(&path, &event_name, &payload_json, sha.as_deref(), &anchor)
+    let repository = env::var(crate::origin::GITHUB_REPOSITORY_ENV)
+        .ok()
+        .filter(|slug| !slug.is_empty());
+    write_request_parts(
+        &path,
+        &event_name,
+        &payload_json,
+        sha.as_deref(),
+        repository.as_deref(),
+        &anchor,
+    )
 }
 
 /// Materialize one canonical request file from explicit inputs.
@@ -100,6 +117,7 @@ pub fn write_request_parts(
     event_name: &str,
     payload_json: &str,
     github_sha: Option<&str>,
+    repository: Option<&str>,
     anchor: &Path,
 ) -> Result<PathBuf, OrchestratorError> {
     let path = request_path.to_path_buf();
@@ -118,6 +136,9 @@ pub fn write_request_parts(
         base,
         head,
         root: ".".to_owned(),
+        repository: repository
+            .filter(|slug| !slug.is_empty())
+            .map(str::to_owned),
     };
     let bytes = canonical_json_bytes(&request).map_err(internal_contract)?;
     if let Some(parent) = path.parent() {

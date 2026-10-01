@@ -16,8 +16,11 @@ use velnor_actions_contract::{
 };
 use velnor_actions_mise::BaselineLookup as MiseBaselineLookup;
 
-use self::provenance_check::{ProvenanceExpectations, publish_event_eligible, validate_provenance};
-use self::provenance_resolve::{expected_repository_for_root, repository_anchor_for_slug};
+use self::provenance_check::{
+    ProvenanceExpectations, publish_event_eligible, repository_slug_from_origin,
+    validate_provenance,
+};
+use self::provenance_resolve::{repository_anchor_for_slug, resolve_expected_repository};
 use crate::OrchestratorError;
 use crate::cover::shard;
 use crate::cover_identity::{SOURCE_BUILD_REASON, apply_coverage, is_source_build};
@@ -36,7 +39,7 @@ pub(crate) fn unix_now() -> u64 {
         .map_or(u64::MAX, |elapsed| elapsed.as_secs())
 }
 
-/// Baseline resolution inputs: branch, root, workflow, and tool catalog.
+/// Baseline resolution inputs: branch, root, workflow, catalog, and repo.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct BaselineInputs<'a> {
     /// Default branch for manifest refs.
@@ -47,6 +50,14 @@ pub(crate) struct BaselineInputs<'a> {
     pub(crate) workflow: &'a str,
     /// Tool catalog for manifest resolution.
     pub(crate) catalog: &'a velnor_actions_mise::ToolCatalog,
+    /// Runner-owned repository slug (`owner/repo`) from the request.
+    ///
+    /// `None` models a local run: the git origin is the fallback.
+    /// Callers pass this explicitly so baseline classification stays a
+    /// pure function of request plus checkout; ambient process env
+    /// must never leak in here (it once poisoned CI runs whose
+    /// runner env described a different repository than the target).
+    pub(crate) repository: Option<&'a str>,
 }
 
 /// Classify obligations against baseline evidence, or execute everything.
@@ -90,7 +101,8 @@ pub(crate) fn apply_baseline(
         return Ok(());
     };
     let digest = digest_b3(&canonical_json_bytes(&manifest).map_err(internal_contract)?);
-    let repo = expected_repository_for_root(inputs.root);
+    let origin = repository_slug_from_origin(inputs.root);
+    let repo = resolve_expected_repository(origin.as_deref(), inputs.repository);
     let expected = ProvenanceExpectations {
         base: base.clone(),
         branch: inputs.branch.to_owned(),
@@ -170,6 +182,7 @@ fn lookup_manifest(plan: &mut Plan, inputs: BaselineInputs<'_>) -> Option<Baseli
         inputs.workflow,
         inputs.branch,
         None,
+        inputs.repository,
     ) {
         Ok(found) => {
             let mut found = found.into_iter();

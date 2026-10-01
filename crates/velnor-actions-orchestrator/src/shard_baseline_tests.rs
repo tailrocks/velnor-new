@@ -20,41 +20,40 @@ fn git_checkout_with_origin(url: &str) -> tempfile::TempDir {
     tmp
 }
 
-/// Lookup repo resolution follows the environment hermetically: no
-/// spawn happens here, so the expectation derives from the same env
-/// the resolver reads.
+/// Lookup repo resolution follows the explicit request slug: no
+/// spawn happens here and no ambient env is read, so identical
+/// inputs resolve identically under any runner environment.
 #[test]
-fn lookup_repo_resolution_is_env_hermetic() {
-    use crate::origin::validate_repository_slug;
-    let env = std::env::var(crate::origin::GITHUB_REPOSITORY_ENV)
-        .ok()
-        .and_then(|raw| validate_repository_slug(&raw));
-    // Bare checkout: env slug when set, else unresolved.
+fn lookup_repo_resolution_is_request_hermetic() {
+    // Bare checkout: request slug when set, else unresolved.
     let bare = tempfile::tempdir().expect("tempdir");
-    match &env {
-        Some(slug) => assert_eq!(resolve_lookup_repo(bare.path()), Ok(slug.clone())),
-        None => assert_eq!(
-            resolve_lookup_repo(bare.path()),
-            Err("baseline_repo_unresolved".to_owned())
-        ),
-    }
+    assert_eq!(
+        resolve_lookup_repo(bare.path(), Some("o/r")),
+        Ok("o/r".to_owned())
+    );
+    assert_eq!(
+        resolve_lookup_repo(bare.path(), None),
+        Err("baseline_repo_unresolved".to_owned())
+    );
     // Origin checkout: agreement resolves, disagreement conflicts.
-    let origin = env.clone().unwrap_or_else(|| "o/r".to_owned());
-    let checkout = git_checkout_with_origin(&format!("https://github.com/{origin}.git"));
-    assert_eq!(resolve_lookup_repo(checkout.path()), Ok(origin));
-    let other = if env.as_deref() == Some("o/r") {
-        "evil/fork"
-    } else {
-        "o/r"
-    };
-    let forked = git_checkout_with_origin(&format!("https://github.com/{other}.git"));
-    match &env {
-        Some(_) => assert_eq!(
-            resolve_lookup_repo(forked.path()),
-            Err("baseline_repo_conflict".to_owned())
-        ),
-        None => assert_eq!(resolve_lookup_repo(forked.path()), Ok(other.to_owned())),
-    }
+    let checkout = git_checkout_with_origin("https://github.com/o/r.git");
+    assert_eq!(
+        resolve_lookup_repo(checkout.path(), Some("o/r")),
+        Ok("o/r".to_owned())
+    );
+    assert_eq!(
+        resolve_lookup_repo(checkout.path(), None),
+        Ok("o/r".to_owned())
+    );
+    let forked = git_checkout_with_origin("https://github.com/evil/fork.git");
+    assert_eq!(
+        resolve_lookup_repo(forked.path(), Some("o/r")),
+        Err("baseline_repo_conflict".to_owned())
+    );
+    assert_eq!(
+        resolve_lookup_repo(forked.path(), None),
+        Ok("evil/fork".to_owned())
+    );
 }
 
 /// `gh` stdout decodes under its explicit cap only: small listings

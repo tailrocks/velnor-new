@@ -153,6 +153,7 @@ pub(super) fn inputs<'a>(
         root,
         workflow: ".github/workflows/ci.yml",
         catalog,
+        repository: None,
     }
 }
 
