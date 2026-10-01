@@ -90,8 +90,8 @@ pub use workflow::{
     RequiredJobResult, STALE_WORKFLOW_PATHS, ScheduleTrigger, Step, StepKind, TaskReport,
     TaskStatus, TaskTiming, Trigger, Trust, ValidatorKind, WORKFLOW_DISPLAY_NAME, WorkflowEvent,
     WorkflowIr, assign_crate_job_ids, check_matrix_agreement, crate_display_label,
-    crate_display_name, final_report_id_for_run, final_report_relpath, join_runner_temp,
-    matrix_json_bytes, matrix_report_relpath, plan_json_bytes, slugify_segment,
+    crate_display_name, final_report_id_for_run, final_report_relpath, is_safe_display_name,
+    join_runner_temp, matrix_json_bytes, matrix_report_relpath, plan_json_bytes, slugify_segment,
     task_report_relpath, trust_for_event, validate_final_report_id, validate_job_id,
     validate_matrix_run,
 };

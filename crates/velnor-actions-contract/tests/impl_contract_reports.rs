@@ -232,6 +232,17 @@ fn workflow_ir_validates_pins_and_refs() -> Result<(), ContractError> {
         job.runs_on = "ubuntu-latest".to_owned();
     }
     assert!(bad.validate().is_err());
+    for display in ["Plan ${{ secrets.x }}", "Plan\nInjected: true", "Plan\tx"] {
+        let mut bad = ir.clone();
+        if let Some(job) = bad.jobs.get_mut("plan") {
+            job.display_name = display.to_owned();
+        }
+        let err = bad.validate().expect_err("display must fail closed");
+        assert!(
+            err.to_string().contains("bad_display_name"),
+            "{display:?}: {err}"
+        );
+    }
     Ok(())
 }
 

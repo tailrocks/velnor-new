@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use crate::errors::ContractError;
 use crate::ids::{validate_matrix_key, validate_task_id};
 use crate::validate_digest;
-use crate::workflow::jobs::validate_job_id;
+use crate::workflow::jobs::{is_safe_display_name, validate_job_id};
 
 /// One logical obligation inside a crate job (per task, individually reported).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -56,7 +56,10 @@ impl CrateJob {
     /// # Errors
     pub fn validate(&self) -> Result<(), ContractError> {
         validate_job_id(&self.job_id)?;
-        if self.display_name.trim().is_empty() || !self.display_name.starts_with("Rust / ") {
+        if self.display_name.trim().is_empty()
+            || !self.display_name.starts_with("Rust / ")
+            || !is_safe_display_name(&self.display_name)
+        {
             return Err(ContractError::identity(
                 "crate_job.display_name",
                 format!("bad_display:{}", self.job_id),
