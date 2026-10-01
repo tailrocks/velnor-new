@@ -237,8 +237,10 @@ fn committed_drift_warns_never_fails() -> TestResult {
             .is_empty()
     );
     let prep = prepare(root)?;
-    assert_eq!(prep.runner_image.image_os.as_str(), "ubuntu");
-    assert_eq!(prep.runner_image.image_version.as_str(), "26.04");
+    assert!(prep.runner_image.is_unobserved());
+    assert_eq!(prep.runner_image.image_os.as_str(), "unknown");
+    assert_eq!(prep.runner_image.image_version.as_str(), "unknown");
+    assert!(!prep.runner_label.is_empty());
     Ok(())
 }
 

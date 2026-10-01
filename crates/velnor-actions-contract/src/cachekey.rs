@@ -105,9 +105,10 @@ pub struct PlatformInputs {
     pub arch: String,
     /// Exact literal `runs-on` label.
     pub runs_on: String,
-    /// Runner `ImageOS` value.
+    /// Runner `ImageOS` value; `unknown` when unobserved (P03-4: the
+    /// generator never splits label text into this field).
     pub image_os: String,
-    /// Runner `ImageVersion` value.
+    /// Runner `ImageVersion` value; `unknown` when unobserved (P03-4).
     pub image_version: String,
     /// Execution target (`host` or triple).
     pub target: String,

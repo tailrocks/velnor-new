@@ -4,8 +4,8 @@ use velnor_actions_contract::config::{LATEST_RUNNER_LABEL, OVERRIDABLE_ACTIONS};
 use velnor_actions_contract::{
     ContractError, FRESHNESS_CLASSES, Finding, FreshnessEntry, FreshnessRequirement,
     FreshnessStatus, GithubRunnerImages, NightlyRecord, PolicyException, RunnerImageEvidence,
-    RunnerInventory, ToolIdentity, VersionPolicy, days_between, runner_family_changed,
-    validate_freshness_class,
+    RunnerInventory, ToolIdentity, UNOBSERVED_IMAGE_VALUE, VersionPolicy, days_between,
+    runner_family_changed, validate_freshness_class,
 };
 
 #[test]
@@ -253,6 +253,12 @@ fn ver_tool_identity_carries_source_platforms_digest() {
     let mut bad = tool.clone();
     bad.digest = "xyz".to_owned();
     assert!(bad.validate("catalog").is_err());
+    let mut bad = tool.clone();
+    bad.digest = "00".repeat(32);
+    let err = bad
+        .validate("catalog")
+        .expect_err("all-zero digests never validate as trusted");
+    assert!(err.to_string().contains("placeholder_digest"), "{err}");
     let mut bad = tool;
     bad.name = "Rust!".to_owned();
     assert!(bad.validate("catalog").is_err());
@@ -305,6 +311,15 @@ fn ver_runner_image_evidence_and_family_change() {
     let mut bad = evidence.clone();
     bad.image_version = String::new();
     assert!(bad.validate().is_err());
+    let unobserved = RunnerImageEvidence::unobserved();
+    assert!(unobserved.is_unobserved());
+    assert_eq!(unobserved.validate(), Ok(()));
+    assert_eq!(UNOBSERVED_IMAGE_VALUE, "unknown");
+    assert!(!evidence.is_unobserved());
+    let observed = RunnerImageEvidence::observed("ubuntu26", "20260928.1.0").expect("observed");
+    assert!(!observed.is_unobserved());
+    assert!(RunnerImageEvidence::observed("unknown", "20260928.1.0").is_err());
+    assert!(RunnerImageEvidence::observed("ubuntu26", "unknown").is_err());
     assert!(!runner_family_changed("ubuntu-26.04", "ubuntu-26.04-arm"));
     assert!(runner_family_changed("ubuntu-24.04", "ubuntu-26.04"));
     assert!(runner_family_changed("ubuntu-26.04", "ubuntu-24.04-arm"));

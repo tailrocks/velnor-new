@@ -47,8 +47,8 @@ pub use extensions::{RUST_EXTENSION_REQUIRED_SLOTS, validate_rust_extension};
 pub use finding::Finding;
 pub use formats::{DECLARED_GITHUB_FORMATS, find_github_format, is_declared_github_format};
 pub use freshness::{
-    FRESHNESS_CLASSES, FreshnessRequirement, RunnerImageEvidence, runner_family_changed,
-    validate_freshness_class,
+    FRESHNESS_CLASSES, FreshnessRequirement, RunnerImageEvidence, UNOBSERVED_IMAGE_VALUE,
+    runner_family_changed, validate_freshness_class,
 };
 pub use graph::{
     CachePolicy, EdgeKind, ResourceClass, ResourceDemand, TaskEdge, TaskGraph, TaskNode,

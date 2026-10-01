@@ -94,10 +94,16 @@ fn writers_overlap_guards_layers() {
 #[test]
 fn catalog_identities_validate() {
     let catalog = ToolCatalog::pinned();
-    assert_eq!(catalog.validate_identities(), Ok(()));
+    let err = catalog
+        .validate_identities()
+        .expect_err("placeholder digests never validate as trusted");
+    assert!(err.to_string().contains("placeholder_digest"), "{err}");
     for tool in PinnedTool::ALL {
         let identity = catalog.tool_identity(tool);
-        assert_eq!(identity.validate("catalog"), Ok(()));
+        let err = identity
+            .validate("catalog")
+            .expect_err("placeholder digests never validate as trusted");
+        assert!(err.to_string().contains("placeholder_digest"), "{err}");
         assert!(identity.source.starts_with("https://"));
         assert!(!identity.platforms.is_empty());
     }

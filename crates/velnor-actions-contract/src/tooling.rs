@@ -27,6 +27,10 @@ pub struct ToolIdentity {
 
 impl ToolIdentity {
     /// Validate name, exact version, source, platforms, and digest.
+    ///
+    /// A validated identity is a trust record: the digest must be the
+    /// SHA-256 of a qualified artifact, so the all-zero placeholder is
+    /// rejected even though it is shape-valid hex (P03-8b).
     /// # Errors
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
         if self.name.trim().is_empty()
@@ -63,6 +67,13 @@ impl ToolIdentity {
             ));
         }
         check_sha256(&self.digest, file, "tool.digest")?;
+        if self.digest.bytes().all(|byte| byte == b'0') {
+            return Err(ContractError::config(
+                file,
+                "tool.digest",
+                "placeholder_digest",
+            ));
+        }
         Ok(())
     }
 }

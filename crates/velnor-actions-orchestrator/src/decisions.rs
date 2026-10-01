@@ -231,21 +231,15 @@ pub fn not_selected_report(inputs: &NotSelectedInputs<'_>) -> Result<TaskReport,
     Ok(report)
 }
 
-/// Observed runner-image evidence for one label (VER-4.2).
+/// Runner-image evidence at generation time (VER-4.2).
 ///
-/// The label's first segment names the OS and the rest the version
-/// (`ubuntu-26.04`); unversioned labels record `unknown`.
-pub(crate) fn runner_image_evidence(label: &str) -> Result<RunnerImageEvidence, ContractError> {
-    let (os, version) = match label.split_once('-') {
-        Some((os, rest)) if !rest.is_empty() => (os, rest),
-        _ => (label, "unknown"),
-    };
-    let evidence = RunnerImageEvidence {
-        image_os: os.to_owned(),
-        image_version: version.to_owned(),
-    };
-    evidence.validate()?;
-    Ok(evidence)
+/// Explicitly unobserved: the generator never sees the provisioned
+/// runner, so label text is never split into `ImageOS`/`ImageVersion`
+/// facts. Observed provisioner values bind later through
+/// [`RunnerImageEvidence::observed`], which rejects this marker, so
+/// the two states stay disjoint by construction (P03-4).
+pub(crate) fn runner_image_evidence() -> RunnerImageEvidence {
+    RunnerImageEvidence::unobserved()
 }
 
 /// Broaden warning for global-config or outside-project paths, if any.

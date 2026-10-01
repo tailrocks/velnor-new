@@ -372,6 +372,7 @@ Budgets:
 
 - Same obligation set across all 7 cases: PASSED (digest
   `cd8b34ba18f0982d` in all 16 samples).
+- B1 true-cold/install, B7 resolution effects, P13-3 hosted negatives: UNPASSED/UNMEASURED, no controlled runs (bench cases are planner-level; 124 hosted runs all same-repo PR CI).
 - Inventory reuse op counts: PASSED (exact: 1/10/100 members →
   2/11/101 legacy subprocesses vs 1 reused).
 - Concurrent validation lanes without contention: UNPASSED as a

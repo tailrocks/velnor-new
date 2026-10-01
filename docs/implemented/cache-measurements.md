@@ -34,7 +34,10 @@ Nothing is fabricated.
 listing is complete (no pagination gap). A second pull after the warm
 and green runs returned the same 21 entries and the same byte total:
 both runs were storage-neutral (sources save skipped/refused, tools
-never save, MBX never saves on PR runs).
+never save, MBX never saves on PR runs). A third pull 2026-10-01T12:59Z
+is again byte-identical (21 entries, 1,325,342,795 B; oldest
+2026-09-28T23:12Z, newest the 09-30 seed save): ~24 further same-repo
+PR runs added zero entries and evicted zero.
 
 | Layer | Entries | Stored bytes | Share |
 | --- | ---: | ---: | ---: |
@@ -174,7 +177,13 @@ warm and green. Local §3 replays both branches verbatim.
 UNMEASURED / open: MBX objects seed (needs a default-branch P08 run
 — until then every crate job recompiles from scratch and pays 10–14 s
 for an empty restore); eviction over time (needs a week-scale
-sequential sample).
+sequential sample — oldest entry 2026-09-28, none 7-day-eligible yet);
+fork-PR read-only hosted run (all 124 runs in history are same-repo
+`pull_request` events per 2026-10-01 API census — zero fork-origin
+runs, so fork read-only has unit evidence only:
+`pr_save_allowed`/`is_read_only`/`mode_for_event`); simultaneous-writer
+attempts (PARTIAL: warm-run sources save hit backend reservation
+refusal, but no controlled two-writer race on one key was run).
 ANSWERED: why the Mise built-in cache never saved — the pinned
 `jdx/mise-action` saves only inside its `install` leg, which Velnor
 disables (`install: false`), so the push-gated `cache_save`
