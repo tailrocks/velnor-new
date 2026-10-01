@@ -19,14 +19,20 @@ fn baseline_publish_and_download_rules() {
         Some(&name),
         7,
         dir,
+        "o/r",
     )
     .iter()
     .map(|arg| arg.to_string_lossy().into_owned())
     .collect();
     assert_eq!(&named[0..4], &["run", "download", "7", "--name"]);
     assert_eq!(named[4], name);
-    assert!(baseline_download_args(&base, "w", "b", None, 7, dir).is_empty());
-    assert!(baseline_download_args(&base, "w", "b", Some(""), 7, dir).is_empty());
+    assert_eq!(&named[named.len() - 2..], &["--repo", "o/r"]);
+    assert!(baseline_download_args(&base, "w", "b", None, 7, dir, "o/r").is_empty());
+    assert!(baseline_download_args(&base, "w", "b", Some(""), 7, dir, "o/r").is_empty());
+    assert!(
+        baseline_download_args(&base, "w", "b", Some(&name), 7, dir, "not-a-slug").is_empty(),
+        "a malformed repo yields no unscoped command"
+    );
 }
 
 /// Minimal valid manifest JSON for `base`/`name`, run 7 attempt 1 id 9.
@@ -145,6 +151,121 @@ fn empty_discovery() -> crate::discover::Discovery {
         consumer_manifest_stand_in: false,
         skipped_non_utf8: false,
     }
+}
+
+/// Repository slug the test checkout must anchor: the CI-provided
+/// `GITHUB_REPOSITORY` when well-formed, else the `o/r` fixture slug.
+/// Keeps anchor fixtures green whether or not CI env is present.
+fn anchor_slug() -> String {
+    let shaped = |slug: &str| {
+        let mut parts = slug.split('/');
+        matches!(
+            (parts.next(), parts.next(), parts.next()),
+            (Some(owner), Some(repo), None)
+                if !owner.is_empty()
+                    && !repo.is_empty()
+                    && !slug.chars().any(char::is_whitespace)
+        )
+    };
+    std::env::var("GITHUB_REPOSITORY")
+        .ok()
+        .filter(|slug| shaped(slug))
+        .map_or_else(|| "o/r".to_owned(), |slug| slug.to_lowercase())
+}
+
+/// Minimal git checkout anchoring `slug` as its origin.
+fn anchored_checkout(slug: &str) -> tempfile::TempDir {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let git = tmp.path().join(".git");
+    std::fs::create_dir_all(git.join("objects")).expect("objects");
+    std::fs::create_dir_all(git.join("refs")).expect("refs");
+    std::fs::write(git.join("HEAD"), "ref: refs/heads/testmain\n").expect("HEAD");
+    std::fs::write(
+        git.join("config"),
+        format!("[remote \"origin\"]\n\turl = https://github.com/{slug}.git\n"),
+    )
+    .expect("config");
+    tmp
+}
+
+/// Valid manifest over `slug`/`base` except one forwarded proof run.
+fn forwarded_manifest(slug: &str, base: &str) -> BaselineManifest {
+    let digest = digest_b3(b"d");
+    let name = super::provenance_check::baseline_artifact_name(base, &digest).expect("name");
+    BaselineManifest {
+        schema: 2,
+        repository_id: digest_b3(format!("github.com/{slug}").as_bytes()),
+        source_commit: base.to_owned(),
+        ref_: "refs/heads/testmain".to_owned(),
+        event: "push".to_owned(),
+        workflow_ref: format!("{slug}/.github/workflows/ci.yml@refs/heads/testmain"),
+        run_id: 7,
+        run_attempt: 1,
+        final_status: "passed".to_owned(),
+        generator_version: env!("CARGO_PKG_VERSION").to_owned(),
+        generator_sha256: "1".repeat(64),
+        compatibility_id: digest.clone(),
+        artifact_id: 9,
+        artifact_name: name,
+        tasks: vec![crate::merge::required_evidence::BaselineTaskEntry {
+            task_id: "stack/rust/root/clippy/default".to_owned(),
+            task_digest: digest.clone(),
+            input_digest: digest.clone(),
+            closure_digest: digest,
+            proof_run_id: 5,
+            observed_run_id: 7,
+            external_data: None,
+            proof: None,
+        }],
+        expires_at_unix: None,
+    }
+}
+
+/// Forwarded proofs fail closed at the caller: the plan marks the
+/// baseline unavailable with the exact miss token, warns once, and
+/// keeps every obligation executing.
+#[test]
+fn forwarded_proof_marks_baseline_unavailable() {
+    use velnor_actions_contract::ObligationDecision;
+    use velnor_actions_mise::ToolCatalog;
+    let slug = anchor_slug();
+    let checkout = anchored_checkout(&slug);
+    let base = "a".repeat(40);
+    let manifest = forwarded_manifest(&slug, &base);
+    let marker = "1".repeat(64);
+    let mut plan = marker_plan(&marker);
+    let catalog = ToolCatalog::pinned();
+    let inputs = BaselineInputs {
+        branch: "testmain",
+        root: checkout.path(),
+        workflow: ".github/workflows/ci.yml",
+        catalog: &catalog,
+    };
+    apply_baseline(
+        &mut plan,
+        WorkflowEvent::PullRequest,
+        inputs,
+        Some(manifest),
+        &empty_discovery(),
+        None,
+    )
+    .expect("classify");
+    assert_eq!(
+        plan.baseline.reason(),
+        Some("baseline_invalid:originating_run_unverified")
+    );
+    assert!(
+        plan.warnings
+            .iter()
+            .any(|w| w == "baseline_miss:originating_run_unverified"),
+        "{:?}",
+        plan.warnings
+    );
+    assert!(
+        plan.obligations
+            .iter()
+            .all(|ob| ob.decision == ObligationDecision::Execute)
+    );
 }
 
 /// No lock fill: a marker-sha plan keeps its marker through baseline

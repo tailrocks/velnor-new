@@ -44,6 +44,7 @@ fn manifest_and_expected(base: &str) -> (BaselineManifest, ProvenanceExpectation
         generator_sha256: "1".repeat(64),
         repository_id: Some(anchor),
         repository_slug: Some("o/r".to_owned()),
+        repository_conflict: false,
     };
     (manifest, expected)
 }
@@ -163,7 +164,7 @@ fn every_wrong_dimension_fails_validation() {
 }
 
 #[test]
-fn repository_anchor_and_origins_normalize() {
+fn repository_slug_and_origins_normalize() {
     assert_eq!(
         normalize_origin_url("https://github.com/O/R.git"),
         Some("github.com/o/r".to_owned())
@@ -175,16 +176,15 @@ fn repository_anchor_and_origins_normalize() {
     assert!(normalize_origin_url("not-a-url").is_none());
     let repo = make_git_repo(Some("https://github.com/o/r.git"));
     let root = repo.path();
-    let anchor = repository_anchor_from_origin(root).expect("anchor");
-    assert_eq!(anchor, fixture_anchor());
-    assert_eq!(repository_slug_from_origin(root).as_deref(), Some("o/r"));
+    let slug = repository_slug_from_origin(root).expect("slug");
+    assert_eq!(slug, "o/r");
+    assert_eq!(repository_anchor_for_slug(&slug), fixture_anchor());
     set_origin(root, "git@github.com:O/R.git");
-    assert_eq!(repository_anchor_from_origin(root).expect("scp"), anchor);
     assert_eq!(repository_slug_from_origin(root).as_deref(), Some("o/r"));
     let base = "a".repeat(40);
     let (mut manifest, mut expected) = manifest_and_expected(&base);
-    expected.repository_id = Some(anchor.clone());
-    manifest.repository_id = anchor;
+    expected.repository_id = Some(fixture_anchor());
+    manifest.repository_id = fixture_anchor();
     assert!(validate_provenance(&manifest, &digest_b3(b"m"), &expected).is_ok());
     manifest.repository_id = digest_b3(b"other");
     assert_eq!(
@@ -206,9 +206,10 @@ fn linked_worktree_anchor_shares_remote_identity() {
     let wt = holder.path().join("wt");
     link_worktree(root, &wt);
     assert!(wt.join(".git").is_file(), "linked worktree has a .git file");
-    let main = repository_anchor_from_origin(root).expect("main anchor");
-    assert_eq!(main, fixture_anchor());
-    assert_eq!(repository_anchor_from_origin(&wt).expect("wt anchor"), main);
+    let main = repository_slug_from_origin(root).expect("main slug");
+    assert_eq!(main, "o/r");
+    assert_eq!(repository_anchor_for_slug(&main), fixture_anchor());
+    assert_eq!(repository_slug_from_origin(&wt).expect("wt slug"), main);
 }
 
 #[test]
@@ -227,10 +228,9 @@ fn include_defined_origin_resolves() {
         !local.contains("[remote \"origin\"]"),
         "origin must live only in the include"
     );
-    assert_eq!(
-        repository_anchor_from_origin(root).expect("anchor"),
-        fixture_anchor()
-    );
+    let slug = repository_slug_from_origin(root).expect("slug");
+    assert_eq!(slug, "o/r");
+    assert_eq!(repository_anchor_for_slug(&slug), fixture_anchor());
 }
 
 /// Valid task entry over `digest`, observed by the manifest run.
@@ -339,28 +339,27 @@ fn task_entries_validate_identity_runs_freshness_and_proof_binding() {
 #[test]
 fn missing_and_mismatched_origins_fail_closed() {
     let plain = tempfile::tempdir().expect("tempdir");
-    assert!(repository_anchor_from_origin(plain.path()).is_none());
     assert!(repository_slug_from_origin(plain.path()).is_none());
     let repo = make_git_repo(None);
     let root = repo.path();
-    assert!(repository_anchor_from_origin(root).is_none());
     assert!(repository_slug_from_origin(root).is_none());
     set_origin(root, "https://github.com/o/r.git");
-    let anchor = repository_anchor_from_origin(root).expect("anchor");
+    let slug = repository_slug_from_origin(root).expect("slug");
+    assert_eq!(slug, "o/r");
     set_origin(root, "https://github.com/evil/other.git");
-    let other = repository_anchor_from_origin(root).expect("other anchor");
-    assert_ne!(anchor, other);
     assert_eq!(
         repository_slug_from_origin(root).as_deref(),
         Some("evil/other")
     );
+    assert_ne!(
+        repository_anchor_for_slug(&slug),
+        repository_anchor_for_slug("evil/other")
+    );
     set_origin(root, "https://ghe.example.com/o/r.git");
-    assert!(repository_anchor_from_origin(root).is_some());
     assert!(
         repository_slug_from_origin(root).is_none(),
         "non-github origins have no comparable slug"
     );
     set_origin(root, "not-a-url");
-    assert!(repository_anchor_from_origin(root).is_none());
     assert!(repository_slug_from_origin(root).is_none());
 }

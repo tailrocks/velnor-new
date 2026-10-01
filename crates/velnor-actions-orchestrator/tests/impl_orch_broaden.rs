@@ -174,7 +174,7 @@ fn baseline_miss_reasons_are_precise() -> TestResult {
 }
 
 #[test]
-fn carried_proof_revalidated_by_exact_identity() -> TestResult {
+fn carried_proof_fails_closed_without_originating_attestation() -> TestResult {
     let (repo, seed) = plan_for_source_change()?;
     anchor_repo(repo.path())?;
     let head = seed.head.clone();
@@ -185,16 +185,24 @@ fn carried_proof_revalidated_by_exact_identity() -> TestResult {
         task["observed_run_id"] = Json::from(7);
     }
     let manifest = manifest_for(&bare, &head, &tasks);
-    let (plan, _) = plan_at(repo.path(), Some(&head), &head, Some(manifest))?;
+    let (plan, warnings) = plan_at(repo.path(), Some(&head), &head, Some(manifest))?;
+    // A forwarded proof run claims success for an originating run the
+    // manifest cannot prove: validation fails closed with its precise
+    // reason instead of warning-and-covering.
     assert!(
         plan.obligations
             .iter()
-            .all(|ob| ob.decision == ObligationDecision::CoveredByTrustedBaseline)
+            .all(|ob| ob.decision == ObligationDecision::Execute)
+    );
+    assert_eq!(
+        plan.baseline.reason(),
+        Some("baseline_invalid:originating_run_unverified")
     );
     assert!(
-        plan.obligations
+        warnings
             .iter()
-            .all(|ob| ob.baseline_proof.as_ref().is_some_and(|p| p.run_id() == 5))
+            .any(|w| w == "baseline_miss:originating_run_unverified"),
+        "{warnings:?}"
     );
     Ok(())
 }

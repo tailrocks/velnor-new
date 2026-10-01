@@ -170,6 +170,7 @@ pub(super) fn provenance_for(manifest: &BaselineManifest) -> ValidatedProvenance
         generator_sha256: "1".repeat(64),
         repository_id: Some(digest_b3("github.com/o/r".as_bytes())),
         repository_slug: Some("o/r".to_owned()),
+        repository_conflict: false,
     };
     let bytes = canonical_json_bytes(manifest).expect("canonical");
     let digest = digest_b3(&bytes);

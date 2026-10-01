@@ -9,10 +9,14 @@
 //! merge reaches its `planning_failed` verdict. Only unusable
 //! environment (no runner temp, no numeric run ID) fails outright.
 
+// Wired here so the shared reader compiles without touching `lib.rs`.
+#[path = "staged_reads.rs"]
+pub(crate) mod staged_reads;
+pub(crate) use self::staged_reads::{path_is_symlink, read_staged_bytes, read_staged_text};
+
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::fs;
-use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use velnor_actions_contract::{parse_strict_json, task_report_id_for_task, validate_artifact_id};
@@ -59,6 +63,12 @@ pub(crate) fn retrieve_reports_to(run_id: u64, run_dir: &Path) -> usize {
     let Some(plan) = plan else {
         return 0;
     };
+    let repo = std::env::var(crate::origin::GITHUB_REPOSITORY_ENV)
+        .ok()
+        .and_then(|raw| crate::origin::validate_repository_slug(&raw));
+    let Some(repo) = repo else {
+        return 0;
+    };
     let catalog = ToolCatalog::pinned();
     let mut retrieved = 0usize;
     for artifact_id in expected_artifact_ids(&plan) {
@@ -71,7 +81,7 @@ pub(crate) fn retrieve_reports_to(run_id: u64, run_dir: &Path) -> usize {
         if fs::create_dir_all(&dir).is_err() {
             continue;
         }
-        let Ok(args) = retrieve_args(run_id, artifact_id, &dir) else {
+        let Ok(args) = retrieve_args(run_id, artifact_id, &dir, &repo) else {
             continue;
         };
         if crate::cover::shard::BaselineLookup::run(&catalog, run_dir, args).is_ok() {
@@ -83,15 +93,26 @@ pub(crate) fn retrieve_reports_to(run_id: u64, run_dir: &Path) -> usize {
 
 /// Fixed `gh run download` argv for one exact artifact (no wildcards).
 ///
+/// `--repo` pins the download to the expected repository: without it
+/// `gh` would resolve the repo from the working directory's git
+/// origin, which a prior step may have rewritten.
+///
 /// # Errors
 ///
-/// Returns [`OrchestratorError::Internal`] for a malformed artifact ID.
+/// Returns [`OrchestratorError::Internal`] for a malformed artifact ID
+/// or a malformed repository slug.
 pub(crate) fn retrieve_args(
     run_id: u64,
     artifact_id: &str,
     dir: &Path,
+    repo: &str,
 ) -> Result<Vec<OsString>, OrchestratorError> {
     validate_artifact_id(artifact_id).map_err(internal_contract)?;
+    let Some(repo) = crate::origin::validate_repository_slug(repo) else {
+        return Err(internal_contract(
+            velnor_actions_contract::ContractError::identity("repository", "bad_lookup_repo"),
+        ));
+    };
     Ok(vec![
         OsString::from("run"),
         OsString::from("download"),
@@ -100,15 +121,27 @@ pub(crate) fn retrieve_args(
         OsString::from(artifact_id),
         OsString::from("--dir"),
         dir.as_os_str().to_owned(),
+        OsString::from("--repo"),
+        OsString::from(repo),
     ])
 }
+
+/// Maximum bytes read for the retrieve-step plan.
+///
+/// Matches the merge-request assembly bound: the same `plan.json`
+/// parses identically at retrieve and merge time, and a giant plan
+/// downloads nothing instead of exhausting the final job's memory.
+pub(crate) const MAX_RETRIEVE_PLAN_BYTES: u64 = 4 << 20;
 
 /// Parse the downloaded plan, if any.
 ///
 /// Symlink-rejecting, size-bounded, duplicate-key-rejecting (X7); typed
-/// plan structs additionally carry `deny_unknown_fields`.
+/// plan structs additionally carry `deny_unknown_fields`. Bounded like
+/// every other event-time read: a missing, oversize, or unparsable plan
+/// downloads nothing, and the merge still reaches its `planning_failed`
+/// verdict.
 fn read_plan(run_dir: &Path) -> Option<serde_json::Value> {
-    let text = read_bounded(&run_dir.join("plan.json")).ok()?;
+    let text = read_staged_text(&run_dir.join("plan.json"), MAX_RETRIEVE_PLAN_BYTES).ok()?;
     parse_strict_json(&text).ok()
 }
 
@@ -156,7 +189,7 @@ pub(crate) fn read_staged_reports(
         // expectation only; entries without that shape expect nothing
         // and the merge fails them closed on incoherence instead.
         let tasks_dir = home.join("tasks");
-        let linked = is_symlink(&tasks_dir);
+        let linked = path_is_symlink(&tasks_dir);
         for report_id in expected_file_ids(entry, run_key, &digests) {
             if linked {
                 errors.push(format!("symlink_task:{report_id}"));
@@ -201,8 +234,10 @@ fn obligation_digests(plan: &serde_json::Value) -> BTreeMap<&str, &str> {
 
 /// Read one artifact's matrix file; the home dir on success.
 ///
-/// The artifact directory itself must be a real directory: a symlink
-/// anywhere on a traversed path rejects, even at a live target.
+/// The artifact home, the nested parent, and the file itself reject
+/// symlinks (pre-checks plus a `NOFOLLOW` open validated via the
+/// handle), even at live targets. Ancestors above the staging root are
+/// trusted: the runner and the retrieve step create them.
 fn read_matrix_file(
     dir: &Path,
     artifact_id: &str,
@@ -210,7 +245,7 @@ fn read_matrix_file(
     errors: &mut Vec<String>,
 ) -> Option<PathBuf> {
     let home = dir.join(artifact_id);
-    if is_symlink(&home) {
+    if path_is_symlink(&home) {
         errors.push(format!("symlink_report:{artifact_id}"));
         return None;
     }
@@ -219,7 +254,7 @@ fn read_matrix_file(
     let (path, text) = match read_bounded(&direct) {
         Ok(text) => (direct, text),
         Err("missing") => {
-            if nested.parent().is_some_and(is_symlink) {
+            if nested.parent().is_some_and(path_is_symlink) {
                 errors.push(format!("symlink_report:{artifact_id}"));
                 return None;
             }
@@ -277,15 +312,6 @@ fn expected_file_ids(
     ids
 }
 
-/// True when a traversed path is a symlink.
-///
-/// `symlink_metadata` never follows the final component: a symlink
-/// rejects even at a live target. Missing paths are not links; the
-/// bounded read below reports them as missing instead.
-fn is_symlink(path: &Path) -> bool {
-    fs::symlink_metadata(path).is_ok_and(|meta| meta.file_type().is_symlink())
-}
-
 /// Read one staged file with symlink rejection and a size bound.
 ///
 /// Symlinks reject without reading; reads stop one byte past the bound
@@ -293,30 +319,6 @@ fn is_symlink(path: &Path) -> bool {
 /// classes map directly onto assembly error prefixes.
 fn read_bounded(path: &Path) -> Result<String, &'static str> {
     read_staged_text(path, MAX_STAGED_REPORT_BYTES)
-}
-
-/// Read one file with symlink rejection and a caller size bound.
-///
-/// Shared by staged-report reads and merge-request assembly so every
-/// event-time read enforces the same gates: symlinks and non-files
-/// reject, missing files report, and oversize files error instead of
-/// exhausting memory.
-pub(crate) fn read_staged_text(path: &Path, bound: u64) -> Result<String, &'static str> {
-    match fs::symlink_metadata(path) {
-        Ok(meta) if meta.file_type().is_symlink() => return Err("symlink"),
-        Ok(meta) if !meta.is_file() => return Err("unreadable"),
-        Err(_) => return Err("missing"),
-        Ok(_) => {}
-    }
-    let file = fs::File::open(path).map_err(|_| "unreadable")?;
-    let mut text = String::new();
-    file.take(bound + 1)
-        .read_to_string(&mut text)
-        .map_err(|_| "unreadable")?;
-    if u64::try_from(text.len()).unwrap_or(u64::MAX) > bound {
-        return Err("oversize");
-    }
-    Ok(text)
 }
 
 /// Sort key for one staged value; empty when the ID is absent.

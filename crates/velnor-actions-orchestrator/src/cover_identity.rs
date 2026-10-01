@@ -11,6 +11,10 @@ pub(crate) mod generator;
 #[cfg(test)]
 #[path = "cover_identity_tests.rs"]
 mod cover_identity_tests;
+// Structured-proof tests live apart for the same reason.
+#[cfg(test)]
+#[path = "cover_proof_tests.rs"]
+mod cover_proof_tests;
 // Test fixtures live apart so the test module keeps its size gate.
 #[cfg(test)]
 #[path = "cover_identity_fixtures.rs"]
@@ -20,10 +24,10 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 use velnor_actions_contract::{
-    BaselineProof, ManifestTaskProof, ObligationDecision, Plan, PlanObligation,
+    BaselineProof, ManifestTaskProof, ObligationDecision, Plan, PlanObligation, digest_b3,
     validate_rust_extension,
 };
-use velnor_actions_rust::TaskGroup;
+use velnor_actions_rust::{CompileDriver, TaskGroup};
 
 use crate::cover_baseline::BaselineInputs;
 use crate::cover_baseline::provenance_check::ValidatedProvenance;
@@ -40,13 +44,6 @@ use crate::internal_plan::{nextest_config_for, toolchain_id};
 use crate::merge::BaselineManifest;
 
 pub(crate) use self::generator::{SOURCE_BUILD_REASON, is_source_build};
-
-/// Explicit unpassed acceptance: a structured task proof carries `mbx`
-/// and `profile` dimensions for which the data model defines no live
-/// source (no publisher binds them), so coverage compares the
-/// graph/toolchain/platform dimensions and records these two openly
-/// instead of passing silently.
-pub(crate) const PROOF_DIM_COMPARISON_GAP: &str = "unpassed:proof_mbx_profile_have_no_live_source";
 
 /// Cover-time closure digest for one group, or the refusal reason.
 ///
@@ -106,13 +103,27 @@ fn cover_closure_digest(
     canonical_digest(&closure).map_err(|_| "closure_digest_failed".to_owned())
 }
 
+/// Live mbx dimension for one group: the compile driver plus the
+/// catalog's mbx pin when the driver runs through mbx.
+///
+/// Cargo-driven groups bind no mbx pin, so a pin bump never invalidates
+/// their proofs; mbx-driven groups bind the exact pin, so a proof from
+/// another mbx version refuses.
+fn live_mbx_digest(group: &TaskGroup, catalog: &velnor_actions_mise::ToolCatalog) -> String {
+    let pin = (group.compile_driver == CompileDriver::Mbx)
+        .then(|| catalog.version(velnor_actions_mise::PinnedTool::MrBoxington));
+    canonical_digest(&serde_json::json!({
+        "driver": group.compile_driver.as_str(),
+        "mbx_pin": pin,
+    }))
+    .unwrap_or_else(|_| digest_b3(b"mbx_error"))
+}
+
 /// Structured proof verified against live task identity.
 ///
-/// Compares the carried graph, toolchain, and platform dimensions
-/// against the values resolved live for this group; any drift refuses
-/// coverage. The `mbx` and `profile` dimensions have no defined live
-/// source (see [`PROOF_DIM_COMPARISON_GAP`]) and stay uncompared but
-/// explicitly recorded by the caller.
+/// Compares all five carried dimensions against the values resolved
+/// live for this group: graph, toolchain, platform, execution profile,
+/// and mbx. Any drift refuses coverage; nothing compares-and-notes.
 fn verify_proof_live(
     snapshot: &ExecutionSnapshot,
     discovery: &Discovery,
@@ -142,6 +153,12 @@ fn verify_proof_live(
     };
     if proof.platform_id() != platform {
         return Err("proof_platform_mismatch".to_owned());
+    }
+    if proof.profile() != bundle.inputs().profile {
+        return Err("proof_profile_mismatch".to_owned());
+    }
+    if proof.mbx_digest() != live_mbx_digest(group, catalog) {
+        return Err("proof_mbx_mismatch".to_owned());
     }
     Ok(())
 }
@@ -195,9 +212,9 @@ fn mark_covered(
 
 /// Structured proof gate for one candidate entry.
 ///
-/// A carried proof compares against live identity; drift refuses with
-/// its miss warning, and a match records the mbx/profile comparison
-/// gap openly. Entries without a proof pass through untouched.
+/// A carried proof compares all five dimensions against live identity;
+/// drift refuses with its miss warning, and a match passes silently.
+/// Entries without a proof pass through untouched.
 fn gate_proof(
     warnings: &mut Vec<String>,
     label: &str,
@@ -222,10 +239,6 @@ fn gate_proof(
         warnings.push(format!("baseline_miss:{}:{reason}", group.task_id));
         return false;
     }
-    warnings.push(format!(
-        "baseline_note:{}:{PROOF_DIM_COMPARISON_GAP}",
-        group.task_id
-    ));
     true
 }
 

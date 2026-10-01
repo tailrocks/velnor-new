@@ -21,12 +21,38 @@ pub(crate) struct BaselineLookup {
     pub(crate) workflow: String,
     /// Protected default-branch name.
     pub(crate) branch: String,
+    /// Expected repository slug scoping every `gh` call.
+    pub(crate) repo: String,
 }
 
 impl BaselineLookup {
-    /// Build a lookup; rejects short SHAs, URLs, wildcards, and shell.
+    /// Build a lookup; rejects short SHAs, URLs, wildcards, shell, and
+    /// malformed repo slugs.
     /// # Errors
-    pub(crate) fn new(base: &str, workflow: &str, branch: &str) -> Result<Self, String> {
+    pub(crate) fn new(
+        base: &str,
+        workflow: &str,
+        branch: &str,
+        repo: &str,
+    ) -> Result<Self, String> {
+        Self::validate_inputs(base, workflow, branch)?;
+        let Some(repo) = crate::origin::validate_repository_slug(repo) else {
+            return Err("bad_lookup_repo".into());
+        };
+        Ok(Self {
+            base_sha: base.into(),
+            workflow: workflow.into(),
+            branch: branch.into(),
+            repo,
+        })
+    }
+
+    /// Validate base, workflow, and branch shapes without a repo.
+    ///
+    /// [`resolve_manifests`] runs this first so malformed inputs fail
+    /// deterministically before any environment-dependent repo miss.
+    /// # Errors
+    pub(crate) fn validate_inputs(base: &str, workflow: &str, branch: &str) -> Result<(), String> {
         if base.len() != 40 || !base.bytes().all(|b| b.is_ascii_hexdigit()) {
             return Err("base_must_be_full_sha".into());
         }
@@ -38,16 +64,14 @@ impl BaselineLookup {
                 return Err("bad_lookup_input".into());
             }
         }
-        Ok(Self {
-            base_sha: base.into(),
-            workflow: workflow.into(),
-            branch: branch.into(),
-        })
+        Ok(())
     }
 
     /// Fixed `gh run list` args for the exact workflow and branch.
     ///
-    /// The listing carries the successful attempt: selection binds the
+    /// `--repo` pins the lookup to the expected repository: without it
+    /// `gh` would resolve the repo from the mutable git origin. The
+    /// listing carries the successful attempt: selection binds the
     /// baseline claim to this attempt, never an unpinned run.
     #[must_use]
     pub(crate) fn list_args(&self) -> Vec<OsString> {
@@ -57,6 +81,8 @@ impl BaselineLookup {
         [
             "run",
             "list",
+            "--repo",
+            self.repo.as_str(),
             "--workflow",
             workflow,
             "--branch",
@@ -73,14 +99,15 @@ impl BaselineLookup {
 
     /// Fixed `gh api` args listing one run's artifacts.
     ///
-    /// `{owner}`/`{repo}` fill from the current repository; the response
-    /// proves the exact baseline artifact exists unexpired before any
-    /// download is attempted.
+    /// The path names the expected repository explicitly: no
+    /// `{owner}`/`{repo}` template ever resolves from the mutable git
+    /// origin. The response proves the exact baseline artifact exists
+    /// unexpired before any download is attempted.
     #[must_use]
-    pub(crate) fn artifacts_args(run_id: u64) -> Vec<OsString> {
+    pub(crate) fn artifacts_args(&self, run_id: u64) -> Vec<OsString> {
         [
             "api",
-            &format!("repos/{{owner}}/{{repo}}/actions/runs/{run_id}/artifacts"),
+            &format!("repos/{}/actions/runs/{run_id}/artifacts", self.repo),
         ]
         .iter()
         .map(OsString::from)
@@ -104,10 +131,29 @@ impl BaselineLookup {
         if !output.success {
             return Err("baseline_unavailable".to_owned());
         }
-        output
-            .stdout_text("gh")
-            .map_err(|_| "baseline_unavailable".to_owned())
+        gh_stdout_checked(&output)
     }
+}
+
+/// Maximum accepted `gh` stdout bytes for lookup and retrieve calls.
+///
+/// Listings and download receipts are kilobytes; one megabyte fails
+/// closed on runaway output before JSON parsing instead of buffering
+/// megabytes the selectors never need. (The spawn layer caps pipes at
+/// 8 MiB; this is the tighter call-site bound.)
+const MAX_GH_STDOUT_BYTES: usize = 1 << 20;
+
+/// Decode `gh` stdout with an explicit size cap.
+///
+/// Over-bound output misses before parsing; undecodable output misses
+/// the same way.
+fn gh_stdout_checked(output: &velnor_actions_mise::ProcessOutput) -> Result<String, String> {
+    if output.stdout.len() > MAX_GH_STDOUT_BYTES {
+        return Err("baseline_unavailable".to_owned());
+    }
+    output
+        .stdout_text("gh")
+        .map_err(|_| "baseline_unavailable".to_owned())
 }
 
 /// Resolve exact-base manifests: list, select, pin, download, filter.
@@ -115,7 +161,9 @@ impl BaselineLookup {
 /// Only one exact named artifact ever downloads: without a known
 /// artifact name there is no bounded download, so the lookup misses
 /// before spawning anything. A whole-run download fallback does not
-/// exist. The selected run pins its successful attempt and the exact
+/// exist. Every `gh` call carries the expected repository explicitly;
+/// a conflicted or unresolvable repo misses before spawning anything.
+/// The selected run pins its successful attempt and the exact
 /// artifact must exist unexpired before the download; survivors must
 /// match the exact base commit, run, attempt, artifact id, and
 /// directory name; temp is always removed.
@@ -128,17 +176,15 @@ pub(crate) fn resolve_manifests(
     branch: &str,
     artifact: Option<&str>,
 ) -> Result<Vec<BaselineManifest>, String> {
-    let lookup = BaselineLookup::new(base, workflow, branch)?;
+    BaselineLookup::validate_inputs(base, workflow, branch)?;
     let Some(artifact) = artifact.filter(|name| !name.is_empty()) else {
         return Err("baseline_no_exact_artifact".to_owned());
     };
+    let repo = resolve_lookup_repo(root)?;
+    let lookup = BaselineLookup::new(base, workflow, branch, &repo)?;
     let text = BaselineLookup::run(catalog, root, lookup.list_args())?;
     let selected = select_exact_base_run(&text, base, branch)?;
-    let listed = BaselineLookup::run(
-        catalog,
-        root,
-        BaselineLookup::artifacts_args(selected.run_id),
-    )?;
+    let listed = BaselineLookup::run(catalog, root, lookup.artifacts_args(selected.run_id))?;
     let artifact_id = select_baseline_artifact(&listed, artifact)?;
     let temp = tempfile::tempdir().map_err(|_| "baseline_unavailable".to_owned())?;
     BaselineLookup::run(
@@ -151,6 +197,7 @@ pub(crate) fn resolve_manifests(
             Some(artifact),
             selected.run_id,
             temp.path(),
+            &repo,
         ),
     )?;
     collect_manifests(
@@ -160,6 +207,21 @@ pub(crate) fn resolve_manifests(
         selected.attempt,
         artifact_id,
     )
+}
+
+/// Repository slug scoping every lookup `gh` call.
+///
+/// Env-first with origin fallback; a conflict or an absence misses
+/// before spawning anything, so no lookup ever queries a repo the
+/// runner did not bless or the checkout cannot name.
+fn resolve_lookup_repo(root: &Path) -> Result<String, String> {
+    let expected = crate::cover_baseline::provenance_check::expected_repository_for_root(root);
+    if expected.conflict {
+        return Err("baseline_repo_conflict".to_owned());
+    }
+    expected
+        .slug
+        .ok_or_else(|| "baseline_repo_unresolved".to_owned())
 }
 
 /// Keep temp artifacts matching the exact base, run, attempt, id, shape.
@@ -190,3 +252,7 @@ fn collect_manifests(
     out.sort_by(|left, right| left.artifact_name.cmp(&right.artifact_name));
     Ok(out)
 }
+
+#[cfg(test)]
+#[path = "shard_baseline_tests.rs"]
+mod tests;

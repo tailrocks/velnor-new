@@ -66,7 +66,9 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
         // in the lockfile via tempfile, zero new crates.
         "rustix",
         // Reviewed hash impl for the pre-seed manifest writer (SHA-256 of
-        // the fresh helper); pure Rust, no enabled features beyond default.
+        // the fresh helper) and generator SHA-256 identity (replaces
+        // hand-rolled SHA-256 so release-pin comparison cannot drift from
+        // the audited implementation); pure Rust, default features only.
         "sha2",
     ];
     for (dir, _) in MEMBERS {

@@ -8,8 +8,8 @@ use velnor_actions_contract::{
 };
 use velnor_actions_orchestrator::decisions::{
     CacheHit, MetadataFailure, NotSelectedInputs, ObligationInputs, baseline_expired,
-    classify_obligation, classify_restore_with_ownership, dedupe_sorted, not_selected_report,
-    omission_ledger, plan_artifact_dir, plan_json_path, selection_broadens_for_path,
+    classify_obligation, dedupe_sorted, not_selected_report, omission_ledger, plan_artifact_dir,
+    plan_json_path, selection_broadens_for_path,
 };
 
 use crate::impl_common::{TestResult, passing_reports, plan_for_source_change};
@@ -25,23 +25,6 @@ fn open_inputs() -> ObligationInputs {
         cache_hit: CacheHit::Execute,
         baseline_covered: false,
         restore_miss_reason: None,
-    }
-}
-
-/// Fully observed restore: real path, bytes, and matching digests.
-fn observed_restore() -> velnor_actions_mise::restore_evidence::RestoreObservation {
-    use velnor_actions_mise::restore_evidence::RestoreObservation;
-    let bytes = b"entry bytes".to_vec();
-    RestoreObservation {
-        entry_path: "task-artifacts/v2/clippy/entry".to_owned(),
-        entry_bytes: bytes.clone(),
-        expected_digest: digest_b3(&bytes),
-        expected_compat: digest_b3(b"compat"),
-        observed_compat: digest_b3(b"compat"),
-        expected_owner: "trusted".to_owned(),
-        observed_owner: "trusted".to_owned(),
-        expected_inputs: digest_b3(b"inputs"),
-        observed_inputs: digest_b3(b"inputs"),
     }
 }
 
@@ -118,34 +101,6 @@ fn every_obligation_classifies_with_reason() {
     assert_eq!(
         decide(&open),
         (ObligationDecision::Execute, "cache_corrupt")
-    );
-}
-
-#[test]
-fn restore_checks_ownership_explicitly() {
-    let obs = observed_restore();
-    assert_eq!(
-        classify_restore_with_ownership("pr", &obs),
-        Err("ownership_mismatch")
-    );
-    assert!(classify_restore_with_ownership("trusted", &obs).is_ok());
-    let mut obs = observed_restore();
-    obs.entry_path.clear();
-    assert_eq!(
-        classify_restore_with_ownership("trusted", &obs),
-        Err("no_entry")
-    );
-    let mut obs = observed_restore();
-    obs.entry_bytes = b"forged".to_vec();
-    assert_eq!(
-        classify_restore_with_ownership("trusted", &obs),
-        Err("cache_corrupt")
-    );
-    let mut obs = observed_restore();
-    obs.observed_owner = "pr".to_owned();
-    assert_eq!(
-        classify_restore_with_ownership("pr", &obs),
-        Err("trust_scope_mismatch")
     );
 }
 

@@ -12,6 +12,84 @@ use crate::cover::Signals;
 use crate::cover_baseline::provenance_check::parse_workflow_ref;
 use crate::merge::BaselineManifest;
 
+/// Merge-time anchor expectations from runner-owned environment.
+///
+/// Each field compares the manifest's anchors against CI ground truth
+/// instead of the possibly attacker-influenced plan: an evil-fork plan
+/// paired with a self-consistent evil manifest fails here even though
+/// it matches the plan. `None` fields skip their check (local runs
+/// without CI env); the plan-anchored invariants below still apply.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct MergeAnchorExpectations {
+    /// Lowercase `owner/repo` slug from `GITHUB_REPOSITORY`.
+    pub(crate) repository_slug: Option<String>,
+    /// Protected ref from `GITHUB_BASE_REF` or `GITHUB_REF`.
+    pub(crate) protected_ref: Option<String>,
+    /// Generated workflow path from `GITHUB_WORKFLOW_REF`.
+    pub(crate) workflow_path: Option<String>,
+}
+
+/// Anchor expectations from the runner-owned environment.
+///
+/// `GITHUB_REPOSITORY` names the repo slug; `GITHUB_BASE_REF` (pull
+/// requests) or a `refs/heads/` `GITHUB_REF` (pushes) names the
+/// protected ref; `GITHUB_WORKFLOW_REF` (`<repo>/<path>@<ref>`) names
+/// the workflow path. Malformed values yield `None`, never guesses.
+pub(crate) fn merge_anchors_from_env() -> MergeAnchorExpectations {
+    merge_anchors_from_parts(
+        std::env::var("GITHUB_REPOSITORY").ok().as_deref(),
+        std::env::var("GITHUB_BASE_REF").ok().as_deref(),
+        std::env::var("GITHUB_REF").ok().as_deref(),
+        std::env::var("GITHUB_WORKFLOW_REF").ok().as_deref(),
+    )
+}
+
+/// Anchor expectations from explicit environment values.
+///
+/// Pure so tests cover the mapping hermetically; [`merge_anchors_from_env`]
+/// is the thin production reader over this function.
+fn merge_anchors_from_parts(
+    repository: Option<&str>,
+    base_ref: Option<&str>,
+    git_ref: Option<&str>,
+    workflow_ref: Option<&str>,
+) -> MergeAnchorExpectations {
+    MergeAnchorExpectations {
+        repository_slug: repository.and_then(crate::origin::validate_repository_slug),
+        protected_ref: protected_ref_from(base_ref, git_ref),
+        workflow_path: workflow_ref
+            .and_then(parse_workflow_ref)
+            .map(|(_, path, _)| path),
+    }
+}
+
+/// Protected ref from the base branch or the current ref.
+///
+/// Pull-request and merge-group jobs read `GITHUB_BASE_REF` (a short
+/// branch name); push jobs fall back to `GITHUB_REF` when it already
+/// names a protected branch ref. Anything else yields no expectation.
+fn protected_ref_from(base_ref: Option<&str>, git_ref: Option<&str>) -> Option<String> {
+    if let Some(base) = base_ref.filter(|base| valid_branch_name(base)) {
+        return Some(format!("refs/heads/{base}"));
+    }
+    git_ref
+        .filter(|git_ref| {
+            git_ref.starts_with("refs/heads/")
+                && git_ref.len() > "refs/heads/".len()
+                && !git_ref.chars().any(char::is_whitespace)
+        })
+        .map(str::to_owned)
+}
+
+/// True for plausible branch names: nonempty, no whitespace, no
+/// traversal, not HEAD.
+fn valid_branch_name(base: &str) -> bool {
+    !base.is_empty()
+        && !base.chars().any(char::is_whitespace)
+        && !base.contains("..")
+        && base != "HEAD"
+}
+
 /// Revalidate planner coverage claims against the trusted manifest.
 ///
 /// Every failure carries a miss token so diagnostics never emit bare
@@ -24,16 +102,35 @@ use crate::merge::BaselineManifest;
 /// future decision variant fails to compile here instead of silently
 /// skipping revalidation.
 ///
-/// Merge consumes the plan only: full repo/ref/workflow anchor
-/// comparison needs checkout ground truth the merge never rediscovers,
-/// so well-formed-but-foreign anchors bind at plan time instead (see
-/// `validate_provenance`); malformed or internally inconsistent
-/// anchors fail here.
+/// Anchors additionally compare against runner-owned environment (see
+/// [`MergeAnchorExpectations`]), so a well-formed-but-foreign plan and
+/// manifest pair fails here instead of passing on internal consistency
+/// plus plan agreement alone.
 pub(crate) fn revalidate_coverage(
     plan: &Plan,
     manifest: Option<&BaselineManifest>,
     signals: &mut Signals,
     miss_reasons: &mut BTreeSet<String>,
+) {
+    revalidate_coverage_with_anchors(
+        plan,
+        manifest,
+        signals,
+        miss_reasons,
+        &merge_anchors_from_env(),
+    );
+}
+
+/// Revalidate coverage against explicit anchor expectations.
+///
+/// Pure over `anchors` so tests cover every field hermetically;
+/// [`revalidate_coverage`] is the production reader over this function.
+pub(crate) fn revalidate_coverage_with_anchors(
+    plan: &Plan,
+    manifest: Option<&BaselineManifest>,
+    signals: &mut Signals,
+    miss_reasons: &mut BTreeSet<String>,
+    anchors: &MergeAnchorExpectations,
 ) {
     let mut covered = Vec::new();
     for obligation in &plan.obligations {
@@ -58,6 +155,11 @@ pub(crate) fn revalidate_coverage(
     if !manifest_provenance_matches_plan(plan, manifest) {
         signals.planning_failed = true;
         miss_reasons.insert("cache_corrupt".to_owned());
+        return;
+    }
+    if !merge_anchors_match(manifest, anchors) {
+        signals.planning_failed = true;
+        miss_reasons.insert("foreign_anchor".to_owned());
         return;
     }
     for obligation in covered {
@@ -127,166 +229,42 @@ fn workflow_ref_consistent(manifest: &BaselineManifest) -> bool {
     git_ref == manifest.ref_
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use velnor_actions_contract::{
-        BaselineProof, PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanRunner,
-        RunnerSelection, Trust, WorkflowEvent,
-    };
-
-    /// Task and input digests shared by obligation and entry.
-    fn digests() -> (String, String, String) {
-        (
-            digest_b3(b"task"),
-            digest_b3(b"inputs"),
-            digest_b3(b"closure"),
-        )
-    }
-
-    /// Trusted manifest with one entry over `commit`.
-    fn manifest_for(commit: &str) -> BaselineManifest {
-        let (task, inputs, closure) = digests();
-        BaselineManifest {
-            schema: 2,
-            repository_id: digest_b3(b"repo"),
-            source_commit: commit.to_owned(),
-            ref_: "refs/heads/testmain".to_owned(),
-            event: "push".to_owned(),
-            workflow_ref: "o/r/.github/workflows/ci.yml@refs/heads/testmain".to_owned(),
-            run_id: 7,
-            run_attempt: 1,
-            final_status: "passed".to_owned(),
-            generator_version: "0.1.0".to_owned(),
-            generator_sha256: "1".repeat(64),
-            compatibility_id: digest_b3(b"compat"),
-            artifact_id: 9,
-            artifact_name: "velnor-plan-local".to_owned(),
-            tasks: vec![crate::merge::required_evidence::BaselineTaskEntry {
-                task_id: "stack/rust/root/clippy/default".to_owned(),
-                task_digest: task,
-                input_digest: inputs,
-                closure_digest: closure,
-                proof_run_id: 7,
-                observed_run_id: 7,
-                external_data: None,
-                proof: None,
-            }],
-            expires_at_unix: None,
+/// Manifest anchors against runner-owned expectations.
+///
+/// Every present field must match: the repository slug binds both the
+/// manifest's repository id and its workflow-ref slug, the protected
+/// ref binds the manifest ref, and the workflow path binds the
+/// workflow-ref path. Absent fields skip; a plan-consistent but
+/// environment-foreign manifest fails.
+fn merge_anchors_match(manifest: &BaselineManifest, anchors: &MergeAnchorExpectations) -> bool {
+    if let Some(slug) = anchors.repository_slug.as_deref() {
+        let bound = digest_b3(format!("github.com/{slug}").as_bytes());
+        if manifest.repository_id != bound {
+            return false;
+        }
+        let slug_ok = parse_workflow_ref(&manifest.workflow_ref)
+            .is_some_and(|(carried, _, _)| carried.to_lowercase() == slug);
+        if !slug_ok {
+            return false;
         }
     }
-
-    /// Plan with one covered obligation bound to `manifest`.
-    fn plan_for(manifest: &BaselineManifest, base: Option<&str>) -> Plan {
-        let (task, inputs, closure) = digests();
-        let digest = digest_b3(&canonical_json_bytes(manifest).expect("canonical"));
-        let proof = BaselineProof::new(
-            &manifest.source_commit,
-            7,
-            9,
-            &manifest.artifact_name,
-            &digest,
-        )
-        .expect("proof");
-        Plan {
-            schema: 1,
-            run_key: "local".to_owned(),
-            plan_id: "plan-local".to_owned(),
-            base: base.map(str::to_owned),
-            head: "head".to_owned(),
-            event: WorkflowEvent::PullRequest,
-            runner: PlanRunner {
-                label: "ubuntu-26.04".to_owned(),
-                selection: RunnerSelection::LatestDefault,
-            },
-            trust: Trust::Pr,
-            baseline: PlanBaseline::unavailable(None).expect("baseline"),
-            generator: PlanGenerator {
-                version: "0.1.0".to_owned(),
-                target: "x86_64-unknown-linux-gnu".to_owned(),
-                sha256: "1".repeat(64),
-            },
-            packages: Vec::new(),
-            obligations: vec![PlanObligation {
-                task_id: "stack/rust/root/clippy/default".to_owned(),
-                decision: ObligationDecision::CoveredByTrustedBaseline,
-                reason: "covered_by_trusted_baseline".to_owned(),
-                task_digest: task,
-                input_digest: inputs,
-                closure_digest: closure,
-                baseline_proof: Some(proof),
-            }],
-            matrix: PlanMatrix {
-                include: Vec::new(),
-            },
-            task_ids: vec!["stack/rust/root/clippy/default".to_owned()],
-            warnings: Vec::new(),
-            edges: Vec::new(),
+    if anchors
+        .protected_ref
+        .as_deref()
+        .is_some_and(|expected| manifest.ref_ != expected)
+    {
+        return false;
+    }
+    if let Some(expected) = anchors.workflow_path.as_deref() {
+        let path_ok =
+            parse_workflow_ref(&manifest.workflow_ref).is_some_and(|(_, path, _)| path == expected);
+        if !path_ok {
+            return false;
         }
     }
-
-    /// Revalidation verdict for one plan/manifest pair.
-    fn verdict(plan: &Plan, manifest: Option<&BaselineManifest>) -> (Signals, BTreeSet<String>) {
-        let mut signals = Signals::default();
-        let mut miss = BTreeSet::new();
-        revalidate_coverage(plan, manifest, &mut signals, &mut miss);
-        (signals, miss)
-    }
-
-    #[test]
-    fn bound_coverage_revalidates() {
-        let commit = "a".repeat(40);
-        let manifest = manifest_for(&commit);
-        let plan = plan_for(&manifest, Some(&commit));
-        let (signals, miss) = verdict(&plan, Some(&manifest));
-        assert!(!signals.planning_failed);
-        assert!(miss.is_empty());
-    }
-
-    #[test]
-    fn wrong_provenance_fails_per_field() {
-        let commit = "a".repeat(40);
-        let manifest = manifest_for(&commit);
-        let plan = plan_for(&manifest, Some(&commit));
-        let check = |label: &str, plan: &Plan, manifest: &BaselineManifest| {
-            let (signals, miss) = verdict(plan, Some(manifest));
-            assert!(signals.planning_failed, "{label}");
-            assert!(miss.contains("cache_corrupt"), "{label}: {miss:?}");
-        };
-        let other_base = plan_for(&manifest, Some(&"b".repeat(40)));
-        check("wrong base", &other_base, &manifest);
-        let no_base = plan_for(&manifest, None);
-        check("missing base", &no_base, &manifest);
-        let mut generator = manifest.clone();
-        generator.generator_version = "9.9.9".to_owned();
-        check("wrong generator version", &plan, &generator);
-        let mut generator = manifest.clone();
-        generator.generator_sha256 = "f".repeat(64);
-        check("wrong generator sha", &plan, &generator);
-        let mut event = manifest.clone();
-        event.event = "pull_request".to_owned();
-        check("wrong event", &plan, &event);
-        let mut status = manifest.clone();
-        status.final_status = "failed".to_owned();
-        check("failed status", &plan, &status);
-        let mut repo = manifest.clone();
-        repo.repository_id = "bogus".to_owned();
-        check("malformed repository", &plan, &repo);
-        let mut git_ref = manifest.clone();
-        git_ref.ref_ = "testmain".to_owned();
-        check("malformed ref", &plan, &git_ref);
-        let mut workflow = manifest.clone();
-        workflow.workflow_ref = "o/r/.github/workflows/ci.yml@refs/heads/other".to_owned();
-        check("inconsistent workflow ref", &plan, &workflow);
-        let mut workflow = manifest.clone();
-        workflow.workflow_ref = "not-a-ref".to_owned();
-        check("unparsable workflow ref", &plan, &workflow);
-        // A manifest moved to another commit matches neither the plan
-        // base nor the proof binding.
-        let mut moved = manifest.clone();
-        moved.source_commit = "b".repeat(40);
-        check("moved commit", &plan, &moved);
-        let (signals, _) = verdict(&plan, None);
-        assert!(signals.planning_failed, "missing manifest");
-    }
+    true
 }
+
+#[cfg(test)]
+#[path = "cover_revalidate_tests.rs"]
+mod cover_revalidate_tests;

@@ -36,6 +36,7 @@ fn manifest_and_expected(base: &str) -> (BaselineManifest, ProvenanceExpectation
         generator_sha256: "1".repeat(64),
         repository_id: Some(anchor),
         repository_slug: Some("o/r".to_owned()),
+        repository_conflict: false,
     };
     (manifest, expected)
 }
@@ -91,10 +92,11 @@ fn workflow_slug_binds_anchor_and_manifest() {
     );
 }
 
-/// Forwarded proof runs carry the explicit unpassed acceptance instead
-/// of passing silently; same-run proofs stay success-bound and quiet.
+/// Forwarded proof runs fail closed: the manifest cannot prove the
+/// originating run succeeded, so validation refuses instead of
+/// warning-and-covering. Same-run proofs stay success-bound and pass.
 #[test]
-fn forwarded_proof_runs_carry_explicit_acceptance() {
+fn forwarded_proof_runs_fail_closed() {
     let base = "a".repeat(40);
     let digest = digest_b3(b"d");
     let run = |entry: &BaselineTaskEntry| {
@@ -103,13 +105,18 @@ fn forwarded_proof_runs_carry_explicit_acceptance() {
         validate_provenance(&manifest, &digest_b3(b"m"), &expected)
     };
     let same = task_entry(&digest, 7);
-    let proven = run(&same).expect("same run");
-    assert!(!proven.originating_runs_unverified);
+    assert!(run(&same).is_ok(), "same-run proof validates");
     let forwarded = task_entry(&digest, 5);
-    let carried = run(&forwarded).expect("forwarded validates");
-    assert!(carried.originating_runs_unverified);
-    assert!(
-        ORIGINATING_RUN_SUCCESS_GAP.starts_with("unpassed:"),
-        "gap stays an explicit unpassed acceptance"
+    assert_eq!(
+        run(&forwarded).expect_err("forwarded proof must fail"),
+        "originating_run_unverified".to_owned()
+    );
+    // One forwarded entry poisons the whole manifest, even beside a
+    // same-run entry.
+    let (mut manifest, expected) = manifest_and_expected(&base);
+    manifest.tasks = vec![same, forwarded];
+    assert_eq!(
+        validate_provenance(&manifest, &digest_b3(b"m"), &expected).expect_err("mixed"),
+        "originating_run_unverified".to_owned()
     );
 }

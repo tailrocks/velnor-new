@@ -1,11 +1,18 @@
 //! Planner decisions: classification, selection, and artifact paths.
 //!
 //! Pure coordination policy shared by plan and merge: metadata-failure
-//! classification, three-way obligation decisions, restore ownership,
-//! `not_selected` report creation, broaden-path classification, the
-//! omission ledger, the detector registry, plan-artifact paths, baseline
-//! expiry, and duplicate detection. Exact-base run selection lives in
-//! [`crate::run_select`].
+//! classification, three-way obligation decisions, `not_selected`
+//! report creation, broaden-path classification, the omission ledger,
+//! the detector registry, plan-artifact paths, baseline expiry, and
+//! duplicate detection. Exact-base run selection lives in
+//! [`crate::run_select`]. The restore-ownership gate is test-only;
+//! production reuse verifies ownership through the staged pipeline
+//! instead.
+
+// Unit tests live apart so `decisions.rs` keeps its size gate.
+#[cfg(test)]
+#[path = "decisions_tests.rs"]
+mod decisions_tests;
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -121,20 +128,43 @@ pub fn classify_obligation(inputs: &ObligationInputs) -> (ObligationDecision, &'
     (ObligationDecision::Execute, "selected")
 }
 
+/// Owner scope for one trust value: the only live scopes that exist.
+///
+/// The gate takes [`Trust`], never a caller-supplied string, so no
+/// future caller can bless a restore under an invented scope.
+#[cfg(test)]
+fn owner_scope_for_trust(trust: Trust) -> &'static str {
+    match trust {
+        Trust::Trusted => "trusted",
+        Trust::Pr => "pr",
+    }
+}
+
 /// Restore classification with ownership as an explicit check (cache §2).
 ///
-/// The live trust scope must match the observed owner first
-/// (`ownership_mismatch`); otherwise the Mise ordered checks over
+/// Test-only: no production path consumes `RestoreObservation` yet
+/// (task reports carry no restore observations; the staged reuse
+/// pipeline verifies ownership separately), so this gate pins the
+/// intended semantics for the future call site instead of enforcing
+/// anything today. The live trust scope must match the observed owner
+/// first (`ownership_mismatch`); otherwise the Mise ordered checks over
 /// observed evidence (present, digest, compat, trust, inputs) decide.
+///
+/// Observations are caller-constructed: only real restore I/O may
+/// build them, since a hand-written literal with self-consistent
+/// digests would classify clean. Sealing the type (private fields
+/// plus a fallible I/O constructor) is deferred to the owning Mise
+/// lane; every future call site needs constructor review until then.
 ///
 /// # Errors
 ///
 /// Returns the precise miss reason when ownership or any check fails.
+#[cfg(test)]
 pub fn classify_restore_with_ownership(
-    live_scope: &str,
+    trust: Trust,
     obs: &velnor_actions_mise::restore_evidence::RestoreObservation,
 ) -> Result<(), &'static str> {
-    if obs.observed_owner != live_scope {
+    if obs.observed_owner != owner_scope_for_trust(trust) {
         return Err("ownership_mismatch");
     }
     velnor_actions_mise::restore_evidence::classify_restore(obs)

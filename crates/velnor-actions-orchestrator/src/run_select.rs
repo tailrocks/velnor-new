@@ -50,8 +50,10 @@ pub fn select_exact_base_run(
 /// Select the exact baseline artifact from a run-artifacts listing.
 ///
 /// Accepts the `gh api` object shape (`{"artifacts": [...]}`) or a bare
-/// array. The entry must name `expected` exactly and be unexpired; a
-/// missing, expired, or neighbouring artifact never selects.
+/// array. The entry must name `expected` exactly and carry an explicit
+/// `"expired": false`; a missing, expired, neighbouring, or
+/// expiry-unattested (absent/null/non-bool `expired`) artifact never
+/// selects.
 ///
 /// # Errors
 ///
@@ -68,7 +70,7 @@ pub fn select_baseline_artifact(text: &str, expected: &str) -> Result<u64, Strin
     };
     entries
         .iter()
-        .filter(|entry| entry["name"] == expected && entry["expired"] != true)
+        .filter(|entry| entry["name"] == expected && entry["expired"].as_bool() == Some(false))
         .find_map(|entry| {
             entry["id"]
                 .as_u64()
@@ -76,4 +78,44 @@ pub fn select_baseline_artifact(text: &str, expected: &str) -> Result<u64, Strin
                 .filter(|id| *id > 0)
         })
         .ok_or_else(|| "baseline_unavailable".to_owned())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Only an explicit `"expired": false` selects; absent, null, true,
+    /// and non-bool markers never do.
+    #[test]
+    fn artifact_expiry_must_be_explicitly_false() {
+        let listed = serde_json::json!({"artifacts": [
+            {"id": 10, "name": "n", "expired": false},
+        ]});
+        assert_eq!(select_baseline_artifact(&listed.to_string(), "n"), Ok(10));
+        for (label, entry) in [
+            ("absent", serde_json::json!({"id": 11, "name": "n"})),
+            (
+                "null",
+                serde_json::json!({"id": 12, "name": "n", "expired": null}),
+            ),
+            (
+                "true",
+                serde_json::json!({"id": 13, "name": "n", "expired": true}),
+            ),
+            (
+                "string",
+                serde_json::json!({"id": 14, "name": "n", "expired": "false"}),
+            ),
+            (
+                "number",
+                serde_json::json!({"id": 15, "name": "n", "expired": 0}),
+            ),
+        ] {
+            let listed = serde_json::json!({"artifacts": [entry]});
+            assert!(
+                select_baseline_artifact(&listed.to_string(), "n").is_err(),
+                "{label} expiry must never select"
+            );
+        }
+    }
 }
