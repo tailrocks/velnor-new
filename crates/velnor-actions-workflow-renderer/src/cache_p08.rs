@@ -1,12 +1,16 @@
 //! P08 qualified caches: built-in Mise, shared sources, Cargo-only fallback.
 //!
-//! Tools use the Mise action's built-in cache with an explicit `cache_key`
-//! derived from the job's resolved tool specs (same tools share one entry;
-//! job-role names never fork copies). No manual `mise-tools-*` archives:
-//! the legacy `ensure_tools_cache` path is superseded and never emitted.
-//! Sources use one shared `actions/cache` snapshot (plan writes, crates
-//! read). Cargo-only projects (no MBX anywhere) use pinned
-//! `Swatinem/rust-cache` (registry-only, shared key); MBX jobs never do.
+//! Tools restore through the Mise action's built-in cache with an explicit
+//! `cache_key` derived from the job's resolved tool specs (same tools share
+//! one entry; job-role names never fork copies) and save through explicit
+//! push-gated `Save Mise tools` steps on the elected writer per key. The
+//! action's built-in save is unreachable (`install: false` disables its
+//! save leg), so setups stay restore-only and never promise a save. The
+//! legacy `mise-tools-*` key namespace and `ensure_tools_cache` path are
+//! superseded and never emitted. Sources use one shared `actions/cache`
+//! snapshot (plan writes, crates read). Cargo-only projects (no MBX
+//! anywhere) use pinned `Swatinem/rust-cache` (registry-only, shared key);
+//! MBX jobs never do.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -111,9 +115,16 @@ fn specs_in_argv(run: &[String]) -> Vec<String> {
 
 /// Setup step with qualified built-in cache (`cache:true` + `cache_key`).
 ///
-/// Saves stay push-gated: every run restores the tools cache, but only
-/// push runs save it (same-repo and fork PRs restore read-only, since the
-/// pinned action has no PR-scoped save to promote into).
+/// Restore-only: every run restores the tools cache, but no setup ever
+/// saves through the action. The pinned `jdx/mise-action` saves only
+/// inside its `install` leg, which Velnor disables (`install: false`
+/// keeps project tool files, tasks, and hooks from running), so a
+/// push-gated `cache_save` expression would promise a save the action
+/// never performs. Push-gated saves are explicit `Save Mise tools`
+/// steps on the elected writer of each key
+/// ([`elect_mise_cache_writers`]); same-repo and fork PRs restore
+/// read-only, since the pinned action has no PR-scoped save to promote
+/// into.
 ///
 /// # Errors
 ///
@@ -134,10 +145,7 @@ pub fn mise_setup_step_p08(setup: &MiseSetup, cache_key: &str) -> Result<Step, R
             ("install".to_owned(), "false".to_owned()),
             ("env".to_owned(), "false".to_owned()),
             ("cache".to_owned(), "true".to_owned()),
-            (
-                "cache_save".to_owned(),
-                velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION_EXPR.to_owned(),
-            ),
+            ("cache_save".to_owned(), "false".to_owned()),
             ("cache_key".to_owned(), cache_key.to_owned()),
         ]),
     )
@@ -324,9 +332,7 @@ fn setup_shape_ok(step: &Step, qualified: bool) -> bool {
     }
     if qualified {
         with.get("cache").is_some_and(|v| v == "true")
-            && with.get("cache_save").is_some_and(|v| {
-                v == velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION_EXPR
-            })
+            && with.get("cache_save").is_some_and(|v| v == "false")
             && with.get("cache_key").is_some_and(|v| is_cache_key(v))
     } else {
         with.get("cache").is_some_and(|v| v == "false")

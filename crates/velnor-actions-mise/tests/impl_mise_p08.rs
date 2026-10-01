@@ -164,10 +164,6 @@ fn c9_pr_save_needs_action_support_and_forks_stay_read_only() {
         velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION,
         "success() && github.event_name == 'push'"
     );
-    assert_eq!(
-        velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION_EXPR,
-        "${{ github.event_name == 'push' }}"
-    );
 }
 
 #[test]
