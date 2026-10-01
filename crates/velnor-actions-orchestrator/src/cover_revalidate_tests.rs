@@ -269,7 +269,7 @@ fn merge_rejects_expired_manifest() {
 /// Every token the anchor path emits validates against the contract vocabulary.
 ///
 /// A novel token compiles and passes producer-side asserts but fails
-/// FinalReport validation at merge, corrupting a PlanningFailed
+/// `FinalReport` validation at merge, corrupting a `PlanningFailed`
 /// verdict into Internal (CI once ran `foreign_anchor` into exactly
 /// this). This test pins the producer to the contract's closed set.
 #[test]
