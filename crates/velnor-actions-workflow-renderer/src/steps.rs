@@ -27,6 +27,8 @@ pub const INTERNAL_OP_ENV: &str = "VELNOR_INTERNAL_OP";
 pub const REQUEST_FILE_ENV: &str = "VELNOR_REQUEST_FILE";
 /// Planner operation name.
 pub const PLAN_OPERATION: &str = "plan-v1";
+/// Pre-seed manifest-writing operation name.
+pub const WRITE_PRESEED_MANIFEST_OPERATION: &str = "write-preseed-manifest-v1";
 /// Report-merge operation name.
 pub const MERGE_OPERATION: &str = "merge-v1";
 /// Matrix-report fetch operation name.

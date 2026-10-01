@@ -1,11 +1,7 @@
 //! F2 closure: cache layers and forbidden content.
-use velnor_actions_contract::{GeneratorValidation, NotSelectedReason, WorkflowPolicy};
+use velnor_actions_contract::{GeneratorValidation, WorkflowPolicy};
 use velnor_actions_workflow_renderer::steps::{
     TOOLS_RESTORE_USES, cache_action_step, tools_cache_key,
-};
-use velnor_actions_workflow_renderer::task_steps::{
-    NOOP_REASON_ENV, NOOP_REPORT_OP, NOT_APPLICABLE_REASON, NoOpReport, RESTORE_OBJECTS_NAME,
-    noop_step,
 };
 use velnor_actions_workflow_renderer::{
     PUBLISH_PLAN_NAME, RenderError, merge_step, render_workflow_ir,
@@ -222,34 +218,5 @@ fn repo_config_sets_velnor_repository_v1() -> Result<(), String> {
     let pinned = format!("{}/../../.mise-version", env!("CARGO_MANIFEST_DIR"));
     let mise = std::fs::read_to_string(&pinned).map_err(|err| format!("mise-version:{err}"))?;
     assert_eq!(mise.trim(), "2026.9.18", "mise pin drift");
-    Ok(())
-}
-
-#[test]
-fn not_applicable_maps_to_unsupported_report() -> Result<(), RenderError> {
-    assert_eq!(NOT_APPLICABLE_REASON, NotSelectedReason::Unsupported);
-    let report = NoOpReport {
-        task_id: "stack/rust/crates/velnor-actions-contract/clippy/default".to_owned(),
-        task_digest: format!("b3-{}", "a".repeat(64)),
-        reason: NOT_APPLICABLE_REASON,
-    };
-    let step = noop_step(
-        RESTORE_OBJECTS_NAME,
-        &report,
-        "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0",
-    )?;
-    let velnor_actions_contract::StepKind::Shell { run, .. } = &step.kind else {
-        panic!("no-op must be a shell step");
-    };
-    for token in [NOOP_REPORT_OP, NOOP_REASON_ENV, "unsupported"] {
-        assert!(run[2].contains(token), "missing {token}:\n{}", run[2]);
-    }
-    for forbidden in ["not_selected", "/tasks/", "printf"] {
-        assert!(
-            !run[2].contains(forbidden),
-            "report bytes come from Rust: {forbidden}:\n{}",
-            run[2]
-        );
-    }
     Ok(())
 }

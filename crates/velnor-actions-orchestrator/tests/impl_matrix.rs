@@ -3,10 +3,12 @@
 use std::fs;
 
 use tempfile::TempDir;
-use velnor_actions_orchestrator::{GenerateOptions, generate, plan_text, prepare};
+use velnor_actions_orchestrator::{GenerateOptions, generate, prepare};
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
-use super::impl_common::{TestResult, config_with_branch, make_repo, plan_for_source_change};
+use super::impl_common::{
+    TestResult, config_with_branch, make_repo, plan_for, plan_for_source_change,
+};
 
 /// Preview `ci.yml` text for one config; temps keep the dirs alive.
 fn preview_yml(config: &str) -> Result<(TempDir, TempDir, String), Box<dyn std::error::Error>> {
@@ -56,7 +58,7 @@ fn crate_graph_ignores_matrix_cap() -> TestResult {
     let config = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\nmax_parallel_jobs = 3\n";
     let repo = make_repo(config)?;
     let prep = prepare(repo.path())?;
-    assert!(plan_text(&prep).contains("1 Rust crate job"), "crate plan");
+    assert!(plan_for(&prep)?.contains("1 Rust crate job"), "crate plan");
     let (_repo, _parent, text) = preview_yml(config)?;
     for marker in ["max-parallel:", "strategy:", "fromJSON"] {
         assert!(
@@ -70,7 +72,7 @@ fn crate_graph_ignores_matrix_cap() -> TestResult {
 #[test]
 fn plan_crate_agreement() -> TestResult {
     let repo = make_repo(config_with_branch())?;
-    let plan = plan_text(&prepare(repo.path())?);
+    let plan = plan_for(&prepare(repo.path())?)?;
     assert!(plan.contains("1 Rust crate job"), "crate plan:\n{plan}");
     assert!(plan.contains("rust-demo"), "crate entry:\n{plan}");
     let (_repo, _parent, text) = preview_yml(config_with_branch())?;
@@ -79,7 +81,7 @@ fn plan_crate_agreement() -> TestResult {
     let ignored =
         "schema = 1\n[workflow]\ndefault_branch = \"testmain\"\n[stacks]\nignore = [\"rust\"]\n";
     let repo = make_repo(ignored)?;
-    let plan = plan_text(&prepare(repo.path())?);
+    let plan = plan_for(&prepare(repo.path())?)?;
     assert!(plan.contains("no-work workflow"), "static plan:\n{plan}");
     assert!(!plan.contains("Rust crate job"), "static plan:\n{plan}");
     assert!(plan.contains("no matrix fan-out"), "static plan:\n{plan}");
@@ -96,6 +98,7 @@ fn obligations_carry_fixed_identity() -> TestResult {
         "- name: Clippy",
         "VELNOR_TASK_ID: stack/rust/root/clippy/default",
         "VELNOR_TASK_DIGEST: b3-",
+        "VELNOR_MATRIX_ID: ",
         "VELNOR_MATRIX_KEY: m-",
         "cargo clippy --locked --offline",
     ] {

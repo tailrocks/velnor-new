@@ -1,9 +1,12 @@
 //! Pre-seed mode: build-once templates plus strict closure gates.
 use velnor_actions_contract::{Job, WorkflowPolicy};
 use velnor_actions_workflow_renderer::{
-    PRESEED_STAGE_NAME, PreseedStageSource, RenderError, checkout_step, merge_step, plan_step,
-    preseed_build_step, preseed_download_step, preseed_manifest_script, preseed_manifest_step,
-    preseed_stage_step, preseed_upload_step, preseed_verify_step, render_workflow_ir_strict,
+    INTERNAL_OP_ENV, PRESEED_BUILD_OUTPUT, PRESEED_MANIFEST_BINARY_ENV, PRESEED_MANIFEST_OUT_ENV,
+    PRESEED_MANIFEST_TARGET_ENV, PRESEED_MANIFEST_TOOLCHAIN_ENV, PRESEED_STAGE_NAME,
+    PRESEED_VERIFY_MANIFEST_NAME, PreseedStageSource, RenderError,
+    WRITE_PRESEED_MANIFEST_OPERATION, checkout_step, merge_step, plan_step, preseed_build_step,
+    preseed_download_step, preseed_manifest_step, preseed_manifest_verify_step, preseed_stage_step,
+    preseed_upload_step, preseed_verify_step, render_workflow_ir_strict,
 };
 
 use super::impl_renderer_fixtures::*;
@@ -57,6 +60,7 @@ fn preseed_final() -> Result<(String, Job), RenderError> {
         vec!["plan".to_owned()],
         vec![
             preseed_download_step()?,
+            preseed_manifest_verify_step(TARGET)?,
             preseed_stage_step(PreseedStageSource::DownloadedArtifact, STAGED)?,
             merge_step(),
         ],
@@ -75,6 +79,7 @@ fn preseed_templates_carry_trust_mark_and_exact_artifact() -> Result<(), RenderE
         manifest,
         preseed_upload_step()?,
         preseed_download_step()?,
+        preseed_manifest_verify_step(TARGET)?,
         preseed_stage_step(PreseedStageSource::LocalBuild, STAGED)?,
     ] {
         assert!(
@@ -83,21 +88,6 @@ fn preseed_templates_carry_trust_mark_and_exact_artifact() -> Result<(), RenderE
             step.name
         );
     }
-    let script = preseed_manifest_script(TARGET, "rust@1.98.1");
-    for key in [
-        "\\\"schema\\\":1",
-        "\\\"commit\\\":",
-        "\\\"target\\\":",
-        "\\\"toolchain\\\":",
-        "\\\"sha256\\\":",
-    ] {
-        assert!(script.contains(key), "manifest misses {key}: {script}");
-    }
-    assert!(script.contains("$GITHUB_SHA"), "commit recorded: {script}");
-    assert!(
-        !script.contains('\''),
-        "inner quotes break shellcheck quoting: {script}"
-    );
     assert!(
         preseed_manifest_step(&build, "wasm32-unknown-unknown").is_err(),
         "bad target accepted"
@@ -114,30 +104,48 @@ fn preseed_templates_carry_trust_mark_and_exact_artifact() -> Result<(), RenderE
 }
 
 #[test]
-fn preseed_manifest_printf_unescapes_to_valid_json() {
-    let script = preseed_manifest_script(TARGET, "rust@1.98.1");
-    assert!(
-        !script.contains("\"{\""),
-        "bare-quote printf the shell eats: {script}"
-    );
-    let after_printf = script.split_once("printf \"").expect("printf invocation").1;
-    let head = after_printf
-        .split_once("\"$GITHUB_SHA\"")
-        .expect("format end")
-        .0;
-    let format = head
-        .strip_suffix(' ')
-        .expect("trailing space")
-        .strip_suffix('"')
-        .expect("closing quote");
-    assert!(
-        !format.replace("\\\"", "").contains('\\'),
-        "stray escape in format: {format}"
+fn preseed_manifest_step_runs_fresh_binary_with_op() -> Result<(), RenderError> {
+    let step = preseed_manifest_step(&build_argv(), TARGET)?;
+    let velnor_actions_contract::StepKind::Shell { run, env } = &step.kind else {
+        panic!("manifest must be a shell step");
+    };
+    assert_eq!(
+        run,
+        &vec![PRESEED_BUILD_OUTPUT.to_owned()],
+        "fresh binary, no sh -c wrapper: {run:?}"
     );
     assert_eq!(
-        format.replace("\\\"", "\""),
-        "{\"schema\":1,\"commit\":\"%s\",\"target\":\"x86_64-unknown-linux-gnu\",\"toolchain\":\"rust@1.98.1\",\"sha256\":\"%s\"}"
+        env.get(INTERNAL_OP_ENV).map(String::as_str),
+        Some(WRITE_PRESEED_MANIFEST_OPERATION),
+        "manifest op selected: {env:?}"
     );
+    assert_eq!(
+        env.get(PRESEED_MANIFEST_BINARY_ENV).map(String::as_str),
+        Some(PRESEED_BUILD_OUTPUT),
+        "binary path: {env:?}"
+    );
+    assert_eq!(
+        env.get(PRESEED_MANIFEST_OUT_ENV).map(String::as_str),
+        Some("${{ runner.temp }}/velnor/preseed-output"),
+        "expression-form out dir, no shell expansion: {env:?}"
+    );
+    assert_eq!(
+        env.get(PRESEED_MANIFEST_TARGET_ENV).map(String::as_str),
+        Some(TARGET),
+        "literal target: {env:?}"
+    );
+    assert_eq!(
+        env.get(PRESEED_MANIFEST_TOOLCHAIN_ENV).map(String::as_str),
+        Some("rust@1.98.1"),
+        "toolchain derived from the build vector: {env:?}"
+    );
+    for value in env.values() {
+        assert!(
+            !value.contains("printf") && !value.contains("sha256sum"),
+            "no shell-composed JSON or digest: {value}"
+        );
+    }
+    Ok(())
 }
 
 #[test]
@@ -285,6 +293,66 @@ fn strict_preseed_closure_rejects_gaps() {
     assert!(
         err.is_err_and(|err| err.to_string().contains("preseed_misordered")),
         "stage-before-download accepted"
+    );
+}
+
+#[test]
+fn strict_preseed_closure_rejects_plan_manifest_gap() {
+    let mut ctx = fixture_ctx();
+    ctx.preseed = true;
+    let (id, mut plan) = preseed_plan().expect("plan");
+    plan.steps
+        .retain(|step| step.name != "Write helper manifest (pre-seed trust-on-review)");
+    let err = render_workflow_ir_strict(
+        &fixture_ir(vec![(id, plan), preseed_final().expect("final")]),
+        WorkflowPolicy::VelnorRepositoryV1,
+        None,
+        &ctx,
+        &mise(),
+    );
+    assert!(
+        err.is_err_and(|err| err.to_string().contains("preseed_incomplete:plan:manifest")),
+        "plan without manifest accepted"
+    );
+}
+
+#[test]
+fn strict_preseed_closure_rejects_verify_gaps() {
+    let mut ctx = fixture_ctx();
+    ctx.preseed = true;
+    let (id, mut unverified) = preseed_final().expect("final");
+    unverified
+        .steps
+        .retain(|step| step.name != PRESEED_VERIFY_MANIFEST_NAME);
+    let err = render_workflow_ir_strict(
+        &fixture_ir(vec![preseed_plan().expect("plan"), (id, unverified)]),
+        WorkflowPolicy::VelnorRepositoryV1,
+        None,
+        &ctx,
+        &mise(),
+    );
+    assert!(
+        err.is_err_and(|err| err.to_string().contains("preseed_incomplete")),
+        "final without manifest verify accepted"
+    );
+    let (id, mut verify_late) = preseed_final().expect("final");
+    let verify_at = verify_late
+        .steps
+        .iter()
+        .position(|step| step.name == PRESEED_VERIFY_MANIFEST_NAME)
+        .expect("verify step");
+    let verify = verify_late.steps.remove(verify_at);
+    verify_late.steps.push(verify);
+    let err = render_workflow_ir_strict(
+        &fixture_ir(vec![preseed_plan().expect("plan"), (id, verify_late)]),
+        WorkflowPolicy::VelnorRepositoryV1,
+        None,
+        &ctx,
+        &mise(),
+    );
+    assert!(
+        err.is_err_and(|err| err.to_string().contains("preseed_misordered")),
+        "verify-after-stage accepted"
     );
 }
 

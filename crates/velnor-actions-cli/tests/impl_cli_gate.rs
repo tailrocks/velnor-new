@@ -15,7 +15,7 @@ fn stage_request(dir: &Path, name: &str, body: &str) -> Result<PathBuf, Box<dyn 
 }
 
 /// Assert two outputs are byte-identical in code, stdout, and stderr.
-fn assert_identical(left: &std::process::Output, right: &std::process::Output) {
+pub(super) fn assert_identical(left: &std::process::Output, right: &std::process::Output) {
     assert_eq!(code(left), code(right));
     assert_eq!(left.stdout, right.stdout);
     assert_eq!(left.stderr, right.stderr);
@@ -296,6 +296,9 @@ fn report_op_needs_runner_temp_and_run_id() -> Result<(), Box<dyn Error>> {
     cleanup(&tmp);
     Ok(())
 }
+
+// NOTE: `write-preseed-manifest-v1` gate coverage lives in
+// `impl_cli_gate_preseed.rs` (alint `rust-max-lines` split).
 
 #[test]
 fn report_op_without_plan_fails_internal_silently() -> Result<(), Box<dyn Error>> {

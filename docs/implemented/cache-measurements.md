@@ -1,25 +1,40 @@
 # P08 cache measurements + warm-reuse proof (R11/R12)
 
-Commit measured: `347976d` (branch `docs/velnor-actions-spec`).
+Commit measured: `347976d` (branch `docs/velnor-actions-spec`);
+green run below at `695752e`.
 Hosted runs: seed
 [`36754512444`](https://github.com/tailrocks/velnor-new/actions/runs/36754512444)
-(plan-only, 2026-09-30T17:52Z) and warm
+(plan-only, 2026-09-30T17:52Z, conclusion `failure`: plan failed at
+`Check generated files` AFTER the save), warm
 [`36760724180`](https://github.com/tailrocks/velnor-new/actions/runs/36760724180)
-(2026-09-30T18:44Z), both `ubuntu-26.04`, `x86_64-unknown-linux-gnu`,
-rust 1.98.1, P08 `ci.yml`. Service listing pulled 2026-09-30 ~19:25Z
-(read-only `gh cache list` + `cache/usage` API). Local fixture runs on
-`arm64` macOS, rustup cargo 1.98.1 direct (generated steps use
-`mise exec rust@1.98.1`; the cargo-level probe/fetch behavior is
-identical — the `mise exec` launch delta is not isolated here).
-Every figure below is measured; the single assumption (quota limit) is
-labeled. Nothing is fabricated.
+(2026-09-30T18:44Z, conclusion `failure`: orchestrator crate failed,
+so Required failed — cache evidence below is still valid, but no
+green-run verdict may cite it), and green
+[`36777030585`](https://github.com/tailrocks/velnor-new/actions/runs/36777030585)
+(2026-09-30T21:04Z, conclusion `success`, 41/41 reports,
+`status: passed`), all `ubuntu-26.04` (`Image: ubuntu-26.04` in the
+provisioner log), `x86_64-unknown-linux-gnu`, rust 1.98.1,
+nextest 0.9.146, P08 `ci.yml`. Pins moved mid-day: seed/warm ran
+mise 2026.9.16 + mbx 1.19.0, green runs mise 2026.9.18 + mbx
+1.21.0 (install lines verified per run). Service listing
+pulled 2026-09-30 ~19:25Z and re-pulled 2026-10-01 ~05:55Z (read-only
+`gh cache list` + `cache/usage` API); the two pulls are byte-identical
+(§1). Local fixture runs on `arm64` macOS, rustup cargo 1.98.1 direct
+(generated steps use `mise exec rust@1.98.1`; the cargo-level
+probe/fetch behavior is identical — the `mise exec` launch delta is
+not isolated here). Every figure below is measured; the single
+assumption (quota limit) and every derived aggregate are labeled.
+Nothing is fabricated.
 
 ## 1. Service inventory (stored sizes, eviction, headroom)
 
 `gh cache list --limit 100 --json` returned 21 entries totaling
 **1,325,342,795 B (1263.95 MiB)** — exactly equal to the
 `cache/usage` API (`active_caches_size_in_bytes`, 21 caches), so the
-listing is complete (no pagination gap).
+listing is complete (no pagination gap). A second pull after the warm
+and green runs returned the same 21 entries and the same byte total:
+both runs were storage-neutral (sources save skipped/refused, tools
+never save, MBX never saves on PR runs).
 
 | Layer | Entries | Stored bytes | Share |
 | --- | ---: | ---: | ---: |
@@ -46,37 +61,73 @@ LRU pressure is absent (12.3% of the assumed quota).
 
 Seed = run 36754512444 (plan ran, crates skipped: plan failed at
 `Check generated files` AFTER the save). Warm = run 36760724180
-(plan + 7 crates + validators + Required).
+(plan + 7 crates + validators + Required; orchestrator FAILED —
+red run, cache branches only). Green = run 36777030585 (success,
+17 m 30 s created→updated, fully accounted in
+[performance.md](performance.md)).
 
-| Layer / step | Seed (cold) | Warm (N+1) |
-| --- | --- | --- |
-| Mise tools restore | MISS (`mise cache not found for mise-v1-…e9592c9b`) | MISS (same key) |
-| Tool install (cold, per job) | plan ~13.8 s | crate ~14.3 s |
-| Sources restore | MISS (~0.3 s overhead, no entry) | HIT, 17,568,922 B, exact seed key |
-| Sources restore duration | — | plan 1.85 s @15.4 MB/s; crate ~0.6 s @82.5 MB/s |
-| Fetch probe | `sources miss (source_missing)`, 58 `Downloaded` | `sources hit, skipping fetch`, 0 `Downloaded` |
-| Crate `Downloading`/`Updating` | n/a (skipped) | 0 lines in every sampled crate job |
-| Sources save | SAVED in ~2.0 s (17:53:40→42) | SKIPPED (`Unable to reserve cache … another job may be creating`) — immutable entry kept, no duplicate stored |
-| MBX objects | no entry, no hit/miss line in action output | same: setup ~10.3 s, MISS/`no_entry` (P08 MBX action never ran on the default branch, so no seed exists) |
+| Layer / step | Seed (cold) | Warm (N+1, red) | Green (N+2) |
+| --- | --- | --- | --- |
+| Mise tools restore | MISS (`mise cache not found for mise-v1-…e9592c9b`) | MISS (same key) | MISS (same key shape, `…-2026.9.18-6270601fa454da91`) |
+| Tool install (cold, per job) | plan ~13.8 s | crate ~14.3 s | plan 15 s, crates 12–18 s, Required 2 s (`gh` only) |
+| Sources restore | MISS (~0.3 s overhead, no entry) | HIT, 17,568,922 B, exact seed key | HIT, 17,568,922 B, exact seed key, all 8 restoring jobs |
+| Sources restore duration | — | plan 1.85 s @ 15.4 MB/s; contract 1.56 s @ 18.4 MB/s (action-reported rates; the old "~0.6 s @ 82.5 MB/s" matched no sampled job and is withdrawn) | sub-second steps; action-reported 16.0–103.4 MB/s across the 8 jobs (plan 85.9, orch 103.4, cli 16.0, contract 36.3, rust 73.2, actionlint 32.4, renderer 24.1, mise 60.5) |
+| Fetch probe | `sources miss (source_missing)`, 58 `Downloaded` | `sources hit, skipping fetch`, 0 `Downloaded` | `sources hit, skipping fetch`, 0 `Downloaded` (fetch steps; setup downloads split below) |
+| Crate `Downloading`/`Updating` | n/a (skipped) | 0 lines in every sampled crate job | 0 lines in all 7 crate logs |
+| Sources save | SAVED in ~2.0 s (17:53:40→42) | SKIPPED (`Unable to reserve cache … another job may be creating`) — immutable entry kept, no duplicate stored | SKIPPED (step skipped: entry exists from seed; inventory byte-identical after) |
+| MBX objects | no entry, no hit/miss line in action output | same: setup ~10.3 s, MISS/`no_entry` (P08 MBX action never ran on the default branch, so no seed exists) | `No mbx cache found` in all 7 crate jobs; restore step costs 10–14 s/job returning nothing (~80 s total overhead) |
 
-Aggregate warm-run transfer (sources): 8 restoring jobs × 17,568,922 B
-= **140,551,376 B (~134.0 MiB)** downloaded for **17,568,922 B stored
-once** — sharing removes stored copies, not per-job transfer, exactly
-as pr-1 predicts. Warm plan `Downloaded` lines: 53, all in the
-pre-restore `Build helper` step (own cargo home); fetch-step delta is
-58 → 0. Warm crate obligations all ran `--offline` with
-`mbx[cache]: 0 B downloaded, 0 B uploaded` (sampled: clippy 1 hit /
-44 not-looked-up, build/test/doc 0 hits — compiler reuse stays local).
+Aggregate green-run transfer (sources): per-job restore size is
+measured in each of the 8 job logs (`Cache Size: ~17 MB
+(17568922 B)`); the aggregate 8 × 17,568,922 =
+**140,551,376 B (~134.0 MiB)** downloaded for **17,568,922 B stored
+once** is their sum — DERIVED, not independently metered (no
+per-job byte counter exists outside the restore line). Sharing
+removes stored copies, not per-job transfer, exactly as pr-1
+predicts.
 
-Per-goal dimensions, recorded separately: queue seed ~6 s / warm ~3 s
-(created→first-job-start); setup ≈ checkout + mise download ~2 s/job;
-tool-install ~14 s/job cold (both runs — the tools MISS dominates job
-startup); transfer above; compile warm-crate 1–4 min/job (hosted,
-source-dominated); test inside those walls; artifact = 17.57 MB
-sources snapshot (+ legacy tools archives); critical path warm 6 m 46 s
-(plan 87 s → slowest crate 252 s → Required 22 s); sizes/bytes in §1;
-reasons: `source_missing` (seed), `no_entry` (tools/MBX every run),
+Setup-vs-fetch download split (green run): the "zero re-download"
+claim covers fetch steps only. Plan's `Build helper` step runs
+before any restore with its own cargo home and emits 53
+`Downloaded` lines (all inside the Build helper step group,
+21:06:38Z); fetch-step delta is 58 → 0 (seed likewise: 58 fetch
+of 111 plan-log total, rest setup). Run total: 53 downloads, all
+tool-provisioning/setup, zero from source fetch. Rust-component
+download bytes are UNMEASURED (the 0–1 s `Prepare Rust components`
+step logs no byte count).
+
+Warm-crate obligations all ran `--offline` with
+`mbx[cache]: 0 B downloaded, 0 B uploaded` (green run sampled all
+7: contract clippy 1 hit / 51 not-looked-up, build/test/doc 0–25
+hits — every hit is intra-job clippy→build reuse, 7.73 s avoided
+in contract, 9.67 s in orchestrator; cross-job compiler reuse is
+zero because no MBX seed exists).
+
+Per-goal dimensions (green run), recorded separately: queue 91 s
+(created→first-job-start 21:04:36→21:06:07); setup 5–8 s/job
+(checkout + mise + helper/plan downloads); tool-install 12–18 s/job cold (every job —
+the tools MISS dominates job startup, ~114 s run-wide); transfer
+above; compile per crate (clippy+build, cold target, warm
+sources, no MBX): actionlint 13 s, contract 14 s, mise 16 s, rust
+18 s, renderer 28 s, cli 30 s, orchestrator 46 s — ~165 s summed,
+recompiled 7× with zero cross-job reuse; test inside those walls
+except orchestrator (nextest 610/610 in 679.316 s, 2 slow tests)
+and cli (211 in 23.910 s); artifact = 17.57 MB sources snapshot
+(+ 39,174 B matrix reports, 22,860 B plan, 2,401,586 B helper);
+critical path 17 m 30 s = queue 91 + Plan 88 + plan→crate gap 2 +
+crate wave 818 (orchestrator 781 s wall) + crate→Required gap 5 +
+Required 46 — residual 0 s; sizes/bytes in §1; reasons:
+`source_missing` (seed), `no_entry` (tools/MBX every run),
 reservation-refused (warm save — healthy, not an error).
+
+Warm-run wall accounting (the 45 s the old "plan 87 s → slowest
+crate 252 s → Required 22 s" sum dropped): created→updated 406 s =
+queue 3 + Plan-start wait 36 (validators done 18:44:41, Plan
+starts 18:45:01 — scheduling gap, cause undetermined beyond API
+timestamps) + Plan 87 + crate gap 3 + orchestrator 252 + Required
+gap 2 + Required 22 + tail 1. Residual 0 s. The old text has been
+corrected: job walls never sum to run wall without queue and
+scheduling gaps.
 
 ## 3. Local cold-vs-warm (`cacheprobe` fixture, 6 locked packages)
 
@@ -118,9 +169,11 @@ and disjoint MBX/Cargo cache shapes with lock-content re-keying via
 `hashFiles` at runtime; `impl_cache_fixtures.rs` asserts per-job
 keys/paths, one shared sources key, one tools identity per tool
 union, a single plan writer, and restore<MBX<fetch order. Hosted §2
-shows the seed/warm branches with zero re-download on warm. Local §3
-replays both branches verbatim. UNMEASURED / open: why the Mise
-built-in cache never saved (no `mise-v1-*` entries; no save lines in
-any log — restore MISS lines are the only evidence); MBX objects seed
-(needs a default-branch P08 run); eviction over time (needs a
-week-scale sequential sample).
+shows the seed/warm/green branches with zero fetch re-download on
+warm and green. Local §3 replays both branches verbatim.
+UNMEASURED / open: why the Mise built-in cache never saved (no
+`mise-v1-*` entries after three P08 runs; no save lines in any log —
+restore MISS lines are the only evidence); MBX objects seed (needs
+a default-branch P08 run — until then every crate job recompiles
+from scratch and pays 10–14 s for an empty restore); eviction over
+time (needs a week-scale sequential sample).

@@ -1,12 +1,11 @@
-//! Adapter-wire cases: toolchain-home env, bare-cargo scans, prepared
-//! inputs, lane target dirs, cache order, and release gates (F2 halves).
+//! Adapter-wire cases: toolchain-home env, bare-cargo scans, lane target
+//! dirs, cache order, and release gates (F2 halves).
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_workflow_renderer::steps::{
     TOOLS_CACHE_PATH, TOOLS_RESTORE_USES, TOOLS_SAVE_USES, cache_action_step,
 };
-use velnor_actions_workflow_renderer::task_steps::{VERIFY_INPUTS_NAME, prepared_inputs_step};
 use velnor_actions_workflow_renderer::toolchain_env::{
     TOOLCHAIN_HOME_KEYS, check_toolchain_homes, with_toolchain_homes,
 };
@@ -67,16 +66,6 @@ fn bare_cargo_scan_covers_rendered_workflow() -> Result<(), RenderError> {
     let ir = fixture_ir(vec![job("task", "Task", Vec::new(), vec![bare])]);
     let rendered = render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx)?;
     assert!(check_no_bare_cargo(&rendered).is_err());
-    Ok(())
-}
-
-#[test]
-fn prepared_inputs_step_pins_mise_shape() -> Result<(), RenderError> {
-    assert_eq!(VERIFY_INPUTS_NAME, "Verify prepared inputs");
-    let step = prepared_inputs_step(vec!["mise".to_owned(), "exec".to_owned()], BTreeMap::new())?;
-    assert_eq!(step.name, VERIFY_INPUTS_NAME);
-    assert!(prepared_inputs_step(vec!["cargo".to_owned()], BTreeMap::new()).is_err());
-    assert!(prepared_inputs_step(Vec::new(), BTreeMap::new()).is_err());
     Ok(())
 }
 

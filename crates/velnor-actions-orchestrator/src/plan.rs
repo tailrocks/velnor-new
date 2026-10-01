@@ -1,24 +1,26 @@
 //! Deterministic human-readable plan text (no JSON, YAML, or writes).
 
+use std::collections::BTreeMap;
+
 use velnor_actions_actionlint::ACTIONLINT_VERSION;
-use velnor_actions_contract::{RunnerSelection, WorkflowPolicy};
+use velnor_actions_contract::{CRATE_JOB_ID_PREFIX, Job, RunnerSelection, WorkflowPolicy};
 use velnor_actions_rust::{TaskGroup, TaskKind};
+use velnor_actions_workflow_renderer::action_pins;
 use velnor_actions_workflow_renderer::release_tree::RELEASE_TREE_PATHS;
-use velnor_actions_workflow_renderer::render::{
-    ACTIONLINT_PATH, FINAL_JOB_ID, PLAN_JOB_ID, WORKFLOW_PATH,
-};
+use velnor_actions_workflow_renderer::render::{ACTIONLINT_PATH, WORKFLOW_PATH};
 
 use crate::OrchestratorError;
+use crate::finalized::finalized_jobs;
 use crate::generate::render_staged_tree;
 use crate::plan_stacks::stacks_section;
 use crate::prepare::GenerationPreparation;
-use crate::workflow::{CHECKOUT_USES, LINT_JOB_ID};
 
 /// Render the concise deterministic `plan` report from a preparation,
 /// after rendering the full tree in memory and discarding the bytes.
 ///
-/// Fails when generation-time rendering would fail, keeping `plan` on
-/// the same renderer output `generate` writes. Writes nothing.
+/// The job table, step counts, and action pins derive from the same
+/// finalized jobs `generate` writes (validators included), so plan
+/// and YAML agree by construction. Writes nothing.
 ///
 /// # Errors
 ///
@@ -26,12 +28,18 @@ use crate::workflow::{CHECKOUT_USES, LINT_JOB_ID};
 /// discarded renderer pass.
 pub fn plan_text_checked(prep: &GenerationPreparation) -> Result<String, OrchestratorError> {
     let _ = render_staged_tree(prep)?;
-    Ok(plan_text(prep))
+    let jobs = finalized_jobs(prep)?;
+    Ok(plan_text(prep, &jobs))
 }
 
-/// Render the concise deterministic `plan` report from a preparation.
+/// Render the concise deterministic `plan` report from finalized jobs.
+///
+/// `jobs` must be [`finalized_jobs`] for `prep`: the attached IR plus
+/// merged support, setup insertion, closures, and the final fan-in.
+/// Passing pre-merge IR jobs would reintroduce the plan/YAML gaps
+/// (missing validators, stale step counts, partial pins).
 #[must_use]
-pub fn plan_text(prep: &GenerationPreparation) -> String {
+pub fn plan_text(prep: &GenerationPreparation, jobs: &BTreeMap<String, Job>) -> String {
     let mut out = String::new();
     push(
         &mut out,
@@ -40,7 +48,7 @@ pub fn plan_text(prep: &GenerationPreparation) -> String {
     push(&mut out, &format!("Repository: {}", prep.root.display()));
     out.push('\n');
     stacks_section(&mut out, prep);
-    workflow_section(&mut out, prep);
+    workflow_section(&mut out, prep, jobs);
     recommendations_section(&mut out, prep);
     out
 }
@@ -52,7 +60,7 @@ pub(crate) fn push(out: &mut String, line: &str) {
 }
 
 /// Planned workflow files, jobs, matrix, runner, cache, and pins.
-fn workflow_section(out: &mut String, prep: &GenerationPreparation) {
+fn workflow_section(out: &mut String, prep: &GenerationPreparation, jobs: &BTreeMap<String, Job>) {
     out.push('\n');
     push(out, "Workflow to generate");
     push(out, &format!("  {ACTIONLINT_PATH}"));
@@ -76,11 +84,11 @@ fn workflow_section(out: &mut String, prep: &GenerationPreparation) {
         &format!("  Runner: {} ({provenance})", prep.runner_label),
     );
     push(out, "  Jobs:");
-    for (id, job) in &prep.workflow.ir.jobs {
+    for (id, job) in jobs {
         push(out, &format!("    - {} ({} steps)", id, job.steps.len()));
     }
-    crate_lines(out, prep);
-    match crate_job_ids(prep).len() {
+    crate_lines(out, prep, jobs);
+    match crate_job_ids(jobs).len() {
         0 => push(out, "  Parallel: single job; no matrix fan-out"),
         1 => push(
             out,
@@ -95,13 +103,25 @@ fn workflow_section(out: &mut String, prep: &GenerationPreparation) {
     clippy_lines(out, prep);
     push(out, &format!("  Cache layers: {}", cache_layers(prep)));
     push(out, &format!("  Actionlint: {ACTIONLINT_VERSION} pinned"));
-    push(out, &format!("  Action pins: {CHECKOUT_USES}"));
+    pin_lines(out, jobs);
     ineligible_lines(out, prep);
     feature_lines(out, prep);
     push(
         out,
         "  Pull-request execution narrows crate obligations through its event-time affected-work plan.",
     );
+}
+
+/// Every distinct action pin the finalized jobs embed, sorted.
+///
+/// The count and refs match the `uses:` lines `generate` writes, so a
+/// new action in the YAML appears here without a plan-side allowlist.
+fn pin_lines(out: &mut String, jobs: &BTreeMap<String, Job>) {
+    let pins = action_pins(jobs);
+    push(out, &format!("  Action pins: {}", pins.len()));
+    for pin in &pins {
+        push(out, &format!("    - {pin}"));
+    }
 }
 
 /// Release-owned tree paths, exactly what `generate` emits when enabled.
@@ -120,25 +140,24 @@ fn release_file_lines(out: &mut String, prep: &GenerationPreparation) {
     }
 }
 
-/// IR crate-job IDs: every finalized job except plan, final, and lint.
-fn crate_job_ids(prep: &GenerationPreparation) -> Vec<&str> {
-    prep.workflow
-        .ir
-        .jobs
-        .keys()
-        .filter(|id| {
-            id.as_str() != PLAN_JOB_ID && id.as_str() != FINAL_JOB_ID && id.as_str() != LINT_JOB_ID
-        })
+/// Finalized crate-job IDs: exactly the `rust-` jobs.
+///
+/// Structural, never an exclusion list: plan, final, lint, validators,
+/// candidate, and release carry other IDs, so merged support jobs can
+/// never inflate the crate count.
+fn crate_job_ids(jobs: &BTreeMap<String, Job>) -> Vec<&str> {
+    jobs.keys()
+        .filter(|id| id.starts_with(CRATE_JOB_ID_PREFIX))
         .map(String::as_str)
         .collect()
 }
 
 /// Crate-job count plus the per-obligation kind chain.
 ///
-/// Counts finalized IR crate jobs, never task groups; otherwise the
+/// Counts finalized crate jobs, never task groups; otherwise the
 /// static no-work line keeps plan and YAML in agreement.
-fn crate_lines(out: &mut String, prep: &GenerationPreparation) {
-    let crates = crate_job_ids(prep);
+fn crate_lines(out: &mut String, prep: &GenerationPreparation, jobs: &BTreeMap<String, Job>) {
+    let crates = crate_job_ids(jobs);
     if crates.is_empty() {
         push(out, "    - no matrix entries (no-work workflow)");
         return;
@@ -160,7 +179,7 @@ fn crate_lines(out: &mut String, prep: &GenerationPreparation) {
         .discovery
         .task_groups
         .iter()
-        .filter(|group| !group.no_test_targets)
+        .filter(|group| crate::crate_jobs::is_runnable(group))
         .map(|group| group.task_id.as_str())
         .collect();
     obligations.sort_unstable();
@@ -185,7 +204,7 @@ fn present_kinds(groups: &[TaskGroup]) -> Vec<&'static str> {
     ] {
         if groups
             .iter()
-            .any(|group| group.kind == kind && !group.no_test_targets)
+            .any(|group| group.kind == kind && crate::crate_jobs::is_runnable(group))
             && !kinds.contains(&word)
         {
             kinds.push(word);
@@ -223,9 +242,16 @@ fn clippy_lines(out: &mut String, prep: &GenerationPreparation) {
     );
 }
 
-/// Cache layers derived from selected drivers.
+/// Cache layers derived from lock state plus selected drivers.
+///
+/// `Cargo sources` appears only when a lockfile exists to snapshot:
+/// lockless repos emit no fetch or restore steps, so advertising the
+/// layer would promise YAML that `generate` never writes.
 fn cache_layers(prep: &GenerationPreparation) -> String {
-    let mut layers = vec!["Mise tools", "Cargo sources"];
+    let mut layers = vec!["Mise tools"];
+    if !crate::source_prep::lockful_roots(&prep.root, &prep.discovery.workspaces).is_empty() {
+        layers.push("Cargo sources");
+    }
     if prep.discovery.workspaces.iter().any(|workspace| {
         workspace.profile.compile_driver == velnor_actions_rust::CompileDriver::Mbx
     }) {

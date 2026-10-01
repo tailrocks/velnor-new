@@ -6,13 +6,13 @@
 use std::collections::BTreeMap;
 use std::fs;
 
+use crate::matrix_step::OBLIGATION_TASK_DIGEST_ENV;
 use tempfile::TempDir;
 use velnor_actions_contract::{
     ExecuteTaskIds, ExecuteTaskRef, MatrixEntry, MatrixReport, MatrixStatus, ObligationDecision,
     Plan, PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanRunner, RunnerSelection,
     TaskReport, TaskStatus, Trust, WorkflowEvent, matrix_json_bytes, plan_id_for_run,
 };
-use velnor_actions_workflow_renderer::task_steps as legs;
 
 use super::*;
 use crate::task_report::{EXIT_CODE_ENV, REPORT_OP, TASK_ID_ENV};
@@ -210,19 +210,18 @@ fn noop_rejects_contradictions() {
 }
 
 #[test]
-fn renderer_noop_consts_match_op_contract() {
-    assert_eq!(legs::NOOP_REPORT_OP, REPORT_OP);
-    assert_eq!(legs::NOOP_REASON_ENV, NOT_SELECTED_REASON_ENV);
-    assert_eq!(legs::NOOP_DIGEST_ENV, TASK_DIGEST_ENV);
-    assert_eq!(legs::NOOP_EXIT_ENV, EXIT_CODE_ENV);
-    assert_eq!(legs::LEG_TASK_ID_ENV, TASK_ID_ENV);
+fn noop_op_contract_pins_wire_strings() {
+    assert_eq!(REPORT_OP, "write-task-report-v1");
+    assert_eq!(NOT_SELECTED_REASON_ENV, "VELNOR_NOT_SELECTED_REASON");
+    assert_eq!(TASK_DIGEST_ENV, "VELNOR_NOOP_TASK_DIGEST");
+    assert_eq!(EXIT_CODE_ENV, "VELNOR_EXIT_CODE");
+    assert_eq!(TASK_ID_ENV, "VELNOR_TASK_ID");
 }
 
 #[test]
 fn noop_digest_key_is_disjoint_from_exec_digest_key() {
     assert_ne!(
-        TASK_DIGEST_ENV,
-        legs::LEG_TASK_DIGEST_ENV,
-        "exec steps bake the leg digest into every obligation env; aliasing          makes the report op fail noop_half_present on every executed task"
+        TASK_DIGEST_ENV, OBLIGATION_TASK_DIGEST_ENV,
+        "exec steps bake the obligation digest into every obligation env; aliasing makes the report op fail noop_half_present on every executed task"
     );
 }

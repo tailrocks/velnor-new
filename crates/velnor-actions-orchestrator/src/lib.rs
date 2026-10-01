@@ -22,6 +22,7 @@ mod evidence;
 mod exclusive_write;
 mod extension_schemas;
 mod external_data;
+mod finalized;
 mod generate;
 mod git_paths;
 mod init;
@@ -39,6 +40,7 @@ mod pins;
 mod plan;
 mod plan_stacks;
 mod prepare;
+mod preseed_manifest;
 mod provenance;
 mod qualify;
 mod recommendations;
@@ -83,6 +85,7 @@ pub use external_data::{
     DEFAULT_EXTERNAL_DATA_MAX_AGE_SECS, EXTERNAL_DATA_CHECK_KIND, ExternalDataFreshness,
     external_data_kind, may_skip_external_data,
 };
+pub use finalized::finalized_jobs;
 pub use generate::{GenerateOptions, GenerateReport, ToolSnapshot, generate, render_staged_tree};
 pub use init::{InitReport, init_config};
 pub use internal::{
@@ -95,6 +98,7 @@ pub use merge_request::assemble_merge_request;
 pub use pins::consumer_acquire_step_with_manifest;
 pub use plan::{plan_text, plan_text_checked};
 pub use prepare::{GenerationPreparation, prepare};
+pub use preseed_manifest::{PRESEED_MANIFEST_OP, write_preseed_manifest};
 pub use provenance::{EvidenceProvenance, ProfileProvenance};
 pub use qualify::qualify_argv_staged;
 pub use retrieve_reports::{FETCH_OP, retrieve_reports};

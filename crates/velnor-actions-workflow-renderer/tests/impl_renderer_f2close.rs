@@ -64,6 +64,7 @@ fn candidate_job_verifies_manifest_before_running_binary() -> Result<(), RenderE
         "sha256",
         "GITHUB_SHA",
         "sha256sum",
+        "line=; rest=;",
         "x86_64-unknown-linux-gnu",
     ] {
         assert!(script.contains(token), "missing {token}:\n{script}");

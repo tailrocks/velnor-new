@@ -4,8 +4,9 @@
 //! in `VELNOR_REQUEST_FILE`: `write-request-v1` needs GitHub event env and no
 //! pre-existing file, `plan-v1`/`merge-v1` need a pre-existing request file,
 //! `fetch-reports-v1`/`write-task-report-v1` need runner temp plus the
-//! numeric run ID instead. Anything else falls through to Clap, so public
-//! behavior is byte-identical with or without the environment set.
+//! numeric run ID instead, and `write-preseed-manifest-v1` needs runner
+//! temp only. Anything else falls through to Clap, so public behavior is
+//! byte-identical with or without the environment set.
 
 use std::env;
 use std::fs;
@@ -14,10 +15,11 @@ use std::process::ExitCode;
 
 use clap::Parser;
 use velnor_actions_orchestrator::{
-    FETCH_OP, GenerateOptions, MERGE_OP, OrchestratorError, PLAN_OP, REPORT_OP, REQUEST_FILE_ENV,
-    WRITE_REQUEST_OP, generate, init_config, merge_internal, merge_passed, plan_internal,
-    plan_outputs, plan_text_checked, prepare, publish_final_report, publish_plan_files,
-    resolve_root, response_path_for, retrieve_reports, write_request, write_task_report,
+    FETCH_OP, GenerateOptions, MERGE_OP, OrchestratorError, PLAN_OP, PRESEED_MANIFEST_OP,
+    REPORT_OP, REQUEST_FILE_ENV, WRITE_REQUEST_OP, generate, init_config, merge_internal,
+    merge_passed, plan_internal, plan_outputs, plan_text_checked, prepare, publish_final_report,
+    publish_plan_files, resolve_root, response_path_for, retrieve_reports, write_preseed_manifest,
+    write_request, write_task_report,
 };
 
 use crate::args::{Cli, Command};
@@ -46,6 +48,8 @@ enum InternalOp {
     Fetch,
     /// Task-report production operation.
     Report,
+    /// Pre-seed manifest-writing operation.
+    PreseedManifest,
 }
 
 /// Validated private request: operation plus exact request-file path.
@@ -81,7 +85,8 @@ pub(crate) fn try_internal() -> Option<ExitCode> {
 /// Check the private gate: known op plus request-file presence by op.
 ///
 /// Fetch and report take no request file: they need the runner-temp
-/// velnor directory plus the numeric run ID instead.
+/// velnor directory plus the numeric run ID instead. The manifest op
+/// takes no request file either: runner temp scopes its output.
 fn gate_request() -> Option<InternalRequest> {
     let op = match env::var(OP_ENV).as_deref() {
         Ok(tag) if tag == WRITE_REQUEST_OP => InternalOp::WriteRequest,
@@ -89,6 +94,7 @@ fn gate_request() -> Option<InternalRequest> {
         Ok(tag) if tag == MERGE_OP => InternalOp::Merge,
         Ok(tag) if tag == FETCH_OP => InternalOp::Fetch,
         Ok(tag) if tag == REPORT_OP => InternalOp::Report,
+        Ok(tag) if tag == PRESEED_MANIFEST_OP => InternalOp::PreseedManifest,
         _ => return None,
     };
     if op == InternalOp::Fetch || op == InternalOp::Report {
@@ -100,6 +106,13 @@ fn gate_request() -> Option<InternalRequest> {
             });
         }
         return None;
+    }
+    if op == InternalOp::PreseedManifest {
+        let temp = env::var_os(RUNNER_TEMP_ENV).filter(|value| !value.is_empty())?;
+        return Some(InternalRequest {
+            op,
+            path: Path::new(&temp).join("velnor"),
+        });
     }
     let path = env::var_os(REQUEST_FILE_ENV)
         .filter(|value| !value.is_empty())
@@ -121,7 +134,7 @@ fn gate_request() -> Option<InternalRequest> {
                 return None;
             }
         }
-        InternalOp::Fetch | InternalOp::Report => {}
+        InternalOp::Fetch | InternalOp::Report | InternalOp::PreseedManifest => {}
     }
     Some(InternalRequest { op, path })
 }
@@ -141,6 +154,10 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
         },
         InternalOp::Report => match write_task_report() {
             Ok(_) => ExitCode::SUCCESS,
+            Err(error) => fail_internal(&error.to_string()),
+        },
+        InternalOp::PreseedManifest => match write_preseed_manifest() {
+            Ok(()) => ExitCode::SUCCESS,
             Err(error) => fail_internal(&error.to_string()),
         },
     }

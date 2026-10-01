@@ -13,7 +13,9 @@ use velnor_actions_mise::{CandidateBuild, PinnedTool, ToolCatalog};
 use velnor_actions_orchestrator::{DEFAULT_RUNNER_LABEL, prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::render::{ACTIONLINT_PATH, WORKFLOW_PATH};
 
-use super::impl_common::{TestResult, config_with_branch, make_repo, make_virtual_repo};
+use super::impl_common::{
+    TestResult, config_with_branch, make_repo, make_virtual_repo, without_ambient_identity,
+};
 
 /// Staged workflow + actionlint bytes for one config.
 fn preview_both(config: &str) -> Result<(TempDir, String, String), Box<dyn std::error::Error>> {
@@ -39,11 +41,6 @@ fn make_velnor_repo(config: &str) -> Result<TempDir, Box<dyn std::error::Error>>
     text.push_str("[remote \"origin\"]\n\turl = https://github.com/tailrocks/velnor-new.git\n");
     fs::write(&git_config, text)?;
     Ok(repo)
-}
-
-/// Skip only when an ambient non-canonical identity would fail the fixture.
-fn ambient_identity_blocks() -> bool {
-    std::env::var("GITHUB_REPOSITORY").is_ok_and(|hint| hint != "tailrocks/velnor-new")
 }
 
 /// YAML slice between two markers (to end when `end` is absent).
@@ -82,27 +79,26 @@ fn w1_checkout_uses_pinned_action_ref() -> TestResult {
 
 #[test]
 fn w1_runs_on_hosted_labels_only() -> TestResult {
-    if ambient_identity_blocks() {
-        return Ok(());
-    }
-    let (_repo, consumer, _alint) = preview_both(config_with_branch())?;
-    let velnor = make_velnor_repo(VELNOR_CONFIG)?;
-    let prep = prepare(velnor.path())?;
-    let tree = render_staged_tree(&prep)?;
-    let velnor_yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
-    for (name, yaml) in [("consumer", consumer.as_str()), ("velnor", velnor_yaml)] {
-        let labels: Vec<&str> = yaml
-            .lines()
-            .filter_map(|line| line.trim().strip_prefix("runs-on:"))
-            .map(str::trim)
-            .collect();
-        assert!(labels.len() >= 4, "{name} jobs: {labels:?}");
-        for label in &labels {
-            assert!(label.starts_with("ubuntu-"), "{name} label {label}");
+    without_ambient_identity("w1_runs_on_hosted_labels_only", || {
+        let (_repo, consumer, _alint) = preview_both(config_with_branch())?;
+        let velnor = make_velnor_repo(VELNOR_CONFIG)?;
+        let prep = prepare(velnor.path())?;
+        let tree = render_staged_tree(&prep)?;
+        let velnor_yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
+        for (name, yaml) in [("consumer", consumer.as_str()), ("velnor", velnor_yaml)] {
+            let labels: Vec<&str> = yaml
+                .lines()
+                .filter_map(|line| line.trim().strip_prefix("runs-on:"))
+                .map(str::trim)
+                .collect();
+            assert!(labels.len() >= 4, "{name} jobs: {labels:?}");
+            for label in &labels {
+                assert!(label.starts_with("ubuntu-"), "{name} label {label}");
+            }
+            assert!(!yaml.contains("self-hosted"), "{name} must not self-host");
         }
-        assert!(!yaml.contains("self-hosted"), "{name} must not self-host");
-    }
-    Ok(())
+        Ok(())
+    })
 }
 
 #[test]
@@ -177,60 +173,58 @@ fn w1_plan_prepare_index_and_contract_order() -> TestResult {
 
 #[test]
 fn w1_candidate_build_matches_mise_constructor() -> TestResult {
-    if ambient_identity_blocks() {
-        return Ok(());
-    }
-    let velnor = make_velnor_repo(VELNOR_CONFIG)?;
-    let prep = prepare(velnor.path())?;
-    let tree = render_staged_tree(&prep)?;
-    let yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
-    let catalog = ToolCatalog::pinned();
-    let want = CandidateBuild::new()?
-        .argv(&catalog)
-        .into_iter()
-        .map(|arg| arg.into_string().map_err(|_| "non-utf8"))
-        .collect::<Result<Vec<_>, _>>()?
-        .join(" ");
-    assert!(yaml.contains(&want), "preseed build misses {want}:\n{yaml}");
-    Ok(())
+    without_ambient_identity("w1_candidate_build_matches_mise_constructor", || {
+        let velnor = make_velnor_repo(VELNOR_CONFIG)?;
+        let prep = prepare(velnor.path())?;
+        let tree = render_staged_tree(&prep)?;
+        let yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
+        let catalog = ToolCatalog::pinned();
+        let want = CandidateBuild::new()?
+            .argv(&catalog)
+            .into_iter()
+            .map(|arg| arg.into_string().map_err(|_| "non-utf8"))
+            .collect::<Result<Vec<_>, _>>()?
+            .join(" ");
+        assert!(yaml.contains(&want), "preseed build misses {want}:\n{yaml}");
+        Ok(())
+    })
 }
 
 #[test]
 fn w1_validators_carry_deny_machete_zizmor_in_order() -> TestResult {
-    if ambient_identity_blocks() {
-        return Ok(());
-    }
-    let velnor = make_velnor_repo(VELNOR_CONFIG)?;
-    let tree = render_staged_tree(&prepare(velnor.path())?)?;
-    let yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
-    assert!(!yaml.contains("  policy:"), "no umbrella:\n{yaml}");
-    let deny_at = yaml.find("  cargo-deny:").ok_or("deny job")?;
-    let machete_at = yaml.find("  cargo-machete:").ok_or("machete job")?;
-    let zizmor_at = yaml.find("  zizmor:").ok_or("zizmor job")?;
-    assert!(
-        deny_at < machete_at && machete_at < zizmor_at,
-        "validator order:\n{yaml}"
-    );
-    let deny = window(yaml, "  cargo-deny:", "  cargo-machete:")?;
-    let machete = window(yaml, "  cargo-machete:", "  plan:")?;
-    let zizmor = window(yaml, "  zizmor:", "\nzzz-no-such-job:")?;
-    assert!(deny.contains("Run cargo-deny"), "deny step:\n{deny}");
-    assert!(
-        machete.contains("Run cargo-machete"),
-        "machete step:\n{machete}"
-    );
-    assert!(zizmor.contains("Run zizmor"), "zizmor step:\n{zizmor}");
-    let catalog = ToolCatalog::pinned();
-    assert!(
-        zizmor.contains(&catalog.tool_spec(PinnedTool::Zizmor)),
-        "{zizmor}"
-    );
-    assert!(zizmor.contains("--no-online-audits"), "{zizmor}");
-    assert!(
-        zizmor.contains("zizmor --no-online-audits --config .zizmor.yml .github/workflows"),
-        "zizmor input+config:\n{zizmor}"
-    );
-    Ok(())
+    without_ambient_identity("w1_validators_carry_deny_machete_zizmor_in_order", || {
+        let velnor = make_velnor_repo(VELNOR_CONFIG)?;
+        let tree = render_staged_tree(&prepare(velnor.path())?)?;
+        let yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
+        assert!(!yaml.contains("  policy:"), "no umbrella:\n{yaml}");
+        let deny_at = yaml.find("  cargo-deny:").ok_or("deny job")?;
+        let machete_at = yaml.find("  cargo-machete:").ok_or("machete job")?;
+        let zizmor_at = yaml.find("  zizmor:").ok_or("zizmor job")?;
+        assert!(
+            deny_at < machete_at && machete_at < zizmor_at,
+            "validator order:\n{yaml}"
+        );
+        let deny = window(yaml, "  cargo-deny:", "  cargo-machete:")?;
+        let machete = window(yaml, "  cargo-machete:", "  plan:")?;
+        let zizmor = window(yaml, "  zizmor:", "\nzzz-no-such-job:")?;
+        assert!(deny.contains("Run cargo-deny"), "deny step:\n{deny}");
+        assert!(
+            machete.contains("Run cargo-machete"),
+            "machete step:\n{machete}"
+        );
+        assert!(zizmor.contains("Run zizmor"), "zizmor step:\n{zizmor}");
+        let catalog = ToolCatalog::pinned();
+        assert!(
+            zizmor.contains(&catalog.tool_spec(PinnedTool::Zizmor)),
+            "{zizmor}"
+        );
+        assert!(zizmor.contains("--no-online-audits"), "{zizmor}");
+        assert!(
+            zizmor.contains("zizmor --no-online-audits --config .zizmor.yml .github/workflows"),
+            "zizmor input+config:\n{zizmor}"
+        );
+        Ok(())
+    })
 }
 
 #[test]
@@ -343,15 +337,14 @@ fn w1_actionlint_vars_emit_exact_v1_set() -> TestResult {
 
 #[test]
 fn w1_pr_workflows_carry_no_msrv() -> TestResult {
-    if ambient_identity_blocks() {
-        return Ok(());
-    }
-    let (_repo, consumer, _alint) = preview_both(config_with_branch())?;
-    let velnor = make_velnor_repo(VELNOR_CONFIG)?;
-    let tree = render_staged_tree(&prepare(velnor.path())?)?;
-    let velnor_yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
-    for (name, yaml) in [("consumer", consumer.as_str()), ("velnor", velnor_yaml)] {
-        assert!(!yaml.to_lowercase().contains("msrv"), "{name} leaks msrv");
-    }
-    Ok(())
+    without_ambient_identity("w1_pr_workflows_carry_no_msrv", || {
+        let (_repo, consumer, _alint) = preview_both(config_with_branch())?;
+        let velnor = make_velnor_repo(VELNOR_CONFIG)?;
+        let tree = render_staged_tree(&prepare(velnor.path())?)?;
+        let velnor_yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
+        for (name, yaml) in [("consumer", consumer.as_str()), ("velnor", velnor_yaml)] {
+            assert!(!yaml.to_lowercase().contains("msrv"), "{name} leaks msrv");
+        }
+        Ok(())
+    })
 }

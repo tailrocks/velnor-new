@@ -9,7 +9,9 @@ use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::WORKFLOW_PATH;
 
-use crate::impl_common::{TestResult, config_with_branch, git, make_repo};
+use crate::impl_common::{
+    TestResult, config_with_branch, git, make_repo, without_ambient_identity,
+};
 
 /// Emitted plan-job ID.
 const PLAN_JOB_ID: &str = "plan";
@@ -171,11 +173,6 @@ fn make_velnor_repo() -> Result<tempfile::TempDir, Box<dyn std::error::Error>> {
     Ok(repo)
 }
 
-/// Skip only when an ambient non-canonical identity would fail the fixture.
-fn ambient_identity_blocks() -> bool {
-    std::env::var("GITHUB_REPOSITORY").is_ok_and(|hint| hint != "tailrocks/velnor-new")
-}
-
 /// `MISE_CARGO_HOME` value carried by one rendered step body, if any.
 fn cargo_home_of(body: &str) -> Option<String> {
     body.lines().find_map(|line| {
@@ -212,21 +209,25 @@ fn plan_fetch_check_and_plan_share_one_cargo_home() -> TestResult {
 
 #[test]
 fn preseed_plan_installs_before_build_and_check_generated() -> TestResult {
-    if ambient_identity_blocks() {
-        return Ok(());
-    }
-    let repo = make_velnor_repo()?;
-    let yaml = workflow_yaml(repo.path())?;
-    let steps = plan_steps(&yaml);
-    let prepare_at = step_index(&steps, "Prepare pinned tools").ok_or("missing Prepare step")?;
-    let build_at = steps
-        .iter()
-        .position(|(step, _)| step.contains("Build helper"))
-        .ok_or("missing Build helper step")?;
-    let check_at = step_index(&steps, "Check generated files").ok_or("missing Check step")?;
-    assert!(
-        prepare_at < build_at && build_at < check_at,
-        "install < build < generate: {steps:?}"
-    );
-    Ok(())
+    without_ambient_identity(
+        "preseed_plan_installs_before_build_and_check_generated",
+        || {
+            let repo = make_velnor_repo()?;
+            let yaml = workflow_yaml(repo.path())?;
+            let steps = plan_steps(&yaml);
+            let prepare_at =
+                step_index(&steps, "Prepare pinned tools").ok_or("missing Prepare step")?;
+            let build_at = steps
+                .iter()
+                .position(|(step, _)| step.contains("Build helper"))
+                .ok_or("missing Build helper step")?;
+            let check_at =
+                step_index(&steps, "Check generated files").ok_or("missing Check step")?;
+            assert!(
+                prepare_at < build_at && build_at < check_at,
+                "install < build < generate: {steps:?}"
+            );
+            Ok(())
+        },
+    )
 }

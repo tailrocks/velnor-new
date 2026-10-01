@@ -3,11 +3,11 @@
 use std::collections::BTreeMap;
 use std::fs;
 
-use crate::impl_common::{TestResult, config_with_branch, err_of, make_repo};
+use crate::impl_common::{TestResult, config_with_branch, err_of, make_repo, plan_for};
 use velnor_actions_orchestrator::{
     CONFLICTING_TOOL_VALUES, DEFAULT_EXTERNAL_DATA_MAX_AGE_SECS, ExternalDataFreshness, ToolParse,
     UNSUPPORTED_TOOL_VALUE, check_tool_inputs, coverage_schema_known, critical_path_for_groups,
-    external_data_kind, may_skip_external_data, plan_text, prepare, render_critical_path,
+    external_data_kind, may_skip_external_data, prepare, render_critical_path,
     reuse_eligible_for_schema, tool_conflicts,
 };
 
@@ -57,7 +57,7 @@ fn tool_inputs_report_presence_parse_values_digests() -> TestResult {
     );
     assert_eq!(values.get(&("mise.toml", "tools.rust")), Some(&"1.85.0"));
     assert!(tool_conflicts(&prep.discovery.tool_checks).is_empty());
-    let text = plan_text(&prep);
+    let text = plan_for(&prep)?;
     assert!(text.contains("mise.toml is read-only input"), "{text}");
     assert_eq!(check_tool_inputs(root), prep.discovery.tool_checks);
     Ok(())
@@ -163,7 +163,7 @@ fn unknown_extension_schema_disables_reuse_and_coverage() -> TestResult {
 fn plan_reports_structural_critical_path() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     let prep = prepare(repo.path())?;
-    let text = plan_text(&prep);
+    let text = plan_for(&prep)?;
     let line = text
         .lines()
         .find(|line| line.contains("Critical path:"))
@@ -311,7 +311,7 @@ fn clippy_configs_schedule_in_separate_groups() -> TestResult {
     all.sort_unstable();
     assert_eq!(union, all, "no check removed");
     assert!(
-        plan_text(&prep).contains("Clippy memory groups: 2; barriers: 1"),
+        plan_for(&prep)?.contains("Clippy memory groups: 2; barriers: 1"),
         "schedule reported"
     );
     Ok(())
@@ -325,7 +325,7 @@ fn single_clippy_config_needs_no_barrier() -> TestResult {
     assert_eq!(memory.groups.len(), 1);
     assert_eq!(memory.barriers, 0);
     assert!(
-        plan_text(&prep).contains("Clippy memory groups: 1; barriers: 0"),
+        plan_for(&prep)?.contains("Clippy memory groups: 1; barriers: 0"),
         "schedule reported"
     );
     Ok(())

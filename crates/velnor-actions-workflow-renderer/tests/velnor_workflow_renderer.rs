@@ -37,6 +37,8 @@ mod impl_renderer_planclose;
 mod impl_renderer_planformat;
 #[path = "impl_renderer_preseed.rs"]
 mod impl_renderer_preseed;
+#[path = "impl_renderer_preseed_verify.rs"]
+mod impl_renderer_preseed_verify;
 #[path = "impl_renderer_protocol.rs"]
 mod impl_renderer_protocol;
 #[path = "impl_renderer_release_config.rs"]
@@ -65,8 +67,6 @@ mod impl_renderer_setup;
 mod impl_renderer_steps;
 #[path = "impl_renderer_sweep.rs"]
 mod impl_renderer_sweep;
-#[path = "impl_renderer_tasksteps.rs"]
-mod impl_renderer_tasksteps;
 #[path = "impl_renderer_token_hygiene.rs"]
 mod impl_renderer_token_hygiene;
 #[path = "impl_renderer_toolchain_contract.rs"]

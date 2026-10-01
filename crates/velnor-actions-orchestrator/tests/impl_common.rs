@@ -8,10 +8,60 @@ use std::time::SystemTime;
 
 use tempfile::TempDir;
 use velnor_actions_contract::{MatrixReport, Plan};
-use velnor_actions_orchestrator::{OrchestratorError, plan_internal};
+use velnor_actions_orchestrator::{
+    GenerationPreparation, OrchestratorError, finalized_jobs, plan_internal, plan_text,
+};
 
 /// Test error shortcut.
 pub(crate) type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+/// Plan text over the same finalized jobs `generate` writes.
+///
+/// Tests asserting plan content go through this helper so they cover
+/// the plan/generate parity path (validators included) instead of a
+/// pre-merge IR projection no user ever sees.
+pub(crate) fn plan_for(prep: &GenerationPreparation) -> Result<String, Box<dyn std::error::Error>> {
+    Ok(plan_text(prep, &finalized_jobs(prep)?))
+}
+
+/// Marker proving the current process already scrubbed ambient identity.
+const SCRUBBED_ENV: &str = "VELNOR_TEST_SCRUBBED_IDENTITY";
+
+/// True when ambient `GITHUB_REPOSITORY` names a non-canonical repo.
+///
+/// Fork CI exports the fork identity; Velnor-policy fixtures carry the
+/// canonical origin, so an in-process `prepare` would fail closed on
+/// the ambient hint instead of exercising the fixture.
+pub(crate) fn ambient_identity_blocks() -> bool {
+    std::env::var("GITHUB_REPOSITORY").is_ok_and(|hint| hint != "tailrocks/velnor-new")
+}
+
+/// Run Velnor-policy assertions with ambient identity scrubbed.
+///
+/// When [`ambient_identity_blocks`], re-executes the calling test in a
+/// child with `GITHUB_REPOSITORY` removed (child env needs no `unsafe`,
+/// which `unsafe_code = "forbid"` bars even in tests) and requires
+/// exactly one passing child run — a missing or failing child fails
+/// loudly, never green. Otherwise runs `inner` in-process. `test` is
+/// the bare test name, which must be unique in the binary.
+pub(crate) fn without_ambient_identity(
+    test: &str,
+    inner: impl FnOnce() -> TestResult,
+) -> TestResult {
+    if std::env::var(SCRUBBED_ENV).is_err() && ambient_identity_blocks() {
+        let output = StdCommand::new(std::env::current_exe()?)
+            .arg(test)
+            .env(SCRUBBED_ENV, "1")
+            .env_remove("GITHUB_REPOSITORY")
+            .output()?;
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(output.status.success(), "{test}: {stdout}{stderr}");
+        assert!(stdout.contains("1 passed"), "{test}: {stdout}");
+        return Ok(());
+    }
+    inner()
+}
 
 /// Snapshot map shortcut.
 pub(crate) type Snapshot = BTreeMap<String, (Vec<u8>, SystemTime)>;

@@ -7,9 +7,11 @@
 use std::fs;
 
 use tempfile::TempDir;
-use velnor_actions_orchestrator::{plan_text, prepare, render_staged_tree};
+use velnor_actions_orchestrator::{prepare, render_staged_tree};
 
-use crate::impl_common::{TestResult, err_of, fixture_manifest_json, git, write_nextest_task};
+use crate::impl_common::{
+    TestResult, err_of, fixture_manifest_json, git, plan_for, write_nextest_task,
+};
 
 /// Config with one `full` configuration requesting `process` and `pty`.
 const FULL_CONFIG: &str = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[[stacks.rust.configurations]]\nname = \"full\"\nfeatures = [\"process\", \"pty\"]\ntarget = \"host\"\n";
@@ -88,7 +90,7 @@ fn config_features_intersect_per_crate() -> TestResult {
         vec!["process".to_owned(), "pty".to_owned()]
     );
     assert_eq!(fallback.applied, vec!["default".to_owned()]);
-    let plan = plan_text(&prep);
+    let plan = plan_for(&prep)?;
     assert!(
         plan.contains(
             "Features: fuzz [full] declares none of [process,pty]; using default features"
@@ -154,7 +156,7 @@ fn testless_crate_omits_test_runners() -> TestResult {
         .collect();
     assert_eq!(app_nextest.len(), 1, "app keeps its nextest group");
     assert!(!app_nextest[0].no_test_targets);
-    let plan = plan_text(&prep);
+    let plan = plan_for(&prep)?;
     assert!(
         plan.contains("Ineligible: stack/rust/crates/fuzz/nextest/full has no test targets"),
         "fuzz ineligibility recorded:\n{plan}"
@@ -212,7 +214,7 @@ fn partial_feature_subset_applies_intersection() -> TestResult {
         "fuzz applies its declared subset"
     );
     assert_eq!(prep.discovery.feature_fallbacks.len(), 2);
-    let plan = plan_text(&prep);
+    let plan = plan_for(&prep)?;
     for line in [
         "Features: app [mixed] requested [extra,process]; applied [process]",
         "Features: fuzz [mixed] requested [extra,process]; applied [extra]",

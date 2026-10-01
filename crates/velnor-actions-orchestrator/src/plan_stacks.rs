@@ -26,6 +26,8 @@ pub(crate) fn stacks_section(out: &mut String, prep: &GenerationPreparation) {
                 );
             }
         }
+    } else if prep.discovery.workspaces.is_empty() {
+        push(out, "  Rust: none detected");
     } else {
         push(out, "  Rust: selected");
     }

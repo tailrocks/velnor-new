@@ -3,7 +3,6 @@
 //! Declared via `#[path]` from `matrix_step.rs` under `cfg(test)`.
 
 use super::*;
-use velnor_actions_workflow_renderer::task_steps as legs;
 
 /// Obligation fixture for step construction.
 fn obligation() -> CrateObligation {
@@ -36,7 +35,7 @@ fn identity_env_contract_enforces_in_every_build() {
     let mut missing = identity.clone();
     missing.remove(TASK_ID_ENV);
     assert!(check_identity_env_contract(&missing, task_id).is_err());
-    assert_eq!(legs::LEG_TASK_ID_ENV, TASK_ID_ENV);
+    assert_eq!(OBLIGATION_TASK_ID_ENV, TASK_ID_ENV);
 }
 
 #[test]

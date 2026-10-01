@@ -1,9 +1,17 @@
 //! P10 NUL-path cases: exact path bytes (Unicode, spaces, newlines,
 //! deletes, renames, staged/unstaged union, non-UTF-8) through the typed
 //! plan boundary.
+//!
+//! APFS rejects non-UTF-8 names at creation, so the committed case builds
+//! its commit through git plumbing ([`commit_with_raw_name`]) and runs
+//! everywhere; the untracked case cannot exist on such filesystems (an
+//! untracked path must be created to be listed) and reports a loud
+//! `paths: ... status=SKIP` diagnostic instead of asserting.
 
 use std::fs;
 use std::path::Path;
+#[cfg(unix)]
+use std::process::Command as StdCommand;
 
 use velnor_actions_contract::Plan;
 use velnor_actions_orchestrator::{plan_internal, resolve_root};
@@ -261,6 +269,9 @@ fn untracked_non_utf8_broadens_with_explicit_tag() -> TestResult {
     let raw = b"\xffuntracked.rs";
     let path = root.join(std::ffi::OsStr::from_bytes(raw));
     if fs::write(&path, "pub fn f() {}\n").is_err() {
+        eprintln!(
+            "paths: case=untracked_non_utf8 status=SKIP note=filesystem-rejects-non-utf8-names"
+        );
         return Ok(());
     }
     let (plan, warnings) = plan_pr(root, Some(&base), &base)?;
@@ -279,19 +290,90 @@ fn untracked_non_utf8_broadens_with_explicit_tag() -> TestResult {
     Ok(())
 }
 
+/// Commit a tree entry whose name bytes no filesystem may carry.
+///
+/// `git update-index --cacheinfo` inserts the blob under raw name bytes
+/// without touching the worktree, so the committed non-UTF-8 path runs
+/// hermetically — including on APFS, which rejects such names at
+/// creation. HEAD advances to the new commit (the plan boundary requires
+/// the checkout to match `head`) and the index is reset to match.
+#[cfg(unix)]
+fn commit_with_raw_name(
+    root: &Path,
+    base: &str,
+    raw: &[u8],
+) -> Result<String, Box<dyn std::error::Error>> {
+    use std::ffi::OsString;
+    use std::os::unix::ffi::OsStringExt;
+
+    fn git_output(args: &[OsString], cwd: &Path) -> Result<String, Box<dyn std::error::Error>> {
+        let output = StdCommand::new("git")
+            .args(args)
+            .current_dir(cwd)
+            .output()?;
+        assert!(
+            output.status.success(),
+            "git {args:?} failed in {}",
+            cwd.display()
+        );
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned())
+    }
+
+    let hash_child = StdCommand::new("git")
+        .args(["hash-object", "-w", "-t", "blob", "--stdin"])
+        .current_dir(root)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .spawn()?;
+    let hash_out = hash_child.wait_with_output()?;
+    assert!(hash_out.status.success(), "hash-object failed");
+    let blob = String::from_utf8_lossy(&hash_out.stdout).trim().to_owned();
+    assert_eq!(blob.len(), 40, "blob sha: {blob}");
+
+    let mode = OsString::from(format!("100644,{blob},"));
+    let mut spec = mode.into_vec();
+    spec.extend_from_slice(raw);
+    let cacheinfo = OsString::from_vec(spec);
+    git_output(
+        &[
+            OsString::from("update-index"),
+            OsString::from("--add"),
+            OsString::from("--cacheinfo"),
+            cacheinfo,
+        ],
+        root,
+    )?;
+    let tree = git_output(&[OsString::from("write-tree")], root)?;
+    let head = git_output(
+        &[
+            OsString::from("commit-tree"),
+            OsString::from(tree),
+            OsString::from("-p"),
+            OsString::from(base),
+            OsString::from("-m"),
+            OsString::from("two"),
+        ],
+        root,
+    )?;
+    git_output(
+        &[
+            OsString::from("update-ref"),
+            OsString::from("HEAD"),
+            OsString::from(&head),
+        ],
+        root,
+    )?;
+    git_output(&[OsString::from("reset"), OsString::from("-q")], root)?;
+    Ok(head)
+}
+
 #[test]
 #[cfg(unix)]
 fn non_utf8_path_broadens_explicitly() -> TestResult {
-    use std::os::unix::ffi::OsStrExt;
     let repo = make_ws_repo(false)?;
     let root = repo.path();
     let base = commit(root, "one")?;
-    let raw = b"alpha/src/\xffinvalid.rs";
-    let path = root.join(std::ffi::OsStr::from_bytes(raw));
-    if fs::write(&path, "pub fn f() {}\n").is_err() {
-        return Ok(());
-    }
-    let head = commit(root, "two")?;
+    let head = commit_with_raw_name(root, &base, b"alpha/src/\xffinvalid.rs")?;
     let (plan, warnings) = plan_pr(root, Some(&base), &head)?;
     assert!(
         plan.task_ids.iter().any(|id| id.contains("alpha"))

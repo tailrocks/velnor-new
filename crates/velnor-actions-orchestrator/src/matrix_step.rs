@@ -7,11 +7,55 @@ use velnor_actions_mise::{
     ISOLATION_ENV, NO_AUTO_INSTALL_ENV, PREPARE_PINNED_TOOLS_STEP, PinnedTool, PreparePinnedTools,
     ToolCatalog, ToolHomes,
 };
+use velnor_actions_rust::TaskKind;
+use velnor_actions_workflow_renderer::plan_format::FORMAT_STEP_NAME;
 use velnor_actions_workflow_renderer::steps::{INTERNAL_OP_ENV, STAGED_BINARY_PREFIX};
 
 use crate::OrchestratorError;
 use crate::task_report::{DOWNSTREAM_IDS_ENV, EXIT_CODE_ENV, REPORT_OP, TASK_ID_ENV};
 use crate::utf8::{strings_of, strings_of_env};
+
+/// `Clippy` obligation step name.
+pub(crate) const CLIPPY_NAME: &str = "Clippy";
+/// `Build test executables` obligation step name.
+pub(crate) const BUILD_TEST_NAME: &str = "Build test executables";
+/// `Unit and integration tests` obligation step name.
+pub(crate) const TEST_NAME: &str = "Unit and integration tests";
+/// `Doctests` obligation step name.
+pub(crate) const DOCTESTS_NAME: &str = "Doctests";
+/// `Documentation` obligation step name.
+pub(crate) const DOCUMENTATION_NAME: &str = "Documentation";
+
+/// Env key carrying the obligation's task ID (report lookup key).
+pub(crate) const OBLIGATION_TASK_ID_ENV: &str = "VELNOR_TASK_ID";
+/// Env key carrying the obligation's task digest.
+pub(crate) const OBLIGATION_TASK_DIGEST_ENV: &str = "VELNOR_TASK_DIGEST";
+/// Env key carrying the obligation's matrix ID.
+pub(crate) const OBLIGATION_MATRIX_ID_ENV: &str = "VELNOR_MATRIX_ID";
+/// Env key carrying the obligation's matrix key.
+pub(crate) const OBLIGATION_MATRIX_KEY_ENV: &str = "VELNOR_MATRIX_KEY";
+
+/// Human step name for one obligation; shards name their index.
+pub(crate) fn step_name_for(kind: TaskKind, task_id: &str) -> String {
+    let base = match kind {
+        TaskKind::Fmt => FORMAT_STEP_NAME,
+        TaskKind::Clippy => CLIPPY_NAME,
+        TaskKind::Build => BUILD_TEST_NAME,
+        TaskKind::Test | TaskKind::Nextest => TEST_NAME,
+        TaskKind::Doctest => DOCTESTS_NAME,
+        TaskKind::Doc => DOCUMENTATION_NAME,
+    };
+    match shard_suffix(task_id) {
+        Some((index, count)) => format!("{base} (shard {index} of {count})"),
+        None => base.to_owned(),
+    }
+}
+
+/// Shard index/count from a trailing `/shard-<index>-of-<count>` segment.
+pub(crate) fn shard_suffix(task_id: &str) -> Option<(u32, u32)> {
+    let (_, index, count) = velnor_actions_contract::split_shard_suffix(task_id)?;
+    Some((index, count))
+}
 
 /// Crate-job driver tools: Rust plus MBX only on MBX evidence.
 #[must_use]
@@ -137,12 +181,14 @@ pub(crate) fn obligation_identity_env(
     matrix_id: &str,
     matrix_key: &str,
 ) -> BTreeMap<String, String> {
-    use velnor_actions_workflow_renderer::task_steps as legs;
     BTreeMap::from([
-        (legs::LEG_TASK_ID_ENV.to_owned(), task_id.to_owned()),
-        (legs::LEG_TASK_DIGEST_ENV.to_owned(), task_digest.to_owned()),
-        (legs::LEG_MATRIX_ID_ENV.to_owned(), matrix_id.to_owned()),
-        (legs::LEG_MATRIX_KEY_ENV.to_owned(), matrix_key.to_owned()),
+        (OBLIGATION_TASK_ID_ENV.to_owned(), task_id.to_owned()),
+        (
+            OBLIGATION_TASK_DIGEST_ENV.to_owned(),
+            task_digest.to_owned(),
+        ),
+        (OBLIGATION_MATRIX_ID_ENV.to_owned(), matrix_id.to_owned()),
+        (OBLIGATION_MATRIX_KEY_ENV.to_owned(), matrix_key.to_owned()),
     ])
 }
 

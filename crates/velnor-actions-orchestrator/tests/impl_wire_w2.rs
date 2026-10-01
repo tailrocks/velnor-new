@@ -6,12 +6,12 @@ use std::path::Path;
 use serde_json::json;
 use velnor_actions_contract as C;
 use velnor_actions_orchestrator::{
-    decisions::plan_json_path, plan_outputs, plan_text, prepare, publish_plan_files,
+    decisions::plan_json_path, plan_outputs, prepare, publish_plan_files,
 };
 
 use super::impl_common::{
     TestResult, anchor_id, anchor_repo, config_with_branch, err_of, git, git_line, make_repo,
-    passing_reports, plan_for_source_change, write_nextest_task,
+    passing_reports, plan_for, plan_for_source_change, write_nextest_task,
 };
 use super::impl_orch_core::{
     WireResult, has_warning, manifest_for, merge, merge_request, merge_request_for, plan_value,
@@ -312,7 +312,7 @@ fn fork_plans_use_pr_trust() -> TestResult {
 fn matrix_reports_entries_per_task() -> TestResult {
     let dir = make_repo(config_with_branch())?;
     let prep = prepare(dir.path())?;
-    let text = plan_text(&prep);
+    let text = plan_for(&prep)?;
     assert!(text.contains("Entries:"), "{text}");
     for g in &prep.discovery.task_groups {
         assert!(g.no_test_targets || text.contains(&g.task_id), "{text}");

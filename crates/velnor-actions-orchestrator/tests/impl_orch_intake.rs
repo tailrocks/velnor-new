@@ -7,12 +7,12 @@ use tempfile::TempDir;
 use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_mise::{GitRequest, is_allowed_git_verb};
 use velnor_actions_orchestrator::{
-    GenerateOptions, OrchestratorError, generate, init_config, plan_text, prepare, resolve_root,
+    GenerateOptions, OrchestratorError, generate, init_config, prepare, resolve_root,
 };
 use velnor_actions_rust::DetectionStatus;
 
 use crate::impl_common::{
-    TestResult, config_with_branch, err_of, make_repo, snapshot, write_nextest_task,
+    TestResult, config_with_branch, err_of, make_repo, plan_for, snapshot, write_nextest_task,
 };
 
 /// Selected detection manifests in discovery order.
@@ -57,7 +57,7 @@ fn intake_tool_inputs_untouched_and_reported() -> TestResult {
     fs::write(root.join("mise.lock"), "{}\n")?;
     let before = snapshot(root)?;
     let prep = prepare(root)?;
-    let text = plan_text(&prep);
+    let text = plan_for(&prep)?;
     for fragment in [
         "mise.toml is read-only input",
         "mise.lock is read-only input",
@@ -311,7 +311,7 @@ fn intake_default_budgets_are_conservative_and_reported() -> TestResult {
     assert_eq!(prep.config.workflow.max_parallel_jobs, 2);
     assert_eq!(prep.config.resources.compiler_process_budget, 2);
     assert_eq!(prep.config.resources.test_process_budget, 2);
-    let text = plan_text(&prep);
+    let text = plan_for(&prep)?;
     assert!(text.contains("Parallel:"), "budgets reported:\n{text}");
     Ok(())
 }
@@ -328,7 +328,7 @@ fn intake_missing_tool_files_recommend_without_writes() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     let root = repo.path();
     let prep = prepare(root)?;
-    let text = plan_text(&prep);
+    let text = plan_for(&prep)?;
     for fragment in [
         "mise.toml not found",
         "mise.lock not found",

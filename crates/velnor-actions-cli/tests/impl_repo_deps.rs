@@ -65,6 +65,9 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
         // Reviewed OS shim for the P09 atomic directory exchange; already
         // in the lockfile via tempfile, zero new crates.
         "rustix",
+        // Reviewed hash impl for the pre-seed manifest writer (SHA-256 of
+        // the fresh helper); pure Rust, no enabled features beyond default.
+        "sha2",
     ];
     for (dir, _) in MEMBERS {
         let body = manifest(dir)?;

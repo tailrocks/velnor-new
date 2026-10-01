@@ -12,6 +12,8 @@ use velnor_actions_workflow_renderer::steps::{
     TASK_ARTIFACTS_DIR, cache_action_step, mbx_objects_step,
 };
 
+use crate::impl_common::without_ambient_identity;
+
 /// Test error shortcut.
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -97,19 +99,21 @@ fn make_sample_repo(sample: &str) -> Result<TempDir, Box<dyn std::error::Error>>
 
 #[test]
 fn repo_config_sample_parses_through_prepare() -> TestResult {
-    let sample = repo_sample_text()?;
-    let repo = make_sample_repo(&sample)?;
-    let prep = prepare(repo.path())?;
-    assert_eq!(prep.config.schema, 1);
-    assert_eq!(
-        prep.config.workflow.policy,
-        WorkflowPolicy::VelnorRepositoryV1
-    );
-    assert_eq!(prep.config.discovery.exclude, vec!["fixtures/**"]);
-    // The live sample pins the branch: config wins over origin/HEAD so CI
-    // checkouts (which create no origin/HEAD) still resolve the branch.
-    assert_eq!(prep.default_branch, "main");
-    Ok(())
+    without_ambient_identity("repo_config_sample_parses_through_prepare", || {
+        let sample = repo_sample_text()?;
+        let repo = make_sample_repo(&sample)?;
+        let prep = prepare(repo.path())?;
+        assert_eq!(prep.config.schema, 1);
+        assert_eq!(
+            prep.config.workflow.policy,
+            WorkflowPolicy::VelnorRepositoryV1
+        );
+        assert_eq!(prep.config.discovery.exclude, vec!["fixtures/**"]);
+        // The live sample pins the branch: config wins over origin/HEAD so CI
+        // checkouts (which create no origin/HEAD) still resolve the branch.
+        assert_eq!(prep.default_branch, "main");
+        Ok(())
+    })
 }
 
 #[test]

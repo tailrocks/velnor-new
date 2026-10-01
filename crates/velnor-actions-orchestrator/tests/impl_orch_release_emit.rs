@@ -4,10 +4,13 @@ use std::fs;
 
 use tempfile::TempDir;
 use velnor_actions_orchestrator::{
-    GenerateOptions, OrchestratorError, generate, plan_text, prepare, render_staged_tree,
+    GenerateOptions, OrchestratorError, generate, prepare, render_staged_tree,
 };
 
-use crate::impl_common::{TestResult, config_with_branch, err_of, git, git_line, make_repo};
+use crate::impl_common::{
+    TestResult, config_with_branch, err_of, git, git_line, make_repo, plan_for,
+    without_ambient_identity,
+};
 
 /// Release-enabled consumer config selecting the fixture crate.
 const OIDC_CONFIG: &str = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[stacks.rust.release]\nenabled = true\npackages = [\"demo\"]\n";
@@ -63,7 +66,7 @@ fn release_disabled_emits_base_tree_only() -> TestResult {
 #[test]
 fn plan_lists_release_files_iff_enabled() -> TestResult {
     let repo = release_repo(OIDC_CONFIG)?;
-    let plan = plan_text(&prepare(repo.path())?);
+    let plan = plan_for(&prepare(repo.path())?)?;
     for path in [
         ".github/release-plz-bootstrap.toml",
         ".github/release-plz.toml",
@@ -72,7 +75,7 @@ fn plan_lists_release_files_iff_enabled() -> TestResult {
         assert!(plan.contains(path), "plan names {path}:\n{plan}");
     }
     let bare = make_repo(config_with_branch())?;
-    let bare_plan = plan_text(&prepare(bare.path())?);
+    let bare_plan = plan_for(&prepare(bare.path())?)?;
     assert!(
         !bare_plan.contains("velnor-release.yml") && !bare_plan.contains("release-plz"),
         "no release inventory without opt-in:\n{bare_plan}"
@@ -275,20 +278,19 @@ fn release_bootstrap_mismatch_fails_closed() -> TestResult {
 
 #[test]
 fn release_velnor_policy_rejects_enabled() -> TestResult {
-    if std::env::var("GITHUB_REPOSITORY").is_ok() {
-        return Ok(()); // Precondition: no ambient repository identity.
-    }
-    let config = "schema = 1\n[workflow]\ndefault_branch = \"testmain\"\npolicy = \"velnor-repository-v1\"\n[stacks.rust.release]\nenabled = true\npackages = [\"demo\"]\n";
-    let repo = make_repo(config)?;
-    let git_config = repo.path().join(".git/config");
-    let mut text = fs::read_to_string(&git_config)?;
-    text.push_str("[remote \"origin\"]\n\turl = https://github.com/tailrocks/velnor-new.git\n");
-    fs::write(&git_config, text)?;
-    let prep = prepare(repo.path())?;
-    let err = err_of(render_staged_tree(&prep), "velnor policy")?;
-    assert!(
-        err.to_string().contains("release_requires_consumer_policy"),
-        "got {err}"
-    );
-    Ok(())
+    without_ambient_identity("release_velnor_policy_rejects_enabled", || {
+        let config = "schema = 1\n[workflow]\ndefault_branch = \"testmain\"\npolicy = \"velnor-repository-v1\"\n[stacks.rust.release]\nenabled = true\npackages = [\"demo\"]\n";
+        let repo = make_repo(config)?;
+        let git_config = repo.path().join(".git/config");
+        let mut text = fs::read_to_string(&git_config)?;
+        text.push_str("[remote \"origin\"]\n\turl = https://github.com/tailrocks/velnor-new.git\n");
+        fs::write(&git_config, text)?;
+        let prep = prepare(repo.path())?;
+        let err = err_of(render_staged_tree(&prep), "velnor policy")?;
+        assert!(
+            err.to_string().contains("release_requires_consumer_policy"),
+            "got {err}"
+        );
+        Ok(())
+    })
 }

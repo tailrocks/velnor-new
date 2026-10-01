@@ -203,6 +203,28 @@ pub fn render_workflow_ir_strict(
     ctx: &RenderContext,
     mise: &MiseSetup,
 ) -> Result<String, RenderError> {
+    let jobs = finalize_jobs(ir, policy, support, ctx, mise)?;
+    render_merged(ir, &jobs, ctx)
+}
+
+/// Finalize jobs exactly as `generate` writes them: policy merge, setup
+/// insertion, then every closure and the final fan-in.
+///
+/// `plan` lists these jobs (validators included) so its job table,
+/// step counts, and action pins match the written YAML by construction
+/// instead of echoing the pre-merge IR.
+///
+/// # Errors
+///
+/// Returns [`RenderError`] for invalid pins, context, IR, policy,
+/// missing setup/staging, or steps.
+pub fn finalize_jobs(
+    ir: &WorkflowIr,
+    policy: WorkflowPolicy,
+    support: Option<&VelnorSupportWorkflow>,
+    ctx: &RenderContext,
+    mise: &MiseSetup,
+) -> Result<BTreeMap<String, Job>, RenderError> {
     mise.validate()?;
     let mut jobs = merged_jobs(ir, policy, support, ctx)?;
     for (id, job) in &mut jobs {
@@ -223,75 +245,21 @@ pub fn render_workflow_ir_strict(
     closure::insert_task_closure(&mut jobs)?;
     closure::insert_final_closure(&mut jobs)?;
     final_steps::insert_final_fanin(&mut jobs)?;
-    render_merged(ir, &jobs, ctx)
+    Ok(jobs)
 }
 
-/// Assemble the exact two-file tree from rendered workflow bytes plus the
-/// actionlint crate's bytes (passed through, marker-checked).
-///
-/// Byte-identical to the pre-release tree: delegates with no extras.
-///
-/// # Errors
-///
-/// Returns [`RenderError`] for marker, token, or path failures.
-pub fn render_tree(
-    workflow_bytes: &str,
-    actionlint_bytes: &str,
-    version: &str,
-) -> Result<RenderedTree, RenderError> {
-    render_tree_with_extra(workflow_bytes, actionlint_bytes, &[], version)
-}
-
-/// Assemble the generated tree: base two files plus validated extras.
-///
-/// Extras (the release family) pass the same marker, token, and path
-/// gates; base-path collisions and duplicate paths fail closed. Files are
-/// sorted by path, so an empty `extra` renders exactly [`render_tree`].
-///
-/// # Errors
-///
-/// Returns [`RenderError`] for marker, token, path, or collision failures.
-pub fn render_tree_with_extra(
-    workflow_bytes: &str,
-    actionlint_bytes: &str,
-    extra: &[RenderedFile],
-    version: &str,
-) -> Result<RenderedTree, RenderError> {
-    marker::check_first_line(workflow_bytes, version)?;
-    marker::check_first_line(actionlint_bytes, version)?;
-    steps::scan_for_private_subcommands(workflow_bytes)?;
-    steps::scan_for_private_subcommands(actionlint_bytes)?;
-    guard::validate_tree_path(ACTIONLINT_PATH)?;
-    guard::validate_tree_path(WORKFLOW_PATH)?;
-    let mut files = vec![
-        RenderedFile {
-            path: ACTIONLINT_PATH.to_owned(),
-            bytes: actionlint_bytes.to_owned(),
-        },
-        RenderedFile {
-            path: WORKFLOW_PATH.to_owned(),
-            bytes: workflow_bytes.to_owned(),
-        },
-    ];
-    for file in extra {
-        marker::check_first_line(&file.bytes, version)?;
-        steps::scan_for_private_subcommands(&file.bytes)?;
-        guard::validate_tree_path(&file.path)?;
-        if file.path == ACTIONLINT_PATH || file.path == WORKFLOW_PATH {
-            return Err(RenderError::UnsafePath(format!(
-                "tree_path_collision:{}",
-                file.path
-            )));
-        }
-        files.push(file.clone());
-    }
-    files.sort_by(|left, right| left.path.cmp(&right.path));
-    for pair in files.windows(2) {
-        if pair[0].path == pair[1].path {
-            return Err(RenderError::UnsafePath("tree_path_duplicate".to_owned()));
+/// Sorted unique `uses:` refs across every action step (plan display).
+#[must_use]
+pub fn action_pins(jobs: &BTreeMap<String, Job>) -> Vec<String> {
+    let mut pins = std::collections::BTreeSet::new();
+    for job in jobs.values() {
+        for step in &job.steps {
+            if let velnor_actions_contract::StepKind::Action { uses, .. } = &step.kind {
+                pins.insert(uses.clone());
+            }
         }
     }
-    Ok(RenderedTree { files })
+    pins.into_iter().collect()
 }
 
 /// Validate context/IR plus policy merge and support invariants.

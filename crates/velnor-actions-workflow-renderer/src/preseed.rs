@@ -9,11 +9,15 @@
 //! Every pre-seed step name carries the trust-on-review marker so the
 //! weaker provenance is visible in CI logs, not silently implied.
 //!
-//! There is deliberately NO manifest self-verification step: the manifest
-//! and the binary are built from the same PR source, so any digest check
-//! the PR performs on its own bytes is circular trust — a trojaned merge
-//! would always pass. The manifest is an audit record, not a gate; the
-//! trust root is human review of the pre-seed source and workflow.
+//! Downloaders verify the manifest before staging (same shape as the
+//! candidate gate): schema 1, commit equal to this run's checked-out
+//! `$GITHUB_SHA`, the generator-rendered expected target, and a sha256
+//! recomputed over the downloaded binary. The commit anchor binds staged
+//! bytes to this run's checkout (a swapped or cross-run artifact fails
+//! closed) and the digest binds them across artifact transit; neither
+//! reviews the source itself — a trojaned PR writes a consistent
+//! manifest, so the trust root for pre-seed source stays human review
+//! of the pre-seed source and workflow, exactly as for candidates.
 
 use velnor_actions_contract::{CRATE_JOB_ID_PREFIX, Job, Step};
 
@@ -26,10 +30,6 @@ use crate::{
 
 /// Exact pre-seed helper artifact name (run-scoped, no wildcards).
 pub const PRESEED_ARTIFACT_NAME: &str = "velnor-preseed-helper";
-/// Directory holding the built helper binary plus its manifest.
-///
-/// Shell `run:` spelling only; the upload input uses [`PRESEED_OUTPUT_DIR_EXPR`].
-pub const PRESEED_OUTPUT_DIR: &str = "$RUNNER_TEMP/velnor/preseed-output";
 /// Directory receiving the downloaded pre-seed helper.
 ///
 /// Shell `run:` spelling only; the download input uses [`PRESEED_STAGE_DIR_EXPR`].
@@ -53,8 +53,18 @@ pub const PRESEED_MANIFEST_NAME: &str = "Write helper manifest (pre-seed trust-o
 pub const PRESEED_UPLOAD_NAME: &str = "Upload helper (pre-seed trust-on-review)";
 /// Display name of the pre-seed helper download step.
 pub const PRESEED_DOWNLOAD_NAME: &str = "Download helper (pre-seed trust-on-review)";
+/// Display name of the pre-seed manifest verification step.
+pub const PRESEED_VERIFY_MANIFEST_NAME: &str = "Verify helper manifest (pre-seed trust-on-review)";
 /// Display name of the pre-seed helper staging step.
 pub const PRESEED_STAGE_NAME: &str = "Stage helper (pre-seed trust-on-review)";
+/// Env key carrying the fresh binary path to the manifest op.
+pub const PRESEED_MANIFEST_BINARY_ENV: &str = "VELNOR_PRESEED_BINARY";
+/// Env key carrying the expanded manifest output directory.
+pub const PRESEED_MANIFEST_OUT_ENV: &str = "VELNOR_PRESEED_OUT";
+/// Env key carrying the literal target triple.
+pub const PRESEED_MANIFEST_TARGET_ENV: &str = "VELNOR_PRESEED_TARGET";
+/// Env key carrying the toolchain identity from the build vector.
+pub const PRESEED_MANIFEST_TOOLCHAIN_ENV: &str = "VELNOR_PRESEED_TOOLCHAIN";
 
 /// Pre-seed staging source: local build output or downloaded artifact.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -172,24 +182,17 @@ fn is_exact_version(version: &str) -> bool {
             .all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()))
 }
 
-/// Fixed script writing the pre-seed helper manifest JSON.
+/// Pre-seed manifest step: the fresh helper writes its own manifest.
 ///
-/// Emits exactly the §4.4 keys: recorded source commit, target triple,
-/// toolchain identity, and binary SHA-256 (computed at runtime). The script
-/// carries NO single quotes (double-quoted printf format with shell-escaped
-/// inner quotes, `read` instead of `cut`): inner quotes would break
-/// whole-script quoting and expose `$sha` to shellcheck as SC2154.
-#[must_use]
-pub fn preseed_manifest_script(target: &str, toolchain: &str) -> String {
-    format!(
-        "mkdir -p {PRESEED_OUTPUT_DIR} && cp {PRESEED_BUILD_OUTPUT} {PRESEED_OUTPUT_DIR}/velnor-actions && sha256sum {PRESEED_OUTPUT_DIR}/velnor-actions > {PRESEED_OUTPUT_DIR}/sha.txt && read sha rest < {PRESEED_OUTPUT_DIR}/sha.txt && printf \"{{\\\"schema\\\":1,\\\"commit\\\":\\\"%s\\\",\\\"target\\\":\\\"{target}\\\",\\\"toolchain\\\":\\\"{toolchain}\\\",\\\"sha256\\\":\\\"%s\\\"}}\" \"$GITHUB_SHA\" \"$sha\" > {PRESEED_OUTPUT_DIR}/{PRESEED_MANIFEST_FILE}"
-    )
-}
-
-/// Pre-seed manifest step: toolchain from the fixed build vector.
-///
-/// Toolchain identity derives from the `tool@exact` specs in `build`
-/// (never guessed); the target must be a supported release triple.
+/// The plan job builds the helper from source, then runs the FRESH
+/// binary (never a staged or downloaded one) with the manifest op: it
+/// hashes its own file, stages the copy, and writes the §4.4 JSON
+/// through serde. Writing is not embedding (bootstrap §2 bans only
+/// compile-time bakes), so no self-hash paradox arises. Toolchain
+/// identity derives from the `tool@exact` specs in `build` (never
+/// guessed); the target must be a supported release triple; the output
+/// directory uses the runner-temp expression form so no shell expansion
+/// is needed. No JSON is composed in shell on this side.
 /// # Errors
 pub fn preseed_manifest_step(build: &[String], target: &str) -> Result<Step, RenderError> {
     debug_assert!(PRESEED_MANIFEST_NAME.ends_with(TRUST_MARK));
@@ -199,11 +202,25 @@ pub fn preseed_manifest_step(build: &[String], target: &str) -> Result<Step, Ren
         )));
     }
     let toolchain = crate::candidate::toolchain_identity(build)?;
-    let script = preseed_manifest_script(target, &toolchain);
     steps::shell_step(
         PRESEED_MANIFEST_NAME,
-        vec!["sh".to_owned(), "-c".to_owned(), script],
-        std::collections::BTreeMap::new(),
+        vec![PRESEED_BUILD_OUTPUT.to_owned()],
+        std::collections::BTreeMap::from([
+            (
+                steps::INTERNAL_OP_ENV.to_owned(),
+                steps::WRITE_PRESEED_MANIFEST_OPERATION.to_owned(),
+            ),
+            (
+                PRESEED_MANIFEST_BINARY_ENV.to_owned(),
+                PRESEED_BUILD_OUTPUT.to_owned(),
+            ),
+            (
+                PRESEED_MANIFEST_OUT_ENV.to_owned(),
+                PRESEED_OUTPUT_DIR_EXPR.to_owned(),
+            ),
+            (PRESEED_MANIFEST_TARGET_ENV.to_owned(), target.to_owned()),
+            (PRESEED_MANIFEST_TOOLCHAIN_ENV.to_owned(), toolchain),
+        ]),
     )
 }
 
@@ -233,6 +250,54 @@ pub fn preseed_download_step() -> Result<Step, RenderError> {
             ("name".to_owned(), PRESEED_ARTIFACT_NAME.to_owned()),
             ("path".to_owned(), PRESEED_STAGE_DIR_EXPR.to_owned()),
         ]),
+    )
+}
+
+/// Fixed script verifying the downloaded manifest before any staging.
+///
+/// Same shape as the candidate verification: schema 1, 40-hex commit
+/// equal to the checked-out `$GITHUB_SHA`, exact expected target,
+/// nonempty toolchain, 64-hex sha256 equal to the downloaded binary's
+/// recomputed digest. Existence-only on the binary: artifact downloads
+/// do not preserve the exec bit, so `test -x` here would fail closed on
+/// every legitimate payload; executability is established by the staging
+/// copy's `chmod +x` below. A tampered staged payload fails closed here,
+/// so the staging copy below never runs on attacker bytes.
+///
+/// Contract exception (raw shell parse, kept deliberately): consumers
+/// must verify the manifest BEFORE staging, and pre-staging they hold
+/// no trusted executor — executing downloaded bytes to verify them
+/// would defeat verification, and no pinned parser exists outside the
+/// helper. The write side runs in the fresh helper (see
+/// [`preseed_manifest_step`]); only this parse side stays shell, and it
+/// executes nothing but `test`/`read`/`sha256sum` over fixed paths.
+#[must_use]
+pub fn preseed_manifest_verify_script(target: &str) -> String {
+    format!(
+        "line=; rest=; m=\"{PRESEED_STAGE_DIR}/{PRESEED_MANIFEST_FILE}\" && b=\"{PRESEED_STAGE_DIR}/velnor-actions\" && test -f \"$m\" && test -f \"$b\" && read line rest < \"$m\" || [ -n \"$line\" ] && v=${{line#*\\\"schema\\\":}} && v=${{v%%,*}} && [ \"$v\" = 1 ] && c=${{line#*\\\"commit\\\":\\\"}} && c=${{c%%\\\"*}} && [ \"${{#c}}\" = 40 ] && [ \"$c\" = \"$GITHUB_SHA\" ] && t=${{line#*\\\"target\\\":\\\"}} && t=${{t%%\\\"*}} && [ \"$t\" = \"{target}\" ] && tc=${{line#*\\\"toolchain\\\":\\\"}} && tc=${{tc%%\\\"*}} && [ -n \"$tc\" ] && s=${{line#*\\\"sha256\\\":\\\"}} && s=${{s%%\\\"*}} && [ \"${{#s}}\" = 64 ] && sha256sum \"$b\" > \"{PRESEED_STAGE_DIR}/got.txt\" && read got rest < \"{PRESEED_STAGE_DIR}/got.txt\" && [ \"$got\" = \"$s\" ]"
+    )
+}
+
+/// Manifest verification step; must precede every downloaded staging.
+///
+/// The expected target is the literal triple the plan job builds for
+/// (never the manifest's own claim).
+/// # Errors
+pub fn preseed_manifest_verify_step(target: &str) -> Result<Step, RenderError> {
+    debug_assert!(PRESEED_VERIFY_MANIFEST_NAME.ends_with(TRUST_MARK));
+    if !velnor_actions_contract::is_supported_target(target) {
+        return Err(RenderError::BadCommand(format!(
+            "preseed_unsupported_target:{target}"
+        )));
+    }
+    steps::shell_step(
+        PRESEED_VERIFY_MANIFEST_NAME,
+        vec![
+            "sh".to_owned(),
+            "-c".to_owned(),
+            preseed_manifest_verify_script(target),
+        ],
+        std::collections::BTreeMap::new(),
     )
 }
 
@@ -277,11 +342,10 @@ fn validate_staged_path(staged: &str) -> Result<(), RenderError> {
 /// Pre-seed closure: single plan build plus artifact sharing (Gap A).
 ///
 /// In pre-seed mode the plan job must build, upload, and stage the helper
-/// while every present task/final job downloads and stages it in that
-/// order; anything less would rebuild per job or invoke an unstaged
-/// helper. There is no verify step: self-verification would be circular
-/// trust (see the module docs). Outside pre-seed mode there is nothing
-/// to close over.
+/// while every present task/final job downloads, digest-verifies, and
+/// stages it in that order; anything less would rebuild per job, stage
+/// unverified bytes, or invoke an unstaged helper. Outside pre-seed
+/// mode there is nothing to close over.
 /// # Errors
 pub(crate) fn check_preseed_closure(
     jobs: &std::collections::BTreeMap<String, Job>,
@@ -295,6 +359,7 @@ pub(crate) fn check_preseed_closure(
     };
     for (name, kind) in [
         (PRESEED_BUILD_NAME, "build"),
+        (PRESEED_MANIFEST_NAME, "manifest"),
         (PRESEED_UPLOAD_NAME, "upload"),
         (PRESEED_STAGE_NAME, "stage"),
     ] {
@@ -309,12 +374,15 @@ pub(crate) fn check_preseed_closure(
             continue;
         }
         let position = |name: &str| job.steps.iter().position(|step| step.name == name);
-        let (Some(download_at), Some(stage_at)) = (
+        let (Some(download_at), Some(verify_at), Some(stage_at)) = (
             position(PRESEED_DOWNLOAD_NAME),
+            position(PRESEED_VERIFY_MANIFEST_NAME),
             position(PRESEED_STAGE_NAME),
         ) else {
             let kind = if position(PRESEED_DOWNLOAD_NAME).is_none() {
                 "download"
+            } else if position(PRESEED_VERIFY_MANIFEST_NAME).is_none() {
+                "verify"
             } else {
                 "stage"
             };
@@ -322,7 +390,7 @@ pub(crate) fn check_preseed_closure(
                 "preseed_incomplete:{id}:{kind}"
             )));
         };
-        if download_at >= stage_at {
+        if !(download_at < verify_at && verify_at < stage_at) {
             return Err(RenderError::InvalidWorkflow(format!(
                 "preseed_misordered:{id}"
             )));

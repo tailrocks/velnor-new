@@ -22,16 +22,13 @@ use velnor_actions_contract::{
 };
 use velnor_actions_mise::{PinnedTool, TaskCacheMode, ToolCatalog};
 use velnor_actions_rust::{CompileDriver as RustDriver, STACK_ID, TaskGroup, TaskKind, TestRunner};
-use velnor_actions_workflow_renderer::plan_format::FORMAT_STEP_NAME;
 use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
 use velnor_actions_workflow_renderer::steps::{CompileDriver as RenderDriver, mbx_step_for_driver};
-use velnor_actions_workflow_renderer::task_steps::{
-    BUILD_TEST_NAME, CLIPPY_NAME, DOCTESTS_NAME, DOCUMENTATION_NAME, TEST_NAME,
-};
 
 use crate::OrchestratorError;
 use crate::discover::Discovery;
 use crate::internal::internal;
+use crate::matrix_step::step_name_for;
 
 /// Built crate jobs plus their driver selections for MBX gating.
 pub(crate) struct CrateBuild {
@@ -114,6 +111,15 @@ pub(crate) fn build_crate_jobs(
     Ok(CrateBuild { jobs, drivers })
 }
 
+/// True when the group becomes a crate-job obligation.
+///
+/// Test-less groups carry no command and package-less workspace groups
+/// belong to the plan job, so neither is emitted as an obligation.
+/// Shared with `plan` so its obligation list matches emission exactly.
+pub(crate) fn is_runnable(group: &TaskGroup) -> bool {
+    !group.no_test_targets && !group.package_id.is_empty()
+}
+
 /// Runnable groups by `(package_id, configuration)` in sorted order.
 ///
 /// Skips groups without test targets (no command is emitted for them)
@@ -121,7 +127,7 @@ pub(crate) fn build_crate_jobs(
 fn group_runnable(groups: &[TaskGroup]) -> BTreeMap<(String, String), Vec<&TaskGroup>> {
     let mut grouped: BTreeMap<(String, String), Vec<&TaskGroup>> = BTreeMap::new();
     for group in groups {
-        if group.no_test_targets || group.package_id.is_empty() {
+        if !is_runnable(group) {
             continue;
         }
         grouped
@@ -228,28 +234,6 @@ fn gates_for(group: &TaskGroup, executed: &BTreeSet<&str>) -> Vec<String> {
     gates.sort();
     gates.dedup();
     gates
-}
-
-/// Human step name for one obligation; shards name their index.
-fn step_name_for(kind: TaskKind, task_id: &str) -> String {
-    let base = match kind {
-        TaskKind::Fmt => FORMAT_STEP_NAME,
-        TaskKind::Clippy => CLIPPY_NAME,
-        TaskKind::Build => BUILD_TEST_NAME,
-        TaskKind::Test | TaskKind::Nextest => TEST_NAME,
-        TaskKind::Doctest => DOCTESTS_NAME,
-        TaskKind::Doc => DOCUMENTATION_NAME,
-    };
-    match shard_suffix(task_id) {
-        Some((index, count)) => format!("{base} (shard {index} of {count})"),
-        None => base.to_owned(),
-    }
-}
-
-/// Shard index/count from a trailing `/shard-<index>-of-<count>` segment.
-fn shard_suffix(task_id: &str) -> Option<(u32, u32)> {
-    let (_, index, count) = velnor_actions_contract::split_shard_suffix(task_id)?;
-    Some((index, count))
 }
 
 /// Render one validated crate model to its fixed IR job.
@@ -383,3 +367,7 @@ fn mbx_objects_step(
 #[cfg(test)]
 #[path = "crate_jobs_tests.rs"]
 mod crate_jobs_tests;
+
+#[cfg(test)]
+#[path = "crate_jobs_reports_tests.rs"]
+mod crate_jobs_reports_tests;

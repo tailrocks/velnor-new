@@ -5,11 +5,9 @@
 
 use std::fs;
 
-use velnor_actions_orchestrator::{
-    GenerateOptions, GenerationPreparation, generate, plan_text, prepare,
-};
+use velnor_actions_orchestrator::{GenerateOptions, GenerationPreparation, generate, prepare};
 
-use crate::impl_common::{TestResult, config_with_branch, err_of, make_repo, snapshot};
+use crate::impl_common::{TestResult, config_with_branch, err_of, make_repo, plan_for, snapshot};
 
 /// Finding code when transient-only evidence selects a non-default profile.
 const TRANSIENT_CODE: &str = "transient_evidence_requires_declaration";
@@ -79,7 +77,7 @@ fn transient_mbx_blocks_generate() -> TestResult {
     assert_eq!(workspace.profile.compile_driver.as_str(), "mbx");
     assert_eq!(workspace.findings.len(), 1);
     assert_eq!(workspace.findings[0].code, TRANSIENT_CODE);
-    let plan = plan_text(&prep);
+    let plan = plan_for(&prep)?;
     assert!(
         plan.contains(TRANSIENT_CODE),
         "plan reports finding:\n{plan}"
@@ -127,7 +125,7 @@ fn transient_nextest_blocks_generate() -> TestResult {
             .any(|finding| finding.code == TRANSIENT_CODE),
         "nextest finding recorded"
     );
-    let plan = plan_text(&prep);
+    let plan = plan_for(&prep)?;
     assert!(
         plan.contains(TRANSIENT_CODE),
         "plan reports finding:\n{plan}"
@@ -160,7 +158,7 @@ fn declared_profile_survives_regeneration() -> TestResult {
         prep.discovery.workspaces[0].findings.is_empty(),
         "declaration resolves transient evidence"
     );
-    let plan = plan_text(&prep);
+    let plan = plan_for(&prep)?;
     assert!(
         plan.contains("mbx compile driver (declared)"),
         "provenance:\n{plan}"
@@ -220,7 +218,7 @@ fn generated_workflow_not_evidence() -> TestResult {
             workspace.findings.is_empty(),
             "no findings without evidence"
         );
-        let plan = plan_text(&prep);
+        let plan = plan_for(&prep)?;
         assert!(!plan.contains(TRANSIENT_CODE), "no finding:\n{plan}");
         let first = preview_bytes(&prep)?;
         let second = preview_bytes(&prepare(root)?)?;
@@ -234,11 +232,11 @@ fn durable_evidence_stable() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     let root = repo.path();
     write_executable_task(root, "mbx test --package demo")?;
-    let before = plan_text(&prepare(root)?);
+    let before = plan_for(&prepare(root)?)?;
     assert!(before.contains("mbx compile driver (detected)"), "{before}");
     generate(&prepare(root)?, &GenerateOptions::default())?;
     assert!(root.join(".github/workflows/ci.yml").is_file());
-    let after = plan_text(&prepare(root)?);
+    let after = plan_for(&prepare(root)?)?;
     assert_eq!(before, after, "plan identical after in-place regen");
     let prep = prepare(root)?;
     let workspace = &prep.discovery.workspaces[0];

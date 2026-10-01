@@ -54,7 +54,7 @@ pub fn candidate_manifest_verify_script(target: &str) -> String {
     let dir = steps::CANDIDATE_STAGE_DIR;
     let file = steps::CANDIDATE_MANIFEST_FILE;
     format!(
-        "m=\"{dir}/{file}\" && b=\"{dir}/velnor-actions\" && test -f \"$m\" && test -x \"$b\" && read line rest < \"$m\" || [ -n \"$line\" ] && v=${{line#*\\\"schema\\\":}} && v=${{v%%,*}} && [ \"$v\" = 1 ] && c=${{line#*\\\"commit\\\":\\\"}} && c=${{c%%\\\"*}} && [ \"${{#c}}\" = 40 ] && [ \"$c\" = \"$GITHUB_SHA\" ] && t=${{line#*\\\"target\\\":\\\"}} && t=${{t%%\\\"*}} && [ \"$t\" = \"{target}\" ] && tc=${{line#*\\\"toolchain\\\":\\\"}} && tc=${{tc%%\\\"*}} && [ -n \"$tc\" ] && s=${{line#*\\\"sha256\\\":\\\"}} && s=${{s%%\\\"*}} && [ \"${{#s}}\" = 64 ] && sha256sum \"$b\" > \"{dir}/got.txt\" && read got rest < \"{dir}/got.txt\" && [ \"$got\" = \"$s\" ]"
+        "line=; rest=; m=\"{dir}/{file}\" && b=\"{dir}/velnor-actions\" && test -f \"$m\" && test -x \"$b\" && read line rest < \"$m\" || [ -n \"$line\" ] && v=${{line#*\\\"schema\\\":}} && v=${{v%%,*}} && [ \"$v\" = 1 ] && c=${{line#*\\\"commit\\\":\\\"}} && c=${{c%%\\\"*}} && [ \"${{#c}}\" = 40 ] && [ \"$c\" = \"$GITHUB_SHA\" ] && t=${{line#*\\\"target\\\":\\\"}} && t=${{t%%\\\"*}} && [ \"$t\" = \"{target}\" ] && tc=${{line#*\\\"toolchain\\\":\\\"}} && tc=${{tc%%\\\"*}} && [ -n \"$tc\" ] && s=${{line#*\\\"sha256\\\":\\\"}} && s=${{s%%\\\"*}} && [ \"${{#s}}\" = 64 ] && sha256sum \"$b\" > \"{dir}/got.txt\" && read got rest < \"{dir}/got.txt\" && [ \"$got\" = \"$s\" ]"
     )
 }
 
