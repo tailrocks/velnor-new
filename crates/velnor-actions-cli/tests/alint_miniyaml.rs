@@ -124,6 +124,8 @@ pub(crate) const EXPECTED: [ExpectedRule; 7] = [
                 &[
                     "crates/velnor-actions-*/src/**/*.rs",
                     "crates/velnor-actions-*/tests/**/*.rs",
+                    "crates/velnor-runner/crates/*/src/**/*.rs",
+                    "crates/velnor-runner/crates/*/tests/**/*.rs",
                 ],
             ),
             ("paths.exclude", &["**/fixtures/**", "**/testdata/**"]),
@@ -138,6 +140,8 @@ pub(crate) const EXPECTED: [ExpectedRule; 7] = [
             &[
                 "crates/velnor-actions-*/src/lib.rs",
                 "crates/velnor-actions-*/src/main.rs",
+                "crates/velnor-runner/crates/*/src/lib.rs",
+                "crates/velnor-runner/crates/*/src/main.rs",
             ],
         )],
         pairs: &[("max_lines", "150")],

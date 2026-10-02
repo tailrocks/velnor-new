@@ -387,11 +387,9 @@ Use Mise for all tool installation and MBX for compiler caching. Do not invoke d
 | Capacity | Fixed `N` never exceeds its worker population | Not implemented |
 | Security | Controller credentials absent from workload environment and logs | Not implemented |
 | Cache correctness | Warm reuse works; changed inputs invalidate; no shared mutable slot state | Not implemented |
-
 Qualification MUST run the same commit and task set under official mode and native mode, comparing both with expected outcomes. A matching infrastructure failure in both modes is still a failure. Missing or skipped qualification is not success. Failure injection is required at every external side-effect boundary.
 
 ## 11. Delivery sequence
-
 1. **Contract freeze:** record the qualified V1 profile schema, generated task IDs, labels, tool identities, and cache identities. Add compatibility fixtures.
 2. **V2 official mode:** implement preflight, JIT registration, one container, diagnostics, authoritative result handling, cancellation, and owned cleanup.
 3. **V2 recovery:** add the journal, reconciliation, pending result delivery, and fixed slots. Pass all V2 gates.
