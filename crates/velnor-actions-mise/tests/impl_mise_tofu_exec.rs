@@ -7,7 +7,8 @@ use velnor_actions_mise::command::{
 };
 use velnor_actions_mise::{
     MiseError, PinnedTool, PinnedToolExec, ProcessOutput, TF_CLI_CONFIG_FILE_ENV, TF_DATA_DIR_ENV,
-    TF_IN_AUTOMATION_ENV, TF_IN_AUTOMATION_ON, TF_INPUT_ENV, TF_INPUT_OFF, ToolCatalog,
+    TF_IN_AUTOMATION_ENV, TF_IN_AUTOMATION_ON, TF_INPUT_ENV, TF_INPUT_OFF, TF_PLUGIN_CACHE_DIR_ENV,
+    ToolCatalog,
 };
 
 /// Fixed fmt payload mirroring the tofu adapter's fixed shape for a
@@ -33,6 +34,7 @@ fn tofu_command() -> Result<IsolatedCommand, String> {
         &fmt_payload(),
         "/velnor/tofu-data",
         "/velnor/tofu-cli.hcl",
+        "/velnor/tofu-cache",
     )
     .map_err(|err| err.to_string())
 }
@@ -45,6 +47,7 @@ fn tofu_key_consts_are_exact() {
     assert_eq!(TF_INPUT_OFF, "0");
     assert_eq!(TF_DATA_DIR_ENV, "TF_DATA_DIR");
     assert_eq!(TF_CLI_CONFIG_FILE_ENV, "TF_CLI_CONFIG_FILE");
+    assert_eq!(TF_PLUGIN_CACHE_DIR_ENV, "TF_PLUGIN_CACHE_DIR");
 }
 
 #[test]
@@ -63,6 +66,7 @@ fn tofu_exec_wraps_pinned_opentofu_payload() -> Result<(), String> {
         &exec.payload(),
         "/velnor/tofu-data",
         "/velnor/tofu-cli.hcl",
+        "/velnor/tofu-cache",
     )
     .map_err(|err| err.to_string())?;
     let argv: Vec<String> = command
@@ -120,6 +124,10 @@ fn tofu_exec_bakes_exact_isolation_env() -> Result<(), String> {
                 "TF_CLI_CONFIG_FILE".to_owned(),
                 "/velnor/tofu-cli.hcl".to_owned()
             ),
+            (
+                "TF_PLUGIN_CACHE_DIR".to_owned(),
+                "/velnor/tofu-cache".to_owned()
+            ),
         ]
     );
     Ok(())
@@ -129,16 +137,20 @@ fn tofu_exec_bakes_exact_isolation_env() -> Result<(), String> {
 fn tofu_exec_rejects_empty_inputs() {
     let specs = ["opentofu@1.13.1".to_owned()];
     assert!(matches!(
-        IsolatedCommand::tofu_exec(&specs, &[], "/data", "/cli.hcl"),
+        IsolatedCommand::tofu_exec(&specs, &[], "/data", "/cli.hcl", "/cache"),
         Err(MiseError::EmptyCommand { .. })
     ));
     assert!(matches!(
-        IsolatedCommand::tofu_exec(&specs, &fmt_payload(), "", "/cli.hcl"),
+        IsolatedCommand::tofu_exec(&specs, &fmt_payload(), "", "/cli.hcl", "/cache"),
         Err(MiseError::InvalidStepInput { field, .. }) if field == "tf_data_dir"
     ));
     assert!(matches!(
-        IsolatedCommand::tofu_exec(&specs, &fmt_payload(), "/data", ""),
+        IsolatedCommand::tofu_exec(&specs, &fmt_payload(), "/data", "", "/cache"),
         Err(MiseError::InvalidStepInput { field, .. }) if field == "tf_cli_config_file"
+    ));
+    assert!(matches!(
+        IsolatedCommand::tofu_exec(&specs, &fmt_payload(), "/data", "/cli.hcl", ""),
+        Err(MiseError::InvalidStepInput { field, .. }) if field == "tf_plugin_cache_dir"
     ));
 }
 

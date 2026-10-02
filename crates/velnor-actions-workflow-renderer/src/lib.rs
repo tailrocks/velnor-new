@@ -39,6 +39,7 @@ mod steps_artifact;
 mod steps_internal;
 mod steps_plain;
 mod support;
+pub mod tofu_cache;
 pub mod toolchain_env;
 pub mod tree;
 pub mod yaml;

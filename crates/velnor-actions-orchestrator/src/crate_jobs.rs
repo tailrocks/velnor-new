@@ -7,8 +7,9 @@
 //! each, validates the grouping through the contract model (stable
 //! unbranded IDs, gates referencing strictly earlier obligations),
 //! then renders each group to a fixed IR job: checkout, pinned tools,
-//! components, lockful sources, the MBX objects restore on MBX crates,
-//! and one shell step per obligation in gate order.
+//! components, lockful sources, the per-root provider restore on
+//! opentofu crates, the MBX objects restore on MBX crates, and one
+//! shell step per obligation in gate order.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -220,12 +221,13 @@ fn gates_for(task: &ProposedTask, executed: &BTreeSet<&str>) -> Vec<String> {
 /// Render one validated crate model to its fixed IR job.
 ///
 /// P08 order: helper staging, plan download (report identities bind
-/// the plan), restore shared sources (or Cargo-only registry), then
-/// MBX objects, then probe-and-fetch, then report-wrapped
-/// obligations, then one always-on crate-report upload carrying every
-/// entry. Readers never save. Rust setup (components, restore,
-/// fetch) emits only for rust roles; pure-tofu roles carry the
-/// opentofu driver with no Rust setup, mixed roles the union.
+/// the plan), restore shared sources (or Cargo-only registry), the
+/// per-root provider restore on opentofu roles, then MBX objects,
+/// then probe-and-fetch, then report-wrapped obligations, then one
+/// always-on crate-report upload carrying every entry. Readers never
+/// save. Rust setup (components, restore, fetch) emits only for rust
+/// roles; pure-tofu roles carry the opentofu driver with no Rust
+/// setup, mixed roles the union.
 #[expect(
     clippy::too_many_arguments,
     clippy::fn_params_excessive_bools,
@@ -269,6 +271,12 @@ fn render_job(
         use_mbx,
         repo_has_mbx,
     )?);
+    if use_opentofu {
+        let root = crate::tofu_cache::tofu_root_for_obligations(&model.obligations)?;
+        steps.push(crate::tofu_cache::restore_step_for_tofu_root(
+            label, catalog, &root,
+        )?);
+    }
     steps.extend(mbx_objects_step(catalog, use_mbx)?);
     if use_rust {
         steps.extend(crate::source_prep::fetch_steps_for_crate(
@@ -311,11 +319,11 @@ fn render_job(
 
 /// Restore step for one crate: shared sources, or Cargo-only registry.
 ///
-/// Lockless emits nothing, and pure-tofu roles emit nothing (their
-/// provider cache lands in a later task). Cargo-only repos (no MBX
-/// anywhere) restore via pinned `rust-cache` (read-only); every other
-/// lockful crate restores the shared `actions/cache` snapshot
-/// (read-only, never saves the shared key).
+/// Lockless emits nothing, and tofu roles restore providers through
+/// the separate provider-cache step (never here). Cargo-only repos
+/// (no MBX anywhere) restore via pinned `rust-cache` (read-only);
+/// every other lockful crate restores the shared `actions/cache`
+/// snapshot (read-only, never saves the shared key).
 fn restore_step_for_crate(
     label: &str,
     catalog: &ToolCatalog,
@@ -375,6 +383,10 @@ mod crate_jobs_tests;
 #[cfg(test)]
 #[path = "crate_jobs_display_tests.rs"]
 mod crate_jobs_display_tests;
+
+#[cfg(test)]
+#[path = "crate_jobs_tofu_cache_tests.rs"]
+mod crate_jobs_tofu_cache_tests;
 
 #[cfg(test)]
 #[path = "crate_jobs_tofu_tests.rs"]

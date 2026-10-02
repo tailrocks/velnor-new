@@ -164,6 +164,7 @@ fn tofu_exec_baked_env_survives_hostile_parent() -> Result<(), String> {
         &[OsString::from("tofu"), OsString::from("version")],
         "/velnor/data",
         "/velnor/cli.hcl",
+        "/velnor/cache",
     )
     .map_err(|err| err.to_string())?;
     let env = command.spawn_env(&hostile_tofu_parent());
@@ -172,6 +173,7 @@ fn tofu_exec_baked_env_survives_hostile_parent() -> Result<(), String> {
         ("TF_INPUT", "0"),
         ("TF_DATA_DIR", "/velnor/data"),
         ("TF_CLI_CONFIG_FILE", "/velnor/cli.hcl"),
+        ("TF_PLUGIN_CACHE_DIR", "/velnor/cache"),
     ] {
         let seen: Vec<OsString> = env
             .iter()

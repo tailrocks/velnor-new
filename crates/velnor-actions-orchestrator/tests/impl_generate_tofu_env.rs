@@ -30,6 +30,10 @@ fn tofu_key_consts_agree_across_crates() {
         velnor_actions_tofu::TF_CLI_CONFIG_FILE_ENV
     );
     assert_eq!(
+        velnor_actions_mise::TF_PLUGIN_CACHE_DIR_ENV,
+        velnor_actions_tofu::TF_PLUGIN_CACHE_DIR_ENV
+    );
+    assert_eq!(
         velnor_actions_mise::runtime_paths::TOFU_DATA_BASE_EXPR,
         "${{ runner.temp }}/velnor/tofu-data"
     );
@@ -76,13 +80,17 @@ fn tf_predicate_parity_with_documented_divergence() {
 
 #[test]
 fn isolation_pairs_agree_between_author_and_constructor() -> Result<(), String> {
-    let authored =
-        velnor_actions_tofu::tofu_isolation_env("/velnor/tofu-data", "/velnor/tofu-cli.hcl");
+    let authored = velnor_actions_tofu::tofu_isolation_env(
+        "/velnor/tofu-data",
+        "/velnor/tofu-cli.hcl",
+        "/velnor/tofu-cache",
+    );
     let command = velnor_actions_mise::IsolatedCommand::tofu_exec(
         &["opentofu@1.13.1".to_owned()],
         &[OsString::from("tofu"), OsString::from("version")],
         "/velnor/tofu-data",
         "/velnor/tofu-cli.hcl",
+        "/velnor/tofu-cache",
     )
     .map_err(|err| err.to_string())?;
     let full = command.full_env();

@@ -58,6 +58,17 @@ fn digests_equal(expected: &str, observed: &str) -> bool {
     validate_digest(expected).is_ok() && expected == observed
 }
 
+/// Verify one provider-cache restore through the 5-check chain.
+///
+/// Provider entries are acceleration, never results: the same
+/// ordered checks (present, digest, compatibility, trust, inputs)
+/// verify them, a miss discards the entry for refetch through the
+/// normal verified path, and a hit never disables verification.
+/// # Errors
+pub fn verify_provider_restore(obs: &RestoreObservation) -> Result<(), &'static str> {
+    classify_restore(obs)
+}
+
 /// Classify a restore attempt from observed evidence: hit or precise reason.
 ///
 /// Checks run in order: present, digest, compatibility, trust, inputs.

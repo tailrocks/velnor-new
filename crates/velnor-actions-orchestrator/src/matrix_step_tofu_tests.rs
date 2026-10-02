@@ -106,6 +106,32 @@ fn tofu_obligation_step_carries_tofu_matrix_id_and_no_doc_env() {
 }
 
 #[test]
+fn tofu_obligation_step_carries_isolated_cache_dir() {
+    let step =
+        obligation_step(&tofu_obligation(), &ToolCatalog::pinned(), &[], None).expect("step");
+    let velnor_actions_contract::StepKind::Shell { env, .. } = &step.kind else {
+        panic!("obligation must be a shell step");
+    };
+    let data = env
+        .get(velnor_actions_tofu::TF_DATA_DIR_ENV)
+        .expect("data dir");
+    let cache = env
+        .get(velnor_actions_tofu::TF_PLUGIN_CACHE_DIR_ENV)
+        .expect("cache dir");
+    assert!(
+        data.starts_with("${{ runner.temp }}/velnor/tofu-data/root-"),
+        "{data}"
+    );
+    assert!(
+        cache.starts_with("${{ runner.temp }}/velnor/tofu-cache/root-"),
+        "{cache}"
+    );
+    let data_slug = data.rsplit('/').next().expect("slug");
+    let cache_slug = cache.rsplit('/').next().expect("slug");
+    assert_eq!(data_slug, cache_slug, "one slug, two bases");
+}
+
+#[test]
 fn stackless_obligation_task_ids_keep_malformed_vocabulary() {
     let mut bad = tofu_obligation();
     bad.task_id = "bogus".to_owned();

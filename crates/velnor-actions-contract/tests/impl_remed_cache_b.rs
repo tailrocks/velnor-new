@@ -67,6 +67,52 @@ fn cache_miss_reason_membership_enforced() -> Result<(), ContractError> {
 }
 
 #[test]
+fn cache_tofu_providers_layer_reports_and_roundtrips() -> Result<(), ContractError> {
+    let compat = digest_b3(b"compat");
+    let snapshot = digest_b3(b"snapshot");
+    let key = cache_key("tofu-providers", "trusted", &compat, &snapshot)?;
+    let wire = format!(r#"{{"layer":"tofu-providers","key":"{key}","result":"hit"}}"#);
+    let outcome: CacheOutcome = serde_json::from_str(&wire).expect("provider layer parses");
+    assert_eq!(outcome.result, CacheResult::Hit);
+    let back = serde_json::to_string(&outcome).expect("serialize");
+    assert!(back.contains("\"layer\":\"tofu-providers\""), "{back}");
+    Ok(())
+}
+
+#[test]
+fn cache_provider_compatibility_binds_dimensions_and_trust_scopes_keys() -> Result<(), ContractError>
+{
+    use velnor_actions_contract::{CompatibilityInputs, compatibility_id};
+    let inputs = CompatibilityInputs {
+        schema_id: "v1".to_owned(),
+        repository_id: digest_b3(b"repo"),
+        workspace_id: digest_b3(b"workspace"),
+        lane_id: digest_b3(b"lane"),
+        platform_id: digest_b3(b"linux-x86_64"),
+        toolchain_id: digest_b3(b"opentofu-1.13.1"),
+        cache_format_id: digest_b3(b"tofu-format"),
+        stack_extension_id: digest_b3(b"lock-digest"),
+    };
+    let compat = compatibility_id(&inputs)?;
+    let mut drifted = inputs.clone();
+    drifted.stack_extension_id = digest_b3(b"changed-lock");
+    assert_ne!(
+        compatibility_id(&drifted)?,
+        compat,
+        "a lock change flips provider compatibility"
+    );
+    let snapshot = digest_b3(b"snapshot");
+    let trusted = cache_key("tofu-providers", "trusted", &compat, &snapshot)?;
+    let pr = cache_key("tofu-providers", "pr", &compat, &snapshot)?;
+    assert_ne!(trusted, pr, "trust namespaces the key");
+    assert!(
+        trusted.contains("-trusted-") && pr.contains("-pr-"),
+        "trust rides the key, never the digest"
+    );
+    Ok(())
+}
+
+#[test]
 fn cache_report_outputs_declared_and_secret_free() -> Result<(), ContractError> {
     let run_key = run_key_for_ci(23, 1);
     let entry = sample_entry(&run_key)?;

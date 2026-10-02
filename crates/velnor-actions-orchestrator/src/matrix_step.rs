@@ -15,6 +15,9 @@ use crate::task_report::{DOWNSTREAM_IDS_ENV, EXIT_CODE_ENV, REPORT_OP, START_MS_
 #[path = "matrix_tools.rs"]
 mod tools;
 
+#[path = "matrix_tofu_env.rs"]
+mod tofu_env;
+
 #[cfg(test)]
 pub(crate) use tools::task_driver_tools;
 pub(crate) use tools::{crate_needs_generate_validators, prepare_crate_tools_step};
@@ -113,8 +116,14 @@ pub(crate) fn task_step_env(
             .iter()
             .map(|(key, value)| (key.clone(), value.clone())),
     );
-    if let Some(data_dir) = tofu_data_dir_for_extra(extra)? {
+    if let Some(data_dir) = tofu_env::tofu_data_dir_for_extra(extra)? {
         base.insert(velnor_actions_tofu::TF_DATA_DIR_ENV.to_owned(), data_dir);
+    }
+    if let Some(cache_dir) = tofu_env::tofu_plugin_cache_dir_for_extra(extra)? {
+        base.insert(
+            velnor_actions_tofu::TF_PLUGIN_CACHE_DIR_ENV.to_owned(),
+            cache_dir,
+        );
     }
     if !needs_rust {
         toolchain_env::reject_denied_step_keys(&base).map_err(OrchestratorError::from)?;
@@ -124,41 +133,6 @@ pub(crate) fn task_step_env(
     let toolchain = catalog.rustup_toolchain();
     toolchain_env::checked_task_env(&base, homes.rustup_home(), homes.cargo_home(), &toolchain)
         .map_err(OrchestratorError::from)
-}
-
-/// Isolated per-root `TF_DATA_DIR` for tofu obligation extras, if any.
-///
-/// Reads the obligation task ID the identity map carries, derives the
-/// normalized root from its key segment, and builds the Velnor-owned
-/// data dir under the runner-temp base. Non-tofu and task-less extras
-/// (fetch steps) map to `None`; the reserved-key rule above already
-/// rejected any caller-supplied `TF_*`, so this constructor is the
-/// sole source of the rendered key.
-///
-/// # Errors
-///
-/// Returns a contract error when the data-dir derivation fails.
-fn tofu_data_dir_for_extra(
-    extra: &BTreeMap<String, String>,
-) -> Result<Option<String>, OrchestratorError> {
-    let Some(task_id) = extra.get(TASK_ID_ENV) else {
-        return Ok(None);
-    };
-    if obligation_stack(task_id) != Some(Stack::Tofu) {
-        return Ok(None);
-    }
-    let Some(key) = crate::extension_schemas::task_key_segment(task_id) else {
-        return Ok(None);
-    };
-    let root = velnor_actions_tofu::root_for_key(&key);
-    velnor_actions_tofu::tofu_data_dir_under(
-        velnor_actions_mise::runtime_paths::TOFU_DATA_BASE_EXPR,
-        &root,
-    )
-    .map(Some)
-    .map_err(|err| OrchestratorError::Contract {
-        problem: err.to_string(),
-    })
 }
 
 /// Fixed obligation identity env carried by every obligation step.

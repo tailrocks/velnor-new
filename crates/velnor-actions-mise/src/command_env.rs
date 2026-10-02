@@ -45,6 +45,11 @@ pub const TF_INPUT_OFF: &str = "0";
 pub const TF_DATA_DIR_ENV: &str = "TF_DATA_DIR";
 /// Tofu isolated CLI-config env key (constructor-baked only).
 pub const TF_CLI_CONFIG_FILE_ENV: &str = "TF_CLI_CONFIG_FILE";
+/// Tofu plugin-cache env key (constructor-baked only; T21 transport).
+///
+/// Mirrors the tofu adapter's key without depending on it; the
+/// orchestrator pins the two equal by test.
+pub const TF_PLUGIN_CACHE_DIR_ENV: &str = "TF_PLUGIN_CACHE_DIR";
 
 /// Credential keys that must never reach a task environment.
 ///
