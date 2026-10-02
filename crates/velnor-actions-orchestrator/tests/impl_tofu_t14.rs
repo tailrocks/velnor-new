@@ -61,14 +61,37 @@ fn tofu_stale_lock_surfaces_a_recommendation() -> TestResult {
 }
 
 #[test]
-fn tofu_missing_lock_on_provider_root_surfaces_a_recommendation() -> TestResult {
+fn tofu_missing_lock_on_provider_root_fails_planning() -> TestResult {
     let repo = make_repo(&tofu_config("stacks/a"))?;
     let root = repo.path();
     fs::create_dir_all(root.join("stacks/a"))?;
     fs::write(root.join("stacks/a/main.tf"), "resource \"x\" \"y\" {}\n")?;
+    let err = prepare(root).expect_err("provider root without a lock must fail");
+    let text = err.to_string();
+    assert!(
+        text.contains("missing_committed_lock:stacks/a/.terraform.lock.hcl"),
+        "names the lock: {text}"
+    );
+    assert!(
+        text.contains("tofu providers lock"),
+        "manual remediation rides along: {text}"
+    );
+    Ok(())
+}
+
+#[test]
+fn tofu_committed_lock_on_provider_root_plans() -> TestResult {
+    let repo = make_repo(&tofu_config("stacks/a"))?;
+    let root = repo.path();
+    fs::create_dir_all(root.join("stacks/a"))?;
+    fs::write(root.join("stacks/a/main.tf"), "resource \"x\" \"y\" {}\n")?;
+    fs::write(
+        root.join("stacks/a/.terraform.lock.hcl"),
+        "provider \"example.com/a/b\" {\nversion = \"1.0.0\"\n}\n",
+    )?;
     let prep = prepare(root)?;
     assert!(
-        has_line(&prep, "tofu_lockfile_missing"),
+        !has_line(&prep, "tofu_lockfile_missing"),
         "{:?}",
         prep.discovery.recommendations
     );

@@ -6,8 +6,8 @@
 //! payload with the default shell. Validation never touches state:
 //! even a nondefault `backend` block plans and validates through
 //! `init -backend=false`. Provider-free roots run silent without a
-//! lockfile; provider-backed roots diagnose the missing pins while
-//! their validation still runs.
+//! lockfile; provider-backed roots fail planning without a committed
+//! lock (readonly init would fail them in CI).
 use std::fs;
 use std::path::Path;
 
@@ -213,39 +213,19 @@ fn tofu_provider_free_root_runs_without_lock_claims() -> TestResult {
     Ok(())
 }
 
-/// A provider-backed root diagnoses missing pins while validation runs.
+/// A provider-backed root without a committed lock fails planning:
+/// readonly init would fail it in CI, so no plan and no merge follow.
 #[test]
-fn tofu_provider_backed_root_diagnoses_missing_pins() -> TestResult {
+fn tofu_provider_backed_root_without_lock_fails_planning() -> TestResult {
     let config = config_with_extra("\"stacks/a\"", "");
     let backed = "resource \"null_resource\" \"x\" {}\n";
     let dir = make_pure_tofu_repo(&config, &[("stacks/a/main.tf", backed)])?;
     let root = dir.path();
-    let prep = prepare(root)?;
+    let err = prepare(root).expect_err("missing lock must fail planning");
     assert!(
-        prep.discovery
-            .recommendations
-            .iter()
-            .any(|line| line.contains("tofu_lockfile_missing")),
-        "missing pins diagnosed: {:?}",
-        prep.discovery.recommendations
-    );
-    git(&["add", "."], root)?;
-    git(&["commit", "-m", "one"], root)?;
-    git(&["commit", "--allow-empty", "-m", "two"], root)?;
-    let plan = plan_tofu_pr(root)?;
-    assert_eq!(plan.obligations.len(), 3, "diagnosis never drops work");
-    let reports = passing_reports(&plan)?;
-    let plan_value = serde_json::to_value(&plan)?;
-    let request = merge_request(
-        &plan_value,
-        &serde_json::to_value(&plan.matrix)?,
-        &serde_json::to_value(&reports)?,
-        &success_jobs(),
-    );
-    assert_eq!(
-        merge(&request)?.status,
-        FinalStatus::Passed,
-        "diagnosis never gates the verdict"
+        err.to_string()
+            .contains("missing_committed_lock:stacks/a/.terraform.lock.hcl"),
+        "names the lock: {err}"
     );
     Ok(())
 }

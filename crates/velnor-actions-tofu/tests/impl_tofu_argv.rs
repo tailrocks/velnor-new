@@ -48,20 +48,26 @@ fn fmt_root_shape_is_exact() -> Result<(), ContractError> {
     Ok(())
 }
 
-/// Init at the repo root is byte-exact (no lockfile flag: S7 ships it separately).
+/// Init at the repo root is byte-exact (readonly lock, no color).
 #[test]
 fn init_root_shape_is_exact() -> Result<(), ContractError> {
     assert_eq!(
         text(TofuTaskKind::InitForValidate, "")?,
-        ["init", "-backend=false", "-input=false"]
+        [
+            "init",
+            "-backend=false",
+            "-input=false",
+            "-lockfile=readonly",
+            "-no-color"
+        ]
     );
     Ok(())
 }
 
-/// Validate at the repo root is byte-exact.
+/// Validate at the repo root is byte-exact (no color).
 #[test]
 fn validate_root_shape_is_exact() -> Result<(), ContractError> {
-    assert_eq!(text(TofuTaskKind::Validate, "")?, ["validate"]);
+    assert_eq!(text(TofuTaskKind::Validate, "")?, ["validate", "-no-color"]);
     Ok(())
 }
 
@@ -84,14 +90,33 @@ fn subdir_roots_prefix_chdir_first() -> Result<(), ContractError> {
     Ok(())
 }
 
-/// No kind and no root emits the lockfile flag (S7 behavior-change commit owns it).
+/// Init carries `-lockfile=readonly` exactly once on every root; no
+/// other kind emits a lockfile flag, and every kind ends in `-no-color`.
 #[test]
-fn payloads_exclude_lockfile_flag() -> Result<(), ContractError> {
+fn payloads_pin_readonly_and_no_color() -> Result<(), ContractError> {
     for kind in KINDS {
         for root in ["", "stacks/a"] {
             let argv = text(kind, root)?;
+            let readonly = argv
+                .iter()
+                .filter(|arg| arg.as_str() == "-lockfile=readonly")
+                .count();
+            assert_eq!(
+                readonly,
+                usize::from(kind == TofuTaskKind::InitForValidate),
+                "{} {root}: {argv:?}",
+                kind.as_str()
+            );
             assert!(
-                !argv.iter().any(|arg| arg.contains("lockfile")),
+                !argv
+                    .iter()
+                    .any(|arg| arg.contains("lockfile") && arg.as_str() != "-lockfile=readonly"),
+                "{} {root}: {argv:?}",
+                kind.as_str()
+            );
+            assert_eq!(
+                argv.last().map(String::as_str),
+                Some("-no-color"),
                 "{} {root}: {argv:?}",
                 kind.as_str()
             );

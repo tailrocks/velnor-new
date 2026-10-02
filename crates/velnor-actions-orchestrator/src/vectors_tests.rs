@@ -226,7 +226,7 @@ fn tofu_task_argv_routes_through_pinned_opentofu() {
     );
     let at = argv.iter().position(|arg| arg == "--").expect("separator");
     // Program `tofu` plus the fixed payload, wrapped never edited.
-    assert_eq!(&argv[at + 1..], ["tofu", "validate"]);
+    assert_eq!(&argv[at + 1..], ["tofu", "validate", "-no-color"]);
 }
 
 #[test]

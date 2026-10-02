@@ -43,7 +43,8 @@ pub use detect::{detected_projects_for_units, discover_stack_candidates, manifes
 pub use diagnostics::{
     LOCKFILE_MISSING, LOCKFILE_STALE, PROVIDER_DEPENDENCY_CHANGES,
     REQUIRED_VERSION_EXCLUDES_TOOLCHAIN, RequiredVersionClaim, lockfile_findings_for_root,
-    remediation_for_init_stderr, required_versions_for_root, version_compat_findings,
+    remediation_for_init_stderr, require_committed_provider_lock, required_versions_for_root,
+    version_compat_findings,
 };
 pub use effective::{Dialect, config_shape, dir_has_effective_config, effective_set};
 pub use env::{

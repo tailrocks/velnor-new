@@ -200,23 +200,16 @@ fn corrupt_lock_diagnoses_while_provider_transport_renders() -> TestResult {
 }
 
 #[test]
-fn missing_lock_diagnoses_while_provider_transport_renders() -> TestResult {
+fn missing_lock_fails_planning_before_provider_transport_renders() -> TestResult {
     let repo = make_repo(&tofu_config("stacks/a"))?;
     let root = repo.path();
     fs::create_dir_all(root.join("stacks/a"))?;
     fs::write(root.join("stacks/a/main.tf"), "resource \"x\" \"y\" {}\n")?;
-    let prep = prepare(root)?;
+    let err = prepare(root).expect_err("missing lock must fail planning");
     assert!(
-        has_line(&prep, "tofu_lockfile_missing"),
-        "{:?}",
-        prep.discovery.recommendations
-    );
-    let jobs = finalized_jobs(&prep)?;
-    assert!(
-        jobs.iter()
-            .filter(|(id, _)| id.starts_with("tofu-"))
-            .all(|(_, job)| has_provider_roundtrip(job)),
-        "a missing lock never breaks provider transport"
+        err.to_string()
+            .contains("missing_committed_lock:stacks/a/.terraform.lock.hcl"),
+        "names the lock: {err}"
     );
     Ok(())
 }

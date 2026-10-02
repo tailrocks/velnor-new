@@ -16,3 +16,6 @@ serde = { workspace = true }
 [[test]]
 name = "velnor_mise"
 path = "tests/velnor_mise.rs"
+
+[dev-dependencies]
+velnor-actions-tofu = { version = "=0.1.0", path = "../velnor-actions-tofu" }
