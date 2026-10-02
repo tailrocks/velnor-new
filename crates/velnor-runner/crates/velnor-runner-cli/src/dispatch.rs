@@ -17,10 +17,11 @@ pub fn run() -> ExitCode {
     match Cli::try_parse() {
         Ok(cli) => dispatch(&cli),
         Err(error) => {
+            let code = error.exit_code();
             if error.print().is_err() {
                 return ExitCode::from(2);
             }
-            ExitCode::from(2)
+            u8::try_from(code).map_or(ExitCode::from(2), ExitCode::from)
         }
     }
 }
@@ -51,7 +52,7 @@ fn dispatch(cli: &Cli) -> ExitCode {
         ),
         Command::Service { action } => crate::service::service(*action),
         Command::Daemon { action } => daemon(&state, *action),
-        Command::Compare { .. } => not_proven(),
+        Command::Compare { evidence, .. } => compare_command(evidence.as_deref()),
         Command::Disconnect { drain, .. } => disconnect(*drain),
     }
 }
@@ -182,6 +183,13 @@ fn hold(lock: &DaemonLock) -> ExitCode {
     }
     std::thread::park();
     ExitCode::SUCCESS
+}
+
+fn compare_command(evidence: Option<&Path>) -> ExitCode {
+    match evidence {
+        Some(path) => crate::compare::compare_dir(path),
+        None => not_proven(),
+    }
 }
 
 fn not_proven() -> ExitCode {
