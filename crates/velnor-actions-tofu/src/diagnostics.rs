@@ -72,15 +72,21 @@ pub fn lockfile_findings_for_root(
     let Ok(inspection) = inspect_lockfile(&lock, Some(&text)) else {
         return Vec::new();
     };
-    if !inspection.findings.is_empty() {
+    if inspection.spec.is_none() {
         return inspection.findings;
     }
+    let mut findings = inspection.findings;
     let providers = inspection.spec.map_or_else(Vec::new, |spec| spec.providers);
     match root_shape(root, unit_path, reads) {
-        Some((needs, _)) if providers.is_empty() && needs => vec![missing_finding(&lock)],
-        Some((_, true)) if !providers.is_empty() => vec![stale_finding(&lock, &providers)],
-        Some(_) | None => Vec::new(),
+        Some((needs, _)) if providers.is_empty() && needs => {
+            findings.push(missing_finding(&lock));
+        }
+        Some((_, true)) if !providers.is_empty() => {
+            findings.push(stale_finding(&lock, &providers));
+        }
+        Some(_) | None => {}
     }
+    findings
 }
 
 /// Fail when a provider root lacks a committed lock.

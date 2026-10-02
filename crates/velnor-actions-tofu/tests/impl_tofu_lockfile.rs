@@ -2,7 +2,8 @@
 use velnor_actions_tofu::TofuTaskKind;
 use velnor_actions_tofu::file_cache::FileCache;
 use velnor_actions_tofu::lockfile::{
-    LOCKFILE_CORRUPT, TofuLockSnapshot, inspect_lockfile, lock_digest_at_root, lock_slot_for_kind,
+    LOCKFILE_CORRUPT, LOCKFILE_UNPINNED_HASHES, TofuLockSnapshot, inspect_lockfile,
+    lock_digest_at_root, lock_slot_for_kind,
 };
 use velnor_actions_tofu::task_identity::DigestSlot;
 
@@ -172,6 +173,74 @@ fn inspect_sorts_and_dedupes_providers() {
         spec.providers,
         vec!["a.example/d".to_owned(), "b.example/c".to_owned()]
     );
+}
+
+/// Complete `hashes` on every provider block stays silent.
+#[test]
+fn inspect_pinned_hashes_stay_silent() {
+    let content = "provider \"example.com/a/b\" {\nversion = \"1.0.0\"\n\
+         hashes = [\"h1:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\", \
+         \"zh:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=\"]\n}\n";
+    let inspection = inspect_lockfile(".terraform.lock.hcl", Some(content)).expect("pinned");
+    assert!(inspection.spec.is_some());
+    assert!(
+        inspection.findings.is_empty(),
+        "complete pins stay silent: {:?}",
+        inspection.findings
+    );
+}
+
+/// Stripped, emptied, or non-array `hashes` become one unpinned finding
+/// naming every affected provider; the selection still extracts.
+#[test]
+fn inspect_hash_tampering_is_an_unpinned_finding() {
+    for (name, content, named) in [
+        (
+            "stripped",
+            "provider \"example.com/a/b\" {\nversion = \"1.0.0\"\n}\n",
+            vec!["example.com/a/b"],
+        ),
+        (
+            "emptied",
+            "provider \"example.com/a/b\" {\nversion = \"1.0.0\"\nhashes = []\n}\n",
+            vec!["example.com/a/b"],
+        ),
+        (
+            "non-array",
+            "provider \"example.com/a/b\" {\nversion = \"1.0.0\"\nhashes = \"h1:xxx\"\n}\n",
+            vec!["example.com/a/b"],
+        ),
+        (
+            "added-unpinned",
+            "provider \"example.com/a/b\" {\nversion = \"1.0.0\"\n\
+             hashes = [\"h1:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"]\n}\n\
+             provider \"evil.example/x/y\" {}\n",
+            vec!["evil.example/x/y"],
+        ),
+    ] {
+        let inspection = inspect_lockfile(".terraform.lock.hcl", Some(content)).expect(name);
+        let spec = inspection.spec.expect("selection survives");
+        assert!(!spec.providers.is_empty(), "{name}: {spec:?}");
+        assert_eq!(inspection.findings.len(), 1, "{name}");
+        let finding = &inspection.findings[0];
+        assert_eq!(finding.code, LOCKFILE_UNPINNED_HASHES, "{name}");
+        assert_eq!(finding.code, "tofu_lockfile_unpinned_hashes", "{name}");
+        assert!(finding.validate().is_ok(), "{name}");
+        let observed = finding.observed.as_deref().unwrap_or_default();
+        assert_eq!(
+            observed,
+            named.join(","),
+            "{name}: names exactly the unpinned"
+        );
+        assert!(
+            finding
+                .action
+                .as_deref()
+                .unwrap_or_default()
+                .contains("tofu providers lock"),
+            "{name}: manual remediation: {finding:?}"
+        );
+    }
 }
 
 #[test]

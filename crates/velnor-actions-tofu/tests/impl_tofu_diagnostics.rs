@@ -5,6 +5,7 @@ use velnor_actions_tofu::diagnostics::{
     remediation_for_init_stderr, required_versions_for_root, version_compat_findings,
 };
 use velnor_actions_tofu::file_cache::FileCache;
+use velnor_actions_tofu::lockfile::LOCKFILE_UNPINNED_HASHES;
 
 use crate::support::{Outcome, TempDir, fixture_dir};
 
@@ -91,7 +92,10 @@ fn provider_root_with_pins_stays_silent() -> Outcome {
         &dir,
         "stacks/a",
         "resource \"x\" \"y\" {}\n",
-        Some("provider \"example.com/a/b\" {\nversion = \"1.0.0\"\n}\n"),
+        Some(
+            "provider \"example.com/a/b\" {\nversion = \"1.0.0\"\n\
+             hashes = [\"h1:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"]\n}\n",
+        ),
     )?;
     assert!(lockfile_findings_for_root(dir.path(), "stacks/a", &mut FileCache::new()).is_empty());
     Ok(())
@@ -114,7 +118,10 @@ fn module_calls_abstain_from_stale_claims() -> Outcome {
         &dir,
         ".",
         "module \"m\" {\n  source = \"./mods/m\"\n}\n",
-        Some("provider \"example.com/a/b\" {}\n"),
+        Some(
+            "provider \"example.com/a/b\" {\n\
+             hashes = [\"h1:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"]\n}\n",
+        ),
     )?;
     assert!(lockfile_findings_for_root(dir.path(), ".", &mut FileCache::new()).is_empty());
     Ok(())
@@ -134,7 +141,7 @@ fn terraform_block_alone_abstains_both_ways() -> Outcome {
 }
 
 #[test]
-fn malformed_configs_abstain() -> Outcome {
+fn malformed_configs_abstain_from_shape_claims_only() -> Outcome {
     let dir = TempDir::create("tofu-diag-malformed")?;
     seed_root(
         &dir,
@@ -142,7 +149,11 @@ fn malformed_configs_abstain() -> Outcome {
         "resource \"x\" {\n  broken ==\n",
         Some("provider \"a/b/c\" {}\n"),
     )?;
-    assert!(lockfile_findings_for_root(dir.path(), ".", &mut FileCache::new()).is_empty());
+    let findings = lockfile_findings_for_root(dir.path(), ".", &mut FileCache::new());
+    assert_eq!(findings.len(), 1, "lock-level claims need no configs");
+    assert_eq!(findings[0].code, LOCKFILE_UNPINNED_HASHES);
+    assert_eq!(findings[0].code, "tofu_lockfile_unpinned_hashes");
+    assert!(findings[0].validate().is_ok());
     Ok(())
 }
 

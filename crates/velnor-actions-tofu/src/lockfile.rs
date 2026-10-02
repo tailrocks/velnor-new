@@ -15,11 +15,44 @@ use velnor_actions_contract::{ContractError, Finding, digest_b3};
 use crate::family::LOCKFILE_NAME;
 use crate::file_cache::FileCache;
 use crate::kinds::TofuTaskKind;
-use crate::parser::parse_native;
+use crate::parser::{MAX_DIAGNOSTIC_CHARS, parse_native};
 use crate::task_identity::DigestSlot;
 
 /// Stable code for an unparseable committed lockfile.
 pub const LOCKFILE_CORRUPT: &str = "tofu_lockfile_corrupt";
+/// Stable code for provider blocks without `hashes`.
+pub const LOCKFILE_UNPINNED_HASHES: &str = "tofu_lockfile_unpinned_hashes";
+
+/// `hashes` entry count of one top-level `provider` block.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProviderHashCount {
+    /// First label (provider address; empty when unlabeled).
+    pub address: String,
+    /// Entries in the `hashes` array (0 when missing or not an array).
+    pub hashes: usize,
+}
+
+/// Count the `hashes` entries of one native `provider` block.
+///
+/// Counts array entries without walking them (no budget impact):
+/// only emptiness is structural; entry shapes stay tofu's runtime
+/// concern. Called from the structural walk for every top-level
+/// `provider` block.
+pub(crate) fn provider_hash_count(block: &hcl::Block) -> ProviderHashCount {
+    let address = block
+        .labels()
+        .first()
+        .map_or_else(String::new, |label| label.as_str().to_owned());
+    let mut hashes = 0;
+    for attribute in block.body().attributes() {
+        if attribute.key.as_str() == "hashes"
+            && let hcl::Expression::Array(items) = &attribute.expr
+        {
+            hashes = items.len();
+        }
+    }
+    ProviderHashCount { address, hashes }
+}
 
 /// Lockfile slot at `root`: content, proven absence, or unknown.
 ///
@@ -87,8 +120,9 @@ pub struct LockfileInspection {
 /// Inspect supplied lockfile bytes (`None` when missing).
 ///
 /// Read-only: a corrupt lock becomes a finding with manual
-/// remediation, never an error and never a repair. Missing and
-/// empty locks carry no claim (absence is a slot state; an empty
+/// remediation, never an error and never a repair. Provider blocks
+/// without `hashes` become an unpinned finding the same way. Missing
+/// and empty locks carry no claim (absence is a slot state; an empty
 /// lock is neutral and ignored).
 ///
 /// # Errors
@@ -122,13 +156,26 @@ pub fn inspect_lockfile(
         });
     }
     match parse_native(text) {
-        Ok(model) => Ok(LockfileInspection {
-            file,
-            spec: Some(LockfileSpec {
-                providers: provider_addresses(&model),
-            }),
-            findings: Vec::new(),
-        }),
+        Ok(model) => {
+            let unpinned: Vec<String> = model
+                .provider_hash_counts
+                .iter()
+                .filter(|entry| entry.hashes == 0)
+                .map(|entry| entry.address.clone())
+                .collect();
+            let findings = if unpinned.is_empty() {
+                Vec::new()
+            } else {
+                vec![unpinned_hashes_finding(path, &unpinned)]
+            };
+            Ok(LockfileInspection {
+                file,
+                spec: Some(LockfileSpec {
+                    providers: provider_addresses(&model),
+                }),
+                findings,
+            })
+        }
         Err(problem) => Ok(LockfileInspection {
             file,
             spec: None,
@@ -149,6 +196,29 @@ fn provider_addresses(model: &crate::parser::FileModel) -> Vec<String> {
     providers.sort();
     providers.dedup();
     providers
+}
+
+/// Unpinned-hashes finding naming the providers without them (capped).
+fn unpinned_hashes_finding(path: &str, providers: &[String]) -> Finding {
+    let observed: String = providers
+        .join(",")
+        .chars()
+        .take(MAX_DIAGNOSTIC_CHARS)
+        .collect();
+    Finding {
+        code: LOCKFILE_UNPINNED_HASHES.to_owned(),
+        path: path.to_owned(),
+        observed: Some(observed),
+        recommended: None,
+        action: Some(
+            "restore the missing `hashes` by running `tofu providers lock` manually and \
+             commit the result; Velnor never repairs the lock"
+                .to_owned(),
+        ),
+        reason: "provider entries without hashes let init resolve outside the committed \
+             pins; validate cannot prove the provider set"
+            .to_owned(),
+    }
 }
 
 /// Corrupt-lock finding: manual regeneration, never a repair.

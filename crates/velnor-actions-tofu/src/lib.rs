@@ -67,8 +67,8 @@ pub use identity::{
 };
 pub use kinds::TofuTaskKind;
 pub use lockfile::{
-    LOCKFILE_CORRUPT, LockfileInspection, LockfileSpec, TofuLockSnapshot, inspect_lockfile,
-    lock_digest_at_root, lock_slot_for_kind,
+    LOCKFILE_CORRUPT, LOCKFILE_UNPINNED_HASHES, LockfileInspection, LockfileSpec, TofuLockSnapshot,
+    inspect_lockfile, lock_digest_at_root, lock_slot_for_kind,
 };
 pub use modules::{
     ModuleDecl, ModuleEdge, ModuleEdges, ModuleError, ModuleFinding, ModuleRef, ModuleSource,
