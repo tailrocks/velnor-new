@@ -97,8 +97,8 @@ pub use derive_groups::FeatureFallback;
 pub use discover::{Discovery, PlannedWorkspace};
 pub use error::OrchestratorError;
 pub use extension_schemas::{
-    coverage_schema_known, extension_schema_for_stack, reuse_eligible_for_schema,
-    task_key_segment, task_kind_segment, task_stack_segment,
+    coverage_schema_known, extension_schema_for_stack, reuse_eligible_for_schema, task_key_segment,
+    task_kind_segment, task_stack_segment,
 };
 pub use external_data::{
     DEFAULT_EXTERNAL_DATA_MAX_AGE_SECS, EXTERNAL_DATA_CHECK_KIND, ExternalDataFreshness,
