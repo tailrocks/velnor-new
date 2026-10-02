@@ -167,14 +167,18 @@ fn tofu_data_dir_for_extra(
 /// fixed values (never `${{ }}` expressions), so the report wrapper
 /// invokes the helper for the right obligation and merge locates its
 /// evidence. Downstream same-job task IDs ride along so a failure
-/// reports its skipped successors; empty downstream stays absent.
+/// reports its skipped successors; empty downstream stays absent. A
+/// root-job cap additionally declares the matrix marker trio (the
+/// plan producer every obligation already consumes, plus the bound),
+/// which the renderer turns into `strategy.max-parallel`.
 pub(crate) fn obligation_identity_env(
     task_id: &str,
     task_digest: &str,
     matrix_id: &str,
     matrix_key: &str,
+    matrix_cap: Option<u32>,
 ) -> BTreeMap<String, String> {
-    BTreeMap::from([
+    let mut identity = BTreeMap::from([
         (OBLIGATION_TASK_ID_ENV.to_owned(), task_id.to_owned()),
         (
             OBLIGATION_TASK_DIGEST_ENV.to_owned(),
@@ -182,7 +186,22 @@ pub(crate) fn obligation_identity_env(
         ),
         (OBLIGATION_MATRIX_ID_ENV.to_owned(), matrix_id.to_owned()),
         (OBLIGATION_MATRIX_KEY_ENV.to_owned(), matrix_key.to_owned()),
-    ])
+    ]);
+    if let Some(cap) = matrix_cap {
+        identity.insert(
+            velnor_actions_workflow_renderer::MATRIX_NEEDS_JOB_ENV.to_owned(),
+            velnor_actions_workflow_renderer::render::PLAN_JOB_ID.to_owned(),
+        );
+        identity.insert(
+            velnor_actions_workflow_renderer::MATRIX_OUTPUT_ENV.to_owned(),
+            velnor_actions_workflow_renderer::COVERED_TASKS_OUTPUT.to_owned(),
+        );
+        identity.insert(
+            velnor_actions_workflow_renderer::MATRIX_MAX_PARALLEL_ENV.to_owned(),
+            cap.to_string(),
+        );
+    }
+    identity
 }
 
 /// One obligation shell step: fixed argv wrapped with report capture.
@@ -207,6 +226,7 @@ pub(crate) fn obligation_step(
     obligation: &CrateObligation,
     catalog: &ToolCatalog,
     downstream: &[String],
+    matrix_cap: Option<u32>,
 ) -> Result<Step, OrchestratorError> {
     // Unknown segments keep the previous single-stack behavior: the
     // grammar validation below fails them as malformed task IDs.
@@ -219,6 +239,7 @@ pub(crate) fn obligation_step(
         &obligation.task_digest,
         &matrix_id,
         &obligation.matrix_key,
+        matrix_cap,
     );
     if !downstream.is_empty() {
         identity.insert(DOWNSTREAM_IDS_ENV.to_owned(), downstream.join(","));
