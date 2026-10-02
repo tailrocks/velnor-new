@@ -37,3 +37,5 @@ mod impl_remed_contract_b;
 mod impl_remed_par;
 #[path = "impl_remed_policy.rs"]
 mod impl_remed_policy;
+#[path = "impl_schema2_routing.rs"]
+mod impl_schema2_routing;

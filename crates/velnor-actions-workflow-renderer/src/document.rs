@@ -180,7 +180,10 @@ fn job_to_yaml(
     steps::scan_for_private_subcommands(&job.display_name)?;
     let mut entries = vec![
         ("name".to_owned(), Yaml::str(job.display_name.clone())),
-        ("runs-on".to_owned(), Yaml::str(job.runs_on.clone())),
+        (
+            "runs-on".to_owned(),
+            crate::runs_on::runs_on_yaml(&job.runs_on)?,
+        ),
         (
             "timeout-minutes".to_owned(),
             Yaml::Int(i64::from(job.timeout_minutes.minutes())),

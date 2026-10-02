@@ -1,8 +1,7 @@
 //! Deterministic YAML emitter: stable order, safe quoting, 2-space indent.
 //!
-//! Block style only, no anchors, aliases, tags, or flow collections beyond
-//! empty `[]`/`{}`. Key order is caller-controlled; determinism follows from
-//! fixed renderer code plus sorted contract maps.
+//! Block style only, no anchors, aliases, or tags. Flow sequences are
+//! empty `[]` plus the typed `runs-on` selector. Key order is caller-controlled.
 
 /// Minimal YAML value tree with explicit mapping order.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -19,6 +18,8 @@ pub enum Yaml {
     Seq(Vec<Self>),
     /// Block mapping in the given entry order.
     Map(Vec<(String, Self)>),
+    /// One-line flow sequence of scalars: `[a, b]`.
+    Flow(Vec<String>),
 }
 
 impl Yaml {
@@ -31,7 +32,7 @@ impl Yaml {
     /// True when the value fits on one line after `key: ` or `- `.
     fn is_inline(&self) -> bool {
         match self {
-            Self::Null | Self::Str(_) | Self::Bool(_) | Self::Int(_) => true,
+            Self::Null | Self::Str(_) | Self::Bool(_) | Self::Int(_) | Self::Flow(_) => true,
             Self::Seq(items) => items.is_empty(),
             Self::Map(entries) => entries.is_empty(),
         }
@@ -101,7 +102,7 @@ fn emit_node(value: &Yaml, indent: usize, out: &mut String) {
                 emit_map_entry(key, child, indent, out);
             }
         }
-        Yaml::Null | Yaml::Str(_) | Yaml::Bool(_) | Yaml::Int(_) => {}
+        Yaml::Null | Yaml::Str(_) | Yaml::Bool(_) | Yaml::Int(_) | Yaml::Flow(_) => {}
     }
 }
 
@@ -174,8 +175,21 @@ fn emit_inline(value: &Yaml, out: &mut String) {
         Yaml::Int(num) => out.push_str(&num.to_string()),
         Yaml::Seq(items) if items.is_empty() => out.push_str("[]"),
         Yaml::Map(entries) if entries.is_empty() => out.push_str("{}"),
+        Yaml::Flow(items) => emit_flow(items, out),
         Yaml::Null | Yaml::Seq(_) | Yaml::Map(_) => {}
     }
+}
+
+/// Emit `[a, b]` with the renderer's scalar quoting.
+fn emit_flow(items: &[String], out: &mut String) {
+    out.push('[');
+    for (index, item) in items.iter().enumerate() {
+        if index > 0 {
+            out.push_str(", ");
+        }
+        out.push_str(&quote_scalar(item));
+    }
+    out.push(']');
 }
 
 /// Push 2-space indentation.
