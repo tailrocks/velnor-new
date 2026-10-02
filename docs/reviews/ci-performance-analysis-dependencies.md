@@ -61,3 +61,10 @@ completion path **210 s**, longest dependency job walls **203 s**, executed runn
 wall sum **708 s**. Workflow blob and SHA-256 remained those recorded in the
 [hosted protocol](ci-performance-hosted-protocol.md). This qualifies the reporting
 dependency and bounded timeline calculation, not hosted T01–T26 performance.
+
+After terminal-metadata admission was added, the same isolated environment passed
+the expanded **23-test** suite and reran that failed baseline successfully. Private
+`analysis-dependencies/terminal-admission-proof/proof.json` records exact analyzer,
+test, requirements and verified wheel input SHA-256 values, command exit codes
+and transcript digests. The earlier 15-test count describes the initial dependency
+qualification; this expansion adds admission proof, not performance qualification.
