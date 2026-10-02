@@ -3,6 +3,7 @@
 //! Validated IR plus fixed argv in, marked YAML out: no subprocesses, no
 //! stack or tool branching, quoting-only shell shaping.
 
+pub mod agents_md;
 mod artifact_paths;
 pub mod cache_elect;
 pub mod cache_p08;
@@ -75,12 +76,13 @@ pub use preseed::{
     preseed_manifest_verify_step, preseed_stage_step, preseed_upload_step, preseed_verify_step,
 };
 pub use render::{
-    ACTIONLINT_PATH, ALINT_BINARY_VERSION, ALINT_USES, CANDIDATE_JOB_ID, CONCURRENCY_CANCEL,
-    CONCURRENCY_GROUP, COVERED_TASKS_OUTPUT, CandidateSpec, EXPECTED_PR_TYPES, FINAL_CONDITION,
+    ACTIONLINT_PATH, AGENTS_MD_PATH, ALINT_BINARY_VERSION, ALINT_USES, CANDIDATE_JOB_ID,
+    CLAUDE_MD_PATH, CLAUDE_MD_TARGET, CONCURRENCY_CANCEL, CONCURRENCY_GROUP,
+    COVERED_TASKS_OUTPUT, CandidateSpec, EXPECTED_PR_TYPES, FINAL_CONDITION,
     FINAL_DISPLAY_NAME, FINAL_JOB_ID, MATRIX_MAX_PARALLEL_ENV, MATRIX_NEEDS_JOB_ENV,
     MATRIX_OUTPUT_ENV, MatrixSource, MiseSetup, PLAN_ID_OUTPUT, PLAN_JOB_ID, PLAN_STEP_ID,
-    PUBLISH_JOB_ID, RUN_KEY_OUTPUT, RenderContext, RenderedFile, RenderedTree, TASK_JOB_ID,
-    ValidatorCommand, WORKFLOW_PATH, action_pins, finalize_jobs, render_workflow_ir,
+    PUBLISH_JOB_ID, RUN_KEY_OUTPUT, RenderContext, RenderedFile, RenderedSymlink, RenderedTree,
+    TASK_JOB_ID, ValidatorCommand, WORKFLOW_PATH, action_pins, finalize_jobs, render_workflow_ir,
     render_workflow_ir_strict,
 };
 pub use setup::{MISE_ACTION_NAME, SETUP_MISE_NAME, mise_setup_step};
