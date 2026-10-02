@@ -3,14 +3,24 @@
 use std::collections::VecDeque;
 
 use velnor_runner_github::{
-    Ack, AcquireOutcome, Certainty, Exchange, InnerKind, Method, ParsedBatch, Poll, RefreshGate,
-    SessionError, SessionRequest, Transport, TransportFail, WireError, ack, acquire, acquire_path,
-    delete_session, jit, jit_path, may_ack, parse_poll,
+    Ack, AckScope, AcquireOutcome, Certainty, Exchange, InnerKind, Method, ParsedBatch, Poll,
+    RefreshGate, SessionError, SessionRequest, Transport, TransportFail, WireError, ack, acquire,
+    acquire_path, delete_session, jit, jit_path, may_ack, parse_poll,
 };
 
 const QUEUE: &str = "_apis/runtime/runnerscalesets/7/sessions/s/messages";
 const UNKNOWN: &str = r#"{"messageId":4,"messageType":"RunnerScaleSetJobMessages","body":"[{\"messageType\":\"JobExploded\",\"runnerRequestId\":9}]"}"#;
 const AVAILABLE: &str = r#"{"messageId":4,"messageType":"RunnerScaleSetJobMessages","body":"[{\"messageType\":\"JobAvailable\",\"runnerRequestId\":3}]"}"#;
+const TOKEN: &str = "queue-token-canary";
+const ADMIN: &str = "admin-canary";
+
+fn scope(replay_safe: bool, sole_unacquired_offer: bool) -> AckScope<'static> {
+    AckScope {
+        replay_safe,
+        sole_unacquired_offer,
+        queue_token: TOKEN,
+    }
+}
 
 struct Script {
     replies: VecDeque<Result<Exchange, TransportFail>>,
@@ -80,8 +90,7 @@ fn suppressed(
         &mut script,
         QUEUE,
         batch,
-        replay_safe,
-        sole_unacquired_offer,
+        &scope(replay_safe, sole_unacquired_offer),
         &RefreshGate::new(),
         || Ok(()),
     )
@@ -96,25 +105,40 @@ fn acquire_keeps_partial_ids_and_rejects_foreign_ids() -> Result<(), &'static st
     let gate = RefreshGate::new();
     let mut script = Script::once(200, r#"{"count":2,"value":[1,3]}"#);
     let partial =
-        acquire(&mut script, 3, &[1, 2, 3], &[], &gate, || Ok(())).map_err(|_| "partial")?;
+        acquire(&mut script, 3, &[1, 2, 3], &[], TOKEN, &gate, || Ok(())).map_err(|_| "partial")?;
     assert_eq!(partial, AcquireOutcome::Acquired(vec![1, 3]));
     assert_eq!(script.seen[0].method, Method::Post);
     assert_eq!(script.seen[0].path, acquire_path(3));
     assert_eq!(&script.seen[0].body, b"[1,2,3]");
     assert_eq!(header(&script.seen[0], "X-ScaleSetMaxCapacity"), None);
     assert_eq!(
+        header(&script.seen[0], "Authorization"),
+        Some("Bearer queue-token-canary")
+    );
+    assert!(!format!("{:?}", script.seen[0]).contains(TOKEN));
+    assert_eq!(header(&script.seen[0], "User-Agent"), Some("velnor-host"));
+    assert_eq!(
         script.seen[0].query.as_deref(),
         Some("api-version=6.0-preview")
     );
     let mut foreign = Script::once(200, r#"{"count":1,"value":[9]}"#);
-    let err = must_err(&acquire(&mut foreign, 3, &[1], &[], &gate, || Ok(())))?;
+    let err = must_err(&acquire(
+        &mut foreign,
+        3,
+        &[1],
+        &[],
+        TOKEN,
+        &gate,
+        || Ok(()),
+    ))?;
     assert_eq!(err, SessionError::Wire(WireError::OutsideRequest));
     assert_eq!(err.certainty(), Certainty::Definite);
     let mut same = Script::once(200, r#"{"count":2,"value":[2,1]}"#);
-    let noop = acquire(&mut same, 3, &[1, 2], &[1, 2], &gate, || Ok(())).map_err(|_| "noop")?;
+    let noop =
+        acquire(&mut same, 3, &[1, 2], &[1, 2], TOKEN, &gate, || Ok(())).map_err(|_| "noop")?;
     assert_eq!(noop, AcquireOutcome::Noop);
     let mut bad = Script::once(200, r#"{"count":1,"value":[1,2]}"#);
-    let err = must_err(&acquire(&mut bad, 3, &[1, 2], &[], &gate, || Ok(())))?;
+    let err = must_err(&acquire(&mut bad, 3, &[1, 2], &[], TOKEN, &gate, || Ok(())))?;
     assert_eq!(err, SessionError::Wire(WireError::Malformed));
     Ok(())
 }
@@ -124,13 +148,13 @@ fn acquire_timeout_and_reset_are_not_definite_failures() -> Result<(), &'static 
     let gate = RefreshGate::new();
     for fail in [TransportFail::Timeout, TransportFail::Reset] {
         let mut script = Script::fail(fail);
-        let err = must_err(&acquire(&mut script, 3, &[1], &[], &gate, || Ok(())))?;
+        let err = must_err(&acquire(&mut script, 3, &[1], &[], TOKEN, &gate, || Ok(())))?;
         assert_eq!(err, SessionError::Uncertain);
         assert_eq!(err.certainty(), Certainty::Uncertain);
         assert_eq!(gate.started().map_err(|_| "started")?, 0);
     }
     let mut script = Script::once(403, "");
-    let err = must_err(&acquire(&mut script, 3, &[1], &[], &gate, || Ok(())))?;
+    let err = must_err(&acquire(&mut script, 3, &[1], &[], TOKEN, &gate, || Ok(())))?;
     assert_eq!(err, SessionError::Wire(WireError::Forbidden));
     assert_eq!(err.certainty(), Certainty::Definite);
     assert_eq!(script.seen.len(), 1);
@@ -165,8 +189,7 @@ fn ack_skips_unsafe_batches_and_deletes_real_ids() -> Result<(), &'static str> {
         &mut script,
         QUEUE,
         &zero,
-        true,
-        false,
+        &scope(true, false),
         &RefreshGate::new(),
         || Ok(()),
     )
@@ -180,8 +203,7 @@ fn ack_skips_unsafe_batches_and_deletes_real_ids() -> Result<(), &'static str> {
         &mut script,
         QUEUE,
         &available,
-        true,
-        false,
+        &scope(true, false),
         &RefreshGate::new(),
         || Ok(()),
     )
@@ -203,8 +225,7 @@ fn ack_non_204_fails_and_unauthorized_retries_once() -> Result<(), &'static str>
         &mut script,
         QUEUE,
         &zero,
-        true,
-        false,
+        &scope(true, false),
         &RefreshGate::new(),
         || Ok(()),
     ))?;
@@ -220,8 +241,7 @@ fn ack_non_204_fails_and_unauthorized_retries_once() -> Result<(), &'static str>
         &mut script,
         QUEUE,
         &zero,
-        true,
-        false,
+        &scope(true, false),
         &RefreshGate::new(),
         || {
             refreshes += 1;
@@ -245,19 +265,27 @@ fn jit_bytes_stay_out_of_debug_and_errors() -> Result<(), &'static str> {
     let request_canary = "request-jit-canary";
     let response_canary = "response-jit-canary";
     let request = format!(r#"{{"name":"{request_canary}"}}"#);
-    let mut script = Script::once(200, response_canary);
-    let config = jit(&mut script, 7, request.as_bytes()).map_err(|_| "jit")?;
+    let response = format!(r#"{{"encodedJITConfig":"{response_canary}"}}"#);
+    let mut script = Script::once(200, &response);
+    let config = jit(&mut script, 7, ADMIN, request.as_bytes()).map_err(|_| "jit")?;
     assert_eq!(config.expose(), response_canary);
+    assert!(!config.expose().contains("encodedJITConfig"));
     assert!(!format!("{config:?}").contains(response_canary));
     let rendered = format!("{:?}", script.seen[0]);
     assert!(!rendered.contains(request_canary));
     assert!(!rendered.contains(response_canary));
+    assert!(!rendered.contains(ADMIN));
+    assert_eq!(
+        header(&script.seen[0], "Authorization"),
+        Some("Bearer admin-canary")
+    );
+    assert_eq!(header(&script.seen[0], "User-Agent"), Some("velnor-host"));
     assert_eq!(script.seen[0].body, request.as_bytes());
     assert_eq!(script.seen[0].method, Method::Post);
     assert_eq!(script.seen[0].path, jit_path(7));
     assert_eq!(script.seen.len(), 1);
     let mut script = Script::once(500, response_canary);
-    let err = must_err(&jit(&mut script, 7, request.as_bytes()))?;
+    let err = must_err(&jit(&mut script, 7, ADMIN, request.as_bytes()))?;
     let rendered = format!("{err} {err:?} {:?}", script.seen[0]);
     assert!(!rendered.contains(request_canary));
     assert!(!rendered.contains(response_canary));

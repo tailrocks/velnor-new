@@ -16,6 +16,8 @@ pub enum Method {
     Post,
     /// `DELETE` a message or the session.
     Delete,
+    /// `PATCH` refreshes the message session.
+    Patch,
 }
 
 /// Outbound call. The body is wiped on drop and hidden from [`Debug`].
@@ -41,15 +43,33 @@ impl fmt::Debug for SessionRequest {
             .field("method", &self.method)
             .field("path", &self.path)
             .field("query", &self.query)
-            .field("headers", &self.headers)
+            .field("headers", &redacted_headers(&self.headers))
             .field("body", &"[redacted]")
             .finish()
     }
 }
 
+fn redacted_headers(headers: &[(String, String)]) -> Vec<(&str, &str)> {
+    headers
+        .iter()
+        .map(|(key, value)| {
+            if key.eq_ignore_ascii_case("authorization") {
+                (key.as_str(), "[redacted]")
+            } else {
+                (key.as_str(), value.as_str())
+            }
+        })
+        .collect()
+}
+
 impl Drop for SessionRequest {
     fn drop(&mut self) {
         self.body.zeroize();
+        for (key, value) in &mut self.headers {
+            if key.eq_ignore_ascii_case("authorization") {
+                value.zeroize();
+            }
+        }
     }
 }
 

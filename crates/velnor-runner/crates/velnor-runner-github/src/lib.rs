@@ -22,6 +22,6 @@ pub use refresh::{RefreshGate, StatusClass, classify_status};
 pub use registration::{Label, ScaleSetView, accept_scale_set, create_body};
 pub use secret::EncodedJit;
 pub use session::{
-    Ack, Exchange, Method, SessionError, SessionRequest, Transport, ack, acquire, delete_session,
-    jit, poll,
+    Ack, AckScope, Exchange, Method, QueueSession, SessionError, SessionRequest, Transport, ack,
+    acquire, create_session, delete_session, jit, poll, refresh_if_current, refresh_session,
 };

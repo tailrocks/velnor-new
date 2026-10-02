@@ -6,7 +6,19 @@ use crate::{ParsedBatch, WireError, may_ack};
 
 use super::error::{SessionError, reject};
 use super::request::{Method, SessionRequest, Transport};
-use super::retry::{attempt, json_content};
+use super::retry::{attempt, bearer, json_content, user_agent};
+
+/// Delete policy for one batch. Keeps [`ack`] under the argument limit.
+#[derive(Debug, Clone, Copy)]
+#[must_use]
+pub struct AckScope<'a> {
+    /// False suppresses the delete. A replay that is not safe must not ack.
+    pub replay_safe: bool,
+    /// True suppresses the delete so a sole unacquired offer stays queued.
+    pub sole_unacquired_offer: bool,
+    /// Queue bearer. Not the admin token.
+    pub queue_token: &'a str,
+}
 
 /// Result of an acknowledgement attempt.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -35,8 +47,7 @@ pub fn ack<T, R>(
     transport: &mut T,
     queue_path: &str,
     batch: &ParsedBatch,
-    replay_safe: bool,
-    sole_unacquired_offer: bool,
+    scope: &AckScope<'_>,
     gate: &RefreshGate,
     refresh: R,
 ) -> Result<Ack, SessionError>
@@ -44,14 +55,14 @@ where
     T: Transport + ?Sized,
     R: FnMut() -> Result<(), WireError>,
 {
-    if sole_unacquired_offer || !may_ack(batch, replay_safe) {
+    if scope.sole_unacquired_offer || !may_ack(batch, scope.replay_safe) {
         return Ok(Ack::Suppressed);
     }
     let request = SessionRequest {
         method: Method::Delete,
         path: message_path(queue_path, batch.message_id),
         query: None,
-        headers: vec![json_content()],
+        headers: vec![json_content(), bearer(scope.queue_token)?, user_agent()],
         body: Vec::new(),
     };
     let answer = attempt(transport, &request, gate, refresh)?;

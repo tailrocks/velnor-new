@@ -29,7 +29,7 @@ impl SessionError {
     }
 }
 
-pub(crate) fn reject(class: StatusClass) -> SessionError {
+pub(crate) const fn reject(class: StatusClass) -> SessionError {
     match class {
         StatusClass::SessionConflict => SessionError::Conflict,
         StatusClass::Ok

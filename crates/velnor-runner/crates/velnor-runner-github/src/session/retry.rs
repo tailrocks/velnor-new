@@ -13,7 +13,7 @@ use super::request::{Exchange, SessionRequest, Transport};
 
 pub(crate) const API_QUERY: &str = "api-version=6.0-preview";
 
-pub(crate) fn fresh_gate() -> RefreshGate {
+pub(crate) const fn fresh_gate() -> RefreshGate {
     RefreshGate::new()
 }
 
@@ -24,8 +24,8 @@ pub(crate) struct Answer {
 }
 
 impl Answer {
-    pub(crate) fn body(&self) -> &[u8] {
-        &self.body
+    pub(crate) const fn body(&self) -> &[u8] {
+        self.body.as_slice()
     }
 }
 
@@ -48,6 +48,25 @@ pub(crate) fn accept_preview() -> (String, String) {
 
 pub(crate) fn capacity_pair(total: u32) -> (String, String) {
     (CAPACITY_HEADER.to_owned(), capacity_header_value(total))
+}
+
+/// Product token. Not the GitHub Actions runner user agent.
+pub(crate) const USER_AGENT: &str = "velnor-host";
+
+pub(crate) fn user_agent() -> (String, String) {
+    ("User-Agent".to_owned(), USER_AGENT.to_owned())
+}
+
+/// Queue or admin bearer. An empty token never reaches the transport.
+///
+/// # Errors
+///
+/// Returns [`WireError::RegistrationRejected`] when `token` is empty.
+pub(crate) fn bearer(token: &str) -> Result<(String, String), SessionError> {
+    if token.is_empty() {
+        return Err(SessionError::Wire(WireError::RegistrationRejected));
+    }
+    Ok(("Authorization".to_owned(), format!("Bearer {token}")))
 }
 
 pub(crate) fn poll_query(cursor: i64) -> String {
