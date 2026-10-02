@@ -38,3 +38,15 @@ fn tofu_obligations_order_fmt_init_validate() {
     assert_eq!(obligations[0].step_name, step_name_for("fmt", &fmt.task_id));
     assert_eq!(obligations[2].gated_by, vec![init.task_id.clone()]);
 }
+
+#[test]
+fn tofu_tasks_bind_no_rust_tools_but_select_opentofu() {
+    use velnor_actions_tofu::TofuTaskKind;
+    let tofu = tofu_group("stacks/a", TofuTaskKind::Validate);
+    let needs = needs(&tofu);
+    assert!(!needs.mbx && !needs.nextest);
+    assert!(!is_mbx(&tofu) && !is_nextest(&tofu));
+    assert!(is_opentofu(&tofu));
+    let rust = crate_jobs_tests::group("demo", TaskKind::Clippy, &[]);
+    assert!(!is_opentofu(&rust));
+}

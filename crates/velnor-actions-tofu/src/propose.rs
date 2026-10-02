@@ -5,7 +5,7 @@
 //! [`task_id_for_stack`](velnor_actions_contract::task_id_for_stack)
 //! grammar, `Validate depends_on same-root Init` edges through the
 //! neutral `depends_on` vocabulary, and precomputed adapter facts
-//! (payload stub, component, project root), never recomputed
+//! (payload, environment, component, project root), never recomputed
 //! downstream. The kind/tool helpers below back the orchestrator's
 //! closed per-stack dispatch: spellings stay here, decisions stay
 //! neutral out there.
@@ -18,6 +18,8 @@ use velnor_actions_contract::{
     component_id_for_unit, project_root_for_unit_path,
 };
 
+use crate::argv::tofu_payload_argv;
+use crate::env::tofu_payload_env;
 use crate::kinds::TofuTaskKind;
 
 /// Selected compile driver spelling for tofu tasks: the invoked program.
@@ -94,32 +96,32 @@ pub fn task_id_for_root(
     )
 }
 
-/// Stub payload carried until T13 owns argv shapes.
-///
-/// Satisfies the non-empty payload rule; a documented placeholder
-/// that planning wraps but never executes. T13 replaces this with
-/// the fixed per-kind argv.
-#[must_use]
-pub fn stub_payload() -> Vec<OsString> {
-    vec![OsString::from("tofu"), OsString::from("pending_t13")]
-}
-
 /// Convert one tofu task group into its neutral proposal.
 ///
 /// Copies adapter-known fields verbatim (ids, edges, drivers as
-/// spellings) and precomputes the stub payload, component, and
-/// project root the pipeline needs. `Validate` depends on the
+/// spellings) and precomputes the payload, environment, component,
+/// and project root the pipeline needs. `Validate` depends on the
 /// same-root `Init`; `Fmt` is independent.
 ///
 /// # Errors
 ///
 /// Returns [`ContractError`] when the triple falls outside the
-/// task-ID grammar.
+/// task-ID grammar, or when the fixed payload rejects a
+/// leading-dash root.
 pub fn propose_task(group: &TofuTaskGroup) -> Result<ProposedTask, ContractError> {
     let key = key_for_root(&group.root);
     let unit_path = display_for_root(&group.root);
     let project_root = project_root_for_unit_path(&unit_path);
     let task_id = task_id_for_root(&group.root, group.kind, &group.configuration)?;
+    let environment: BTreeMap<String, String> = tofu_payload_env(group.kind)
+        .into_iter()
+        .map(|(name, value)| {
+            (
+                name.to_string_lossy().into_owned(),
+                value.to_string_lossy().into_owned(),
+            )
+        })
+        .collect();
     let depends_on = match group.kind {
         TofuTaskKind::Validate => vec![task_id_for_root(
             &group.root,
@@ -160,11 +162,11 @@ pub fn propose_task(group: &TofuTaskGroup) -> Result<ProposedTask, ContractError
             flags: Vec::new(),
             compile_driver: TOFU_DRIVER.to_owned(),
             test_runner: TOFU_RUNNER.to_owned(),
-            environment: BTreeMap::new(),
+            environment,
             declared_inputs: Vec::new(),
             undeclared_reads: false,
         },
-        payload: stub_payload(),
+        payload: tofu_payload_argv(group.kind, &group.root)?,
         display_name: display_for_root(&group.root),
         uses_clock: false,
         uses_random: false,
@@ -232,14 +234,11 @@ pub fn is_validate_kind(kind: &str) -> bool {
     kind == TofuTaskKind::Validate.as_str()
 }
 
-/// Fixed payload env for one kind spelling; empty for every tofu kind.
-///
-/// T13 owns tofu env (and argv shapes); this mapping exists so the
-/// obligation step threads tofu kinds through the same seam without
-/// misreading them as rust kinds.
+/// Fixed payload env for one kind spelling; bogus spellings map empty.
 #[must_use]
 pub fn payload_env_for_kind(kind: &str) -> Vec<(OsString, OsString)> {
-    // Validated legs never carry unknown kinds; T13 maps tofu env.
-    let _ = kind;
-    Vec::new()
+    match TofuTaskKind::parse(kind) {
+        Ok(parsed) => tofu_payload_env(parsed),
+        Err(_) => Vec::new(),
+    }
 }

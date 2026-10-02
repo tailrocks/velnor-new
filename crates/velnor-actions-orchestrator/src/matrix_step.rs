@@ -3,20 +3,21 @@
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 
-use velnor_actions_contract::{
-    CrateObligation, Stack, Step, WorkflowPolicy, sanitize_error_detail,
-};
-use velnor_actions_mise::{
-    ISOLATION_ENV, NO_AUTO_INSTALL_ENV, PREPARE_PINNED_TOOLS_STEP, PinnedTool, PreparePinnedTools,
-    ToolCatalog, ToolHomes,
-};
+use velnor_actions_contract::{CrateObligation, Stack, Step, sanitize_error_detail};
+use velnor_actions_mise::{ISOLATION_ENV, NO_AUTO_INSTALL_ENV, ToolCatalog, ToolHomes};
 use velnor_actions_rust::{payload_env_for_kind, step_base_name};
 use velnor_actions_workflow_renderer::plan_format::FORMAT_STEP_NAME;
 use velnor_actions_workflow_renderer::steps::{INTERNAL_OP_ENV, STAGED_BINARY_PREFIX};
 
 use crate::OrchestratorError;
 use crate::task_report::{DOWNSTREAM_IDS_ENV, EXIT_CODE_ENV, REPORT_OP, START_MS_ENV, TASK_ID_ENV};
-use crate::utf8::{strings_of, strings_of_env};
+
+#[path = "matrix_tools.rs"]
+mod tools;
+
+#[cfg(test)]
+pub(crate) use tools::task_driver_tools;
+pub(crate) use tools::{crate_needs_generate_validators, prepare_crate_tools_step};
 
 /// `Documentation` obligation step name.
 #[cfg(test)]
@@ -60,91 +61,13 @@ fn obligation_stack(task_id: &str) -> Option<Stack> {
 
 /// Fixed payload env for one obligation, dispatched by stack.
 ///
-/// Tofu kinds thread through the tofu env mapping (empty until T13
-/// owns tofu env); everything else keeps the rust mapping.
+/// Tofu kinds thread through the tofu env mapping (the T03
+/// automation pair); everything else keeps the rust mapping.
 fn payload_env_for_obligation(task_id: &str, kind: &str) -> Vec<(OsString, OsString)> {
     match obligation_stack(task_id) {
         Some(Stack::Tofu) => velnor_actions_tofu::payload_env_for_kind(kind),
         _ => payload_env_for_kind(kind),
     }
-}
-
-/// Crate-job driver tools: Rust plus MBX only on MBX evidence.
-#[must_use]
-pub(crate) fn task_driver_tools(use_mbx: bool) -> Vec<PinnedTool> {
-    let mut tools = vec![PinnedTool::Rust];
-    tools.extend(use_mbx.then_some(PinnedTool::MrBoxington));
-    tools
-}
-
-/// Velnor-repository suites that shell out to the `generate` validators.
-///
-/// Only the orchestrator suite (validating `generate` plus zizmor
-/// staging) and the CLI suite (parity runs `generate`) execute the
-/// trio; every other suite only asserts argv, never spawns validators.
-///
-/// Re-audit when a suite starts spawning validators: grep its tests
-/// for `generate()` executions and `PinnedToolExec` trio runs
-/// (actionlint, shellcheck, zizmor); a suite that executes any of
-/// them joins this list, anything else stays trimmed. Adding a
-/// workspace crate fails `every_workspace_member_is_classified`
-/// until it is classified here or in the trimmed set.
-const GENERATE_VALIDATOR_SUITES: [&str; 2] = ["velnor-actions-orchestrator", "velnor-actions-cli"];
-
-/// Whether one crate job installs the `generate` validators.
-///
-/// Velnor-policy jobs trim by executed suite: only the two suites above
-/// install the trio, the rest install drivers plus Nextest. Consumer
-/// suites are opaque to the generator, so consumer jobs keep the trio
-/// fail-safe: dropping an install a suite needs fails CI with
-/// `couldn't exec process` (run 36751323928), while an unneeded
-/// install only costs seconds. Dedicated validator jobs remain the
-/// lint gates for the committed workflow either way.
-#[must_use]
-pub(crate) fn crate_needs_generate_validators(policy: WorkflowPolicy, package: &str) -> bool {
-    match policy {
-        WorkflowPolicy::ConsumerV1 => true,
-        WorkflowPolicy::VelnorRepositoryV1 => GENERATE_VALIDATOR_SUITES.contains(&package),
-    }
-}
-
-/// Typed `Prepare pinned tools` step for the crate-job tool set.
-///
-/// Driver toolchain plus Nextest when used, plus the `generate`
-/// validators only when `needs_validators` holds (see
-/// [`crate_needs_generate_validators`]). The set is exact and pinned
-/// by test: driver, conditional validators, optional Nextest, nothing
-/// else. Order follows `PinnedTool::ALL`.
-///
-/// # Errors
-///
-/// Returns a contract error when the Mise adapter rejects the request.
-pub(crate) fn prepare_crate_tools_step(
-    catalog: &ToolCatalog,
-    use_mbx: bool,
-    use_nextest: bool,
-    needs_validators: bool,
-) -> Result<Step, OrchestratorError> {
-    let mut tools = task_driver_tools(use_mbx);
-    if needs_validators {
-        tools.extend([
-            PinnedTool::Actionlint,
-            PinnedTool::Shellcheck,
-            PinnedTool::Zizmor,
-        ]);
-    }
-    tools.extend(use_nextest.then_some(PinnedTool::Nextest));
-    let prepare = PreparePinnedTools::new(tools, ToolHomes::runner_temp()).map_err(|err| {
-        OrchestratorError::Contract {
-            problem: err.to_string(),
-        }
-    })?;
-    let run = strings_of(prepare.argv(catalog))
-        .map_err(|problem| OrchestratorError::Contract { problem })?;
-    let env = strings_of_env(&prepare.env(catalog))
-        .map_err(|problem| OrchestratorError::Contract { problem })?;
-    velnor_actions_workflow_renderer::ambient_shell_step(PREPARE_PINNED_TOOLS_STEP, run, env)
-        .map_err(OrchestratorError::from)
 }
 
 /// Validated env every crate-job Cargo step runs with.
@@ -221,9 +144,9 @@ pub(crate) fn obligation_identity_env(
 /// Identity env doubles as the report lookup key; the plan binds the
 /// digests, never these baked values. Doc obligations additionally
 /// carry the adapter `payload_env_for_kind` pairs (`RUSTDOCFLAGS=-D
-/// warnings`), matching the plan identity envelope. The step skips via
-/// `if:` when the plan covered this obligation; unknown coverage
-/// executes.
+/// warnings`) and tofu obligations the automation pair, matching the
+/// plan identity envelope. The step skips via `if:` when the plan
+/// covered this obligation; unknown coverage executes.
 ///
 /// # Errors
 ///

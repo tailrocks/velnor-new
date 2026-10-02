@@ -96,8 +96,7 @@ pub(crate) fn task_argv(
 
 /// V1 fixed vector for one tofu task: pinned `opentofu`, program `tofu`.
 ///
-/// The stub payload rides through wrapped, never edited; T13 replaces
-/// the payload words while this routing stays.
+/// The fixed payload rides through wrapped, never edited.
 fn tofu_task_argv(
     task: &ProposedTask,
     catalog: &ToolCatalog,

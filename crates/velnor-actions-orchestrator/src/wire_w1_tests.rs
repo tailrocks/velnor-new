@@ -87,20 +87,38 @@ fn crate_tools_follow_selection_with_validators() {
     use velnor_actions_mise::PinnedTool;
 
     use crate::matrix_step::{prepare_crate_tools_step, task_driver_tools};
-    assert_eq!(task_driver_tools(false), vec![PinnedTool::Rust]);
+    assert_eq!(task_driver_tools(false, false), vec![PinnedTool::Rust]);
     assert_eq!(
-        task_driver_tools(true),
+        task_driver_tools(true, false),
         vec![PinnedTool::Rust, PinnedTool::MrBoxington]
     );
+    assert_eq!(
+        task_driver_tools(false, true),
+        vec![PinnedTool::Rust, PinnedTool::Opentofu]
+    );
+    assert_eq!(
+        task_driver_tools(true, true),
+        vec![
+            PinnedTool::Rust,
+            PinnedTool::MrBoxington,
+            PinnedTool::Opentofu
+        ]
+    );
     let catalog = ToolCatalog::pinned();
-    for (use_mbx, use_nextest, needs_validators) in [
-        (false, false, false),
-        (false, true, true),
-        (true, false, true),
-        (true, true, false),
+    for (use_mbx, use_nextest, use_opentofu, needs_validators) in [
+        (false, false, false, false),
+        (false, true, true, true),
+        (true, false, true, true),
+        (true, true, false, false),
     ] {
-        let step = prepare_crate_tools_step(&catalog, use_mbx, use_nextest, needs_validators)
-            .expect("step");
+        let step = prepare_crate_tools_step(
+            &catalog,
+            use_mbx,
+            use_nextest,
+            use_opentofu,
+            needs_validators,
+        )
+        .expect("step");
         let StepKind::Shell { run, .. } = &step.kind else {
             panic!("prepare must be a shell step");
         };
@@ -119,6 +137,8 @@ fn crate_tools_follow_selection_with_validators() {
         assert_eq!(run.contains(&nextest), use_nextest);
         let mbx = catalog.tool_spec(PinnedTool::MrBoxington);
         assert_eq!(run.contains(&mbx), use_mbx);
+        let opentofu = catalog.tool_spec(PinnedTool::Opentofu);
+        assert_eq!(run.contains(&opentofu), use_opentofu);
         assert!(declared_config_variables().is_empty());
     }
 }
@@ -130,9 +150,20 @@ fn crate_tools_install_exact_pinned_set() {
     use crate::matrix_step::prepare_crate_tools_step;
     let catalog = ToolCatalog::pinned();
     for needs_validators in [false, true] {
-        for (use_mbx, use_nextest) in [(false, false), (false, true), (true, false), (true, true)] {
-            let step = prepare_crate_tools_step(&catalog, use_mbx, use_nextest, needs_validators)
-                .expect("step");
+        for (use_mbx, use_nextest, use_opentofu) in [
+            (false, false, false),
+            (false, true, true),
+            (true, false, true),
+            (true, true, false),
+        ] {
+            let step = prepare_crate_tools_step(
+                &catalog,
+                use_mbx,
+                use_nextest,
+                use_opentofu,
+                needs_validators,
+            )
+            .expect("step");
             let StepKind::Shell { run, .. } = &step.kind else {
                 panic!("prepare must be a shell step");
             };
@@ -144,6 +175,9 @@ fn crate_tools_install_exact_pinned_set() {
             let mut expected = vec![catalog.tool_spec(PinnedTool::Rust)];
             if use_mbx {
                 expected.push(catalog.tool_spec(PinnedTool::MrBoxington));
+            }
+            if use_opentofu {
+                expected.push(catalog.tool_spec(PinnedTool::Opentofu));
             }
             if needs_validators {
                 expected.extend([
@@ -158,7 +192,7 @@ fn crate_tools_install_exact_pinned_set() {
             assert_eq!(
                 specs,
                 expected.as_slice(),
-                "exact crate install set (mbx={use_mbx}, nextest={use_nextest}, validators={needs_validators})"
+                "exact crate install set (mbx={use_mbx}, nextest={use_nextest}, opentofu={use_opentofu}, validators={needs_validators})"
             );
             for absent in [PinnedTool::Gh, PinnedTool::ReleasePlz] {
                 assert!(

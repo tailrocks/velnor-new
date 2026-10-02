@@ -80,6 +80,7 @@ pub(crate) fn build_crate_jobs(
         let display = crate_display_name(&first.display_name, &manifest, configuration);
         let use_mbx = tasks.iter().any(|task| is_mbx(task));
         let use_nextest = tasks.iter().any(|task| is_nextest(task));
+        let use_opentofu = tasks.iter().any(|task| is_opentofu(task));
         let driver = if use_mbx {
             RenderDriver::Mbx
         } else {
@@ -104,6 +105,7 @@ pub(crate) fn build_crate_jobs(
             fetch_roots,
             use_mbx,
             use_nextest,
+            use_opentofu,
             repo_has_mbx,
             acquire,
         )?;
@@ -127,7 +129,16 @@ pub(crate) fn is_runnable(task: &ProposedTask) -> bool {
 }
 
 /// Tool needs backing one task's driver/runner selection.
+///
+/// Tofu tasks bind no rust tools through an explicit arm, never the
+/// rust unknown-spelling fallthrough.
 fn needs(task: &ProposedTask) -> velnor_actions_rust::ToolNeeds {
+    if Stack::from_id(&task.stack_id) == Some(Stack::Tofu) {
+        return velnor_actions_rust::ToolNeeds {
+            mbx: false,
+            nextest: false,
+        };
+    }
     tool_needs(&task.identity.compile_driver, &task.identity.test_runner)
 }
 
@@ -139,6 +150,11 @@ fn is_mbx(task: &ProposedTask) -> bool {
 /// True when the task runs tests through Nextest.
 fn is_nextest(task: &ProposedTask) -> bool {
     needs(task).nextest
+}
+
+/// True when the task runs through the pinned Opentofu driver.
+fn is_opentofu(task: &ProposedTask) -> bool {
+    Stack::from_id(&task.stack_id) == Some(Stack::Tofu)
 }
 
 /// Obligation order rank for one task, dispatched by stack.
@@ -215,6 +231,7 @@ fn gates_for(task: &ProposedTask, executed: &BTreeSet<&str>) -> Vec<String> {
 /// entry. Readers never save.
 #[expect(
     clippy::too_many_arguments,
+    clippy::fn_params_excessive_bools,
     reason = "one call site threads job scope plus driver selection"
 )]
 fn render_job(
@@ -225,6 +242,7 @@ fn render_job(
     fetch_roots: &[String],
     use_mbx: bool,
     use_nextest: bool,
+    use_opentofu: bool,
     repo_has_mbx: bool,
     acquire: Option<&Step>,
 ) -> Result<Job, OrchestratorError> {
@@ -237,6 +255,7 @@ fn render_job(
         catalog,
         use_mbx,
         use_nextest,
+        use_opentofu,
         needs_validators,
     )?);
     steps.push(crate::workflow::prepare_rust_components_step(catalog)?);

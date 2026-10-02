@@ -25,7 +25,7 @@ use std::path::Path;
 
 use velnor_actions_contract::{
     BaselineProof, ManifestTaskProof, ObligationDecision, Plan, PlanObligation, ProposedTask,
-    digest_b3, validate_rust_extension,
+    Stack, digest_b3, validate_rust_extension,
 };
 use velnor_actions_rust::{extension_for_proposal, tool_needs};
 
@@ -112,12 +112,15 @@ fn cover_closure_digest(
 ///
 /// Cargo-driven tasks bind no mbx pin, so a pin bump never invalidates
 /// their proofs; mbx-driven tasks bind the exact pin, so a proof from
-/// another mbx version refuses.
+/// another mbx version refuses. Tofu tasks bind no mbx pin through an
+/// explicit arm, never the rust unknown-spelling fallthrough.
 fn live_mbx_digest(task: &ProposedTask, catalog: &velnor_actions_mise::ToolCatalog) -> String {
-    let needs = tool_needs(&task.identity.compile_driver, &task.identity.test_runner);
-    let pin = needs
-        .mbx
-        .then(|| catalog.version(velnor_actions_mise::PinnedTool::MrBoxington));
+    let mbx = if Stack::from_id(&task.stack_id) == Some(Stack::Tofu) {
+        false
+    } else {
+        tool_needs(&task.identity.compile_driver, &task.identity.test_runner).mbx
+    };
+    let pin = mbx.then(|| catalog.version(velnor_actions_mise::PinnedTool::MrBoxington));
     canonical_digest(&serde_json::json!({
         "driver": task.identity.compile_driver,
         "mbx_pin": pin,
