@@ -29,11 +29,13 @@ pub(crate) const LINT_DISPLAY_NAME: &str = "Actionlint";
 /// Planner job: checkout, pinned-tool install, optional Acquire, request, plan.
 ///
 /// `Prepare pinned tools` installs the exact catalog tools the later steps consume
-/// through fail-closed `mise exec`: Rust plus the detected MBX driver for the
-/// format/build steps, Nextest when any leg selects it, and the validators the
-/// public `generate` runs inside `Check generated files`. Without it the freshness
-/// step fails with `mise ... couldn't exec process` because implicit installation
-/// is disabled there.
+/// through fail-closed `mise exec`, per role: Rust plus the detected MBX driver
+/// for the format/build steps, Nextest when any leg selects it, Opentofu when any
+/// tofu work exists, and the validators the public `generate` runs inside `Check
+/// generated files`. Without it the freshness step fails with `mise ...
+/// couldn't exec process` because implicit installation is disabled there.
+/// Pure-tofu plans install opentofu plus the validators with no Rust setup
+/// (no components, fetch, or owned-homes triple); mixed plans the union.
 ///
 /// No `Verify toolchain` step: task-execution-contract §2 scopes it to
 /// task jobs; the plan sequence is workflow-contract §3 steps 1-8.
@@ -50,14 +52,22 @@ pub(crate) fn plan_job(
     label: &str,
     acquire: Option<Step>,
     catalog: &ToolCatalog,
+    use_rust: bool,
     use_mbx: bool,
     use_nextest: bool,
+    use_opentofu: bool,
     fetch_roots: &[String],
 ) -> Result<Job, OrchestratorError> {
     let mut steps = vec![checkout_history_action()?];
-    let prepare = prepare_pinned_tools_step(catalog, plan_tools(use_mbx, use_nextest))?;
+    let prepare = prepare_pinned_tools_step(
+        catalog,
+        plan_tools(use_rust, use_mbx, use_nextest, use_opentofu),
+        use_rust,
+    )?;
     steps.push(prepare);
-    steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
+    if use_rust {
+        steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
+    }
     let cached =
         crate::workflow_jobs_cache::cache_steps_for_plan(label, catalog, use_mbx, fetch_roots)?;
     steps.extend(cached.restore);
@@ -140,7 +150,11 @@ pub(crate) fn final_job(
     needs.push(LINT_JOB_ID.to_owned());
     let mut steps = Vec::new();
     steps.extend(acquire);
-    steps.push(prepare_pinned_tools_step(catalog, vec![PinnedTool::Gh])?);
+    steps.push(prepare_pinned_tools_step(
+        catalog,
+        vec![PinnedTool::Gh],
+        true,
+    )?);
     steps.push(request_step(MERGE_OPERATION)?);
     steps.push(merge_step());
     Ok(Job {
@@ -155,14 +169,21 @@ pub(crate) fn final_job(
     })
 }
 
-/// Plan-job install set: driver tools, the `generate` validators, Nextest when used.
+/// Plan-job install set per role: drivers, the `generate` validators, Nextest when used.
 ///
 /// Validators join the driver set because `Check generated files` runs the public
 /// `generate`, whose staged validation fail-closed-execs pinned actionlint, shellcheck,
 /// and zizmor; installing only the driver toolchain leaves that step red. Order
-/// follows `PinnedTool::ALL`.
-fn plan_tools(use_mbx: bool, use_nextest: bool) -> Vec<PinnedTool> {
-    let mut tools = vec![PinnedTool::Rust];
+/// follows `PinnedTool::ALL`. Pure-tofu plans carry opentofu plus the validators
+/// with no Rust; mixed plans carry the union.
+fn plan_tools(
+    use_rust: bool,
+    use_mbx: bool,
+    use_nextest: bool,
+    use_opentofu: bool,
+) -> Vec<PinnedTool> {
+    let mut tools = Vec::new();
+    tools.extend(use_rust.then_some(PinnedTool::Rust));
     tools.extend(use_mbx.then_some(PinnedTool::MrBoxington));
     tools.extend([
         PinnedTool::Actionlint,
@@ -170,19 +191,23 @@ fn plan_tools(use_mbx: bool, use_nextest: bool) -> Vec<PinnedTool> {
         PinnedTool::Zizmor,
     ]);
     tools.extend(use_nextest.then_some(PinnedTool::Nextest));
+    tools.extend(use_opentofu.then_some(PinnedTool::Opentofu));
     tools
 }
 
 /// Typed `Prepare pinned tools` step for one exact tool set.
 ///
 /// Homes use the runner-temp expression form: shell `$VAR` never expands
-/// in the `env:` position that carries these paths.
+/// in the `env:` position that carries these paths. Pure-tofu roles
+/// (`use_rust` false) carry no owned-homes triple; every other role
+/// keeps it.
 /// # Errors
 ///
 /// Returns a contract error when the Mise adapter rejects the request.
 fn prepare_pinned_tools_step(
     catalog: &ToolCatalog,
     tools: Vec<PinnedTool>,
+    use_rust: bool,
 ) -> Result<Step, OrchestratorError> {
     let homes = ToolHomes::runner_temp();
     let prepare =
@@ -191,8 +216,12 @@ fn prepare_pinned_tools_step(
         })?;
     let run = strings_of(prepare.argv(catalog))
         .map_err(|problem| OrchestratorError::Contract { problem })?;
-    let env = strings_of_env(&prepare.env(catalog))
-        .map_err(|problem| OrchestratorError::Contract { problem })?;
+    let env = if use_rust {
+        strings_of_env(&prepare.env(catalog))
+    } else {
+        strings_of_env(&prepare.env_without_homes())
+    }
+    .map_err(|problem| OrchestratorError::Contract { problem })?;
     velnor_actions_workflow_renderer::ambient_shell_step(PREPARE_PINNED_TOOLS_STEP, run, env)
         .map_err(|err| OrchestratorError::Contract {
             problem: err.to_string(),
@@ -253,8 +282,8 @@ mod tests {
     fn plan_job_writes_request_before_plan() {
         let catalog = ToolCatalog::pinned();
         for acquire in [None, Some(checkout_action().expect("checkout step"))] {
-            let job =
-                plan_job("ubuntu-26.04", acquire, &catalog, false, false, &[]).expect("plan job");
+            let job = plan_job("ubuntu-26.04", acquire, &catalog, true, false, false, false, &[])
+                .expect("plan job");
             assert_request_before(&job, "Plan", "write-request-v1:plan-v1", PLAN_OPERATION);
         }
     }
@@ -262,7 +291,8 @@ mod tests {
     #[test]
     fn plan_job_checks_out_full_history_for_archaeology() {
         let catalog = ToolCatalog::pinned();
-        let job = plan_job("ubuntu-26.04", None, &catalog, false, false, &[]).expect("plan job");
+        let job = plan_job("ubuntu-26.04", None, &catalog, true, false, false, false, &[])
+            .expect("plan job");
         let StepKind::Action { with, .. } = &job.steps[0].kind else {
             panic!("plan must start with checkout");
         };
@@ -282,11 +312,74 @@ mod tests {
     }
 
     #[test]
+    fn plan_tools_follow_role_in_all_order() {
+        assert_eq!(
+            plan_tools(true, false, false, false),
+            vec![
+                PinnedTool::Rust,
+                PinnedTool::Actionlint,
+                PinnedTool::Shellcheck,
+                PinnedTool::Zizmor,
+            ]
+        );
+        assert_eq!(
+            plan_tools(false, false, false, true),
+            vec![
+                PinnedTool::Actionlint,
+                PinnedTool::Shellcheck,
+                PinnedTool::Zizmor,
+                PinnedTool::Opentofu,
+            ],
+            "pure-tofu plans carry opentofu plus the validators, no Rust"
+        );
+        assert_eq!(
+            plan_tools(true, true, true, true),
+            vec![
+                PinnedTool::Rust,
+                PinnedTool::MrBoxington,
+                PinnedTool::Actionlint,
+                PinnedTool::Shellcheck,
+                PinnedTool::Zizmor,
+                PinnedTool::Nextest,
+                PinnedTool::Opentofu,
+            ],
+            "mixed plans carry the union"
+        );
+        for tools in [
+            plan_tools(true, false, false, false),
+            plan_tools(false, false, false, true),
+            plan_tools(true, true, true, true),
+        ] {
+            let order: Vec<usize> = tools
+                .iter()
+                .map(|tool| {
+                    PinnedTool::ALL
+                        .iter()
+                        .position(|known| known == tool)
+                        .expect("plan installs catalog tools only")
+                })
+                .collect();
+            let mut sorted = order.clone();
+            sorted.sort();
+            assert_eq!(order, sorted, "plan order follows ALL: {tools:?}");
+        }
+    }
+
+    #[test]
     fn plan_job_prepares_pinned_tools_before_generate_consumers() {
         let catalog = ToolCatalog::pinned();
         for (use_mbx, use_nextest) in [(false, false), (false, true), (true, true)] {
-            let job = plan_job("ubuntu-26.04", None, &catalog, use_mbx, use_nextest, &[])
-                .expect("plan job");
+            let job = plan_job(
+                "ubuntu-26.04",
+                None,
+                &catalog,
+                true,
+                use_mbx,
+                use_nextest,
+                false,
+                &[],
+            )
+            .expect("plan job");
             let names: Vec<&str> = job.steps.iter().map(|step| step.name.as_str()).collect();
             let prepare_at = names
                 .iter()
@@ -341,6 +434,56 @@ mod tests {
                 "prepare pins the lockfile off so installs never rewrite it: {env:?}"
             );
         }
+    }
+
+    #[test]
+    fn pure_tofu_plan_drops_all_rust_setup() {
+        use velnor_actions_mise::PREPARE_RUST_COMPONENTS_STEP;
+
+        use crate::source_prep::FETCH_SOURCES_STEP;
+        let catalog = ToolCatalog::pinned();
+        let job = plan_job("ubuntu-26.04", None, &catalog, false, false, false, true, &[])
+            .expect("plan job");
+        let names: Vec<&str> = job.steps.iter().map(|step| step.name.as_str()).collect();
+        assert!(
+            !names.contains(&PREPARE_RUST_COMPONENTS_STEP),
+            "no components step: {names:?}"
+        );
+        assert!(
+            !names.iter().any(|name| name.starts_with(FETCH_SOURCES_STEP)),
+            "no cargo fetch: {names:?}"
+        );
+        let prepare_at = names
+            .iter()
+            .position(|name| *name == PREPARE_PINNED_TOOLS_STEP)
+            .expect("prepare step");
+        let StepKind::Shell { run, env } = &job.steps[prepare_at].kind else {
+            panic!("prepare must be a shell step: {names:?}");
+        };
+        let install_at = run
+            .iter()
+            .position(|arg| arg == "install")
+            .expect("install argv");
+        let specs = &run[install_at + 1..];
+        assert_eq!(
+            specs,
+            [
+                catalog.tool_spec(PinnedTool::Actionlint),
+                catalog.tool_spec(PinnedTool::Shellcheck),
+                catalog.tool_spec(PinnedTool::Zizmor),
+                catalog.tool_spec(PinnedTool::Opentofu),
+            ]
+            .as_slice(),
+            "pure-tofu plan installs opentofu plus validators: {run:?}"
+        );
+        for key in ["MISE_RUSTUP_HOME", "MISE_CARGO_HOME", "RUSTUP_TOOLCHAIN"] {
+            assert!(!env.contains_key(key), "prepare carries no {key}: {env:?}");
+        }
+        assert_eq!(
+            env.get("MISE_NO_CONFIG").map(String::as_str),
+            Some("1"),
+            "isolation overlay stays: {env:?}"
+        );
     }
 
     #[test]
