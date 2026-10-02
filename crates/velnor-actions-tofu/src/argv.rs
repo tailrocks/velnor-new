@@ -30,12 +30,18 @@ pub const CHDIR_FINDING_TAG: &str = "path.cwd";
 ///
 /// # Errors
 ///
-/// Returns [`ContractError`] when the root starts with `-`: the
-/// separate `-chdir <value>` form would let tofu reparse it as flags.
+/// Returns [`ContractError`] when the root starts with `-` (the
+/// separate `-chdir <value>` form would let tofu reparse it as
+/// flags) or carries a `..` segment. Proposals qualify roots before
+/// building payloads, so traversal never arrives via `propose_task`;
+/// the check fails closed for direct callers.
 pub fn tofu_payload_argv(kind: TofuTaskKind, root: &str) -> Result<Vec<OsString>, ContractError> {
     let mut argv: Vec<OsString> = Vec::new();
     if !root.is_empty() {
         reject_leading_dash(root, "root")?;
+        if root.split('/').any(|segment| segment == "..") {
+            return Err(ContractError::identity("tofu_cli_argv", "traversal_root"));
+        }
         argv.push(OsString::from("-chdir"));
         argv.push(OsString::from(root));
     }
