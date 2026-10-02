@@ -16,7 +16,9 @@ use crate::impl_common::{
 const OIDC_CONFIG: &str = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[stacks.rust.release]\nenabled = true\npackages = [\"demo\"]\n";
 
 /// Full generated tree with release enabled, in sorted path order.
-const RELEASE_FAMILY: [&str; 5] = [
+const RELEASE_FAMILY: [&str; 7] = [
+    ".github/AGENTS.md",
+    ".github/CLAUDE.md",
     ".github/actionlint.yaml",
     ".github/release-plz-bootstrap.toml",
     ".github/release-plz.toml",
@@ -92,7 +94,11 @@ fn release_disabled_emits_base_tree_only() -> TestResult {
         let paths: Vec<&str> = tree.files.iter().map(|file| file.path.as_str()).collect();
         assert_eq!(
             paths,
-            [".github/actionlint.yaml", ".github/workflows/ci.yml"],
+            [
+                ".github/AGENTS.md",
+                ".github/actionlint.yaml",
+                ".github/workflows/ci.yml"
+            ],
             "release absent without opt-in"
         );
     }

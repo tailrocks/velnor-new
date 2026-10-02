@@ -7,6 +7,8 @@ Velnor V1 generate writes one complete tree:
 
 ```text
 .github/
+├── AGENTS.md
+├── CLAUDE.md -> AGENTS.md
 ├── actionlint.yaml
 ├── release-plz-bootstrap.toml   # consumer-v1 only, release enabled
 ├── release-plz.toml             # consumer-v1 only, release enabled
@@ -38,6 +40,8 @@ block (least privilege for its role); see [workflow
 | Output | Produces format | Write coordinator | Ownership rule |
 |---|---|---|---|
 | .github/actionlint.yaml | velnor-actions-actionlint | velnor-actions-orchestrator | Generated actionlint config; replaced with the complete .github tree |
+| .github/AGENTS.md | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Generated agent instructions with version marker; replaced with the complete .github tree |
+| .github/CLAUDE.md | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Symbolic link to AGENTS.md; replaced with the complete .github tree |
 | .github/workflows/** | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Generated workflows; replaced with the complete .github tree |
 | .github/release-plz*.toml | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Generated effective release-plz configs (consumer-v1, release enabled); replaced with the complete .github tree |
 | mise.toml, mise.lock, rust-toolchain.toml | None | None | Repository-owned read-only inputs; never create or modify |
