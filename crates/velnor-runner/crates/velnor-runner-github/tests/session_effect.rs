@@ -305,7 +305,7 @@ fn delete_session_rejects_non_204() -> Result<(), &'static str> {
     ];
     for (status, expected) in cases {
         let mut script = Script::once(status, "delete-body-canary");
-        let err = must_err(&delete_session(&mut script, 7, "sess"))?;
+        let err = must_err(&delete_session(&mut script, 7, "sess", ADMIN))?;
         assert_eq!(err, expected);
         assert_ne!(err.certainty(), Certainty::Uncertain);
         assert_eq!(script.seen.len(), 1);
@@ -318,9 +318,13 @@ fn delete_session_rejects_non_204() -> Result<(), &'static str> {
         assert!(!format!("{err} {err:?}").contains("delete-body-canary"));
     }
     let mut script = Script::once(204, "");
-    delete_session(&mut script, 7, "sess").map_err(|_| "deleted")?;
+    delete_session(&mut script, 7, "sess", ADMIN).map_err(|_| "deleted")?;
+    assert_eq!(
+        header(&script.seen[0], "Authorization"),
+        Some("Bearer admin-canary")
+    );
     let mut script = Script::fail(TransportFail::Timeout);
-    let err = must_err(&delete_session(&mut script, 7, "sess"))?;
+    let err = must_err(&delete_session(&mut script, 7, "sess", ADMIN))?;
     assert_eq!(err, SessionError::Uncertain);
     Ok(())
 }
