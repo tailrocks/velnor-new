@@ -120,8 +120,8 @@ pub struct CandidateSpec {
     pub qualify: Vec<String>,
 }
 
-pub use velnor_actions_contract::{AGENTS_MD_PATH, CLAUDE_MD_PATH, CLAUDE_MD_TARGET};
 pub use crate::tree::{RenderedFile, RenderedSymlink, RenderedTree};
+pub use velnor_actions_contract::{AGENTS_MD_PATH, CLAUDE_MD_PATH, CLAUDE_MD_TARGET};
 
 impl RenderContext {
     /// Validate every context scalar before rendering.

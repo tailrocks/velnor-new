@@ -4,8 +4,8 @@ use std::collections::BTreeMap;
 use velnor_actions_contract::config::ActionsConfig;
 use velnor_actions_contract::{
     AGENTS_MD_PATH, CLAUDE_MD_PATH, ContractError, DECLARED_GITHUB_FORMATS, DiscoveryConfig,
-    ObligationDecision, Plan, PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation,
-    PlanPackage, PlanRunner, ResourcesConfig, RunnerSelection, RustStackConfig, StacksConfig,
+    ObligationDecision, Plan, PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanPackage,
+    PlanRunner, ResourcesConfig, RunnerSelection, RustStackConfig, StacksConfig,
     TestShardingConfig, Trust, VelnorConfig, WorkflowConfig, WorkflowEvent, WorkflowPolicy,
     digest_b3, find_github_format, is_declared_github_format, plan_id_for_run, run_key_for_ci,
 };
