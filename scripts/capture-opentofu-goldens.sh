@@ -94,7 +94,8 @@ stage="$WORK/stage"
 rm -rf "$stage"
 mkdir -p "$stage"
 for case in $FIXTURES; do
-  # shellcheck disable=SC2086
+  # intentional word-split: setup_case prints the $1 $2 pair for capture_case
+  # shellcheck disable=SC2086,SC2046
   set -- $(setup_case "$case")
   capture_case "$case" "$1" "$2" "$stage/$case"
   note "captured $case (plan exit $(cat "$stage/$case/plan.exit"))"

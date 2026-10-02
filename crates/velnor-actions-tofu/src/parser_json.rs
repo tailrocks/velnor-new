@@ -1,6 +1,6 @@
 //! JSON half of the bounded structural walk (S8).
 //!
-//! Extends [`Walk`](crate::parser::Walk) with JSON value modeling:
+//! Extends `Walk` with JSON value modeling:
 //! top-level keys become block identities (tracked kinds extract
 //! labels from the documented object shapes), `terraform` values
 //! yield `required_version` literals, and every string value scans

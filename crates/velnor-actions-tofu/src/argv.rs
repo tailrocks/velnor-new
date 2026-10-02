@@ -1,6 +1,6 @@
 //! Fixed tofu payload argv per kind (contract S3, spec §6.1).
 //!
-//! Pure data over [`TofuTaskKind`](crate::kinds::TofuTaskKind) plus the
+//! Pure data over `TofuTaskKind` plus the
 //! normalized root: the orchestrator wraps this payload in a pinned-tool
 //! execution via the Mise adapter; this crate builds no invocations.
 //! `-chdir` is global and precedes the subcommand, so subdir roots
