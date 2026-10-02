@@ -9,7 +9,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::content::signals_for;
-use crate::effective::{config_shape, effective_set};
+use crate::effective::{Dialect, config_shape, effective_set};
+use crate::modules::{ModuleSource, SourceClass, classify_literal, resolve_local_target};
+use crate::parser::{parse_json, parse_native};
 
 /// Mise tool selecting `OpenTofu` (STRONG E3).
 pub const MISE_OPENTOFU_TOOL: &str = "opentofu";
@@ -42,8 +44,9 @@ pub struct Evidence {
     pub signals: Vec<String>,
     /// Advisory inferred roots (config spellings, `.` for the root).
     ///
-    /// Set only when exactly one directory holds effective config;
-    /// child-module dirs cannot be excluded until T11 parses edges.
+    /// Set only when exactly one non-module directory holds
+    /// effective config (local module targets parsed from contents
+    /// never infer; malformed contents infer nothing).
     pub inferred: Vec<String>,
 }
 
@@ -179,7 +182,7 @@ pub fn classify_with_contents(
     Evidence {
         level,
         signals,
-        inferred: infer_roots(files),
+        inferred: infer_roots(files, contents),
     }
 }
 
@@ -211,20 +214,55 @@ fn push_sightings(signals: &mut Vec<String>, class: &str, paths: &[String]) {
     }
 }
 
-/// Advisory roots: the single effective-config dir, if unambiguous.
-fn infer_roots(files: &[String]) -> Vec<String> {
+/// Advisory roots: the single non-module effective-config dir, if any.
+///
+/// Local module targets parsed from `contents` never infer: only a
+/// lone surviving caller dir advises. Malformed contents or escaping
+/// sources abandon inference (no table, no claim).
+fn infer_roots(files: &[String], contents: &BTreeMap<String, String>) -> Vec<String> {
     let survivors = effective_set(files);
     let dirs: BTreeSet<&str> = survivors
         .iter()
         .map(|path| path.rsplit_once('/').map_or("", |(dir, _)| dir))
         .collect();
-    if dirs.len() == 1 {
-        let dir = dirs.into_iter().next().unwrap_or("");
+    let Some(targets) = module_targets(contents) else {
+        return Vec::new();
+    };
+    let remaining: Vec<&&str> = dirs.iter().filter(|dir| !targets.contains(**dir)).collect();
+    if remaining.len() == 1 {
+        let dir = remaining[0];
         return vec![if dir.is_empty() {
             ".".to_owned()
         } else {
-            dir.to_owned()
+            (*dir).to_owned()
         }];
     }
     Vec::new()
+}
+
+/// Local module targets across `contents`; `None` abandons inference.
+fn module_targets(contents: &BTreeMap<String, String>) -> Option<BTreeSet<String>> {
+    let mut targets = BTreeSet::new();
+    for (path, text) in contents {
+        let name = path.rsplit('/').next().unwrap_or(path);
+        let Some(shape) = config_shape(name) else {
+            continue;
+        };
+        let model = match shape.dialect {
+            Dialect::Native => parse_native(text),
+            Dialect::Json => parse_json(text),
+        }
+        .ok()?;
+        let caller = path.rsplit_once('/').map_or("", |(dir, _)| dir);
+        for decl in &model.modules {
+            let ModuleSource::Literal(source) = &decl.source else {
+                continue;
+            };
+            if classify_literal(source) != SourceClass::Local {
+                continue;
+            }
+            targets.insert(resolve_local_target(caller, source)?);
+        }
+    }
+    Some(targets)
 }

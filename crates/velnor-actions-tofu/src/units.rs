@@ -17,6 +17,7 @@ use std::fmt;
 use crate::effective::{Dialect, config_shape, effective_set};
 use crate::family::{Family, family_of};
 use crate::fmt_scope::fmt_scope_for_root;
+use crate::modules::ModuleRef;
 use crate::parser::{MAX_FILES_PER_UNIT, parse_json, parse_native};
 
 /// Top-level block types accepted in config files (superset-safe:
@@ -53,6 +54,8 @@ pub struct AnalyzedUnit {
     pub effective: Vec<String>,
     /// Sorted fmt scope (precedence-independent, shadowed included).
     pub fmt: Vec<String>,
+    /// Module references from effective files (unresolved; boundary qualifies).
+    pub modules: Vec<ModuleRef>,
 }
 
 /// Typed unit-analysis failure.
@@ -164,6 +167,7 @@ pub fn analyze_files(pairs: &[(String, String)]) -> Result<AnalyzedUnit, UnitErr
         let dir = path.rsplit_once('/').map_or("", |(parent, _)| parent);
         by_dir.entry(dir).or_default().push(path.as_str());
     }
+    let mut modules = Vec::new();
     for group in by_dir.values() {
         let mut seen: BTreeMap<(String, Vec<String>), String> = BTreeMap::new();
         for path in group {
@@ -190,11 +194,19 @@ pub fn analyze_files(pairs: &[(String, String)]) -> Result<AnalyzedUnit, UnitErr
                 family_of(name) == Family::Override,
                 &mut seen,
             )?;
+            for decl in &model.modules {
+                modules.push(ModuleRef {
+                    file: (*path).to_owned(),
+                    name: decl.name.clone(),
+                    source: decl.source.clone(),
+                });
+            }
         }
     }
     Ok(AnalyzedUnit {
         fmt: fmt_scope_for_root(&paths, ""),
         effective,
+        modules,
     })
 }
 

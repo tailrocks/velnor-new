@@ -72,6 +72,21 @@ fn seed(root: &TempDir, unit: &str, lock: bool) -> Result<(), Box<dyn std::error
     Ok(())
 }
 
+/// Seed a unit root with a local module edge.
+fn seed_modules(root: &TempDir, unit: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let prefix = if unit.is_empty() {
+        String::new()
+    } else {
+        format!("{unit}/")
+    };
+    root.write(
+        &format!("{prefix}main.tf"),
+        "module \"a\" {\n  source = \"./mods/a\"\n}\n",
+    )?;
+    root.write(&format!("{prefix}mods/a/main.tf"), "variable \"x\" {}\n")?;
+    Ok(())
+}
+
 #[test]
 fn kinds_round_trip_and_reject_unknown() {
     for (token, kind) in [
@@ -277,5 +292,99 @@ fn init_and_validate_share_the_load_set() -> Outcome {
         validate.inputs.get("source_tree")
     );
     assert!(init.unknown_inputs().is_empty());
+    Ok(())
+}
+
+#[test]
+fn modules_input_binds_local_closure() -> Outcome {
+    let root = TempDir::create("tofu-closure-modules")?;
+    seed_modules(&root, "")?;
+    let closure = resolve_closure_at_root(root.path(), &proposal("validate", ""), "g", "t", "p")?;
+    assert!(matches!(
+        closure.inputs.get("modules"),
+        Some(Provenance::Known { .. })
+    ));
+    assert!(closure.unknown_inputs().is_empty());
+    Ok(())
+}
+
+#[test]
+fn module_edit_flips_modules_digest() -> Outcome {
+    let root = TempDir::create("tofu-closure-mod-edit")?;
+    seed_modules(&root, "")?;
+    let before = resolve_closure_at_root(root.path(), &proposal("validate", ""), "g", "t", "p")?;
+    root.write("mods/a/main.tf", "variable \"x\" {}\nvariable \"y\" {}\n")?;
+    let after = resolve_closure_at_root(root.path(), &proposal("validate", ""), "g", "t", "p")?;
+    assert_ne!(before.inputs.get("modules"), after.inputs.get("modules"));
+    Ok(())
+}
+
+#[test]
+fn dynamic_source_marks_modules_unknown() -> Outcome {
+    let root = TempDir::create("tofu-closure-dynamic")?;
+    root.write("main.tf", "module \"d\" {\n  source = var.x\n}\n")?;
+    let closure = resolve_closure_at_root(root.path(), &proposal("validate", ""), "g", "t", "p")?;
+    assert!(closure.unknown_inputs().contains(&"modules"));
+    Ok(())
+}
+
+#[test]
+fn missing_target_marks_modules_unknown() -> Outcome {
+    let root = TempDir::create("tofu-closure-mod-missing")?;
+    root.write("main.tf", "module \"a\" {\n  source = \"./absent\"\n}\n")?;
+    let closure = resolve_closure_at_root(root.path(), &proposal("validate", ""), "g", "t", "p")?;
+    assert!(closure.unknown_inputs().contains(&"modules"));
+    Ok(())
+}
+
+#[test]
+fn varfiles_input_binds_auto_tfvars() -> Outcome {
+    let root = TempDir::create("tofu-closure-varfiles")?;
+    seed(&root, "", false)?;
+    root.write("terraform.tfvars", "x = 1\n")?;
+    root.write("extra.auto.tfvars", "y = 2\n")?;
+    let before = resolve_closure_at_root(root.path(), &proposal("validate", ""), "g", "t", "p")?;
+    assert!(matches!(
+        before.inputs.get("varfiles"),
+        Some(Provenance::Known { .. })
+    ));
+    root.write("extra.tfvars", "x = 9\n")?;
+    let same = resolve_closure_at_root(root.path(), &proposal("validate", ""), "g", "t", "p")?;
+    assert_eq!(before.inputs.get("varfiles"), same.inputs.get("varfiles"));
+    root.write("extra.auto.tfvars", "y = 3\n")?;
+    let after = resolve_closure_at_root(root.path(), &proposal("validate", ""), "g", "t", "p")?;
+    assert_ne!(before.inputs.get("varfiles"), after.inputs.get("varfiles"));
+    Ok(())
+}
+
+#[test]
+fn force_added_varfiles_still_bound() -> Outcome {
+    let root = TempDir::create("tofu-closure-forced")?;
+    root.write(".gitignore", "*.tfvars\n")?;
+    root.write("main.tf", "variable \"x\" {}\n")?;
+    root.write("forced.auto.tfvars", "x = 1\n")?;
+    let closure = resolve_closure_at_root(root.path(), &proposal("validate", ""), "g", "t", "p")?;
+    assert!(matches!(
+        closure.inputs.get("varfiles"),
+        Some(Provenance::Known { .. })
+    ));
+    Ok(())
+}
+
+#[test]
+fn fmt_excludes_modules_and_varfiles() -> Outcome {
+    let root = TempDir::create("tofu-closure-fmt-mod")?;
+    seed_modules(&root, "")?;
+    root.write("terraform.tfvars", "x = 1\n")?;
+    let closure = resolve_closure_at_root(root.path(), &proposal("fmt", ""), "g", "t", "p")?;
+    assert!(matches!(
+        closure.inputs.get("modules"),
+        Some(Provenance::AbsentProven { .. })
+    ));
+    assert!(matches!(
+        closure.inputs.get("varfiles"),
+        Some(Provenance::AbsentProven { .. })
+    ));
+    assert!(closure.unknown_inputs().is_empty());
     Ok(())
 }

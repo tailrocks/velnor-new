@@ -10,6 +10,8 @@
 
 use std::fmt;
 
+use crate::modules::{ModuleDecl, source_from_native};
+
 /// Maximum bytes of one parsed file.
 pub const MAX_FILE_BYTES: u64 = 1_048_576;
 /// Maximum files analyzed for one unit.
@@ -76,6 +78,8 @@ pub struct FileModel {
     pub required_versions: Vec<String>,
     /// Whether any string literal carries a legacy `terraform` token.
     pub has_legacy_ref: bool,
+    /// Top-level `module` declarations with parsed sources, in file order.
+    pub modules: Vec<ModuleDecl>,
 }
 
 /// Parse one native (`.tf`/`.tofu`) file structurally.
@@ -207,6 +211,8 @@ pub(crate) struct Walk {
     nodes: usize,
     /// Blocks collected.
     pub(crate) blocks: Vec<BlockModel>,
+    /// Module declarations collected.
+    pub(crate) modules: Vec<ModuleDecl>,
     /// Version literals collected.
     versions: Vec<String>,
     /// Legacy token observed.
@@ -219,6 +225,7 @@ impl Walk {
         Self {
             nodes: 0,
             blocks: Vec::new(),
+            modules: Vec::new(),
             versions: Vec::new(),
             legacy: false,
         }
@@ -230,6 +237,7 @@ impl Walk {
             blocks: self.blocks,
             required_versions: self.versions,
             has_legacy_ref: self.legacy,
+            modules: self.modules,
         }
     }
 
@@ -277,6 +285,15 @@ impl Walk {
                 });
                 if block.identifier() == "terraform" {
                     self.terraform_block(block);
+                }
+                if block.identifier() == "module" {
+                    self.modules.push(ModuleDecl {
+                        name: block
+                            .labels()
+                            .first()
+                            .map_or_else(String::new, |label| label.as_str().to_owned()),
+                        source: source_from_native(block),
+                    });
                 }
             }
             self.body(block.body(), depth + 1, false)?;
