@@ -277,6 +277,7 @@ fn marked(body: &str) -> String {
 
 const QUALIFICATION: &str = r#"name: Qualification
 "on":
+  push: {}
   workflow_dispatch:
     inputs:
       mode:

@@ -202,20 +202,23 @@ fn document(name: &str, on: Yaml, jobs: Vec<(String, Yaml)>) -> Yaml {
 }
 
 fn mode_trigger() -> Yaml {
-    Yaml::Map(vec![(
-        "workflow_dispatch".to_owned(),
-        Yaml::Map(vec![(
-            "inputs".to_owned(),
+    Yaml::Map(vec![
+        ("push".to_owned(), Yaml::Map(vec![])),
+        (
+            "workflow_dispatch".to_owned(),
             Yaml::Map(vec![(
-                "mode".to_owned(),
-                Yaml::Map(vec![
-                    ("type".to_owned(), Yaml::str("string")),
-                    ("required".to_owned(), Yaml::Bool(false)),
-                    ("default".to_owned(), Yaml::str("both")),
-                ]),
+                "inputs".to_owned(),
+                Yaml::Map(vec![(
+                    "mode".to_owned(),
+                    Yaml::Map(vec![
+                        ("type".to_owned(), Yaml::str("string")),
+                        ("required".to_owned(), Yaml::Bool(false)),
+                        ("default".to_owned(), Yaml::str("both")),
+                    ]),
+                )]),
             )]),
-        )]),
-    )])
+        ),
+    ])
 }
 
 fn empty_dispatch() -> Yaml {
