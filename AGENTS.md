@@ -3,7 +3,7 @@
 ## V1 generator boundaries
 
 - V1 is a workflow generator: `plan`/`generate` turn repository evidence into CI workflows. It is not a runner, interpreter, or second task graph.
-- Runner work (job messages, broker, expressions, credentials, run-service, timeline, `actions/runner` protocol) is deferred to `docs/deferred/self-hosted-runner.md`. Do not implement runner behavior in V1 crates. When runner work starts, `actions/runner` is the protocol source of truth: match its logic exactly, never guess.
+- Do not implement runner behavior in V1 generator crates. The active runner spec is `docs/proposed/macos-scaleset-runner.md` (nested `crates/velnor-runner`). Conflicting deferred clauses are superseded. `actions/runner` and `actions/scaleset` are the protocol sources of truth: match them, never guess.
 - No legacy code. Finish every migration: remove old paths completely—no compatibility shims, aliases, or deprecation periods. Breaking changes are preferred.
 - Research project: unsafe, breaking changes expected, never production-ready. Break things when needed; deliver fast.
 
