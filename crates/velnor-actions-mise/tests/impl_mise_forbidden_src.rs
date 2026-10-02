@@ -45,6 +45,7 @@ fn expected_modules() -> Vec<&'static str> {
         "template.rs",
         "toml_parser.rs",
         "toml_scan.rs",
+        "toml_strings.rs",
         "toolfiles.rs",
         "verify.rs",
         "wrappers.rs",
