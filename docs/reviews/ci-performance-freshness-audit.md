@@ -60,3 +60,72 @@ Local raw evidence: `/tmp/velnor-freshness-tools`, `/tmp/velnor-freshness-action
 Exact Rust pin manifest: [1.98.1](https://static.rust-lang.org/dist/channel-rust-1.98.1.toml), published `2026-09-03`, SHA256 `a7c8774a5fd8441c997d94c029776cbc5eb111e9d72ab5d256fa69866644347e`.
 
 The inventory owner must integrate fresh observations without changing historical pins silently. A `current` row requires genuine pin/latest equality and freshness within 24 hours; newly stale rows must fail until migration qualification or an honestly attributed temporary hold. Hosted CI being green does not discharge this requirement.
+
+## Integration checkpoint: 2026-10-02 21:07 UTC onward
+
+The tables above preserve the initial audit snapshot. Subsequent authorized source updates synchronized Mise `2026.10.0`, MBX `1.21.1` and MBX action `v1.6.0` / `1687e54eb349cadf61fa38b5813a77875489e8e6`. Their initial stale observations remain historical evidence. This checkpoint records source identity and installed executable bytes; hosted workload/cache performance remains unqualified.
+
+The current inventory contains **26 Mise/catalog tools** (the earlier 25-tool checkpoint gained Node), plus two separate Homebrew native authority records and three delivery-tool records. Nine tool rows remain explicitly stale; no additional hold was invented. Existing three holds remain separate.
+
+| Added tool | Pin | Latest observed | Source status |
+|---|---|---|---|
+| [bun](https://api.github.com/repos/oven-sh/bun/releases/latest) | 1.3.14 | 1.4.2 | stale; hosted performance unqualified |
+| [swift](https://api.github.com/repos/swiftlang/swift/releases/latest) | 6.4.0 | 6.4.0 | current; hosted performance unqualified |
+| [ruby](https://api.github.com/repos/ruby/ruby/releases/latest) | 4.0.7 | 4.0.7 | current; hosted performance unqualified |
+| [reuse](https://api.github.com/repos/fsfe/reuse-tool/releases/latest) | 6.2.0 | 6.2.0 | current; hosted performance unqualified |
+| [java](https://www.oracle.com/a/tech/docs/graalvm-downloads.json) | 25.0.3 | 25.0.4.1.1 | stale; hosted performance unqualified |
+| [gradle](https://api.github.com/repos/gradle/gradle/releases/latest) | 9.7.0 | 9.8.0 | stale; hosted performance unqualified |
+| [python](https://www.python.org/downloads/) | 3.14.7 | 3.14.8 | stale; hosted performance unqualified |
+| [uv](https://api.github.com/repos/astral-sh/uv/releases/latest) | 0.11.29 | 0.12.22 | stale; hosted performance unqualified |
+| [cargo-audit](https://crates.io/api/v1/crates/cargo-audit) | 0.22.2 | 0.22.2 | current; hosted performance unqualified |
+| [cargo-deny](https://crates.io/api/v1/crates/cargo-deny) | 0.20.2 | 0.20.2 | current; hosted performance unqualified |
+| [alint](https://api.github.com/repos/asamarts/alint/releases/latest) | 0.16.1 | 0.17.0 | stale; hosted performance unqualified |
+| [node](https://nodejs.org/dist/index.json) | 24.20.0 | 24.21.0 | stale; hosted performance unqualified |
+| [boltffi](https://api.github.com/repos/boltffi/boltffi/releases/latest) | 0.30.1 | 0.31.0 | stale; hosted performance unqualified |
+| [xcodegen](https://api.github.com/repos/yonaskolb/XcodeGen/releases/latest) | 2.46.0 | 2.46.0 | current; hosted performance unqualified |
+| [jq](https://api.github.com/repos/jqlang/jq/releases/latest) | 1.8.2 | 1.8.2 | current; hosted performance unqualified |
+| [rust-desktop](https://static.rust-lang.org/dist/channel-rust-stable.toml) | 1.97.1 | 1.99.0 | stale; hosted performance unqualified |
+
+Java freshness now uses Oracle GraalVM 25 vendor/channel selection, excluding the separate innovation channel: [official downloads metadata](https://www.oracle.com/a/tech/docs/graalvm-downloads.json) and [25.0.4.1.1 metadata](https://www.oracle.com/a/tech/docs/graalvm-25.0.4.1.1.json). Historical `25.0.3` is stale. A former lookup failure has been resolved by source research; that is not installation or performance proof.
+
+Native source details are retained in `/tmp/velnor-native-authorities/summary.json`; eleven initial workload/tool additions are in `/tmp/velnor-tool-pin-evidence/inventory-ready.json`. XcodeGen `2.46.0` and jq `1.8.2` match latest source metadata. Boltffi `0.30.1` remains stale against `0.31.0`; desktop Rust `1.97.1` remains stale against `1.99.0`, without a new hold. Exact commit and published asset digest records prove source identity only.
+
+### Mise executable byte qualification
+
+Release source commit: `bc11f90c74eba23bf0d7350efb540e62fb7d9ffd`. `catalog_mise_binary.rs` pins installed executable SHA256 independently from compressed archive SHA256. Platform downloads matched official standalone/checksum metadata; ARM64 binaries were extracted from `mise/bin/mise`. Raw results: `/tmp/velnor-mise-platforms/results.json`. Cryptographic release signatures were downloaded but **not verified**.
+
+| Platform | Installed executable SHA256 |
+|---|---|
+| linux-arm64-mise | `4b8cacffac83e8493fc5d1eef25f6365edba73ccbed5a1f3987b7cb3f5079656` |
+| macos-arm64-mise | `8d2007efdae0c2b64e3955257533e6ec17197bc2fdcbc5dd8f6847f92881deea` |
+| linux-x64-mise | `57ced973f968b8fbab07aa8e32bd7077d4a357e200a22356d98963c723c6de0a` |
+
+### Homebrew native authority boundary
+
+Homebrew source is pinned to [`8e858db5584704dcd469b8e826228c0d5a5a94f6`](https://github.com/Homebrew/brew/tree/8e858db5584704dcd469b8e826228c0d5a5a94f6) (release `7.0.7`). This is an immutable source authority, not a Mise installation entry or a claim of qualified Homebrew runtime performance. Portable Ruby `4.0.7` uses artifact blob digests read from that exact source commit:
+
+| Platform | Portable Ruby artifact SHA256 | Verified source |
+|---|---|---|
+| x86_64-linux | `bf2a9bf102694d40084ed436b06a1566dded60a519f4d1879c90c81046e11081` | [commit-bound vendor record](https://raw.githubusercontent.com/Homebrew/brew/8e858db5584704dcd469b8e826228c0d5a5a94f6/Library/Homebrew/vendor/portable-ruby-x86_64-linux) |
+| arm64-linux | `c9b75dd6bd9578921f3ce739dacae8866698c3399c0f83574a5d5fadda2aab2d` | [commit-bound vendor record](https://raw.githubusercontent.com/Homebrew/brew/8e858db5584704dcd469b8e826228c0d5a5a94f6/Library/Homebrew/vendor/portable-ruby-arm64-linux) |
+
+The catalog workstream reports its 46-fixture probe passed and root-local checks passed; Cargo qualification remains queued at this checkpoint. Those reports are not independent hosted execution evidence. The nine observed stale tool rows remain freshness failures until reviewed qualification/migration; green local checks do not convert them to current or performance verified.
+
+## Integration delta: 2026-10-02 21:25 UTC onward
+
+This later checkpoint supersedes counts and statuses in the preceding historical snapshots. Inventory now has **28 tool rows: 27 `PinnedTool` entries plus Mise**, and **four native source authority records covering 13 exact pins**. Eight stale tools remain: Bun, Java, Gradle, Python, Uv, Node, Boltffi and desktop Rust. Alint's previous hold was removed after the paired compatibility update; Rust and Mise action holds remain. No new hold or hosted performance qualification is claimed.
+
+Alint tool/action now both pin approved `0.17.0`; action/source commit `d93c0283b19dd78afcd8a4b303f1556a7759ba81`. Paired actual configuration and action-flag compatibility evidence is `/tmp/velnor-tool-pin-evidence/alint-qualification/qualification-report.json`: both versions validate the 53-rule config, and actual check/action outputs have identical five errors/four informational findings. This verifies upgrade compatibility, not a green repository check; the reported policy failures remain separate work.
+
+| Added source-current tool | Version | Peeled source commit | Evidence SHA256 |
+|---|---|---|---|
+| [swiftlint](https://api.github.com/repos/realm/SwiftLint/releases/latest) | 0.65.1 | `6aba03e3d8302b33f106e0f922210f35ca4b52cf` | `d03a40908ebd3301389d45f8354e9e489a051a1ab34deb95c4c5eb55a96078b0` |
+| [periphery](https://api.github.com/repos/peripheryapp/periphery/releases/latest) | 3.8.0 | `a2db299196ae774cd644c79fa6b1f67556d78de8` | `cc0eafdc5cc4c14965b172ac271006e04232982baa35056bdaf1effc8da9e22e` |
+
+These Swift tool observations retain published asset metadata and source qualification in `/tmp/nativeauthority/summary.json`; isolated acquisition probes are separately reported. Actual hosted workload/cache performance remains unqualified.
+
+The Gradle wrapper authority records execution engine `9.5.1` separately from bootstrap `9.4.1` source commit `2d6327017519d23b96af35865dc997fcb544fb40`. Distribution SHA256 is `bafc141b619ad6350fd975fc903156dd5c151998cc8b058e8c1044ab5f7b031f`; actual project script SHA256 is `aed171fb114f82e6eaea4970a245a200e0582a7dcc8ec0891ca41b6e4a62b754`; JAR SHA256 is `55243ef57851f12b070ad14f7f5bb8302daceeebc5bce5ece5fa6edb23e1145c`. The JAR matches official 9.4.1 bytes. The project-generated script has a template-origin/VM-options substitution; it must not be described as byte-identical to the official root script. Source comparison is retained in `/tmp/velnor-gradle-authority/README.md`.
+
+PostgreSQL fixture authority is `postgres:18.6-trixie@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280`. Its exact registry manifest identifies the source image; database startup, tests, trust and hosted cache behavior are not qualified by this metadata.
+
+Mise descriptors for three hosts are migrating to the independently identified official artifacts recorded above. This is official tool-artifact qualification; it does not establish a newly published Velnor runtime identity, consumer rollout or hosted performance completion.

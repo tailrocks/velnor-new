@@ -4,18 +4,21 @@ Private raw W0, runtime, release-identity, cache-trust and qualification evidenc
 
 Archive: `~/.codex-chainargos2/private/ci-performance/evidence-2026-10-03/`. Private `manifest.json` records source directories, relative file paths, SHA256, bytes, collection identity files and all 47 collected source commits. Directories use mode 0700; regular files use 0600. Symlinks and special entries are never followed. Literal symlink targets are recorded privately.
 
-Snapshot status: waves A–C report collection complete; final evidence snapshot captured after all wave audit writers finished. Performance qualification remains incomplete.
+Snapshot status: W0 supplements for all waves captured after the audit writers finished. Previous manifests remain in private `manifest-history/`; differing metadata revisions are retained by digest. Renewed independent preservation verification passed. Performance qualification remains incomplete.
 
 | Collection | Regular files | Bytes | Skipped entries |
 |---|---:|---:|---:|
-| runtime | 38 | 35207521 | 0 |
+| runtime | 42 | 41283736 | 0 |
 | scope-audit | 48 | 20364177 | 0 |
-| wave-a | 3701 | 92745881 | 11 |
-| wave-b | 9107 | 320029336 | 0 |
-| wave-c | 1804 | 330469857 | 0 |
+| wave-a | 4148 | 114580588 | 18 |
+| wave-b | 10833 | 431250805 | 0 |
+| wave-c | 1863 | 331542562 | 0 |
 | release-identity | 3 | 14831267 | 0 |
 | cache-trust | 25 | 4241703 | 0 |
-| qualification | 19 | 1258671 | 0 |
+| qualification | 21 | 1442046 | 0 |
+| rust-profile-local | 7 | 5548 | 0 |
+| desktop-rust-profile-local | 24 | 13686 | 0 |
+| cargo-release-identity | 6 | 1748834 | 0 |
 
 The qualification collection preserves the observed failing generator run, attempt 1, including raw jobs API, logs and artifact API identities. Artifact API identity is distinct from downloading and inspecting artifact payloads. Missing compiler CPU, exact downloads, queue measurements, cache persistence and controlled benchmarks remain unknown.
 
@@ -73,4 +76,8 @@ The 47-repository JSON, text and CSV inventories match exactly, in order, includ
 
 All 47 performance statuses remain `INCOMPLETE`. Green historical CI, retained source, a workflow index and waived CI are separate evidence states. These rows do not mark indexed workflow references as completed performance audits. Raw private source, diffs, commands, logs and operational configuration are not published here.
 
-Private manifest SHA256: `198fe6749c6ba0e5050ca9c911b6a4df7db85aa12291abc0bfedc3acc6ab3bd2`. Independent preservation verification passed: all 14,745 regular files (819,148,413 bytes) match their source and destination SHA256 and sizes; inventories and private permissions match. Eleven skipped source symlinks match their recorded literal targets and modes. All 47 source identities and ordered scope inputs match. This proves preservation, not cache behavior or performance.
+Private manifest SHA256: `593aa6741a2b0169cf0ff1a8c2a3a893e128f51a130f48703b79e974c6a2ec53`. Independent final preservation verification passed: 17,020 regular files (961,304,952 bytes) match selected source and destination SHA256, sizes and inventories; private modes match. Eighteen skipped symlink targets and modes match. Ten excluded local tool-state trees were not traversed. Four prior manifest digests and all 47 ordered scope identities were verified. Preservation proves retained bytes, not hosted cache behavior or performance.
+
+The two Rust profile collections preserve selected local proof logs, JSON records, summaries and metadata fixture files. Installed tool-state directories are explicitly excluded. These local sequences do not prove hosted fresh-runner restoration or performance.
+
+The Cargo release identity collection retains official source metadata and its independent crosscheck. A local Mac runtime proof does not establish Linux runtime identity or hosted restoration.

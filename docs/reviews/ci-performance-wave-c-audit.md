@@ -56,6 +56,35 @@ and unique repeated commands were read, with action, environment, permission
 and condition differences compared. This closes the identified W0 static audit
 gaps; unavailable historical step evidence remains explicitly qualified.
 
+## Explicit W0 closure
+
+Archive-first closure rereads distinguish completed historical audit from pending
+performance qualification. The private per-repository `w0-closure.json` and
+`w0-closure.md` bind complete current workflow/configuration/runtime inspection,
+actual-path PR screening and relevant full diff review to executed-job raw log
+coverage. An independent reader inspected raw commands, outcomes and artifacts;
+the verdict does not rely on a successful run summary or a file index.
+
+| Repository | Current source and relevant diffs | Representative PR/default executed raw logs | Remaining historical evidence limit |
+|---|---|---|---|
+| `ChainArgos/blockchain-nodes` | inspected; omitted API bodies recovered | 4 / 5; skipped PR baseline accounted | no missing representative log; additional prior job logs inspected |
+| `ChainArgos/java-monorepo` | inspected; omitted API bodies recovered | 23 / 23; failed-run baseline skips accounted | completed later candidate separately inspected; old pending-run 404 superseded |
+| `ChainArgos/jackin-agent-brown` | inspected; repeated commands fully compared | 3 / 4; skipped PR baseline accounted | six historical empty archives and three HTTP 404 retained without inferred cause |
+| `ChainArgos/cloudflare-tofu` | inspected; merged versus proposed changes distinguished | 5 / 6; skipped PR baseline accounted | seven historical empty archives and one HTTP 404 retained |
+| `ChainArgos/github-terraform` | inspected; provider/policy path omissions corrected | nine executed raw jobs across PR/default; skipped baseline accounted | 21 historical/skipped/queued HTTP 404 retained without inferred cause |
+
+No missing representative executed-job log requires retrieval in the bounded W0
+scope. Unknown compiler CPU, precise linking, unsupported download/transfer
+diagnostics and controlled cache persistence measurements are acceptance work,
+not an access waiver or completed performance proof. New closure manifests and
+full-log inventories are private archive supplements; the archive owner refreshes
+their digests after all writers finish. No cloud execution was requested.
+The GitHub Terraform plan/final/crate/baseline payload gap was closed with a
+bounded read-only retrieval of existing artifacts. Full payload inspection
+confirmed selected/executed dispositions and exact baseline source/run/attempt;
+the artifact API index alone was insufficient. Independent diff rereading also
+found a retained manual-validation trigger missing from generated output.
+
 ## Findings requiring upstream qualification
 
 Independent source review confirms that whole-workflow replacement can discard
@@ -67,7 +96,7 @@ contracts remain in external evidence for upstream implementation and review.
 For public `blockchain-nodes`, PR #729 removes the previous Docker validation
 and tag publishing families while Docker inputs remain in the repository.
 The generated current run succeeds on a much narrower workload. The old DCO
-workflow was removed, but an external DCO application supplies a successful
+workflow was removed, but a separate DCO commit status supplies a successful
 status on the migration head; workflow deletion alone does not prove a missing
 required DCO check. Before treating the migration as complete, record explicit
 retirement or qualified replacement for every original obligation.
