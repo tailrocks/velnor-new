@@ -225,6 +225,51 @@ fn parity_no_work_repo() -> TestResult {
     Ok(())
 }
 
+/// Pure-tofu fixture: two configured roots, no Cargo.
+fn make_pure_tofu_repo() -> Result<tempfile::TempDir, Box<dyn std::error::Error>> {
+    let dir = tempfile::TempDir::new()?;
+    let root = dir.path();
+    git(&["init", "-b", "testmain"], root)?;
+    git(&["config", "user.email", "test@example.com"], root)?;
+    git(&["config", "user.name", "Test"], root)?;
+    git(&["config", "commit.gpgsign", "false"], root)?;
+    fs::create_dir_all(root.join(".velnor"))?;
+    fs::write(
+        root.join(".velnor/config.toml"),
+        "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[stacks.tofu]\nroots = [\"stacks/a\", \"stacks/b\"]\n",
+    )?;
+    fs::write(
+        root.join(".velnor/release-manifest.json"),
+        fixture_manifest_json(),
+    )?;
+    for repo_root in ["stacks/a", "stacks/b"] {
+        fs::create_dir_all(root.join(repo_root))?;
+        fs::write(root.join(repo_root).join("main.tf"), "variable \"x\" {}\n")?;
+    }
+    Ok(dir)
+}
+
+#[test]
+fn parity_pure_tofu() -> TestResult {
+    let repo = make_pure_tofu_repo()?;
+    let prep = prepare(repo.path())?;
+    let plan = plan_for(&prep)?;
+    let yaml = workflow_yaml(&prep)?;
+    assert_parity(&prep, &plan, &yaml)?;
+    for id in ["tofu-stacks-a", "tofu-stacks-b"] {
+        assert!(
+            plan.contains(&format!("- {id} (")),
+            "plan lists {id}:\n{plan}"
+        );
+        assert!(yaml.contains(&format!("\n  {id}:")), "yaml has {id}");
+        assert!(
+            !plan.contains("Rust crate job"),
+            "no rust label on a pure-tofu plan:\n{plan}"
+        );
+    }
+    Ok(())
+}
+
 #[test]
 fn parity_velnor_policy_lists_validators() -> TestResult {
     without_ambient_identity("parity_velnor_policy_lists_validators", || {

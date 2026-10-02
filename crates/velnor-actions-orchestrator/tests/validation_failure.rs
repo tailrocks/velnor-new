@@ -56,10 +56,8 @@ exec \"$VELNOR_REAL_MISE\" \"$@\"
         Ok(())
     }
 
-    /// The child scenario: validators fail, every output is preserved.
-    fn scrubbed_child() -> Result<(), Box<dyn std::error::Error>> {
-        let dir = TempDir::new()?;
-        let root = dir.path();
+    /// Git-init one fixture repo with the shared test identity.
+    fn git_init(root: &Path) -> Result<(), Box<dyn std::error::Error>> {
         for args in [
             vec!["init", "-b", "testmain"],
             vec!["config", "user.email", "test@example.com"],
@@ -74,6 +72,14 @@ exec \"$VELNOR_REAL_MISE\" \"$@\"
                     .success()
             );
         }
+        Ok(())
+    }
+
+    /// The child scenario: validators fail, every output is preserved.
+    fn scrubbed_child() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = TempDir::new()?;
+        let root = dir.path();
+        git_init(root)?;
         fs::create_dir_all(root.join(".velnor"))?;
         fs::write(
             root.join(".velnor/config.toml"),
@@ -130,6 +136,48 @@ exec \"$VELNOR_REAL_MISE\" \"$@\"
         );
         assert!(!preview_root.exists(), "no partial preview write");
         assert_eq!(before, content(root)?, "failed preview writes nothing");
+        assert_tofu_failure_preserves()?;
+        Ok(())
+    }
+
+    /// Same failure over tofu paths: locks and sources preserved.
+    fn assert_tofu_failure_preserves() -> Result<(), Box<dyn std::error::Error>> {
+        let tofu_dir = TempDir::new()?;
+        let tofu_root = tofu_dir.path();
+        git_init(tofu_root)?;
+        fs::create_dir_all(tofu_root.join(".velnor"))?;
+        fs::write(
+            tofu_root.join(".velnor/config.toml"),
+            "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[stacks.tofu]\nroots = [\"stacks/a\"]\n",
+        )?;
+        fs::write(
+            tofu_root.join(".velnor/release-manifest.json"),
+            manifest_fixture(),
+        )?;
+        fs::create_dir_all(tofu_root.join("stacks/a"))?;
+        fs::write(tofu_root.join("stacks/a/main.tf"), "variable \"x\" {}\n")?;
+        fs::write(
+            tofu_root.join("stacks/a/.terraform.lock.hcl"),
+            "provider \"example.com/a/b\" {\nversion = \"1.0.0\"\n}\n",
+        )?;
+        let tofu_prep = prepare(tofu_root)?;
+        let tofu_before = content(tofu_root)?;
+        let err = generate(&tofu_prep, &GenerateOptions { output_dir: None })
+            .err()
+            .ok_or("expected tofu validation failure")?;
+        assert!(
+            matches!(err, OrchestratorError::Validation { .. }),
+            "validation error, got {err}"
+        );
+        assert!(
+            err.to_string().contains("fake-mise"),
+            "fake intercepted tofu validators, got {err}"
+        );
+        assert_eq!(
+            tofu_before,
+            content(tofu_root)?,
+            "failed tofu validation writes nothing"
+        );
         Ok(())
     }
 

@@ -11,7 +11,9 @@ use serde::{Deserialize, Serialize};
 use crate::errors::ContractError;
 use crate::ids::{validate_matrix_key, validate_task_id};
 use crate::validate_digest;
-use crate::workflow::jobs::{is_safe_display_name, validate_job_id};
+use crate::workflow::jobs::{
+    TOFU_DISPLAY_PREFIX, TOFU_JOB_ID_PREFIX, is_safe_display_name, validate_job_id,
+};
 
 /// One logical obligation inside a crate job (per task, individually reported).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -37,7 +39,7 @@ pub struct CrateObligation {
 pub struct CrateJob {
     /// Stable collision-safe job ID.
     pub job_id: String,
-    /// Display name (`Rust / <label>`).
+    /// Display name (`Rust / <label>`, or `OpenToFu — <root>` under `tofu-`).
     pub display_name: String,
     /// Cargo package name (empty only with folder-fallback display).
     pub package_name: String,
@@ -53,11 +55,20 @@ pub struct CrateJob {
 
 impl CrateJob {
     /// Validate ordering, uniqueness, gates, and label hygiene.
+    ///
+    /// The display prefix partitions with the ID namespace: `tofu-`
+    /// jobs render `OpenToFu — <root>`, every other crate job keeps
+    /// the byte-identical `Rust / <label>` contract.
     /// # Errors
     pub fn validate(&self) -> Result<(), ContractError> {
         validate_job_id(&self.job_id)?;
+        let prefix = if self.job_id.starts_with(TOFU_JOB_ID_PREFIX) {
+            TOFU_DISPLAY_PREFIX
+        } else {
+            "Rust / "
+        };
         if self.display_name.trim().is_empty()
-            || !self.display_name.starts_with("Rust / ")
+            || !self.display_name.starts_with(prefix)
             || !is_safe_display_name(&self.display_name)
         {
             return Err(ContractError::identity(
@@ -129,3 +140,7 @@ impl CrateObligation {
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "crate_job_tests.rs"]
+mod tests;
