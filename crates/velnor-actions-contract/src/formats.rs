@@ -13,8 +13,23 @@ pub struct GithubFormat {
     pub owner: &'static str,
 }
 
+/// Generated AGENTS.md instruction path inside the repository.
+pub const AGENTS_MD_PATH: &str = ".github/AGENTS.md";
+/// Generated CLAUDE.md symlink path inside the repository.
+pub const CLAUDE_MD_PATH: &str = ".github/CLAUDE.md";
+/// Relative symlink target for sibling CLAUDE.md.
+pub const CLAUDE_MD_TARGET: &str = "AGENTS.md";
+
 /// Every declared `.github` output format (gen §0).
-pub const DECLARED_GITHUB_FORMATS: [GithubFormat; 2] = [
+pub const DECLARED_GITHUB_FORMATS: [GithubFormat; 4] = [
+    GithubFormat {
+        path: AGENTS_MD_PATH,
+        owner: "velnor-actions-workflow-renderer",
+    },
+    GithubFormat {
+        path: CLAUDE_MD_PATH,
+        owner: "velnor-actions-workflow-renderer",
+    },
     GithubFormat {
         path: ".github/actionlint.yaml",
         owner: "velnor-actions-actionlint",

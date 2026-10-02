@@ -54,10 +54,13 @@ fn generate_preview_matches_in_place_and_preserves_repo() -> TestResult {
     assert_eq!(before, snapshot(root)?, "preview must not touch the repo");
     let inplace_report = generate(&prep, &GenerateOptions { output_dir: None })?;
     assert_eq!(preview_report.files_written, inplace_report.files_written);
-    assert_eq!(
-        preview_report.files_written,
-        vec![".github/actionlint.yaml", ".github/workflows/ci.yml"]
-    );
+    let expected_files = [
+        ".github/AGENTS.md",
+        ".github/CLAUDE.md",
+        ".github/actionlint.yaml",
+        ".github/workflows/ci.yml",
+    ];
+    assert_eq!(preview_report.files_written, expected_files);
     for rel in &inplace_report.files_written {
         let preview_bytes = fs::read(preview_root.join(rel))?;
         let inplace_bytes = fs::read(root.join(rel))?;
@@ -357,7 +360,7 @@ fn ignored_rust_plans_no_work() -> TestResult {
     assert!(text.contains("Rust: ignored"), "ignored:\n{text}");
     assert!(text.contains("no-work workflow"), "no-work:\n{text}");
     let report = generate(&prep, &GenerateOptions { output_dir: None })?;
-    assert_eq!(report.files_written.len(), 2);
+    assert_eq!(report.files_written.len(), 4);
     Ok(())
 }
 

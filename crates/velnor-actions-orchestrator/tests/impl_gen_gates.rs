@@ -72,7 +72,7 @@ fn cross_checkout_determinism() -> TestResult {
     );
     let left_bytes = preview_bytes(left.path())?;
     let right_bytes = preview_bytes(right.path())?;
-    assert_eq!(left_bytes.keys().len(), 2, "two generated files");
+    assert_eq!(left_bytes.keys().len(), 4, "four generated files");
     assert_eq!(
         left_bytes, right_bytes,
         "identical inputs at different absolute paths stage identical bytes"
