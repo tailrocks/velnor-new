@@ -1,4 +1,5 @@
 //! Unit-analysis cases: precedence, structure, duplicates, scopes.
+use velnor_actions_tofu::modules::ModuleSource;
 use velnor_actions_tofu::units::{UnitError, analyze_files, files_for_prefix};
 
 use crate::support::{Outcome, fixture_dir, read_pairs};
@@ -181,6 +182,54 @@ fn consumer_mirror_analyzes_clean() -> Outcome {
     assert!(!unit.effective.is_empty());
     assert_eq!(unit.effective.len(), unit.fmt.len());
     Ok(())
+}
+
+#[test]
+fn analyze_extracts_module_refs() {
+    let unit = analyze_files(&pairs(&[
+        ("main.tf", "module \"a\" {\n  source = \"./mods/a\"\n}\n"),
+        (
+            "extra.tf.json",
+            "{\"module\": {\"b\": {\"source\": \"../shared\"}}}",
+        ),
+        (
+            "z_override.tf",
+            "module \"c\" {\n  source = \"ns/name/sys\"\n}\n",
+        ),
+    ]))
+    .expect("analyzes");
+    assert_eq!(unit.modules.len(), 3);
+    let by_name = |name: &str| {
+        unit.modules
+            .iter()
+            .find(|reference| reference.name == name)
+            .expect("fixture ref present")
+    };
+    assert_eq!(by_name("a").file, "main.tf");
+    assert!(matches!(
+        &by_name("a").source,
+        ModuleSource::Literal(source) if source == "./mods/a"
+    ));
+    assert_eq!(by_name("b").file, "extra.tf.json");
+    assert!(matches!(
+        &by_name("b").source,
+        ModuleSource::Literal(source) if source == "../shared"
+    ));
+    assert_eq!(by_name("c").file, "z_override.tf");
+    assert!(matches!(
+        &by_name("c").source,
+        ModuleSource::Literal(source) if source == "ns/name/sys"
+    ));
+}
+
+#[test]
+fn shadowed_module_calls_ignored() {
+    let unit = analyze_files(&pairs(&[
+        ("main.tf", "module \"ghost\" {\n  source = \"./ghost\"\n}\n"),
+        ("main.tofu", "variable \"x\" {}\n"),
+    ]))
+    .expect("analyzes");
+    assert!(unit.modules.is_empty(), "shadowed never parsed");
 }
 
 #[test]

@@ -1,7 +1,7 @@
 //! Dialect evidence classification cases.
 use std::collections::BTreeMap;
 use velnor_actions_tofu::evidence::{
-    EvidenceLevel, TofuNote, classify, mise_tool_selected, plan_note,
+    EvidenceLevel, TofuNote, classify, classify_with_contents, mise_tool_selected, plan_note,
 };
 
 /// Index file list from names.
@@ -355,7 +355,6 @@ fn bare_classify_reads_no_content() {
 
 #[test]
 fn e4_strong_advises_in_plan_note() {
-    use velnor_actions_tofu::evidence::classify_with_contents;
     let evidence = classify_with_contents(
         &files(&["main.tf"]),
         &contents(&[(

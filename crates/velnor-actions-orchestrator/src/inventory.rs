@@ -116,7 +116,8 @@ fn manifest_for_rust(unit_root: &str) -> String {
 ///
 /// Structural failures (including unreadable, oversize, symlinked,
 /// or non-UTF-8 effective files) report a malformed outcome naming
-/// the file; only a clean analysis reports success.
+/// the file; module-boundary failures (escapes, missing targets,
+/// cycles) likewise report malformed. Findings pass through.
 fn analyze_tofu_unit(root: &Path, files: &[String], unit: &str) -> CandidateOutcome {
     let selected = match velnor_actions_tofu::files_for_prefix(files, unit) {
         Ok(selected) => selected,
@@ -134,7 +135,12 @@ fn analyze_tofu_unit(root: &Path, files: &[String], unit: &str) -> CandidateOutc
         }
     }
     match velnor_actions_tofu::analyze_files(&pairs) {
-        Ok(_) => ok_outcome(unit.to_owned()),
+        Ok(unit_record) => {
+            match velnor_actions_tofu::qualify_module_edges(root, files, &unit_record.modules) {
+                Ok(_) => ok_outcome(unit.to_owned()),
+                Err(err) => module_error_outcome(&err, unit),
+            }
+        }
         Err(err) => {
             let path = unit_error_path(&err, unit);
             malformed_outcome(&path, err.to_string())
@@ -151,6 +157,21 @@ fn unit_error_path(err: &velnor_actions_tofu::UnitError, unit: &str) -> String {
         | velnor_actions_tofu::UnitError::Shape { path, .. } => path.clone(),
         velnor_actions_tofu::UnitError::Duplicate { second, .. } => second.clone(),
     }
+}
+
+/// Malformed outcome for one module-boundary failure.
+fn module_error_outcome(err: &velnor_actions_tofu::ModuleError, unit: &str) -> CandidateOutcome {
+    let path = match err {
+        velnor_actions_tofu::ModuleError::Escape { target }
+        | velnor_actions_tofu::ModuleError::MissingTarget { target }
+        | velnor_actions_tofu::ModuleError::Unreadable { target }
+            if !target.is_empty() =>
+        {
+            target.clone()
+        }
+        _ => unit.to_owned(),
+    };
+    malformed_outcome(&path, err.to_string())
 }
 
 /// Malformed outcome for one evidence path and diagnostic.
