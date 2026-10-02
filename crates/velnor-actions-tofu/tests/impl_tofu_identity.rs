@@ -37,6 +37,9 @@ fn inputs<'a>(
 }
 
 /// The derived extension carries the tofu schema and validates.
+///
+/// T23: validate refuses task-result reuse even with a resolved slot;
+/// the envelope still validates (schema/coverage untouched).
 #[test]
 fn extension_carries_schema_and_validates() {
     let workspace = digest_b3(b"workspace");
@@ -53,15 +56,20 @@ fn extension_carries_schema_and_validates() {
     ));
     assert_eq!(ext.unit_id, "root");
     assert_eq!(ext.kind, "validate");
+    assert_eq!(ext.task_kind, TofuTaskKind::Validate);
     assert_eq!(ext.driver, "tofu+none");
     assert!(ext.lock_digest.is_none());
-    assert!(ext.reuse_eligible().is_ok());
+    let err = ext.reuse_eligible().expect_err("validate reuse is OFF");
+    assert!(err.to_string().contains("tofu_reuse_disabled"), "{err}");
     let envelope = ext.to_stack_extension();
     assert_eq!(envelope.schema, TOFU_EXTENSION_SCHEMA);
     assert_eq!(validate_tofu_extension(&envelope), Ok(()));
 }
 
 /// A known lockfile binds content; an unknown one blocks reuse.
+///
+/// T23: init refuses task-result reuse even with a known lockfile; an
+/// unknown slot still reports its own precise reason first.
 #[test]
 fn lock_slot_gates_reuse() {
     let workspace = digest_b3(b"workspace");
@@ -77,7 +85,8 @@ fn lock_slot_gates_reuse() {
         &config,
     ));
     assert!(known.lock_digest.is_some());
-    assert!(known.reuse_eligible().is_ok());
+    let err = known.reuse_eligible().expect_err("init reuse is OFF");
+    assert!(err.to_string().contains("tofu_reuse_disabled"), "{err}");
     assert_eq!(validate_tofu_extension(&known.to_stack_extension()), Ok(()));
     let unknown = TofuTaskIdentityExtension::for_task(&inputs(
         "stacks/a",
@@ -93,6 +102,109 @@ fn lock_slot_gates_reuse() {
         err.to_string().contains("unresolved_input:lockfile"),
         "{err}"
     );
+}
+
+/// T23: init/validate reuse is OFF across every resolving lock slot.
+#[test]
+fn init_and_validate_reuse_off_across_resolving_slots() {
+    let workspace = digest_b3(b"workspace");
+    let graph = digest_b3(b"graph");
+    let config = digest_b3(b"config");
+    for kind in [TofuTaskKind::InitForValidate, TofuTaskKind::Validate] {
+        for slot in [
+            DigestSlot::Known(digest_b3(b"lock")),
+            DigestSlot::AbsentProven("not_found:.terraform.lock.hcl".to_owned()),
+        ] {
+            let ext = TofuTaskIdentityExtension::for_task(&inputs(
+                "stacks/a", "stacks/a", slot, kind, &workspace, &graph, &config,
+            ));
+            let err = ext.reuse_eligible().expect_err("reuse is OFF");
+            assert!(
+                err.to_string().contains("tofu_reuse_disabled"),
+                "{kind:?}: {err}"
+            );
+        }
+    }
+}
+
+/// T23: fmt keeps the shared qualification (lockfile-independent, and
+/// the T23 row scopes OFF to init/validate only).
+#[test]
+fn fmt_keeps_shared_qualification() {
+    let workspace = digest_b3(b"workspace");
+    let graph = digest_b3(b"graph");
+    let config = digest_b3(b"config");
+    for slot in [
+        DigestSlot::Known(digest_b3(b"lock")),
+        DigestSlot::AbsentProven("not_found:.terraform.lock.hcl".to_owned()),
+    ] {
+        let ext = TofuTaskIdentityExtension::for_task(&inputs(
+            "stacks/a",
+            "stacks/a",
+            slot,
+            TofuTaskKind::Fmt,
+            &workspace,
+            &graph,
+            &config,
+        ));
+        assert!(ext.reuse_eligible().is_ok(), "fmt stays eligible");
+    }
+    let unknown = TofuTaskIdentityExtension::for_task(&inputs(
+        "stacks/a",
+        "stacks/a",
+        DigestSlot::Unknown("unreadable".to_owned()),
+        TofuTaskKind::Fmt,
+        &workspace,
+        &graph,
+        &config,
+    ));
+    let err = unknown.reuse_eligible().expect_err("unknown blocks fmt");
+    assert!(
+        err.to_string().contains("unresolved_input:lockfile"),
+        "{err}"
+    );
+}
+
+/// T23 touches task-result reuse only: baseline coverage still admits
+/// resolved init/validate extensions and still gates unknown slots.
+#[test]
+fn coverage_path_untouched_by_reuse_off() {
+    let workspace = digest_b3(b"workspace");
+    let graph = digest_b3(b"graph");
+    let config = digest_b3(b"config");
+    for kind in [TofuTaskKind::InitForValidate, TofuTaskKind::Validate] {
+        let resolved = TofuTaskIdentityExtension::for_task(&inputs(
+            "stacks/a",
+            "stacks/a",
+            DigestSlot::Known(digest_b3(b"lock")),
+            kind,
+            &workspace,
+            &graph,
+            &config,
+        ));
+        assert!(
+            resolved.coverage_eligible().is_ok(),
+            "{kind:?} still coverable"
+        );
+        assert!(
+            !resolved.conservative_execution_required(),
+            "{kind:?} needs no conservative execution"
+        );
+        let unknown = TofuTaskIdentityExtension::for_task(&inputs(
+            "stacks/a",
+            "stacks/a",
+            DigestSlot::Unknown("unreadable".to_owned()),
+            kind,
+            &workspace,
+            &graph,
+            &config,
+        ));
+        assert!(
+            unknown.coverage_eligible().is_err(),
+            "{kind:?} coverage still slot-gated"
+        );
+        assert!(unknown.conservative_execution_required());
+    }
 }
 
 /// Undeclared reads block reuse even with a known lockfile.

@@ -90,6 +90,7 @@ mod impl_tofu_t20;
 mod impl_tofu_t20_stable;
 mod impl_tofu_t21;
 mod impl_tofu_t22;
+mod impl_tofu_t23;
 mod impl_tool_snapshot;
 mod impl_trust;
 mod impl_trust_identity;

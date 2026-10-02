@@ -223,3 +223,66 @@ fn merge_lists_shared_job_artifact_once() {
     assert_eq!(verdict.counts.executed, 2);
     assert_eq!(verdict.downloaded_artifact_ids, [shared]);
 }
+
+/// T23: a validate `TaskReport` that is `executed` alongside a
+/// provider-cache hit aggregates to executed — the hit never mints
+/// reuse and never disturbs the fold.
+#[test]
+fn provider_hit_validate_execution_aggregates_executed() {
+    use std::collections::BTreeMap;
+    use velnor_actions_contract::{ExecuteTaskIds, MatrixStatus, Trust, WorkflowEvent, digest_b3};
+    let plan = fixture_plan();
+    let task_id = "stack/tofu/stacks/a/validate/default";
+    let task_digest = digest_b3(b"tofu-validate-task");
+    let entry = MatrixEntry::derive(
+        "tofu",
+        task_id,
+        "true",
+        &task_digest,
+        serde_json::json!({}),
+        ExecuteTaskIds {
+            tasks: BTreeMap::from([(
+                "validate".to_owned(),
+                ExecuteTaskRef::Single(task_id.to_owned()),
+            )]),
+        },
+        &digest_b3(b"tofu-validate-inputs"),
+        "local",
+        "tofu-stacks-a",
+    )
+    .expect("tofu entry derives");
+    let task = TaskReport {
+        schema: 1,
+        task_report_id: task_report_id_for_task("local", &entry.matrix_key, &task_digest)
+            .expect("report id"),
+        run_key: "local".to_owned(),
+        event: WorkflowEvent::PullRequest,
+        trust: Trust::Pr,
+        matrix_id: entry.id.clone(),
+        matrix_key: entry.matrix_key.clone(),
+        task_id: task_id.to_owned(),
+        task_digest,
+        status: TaskStatus::Executed,
+        not_selected_reason: None,
+        cache: CacheOutcome {
+            layer: CacheLayer::TofuProviders,
+            key: "velnor-v1-tofu-providers-x86_64-unknown-linux-gnu-1.13.1-stacks-a-0123456789ab"
+                .to_owned(),
+            result: CacheResult::Hit,
+            miss_reason: None,
+        },
+        exit_code: 0,
+        duration_ms: None,
+        outputs: vec![],
+        lane: None,
+        queue: None,
+        partition: None,
+        reason: None,
+        timing: None,
+    };
+    task.validate().expect("executed+provider-hit validates");
+    let aggregate = single_task_aggregate(&plan, &entry, &task).expect("aggregates");
+    assert_eq!(aggregate.executed, 1);
+    assert_eq!(aggregate.reused, 0);
+    assert_eq!(aggregate.status, MatrixStatus::Passed);
+}
