@@ -1,7 +1,7 @@
 //! Tofu file families: config, override, test, var, lock, other.
 //!
 //! Families classify by file NAME only (never content): the config
-//! family reuses the S1 [`config_shape`](crate::effective::config_shape)
+//! family reuses the S1 `config_shape`
 //! suffixes, override is the config subset whose stem is `override` or
 //! ends with `_override`, test/var/lock match their own suffixes, and
 //! everything else is [`Family::Other`]. `.tofuvars` is deliberately
