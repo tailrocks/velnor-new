@@ -78,6 +78,7 @@ pub(crate) fn build_crate_jobs(
             .clone();
         let manifest = first.identity.unit_path.clone();
         let display = crate_display_name(&first.display_name, &manifest, configuration);
+        let use_rust = tasks.iter().any(|task| is_rust(task));
         let use_mbx = tasks.iter().any(|task| is_mbx(task));
         let use_nextest = tasks.iter().any(|task| is_nextest(task));
         let use_opentofu = tasks.iter().any(|task| is_opentofu(task));
@@ -103,6 +104,7 @@ pub(crate) fn build_crate_jobs(
             &model,
             catalog,
             fetch_roots,
+            use_rust,
             use_mbx,
             use_nextest,
             use_opentofu,
@@ -140,6 +142,12 @@ fn needs(task: &ProposedTask) -> velnor_actions_rust::ToolNeeds {
         };
     }
     tool_needs(&task.identity.compile_driver, &task.identity.test_runner)
+}
+
+/// True when the task needs the Rust toolchain (tofu tasks never do;
+/// unknown stacks keep the rust fallthrough, matching [`needs`]).
+fn is_rust(task: &ProposedTask) -> bool {
+    !is_opentofu(task)
 }
 
 /// True when the task compiles through MBX (unknown spellings are Cargo).
@@ -228,7 +236,9 @@ fn gates_for(task: &ProposedTask, executed: &BTreeSet<&str>) -> Vec<String> {
 /// the plan), restore shared sources (or Cargo-only registry), then
 /// MBX objects, then probe-and-fetch, then report-wrapped
 /// obligations, then one always-on crate-report upload carrying every
-/// entry. Readers never save.
+/// entry. Readers never save. Rust setup (components, restore,
+/// fetch) emits only for rust roles; pure-tofu roles carry the
+/// opentofu driver with no Rust setup, mixed roles the union.
 #[expect(
     clippy::too_many_arguments,
     clippy::fn_params_excessive_bools,
@@ -240,6 +250,7 @@ fn render_job(
     model: &CrateJob,
     catalog: &ToolCatalog,
     fetch_roots: &[String],
+    use_rust: bool,
     use_mbx: bool,
     use_nextest: bool,
     use_opentofu: bool,
@@ -253,24 +264,30 @@ fn render_job(
         crate::matrix_step::crate_needs_generate_validators(policy, &model.package_name);
     steps.push(crate::matrix_step::prepare_crate_tools_step(
         catalog,
+        use_rust,
         use_mbx,
         use_nextest,
         use_opentofu,
         needs_validators,
     )?);
-    steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
+    if use_rust {
+        steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
+    }
     steps.extend(restore_step_for_crate(
         label,
         catalog,
         fetch_roots,
+        use_rust,
         use_mbx,
         repo_has_mbx,
     )?);
     steps.extend(mbx_objects_step(catalog, use_mbx)?);
-    steps.extend(crate::source_prep::fetch_steps_for_crate(
-        catalog,
-        fetch_roots,
-    )?);
+    if use_rust {
+        steps.extend(crate::source_prep::fetch_steps_for_crate(
+            catalog,
+            fetch_roots,
+        )?);
+    }
     steps.extend(crate::workflow::wire_w1::maybe_task_cache_steps(
         None,
         TaskCacheMode::Off,
@@ -302,17 +319,20 @@ fn render_job(
 
 /// Restore step for one crate: shared sources, or Cargo-only registry.
 ///
-/// Lockless emits nothing. Cargo-only repos (no MBX anywhere) restore via
-/// pinned `rust-cache` (read-only); every other lockful crate restores the
-/// shared `actions/cache` snapshot (read-only, never saves the shared key).
+/// Lockless emits nothing, and pure-tofu roles emit nothing (their
+/// provider cache lands in a later task). Cargo-only repos (no MBX
+/// anywhere) restore via pinned `rust-cache` (read-only); every other
+/// lockful crate restores the shared `actions/cache` snapshot
+/// (read-only, never saves the shared key).
 fn restore_step_for_crate(
     label: &str,
     catalog: &ToolCatalog,
     fetch_roots: &[String],
+    use_rust: bool,
     use_mbx: bool,
     repo_has_mbx: bool,
 ) -> Result<Option<Step>, OrchestratorError> {
-    if fetch_roots.is_empty() {
+    if !use_rust || fetch_roots.is_empty() {
         return Ok(None);
     }
     let target = velnor_actions_contract::target_for_runner_label(label).ok_or_else(|| {

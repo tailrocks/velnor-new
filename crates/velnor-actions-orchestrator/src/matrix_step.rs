@@ -70,30 +70,35 @@ fn payload_env_for_obligation(task_id: &str, kind: &str) -> Vec<(OsString, OsStr
     }
 }
 
-/// Validated env every crate-job Cargo step runs with.
+/// Validated env every crate-job step runs with.
 ///
 /// Single constructor shared by obligation steps and `Fetch Cargo
 /// sources`: the isolation quartet plus install disable from the Mise
-/// adapter's single source, the owned-homes triple, and caller extras.
-/// Tofu obligations additionally carry the isolated per-root
-/// `TF_DATA_DIR` from the tofu adapter's derivation (the temp CLI
-/// config path stays local-only until a materialization step lands).
-/// Reserved keys in the extras fail closed, so generated steps use the
-/// same validated contract as local helper requests and fetch plus
-/// consumers can never drift apart (run 36560676954 failed every leg
-/// when only `Run task` carried the triple).
+/// adapter's single source, the owned-homes triple for rust steps,
+/// and caller extras. Tofu obligations carry no triple; they carry
+/// the isolated per-root `TF_DATA_DIR` from the tofu adapter's
+/// derivation instead (the temp CLI config path stays local-only
+/// until a materialization step lands). Reserved keys in the extras
+/// fail closed, so generated steps use the same validated contract as
+/// local helper requests and fetch plus consumers can never drift
+/// apart (run 36560676954 failed every leg when only `Run task`
+/// carried the triple).
 ///
 /// # Errors
 ///
-/// Returns a contract error for reserved extras and a render error for
-/// blank triple inputs or denied credential keys.
+/// Returns a contract error for reserved extras (triple keys included
+/// when `needs_rust` is false) and a render error for blank triple
+/// inputs or denied credential keys.
 pub(crate) fn task_step_env(
     catalog: &ToolCatalog,
     extra: &BTreeMap<String, String>,
+    needs_rust: bool,
 ) -> Result<BTreeMap<String, String>, OrchestratorError> {
     use velnor_actions_workflow_renderer::toolchain_env;
     for key in extra.keys() {
-        if velnor_actions_mise::command::is_reserved_env_key(key) {
+        if velnor_actions_mise::command::is_reserved_env_key(key)
+            || (!needs_rust && toolchain_env::TOOLCHAIN_HOME_KEYS.contains(&key.as_str()))
+        {
             return Err(OrchestratorError::Contract {
                 problem: format!("reserved_step_env:{key}"),
             });
@@ -110,6 +115,10 @@ pub(crate) fn task_step_env(
     );
     if let Some(data_dir) = tofu_data_dir_for_extra(extra)? {
         base.insert(velnor_actions_tofu::TF_DATA_DIR_ENV.to_owned(), data_dir);
+    }
+    if !needs_rust {
+        toolchain_env::reject_denied_step_keys(&base).map_err(OrchestratorError::from)?;
+        return Ok(base);
     }
     let homes = ToolHomes::runner_temp();
     let toolchain = catalog.rustup_toolchain();
@@ -186,8 +195,9 @@ pub(crate) fn obligation_identity_env(
 /// digests, never these baked values. Doc obligations additionally
 /// carry the adapter `payload_env_for_kind` pairs (`RUSTDOCFLAGS=-D
 /// warnings`) and tofu obligations the automation pair, matching the
-/// plan identity envelope. The step skips via `if:` when the plan
-/// covered this obligation; unknown coverage executes.
+/// plan identity envelope. Tofu obligations run triple-less; every
+/// other stack keeps the owned-homes triple. The step skips via `if:`
+/// when the plan covered this obligation; unknown coverage executes.
 ///
 /// # Errors
 ///
@@ -220,7 +230,8 @@ pub(crate) fn obligation_step(
         );
     }
     check_identity_env_contract(&identity, &obligation.task_id)?;
-    let env = task_step_env(catalog, &identity)?;
+    let needs_rust = obligation_stack(&obligation.task_id) != Some(Stack::Tofu);
+    let env = task_step_env(catalog, &identity, needs_rust)?;
     let joined =
         velnor_actions_workflow_renderer::join_argv_for_run(&obligation.run).map_err(|err| {
             OrchestratorError::Contract {
@@ -362,3 +373,7 @@ pub(crate) fn crate_upload_step(job_id: &str) -> Result<Step, OrchestratorError>
 #[cfg(test)]
 #[path = "matrix_step_tests.rs"]
 mod matrix_step_tests;
+
+#[cfg(test)]
+#[path = "matrix_step_tofu_tests.rs"]
+mod matrix_step_tofu_tests;

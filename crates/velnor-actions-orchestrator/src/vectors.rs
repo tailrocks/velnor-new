@@ -292,7 +292,7 @@ pub(crate) fn custom_task_steps(
             let run = custom_task_run_argv(task).map_err(|err| OrchestratorError::Contract {
                 problem: err.to_string(),
             })?;
-            let env = crate::matrix_step::task_step_env(catalog, &BTreeMap::new())?;
+            let env = crate::matrix_step::task_step_env(catalog, &BTreeMap::new(), true)?;
             velnor_actions_workflow_renderer::shell_step(&format!("Custom task {task}"), run, env)
                 .map_err(|err| OrchestratorError::Contract {
                     problem: err.to_string(),
