@@ -1,7 +1,7 @@
 import {createHash} from 'node:crypto'
 import path from 'node:path'
 
-export type Backend = 'local' | 'github' | 'server'
+export type Backend = 'local' | 'github' | 'remote'
 export type GithubCacheMode = 'objects' | 'target'
 export type BundleForm = 'tar' | 'directory'
 
@@ -101,8 +101,114 @@ export function callingCard(note: string, rows: CallingCardRow[]): string {
 }
 
 export function parseBackend(value: string): Backend {
-  if (value === 'local' || value === 'github' || value === 'server') return value
-  throw new Error(`backend must be "local", "github", or "server", got ${JSON.stringify(value)}`)
+  if (value === 'local' || value === 'github' || value === 'remote') return value
+  // `server` named this backend before an s3:// bucket could stand in for a
+  // cache server, and existing workflows still spell it that way.
+  if (value === 'server') return 'remote'
+  throw new Error(`backend must be "local", "github", or "remote", got ${JSON.stringify(value)}`)
+}
+
+/** One setting under two input names, which must agree when both are given. */
+export function aliasedInput(
+  name: string,
+  value: string,
+  alias: string,
+  aliasValue: string
+): string {
+  if (value && aliasValue && value !== aliasValue) {
+    throw new Error(`${name} and ${alias} name the same setting with different values; set only ${name}`)
+  }
+  return value || aliasValue
+}
+
+export interface RemoteInputs {
+  url: string
+  namespace: string
+  token: string
+  tokenFile: string
+  oidcAudience: string
+  mode: string
+}
+
+/**
+ * The `MBX_REMOTE_*` variables the remote backend exports: one per input that
+ * was given, and nothing else.
+ *
+ * A setting without an input keeps whatever an earlier step exported, such as
+ * a runner action that points mbx at its own bucket, and mbx applies its own
+ * default when nothing set it. Exporting an empty or default value here would
+ * overwrite that step's choice.
+ */
+export function remoteExports(inputs: RemoteInputs): Record<string, string> {
+  if (inputs.mode && !['read-write', 'read-only', 'write-only'].includes(inputs.mode)) {
+    throw new Error(`invalid remote-mode ${JSON.stringify(inputs.mode)}`)
+  }
+  if ([inputs.token, inputs.tokenFile, inputs.oidcAudience].filter(Boolean).length > 1) {
+    throw new Error('set only one of token, token-file, or oidc-audience')
+  }
+  const variables: [string, string][] = [
+    ['MBX_REMOTE_URL', inputs.url],
+    ['MBX_REMOTE_NAMESPACE', inputs.namespace],
+    ['MBX_REMOTE_MODE', inputs.mode],
+    ['MBX_REMOTE_TOKEN', inputs.token],
+    ['MBX_REMOTE_TOKEN_FILE', inputs.tokenFile],
+    ['MBX_REMOTE_OIDC_AUDIENCE', inputs.oidcAudience]
+  ]
+  return Object.fromEntries(variables.filter(([, value]) => value))
+}
+
+export interface RemoteStatus {
+  /**
+   * `ready` when mbx built a client and reached the remote, or its write
+   * policy disables the remote for this run; `unreachable` when the
+   * configuration is sound but the connection check failed; `missing` when no
+   * URL is configured anywhere mbx looks; `invalid` when mbx rejects the
+   * configuration, which fails every build that uses it; `unknown` when mbx
+   * gave no report.
+   */
+  state: 'ready' | 'unreachable' | 'missing' | 'invalid' | 'unknown'
+  detail: string
+  /** Configured and effective mode, when a URL is configured. */
+  policy?: string
+}
+
+interface DoctorCheck {
+  severity: string
+  name: string
+  detail: string
+}
+
+/**
+ * What `mbx doctor --json` says about the remote cache.
+ *
+ * mbx resolves the remote from the environment and its user config file, so
+ * asking it covers every place a URL can come from and applies the same checks
+ * a build does before its first compilation.
+ */
+export function remoteStatus(doctorOutput: string): RemoteStatus {
+  let checks: DoctorCheck[]
+  try {
+    const report = JSON.parse(doctorOutput) as {checks?: DoctorCheck[]}
+    if (!Array.isArray(report.checks)) throw new Error('no checks')
+    checks = report.checks
+  } catch {
+    return {state: 'unknown', detail: 'mbx doctor --json produced no report'}
+  }
+  const config = checks.find(check => check.name === 'config')
+  if (config?.severity === 'fail') return {state: 'invalid', detail: config.detail}
+  const remote = checks.find(check => check.name === 'remote')
+  if (!remote) return {state: 'unknown', detail: 'mbx doctor reported no remote check'}
+  const policy = checks.find(check => check.name === 'policy')?.detail
+  if (remote.severity === 'fail') {
+    // mbx wraps only a failed probe of a client it could build this way; any
+    // other failure is a configuration the build would refuse too.
+    const state = remote.detail.startsWith('connection check failed') ? 'unreachable' : 'invalid'
+    return {state, detail: remote.detail, policy}
+  }
+  if (remote.detail.startsWith('not configured')) {
+    return {state: 'missing', detail: remote.detail}
+  }
+  return {state: 'ready', detail: remote.detail, policy}
 }
 
 export function parseGithubCacheMode(value: string): GithubCacheMode {
@@ -188,6 +294,29 @@ export function generatedRestoreKey(
 }
 
 /**
+ * The restore key that leads a saving pull request back to its own latest
+ * entry on its base commit.
+ *
+ * Its primary key is unique to the run, so it never matches. GitHub's cache
+ * service takes a restore key that matches an entry exactly over every prefix
+ * match, whichever order the keys were given in. Listing the base commit's own
+ * key would therefore restore the base branch's entry on every revision and
+ * never the pull request's own. This prefix cannot match any entry exactly. It
+ * reaches the pull request's runs on that base, which GitHub finds in the pull
+ * request's own scope, and the generated restore key after it falls back to
+ * the pull request's newest entry and then the base branch's.
+ */
+export function pullRequestRestoreKey(
+  os: string,
+  arch: string,
+  generation: string,
+  toolchain: string,
+  baseSha: string
+): string {
+  return `${generatedKey(os, arch, generation, toolchain, baseSha)}-run-`
+}
+
+/**
  * Whether an installed mbx can read and write directory-form bundles.
  *
  * `mbx cache export --format directory` arrived in mbx 1.12.0, and an older
@@ -264,33 +393,113 @@ export function toolchainSegment(rustcIdentity: string | null): string {
 }
 
 /**
- * Give saving dispatches a fresh primary key so GitHub's immutable cache can
- * preserve state learned after restoring the previous compatible dispatch.
+ * Give saving runs other than pushes a fresh primary key. A dispatch or a pull
+ * request can save many times against one commit, and GitHub's immutable cache
+ * would otherwise keep only the first entry and drop what later runs learned
+ * after restoring it.
  */
 export function cacheRevision(
   eventName: string,
   sha: string,
-  saveOnWorkflowDispatch: boolean,
+  save: boolean,
   runId: number,
   runAttempt: number
 ): string {
-  return eventName === 'workflow_dispatch' && saveOnWorkflowDispatch
-    ? `${sha}-run-${runId}-${runAttempt}`
-    : sha
+  return save && eventName !== 'push' ? `${sha}-run-${runId}-${runAttempt}` : sha
 }
 
-export function shouldSave(
-  eventName: string,
-  ref: string,
-  defaultBranch?: string | null,
-  saveOnWorkflowDispatch = false
-): boolean {
-  if (eventName === 'workflow_dispatch') return saveOnWorkflowDispatch
-  return Boolean(
-    eventName === 'push' &&
-      defaultBranch &&
-      ref === `refs/heads/${defaultBranch}`
-  )
+export interface SaveOptions {
+  workflowDispatch?: boolean
+  pullRequest?: boolean
+  protectedBranch?: boolean
+}
+
+export interface SaveContext {
+  eventName: string
+  ref: string
+  defaultBranch?: string | null
+  /** `GITHUB_REF_PROTECTED`: the ref has branch protection or rulesets. */
+  refProtected?: boolean
+  /** Whether a pull request's head branch lives in the base repository. */
+  sameRepository?: boolean
+  /** `ACTIONS_CACHE_MODE`: the cache access GitHub granted this job. */
+  cacheMode?: string
+}
+
+export interface SaveDecision {
+  save: boolean
+  reason: string
+}
+
+/**
+ * Whether a successful job saves the GitHub cache, and why.
+ *
+ * Default-branch pushes always save. Protected-branch pushes, same-repository
+ * pull requests, and dispatches save only when opted in. A fork pull request
+ * never saves: GitHub would accept its write into the pull request's own
+ * scope, but nothing about the run is trusted.
+ *
+ * A save the policy allows is still skipped when GitHub's `cache-mode` for
+ * the job denies writes, so the decision says so up front instead of pruning
+ * and exporting a payload the cache library would then drop.
+ */
+export function savePolicy(run: SaveContext, options: SaveOptions = {}): SaveDecision {
+  const decision = eventSavePolicy(run, options)
+  const mode = run.cacheMode?.trim().toLowerCase() ?? ''
+  if (decision.save && !cacheModePermitsWrites(mode)) {
+    return {save: false, reason: `${decision.reason}; cache-mode ${mode} does not permit writes`}
+  }
+  return decision
+}
+
+/**
+ * The same lattice `@actions/cache` applies: an unset or unrecognized mode is
+ * permissive, so runners that do not export one keep today's behavior.
+ */
+export function cacheModePermitsWrites(mode: string): boolean {
+  if (!['none', 'read', 'write', 'write-only'].includes(mode)) return true
+  return mode === 'write' || mode === 'write-only'
+}
+
+function eventSavePolicy(run: SaveContext, options: SaveOptions): SaveDecision {
+  const {eventName, ref, defaultBranch} = run
+  if (eventName === 'push' && ref.startsWith('refs/heads/')) {
+    if (defaultBranch && ref === `refs/heads/${defaultBranch}`) {
+      return {save: true, reason: 'default-branch push'}
+    }
+    if (!run.refProtected) return {save: false, reason: 'unprotected-branch push'}
+    return options.protectedBranch
+      ? {save: true, reason: 'protected-branch push'}
+      : {save: false, reason: 'protected-branch push; save-on-protected-branch is off'}
+  }
+  if (eventName === 'pull_request') {
+    if (!run.sameRepository) return {save: false, reason: 'fork pull request'}
+    // Once a pull request is merged, its `closed` run reports the branch it
+    // merged into, and a save there would land in that branch's scope.
+    if (!/^refs\/pull\/\d+\/merge$/.test(ref)) {
+      return {save: false, reason: 'pull request outside its merge ref'}
+    }
+    return options.pullRequest
+      ? {save: true, reason: 'same-repository pull request'}
+      : {save: false, reason: 'pull request; save-on-pull-request is off'}
+  }
+  if (eventName === 'workflow_dispatch') {
+    return options.workflowDispatch
+      ? {save: true, reason: 'workflow_dispatch'}
+      : {save: false, reason: 'workflow_dispatch; save-on-workflow-dispatch is off'}
+  }
+  return {save: false, reason: `${eventName} event`}
+}
+
+export interface PullRequestRepositories {
+  head?: {repo?: {full_name?: string} | null}
+  base?: {repo?: {full_name?: string} | null}
+}
+
+/** A pull request whose head repository is gone is treated as a fork. */
+export function isSameRepositoryPullRequest(pullRequest?: PullRequestRepositories): boolean {
+  const head = pullRequest?.head?.repo?.full_name
+  return Boolean(head && head === pullRequest?.base?.repo?.full_name)
 }
 
 /**

@@ -3,10 +3,10 @@ import {chmod, mkdtemp, rm, writeFile} from 'node:fs/promises'
 import {tmpdir} from 'node:os'
 import path from 'node:path'
 
-const mocks = vi.hoisted(() => ({inputs: {} as Record<string, string>, state: {} as Record<string, string>, exec: vi.fn(), restore: vi.fn(), failed: vi.fn(), warning: vi.fn(), info: vi.fn()}))
+const mocks = vi.hoisted(() => ({inputs: {} as Record<string, string>, state: {} as Record<string, string>, exec: vi.fn(), restore: vi.fn(), failed: vi.fn(), warning: vi.fn(), info: vi.fn(), context: {runId: 1, runAttempt: 1, eventName: 'push', ref: 'refs/heads/main', sha: 'abc', payload: {repository: {default_branch: 'main'}}}}))
 vi.mock('@actions/core', () => ({
   getState: () => '', getInput: (name: string) => mocks.inputs[name] || '',
-  getMultilineInput: () => ['linux-x64-mbx-qualified-'], getBooleanInput: () => false,
+  getMultilineInput: () => ['linux-x64-mbx-qualified-'], getBooleanInput: (name: string) => mocks.inputs[name] === 'true',
   saveState: (name: string, value: string) => { mocks.state[name] = value },
   setFailed: mocks.failed, warning: mocks.warning, info: mocks.info,
   addPath: vi.fn(), exportVariable: vi.fn(), setOutput: vi.fn(), setSecret: vi.fn(), debug: vi.fn(),
@@ -14,7 +14,7 @@ vi.mock('@actions/core', () => ({
 }))
 vi.mock('@actions/cache', () => ({restoreCache: mocks.restore, ValidationError: class ValidationError extends Error {}}))
 vi.mock('@actions/exec', () => ({exec: mocks.exec}))
-vi.mock('@actions/github', () => ({context: {runId: 1, runAttempt: 1, eventName: 'push', ref: 'refs/heads/main', sha: 'abc', payload: {repository: {default_branch: 'main'}}}}))
+vi.mock('@actions/github', () => ({context: mocks.context}))
 vi.mock('@actions/tool-cache', () => ({}))
 
 let directory = ''
@@ -31,6 +31,7 @@ beforeEach(async () => {
   await chmod(bin, 0o755)
   mocks.inputs = {'mbx-path': bin, 'expected-version': '1.12.0', backend: 'github', 'github-cache-mode': 'objects', 'comparison-state': path.join(directory, 'baseline'), toolchain: '1.98.0', 'cache-links': 'false', 'cache-generation': 'qualified'}
   mocks.state = {}
+  mocks.context.eventName = 'push'
   importFails = false
   mocks.restore.mockResolvedValue('restored-qualified-key')
   mocks.exec.mockImplementation(async (_bin, args, options) => {
@@ -90,5 +91,13 @@ describe('strict object transport main', () => {
     await invoke()
     expect(mocks.failed).toHaveBeenCalled()
     expect(mocks.restore).not.toHaveBeenCalled()
+  })
+  it('keeps comparison dispatch keys semantic without a run identifier', async () => {
+    mocks.context.eventName = 'workflow_dispatch'
+    mocks.inputs['save-on-workflow-dispatch'] = 'true'
+    await invoke()
+    expect(mocks.failed).not.toHaveBeenCalled()
+    expect(mocks.state['mbx-cache-key']).toMatch(/-abc$/)
+    expect(mocks.state['mbx-cache-key']).not.toContain('-run-')
   })
 })
