@@ -92,7 +92,7 @@ pub fn http_create_body(name: &str) -> Result<String, WireError> {
     if name.is_empty() {
         return Err(WireError::RegistrationRejected);
     }
-    outgoing_json(name, &product_create_labels())
+    outgoing_json(name, &product_create_labels(), 0)
 }
 
 /// Label object returned by the service.
@@ -115,8 +115,8 @@ pub struct ScaleSetView {
     /// Returned labels.
     #[serde(default)]
     pub labels: Vec<Label>,
-    /// Update policy.
-    #[serde(rename = "RunnerSetting")]
+    /// Update policy. Create requests use Pascal-case. The service reads it back camel-case.
+    #[serde(rename = "runnerSetting", alias = "RunnerSetting")]
     pub runner_setting: RunnerSetting,
 }
 
@@ -151,10 +151,15 @@ fn other_status(status: u16) -> SessionError {
     }
 }
 
-fn outgoing_json(name: &str, labels: &[CreateLabel]) -> Result<String, WireError> {
+fn outgoing_json(
+    name: &str,
+    labels: &[CreateLabel],
+    runner_group_id: i64,
+) -> Result<String, WireError> {
     let prepared = prepare_labels(name, labels)?;
     let body = OutgoingScaleSet {
         name,
+        runner_group_id: (runner_group_id > 0).then_some(runner_group_id),
         labels: prepared,
         runner_setting: RunnerSetting {
             disable_update: true,
@@ -201,6 +206,8 @@ const fn default_type(label_type: &str) -> &str {
 #[derive(Serialize)]
 struct OutgoingScaleSet<'a> {
     name: &'a str,
+    #[serde(rename = "runnerGroupId", skip_serializing_if = "Option::is_none")]
+    runner_group_id: Option<i64>,
     labels: Vec<OutgoingLabel<'a>>,
     #[serde(rename = "RunnerSetting")]
     runner_setting: RunnerSetting,

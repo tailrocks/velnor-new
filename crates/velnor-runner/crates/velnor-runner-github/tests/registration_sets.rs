@@ -110,6 +110,7 @@ fn create_sends_product_labels_and_preview_query() -> Result<(), String> {
         &mut script,
         &ScaleSetCreate {
             name: NAME,
+            runner_group_id: 1,
             labels: &labels,
             admin_token: ADMIN,
         },
@@ -122,12 +123,11 @@ fn create_sends_product_labels_and_preview_query() -> Result<(), String> {
     let body = String::from_utf8(request.body.clone()).map_err(|_| "utf8".to_owned())?;
     assert_eq!(
         body,
-        r#"{"name":"ubuntu-26.04-scale-set","labels":[{"type":"System","name":"velnor"},{"type":"System","name":"ubuntu-26.04-scale-set"}],"RunnerSetting":{"disableUpdate":true}}"#
+        r#"{"name":"ubuntu-26.04-scale-set","runnerGroupId":1,"labels":[{"type":"System","name":"velnor"},{"type":"System","name":"ubuntu-26.04-scale-set"}],"RunnerSetting":{"disableUpdate":true}}"#
     );
-    assert_eq!(
-        http_create_body(NAME).map_err(|err| format!("{err:?}"))?,
-        body
-    );
+    let preview = http_create_body(NAME).map_err(|err| format!("{err:?}"))?;
+    assert!(!preview.contains("runnerGroupId"));
+    assert!(preview.contains("disableUpdate"));
     let parsed: serde_json::Value = serde_json::from_str(&body).map_err(|_| "json".to_owned())?;
     let names: Vec<&str> = parsed["labels"]
         .as_array()
@@ -147,6 +147,7 @@ fn empty_create_labels_use_the_set_name() -> Result<(), String> {
         &mut script,
         &ScaleSetCreate {
             name: NAME,
+            runner_group_id: 1,
             labels: &[],
             admin_token: ADMIN,
         },
@@ -156,13 +157,14 @@ fn empty_create_labels_use_the_set_name() -> Result<(), String> {
     let body = String::from_utf8(request.body.clone()).map_err(|_| "utf8".to_owned())?;
     assert_eq!(
         body,
-        r#"{"name":"ubuntu-26.04-scale-set","labels":[{"type":"System","name":"ubuntu-26.04-scale-set"}],"RunnerSetting":{"disableUpdate":true}}"#
+        r#"{"name":"ubuntu-26.04-scale-set","runnerGroupId":1,"labels":[{"type":"System","name":"ubuntu-26.04-scale-set"}],"RunnerSetting":{"disableUpdate":true}}"#
     );
     let mut refused = Script::once(200, &one_set(7));
     let err = create_runner_scale_set(
         &mut refused,
         &ScaleSetCreate {
             name: "",
+            runner_group_id: 1,
             labels: &[],
             admin_token: ADMIN,
         },

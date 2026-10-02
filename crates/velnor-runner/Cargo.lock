@@ -3249,6 +3249,7 @@ dependencies = [
  "turso",
  "velnor-runner-core",
  "velnor-runner-github",
+ "zeroize",
 ]
 
 [[package]]

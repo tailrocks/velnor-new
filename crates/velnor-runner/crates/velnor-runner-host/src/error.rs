@@ -27,4 +27,7 @@ pub enum HostError {
     /// Docker client could not open the configured socket.
     #[error("docker socket")]
     Docker,
+    /// Endpoint was not an `https` URL.
+    #[error("bad endpoint")]
+    Endpoint,
 }

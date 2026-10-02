@@ -2,8 +2,9 @@
 
 Resolved 2026-10-03 with `gh api` from this machine. Offline generator and
 runner tests cited below have run. A per-user LaunchAgent was installed,
-observed, and removed. No image build, live JIT worker, or ChainArgos rollout
-has been attempted. Those rows stay `NOT_RUN`.
+observed, and removed. Image builds were inspected. The product scale set was
+created with the shipped client. No live JIT worker and no ChainArgos rollout.
+G3, G4, G7, and G8 stay `NOT_RUN`.
 
 ## Identities
 
@@ -56,6 +57,8 @@ On 2026-10-02, `gh api repos/tailrocks/velnor-new/actions/runners` and the same 
 
 On 2026-10-03, `POST /repos/tailrocks/velnor-new/actions/runners/registration-token` and the same path for `ChainArgos/java-monorepo` both returned `HTTP/2.0 201 Created`. The response body was discarded and is not in this file. A registration token is not a scale set, not a session, and not G4.
 
+On 2026-10-02T22:49:03Z, from `crates/velnor-runner` at parent `3857679`, `cargo run --offline --quiet -p velnor-runner-host --example ensure_set` exited 0 and printed `id=1 name=ubuntu-26.04-scale-set disable_update=true labels=velnor,ubuntu-26.04-scale-set`. The binary was the registration client in this change. A repeat of that command is idempotent and prints the same line. The set is on `tailrocks/velnor-new` in runner group 1 (`Default`). Create sends `runnerGroupId` 1. Omitting it makes the service answer `No runner group found with identifier 0`. The response field is camel-case `runnerSetting` with `disableUpdate` true. Labels are exactly `velnor` and `ubuntu-26.04-scale-set`, not hosted `ubuntu-26.04`. Actions admin host is `pipelinesghubeus4.actions.githubusercontent.com`. Status at create was offline. No JIT config, no worker container, and no GitHub job URL. This does not mark G4 `PASS`. Transcript: scratch `scaleset-ensure-post-option.log` (no token).
+
 GitHub CLI user `donbeave` has `gist`, `read:org`, `repo`, and `workflow` scopes and admin on both `tailrocks/velnor-new` and `ChainArgos/java-monorepo`. `tailrocks/velnor-new` has no repository rulesets. Classic branch protection on `main` returned 404.
 
 ## LaunchAgent
@@ -76,4 +79,4 @@ An older note recorded the required context as `ci-required`. The 2026-10-03 rul
 
 ## Not yet run
 
-No scale-set create, no JIT worker, no paired workflow, and no published image or macOS binary beyond the existing `v0.1.0` generator assets.
+No JIT worker, no paired workflow, and no published image or macOS binary beyond the existing `v0.1.0` generator assets. Scale set id 1 exists and has no official runner job.

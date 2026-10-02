@@ -18,7 +18,7 @@ this repository ran.
 | G2-uncertain | Uncertain acquire and delete keep capacity | PASS | `release_permitted_gates_capacity_release` keeps occupancy at 1 until `CleanupProof`; `before_advertise_holds_uncertain_and_adopts` |
 | G3-isolation | Private DinD, no outer socket/home, canary absent from metadata | NOT_RUN | pending spec tests; live inspect not run |
 | G3-ownership | Foreign objects survive; id mismatch quarantines | NOT_RUN | pending host tests |
-| G4-live | Real GitHub job on official runner and scale-set labels | NOT_RUN | public scale-set route 404; no shipped-client session |
+| G4-live | Real GitHub job on official runner and scale-set labels | NOT_RUN | shipped client created set id 1; no GitHub job URL |
 | G5-routing | Schema 1 unchanged; `both` duplicates verification only | PASS | `impl_schema2_routing.rs` at `40e08e8`; goldens unchanged |
 | G5-compare | Duplicate, missing lane, swapped artifact, unsafe archive fail closed | PASS | `compare_tests.rs` at `658154c` |
 | G6-launchd | User LaunchAgent foreground `daemon run`; second daemon fails | PASS | `launchctl print gui/501` at 2026-10-03: absolute `daemon run`, `forks = 0`; second `daemon run` exit 1; bootout removed the job |

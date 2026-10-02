@@ -61,6 +61,8 @@ impl fmt::Debug for ScaleSetById<'_> {
 pub struct ScaleSetCreate<'a> {
     /// Scale-set name.
     pub name: &'a str,
+    /// `runnerGroupId`. Zero is omitted, matching Go `omitempty`.
+    pub runner_group_id: i64,
     /// Labels before default types. Empty gets one `System` label named `name`.
     pub labels: &'a [CreateLabel],
     /// Actions admin bearer.
@@ -72,6 +74,7 @@ impl fmt::Debug for ScaleSetCreate<'_> {
         formatter
             .debug_struct("ScaleSetCreate")
             .field("name", &self.name)
+            .field("runner_group_id", &self.runner_group_id)
             .field("labels", &self.labels)
             .field("admin_token", &"[redacted]")
             .finish()
@@ -168,7 +171,7 @@ pub fn create_runner_scale_set<T>(
 where
     T: Transport + ?Sized,
 {
-    let body = outgoing_json(call.name, call.labels)?.into_bytes();
+    let body = outgoing_json(call.name, call.labels, call.runner_group_id)?.into_bytes();
     let request = SessionRequest {
         method: Method::Post,
         path: scale_set_path().to_owned(),
