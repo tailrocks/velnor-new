@@ -7,6 +7,7 @@
 //! for legacy refs. Lives apart so the parser facade keeps the file
 //! size gate.
 
+use crate::modules::{ModuleDecl, source_from_json};
 use crate::parser::{BlockModel, MAX_DEPTH, ParseError, Walk};
 
 impl Walk {
@@ -21,7 +22,23 @@ impl Walk {
             return Err(ParseError::TooDeep);
         }
         match kind {
-            "variable" | "output" | "module" => {
+            "module" => {
+                let entries = value.as_object().ok_or_else(|| ParseError::Syntax {
+                    message: format!("{kind}_must_be_object"),
+                })?;
+                for (name, body) in entries {
+                    self.blocks.push(BlockModel {
+                        kind: kind.to_owned(),
+                        labels: vec![name.clone()],
+                    });
+                    self.modules.push(ModuleDecl {
+                        name: name.clone(),
+                        source: source_from_json(body),
+                    });
+                    self.json_value(body, depth + 1)?;
+                }
+            }
+            "variable" | "output" => {
                 let entries = value.as_object().ok_or_else(|| ParseError::Syntax {
                     message: format!("{kind}_must_be_object"),
                 })?;

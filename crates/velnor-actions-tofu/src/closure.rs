@@ -13,6 +13,7 @@ use velnor_actions_contract::{
     canonical_json_bytes, digest_b3, normalize_posix_path,
 };
 
+use crate::closure_inputs::{modules_provenance, varfiles_provenance};
 use crate::effective::effective_set;
 use crate::family::{Family, LOCKFILE_NAME, family_of};
 use crate::fmt_scope::is_fmt_file;
@@ -44,6 +45,8 @@ pub fn resolve_closure_at_root(
     let mut closure = ClosureBuilder::new()
         .input("source_tree", source_tree_provenance(root, unit, kind))
         .input("lockfile", lockfile_provenance(root, unit, kind))
+        .input("modules", modules_provenance(root, unit, kind))
+        .input("varfiles", varfiles_provenance(root, unit, kind))
         .digest("local_deps", graph_digest)
         .digest("toolchain", toolchain_id)
         .digest("platform", platform_id)
@@ -164,7 +167,7 @@ fn vcs_provenance(undeclared_reads: bool) -> Provenance {
 }
 
 /// Digest over sorted `(path, digest)` file pairs.
-fn files_digest(files: &[(String, String)]) -> String {
+pub(crate) fn files_digest(files: &[(String, String)]) -> String {
     let pairs: Vec<(&str, &str)> = files
         .iter()
         .map(|(path, digest)| (path.as_str(), digest.as_str()))
@@ -177,7 +180,7 @@ fn files_digest(files: &[(String, String)]) -> String {
 ///
 /// Symlinks, non-UTF-8 names, unreadable entries, and over-cap
 /// selections fail the walk (the caller reports unknown).
-fn collect_unit_files(root: &Path, unit: &str) -> Result<Vec<String>, String> {
+pub(crate) fn collect_unit_files(root: &Path, unit: &str) -> Result<Vec<String>, String> {
     let mut base: PathBuf = root.to_path_buf();
     if !unit.is_empty() {
         base.push(unit);
