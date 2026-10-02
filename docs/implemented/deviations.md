@@ -21,7 +21,7 @@ point per crate, not in `src/**/tests.rs` modules.
 Entry points are named `tests/velnor_<crate>.rs` with case files as
 `tests/impl_*.rs` siblings, not `tests/integration.rs` + `tests/cases/`.
 
-- Reason: per-crate entry names stay unique and greppable in a 7-crate
+- Reason: per-crate entry names stay unique and greppable in an 8-crate
   workspace; `impl_*.rs` siblings avoid an extra directory level.
 - Impact: none on the MUST-NOT half (no binary per case), pinned by
   `test_entries_match_layout_and_stay_far_below_cases`: one `[[test]]`
