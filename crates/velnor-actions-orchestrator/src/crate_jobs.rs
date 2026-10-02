@@ -18,7 +18,7 @@ use velnor_actions_actionlint::{
 };
 use velnor_actions_contract::{
     CrateJob, CrateObligation, Job, JobTimeout, ProposedTask, Stack, Step, WorkflowPolicy,
-    crate_display_name, matrix_id_for_task_group, matrix_key_for_id,
+    crate_display_name, matrix_id_for_task_group, matrix_key_for_id, tofu_display_name,
 };
 use velnor_actions_mise::{PinnedTool, TaskCacheMode, ToolCatalog};
 use velnor_actions_rust::task_kind_rank;
@@ -26,7 +26,7 @@ use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
 use velnor_actions_workflow_renderer::steps::{CompileDriver as RenderDriver, mbx_step_for_driver};
 
 use crate::OrchestratorError;
-use crate::crate_job_ids::{assign_group_ids, group_runnable};
+use crate::crate_job_ids::{assign_group_ids, group_is_tofu, group_runnable};
 use crate::discover::Discovery;
 use crate::internal::internal;
 use crate::matrix_step::step_name_for;
@@ -90,7 +90,11 @@ pub(crate) fn build_crate_jobs(
             .ok_or_else(|| internal("crate_job_id_missing"))?
             .clone();
         let manifest = first.identity.unit_path.clone();
-        let display = crate_display_name(&first.display_name, &manifest, configuration);
+        let display = if group_is_tofu(tasks) {
+            tofu_display_name(&first.display_name)
+        } else {
+            crate_display_name(&first.display_name, &manifest, configuration)
+        };
         let use_rust = tasks.iter().any(|task| is_rust(task));
         let use_mbx = tasks.iter().any(|task| is_mbx(task));
         let use_nextest = tasks.iter().any(|task| is_nextest(task));
@@ -367,6 +371,10 @@ fn mbx_objects_step(
 #[cfg(test)]
 #[path = "crate_jobs_tests.rs"]
 mod crate_jobs_tests;
+
+#[cfg(test)]
+#[path = "crate_jobs_display_tests.rs"]
+mod crate_jobs_display_tests;
 
 #[cfg(test)]
 #[path = "crate_jobs_tofu_tests.rs"]

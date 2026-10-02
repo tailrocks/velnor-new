@@ -52,7 +52,11 @@ pub(crate) fn assign_group_ids(
 }
 
 /// True when every group member is a tofu task.
-fn group_is_tofu(members: &[&ProposedTask]) -> bool {
+///
+/// The single partition behind both the `tofu-` ID namespace and the
+/// `OpenToFu — <root>` display: ID and display derive from the same
+/// predicate over the same members, so they can never disagree.
+pub(crate) fn group_is_tofu(members: &[&ProposedTask]) -> bool {
     !members.is_empty()
         && members
             .iter()

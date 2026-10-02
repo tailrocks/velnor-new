@@ -126,6 +126,12 @@ pub const CRATE_JOB_ID_PREFIX: &str = "rust-";
 /// touching the rust contract above. Mixed groups keep `rust-`.
 pub const TOFU_JOB_ID_PREFIX: &str = "tofu-";
 
+/// Display-name prefix for tofu root jobs (`OpenToFu — <root>`).
+///
+/// All-tofu groups take this prefix; every other group keeps
+/// `Rust / `, so displays partition exactly like the ID namespaces.
+pub const TOFU_DISPLAY_PREFIX: &str = "OpenToFu — ";
+
 /// True for crate-group job IDs under either stack prefix.
 ///
 /// Single definition of the crate-job ID namespace: plan counts,
@@ -246,6 +252,17 @@ pub fn crate_display_name(package_name: &str, manifest: &str, configuration: &st
         format!("Rust / {label} ({configuration})")
     };
     sanitize_display_text(&composed)
+}
+
+/// Display name for one tofu root job: `OpenToFu — <label>`.
+///
+/// The label is the display root (`.` for the repository root); tofu
+/// carries no configuration suffix in v1. Sanitized whole through
+/// the same constructor as rust displays, so hostile labels fail
+/// closed at the same gate.
+#[must_use]
+pub fn tofu_display_name(root_label: &str) -> String {
+    sanitize_display_text(&format!("{TOFU_DISPLAY_PREFIX}{root_label}"))
 }
 
 /// Assign stable collision-safe crate job IDs for one package set.

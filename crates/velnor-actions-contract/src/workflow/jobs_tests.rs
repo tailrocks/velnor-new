@@ -2,7 +2,10 @@
 //!
 //! Declared via `#[path]` from `jobs.rs` under `cfg(test)`.
 
-use super::{crate_display_label, crate_display_name, is_safe_display_name, validate_job_id};
+use super::{
+    TOFU_DISPLAY_PREFIX, crate_display_label, crate_display_name, is_safe_display_name,
+    tofu_display_name, validate_job_id,
+};
 
 #[test]
 fn display_names_reject_expressions_and_controls() {
@@ -36,6 +39,21 @@ fn display_names_reject_expressions_and_controls() {
         "crates/${{x}}/Cargo.toml",
         "evil\ncfg"
     )));
+}
+
+#[test]
+fn tofu_display_names_pin_prefix_and_sanitize() {
+    assert_eq!(tofu_display_name("stacks/a"), "OpenToFu — stacks/a");
+    assert_eq!(tofu_display_name("."), "OpenToFu — .");
+    assert!(
+        tofu_display_name("x").starts_with(TOFU_DISPLAY_PREFIX),
+        "single prefix source"
+    );
+    assert!(is_safe_display_name(&tofu_display_name("stacks/a")));
+    assert_eq!(tofu_display_name("${{x}}"), "OpenToFu — $?{{x}}");
+    assert!(is_safe_display_name(&tofu_display_name("${{x}}")));
+    assert_eq!(tofu_display_name("a\nb"), "OpenToFu — a?b");
+    assert!(is_safe_display_name(&tofu_display_name("a\nb")));
 }
 
 #[test]
