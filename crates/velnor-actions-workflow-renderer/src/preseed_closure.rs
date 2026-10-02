@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{CRATE_JOB_ID_PREFIX, Job};
+use velnor_actions_contract::{Job, is_crate_job_id};
 
 use crate::{
     RenderError,
@@ -44,7 +44,7 @@ pub(crate) fn check_preseed_closure(
         }
     }
     for (id, job) in jobs {
-        if id != FINAL_JOB_ID && id != PUBLISH_JOB_ID && !id.starts_with(CRATE_JOB_ID_PREFIX) {
+        if id != FINAL_JOB_ID && id != PUBLISH_JOB_ID && !is_crate_job_id(id) {
             continue;
         }
         let position = |name: &str| job.steps.iter().position(|step| step.name == name);

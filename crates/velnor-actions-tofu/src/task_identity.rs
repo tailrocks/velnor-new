@@ -161,6 +161,33 @@ impl TofuTaskIdentityExtension {
         Ok(())
     }
 
+    /// Reject baseline coverage when inputs are undeclared or unresolved.
+    ///
+    /// Mirrors [`reuse_eligible`](Self::reuse_eligible): an unknown
+    /// lockfile slot blocks coverage exactly like it blocks reuse.
+    /// # Errors
+    pub fn coverage_eligible(&self) -> Result<(), ContractError> {
+        if self.undeclared_reads {
+            return Err(ContractError::identity(
+                "stack_extension",
+                "undeclared_inputs_no_coverage",
+            ));
+        }
+        if self.lock_slot.is_unknown() {
+            return Err(ContractError::identity(
+                "stack_extension",
+                "unresolved_input_no_coverage:lockfile",
+            ));
+        }
+        Ok(())
+    }
+
+    /// Whether the root MUST execute conservatively (no reuse, no cover).
+    #[must_use]
+    pub fn conservative_execution_required(&self) -> bool {
+        self.undeclared_reads || self.lock_slot.is_unknown()
+    }
+
     /// Derive the extension for one task before selection and reuse.
     #[must_use]
     pub fn for_task(inputs: &ExtensionInputs<'_>) -> Self {
