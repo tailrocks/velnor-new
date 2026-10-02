@@ -233,6 +233,8 @@ pub fn finalize_jobs(
     }
     // Writer election needs every setup inserted: one saver per key.
     cache_p08::elect_mise_cache_writers(&mut jobs)?;
+    // Provider election needs every restore inserted: one saver per key.
+    cache_p08::elect_tofu_provider_savers(&mut jobs)?;
     closure::check_plan_anchor(&jobs)?;
     preseed_closure::check_preseed_closure(&jobs, ctx.preseed)?;
     closure::insert_plan_closure(&mut jobs, ctx)?;
@@ -296,15 +298,19 @@ fn render_merged(
     ctx: &RenderContext,
 ) -> Result<String, RenderError> {
     let matrix = matrix::task_matrix_of(jobs)?;
-    let jobs = matrix
-        .as_ref()
-        .map_or_else(|| jobs.clone(), |_| matrix::scrub_matrix_marker(jobs));
+    let caps = matrix::crate_job_caps(jobs)?;
+    let jobs = if matrix.is_some() || !caps.is_empty() {
+        matrix::scrub_matrix_marker(jobs)
+    } else {
+        jobs.clone()
+    };
     let mut document = document::workflow_to_yaml(ir, &jobs, ctx)?;
     if let Some((source, max_parallel)) = &matrix {
         matrix::attach_task_matrix(&mut document, source, *max_parallel)?;
     } else {
         matrix::attach_plan_outputs(&mut document)?;
     }
+    matrix::attach_crate_job_caps(&mut document, &caps)?;
     matrix::insert_publish_step_id(&mut document)?;
     let document = crate::yaml::quote_run_values_in_yaml(document);
     let text = marker::with_marker(&ctx.generator_version, &render_yaml(&document))?;

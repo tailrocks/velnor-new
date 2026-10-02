@@ -5,6 +5,8 @@ mod impl_adapter_wire_renderer;
 mod impl_renderer_acquire;
 #[path = "impl_renderer_cache_steps.rs"]
 mod impl_renderer_cache_steps;
+#[path = "impl_renderer_cache_t22.rs"]
+mod impl_renderer_cache_t22;
 #[path = "impl_renderer_f2close.rs"]
 mod impl_renderer_f2close;
 #[path = "impl_renderer_f2close_hygiene.rs"]
@@ -79,6 +81,10 @@ mod impl_renderer_steps_quote;
 mod impl_renderer_sweep;
 #[path = "impl_renderer_timeout.rs"]
 mod impl_renderer_timeout;
+#[path = "impl_renderer_tofu_cache.rs"]
+mod impl_renderer_tofu_cache;
+#[path = "impl_renderer_tofu_leak.rs"]
+mod impl_renderer_tofu_leak;
 #[path = "impl_renderer_token_hygiene.rs"]
 mod impl_renderer_token_hygiene;
 #[path = "impl_renderer_token_hygiene_env.rs"]

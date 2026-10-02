@@ -266,6 +266,7 @@ EXPECTED_TOOLS = {
     "shellcheck": "SHELLCHECK_VERSION",
     "zizmor": "ZIZMOR_VERSION",
     "nextest": "NEXTEST_VERSION",
+    "opentofu": "OPENTOFU_VERSION",
     "release-plz": "RELEASE_PLZ_VERSION",
 }
 EXPECTED_ACTIONS = {

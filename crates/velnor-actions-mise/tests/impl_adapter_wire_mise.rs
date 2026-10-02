@@ -96,14 +96,21 @@ fn catalog_identities_validate() {
     let catalog = ToolCatalog::pinned();
     let err = catalog
         .validate_identities()
-        .expect_err("placeholder digests never validate as trusted");
+        .expect_err("unbound digests never validate as trusted");
     assert!(err.to_string().contains("placeholder_digest"), "{err}");
     for tool in PinnedTool::ALL {
         let identity = catalog.tool_identity(tool);
-        let err = identity
-            .validate("catalog")
-            .expect_err("placeholder digests never validate as trusted");
-        assert!(err.to_string().contains("placeholder_digest"), "{err}");
+        if tool == PinnedTool::Opentofu {
+            assert!(
+                identity.validate("catalog").is_ok(),
+                "opentofu digest is bound (T15)"
+            );
+        } else {
+            let err = identity
+                .validate("catalog")
+                .expect_err("placeholder digests never validate as trusted");
+            assert!(err.to_string().contains("placeholder_digest"), "{err}");
+        }
         assert!(identity.source.starts_with("https://"));
         assert!(!identity.platforms.is_empty());
     }
@@ -112,12 +119,12 @@ fn catalog_identities_validate() {
         RUST_VERSION
     );
     let custom = ToolCatalog::new(
-        "1.98.1", "1.19.0", "2.101.0", "1.7.12", "0.11.0", "1.30.1", "0.9.146",
+        "1.98.1", "1.19.0", "2.101.0", "1.7.12", "0.11.0", "1.30.1", "0.9.146", "1.13.0",
     );
     assert!(custom.is_ok());
     assert!(
         ToolCatalog::new(
-            "latest", "1.19.0", "2.101.0", "1.7.12", "0.11.0", "1.30.1", "0.9.146"
+            "latest", "1.19.0", "2.101.0", "1.7.12", "0.11.0", "1.30.1", "0.9.146", "1.13.0"
         )
         .is_err()
     );

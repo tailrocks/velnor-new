@@ -146,3 +146,33 @@ fn envelope_binds_input_closure_digest() {
         "a source edit flips the closure digest and must flip input_digest"
     );
 }
+
+/// Tofu proposal via the T12 adapter constructor.
+fn tofu_proposal(kind: velnor_actions_tofu::TofuTaskKind) -> ProposedTask {
+    let group = velnor_actions_tofu::TofuTaskGroup {
+        root: String::new(),
+        kind,
+        configuration: "default".to_owned(),
+        no_targets: false,
+    };
+    let task = velnor_actions_tofu::propose_task(&group).expect("fixture proposes");
+    task.validate().expect("fixture valid");
+    task
+}
+
+#[test]
+fn tofu_metadata_and_cache_ids_derive() {
+    use velnor_actions_tofu::TofuTaskKind;
+    let task = tofu_proposal(TofuTaskKind::Validate);
+    let meta = adapter_metadata(&task, &[]).expect("metadata");
+    assert_eq!(meta["unit_id"], serde_json::json!("root"));
+    assert_eq!(meta["compile_driver"], serde_json::json!("tofu"));
+    assert_eq!(meta["test_runner"], serde_json::json!("none"));
+    let catalog = velnor_actions_mise::ToolCatalog::pinned();
+    let toolchain = toolchain_id(&task, &catalog).expect("toolchain");
+    let ids = cache_ids_for(&task, "ubuntu-24.04", &toolchain).expect("cache ids");
+    assert_eq!(
+        ids.cache_format_id(),
+        identities::cache_format_id_for_tofu().as_str()
+    );
+}

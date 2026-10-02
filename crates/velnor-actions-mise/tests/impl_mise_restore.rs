@@ -7,6 +7,7 @@ use velnor_actions_mise::restore::{
     verify_restored_task_result,
 };
 use velnor_actions_mise::restore_evidence::RestoreObservation;
+use velnor_actions_mise::restore_evidence::verify_provider_restore;
 
 /// Fully observed restore: real path, bytes, and matching digests.
 fn observed_restore() -> RestoreObservation {
@@ -92,6 +93,54 @@ fn restore_verification_orders_evidence_then_outputs() {
         Err(MissReason::NO_ENTRY),
         "evidence runs before outputs"
     );
+}
+
+/// Fully observed provider restore: lock-bound bytes, matching dims.
+fn provider_observation() -> RestoreObservation {
+    let bytes = b"provider bytes".to_vec();
+    RestoreObservation {
+        entry_path: "tofu-cache/root-0123456789ab/registry.opentofu.org/hashicorp/null".to_owned(),
+        entry_bytes: bytes.clone(),
+        expected_digest: digest_b3(&bytes),
+        expected_compat: digest_b3(b"provider-compat"),
+        observed_compat: digest_b3(b"provider-compat"),
+        expected_owner: "trusted".to_owned(),
+        observed_owner: "trusted".to_owned(),
+        expected_inputs: digest_b3(b"lock-inputs"),
+        observed_inputs: digest_b3(b"lock-inputs"),
+    }
+}
+
+/// T21: provider-cache restores classify through the same model
+/// 5-check chain as task results; a hit never disables verification.
+#[test]
+fn provider_restore_classifies_through_the_model_five_check_chain() {
+    let ok = provider_observation();
+    assert_eq!(verify_provider_restore(&ok), Ok(()));
+    assert_eq!(
+        verify_provider_restore(&ok),
+        Ok(()),
+        "verification is pure: a hit re-verifies"
+    );
+    let mut obs = provider_observation();
+    obs.entry_path.clear();
+    assert_eq!(verify_provider_restore(&obs), Err("no_entry"));
+    let mut obs = provider_observation();
+    obs.entry_bytes = b"forged".to_vec();
+    assert_eq!(
+        verify_provider_restore(&obs),
+        Err("cache_corrupt"),
+        "corrupt content discards, never verifies"
+    );
+    let mut obs = provider_observation();
+    obs.observed_compat = digest_b3(b"other");
+    assert_eq!(verify_provider_restore(&obs), Err("compatibility_mismatch"));
+    let mut obs = provider_observation();
+    obs.observed_owner = "pr".to_owned();
+    assert_eq!(verify_provider_restore(&obs), Err("trust_scope_mismatch"));
+    let mut obs = provider_observation();
+    obs.observed_inputs = digest_b3(b"other");
+    assert_eq!(verify_provider_restore(&obs), Err("input_digest_mismatch"));
 }
 
 /// REUSE-6: the mise reason set is exactly the contract's 13 values.

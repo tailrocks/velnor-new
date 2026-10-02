@@ -1,4 +1,4 @@
-//! Committed-manifest file-read tests.
+//! Committed-manifest file-read plus closed-dispatch tests.
 //!
 //! Declared via `#[path]` from `discover.rs` under `cfg(test)` so the
 //! discovery module keeps the file size gate. The helper is
@@ -8,8 +8,9 @@
 use std::fs;
 
 use tempfile::TempDir;
+use velnor_actions_contract::StackCandidate;
 
-use super::read_manifest_file;
+use super::{detected_projects, read_manifest_file};
 use crate::safe_read::MAX_REPO_FILE_BYTES;
 
 /// Present file returns its exact text.
@@ -77,4 +78,35 @@ fn oversize_file_errors() {
     fs::write(dir.join("release-manifest.json"), big).expect("manifest");
     let err = read_manifest_file(root.path()).expect_err("oversize refused");
     assert!(err.to_string().contains("oversize"), "{err}");
+}
+
+/// M6 spike: candidates from unregistered stacks fail closed at dispatch.
+///
+/// No silent skip, no default arm: the second stack must register before
+/// any candidate converts.
+#[test]
+fn unregistered_stack_candidate_fails_closed() {
+    let candidate = StackCandidate {
+        stack_id: "cobol".to_owned(),
+        unit_root: String::new(),
+    };
+    let err = detected_projects(std::slice::from_ref(&candidate)).expect_err("must fail");
+    assert!(err.to_string().contains("unregistered_stack"), "{err}");
+}
+
+/// T10: registered tofu candidates convert to detector records.
+///
+/// The T09 pending arm is open: conversion is real (stack, root, and
+/// unit-root evidence path), never a silent skip.
+#[test]
+fn tofu_candidate_converts_to_project() {
+    let candidate = StackCandidate {
+        stack_id: "tofu".to_owned(),
+        unit_root: String::new(),
+    };
+    let projects = detected_projects(std::slice::from_ref(&candidate)).expect("converts");
+    assert_eq!(projects.len(), 1);
+    assert_eq!(projects[0].stack_id, "tofu");
+    assert_eq!(projects[0].project_root, "");
+    assert_eq!(projects[0].manifest, "");
 }

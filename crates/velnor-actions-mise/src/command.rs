@@ -4,12 +4,16 @@
 mod env;
 #[path = "command_output.rs"]
 mod output;
+#[path = "command_tofu.rs"]
+mod tofu;
 
 pub use self::env::{
     CREDENTIAL_ALLOWLIST_BASELINE, CREDENTIAL_ALLOWLIST_BOOTSTRAP, CREDENTIAL_ENV_KEYS,
     ENDPOINT_ENV_KEYS, EnvPolicy, ISOLATION_ENV, MISE_CARGO_HOME_ENV, MISE_RUSTUP_HOME_ENV,
-    NO_AUTO_INSTALL_ENV, PROXY_ENV_KEYS, RUSTUP_TOOLCHAIN_ENV, is_denied_credential_key,
-    is_denied_endpoint_key, is_reserved_env_key, proxy_passthrough, toolchain_env,
+    NO_AUTO_INSTALL_ENV, PROXY_ENV_KEYS, RUSTUP_TOOLCHAIN_ENV, TF_CLI_CONFIG_FILE_ENV,
+    TF_DATA_DIR_ENV, TF_IN_AUTOMATION_ENV, TF_IN_AUTOMATION_ON, TF_INPUT_ENV, TF_INPUT_OFF,
+    TF_PLUGIN_CACHE_DIR_ENV, is_denied_credential_key, is_denied_endpoint_key, is_reserved_env_key,
+    proxy_passthrough, toolchain_env,
 };
 use self::env::{pairs_of, redact_env_for_debug, strip_credentials};
 pub(crate) use self::output::redact_argv_for_debug;
