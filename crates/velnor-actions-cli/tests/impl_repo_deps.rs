@@ -71,6 +71,9 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
         // hand-rolled SHA-256 so release-pin comparison cannot drift from
         // the audited implementation); pure Rust, default features only.
         "sha2",
+        // Mandatory native ownership tests parse Rust paths/imports; runtime
+        // adapters never depend on or invoke this analyzer.
+        "syn",
         // Reviewed HCL structural parser for the tofu stack (T10, S8):
         // `hcl` renames `hcl-rs` 0.19.8 (Q1 pre-qualified; MSRV
         // compile-gated at 1.98.1); default features only, facade-owned
@@ -86,12 +89,23 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
                 continue;
             }
             assert!(allowed.contains(&key), "{dir} uses {key}");
+            if key == "syn" {
+                assert_eq!(dir, "crates/velnor-actions-native");
+                let doc = p11_toml::parse(&body)?;
+                assert!(
+                    p11_toml::section(&doc, "dependencies")
+                        .is_none_or(|deps| { deps.pairs.iter().all(|pair| pair.0 != "syn") }),
+                    "syn is test-only"
+                );
+            }
             if let Some(index) = line.find("features") {
                 let quoted: Vec<&str> = line[index..].split('"').collect();
                 for feature in quoted.into_iter().skip(1).step_by(2) {
                     // Only `derive` globally, plus `fs` on rustix for the
                     // P09 atomic directory exchange (no net/pty/terminal).
-                    let narrow = feature == "derive" || (key == "rustix" && feature == "fs");
+                    let narrow = feature == "derive"
+                        || (key == "rustix" && feature == "fs")
+                        || (key == "syn" && ["full", "parsing", "visit"].contains(&feature));
                     assert!(narrow, "{dir}/{key} feature {feature}");
                 }
             }

@@ -3,6 +3,7 @@ members = [
     "crates/velnor-actions-contract",
     "crates/velnor-actions-rust",
     "crates/velnor-actions-mise",
+    "crates/velnor-actions-native",
     "crates/velnor-actions-actionlint",
     "crates/velnor-actions-workflow-renderer",
     "crates/velnor-actions-orchestrator",
