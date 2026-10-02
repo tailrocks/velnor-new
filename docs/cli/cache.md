@@ -10,9 +10,10 @@ Inspect the local store.
 
 ## Subcommands
 
+- [`mbx cache comparison-state [--json] [--verify] <FILE>`](/cli/cache/comparison-state.md)
 - [`mbx cache dir [--json]`](/cli/cache/dir.md)
-- [`mbx cache export [--group <GROUP>] [--format <FORMAT>] <ARCHIVE>`](/cli/cache/export.md)
-- [`mbx cache import <ARCHIVE>`](/cli/cache/import.md)
+- [`mbx cache export [FLAGS] <ARCHIVE>`](/cli/cache/export.md)
+- [`mbx cache import [--comparison-state <FILE>] [--json] <ARCHIVE>`](/cli/cache/import.md)
 - [`mbx cache largest [--limit <LIMIT>]`](/cli/cache/largest.md)
 - [`mbx cache projects`](/cli/cache/projects.md)
 - [`mbx cache remove [--interactive] [WORKSPACE]`](/cli/cache/remove.md)

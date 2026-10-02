@@ -18,6 +18,8 @@ pub(super) struct CacheArgs {
 pub(super) enum CacheCommands {
     /// Export wrapper timings from a session JSONL file as Perfetto-compatible trace JSON.
     Trace(TraceArgs),
+    /// Write an empty owner comparison baseline for a cold cache miss.
+    ComparisonState(ComparisonStateArgs),
     /// Print the store directory.
     Dir(JsonArgs),
     /// Summarize what the store holds.
@@ -46,6 +48,18 @@ pub(super) enum CacheCommands {
 }
 
 #[derive(usage::Args)]
+pub(super) struct ComparisonStateArgs {
+    /// Owner comparison-state file to write.
+    file: PathBuf,
+    /// Print a stable machine-readable report.
+    #[usage(long)]
+    json: bool,
+    /// Validate an existing owner baseline instead of writing an empty one.
+    #[usage(long)]
+    verify: bool,
+}
+
+#[derive(usage::Args)]
 pub(super) struct TraceArgs {
     /// Session JSONL file under the store's sessions/v1 directory.
     session: PathBuf,
@@ -67,6 +81,14 @@ pub(super) struct LargestArgs {
 
 #[derive(usage::Args)]
 pub(super) struct ExportArgs {
+    /// Retain and compare owner state recorded during import. Current task invocations
+    /// replace previous predictions; required retained blobs are revalidated.
+    /// Requires directory format; snapshots exceeding the owner store budget fail.
+    #[usage(long, value_name = "FILE")]
+    compare: Option<PathBuf>,
+    /// Print a stable machine-readable report.
+    #[usage(long)]
+    json: bool,
     /// Export every build that set MBX_CACHE_EXPORT_GROUP to this CI group.
     #[usage(long, value_name = "GROUP")]
     group: Option<String>,
@@ -80,6 +102,12 @@ pub(super) struct ExportArgs {
 
 #[derive(usage::Args)]
 pub(super) struct ImportArgs {
+    /// Record owner comparison state before consuming the bundle.
+    #[usage(long, value_name = "FILE")]
+    comparison_state: Option<PathBuf>,
+    /// Print a stable machine-readable report.
+    #[usage(long)]
+    json: bool,
     /// Tar archive or directory to import.
     archive: PathBuf,
 }
@@ -97,6 +125,19 @@ pub(super) struct RemoveCacheArgs {
 
 pub(super) fn run(config: &Config, command: CacheCommands) -> Result<ExitCode> {
     match command {
+        CacheCommands::ComparisonState(args) => {
+            if args.verify {
+                super::cache_comparison::read(&args.file)?;
+            } else {
+                super::cache_comparison::empty(&args.file)?;
+            }
+            if args.json {
+                print_json(
+                    &serde_json::json!({"version": 1, "valid": true, "empty": !args.verify}),
+                )?;
+            }
+            Ok(ExitCode::SUCCESS)
+        }
         CacheCommands::Trace(args) => {
             print_json(&crate::phase_timing::export(&args.session)?)?;
             Ok(ExitCode::SUCCESS)
@@ -123,11 +164,17 @@ pub(super) fn run(config: &Config, command: CacheCommands) -> Result<ExitCode> {
             &args.archive,
             args.group.as_deref(),
             args.format.parse()?,
+            args.compare.as_deref(),
+            args.json,
         )
         .map(|()| ExitCode::SUCCESS),
-        CacheCommands::Import(args) => {
-            cache_import(config, &args.archive).map(|()| ExitCode::SUCCESS)
-        }
+        CacheCommands::Import(args) => cache_import(
+            config,
+            &args.archive,
+            args.comparison_state.as_deref(),
+            args.json,
+        )
+        .map(|()| ExitCode::SUCCESS),
         CacheCommands::Remove(args) => {
             if args.interactive {
                 cache_remove_interactive(config)
@@ -147,7 +194,13 @@ pub(super) fn cache_export(
     archive: &Path,
     group: Option<&str>,
     form: store::ExportForm,
+    compare: Option<&Path>,
+    json: bool,
 ) -> Result<()> {
+    if compare.is_some() && !matches!(form, store::ExportForm::Directory) {
+        eyre::bail!("--compare requires --format directory");
+    }
+    let baseline = compare.map(super::cache_comparison::read).transpose()?;
     let working_dir = std::env::current_dir()?;
     let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
     let workspace = cargo_roots(&cargo, &[], None)
@@ -160,17 +213,93 @@ pub(super) fn cache_export(
             .into_iter()
             .collect(),
     };
+    let targets = capture_targets(&cargo, &targets);
     let additions = match workspace_state::capture(&store_dir, &targets) {
         Ok(additions) => additions,
         Err(error) => {
+            if compare.is_some() {
+                return Err(error);
+            }
             log::warn!("Cargo workspace state was not included in the cache export: {error}");
             store::ExportAdditions::default()
         }
     };
-    let outcome = match group {
-        Some(group) => store::export_group_as(&store_dir, group, archive, additions, form)?,
-        None => store::export_checkout_as(&store_dir, &workspace, archive, additions, form)?,
+    let additions = workspace_state::retain(
+        &store_dir,
+        additions,
+        baseline
+            .as_ref()
+            .and_then(|baseline| baseline.cache.attachments.get(workspace_state::ATTACHMENT)),
+    )?;
+    let snapshot_budget = baseline.as_ref().map(|_| config.gc.max_bytes);
+    let mut report = None;
+    let mut publish = |root: &Path, state: &store::ComparisonState| {
+        if json || baseline.is_some() {
+            let result = super::cache_comparison::report(baseline.as_ref(), root, state)?;
+            let useful = result.0.as_ref().is_none_or(|delta| delta.useful());
+            report = Some(result);
+            return Ok(useful);
+        }
+        Ok(true)
     };
+    let outcome = match group {
+        Some(group) => store::export_group_as_checked(
+            &store_dir,
+            group,
+            archive,
+            additions,
+            form,
+            store::ExportPolicy {
+                max_bytes: snapshot_budget,
+                retained: baseline.as_ref().map(|baseline| &baseline.cache),
+            },
+            &mut publish,
+        ),
+        None => store::export_checkout_as_checked(
+            &store_dir,
+            &workspace,
+            archive,
+            additions,
+            form,
+            store::ExportPolicy {
+                max_bytes: snapshot_budget,
+                retained: baseline.as_ref().map(|baseline| &baseline.cache),
+            },
+            &mut publish,
+        ),
+    };
+    let outcome = match outcome {
+        Ok(outcome) => outcome,
+        Err(error) => {
+            if json && let Some(refusal) = error.downcast_ref::<store::ExportBudgetExceeded>() {
+                print_json(&serde_json::json!({"version": 1, "exported": false,
+                    "budget_refused": true, "snapshot_budget_bytes": refusal.budget,
+                    "logical_closure_bytes": refusal.logical_bytes,
+                    "qualification": "verified inventory exceeds owner budget; persistence not verified"}))?;
+            }
+            return Err(error);
+        }
+    };
+    if let Some((delta, semantic_digest)) = report {
+        if json {
+            return print_json(&serde_json::json!({
+                "version": 1, "budget_refused": false, "snapshot_budget_bytes": snapshot_budget, "exported": outcome.exported, "actions": outcome.actions, "objects": outcome.objects,
+                "bytes": outcome.bytes, "useful_delta": delta.as_ref().map_or(outcome.actions > 0, |d| d.useful()),
+                "delta": delta,
+                "semantic_digest": semantic_digest,
+                "workspace_comparison": "relative_path_type_content_mode_symlink_target",
+                "workspace_comparison_exclusions": [".rustc_info.json"],
+                "workspace_transport_scope": "recorded_target_directory_only",
+                "qualification": "compiled actions, predictions and Cargo unit state; excludes root compiler-query cache .rustc_info.json; other scheduler content differences are reported, not proven additional cache hits"
+            }));
+        }
+        if let Some(delta) = delta {
+            println!("useful delta: {}", delta.useful());
+        }
+    }
+    if !outcome.exported {
+        return Ok(());
+    }
     let subject = group.map_or_else(
         || workspace.display().to_string(),
         |group| format!("export group {group:?}"),
@@ -184,9 +313,50 @@ pub(super) fn cache_export(
     Ok(())
 }
 
-pub(super) fn cache_import(config: &Config, archive: &Path) -> Result<()> {
+/// A nested Cargo lane must retain its prefix inside the full reported target.
+/// Otherwise capturing `target/check` and restoring into `target` flattens the
+/// lane and discards previously restored build state.
+fn capture_targets(
+    cargo: &std::ffi::OsStr,
+    targets: &[store::WorkspaceTarget],
+) -> Vec<store::WorkspaceTarget> {
+    targets
+        .iter()
+        .map(|target| {
+            let args = vec![
+                "--manifest-path".to_owned(),
+                target
+                    .workspace_root
+                    .join("Cargo.toml")
+                    .to_string_lossy()
+                    .into_owned(),
+            ];
+            let target_dir = cargo_roots(cargo, &args, None)
+                .filter(|roots| target.target_dir.starts_with(&roots.target_dir))
+                .map_or_else(|| target.target_dir.clone(), |roots| roots.target_dir);
+            store::WorkspaceTarget {
+                workspace_root: target.workspace_root.clone(),
+                target_dir,
+            }
+        })
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
+        .collect()
+}
+
+pub(super) fn cache_import(
+    config: &Config,
+    archive: &Path,
+    comparison_state: Option<&Path>,
+    json: bool,
+) -> Result<()> {
     let store = config.store_dir();
-    let imported = store::import_archive_with_attachments(&store, archive)?;
+    let imported = store::import_archive_with_comparison(&store, archive, |root, state| {
+        if let Some(path) = comparison_state {
+            super::cache_comparison::write(path, root, state)?;
+        }
+        Ok(())
+    })?;
     let restored = if let Some(attachment) = imported.attachments.get(workspace_state::ATTACHMENT) {
         let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
         if let Some(roots) = cargo_roots(&cargo, &[], None) {
@@ -212,6 +382,14 @@ pub(super) fn cache_import(config: &Config, archive: &Path) -> Result<()> {
         None
     };
     let outcome = imported.transfer;
+    if json {
+        return print_json(
+            &serde_json::json!({ "version": 1, "actions": outcome.actions,
+            "objects": outcome.objects, "bytes": outcome.bytes,
+            "comparison_state_recorded": comparison_state.is_some(),
+            "workspace_restored": restored.is_some() }),
+        );
+    }
     println!(
         "imported {} actions and {} objects from {} ({})",
         outcome.actions,

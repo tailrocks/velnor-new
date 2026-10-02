@@ -1355,6 +1355,8 @@ fn grouped_export_keeps_each_commands_predictions_and_newest_conflicts() {
         &archive,
         ExportAdditions::default(),
         ExportForm::Tar,
+        ExportPolicy::default(),
+        None,
     )
     .unwrap();
     import_archive(destination.path(), &archive).unwrap();
@@ -1542,6 +1544,8 @@ fn equal_timestamp_exports_ignore_receipt_enumeration_order() {
             &archive,
             ExportAdditions::default(),
             ExportForm::Tar,
+            ExportPolicy::default(),
+            None,
         )
         .unwrap();
         import_archive(destination.path(), &archive).unwrap();
@@ -2342,4 +2346,533 @@ fn a_due_sweep_is_reported_without_being_claimed() {
         "the claim is what stamps it"
     );
     assert!(sweep_is_due(store, Duration::ZERO));
+}
+
+#[test]
+fn comparison_callback_precedes_consumption_and_failure_preserves_bundle() {
+    let source = tempfile::tempdir().unwrap();
+    let destination = tempfile::tempdir().unwrap();
+    let workspace = source.path().join("workspace");
+    std::fs::create_dir_all(&workspace).unwrap();
+    let output = store_object(source.path(), b"compiled artifact");
+    let action = store_result(
+        source.path(),
+        "compile action",
+        std::slice::from_ref(&output),
+    );
+    let identity = "d".repeat(64);
+    record_build(
+        source.path(),
+        &identity,
+        &workspace,
+        std::slice::from_ref(&action),
+    );
+    let bundle = source.path().join("bundle");
+
+    let exported = export_checkout_as(
+        source.path(),
+        &workspace,
+        &bundle,
+        ExportAdditions::default(),
+        ExportForm::Directory,
+    )
+    .unwrap();
+    assert!(bundle.join(EXPORT_MANIFEST).is_file());
+    let error = import_archive_with_comparison(destination.path(), &bundle, |root, state| {
+        assert_eq!(root, bundle);
+        assert_eq!(state.version, 1);
+        assert_eq!(state.action_results.len(), 1);
+        assert!(bundle.join(EXPORT_MANIFEST).is_file());
+        assert!(LocalCas::new(destination.path()).find(&output)?.is_none());
+        eyre::bail!("baseline write failed")
+    })
+    .unwrap_err();
+    assert!(error.to_string().contains("baseline write failed"));
+    assert!(bundle.exists());
+    let imported = import_archive_with_comparison(destination.path(), &bundle, |_, state| {
+        assert_eq!(state.action_results.len(), 1);
+        Ok(())
+    })
+    .unwrap();
+
+    assert_eq!(exported.objects, 3);
+    assert_eq!(imported.transfer.objects, 3);
+    assert!(
+        LocalCas::new(destination.path())
+            .find(&output)
+            .unwrap()
+            .is_some()
+    );
+    assert_eq!(
+        task_manifest_actions(destination.path(), &identity).unwrap(),
+        vec![action]
+    );
+    // The bundle is consumed: its objects were moved, not copied.
+    assert!(!bundle.exists(), "a directory bundle is removed on success");
+}
+
+#[test]
+fn unchanged_inventory_skips_export_publication() {
+    let source = tempfile::tempdir().unwrap();
+    let workspace = source.path().join("workspace");
+    std::fs::create_dir_all(&workspace).unwrap();
+    let output = store_object(source.path(), b"compiled artifact");
+    let action = store_result(
+        source.path(),
+        "compile action",
+        std::slice::from_ref(&output),
+    );
+    let identity = "d".repeat(64);
+    record_build(
+        source.path(),
+        &identity,
+        &workspace,
+        std::slice::from_ref(&action),
+    );
+    let bundle = source.path().join("bundle");
+
+    let exported = export_checkout_as_checked(
+        source.path(),
+        &workspace,
+        &bundle,
+        ExportAdditions::default(),
+        ExportForm::Directory,
+        ExportPolicy::default(),
+        |root, state| {
+            assert_eq!(root, source.path());
+            assert_eq!(state.action_results.len(), 1);
+            Ok(false)
+        },
+    )
+    .unwrap();
+    assert!(!exported.exported);
+    assert_eq!(exported.bytes, 0);
+    assert!(!bundle.exists());
+}
+
+#[test]
+fn retained_baseline_actions_and_predictions_survive_partial_later_builds() {
+    let source = tempfile::tempdir().unwrap();
+    let workspace = source.path().join("workspace");
+    std::fs::create_dir_all(&workspace).unwrap();
+    let first_output = store_object(source.path(), b"first artifact");
+    let first_action = store_result(source.path(), "first action", &[first_output]);
+    let first_identity = "a".repeat(64);
+    record_build(
+        source.path(),
+        &first_identity,
+        &workspace,
+        std::slice::from_ref(&first_action),
+    );
+    let first = source.path().join("first");
+    export_checkout_as(
+        source.path(),
+        &workspace,
+        &first,
+        ExportAdditions::default(),
+        ExportForm::Directory,
+    )
+    .unwrap();
+    let baseline = ComparisonState::from_directory(&first).unwrap();
+    let second_output = store_object(source.path(), b"second artifact");
+    let second_action = store_result(source.path(), "second action", &[second_output]);
+    record_build(
+        source.path(),
+        &"b".repeat(64),
+        &workspace,
+        std::slice::from_ref(&second_action),
+    );
+    for form in [ExportForm::Directory, ExportForm::Tar] {
+        let bundle = source.path().join(format!("retained-{form:?}"));
+        let outcome = export_checkout_as_checked(
+            source.path(),
+            &workspace,
+            &bundle,
+            ExportAdditions::default(),
+            form,
+            ExportPolicy {
+                max_bytes: None,
+                retained: Some(&baseline),
+            },
+            |_, current| {
+                assert_eq!(current.action_results.len(), 2);
+                assert!(baseline.predictions.is_subset(&current.predictions));
+                Ok(true)
+            },
+        )
+        .unwrap();
+        assert_eq!(outcome.actions, 2);
+        let destination = tempfile::tempdir().unwrap();
+        import_archive(destination.path(), &bundle).unwrap();
+        assert!(
+            mbx_cache_core::LocalActionCache::new(destination.path())
+                .find(&first_action)
+                .unwrap()
+                .is_some()
+        );
+        assert!(
+            mbx_cache_core::LocalActionCache::new(destination.path())
+                .find(&second_action)
+                .unwrap()
+                .is_some()
+        );
+        assert_eq!(
+            task_manifest_actions(destination.path(), &first_identity).unwrap(),
+            vec![first_action.clone()]
+        );
+    }
+}
+
+#[test]
+fn an_empty_latest_receipt_retains_an_imported_baseline_action() {
+    let source = tempfile::tempdir().unwrap();
+    let baseline_store = tempfile::tempdir().unwrap();
+    let destination = tempfile::tempdir().unwrap();
+    let workspace = source.path().join("workspace");
+    std::fs::create_dir_all(&workspace).unwrap();
+    let output = store_object(source.path(), b"baseline artifact");
+    let action = store_result(source.path(), "baseline action", &[output]);
+    let identity = "1".repeat(64);
+    let prediction = ActionPrediction {
+        invocation: CacheDigest::blake3(b"baseline invocation"),
+        action: action.clone(),
+        adapter: "rustc".into(),
+        payload: r#"{"source":"baseline"}"#.into(),
+    };
+    record_build_receipt(
+        source.path(),
+        &"2".repeat(64),
+        &identity,
+        &workspace,
+        None,
+        vec![prediction],
+    )
+    .unwrap();
+    let baseline_bundle = source.path().join("baseline");
+    export_checkout_as(
+        source.path(),
+        &workspace,
+        &baseline_bundle,
+        ExportAdditions::default(),
+        ExportForm::Directory,
+    )
+    .unwrap();
+
+    let mut baseline_bytes = None;
+    import_archive_with_comparison(baseline_store.path(), &baseline_bundle, |_, state| {
+        baseline_bytes = Some(serde_json::to_vec(state)?);
+        Ok(())
+    })
+    .unwrap();
+    let baseline: ComparisonState = serde_json::from_slice(&baseline_bytes.unwrap()).unwrap();
+
+    // The latest command completed without predictions. The imported action
+    // remains the only useful closure and must still be exported.
+    record_build_receipt(
+        baseline_store.path(),
+        &"3".repeat(64),
+        &identity,
+        &workspace,
+        None,
+        Vec::new(),
+    )
+    .unwrap();
+    let bundle = baseline_store.path().join("current");
+    let mut callback_called = false;
+    let outcome = export_checkout_as_checked(
+        baseline_store.path(),
+        &workspace,
+        &bundle,
+        ExportAdditions::default(),
+        ExportForm::Directory,
+        ExportPolicy {
+            max_bytes: None,
+            retained: Some(&baseline),
+        },
+        |_, state| {
+            callback_called = true;
+            assert_eq!(state.action_results.len(), 1);
+            assert_eq!(state.predictions, baseline.predictions);
+            Ok(true)
+        },
+    )
+    .unwrap();
+
+    assert!(callback_called);
+    assert!(outcome.exported);
+    import_archive(destination.path(), &bundle).unwrap();
+    assert!(
+        LocalActionCache::new(destination.path())
+            .find(&action)
+            .unwrap()
+            .is_some()
+    );
+    assert_eq!(
+        task_manifest_actions(destination.path(), &identity).unwrap(),
+        vec![action]
+    );
+}
+
+#[test]
+fn current_prediction_wins_same_invocation_and_retains_old_invocations() {
+    let source = tempfile::tempdir().unwrap();
+    let destination = tempfile::tempdir().unwrap();
+    let workspace = source.path().join("workspace");
+    std::fs::create_dir_all(&workspace).unwrap();
+    let baseline_same_action = store_result(source.path(), "baseline same", &[]);
+    let baseline_old_action = store_result(source.path(), "baseline old", &[]);
+    let current_same_action = store_result(source.path(), "current same", &[]);
+    let identity = "4".repeat(64);
+    let same_invocation = CacheDigest::blake3(b"same invocation");
+    let old_invocation = CacheDigest::blake3(b"old invocation");
+    let baseline_same = ActionPrediction {
+        invocation: same_invocation.clone(),
+        action: baseline_same_action.clone(),
+        adapter: "rustc".into(),
+        payload: r#"{"source":"baseline"}"#.into(),
+    };
+    let baseline_old = ActionPrediction {
+        invocation: old_invocation,
+        action: baseline_old_action,
+        adapter: "rustc".into(),
+        payload: r#"{"source":"old"}"#.into(),
+    };
+    record_build_receipt(
+        source.path(),
+        &"5".repeat(64),
+        &identity,
+        &workspace,
+        None,
+        vec![baseline_same.clone(), baseline_old.clone()],
+    )
+    .unwrap();
+    let baseline_bundle = source.path().join("baseline");
+    export_checkout_as(
+        source.path(),
+        &workspace,
+        &baseline_bundle,
+        ExportAdditions::default(),
+        ExportForm::Directory,
+    )
+    .unwrap();
+    let baseline = ComparisonState::from_directory(&baseline_bundle).unwrap();
+
+    let current = ActionPrediction {
+        invocation: same_invocation,
+        action: current_same_action,
+        adapter: "rustc".into(),
+        payload: r#"{"source":"current"}"#.into(),
+    };
+    record_build_receipt(
+        source.path(),
+        &"6".repeat(64),
+        &identity,
+        &workspace,
+        None,
+        vec![current.clone()],
+    )
+    .unwrap();
+    let bundle = source.path().join("current");
+    let outcome = export_checkout_as_checked(
+        source.path(),
+        &workspace,
+        &bundle,
+        ExportAdditions::default(),
+        ExportForm::Directory,
+        ExportPolicy {
+            max_bytes: None,
+            retained: Some(&baseline),
+        },
+        |_, _| Ok(true),
+    )
+    .unwrap();
+    assert!(outcome.exported);
+
+    import_archive(destination.path(), &bundle).unwrap();
+    let manifest: TaskActionManifest = serde_json::from_slice(
+        &std::fs::read(task_manifest_path(destination.path(), &identity)).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(manifest.predictions.len(), 2);
+    assert_eq!(
+        manifest
+            .predictions
+            .iter()
+            .find(|prediction| prediction.invocation == current.invocation),
+        Some(&current)
+    );
+    assert_eq!(
+        manifest
+            .predictions
+            .iter()
+            .find(|prediction| prediction.invocation == baseline_old.invocation),
+        Some(&baseline_old)
+    );
+    assert!(!manifest.predictions.contains(&baseline_same));
+}
+
+#[test]
+fn corrupt_or_deleted_retained_objects_fail_before_the_publish_callback() {
+    for corrupt in [false, true] {
+        let source = tempfile::tempdir().unwrap();
+        let workspace = source.path().join("workspace");
+        std::fs::create_dir_all(&workspace).unwrap();
+        let output = store_object(source.path(), b"retained artifact");
+        let action = store_result(
+            source.path(),
+            "retained action",
+            std::slice::from_ref(&output),
+        );
+        let identity = "7".repeat(64);
+        record_build(
+            source.path(),
+            &identity,
+            &workspace,
+            std::slice::from_ref(&action),
+        );
+        let baseline_bundle = source.path().join("baseline");
+        export_checkout_as(
+            source.path(),
+            &workspace,
+            &baseline_bundle,
+            ExportAdditions::default(),
+            ExportForm::Directory,
+        )
+        .unwrap();
+        let baseline = ComparisonState::from_directory(&baseline_bundle).unwrap();
+        record_build_receipt(
+            source.path(),
+            &"8".repeat(64),
+            &identity,
+            &workspace,
+            None,
+            Vec::new(),
+        )
+        .unwrap();
+        let output_path = LocalCas::new(source.path()).path_for(&output).unwrap();
+        if corrupt {
+            std::fs::write(output_path, b"corrupt retained object").unwrap();
+        } else {
+            std::fs::remove_file(output_path).unwrap();
+        }
+
+        let bundle = source.path().join("current");
+        let mut callback_called = false;
+        let result = export_checkout_as_checked(
+            source.path(),
+            &workspace,
+            &bundle,
+            ExportAdditions::default(),
+            ExportForm::Directory,
+            ExportPolicy {
+                max_bytes: None,
+                retained: Some(&baseline),
+            },
+            |_, _| {
+                callback_called = true;
+                Ok(true)
+            },
+        );
+
+        assert!(result.is_err());
+        assert!(!callback_called);
+        assert!(!bundle.exists());
+    }
+}
+
+#[test]
+fn a_checked_group_skip_keeps_its_pending_receipts() {
+    let source = tempfile::tempdir().unwrap();
+    let workspace = source.path().join("workspace");
+    std::fs::create_dir_all(&workspace).unwrap();
+    let action = store_result(source.path(), "group action", &[]);
+    let identity = "9".repeat(64);
+    let group = "retention-group";
+    record_build_in_group(
+        source.path(),
+        &identity,
+        &workspace,
+        std::slice::from_ref(&action),
+        Some(group),
+    );
+    let group_root = source
+        .path()
+        .join(BUILD_RECEIPTS_DIR)
+        .join("groups")
+        .join(group_key(group));
+    let receipts = walk_files(&group_root)
+        .unwrap()
+        .into_iter()
+        .map(|entry| entry.path)
+        .collect::<Vec<_>>();
+    assert_eq!(receipts.len(), 1);
+    let bundle = source.path().join("group");
+    let mut callback_called = false;
+    let outcome = export_group_as_checked(
+        source.path(),
+        group,
+        &bundle,
+        ExportAdditions::default(),
+        ExportForm::Directory,
+        ExportPolicy::default(),
+        |_, _| {
+            callback_called = true;
+            Ok(false)
+        },
+    )
+    .unwrap();
+
+    assert!(callback_called);
+    assert!(!outcome.exported);
+    assert!(!bundle.exists());
+    assert!(receipts.iter().all(|path| path.exists()));
+}
+
+#[test]
+fn a_budget_refusal_is_typed_and_keeps_group_receipts() {
+    let source = tempfile::tempdir().unwrap();
+    let workspace = source.path().join("workspace");
+    std::fs::create_dir_all(&workspace).unwrap();
+    let output = store_object(source.path(), b"budgeted artifact");
+    let action = store_result(source.path(), "budgeted action", &[output]);
+    let identity = "a".repeat(64);
+    let group = "budget-group";
+    record_build_in_group(
+        source.path(),
+        &identity,
+        &workspace,
+        std::slice::from_ref(&action),
+        Some(group),
+    );
+    let group_root = source
+        .path()
+        .join(BUILD_RECEIPTS_DIR)
+        .join("groups")
+        .join(group_key(group));
+    let receipts = walk_files(&group_root)
+        .unwrap()
+        .into_iter()
+        .map(|entry| entry.path)
+        .collect::<Vec<_>>();
+    let bundle = source.path().join("group");
+    let error = export_group_as_checked(
+        source.path(),
+        group,
+        &bundle,
+        ExportAdditions::default(),
+        ExportForm::Directory,
+        ExportPolicy {
+            max_bytes: Some(1),
+            retained: None,
+        },
+        |_, _| Ok(true),
+    )
+    .unwrap_err();
+    let refusal = error
+        .downcast_ref::<ExportBudgetExceeded>()
+        .expect("budget refusal should preserve its public error type");
+    assert_eq!(refusal.budget, 1);
+    assert!(refusal.logical_bytes > refusal.budget);
+    assert!(!bundle.exists());
+    assert!(receipts.iter().all(|path| path.exists()));
 }

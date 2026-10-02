@@ -361,6 +361,52 @@ async fn a_session_with_no_shim_connection_does_not_load_a_manifest() {
     assert_eq!(session.finish().await.unwrap().predictions_loaded, 0);
 }
 
+#[tokio::test]
+async fn a_grouped_session_without_wrappers_records_native_target_participation() {
+    let cache = tempfile::tempdir().unwrap();
+    let session_dir = tempfile::tempdir().unwrap();
+    let config = test_config(cache.path());
+    let session = CacheSession::start(session_dir.path(), &config)
+        .await
+        .unwrap();
+    let workspace = tempfile::tempdir().unwrap();
+    let target = workspace.path().join("target/check");
+    std::fs::create_dir_all(&target).unwrap();
+    let mut environment = BTreeMap::new();
+    let mut run = session
+        .begin(
+            workspace.path(),
+            &target,
+            &["check".to_string()],
+            &mut environment,
+        )
+        .await
+        .unwrap();
+    run.export_group = Some("fresh-group".to_owned());
+    assert!(session.task.initialized.get().is_none());
+    run.commit().await.unwrap();
+    assert!(session.task.initialized.get().is_none());
+    assert_eq!(
+        crate::store::group_workspace_targets(&config.store_dir(), "fresh-group").unwrap(),
+        vec![crate::store::WorkspaceTarget {
+            workspace_root: workspace.path().to_path_buf(),
+            target_dir: target
+        }]
+    );
+    let bundle = cache.path().join("native-group");
+    let exported = crate::store::export_group_as(
+        &config.store_dir(),
+        "fresh-group",
+        &bundle,
+        Default::default(),
+        crate::store::ExportForm::Directory,
+    )
+    .unwrap();
+    assert_eq!(exported.actions, 0);
+    assert!(exported.exported);
+    assert_eq!(session.finish().await.unwrap().predictions_loaded, 0);
+}
+
 #[test]
 fn nested_sessions_unwrap_the_outer_rustdoc_shim() {
     let values = BTreeMap::from([

@@ -217,3 +217,63 @@ compilations overlap, so this ranking does not directly identify the critical pa
 The JSON statistics report exposes the same data in
 `estimated_compiler_duration_avoided_ns`, `compiler`, and
 `slow_compilations`.
+
+## Compare transported cache state
+
+The cache owner can record a versioned comparison baseline before an import
+consumes its directory bundle:
+
+```sh
+mbx cache import --comparison-state baseline.json --json restored-bundle
+mbx cache export --group ci --compare baseline.json --json --format directory updated-bundle
+```
+
+For a cold miss, `mbx cache comparison-state baseline.json --json` writes an
+empty baseline. Keep this file outside the bundle. Export JSON version 1 includes
+`useful_delta`, new and changed action-result counts, new prediction counts,
+new and changed workspace-variant counts, and a 64-character BLAKE3
+`semantic_digest`. A subset of the imported closure is not a useful delta.
+Changed results and predictions remain detectable when their counts stay equal.
+The digest identifies an inventory; unequal digests alone do not establish a
+useful delta.
+
+Workspace comparison includes relative path, entry type, file content digest,
+mode, and symlink target. It excludes the external workspace root and filesystem
+mtime metadata. Actual scheduler file contents can contain volatile values
+(including paths and timestamps); their differences are reported honestly and
+are not proof of additional cache hits. Restoration preserves its existing
+filesystem timestamps. Comparison requires directory export format. A variant is one complete semantic
+workspace inventory; changed variants have a previously known workspace signature.
+The owner compares before publication and reports `exported: false` when no useful
+delta exists, avoiding closure copying. `mbx cache comparison-state baseline.json
+--verify --json` validates an existing baseline without rewriting it.
+
+The reported inventory explicitly excludes the target root `.rustc_info.json`
+compiler-query cache from usefulness. Cargo fingerprints compiler and wrapper
+paths, file lengths, creation times, and modification times in this file;
+relocating an MBX shim can therefore rewrite it during a fully fresh build.
+The file remains captured and restored with its original bytes and timestamps.
+This is a qualification about compiled actions, predictions, and Cargo unit
+state, rather than all compiler-probe metadata. See the pinned
+[Cargo compiler-query cache implementation](https://github.com/rust-lang/cargo/blob/797e8a9bca276c1c9f9f738d2a20f484fa4eea9d/src/cargo/util/rustc.rs#L327-L347).
+
+Workspace transport currently records only the Cargo target directory. A
+configured intermediate build directory outside that target is not included;
+this API does not qualify restoration of that separate scheduler state. The
+JSON report states `workspace_transport_scope: "recorded_target_directory_only"`.
+
+Comparison exports retain the baseline's full action closure and prediction
+mappings. Current predictions replace older entries for the same task and
+invocation. Captured workspaces replace the baseline state for the same recorded
+workspace root; omitted roots remain included. Every retained CAS object is
+revalidated. Missing or corrupt retained state fails before publication or group
+receipt cleanup.
+
+An additive comparison snapshot must fit the configured action-store budget
+(`gc.max_size`, resolved internally to `Config.gc.max_bytes`); the owner measures its verified logical closure before copying
+it. An oversized optional snapshot returns an explicit refusal with the budget
+and actual byte count, publishes no bundle, and preserves its pending receipts.
+This does not certify persistence. Existing store GC may remove old unrooted
+baseline objects; their absence causes refusal rather than silently dropping
+previously useful work. Baseline integrity covers attachment references as well
+as action and semantic workspace inventories.

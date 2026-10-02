@@ -944,6 +944,26 @@ pub struct ActionRun {
 
 impl ActionRun {
     pub async fn commit(self) -> Result<()> {
+        if self
+            .initialized
+            .as_ref()
+            .is_some_and(|task| !task.connected.load(std::sync::atomic::Ordering::Relaxed))
+        {
+            if self.export_group.is_some() {
+                // Cargo may be completely fresh and invoke no wrappers. Its
+                // native target state still participates in the export group.
+                crate::store::record_build_receipt(
+                    &self.store,
+                    &self.receipt,
+                    &self.identity,
+                    &self.workspace_root,
+                    self.export_group.as_deref(),
+                    Vec::new(),
+                )?;
+            }
+            return Ok(());
+        }
+
         if self.initialized.as_ref().is_some_and(|task| {
             !task.connected.load(std::sync::atomic::Ordering::Relaxed)
                 || task.initialized.get() != Some(&true)

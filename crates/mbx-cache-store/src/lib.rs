@@ -9,7 +9,9 @@
 //! their checkout claims, and session streams are bounded by age and count
 //! because they are history rather than cache content.
 
+mod comparison;
 mod events;
+pub use comparison::ComparisonState;
 
 use eyre::{Context, Result};
 use mbx_cache_core::{
@@ -114,10 +116,36 @@ pub struct RemoveProjectOutcome {
 
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct TransferOutcome {
+    /// Whether an export published a bundle (imports always true).
+    pub exported: bool,
     pub actions: u64,
     pub objects: u64,
     pub bytes: u64,
 }
+
+/// Owner policy for optional additive cache snapshots.
+#[derive(Default)]
+pub struct ExportPolicy<'a> {
+    pub max_bytes: Option<u64>,
+    pub retained: Option<&'a ComparisonState>,
+}
+
+/// Optional snapshot refusal: the verified logical closure exceeds owner budget.
+#[derive(Debug)]
+pub struct ExportBudgetExceeded {
+    pub budget: u64,
+    pub logical_bytes: u64,
+}
+impl std::fmt::Display for ExportBudgetExceeded {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "cache export refused: verified logical closure {} bytes exceeds owner budget {} bytes; no bundle published",
+            self.logical_bytes, self.budget
+        )
+    }
+}
+impl std::error::Error for ExportBudgetExceeded {}
 
 /// A cache import together with named higher-level CAS roots it carried.
 #[derive(Debug)]
@@ -324,6 +352,8 @@ pub fn export_checkout(
         archive,
         ExportAdditions::default(),
         ExportForm::Tar,
+        ExportPolicy::default(),
+        None,
     )
 }
 
@@ -384,7 +414,15 @@ pub fn export_checkout_with(
                 workspace_root.display()
             )
         })?;
-    export_receipts(store, vec![receipt], archive, additions, ExportForm::Tar)
+    export_receipts(
+        store,
+        vec![receipt],
+        archive,
+        additions,
+        ExportForm::Tar,
+        ExportPolicy::default(),
+        None,
+    )
 }
 
 /// Export one checkout's closure in the requested form.
@@ -395,6 +433,27 @@ pub fn export_checkout_as(
     additions: ExportAdditions,
     form: ExportForm,
 ) -> Result<TransferOutcome> {
+    export_checkout_as_checked(
+        store,
+        workspace_root,
+        destination,
+        additions,
+        form,
+        ExportPolicy::default(),
+        |_, _| Ok(true),
+    )
+}
+
+/// Decide whether to publish a verified checkout inventory before copying its closure.
+pub fn export_checkout_as_checked(
+    store: &Path,
+    workspace_root: &Path,
+    destination: &Path,
+    additions: ExportAdditions,
+    form: ExportForm,
+    policy: ExportPolicy<'_>,
+    mut publish: impl FnMut(&Path, &ComparisonState) -> Result<bool>,
+) -> Result<TransferOutcome> {
     let receipt = read_build_receipt(&latest_receipt_path(store, workspace_root))
         .filter(|receipt| receipt.workspace_root == workspace_root)
         .ok_or_else(|| {
@@ -403,7 +462,15 @@ pub fn export_checkout_as(
                 workspace_root.display()
             )
         })?;
-    export_receipts(store, vec![receipt], destination, additions, form)
+    export_receipts(
+        store,
+        vec![receipt],
+        destination,
+        additions,
+        form,
+        policy,
+        Some(&mut publish),
+    )
 }
 
 /// Export the union of every completed build recorded under one CI group.
@@ -429,6 +496,27 @@ pub fn export_group_as(
     additions: ExportAdditions,
     form: ExportForm,
 ) -> Result<TransferOutcome> {
+    export_group_as_checked(
+        store,
+        group,
+        destination,
+        additions,
+        form,
+        ExportPolicy::default(),
+        |_, _| Ok(true),
+    )
+}
+
+/// Decide whether to publish a verified grouped inventory before copying its closure.
+pub fn export_group_as_checked(
+    store: &Path,
+    group: &str,
+    destination: &Path,
+    additions: ExportAdditions,
+    form: ExportForm,
+    policy: ExportPolicy<'_>,
+    mut publish: impl FnMut(&Path, &ComparisonState) -> Result<bool>,
+) -> Result<TransferOutcome> {
     validate_export_group(group)?;
     let root = store
         .join(BUILD_RECEIPTS_DIR)
@@ -451,7 +539,12 @@ pub fn export_group_as(
         destination,
         additions,
         form,
+        policy,
+        Some(&mut publish),
     )?;
+    if !outcome.exported {
+        return Ok(outcome);
+    }
     // A receipt is a pending-export root. Retire only the files this export
     // consumed, and only after its complete archive has been published. A
     // concurrent build can add another uniquely named receipt to the group
@@ -463,12 +556,16 @@ pub fn export_group_as(
     Ok(outcome)
 }
 
+type ExportPredicate<'a> = dyn FnMut(&Path, &ComparisonState) -> Result<bool> + 'a;
+
 fn export_receipts(
     store: &Path,
     mut receipts: Vec<BuildReceipt>,
     archive: &Path,
     additions: ExportAdditions,
     form: ExportForm,
+    policy: ExportPolicy<'_>,
+    mut publish: Option<&mut ExportPredicate<'_>>,
 ) -> Result<TransferOutcome> {
     receipts.sort_by(|left, right| {
         left.completed_nanos
@@ -506,7 +603,7 @@ fn export_receipts(
             .or_insert_with(Vec::new)
             .extend(receipt.predictions);
     }
-    let tasks = tasks
+    let mut tasks = tasks
         .into_iter()
         .map(|(task, predictions)| {
             let mut invocations = BTreeSet::new();
@@ -523,6 +620,31 @@ fn export_receipts(
             }
         })
         .collect::<Vec<_>>();
+    if let Some(retained) = policy.retained {
+        retained.validate()?;
+        for action in retained.action_results.keys() {
+            actions.insert(serde_json::from_str(action)?);
+        }
+        for value in &retained.predictions {
+            let (identity, prediction): (String, ActionPrediction) = serde_json::from_str(value)?;
+            if let Some(task) = tasks.iter_mut().find(|task| task.task == identity) {
+                if !task
+                    .predictions
+                    .iter()
+                    .any(|current| current.invocation == prediction.invocation)
+                {
+                    task.predictions.push(prediction);
+                }
+            } else {
+                tasks.push(TaskActionManifest {
+                    version: 1,
+                    task: identity,
+                    predictions: vec![prediction],
+                });
+            }
+        }
+        tasks.sort_by(|left, right| left.task.cmp(&right.task));
+    }
     if tasks.iter().any(|task| !task.validate()) {
         eyre::bail!("combined export predictions exceed task manifest limits");
     }
@@ -541,7 +663,7 @@ fn export_receipts(
         .filter(|parent| !parent.as_os_str().is_empty())
         .unwrap_or_else(|| Path::new("."));
     std::fs::create_dir_all(parent)?;
-    let manifest = serde_json::to_vec(&ExportManifest {
+    let manifest = ExportManifest {
         version: if additions.attachments.is_empty() && additions.objects.is_empty() {
             LEGACY_EXPORT_VERSION
         } else {
@@ -551,7 +673,34 @@ fn export_receipts(
         actions: actions.iter().cloned().collect(),
         attachments: additions.attachments.clone(),
         objects: additions.objects.iter().cloned().collect(),
-    })?;
+    };
+    if let Some(publish) = publish.as_mut() {
+        let state = ComparisonState::from_manifest(store, &manifest)?;
+        if !publish(store, &state)? {
+            return Ok(TransferOutcome {
+                exported: false,
+                actions: actions.len() as u64,
+                objects: closure.objects.len() as u64,
+                bytes: 0,
+            });
+        }
+    }
+    let manifest = serde_json::to_vec(&manifest)?;
+    let logical_bytes = closure
+        .objects
+        .iter()
+        .chain(closure.results.iter())
+        .try_fold(manifest.len() as u64, |total, path| -> Result<u64> {
+            Ok(total.saturating_add(std::fs::metadata(path)?.len()))
+        })?;
+    if let Some(budget) = policy.max_bytes.filter(|budget| logical_bytes > *budget) {
+        return Err(ExportBudgetExceeded {
+            budget,
+            logical_bytes,
+        }
+        .into());
+    }
+
     let members = closure
         .objects
         .iter()
@@ -564,6 +713,7 @@ fn export_receipts(
         }
     };
     Ok(TransferOutcome {
+        exported: true,
         actions: actions.len() as u64,
         objects: closure.objects.len() as u64,
         bytes,
@@ -669,6 +819,15 @@ pub fn import_archive(store: &Path, archive: &Path) -> Result<TransferOutcome> {
 
 /// Import a cache archive and return its named higher-level CAS roots.
 pub fn import_archive_with_attachments(store: &Path, archive: &Path) -> Result<ImportOutcome> {
+    import_archive_with_comparison(store, archive, |_, _| Ok(()))
+}
+
+/// Inspect verified owner state before publishing or consuming the bundle.
+pub fn import_archive_with_comparison(
+    store: &Path,
+    archive: &Path,
+    before_publish: impl FnOnce(&Path, &ComparisonState) -> Result<()>,
+) -> Result<ImportOutcome> {
     // A directory bundle is read where it lies. Unpacking one into staging
     // would write every byte a second time, which is the whole cost the
     // directory form exists to avoid.
@@ -702,6 +861,75 @@ pub fn import_archive_with_attachments(store: &Path, archive: &Path) -> Result<I
     let bundle_bytes = archive.is_dir().then(|| tree_bytes(archive));
     let manifest: ExportManifest =
         serde_json::from_slice(&std::fs::read(root.join(EXPORT_MANIFEST))?)?;
+    let actions = validate_export_manifest(&manifest)?;
+    let mut closure =
+        strict_closure(root, &actions).wrap_err("cache export is incomplete or corrupt")?;
+    let staged_cas = LocalCas::new(root);
+    for digest in &manifest.objects {
+        require_object(&staged_cas, &mut closure, digest)
+            .wrap_err("cache export attachment is incomplete or corrupt")?;
+    }
+    verify_pending(&mut closure.pending).wrap_err("cache export is incomplete or corrupt")?;
+
+    // Read every action result before anything is published. Publication moves
+    // a directory bundle's objects into the store, and a bundle cannot be
+    // re-imported once that has happened, so every failure that can be moved
+    // ahead of it should be: a malformed result has to fail while the bundle
+    // is still whole. What remains after this point is filesystem failure on
+    // the store itself, which a retry would not survive either.
+    let results = closure
+        .results
+        .iter()
+        .map(|path| {
+            let result: RemoteActionResult = serde_json::from_slice(&std::fs::read(path)?)
+                .wrap_err_with(|| format!("action result is invalid: {}", path.display()))?;
+            Ok(result)
+        })
+        .collect::<Result<Vec<_>>>()
+        .wrap_err("cache export is incomplete or corrupt")?;
+
+    before_publish(root, &ComparisonState::from_root(root)?)?;
+    let cas = LocalCas::new(store);
+    for path in &closure.objects {
+        let relative = path.strip_prefix(root)?;
+        let source = root.join(relative);
+        let digest = addressed_digest(root, &source, false)
+            .ok_or_else(|| eyre::eyre!("invalid cache object path {}", relative.display()))?;
+        // `strict_closure` verified every path in `objects` against its
+        // content-addressed name. Preserve that proof and move the owned
+        // staging file instead of hashing or copying the bytes again.
+        cas.adopt_verified_file(&digest, &source)?;
+    }
+    let action_cache = mbx_cache_core::LocalActionCache::new(store);
+    for result in &results {
+        action_cache.store(result)?;
+    }
+    for task in manifest.tasks {
+        merge_imported_manifest(store, task)?;
+    }
+    let bytes = match bundle_bytes {
+        Some(bytes) => {
+            // Publication moved the objects out of the bundle, so what is left
+            // is a shell of empty directories. Removing it keeps a restored
+            // bundle out of the job's disk budget for the rest of the run.
+            std::fs::remove_dir_all(archive)
+                .wrap_err_with(|| format!("failed to remove {}", archive.display()))?;
+            bytes
+        }
+        None => std::fs::metadata(archive)?.len(),
+    };
+    Ok(ImportOutcome {
+        transfer: TransferOutcome {
+            exported: true,
+            actions: actions.len() as u64,
+            objects: closure.objects.len() as u64,
+            bytes,
+        },
+        attachments: manifest.attachments,
+    })
+}
+
+fn validate_export_manifest(manifest: &ExportManifest) -> Result<BTreeSet<CacheDigest>> {
     let actions = manifest.actions.iter().cloned().collect::<BTreeSet<_>>();
     let task_identities = manifest
         .tasks
@@ -741,69 +969,7 @@ pub fn import_archive_with_attachments(store: &Path, archive: &Path) -> Result<I
     {
         eyre::bail!("unsupported or invalid cache export manifest");
     }
-    let mut closure =
-        strict_closure(root, &actions).wrap_err("cache export is incomplete or corrupt")?;
-    let staged_cas = LocalCas::new(root);
-    for digest in &manifest.objects {
-        require_object(&staged_cas, &mut closure, digest)
-            .wrap_err("cache export attachment is incomplete or corrupt")?;
-    }
-    verify_pending(&mut closure.pending).wrap_err("cache export is incomplete or corrupt")?;
-
-    // Read every action result before anything is published. Publication moves
-    // a directory bundle's objects into the store, and a bundle cannot be
-    // re-imported once that has happened, so every failure that can be moved
-    // ahead of it should be: a malformed result has to fail while the bundle
-    // is still whole. What remains after this point is filesystem failure on
-    // the store itself, which a retry would not survive either.
-    let results = closure
-        .results
-        .iter()
-        .map(|path| {
-            let result: RemoteActionResult = serde_json::from_slice(&std::fs::read(path)?)
-                .wrap_err_with(|| format!("action result is invalid: {}", path.display()))?;
-            Ok(result)
-        })
-        .collect::<Result<Vec<_>>>()
-        .wrap_err("cache export is incomplete or corrupt")?;
-
-    let cas = LocalCas::new(store);
-    for path in &closure.objects {
-        let relative = path.strip_prefix(root)?;
-        let source = root.join(relative);
-        let digest = addressed_digest(root, &source, false)
-            .ok_or_else(|| eyre::eyre!("invalid cache object path {}", relative.display()))?;
-        // `strict_closure` verified every path in `objects` against its
-        // content-addressed name. Preserve that proof and move the owned
-        // staging file instead of hashing or copying the bytes again.
-        cas.adopt_verified_file(&digest, &source)?;
-    }
-    let action_cache = mbx_cache_core::LocalActionCache::new(store);
-    for result in &results {
-        action_cache.store(result)?;
-    }
-    for task in manifest.tasks {
-        merge_imported_manifest(store, task)?;
-    }
-    let bytes = match bundle_bytes {
-        Some(bytes) => {
-            // Publication moved the objects out of the bundle, so what is left
-            // is a shell of empty directories. Removing it keeps a restored
-            // bundle out of the job's disk budget for the rest of the run.
-            std::fs::remove_dir_all(archive)
-                .wrap_err_with(|| format!("failed to remove {}", archive.display()))?;
-            bytes
-        }
-        None => std::fs::metadata(archive)?.len(),
-    };
-    Ok(ImportOutcome {
-        transfer: TransferOutcome {
-            actions: actions.len() as u64,
-            objects: closure.objects.len() as u64,
-            bytes,
-        },
-        attachments: manifest.attachments,
-    })
+    Ok(actions)
 }
 
 fn validate_export_additions(additions: &ExportAdditions) -> Result<()> {

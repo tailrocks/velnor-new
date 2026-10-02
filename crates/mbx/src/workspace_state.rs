@@ -107,6 +107,59 @@ pub(crate) fn capture(store: &Path, targets: &[WorkspaceTarget]) -> Result<Expor
     })
 }
 
+/// Retain omitted supported workspaces while current captures replace the same root.
+pub(crate) fn retain(
+    store: &Path,
+    mut additions: ExportAdditions,
+    baseline: Option<&CacheDigest>,
+) -> Result<ExportAdditions> {
+    let Some(baseline) = baseline else {
+        return Ok(additions);
+    };
+    let cas = LocalCas::new(store);
+    let load = |digest: &CacheDigest| -> Result<Bundle> {
+        let path = cas
+            .find(digest)?
+            .ok_or_else(|| eyre::eyre!("retained workspace attachment is missing"))?;
+        let bundle: Bundle = serde_json::from_slice(&std::fs::read(path)?)?;
+        if bundle.version != VERSION || bundle.workspaces.is_empty() {
+            bail!("invalid retained workspace attachment");
+        }
+        for state in &bundle.workspaces {
+            validate_state(state)?;
+        }
+        Ok(bundle)
+    };
+    let mut states = load(baseline)?
+        .workspaces
+        .into_iter()
+        .map(|state| (state.workspace_root.clone(), state))
+        .collect::<BTreeMap<_, _>>();
+    if let Some(current) = additions.attachments.get(ATTACHMENT) {
+        for state in load(current)?.workspaces {
+            states.insert(state.workspace_root.clone(), state);
+        }
+    }
+    let bundle = Bundle {
+        version: VERSION,
+        workspaces: states.into_values().collect(),
+    };
+    for state in &bundle.workspaces {
+        additions.objects.insert(state.inline_archive.clone());
+        for reference in &state.references {
+            if let FileSource::Cas(digest) = &reference.source {
+                additions.objects.insert(digest.clone());
+            }
+        }
+    }
+    let bytes = serde_json::to_vec(&bundle)?;
+    let digest = CacheDigest::blake3(&bytes);
+    cas.store_bytes(&digest, &bytes)?;
+    additions.objects.insert(digest.clone());
+    additions.attachments.insert(ATTACHMENT.to_owned(), digest);
+    Ok(additions)
+}
+
 fn capture_workspace(
     cas: &LocalCas,
     target: &WorkspaceTarget,
@@ -177,6 +230,461 @@ fn capture_workspace(
         references,
         symlinks,
     })
+}
+
+/// Return stable semantic records carried by a workspace-state attachment.
+///
+/// The inventory is keyed by a workspace signature, a digest of that
+/// workspace's complete semantic entry map, and a normalized relative path.
+/// The workspace root and all timestamp metadata stay out of both keys and
+/// values.  A workspace digest is the marker, so a deletion changes the
+/// marker even when the deleted entry is absent from the after-inventory.  An
+/// absent attachment has an empty inventory.
+pub(crate) fn semantic_inventory(
+    store: &Path,
+    attachment: Option<&CacheDigest>,
+) -> Result<BTreeMap<String, serde_json::Value>> {
+    let Some(attachment) = attachment else {
+        return Ok(BTreeMap::new());
+    };
+    attachment.validate()?;
+    let cas = LocalCas::new(store);
+    let bundle_path = cas
+        .find(attachment)?
+        .ok_or_else(|| eyre::eyre!("workspace-state attachment is missing"))?;
+    let bundle: Bundle = serde_json::from_slice(&std::fs::read(bundle_path)?)?;
+    if bundle.version != VERSION || bundle.workspaces.is_empty() {
+        bail!("unsupported or invalid Cargo workspace-state attachment");
+    }
+
+    let mut workspaces = bundle
+        .workspaces
+        .iter()
+        .map(|state| semantic_workspace(&cas, state))
+        .collect::<Result<Vec<_>>>()?;
+    workspaces.sort_by(|left, right| {
+        left.signature
+            .key()
+            .cmp(&right.signature.key())
+            .then_with(|| left.digest.key().cmp(&right.digest.key()))
+    });
+
+    let mut inventory = BTreeMap::new();
+    for workspace in workspaces {
+        let prefix = format!(
+            "workspace/{}/{}/{}/state/{}/{}/{}",
+            workspace.signature.algorithm,
+            workspace.signature.hash,
+            workspace.signature.size,
+            workspace.digest.algorithm,
+            workspace.digest.hash,
+            workspace.digest.size,
+        );
+        inventory.insert(
+            prefix.clone(),
+            serde_json::json!({
+                "type": "workspace",
+                "content": {
+                    "kind": "digest",
+                    "digest": workspace.digest,
+                },
+            }),
+        );
+        for (path, value) in workspace.entries {
+            inventory.insert(format!("{prefix}/{path}"), value);
+        }
+    }
+    Ok(inventory)
+}
+
+/// Validate an owner-produced semantic inventory before it becomes a
+/// comparison baseline.
+pub(crate) fn validate_semantic_inventory(
+    inventory: &BTreeMap<String, serde_json::Value>,
+) -> Result<()> {
+    let mut markers = BTreeMap::<(CacheDigest, CacheDigest), CacheDigest>::new();
+    let mut entries =
+        BTreeMap::<(CacheDigest, CacheDigest), BTreeMap<String, serde_json::Value>>::new();
+    for (key, value) in inventory {
+        let parsed = parse_semantic_key(key)?;
+        let marker = validate_semantic_value(&parsed, value)?;
+        let identity = (parsed.signature, parsed.state);
+        match parsed.path {
+            Some(path) => {
+                entries
+                    .entry(identity)
+                    .or_default()
+                    .insert(path, value.clone());
+            }
+            None => {
+                let digest = marker.ok_or_else(|| {
+                    eyre::eyre!("workspace semantic marker is missing its digest")
+                })?;
+                if markers.insert(identity, digest).is_some() {
+                    bail!("workspace semantic inventory contains a duplicate marker");
+                }
+            }
+        }
+    }
+    for (identity, marker_digest) in &markers {
+        let encoded = match entries.get(identity) {
+            Some(entries) => serde_json::to_vec(entries)?,
+            None => serde_json::to_vec(&BTreeMap::<String, serde_json::Value>::new())?,
+        };
+        let computed = CacheDigest::blake3(&encoded);
+        if computed != *marker_digest {
+            bail!("workspace semantic marker does not match its entries");
+        }
+    }
+    for identity in entries.keys() {
+        if !markers.contains_key(identity) {
+            bail!("workspace semantic entry has no marker");
+        }
+    }
+    Ok(())
+}
+
+struct ParsedSemanticKey {
+    signature: CacheDigest,
+    state: CacheDigest,
+    path: Option<String>,
+}
+
+fn parse_semantic_key(key: &str) -> Result<ParsedSemanticKey> {
+    if key.is_empty() || key.contains('\\') {
+        bail!("workspace semantic key is not canonical: {key}");
+    }
+    let parts = key.split('/').collect::<Vec<_>>();
+    if parts.len() < 8
+        || parts[0] != "workspace"
+        || parts[4] != "state"
+        || parts.iter().any(|part| part.is_empty())
+    {
+        bail!("workspace semantic key is not canonical: {key}");
+    }
+    let signature = semantic_key_digest(&parts[1..4], key)?;
+    let state = semantic_key_digest(&parts[5..8], key)?;
+    let path = if parts.len() == 8 {
+        None
+    } else {
+        let path = parts[8..].join("/");
+        let normalized = normalized_relative_path(Path::new(&path))?;
+        if normalized != path {
+            bail!("workspace semantic key is not canonical: {key}");
+        }
+        Some(path)
+    };
+    Ok(ParsedSemanticKey {
+        signature,
+        state,
+        path,
+    })
+}
+
+fn semantic_key_digest(parts: &[&str], key: &str) -> Result<CacheDigest> {
+    let size = parts[2]
+        .parse::<u64>()
+        .map_err(|_| eyre::eyre!("workspace semantic key has an invalid size: {key}"))?;
+    if size.to_string() != parts[2] {
+        bail!("workspace semantic key is not canonical: {key}");
+    }
+    let digest = CacheDigest {
+        algorithm: parts[0].to_owned(),
+        hash: parts[1].to_owned(),
+        size,
+    };
+    digest.validate()?;
+    Ok(digest)
+}
+
+fn validate_semantic_value(
+    key: &ParsedSemanticKey,
+    value: &serde_json::Value,
+) -> Result<Option<CacheDigest>> {
+    let object = value
+        .as_object()
+        .ok_or_else(|| eyre::eyre!("workspace semantic entry is not an object"))?;
+    let kind = object
+        .get("type")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| eyre::eyre!("workspace semantic entry has no type"))?;
+    match (key.path.as_deref(), kind) {
+        (None, "workspace") => {
+            require_semantic_fields(object, &["type", "content"])?;
+            match validate_semantic_content(object.get("content"), false)? {
+                SemanticContent::Digest(digest) if digest == key.state => Ok(Some(digest)),
+                SemanticContent::Digest(_) => {
+                    bail!("workspace semantic marker digest does not match its key")
+                }
+                SemanticContent::Mbx => bail!("workspace semantic marker cannot use mbx content"),
+            }
+        }
+        (Some(_), "file") => {
+            require_semantic_fields(object, &["type", "content", "mode"])?;
+            validate_semantic_mode(object)?;
+            validate_semantic_content(object.get("content"), true)?;
+            Ok(None)
+        }
+        (Some(_), "directory") => {
+            require_semantic_fields(object, &["type", "mode"])?;
+            validate_semantic_mode(object)?;
+            Ok(None)
+        }
+        (Some(path), "symlink") => {
+            require_semantic_fields(object, &["type", "target", "directory"])?;
+            let target = object
+                .get("target")
+                .and_then(serde_json::Value::as_str)
+                .ok_or_else(|| eyre::eyre!("workspace semantic symlink has no target"))?;
+            if target.contains('\\') {
+                bail!("workspace semantic symlink target is not canonical");
+            }
+            let target_path = Path::new(target);
+            if normalized_link_target(target_path)? != target
+                || !object
+                    .get("directory")
+                    .is_some_and(serde_json::Value::is_boolean)
+            {
+                bail!("workspace semantic symlink is invalid");
+            }
+            validate_link(Path::new(path), target_path)?;
+            Ok(None)
+        }
+        (None, _) => bail!("workspace semantic marker has an invalid type: {kind}"),
+        (Some(_), _) => bail!("workspace semantic entry has an invalid type: {kind}"),
+    }
+}
+
+fn require_semantic_fields(
+    object: &serde_json::Map<String, serde_json::Value>,
+    fields: &[&str],
+) -> Result<()> {
+    if object.len() != fields.len() || object.keys().any(|key| !fields.contains(&key.as_str())) {
+        bail!("workspace semantic entry has unknown or missing fields");
+    }
+    Ok(())
+}
+
+fn validate_semantic_mode(object: &serde_json::Map<String, serde_json::Value>) -> Result<()> {
+    let mode = object
+        .get("mode")
+        .and_then(serde_json::Value::as_u64)
+        .ok_or_else(|| eyre::eyre!("workspace semantic entry has an invalid mode"))?;
+    u32::try_from(mode).map_err(|_| eyre::eyre!("workspace semantic entry has an invalid mode"))?;
+    Ok(())
+}
+
+enum SemanticContent {
+    Digest(CacheDigest),
+    Mbx,
+}
+
+fn validate_semantic_content(
+    value: Option<&serde_json::Value>,
+    allow_mbx: bool,
+) -> Result<SemanticContent> {
+    let object = value
+        .and_then(serde_json::Value::as_object)
+        .ok_or_else(|| eyre::eyre!("workspace semantic entry has invalid content"))?;
+    let kind = object
+        .get("kind")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| eyre::eyre!("workspace semantic entry has invalid content kind"))?;
+    match kind {
+        "digest" => {
+            require_semantic_fields(object, &["kind", "digest"])?;
+            let digest: CacheDigest = serde_json::from_value(
+                object
+                    .get("digest")
+                    .cloned()
+                    .ok_or_else(|| eyre::eyre!("workspace semantic entry has no digest"))?,
+            )?;
+            digest.validate()?;
+            Ok(SemanticContent::Digest(digest))
+        }
+        "mbx" if allow_mbx => {
+            require_semantic_fields(object, &["kind"])?;
+            Ok(SemanticContent::Mbx)
+        }
+        "mbx" => bail!("workspace semantic marker cannot use mbx content"),
+        _ => bail!("workspace semantic entry has an invalid content kind: {kind}"),
+    }
+}
+
+struct SemanticWorkspace {
+    signature: CacheDigest,
+    digest: CacheDigest,
+    entries: BTreeMap<String, serde_json::Value>,
+}
+
+fn semantic_workspace(cas: &LocalCas, state: &WorkspaceState) -> Result<SemanticWorkspace> {
+    validate_state(state)?;
+    let mut entries = BTreeMap::new();
+    let modes = inline_file_modes(state)?;
+    semantic_inline_entries(cas, state, &modes, &mut entries)?;
+    for reference in &state.references {
+        let path = normalized_relative_path(&reference.path)?;
+        let content = match &reference.source {
+            FileSource::Cas(digest) => serde_json::json!({
+                "kind": "digest",
+                "digest": digest,
+            }),
+            FileSource::Mbx => serde_json::json!({"kind": "mbx"}),
+        };
+        insert_semantic_entry(
+            &mut entries,
+            path,
+            serde_json::json!({
+                "type": "file",
+                "content": content,
+                "mode": reference.mode,
+            }),
+        )?;
+    }
+    for link in &state.symlinks {
+        let path = normalized_relative_path(&link.path)?;
+        let target = normalized_link_target(&link.target)?;
+        insert_semantic_entry(
+            &mut entries,
+            path,
+            serde_json::json!({
+                "type": "symlink",
+                "target": target,
+                "directory": link.directory,
+            }),
+        )?;
+    }
+    // Cargo's compiler-query cache fingerprints wrapper paths and filesystem
+    // timestamps. It is restored byte-for-byte, but is outside useful compiled
+    // actions and Cargo unit scheduler state. See Cargo rustc.rs at 797e8a9b.
+    entries.remove(".rustc_info.json");
+    let encoded = serde_json::to_vec(&entries)?;
+    let digest = CacheDigest::blake3(&encoded);
+    Ok(SemanticWorkspace {
+        signature: state.signature.clone(),
+        digest,
+        entries,
+    })
+}
+
+fn inline_file_modes(state: &WorkspaceState) -> Result<BTreeMap<String, u32>> {
+    let mut modes = BTreeMap::new();
+    for metadata in &state.inline_files {
+        let path = normalized_relative_path(&metadata.path)?;
+        if modes.insert(path.clone(), metadata.mode).is_some() {
+            bail!("workspace-state contains duplicate inline file {path}");
+        }
+    }
+    Ok(modes)
+}
+
+fn semantic_inline_entries(
+    cas: &LocalCas,
+    state: &WorkspaceState,
+    modes: &BTreeMap<String, u32>,
+    entries: &mut BTreeMap<String, serde_json::Value>,
+) -> Result<()> {
+    let archive_path = cas
+        .find(&state.inline_archive)?
+        .ok_or_else(|| eyre::eyre!("workspace-state inline archive is missing"))?;
+    let mut archive = tar::Archive::new(File::open(archive_path)?);
+    for entry in archive.entries()? {
+        let mut entry = entry?;
+        let path = entry.path()?.into_owned();
+        let normalized = normalized_relative_path(&path)?;
+        let mode = entry.header().mode()?;
+        let kind = entry.header().entry_type();
+        if kind.is_dir() {
+            insert_semantic_entry(
+                entries,
+                normalized,
+                serde_json::json!({
+                    "type": "directory",
+                    "mode": mode,
+                }),
+            )?;
+        } else if kind.is_file() || kind.is_gnu_sparse() {
+            let temporary = tempfile::NamedTempFile::new()?;
+            {
+                let mut output = temporary.reopen()?;
+                std::io::copy(&mut entry, &mut output)?;
+            }
+            let digest = CacheDigest::blake3_file(temporary.path())?;
+            insert_semantic_entry(
+                entries,
+                normalized.clone(),
+                serde_json::json!({
+                    "type": "file",
+                    "content": {
+                        "kind": "digest",
+                        "digest": digest,
+                    },
+                    "mode": modes.get(&normalized).copied().unwrap_or(mode),
+                }),
+            )?;
+        } else {
+            bail!("workspace-state archive contains a non-file entry");
+        }
+    }
+    Ok(())
+}
+
+fn insert_semantic_entry(
+    entries: &mut BTreeMap<String, serde_json::Value>,
+    path: String,
+    value: serde_json::Value,
+) -> Result<()> {
+    if entries.insert(path.clone(), value).is_some() {
+        bail!("workspace-state contains duplicate entry {path}");
+    }
+    Ok(())
+}
+
+fn normalized_relative_path(path: &Path) -> Result<String> {
+    validate_relative_path(path)?;
+    normalized_path(path)
+}
+
+fn normalized_link_target(path: &Path) -> Result<String> {
+    if path.is_absolute() {
+        bail!("workspace state contains an absolute link target");
+    }
+    normalized_path(path)
+}
+
+fn normalized_path(path: &Path) -> Result<String> {
+    let mut normalized = String::new();
+    for component in path.components() {
+        let component = match component {
+            Component::Normal(component) => component,
+            Component::CurDir => {
+                if !normalized.is_empty() {
+                    normalized.push('/');
+                }
+                normalized.push('.');
+                continue;
+            }
+            Component::ParentDir => {
+                if !normalized.is_empty() {
+                    normalized.push('/');
+                }
+                normalized.push_str("..");
+                continue;
+            }
+            _ => bail!("workspace state contains an unsafe path {}", path.display()),
+        };
+        let component = component
+            .to_str()
+            .ok_or_else(|| eyre::eyre!("workspace state path is not valid UTF-8"))?;
+        if !normalized.is_empty() {
+            normalized.push('/');
+        }
+        normalized.push_str(component);
+    }
+    if normalized.is_empty() {
+        bail!("workspace state contains an empty path");
+    }
+    Ok(normalized)
 }
 
 /// Restore the state matching the current Cargo workspace into an empty target.
@@ -499,4 +1007,238 @@ fn create_symlink(target: &Path, destination: &Path, directory: bool) -> Result<
         std::os::windows::fs::symlink_file(target, destination)?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    struct Fixture {
+        target: WorkspaceTarget,
+        inline: PathBuf,
+    }
+
+    fn fixture(root: &Path, name: &str, reference: &[u8]) -> Result<Fixture> {
+        let workspace_root = root.join(name);
+        let target_dir = workspace_root.join("target");
+        fs::create_dir_all(target_dir.join("nested/deps"))?;
+        fs::write(
+            workspace_root.join("Cargo.toml"),
+            b"[package]\nname = \"fixture\"\n",
+        )?;
+        let inline = target_dir.join("nested/inline.txt");
+        fs::write(&inline, b"inline contents")?;
+        fs::write(target_dir.join("reference.bin"), reference)?;
+        let reference_digest = CacheDigest::blake3(reference);
+        LocalCas::new(root).store_bytes(&reference_digest, reference)?;
+        let executable = std::env::current_exe()?;
+        fs::copy(executable, target_dir.join("mbx-placeholder"))?;
+        #[cfg(unix)]
+        std::os::unix::fs::symlink("nested/inline.txt", target_dir.join("link"))?;
+        Ok(Fixture {
+            target: WorkspaceTarget {
+                workspace_root,
+                target_dir,
+            },
+            inline,
+        })
+    }
+
+    fn attachment(additions: &ExportAdditions) -> Result<CacheDigest> {
+        additions
+            .attachments
+            .get(ATTACHMENT)
+            .cloned()
+            .ok_or_else(|| eyre::eyre!("fixture did not produce a workspace attachment"))
+    }
+
+    fn find_entry<'a>(
+        inventory: &'a BTreeMap<String, serde_json::Value>,
+        suffix: &str,
+    ) -> Result<&'a serde_json::Value> {
+        inventory
+            .iter()
+            .find_map(|(key, value)| key.ends_with(suffix).then_some(value))
+            .ok_or_else(|| eyre::eyre!("missing semantic inventory entry {suffix}"))
+    }
+
+    #[test]
+    fn semantic_inventory_preserves_content_shape_and_ignores_root_and_time() -> Result<()> {
+        let store = tempfile::tempdir()?;
+        let fixture = fixture(store.path(), "workspace", b"reference contents")?;
+        let first = capture(store.path(), std::slice::from_ref(&fixture.target))?;
+        let first_inventory = semantic_inventory(store.path(), Some(&attachment(&first)?))?;
+        let first_json = serde_json::to_string(&first_inventory)?;
+        assert!(!first_json.contains(&fixture.target.workspace_root.display().to_string()));
+        assert!(!first_json.contains("modified_secs"));
+
+        let inline = first_inventory
+            .iter()
+            .find(|(key, _)| key.ends_with("/nested/inline.txt"))
+            .map(|(_, value)| value)
+            .ok_or_else(|| eyre::eyre!("inline file is missing"))?;
+        assert_eq!(inline["type"], "file");
+        assert_eq!(inline["content"]["kind"], "digest");
+        assert_eq!(inline["content"]["digest"]["algorithm"], "blake3");
+        assert!(inline["mode"].is_u64());
+        assert_eq!(
+            find_entry(&first_inventory, "/nested")?["type"],
+            "directory"
+        );
+        let reference = find_entry(&first_inventory, "/reference.bin")?;
+        assert_eq!(reference["content"]["kind"], "digest");
+        let mbx = find_entry(&first_inventory, "/mbx-placeholder")?;
+        assert_eq!(mbx["content"]["kind"], "mbx");
+        assert!(mbx["content"].get("digest").is_none());
+        let marker = first_inventory
+            .values()
+            .find(|value| value["type"] == "workspace")
+            .ok_or_else(|| eyre::eyre!("workspace marker is missing"))?;
+        assert_eq!(marker["content"]["kind"], "digest");
+
+        filetime::set_file_mtime(&fixture.inline, filetime::FileTime::from_unix_time(1, 2))?;
+        let second = capture(store.path(), std::slice::from_ref(&fixture.target))?;
+        let second_inventory = semantic_inventory(store.path(), Some(&attachment(&second)?))?;
+        assert_eq!(first_inventory, second_inventory);
+        #[cfg(unix)]
+        assert_eq!(
+            find_entry(&first_inventory, "/link")?["target"],
+            "nested/inline.txt"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_workspace_identity_is_stable_when_same_signature_sibling_is_omitted() -> Result<()>
+    {
+        let store = tempfile::tempdir()?;
+        let first = fixture(store.path(), "first", b"reference contents")?;
+        let second = fixture(store.path(), "second", b"reference contents")?;
+        fs::write(&second.inline, b"second workspace contents")?;
+        let both = capture(store.path(), &[first.target.clone(), second.target.clone()])?;
+        let only_second = capture(store.path(), std::slice::from_ref(&second.target))?;
+        let all = semantic_inventory(store.path(), Some(&attachment(&both)?))?;
+        let subset = semantic_inventory(store.path(), Some(&attachment(&only_second)?))?;
+        for (key, value) in subset {
+            assert_eq!(all.get(&key), Some(&value), "subset entry moved: {key}");
+        }
+        Ok(())
+    }
+    #[test]
+    fn semantic_inventory_excludes_only_root_compiler_probe_cache() -> Result<()> {
+        let store = tempfile::tempdir()?;
+        let fixture = fixture(store.path(), "workspace", b"reference contents")?;
+        let probe = fixture.target.target_dir.join(".rustc_info.json");
+        std::fs::write(&probe, br#"{"rustc_fingerprint":1}"#)?;
+        let first = capture(store.path(), std::slice::from_ref(&fixture.target))?;
+        let before = semantic_inventory(store.path(), Some(&attachment(&first)?))?;
+        std::fs::write(&probe, br#"{"rustc_fingerprint":2}"#)?;
+        let second = capture(store.path(), std::slice::from_ref(&fixture.target))?;
+        let after = semantic_inventory(store.path(), Some(&attachment(&second)?))?;
+        assert_eq!(before, after);
+        let cas = LocalCas::new(store.path());
+        let bundle: Bundle =
+            serde_json::from_slice(&std::fs::read(cas.path_for(&attachment(&second)?)?)?)?;
+        assert!(
+            bundle.workspaces[0]
+                .inline_files
+                .iter()
+                .any(|entry| entry.path == Path::new(".rustc_info.json"))
+        );
+        std::fs::write(
+            fixture.target.target_dir.join("nested/.rustc_info.json"),
+            b"actual nested content",
+        )?;
+        let nested = capture(store.path(), std::slice::from_ref(&fixture.target))?;
+        assert_ne!(
+            after,
+            semantic_inventory(store.path(), Some(&attachment(&nested)?))?
+        );
+        Ok(())
+    }
+    #[test]
+    fn retained_workspace_union_replaces_current_root_and_keeps_omitted_roots() -> Result<()> {
+        let store = tempfile::tempdir()?;
+        let first = fixture(store.path(), "first", b"first output")?;
+        let second = fixture(store.path(), "second", b"second output")?;
+        let baseline = capture(store.path(), &[first.target.clone(), second.target.clone()])?;
+        let baseline_inventory = semantic_inventory(store.path(), Some(&attachment(&baseline)?))?;
+        std::fs::write(&first.inline, b"updated current state")?;
+        let current = capture(store.path(), std::slice::from_ref(&first.target))?;
+        let merged = retain(store.path(), current, Some(&attachment(&baseline)?))?;
+        let cas = LocalCas::new(store.path());
+        let bundle: Bundle =
+            serde_json::from_slice(&std::fs::read(cas.path_for(&attachment(&merged)?)?)?)?;
+        assert_eq!(bundle.workspaces.len(), 2);
+        assert_eq!(
+            bundle
+                .workspaces
+                .iter()
+                .filter(|state| state.workspace_root == first.target.workspace_root)
+                .count(),
+            1
+        );
+        let inventory = semantic_inventory(store.path(), Some(&attachment(&merged)?))?;
+        let second_only = capture(store.path(), std::slice::from_ref(&second.target))?;
+        let omitted = semantic_inventory(store.path(), Some(&attachment(&second_only)?))?;
+        assert!(
+            omitted
+                .iter()
+                .all(|(key, value)| inventory.get(key) == Some(value))
+        );
+        assert_ne!(baseline_inventory, inventory);
+        let unchanged = retain(
+            store.path(),
+            ExportAdditions::default(),
+            Some(&attachment(&merged)?),
+        )?;
+        assert_eq!(
+            inventory,
+            semantic_inventory(store.path(), Some(&attachment(&unchanged)?))?
+        );
+        let retained_inline = bundle.workspaces[0].inline_archive.clone();
+        std::fs::write(cas.path_for(&retained_inline)?, b"tampered")?;
+        assert!(semantic_inventory(store.path(), Some(&attachment(&unchanged)?)).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_inventory_validation_rejects_unknown_fields_and_unsafe_links() -> Result<()> {
+        let store = tempfile::tempdir()?;
+        let fixture = fixture(store.path(), "workspace", b"reference contents")?;
+        let additions = capture(store.path(), std::slice::from_ref(&fixture.target))?;
+        let inventory = semantic_inventory(store.path(), Some(&attachment(&additions)?))?;
+        validate_semantic_inventory(&inventory)?;
+
+        let marker_key = inventory
+            .iter()
+            .find(|(_, value)| value["type"] == "workspace")
+            .map(|(key, _)| key.clone())
+            .ok_or_else(|| eyre::eyre!("workspace marker is missing"))?;
+        let mut unknown = inventory.clone();
+        unknown
+            .get_mut(&marker_key)
+            .and_then(serde_json::Value::as_object_mut)
+            .ok_or_else(|| eyre::eyre!("workspace marker is not an object"))?
+            .insert("unexpected".to_owned(), serde_json::json!(true));
+        assert!(validate_semantic_inventory(&unknown).is_err());
+
+        #[cfg(unix)]
+        {
+            let link_key = inventory
+                .keys()
+                .find(|key| key.ends_with("/link"))
+                .cloned()
+                .ok_or_else(|| eyre::eyre!("symlink is missing"))?;
+            let mut unsafe_link = inventory;
+            unsafe_link
+                .get_mut(&link_key)
+                .and_then(serde_json::Value::as_object_mut)
+                .ok_or_else(|| eyre::eyre!("symlink is not an object"))?
+                .insert("target".to_owned(), serde_json::json!("../../outside"));
+            assert!(validate_semantic_inventory(&unsafe_link).is_err());
+        }
+        Ok(())
+    }
 }
