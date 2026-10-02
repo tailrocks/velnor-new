@@ -2,7 +2,6 @@
 //! In-place commits exchange atomically on Linux/macOS, else fall back
 //! to a guarded two-rename commit preserving old output on failure.
 
-use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use velnor_actions_actionlint::render_actionlint_yaml;
@@ -80,7 +79,7 @@ pub fn generate(
         }
     };
     Ok(GenerateReport {
-        files_written: tree.files.iter().map(|file| file.path.clone()).collect(),
+        files_written: tree.paths(),
         recommendations: prep.discovery.recommendations.clone(),
         validated_by,
         profiles: profile_provenance(prep),
@@ -149,6 +148,9 @@ fn check_tree_paths(tree: &RenderedTree) -> Result<Vec<SafeTreePath>, Orchestrat
     let mut safe = Vec::with_capacity(tree.files.len());
     for file in &tree.files {
         safe.push(guard::validate_tree_path(&file.path)?);
+    }
+    for link in &tree.symlinks {
+        guard::validate_tree_path(&link.path)?;
     }
     Ok(safe)
 }
@@ -287,59 +289,11 @@ fn write_preview(
     write_tree(&canonical.join(".github"), tree)
 }
 
-/// Write every rendered file under `github_dir`, refusing symlinks.
-/// Parents are re-verified before use; leaves are created exclusively,
-/// so overwrites and swapped links refuse instead of diverting writes.
-pub(crate) fn write_tree(github_dir: &Path, tree: &RenderedTree) -> Result<(), OrchestratorError> {
-    for file in &tree.files {
-        let rel = file.path.strip_prefix(".github/").unwrap_or(&file.path);
-        let dest = github_dir.join(rel);
-        if let Some(parent) = dest.parent() {
-            std::fs::create_dir_all(parent).map_err(|err| {
-                OrchestratorError::io(parent.display().to_string(), err.to_string())
-            })?;
-            let mut current = Some(parent);
-            while let Some(level) = current {
-                if !level.starts_with(github_dir) {
-                    break;
-                }
-                if std::fs::symlink_metadata(level).is_ok_and(|meta| meta.is_symlink()) {
-                    return Err(OrchestratorError::UnsafePath {
-                        path: level.display().to_string(),
-                        reason: "symlink_refused".to_owned(),
-                    });
-                }
-                current = if level == github_dir {
-                    None
-                } else {
-                    level.parent()
-                };
-            }
-        }
-        if std::fs::symlink_metadata(&dest).is_ok_and(|meta| meta.is_symlink()) {
-            return Err(OrchestratorError::UnsafePath {
-                path: dest.display().to_string(),
-                reason: "symlink_refused".to_owned(),
-            });
-        }
-        std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&dest)
-            .map_err(|err| {
-                if err.kind() == std::io::ErrorKind::AlreadyExists {
-                    OrchestratorError::OverwriteRefused {
-                        path: dest.display().to_string(),
-                    }
-                } else {
-                    OrchestratorError::io(dest.display().to_string(), err.to_string())
-                }
-            })?
-            .write_all(file.bytes.as_bytes())
-            .map_err(|err| OrchestratorError::io(dest.display().to_string(), err.to_string()))?;
-    }
-    Ok(())
-}
+/// Staged tree writing: regular files and symbolic links.
+#[path = "generate_write.rs"]
+pub(crate) mod write;
+
+pub(crate) use write::write_tree;
 
 #[cfg(test)]
 mod tests {

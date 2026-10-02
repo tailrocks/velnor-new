@@ -103,7 +103,12 @@ fn orch_gen_plan_matches_generated_tree() -> TestResult {
     }
     assert_eq!(
         report.files_written,
-        [".github/actionlint.yaml", ".github/workflows/ci.yml"]
+        [
+            ".github/AGENTS.md",
+            ".github/CLAUDE.md",
+            ".github/actionlint.yaml",
+            ".github/workflows/ci.yml"
+        ]
     );
     assert!(plan.contains("1 Rust crate job"), "crate wording:\n{plan}");
     assert!(yaml.contains("  rust-demo:"), "crate presence parity");
@@ -136,7 +141,7 @@ fn orch_gen_zero_candidate_repo_plans_no_work() -> TestResult {
     assert!(plan.contains("no-work workflow"), "no-work:\n{plan}");
     let parent = TempDir::new()?;
     let report = preview_into(&prep, parent.path().join("preview"))?;
-    assert_eq!(report.files_written.len(), 2);
+    assert_eq!(report.files_written.len(), 4);
     Ok(())
 }
 

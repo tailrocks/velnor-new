@@ -74,7 +74,17 @@ fn tofu_cross_checkout_determinism() -> TestResult {
         for rel in &report.files_written {
             files.insert(rel.clone(), fs::read(preview_root.join(rel))?);
         }
-        assert_eq!(files.keys().len(), 2, "two generated files");
+        let names: Vec<&str> = files.keys().map(String::as_str).collect();
+        assert_eq!(
+            names,
+            [
+                ".github/AGENTS.md",
+                ".github/CLAUDE.md",
+                ".github/actionlint.yaml",
+                ".github/workflows/ci.yml",
+            ],
+            "tofu workflows compose with generated agent docs (PR #11)"
+        );
         trees.insert(format!("{files:?}"));
     }
     assert_eq!(trees.len(), 1, "staged bytes agree across checkouts");

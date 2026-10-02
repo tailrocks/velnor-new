@@ -120,34 +120,8 @@ pub struct CandidateSpec {
     pub qualify: Vec<String>,
 }
 
-/// One rendered file: repository-relative path plus bytes.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RenderedFile {
-    /// Repository-relative output path.
-    pub path: String,
-    /// Complete file bytes including the marker.
-    pub bytes: String,
-}
-
-/// The generated files, sorted by path: the base two (actionlint config
-/// plus CI workflow) with release disabled, plus the release family when
-/// release rendering is enabled.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RenderedTree {
-    /// Generated files in sorted path order.
-    pub files: Vec<RenderedFile>,
-}
-
-impl RenderedTree {
-    /// Fetch file bytes by repository-relative path.
-    #[must_use]
-    pub fn get(&self, path: &str) -> Option<&str> {
-        self.files
-            .iter()
-            .find(|file| file.path == path)
-            .map(|file| file.bytes.as_str())
-    }
-}
+pub use crate::tree::{RenderedFile, RenderedSymlink, RenderedTree};
+pub use velnor_actions_contract::{AGENTS_MD_PATH, CLAUDE_MD_PATH, CLAUDE_MD_TARGET};
 
 impl RenderContext {
     /// Validate every context scalar before rendering.

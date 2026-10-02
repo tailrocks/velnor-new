@@ -310,9 +310,13 @@ fn tree_has_exactly_two_tool_free_files() -> Result<(), RenderError> {
     )?;
     let actionlint = with_marker(VERSION, "self-hosted: false\n")?;
     let tree = render_tree(&workflow, &actionlint, VERSION)?;
-    assert_eq!(tree.files.len(), 2);
-    assert_eq!(tree.files[0].path, ".github/actionlint.yaml");
-    assert_eq!(tree.files[1].path, ".github/workflows/ci.yml");
+    assert_eq!(tree.files.len(), 3);
+    assert_eq!(tree.symlinks.len(), 1);
+    assert_eq!(tree.files[0].path, ".github/AGENTS.md");
+    assert_eq!(tree.files[1].path, ".github/actionlint.yaml");
+    assert_eq!(tree.files[2].path, ".github/workflows/ci.yml");
+    assert_eq!(tree.symlinks[0].path, ".github/CLAUDE.md");
+    assert_eq!(tree.symlinks[0].target, "AGENTS.md");
     for file in &tree.files {
         for tool_file in [
             "mise.toml",

@@ -1,6 +1,8 @@
 velnor-actions: WARNING: .velnor/release-manifest.json is absent; generated workflows use a debug-only stand-in that MUST NOT ship
 Preview: /private/tmp/velnor-goldens-work/stage/dogfood/preview
 Repository: /Users/donbeave/Projects/tailrocks-new/velnor-new
+.github/AGENTS.md
+.github/CLAUDE.md
 .github/actionlint.yaml
 .github/workflows/ci.yml
 .github/workflows/freshness.yml
