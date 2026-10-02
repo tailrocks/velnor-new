@@ -64,6 +64,20 @@ async fn uncertain_outcome_keeps_the_row() -> Result<(), HostError> {
 }
 
 #[tokio::test]
+async fn missing_row_is_not_a_successful_finish() -> Result<(), HostError> {
+    let scratch = Scratch::new("missing")?;
+    let journal = open(&scratch.file()).await?;
+    assert_eq!(
+        journal.finish(99, Outcome::Done).await,
+        Err(HostError::Journal)
+    );
+    let id = journal.begin("acquire").await?;
+    journal.finish(id, Outcome::DefiniteFailure).await?;
+    assert_eq!(journal.read(id).await?, IntentState::Failed);
+    Ok(())
+}
+
+#[tokio::test]
 async fn empty_and_quoted_kinds_are_rejected() -> Result<(), HostError> {
     let scratch = Scratch::new("kind")?;
     let journal = open(&scratch.file()).await?;

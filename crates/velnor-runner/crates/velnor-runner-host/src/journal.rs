@@ -102,13 +102,18 @@ impl Journal {
             Outcome::DefiniteFailure => IntentState::Failed,
         };
         let conn = self.connection().await?;
-        conn.execute(
-            "UPDATE intents SET state = ?1 WHERE id = ?2",
-            (state.as_str().to_owned(), id),
-        )
-        .await
-        .map_err(|_| HostError::Journal)?;
-        Ok(())
+        let changed = conn
+            .execute(
+                "UPDATE intents SET state = ?1 WHERE id = ?2",
+                (state.as_str().to_owned(), id),
+            )
+            .await
+            .map_err(|_| HostError::Journal)?;
+        if changed == 1 {
+            Ok(())
+        } else {
+            Err(HostError::Journal)
+        }
     }
 
     /// Read a row back, including after a new [`Journal::open`].
