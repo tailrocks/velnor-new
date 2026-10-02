@@ -7,6 +7,9 @@ use crate::platform::{ARCH, OS};
 
 pub static VERSION_PLAIN: Lazy<String> = Lazy::new(|| {
     let mut v = V.to_string();
+    if cfg!(feature = "owned-cargo-wrapper") {
+        v.push_str("-owned-cargo-wrapper");
+    }
     if cfg!(debug_assertions) {
         v.push_str("-DEBUG");
     };

@@ -3723,6 +3723,10 @@ pub fn load_command_wrappers<'a>(
     config_files: &ConfigMap,
     tools: impl IntoIterator<Item = &'a crate::toolset::ToolRequest>,
 ) -> Result<IndexMap<String, CommandWrapper>> {
+    #[cfg(feature = "owned-cargo-wrapper")]
+    if let Some(wrapper) = crate::owned_cargo_wrapper::wrapper()? {
+        return Ok([("cargo".into(), wrapper)].into());
+    }
     let mut wrappers = IndexMap::new();
     let safe_mode = Settings::safe_mode();
     for config_file in config_files.values().rev() {

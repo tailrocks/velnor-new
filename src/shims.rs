@@ -859,7 +859,24 @@ pub fn ensure_command_wrapper_shims(config: &Config, ts: &Toolset) -> Result<()>
     if wrappers.is_empty() {
         return Ok(());
     }
+    #[cfg(not(feature = "owned-cargo-wrapper"))]
     let mise_bin = mise_bin_for_shims().absolutize()?.into_owned();
+    #[cfg(feature = "owned-cargo-wrapper")]
+    let owned = crate::owned_cargo_wrapper::wrapper()?.is_some();
+    #[cfg(feature = "owned-cargo-wrapper")]
+    let mise_bin = if owned {
+        std::fs::canonicalize(std::env::current_exe()?)?
+    } else {
+        mise_bin_for_shims().absolutize()?.into_owned()
+    };
+    #[cfg(all(feature = "owned-cargo-wrapper", unix))]
+    if owned {
+        crate::owned_cargo_wrapper::validate_shim(
+            &dirs::COMMAND_WRAPPERS.join("cargo"),
+            &mise_bin,
+            true,
+        )?;
+    }
     let shims = wrappers
         .keys()
         .flat_map(|name| platform_shim_names(&mise_bin, name))
@@ -868,6 +885,14 @@ pub fn ensure_command_wrapper_shims(config: &Config, ts: &Toolset) -> Result<()>
         write_bootstrap_shims(&mise_bin, &dirs::COMMAND_WRAPPERS, &shims, cfg!(windows))?
     {
         return Err(error);
+    }
+    #[cfg(all(feature = "owned-cargo-wrapper", unix))]
+    if owned {
+        crate::owned_cargo_wrapper::validate_shim(
+            &dirs::COMMAND_WRAPPERS.join("cargo"),
+            &mise_bin,
+            false,
+        )?;
     }
     Ok(())
 }

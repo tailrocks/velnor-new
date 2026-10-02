@@ -344,6 +344,7 @@ pretty_assertions = "1"
 test-log = "0.2"
 
 [features]
+owned-cargo-wrapper = []
 self_update = ["dep:self-replace", "dep:tar", "dep:zipsign-api"]
 default = ["native-tls", "vfox/vendored-lua", "self_update"]
 native-tls = [

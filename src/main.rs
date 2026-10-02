@@ -43,6 +43,15 @@ mod test {
 }
 
 fn main() -> ExitCode {
+    #[cfg(feature = "owned-cargo-wrapper")]
+    match owned_cargo_wrapper::dispatch() {
+        Ok(Some(code)) => return code,
+        Ok(None) => {}
+        Err(err) => {
+            eprintln!("Error: owned cargo wrapper: {err}");
+            return ExitCode::FAILURE;
+        }
+    }
     cli::register_frontend();
     register_util_hooks();
     // Same reason, different caller: `self-replace` spawns a copy of this binary under a generated

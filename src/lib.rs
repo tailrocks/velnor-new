@@ -27,6 +27,8 @@ pub mod hint;
 pub mod timings;
 
 pub mod otel;
+#[cfg(feature = "owned-cargo-wrapper")]
+pub mod owned_cargo_wrapper;
 
 #[macro_use]
 pub mod cmd;
