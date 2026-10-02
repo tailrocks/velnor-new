@@ -5,7 +5,7 @@ use std::collections::VecDeque;
 use velnor_runner_github::{
     Ack, AckScope, AcquireOutcome, Certainty, Exchange, InnerKind, Method, ParsedBatch, Poll,
     RefreshGate, SessionError, SessionRequest, Transport, TransportFail, WireError, ack, acquire,
-    acquire_path, delete_session, jit, jit_path, may_ack, parse_poll,
+    acquire_path, delete_session, jit, jit_path, jit_request, may_ack, parse_poll,
 };
 
 const QUEUE: &str = "_apis/runtime/runnerscalesets/7/sessions/s/messages";
@@ -322,5 +322,15 @@ fn delete_session_rejects_non_204() -> Result<(), &'static str> {
     let mut script = Script::fail(TransportFail::Timeout);
     let err = must_err(&delete_session(&mut script, 7, "sess"))?;
     assert_eq!(err, SessionError::Uncertain);
+    Ok(())
+}
+
+#[test]
+fn jit_request_matches_the_pinned_scaler() -> Result<(), WireError> {
+    let body = jit_request("runner-ab")?;
+    assert_eq!(body, br#"{"name":"runner-ab","workFolder":""}"#);
+    assert_eq!(jit_request(""), Err(WireError::RegistrationRejected));
+    assert_eq!(jit_request("a/b"), Err(WireError::RegistrationRejected));
+    assert_eq!(jit_request("a b"), Err(WireError::RegistrationRejected));
     Ok(())
 }

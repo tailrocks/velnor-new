@@ -1,6 +1,6 @@
 //! `POST .../generatejitconfig`. The request JSON and the response are not logged.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::refresh::{StatusClass, classify_status};
 use crate::{EncodedJit, WireError, jit_path};
@@ -8,6 +8,23 @@ use crate::{EncodedJit, WireError, jit_path};
 use super::error::{SessionError, reject};
 use super::request::{Method, SessionRequest, Transport};
 use super::retry::{API_QUERY, bearer, execute, fresh_gate, json_content, user_agent};
+
+/// JSON body for [`jit`]. `workFolder` is empty, matching the pinned scaler.
+///
+/// # Errors
+///
+/// Returns [`WireError::RegistrationRejected`] when `name` is empty or has
+/// whitespace or a slash. The name is a container name, not a path.
+pub fn jit_request(name: &str) -> Result<Vec<u8>, WireError> {
+    if name.is_empty() || name.chars().any(|ch| ch.is_whitespace() || ch == '/') {
+        return Err(WireError::RegistrationRejected);
+    }
+    serde_json::to_vec(&JitRequest {
+        name,
+        work_folder: "",
+    })
+    .map_err(|_| WireError::Encode)
+}
 
 /// `POST` `request_json` to the JIT route. `admin_token` is the admin bearer.
 ///
@@ -48,6 +65,13 @@ fn decode_jit(body: &[u8]) -> Result<EncodedJit, SessionError> {
         return Err(SessionError::Wire(WireError::Malformed));
     }
     Ok(EncodedJit::new(parsed.encoded_jit_config))
+}
+
+#[derive(Serialize)]
+struct JitRequest<'a> {
+    name: &'a str,
+    #[serde(rename = "workFolder")]
+    work_folder: &'a str,
 }
 
 #[derive(Deserialize)]

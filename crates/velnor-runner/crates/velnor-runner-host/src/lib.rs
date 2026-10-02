@@ -3,6 +3,7 @@
 //! Callers persist intent before an external effect and never hold a
 //! transaction across that effect.
 
+mod assign;
 mod config;
 mod connect;
 mod daemon_lock;
@@ -18,6 +19,7 @@ mod reconcile;
 mod scale_set;
 mod worker;
 
+pub use assign::{Offer, offer};
 pub use config::{DockerConfig, GithubSection, HostConfig, HostLimits};
 pub use connect::{ConnectPlan, DisconnectEffect, SetOwnership, connect_plan, disconnect_effects};
 pub use daemon_lock::DaemonLock;
@@ -40,6 +42,8 @@ pub use worker::{
     start_pair,
 };
 
+#[cfg(test)]
+mod assign_tests;
 #[cfg(test)]
 mod connect_tests;
 #[cfg(test)]
