@@ -274,8 +274,12 @@ fn preview_prints_absolute_paths_and_files() -> Result<(), Box<dyn Error>> {
         stderr.contains(&format!("Repository: {}", want_root.display())),
         "{stderr}"
     );
+    assert!(stderr.contains(".github/AGENTS.md"), "{stderr}");
+    assert!(stderr.contains(".github/CLAUDE.md"), "{stderr}");
     assert!(stderr.contains(".github/actionlint.yaml"), "{stderr}");
     assert!(stderr.contains(".github/workflows/ci.yml"), "{stderr}");
+    assert!(preview.join(".github/AGENTS.md").is_file());
+    assert!(preview.join(".github/CLAUDE.md").is_symlink());
     cleanup(&tmp);
     cleanup(&outer);
     Ok(())
