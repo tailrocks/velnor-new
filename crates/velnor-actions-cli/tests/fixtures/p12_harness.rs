@@ -173,3 +173,96 @@ pub(crate) fn passing(prefix: &str) -> Result<Fixture, Box<dyn Error>> {
 pub(crate) fn cleanup(fixture: &Fixture) {
     crate::impl_cli_tmp::cleanup(&fixture.dir);
 }
+
+const TOOL_PROBE_ROWS: &[(&str, &str, &str)] = &[
+    (
+        "https://api.github.com/repos/jdx/mise/releases/latest",
+        "mise.json",
+        "{\"tag_name\": \"v2026.9.16\"}",
+    ),
+    (
+        "https://static.rust-lang.org/dist/channel-rust-stable.toml",
+        "rust.toml",
+        "[pkg.rust]\nversion = \"1.98.1 (48a229cea 2026-09-01)\"\n",
+    ),
+    (
+        "https://api.github.com/repos/jdx/mr-boxington/releases/latest",
+        "mbx.json",
+        "[{\"tag_name\": \"v1.20.0-beta\", \"prerelease\": true}, {\"tag_name\": \"v1.19.0\"}]",
+    ),
+    (
+        "https://api.github.com/repos/cli/cli/releases/latest",
+        "gh.json",
+        "{\"tag_name\": \"v2.101.0\"}",
+    ),
+    (
+        "https://api.github.com/repos/rhysd/actionlint/releases/latest",
+        "actionlint.json",
+        "{\"tag_name\": \"v1.7.12\"}",
+    ),
+    (
+        "https://api.github.com/repos/koalaman/shellcheck/releases/latest",
+        "shellcheck.json",
+        "{\"tag_name\": \"v0.11.0\"}",
+    ),
+    (
+        "https://api.github.com/repos/zizmorcore/zizmor/releases/latest",
+        "zizmor.json",
+        "{\"tag_name\": \"v1.30.1\"}",
+    ),
+    (
+        "https://crates.io/api/v1/crates/cargo-nextest",
+        "nextest.json",
+        "{\"crate\": {\"max_version\": \"0.9.146\"}}",
+    ),
+];
+
+const ACTION_PROBE_ROWS: &[(&str, &str, &str)] = &[
+    (
+        "https://api.github.com/repos/Swatinem/rust-cache/tags",
+        "rust-cache.json",
+        "[{\"name\": \"v2.9.2\"}]",
+    ),
+    (
+        "https://api.github.com/repos/jdx/mise-action/releases/latest",
+        "mise-action.json",
+        "{\"tag_name\": \"v4.3.0\"}",
+    ),
+    (
+        "https://api.github.com/repos/actions/checkout/releases/latest",
+        "checkout.json",
+        "{\"tag_name\": \"v7.0.1\"}",
+    ),
+    (
+        "https://api.github.com/repos/actions/download-artifact/releases/latest",
+        "download.json",
+        "{\"tag_name\": \"v8.0.1\"}",
+    ),
+    (
+        "https://api.github.com/repos/actions/upload-artifact/releases/latest",
+        "upload.json",
+        "{\"tag_name\": \"v7.0.1\"}",
+    ),
+    (
+        "https://api.github.com/repos/actions/cache/releases/latest",
+        "cache.json",
+        "{\"tag_name\": \"v6.1.0\"}",
+    ),
+    (
+        "https://api.github.com/repos/jdx/mr-boxington-action/releases",
+        "mbx-action.json",
+        "[{\"tag_name\": \"v1.5.0\"}]",
+    ),
+    (
+        "https://api.github.com/repos/asamarts/alint/releases/latest",
+        "alint.json",
+        "{\"tag_name\": \"v0.16.1\"}",
+    ),
+];
+
+/// (inventory source URL, canned file, canned body) for every probe row.
+pub(crate) fn probe_rows() -> Vec<(&'static str, &'static str, &'static str)> {
+    let mut rows = TOOL_PROBE_ROWS.to_vec();
+    rows.extend_from_slice(ACTION_PROBE_ROWS);
+    rows
+}
