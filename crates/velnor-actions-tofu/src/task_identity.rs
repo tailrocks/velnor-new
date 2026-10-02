@@ -144,6 +144,12 @@ impl TofuTaskIdentityExtension {
     }
 
     /// Reject reuse when inputs are undeclared or the lockfile is unresolved.
+    ///
+    /// Tofu init/validate task-result reuse is OFF (T23): even fully
+    /// resolved extensions refuse, so a provider-cache hit still runs
+    /// validation (`executed`, never `reused`). Fmt keeps the shared
+    /// qualification: it never reads the lockfile or providers, and
+    /// the T23 row scopes OFF to init/validate only.
     /// # Errors
     pub fn reuse_eligible(&self) -> Result<(), ContractError> {
         if self.undeclared_reads {
@@ -156,6 +162,15 @@ impl TofuTaskIdentityExtension {
             return Err(ContractError::identity(
                 "stack_extension",
                 "unresolved_input:lockfile",
+            ));
+        }
+        if matches!(
+            self.task_kind,
+            TofuTaskKind::InitForValidate | TofuTaskKind::Validate
+        ) {
+            return Err(ContractError::identity(
+                "stack_extension",
+                "tofu_reuse_disabled",
             ));
         }
         Ok(())
