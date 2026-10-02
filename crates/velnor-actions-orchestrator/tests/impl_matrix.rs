@@ -59,7 +59,10 @@ fn crate_yaml_shape_exact() -> TestResult {
 }
 
 #[test]
-fn crate_graph_ignores_matrix_cap() -> TestResult {
+fn rust_jobs_ignore_matrix_cap() -> TestResult {
+    // T18 flip of `crate_graph_ignores_matrix_cap`: rust-only repos
+    // stay static (same assertions, scoped name); tofu root jobs
+    // honor the cap (next test).
     let config = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\nmax_parallel_jobs = 3\n";
     let repo = make_repo(config)?;
     let prep = prepare(repo.path())?;
@@ -70,6 +73,60 @@ fn crate_graph_ignores_matrix_cap() -> TestResult {
             !text.contains(marker),
             "static yaml keeps {marker}:\n{text}"
         );
+    }
+    Ok(())
+}
+
+/// Preview `ci.yml` text for one config plus extra `files`.
+fn preview_yml_with(
+    config: &str,
+    files: &[(&str, &str)],
+) -> Result<(TempDir, TempDir, String), Box<dyn std::error::Error>> {
+    let repo = make_repo(config)?;
+    for (relative, content) in files {
+        let target = repo.path().join(relative);
+        if let Some(parent) = target.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::write(target, content)?;
+    }
+    let prep = prepare(repo.path())?;
+    let parent = TempDir::new()?;
+    let preview = parent.path().join("preview");
+    generate(
+        &prep,
+        &GenerateOptions {
+            output_dir: Some(preview.clone()),
+        },
+    )?;
+    let text = fs::read_to_string(preview.join(WORKFLOW_PATH))?;
+    Ok((repo, parent, text))
+}
+
+#[test]
+fn tofu_root_jobs_honor_matrix_cap() -> TestResult {
+    // T18 flip partner: the configured cap renders on every tofu
+    // root job while the rust job stays static and markers scrub.
+    let config = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\nmax_parallel_jobs = 3\n[stacks.tofu]\nroots = [\"stacks/a\", \"stacks/b\"]\n";
+    let (_repo, _parent, text) = preview_yml_with(
+        config,
+        &[
+            ("stacks/a/main.tf", "variable \"a\" {}\n"),
+            ("stacks/b/main.tf", "variable \"b\" {}\n"),
+        ],
+    )?;
+    assert_eq!(
+        text.matches("max-parallel: 3").count(),
+        2,
+        "both tofu jobs declare the cap, the rust job none:\n{text}"
+    );
+    for marker in [
+        "VELNOR_MATRIX_NEEDS_JOB",
+        "VELNOR_MATRIX_OUTPUT",
+        "VELNOR_MATRIX_MAX_PARALLEL",
+        "fromJSON",
+    ] {
+        assert!(!text.contains(marker), "marker {marker}:\n{text}");
     }
     Ok(())
 }

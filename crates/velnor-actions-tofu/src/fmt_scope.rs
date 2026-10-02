@@ -66,3 +66,24 @@ pub fn fmt_scope_for_root(paths: &[String], prefix: &str) -> Vec<String> {
         .filter(|path| prefix.is_empty() || path.starts_with(&format!("{prefix}/")))
         .collect()
 }
+
+/// Roots whose fmt scope another selected root already covers.
+///
+/// Scopes nest by prefix: `""` covers every root, `a` covers `a/b`
+/// but never the sibling `a-sibling`. A covered root formats nothing
+/// itself (its leg carries `no_targets`); the covering leg checks the
+/// union recursively, so every file formats exactly once. Roots must
+/// be normalized (`.` already folded to `""`).
+#[must_use]
+pub fn covered_fmt_roots(roots: &[String]) -> std::collections::BTreeSet<String> {
+    let mut covered = std::collections::BTreeSet::new();
+    for root in roots {
+        let dominated = roots.iter().any(|other| {
+            other != root && (other.is_empty() || root.starts_with(&format!("{other}/")))
+        });
+        if dominated {
+            covered.insert(root.clone());
+        }
+    }
+    covered
+}

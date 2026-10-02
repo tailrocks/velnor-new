@@ -156,6 +156,7 @@ pub(crate) fn build_workflow(
         fetch_roots,
         custom_tasks,
         acquire.as_ref(),
+        config.workflow.max_parallel_jobs,
     )?;
     let crate_ids: Vec<String> = built.jobs.iter().map(|(id, _)| id.clone()).collect();
     for (id, job) in built.jobs {

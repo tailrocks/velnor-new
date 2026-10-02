@@ -55,7 +55,9 @@ pub use evidence::{
     classify_with_contents, mise_tool_selected, plan_note,
 };
 pub use family::{Family, LOCKFILE_NAME, family_of, is_auto_var, is_override_stem};
-pub use fmt_scope::{fmt_scope_for_root, fmt_set, is_excluded_name, is_fmt_file, under_hidden_dir};
+pub use fmt_scope::{
+    covered_fmt_roots, fmt_scope_for_root, fmt_set, is_excluded_name, is_fmt_file, under_hidden_dir,
+};
 pub use identity::{
     TofuGroupExtensionInputs, entry_metadata_for_task, extension_for_proposal, lock_slot_at_root,
 };

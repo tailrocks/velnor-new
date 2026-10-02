@@ -90,7 +90,8 @@ fn tofu_step_names_render_through_tofu_table() {
 #[test]
 fn tofu_obligation_step_carries_tofu_matrix_id_and_no_doc_env() {
     use velnor_actions_rust::RUSTDOCFLAGS_ENV;
-    let step = obligation_step(&tofu_obligation(), &ToolCatalog::pinned(), &[]).expect("step");
+    let step =
+        obligation_step(&tofu_obligation(), &ToolCatalog::pinned(), &[], None).expect("step");
     let velnor_actions_contract::StepKind::Shell { env, .. } = &step.kind else {
         panic!("obligation must be a shell step");
     };
@@ -108,6 +109,6 @@ fn tofu_obligation_step_carries_tofu_matrix_id_and_no_doc_env() {
 fn stackless_obligation_task_ids_keep_malformed_vocabulary() {
     let mut bad = tofu_obligation();
     bad.task_id = "bogus".to_owned();
-    let err = obligation_step(&bad, &ToolCatalog::pinned(), &[]).expect_err("must fail");
+    let err = obligation_step(&bad, &ToolCatalog::pinned(), &[], None).expect_err("must fail");
     assert!(err.to_string().contains("malformed_task_id"), "{err}");
 }

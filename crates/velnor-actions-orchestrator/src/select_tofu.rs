@@ -253,7 +253,11 @@ fn owns(nodes: &BTreeSet<String>, path: &str) -> bool {
 
 /// Derive one fmt/init/validate triple per selected tofu root.
 ///
-/// Empty fmt scopes carry `no_targets`.
+/// Derivation is joint over the whole root set: a root's fmt leg
+/// carries `no_targets` when its scope is empty or when another
+/// selected root's fmt leg already covers it (nested scopes merge so
+/// every file formats exactly once). Init and validate always derive
+/// exactly once per root.
 ///
 /// # Errors
 ///
@@ -264,20 +268,23 @@ pub(crate) fn derive_tofu(
     files: &[String],
 ) -> Result<Vec<ProposedTask>, OrchestratorError> {
     use velnor_actions_tofu::{TofuTaskGroup, TofuTaskKind};
+    let selected = tofu_selected_roots(statuses);
+    let covered = velnor_actions_tofu::covered_fmt_roots(&selected);
     let mut proposals = Vec::new();
-    for root in tofu_selected_roots(statuses) {
+    for root in &selected {
         for kind in [
             TofuTaskKind::Fmt,
             TofuTaskKind::InitForValidate,
             TofuTaskKind::Validate,
         ] {
-            let empty_scope = kind == TofuTaskKind::Fmt
-                && velnor_actions_tofu::fmt_scope_for_root(files, &root).is_empty();
+            let no_fmt = kind == TofuTaskKind::Fmt
+                && (velnor_actions_tofu::fmt_scope_for_root(files, root).is_empty()
+                    || covered.contains(root));
             let group = TofuTaskGroup {
                 root: root.clone(),
                 kind,
                 configuration: "default".to_owned(),
-                no_targets: empty_scope,
+                no_targets: no_fmt,
             };
             let task = velnor_actions_tofu::propose_task(&group)?;
             task.validate()?;

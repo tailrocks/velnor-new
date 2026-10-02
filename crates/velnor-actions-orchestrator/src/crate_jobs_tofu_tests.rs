@@ -73,6 +73,7 @@ fn pure_tofu_group_renders_without_rust_setup() {
         &[String::new()],
         &[],
         None,
+        2,
     )
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 1, "one job per tofu root");
@@ -149,6 +150,7 @@ fn mixed_group_keeps_the_rust_union() {
         &[],
         &[],
         None,
+        2,
     )
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 1, "shared group renders once");
@@ -176,4 +178,159 @@ fn mixed_group_keeps_the_rust_union() {
         env.contains_key("RUSTUP_TOOLCHAIN"),
         "mixed prepare keeps the triple: {env:?}"
     );
+}
+
+/// One fmt/init/validate triple per root, all runnable.
+fn tofu_triples(roots: &[&str]) -> Vec<ProposedTask> {
+    use velnor_actions_tofu::TofuTaskKind;
+    let mut tasks = Vec::new();
+    for root in roots {
+        for kind in [
+            TofuTaskKind::Fmt,
+            TofuTaskKind::InitForValidate,
+            TofuTaskKind::Validate,
+        ] {
+            tasks.push(tofu_group(root, kind));
+        }
+    }
+    tasks
+}
+
+/// Shell env of one named step.
+fn step_env<'a>(
+    job: &'a velnor_actions_contract::Job,
+    name: &str,
+) -> &'a std::collections::BTreeMap<String, String> {
+    let step = job
+        .steps
+        .iter()
+        .find(|step| step.name == name)
+        .expect("named step");
+    let velnor_actions_contract::StepKind::Shell { env, .. } = &step.kind else {
+        panic!("{name} must be a shell step");
+    };
+    env
+}
+
+#[test]
+fn tofu_root_jobs_stage_lanes_by_max_parallel() {
+    let tasks = tofu_triples(&["stacks/a", "stacks/b", "stacks/c"]);
+    let found = build_crate_jobs(
+        "ubuntu-26.04",
+        WorkflowPolicy::ConsumerV1,
+        &crate_jobs_tests::discovery(tasks),
+        &ToolCatalog::pinned(),
+        &[],
+        &[],
+        None,
+        2,
+    )
+    .expect("crate jobs");
+    assert_eq!(found.jobs.len(), 3, "one job per root");
+    let (first, second, third) = (&found.jobs[0], &found.jobs[1], &found.jobs[2]);
+    assert_eq!(first.1.needs, vec![PLAN_JOB_ID.to_owned()]);
+    assert_eq!(second.1.needs, vec![PLAN_JOB_ID.to_owned()]);
+    assert_eq!(
+        third.1.needs,
+        vec![PLAN_JOB_ID.to_owned(), first.0.clone()],
+        "third job waits for the first lane"
+    );
+}
+
+#[test]
+fn wide_cap_stages_nothing() {
+    let tasks = tofu_triples(&["stacks/a", "stacks/b"]);
+    let found = build_crate_jobs(
+        "ubuntu-26.04",
+        WorkflowPolicy::ConsumerV1,
+        &crate_jobs_tests::discovery(tasks),
+        &ToolCatalog::pinned(),
+        &[],
+        &[],
+        None,
+        5,
+    )
+    .expect("crate jobs");
+    assert_eq!(found.jobs.len(), 2);
+    for (id, job) in &found.jobs {
+        assert_eq!(job.needs, vec![PLAN_JOB_ID.to_owned()], "{id} runs free");
+    }
+}
+
+#[test]
+fn rust_jobs_never_stage() {
+    let clippy = crate_jobs_tests::group("demo", TaskKind::Clippy, &[]);
+    let nested = crate_jobs_tests::group("nested", TaskKind::Clippy, &[]);
+    let found = build_crate_jobs(
+        "ubuntu-26.04",
+        WorkflowPolicy::ConsumerV1,
+        &crate_jobs_tests::discovery(vec![clippy, nested]),
+        &ToolCatalog::pinned(),
+        &[],
+        &[],
+        None,
+        1,
+    )
+    .expect("crate jobs");
+    assert_eq!(found.jobs.len(), 2);
+    for (id, job) in &found.jobs {
+        assert_eq!(
+            job.needs,
+            vec![PLAN_JOB_ID.to_owned()],
+            "{id} needs plan only"
+        );
+        for step in &job.steps {
+            if let velnor_actions_contract::StepKind::Shell { env, .. } = &step.kind {
+                for key in [
+                    velnor_actions_workflow_renderer::MATRIX_NEEDS_JOB_ENV,
+                    velnor_actions_workflow_renderer::MATRIX_OUTPUT_ENV,
+                    velnor_actions_workflow_renderer::MATRIX_MAX_PARALLEL_ENV,
+                ] {
+                    assert!(!env.contains_key(key), "{id} carries no {key}");
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn first_tofu_obligation_declares_the_cap() {
+    use velnor_actions_workflow_renderer::{
+        COVERED_TASKS_OUTPUT, MATRIX_MAX_PARALLEL_ENV, MATRIX_NEEDS_JOB_ENV, MATRIX_OUTPUT_ENV,
+    };
+    let tasks = tofu_triples(&["stacks/a"]);
+    let found = build_crate_jobs(
+        "ubuntu-26.04",
+        WorkflowPolicy::ConsumerV1,
+        &crate_jobs_tests::discovery(tasks),
+        &ToolCatalog::pinned(),
+        &[],
+        &[],
+        None,
+        3,
+    )
+    .expect("crate jobs");
+    assert_eq!(found.jobs.len(), 1);
+    let job = &found.jobs[0].1;
+    let first = step_env(job, "Format");
+    assert_eq!(
+        first.get(MATRIX_NEEDS_JOB_ENV).map(String::as_str),
+        Some("plan")
+    );
+    assert_eq!(
+        first.get(MATRIX_OUTPUT_ENV).map(String::as_str),
+        Some(COVERED_TASKS_OUTPUT)
+    );
+    assert_eq!(
+        first.get(MATRIX_MAX_PARALLEL_ENV).map(String::as_str),
+        Some("3")
+    );
+    let later = step_env(job, "Validate");
+    for key in [
+        MATRIX_NEEDS_JOB_ENV,
+        MATRIX_OUTPUT_ENV,
+        MATRIX_MAX_PARALLEL_ENV,
+    ] {
+        assert!(!later.contains_key(key), "later obligations stay quiet");
+    }
 }

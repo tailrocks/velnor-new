@@ -21,7 +21,13 @@ fn obligation() -> CrateObligation {
 #[test]
 fn identity_env_contract_enforces_in_every_build() {
     let task_id = "stack/rust/demo/clippy/default";
-    let identity = obligation_identity_env(task_id, &format!("b3-{}", "a".repeat(64)), "id", "key");
+    let identity = obligation_identity_env(
+        task_id,
+        &format!("b3-{}", "a".repeat(64)),
+        "id",
+        "key",
+        None,
+    );
     assert!(check_identity_env_contract(&identity, task_id).is_ok());
     let mut drifted = identity.clone();
     drifted.insert(
@@ -53,7 +59,7 @@ fn identity_env_contract_enforces_in_every_build() {
 #[test]
 fn obligation_step_carries_the_report_lookup_key() {
     let obligation = obligation();
-    let step = obligation_step(&obligation, &ToolCatalog::pinned(), &[]).expect("step");
+    let step = obligation_step(&obligation, &ToolCatalog::pinned(), &[], None).expect("step");
     let velnor_actions_contract::StepKind::Shell { run, env } = &step.kind else {
         panic!("obligation must be a shell step");
     };
@@ -67,7 +73,7 @@ fn obligation_step_carries_the_report_lookup_key() {
 #[test]
 fn obligation_step_skips_when_plan_covered_it() {
     let obligation = obligation();
-    let step = obligation_step(&obligation, &ToolCatalog::pinned(), &[]).expect("step");
+    let step = obligation_step(&obligation, &ToolCatalog::pinned(), &[], None).expect("step");
     assert_eq!(
         step.condition.as_deref(),
         Some("!contains(needs.plan.outputs.covered_tasks, ',stack/rust/demo/clippy/default,')")
@@ -75,7 +81,7 @@ fn obligation_step_skips_when_plan_covered_it() {
     let mut forged = obligation.clone();
     forged.task_id = "not-a-task".to_owned();
     assert!(
-        obligation_step(&forged, &ToolCatalog::pinned(), &[])
+        obligation_step(&forged, &ToolCatalog::pinned(), &[], None)
             .expect_err("malformed id")
             .to_string()
             .contains("malformed_task_id"),
@@ -155,7 +161,7 @@ fn doc_obligation_step_carries_typed_rustdocflags() {
     doc.task_id = "stack/rust/demo/doc/default".to_owned();
     doc.kind = TaskKind::Doc.as_str().to_owned();
     doc.step_name = DOCUMENTATION_NAME.to_owned();
-    let step = obligation_step(&doc, &ToolCatalog::pinned(), &[]).expect("step");
+    let step = obligation_step(&doc, &ToolCatalog::pinned(), &[], None).expect("step");
     let velnor_actions_contract::StepKind::Shell { env, .. } = &step.kind else {
         panic!("obligation must be a shell step");
     };
@@ -192,7 +198,7 @@ fn tofu_obligation_steps_carry_the_automation_pair() {
     tofu.task_id = "stack/tofu/root/validate/default".to_owned();
     tofu.kind = "validate".to_owned();
     tofu.step_name = "Validate".to_owned();
-    let step = obligation_step(&tofu, &ToolCatalog::pinned(), &[]).expect("step");
+    let step = obligation_step(&tofu, &ToolCatalog::pinned(), &[], None).expect("step");
     let velnor_actions_contract::StepKind::Shell { env, .. } = &step.kind else {
         panic!("obligation must be a shell step");
     };
@@ -225,7 +231,7 @@ fn tofu_obligation_steps_carry_the_automation_pair() {
         !env.contains_key(TF_CLI_CONFIG_FILE_ENV),
         "temp CLI config stays local-only until a materialization step lands"
     );
-    let step = obligation_step(&obligation(), &ToolCatalog::pinned(), &[]).expect("step");
+    let step = obligation_step(&obligation(), &ToolCatalog::pinned(), &[], None).expect("step");
     let velnor_actions_contract::StepKind::Shell { env, .. } = &step.kind else {
         panic!("obligation must be a shell step");
     };
@@ -248,7 +254,7 @@ fn tofu_obligation_steps_carry_the_automation_pair() {
 #[test]
 fn non_doc_obligation_steps_carry_no_rustdocflags() {
     use velnor_actions_rust::RUSTDOCFLAGS_ENV;
-    let step = obligation_step(&obligation(), &ToolCatalog::pinned(), &[]).expect("step");
+    let step = obligation_step(&obligation(), &ToolCatalog::pinned(), &[], None).expect("step");
     let velnor_actions_contract::StepKind::Shell { env, .. } = &step.kind else {
         panic!("obligation must be a shell step");
     };

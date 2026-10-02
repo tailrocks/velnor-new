@@ -1,6 +1,6 @@
 //! Formatting-scope (S2) inclusion, exclusion, and per-root sets.
 use velnor_actions_tofu::fmt_scope::{
-    fmt_scope_for_root, fmt_set, is_excluded_name, is_fmt_file, under_hidden_dir,
+    covered_fmt_roots, fmt_scope_for_root, fmt_set, is_excluded_name, is_fmt_file, under_hidden_dir,
 };
 
 /// Repo-relative path list from names.
@@ -124,4 +124,33 @@ fn override_and_test_files_format() {
 fn empty_selection_stays_empty() {
     assert!(fmt_set(&[]).is_empty());
     assert!(fmt_scope_for_root(&paths(&["main.tf.json"]), ".").is_empty());
+}
+
+/// Normalized root list from names.
+fn roots(names: &[&str]) -> Vec<String> {
+    names.iter().map(|name| (*name).to_owned()).collect()
+}
+
+#[test]
+fn repo_root_covers_every_subdir() {
+    let covered = covered_fmt_roots(&roots(&["", "stacks/a"]));
+    assert_eq!(covered, roots(&["stacks/a"]).into_iter().collect());
+}
+
+#[test]
+fn ancestor_covers_nested_but_never_siblings() {
+    let covered = covered_fmt_roots(&roots(&["stacks", "stacks/nested", "stacks-sibling"]));
+    assert_eq!(covered, roots(&["stacks/nested"]).into_iter().collect());
+}
+
+#[test]
+fn disjoint_roots_cover_nothing() {
+    let covered = covered_fmt_roots(&roots(&["stacks/a", "stacks/b"]));
+    assert!(covered.is_empty());
+}
+
+#[test]
+fn deep_chains_cover_every_descendant() {
+    let covered = covered_fmt_roots(&roots(&["a", "a/b", "a/b/c"]));
+    assert_eq!(covered, roots(&["a/b", "a/b/c"]).into_iter().collect());
 }

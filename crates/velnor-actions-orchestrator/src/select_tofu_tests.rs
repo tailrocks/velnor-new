@@ -101,11 +101,11 @@ fn selected_roots_derive_from_selected_statuses_only() {
 
 #[test]
 fn derive_tofu_proposes_triples_with_fmt_scope_targets() {
-    let statuses = vec![selected(""), selected("stacks/a")];
+    let statuses = vec![selected("stacks/a"), selected("stacks/b")];
     let files = vec![
-        "main.tf".to_owned(),
         "stacks/a/main.tf".to_owned(),
-        "stacks/a/notes.md".to_owned(),
+        "stacks/b/main.tf".to_owned(),
+        "stacks/b/notes.md".to_owned(),
     ];
     let tasks = derive_tofu(&statuses, &files).expect("derives");
     assert_eq!(tasks.len(), 6);
@@ -121,11 +121,62 @@ fn derive_tofu_proposes_triples_with_fmt_scope_targets() {
     assert!(fmt.iter().all(|task| !task.no_targets));
     let validate = tasks
         .iter()
-        .find(|task| task.task_id == "stack/tofu/stacks/a/validate/default")
-        .expect("nested validate");
+        .find(|task| task.task_id == "stack/tofu/stacks/b/validate/default")
+        .expect("second validate");
     assert_eq!(
         validate.depends_on,
-        vec!["stack/tofu/stacks/a/init/default".to_owned()]
+        vec!["stack/tofu/stacks/b/init/default".to_owned()]
+    );
+}
+
+#[test]
+fn derive_tofu_merges_nested_fmt_scopes() {
+    let statuses = vec![selected(""), selected("stacks/a")];
+    let files = vec!["main.tf".to_owned(), "stacks/a/main.tf".to_owned()];
+    let tasks = derive_tofu(&statuses, &files).expect("derives");
+    assert_eq!(tasks.len(), 6);
+    let fmt_no_targets = |unit: &str| {
+        tasks
+            .iter()
+            .find(|task| task.task_kind == "fmt" && task.identity.unit_id == unit)
+            .map(|task| task.no_targets)
+    };
+    assert_eq!(fmt_no_targets("root"), Some(false), "outer fmt runs");
+    assert_eq!(
+        fmt_no_targets("stacks/a"),
+        Some(true),
+        "covered inner fmt skips"
+    );
+    assert!(
+        tasks
+            .iter()
+            .filter(|task| task.task_kind != "fmt")
+            .all(|task| !task.no_targets),
+        "merge never touches init or validate"
+    );
+}
+
+#[test]
+fn derive_tofu_inits_once_per_root() {
+    let statuses = vec![
+        selected("stacks/a"),
+        selected("stacks/b"),
+        selected("stacks/a"),
+    ];
+    let tasks = derive_tofu(&statuses, &[]).expect("derives");
+    let mut inits: Vec<&str> = tasks
+        .iter()
+        .filter(|task| task.task_kind == "init")
+        .map(|task| task.task_id.as_str())
+        .collect();
+    inits.sort_unstable();
+    assert_eq!(
+        inits,
+        [
+            "stack/tofu/stacks/a/init/default",
+            "stack/tofu/stacks/b/init/default",
+        ],
+        "duplicate statuses still derive one init per root"
     );
 }
 

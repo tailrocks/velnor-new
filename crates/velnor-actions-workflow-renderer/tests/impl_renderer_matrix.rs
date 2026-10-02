@@ -155,3 +155,115 @@ fn matrix_misuse_fails_closed() -> Result<(), RenderError> {
     }
     Ok(())
 }
+
+/// IR with the plan job plus one crate job (no task job).
+fn fixture_ir_with(id: &str, job: Job) -> Result<WorkflowIr, RenderError> {
+    let mut ir = fixture_ir(task_job(&BTreeMap::new(), vec!["plan".to_owned()])?)?;
+    ir.jobs.remove("velnor-task");
+    ir.jobs.insert(id.to_owned(), job);
+    Ok(ir)
+}
+
+/// Crate job with one trio-carrying shell step.
+fn capped_job(env: &BTreeMap<String, String>, needs: Vec<String>) -> Result<Job, RenderError> {
+    let argv = ["sh", "-c", "echo hi"].map(str::to_owned).to_vec();
+    Ok(Job {
+        display_name: "Rust / stacks-a".to_owned(),
+        runs_on: LABEL.to_owned(),
+        timeout_minutes: JobTimeout::CRATE,
+        needs,
+        condition: None,
+        permissions: None,
+        environment: None,
+        steps: vec![
+            checkout_step(&checkout_pin())?,
+            shell_step("Validate", argv, env.clone())?,
+        ],
+    })
+}
+
+fn cap_env(max: &str) -> BTreeMap<String, String> {
+    BTreeMap::from([
+        (MATRIX_NEEDS_JOB_ENV.into(), "plan".into()),
+        (MATRIX_OUTPUT_ENV.into(), "covered_tasks".into()),
+        (MATRIX_MAX_PARALLEL_ENV.into(), max.into()),
+    ])
+}
+
+fn render_capped(id: &str, job: Job) -> Result<String, RenderError> {
+    let ir = fixture_ir_with(id, job)?;
+    render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &fixture_ctx())
+}
+
+/// YAML slice of one rendered job.
+fn job_window<'a>(yaml: &'a str, id: &str) -> Result<&'a str, RenderError> {
+    let header = format!("  {id}:");
+    let from = yaml
+        .find(&header)
+        .ok_or_else(|| RenderError::InvalidWorkflow("job header".to_owned()))?;
+    let mut end = yaml.len();
+    let mut at = from + header.len();
+    for line in yaml[at..].split_inclusive('\n') {
+        let trimmed = line.trim_end().strip_prefix("  ").unwrap_or("");
+        if !trimmed.starts_with(' ')
+            && trimmed.len() > 1
+            && trimmed.ends_with(':')
+            && !trimmed.contains(' ')
+        {
+            end = at;
+            break;
+        }
+        at += line.len();
+    }
+    Ok(&yaml[from..end])
+}
+
+#[test]
+fn capped_crate_job_renders_cap_without_matrix() -> Result<(), RenderError> {
+    let id = "rust-stacks-a";
+    let text = render_capped(id, capped_job(&cap_env("3"), vec!["plan".to_owned()])?)?;
+    let window = job_window(&text, id)?;
+    assert!(window.contains("max-parallel: 3"), "cap:\n{window}");
+    for absent in ["fromJSON", "matrix:", "VELNOR_MATRIX_"] {
+        assert!(!window.contains(absent), "capped hit {absent}:\n{text}");
+    }
+    Ok(())
+}
+
+#[test]
+fn uncapped_crate_job_stays_static() -> Result<(), RenderError> {
+    let id = "rust-demo";
+    let text = render_capped(id, capped_job(&BTreeMap::new(), vec!["plan".to_owned()])?)?;
+    let window = job_window(&text, id)?;
+    for absent in ["strategy:", "fromJSON", "VELNOR_MATRIX_"] {
+        assert!(!window.contains(absent), "static hit {absent}:\n{text}");
+    }
+    Ok(())
+}
+
+#[test]
+fn crate_cap_misuse_fails_closed() -> Result<(), RenderError> {
+    let id = "rust-stacks-a";
+    let partial = BTreeMap::from([(MATRIX_MAX_PARALLEL_ENV.to_owned(), "2".to_owned())]);
+    for (env, needs, want) in [
+        (partial, vec!["plan".to_owned()], "matrix_marker_partial"),
+        (
+            cap_env("0"),
+            vec!["plan".to_owned()],
+            "matrix_bad_max_parallel",
+        ),
+        (
+            cap_env("nope"),
+            vec!["plan".to_owned()],
+            "matrix_bad_max_parallel",
+        ),
+        (cap_env("2"), Vec::new(), "matrix_without_producer_need"),
+    ] {
+        assert!(
+            render_capped(id, capped_job(&env, needs)?)
+                .is_err_and(|err| format!("{err:?}").contains(want)),
+            "want {want}"
+        );
+    }
+    Ok(())
+}
