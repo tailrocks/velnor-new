@@ -1,8 +1,10 @@
 # OpenTofu Phase B final evidence summary (T36)
 
 Identity: producer lane branch `impl/phaseb-postmerge` at
-`f2021332ac099034cad250bbab60589766ea9eec` (tree clean, detached HEAD
-verified); consumer repo `tailrocks/github-terraform`.
+`a3ab5e3` (this refresh commits on top; tree clean); producer main
+`d369a83`; consumer repo `tailrocks/github-terraform`, main
+`a00bbff` (PR #37 squash-merged). Refresh of the f202133 edition:
+v0.1.0 re-cut, T34 READY, T35 merged, producer main green.
 Required sections per ws7 Q7 (`velnor-ws7-e2e-qual.md:138-145`, pinned
 `619ad6f1...40ace9`) + the T36 ledger row. Every item evidenced; nothing
 invented. Gaps say MISSING or cite the open item explicitly.
@@ -47,12 +49,12 @@ are the signal. Fn counts are `#[test]`-fn greps from the ledger.
 | T28 | quality | complete | 5 files +118/-4, `e32df58cf2b6631aaa36ed6ccc5a67f70a2c49e1` (comment-only doc/shellcheck fixes + qual record) | nextest 2616/2616 + 1 skipped; verify-local 37 ok; Gates 0–8 keys 54/54; actionlint/shellcheck/zizmor/machete/realbin 9/9 green | verify-t28 PASS 5/5 + coordinator | branch `gh run list` empty (PR/main-only triggers) |
 | T29 | review | complete | 9 fixing commits `1c2f3b2`..`549b82f` + close `c2857db` (ledger `review-ledger-t29.md`: 22 fixed / 9 accepted / 0 open) | per-commit nextest 2617→2634 (+18 pins), each green; c4/c5 sole env-403 accepted | review-t29-{arch,sec,perf} + verify-dispo-c1/c23/c4/c5/c6/c7(FAIL→C9 fix-forward)/c8/c9, all PASS at end + coordinator | none (branch CI absent) |
 | T30 | review | complete | 1 file 1 line, `48a33f39475270941ca370e65c3d40cb8bc95f66` (ledger row flip) | re-fetch at 7a0286e: 0 reviews, 0 threads, 1 bot notice (not a finding); nextest 2646/2646 + 1; zero drift | impl-t30 + coordinator-accepted (no verify-t30 thread) | PR #10 run 36991743365 (in_progress at re-fetch; later mise-job red → fixtofu-ci) |
-| T31 | release | complete | no repo commit (NO PUSH honored); artifact + scratch manifest under impl-t31 `t31-scratch/` | source 95c1d6f + run 36998679726 re-verified; build exit 0; `--version 0.1.0`; DL+shasum+smoke OK; mutation RED 1 / GREEN 0 | impl-t31 + coordinator independent re-runs (no verify-t31 thread) | producer push run 36998679726 success 16/16 on exact 95c1d6f; artifact file:// URL + sha (UNPUBLISHED) |
-| T32 | consumer | complete | 2 test files +274/-0 `516407309b3c12cc4b38ab18770811a73514cbb9` + row flip `22a7360d6fd015b9c6fcf9370ca105342fa8898b` | preview B EXIT 0 ×2 byte-identical; O-table closed O3/O7, O10 flag stands; 6 negatives (5/5 red-before, 6/6 green-after); nextest 2656 + 1 | impl-t32 + coordinator (independent preview-B regen IDENTICAL; no verify-t32 thread) | none (no CI-acquisition claim; linux asset unpublished) |
-| T33 | consumer | complete | consumer commit `3abf81e1b972d0362e5ef60de25a5f6ee2932e5f` (parent f0eedf3, 5 files +323/-37) + producer row flip `690f3eec0d73f41e9065f09d66ef3d1f18df507b` | 6 preserved files byte-identical; `.github` IDENTICAL to preview B; 5× ubuntu-26.04; markers head all 3 | impl-t33 + coordinator (independent regen IDENTICAL; no verify-t33 thread) | consumer PR tailrocks/github-terraform#37 |
-| T34 | consumer | complete | producer row flip `fa336617027b781a3ed0dcd88edc5591ae2701f8` (verification complete; PR CI verdict FAIL, honest) | run 37002672312 on exact 3abf81e: failure (Acquire 404 ×2, tofu lanes skipped, 0 artifacts); manifest byte-identical (sha `16394c54…`); 0 reviews/threads | impl-t34 + coordinator independent re-runs (NO verify-t34 thread exists; ledger "verify-t34" label is imprecise) | consumer PR run 37002672312 failure |
-| T35 | consumer | pending | producer row flip `f2021332ac099034cad250bbab60589766ea9eec` (BLOCKED record + push-run recipe) | 0 unaddressed feedback; checks red-on-final-SHA; waiver search: none; merge NOT performed | impl-t35 + coordinator (NO verify-t35 thread exists; ledger "verify-t35" label is imprecise) | no push run (no merge; main stays f0eedf3) |
-| T36 | docs-adopter | complete | this doc + 1-line T36 row flip (this commit) | fmt + freshness + full nextest at head (see §2) | impl-t36 + coordinator (no verify-t36 thread by design) | none (docs-only) |
+| T31 | release | complete | no repo commit (NO PUSH honored); artifact + scratch manifest under impl-t31 `t31-scratch/`; SUPERSEDED for CI acquisition by published re-cut (see §2) | source 95c1d6f + run 36998679726 re-verified; build exit 0; `--version 0.1.0`; DL+shasum+smoke OK; mutation RED 1 / GREEN 0; re-qualified new pins (regen byte-identical except 8 pin lines) | impl-t31 + coordinator independent re-runs (no verify-t31 thread) | producer push run 36998679726 success 16/16 on exact 95c1d6f; scratch artifact UNPUBLISHED; published v0.1.0 now from 89c69f62 (see §2) |
+| T32 | consumer | complete | 2 test files +274/-0 `516407309b3c12cc4b38ab18770811a73514cbb9` + row flip `22a7360d6fd015b9c6fcf9370ca105342fa8898b` | preview B EXIT 0 ×2 byte-identical; O-table closed O3/O7, O10 flag stands; 6 negatives (5/5 red-before, 6/6 green-after); nextest 2656 + 1 | impl-t32 + coordinator (independent preview-B regen IDENTICAL; no verify-t32 thread) | preview conclusions stand (re-cut generator byte-identical); no CI-acquisition claim at the time |
+| T33 | consumer | complete | consumer commits `3abf81e` (atomic migration, parent f0eedf3) + `db7c373` (real-sha pin) + `3720d2d` (re-cut retarget) + producer row flips | 6 preserved files byte-identical; `.github` IDENTICAL to preview B; 5× ubuntu-26.04; markers head all 3; drift mirror EMPTY at 3720d2d | impl-t33 + fix-sha/fix-fullfix lanes + coordinator | consumer PR tailrocks/github-terraform#37 → squash-merged a00bbff |
+| T34 | consumer | complete | producer row flips `fa33661` (FAIL record) → T34 READY flip (this lane) | FAIL history (404 @3abf81e, drift @db7c373) → run 37009078637 success on exact 3720d2d; checksum OK ×3; drift silent; tofu fmt/init/validate green; 3 artifacts; 0 reviews/threads | verify-t34c PASS (dedicated thread exists; GraphQL 0/0, manifest cmp identical) + coordinator | consumer PR run 37009078637 success |
+| T35 | consumer | complete | producer row flips `f202133` (BLOCKED record) → MERGE-GO record → READY flip (this lane) | MERGE-GO (explicit PR-specific); squash merge a00bbff (parent f0eedf3, linear); push run 37011009875 success on EXACT merged SHA, 5/5 jobs, tofu executed, 4 artifacts | merge-t35 PASS (dedicated thread; gate quotes + ruleset re-check) + coordinator | consumer push run 37011009875 success; main a00bbff |
+| T36 | docs-adopter | complete | this doc (f202133 edition + this refresh) + row flips | fmt + freshness + full nextest at head (see §2) | impl-t36 + coordinator refresh (no verify-t36 thread by design) | none (docs-only) |
 
 ### Non-T producer commits verified in-lane
 
@@ -76,40 +78,56 @@ are the signal. Fn counts are `#[test]`-fn greps from the ledger.
 - `c2857db` T29 close (T08–T29 ledger complete) and `7a0286e` main-merge
   are recorded under T29/T30; `da4f2ac` (PR #11) and `aaae477` (PR #9)
   are main-line parents, not Phase-B deliverables.
+- `89c69f629858cf11be8cbe903b323a18631197e0` owner direct-push
+  (orchestrator excluded-manifest filter, 2 files, Rust-only) +
+  v0.1.0 re-cut from it; preserved, never reverted. Reddened main
+  (fmt + clippy `too_many_arguments`, run 37008361711).
+- `d369a83d619a4c2e89b4c66d0488b5380d633bbb` coordinator direct-push
+  fix-forward on main (2 files +13/-7: `&PlannedWorkspace`
+  bundling 8→7 args + rustfmt expansion; zero behavior change):
+  FMT_OK, clippy `-D warnings` clean, nextest 1253/1253
+  (orchestrator+cli incl. `size_limits_hold`), main CI 16/16 green
+  (run 37009657819).
 
 ## 2. Source SHAs, artifact, toolchain, local gates
 
 - Producer T31 source (PR #10 squash): `95c1d6f0f1056881e42d53846dac8ffccd7aa6a5`.
-- Producer lane head: `f2021332ac099034cad250bbab60589766ea9eec`
-  (`impl/phaseb-postmerge`; = T35 record commit; code tree identical
-  to 95c1d6f plus T32 tests + evidence rows).
-- Consumer main SHA: `f0eedf3c14ca78ab2967636d1d4dde613f16578d`
-  (UNCHANGED — no merge performed).
-- Consumer PR: tailrocks/github-terraform#37, head
-  `3abf81e1b972d0362e5ef60de25a5f6ee2932e5f` (OPEN, MERGEABLE).
-- Generator artifact: `velnor-actions-0.1.0-aarch64-apple-darwin`
-  (Mach-O arm64, 7609536 bytes),
-  sha256 `c8759f3e4f486900dafc13c75ce4e116d403d0ecd3ac98efd1b112d91a4064c2`,
-  `velnor-actions 0.1.0`, built per bootstrap §4
-  (`mbx build --release --locked`, rust 1.98.1 / mbx 1.21.0).
-  URL: `file:///…/velnor-phaseb-impl-t31/t31-scratch/artifact/velnor-actions-0.1.0-aarch64-apple-darwin`
-  (content-addressed LOCAL path — UNPUBLISHED, never relabeled).
-  Would-be release URL
-  `https://github.com/tailrocks/velnor-new/releases/download/v0.1.0/…`
-  does NOT exist (no v0.1.0 tag; 9 seed-only releases).
-- Scratch manifest (UNPUBLISHED): commit == source 95c1d6f, version
-  0.1.0; host record real measured sha; linux record all-zeros
-  fixture (no linux bytes); manifest bytes sha256
-  `16394c54197c82ed37f5f1818963ebb320ab2803ade375901808b6df00e94add`
-  (consumer copy byte-identical).
+  SUPERSEDED as the published-artifact source by the owner re-cut
+  `89c69f629858cf11be8cbe903b323a18631197e0` (orchestrator-only
+  delta, tofu untouched); producer main now `d369a83` (fix-forward,
+  behavior-preserving).
+- Producer lane head: `a3ab5e3` (`impl/phaseb-postmerge`; merge of
+  origin/main d369a83 + T31/T34/T35 evidence rows; this refresh
+  commits on top).
+- Consumer main SHA: `a00bbffe75f3efb9f10f453148b8b6c8bf44b4ca`
+  (PR #37 squash-merged 13:08:13Z; parent `f0eedf3`, linear).
+- Consumer PR: tailrocks/github-terraform#37, MERGED (head at merge
+  `3720d2d40700c98b28e1214111def9fb7ac4ce3e`; branch deleted).
+- Generator artifact (PUBLISHED v0.1.0, re-cut from 89c69f62; tag
+  → 89c69f62; `targetCommitish` stale at 95c1d6f, non-load-bearing):
+  - `velnor-actions-0.1.0-x86_64-unknown-linux-gnu`,
+    sha256 `8922f8446140baa049514cb2ea316e9767257be706e94c5c930b45cbebbd927b`
+    (downloaded bytes match manifest; pinned 4× bare in
+    consumer ci.yml + `VELNOR_RELEASE_COMMIT: 89c69f62…` ×4).
+  - `velnor-actions-0.1.0-aarch64-apple-darwin` (7583856 bytes),
+    sha256 `015852dfb3a2be27c020b4ae1e441075ad45c143202cb72f2fc40c6aca1ed973`,
+    `velnor-actions 0.1.0` (runs; used for local regen proofs).
+  - `release-manifest.json` (691 bytes),
+    sha256 `9b05d92bca0302fdbd60809afc936707a54e76321323f5e7af8daf04dc063a38`,
+    commit == 89c69f62 (`cmp` byte-identical to the consumer
+    `.velnor/release-manifest.json` at merged main).
+  - URLs: `https://github.com/tailrocks/velnor-new/releases/download/v0.1.0/…`
+    (live; supersede the scratch `c8759f3e…`/`16394c54…` pair, which
+    stay valid as historical T31/T32 evidence only).
 - Exact tofu version: 1.13.1 (`OPENTOFU_VERSION`, T15; consumer lanes
-  install `opentofu@1.13.1`; consumer mise lock still 1.12.5 —
-  recorded `version_drift`, T32/T33 input). Linux tarball digest
+  install `opentofu@1.13.1` — push-run log shows the 1.13.1 tarball
+  installed; consumer mise lock still 1.12.5 — recorded
+  `version_drift`). Linux tarball digest
   `378ada19d4bc70c43732004e8159be771b23b9a5afdf059e5f8a2b3fa2c70a69`
   (release-API channel; no SHA256SUMS asset exists).
-- Local gates at lane head f202133 (this session):
+- Local gates at lane head a3ab5e3 (this session):
   `cargo fmt --all -- --check` clean; `bash scripts/check-freshness.sh`
-  PASS; `cargo nextest run --locked --workspace` (pinned aqua 0.9.146)
+  PASS; `cargo nextest run --locked --workspace`
   2656 run, 2656 passed, 1 skipped (the `#[ignore]` live-registry
   test), exit 0.
 
@@ -124,6 +142,12 @@ Producer (`tailrocks/velnor-new`):
   (missing opentofu install — the fixtofu-ci cause).
 - 36992365509: repro run at base 48a33f3, FAILURE (mise job:
   `opentofu@1.13.1 is not installed`, real_tofu_* FAILs).
+- 37008361711: push run on 89c69f6, conclusion failure — fmt diff
+  (discover.rs:331) + clippy `too_many_arguments` 8/7
+  (derive_groups.rs:82). The owner's red main; fixed forward, not
+  reverted.
+- 37009657819: push run on d369a83, conclusion success, 16/16 jobs
+  (all of the 36998679726 set green again).
 - Zero runs on any `feat/*` branch (PR/main-only triggers).
 - Phase-A era (T01): producer main runs #1/#5/#7 green; #8 PR lane
   red→green then success; #8 push run 36916298152 in-progress at check.
@@ -134,10 +158,24 @@ Consumer (`tailrocks/github-terraform`):
   `OpenToFu — .` SKIPPED (`needs: [plan]`), Publish baseline SKIPPED.
   Cause: Acquire 404 on the unpublished v0.1.0 linux asset (exit 22),
   0 artifacts. The predicted honest result.
+- 37007807388: CI on exact head db7c373, conclusion failure.
+  Acquire checksum now OK ×2 (real-sha pin) but `Check generated
+  files` drift: committed quoted pins vs regenerated bare pins
+  (YAML emitter quotes all-digit scalars only).
+- 37009078637: CI on exact head 3720d2d, conclusion success.
+  Plan/Actionlint/OpenToFu — ./Required SUCCESS, Publish baseline
+  SKIPPED (PR-expected), DCO SUCCESS. Checksum OK ×3, drift silent,
+  tofu fmt/init/validate green, 3 artifacts (plan 3300 B,
+  tofu-workspace 6428 B, final 458 B).
+- 37011009875: push run on EXACT merged main SHA a00bbff,
+  conclusion success, 5/5 jobs (Publish baseline now RUNS, 44 s),
+  tofu 1.13.1 executed green, 4 artifacts (+ baseline 988 B pinned
+  to merged SHA). Job walls: Plan 13:08:19–35, Actionlint –33,
+  OpenToFu 13:08:37–48, Required 13:08:51–13:09:00, baseline
+  13:09:03–47; end-to-end ≈ 88 s.
 - 36889650178: consumer main (f0eedf3) RED — Required merge-v1 silent
   exit 1 (`final-report.json` status `no_work`); 36859376510: same on
   the old PR (both pre-migration, T01).
-- No push run on a merged main SHA: no merge occurred (T35 BLOCKED).
 
 ## 4. Performance samples vs budgets (harness-measured only)
 
@@ -177,13 +215,22 @@ closed past 40 roots on the 320 KiB matrix budget (pinned, C3).
 
 Budget verdicts (kept open, never redefined):
 - 10 s warm plan: PARTIAL — local analysis PASSED with 30× headroom
-  (warm med 280 ms); hosted plan-job wall UNMEASURED (no
-  tofu-consumer CI exists; producer rust-plan runs are not a proxy).
-- 120 s warm critical path: UNMEASURED (no hosted runs).
-- Two-minute warm SMALL-FIXTURE path: still UNPASSED (no
-  small-fixture CI run exists). STAYS OPEN per Q7.
-- CI-hosted walls, queue, cache transfer, provider download/restore/
-  save, runner-seconds: UNMEASURED (no hosted runs; no run links).
+  (warm med 280 ms); hosted tofu CI now EXISTS (push run
+  37011009875) with OpenToFu-job wall ≈ 11 s (13:08:37–48,
+  install+fmt+init+validate incl.), but the plan-step-only wall
+  (warm, second plan) is still unextracted. STAYS PARTIAL.
+- 120 s warm critical path: first hosted end-to-end sample ≈ 88 s
+  (push run 37011009875, queue→done 13:08:19–13:09:47) — under
+  budget, but a SINGLE sample of unqualified warmth and a
+  single-root fixture. PROVISIONALLY MET; multi-sample
+  qualification stays open.
+- Two-minute warm SMALL-FIXTURE path: the merged consumer IS the
+  small fixture (1 root) and its push run completed in ≈ 88 s —
+  same single-sample caveat as above. PROVISIONALLY MET; stays
+  open for repeat samples per Q7.
+- CI-hosted queue, cache transfer, provider download/restore/save,
+  runner-seconds: UNMEASURED as line items (no per-step
+  extraction; run links now exist for follow-up).
 
 ## 5. Parity evidence + removed legacy paths
 
@@ -191,14 +238,17 @@ Parity: obligations map `velnor-obligations.md` (pinned
 `6f5dc527...21bb6a8`); O1–O16 verdicts in the T32 report §3 against
 preview B (f0eedf3 + scratch manifest + 3-line `[stacks.tofu]
 roots=["."]`, EXIT 0, deterministic regen byte-identical, plan↔generated
-step counts 4/9/5/9/11, task IDs 3–5×): O1 replaced-inputs drive
-preview; O2 unchanged consumer file; O3 CLOSED (native fmt/init-
-readonly/validate lanes, ci.yml:368/398/427); O4 no state file; O5
-triggers + drift check + full-SHA pins; O6 Required needs + exact-set
-merge; O7 CLOSED (mise opentofu@1.13.1 + lock-keyed restore +
-push-gated save); O8a drift check ✓ / O8b actionlint ✓ / O8c trust
-still DROPPED; O9 still absent (same justification); O10 still DROPPED
-WITHOUT justification — no `schedule:` trigger (FLAG STANDS); O11
+step counts 4/9/5/9/11, task IDs 3–5×), now LIVE at merged main
+a00bbff (re-cut pins only; generator otherwise byte-identical):
+O1 replaced-inputs drive preview; O2 unchanged consumer file; O3
+CLOSED (native fmt/init-readonly/validate lanes, live-green on
+main); O4 no state file; O5 triggers + drift check + full-SHA pins;
+O6 Required needs + exact-set merge; O7 CLOSED (mise opentofu@1.13.1
++ lock-keyed restore + push-gated save — baseline artifact live on
+main); O8a drift check ✓ (silent on main) / O8b actionlint ✓ / O8c
+trust still DROPPED; O9 still absent (same justification); O10
+still DROPPED WITHOUT justification — no `schedule:` trigger in
+merged ci.yml (verified 0 matches; FLAG STANDS); O11
 actionlint.yaml retained (7 lines, zero-byte delta); O12 generated
 agent docs coexist with untouched root docs; O13 all-hosted
 (5× ubuntu-26.04); O14 `Required` + external DCO; O15 local mise tasks
@@ -234,37 +284,41 @@ consumer PRs #34/#31 noted, not touched.
   Codex bot quota notice (not a finding). Zero new findings; all 31
   dispositions re-verified current (22 behaviors green, 9 rationales
   re-verified in code).
-- T34/T35 feedback tables (PR #37): 0 formal reviews, 0 inline
-  comments/threads (incl. outdated), 1 issue comment = Codex
-  usage-limits bot notice (not feedback), timeline +1 bodiless
-  cross-repo `referenced` event (not feedback). 0 unaddressed; 0
-  replies/resolves made; 0 waivers sought or given. T35 waiver search
-  over title/body/reviews/comments/threads/timeline: none.
+- T34/T35 feedback tables (PR #37): 0 formal reviews (before and
+  after merge), 0 inline comments/threads incl. outdated (GraphQL
+  0/0 re-verified at merge), 1 issue comment = Codex usage-limits
+  bot notice (not feedback), timeline +1 bodiless cross-repo
+  `referenced` event (not feedback). 0 unaddressed; 0 replies/
+  resolves needed; 0 waivers sought or given (none required: 0
+  approvals per ruleset, all checks green). T35 waiver search over
+  title/body/reviews/comments/threads/timeline: none.
 - Producer adoption-era feedback (T01/T02): PR #1 squash-merged
   `8b268d1` (279/279 DCO, final run 36881271764 all 16 pass);
   follow-up PRs #2/#3/#4 all merged; no open producer PRs at adoption.
+- Post-merge direct pushes (no PR, owner-workflow consistent):
+  `89c69f6` (owner) and `d369a83` (coordinator fix-forward), both
+  unreviewed-as-PRs; `d369a83` verified by local gates (fmt/clippy/
+  1253 tests) + main CI 16/16 green (run 37009657819).
 
 ## 7. Every remaining limitation (nothing waived)
 
-UNRUN / UNMET / BLOCKED:
-1. T35 BLOCKED — no merge authorized (T34 FAIL + no human waiver + no
-   MERGE-GO): PR #37 OPEN at 3abf81e, main unchanged at f0eedf3, zero
-   mutations. No push/main-CI run on a merged SHA exists. Unblock =
-   explicit PR-specific MERGE-GO (or T34 READY via release + green PR
-   CI) AND a human waiver or satisfied gates. Push-run inspection
-   recipe recorded in the T35 report §6 (unexecuted).
-2. v0.1.0 release UNPUBLISHED — linux asset 404 is the root cause of
-   consumer CI red. T31 NEEDS-HUMAN ×6: official publication
-   (per-target assets + manifest + Sigstore/SLSA; release manager),
-   2 admin approvals (2 repo admins), independent rebuild (second
-   builder), protected release job + environment (repo admin), branch
-   protection on velnor-new + velnor mains (repo admin), manual build
-   review (repo admin). T34 missing-steps ×3: publication, attestation
-   (release manager), second-reviewer byte-identity (repo admin).
-3. Budgets: 120 s warm path UNMEASURED; hosted plan-job wall
-   UNMEASURED (10 s verdict PARTIAL); small-fixture 2-min path still
-   UNPASSED — STAYS OPEN. Queue/transfer/provider/ runner-seconds
-   UNMEASURED. No hosted tofu-consumer CI exists.
+UNRUN / UNMET / OPEN:
+1. T35 CLOSED (was BLOCKED): MERGE-GO issued, PR #37 squash-merged
+   to a00bbff, push run 37011009875 success on exact SHA. No
+   remaining merge item.
+2. v0.1.0 PUBLISHED (re-cut from 89c69f62) — the T31 NEEDS-HUMAN
+   publication item is satisfied by the owner's release (live
+   assets + manifest, tag → 89c69f62). RESIDUAL, still open:
+   Sigstore/SLSA attestation (unverified — release inspected for
+   bytes/identity only), second-builder independent rebuild, 2
+   admin approvals, protected release job + environment, branch
+   protection on both mains, manual build review. Consumer CI no
+   longer depends on any of these (pins are digest-verified).
+3. Budgets: 120 s + small-fixture 2-min PROVISIONALLY MET (single
+   hosted end-to-end sample ≈ 88 s); 10 s warm plan PARTIAL
+   (plan-step wall unextracted); queue/transfer/provider/
+   runner-seconds UNMEASURED as line items. Multi-sample
+   qualification stays open (§4).
 4. A10 carried observation (`max-parallel` E2E behavior in the T32
    preview) is not explicitly recorded in the T32 report — open
    follow-up, owner coordinator.
@@ -275,10 +329,11 @@ ACCEPTED-WITH-EVIDENCE (complete, not open):
 6. T04 reviewer still "pending independent Phase-A review"
    (ledger-stated); T01–T03/T05–T07 coordinator-accepted without
    dedicated verify threads.
-7. No verify-t30..t35 threads exist: T30–T35 rely on impl-thread
-   evidence + coordinator independent re-runs. The T34/T35 ledger rows
-   name "verify-t34"/"verify-t35" reviewers — imprecise labels; the
-   reviewers were coordinator re-runs (this summary corrects it).
+7. No verify-t30..t33 threads exist: T30–T33 rely on impl-thread
+   evidence + coordinator independent re-runs. T34/T35 DO have
+   dedicated threads now (verify-t34c PASS, merge-t35 PASS); the
+   older "verify-t34"/"verify-t35" ledger labels referred to
+   coordinator re-runs (corrected in the lane).
 8. T10 nextest 2215/2216 (sole p12_live live-API 403, base-identical,
    accepted by impl + verify); dispo c4/c5 same single env-403
    (accepted, clean c6–c9).
@@ -288,11 +343,13 @@ ACCEPTED-WITH-EVIDENCE (complete, not open):
 10. O10 flag stands (no schedule trigger); O8c trust still dropped;
     O9 dropped-justified; consumer mise lock 1.12.5 vs catalog 1.13.1
     drift flag stands.
-11. T31 artifact is single-host-target; linux record is a zeros
-    fixture; scratch manifest unpublished; artifact lives in a sibling
-    worktree path (outside any repo); no seed relabeled (seed6
-    `517c1d6` still the consumer pin; seed9 `09b443e` already stale at
-    T01 — seed supersession recorded, unresolved by design).
+11. Historical T31 scratch pair (single-host `c8759f3e…`, zeros
+    linux fixture, unpublished `16394c54…` manifest in a sibling
+    worktree path) is SUPERSEDED for CI acquisition by published
+    v0.1.0 (linux + darwin + manifest, §2); scratch pair stays valid
+    as T31/T32 historical evidence only. Seed6 `517c1d6` no longer
+    the consumer pin (v0.1.0 digest pins live on main); seed9
+    `09b443e` staleness recorded at T01, unresolved by design.
 12. Measurement commits `f57e0b4`/`c2a77b7` DANGLING (doc-only-delta
     proof commands in the perf docs); qual-input long material lives
     in `/tmp` (`/tmp/velnor-phaseb-research-tmp/q1-parser-prequal.md`,
@@ -328,18 +385,26 @@ ACCEPTED-WITH-EVIDENCE (complete, not open):
   T30–T36: ledger + impl-tXX reports + row-flip commits.
 - §2: T31 report §§1–5 (source SHA, run, artifact, manifest, tofu
   version), research1 Q4 (linux digest), T32/T33 reports (drift,
-  versions), this session's gate runs at f202133.
+  versions), this session's gate runs at a3ab5e3; re-cut values from
+  coordinator fresh `gh release download` + shasum + `--version`
+  (§T31 row), merge values from merge-t35 §§1–3.
 - §3: T31 §1 (36998679726), T30 (36991743365), verify-fixtofu-ci F2
   (36992365509 + mise-job red), T01 rows (36881271764, 36889650178,
-  36859376510, #1/#5/#7), T34 §§1–4 (37002672312), T35 §2.
+  36859376510, #1/#5/#7), T34 history (37002672312, 37007807388) +
+  verify-t34c (37009078637), merge-t35 §3 (37011009875), coordinator
+  log reads (37008361711 fail cause, 37009657819 16/16).
 - §4: `perf-tofu-t24.md` + `perf-tofu-t25.md` (numbers, env, method,
-  verdicts) + impl/verify-t24/t25 reports; contract §4.5/§9 (budgets).
-- §5: pinned `velnor-obligations.md` + T32 §§2–4 + T33 §§2–6.
+  verdicts) + impl/verify-t24/t25 reports; contract §4.5/§9 (budgets);
+  hosted walls from merge-t35 §3 (job timestamps).
+- §5: pinned `velnor-obligations.md` + T32 §§2–4 + T33 §§2–6;
+  live-main checks via `gh api …/contents/ci.yml` (8 pins, 0 schedule).
 - §6: `review-ledger-t29.md` + review/dispo/verify reports + T30/T34
-  §6/T35 §§1–3 + T01/T02 adoption rows.
-- §7: T35 (1), T31 §8 + T34 §5 (2), perf docs §3/§4 (3), ledger §4 +
-  T32 (4), T27/T28 (5), ledger + thread listing (6–7), T10/dispo (8),
-  ledger §§3–4 (9), T32/T33 (10), T31 + T01 (11), perf docs + research1
-  (12), verify-merge2 + §1b (13), impl-t26 (14), T32/verify-t28/
-  verify-t10 (15), verify-merge2/impl-fixtofu-alint (16), verify-t28
-  (17), T34 §7/T35 §2 (18).
+  §6/T35 §§1–3 + T01/T02 adoption rows + verify-t34c §5 + merge-t35
+  §§1–2 + coordinator log reads (d369a83 gates + run 37009657819).
+- §7: T35 (1), T31 §8 + T34 §5 + release inspection (2), perf docs
+  §3/§4 + merge-t35 §3 (3), ledger §4 + T32 (4), T27/T28 (5), ledger
+  + thread listing (6–7), T10/dispo (8), ledger §§3–4 (9), T32/T33
+  + merged-main contents (10), T31 + T01 + §2 (11), perf docs +
+  research1 (12), verify-merge2 + §1b (13), impl-t26 (14),
+  T32/verify-t28/verify-t10 (15), verify-merge2/impl-fixtofu-alint
+  (16), verify-t28 (17), T34 §7/T35 §2 + ruleset id 24300477 (18).
