@@ -8,10 +8,10 @@
 
 use std::path::Path;
 
-use velnor_actions_contract::{ContractError, ProposedTask, component_id_for_unit, digest_b3};
+use velnor_actions_contract::{ContractError, ProposedTask, component_id_for_unit};
 
-use crate::family::LOCKFILE_NAME;
 use crate::kinds::TofuTaskKind;
+use crate::lockfile::lock_digest_at_root;
 use crate::propose::{TOFU_DRIVER, TOFU_RUNNER};
 use crate::task_identity::{DigestSlot, ExtensionInputs, TofuTaskIdentityExtension};
 
@@ -101,20 +101,10 @@ pub fn entry_metadata_for_task(
 /// Root-lockfile slot at `root`: content, proven absence, or unknown.
 ///
 /// `unit_path` is the unit evidence path (`.` or the root directory).
+/// Delegates to the canonical root-lock digest function.
 #[must_use]
 pub fn lock_slot_at_root(root: &Path, unit_path: &str) -> DigestSlot {
-    let relative = if unit_path == "." || unit_path.is_empty() {
-        LOCKFILE_NAME.to_owned()
-    } else {
-        format!("{unit_path}/{LOCKFILE_NAME}")
-    };
-    match std::fs::read(root.join(&relative)) {
-        Ok(bytes) => DigestSlot::Known(digest_b3(&bytes)),
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
-            DigestSlot::AbsentProven(format!("not_found:{relative}"))
-        }
-        Err(err) => DigestSlot::Unknown(format!("unreadable:{relative}:{err}")),
-    }
+    lock_digest_at_root(root, unit_path)
 }
 
 /// Fail-closed check for the tofu compile-driver spelling.

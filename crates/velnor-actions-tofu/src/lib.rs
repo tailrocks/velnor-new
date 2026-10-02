@@ -16,6 +16,7 @@ pub mod closure;
 pub mod closure_inputs;
 pub mod content;
 pub mod detect;
+pub mod diagnostics;
 pub mod effective;
 pub mod env;
 pub mod evidence;
@@ -23,6 +24,7 @@ pub mod family;
 pub mod fmt_scope;
 pub mod identity;
 pub mod kinds;
+pub mod lockfile;
 pub mod modules;
 pub mod parser;
 pub mod parser_json;
@@ -37,6 +39,11 @@ pub use argv::{CHDIR_FINDING_TAG, chdir_finding_for_root, tofu_payload_argv};
 pub use closure::resolve_closure_at_root;
 pub use content::{ContentSignals, signals_for};
 pub use detect::{detected_projects_for_units, discover_stack_candidates, manifest_for_unit_root};
+pub use diagnostics::{
+    LOCKFILE_MISSING, LOCKFILE_STALE, PROVIDER_DEPENDENCY_CHANGES,
+    REQUIRED_VERSION_EXCLUDES_TOOLCHAIN, RequiredVersionClaim, lockfile_findings_for_root,
+    remediation_for_init_stderr, required_versions_for_root, version_compat_findings,
+};
 pub use effective::{Dialect, config_shape, dir_has_effective_config, effective_set};
 pub use env::{
     TF_IN_AUTOMATION_ENV, TF_IN_AUTOMATION_ON, TF_INPUT_ENV, TF_INPUT_OFF, tofu_payload_env,
@@ -51,6 +58,10 @@ pub use identity::{
     TofuGroupExtensionInputs, entry_metadata_for_task, extension_for_proposal, lock_slot_at_root,
 };
 pub use kinds::TofuTaskKind;
+pub use lockfile::{
+    LOCKFILE_CORRUPT, LockfileInspection, LockfileSpec, TofuLockSnapshot, inspect_lockfile,
+    lock_digest_at_root, lock_slot_for_kind,
+};
 pub use modules::{
     ModuleDecl, ModuleEdge, ModuleEdges, ModuleError, ModuleFinding, ModuleRef, ModuleSource,
     RemoteKind, SourceClass, canonicalize_edges, check_acyclic, classify_literal,
@@ -69,7 +80,9 @@ pub use roots::qualify_roots;
 pub use select::{RootSelection, SelectAllReason, select_roots};
 pub use task_identity::{DigestSlot, ExtensionInputs, SlotState, TofuTaskIdentityExtension};
 pub use units::{AnalyzedUnit, UnitError, analyze_files, files_for_prefix, module_refs_for_texts};
-pub use version::{OPENTOFU_FLOOR, admits_opentofu, is_terraform_only};
+pub use version::{
+    OPENTOFU_FLOOR, admits_opentofu, admits_version, is_terraform_only, toolchain_triple,
+};
 
 /// Stable identifier for the `OpenTofu` stack.
 pub const STACK_ID: &str = "tofu";

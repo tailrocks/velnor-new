@@ -121,6 +121,49 @@ fn config_contents(root: &Path, index: &FileIndex) -> BTreeMap<String, String> {
     contents
 }
 
+/// Diagnostic recommendation lines for configured tofu roots.
+///
+/// Lock findings (missing/stale/corrupt) plus `required_version`
+/// exclusion against the Mise `opentofu` pin surface as validated
+/// finding lines; anything unvalidated stays out. Ignored stacks
+/// and table-less repos contribute nothing.
+pub(crate) fn tofu_diagnostic_lines(
+    root: &Path,
+    config: &VelnorConfig,
+    tool_checks: &[ToolInputCheck],
+) -> Vec<String> {
+    let ignored = config
+        .stacks
+        .ignore
+        .iter()
+        .any(|id| id == velnor_actions_tofu::STACK_ID);
+    let Some(tofu) = &config.stacks.tofu else {
+        return Vec::new();
+    };
+    if ignored {
+        return Vec::new();
+    }
+    let mut values = mise_toml_values(tool_checks);
+    let pin = values.remove("tools.opentofu");
+    let mut lines = Vec::new();
+    for configured in &tofu.roots {
+        let unit = velnor_actions_tofu::display_for_root(configured.unit_prefix());
+        let mut findings = velnor_actions_tofu::lockfile_findings_for_root(root, &unit);
+        if let Some(pinned) = &pin {
+            let claims = velnor_actions_tofu::required_versions_for_root(root, &unit);
+            findings.extend(velnor_actions_tofu::version_compat_findings(
+                &claims, pinned,
+            ));
+        }
+        for finding in &findings {
+            if finding.validate().is_ok() {
+                lines.push(crate::toolfindings::finding_line(finding));
+            }
+        }
+    }
+    lines
+}
+
 /// Flattened `mise.toml` values (empty when missing or malformed).
 fn mise_toml_values(tool_checks: &[ToolInputCheck]) -> BTreeMap<String, String> {
     tool_checks

@@ -7,6 +7,8 @@ mod impl_tofu_closure;
 mod impl_tofu_content;
 #[path = "impl_tofu_detect.rs"]
 mod impl_tofu_detect;
+#[path = "impl_tofu_diagnostics.rs"]
+mod impl_tofu_diagnostics;
 #[path = "impl_tofu_effective.rs"]
 mod impl_tofu_effective;
 #[path = "impl_tofu_evidence.rs"]
@@ -19,6 +21,8 @@ mod impl_tofu_fmt;
 mod impl_tofu_identity;
 #[path = "impl_tofu_infer.rs"]
 mod impl_tofu_infer;
+#[path = "impl_tofu_lockfile.rs"]
+mod impl_tofu_lockfile;
 #[path = "impl_tofu_modules.rs"]
 mod impl_tofu_modules;
 #[path = "impl_tofu_parser.rs"]
