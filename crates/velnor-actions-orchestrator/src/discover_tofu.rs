@@ -48,7 +48,7 @@ pub(crate) fn qualify_tofu_step(
         .iter()
         .any(|id| id == velnor_actions_tofu::STACK_ID);
     if let Some(tofu) = &config.stacks.tofu {
-        return qualify_configured(root, tofu, index, ignored);
+        return qualify_configured(root, tofu, index, ignored, reads);
     }
     let evidence = classify_with_contents(
         index.files(),
@@ -72,13 +72,25 @@ pub(crate) fn qualify_tofu_step(
 }
 
 /// Qualify configured roots; ignored stacks validate but emit nothing.
+///
+/// Live stacks additionally prove every provider root carries a
+/// committed lock: readonly init would fail the root in CI, so
+/// planning fails here with the manual remediation instead.
 fn qualify_configured(
     root: &Path,
     tofu: &velnor_actions_contract::TofuStackConfig,
     index: &FileIndex,
     ignored: bool,
+    reads: &mut velnor_actions_tofu::FileCache,
 ) -> Result<TofuStep, OrchestratorError> {
     let candidates = qualify_roots(CONFIG_REL, root, tofu, index).map_err(map_roots_error)?;
+    if !ignored {
+        for configured in &tofu.roots {
+            let unit = velnor_actions_tofu::display_for_root(configured.unit_prefix());
+            velnor_actions_tofu::require_committed_provider_lock(CONFIG_REL, root, &unit, reads)
+                .map_err(map_roots_error)?;
+        }
+    }
     Ok(TofuStep {
         candidates: if ignored { Vec::new() } else { candidates },
         note: ignored.then_some(TofuNote::Ignored),

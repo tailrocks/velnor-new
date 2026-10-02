@@ -20,6 +20,7 @@ use velnor_actions_mise::command::{
     CancelHandle, IsolatedCommand, ProcessOutput, is_cancel_or_timeout,
 };
 use velnor_actions_mise::{MiseError, OPENTOFU_VERSION, PinnedTool, ToolCatalog};
+use velnor_actions_tofu::{TofuTaskKind, tofu_payload_argv};
 
 /// Opt-in env var for the network-dependent live test.
 const LIVE_ENV: &str = "VELNOR_LIVE_TOFU";
@@ -73,12 +74,21 @@ fn opentofu_specs() -> Vec<String> {
     specs
 }
 
-/// Tofu ctor over one stage; asserts install stays disabled.
-fn tofu_run(payload: &[&str], stage: &Stage) -> Result<IsolatedCommand, String> {
-    let args: Vec<OsString> = payload.iter().map(OsString::from).collect();
+/// Product payload argv for one kind at the repo root, driver-prefixed.
+///
+/// Real runs execute the exact generated payload (`tofu_payload_argv`),
+/// never a hand-written approximation, so payload drift fails here.
+fn product_argv(kind: TofuTaskKind) -> Result<Vec<OsString>, String> {
+    let mut argv = vec![OsString::from("tofu")];
+    argv.extend(tofu_payload_argv(kind, "").map_err(|err| err.to_string())?);
+    Ok(argv)
+}
+
+/// Tofu ctor over one stage from owned argv; asserts install stays disabled.
+fn tofu_run_owned(payload: &[OsString], stage: &Stage) -> Result<IsolatedCommand, String> {
     let command = IsolatedCommand::tofu_exec(
         &opentofu_specs(),
-        &args,
+        payload,
         &stage.data,
         &stage.config,
         &stage.cache,
@@ -90,6 +100,12 @@ fn tofu_run(payload: &[&str], stage: &Stage) -> Result<IsolatedCommand, String> 
         "real runs resolve, never install"
     );
     Ok(command)
+}
+
+/// Tofu ctor over one stage; asserts install stays disabled.
+fn tofu_run(payload: &[&str], stage: &Stage) -> Result<IsolatedCommand, String> {
+    let args: Vec<OsString> = payload.iter().map(OsString::from).collect();
+    tofu_run_owned(&args, stage)
 }
 
 /// Run under explicit bounds; spawn failures surface as strings.
@@ -121,16 +137,13 @@ fn real_tofu_version_reports_pinned_release() -> Result<(), String> {
     Ok(())
 }
 
-/// (6) `fmt -check` passes a clean provider-free root. Hermetic: files.
+/// (6) Product fmt payload passes a clean provider-free root. Hermetic: files.
 #[test]
 fn real_tofu_fmt_check_passes_clean_fixture() -> Result<(), String> {
     let stage = stage("fmt-clean")?;
     std::fs::write(stage.root.join("main.tf"), CLEAN_MAIN_TF).map_err(|err| err.to_string())?;
     let output = run(
-        &tofu_run(
-            &["tofu", "fmt", "-check", "-recursive", "-no-color"],
-            &stage,
-        )?,
+        &tofu_run_owned(&product_argv(TofuTaskKind::Fmt)?, &stage)?,
         120,
     )?;
     assert!(output.success);
@@ -138,17 +151,14 @@ fn real_tofu_fmt_check_passes_clean_fixture() -> Result<(), String> {
     Ok(())
 }
 
-/// (6) `fmt -check` exit 3 stays typed on the real binary. Hermetic.
+/// (6) Product fmt payload exit 3 stays typed on the real binary. Hermetic.
 #[test]
 fn real_tofu_fmt_check_exit_3_stays_typed() -> Result<(), String> {
     let stage = stage("fmt-bad")?;
     std::fs::write(stage.root.join("main.tf"), CLEAN_MAIN_TF).map_err(|err| err.to_string())?;
     std::fs::write(stage.root.join("bad.tf"), BAD_TF).map_err(|err| err.to_string())?;
     let output = run(
-        &tofu_run(
-            &["tofu", "fmt", "-check", "-recursive", "-no-color"],
-            &stage,
-        )?,
+        &tofu_run_owned(&product_argv(TofuTaskKind::Fmt)?, &stage)?,
         120,
     )?;
     assert!(!output.success);
@@ -163,7 +173,7 @@ fn real_tofu_fmt_check_exit_3_stays_typed() -> Result<(), String> {
     Ok(())
 }
 
-/// (6) `init -backend=false` + `validate` succeed offline on a
+/// (6) Product init + validate payloads succeed offline on a
 /// provider-free root. Hermetic: no providers/backends/modules, backend
 /// disabled, checkpoint disabled — nothing to fetch or phone home.
 #[test]
@@ -171,7 +181,7 @@ fn real_tofu_init_then_validate_offline() -> Result<(), String> {
     let stage = stage("init-validate")?;
     std::fs::write(stage.root.join("main.tf"), CLEAN_MAIN_TF).map_err(|err| err.to_string())?;
     let init = run(
-        &tofu_run(&["tofu", "init", "-backend=false", "-no-color"], &stage)?,
+        &tofu_run_owned(&product_argv(TofuTaskKind::InitForValidate)?, &stage)?,
         120,
     )?;
     assert!(
@@ -180,7 +190,10 @@ fn real_tofu_init_then_validate_offline() -> Result<(), String> {
         String::from_utf8_lossy(&init.stderr)
     );
     assert_eq!(init.code, Some(0));
-    let validate = run(&tofu_run(&["tofu", "validate", "-no-color"], &stage)?, 120)?;
+    let validate = run(
+        &tofu_run_owned(&product_argv(TofuTaskKind::Validate)?, &stage)?,
+        120,
+    )?;
     assert!(validate.success);
     assert_eq!(validate.code, Some(0));
     Ok(())
@@ -191,11 +204,18 @@ fn real_tofu_init_then_validate_offline() -> Result<(), String> {
 /// (`https://127.0.0.1:1/`), so init fails with `connection refused`
 /// with or without internet and no download can succeed. NOTE: M4
 /// forbids mirrors in product config — this mirror exists only as a
-/// negative-test failure injector, never in generated steps.
+/// negative-test failure injector, never in generated steps. A staged
+/// complete lock lets the readonly product init reach the network.
 #[test]
 fn real_tofu_dead_mirror_init_fails_typed() -> Result<(), String> {
     let stage = stage("dead-mirror")?;
     std::fs::write(stage.root.join("main.tf"), PROVIDER_MAIN_TF).map_err(|err| err.to_string())?;
+    std::fs::write(
+        stage.root.join(".terraform.lock.hcl"),
+        "provider \"registry.opentofu.org/hashicorp/null\" {\n  version = \"3.2.1\"\n  \
+         hashes = [\"h1:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"]\n}\n",
+    )
+    .map_err(|err| err.to_string())?;
     let mirror = format!(
         "plugin_cache_dir = \"{}\"\ndisable_checkpoint = true\nprovider_installation {{\n  \
          network_mirror {{\n    url = \"https://127.0.0.1:1/\"\n  }}\n}}\n",
@@ -203,7 +223,7 @@ fn real_tofu_dead_mirror_init_fails_typed() -> Result<(), String> {
     );
     std::fs::write(&stage.config, mirror).map_err(|err| err.to_string())?;
     let output = run(
-        &tofu_run(&["tofu", "init", "-backend=false", "-no-color"], &stage)?,
+        &tofu_run_owned(&product_argv(TofuTaskKind::InitForValidate)?, &stage)?,
         120,
     )?;
     assert!(!output.success);
@@ -274,13 +294,17 @@ fn offline_fixtures_admit_no_network_shape() {
     );
 }
 
-/// (6) LIVE: real registry init downloads the null provider.
+/// (6) LIVE: real registry init downloads the null provider through
+/// the readonly product payload.
 ///
 /// Ignored by default; runs only with `VELNOR_LIVE_TOFU=1` plus
 /// `-- --ignored` (or nextest `--run-ignored`). TOUCHES NETWORK:
 /// `registry.opentofu.org` discovery + provider release download into
 /// the stage-local cache. Fails loud without the opt-in var so the
-/// gate is enforced, never silently skipped.
+/// gate is enforced, never silently skipped. A setup init first writes
+/// the lock (lock creation is fixture setup: Velnor never creates
+/// locks); the asserted run is the product readonly init over that
+/// committed lock, which must succeed without touching it.
 #[test]
 #[ignore = "needs VELNOR_LIVE_TOFU=1 plus registry network"]
 fn live_tofu_registry_init_downloads_provider() -> Result<(), String> {
@@ -289,20 +313,48 @@ fn live_tofu_registry_init_downloads_provider() -> Result<(), String> {
     }
     let stage = stage("live")?;
     std::fs::write(stage.root.join("main.tf"), PROVIDER_MAIN_TF).map_err(|err| err.to_string())?;
+    let setup = run(
+        &tofu_run(
+            &[
+                "tofu",
+                "init",
+                "-backend=false",
+                "-input=false",
+                "-no-color",
+            ],
+            &stage,
+        )?,
+        300,
+    )?;
+    assert!(
+        setup.success,
+        "setup init stderr: {}",
+        String::from_utf8_lossy(&setup.stderr)
+    );
+    let lock_path = stage.root.join(".terraform.lock.hcl");
+    let lock = std::fs::read_to_string(&lock_path).map_err(|err| err.to_string())?;
+    assert!(
+        lock.contains("registry.opentofu.org/hashicorp/null"),
+        "lock pins the downloaded provider: {lock}"
+    );
+    drop(std::fs::remove_dir_all(&stage.data));
+    std::fs::create_dir_all(&stage.data).map_err(|err| err.to_string())?;
     let output = run(
-        &tofu_run(&["tofu", "init", "-backend=false", "-no-color"], &stage)?,
+        &tofu_run_owned(&product_argv(TofuTaskKind::InitForValidate)?, &stage)?,
         300,
     )?;
     assert!(
         output.success,
-        "live init stderr: {}",
+        "live readonly init stderr: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let lock = std::fs::read_to_string(stage.root.join(".terraform.lock.hcl"))
-        .map_err(|err| err.to_string())?;
+    let relocked = std::fs::read_to_string(&lock_path).map_err(|err| err.to_string())?;
+    assert_eq!(relocked, lock, "readonly init never rewrites the lock");
     assert!(
-        lock.contains("registry.opentofu.org/hashicorp/null"),
-        "lock pins the downloaded provider: {lock}"
+        std::path::Path::new(&stage.data)
+            .join("providers/registry.opentofu.org/hashicorp/null")
+            .is_dir(),
+        "provider materialized through the product payload"
     );
     Ok(())
 }

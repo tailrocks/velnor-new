@@ -9,7 +9,7 @@
 
 use std::path::Path;
 
-use velnor_actions_contract::Finding;
+use velnor_actions_contract::{ContractError, Finding};
 
 use crate::effective::effective_set;
 use crate::family::{Family, family_of};
@@ -18,6 +18,7 @@ use crate::lockfile::{
     corrupt_lockfile_finding, inspect_lockfile, lock_digest_at_root, lock_relative,
 };
 use crate::parser::{FileModel, MAX_DIAGNOSTIC_CHARS};
+use crate::task_identity::DigestSlot;
 use crate::version::{admits_version, toolchain_triple};
 
 /// Stable code for a provider root without committed pins.
@@ -79,6 +80,47 @@ pub fn lockfile_findings_for_root(
         Some((needs, _)) if providers.is_empty() && needs => vec![missing_finding(&lock)],
         Some((_, true)) if !providers.is_empty() => vec![stale_finding(&lock, &providers)],
         Some(_) | None => Vec::new(),
+    }
+}
+
+/// Fail when a provider root lacks a committed lock.
+///
+/// Provider roots validate against the committed lock, so a missing
+/// or unreadable lock fails planning with the manual remediation:
+/// readonly init would fail it in CI otherwise. Provider-free roots
+/// pass; malformed configs abstain (units own that failure).
+///
+/// # Errors
+///
+/// Returns a `stacks.tofu.roots` config error naming the lock.
+pub fn require_committed_provider_lock(
+    file: &str,
+    root: &Path,
+    unit_path: &str,
+    reads: &mut FileCache,
+) -> Result<(), ContractError> {
+    let Some((needs, _)) = root_shape(root, unit_path, reads) else {
+        return Ok(());
+    };
+    if !needs {
+        return Ok(());
+    }
+    let lock = lock_relative(unit_path);
+    match lock_digest_at_root(root, unit_path, reads) {
+        DigestSlot::Known(_) => Ok(()),
+        DigestSlot::AbsentProven(_) => Err(ContractError::config(
+            file,
+            "stacks.tofu.roots",
+            format!(
+                "missing_committed_lock:{lock}:commit a lockfile: run `tofu providers lock` \
+                 manually and commit the result"
+            ),
+        )),
+        DigestSlot::Unknown(_) => Err(ContractError::config(
+            file,
+            "stacks.tofu.roots",
+            format!("unreadable_committed_lock:{lock}"),
+        )),
     }
 }
 
