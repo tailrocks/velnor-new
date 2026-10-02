@@ -155,18 +155,25 @@ fn affected_from_changed(
         warnings.push(warning.to_owned());
         return all_packages;
     }
-    if has_unowned_file(discovery, changed) {
+    let Some((rust_changed, tofu_affected)) =
+        crate::select_tofu::split_or_broaden(root, base, head, discovery, changed, warnings)
+    else {
+        return all_packages;
+    };
+    if has_unowned_file(discovery, &rust_changed) {
         warnings.push("unclassified_files:all_changed".to_owned());
         return all_packages;
     }
     let head_edges = head_edges(discovery);
-    match base_edges(root, base, head, discovery) {
-        Ok(base_edges) => affected_packages(discovery, changed, &base_edges, &head_edges),
+    let mut affected = match base_edges(root, base, head, discovery) {
+        Ok(base_edges) => affected_packages(discovery, &rust_changed, &base_edges, &head_edges),
         Err(problem) => {
             warnings.push(format!("comparison_unavailable:{problem}:all_changed"));
-            all_packages
+            return all_packages;
         }
-    }
+    };
+    affected.extend(tofu_affected);
+    affected
 }
 
 /// True when one task counts as changed under the affected packages.

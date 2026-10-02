@@ -1,6 +1,8 @@
 //! Unit-analysis cases: precedence, structure, duplicates, scopes.
 use velnor_actions_tofu::modules::ModuleSource;
-use velnor_actions_tofu::units::{UnitError, analyze_files, files_for_prefix};
+use velnor_actions_tofu::units::{
+    UnitError, analyze_files, files_for_prefix, module_refs_for_texts,
+};
 
 use crate::support::{Outcome, fixture_dir, read_pairs};
 
@@ -241,4 +243,34 @@ fn fmt_scope_covers_tfvars_but_never_json() -> Outcome {
     assert!(unit.fmt.contains(&"terraform.tfvars".to_owned()));
     assert!(!unit.fmt.iter().any(|path| path.ends_with(".example")));
     Ok(())
+}
+
+#[test]
+fn refs_extract_without_validation_checks() {
+    let refs = module_refs_for_texts(&pairs(&[
+        ("main.tf", "module \"a\" {\n  source = \"./mods/a\"\n}\n"),
+        (
+            "extra.tf.json",
+            "{\"module\": {\"b\": {\"source\": \"../shared\"}}}",
+        ),
+        // Duplicates and unknown blocks pass: history predates checks.
+        (
+            "dup.tf",
+            "variable \"x\" {}\nvariable \"x\" {}\nwat \"q\" {}\n",
+        ),
+    ]))
+    .expect("refs extract");
+    assert_eq!(refs.len(), 2);
+    assert!(refs.iter().any(|reference| reference.name == "a"));
+    assert!(refs.iter().any(|reference| reference.name == "b"));
+}
+
+#[test]
+fn refs_reject_non_config_and_garbage() {
+    let err = module_refs_for_texts(&pairs(&[("notes.md", "module \"a\" {}\n")]))
+        .expect_err("non-config fails");
+    assert!(err.to_string().contains("not_config"), "{err}");
+    let err =
+        module_refs_for_texts(&pairs(&[("main.tf", "((( garbage")])).expect_err("garbage fails");
+    assert!(err.to_string().contains("malformed:main.tf"), "{err}");
 }

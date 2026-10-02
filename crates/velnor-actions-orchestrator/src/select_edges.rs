@@ -29,14 +29,36 @@ const MAX_BASE_MANIFEST_BATCH: usize = 512;
 /// are ever matched against this set (non-ASCII names fail manifest-key
 /// validation at obligation time, before selection), so byte-exactness is
 /// enforced by construction and proven by the shared splitter unit tests.
-fn added_files(root: &Path, base: &str, head: &str) -> Result<BTreeSet<String>, String> {
+pub(crate) fn added_files(root: &Path, base: &str, head: &str) -> Result<BTreeSet<String>, String> {
+    filtered_files(root, base, head, "A")
+}
+
+/// Head paths deleted since base: present at base, absent at head.
+///
+/// Same no-rename convention and validation as [`added_files`]; the
+/// tofu base graph reads base texts of deleted config files.
+pub(crate) fn deleted_files(
+    root: &Path,
+    base: &str,
+    head: &str,
+) -> Result<BTreeSet<String>, String> {
+    filtered_files(root, base, head, "D")
+}
+
+/// Paths under one `--diff-filter` between base and head, NUL-delimited.
+fn filtered_files(
+    root: &Path,
+    base: &str,
+    head: &str,
+    filter: &str,
+) -> Result<BTreeSet<String>, String> {
     validate_diff_rev(base, "bad_base")?;
     validate_diff_rev(head, "bad_head")?;
     let range = format!("{base}...{head}");
     let mut args = vec![
         OsString::from("--name-only"),
         OsString::from("--no-renames"),
-        OsString::from("--diff-filter=A"),
+        OsString::from(format!("--diff-filter={filter}")),
         OsString::from(range),
         OsString::from("--"),
     ];
@@ -112,8 +134,13 @@ pub(crate) fn base_edges(
 ///
 /// One batched `git show` cannot delimit blobs: git shows a repeated
 /// separator object only once, so per-manifest reads keep boundaries exact.
-/// Added (new) manifests never reach here.
-fn base_manifests(root: &Path, base: &str, manifests: &[&str]) -> Result<Vec<String>, String> {
+/// Added (new) manifests never reach here. Shared with the tofu base
+/// graph, which passes config paths instead of manifests.
+pub(crate) fn base_manifests(
+    root: &Path,
+    base: &str,
+    manifests: &[&str],
+) -> Result<Vec<String>, String> {
     validate_diff_rev(base, "bad_base")?;
     let mut out = Vec::with_capacity(manifests.len());
     for manifest in manifests {

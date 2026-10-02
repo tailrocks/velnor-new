@@ -80,6 +80,7 @@ mod impl_strict_envelope;
 mod impl_task_source_prep;
 mod impl_tofu_t09;
 mod impl_tofu_t11;
+mod impl_tofu_t12;
 mod impl_tool_snapshot;
 mod impl_trust;
 mod impl_trust_identity;

@@ -202,6 +202,35 @@ fn custom_task_steps_reject_bad_names() {
 }
 
 #[test]
+fn tofu_task_argv_routes_through_pinned_opentofu() {
+    use velnor_actions_tofu::{TofuTaskGroup, TofuTaskKind};
+    let group = TofuTaskGroup {
+        root: String::new(),
+        kind: TofuTaskKind::Validate,
+        configuration: "default".to_owned(),
+        no_targets: false,
+    };
+    let task = velnor_actions_tofu::propose_task(&group).expect("fixture proposes");
+    task.validate().expect("fixture valid");
+    let catalog = ToolCatalog::pinned();
+    let argv = task_argv(&task, &catalog).expect("task argv");
+    assert!(
+        argv.contains(&catalog.tool_spec(PinnedTool::Opentofu)),
+        "opentofu spec: {argv:?}"
+    );
+    assert!(
+        !argv
+            .iter()
+            .any(|arg| arg == "cargo" || arg.contains("nextest")),
+        "no rust tools: {argv:?}"
+    );
+    let at = argv.iter().position(|arg| arg == "--").expect("separator");
+    // Program `tofu` plus the stub payload (its leading `tofu`
+    // duplicates the program; T13 replaces the payload words).
+    assert_eq!(&argv[at + 1..], ["tofu", "tofu", "pending_t13"]);
+}
+
+#[test]
 fn candidate_build_delegates_to_mise_constructor() {
     let catalog = ToolCatalog::pinned();
     let mine = candidate_build_argv(&catalog).expect("build argv");

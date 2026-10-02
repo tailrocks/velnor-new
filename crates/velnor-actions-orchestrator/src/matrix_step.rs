@@ -1,6 +1,7 @@
 //! Crate-job step constructors: prelude plus validated obligation env.
 
 use std::collections::BTreeMap;
+use std::ffi::OsString;
 
 use velnor_actions_contract::{
     CrateObligation, Stack, Step, WorkflowPolicy, sanitize_error_detail,
@@ -31,8 +32,15 @@ pub(crate) const OBLIGATION_MATRIX_ID_ENV: &str = "VELNOR_MATRIX_ID";
 pub(crate) const OBLIGATION_MATRIX_KEY_ENV: &str = "VELNOR_MATRIX_KEY";
 
 /// Human step name for one obligation; shards name their index.
+///
+/// The base name dispatches by the task ID's stack segment: tofu
+/// kinds render through the tofu table, everything else through the
+/// rust table (unknown segments keep existing behavior).
 pub(crate) fn step_name_for(kind: &str, task_id: &str) -> String {
-    let base = step_base_name(kind, FORMAT_STEP_NAME);
+    let base = match obligation_stack(task_id) {
+        Some(Stack::Tofu) => velnor_actions_tofu::step_base_name(kind, FORMAT_STEP_NAME),
+        _ => step_base_name(kind, FORMAT_STEP_NAME),
+    };
     match shard_suffix(task_id) {
         Some((index, count)) => format!("{base} (shard {index} of {count})"),
         None => base.to_owned(),
@@ -43,6 +51,22 @@ pub(crate) fn step_name_for(kind: &str, task_id: &str) -> String {
 pub(crate) fn shard_suffix(task_id: &str) -> Option<(u32, u32)> {
     let (_, index, count) = velnor_actions_contract::split_shard_suffix(task_id)?;
     Some((index, count))
+}
+
+/// Known stack for one obligation task ID, if its segment parses.
+fn obligation_stack(task_id: &str) -> Option<Stack> {
+    crate::extension_schemas::task_stack_segment(task_id).and_then(Stack::from_id)
+}
+
+/// Fixed payload env for one obligation, dispatched by stack.
+///
+/// Tofu kinds thread through the tofu env mapping (empty until T13
+/// owns tofu env); everything else keeps the rust mapping.
+fn payload_env_for_obligation(task_id: &str, kind: &str) -> Vec<(OsString, OsString)> {
+    match obligation_stack(task_id) {
+        Some(Stack::Tofu) => velnor_actions_tofu::payload_env_for_kind(kind),
+        _ => payload_env_for_kind(kind),
+    }
 }
 
 /// Crate-job driver tools: Rust plus MBX only on MBX evidence.
@@ -210,8 +234,11 @@ pub(crate) fn obligation_step(
     catalog: &ToolCatalog,
     downstream: &[String],
 ) -> Result<Step, OrchestratorError> {
+    // Unknown segments keep the previous single-stack behavior: the
+    // grammar validation below fails them as malformed task IDs.
+    let stack_id = obligation_stack(&obligation.task_id).map_or(Stack::Rust.id(), Stack::id);
     let matrix_id =
-        velnor_actions_contract::matrix_id_for_task_group(Stack::Rust.id(), &obligation.task_id)
+        velnor_actions_contract::matrix_id_for_task_group(stack_id, &obligation.task_id)
             .map_err(crate::internal::internal_contract)?;
     let mut identity = obligation_identity_env(
         &obligation.task_id,
@@ -222,7 +249,7 @@ pub(crate) fn obligation_step(
     if !downstream.is_empty() {
         identity.insert(DOWNSTREAM_IDS_ENV.to_owned(), downstream.join(","));
     }
-    for (key, value) in payload_env_for_kind(&obligation.kind) {
+    for (key, value) in payload_env_for_obligation(&obligation.task_id, &obligation.kind) {
         identity.insert(
             key.to_string_lossy().into_owned(),
             value.to_string_lossy().into_owned(),

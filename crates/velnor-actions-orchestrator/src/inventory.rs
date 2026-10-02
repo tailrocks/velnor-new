@@ -15,6 +15,7 @@ use crate::discover::{PlannedWorkspace, workspace_lock, workspace_manifest};
 use crate::generate::ToolSnapshot;
 use crate::inventory_reuse::MemberIndex;
 use crate::safe_read::{RepoRead, read_repo_file};
+use crate::select_tofu::TofuSelectionUnit;
 
 /// Candidate outcomes plus successful manifest inventories.
 pub(crate) type Inventories = (Vec<CandidateOutcome>, Vec<(String, WorkspaceRecord)>);
@@ -26,7 +27,8 @@ const MAX_METADATA_LANES: usize = 1;
 /// Run unit analysis for every candidate: Cargo metadata for rust
 /// (reusing workspace records after membership validation), bounded
 /// structural parses for tofu. Outcomes return in candidate order;
-/// only rust contributes workspace records.
+/// only rust contributes workspace records. Successful tofu units
+/// also contribute selection records (head files plus edges).
 ///
 /// # Errors
 ///
@@ -35,7 +37,7 @@ pub(crate) fn run_inventories(
     root: &Path,
     candidates: &[StackCandidate],
     files: &[String],
-) -> Result<Inventories, OrchestratorError> {
+) -> Result<(Inventories, Vec<TofuSelectionUnit>), OrchestratorError> {
     let catalog = ToolCatalog::pinned();
     let mut manifests = Vec::with_capacity(candidates.len());
     for candidate in candidates {
@@ -59,9 +61,13 @@ pub(crate) fn run_inventories(
         fetch_inventory(root, manifest, &catalog, &known)
     })?;
     let mut tofu_outcomes = BTreeMap::new();
+    let mut tofu_selection = Vec::new();
     for unit in tofu_units {
-        tofu_outcomes.insert(unit.to_owned(), analyze_tofu_unit(root, files, unit));
+        let (outcome, record) = analyze_tofu_unit(root, files, unit);
+        tofu_outcomes.insert(unit.to_owned(), outcome);
+        tofu_selection.extend(record);
     }
+    tofu_selection.sort_by(|left, right| left.root.cmp(&right.root));
     let mut rust_iter = rust_outcomes.into_iter();
     let mut outcomes = Vec::with_capacity(candidates.len());
     for candidate in candidates {
@@ -91,7 +97,7 @@ pub(crate) fn run_inventories(
             }
         }
     }
-    Ok((outcomes, inventories))
+    Ok(((outcomes, inventories), tofu_selection))
 }
 
 /// Manifest path for one neutral candidate via closed stack dispatch.
@@ -118,10 +124,16 @@ fn manifest_for_rust(unit_root: &str) -> String {
 /// or non-UTF-8 effective files) report a malformed outcome naming
 /// the file; module-boundary failures (escapes, missing targets,
 /// cycles) likewise report malformed. Findings pass through.
-fn analyze_tofu_unit(root: &Path, files: &[String], unit: &str) -> CandidateOutcome {
+/// Successful units also return their selection record.
+fn analyze_tofu_unit(
+    root: &Path,
+    files: &[String],
+    unit: &str,
+) -> (CandidateOutcome, Option<TofuSelectionUnit>) {
+    let failed = |outcome: CandidateOutcome| (outcome, None);
     let selected = match velnor_actions_tofu::files_for_prefix(files, unit) {
         Ok(selected) => selected,
-        Err(err) => return malformed_outcome(unit, err.to_string()),
+        Err(err) => return failed(malformed_outcome(unit, err.to_string())),
     };
     let effective = velnor_actions_tofu::effective_set(&selected);
     let mut pairs = Vec::with_capacity(effective.len());
@@ -129,23 +141,47 @@ fn analyze_tofu_unit(root: &Path, files: &[String], unit: &str) -> CandidateOutc
         match read_repo_file(root, path, velnor_actions_tofu::MAX_FILE_BYTES) {
             Ok(RepoRead::Text(text)) => pairs.push((path.clone(), text)),
             Ok(RepoRead::Absent) => {
-                return malformed_outcome(path, "absent_after_index".to_owned());
+                return failed(malformed_outcome(path, "absent_after_index".to_owned()));
             }
-            Err(err) => return malformed_outcome(path, err.to_string()),
+            Err(err) => return failed(malformed_outcome(path, err.to_string())),
         }
     }
     match velnor_actions_tofu::analyze_files(&pairs) {
         Ok(unit_record) => {
             match velnor_actions_tofu::qualify_module_edges(root, files, &unit_record.modules) {
-                Ok(_) => ok_outcome(unit.to_owned()),
-                Err(err) => module_error_outcome(&err, unit),
+                Ok(edges) => {
+                    let record = TofuSelectionUnit {
+                        root: unit.to_owned(),
+                        files: config_files(&selected),
+                        edges,
+                    };
+                    (ok_outcome(unit.to_owned()), Some(record))
+                }
+                Err(err) => failed(module_error_outcome(&err, unit)),
             }
         }
         Err(err) => {
             let path = unit_error_path(&err, unit);
-            malformed_outcome(&path, err.to_string())
+            failed(malformed_outcome(&path, err.to_string()))
         }
     }
+}
+
+/// Sorted config-family files among unit paths (base-text candidates).
+fn config_files(selected: &[String]) -> Vec<String> {
+    let mut configs: Vec<String> = selected
+        .iter()
+        .filter(|path| {
+            let name = path.rsplit('/').next().unwrap_or(path);
+            matches!(
+                velnor_actions_tofu::family_of(name),
+                velnor_actions_tofu::Family::Config | velnor_actions_tofu::Family::Override
+            )
+        })
+        .cloned()
+        .collect();
+    configs.sort();
+    configs
 }
 
 /// Evidence path naming a tofu unit failure.

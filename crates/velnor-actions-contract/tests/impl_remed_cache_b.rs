@@ -3,10 +3,10 @@ use crate::impl_contract_ids::{TASK, sample_entry, sample_identity};
 use velnor_actions_contract::cachekey::{MISS_REASONS, cache_key, validate_miss_reason};
 use velnor_actions_contract::{
     CacheLayer, CacheOutcome, CacheResult, ContractError, RUST_EXTENSION_REQUIRED_SLOTS,
-    StackExtension, TaskReport, TaskStatus, Trust, WorkflowEvent, digest_b3,
-    final_report_id_for_run, final_report_relpath, input_digest, join_runner_temp,
+    StackExtension, TOFU_EXTENSION_REQUIRED_SLOTS, TaskReport, TaskStatus, Trust, WorkflowEvent,
+    digest_b3, final_report_id_for_run, final_report_relpath, input_digest, join_runner_temp,
     matrix_report_relpath, run_key_for_ci, task_report_id_for_task, task_report_relpath,
-    validate_rust_extension,
+    validate_rust_extension, validate_tofu_extension,
 };
 
 #[test]
@@ -194,4 +194,54 @@ fn cache_extension_slots_require_workspace_and_profile() {
     let mut bad = good;
     bad.data["graph_digest"] = serde_json::json!("nope");
     assert!(validate_rust_extension(&bad).is_err());
+}
+
+#[test]
+fn tofu_extension_slots_require_unit_graph_and_driver() {
+    assert_eq!(TOFU_EXTENSION_REQUIRED_SLOTS.len(), 9);
+    let good = StackExtension {
+        schema: "tofu-task-identity-v1".to_owned(),
+        data: serde_json::json!({
+            "unit_id": "root",
+            "workspace_id": digest_b3(b"workspace"),
+            "graph_digest": digest_b3(b"graph"),
+            "root": "",
+            "profile": "default",
+            "driver": "tofu+none",
+            "config_digest": digest_b3(b"config"),
+            "lock_digest": null,
+            "kind": "validate",
+        }),
+    };
+    assert_eq!(validate_tofu_extension(&good), Ok(()));
+    let mut nested = good.clone();
+    nested.data["unit_id"] = serde_json::json!("stacks/a");
+    nested.data["root"] = serde_json::json!("stacks/a");
+    nested.data["lock_digest"] = serde_json::json!(digest_b3(b"lock"));
+    assert_eq!(validate_tofu_extension(&nested), Ok(()));
+    let mut unknown = good.clone();
+    unknown.schema = "rust-task-identity-v1".to_owned();
+    assert!(validate_tofu_extension(&unknown).is_err());
+    for slot in ["unit_id", "graph_digest", "driver", "lock_digest"] {
+        let mut value = serde_json::to_value(&good.data).expect("value");
+        value.as_object_mut().expect("object").remove(slot);
+        let missing = StackExtension {
+            schema: good.schema.clone(),
+            data: value,
+        };
+        let err = validate_tofu_extension(&missing).expect_err("missing slot");
+        assert!(
+            err.to_string().contains(&format!("missing_slot:{slot}")),
+            "{slot}"
+        );
+    }
+    let mut bad = good.clone();
+    bad.data["driver"] = serde_json::json!("tofu");
+    assert!(validate_tofu_extension(&bad).is_err());
+    let mut bad = good.clone();
+    bad.data["config_digest"] = serde_json::json!("nope");
+    assert!(validate_tofu_extension(&bad).is_err());
+    let mut bad = good;
+    bad.data["lock_digest"] = serde_json::json!(42);
+    assert!(validate_tofu_extension(&bad).is_err());
 }

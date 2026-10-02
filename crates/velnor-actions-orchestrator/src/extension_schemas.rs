@@ -4,17 +4,20 @@
 //! map to their adapter schema; task IDs map to their stack segment.
 
 use velnor_actions_contract::Stack;
-use velnor_actions_contract::cachekey::{RUST_EXTENSION_SCHEMA, is_known_stack_extension_schema};
+use velnor_actions_contract::cachekey::{
+    RUST_EXTENSION_SCHEMA, TOFU_EXTENSION_SCHEMA, is_known_stack_extension_schema,
+};
 
 /// Adapter extension schema for one stack ID, if the stack is known.
 ///
-/// Tofu has no adapter schema until T09, so it maps to `None`
-/// (unknown), disabling reuse and baseline coverage for tofu tasks.
+/// Unknown stack IDs map to `None` (unknown), disabling reuse and
+/// baseline coverage for their tasks.
 #[must_use]
 pub fn extension_schema_for_stack(stack_id: &str) -> Option<&'static str> {
     match Stack::from_id(stack_id) {
         Some(Stack::Rust) => Some(RUST_EXTENSION_SCHEMA),
-        Some(Stack::Tofu) | None => None,
+        Some(Stack::Tofu) => Some(TOFU_EXTENSION_SCHEMA),
+        None => None,
     }
 }
 
@@ -108,5 +111,18 @@ mod tests {
         assert!(!coverage_schema_known("bogus"));
         assert!(reuse_eligible_for_schema(RUST_EXTENSION_SCHEMA));
         assert!(!reuse_eligible_for_schema("rust-task-v2"));
+    }
+
+    #[test]
+    fn tofu_schema_covers_tofu_tasks() {
+        assert_eq!(
+            extension_schema_for_stack("tofu"),
+            Some(TOFU_EXTENSION_SCHEMA)
+        );
+        assert!(coverage_schema_known("stack/tofu/root/validate/default"));
+        assert!(coverage_schema_known(
+            "stack/tofu/stacks/a/init/default/shard-1-of-2"
+        ));
+        assert!(reuse_eligible_for_schema(TOFU_EXTENSION_SCHEMA));
     }
 }

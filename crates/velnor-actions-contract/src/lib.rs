@@ -14,6 +14,7 @@ pub mod closure;
 pub mod config;
 pub mod discover;
 pub mod errors;
+pub mod extension_schemas;
 pub mod extensions;
 pub mod finding;
 pub mod formats;
@@ -54,7 +55,10 @@ pub use discover::{
     validate_pattern,
 };
 pub use errors::{ContractError, sanitize_error_detail};
-pub use extensions::{RUST_EXTENSION_REQUIRED_SLOTS, validate_rust_extension};
+pub use extensions::{
+    RUST_EXTENSION_REQUIRED_SLOTS, TOFU_EXTENSION_REQUIRED_SLOTS, validate_rust_extension,
+    validate_tofu_extension,
+};
 pub use finding::Finding;
 pub use formats::{DECLARED_GITHUB_FORMATS, find_github_format, is_declared_github_format};
 pub use freshness::{

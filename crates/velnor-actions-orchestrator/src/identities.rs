@@ -151,6 +151,11 @@ impl ExtensionBundle {
         &self.config_digest
     }
 
+    /// Workspace identity digest backing the bundle.
+    pub(crate) fn workspace_id(&self) -> &str {
+        &self.workspace_id
+    }
+
     /// Workspace graph digest backing the bundle.
     pub(crate) fn graph_digest(&self) -> &str {
         &self.graph_digest
@@ -205,7 +210,14 @@ pub(crate) fn extension_bundle_with_snapshot(
     if !bundle.has_build_script {
         bundle.rerun_inputs = Some(Vec::new());
     }
-    if let Some(root) = root {
+    if Stack::from_id(&task.stack_id) == Some(Stack::Tofu) {
+        // Tofu slots resolve through the tofu bridge (root lockfile);
+        // the rust probes below would bind Cargo content instead.
+        bundle.lock_digest =
+            velnor_actions_rust::tasks::DigestSlot::Unknown("tofu_adapter_owned".to_owned());
+        bundle.nextest_digest =
+            velnor_actions_rust::tasks::DigestSlot::Unknown("tofu_adapter_owned".to_owned());
+    } else if let Some(root) = root {
         bundle.lock_digest = super::closure_slots::lock_digest_at_root(root, &bundle.manifest);
         bundle.nextest_digest = super::closure_slots::nextest_digest_at_root(root, nextest_config);
     }
@@ -360,6 +372,26 @@ pub(crate) fn cache_format_id_for(driver: CompileDriver) -> String {
     canonical_digest(&serde_json::json!({
         "schema": "velnor-cache-format-fallback-v1",
         "adapter": driver.as_str(),
+    }))
+    .unwrap_or_else(|_| digest_b3(b"cache_format_error"))
+}
+
+/// Cache-format identity for tofu tasks (the tofu adapter reports it).
+///
+/// Same payload version as rust; the adapter slot distinguishes the
+/// family. Total: the contract admits the `tofu` adapter, so the
+/// fallback below never triggers.
+pub(crate) fn cache_format_id_for_tofu() -> String {
+    if let Ok(id) = cache_format_id(&FormatInputs {
+        adapter: velnor_actions_tofu::STACK_ID.to_owned(),
+        format: CACHE_FORMAT_LABEL.to_owned(),
+        generation: "1".to_owned(),
+    }) {
+        return id;
+    }
+    canonical_digest(&serde_json::json!({
+        "schema": "velnor-cache-format-fallback-v1",
+        "adapter": velnor_actions_tofu::STACK_ID,
     }))
     .unwrap_or_else(|_| digest_b3(b"cache_format_error"))
 }

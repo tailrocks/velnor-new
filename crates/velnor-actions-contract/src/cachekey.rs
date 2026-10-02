@@ -11,15 +11,10 @@ use crate::errors::ContractError;
 
 /// Cache-key schema id, always `v1`.
 pub const CACHE_SCHEMA_ID: &str = "v1";
-/// Extension schema emitted by the Rust adapter's identity extension.
-pub const RUST_EXTENSION_SCHEMA: &str = "rust-task-identity-v1";
-/// Known stack-extension schemas; unknown schemas disable reuse/coverage.
-pub const KNOWN_STACK_EXTENSION_SCHEMAS: &[&str] = &[RUST_EXTENSION_SCHEMA];
-/// True when `schema` is a known stack-extension schema (cache §1).
-#[must_use]
-pub fn is_known_stack_extension_schema(schema: &str) -> bool {
-    KNOWN_STACK_EXTENSION_SCHEMAS.contains(&schema)
-}
+pub use crate::extension_schemas::{
+    KNOWN_STACK_EXTENSION_SCHEMAS, RUST_EXTENSION_SCHEMA, TOFU_EXTENSION_SCHEMA,
+    is_known_stack_extension_schema,
+};
 /// Maximum GitHub cache-key bytes; longer keys fail generation.
 pub const MAX_CACHE_KEY_BYTES: usize = 512;
 
@@ -201,7 +196,7 @@ pub fn toolchain_id(inputs: &ToolchainInputs) -> Result<String, ContractError> {
 /// Compute `cache_format_id`; unreportable MBX formats fail, never guess.
 /// # Errors
 pub fn cache_format_id(inputs: &FormatInputs) -> Result<String, ContractError> {
-    if inputs.adapter != "cargo" && inputs.adapter != "mbx" {
+    if inputs.adapter != "cargo" && inputs.adapter != "mbx" && inputs.adapter != "tofu" {
         return Err(ContractError::identity("cache_format", "unknown_adapter"));
     }
     if inputs.format.trim().is_empty() || inputs.generation.trim().is_empty() {
@@ -387,12 +382,5 @@ mod tests {
         );
         assert!(validate_miss_reason("no_entry").is_ok());
         assert!(validate_miss_reason("sometimes").is_err());
-    }
-
-    #[test]
-    fn unknown_extension_schemas_disable_identity() {
-        assert!(is_known_stack_extension_schema(RUST_EXTENSION_SCHEMA));
-        assert!(!is_known_stack_extension_schema("rust-task-v2"));
-        assert!(!is_known_stack_extension_schema(""));
     }
 }

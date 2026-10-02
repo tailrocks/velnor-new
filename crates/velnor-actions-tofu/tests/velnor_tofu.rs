@@ -13,12 +13,16 @@ mod impl_tofu_evidence;
 mod impl_tofu_family;
 #[path = "impl_tofu_fmt.rs"]
 mod impl_tofu_fmt;
+#[path = "impl_tofu_identity.rs"]
+mod impl_tofu_identity;
 #[path = "impl_tofu_infer.rs"]
 mod impl_tofu_infer;
 #[path = "impl_tofu_modules.rs"]
 mod impl_tofu_modules;
 #[path = "impl_tofu_parser.rs"]
 mod impl_tofu_parser;
+#[path = "impl_tofu_propose.rs"]
+mod impl_tofu_propose;
 #[path = "impl_tofu_qualify.rs"]
 mod impl_tofu_qualify;
 #[path = "impl_tofu_roots.rs"]
