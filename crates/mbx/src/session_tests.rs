@@ -251,7 +251,10 @@ async fn cmake_selection_uses_the_final_build_environment() {
     session
         .begin(
             workspace.path(),
-            &workspace.path().join("target"),
+            &crate::store::CargoBuildRoots {
+                target_dir: workspace.path().join("target"),
+                build_dir: workspace.path().join("target"),
+            },
             &["build".into()],
             &mut environment,
         )
@@ -290,7 +293,10 @@ async fn session_environment_directs_cargo_at_the_shim() {
     let run = session
         .begin(
             workspace.path(),
-            &workspace.path().join("target"),
+            &crate::store::CargoBuildRoots {
+                target_dir: workspace.path().join("target"),
+                build_dir: workspace.path().join("target"),
+            },
             &["build".to_string()],
             &mut values,
         )
@@ -341,7 +347,10 @@ async fn failed_incremental_recording_replaces_an_inherited_root() {
     session
         .begin(
             workspace.path(),
-            &target,
+            &crate::store::CargoBuildRoots {
+                target_dir: target.clone(),
+                build_dir: target.clone(),
+            },
             &["build".to_string()],
             &mut values,
         )
@@ -425,7 +434,10 @@ async fn a_session_with_no_shim_connection_does_not_load_a_manifest() {
     let run = session
         .begin(
             workspace.path(),
-            &workspace.path().join("target"),
+            &crate::store::CargoBuildRoots {
+                target_dir: workspace.path().join("target"),
+                build_dir: workspace.path().join("target"),
+            },
             &["build".to_string()],
             &mut environment,
         )
@@ -447,13 +459,17 @@ async fn a_grouped_session_without_wrappers_records_native_target_participation(
         .await
         .unwrap();
     let workspace = tempfile::tempdir().unwrap();
-    let target = workspace.path().join("target/check");
+    let target = workspace.path().join("target");
+    let build = workspace.path().join("intermediates");
     std::fs::create_dir_all(&target).unwrap();
     let mut environment = BTreeMap::new();
     let mut run = session
         .begin(
             workspace.path(),
-            &target,
+            &crate::store::CargoBuildRoots {
+                target_dir: target.clone(),
+                build_dir: build.clone(),
+            },
             &["check".to_string()],
             &mut environment,
         )
@@ -462,12 +478,26 @@ async fn a_grouped_session_without_wrappers_records_native_target_participation(
     run.export_group = Some("fresh-group".to_owned());
     assert!(session.task.initialized.get().is_none());
     run.commit().await.unwrap();
+    // A later invocation changes checkout metadata, never this receipt.
+    crate::store::record_checkout(
+        &config.store_dir(),
+        &build_identity(workspace.path(), &["check".into()]),
+        workspace.path(),
+        Some(&crate::store::CargoBuildRoots {
+            target_dir: workspace.path().join("other-target"),
+            build_dir: workspace.path().join("other-build"),
+        }),
+    )
+    .unwrap();
     assert!(session.task.initialized.get().is_none());
     assert_eq!(
-        crate::store::group_workspace_targets(&config.store_dir(), "fresh-group").unwrap(),
-        vec![crate::store::WorkspaceTarget {
+        crate::store::group_workspace_roots(&config.store_dir(), "fresh-group").unwrap(),
+        vec![crate::store::WorkspaceRoots {
             workspace_root: workspace.path().to_path_buf(),
-            target_dir: target
+            cargo: crate::store::CargoBuildRoots {
+                target_dir: target.clone(),
+                build_dir: build
+            }
         }]
     );
     let bundle = cache.path().join("native-group");
@@ -607,7 +637,10 @@ async fn incremental_builds_leave_cargo_incremental_alone() {
     session
         .begin(
             workspace.path(),
-            &workspace.path().join("target"),
+            &crate::store::CargoBuildRoots {
+                target_dir: workspace.path().join("target"),
+                build_dir: workspace.path().join("target"),
+            },
             &["build".to_string()],
             &mut values,
         )
@@ -635,7 +668,10 @@ async fn verify_mode_is_passed_to_the_shim() {
     session
         .begin(
             workspace.path(),
-            &workspace.path().join("target"),
+            &crate::store::CargoBuildRoots {
+                target_dir: workspace.path().join("target"),
+                build_dir: workspace.path().join("target"),
+            },
             &["build".to_string()],
             &mut values,
         )
@@ -2069,4 +2105,47 @@ fn routine_bypasses_are_debug_but_failed_cache_paths_are_warnings() {
         super::bypass_diagnostic(false, "failed"),
         AgentRequest::RecordWarning { .. }
     ));
+}
+
+#[tokio::test]
+async fn cargo_session_carries_separate_roots_and_exec_clears_inherited_roots() {
+    let cache = tempfile::tempdir().unwrap();
+    let session_dir = tempfile::tempdir().unwrap();
+    let config = test_config(cache.path());
+    let session = CacheSession::start(session_dir.path(), &config)
+        .await
+        .unwrap();
+    let workspace = tempfile::tempdir().unwrap();
+    let roots = crate::store::CargoBuildRoots {
+        target_dir: workspace.path().join("target"),
+        build_dir: workspace.path().join("intermediates"),
+    };
+    let mut environment = BTreeMap::new();
+    let run = session
+        .begin(
+            workspace.path(),
+            &roots,
+            &["check".into()],
+            &mut environment,
+        )
+        .await
+        .unwrap();
+    assert_eq!(run.cargo_roots, Some(roots.clone()));
+    assert_eq!(
+        PathBuf::from(&environment[TARGET_DIR_ENV]),
+        roots.target_dir
+    );
+    assert_eq!(PathBuf::from(&environment[BUILD_DIR_ENV]), roots.build_dir);
+    session.finish().await.unwrap();
+
+    let exec_dir = tempfile::tempdir().unwrap();
+    let exec = CacheSession::start(exec_dir.path(), &config).await.unwrap();
+    let run = exec
+        .begin_exec(workspace.path(), &["make".into()], None, &mut environment)
+        .await
+        .unwrap();
+    assert_eq!(run.cargo_roots, None);
+    assert!(!environment.contains_key(TARGET_DIR_ENV));
+    assert!(!environment.contains_key(BUILD_DIR_ENV));
+    exec.finish().await.unwrap();
 }

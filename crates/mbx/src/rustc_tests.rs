@@ -1737,3 +1737,36 @@ fn relative_external_native_paths_are_mapped_from_the_working_directory() {
         .unwrap()
     );
 }
+
+#[test]
+fn separate_and_equal_cargo_build_roots_have_stable_portable_names() {
+    let directory = tempfile::tempdir().unwrap();
+    let target = directory.path().join("target");
+    let build = target.join("intermediates");
+    for effective_build in [&build, &target] {
+        let mappings = path_mappings_with_env(directory.path(), None, None, |name| match name {
+            session::TARGET_DIR_ENV => Some(target.clone().into_os_string()),
+            session::BUILD_DIR_ENV => Some(effective_build.clone().into_os_string()),
+            _ => None,
+        });
+        let mapping = mappings
+            .iter()
+            .find(|mapping| mapping.root == *effective_build)
+            .unwrap();
+        assert_eq!(
+            mapping.placeholder,
+            if effective_build == &target {
+                "target"
+            } else {
+                "build"
+            }
+        );
+        assert_eq!(
+            mappings
+                .iter()
+                .filter(|mapping| mapping.root == *effective_build)
+                .count(),
+            1
+        );
+    }
+}

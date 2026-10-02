@@ -275,7 +275,12 @@ fn action_descriptor(rustdoc: &OsStr, invocation: &Invocation) -> Result<Vec<u8>
         .collect();
     let environment = action_environment(std::env::vars(), &mappings);
     let mut inputs = BTreeMap::new();
-    let target = std::env::var_os(session::TARGET_DIR_ENV).map(PathBuf::from);
+    let excluded = [session::TARGET_DIR_ENV, session::BUILD_DIR_ENV]
+        .into_iter()
+        .filter_map(std::env::var_os)
+        .map(PathBuf::from)
+        .filter(|root| root.is_absolute())
+        .collect::<Vec<_>>();
     let workspace = std::env::var_os(session::WORKSPACE_ROOT_ENV).map(PathBuf::from);
     let (input_root, portable_root) = workspace
         .as_deref()
@@ -287,7 +292,7 @@ fn action_descriptor(rustdoc: &OsStr, invocation: &Invocation) -> Result<Vec<u8>
         input_root,
         input_root,
         portable_root,
-        target.as_deref(),
+        &excluded,
         &mut inputs,
     )?;
     collect_argument_inputs(&invocation.arguments, &mappings, &mut inputs)?;
@@ -320,12 +325,24 @@ fn action_environment(
 }
 
 fn path_mappings(invocation: &Invocation) -> Vec<(String, String)> {
+    path_mappings_with_env(invocation, |name| std::env::var_os(name))
+}
+
+fn path_mappings_with_env(
+    invocation: &Invocation,
+    environment: impl Fn(&str) -> Option<OsString>,
+) -> Vec<(String, String)> {
     let mut roots = Vec::new();
     for (name, value) in [
-        ("target", std::env::var_os(session::TARGET_DIR_ENV)),
-        ("workspace", std::env::var_os(session::WORKSPACE_ROOT_ENV)),
+        ("target", environment(session::TARGET_DIR_ENV)),
+        ("build", environment(session::BUILD_DIR_ENV)),
+        ("workspace", environment(session::WORKSPACE_ROOT_ENV)),
     ] {
-        if let Some(value) = value {
+        if let Some(value) = value.filter(|value| Path::new(value).is_absolute())
+            && !roots
+                .iter()
+                .any(|root: &(String, String)| root.0 == value.to_string_lossy())
+        {
             roots.push((
                 PathBuf::from(value).to_string_lossy().into_owned(),
                 format!("${{{name}}}"),
@@ -352,7 +369,7 @@ fn collect_tree(
     root: &Path,
     directory: &Path,
     portable_root: &str,
-    excluded: Option<&Path>,
+    excluded: &[PathBuf],
     inputs: &mut BTreeMap<String, CacheDigest>,
 ) -> Result<()> {
     for entry in std::fs::read_dir(directory)? {
@@ -364,7 +381,9 @@ fn collect_tree(
         // name and configured location before applying the conservative source
         // symlink check.
         if (name == "target" && (file_type.is_dir() || file_type.is_symlink()))
-            || excluded.is_some_and(|excluded| path == excluded || path.starts_with(excluded))
+            || excluded
+                .iter()
+                .any(|excluded| path == *excluded || path.starts_with(excluded))
         {
             continue;
         }
@@ -827,11 +846,67 @@ mod tests {
             package.path(),
             package.path(),
             "${package}",
-            Some(managed.path()),
+            &[managed.path().to_path_buf()],
             &mut inputs,
         )
         .unwrap();
 
+        assert_eq!(inputs.len(), 1);
+        assert!(inputs.contains_key("${package}/lib.rs"));
+    }
+
+    #[test]
+    fn rustdoc_build_root_mapping_preserves_equal_root_behavior() {
+        let package = tempfile::tempdir().unwrap();
+        let target = package.path().join("target");
+        let build = target.join("scratch");
+        let invocation = Invocation {
+            crate_name: "widget".into(),
+            output: target.join("doc"),
+            manifest: package.path().into(),
+            arguments: Vec::new(),
+        };
+        for effective_build in [&build, &target] {
+            let mappings = path_mappings_with_env(&invocation, |name| match name {
+                session::TARGET_DIR_ENV => Some(target.clone().into_os_string()),
+                session::BUILD_DIR_ENV => Some(effective_build.clone().into_os_string()),
+                _ => None,
+            });
+            assert_eq!(
+                normalize(
+                    &effective_build.join("debug/build").to_string_lossy(),
+                    &mappings
+                ),
+                format!(
+                    "${{{}}}/debug/build",
+                    if effective_build == &target {
+                        "target"
+                    } else {
+                        "build"
+                    }
+                )
+            );
+        }
+    }
+
+    #[test]
+    fn rustdoc_source_tree_excludes_separate_build_root() {
+        let package = tempfile::tempdir().unwrap();
+        let target = package.path().join("target");
+        let build = package.path().join("scratch");
+        std::fs::create_dir(&target).unwrap();
+        std::fs::create_dir(&build).unwrap();
+        std::fs::write(package.path().join("lib.rs"), "pub fn value() {}\n").unwrap();
+        std::fs::write(build.join("generated.rs"), "intermediate").unwrap();
+        let mut inputs = BTreeMap::new();
+        collect_tree(
+            package.path(),
+            package.path(),
+            "${package}",
+            &[target, build],
+            &mut inputs,
+        )
+        .unwrap();
         assert_eq!(inputs.len(), 1);
         assert!(inputs.contains_key("${package}/lib.rs"));
     }

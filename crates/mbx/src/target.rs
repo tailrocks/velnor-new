@@ -1212,6 +1212,47 @@ fn symlink_dir(source: &Path, link: &Path) -> std::io::Result<()> {
     std::os::windows::fs::symlink_dir(source, link)
 }
 
+/// Resolve only a recorded MBX target link belonging to this exact workspace.
+pub(crate) fn owned_capture_root(workspace_root: &Path, path: &Path) -> Result<Option<PathBuf>> {
+    let managed = std::fs::read_link(path)?;
+    let key = view_key(workspace_root);
+    let Some(parent) = managed.parent() else {
+        return Ok(None);
+    };
+    if !managed.is_absolute()
+        || managed.file_name().and_then(|name| name.to_str()) != Some(key.as_str())
+        || parent.file_name().and_then(|name| name.to_str()) != Some(VIEWS_DIR)
+    {
+        return Ok(None);
+    }
+    let record_path = managed.with_extension("json");
+    if !std::fs::symlink_metadata(&record_path).is_ok_and(|metadata| metadata.file_type().is_file())
+    {
+        return Ok(None);
+    }
+    let Some(record) = read_view_record(&record_path) else {
+        return Ok(None);
+    };
+    if record.workspace_root != workspace_root {
+        return Ok(None);
+    }
+    match std::fs::symlink_metadata(&managed) {
+        Ok(metadata) if metadata.is_dir() => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        _ => return Ok(None),
+    }
+    let canonical_parent = parent.canonicalize()?;
+    if canonical_parent.file_name().and_then(|name| name.to_str()) != Some(VIEWS_DIR) {
+        return Ok(None);
+    }
+    let expected = canonical_parent.join(key);
+    if !managed.try_exists()? {
+        return Ok(Some(expected));
+    }
+    let actual = path.canonicalize()?;
+    Ok((actual == expected).then_some(actual))
+}
+
 /// Mark an existing managed view as used when this build wrote into it.
 ///
 /// Placement records a view every time it happens, but a build can write into a

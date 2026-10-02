@@ -378,3 +378,36 @@ fn output_scan_matches_logical_macos_mapping_roots() {
         assert!(!portable.outputs_are_clean(&object, &[PathMapping::new(&physical, "target")]));
     }
 }
+
+#[test]
+fn cc_cargo_build_root_has_its_own_portable_name() {
+    let directory = tempfile::tempdir().unwrap();
+    let target = directory.path().join("target");
+    let build = target.join("scratch");
+    for effective_build in [&build, &target] {
+        let mappings = path_mappings_with_env(directory.path(), |name| match name {
+            session::TARGET_DIR_ENV => Some(target.clone().into_os_string()),
+            session::BUILD_DIR_ENV => Some(effective_build.clone().into_os_string()),
+            _ => None,
+        });
+        let mapping = mappings
+            .iter()
+            .find(|mapping| mapping.root == *effective_build)
+            .unwrap();
+        assert_eq!(
+            mapping.placeholder,
+            if effective_build == &target {
+                "target"
+            } else {
+                "build"
+            }
+        );
+        assert_eq!(
+            mappings
+                .iter()
+                .filter(|mapping| mapping.root == *effective_build)
+                .count(),
+            1
+        );
+    }
+}

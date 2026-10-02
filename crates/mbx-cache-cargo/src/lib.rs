@@ -8,7 +8,7 @@ use mbx_cache_core::{CacheDigest, canonical_json};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::ffi::{OsStr, OsString};
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::process::Command;
 use std::time::SystemTime;
 
@@ -173,6 +173,9 @@ fn resolve_with_reported(
                 .map(|value| absolute(&invocation_dir, &value.to_string_lossy()))
         })
         .unwrap_or_else(|| workspace_root.join("target"));
+    let workspace_root = normalized_root(&workspace_root);
+    let target_dir = normalized_root(&target_dir);
+    let build_dir = build_dir.map(|root| normalized_root(&root));
     let build_identity = build_identity(&workspace_root, arguments);
     CargoInvocation {
         workspace_root,
@@ -181,6 +184,29 @@ fn resolve_with_reported(
         build_dir,
         build_identity,
     }
+}
+
+// Keep Cargo's logical symlink spelling. Dot components do not change path
+// authority; a parent component can be removed only after an ordinary directory.
+fn normalized_root(path: &Path) -> PathBuf {
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir if normalized.has_root() && normalized.parent().is_none() => {}
+            Component::ParentDir
+                if matches!(
+                    normalized.components().next_back(),
+                    Some(Component::Normal(_))
+                ) && std::fs::symlink_metadata(&normalized)
+                    .is_ok_and(|metadata| metadata.file_type().is_dir()) =>
+            {
+                normalized.pop();
+            }
+            _ => normalized.push(component.as_os_str()),
+        }
+    }
+    normalized
 }
 
 #[derive(Serialize)]
@@ -1144,6 +1170,61 @@ mod tests {
 
         let dangling = ["build".into(), "--target-dir".into()];
         assert!(!resolve(cargo, &dangling, root, None).target_dir_requested);
+    }
+
+    #[test]
+    fn resolved_roots_remove_dot_components_without_resolving_symlink_authority() {
+        let directory = cargo_fixture();
+        let root = directory.path();
+        let target = root.join("./target");
+        let build = root.join("./src/../intermediates");
+        let resolved = resolve_with_reported(
+            &["build".into(), "--target-dir=./target".into()],
+            root,
+            None,
+            Some((root.join("."), target, Some(build))),
+        );
+        assert_eq!(resolved.workspace_root, root);
+        assert_eq!(resolved.target_dir, root.join("target"));
+        assert_eq!(resolved.build_dir, Some(root.join("intermediates")));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn normalization_never_collapses_parent_across_a_symlink() {
+        let directory = tempfile::tempdir().unwrap();
+        let elsewhere = tempfile::tempdir().unwrap();
+        std::os::unix::fs::symlink(elsewhere.path(), directory.path().join("link")).unwrap();
+        let logical = directory.path().join("link/../target");
+        assert_eq!(normalized_root(&logical), logical);
+        let repeated_parent = directory.path().join("link/../../target");
+        assert_eq!(normalized_root(&repeated_parent), repeated_parent);
+        assert_eq!(
+            normalized_root(&directory.path().join("./link/target")),
+            directory.path().join("link/target")
+        );
+    }
+
+    #[test]
+    fn actual_cargo_metadata_roots_are_normalized_at_the_resolver_boundary() {
+        let directory = cargo_fixture();
+        let root = directory.path();
+        let home = root.join("cargo-home");
+        std::fs::create_dir(&home).unwrap();
+        for target in ["./target", "src/../target"] {
+            let arguments = ["build".into(), format!("--target-dir={target}")];
+            let resolved = resolve_reported_from_home(
+                None,
+                Some(&home),
+                OsStr::new("cargo"),
+                &arguments,
+                root,
+                None,
+            )
+            .unwrap();
+            assert_eq!(resolved.target_dir, root.join("target"));
+            assert!(resolved.target_dir_requested);
+        }
     }
 
     #[test]

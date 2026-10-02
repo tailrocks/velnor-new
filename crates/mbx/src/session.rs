@@ -117,6 +117,7 @@ pub const CACHE_LINKS_ENV: &str = "MBX_CACHE_LINKS";
 pub const CACHE_EXPORT_GROUP_ENV: &str = "MBX_CACHE_EXPORT_GROUP";
 pub(crate) const WORKSPACE_ROOT_ENV: &str = "MBX_WORKSPACE_ROOT";
 pub(crate) const TARGET_DIR_ENV: &str = "MBX_TARGET_DIR";
+pub(crate) const BUILD_DIR_ENV: &str = "MBX_BUILD_DIR";
 pub(crate) const BUILD_SCRIPT_REAL_SUFFIX: &str = ".mbx-real";
 const PREVIOUS_RUSTC_WRAPPER_ENV: &str = "MBX_PREVIOUS_RUSTC_WRAPPER";
 const PREVIOUS_RUSTC_WORKSPACE_WRAPPER_ENV: &str = "MBX_PREVIOUS_RUSTC_WORKSPACE_WRAPPER";
@@ -418,10 +419,11 @@ impl CacheSession {
     pub async fn begin(
         &self,
         workspace_root: &Path,
-        target_dir: &Path,
+        cargo_roots: &crate::store::CargoBuildRoots,
         command: &[String],
         environment: &mut BTreeMap<String, String>,
     ) -> Option<ActionRun> {
+        let target_dir = &cargo_roots.target_dir;
         let identity = build_identity(workspace_root, command);
         // Named before the first compilation, so a TUI that attaches mid-build
         // can say whose build it is watching rather than showing bare rows.
@@ -434,7 +436,7 @@ impl CacheSession {
         // still means this checkout is here and using the store, and the record
         // is what stops the collector treating its artifacts as abandoned.
         if let Err(error) =
-            crate::store::record_checkout(&self.store, &identity, workspace_root, target_dir)
+            crate::store::record_checkout(&self.store, &identity, workspace_root, Some(cargo_roots))
         {
             warn!("this checkout was not recorded as a cache root: {error}");
         }
@@ -456,6 +458,7 @@ impl CacheSession {
             receipt: build_receipt_run(&identity),
             identity: identity.clone(),
             workspace_root: workspace_root.to_path_buf(),
+            cargo_roots: Some(cargo_roots.clone()),
             export_group: std::env::var(CACHE_EXPORT_GROUP_ENV).ok(),
             store: self.store.clone(),
             agent: self.agent.clone(),
@@ -471,6 +474,10 @@ impl CacheSession {
         environment.insert(
             TARGET_DIR_ENV.into(),
             target_dir.to_string_lossy().into_owned(),
+        );
+        environment.insert(
+            BUILD_DIR_ENV.into(),
+            cargo_roots.build_dir.to_string_lossy().into_owned(),
         );
         // A compilation that reads build-script output is handed a copy of it
         // under the cache, named for its contents, so checkouts whose
@@ -715,7 +722,7 @@ impl CacheSession {
         // record, but the checkout itself must be known for its objects to
         // count as reachable.
         if let Err(error) =
-            crate::store::record_checkout(&self.store, &identity, project_root, project_root)
+            crate::store::record_checkout(&self.store, &identity, project_root, None)
         {
             warn!("this checkout was not recorded as a cache root: {error}");
         }
@@ -728,6 +735,7 @@ impl CacheSession {
                         run,
                         identity: identity.clone(),
                         workspace_root: project_root.to_path_buf(),
+                        cargo_roots: None,
                         export_group: std::env::var(CACHE_EXPORT_GROUP_ENV).ok(),
                         store: self.store.clone(),
                         agent: self.agent.clone(),
@@ -743,6 +751,9 @@ impl CacheSession {
             WORKSPACE_ROOT_ENV.into(),
             project_root.to_string_lossy().into_owned(),
         );
+        // Override inherited Cargo roots in standalone compiler processes.
+        environment.remove(TARGET_DIR_ENV);
+        environment.remove(BUILD_DIR_ENV);
         environment.insert(SOCKET_ENV.into(), self.socket.clone());
         environment.insert(
             STAGING_ENV.into(),
@@ -1046,6 +1057,7 @@ pub struct ActionRun {
     receipt: String,
     identity: String,
     workspace_root: PathBuf,
+    cargo_roots: Option<crate::store::CargoBuildRoots>,
     export_group: Option<String>,
     store: PathBuf,
     agent: CacheAgent,
@@ -1067,6 +1079,7 @@ impl ActionRun {
                     &self.receipt,
                     &self.identity,
                     &self.workspace_root,
+                    self.cargo_roots.as_ref(),
                     self.export_group.as_deref(),
                     Vec::new(),
                 )?;
@@ -1093,6 +1106,7 @@ impl ActionRun {
             &self.receipt,
             &self.identity,
             &self.workspace_root,
+            self.cargo_roots.as_ref(),
             self.export_group.as_deref(),
             predictions,
         )

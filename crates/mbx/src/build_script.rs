@@ -604,8 +604,24 @@ fn input_state(path: &Path, mappings: &[PathMapping]) -> Result<InputState> {
 }
 
 fn package_input_state(path: &Path, mappings: &[PathMapping]) -> Result<InputState> {
+    package_input_state_with_roots(
+        path,
+        mappings,
+        [session::TARGET_DIR_ENV, session::BUILD_DIR_ENV]
+            .into_iter()
+            .filter_map(std::env::var_os)
+            .filter(|root| !root.is_empty())
+            .map(PathBuf::from),
+    )
+}
+
+fn package_input_state_with_roots(
+    path: &Path,
+    mappings: &[PathMapping],
+    roots: impl IntoIterator<Item = PathBuf>,
+) -> Result<InputState> {
     let mut excluded = vec![path.join(".git"), path.join("target")];
-    if let Some(target) = std::env::var_os(session::TARGET_DIR_ENV) {
+    for target in roots {
         let target = std::path::absolute(target)?;
         if target.starts_with(path) {
             excluded.push(target);
@@ -684,6 +700,7 @@ fn out_dir_is_portable() -> Result<bool> {
         "CARGO_MANIFEST_DIR",
         session::WORKSPACE_ROOT_ENV,
         session::TARGET_DIR_ENV,
+        session::BUILD_DIR_ENV,
         "CARGO_HOME",
     ]
     .into_iter()
@@ -952,8 +969,13 @@ fn build_script_mappings_with_env(
         ("CARGO_MANIFEST_DIR", "build_script_manifest_dir"),
         (session::WORKSPACE_ROOT_ENV, "workspace"),
         (session::TARGET_DIR_ENV, "target"),
+        (session::BUILD_DIR_ENV, "build"),
     ] {
-        if let Some(root) = environment(name) {
+        if let Some(root) = environment(name).filter(|root| root.is_absolute())
+            && !mappings
+                .iter()
+                .any(|mapping: &PathMapping| mapping.root == root)
+        {
             mappings.push(PathMapping::new(root, placeholder));
         }
     }
@@ -1156,6 +1178,50 @@ mod tests {
             .unwrap();
         assert!(parsed.default_package);
         assert_eq!(parsed.inputs, ["${build_script_manifest_dir}"]);
+    }
+
+    #[test]
+    fn default_package_inputs_exclude_nested_cargo_build_state() {
+        let directory = tempfile::tempdir().unwrap();
+        let package = directory.path();
+        let build = package.join("scratch");
+        std::fs::create_dir(&build).unwrap();
+        std::fs::write(package.join("build.rs"), "fn main() {}\n").unwrap();
+        let before = package_input_state_with_roots(package, &[], [build.clone()]).unwrap();
+        std::fs::write(build.join("generated.rs"), "changed intermediate").unwrap();
+        let after = package_input_state_with_roots(package, &[], [build]).unwrap();
+        assert_eq!(
+            canonical_json(&before).unwrap(),
+            canonical_json(&after).unwrap()
+        );
+    }
+
+    #[test]
+    fn build_script_build_roots_are_portable_without_changing_equal_root_names() {
+        let directory = tempfile::tempdir().unwrap();
+        let target = directory.path().join("target");
+        let build = directory.path().join("intermediates");
+        for effective_build in [&build, &target] {
+            let mappings = build_script_mappings_with_env(|name| match name {
+                session::TARGET_DIR_ENV => Some(target.clone()),
+                session::BUILD_DIR_ENV => Some(effective_build.clone()),
+                _ => None,
+            });
+            assert_eq!(
+                normalize_environment_value(
+                    &effective_build.join("debug/build").to_string_lossy(),
+                    &mappings
+                ),
+                format!(
+                    "${{{}}}/debug/build",
+                    if effective_build == &target {
+                        "target"
+                    } else {
+                        "build"
+                    }
+                ),
+            );
+        }
     }
 
     #[test]

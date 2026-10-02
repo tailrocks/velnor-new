@@ -34,7 +34,7 @@
 - [`mbx cache largest [--limit <LIMIT>]`](/cli/cache/largest.md)
 - [`mbx cache verify`](/cli/cache/verify.md)
 - [`mbx cache export [FLAGS] <ARCHIVE>`](/cli/cache/export.md)
-- [`mbx cache import [--comparison-state <FILE>] [--json] <ARCHIVE>`](/cli/cache/import.md)
+- [`mbx cache import [--comparison-state <FILE>] [--json] <ARCHIVE> [-- CARGO_ARGS]…`](/cli/cache/import.md)
 - [`mbx cache remove [--interactive] [WORKSPACE]`](/cli/cache/remove.md)
 - [`mbx clean [WORKSPACE]`](/cli/clean.md)
 - [`mbx adopt [-r --recursive] [--dry-run] [PATH]…`](/cli/adopt.md)

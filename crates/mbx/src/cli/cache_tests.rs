@@ -152,3 +152,56 @@ fn cache_removal_preserves_the_requested_spelling_when_cargo_cannot_resolve_it()
         requested
     );
 }
+
+#[test]
+fn cache_import_preserves_explicit_cargo_root_selector_arguments() {
+    let arguments = [
+        "mbx",
+        "cache",
+        "import",
+        "--json",
+        "bundle",
+        "--",
+        "build",
+        "--target-dir",
+        "artifacts",
+        "--config",
+        "build.build-dir=\"intermediates\"",
+        "--config",
+        "custom.toml",
+    ]
+    .map(std::ffi::OsStr::new);
+    let cli = Cli::try_parse_from(&arguments).unwrap();
+    let Commands::Cache(CacheArgs {
+        command: CacheCommands::Import(args),
+    }) = cli.command
+    else {
+        panic!("cache import should parse");
+    };
+    assert_eq!(
+        args.cargo_args,
+        [
+            "build",
+            "--target-dir",
+            "artifacts",
+            "--config",
+            "build.build-dir=\"intermediates\"",
+            "--config",
+            "custom.toml",
+        ]
+    );
+}
+
+#[test]
+fn cache_import_requires_separator_before_cargo_root_options() {
+    let arguments = [
+        "mbx",
+        "cache",
+        "import",
+        "bundle",
+        "--target-dir",
+        "artifacts",
+    ]
+    .map(std::ffi::OsStr::new);
+    assert!(Cli::try_parse_from(&arguments).is_err());
+}

@@ -31,9 +31,9 @@ const ACTION_RESULTS_DIR: &str = "action-results/v1";
 const CHECKOUTS_DIR: &str = "checkouts/v1";
 const SWEEP_STAMP: &str = "gc/v1/last-sweep";
 const SWEEP_LOCK: &str = "gc/v1/sweep.lock";
-const CHECKOUT_RECORD_VERSION: u8 = 1;
+const CHECKOUT_RECORD_VERSION: u8 = 2;
 const BUILD_RECEIPTS_DIR: &str = "build-receipts/v1";
-const BUILD_RECEIPT_VERSION: u8 = 1;
+const BUILD_RECEIPT_VERSION: u8 = 2;
 const IMPORT_STAGING_DIR: &str = "import-staging";
 const EXPORT_MANIFEST: &str = "mbx-cache-export-v1.json";
 const EXPORT_VERSION: u8 = 2;
@@ -91,6 +91,7 @@ pub struct ProjectUsage {
     pub workspace_root: PathBuf,
     pub identities: u64,
     pub action_bytes: u64,
+    /// Combined bytes in live Cargo target and intermediate build trees.
     pub target_bytes: u64,
     pub live: bool,
 }
@@ -164,11 +165,28 @@ pub struct ExportAdditions {
     pub objects: BTreeSet<CacheDigest>,
 }
 
-/// One Cargo workspace and the target directory recorded for its build.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct WorkspaceTarget {
-    pub workspace_root: PathBuf,
+/// Cargo's output and intermediate build directories for one completed build.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CargoBuildRoots {
     pub target_dir: PathBuf,
+    pub build_dir: PathBuf,
+}
+
+fn deserialize_cargo_roots<'de, D>(
+    deserializer: D,
+) -> std::result::Result<Option<CargoBuildRoots>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Option::<CargoBuildRoots>::deserialize(deserializer)
+}
+
+/// One Cargo workspace and the roots recorded for its build.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct WorkspaceRoots {
+    pub workspace_root: PathBuf,
+    pub cargo: CargoBuildRoots,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -189,6 +207,8 @@ struct ExportManifest {
 struct BuildReceipt {
     version: u8,
     workspace_root: PathBuf,
+    #[serde(deserialize_with = "deserialize_cargo_roots")]
+    cargo: Option<CargoBuildRoots>,
     identity: String,
     completed_nanos: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -202,6 +222,7 @@ pub fn record_build_receipt(
     run: &str,
     identity: &str,
     workspace_root: &Path,
+    cargo: Option<&CargoBuildRoots>,
     group: Option<&str>,
     predictions: Vec<ActionPrediction>,
 ) -> Result<()> {
@@ -228,6 +249,7 @@ pub fn record_build_receipt(
         && read_build_receipt(&latest_receipt_path(store, workspace_root)).is_some_and(|latest| {
             latest.identity == identity
                 && latest.workspace_root == workspace_root
+                && latest.cargo.as_ref() == cargo
                 && latest.group.is_none()
                 && latest.predictions == predictions
         })
@@ -249,6 +271,7 @@ pub fn record_build_receipt(
     let receipt = BuildReceipt {
         version: BUILD_RECEIPT_VERSION,
         workspace_root: workspace_root.to_path_buf(),
+        cargo: cargo.cloned(),
         identity: identity.to_owned(),
         completed_nanos,
         group: group.map(str::to_owned),
@@ -357,21 +380,21 @@ pub fn export_checkout(
     )
 }
 
-/// Return the target directory recorded for this checkout's latest build.
-pub fn checkout_workspace_target(
+/// Return the Cargo roots recorded for this checkout's latest build.
+pub fn checkout_workspace_roots(
     store: &Path,
     workspace_root: &Path,
-) -> Result<Option<WorkspaceTarget>> {
+) -> Result<Option<WorkspaceRoots>> {
     let Some(receipt) = read_build_receipt(&latest_receipt_path(store, workspace_root))
         .filter(|receipt| receipt.workspace_root == workspace_root)
     else {
         return Ok(None);
     };
-    Ok(workspace_target_for_receipt(store, &receipt))
+    Ok(workspace_roots_for_receipt(&receipt))
 }
 
-/// Return every Cargo target represented by the pending receipts in a group.
-pub fn group_workspace_targets(store: &Path, group: &str) -> Result<Vec<WorkspaceTarget>> {
+/// Return every Cargo root pair represented by pending receipts in a group.
+pub fn group_workspace_roots(store: &Path, group: &str) -> Result<Vec<WorkspaceRoots>> {
     validate_export_group(group)?;
     let root = store
         .join(BUILD_RECEIPTS_DIR)
@@ -381,22 +404,16 @@ pub fn group_workspace_targets(store: &Path, group: &str) -> Result<Vec<Workspac
         .into_iter()
         .filter_map(|entry| read_build_receipt(&entry.path))
         .filter(|receipt| receipt.group.as_deref() == Some(group))
-        .filter_map(|receipt| workspace_target_for_receipt(store, &receipt))
+        .filter_map(|receipt| workspace_roots_for_receipt(&receipt))
         .collect::<BTreeSet<_>>();
     Ok(targets.into_iter().collect())
 }
 
-fn workspace_target_for_receipt(store: &Path, receipt: &BuildReceipt) -> Option<WorkspaceTarget> {
-    let record = read_checkout_record(&checkout_record_path(
-        store,
-        &receipt.identity,
-        &receipt.workspace_root,
-    ))?;
-    (record.workspace_root == receipt.workspace_root && record.target_dir != record.workspace_root)
-        .then_some(WorkspaceTarget {
-            workspace_root: record.workspace_root,
-            target_dir: record.target_dir,
-        })
+fn workspace_roots_for_receipt(receipt: &BuildReceipt) -> Option<WorkspaceRoots> {
+    receipt.cargo.clone().map(|cargo| WorkspaceRoots {
+        workspace_root: receipt.workspace_root.clone(),
+        cargo,
+    })
 }
 
 /// Export one checkout's closure together with higher-level CAS attachments.
@@ -1355,17 +1372,13 @@ fn validate_archive_path(path: &Path) -> Result<()> {
 }
 
 /// One checkout's claim on the actions a build identity recorded.
-///
-/// The target directory is not read back by anything yet; it is recorded
-/// because it is the other half of what the shim mapped, and a record that
-/// names only half of it would have to be rewritten to answer where the
-/// artifacts went.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct CheckoutRecord {
     version: u8,
     workspace_root: PathBuf,
-    target_dir: PathBuf,
+    #[serde(deserialize_with = "deserialize_cargo_roots")]
+    cargo: Option<CargoBuildRoots>,
     updated_secs: u64,
 }
 
@@ -1384,17 +1397,21 @@ pub fn stats(store: &Path) -> Result<StoreStats> {
     })
 }
 
-/// Size the target tree a checkout record names, if it names one.
-///
-/// A build with no target directory of its own -- one driven by make or CMake,
-/// which writes wherever it was told -- records the checkout in that field
-/// rather than inventing a directory. Walking it would report the whole source
-/// tree, `.git` included, as though it were build output.
-fn checkout_target_bytes(sizes: &mut BTreeMap<PathBuf, u64>, record: &CheckoutRecord) -> u64 {
-    if record.target_dir == record.workspace_root {
-        return 0;
-    }
-    cached_tree_bytes(sizes, &record.target_dir)
+/// Size each distinct Cargo tree once, excluding roots covered by a parent.
+fn cargo_tree_bytes(sizes: &mut BTreeMap<PathBuf, u64>, roots: &BTreeSet<PathBuf>) -> u64 {
+    let roots = roots
+        .iter()
+        .map(|root| root.canonicalize().unwrap_or_else(|_| root.clone()))
+        .collect::<BTreeSet<_>>();
+    roots
+        .iter()
+        .filter(|root| {
+            !roots
+                .iter()
+                .any(|other| *root != other && root.starts_with(other))
+        })
+        .map(|root| cached_tree_bytes(sizes, root))
+        .fold(0_u64, u64::saturating_add)
 }
 
 /// Attribute cache and target bytes to each recorded workspace.
@@ -1419,8 +1436,15 @@ pub fn live_project_cache_bytes(store: &Path) -> Result<Vec<u64>> {
         .collect())
 }
 
+#[derive(Default)]
+struct ProjectClaims {
+    identities: BTreeSet<String>,
+    live: bool,
+    cargo_roots: BTreeSet<PathBuf>,
+}
+
 fn project_usage(store: &Path, size_targets: bool) -> Result<Vec<ProjectUsage>> {
-    let mut projects: BTreeMap<PathBuf, (BTreeSet<String>, bool, u64)> = BTreeMap::new();
+    let mut projects: BTreeMap<PathBuf, ProjectClaims> = BTreeMap::new();
     let mut target_sizes = BTreeMap::new();
     let root = store.join(CHECKOUTS_DIR);
     for identity_entry in read_dir_or_empty(&root)? {
@@ -1434,33 +1458,34 @@ fn project_usage(store: &Path, size_targets: bool) -> Result<Vec<ProjectUsage>> 
             };
             let project = projects.entry(record.workspace_root.clone()).or_default();
             if claim_is_live(store, &record) {
-                project.0.insert(identity.clone());
-                project.1 = true;
-            }
-            if size_targets {
-                project.2 = project
-                    .2
-                    .max(checkout_target_bytes(&mut target_sizes, &record));
+                project.identities.insert(identity.clone());
+                project.live = true;
+                if size_targets && let Some(cargo) = record.cargo {
+                    project
+                        .cargo_roots
+                        .extend([cargo.target_dir, cargo.build_dir]);
+                }
             }
         }
     }
     let live = projects
         .values()
-        .flat_map(|(identities, _, _)| identities.iter().cloned())
+        .flat_map(|claims| claims.identities.iter().cloned())
         .collect::<BTreeSet<_>>();
     let mut reachability = Reachability::new(store);
     for_each_manifest(store, &live, |identity, actions| {
         reachability.record(identity, &actions);
     });
     let mut usages = Vec::new();
-    for (workspace_root, (identities, live, target_bytes)) in projects {
-        let action_bytes = reachability.bytes(&identities);
+    for (workspace_root, claims) in projects {
+        let target_bytes = cargo_tree_bytes(&mut target_sizes, &claims.cargo_roots);
+        let action_bytes = reachability.bytes(&claims.identities);
         usages.push(ProjectUsage {
             workspace_root,
-            identities: identities.len() as u64,
+            identities: claims.identities.len() as u64,
             action_bytes,
             target_bytes,
-            live,
+            live: claims.live,
         });
     }
     usages.sort_by(|left, right| {
@@ -1773,18 +1798,17 @@ pub fn remove_project(store: &Path, workspace_root: &Path) -> Result<RemoveProje
 /// builds out of each other's way -- there is nothing to merge, so there is no
 /// lock and no lost update.
 ///
-/// A build with no target directory of its own passes `workspace_root` for
-/// `target_dir`, which reads as "none" rather than as a tree to measure.
+/// A standalone build passes `None`; Cargo builds record their explicit roots.
 pub fn record_checkout(
     store: &Path,
     identity: &str,
     workspace_root: &Path,
-    target_dir: &Path,
+    cargo: Option<&CargoBuildRoots>,
 ) -> Result<()> {
     let record = CheckoutRecord {
         version: CHECKOUT_RECORD_VERSION,
         workspace_root: workspace_root.to_path_buf(),
-        target_dir: target_dir.to_path_buf(),
+        cargo: cargo.cloned(),
         updated_secs: SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map(|since| since.as_secs())

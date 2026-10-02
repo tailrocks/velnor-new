@@ -37,8 +37,9 @@ pub(super) enum CacheCommands {
     /// Import a cache export into the local store. A directory export is consumed:
     /// its objects are moved into the store and the directory is removed. If the
     /// export contains Cargo workspace state and the command runs from a matching
-    /// checkout with an absent or empty target directory, restore that state as well.
-    /// A non-empty target directory is never replaced.
+    /// checkout with absent or empty target and build directories, restore that state as well.
+    /// Non-empty directories are never replaced. Pass the build invocation after `--`
+    /// to select roots configured by command-specific Cargo options.
     Import(ImportArgs),
     /// Remove managed targets, learned incremental state, and cache claims for
     /// one workspace or selected workspaces.
@@ -101,6 +102,7 @@ pub(super) struct ExportArgs {
 }
 
 #[derive(usage::Args)]
+#[usage(dont_delimit_trailing_values = true)]
 pub(super) struct ImportArgs {
     /// Record owner comparison state before consuming the bundle.
     #[usage(long, value_name = "FILE")]
@@ -110,6 +112,13 @@ pub(super) struct ImportArgs {
     json: bool,
     /// Tar archive or directory to import.
     archive: PathBuf,
+    /// Cargo invocation options used to resolve target and intermediate build roots.
+    #[usage(
+        double_dash = "required",
+        allow_hyphen_values,
+        value_name = "CARGO_ARGS"
+    )]
+    pub(super) cargo_args: Vec<String>,
 }
 
 #[derive(usage::Args)]
@@ -173,6 +182,7 @@ pub(super) fn run(config: &Config, command: CacheCommands) -> Result<ExitCode> {
             &args.archive,
             args.comparison_state.as_deref(),
             args.json,
+            &args.cargo_args,
         )
         .map(|()| ExitCode::SUCCESS),
         CacheCommands::Remove(args) => {
@@ -208,12 +218,11 @@ pub(super) fn cache_export(
         .unwrap_or_else(|| discover_project_root(&working_dir));
     let store_dir = config.store_dir();
     let targets = match group {
-        Some(group) => store::group_workspace_targets(&store_dir, group)?,
-        None => store::checkout_workspace_target(&store_dir, &workspace)?
+        Some(group) => store::group_workspace_roots(&store_dir, group)?,
+        None => store::checkout_workspace_roots(&store_dir, &workspace)?
             .into_iter()
             .collect(),
     };
-    let targets = capture_targets(&cargo, &targets);
     let additions = match workspace_state::capture(&store_dir, &targets) {
         Ok(additions) => additions,
         Err(error) => {
@@ -288,9 +297,9 @@ pub(super) fn cache_export(
                 "delta": delta,
                 "semantic_digest": semantic_digest,
                 "workspace_comparison": "relative_path_type_content_mode_symlink_target",
-                "workspace_comparison_exclusions": [".rustc_info.json"],
-                "workspace_transport_scope": "recorded_target_directory_only",
-                "qualification": "compiled actions, predictions and Cargo unit state; excludes root compiler-query cache .rustc_info.json; other scheduler content differences are reported, not proven additional cache hits"
+                "workspace_comparison_exclusions": ["effective_build_root/.rustc_info.json"],
+                "workspace_transport_scope": "recorded_target_and_build_directories",
+                "qualification": "compiled actions, predictions and Cargo unit state; includes Cargo output and intermediate roots; excludes only effective build-root compiler-query cache .rustc_info.json; other scheduler content differences are reported, not proven additional cache hits"
             }));
         }
         if let Some(delta) = delta {
@@ -313,42 +322,12 @@ pub(super) fn cache_export(
     Ok(())
 }
 
-/// A nested Cargo lane must retain its prefix inside the full reported target.
-/// Otherwise capturing `target/check` and restoring into `target` flattens the
-/// lane and discards previously restored build state.
-fn capture_targets(
-    cargo: &std::ffi::OsStr,
-    targets: &[store::WorkspaceTarget],
-) -> Vec<store::WorkspaceTarget> {
-    targets
-        .iter()
-        .map(|target| {
-            let args = vec![
-                "--manifest-path".to_owned(),
-                target
-                    .workspace_root
-                    .join("Cargo.toml")
-                    .to_string_lossy()
-                    .into_owned(),
-            ];
-            let target_dir = cargo_roots(cargo, &args, None)
-                .filter(|roots| target.target_dir.starts_with(&roots.target_dir))
-                .map_or_else(|| target.target_dir.clone(), |roots| roots.target_dir);
-            store::WorkspaceTarget {
-                workspace_root: target.workspace_root.clone(),
-                target_dir,
-            }
-        })
-        .collect::<std::collections::BTreeSet<_>>()
-        .into_iter()
-        .collect()
-}
-
 pub(super) fn cache_import(
     config: &Config,
     archive: &Path,
     comparison_state: Option<&Path>,
     json: bool,
+    cargo_args: &[String],
 ) -> Result<()> {
     let store = config.store_dir();
     let imported = store::import_archive_with_comparison(&store, archive, |root, state| {
@@ -357,24 +336,56 @@ pub(super) fn cache_import(
         }
         Ok(())
     })?;
+    let mut restore_status = "not_present";
     let restored = if let Some(attachment) = imported.attachments.get(workspace_state::ATTACHMENT) {
         let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
-        if let Some(roots) = cargo_roots(&cargo, &[], None) {
+        let target_env = std::env::var_os(super::cargo::CARGO_TARGET_DIR_ENV);
+        if let Some(roots) = cargo_roots(&cargo, cargo_args, target_env.as_deref()) {
+            let cargo = store::CargoBuildRoots {
+                build_dir: roots.build_dir.unwrap_or_else(|| roots.target_dir.clone()),
+                target_dir: roots.target_dir,
+            };
             match workspace_state::restore(
                 config,
                 &store,
                 attachment,
                 &roots.workspace_root,
-                &roots.target_dir,
-                roots.target_dir_requested,
+                &cargo,
             ) {
-                Ok(restored) => restored,
+                Ok(workspace_state::RestoreOutcome::Restored {
+                    files,
+                    referenced_bytes,
+                }) => {
+                    restore_status = "restored";
+                    Some((files, referenced_bytes))
+                }
+                Ok(workspace_state::RestoreOutcome::SkippedAmbiguous) => {
+                    restore_status = "skipped_ambiguous";
+                    log::warn!(
+                        "cache imported without restoring Cargo workspace state: multiple root pairs match; pass the Cargo invocation after `--` to select its roots"
+                    );
+                    None
+                }
+                Ok(workspace_state::RestoreOutcome::SkippedIncompatible) => {
+                    restore_status = "skipped_incompatible";
+                    None
+                }
+                Ok(workspace_state::RestoreOutcome::SkippedUnavailable) => {
+                    restore_status = "skipped_unavailable";
+                    None
+                }
+                Ok(workspace_state::RestoreOutcome::SkippedNonempty) => {
+                    restore_status = "skipped_nonempty";
+                    None
+                }
                 Err(error) => {
+                    restore_status = "failed";
                     log::warn!("cache imported without restoring Cargo workspace state: {error}");
                     None
                 }
             }
         } else {
+            restore_status = "metadata_unavailable";
             log::debug!("no Cargo workspace was available for workspace-state restore");
             None
         }
@@ -387,7 +398,7 @@ pub(super) fn cache_import(
             &serde_json::json!({ "version": 1, "actions": outcome.actions,
             "objects": outcome.objects, "bytes": outcome.bytes,
             "comparison_state_recorded": comparison_state.is_some(),
-            "workspace_restored": restored.is_some() }),
+            "workspace_restored": restored.is_some(), "workspace_restore": restore_status }),
         );
     }
     println!(
@@ -397,11 +408,11 @@ pub(super) fn cache_import(
         archive.display(),
         ByteSize::b(outcome.bytes).display().iec()
     );
-    if let Some(restored) = restored {
+    if let Some((files, referenced_bytes)) = restored {
         println!(
             "restored Cargo workspace state ({} referenced files, {})",
-            restored.files,
-            ByteSize::b(restored.referenced_bytes).display().iec()
+            files,
+            ByteSize::b(referenced_bytes).display().iec()
         );
     }
     Ok(())

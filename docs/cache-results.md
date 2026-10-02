@@ -232,7 +232,7 @@ For a cold miss, `mbx cache comparison-state baseline.json --json` writes an
 empty baseline. Keep this file outside the bundle. Export JSON version 1 includes
 `useful_delta`, new and changed action-result counts, new prediction counts,
 new and changed workspace-variant counts, and a 64-character BLAKE3
-`semantic_digest`. A subset of the imported closure is not a useful delta.
+`semantic_digest`. A subset of the imported closure is not a useful delta. Deletion-only workspace changes remain reported as changed variants, but do not add reusable work or make `useful_delta` true.
 Changed results and predictions remain detectable when their counts stay equal.
 The digest identifies an inventory; unequal digests alone do not establish a
 useful delta.
@@ -248,7 +248,7 @@ The owner compares before publication and reports `exported: false` when no usef
 delta exists, avoiding closure copying. `mbx cache comparison-state baseline.json
 --verify --json` validates an existing baseline without rewriting it.
 
-The reported inventory explicitly excludes the target root `.rustc_info.json`
+The reported inventory explicitly excludes the effective intermediate build root `.rustc_info.json` (the target root when both roots coincide)
 compiler-query cache from usefulness. Cargo fingerprints compiler and wrapper
 paths, file lengths, creation times, and modification times in this file;
 relocating an MBX shim can therefore rewrite it during a fully fresh build.
@@ -257,15 +257,30 @@ This is a qualification about compiled actions, predictions, and Cargo unit
 state, rather than all compiler-probe metadata. See the pinned
 [Cargo compiler-query cache implementation](https://github.com/rust-lang/cargo/blob/797e8a9bca276c1c9f9f738d2a20f484fa4eea9d/src/cargo/util/rustc.rs#L327-L347).
 
-Workspace transport currently records only the Cargo target directory. A
-configured intermediate build directory outside that target is not included;
-this API does not qualify restoration of that separate scheduler state. The
-JSON report states `workspace_transport_scope: "recorded_target_directory_only"`.
+Workspace transport records the full Cargo target and intermediate build root
+pair, including disjoint and nested layouts, with separate semantic root roles.
+The JSON report states
+`workspace_transport_scope: "recorded_target_and_build_directories"`.
+Import resolves the current roots through Cargo metadata, including Cargo
+configuration and environment. Pass the original build invocation after `--`
+when its command-specific options selected the roots:
+
+```sh
+mbx cache import --json restored-bundle -- build --target-dir artifacts --config 'build.build-dir="intermediates"'
+```
+
+Restoration selects an exact recorded root pair first, then permits a unique
+matching workspace variant after relocation. Multiple eligible pairs are an
+explicit `workspace_restore: "skipped_ambiguous"`, with `workspace_restored:
+false`. Neither target nor intermediate build roots with existing content are
+replaced. Transport preserves original file bytes, modes, links, and timestamps.
 
 Comparison exports retain the baseline's full action closure and prediction
 mappings. Current predictions replace older entries for the same task and
-invocation. Captured workspaces replace the baseline state for the same recorded
-workspace root; omitted roots remain included. Every retained CAS object is
+invocation. Retention identifies snapshots by the exact workspace, target, and intermediate
+build root pair; separate pairs and omitted pairs remain distinct. A local
+cleanup must not turn an empty scheduler tree into newly reusable work, and
+freshness invalidation must not be mistaken for added or repaired work. Every retained CAS object is
 revalidated. Missing or corrupt retained state fails before publication or group
 receipt cleanup.
 

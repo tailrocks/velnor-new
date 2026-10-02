@@ -3323,27 +3323,32 @@ fn path_mappings_with_env(
     // Cargo compiles a dependency with its working directory inside the
     // registry, not in the workspace, so neither root can be inferred from the
     // working directory -- the session passes both in.
-    let configured_target = environment(session::TARGET_DIR_ENV)
-        .map(PathBuf::from)
-        .filter(|root| root.is_absolute())
-        .map(|root| {
-            // Match the spelling emitted by rustc when a macOS link uses the
-            // physical target directory to share ld64's single OSO prefix.
-            let physical = std::fs::canonicalize(&root).ok();
-            physical
-                .filter(|physical| {
-                    target_output.is_some_and(|output| {
-                        output.starts_with(physical) && !output.starts_with(&root)
+    let configured_root = |name| {
+        environment(name)
+            .map(PathBuf::from)
+            .filter(|root| root.is_absolute())
+            .map(|root| {
+                // Match the spelling emitted by rustc when a macOS link uses the
+                // physical target directory to share ld64's single OSO prefix.
+                let physical = std::fs::canonicalize(&root).ok();
+                physical
+                    .filter(|physical| {
+                        target_output.is_some_and(|output| {
+                            output.starts_with(physical) && !output.starts_with(&root)
+                        })
                     })
-                })
-                .unwrap_or(root)
-        });
-    if let Some(root) = configured_target.or_else(|| {
+                    .unwrap_or(root)
+            })
+    };
+    if let Some(root) = configured_root(session::TARGET_DIR_ENV).or_else(|| {
         target_output
             .filter(|root| root.is_absolute())
             .map(|output| standalone_target_root(output, target))
     }) {
         add_mapping(&mut mappings, &mut roots, root, "target");
+    }
+    if let Some(root) = configured_root(session::BUILD_DIR_ENV) {
+        add_mapping(&mut mappings, &mut roots, root, "build");
     }
     if let Some(root) = environment(session::WORKSPACE_ROOT_ENV)
         .map(PathBuf::from)

@@ -1,6 +1,13 @@
 use super::*;
 use mbx_cache_core::{ActionPrediction, CacheFileNode, LocalActionCache};
 
+fn cargo_roots(workspace: &Path) -> CargoBuildRoots {
+    CargoBuildRoots {
+        target_dir: workspace.join("target"),
+        build_dir: workspace.join("target"),
+    }
+}
+
 fn store_object(store: &Path, contents: &[u8]) -> CacheDigest {
     let digest = CacheDigest::blake3(contents);
     LocalCas::new(store).store_bytes(&digest, contents).unwrap();
@@ -78,7 +85,7 @@ fn record_build_in_group(
         store,
         identity,
         workspace_root,
-        &workspace_root.join("target"),
+        Some(&cargo_roots(workspace_root)),
     )
     .unwrap();
     let predictions = actions
@@ -102,7 +109,16 @@ fn record_build_in_group(
         .join(format!("{identity}.json"));
     write_atomic(&path, &serde_json::to_vec(&manifest).unwrap()).unwrap();
     let run = CacheDigest::blake3(format!("run-{identity}-{group:?}-{actions:?}").as_bytes()).hash;
-    record_build_receipt(store, &run, identity, workspace_root, group, predictions).unwrap();
+    record_build_receipt(
+        store,
+        &run,
+        identity,
+        workspace_root,
+        Some(&cargo_roots(workspace_root)),
+        group,
+        predictions,
+    )
+    .unwrap();
 }
 
 #[test]
@@ -124,6 +140,7 @@ fn an_identical_receipt_is_left_standing() {
         &identity,
         workspace,
         None,
+        None,
         predictions.clone(),
     )
     .unwrap();
@@ -136,6 +153,7 @@ fn an_identical_receipt_is_left_standing() {
         &run("second"),
         &identity,
         workspace,
+        None,
         None,
         predictions.clone(),
     )
@@ -161,6 +179,7 @@ fn an_identical_receipt_is_left_standing() {
         &run("third"),
         &identity,
         workspace,
+        None,
         None,
         more.clone(),
     )
@@ -404,7 +423,7 @@ fn project_usage_excludes_expired_claims() {
     let stale = CheckoutRecord {
         version: CHECKOUT_RECORD_VERSION,
         workspace_root: workspace.clone(),
-        target_dir: workspace.join("target"),
+        cargo: Some(cargo_roots(&workspace)),
         updated_secs: SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -452,7 +471,7 @@ fn a_checkout_with_no_target_directory_of_its_own_reports_none() {
     let workspace = directory.path().join("workspace");
     std::fs::create_dir_all(workspace.join("src")).unwrap();
     std::fs::write(workspace.join("src/main.c"), vec![0_u8; 4096]).unwrap();
-    record_checkout(directory.path(), &"a".repeat(64), &workspace, &workspace).unwrap();
+    record_checkout(directory.path(), &"a".repeat(64), &workspace, None).unwrap();
 
     let projects = projects(directory.path()).unwrap();
 
@@ -594,15 +613,15 @@ fn reports_the_targets_represented_by_a_group() {
     );
 
     assert_eq!(
-        group_workspace_targets(store.path(), "ci-job").unwrap(),
+        group_workspace_roots(store.path(), "ci-job").unwrap(),
         vec![
-            WorkspaceTarget {
+            WorkspaceRoots {
                 workspace_root: first.clone(),
-                target_dir: first.join("target"),
+                cargo: cargo_roots(&first),
             },
-            WorkspaceTarget {
+            WorkspaceRoots {
                 workspace_root: second.clone(),
-                target_dir: second.join("target"),
+                cargo: cargo_roots(&second),
             },
         ]
     );
@@ -1337,7 +1356,8 @@ fn grouped_export_keeps_each_commands_predictions_and_newest_conflicts() {
     let old_shared = prediction("shared", "old shared result");
     let new_shared = prediction("shared", "new shared result");
     let receipt = |completed_nanos, predictions| BuildReceipt {
-        version: 1,
+        version: BUILD_RECEIPT_VERSION,
+        cargo: None,
         workspace_root: source.path().join("workspace"),
         identity: identity.clone(),
         completed_nanos,
@@ -1522,7 +1542,8 @@ fn equal_timestamp_exports_ignore_receipt_enumeration_order() {
     let source = tempfile::tempdir().unwrap();
     let identity = "e".repeat(64);
     let receipts = ["first", "second"].map(|name| BuildReceipt {
-        version: 1,
+        version: BUILD_RECEIPT_VERSION,
+        cargo: None,
         workspace_root: source.path().to_path_buf(),
         identity: identity.clone(),
         completed_nanos: 1,
@@ -1989,7 +2010,7 @@ fn drops_checkout_records_whose_worktree_is_gone() {
     let discarded_parent = directory.path().join("temporary");
     let gone = discarded_parent.join("codex/worktree");
     std::fs::create_dir_all(&gone).unwrap();
-    record_checkout(&store, &"e".repeat(64), &gone, &gone.join("target")).unwrap();
+    record_checkout(&store, &"e".repeat(64), &gone, Some(&cargo_roots(&gone))).unwrap();
 
     assert_eq!(stats(&store).unwrap().live_checkouts, 1);
     // Codex and temporary-worktree managers discard the checkout together
@@ -2012,7 +2033,7 @@ fn keeps_a_checkout_recorded_while_its_worktree_exists() {
     let store = directory.path().join("store");
     let live = directory.path().join("live");
     std::fs::create_dir_all(&live).unwrap();
-    record_checkout(&store, &"f".repeat(64), &live, &live.join("target")).unwrap();
+    record_checkout(&store, &"f".repeat(64), &live, Some(&cargo_roots(&live))).unwrap();
 
     let outcome = gc(&store, u64::MAX).unwrap();
 
@@ -2044,7 +2065,7 @@ fn forgets_a_claim_no_build_has_renewed() {
     let stale = CheckoutRecord {
         version: CHECKOUT_RECORD_VERSION,
         workspace_root: checkout.clone(),
-        target_dir: checkout.join("target"),
+        cargo: Some(cargo_roots(&checkout)),
         updated_secs: SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -2081,7 +2102,13 @@ fn ignores_what_it_did_not_write_beside_the_checkout_records() {
     let store = directory.path().join("store");
     let checkout = directory.path().join("project");
     std::fs::create_dir_all(&checkout).unwrap();
-    record_checkout(&store, &"3".repeat(64), &checkout, &checkout.join("target")).unwrap();
+    record_checkout(
+        &store,
+        &"3".repeat(64),
+        &checkout,
+        Some(&cargo_roots(&checkout)),
+    )
+    .unwrap();
 
     // A plain file whose name reads like an identity used to fail the scan,
     // and with it every sweep and every `cache stats`.
@@ -2204,7 +2231,13 @@ fn does_not_count_its_own_bookkeeping_against_the_budget() {
     let store = directory.path().join("store");
     let checkout = directory.path().join("checkout");
     std::fs::create_dir_all(&checkout).unwrap();
-    record_checkout(&store, &"1".repeat(64), &checkout, &checkout.join("target")).unwrap();
+    record_checkout(
+        &store,
+        &"1".repeat(64),
+        &checkout,
+        Some(&cargo_roots(&checkout)),
+    )
+    .unwrap();
     sweep_if_due(&store, u64::MAX, Duration::ZERO).unwrap();
 
     // Checkout records and the sweep stamp live outside the collected
@@ -2566,6 +2599,7 @@ fn an_empty_latest_receipt_retains_an_imported_baseline_action() {
         &identity,
         &workspace,
         None,
+        None,
         vec![prediction],
     )
     .unwrap();
@@ -2594,6 +2628,7 @@ fn an_empty_latest_receipt_retains_an_imported_baseline_action() {
         &"3".repeat(64),
         &identity,
         &workspace,
+        None,
         None,
         Vec::new(),
     )
@@ -2664,6 +2699,7 @@ fn current_prediction_wins_same_invocation_and_retains_old_invocations() {
         &identity,
         &workspace,
         None,
+        None,
         vec![baseline_same.clone(), baseline_old.clone()],
     )
     .unwrap();
@@ -2689,6 +2725,7 @@ fn current_prediction_wins_same_invocation_and_retains_old_invocations() {
         &"6".repeat(64),
         &identity,
         &workspace,
+        None,
         None,
         vec![current.clone()],
     )
@@ -2766,6 +2803,7 @@ fn corrupt_or_deleted_retained_objects_fail_before_the_publish_callback() {
             &"8".repeat(64),
             &identity,
             &workspace,
+            None,
             None,
             Vec::new(),
         )
@@ -2896,4 +2934,253 @@ fn a_budget_refusal_is_typed_and_keeps_group_receipts() {
     assert!(refusal.logical_bytes > refusal.budget);
     assert!(!bundle.exists());
     assert!(receipts.iter().all(|path| path.exists()));
+}
+
+#[test]
+fn grouped_roots_are_immutable_across_checkout_updates() {
+    let directory = tempfile::tempdir().unwrap();
+    let store = directory.path();
+    let workspace = store.join("workspace");
+    let identity = "a".repeat(64);
+    let first = CargoBuildRoots {
+        target_dir: store.join("target-first"),
+        build_dir: store.join("build-first"),
+    };
+    let second = CargoBuildRoots {
+        target_dir: store.join("target-second"),
+        build_dir: store.join("build-second"),
+    };
+    for (run, roots) in [("b", &first), ("c", &second)] {
+        record_checkout(store, &identity, &workspace, Some(roots)).unwrap();
+        record_build_receipt(
+            store,
+            &run.repeat(64),
+            &identity,
+            &workspace,
+            Some(roots),
+            Some("job"),
+            Vec::new(),
+        )
+        .unwrap();
+    }
+    // The live claim disappears; completed run roots remain available.
+    std::fs::remove_file(checkout_record_path(store, &identity, &workspace)).unwrap();
+    assert_eq!(
+        group_workspace_roots(store, "job").unwrap(),
+        vec![
+            WorkspaceRoots {
+                workspace_root: workspace.clone(),
+                cargo: first
+            },
+            WorkspaceRoots {
+                workspace_root: workspace.clone(),
+                cargo: second.clone()
+            },
+        ]
+    );
+    assert_eq!(
+        checkout_workspace_roots(store, &workspace).unwrap(),
+        Some(WorkspaceRoots {
+            workspace_root: workspace,
+            cargo: second,
+        })
+    );
+}
+
+#[test]
+fn unchanged_predictions_replace_receipts_when_either_cargo_root_changes() {
+    let directory = tempfile::tempdir().unwrap();
+    let store = directory.path();
+    let workspace = store.join("workspace");
+    let identity = "a".repeat(64);
+    let mut roots = cargo_roots(&workspace);
+    for index in 0..3 {
+        if index == 1 {
+            roots.build_dir = store.join("build");
+        }
+        if index == 2 {
+            roots.target_dir = store.join("target");
+        }
+        record_build_receipt(
+            store,
+            &"b".repeat(64),
+            &identity,
+            &workspace,
+            Some(&roots),
+            None,
+            Vec::new(),
+        )
+        .unwrap();
+        assert_eq!(
+            read_build_receipt(&latest_receipt_path(store, &workspace))
+                .unwrap()
+                .cargo,
+            Some(roots.clone())
+        );
+        let before = std::fs::read(latest_receipt_path(store, &workspace)).unwrap();
+        record_build_receipt(
+            store,
+            &"c".repeat(64),
+            &identity,
+            &workspace,
+            Some(&roots),
+            None,
+            Vec::new(),
+        )
+        .unwrap();
+        assert_eq!(
+            std::fs::read(latest_receipt_path(store, &workspace)).unwrap(),
+            before
+        );
+    }
+    record_build_receipt(
+        store,
+        &"d".repeat(64),
+        &identity,
+        &workspace,
+        None,
+        None,
+        Vec::new(),
+    )
+    .unwrap();
+    assert_eq!(checkout_workspace_roots(store, &workspace).unwrap(), None);
+}
+
+#[test]
+fn standalone_receipts_never_claim_cargo_roots() {
+    let directory = tempfile::tempdir().unwrap();
+    let store = directory.path();
+    let workspace = store.join("workspace");
+    record_checkout(
+        store,
+        &"a".repeat(64),
+        &workspace,
+        Some(&cargo_roots(&workspace)),
+    )
+    .unwrap();
+    record_build_receipt(
+        store,
+        &"b".repeat(64),
+        &"a".repeat(64),
+        &workspace,
+        None,
+        Some("job"),
+        Vec::new(),
+    )
+    .unwrap();
+    assert!(group_workspace_roots(store, "job").unwrap().is_empty());
+    assert_eq!(checkout_workspace_roots(store, &workspace).unwrap(), None);
+}
+
+#[test]
+fn roots_record_schemas_reject_legacy_missing_and_unknown_fields() {
+    let checkout = serde_json::json!({
+        "version": CHECKOUT_RECORD_VERSION, "workspace_root": "/workspace",
+        "cargo": {"target_dir": "/target", "build_dir": "/build"}, "updated_secs": 1,
+    });
+    let receipt = serde_json::json!({
+        "version": BUILD_RECEIPT_VERSION, "workspace_root": "/workspace",
+        "cargo": {"target_dir": "/target", "build_dir": "/build"},
+        "identity": "a".repeat(64), "completed_nanos": 1, "predictions": [],
+    });
+    let directory = tempfile::tempdir().unwrap();
+    for (name, original) in [("checkout", checkout), ("receipt", receipt)] {
+        let path = directory.path().join(name);
+        write_atomic(&path, &serde_json::to_vec(&original).unwrap()).unwrap();
+        if name == "checkout" {
+            assert!(read_checkout_record(&path).is_some());
+        } else {
+            assert!(read_build_receipt(&path).is_some());
+        }
+        for defect in [
+            "legacy",
+            "missing-cargo",
+            "missing-build",
+            "unknown",
+            "unknown-root",
+        ] {
+            let mut broken = original.clone();
+            match defect {
+                "legacy" => {
+                    broken["version"] = 1.into();
+                }
+                "missing-cargo" => {
+                    broken.as_object_mut().unwrap().remove("cargo");
+                }
+                "missing-build" => {
+                    broken["cargo"].as_object_mut().unwrap().remove("build_dir");
+                }
+                "unknown" => {
+                    broken["target_dir"] = "/legacy".into();
+                }
+                "unknown-root" => {
+                    broken["cargo"]["extra"] = true.into();
+                }
+                _ => unreachable!(),
+            }
+            write_atomic(&path, &serde_json::to_vec(&broken).unwrap()).unwrap();
+            if name == "checkout" {
+                assert!(read_checkout_record(&path).is_none(), "{defect}");
+            } else {
+                assert!(read_build_receipt(&path).is_none(), "{defect}");
+            }
+        }
+    }
+}
+
+#[test]
+fn project_usage_counts_live_root_union_without_double_counting() {
+    let directory = tempfile::tempdir().unwrap();
+    let store = directory.path();
+    let workspace = store.join("workspace");
+    let target = store.join("target");
+    let build = store.join("build");
+    std::fs::create_dir_all(&workspace).unwrap();
+    std::fs::create_dir_all(target.join("nested")).unwrap();
+    std::fs::create_dir_all(&build).unwrap();
+    std::fs::write(target.join("artifact"), b"123").unwrap();
+    std::fs::write(target.join("nested/artifact"), b"4567").unwrap();
+    std::fs::write(build.join("intermediate"), b"89012").unwrap();
+    let roots = CargoBuildRoots {
+        target_dir: target.clone(),
+        build_dir: build,
+    };
+    record_checkout(store, &"a".repeat(64), &workspace, Some(&roots)).unwrap();
+    let nested = CargoBuildRoots {
+        target_dir: target.clone(),
+        build_dir: target.join("nested"),
+    };
+    record_checkout(store, &"b".repeat(64), &workspace, Some(&nested)).unwrap();
+    assert_eq!(projects(store).unwrap()[0].target_bytes, 12);
+    let path = checkout_record_path(store, &"a".repeat(64), &workspace);
+    let mut stale = read_checkout_record(&path).unwrap();
+    stale.updated_secs = 0;
+    write_atomic(&path, &serde_json::to_vec(&stale).unwrap()).unwrap();
+    assert_eq!(projects(store).unwrap()[0].target_bytes, 7);
+}
+
+#[cfg(unix)]
+#[test]
+fn project_usage_deduplicates_roots_through_symlink_aliases() {
+    use std::os::unix::fs::symlink;
+    let directory = tempfile::tempdir().unwrap();
+    let store = directory.path();
+    let workspace = store.join("workspace");
+    let actual = store.join("actual");
+    let alias = store.join("alias");
+    std::fs::create_dir_all(&workspace).unwrap();
+    std::fs::create_dir_all(actual.join("nested")).unwrap();
+    std::fs::write(actual.join("nested/artifact"), b"compiled").unwrap();
+    symlink(&actual, &alias).unwrap();
+    let roots = CargoBuildRoots {
+        target_dir: actual.clone(),
+        build_dir: alias.clone(),
+    };
+    record_checkout(store, &"a".repeat(64), &workspace, Some(&roots)).unwrap();
+    let nested = CargoBuildRoots {
+        target_dir: actual,
+        build_dir: alias.join("nested"),
+    };
+    record_checkout(store, &"b".repeat(64), &workspace, Some(&nested)).unwrap();
+    assert_eq!(projects(store).unwrap()[0].target_bytes, 8);
 }

@@ -293,6 +293,14 @@ fn cargo_with_settings_bypass_log_and_roots(
     };
     // Chosen after placement, because it is a directory inside the managed
     // view: a build that could not place `target/` has nowhere to put one.
+    // Receipts retain the complete Cargo roots; a lane only changes this command.
+    let cargo_roots = crate::store::CargoBuildRoots {
+        target_dir: roots.target_dir.clone(),
+        build_dir: roots
+            .build_dir
+            .clone()
+            .unwrap_or_else(|| roots.target_dir.clone()),
+    };
     let check_lane = check_lane(config, &roots, &placement, &cargo, &working_dir, arguments);
     let lane_arguments = check_lane
         .as_ref()
@@ -409,7 +417,7 @@ fn cargo_with_settings_bypass_log_and_roots(
         let run = session
             .begin(
                 &roots.workspace_root,
-                &roots.target_dir,
+                &cargo_roots,
                 arguments,
                 &mut environment,
             )
@@ -1041,11 +1049,22 @@ pub(super) fn run_cargo(
 ) -> Result<ExitCode> {
     let mut command = Command::new(cargo);
     command.args(arguments);
-    command.envs(environment);
+    apply_build_environment(&mut command, environment);
     let status = command
         .status()
         .wrap_err_with(|| format!("failed to run {}", cargo.to_string_lossy()))?;
     Ok(exit_code(status))
+}
+
+/// Session Cargo roots belong only to the build that supplies them.
+pub(super) fn apply_build_environment(
+    command: &mut Command,
+    environment: BTreeMap<String, String>,
+) {
+    command
+        .env_remove(session::TARGET_DIR_ENV)
+        .env_remove(session::BUILD_DIR_ENV);
+    command.envs(environment);
 }
 
 /// Cargo's quiet flag applies to mbx's build summary as well as Cargo's own

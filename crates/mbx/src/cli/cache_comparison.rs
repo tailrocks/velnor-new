@@ -22,6 +22,8 @@ pub(super) struct Delta {
     new_predictions: u64,
     new_workspace_variants: u64,
     changed_workspace_variants: u64,
+    #[serde(skip)]
+    reusable_workspace_variants: u64,
 }
 
 impl Delta {
@@ -29,8 +31,7 @@ impl Delta {
         self.new_action_results
             + self.changed_action_results
             + self.new_predictions
-            + self.new_workspace_variants
-            + self.changed_workspace_variants
+            + self.reusable_workspace_variants
             > 0
     }
 }
@@ -140,7 +141,7 @@ fn changes<T: PartialEq>(before: &BTreeMap<String, T>, after: &BTreeMap<String, 
 fn workspace_variants(
     before: &BTreeMap<String, serde_json::Value>,
     after: &BTreeMap<String, serde_json::Value>,
-) -> (u64, u64) {
+) -> (u64, u64, u64) {
     let markers = |entries: &BTreeMap<String, serde_json::Value>| {
         entries
             .iter()
@@ -154,18 +155,48 @@ fn workspace_variants(
     let new = markers(after);
     let mut added = 0;
     let mut changed = 0;
+    let mut reusable = 0;
     for key in new.difference(&old) {
         let signature = key.split_once("/state/").map(|(signature, _)| signature);
-        if old
+        let previous = old
             .iter()
-            .any(|old| old.split_once("/state/").map(|(signature, _)| signature) == signature)
+            .filter(|old| old.split_once("/state/").map(|(signature, _)| signature) == signature)
+            .collect::<Vec<_>>();
+        let current_entries = variant_entries(after, key);
+        if current_entries
+            .values()
+            .any(|value| value["type"] != "root")
+            && !previous.iter().any(|old| {
+                let old_entries = variant_entries(before, old);
+                current_entries
+                    .iter()
+                    .all(|(path, value)| old_entries.get(path) == Some(value))
+            })
         {
+            reusable += 1;
+        }
+        if !previous.is_empty() {
             changed += 1;
         } else {
             added += 1;
         }
     }
-    (added, changed)
+    (added, changed, reusable)
+}
+
+fn variant_entries<'a>(
+    inventory: &'a BTreeMap<String, serde_json::Value>,
+    marker: &str,
+) -> BTreeMap<&'a str, &'a serde_json::Value> {
+    let prefix = format!("{marker}/");
+    inventory
+        .iter()
+        .filter_map(|(key, value)| {
+            key.strip_prefix(&prefix)
+                .filter(|_| value["type"] != "root")
+                .map(|relative| (relative, value))
+        })
+        .collect()
 }
 
 fn compare_inventories(
@@ -175,7 +206,7 @@ fn compare_inventories(
 ) -> Delta {
     let (new_action_results, changed_action_results) =
         changes(&baseline.cache.action_results, &current.action_results);
-    let (new_workspace_variants, changed_workspace_variants) =
+    let (new_workspace_variants, changed_workspace_variants, reusable_workspace_variants) =
         workspace_variants(&baseline.workspace_entries, entries);
     Delta {
         new_action_results,
@@ -186,6 +217,7 @@ fn compare_inventories(
             .count() as u64,
         new_workspace_variants,
         changed_workspace_variants,
+        reusable_workspace_variants,
     }
 }
 
@@ -296,10 +328,14 @@ mod tests {
             ("workspace/sig/state/b".into(), marker.clone()),
         ]);
         let subset = BTreeMap::from([("workspace/sig/state/b".into(), marker.clone())]);
-        assert_eq!(workspace_variants(&before, &subset), (0, 0));
+        assert_eq!(workspace_variants(&before, &subset), (0, 0, 0));
         let changed = BTreeMap::from([("workspace/sig/state/c".into(), marker.clone())]);
-        assert_eq!(workspace_variants(&before, &changed), (0, 1));
+        assert_eq!(workspace_variants(&before, &changed), (0, 1, 0));
         let added = BTreeMap::from([("workspace/new/state/c".into(), marker)]);
-        assert_eq!(workspace_variants(&before, &added), (1, 0));
+        assert_eq!(workspace_variants(&before, &added), (1, 0, 0));
     }
 }
+
+#[cfg(test)]
+#[path = "cache_comparison_usefulness_tests.rs"]
+mod usefulness_tests;

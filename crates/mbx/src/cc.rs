@@ -868,6 +868,18 @@ fn absolute(path: &Path, working_dir: &Path) -> PathBuf {
 /// session variables, so both adapters agree on which paths belong to a
 /// checkout rather than to the machine.
 fn path_mappings(working_dir: &Path) -> Vec<PathMapping> {
+    path_mappings_with_env(working_dir, |name| std::env::var_os(name))
+}
+
+fn path_mappings_with_env(
+    working_dir: &Path,
+    environment: impl Fn(&str) -> Option<OsString>,
+) -> Vec<PathMapping> {
+    let session_path = |name| {
+        environment(name)
+            .filter(|value| !value.is_empty())
+            .map(PathBuf::from)
+    };
     let mut mappings = Vec::new();
     let mut add = |root: Option<PathBuf>, placeholder: &str| {
         if let Some(root) = root.filter(|root| root.is_absolute())
@@ -879,8 +891,9 @@ fn path_mappings(working_dir: &Path) -> Vec<PathMapping> {
         }
     };
     add(session_path(session::TARGET_DIR_ENV), "target");
+    add(session_path(session::BUILD_DIR_ENV), "build");
     add(session_path(session::WORKSPACE_ROOT_ENV), "workspace");
-    let cargo_home = std::env::var_os("CARGO_HOME")
+    let cargo_home = environment("CARGO_HOME")
         .map(PathBuf::from)
         .or_else(|| dirs::home_dir().map(|home| home.join(".cargo")));
     add(
@@ -889,19 +902,19 @@ fn path_mappings(working_dir: &Path) -> Vec<PathMapping> {
     );
     add(cargo_home, "cargo_home");
     add(
-        std::env::var_os("RUSTUP_HOME")
+        environment("RUSTUP_HOME")
             .map(PathBuf::from)
             .or_else(|| dirs::home_dir().map(|home| home.join(".rustup"))),
         "rustup_home",
     );
     add(dirs::home_dir(), "home");
-    add(std::env::var_os("VCINSTALLDIR").map(PathBuf::from), "msvc");
+    add(environment("VCINSTALLDIR").map(PathBuf::from), "msvc");
     add(
-        std::env::var_os("WindowsSdkDir").map(PathBuf::from),
+        environment("WindowsSdkDir").map(PathBuf::from),
         "windows_sdk",
     );
     add(
-        std::env::var_os("UniversalCRTSdkDir").map(PathBuf::from),
+        environment("UniversalCRTSdkDir").map(PathBuf::from),
         "ucrt_sdk",
     );
     // A build script of a path dependency outside the workspace compiles
@@ -933,12 +946,6 @@ fn rustc_path_mappings(mappings: &[PathMapping]) -> Vec<mbx_cache_rustc::PathMap
         .iter()
         .map(|mapping| mbx_cache_rustc::PathMapping::new(&mapping.root, &mapping.placeholder))
         .collect()
-}
-
-fn session_path(name: &str) -> Option<PathBuf> {
-    std::env::var_os(name)
-        .filter(|value| !value.is_empty())
-        .map(PathBuf::from)
 }
 
 /// Fingerprint the driver, and for gcc the assembler it hands objects to.

@@ -951,3 +951,21 @@ fn a_real_rustc_wrapper_is_kept() {
         Some(std::path::PathBuf::from("workspace-wrapper"))
     );
 }
+
+#[cfg(unix)]
+#[test]
+fn standalone_child_removes_inherited_cargo_root_environment() {
+    // Set a simulated parent environment, then apply the exact launch policy.
+    let mut command = std::process::Command::new("sh");
+    command.env(crate::session::TARGET_DIR_ENV, "/parent/target");
+    command.env(crate::session::BUILD_DIR_ENV, "/parent/build");
+    apply_build_environment(&mut command, std::collections::BTreeMap::new());
+    let output = command
+        .args([
+            "-c",
+            r#"test -z "${MBX_TARGET_DIR+x}" && test -z "${MBX_BUILD_DIR+x}""#,
+        ])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+}
