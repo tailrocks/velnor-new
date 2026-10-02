@@ -14,7 +14,7 @@ use crate::decisions::{MetadataFailure, classify_metadata_failure};
 use crate::discover::{PlannedWorkspace, workspace_lock, workspace_manifest};
 use crate::generate::ToolSnapshot;
 use crate::inventory_reuse::MemberIndex;
-use crate::safe_read::{RepoRead, read_repo_file};
+use crate::safe_read::read_repo_file_cached;
 use crate::select_tofu::TofuSelectionUnit;
 
 /// Candidate outcomes plus successful manifest inventories.
@@ -37,6 +37,7 @@ pub(crate) fn run_inventories(
     root: &Path,
     candidates: &[StackCandidate],
     files: &[String],
+    reads: &mut velnor_actions_tofu::FileCache,
 ) -> Result<(Inventories, Vec<TofuSelectionUnit>), OrchestratorError> {
     let catalog = ToolCatalog::pinned();
     let mut manifests = Vec::with_capacity(candidates.len());
@@ -63,7 +64,7 @@ pub(crate) fn run_inventories(
     let mut tofu_outcomes = BTreeMap::new();
     let mut tofu_selection = Vec::new();
     for unit in tofu_units {
-        let (outcome, record) = analyze_tofu_unit(root, files, unit);
+        let (outcome, record) = analyze_tofu_unit(root, files, unit, &mut *reads);
         tofu_outcomes.insert(unit.to_owned(), outcome);
         tofu_selection.extend(record);
     }
@@ -129,6 +130,7 @@ fn analyze_tofu_unit(
     root: &Path,
     files: &[String],
     unit: &str,
+    reads: &mut velnor_actions_tofu::FileCache,
 ) -> (CandidateOutcome, Option<TofuSelectionUnit>) {
     let failed = |outcome: CandidateOutcome| (outcome, None);
     let selected = match velnor_actions_tofu::files_for_prefix(files, unit) {
@@ -138,12 +140,14 @@ fn analyze_tofu_unit(
     let effective = velnor_actions_tofu::effective_set(&selected);
     let mut pairs = Vec::with_capacity(effective.len());
     for path in &effective {
-        match read_repo_file(root, path, velnor_actions_tofu::MAX_FILE_BYTES) {
-            Ok(RepoRead::Text(text)) => pairs.push((path.clone(), text)),
-            Ok(RepoRead::Absent) => {
+        match read_repo_file_cached(root, path, velnor_actions_tofu::MAX_FILE_BYTES, reads) {
+            velnor_actions_tofu::PinnedOutcome::Text(text) => pairs.push((path.clone(), text)),
+            velnor_actions_tofu::PinnedOutcome::Absent => {
                 return failed(malformed_outcome(path, "absent_after_index".to_owned()));
             }
-            Err(err) => return failed(malformed_outcome(path, err.to_string())),
+            velnor_actions_tofu::PinnedOutcome::Unreadable(problem) => {
+                return failed(malformed_outcome(path, problem));
+            }
         }
     }
     match velnor_actions_tofu::analyze_files(&pairs) {

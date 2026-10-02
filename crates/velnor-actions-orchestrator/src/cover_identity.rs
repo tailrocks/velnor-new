@@ -73,7 +73,8 @@ fn cover_closure_digest(
         Some(root),
         nextest_config_for(discovery, task).as_deref(),
     );
-    verify_cover_extension(task, root, &bundle)?;
+    let mut reads = velnor_actions_tofu::FileCache::new();
+    verify_cover_extension(task, root, &bundle, &mut reads)?;
     let Ok(toolchain) = toolchain_id(task, catalog) else {
         return Err("toolchain_unresolvable".to_owned());
     };
@@ -87,6 +88,7 @@ fn cover_closure_digest(
         bundle.graph_digest(),
         &toolchain,
         &platform,
+        &mut reads,
     ) else {
         return Err("closure_unresolvable".to_owned());
     };
@@ -108,9 +110,10 @@ fn verify_cover_extension(
     task: &ProposedTask,
     root: &Path,
     bundle: &crate::internal_plan::identities::ExtensionBundle,
+    reads: &mut velnor_actions_tofu::FileCache,
 ) -> Result<(), String> {
     if Stack::from_id(&task.stack_id) == Some(Stack::Tofu) {
-        let ext = crate::internal_plan::tofu_extension_for(task, root, bundle)
+        let ext = crate::internal_plan::tofu_extension_for(task, root, bundle, reads)
             .map_err(|_| "extension_unverified:unparsable_spelling".to_owned())?;
         if ext.coverage_eligible().is_err() || ext.conservative_execution_required() {
             return Err("undeclared_inputs".to_owned());

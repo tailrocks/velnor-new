@@ -11,13 +11,13 @@ use std::path::Path;
 
 use velnor_actions_contract::Finding;
 
-use crate::closure::collect_unit_files;
-use crate::effective::{Dialect, config_shape, effective_set};
+use crate::effective::effective_set;
 use crate::family::{Family, family_of};
+use crate::file_cache::FileCache;
 use crate::lockfile::{
     corrupt_lockfile_finding, inspect_lockfile, lock_digest_at_root, lock_relative,
 };
-use crate::parser::{FileModel, MAX_DIAGNOSTIC_CHARS, parse_json, parse_native};
+use crate::parser::{FileModel, MAX_DIAGNOSTIC_CHARS};
 use crate::version::{admits_version, toolchain_triple};
 
 /// Stable code for a provider root without committed pins.
@@ -50,13 +50,17 @@ pub struct RequiredVersionClaim {
 /// malformed configs abstain (units own that failure); a neutral
 /// lock on a provider-free root stays silent.
 #[must_use]
-pub fn lockfile_findings_for_root(root: &Path, unit_path: &str) -> Vec<Finding> {
-    if lock_digest_at_root(root, unit_path).is_unknown() {
+pub fn lockfile_findings_for_root(
+    root: &Path,
+    unit_path: &str,
+    reads: &mut FileCache,
+) -> Vec<Finding> {
+    if lock_digest_at_root(root, unit_path, &mut *reads).is_unknown() {
         return Vec::new();
     }
     let lock = lock_relative(unit_path);
-    let Ok(bytes) = std::fs::read(root.join(&lock)) else {
-        return match root_shape(root, unit_path) {
+    let Ok(bytes) = reads.read_raw(&root.join(&lock)) else {
+        return match root_shape(root, unit_path, &mut *reads) {
             Some((true, _)) => vec![missing_finding(&lock)],
             Some((false, _)) | None => Vec::new(),
         };
@@ -71,7 +75,7 @@ pub fn lockfile_findings_for_root(root: &Path, unit_path: &str) -> Vec<Finding> 
         return inspection.findings;
     }
     let providers = inspection.spec.map_or_else(Vec::new, |spec| spec.providers);
-    match root_shape(root, unit_path) {
+    match root_shape(root, unit_path, reads) {
         Some((needs, _)) if providers.is_empty() && needs => vec![missing_finding(&lock)],
         Some((_, true)) if !providers.is_empty() => vec![stale_finding(&lock, &providers)],
         Some(_) | None => Vec::new(),
@@ -83,13 +87,17 @@ pub fn lockfile_findings_for_root(root: &Path, unit_path: &str) -> Vec<Finding> 
 /// Malformed files contribute no claims (no table, no claim); an
 /// unreadable root yields no claims.
 #[must_use]
-pub fn required_versions_for_root(root: &Path, unit_path: &str) -> Vec<RequiredVersionClaim> {
+pub fn required_versions_for_root(
+    root: &Path,
+    unit_path: &str,
+    reads: &mut FileCache,
+) -> Vec<RequiredVersionClaim> {
     let mut claims = Vec::new();
-    let Some(paths) = effective_paths(root, unit_path) else {
+    let Some(paths) = effective_paths(root, unit_path, &mut *reads) else {
         return claims;
     };
     for path in &paths {
-        let Some(model) = parse_model(root, path) else {
+        let Some(model) = parse_model(root, path, &mut *reads) else {
             continue;
         };
         for constraint in &model.required_versions {
@@ -165,12 +173,12 @@ pub fn remediation_for_init_stderr(
 /// `bare` additionally forbids `terraform` and `module` blocks
 /// (hidden requirements abstain both ways). `None` abstains on any
 /// unreadable or malformed config.
-fn root_shape(root: &Path, unit_path: &str) -> Option<(bool, bool)> {
-    let paths = effective_paths(root, unit_path)?;
+fn root_shape(root: &Path, unit_path: &str, reads: &mut FileCache) -> Option<(bool, bool)> {
+    let paths = effective_paths(root, unit_path, &mut *reads)?;
     let mut needs = false;
     let mut bare = true;
     for path in &paths {
-        let model = parse_model(root, path)?;
+        let model = parse_model(root, path, &mut *reads)?;
         for block in &model.blocks {
             match block.kind.as_str() {
                 "resource" | "data" | "provider" => {
@@ -188,9 +196,9 @@ fn root_shape(root: &Path, unit_path: &str) -> Option<(bool, bool)> {
 }
 
 /// Effective config paths of one unit, or `None` when unreadable.
-fn effective_paths(root: &Path, unit_path: &str) -> Option<Vec<String>> {
+fn effective_paths(root: &Path, unit_path: &str, reads: &mut FileCache) -> Option<Vec<String>> {
     let unit = if unit_path == "." { "" } else { unit_path };
-    let collected = collect_unit_files(root, unit).ok()?;
+    let collected = reads.unit_files(root, unit).ok()?;
     let configs: Vec<String> = collected
         .into_iter()
         .filter(|path| {
@@ -204,14 +212,8 @@ fn effective_paths(root: &Path, unit_path: &str) -> Option<Vec<String>> {
 }
 
 /// Parsed model of one config path, or `None` when unusable.
-fn parse_model(root: &Path, path: &str) -> Option<FileModel> {
-    let text = std::fs::read_to_string(root.join(path)).ok()?;
-    let name = path.rsplit('/').next().unwrap_or(path);
-    let shape = config_shape(name)?;
-    match shape.dialect {
-        Dialect::Native => parse_native(&text).ok(),
-        Dialect::Json => parse_json(&text).ok(),
-    }
+fn parse_model(root: &Path, path: &str, reads: &mut FileCache) -> Option<FileModel> {
+    reads.model_for(root, path).ok().flatten()
 }
 
 /// Missing-lock finding: commit pins manually, never auto-created.

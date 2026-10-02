@@ -16,6 +16,7 @@ use velnor_actions_contract::{
 use crate::closure_inputs::{modules_provenance, varfiles_provenance};
 use crate::effective::effective_set;
 use crate::family::{Family, LOCKFILE_NAME, family_of};
+use crate::file_cache::FileCache;
 use crate::fmt_scope::is_fmt_file;
 use crate::kinds::TofuTaskKind;
 use crate::parser::MAX_FILES_PER_UNIT;
@@ -36,17 +37,22 @@ pub fn resolve_closure_at_root(
     graph_digest: &str,
     toolchain_id: &str,
     platform_id: &str,
+    reads: &mut FileCache,
 ) -> Result<TaskInputClosure, ContractError> {
     let kind = TofuTaskKind::parse(&task.task_kind)?;
     let unit = task.identity.unit_path.as_str();
     if !unit.is_empty() {
         normalize_posix_path(unit)?;
     }
+    let source_tree = source_tree_provenance(root, unit, kind, &mut *reads);
+    let lockfile = lockfile_provenance(root, unit, kind, &mut *reads);
+    let modules = modules_provenance(root, unit, kind, &mut *reads);
+    let varfiles = varfiles_provenance(root, unit, kind, &mut *reads);
     let mut closure = ClosureBuilder::new()
-        .input("source_tree", source_tree_provenance(root, unit, kind))
-        .input("lockfile", lockfile_provenance(root, unit, kind))
-        .input("modules", modules_provenance(root, unit, kind))
-        .input("varfiles", varfiles_provenance(root, unit, kind))
+        .input("source_tree", source_tree)
+        .input("lockfile", lockfile)
+        .input("modules", modules)
+        .input("varfiles", varfiles)
         .digest("local_deps", graph_digest)
         .digest("toolchain", toolchain_id)
         .digest("platform", platform_id)
@@ -58,7 +64,7 @@ pub fn resolve_closure_at_root(
         .value("kind", &task.task_kind);
     for (index, extra) in task.identity.declared_inputs.iter().enumerate() {
         let name = format!("declared_extra:{index}:{extra}");
-        closure = closure.input(&name, probe_path(root, extra));
+        closure = closure.input(&name, probe_path(root, extra, &mut *reads));
     }
     Ok(closure
         .input("vcs", vcs_provenance(task.identity.undeclared_reads))
@@ -66,8 +72,13 @@ pub fn resolve_closure_at_root(
 }
 
 /// Source-tree provenance: fmt scope for `fmt`, effective set otherwise.
-fn source_tree_provenance(root: &Path, unit: &str, kind: TofuTaskKind) -> Provenance {
-    let collected = match collect_unit_files(root, unit) {
+fn source_tree_provenance(
+    root: &Path,
+    unit: &str,
+    kind: TofuTaskKind,
+    reads: &mut FileCache,
+) -> Provenance {
+    let collected = match reads.unit_files(root, unit) {
         Ok(collected) => collected,
         Err(reason) => return Provenance::Unknown { reason },
     };
@@ -103,7 +114,7 @@ fn source_tree_provenance(root: &Path, unit: &str, kind: TofuTaskKind) -> Proven
     }
     let mut files = Vec::with_capacity(wanted.len());
     for path in &wanted {
-        match std::fs::read(root.join(path)) {
+        match reads.read_raw(&root.join(path)) {
             Ok(bytes) => files.push((path.clone(), digest_b3(&bytes))),
             Err(reason) => {
                 return Provenance::Unknown {
@@ -119,7 +130,12 @@ fn source_tree_provenance(root: &Path, unit: &str, kind: TofuTaskKind) -> Proven
 }
 
 /// Lockfile provenance: content, proven absence, or kind exclusion.
-fn lockfile_provenance(root: &Path, unit: &str, kind: TofuTaskKind) -> Provenance {
+fn lockfile_provenance(
+    root: &Path,
+    unit: &str,
+    kind: TofuTaskKind,
+    reads: &mut FileCache,
+) -> Provenance {
     if kind == TofuTaskKind::Fmt {
         return Provenance::AbsentProven {
             evidence: "excluded:kind_does_not_read_lockfile".to_owned(),
@@ -130,17 +146,17 @@ fn lockfile_provenance(root: &Path, unit: &str, kind: TofuTaskKind) -> Provenanc
     } else {
         format!("{unit}/{LOCKFILE_NAME}")
     };
-    probe_path(root, &relative)
+    probe_path(root, &relative, reads)
 }
 
 /// Provenance of one repo-relative path: digest, absence, or unknown.
-fn probe_path(root: &Path, relative: &str) -> Provenance {
+fn probe_path(root: &Path, relative: &str, reads: &mut FileCache) -> Provenance {
     let Ok(normalized) = normalize_posix_path(relative) else {
         return Provenance::Unknown {
             reason: format!("bad_path:{relative}"),
         };
     };
-    match std::fs::read(root.join(&normalized)) {
+    match reads.read_raw(&root.join(&normalized)) {
         Ok(bytes) => Provenance::Known {
             digest: digest_b3(&bytes),
         },
