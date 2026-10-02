@@ -21,7 +21,7 @@ Deny = deny ok; R = file read @HEAD; CI6 = dogfood CI green 47/47 on HEAD
 
 | Requirement | Gt | Crate | Impl file(s) | Regression test(s) | Evidence |
 |---|---|---|---|---|---|
-| RQ-1/ARCH-1: exactly 7 `velnor-actions-*` pkgs, virtual ws, explicit members | 0 | CLI | `Cargo.toml` (R) | `CLI/tests/impl_repo_policy.rs:workspace_lists_exactly_seven_members` | T+F |
+| RQ-1/ARCH-1: exactly 8 `velnor-actions-*` pkgs, virtual ws, explicit members | 0 | CLI | `Cargo.toml` (R) | `CLI/tests/impl_repo_policy.rs:workspace_lists_exactly_eight_members` | T+F |
 | RQ-1/ARCH-1/CLI-1: generic names forbidden; `velnor` reserved; CLI owns `velnor-actions` bin | 0 | CLI | `Cargo.toml`, `CLI/src/main.rs` (R) | `CLI/tests/impl_repo_policy.rs:generic_names_forbidden`, `CLI/tests/impl_repo_policy.rs:velnor_name_never_published` | T+F |
 | RQ-1/ARCH-1/PLAN-cfg: ownership table + dep direction (adapters→CT only, OR composes, RS↔MI banned, no tool calls in CLI) | 0 | OR | `Cargo.toml`s (R) | `OR/tests/impl_orch_intake_deps.rs:intake_adapter_dependency_direction`, `CLI/tests/impl_repo_deps.rs:dependency_edges_match_ownership_table` | T |
 | RQ-1/ARCH-1.10: product roots under `crates/`; fixtures not packages; alint scopes product paths | 0 | CLI | `.alint.yml` (R) | `CLI/tests/impl_repo_shape.rs:arch110_product_roots_live_under_crates`, `CLI/tests/impl_repo_shape.rs:arch112_alint_scopes_product_paths` | T+F |
