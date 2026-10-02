@@ -15,11 +15,16 @@ fn c1_inventory_lists_every_runtime_path_with_one_owner() {
         "cargo-binaries",
         "cargo-target",
         "mbx-objects",
+        "tofu-provider-cache",
     ] {
         assert!(paths::is_known_id(id), "missing {id}");
         assert!(!paths::owner_for(id).expect("owner").is_empty());
     }
-    assert_eq!(inv.len(), 7, "exact inventory size");
+    assert_eq!(inv.len(), 8, "exact inventory size");
+    assert_eq!(
+        paths::owner_for("tofu-provider-cache").expect("owner"),
+        "velnor/tofu-providers"
+    );
 }
 
 #[test]

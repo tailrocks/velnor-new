@@ -69,10 +69,16 @@ fn digest(byte: u8) -> String {
 }
 
 /// One single-task plan entry plus its obligation digest.
-fn entry_for(task_id: &str, kind: &str, seed: u8, job_id: &str) -> (MatrixEntry, String) {
+fn entry_for(
+    stack: &str,
+    task_id: &str,
+    kind: &str,
+    seed: u8,
+    job_id: &str,
+) -> (MatrixEntry, String) {
     let task_digest = digest(seed);
     let entry = MatrixEntry::derive(
-        "rust",
+        stack,
         task_id,
         "true",
         &task_digest,
@@ -103,8 +109,8 @@ fn obligation_for(task_id: &str, task_digest: String, seed: u8) -> PlanObligatio
 
 /// Valid two-task fixture plan (clippy plus test).
 pub(super) fn fixture_plan() -> Plan {
-    let (clippy_entry, clippy_digest) = entry_for(CLIPPY, "clippy", 1, "crate_clippy");
-    let (test_entry, test_digest) = entry_for(TEST, "test", 2, "crate_test");
+    let (clippy_entry, clippy_digest) = entry_for("rust", CLIPPY, "clippy", 1, "crate_clippy");
+    let (test_entry, test_digest) = entry_for("rust", TEST, "test", 2, "crate_test");
     let plan = Plan {
         schema: 1,
         run_key: "local".to_owned(),
@@ -235,8 +241,45 @@ fn failed_report_marks_entry_failed() {
         task.duration_ms.is_some_and(|elapsed| elapsed >= 1),
         "present stamp measures"
     );
+    let duration = task.duration_ms.expect("duration");
+    let timing = task.timing.expect("measured duration carries timing");
+    assert_eq!(timing.task_ms, duration);
+    assert_eq!(timing.accounted_total(), duration);
+    assert_eq!(
+        timing.slots(),
+        [0, 0, duration, 0, 0, 0, 0, 0, 0, 0],
+        "only the task-body slot measures"
+    );
     assert_eq!(matrix.status, MatrixStatus::Failed);
     assert_eq!(matrix.failed, 1);
+}
+
+/// Tofu task ID for the timing-carrying execution case.
+const TOFU_VALIDATE: &str = "stack/tofu/stacks/a/validate/default";
+
+#[test]
+fn tofu_executed_report_carries_measured_timing() {
+    let mut plan = fixture_plan();
+    let (tofu_entry, digest) = entry_for("tofu", TOFU_VALIDATE, "validate", 7, "tofu_validate");
+    plan.matrix.include[1] = tofu_entry;
+    let entry = &plan.matrix.include[1];
+    plan.obligations[1] = obligation_for(TOFU_VALIDATE, digest.clone(), 7);
+    plan.task_ids[1] = TOFU_VALIDATE.to_owned();
+    plan.validate().expect("mixed plan validates");
+    let temp = staged_run(&plan, "local");
+    let reported =
+        write_task_report_to("local", TOFU_VALIDATE, 0, Some(1), &[], temp.path()).expect("report");
+    assert_eq!(reported, 1);
+    let expect_id =
+        velnor_actions_contract::task_report_id_for_task("local", &entry.matrix_key, &digest)
+            .expect("task report id");
+    let (task, matrix) = read_entry(&temp, "local", &entry.matrix_key, &expect_id);
+    assert_eq!(task.status, TaskStatus::Executed);
+    let duration = task.duration_ms.expect("duration");
+    let timing = task.timing.expect("tofu timing measures");
+    assert_eq!(timing.task_ms, duration);
+    assert_eq!(timing.accounted_total(), duration);
+    assert_eq!(matrix.status, MatrixStatus::Passed);
 }
 
 #[test]

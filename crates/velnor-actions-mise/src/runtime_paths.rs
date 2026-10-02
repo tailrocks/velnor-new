@@ -24,6 +24,13 @@ pub const CARGO_GIT_SUFFIX: &str = "git";
 pub const CARGO_BIN_SUFFIX: &str = "bin";
 /// Per-lane target base (concurrent writers never share).
 pub const TARGET_BASE: &str = "$RUNNER_TEMP/velnor/target/";
+/// Velnor-owned tofu data-dir base (expression form for `env:`).
+pub const TOFU_DATA_BASE_EXPR: &str = "${{ runner.temp }}/velnor/tofu-data";
+/// Velnor-owned tofu provider-cache base (expression form for `env:`).
+///
+/// Shell spelling `$RUNNER_TEMP/velnor/tofu-cache/<slug>`; per-root
+/// slugs hang under this base, one job-private dir per root.
+pub const TOFU_PROVIDER_CACHE_BASE_EXPR: &str = "${{ runner.temp }}/velnor/tofu-cache";
 /// MBX objects are action-managed, never a filesystem archive path.
 pub const MBX_OBJECTS_OWNER: &str = "mr-boxington-action/objects";
 /// Mise task artifacts dir (task-result layer).
@@ -40,7 +47,7 @@ pub struct RuntimePath {
     pub owner: &'static str,
 }
 
-/// Exact inventory: Mise installs, rustup, Cargo, target, MBX, task.
+/// Exact inventory: Mise installs, rustup, Cargo, target, MBX, task, tofu.
 #[must_use]
 pub fn inventory() -> Vec<RuntimePath> {
     vec![
@@ -48,6 +55,11 @@ pub fn inventory() -> Vec<RuntimePath> {
             id: "mise-installs",
             path: MISE_DATA_DIR,
             owner: "catalog/tools",
+        },
+        RuntimePath {
+            id: "tofu-provider-cache",
+            path: TOFU_PROVIDER_CACHE_BASE_EXPR,
+            owner: "velnor/tofu-providers",
         },
         RuntimePath {
             id: "rustup-toolchains",

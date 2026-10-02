@@ -7,6 +7,7 @@ mod discovery;
 mod release;
 mod resources;
 mod stacks;
+mod tofu;
 mod workflow;
 
 pub use actions::{ActionPinOverride, ActionsConfig, OVERRIDABLE_ACTIONS};
@@ -19,6 +20,7 @@ pub use stacks::{
     DeclaredCompileDriver, DeclaredTestRunner, RustConfiguration, RustStackConfig, StacksConfig,
     is_valid_custom_task_name, is_valid_feature_name, is_valid_rust_target,
 };
+pub use tofu::{RootProblem, TofuStackConfig, Utf8RepoRelDir};
 pub use workflow::{
     GeneratorValidation, LATEST_RUNNER_LABEL, RUNNER_LABEL_CATALOG, RunnerSelection,
     VelnorSupportWorkflow, WorkflowConfig, WorkflowPolicy,
@@ -52,7 +54,7 @@ impl VelnorConfig {
     /// Schema version this contract accepts.
     pub const SCHEMA: u32 = 1;
     /// Stack IDs registered in V1.
-    pub const REGISTERED_STACKS: &'static [&'static str] = &["rust"];
+    pub const REGISTERED_STACKS: &'static [&'static str] = &["rust", "tofu"];
     /// Validate every field; failures name file, key path, and problem.
     /// # Errors
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {

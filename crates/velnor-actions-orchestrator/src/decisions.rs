@@ -20,9 +20,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use velnor_actions_contract::{
     CacheLayer, CacheOutcome, CacheResult, ContractError, NotSelectedReason, ObligationDecision,
-    RunnerImageEvidence, TaskReport, TaskStatus, Trust, WorkflowEvent, join_runner_temp,
+    RunnerImageEvidence, Stack, TaskReport, TaskStatus, Trust, WorkflowEvent, join_runner_temp,
     task_report_id_for_task, validate_run_key,
 };
+use velnor_actions_rust::SelectionBroadening;
 
 use crate::OrchestratorError;
 use crate::internal::internal_contract;
@@ -254,6 +255,30 @@ pub fn selection_broadens_for_path(path: &str) -> Option<&'static str> {
     None
 }
 
+/// Broadening class one changed path triggers, unioned over stacks.
+///
+/// Each stack classifies its own lock/root-config paths; the orchestrator
+/// only unions the verdicts and owns the warning vocabulary. Tofu
+/// contributes nothing by design (T12 call): every tofu lockfile lives
+/// under its root, so lockfile changes attribute per-root through
+/// calling-root selection instead of broadening; the `[stacks.tofu]`
+/// table itself broadens as global config via
+/// [`selection_broadens_for_path`].
+#[must_use]
+pub(crate) fn broadening_for_path(path: &str) -> Option<SelectionBroadening> {
+    for stack in Stack::all() {
+        match stack {
+            Stack::Rust => {
+                if let Some(class) = velnor_actions_rust::selection_broadening(path) {
+                    return Some(class);
+                }
+            }
+            Stack::Tofu => {}
+        }
+    }
+    None
+}
+
 /// One omitted task plus its internal-record explanation (arch §5).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TaskOmission {
@@ -290,7 +315,7 @@ pub struct DetectorInfo {
     pub schema: u32,
 }
 
-/// Detector registry in ascending stack-ID order; V1 holds `rust` only.
+/// Detector registry in ascending stack-ID order; V1 holds `rust` and `tofu`.
 #[must_use]
 pub fn detector_registry() -> Vec<DetectorInfo> {
     crate::discover::detector_entries()

@@ -83,25 +83,65 @@ fn task_cache_steps_need_fixture_and_live_mode() {
 }
 
 #[test]
+fn crate_driver_tools_follow_role_selection() {
+    use velnor_actions_mise::PinnedTool;
+
+    use crate::matrix_step::task_driver_tools;
+    assert_eq!(
+        task_driver_tools(true, false, false),
+        vec![PinnedTool::Rust]
+    );
+    assert_eq!(
+        task_driver_tools(true, true, false),
+        vec![PinnedTool::Rust, PinnedTool::MrBoxington]
+    );
+    assert_eq!(
+        task_driver_tools(true, false, true),
+        vec![PinnedTool::Rust, PinnedTool::Opentofu]
+    );
+    assert_eq!(
+        task_driver_tools(true, true, true),
+        vec![
+            PinnedTool::Rust,
+            PinnedTool::MrBoxington,
+            PinnedTool::Opentofu
+        ]
+    );
+    assert_eq!(
+        task_driver_tools(false, false, true),
+        vec![PinnedTool::Opentofu],
+        "pure-tofu drivers carry no Rust"
+    );
+    assert!(
+        task_driver_tools(false, false, false).is_empty(),
+        "no drivers without any role"
+    );
+}
+
+#[test]
 fn crate_tools_follow_selection_with_validators() {
     use velnor_actions_mise::PinnedTool;
 
-    use crate::matrix_step::{prepare_crate_tools_step, task_driver_tools};
-    assert_eq!(task_driver_tools(false), vec![PinnedTool::Rust]);
-    assert_eq!(
-        task_driver_tools(true),
-        vec![PinnedTool::Rust, PinnedTool::MrBoxington]
-    );
+    use crate::matrix_step::prepare_crate_tools_step;
     let catalog = ToolCatalog::pinned();
-    for (use_mbx, use_nextest, needs_validators) in [
-        (false, false, false),
-        (false, true, true),
-        (true, false, true),
-        (true, true, false),
+    for (use_rust, use_mbx, use_nextest, use_opentofu, needs_validators) in [
+        (true, false, false, false, false),
+        (true, false, true, true, true),
+        (true, true, false, true, true),
+        (true, true, true, false, false),
+        (false, false, false, true, false),
+        (false, false, false, true, true),
     ] {
-        let step = prepare_crate_tools_step(&catalog, use_mbx, use_nextest, needs_validators)
-            .expect("step");
-        let StepKind::Shell { run, .. } = &step.kind else {
+        let step = prepare_crate_tools_step(
+            &catalog,
+            use_rust,
+            use_mbx,
+            use_nextest,
+            use_opentofu,
+            needs_validators,
+        )
+        .expect("step");
+        let StepKind::Shell { run, env } = &step.kind else {
             panic!("prepare must be a shell step");
         };
         for tool in [
@@ -119,6 +159,21 @@ fn crate_tools_follow_selection_with_validators() {
         assert_eq!(run.contains(&nextest), use_nextest);
         let mbx = catalog.tool_spec(PinnedTool::MrBoxington);
         assert_eq!(run.contains(&mbx), use_mbx);
+        let opentofu = catalog.tool_spec(PinnedTool::Opentofu);
+        assert_eq!(run.contains(&opentofu), use_opentofu);
+        let rust = catalog.tool_spec(PinnedTool::Rust);
+        assert_eq!(
+            run.contains(&rust),
+            use_rust,
+            "rust installs only for rust roles: {run:?}"
+        );
+        for key in ["MISE_RUSTUP_HOME", "MISE_CARGO_HOME", "RUSTUP_TOOLCHAIN"] {
+            assert_eq!(
+                env.contains_key(key),
+                use_rust,
+                "triple follows the rust role: {env:?}"
+            );
+        }
         assert!(declared_config_variables().is_empty());
     }
 }
@@ -130,9 +185,22 @@ fn crate_tools_install_exact_pinned_set() {
     use crate::matrix_step::prepare_crate_tools_step;
     let catalog = ToolCatalog::pinned();
     for needs_validators in [false, true] {
-        for (use_mbx, use_nextest) in [(false, false), (false, true), (true, false), (true, true)] {
-            let step = prepare_crate_tools_step(&catalog, use_mbx, use_nextest, needs_validators)
-                .expect("step");
+        for (use_rust, use_mbx, use_nextest, use_opentofu) in [
+            (true, false, false, false),
+            (true, false, true, true),
+            (true, true, false, true),
+            (true, true, true, false),
+            (false, false, false, true),
+        ] {
+            let step = prepare_crate_tools_step(
+                &catalog,
+                use_rust,
+                use_mbx,
+                use_nextest,
+                use_opentofu,
+                needs_validators,
+            )
+            .expect("step");
             let StepKind::Shell { run, .. } = &step.kind else {
                 panic!("prepare must be a shell step");
             };
@@ -141,9 +209,15 @@ fn crate_tools_install_exact_pinned_set() {
                 .position(|arg| arg == "install")
                 .expect("install argv");
             let specs = &run[at + 1..];
-            let mut expected = vec![catalog.tool_spec(PinnedTool::Rust)];
+            let mut expected = Vec::new();
+            if use_rust {
+                expected.push(catalog.tool_spec(PinnedTool::Rust));
+            }
             if use_mbx {
                 expected.push(catalog.tool_spec(PinnedTool::MrBoxington));
+            }
+            if use_opentofu {
+                expected.push(catalog.tool_spec(PinnedTool::Opentofu));
             }
             if needs_validators {
                 expected.extend([
@@ -158,7 +232,7 @@ fn crate_tools_install_exact_pinned_set() {
             assert_eq!(
                 specs,
                 expected.as_slice(),
-                "exact crate install set (mbx={use_mbx}, nextest={use_nextest}, validators={needs_validators})"
+                "exact crate install set (rust={use_rust}, mbx={use_mbx}, nextest={use_nextest}, opentofu={use_opentofu}, validators={needs_validators})"
             );
             for absent in [PinnedTool::Gh, PinnedTool::ReleasePlz] {
                 assert!(

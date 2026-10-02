@@ -174,6 +174,10 @@ fn reuse_qualification_rejects_nondeterministic_tasks() {
     assert!(qualify_reuse("clippy", true, false, false).is_err());
     assert!(qualify_reuse("clippy", false, true, false).is_err());
     assert!(qualify_reuse("clippy", false, false, true).is_err());
+    // T21: tofu init must-run carries the Network signal, so it can
+    // never qualify for task-result reuse; validate's disablement is
+    // plan/merge-time (forced execute + fail-closed reuse claims).
+    assert!(qualify_reuse("init", true, false, false).is_err());
 }
 
 /// Restore attempts classify hits and precise miss reasons in order.

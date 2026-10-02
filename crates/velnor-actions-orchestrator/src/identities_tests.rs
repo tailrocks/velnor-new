@@ -221,3 +221,149 @@ fn compiler_spec_versions_flip_the_digest() {
         );
     }
 }
+
+/// Minimal tofu proposal with `kind` and driver spellings.
+fn tofu_task(kind: &str) -> ProposedTask {
+    use std::collections::BTreeMap;
+    use std::ffi::OsString;
+    use velnor_actions_contract::{CachePolicy, IdentityInputs, ResourceClass, ResourceDemand};
+    ProposedTask {
+        task_id: format!("stack/tofu/root/{kind}/default"),
+        stack_id: "tofu".to_owned(),
+        component_id: "tofu:".to_owned(),
+        task_kind: kind.to_owned(),
+        configuration: "default".to_owned(),
+        depends_on: Vec::new(),
+        gated_by: Vec::new(),
+        reads: Vec::new(),
+        writes: Vec::new(),
+        outputs: Vec::new(),
+        resource: ResourceDemand {
+            class: ResourceClass::Compiler,
+            cpu_milli: None,
+            memory_mb: None,
+            needs_network: false,
+            service: None,
+        },
+        cache_policy: CachePolicy {
+            allow_compilation_reuse: false,
+            allow_task_reuse: false,
+        },
+        identity: IdentityInputs {
+            unit_id: String::new(),
+            unit_key: "root".to_owned(),
+            unit_path: String::new(),
+            project_root: ".".to_owned(),
+            target: "host".to_owned(),
+            features: Vec::new(),
+            flags: Vec::new(),
+            compile_driver: "tofu".to_owned(),
+            test_runner: "tofu".to_owned(),
+            environment: BTreeMap::new(),
+            declared_inputs: Vec::new(),
+            undeclared_reads: false,
+        },
+        payload: vec![OsString::from("tofu")],
+        display_name: String::new(),
+        uses_clock: false,
+        uses_random: false,
+        no_targets: false,
+        runner_profile: "default".to_owned(),
+    }
+}
+
+#[test]
+fn tofu_toolchain_pins_opentofu_plus_provider_surface() {
+    let inputs = toolchain_inputs_for(&tofu_task("validate"), &ToolCatalog::pinned())
+        .expect("tofu converts");
+    assert_eq!(inputs.tools, vec!["opentofu@1.13.1".to_owned()]);
+    assert_eq!(inputs.components.len(), 1);
+    let entry = &inputs.components[0];
+    assert!(entry.starts_with("tofu-provider-inputs:b3-"), "{entry}");
+    let digest = entry.strip_prefix("tofu-provider-inputs:").expect("prefix");
+    assert!(validate_digest(digest).is_ok());
+    assert_eq!(inputs.compile_driver, "tofu");
+    assert_eq!(inputs.test_runner, "tofu");
+    assert!(toolchain_id(&inputs).is_ok());
+}
+
+#[test]
+fn tofu_toolchain_flips_on_provider_surface() {
+    let catalog = ToolCatalog::pinned();
+    let digest_for = |task: &ProposedTask| toolchain_digest_for(task, &catalog).expect("digest");
+    let validate = digest_for(&tofu_task("validate"));
+    assert_eq!(validate, digest_for(&tofu_task("init")));
+    assert_ne!(validate, digest_for(&tofu_task("fmt")));
+    let mut other = tofu_task("validate");
+    other.identity.unit_key = "stacks/vpc".to_owned();
+    assert_ne!(validate, digest_for(&other));
+    assert!(toolchain_inputs_for(&tofu_task("bogus"), &catalog).is_err());
+}
+
+/// Tofu proposal via the T12 adapter constructor.
+fn tofu_proposal(kind: velnor_actions_tofu::TofuTaskKind) -> ProposedTask {
+    let group = velnor_actions_tofu::TofuTaskGroup {
+        root: String::new(),
+        kind,
+        configuration: "default".to_owned(),
+        no_targets: false,
+    };
+    let task = velnor_actions_tofu::propose_task(&group).expect("fixture proposes");
+    task.validate().expect("fixture valid");
+    task
+}
+
+#[test]
+fn tofu_cache_format_is_distinct_and_valid() {
+    let tofu = cache_format_id_for_tofu();
+    assert!(validate_digest(&tofu).is_ok());
+    assert_ne!(tofu, cache_format_id_for(CompileDriver::Cargo));
+    assert_ne!(tofu, cache_format_id_for(CompileDriver::Mbx));
+}
+
+/// Minimal discovery with no workspaces or tool checks.
+fn empty_discovery() -> crate::discover::Discovery {
+    crate::discover::Discovery {
+        statuses: Vec::new(),
+        workspaces: Vec::new(),
+        proposals: Vec::new(),
+        feature_fallbacks: Vec::new(),
+        tool_checks: Vec::new(),
+        clippy_memory: crate::clippy_groups::ClippyMemoryPlan {
+            groups: Vec::new(),
+            barriers: 0,
+        },
+        recommendations: Vec::new(),
+        consumer_manifest_json: None,
+        consumer_manifest_stand_in: false,
+        skipped_non_utf8: false,
+        tofu_note: None,
+        tofu_units: Vec::new(),
+    }
+}
+
+#[test]
+fn tofu_bundles_skip_rust_checkout_probes() {
+    use velnor_actions_tofu::TofuTaskKind;
+    let task = tofu_proposal(TofuTaskKind::Validate);
+    let discovery = empty_discovery();
+    let snapshot = super::snapshot::ExecutionSnapshot::build(&discovery);
+    // A nonexistent root proves no probe runs: tofu slots resolve
+    // through the tofu bridge, never here.
+    let bundle = extension_bundle_with_snapshot(
+        &snapshot,
+        &discovery,
+        &task,
+        Some(std::path::Path::new("/nonexistent-tofu-guard")),
+        None,
+    );
+    let inputs = bundle.inputs();
+    assert_eq!(
+        inputs.lock_digest,
+        velnor_actions_rust::tasks::DigestSlot::Unknown("tofu_adapter_owned".to_owned())
+    );
+    assert_eq!(
+        inputs.nextest_digest,
+        velnor_actions_rust::tasks::DigestSlot::Unknown("tofu_adapter_owned".to_owned())
+    );
+}

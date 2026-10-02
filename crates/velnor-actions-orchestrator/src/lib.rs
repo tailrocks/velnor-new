@@ -9,6 +9,7 @@ mod attach;
 mod baseline_publish;
 mod clippy_groups;
 mod config;
+mod config_stacks;
 mod cover;
 mod cover_baseline;
 mod cover_compat;
@@ -21,6 +22,7 @@ pub mod decisions;
 mod derive_groups;
 mod discover;
 mod discover_index;
+mod discover_tofu;
 mod error;
 mod evidence;
 mod exclusive_write;
@@ -66,10 +68,12 @@ pub mod schedule;
 mod select;
 mod select_affected;
 mod select_edges;
+mod select_tofu;
 mod source_cache;
 mod source_prep;
 mod task_report;
 mod task_report_aggregate;
+mod tofu_cache;
 mod toolcheck;
 mod toolfindings;
 mod utf8;
@@ -94,7 +98,7 @@ pub use derive_groups::FeatureFallback;
 pub use discover::{Discovery, PlannedWorkspace};
 pub use error::OrchestratorError;
 pub use extension_schemas::{
-    coverage_schema_known, extension_schema_for_stack, reuse_eligible_for_schema,
+    coverage_schema_known, extension_schema_for_stack, reuse_eligible_for_schema, task_key_segment,
     task_kind_segment, task_stack_segment,
 };
 pub use external_data::{

@@ -6,8 +6,8 @@
 //! orchestrator stays opaque to adapter data; this validator pins the
 //! required slots so reuse never rests on a partial extension.
 
-use crate::cachekey::RUST_EXTENSION_SCHEMA;
 use crate::cachekey::validate_semantic_text;
+use crate::cachekey::{RUST_EXTENSION_SCHEMA, TOFU_EXTENSION_SCHEMA};
 use crate::canonical::{StackExtension, validate_digest};
 use crate::errors::ContractError;
 
@@ -63,6 +63,68 @@ pub fn validate_rust_extension(extension: &StackExtension) -> Result<(), Contrac
     check_string_array(data, "features")?;
     check_nullable_text(data, "nextest_digest")?;
     check_nullable_text(data, "archive")?;
+    Ok(())
+}
+
+/// Required `data` keys of the tofu task-identity extension.
+///
+/// `driver` carries driver+runner combined (`tofu+none`); `root` is
+/// empty for the repository root; `lock_digest` is null when the
+/// root lockfile is absent.
+pub const TOFU_EXTENSION_REQUIRED_SLOTS: [&str; 9] = [
+    "unit_id",
+    "workspace_id",
+    "graph_digest",
+    "root",
+    "profile",
+    "driver",
+    "config_digest",
+    "lock_digest",
+    "kind",
+];
+
+/// Validate a tofu task-identity extension against the required slots.
+/// # Errors
+pub fn validate_tofu_extension(extension: &StackExtension) -> Result<(), ContractError> {
+    if extension.schema != TOFU_EXTENSION_SCHEMA {
+        return Err(ContractError::identity(
+            "stack_extension.schema",
+            "unknown_schema",
+        ));
+    }
+    let Some(data) = extension.data.as_object() else {
+        return Err(ContractError::identity(
+            "stack_extension.data",
+            "must_be_object",
+        ));
+    };
+    for slot in TOFU_EXTENSION_REQUIRED_SLOTS {
+        if !data.contains_key(slot) {
+            return Err(ContractError::identity(
+                "stack_extension.data",
+                format!("missing_slot:{slot}"),
+            ));
+        }
+    }
+    check_extension_text(data, "unit_id")?;
+    check_extension_text(data, "workspace_id")?;
+    check_extension_text(data, "profile")?;
+    check_extension_text(data, "kind")?;
+    check_root_slot(data)?;
+    check_driver_slot(data)?;
+    validate_digest(slot_str(data, "graph_digest"))?;
+    validate_digest(slot_str(data, "config_digest"))?;
+    check_nullable_text(data, "lock_digest")?;
+    Ok(())
+}
+
+/// Check the root slot: empty (repository root) or semantic text.
+fn check_root_slot(data: &serde_json::Map<String, serde_json::Value>) -> Result<(), ContractError> {
+    let root = slot_str(data, "root");
+    if root.is_empty() {
+        return Ok(());
+    }
+    validate_semantic_text("stack_extension.data", root)?;
     Ok(())
 }
 

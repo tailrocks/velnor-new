@@ -11,10 +11,10 @@ use std::path::Path;
 
 use velnor_actions_contract::{ProposedTask, WorkflowEvent};
 use velnor_actions_mise::GitRequest;
-use velnor_actions_rust::{FOREIGN_TOOL_FILES, RUST_TOOLCHAIN_FILE};
+use velnor_actions_rust::SelectionBroadening;
 
 use crate::OrchestratorError;
-use crate::decisions::selection_broadens_for_path;
+use crate::decisions::{broadening_for_path, selection_broadens_for_path};
 use crate::discover::Discovery;
 use crate::git_paths::{NON_UTF8_PATH, split_nul_paths};
 use crate::internal::internal;
@@ -27,7 +27,8 @@ use crate::validators::{validate_diff_rev, validate_select_diff_args};
 /// Tasks without applicable targets are never obligations: scheduling
 /// them would emit impossible work (for example `cargo test --doc` for a
 /// package with no doctest-able target). Each omission is recorded as a
-/// `valid_no_test_targets:<task-id>` warning, never silent.
+/// `valid_no_test_targets:<task-id>` warning, never silent. Tofu
+/// subdir roots additionally record one `path.cwd:<root>` caveat each.
 pub(crate) fn select_universe<'a>(
     discovery: &'a Discovery,
     warnings: &mut Vec<String>,
@@ -40,6 +41,7 @@ pub(crate) fn select_universe<'a>(
             kept.push(task);
         }
     }
+    crate::select_tofu::push_chdir_findings(discovery, warnings);
     kept
 }
 
@@ -134,11 +136,17 @@ fn affected_from_changed(
         );
         return BTreeSet::new();
     }
-    if changed.iter().any(|path| path == "Cargo.lock") {
+    if changed
+        .iter()
+        .any(|path| broadening_for_path(path) == Some(SelectionBroadening::Lockfile))
+    {
         warnings.push("cargo_lock_changed:all_changed".to_owned());
         return all_packages;
     }
-    if changed.iter().any(|path| is_root_config(path)) {
+    if changed
+        .iter()
+        .any(|path| broadening_for_path(path) == Some(SelectionBroadening::RootConfig))
+    {
         warnings.push("root_config_changed:all_changed".to_owned());
         return all_packages;
     }
@@ -149,18 +157,25 @@ fn affected_from_changed(
         warnings.push(warning.to_owned());
         return all_packages;
     }
-    if has_unowned_file(discovery, changed) {
+    let Some((rust_changed, tofu_affected)) =
+        crate::select_tofu::split_or_broaden(root, base, head, discovery, changed, warnings)
+    else {
+        return all_packages;
+    };
+    if has_unowned_file(discovery, &rust_changed) {
         warnings.push("unclassified_files:all_changed".to_owned());
         return all_packages;
     }
     let head_edges = head_edges(discovery);
-    match base_edges(root, base, head, discovery) {
-        Ok(base_edges) => affected_packages(discovery, changed, &base_edges, &head_edges),
+    let mut affected = match base_edges(root, base, head, discovery) {
+        Ok(base_edges) => affected_packages(discovery, &rust_changed, &base_edges, &head_edges),
         Err(problem) => {
             warnings.push(format!("comparison_unavailable:{problem}:all_changed"));
-            all_packages
+            return all_packages;
         }
-    }
+    };
+    affected.extend(tofu_affected);
+    affected
 }
 
 /// True when one task counts as changed under the affected packages.
@@ -381,10 +396,5 @@ fn untracked_files(root: &Path) -> Result<BTreeSet<String>, String> {
 /// Generated execution uses Velnor's exact pins, so these repository inputs
 /// feed inspection findings only; a task consuming one must declare it.
 fn is_advisory_toolfile(path: &str) -> bool {
-    path == RUST_TOOLCHAIN_FILE || path == ".mise.toml" || FOREIGN_TOOL_FILES.contains(&path)
-}
-
-/// True for root Cargo config paths: root manifest or cargo config.
-fn is_root_config(path: &str) -> bool {
-    path == "Cargo.toml" || path == ".cargo/config.toml" || path == ".cargo/config"
+    path == ".mise.toml" || velnor_actions_rust::is_known_toolfile(path)
 }

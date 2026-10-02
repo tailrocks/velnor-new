@@ -16,11 +16,11 @@ use velnor_actions_rust::{
 use crate::OrchestratorError;
 use crate::clippy_groups::{ClippyMemoryPlan, clippy_memory_groups};
 use crate::discover_index::build_file_index;
-use crate::evidence::profile_for_workspace;
 use crate::inventory::{qualify_workspaces, run_inventories};
 use crate::recommendations::collect_recommendations;
 use crate::safe_read::{MAX_REPO_FILE_BYTES, RepoRead, read_repo_file};
 use crate::toolcheck::{ToolInputCheck, check_tool_inputs};
+use crate::{discover_tofu::qualify_tofu_step, evidence::profile_for_workspace};
 
 /// One workspace with its inventory, profile, and recommendations.
 #[derive(Debug, Clone)]
@@ -72,6 +72,13 @@ pub struct Discovery {
     /// Selection broadens explicitly on this: a skipped name cannot be
     /// attributed to an owning package.
     pub skipped_non_utf8: bool,
+    /// Tofu plan note: ignore marker or table-less evidence advisory.
+    ///
+    /// `None` when the tofu table is absent and no evidence exists, or
+    /// when configured roots convert to selected projects.
+    pub tofu_note: Option<velnor_actions_tofu::TofuNote>,
+    /// Tofu selection records: head files plus edges per root.
+    pub tofu_units: Vec<crate::select_tofu::TofuSelectionUnit>,
 }
 
 /// Run file index, detection, inventory, profiles, and task derivation.
@@ -90,12 +97,17 @@ pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, 
         previous = stack_id;
         candidates.extend(detect(&index));
     }
+    let tool_checks = check_tool_inputs(root);
+    let mut reads = velnor_actions_tofu::FileCache::new();
+    let tofu_step = qualify_tofu_step(root, config, &index, &tool_checks, &mut reads)?;
+    candidates.extend(tofu_step.candidates);
     let projects = detected_projects(&candidates)?;
     check_duplicates(&projects).map_err(|err| OrchestratorError::Detection {
         problem: err.to_string(),
     })?;
     let initial = apply_stack_ignores(projects, &config.stacks.ignore);
-    let (outcomes, inventories) = run_inventories(root, &candidates)?;
+    let ((outcomes, inventories), tofu_units) =
+        run_inventories(root, &candidates, index.files(), &mut reads)?;
     let statuses = check_candidate_outcomes(initial, &outcomes).map_err(|err| {
         OrchestratorError::Detection {
             problem: err.to_string(),
@@ -103,10 +115,10 @@ pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, 
     })?;
     let workspaces = plan_workspaces(root, &index, &statuses, inventories, config)?;
     qualify_workspaces(root, &workspaces)?;
-    let (proposals, fallbacks) = derive_all(config, &index, &workspaces)?;
-    let tool_checks = check_tool_inputs(root);
+    let (proposals, fallbacks) = derive_all(config, &index, &workspaces, &statuses)?;
     let clippy_memory = clippy_memory_groups(&proposals);
-    let recommendations = collect_recommendations(&index, &workspaces, &tool_checks);
+    let recommendations =
+        collect_recommendations(root, config, &index, &workspaces, &tool_checks, &mut reads);
     let (consumer_manifest_json, consumer_manifest_stand_in) = consumer_manifest_text(root)?;
     Ok(Discovery {
         statuses,
@@ -119,16 +131,25 @@ pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, 
         consumer_manifest_json,
         consumer_manifest_stand_in,
         skipped_non_utf8,
+        tofu_note: tofu_step.note,
+        tofu_units,
     })
 }
 
 /// Detector registry (stack id, record schema, implementation), ascending.
-/// V1 registers rust; schema 1 is `{ stack_id, project_root, manifest }`.
-const DETECTORS: [DetectorEntry; 1] = [(
-    Stack::Rust.id(),
-    DETECTION_SCHEMA,
-    velnor_actions_rust::discover_stack_candidates,
-)];
+/// V1 registers rust and tofu; schema 1 is `{ stack_id, project_root, manifest }`.
+const DETECTORS: [DetectorEntry; 2] = [
+    (
+        Stack::Rust.id(),
+        DETECTION_SCHEMA,
+        velnor_actions_rust::discover_stack_candidates,
+    ),
+    (
+        Stack::Tofu.id(),
+        DETECTION_SCHEMA,
+        velnor_actions_tofu::discover_stack_candidates,
+    ),
+];
 
 /// Convert neutral candidates to detected projects via closed dispatch.
 ///
@@ -138,9 +159,22 @@ fn detected_projects(
     candidates: &[StackCandidate],
 ) -> Result<Vec<DetectedProject>, OrchestratorError> {
     let mut rust = Vec::new();
+    let mut tofu = Vec::new();
+    let mut order: Vec<Stack> = Vec::new();
     for candidate in candidates {
         match Stack::require_known(&candidate.stack_id) {
-            Ok(Stack::Rust) => rust.push(candidate.clone()),
+            Ok(stack @ Stack::Rust) => {
+                if !order.contains(&stack) {
+                    order.push(stack);
+                }
+                rust.push(candidate.clone());
+            }
+            Ok(stack @ Stack::Tofu) => {
+                if !order.contains(&stack) {
+                    order.push(stack);
+                }
+                tofu.push(candidate.clone());
+            }
             Err(err) => {
                 return Err(OrchestratorError::Detection {
                     problem: err.to_string(),
@@ -148,7 +182,16 @@ fn detected_projects(
             }
         }
     }
-    Ok(velnor_actions_rust::detected_projects_for_units(&rust))
+    let rust_projects = velnor_actions_rust::detected_projects_for_units(&rust);
+    let tofu_projects = velnor_actions_tofu::detected_projects_for_units(&tofu);
+    let mut projects = Vec::with_capacity(rust_projects.len() + tofu_projects.len());
+    for stack in order {
+        match stack {
+            Stack::Rust => projects.extend(rust_projects.clone()),
+            Stack::Tofu => projects.extend(tofu_projects.clone()),
+        }
+    }
+    Ok(projects)
 }
 
 /// Registered detectors as (stack ID, record schema), ascending.
@@ -282,11 +325,12 @@ fn plan_workspaces(
     Ok(planned)
 }
 
-/// Derive every task proposal plus feature fallbacks, expanding test shards.
+/// Derive every task proposal (rust groups plus tofu triples) and fallbacks.
 fn derive_all(
     config: &VelnorConfig,
     index: &FileIndex,
     workspaces: &[PlannedWorkspace],
+    statuses: &[DetectionStatus],
 ) -> Result<
     (
         Vec<ProposedTask>,
@@ -325,6 +369,7 @@ fn derive_all(
         task.validate()?;
         proposals.push(task);
     }
+    proposals.extend(crate::select_tofu::derive_tofu(statuses, index.files())?);
     proposals.sort_by(|left, right| left.task_id.cmp(&right.task_id));
     Ok((proposals, fallbacks))
 }

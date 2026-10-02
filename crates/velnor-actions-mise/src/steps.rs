@@ -163,6 +163,18 @@ impl PreparePinnedTools {
         env
     }
 
+    /// Step env without the owned-homes triple: isolation overlay only.
+    ///
+    /// Pure-tofu roles install no Rust toolchain, so their prepare
+    /// step carries no rustup/cargo homes; config, env files, hooks,
+    /// and lockfile writes stay disabled as in [`Self::env`]. Render
+    /// only: local installs always run under owned homes, so this
+    /// matches no spawner env.
+    #[must_use]
+    pub fn env_without_homes(&self) -> Vec<(OsString, OsString)> {
+        IsolatedCommand::env_overlay()
+    }
+
     /// Isolated command running this installation under the owned homes.
     ///
     /// # Errors

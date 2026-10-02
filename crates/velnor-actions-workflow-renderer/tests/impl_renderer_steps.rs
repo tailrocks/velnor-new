@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use velnor_actions_workflow_renderer::{
     ASSET_SHA_ENV, ASSET_URL_ENV, RELEASE_COMMIT_ENV, RenderError, STAGED_BINARY_PREFIX,
     acquire_velnor_step, action_step, checkout_step, internal_step, merge_step, plan_step,
-    scan_for_private_subcommands, shell_step, validate_command_argv, validate_uses,
+    scan_for_private_subcommands, shell_step, validate_command_argv, validate_env, validate_uses,
 };
 
 fn pin(name: &str) -> String {
@@ -169,4 +169,54 @@ fn private_subcommand_scan_finds_hidden_tokens() {
     assert!(scan_for_private_subcommands("velnor-actions run x").is_err());
     assert!(scan_for_private_subcommands("prefix __internal suffix").is_err());
     assert!(action_step("x", "velnor-actions __y", BTreeMap::new()).is_err());
+}
+
+/// Env validation pins: `A-Z0-9_` keys and single-line clean values
+/// pass; every other shape fails with its stable token.
+#[test]
+fn env_validation_pins_key_and_value_gates_with_tokens() {
+    let env = BTreeMap::from([
+        ("HELLO".to_owned(), "world".to_owned()),
+        ("A1_B2".to_owned(), "x".to_owned()),
+    ]);
+    assert!(validate_env(&env).is_ok(), "clean env passes");
+    assert!(validate_env(&BTreeMap::new()).is_ok(), "empty env passes");
+    for (key, token) in [
+        ("hello", "bad_env_key:hello"),
+        ("", "bad_env_key:"),
+        ("HAS-DASH", "bad_env_key:HAS-DASH"),
+        ("HAS SPACE", "bad_env_key:HAS SPACE"),
+    ] {
+        let env = BTreeMap::from([(key.to_owned(), "x".to_owned())]);
+        let err = validate_env(&env).expect_err("bad key fails");
+        assert!(err.to_string().contains(token), "{key:?}: {err}");
+    }
+    for value in ["a\nb", "a\rb", "a\0b"] {
+        let env = BTreeMap::from([("KEY".to_owned(), value.to_owned())]);
+        let err = validate_env(&env).expect_err("bad value fails");
+        assert!(
+            err.to_string().contains("bad_env_value:KEY"),
+            "{value:?}: {err}"
+        );
+    }
+}
+
+/// Argv rejections carry stable tokens, so a refactor dropping one
+/// check fails here instead of staying green.
+#[test]
+fn argv_rejections_carry_stable_tokens() {
+    for (items, token) in [
+        (vec![], "empty_argv"),
+        (argv(&["ok", ""]), "empty_arg"),
+        (argv(&["bad\nline"]), "control_char"),
+        (argv(&["bad\rline"]), "control_char"),
+        (argv(&["echo", "$(evil)"]), "command_substitution"),
+        (argv(&["echo", "`evil`"]), "command_substitution"),
+        (argv(&["cargo", "install", "x"]), "cargo_install"),
+        (argv(&["/usr/bin/cargo", "test"]), "absolute_cargo_path"),
+        (argv(&["/cargo", "test"]), "absolute_cargo_path"),
+    ] {
+        let err = validate_command_argv(&items).expect_err("must reject");
+        assert!(err.to_string().contains(token), "{items:?}: {err}");
+    }
 }

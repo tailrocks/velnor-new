@@ -21,6 +21,7 @@ fn expected_internal(dir: &str) -> Vec<&str> {
             "velnor-actions-contract",
             "velnor-actions-mise",
             "velnor-actions-rust",
+            "velnor-actions-tofu",
             "velnor-actions-workflow-renderer",
         ],
         "crates/velnor-actions-cli" => vec!["velnor-actions-orchestrator"],
@@ -37,6 +38,7 @@ fn members() -> Vec<&'static str> {
         "crates/velnor-actions-mise",
         "crates/velnor-actions-orchestrator",
         "crates/velnor-actions-rust",
+        "crates/velnor-actions-tofu",
         "crates/velnor-actions-workflow-renderer",
     ]
 }
@@ -69,6 +71,16 @@ fn crate_boundaries_match_architecture_dependency_direction() -> TestResult {
         let mut deps = BTreeSet::new();
         for dep in node["deps"].as_array().ok_or("deps")? {
             let pkg = dep["pkg"].as_str().ok_or("dep pkg")?;
+            // Normal edges only: the architecture diagram governs
+            // product dependencies; dev/build edges are test-only and
+            // ride outside the diagram (the CLI gate scans the
+            // `[dependencies]` section alone for the same reason).
+            let normal = dep["dep_kinds"]
+                .as_array()
+                .is_some_and(|kinds| kinds.iter().any(|kind| kind["kind"].is_null()));
+            if !normal {
+                continue;
+            }
             if let Some(dep_name) = id_to_name.get(pkg)
                 && dep_name.starts_with("velnor-actions-")
             {

@@ -31,6 +31,33 @@ pub(crate) fn stacks_section(out: &mut String, prep: &GenerationPreparation) {
     } else {
         push(out, "  Rust: selected");
     }
+    if let Some(note) = &prep.discovery.tofu_note {
+        tofu_lines(out, note);
+    }
+    let mut roots: Vec<String> = prep
+        .discovery
+        .statuses
+        .iter()
+        .filter_map(|status| match status {
+            DetectionStatus::Selected(project)
+                if project.stack_id == velnor_actions_tofu::STACK_ID =>
+            {
+                Some(if project.project_root.is_empty() {
+                    ".".to_owned()
+                } else {
+                    project.project_root.clone()
+                })
+            }
+            _ => None,
+        })
+        .collect();
+    if !roots.is_empty() {
+        roots.sort();
+        push(
+            out,
+            &format!("  Tofu: selected (roots: [{}])", roots.join(", ")),
+        );
+    }
     let crates = sorted_crates(prep);
     push(out, &format!("  Workspace crates: {}", crates.len()));
     for (name, manifest, detail) in &crates {
@@ -38,6 +65,37 @@ pub(crate) fn stacks_section(out: &mut String, prep: &GenerationPreparation) {
     }
     for workspace in &prep.discovery.workspaces {
         profile_lines(out, workspace);
+    }
+}
+
+/// Tofu plan note: ignore marker or table-less evidence advisory.
+fn tofu_lines(out: &mut String, note: &velnor_actions_tofu::TofuNote) {
+    match note {
+        velnor_actions_tofu::TofuNote::Ignored => {
+            push(out, "  Tofu: ignored (config stacks.ignore)");
+        }
+        velnor_actions_tofu::TofuNote::Advisory(advisory) => {
+            let strength = if advisory.strong { "strong" } else { "weak" };
+            push(
+                out,
+                &format!(
+                    "  Tofu: not detected ({strength} evidence; add [stacks.tofu] roots to enable)"
+                ),
+            );
+            push(
+                out,
+                &format!("    evidence: {}", advisory.signals.join(", ")),
+            );
+            if !advisory.inferred.is_empty() {
+                push(
+                    out,
+                    &format!(
+                        "    inferred roots (advisory): [{}]",
+                        advisory.inferred.join(", ")
+                    ),
+                );
+            }
+        }
     }
 }
 

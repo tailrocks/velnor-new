@@ -26,10 +26,11 @@ const SHORT_SHA_MIN_LEN: usize = 4;
 
 /// `git diff` flags the selection call paths emit; any other leading-dash
 /// argument is rejected.
-const DIFF_ALLOWED_FLAGS: [&str; 5] = [
+const DIFF_ALLOWED_FLAGS: [&str; 6] = [
     "--name-only",
     "--no-renames",
     "--diff-filter=A",
+    "--diff-filter=D",
     "--cached",
     "--",
 ];
@@ -148,8 +149,8 @@ pub fn validate_show_path(path: &str) -> Result<(), GitArgError> {
 
 /// Validate full `git diff` arguments: allowlisted flags plus revisions.
 ///
-/// Accepted: `--name-only`, `--no-renames`, `--diff-filter=A`, the `--`
-/// separator, `base...head` ranges of full SHAs, and bare full SHAs.
+/// Accepted: `--name-only`, `--no-renames`, `--diff-filter=A/D`, the
+/// `--` separator, `base...head` ranges of full SHAs, and bare full SHAs.
 /// Anything else — flags, symbolic refs, short SHAs, paths — is rejected.
 ///
 /// # Errors

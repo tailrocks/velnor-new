@@ -16,6 +16,39 @@ pub const OWNED_SYMBOLS: &[&str] = &["Cargo.toml", "Cargo.lock", RUST_TOOLCHAIN_
 /// Tool files owned by sibling adapters; recognized but never inspected here.
 pub const FOREIGN_TOOL_FILES: &[&str] = &["mise.toml", "mise.lock"];
 
+/// Selection-broadening class one changed path triggers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SelectionBroadening {
+    /// Lockfile change: every unit is affected.
+    Lockfile,
+    /// Root configuration change: every unit is affected.
+    RootConfig,
+}
+
+/// Broadening class for one changed path, if it invalidates selection.
+///
+/// Only the root lockfile and root Cargo configuration broaden; nested
+/// paths resolve through ownership and edges instead.
+#[must_use]
+pub fn selection_broadening(path: &str) -> Option<SelectionBroadening> {
+    if path == "Cargo.lock" {
+        return Some(SelectionBroadening::Lockfile);
+    }
+    if path == "Cargo.toml" || path == ".cargo/config.toml" || path == ".cargo/config" {
+        return Some(SelectionBroadening::RootConfig);
+    }
+    None
+}
+
+/// True for toolfiles the rust adapter recognizes (own plus foreign).
+///
+/// `.mise.toml` (hidden variant) stays orchestrator-global and is not
+/// covered here.
+#[must_use]
+pub fn is_known_toolfile(path: &str) -> bool {
+    path == RUST_TOOLCHAIN_FILE || FOREIGN_TOOL_FILES.contains(&path)
+}
+
 /// Stable code for a missing recommended tool input (tooling-input §1).
 pub const MISSING_RECOMMENDED_INPUT: &str = "missing_recommended_input";
 
@@ -279,4 +312,44 @@ fn parse_string_list(value: &str, index: usize) -> Result<Vec<String>, String> {
 /// `line N: problem` detail with one-based line numbers.
 fn line_problem(index: usize, problem: &str) -> String {
     format!("line {}: {problem}", index.saturating_add(1))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn broadening_pins_root_lock_and_config_only() {
+        assert_eq!(
+            selection_broadening("Cargo.lock"),
+            Some(SelectionBroadening::Lockfile)
+        );
+        for path in ["Cargo.toml", ".cargo/config.toml", ".cargo/config"] {
+            assert_eq!(
+                selection_broadening(path),
+                Some(SelectionBroadening::RootConfig),
+                "{path:?}"
+            );
+        }
+        for path in [
+            "crates/a/Cargo.lock",
+            "crates/a/Cargo.toml",
+            "src/lib.rs",
+            ".mise.toml",
+            "mise.toml",
+            "rust-toolchain.toml",
+        ] {
+            assert_eq!(selection_broadening(path), None, "{path:?}");
+        }
+    }
+
+    #[test]
+    fn known_toolfiles_cover_own_and_foreign() {
+        for path in ["rust-toolchain.toml", "mise.toml", "mise.lock"] {
+            assert!(is_known_toolfile(path), "{path:?}");
+        }
+        for path in [".mise.toml", "Cargo.toml", "Cargo.lock", "src/lib.rs"] {
+            assert!(!is_known_toolfile(path), "{path:?}");
+        }
+    }
 }

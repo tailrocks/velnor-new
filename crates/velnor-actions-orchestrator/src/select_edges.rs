@@ -8,7 +8,7 @@ use velnor_actions_contract::{
     ContractError, EdgeKind, ProposedTask, TaskEdge, TaskGraph, TaskNode, digest_b3,
 };
 use velnor_actions_mise::GitRequest;
-use velnor_actions_rust::{DepKind, LocalEdge};
+use velnor_actions_rust::{local_edge_pairs, manifest_edges};
 
 use crate::discover::Discovery;
 use crate::git_paths::split_nul_paths;
@@ -29,14 +29,36 @@ const MAX_BASE_MANIFEST_BATCH: usize = 512;
 /// are ever matched against this set (non-ASCII names fail manifest-key
 /// validation at obligation time, before selection), so byte-exactness is
 /// enforced by construction and proven by the shared splitter unit tests.
-fn added_files(root: &Path, base: &str, head: &str) -> Result<BTreeSet<String>, String> {
+pub(crate) fn added_files(root: &Path, base: &str, head: &str) -> Result<BTreeSet<String>, String> {
+    filtered_files(root, base, head, "A")
+}
+
+/// Head paths deleted since base: present at base, absent at head.
+///
+/// Same no-rename convention and validation as [`added_files`]; the
+/// tofu base graph reads base texts of deleted config files.
+pub(crate) fn deleted_files(
+    root: &Path,
+    base: &str,
+    head: &str,
+) -> Result<BTreeSet<String>, String> {
+    filtered_files(root, base, head, "D")
+}
+
+/// Paths under one `--diff-filter` between base and head, NUL-delimited.
+fn filtered_files(
+    root: &Path,
+    base: &str,
+    head: &str,
+    filter: &str,
+) -> Result<BTreeSet<String>, String> {
     validate_diff_rev(base, "bad_base")?;
     validate_diff_rev(head, "bad_head")?;
     let range = format!("{base}...{head}");
     let mut args = vec![
         OsString::from("--name-only"),
         OsString::from("--no-renames"),
-        OsString::from("--diff-filter=A"),
+        OsString::from(format!("--diff-filter={filter}")),
         OsString::from(range),
         OsString::from("--"),
     ];
@@ -51,11 +73,14 @@ fn added_files(root: &Path, base: &str, head: &str) -> Result<BTreeSet<String>, 
     split_nul_paths(&output.stdout)
 }
 
-/// Head local-path edges from discovery records.
-pub(crate) fn head_edges(discovery: &Discovery) -> Vec<LocalEdge> {
+/// Head local-path edges from discovery records, as neutral pairs.
+///
+/// Converted at the rust boundary via [`local_edge_pairs`]; selection
+/// never sees adapter edge types.
+pub(crate) fn head_edges(discovery: &Discovery) -> Vec<(String, String)> {
     let mut edges = Vec::new();
     for workspace in &discovery.workspaces {
-        edges.extend(workspace.record.edges.iter().cloned());
+        edges.extend(local_edge_pairs(&workspace.record.edges));
     }
     edges
 }
@@ -72,7 +97,7 @@ pub(crate) fn base_edges(
     base: &str,
     head: &str,
     discovery: &Discovery,
-) -> Result<Vec<LocalEdge>, String> {
+) -> Result<Vec<(String, String)>, String> {
     let mut packages: Vec<(String, String)> = Vec::new();
     let mut wanted: Vec<(String, String)> = Vec::new();
     for workspace in &discovery.workspaces {
@@ -102,15 +127,20 @@ pub(crate) fn base_edges(
             &packages,
         )?);
     }
-    Ok(edges)
+    Ok(local_edge_pairs(&edges))
 }
 
 /// Base contents of every wanted manifest via one `git show` each.
 ///
 /// One batched `git show` cannot delimit blobs: git shows a repeated
 /// separator object only once, so per-manifest reads keep boundaries exact.
-/// Added (new) manifests never reach here.
-fn base_manifests(root: &Path, base: &str, manifests: &[&str]) -> Result<Vec<String>, String> {
+/// Added (new) manifests never reach here. Shared with the tofu base
+/// graph, which passes config paths instead of manifests.
+pub(crate) fn base_manifests(
+    root: &Path,
+    base: &str,
+    manifests: &[&str],
+) -> Result<Vec<String>, String> {
     validate_diff_rev(base, "bad_base")?;
     let mut out = Vec::with_capacity(manifests.len());
     for manifest in manifests {
@@ -125,100 +155,6 @@ fn base_manifests(root: &Path, base: &str, manifests: &[&str]) -> Result<Vec<Str
         out.push(output.stdout_text("git").map_err(|err| err.to_string())?);
     }
     Ok(out)
-}
-
-/// Path edges of one base manifest, resolved to head package IDs.
-fn manifest_edges(
-    text: &str,
-    from: &str,
-    dir: &str,
-    packages: &[(String, String)],
-) -> Result<Vec<LocalEdge>, String> {
-    let document: toml::Table = toml::from_str(text).map_err(|err| err.to_string())?;
-    let mut edges = Vec::new();
-    for (table, kind) in sections() {
-        if let Some(deps) = document.get(table).and_then(toml::Value::as_table) {
-            edges.extend(dep_edges(deps, from, dir, packages, kind, None));
-        }
-    }
-    if let Some(targets) = document.get("target").and_then(toml::Value::as_table) {
-        for (name, target) in targets {
-            let Some(target) = target.as_table() else {
-                continue;
-            };
-            for (table, kind) in sections() {
-                if let Some(deps) = target.get(table).and_then(toml::Value::as_table) {
-                    edges.extend(dep_edges(deps, from, dir, packages, kind, Some(name)));
-                }
-            }
-        }
-    }
-    Ok(edges)
-}
-
-/// Dependency tables with their edge kinds.
-fn sections() -> [(&'static str, DepKind); 3] {
-    [
-        ("dependencies", DepKind::Normal),
-        ("build-dependencies", DepKind::Build),
-        ("dev-dependencies", DepKind::Dev),
-    ]
-}
-
-/// Path-dep edges of one dependency table.
-fn dep_edges(
-    deps: &toml::Table,
-    from: &str,
-    dir: &str,
-    packages: &[(String, String)],
-    kind: DepKind,
-    target: Option<&str>,
-) -> Vec<LocalEdge> {
-    let mut edges = Vec::new();
-    for spec in deps.values() {
-        let Some(spec) = spec.as_table() else {
-            continue;
-        };
-        let Some(path) = spec.get("path").and_then(toml::Value::as_str) else {
-            continue;
-        };
-        let joined = join_dir(dir, path);
-        let Some(to) = packages
-            .iter()
-            .find(|(owned, _)| *owned == joined)
-            .map(|(_, id)| id)
-        else {
-            continue;
-        };
-        let optional = spec
-            .get("optional")
-            .and_then(toml::Value::as_bool)
-            .unwrap_or(false);
-        edges.push(LocalEdge {
-            from: from.to_owned(),
-            to: to.clone(),
-            kind,
-            optional,
-            target: target.map(str::to_owned),
-        });
-    }
-    edges
-}
-
-/// Join a manifest directory with a dep path, resolving `.` and `..`.
-fn join_dir(dir: &str, path: &str) -> String {
-    let mut parts: Vec<&str> = dir.split('/').filter(|seg| !seg.is_empty()).collect();
-    for seg in path.split('/') {
-        if seg.is_empty() || seg == "." {
-            continue;
-        }
-        if seg == ".." {
-            parts.pop();
-        } else {
-            parts.push(seg);
-        }
-    }
-    parts.join("/")
 }
 
 /// Validated plan graph: nodes per task plus sorted unique edges (PAR-3.1/3.2).

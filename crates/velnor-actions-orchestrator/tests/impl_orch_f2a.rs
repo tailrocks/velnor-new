@@ -182,16 +182,22 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
 }
 
 #[test]
-fn v1_registers_rust_only() {
+fn v1_registers_rust_and_tofu() {
     use velnor_actions_contract::VelnorConfig;
     use velnor_actions_orchestrator::decisions::{DetectorInfo, detector_registry};
-    assert_eq!(VelnorConfig::REGISTERED_STACKS, &["rust"]);
+    assert_eq!(VelnorConfig::REGISTERED_STACKS, &["rust", "tofu"]);
     assert_eq!(
         detector_registry(),
-        vec![DetectorInfo {
-            stack_id: "rust",
-            schema: 1
-        }]
+        vec![
+            DetectorInfo {
+                stack_id: "rust",
+                schema: 1
+            },
+            DetectorInfo {
+                stack_id: "tofu",
+                schema: 1
+            },
+        ]
     );
 }
 
@@ -372,7 +378,10 @@ fn offline_deps_fail_closed_without_fetch() -> TestResult {
                 // Plan checkout input emission: `fetch-depth: 0` is a
                 // workflow input literal (history for HEAD^2 + base diff),
                 // never an analysis-time fetch execution.
-                .replace("fetch-depth", "");
+                .replace("fetch-depth", "")
+                // Contract error-code literal asserted by cache-key
+                // rejection tests, never an execution.
+                .replace("unsafe_fetch_root", "");
             assert!(
                 !scrubbed.contains("fetch"),
                 "fetch verb at {}:{line}: {code}",

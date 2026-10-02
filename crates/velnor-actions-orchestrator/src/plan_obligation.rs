@@ -11,7 +11,8 @@ use std::path::Path;
 
 use serde::Serialize;
 use velnor_actions_contract::{
-    MatrixEntry, PlanObligation, ProposedTask, canonical_json_bytes, digest_b3,
+    MatrixEntry, PlanObligation, ProposedTask, Stack, StackExtension, canonical_json_bytes,
+    digest_b3,
 };
 use velnor_actions_mise::ToolCatalog;
 use velnor_actions_mise::restore::probe_tool_availability;
@@ -33,6 +34,10 @@ use crate::internal_plan::{
 use crate::schedule::assign_lanes;
 use crate::select::group_changed;
 use crate::vectors::task_argv;
+
+#[cfg(test)]
+#[path = "plan_obligation_tests.rs"]
+mod tests;
 
 /// Inputs for planning one obligation.
 pub(crate) struct GroupInputs<'a> {
@@ -99,6 +104,27 @@ struct PlannedIdentity {
     input_digest: String,
 }
 
+/// Stack-extension envelope plus reuse eligibility for one task.
+///
+/// Closed per-stack dispatch: rust tasks derive through the rust
+/// bridge over the snapshot bundle; tofu tasks derive through the
+/// tofu bridge with a checkout-bound root-lockfile slot. Both feed
+/// the same neutral envelope and gate.
+fn extension_for_task(
+    task: &ProposedTask,
+    root: &Path,
+    bundle: &ExtensionBundle,
+    reads: &mut velnor_actions_tofu::FileCache,
+) -> Result<(StackExtension, bool), OrchestratorError> {
+    if Stack::from_id(&task.stack_id) == Some(Stack::Tofu) {
+        let ext = crate::internal_plan::tofu_extension_for(task, root, bundle, reads)
+            .map_err(internal_contract)?;
+        return Ok((ext.to_stack_extension(), ext.reuse_eligible().is_ok()));
+    }
+    let ext = extension_for_proposal(task, &bundle.inputs()).map_err(internal_contract)?;
+    Ok((ext.to_stack_extension(), ext.reuse_eligible().is_ok()))
+}
+
 /// Snapshot bundle plus closure-bound identity digests for one task.
 ///
 /// The closure resolves against the checkout and its digest binds into
@@ -109,6 +135,7 @@ fn planned_identity(
     argv: &[String],
     toolchain: &str,
     platform_id: &str,
+    reads: &mut velnor_actions_tofu::FileCache,
 ) -> Result<PlannedIdentity, OrchestratorError> {
     let task = inputs.task;
     let manifest = task.identity.unit_path.clone();
@@ -120,7 +147,7 @@ fn planned_identity(
         Some(inputs.root),
         nextest_config.as_deref(),
     );
-    let ext = extension_for_proposal(task, &bundle.inputs()).map_err(internal_contract)?;
+    let (extension, _) = extension_for_task(task, inputs.root, &bundle, reads)?;
     let closure = resolve_closure_at_root(
         inputs.root,
         task,
@@ -128,6 +155,7 @@ fn planned_identity(
         bundle.graph_digest(),
         toolchain,
         platform_id,
+        &mut *reads,
     )
     .map_err(internal_contract)?;
     let closure_digest = canonical_digest(&closure).map_err(internal_contract)?;
@@ -138,7 +166,7 @@ fn planned_identity(
         platform_id,
         manifest: &manifest,
         generator: inputs.wire.generator,
-        extension: ext.to_stack_extension(),
+        extension,
         closure_digest: &closure_digest,
     })
     .map_err(internal_contract)?;
@@ -156,14 +184,15 @@ fn planned_identity(
 /// classification.
 pub(crate) fn plan_group(
     inputs: &GroupInputs<'_>,
+    reads: &mut velnor_actions_tofu::FileCache,
 ) -> Result<(PlanObligation, MatrixEntry), OrchestratorError> {
     let task = inputs.task;
     let _ = inputs.lane;
     let toolchain = toolchain_id(task, inputs.catalog).map_err(internal_contract)?;
     let argv = task_argv(task, inputs.catalog)?;
     let platform_id = platform_id_for_group(inputs.label, task).map_err(internal_contract)?;
-    let identity = planned_identity(inputs, &argv, &toolchain, &platform_id)?;
-    let ext = extension_for_proposal(task, &identity.bundle.inputs()).map_err(internal_contract)?;
+    let identity = planned_identity(inputs, &argv, &toolchain, &platform_id, &mut *reads)?;
+    let (_, reuse_eligible) = extension_for_task(task, inputs.root, &identity.bundle, reads)?;
     let input_digest = identity.input_digest;
     let closure_digest = identity.closure_digest;
     let reuse = if inputs.changed {
@@ -175,7 +204,7 @@ pub(crate) fn plan_group(
             probe_tool_availability(false, false),
             &toolchain,
             &input_digest,
-            ext.reuse_eligible().is_ok(),
+            reuse_eligible,
         )?
     };
     let gate = wire_w2::check_archive_identity_with_source(

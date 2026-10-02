@@ -12,8 +12,7 @@
 use serde::Serialize;
 use velnor_actions_contract::cachekey::{PlatformInputs, platform_id};
 use velnor_actions_contract::{
-    ContractError, UNOBSERVED_IMAGE_VALUE, canonical_json_bytes, digest_b3, normalize_posix_path,
-    parse_strict_json,
+    ContractError, UNOBSERVED_IMAGE_VALUE, canonical_json_bytes, digest_b3, parse_strict_json,
 };
 
 /// Explicit unknown marker for unverifiable archive sources.
@@ -46,27 +45,6 @@ pub(crate) fn canonical_digest<T: Serialize>(value: &T) -> Result<String, Contra
 /// Returns [`ContractError`] for malformed JSON or duplicate keys.
 pub(crate) fn parse_canonical_json(text: &str) -> Result<serde_json::Value, ContractError> {
     parse_strict_json(text)
-}
-
-/// Normalize a checkout path: repo-relative, `/` separators, explicit rejects.
-///
-/// Case and Unicode are preserved byte-for-byte; empty, absolute,
-/// traversing, NUL/control-carrying, and backslash paths are rejected.
-///
-/// # Errors
-///
-/// Returns [`ContractError`] for malformed checkout paths.
-pub(crate) fn normalize_checkout_path(path: &str) -> Result<String, ContractError> {
-    if path.is_empty() {
-        return Err(ContractError::identity("path", "empty_path"));
-    }
-    if path.contains('\0') || path.chars().any(char::is_control) {
-        return Err(ContractError::identity("path", "control_characters"));
-    }
-    if path.contains('\\') {
-        return Err(ContractError::identity("path", "backslash_separator"));
-    }
-    normalize_posix_path(path)
 }
 
 /// Release triple for the build host; unknown pairs keep `{arch}-{os}`.
@@ -235,17 +213,6 @@ mod tests {
         );
         assert!(parse_canonical_json(r#"{"a": 1, "a": 2}"#).is_err());
         assert!(parse_canonical_json(r#"{"a": 1}"#).is_ok());
-    }
-
-    #[test]
-    fn checkout_paths_preserve_case_and_unicode() {
-        assert_eq!(
-            normalize_checkout_path("Crates/Äpfel/Cargo.toml").expect("unicode"),
-            "Crates/Äpfel/Cargo.toml"
-        );
-        for bad in ["", "/abs/path", "a/../b", "a\\b", "a\0b", "a\nb"] {
-            assert!(normalize_checkout_path(bad).is_err(), "{bad:?}");
-        }
     }
 
     #[test]

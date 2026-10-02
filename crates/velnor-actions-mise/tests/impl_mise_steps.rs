@@ -78,6 +78,26 @@ fn prepare_pinned_tools_env_disables_knobs_and_carries_homes() -> Result<(), Str
 }
 
 #[test]
+fn prepare_pinned_tools_env_without_homes_is_isolation_only() -> Result<(), String> {
+    let step = prepare()?;
+    let env = step.env_without_homes();
+    let expected: Vec<(OsString, OsString)> = [
+        ("MISE_NO_CONFIG", "1"),
+        ("MISE_NO_ENV", "1"),
+        ("MISE_NO_HOOKS", "1"),
+        ("MISE_LOCKFILE", "0"),
+    ]
+    .into_iter()
+    .map(|(key, value)| (OsString::from(key), OsString::from(value)))
+    .collect();
+    assert_eq!(
+        env, expected,
+        "triple-less prepare env is the exact isolation overlay: {env:?}"
+    );
+    Ok(())
+}
+
+#[test]
 fn prepare_pinned_tools_command_matches_step() -> Result<(), String> {
     let step = prepare()?;
     let command = step.command(&pinned()).map_err(|err| err.to_string())?;
@@ -99,7 +119,7 @@ fn prepare_pinned_tools_rejects_empty_toolchain() -> Result<(), String> {
 #[test]
 fn prepare_pinned_tools_specs_come_only_from_catalog() -> Result<(), String> {
     let catalog = ToolCatalog::new(
-        "1.97.0", "1.18.0", "2.100.0", "1.7.11", "0.10.0", "1.30.0", "0.9.145",
+        "1.97.0", "1.18.0", "2.100.0", "1.7.11", "0.10.0", "1.30.0", "0.9.145", "1.13.0",
     )
     .map_err(|err| err.to_string())?;
     let step =

@@ -7,8 +7,9 @@
 //! each, validates the grouping through the contract model (stable
 //! unbranded IDs, gates referencing strictly earlier obligations),
 //! then renders each group to a fixed IR job: checkout, pinned tools,
-//! components, lockful sources, the MBX objects restore on MBX crates,
-//! and one shell step per obligation in gate order.
+//! components, lockful sources, the per-root provider restore on
+//! opentofu crates, the MBX objects restore on MBX crates, and one
+//! shell step per obligation in gate order.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -17,19 +18,26 @@ use velnor_actions_actionlint::{
     actions::{MR_BOXINGTON_ACTION_SHA, MR_BOXINGTON_ACTION_VERSION},
 };
 use velnor_actions_contract::{
-    CrateJob, CrateObligation, Job, JobTimeout, ProposedTask, Step, WorkflowPolicy,
-    assign_crate_job_ids, crate_display_name, matrix_id_for_task_group, matrix_key_for_id,
+    CrateJob, CrateObligation, Job, JobTimeout, ProposedTask, Stack, Step, WorkflowPolicy,
+    crate_display_name, matrix_id_for_task_group, matrix_key_for_id, tofu_display_name,
 };
 use velnor_actions_mise::{PinnedTool, TaskCacheMode, ToolCatalog};
-use velnor_actions_rust::{task_kind_rank, tool_needs};
+use velnor_actions_rust::task_kind_rank;
 use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
 use velnor_actions_workflow_renderer::steps::{CompileDriver as RenderDriver, mbx_step_for_driver};
 
 use crate::OrchestratorError;
-use crate::crate_job_ids::{group_runnable, id_inputs};
+use crate::crate_job_ids::{assign_group_ids, group_is_tofu, group_runnable};
 use crate::discover::Discovery;
 use crate::internal::internal;
 use crate::matrix_step::step_name_for;
+
+#[path = "crate_jobs_stage.rs"]
+mod stage;
+
+#[cfg(test)]
+pub(crate) use stage::needs;
+pub(crate) use stage::{is_mbx, is_nextest, is_opentofu, is_rust};
 
 /// Built crate jobs plus their driver selections for MBX gating.
 pub(crate) struct CrateBuild {
@@ -52,6 +60,10 @@ pub(crate) struct CrateBuild {
 /// # Errors
 ///
 /// Returns contract, render-context, or tool-request errors.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "one call site threads job scope plus the concurrency cap"
+)]
 pub(crate) fn build_crate_jobs(
     label: &str,
     policy: WorkflowPolicy,
@@ -60,15 +72,17 @@ pub(crate) fn build_crate_jobs(
     fetch_roots: &[String],
     custom_tasks: &[String],
     acquire: Option<&Step>,
+    max_parallel_jobs: u32,
 ) -> Result<CrateBuild, OrchestratorError> {
     let grouped = group_runnable(&discovery.proposals);
-    let assigned = assign_crate_job_ids(&id_inputs(&grouped));
+    let assigned = assign_group_ids(&grouped);
     // Reject a non-empty allowlist before the loop: with zero runnable
     // tasks the loop body (and its rejection) never runs, so the
     // allowlist would be silently ignored instead of failing closed.
     let custom_steps = crate::vectors::custom_task_steps(custom_tasks, catalog)?;
     let mut jobs = Vec::with_capacity(grouped.len());
     let mut drivers = BTreeMap::new();
+    let mut tofu_ids = Vec::new();
     for ((package_id, configuration), tasks) in &grouped {
         let first = tasks.first().ok_or_else(|| internal("crate_empty"))?;
         let key = (package_id.clone(), configuration.clone());
@@ -77,9 +91,15 @@ pub(crate) fn build_crate_jobs(
             .ok_or_else(|| internal("crate_job_id_missing"))?
             .clone();
         let manifest = first.identity.unit_path.clone();
-        let display = crate_display_name(&first.display_name, &manifest, configuration);
+        let display = if group_is_tofu(tasks) {
+            tofu_display_name(&first.display_name)
+        } else {
+            crate_display_name(&first.display_name, &manifest, configuration)
+        };
+        let use_rust = tasks.iter().any(|task| is_rust(task));
         let use_mbx = tasks.iter().any(|task| is_mbx(task));
         let use_nextest = tasks.iter().any(|task| is_nextest(task));
+        let use_opentofu = tasks.iter().any(|task| is_opentofu(task));
         let driver = if use_mbx {
             RenderDriver::Mbx
         } else {
@@ -102,17 +122,24 @@ pub(crate) fn build_crate_jobs(
             &model,
             catalog,
             fetch_roots,
+            use_rust,
             use_mbx,
             use_nextest,
+            use_opentofu,
             repo_has_mbx,
             acquire,
+            max_parallel_jobs,
         )?;
         // Allowlisted custom tasks run after the fixed obligations; the
         // pre-loop rejection above guarantees this is empty today.
         job.steps.extend(custom_steps.iter().cloned());
         drivers.insert(job_id.clone(), driver);
+        if use_opentofu {
+            tofu_ids.push(job_id.clone());
+        }
         jobs.push((job_id, job));
     }
+    stage::stage_tofu_root_jobs(&mut jobs, &tofu_ids, max_parallel_jobs);
     jobs.sort_by(|left, right| left.0.cmp(&right.0));
     Ok(CrateBuild { jobs, drivers })
 }
@@ -126,19 +153,12 @@ pub(crate) fn is_runnable(task: &ProposedTask) -> bool {
     !task.no_targets && !task.identity.unit_id.is_empty()
 }
 
-/// Tool needs backing one task's driver/runner selection.
-fn needs(task: &ProposedTask) -> velnor_actions_rust::ToolNeeds {
-    tool_needs(&task.identity.compile_driver, &task.identity.test_runner)
-}
-
-/// True when the task compiles through MBX (unknown spellings are Cargo).
-fn is_mbx(task: &ProposedTask) -> bool {
-    needs(task).mbx
-}
-
-/// True when the task runs tests through Nextest.
-fn is_nextest(task: &ProposedTask) -> bool {
-    needs(task).nextest
+/// Obligation order rank for one task, dispatched by stack.
+fn obligation_rank(task: &ProposedTask) -> u32 {
+    match Stack::from_id(&task.stack_id) {
+        Some(Stack::Tofu) => velnor_actions_tofu::task_kind_rank(&task.task_kind),
+        _ => task_kind_rank(&task.task_kind),
+    }
 }
 
 /// Ordered validated obligations for one crate's tasks.
@@ -149,8 +169,7 @@ fn obligations_for(
     let executed: BTreeSet<&str> = tasks.iter().map(|task| task.task_id.as_str()).collect();
     let mut ordered = tasks.to_vec();
     ordered.sort_by(|left, right| {
-        (task_kind_rank(&left.task_kind), &left.task_id)
-            .cmp(&(task_kind_rank(&right.task_kind), &right.task_id))
+        (obligation_rank(left), &left.task_id).cmp(&(obligation_rank(right), &right.task_id))
     });
     let mut obligations = Vec::with_capacity(ordered.len());
     for task in ordered {
@@ -202,12 +221,16 @@ fn gates_for(task: &ProposedTask, executed: &BTreeSet<&str>) -> Vec<String> {
 /// Render one validated crate model to its fixed IR job.
 ///
 /// P08 order: helper staging, plan download (report identities bind
-/// the plan), restore shared sources (or Cargo-only registry), then
-/// MBX objects, then probe-and-fetch, then report-wrapped
-/// obligations, then one always-on crate-report upload carrying every
-/// entry. Readers never save.
+/// the plan), restore shared sources (or Cargo-only registry), the
+/// per-root provider restore on opentofu roles, then MBX objects,
+/// then probe-and-fetch, then report-wrapped obligations, then one
+/// always-on crate-report upload carrying every entry. Readers never
+/// save. Rust setup (components, restore, fetch) emits only for rust
+/// roles; pure-tofu roles carry the opentofu driver with no Rust
+/// setup, mixed roles the union.
 #[expect(
     clippy::too_many_arguments,
+    clippy::fn_params_excessive_bools,
     reason = "one call site threads job scope plus driver selection"
 )]
 fn render_job(
@@ -216,10 +239,13 @@ fn render_job(
     model: &CrateJob,
     catalog: &ToolCatalog,
     fetch_roots: &[String],
+    use_rust: bool,
     use_mbx: bool,
     use_nextest: bool,
+    use_opentofu: bool,
     repo_has_mbx: bool,
     acquire: Option<&Step>,
+    max_parallel_jobs: u32,
 ) -> Result<Job, OrchestratorError> {
     let mut steps = vec![crate::workflow::wire_w1::checkout_step()?];
     steps.extend(acquire.cloned());
@@ -228,23 +254,36 @@ fn render_job(
         crate::matrix_step::crate_needs_generate_validators(policy, &model.package_name);
     steps.push(crate::matrix_step::prepare_crate_tools_step(
         catalog,
+        use_rust,
         use_mbx,
         use_nextest,
+        crate::matrix_step::prepare_install_opentofu(policy, &model.package_name, use_opentofu),
         needs_validators,
     )?);
-    steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
+    if use_rust {
+        steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
+    }
     steps.extend(restore_step_for_crate(
         label,
         catalog,
         fetch_roots,
+        use_rust,
         use_mbx,
         repo_has_mbx,
     )?);
+    if use_opentofu {
+        let root = crate::tofu_cache::tofu_root_for_obligations(&model.obligations)?;
+        steps.push(crate::tofu_cache::restore_step_for_tofu_root(
+            label, catalog, &root,
+        )?);
+    }
     steps.extend(mbx_objects_step(catalog, use_mbx)?);
-    steps.extend(crate::source_prep::fetch_steps_for_crate(
-        catalog,
-        fetch_roots,
-    )?);
+    if use_rust {
+        steps.extend(crate::source_prep::fetch_steps_for_crate(
+            catalog,
+            fetch_roots,
+        )?);
+    }
     steps.extend(crate::workflow::wire_w1::maybe_task_cache_steps(
         None,
         TaskCacheMode::Off,
@@ -255,10 +294,14 @@ fn render_job(
             .iter()
             .map(|later| later.task_id.clone())
             .collect();
+        // The first obligation declares the root job's concurrency cap;
+        // the renderer turns the marker into `strategy.max-parallel`.
+        let cap = (index == 0 && use_opentofu).then_some(max_parallel_jobs);
         steps.push(crate::matrix_step::obligation_step(
             obligation,
             catalog,
             &downstream,
+            cap,
         )?);
     }
     steps.push(crate::matrix_step::crate_upload_step(&model.job_id)?);
@@ -276,17 +319,20 @@ fn render_job(
 
 /// Restore step for one crate: shared sources, or Cargo-only registry.
 ///
-/// Lockless emits nothing. Cargo-only repos (no MBX anywhere) restore via
-/// pinned `rust-cache` (read-only); every other lockful crate restores the
-/// shared `actions/cache` snapshot (read-only, never saves the shared key).
+/// Lockless emits nothing, and tofu roles restore providers through
+/// the separate provider-cache step (never here). Cargo-only repos
+/// (no MBX anywhere) restore via pinned `rust-cache` (read-only);
+/// every other lockful crate restores the shared `actions/cache`
+/// snapshot (read-only, never saves the shared key).
 fn restore_step_for_crate(
     label: &str,
     catalog: &ToolCatalog,
     fetch_roots: &[String],
+    use_rust: bool,
     use_mbx: bool,
     repo_has_mbx: bool,
 ) -> Result<Option<Step>, OrchestratorError> {
-    if fetch_roots.is_empty() {
+    if !use_rust || fetch_roots.is_empty() {
         return Ok(None);
     }
     let target = velnor_actions_contract::target_for_runner_label(label).ok_or_else(|| {
@@ -333,6 +379,18 @@ fn mbx_objects_step(
 #[cfg(test)]
 #[path = "crate_jobs_tests.rs"]
 mod crate_jobs_tests;
+
+#[cfg(test)]
+#[path = "crate_jobs_display_tests.rs"]
+mod crate_jobs_display_tests;
+
+#[cfg(test)]
+#[path = "crate_jobs_tofu_cache_tests.rs"]
+mod crate_jobs_tofu_cache_tests;
+
+#[cfg(test)]
+#[path = "crate_jobs_tofu_tests.rs"]
+mod crate_jobs_tofu_tests;
 
 #[cfg(test)]
 #[path = "crate_jobs_upload_tests.rs"]

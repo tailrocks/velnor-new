@@ -45,6 +45,7 @@ fn policy_vectors_pin_specs_and_payloads() {
         "machete",
         "crates/velnor-actions-contract",
         "crates/velnor-actions-rust",
+        "crates/velnor-actions-tofu",
         "crates/velnor-actions-mise",
         "crates/velnor-actions-actionlint",
         "crates/velnor-actions-workflow-renderer",
@@ -198,6 +199,61 @@ fn custom_task_steps_reject_bad_names() {
             "{bad:?} must fail closed"
         );
     }
+}
+
+#[test]
+fn tofu_task_argv_routes_through_pinned_opentofu() {
+    use velnor_actions_tofu::{TofuTaskGroup, TofuTaskKind};
+    let group = TofuTaskGroup {
+        root: String::new(),
+        kind: TofuTaskKind::Validate,
+        configuration: "default".to_owned(),
+        no_targets: false,
+    };
+    let task = velnor_actions_tofu::propose_task(&group).expect("fixture proposes");
+    task.validate().expect("fixture valid");
+    let catalog = ToolCatalog::pinned();
+    let argv = task_argv(&task, &catalog).expect("task argv");
+    assert!(
+        argv.contains(&catalog.tool_spec(PinnedTool::Opentofu)),
+        "opentofu spec: {argv:?}"
+    );
+    assert!(
+        !argv
+            .iter()
+            .any(|arg| arg == "cargo" || arg.contains("nextest")),
+        "no rust tools: {argv:?}"
+    );
+    let at = argv.iter().position(|arg| arg == "--").expect("separator");
+    // Program `tofu` plus the fixed payload, wrapped never edited.
+    assert_eq!(&argv[at + 1..], ["tofu", "validate", "-no-color"]);
+}
+
+#[test]
+fn tofu_subdir_payload_runs_under_chdir_first() {
+    use velnor_actions_tofu::{TofuTaskGroup, TofuTaskKind};
+    let group = TofuTaskGroup {
+        root: "stacks/a".to_owned(),
+        kind: TofuTaskKind::Fmt,
+        configuration: "default".to_owned(),
+        no_targets: false,
+    };
+    let task = velnor_actions_tofu::propose_task(&group).expect("fixture proposes");
+    let catalog = ToolCatalog::pinned();
+    let argv = task_argv(&task, &catalog).expect("task argv");
+    let at = argv.iter().position(|arg| arg == "--").expect("separator");
+    assert_eq!(
+        &argv[at + 1..],
+        [
+            "tofu",
+            "-chdir",
+            "stacks/a",
+            "fmt",
+            "-check",
+            "-recursive",
+            "-no-color"
+        ]
+    );
 }
 
 #[test]

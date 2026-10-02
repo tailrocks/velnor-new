@@ -3,10 +3,10 @@ use crate::impl_contract_ids::{TASK, sample_entry, sample_identity};
 use velnor_actions_contract::cachekey::{MISS_REASONS, cache_key, validate_miss_reason};
 use velnor_actions_contract::{
     CacheLayer, CacheOutcome, CacheResult, ContractError, RUST_EXTENSION_REQUIRED_SLOTS,
-    StackExtension, TaskReport, TaskStatus, Trust, WorkflowEvent, digest_b3,
-    final_report_id_for_run, final_report_relpath, input_digest, join_runner_temp,
+    StackExtension, TOFU_EXTENSION_REQUIRED_SLOTS, TaskReport, TaskStatus, Trust, WorkflowEvent,
+    digest_b3, final_report_id_for_run, final_report_relpath, input_digest, join_runner_temp,
     matrix_report_relpath, run_key_for_ci, task_report_id_for_task, task_report_relpath,
-    validate_rust_extension,
+    validate_rust_extension, validate_tofu_extension,
 };
 
 #[test]
@@ -63,6 +63,52 @@ fn cache_miss_reason_membership_enforced() -> Result<(), ContractError> {
     report.validate()?;
     report.cache.miss_reason = Some("sometimes".to_owned());
     assert!(report.validate().is_err());
+    Ok(())
+}
+
+#[test]
+fn cache_tofu_providers_layer_reports_and_roundtrips() -> Result<(), ContractError> {
+    let compat = digest_b3(b"compat");
+    let snapshot = digest_b3(b"snapshot");
+    let key = cache_key("tofu-providers", "trusted", &compat, &snapshot)?;
+    let wire = format!(r#"{{"layer":"tofu-providers","key":"{key}","result":"hit"}}"#);
+    let outcome: CacheOutcome = serde_json::from_str(&wire).expect("provider layer parses");
+    assert_eq!(outcome.result, CacheResult::Hit);
+    let back = serde_json::to_string(&outcome).expect("serialize");
+    assert!(back.contains("\"layer\":\"tofu-providers\""), "{back}");
+    Ok(())
+}
+
+#[test]
+fn cache_provider_compatibility_binds_dimensions_and_trust_scopes_keys() -> Result<(), ContractError>
+{
+    use velnor_actions_contract::{CompatibilityInputs, compatibility_id};
+    let inputs = CompatibilityInputs {
+        schema_id: "v1".to_owned(),
+        repository_id: digest_b3(b"repo"),
+        workspace_id: digest_b3(b"workspace"),
+        lane_id: digest_b3(b"lane"),
+        platform_id: digest_b3(b"linux-x86_64"),
+        toolchain_id: digest_b3(b"opentofu-1.13.1"),
+        cache_format_id: digest_b3(b"tofu-format"),
+        stack_extension_id: digest_b3(b"lock-digest"),
+    };
+    let compat = compatibility_id(&inputs)?;
+    let mut drifted = inputs.clone();
+    drifted.stack_extension_id = digest_b3(b"changed-lock");
+    assert_ne!(
+        compatibility_id(&drifted)?,
+        compat,
+        "a lock change flips provider compatibility"
+    );
+    let snapshot = digest_b3(b"snapshot");
+    let trusted = cache_key("tofu-providers", "trusted", &compat, &snapshot)?;
+    let pr = cache_key("tofu-providers", "pr", &compat, &snapshot)?;
+    assert_ne!(trusted, pr, "trust namespaces the key");
+    assert!(
+        trusted.contains("-trusted-") && pr.contains("-pr-"),
+        "trust rides the key, never the digest"
+    );
     Ok(())
 }
 
@@ -194,4 +240,96 @@ fn cache_extension_slots_require_workspace_and_profile() {
     let mut bad = good;
     bad.data["graph_digest"] = serde_json::json!("nope");
     assert!(validate_rust_extension(&bad).is_err());
+}
+
+#[test]
+fn tofu_extension_slots_require_unit_graph_and_driver() {
+    assert_eq!(TOFU_EXTENSION_REQUIRED_SLOTS.len(), 9);
+    let good = StackExtension {
+        schema: "tofu-task-identity-v1".to_owned(),
+        data: serde_json::json!({
+            "unit_id": "root",
+            "workspace_id": digest_b3(b"workspace"),
+            "graph_digest": digest_b3(b"graph"),
+            "root": "",
+            "profile": "default",
+            "driver": "tofu+none",
+            "config_digest": digest_b3(b"config"),
+            "lock_digest": null,
+            "kind": "validate",
+        }),
+    };
+    assert_eq!(validate_tofu_extension(&good), Ok(()));
+    let mut nested = good.clone();
+    nested.data["unit_id"] = serde_json::json!("stacks/a");
+    nested.data["root"] = serde_json::json!("stacks/a");
+    nested.data["lock_digest"] = serde_json::json!(digest_b3(b"lock"));
+    assert_eq!(validate_tofu_extension(&nested), Ok(()));
+    let mut unknown = good.clone();
+    unknown.schema = "rust-task-identity-v1".to_owned();
+    assert!(validate_tofu_extension(&unknown).is_err());
+    for slot in ["unit_id", "graph_digest", "driver", "lock_digest"] {
+        let mut value = serde_json::to_value(&good.data).expect("value");
+        value.as_object_mut().expect("object").remove(slot);
+        let missing = StackExtension {
+            schema: good.schema.clone(),
+            data: value,
+        };
+        let err = validate_tofu_extension(&missing).expect_err("missing slot");
+        assert!(
+            err.to_string().contains(&format!("missing_slot:{slot}")),
+            "{slot}"
+        );
+    }
+    let mut bad = good.clone();
+    bad.data["driver"] = serde_json::json!("tofu");
+    assert!(validate_tofu_extension(&bad).is_err());
+    let mut bad = good.clone();
+    bad.data["config_digest"] = serde_json::json!("nope");
+    assert!(validate_tofu_extension(&bad).is_err());
+    let mut bad = good;
+    bad.data["lock_digest"] = serde_json::json!(42);
+    assert!(validate_tofu_extension(&bad).is_err());
+}
+
+#[test]
+fn cache_provider_layer_reports_only_closed_reasons() -> Result<(), ContractError> {
+    let run_key = run_key_for_ci(22, 1);
+    let entry = sample_entry(&run_key)?;
+    let task_digest = digest_b3(b"task-bytes");
+    let mut report = TaskReport {
+        schema: 1,
+        task_report_id: task_report_id_for_task(&run_key, &entry.matrix_key, &task_digest)?,
+        run_key: run_key.clone(),
+        event: WorkflowEvent::PullRequest,
+        trust: Trust::Pr,
+        matrix_id: entry.id.clone(),
+        matrix_key: entry.matrix_key.clone(),
+        task_id: TASK.to_owned(),
+        task_digest,
+        status: TaskStatus::Executed,
+        not_selected_reason: None,
+        cache: CacheOutcome {
+            layer: CacheLayer::TofuProviders,
+            key: "k".to_owned(),
+            result: CacheResult::Miss,
+            miss_reason: Some("no_entry".to_owned()),
+        },
+        exit_code: 0,
+        duration_ms: Some(1),
+        outputs: vec![],
+        lane: None,
+        queue: None,
+        partition: None,
+        reason: None,
+        timing: None,
+    };
+    assert_eq!(MISS_REASONS.len(), 13);
+    for reason in MISS_REASONS {
+        report.cache.miss_reason = Some((*reason).to_owned());
+        report.validate()?;
+    }
+    report.cache.miss_reason = Some("sometimes".to_owned());
+    assert!(report.validate().is_err());
+    Ok(())
 }

@@ -215,6 +215,11 @@ const TOOL_PROBE_ROWS: &[(&str, &str, &str)] = &[
         "nextest.json",
         "{\"crate\": {\"max_version\": \"0.9.146\"}}",
     ),
+    (
+        "https://api.github.com/repos/opentofu/opentofu/releases/latest",
+        "opentofu.json",
+        "{\"tag_name\": \"v1.13.1\"}",
+    ),
 ];
 
 const ACTION_PROBE_ROWS: &[(&str, &str, &str)] = &[

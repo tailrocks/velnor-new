@@ -14,6 +14,7 @@ pub mod evidence;
 mod evidence_text;
 pub mod graph;
 pub mod identity;
+mod manifest_edges;
 pub mod metadata;
 pub mod metadata_edges;
 pub mod profile;
@@ -34,8 +35,8 @@ pub mod toolfiles;
 pub use cargo_env::{DENY_WARNINGS, RUSTDOCFLAGS_ENV, cargo_payload_env};
 pub use closure::{lock_digest_at_root, nextest_digest_at_root, resolve_closure_at_root};
 pub use detect::{
-    CargoCandidate, REGISTERED_STACKS, detected_projects_for_units, discover_candidates,
-    discover_stack_candidates, manifest_for_key, manifest_for_unit_root, project_root_for_manifest,
+    CargoCandidate, detected_projects_for_units, discover_candidates, discover_stack_candidates,
+    manifest_for_key, manifest_for_unit_root, project_root_for_manifest,
 };
 pub use evidence::{
     Evidence, EvidenceFile, EvidenceStrength, MiseWrapperInput, NEXTEST_RECOMMENDATION,
@@ -47,6 +48,7 @@ pub use identity::{
     GroupExtensionInputs, adapter_entry_metadata, entry_metadata_for_task, expand_shards_for_group,
     extension_for_proposal,
 };
+pub use manifest_edges::manifest_edges;
 pub use metadata::{
     METADATA_FORMAT_VERSION, MetadataError, PackageRecord, TargetRecord, WorkspaceRecord,
     parse_metadata_json,
@@ -86,8 +88,9 @@ pub use tasks::{
 };
 pub use toolfiles::{
     FOREIGN_TOOL_FILES, MISSING_RECOMMENDED_INPUT, OWNED_SYMBOLS, RUST_TOOLCHAIN_FILE,
-    TOOLING_INPUT_INVALID, ToolFile, ToolFinding, ToolInspectError, ToolchainInspection,
-    ToolchainSpec, inspect_toolchain_file, is_owned_tool_file, stack_for_symbol,
+    SelectionBroadening, TOOLING_INPUT_INVALID, ToolFile, ToolFinding, ToolInspectError,
+    ToolchainInspection, ToolchainSpec, inspect_toolchain_file, is_known_toolfile,
+    is_owned_tool_file, selection_broadening, stack_for_symbol,
 };
 
 /// Stable identifier for the Rust stack.

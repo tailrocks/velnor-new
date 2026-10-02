@@ -1,4 +1,6 @@
 //! Integration test entry point; cases live in the sibling files.
+#[path = "impl_adapter_neutral_waist.rs"]
+mod impl_adapter_neutral_waist;
 #[path = "impl_adapter_wire_contract.rs"]
 mod impl_adapter_wire_contract;
 #[path = "impl_alint_negative.rs"]
@@ -9,6 +11,8 @@ mod impl_contract;
 mod impl_contract_conclusions;
 #[path = "impl_contract_ids.rs"]
 mod impl_contract_ids;
+#[path = "impl_contract_job_ids.rs"]
+mod impl_contract_job_ids;
 #[path = "impl_contract_release.rs"]
 mod impl_contract_release;
 #[path = "impl_contract_release_ir.rs"]
@@ -19,6 +23,8 @@ mod impl_contract_release_modes;
 mod impl_contract_reports;
 #[path = "impl_contract_targets.rs"]
 mod impl_contract_targets;
+#[path = "impl_contract_tofu_config.rs"]
+mod impl_contract_tofu_config;
 #[path = "impl_remed_cache.rs"]
 mod impl_remed_cache;
 #[path = "impl_remed_cache_b.rs"]

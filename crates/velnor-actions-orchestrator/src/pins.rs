@@ -256,6 +256,7 @@ mod tests {
             stacks: StacksConfig {
                 ignore: Vec::new(),
                 rust: None,
+                tofu: None,
             },
             discovery: DiscoveryConfig {
                 exclude: Vec::new(),

@@ -3,14 +3,7 @@
 //! Detectors observe the post-exclusion index; stack ignores apply after
 //! detection completes and never suppress malformed-manifest errors.
 
-use velnor_actions_contract::{DetectedProject, FileIndex, StackCandidate};
-
-/// Stacks this detector may emit (single explicit stack: rust).
-///
-/// The contract registry is authoritative for dispatch; this mirror
-/// exists so the detector self-checks its own output. Pinned equal
-/// to the contract registry by `registration_matches_contract_registry`.
-pub const REGISTERED_STACKS: &[&str] = &["rust"];
+use velnor_actions_contract::{DetectedProject, FileIndex, StackCandidate, VelnorConfig};
 
 /// One discovered `Cargo.toml` manifest (post-exclusion).
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -49,7 +42,7 @@ pub fn project_root_for_manifest(manifest: &str) -> String {
 #[must_use]
 pub fn discover_stack_candidates(index: &FileIndex) -> Vec<StackCandidate> {
     debug_assert!(
-        REGISTERED_STACKS.contains(&crate::STACK_ID),
+        VelnorConfig::REGISTERED_STACKS.contains(&crate::STACK_ID),
         "detector emits only registered stacks"
     );
     discover_candidates(index)

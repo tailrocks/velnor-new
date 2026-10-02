@@ -91,21 +91,30 @@ fn arch112_alint_scopes_product_paths() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn arch15_single_explicit_stack() -> Result<(), Box<dyn Error>> {
-    let detect = read("crates/velnor-actions-rust/src/detect.rs")?;
-    assert!(
-        detect.contains("REGISTERED_STACKS: &[&str] = &[\"rust\"]"),
-        "only explicit stack must be rust"
-    );
-    let lib = read("crates/velnor-actions-rust/src/lib.rs")?;
-    assert!(
-        lib.contains("STACK_ID: &str = \"rust\""),
-        "rust crate must name its stack explicitly"
-    );
-    assert!(
-        detect.contains("crate::STACK_ID"),
-        "detector records must carry the explicit id"
-    );
+fn arch15_all_stacks_explicit() -> Result<(), Box<dyn Error>> {
+    for (dir, id) in [
+        ("crates/velnor-actions-rust", "rust"),
+        ("crates/velnor-actions-tofu", "tofu"),
+    ] {
+        let detect = read(&format!("{dir}/src/detect.rs"))?;
+        assert!(
+            !detect.contains("const REGISTERED_STACKS"),
+            "contract owns the single stack registry; no {id} mirror"
+        );
+        assert!(
+            detect.contains("VelnorConfig::REGISTERED_STACKS"),
+            "detector self-check must read the contract registry ({id})"
+        );
+        let lib = read(&format!("{dir}/src/lib.rs"))?;
+        assert!(
+            lib.contains(&format!("STACK_ID: &str = \"{id}\"")),
+            "{id} crate must name its stack explicitly"
+        );
+        assert!(
+            detect.contains("crate::STACK_ID"),
+            "detector records must carry the explicit id ({id})"
+        );
+    }
     Ok(())
 }
 

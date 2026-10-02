@@ -1,6 +1,7 @@
 //! Stack selection and per-stack options.
 use super::VelnorConfig;
 use super::release::RustReleaseConfig;
+use super::tofu::TofuStackConfig;
 use crate::errors::ContractError;
 use crate::ids::is_component_byte;
 use serde::{Deserialize, Serialize};
@@ -16,6 +17,9 @@ pub struct StacksConfig {
     /// Rust stack options.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rust: Option<RustStackConfig>,
+    /// Tofu stack options; absent means no tofu validation roots.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tofu: Option<TofuStackConfig>,
 }
 
 /// Declared compile driver (`[stacks.rust] compile_driver`).
@@ -178,6 +182,9 @@ impl StacksConfig {
         }
         if let Some(rust) = &self.rust {
             rust.validate(file)?;
+        }
+        if let Some(tofu) = &self.tofu {
+            tofu.validate(file)?;
         }
         Ok(())
     }

@@ -94,7 +94,7 @@ pub(crate) fn lockful_roots(root: &Path, workspaces: &[PlannedWorkspace]) -> Vec
 /// Fetch steps for crate jobs (readers): probe, skip when warm, else fetch.
 ///
 /// Env is the validated obligation contract, so fetch and consumer match
-/// by construction.
+/// by construction. Rust-only: callers emit no fetch for pure-tofu roles.
 /// # Errors
 ///
 /// Returns contract errors for rejected roots or step-env failures.
@@ -102,7 +102,7 @@ pub(crate) fn fetch_steps_for_crate(
     catalog: &ToolCatalog,
     roots: &[String],
 ) -> Result<Vec<Step>, OrchestratorError> {
-    let env = crate::matrix_step::task_step_env(catalog, &BTreeMap::new())?;
+    let env = crate::matrix_step::task_step_env(catalog, &BTreeMap::new(), true)?;
     fetch_steps_with(catalog, roots, &env)
 }
 
@@ -117,7 +117,7 @@ pub(crate) fn fetch_steps_for_plan(
     catalog: &ToolCatalog,
     roots: &[String],
 ) -> Result<Vec<Step>, OrchestratorError> {
-    let env = crate::matrix_step::task_step_env(catalog, &BTreeMap::new())?;
+    let env = crate::matrix_step::task_step_env(catalog, &BTreeMap::new(), true)?;
     fetch_steps_with(catalog, roots, &env)
 }
 
@@ -261,7 +261,7 @@ mod tests {
                 "crate fetch must never carry a credential {key}"
             );
         }
-        let shared = crate::matrix_step::task_step_env(&catalog, &BTreeMap::new())
+        let shared = crate::matrix_step::task_step_env(&catalog, &BTreeMap::new(), true)
             .expect("shared crate env");
         assert_eq!(
             got, &shared,
@@ -274,8 +274,8 @@ mod tests {
         let catalog = ToolCatalog::pinned();
         let steps = fetch_steps_for_plan(&catalog, &[String::new()]).expect("fetch steps");
         let (_, got) = shell_parts(&steps[0].kind).expect("fetch must be a shell step");
-        let shared =
-            crate::matrix_step::task_step_env(&catalog, &BTreeMap::new()).expect("shared env");
+        let shared = crate::matrix_step::task_step_env(&catalog, &BTreeMap::new(), true)
+            .expect("shared env");
         assert_eq!(
             got, &shared,
             "writer and readers share one Cargo home expression"

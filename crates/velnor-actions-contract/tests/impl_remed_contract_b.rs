@@ -79,6 +79,7 @@ fn assert_contract_modules(root: &str) {
             "config",
             "discover",
             "errors",
+            "extension_schemas",
             "extensions",
             "finding",
             "formats",

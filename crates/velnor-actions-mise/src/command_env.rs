@@ -30,6 +30,27 @@ pub const MISE_CARGO_HOME_ENV: &str = "MISE_CARGO_HOME";
 /// Environment name selecting the exact Rust toolchain for Cargo runs.
 pub const RUSTUP_TOOLCHAIN_ENV: &str = "RUSTUP_TOOLCHAIN";
 
+/// Tofu automation-marker env key (allowed extra; T03 pair).
+///
+/// Mirrors the tofu adapter's key without depending on it; the
+/// orchestrator pins the two equal by test.
+pub const TF_IN_AUTOMATION_ENV: &str = "TF_IN_AUTOMATION";
+/// Tofu automation marker enabled.
+pub const TF_IN_AUTOMATION_ON: &str = "1";
+/// Tofu interactive-input env key (allowed extra; T03 pair).
+pub const TF_INPUT_ENV: &str = "TF_INPUT";
+/// Tofu interactive input disabled.
+pub const TF_INPUT_OFF: &str = "0";
+/// Tofu isolated data-dir env key (constructor-baked only).
+pub const TF_DATA_DIR_ENV: &str = "TF_DATA_DIR";
+/// Tofu isolated CLI-config env key (constructor-baked only).
+pub const TF_CLI_CONFIG_FILE_ENV: &str = "TF_CLI_CONFIG_FILE";
+/// Tofu plugin-cache env key (constructor-baked only; T21 transport).
+///
+/// Mirrors the tofu adapter's key without depending on it; the
+/// orchestrator pins the two equal by test.
+pub const TF_PLUGIN_CACHE_DIR_ENV: &str = "TF_PLUGIN_CACHE_DIR";
+
 /// Credential keys that must never reach a task environment.
 ///
 /// Static tokens (`MISE_GITHUB_TOKEN`, `GITHUB_TOKEN`/`GH_TOKEN`,
@@ -122,14 +143,24 @@ pub const CREDENTIAL_ALLOWLIST_BASELINE: [&str; 2] = ["GITHUB_TOKEN", "GH_TOKEN"
 /// enumerating them.
 const MISE_ALLOWED_EXTRAS: [&str; 2] = [MISE_RUSTUP_HOME_ENV, MISE_CARGO_HOME_ENV];
 
+/// Tofu keys that declared extras may still carry: the harmless T03
+/// automation pair, which proposal env threads through step extras.
+/// Every other `TF_*`/`TOFU_*` name arrives via the tofu spawn
+/// constructor only, never as caller extras.
+const TOFU_ALLOWED_EXTRAS: [&str; 2] = [TF_IN_AUTOMATION_ENV, TF_INPUT_ENV];
+
 /// Whether a key is reserved: the `MISE_*` prefix (minus the owned-homes
-/// allowlist), credentials, or endpoint selectors. Credentials are
-/// pattern-matched ([`is_denied_credential_key`]); note
-/// `CARGO_REGISTRY_TOKEN` (a repo task carrying it would silently
-/// disable trusted publishing) and its `CARGO_REGISTRIES_*` siblings.
-/// The prefix rule closes the override hole whole: any `MISE_*` name
-/// mise reads (`MISE_ENV`, `MISE_CONFIG_FILE`, `MISE_TRUSTED_CONFIG_PATHS`,
-/// `MISE_DATA_DIR`, ...) fails loud instead of only the enumerated few.
+/// allowlist), the `TF_*`/`TOFU_*` prefixes (minus the automation-pair
+/// allowlist), the `CHECKPOINT_*` prefix, credentials, or endpoint
+/// selectors. Credentials are pattern-matched
+/// ([`is_denied_credential_key`]); note `CARGO_REGISTRY_TOKEN` (a repo
+/// task carrying it would silently disable trusted publishing) and its
+/// `CARGO_REGISTRIES_*` siblings. The prefix rules close the override
+/// hole whole: any `MISE_*` name mise reads (`MISE_ENV`,
+/// `MISE_CONFIG_FILE`, `MISE_TRUSTED_CONFIG_PATHS`, `MISE_DATA_DIR`,
+/// ...) and any `TF_*` name tofu reads (`TF_VAR_*`, `TF_CLI_ARGS_*`,
+/// `TF_TOKEN_*`, `TF_WORKSPACE`, `TF_LOG`, ...) fail loud instead of
+/// only the enumerated few.
 #[must_use]
 pub fn is_reserved_env_key(key: &str) -> bool {
     if MISE_ALLOWED_EXTRAS.contains(&key) {
@@ -138,7 +169,20 @@ pub fn is_reserved_env_key(key: &str) -> bool {
     if key.starts_with("MISE_") {
         return true;
     }
+    if TOFU_ALLOWED_EXTRAS.contains(&key) {
+        return false;
+    }
+    if key.starts_with("TF_") || key.starts_with("TOFU_") || key.starts_with("CHECKPOINT_") {
+        return true;
+    }
     is_denied_credential_key(key) || is_denied_endpoint_key(key)
+}
+
+/// True for ambient-only tofu/checkpoint families: stripped from every
+/// inherited parent before spawn (Velnor's own pairs arrive via the
+/// fixed overlays after the strip, so constructor-set values survive).
+fn is_stripped_ambient_key(key: &str) -> bool {
+    key.starts_with("TF_") || key.starts_with("TOFU_") || key.starts_with("CHECKPOINT_")
 }
 
 /// Redact secret-looking values for `Debug`: names stay, values become
@@ -205,9 +249,10 @@ impl EnvPolicy {
     /// Full child environment over an explicit parent snapshot.
     ///
     /// The pure contract behind the spawner: inheriting policies keep
-    /// the parent minus stripped credentials, repo-task keeps the
-    /// proxy passthrough only, and every policy appends `additions`
-    /// (the isolation overlay plus validated extras) last.
+    /// the parent minus stripped credentials, endpoints, and
+    /// tofu/checkpoint ambient families; repo-task keeps the proxy
+    /// passthrough only; and every policy appends `additions` (the
+    /// isolation overlay plus validated extras) last.
     #[must_use]
     pub fn child_env(
         &self,
@@ -223,7 +268,8 @@ impl EnvPolicy {
                 let name = key.to_string_lossy();
                 let stripped = (is_denied_credential_key(&name)
                     && !allowed.contains(&name.as_ref()))
-                    || ENDPOINT_ENV_KEYS.contains(&name.as_ref());
+                    || ENDPOINT_ENV_KEYS.contains(&name.as_ref())
+                    || is_stripped_ambient_key(&name);
                 if !stripped {
                     env.push((key.clone(), value.clone()));
                 }
@@ -251,8 +297,9 @@ pub fn proxy_passthrough(parent: &[(OsString, OsString)]) -> Vec<(OsString, OsSt
 /// Remove every credential key the policy does not allow (P07-1).
 ///
 /// The nine known names strip unconditionally; pattern-shaped names
-/// (`CARGO_REGISTRIES_*`, `*_TOKEN`) strip by scanning the live parent
-/// environment, since the fixed list can never enumerate them.
+/// (`CARGO_REGISTRIES_*`, `*_TOKEN`) and the tofu/checkpoint ambient
+/// families (`TF_*`, `TOFU_*`, `CHECKPOINT_*`) strip by scanning the
+/// live parent environment, since no fixed list can enumerate them.
 pub(crate) fn strip_credentials(command: &mut Command, policy: EnvPolicy) {
     let allowed = policy.allowed_credentials();
     for key in CREDENTIAL_ENV_KEYS {
@@ -265,9 +312,10 @@ pub(crate) fn strip_credentials(command: &mut Command, policy: EnvPolicy) {
     }
     for (key, _) in std::env::vars_os() {
         let name = key.to_string_lossy();
-        if is_denied_credential_key(&name)
-            && !CREDENTIAL_ENV_KEYS.contains(&name.as_ref())
-            && !allowed.contains(&name.as_ref())
+        if is_stripped_ambient_key(&name)
+            || (is_denied_credential_key(&name)
+                && !CREDENTIAL_ENV_KEYS.contains(&name.as_ref())
+                && !allowed.contains(&name.as_ref()))
         {
             command.env_remove(key);
         }
