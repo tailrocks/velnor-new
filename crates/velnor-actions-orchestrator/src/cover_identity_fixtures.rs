@@ -227,6 +227,7 @@ pub(super) fn live_closure_digest(
         bundle.graph_digest(),
         &toolchain,
         &platform,
+        &mut velnor_actions_tofu::FileCache::new(),
     )
     .expect("closure");
     canonical_digest(&closure).expect("digest")

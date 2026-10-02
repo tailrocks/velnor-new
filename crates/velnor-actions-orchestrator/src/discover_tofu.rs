@@ -18,7 +18,7 @@ use velnor_actions_tofu::{
 
 use crate::OrchestratorError;
 use crate::config::CONFIG_REL;
-use crate::safe_read::{RepoRead, read_repo_file};
+use crate::safe_read::read_repo_file_cached;
 use crate::toolcheck::{TOOL_INPUT_PATHS, ToolInputCheck};
 
 /// Tofu step output: configured candidates plus an optional plan note.
@@ -40,6 +40,7 @@ pub(crate) fn qualify_tofu_step(
     config: &VelnorConfig,
     index: &FileIndex,
     tool_checks: &[ToolInputCheck],
+    reads: &mut velnor_actions_tofu::FileCache,
 ) -> Result<TofuStep, OrchestratorError> {
     let ignored = config
         .stacks
@@ -51,7 +52,7 @@ pub(crate) fn qualify_tofu_step(
     }
     let evidence = classify_with_contents(
         index.files(),
-        &config_contents(root, index),
+        &config_contents(root, index, reads),
         &mise_toml_values(tool_checks),
     );
     if evidence.level == EvidenceLevel::Conflict && !ignored {
@@ -106,14 +107,18 @@ fn map_roots_error(err: ContractError) -> OrchestratorError {
 ///
 /// Capped in count and bytes; unreadable entries contribute no
 /// signals (no table, no claim).
-fn config_contents(root: &Path, index: &FileIndex) -> BTreeMap<String, String> {
+fn config_contents(
+    root: &Path,
+    index: &FileIndex,
+    reads: &mut velnor_actions_tofu::FileCache,
+) -> BTreeMap<String, String> {
     let mut contents = BTreeMap::new();
     for path in effective_set(index.files())
         .iter()
         .take(velnor_actions_tofu::MAX_FILES_PER_UNIT)
     {
-        if let Ok(RepoRead::Text(text)) =
-            read_repo_file(root, path, velnor_actions_tofu::MAX_FILE_BYTES)
+        if let velnor_actions_tofu::PinnedOutcome::Text(text) =
+            read_repo_file_cached(root, path, velnor_actions_tofu::MAX_FILE_BYTES, reads)
         {
             contents.insert(path.clone(), text);
         }
@@ -131,6 +136,7 @@ pub(crate) fn tofu_diagnostic_lines(
     root: &Path,
     config: &VelnorConfig,
     tool_checks: &[ToolInputCheck],
+    reads: &mut velnor_actions_tofu::FileCache,
 ) -> Vec<String> {
     let ignored = config
         .stacks
@@ -148,9 +154,10 @@ pub(crate) fn tofu_diagnostic_lines(
     let mut lines = Vec::new();
     for configured in &tofu.roots {
         let unit = velnor_actions_tofu::display_for_root(configured.unit_prefix());
-        let mut findings = velnor_actions_tofu::lockfile_findings_for_root(root, &unit);
+        let mut findings =
+            velnor_actions_tofu::lockfile_findings_for_root(root, &unit, &mut *reads);
         if let Some(pinned) = &pin {
-            let claims = velnor_actions_tofu::required_versions_for_root(root, &unit);
+            let claims = velnor_actions_tofu::required_versions_for_root(root, &unit, &mut *reads);
             findings.extend(velnor_actions_tofu::version_compat_findings(
                 &claims, pinned,
             ));

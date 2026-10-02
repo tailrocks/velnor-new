@@ -289,23 +289,27 @@ fn build_plan(
     // fill, so a source build can never emit a release-pinned identity.
     let generator = default_generator();
     let snapshot = ExecutionSnapshot::build(discovery);
+    let mut reads = velnor_actions_tofu::FileCache::new();
     for task in universe {
         let wire = GroupWire {
             event: request.event,
             generator: &generator,
         };
-        let (obligation, entry) = plan_group(&GroupInputs {
-            discovery,
-            task,
-            run_key: &request.run_key,
-            label,
-            lane: lanes.get(&task.task_id).copied().unwrap_or(0),
-            catalog,
-            wire,
-            changed: member_changed(task, changed, &keys),
-            snapshot: &snapshot,
-            root,
-        })?;
+        let (obligation, entry) = plan_group(
+            &GroupInputs {
+                discovery,
+                task,
+                run_key: &request.run_key,
+                label,
+                lane: lanes.get(&task.task_id).copied().unwrap_or(0),
+                catalog,
+                wire,
+                changed: member_changed(task, changed, &keys),
+                snapshot: &snapshot,
+                root,
+            },
+            &mut reads,
+        )?;
         task_ids.push(task.task_id.clone());
         digests.insert(task.task_id.clone(), obligation.input_digest.clone());
         obligations.push(obligation);

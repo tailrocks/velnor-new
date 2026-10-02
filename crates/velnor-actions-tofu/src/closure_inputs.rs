@@ -11,27 +11,32 @@ use std::path::Path;
 
 use velnor_actions_contract::{Provenance, digest_b3};
 
-use crate::closure::{collect_unit_files, files_digest};
-use crate::effective::{Dialect, config_shape, effective_set};
+use crate::closure::files_digest;
+use crate::effective::effective_set;
 use crate::family::{Family, family_of, is_auto_var};
+use crate::file_cache::FileCache;
 use crate::kinds::TofuTaskKind;
 use crate::modules::{
     ModuleEdge, ModuleError, ModuleFinding, ModuleRef, ModuleSource, SourceClass,
     canonicalize_side, check_acyclic, identities_digest, resolve_local_target, resolve_refs,
 };
-use crate::parser::{parse_json, parse_native};
 
 /// One module identity record: `(file, name, source, target, content)`.
 type IdentityRecord = (String, String, String, String, String);
 
 /// Module source/content identity (M2), or Unknown with a typed reason.
-pub(crate) fn modules_provenance(root: &Path, unit: &str, kind: TofuTaskKind) -> Provenance {
+pub(crate) fn modules_provenance(
+    root: &Path,
+    unit: &str,
+    kind: TofuTaskKind,
+    reads: &mut FileCache,
+) -> Provenance {
     if kind == TofuTaskKind::Fmt {
         return Provenance::AbsentProven {
             evidence: "excluded:kind_does_not_resolve_modules".to_owned(),
         };
     }
-    let collected = match collect_unit_files(root, unit) {
+    let collected = match reads.unit_files(root, unit) {
         Ok(collected) => collected,
         Err(reason) => return Provenance::Unknown { reason },
     };
@@ -45,7 +50,7 @@ pub(crate) fn modules_provenance(root: &Path, unit: &str, kind: TofuTaskKind) ->
         })
         .collect();
     let wanted = effective_set(&configs);
-    let refs = match unit_module_refs(root, &wanted) {
+    let refs = match unit_module_refs(root, &wanted, &mut *reads) {
         Ok(refs) => refs,
         Err(reason) => return Provenance::Unknown { reason },
     };
@@ -83,7 +88,7 @@ pub(crate) fn modules_provenance(root: &Path, unit: &str, kind: TofuTaskKind) ->
             reason: err.to_string(),
         };
     }
-    let records = match identity_records(&canonical_root, &refs) {
+    let records = match identity_records(&canonical_root, &refs, reads) {
         Ok(records) => records,
         Err(err) => {
             return Provenance::Unknown {
@@ -112,22 +117,28 @@ pub(crate) fn modules_provenance(root: &Path, unit: &str, kind: TofuTaskKind) ->
 fn identity_records(
     canonical_root: &Path,
     refs: &[ModuleRef],
+    reads: &mut FileCache,
 ) -> Result<Vec<IdentityRecord>, ModuleError> {
     let mut records = Vec::with_capacity(refs.len());
     for reference in refs {
-        records.push(identity_record(canonical_root, reference)?);
+        records.push(identity_record(canonical_root, reference, &mut *reads)?);
     }
     Ok(records)
 }
 
 /// H2 auto-loaded varfiles identity, or proven absence.
-pub(crate) fn varfiles_provenance(root: &Path, unit: &str, kind: TofuTaskKind) -> Provenance {
+pub(crate) fn varfiles_provenance(
+    root: &Path,
+    unit: &str,
+    kind: TofuTaskKind,
+    reads: &mut FileCache,
+) -> Provenance {
     if kind == TofuTaskKind::Fmt {
         return Provenance::AbsentProven {
             evidence: "excluded:fmt_binds_tfvars_via_source_tree".to_owned(),
         };
     }
-    let collected = match collect_unit_files(root, unit) {
+    let collected = match reads.unit_files(root, unit) {
         Ok(collected) => collected,
         Err(reason) => return Provenance::Unknown { reason },
     };
@@ -143,7 +154,7 @@ pub(crate) fn varfiles_provenance(root: &Path, unit: &str, kind: TofuTaskKind) -
     wanted.sort();
     let mut files = Vec::with_capacity(wanted.len());
     for path in &wanted {
-        match std::fs::read(root.join(path)) {
+        match reads.read_raw(&root.join(path)) {
             Ok(bytes) => files.push((path.clone(), digest_b3(&bytes))),
             Err(err) => {
                 return Provenance::Unknown {
@@ -159,22 +170,18 @@ pub(crate) fn varfiles_provenance(root: &Path, unit: &str, kind: TofuTaskKind) -
 }
 
 /// Parse module references from the unit's effective configs.
-fn unit_module_refs(root: &Path, wanted: &[String]) -> Result<Vec<ModuleRef>, String> {
+fn unit_module_refs(
+    root: &Path,
+    wanted: &[String],
+    reads: &mut FileCache,
+) -> Result<Vec<ModuleRef>, String> {
     let mut refs = Vec::new();
     for path in wanted {
-        let text = match std::fs::read_to_string(root.join(path)) {
-            Ok(text) => text,
-            Err(err) => return Err(format!("unreadable:{path}:{err}")),
+        let model = match reads.model_for(root, path) {
+            Ok(Some(model)) => model,
+            Ok(None) => continue,
+            Err(reason) => return Err(reason),
         };
-        let name = path.rsplit('/').next().unwrap_or(path);
-        let Some(shape) = config_shape(name) else {
-            continue;
-        };
-        let model = match shape.dialect {
-            Dialect::Native => parse_native(&text),
-            Dialect::Json => parse_json(&text),
-        }
-        .map_err(|err| format!("malformed:{path}:{err}"))?;
         for decl in &model.modules {
             refs.push(ModuleRef {
                 file: path.clone(),
@@ -223,6 +230,7 @@ fn finding_reason(finding: &ModuleFinding) -> String {
 fn identity_record(
     canonical_root: &Path,
     reference: &ModuleRef,
+    reads: &mut FileCache,
 ) -> Result<IdentityRecord, ModuleError> {
     let ModuleSource::Literal(source) = &reference.source else {
         return Err(ModuleError::Unreadable {
@@ -236,7 +244,7 @@ fn identity_record(
         });
     };
     let canonical = canonicalize_side(canonical_root, &lexical)?;
-    let content = digest_target(canonical_root, &canonical)?;
+    let content = digest_target(canonical_root, &canonical, reads)?;
     Ok((
         reference.file.clone(),
         reference.name.clone(),
@@ -247,9 +255,14 @@ fn identity_record(
 }
 
 /// Digest the effective config content of one canonical target dir.
-fn digest_target(canonical_root: &Path, target: &str) -> Result<String, ModuleError> {
-    let walked =
-        collect_unit_files(canonical_root, target).map_err(|reason| walk_error(target, &reason))?;
+fn digest_target(
+    canonical_root: &Path,
+    target: &str,
+    reads: &mut FileCache,
+) -> Result<String, ModuleError> {
+    let walked = reads
+        .unit_files(canonical_root, target)
+        .map_err(|reason| walk_error(target, &reason))?;
     let configs: Vec<String> = walked
         .into_iter()
         .filter(|path| {
@@ -267,7 +280,7 @@ fn digest_target(canonical_root: &Path, target: &str) -> Result<String, ModuleEr
     }
     let mut files = Vec::with_capacity(wanted.len());
     for path in &wanted {
-        match std::fs::read(canonical_root.join(path)) {
+        match reads.read_raw(&canonical_root.join(path)) {
             Ok(bytes) => files.push((path.clone(), digest_b3(&bytes))),
             Err(_) => {
                 return Err(ModuleError::Unreadable {

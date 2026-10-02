@@ -143,6 +143,7 @@ fn checkout_resolution_binds_content_and_absence() {
         &graph,
         &toolchain,
         &platform,
+        &mut velnor_actions_tofu::FileCache::new(),
     )
     .expect("closure");
     assert!(
@@ -174,6 +175,7 @@ fn checkout_resolution_binds_content_and_absence() {
         &graph,
         &toolchain,
         &platform,
+        &mut velnor_actions_tofu::FileCache::new(),
     )
     .expect("closure");
     assert_eq!(digest_of(&closure), digest_of(&again));
@@ -184,6 +186,7 @@ fn checkout_resolution_binds_content_and_absence() {
         &graph,
         &toolchain,
         &platform,
+        &mut velnor_actions_tofu::FileCache::new(),
     )
     .expect("closure");
     assert!(missing.verify_complete().is_err());
@@ -194,6 +197,7 @@ fn checkout_resolution_binds_content_and_absence() {
         &graph,
         &toolchain,
         &platform,
+        &mut velnor_actions_tofu::FileCache::new(),
     )
     .expect("closure");
     assert!(dirty.verify_complete().is_err());
@@ -218,6 +222,7 @@ fn source_edits_flip_and_classes_exclude_explicitly() {
             &graph,
             &toolchain,
             &platform,
+            &mut velnor_actions_tofu::FileCache::new(),
         )
         .expect("closure")
     };
@@ -320,9 +325,16 @@ fn tofu_task(kind: &str, unit: &str) -> ProposedTask {
 fn tofu_dispatch_resolves_closure() {
     let dir = tempfile::TempDir::new().expect("temp root");
     std::fs::write(dir.path().join("main.tf"), "variable \"x\" {}\n").expect("seed");
-    let closure =
-        resolve_closure_at_root(dir.path(), &tofu_task("validate", ""), None, "g", "t", "p")
-            .expect("tofu converts");
+    let closure = resolve_closure_at_root(
+        dir.path(),
+        &tofu_task("validate", ""),
+        None,
+        "g",
+        "t",
+        "p",
+        &mut velnor_actions_tofu::FileCache::new(),
+    )
+    .expect("tofu converts");
     assert!(closure.unknown_inputs().is_empty());
     assert!(matches!(
         closure.inputs.get("source_tree"),
@@ -333,8 +345,16 @@ fn tofu_dispatch_resolves_closure() {
 #[test]
 fn tofu_dispatch_rejects_unknown_kind() {
     let dir = tempfile::TempDir::new().expect("temp root");
-    let err = resolve_closure_at_root(dir.path(), &tofu_task("plan", ""), None, "g", "t", "p")
-        .expect_err("unknown kind");
+    let err = resolve_closure_at_root(
+        dir.path(),
+        &tofu_task("plan", ""),
+        None,
+        "g",
+        "t",
+        "p",
+        &mut velnor_actions_tofu::FileCache::new(),
+    )
+    .expect_err("unknown kind");
     assert!(err.to_string().contains("unknown_kind"), "{err}");
 }
 
@@ -343,6 +363,15 @@ fn closure_dispatch_rejects_unregistered_stack() {
     let dir = tempfile::TempDir::new().expect("temp root");
     let mut task = tofu_task("validate", "");
     task.stack_id = "cobol".to_owned();
-    let err = resolve_closure_at_root(dir.path(), &task, None, "g", "t", "p").expect_err("bogus");
+    let err = resolve_closure_at_root(
+        dir.path(),
+        &task,
+        None,
+        "g",
+        "t",
+        "p",
+        &mut velnor_actions_tofu::FileCache::new(),
+    )
+    .expect_err("bogus");
     assert!(err.to_string().contains("unregistered_stack"), "{err}");
 }

@@ -20,6 +20,7 @@ pub(crate) fn collect_recommendations(
     index: &FileIndex,
     workspaces: &[PlannedWorkspace],
     tool_checks: &[ToolInputCheck],
+    reads: &mut velnor_actions_tofu::FileCache,
 ) -> Vec<String> {
     let mut out = BTreeSet::new();
     for workspace in workspaces {
@@ -38,7 +39,7 @@ pub(crate) fn collect_recommendations(
             out.insert(finding_line(&finding));
         }
     }
-    for line in crate::discover_tofu::tofu_diagnostic_lines(root, config, tool_checks) {
+    for line in crate::discover_tofu::tofu_diagnostic_lines(root, config, tool_checks, reads) {
         out.insert(line);
     }
     if index.contains("mise.toml") || index.contains(".mise.toml") {

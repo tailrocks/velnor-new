@@ -50,6 +50,7 @@ pub(crate) fn tofu_extension_for(
     task: &ProposedTask,
     root: &std::path::Path,
     bundle: &ExtensionBundle,
+    reads: &mut velnor_actions_tofu::FileCache,
 ) -> Result<velnor_actions_tofu::TofuTaskIdentityExtension, ContractError> {
     let normalized = velnor_actions_tofu::root_for_key(&task.identity.unit_key);
     let inputs = velnor_actions_tofu::TofuGroupExtensionInputs {
@@ -60,7 +61,7 @@ pub(crate) fn tofu_extension_for(
         graph_digest: bundle.graph_digest(),
         root: &normalized,
         config_digest: bundle.config_digest(),
-        lock_digest: velnor_actions_tofu::lock_slot_at_root(root, &task.identity.unit_path),
+        lock_digest: velnor_actions_tofu::lock_slot_at_root(root, &task.identity.unit_path, reads),
     };
     velnor_actions_tofu::extension_for_proposal(task, &inputs)
 }

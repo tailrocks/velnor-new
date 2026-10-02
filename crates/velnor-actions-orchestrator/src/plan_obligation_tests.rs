@@ -81,7 +81,13 @@ fn tofu_tasks_derive_the_tofu_envelope() {
         Some(&dir.path),
         None,
     );
-    let (envelope, eligible) = extension_for_task(&task, &dir.path, &bundle).expect("derives");
+    let (envelope, eligible) = extension_for_task(
+        &task,
+        &dir.path,
+        &bundle,
+        &mut velnor_actions_tofu::FileCache::new(),
+    )
+    .expect("derives");
     assert_eq!(envelope.schema, TOFU_EXTENSION_SCHEMA);
     assert!(
         !eligible,
@@ -105,7 +111,13 @@ fn tofu_drift_fails_the_bridge_closed() {
         Some(&dir.path),
         None,
     );
-    let err = extension_for_task(&task, &dir.path, &bundle).expect_err("drift fails");
+    let err = extension_for_task(
+        &task,
+        &dir.path,
+        &bundle,
+        &mut velnor_actions_tofu::FileCache::new(),
+    )
+    .expect_err("drift fails");
     assert!(err.to_string().contains("unknown_driver:cargo"), "{err}");
 }
 
@@ -147,7 +159,13 @@ fn rust_tasks_keep_the_rust_envelope() {
         Some(&dir.path),
         None,
     );
-    let (envelope, eligible) = extension_for_task(&task, &dir.path, &bundle).expect("derives");
+    let (envelope, eligible) = extension_for_task(
+        &task,
+        &dir.path,
+        &bundle,
+        &mut velnor_actions_tofu::FileCache::new(),
+    )
+    .expect("derives");
     assert_eq!(envelope.schema, RUST_EXTENSION_SCHEMA);
     assert!(eligible, "no build script is reuse-eligible");
 }

@@ -201,6 +201,23 @@ pub fn contract_timing(timing: &TaskTiming) -> velnor_actions_contract::TaskTimi
     }
 }
 
+/// Timing breakdown for one measured task duration (PAR-9.2).
+///
+/// The obligation wrapper measures only the task-body wall, so the
+/// measured duration lands in the `task_ms` slot and every other
+/// slot reads zero; unmeasured durations stay absent, never
+/// fabricated. Renders through [`contract_timing`] so scheduler and
+/// contract math agree by construction.
+#[must_use]
+pub fn measured_timing(duration_ms: Option<u64>) -> Option<velnor_actions_contract::TaskTiming> {
+    duration_ms.map(|elapsed| {
+        contract_timing(&TaskTiming {
+            task_ms: elapsed,
+            ..TaskTiming::default()
+        })
+    })
+}
+
 /// Sum one timing breakdown over many tasks, slot by slot.
 #[must_use]
 pub fn aggregate_timings(timings: &[TaskTiming]) -> TaskTiming {

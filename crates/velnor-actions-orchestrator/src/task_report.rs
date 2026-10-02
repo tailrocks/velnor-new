@@ -313,7 +313,7 @@ fn terminal_task_report(
         queue: None,
         partition: None,
         reason: None,
-        timing: None,
+        timing: crate::schedule::measured_timing(duration_ms),
     };
     report.validate()?;
     report.validate_outputs_declared(&entry.declared_outputs)?;

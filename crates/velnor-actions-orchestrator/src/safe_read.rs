@@ -19,6 +19,8 @@ use std::fs;
 use std::io::Read;
 use std::path::Path;
 
+use velnor_actions_tofu::{FileCache, PinnedOutcome};
+
 use crate::OrchestratorError;
 
 /// Maximum bytes read from one repo or event file (8 MiB).
@@ -65,6 +67,31 @@ pub(crate) fn read_repo_file(
         return Err(unsafe_path(&path, "root_escape"));
     }
     Ok(RepoRead::Text(read_capped(&canonical, max_bytes)?))
+}
+
+/// Read one repo-relative file through the shared pinned compartment.
+///
+/// Hits return the first read's outcome; misses run [`read_repo_file`]
+/// and store its outcome (text, absence, or the error's display
+/// string). Callers map the plain outcome onto their own handling;
+/// the secure checks always run on the miss path.
+pub(crate) fn read_repo_file_cached(
+    root: &Path,
+    rel: &str,
+    max_bytes: u64,
+    reads: &mut FileCache,
+) -> PinnedOutcome {
+    let key = root.join(rel);
+    if let Some(hit) = reads.pinned(&key) {
+        return hit;
+    }
+    let outcome = match read_repo_file(root, rel, max_bytes) {
+        Ok(RepoRead::Text(text)) => PinnedOutcome::Text(text),
+        Ok(RepoRead::Absent) => PinnedOutcome::Absent,
+        Err(err) => PinnedOutcome::Unreadable(err.to_string()),
+    };
+    reads.store_pinned(key, outcome.clone());
+    outcome
 }
 
 /// Read one event-payload file outside the checkout, within `max_bytes`.

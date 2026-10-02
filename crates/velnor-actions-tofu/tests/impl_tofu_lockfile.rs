@@ -1,5 +1,6 @@
 //! Root-lock slot, lockfile inspection, and lock snapshot cases.
 use velnor_actions_tofu::TofuTaskKind;
+use velnor_actions_tofu::file_cache::FileCache;
 use velnor_actions_tofu::lockfile::{
     LOCKFILE_CORRUPT, TofuLockSnapshot, inspect_lockfile, lock_digest_at_root, lock_slot_for_kind,
 };
@@ -20,11 +21,13 @@ fn fixture_lock(name: &str) -> Option<String> {
 #[test]
 fn root_lock_slot_binds_content_absence_and_ignorance() -> Outcome {
     let dir = TempDir::create("tofu-lock-slot")?;
-    let absent = lock_digest_at_root(dir.path(), ".");
+    let mut reads = velnor_actions_tofu::FileCache::new();
+    let absent = lock_digest_at_root(dir.path(), ".", &mut reads);
     assert!(matches!(absent, DigestSlot::AbsentProven(_)));
     assert_eq!(absent.state(), velnor_actions_tofu::SlotState::AbsentProven);
     dir.write(".terraform.lock.hcl", "lock-bytes\n")?;
-    let known = lock_digest_at_root(dir.path(), ".");
+    let mut reads = velnor_actions_tofu::FileCache::new();
+    let known = lock_digest_at_root(dir.path(), ".", &mut reads);
     assert!(matches!(known, DigestSlot::Known(_)));
     assert!(
         known
@@ -32,7 +35,7 @@ fn root_lock_slot_binds_content_absence_and_ignorance() -> Outcome {
             .is_some_and(|digest| digest.starts_with("b3-"))
     );
     assert_ne!(known, absent, "content differs from absence");
-    let nested = lock_digest_at_root(dir.path(), "stacks/a");
+    let nested = lock_digest_at_root(dir.path(), "stacks/a", &mut reads);
     assert!(matches!(nested, DigestSlot::AbsentProven(_)));
     assert!(nested.as_known().is_none());
     Ok(())
@@ -44,12 +47,12 @@ fn root_lock_slot_never_collapses_absence_and_ignorance() -> Outcome {
     // A directory where the lock belongs: `read` fails with a
     // non-`NotFound` IO error on every platform, even for root.
     std::fs::create_dir(dir.path().join(".terraform.lock.hcl"))?;
-    let unknown = lock_digest_at_root(dir.path(), ".");
+    let unknown = lock_digest_at_root(dir.path(), ".", &mut FileCache::new());
     assert!(matches!(unknown, DigestSlot::Unknown(_)));
     assert!(unknown.is_unknown());
     assert_eq!(unknown.state(), velnor_actions_tofu::SlotState::Unknown);
     std::fs::remove_dir(dir.path().join(".terraform.lock.hcl"))?;
-    let absent = lock_digest_at_root(dir.path(), ".");
+    let absent = lock_digest_at_root(dir.path(), ".", &mut FileCache::new());
     assert!(!absent.is_unknown(), "absence is proven, never unknown");
     Ok(())
 }
@@ -59,7 +62,7 @@ fn fmt_kind_keeps_the_lockfile_exclusion() -> Outcome {
     let dir = TempDir::create("tofu-lock-fmt")?;
     dir.write(".terraform.lock.hcl", "lock-bytes\n")?;
     for unit in [".", "stacks/a"] {
-        let slot = lock_slot_for_kind(dir.path(), unit, TofuTaskKind::Fmt);
+        let slot = lock_slot_for_kind(dir.path(), unit, TofuTaskKind::Fmt, &mut FileCache::new());
         assert!(
             matches!(slot, DigestSlot::AbsentProven(ref evidence)
                 if evidence == "excluded:kind_does_not_read_lockfile"),
@@ -74,9 +77,10 @@ fn init_and_validate_bind_the_root_lock() -> Outcome {
     let dir = TempDir::create("tofu-lock-kinds")?;
     dir.write("stacks/a/.terraform.lock.hcl", "lock-bytes\n")?;
     for kind in [TofuTaskKind::InitForValidate, TofuTaskKind::Validate] {
-        let slot = lock_slot_for_kind(dir.path(), "stacks/a", kind);
+        let mut reads = velnor_actions_tofu::FileCache::new();
+        let slot = lock_slot_for_kind(dir.path(), "stacks/a", kind, &mut reads);
         assert!(matches!(slot, DigestSlot::Known(_)), "{kind:?}: {slot:?}");
-        let missing = lock_slot_for_kind(dir.path(), "stacks/b", kind);
+        let missing = lock_slot_for_kind(dir.path(), "stacks/b", kind, &mut reads);
         assert!(
             matches!(missing, DigestSlot::AbsentProven(_)),
             "{kind:?}: {missing:?}"

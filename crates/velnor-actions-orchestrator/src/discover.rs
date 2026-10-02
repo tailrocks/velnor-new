@@ -16,11 +16,11 @@ use velnor_actions_rust::{
 use crate::OrchestratorError;
 use crate::clippy_groups::{ClippyMemoryPlan, clippy_memory_groups};
 use crate::discover_index::build_file_index;
-use crate::evidence::profile_for_workspace;
 use crate::inventory::{qualify_workspaces, run_inventories};
 use crate::recommendations::collect_recommendations;
 use crate::safe_read::{MAX_REPO_FILE_BYTES, RepoRead, read_repo_file};
 use crate::toolcheck::{ToolInputCheck, check_tool_inputs};
+use crate::{discover_tofu::qualify_tofu_step, evidence::profile_for_workspace};
 
 /// One workspace with its inventory, profile, and recommendations.
 #[derive(Debug, Clone)]
@@ -98,14 +98,16 @@ pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, 
         candidates.extend(detect(&index));
     }
     let tool_checks = check_tool_inputs(root);
-    let tofu_step = crate::discover_tofu::qualify_tofu_step(root, config, &index, &tool_checks)?;
+    let mut reads = velnor_actions_tofu::FileCache::new();
+    let tofu_step = qualify_tofu_step(root, config, &index, &tool_checks, &mut reads)?;
     candidates.extend(tofu_step.candidates);
     let projects = detected_projects(&candidates)?;
     check_duplicates(&projects).map_err(|err| OrchestratorError::Detection {
         problem: err.to_string(),
     })?;
     let initial = apply_stack_ignores(projects, &config.stacks.ignore);
-    let ((outcomes, inventories), tofu_units) = run_inventories(root, &candidates, index.files())?;
+    let ((outcomes, inventories), tofu_units) =
+        run_inventories(root, &candidates, index.files(), &mut reads)?;
     let statuses = check_candidate_outcomes(initial, &outcomes).map_err(|err| {
         OrchestratorError::Detection {
             problem: err.to_string(),
@@ -115,7 +117,8 @@ pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, 
     qualify_workspaces(root, &workspaces)?;
     let (proposals, fallbacks) = derive_all(config, &index, &workspaces, &statuses)?;
     let clippy_memory = clippy_memory_groups(&proposals);
-    let recommendations = collect_recommendations(root, config, &index, &workspaces, &tool_checks);
+    let recommendations =
+        collect_recommendations(root, config, &index, &workspaces, &tool_checks, &mut reads);
     let (consumer_manifest_json, consumer_manifest_stand_in) = consumer_manifest_text(root)?;
     Ok(Discovery {
         statuses,

@@ -114,9 +114,10 @@ fn extension_for_task(
     task: &ProposedTask,
     root: &Path,
     bundle: &ExtensionBundle,
+    reads: &mut velnor_actions_tofu::FileCache,
 ) -> Result<(StackExtension, bool), OrchestratorError> {
     if Stack::from_id(&task.stack_id) == Some(Stack::Tofu) {
-        let ext = crate::internal_plan::tofu_extension_for(task, root, bundle)
+        let ext = crate::internal_plan::tofu_extension_for(task, root, bundle, reads)
             .map_err(internal_contract)?;
         return Ok((ext.to_stack_extension(), ext.reuse_eligible().is_ok()));
     }
@@ -134,6 +135,7 @@ fn planned_identity(
     argv: &[String],
     toolchain: &str,
     platform_id: &str,
+    reads: &mut velnor_actions_tofu::FileCache,
 ) -> Result<PlannedIdentity, OrchestratorError> {
     let task = inputs.task;
     let manifest = task.identity.unit_path.clone();
@@ -145,7 +147,7 @@ fn planned_identity(
         Some(inputs.root),
         nextest_config.as_deref(),
     );
-    let (extension, _) = extension_for_task(task, inputs.root, &bundle)?;
+    let (extension, _) = extension_for_task(task, inputs.root, &bundle, reads)?;
     let closure = resolve_closure_at_root(
         inputs.root,
         task,
@@ -153,6 +155,7 @@ fn planned_identity(
         bundle.graph_digest(),
         toolchain,
         platform_id,
+        &mut *reads,
     )
     .map_err(internal_contract)?;
     let closure_digest = canonical_digest(&closure).map_err(internal_contract)?;
@@ -181,14 +184,15 @@ fn planned_identity(
 /// classification.
 pub(crate) fn plan_group(
     inputs: &GroupInputs<'_>,
+    reads: &mut velnor_actions_tofu::FileCache,
 ) -> Result<(PlanObligation, MatrixEntry), OrchestratorError> {
     let task = inputs.task;
     let _ = inputs.lane;
     let toolchain = toolchain_id(task, inputs.catalog).map_err(internal_contract)?;
     let argv = task_argv(task, inputs.catalog)?;
     let platform_id = platform_id_for_group(inputs.label, task).map_err(internal_contract)?;
-    let identity = planned_identity(inputs, &argv, &toolchain, &platform_id)?;
-    let (_, reuse_eligible) = extension_for_task(task, inputs.root, &identity.bundle)?;
+    let identity = planned_identity(inputs, &argv, &toolchain, &platform_id, &mut *reads)?;
+    let (_, reuse_eligible) = extension_for_task(task, inputs.root, &identity.bundle, reads)?;
     let input_digest = identity.input_digest;
     let closure_digest = identity.closure_digest;
     let reuse = if inputs.changed {
