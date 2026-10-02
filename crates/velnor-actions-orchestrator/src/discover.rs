@@ -115,7 +115,7 @@ pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, 
     qualify_workspaces(root, &workspaces)?;
     let (proposals, fallbacks) = derive_all(config, &index, &workspaces, &statuses)?;
     let clippy_memory = clippy_memory_groups(&proposals);
-    let recommendations = collect_recommendations(&index, &workspaces, &tool_checks);
+    let recommendations = collect_recommendations(root, config, &index, &workspaces, &tool_checks);
     let (consumer_manifest_json, consumer_manifest_stand_in) = consumer_manifest_text(root)?;
     Ok(Discovery {
         statuses,

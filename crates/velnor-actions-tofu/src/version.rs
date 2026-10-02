@@ -64,6 +64,52 @@ pub fn is_terraform_only(constraint: &str) -> bool {
     !admits_opentofu(constraint)
 }
 
+/// Parse one toolchain version triple (`1.13.1`, `v`-prefixed, padded).
+///
+/// Strict dotted numerics only; prerelease/build metadata, empty
+/// parts, and extra parts abstain to `None` (no toolchain claim).
+#[must_use]
+pub fn toolchain_triple(text: &str) -> Option<(u32, u32, u32)> {
+    parse_triple(text.strip_prefix('v').unwrap_or(text))
+}
+
+/// True when `constraint` admits the exact `toolchain` triple.
+///
+/// Every requirement must hold at the toolchain: exacts equal it,
+/// bounds compare, `~>` spans `[triple, upper)`. Empty and
+/// unparseable constraints admit (abstain, not fail); `!=` never
+/// excludes, matching [`admits_opentofu`].
+#[must_use]
+pub fn admits_version(constraint: &str, toolchain: (u32, u32, u32)) -> bool {
+    for requirement in constraint.split(',') {
+        let (operator, version) = split_operator(requirement.trim());
+        let Some(triple) = parse_triple(version) else {
+            return true;
+        };
+        if !requirement_holds(operator, version, triple, toolchain) {
+            return false;
+        }
+    }
+    true
+}
+
+/// True when one operator-plus-triple requirement holds at `toolchain`.
+///
+/// Unknown operators abstain toward admit (never fail closed on a
+/// spelling this evaluator does not understand).
+fn requirement_holds(operator: &str, version: &str, triple: Triple, toolchain: Triple) -> bool {
+    match operator {
+        "=" | "==" | "" => toolchain == triple,
+        "<" => toolchain < triple,
+        "<=" => toolchain <= triple,
+        ">" => toolchain > triple,
+        ">=" => toolchain >= triple,
+        "~>" => toolchain >= triple && toolchain < pessimistic_upper(triple, version),
+        // `!=` never excludes a version; unknown operators abstain.
+        _ => true,
+    }
+}
+
 /// Split `requirement` into operator and version text.
 fn split_operator(requirement: &str) -> (&str, &str) {
     for operator in ["==", "!=", ">=", "<=", "~>", ">", "<", "="] {
