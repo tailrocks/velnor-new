@@ -24,6 +24,36 @@ fail=0
 note() { echo "$1"; }
 die() { echo "FAIL: $1"; fail=1; }
 
+# Portable link-preserving recursive copy. Plain `cp -r` dereferences
+# symlinks (BSD: -r is -RL; GNU: -r on links is non-portable), which
+# materialized generated CLAUDE.md symlinks as regular files. `-RP`
+# is POSIX and pins link-as-link on both BSD and GNU cp.
+copy_tree() {
+  cp -RP "$1" "$2"
+}
+
+# Deterministic content+link pin of a tree: sha256 per regular file
+# (sorted) plus one `link <path> -> <target>` line per symlink (sorted).
+# `find -type f` alone skips links, leaving targets unpinned.
+hash_tree() {
+  (cd "$1" && {
+    find . -type f | sort | xargs sha256sum
+    find . -type l | sort | while IFS= read -r link; do
+      printf 'link %s -> %s\n' "$link" "$(readlink "$link")"
+    done
+  } >"$2")
+}
+
+# Deterministic symlink identity of a tree, one `<path> -> <target>`
+# line per link, sorted. `diff -r` follows links on both BSD and GNU,
+# so a link-vs-materialized-file pair with equal bytes compares silent
+# (proven on BSD); check mode diffs this listing explicitly.
+link_identity() {
+  (cd "$1" && find . -type l | sort | while IFS= read -r link; do
+    printf '%s -> %s\n' "$link" "$(readlink "$link")"
+  done)
+}
+
 build_bin() {
   (cd "$ROOT" && cargo build --locked -p velnor-actions-cli) >/dev/null 2>&1 \
     || { echo "FATAL: cargo build failed"; exit 2; }
@@ -35,7 +65,7 @@ setup_case() {
   repo="$WORK/$case"
   rm -rf "$repo"
   mkdir -p "$repo"
-  cp -r "$ROOT/fixtures/$case/." "$repo/"
+  copy_tree "$ROOT/fixtures/$case/." "$repo/"
   if [ ! -f "$repo/.velnor/config.toml" ]; then
     mkdir -p "$repo/.velnor"
     printf 'schema = 1\n\n[workflow]\ndefault_branch = "main"\n' > "$repo/.velnor/config.toml"
@@ -61,7 +91,7 @@ capture_case() {
   rm "$out/plan.raw.txt"
   if [ "$(cat "$out/plan.exit")" = "0" ]; then
     (cd "$repo" && "$BIN" generate --output-dir "$preview" >"$out/generate.stdout.txt" 2>"$out/generate.stderr.txt"; echo "$?" >"$out/generate.exit")
-    (cd "$preview" && find . -type f | sort | xargs sha256sum >"$out/tree.sha256")
+    hash_tree "$preview" "$out/tree.sha256"
   fi
 }
 
@@ -82,7 +112,7 @@ capture_dogfood() {
     else
       echo "DIFFERS" >"$out/dogfood.verdict"
     fi
-    (cd "$preview" && find . -type f | sort | xargs sha256sum >"$out/tree.sha256")
+    hash_tree "$preview" "$out/tree.sha256"
   fi
 }
 
@@ -106,8 +136,8 @@ note "captured dogfood (plan exit $(cat "$stage/dogfood/plan.exit"), tree $(cat 
 if [ "$MODE" = "capture" ]; then
   rm -rf "$GOLDEN_DIR/cases"
   mkdir -p "$GOLDEN_DIR"
-  cp -r "$stage" "$GOLDEN_DIR/cases"
-  (cd "$GOLDEN_DIR/cases" && find . -type f | sort | xargs sha256sum >"$GOLDEN_DIR/MANIFEST.sha256")
+  copy_tree "$stage" "$GOLDEN_DIR/cases"
+  hash_tree "$GOLDEN_DIR/cases" "$GOLDEN_DIR/MANIFEST.sha256"
   note "wrote $GOLDEN_DIR/cases"
   exit 0
 fi
@@ -120,6 +150,11 @@ for case in $FIXTURES dogfood; do
   if ! diff -r "$GOLDEN_DIR/cases/$case" "$stage/$case" >"$tmp/$case.diff" 2>&1; then
     die "golden mismatch: $case (see $tmp/$case.diff)"
     head -20 "$tmp/$case.diff"
+  elif ! link_identity "$GOLDEN_DIR/cases/$case" >"$tmp/$case.golden.links" 2>&1 \
+    || ! link_identity "$stage/$case" >"$tmp/$case.stage.links" 2>&1 \
+    || ! diff "$tmp/$case.golden.links" "$tmp/$case.stage.links" >"$tmp/$case.links.diff" 2>&1; then
+    die "golden symlink mismatch: $case (see $tmp/$case.links.diff)"
+    head -20 "$tmp/$case.links.diff"
   else
     note "match: $case"
   fi

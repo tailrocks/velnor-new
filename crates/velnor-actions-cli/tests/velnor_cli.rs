@@ -29,6 +29,8 @@ mod impl_cli_verify_local;
 mod impl_repo_deps;
 #[path = "impl_repo_freshness.rs"]
 mod impl_repo_freshness;
+#[path = "impl_repo_goldens.rs"]
+mod impl_repo_goldens;
 #[path = "impl_repo_policy.rs"]
 mod impl_repo_policy;
 #[path = "impl_repo_quality.rs"]
