@@ -62,10 +62,11 @@ direction: orchestrator → {contract, rust, tofu, mise, actionlint,
 renderer}; all adapters → contract only. Tofu owns domain semantics; Mise
 owns execution; renderer owns representation; orchestrator composes.
 
-Rust constraints (spec §3 + hard invariants 10–12) hold throughout:
-refactor-first with golden parity, KISS/YAGNI, `unsafe` forbidden, no
-product `unwrap`/`expect`/`panic!`, committed `Cargo.lock`, exact pins,
-400/150/80 line gates, `deny_unknown_fields` strictness.
+Rust constraints (spec §3 + hard invariants 10–12) hold throughout,
+detailed in `rust-quality-contract.md`: refactor-first with golden parity,
+KISS/YAGNI, `unsafe` forbidden, no product `unwrap`/`expect`/`panic!`,
+committed `Cargo.lock`, exact pins, 400/150/80 line gates,
+`deny_unknown_fields` strictness.
 
 ### 3.1 Seam resolution: fn-pointers + dispatch arms, no trait
 
@@ -169,7 +170,8 @@ per root per attempt); one fmt invocation per non-overlapping scope.
 ### 4.2 Security MUSTs H1–H6 + M1–M6 (WS6)
 
 - **H1 env allowlist (MUST):** default-deny per-purpose env for tofu
-  children. Denylist at minimum: `TF_LOG`/`TF_LOG_PATH`, `TF_PLUGIN_CACHE_DIR`,
+  children (ambient inheritance; §4.4 approves generated values). Denylist
+  at minimum: `TF_LOG`/`TF_LOG_PATH`, `TF_PLUGIN_CACHE_DIR`,
   `TF_DATA_DIR`, `TF_WORKSPACE`, `TF_CLI_CONFIG_FILE`, `TF_REGISTRY_*`,
   `CHECKPOINT_*`, `GITHUB_*`/`GH_TOKEN`, `OP_*`/`OP_SERVICE_ACCOUNT_TOKEN`,
   cloud families (`AWS_*`, `GOOGLE_*`, `ARM_*`, `HCLOUD_*`, …),
@@ -229,6 +231,8 @@ mirror; placeholder digest never proves the new tool (P03-8b).
 
 ### 4.4 Mise/cache/perf adoption (WS4 §§7–12)
 
+Ownership: `rust-quality-contract.md` owns the Rust quality rules; §§4.4–4.5
+state tofu adoption deltas by reference, never restating them.
 Per-role tools: pure-tofu plan = opentofu + actionlint/shellcheck/zizmor
 (no Rust/MBX/Nextest/components/Cargo fetch); `tofu-<root>` jobs = opentofu
 only + provider-cache restore; actionlint/required/validators unchanged;
@@ -239,13 +243,18 @@ Provider cache: closed layer `tofu-providers`, key
 only (job-private `$RUNNER_TEMP/velnor/tofu-cache/<slug>`), restore before
 init; per-root job saves only its own root-scoped key (plan never inits so
 never saves); push-gated trusted save; restore still faces readonly init;
-hit MUST still run init+validate (T23). Env: approved
+hit MUST still run init+validate (T23). Compiler reuse stays under
+`rust-quality-contract.md` §3 (MBX profiles); this layer caches provider
+artifacts only. Env: approved
 `TF_IN_AUTOMATION=1`, `TF_INPUT=0`, per-root `TF_DATA_DIR`, generated
 `TF_CLI_CONFIG_FILE`, `TF_PLUGIN_CACHE_DIR` + isolation quartet +
 install-disable; deny `TF_CLI_ARGS*`, `TF_VAR_*`, `TF_TOKEN_*`/cloud creds,
 `TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE`, `TF_WORKSPACE`, `TF_LOG*`,
 `TF_CHECKPOINT*`/`CHECKPOINT_*`, ambient config/data/cache overrides,
-`TF_REGISTRY_*`. Deterministic efficiency gates 1–7 + measurement plan
+`TF_REGISTRY_*`. H1's denylist governs ambient inheritance; the approved
+names above are values the generator sets explicitly (per-root `TF_DATA_DIR`,
+job-private `TF_PLUGIN_CACHE_DIR`, generated `TF_CLI_CONFIG_FILE`).
+Deterministic efficiency gates 1–7 + measurement plan
 (budgets 120 s warm critical path / 10 s warm plan; ≥3 cold + ≥5 warm
 samples; matrix incl. corrupt-cache/mixed/fork; 1/10/100-root synthetic
 scaling) are adopted as stated.
@@ -254,7 +263,8 @@ scaling) are adopted as stated.
 
 One job per validation root (`tofu-<root>`, display `OpenTofu — <root>`);
 fmt/init/validate as same-job ordered steps (init→validate `Data` edge);
-fmt once per scope, init once per root per attempt; `MatrixEntry::derive("tofu", …)`;
+tofu fmt once per scope, init once per root per attempt;
+`MatrixEntry::derive("tofu", …)`;
 `required.needs` ⊇ {plan, tofu jobs, lint}. Reports flow through
 `write-task-report-v1` → exact-name fetch → `merge-v1` unchanged; reuse
 disabled for tofu (`ReusedFromTaskCache` already fails closed); docs-only =
@@ -263,7 +273,9 @@ never passes. No second verdict path. Validators: staged actionlint→
 shellcheck→zizmor→shellcheck-`run:`-bodies; tofu steps as single-line
 scalars; no `setup-opentofu` (Mise only). Read-only `plan`/`generate`
 proven by before/after snapshots (no `.terraform`/lock/tool/source mutation,
-no init/network during discovery).
+no init/network during discovery). Verification detail is owned by
+`rust-quality-contract.md` §9; per-root jobs and tofu step order are the
+adoption delta.
 
 ### 4.6 E2E qualification (WS7 Q0–Q7)
 

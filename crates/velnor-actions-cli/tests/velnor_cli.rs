@@ -31,6 +31,8 @@ mod impl_repo_deps;
 mod impl_repo_freshness;
 #[path = "impl_repo_policy.rs"]
 mod impl_repo_policy;
+#[path = "impl_repo_quality.rs"]
+mod impl_repo_quality;
 #[path = "impl_repo_shape.rs"]
 mod impl_repo_shape;
 #[path = "impl_repo_strictness.rs"]

@@ -40,6 +40,7 @@ crates/
   velnor-actions-workflow-renderer/
   velnor-actions-orchestrator/
   velnor-actions-cli/
+  velnor-actions-tofu/
 # Optional, repository-owned, read-only Velnor inputs:
 rust-toolchain.toml
 mise.toml
@@ -47,7 +48,7 @@ mise.lock
 ```
 
 All first-party Rust packages MUST be under `crates/`. The root manifest MUST
-be a virtual workspace with exactly the seven product package names listed in
+be a virtual workspace with exactly the eight product package names listed in
 the table below. Cargo metadata is authoritative for package membership and
 dependency relationships. V1 does not add a custom linter to reject package
 renames or validate the architecture dependency matrix; those decisions are reviewed only through the §5
@@ -62,7 +63,7 @@ declare binary `velnor-actions`, the only target name without the
 package-purpose suffix. Non-Rust directories MAY remain in their own
 conventional locations.
 
-The seven V1 crates have fixed boundaries. Every V1 Cargo package MUST use the
+The eight V1 crates have fixed boundaries. Every V1 Cargo package MUST use the
 `velnor-actions-<purpose>` namespace. Generic names such as `velnor-model`,
 `velnor-core`, `velnor-rust`, `velnor-common`, and `velnor-utils` are forbidden. The
 `velnor-actions` binary is owned by package `velnor-actions-cli`. Future
@@ -78,6 +79,16 @@ independent of other stack crates.
 | `velnor-actions-workflow-renderer` | Generic GitHub Actions workflow YAML from typed workflow IR | Rust/Cargo, Mise syntax, repository scanning, subprocesses, stack policy |
 | `velnor-actions-orchestrator` | Composition, obligation selection, cache evidence, scheduling, generation coordination, typed process-request coordination | Parsing Cargo/Mise files, direct YAML templates, CLI parsing, OS process details, process creation |
 | `velnor-actions-cli` | Clap parser, typed dispatch, concise deterministic human plan renderer, generation output, and exit-code formatting; emits binary `velnor-actions` | Orchestration algorithms or Rust, Mise, and renderer domain rules |
+| `velnor-actions-tofu` | All OpenToFu/HCL discovery, root/module interpretation, task payloads, affected selection, identity extensions | Rust/Cargo, Mise execution, workflow YAML, process details, non-tofu stacks |
+
+Hard invariants 10–12 (spec §3.3) are normative throughout. 10 — One owner per
+domain rule per the table above; extend an existing owner before making a new
+module, and fix cycles through ownership changes. 11 — Never duplicate domain
+knowledge: on a second use move the rule to its owner, switch every caller,
+verify identical behavior, then add the new caller; record unconverted
+instances with reasons. 12 — No domain logic in rendering or transport:
+rendering, dispatch, display, and transport layers render or execute owners'
+decisions; boundary safety validation MUST NOT duplicate domain planning.
 
 The authority order MUST be:
 
@@ -106,7 +117,7 @@ snapshot is Rust 1.98.1 with MSRV 1.98. Never use a placeholder MSRV.
 
 ```toml
 [workspace]
-members = ["crates/velnor-actions-contract", "crates/velnor-actions-rust", "crates/velnor-actions-mise", "crates/velnor-actions-actionlint", "crates/velnor-actions-workflow-renderer", "crates/velnor-actions-orchestrator", "crates/velnor-actions-cli"]
+members = ["crates/velnor-actions-contract", "crates/velnor-actions-rust", "crates/velnor-actions-mise", "crates/velnor-actions-actionlint", "crates/velnor-actions-workflow-renderer", "crates/velnor-actions-orchestrator", "crates/velnor-actions-cli", "crates/velnor-actions-tofu"]
 resolver = "3"
 
 [workspace.package]
@@ -193,35 +204,7 @@ profiles, and no second cache may archive its store.
 
 ## 4. Tests and source layout
 
-The preferred test layout keeps test implementations out of production files.
-For `parser.rs`:
-
-```rust
-#[cfg(test)]
-mod tests;
-```
-
-The implementation SHOULD be in `src/parser/tests.rs`; tests for `src/lib.rs`
-SHOULD be in `src/tests.rs`. V1 does not enforce this layout with a custom Rust
-source parser or test-placement linter. Alint cannot inspect Rust syntax, so it
-MUST NOT be described as enforcing these rules. Strict test-layout enforcement
-is deferred until a separate, approved mechanism is selected. Generated source
-MUST still be explicitly classified with an owner and verification rule; it
-MUST NOT become an unreviewed escape hatch.
-
-Integration tests SHOULD use a small declared entry point, such as
-`tests/integration.rs`, with related cases in `tests/cases/`. Do not create one
-Cargo test binary per case file. Doctests MUST run in a separate gate because
-Nextest does not execute them. Every Velnor product package MUST have at least
-one registered unit or integration test; V1 has no empty-suite exception. The
-generated Nextest task MUST pass `--no-tests fail`, so a selected feature
-configuration that discovers zero tests fails with Nextest's documented
-no-tests exit code.
-
-Tests MUST assert observable behavior, boundaries, and failure paths using
-independent fixtures. They MUST NOT merely call the same helper used by the
-implementation and compare its output with itself. Snapshot changes require
-review. `proptest` SHOULD cover parsers, planners, and invariants.
+Detail lives in [rust-test-policy.md](rust-test-policy.md).
 
 ## 5. Size and architecture limits
 
@@ -245,6 +228,13 @@ rebuild reduction. Pure model code MUST NOT depend on UI, database, HTTP,
 platform, or process crates. Do not create wrapper or `utils` crates only to
 meet a count. The allowed dependency directions are architectural requirements
 reviewed from Cargo metadata through this mechanism allowlist only: (1) a `cargo-metadata` edge test over the manifest graph, (2) an exact workspace member-set test, (3) literal-substring ownership tests over declared paths, (4) sizes via generic Alint line-count rules plus Clippy `too_many_lines`, (5) human-reviewed insta snapshots. Custom linters are forbidden; Alint stays generic-only.
+
+Timeless principles (spec §3.2): separation of concerns per §1,
+`pub(crate)` by default, one authoritative implementation, KISS/YAGNI (no
+plugin framework, second DAG, or speculative third stack), traits only for
+demonstrated interchangeable capabilities, fail-early validation at input
+boundaries, and disciplined open/closed (generalize the demonstrated
+Rust-plus-OpenToFu boundary, not every internal subsystem).
 
 ## 6. Compiler, Clippy, and formatting policy
 
@@ -308,30 +298,29 @@ reviewed crate, and keep `forbid(unsafe_code)` in every safe crate.
 `rustfmt.toml` MUST contain `edition = "2024"`, `style_edition = "2024"`,
 and `newline_style = "Unix"`. Formatting MUST be checked with
 `cargo fmt --all -- --check` through Mise. Unstable formatter options are not
-part of this baseline.
+part of this baseline. This is cargo-fmt via rustfmt, distinct from `tofu fmt`
+in `opentofu-contract.md` §4.5.
+
+Rust idiom: `Result<T, E>` and `?` in the existing `thiserror` style with
+contextual path/task/phase information; enums with validated constructors or
+`TryFrom` for invariants; immutable borrows and owned values first (`Box`
+only for needed indirection, `Arc` only for genuinely shared ownership);
+small public APIs with documented contracts; `cfg` and OS/process detail
+stays in infrastructure owners.
 
 ## 7. Dependencies and supply chain
 
-Dependencies MUST have a concrete responsibility and narrow features. The
-initial set MAY include `serde`, `serde_json`, `toml`, `cargo_metadata`,
-`globset`, `blake3`, `clap` (`derive`), `thiserror`, `anyhow`, and `tracing`.
-Development dependencies MAY include `tempfile`, `proptest`, and `insta`.
-Tokio requires a demonstrated asynchronous-I/O need. Prefer the standard
-library for one-use facilities. Shared versions belong in
-`[workspace.dependencies]`; members MUST opt in explicitly.
-
-`deny.toml` MUST reject yanked/unsound advisories, unknown registries, moving
-Git sources, and wildcard dependency versions. It MUST define the reviewed
-license allowlist. `cargo deny --locked check` and `cargo machete` MUST run in
-CI. Duplicate versions MAY warn initially and MUST be reviewed. Cargo-vet MAY
-be added when dependency audit provenance justifies it.
+Detail lives in [rust-dependency-policy.md](rust-dependency-policy.md). A
+mature HCL parser MUST be researched and qualified for maintenance, license,
+MSRV, behavior, and build cost; do not hand-write a regex parser for HCL.
 
 ## 8. Repository policy checks
 
 Velnor's own `.velnor/config.toml` MUST set
 `workflow.policy = "velnor-repository-v1"`, which emits a dedicated
 `alint` job. The job MUST use the configured Alint action, defaulting to the
-full-SHA pin:
+full-SHA pin (repository-structure alint, distinct
+from workflow-syntax actionlint):
 
 ```yaml
 - uses: asamarts/alint@9f9d34ba0eae3888299b9e570f43338b0e7f2cdb # v0.16.1
@@ -350,6 +339,12 @@ exceptions require review and negative fixtures where the selected tool
 supports them.
 
 ## 9. Required verification
+
+If structure blocks a clean change, land the smallest
+behavior-preserving refactor first (verified with golden parity and
+committed), preserving error outcomes, ordering, defaults, serialization,
+IDs, hashes, and process behavior; the behavior change gets its own commit
+and tests. A red baseline is reproduced and classified first, never waived.
 
 Mise MUST expose these focused task templates; each invocation MUST target one
 package/configuration and preserve the real exit status. `dependencies` is
