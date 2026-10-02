@@ -1,7 +1,7 @@
 # CI performance completion ledger
 
-Status: **OPEN**. Snapshot: 2026-10-03; recorded integration HEAD
-`2ce93d53e882aa98e01d79105b1bf54fe0b1be8a` plus concurrent uncommitted work.
+Status: **OPEN**. Snapshot: 2026-10-03; recorded PR/source HEAD
+`6209c06d87c2f7e41ff162b77cc51e0c99989eec` plus concurrent uncommitted work.
 No final source qualification, fresh hosted sequence, runtime promotion or consumer
 rollout is established by this ledger. Refresh identities after freezing the head.
 
@@ -21,6 +21,59 @@ remains OPEN until its applicable behavior and distribution gates pass.
 Unknown metrics remain `null`/unknown; historical green CI and merge waivers are
 separate evidence. No repository currently receives `PERF_VERIFIED` here.
 
+## Current observed blockers
+
+The current recorded commit fixes Git branch grammar and pinned-gate issues; it
+is not the complete remediation source. Its [PR CI run 37075875245](https://github.com/tailrocks/velnor-new/actions/runs/37075875245)
+completed **failure**, with API head SHA
+`6209c06d87c2f7e41ff162b77cc51e0c99989eec`. The metadata below was read on
+2026-10-03; it is not a full raw-log performance audit of that run.
+
+| Job | Actual result / failing step | Exact job |
+|---|---|---|
+| Plan | success | [111065538672](https://github.com/tailrocks/velnor-new/actions/runs/37075875245/job/111065538672) |
+| Rust / orchestrator | failure / Clippy | [111065889616](https://github.com/tailrocks/velnor-new/actions/runs/37075875245/job/111065889616) |
+| Rust / CLI | failure / Unit and integration tests | [111065889728](https://github.com/tailrocks/velnor-new/actions/runs/37075875245/job/111065889728) |
+| Required | failure / Merge reports | [111066274947](https://github.com/tailrocks/velnor-new/actions/runs/37075875245/job/111066274947) |
+| Publish baseline | skipped | [111066349950](https://github.com/tailrocks/velnor-new/actions/runs/37075875245/job/111066349950) |
+
+Current implementation still requires an integrated reviewed source freeze and
+all repository gates; no successful default-branch qualification is established.
+Owned tool source publication, native hosted artifact qualification, immutable
+publication/attestation and source-bound generator runtime promotion remain
+uncompleted dependencies. No qualified runtime has been distributed to the
+consumer waves, and no reviewed generated rollout or resulting default branch
+has been performance-qualified. Cold/warm/third and changed/negative hosted
+experiments, supported compiler/download/cache/queue telemetry and final
+obligation equivalence remain pending for all47.
+
+The [owned publication record](ci-performance-owned-tool-publication.md) and
+local `source-receipt.json` records distinguish source staging from distribution:
+
+| Source receipt | Local source identity | Receipt state / limitation |
+|---|---|---|
+| Mise | `dbbf5b0d8f9c7edc5d0111e17ebaf781ecc97a96`, tree `d5eefb0470da013d4f524555df763f16a0faf22d` | DCO signed-off; no `gpgsig` commit header. `behavioral_qualification`, `publication`, and `signed_build_provenance` are `null`; source publication remains pending |
+| Earlier MBX action | `06f353d41002af758d27490164f53c82e2165637`, tree `810f992dc95bd1efe3db25e925d7b2b727c1bc27` | DCO signed-off; no `gpgsig` commit header. Receipt qualification/publication/provenance fields are `null`. Source owner withdrew this candidate after a protected-ordering defect; replacement source/bundle review is pending |
+
+Raw local Git commit headers and DCO trailers were checked at the receipt SHAs.
+DCO signoff does not establish a cryptographic commit signature or signed build
+provenance. A local SHA is not asserted reachable in an official upstream or
+owned-source remote. Active source-reference and immutable-release implementation
+does not close publication, protection or hosted qualification gates.
+
+Generator native source-population review binds private
+`generator-source-map/source-map.json` SHA256
+`967dccf2a7d9bd9fd72192293da7798c4f4b152f2e0fef451a2e2a592ffcc988`.
+Independent reviewer `closure_inputs/generator_map_review` verified 124 immutable
+source references, five full tree inventories and exact workflow events/job/step
+dependencies. Each W0/current attempt maps 47 Rust phases plus 11 control phases,
+with 15 executed raw job logs and one unexecuted baseline job; unavailable logs
+are zero for these bounded attempts. The current attempt actually checked out
+integration `9927a4907c1b3aeb4cc2043df823c62cdcd80935`, whose tree equals the
+recorded PR head tree. This closes only the prior native source-population gap;
+failed jobs, skipped baseline, whole runtime-audit limits and all performance
+gates remain distinct and unqualified.
+
 ## C01–C09 traceability
 
 Source abbreviations: `R` = `crates/velnor-actions-workflow-renderer/src/`;
@@ -33,7 +86,7 @@ not immutable qualification identities.
 | C01 canonical transport | I/S/L: `R/cache_snapshot.rs`, `cache_p08.rs`, shared roots; actual bundled toolkit execution in [hidden-version proof](ci-performance-cache-version.md) | tools_cache, repair_snapshots | Regenerate exact head; verify identical resolved ordered payload/compression/version on hosted restore/save; new namespace, isolated Mise hooks/config |
 | C02 complete Rust tools | I/S/L: `O/rust_tools_prepare.rs`, bootstrap/proxy guards; [local closure](ci-performance-rust-tool-closure.md) | tools_cache, rust_profile, rust_health | Complete damaged toolchain/component/target detection; restore before execution; fresh Linux/macOS closure and repaired snapshot persistence; minimum actual components/targets |
 | C03 MBX immutable domains | I/S: `O/mbx_domain.rs`, `attach.rs`; local owner-API development remains separate from published integration | mbx, upstream_delta, upstream_action | Source-qualified supported MBX/action distribution; bounded useful immutable union snapshots, cohorts, reversed writers/retry and late validation persistence |
-| C04 single verified MBX | I/S: isolated action executable-path/digest interface prototype; current official pin alone does not provide that interface | mbx, upstream_action | Publish/consume reviewed supported exact integration; prove one Mise installation, no fallback download; action and task compiler/homes agree |
+| C04 single verified MBX | I/S: isolated action executable-path/digest interface development; earlier staged action candidate withdrawn, replacement review pending; current official pin alone does not provide that interface | mbx, upstream_action | Publish/consume reviewed supported exact integration; prove one Mise installation, no fallback download; action and task compiler/homes agree |
 | C05 workspace state | I/S: upstream MBX comparison/retention development; owner-reported local experiments need an independently inspected immutable record | mbx, transport_source, build_dir_scope | Immutable resolved target/intermediate-build roots; supported relocation/configuration history; visible bypass accounting, no raw target cache or spoofed mtimes |
 | C06 useful source exports | I/S/L: `O/source_prep.rs`, behavior fixtures; [source closure](ci-performance-source-closure.md), [observer](ci-performance-snapshot-observer.md) | tools_cache, source_closure, repair_snapshots | Selected package/feature/target closure remains conservative complete locked workspace; qualify narrowing or verified contract decision; actual fill/export and source unpack-versus-archive costs |
 | C07 early selection | I/S: `O/analysis_*`, baseline/lineage, job predicates; `U/manifest_graph.rs`, `semantic_inputs.rs`; [correctness review](ci-performance-correctness-review.md) | selection, closure_inputs, early_plan, gate | Authenticate persisted inventory; Plan and freshness consume it before Cargo setup; both exact graphs; carried proof/rerun lineage; hosted covered path without Rust/MBX setup |
@@ -89,7 +142,7 @@ isolated namespaces and validation flows; never benchmark production publication
 
 | Gate | Evidence / current limitation | Owner / next action |
 |---|---|---|
-| W0 all47 full evidence | [Scope audit](ci-performance-scope-audit.md), wave audits below, [durable archive](ci-performance-evidence-archive.md); all46 immutable consumer audits independently closed: Wave A eight, Wave B 33, Wave C five; full relevant diffs/fallbacks, representative executable raw logs, bounded attempts/jobs and exact historical/nonexecution limits retained; all47 performance statuses remain INCOMPLETE | Audit owners / retain generator audit limitations separately; refresh actual rollout source identities and qualify C01–C09/T01–T26; private wave closure records bind frozen collection SHAs, not later live heads |
+| W0 bounded audit closure | [Scope audit](ci-performance-scope-audit.md), wave audits below, [durable archive](ci-performance-evidence-archive.md); all46 immutable consumer audits independently closed: Wave A eight, Wave B 33, Wave C five; full relevant diffs/fallbacks, representative executable raw logs, bounded attempts/jobs and exact historical/nonexecution limits retained; all47 performance statuses remain INCOMPLETE | Audit owners / all46 consumer W0 audits CLOSED at collection, generator native source-population map independently closed; whole runtime-audit limits retained; refresh actual rollout source identities and qualify C01–C09/T01–T26; private wave closure records bind frozen collection SHAs, not later live heads |
 | Cache ownership | Tools vs sources distinct; MBX owns supported compiler/workspace state; native stores separate; same-run artifacts not passed tests; task results disabled absent qualification | tools_cache, mbx, native_caches / verify no overlapping roots, credentials, state or private content |
 | Descriptor compatibility §4.1 | Current typed fields/source inspection, not final runtime compatibility proof | tools_cache, mbx / preserve runner image or reviewed schema; actual platform/ABI/compiler/components/config/path-layout/trust; constrained prefixes and useful-export budget/retention |
 | Native §4.3 | [Native cache audit](ci-performance-native-cache-audit.md), [obligation restoration](ci-performance-obligation-restoration.md); Node/Bun/Gradle public-source/output proof incomplete; Tofu/Docker separate owners | native_caches, obligation_restore_design / complete public-origin proof and native relocation/cache-mount measurements |
@@ -98,7 +151,7 @@ isolated namespaces and validation flows; never benchmark production publication
 | Security §5 | [Independent review](ci-performance-security-review.md); cache-mode server support vs pinned validator rejection is documented, not permission to bypass | security_review / final code/generated outputs + T13–16/T18/T26; preserve default PR read-only and release protection |
 | Telemetry §8 | Actual compiler CPU/fresh/link/build-script/rustdoc, payload bytes, queue/provision and full critical path remain unknown where unavailable | qualification / extend existing reports with supported diagnostics and exact layer/session identities; redact private data |
 | Statistics/budgets §7.3 | Three hosted runs not yet done; no p95; local timings only local | qualification / paired comparable sample initially20 for percentile claims, disclose outliers/queue/failures; investigate warm >120s; transport costs vs avoided work |
-| Deterministic repo gates | Focused local checks exist; final integrated fmt/clippy/nextest/alint/deny/freshness not yet established | parent / serialize complete checks at frozen head, record commands/results and failures honestly |
+| Deterministic repo gates | Focused local checks exist; recorded PR head `6209c06d87c2f7e41ff162b77cc51e0c99989eec` CI failed; final integrated fmt/clippy/nextest/alint/deny/freshness not yet established | parent / serialize complete checks at frozen head, record commands/results and failures honestly |
 | Official runtime | [Runtime audit](ci-performance-runtime-audit.md): old asset integrity matches, provenance incomplete/missing supported target | release_restore, qualification / qualified actual default branch, complete supported-target assets, exact source/digests/attestation/approvals; immutable new version |
 | Consumer waves | All47 below remain INCOMPLETE; no qualified generated rollout completed | parent, wave owners / first Jackin canary; A then B then C; requalify earlier waves after relevant generator changes |
 | Final feedback/closure | Earlier bounded audits do not approve final changes | parent, independent reviewers / re-fetch reviews/comments/replies/threads at final head; verified fixing commit links or evidenced rejection; verify integration and default branch separately |
@@ -144,7 +197,11 @@ across T01–T03; baseline-only omission cannot prove compiler reuse.
 
 ## Exact47 repository closure inventory
 
-The next table repeats immutable **W0 collection** SHAs from the scope audit;
+The next table separates **bounded W0 audit closure** from performance status.
+All46 consumer W0 audits are CLOSED at their frozen collection SHAs. Generator
+native source-population mapping is independently closed; its whole runtime
+audit retains the separately documented historical review limits.
+The table repeats immutable **W0 collection** SHAs from the scope audit;
 they are not asserted live heads. Each evidence link supplies PR/run/job findings
 and limits. Every row: qualification run/attempt/job, final runtime digest,
 cache-domain/download/compiler metrics, selected/covered counts and critical path
@@ -157,55 +214,55 @@ Allowed final statuses: PERF_VERIFIED, STATIC_ONLY,
 CI_WAIVED_PERF_UNVERIFIED, INACCESSIBLE, INCOMPLETE. Changes to a row require exact
 source-bound evidence and an independent verdict. Waiver cannot grant performance.
 
-| # | Wave | Repository | W0 source SHA | Evidence / owner | Status |
-|---:|---|---|---|---|---|
-| 0 | G | `tailrocks/velnor-new` | `c57c700459bbe1549fe7eedcb7d8689585c38986` | [Audit](ci-performance-runtime-audit.md) / runtime_logs / parent | INCOMPLETE |
-| 1 | A | `jackin-project/jackin` | `6c389d38eadab93d6d6a4005e01dbdd8c4160221` | [Audit](ci-performance-wave-a-audit.md) / wave_a_audit | INCOMPLETE |
-| 2 | A | `jackin-project/jackin-agent-smith` | `2e7119b9c668ca7a9c55218b20049885299d198f` | [Audit](ci-performance-wave-a-audit.md) / wave_a_audit | INCOMPLETE |
-| 3 | A | `jackin-project/homebrew-tap` | `cd05a0ea2cf68fd6c2753ee938247b2dcd4c7551` | [Audit](ci-performance-wave-a-audit.md) / wave_a_audit | INCOMPLETE |
-| 4 | A | `jackin-project/jackin-role-action` | `59e538704b8c119f3b6668cea0154909a6158ff6` | [Audit](ci-performance-wave-a-audit.md) / wave_a_audit | INCOMPLETE |
-| 5 | A | `jackin-project/jackin-sentinel` | `587a0d1a8eef96108c9d9d530bdaa13df91edd2b` | [Audit](ci-performance-wave-a-audit.md) / wave_a_audit | INCOMPLETE |
-| 6 | A | `jackin-project/jackin-dev` | `a01b342162bc56cdf1e8bbaab793e73d31c1d621` | [Audit](ci-performance-wave-a-audit.md) / wave_a_audit | INCOMPLETE |
-| 7 | A | `jackin-project/jackin-github-terraform` | `b43a2314c6b58906d52828115d3b3973026f6a2a` | [Audit](ci-performance-wave-a-audit.md) / wave_a_audit | INCOMPLETE |
-| 8 | A | `jackin-project/jackin-the-architect` | `2cf461e2fed1b95d9fd1e7ba74c10d4d8b1c685d` | [Audit](ci-performance-wave-a-audit.md) / wave_a_audit | INCOMPLETE |
-| 9 | B | `tailrocks/github-terraform` | `288dc40dec53500dfeb8bed148613b99cfea92c2` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | INCOMPLETE |
-| 10 | B | `tailrocks/termpane` | `7cf2f9981ef9a3f7c8fc295a7501a261fba955a8` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | INCOMPLETE |
-| 11 | B | `tailrocks/tui-snap` | `a47c9aaefb34e4c00026f99d8a8dd7ee5916b274` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | INCOMPLETE |
-| 12 | B | `tailrocks/velnor` | `3f6633252963efef0d71244aadae36516a11601e` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | INCOMPLETE |
-| 13 | B | `tailrocks/termrock` | `e2515bac765f440b11843a25d36ed8f720ae6435` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | INCOMPLETE |
-| 14 | B | `tailrocks/parallax` | `90d901c9d12477e93a56a9e021077ced7c78f9df` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | INCOMPLETE |
-| 15 | B | `tailrocks/terminal-components-claude` | `84482d066c5f0bc531f875f7f9d7716929c1b9c6` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | INCOMPLETE |
-| 16 | B | `tailrocks/tailrocks-repository-skills` | `036063edc58d88cd88f57e4e3a9721ebadf3ad62` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | INCOMPLETE |
-| 17 | B | `tailrocks/tailrocks-skills` | `1e9a23a63e0a44abf6a5ef17b69711011316cd9f` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | INCOMPLETE |
-| 18 | B | `tailrocks/tailrocks-pull-request-skills` | `1b260bab1e356b1123fbbbdcdb17bb7bbf8ae83a` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | INCOMPLETE |
-| 19 | B | `tailrocks/homebrew-velnor` | `a0db8c185b76e1bfab3508124504d0f6361e83b6` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | INCOMPLETE |
-| 20 | B | `tailrocks/velnor-apt` | `115b5c42d7ad5659c8496600fabf6cd8061b64b1` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | INCOMPLETE |
-| 21 | B | `tailrocks/parallax-telemetry-playground` | `763518791d60d4197d36119a47311e008ae3f5bf` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | INCOMPLETE |
-| 22 | B | `tailrocks/velnor-actions-fixture` | `1c076c5b5828fb6ba04887885c567da26fe01a69` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | INCOMPLETE |
-| 23 | B | `tailrocks/holla` | `c756189538c776eaa563ff83a5488e1ac96600c9` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | INCOMPLETE |
-| 24 | B | `tailrocks/tracing-request-level` | `2675c867fa2f8af78c2bf2543482add847eec713` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | INCOMPLETE |
-| 25 | B | `tailrocks/pg-bigdecimal` | `0a06226df6ec5f4e1a70a853d14368ebf2e69a80` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | INCOMPLETE |
-| 26 | B | `tailrocks/ruxel` | `304da9f21271be81964459f5c7e6f51f41e5fdcf` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | INCOMPLETE |
-| 27 | B | `tailrocks/schemalane` | `94a58dad0fe6714312373fd5dac69f2ced75d194` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | INCOMPLETE |
-| 28 | B | `tailrocks/holla-apt` | `405239a2ffec34bca5eb14d95915fb0cdaae0453` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | INCOMPLETE |
-| 29 | B | `tailrocks/homebrew-parallax` | `70af3b38e051abfa5a14c08ed5cd5388219ffc40` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | INCOMPLETE |
-| 30 | B | `tailrocks/homebrew-ruxel` | `1db9876988e9912bafb6ea9333eea116853dc31f` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | INCOMPLETE |
-| 31 | B | `tailrocks/homebrew-tablerock` | `20428a6d85086aa8454e3dd693e575541e714df2` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | INCOMPLETE |
-| 32 | B | `tailrocks/homebrew-holla` | `5b7c0f27b570de6ef07f17f593cf96737b0de3ce` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | INCOMPLETE |
-| 33 | B | `tailrocks/tablerock` | `a9771cab32271b1b3fca40f536d9112970989623` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | INCOMPLETE |
-| 34 | B | `tailrocks/cloudflare-tofu` | `03fb253cc0f352c3f57ff7dff9d35e4ea95eec4e` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | INCOMPLETE |
-| 35 | B | `tailrocks/tailrocks-typescript-skills` | `0652a50fce67c4a11f01ebb960a50fd5e283e0a9` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | INCOMPLETE |
-| 36 | B | `tailrocks/tailrocks-skill-authoring-skills` | `93fa4d609f348c04869a94d0dc7a10751e31bf1d` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | INCOMPLETE |
-| 37 | B | `tailrocks/tailrocks-rust-skills` | `0317f100714dc66285c01c24f7967134375b5ac5` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | INCOMPLETE |
-| 38 | B | `tailrocks/tailrocks-roadmap-skills` | `98d23280cd562c9298ce13ae40bd0eb73a3e376a` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | INCOMPLETE |
-| 39 | B | `tailrocks/tailrocks-open-source-skills` | `3e51bc5c91949f361ed926d8f760bcb16edef111` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | INCOMPLETE |
-| 40 | B | `tailrocks/tailrocks-macos-skills` | `eb0be5522fe0c1c9c74d41ee354446a011b10c74` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | INCOMPLETE |
-| 41 | B | `tailrocks/tailrocks-code-quality-skills` | `e63a82f28b688a7fada418e615aa9ec0eeec4c04` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | INCOMPLETE |
-| 42 | C | `ChainArgos/blockchain-nodes` | `0881638712a837bdcb90b3cd811a8a9be3aa8d83` | [Audit](ci-performance-wave-c-audit.md) / wave_c_audit | INCOMPLETE |
-| 43 | C | `ChainArgos/java-monorepo` | `5f77c0b09eda3ac4a6fb8c5de0a622a0cb926c45` | [Audit](ci-performance-wave-c-audit.md) / wave_c_audit | INCOMPLETE |
-| 44 | C | `ChainArgos/jackin-agent-brown` | `6b2ac2277103a22b9ae155bc92415ca5ddf05f95` | [Audit](ci-performance-wave-c-audit.md) / wave_c_audit | INCOMPLETE |
-| 45 | C | `ChainArgos/cloudflare-tofu` | `cc0e2b687dc6c1a9943b0ae9f5911f1e782c1a20` | [Audit](ci-performance-wave-c-audit.md) / wave_c_audit | INCOMPLETE |
-| 46 | C | `ChainArgos/github-terraform` | `c8d47ea87a611251f965555dafbd8015f29f303b` | [Audit](ci-performance-wave-c-audit.md) / wave_c_audit | INCOMPLETE |
+| # | Wave | Repository | W0 source SHA | Evidence / owner | W0 audit | Performance status |
+|---:|---|---|---|---|---|---|
+| 0 | G | `tailrocks/velnor-new` | `c57c700459bbe1549fe7eedcb7d8689585c38986` | [Audit](ci-performance-runtime-audit.md) / runtime_logs / parent | OPEN: whole runtime audit; native population CLOSED | INCOMPLETE |
+| 1 | A | `jackin-project/jackin` | `6c389d38eadab93d6d6a4005e01dbdd8c4160221` | [Audit](ci-performance-wave-a-audit.md) / wave_a_audit | CLOSED | INCOMPLETE |
+| 2 | A | `jackin-project/jackin-agent-smith` | `2e7119b9c668ca7a9c55218b20049885299d198f` | [Audit](ci-performance-wave-a-audit.md) / wave_a_audit | CLOSED | INCOMPLETE |
+| 3 | A | `jackin-project/homebrew-tap` | `cd05a0ea2cf68fd6c2753ee938247b2dcd4c7551` | [Audit](ci-performance-wave-a-audit.md) / wave_a_audit | CLOSED | INCOMPLETE |
+| 4 | A | `jackin-project/jackin-role-action` | `59e538704b8c119f3b6668cea0154909a6158ff6` | [Audit](ci-performance-wave-a-audit.md) / wave_a_audit | CLOSED | INCOMPLETE |
+| 5 | A | `jackin-project/jackin-sentinel` | `587a0d1a8eef96108c9d9d530bdaa13df91edd2b` | [Audit](ci-performance-wave-a-audit.md) / wave_a_audit | CLOSED | INCOMPLETE |
+| 6 | A | `jackin-project/jackin-dev` | `a01b342162bc56cdf1e8bbaab793e73d31c1d621` | [Audit](ci-performance-wave-a-audit.md) / wave_a_audit | CLOSED | INCOMPLETE |
+| 7 | A | `jackin-project/jackin-github-terraform` | `b43a2314c6b58906d52828115d3b3973026f6a2a` | [Audit](ci-performance-wave-a-audit.md) / wave_a_audit | CLOSED | INCOMPLETE |
+| 8 | A | `jackin-project/jackin-the-architect` | `2cf461e2fed1b95d9fd1e7ba74c10d4d8b1c685d` | [Audit](ci-performance-wave-a-audit.md) / wave_a_audit | CLOSED | INCOMPLETE |
+| 9 | B | `tailrocks/github-terraform` | `288dc40dec53500dfeb8bed148613b99cfea92c2` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | CLOSED | INCOMPLETE |
+| 10 | B | `tailrocks/termpane` | `7cf2f9981ef9a3f7c8fc295a7501a261fba955a8` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | CLOSED | INCOMPLETE |
+| 11 | B | `tailrocks/tui-snap` | `a47c9aaefb34e4c00026f99d8a8dd7ee5916b274` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | CLOSED | INCOMPLETE |
+| 12 | B | `tailrocks/velnor` | `3f6633252963efef0d71244aadae36516a11601e` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | CLOSED | INCOMPLETE |
+| 13 | B | `tailrocks/termrock` | `e2515bac765f440b11843a25d36ed8f720ae6435` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | CLOSED | INCOMPLETE |
+| 14 | B | `tailrocks/parallax` | `90d901c9d12477e93a56a9e021077ced7c78f9df` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | CLOSED | INCOMPLETE |
+| 15 | B | `tailrocks/terminal-components-claude` | `84482d066c5f0bc531f875f7f9d7716929c1b9c6` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | CLOSED | INCOMPLETE |
+| 16 | B | `tailrocks/tailrocks-repository-skills` | `036063edc58d88cd88f57e4e3a9721ebadf3ad62` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | CLOSED | INCOMPLETE |
+| 17 | B | `tailrocks/tailrocks-skills` | `1e9a23a63e0a44abf6a5ef17b69711011316cd9f` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | CLOSED | INCOMPLETE |
+| 18 | B | `tailrocks/tailrocks-pull-request-skills` | `1b260bab1e356b1123fbbbdcdb17bb7bbf8ae83a` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | CLOSED | INCOMPLETE |
+| 19 | B | `tailrocks/homebrew-velnor` | `a0db8c185b76e1bfab3508124504d0f6361e83b6` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | CLOSED | INCOMPLETE |
+| 20 | B | `tailrocks/velnor-apt` | `115b5c42d7ad5659c8496600fabf6cd8061b64b1` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | CLOSED | INCOMPLETE |
+| 21 | B | `tailrocks/parallax-telemetry-playground` | `763518791d60d4197d36119a47311e008ae3f5bf` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | CLOSED | INCOMPLETE |
+| 22 | B | `tailrocks/velnor-actions-fixture` | `1c076c5b5828fb6ba04887885c567da26fe01a69` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | CLOSED | INCOMPLETE |
+| 23 | B | `tailrocks/holla` | `c756189538c776eaa563ff83a5488e1ac96600c9` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | CLOSED | INCOMPLETE |
+| 24 | B | `tailrocks/tracing-request-level` | `2675c867fa2f8af78c2bf2543482add847eec713` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | CLOSED | INCOMPLETE |
+| 25 | B | `tailrocks/pg-bigdecimal` | `0a06226df6ec5f4e1a70a853d14368ebf2e69a80` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | CLOSED | INCOMPLETE |
+| 26 | B | `tailrocks/ruxel` | `304da9f21271be81964459f5c7e6f51f41e5fdcf` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | CLOSED | INCOMPLETE |
+| 27 | B | `tailrocks/schemalane` | `94a58dad0fe6714312373fd5dac69f2ced75d194` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | CLOSED | INCOMPLETE |
+| 28 | B | `tailrocks/holla-apt` | `405239a2ffec34bca5eb14d95915fb0cdaae0453` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | CLOSED | INCOMPLETE |
+| 29 | B | `tailrocks/homebrew-parallax` | `70af3b38e051abfa5a14c08ed5cd5388219ffc40` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | CLOSED | INCOMPLETE |
+| 30 | B | `tailrocks/homebrew-ruxel` | `1db9876988e9912bafb6ea9333eea116853dc31f` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | CLOSED | INCOMPLETE |
+| 31 | B | `tailrocks/homebrew-tablerock` | `20428a6d85086aa8454e3dd693e575541e714df2` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | CLOSED | INCOMPLETE |
+| 32 | B | `tailrocks/homebrew-holla` | `5b7c0f27b570de6ef07f17f593cf96737b0de3ce` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | CLOSED | INCOMPLETE |
+| 33 | B | `tailrocks/tablerock` | `a9771cab32271b1b3fca40f536d9112970989623` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | CLOSED | INCOMPLETE |
+| 34 | B | `tailrocks/cloudflare-tofu` | `03fb253cc0f352c3f57ff7dff9d35e4ea95eec4e` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | CLOSED | INCOMPLETE |
+| 35 | B | `tailrocks/tailrocks-typescript-skills` | `0652a50fce67c4a11f01ebb960a50fd5e283e0a9` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | CLOSED | INCOMPLETE |
+| 36 | B | `tailrocks/tailrocks-skill-authoring-skills` | `93fa4d609f348c04869a94d0dc7a10751e31bf1d` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | CLOSED | INCOMPLETE |
+| 37 | B | `tailrocks/tailrocks-rust-skills` | `0317f100714dc66285c01c24f7967134375b5ac5` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | CLOSED | INCOMPLETE |
+| 38 | B | `tailrocks/tailrocks-roadmap-skills` | `98d23280cd562c9298ce13ae40bd0eb73a3e376a` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | CLOSED | INCOMPLETE |
+| 39 | B | `tailrocks/tailrocks-open-source-skills` | `3e51bc5c91949f361ed926d8f760bcb16edef111` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | CLOSED | INCOMPLETE |
+| 40 | B | `tailrocks/tailrocks-macos-skills` | `eb0be5522fe0c1c9c74d41ee354446a011b10c74` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | CLOSED | INCOMPLETE |
+| 41 | B | `tailrocks/tailrocks-code-quality-skills` | `e63a82f28b688a7fada418e615aa9ec0eeec4c04` | [Audit](ci-performance-wave-b-audit.md) / wave_b_audit | CLOSED | INCOMPLETE |
+| 42 | C | `ChainArgos/blockchain-nodes` | `0881638712a837bdcb90b3cd811a8a9be3aa8d83` | [Audit](ci-performance-wave-c-audit.md) / wave_c_audit | CLOSED | INCOMPLETE |
+| 43 | C | `ChainArgos/java-monorepo` | `5f77c0b09eda3ac4a6fb8c5de0a622a0cb926c45` | [Audit](ci-performance-wave-c-audit.md) / wave_c_audit | CLOSED | INCOMPLETE |
+| 44 | C | `ChainArgos/jackin-agent-brown` | `6b2ac2277103a22b9ae155bc92415ca5ddf05f95` | [Audit](ci-performance-wave-c-audit.md) / wave_c_audit | CLOSED | INCOMPLETE |
+| 45 | C | `ChainArgos/cloudflare-tofu` | `cc0e2b687dc6c1a9943b0ae9f5911f1e782c1a20` | [Audit](ci-performance-wave-c-audit.md) / wave_c_audit | CLOSED | INCOMPLETE |
+| 46 | C | `ChainArgos/github-terraform` | `c8d47ea87a611251f965555dafbd8015f29f303b` | [Audit](ci-performance-wave-c-audit.md) / wave_c_audit | CLOSED | INCOMPLETE |
 
 ## Update rule
 
@@ -215,9 +272,17 @@ remaining limits. Re-check related gates after integration; never infer hosted
 qualification from local state. Final closure requires all applicable gates or
 exact irreducible authorization/access limits after authorized work is exhausted.
 
-Independent second reader `gate_traceability/ledger_verify` inspected the full
+For the earlier ledger snapshot, independent second reader
+`gate_traceability/ledger_verify` inspected the full
 goal/specification, computed ordered47-row/SHA equality against scope/audit,
 checked all9 C gates/all26 T cases, resolved links and source/test references,
 and reviewed evidence grades. Two missing cross-cutting rows and an unsupported
 local MBX evidence grade were corrected; final rereview found no remaining ledger
 coverage/factual issue. This is ledger verification, not implementation approval.
+
+Refresh reviewer `closure_inputs/ledger_refresh_review` independently verified
+ordered47 number/wave/repository equality against all three scope inputs, frozen
+SHA equality against the scope audit, all C01–C09/T01–T26 rows, bounded consumer
+W0 closure, retained CI metadata and raw local source receipt/commit distinctions.
+No unsupported ledger claim remained. This review used existing read-only records;
+it grants no hosted behavior, runtime publication or performance qualification.
