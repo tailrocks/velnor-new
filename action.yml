@@ -13,6 +13,15 @@ inputs:
   version:
     description: mbx release version to install, such as "0.4.0", or "latest"; when omitted, use mbx from PATH or install latest
     required: false
+  mbx-path:
+    description: Absolute path to a verified preinstalled mbx executable; requires expected-version and never downloads mbx
+    required: false
+  expected-version:
+    description: Exact version required from mbx-path; cannot be combined with version
+    required: false
+  comparison-state:
+    description: Absolute owner comparison-state path; requires strict preinstalled mbx and GitHub objects mode; save only useful semantic delta
+    required: false
   github-token:
     description: GitHub token used to resolve mbx release metadata
     default: ${{ github.token }}

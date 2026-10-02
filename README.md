@@ -5,6 +5,26 @@ store directly or back it with GitHub Actions cache or an mbx-compatible server.
 `version` is omitted, the action uses `mbx` from `PATH` and downloads the latest
 release only when it is absent. Setting `version` always installs that release.
 
+To use an independently verified executable without installing or downloading
+mbx, supply `mbx-path` (an absolute executable path) and `expected-version`
+(an exact version such as `1.12.0`) together. The action requires the exact
+`mbx 1.12.0` version banner and fails if the executable is missing, inaccessible,
+or mismatched. These inputs cannot be combined with `version`. The external
+executable is never restored from or copied into a target cache, and is verified
+again before a saving post step, including its original SHA-256 digest.
+
+For an mbx executable supporting the owner comparison API, GitHub `objects`
+mode accepts a fresh absolute `comparison-state` path inside `RUNNER_TEMP`,
+outside the transported cache. Preexisting paths and symlinks are rejected;
+the recorded baseline must retain its original SHA-256 digest until post.
+The action probes the API before restore, records the restored bundle's owner
+inventory before import, and requires that baseline in post. Cold restores use
+an explicit empty owner baseline. Export reports `useful_delta` and a semantic
+digest: unchanged owner state skips upload; useful state saves under
+`${primaryKey}-${semantic_digest}`. A malformed report fails closed. Optional
+import, export, or upload failures warn without changing the build outcome;
+executable verification and comparison capability failures remain fatal.
+
 ## Local filesystem
 
 ```yaml
@@ -109,6 +129,8 @@ key follows it:
 
 `toolchain` scopes the cache key only — it neither installs the toolchain nor
 selects it for the build.
+An explicitly named toolchain that cannot report its identity fails the action;
+install that toolchain before invoking the action.
 
 On Linux, the action also enables mbx's native link cache. This avoids relinking
 eligible test binaries and executables on a warm build. Set `cache-links: false`
@@ -188,6 +210,9 @@ own authorization policy.
 | --------------------------- | --------------------- | ------------------------------------------------------------------------------ |
 | `backend`                   | `github`              | `local`, `github`, or `server`                                                 |
 | `version`                   |                       | mbx release version, or `latest`; when omitted, prefer `mbx` from `PATH`       |
+| `mbx-path`                  |                       | Absolute preinstalled executable path; requires `expected-version`; never downloads |
+| `expected-version`          |                       | Exact version required from `mbx-path`; excludes `version`                    |
+| `comparison-state`          |                       | Absolute baseline path; strict GitHub objects mode saves only useful owner delta |
 | `github-token`              | `${{ github.token }}` | Token used when `GITHUB_TOKEN` is not exported                                 |
 | `cache-generation`          | `v1`                  | Generated GitHub cache key generation                                          |
 | `github-cache-mode`         | `target`              | GitHub payload: warm Cargo `target` tree or portable mbx `objects`             |
