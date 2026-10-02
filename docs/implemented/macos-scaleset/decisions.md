@@ -14,3 +14,5 @@
 | D10 | Protocol pin remains `actions/scaleset` `e6daac7` because that commit is still the default-branch HEAD. Wire tags, including Pascal-case `RunnerSetting`, come from that tree. |
 | D11 | No Java adapter for ChainArgos. Pinned CI does not run Java or frontend tests. |
 | D12 | Legacy runner sources are Apache-2.0 only. Do not relabel copied text as MIT. Prefer reimplementation of invariants over copying files. |
+| D13 | `tokio =1.47.1` is not in the registry. Bollard 0.21.1 resolves `^1.47` to 1.49.0 as the oldest available non-yanked release. Pin `=1.49.0`. |
+| D14 | Nested `deny.toml` allows `Zlib` because `foldhash` 0.2 (pulled by `turso` 0.8.1 via `tantivy`) declares that license. Path dependencies carry `version = "=0.1.0"` so cargo-deny does not treat them as wildcards. The generator allowlist is unchanged. |

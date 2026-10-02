@@ -1,27 +1,29 @@
 [workspace]
 members = [
-    "crates/velnor-actions-contract",
-    "crates/velnor-actions-rust",
-    "crates/velnor-actions-mise",
-    "crates/velnor-actions-actionlint",
-    "crates/velnor-actions-workflow-renderer",
-    "crates/velnor-actions-orchestrator",
-    "crates/velnor-actions-cli",
-    "crates/velnor-actions-tofu",
+    "crates/velnor-runner-core",
+    "crates/velnor-runner-github",
+    "crates/velnor-runner-host",
+    "crates/velnor-runner-cli",
 ]
-exclude = ["crates/velnor-runner"]
+exclude = []
 resolver = "3"
-
-[workspace.dependencies]
-serde = { version = "=1.0.229", features = ["derive"] }
-serde_json = { version = "=1.0.151" }
-thiserror = { version = "=2.0.21" }
 
 [workspace.package]
 edition = "2024"
 rust-version = "1.98"
 version = "0.1.0"
 license = "MIT OR Apache-2.0"
+
+[workspace.dependencies]
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = { version = "=1.0.151" }
+thiserror = { version = "=2.0.21" }
+clap = { version = "=4.6.7", features = ["derive"] }
+tokio = { version = "=1.49.0", features = ["rt-multi-thread", "macros", "time", "io-util", "sync", "net"] }
+bollard = { version = "=0.21.1", default-features = false, features = ["pipe"] }
+turso = { version = "=0.8.1" }
+zeroize = { version = "=1.8.1", features = ["derive"] }
+toml = { version = "=0.9.12" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
