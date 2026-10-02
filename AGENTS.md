@@ -20,7 +20,7 @@
 - `cargo clippy --locked --workspace --all-targets -- -D warnings`
 - `cargo nextest run --locked --workspace` (fallback: `cargo test --locked --workspace`)
 - `alint validate-config && alint check --fail-on-warning`
-- `cargo deny check --locked`
+- `cargo deny check`
 - `bash scripts/check-freshness.sh`
 
 ## Proof invariants
