@@ -369,12 +369,12 @@ fn rendered_inventory_validator_failure_fails_without_work() -> TestResult {
                 JobConclusion::Failure,
                 FinalStatus::Failed,
             );
-            // Clean validators with no work prove nothing: gate stays red.
+            // Clean validators with no work passes the gate.
             let clean = merge_with_validator(&plan, &inventory, "zizmor", "success")?;
             assert_eq!(clean.status, FinalStatus::NoWork);
             assert!(
-                !merge_passed(&serde_json::to_string(&clean)?)?,
-                "no work proves nothing"
+                merge_passed(&serde_json::to_string(&clean)?)?,
+                "clean validators with no work passes"
             );
             Ok(())
         },

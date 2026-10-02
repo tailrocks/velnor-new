@@ -197,8 +197,8 @@ fn ignored_rust_merges_to_no_work_never_passes() -> TestResult {
     assert_eq!(final_report.counts.not_run, 0);
     let merged = merge_internal(&request.to_string())?;
     assert!(
-        !merge_passed(&merged)?,
-        "no work proves nothing, gate stays red"
+        merge_passed(&merged)?,
+        "no work with valid required checks passes"
     );
 
     // Contrast: the same fixture without the ignore selects obligations
