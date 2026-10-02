@@ -11,7 +11,7 @@ not a pass.
 | G3 | NOT_RUN | Image recipes and ownership decisions exist. No image build or live inspect. |
 | G4 | NOT_RUN | `GET .../actions/runner-scale-sets` returned 404. No shipped-client session and no GitHub job. Mocks must not flip this to PASS. |
 | G5 | PASS for in-repo routing and compare | `40e08e8` and `658154c`. A GitHub run of an expected-negative workflow is not this pass. |
-| G6 | PASS for the binary only | Help exits 0 and status is `waiting_for_credentials` at `658154c`. Launchctl was not driven. Unit tests must not mark launchd PASS. |
+| G6 | PASS | Help exits 0 and status is `waiting_for_credentials` at `658154c`. LaunchAgent `gui/501` ran absolute `daemon run` with `forks = 0`; a second daemon exited 1; the job was removed. |
 | G7 | NOT_RUN | ChainArgos not updated. |
 | G8 | NOT_RUN | No promotion. Required checks stay. |
 
