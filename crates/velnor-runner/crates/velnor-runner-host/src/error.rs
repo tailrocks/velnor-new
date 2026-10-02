@@ -27,6 +27,9 @@ pub enum HostError {
     /// Docker client could not open the configured socket.
     #[error("docker socket")]
     Docker,
+    /// JIT payload was empty. No container was created.
+    #[error("empty jit")]
+    EmptyJit,
     /// Endpoint was not an `https` URL.
     #[error("bad endpoint")]
     Endpoint,

@@ -16,6 +16,7 @@ mod plist;
 mod readiness;
 mod reconcile;
 mod scale_set;
+mod worker;
 
 pub use config::{DockerConfig, GithubSection, HostConfig, HostLimits};
 pub use connect::{ConnectPlan, DisconnectEffect, SetOwnership, connect_plan, disconnect_effects};
@@ -34,6 +35,10 @@ pub use reconcile::{
     IntentRow, Reconcile, ReleaseFact, before_advertise, occupies, release_permitted,
 };
 pub use scale_set::{EnsureError, EnsuredSet, ensure_product_scale_set};
+pub use worker::{
+    BollardCreate, CreateProjection, Started, bollard_create, dind_create, runner_create,
+    start_pair,
+};
 
 #[cfg(test)]
 mod connect_tests;
@@ -51,3 +56,5 @@ mod journal_tests;
 mod plist_tests;
 #[cfg(test)]
 mod readiness_tests;
+#[cfg(test)]
+mod worker_tests;
