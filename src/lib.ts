@@ -434,14 +434,14 @@ export interface SaveDecision {
 /**
  * Whether a successful job saves the GitHub cache, and why.
  *
- * Default-branch pushes always save. Protected-branch pushes, same-repository
+ * Protected default-branch pushes save. Other protected-branch pushes, same-repository
  * pull requests, and dispatches save only when opted in. A fork pull request
  * never saves: GitHub would accept its write into the pull request's own
  * scope, but nothing about the run is trusted.
  *
- * A save the policy allows is still skipped when GitHub's `cache-mode` for
- * the job denies writes, so the decision says so up front instead of pruning
- * and exporting a payload the cache library would then drop.
+ * This client policy is defense in depth; it does not enforce server access.
+ * A save it allows is skipped when the job's `cache-mode` denies writes,
+ * avoiding pruning and exporting a payload the cache library would drop.
  */
 export function savePolicy(run: SaveContext, options: SaveOptions = {}): SaveDecision {
   const decision = eventSavePolicy(run, options)
@@ -464,10 +464,10 @@ export function cacheModePermitsWrites(mode: string): boolean {
 function eventSavePolicy(run: SaveContext, options: SaveOptions): SaveDecision {
   const {eventName, ref, defaultBranch} = run
   if (eventName === 'push' && ref.startsWith('refs/heads/')) {
+    if (run.refProtected !== true) return {save: false, reason: 'unprotected-branch push'}
     if (defaultBranch && ref === `refs/heads/${defaultBranch}`) {
       return {save: true, reason: 'default-branch push'}
     }
-    if (!run.refProtected) return {save: false, reason: 'unprotected-branch push'}
     return options.protectedBranch
       ? {save: true, reason: 'protected-branch push'}
       : {save: false, reason: 'protected-branch push; save-on-protected-branch is off'}

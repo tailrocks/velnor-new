@@ -25,6 +25,7 @@ beforeEach(async () => {
   vi.clearAllMocks()
   vi.stubEnv('ACTIONS_RUNTIME_TOKEN', 'fixture-token')
   vi.stubEnv('ACTIONS_RESULTS_URL', 'https://fixture.invalid/')
+  vi.stubEnv('GITHUB_REF_PROTECTED', 'true')
   directory = await mkdtemp(path.join(tmpdir(), 'mbx-main-test-'))
   vi.stubEnv('RUNNER_TEMP', directory)
   const bin = path.join(directory, 'mbx')

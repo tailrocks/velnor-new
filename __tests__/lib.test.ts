@@ -302,14 +302,22 @@ describe('save policy', () => {
     expect(cacheRevision('push', 'abc123', true, 42, 3)).toBe('abc123')
   })
 
-  it('saves only default-branch pushes by default', () => {
-    expect(saves('push', 'refs/heads/main')).toBe(true)
-    expect(saves('push', 'refs/heads/main', {defaultBranch: undefined})).toBe(false)
+  it('saves only protected default-branch pushes by default', () => {
+    expect(saves('push', 'refs/heads/main', {refProtected: true})).toBe(true)
+    expect(saves('push', 'refs/heads/main', {defaultBranch: undefined, refProtected: true})).toBe(false)
     expect(saves('pull_request', 'refs/pull/1/merge', {sameRepository: true})).toBe(false)
     expect(saves('push', 'refs/heads/topic')).toBe(false)
     expect(saves('push', 'refs/heads/release', {refProtected: true})).toBe(false)
     expect(saves('workflow_dispatch', 'refs/heads/topic')).toBe(false)
     expect(saves('push', 'refs/tags/v1.0.0', {refProtected: true})).toBe(false)
+  })
+
+  it.each([undefined, false])('rejects default-branch pushes with protection %s in every cache mode', refProtected => {
+    for (const cacheMode of [undefined, '', 'future-mode', 'write', 'write-only', 'read', 'none']) {
+      expect(savePolicy({
+        eventName: 'push', ref: 'refs/heads/main', defaultBranch: 'main', refProtected, cacheMode
+      }, {protectedBranch: true})).toEqual({save: false, reason: 'unprotected-branch push'})
+    }
   })
 
   it('can opt trusted workflow dispatches into saving', () => {
@@ -338,7 +346,7 @@ describe('save policy', () => {
   })
 
   it('respects the cache-mode GitHub granted the job', () => {
-    const run = {eventName: 'push', ref: 'refs/heads/main', defaultBranch: 'main'}
+    const run = {eventName: 'push', ref: 'refs/heads/main', defaultBranch: 'main', refProtected: true}
     expect(savePolicy({...run, cacheMode: 'read'})).toEqual({
       save: false,
       reason: 'default-branch push; cache-mode read does not permit writes'
@@ -348,7 +356,7 @@ describe('save policy', () => {
     expect(savePolicy({...run, cacheMode: 'write-only'}).save).toBe(true)
     expect(savePolicy({...run, cacheMode: ''}).save).toBe(true)
     expect(savePolicy({...run, cacheMode: 'future-mode'}).save).toBe(true)
-    expect(savePolicy({...run, ref: 'refs/heads/topic', cacheMode: 'read'}).reason).toBe(
+    expect(savePolicy({...run, ref: 'refs/heads/topic', refProtected: false, cacheMode: 'read'}).reason).toBe(
       'unprotected-branch push'
     )
     expect(savePolicy({...run, cacheMode: ' READ '}).save).toBe(false)
@@ -358,7 +366,7 @@ describe('save policy', () => {
   it('explains each decision', () => {
     const reason = (eventName: string, ref: string, extra = {}, options = {}) =>
       savePolicy({eventName, ref, defaultBranch: 'main', ...extra}, options).reason
-    expect(reason('push', 'refs/heads/main')).toBe('default-branch push')
+    expect(reason('push', 'refs/heads/main', {refProtected: true})).toBe('default-branch push')
     expect(reason('push', 'refs/heads/topic')).toBe('unprotected-branch push')
     expect(reason('pull_request', 'refs/pull/1/merge')).toBe('fork pull request')
     expect(reason('pull_request', 'refs/pull/1/merge', {sameRepository: true})).toBe(
