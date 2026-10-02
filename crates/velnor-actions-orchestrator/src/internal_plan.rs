@@ -33,6 +33,37 @@ use velnor_actions_mise::ToolCatalog;
 use velnor_actions_rust::{CompileDriver, Evidence, entry_metadata_for_task};
 
 use crate::discover::Discovery;
+use crate::internal_plan::identities::ExtensionBundle;
+
+/// Typed tofu identity extension for one task (plan-time and cover-time).
+///
+/// Single construction site: the snapshot bundle carries workspace,
+/// graph, and config digests while the root lockfile slot resolves
+/// against the checkout. Both `plan_group` and cover-time
+/// revalidation derive through here so the two can never drift.
+///
+/// # Errors
+///
+/// Returns [`ContractError`] for kind/driver/runner spellings outside
+/// the known tokens.
+pub(crate) fn tofu_extension_for(
+    task: &ProposedTask,
+    root: &std::path::Path,
+    bundle: &ExtensionBundle,
+) -> Result<velnor_actions_tofu::TofuTaskIdentityExtension, ContractError> {
+    let normalized = velnor_actions_tofu::root_for_key(&task.identity.unit_key);
+    let inputs = velnor_actions_tofu::TofuGroupExtensionInputs {
+        unit_id: &task.identity.unit_id,
+        workspace_id: bundle.workspace_id(),
+        profile: &task.configuration,
+        manifest: &task.identity.unit_path,
+        graph_digest: bundle.graph_digest(),
+        root: &normalized,
+        config_digest: bundle.config_digest(),
+        lock_digest: velnor_actions_tofu::lock_slot_at_root(root, &task.identity.unit_path),
+    };
+    velnor_actions_tofu::extension_for_proposal(task, &inputs)
+}
 
 /// Synthetic identity-input path carrying the input-closure digest.
 ///
@@ -276,6 +307,10 @@ pub(crate) fn default_generator() -> PlanGenerator {
 }
 
 /// Complete package inventory with selection flags.
+///
+/// Rust rows enumerate workspace packages; tofu rows enumerate
+/// selected tofu projects by root key, so an untouched root stays
+/// distinguishable (`not_affected`) instead of vanishing.
 pub(crate) fn plan_packages(discovery: &Discovery, selected: &BTreeSet<&str>) -> Vec<PlanPackage> {
     let mut packages = Vec::new();
     for workspace in &discovery.workspaces {
@@ -283,28 +318,60 @@ pub(crate) fn plan_packages(discovery: &Discovery, selected: &BTreeSet<&str>) ->
             if !package.in_workspace || package.external {
                 continue;
             }
-            let is_selected = selected.contains(package.id.as_str());
-            let mut tasks: Vec<String> = discovery
-                .proposals
-                .iter()
-                .filter(|task| task.identity.unit_id == package.id)
-                .map(|task| task.task_id.clone())
-                .collect();
-            tasks.sort();
-            packages.push(PlanPackage {
-                package_id: package.id.clone(),
-                name: package.name.clone(),
-                manifest: package.manifest.clone(),
-                selected: is_selected,
-                reasons: vec![if is_selected {
-                    "selected".to_owned()
-                } else {
-                    "not_affected".to_owned()
-                }],
-                tasks,
-            });
+            packages.push(package_row(
+                &package.id,
+                &package.name,
+                &package.manifest,
+                discovery,
+                selected,
+            ));
         }
     }
+    packages.extend(tofu_packages(discovery, selected));
     packages.sort_by(|left, right| left.package_id.cmp(&right.package_id));
     packages
+}
+
+/// One inventory row: selection flag plus sorted task IDs.
+fn package_row(
+    package_id: &str,
+    name: &str,
+    manifest: &str,
+    discovery: &Discovery,
+    selected: &BTreeSet<&str>,
+) -> PlanPackage {
+    let is_selected = selected.contains(package_id);
+    let mut tasks: Vec<String> = discovery
+        .proposals
+        .iter()
+        .filter(|task| task.identity.unit_id == package_id)
+        .map(|task| task.task_id.clone())
+        .collect();
+    tasks.sort();
+    PlanPackage {
+        package_id: package_id.to_owned(),
+        name: name.to_owned(),
+        manifest: manifest.to_owned(),
+        selected: is_selected,
+        reasons: vec![if is_selected {
+            "selected".to_owned()
+        } else {
+            "not_affected".to_owned()
+        }],
+        tasks,
+    }
+}
+
+/// Tofu inventory rows: one per selected project, keyed by root key.
+fn tofu_packages(discovery: &Discovery, selected: &BTreeSet<&str>) -> Vec<PlanPackage> {
+    let mut roots = crate::select_tofu::tofu_selected_roots(&discovery.statuses);
+    roots.dedup();
+    roots
+        .iter()
+        .map(|root| {
+            let key = velnor_actions_tofu::key_for_root(root);
+            let display = velnor_actions_tofu::display_for_root(root);
+            package_row(&key, &display, &display, discovery, selected)
+        })
+        .collect()
 }
