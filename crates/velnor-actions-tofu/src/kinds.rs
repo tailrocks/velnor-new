@@ -13,7 +13,10 @@ pub enum TofuTaskKind {
     /// Formatting check over the independent fmt scope.
     Fmt,
     /// Validation-only init (backend-less, readonly lockfile).
-    Init,
+    ///
+    /// Contract-exact `InitForValidate`; the wire spelling stays
+    /// `init` (spec §6.1 `stack/tofu/root/init/default` normative).
+    InitForValidate,
     /// Real validate in the initialized root.
     Validate,
 }
@@ -24,7 +27,7 @@ impl TofuTaskKind {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Fmt => "fmt",
-            Self::Init => "init",
+            Self::InitForValidate => "init",
             Self::Validate => "validate",
         }
     }
@@ -37,7 +40,7 @@ impl TofuTaskKind {
     pub fn parse(value: &str) -> Result<Self, ContractError> {
         match value {
             "fmt" => Ok(Self::Fmt),
-            "init" => Ok(Self::Init),
+            "init" => Ok(Self::InitForValidate),
             "validate" => Ok(Self::Validate),
             _ => Err(ContractError::identity(
                 "task_kind",

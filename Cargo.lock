@@ -667,6 +667,7 @@ name = "velnor-actions-tofu"
 version = "0.1.0"
 dependencies = [
  "hcl-rs",
+ "serde",
  "serde_json",
  "velnor-actions-contract",
 ]

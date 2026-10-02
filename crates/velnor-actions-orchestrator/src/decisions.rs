@@ -258,8 +258,12 @@ pub fn selection_broadens_for_path(path: &str) -> Option<&'static str> {
 /// Broadening class one changed path triggers, unioned over stacks.
 ///
 /// Each stack classifies its own lock/root-config paths; the orchestrator
-/// only unions the verdicts and owns the warning vocabulary. Tofu owns
-/// no paths until T09, so its arm contributes nothing.
+/// only unions the verdicts and owns the warning vocabulary. Tofu
+/// contributes nothing by design (T12 call): every tofu lockfile lives
+/// under its root, so lockfile changes attribute per-root through
+/// calling-root selection instead of broadening; the `[stacks.tofu]`
+/// table itself broadens as global config via
+/// [`selection_broadens_for_path`].
 #[must_use]
 pub(crate) fn broadening_for_path(path: &str) -> Option<SelectionBroadening> {
     for stack in Stack::all() {

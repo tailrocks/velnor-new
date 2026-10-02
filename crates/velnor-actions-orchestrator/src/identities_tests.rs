@@ -282,3 +282,71 @@ fn tofu_toolchain_pins_opentofu_alone() {
     assert_eq!(inputs.test_runner, "tofu");
     assert!(toolchain_id(&inputs).is_ok());
 }
+
+/// Tofu proposal via the T12 adapter constructor.
+fn tofu_proposal(kind: velnor_actions_tofu::TofuTaskKind) -> ProposedTask {
+    let group = velnor_actions_tofu::TofuTaskGroup {
+        root: String::new(),
+        kind,
+        configuration: "default".to_owned(),
+        no_targets: false,
+    };
+    let task = velnor_actions_tofu::propose_task(&group).expect("fixture proposes");
+    task.validate().expect("fixture valid");
+    task
+}
+
+#[test]
+fn tofu_cache_format_is_distinct_and_valid() {
+    let tofu = cache_format_id_for_tofu();
+    assert!(validate_digest(&tofu).is_ok());
+    assert_ne!(tofu, cache_format_id_for(CompileDriver::Cargo));
+    assert_ne!(tofu, cache_format_id_for(CompileDriver::Mbx));
+}
+
+/// Minimal discovery with no workspaces or tool checks.
+fn empty_discovery() -> crate::discover::Discovery {
+    crate::discover::Discovery {
+        statuses: Vec::new(),
+        workspaces: Vec::new(),
+        proposals: Vec::new(),
+        feature_fallbacks: Vec::new(),
+        tool_checks: Vec::new(),
+        clippy_memory: crate::clippy_groups::ClippyMemoryPlan {
+            groups: Vec::new(),
+            barriers: 0,
+        },
+        recommendations: Vec::new(),
+        consumer_manifest_json: None,
+        consumer_manifest_stand_in: false,
+        skipped_non_utf8: false,
+        tofu_note: None,
+        tofu_units: Vec::new(),
+    }
+}
+
+#[test]
+fn tofu_bundles_skip_rust_checkout_probes() {
+    use velnor_actions_tofu::TofuTaskKind;
+    let task = tofu_proposal(TofuTaskKind::Validate);
+    let discovery = empty_discovery();
+    let snapshot = super::snapshot::ExecutionSnapshot::build(&discovery);
+    // A nonexistent root proves no probe runs: tofu slots resolve
+    // through the tofu bridge, never here.
+    let bundle = extension_bundle_with_snapshot(
+        &snapshot,
+        &discovery,
+        &task,
+        Some(std::path::Path::new("/nonexistent-tofu-guard")),
+        None,
+    );
+    let inputs = bundle.inputs();
+    assert_eq!(
+        inputs.lock_digest,
+        velnor_actions_rust::tasks::DigestSlot::Unknown("tofu_adapter_owned".to_owned())
+    );
+    assert_eq!(
+        inputs.nextest_digest,
+        velnor_actions_rust::tasks::DigestSlot::Unknown("tofu_adapter_owned".to_owned())
+    );
+}

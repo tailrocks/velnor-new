@@ -26,7 +26,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{
     ContractError, EntryCacheIds, ExecuteTaskIds, ExecuteTaskRef, PlanGenerator, PlanPackage,
-    ProposedTask, StackExtension, TaskConfiguration, TaskGenerator, TaskIdentity, TaskInput,
+    ProposedTask, Stack, StackExtension, TaskConfiguration, TaskGenerator, TaskIdentity, TaskInput,
     VcsInputs, component_id_for_unit, digest_b3, input_digest,
 };
 use velnor_actions_mise::ToolCatalog;
@@ -54,6 +54,13 @@ pub(crate) fn adapter_metadata(
     task: &ProposedTask,
     evidence: &[Evidence],
 ) -> Result<serde_json::Value, ContractError> {
+    if Stack::from_id(&task.stack_id) == Some(Stack::Tofu) {
+        let ids: Vec<String> = evidence
+            .iter()
+            .map(velnor_actions_rust::tasks::evidence_id)
+            .collect();
+        return velnor_actions_tofu::entry_metadata_for_task(task, &ids);
+    }
     entry_metadata_for_task(task, evidence)
 }
 
@@ -106,12 +113,17 @@ pub(crate) fn cache_ids_for(
     toolchain: &str,
 ) -> Result<EntryCacheIds, ContractError> {
     let workspace_id = digest_b3(task.identity.unit_path.as_bytes());
+    let format_id = if Stack::from_id(&task.stack_id) == Some(Stack::Tofu) {
+        identities::cache_format_id_for_tofu()
+    } else {
+        identities::cache_format_id_for(CompileDriver::parse(&task.identity.compile_driver)?)
+    };
     EntryCacheIds::new(
         &workspace_id,
         &identities::lane_id_for(task, &workspace_id),
         &identities::platform_id_for_group(label, task)?,
         toolchain,
-        &identities::cache_format_id_for(CompileDriver::parse(&task.identity.compile_driver)?),
+        &format_id,
     )
 }
 

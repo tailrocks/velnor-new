@@ -146,6 +146,46 @@ pub fn files_for_prefix(files: &[String], prefix: &str) -> Result<Vec<String>, U
     Ok(selected)
 }
 
+/// Module references for `(path, bounded text)` config pairs.
+///
+/// Parses without block-type, shape, or duplicate checks: base-graph
+/// selection needs references from history that predates validation.
+/// Every pair must be an effective-shape config file.
+///
+/// # Errors
+///
+/// Returns [`UnitError`] for over-cap selections, non-config paths,
+/// and parse failures.
+pub fn module_refs_for_texts(pairs: &[(String, String)]) -> Result<Vec<ModuleRef>, UnitError> {
+    if pairs.len() > MAX_FILES_PER_UNIT {
+        return Err(UnitError::TooManyFiles { count: pairs.len() });
+    }
+    let mut refs = Vec::new();
+    for (path, text) in pairs {
+        let name = path.rsplit('/').next().unwrap_or(path);
+        let shape = config_shape(name).ok_or_else(|| UnitError::Parse {
+            path: path.clone(),
+            message: "not_config".to_owned(),
+        })?;
+        let model = match shape.dialect {
+            Dialect::Native => parse_native(text),
+            Dialect::Json => parse_json(text),
+        }
+        .map_err(|err| UnitError::Parse {
+            path: path.clone(),
+            message: err.to_string(),
+        })?;
+        for decl in &model.modules {
+            refs.push(ModuleRef {
+                file: path.clone(),
+                name: decl.name.clone(),
+                source: decl.source.clone(),
+            });
+        }
+    }
+    Ok(refs)
+}
+
 /// Analyze one unit's `(path, bounded text)` pairs.
 ///
 /// # Errors

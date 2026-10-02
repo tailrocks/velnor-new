@@ -77,6 +77,8 @@ pub struct Discovery {
     /// `None` when the tofu table is absent and no evidence exists, or
     /// when configured roots convert to selected projects.
     pub tofu_note: Option<velnor_actions_tofu::TofuNote>,
+    /// Tofu selection records: head files plus edges per root.
+    pub tofu_units: Vec<crate::select_tofu::TofuSelectionUnit>,
 }
 
 /// Run file index, detection, inventory, profiles, and task derivation.
@@ -103,7 +105,7 @@ pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, 
         problem: err.to_string(),
     })?;
     let initial = apply_stack_ignores(projects, &config.stacks.ignore);
-    let (outcomes, inventories) = run_inventories(root, &candidates, index.files())?;
+    let ((outcomes, inventories), tofu_units) = run_inventories(root, &candidates, index.files())?;
     let statuses = check_candidate_outcomes(initial, &outcomes).map_err(|err| {
         OrchestratorError::Detection {
             problem: err.to_string(),
@@ -111,7 +113,7 @@ pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, 
     })?;
     let workspaces = plan_workspaces(root, &index, &statuses, inventories, config)?;
     qualify_workspaces(root, &workspaces)?;
-    let (proposals, fallbacks) = derive_all(config, &index, &workspaces)?;
+    let (proposals, fallbacks) = derive_all(config, &index, &workspaces, &statuses)?;
     let clippy_memory = clippy_memory_groups(&proposals);
     let recommendations = collect_recommendations(&index, &workspaces, &tool_checks);
     let (consumer_manifest_json, consumer_manifest_stand_in) = consumer_manifest_text(root)?;
@@ -127,6 +129,7 @@ pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, 
         consumer_manifest_stand_in,
         skipped_non_utf8,
         tofu_note: tofu_step.note,
+        tofu_units,
     })
 }
 
@@ -319,11 +322,12 @@ fn plan_workspaces(
     Ok(planned)
 }
 
-/// Derive every task proposal plus feature fallbacks, expanding test shards.
+/// Derive every task proposal (rust groups plus tofu triples) and fallbacks.
 fn derive_all(
     config: &VelnorConfig,
     index: &FileIndex,
     workspaces: &[PlannedWorkspace],
+    statuses: &[DetectionStatus],
 ) -> Result<
     (
         Vec<ProposedTask>,
@@ -362,6 +366,7 @@ fn derive_all(
         task.validate()?;
         proposals.push(task);
     }
+    proposals.extend(crate::select_tofu::derive_tofu(statuses, index.files())?);
     proposals.sort_by(|left, right| left.task_id.cmp(&right.task_id));
     Ok((proposals, fallbacks))
 }

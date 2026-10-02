@@ -17,7 +17,7 @@ use velnor_actions_actionlint::{
     actions::{MR_BOXINGTON_ACTION_SHA, MR_BOXINGTON_ACTION_VERSION},
 };
 use velnor_actions_contract::{
-    CrateJob, CrateObligation, Job, JobTimeout, ProposedTask, Step, WorkflowPolicy,
+    CrateJob, CrateObligation, Job, JobTimeout, ProposedTask, Stack, Step, WorkflowPolicy,
     assign_crate_job_ids, crate_display_name, matrix_id_for_task_group, matrix_key_for_id,
 };
 use velnor_actions_mise::{PinnedTool, TaskCacheMode, ToolCatalog};
@@ -141,6 +141,14 @@ fn is_nextest(task: &ProposedTask) -> bool {
     needs(task).nextest
 }
 
+/// Obligation order rank for one task, dispatched by stack.
+fn obligation_rank(task: &ProposedTask) -> u32 {
+    match Stack::from_id(&task.stack_id) {
+        Some(Stack::Tofu) => velnor_actions_tofu::task_kind_rank(&task.task_kind),
+        _ => task_kind_rank(&task.task_kind),
+    }
+}
+
 /// Ordered validated obligations for one crate's tasks.
 fn obligations_for(
     tasks: &[&ProposedTask],
@@ -149,8 +157,7 @@ fn obligations_for(
     let executed: BTreeSet<&str> = tasks.iter().map(|task| task.task_id.as_str()).collect();
     let mut ordered = tasks.to_vec();
     ordered.sort_by(|left, right| {
-        (task_kind_rank(&left.task_kind), &left.task_id)
-            .cmp(&(task_kind_rank(&right.task_kind), &right.task_id))
+        (obligation_rank(left), &left.task_id).cmp(&(obligation_rank(right), &right.task_id))
     });
     let mut obligations = Vec::with_capacity(ordered.len());
     for task in ordered {
@@ -333,6 +340,10 @@ fn mbx_objects_step(
 #[cfg(test)]
 #[path = "crate_jobs_tests.rs"]
 mod crate_jobs_tests;
+
+#[cfg(test)]
+#[path = "crate_jobs_tofu_tests.rs"]
+mod crate_jobs_tofu_tests;
 
 #[cfg(test)]
 #[path = "crate_jobs_upload_tests.rs"]

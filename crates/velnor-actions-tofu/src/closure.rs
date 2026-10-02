@@ -77,7 +77,7 @@ fn source_tree_provenance(root: &Path, unit: &str, kind: TofuTaskKind) -> Proven
             .filter(|path| is_fmt_file(path.rsplit('/').next().unwrap_or(path)))
             .cloned()
             .collect(),
-        TofuTaskKind::Init | TofuTaskKind::Validate => {
+        TofuTaskKind::InitForValidate | TofuTaskKind::Validate => {
             let configs: Vec<String> = collected
                 .into_iter()
                 .filter(|path| {

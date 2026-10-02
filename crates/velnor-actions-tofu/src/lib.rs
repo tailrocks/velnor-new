@@ -6,8 +6,9 @@
 //! and E4 content signals, and converts configured roots to detector
 //! records, inventories, toolchain inputs, and closures. T11 adds
 //! local-module edges (S6), H5 canonicalization, M2 identity, and
-//! calling-root selection over the base/head union. Task proposals
-//! (T12) stay out. This crate launches no processes, builds no tool
+//! calling-root selection over the base/head union. T12 adds native
+//! task proposals (kinds, IDs, identities, edges) with a stub payload
+//! T13 replaces. This crate launches no processes, builds no tool
 //! invocations, and renders no workflow text.
 
 pub mod closure;
@@ -18,12 +19,15 @@ pub mod effective;
 pub mod evidence;
 pub mod family;
 pub mod fmt_scope;
+pub mod identity;
 pub mod kinds;
 pub mod modules;
 pub mod parser;
 pub mod parser_json;
+pub mod propose;
 pub mod roots;
 pub mod select;
+pub mod task_identity;
 pub mod units;
 pub mod version;
 
@@ -37,6 +41,9 @@ pub use evidence::{
 };
 pub use family::{Family, LOCKFILE_NAME, family_of, is_auto_var, is_override_stem};
 pub use fmt_scope::{fmt_scope_for_root, fmt_set, is_excluded_name, is_fmt_file, under_hidden_dir};
+pub use identity::{
+    TofuGroupExtensionInputs, entry_metadata_for_task, extension_for_proposal, lock_slot_at_root,
+};
 pub use kinds::TofuTaskKind;
 pub use modules::{
     ModuleDecl, ModuleEdge, ModuleEdges, ModuleError, ModuleFinding, ModuleRef, ModuleSource,
@@ -47,9 +54,16 @@ pub use parser::{
     BlockModel, FileModel, MAX_DEPTH, MAX_DIAGNOSTIC_CHARS, MAX_FILE_BYTES, MAX_FILES_PER_UNIT,
     MAX_NODES, ParseError, has_legacy_ref_text, parse_json, parse_native, strip_template_spans,
 };
+pub use propose::{
+    KIND_DISPLAY_WORDS, TOFU_DRIVER, TOFU_PROFILE, TOFU_RUNNER, TofuTaskGroup, display_for_root,
+    is_init_kind, is_validate_kind, key_for_root, payload_env_for_kind, propose_task,
+    resource_class_for_kind, root_for_key, step_base_name, stub_payload, task_id_for_root,
+    task_kind_rank,
+};
 pub use roots::qualify_roots;
 pub use select::{RootSelection, SelectAllReason, select_roots};
-pub use units::{AnalyzedUnit, UnitError, analyze_files, files_for_prefix};
+pub use task_identity::{DigestSlot, ExtensionInputs, SlotState, TofuTaskIdentityExtension};
+pub use units::{AnalyzedUnit, UnitError, analyze_files, files_for_prefix, module_refs_for_texts};
 pub use version::{OPENTOFU_FLOOR, admits_opentofu, is_terraform_only};
 
 /// Stable identifier for the `OpenTofu` stack.

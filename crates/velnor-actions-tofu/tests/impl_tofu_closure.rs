@@ -91,7 +91,7 @@ fn seed_modules(root: &TempDir, unit: &str) -> Result<(), Box<dyn std::error::Er
 fn kinds_round_trip_and_reject_unknown() {
     for (token, kind) in [
         ("fmt", TofuTaskKind::Fmt),
-        ("init", TofuTaskKind::Init),
+        ("init", TofuTaskKind::InitForValidate),
         ("validate", TofuTaskKind::Validate),
     ] {
         assert_eq!(TofuTaskKind::parse(token).expect("known"), kind);

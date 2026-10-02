@@ -205,7 +205,10 @@ fn crate_lines(out: &mut String, prep: &GenerationPreparation, jobs: &BTreeMap<S
 /// Kind words in fixed order for the tasks present.
 fn present_kinds(tasks: &[ProposedTask]) -> Vec<&'static str> {
     let mut kinds = Vec::new();
-    for (kind, word) in KIND_DISPLAY_WORDS {
+    let words = KIND_DISPLAY_WORDS
+        .into_iter()
+        .chain(velnor_actions_tofu::KIND_DISPLAY_WORDS);
+    for (kind, word) in words {
         if tasks
             .iter()
             .any(|task| task.task_kind == kind && crate::crate_jobs::is_runnable(task))
