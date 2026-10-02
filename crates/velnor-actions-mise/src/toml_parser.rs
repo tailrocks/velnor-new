@@ -4,18 +4,16 @@
 //! tables) with one-based line tracking; document assembly and
 //! flattening stay in [`crate::toml_scan`].
 
-use std::collections::BTreeSet;
-
-use crate::toml_scan::{TomlDiagnostic, TomlDoc, TomlValue, flatten_value};
+use crate::toml_scan::{TomlDiagnostic, TomlDoc, TomlScope, TomlValue, flatten_entry};
 
 /// Character cursor with one-based line tracking.
 pub(crate) struct Parser {
     /// Input characters.
-    chars: Vec<char>,
+    pub(crate) chars: Vec<char>,
     /// Cursor position.
-    pos: usize,
+    pub(crate) pos: usize,
     /// One-based current line.
-    line: u32,
+    pub(crate) line: u32,
 }
 
 impl Parser {
@@ -28,12 +26,12 @@ impl Parser {
         }
     }
 
-    /// Parse one `[section]` or `[[table]]` header; return its path.
+    /// Parse one `[section]` or `[[table]]` header; return `(path, is_array)`.
     pub(crate) fn parse_header(
         &mut self,
         doc: &mut TomlDoc,
-        defined: &BTreeSet<Vec<String>>,
-    ) -> Result<Vec<String>, TomlDiagnostic> {
+        scope: &mut TomlScope<'_>,
+    ) -> Result<(Vec<String>, bool), TomlDiagnostic> {
         let line = self.line;
         self.bump();
         let array = self.eat('[');
@@ -45,15 +43,40 @@ impl Parser {
                 problem: "unterminated_section".to_owned(),
             });
         }
-        if defined.contains(&path) {
+        if scope.defined.contains(&path) {
             return Err(TomlDiagnostic {
                 line,
                 problem: "duplicate_key".to_owned(),
             });
         }
+        for width in 1..path.len() {
+            if scope.defined.contains(&path[..width]) {
+                return Err(TomlDiagnostic {
+                    line,
+                    problem: "duplicate_key".to_owned(),
+                });
+            }
+        }
+        if array {
+            if scope.tables.contains(&path) {
+                return Err(TomlDiagnostic {
+                    line,
+                    problem: "duplicate_key".to_owned(),
+                });
+            }
+            scope.array_tables.insert(path.clone());
+        } else {
+            if scope.tables.contains(&path) || scope.array_tables.contains(&path) {
+                return Err(TomlDiagnostic {
+                    line,
+                    problem: "duplicate_key".to_owned(),
+                });
+            }
+            scope.tables.insert(path.clone());
+        }
         self.end_of_line()?;
         doc.sections.push((path.clone(), line));
-        Ok(path)
+        Ok((path, array))
     }
 
     /// Parse one `dotted = value` entry under `section`.
@@ -61,8 +84,7 @@ impl Parser {
         &mut self,
         section: &[String],
         doc: &mut TomlDoc,
-        defined: &mut BTreeSet<Vec<String>>,
-        tables: &BTreeSet<Vec<String>>,
+        scope: &mut TomlScope<'_>,
     ) -> Result<(), TomlDiagnostic> {
         let line = self.line;
         let key = self.parse_dotted()?;
@@ -73,8 +95,8 @@ impl Parser {
         let value = self.parse_value()?;
         self.end_of_line()?;
         let mut path: Vec<String> = section.to_vec();
-        path.extend(key);
-        flatten_value(path, value, line, doc, defined, tables)
+        path.extend(key.clone());
+        flatten_entry(path, key, value, line, doc, scope)
     }
 
     /// Parse one value: string, boolean, number, array, or inline table.
@@ -119,71 +141,6 @@ impl Parser {
             }
             _ => Err(self.fail("expected_key")),
         }
-    }
-
-    /// Parse a quoted string value (basic or literal).
-    fn parse_string(&mut self) -> Result<TomlValue, TomlDiagnostic> {
-        self.parse_quoted_text().map(TomlValue::Str)
-    }
-
-    /// Parse quoted text; triple-quoted strings are rejected explicitly.
-    fn parse_quoted_text(&mut self) -> Result<String, TomlDiagnostic> {
-        let quote = self.bump().unwrap_or('\0');
-        if self.peek() == Some(quote) && self.peek_at(1) == Some(quote) {
-            return Err(self.fail("multiline_string_unsupported"));
-        }
-        let start = self.line;
-        let mut out = String::new();
-        let basic = quote == '"';
-        loop {
-            match self.bump() {
-                Some(char) if char == quote => return Ok(out),
-                Some('\\') if basic => out.push_str(&self.parse_escape()?),
-                Some('\n') | None => {
-                    return Err(TomlDiagnostic {
-                        line: start,
-                        problem: "unterminated_string".to_owned(),
-                    });
-                }
-                Some(char) if char.is_control() && char != '\t' => {
-                    return Err(self.fail("bad_string"));
-                }
-                Some(char) => out.push(char),
-            }
-        }
-    }
-
-    /// Parse one basic-string escape after the backslash.
-    fn parse_escape(&mut self) -> Result<String, TomlDiagnostic> {
-        match self.bump() {
-            Some('b') => Ok("\u{0008}".to_owned()),
-            Some('t') => Ok("\t".to_owned()),
-            Some('n') => Ok("\n".to_owned()),
-            Some('f') => Ok("\u{000C}".to_owned()),
-            Some('r') => Ok("\r".to_owned()),
-            Some('"') => Ok("\"".to_owned()),
-            Some('\\') => Ok("\\".to_owned()),
-            Some('u') => self.parse_unicode(4),
-            Some('U') => self.parse_unicode(8),
-            _ => Err(self.fail("bad_escape")),
-        }
-    }
-
-    /// Parse a fixed-width `\u`/`\U` escape into one character.
-    fn parse_unicode(&mut self, width: usize) -> Result<String, TomlDiagnostic> {
-        let mut digits = String::with_capacity(width);
-        for _ in 0..width {
-            match self.peek() {
-                Some(char) if char.is_ascii_hexdigit() => {
-                    digits.push(char);
-                    self.bump();
-                }
-                _ => return Err(self.fail("bad_escape")),
-            }
-        }
-        let scalar = u32::from_str_radix(&digits, 16).unwrap_or(u32::MAX);
-        char::from_u32(scalar)
-            .map_or_else(|| Err(self.fail("bad_escape")), |char| Ok(char.to_string()))
     }
 
     /// Parse `true`/`false` or an opaque bare scalar token.
@@ -333,7 +290,7 @@ impl Parser {
     }
 
     /// Peek the character `offset` ahead of the cursor.
-    fn peek_at(&self, offset: usize) -> Option<char> {
+    pub(crate) fn peek_at(&self, offset: usize) -> Option<char> {
         self.chars.get(self.pos + offset).copied()
     }
 
@@ -343,7 +300,7 @@ impl Parser {
     }
 
     /// Consume one character, tracking newlines.
-    fn bump(&mut self) -> Option<char> {
+    pub(crate) fn bump(&mut self) -> Option<char> {
         let next = self.chars.get(self.pos).copied()?;
         self.pos += 1;
         if next == '\n' {
@@ -353,7 +310,7 @@ impl Parser {
     }
 
     /// Diagnostic at the current line for `problem`.
-    fn fail(&self, problem: &str) -> TomlDiagnostic {
+    pub(crate) fn fail(&self, problem: &str) -> TomlDiagnostic {
         TomlDiagnostic {
             line: self.line,
             problem: problem.to_owned(),

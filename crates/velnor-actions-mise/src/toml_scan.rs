@@ -72,40 +72,121 @@ pub(crate) struct TomlDiagnostic {
 ///
 /// # Errors
 ///
+/// Active table state during TOML document assembly.
+#[derive(Debug)]
+pub(crate) struct TomlScope<'a> {
+    /// Fully qualified scalar paths defined in document order.
+    pub(crate) defined: &'a mut BTreeSet<Vec<String>>,
+    /// Normal table paths declared via `[table]`.
+    pub(crate) tables: &'a mut BTreeSet<Vec<String>>,
+    /// Array table paths declared via `[[table]]`.
+    pub(crate) array_tables: &'a mut BTreeSet<Vec<String>>,
+    /// Relative key paths defined in the current array-table element.
+    pub(crate) current_array_keys: &'a mut BTreeSet<Vec<String>>,
+    /// Whether the current section is an array table.
+    pub(crate) in_array_table: bool,
+}
+
+impl TomlScope<'_> {
+    /// Check whether `path` is already occupied by a scalar or table.
+    fn check_path(&self, path: &[String], line: u32) -> Result<(), TomlDiagnostic> {
+        if self.defined.contains(path)
+            || self.tables.contains(path)
+            || self.array_tables.contains(path)
+        {
+            return Err(TomlDiagnostic {
+                line,
+                problem: "duplicate_key".to_owned(),
+            });
+        }
+        for width in 1..path.len() {
+            if self.defined.contains(&path[..width]) {
+                return Err(TomlDiagnostic {
+                    line,
+                    problem: "duplicate_key".to_owned(),
+                });
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Parse `content` into sections plus flattened assignments.
+///
+/// # Errors
+///
 /// Returns [`TomlDiagnostic`] on any malformed or unsupported input.
 pub(crate) fn parse_toml(content: &str) -> Result<TomlDoc, TomlDiagnostic> {
     let mut parser = Parser::new(content);
     let mut doc = TomlDoc::default();
-    let mut defined: BTreeSet<Vec<String>> = BTreeSet::new();
-    let mut tables: BTreeSet<Vec<String>> = BTreeSet::new();
-    let mut section: Vec<String> = Vec::new();
+    let mut defined = BTreeSet::new();
+    let mut tables = BTreeSet::new();
+    let mut array_tables = BTreeSet::new();
+    let mut current_array_keys = BTreeSet::new();
+    let mut section = Vec::new();
+    let mut in_array_table = false;
+
     loop {
         parser.skip_trivia();
         if parser.at_end() {
             return Ok(doc);
         }
         if parser.peek() == Some('[') {
-            section = parser.parse_header(&mut doc, &defined)?;
-            tables.insert(section.clone());
+            let mut scope = TomlScope {
+                defined: &mut defined,
+                tables: &mut tables,
+                array_tables: &mut array_tables,
+                current_array_keys: &mut current_array_keys,
+                in_array_table,
+            };
+            let (path, is_array) = parser.parse_header(&mut doc, &mut scope)?;
+            section = path;
+            in_array_table = is_array;
+            current_array_keys.clear();
         } else {
-            parser.parse_entry(&section, &mut doc, &mut defined, &tables)?;
+            let mut scope = TomlScope {
+                defined: &mut defined,
+                tables: &mut tables,
+                array_tables: &mut array_tables,
+                current_array_keys: &mut current_array_keys,
+                in_array_table,
+            };
+            parser.parse_entry(&section, &mut doc, &mut scope)?;
         }
     }
 }
 
 /// Flatten one parsed value into document assignments.
-pub(crate) fn flatten_value(
+pub(crate) fn flatten_entry(
     path: Vec<String>,
+    relative_key: Vec<String>,
     value: InlineValue,
     line: u32,
     doc: &mut TomlDoc,
-    defined: &mut BTreeSet<Vec<String>>,
-    tables: &BTreeSet<Vec<String>>,
+    scope: &mut TomlScope<'_>,
 ) -> Result<(), TomlDiagnostic> {
     match value {
         InlineValue::Scalar(scalar) => {
-            check_path(&path, line, defined, tables)?;
-            defined.insert(path.clone());
+            if scope.in_array_table {
+                if scope.current_array_keys.contains(&relative_key) {
+                    return Err(TomlDiagnostic {
+                        line,
+                        problem: "duplicate_key".to_owned(),
+                    });
+                }
+                for width in 1..relative_key.len() {
+                    if scope.current_array_keys.contains(&relative_key[..width]) {
+                        return Err(TomlDiagnostic {
+                            line,
+                            problem: "duplicate_key".to_owned(),
+                        });
+                    }
+                }
+                scope.current_array_keys.insert(relative_key);
+            } else {
+                scope.check_path(&path, line)?;
+                scope.defined.insert(path.clone());
+            }
             doc.assignments.push(TomlAssignment {
                 path,
                 value: scalar,
@@ -114,36 +195,14 @@ pub(crate) fn flatten_value(
             Ok(())
         }
         InlineValue::Table(entries) => {
-            for (key, nested, key_line) in entries {
+            for (nested_key, nested, key_line) in entries {
                 let mut full = path.clone();
-                full.extend(key);
-                flatten_value(full, nested, key_line, doc, defined, tables)?;
+                full.extend(nested_key.clone());
+                let mut full_rel = relative_key.clone();
+                full_rel.extend(nested_key);
+                flatten_entry(full, full_rel, nested, key_line, doc, scope)?;
             }
             Ok(())
         }
     }
-}
-
-/// Reject redefined or scalar-shadowed assignment paths.
-fn check_path(
-    path: &[String],
-    line: u32,
-    defined: &BTreeSet<Vec<String>>,
-    tables: &BTreeSet<Vec<String>>,
-) -> Result<(), TomlDiagnostic> {
-    if defined.contains(path) || tables.contains(path) {
-        return Err(TomlDiagnostic {
-            line,
-            problem: "duplicate_key".to_owned(),
-        });
-    }
-    for width in 1..path.len() {
-        if defined.contains(&path[..width]) {
-            return Err(TomlDiagnostic {
-                line,
-                problem: "duplicate_key".to_owned(),
-            });
-        }
-    }
-    Ok(())
 }
