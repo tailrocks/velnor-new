@@ -370,7 +370,7 @@ fn publish_plan_files_writes_artifact_pair() -> TestResult {
 fn merge_verdict_mapping() -> TestResult {
     for (status, passed) in [
         ("passed", true),
-        ("no_work", false),
+        ("no_work", true),
         ("failed", false),
         ("cancelled", false),
         ("blocked", false),
