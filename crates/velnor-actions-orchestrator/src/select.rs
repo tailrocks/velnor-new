@@ -27,7 +27,8 @@ use crate::validators::{validate_diff_rev, validate_select_diff_args};
 /// Tasks without applicable targets are never obligations: scheduling
 /// them would emit impossible work (for example `cargo test --doc` for a
 /// package with no doctest-able target). Each omission is recorded as a
-/// `valid_no_test_targets:<task-id>` warning, never silent.
+/// `valid_no_test_targets:<task-id>` warning, never silent. Tofu
+/// subdir roots additionally record one `path.cwd:<root>` caveat each.
 pub(crate) fn select_universe<'a>(
     discovery: &'a Discovery,
     warnings: &mut Vec<String>,
@@ -40,6 +41,7 @@ pub(crate) fn select_universe<'a>(
             kept.push(task);
         }
     }
+    crate::select_tofu::push_chdir_findings(discovery, warnings);
     kept
 }
 

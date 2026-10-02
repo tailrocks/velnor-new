@@ -5,6 +5,7 @@ use std::ffi::OsString;
 use velnor_actions_contract::{
     CachePolicy, IdentityInputs, ProposedTask, Provenance, ResourceClass, ResourceDemand,
 };
+use velnor_actions_tofu::argv::tofu_payload_argv;
 use velnor_actions_tofu::closure::resolve_closure_at_root;
 use velnor_actions_tofu::kinds::TofuTaskKind;
 
@@ -48,7 +49,12 @@ fn proposal(kind: &str, unit: &str) -> ProposedTask {
             declared_inputs: Vec::new(),
             undeclared_reads: false,
         },
-        payload: vec![OsString::from("tofu")],
+        payload: match TofuTaskKind::parse(kind) {
+            Ok(parsed) => {
+                tofu_payload_argv(parsed, unit).unwrap_or_else(|_| vec![OsString::from("tofu")])
+            }
+            Err(_) => vec![OsString::from("tofu")],
+        },
         display_name: String::new(),
         uses_clock: false,
         uses_random: false,

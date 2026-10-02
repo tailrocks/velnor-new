@@ -1,4 +1,6 @@
 //! Integration test entry point; cases live in the sibling files.
+#[path = "impl_tofu_argv.rs"]
+mod impl_tofu_argv;
 #[path = "impl_tofu_closure.rs"]
 mod impl_tofu_closure;
 #[path = "impl_tofu_content.rs"]

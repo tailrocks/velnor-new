@@ -39,6 +39,52 @@ fn discovery_with(statuses: Vec<DetectionStatus>, units: Vec<TofuSelectionUnit>)
 }
 
 #[test]
+fn chdir_findings_name_each_subdir_root_once() {
+    use velnor_actions_tofu::{TofuTaskGroup, TofuTaskKind};
+    let kinds = [
+        TofuTaskKind::Fmt,
+        TofuTaskKind::InitForValidate,
+        TofuTaskKind::Validate,
+    ];
+    let mut discovery = discovery_with(Vec::new(), Vec::new());
+    for root in ["", "stacks/a", "stacks/b"] {
+        for kind in kinds {
+            let group = TofuTaskGroup {
+                root: root.to_owned(),
+                kind,
+                configuration: "default".to_owned(),
+                no_targets: false,
+            };
+            discovery
+                .proposals
+                .push(velnor_actions_tofu::propose_task(&group).expect("proposes"));
+        }
+    }
+    let mut warnings = Vec::new();
+    push_chdir_findings(&discovery, &mut warnings);
+    assert_eq!(
+        warnings,
+        vec![
+            "path.cwd:stacks/a".to_owned(),
+            "path.cwd:stacks/b".to_owned()
+        ]
+    );
+    let mut root_only = discovery_with(Vec::new(), Vec::new());
+    let group = TofuTaskGroup {
+        root: String::new(),
+        kind: TofuTaskKind::Validate,
+        configuration: "default".to_owned(),
+        no_targets: false,
+    };
+    root_only
+        .proposals
+        .push(velnor_actions_tofu::propose_task(&group).expect("proposes"));
+    let mut silent = Vec::new();
+    push_chdir_findings(&root_only, &mut silent);
+    assert!(silent.is_empty());
+}
+
+#[test]
 fn selected_roots_derive_from_selected_statuses_only() {
     let ignored = DetectionStatus::Ignored {
         project: DetectedProject {

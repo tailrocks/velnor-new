@@ -1,10 +1,11 @@
 //! Tofu proposal + task-kind cases (T12).
 use velnor_actions_contract::ResourceClass;
+use velnor_actions_tofu::argv::tofu_payload_argv;
 use velnor_actions_tofu::kinds::TofuTaskKind;
 use velnor_actions_tofu::propose::{
     KIND_DISPLAY_WORDS, TOFU_DRIVER, TOFU_RUNNER, TofuTaskGroup, display_for_root, is_init_kind,
     is_validate_kind, key_for_root, payload_env_for_kind, propose_task, resource_class_for_kind,
-    root_for_key, step_base_name, stub_payload, task_id_for_root, task_kind_rank,
+    root_for_key, step_base_name, task_id_for_root, task_kind_rank,
 };
 
 /// Contract-exact variant keeps the `init` wire spelling (spec §6.1
@@ -105,9 +106,31 @@ fn proposals_populate_identity_and_validate() {
             assert_eq!(task.identity.compile_driver, TOFU_DRIVER);
             assert_eq!(task.identity.test_runner, TOFU_RUNNER);
             assert_eq!(task.identity.target, "host");
-            assert!(task.identity.environment.is_empty());
+            assert_eq!(
+                task.identity
+                    .environment
+                    .get("TF_IN_AUTOMATION")
+                    .map(String::as_str),
+                Some("1"),
+                "{root} {} env",
+                kind.as_str()
+            );
+            assert_eq!(
+                task.identity
+                    .environment
+                    .get("TF_INPUT")
+                    .map(String::as_str),
+                Some("0"),
+                "{root} {} env",
+                kind.as_str()
+            );
             assert!(!task.identity.undeclared_reads);
-            assert_eq!(task.payload, stub_payload());
+            assert_eq!(
+                task.payload,
+                tofu_payload_argv(kind, root).expect("direct payload"),
+                "{root} {} payload",
+                kind.as_str()
+            );
             assert_eq!(task.display_name, display_for_root(root));
             assert_eq!(task.runner_profile, "default");
             assert!(!task.uses_clock && !task.uses_random && !task.no_targets);
@@ -137,13 +160,38 @@ fn resource_classes_pin_init_network() {
     );
 }
 
-/// The stub payload is the marked T13 placeholder, never a real argv.
+/// Proposals carry fixed per-kind argv, never a placeholder marker.
 #[test]
-fn stub_payload_is_marked_pending_t13() {
-    let payload = stub_payload();
-    assert_eq!(payload.len(), 2);
-    assert_eq!(payload[0].to_string_lossy(), "tofu");
-    assert_eq!(payload[1].to_string_lossy(), "pending_t13");
+fn payloads_are_fixed_shapes_not_placeholders() {
+    for root in ["", "stacks/a"] {
+        for kind in [
+            TofuTaskKind::Fmt,
+            TofuTaskKind::InitForValidate,
+            TofuTaskKind::Validate,
+        ] {
+            let task = propose_task(&group(root, kind)).expect("proposes");
+            assert!(
+                !task
+                    .payload
+                    .iter()
+                    .any(|arg| arg.to_string_lossy().contains("pending_t13")),
+                "{root} {} unmarked",
+                kind.as_str()
+            );
+            assert_eq!(
+                task.payload
+                    .first()
+                    .map(|arg| arg.to_string_lossy().into_owned()),
+                Some(if root.is_empty() {
+                    kind.as_str().to_owned()
+                } else {
+                    "-chdir".to_owned()
+                }),
+                "{root} {} head",
+                kind.as_str()
+            );
+        }
+    }
 }
 
 /// Empty fmt scopes carry `no_targets` without breaking validation.
@@ -174,9 +222,9 @@ fn dispatch_helpers_pin_spellings() {
     assert!(is_validate_kind("validate"));
     assert!(!is_validate_kind("init"));
     assert!(!is_init_kind("fmt") && !is_validate_kind("fmt"));
-    assert!(payload_env_for_kind("fmt").is_empty());
-    assert!(payload_env_for_kind("init").is_empty());
-    assert!(payload_env_for_kind("validate").is_empty());
+    assert_eq!(payload_env_for_kind("fmt").len(), 2);
+    assert_eq!(payload_env_for_kind("init").len(), 2);
+    assert_eq!(payload_env_for_kind("validate").len(), 2);
     assert!(payload_env_for_kind("bogus").is_empty());
     assert_eq!(
         resource_class_for_kind(TofuTaskKind::InitForValidate),

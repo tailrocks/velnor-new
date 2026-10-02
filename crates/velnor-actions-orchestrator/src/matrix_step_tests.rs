@@ -182,6 +182,31 @@ fn doc_obligation_step_carries_typed_rustdocflags() {
 }
 
 #[test]
+fn tofu_obligation_steps_carry_the_automation_pair() {
+    use velnor_actions_tofu::{
+        TF_IN_AUTOMATION_ENV, TF_IN_AUTOMATION_ON, TF_INPUT_ENV, TF_INPUT_OFF,
+    };
+    let mut tofu = obligation();
+    tofu.task_id = "stack/tofu/root/validate/default".to_owned();
+    tofu.kind = "validate".to_owned();
+    tofu.step_name = "Validate".to_owned();
+    let step = obligation_step(&tofu, &ToolCatalog::pinned(), &[]).expect("step");
+    let velnor_actions_contract::StepKind::Shell { env, .. } = &step.kind else {
+        panic!("obligation must be a shell step");
+    };
+    assert_eq!(
+        env.get(TF_IN_AUTOMATION_ENV).map(String::as_str),
+        Some(TF_IN_AUTOMATION_ON),
+        "tofu steps mark automation"
+    );
+    assert_eq!(
+        env.get(TF_INPUT_ENV).map(String::as_str),
+        Some(TF_INPUT_OFF),
+        "tofu steps disable input"
+    );
+}
+
+#[test]
 fn non_doc_obligation_steps_carry_no_rustdocflags() {
     use velnor_actions_rust::RUSTDOCFLAGS_ENV;
     let step = obligation_step(&obligation(), &ToolCatalog::pinned(), &[]).expect("step");

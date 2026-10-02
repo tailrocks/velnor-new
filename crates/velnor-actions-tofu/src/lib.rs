@@ -7,15 +7,17 @@
 //! records, inventories, toolchain inputs, and closures. T11 adds
 //! local-module edges (S6), H5 canonicalization, M2 identity, and
 //! calling-root selection over the base/head union. T12 adds native
-//! task proposals (kinds, IDs, identities, edges) with a stub payload
-//! T13 replaces. This crate launches no processes, builds no tool
-//! invocations, and renders no workflow text.
+//! task proposals (kinds, IDs, identities, edges). T13 adds the fixed
+//! per-kind payload argv plus env. This crate launches no processes,
+//! builds no tool invocations, and renders no workflow text.
 
+pub mod argv;
 pub mod closure;
 pub mod closure_inputs;
 pub mod content;
 pub mod detect;
 pub mod effective;
+pub mod env;
 pub mod evidence;
 pub mod family;
 pub mod fmt_scope;
@@ -31,10 +33,14 @@ pub mod task_identity;
 pub mod units;
 pub mod version;
 
+pub use argv::{CHDIR_FINDING_TAG, chdir_finding_for_root, tofu_payload_argv};
 pub use closure::resolve_closure_at_root;
 pub use content::{ContentSignals, signals_for};
 pub use detect::{detected_projects_for_units, discover_stack_candidates, manifest_for_unit_root};
 pub use effective::{Dialect, config_shape, dir_has_effective_config, effective_set};
+pub use env::{
+    TF_IN_AUTOMATION_ENV, TF_IN_AUTOMATION_ON, TF_INPUT_ENV, TF_INPUT_OFF, tofu_payload_env,
+};
 pub use evidence::{
     Advisory, Evidence, EvidenceLevel, MISE_OPENTOFU_TOOL, MISE_TERRAFORM_TOOL, TofuNote, classify,
     classify_with_contents, mise_tool_selected, plan_note,
@@ -57,8 +63,7 @@ pub use parser::{
 pub use propose::{
     KIND_DISPLAY_WORDS, TOFU_DRIVER, TOFU_PROFILE, TOFU_RUNNER, TofuTaskGroup, display_for_root,
     is_init_kind, is_validate_kind, key_for_root, payload_env_for_kind, propose_task,
-    resource_class_for_kind, root_for_key, step_base_name, stub_payload, task_id_for_root,
-    task_kind_rank,
+    resource_class_for_kind, root_for_key, step_base_name, task_id_for_root, task_kind_rank,
 };
 pub use roots::qualify_roots;
 pub use select::{RootSelection, SelectAllReason, select_roots};

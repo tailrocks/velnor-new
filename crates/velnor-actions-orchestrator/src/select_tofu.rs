@@ -12,7 +12,10 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 use velnor_actions_contract::{DetectionStatus, ProposedTask};
-use velnor_actions_tofu::{Family, ModuleEdges, family_of, key_for_root, select_roots};
+use velnor_actions_tofu::{
+    Family, ModuleEdges, chdir_finding_for_root, family_of, key_for_root, root_for_key,
+    select_roots,
+};
 
 use crate::OrchestratorError;
 use crate::discover::Discovery;
@@ -52,6 +55,26 @@ pub(crate) fn tofu_selected_roots(statuses: &[DetectionStatus]) -> Vec<String> {
     roots.sort();
     roots.dedup();
     roots
+}
+
+/// `path.cwd` caveats for tofu subdir roots, one per root.
+///
+/// Subdir-root payloads run under `-chdir`, so each configured
+/// subdir root records its caveat finding; the repo root needs none
+/// (its identity carries `.`). Roots derive from the proposals and
+/// sort for a stable warning order.
+pub(crate) fn push_chdir_findings(discovery: &Discovery, warnings: &mut Vec<String>) {
+    let mut findings: BTreeSet<String> = BTreeSet::new();
+    for task in &discovery.proposals {
+        if task.stack_id != velnor_actions_tofu::STACK_ID {
+            continue;
+        }
+        let root = root_for_key(&task.identity.unit_key);
+        if let Some(finding) = chdir_finding_for_root(&root) {
+            findings.insert(finding);
+        }
+    }
+    warnings.extend(findings);
 }
 
 /// Split `changed` by tofu ownership and select affected tofu keys.

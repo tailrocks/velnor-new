@@ -225,9 +225,35 @@ fn tofu_task_argv_routes_through_pinned_opentofu() {
         "no rust tools: {argv:?}"
     );
     let at = argv.iter().position(|arg| arg == "--").expect("separator");
-    // Program `tofu` plus the stub payload (its leading `tofu`
-    // duplicates the program; T13 replaces the payload words).
-    assert_eq!(&argv[at + 1..], ["tofu", "tofu", "pending_t13"]);
+    // Program `tofu` plus the fixed payload, wrapped never edited.
+    assert_eq!(&argv[at + 1..], ["tofu", "validate"]);
+}
+
+#[test]
+fn tofu_subdir_payload_runs_under_chdir_first() {
+    use velnor_actions_tofu::{TofuTaskGroup, TofuTaskKind};
+    let group = TofuTaskGroup {
+        root: "stacks/a".to_owned(),
+        kind: TofuTaskKind::Fmt,
+        configuration: "default".to_owned(),
+        no_targets: false,
+    };
+    let task = velnor_actions_tofu::propose_task(&group).expect("fixture proposes");
+    let catalog = ToolCatalog::pinned();
+    let argv = task_argv(&task, &catalog).expect("task argv");
+    let at = argv.iter().position(|arg| arg == "--").expect("separator");
+    assert_eq!(
+        &argv[at + 1..],
+        [
+            "tofu",
+            "-chdir",
+            "stacks/a",
+            "fmt",
+            "-check",
+            "-recursive",
+            "-no-color"
+        ]
+    );
 }
 
 #[test]
