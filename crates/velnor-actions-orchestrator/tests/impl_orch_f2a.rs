@@ -378,7 +378,10 @@ fn offline_deps_fail_closed_without_fetch() -> TestResult {
                 // Plan checkout input emission: `fetch-depth: 0` is a
                 // workflow input literal (history for HEAD^2 + base diff),
                 // never an analysis-time fetch execution.
-                .replace("fetch-depth", "");
+                .replace("fetch-depth", "")
+                // Contract error-code literal asserted by cache-key
+                // rejection tests, never an execution.
+                .replace("unsafe_fetch_root", "");
             assert!(
                 !scrubbed.contains("fetch"),
                 "fetch verb at {}:{line}: {code}",

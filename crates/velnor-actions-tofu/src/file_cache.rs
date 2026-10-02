@@ -72,19 +72,37 @@ impl FileCache {
     /// Hits return the first read's bytes or an error rebuilt with
     /// the same kind and message; misses read live and cache the
     /// outcome, except oversize files (over [`MAX_FILE_BYTES`]),
-    /// which read through uncached on every call.
+    /// which read through uncached on every call. Symlinks refuse
+    /// without reading (even at live targets), mirroring the
+    /// orchestrator's NOFOLLOW discipline; the refusal caches like
+    /// any other failure.
     ///
     /// [`MAX_FILE_BYTES`]: crate::parser::MAX_FILE_BYTES
     ///
     /// # Errors
     ///
     /// Returns the live [`std::io::Error`] when the path cannot be
-    /// read (cached verbatim for later hits).
+    /// read (cached verbatim for later hits), or a `symlink_refused`
+    /// error when the final component is a symlink.
     pub fn read_raw(&mut self, path: &Path) -> Result<Vec<u8>, std::io::Error> {
         if let Some(hit) = self.raw.get(path) {
             return hit
                 .clone()
                 .map_err(|failure| std::io::Error::new(failure.kind, failure.message.clone()));
+        }
+        if std::fs::symlink_metadata(path).is_ok_and(|meta| meta.file_type().is_symlink()) {
+            let refused = std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                format!("symlink_refused:{}", path.display()),
+            );
+            self.raw.insert(
+                path.to_path_buf(),
+                Err(ReadFailure {
+                    kind: refused.kind(),
+                    message: refused.to_string(),
+                }),
+            );
+            return Err(refused);
         }
         match std::fs::read(path) {
             Ok(bytes) => {

@@ -154,3 +154,62 @@ fn deep_chains_cover_every_descendant() {
     let covered = covered_fmt_roots(&roots(&["a", "a/b", "a/b/c"]));
     assert_eq!(covered, roots(&["a/b", "a/b/c"]).into_iter().collect());
 }
+
+/// Family-derived fmt oracle: native configs/overrides, tests, and
+/// non-JSON vars format; JSON spellings, the lock, and others never.
+fn family_expects_fmt(name: &str) -> bool {
+    use velnor_actions_tofu::effective::{Dialect, config_shape};
+    use velnor_actions_tofu::family::{Family, family_of};
+    use velnor_actions_tofu::fmt_scope::is_excluded_name;
+    if is_excluded_name(name) {
+        return false;
+    }
+    match family_of(name) {
+        Family::Config | Family::Override => {
+            matches!(
+                config_shape(name).map(|shape| shape.dialect),
+                Some(Dialect::Native)
+            )
+        }
+        Family::Test => true,
+        Family::Var => name.strip_suffix(".json").is_none(),
+        Family::Lock | Family::Other => false,
+    }
+}
+
+/// The fmt inclusion list and the family arms enumerate the same S2
+/// set: every corpus name agrees with its family derivation.
+#[test]
+fn fmt_inclusion_matches_family_derivation() {
+    for name in [
+        "main.tf",
+        "main.tofu",
+        "main.tf.json",
+        "main.tofu.json",
+        "override.tf",
+        "network_override.tofu",
+        "override.tf.json",
+        "main.tftest.hcl",
+        "main.tofutest.hcl",
+        "a.tfvars",
+        "a.tfvars.json",
+        "terraform.tfvars",
+        "terraform.tfvars.json",
+        "prod.auto.tfvars",
+        "prod.auto.tfvars.json",
+        "vars.tofuvars",
+        ".terraform.lock.hcl",
+        "README.md",
+        "main.tf.example",
+        ".hidden.tf",
+        "~scratch.tofu",
+        "#temp.tf#",
+        "nested.tftest.hcl.json",
+    ] {
+        assert_eq!(
+            is_fmt_file(name),
+            family_expects_fmt(name),
+            "{name} drifts between the fmt list and families"
+        );
+    }
+}

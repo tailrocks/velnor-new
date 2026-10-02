@@ -224,3 +224,54 @@ fn provider_key_rejects_loose_tofu_versions() {
         "the qualified pin builds"
     );
 }
+
+#[test]
+fn provider_key_rejects_unsafe_roots() {
+    for root in [
+        "../escape",
+        "a/../b",
+        "/abs",
+        "a'b",
+        "a\"b",
+        "a$b",
+        "a`b",
+        "a\\b",
+        "a\nb",
+    ] {
+        let err =
+            crate::tofu_cache::tofu_providers_cache_key("x86_64-unknown-linux-gnu", "1.13.1", root)
+                .expect_err("unsafe roots fail closed");
+        assert!(
+            err.to_string().contains("unsafe_fetch_root"),
+            "{root:?}: {err}"
+        );
+    }
+}
+
+#[test]
+fn provider_key_rejects_leading_dash_roots() {
+    for root in ["-evil", "-chdir"] {
+        let err =
+            crate::tofu_cache::tofu_providers_cache_key("x86_64-unknown-linux-gnu", "1.13.1", root)
+                .expect_err("leading-dash roots fail closed");
+        assert!(
+            err.to_string().contains("leading_dash_root"),
+            "{root:?}: {err}"
+        );
+    }
+}
+
+#[test]
+fn provider_key_rejects_overlong_keys_from_deep_roots() {
+    let deep = format!("{}leaf", "nest/".repeat(200));
+    let err =
+        crate::tofu_cache::tofu_providers_cache_key("x86_64-unknown-linux-gnu", "1.13.1", &deep)
+            .expect_err("deep roots overflow the key");
+    assert!(err.to_string().contains("key_too_long"), "{err}");
+    let roomy = format!("{}leaf", "nest/".repeat(20));
+    assert!(
+        crate::tofu_cache::tofu_providers_cache_key("x86_64-unknown-linux-gnu", "1.13.1", &roomy,)
+            .is_ok(),
+        "ordinary nesting builds"
+    );
+}

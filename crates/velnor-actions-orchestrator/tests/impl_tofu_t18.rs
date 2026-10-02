@@ -353,3 +353,37 @@ fn restore_precedes_init_precedes_validate() -> TestResult {
     }
     Ok(())
 }
+
+/// Staged jobs carry `if: always()` so lane failures collect instead
+/// of skipping later lanes; first-in-lane jobs keep the default.
+#[test]
+fn staged_root_jobs_carry_always_while_first_lane_stays_default() -> TestResult {
+    let dir = make_pure_tofu_repo(&three_root_config(), &three_root_files())?;
+    let prep = prepare(dir.path())?;
+    let jobs = finalized_jobs(&prep)?;
+    let ids = sorted_crate_ids(&jobs);
+    assert_eq!(ids.len(), 3, "one job per root: {ids:?}");
+    assert_eq!(jobs[&ids[0]].condition, None, "first lane default");
+    assert_eq!(jobs[&ids[1]].condition, None, "second lane default");
+    assert_eq!(
+        jobs[&ids[2]].condition.as_deref(),
+        Some("always()"),
+        "staged job collects lane failures"
+    );
+    let tree = render_staged_tree(&prep)?;
+    let yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
+    // Job-level `if:` renders at four spaces; the always-on report
+    // upload step carries its own deeper `if: always()` in every job.
+    let window = job_window(yaml, &ids[2])?;
+    assert!(
+        window.contains("\n    if: always()\n"),
+        "staged job renders the condition: {window}"
+    );
+    for id in &ids[..2] {
+        assert!(
+            !job_window(yaml, id)?.contains("\n    if: always()\n"),
+            "{id} renders no job-level condition"
+        );
+    }
+    Ok(())
+}

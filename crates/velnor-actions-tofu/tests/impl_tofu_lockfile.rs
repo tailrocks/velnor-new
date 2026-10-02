@@ -310,3 +310,23 @@ fn lockfile_module_never_writes() {
         assert!(!src.contains(token), "write token {token}");
     }
 }
+
+/// A symlinked lock counts as unreadable: capture never follows it
+/// and verification fails closed.
+#[test]
+#[cfg(unix)]
+fn symlinked_lock_captures_unreadable_and_fails_verify() -> Outcome {
+    let dir = TempDir::create("tofu-lock-link")?;
+    dir.write("victim.txt", "outside-bytes\n")?;
+    std::os::unix::fs::symlink(
+        dir.path().join("victim.txt"),
+        dir.path().join(".terraform.lock.hcl"),
+    )?;
+    let snap = TofuLockSnapshot::capture(dir.path(), &[String::new()]);
+    let err = snap.verify(dir.path()).expect_err("unreadable fails");
+    assert!(
+        err.contains("tofu_lock_unreadable:.terraform.lock.hcl"),
+        "got {err}"
+    );
+    Ok(())
+}

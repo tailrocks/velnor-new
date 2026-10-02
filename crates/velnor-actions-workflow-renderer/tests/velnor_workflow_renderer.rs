@@ -83,6 +83,8 @@ mod impl_renderer_sweep;
 mod impl_renderer_timeout;
 #[path = "impl_renderer_tofu_cache.rs"]
 mod impl_renderer_tofu_cache;
+#[path = "impl_renderer_tofu_leak.rs"]
+mod impl_renderer_tofu_leak;
 #[path = "impl_renderer_token_hygiene.rs"]
 mod impl_renderer_token_hygiene;
 #[path = "impl_renderer_token_hygiene_env.rs"]

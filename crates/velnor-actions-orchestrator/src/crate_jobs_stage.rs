@@ -51,10 +51,18 @@ pub(crate) fn is_opentofu(task: &ProposedTask) -> bool {
     Stack::from_id(&task.stack_id) == Some(Stack::Tofu)
 }
 
+/// Run condition for lane-staged tofu jobs: collect independent lane
+/// failures instead of skipping past them (`needs` still serializes;
+/// conclusions still fold; step-level coverage gates unaffected).
+/// Only jobs that gain a lane predecessor carry it: first-in-lane
+/// jobs keep the default plan-gated condition.
+pub(crate) const STAGED_TOFU_JOB_CONDITION: &str = "always()";
+
 /// Append lane-staging `needs` to tofu root jobs.
 ///
 /// `tofu_ids` names the staged jobs; every other job keeps its
 /// `needs` untouched. Staging is deterministic for a fixed ID set.
+/// Jobs that gain a lane predecessor also gain [`STAGED_TOFU_JOB_CONDITION`].
 pub(crate) fn stage_tofu_root_jobs(
     jobs: &mut [(String, Job)],
     tofu_ids: &[String],
@@ -76,6 +84,7 @@ pub(crate) fn stage_tofu_root_jobs(
     for (id, job) in jobs.iter_mut() {
         if let Some(previous) = predecessors.get(id.as_str()) {
             job.needs.push((*previous).to_owned());
+            job.condition = Some(STAGED_TOFU_JOB_CONDITION.to_owned());
         }
     }
 }
