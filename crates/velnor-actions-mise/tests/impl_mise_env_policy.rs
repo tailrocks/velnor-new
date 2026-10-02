@@ -30,6 +30,30 @@ fn has(env: &[(OsString, OsString)], key: &str) -> bool {
     env.iter().any(|(name, _)| name == key)
 }
 
+fn hostile_tofu_parent() -> Vec<(OsString, OsString)> {
+    let mut parent = parent_snapshot();
+    for (key, value) in [
+        ("TF_VAR_secret", "hunter2"),
+        ("TF_CLI_ARGS", "-auto-approve"),
+        ("TF_CLI_ARGS_plan", "-destroy"),
+        ("TF_TOKEN_app", "hunter2"),
+        ("TF_DATA_DIR", "/evil/data"),
+        ("TF_CLI_CONFIG_FILE", "/evil/cli.hcl"),
+        ("TF_PLUGIN_CACHE_DIR", "/evil/cache"),
+        ("TF_WORKSPACE", "evil"),
+        ("TF_LOG", "DEBUG"),
+        ("TF_LOG_PATH", "/evil/tofu.log"),
+        ("TF_REGISTRY_CLIENT_TIMEOUT", "0"),
+        ("TOFU_FUTURE_KEY", "evil"),
+        ("CHECKPOINT_DISABLE", "0"),
+        ("TF_IN_AUTOMATION", "0"),
+        ("TF_INPUT", "1"),
+    ] {
+        parent.push(pair(key, value));
+    }
+    parent
+}
+
 fn bootstrap() -> Result<IsolatedCommand, String> {
     IsolatedCommand::mise_install(&["rust@1.98.1".to_owned()]).map_err(|err| err.to_string())
 }
@@ -82,6 +106,83 @@ fn endpoint_selectors_strip_for_every_policy() -> Result<(), String> {
         for key in ["GH_HOST", "GH_CONFIG_DIR", "GH_ENTERPRISE_TOKEN"] {
             assert!(!has(env, key), "{label}: {key} must strip: {env:?}");
         }
+    }
+    Ok(())
+}
+
+/// H1 hostile-ambient negatives: no tofu/checkpoint ambient value
+/// survives any policy, including the automation pair (the constructor
+/// sets its own values after the strip, never inheriting them).
+#[test]
+fn tofu_ambient_families_strip_for_every_policy() -> Result<(), String> {
+    let parent = hostile_tofu_parent();
+    let cases: Vec<(&str, Vec<(OsString, OsString)>)> = vec![
+        ("bootstrap", bootstrap()?.spawn_env(&parent)),
+        ("baseline", baseline()?.spawn_env(&parent)),
+        ("verify", verify()?.spawn_env(&parent)),
+        ("discovery", discovery().spawn_env(&parent)),
+        ("repo_task", repo_task()?.spawn_env(&parent)),
+    ];
+    for (label, env) in &cases {
+        for key in [
+            "TF_VAR_secret",
+            "TF_CLI_ARGS",
+            "TF_CLI_ARGS_plan",
+            "TF_TOKEN_app",
+            "TF_DATA_DIR",
+            "TF_CLI_CONFIG_FILE",
+            "TF_PLUGIN_CACHE_DIR",
+            "TF_WORKSPACE",
+            "TF_LOG",
+            "TF_LOG_PATH",
+            "TF_REGISTRY_CLIENT_TIMEOUT",
+            "TOFU_FUTURE_KEY",
+            "CHECKPOINT_DISABLE",
+            "TF_IN_AUTOMATION",
+            "TF_INPUT",
+        ] {
+            assert!(!has(env, key), "{label}: ambient {key} must strip: {env:?}");
+        }
+        for (key, value) in env {
+            assert_ne!(
+                value.to_string_lossy(),
+                "hunter2",
+                "{label}: hostile value must not survive via {key:?}"
+            );
+        }
+    }
+    Ok(())
+}
+
+/// Strip-then-set ordering: the tofu constructor's baked pairs apply
+/// after the ambient strip, so hostile parent values cannot shadow
+/// Velnor's own isolation env.
+#[test]
+fn tofu_exec_baked_env_survives_hostile_parent() -> Result<(), String> {
+    let command = IsolatedCommand::tofu_exec(
+        &["opentofu@1.13.1".to_owned()],
+        &[OsString::from("tofu"), OsString::from("version")],
+        "/velnor/data",
+        "/velnor/cli.hcl",
+    )
+    .map_err(|err| err.to_string())?;
+    let env = command.spawn_env(&hostile_tofu_parent());
+    for (key, value) in [
+        ("TF_IN_AUTOMATION", "1"),
+        ("TF_INPUT", "0"),
+        ("TF_DATA_DIR", "/velnor/data"),
+        ("TF_CLI_CONFIG_FILE", "/velnor/cli.hcl"),
+    ] {
+        let seen: Vec<OsString> = env
+            .iter()
+            .filter(|(name, _)| *name == key)
+            .map(|(_, val)| val.clone())
+            .collect();
+        assert_eq!(
+            seen,
+            [OsString::from(value)],
+            "{key} must carry exactly the baked value: {env:?}"
+        );
     }
     Ok(())
 }

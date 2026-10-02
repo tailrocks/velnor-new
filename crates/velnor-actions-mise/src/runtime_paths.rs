@@ -24,6 +24,8 @@ pub const CARGO_GIT_SUFFIX: &str = "git";
 pub const CARGO_BIN_SUFFIX: &str = "bin";
 /// Per-lane target base (concurrent writers never share).
 pub const TARGET_BASE: &str = "$RUNNER_TEMP/velnor/target/";
+/// Velnor-owned tofu data-dir base (expression form for `env:`).
+pub const TOFU_DATA_BASE_EXPR: &str = "${{ runner.temp }}/velnor/tofu-data";
 /// MBX objects are action-managed, never a filesystem archive path.
 pub const MBX_OBJECTS_OWNER: &str = "mr-boxington-action/objects";
 /// Mise task artifacts dir (task-result layer).

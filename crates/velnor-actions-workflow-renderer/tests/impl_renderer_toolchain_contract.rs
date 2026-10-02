@@ -3,10 +3,11 @@ use std::collections::BTreeMap;
 
 use velnor_actions_workflow_renderer::toolchain_env::{
     CREDENTIAL_UNSET_VARS, STEP_CREDENTIAL_DENYLIST, STEP_ENDPOINT_DENYLIST,
-    STEP_ISOLATION_DENYLIST, TOOLCHAIN_HOME_KEYS, checked_project_task_env, checked_task_env,
-    credential_scrub, credential_unset_prelude, is_denied_credential_key, is_denied_endpoint_key,
-    reject_denied_step_keys, reject_privileged_task_keys, with_credential_scrub,
-    with_env_unset_argv, with_toolchain_homes,
+    STEP_ISOLATION_DENYLIST, STEP_TF_ALLOWLIST, STEP_TF_DENYLIST_PREFIXES, TOOLCHAIN_HOME_KEYS,
+    checked_project_task_env, checked_task_env, credential_scrub, credential_unset_prelude,
+    is_denied_credential_key, is_denied_endpoint_key, is_denied_tf_key, reject_denied_step_keys,
+    reject_denied_tf_keys, reject_privileged_task_keys, with_credential_scrub, with_env_unset_argv,
+    with_toolchain_homes,
 };
 
 #[test]
@@ -284,6 +285,64 @@ fn unset_wrappers_cover_every_unshadowable_var() {
         assert_eq!(argv[at - 1], "-u", "{var} must pair with -u");
     }
     assert_eq!(&argv[argv.len() - 3..], ["mise", "run", "x"]);
+}
+
+#[test]
+fn tf_family_keys_denied_except_automation_pair() {
+    assert_eq!(STEP_TF_DENYLIST_PREFIXES, ["TF_", "CHECKPOINT_"]);
+    assert_eq!(STEP_TF_ALLOWLIST, ["TF_IN_AUTOMATION", "TF_INPUT"]);
+    for denied in [
+        "TF_VAR_secret",
+        "TF_CLI_ARGS_plan",
+        "TF_TOKEN_app",
+        "TF_DATA_DIR",
+        "TF_CLI_CONFIG_FILE",
+        "TF_WORKSPACE",
+        "TF_LOG",
+        "TF_LOG_PATH",
+        "TF_REGISTRY_CLIENT_TIMEOUT",
+        "CHECKPOINT_DISABLE",
+    ] {
+        assert!(is_denied_tf_key(denied), "{denied} must match");
+        let base = BTreeMap::from([(denied.to_owned(), "sentinel".to_owned())]);
+        assert!(
+            reject_denied_tf_keys(&base).is_err(),
+            "{denied} must fail in a project map"
+        );
+    }
+    for clean in [
+        "TF_IN_AUTOMATION",
+        "TF_INPUT",
+        "MISE_RUSTUP_HOME",
+        "VELNOR_TASK_RUN",
+        "PATH",
+    ] {
+        assert!(!is_denied_tf_key(clean), "{clean} must pass");
+    }
+    assert!(reject_denied_tf_keys(&BTreeMap::new()).is_ok());
+}
+
+#[test]
+fn project_task_env_rejects_tf_keys() {
+    for hostile in ["TF_VAR_evil", "TF_DATA_DIR", "CHECKPOINT_DISABLE"] {
+        let base = BTreeMap::from([(hostile.to_owned(), "evil".to_owned())]);
+        let err = checked_project_task_env(&base, "/r/rustup", "/r/cargo", "1.98.1")
+            .expect_err("hostile TF key must fail");
+        assert!(
+            err.to_string().contains(&format!("tf_task_env:{hostile}")),
+            "got {err}"
+        );
+    }
+    let base = BTreeMap::from([
+        ("TF_IN_AUTOMATION".to_owned(), "1".to_owned()),
+        ("TF_INPUT".to_owned(), "0".to_owned()),
+    ]);
+    let merged = checked_project_task_env(&base, "/r/rustup", "/r/cargo", "1.98.1")
+        .expect("automation pair stays allowed");
+    assert_eq!(
+        merged.get("TF_IN_AUTOMATION").map(String::as_str),
+        Some("1")
+    );
 }
 
 #[test]

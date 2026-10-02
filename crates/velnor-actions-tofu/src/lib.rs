@@ -46,7 +46,9 @@ pub use diagnostics::{
 };
 pub use effective::{Dialect, config_shape, dir_has_effective_config, effective_set};
 pub use env::{
-    TF_IN_AUTOMATION_ENV, TF_IN_AUTOMATION_ON, TF_INPUT_ENV, TF_INPUT_OFF, tofu_payload_env,
+    DIR_DIGEST_HEX_CHARS, MAX_CLI_CONFIG_PATH_BYTES, MAX_DIR_SLUG_CHARS, TF_CLI_CONFIG_FILE_ENV,
+    TF_DATA_DIR_ENV, TF_IN_AUTOMATION_ENV, TF_IN_AUTOMATION_ON, TF_INPUT_ENV, TF_INPUT_OFF,
+    tofu_cli_config, tofu_data_dir_under, tofu_isolation_env, tofu_payload_env,
 };
 pub use evidence::{
     Advisory, Evidence, EvidenceLevel, MISE_OPENTOFU_TOOL, MISE_TERRAFORM_TOOL, TofuNote, classify,

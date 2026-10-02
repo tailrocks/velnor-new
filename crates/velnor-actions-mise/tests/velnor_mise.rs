@@ -67,5 +67,7 @@ mod impl_mise_steps;
 mod impl_mise_surface;
 #[path = "impl_mise_templates.rs"]
 mod impl_mise_templates;
+#[path = "impl_mise_tofu_exec.rs"]
+mod impl_mise_tofu_exec;
 #[path = "impl_mise_verify.rs"]
 mod impl_mise_verify;
