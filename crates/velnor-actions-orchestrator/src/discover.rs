@@ -344,7 +344,7 @@ fn derive_all(
         .clone()
         .unwrap_or_else(RustStackConfig::default_config);
     let explicit_fmt = index.contains("rustfmt.toml") || index.contains(".rustfmt.toml");
-    let union = crate::derive_groups::declared_union(workspaces);
+    let union = crate::derive_groups::declared_union(workspaces, index);
     let mut groups = Vec::new();
     let mut fallbacks = Vec::new();
     let mut archives = ArchivePlan::new();
@@ -352,8 +352,8 @@ fn derive_all(
         for config_name in &rust.configurations {
             let (derived, narrowed) = crate::derive_groups::derive_for_config(
                 config,
-                &workspace.record,
-                &workspace.profile,
+                index,
+                workspace,
                 config_name,
                 explicit_fmt,
                 &mut archives,

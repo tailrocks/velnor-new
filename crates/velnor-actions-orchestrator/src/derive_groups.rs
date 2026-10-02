@@ -14,12 +14,12 @@
 use std::collections::BTreeSet;
 
 use velnor_actions_contract::{
-    ContractError, RustConfiguration, Stack, VelnorConfig, task_id_for_stack,
+    ContractError, FileIndex, RustConfiguration, Stack, VelnorConfig, task_id_for_stack,
 };
 use velnor_actions_mise::{ArchivePlan, NextestArchive, NextestDriver, SortedInventory};
 use velnor_actions_rust::{
-    CompileDriver, DeriveInputs, RustExecutionProfile, TaskGroup, TaskKind, WorkspaceRecord,
-    derive_task_groups, derive_workspace_fmt_if_explicit, expand_shards_for_group,
+    CompileDriver, DeriveInputs, RustExecutionProfile, TaskGroup, TaskKind, derive_task_groups,
+    derive_workspace_fmt_if_explicit, expand_shards_for_group,
 };
 
 use crate::OrchestratorError;
@@ -55,11 +55,14 @@ impl FeatureFallback {
 /// The union spans workspaces so a feature declared in one workspace
 /// never reads as a typo while resolving another.
 #[must_use]
-pub(crate) fn declared_union(workspaces: &[PlannedWorkspace]) -> BTreeSet<String> {
+pub(crate) fn declared_union(
+    workspaces: &[PlannedWorkspace],
+    index: &FileIndex,
+) -> BTreeSet<String> {
     let mut union = BTreeSet::new();
     for workspace in workspaces {
         for package in &workspace.record.packages {
-            if package.in_workspace && !package.external {
+            if package.in_workspace && !package.external && index.contains(&package.manifest) {
                 union.extend(package.features.iter().cloned());
             }
         }
@@ -78,17 +81,19 @@ pub(crate) fn declared_union(workspaces: &[PlannedWorkspace]) -> BTreeSet<String
 /// when a task id cannot be derived.
 pub(crate) fn derive_for_config(
     config: &VelnorConfig,
-    record: &WorkspaceRecord,
-    profile: &RustExecutionProfile,
+    index: &FileIndex,
+    workspace: &PlannedWorkspace,
     rust_config: &RustConfiguration,
     explicit_fmt: bool,
     archives: &mut ArchivePlan,
     union: &BTreeSet<String>,
 ) -> Result<(Vec<TaskGroup>, Vec<FeatureFallback>), OrchestratorError> {
+    let record = &workspace.record;
+    let profile = &workspace.profile;
     let mut groups = Vec::new();
     let mut fallbacks = Vec::new();
     for package in &record.packages {
-        if !package.in_workspace || package.external {
+        if !package.in_workspace || package.external || !index.contains(&package.manifest) {
             continue;
         }
         let (features, fallback) =
