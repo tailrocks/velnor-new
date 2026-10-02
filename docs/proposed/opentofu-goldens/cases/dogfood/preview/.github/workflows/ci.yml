@@ -1370,7 +1370,7 @@ jobs:
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
           cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-d6bb2c969e4ca7df
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-b44a6349783a632e
           cache_save: "false"
           env: "false"
           install: "false"
@@ -1423,7 +1423,7 @@ jobs:
           MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
-        run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.21.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
+        run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.21.0 opentofu@1.13.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
       - name: Prepare Rust components
         env:
           MISE_AUTO_INSTALL: "false"
@@ -1643,6 +1643,12 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-velnor-actions-mise
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
+      - name: Save Mise tools
+        if: success() && github.event_name == 'push'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-b44a6349783a632e
+          path: ~/.local/share/mise
   rust-velnor-actions-orchestrator:
     name: Rust / velnor-actions-orchestrator
     runs-on: ubuntu-26.04

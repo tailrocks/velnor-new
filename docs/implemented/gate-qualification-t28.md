@@ -111,3 +111,16 @@ count stays 0); all existing pins green and behavior-identical (the
   `cargo deny check` is the working gate (standing precedent).
 - Branch CI has never run (gate #18); per-crate CI jobs are
   unexecuted by design until a PR opens.
+
+## 2026-10-02 fix: opentofu install for tofu-spawning suites (PR #10 CI)
+
+Residual from this qualification: branch CI never ran before PR #10,
+so the hermetic violation slipped all local gates — the
+`velnor-actions-mise` crate job installed rust+mbx+nextest but not
+opentofu while its suite spawns real `tofu` (`tofu_exec`), failing 4
+realbin tests with `mise WARN opentofu@1.13.1 is not installed and
+auto-install is disabled` (PR #10 run 36991743365 job 110789858438;
+independent repro run 36992365509). Fixed in this commit via the
+`TOFU_EXEC_SUITES` classification (`matrix_tools.rs`): the mise job's
+`Prepare pinned tools` step installs `opentofu@1.13.1`, nothing else
+changes.
