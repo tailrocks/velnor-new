@@ -218,3 +218,65 @@ fn sorted_unique(values: &[String]) -> Vec<String> {
     out.dedup();
     out
 }
+
+/// Provider/plugin digest inputs for the tofu toolchain identity.
+///
+/// Sorted toolchain `components` entries binding the task's provider
+/// surface declaration: which root's providers, which kind's lock
+/// requirement, and which exact tofu pin. Init and validate share
+/// the lock-reading slot; fmt binds the excluded marker (mirroring
+/// [`lock_slot_for_kind`](crate::lockfile::lock_slot_for_kind)).
+/// Provider CONTENT binds through the extension lock slot; this
+/// declares the surface the toolchain must serve.
+///
+/// # Errors
+///
+/// Returns [`ContractError`] for kind spellings outside the known
+/// tokens.
+pub fn provider_toolchain_entries(
+    unit_key: &str,
+    kind_spelling: &str,
+    tofu_spec: &str,
+) -> Result<Vec<String>, ContractError> {
+    use velnor_actions_contract::canonical::digest_b3_typed;
+    use velnor_actions_contract::canonical_json_bytes;
+    let slot = match TofuTaskKind::parse(kind_spelling)? {
+        TofuTaskKind::Fmt => "excluded:kind_does_not_read_lockfile",
+        TofuTaskKind::InitForValidate | TofuTaskKind::Validate => "lockfile",
+    };
+    let record = serde_json::json!({
+        "schema": "tofu-provider-inputs-v1",
+        "unit": unit_key,
+        "kind_slot": slot,
+        "tofu": tofu_spec,
+    });
+    let digest = digest_b3_typed(&canonical_json_bytes(&record)?);
+    Ok(vec![format!("tofu-provider-inputs:{}", digest.as_str())])
+}
+
+/// Toolchain inputs for one tofu task: exact pin plus provider surface.
+///
+/// The orchestrator's tofu arm delegates here so the adapter owns
+/// its toolchain shape; catalog specs sort inside, and unknown
+/// kinds fail closed.
+///
+/// # Errors
+///
+/// Returns [`ContractError`] for kind spellings outside the known
+/// tokens.
+pub fn toolchain_inputs_for_task(
+    task: &velnor_actions_contract::ProposedTask,
+    specs: Vec<String>,
+) -> Result<velnor_actions_contract::cachekey::ToolchainInputs, ContractError> {
+    use velnor_actions_contract::cachekey::ToolchainInputs;
+    let mut specs = specs;
+    specs.sort();
+    let spec = specs.first().map_or("", String::as_str);
+    let components = provider_toolchain_entries(&task.identity.unit_key, &task.task_kind, spec)?;
+    Ok(ToolchainInputs {
+        tools: specs,
+        components,
+        compile_driver: task.identity.compile_driver.clone(),
+        test_runner: task.identity.test_runner.clone(),
+    })
+}

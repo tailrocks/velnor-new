@@ -282,7 +282,7 @@ pub fn cache_key(
     compatibility: &str,
     snapshot: &str,
 ) -> Result<String, ContractError> {
-    if !matches!(layer, "sources" | "mbx" | "task") {
+    if !matches!(layer, "sources" | "mbx" | "task" | "tofu-providers") {
         return Err(ContractError::identity("cache.layer", "unknown_layer"));
     }
     if !matches!(trust, "trusted" | "pr") {
@@ -304,7 +304,7 @@ pub fn restore_prefix(
     trust: &str,
     compatibility: &str,
 ) -> Result<String, ContractError> {
-    if !matches!(layer, "sources" | "mbx" | "task") {
+    if !matches!(layer, "sources" | "mbx" | "task" | "tofu-providers") {
         return Err(ContractError::identity("cache.layer", "unknown_layer"));
     }
     if !matches!(trust, "trusted" | "pr") {

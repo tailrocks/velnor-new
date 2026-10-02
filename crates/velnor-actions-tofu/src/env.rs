@@ -3,8 +3,8 @@
 //! Pure data like [`tofu_payload_argv`](crate::argv::tofu_payload_argv):
 //! the orchestrator threads the returned pairs through the pinned-tool
 //! execution env. Every kind carries the automation pair; T16 adds the
-//! isolated per-root data dir plus the temp M4 CLI config path. The
-//! plugin-cache env stays a T21 transport concern.
+//! isolated per-root data dir plus the temp M4 CLI config path. T21
+//! adds the job-private per-root plugin-cache dir.
 
 use std::ffi::OsString;
 
@@ -24,6 +24,8 @@ pub const TF_INPUT_OFF: &str = "0";
 pub const TF_DATA_DIR_ENV: &str = "TF_DATA_DIR";
 /// Isolated temp CLI-config env key (T16, M4).
 pub const TF_CLI_CONFIG_FILE_ENV: &str = "TF_CLI_CONFIG_FILE";
+/// Job-private per-root plugin-cache env key (T21 transport).
+pub const TF_PLUGIN_CACHE_DIR_ENV: &str = "TF_PLUGIN_CACHE_DIR";
 /// Root-slug chars kept in a data-dir name; the digest suffix below
 /// keeps truncated slugs unique.
 pub const MAX_DIR_SLUG_CHARS: usize = 64;
@@ -54,39 +56,40 @@ fn automation_pair() -> Vec<(OsString, OsString)> {
 }
 
 /// Fixed tofu isolation env: the automation pair plus isolated
-/// data/config paths.
+/// data/config/cache paths.
 ///
 /// The single author of the pair structure: the Mise spawn
 /// constructor bakes these same keys, and the orchestrator pins the
 /// two outputs equal by test so rendered and spawned children never
 /// drift apart.
 #[must_use]
-pub fn tofu_isolation_env(data_dir: &str, config_file: &str) -> Vec<(OsString, OsString)> {
+pub fn tofu_isolation_env(
+    data_dir: &str,
+    config_file: &str,
+    cache_dir: &str,
+) -> Vec<(OsString, OsString)> {
     let mut env = automation_pair();
     env.push((OsString::from(TF_DATA_DIR_ENV), OsString::from(data_dir)));
     env.push((
         OsString::from(TF_CLI_CONFIG_FILE_ENV),
         OsString::from(config_file),
     ));
+    env.push((
+        OsString::from(TF_PLUGIN_CACHE_DIR_ENV),
+        OsString::from(cache_dir),
+    ));
     env
 }
 
-/// Isolated per-root data dir under `base`.
+/// H3-hashed root slug shared by every per-root dir derivation.
 ///
-/// `{base}/{slug}-{digest12}`: the slug is the lowercased root with
+/// `{slug}-{digest12}`: the slug is the lowercased root with
 /// separators folded (the repo root maps to `root`), truncated to
 /// [`MAX_DIR_SLUG_CHARS`], and the digest is blake3 over the exact
-/// root so case-folded or truncated slugs never collide. `base` is
-/// caller-owned (a runner-temp expression for rendered steps, a
-/// staging dir for local spawns).
-///
-/// # Errors
-///
-/// Returns [`ContractError`] for an empty base.
-pub fn tofu_data_dir_under(base: &str, root: &str) -> Result<String, ContractError> {
-    if base.is_empty() {
-        return Err(ContractError::identity("tofu_data_dir", "empty_base"));
-    }
+/// root so case-folded or truncated slugs never collide. Repo-derived
+/// key/path components hash through here, never interpolate.
+#[must_use]
+pub fn tofu_root_slug(root: &str) -> String {
     let slug = slugify_segment(root);
     let slug = if slug.is_empty() {
         "root".to_owned()
@@ -97,7 +100,39 @@ pub fn tofu_data_dir_under(base: &str, root: &str) -> Result<String, ContractErr
     let digest = digest_b3(root.as_bytes());
     let hex = digest.strip_prefix("b3-").unwrap_or(digest.as_str());
     let tag: String = hex.chars().take(DIR_DIGEST_HEX_CHARS).collect();
-    Ok(format!("{base}/{slug}-{tag}"))
+    format!("{slug}-{tag}")
+}
+
+/// Isolated per-root data dir under `base`.
+///
+/// `{base}/` plus the shared [`tofu_root_slug`]. `base` is
+/// caller-owned (a runner-temp expression for rendered steps, a
+/// staging dir for local spawns).
+///
+/// # Errors
+///
+/// Returns [`ContractError`] for an empty base.
+pub fn tofu_data_dir_under(base: &str, root: &str) -> Result<String, ContractError> {
+    if base.is_empty() {
+        return Err(ContractError::identity("tofu_data_dir", "empty_base"));
+    }
+    Ok(format!("{base}/{}", tofu_root_slug(root)))
+}
+
+/// Job-private per-root plugin-cache dir under `base` (T21).
+///
+/// `{base}/` plus the shared [`tofu_root_slug`]: the data dir and
+/// the plugin-cache dir for one root share the slug but never the
+/// base, so the two stay separate by construction.
+///
+/// # Errors
+///
+/// Returns [`ContractError`] for an empty base.
+pub fn tofu_cache_dir_under(base: &str, root: &str) -> Result<String, ContractError> {
+    if base.is_empty() {
+        return Err(ContractError::identity("tofu_cache_dir", "empty_base"));
+    }
+    Ok(format!("{base}/{}", tofu_root_slug(root)))
 }
 
 /// M4 CLI config content: `plugin_cache_dir` + `disable_checkpoint` only.

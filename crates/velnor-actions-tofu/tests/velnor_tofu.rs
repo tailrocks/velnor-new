@@ -31,6 +31,8 @@ mod impl_tofu_modules;
 mod impl_tofu_parser;
 #[path = "impl_tofu_propose.rs"]
 mod impl_tofu_propose;
+#[path = "impl_tofu_provider_inputs.rs"]
+mod impl_tofu_provider_inputs;
 #[path = "impl_tofu_qualify.rs"]
 mod impl_tofu_qualify;
 #[path = "impl_tofu_roots.rs"]

@@ -79,6 +79,8 @@ mod impl_renderer_steps_quote;
 mod impl_renderer_sweep;
 #[path = "impl_renderer_timeout.rs"]
 mod impl_renderer_timeout;
+#[path = "impl_renderer_tofu_cache.rs"]
+mod impl_renderer_tofu_cache;
 #[path = "impl_renderer_token_hygiene.rs"]
 mod impl_renderer_token_hygiene;
 #[path = "impl_renderer_token_hygiene_env.rs"]
