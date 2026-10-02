@@ -21,7 +21,9 @@ pub fn is_valid_branch_name(value: &str) -> bool {
             !part.is_empty()
                 && !part.starts_with(['.', '-'])
                 && !part.ends_with('.')
-                && !part.ends_with(".lock")
+                && part
+                    .rsplit_once('.')
+                    .is_none_or(|(_, suffix)| suffix != "lock")
         })
 }
 
@@ -31,7 +33,15 @@ mod tests {
 
     #[test]
     fn branch_authority_accepts_literal_names() {
-        for branch in ["main", "trunk", "release/1.2", "feature/x_y-z", "Main"] {
+        for branch in [
+            "main",
+            "trunk",
+            "release/1.2",
+            "feature/x_y-z",
+            "Main",
+            "main.LOCK",
+            "a/b.Lock",
+        ] {
             assert!(is_valid_branch_name(branch), "{branch:?}");
         }
     }

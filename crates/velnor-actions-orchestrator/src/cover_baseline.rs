@@ -17,8 +17,8 @@ use velnor_actions_contract::{
 use velnor_actions_mise::BaselineLookup as MiseBaselineLookup;
 
 use self::provenance_check::{
-    ProvenanceExpectations, baseline_can_carry, publish_event_eligible, repository_slug_from_origin,
-    validate_provenance,
+    ProvenanceExpectations, baseline_can_carry, publish_event_eligible,
+    repository_slug_from_origin, validate_provenance,
 };
 use self::provenance_resolve::{repository_anchor_for_slug, resolve_expected_repository};
 use crate::OrchestratorError;
