@@ -7,7 +7,7 @@ not a pass.
 |---|---|---|
 | G0 | PASS for identity, consumer inventory, and supersession only | `evidence.md`. Implementation and live rows are not part of this pass. |
 | G1 | PASS for migrate, labels, capacity, and wire tests | Checklist rows cite `40e08e8` and `da68f44`. Registration HTTP is not this pass. |
-| G2 | NOT_RUN | Reopen and a missing-row finish are tested. Fault injection around HTTP and Docker, and reconcile-before-advertise, are not. |
+| G2 | PASS | Pending is visible before the effect returns. Uncertain does not release `Capacity`. Advertise waits for `before_advertise`. Live HTTP and Docker sockets are not this pass. |
 | G3 | NOT_RUN | Image recipes and ownership decisions exist. No image build or live inspect. |
 | G4 | NOT_RUN | `GET .../actions/runner-scale-sets` returned 404. No shipped-client session and no GitHub job. Mocks must not flip this to PASS. |
 | G5 | PASS for in-repo routing and compare | `40e08e8` and `658154c`. A GitHub run of an expected-negative workflow is not this pass. |

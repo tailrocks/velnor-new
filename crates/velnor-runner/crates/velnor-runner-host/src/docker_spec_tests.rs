@@ -6,17 +6,31 @@ use crate::{
     runner_plan,
 };
 
-fn plan_with_mount(source: &str, target: &str) -> ContainerPlan {
+fn base_plan() -> ContainerPlan {
     ContainerPlan {
         privileged: false,
+        platform: "linux/amd64".to_owned(),
+        image: "velnor-runner:ubuntu-26.04-2.337.0".to_owned(),
         env: Vec::new(),
-        cmd: Vec::new(),
+        cmd: vec!["/usr/local/bin/velnor-runner-entrypoint".to_owned()],
         labels: Vec::new(),
-        mounts: vec![Mount {
-            source: source.to_owned(),
-            target: target.to_owned(),
-        }],
+        mounts: Vec::new(),
     }
+}
+
+fn plan_with_mount(source: &str, target: &str) -> ContainerPlan {
+    let mut plan = base_plan();
+    plan.mounts.push(Mount {
+        source: source.to_owned(),
+        target: target.to_owned(),
+    });
+    plan
+}
+
+fn plan_with_env(entry: &str) -> ContainerPlan {
+    let mut plan = base_plan();
+    plan.env.push(entry.to_owned());
+    plan
 }
 
 #[test]
@@ -25,9 +39,14 @@ fn runner_plan_is_not_privileged() -> Result<(), HostError> {
     assert_eq!(runner_plan("a/b"), Err(HostError::ForbiddenMount));
     let plan = runner_plan("worker_a")?;
     assert!(!plan.privileged);
-    assert_eq!(plan.mounts.len(), 1);
+    assert_eq!(plan.platform, "linux/amd64");
+    assert_eq!(plan.image, "velnor-runner:ubuntu-26.04-2.337.0");
+    assert_eq!(plan.mounts.len(), 2);
     assert_eq!(plan.mounts[0].source, "volume:worker_a");
-    assert_eq!(plan.mounts[0].target, "/var/run/docker.sock");
+    assert_eq!(plan.mounts[0].target, "/run");
+    assert_eq!(plan.mounts[1].source, "volume:worker_a-work");
+    assert_eq!(plan.mounts[1].target, "/home/runner/_work");
+    assert_eq!(plan.env.len(), 0);
     assert!(audit_plan(&plan).is_ok());
     let mut privileged = plan;
     privileged.privileged = true;
@@ -46,11 +65,19 @@ fn audit_rejects_host_and_secret_mounts() {
         "/home",
         "/var/run/docker.sock",
         "/VAR/RUN/DOCKER.SOCK",
+        "/run",
+        "/var/run",
+        "/private/var/run",
         "/tmp/ssh-agent.sock",
         "/tmp/SSH-AGENT.sock",
+        "/Users/me/.ssh/id_ed25519",
         "/Users/me/Library/Keychains/login.keychain-db",
         "/Users/me/Library/Application Support/Velnor/host.toml",
         "/users/me/library/application support/velnor/host.toml",
+        "/.orbstack/run/docker.sock",
+        "/opt/orbstack/run/docker.sock",
+        "/var/run/orbstack.sock",
+        "/Users/me/.orbstack/run/docker.sock",
     ];
     for source in sources {
         let plan = plan_with_mount(source, "/mnt");
@@ -67,13 +94,19 @@ fn audit_rejects_host_and_secret_mounts() {
 fn docker_sock_is_only_a_private_volume() -> Result<(), HostError> {
     let plan = runner_plan("priv")?;
     assert_eq!(plan.mounts[0].source, "volume:priv");
+    assert_eq!(plan.mounts[0].target, "/run");
     assert!(audit_plan(&plan).is_ok());
     let rejected = [
         ("/var/run/docker.sock", "/var/run/docker.sock"),
         ("/run/docker.sock", "/var/run/docker.sock"),
+        (
+            "/Users/me/.orbstack/run/docker.sock",
+            "/var/run/docker.sock",
+        ),
         ("volume:", "/var/run/docker.sock"),
         ("volume:a/b", "/var/run/docker.sock"),
         ("volume:../sock", "/var/run/docker.sock"),
+        ("volume:/var/run/docker.sock", "/run"),
     ];
     for (source, target) in rejected {
         assert_eq!(
@@ -86,10 +119,58 @@ fn docker_sock_is_only_a_private_volume() -> Result<(), HostError> {
 }
 
 #[test]
-fn canary_is_found_in_env_cmd_and_labels() -> Result<(), HostError> {
+fn audit_rejects_host_and_token_env() {
+    let entries = [
+        "HOME=/Users/me",
+        "HOME=/home/me",
+        "HOME=/home",
+        "SSH_AUTH_SOCK=/tmp/ssh-agent.sock",
+        "SSH_AGENT_PID=9",
+        "KEYCHAIN_PATH=/Users/me/Library/Keychains/login.keychain-db",
+        "VELNOR_HOST=/Users/me/Library/Application Support/Velnor/host.toml",
+        "GITHUB_TOKEN=ghs_example",
+        "GH_TOKEN=ghs_example",
+        "ACTIONS_RUNTIME_TOKEN=secret",
+        "GH_PAT=secret",
+        "DOCKER_HOST=unix:///var/run/docker.sock",
+        "DOCKER_HOST=unix:///Users/me/.orbstack/run/docker.sock",
+        "X=--jitconfig secret",
+    ];
+    for entry in entries {
+        assert_eq!(
+            audit_plan(&plan_with_env(entry)),
+            Err(HostError::ForbiddenMount),
+            "{entry}"
+        );
+    }
+}
+
+#[test]
+fn platform_stays_linux_amd64() -> Result<(), HostError> {
+    let plan = runner_plan("worker_a")?;
+    assert_eq!(plan.platform, "linux/amd64");
+    assert!(audit_plan(&plan).is_ok());
+    for platform in ["linux/arm64", "linux/aarch64", "aarch64", "arm64"] {
+        let mut wrong = plan.clone();
+        wrong.platform = platform.to_owned();
+        assert_eq!(
+            audit_plan(&wrong),
+            Err(HostError::ForbiddenMount),
+            "{platform}"
+        );
+    }
+    let mut arm_image = plan;
+    arm_image.image = "velnor-runner:ubuntu-26.04-arm64".to_owned();
+    assert_eq!(audit_plan(&arm_image), Err(HostError::ForbiddenMount));
+    Ok(())
+}
+
+#[test]
+fn canary_is_found_in_env_cmd_labels_and_mounts() -> Result<(), HostError> {
     let mut plan = runner_plan("priv")?;
     let canary = "JITCONFIG";
     assert!(!plan_contains(&plan, canary));
+    assert!(!plan_contains(&plan, ""));
     plan.env.push(format!("X={canary}"));
     assert!(plan_contains(&plan, canary));
     plan.env.clear();
@@ -100,6 +181,21 @@ fn canary_is_found_in_env_cmd_and_labels() -> Result<(), HostError> {
     assert!(!plan_contains(&plan, canary));
     plan.labels.push(format!("k={canary}"));
     assert!(plan_contains(&plan, canary));
+    plan.labels.pop();
+    assert!(!plan_contains(&plan, canary));
+    plan.mounts.push(Mount {
+        source: format!("volume:{canary}"),
+        target: "/mnt".to_owned(),
+    });
+    assert!(plan_contains(&plan, canary));
+    Ok(())
+}
+
+#[test]
+fn normal_plan_omits_canary() -> Result<(), HostError> {
+    let plan = runner_plan("worker_a")?;
+    assert!(!plan_contains(&plan, "JITCONFIG-CANARY"));
+    assert!(audit_plan(&plan).is_ok());
     Ok(())
 }
 

@@ -22,6 +22,9 @@ fn start() -> ExitCode {
     let Some(uid) = read_uid() else {
         return ExitCode::from(1);
     };
+    if std::fs::create_dir_all(log_dir()).is_err() {
+        return ExitCode::from(1);
+    }
     spawn(&bootstrap_argv(uid, &plist_path()))
 }
 
@@ -52,7 +55,7 @@ fn install() -> ExitCode {
     let Some(parent) = path.parent() else {
         return ExitCode::from(1);
     };
-    if std::fs::create_dir_all(parent).is_err() {
+    if std::fs::create_dir_all(parent).is_err() || std::fs::create_dir_all(log_dir()).is_err() {
         return ExitCode::from(1);
     }
     let body = with_logs(&plist, &log_dir());

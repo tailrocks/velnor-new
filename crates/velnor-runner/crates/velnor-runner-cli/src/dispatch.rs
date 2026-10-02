@@ -172,7 +172,10 @@ fn daemon(state: &Path, action: DaemonAction) -> ExitCode {
     match action {
         DaemonAction::Run => match DaemonLock::try_acquire(&state.join("daemon.lock")) {
             Ok(lock) => hold(&lock),
-            Err(_) => ExitCode::from(1),
+            Err(_) => {
+                eprintln!("daemon already running");
+                ExitCode::from(1)
+            }
         },
     }
 }

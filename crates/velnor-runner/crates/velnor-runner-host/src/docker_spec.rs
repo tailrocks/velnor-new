@@ -1,4 +1,4 @@
-//! Runner container plan. Privileged is false. JIT is not in metadata.
+//! One Ubuntu 26.04 runner. Platform is `linux/amd64`. JIT stays off the plan.
 
 use crate::error::HostError;
 
@@ -12,17 +12,23 @@ pub struct Mount {
 }
 
 /// Docker create projection the controller is allowed to send.
+///
+/// One runner. JIT is not a field: stdin feeds the entrypoint, not env, cmd, or labels.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ContainerPlan {
     /// Must stay false for the runner.
     pub privileged: bool,
-    /// Env pairs. Must not contain JIT.
+    /// Requested OCI platform. Always `linux/amd64`, never the host or VM arch.
+    pub platform: String,
+    /// Ubuntu 26.04 runner image. Not an ARM tag.
+    pub image: String,
+    /// Env pairs. Must not carry JIT, host paths, or management tokens.
     pub env: Vec<String>,
-    /// Command. Must not contain JIT.
+    /// Runner invocation. Must not carry the JIT payload.
     pub cmd: Vec<String>,
-    /// Labels. Must not contain JIT.
+    /// Labels. Must not carry JIT.
     pub labels: Vec<String>,
-    /// Mounts.
+    /// Private volumes for this worker's socket and work tree.
     pub mounts: Vec<Mount>,
 }
 
@@ -31,13 +37,32 @@ pub struct ContainerPlan {
 pub enum DeleteDecision {
     /// Immutable id matched the owned id.
     Delete,
-    /// Same name, different id. Leave it.
+    /// Observed id is not the owned id. Leave it.
     KeepForeign,
-    /// No body. Not success.
+    /// Observed id missing. Not proof of cleanup.
     NotDeleted,
 }
 
-/// Build the runner plan. The socket source is a private volume name.
+const RUNNER_PLATFORM: &str = "linux/amd64";
+const RUNNER_IMAGE: &str = "velnor-runner:ubuntu-26.04-2.337.0";
+const ENTRYPOINT: &str = "/usr/local/bin/velnor-runner-entrypoint";
+const SOCKET_TARGET: &str = "/run";
+const WORK_TARGET: &str = "/home/runner/_work";
+
+const HOST_NEEDLES: &[&str] = &[
+    "ssh-agent",
+    "ssh_auth_sock",
+    "keychain",
+    ".ssh",
+    "application support/velnor",
+    "orbstack",
+    "com.tailrocks.velnor",
+    "docker.sock",
+];
+
+/// Build the runner plan. `private_volume` is this worker's socket volume.
+///
+/// The work tree uses `{private_volume}-work`. JIT is not accepted.
 ///
 /// # Errors
 ///
@@ -46,34 +71,66 @@ pub fn runner_plan(private_volume: &str) -> Result<ContainerPlan, HostError> {
     if !private_volume_name(private_volume) {
         return Err(HostError::ForbiddenMount);
     }
+    let work = format!("{private_volume}-work");
     Ok(ContainerPlan {
         privileged: false,
+        platform: RUNNER_PLATFORM.to_owned(),
+        image: RUNNER_IMAGE.to_owned(),
         env: Vec::new(),
-        cmd: vec!["/usr/local/bin/velnor-runner-entrypoint".to_owned()],
+        cmd: vec![ENTRYPOINT.to_owned()],
         labels: vec![
             "velnor.role=runner".to_owned(),
             format!("velnor.volume={private_volume}"),
         ],
-        mounts: vec![Mount {
-            source: format!("volume:{private_volume}"),
-            target: "/var/run/docker.sock".to_owned(),
-        }],
+        mounts: vec![
+            Mount {
+                source: format!("volume:{private_volume}"),
+                target: SOCKET_TARGET.to_owned(),
+            },
+            Mount {
+                source: format!("volume:{work}"),
+                target: WORK_TARGET.to_owned(),
+            },
+        ],
     })
 }
 
-/// Reject privileged runners and host mounts.
+/// Reject privileged runners, non-amd64 platforms, and host or token exposure.
 ///
 /// # Errors
 ///
-/// Returns [`HostError::PrivilegedRunner`] or [`HostError::ForbiddenMount`].
+/// Returns [`HostError::PrivilegedRunner`] when privileged.
+/// Returns [`HostError::ForbiddenMount`] for host paths, tokens, `OrbStack`, the outer
+/// socket, JIT in Docker config, an ARM image, or a platform other than `linux/amd64`.
 pub fn audit_plan(plan: &ContainerPlan) -> Result<(), HostError> {
     if plan.privileged {
         return Err(HostError::PrivilegedRunner);
+    }
+    if shape_rejected(plan) || plan.env.iter().any(|entry| env_forbidden(entry)) {
+        return Err(HostError::ForbiddenMount);
     }
     for mount in &plan.mounts {
         reject_mount(mount)?;
     }
     Ok(())
+}
+
+fn shape_rejected(plan: &ContainerPlan) -> bool {
+    plan.platform != RUNNER_PLATFORM
+        || image_rejected(&plan.image)
+        || contains_jit(&plan.env)
+        || contains_jit(&plan.cmd)
+        || contains_jit(&plan.labels)
+}
+
+fn image_rejected(image: &str) -> bool {
+    image != RUNNER_IMAGE
+}
+
+fn contains_jit(items: &[String]) -> bool {
+    items
+        .iter()
+        .any(|item| item.to_ascii_lowercase().contains("jitconfig"))
 }
 
 fn reject_mount(mount: &Mount) -> Result<(), HostError> {
@@ -112,28 +169,64 @@ fn volume_char(ch: char) -> bool {
     ch.is_ascii_alphanumeric() || matches!(ch, '_' | '.' | '-')
 }
 
-const FORBIDDEN_MOUNT_NEEDLES: &[&str] = &[
-    "/users/",
-    "/home/",
-    "/var/run/docker.sock",
-    "ssh-agent",
-    "keychain",
-    "application support/velnor",
-];
-
 fn forbidden_source(source: &str) -> bool {
-    let folded = source.to_ascii_lowercase();
-    if FORBIDDEN_MOUNT_NEEDLES
-        .iter()
-        .any(|needle| folded.contains(needle))
-    {
-        return true;
-    }
-    let path = folded.strip_prefix("volume:").unwrap_or(folded.as_str());
-    path == "/users" || path == "/home"
+    host_exposure(&source.to_ascii_lowercase())
 }
 
-/// Delete only when the immutable id matches. Missing is not success.
+fn env_forbidden(entry: &str) -> bool {
+    let folded = entry.to_ascii_lowercase();
+    secret_key(env_key(&folded)) || folded.contains("jitconfig") || host_exposure(&folded)
+}
+
+fn env_key(entry: &str) -> &str {
+    entry.split_once('=').map_or(entry, |(key, _)| key).trim()
+}
+
+fn secret_key(key: &str) -> bool {
+    key == "ssh_auth_sock"
+        || key == "ssh_agent_pid"
+        || key == "docker_host"
+        || key == "pat"
+        || key.ends_with("_pat")
+        || key.contains("token")
+        || key.contains("secret")
+        || key.contains("password")
+        || key.contains("credential")
+        || key.contains("keychain")
+}
+
+fn host_exposure(folded: &str) -> bool {
+    if HOST_NEEDLES.iter().any(|needle| folded.contains(needle)) {
+        return true;
+    }
+    let path = folded.strip_prefix("volume:").unwrap_or(folded);
+    contains_path(path, "/home")
+        || contains_path(path, "/users")
+        || contains_path(path, "/run")
+        || contains_path(path, "/var/run")
+        || contains_path(path, "/private/var/run")
+}
+
+fn contains_path(text: &str, path: &str) -> bool {
+    let mut rest = text;
+    while let Some(index) = rest.find(path) {
+        let end = index + path.len();
+        if path_boundary(rest, end) {
+            return true;
+        }
+        rest = &rest[index + 1..];
+    }
+    false
+}
+
+fn path_boundary(text: &str, end: usize) -> bool {
+    matches!(
+        text.as_bytes().get(end),
+        None | Some(b'/' | b'"' | b' ' | b',' | b'=' | b':')
+    )
+}
+
+/// Delete only when the immutable id matches. A missing id is not cleanup.
 #[must_use]
 pub fn delete_decision(owned_id: &str, observed: Option<&str>) -> DeleteDecision {
     match observed {
@@ -143,10 +236,23 @@ pub fn delete_decision(owned_id: &str, observed: Option<&str>) -> DeleteDecision
     }
 }
 
-/// True when the canary appears in env, cmd, or labels.
+/// True only when `canary` leaked into env, cmd, labels, or mounts.
+///
+/// A canary that was never placed returns false. An empty canary is not a leak.
 #[must_use]
 pub fn plan_contains(plan: &ContainerPlan, canary: &str) -> bool {
-    plan.env.iter().any(|item| item.contains(canary))
-        || plan.cmd.iter().any(|item| item.contains(canary))
-        || plan.labels.iter().any(|item| item.contains(canary))
+    if canary.is_empty() {
+        return false;
+    }
+    field_contains(&plan.env, canary)
+        || field_contains(&plan.cmd, canary)
+        || field_contains(&plan.labels, canary)
+        || plan
+            .mounts
+            .iter()
+            .any(|mount| mount.source.contains(canary) || mount.target.contains(canary))
+}
+
+fn field_contains(items: &[String], canary: &str) -> bool {
+    items.iter().any(|item| item.contains(canary))
 }

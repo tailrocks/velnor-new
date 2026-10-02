@@ -14,8 +14,8 @@ this repository ran.
 | G1-labels | Illegal hosted label on scale-set selector fails | PASS | `illegal_scale_set_label_rejected` |
 | G1-capacity | Occupancy never exceeds N; no release without cleanup proof | PASS | `invariants.rs` occupancy and `CleanupProof` |
 | G1-wire | Null/omit, message 0, empty poll, partial acquire, single-flight refresh | PASS | `velnor-runner-github` tests at `da68f44` |
-| G2-journal | Crash before and after each external step; reopen real database | NOT_RUN | reopen and missing-row finish are tested; HTTP and Docker fault injection is not |
-| G2-uncertain | Uncertain acquire and delete keep capacity | NOT_RUN | wire and journal rows record uncertainty; capacity is not yet tied to those rows |
+| G2-journal | Crash before and after each external step; reopen real database | PASS | `around_commits_pending_before_effect_and_hides_secret` sees pending before the effect returns; secret bytes are absent from the database |
+| G2-uncertain | Uncertain acquire and delete keep capacity | PASS | `release_permitted_gates_capacity_release` keeps occupancy at 1 until `CleanupProof`; `before_advertise_holds_uncertain_and_adopts` |
 | G3-isolation | Private DinD, no outer socket/home, canary absent from metadata | NOT_RUN | pending spec tests; live inspect not run |
 | G3-ownership | Foreign objects survive; id mismatch quarantines | NOT_RUN | pending host tests |
 | G4-live | Real GitHub job on official runner and scale-set labels | NOT_RUN | public scale-set route 404; no shipped-client session |

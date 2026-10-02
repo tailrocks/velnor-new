@@ -46,7 +46,9 @@ is correct for this controller.
 
 `cargo test --locked --offline -p velnor-runner-github --all-targets` passed at `da68f44` (25 tests): null and omitted statistics, message id 0, empty poll, partial acquire, single-flight 401, create, refresh skip, and `encodedJITConfig`.
 
-`cargo test --locked --offline -p velnor-runner-core --test invariants` covers occupancy and cleanup proof. `cargo test --locked --offline -p velnor-runner-host --all-targets` passed at `f03e1ae` (23 tests), including journal reopen and a missing-row finish.
+`cargo test --locked --offline -p velnor-runner-core --test invariants` covers occupancy and cleanup proof. `cargo test --locked --offline -p velnor-runner-host -p velnor-runner-cli --all-targets` passed on 2026-10-03 (46 tests) after the journal reconcile and runner-plan changes. `around_commits_pending_before_effect_and_hides_secret` reopens the database while the effect is running and does not store the canary. `release_permitted_gates_capacity_release` calls `Capacity::release` only after proven cleanup. `before_advertise` holds pending, uncertain, and missing docker ids, and returns unjournaled owned ids for adoption rather than deletion.
+
+`docker build --platform linux/amd64` for `images/dind` and `images/runner/ubuntu-26.04` exited 0. Inspect: host `arm64`, engine `linux/arm64`, `velnor-dind:29.8.2` `linux/amd64` id `sha256:0a778ae8c9ec3feb9ea297534d17c7f226327e9e2ba7b81dbd5a850332271e7b`, `velnor-runner:ubuntu-26.04-2.337.0` `linux/amd64` id `sha256:577f4aa8df5490bfca303ccb26aa99fa35eed7e0d889bcc1435fe2ab103a18f2`. Runner image config env is `PATH` only, cmd is null, entrypoint is the image entrypoint, and `jitconfig` occurs 0 times in `Config`. That is not a running-worker mount inspect and does not mark G3 `PASS`.
 
 `cargo test --locked --offline -p velnor-runner-cli --all-targets` passed at `658154c` (14 tests). `velnor-host --help` exited 0 and listed every command. `status --json` and `doctor` on a missing state directory printed `waiting_for_credentials` twice, identically, and did not create the directory.
 
