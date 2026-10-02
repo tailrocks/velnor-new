@@ -6,12 +6,12 @@ not a pass.
 | Gate | Status | Why |
 |---|---|---|
 | G0 | PASS for identity, consumer inventory, and supersession only | `evidence.md`. Implementation and live rows are not part of this pass. |
-| G1 | NOT_RUN | Wire decode tests exist. Session create/poll/acquire/JIT/ack and schema-2 routing are not landed. Decode tests are not this gate. |
-| G2 | NOT_RUN | Local journal module exists. Reopen, fault-injection, and reconcile-before-advertise tests are not landed. |
-| G3 | NOT_RUN | Image recipes and ownership decisions exist. No image build, canary, or foreign-object run. |
-| G4 | NOT_RUN | No real GitHub job. Mocks must not flip this to PASS. |
-| G5 | NOT_RUN | Generator negatives not landed. |
-| G6 | NOT_RUN | `velnor-host` builds. Launchctl argv is unit-tested. A live LaunchAgent is not proven. Linux unit tests must not mark launchd PASS. |
+| G1 | PASS for migrate, labels, capacity, and wire tests | Checklist rows cite `40e08e8` and `da68f44`. Registration HTTP is not this pass. |
+| G2 | NOT_RUN | Reopen and a missing-row finish are tested. Fault injection around HTTP and Docker, and reconcile-before-advertise, are not. |
+| G3 | NOT_RUN | Image recipes and ownership decisions exist. No image build or live inspect. |
+| G4 | NOT_RUN | `GET .../actions/runner-scale-sets` returned 404. No shipped-client session and no GitHub job. Mocks must not flip this to PASS. |
+| G5 | PASS for in-repo routing and compare | `40e08e8` and `658154c`. A GitHub run of an expected-negative workflow is not this pass. |
+| G6 | PASS for the binary only | Help exits 0 and status is `waiting_for_credentials` at `658154c`. Launchctl was not driven. Unit tests must not mark launchd PASS. |
 | G7 | NOT_RUN | ChainArgos not updated. |
 | G8 | NOT_RUN | No promotion. Required checks stay. |
 
