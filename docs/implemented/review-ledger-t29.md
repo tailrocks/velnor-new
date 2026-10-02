@@ -247,7 +247,7 @@ check --fail-on-warning` (3 pre-existing infos steady).
 | c9 | 2634 / 2634 / 1 | +1 (A8 pin); verdicts unchanged |
 
 Fail-before observed (stash) for: A2, A5, B2 (new-symbol
-pins), B4 (both), B9. New-symbol pins (B2 const, B6 tokens)
+pins), B4 (both), B9. New-symbol pins (B2 const)
 additionally fail to compile at base by construction.
-Composition pins over unchanged behavior (B13, C3) are green at
+Composition pins over unchanged behavior (B6, B13, C3) are green at
 base by design; their value is regression coverage.
