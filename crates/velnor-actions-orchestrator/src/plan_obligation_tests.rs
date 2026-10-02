@@ -83,7 +83,10 @@ fn tofu_tasks_derive_the_tofu_envelope() {
     );
     let (envelope, eligible) = extension_for_task(&task, &dir.path, &bundle).expect("derives");
     assert_eq!(envelope.schema, TOFU_EXTENSION_SCHEMA);
-    assert!(!eligible, "T23: validate reuse is OFF despite a known lockfile");
+    assert!(
+        !eligible,
+        "T23: validate reuse is OFF despite a known lockfile"
+    );
     assert!(velnor_actions_contract::validate_tofu_extension(&envelope).is_ok());
 }
 
