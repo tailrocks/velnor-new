@@ -115,7 +115,14 @@ they name a file the key would need to hash. On Linux, `-Wl,-z,` followed by `de
 `lazy`, `nodelete`, `nodlopen`, `noexecstack`, `norelro`, `now`, `origin`, or
 `relro` is the exception: each sets a flag in the output and reads nothing, so
 it enters the key as text. Node-API addons built with napi-build pass
-`-z nodelete` and cache this way.
+`-z nodelete` and cache this way. On Windows MSVC, `-C link-arg=/STACK:<size>`
+(or `/STACK:<reserve>,<commit>`) and `/Brepro` are the same kind of exception.
+A `rustflags` entry such as `-C link-arg=/STACK:8000000` reaches every proc
+macro, build script, and binary in a workspace, so refusing it would leave all
+of them linking on every build. An MSVC link is not reproducible, which makes
+each rebuilt proc-macro DLL hash differently and every crate that uses it
+miss. Other options, such as `/DEF:` or `/LIBPATH:`, can name a file and still
+bypass.
 On macOS a debug-info link records absolute object paths and their timestamps
 in the binary's debug map, so the shim passes ld64 `-oso_prefix` for its own
 output directory, which lets those links cache. An explicit `--target`
@@ -149,6 +156,11 @@ bypass. The search root itself may be a symlink, such as a Homebrew `opt` path.
 Existing directory size and input-count limits still apply. Installation paths
 remain part of the key, so different installations do not share artifacts just
 because their files match.
+
+A workspace crate that bypasses for one of these reasons, such as a dependent of
+a `-sys` crate that found a system library through pkg-config, still switches to
+[private incremental state](/incremental#learned-incremental-reuse) on its first
+source edit. Only its result stays out of the shared cache.
 
 A custom target specification names its archives its own way, so a `-l static`
 compile for one bypasses as `custom-target-native-library` unless the flag is

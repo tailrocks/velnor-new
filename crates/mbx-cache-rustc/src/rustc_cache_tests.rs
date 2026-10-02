@@ -1771,6 +1771,229 @@ fn a_rebuilt_dependency_does_not_move_the_source_fingerprint() {
     assert_ne!(fingerprint(), before);
 }
 
+/// A native search directory is part of a shared key, and a directory the cache
+/// cannot describe never gets one. Neither says anything about whether the
+/// crate was edited, so the churn fingerprint must come out the same whether
+/// discovery scanned the directory, refused it, or never looked.
+#[cfg(unix)]
+#[test]
+fn native_search_directories_do_not_move_the_source_fingerprint() {
+    let directory = tempfile::tempdir().unwrap();
+    let working_dir = directory.path().join("work");
+    let native = directory.path().join("native");
+    let elsewhere = directory.path().join("elsewhere");
+    for path in [&working_dir, &native, &elsewhere] {
+        std::fs::create_dir_all(path).unwrap();
+    }
+    std::fs::write(working_dir.join("src.rs"), "pub fn value() {}\n").unwrap();
+    std::fs::write(native.join("generated.rs"), "// listed by dep-info\n").unwrap();
+    std::fs::write(native.join("libfixture.a"), "first").unwrap();
+    let argument = format!("-Lnative={}", native.display());
+    let invocation = RustcInvocation::parse(&args(&[
+        "--crate-name=widget",
+        "--crate-type=lib",
+        "--emit=dep-info,metadata,link",
+        "--out-dir=target/debug/deps",
+        &argument,
+        "src.rs",
+    ]))
+    .unwrap();
+    let dep_info = RustcDepInfo::parse(&format!(
+        "target/debug/deps/widget.d: src.rs {}\n",
+        native.join("generated.rs").display()
+    ))
+    .unwrap();
+    let mappings = [PathMapping::new(&native, "native")];
+    let scanned = || {
+        invocation
+            .discover_inputs_with_mappings(
+                &dep_info,
+                &working_dir,
+                &mappings,
+                &mbx_cache_core::NoFileDigestCache,
+            )
+            .map(|discovered| invocation.source_fingerprint(&discovered))
+    };
+    let refused = || {
+        invocation
+            .discover_inputs_with_mappings(
+                &dep_info,
+                &working_dir,
+                &[],
+                &mbx_cache_core::NoFileDigestCache,
+            )
+            .map(|discovered| invocation.source_fingerprint(&discovered))
+    };
+    let sources_only = || {
+        invocation
+            .discover_source_inputs(&dep_info, &working_dir, &mbx_cache_core::NoFileDigestCache)
+            .map(|discovered| invocation.source_fingerprint(&discovered))
+            .unwrap()
+    };
+    let before = sources_only();
+    assert_eq!(scanned().unwrap(), before);
+
+    // The directory outside every admitted root is refused, and a dangling
+    // link in an admitted one cannot be read; the fingerprint is still defined.
+    assert!(matches!(
+        refused(),
+        Err(BypassReason::UnsupportedSearchPath(_))
+    ));
+    std::os::unix::fs::symlink(elsewhere.join("missing"), native.join("libdangling.so")).unwrap();
+    assert!(matches!(scanned(), Err(BypassReason::InputRead { .. })));
+    assert_eq!(sources_only(), before);
+
+    // A library appearing or changing in the directory is not an edit.
+    std::fs::write(native.join("libfixture.a"), "rebuilt").unwrap();
+    std::fs::write(native.join("libextra.a"), "new").unwrap();
+    assert_eq!(sources_only(), before);
+
+    // A file dep-info names is a source, wherever it lives.
+    std::fs::write(native.join("generated.rs"), "// changed\n").unwrap();
+    assert_ne!(sources_only(), before);
+    std::fs::remove_file(native.join("libdangling.so")).unwrap();
+    assert_eq!(scanned().unwrap(), sources_only());
+}
+
+/// A prediction omits what a native directory scan will find again, but not a
+/// file dep-info names there. Rediscovery from it has to agree with discovery
+/// from dep-info about which files are the crate's own sources.
+#[test]
+fn a_predicted_discovery_keeps_named_sources_beneath_a_native_directory() {
+    let directory = tempfile::tempdir().unwrap();
+    let working_dir = directory.path().join("work");
+    let native = directory.path().join("target/native");
+    std::fs::create_dir_all(&working_dir).unwrap();
+    std::fs::create_dir_all(&native).unwrap();
+    std::fs::write(working_dir.join("src.rs"), "pub fn value() {}\n").unwrap();
+    std::fs::write(native.join("generated.rs"), "// named by dep-info\n").unwrap();
+    std::fs::write(native.join("libfixture.a"), "first").unwrap();
+    let argument = format!("-Lnative={}", native.display());
+    let invocation = RustcInvocation::parse(&args(&[
+        "--crate-name=widget",
+        "--crate-type=lib",
+        "--emit=dep-info,metadata,link",
+        "--out-dir=target/debug/deps",
+        &argument,
+        "src.rs",
+    ]))
+    .unwrap();
+    let dep_info = RustcDepInfo::parse(&format!(
+        "target/debug/deps/widget.d: src.rs {}\n",
+        native.join("generated.rs").display()
+    ))
+    .unwrap();
+    let mappings = vec![
+        PathMapping::new(&working_dir, "workspace"),
+        PathMapping::new(directory.path().join("target"), "target"),
+    ];
+    let discovered = invocation
+        .discover_inputs_with_mappings(
+            &dep_info,
+            &working_dir,
+            &mappings,
+            &mbx_cache_core::NoFileDigestCache,
+        )
+        .unwrap();
+    let action_context = ActionContext {
+        working_dir: working_dir.clone(),
+        path_mappings: mappings.clone(),
+        inputs: discovered.inputs.clone(),
+        ..context(&[])
+    };
+    let prediction = invocation.prediction(&action_context, &discovered).unwrap();
+    let predicted = || {
+        let predicted = prediction
+            .discover(&working_dir, &mappings, &mbx_cache_core::NoFileDigestCache)
+            .unwrap();
+        invocation.source_fingerprint(&predicted)
+    };
+    let before = invocation.source_fingerprint(&discovered);
+    assert_eq!(predicted(), before);
+
+    // A library appearing in the directory is not an edit; the named file is.
+    std::fs::write(native.join("libextra.a"), "new").unwrap();
+    assert_eq!(predicted(), before);
+    std::fs::write(native.join("generated.rs"), "// changed\n").unwrap();
+    assert_ne!(predicted(), before);
+}
+
+/// The crate root is a required input whether or not dep-info lists it. Having a
+/// native search directory must not turn it, or anything else outside that
+/// directory, into something an edit can go unnoticed in.
+#[test]
+fn a_required_source_outside_a_native_directory_still_moves_the_source_fingerprint() {
+    let directory = tempfile::tempdir().unwrap();
+    let working_dir = directory.path().join("work");
+    let native = directory.path().join("target/native");
+    std::fs::create_dir_all(&working_dir).unwrap();
+    std::fs::create_dir_all(&native).unwrap();
+    std::fs::write(working_dir.join("src.rs"), "pub fn value() {}\n").unwrap();
+    std::fs::write(native.join("libfixture.a"), "archive").unwrap();
+    let argument = format!("-Lnative={}", native.display());
+    let invocation = RustcInvocation::parse(&args(&[
+        "--crate-name=widget",
+        "--crate-type=lib",
+        "--emit=dep-info,metadata,link",
+        "--out-dir=target/debug/deps",
+        &argument,
+        "src.rs",
+    ]))
+    .unwrap();
+    // dep-info that leaves the root out: it still counts.
+    std::fs::write(working_dir.join("other.rs"), "// listed\n").unwrap();
+    let dep_info = RustcDepInfo::parse("target/debug/deps/widget.d: other.rs\n").unwrap();
+    let mappings = vec![
+        PathMapping::new(&working_dir, "workspace"),
+        PathMapping::new(directory.path().join("target"), "target"),
+    ];
+    let discover = || {
+        invocation
+            .discover_inputs_with_mappings(
+                &dep_info,
+                &working_dir,
+                &mappings,
+                &mbx_cache_core::NoFileDigestCache,
+            )
+            .unwrap()
+    };
+    let scanned = || invocation.source_fingerprint(&discover());
+    let sources_only = || {
+        invocation.source_fingerprint(
+            &invocation
+                .discover_source_inputs(&dep_info, &working_dir, &mbx_cache_core::NoFileDigestCache)
+                .unwrap(),
+        )
+    };
+    let discovered = discover();
+    let action_context = ActionContext {
+        working_dir: working_dir.clone(),
+        path_mappings: mappings.clone(),
+        inputs: discovered.inputs.clone(),
+        ..context(&[])
+    };
+    let prediction = invocation.prediction(&action_context, &discovered).unwrap();
+    let predicted = || {
+        invocation.source_fingerprint(
+            &prediction
+                .discover(&working_dir, &mappings, &mbx_cache_core::NoFileDigestCache)
+                .unwrap(),
+        )
+    };
+    let before = scanned();
+    assert_eq!(sources_only(), before);
+    assert_eq!(predicted(), before);
+
+    std::fs::write(native.join("libfixture.a"), "rebuilt").unwrap();
+    assert_eq!(scanned(), before);
+    assert_eq!(predicted(), before);
+
+    std::fs::write(working_dir.join("src.rs"), "pub fn value() -> u32 { 1 }\n").unwrap();
+    assert_ne!(scanned(), before);
+    assert_ne!(sources_only(), before);
+    assert_ne!(predicted(), before);
+}
+
 fn native_links() -> ParseOptions {
     ParseOptions::caching_native_links(true)
 }
@@ -2470,7 +2693,9 @@ fn link_arguments_bypass_whatever_actually_links() {
         );
     }
 
-    let flag = "-Clink-arg=/STACK:8000000";
+    // A native link refuses what it cannot tell from a file name. A stack
+    // size is the exception on MSVC; see the test for it below.
+    let flag = "-Clink-arg=/DEF:exports.def";
     let native = args(&["--test", "--emit=dep-info,link", flag, "src/lib.rs"]);
     assert_eq!(
         RustcInvocation::parse_with(&native, native_links()),
@@ -2479,6 +2704,103 @@ fn link_arguments_bypass_whatever_actually_links() {
         )),
         "{flag} should not be cacheable on a native link"
     );
+}
+
+/// A `rustflags` entry of `-C link-arg=/STACK:8000000` reaches every proc
+/// macro, build script, and binary a Windows workspace builds. Treated as
+/// unmodeled it bypassed all of them, and since a MSVC link stamps the PE
+/// header and PDB with a time and a GUID, every rebuilt proc-macro DLL hashed
+/// differently from the last one and every crate compiled against it missed
+/// as well: about 175 of mise's 1100 compilations never became hits.
+#[test]
+fn msvc_stack_and_reproducibility_options_are_keyed_on_a_native_link() {
+    let link = |crate_type: &str, flag: &str| {
+        args(&[
+            "--crate-name=widget",
+            crate_type,
+            "--emit=dep-info,link",
+            "--out-dir=target/debug/deps",
+            flag,
+            "src/lib.rs",
+        ])
+    };
+    for flag in [
+        "-Clink-arg=/STACK:8000000",
+        "-Clink-arg=/Brepro",
+        "-Clink-args=/STACK:8000000 /Brepro",
+    ] {
+        let parsed =
+            RustcInvocation::parse_with(&link("--crate-type=proc-macro", flag), native_links());
+        if !cfg!(target_env = "msvc") {
+            // Another host hands this to a linker that reads it as a file.
+            assert_eq!(
+                parsed,
+                Err(BypassReason::UnmodeledLinkArgument(
+                    flag.strip_prefix("-C").unwrap().into()
+                )),
+                "{flag} must still bypass off MSVC"
+            );
+            continue;
+        }
+        assert!(
+            parsed.unwrap().links_natively(),
+            "{flag} should be cacheable"
+        );
+    }
+
+    // Nothing else an MSVC linker accepts is modeled, whatever the output
+    // linked.
+    let msvc = cfg!(target_env = "msvc");
+    for flag in [
+        "-Clink-arg=/DEF:exports.def",
+        "-Clink-arg=/STACK:8000000,x",
+        "-Clink-arg=/LIBPATH:C:\\libs",
+        "-Clink-arg=/Brepro:yes",
+        "-Clink-args=/STACK:8000000 /DEF:exports.def",
+        "-Clink-args=",
+        "-Clink-arg=exports.def",
+    ] {
+        let parsed = RustcInvocation::parse_with(&link("--crate-type=bin", flag), native_links());
+        assert!(
+            matches!(parsed, Err(BypassReason::UnmodeledLinkArgument(_))),
+            "{flag} should bypass (msvc: {msvc})"
+        );
+    }
+}
+
+/// The grammar behind that: a number after `/STACK:` and `/Brepro`, with the
+/// case and the `-` spelling the linker itself accepts.
+#[test]
+fn msvc_link_option_grammar_is_closed() {
+    for modeled in [
+        "/STACK:8000000",
+        "/stack:8000000,4096",
+        "-STACK:0x800000",
+        "/Brepro",
+        "/BREPRO",
+        "-brepro",
+    ] {
+        assert!(msvc_option_reads_no_file(modeled), "{modeled}");
+    }
+    for refused in [
+        "",
+        "/",
+        "STACK:8000000",
+        "/STACK",
+        "/STACK:",
+        "/STACK:,",
+        "/STACK:1,2,3",
+        "/STACK:0x",
+        "/STACK:12ab",
+        "/STACK:8000000 /Brepro",
+        "/STACK:C:\\file",
+        "/Brepro:NO",
+        "/DEBUG",
+        "/OUT:foo.exe",
+        "@response.rsp",
+    ] {
+        assert!(!msvc_option_reads_no_file(refused), "{refused}");
+    }
 }
 
 /// `-z` keywords that only set a flag in the ELF output read no file, so a

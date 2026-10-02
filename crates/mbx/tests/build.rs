@@ -8,7 +8,44 @@ use std::os::unix::fs::PermissionsExt as _;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 #[cfg(unix)]
-use std::process::Stdio;
+use std::process::{Child, Output, Stdio};
+
+#[cfg(unix)]
+struct BuildChildGuard(Option<Child>);
+
+#[cfg(unix)]
+impl BuildChildGuard {
+    fn new(child: Child) -> Self {
+        Self(Some(child))
+    }
+
+    fn try_wait(&mut self) -> std::io::Result<Option<std::process::ExitStatus>> {
+        self.0
+            .as_mut()
+            .expect("build child was already consumed")
+            .try_wait()
+    }
+
+    fn wait_with_output(mut self) -> std::io::Result<Output> {
+        self.0
+            .take()
+            .expect("build child was already consumed")
+            .wait_with_output()
+    }
+}
+
+#[cfg(unix)]
+impl Drop for BuildChildGuard {
+    fn drop(&mut self) {
+        let Some(child) = self.0.as_mut() else {
+            return;
+        };
+        if child.try_wait().ok().flatten().is_none() {
+            let _ = child.kill();
+        }
+        let _ = child.wait();
+    }
+}
 
 #[path = "build/semantic_oracle.rs"]
 mod semantic_oracle;
@@ -1696,6 +1733,82 @@ fn a_workspace_crate_is_incremental_on_its_first_edit_and_mbx_clean_resets_it() 
     );
 }
 
+/// A native search directory the cache cannot describe, such as a system library
+/// directory whose symlinks lead into other trees, makes a compilation
+/// uncacheable. It says nothing about whether the crate's sources are being
+/// edited, so the edit still has to switch the crate to private incremental state.
+#[cfg(unix)]
+fn assert_incremental_on_first_edit_despite_native_dir(prepare: impl FnOnce(&Path, &Path)) {
+    let store = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    let reports = tempfile::tempdir().unwrap();
+    let native = tempfile::tempdir().unwrap();
+    let elsewhere = tempfile::tempdir().unwrap();
+    write_project(project.path());
+    prepare(native.path(), elsewhere.path());
+    std::fs::write(
+        project.path().join("build.rs"),
+        format!(
+            "fn main() {{\n    println!(\"cargo:rerun-if-changed=build.rs\");\n    println!(\"cargo:rustc-link-search=native={}\");\n}}\n",
+            native.path().display()
+        ),
+    )
+    .unwrap();
+
+    let cold = build(
+        project.path(),
+        store.path(),
+        &reports.path().join("cold.json"),
+    );
+    assert_eq!(
+        compiled_incrementally(&cold),
+        0,
+        "a first build has nothing to be incremental on: {cold}"
+    );
+
+    edit_project(project.path(), 1);
+    let stats = build(
+        project.path(),
+        store.path(),
+        &reports.path().join("edit-1.json"),
+    );
+
+    assert!(
+        compiled_incrementally(&stats) > 0,
+        "the edited crate should have compiled incrementally despite its search path: {stats}"
+    );
+    assert!(
+        learned_sessions(store.path()) > 0,
+        "it should have left incremental state behind: {stats}"
+    );
+    assert_eq!(
+        stats["stored_bytes"].as_u64(),
+        Some(0),
+        "an incremental artifact must never be published: {stats}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn a_crate_with_an_unshareable_native_search_path_is_incremental_on_its_first_edit() {
+    assert_incremental_on_first_edit_despite_native_dir(|native, elsewhere| {
+        std::fs::write(elsewhere.join("libextra.so.1"), b"not a library").unwrap();
+        std::os::unix::fs::symlink(elsewhere.join("libextra.so.1"), native.join("libextra.so"))
+            .unwrap();
+    });
+}
+
+/// rustc never reads a link it is not asked to resolve, so a dangling one in the
+/// search directory does not fail the build. It only keeps the directory from
+/// being scanned.
+#[cfg(unix)]
+#[test]
+fn a_dangling_link_in_a_native_search_path_does_not_stop_the_first_edit_going_incremental() {
+    assert_incremental_on_first_edit_despite_native_dir(|native, elsewhere| {
+        std::os::unix::fs::symlink(elsewhere.join("missing"), native.join("libgone.so")).unwrap();
+    });
+}
+
 /// The same evidence that turns it on turns it off: once the content stops
 /// moving, the unit compiles normally again and rejoins the shared cache.
 #[test]
@@ -3333,6 +3446,88 @@ fn a_cargo_hardlink_build_runs_the_automatic_collector() {
     assert!(
         !log.contains("no such command"),
         "the collector must not run Cargo: {log}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn a_low_disk_floor_starts_collection_before_the_build_ends() {
+    let store = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    let reports = tempfile::tempdir().unwrap();
+    write_dependent_project(project.path());
+
+    // Hold the first real compilation until the test has observed that Cargo
+    // is alive, then keep the dependent compiler alive until the detached
+    // collector claims its stamp.
+    let wrapper = project.path().join("delayed-rustc");
+    let compiled = project.path().join("compiler-finished");
+    let release = project.path().join("release-compiler");
+    let stamp = store.path().join("actions/gc/v1/last-sweep");
+    std::fs::write(
+        &wrapper,
+        "#!/bin/sh\n\"$TEST_REAL_RUSTC\" \"$@\"\nstatus=$?\ncase \" $* \" in\n  *\" --crate-name base \"*)\n    if [ \"$status\" -eq 0 ]; then\n      : > \"$TEST_COMPILER_FINISHED\"\n      while [ ! -e \"$TEST_RELEASE_COMPILER\" ]; do sleep 0.02; done\n    fi\n    ;;\n  *\" --crate-name above \"*)\n    if [ \"$status\" -eq 0 ]; then\n      attempts=0\n      while [ ! -e \"$TEST_SWEEP_STAMP\" ] && [ \"$attempts\" -lt 1500 ]; do\n        sleep 0.02\n        attempts=$((attempts + 1))\n      done\n    fi\n    ;;\nesac\nexit \"$status\"\n",
+    )
+    .unwrap();
+    let mut permissions = std::fs::metadata(&wrapper).unwrap().permissions();
+    permissions.set_mode(0o755);
+    std::fs::set_permissions(&wrapper, permissions).unwrap();
+
+    let report = reports.path().join("build.json");
+    let real_rustc = which::which("rustc").unwrap();
+    let mut command = isolated_cargo_command(
+        mbx_command(),
+        project.path(),
+        store.path(),
+        &report,
+        &["check", "--offline"],
+        &[
+            ("MBX_GC_AUTO", "1"),
+            ("MBX_GC_MIN_FREE_SIZE", "1PiB"),
+            ("MBX_GC_MAX_SIZE", "1"),
+            ("MBX_GC_INTERVAL", "1h"),
+            ("RUSTC", wrapper.to_str().unwrap()),
+            ("TEST_REAL_RUSTC", real_rustc.to_str().unwrap()),
+            ("TEST_COMPILER_FINISHED", compiled.to_str().unwrap()),
+            ("TEST_RELEASE_COMPILER", release.to_str().unwrap()),
+            ("TEST_SWEEP_STAMP", stamp.to_str().unwrap()),
+        ],
+    );
+    command.stdout(Stdio::piped()).stderr(Stdio::piped());
+    let mut child = BuildChildGuard::new(command.spawn().expect("mbx should run"));
+
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while !compiled.exists() && std::time::Instant::now() < deadline {
+        assert!(
+            child.try_wait().unwrap().is_none(),
+            "the build exited before the compiler could be released"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    assert!(
+        compiled.exists(),
+        "the compiler did not reach the test barrier"
+    );
+
+    std::fs::write(&release, b"").unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while !stamp.exists() && std::time::Instant::now() < deadline {
+        assert!(
+            child.try_wait().unwrap().is_none(),
+            "the build ended before the low-disk sweep was claimed"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    assert!(
+        stamp.exists(),
+        "the low-disk collector was not claimed while the build was running"
+    );
+
+    let output = child.wait_with_output().unwrap();
+    assert!(
+        output.status.success(),
+        "the build failed: {}",
+        String::from_utf8_lossy(&output.stderr)
     );
 }
 

@@ -607,7 +607,9 @@ impl RustcInvocation {
         let owned = discovered
             .inputs
             .iter()
-            .filter(|input| !linked.contains(input.path.as_path()))
+            .filter(|input| {
+                !linked.contains(input.path.as_path()) && !discovered.is_native_only(&input.path)
+            })
             .map(|input| (input.path.as_path(), &input.digest))
             .collect::<BTreeMap<_, _>>();
         let mut bytes = Vec::new();
@@ -798,10 +800,17 @@ impl RustcInvocation {
         // leaves thousands of files there, which was enough to push the
         // serialized prediction past the protocol's payload limit and lose the
         // prediction entirely for the crate that most needed one.
+        //
+        // A file dep-info itself names stays, even beneath a recorded
+        // directory. It is a source of the crate, and rediscovery can only tell
+        // it from the objects around it if the prediction says which it is.
+        // There are few of those; the thousands of objects are not named.
         let mut inputs = BTreeSet::new();
         for input in &discovered.inputs {
             let normalized = builder.normalize_path(&input.path)?;
-            if !under_any_directory(&normalized, &native_directories) {
+            if !under_any_directory(&normalized, &native_directories)
+                || !discovered.is_native_only(&input.path)
+            {
                 inputs.insert(normalized);
             }
         }
@@ -1135,6 +1144,7 @@ impl RustcInputPrediction {
             return Err(BypassReason::UnsupportedPrediction);
         }
         let mut paths = BTreeSet::new();
+        let mut named = BTreeSet::new();
         let admitted_roots = dep_info::native_input_roots(working_dir, path_mappings);
         let mut native_bytes = 0_u64;
         for path in &self.inputs {
@@ -1149,9 +1159,12 @@ impl RustcInputPrediction {
                     &mut native_bytes,
                 )?;
             } else {
-                paths.insert(denormalize_path(path, path_mappings)?);
+                let path = denormalize_path(path, path_mappings)?;
+                named.insert(path.clone());
+                paths.insert(path);
             }
         }
+        let native_only = paths.difference(&named).cloned().collect();
         let environment = self
             .environment
             .iter()
@@ -1169,7 +1182,10 @@ impl RustcInputPrediction {
                 Ok((name.clone(), value))
             })
             .collect::<Result<BTreeMap<_, _>, _>>()?;
-        DiscoveredInputs::from_paths(working_dir, paths, environment, digests)
+        Ok(
+            DiscoveredInputs::from_paths(working_dir, paths, environment, digests)?
+                .with_native_only(native_only),
+        )
     }
 }
 
@@ -2025,7 +2041,8 @@ impl Parser<'_> {
             let option = value.strip_prefix("--codegen=")?;
             let (name, value) = option.split_once('=').unwrap_or((option, ""));
             (matches!(name, "link-arg" | "link-args")
-                && !(name == "link-arg" && elf_keyword_is_modeled(link_output, value)))
+                && !(name == "link-arg" && elf_keyword_is_modeled(link_output, value))
+                && !msvc_options_are_modeled(link_output, name, value))
             .then_some(option)
         })
     }
@@ -2204,6 +2221,65 @@ fn elf_keyword_is_modeled(link_output: LinkOutput, value: &str) -> bool {
                     | "relro"
             )
         })
+}
+
+/// `-C link-arg` / `-C link-args` values that `link.exe` and `lld-link` read
+/// as a plain switch or number and never as a file name.
+///
+/// `-C link-arg=/STACK:8000000` is how projects raise the main thread's stack
+/// for Windows, usually through a `rustflags` entry in `.cargo/config.toml`
+/// that reaches every proc macro, build script, and binary the workspace
+/// builds. Refusing it leaves each of those linking on every build, and a MSVC
+/// link is not reproducible (the PE header and PDB carry a timestamp and a
+/// GUID), so each fresh proc-macro DLL hashes differently and every crate
+/// compiled against it misses too.
+///
+/// Only spellings whose grammar is closed are listed: a number after
+/// `/STACK:`, and `/Brepro`, which makes the link reproducible. Anything else
+/// (`/DEF:`, `/MANIFESTINPUT:`, `/LIBPATH:`, a bare file name) can name a file
+/// the key never hashes, so it still bypasses.
+fn msvc_options_are_modeled(link_output: LinkOutput, name: &str, value: &str) -> bool {
+    cfg!(target_env = "msvc")
+        && matches!(
+            link_output,
+            LinkOutput::NativeExecutable
+                | LinkOutput::NativeProcMacro
+                | LinkOutput::NativeSharedLibrary
+        )
+        && match name {
+            "link-arg" => msvc_option_reads_no_file(value),
+            // The plural spelling is a whitespace-separated list, each entry
+            // of which has to qualify.
+            "link-args" => {
+                let mut options = value.split_ascii_whitespace().peekable();
+                options.peek().is_some() && options.all(msvc_option_reads_no_file)
+            }
+            _ => false,
+        }
+}
+
+/// One MSVC linker option from the closed list in [`msvc_options_are_modeled`].
+/// The linker takes `-` for `/` and ignores the case of option names, and so
+/// does this.
+fn msvc_option_reads_no_file(option: &str) -> bool {
+    let Some(option) = option.strip_prefix(['/', '-']) else {
+        return false;
+    };
+    if option.eq_ignore_ascii_case("brepro") {
+        return true;
+    }
+    let Some((name, sizes)) = option.split_once(':') else {
+        return false;
+    };
+    // `/STACK:reserve[,commit]`. Sizes are decimal or `0x` hexadecimal, and
+    // nothing else, so a value cannot smuggle in a path.
+    let is_size = |size: &str| match size.strip_prefix("0x").or_else(|| size.strip_prefix("0X")) {
+        Some(hex) => !hex.is_empty() && hex.bytes().all(|byte| byte.is_ascii_hexdigit()),
+        None => !size.is_empty() && size.bytes().all(|byte| byte.is_ascii_digit()),
+    };
+    name.eq_ignore_ascii_case("stack")
+        && sizes.split(',').count() <= 2
+        && sizes.split(',').all(is_size)
 }
 
 fn compiler_bundled_wasm_target(target: &str) -> bool {
