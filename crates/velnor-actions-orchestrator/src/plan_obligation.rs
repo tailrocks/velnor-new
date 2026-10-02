@@ -116,18 +116,7 @@ fn extension_for_task(
     bundle: &ExtensionBundle,
 ) -> Result<(StackExtension, bool), OrchestratorError> {
     if Stack::from_id(&task.stack_id) == Some(Stack::Tofu) {
-        let normalized = velnor_actions_tofu::root_for_key(&task.identity.unit_key);
-        let inputs = velnor_actions_tofu::TofuGroupExtensionInputs {
-            unit_id: &task.identity.unit_id,
-            workspace_id: bundle.workspace_id(),
-            profile: &task.configuration,
-            manifest: &task.identity.unit_path,
-            graph_digest: bundle.graph_digest(),
-            root: &normalized,
-            config_digest: bundle.config_digest(),
-            lock_digest: velnor_actions_tofu::lock_slot_at_root(root, &task.identity.unit_path),
-        };
-        let ext = velnor_actions_tofu::extension_for_proposal(task, &inputs)
+        let ext = crate::internal_plan::tofu_extension_for(task, root, bundle)
             .map_err(internal_contract)?;
         return Ok((ext.to_stack_extension(), ext.reuse_eligible().is_ok()));
     }

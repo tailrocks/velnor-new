@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use velnor_actions_actionlint::ACTIONLINT_VERSION;
 use velnor_actions_contract::{
     CRATE_JOB_ID_PREFIX, FRESHNESS_WORKFLOW_PATH, Job, ProposedTask, RequiredCheckMigration,
-    RunnerSelection, WorkflowPolicy,
+    RunnerSelection, WorkflowPolicy, is_crate_job_id,
 };
 use velnor_actions_rust::KIND_DISPLAY_WORDS;
 use velnor_actions_workflow_renderer::action_pins;
@@ -152,14 +152,14 @@ fn freshness_file_lines(out: &mut String, prep: &GenerationPreparation) {
     }
 }
 
-/// Finalized crate-job IDs: exactly the `rust-` jobs.
+/// Finalized crate-job IDs: exactly the crate-group jobs.
 ///
 /// Structural, never an exclusion list: plan, final, lint, validators,
 /// candidate, and release carry other IDs, so merged support jobs can
 /// never inflate the crate count.
 fn crate_job_ids(jobs: &BTreeMap<String, Job>) -> Vec<&str> {
     jobs.keys()
-        .filter(|id| id.starts_with(CRATE_JOB_ID_PREFIX))
+        .filter(|id| is_crate_job_id(id))
         .map(String::as_str)
         .collect()
 }
@@ -174,11 +174,13 @@ fn crate_lines(out: &mut String, prep: &GenerationPreparation, jobs: &BTreeMap<S
         push(out, "    - no matrix entries (no-work workflow)");
         return;
     }
-    if crates.len() == 1 {
-        push(out, "    - 1 Rust crate job");
-    } else {
-        push(out, &format!("    - {} Rust crate jobs", crates.len()));
-    }
+    let rust = crates
+        .iter()
+        .filter(|id| id.starts_with(CRATE_JOB_ID_PREFIX))
+        .count();
+    let tofu = crates.len() - rust;
+    count_line(out, rust, "Rust crate job");
+    count_line(out, tofu, "OpenTofu root job");
     let kinds = present_kinds(&prep.discovery.proposals);
     if !kinds.is_empty() {
         push(out, &format!("      Each: {}", kinds.join(" -> ")));
@@ -199,6 +201,18 @@ fn crate_lines(out: &mut String, prep: &GenerationPreparation, jobs: &BTreeMap<S
     push(out, "      Obligations:");
     for id in obligations {
         push(out, &format!("        - {id}"));
+    }
+}
+
+/// One per-stack count line; zero-count stacks stay silent.
+///
+/// Rust-only plans keep their exact historical line, so golden parity
+/// holds; tofu adds its own line in fixed order below.
+fn count_line(out: &mut String, count: usize, label: &str) {
+    if count == 1 {
+        push(out, &format!("    - 1 {label}"));
+    } else if count > 1 {
+        push(out, &format!("    - {count} {label}s"));
     }
 }
 

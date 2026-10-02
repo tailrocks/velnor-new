@@ -18,7 +18,7 @@ use velnor_actions_actionlint::{
 };
 use velnor_actions_contract::{
     CrateJob, CrateObligation, Job, JobTimeout, ProposedTask, Stack, Step, WorkflowPolicy,
-    assign_crate_job_ids, crate_display_name, matrix_id_for_task_group, matrix_key_for_id,
+    crate_display_name, matrix_id_for_task_group, matrix_key_for_id,
 };
 use velnor_actions_mise::{PinnedTool, TaskCacheMode, ToolCatalog};
 use velnor_actions_rust::task_kind_rank;
@@ -26,7 +26,7 @@ use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
 use velnor_actions_workflow_renderer::steps::{CompileDriver as RenderDriver, mbx_step_for_driver};
 
 use crate::OrchestratorError;
-use crate::crate_job_ids::{group_runnable, id_inputs};
+use crate::crate_job_ids::{assign_group_ids, group_runnable};
 use crate::discover::Discovery;
 use crate::internal::internal;
 use crate::matrix_step::step_name_for;
@@ -74,7 +74,7 @@ pub(crate) fn build_crate_jobs(
     max_parallel_jobs: u32,
 ) -> Result<CrateBuild, OrchestratorError> {
     let grouped = group_runnable(&discovery.proposals);
-    let assigned = assign_crate_job_ids(&id_inputs(&grouped));
+    let assigned = assign_group_ids(&grouped);
     // Reject a non-empty allowlist before the loop: with zero runnable
     // tasks the loop body (and its rejection) never runs, so the
     // allowlist would be silently ignored instead of failing closed.

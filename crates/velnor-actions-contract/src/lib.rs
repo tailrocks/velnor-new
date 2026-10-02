@@ -110,12 +110,13 @@ pub use workflow::{
     PLAN_JSON_FILENAME, PermissionLevel, Permissions, Plan, PlanBaseline, PlanGenerator,
     PlanMatrix, PlanObligation, PlanPackage, PlanRunner, REQUIRED_CONDITION, REQUIRED_DISPLAY_NAME,
     REQUIRED_JOB_ID, RequiredCheckMigration, RequiredJobResult, STALE_WORKFLOW_PATHS,
-    ScheduleTrigger, Step, StepKind, TaskReport, TaskStatus, TaskTiming, Trigger, Trust,
-    ValidatorKind, WORKFLOW_DISPLAY_NAME, WorkflowEvent, WorkflowIr, assign_crate_job_ids,
-    check_matrix_agreement, crate_display_label, crate_display_name, final_report_id_for_run,
-    final_report_relpath, is_safe_display_name, join_runner_temp, matrix_json_bytes,
-    matrix_report_relpath, plan_json_bytes, slugify_segment, task_report_relpath, trust_for_event,
-    validate_final_report_id, validate_job_id, validate_matrix_run,
+    ScheduleTrigger, Step, StepKind, TOFU_JOB_ID_PREFIX, TaskReport, TaskStatus, TaskTiming,
+    Trigger, Trust, ValidatorKind, WORKFLOW_DISPLAY_NAME, WorkflowEvent, WorkflowIr,
+    assign_crate_job_ids, check_matrix_agreement, crate_display_label, crate_display_name,
+    final_report_id_for_run, final_report_relpath, is_crate_job_id, is_safe_display_name,
+    join_runner_temp, matrix_json_bytes, matrix_report_relpath, plan_json_bytes, slugify_segment,
+    task_report_relpath, trust_for_event, validate_final_report_id, validate_job_id,
+    validate_matrix_run,
 };
 
 /// Version marker for the contract schema shell.

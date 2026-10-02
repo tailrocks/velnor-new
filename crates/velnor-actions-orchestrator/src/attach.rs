@@ -8,7 +8,7 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
-    CRATE_JOB_ID_PREFIX, GeneratorLock, Step, WorkflowIr, target_for_runner_label,
+    GeneratorLock, Step, WorkflowIr, is_crate_job_id, target_for_runner_label,
 };
 use velnor_actions_mise::{PREPARE_PINNED_TOOLS_STEP, PinnedTool, ToolCatalog};
 use velnor_actions_workflow_renderer::cache_p08::{RESTORE_SOURCES_NAME, RUST_CACHE_NAME};
@@ -63,7 +63,7 @@ pub(crate) fn attach_lock_acquire(
             .insert(0, lock_acquire_step(lock, label, &staged)?);
     }
     for (id, job) in &mut ir.jobs {
-        if !id.starts_with(CRATE_JOB_ID_PREFIX) {
+        if !is_crate_job_id(id) {
             continue;
         }
         let step = lock_acquire_step(lock, label, &staged)?;
@@ -145,7 +145,7 @@ pub(crate) fn attach_preseed(
         );
     }
     for (id, job) in &mut workflow.ir.jobs {
-        if !id.starts_with(CRATE_JOB_ID_PREFIX) {
+        if !is_crate_job_id(id) {
             continue;
         }
         job.steps.splice(

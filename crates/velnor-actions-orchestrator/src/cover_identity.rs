@@ -25,7 +25,7 @@ use std::path::Path;
 
 use velnor_actions_contract::{
     BaselineProof, ManifestTaskProof, ObligationDecision, Plan, PlanObligation, ProposedTask,
-    Stack, digest_b3, validate_rust_extension,
+    Stack, digest_b3, validate_rust_extension, validate_tofu_extension,
 };
 use velnor_actions_rust::{extension_for_proposal, tool_needs};
 
@@ -73,15 +73,7 @@ fn cover_closure_digest(
         Some(root),
         nextest_config_for(discovery, task).as_deref(),
     );
-    let Ok(ext) = extension_for_proposal(task, &bundle.inputs()) else {
-        return Err("extension_unverified:unparsable_spelling".to_owned());
-    };
-    if ext.coverage_eligible().is_err() || ext.conservative_execution_required() {
-        return Err("undeclared_inputs".to_owned());
-    }
-    if let Err(err) = validate_rust_extension(&ext.to_stack_extension()) {
-        return Err(format!("extension_unverified:{err}"));
-    }
+    verify_cover_extension(task, root, &bundle)?;
     let Ok(toolchain) = toolchain_id(task, catalog) else {
         return Err("toolchain_unresolvable".to_owned());
     };
@@ -105,6 +97,34 @@ fn cover_closure_digest(
         ));
     }
     canonical_digest(&closure).map_err(|_| "closure_digest_failed".to_owned())
+}
+
+/// Cover-time extension revalidation, dispatched per stack.
+///
+/// Rust tasks revalidate through the rust bridge; tofu tasks through
+/// the shared tofu constructor plus the tofu slot validator. Spelling
+/// drift or undeclared/unknown inputs refuse coverage either way.
+fn verify_cover_extension(
+    task: &ProposedTask,
+    root: &Path,
+    bundle: &crate::internal_plan::identities::ExtensionBundle,
+) -> Result<(), String> {
+    if Stack::from_id(&task.stack_id) == Some(Stack::Tofu) {
+        let ext = crate::internal_plan::tofu_extension_for(task, root, bundle)
+            .map_err(|_| "extension_unverified:unparsable_spelling".to_owned())?;
+        if ext.coverage_eligible().is_err() || ext.conservative_execution_required() {
+            return Err("undeclared_inputs".to_owned());
+        }
+        return validate_tofu_extension(&ext.to_stack_extension())
+            .map_err(|err| format!("extension_unverified:{err}"));
+    }
+    let ext = extension_for_proposal(task, &bundle.inputs())
+        .map_err(|_| "extension_unverified:unparsable_spelling".to_owned())?;
+    if ext.coverage_eligible().is_err() || ext.conservative_execution_required() {
+        return Err("undeclared_inputs".to_owned());
+    }
+    validate_rust_extension(&ext.to_stack_extension())
+        .map_err(|err| format!("extension_unverified:{err}"))
 }
 
 /// Live mbx dimension for one task: the compile driver plus the

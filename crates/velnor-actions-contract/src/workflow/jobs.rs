@@ -113,20 +113,37 @@ impl ValidatorKind {
 
 /// Package-slug job-ID prefix: IDs below it derive from real package names.
 ///
-/// [`assign_crate_job_ids`] emits one `rust-<slug>` ID per crate, so the
-/// branding gate in [`validate_job_id`] skips this prefix: self-hosting
-/// repositories keep their package names while orchestration IDs stay
-/// unbranded (P05-7).
+/// [`assign_crate_job_ids`] emits one `rust-<slug>` ID per rust crate,
+/// so the branding gate in [`validate_job_id`] skips this prefix:
+/// self-hosting repositories keep their package names while
+/// orchestration IDs stay unbranded (P05-7).
 pub const CRATE_JOB_ID_PREFIX: &str = "rust-";
+
+/// Root-slug job-ID prefix: IDs below it derive from tofu root paths.
+///
+/// [`assign_crate_job_ids`] emits one `tofu-<slug>` ID per all-tofu
+/// group, giving tofu obligations their exact-set identity without
+/// touching the rust contract above. Mixed groups keep `rust-`.
+pub const TOFU_JOB_ID_PREFIX: &str = "tofu-";
+
+/// True for crate-group job IDs under either stack prefix.
+///
+/// Single definition of the crate-job ID namespace: plan counts,
+/// lock/pre-seed attach, and the pre-seed closure gate all consult
+/// this instead of matching one prefix.
+#[must_use]
+pub fn is_crate_job_id(id: &str) -> bool {
+    id.starts_with(CRATE_JOB_ID_PREFIX) || id.starts_with(TOFU_JOB_ID_PREFIX)
+}
 
 /// Validate a producer job ID: unbranded ASCII plus collision-safe shape.
 ///
 /// Rejects empty IDs and non-`[a-z0-9-_]` bytes; `velnor` branding is
-/// rejected on orchestration IDs only, while package-slug IDs under
-/// [`CRATE_JOB_ID_PREFIX`] keep their package names so self-hosting
-/// repositories validate. The legacy renderer constants keep working
-/// because this gate applies to producer constructors only, never
-/// `Job::validate`.
+/// rejected on orchestration IDs only, while crate-group IDs under
+/// either stack prefix keep their real names so self-hosting
+/// repositories and `velnor-*` tofu roots validate. The legacy
+/// renderer constants keep working because this gate applies to
+/// producer constructors only, never `Job::validate`.
 /// # Errors
 pub fn validate_job_id(id: &str) -> Result<(), ContractError> {
     if id.is_empty()
@@ -139,7 +156,7 @@ pub fn validate_job_id(id: &str) -> Result<(), ContractError> {
             format!("bad_job_id:{id}"),
         ));
     }
-    if !id.starts_with(CRATE_JOB_ID_PREFIX) && id.contains("velnor") {
+    if !is_crate_job_id(id) && id.contains("velnor") {
         return Err(ContractError::identity(
             "job.id",
             format!("branded_job_id:{id}"),
@@ -233,21 +250,25 @@ pub fn crate_display_name(package_name: &str, manifest: &str, configuration: &st
 
 /// Assign stable collision-safe crate job IDs for one package set.
 ///
-/// Base form is `rust-<slug>` (`rust-<slug>-<config>` off default); on
-/// slug collision the later key in sorted order takes `-<digest8>` of
-/// its package ID plus configuration. Deterministic for a fixed set.
+/// Base form is `<prefix><slug>` (`<prefix><slug>-<config>` off
+/// default); on slug collision the later key in sorted order takes
+/// `-<digest8>` of its package ID plus configuration. Deterministic
+/// for a fixed set. Callers pass [`CRATE_JOB_ID_PREFIX`] for rust
+/// groups and [`TOFU_JOB_ID_PREFIX`] for all-tofu groups; namespaces
+/// never collide across prefixes.
 #[must_use]
 pub fn assign_crate_job_ids(
     crates: &BTreeSet<(String, String, String)>,
+    prefix: &str,
 ) -> BTreeMap<(String, String), String> {
     let mut assigned = BTreeMap::new();
     let mut taken = BTreeSet::new();
     for (package_id, package_name, configuration) in crates {
         let slug = slugify_segment(package_name);
         let mut base = if slug.is_empty() {
-            format!("{CRATE_JOB_ID_PREFIX}workspace")
+            format!("{prefix}workspace")
         } else {
-            format!("{CRATE_JOB_ID_PREFIX}{slug}")
+            format!("{prefix}{slug}")
         };
         if configuration != "default" {
             base.push('-');
@@ -345,50 +366,5 @@ impl RequiredCheckMigration {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{crate_display_label, crate_display_name, is_safe_display_name, validate_job_id};
-
-    #[test]
-    fn display_names_reject_expressions_and_controls() {
-        assert!(is_safe_display_name("Rust / demo"));
-        assert!(is_safe_display_name("Plan"));
-        for bad in [
-            "Rust / ${{ secrets.x }}",
-            "x\ny",
-            "x\ry",
-            "x\ty",
-            "x\x07y",
-            "${{",
-        ] {
-            assert!(!is_safe_display_name(bad), "{bad:?} must fail");
-        }
-        assert_eq!(
-            crate_display_label("demo", "crates/demo/Cargo.toml"),
-            "demo"
-        );
-        assert_eq!(
-            crate_display_label("", "crates/${{x}}/Cargo.toml"),
-            "$?{{x}}"
-        );
-        assert_eq!(crate_display_label("", "crates/a\nb/Cargo.toml"), "a?b");
-        assert_eq!(
-            crate_display_name("", "crates/a/Cargo.toml", "default"),
-            "Rust / a"
-        );
-        assert!(is_safe_display_name(&crate_display_name(
-            "",
-            "crates/${{x}}/Cargo.toml",
-            "evil\ncfg"
-        )));
-    }
-
-    #[test]
-    fn branding_gate_skips_package_slugs_only() {
-        assert!(validate_job_id("plan").is_ok());
-        assert!(validate_job_id("rust-demo").is_ok());
-        assert!(validate_job_id("rust-velnor-actions-contract").is_ok());
-        assert!(validate_job_id("velnor-plan").is_err());
-        assert!(validate_job_id("task-velnor-final").is_err());
-        assert!(validate_job_id("").is_err());
-    }
-}
+#[path = "jobs_tests.rs"]
+mod tests;
