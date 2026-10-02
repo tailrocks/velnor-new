@@ -54,11 +54,12 @@ fn rename_step(mut step: Step, name: &str) -> Result<Step, RenderError> {
 /// True for exactly one owned plugin-cache dir under the base.
 ///
 /// Single path segment, slug charset only, no traversal, no
-/// credential names, never the bare base: the data dir beside it
-/// (`tofu-data`) and every foreign tree stay out.
+/// never-archive names (state, plans, credentials), never the bare
+/// base: the data dir beside it (`tofu-data`) and every foreign tree
+/// stay out.
 #[must_use]
 pub fn tofu_providers_path_ok(path: &str) -> bool {
-    if path.contains("..") || path.contains("credentials") {
+    if path.contains("..") || crate::cache_steps::is_never_archive_path(path) {
         return false;
     }
     let Some(slug) = path.strip_prefix(&format!("{TOFU_PROVIDER_CACHE_BASE_EXPR}/")) else {

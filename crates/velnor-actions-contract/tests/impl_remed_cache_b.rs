@@ -291,3 +291,45 @@ fn tofu_extension_slots_require_unit_graph_and_driver() {
     bad.data["lock_digest"] = serde_json::json!(42);
     assert!(validate_tofu_extension(&bad).is_err());
 }
+
+#[test]
+fn cache_provider_layer_reports_only_closed_reasons() -> Result<(), ContractError> {
+    let run_key = run_key_for_ci(22, 1);
+    let entry = sample_entry(&run_key)?;
+    let task_digest = digest_b3(b"task-bytes");
+    let mut report = TaskReport {
+        schema: 1,
+        task_report_id: task_report_id_for_task(&run_key, &entry.matrix_key, &task_digest)?,
+        run_key: run_key.clone(),
+        event: WorkflowEvent::PullRequest,
+        trust: Trust::Pr,
+        matrix_id: entry.id.clone(),
+        matrix_key: entry.matrix_key.clone(),
+        task_id: TASK.to_owned(),
+        task_digest,
+        status: TaskStatus::Executed,
+        not_selected_reason: None,
+        cache: CacheOutcome {
+            layer: CacheLayer::TofuProviders,
+            key: "k".to_owned(),
+            result: CacheResult::Miss,
+            miss_reason: Some("no_entry".to_owned()),
+        },
+        exit_code: 0,
+        duration_ms: Some(1),
+        outputs: vec![],
+        lane: None,
+        queue: None,
+        partition: None,
+        reason: None,
+        timing: None,
+    };
+    assert_eq!(MISS_REASONS.len(), 13);
+    for reason in MISS_REASONS {
+        report.cache.miss_reason = Some((*reason).to_owned());
+        report.validate()?;
+    }
+    report.cache.miss_reason = Some("sometimes".to_owned());
+    assert!(report.validate().is_err());
+    Ok(())
+}

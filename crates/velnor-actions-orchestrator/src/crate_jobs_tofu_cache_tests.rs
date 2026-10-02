@@ -192,3 +192,35 @@ fn mixed_job_restores_both_sources_and_providers() {
         "provider restore precedes obligations: {names:?}"
     );
 }
+
+#[test]
+fn provider_key_rejects_unknown_targets() {
+    let err =
+        crate::tofu_cache::tofu_providers_cache_key("mips-unknown-linux", "1.13.1", "stacks/a")
+            .expect_err("unknown targets fail closed");
+    assert!(err.to_string().contains("bad_target"), "unexpected {err:?}");
+}
+
+#[test]
+fn provider_key_rejects_loose_tofu_versions() {
+    for version in ["1.13", "latest", ">= 1.0", ""] {
+        assert!(
+            crate::tofu_cache::tofu_providers_cache_key(
+                "x86_64-unknown-linux-gnu",
+                version,
+                "stacks/a"
+            )
+            .is_err(),
+            "{version:?} must fail closed"
+        );
+    }
+    assert!(
+        crate::tofu_cache::tofu_providers_cache_key(
+            "x86_64-unknown-linux-gnu",
+            "1.13.1",
+            "stacks/a"
+        )
+        .is_ok(),
+        "the qualified pin builds"
+    );
+}

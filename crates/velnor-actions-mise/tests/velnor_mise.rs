@@ -11,6 +11,8 @@ mod impl_mise_build;
 mod impl_mise_cache;
 #[path = "impl_mise_cache_gates.rs"]
 mod impl_mise_cache_gates;
+#[path = "impl_mise_cache_t22.rs"]
+mod impl_mise_cache_t22;
 #[path = "impl_mise_catalog.rs"]
 mod impl_mise_catalog;
 #[path = "impl_mise_command.rs"]

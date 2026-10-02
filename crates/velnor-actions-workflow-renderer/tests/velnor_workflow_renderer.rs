@@ -5,6 +5,8 @@ mod impl_adapter_wire_renderer;
 mod impl_renderer_acquire;
 #[path = "impl_renderer_cache_steps.rs"]
 mod impl_renderer_cache_steps;
+#[path = "impl_renderer_cache_t22.rs"]
+mod impl_renderer_cache_t22;
 #[path = "impl_renderer_f2close.rs"]
 mod impl_renderer_f2close;
 #[path = "impl_renderer_f2close_hygiene.rs"]

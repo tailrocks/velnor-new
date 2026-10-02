@@ -27,6 +27,22 @@ pub const SOURCE_SUBSET: [&str; 6] = [
 /// Role allowed to save the shared sources snapshot.
 pub const TRUSTED_WRITER_ROLE: &str = "plan";
 
+/// Never-archive markers: state, plans, and credential-bearing names
+/// must never enter a cache archive (T22).
+///
+/// The renderer mirrors this list exactly (`cache_steps`); the
+/// orchestrator pins both equal by test, like the credential
+/// denylists.
+pub const NEVER_ARCHIVE_MARKERS: [&str; 3] = ["credentials", ".tfstate", ".tfplan"];
+
+/// True when `path` names state, plans, or credentials.
+#[must_use]
+pub fn is_never_archive_path(path: &str) -> bool {
+    NEVER_ARCHIVE_MARKERS
+        .iter()
+        .any(|marker| path.contains(marker))
+}
+
 /// Fetch decision after a restore attempt.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FetchDecision {
@@ -65,7 +81,7 @@ pub fn sources_cache_paths(cargo_home: &str) -> Result<Vec<String>, MiseError> {
 /// credentials, `registry/src`, or paths outside `cargo_home`.
 pub fn validate_sources_subset(paths: &[String], cargo_home: &str) -> Result<(), MiseError> {
     for path in paths {
-        if path.contains("..") || path.contains("credentials") {
+        if path.contains("..") || is_never_archive_path(path) {
             return Err(reject(path));
         }
         if !path.starts_with(&format!("{cargo_home}/")) {
