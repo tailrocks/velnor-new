@@ -2,6 +2,7 @@
 
 mod args;
 mod dispatch;
+mod service;
 
 pub use args::Cli;
 pub use dispatch::run;

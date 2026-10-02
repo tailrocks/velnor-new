@@ -6,10 +6,10 @@ use std::process::ExitCode;
 use clap::Parser;
 use velnor_runner_host::{
     ConnectPlan, DaemonLock, DisconnectEffect, HostConfig, Readiness, SetOwnership, connect_plan,
-    disconnect_effects, doctor_json, launch_agent_plist, readiness_for_empty, status_json,
+    disconnect_effects, doctor_json, readiness_for_empty, status_json,
 };
 
-use crate::args::{Cli, Command, DaemonAction, ServiceAction};
+use crate::args::{Cli, Command, DaemonAction};
 
 /// Parse argv and run one command.
 #[must_use]
@@ -30,7 +30,7 @@ fn dispatch(cli: &Cli) -> ExitCode {
     match &cli.command {
         Command::Status { json } => print_status(&state, *json),
         Command::Doctor { probe } => print_doctor(&state, *probe),
-        Command::Logs { follow } => logs(&state, *follow),
+        Command::Logs { follow } => logs(*follow),
         Command::Drain { .. } => flag(&state, "drain"),
         Command::Resume => remove_flag(&state, "drain"),
         Command::Connect {
@@ -49,7 +49,7 @@ fn dispatch(cli: &Cli) -> ExitCode {
             docker_context.as_deref(),
             endpoint.as_deref(),
         ),
-        Command::Service { action } => service(&state, *action),
+        Command::Service { action } => crate::service::service(*action),
         Command::Daemon { action } => daemon(&state, *action),
         Command::Compare { .. } => not_proven(),
         Command::Disconnect { drain, .. } => disconnect(*drain),
@@ -86,8 +86,8 @@ fn observe(_state: &Path) -> Readiness {
     readiness_for_empty()
 }
 
-fn logs(state: &Path, follow: bool) -> ExitCode {
-    let path = state.join("host.log");
+fn logs(follow: bool) -> ExitCode {
+    let path = crate::service::log_dir().join("host.log");
     if follow && !path.is_file() {
         eprintln!("log missing");
         return ExitCode::from(1);
@@ -165,40 +165,6 @@ fn sample_config(
     format!(
         "schema = 1\n[github]\nrepository = \"{repo}\"\nscale_set_name = \"{scale_set}\"\ncredential_ref = \"keychain:com.tailrocks.velnor.host/local\"\n[host]\nmax_jobs = {max_jobs}\n[docker]\ncontext = \"{context}\"\nplatform = \"{platform}\"\nendpoint = \"{socket}\"\n"
     )
-}
-
-fn service(state: &Path, action: ServiceAction) -> ExitCode {
-    match action {
-        ServiceAction::Install => install(state),
-        ServiceAction::Start | ServiceAction::Stop | ServiceAction::Uninstall => {
-            println!("{}", action_name(action));
-            ExitCode::SUCCESS
-        }
-    }
-}
-
-fn action_name(action: ServiceAction) -> &'static str {
-    match action {
-        ServiceAction::Install => "install",
-        ServiceAction::Start => "start",
-        ServiceAction::Stop => "stop",
-        ServiceAction::Uninstall => "uninstall",
-    }
-}
-
-fn install(state: &Path) -> ExitCode {
-    let Ok(bin) = std::env::current_exe() else {
-        return ExitCode::from(1);
-    };
-    let Ok(plist) = launch_agent_plist(&bin) else {
-        return ExitCode::from(1);
-    };
-    if std::fs::create_dir_all(state).is_err()
-        || std::fs::write(state.join("host.plist"), plist).is_err()
-    {
-        return ExitCode::from(1);
-    }
-    ExitCode::SUCCESS
 }
 
 fn daemon(state: &Path, action: DaemonAction) -> ExitCode {
