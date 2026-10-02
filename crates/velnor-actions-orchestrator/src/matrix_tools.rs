@@ -11,13 +11,18 @@ use velnor_actions_mise::{
 use crate::OrchestratorError;
 use crate::utf8::{strings_of, strings_of_env};
 
-/// Crate-job driver tools: Rust plus MBX only on MBX evidence, plus
-/// Opentofu when the job carries tofu obligations (a later per-role
-/// task removes the Rust setup from pure-tofu jobs; this arm only
-/// adds the missing driver).
+/// Crate-job driver tools per role: Rust only when the job carries
+/// rust obligations, plus MBX only on MBX evidence, plus Opentofu
+/// when the job carries tofu obligations. Pure-tofu jobs install the
+/// opentofu driver with no Rust setup; mixed jobs install the union.
 #[must_use]
-pub(crate) fn task_driver_tools(use_mbx: bool, use_opentofu: bool) -> Vec<PinnedTool> {
-    let mut tools = vec![PinnedTool::Rust];
+pub(crate) fn task_driver_tools(
+    use_rust: bool,
+    use_mbx: bool,
+    use_opentofu: bool,
+) -> Vec<PinnedTool> {
+    let mut tools = Vec::new();
+    tools.extend(use_rust.then_some(PinnedTool::Rust));
     tools.extend(use_mbx.then_some(PinnedTool::MrBoxington));
     tools.extend(use_opentofu.then_some(PinnedTool::Opentofu));
     tools
@@ -56,27 +61,30 @@ pub(crate) fn crate_needs_generate_validators(policy: WorkflowPolicy, package: &
 
 /// Typed `Prepare pinned tools` step for the crate-job tool set.
 ///
-/// Driver toolchain (plus Opentofu for tofu jobs) plus Nextest when
-/// used, plus the `generate` validators only when `needs_validators`
-/// holds (see [`crate_needs_generate_validators`]). The set is exact
-/// and pinned by test: drivers, conditional validators, optional
-/// Nextest, nothing else.
+/// Driver toolchain per role (Rust only for rust obligations, plus
+/// Opentofu for tofu jobs) plus Nextest when used, plus the
+/// `generate` validators only when `needs_validators` holds (see
+/// [`crate_needs_generate_validators`]). The set is exact and pinned
+/// by test: drivers, conditional validators, optional Nextest,
+/// nothing else. Pure-tofu roles carry no owned-homes triple in the
+/// step env; every other role keeps it.
 ///
 /// # Errors
 ///
 /// Returns a contract error when the Mise adapter rejects the request.
 #[expect(
     clippy::fn_params_excessive_bools,
-    reason = "four independent install flags mirror the driver selection"
+    reason = "five independent install flags mirror the driver selection"
 )]
 pub(crate) fn prepare_crate_tools_step(
     catalog: &ToolCatalog,
+    use_rust: bool,
     use_mbx: bool,
     use_nextest: bool,
     use_opentofu: bool,
     needs_validators: bool,
 ) -> Result<Step, OrchestratorError> {
-    let mut tools = task_driver_tools(use_mbx, use_opentofu);
+    let mut tools = task_driver_tools(use_rust, use_mbx, use_opentofu);
     if needs_validators {
         tools.extend([
             PinnedTool::Actionlint,
@@ -92,8 +100,12 @@ pub(crate) fn prepare_crate_tools_step(
     })?;
     let run = strings_of(prepare.argv(catalog))
         .map_err(|problem| OrchestratorError::Contract { problem })?;
-    let env = strings_of_env(&prepare.env(catalog))
-        .map_err(|problem| OrchestratorError::Contract { problem })?;
+    let env = if use_rust {
+        strings_of_env(&prepare.env(catalog))
+    } else {
+        strings_of_env(&prepare.env_without_homes())
+    }
+    .map_err(|problem| OrchestratorError::Contract { problem })?;
     velnor_actions_workflow_renderer::ambient_shell_step(PREPARE_PINNED_TOOLS_STEP, run, env)
         .map_err(OrchestratorError::from)
 }

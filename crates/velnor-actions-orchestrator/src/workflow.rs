@@ -10,8 +10,8 @@ use std::collections::BTreeMap;
 
 use velnor_actions_actionlint::{ActionlintConfigInput, IgnorePolicy, StepSyntax};
 use velnor_actions_contract::{
-    Concurrency, GeneratorValidation, Job, Permissions, Step, StepKind, Trigger, ValidatorKind,
-    VelnorConfig, VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
+    Concurrency, GeneratorValidation, Job, Permissions, Stack, Step, StepKind, Trigger,
+    ValidatorKind, VelnorConfig, VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
 };
 use velnor_actions_mise::{
     PREPARE_RUST_COMPONENTS_STEP, PrepareRustComponents, ToolCatalog, ToolHomes,
@@ -64,16 +64,32 @@ pub struct WorkflowPlan {
 /// # Errors
 ///
 /// Returns tool-request or step-construction errors.
+#[expect(
+    clippy::too_many_arguments,
+    clippy::fn_params_excessive_bools,
+    reason = "one call site threads job scope plus role selection"
+)]
 fn build_plan_job(
     label: &str,
     acquire: Option<Step>,
     catalog: &ToolCatalog,
+    use_rust: bool,
     use_mbx: bool,
     use_nextest: bool,
+    use_opentofu: bool,
     fetch_roots: &[String],
     discovery: &Discovery,
 ) -> Result<Job, OrchestratorError> {
-    let mut plan = plan_job(label, acquire, catalog, use_mbx, use_nextest, fetch_roots)?;
+    let mut plan = plan_job(
+        label,
+        acquire,
+        catalog,
+        use_rust,
+        use_mbx,
+        use_nextest,
+        use_opentofu,
+        fetch_roots,
+    )?;
     if let Some(format) = wire_w1::workspace_format_step(discovery, catalog)? {
         insert_format_step(&mut plan, format);
     }
@@ -113,12 +129,16 @@ pub(crate) fn build_workflow(
         WorkflowPolicy::VelnorRepositoryV1 => None,
     };
     let use_nextest = plan_uses_nextest(discovery);
+    let use_opentofu = plan_uses_opentofu(discovery);
+    let use_rust = plan_uses_rust(discovery);
     let plan = build_plan_job(
         label,
         acquire.clone(),
         &catalog,
+        use_rust,
         use_mbx,
         use_nextest,
+        use_opentofu,
         fetch_roots,
         discovery,
     )?;
@@ -159,7 +179,7 @@ pub(crate) fn build_workflow(
         },
         jobs,
     };
-    let context = render_context(config, label, &version, &catalog)?;
+    let context = render_context(config, label, &version, &catalog, use_rust)?;
     let actionlint = actionlint_input(policy, &version, label);
     Ok(WorkflowPlan {
         ir,
@@ -256,6 +276,28 @@ fn plan_uses_nextest(discovery: &Discovery) -> bool {
         .any(|workspace| workspace.profile.test_runner == TestRunner::CargoNextest)
 }
 
+/// True when any proposal runs through the pinned Opentofu driver.
+///
+/// Tofu has no workspace profiles, so the plan derives its tofu role
+/// from task proposals (the same per-task signal crate jobs group
+/// on), never from workspace scans.
+pub(crate) fn plan_uses_opentofu(discovery: &Discovery) -> bool {
+    discovery
+        .proposals
+        .iter()
+        .any(|task| Stack::from_id(&task.stack_id) == Some(Stack::Tofu))
+}
+
+/// True when the plan job needs the Rust toolchain.
+///
+/// Every repo keeps it except pure-tofu ones: tofu work with zero
+/// rust workspaces. Repos with neither keep it too (fail-safe: an
+/// unneeded install costs seconds, a missing toolchain fails the
+/// format/build steps).
+fn plan_uses_rust(discovery: &Discovery) -> bool {
+    !(plan_uses_opentofu(discovery) && discovery.workspaces.is_empty())
+}
+
 /// Typed `Prepare Rust components` step, shared by plan and task jobs.
 ///
 /// Runs second, right after `Prepare pinned tools`: the pinned toolchain
@@ -278,11 +320,16 @@ pub(crate) fn prepare_rust_components_step(
 }
 
 /// Renderer scalars: version, label, staged path, request dir, pins.
+///
+/// The plan-consumer env follows the plan role: pure-tofu plans run
+/// the plan-op and freshness steps triple-less, every other role
+/// keeps the owned-homes triple.
 fn render_context(
     config: &VelnorConfig,
     label: &str,
     version: &str,
     catalog: &ToolCatalog,
+    plan_needs_rust: bool,
 ) -> Result<RenderContext, OrchestratorError> {
     debug_assert!(REQUEST_DIR.starts_with(REQUEST_DIR_PREFIX));
     let velnor = config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1;
@@ -325,6 +372,7 @@ fn render_context(
         plan_consumer_env: crate::matrix_step::task_step_env(
             catalog,
             &std::collections::BTreeMap::new(),
+            plan_needs_rust,
         )?,
     })
 }

@@ -70,7 +70,17 @@ fn lock_acquire_inserts_digest_verified_stage() {
     let mut ir = bare_ir(BTreeMap::from([
         (
             "plan".to_owned(),
-            plan_job("ubuntu-26.04", None, &catalog, false, false, &[]).expect("plan job"),
+            plan_job(
+                "ubuntu-26.04",
+                None,
+                &catalog,
+                true,
+                false,
+                false,
+                false,
+                &[],
+            )
+            .expect("plan job"),
         ),
         (
             "required".to_owned(),
@@ -142,7 +152,17 @@ fn lock_acquire_records_source_commit() {
     let catalog = ToolCatalog::pinned();
     let mut ir = bare_ir(BTreeMap::from([(
         "plan".to_owned(),
-        plan_job("ubuntu-26.04", None, &catalog, false, false, &[]).expect("plan job"),
+        plan_job(
+            "ubuntu-26.04",
+            None,
+            &catalog,
+            true,
+            false,
+            false,
+            false,
+            &[],
+        )
+        .expect("plan job"),
     )]));
     ir.jobs.insert(
         "required".to_owned(),
@@ -175,7 +195,17 @@ fn preseed_attach_builds_once_and_sets_mode() {
         ir: bare_ir(BTreeMap::from([
             (
                 "plan".to_owned(),
-                plan_job("ubuntu-26.04", None, &catalog, false, false, &[]).expect("plan job"),
+                plan_job(
+                    "ubuntu-26.04",
+                    None,
+                    &catalog,
+                    true,
+                    false,
+                    false,
+                    false,
+                    &[],
+                )
+                .expect("plan job"),
             ),
             ("rust-demo".to_owned(), legacy_task_job()),
             (
@@ -266,8 +296,17 @@ fn preseed_fixture(use_mbx: bool, fetch_roots: &[String]) -> WorkflowPlan {
         ir: bare_ir(BTreeMap::from([
             (
                 "plan".to_owned(),
-                plan_job("ubuntu-26.04", None, &catalog, use_mbx, false, fetch_roots)
-                    .expect("plan job"),
+                plan_job(
+                    "ubuntu-26.04",
+                    None,
+                    &catalog,
+                    true,
+                    use_mbx,
+                    false,
+                    false,
+                    fetch_roots,
+                )
+                .expect("plan job"),
             ),
             (
                 "required".to_owned(),

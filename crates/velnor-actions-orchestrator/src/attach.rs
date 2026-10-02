@@ -102,7 +102,7 @@ pub(crate) fn attach_preseed(
     let build = candidate_build_argv(&catalog)?;
     let probe = mbx_probe_argv(&catalog)?;
     let staged = format!("{STAGED_BINARY_PREFIX}{version}");
-    let homes = crate::matrix_step::task_step_env(&catalog, &BTreeMap::new())?;
+    let homes = crate::matrix_step::task_step_env(&catalog, &BTreeMap::new(), true)?;
     let plan_steps = vec![
         preseed_build_step(&build, &homes)?,
         preseed_verify_step(&probe, catalog.version(PinnedTool::MrBoxington), &homes)?,
