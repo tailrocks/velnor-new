@@ -259,6 +259,8 @@ pub fn finalize_jobs(
     }
     // Writer election needs every setup inserted: one saver per key.
     cache_p08::elect_mise_cache_writers(&mut jobs)?;
+    // Provider election needs every restore inserted: one saver per key.
+    cache_p08::elect_tofu_provider_savers(&mut jobs)?;
     closure::check_plan_anchor(&jobs)?;
     preseed_closure::check_preseed_closure(&jobs, ctx.preseed)?;
     closure::insert_plan_closure(&mut jobs, ctx)?;

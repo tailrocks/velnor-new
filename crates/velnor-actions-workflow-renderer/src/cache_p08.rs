@@ -22,6 +22,7 @@ use crate::{
 };
 
 pub use crate::cache_elect::elect_mise_cache_writers;
+pub use crate::cache_elect::elect_tofu_provider_savers;
 
 /// Display name of the shared sources restore step.
 pub const RESTORE_SOURCES_NAME: &str = "Restore Cargo sources";

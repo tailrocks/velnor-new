@@ -294,6 +294,21 @@ fn cache_declared_env_value_change_invalidates_identity() -> Result<(), Contract
 }
 
 #[test]
+fn cache_tofu_providers_layer_builds_keys_and_prefixes() -> Result<(), ContractError> {
+    let compat = digest_b3(b"compat");
+    let snapshot = digest_b3(b"snapshot");
+    let key = cache_key("tofu-providers", "trusted", &compat, &snapshot)?;
+    assert!(key.len() <= MAX_CACHE_KEY_BYTES);
+    assert_eq!(
+        key,
+        format!("velnor-v1-tofu-providers-trusted-{compat}-{snapshot}")
+    );
+    let prefix = restore_prefix("tofu-providers", "pr", &compat)?;
+    assert!(prefix.ends_with('-') && !prefix.contains(&snapshot));
+    Ok(())
+}
+
+#[test]
 fn cache_mbx_hit_can_never_satisfy_task_obligation() -> Result<(), ContractError> {
     let compat = digest_b3(b"compat");
     let snapshot = digest_b3(b"snapshot");

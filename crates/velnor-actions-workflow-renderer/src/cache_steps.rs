@@ -206,7 +206,7 @@ pub fn cache_action_step(
     if !uses.starts_with(&format!("{want}@")) {
         return Err(RenderError::BadActionRef(format!("bad_cache_uses:{uses}")));
     }
-    if !matches!(layer, "sources" | "task" | "tools") {
+    if !matches!(layer, "sources" | "task" | "tools" | "tofu-providers") {
         return Err(RenderError::BadCommand("mbx_needs_objects_mode".to_owned()));
     }
     if key.trim().is_empty() || key.contains(' ') || key.contains('\n') {
@@ -239,6 +239,7 @@ fn validate_cache_path(layer: &str, path: &str) -> Result<(), RenderError> {
     if layer == "sources" && (legacy_ok || sources_subset_ok(path))
         || layer == "task" && path == TASK_ARTIFACTS_DIR
         || layer == "tools" && path == TOOLS_CACHE_PATH
+        || layer == "tofu-providers" && crate::tofu_cache::tofu_providers_path_ok(path)
     {
         Ok(())
     } else {

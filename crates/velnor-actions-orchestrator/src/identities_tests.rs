@@ -273,14 +273,31 @@ fn tofu_task(kind: &str) -> ProposedTask {
 }
 
 #[test]
-fn tofu_toolchain_pins_opentofu_alone() {
+fn tofu_toolchain_pins_opentofu_plus_provider_surface() {
     let inputs = toolchain_inputs_for(&tofu_task("validate"), &ToolCatalog::pinned())
         .expect("tofu converts");
     assert_eq!(inputs.tools, vec!["opentofu@1.13.1".to_owned()]);
-    assert!(inputs.components.is_empty());
+    assert_eq!(inputs.components.len(), 1);
+    let entry = &inputs.components[0];
+    assert!(entry.starts_with("tofu-provider-inputs:b3-"), "{entry}");
+    let digest = entry.strip_prefix("tofu-provider-inputs:").expect("prefix");
+    assert!(validate_digest(digest).is_ok());
     assert_eq!(inputs.compile_driver, "tofu");
     assert_eq!(inputs.test_runner, "tofu");
     assert!(toolchain_id(&inputs).is_ok());
+}
+
+#[test]
+fn tofu_toolchain_flips_on_provider_surface() {
+    let catalog = ToolCatalog::pinned();
+    let digest_for = |task: &ProposedTask| toolchain_digest_for(task, &catalog).expect("digest");
+    let validate = digest_for(&tofu_task("validate"));
+    assert_eq!(validate, digest_for(&tofu_task("init")));
+    assert_ne!(validate, digest_for(&tofu_task("fmt")));
+    let mut other = tofu_task("validate");
+    other.identity.unit_key = "stacks/vpc".to_owned();
+    assert_ne!(validate, digest_for(&other));
+    assert!(toolchain_inputs_for(&tofu_task("bogus"), &catalog).is_err());
 }
 
 /// Tofu proposal via the T12 adapter constructor.

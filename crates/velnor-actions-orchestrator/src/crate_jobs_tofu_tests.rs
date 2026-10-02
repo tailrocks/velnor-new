@@ -18,6 +18,21 @@ fn tofu_group(root: &str, kind: velnor_actions_tofu::TofuTaskKind) -> ProposedTa
     task
 }
 
+/// Provider restore present, rust restores absent, for pure-tofu names.
+fn assert_provider_restore_only(names: &[&str]) {
+    for rust in [
+        "Restore Cargo sources",
+        "Restore Cargo registry",
+        "Restore MBX objects",
+    ] {
+        assert!(!names.contains(&rust), "no rust-pinned {rust}: {names:?}");
+    }
+    assert!(
+        names.contains(&"Restore Tofu providers"),
+        "pure tofu restores its providers: {names:?}"
+    );
+}
+
 #[test]
 fn tofu_obligations_order_fmt_init_validate() {
     use velnor_actions_tofu::TofuTaskKind;
@@ -89,10 +104,7 @@ fn pure_tofu_group_renders_without_rust_setup() {
             .any(|name| name.starts_with(FETCH_SOURCES_STEP)),
         "no {FETCH_SOURCES_STEP} despite lockful roots: {names:?}"
     );
-    assert!(
-        !names.iter().any(|name| name.contains("Restore")),
-        "no rust-pinned restore: {names:?}"
-    );
+    assert_provider_restore_only(&names);
     let catalog = ToolCatalog::pinned();
     let prepare = job
         .steps

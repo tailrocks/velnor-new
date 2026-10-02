@@ -92,6 +92,57 @@ fn reuse_outcomes_execute_with_precise_reasons() {
     );
 }
 
+/// Tofu proposal via the T12 adapter constructor.
+fn tofu_group(kind: velnor_actions_tofu::TofuTaskKind) -> ProposedTask {
+    let group = velnor_actions_tofu::TofuTaskGroup {
+        root: String::new(),
+        kind,
+        configuration: "default".to_owned(),
+        no_targets: false,
+    };
+    let task = velnor_actions_tofu::propose_task(&group).expect("fixture proposes");
+    task.validate().expect("fixture valid");
+    task
+}
+
+/// T21: task-result reuse stays disabled for tofu init/validate: plan
+/// time executes with precise reasons and never enables task-cache,
+/// and init must-run carries the Network signal on top.
+#[test]
+fn tofu_init_and_validate_never_plan_reuse() {
+    use velnor_actions_tofu::TofuTaskKind;
+    let digest = digest_b3(b"toolchain");
+    let outcome = |task: &ProposedTask, availability| {
+        plan_reuse_outcome(
+            task,
+            WorkflowEvent::PullRequest,
+            availability,
+            &digest,
+            &digest,
+            true,
+        )
+        .expect("outcome")
+    };
+    let init = tofu_group(TofuTaskKind::InitForValidate);
+    assert!(init.resource.needs_network);
+    assert!(reuse_qualification(&init, WorkflowEvent::Push).always_run());
+    let blocked = outcome(&init, ToolAvailability::Ready);
+    assert_eq!(blocked.reason, MissReason::TASK_NOT_ELIGIBLE.as_str());
+    let validate = tofu_group(TofuTaskKind::Validate);
+    let refused = outcome(&validate, ToolAvailability::Ready);
+    assert_eq!(refused.reason, MissReason::NO_ENTRY.as_str());
+    for result in [
+        blocked,
+        refused,
+        outcome(&init, ToolAvailability::Unqualified),
+        outcome(&validate, ToolAvailability::Unqualified),
+    ] {
+        assert_eq!(result.decision, ObligationDecision::Execute);
+        assert!(!result.task_cache_enabled);
+        assert!(result.task_cache_key.is_none());
+    }
+}
+
 #[test]
 fn reused_tasks_verify_outputs_then_fail_trust_closed() {
     let run = |task: &str,

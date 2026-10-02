@@ -10,15 +10,16 @@ use crate::error::MiseError;
 
 use super::{
     EnvPolicy, NO_AUTO_INSTALL_ENV, TF_CLI_CONFIG_FILE_ENV, TF_DATA_DIR_ENV, TF_IN_AUTOMATION_ENV,
-    TF_IN_AUTOMATION_ON, TF_INPUT_ENV, TF_INPUT_OFF, mise_argv_tail, pairs_of,
+    TF_IN_AUTOMATION_ON, TF_INPUT_ENV, TF_INPUT_OFF, TF_PLUGIN_CACHE_DIR_ENV, mise_argv_tail,
+    pairs_of,
 };
 
 impl super::IsolatedCommand {
     /// Build `mise <globals> exec <specs> -- <payload>` with baked tofu isolation.
     ///
     /// H1 allowlist constructor: the automation pair plus the isolated
-    /// data/config paths arrive baked, since the reserved-key rule
-    /// rejects them as caller extras. Verify policy plus the
+    /// data/config/cache paths arrive baked, since the reserved-key
+    /// rule rejects them as caller extras. Verify policy plus the
     /// install-disable pair, exactly like [`Self::mise_exec`]:
     /// explicit `opentofu@exact` specs are the sole version authority
     /// and a missing tool fails as a preparation error. Ambient
@@ -31,13 +32,14 @@ impl super::IsolatedCommand {
     /// # Errors
     ///
     /// Returns [`MiseError::EmptyCommand`] for an empty payload and
-    /// [`MiseError::InvalidStepInput`] for an empty data dir or config
-    /// file.
+    /// [`MiseError::InvalidStepInput`] for an empty data dir, config
+    /// file, or plugin-cache dir.
     pub fn tofu_exec(
         tool_specs: &[String],
         payload: &[OsString],
         data_dir: &str,
         config_file: &str,
+        cache_dir: &str,
     ) -> Result<Self, MiseError> {
         if payload.is_empty() {
             return Err(MiseError::EmptyCommand {
@@ -47,6 +49,7 @@ impl super::IsolatedCommand {
         for (field, value) in [
             ("tf_data_dir", data_dir),
             ("tf_cli_config_file", config_file),
+            ("tf_plugin_cache_dir", cache_dir),
         ] {
             if value.is_empty() {
                 return Err(MiseError::InvalidStepInput {
@@ -62,6 +65,7 @@ impl super::IsolatedCommand {
                 (TF_INPUT_ENV, TF_INPUT_OFF),
                 (TF_DATA_DIR_ENV, data_dir),
                 (TF_CLI_CONFIG_FILE_ENV, config_file),
+                (TF_PLUGIN_CACHE_DIR_ENV, cache_dir),
             ]
             .iter()
             .map(|(key, value)| (OsString::from(key), OsString::from(value))),
