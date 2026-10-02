@@ -184,7 +184,8 @@ fn doc_obligation_step_carries_typed_rustdocflags() {
 #[test]
 fn tofu_obligation_steps_carry_the_automation_pair() {
     use velnor_actions_tofu::{
-        TF_IN_AUTOMATION_ENV, TF_IN_AUTOMATION_ON, TF_INPUT_ENV, TF_INPUT_OFF,
+        TF_CLI_CONFIG_FILE_ENV, TF_DATA_DIR_ENV, TF_IN_AUTOMATION_ENV, TF_IN_AUTOMATION_ON,
+        TF_INPUT_ENV, TF_INPUT_OFF,
     };
     let mut tofu = obligation();
     tofu.task_id = "stack/tofu/root/validate/default".to_owned();
@@ -203,6 +204,23 @@ fn tofu_obligation_steps_carry_the_automation_pair() {
         env.get(TF_INPUT_ENV).map(String::as_str),
         Some(TF_INPUT_OFF),
         "tofu steps disable input"
+    );
+    assert_eq!(
+        env.get(TF_DATA_DIR_ENV).map(String::as_str),
+        Some("${{ runner.temp }}/velnor/tofu-data/root-af1349b9f5f9"),
+        "tofu steps isolate the per-root data dir"
+    );
+    assert!(
+        !env.contains_key(TF_CLI_CONFIG_FILE_ENV),
+        "temp CLI config stays local-only until a materialization step lands"
+    );
+    let step = obligation_step(&obligation(), &ToolCatalog::pinned(), &[]).expect("step");
+    let velnor_actions_contract::StepKind::Shell { env, .. } = &step.kind else {
+        panic!("obligation must be a shell step");
+    };
+    assert!(
+        !env.contains_key(TF_DATA_DIR_ENV),
+        "rust steps carry no tofu data dir"
     );
 }
 

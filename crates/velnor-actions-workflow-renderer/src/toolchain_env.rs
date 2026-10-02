@@ -61,6 +61,37 @@ pub fn is_denied_endpoint_key(key: &str) -> bool {
     STEP_ENDPOINT_DENYLIST.contains(&key)
 }
 
+/// TF-family env prefixes no project task may declare.
+///
+/// `TF_*` steers `IaC` tool behavior (`TF_VAR_*` injects variables,
+/// `TF_CLI_ARGS_*` appends flags, `TF_DATA_DIR`/`TF_CLI_CONFIG_FILE`
+/// relocate state/config) and `CHECKPOINT_*` toggles phone-home
+/// telemetry; untrusted project-task declarations must never smuggle
+/// them in. Mirrors the Mise adapter's reserved rule for these
+/// families without depending on it; the orchestrator pins the two
+/// predicates equal by test on a corpus.
+pub const STEP_TF_DENYLIST_PREFIXES: [&str; 2] = ["TF_", "CHECKPOINT_"];
+
+/// TF-family keys project tasks may still declare: the harmless
+/// automation pair, which the generator itself threads everywhere.
+pub const STEP_TF_ALLOWLIST: [&str; 2] = ["TF_IN_AUTOMATION", "TF_INPUT"];
+
+/// True for a TF-family env key no project task may declare: the
+/// `TF_`/`CHECKPOINT_` prefixes minus the automation-pair allowlist.
+///
+/// (One future reserved family stays Mise-only: no tool reads it
+/// and it has no wire presence, so the renderer leaves it alone; the
+/// orchestrator parity test pins the deliberate divergence.)
+#[must_use]
+pub fn is_denied_tf_key(key: &str) -> bool {
+    if STEP_TF_ALLOWLIST.contains(&key) {
+        return false;
+    }
+    STEP_TF_DENYLIST_PREFIXES
+        .iter()
+        .any(|prefix| key.starts_with(prefix))
+}
+
 /// Merge the toolchain-home triple into a step env map.
 #[must_use]
 pub fn with_toolchain_homes(
@@ -267,11 +298,26 @@ pub fn reject_privileged_task_keys(env: &BTreeMap<String, String>) -> Result<(),
     Ok(())
 }
 
+/// Reject TF-family keys in a project-task step env map.
+///
+/// Pattern-matched, not list-matched: any `TF_*`/`CHECKPOINT_*` key
+/// fails except the automation-pair allowlist.
+/// # Errors
+pub fn reject_denied_tf_keys(env: &BTreeMap<String, String>) -> Result<(), RenderError> {
+    for key in env.keys() {
+        if is_denied_tf_key(key) {
+            return Err(RenderError::BadCommand(format!("tf_task_env:{key}")));
+        }
+    }
+    Ok(())
+}
+
 /// Merge the triple over untrusted project-task declarations, refusing all privileged keys.
 ///
-/// Same contract as [`checked_task_env`], plus isolation-key denial: a
-/// hostile project task cannot re-enable hooks/config or smuggle
-/// credentials through its declared env.
+/// Same contract as [`checked_task_env`], plus isolation-key and
+/// TF-family denial: a hostile project task cannot re-enable
+/// hooks/config, steer `IaC` tool behavior, or smuggle credentials
+/// through its declared env.
 /// # Errors
 pub fn checked_project_task_env(
     base: &BTreeMap<String, String>,
@@ -280,6 +326,7 @@ pub fn checked_project_task_env(
     toolchain: &str,
 ) -> Result<BTreeMap<String, String>, RenderError> {
     reject_privileged_task_keys(base)?;
+    reject_denied_tf_keys(base)?;
     checked_task_env(base, rustup_home, cargo_home, toolchain)
 }
 

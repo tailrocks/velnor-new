@@ -64,6 +64,9 @@ fn reserved_keys_cover_isolation_disable_and_credentials() {
         "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
         "ACTIONS_ID_TOKEN_REQUEST_URL",
         "CARGO_REGISTRY_TOKEN",
+        "TF_DATA_DIR",
+        "TF_VAR_PROBE",
+        "CHECKPOINT_DISABLE",
     ] {
         assert!(is_reserved_env_key(key), "{key} must be reserved");
     }
@@ -73,6 +76,8 @@ fn reserved_keys_cover_isolation_disable_and_credentials() {
         "RUSTUP_TOOLCHAIN",
         "PATH",
         "VELNOR_TASK_RUN",
+        "TF_IN_AUTOMATION",
+        "TF_INPUT",
     ] {
         assert!(!is_reserved_env_key(key), "{key} must stay allowed");
     }

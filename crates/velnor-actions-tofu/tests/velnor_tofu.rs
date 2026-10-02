@@ -21,6 +21,8 @@ mod impl_tofu_fmt;
 mod impl_tofu_identity;
 #[path = "impl_tofu_infer.rs"]
 mod impl_tofu_infer;
+#[path = "impl_tofu_isolation.rs"]
+mod impl_tofu_isolation;
 #[path = "impl_tofu_lockfile.rs"]
 mod impl_tofu_lockfile;
 #[path = "impl_tofu_modules.rs"]
