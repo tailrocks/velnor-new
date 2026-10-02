@@ -43,6 +43,8 @@ mod impl_tofu_qualify;
 mod impl_tofu_roots;
 #[path = "impl_tofu_select.rs"]
 mod impl_tofu_select;
+#[path = "impl_tofu_t27_select.rs"]
+mod impl_tofu_t27_select;
 #[path = "impl_tofu_units.rs"]
 mod impl_tofu_units;
 #[path = "impl_tofu_version.rs"]
