@@ -11,12 +11,18 @@
 
 mod comparison;
 mod events;
+mod verify;
 pub use comparison::ComparisonState;
+pub use verify::{BundleVerification, verify_directory_bundle};
+
+#[cfg(all(test, unix))]
+mod ownership_tests;
 
 use eyre::{Context, Result};
 use mbx_cache_core::{
-    ActionPrediction, CacheDigest, CacheDirectory, LocalCas, RemoteActionResult, RustcMetadata,
-    TaskActionManifest, is_task_identity, merge_task_action_predictions, task_manifest_actions,
+    ActionPrediction, CacheDigest, CacheDirectory, CapturedMetadata, CapturedMetadataKind,
+    LocalCas, RemoteActionResult, RustcMetadata, TaskActionManifest, is_task_identity,
+    merge_task_action_predictions, task_manifest_actions,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -35,13 +41,29 @@ const CHECKOUT_RECORD_VERSION: u8 = 2;
 const BUILD_RECEIPTS_DIR: &str = "build-receipts/v1";
 const BUILD_RECEIPT_VERSION: u8 = 2;
 const IMPORT_STAGING_DIR: &str = "import-staging";
-const EXPORT_MANIFEST: &str = "mbx-cache-export-v1.json";
-const EXPORT_VERSION: u8 = 2;
-const LEGACY_EXPORT_VERSION: u8 = 1;
+const EXPORT_MANIFEST: &str = "mbx-cache-export-v3.json";
+const EXPORT_VERSION: u8 = 3;
 
 const IMPORT_STAGING_RETENTION: Duration = Duration::from_secs(24 * 60 * 60);
 const SESSION_RETENTION: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 const MAX_SESSIONS: usize = 256;
+
+/// The complete native store namespaces, for owner placement checks.
+pub fn owned_paths(store: &Path) -> Vec<PathBuf> {
+    [
+        CAS_DIR,
+        ACTION_RESULTS_DIR,
+        CHECKOUTS_DIR,
+        BUILD_RECEIPTS_DIR,
+        IMPORT_STAGING_DIR,
+        "task-manifests/v1",
+        "sessions/v1",
+        "gc/v1",
+    ]
+    .into_iter()
+    .map(|relative| store.join(relative))
+    .collect()
+}
 
 /// How long a checkout's claim outlives the last build that renewed it.
 ///
@@ -195,6 +217,7 @@ struct ExportManifest {
     version: u8,
     tasks: Vec<TaskActionManifest>,
     actions: Vec<CacheDigest>,
+    action_owners: BTreeMap<String, String>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     attachments: BTreeMap<String, CacheDigest>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -605,8 +628,12 @@ fn export_receipts(
             })
     });
     let mut actions = BTreeSet::new();
+    let mut action_owners = BTreeMap::new();
     let mut tasks = BTreeMap::new();
     for receipt in receipts {
+        for prediction in &receipt.predictions {
+            record_action_owner(&mut action_owners, &prediction.action, &prediction.adapter)?;
+        }
         actions.extend(
             receipt
                 .predictions
@@ -639,6 +666,10 @@ fn export_receipts(
         .collect::<Vec<_>>();
     if let Some(retained) = policy.retained {
         retained.validate()?;
+        for (key, owner) in &retained.action_owners {
+            let action: CacheDigest = serde_json::from_str(key)?;
+            record_action_owner(&mut action_owners, &action, owner)?;
+        }
         for action in retained.action_results.keys() {
             actions.insert(serde_json::from_str(action)?);
         }
@@ -666,7 +697,7 @@ fn export_receipts(
         eyre::bail!("combined export predictions exceed task manifest limits");
     }
     validate_export_additions(&additions)?;
-    let mut closure = strict_closure(store, &actions)?;
+    let mut closure = strict_closure(store, &actions, &action_owners)?;
     let cas = LocalCas::new(store);
     for digest in &additions.objects {
         require_object(&cas, &mut closure, digest)?;
@@ -681,13 +712,10 @@ fn export_receipts(
         .unwrap_or_else(|| Path::new("."));
     std::fs::create_dir_all(parent)?;
     let manifest = ExportManifest {
-        version: if additions.attachments.is_empty() && additions.objects.is_empty() {
-            LEGACY_EXPORT_VERSION
-        } else {
-            EXPORT_VERSION
-        },
+        version: EXPORT_VERSION,
         tasks,
         actions: actions.iter().cloned().collect(),
+        action_owners,
         attachments: additions.attachments.clone(),
         objects: additions.objects.iter().cloned().collect(),
     };
@@ -702,7 +730,7 @@ fn export_receipts(
             });
         }
     }
-    let manifest = serde_json::to_vec(&manifest)?;
+    let manifest = mbx_cache_core::canonical_json(&manifest)?;
     let logical_bytes = closure
         .objects
         .iter()
@@ -876,11 +904,9 @@ pub fn import_archive_with_comparison(
     // Measure a directory bundle now: publication moves its objects into the
     // store, so by the end there is nothing left to measure.
     let bundle_bytes = archive.is_dir().then(|| tree_bytes(archive));
-    let manifest: ExportManifest =
-        serde_json::from_slice(&std::fs::read(root.join(EXPORT_MANIFEST))?)?;
-    let actions = validate_export_manifest(&manifest)?;
-    let mut closure =
-        strict_closure(root, &actions).wrap_err("cache export is incomplete or corrupt")?;
+    let (manifest, actions) = read_export_manifest(root)?;
+    let mut closure = strict_closure(root, &actions, &manifest.action_owners)
+        .wrap_err("cache export is incomplete or corrupt")?;
     let staged_cas = LocalCas::new(root);
     for digest in &manifest.objects {
         require_object(&staged_cas, &mut closure, digest)
@@ -946,6 +972,16 @@ pub fn import_archive_with_comparison(
     })
 }
 
+fn read_export_manifest(root: &Path) -> Result<(ExportManifest, BTreeSet<CacheDigest>)> {
+    let bytes = std::fs::read(root.join(EXPORT_MANIFEST))?;
+    let manifest: ExportManifest = serde_json::from_slice(&bytes)?;
+    let actions = validate_export_manifest(&manifest)?;
+    if mbx_cache_core::canonical_json(&manifest)? != bytes {
+        eyre::bail!("cache export manifest is not canonical");
+    }
+    Ok((manifest, actions))
+}
+
 fn validate_export_manifest(manifest: &ExportManifest) -> Result<BTreeSet<CacheDigest>> {
     let actions = manifest.actions.iter().cloned().collect::<BTreeSet<_>>();
     let task_identities = manifest
@@ -953,9 +989,7 @@ fn validate_export_manifest(manifest: &ExportManifest) -> Result<BTreeSet<CacheD
         .iter()
         .map(|task| task.task.as_str())
         .collect::<BTreeSet<_>>();
-    if !matches!(manifest.version, LEGACY_EXPORT_VERSION | EXPORT_VERSION)
-        || (manifest.version == LEGACY_EXPORT_VERSION
-            && (!manifest.attachments.is_empty() || !manifest.objects.is_empty()))
+    if manifest.version != EXPORT_VERSION
         || manifest.tasks.is_empty()
         || actions.len() != manifest.actions.len()
         || task_identities.len() != manifest.tasks.len()
@@ -986,6 +1020,8 @@ fn validate_export_manifest(manifest: &ExportManifest) -> Result<BTreeSet<CacheD
     {
         eyre::bail!("unsupported or invalid cache export manifest");
     }
+    validate_action_owners(&manifest.action_owners, &actions)?;
+    validate_prediction_owners(&manifest.tasks, &manifest.action_owners)?;
     Ok(actions)
 }
 
@@ -1030,7 +1066,12 @@ struct PendingObject {
     path: PathBuf,
 }
 
-fn strict_closure(store: &Path, actions: &BTreeSet<CacheDigest>) -> Result<Closure> {
+fn strict_closure(
+    store: &Path,
+    actions: &BTreeSet<CacheDigest>,
+    owners: &BTreeMap<String, String>,
+) -> Result<Closure> {
+    validate_action_owners(owners, actions)?;
     let cas = LocalCas::new(store);
     let action_cache = mbx_cache_core::LocalActionCache::new(store);
     let mut closure = Closure::default();
@@ -1043,8 +1084,11 @@ fn strict_closure(store: &Path, actions: &BTreeSet<CacheDigest>) -> Result<Closu
         require_object(&cas, &mut closure, &result.action)?;
         if let Some(metadata) = &result.metadata {
             let path = require_parsed_object(&cas, &mut closure, metadata)?;
-            let captured: CapturedOutput = serde_json::from_slice(&std::fs::read(path)?)
+            let captured = CapturedMetadata::from_canonical_bytes(&std::fs::read(path)?)
                 .wrap_err("action metadata is invalid")?;
+            if captured.kind != metadata_owner_kind(owners, action)? {
+                eyre::bail!("action metadata kind does not match its prediction owner");
+            }
             require_object(&cas, &mut closure, &captured.stdout)?;
             require_object(&cas, &mut closure, &captured.stderr)?;
         }
@@ -1055,7 +1099,7 @@ fn strict_closure(store: &Path, actions: &BTreeSet<CacheDigest>) -> Result<Closu
                     continue;
                 }
                 let path = require_parsed_object(&cas, &mut closure, &digest)?;
-                let directory: CacheDirectory = serde_json::from_slice(&std::fs::read(path)?)
+                let directory = CacheDirectory::from_canonical_bytes(&std::fs::read(path)?)
                     .wrap_err("output directory is invalid")?;
                 for file in directory.files {
                     require_object(&cas, &mut closure, &file.digest)?;
@@ -1067,6 +1111,59 @@ fn strict_closure(store: &Path, actions: &BTreeSet<CacheDigest>) -> Result<Closu
         }
     }
     Ok(closure)
+}
+
+fn metadata_owner_kind(
+    owners: &BTreeMap<String, String>,
+    action: &CacheDigest,
+) -> Result<CapturedMetadataKind> {
+    let owner = owners
+        .get(&serde_json::to_string(action)?)
+        .ok_or_else(|| eyre::eyre!("action has no recorded native owner"))?;
+    CapturedMetadataKind::for_adapter(owner)
+}
+
+fn record_action_owner(
+    owners: &mut BTreeMap<String, String>,
+    action: &CacheDigest,
+    owner: &str,
+) -> Result<()> {
+    CapturedMetadataKind::for_adapter(owner)?;
+    let key = serde_json::to_string(action)?;
+    if owners.get(&key).is_some_and(|previous| previous != owner) {
+        eyre::bail!("action has conflicting native owners");
+    }
+    owners.insert(key, owner.to_owned());
+    Ok(())
+}
+
+fn validate_action_owners(
+    owners: &BTreeMap<String, String>,
+    actions: &BTreeSet<CacheDigest>,
+) -> Result<()> {
+    let keys = actions
+        .iter()
+        .map(serde_json::to_string)
+        .collect::<std::result::Result<BTreeSet<_>, _>>()?;
+    if keys != owners.keys().cloned().collect() {
+        eyre::bail!("native action ownership does not cover exactly the exported actions");
+    }
+    for owner in owners.values() {
+        CapturedMetadataKind::for_adapter(owner)?;
+    }
+    Ok(())
+}
+
+fn validate_prediction_owners(
+    tasks: &[TaskActionManifest],
+    owners: &BTreeMap<String, String>,
+) -> Result<()> {
+    for prediction in tasks.iter().flat_map(|task| &task.predictions) {
+        if owners.get(&serde_json::to_string(&prediction.action)?) != Some(&prediction.adapter) {
+            eyre::bail!("prediction adapter does not match its recorded native action owner");
+        }
+    }
+    Ok(())
 }
 
 /// Verify every recorded leaf's contents, spread across the machine.
@@ -1132,12 +1229,6 @@ fn verify_pending(pending: &mut [PendingObject]) -> Result<()> {
         Some((_, error)) => Err(error),
         None => Ok(()),
     }
-}
-
-#[derive(Deserialize)]
-struct CapturedOutput {
-    stdout: CacheDigest,
-    stderr: CacheDigest,
 }
 
 fn merge_imported_manifest(destination: &Path, mut imported: TaskActionManifest) -> Result<()> {

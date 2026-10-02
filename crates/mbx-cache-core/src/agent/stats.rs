@@ -1,3 +1,4 @@
+use crate::{AdapterKind, AdapterMeasurement};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Aggregate cache activity for one task session.
@@ -9,6 +10,8 @@ use std::collections::{BTreeMap, BTreeSet};
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct AgentStats {
+    /// Direct typed adapter observations, retaining unknown unit attribution.
+    pub measurement_adapters: BTreeMap<AdapterKind, AdapterMeasurement>,
     /// Cumulative exclusive wrapper durations, including an unattributed remainder.
     pub wrapper_phases_ns: BTreeMap<String, u64>,
     /// End-to-end lifetime of the task-scoped cache session.

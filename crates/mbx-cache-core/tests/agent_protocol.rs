@@ -11,7 +11,7 @@ use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
-const AGENT_FIXTURE: &str = include_str!("fixtures/agent-protocol-v11.jsonl");
+const AGENT_FIXTURE: &str = include_str!("fixtures/agent-protocol-v12.jsonl");
 
 fn digest() -> CacheDigest {
     CacheDigest {
@@ -112,6 +112,34 @@ fn assert_variant_coverage<'a>(
 
 fn requests() -> Vec<(&'static str, AgentRequest)> {
     vec![
+        (
+            "request.record_measurement_invocation",
+            AgentRequest::RecordMeasurement {
+                event: mbx_cache_core::MeasurementEvent::Invocation {
+                    adapter: mbx_cache_core::AdapterKind::Rustdoc,
+                    invocation_kind: mbx_cache_core::InvocationKind::Work,
+                    cache_outcome: mbx_cache_core::CacheOutcome::Hit,
+                    unit: None,
+                },
+            },
+        ),
+        (
+            "request.record_measurement_process",
+            AgentRequest::RecordMeasurement {
+                event: mbx_cache_core::MeasurementEvent::Process {
+                    adapter: mbx_cache_core::AdapterKind::Rustdoc,
+                    purpose: mbx_cache_core::ProcessPurpose::RustdocFinalize,
+                    outcome: mbx_cache_core::ProcessOutcome::Succeeded,
+                    measurement: mbx_cache_core::ProcessMeasurement {
+                        attempts: 1,
+                        started: 1,
+                        observed_wall_ns: 42,
+                        wall_observations: 1,
+                    },
+                    unit: None,
+                },
+            },
+        ),
         (
             "request.record_wrapper_timing",
             AgentRequest::RecordWrapperTiming {
@@ -304,6 +332,10 @@ fn requests() -> Vec<(&'static str, AgentRequest)> {
 fn responses() -> Vec<(&'static str, AgentResponse)> {
     vec![
         (
+            "response.measurement_recorded",
+            AgentResponse::MeasurementRecorded,
+        ),
+        (
             "response.wrapper_timing_recorded",
             AgentResponse::WrapperTimingRecorded,
         ),
@@ -474,7 +506,7 @@ fn assert_fixture<T: Serialize>(expected: &mut BTreeMap<&str, &str>, name: &str,
 }
 
 #[test]
-fn agent_protocol_v11_shapes_match_the_conformance_fixture() {
+fn agent_protocol_v12_shapes_match_the_conformance_fixture() {
     let mut expected = fixture();
     for line in AGENT_FIXTURE.lines() {
         let (name, json) = line
@@ -552,7 +584,7 @@ fn agent_protocol_v11_shapes_match_the_conformance_fixture() {
 
 #[test]
 fn protocol_constants_match_the_contract() {
-    assert_eq!(AGENT_PROTOCOL_VERSION, 11);
+    assert_eq!(AGENT_PROTOCOL_VERSION, 12);
     assert_eq!(PROTOCOL_VERSION, 1);
     assert_eq!(
         ACTION_RESULT_MEDIA_TYPE,
@@ -615,6 +647,7 @@ define_variant_coverage!(request_variant_name, EXPECTED_REQUEST_VARIANTS, AgentR
     AgentRequest::JoinActionPromise { .. } => "join_action_promise",
     AgentRequest::CompleteActionPromise { .. } => "complete_action_promise",
     AgentRequest::ResolveFileDigests { .. } => "resolve_file_digests",
+    AgentRequest::RecordMeasurement { .. } => "record_measurement",
     AgentRequest::RecordWrapperTiming { .. } => "record_wrapper_timing",
 });
 
@@ -644,5 +677,6 @@ define_variant_coverage!(response_variant_name, EXPECTED_RESPONSE_VARIANTS, Agen
     AgentResponse::ActionPromise { .. } => "action_promise",
     AgentResponse::ActionPromiseCompleted => "action_promise_completed",
     AgentResponse::FileDigestsResolved { .. } => "file_digests_resolved",
+    AgentResponse::MeasurementRecorded => "measurement_recorded",
     AgentResponse::WrapperTimingRecorded => "wrapper_timing_recorded",
 });

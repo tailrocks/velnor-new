@@ -13,6 +13,10 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
+mod captured_metadata;
+mod directory_validation;
+pub use captured_metadata::{CapturedMetadata, CapturedMetadataKind};
+
 /// Major version of the HTTP cache protocol.
 pub const PROTOCOL_VERSION: u8 = 1;
 /// Header carrying the negotiated cache protocol version.
@@ -95,6 +99,32 @@ impl Digest {
         Ok(Self {
             algorithm: DigestAlgorithm::Blake3.into(),
             hash,
+            size,
+        })
+    }
+
+    /// Hash a byte stream with BLAKE3 without materializing a temporary file.
+    pub fn blake3_reader(mut reader: impl std::io::Read) -> eyre::Result<Self> {
+        let mut hasher = blake3::Hasher::new();
+        let mut size = 0u64;
+        let mut buffer = [0u8; 64 * 1024];
+        loop {
+            let count = match reader.read(&mut buffer) {
+                Ok(count) => count,
+                Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+                Err(error) => return Err(error.into()),
+            };
+            if count == 0 {
+                break;
+            }
+            hasher.update(&buffer[..count]);
+            size = size
+                .checked_add(count as u64)
+                .ok_or_else(|| eyre::eyre!("digest stream size overflow"))?;
+        }
+        Ok(Self {
+            algorithm: DigestAlgorithm::Blake3.into(),
+            hash: hasher.finalize().to_hex().to_string(),
             size,
         })
     }
@@ -317,10 +347,8 @@ pub struct RustcMetadata {
 impl RustcMetadata {
     /// Whether the metadata satisfies the version-one rustc schema invariants.
     pub fn validate(&self) -> bool {
-        self.version == 1
-            && self.kind == "rustc"
-            && self.stdout.validate().is_ok()
-            && self.stderr.validate().is_ok()
+        self.kind == "rustc"
+            && captured_metadata::validate_streams(self.version, &self.stdout, &self.stderr).is_ok()
     }
 }
 
@@ -341,10 +369,8 @@ pub struct CcMetadata {
 impl CcMetadata {
     /// Whether the metadata satisfies the version-one cc schema invariants.
     pub fn validate(&self) -> bool {
-        self.version == 1
-            && self.kind == "cc"
-            && self.stdout.validate().is_ok()
-            && self.stderr.validate().is_ok()
+        self.kind == "cc"
+            && captured_metadata::validate_streams(self.version, &self.stdout, &self.stderr).is_ok()
     }
 }
 

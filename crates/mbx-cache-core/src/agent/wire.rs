@@ -1,11 +1,11 @@
 use super::{FileDigestResolution, FileDigestScope, FileIdentity, RecordedFileDigest};
-use crate::{ActionPrediction, CacheDigest, RemoteActionResult};
+use crate::{ActionPrediction, CacheDigest, MeasurementEvent, RemoteActionResult};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 /// Wire protocol version used between an in-process cache agent and its shims.
-pub const AGENT_PROTOCOL_VERSION: u8 = 11;
+pub const AGENT_PROTOCOL_VERSION: u8 = 12;
 /// Largest single protocol request the agent will read.
 ///
 /// Requests are small JSON objects; the largest legitimate ones carry an output
@@ -300,6 +300,11 @@ pub enum AgentRequest {
         /// File identities to resolve, preserving request order.
         files: Vec<FileIdentity>,
     },
+    /// Record a typed invocation or actual child-process observation.
+    RecordMeasurement {
+        /// Observation produced directly by its owning adapter.
+        event: MeasurementEvent,
+    },
     /// Record exclusive wrapper phase durations and bounded trace spans.
     RecordWrapperTiming {
         /// Completed invocation timings.
@@ -593,6 +598,8 @@ pub enum AgentResponse {
     },
     /// Wrapper phase timings were recorded.
     WrapperTimingRecorded,
+    /// A typed adapter observation was recorded.
+    MeasurementRecorded,
     /// A fatal shim diagnostic was accepted for the session to surface.
     ///
     /// This is appended to preserve every existing response variant and wire

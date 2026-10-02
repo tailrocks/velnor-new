@@ -2434,7 +2434,7 @@ fn comparison_callback_precedes_consumption_and_failure_preserves_bundle() {
     assert!(bundle.join(EXPORT_MANIFEST).is_file());
     let error = import_archive_with_comparison(destination.path(), &bundle, |root, state| {
         assert_eq!(root, bundle);
-        assert_eq!(state.version, 1);
+        assert_eq!(state.version, ComparisonState::VERSION);
         assert_eq!(state.action_results.len(), 1);
         assert!(bundle.join(EXPORT_MANIFEST).is_file());
         assert!(LocalCas::new(destination.path()).find(&output)?.is_none());

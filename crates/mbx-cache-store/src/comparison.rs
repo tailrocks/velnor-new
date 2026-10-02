@@ -7,16 +7,29 @@ pub struct ComparisonState {
     pub version: u8,
     /// Full action-result values, keyed by the complete action digest tuple.
     pub action_results: BTreeMap<String, serde_json::Value>,
+    /// Actual native adapter owner of every complete action-result key.
+    pub action_owners: BTreeMap<String, String>,
     /// Full prediction tuples including their task identity.
     pub predictions: BTreeSet<String>,
     pub attachments: BTreeMap<String, CacheDigest>,
 }
 
 impl ComparisonState {
+    /// The current complete owner-inventory schema version.
+    pub const VERSION: u8 = 2;
+
     /// Validate the complete owner state shape without requiring retained blobs.
     pub fn validate(&self) -> Result<()> {
-        if self.version != 1 {
+        if self.version != Self::VERSION {
             eyre::bail!("unsupported comparison version");
+        }
+        if self.action_owners.keys().collect::<BTreeSet<_>>()
+            != self.action_results.keys().collect()
+        {
+            eyre::bail!("comparison ownership does not cover exactly its action results");
+        }
+        for owner in self.action_owners.values() {
+            CapturedMetadataKind::for_adapter(owner)?;
         }
         for (key, value) in &self.action_results {
             let action: CacheDigest = serde_json::from_str(key)?;
@@ -46,6 +59,10 @@ impl ComparisonState {
                 || !self
                     .action_results
                     .contains_key(&serde_json::to_string(&prediction.action)?)
+                || self
+                    .action_owners
+                    .get(&serde_json::to_string(&prediction.action)?)
+                    != Some(&prediction.adapter)
             {
                 eyre::bail!("invalid comparison prediction");
             }
@@ -79,10 +96,8 @@ impl ComparisonState {
     }
 
     pub(super) fn from_root(root: &Path) -> Result<Self> {
-        let manifest: ExportManifest =
-            serde_json::from_slice(&std::fs::read(root.join(EXPORT_MANIFEST))?)?;
-        let actions = validate_export_manifest(&manifest)?;
-        let mut closure = strict_closure(root, &actions)?;
+        let (manifest, actions) = read_export_manifest(root)?;
+        let mut closure = strict_closure(root, &actions, &manifest.action_owners)?;
         let cas = LocalCas::new(root);
         for digest in &manifest.objects {
             require_object(&cas, &mut closure, digest)?;
@@ -110,8 +125,9 @@ impl ComparisonState {
             }
         }
         Ok(Self {
-            version: 1,
+            version: Self::VERSION,
             action_results,
+            action_owners: manifest.action_owners.clone(),
             predictions,
             attachments: manifest.attachments.clone(),
         })

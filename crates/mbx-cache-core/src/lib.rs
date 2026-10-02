@@ -40,6 +40,7 @@ mod agent;
 mod client;
 mod imds;
 mod local;
+mod measurement;
 mod path_mapping;
 mod remote_http;
 mod remote_s3;
@@ -63,12 +64,17 @@ pub use mbx_cache_protocol::{
     ActionResult as RemoteActionResult, BLOB_MEDIA_TYPE, BLOB_PACK_BLOBS_HEADER,
     BLOB_PACK_BYTES_HEADER, BLOB_PACK_HEADER_BYTES, BLOB_PACK_MAGIC, BLOB_PACK_MEDIA_TYPE,
     BLOB_PACK_RECEIPT_MEDIA_TYPE, CLIENT_METADATA_MEDIA_TYPE, Capabilities, CapabilityFeatures,
-    CapabilityLimits, CapabilityProtocol, CcMetadata, DIGEST_LIST_MEDIA_TYPE, DIRECTORY_MEDIA_TYPE,
-    Digest as CacheDigest, DigestAlgorithm, Directory as CacheDirectory,
-    DirectoryNode as CacheDirectoryNode, FileNode as CacheFileNode, MAX_ACTION_PREDICTION_PAYLOAD,
-    MAX_ACTION_PROMISE_CLAIM_BYTES, NAMESPACE_HEADER, PROTOCOL_HEADER, PROTOCOL_VERSION,
-    RustcMetadata, SymlinkNode as CacheSymlinkNode, TASK_ACTION_MANIFEST_MEDIA_TYPE,
-    TaskActionManifest,
+    CapabilityLimits, CapabilityProtocol, CapturedMetadata, CapturedMetadataKind, CcMetadata,
+    DIGEST_LIST_MEDIA_TYPE, DIRECTORY_MEDIA_TYPE, Digest as CacheDigest, DigestAlgorithm,
+    Directory as CacheDirectory, DirectoryNode as CacheDirectoryNode, FileNode as CacheFileNode,
+    MAX_ACTION_PREDICTION_PAYLOAD, MAX_ACTION_PROMISE_CLAIM_BYTES, NAMESPACE_HEADER,
+    PROTOCOL_HEADER, PROTOCOL_VERSION, RustcMetadata, SymlinkNode as CacheSymlinkNode,
+    TASK_ACTION_MANIFEST_MEDIA_TYPE, TaskActionManifest,
+};
+pub use measurement::{
+    AdapterKind, AdapterMeasurement, CacheOutcome, CompletedMeasurement, InvocationKind,
+    LinkAttribution, MeasurementEvent, PackageOrigin, ProcessMeasurement, ProcessOutcome,
+    ProcessPurpose, UnitIdentity, UnitMeasurement,
 };
 pub use path_mapping::{
     PathAliases, PathMapping, PathNormalizationError, normalize_mapped_path,

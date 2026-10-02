@@ -800,21 +800,12 @@ impl CacheAgent {
 
     pub(super) fn parse_rustc_metadata(path: &Path) -> Result<RustcMetadata> {
         let bytes = fs::read(path)?;
-        let metadata: RustcMetadata = serde_json::from_slice(&bytes)?;
-        if metadata.version != 1 || metadata.kind != "rustc" || canonical_json(&metadata)? != bytes
-        {
-            bail!("remote rustc action metadata is invalid");
-        }
-        Ok(metadata)
+        RustcMetadata::from_canonical_bytes(&bytes)
     }
 
     pub(super) fn parse_cache_directory(path: &Path) -> Result<CacheDirectory> {
         let bytes = fs::read(path)?;
-        let directory: CacheDirectory = serde_json::from_slice(&bytes)?;
-        if directory.version != 1 || canonical_json(&directory)? != bytes {
-            bail!("remote action output directory is invalid");
-        }
-        Ok(directory)
+        CacheDirectory::from_canonical_bytes(&bytes)
     }
 
     #[cfg(test)]

@@ -24,6 +24,7 @@ use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWrite
 
 mod file_digest;
 mod manifest;
+mod measurement;
 mod prefetch;
 mod stats;
 mod wire;
@@ -163,6 +164,7 @@ pub struct AgentRemoteCache {
 
 #[derive(Default)]
 struct AtomicAgentStats {
+    measurement_adapters: Mutex<BTreeMap<crate::AdapterKind, crate::AdapterMeasurement>>,
     wrapper_phases_ns: Mutex<BTreeMap<String, u64>>,
     lookups: AtomicU64,
     unconsulted: AtomicU64,
@@ -1790,6 +1792,7 @@ impl CacheAgent {
     /// Return a snapshot of this session's cache activity.
     pub fn stats(&self) -> AgentStats {
         AgentStats {
+            measurement_adapters: measurement::snapshot(&self.stats.measurement_adapters),
             session_duration_ns: 0,
             lookups: self.stats.lookups.load(Ordering::Relaxed),
             unconsulted: self.stats.unconsulted.load(Ordering::Relaxed),
@@ -2053,6 +2056,10 @@ impl CacheAgent {
             }
             AgentRequest::RecordFileDigests { scope, entries } => {
                 self.record_file_digests(scope, entries)
+            }
+            AgentRequest::RecordMeasurement { event } => {
+                measurement::record(&self.stats.measurement_adapters, event)
+                    .map(|()| AgentResponse::MeasurementRecorded)
             }
             AgentRequest::RecordWrapperTiming { timing } => (|| {
                 if timing.spans.len() > 512
