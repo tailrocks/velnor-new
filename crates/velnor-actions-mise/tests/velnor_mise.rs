@@ -37,6 +37,8 @@ mod impl_mise_isolation;
 mod impl_mise_lock;
 #[path = "impl_mise_lockfile.rs"]
 mod impl_mise_lockfile;
+#[path = "impl_mise_multiline.rs"]
+mod impl_mise_multiline;
 #[path = "impl_mise_negative.rs"]
 mod impl_mise_negative;
 #[path = "impl_mise_nextest.rs"]

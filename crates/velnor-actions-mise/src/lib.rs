@@ -30,6 +30,7 @@ pub mod steps;
 pub mod template;
 mod toml_parser;
 mod toml_scan;
+mod toml_strings;
 pub mod toolfiles;
 pub mod verify;
 pub mod wrappers;
