@@ -253,3 +253,43 @@ fn parity_fails_closed() {
     let skip = verify_complete_results(&expected, &[report("hosted"), skipped], &good);
     assert_eq!(skip, Err(EvidenceError::NotProven("bad_conclusion")));
 }
+
+#[test]
+fn source_profile_artifact_and_census_fail_closed() {
+    let expected = expected_pair();
+    let good = census(&[key("hosted"), key("local")]);
+    let mut source = report("hosted");
+    source.key.source = "other".to_owned();
+    let err = verify_complete_results(&expected, &[source, report("local")], &good);
+    assert_eq!(err, Err(EvidenceError::NotProven("wrong_source")));
+    let mut profile = report("hosted");
+    profile.key.profile = "foreign".to_owned();
+    let err = verify_complete_results(&expected, &[profile, report("local")], &good);
+    assert_eq!(err, Err(EvidenceError::NotProven("wrong_profile")));
+    let mut plan = report("local");
+    plan.key.plan = "other-plan".to_owned();
+    let err = verify_complete_results(&expected, &[report("hosted"), plan], &good);
+    assert_eq!(err, Err(EvidenceError::NotProven("wrong_plan")));
+    let mut missing = report("hosted");
+    missing.artifact_id.clear();
+    let err = verify_complete_results(&expected, &[missing, report("local")], &good);
+    assert_eq!(err, Err(EvidenceError::NotProven("missing_artifact")));
+    let mut unknown = report("local");
+    unknown.runner_known = false;
+    let err = verify_complete_results(&expected, &[report("hosted"), unknown], &good);
+    assert_eq!(err, Err(EvidenceError::NotProven("unknown_runner")));
+    let mut incomplete = good.clone();
+    incomplete.complete = false;
+    let err = verify_complete_results(&expected, &[report("hosted"), report("local")], &incomplete);
+    assert_eq!(err, Err(EvidenceError::NotProven("incomplete_census")));
+    for conclusion in [
+        Conclusion::Cancelled,
+        Conclusion::TimedOut,
+        Conclusion::Failed,
+    ] {
+        let mut bad = report("local");
+        bad.conclusion = conclusion;
+        let err = verify_complete_results(&expected, &[report("hosted"), bad], &good);
+        assert_eq!(err, Err(EvidenceError::NotProven("bad_conclusion")));
+    }
+}

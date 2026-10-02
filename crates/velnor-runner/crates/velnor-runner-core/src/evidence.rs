@@ -58,10 +58,14 @@ impl ExpectedExecutionSet {
         }) {
             return Err(EvidenceError::NotProven("wrong_attempt"));
         }
-        if self.items.iter().any(|item| {
-            item.key.plan != report.key.plan && item.key.logical_job == report.key.logical_job
-        }) {
+        if same_job(self, report, |item| item.key.source != report.key.source) {
+            return Err(EvidenceError::NotProven("wrong_source"));
+        }
+        if same_job(self, report, |item| item.key.plan != report.key.plan) {
             return Err(EvidenceError::NotProven("wrong_plan"));
+        }
+        if same_job(self, report, |item| item.key.profile != report.key.profile) {
+            return Err(EvidenceError::NotProven("wrong_profile"));
         }
         Err(EvidenceError::NotProven("missing_lane"))
     }
@@ -207,6 +211,9 @@ fn check_report(
     if report.conclusion != Conclusion::Success {
         return Err(EvidenceError::NotProven("bad_conclusion"));
     }
+    if report.artifact_id.is_empty() {
+        return Err(EvidenceError::NotProven("missing_artifact"));
+    }
     if report.artifact_id != item.artifact_id {
         return Err(EvidenceError::NotProven("swapped_artifact"));
     }
@@ -214,6 +221,17 @@ fn check_report(
         return Err(EvidenceError::NotProven("unknown_runner"));
     }
     Ok(())
+}
+
+fn same_job(
+    expected: &ExpectedExecutionSet,
+    report: &VerifiedExecutionReport,
+    differ: impl Fn(&ExpectedItem) -> bool,
+) -> bool {
+    expected
+        .items
+        .iter()
+        .any(|item| item.key.logical_job == report.key.logical_job && differ(item))
 }
 
 fn archive_reason(archive: ArchiveSafety) -> &'static str {
