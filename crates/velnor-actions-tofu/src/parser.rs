@@ -80,6 +80,9 @@ pub struct FileModel {
     pub has_legacy_ref: bool,
     /// Top-level `module` declarations with parsed sources, in file order.
     pub modules: Vec<ModuleDecl>,
+    /// Top-level `provider` hash counts, in file order (native only:
+    /// lockfiles are HCL, so the JSON walk leaves this empty).
+    pub provider_hash_counts: Vec<crate::lockfile::ProviderHashCount>,
 }
 
 /// Parse one native (`.tf`/`.tofu`) file structurally.
@@ -217,6 +220,8 @@ pub(crate) struct Walk {
     versions: Vec<String>,
     /// Legacy token observed.
     legacy: bool,
+    /// Provider hash counts collected (native walk only).
+    provider_hashes: Vec<crate::lockfile::ProviderHashCount>,
 }
 
 impl Walk {
@@ -228,6 +233,7 @@ impl Walk {
             modules: Vec::new(),
             versions: Vec::new(),
             legacy: false,
+            provider_hashes: Vec::new(),
         }
     }
 
@@ -238,6 +244,7 @@ impl Walk {
             required_versions: self.versions,
             has_legacy_ref: self.legacy,
             modules: self.modules,
+            provider_hash_counts: self.provider_hashes,
         }
     }
 
@@ -285,6 +292,10 @@ impl Walk {
                 });
                 if block.identifier() == "terraform" {
                     self.terraform_block(block);
+                }
+                if block.identifier() == "provider" {
+                    self.provider_hashes
+                        .push(crate::lockfile::provider_hash_count(block));
                 }
                 if block.identifier() == "module" {
                     self.modules.push(ModuleDecl {
