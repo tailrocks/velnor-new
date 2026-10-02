@@ -304,8 +304,8 @@ fn cross_trust_provider_cache_entry_rejected() {
 /// (5) Poisoned provider-cache bytes fail with precise reasons.
 ///
 /// Tampered bytes, poisoned input digests, and missing entries each
-/// fail the 5-check chain at their own reason; a miss discards the
-/// entry for refetch through the normal verified path.
+/// fail the model-only 5-check chain at their own reason; a miss
+/// would discard the entry for refetch (no live-path consumer yet).
 #[test]
 fn poisoned_provider_cache_bytes_rejected() {
     let mut tampered = provider_cache_observation();

@@ -89,7 +89,7 @@ fn sources_subset_validation_enforces_the_never_archive_list() {
 }
 
 #[test]
-fn provider_corruption_discards_and_refetches_through_the_verified_path() {
+fn provider_corruption_discards_and_refetches_through_the_model_checks() {
     let mut tampered = observed_provider_restore();
     tampered.entry_bytes = b"tampered bytes".to_vec();
     assert_eq!(verify_provider_restore(&tampered), Err("cache_corrupt"));
