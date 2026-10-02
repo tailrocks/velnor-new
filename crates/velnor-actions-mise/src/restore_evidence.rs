@@ -58,12 +58,15 @@ fn digests_equal(expected: &str, observed: &str) -> bool {
     validate_digest(expected).is_ok() && expected == observed
 }
 
-/// Verify one provider-cache restore through the 5-check chain.
+/// Model-only 5-check chain for one provider-cache restore.
 ///
-/// Provider entries are acceleration, never results: the same
-/// ordered checks (present, digest, compatibility, trust, inputs)
-/// verify them, a miss discards the entry for refetch through the
-/// normal verified path, and a hit never disables verification.
+/// Pins the intended semantics (present, digest, compatibility,
+/// trust, inputs): a miss would discard the entry for refetch, and a
+/// hit would never disable verification. No production path consumes
+/// `RestoreObservation` yet (task reports carry no restore
+/// observations), so this classifies caller-built models only; the
+/// live chain is exact-key restore, then lock-verified readonly init,
+/// then mandatory validate. See `decisions.rs`.
 /// # Errors
 pub fn verify_provider_restore(obs: &RestoreObservation) -> Result<(), &'static str> {
     classify_restore(obs)
