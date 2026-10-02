@@ -56,7 +56,10 @@ pub use discover::{
 pub use errors::{ContractError, sanitize_error_detail};
 pub use extensions::{RUST_EXTENSION_REQUIRED_SLOTS, validate_rust_extension};
 pub use finding::Finding;
-pub use formats::{DECLARED_GITHUB_FORMATS, find_github_format, is_declared_github_format};
+pub use formats::{
+    AGENTS_MD_PATH, CLAUDE_MD_PATH, CLAUDE_MD_TARGET, DECLARED_GITHUB_FORMATS, find_github_format,
+    is_declared_github_format,
+};
 pub use freshness::{
     FRESHNESS_CLASSES, FreshnessRequirement, RunnerImageEvidence, UNOBSERVED_IMAGE_VALUE,
     runner_family_changed, validate_freshness_class,
