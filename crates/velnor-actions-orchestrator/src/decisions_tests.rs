@@ -60,6 +60,19 @@ fn restore_checks_ownership_explicitly() {
     );
 }
 
+/// Tofu lockfiles never broaden: calling-root selection attributes per root.
+#[test]
+fn tofu_paths_never_broaden_selection() {
+    for path in [
+        "stacks/a/.terraform.lock.hcl",
+        "stacks/a/main.tf",
+        "terraform.tfvars",
+        "a.auto.tfvars",
+    ] {
+        assert_eq!(broadening_for_path(path), None, "{path}");
+    }
+}
+
 /// Generation-time image evidence is unobserved, never label-split.
 #[test]
 fn runner_image_evidence_is_unobserved() {

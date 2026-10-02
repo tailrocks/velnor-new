@@ -4,14 +4,14 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use serde::Deserialize;
-use velnor_actions_contract::config::{ActionPinOverride, ActionsConfig, RustReleaseConfig};
+use velnor_actions_contract::config::{ActionPinOverride, ActionsConfig};
 use velnor_actions_contract::{
-    DeclaredCompileDriver, DeclaredTestRunner, DiscoveryConfig, GeneratorValidation,
-    ResourcesConfig, RustConfiguration, RustStackConfig, StacksConfig, TestShardingConfig,
-    VelnorConfig, WorkflowConfig, WorkflowPolicy,
+    DiscoveryConfig, GeneratorValidation, ResourcesConfig, TestShardingConfig, VelnorConfig,
+    WorkflowConfig, WorkflowPolicy,
 };
 
 use crate::OrchestratorError;
+use crate::config_stacks::PartialStacks;
 
 /// Config path as reported in diagnostics.
 pub(crate) const CONFIG_REL: &str = ".velnor/config.toml";
@@ -152,33 +152,6 @@ struct PartialSharding {
     by_manifest: BTreeMap<String, u32>,
 }
 
-/// Stacks section with every value optional.
-#[derive(Debug, Default, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct PartialStacks {
-    /// Stack IDs to ignore.
-    #[serde(default)]
-    ignore: Vec<String>,
-    /// Rust stack options.
-    rust: Option<PartialRustStack>,
-}
-
-/// Rust stack section with every value optional.
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct PartialRustStack {
-    /// Rust task configuration variants.
-    configurations: Option<Vec<RustConfiguration>>,
-    /// Sticky declared compile driver.
-    compile_driver: Option<DeclaredCompileDriver>,
-    /// Sticky declared test runner.
-    test_runner: Option<DeclaredTestRunner>,
-    /// Rust release policy; disabled by default.
-    release: Option<RustReleaseConfig>,
-    /// Allowlisted Mise custom-task names; empty by default.
-    custom_tasks: Option<Vec<String>>,
-}
-
 /// Discovery section with every value optional.
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -208,7 +181,7 @@ impl PartialConfig {
             workflow: self.workflow.materialize(),
             resources: self.resources.materialize(),
             test_sharding: self.test_sharding.materialize(),
-            stacks: self.stacks.materialize(),
+            stacks: self.stacks.materialize()?,
             discovery: self.discovery.materialize(),
             actions: self.actions.materialize(),
         })
@@ -251,26 +224,6 @@ impl PartialSharding {
     }
 }
 
-impl PartialStacks {
-    /// Fill stacks defaults.
-    fn materialize(self) -> StacksConfig {
-        let rust = self.rust.map(|stack| {
-            let defaults = RustStackConfig::default_config();
-            RustStackConfig {
-                configurations: stack.configurations.unwrap_or(defaults.configurations),
-                compile_driver: stack.compile_driver,
-                test_runner: stack.test_runner,
-                release: stack.release.unwrap_or_default(),
-                custom_tasks: stack.custom_tasks.unwrap_or_default(),
-            }
-        });
-        StacksConfig {
-            ignore: self.ignore,
-            rust,
-        }
-    }
-}
-
 impl PartialDiscovery {
     /// Fill discovery defaults.
     fn materialize(self) -> DiscoveryConfig {
@@ -285,106 +238,6 @@ impl PartialActions {
     fn materialize(self) -> ActionsConfig {
         ActionsConfig {
             overrides: self.overrides,
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// Write `body` as `.velnor/config.toml` under a fresh temp root.
-    fn rooted(body: &str) -> tempfile::TempDir {
-        let root = tempfile::tempdir().expect("temp root");
-        let dir = root.path().join(".velnor");
-        std::fs::create_dir_all(&dir).expect("velnor dir");
-        std::fs::write(dir.join("config.toml"), body).expect("config write");
-        root
-    }
-
-    #[test]
-    fn release_section_parses_and_defaults_disabled() {
-        // Bind once: the f2a gate textually requires a single production
-        // `load_config` call site (prepare.rs); test calls use the alias.
-        let load = load_config;
-        let root = rooted("schema = 1\n");
-        let config = load(root.path()).expect("minimal config");
-        assert!(config.stacks.rust.is_none());
-        let root =
-            rooted("schema = 1\n[stacks.rust.release]\nenabled = true\npackages = [\"demo\"]\n");
-        let config = load(root.path()).expect("release config");
-        let rust = config.stacks.rust.expect("rust stack");
-        assert!(rust.release.enabled);
-        assert_eq!(rust.release.packages, ["demo".to_owned()]);
-        let root = rooted("schema = 1\n[stacks.rust]\n");
-        let config = load(root.path()).expect("rust config");
-        let rust = config.stacks.rust.expect("rust stack");
-        assert!(!rust.release.enabled);
-    }
-
-    #[test]
-    fn custom_tasks_parse_and_default_empty() {
-        let load = load_config;
-        let root = rooted("schema = 1\n[stacks.rust]\ncustom_tasks = [\"audit\"]\n");
-        let config = load(root.path()).expect("custom tasks");
-        let rust = config.stacks.rust.expect("rust stack");
-        assert_eq!(rust.custom_tasks, ["audit".to_owned()]);
-        let root = rooted("schema = 1\n[stacks.rust]\n");
-        let config = load(root.path()).expect("rust config");
-        let rust = config.stacks.rust.expect("rust stack");
-        assert!(rust.custom_tasks.is_empty());
-    }
-
-    #[test]
-    fn render_unsafe_stack_values_are_rejected() {
-        let load = load_config;
-        for (body, want) in [
-            (
-                "schema = 1\n[[stacks.rust.configurations]]\nname = \"x\"\ntarget = \"${{ secrets.x }}\"\n",
-                "bad_target",
-            ),
-            (
-                "schema = 1\n[[stacks.rust.configurations]]\nname = \"x\"\ntarget = \"a;true\"\n",
-                "bad_target",
-            ),
-            (
-                "schema = 1\n[[stacks.rust.configurations]]\nname = \"x\"\nfeatures = [\"${{ x }}\"]\ntarget = \"host\"\n",
-                "bad_feature",
-            ),
-            (
-                "schema = 1\n[stacks.rust]\ncustom_tasks = [\"${{secrets.x}}\"]\n",
-                "bad_custom_task",
-            ),
-            (
-                "schema = 1\n[stacks.rust]\ncustom_tasks = [\"a;true\"]\n",
-                "bad_custom_task",
-            ),
-        ] {
-            let root = rooted(body);
-            let err = load(root.path()).expect_err("unsafe value must fail");
-            assert!(err.to_string().contains(want), "got {err} want {want}");
-        }
-        let root = rooted(
-            "schema = 1\n[[stacks.rust.configurations]]\nname = \"x\"\nfeatures = [\"serde\", \"dep:foo\", \"bar?/baz\"]\ntarget = \"x86_64-unknown-linux-gnu\"\n[stacks.rust]\ncustom_tasks = [\"audit\", \"lint:strict\"]\n",
-        );
-        let config = load(root.path()).expect("safe values pass");
-        let rust = config.stacks.rust.expect("rust stack");
-        assert_eq!(
-            rust.custom_tasks,
-            ["audit".to_owned(), "lint:strict".to_owned()]
-        );
-    }
-
-    #[test]
-    fn unknown_rust_keys_are_rejected() {
-        let load = load_config;
-        for body in [
-            "schema = 1\n[stacks.rust]\ntasks = [\"audit\"]\n",
-            "schema = 1\n[stacks.rust]\ncustom = [\"audit\"]\n",
-        ] {
-            let root = rooted(body);
-            let err = load(root.path()).expect_err("unknown key must fail");
-            assert!(err.to_string().contains(CONFIG_REL), "got {err}");
         }
     }
 }

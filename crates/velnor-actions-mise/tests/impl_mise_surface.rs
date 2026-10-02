@@ -7,10 +7,10 @@ use velnor_actions_mise::catalog::NEXTEST_VERSION;
 use velnor_actions_mise::{
     ACTIONLINT_VERSION, BaselineLookup, CandidateBuild, GH_VERSION, IsolatedCommand,
     MR_BOXINGTON_VERSION, MetadataDiscovery, MetadataQualification, MiseInstall, NextestArchive,
-    NextestDriver, NextestList, NextestPartition, NextestRun, PinnedTool, PinnedToolExec,
-    PreparePinnedTools, RUST_VERSION, RouteDriver, SHELLCHECK_VERSION, TaskCacheMode, TestRunner,
-    ToolCatalog, ToolHomes, VerifyPreparedInputs, VerifySpec, VerifyToolchain, ZIZMOR_VERSION,
-    is_allowed_mise_subcommand, qualified_task_run_argv,
+    NextestDriver, NextestList, NextestPartition, NextestRun, OPENTOFU_VERSION, PinnedTool,
+    PinnedToolExec, PreparePinnedTools, RUST_VERSION, RouteDriver, SHELLCHECK_VERSION,
+    TaskCacheMode, TestRunner, ToolCatalog, ToolHomes, VerifyPreparedInputs, VerifySpec,
+    VerifyToolchain, ZIZMOR_VERSION, is_allowed_mise_subcommand, qualified_task_run_argv,
 };
 
 fn pinned() -> ToolCatalog {
@@ -171,6 +171,7 @@ fn catalog_pins_ignore_project_selectors() -> Result<(), String> {
         SHELLCHECK_VERSION,
         ZIZMOR_VERSION,
         NEXTEST_VERSION,
+        OPENTOFU_VERSION,
     )
     .map_err(|err| err.to_string())?;
     assert_eq!(catalog, ToolCatalog::pinned());

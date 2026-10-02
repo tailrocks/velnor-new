@@ -5,8 +5,9 @@
 //! commands report.
 
 use std::collections::BTreeSet;
+use std::path::Path;
 
-use velnor_actions_contract::FileIndex;
+use velnor_actions_contract::{FileIndex, VelnorConfig};
 
 use crate::discover::PlannedWorkspace;
 use crate::toolcheck::ToolInputCheck;
@@ -14,9 +15,12 @@ use crate::toolfindings::{finding_line, tool_check_lines, tool_conflicts};
 
 /// Collect profile plus tool-file recommendations, sorted and unique.
 pub(crate) fn collect_recommendations(
+    root: &Path,
+    config: &VelnorConfig,
     index: &FileIndex,
     workspaces: &[PlannedWorkspace],
     tool_checks: &[ToolInputCheck],
+    reads: &mut velnor_actions_tofu::FileCache,
 ) -> Vec<String> {
     let mut out = BTreeSet::new();
     for workspace in workspaces {
@@ -34,6 +38,9 @@ pub(crate) fn collect_recommendations(
         if finding.validate().is_ok() {
             out.insert(finding_line(&finding));
         }
+    }
+    for line in crate::discover_tofu::tofu_diagnostic_lines(root, config, tool_checks, reads) {
+        out.insert(line);
     }
     if index.contains("mise.toml") || index.contains(".mise.toml") {
         out.insert("mise.toml is read-only input; Velnor never modifies it".to_owned());

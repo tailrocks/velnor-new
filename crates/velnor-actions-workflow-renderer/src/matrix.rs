@@ -4,6 +4,9 @@
 //! the renderer validates the producer wiring, scrubs the markers, and
 //! emits the typed `strategy` (`fail-fast: false`, capped `max-parallel`,
 //! exact `fromJSON` producer ref) plus producer `outputs` and step ID.
+//! Capped crate jobs carry the same trio on one obligation step; the
+//! renderer validates it identically and emits the declared
+//! `strategy.max-parallel` the lane staging enforces through `needs`.
 
 use std::collections::BTreeMap;
 
@@ -48,6 +51,24 @@ pub(crate) fn matrix_invalid(problem: &str) -> RenderError {
     RenderError::InvalidWorkflow(problem.to_owned())
 }
 
+/// First marker trio hit in one job's shell steps, if any key present.
+fn marker_trio(job: &Job) -> Option<[Option<String>; 3]> {
+    for step in &job.steps {
+        if let StepKind::Shell { env, .. } = &step.kind {
+            let hit = [
+                MATRIX_NEEDS_JOB_ENV,
+                MATRIX_OUTPUT_ENV,
+                MATRIX_MAX_PARALLEL_ENV,
+            ]
+            .map(|key| env.get(key).cloned());
+            if hit.iter().any(Option::is_some) {
+                return Some(hit);
+            }
+        }
+    }
+    None
+}
+
 /// Task matrix directive from the fixed-step env trio (`None` = static).
 pub(crate) fn task_matrix_of(
     jobs: &BTreeMap<String, Job>,
@@ -55,21 +76,7 @@ pub(crate) fn task_matrix_of(
     let Some(task) = jobs.get(TASK_JOB_ID) else {
         return Ok(None);
     };
-    let mut trio = None;
-    for step in &task.steps {
-        if let StepKind::Shell { env, .. } = &step.kind {
-            let hit = [
-                MATRIX_NEEDS_JOB_ENV,
-                MATRIX_OUTPUT_ENV,
-                MATRIX_MAX_PARALLEL_ENV,
-            ]
-            .map(|key| env.get(key));
-            if hit.iter().any(Option::is_some) {
-                trio = Some(hit);
-                break;
-            }
-        }
-    }
+    let trio = marker_trio(task);
     let Some([Some(job), Some(out), Some(max)]) = trio else {
         return if trio.is_some() {
             Err(matrix_invalid("matrix_marker_partial"))
@@ -77,7 +84,7 @@ pub(crate) fn task_matrix_of(
             Ok(None)
         };
     };
-    if !is_matrix_name(job) || !is_matrix_name(out) {
+    if !is_matrix_name(&job) || !is_matrix_name(&out) {
         return Err(matrix_invalid("matrix_bad_producer"));
     }
     let max = max
@@ -85,10 +92,10 @@ pub(crate) fn task_matrix_of(
         .ok()
         .filter(|max| *max >= 1)
         .ok_or_else(|| matrix_invalid("matrix_bad_max_parallel"))?;
-    if !jobs.contains_key(job) {
+    if !jobs.contains_key(job.as_str()) {
         return Err(matrix_invalid("matrix_without_producer_job"));
     }
-    if !task.needs.contains(job) {
+    if !task.needs.contains(&job) {
         return Err(matrix_invalid("matrix_without_producer_need"));
     }
     Ok(Some((
@@ -100,11 +107,50 @@ pub(crate) fn task_matrix_of(
     )))
 }
 
+/// Declared concurrency caps from per-job marker trios, by job ID.
+///
+/// Every non-task job carrying any trio key must carry the full trio
+/// with a live producer and a positive cap, exactly like the task
+/// matrix; unmarked jobs stay out.
+pub(crate) fn crate_job_caps(
+    jobs: &BTreeMap<String, Job>,
+) -> Result<BTreeMap<String, u32>, RenderError> {
+    let mut caps = BTreeMap::new();
+    for (id, job) in jobs {
+        if id == TASK_JOB_ID {
+            continue;
+        }
+        let trio = marker_trio(job);
+        let Some([Some(producer), Some(output), Some(max)]) = trio else {
+            if trio.is_some() {
+                return Err(matrix_invalid("matrix_marker_partial"));
+            }
+            continue;
+        };
+        if !is_matrix_name(&producer) || !is_matrix_name(&output) {
+            return Err(matrix_invalid("matrix_bad_producer"));
+        }
+        let max = max
+            .parse::<u32>()
+            .ok()
+            .filter(|max| *max >= 1)
+            .ok_or_else(|| matrix_invalid("matrix_bad_max_parallel"))?;
+        if !jobs.contains_key(producer.as_str()) {
+            return Err(matrix_invalid("matrix_without_producer_job"));
+        }
+        if !job.needs.contains(&producer) {
+            return Err(matrix_invalid("matrix_without_producer_need"));
+        }
+        caps.insert(id.clone(), max);
+    }
+    Ok(caps)
+}
+
 /// Clone jobs minus the matrix marker trio, which never renders.
 pub(crate) fn scrub_matrix_marker(jobs: &BTreeMap<String, Job>) -> BTreeMap<String, Job> {
     let mut scrubbed = jobs.clone();
-    if let Some(task) = scrubbed.get_mut(TASK_JOB_ID) {
-        for step in &mut task.steps {
+    for job in scrubbed.values_mut() {
+        for step in &mut job.steps {
             if let StepKind::Shell { env, .. } = &mut step.kind {
                 for key in [
                     MATRIX_NEEDS_JOB_ENV,
@@ -173,6 +219,39 @@ pub(crate) fn attach_task_matrix(
     }
     insert_job_key(jobs, needs_job, "outputs", Yaml::Map(outputs))?;
     insert_plan_step_id(jobs, needs_job, output)
+}
+
+/// Emit each capped job's declared `strategy.max-parallel`.
+///
+/// The cap declares the lane-staging bound the orchestrator enforces
+/// through `needs`; without it the staging would be invisible. Empty
+/// caps change nothing.
+pub(crate) fn attach_crate_job_caps(
+    document: &mut Yaml,
+    caps: &BTreeMap<String, u32>,
+) -> Result<(), RenderError> {
+    if caps.is_empty() {
+        return Ok(());
+    }
+    let Yaml::Map(entries) = document else {
+        return Err(matrix_invalid("matrix_without_document"));
+    };
+    let Some(Yaml::Map(jobs)) = entries
+        .iter_mut()
+        .find(|entry| entry.0 == "jobs")
+        .map(|entry| &mut entry.1)
+    else {
+        return Err(matrix_invalid("matrix_without_jobs"));
+    };
+    for (id, cap) in caps {
+        insert_job_key(
+            jobs,
+            id,
+            "strategy",
+            Yaml::Map(vec![("max-parallel".to_owned(), Yaml::Int((*cap).into()))]),
+        )?;
+    }
+    Ok(())
 }
 
 /// Emit the plan job's `covered_tasks` output plus the plan step ID.

@@ -63,9 +63,14 @@ pub fn generate(
 ) -> Result<GenerateReport, OrchestratorError> {
     fail_on_blocking_findings(prep)?;
     let tools = ToolSnapshot::capture(&prep.root);
+    let tofu_roots = crate::select_tofu::tofu_selected_roots(&prep.discovery.statuses);
+    let tofu_locks = velnor_actions_tofu::TofuLockSnapshot::capture(&prep.root, &tofu_roots);
     let tree = render_staged_tree(prep)?;
     let validated_by = validate_staged(&tree)?;
     tools.verify(&prep.root)?;
+    tofu_locks
+        .verify(&prep.root)
+        .map_err(|problem| OrchestratorError::Contract { problem })?;
     let warnings = match &opts.output_dir {
         None => replace_in_place(prep, &tree)?,
         Some(dir) => {

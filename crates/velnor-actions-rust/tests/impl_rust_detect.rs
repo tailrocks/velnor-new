@@ -6,21 +6,21 @@ use velnor_actions_contract::{
     selected_projects,
 };
 use velnor_actions_rust::{
-    REGISTERED_STACKS, STACK_ID, detected_projects_for_units, discover_candidates,
-    discover_stack_candidates, project_root_for_manifest,
+    STACK_ID, detected_projects_for_units, discover_candidates, discover_stack_candidates,
+    project_root_for_manifest,
 };
 
 #[test]
 fn registry_orders_rust_first() {
-    assert_eq!(VelnorConfig::REGISTERED_STACKS, &["rust"]);
-    assert_eq!(Stack::all(), &[Stack::Rust]);
+    assert_eq!(VelnorConfig::REGISTERED_STACKS, &["rust", "tofu"]);
+    assert_eq!(Stack::all(), &[Stack::Rust, Stack::Tofu]);
 }
 
 #[test]
 fn registration_matches_contract_registry() {
-    assert_eq!(REGISTERED_STACKS, VelnorConfig::REGISTERED_STACKS);
+    assert!(VelnorConfig::REGISTERED_STACKS.contains(&STACK_ID));
     assert_eq!(STACK_ID, Stack::Rust.id());
-    assert_eq!(&[STACK_ID], VelnorConfig::REGISTERED_STACKS);
+    assert_eq!(&[STACK_ID, "tofu"], VelnorConfig::REGISTERED_STACKS);
 }
 
 #[test]

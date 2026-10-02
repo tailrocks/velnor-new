@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 use std::ffi::{OsStr, OsString};
 
-use velnor_actions_contract::{ProposedTask, Step};
+use velnor_actions_contract::{ProposedTask, Stack, Step};
 use velnor_actions_mise::{
     CandidateBuild, IsolatedCommand, PinnedTool, PinnedToolExec, RouteDriver, ToolCatalog,
     custom_run::custom_task_run_argv, validate_exact_version,
@@ -53,9 +53,10 @@ const VALIDATOR_TOOL_SPECS: [&str; 2] = ["cargo-deny", "ubi:bnjbvr/cargo-machete
 /// crates, never fixtures or tooling trees (a bare walk previously
 /// errored on a symlink-hazard fixture; hazards now live only in
 /// TempDir-built tests, never in the tree).
-const MACHETE_SCAN_CRATES: [&str; 7] = [
+const MACHETE_SCAN_CRATES: [&str; 8] = [
     "crates/velnor-actions-contract",
     "crates/velnor-actions-rust",
+    "crates/velnor-actions-tofu",
     "crates/velnor-actions-mise",
     "crates/velnor-actions-actionlint",
     "crates/velnor-actions-workflow-renderer",
@@ -69,12 +70,16 @@ pub(crate) const ZIZMOR_STEP_NAME: &str = "Run zizmor";
 /// V1 fixed vector for one task: pinned `mise` payload plus kind args.
 ///
 /// Program follows the compile route (`mbx` for MBX, `cargo` otherwise); Nextest
-/// profiles add the runner tool, `cargo_test` legs never carry it. The
+/// profiles add the runner tool, `cargo_test` legs never carry it. Tofu
+/// tasks route to the pinned `opentofu` tool invoking `tofu`. The
 /// payload is the adapter-precomputed command, wrapped never edited.
 pub(crate) fn task_argv(
     task: &ProposedTask,
     catalog: &ToolCatalog,
 ) -> Result<Vec<String>, OrchestratorError> {
+    if Stack::from_id(&task.stack_id) == Some(Stack::Tofu) {
+        return tofu_task_argv(task, catalog);
+    }
     let driver = RouteDriver::from_compile_driver(&task.identity.compile_driver);
     let mut tools = driver.map_or(vec![PinnedTool::Rust], RouteDriver::tools);
     if tool_needs(&task.identity.compile_driver, &task.identity.test_runner).nextest {
@@ -85,6 +90,24 @@ pub(crate) fn task_argv(
         OrchestratorError::Contract {
             problem: err.to_string(),
         }
+    })?;
+    strings_of(exec.argv(catalog)).map_err(|problem| OrchestratorError::Contract { problem })
+}
+
+/// V1 fixed vector for one tofu task: pinned `opentofu`, program `tofu`.
+///
+/// The fixed payload rides through wrapped, never edited.
+fn tofu_task_argv(
+    task: &ProposedTask,
+    catalog: &ToolCatalog,
+) -> Result<Vec<String>, OrchestratorError> {
+    let exec = PinnedToolExec::new(
+        vec![PinnedTool::Opentofu],
+        OsStr::new("tofu"),
+        task.payload.clone(),
+    )
+    .map_err(|err| OrchestratorError::Contract {
+        problem: err.to_string(),
     })?;
     strings_of(exec.argv(catalog)).map_err(|problem| OrchestratorError::Contract { problem })
 }
@@ -269,7 +292,7 @@ pub(crate) fn custom_task_steps(
             let run = custom_task_run_argv(task).map_err(|err| OrchestratorError::Contract {
                 problem: err.to_string(),
             })?;
-            let env = crate::matrix_step::task_step_env(catalog, &BTreeMap::new())?;
+            let env = crate::matrix_step::task_step_env(catalog, &BTreeMap::new(), true)?;
             velnor_actions_workflow_renderer::shell_step(&format!("Custom task {task}"), run, env)
                 .map_err(|err| OrchestratorError::Contract {
                     problem: err.to_string(),

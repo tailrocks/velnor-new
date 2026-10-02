@@ -78,6 +78,28 @@ fn git_diff_accepts_selection_call_shapes() {
 }
 
 #[test]
+fn git_diff_accepts_deleted_call_shape() {
+    let base = sha(0x11);
+    let head = sha(0x22);
+    let deleted = args(&[
+        "--name-only",
+        "--no-renames",
+        "--diff-filter=D",
+        &format!("{base}...{head}"),
+        "--",
+    ]);
+    assert!(validate_select_diff_args(&deleted).is_ok());
+    let lower = args(&[
+        "--name-only",
+        "--no-renames",
+        "--diff-filter=d",
+        &format!("{base}...{head}"),
+        "--",
+    ]);
+    assert!(validate_select_diff_args(&lower).is_err());
+}
+
+#[test]
 fn git_diff_rejects_injection() {
     let base = sha(0x11);
     let head = sha(0x22);

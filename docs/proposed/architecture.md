@@ -23,16 +23,18 @@ Cargo dependency direction (`A -> B` means “A depends on B”):
 velnor-actions-cli -> velnor-actions-orchestrator
 velnor-actions-orchestrator -> velnor-actions-contract
 velnor-actions-orchestrator -> velnor-actions-rust
+velnor-actions-orchestrator -> velnor-actions-tofu
 velnor-actions-orchestrator -> velnor-actions-mise
 velnor-actions-orchestrator -> velnor-actions-actionlint
 velnor-actions-orchestrator -> velnor-actions-workflow-renderer
 velnor-actions-rust -> velnor-actions-contract
+velnor-actions-tofu -> velnor-actions-contract
 velnor-actions-mise -> velnor-actions-contract
 velnor-actions-actionlint -> velnor-actions-contract
 velnor-actions-workflow-renderer -> velnor-actions-contract
 ```
 
-The V1 workspace MUST have exactly these seven product crates. Every Cargo
+The V1 workspace MUST have exactly these eight product crates. Every Cargo
 package MUST use `velnor-actions-<purpose>`. Generic names such as
 `velnor-model`, `velnor-core`, `velnor-common`, or
 `velnor-utils`, and `velnor-rust` are forbidden. The only binary-target exception is
@@ -45,6 +47,7 @@ and runs as a separate GitHub Actions job.
 |---|---|---|
 | `velnor-actions-contract` | Stack-neutral generator contracts: stack/component IDs, task graph, workflow IR, cache identities, generated-file records, reports, recommendations | Rust/Cargo, Mise, process, filesystem, YAML implementation, CLI, or generic application models |
 | `velnor-actions-rust` | All V1 Rust/Cargo behavior: manifest discovery inputs, metadata conversion, Rust targets/graph, reverse-dependency selection, Rust task proposals and requirements, read-only `rust-toolchain.toml` inspection | Mise command/config/task syntax, GitHub YAML, process execution, or non-Rust stack behavior |
+| `velnor-actions-tofu` | All OpenTofu stack behavior: HCL/JSON structural parsing, file families, local-module closure, tofu task proposals and requirements, root diagnostics, fixed payload argv | Mise command/config/task syntax, GitHub YAML, process execution, or non-tofu stack behavior |
 | `velnor-actions-mise` | Mise version/tool selection, command construction, read-only `mise.toml`/`mise.lock` inspection, environment isolation, task-cache integration, execution of tool requests through a fixed Mise subprocess wrapper | Cargo metadata/graph rules, `rust-toolchain.toml`, stack discovery, GitHub YAML, or other stack semantics |
 | `velnor-actions-actionlint` | Pinned actionlint capability/version metadata, generated `.github/actionlint.yaml`, invocation, and actionlint-specific pre-write validation | Rust/Cargo, Mise execution, generic YAML rendering, or workflow planning |
 | `velnor-actions-workflow-renderer` | Stack-neutral GitHub Actions YAML from workflow IR: jobs, matrices, steps, triggers, permissions, and syntax supported by pinned actionlint | Rust/Cargo, Mise syntax, repository scanning, subprocesses, or stack-specific policy |

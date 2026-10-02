@@ -14,6 +14,7 @@ pub mod closure;
 pub mod config;
 pub mod discover;
 pub mod errors;
+pub mod extension_schemas;
 pub mod extensions;
 pub mod finding;
 pub mod formats;
@@ -41,10 +42,10 @@ pub use canonical::{
 pub use closure::{ClosureBuilder, Provenance, TaskInputClosure};
 pub use config::{
     DeclaredCompileDriver, DeclaredTestRunner, DiscoveryConfig, GeneratorValidation,
-    ResourcesConfig, RunnerSelection, RustConfiguration, RustStackConfig, ShardTimingEvidence,
-    StacksConfig, TestShardingConfig, VelnorConfig, VelnorSupportWorkflow, WorkflowConfig,
-    WorkflowPolicy, is_valid_custom_task_name, is_valid_feature_name, is_valid_rust_target,
-    validate_shard_changes_need_evidence,
+    ResourcesConfig, RootProblem, RunnerSelection, RustConfiguration, RustStackConfig,
+    ShardTimingEvidence, StacksConfig, TestShardingConfig, TofuStackConfig, Utf8RepoRelDir,
+    VelnorConfig, VelnorSupportWorkflow, WorkflowConfig, WorkflowPolicy, is_valid_custom_task_name,
+    is_valid_feature_name, is_valid_rust_target, validate_shard_changes_need_evidence,
 };
 pub use discover::{
     BUILTIN_EXCLUSIONS, DETECTION_SCHEMA, DetectError, DetectedProject, DetectionStatus,
@@ -54,7 +55,10 @@ pub use discover::{
     validate_pattern,
 };
 pub use errors::{ContractError, sanitize_error_detail};
-pub use extensions::{RUST_EXTENSION_REQUIRED_SLOTS, validate_rust_extension};
+pub use extensions::{
+    RUST_EXTENSION_REQUIRED_SLOTS, TOFU_EXTENSION_REQUIRED_SLOTS, validate_rust_extension,
+    validate_tofu_extension,
+};
 pub use finding::Finding;
 pub use formats::{
     AGENTS_MD_PATH, CLAUDE_MD_PATH, CLAUDE_MD_TARGET, DECLARED_GITHUB_FORMATS, find_github_format,
@@ -109,11 +113,12 @@ pub use workflow::{
     PLAN_JSON_FILENAME, PermissionLevel, Permissions, Plan, PlanBaseline, PlanGenerator,
     PlanMatrix, PlanObligation, PlanPackage, PlanRunner, REQUIRED_CONDITION, REQUIRED_DISPLAY_NAME,
     REQUIRED_JOB_ID, RequiredCheckMigration, RequiredJobResult, STALE_WORKFLOW_PATHS,
-    ScheduleTrigger, Step, StepKind, TaskReport, TaskStatus, TaskTiming, Trigger, Trust,
-    ValidatorKind, WORKFLOW_DISPLAY_NAME, WorkflowEvent, WorkflowIr, assign_crate_job_ids,
-    check_matrix_agreement, crate_display_label, crate_display_name, final_report_id_for_run,
-    final_report_relpath, is_safe_display_name, join_runner_temp, matrix_json_bytes,
-    matrix_report_relpath, plan_json_bytes, slugify_segment, task_report_relpath, trust_for_event,
+    ScheduleTrigger, Step, StepKind, TOFU_DISPLAY_PREFIX, TOFU_JOB_ID_PREFIX, TaskReport,
+    TaskStatus, TaskTiming, Trigger, Trust, ValidatorKind, WORKFLOW_DISPLAY_NAME, WorkflowEvent,
+    WorkflowIr, assign_crate_job_ids, check_matrix_agreement, crate_display_label,
+    crate_display_name, final_report_id_for_run, final_report_relpath, is_crate_job_id,
+    is_safe_display_name, join_runner_temp, matrix_json_bytes, matrix_report_relpath,
+    plan_json_bytes, slugify_segment, task_report_relpath, tofu_display_name, trust_for_event,
     validate_final_report_id, validate_job_id, validate_matrix_run,
 };
 

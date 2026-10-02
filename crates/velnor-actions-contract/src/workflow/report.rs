@@ -168,6 +168,9 @@ pub enum CacheLayer {
     Mbx,
     /// Task-result layer.
     Task,
+    /// Tofu provider-cache layer (acceleration only, never a verdict).
+    #[serde(rename = "tofu-providers")]
+    TofuProviders,
 }
 /// Cache lookup result.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
