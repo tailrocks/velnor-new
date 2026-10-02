@@ -15,7 +15,8 @@ use crate::https::HttpsTransport;
 use crate::scale_set::EnsureError;
 use crate::scale_set::ensure_product_scale_set;
 
-const OWNER_NAME: &str = "velnor-host";
+/// Session owner sent to the scale-set service.
+pub(crate) const OWNER_NAME: &str = "velnor-host";
 const GITHUB_API: &str = "https://api.github.com";
 
 /// What one short session saw. No token and no queue URL.
@@ -68,14 +69,19 @@ pub fn queue_path<'a>(base: &str, queue_url: &'a str) -> Option<&'a str> {
     }
 }
 
-struct Secret(String);
+/// Admin bearer copy. Zeroized on drop.
+pub(crate) struct Secret(String);
 
 impl Secret {
-    fn new(text: &str) -> Self {
+    /// Copy `text`. The copy is zeroized on drop.
+    #[must_use]
+    pub(crate) fn new(text: &str) -> Self {
         Self(text.to_owned())
     }
 
-    fn expose(&self) -> &str {
+    /// Borrow the bearer for one header. Not for logs.
+    #[must_use]
+    pub(crate) fn expose(&self) -> &str {
         &self.0
     }
 }
@@ -86,19 +92,49 @@ impl Drop for Secret {
     }
 }
 
-struct Link {
+/// Admin client. The base moves between the service and the message host.
+pub(crate) struct Link {
     transport: HttpsTransport,
     admin: AdminConnection,
     base: String,
 }
 
 impl Link {
-    fn token(&self) -> &str {
+    /// Admin bearer. Not for logs.
+    #[must_use]
+    pub(crate) fn token(&self) -> &str {
         self.admin.expose_token()
+    }
+
+    /// Current service origin.
+    #[must_use]
+    pub(crate) fn base(&self) -> &str {
+        &self.base
+    }
+
+    /// Session transport. Do not hold a journal connection across this.
+    pub(crate) fn transport(&mut self) -> &mut HttpsTransport {
+        &mut self.transport
+    }
+
+    /// Point this client at `base`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EnsureError::Endpoint`] when `base` is not `https`.
+    pub(crate) fn set_base(&mut self, base: &str) -> Result<(), EnsureError> {
+        self.transport.set_base(base).map_err(map_host)?;
+        base.clone_into(&mut self.base);
+        Ok(())
     }
 }
 
-fn admin_link(pat: &str, owner: &str, repo: &str) -> Result<Link, EnsureError> {
+/// Registration plus the admin service origin.
+///
+/// # Errors
+///
+/// Returns [`EnsureError`] when the token or the admin connection is refused.
+pub(crate) fn admin_link(pat: &str, owner: &str, repo: &str) -> Result<Link, EnsureError> {
     let mut transport = HttpsTransport::new(GITHUB_API).map_err(map_host)?;
     let registration = registration_token(
         &mut transport,
@@ -134,7 +170,15 @@ fn poll_available(link: &mut Link, session: &QueueSession) -> Result<bool, Ensur
     Ok(matches!(offer(&polled), Offer::Acquire { .. }))
 }
 
-fn point_at_queue(link: &mut Link, url: &str) -> Result<(Option<String>, String), EnsureError> {
+/// Move onto an absolute queue host. `None` means the queue is already on this origin.
+///
+/// # Errors
+///
+/// Returns [`EnsureError`] when the URL is not a usable `https` queue.
+pub(crate) fn point_at_queue(
+    link: &mut Link,
+    url: &str,
+) -> Result<(Option<String>, String), EnsureError> {
     if let Some(path) = queue_path(&link.base, url) {
         return Ok((None, path.to_owned()));
     }
@@ -150,7 +194,16 @@ fn point_at_queue(link: &mut Link, url: &str) -> Result<(Option<String>, String)
     Ok((Some(saved), absolute.path))
 }
 
-fn poll_path(link: &mut Link, session: &QueueSession, path: &str) -> Result<Poll, EnsureError> {
+/// One poll on the current origin.
+///
+/// # Errors
+///
+/// Returns [`EnsureError`] when the poll is refused.
+pub(crate) fn poll_path(
+    link: &mut Link,
+    session: &QueueSession,
+    path: &str,
+) -> Result<Poll, EnsureError> {
     let gate = RefreshGate::new();
     let refresh = || Ok::<(), WireError>(());
     poll(
@@ -165,7 +218,12 @@ fn poll_path(link: &mut Link, session: &QueueSession, path: &str) -> Result<Poll
     .map_err(|err| annotate(err, "poll"))
 }
 
-fn restore_base(link: &mut Link, saved: Option<String>) -> Result<(), EnsureError> {
+/// Restore the admin origin saved by [`point_at_queue`].
+///
+/// # Errors
+///
+/// Returns [`EnsureError::Endpoint`] when the saved origin is not `https`.
+pub(crate) fn restore_base(link: &mut Link, saved: Option<String>) -> Result<(), EnsureError> {
     let Some(base) = saved else {
         return Ok(());
     };
@@ -191,7 +249,8 @@ pub(crate) fn absolute_https(url: &str) -> Option<Absolute> {
     })
 }
 
-fn map_host(error: HostError) -> EnsureError {
+/// Map a local endpoint failure. Other host errors stay off the body.
+pub(crate) fn map_host(error: HostError) -> EnsureError {
     match error {
         HostError::Endpoint => EnsureError::Endpoint,
         _ => EnsureError::Unexpected {
@@ -201,14 +260,18 @@ fn map_host(error: HostError) -> EnsureError {
     }
 }
 
-fn annotate(error: SessionError, step: &'static str) -> EnsureError {
+/// Attach `step` when the body was malformed. Other failures stay as [`map_listen`].
+#[must_use]
+pub(crate) fn annotate(error: SessionError, step: &'static str) -> EnsureError {
     match error {
         SessionError::Wire(WireError::Malformed) => EnsureError::Unexpected { status: 0, step },
         other => map_listen(other),
     }
 }
 
-fn map_listen(error: SessionError) -> EnsureError {
+/// Map a session failure without copying a response body.
+#[must_use]
+pub(crate) fn map_listen(error: SessionError) -> EnsureError {
     match error {
         SessionError::Uncertain => EnsureError::Uncertain,
         SessionError::Conflict => EnsureError::Conflict,

@@ -13,6 +13,7 @@ mod error;
 mod https;
 mod ipc;
 mod journal;
+mod launch;
 mod listen;
 mod plist;
 mod readiness;
@@ -32,6 +33,7 @@ pub use error::HostError;
 pub use https::HttpsTransport;
 pub use ipc::{MAX_FRAME, SOCKET_DIR_MODE, decode_frame, encode_frame};
 pub use journal::{IntentState, Journal, Outcome};
+pub use launch::launch_once;
 pub use listen::{SessionProbe, probe_once, queue_path};
 pub use plist::{keychain_import_argv, launch_agent_plist};
 pub use readiness::{Readiness, doctor_json, readiness_for_empty, status_json};
@@ -58,6 +60,10 @@ mod https_tests;
 mod ipc_tests;
 #[cfg(test)]
 mod journal_tests;
+#[cfg(test)]
+mod launch_harness;
+#[cfg(test)]
+mod launch_tests;
 #[cfg(test)]
 mod listen_tests;
 #[cfg(test)]
