@@ -7,12 +7,17 @@ bucket. When
 release only when it is absent. Setting `version` always installs that release.
 
 To use an independently verified executable without installing or downloading
-mbx, supply `mbx-path` (an absolute executable path) and `expected-version`
-(an exact version such as `1.12.0`) together. The action requires the exact
+mbx, supply `mbx-path` (an absolute executable path), `expected-version`
+(an exact version such as `1.12.0`), and `expected-binary-sha256` together.
+The required lowercase SHA-256 must come from the caller's source-bound
+platform descriptor. The action validates the bytes before invoking the binary,
+then requires the exact
 `mbx 1.12.0` version banner and fails if the executable is missing, inaccessible,
 or mismatched. These inputs cannot be combined with `version`. The external
 executable is never restored from or copied into a target cache, and is verified
-again before a saving post step, including its original SHA-256 digest.
+again before a saving post step against both the bound caller SHA-256 input
+and its saved state. Source builds may use distinct exact version banners,
+such as `1.13.0-velnor.abcdef+source.123`.
 
 For an mbx executable supporting the owner comparison API, GitHub `objects`
 mode accepts a fresh absolute `comparison-state` path inside `RUNNER_TEMP`,
@@ -294,8 +299,9 @@ aliases for `remote-url` and `remote-mode`.
 | --------------------------- | --------------------- | ------------------------------------------------------------------------------ |
 | `backend`                   | `github`              | `local`, `github`, or `remote`                                                 |
 | `version`                   |                       | mbx release version, or `latest`; when omitted, prefer `mbx` from `PATH`       |
-| `mbx-path`                  |                       | Absolute preinstalled executable path; requires `expected-version`; never downloads |
+| `mbx-path`                  |                       | Absolute preinstalled executable path; requires version and SHA-256; never downloads |
 | `expected-version`          |                       | Exact version required from `mbx-path`; excludes `version`                    |
+| `expected-binary-sha256`     |                       | Caller descriptor's exact lowercase binary SHA-256; required before execution |
 | `comparison-state`          |                       | Absolute baseline path; strict GitHub objects mode saves only useful owner delta |
 | `github-token`              | `${{ github.token }}` | Token used when `GITHUB_TOKEN` is not exported                                 |
 | `cache-generation`          | `v1`                  | Generated GitHub cache key generation                                          |

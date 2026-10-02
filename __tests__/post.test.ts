@@ -6,9 +6,10 @@ import path from 'node:path'
 
 const mocks = vi.hoisted(() => ({
   state: {} as Record<string, string>,
+  inputDigest: '',
   exec: vi.fn(), save: vi.fn(), failed: vi.fn(), warning: vi.fn(), info: vi.fn()
 }))
-vi.mock('@actions/core', () => ({getState: (name: string) => mocks.state[name] || '', setFailed: mocks.failed, warning: mocks.warning, info: mocks.info}))
+vi.mock('@actions/core', () => ({getState: (name: string) => mocks.state[name] || '', getInput: (name: string) => name === 'expected-binary-sha256' ? mocks.inputDigest : '', setFailed: mocks.failed, warning: mocks.warning, info: mocks.info}))
 vi.mock('@actions/cache', () => ({saveCache: mocks.save, ValidationError: class ValidationError extends Error {}}))
 vi.mock('@actions/exec', () => ({exec: mocks.exec}))
 vi.mock('@actions/github', () => ({context: {}}))
@@ -35,6 +36,7 @@ beforeEach(async () => {
     'mbx-cache-export-group': 'group', 'mbx-cache-paths': JSON.stringify([path.join(directory, 'bundle')]),
     'mbx-cache-bundle-form': 'directory'
   }
+  mocks.inputDigest = mocks.state['mbx-executable-sha256'] as string
   report = {version: 1, useful_delta: true, exported: true, semantic_digest: digest}
   mocks.exec.mockImplementation(async (_bin, args, options) => {
     const output = args[0] === '--version' ? 'mbx 1.12.0' : args.includes('--verify') ? JSON.stringify({version: 1, valid: true}) : JSON.stringify(report)
@@ -114,6 +116,13 @@ describe('strict owner comparison post', () => {
     await writeFile(mocks.state['mbx-comparison-state'] as string, '{"version":1}')
     await invoke()
     expect(mocks.failed).toHaveBeenCalledWith(expect.objectContaining({message: expect.stringContaining('baseline changed')}))
+    expect(mocks.save).not.toHaveBeenCalled()
+  })
+  it('rejects a post digest state that differs from the caller-bound input', async () => {
+    mocks.inputDigest = 'a'.repeat(64)
+    await invoke()
+    expect(mocks.failed).toHaveBeenCalledWith(expect.objectContaining({message: expect.stringContaining('executable changed')}))
+    expect(mocks.exec).not.toHaveBeenCalled()
     expect(mocks.save).not.toHaveBeenCalled()
   })
 })

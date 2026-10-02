@@ -14,10 +14,13 @@ inputs:
     description: mbx release version to install, such as "0.4.0", or "latest"; when omitted, use mbx from PATH or install latest
     required: false
   mbx-path:
-    description: Absolute path to a verified preinstalled mbx executable; requires expected-version and never downloads mbx
+    description: Absolute path to a verified preinstalled mbx executable; requires expected-version and expected-binary-sha256; never downloads mbx
     required: false
   expected-version:
     description: Exact version required from mbx-path; cannot be combined with version
+    required: false
+  expected-binary-sha256:
+    description: Mandatory lowercase SHA-256 of mbx-path from the caller's source-bound platform descriptor; checked before any execution
     required: false
   comparison-state:
     description: Absolute owner comparison-state path; requires strict preinstalled mbx and GitHub objects mode; save only useful semantic delta

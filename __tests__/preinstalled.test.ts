@@ -1,9 +1,11 @@
+import {createHash} from 'node:crypto'
 import {afterEach, describe, expect, it, vi} from 'vitest'
 import {chmod, mkdtemp, rm, writeFile} from 'node:fs/promises'
 import {tmpdir} from 'node:os'
 import path from 'node:path'
 import {compilerIdentity, preinstalledInputs, verifiedPreinstalledMbx} from '../src/preinstalled.js'
 
+const digest = createHash('sha256').update('fixture').digest('hex')
 const directories: string[] = []
 async function executable(): Promise<string> {
   const directory = await mkdtemp(path.join(tmpdir(), 'mbx-action-test-'))
@@ -22,30 +24,33 @@ describe('strict preinstalled executable', () => {
     expect(preinstalledInputs('', '', '')).toBe(false)
     expect(() => preinstalledInputs('/mbx', '', '')).toThrow(/together/)
     expect(() => preinstalledInputs('', '1.12.0', '')).toThrow(/together/)
-    expect(() => preinstalledInputs('/mbx', '1.12.0', 'latest')).toThrow(/cannot be combined/)
-    expect(() => preinstalledInputs('mbx', '1.12.0', '')).toThrow(/absolute/)
+    expect(() => preinstalledInputs('/mbx', '1.12.0', '')).toThrow(/together/)
+    expect(() => preinstalledInputs('', '', '', digest)).toThrow(/together/)
+    expect(() => preinstalledInputs('/mbx', '1.12.0', '', 'bad')).toThrow(/64 lowercase/)
+    expect(() => preinstalledInputs('/mbx', '1.12.0', 'latest', digest)).toThrow(/cannot be combined/)
+    expect(() => preinstalledInputs('mbx', '1.12.0', '', digest)).toThrow(/absolute/)
     for (const version of ['latest', 'v1.12.0', '1.12', '01.12.0']) {
-      expect(() => preinstalledInputs('/mbx', version, '')).toThrow(/exact/)
+      expect(() => preinstalledInputs('/mbx', version, '', digest)).toThrow(/exact/)
     }
   })
 
   it('uses only the selected executable and accepts the exact banner', async () => {
     const bin = await executable()
     const capture = vi.fn().mockResolvedValue('mbx 1.12.0')
-    expect(await verifiedPreinstalledMbx(bin, '1.12.0', capture)).toEqual({bin, version: '1.12.0'})
+    expect(await verifiedPreinstalledMbx(bin, '1.12.0', digest, capture)).toEqual({bin, version: '1.12.0'})
     expect(capture.mock.calls).toEqual([[bin, ['--version']]])
   })
 
   it.each(['mbx 1.12.1', 'other 1.12.0', 'mbx 1.12.0\nmbx 1.12.0', 'mbx 1.12.0 extra'])('rejects %s', async banner => {
     const bin = await executable()
-    await expect(verifiedPreinstalledMbx(bin, '1.12.0', vi.fn().mockResolvedValue(banner))).rejects.toThrow(/expected/)
+    await expect(verifiedPreinstalledMbx(bin, '1.12.0', digest, vi.fn().mockResolvedValue(banner))).rejects.toThrow(/expected/)
   })
 
   it('fails before execution when the path is missing or a directory', async () => {
     const bin = await executable()
     const capture = vi.fn()
-    await expect(verifiedPreinstalledMbx(`${bin}-absent`, '1.12.0', capture)).rejects.toThrow()
-    await expect(verifiedPreinstalledMbx(path.dirname(bin), '1.12.0', capture)).rejects.toThrow(/regular file/)
+    await expect(verifiedPreinstalledMbx(`${bin}-absent`, '1.12.0', digest, capture)).rejects.toThrow()
+    await expect(verifiedPreinstalledMbx(path.dirname(bin), '1.12.0', digest, capture)).rejects.toThrow(/regular file/)
     expect(capture).not.toHaveBeenCalled()
   })
 
@@ -53,13 +58,24 @@ describe('strict preinstalled executable', () => {
     const bin = await executable()
     await chmod(bin, 0o644)
     const capture = vi.fn()
-    await expect(verifiedPreinstalledMbx(bin, '1.12.0', capture)).rejects.toThrow()
+    await expect(verifiedPreinstalledMbx(bin, '1.12.0', digest, capture)).rejects.toThrow()
     expect(capture).not.toHaveBeenCalled()
   })
 
   it('propagates execution failure without fallback', async () => {
     const bin = await executable()
-    await expect(verifiedPreinstalledMbx(bin, '1.12.0', vi.fn().mockRejectedValue(new Error('exit 1')))).rejects.toThrow(/exit 1/)
+    await expect(verifiedPreinstalledMbx(bin, '1.12.0', digest, vi.fn().mockRejectedValue(new Error('exit 1')))).rejects.toThrow(/exit 1/)
+  })
+  it('rejects a wrong caller hash before invoking the matching-banner executable', async () => {
+    const bin = await executable()
+    const capture = vi.fn().mockResolvedValue('mbx 1.12.0')
+    await expect(verifiedPreinstalledMbx(bin, '1.12.0', 'a'.repeat(64), capture)).rejects.toThrow(/SHA-256/)
+    expect(capture).not.toHaveBeenCalled()
+  })
+  it('accepts an exact source build identity banner with matching bytes', async () => {
+    const bin = await executable()
+    const version = '1.13.0-velnor.abcdef+source.123'
+    expect(await verifiedPreinstalledMbx(bin, version, digest, vi.fn().mockResolvedValue(`mbx ${version}`))).toEqual({bin, version})
   })
 })
 

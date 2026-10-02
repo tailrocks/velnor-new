@@ -312,17 +312,18 @@ async function configureRemote(mbx: string): Promise<RemoteStatus> {
 async function main(): Promise<void> {
   const externalBin = core.getInput('mbx-path')
   const expectedVersion = core.getInput('expected-version')
+  const expectedBinaryDigest = core.getInput('expected-binary-sha256')
   const requestedVersion = core.getInput('version')
-  const preinstalled = preinstalledInputs(externalBin, expectedVersion, requestedVersion)
+  const preinstalled = preinstalledInputs(externalBin, expectedVersion, requestedVersion, expectedBinaryDigest)
   // Validate before any cache restoration or release lookup. Restored executables
   // must never replace the caller's independently verified executable.
   const external = preinstalled
-    ? await verifiedPreinstalledMbx(externalBin, expectedVersion, capture)
+    ? await verifiedPreinstalledMbx(externalBin, expectedVersion, expectedBinaryDigest, capture)
     : undefined
   if (external) {
     core.addPath(path.dirname(external.bin))
     core.saveState(MBX_EXPECTED_STATE, expectedVersion)
-    core.saveState(MBX_DIGEST_STATE, createHash('sha256').update(await readFile(external.bin)).digest('hex'))
+    core.saveState(MBX_DIGEST_STATE, expectedBinaryDigest)
   }
   const backend = parseBackend(core.getInput('backend'))
   const githubCacheMode = parseGithubCacheMode(core.getInput('github-cache-mode'))
@@ -581,10 +582,10 @@ async function post(): Promise<void> {
   if (expectedVersion) {
     const expectedDigest = core.getState(MBX_DIGEST_STATE)
     const actualDigest = createHash('sha256').update(await readFile(mbx)).digest('hex')
-    if (!/^[0-9a-f]{64}$/.test(expectedDigest) || actualDigest !== expectedDigest) {
+    if (!/^[0-9a-f]{64}$/.test(expectedDigest) || expectedDigest !== core.getInput('expected-binary-sha256') || actualDigest !== expectedDigest) {
       throw new Error('Verified preinstalled mbx executable changed before post')
     }
-    await verifiedPreinstalledMbx(mbx, expectedVersion, capture)
+    await verifiedPreinstalledMbx(mbx, expectedVersion, expectedDigest, capture)
   }
   if (core.getState(CACHE_HIT_STATE) === 'true' && !comparisonFile) {
     core.info(`Exact cache ${primaryKey} already exists; not saving it again`)

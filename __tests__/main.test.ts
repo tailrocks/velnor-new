@@ -1,3 +1,4 @@
+import {createHash} from 'node:crypto'
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest'
 import {chmod, mkdtemp, rm, writeFile} from 'node:fs/promises'
 import {tmpdir} from 'node:os'
@@ -29,7 +30,7 @@ beforeEach(async () => {
   const bin = path.join(directory, 'mbx')
   await writeFile(bin, 'fixture-executable')
   await chmod(bin, 0o755)
-  mocks.inputs = {'mbx-path': bin, 'expected-version': '1.12.0', backend: 'github', 'github-cache-mode': 'objects', 'comparison-state': path.join(directory, 'baseline'), toolchain: '1.98.0', 'cache-links': 'false', 'cache-generation': 'qualified'}
+  mocks.inputs = {'mbx-path': bin, 'expected-version': '1.12.0', 'expected-binary-sha256': createHash('sha256').update('fixture-executable').digest('hex'), backend: 'github', 'github-cache-mode': 'objects', 'comparison-state': path.join(directory, 'baseline'), toolchain: '1.98.0', 'cache-links': 'false', 'cache-generation': 'qualified'}
   mocks.state = {}
   mocks.context.eventName = 'push'
   importFails = false
@@ -99,5 +100,12 @@ describe('strict object transport main', () => {
     expect(mocks.failed).not.toHaveBeenCalled()
     expect(mocks.state['mbx-cache-key']).toMatch(/-abc$/)
     expect(mocks.state['mbx-cache-key']).not.toContain('-run-')
+  })
+  it('rejects a wrong published binary hash before any executable or cache operation', async () => {
+    mocks.inputs['expected-binary-sha256'] = 'a'.repeat(64)
+    await invoke()
+    expect(mocks.failed).toHaveBeenCalledWith(expect.objectContaining({message: expect.stringContaining('SHA-256')}))
+    expect(mocks.exec).not.toHaveBeenCalled()
+    expect(mocks.restore).not.toHaveBeenCalled()
   })
 })
