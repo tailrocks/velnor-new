@@ -80,6 +80,15 @@ pub const OPENTOFU_SHA256_DARWIN_ARM64: &str =
 /// Qualified release-plz coordinator release (tag `release-plz-v0.3.169`).
 /// Source: `https://crates.io/api/v1/crates/release-plz`; checked 2026-09-30.
 pub const RELEASE_PLZ_VERSION: &str = "0.3.169";
+/// REUSE lint package; isolated Python/uv workload probe passed 2026-10-02.
+/// Source: `https://pypi.org/pypi/reuse/6.2.0/json`; checked 2026-10-02.
+pub const REUSE_VERSION: &str = "6.2.0";
+/// CPython upstream pin; Mise provisions Astral's standalone distribution.
+/// Source: `https://www.python.org/downloads/`; checked 2026-10-02.
+pub const PYTHON_VERSION: &str = "3.14.8";
+/// uv runtime used by Mise's pipx backend for REUSE installation.
+/// Source: `https://api.github.com/repos/astral-sh/uv/releases/latest`; checked 2026-10-02.
+pub const UV_VERSION: &str = "0.12.22";
 
 // Nextest needs its backend-qualified aqua-registry path: no `nextest`
 // shorthand exists, `github:` tags carry a `cargo-nextest-` prefix, and
@@ -119,11 +128,17 @@ pub enum PinnedTool {
     Opentofu,
     /// Release coordinator (`release-plz`, const-pinned: no catalog slot).
     ReleasePlz,
+    /// REUSE license linter (`reuse`, installed through pipx).
+    Reuse,
+    /// CPython runtime (`python`).
+    Python,
+    /// Python package installer (`uv`).
+    Uv,
 }
 
 impl PinnedTool {
     /// Every catalog tool in stable order.
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 12] = [
         Self::Rust,
         Self::MrBoxington,
         Self::Gh,
@@ -133,6 +148,9 @@ impl PinnedTool {
         Self::Nextest,
         Self::Opentofu,
         Self::ReleasePlz,
+        Self::Reuse,
+        Self::Python,
+        Self::Uv,
     ];
 
     /// Mise registry name used in `<tool>@<version>` selectors.
@@ -148,6 +166,9 @@ impl PinnedTool {
             Self::Nextest => "nextest",
             Self::Opentofu => "opentofu",
             Self::ReleasePlz => "release-plz",
+            Self::Reuse => "reuse",
+            Self::Python => "python",
+            Self::Uv => "uv",
         }
     }
 
@@ -191,12 +212,7 @@ pub struct ToolCatalog {
 }
 
 impl ToolCatalog {
-    /// Catalog holding the qualified pins.
-    ///
-    /// Versions are compile-time literals, so no fallible check runs
-    /// here; trusted identity validation is the separate
-    /// [`Self::validate_identities`] gate, which fails until freshness
-    /// binds real artifact digests (P03-8b).
+    /// Qualified pins; trusted identities require the separate validation gate.
     #[must_use]
     pub fn pinned() -> Self {
         Self {
@@ -211,16 +227,10 @@ impl ToolCatalog {
         }
     }
 
-    /// Catalog with explicit versions; every version must be an exact pin.
-    ///
-    /// Only version exactness is enforced here: the catalog owns pins,
-    /// not artifact trust. Trusted identity validation is the separate
-    /// [`Self::validate_identities`] gate (P03-8b).
+    /// Explicit versions; each of the eight configurable slots must be exact.
     ///
     /// # Errors
-    ///
-    /// Returns [`MiseError::InvalidToolVersion`] for the first version
-    /// that is not exact `major.minor.patch`.
+    /// Returns [`MiseError::InvalidToolVersion`] for non-exact versions.
     #[expect(
         clippy::too_many_arguments,
         reason = "catalog carries eight exact pins at once"
@@ -287,16 +297,9 @@ impl ToolCatalog {
         }
     }
 
-    /// Trusted gate over every catalog identity record.
-    ///
-    /// Fails closed with `placeholder_digest` for every tool whose
-    /// artifact SHA-256 freshness has not bound yet (`OpenTofu` is
-    /// bound; the rest stay placeholder); it flips to `Ok` only once
-    /// every slot binds, so callers can treat success as qualified
-    /// trust (P03-8b).
+    /// Trusted gate: refuses every identity whose artifact digest remains a placeholder.
     ///
     /// # Errors
-    ///
     /// Returns [`MiseError::Contract`] for the first invalid identity.
     pub fn validate_identities(&self) -> Result<(), MiseError> {
         for tool in PinnedTool::ALL {
@@ -322,11 +325,14 @@ impl ToolCatalog {
             PinnedTool::Nextest => &self.nextest,
             PinnedTool::Opentofu => &self.opentofu,
             PinnedTool::ReleasePlz => RELEASE_PLZ_VERSION,
+            PinnedTool::Reuse => REUSE_VERSION,
+            PinnedTool::Python => PYTHON_VERSION,
+            PinnedTool::Uv => UV_VERSION,
         }
     }
 
     /// Mise selector for one tool: `<tool>@<exact>`, except Nextest,
-    /// which needs its backend-qualified aqua-registry path.
+    /// which needs its aqua path, and REUSE, which binds Python and extras.
     ///
     /// Rust carries no inline options: bracketed tool options are silently
     /// ignored on config-less CLI specs, so components install through the
@@ -337,6 +343,10 @@ impl ToolCatalog {
             PinnedTool::Nextest => {
                 format!("{NEXTEST_TOOL_SPEC_PREFIX}@{}", self.version(tool))
             }
+            PinnedTool::Reuse => format!(
+                "pipx:reuse[extras=charset-normalizer,uvx_args=\"--python {PYTHON_VERSION} --no-python-downloads\"]@{}",
+                self.version(tool)
+            ),
             _ => format!("{}@{}", tool.tool_name(), self.version(tool)),
         }
     }
