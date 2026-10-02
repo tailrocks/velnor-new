@@ -26,6 +26,10 @@ def load_collector():
 
 
 COLLECTOR = load_collector()
+# Official GitHub REST OpenAPI components.schemas.job.properties.conclusion.
+# https://github.com/github/rest-api-description/blob/main/descriptions/api.github.com/api.github.com.json
+JOB_CONCLUSIONS = frozenset({"success", "failure", "neutral", "cancelled", "skipped",
+                             "timed_out", "action_required"})
 
 
 def unique_pairs(pairs):
@@ -68,6 +72,62 @@ def timestamp(value):
     if parsed.tzinfo is None:
         raise ValueError("timestamp missing timezone")
     return parsed
+
+
+def positive_integer(value):
+    if type(value) is not int or value <= 0:
+        raise ValueError("identity must be a positive integer")
+    return value
+
+
+def evidence_identity(summary, run):
+    if not isinstance(summary, dict) or not isinstance(run, dict):
+        raise ValueError("summary and run must be mappings")
+    if type(summary.get("schema")) is not int or summary["schema"] != 1:
+        raise ValueError("unsupported collector summary schema")
+    repository = summary["repository"]
+    if not isinstance(repository, str) or not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
+        raise ValueError("repository identity malformed")
+    source = summary["source_commit"]
+    if not isinstance(source, str) or not re.fullmatch(r"[0-9a-f]{40}", source):
+        raise ValueError("source SHA malformed")
+    expected = (repository, positive_integer(summary["run_id"]),
+                positive_integer(summary["attempt"]), source)
+    run_repository = run.get("repository")
+    if not isinstance(run_repository, dict):
+        raise ValueError("run repository must be a mapping")
+    observed = (run_repository["full_name"], positive_integer(run["id"]),
+                positive_integer(run["run_attempt"]), run["head_sha"])
+    if expected != observed or run.get("status") != "completed":
+        raise ValueError("summary and run-attempt identities differ")
+    return expected
+
+
+def admitted_jobs(pages, identity):
+    if not isinstance(pages, list) or not pages:
+        raise ValueError("missing jobs pages")
+    for page in pages:
+        if not isinstance(page, dict) or type(page.get("total_count")) is not int:
+            raise ValueError("jobs page/count malformed")
+        if page["total_count"] < 0 or not isinstance(page.get("jobs"), list):
+            raise ValueError("jobs page/count malformed")
+        for job in page["jobs"]:
+            if not isinstance(job, dict):
+                raise ValueError("job must be a mapping")
+            positive_integer(job["id"])
+    jobs = COLLECTOR.complete_pages(pages, "jobs")
+    for job in jobs:
+        if (positive_integer(job["run_id"]) != identity[1]
+                or positive_integer(job["run_attempt"]) != identity[2]
+                or job.get("head_sha") != identity[3]):
+            raise ValueError("API job identity mismatch")
+        conclusion = job.get("conclusion")
+        if (job.get("status") != "completed" or not isinstance(conclusion, str)
+                or conclusion not in JOB_CONCLUSIONS):
+            raise ValueError("job must have completed status and terminal conclusion")
+        if not isinstance(job.get("name"), str):
+            raise ValueError("job name must be text")
+    return jobs
 
 
 def workflow_for(run, repository):
@@ -205,16 +265,11 @@ def main():
     try:
         COLLECTOR.validate_directory(directory)
         summary, run = document(directory / "summary.json"), document(directory / "run.json")
-        expected = (summary["repository"], summary["run_id"], summary["attempt"], summary["source_commit"])
-        observed = (run["repository"]["full_name"], run["id"], run["run_attempt"], run["head_sha"])
-        if expected != observed or run.get("status") != "completed":
-            raise ValueError("summary and run-attempt identities differ")
+        expected = evidence_identity(summary, run)
         scope = document(Path(__file__).resolve().parents[1] / "scope.json")
         if expected[0] not in {row["repository"] for row in scope["repositories"]}:
             raise ValueError("repository outside exact scope")
-        jobs = COLLECTOR.complete_pages(document(directory / "jobs.json"), "jobs")
-        if any(job.get("run_id") != expected[1] or job.get("run_attempt") != expected[2] for job in jobs):
-            raise ValueError("API job identity mismatch")
+        jobs = admitted_jobs(document(directory / "jobs.json"), expected)
         workflow, content, path, blob = workflow_for(run, expected[0])
         actual, dependencies = graph(workflow, jobs)
         result = {"schema": 1, "repository": expected[0], "run_id": expected[1],

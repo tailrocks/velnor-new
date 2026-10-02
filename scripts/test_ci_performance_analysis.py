@@ -2,10 +2,13 @@
 """Offline regression checks for source-bound CI timeline analysis."""
 
 import base64
+import copy
 import hashlib
 import importlib.util
+import io
 import json
 from pathlib import Path
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -153,6 +156,125 @@ class SourceBindingTests(unittest.TestCase):
     def test_forged_source_path_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "response mismatch"):
             self.lookup({**self.response, "path": ".github/workflows/other.yml"})
+
+
+class MainAdmissionTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory(prefix="velnor-analysis-test-")
+        self.addCleanup(self.temporary.cleanup)
+        self.directory = Path(self.temporary.name)
+        self.source = "a" * 40
+        self.documents = {
+            "summary.json": {"schema": 1, "repository": "tailrocks/velnor-new",
+                             "run_id": 7, "attempt": 1, "source_commit": self.source},
+            "run.json": {"repository": {"full_name": "tailrocks/velnor-new"},
+                         "id": 7, "run_attempt": 1, "head_sha": self.source,
+                         "status": "completed", "conclusion": "failure",
+                         "path": ".github/workflows/ci.yml"},
+            "jobs.json": [{"total_count": 1, "jobs": [{
+                **job(1, 0, 10, "failure"), "name": "a", "run_id": 7,
+                "run_attempt": 1, "head_sha": self.source, "status": "completed",
+            }]}],
+        }
+        self.content = b"jobs:\n  a: {}\n  skipped: {}\n"
+
+    def invoke(self, documents, expected, source_jobs=1):
+        for name, value in documents.items():
+            (self.directory / name).write_text(json.dumps(value))
+        for name in ("workflow-source.yml", "timeline-analysis.json"):
+            (self.directory / name).unlink(missing_ok=True)
+        content = self.content if source_jobs == 2 else b"jobs:\n  a: {}\n"
+        response = {"path": ".github/workflows/ci.yml", "encoding": "base64",
+                    "content": base64.b64encode(content).decode(),
+                    "sha": hashlib.sha1(b"blob " + str(len(content)).encode()
+                                        + b"\0" + content).hexdigest()}
+        with patch("sys.argv", [str(LOCATION), str(self.directory)]), \
+                patch("sys.stdout", new=io.StringIO()), \
+                patch("sys.stderr", new=io.StringIO()), \
+                patch.object(ANALYZER.COLLECTOR, "api", return_value=json.dumps(response)) as api:
+            self.assertEqual(ANALYZER.main(), expected)
+        if expected:
+            api.assert_not_called()
+            self.assertFalse((self.directory / "timeline-analysis.json").exists())
+            self.assertFalse((self.directory / "workflow-source.yml").exists())
+        else:
+            api.assert_called_once()
+
+    def test_failed_completed_run_is_measurable_without_performance_verdict(self):
+        self.invoke(self.documents, 0)
+        result = json.loads((self.directory / "timeline-analysis.json").read_text())
+        self.assertEqual(result["completion_path_seconds"], 10)
+        self.assertIsNone(result["compiler_process_seconds"])
+        self.assertNotIn("qualified", result)
+
+    def test_summary_schema_and_identity_sanity(self):
+        replacements = (
+            ("schema", 2), ("schema", True), ("run_id", 0), ("run_id", True),
+            ("attempt", -1), ("attempt", True), ("source_commit", "bad"),
+            ("repository", "tailrocks/other"),
+        )
+        for key, value in replacements:
+            with self.subTest(key=key, value=value):
+                documents = copy.deepcopy(self.documents)
+                documents["summary.json"][key] = value
+                self.invoke(documents, 1)
+
+    def test_run_identity_mismatch_and_nonterminal_status(self):
+        replacements = (("id", 8), ("id", True), ("run_attempt", 2),
+                        ("run_attempt", True), ("head_sha", "b" * 40),
+                        ("status", "in_progress"),
+                        ("repository", {"full_name": "tailrocks/other"}))
+        for key, value in replacements:
+            with self.subTest(key=key, value=value):
+                documents = copy.deepcopy(self.documents)
+                documents["run.json"][key] = value
+                self.invoke(documents, 1)
+
+    def test_job_identity_mismatch(self):
+        for key, value in (("id", 0), ("id", True), ("run_id", 8),
+                           ("run_attempt", 2), ("head_sha", "b" * 40)):
+            with self.subTest(key=key, value=value):
+                documents = copy.deepcopy(self.documents)
+                documents["jobs.json"][0]["jobs"][0][key] = value
+                self.invoke(documents, 1)
+
+    def test_nonterminal_null_and_unknown_job_outcomes_fail_before_api(self):
+        for status, conclusion in (("in_progress", None), ("queued", "success"),
+                                   ("completed", None), ("completed", "unknown"),
+                                   ("completed", "stale"), ("completed", "startup_failure")):
+            with self.subTest(status=status, conclusion=conclusion):
+                documents = copy.deepcopy(self.documents)
+                documents["jobs.json"][0]["jobs"][0].update(
+                    status=status, conclusion=conclusion)
+                self.invoke(documents, 1)
+
+    def test_supported_terminal_outcomes_preserve_failed_analysis(self):
+        for conclusion in ANALYZER.JOB_CONCLUSIONS - {"skipped"}:
+            with self.subTest(conclusion=conclusion):
+                documents = copy.deepcopy(self.documents)
+                documents["jobs.json"][0]["jobs"][0]["conclusion"] = conclusion
+                self.invoke(documents, 0)
+
+    def test_skipped_terminal_job_needs_no_runner_timestamps(self):
+        documents = copy.deepcopy(self.documents)
+        documents["jobs.json"][0]["total_count"] = 2
+        documents["jobs.json"][0]["jobs"].append({
+            "id": 2, "name": "skipped", "status": "completed", "conclusion": "skipped",
+            "run_id": 7, "run_attempt": 1, "head_sha": self.source,
+            "started_at": None, "completed_at": None,
+        })
+        self.invoke(documents, 0, source_jobs=2)
+
+    def test_missing_duplicate_and_malformed_job_pages_fail_before_api(self):
+        first = copy.deepcopy(self.documents["jobs.json"][0])
+        malformed = ([], [{**first, "total_count": 2}], [first, first],
+                     [{**first, "total_count": True}], [{**first, "jobs": {}}],
+                     [{**first, "jobs": [None]}])
+        for pages in malformed:
+            with self.subTest(pages=pages):
+                documents = copy.deepcopy(self.documents)
+                documents["jobs.json"] = pages
+                self.invoke(documents, 1)
 
 
 if __name__ == "__main__":
