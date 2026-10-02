@@ -69,6 +69,15 @@ pub struct BlockModel {
     pub labels: Vec<String>,
 }
 
+/// `hashes` entry count of one top-level `provider` block.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProviderHashCount {
+    /// First label (provider address; empty when unlabeled).
+    pub address: String,
+    /// Entries in the `hashes` array (0 when missing or not an array).
+    pub hashes: usize,
+}
+
 /// Structural model of one config file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileModel {
@@ -80,6 +89,9 @@ pub struct FileModel {
     pub has_legacy_ref: bool,
     /// Top-level `module` declarations with parsed sources, in file order.
     pub modules: Vec<ModuleDecl>,
+    /// Top-level `provider` hash counts, in file order (native only:
+    /// lockfiles are HCL, so the JSON walk leaves this empty).
+    pub provider_hash_counts: Vec<ProviderHashCount>,
 }
 
 /// Parse one native (`.tf`/`.tofu`) file structurally.
@@ -217,6 +229,8 @@ pub(crate) struct Walk {
     versions: Vec<String>,
     /// Legacy token observed.
     legacy: bool,
+    /// Provider hash counts collected (native walk only).
+    provider_hashes: Vec<ProviderHashCount>,
 }
 
 impl Walk {
@@ -228,6 +242,7 @@ impl Walk {
             modules: Vec::new(),
             versions: Vec::new(),
             legacy: false,
+            provider_hashes: Vec::new(),
         }
     }
 
@@ -238,6 +253,7 @@ impl Walk {
             required_versions: self.versions,
             has_legacy_ref: self.legacy,
             modules: self.modules,
+            provider_hash_counts: self.provider_hashes,
         }
     }
 
@@ -286,6 +302,9 @@ impl Walk {
                 if block.identifier() == "terraform" {
                     self.terraform_block(block);
                 }
+                if block.identifier() == "provider" {
+                    self.provider_block(block);
+                }
                 if block.identifier() == "module" {
                     self.modules.push(ModuleDecl {
                         name: block
@@ -310,6 +329,28 @@ impl Walk {
                 self.version(literal);
             }
         }
+    }
+
+    /// Collect the `hashes` entry count of one `provider` block.
+    ///
+    /// Counts array entries without walking them (no budget impact):
+    /// only emptiness is structural; entry shapes stay tofu's runtime
+    /// concern.
+    fn provider_block(&mut self, block: &hcl::Block) {
+        let address = block
+            .labels()
+            .first()
+            .map_or_else(String::new, |label| label.as_str().to_owned());
+        let mut hashes = 0;
+        for attribute in block.body().attributes() {
+            if attribute.key.as_str() == "hashes"
+                && let hcl::Expression::Array(items) = &attribute.expr
+            {
+                hashes = items.len();
+            }
+        }
+        self.provider_hashes
+            .push(ProviderHashCount { address, hashes });
     }
 
     /// Walk one HCL expression for string literals.
