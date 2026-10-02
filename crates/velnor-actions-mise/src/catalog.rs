@@ -83,7 +83,7 @@ pub const RELEASE_PLZ_VERSION: &str = "0.3.169";
 /// REUSE lint package; isolated Python/uv workload probe passed 2026-10-02.
 /// Source: `https://pypi.org/pypi/reuse/6.2.0/json`; checked 2026-10-02.
 pub const REUSE_VERSION: &str = "6.2.0";
-/// CPython upstream pin; Mise provisions Astral's standalone distribution.
+/// `CPython` upstream pin; Mise provisions Astral's standalone distribution.
 /// Source: `https://www.python.org/downloads/`; checked 2026-10-02.
 pub const PYTHON_VERSION: &str = "3.14.8";
 /// uv runtime used by Mise's pipx backend for REUSE installation.
@@ -130,7 +130,7 @@ pub enum PinnedTool {
     ReleasePlz,
     /// REUSE license linter (`reuse`, installed through pipx).
     Reuse,
-    /// CPython runtime (`python`).
+    /// `CPython` runtime (`python`).
     Python,
     /// Python package installer (`uv`).
     Uv,
