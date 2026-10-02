@@ -77,25 +77,49 @@ impl HostConfig {
 }
 
 fn validate_github(github: &GithubSection) -> Result<(), HostError> {
-    let repo_ok = github.repository.split('/').count() == 2 && !github.repository.contains(' ');
-    let ref_ok = github.credential_ref.starts_with("keychain:")
-        && github.credential_ref.len() > "keychain:".len();
-    if repo_ok && ref_ok && github.scale_set_name == "ubuntu-26.04-scale-set" {
+    if repository_ok(&github.repository)
+        && keychain_ref(&github.credential_ref)
+        && github.scale_set_name == "ubuntu-26.04-scale-set"
+    {
         Ok(())
     } else {
         Err(HostError::Config)
     }
 }
 
+fn repository_ok(repository: &str) -> bool {
+    let mut parts = repository.split('/');
+    match (parts.next(), parts.next(), parts.next()) {
+        (Some(owner), Some(name), None) => {
+            !owner.is_empty() && !name.is_empty() && !repository.contains(' ')
+        }
+        _ => false,
+    }
+}
+
+fn keychain_ref(value: &str) -> bool {
+    let Some(name) = value.strip_prefix("keychain:") else {
+        return false;
+    };
+    !name.is_empty() && !name.chars().any(char::is_whitespace)
+}
+
 fn validate_docker(docker: &DockerConfig) -> Result<(), HostError> {
-    if docker.platform != "linux/amd64" || docker.context.is_empty() {
-        return Err(HostError::Config);
+    if docker.platform == "linux/amd64"
+        && !docker.context.is_empty()
+        && unix_endpoint(&docker.endpoint)
+    {
+        Ok(())
+    } else {
+        Err(HostError::Config)
     }
-    if docker.endpoint.starts_with("unix://") && !docker.endpoint.starts_with("unix:///") {
-        return Err(HostError::Config);
-    }
-    if !docker.endpoint.starts_with("unix://") {
-        return Err(HostError::Config);
-    }
-    Ok(())
+}
+
+fn unix_endpoint(endpoint: &str) -> bool {
+    let Some(path) = endpoint.strip_prefix("unix://") else {
+        return false;
+    };
+    path.starts_with('/')
+        && path.len() > 1
+        && !path.chars().any(|ch| ch.is_control() || ch.is_whitespace())
 }

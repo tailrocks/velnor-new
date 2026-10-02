@@ -41,9 +41,9 @@ pub enum DeleteDecision {
 ///
 /// # Errors
 ///
-/// Returns [`HostError::ForbiddenMount`] when the volume name is empty.
+/// Returns [`HostError::ForbiddenMount`] when the volume name is not one private name.
 pub fn runner_plan(private_volume: &str) -> Result<ContainerPlan, HostError> {
-    if private_volume.is_empty() || private_volume.contains('/') {
+    if !private_volume_name(private_volume) {
         return Err(HostError::ForbiddenMount);
     }
     Ok(ContainerPlan {
@@ -71,26 +71,66 @@ pub fn audit_plan(plan: &ContainerPlan) -> Result<(), HostError> {
         return Err(HostError::PrivilegedRunner);
     }
     for mount in &plan.mounts {
-        if forbidden_source(&mount.source) {
-            return Err(HostError::ForbiddenMount);
-        }
-        if mount.target == "/var/run/docker.sock" && !mount.source.starts_with("volume:") {
-            return Err(HostError::ForbiddenMount);
-        }
+        reject_mount(mount)?;
     }
     Ok(())
 }
 
+fn reject_mount(mount: &Mount) -> Result<(), HostError> {
+    if forbidden_source(&mount.source) || bad_socket(mount) {
+        Err(HostError::ForbiddenMount)
+    } else {
+        Ok(())
+    }
+}
+
+fn bad_socket(mount: &Mount) -> bool {
+    mentions_docker_sock(mount) && !socket_source_ok(&mount.source)
+}
+
+fn mentions_docker_sock(mount: &Mount) -> bool {
+    let target = mount.target.to_ascii_lowercase();
+    let source = mount.source.to_ascii_lowercase();
+    target.contains("docker.sock") || source.contains("docker.sock")
+}
+
+fn socket_source_ok(source: &str) -> bool {
+    source
+        .strip_prefix("volume:")
+        .is_some_and(private_volume_name)
+}
+
+fn private_volume_name(name: &str) -> bool {
+    let mut chars = name.chars();
+    match chars.next() {
+        Some(first) if first.is_ascii_alphanumeric() => chars.all(volume_char),
+        _ => false,
+    }
+}
+
+fn volume_char(ch: char) -> bool {
+    ch.is_ascii_alphanumeric() || matches!(ch, '_' | '.' | '-')
+}
+
+const FORBIDDEN_MOUNT_NEEDLES: &[&str] = &[
+    "/users/",
+    "/home/",
+    "/var/run/docker.sock",
+    "ssh-agent",
+    "keychain",
+    "application support/velnor",
+];
+
 fn forbidden_source(source: &str) -> bool {
-    const NEEDLES: &[&str] = &[
-        "/Users/",
-        "/home/",
-        "/var/run/docker.sock",
-        "ssh-agent",
-        "keychain",
-        "Application Support/Velnor",
-    ];
-    NEEDLES.iter().any(|needle| source.contains(needle))
+    let folded = source.to_ascii_lowercase();
+    if FORBIDDEN_MOUNT_NEEDLES
+        .iter()
+        .any(|needle| folded.contains(needle))
+    {
+        return true;
+    }
+    let path = folded.strip_prefix("volume:").unwrap_or(folded.as_str());
+    path == "/users" || path == "/home"
 }
 
 /// Delete only when the immutable id matches. Missing is not success.
