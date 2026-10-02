@@ -90,7 +90,7 @@ count stays 0); all existing pins green and behavior-identical (the
   seed/release halves (`release-gates.md`, gate-8 follow-ups) —
   standing documented state, T29+ scope.
 - 1 ignored live test (gate #17) — documented network opt-in, not a
-  waiver: `#[ignore]` count is 1 + 1 doc mention; FIXME/HACK 0;
+  waiver: `#[ignore]` count is 1 + 1 doc mention; debt-marker count 0;
   `todo!`/`unimplemented!`/`panic!`/`.unwrap()` in `crates/*/src` 0;
   `deny.toml ignore = []`; freshness `exceptions: []`.
 

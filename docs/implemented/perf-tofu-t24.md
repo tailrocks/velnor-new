@@ -16,8 +16,9 @@ Toolchain: rustc/cargo 1.98.1 (48a229cea/797e8a9bc), mise
 2026.9.16, mbx 1.21.0, nextest 0.9.146 (pinned
 `aqua:nextest-rs/nextest/cargo-nextest@0.9.146`), git 2.56.0,
 python 3.14.8. Fixture pins: `tofu_repo` N-root builder
-(`tofu_perf_fixtures_t24.rs`), `BENCH_ROOTS = 10`, opentofu
-selector unchanged (T15 pin, no install performed locally).
+(`tofu_perf_fixtures_t24.rs`), `BENCH_ROOTS = 10`
+(`impl_tofu_t24_bench.rs`), opentofu selector unchanged (T15 pin,
+no install performed locally).
 
 Method: `impl_tofu_t24_bench` plans fixed-shape fixtures per case
 (30 obligations at width 10; `digest=` over sorted task IDs proves

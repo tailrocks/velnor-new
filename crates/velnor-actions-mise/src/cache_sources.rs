@@ -32,7 +32,9 @@ pub const TRUSTED_WRITER_ROLE: &str = "plan";
 ///
 /// The renderer mirrors this list exactly (`cache_steps`); the
 /// orchestrator pins both equal by test, like the credential
-/// denylists.
+/// denylists. Scope is name markers only: other secret-shaped names
+/// (secret/token/secrets substrings) stay archivable — accepted V1
+/// under-inclusion (B12), contained by the fixed archive subset.
 pub const NEVER_ARCHIVE_MARKERS: [&str; 3] = ["credentials", ".tfstate", ".tfplan"];
 
 /// True when `path` names state, plans, or credentials.

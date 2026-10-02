@@ -26,9 +26,11 @@ base `9a1b297` ran the identical commands minutes apart; the
 `base` column below is that control. `plan_ms` is the
 `plan_internal` wall, `metadata_ms` the direct-`git ls-files`
 lower-bound proxy, `rss_kb` the whole-test-binary peak RSS of the
-filtered run (not comparable to the T24 full-suite RSS). Queue and
-transfer are local no-ops. Hosted runs: none (local-only evidence,
-no run links).
+filtered run (not comparable to the T24 full-suite RSS). The
+corrupt-cache row's `plan_ms` includes the `commit_two_tofu`
+fixture commit inside the timed wall (plan+fixture-commit, not a
+pure `plan_internal` wall). Queue and transfer are local no-ops.
+Hosted runs: none (local-only evidence, no run links).
 
 ## 1. Benchmark matrix (n=5 per case, A/B controlled)
 
