@@ -59,7 +59,24 @@ pub const ZIZMOR_VERSION: &str = "1.30.1";
 pub const NEXTEST_VERSION: &str = "0.9.146";
 /// Qualified `OpenTofu` engine release (tag `v1.13.1`).
 /// Source: `https://github.com/opentofu/opentofu/releases/tag/v1.13.1`; checked 2026-10-02.
+/// Install: bare `opentofu@<exact>` via the aqua backend (isolated probe
+/// passed 2026-10-02); the mise version index lags the release, so pin
+/// exact, never float.
 pub const OPENTOFU_VERSION: &str = "1.13.1";
+/// sha256 of `tofu_1.13.1_linux_amd64.tar.gz` (`v1.13.1` `SHA256SUMS`,
+/// release-API `digest`, and fetched bytes agree; verified 2026-10-02).
+/// This is the catalog digest: the runner fleet is x64-Linux (§4.3).
+pub const OPENTOFU_SHA256_LINUX_AMD64: &str =
+    "378ada19d4bc70c43732004e8159be771b23b9a5afdf059e5f8a2b3fa2c70a69";
+/// sha256 of `tofu_1.13.1_linux_arm64.tar.gz` (same `SHA256SUMS`, verified 2026-10-02).
+pub const OPENTOFU_SHA256_LINUX_ARM64: &str =
+    "9c1ef375aa1852db0b2888aa921b640c71f8140d4682aa4fec99378a64fa7dc3";
+/// sha256 of `tofu_1.13.1_darwin_amd64.tar.gz` (same `SHA256SUMS`, verified 2026-10-02).
+pub const OPENTOFU_SHA256_DARWIN_AMD64: &str =
+    "a73720443ba38712d7d96dc1e857add02c15a790919c653ad07492e9952f8c27";
+/// sha256 of `tofu_1.13.1_darwin_arm64.tar.gz` (same `SHA256SUMS`, verified 2026-10-02).
+pub const OPENTOFU_SHA256_DARWIN_ARM64: &str =
+    "be78f659f04ef06a9dbd9b3934d46af95d787a3aa38396d459dea395261816a9";
 /// Qualified release-plz coordinator release (tag `release-plz-v0.3.169`).
 /// Source: `https://crates.io/api/v1/crates/release-plz`; checked 2026-09-30.
 pub const RELEASE_PLZ_VERSION: &str = "0.3.169";
@@ -240,10 +257,11 @@ impl ToolCatalog {
 
     /// Pinned identity record for one tool (ver §2).
     ///
-    /// The digest is an explicitly unqualified placeholder until
-    /// freshness binds the real upstream artifact SHA-256, so this
-    /// record never validates as trusted and no trust decision may
-    /// consume it (P03-8b).
+    /// The digest is the qualified artifact SHA-256 once freshness
+    /// binds it (`OpenTofu` is bound since T15); every other slot
+    /// keeps the explicitly unqualified placeholder, so its record
+    /// never validates as trusted and no trust decision may consume
+    /// it (P03-8b).
     #[must_use]
     pub fn tool_identity(&self, tool: PinnedTool) -> ToolIdentity {
         ToolIdentity {
@@ -251,15 +269,31 @@ impl ToolCatalog {
             version: self.version(tool).to_owned(),
             source: tool_source(tool, self.version(tool)),
             platforms: TOOL_PLATFORMS.iter().map(ToString::to_string).collect(),
-            digest: PLACEHOLDER_DIGEST.to_owned(),
+            digest: self.tool_digest(tool).to_owned(),
+        }
+    }
+
+    /// Qualified artifact digest for one tool, or the placeholder.
+    ///
+    /// Only the qualified `OpenTofu` pin carries its digest (contract
+    /// §4.3: the `linux_amd64` `.tar.gz` SHA-256, matching the x64-Linux
+    /// runner fleet); any other version keeps the placeholder so an
+    /// unqualified pin never validates as trusted.
+    fn tool_digest(&self, tool: PinnedTool) -> &str {
+        if tool == PinnedTool::Opentofu && self.version(tool) == OPENTOFU_VERSION {
+            OPENTOFU_SHA256_LINUX_AMD64
+        } else {
+            PLACEHOLDER_DIGEST
         }
     }
 
     /// Trusted gate over every catalog identity record.
     ///
-    /// Fails closed with `placeholder_digest` until freshness binds a
-    /// real artifact SHA-256 per tool; it flips to `Ok` only then, so
-    /// callers can treat success as qualified trust (P03-8b).
+    /// Fails closed with `placeholder_digest` for every tool whose
+    /// artifact SHA-256 freshness has not bound yet (`OpenTofu` is
+    /// bound; the rest stay placeholder); it flips to `Ok` only once
+    /// every slot binds, so callers can treat success as qualified
+    /// trust (P03-8b).
     ///
     /// # Errors
     ///
