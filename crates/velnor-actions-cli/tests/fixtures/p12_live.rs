@@ -9,87 +9,6 @@ const INVENTORY: &str = ".velnor/freshness-inventory.json";
 const POLICY: &str = ".velnor/version-policy.toml";
 const CATALOG: &str = "crates/velnor-actions-mise/src/catalog.rs";
 
-/// (inventory source URL, canned file, canned body) for every probe row.
-fn probe_rows() -> Vec<(&'static str, &'static str, &'static str)> {
-    vec![
-        (
-            "https://api.github.com/repos/jdx/mise/releases/latest",
-            "mise.json",
-            "{\"tag_name\": \"v2026.9.16\"}",
-        ),
-        (
-            "https://static.rust-lang.org/dist/channel-rust-stable.toml",
-            "rust.toml",
-            "[pkg.rust]\nversion = \"1.98.1 (48a229cea 2026-09-01)\"\n",
-        ),
-        (
-            "https://api.github.com/repos/jdx/mr-boxington/releases/latest",
-            "mbx.json",
-            "[{\"tag_name\": \"v1.20.0-beta\", \"prerelease\": true}, {\"tag_name\": \"v1.19.0\"}]",
-        ),
-        (
-            "https://api.github.com/repos/cli/cli/releases/latest",
-            "gh.json",
-            "{\"tag_name\": \"v2.101.0\"}",
-        ),
-        (
-            "https://api.github.com/repos/rhysd/actionlint/releases/latest",
-            "actionlint.json",
-            "{\"tag_name\": \"v1.7.12\"}",
-        ),
-        (
-            "https://api.github.com/repos/koalaman/shellcheck/releases/latest",
-            "shellcheck.json",
-            "{\"tag_name\": \"v0.11.0\"}",
-        ),
-        (
-            "https://api.github.com/repos/zizmorcore/zizmor/releases/latest",
-            "zizmor.json",
-            "{\"tag_name\": \"v1.30.1\"}",
-        ),
-        (
-            "https://crates.io/api/v1/crates/cargo-nextest",
-            "nextest.json",
-            "{\"crate\": {\"max_version\": \"0.9.146\"}}",
-        ),
-        (
-            "https://api.github.com/repos/jdx/mise-action/releases/latest",
-            "mise-action.json",
-            "{\"tag_name\": \"v4.3.0\"}",
-        ),
-        (
-            "https://api.github.com/repos/actions/checkout/releases/latest",
-            "checkout.json",
-            "{\"tag_name\": \"v7.0.1\"}",
-        ),
-        (
-            "https://api.github.com/repos/actions/download-artifact/releases/latest",
-            "download.json",
-            "{\"tag_name\": \"v8.0.1\"}",
-        ),
-        (
-            "https://api.github.com/repos/actions/upload-artifact/releases/latest",
-            "upload.json",
-            "{\"tag_name\": \"v7.0.1\"}",
-        ),
-        (
-            "https://api.github.com/repos/actions/cache/releases/latest",
-            "cache.json",
-            "{\"tag_name\": \"v6.1.0\"}",
-        ),
-        (
-            "https://api.github.com/repos/jdx/mr-boxington-action/releases",
-            "mbx-action.json",
-            "[{\"tag_name\": \"v1.5.0\"}]",
-        ),
-        (
-            "https://api.github.com/repos/asamarts/alint/releases/latest",
-            "alint.json",
-            "{\"tag_name\": \"v0.16.1\"}",
-        ),
-    ]
-}
-
 /// Passing fixture with every probe source rewritten to canned `file://` URLs.
 fn probe_fixture(prefix: &str) -> Result<harness::Fixture, Box<dyn Error>> {
     let fixture = harness::passing(prefix)?;
@@ -97,7 +16,7 @@ fn probe_fixture(prefix: &str) -> Result<harness::Fixture, Box<dyn Error>> {
     std::fs::create_dir_all(&upstream)?;
     let path = fixture.dir.join(INVENTORY);
     let mut body = std::fs::read_to_string(&path)?;
-    for (url, file, canned) in probe_rows() {
+    for (url, file, canned) in harness::probe_rows() {
         harness::write(&fixture.dir, &format!("upstream/{file}"), canned)?;
         let file_url = format!("file://{}", upstream.join(file).display());
         assert!(body.contains(url), "anchor {url}");
@@ -188,51 +107,53 @@ fn every_fail_row_is_nonzero() -> Result<(), Box<dyn Error>> {
         "\"temporary_holds\":[{{\"key\":\"gh\",\"held_version\":\"9.9.9\",\"owner\":\"t\",\
          \"issue\":\"#1\",\"reason\":\"r\",\"granted\":\"{granted}\",\"expires\":\"{expired}\"}}]"
     );
-    let table: Vec<(&str, &str, String, String, &str)> = vec![
+    let ch_today = format!("\"checked_at\":\"{today}\"");
+    let ch_old = format!("\"checked_at\":\"{old}\"");
+    let table: [(&str, &str, &str, &str, &str); 6] = [
         (
             "t-lock",
             "crates/aaa/Cargo.toml",
-            "serde_json = \"=1.0.100\"".to_owned(),
-            "serde_json = \"1.0.100\"".to_owned(),
+            "serde_json = \"=1.0.100\"",
+            "serde_json = \"1.0.100\"",
             "lock-staleness",
         ),
         (
             "t-mirror",
             POLICY,
-            "rust = \"1.98.1\"".to_owned(),
-            "rust = \"1.99.0\"".to_owned(),
+            "rust = \"1.98.1\"",
+            "rust = \"1.99.0\"",
             "policy-mirror",
         ),
         (
             "t-pin",
             CATALOG,
-            "GH_VERSION: &str = \"2.101.0\"".to_owned(),
-            "GH_VERSION: &str = \"9.9.9\"".to_owned(),
+            "GH_VERSION: &str = \"2.101.0\"",
+            "GH_VERSION: &str = \"9.9.9\"",
             "local-pin",
         ),
         (
             "t-evidence",
             INVENTORY,
-            format!("\"checked_at\":\"{today}\""),
-            format!("\"checked_at\":\"{old}\""),
+            &ch_today,
+            &ch_old,
             "upstream-freshness",
         ),
         (
             "t-hold",
             INVENTORY,
-            "\"temporary_holds\":[]".to_owned(),
-            hold,
+            "\"temporary_holds\":[]",
+            &hold,
             "exception-expiry",
         ),
         (
             "t-deny",
             "deny.toml",
-            "ignore = []".to_owned(),
-            "ignore = [\"RUSTSEC-2026-0001\"]".to_owned(),
+            "ignore = []",
+            "ignore = [\"RUSTSEC-2026-0001\"]",
             "advisories",
         ),
     ];
-    for (prefix, rel, before, after, check) in &table {
+    for (prefix, rel, before, after, check) in table {
         let fixture = harness::passing(prefix)?;
         harness::mutate(&fixture.dir, rel, before, after)?;
         let run = harness::run_script(&fixture.dir, &[])?;
