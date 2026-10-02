@@ -150,7 +150,11 @@ pub fn propose_task(group: &TofuTaskGroup) -> Result<ProposedTask, ContractError
         },
         cache_policy: CachePolicy {
             allow_compilation_reuse: false,
-            allow_task_reuse: true,
+            // Tofu task-result reuse stays disabled at the gate
+            // (`tofu_reuse_disabled`), so init/validate proposals say
+            // false to match the enforced state; fmt stays true (its
+            // reuse status is unspecified).
+            allow_task_reuse: group.kind == TofuTaskKind::Fmt,
         },
         identity: IdentityInputs {
             unit_id: key.clone(),

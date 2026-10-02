@@ -262,3 +262,37 @@ fn version_excluding_toolchain_diagnoses_while_provider_transport_renders() -> T
     );
     Ok(())
 }
+
+/// Fork composition: a fork event plans at PR trust and generates
+/// restore-everywhere plus push-gated saves, so fork runs are
+/// restore-only at runtime.
+#[test]
+fn fork_event_plans_pr_trust_and_generates_restore_only_roundtrip() -> TestResult {
+    use super::impl_orch_core::plan_value;
+    use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
+    let config = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[stacks.tofu]\nroots = [\"stacks/a\"]\n";
+    let dir = make_pure_tofu_repo(config, &[("stacks/a/main.tf", "variable \"x\" {}\n")])?;
+    let root = dir.path();
+    git(&["add", "."], root)?;
+    git(&["commit", "-m", "one"], root)?;
+    git(&["commit", "--allow-empty", "-m", "two"], root)?;
+    let base = git_line(&["rev-parse", "HEAD~1"], root)?;
+    let head = git_line(&["rev-parse", "HEAD"], root)?;
+    let value = plan_value(root, "fork", Some(&base), &head, None)?;
+    assert_eq!(value["plan"]["trust"], "pr", "fork plans distrust");
+    let jobs = finalized_jobs(&prepare(root)?)?;
+    let mut seen = 0;
+    for (id, job) in jobs.iter().filter(|(id, _)| id.starts_with("tofu-")) {
+        seen += 1;
+        let at = |want: &str| job.steps.iter().position(|step| step.name == want);
+        at("Restore Tofu providers").ok_or(format!("{id} restores"))?;
+        let save = at("Save Tofu providers").ok_or(format!("{id} saves"))?;
+        assert_eq!(
+            job.steps[save].condition.as_deref(),
+            Some(CACHE_SAVE_CONDITION),
+            "{id} saves push-gated only: fork runs restore without saving"
+        );
+    }
+    assert_eq!(seen, 1, "one tofu job for one root");
+    Ok(())
+}

@@ -305,3 +305,21 @@ fn chdir_finding_names_subdir_roots() {
         Some("path.cwd:nested/deep".to_owned())
     );
 }
+
+/// `..` segments fail closed for direct callers (proposals qualify
+/// first, so this is unreachable via `propose_task`); non-segment
+/// dots stay valid.
+#[test]
+fn argv_rejects_dotdot_segments() {
+    for kind in KINDS {
+        for root in ["..", "a/../b", "../a"] {
+            let err = tofu_payload_argv(kind, root).expect_err("traversal fails");
+            assert!(
+                err.to_string().contains("traversal_root"),
+                "{} {root}: {err}",
+                kind.as_str()
+            );
+        }
+        assert!(tofu_payload_argv(kind, "a..b").is_ok());
+    }
+}

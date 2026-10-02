@@ -111,10 +111,10 @@ fn provider_observation() -> RestoreObservation {
     }
 }
 
-/// T21: provider-cache restores verify through the same 5-check
-/// chain as task results; a hit never disables verification.
+/// T21: provider-cache restores classify through the same model
+/// 5-check chain as task results; a hit never disables verification.
 #[test]
-fn provider_restore_verifies_through_the_five_check_chain() {
+fn provider_restore_classifies_through_the_model_five_check_chain() {
     let ok = provider_observation();
     assert_eq!(verify_provider_restore(&ok), Ok(()));
     assert_eq!(

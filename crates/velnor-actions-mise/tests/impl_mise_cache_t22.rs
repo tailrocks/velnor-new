@@ -57,6 +57,11 @@ fn never_archive_markers_reject_state_plans_and_credentials() {
         "/cache/.crates.toml",
         "/cache/bin/cargo-nextest",
         "/cache/git/db/objects/pack",
+        // Deliberate boundary (B12): secrets/token substrings do NOT
+        // flag — only the three markers above exclude.
+        "/cache/config/secret.token",
+        "/cache/config/secrets.env",
+        "/cache/id_token.txt",
     ] {
         assert!(
             !sources::is_never_archive_path(clean),
