@@ -19,8 +19,12 @@ mod tools;
 mod tofu_env;
 
 #[cfg(test)]
+pub(crate) use tools::crate_needs_tofu_install;
+#[cfg(test)]
 pub(crate) use tools::task_driver_tools;
-pub(crate) use tools::{crate_needs_generate_validators, prepare_crate_tools_step};
+pub(crate) use tools::{
+    crate_needs_generate_validators, prepare_crate_tools_step, prepare_install_opentofu,
+};
 
 /// `Documentation` obligation step name.
 #[cfg(test)]
@@ -372,3 +376,7 @@ mod matrix_step_tests;
 #[cfg(test)]
 #[path = "matrix_step_tofu_tests.rs"]
 mod matrix_step_tofu_tests;
+
+#[cfg(test)]
+#[path = "matrix_step_tofu_install_tests.rs"]
+mod matrix_step_tofu_install_tests;

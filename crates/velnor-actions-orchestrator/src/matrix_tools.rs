@@ -59,6 +59,49 @@ pub(crate) fn crate_needs_generate_validators(policy: WorkflowPolicy, package: &
     }
 }
 
+/// Velnor-repository suites that spawn real `tofu` binaries.
+///
+/// Only the mise suite executes `tofu` (the T27 real-binary runs
+/// via `IsolatedCommand::tofu_exec` plus `run_bounded`); the
+/// orchestrator suite only constructs the ctor to assert its env
+/// (zero `run_*` calls), and no other suite touches `tofu_exec` or
+/// `VELNOR_LIVE_TOFU` at all.
+///
+/// Re-audit when a suite starts spawning tofu: grep its tests for
+/// `tofu_exec` plus `run_bounded`/`run_cancellable` executions;
+/// ctor-only and env-assertion uses do NOT join this list. Adding
+/// a workspace crate fails
+/// `every_workspace_member_is_classified_for_tofu` until it is
+/// classified here or in the trimmed set.
+const TOFU_EXEC_SUITES: [&str; 1] = ["velnor-actions-mise"];
+
+/// Whether one crate job installs opentofu for its executed suite.
+///
+/// Velnor-policy jobs install only for the suite above; tofu
+/// obligations select the driver separately (see
+/// [`prepare_install_opentofu`]). Consumer jobs never install here:
+/// unlike the `generate` validators (fail-safe-true because
+/// consumer suites CAN execute `generate`), consumer suites CANNOT
+/// reach our `tofu_exec` ctor — the mise crate is not
+/// published/consumable — so false is correct, not just cheaper.
+#[must_use]
+pub(crate) fn crate_needs_tofu_install(policy: WorkflowPolicy, package: &str) -> bool {
+    match policy {
+        WorkflowPolicy::ConsumerV1 => false,
+        WorkflowPolicy::VelnorRepositoryV1 => TOFU_EXEC_SUITES.contains(&package),
+    }
+}
+
+/// Effective opentofu install flag: tofu obligations or a tofu-spawning suite.
+#[must_use]
+pub(crate) fn prepare_install_opentofu(
+    policy: WorkflowPolicy,
+    package: &str,
+    use_opentofu: bool,
+) -> bool {
+    use_opentofu || crate_needs_tofu_install(policy, package)
+}
+
 /// Typed `Prepare pinned tools` step for the crate-job tool set.
 ///
 /// Driver toolchain per role (Rust only for rust obligations, plus

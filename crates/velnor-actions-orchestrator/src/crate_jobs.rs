@@ -257,7 +257,7 @@ fn render_job(
         use_rust,
         use_mbx,
         use_nextest,
-        use_opentofu,
+        crate::matrix_step::prepare_install_opentofu(policy, &model.package_name, use_opentofu),
         needs_validators,
     )?);
     if use_rust {
