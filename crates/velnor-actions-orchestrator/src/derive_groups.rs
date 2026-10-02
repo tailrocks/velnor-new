@@ -18,8 +18,8 @@ use velnor_actions_contract::{
 };
 use velnor_actions_mise::{ArchivePlan, NextestArchive, NextestDriver, SortedInventory};
 use velnor_actions_rust::{
-    CompileDriver, DeriveInputs, RustExecutionProfile, TaskGroup, TaskKind, WorkspaceRecord,
-    derive_task_groups, derive_workspace_fmt_if_explicit, expand_shards_for_group,
+    CompileDriver, DeriveInputs, RustExecutionProfile, TaskGroup, TaskKind, derive_task_groups,
+    derive_workspace_fmt_if_explicit, expand_shards_for_group,
 };
 
 use crate::OrchestratorError;
@@ -82,13 +82,14 @@ pub(crate) fn declared_union(
 pub(crate) fn derive_for_config(
     config: &VelnorConfig,
     index: &FileIndex,
-    record: &WorkspaceRecord,
-    profile: &RustExecutionProfile,
+    workspace: &PlannedWorkspace,
     rust_config: &RustConfiguration,
     explicit_fmt: bool,
     archives: &mut ArchivePlan,
     union: &BTreeSet<String>,
 ) -> Result<(Vec<TaskGroup>, Vec<FeatureFallback>), OrchestratorError> {
+    let record = &workspace.record;
+    let profile = &workspace.profile;
     let mut groups = Vec::new();
     let mut fallbacks = Vec::new();
     for package in &record.packages {
