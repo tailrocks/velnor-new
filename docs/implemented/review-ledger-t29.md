@@ -3,8 +3,9 @@
 Audited head: `e32df58cf2b6631aaa36ed6ccc5a67f70a2c49e1`
 (`origin/feat/native-opentofu` at review time; all three finding
 reports agree on this head). Disposition branch:
-`origin/feat/native-opentofu`, commits c1–c8 below, all DCO-signed,
-plain-pushed, per-commit gates green.
+`origin/feat/native-opentofu`, commits c1–c9 below, all DCO-signed,
+plain-pushed, per-commit gates green (c9 is a post-ledger pin test
+for the c7 A8 fix; no verdict changes).
 
 Sources: `threads/review-t29-arch/report.md` (A1–A10: 1 blocker /
 2 major / 4 minor / 3 notes), `threads/review-t29-sec/report.md`
@@ -28,7 +29,8 @@ rationale recorded here (the brief's rejected-with-evidence class).
 | c5 | `a094f9c0793ac36e2fcb2389c91711ae37eac2f7` | B3 model-only downgrade |
 | c6 | `efe73f69aaab81819c5c321487566695e629ce29` | Minors A4/A5/A7/B4/B5/B6/B7 |
 | c7 | `63b209c37b7964e604de2c7cac43b865700ee5be` | Notes batch + T21 rename |
-| c8 | this commit | This ledger |
+| c8 | `af0d84a9b22c0a543df410800f1003ac3d853795` | This ledger |
+| c9 | this commit | A8 pin test (post-ledger; verdicts unchanged) |
 
 ## Verdicts
 
@@ -241,7 +243,8 @@ check --fail-on-warning` (3 pre-existing infos steady).
 | c5 | 2620 / 2619 / 1 | +0 (renames); same single environmental failure |
 | c6 | 2630 / 2630 / 1 | +10 (A4/A5/A7/B4×2/B5×2/B6×3); p12_live clean |
 | c7 | 2633 / 2633 / 1 | +3 (B9/B13/C3); includes T21 model-checks rename |
-| c8 | 2633 / 2633 / 1 | docs-only (this ledger) |
+| c8 | 2633 / 2633 / 1 | docs-only (ledger) |
+| c9 | 2634 / 2634 / 1 | +1 (A8 pin); verdicts unchanged |
 
 Fail-before observed (stash) for: A2, A5, B2 (new-symbol
 pins), B4 (both), B9. New-symbol pins (B2 const, B6 tokens)

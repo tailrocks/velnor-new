@@ -235,3 +235,23 @@ fn dispatch_helpers_pin_spellings() {
         ResourceClass::Lightweight
     );
 }
+
+/// Reuse flags match the enforced gate: init/validate proposals say
+/// false (task-result reuse stays disabled), fmt stays true.
+#[test]
+fn reuse_flags_match_the_enforced_gate() -> Result<(), velnor_actions_contract::ContractError> {
+    for (kind, reuse) in [
+        (TofuTaskKind::InitForValidate, false),
+        (TofuTaskKind::Validate, false),
+        (TofuTaskKind::Fmt, true),
+    ] {
+        let task = propose_task(&group("stacks/a", kind))?;
+        assert_eq!(
+            task.cache_policy.allow_task_reuse,
+            reuse,
+            "{} must pin its flag",
+            kind.as_str()
+        );
+    }
+    Ok(())
+}
