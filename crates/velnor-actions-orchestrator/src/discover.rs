@@ -331,20 +331,14 @@ fn derive_all(
     index: &FileIndex,
     workspaces: &[PlannedWorkspace],
     statuses: &[DetectionStatus],
-) -> Result<
-    (
-        Vec<ProposedTask>,
-        Vec<crate::derive_groups::FeatureFallback>,
-    ),
-    OrchestratorError,
-> {
+) -> Result<(Vec<ProposedTask>, Vec<crate::derive_groups::FeatureFallback>), OrchestratorError> {
     let rust = config
         .stacks
         .rust
         .clone()
         .unwrap_or_else(RustStackConfig::default_config);
     let explicit_fmt = index.contains("rustfmt.toml") || index.contains(".rustfmt.toml");
-    let union = crate::derive_groups::declared_union(workspaces);
+    let union = crate::derive_groups::declared_union(workspaces, index);
     let mut groups = Vec::new();
     let mut fallbacks = Vec::new();
     let mut archives = ArchivePlan::new();
@@ -352,6 +346,7 @@ fn derive_all(
         for config_name in &rust.configurations {
             let (derived, narrowed) = crate::derive_groups::derive_for_config(
                 config,
+                index,
                 &workspace.record,
                 &workspace.profile,
                 config_name,
