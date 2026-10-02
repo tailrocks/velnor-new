@@ -4,6 +4,7 @@ use velnor_actions_tofu::diagnostics::{
     REQUIRED_VERSION_EXCLUDES_TOOLCHAIN, RequiredVersionClaim, lockfile_findings_for_root,
     remediation_for_init_stderr, required_versions_for_root, version_compat_findings,
 };
+use velnor_actions_tofu::file_cache::FileCache;
 
 use crate::support::{Outcome, TempDir, fixture_dir};
 
@@ -25,7 +26,7 @@ fn seed_root(dir: &TempDir, unit: &str, config: &str, lock: Option<&str>) -> Out
 fn missing_lock_on_provider_root_is_a_finding() -> Outcome {
     let dir = TempDir::create("tofu-diag-missing")?;
     seed_root(&dir, ".", "resource \"x\" \"y\" {}\n", None)?;
-    let findings = lockfile_findings_for_root(dir.path(), ".");
+    let findings = lockfile_findings_for_root(dir.path(), ".", &mut FileCache::new());
     assert_eq!(findings.len(), 1);
     let finding = &findings[0];
     assert_eq!(finding.code, LOCKFILE_MISSING);
@@ -46,19 +47,19 @@ fn missing_lock_on_provider_root_is_a_finding() -> Outcome {
 #[test]
 fn absent_fixture_root_stays_silent() {
     let root = fixture_dir("tofu-lockfile").join("absent");
-    assert!(lockfile_findings_for_root(&root, ".").is_empty());
+    assert!(lockfile_findings_for_root(&root, ".", &mut FileCache::new()).is_empty());
 }
 
 #[test]
 fn present_empty_fixture_root_stays_silent() {
     let root = fixture_dir("tofu-lockfile").join("present-empty");
-    assert!(lockfile_findings_for_root(&root, ".").is_empty());
+    assert!(lockfile_findings_for_root(&root, ".", &mut FileCache::new()).is_empty());
 }
 
 #[test]
 fn stale_fixture_root_names_the_provider() {
     let root = fixture_dir("tofu-lockfile").join("stale");
-    let findings = lockfile_findings_for_root(&root, ".");
+    let findings = lockfile_findings_for_root(&root, ".", &mut FileCache::new());
     assert_eq!(findings.len(), 1);
     let finding = &findings[0];
     assert_eq!(finding.code, LOCKFILE_STALE);
@@ -77,7 +78,7 @@ fn stale_fixture_root_names_the_provider() {
 #[test]
 fn weakened_fixture_root_is_corrupt() {
     let root = fixture_dir("tofu-lockfile").join("weakened");
-    let findings = lockfile_findings_for_root(&root, ".");
+    let findings = lockfile_findings_for_root(&root, ".", &mut FileCache::new());
     assert_eq!(findings.len(), 1);
     assert_eq!(findings[0].code, "tofu_lockfile_corrupt");
     assert!(findings[0].validate().is_ok());
@@ -92,7 +93,7 @@ fn provider_root_with_pins_stays_silent() -> Outcome {
         "resource \"x\" \"y\" {}\n",
         Some("provider \"example.com/a/b\" {\nversion = \"1.0.0\"\n}\n"),
     )?;
-    assert!(lockfile_findings_for_root(dir.path(), "stacks/a").is_empty());
+    assert!(lockfile_findings_for_root(dir.path(), "stacks/a", &mut FileCache::new()).is_empty());
     Ok(())
 }
 
@@ -100,7 +101,7 @@ fn provider_root_with_pins_stays_silent() -> Outcome {
 fn provider_root_with_empty_lock_is_missing() -> Outcome {
     let dir = TempDir::create("tofu-diag-empty")?;
     seed_root(&dir, ".", "data \"x\" \"y\" {}\n", Some(""))?;
-    let findings = lockfile_findings_for_root(dir.path(), ".");
+    let findings = lockfile_findings_for_root(dir.path(), ".", &mut FileCache::new());
     assert_eq!(findings.len(), 1);
     assert_eq!(findings[0].code, LOCKFILE_MISSING);
     Ok(())
@@ -115,7 +116,7 @@ fn module_calls_abstain_from_stale_claims() -> Outcome {
         "module \"m\" {\n  source = \"./mods/m\"\n}\n",
         Some("provider \"example.com/a/b\" {}\n"),
     )?;
-    assert!(lockfile_findings_for_root(dir.path(), ".").is_empty());
+    assert!(lockfile_findings_for_root(dir.path(), ".", &mut FileCache::new()).is_empty());
     Ok(())
 }
 
@@ -128,7 +129,7 @@ fn terraform_block_alone_abstains_both_ways() -> Outcome {
         "terraform {\n  required_version = \">= 1.6\"\n}\n",
         None,
     )?;
-    assert!(lockfile_findings_for_root(dir.path(), ".").is_empty());
+    assert!(lockfile_findings_for_root(dir.path(), ".", &mut FileCache::new()).is_empty());
     Ok(())
 }
 
@@ -141,7 +142,7 @@ fn malformed_configs_abstain() -> Outcome {
         "resource \"x\" {\n  broken ==\n",
         Some("provider \"a/b/c\" {}\n"),
     )?;
-    assert!(lockfile_findings_for_root(dir.path(), ".").is_empty());
+    assert!(lockfile_findings_for_root(dir.path(), ".", &mut FileCache::new()).is_empty());
     Ok(())
 }
 
@@ -150,7 +151,7 @@ fn unreadable_lock_stays_silent() -> Outcome {
     let dir = TempDir::create("tofu-diag-unreadable")?;
     seed_root(&dir, ".", "resource \"x\" \"y\" {}\n", None)?;
     std::fs::create_dir(dir.path().join(".terraform.lock.hcl"))?;
-    assert!(lockfile_findings_for_root(dir.path(), ".").is_empty());
+    assert!(lockfile_findings_for_root(dir.path(), ".", &mut FileCache::new()).is_empty());
     Ok(())
 }
 
@@ -236,7 +237,7 @@ fn required_versions_collect_with_paths() -> Outcome {
         "terraform {\n  required_version = \"< 2.0\"\n}\n",
     )?;
     dir.write("a/README.md", "required_version = \"= 0.0\"\n")?;
-    let mut claims = required_versions_for_root(dir.path(), "a");
+    let mut claims = required_versions_for_root(dir.path(), "a", &mut FileCache::new());
     claims.sort_by(|left, right| left.path.cmp(&right.path));
     assert_eq!(claims.len(), 2);
     assert_eq!(claims[0].path, "a/extra.tofu");

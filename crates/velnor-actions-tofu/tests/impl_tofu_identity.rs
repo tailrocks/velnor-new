@@ -313,13 +313,15 @@ fn entry_metadata_pins_tofu_shape() {
 #[test]
 fn lock_probe_binds_content_or_absence() -> Result<(), Box<dyn std::error::Error>> {
     let dir = TempDir::create("tofu-lock")?;
-    let absent = lock_slot_at_root(dir.path(), ".");
+    let mut reads = velnor_actions_tofu::FileCache::new();
+    let absent = lock_slot_at_root(dir.path(), ".", &mut reads);
     assert!(matches!(absent, DigestSlot::AbsentProven(_)));
     dir.write(".terraform.lock.hcl", "lock content")?;
-    let known = lock_slot_at_root(dir.path(), ".");
+    let mut reads = velnor_actions_tofu::FileCache::new();
+    let known = lock_slot_at_root(dir.path(), ".", &mut reads);
     assert_eq!(known, DigestSlot::Known(digest_b3(b"lock content")));
     dir.write("stacks/a/main.tf", "terraform {}")?;
-    let nested_absent = lock_slot_at_root(dir.path(), "stacks/a");
+    let nested_absent = lock_slot_at_root(dir.path(), "stacks/a", &mut reads);
     assert!(matches!(nested_absent, DigestSlot::AbsentProven(_)));
     Ok(())
 }

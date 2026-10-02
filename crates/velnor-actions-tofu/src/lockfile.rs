@@ -13,6 +13,7 @@ use std::path::Path;
 use velnor_actions_contract::{ContractError, Finding, digest_b3};
 
 use crate::family::LOCKFILE_NAME;
+use crate::file_cache::FileCache;
 use crate::kinds::TofuTaskKind;
 use crate::parser::parse_native;
 use crate::task_identity::DigestSlot;
@@ -26,9 +27,9 @@ pub const LOCKFILE_CORRUPT: &str = "tofu_lockfile_corrupt";
 /// directory). There is no walk-up for tofu: every root binds only
 /// its own lockfile.
 #[must_use]
-pub fn lock_digest_at_root(root: &Path, unit_path: &str) -> DigestSlot {
+pub fn lock_digest_at_root(root: &Path, unit_path: &str, reads: &mut FileCache) -> DigestSlot {
     let relative = lock_relative(unit_path);
-    match std::fs::read(root.join(&relative)) {
+    match reads.read_raw(&root.join(&relative)) {
         Ok(bytes) => DigestSlot::Known(digest_b3(&bytes)),
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
             DigestSlot::AbsentProven(format!("not_found:{relative}"))
@@ -44,11 +45,16 @@ pub fn lock_digest_at_root(root: &Path, unit_path: &str) -> DigestSlot {
 /// own unit-relative probe with the identical exclusion spelling
 /// (its evidence strings stay byte-stable).
 #[must_use]
-pub fn lock_slot_for_kind(root: &Path, unit_path: &str, kind: TofuTaskKind) -> DigestSlot {
+pub fn lock_slot_for_kind(
+    root: &Path,
+    unit_path: &str,
+    kind: TofuTaskKind,
+    reads: &mut FileCache,
+) -> DigestSlot {
     if kind == TofuTaskKind::Fmt {
         return DigestSlot::AbsentProven("excluded:kind_does_not_read_lockfile".to_owned());
     }
-    lock_digest_at_root(root, unit_path)
+    lock_digest_at_root(root, unit_path, reads)
 }
 
 /// Repo-relative lockfile path for one unit evidence path.

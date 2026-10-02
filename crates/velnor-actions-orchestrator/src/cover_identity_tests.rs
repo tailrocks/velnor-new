@@ -287,7 +287,9 @@ fn tofu_cover_extension_verifies_valid_spellings() {
     let discovery = discovery_with(&[]);
     let snapshot = ExecutionSnapshot::build(&discovery);
     let bundle = cover_bundle_for(&snapshot, &discovery, &task, tmp.path());
-    verify_cover_extension(&task, tmp.path(), &bundle).expect("tofu verifies at cover time");
+    let mut reads = velnor_actions_tofu::FileCache::new();
+    verify_cover_extension(&task, tmp.path(), &bundle, &mut reads)
+        .expect("tofu verifies at cover time");
 }
 
 /// Drifted tofu spellings refuse coverage, never parse loosely.
@@ -300,7 +302,9 @@ fn tofu_cover_extension_refuses_drift() {
     let discovery = discovery_with(&[]);
     let snapshot = ExecutionSnapshot::build(&discovery);
     let bundle = cover_bundle_for(&snapshot, &discovery, &task, tmp.path());
-    let err = verify_cover_extension(&task, tmp.path(), &bundle).expect_err("drift refuses");
+    let mut reads = velnor_actions_tofu::FileCache::new();
+    let err =
+        verify_cover_extension(&task, tmp.path(), &bundle, &mut reads).expect_err("drift refuses");
     assert!(err.contains("unparsable_spelling"), "{err}");
 }
 
@@ -314,6 +318,8 @@ fn tofu_cover_extension_refuses_undeclared_inputs() {
     let discovery = discovery_with(&[]);
     let snapshot = ExecutionSnapshot::build(&discovery);
     let bundle = cover_bundle_for(&snapshot, &discovery, &task, tmp.path());
-    let err = verify_cover_extension(&task, tmp.path(), &bundle).expect_err("undeclared refuses");
+    let mut reads = velnor_actions_tofu::FileCache::new();
+    let err = verify_cover_extension(&task, tmp.path(), &bundle, &mut reads)
+        .expect_err("undeclared refuses");
     assert_eq!(err, "undeclared_inputs");
 }

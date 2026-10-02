@@ -3,6 +3,8 @@
 mod impl_tofu_argv;
 #[path = "impl_tofu_closure.rs"]
 mod impl_tofu_closure;
+#[path = "impl_tofu_closure_b.rs"]
+mod impl_tofu_closure_b;
 #[path = "impl_tofu_content.rs"]
 mod impl_tofu_content;
 #[path = "impl_tofu_detect.rs"]
@@ -15,6 +17,8 @@ mod impl_tofu_effective;
 mod impl_tofu_evidence;
 #[path = "impl_tofu_family.rs"]
 mod impl_tofu_family;
+#[path = "impl_tofu_file_cache.rs"]
+mod impl_tofu_file_cache;
 #[path = "impl_tofu_fmt.rs"]
 mod impl_tofu_fmt;
 #[path = "impl_tofu_identity.rs"]

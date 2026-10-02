@@ -10,6 +10,7 @@ use std::path::Path;
 
 use velnor_actions_contract::{ContractError, ProposedTask, component_id_for_unit};
 
+use crate::file_cache::FileCache;
 use crate::kinds::TofuTaskKind;
 use crate::lockfile::lock_digest_at_root;
 use crate::propose::{TOFU_DRIVER, TOFU_RUNNER};
@@ -103,8 +104,8 @@ pub fn entry_metadata_for_task(
 /// `unit_path` is the unit evidence path (`.` or the root directory).
 /// Delegates to the canonical root-lock digest function.
 #[must_use]
-pub fn lock_slot_at_root(root: &Path, unit_path: &str) -> DigestSlot {
-    lock_digest_at_root(root, unit_path)
+pub fn lock_slot_at_root(root: &Path, unit_path: &str, reads: &mut FileCache) -> DigestSlot {
+    lock_digest_at_root(root, unit_path, reads)
 }
 
 /// Fail-closed check for the tofu compile-driver spelling.

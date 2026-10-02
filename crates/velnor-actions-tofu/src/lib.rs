@@ -21,6 +21,7 @@ pub mod effective;
 pub mod env;
 pub mod evidence;
 pub mod family;
+pub mod file_cache;
 pub mod fmt_scope;
 pub mod identity;
 pub mod kinds;
@@ -56,6 +57,7 @@ pub use evidence::{
     classify_with_contents, mise_tool_selected, plan_note,
 };
 pub use family::{Family, LOCKFILE_NAME, family_of, is_auto_var, is_override_stem};
+pub use file_cache::{FileCache, PinnedOutcome};
 pub use fmt_scope::{
     covered_fmt_roots, fmt_scope_for_root, fmt_set, is_excluded_name, is_fmt_file, under_hidden_dir,
 };
