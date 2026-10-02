@@ -103,7 +103,7 @@ Evidence:
 | F1 zero non-test `TaskGroup` in orchestrator outside one rust-adaptation module | **PASS** | only `derive_groups.rs` (feature/shard derivation); `select_affected` + `cover_identity_fixtures` uses are `#[cfg(test)]` |
 | F2 zero new `serde_json::Value` on discovery/proposal/identity paths; tofu extension gets a required-slot validator | **PASS** (constraint) | zero hits at live head; refactor adds none; `tofu-task-identity-v1` validator lands in Phase B |
 | F3 one reverse-closure owner over neutral edges; zero tofu graph/scheduler types | **PASS** | `contract::reverse_closure<N: Ord + Clone>` is the single owner; `rust/src/graph.rs` holds no copy; `select_affected` converts via rust-owned `local_edge_pairs` |
-| F4 zero `tofu` hits in renderer/transport/CLI product code; no `RenderDriver` variant | **PASS-vacuous** | no tofu code exists in Phase A; grep-enforced from Phase B on |
+| F4 renderer/transport/CLI own no tofu domain decisions (argv/flags, root selection, lock/version/scope); no `RenderDriver` variant | **PASS** | renderer holds tofu representation only (step templates, writer election, layer arms), pinned by the `impl_renderer_tofu_leak` symbol test; CLI src zero tofu hits; mise `tofu_exec` pure ctor, no selection rules |
 | F5 one `REGISTERED_STACKS`; neutral detector records; neutral identity inputs; 7→8 arch tests amended with enforcement intact | **PASS except T08** | M1 deletes the rust mirror; detectors already return `StackCandidate`; lane/platform/toolchain take `&ProposedTask`; T08 (eighth crate) is Phase-B-gated |
 | F6 skew items re-verified | **PASS** | custom-task allowlist IS in `RustStackConfig` at live head (`stacks.rs:57-60`, spec F06 correct); `DetectorEntry` is `(&str,u32,fn)`; `CrateJob` keeps `package_id` + `"Rust / "` gate while `CrateObligation` is neutral; placeholder digest fails closed (`validate_identities`); `release.yml` on main |
 | F7 consumer parity (recursive fmt + readonly backend-less init + validate; module→root selection; hosted labels; no `velnor-workflow` residue) | **PENDING Phase B/E** | requires tofu behavior; rationale recorded, not waived |
@@ -239,7 +239,11 @@ only + provider-cache restore; actionlint/required/validators unchanged;
 mixed = union; removal is a distinct behavior-change commit.
 Provider cache: closed layer `tofu-providers`, key
 `velnor-v1-tofu-providers-<target>-<tofu>-<root-slug>-${{hashFiles(...)}}`
-(≤512 B), trust namespace in key not digest; transport = plugin-cache dir
+(≤512 B), no trust-namespace segment in static keys: event trust is
+unknowable at generation (like the rust sources key), so isolation
+holds via exact-key restore, push-gated saves, and runner branch
+scoping, and every tofu hit still faces lock-verified readonly init
+plus mandatory validate; transport = plugin-cache dir
 only (job-private `$RUNNER_TEMP/velnor/tofu-cache/<slug>`), restore before
 init; per-root job saves only its own root-scoped key (plan never inits so
 never saves); push-gated trusted save; restore still faces readonly init;

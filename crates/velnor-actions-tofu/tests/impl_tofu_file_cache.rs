@@ -52,3 +52,22 @@ fn oversize_files_read_through_uncached() -> Outcome {
     );
     Ok(())
 }
+
+/// Symlinked files refuse without reading, even at live targets; the
+/// refusal caches with its kind and message.
+#[test]
+#[cfg(unix)]
+fn symlinked_files_refuse_without_reading() -> Outcome {
+    let dir = TempDir::create("tofu-read-cache-link")?;
+    let target = dir.write("target.tf", "variable \"a\" {}\n")?;
+    let link = dir.path().join("linked.tf");
+    std::os::unix::fs::symlink(&target, &link)?;
+    let mut reads = FileCache::new();
+    let first = reads.read_raw(&link).expect_err("symlink refuses");
+    assert_eq!(first.kind(), std::io::ErrorKind::PermissionDenied);
+    assert!(first.to_string().contains("symlink_refused"), "got {first}");
+    let second = reads.read_raw(&link).expect_err("refusal caches");
+    assert_eq!(second.kind(), std::io::ErrorKind::PermissionDenied);
+    assert_eq!(second.to_string(), first.to_string());
+    Ok(())
+}

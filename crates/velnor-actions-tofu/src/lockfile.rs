@@ -257,7 +257,8 @@ impl TofuLockSnapshot {
     /// Capture the lock bytes and workdir presence for `roots`.
     ///
     /// `roots` are normalized configured roots (`""` for the
-    /// repository root).
+    /// repository root). Symlinked locks refuse without reading and
+    /// count as unreadable, like the cached-read path.
     #[must_use]
     pub fn capture(root: &Path, roots: &[String]) -> Self {
         let mut unreadable = Vec::new();
@@ -269,12 +270,19 @@ impl TofuLockSnapshot {
             } else {
                 normalized
             });
-            let bytes = match std::fs::read(root.join(&lock)) {
-                Ok(bytes) => Some(bytes),
-                Err(err) if err.kind() == std::io::ErrorKind::NotFound => None,
-                Err(_) => {
-                    unreadable.push(lock.clone());
-                    None
+            let linked = std::fs::symlink_metadata(root.join(&lock))
+                .is_ok_and(|meta| meta.file_type().is_symlink());
+            let bytes = if linked {
+                unreadable.push(lock.clone());
+                None
+            } else {
+                match std::fs::read(root.join(&lock)) {
+                    Ok(bytes) => Some(bytes),
+                    Err(err) if err.kind() == std::io::ErrorKind::NotFound => None,
+                    Err(_) => {
+                        unreadable.push(lock.clone());
+                        None
+                    }
                 }
             };
             locks.push((lock, bytes));

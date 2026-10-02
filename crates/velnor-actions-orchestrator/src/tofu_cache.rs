@@ -22,7 +22,9 @@ pub(crate) const TOFU_PROVIDER_CACHE_BASE_EXPR: &str = "${{ runner.temp }}/velno
 /// the trailing `hashFiles` over the root lockfile churns the key
 /// when provider pins change. No spaces: the cache action rejects
 /// them. The root slug mirrors the isolated data-dir scheme
-/// (H3-hashed, never interpolated).
+/// (H3-hashed, never interpolated). Depth budget: roots carry no
+/// separate depth cap; the 512-byte key cap bounds them instead — a
+/// root nested deep enough to overflow the key fails `key_too_long`.
 /// # Errors
 ///
 /// Returns contract errors for unsupported targets, loose tofu pins,
