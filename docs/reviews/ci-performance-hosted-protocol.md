@@ -7,13 +7,28 @@ T01–T26 verdict. Scope remains the exact 47 repositories in `scope.json`.
 ## Source-bound timeline
 
 `scripts/analyze-ci-performance.py` consumes the existing collector's private
-`run.json`, all `jobs.json` pages and `summary.json`. It authenticates workflow
-bytes through the GitHub contents API at that run's exact source SHA, checks the
+`run.json`, all `jobs.json` pages and `summary.json`. It currently admits only
+`push` events and requires the summary/run event identities to match. For those
+events it authenticates workflow bytes through the GitHub contents API at that
+run's immutable head SHA, checks the
 Git blob digest and records SHA-256. Dependencies come from those workflow bytes,
 never a caller's claimed DAG. Duplicate keys, unknown dependencies, cycles,
 incomplete jobs and mismatched run/attempt/source fail analysis. Static job names
 must match API names exactly. Dynamic matrices/reusable workflows need a qualified
 expansion mapping and are currently rejected rather than guessed.
+Job-level `uses` is rejected explicitly: matching API names cannot reveal the
+called workflow's dependency graph. Step-level actions remain ordinary job steps.
+
+GitHub's [event source rules](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request)
+distinguish a PR's feature commit from its merge revision. Fetching a PR workflow
+at the API head SHA therefore cannot authenticate the executed workflow graph,
+even when its job names match. PR, merge-group, dispatch, schedule and other
+events remain unsupported until their executed immutable workflow revision is
+authenticated. They fail before the workflow API lookup with
+`Timeline unavailable: ExecutedWorkflowRevisionUnavailable`; their timeline is
+unknown. The analyzer never guesses a merge SHA or reads a mutable merge ref.
+Previously saved PR analyses remain historical, unqualified evidence; their
+files are preserved and their DAG calculations cannot supply qualification proof.
 
 ```sh
 rtk proxy /usr/bin/python3 scripts/analyze-ci-performance.py \

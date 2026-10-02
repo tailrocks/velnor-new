@@ -123,11 +123,18 @@ class DocumentTests(unittest.TestCase):
             with self.subTest(definition=definition), self.assertRaises(ValueError):
                 ANALYZER.graph({"jobs": {"a": definition}}, [{"name": "a"}])
 
+    def test_reusable_job_cannot_hide_dependencies_behind_matching_name(self):
+        workflow = {"jobs": {"a": {"uses": "owner/repository/.github/workflows/callee.yml@"
+                                   + "a" * 40}}}
+        with self.assertRaisesRegex(ValueError, "reusable workflow"):
+            ANALYZER.graph(workflow, [{"name": "a"}])
+
 
 class SourceBindingTests(unittest.TestCase):
     def setUp(self):
         self.content = b"jobs:\n  a: {}\n"
-        self.run = {"path": ".github/workflows/ci.yml", "head_sha": "a" * 40}
+        self.run = {"path": ".github/workflows/ci.yml", "head_sha": "a" * 40,
+                    "event": "push"}
         self.response = {
             "path": self.run["path"], "encoding": "base64",
             "content": base64.b64encode(self.content).decode(),
@@ -157,6 +164,18 @@ class SourceBindingTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "response mismatch"):
             self.lookup({**self.response, "path": ".github/workflows/other.yml"})
 
+    def test_source_authority_rejects_nonpush_and_missing_events_without_api(self):
+        for event in ("pull_request", "workflow_dispatch", "schedule", "unknown", None):
+            with self.subTest(event=event), patch.object(ANALYZER.COLLECTOR, "api") as api:
+                with self.assertRaises(ANALYZER.ExecutedWorkflowRevisionUnavailable):
+                    ANALYZER.workflow_for({**self.run, "event": event}, "owner/repository")
+                api.assert_not_called()
+        with patch.object(ANALYZER.COLLECTOR, "api") as api:
+            run = {key: value for key, value in self.run.items() if key != "event"}
+            with self.assertRaises(ANALYZER.ExecutedWorkflowRevisionUnavailable):
+                ANALYZER.workflow_for(run, "owner/repository")
+            api.assert_not_called()
+
 
 class MainAdmissionTests(unittest.TestCase):
     def setUp(self):
@@ -166,11 +185,12 @@ class MainAdmissionTests(unittest.TestCase):
         self.source = "a" * 40
         self.documents = {
             "summary.json": {"schema": 1, "repository": "tailrocks/velnor-new",
-                             "run_id": 7, "attempt": 1, "source_commit": self.source},
+                             "run_id": 7, "attempt": 1, "source_commit": self.source,
+                             "event": "push"},
             "run.json": {"repository": {"full_name": "tailrocks/velnor-new"},
                          "id": 7, "run_attempt": 1, "head_sha": self.source,
                          "status": "completed", "conclusion": "failure",
-                         "path": ".github/workflows/ci.yml"},
+                         "path": ".github/workflows/ci.yml", "event": "push"},
             "jobs.json": [{"total_count": 1, "jobs": [{
                 **job(1, 0, 10, "failure"), "name": "a", "run_id": 7,
                 "run_attempt": 1, "head_sha": self.source, "status": "completed",
@@ -178,33 +198,41 @@ class MainAdmissionTests(unittest.TestCase):
         }
         self.content = b"jobs:\n  a: {}\n  skipped: {}\n"
 
-    def invoke(self, documents, expected, source_jobs=1):
+    def invoke(self, documents, expected, source_jobs=1, content=None, expect_api=False):
         for name, value in documents.items():
             (self.directory / name).write_text(json.dumps(value))
         for name in ("workflow-source.yml", "timeline-analysis.json"):
             (self.directory / name).unlink(missing_ok=True)
-        content = self.content if source_jobs == 2 else b"jobs:\n  a: {}\n"
+        if content is None:
+            content = self.content if source_jobs == 2 else b"jobs:\n  a: {}\n"
         response = {"path": ".github/workflows/ci.yml", "encoding": "base64",
                     "content": base64.b64encode(content).decode(),
                     "sha": hashlib.sha1(b"blob " + str(len(content)).encode()
                                         + b"\0" + content).hexdigest()}
+        stderr = io.StringIO()
         with patch("sys.argv", [str(LOCATION), str(self.directory)]), \
                 patch("sys.stdout", new=io.StringIO()), \
-                patch("sys.stderr", new=io.StringIO()), \
+                patch("sys.stderr", new=stderr), \
                 patch.object(ANALYZER.COLLECTOR, "api", return_value=json.dumps(response)) as api:
             self.assertEqual(ANALYZER.main(), expected)
         if expected:
-            api.assert_not_called()
+            if expect_api:
+                api.assert_called_once()
+            else:
+                api.assert_not_called()
+            self.assertIn("Timeline unavailable:", stderr.getvalue())
             self.assertFalse((self.directory / "timeline-analysis.json").exists())
             self.assertFalse((self.directory / "workflow-source.yml").exists())
         else:
             api.assert_called_once()
+        return stderr.getvalue()
 
     def test_failed_completed_run_is_measurable_without_performance_verdict(self):
         self.invoke(self.documents, 0)
         result = json.loads((self.directory / "timeline-analysis.json").read_text())
         self.assertEqual(result["completion_path_seconds"], 10)
         self.assertIsNone(result["compiler_process_seconds"])
+        self.assertEqual(result["workflow_source_resolution"], "push_head_sha")
         self.assertNotIn("qualified", result)
 
     def test_summary_schema_and_identity_sanity(self):
@@ -275,6 +303,53 @@ class MainAdmissionTests(unittest.TestCase):
                 documents = copy.deepcopy(self.documents)
                 documents["jobs.json"] = pages
                 self.invoke(documents, 1)
+
+    def test_unsupported_or_missing_event_sources_fail_before_api(self):
+        events = ("pull_request", "pull_request_target", "merge_group", "workflow_dispatch",
+                  "schedule", "workflow_run", "unknown", None, False, {})
+        for event in events:
+            with self.subTest(event=event):
+                documents = copy.deepcopy(self.documents)
+                documents["summary.json"]["event"] = event
+                documents["run.json"]["event"] = event
+                self.assertEqual(self.invoke(documents, 1),
+                                 "Timeline unavailable: ExecutedWorkflowRevisionUnavailable\n")
+        documents = copy.deepcopy(self.documents)
+        del documents["summary.json"]["event"]
+        del documents["run.json"]["event"]
+        self.invoke(documents, 1)
+
+    def test_summary_and_run_event_mismatch_fails_before_api(self):
+        for document in ("summary.json", "run.json"):
+            with self.subTest(document=document):
+                documents = copy.deepcopy(self.documents)
+                documents[document]["event"] = "pull_request"
+                self.invoke(documents, 1)
+
+    def test_pr_feature_workflow_cannot_replace_executed_merge_dag(self):
+        feature = yaml.load("jobs:\n  a: {}\n  skipped: {}\n", Loader=ANALYZER.StrictYaml)
+        integration = yaml.load("jobs:\n  a: {}\n  skipped:\n    needs: a\n",
+                                Loader=ANALYZER.StrictYaml)
+        documents = copy.deepcopy(self.documents)
+        documents["summary.json"]["event"] = "pull_request"
+        documents["run.json"]["event"] = "pull_request"
+        documents["jobs.json"][0]["total_count"] = 2
+        documents["jobs.json"][0]["jobs"].append({
+            **job(2, 12, 20), "name": "skipped", "status": "completed",
+            "run_id": 7, "run_attempt": 1, "head_sha": self.source,
+        })
+        jobs = documents["jobs.json"][0]["jobs"]
+        self.assertNotEqual(ANALYZER.graph(feature, jobs)[1],
+                            ANALYZER.graph(integration, jobs)[1])
+        self.invoke(documents, 1, source_jobs=2)
+
+    def test_reusable_job_with_matching_api_name_cannot_publish_timeline(self):
+        content = b"jobs:\n  a:\n    uses: owner/repository/.github/workflows/callee.yml@" + b"a" * 40 + b"\n"
+        self.invoke(self.documents, 1, content=content, expect_api=True)
+
+    def test_step_action_does_not_trigger_reusable_job_rejection(self):
+        content = b"jobs:\n  a:\n    steps:\n      - uses: owner/action@" + b"a" * 40 + b"\n"
+        self.invoke(self.documents, 0, content=content)
 
 
 if __name__ == "__main__":

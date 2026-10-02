@@ -68,3 +68,15 @@ the expanded **23-test** suite and reran that failed baseline successfully. Priv
 test, requirements and verified wheel input SHA-256 values, command exit codes
 and transcript digests. The earlier 15-test count describes the initial dependency
 qualification; this expansion adds admission proof, not performance qualification.
+
+The subsequent executed-workflow revision fix restricts source resolution to
+authenticated push events, binds summary/run events and rejects other events
+before source lookup. The isolated **30-test** suite includes direct source
+authority rejection and an actual-main PR feature/merge fixture with identical
+job names and different dependency graphs. A job-level reusable workflow is also
+rejected before timeline publication despite matching API job names; ordinary
+step actions remain admissible. The push baseline still reproduces
+210/203/708 seconds. Private
+`analysis-dependencies/event-source-proof/reusable-job-fix/proof.json`
+records current input and transcript digests. Historical PR calculations remain
+unqualified; no mutable merge ref or inferred merge SHA is accepted.

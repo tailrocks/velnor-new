@@ -80,6 +80,15 @@ def positive_integer(value):
     return value
 
 
+class ExecutedWorkflowRevisionUnavailable(ValueError):
+    pass
+
+
+def require_push_source(event):
+    if event != "push":
+        raise ExecutedWorkflowRevisionUnavailable("unsupported event source resolution")
+
+
 def evidence_identity(summary, run):
     if not isinstance(summary, dict) or not isinstance(run, dict):
         raise ValueError("summary and run must be mappings")
@@ -100,6 +109,9 @@ def evidence_identity(summary, run):
                 positive_integer(run["run_attempt"]), run["head_sha"])
     if expected != observed or run.get("status") != "completed":
         raise ValueError("summary and run-attempt identities differ")
+    if summary.get("event") != run.get("event"):
+        raise ValueError("summary and run event identities differ")
+    require_push_source(run.get("event"))
     return expected
 
 
@@ -131,6 +143,7 @@ def admitted_jobs(pages, identity):
 
 
 def workflow_for(run, repository):
+    require_push_source(run.get("event"))
     path = run["path"].split("@", 1)[0]
     sha = run["head_sha"]
     if not re.fullmatch(r"[0-9a-f]{40}", sha):
@@ -159,6 +172,8 @@ def graph(workflow, jobs):
     for identifier, definition in definitions.items():
         if not isinstance(identifier, str) or not isinstance(definition, dict):
             raise ValueError("job definition must be a named mapping")
+        if "uses" in definition:
+            raise ValueError("reusable workflow expansion needs a qualified mapping; unsupported")
         name = definition.get("name", identifier)
         if not isinstance(name, str) or "${{" in name or definition.get("strategy"):
             raise ValueError("dynamic job expansion needs a qualified mapping; unsupported")
@@ -274,9 +289,10 @@ def main():
         actual, dependencies = graph(workflow, jobs)
         result = {"schema": 1, "repository": expected[0], "run_id": expected[1],
                   "attempt": expected[2], "source_commit": expected[3],
+                  "event": run["event"], "workflow_source_resolution": "push_head_sha",
                   "workflow_path": path, "workflow_git_blob": blob,
                   "workflow_sha256": hashlib.sha256(content).hexdigest(),
-                  "dag_origin": "exact source contents API; static jobs/needs",
+                  "dag_origin": "push head source contents API; static jobs/needs",
                   **analyze(actual, dependencies)}
         COLLECTOR.write(directory / "workflow-source.yml", content)
         COLLECTOR.write(directory / "timeline-analysis.json", json.dumps(result, indent=2).encode() + b"\n")
