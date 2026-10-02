@@ -210,6 +210,6 @@ fn empty_queue_token_does_not_call_transport() -> Result<(), &'static str> {
         || Ok(()),
     ))?;
     assert_eq!(err, SessionError::Wire(WireError::RegistrationRejected));
-    assert!(script.seen.is_empty());
+    assert_eq!(script.seen.len(), 0);
     Ok(())
 }

@@ -84,7 +84,7 @@ fn refresh_patches_the_same_session() -> Result<(), &'static str> {
     assert_eq!(refreshed.token(), "queue-token-canary");
     assert_eq!(script.seen[0].method, Method::Patch);
     assert!(script.seen[0].path.ends_with("/7/sessions/sess"));
-    assert!(script.seen[0].body.is_empty());
+    assert_eq!(script.seen[0].body.len(), 0);
     let rejected = create_session(&mut Script::once(200, BODY), 7, "", "admin-canary");
     assert_eq!(
         rejected.map(|_| ()),

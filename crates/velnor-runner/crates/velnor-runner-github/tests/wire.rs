@@ -127,6 +127,7 @@ fn registration_disables_updates_and_rejects_hosted_label() -> Result<(), &'stat
     accept_scale_set(&view, "ubuntu-26.04-scale-set").map_err(|_| "ok")?;
     view.labels.push(Label {
         name: "ubuntu-26.04".to_owned(),
+        label_type: String::new(),
     });
     assert_eq!(
         accept_scale_set(&view, "ubuntu-26.04-scale-set"),

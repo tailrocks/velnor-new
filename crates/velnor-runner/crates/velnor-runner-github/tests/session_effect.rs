@@ -96,7 +96,7 @@ fn suppressed(
     )
     .map_err(|_| "ack")?;
     assert_eq!(decision, Ack::Suppressed);
-    assert!(script.seen.is_empty());
+    assert_eq!(script.seen.len(), 0);
     Ok(())
 }
 
