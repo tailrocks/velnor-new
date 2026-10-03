@@ -42,6 +42,18 @@ pub fn import_secret(service: &str, account: &str, secret: &[u8]) -> Result<(), 
     store(service, account, secret)
 }
 
+/// Load the token stored under `service` and `account`.
+///
+/// The buffer is wiped on drop. It is not logged.
+///
+/// # Errors
+///
+/// Returns [`HostError::Keychain`] when the item is missing or the store fails.
+/// Non-macOS always fails.
+pub fn load_secret(service: &str, account: &str) -> Result<Zeroizing<Vec<u8>>, HostError> {
+    Ok(Zeroizing::new(fetch(service, account)?))
+}
+
 #[cfg(target_os = "macos")]
 fn store(service: &str, account: &str, secret: &[u8]) -> Result<(), HostError> {
     security_framework::passwords::set_generic_password(service, account, secret)
@@ -51,6 +63,20 @@ fn store(service: &str, account: &str, secret: &[u8]) -> Result<(), HostError> {
 #[cfg(not(target_os = "macos"))]
 fn store(service: &str, account: &str, secret: &[u8]) -> Result<(), HostError> {
     let _kept = (service.len(), account.len(), secret.len());
+    Err(HostError::Keychain)
+}
+
+#[cfg(target_os = "macos")]
+fn fetch(service: &str, account: &str) -> Result<Vec<u8>, HostError> {
+    security_framework::passwords::generic_password(
+        security_framework::passwords::PasswordOptions::new_generic_password(service, account),
+    )
+    .map_err(|_| HostError::Keychain)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn fetch(service: &str, account: &str) -> Result<Vec<u8>, HostError> {
+    let _kept = (service.len(), account.len());
     Err(HostError::Keychain)
 }
 

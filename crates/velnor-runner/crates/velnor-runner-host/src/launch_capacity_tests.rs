@@ -2,8 +2,8 @@
 
 use crate::IntentState;
 use crate::launch::{
-    Admit, Idle, Seat, admit, needs_running, occupies, parse_admit_target, parse_job_capacity,
-    poll_limit, wide_poll_limit,
+    Admit, Idle, Seat, admit, install_job_capacity, job_capacity, needs_running, occupies,
+    parse_admit_target, parse_job_capacity, poll_limit, wide_poll_limit,
 };
 
 fn decide(capacity: u32, started: u32, running: u32, idle: Idle) -> Admit {
@@ -94,6 +94,21 @@ fn job_capacity_parser_bounds() {
     assert_eq!(parse_job_capacity(Some(" 2 ")), 2);
     assert_eq!(parse_job_capacity(Some("8")), 8);
     assert_eq!(parse_job_capacity(Some("99")), 8);
+}
+
+#[test]
+fn installed_capacity_beats_the_env_parse() {
+    let baseline = parse_job_capacity(std::env::var("VELNOR_MAX_JOBS").ok().as_deref());
+    assert_eq!(job_capacity(), baseline);
+    let chosen = if baseline == 4 { 5 } else { 4 };
+    let guard = install_job_capacity(chosen);
+    assert_eq!(job_capacity(), chosen);
+    drop(guard);
+    assert_eq!(job_capacity(), baseline);
+    let wide = install_job_capacity(99);
+    assert_eq!(job_capacity(), 8);
+    drop(wide);
+    assert_eq!(job_capacity(), baseline);
 }
 
 #[test]
