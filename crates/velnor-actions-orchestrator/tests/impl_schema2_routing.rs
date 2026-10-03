@@ -223,10 +223,7 @@ fn jobs_section(yaml: &str) -> &str {
 
 fn tool_lines(body: &str) -> Vec<&str> {
     body.lines()
-        .filter(|line| {
-            let trimmed = line.trim();
-            trimmed.starts_with("run:") || trimmed.starts_with("uses:")
-        })
+        .filter(|line| line.trim().starts_with("run:") || line.trim().starts_with("uses:"))
         .collect()
 }
 
