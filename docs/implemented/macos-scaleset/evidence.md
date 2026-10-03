@@ -249,6 +249,8 @@ Tag `binary-19a43f57566c1179febb4a1c3967bfcde4f032aa` (published `2026-10-03T06:
 
 Scratch: `release-assets.log`. These assets do not include the later stage-stop commit.
 
+A new generator release cannot be cut from `macos-scaleset`. `docs/proposed/bootstrap-and-release-contract.md` §2.1 cuts a release only from a known-good default-branch commit, and ruleset `protect-tags` (`24397132`) forbids moving `v0.1.0`. `origin/main` is still `c57c700459bbe1549fe7eedcb7d8689585c38986`. That commit has no release workflow; `v0.1.0` was uploaded outside Actions. `docs/implemented/release-gates.md` BOOT-4.7 says the protected release job is not implemented. ChainArgos downloads only `velnor-actions-0.1.0-x86_64-unknown-linux-gnu`. The runner and host release tags are not that pin. G7 stays `NOT_RUN`.
+
 ## Not yet run
 
 No paired ChainArgos workflow. Generator `v0.1.0` is unchanged. Image and macOS binaries from `19a43f5` are GitHub release assets in the publish section, not a GHCR image and not a consumer pin. The first two release dispatches returned HTTP 404 and were not retried. Runs `37101248625`, `37101248540`, and `37101412470` failed or were cancelled before those assets existed. The named section 11 classes have job URLs above. Features dispatch `37097526498`, queue-pressure run `37098293064`, and crash run `37099950570` are recorded above. G4 stays `NOT_RUN` because the job log does not show the official runner cgroup compatibility check. The G3 matrix attempt is recorded and is not a pass. No promotion onto `main`.
