@@ -22,6 +22,13 @@ pub enum Yaml {
     Flow(Vec<String>),
     /// Double-quoted scalar. Plain `6379:6379` is a mapping in a sequence.
     Quoted(String),
+    /// Plain or quoted scalar plus a trailing YAML comment.
+    Annotated {
+        /// Scalar text.
+        value: String,
+        /// Comment text, without the leading `#`.
+        comment: String,
+    },
 }
 
 impl Yaml {
@@ -37,6 +44,15 @@ impl Yaml {
         Self::Quoted(value.into())
     }
 
+    /// Build a scalar with a trailing comment on the same line.
+    #[must_use]
+    pub fn annotated(value: impl Into<String>, comment: impl Into<String>) -> Self {
+        Self::Annotated {
+            value: value.into(),
+            comment: comment.into(),
+        }
+    }
+
     /// True when the value fits on one line after `key: ` or `- `.
     fn is_inline(&self) -> bool {
         match self {
@@ -45,7 +61,8 @@ impl Yaml {
             | Self::Bool(_)
             | Self::Int(_)
             | Self::Flow(_)
-            | Self::Quoted(_) => true,
+            | Self::Quoted(_)
+            | Self::Annotated { .. } => true,
             Self::Seq(items) => items.is_empty(),
             Self::Map(entries) => entries.is_empty(),
         }
@@ -117,6 +134,7 @@ fn emit_node(value: &Yaml, indent: usize, out: &mut String) {
         }
         Yaml::Null
         | Yaml::Str(_)
+        | Yaml::Annotated { .. }
         | Yaml::Bool(_)
         | Yaml::Int(_)
         | Yaml::Flow(_)
@@ -190,6 +208,11 @@ fn emit_inline(value: &Yaml, out: &mut String) {
     match value {
         Yaml::Str(text) => out.push_str(&quote_scalar(text)),
         Yaml::Quoted(text) => out.push_str(&quote_double(text)),
+        Yaml::Annotated { value, comment } => {
+            out.push_str(&quote_scalar(value));
+            out.push_str(" # ");
+            out.push_str(comment);
+        }
         Yaml::Bool(flag) => out.push_str(if *flag { "true" } else { "false" }),
         Yaml::Int(num) => out.push_str(&num.to_string()),
         Yaml::Seq(items) if items.is_empty() => out.push_str("[]"),

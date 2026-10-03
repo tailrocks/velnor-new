@@ -6,8 +6,10 @@
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"
       - name: Local composite
-        uses: ./qualification/actions/composite
+        uses: ./qualification/actions/composite # zizmor: ignore[self-repository]
   composite-scale-set:
     name: Composite / Velnor Scale Set
     if: inputs.mode == 'composite'
@@ -16,8 +18,10 @@
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"
       - name: Local composite
-        uses: ./qualification/actions/composite
+        uses: ./qualification/actions/composite # zizmor: ignore[self-repository]
   js-pin-hosted:
     name: Pinned JavaScript / GitHub hosted
     if: inputs.mode == 'js-pin'
@@ -46,8 +50,10 @@
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"
       - name: Local docker
-        uses: ./qualification/actions/docker
+        uses: ./qualification/actions/docker # zizmor: ignore[self-repository]
   docker-action-scale-set:
     name: Docker action / Velnor Scale Set
     if: inputs.mode == 'docker-action'
@@ -56,8 +62,10 @@
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"
       - name: Local docker
-        uses: ./qualification/actions/docker
+        uses: ./qualification/actions/docker # zizmor: ignore[self-repository]
   container-hosted:
     name: Container / GitHub hosted
     if: inputs.mode == 'container'
@@ -73,7 +81,7 @@
     steps:
       - name: Service DNS
         shell: sh
-        run: i=0; while [ $i -lt 20 ]; do nc -z -w 1 redis 6379 && exit 0; i=$((i+1)); sleep 1; done; exit 1
+        run: "i=0; while [ \"$i\" -lt 20 ]; do nc -z -w 1 redis 6379 && exit 0; i=$((i+1)); sleep 1; done; exit 1"
   container-scale-set:
     name: Container / Velnor Scale Set
     if: inputs.mode == 'container'
@@ -89,7 +97,7 @@
     steps:
       - name: Service DNS
         shell: sh
-        run: i=0; while [ $i -lt 20 ]; do nc -z -w 1 redis 6379 && exit 0; i=$((i+1)); sleep 1; done; exit 1
+        run: "i=0; while [ \"$i\" -lt 20 ]; do nc -z -w 1 redis 6379 && exit 0; i=$((i+1)); sleep 1; done; exit 1"
   outputs-scale-set:
     name: Outputs / Velnor Scale Set
     if: inputs.mode == 'outputs'
@@ -196,8 +204,10 @@
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"
       - name: Main fails post runs
-        uses: ./qualification/actions/post-fail
+        uses: ./qualification/actions/post-fail # zizmor: ignore[self-repository]
   post-fail-scale-set:
     name: Post failure / Velnor Scale Set
     if: inputs.mode == 'post-fail'
@@ -206,8 +216,10 @@
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"
       - name: Main fails post runs
-        uses: ./qualification/actions/post-fail
+        uses: ./qualification/actions/post-fail # zizmor: ignore[self-repository]
   cancel-hosted:
     name: Cancel / GitHub hosted
     if: inputs.mode == 'cancel'
@@ -232,10 +244,12 @@
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"
       - name: Start compose
         run: docker compose -f qualification/compose/stack.yml up -d --wait
       - name: Prove both services
-        run: docker compose -f qualification/compose/stack.yml ps --services --status running > $RUNNER_TEMP/g4-compose-ps && grep -qx api $RUNNER_TEMP/g4-compose-ps && grep -qx db $RUNNER_TEMP/g4-compose-ps
+        run: "docker compose -f qualification/compose/stack.yml ps --services --status running > \"$RUNNER_TEMP/g4-compose-ps\" && grep -qx api \"$RUNNER_TEMP/g4-compose-ps\" && grep -qx db \"$RUNNER_TEMP/g4-compose-ps\""
       - name: Remove compose
         run: docker compose -f qualification/compose/stack.yml down --volumes
       - name: Record compose
@@ -248,10 +262,12 @@
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"
       - name: Start compose
         run: docker compose -f qualification/compose/stack.yml up -d --wait
       - name: Prove both services
-        run: docker compose -f qualification/compose/stack.yml ps --services --status running > $RUNNER_TEMP/g4-compose-ps && grep -qx api $RUNNER_TEMP/g4-compose-ps && grep -qx db $RUNNER_TEMP/g4-compose-ps
+        run: "docker compose -f qualification/compose/stack.yml ps --services --status running > \"$RUNNER_TEMP/g4-compose-ps\" && grep -qx api \"$RUNNER_TEMP/g4-compose-ps\" && grep -qx db \"$RUNNER_TEMP/g4-compose-ps\""
       - name: Remove compose
         run: docker compose -f qualification/compose/stack.yml down --volumes
       - name: Record compose
@@ -263,7 +279,7 @@
     timeout-minutes: 20
     steps:
       - name: Bind workspace file
-        run: printf '%s\n' bind-ok > $GITHUB_WORKSPACE/g4-bind.txt && docker run --rm -v $GITHUB_WORKSPACE/g4-bind.txt:/g4-bind.txt:ro alpine:3.22 cat /g4-bind.txt > $RUNNER_TEMP/g4-bind-out && grep -qx bind-ok $RUNNER_TEMP/g4-bind-out
+        run: "printf '%s\\n' bind-ok > \"$GITHUB_WORKSPACE/g4-bind.txt\" && docker run --rm -v \"$GITHUB_WORKSPACE/g4-bind.txt:/g4-bind.txt:ro\" alpine:3.22 cat /g4-bind.txt > \"$RUNNER_TEMP/g4-bind-out\" && grep -qx bind-ok \"$RUNNER_TEMP/g4-bind-out\""
   bind-scale-set:
     name: Bind / Velnor Scale Set
     if: inputs.mode == 'bind'
@@ -271,7 +287,7 @@
     timeout-minutes: 20
     steps:
       - name: Bind workspace file
-        run: printf '%s\n' bind-ok > $GITHUB_WORKSPACE/g4-bind.txt && docker run --rm -v $GITHUB_WORKSPACE/g4-bind.txt:/g4-bind.txt:ro alpine:3.22 cat /g4-bind.txt > $RUNNER_TEMP/g4-bind-out && grep -qx bind-ok $RUNNER_TEMP/g4-bind-out
+        run: "printf '%s\\n' bind-ok > \"$GITHUB_WORKSPACE/g4-bind.txt\" && docker run --rm -v \"$GITHUB_WORKSPACE/g4-bind.txt:/g4-bind.txt:ro\" alpine:3.22 cat /g4-bind.txt > \"$RUNNER_TEMP/g4-bind-out\" && grep -qx bind-ok \"$RUNNER_TEMP/g4-bind-out\""
   cancel-service-hosted:
     name: Cancel service / GitHub hosted
     if: inputs.mode == 'cancel-service'
@@ -285,7 +301,7 @@
           - "6379:6379"
     steps:
       - name: Probe service then sleep
-        run: i=0; while [ $i -lt 30 ]; do echo >/dev/tcp/127.0.0.1/6379 && break; i=$((i+1)); sleep 1; done; echo >/dev/tcp/127.0.0.1/6379 && echo service-up && sleep 900
+        run: "i=0; while [ \"$i\" -lt 30 ]; do nc -z -w 1 127.0.0.1 6379 && break; i=$((i+1)); sleep 1; done; nc -z -w 1 127.0.0.1 6379 && echo service-up && sleep 900"
   cancel-service-scale-set:
     name: Cancel service / Velnor Scale Set
     if: inputs.mode == 'cancel-service'
@@ -299,7 +315,7 @@
           - "6379:6379"
     steps:
       - name: Probe service then sleep
-        run: i=0; while [ $i -lt 30 ]; do echo >/dev/tcp/127.0.0.1/6379 && break; i=$((i+1)); sleep 1; done; echo >/dev/tcp/127.0.0.1/6379 && echo service-up && sleep 900
+        run: "i=0; while [ \"$i\" -lt 30 ]; do nc -z -w 1 127.0.0.1 6379 && break; i=$((i+1)); sleep 1; done; nc -z -w 1 127.0.0.1 6379 && echo service-up && sleep 900"
   testcontainers-hosted:
     name: Testcontainers / GitHub hosted
     if: inputs.mode == 'testcontainers'
@@ -308,8 +324,10 @@
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"
       - name: Install and reap
-        run: npm install --prefix qualification/testcontainers testcontainers@11.14.0 && node qualification/testcontainers/reap.mjs
+        run: npm ci --prefix qualification/testcontainers && node qualification/testcontainers/reap.mjs
   testcontainers-scale-set:
     name: Testcontainers / Velnor Scale Set
     if: inputs.mode == 'testcontainers'
@@ -318,8 +336,10 @@
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"
       - name: Install and reap
-        run: npm install --prefix qualification/testcontainers testcontainers@11.14.0 && node qualification/testcontainers/reap.mjs
+        run: npm ci --prefix qualification/testcontainers && node qualification/testcontainers/reap.mjs
   submodule-hosted:
     name: Submodule / GitHub hosted
     if: inputs.mode == 'submodule'
@@ -331,8 +351,9 @@
         with:
           submodules: recursive
           lfs: "true"
+          persist-credentials: "false"
       - name: Prove submodule and LFS
-        run: git rev-parse HEAD > $RUNNER_TEMP/g4-head && grep -qx $GITHUB_SHA $RUNNER_TEMP/g4-head && grep -qx submodule-ok qualification/fixtures/submodule/MARKER && grep -qx lfs-ok qualification/fixtures/lfs-marker.txt
+        run: "git rev-parse HEAD > \"$RUNNER_TEMP/g4-head\" && grep -qx \"$GITHUB_SHA\" \"$RUNNER_TEMP/g4-head\" && grep -qx submodule-ok qualification/fixtures/submodule/MARKER && grep -qx lfs-ok qualification/fixtures/lfs-marker.txt"
   submodule-scale-set:
     name: Submodule / Velnor Scale Set
     if: inputs.mode == 'submodule'
@@ -344,8 +365,9 @@
         with:
           submodules: recursive
           lfs: "true"
+          persist-credentials: "false"
       - name: Prove submodule and LFS
-        run: git rev-parse HEAD > $RUNNER_TEMP/g4-head && grep -qx $GITHUB_SHA $RUNNER_TEMP/g4-head && grep -qx submodule-ok qualification/fixtures/submodule/MARKER && grep -qx lfs-ok qualification/fixtures/lfs-marker.txt
+        run: "git rev-parse HEAD > \"$RUNNER_TEMP/g4-head\" && grep -qx \"$GITHUB_SHA\" \"$RUNNER_TEMP/g4-head\" && grep -qx submodule-ok qualification/fixtures/submodule/MARKER && grep -qx lfs-ok qualification/fixtures/lfs-marker.txt"
   ports-a-hosted:
     name: Ports A / GitHub hosted
     if: inputs.mode == 'ports'
@@ -353,7 +375,7 @@
     timeout-minutes: 30
     steps:
       - name: Hold host port
-        run: docker run -d --name g4-hold -p 8080:80 alpine:3.22 sleep 120 && i=0 && while [ $i -lt 30 ]; do docker port g4-hold 80 | grep -q 8080 && break; i=$((i+1)); sleep 1; done && docker port g4-hold 80 | grep -q 8080 && echo port-held && sleep 45 && docker rm -f g4-hold
+        run: "docker run -d --name g4-hold -p 8080:80 alpine:3.22 sleep 120 && i=0 && while [ \"$i\" -lt 30 ]; do docker port g4-hold 80 | grep -q 8080 && break; i=$((i+1)); sleep 1; done && docker port g4-hold 80 | grep -q 8080 && echo port-held && sleep 45 && docker rm -f g4-hold"
   ports-b-hosted:
     name: Ports B / GitHub hosted
     if: inputs.mode == 'ports'
@@ -361,7 +383,7 @@
     timeout-minutes: 30
     steps:
       - name: Hold host port
-        run: docker run -d --name g4-hold -p 8080:80 alpine:3.22 sleep 120 && i=0 && while [ $i -lt 30 ]; do docker port g4-hold 80 | grep -q 8080 && break; i=$((i+1)); sleep 1; done && docker port g4-hold 80 | grep -q 8080 && echo port-held && sleep 45 && docker rm -f g4-hold
+        run: "docker run -d --name g4-hold -p 8080:80 alpine:3.22 sleep 120 && i=0 && while [ \"$i\" -lt 30 ]; do docker port g4-hold 80 | grep -q 8080 && break; i=$((i+1)); sleep 1; done && docker port g4-hold 80 | grep -q 8080 && echo port-held && sleep 45 && docker rm -f g4-hold"
   ports-a-scale-set:
     name: Ports A / Velnor Scale Set
     if: inputs.mode == 'ports'
@@ -369,7 +391,7 @@
     timeout-minutes: 30
     steps:
       - name: Hold host port
-        run: docker run -d --name g4-hold -p 8080:80 alpine:3.22 sleep 120 && i=0 && while [ $i -lt 30 ]; do docker port g4-hold 80 | grep -q 8080 && break; i=$((i+1)); sleep 1; done && docker port g4-hold 80 | grep -q 8080 && echo port-held && sleep 45 && docker rm -f g4-hold
+        run: "docker run -d --name g4-hold -p 8080:80 alpine:3.22 sleep 120 && i=0 && while [ \"$i\" -lt 30 ]; do docker port g4-hold 80 | grep -q 8080 && break; i=$((i+1)); sleep 1; done && docker port g4-hold 80 | grep -q 8080 && echo port-held && sleep 45 && docker rm -f g4-hold"
   ports-b-scale-set:
     name: Ports B / Velnor Scale Set
     if: inputs.mode == 'ports'
@@ -377,7 +399,7 @@
     timeout-minutes: 30
     steps:
       - name: Hold host port
-        run: docker run -d --name g4-hold -p 8080:80 alpine:3.22 sleep 120 && i=0 && while [ $i -lt 30 ]; do docker port g4-hold 80 | grep -q 8080 && break; i=$((i+1)); sleep 1; done && docker port g4-hold 80 | grep -q 8080 && echo port-held && sleep 45 && docker rm -f g4-hold
+        run: "docker run -d --name g4-hold -p 8080:80 alpine:3.22 sleep 120 && i=0 && while [ \"$i\" -lt 30 ]; do docker port g4-hold 80 | grep -q 8080 && break; i=$((i+1)); sleep 1; done && docker port g4-hold 80 | grep -q 8080 && echo port-held && sleep 45 && docker rm -f g4-hold"
   pressure-a-hosted:
     name: Pressure A / GitHub hosted
     if: inputs.mode == 'pressure'

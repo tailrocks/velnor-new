@@ -2,20 +2,21 @@
 //! own `inputs.mode` and is not selected by `features`.
 
 use super::super::features::{
-    CHECKOUT_USES, base, finish, gated, redis_service, run_step, uses_step,
+    CHECKOUT_USES, base, checkout_step, finish, gated, redis_service, run_step,
 };
 use super::steps::uses_with;
 use super::{Extras, both};
 use crate::yaml::Yaml;
 
 const COMPOSE_UP: &str = "docker compose -f qualification/compose/stack.yml up -d --wait";
-const COMPOSE_PROOF: &str = "docker compose -f qualification/compose/stack.yml ps --services --status running > $RUNNER_TEMP/g4-compose-ps && grep -qx api $RUNNER_TEMP/g4-compose-ps && grep -qx db $RUNNER_TEMP/g4-compose-ps";
+const COMPOSE_PROOF: &str = "docker compose -f qualification/compose/stack.yml ps --services --status running > \"$RUNNER_TEMP/g4-compose-ps\" && grep -qx api \"$RUNNER_TEMP/g4-compose-ps\" && grep -qx db \"$RUNNER_TEMP/g4-compose-ps\"";
 const COMPOSE_DOWN: &str = "docker compose -f qualification/compose/stack.yml down --volumes";
-const BIND_RUN: &str = "printf '%s\\n' bind-ok > $GITHUB_WORKSPACE/g4-bind.txt && docker run --rm -v $GITHUB_WORKSPACE/g4-bind.txt:/g4-bind.txt:ro alpine:3.22 cat /g4-bind.txt > $RUNNER_TEMP/g4-bind-out && grep -qx bind-ok $RUNNER_TEMP/g4-bind-out";
-const SERVICE_PROBE: &str = "i=0; while [ $i -lt 30 ]; do echo >/dev/tcp/127.0.0.1/6379 && break; i=$((i+1)); sleep 1; done; echo >/dev/tcp/127.0.0.1/6379 && echo service-up && sleep 900";
-const TC_RUN: &str = "npm install --prefix qualification/testcontainers testcontainers@11.14.0 && node qualification/testcontainers/reap.mjs";
-const SUBMODULE_PROOF: &str = "git rev-parse HEAD > $RUNNER_TEMP/g4-head && grep -qx $GITHUB_SHA $RUNNER_TEMP/g4-head && grep -qx submodule-ok qualification/fixtures/submodule/MARKER && grep -qx lfs-ok qualification/fixtures/lfs-marker.txt";
-const PORT_HOLD: &str = "docker run -d --name g4-hold -p 8080:80 alpine:3.22 sleep 120 && i=0 && while [ $i -lt 30 ]; do docker port g4-hold 80 | grep -q 8080 && break; i=$((i+1)); sleep 1; done && docker port g4-hold 80 | grep -q 8080 && echo port-held && sleep 45 && docker rm -f g4-hold";
+const BIND_RUN: &str = "printf '%s\\n' bind-ok > \"$GITHUB_WORKSPACE/g4-bind.txt\" && docker run --rm -v \"$GITHUB_WORKSPACE/g4-bind.txt:/g4-bind.txt:ro\" alpine:3.22 cat /g4-bind.txt > \"$RUNNER_TEMP/g4-bind-out\" && grep -qx bind-ok \"$RUNNER_TEMP/g4-bind-out\"";
+const SERVICE_PROBE: &str = "i=0; while [ \"$i\" -lt 30 ]; do nc -z -w 1 127.0.0.1 6379 && break; i=$((i+1)); sleep 1; done; nc -z -w 1 127.0.0.1 6379 && echo service-up && sleep 900";
+const TC_RUN: &str =
+    "npm ci --prefix qualification/testcontainers && node qualification/testcontainers/reap.mjs";
+const SUBMODULE_PROOF: &str = "git rev-parse HEAD > \"$RUNNER_TEMP/g4-head\" && grep -qx \"$GITHUB_SHA\" \"$RUNNER_TEMP/g4-head\" && grep -qx submodule-ok qualification/fixtures/submodule/MARKER && grep -qx lfs-ok qualification/fixtures/lfs-marker.txt";
+const PORT_HOLD: &str = "docker run -d --name g4-hold -p 8080:80 alpine:3.22 sleep 120 && i=0 && while [ \"$i\" -lt 30 ]; do docker port g4-hold 80 | grep -q 8080 && break; i=$((i+1)); sleep 1; done && docker port g4-hold 80 | grep -q 8080 && echo port-held && sleep 45 && docker rm -f g4-hold";
 const PRESSURE_RUN: &str = "echo pressure-start && sleep 150 && echo pressure-ok";
 
 /// Compose, bind, cancel-service, testcontainers, submodule, ports, and pressure.
@@ -184,7 +185,7 @@ fn service_extras() -> Extras {
 
 fn compose_steps() -> Vec<Yaml> {
     vec![
-        uses_step("Check out", CHECKOUT_USES),
+        checkout_step(),
         run_step("Start compose", COMPOSE_UP),
         run_step("Prove both services", COMPOSE_PROOF),
         run_step("Remove compose", COMPOSE_DOWN),
@@ -201,10 +202,7 @@ fn cancel_service_steps() -> Vec<Yaml> {
 }
 
 fn testcontainers_steps() -> Vec<Yaml> {
-    vec![
-        uses_step("Check out", CHECKOUT_USES),
-        run_step("Install and reap", TC_RUN),
-    ]
+    vec![checkout_step(), run_step("Install and reap", TC_RUN)]
 }
 
 fn submodule_steps() -> Vec<Yaml> {
@@ -212,7 +210,11 @@ fn submodule_steps() -> Vec<Yaml> {
         uses_with(
             "Check out",
             CHECKOUT_USES,
-            &[("submodules", "recursive"), ("lfs", "true")],
+            &[
+                ("submodules", "recursive"),
+                ("lfs", "true"),
+                ("persist-credentials", "false"),
+            ],
         ),
         run_step("Prove submodule and LFS", SUBMODULE_PROOF),
     ]

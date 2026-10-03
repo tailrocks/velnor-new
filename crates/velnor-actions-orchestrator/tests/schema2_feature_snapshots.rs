@@ -46,6 +46,8 @@ jobs:
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"
       - name: Record checkout
         run: git rev-parse HEAD
       - name: Run JavaScript
@@ -58,6 +60,8 @@ jobs:
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"
       - name: Record checkout
         run: git rev-parse HEAD
       - name: Run JavaScript

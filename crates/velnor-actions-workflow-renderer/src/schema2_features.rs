@@ -121,7 +121,7 @@ fn js_job(id: &str, name: &str, runs_on: Yaml) -> (String, Yaml) {
         id,
         base(name, runs_on, 20),
         vec![
-            uses_step("Check out", CHECKOUT_USES),
+            checkout_step(),
             run_step("Record checkout", "git rev-parse HEAD"),
             run_step("Run JavaScript", "node -e 'console.log(\"js-action-ok\")'"),
         ],
@@ -230,11 +230,27 @@ pub(super) fn publish_step(run: &str) -> Yaml {
     ])
 }
 
-/// One `uses` step.
-pub(super) fn uses_step(name: &str, uses: &str) -> Yaml {
+/// Local `./` action. actionlint 1.7.12 rejects `$/`, so the
+/// self-repository auto-fix cannot be applied. The ignore stays on this line.
+pub(super) fn local_action_step(name: &str, uses: &str) -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(name)),
-        ("uses".to_owned(), Yaml::str(uses)),
+        (
+            "uses".to_owned(),
+            Yaml::annotated(uses, "zizmor: ignore[self-repository]"),
+        ),
+    ])
+}
+
+/// Checkout with credentials disabled. Qualification must not persist a token.
+pub(super) fn checkout_step() -> Yaml {
+    Yaml::Map(vec![
+        ("name".to_owned(), Yaml::str("Check out")),
+        ("uses".to_owned(), Yaml::str(CHECKOUT_USES)),
+        (
+            "with".to_owned(),
+            Yaml::Map(vec![("persist-credentials".to_owned(), Yaml::str("false"))]),
+        ),
     ])
 }
 

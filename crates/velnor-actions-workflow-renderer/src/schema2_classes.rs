@@ -3,7 +3,9 @@
 //! job; the hosted job `needs` it. `ports` runs two scale-set jobs with no
 //! `needs` so both can hold the same logical port.
 
-use super::features::{CHECKOUT_USES, base, finish, gated, redis_service, run_step, uses_step};
+use super::features::{
+    base, checkout_step, finish, gated, local_action_step, redis_service, run_step,
+};
 use crate::yaml::Yaml;
 
 #[path = "schema2_more.rs"]
@@ -21,7 +23,7 @@ const WRITE_OUTPUTS: &str = "mkdir -p \"$RUNNER_TEMP/g4-bin\" && printf '%s\\n' 
 const CHECK_ENV_PATH: &str = "test \"$G4_ENV\" = outputs-ok && g4-path-ok | grep -qx path-ok";
 const MASK_CANARY: &str = "echo \"::add-mask::g4-mask-canary\" && echo g4-mask-canary";
 const CHECK_OIDC: &str = "test -n \"$ACTIONS_ID_TOKEN_REQUEST_URL\"";
-const REDIS_DNS: &str = "i=0; while [ $i -lt 20 ]; do nc -z -w 1 redis 6379 && exit 0; i=$((i+1)); sleep 1; done; exit 1";
+const REDIS_DNS: &str = "i=0; while [ \"$i\" -lt 20 ]; do nc -z -w 1 redis 6379 && exit 0; i=$((i+1)); sleep 1; done; exit 1";
 
 struct Lane<'a> {
     mode: &'a str,
@@ -326,8 +328,8 @@ fn cache_permissions() -> Yaml {
 
 fn composite_steps() -> Vec<Yaml> {
     vec![
-        uses_step("Check out", CHECKOUT_USES),
-        uses_step("Local composite", COMPOSITE_ACTION),
+        checkout_step(),
+        local_action_step("Local composite", COMPOSITE_ACTION),
     ]
 }
 
@@ -341,8 +343,8 @@ fn js_pin_steps() -> Vec<Yaml> {
 
 fn docker_steps() -> Vec<Yaml> {
     vec![
-        uses_step("Check out", CHECKOUT_USES),
-        uses_step("Local docker", DOCKER_ACTION),
+        checkout_step(),
+        local_action_step("Local docker", DOCKER_ACTION),
     ]
 }
 
@@ -363,8 +365,8 @@ fn oidc_steps() -> Vec<Yaml> {
 fn post_fail_steps() -> Vec<Yaml> {
     // No `if: always()`: main.js must fail the job. The action post still runs.
     vec![
-        uses_step("Check out", CHECKOUT_USES),
-        uses_step("Main fails post runs", POST_FAIL_ACTION),
+        checkout_step(),
+        local_action_step("Main fails post runs", POST_FAIL_ACTION),
     ]
 }
 
