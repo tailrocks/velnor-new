@@ -4,7 +4,7 @@ use std::future::Future;
 
 use velnor_runner_github::{
     Ack, AckScope, AcquireOutcome, Certainty, EncodedJit, Poll, RefreshGate, SessionError, ack,
-    acquire, jit, jit_request,
+    acquire, jit, jit_request, may_ack,
 };
 
 use crate::Offer;
@@ -18,6 +18,32 @@ use crate::worker::Started;
 use super::{Drive, Lane};
 
 const KIND: &str = "launch";
+
+/// What one poll allows before acquire.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Idle {
+    /// HTTP 202. The queue has nothing else.
+    Empty,
+    /// One `JobAvailable` id. Do not acknowledge yet.
+    Launch,
+    /// No offer. Delete the message so the next one can arrive.
+    Ack,
+    /// A message that must stay on the queue.
+    Blocked,
+}
+
+/// Classify one poll. A statistics batch is acknowledged. An offer is not.
+#[must_use]
+pub(crate) fn idle(polled: &Poll) -> Idle {
+    match polled {
+        Poll::Empty => Idle::Empty,
+        Poll::Batch(batch) => match offer(polled) {
+            Offer::Acquire { ids, .. } if ids.len() == 1 => Idle::Launch,
+            Offer::Wait if may_ack(batch, true) => Idle::Ack,
+            Offer::Acquire { .. } | Offer::Wait => Idle::Blocked,
+        },
+    }
+}
 
 pub(super) fn assignment(
     polled: &Poll,
@@ -154,7 +180,7 @@ where
     jit(lane, ctx.set_id, &ctx.admin_token, &body)
 }
 
-fn acknowledge<T>(
+pub(super) fn acknowledge<T>(
     lane: &mut T,
     ctx: &Drive,
     batch: &velnor_runner_github::ParsedBatch,

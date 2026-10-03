@@ -2,9 +2,24 @@
 
 use std::sync::{Arc, Mutex};
 
-use crate::launch::drive_offer;
+use velnor_runner_github::{ParsedBatch, Poll};
+
+use crate::launch::{Idle, drive_offer, idle};
 use crate::launch_harness::{CANARY, Mode, Script, absent, available, ctx, open};
 use crate::{EnsureError, HostError, IntentState, Started};
+
+#[test]
+fn statistics_advance_and_offers_stay() {
+    let stats = Poll::Batch(ParsedBatch {
+        message_id: 2,
+        statistics: None,
+        jobs: Vec::new(),
+    });
+    assert_eq!(idle(&stats), Idle::Ack);
+    assert_eq!(idle(&available(&[3])), Idle::Launch);
+    assert_eq!(idle(&Poll::Empty), Idle::Empty);
+    assert_eq!(idle(&available(&[3, 4])), Idle::Blocked);
+}
 
 #[tokio::test]
 async fn launch_acks_only_after_start_and_hides_jit() -> Result<(), String> {

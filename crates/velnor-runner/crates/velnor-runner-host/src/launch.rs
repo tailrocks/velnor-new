@@ -25,6 +25,9 @@ use crate::worker::{Started, start_pair};
 
 mod steps;
 
+#[cfg(test)]
+pub(crate) use steps::{Idle, idle};
+
 /// What one launch attempt started. No JIT and no token.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LaunchReport {
@@ -156,25 +159,99 @@ async fn poll_and_drive(
     journal: &Journal,
     docker: &bollard::Docker,
 ) -> Result<Option<Started>, EnsureError> {
-    let (saved, path) = point_at_queue(link, &session.message_queue_url)?;
-    let queue = saved.as_ref().map(|_| link.base().to_owned());
-    let polled = poll_path(link, session, &path);
-    restore_base(link, saved)?;
-    let polled = polled?;
+    for _ in 0..8 {
+        let (saved, path) = point_at_queue(link, &session.message_queue_url)?;
+        let queue = saved.as_ref().map(|_| link.base().to_owned());
+        let polled = poll_path(link, session, &path);
+        restore_base(link, saved)?;
+        let polled = polled?;
+        match steps::idle(&polled) {
+            steps::Idle::Empty => return Ok(None),
+            steps::Idle::Blocked => {
+                return Err(EnsureError::Unexpected {
+                    status: 0,
+                    step: "queue",
+                });
+            }
+            steps::Idle::Ack => ack_ready(link, session, path, queue, &polled)?,
+            steps::Idle::Launch => {
+                return drive_ready(
+                    link,
+                    Ready {
+                        set_id,
+                        session,
+                        admin_token,
+                        path,
+                        queue,
+                        polled: &polled,
+                    },
+                    journal,
+                    docker,
+                )
+                .await;
+            }
+        }
+    }
+    Err(EnsureError::Unexpected {
+        status: 0,
+        step: "queue",
+    })
+}
+
+struct Ready<'a> {
+    set_id: i64,
+    session: &'a QueueSession,
+    admin_token: &'a str,
+    path: String,
+    queue: Option<String>,
+    polled: &'a Poll,
+}
+
+async fn drive_ready(
+    link: &mut Link,
+    ready: Ready<'_>,
+    journal: &Journal,
+    docker: &bollard::Docker,
+) -> Result<Option<Started>, EnsureError> {
     let ctx = Drive {
-        set_id,
-        queue_path: path,
-        queue_token: session.token().to_owned(),
-        admin_token: admin_token.to_owned(),
+        set_id: ready.set_id,
+        queue_path: ready.path,
+        queue_token: ready.session.token().to_owned(),
+        admin_token: ready.admin_token.to_owned(),
     };
     let admin = link.base().to_owned();
-    let mut lane = HostLane { link, admin, queue };
-    drive_offer(&mut lane, &ctx, &polled, journal, |volume, jit| {
+    let mut lane = HostLane {
+        link,
+        admin,
+        queue: ready.queue,
+    };
+    drive_offer(&mut lane, &ctx, ready.polled, journal, |volume, jit| {
         let volume = volume.to_owned();
         let payload = jit.to_vec();
         async move { start_pair(docker, &volume, &payload).await }
     })
     .await
+}
+
+fn ack_ready(
+    link: &mut Link,
+    session: &QueueSession,
+    path: String,
+    queue: Option<String>,
+    polled: &Poll,
+) -> Result<(), EnsureError> {
+    let Poll::Batch(batch) = polled else {
+        return Ok(());
+    };
+    let ctx = Drive {
+        set_id: 0,
+        queue_path: path,
+        queue_token: session.token().to_owned(),
+        admin_token: String::new(),
+    };
+    let admin = link.base().to_owned();
+    let mut lane = HostLane { link, admin, queue };
+    steps::acknowledge(&mut lane, &ctx, batch)
 }
 
 struct HostLane<'a> {
