@@ -9,7 +9,7 @@ not a pass.
 | G1 | PASS for migrate, labels, capacity, and wire tests | Checklist rows cite `40e08e8` and `da68f44`. Registration HTTP is not this pass. |
 | G2 | PASS | Pending is visible before the effect returns. Uncertain does not release `Capacity`. Advertise waits for `before_advertise`. Live HTTP and Docker sockets are not this pass. |
 | G3 | NOT_RUN | Images are `linux/amd64`. One exited worker's mounts were private volumes only. Spec kill and canary matrix not run. |
-| G4 | NOT_RUN | One ordinary job succeeded: `https://github.com/tailrocks/velnor-new/actions/runs/37081936404/job/111084145716` on runner `m100000009`. The rest of the spec suite has not run. Mocks must not flip this to PASS. |
+| G4 | NOT_RUN | Ordinary echo jobs succeeded, including `https://github.com/tailrocks/velnor-new/actions/runs/37081936404/job/111084145716` on runner `m100000009` and five later echo jobs (`m100000011`, `m100000013`, `m100000015`, `m100000017`, `m100000019`). JavaScript actions, services, artifacts, Buildx, and expected-negative workflows have not been recorded here. Mocks must not flip this to PASS. |
 | G5 | PASS for in-repo routing and compare | `40e08e8` and `658154c`. A GitHub run of an expected-negative workflow is not this pass. |
 | G6 | PASS | Help exits 0 and status is `waiting_for_credentials` at `658154c`. LaunchAgent `gui/501` ran absolute `daemon run` with `forks = 0`; a second daemon exited 1; the job was removed. |
 | G7 | NOT_RUN | ChainArgos not updated. |

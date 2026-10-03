@@ -3,8 +3,9 @@
 Resolved 2026-10-03 with `gh api` from this machine. Offline generator and
 runner tests cited below have run. A per-user LaunchAgent was installed,
 observed, and removed. Image builds were inspected. The product scale set was
-created with the shipped client. One ordinary scale-set job has run on the
-official runner. The rest of the G4 suite is not run. No ChainArgos rollout.
+created with the shipped client. Six ordinary scale-set echo jobs have run on
+the official runner, including the four that stayed queued after an earlier
+ack-without-start. The rest of the G4 suite is not run. No ChainArgos rollout.
 G3, the full G4 suite, G7, and G8 stay `NOT_RUN`.
 
 ## Identities
@@ -87,6 +88,20 @@ On 2026-10-03T00:53:23Z, from `crates/velnor-runner`, `VELNOR_HTTPS_TRACE=1 VELN
 `gh api repos/tailrocks/velnor-new/actions/runs/37081936404/jobs` showed job [111084145716](https://github.com/tailrocks/velnor-new/actions/runs/37081936404/job/111084145716) `Verify / Velnor Scale Set / Linux x64` conclusion `success`, runner `m100000009`, runner group `Default`, labels `velnor` and `ubuntu-26.04-scale-set`. Step `Qualify scale-set lane` succeeded. Runner log line `Current runner version: '2.337.0'` and `Running job: Verify / Velnor Scale Set / Linux x64`.
 
 Host is macOS 27.0 `arm64`. Docker server is `linux` `aarch64` 29.4.0. The runner image is `velnor-runner:ubuntu-26.04-2.337.0` `linux/amd64`, so this job ran under emulation. `docker inspect` reported runner `privileged=false`, user `runner`, platform `linux`. DinD `velnor-dind:29.8.2` was `privileged=true`. Mounts were only volumes `m100000009` at `/run` and `m100000009-work` at `/home/runner/_work`. A search of runner env, cmd, labels, and entrypoint for `jitconfig` returned 0. JIT was not in that config. This is one ordinary `run` step. It is not the rest of the G4 suite (JavaScript actions, services, artifacts, Buildx, or expected-negative workflows).
+
+## Drained echo queue
+
+Later `launch_once` sessions, one at a time and only after the previous runner container exited, minted JIT for the jobs GitHub still had queued. Each scale-set job below concluded `success` on runner group `Default` with labels `velnor` and `ubuntu-26.04-scale-set`. The hosted verify job and the compare job on the same run also concluded `success`.
+
+| Run | Scale-set job | Runner |
+| --- | --- | --- |
+| [37080381197](https://github.com/tailrocks/velnor-new/actions/runs/37080381197) | [111079368918](https://github.com/tailrocks/velnor-new/actions/runs/37080381197/job/111079368918) | `m100000011` |
+| [37081321566](https://github.com/tailrocks/velnor-new/actions/runs/37081321566) | [111082261265](https://github.com/tailrocks/velnor-new/actions/runs/37081321566/job/111082261265) | `m100000013` |
+| [37079796187](https://github.com/tailrocks/velnor-new/actions/runs/37079796187) | [111077566055](https://github.com/tailrocks/velnor-new/actions/runs/37079796187/job/111077566055) | `m100000015` |
+| [37083907366](https://github.com/tailrocks/velnor-new/actions/runs/37083907366) | [111090125130](https://github.com/tailrocks/velnor-new/actions/runs/37083907366/job/111090125130) | `m100000017` |
+| [37085082494](https://github.com/tailrocks/velnor-new/actions/runs/37085082494) | [111093559291](https://github.com/tailrocks/velnor-new/actions/runs/37085082494/job/111093559291) | `m100000019` |
+
+These are the same echo step as the first job. They do not cover JavaScript actions, services, artifacts, Buildx, or expected-negative workflows.
 
 ## Not yet run
 
