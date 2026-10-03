@@ -83,11 +83,12 @@ COPY tar-pax.pl /usr/local/bin/velnor-tar-pax
 # After the divert, /usr/bin/tar is the BusyBox shim, not GNU tar.
 RUN chmod 0755 /usr/local/bin/velnor-runner-entrypoint /usr/local/bin/velnor-tar /usr/local/bin/velnor-tar-pax /usr/local/bin/tar-member.pl \
     && apt-get update \
-    && apt-get install -y --no-install-recommends build-essential clang cmake git-lfs jq libclang-dev libssl-dev perl pkg-config protobuf-compiler zstd \
+    && apt-get install -y --no-install-recommends build-essential clang cmake git-lfs jq libclang-dev libssl-dev perl pkg-config protobuf-compiler python3 zstd \
     && cc --version \
     && pkg-config --modversion openssl \
     && cmake --version \
     && jq --version \
+    && python3 --version \
     && test -n "$(find /usr/lib -path '/usr/lib/llvm-*/lib/libclang.so' -print -quit)" \
     && protoc --version \
     && printf 'syntax = "proto3"; message M { int32 x = 1; }\n' > /tmp/m.proto \
