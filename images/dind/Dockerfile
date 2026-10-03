@@ -46,4 +46,6 @@ RUN mkdir -p /etc/docker \
         '  "iptables": true' \
         '}' > /etc/docker/daemon.json
 
-ENTRYPOINT ["dockerd", "--host=unix:///var/run/docker.sock"]
+COPY entrypoint.sh /usr/local/bin/velnor-dind-entrypoint
+RUN chmod 0755 /usr/local/bin/velnor-dind-entrypoint
+ENTRYPOINT ["/usr/local/bin/velnor-dind-entrypoint"]
