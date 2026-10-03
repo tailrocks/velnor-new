@@ -1,10 +1,7 @@
 //! Hosted image and macOS binary release workflows.
-//!
-//! `id-token` covers the whole job, so attest and GitHub-release upload are
-//! different jobs. The attest job never receives `contents: write` or
-//! `packages: write`. Checksums are `sha256sum` / `shasum` of the bytes just
-//! built. Dispatch has no inputs, so a caller cannot supply a shell fragment
-//! or a checksum.
+//! Attest and upload are different jobs. Attest has `id-token` and no
+//! `contents: write`. Checksums cover bytes just built. No dispatch inputs.
+//! `push` is how GitHub registers a workflow that is not on the default branch.
 
 use crate::RenderError;
 use crate::runs_on::runs_on_yaml;
@@ -388,7 +385,10 @@ fn document(name: &str, jobs: Vec<(String, Yaml)>) -> Yaml {
         ("name".to_owned(), Yaml::str(name)),
         (
             "on".to_owned(),
-            Yaml::Map(vec![("workflow_dispatch".to_owned(), Yaml::Map(vec![]))]),
+            Yaml::Map(vec![
+                ("push".to_owned(), Yaml::Map(vec![])),
+                ("workflow_dispatch".to_owned(), Yaml::Map(vec![])),
+            ]),
         ),
         (
             "permissions".to_owned(),

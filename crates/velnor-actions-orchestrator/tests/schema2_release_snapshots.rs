@@ -2,6 +2,7 @@
 
 pub(super) const IMAGE_RELEASE: &str = r#"name: Image release
 "on":
+  push: {}
   workflow_dispatch: {}
 permissions:
   contents: read
@@ -77,6 +78,7 @@ jobs:
 
 pub(super) const MACOS_RELEASE: &str = r#"name: macOS binary release
 "on":
+  push: {}
   workflow_dispatch: {}
 permissions:
   contents: read
