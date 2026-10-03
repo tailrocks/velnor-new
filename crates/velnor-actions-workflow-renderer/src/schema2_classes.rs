@@ -1,10 +1,13 @@
 //! Qualification classes that each dispatch as their own `inputs.mode`.
 //! They are not part of `features`. Outputs and cache keep one scale-set
-//! job; the hosted job `needs` it. A second scale-set job is not assigned.
+//! job; the hosted job `needs` it. `ports` runs two scale-set jobs with no
+//! `needs` so both can hold the same logical port.
 
 use super::features::{CHECKOUT_USES, base, finish, gated, redis_service, run_step, uses_step};
 use crate::yaml::Yaml;
 
+#[path = "schema2_more.rs"]
+mod more;
 #[path = "schema2_class_steps.rs"]
 mod steps;
 
@@ -18,8 +21,7 @@ const WRITE_OUTPUTS: &str = "mkdir -p \"$RUNNER_TEMP/g4-bin\" && printf '%s\\n' 
 const CHECK_ENV_PATH: &str = "test \"$G4_ENV\" = outputs-ok && g4-path-ok | grep -qx path-ok";
 const MASK_CANARY: &str = "echo \"::add-mask::g4-mask-canary\" && echo g4-mask-canary";
 const CHECK_OIDC: &str = "test -n \"$ACTIONS_ID_TOKEN_REQUEST_URL\"";
-const REDIS_DNS: &str =
-    "i=0; while [ $i -lt 20 ]; do nc -z -w 1 redis 6379 && exit 0; i=$((i+1)); sleep 1; done; exit 1";
+const REDIS_DNS: &str = "i=0; while [ $i -lt 20 ]; do nc -z -w 1 redis 6379 && exit 0; i=$((i+1)); sleep 1; done; exit 1";
 
 struct Lane<'a> {
     mode: &'a str,
@@ -43,6 +45,7 @@ struct Extras {
 pub(super) fn class_jobs(hosted: &Yaml, scale: &Yaml) -> Vec<(String, Yaml)> {
     let mut jobs = action_classes(hosted, scale);
     jobs.extend(state_classes(hosted, scale));
+    jobs.extend(more::jobs(hosted, scale));
     jobs
 }
 

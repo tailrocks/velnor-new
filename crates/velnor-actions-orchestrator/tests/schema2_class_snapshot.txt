@@ -224,3 +224,157 @@
     steps:
       - name: Sleep until cancelled
         run: sleep 180
+  compose-hosted:
+    name: Compose / GitHub hosted
+    if: inputs.mode == 'compose'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Start compose
+        run: docker compose -f qualification/compose/stack.yml up -d --wait
+      - name: Prove both services
+        run: docker compose -f qualification/compose/stack.yml ps --services --status running > $RUNNER_TEMP/g4-compose-ps && grep -qx api $RUNNER_TEMP/g4-compose-ps && grep -qx db $RUNNER_TEMP/g4-compose-ps
+      - name: Remove compose
+        run: docker compose -f qualification/compose/stack.yml down --volumes
+      - name: Record compose
+        run: echo compose-ok
+  compose-scale-set:
+    name: Compose / Velnor Scale Set
+    if: inputs.mode == 'compose'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 20
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Start compose
+        run: docker compose -f qualification/compose/stack.yml up -d --wait
+      - name: Prove both services
+        run: docker compose -f qualification/compose/stack.yml ps --services --status running > $RUNNER_TEMP/g4-compose-ps && grep -qx api $RUNNER_TEMP/g4-compose-ps && grep -qx db $RUNNER_TEMP/g4-compose-ps
+      - name: Remove compose
+        run: docker compose -f qualification/compose/stack.yml down --volumes
+      - name: Record compose
+        run: echo compose-ok
+  bind-hosted:
+    name: Bind / GitHub hosted
+    if: inputs.mode == 'bind'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - name: Bind workspace file
+        run: printf '%s\n' bind-ok > $GITHUB_WORKSPACE/g4-bind.txt && docker run --rm -v $GITHUB_WORKSPACE/g4-bind.txt:/g4-bind.txt:ro alpine:3.22 cat /g4-bind.txt > $RUNNER_TEMP/g4-bind-out && grep -qx bind-ok $RUNNER_TEMP/g4-bind-out
+  bind-scale-set:
+    name: Bind / Velnor Scale Set
+    if: inputs.mode == 'bind'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 20
+    steps:
+      - name: Bind workspace file
+        run: printf '%s\n' bind-ok > $GITHUB_WORKSPACE/g4-bind.txt && docker run --rm -v $GITHUB_WORKSPACE/g4-bind.txt:/g4-bind.txt:ro alpine:3.22 cat /g4-bind.txt > $RUNNER_TEMP/g4-bind-out && grep -qx bind-ok $RUNNER_TEMP/g4-bind-out
+  cancel-service-hosted:
+    name: Cancel service / GitHub hosted
+    if: inputs.mode == 'cancel-service'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    services:
+      redis:
+        image: redis:7-alpine
+        options: "--health-cmd \"redis-cli ping\" --health-interval 5s --health-timeout 5s --health-retries 12"
+        ports:
+          - "6379:6379"
+    steps:
+      - name: Probe service then sleep
+        run: i=0; while [ $i -lt 30 ]; do echo >/dev/tcp/127.0.0.1/6379 && break; i=$((i+1)); sleep 1; done; echo >/dev/tcp/127.0.0.1/6379 && echo service-up && sleep 180
+  cancel-service-scale-set:
+    name: Cancel service / Velnor Scale Set
+    if: inputs.mode == 'cancel-service'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 20
+    services:
+      redis:
+        image: redis:7-alpine
+        options: "--health-cmd \"redis-cli ping\" --health-interval 5s --health-timeout 5s --health-retries 12"
+        ports:
+          - "6379:6379"
+    steps:
+      - name: Probe service then sleep
+        run: i=0; while [ $i -lt 30 ]; do echo >/dev/tcp/127.0.0.1/6379 && break; i=$((i+1)); sleep 1; done; echo >/dev/tcp/127.0.0.1/6379 && echo service-up && sleep 180
+  testcontainers-hosted:
+    name: Testcontainers / GitHub hosted
+    if: inputs.mode == 'testcontainers'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Install and reap
+        run: npm install --prefix qualification/testcontainers testcontainers@11.14.0 && node qualification/testcontainers/reap.mjs
+  testcontainers-scale-set:
+    name: Testcontainers / Velnor Scale Set
+    if: inputs.mode == 'testcontainers'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Install and reap
+        run: npm install --prefix qualification/testcontainers testcontainers@11.14.0 && node qualification/testcontainers/reap.mjs
+  submodule-hosted:
+    name: Submodule / GitHub hosted
+    if: inputs.mode == 'submodule'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          submodules: recursive
+          lfs: "true"
+      - name: Prove submodule and LFS
+        run: git rev-parse HEAD > $RUNNER_TEMP/g4-head && grep -qx $GITHUB_SHA $RUNNER_TEMP/g4-head && grep -qx submodule-ok qualification/fixtures/submodule/MARKER && grep -qx lfs-ok qualification/fixtures/lfs-marker.txt
+  submodule-scale-set:
+    name: Submodule / Velnor Scale Set
+    if: inputs.mode == 'submodule'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 20
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          submodules: recursive
+          lfs: "true"
+      - name: Prove submodule and LFS
+        run: git rev-parse HEAD > $RUNNER_TEMP/g4-head && grep -qx $GITHUB_SHA $RUNNER_TEMP/g4-head && grep -qx submodule-ok qualification/fixtures/submodule/MARKER && grep -qx lfs-ok qualification/fixtures/lfs-marker.txt
+  ports-a-hosted:
+    name: Ports A / GitHub hosted
+    if: inputs.mode == 'ports'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    steps:
+      - name: Hold host port
+        run: docker run -d --name g4-hold -p 8080:80 alpine:3.22 sleep 120 && i=0 && while [ $i -lt 30 ]; do docker port g4-hold 80 | grep -q 8080 && break; i=$((i+1)); sleep 1; done && docker port g4-hold 80 | grep -q 8080 && echo port-held && sleep 45 && docker rm -f g4-hold
+  ports-b-hosted:
+    name: Ports B / GitHub hosted
+    if: inputs.mode == 'ports'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    steps:
+      - name: Hold host port
+        run: docker run -d --name g4-hold -p 8080:80 alpine:3.22 sleep 120 && i=0 && while [ $i -lt 30 ]; do docker port g4-hold 80 | grep -q 8080 && break; i=$((i+1)); sleep 1; done && docker port g4-hold 80 | grep -q 8080 && echo port-held && sleep 45 && docker rm -f g4-hold
+  ports-a-scale-set:
+    name: Ports A / Velnor Scale Set
+    if: inputs.mode == 'ports'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 30
+    steps:
+      - name: Hold host port
+        run: docker run -d --name g4-hold -p 8080:80 alpine:3.22 sleep 120 && i=0 && while [ $i -lt 30 ]; do docker port g4-hold 80 | grep -q 8080 && break; i=$((i+1)); sleep 1; done && docker port g4-hold 80 | grep -q 8080 && echo port-held && sleep 45 && docker rm -f g4-hold
+  ports-b-scale-set:
+    name: Ports B / Velnor Scale Set
+    if: inputs.mode == 'ports'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 30
+    steps:
+      - name: Hold host port
+        run: docker run -d --name g4-hold -p 8080:80 alpine:3.22 sleep 120 && i=0 && while [ $i -lt 30 ]; do docker port g4-hold 80 | grep -q 8080 && break; i=$((i+1)); sleep 1; done && docker port g4-hold 80 | grep -q 8080 && echo port-held && sleep 45 && docker rm -f g4-hold
