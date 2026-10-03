@@ -5,9 +5,9 @@ runner tests cited below have run. A per-user LaunchAgent was installed,
 observed, and removed. Image builds were inspected. The product scale set was
 created with the shipped client. Six ordinary scale-set echo jobs have run on
 the official runner, including the four that stayed queued after an earlier
-ack-without-start. Five later one-class runs covered a `node` step, a Redis
-service probe, artifact upload, Buildx, and an expected failure. Spec section
-11 beyond those classes is not run. No ChainArgos rollout. `image-release.yml`
+ack-without-start. Later one-class runs covered JavaScript, services,
+artifacts, Buildx, an expected failure, and the classes in the second table
+below. Spec section 11 is still not complete. No ChainArgos rollout. `image-release.yml`
 and `macos-binary-release.yml` were dispatched once each and returned HTTP 404
 because those workflows are absent from the default branch. That attempt was
 not retried. G3, the full G4 suite, G7, and G8 stay `NOT_RUN`.
@@ -123,7 +123,29 @@ Each class below ran its hosted job and its scale-set job. The compare job staye
 
 The JavaScript class is `node -e 'console.log("js-action-ok")'` plus checkout. It is not a pinned third-party JavaScript action and not a composite action. Services publishes `redis:7-alpine` on port 6379 and probes `127.0.0.1:6379`, not service DNS, and has no health check. Artifacts uses `actions/upload-artifact`. Buildx runs `docker buildx version` and a scratch Dockerfile. Negative is `echo expected-negative && exit 1`. Both lanes concluded `failure`, which is the required conclusion. Listener census lines (no tokens) were `session assigned=… available=… running=… registered=… busy=… idle=…`. Transcript: scratch `drain-classes.log`. After each start the runner and DinD containers were removed, and volumes `m{messageId}` and `m{messageId}-work` were removed.
 
-Not run, so this section does not mark G4 `PASS`: pinned and composite actions, local actions, Dockerfile and container actions, `container:` jobs, health checks, service DNS, outputs/env/path, secret masking, post actions, cache, checkout of submodules or LFS, permissions/OIDC, Compose, Testcontainers, bind mounts, concurrent workers on the same port, cancellation, and a failed main step with a successful post step.
+## Further one-class runs
+
+Same dispatch rule, at parent `c654b7d`, except the cache rerun below. One `launch_once` listened before each `gh workflow run qualification.yml --ref macos-scaleset --repo tailrocks/velnor-new -f mode=<class>`. Conclusions were re-read with `gh api repos/tailrocks/velnor-new/actions/runs/<id>/jobs`. Transcript: scratch `drain-g4rest.log` and `class-g4-results.txt`.
+
+| Class | Run | Hosted job | Scale-set job | Runner | Conclusion |
+| --- | --- | --- | --- | --- | --- |
+| composite local action | [37092847053](https://github.com/tailrocks/velnor-new/actions/runs/37092847053) | [111116659864](https://github.com/tailrocks/velnor-new/actions/runs/37092847053/job/111116659864) | [111116660070](https://github.com/tailrocks/velnor-new/actions/runs/37092847053/job/111116660070) | `m100000054` | `success` |
+| pinned `actions/github-script` | [37092885334](https://github.com/tailrocks/velnor-new/actions/runs/37092885334) | [111116772546](https://github.com/tailrocks/velnor-new/actions/runs/37092885334/job/111116772546) | [111116772326](https://github.com/tailrocks/velnor-new/actions/runs/37092885334/job/111116772326) | `m100000056` | `success` |
+| local Docker action | [37092916760](https://github.com/tailrocks/velnor-new/actions/runs/37092916760) | [111116869797](https://github.com/tailrocks/velnor-new/actions/runs/37092916760/job/111116869797) | [111116869916](https://github.com/tailrocks/velnor-new/actions/runs/37092916760/job/111116869916) | `m100000058` | `success` |
+| `container:` plus redis health and service DNS | [37092958517](https://github.com/tailrocks/velnor-new/actions/runs/37092958517) | [111116993576](https://github.com/tailrocks/velnor-new/actions/runs/37092958517/job/111116993576) | [111116993287](https://github.com/tailrocks/velnor-new/actions/runs/37092958517/job/111116993287) | `m100000060` | `success` |
+| outputs, env, and `PATH` | [37093009206](https://github.com/tailrocks/velnor-new/actions/runs/37093009206) | [111117215302](https://github.com/tailrocks/velnor-new/actions/runs/37093009206/job/111117215302) | [111117146977](https://github.com/tailrocks/velnor-new/actions/runs/37093009206/job/111117146977) | `m100000062` | `success` |
+| secret mask | [37093041715](https://github.com/tailrocks/velnor-new/actions/runs/37093041715) | [111117246622](https://github.com/tailrocks/velnor-new/actions/runs/37093041715/job/111117246622) | [111117246737](https://github.com/tailrocks/velnor-new/actions/runs/37093041715/job/111117246737) | `m100000064` | `success` |
+| cache, first attempt | [37093073005](https://github.com/tailrocks/velnor-new/actions/runs/37093073005) | [111117416539](https://github.com/tailrocks/velnor-new/actions/runs/37093073005/job/111117416539) | [111117339937](https://github.com/tailrocks/velnor-new/actions/runs/37093073005/job/111117339937) | `m100000066` | hosted `failure`; scale-set job `success` but the save did not upload |
+| OIDC request URL present | [37093107558](https://github.com/tailrocks/velnor-new/actions/runs/37093107558) | [111117449907](https://github.com/tailrocks/velnor-new/actions/runs/37093107558/job/111117449907) | [111117449706](https://github.com/tailrocks/velnor-new/actions/runs/37093107558/job/111117449706) | `m100000068` | `success` |
+| post after failed main | [37093141791](https://github.com/tailrocks/velnor-new/actions/runs/37093141791) | [111117559101](https://github.com/tailrocks/velnor-new/actions/runs/37093141791/job/111117559101) | [111117558962](https://github.com/tailrocks/velnor-new/actions/runs/37093141791/job/111117558962) | `m100000070` | job `failure` (required); Post step `success` |
+| cancel during `sleep 180` | [37093179531](https://github.com/tailrocks/velnor-new/actions/runs/37093179531) | [111117666603](https://github.com/tailrocks/velnor-new/actions/runs/37093179531/job/111117666603) | [111117666485](https://github.com/tailrocks/velnor-new/actions/runs/37093179531/job/111117666485) | `m100000072` | `cancelled` |
+| cache, after tar shim | [37093907324](https://github.com/tailrocks/velnor-new/actions/runs/37093907324) | [111119887039](https://github.com/tailrocks/velnor-new/actions/runs/37093907324/job/111119887039) | [111119801114](https://github.com/tailrocks/velnor-new/actions/runs/37093907324/job/111119801114) | `m100000074` | `success` |
+
+The first cache save logged `Failed to save` because `/usr/bin/tar` was BusyBox and rejected `--posix` and `--files-from`. The hosted restore then exited on `fail-on-cache-miss` for key `g4-cache-37093073005`. GNU tar 1.35 cannot replace it under qemu-user: stating an explicit path returns `ENOSYS` from `openat2`. The image now installs `zstd` and points `/usr/bin/tar` at `tar-shim.sh`, which accepts those flags and runs BusyBox. `docker build --platform linux/amd64 -t velnor-runner:ubuntu-26.04-2.337.0 images/runner/ubuntu-26.04` exited 0, and its Dockerfile probes round-tripped a gzip archive and a `zstdmt` archive. The rerun above is the one that saved and restored `cache-ok`.
+
+The mask step's echoed value in the scale-set log was `***`. The workflow source line still shows the canary, which is the command text, not the step output. The outputs scale-set log checked `G4_ENV=outputs-ok` and `g4-path-ok`. Post-fail steps were re-read from the job API: `Main fails post runs` is `failure` and `Post Main fails post runs` is `success` on both lanes. Cancel was sent with `gh run cancel` only after the scale-set job status was `in_progress`; neither lane finished the sleep as `success`.
+
+Not run, so this section does not mark G4 `PASS`: checkout of submodules or LFS, Compose, Testcontainers and its cleanup helper, bind mounts, concurrent workers on the same port, and cancellation of a job that is running a service. The cancel class is a sleep, not a service. `max_jobs` remains 1, so two workers cannot hold the same port in these runs.
 
 ## Publish attempts
 
