@@ -20,3 +20,6 @@ pub use identity::{
 };
 pub use lifecycle::{Effect, Transition, WorkerEvent, WorkerState, transition};
 pub use ownership::{CleanupProof, OwnedIds, OwnershipFailure};
+
+#[cfg(test)]
+mod lifecycle_tests;

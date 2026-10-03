@@ -191,3 +191,11 @@ async fn empty_jit_does_not_create() -> Result<(), HostError> {
     );
     Ok(())
 }
+
+#[test]
+fn malformed_ownership_label_is_rejected() -> Result<(), HostError> {
+    let mut spec = projection("worker_a")?;
+    spec.labels.push("velnor.volume".to_owned());
+    assert_eq!(bollard_create(&spec), Err(HostError::ForbiddenMount));
+    Ok(())
+}
