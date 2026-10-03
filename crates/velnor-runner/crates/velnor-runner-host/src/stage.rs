@@ -45,6 +45,31 @@ pub(crate) trait PairEngine {
     async fn write_jit(&self, id: &str, jit: &[u8]) -> Result<(), HostError>;
     async fn remove(&self, id: &str) -> Result<(), HostError>;
     async fn id_for_name(&self, name: &str) -> Result<Option<String>, HostError>;
+    async fn running(&self, id: &str) -> Result<bool, HostError>;
+}
+
+/// Records container ids before the next external start.
+pub(crate) trait PairSink {
+    async fn dind(&self, id: &str) -> Result<(), HostError>;
+    async fn runner(&self, id: &str) -> Result<(), HostError>;
+}
+
+/// Sink that does not record ids.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Forget;
+
+#[expect(
+    clippy::unused_async_trait_impl,
+    reason = "sink matches the async trait and does not await"
+)]
+impl PairSink for Forget {
+    async fn dind(&self, _id: &str) -> Result<(), HostError> {
+        Ok(())
+    }
+
+    async fn runner(&self, _id: &str) -> Result<(), HostError> {
+        Ok(())
+    }
 }
 
 impl PairEngine for Docker {
@@ -80,6 +105,13 @@ impl PairEngine for Docker {
             Err(_) => Ok(None),
         }
     }
+
+    async fn running(&self, id: &str) -> Result<bool, HostError> {
+        let Ok(info) = self.inspect_container(id, None).await else {
+            return Ok(false);
+        };
+        Ok(info.state.and_then(|state| state.running).unwrap_or(false))
+    }
 }
 
 /// Create through `stop`, then return. `Jit` matches [`crate::worker::start_pair`].
@@ -95,14 +127,15 @@ pub async fn start_pair_until(
     jit: &[u8],
     stop: PairStop,
 ) -> Result<PartialPair, HostError> {
-    drive(docker, private_volume, jit, stop).await
+    drive(docker, private_volume, jit, stop, &Forget).await
 }
 
-pub(crate) async fn drive<E: PairEngine>(
+pub(crate) async fn drive<E: PairEngine, S: PairSink>(
     engine: &E,
     private_volume: &str,
     jit: &[u8],
     stop: PairStop,
+    sink: &S,
 ) -> Result<PartialPair, HostError> {
     if jit.is_empty() {
         return Err(HostError::EmptyJit);
@@ -114,6 +147,9 @@ pub(crate) async fn drive<E: PairEngine>(
         return Ok(PartialPair::none());
     }
     let dind_id = engine.create(&dind).await?;
+    if let Err(error) = sink.dind(&dind_id).await {
+        return drop_id(engine, &dind_id, error).await;
+    }
     if stop == PairStop::DindCreated {
         return Ok(PartialPair::dind(dind_id));
     }
@@ -126,6 +162,9 @@ pub(crate) async fn drive<E: PairEngine>(
         Ok(id) => id,
         Err(error) => drop_id(engine, &dind_id, error).await?,
     };
+    if let Err(error) = sink.runner(&runner_id).await {
+        return drop_both(engine, &dind_id, &runner_id, error).await;
+    }
     if stop == PairStop::RunnerCreated {
         return Ok(PartialPair::both(dind_id, runner_id));
     }
@@ -154,7 +193,7 @@ pub async fn remove_recorded(
     decide(docker, owned_id, name).await
 }
 
-pub(crate) async fn decide<E: PairEngine>(
+pub(crate) async fn decide<E: PairEngine + ?Sized>(
     engine: &E,
     owned_id: &str,
     name: &str,

@@ -37,7 +37,7 @@ async fn launch_acks_only_after_start_and_hides_jit() -> Result<(), String> {
         &ctx(),
         &available(&[3]),
         &journal,
-        |volume, jit| {
+        |volume, jit, _bind| {
             let volume = volume.to_owned();
             let jit = jit.to_vec();
             let captured = Arc::clone(&captured);
@@ -67,6 +67,7 @@ async fn launch_acks_only_after_start_and_hides_jit() -> Result<(), String> {
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].state, IntentState::Done);
     assert_eq!(rows[0].docker_id.as_deref(), Some("runner-1"));
+    assert_eq!(rows[0].dind_id.as_deref(), Some("dind-1"));
     absent(&scratch.file())
 }
 
@@ -82,7 +83,7 @@ async fn uncertain_acquire_does_not_ack() -> Result<(), String> {
         &ctx(),
         &available(&[3]),
         &journal,
-        |_volume, _jit| async { Err(HostError::Docker) },
+        |_volume, _jit, _bind| async { Err(HostError::Docker) },
     )
     .await
     .map_err(|err| err.to_string());
@@ -106,7 +107,7 @@ async fn forbidden_acquire_is_failed_and_not_acked() -> Result<(), String> {
         &ctx(),
         &available(&[3]),
         &journal,
-        |_volume, _jit| async { Err(HostError::Docker) },
+        |_volume, _jit, _bind| async { Err(HostError::Docker) },
     )
     .await;
     assert_eq!(error, Err(EnsureError::Forbidden));
@@ -128,7 +129,7 @@ async fn empty_acquire_is_not_acked() -> Result<(), String> {
         &ctx(),
         &available(&[3]),
         &journal,
-        |_volume, _jit| async { Err(HostError::Docker) },
+        |_volume, _jit, _bind| async { Err(HostError::Docker) },
     )
     .await;
     assert_eq!(
@@ -156,7 +157,7 @@ async fn two_offers_are_not_acquired() -> Result<(), String> {
         &ctx(),
         &available(&[3, 4]),
         &journal,
-        |_volume, _jit| async { Err(HostError::Docker) },
+        |_volume, _jit, _bind| async { Err(HostError::Docker) },
     )
     .await;
     assert_eq!(
@@ -184,7 +185,7 @@ async fn bound_runner_acks_without_a_second_start() -> Result<(), String> {
         &ctx(),
         &available(&[3]),
         &journal,
-        |_volume, _jit| async {
+        |_volume, _jit, _bind| async {
             Ok(Started {
                 dind_id: "dind-1".to_owned(),
                 runner_id: "runner-1".to_owned(),
@@ -206,7 +207,7 @@ async fn bound_runner_acks_without_a_second_start() -> Result<(), String> {
         &ctx(),
         &available(&[3]),
         &journal,
-        |_volume, _jit| async { Err(HostError::Docker) },
+        |_volume, _jit, _bind| async { Err(HostError::Docker) },
     )
     .await
     .map_err(|err| err.to_string())?;
@@ -227,7 +228,7 @@ async fn start_failure_after_acquire_is_not_acked() -> Result<(), String> {
         &ctx(),
         &available(&[3]),
         &journal,
-        |_volume, _jit| async { Err(HostError::Docker) },
+        |_volume, _jit, _bind| async { Err(HostError::Docker) },
     )
     .await;
     assert_eq!(error, Err(EnsureError::Uncertain));
@@ -250,7 +251,7 @@ async fn ack_failure_keeps_the_runner_bound() -> Result<(), String> {
         &ctx(),
         &available(&[3]),
         &journal,
-        |_volume, _jit| async {
+        |_volume, _jit, _bind| async {
             Ok(Started {
                 dind_id: "dind-1".to_owned(),
                 runner_id: "runner-1".to_owned(),
