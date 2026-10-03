@@ -1,6 +1,29 @@
 use super::*;
 
+pub(super) fn validate_bundle(bundle: &Bundle) -> Result<()> {
+    if bundle.version != VERSION || bundle.workspaces.is_empty() {
+        bail!("unsupported or invalid Cargo workspace-state attachment");
+    }
+    let mut identities = BTreeSet::new();
+    let mut owners = BTreeSet::new();
+    for state in &bundle.workspaces {
+        validate_state(state)?;
+        if !owners.insert(&state.owner) {
+            bail!("duplicate native snapshot owner");
+        }
+        if !identities.insert((
+            &state.workspace_root,
+            &state.cargo_roots.target_dir,
+            &state.cargo_roots.build_dir,
+        )) {
+            bail!("duplicate workspace root pair");
+        }
+    }
+    Ok(())
+}
+
 pub(super) fn validate_state(state: &WorkspaceState) -> Result<()> {
+    state.owner.validate()?;
     state.signature.validate()?;
     for root in [
         &state.workspace_root,
@@ -22,6 +45,13 @@ pub(super) fn validate_state(state: &WorkspaceState) -> Result<()> {
     }
     for tree in &state.trees {
         validate_tree(tree)?;
+    }
+    let mut sources = BTreeSet::new();
+    for snapshot in &state.owned_out_dirs {
+        crate::out_dir::validate_snapshot(snapshot)?;
+        if !sources.insert((&snapshot.source, &snapshot.digest)) {
+            bail!("duplicate owned OUT_DIR source and digest");
+        }
     }
     Ok(())
 }
@@ -75,7 +105,7 @@ pub(super) fn tree_entries(root: &Path, excluded: &[PathBuf]) -> Result<Vec<Path
 }
 
 pub(super) fn workspace_signature(root: &Path) -> Result<CacheDigest> {
-    let mut bytes = b"cargo-workspace-state-v2\0".to_vec();
+    let mut bytes = b"cargo-workspace-state-v4\0".to_vec();
     for name in ["Cargo.toml", "Cargo.lock"] {
         let path = root.join(name);
         if path.is_file() {

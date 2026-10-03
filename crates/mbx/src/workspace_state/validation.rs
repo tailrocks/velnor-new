@@ -86,7 +86,7 @@ fn parse_semantic_key(key: &str) -> Result<ParsedSemanticKey> {
     } else {
         let path = parts[8..].join("/");
         let (role, relative) = path.split_once('/').unwrap_or((&path, ""));
-        if !matches!(role, "target" | "build") {
+        if !matches!(role, "target" | "build" | "out_dir") {
             bail!("workspace semantic entry has invalid role");
         }
         if !relative.is_empty() {
@@ -146,22 +146,27 @@ fn validate_semantic_value(
                 SemanticContent::Mbx => bail!("workspace semantic marker cannot use mbx content"),
             }
         }
-        (Some("target" | "build"), "root") => {
+        (Some("target" | "build" | "out_dir"), "root") => {
             require_semantic_fields(object, &["type"])?;
             Ok(None)
         }
-        (Some(_), "file") => {
+        (Some(path), "owned_out_dir") if path.starts_with("out_dir/") => {
+            require_semantic_fields(object, &["type", "content"])?;
+            validate_semantic_content(object.get("content"), false)?;
+            Ok(None)
+        }
+        (Some(path), "file") if !path.starts_with("out_dir/") => {
             require_semantic_fields(object, &["type", "content", "mode"])?;
             validate_semantic_mode(object)?;
             validate_semantic_content(object.get("content"), true)?;
             Ok(None)
         }
-        (Some(_), "directory") => {
+        (Some(path), "directory") if !path.starts_with("out_dir/") => {
             require_semantic_fields(object, &["type", "mode"])?;
             validate_semantic_mode(object)?;
             Ok(None)
         }
-        (Some(path), "symlink") => {
+        (Some(path), "symlink") if !path.starts_with("out_dir/") => {
             require_semantic_fields(object, &["type", "target", "directory"])?;
             let target = object
                 .get("target")

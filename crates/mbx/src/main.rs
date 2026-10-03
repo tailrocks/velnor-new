@@ -1,6 +1,15 @@
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
+    if let Some(result) = mbx::cli::data_only_verify() {
+        return match result {
+            Ok(code) => code,
+            Err(error) => {
+                eprintln!("mbx[error]: {error:#}");
+                ExitCode::FAILURE
+            }
+        };
+    }
     if let Some(code) = mbx::supervision::dispatch() {
         return code;
     }

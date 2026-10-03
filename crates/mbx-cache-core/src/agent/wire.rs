@@ -1,11 +1,14 @@
 use super::{FileDigestResolution, FileDigestScope, FileIdentity, RecordedFileDigest};
-use crate::{ActionPrediction, CacheDigest, MeasurementEvent, RemoteActionResult};
+use crate::{
+    ActionPrediction, CacheDigest, MeasurementEvent, MeasurementPackageAvailability,
+    MeasurementPackageIdentity, RemoteActionResult,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 /// Wire protocol version used between an in-process cache agent and its shims.
-pub const AGENT_PROTOCOL_VERSION: u8 = 12;
+pub const AGENT_PROTOCOL_VERSION: u8 = 13;
 /// Largest single protocol request the agent will read.
 ///
 /// Requests are small JSON objects; the largest legitimate ones carry an output
@@ -299,6 +302,15 @@ pub enum AgentRequest {
         scope: FileDigestScope,
         /// File identities to resolve, preserving request order.
         files: Vec<FileIdentity>,
+    },
+    /// Record fresh resolved Cargo package identity evidence.
+    RecordMeasurementPackages {
+        /// Monotonically increasing owning metadata probe generation.
+        generation: u64,
+        /// Actual availability of this complete metadata observation.
+        availability: MeasurementPackageAvailability,
+        /// Actual Cargo-resolved packages used to enrich native unit evidence.
+        packages: Vec<MeasurementPackageIdentity>,
     },
     /// Record a typed invocation or actual child-process observation.
     RecordMeasurement {
@@ -600,6 +612,8 @@ pub enum AgentResponse {
     WrapperTimingRecorded,
     /// A typed adapter observation was recorded.
     MeasurementRecorded,
+    /// Actual Cargo-resolved package attribution was recorded.
+    MeasurementPackagesRecorded,
     /// A fatal shim diagnostic was accepted for the session to surface.
     ///
     /// This is appended to preserve every existing response variant and wire

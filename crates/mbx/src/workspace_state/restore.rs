@@ -71,10 +71,26 @@ pub(crate) fn restore(
     workspace_root: &Path,
     roots: &CargoBuildRoots,
 ) -> Result<RestoreOutcome> {
-    let (destinations, owned_link) = resolve_roots(&WorkspaceRoots {
+    let logical = WorkspaceRoots {
         workspace_root: workspace_root.to_path_buf(),
         cargo: roots.clone(),
-    })?;
+    };
+    let active_owner = match lineage::freeze_lineage(config, store, &logical) {
+        Ok(proof) => proof.map(|proof| proof.owner),
+        Err(error) => {
+            log::warn!("previous native restore selector unavailable: {error}");
+            None
+        }
+    };
+    lineage::invalidate(config, &logical)?;
+    let (destinations, owned_link) = resolve_roots(&logical)?;
+    if placement::overlaps(
+        store,
+        &config.cache_dir.join(crate::out_dir::ROOT),
+        &destinations,
+    )? {
+        return Ok(RestoreOutcome::SkippedManagedOverlap);
+    }
     let owned_link = owned_link
         .map(|link| -> Result<OwnedView> {
             let record = destinations.target_dir.with_extension("json");
@@ -88,44 +104,36 @@ pub(crate) fn restore(
         })
         .transpose()?;
     let cas = LocalCas::new(store);
-    let bundle_path = cas
-        .find(attachment)?
-        .ok_or_else(|| eyre::eyre!("workspace-state attachment is missing"))?;
-    let bundle: Bundle = serde_json::from_slice(&std::fs::read(bundle_path)?)?;
-    if bundle.version != VERSION || bundle.workspaces.is_empty() {
-        bail!("unsupported or invalid Cargo workspace-state attachment");
-    }
-    for state in &bundle.workspaces {
-        validate_state(state)?;
-    }
+    let bundle = lineage::read_bundle(&cas, attachment)?;
     let signature = workspace_signature(workspace_root)?;
-    let same_pair = bundle
-        .workspaces
-        .iter()
-        .filter(|state| state.workspace_root == workspace_root && state.cargo_roots == *roots)
-        .collect::<Vec<_>>();
-    let exact = same_pair
-        .iter()
-        .copied()
-        .filter(|state| state.signature == signature)
-        .collect::<Vec<_>>();
-    let matches = if exact.is_empty() {
-        bundle
-            .workspaces
-            .iter()
-            .filter(|state| state.signature == signature)
-            .collect::<Vec<_>>()
-    } else {
-        exact
+    let state = match lineage_select::select_snapshot(
+        &bundle,
+        workspace_root,
+        roots,
+        signature,
+        active_owner,
+    ) {
+        Ok(state) => state,
+        Err(outcome) => return Ok(outcome),
     };
-    if matches.is_empty() && !same_pair.is_empty() {
-        return Ok(RestoreOutcome::SkippedIncompatible);
+    let (origin, _) = lineage::owner_objects(&cas, &state.owner)?;
+    let current_origin = WorkspaceRoots {
+        workspace_root: state.workspace_root.clone(),
+        cargo: state.cargo_roots.clone(),
+    };
+    if origin != current_origin {
+        // Owner-preserving changed views require explicit native coverage authority.
+        return Ok(RestoreOutcome::SkippedUnavailable);
     }
-    let state = match matches.as_slice() {
-        [] => return Ok(RestoreOutcome::SkippedUnavailable),
-        [state] => *state,
-        _ => return Ok(RestoreOutcome::SkippedAmbiguous),
-    };
+    let relationship =
+        |left: &Path, right: &Path| right.strip_prefix(left).ok().map(Path::to_path_buf);
+    if relationship(&state.cargo_roots.target_dir, &state.cargo_roots.build_dir)
+        != relationship(&roots.target_dir, &roots.build_dir)
+        || relationship(&state.cargo_roots.build_dir, &state.cargo_roots.target_dir)
+            != relationship(&roots.build_dir, &roots.target_dir)
+    {
+        return Ok(RestoreOutcome::SkippedUnavailable);
+    }
     if (state.cargo_roots.target_dir == state.cargo_roots.build_dir)
         != (roots.target_dir == roots.build_dir)
     {
@@ -134,6 +142,27 @@ pub(crate) fn restore(
     // Reject unsafe archive shapes and missing/corrupt objects before touching destinations.
     let semantic = semantic_workspace(&cas, state)?;
     validate_role_entries(&semantic.entries, &state.cargo_roots)?;
+    let owner_root = crate::out_dir::resolve_root(&config.cache_dir.join(crate::out_dir::ROOT))?;
+    if state
+        .owned_out_dirs
+        .iter()
+        .any(|snapshot| snapshot.root != owner_root)
+    {
+        return Ok(RestoreOutcome::SkippedUnavailable);
+    }
+    let original = WorkspaceRoots {
+        workspace_root: state.workspace_root.clone(),
+        cargo: state.cargo_roots.clone(),
+    };
+    let evidence = mbx_cache_store::stored_receipt_evidence(store)?;
+    if let Err(error) =
+        crate::out_dir::validate_receipts(&original, &state.owned_out_dirs, &evidence)
+    {
+        if crate::out_dir::is_unavailable(&error) {
+            return Ok(RestoreOutcome::SkippedUnavailable);
+        }
+        return Err(error);
+    }
     let roots = &destinations;
     validate_role_entries(&semantic.entries, roots)?;
     let mut publications = Vec::new();
@@ -215,8 +244,13 @@ pub(crate) fn restore(
             bail!("owned Cargo target metadata changed before publication");
         }
     }
+    owned_out_dirs::hydrate(config, &cas, state, &logical, roots, &publications)?;
     publish_roots(&publications, roots, owned_link.as_ref())?;
     crate::target::touch_managed(config, workspace_root, &roots.target_dir);
+    if let Err(error) = lineage::grant_restore(config, store, attachment, state, &logical) {
+        // Materialization succeeded; unavailable lineage cannot alter task success.
+        log::warn!("native restore lineage unavailable: {error}");
+    }
     Ok(RestoreOutcome::Restored {
         files,
         referenced_bytes,
@@ -231,6 +265,9 @@ pub(super) fn validate_role_entries(
         let Some((role, relative)) = path.split_once('/') else {
             continue;
         };
+        if role == "out_dir" {
+            continue;
+        }
         let role = if role == "target" {
             RootRole::Target
         } else {

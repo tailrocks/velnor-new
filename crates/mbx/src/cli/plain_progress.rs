@@ -43,13 +43,14 @@ pub(super) fn run(
     cargo: &OsStr,
     arguments: &[String],
     environment: BTreeMap<String, String>,
+    session: &session::CacheSession,
     stats: impl Fn() -> AgentStats + Sync,
 ) -> Result<ExitCode> {
     with_progress(
         cadence,
         stats,
         |line| crate::logging::note(&line),
-        || super::cargo::run_cargo(cargo, arguments, environment),
+        || super::cargo::run_workload(cargo, arguments, environment, session),
     )
 }
 

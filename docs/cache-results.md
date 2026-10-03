@@ -229,13 +229,19 @@ mbx cache export --group ci --compare baseline.json --json --format directory up
 ```
 
 For a cold miss, `mbx cache comparison-state baseline.json --json` writes an
-empty baseline. Keep this file outside the bundle. Export JSON version 1 includes
-`useful_delta`, new and changed action-result counts, new prediction counts,
+empty baseline. Keep this file outside the bundle. Export JSON version 2 includes
+`emitted_bundle_useful_delta`, new and changed action-result counts, new prediction counts,
 new and changed workspace-variant counts, and a 64-character BLAKE3
-`semantic_digest`. A subset of the imported closure is not a useful delta. Deletion-only workspace changes remain reported as changed variants, but do not add reusable work or make `useful_delta` true.
+`semantic_digest`. A subset of the imported closure is not a useful delta. Deletion-only workspace changes remain reported as changed variants, but do not add reusable work or make `emitted_bundle_useful_delta` true.
 Changed results and predictions remain detectable when their counts stay equal.
 The digest identifies an inventory; unequal digests alone do not establish a
-useful delta.
+useful delta. `emitted_bundle_useful_delta` names the transport decision.
+`workspace_usefulness` supports only status `unavailable`. Its closed reason
+codes are `scheduler_validity_not_proven`, `owner_coverage_unavailable`,
+`owner_proof_unavailable`, and `managed_overlap`; full diagnostic text is separate.
+A positive status requires native owner proof and a future schema migration. Retaining an unchanged historical bundle
+does not prove the current workspace unchanged. Export report version 1 is
+unsupported; no `useful_delta` alias remains.
 
 Workspace comparison includes relative path, entry type, file content digest,
 mode, and symlink target. It excludes the external workspace root and filesystem

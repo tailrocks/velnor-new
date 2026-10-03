@@ -53,18 +53,26 @@ mod target_units;
 pub mod tui;
 #[doc(hidden)]
 pub mod util;
+#[doc(hidden)]
+pub mod version;
 
 mod analyze;
 mod ar;
 mod build_script;
+pub(crate) mod cargo_artifact_capture;
 mod cc;
 mod digest_ledger;
+pub(crate) mod dispatch_identity;
+pub(crate) mod dispatch_admission;
 mod incremental;
 mod linker;
 mod managed_linker;
 mod materialize;
+pub(crate) mod measurement_reliability;
 mod out_dir;
 mod pressure;
+pub(crate) mod probe_classifier;
+pub(crate) mod process_measurement;
 mod rustc;
 mod rustdoc;
 mod scheduler;
@@ -72,4 +80,6 @@ mod storage;
 #[doc(hidden)]
 pub mod supervision;
 mod unit_graph;
+pub(crate) mod unit_artifact_binding;
+pub(crate) mod unit_attribution;
 mod workspace_state;

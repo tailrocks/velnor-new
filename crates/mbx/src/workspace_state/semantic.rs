@@ -78,6 +78,24 @@ pub(super) fn semantic_workspace(
             entries.insert(format!("{role}/{path}"), value);
         }
     }
+    restore::validate_role_entries(&entries, &state.cargo_roots)?;
+    owned_out_dirs::validate_inventory(cas, state, &entries)?;
+    if !state.owned_out_dirs.is_empty() {
+        entries.insert("out_dir".into(), serde_json::json!({"type": "root"}));
+        for snapshot in &state.owned_out_dirs {
+            let source = normalized_relative_path(&snapshot.source)?;
+            entries.insert(
+                format!(
+                    "out_dir/{source}/{}/{}",
+                    snapshot.digest.algorithm, snapshot.digest.hash
+                ),
+                serde_json::json!({
+                    "type": "owned_out_dir",
+                    "content": {"kind": "digest", "digest": snapshot.digest},
+                }),
+            );
+        }
+    }
     let encoded = serde_json::to_vec(&entries)?;
     let digest = CacheDigest::blake3(&encoded);
     Ok(SemanticWorkspace {
@@ -126,12 +144,7 @@ pub(super) fn semantic_inline_entries(
             )?;
         } else if kind.is_file() || kind.is_gnu_sparse() {
             seen_files.insert(normalized.clone());
-            let temporary = tempfile::NamedTempFile::new()?;
-            {
-                let mut output = temporary.reopen()?;
-                std::io::copy(&mut entry, &mut output)?;
-            }
-            let digest = CacheDigest::blake3_file(temporary.path())?;
+            let digest = CacheDigest::blake3_reader(&mut entry)?;
             insert_semantic_entry(
                 entries,
                 normalized.clone(),

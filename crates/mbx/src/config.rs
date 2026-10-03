@@ -136,6 +136,9 @@ pub(crate) struct RawConfig {
     /// Write a JSON build report to this path.
     #[usage(env = "MBX_STATS_REPORT")]
     stats_report: Option<PathBuf>,
+    /// Publish an immutable completed JSON report for each session in this directory.
+    #[usage(env = "MBX_STATS_REPORT_DIR")]
+    stats_report_dir: Option<PathBuf>,
     /// Detail printed after a build. Auto uses an explanatory CI report in CI
     /// and one line locally; short, ci, full, and off select a fixed style.
     #[usage(
@@ -489,6 +492,8 @@ pub struct Config {
     /// Persistent executable wrappers, separate from shared build artifacts.
     pub shims_dir: PathBuf,
     pub stats_report: Option<PathBuf>,
+    /// Directory for immutable completed reports, including nested sessions.
+    pub stats_report_dir: Option<PathBuf>,
     pub verify: bool,
     pub verify_sample_rate: u8,
     /// Let cargo compile workspace members incrementally, rather than forcing
@@ -608,6 +613,7 @@ impl Config {
             cache_dir: cache_dir.to_path_buf(),
             shims_dir: cache_dir.join("shims"),
             stats_report: None,
+            stats_report_dir: None,
             verify: false,
             verify_sample_rate: 0,
             incremental: false,
@@ -1214,6 +1220,7 @@ impl Config {
                 profiles: raw.linker.profiles.unwrap_or_default(),
             },
             stats_report: raw.stats_report,
+            stats_report_dir: raw.stats_report_dir,
             verify: raw.verify,
             verify_sample_rate: u8::try_from(raw.verify_sample_rate)
                 .ok()

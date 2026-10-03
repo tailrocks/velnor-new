@@ -13,10 +13,11 @@
 use super::shims::{CcShims, is_target_triple, link_path_shim, resolve_on_path};
 use super::{
     pin_names_a_compiler, record_cc_bypass, reserve_stderr_for_compiler, run_transparent_cc,
-    session_socket,
+    session_socket, simple_compiler_probe,
 };
 use eyre::Result;
 use mbx_cache_cc::CcLanguage;
+use mbx_cache_core::{AdapterKind, InvocationKind};
 use std::collections::BTreeMap;
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
@@ -168,19 +169,38 @@ pub fn dispatch() -> Option<ExitCode> {
             return Some(ExitCode::FAILURE);
         };
         let arguments: Vec<_> = arguments.collect();
+        let _timing = crate::phase_timing::start("cc", None);
+        let kind = if simple_compiler_probe(&arguments) {
+            InvocationKind::Probe
+        } else {
+            InvocationKind::Work
+        };
+        let mut measurement = crate::process_measurement::Invocation::new(
+            AdapterKind::Cc,
+            kind,
+            crate::unit_attribution::package_context(None),
+        );
         // A build configured under `mbx exec` records the compiler shim it
         // found on `PATH`, and that shim caches the compile itself.
         let current = std::env::current_exe().ok();
         if !pin_names_a_compiler(Path::new(&compiler), current.as_deref()) {
-            return Some(run_transparent_cc(compiler, arguments));
+            return Some(run_transparent_cc(compiler, arguments, &mut measurement));
         }
         if session_socket().is_some() {
-            match crate::cc::compile(&compiler, &arguments, language) {
+            match crate::cc::compile(&compiler, &arguments, language, &mut measurement) {
                 Ok(code) => return Some(code),
-                Err(error) => record_cc_bypass(&error),
+                Err(error) => {
+                    if measurement.has_work_attempted() {
+                        super::report_shim_warning(&format!(
+                            "cc cache failed after execution: {error:#}"
+                        ));
+                        return Some(ExitCode::FAILURE);
+                    }
+                    record_cc_bypass(&error);
+                }
             }
         }
-        return Some(run_transparent_cc(compiler, arguments));
+        return Some(run_transparent_cc(compiler, arguments, &mut measurement));
     }
     if !name.starts_with(&format!("{SHIM}-")) {
         return None;
@@ -320,19 +340,42 @@ fn write_launcher_script(
          unset(mbx_launcher)\n"
     );
     let destination = directory.join(launcher_script_name(launcher));
-    if std::fs::read_to_string(&destination).is_ok_and(|existing| existing == script) {
-        return Ok(());
+    #[cfg(unix)]
+    {
+        return super::shims::snapshot_publication::publish_bytes(
+            &destination,
+            script.as_bytes(),
+            0o400,
+        );
     }
-    // Staged and renamed: a concurrent CMake run may be reading it.
-    let staging = directory.join(format!(
-        ".{}.{}",
-        launcher_script_name(launcher),
-        std::process::id()
-    ));
-    std::fs::write(&staging, script)?;
-    std::fs::rename(&staging, &destination)?;
-    Ok(())
+    #[cfg(not(unix))]
+    {
+        if std::fs::read_to_string(&destination).is_ok_and(|existing| existing == script) {
+            return Ok(());
+        }
+        // Staged and renamed: a concurrent CMake run may be reading it.
+        use std::io::Write;
+        let mut staging = tempfile::Builder::new()
+            .prefix(".mbx-cmake-")
+            .tempfile_in(directory)?;
+        staging.write_all(script.as_bytes())?;
+        staging.as_file().sync_all()?;
+        let mut lock = fslock::LockFile::open(&directory.join(".mbx-cmake-publish.lock"))?;
+        lock.lock()?;
+        if std::fs::read_to_string(&destination).is_ok_and(|existing| existing == script) {
+            return Ok(());
+        }
+        if std::fs::symlink_metadata(&destination).is_ok() {
+            eyre::bail!("cached CMake script differs from this owner");
+        }
+        staging.persist(&destination).map_err(|error| error.error)?;
+        Ok(())
+    }
 }
+
+#[cfg(all(test, unix))]
+#[path = "cmake_publication_tests.rs"]
+mod publication_tests;
 
 /// Where a `-C` script goes so it runs after every one the caller passed.
 fn after_initial_cache_scripts(arguments: &[OsString]) -> usize {

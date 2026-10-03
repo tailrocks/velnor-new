@@ -75,6 +75,7 @@ windows-sys = { version = "0.61", features = [
 
 [features]
 default = ["rustls"]
+owned-cache-transport = []
 native-tls = ["mbx-cache-cargo/native-tls", "mbx-cache-cc/native-tls", "mbx-cache-core/native-tls", "mbx-cache-rustc/native-tls", "mbx-cache-store/native-tls", "reqwest/native-tls"]
 rustls = ["mbx-cache-cargo/rustls", "mbx-cache-cc/rustls", "mbx-cache-core/rustls", "mbx-cache-rustc/rustls", "mbx-cache-store/rustls", "reqwest/rustls"]
 rustls-native-roots = [

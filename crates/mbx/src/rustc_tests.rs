@@ -227,9 +227,14 @@ fn a_forwarded_compiler_run_captures_what_it_forwards() {
     command.arg("-c").arg(script);
     let stdout_sink = Sink::default();
     let stderr_sink = Sink::default();
-    let output =
-        run_compiler_forwarding(&mut command, stdout_sink.clone(), stderr_sink.clone(), None)
-            .unwrap();
+    let output = run_compiler_forwarding(
+        &mut test_measurement(),
+        &mut command,
+        stdout_sink.clone(),
+        stderr_sink.clone(),
+        None,
+    )
+    .unwrap();
     assert_eq!(output.status.code(), Some(3));
     assert_eq!(
         output.stdout, b"out one\nout two\ntail without newline",
@@ -245,7 +250,7 @@ fn a_forwarded_compiler_run_captures_what_it_forwards() {
     // The plain path returns the same thing Cargo would have seen at the end.
     let mut command = Command::new("sh");
     command.arg("-c").arg(script);
-    let held = run_compiler(&mut command, false, false).unwrap();
+    let held = run_compiler(&mut test_measurement(), &mut command, false, false).unwrap();
     assert_eq!(held.stdout, output.stdout);
     assert_eq!(held.stderr, output.stderr);
     assert_eq!(held.status.code(), Some(3));
@@ -291,7 +296,13 @@ fn a_notification_is_forwarded_before_the_compiler_exits() {
     let (done, finished) = std::sync::mpsc::channel();
     let release_on_timeout = root.path().join("release");
     let worker = std::thread::spawn(move || {
-        let output = run_compiler_forwarding(&mut command, Sink::default(), sink, None);
+        let output = run_compiler_forwarding(
+            &mut test_measurement(),
+            &mut command,
+            Sink::default(),
+            sink,
+            None,
+        );
         let _ = done.send(());
         output
     });
@@ -1769,4 +1780,162 @@ fn separate_and_equal_cargo_build_roots_have_stable_portable_names() {
             1
         );
     }
+}
+
+fn test_measurement() -> crate::process_measurement::Invocation<impl FnMut(MeasurementEvent)> {
+    crate::process_measurement::Invocation::with_sink(
+        mbx_cache_core::AdapterKind::Rustc,
+        mbx_cache_core::InvocationKind::Work,
+        None,
+        |_| {},
+    )
+}
+
+#[cfg(unix)]
+#[test]
+fn actual_compiler_failure_has_one_terminal_process_and_disposition() {
+    use mbx_cache_core::{AdapterKind, InvocationKind, ProcessOutcome};
+    let mut events = Vec::new();
+    let mut measurement = crate::process_measurement::Invocation::with_sink(
+        AdapterKind::Rustc,
+        InvocationKind::Work,
+        None,
+        |event| events.push(event),
+    );
+    measurement.set_outcome(CacheOutcome::Miss);
+    let mut command = Command::new("sh");
+    command.args(["-c", "printf diagnostic >&2; exit 19"]);
+    let output = run_compiler(&mut measurement, &mut command, false, false).unwrap();
+    assert_eq!(output.status.code(), Some(19));
+    measurement.finish_current();
+    assert_eq!(events.len(), 2);
+    assert!(matches!(&events[0], MeasurementEvent::Process {
+        purpose: ProcessPurpose::Work, outcome: ProcessOutcome::Failed, measurement, ..
+    } if measurement.attempts == 1 && measurement.started == 1 && measurement.wall_observations == 1));
+    assert!(matches!(
+        &events[1],
+        MeasurementEvent::Invocation {
+            cache_outcome: CacheOutcome::Miss,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn cached_compiler_result_observes_real_output_without_actual_process() {
+    let root = tempfile::tempdir().unwrap();
+    let outputs = test_outputs(root.path());
+    std::fs::create_dir_all(&outputs.directory).unwrap();
+    std::fs::write(&outputs.files[0], b"cached native artifact").unwrap();
+    let mut events = Vec::new();
+    let mut measurement = crate::process_measurement::Invocation::with_sink(
+        mbx_cache_core::AdapterKind::Rustc,
+        mbx_cache_core::InvocationKind::Work,
+        None,
+        |event| events.push(event),
+    );
+    assert!(observe_cache_hit(&mut measurement, &outputs));
+    measurement.finish_current();
+    assert_eq!(events.len(), 2);
+    assert!(
+        matches!(&events[0], MeasurementEvent::Output { observation, .. }
+        if observation.cache_outcome == CacheOutcome::Hit
+            && observation.digest == CacheDigest::blake3(b"cached native artifact")
+            && observation.path == std::fs::canonicalize(&outputs.files[0]).unwrap())
+    );
+    assert!(matches!(
+        &events[1],
+        MeasurementEvent::Invocation {
+            cache_outcome: CacheOutcome::Hit,
+            ..
+        }
+    ));
+    assert!(
+        !events
+            .iter()
+            .any(|event| matches!(event, MeasurementEvent::Process { .. }))
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn successful_child_missing_required_output_fails_after_one_actual_attempt() {
+    let root = tempfile::tempdir().unwrap();
+    let outputs = test_outputs(root.path());
+    let mut events = Vec::new();
+    let mut measurement = crate::process_measurement::Invocation::with_sink(
+        mbx_cache_core::AdapterKind::Rustc,
+        mbx_cache_core::InvocationKind::Work,
+        None,
+        |event| events.push(event),
+    );
+    measurement.set_outcome(CacheOutcome::Miss);
+    let mut command = Command::new("sh");
+    command.args(["-c", "exit 0"]);
+    let output = run_compiler(&mut measurement, &mut command, false, false).unwrap();
+    assert!(output.status.success());
+    assert!(observe_native_outputs(&mut measurement, &outputs).is_err());
+    assert!(measurement.has_work_attempted());
+    measurement.finish_current();
+    assert_eq!(
+        events
+            .iter()
+            .filter(|event| matches!(event, MeasurementEvent::Process { .. }))
+            .count(),
+        1
+    );
+    assert!(
+        !events
+            .iter()
+            .any(|event| matches!(event, MeasurementEvent::Output { .. }))
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn actual_compiler_success_records_spawn_to_terminal_wall() {
+    use mbx_cache_core::{AdapterKind, InvocationKind, ProcessOutcome};
+    let mut events = Vec::new();
+    let mut measurement = crate::process_measurement::Invocation::with_sink(
+        AdapterKind::Rustc,
+        InvocationKind::Work,
+        None,
+        |event| events.push(event),
+    );
+    measurement.set_outcome(CacheOutcome::Unconsulted);
+    let mut command = Command::new("sh");
+    command.args(["-c", "printf metadata >&2; printf artifact"]);
+    let output = run_compiler_forwarding(
+        &mut measurement,
+        &mut command,
+        Sink::default(),
+        Sink::default(),
+        None,
+    )
+    .unwrap();
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"artifact");
+    assert_eq!(output.stderr, b"metadata");
+    measurement.finish_current();
+    assert_eq!(events.len(), 2);
+    assert!(matches!(&events[0], MeasurementEvent::Process {
+        purpose: ProcessPurpose::Work, outcome: ProcessOutcome::Succeeded, measurement, ..
+    } if measurement.attempts == 1 && measurement.started == 1 && measurement.wall_observations == 1));
+}
+
+#[cfg(unix)]
+#[test]
+fn compiler_sysroot_probe_runs_actual_compiler_and_preserves_result() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let directory = tempfile::tempdir().unwrap();
+    let rustc = directory.path().join("rustc-proxy");
+    let marker = directory.path().join("probe-ran");
+    let sysroot = directory.path().join("toolchain");
+    std::fs::write(
+        &rustc,
+        "#!/bin/sh\n[ \"$1\" = --print ] && [ \"$2\" = sysroot ] || exit 9\nprintf ran > \"${0%/*}/probe-ran\"\nprintf '%s\\n' \"${0%/*}/toolchain\"\n",
+    ).unwrap();
+    std::fs::set_permissions(&rustc, std::fs::Permissions::from_mode(0o755)).unwrap();
+    assert_eq!(compiler_sysroot(rustc.as_os_str()), Some(sysroot));
+    assert_eq!(std::fs::read(marker).unwrap(), b"ran");
 }

@@ -91,7 +91,7 @@ pub(super) fn needs_plain_launch(arguments: &[String]) -> bool {
 
 /// Locate the command without interpreting option values or program arguments
 /// as subcommands. Cargo globals may precede a command through the Cargo shim.
-pub(super) fn cargo_subcommand<T: AsRef<OsStr>>(arguments: &[T]) -> Option<&str> {
+pub(crate) fn cargo_subcommand<T: AsRef<OsStr>>(arguments: &[T]) -> Option<&str> {
     cargo_subcommand_at(arguments).map(|(_, command)| command)
 }
 
@@ -297,7 +297,7 @@ impl Launch {
         self.capture.is_file()
     }
 
-    pub(super) fn run(&self) -> Result<ExitCode> {
+    pub(super) fn run(&self, session: &crate::session::CacheSession) -> Result<ExitCode> {
         let captured: Captured = serde_json::from_slice(
             &std::fs::read(&self.capture)
                 .wrap_err("Cargo did not hand off the application launch")?,
@@ -319,11 +319,14 @@ impl Launch {
             .current_dir(captured.directory)
             .env_clear()
             .envs(captured.environment);
-        Ok(super::cargo::exit_code(
-            command
-                .status()
-                .wrap_err("failed to launch Cargo application")?,
-        ))
+        session.propagate_completed_environment(&mut command);
+        let timer = session.workload_timer();
+        let status = command
+            .spawn()
+            .and_then(|mut child| child.wait())
+            .wrap_err("failed to launch Cargo application")?;
+        timer.finish(status.into());
+        Ok(super::cargo::exit_code(status))
     }
 }
 
@@ -454,6 +457,62 @@ mod tests {
             )
             .unwrap(),
             path(&["custom"])
+        );
+    }
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn captured_application_finishes_before_failed_workload_report() {
+        let root = tempfile::tempdir().unwrap();
+        let session_dir = tempfile::tempdir().unwrap();
+        let mut config = crate::cli::cargo_tests::managed_target_config(root.path());
+        config.stats_report_dir = Some(root.path().join("reports"));
+        let session = crate::session::CacheSession::start(session_dir.path(), &config)
+            .await
+            .unwrap();
+        let identity = session.completed_identity().unwrap();
+        let report_path = config
+            .stats_report_dir
+            .as_ref()
+            .unwrap()
+            .join(format!("{}.json", identity.session_id));
+        let compile = session.workload_timer();
+        let status = Command::new("sh").args(["-c", "exit 0"]).status().unwrap();
+        compile.finish(status.into());
+        let launch = Launch {
+            capture: root.path().join("launch.json"),
+            runner: None,
+            runner_key: "test".into(),
+            shim: root.path().join("unused"),
+        };
+        let script = r#"test ! -e "$MBX_REPORT_TEST_OUTER_PATH" && test "$MBX_REPORT_SESSION_ID" = "$MBX_REPORT_TEST_OUTER_ID" && exit 7"#;
+        let mut environment: Vec<_> = std::env::vars_os().collect();
+        environment.push((
+            "MBX_REPORT_TEST_OUTER_PATH".into(),
+            report_path.as_os_str().to_owned(),
+        ));
+        environment.push((
+            "MBX_REPORT_TEST_OUTER_ID".into(),
+            identity.session_id.clone().into(),
+        ));
+        let captured = Captured {
+            arguments: vec!["sh".into(), "-c".into(), script.into()],
+            environment,
+            directory: root.path().to_path_buf(),
+        };
+        std::fs::write(&launch.capture, serde_json::to_vec(&captured).unwrap()).unwrap();
+        assert!(!report_path.exists());
+        assert_eq!(launch.run(&session).unwrap(), ExitCode::from(7));
+        assert!(!report_path.exists());
+        session.finish().await.unwrap();
+        let report: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(report_path).unwrap()).unwrap();
+        assert_eq!(report["workload"]["exit_code"], 7);
+        assert_eq!(report["workload"]["outcome"], "failed");
+        assert!(
+            report["statistics"]["measurement"]["workload_wall_ns"]
+                .as_u64()
+                .unwrap()
+                > 0
         );
     }
 }

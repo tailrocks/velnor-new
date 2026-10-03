@@ -93,23 +93,6 @@ pub fn dispatch() -> Option<ExitCode> {
     Some(ExitCode::FAILURE)
 }
 
-/// Captured compiler output uses the same post-spawn registration as streaming.
-pub(crate) fn output(
-    command: &mut Command,
-    eligible: bool,
-) -> std::io::Result<std::process::Output> {
-    let mut action = prepare(command, eligible);
-    let child = command
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()?;
-    if let Some(action) = &mut action {
-        action.started();
-    }
-    child.wait_with_output()
-}
-
 fn key(bytes: &[u8]) -> String {
     use sha2::{Digest, Sha256};
     Sha256::digest(bytes)

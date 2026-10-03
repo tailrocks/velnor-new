@@ -9,8 +9,9 @@ use crate::{session, util::workspace_root};
 use eyre::{Context, Result, bail};
 use mbx_cache_core::{
     ActionDiagnostic, ActionPrediction, AgentRequest, AgentResponse, CacheDigest, CacheDirectory,
-    CacheFileNode, FileDigestResolution, FileDigestScope, FileIdentity, FileSnapshot, PinnedFile,
-    RecordedFileDigest, RemoteActionResult, RestoreStats, RustcMetadata, canonical_json,
+    CacheFileNode, CacheOutcome, FileDigestResolution, FileDigestScope, FileIdentity, FileSnapshot,
+    MeasurementEvent, PinnedFile, ProcessPurpose, RecordedFileDigest, RemoteActionResult,
+    RestoreStats, RustcMetadata, canonical_json,
 };
 use mbx_cache_rustc::{
     ActionContext, ActionInput, BypassReason, CompilerIdentity, DiscoveredInputs, LinkerIdentity,
@@ -154,6 +155,7 @@ pub(crate) fn compile(
     rustc: &OsStr,
     arguments: &[OsString],
     wrapper_argument: Option<&OsStr>,
+    measurement: &mut crate::process_measurement::Invocation,
 ) -> Result<ExitCode> {
     let setup = crate::phase_timing::phase("key");
     let working_dir = std::env::current_dir()?;
@@ -213,6 +215,7 @@ pub(crate) fn compile(
             &invocation,
             &outputs,
             &portable,
+            measurement,
         );
     }
 
@@ -293,6 +296,9 @@ pub(crate) fn compile(
                 if verify {
                     verification = Some(cached);
                 } else {
+                    if !observe_cache_hit(measurement, &outputs) {
+                        return Ok(ExitCode::FAILURE);
+                    }
                     let diagnostic = candidates
                         .ordered()
                         .find(|candidate| candidate.digest == action)
@@ -305,8 +311,7 @@ pub(crate) fn compile(
                         invocation.crate_name(),
                         diagnostic,
                     );
-                    install_build_script_shim(&invocation, &outputs, &action);
-                    let _ = replay_bytes(&cached.stdout, &cached.stderr);
+                    replay_cached_result(&invocation, &outputs, &cached);
                     return Ok(ExitCode::SUCCESS);
                 }
             }
@@ -338,8 +343,10 @@ pub(crate) fn compile(
                 if verify {
                     verification = Some(cached);
                 } else {
-                    install_build_script_shim(&invocation, &outputs, &cached.action);
-                    let _ = replay_bytes(&cached.stdout, &cached.stderr);
+                    if !observe_cache_hit(measurement, &outputs) {
+                        return Ok(ExitCode::FAILURE);
+                    }
+                    replay_cached_result(&invocation, &outputs, &cached);
                     return Ok(ExitCode::SUCCESS);
                 }
             }
@@ -382,8 +389,10 @@ pub(crate) fn compile(
             Some(&mut current_diagnostic),
         ) {
             Ok(Some(cached)) => {
-                install_build_script_shim(&invocation, &outputs, &cached.action);
-                let _ = replay_bytes(&cached.stdout, &cached.stderr);
+                if !observe_cache_hit(measurement, &outputs) {
+                    return Ok(ExitCode::FAILURE);
+                }
+                replay_cached_result(&invocation, &outputs, &cached);
                 return Ok(ExitCode::SUCCESS);
             }
             Ok(None) => {}
@@ -437,11 +446,14 @@ pub(crate) fn compile(
                     });
                     match restored {
                         Ok(Some(cached)) => {
+                            if !observe_cache_hit(measurement, &outputs) {
+                                return Ok(ExitCode::FAILURE);
+                            }
                             // Mirror the successful fleet handoff locally:
                             // the remote promise is ephemeral, while this
                             // record survives for the next local flight.
                             flight.flight.leave(&prediction.payload);
-                            let _ = replay_bytes(&cached.stdout, &cached.stderr);
+                            replay_cached_result(&invocation, &outputs, &cached);
                             return Ok(ExitCode::SUCCESS);
                         }
                         Ok(None) => {}
@@ -534,8 +546,16 @@ pub(crate) fn compile(
             .chain(std::iter::once(&outputs.dep_info))
             .map(PathBuf::as_path),
     );
+    measurement.set_outcome(if verification.is_some() {
+        CacheOutcome::Verification
+    } else if action_lookup_attempted {
+        CacheOutcome::Miss
+    } else {
+        CacheOutcome::Unconsulted
+    });
     let output = crate::phase_timing::measure("compiler", || {
         run_compiler(
+            measurement,
             &mut command,
             forwarded,
             wrapper_argument.is_none() && !invocation.crate_name().starts_with("build_script_"),
@@ -554,6 +574,9 @@ pub(crate) fn compile(
             .try_into()
             .unwrap_or(u64::MAX),
     };
+    if output.status.success() {
+        observe_native_outputs(measurement, &outputs)?;
+    }
     // Whether the cache was consulted and whether the result may be stored are
     // separate facts, and one outcome could only carry one of them. A unit
     // re-entering hot workspace state never looks anything up; one whose
@@ -774,6 +797,45 @@ pub(crate) fn compile(
     }
 }
 
+fn replay_cached_result(
+    invocation: &RustcInvocation,
+    outputs: &RustcOutputs,
+    cached: &CachedCompilation,
+) {
+    install_build_script_shim(invocation, outputs, &cached.action);
+    let _ = replay_bytes(&cached.stdout, &cached.stderr);
+}
+
+fn observe_native_outputs<S: FnMut(MeasurementEvent)>(
+    measurement: &mut crate::process_measurement::Invocation<S>,
+    outputs: &RustcOutputs,
+) -> Result<()> {
+    if let Err(error) = crate::unit_artifact_binding::observe(measurement, outputs) {
+        if error.is_missing_mandatory_output() {
+            bail!("mandatory rustc output was not observed: {error}");
+        }
+        session::report_shim_warning(&format!(
+            "native rustc output evidence is unavailable: {error}"
+        ));
+    }
+    Ok(())
+}
+
+fn observe_cache_hit<S: FnMut(MeasurementEvent)>(
+    measurement: &mut crate::process_measurement::Invocation<S>,
+    outputs: &RustcOutputs,
+) -> bool {
+    measurement.set_outcome(CacheOutcome::Hit);
+    match observe_native_outputs(measurement, outputs) {
+        Ok(()) => true,
+        Err(error) => {
+            measurement.set_outcome(CacheOutcome::Unknown);
+            session::report_shim_error(&format!("cached rustc outputs are invalid: {error:#}"));
+            false
+        }
+    }
+}
+
 /// Run the compiler and capture both of its streams, forwarding each line to
 /// the shim's own stream the moment it arrives when `forward` is set.
 ///
@@ -784,32 +846,56 @@ pub(crate) fn compile(
 /// start before this compilation ends and its result is published. The bytes
 /// are still captured whole, because a cache entry stores them for replay on a
 /// hit and a verification run compares them.
-fn run_compiler(command: &mut Command, forward: bool, eligible: bool) -> std::io::Result<Output> {
+fn run_compiler<S: FnMut(MeasurementEvent)>(
+    measurement: &mut crate::process_measurement::Invocation<S>,
+    command: &mut Command,
+    forward: bool,
+    eligible: bool,
+) -> std::io::Result<Output> {
+    let mut action = crate::supervision::prepare(command, eligible);
     if !forward {
-        return crate::supervision::output(command, eligible);
+        command
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        let child = measurement.process(ProcessPurpose::Work).spawn(command)?;
+        if let Some(action) = &mut action {
+            action.started();
+        }
+        return child.wait_with_output();
     }
-    let action = crate::supervision::prepare(command, eligible);
-    run_compiler_forwarding(command, std::io::stdout(), std::io::stderr(), action)
+    run_compiler_forwarding(
+        measurement,
+        command,
+        std::io::stdout(),
+        std::io::stderr(),
+        action,
+    )
 }
 
 /// [`run_compiler`] with the forwarding destinations spelled out, so a test can
 /// see what would have reached Cargo.
-fn run_compiler_forwarding(
+fn run_compiler_forwarding<S: FnMut(MeasurementEvent)>(
+    measurement: &mut crate::process_measurement::Invocation<S>,
     command: &mut Command,
     stdout_sink: impl Write + Send + 'static,
     stderr_sink: impl Write,
     mut action: Option<crate::supervision::Action>,
 ) -> std::io::Result<Output> {
-    let mut child = command
+    command
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?;
+        .stderr(Stdio::piped());
+    let mut child = measurement.process(ProcessPurpose::Work).spawn(command)?;
     if let Some(action) = &mut action {
         action.started();
     }
-    let stdout = child.stdout.take().expect("stdout was piped");
-    let stderr = child.stderr.take().expect("stderr was piped");
+    let stdout = child
+        .take_stdout()
+        .ok_or_else(|| std::io::Error::other("compiler stdout was not piped"))?;
+    let stderr = child
+        .take_stderr()
+        .ok_or_else(|| std::io::Error::other("compiler stderr was not piped"))?;
     // Standard error carries the diagnostics and the notifications, so it is
     // read here; standard output is drained alongside so that neither pipe
     // can fill up and stall the compiler.
@@ -944,6 +1030,7 @@ fn compile_execution_only_build_script(
     invocation: &RustcInvocation,
     outputs: &RustcOutputs,
     portable: &Portable,
+    measurement: &mut crate::process_measurement::Invocation,
 ) -> Result<ExitCode> {
     let demand = crate::scheduler::Demand::new(invocation.crate_name(), true);
     let permit = crate::scheduler::pool().and_then(|pool| pool.admit(&demand));
@@ -965,8 +1052,9 @@ fn compile_execution_only_build_script(
             .chain(std::iter::once(&outputs.dep_info))
             .map(PathBuf::as_path),
     );
-    let output =
-        run_compiler(&mut command, forwarded, false).wrap_err("failed to execute rustc")?;
+    measurement.set_outcome(CacheOutcome::Bypass);
+    let output = run_compiler(measurement, &mut command, forwarded, false)
+        .wrap_err("failed to execute rustc")?;
     drop(permit);
     crate::scheduler::record_compiler_memory(&demand, &output.status);
     session::record_compiler_invocation(
@@ -994,6 +1082,9 @@ fn compile_execution_only_build_script(
         session::report_shim_warning(&format!(
             "build-script inputs were not validated: {error:#}"
         ));
+    }
+    if output.status.success() {
+        observe_native_outputs(measurement, outputs)?;
     }
     if output.status.success()
         && let Some(executable) = cargo_build_script_executable(outputs, invocation)
@@ -1042,7 +1133,11 @@ fn compile_execution_only_build_script(
                     })?)
                 }
             };
-            crate::build_script::install(executable, &binary)
+            crate::build_script::install(
+                executable,
+                &binary,
+                crate::unit_attribution::identity(arguments, Some(invocation.source())),
+            )
         })();
         if let Err(error) = installed {
             session::report_shim_warning(&format!(
@@ -1114,10 +1209,11 @@ fn compiler_sysroot(rustc: &OsStr) -> Option<PathBuf> {
     {
         return Some(root.to_path_buf());
     }
-    let output = Command::new(rustc)
-        .args(["--print", "sysroot"])
-        .output()
-        .ok()?;
+    let mut command = Command::new(rustc);
+    command.args(["--print", "sysroot"]);
+    let output =
+        crate::process_measurement::probe_output(mbx_cache_core::AdapterKind::Rustc, &mut command)
+            .ok()?;
     output
         .status
         .success()
@@ -1175,7 +1271,9 @@ fn install_build_script_shim(
     let Some(executable) = cargo_build_script_executable(outputs, invocation) else {
         return;
     };
-    if let Err(error) = crate::build_script::install(executable, binary_action) {
+    let actual_arguments = std::env::args_os().skip(1).collect::<Vec<_>>();
+    let unit = crate::unit_attribution::identity(&actual_arguments, Some(invocation.source()));
+    if let Err(error) = crate::build_script::install(executable, binary_action, unit) {
         session::report_shim_warning(&format!("build-script shim was not installed: {error:#}"));
     }
 }
@@ -2509,6 +2607,8 @@ fn record_prediction_value(
 ) {
     let result = (|| {
         let task = prediction_task(&invocation);
+        let owner_invocation = invocation.clone();
+        let owner_action = action.clone();
         let responses = session::request_agent(&[AgentRequest::RecordActionPrediction {
             task,
             prediction: ActionPrediction {
@@ -2519,7 +2619,14 @@ fn record_prediction_value(
             },
         }])?;
         match responses.into_iter().next() {
-            Some(AgentResponse::ActionPredictionRecorded) => Ok(()),
+            Some(AgentResponse::ActionPredictionRecorded) => {
+                if let Err(error) = crate::out_dir::finalize(&owner_invocation, &owner_action) {
+                    session::report_shim_warning(&format!(
+                        "OUT_DIR ownership for {crate_name} was not recorded: {error:#}"
+                    ));
+                }
+                Ok(())
+            }
             Some(AgentResponse::Error { message }) => bail!(message),
             _ => bail!("cache agent returned an unexpected prediction response"),
         }
@@ -2873,6 +2980,7 @@ fn validated_outputs(
     directory: CacheDirectory,
     outputs: &RustcOutputs,
 ) -> Result<Vec<(CacheFileNode, PathBuf)>> {
+    directory.validate()?;
     if directory.version != 1 || !directory.directories.is_empty() || !directory.symlinks.is_empty()
     {
         bail!("cached rustc output directory has unsupported entries");
@@ -2957,8 +3065,13 @@ fn query_compiler_identity(rustc: &OsStr) -> Result<CompilerIdentity> {
                 command.env_remove(name);
             }
         }
-        let output = crate::phase_timing::measure("compiler", || command.output())
-            .wrap_err("failed to query the rustc identity")?;
+        let output = crate::phase_timing::measure("compiler", || {
+            crate::process_measurement::probe_output(
+                mbx_cache_core::AdapterKind::Rustc,
+                &mut command,
+            )
+        })
+        .wrap_err("failed to query the rustc identity")?;
         if !output.status.success() {
             bail!(
                 "rustc identity command failed: {}",
@@ -2977,8 +3090,13 @@ fn query_compiler_identity(rustc: &OsStr) -> Result<CompilerIdentity> {
                     command.env_remove(name);
                 }
             }
-            let output = crate::phase_timing::measure("compiler", || command.output())
-                .wrap_err("failed to query the clippy-driver identity")?;
+            let output = crate::phase_timing::measure("compiler", || {
+                crate::process_measurement::probe_output(
+                    mbx_cache_core::AdapterKind::Rustc,
+                    &mut command,
+                )
+            })
+            .wrap_err("failed to query the clippy-driver identity")?;
             if !output.status.success() {
                 bail!(
                     "clippy-driver identity command failed: {}",
@@ -3574,12 +3692,14 @@ fn publish_result<'a>(
     })?;
     let metadata = staged_bytes(staging.path(), "metadata.json", &metadata)?;
     blobs.push(metadata.clone());
-    let directory = canonical_json(&CacheDirectory {
+    let directory = CacheDirectory {
         directories: Vec::new(),
         files,
         symlinks: Vec::new(),
         version: 1,
-    })?;
+    };
+    directory.validate()?;
+    let directory = canonical_json(&directory)?;
     let directory = staged_bytes(staging.path(), "directory.json", &directory)?;
     blobs.push(directory.clone());
 

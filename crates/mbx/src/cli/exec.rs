@@ -1,4 +1,4 @@
-use super::cargo::{absolute, account_session, inherited_environment, run_cargo};
+use super::cargo::{absolute, account_session, inherited_environment, run_cargo, run_workload};
 use crate::config::{CliSettings, Config};
 use crate::session::{self, CacheSession};
 use crate::util::is_checkout_root;
@@ -51,14 +51,6 @@ pub(super) fn run(config: &Config, settings: &CliSettings, args: &ExecArgs) -> R
         // sweeps: a configure step records these paths and expects to find
         // them on the next build.
         let mut arguments: Vec<OsString> = arguments.iter().map(OsString::from).collect();
-        let shims = session::install_path_shims(&config.shims_dir)?;
-        // CMake is still worth a session without them: the launchers a
-        // configure records reach a compiler named by path or by a versioned
-        // name, and a later `cmake --build` needs the session to use them.
-        if shims.is_none() && !session::cmake::is_cmake(&program) {
-            log::warn!("no C or C++ compiler was found on PATH, so this command is not cached");
-            return Ok((run_cargo(&program, &arguments, BTreeMap::new()), None));
-        }
         let session = CacheSession::start_with_events_limit_and_gc(
             session_dir.path(),
             config,
@@ -66,6 +58,17 @@ pub(super) fn run(config: &Config, settings: &CliSettings, args: &ExecArgs) -> R
             settings.retention.min_free,
         )
         .await?;
+        let shims = session.install_path_shims()?;
+        // CMake is still worth a session without them: the launchers a
+        // configure records reach a compiler named by path or by a versioned
+        // name, and a later `cmake --build` needs the session to use them.
+        if shims.is_none() && !session::cmake::is_cmake(&program) {
+            log::warn!("no C or C++ compiler was found on PATH, so this command is not cached");
+            if let Err(error) = session.finish().await {
+                log::warn!("unused compiler session could not close: {error:#}");
+            }
+            return Ok((run_cargo(&program, &arguments, BTreeMap::new()), None));
+        }
         let mut environment = inherited_environment(|name| std::env::var(name).ok(), &working_dir);
         let run = session
             .begin_exec(
@@ -77,7 +80,7 @@ pub(super) fn run(config: &Config, settings: &CliSettings, args: &ExecArgs) -> R
             .await;
         session.prepare_exec_cmake(&program, &mut arguments, &mut environment);
 
-        let status = run_cargo(&program, &arguments, environment);
+        let status = run_workload(&program, &arguments, environment, &session);
 
         // As in a cargo build: a compilation that was restored or published
         // before a later one failed is still worth remembering.

@@ -10,7 +10,8 @@ use crate::session;
 use eyre::{Context as _, Result, bail};
 use mbx_cache_core::{
     ActionPrediction, AgentRequest, AgentResponse, CacheDigest, CacheDirectory, CacheDirectoryNode,
-    CacheFileNode, CacheSymlinkNode, RemoteActionResult, RestoreStats, canonical_json,
+    CacheFileNode, CacheOutcome, CacheSymlinkNode, CapturedMetadata, CapturedMetadataKind,
+    MeasurementEvent, ProcessPurpose, RemoteActionResult, RestoreStats, canonical_json,
 };
 use mbx_cache_rustc::PathMapping;
 use serde::{Deserialize, Serialize};
@@ -71,15 +72,6 @@ struct Prediction {
     version: u8,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Metadata {
-    kind: String,
-    stderr: CacheDigest,
-    stdout: CacheDigest,
-    version: u8,
-}
-
 struct Restored {
     stats: RestoreStats,
     stdout: Vec<u8>,
@@ -87,7 +79,71 @@ struct Restored {
 }
 
 /// Preserve the real program beside Cargo's expected path and replace it with mbx.
-pub(crate) fn install(executable: &Path, binary_action: &CacheDigest) -> Result<()> {
+pub(crate) fn install(
+    executable: &Path,
+    binary_action: &CacheDigest,
+    unit: Option<mbx_cache_core::UnitIdentity>,
+) -> Result<()> {
+    let real = session::build_script_real_path(executable);
+    let action_sidecar = build_script_action_path(&real);
+    let attempt = match crate::dispatch_admission::ProvisionAttempt::begin(
+        executable,
+        &real,
+        binary_action,
+        &action_sidecar,
+        unit,
+    ) {
+        Ok(attempt) => attempt,
+        Err(error) => {
+            session::report_shim_warning(&format!(
+                "build-script provisioning was not observed: {error:#}"
+            ));
+            None
+        }
+    };
+    let result = install_transformed(executable, binary_action, &real);
+    if let Some(attempt) = attempt {
+        let observed = match &result {
+            Ok(Some(installed)) => attempt.installed(installed),
+            Ok(None) => {
+                attempt.failed("build-script provisioning observation is unsupported on this host")
+            }
+            Err(error) => attempt.failed(&format!("build-script installation failed: {error:#}")),
+        };
+        if let Err(error) = observed {
+            session::report_shim_warning(&format!(
+                "build-script provisioning was not admitted: {error:#}"
+            ));
+        }
+    }
+    result.map(|_| ())
+}
+
+pub(crate) struct InstalledLauncher {
+    launcher: PathBuf,
+    pinned: PathBuf,
+    bytes: Vec<u8>,
+}
+
+impl InstalledLauncher {
+    pub(crate) fn launcher_path(&self) -> &Path {
+        &self.launcher
+    }
+
+    pub(crate) fn pinned_executable(&self) -> &Path {
+        &self.pinned
+    }
+
+    pub(crate) fn launcher_bytes(&self) -> &[u8] {
+        &self.bytes
+    }
+}
+
+fn install_transformed(
+    executable: &Path,
+    binary_action: &CacheDigest,
+    real: &Path,
+) -> Result<Option<InstalledLauncher>> {
     // Cargo decides whether a build-script compilation is fresh partly by
     // comparing this path's mtime with its dependencies. The path becomes a
     // shim below, but it still has to look as new as the binary it represents:
@@ -96,7 +152,6 @@ pub(crate) fn install(executable: &Path, binary_action: &CacheDigest) -> Result<
     let modified = std::fs::metadata(executable)?
         .modified()
         .wrap_err("failed to inspect the build-script modification time")?;
-    let real = session::build_script_real_path(executable);
     let temporary = real.with_extension("mbx-real-new");
     let _ = std::fs::remove_file(&temporary);
     std::fs::copy(executable, &temporary).wrap_err("failed to preserve the build script")?;
@@ -105,10 +160,10 @@ pub(crate) fn install(executable: &Path, binary_action: &CacheDigest) -> Result<
     // opened for writing. The timestamp is set through a read-only handle,
     // which an owner may do and which works whichever way the restore landed.
     crate::materialize::set_modified(&temporary, modified)?;
-    let _ = std::fs::remove_file(&real);
-    std::fs::rename(&temporary, &real)?;
+    let _ = std::fs::remove_file(real);
+    std::fs::rename(&temporary, real)?;
     std::fs::write(
-        build_script_action_path(&real),
+        build_script_action_path(real),
         canonical_json(binary_action)?,
     )?;
 
@@ -119,37 +174,30 @@ pub(crate) fn install(executable: &Path, binary_action: &CacheDigest) -> Result<
     // self-contained executable because Cargo needs a PE binary there.
     let mbx = std::env::current_exe().wrap_err("failed to locate the mbx shim")?;
     let _ = std::fs::remove_file(executable);
-    let installed = install_launcher(&mbx, executable).and_then(|_| {
+    let installed = install_launcher(&mbx, executable).and_then(|installed| {
         std::fs::OpenOptions::new()
             .write(true)
             .open(executable)?
-            .set_times(std::fs::FileTimes::new().set_modified(modified))
+            .set_times(std::fs::FileTimes::new().set_modified(modified))?;
+        Ok(installed)
     });
-    if let Err(error) = installed {
-        let _ = std::fs::rename(&real, executable);
-        return Err(error).wrap_err("failed to install the build-script shim");
+    match installed {
+        Ok(installed) => Ok(installed),
+        Err(error) => {
+            let _ = std::fs::rename(real, executable);
+            Err(error).wrap_err("failed to install the build-script shim")
+        }
     }
-    Ok(())
 }
 
 #[cfg(unix)]
-fn install_launcher(mbx: &Path, executable: &Path) -> std::io::Result<()> {
+fn install_launcher(mbx: &Path, executable: &Path) -> std::io::Result<Option<InstalledLauncher>> {
     let depth = profile_depth(executable);
     let profile = executable
         .ancestors()
         .nth(depth)
         .ok_or_else(|| std::io::Error::other("build-script path has no Cargo profile directory"))?;
-    let metadata = std::fs::metadata(mbx)?;
-    let modified = metadata
-        .modified()
-        .ok()
-        .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok());
-    let absolute = std::path::absolute(mbx)?;
-    let mut identity = absolute.as_os_str().as_encoded_bytes().to_vec();
-    identity.push(0);
-    identity.extend_from_slice(&metadata.len().to_le_bytes());
-    identity.extend_from_slice(&modified.map_or(0, |time| time.as_nanos()).to_le_bytes());
-    let identity = CacheDigest::blake3(&identity);
+    let identity = pinned_binary_digest(mbx)?;
     // Put the pinned binary under the profile, which every build script of
     // that profile shares, so the launcher stays portable when a target
     // directory moves between checkouts or CI runners.
@@ -157,7 +205,7 @@ fn install_launcher(mbx: &Path, executable: &Path) -> std::io::Result<()> {
         .join(&identity.hash)
         .join("mbx");
     let pinned = profile.join(&relative);
-    install_pinned_binary(mbx, &pinned)?;
+    install_pinned_binary(mbx, &pinned, &identity)?;
 
     let launcher = format!(
         "#!/bin/sh\n{}=\"$0\" exec \"$(dirname \"$0\")/{}{}\" \"$@\"\n",
@@ -165,8 +213,13 @@ fn install_launcher(mbx: &Path, executable: &Path) -> std::io::Result<()> {
         "../".repeat(depth - 1),
         relative.to_string_lossy(),
     );
-    std::fs::write(executable, launcher)?;
-    std::fs::set_permissions(executable, std::fs::Permissions::from_mode(0o755))
+    std::fs::write(executable, &launcher)?;
+    std::fs::set_permissions(executable, std::fs::Permissions::from_mode(0o755))?;
+    Ok(Some(InstalledLauncher {
+        launcher: executable.to_owned(),
+        pinned,
+        bytes: launcher.into_bytes(),
+    }))
 }
 
 /// How many levels a build-script executable sits below its Cargo profile
@@ -182,62 +235,85 @@ fn profile_depth(executable: &Path) -> usize {
     }
 }
 
+/// Only observed regular executable bytes can identify a pinned shim.
 #[cfg(unix)]
-fn install_pinned_binary(mbx: &Path, destination: &Path) -> std::io::Result<()> {
+fn pinned_binary_digest(path: &Path) -> std::io::Result<CacheDigest> {
+    use std::os::unix::fs::{MetadataExt as _, OpenOptionsExt as _};
+    // Observe type, mode and bytes through one handle. Nofollow rejects link
+    // substitution; nonblock prevents a substituted FIFO from hanging startup.
+    let mut file = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+        .open(path)?;
+    let metadata = file.metadata()?;
+    if !metadata.file_type().is_file() || metadata.permissions().mode() & 0o111 == 0 {
+        return Err(std::io::Error::other(
+            "pinned shim is not a regular executable file",
+        ));
+    }
+    let digest = CacheDigest::blake3_reader(&mut file)
+        .map_err(|error| std::io::Error::other(error.to_string()))?;
+    let current = std::fs::symlink_metadata(path)?;
+    if !current.file_type().is_file()
+        || current.dev() != metadata.dev()
+        || current.ino() != metadata.ino()
+        || current.len() != digest.size
+        || current.permissions().mode() & 0o111 == 0
+    {
+        return Err(std::io::Error::other(
+            "pinned shim changed during verification",
+        ));
+    }
+    Ok(digest)
+}
+
+#[cfg(unix)]
+fn verify_pinned_binary(path: &Path, expected: &CacheDigest) -> std::io::Result<()> {
+    if pinned_binary_digest(path)? != *expected {
+        return Err(std::io::Error::other(
+            "pinned shim content differs from its identity",
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn install_pinned_binary(
+    mbx: &Path,
+    destination: &Path,
+    expected: &CacheDigest,
+) -> std::io::Result<()> {
+    verify_pinned_binary(mbx, expected)?;
     let parent = destination
         .parent()
         .ok_or_else(|| std::io::Error::other("pinned shim has no parent directory"))?;
     std::fs::create_dir_all(parent)?;
-
-    // macOS can SIGKILL an exec through a hard link created moments earlier.
-    // A copied inode published by rename does not hit that kernel race. Races
-    // between installers are harmless because this identity names identical
-    // mbx bytes, and rename keeps the destination complete at every instant.
-    #[cfg(target_os = "macos")]
-    {
-        if destination.exists() {
-            return Ok(());
-        }
-        let temporary = tempfile::NamedTempFile::new_in(parent)?;
-        std::fs::copy(mbx, temporary.path())?;
-        let mut permissions = std::fs::metadata(temporary.path())?.permissions();
-        permissions.set_mode(permissions.mode() | 0o100);
-        std::fs::set_permissions(temporary.path(), permissions)?;
-        let (file, temporary) = temporary.into_parts();
-        drop(file);
-        temporary
-            .persist(destination)
-            .map_err(|error| error.error)?;
-        Ok(())
+    match std::fs::symlink_metadata(destination) {
+        Ok(_) => return verify_pinned_binary(destination, expected),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error),
     }
 
-    #[cfg(not(target_os = "macos"))]
-    {
-        match std::fs::hard_link(mbx, destination) {
-            Ok(()) => return Ok(()),
-            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => return Ok(()),
-            Err(_) => {}
-        }
-
-        let temporary = tempfile::NamedTempFile::new_in(parent)?;
-        std::fs::copy(mbx, temporary.path())?;
-        let mut permissions = std::fs::metadata(temporary.path())?.permissions();
-        permissions.set_mode(permissions.mode() | 0o100);
-        std::fs::set_permissions(temporary.path(), permissions)?;
-        let (file, temporary) = temporary.into_parts();
-        drop(file);
-        match std::fs::hard_link(&temporary, destination) {
-            Ok(()) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
-            Err(error) => return Err(error),
-        }
-        Ok(())
+    // Copy an independent inode: a source hard link would permit later source
+    // writes to mutate a supposedly content-addressed executable. macOS also
+    // rejects some newly linked executable inodes. Never replace a foreign pin.
+    let temporary = tempfile::NamedTempFile::new_in(parent)?;
+    std::fs::copy(mbx, temporary.path())?;
+    verify_pinned_binary(temporary.path(), expected)?;
+    verify_pinned_binary(mbx, expected)?;
+    match temporary.persist_noclobber(destination) {
+        Ok(_) => {}
+        Err(error) if error.error.kind() == std::io::ErrorKind::AlreadyExists => {}
+        Err(error) => return Err(error.error),
     }
+    // This observes publication; a later external filesystem mutation remains
+    // possible and cannot be described as an immutable executable guarantee.
+    verify_pinned_binary(destination, expected)
 }
 
 #[cfg(not(unix))]
-fn install_launcher(mbx: &Path, executable: &Path) -> std::io::Result<()> {
-    std::fs::copy(mbx, executable).map(|_| ())
+fn install_launcher(mbx: &Path, executable: &Path) -> std::io::Result<Option<InstalledLauncher>> {
+    std::fs::copy(mbx, executable).map(|_| None)
 }
 
 /// Apply mbx's archive-timestamp policy to a build script's environment.
@@ -287,7 +363,10 @@ pub(crate) fn start_timing() -> Option<crate::phase_timing::Invocation> {
 }
 
 /// Run the preserved program without consulting the cache.
-pub(crate) fn run_real() -> ExitCode {
+pub(crate) fn run_real(measurement: &mut crate::process_measurement::Invocation) -> ExitCode {
+    if measurement.outcome() != CacheOutcome::Miss {
+        measurement.set_outcome(CacheOutcome::Bypass);
+    }
     let Some(invoked) = session::build_script_invocation_path() else {
         return ExitCode::FAILURE;
     };
@@ -299,7 +378,10 @@ pub(crate) fn run_real() -> ExitCode {
     command.args(std::env::args_os().skip(1));
     command.env_remove(session::BUILD_SCRIPT_SHIM_PATH_ENV);
     apply_ar_determinism(&mut command);
-    match command.status() {
+    match measurement
+        .process(ProcessPurpose::Work)
+        .status(&mut command)
+    {
         Ok(status) => crate::materialize::exit_code(status),
         Err(error) => {
             eprintln!("mbx[error]: failed to execute the build script: {error}");
@@ -308,7 +390,7 @@ pub(crate) fn run_real() -> ExitCode {
     }
 }
 
-pub(crate) fn run() -> Result<ExitCode> {
+pub(crate) fn run(measurement: &mut crate::process_measurement::Invocation) -> Result<ExitCode> {
     let invoked = session::build_script_invocation_path()
         .ok_or_else(|| eyre::eyre!("build-script shim has no argv0"))?;
     let real = session::find_build_script_real_path(&invoked)
@@ -336,6 +418,7 @@ pub(crate) fn run() -> Result<ExitCode> {
         // script republishes it, where bypassing would leave it broken.
         match restore(&action, &action_bytes) {
             Ok(Some(restored)) => {
+                measurement.set_outcome(CacheOutcome::Hit);
                 record_action_hit(&action, restored.stats, &stats_label());
                 replay_bytes(&restored.stdout, &restored.stderr)?;
                 return Ok(ExitCode::SUCCESS);
@@ -355,20 +438,13 @@ pub(crate) fn run() -> Result<ExitCode> {
     command.env_remove(session::BUILD_SCRIPT_SHIM_PATH_ENV);
     apply_ar_determinism(&mut command);
     let started = Instant::now();
-    let output = command
-        .output()
-        .wrap_err("failed to execute the build script")?;
+    let output = captured_execution(&mut command, measurement, looked_up)?;
     session::record_compiler_invocation(
         if looked_up { "miss" } else { "unconsulted" },
         Some(&stats_label()),
         crate::util::duration_ns(started.elapsed()),
     );
-    replay_bytes(&output.stdout, &output.stderr)?;
-    if !output.status.success() {
-        return Ok(crate::materialize::exit_code(output.status));
-    }
-
-    let caching = (|| -> Result<()> {
+    completed_execution(&output, replay_bytes, |output| {
         let Some(prediction) = parse_prediction(&output.stdout)? else {
             record_bypass("build-script-always-rerun");
             return Ok(());
@@ -376,14 +452,43 @@ pub(crate) fn run() -> Result<ExitCode> {
         let (action_bytes, action) = build_action(&binary_action, &prediction)?;
         publish(&action, &action_bytes, &output.stdout, &output.stderr)?;
         record_prediction(invocation, action, &prediction)
-    })();
-    if let Err(error) = caching {
-        // The script has already run and its streams have already reached
-        // Cargo. Cache bookkeeping may fail, but retrying the program would
-        // duplicate arbitrary side effects and every emitted directive.
+    })
+}
+
+/// Completed children cannot fall through to the outer uncached execution.
+fn completed_execution(
+    output: &std::process::Output,
+    replay: impl FnOnce(&[u8], &[u8]) -> Result<()>,
+    store: impl FnOnce(&std::process::Output) -> Result<()>,
+) -> Result<ExitCode> {
+    replay(&output.stdout, &output.stderr)
+        .wrap_err("failed to replay mandatory build-script output")?;
+    if !output.status.success() {
+        return Ok(crate::materialize::exit_code(output.status));
+    }
+    if let Err(error) = store(output) {
+        // Cache bookkeeping must never duplicate arbitrary script side effects.
         session::report_shim_warning(&format!("build-script result was not stored: {error:#}"));
     }
     Ok(ExitCode::SUCCESS)
+}
+
+/// Preparation happens before this boundary; terminal observation precedes
+/// stream replay, metadata parsing and cache publication.
+fn captured_execution<S: FnMut(MeasurementEvent)>(
+    command: &mut Command,
+    measurement: &mut crate::process_measurement::Invocation<S>,
+    looked_up: bool,
+) -> Result<std::process::Output> {
+    measurement.set_outcome(if looked_up {
+        CacheOutcome::Miss
+    } else {
+        CacheOutcome::Bypass
+    });
+    measurement
+        .process(ProcessPurpose::Work)
+        .output(command)
+        .wrap_err("failed to execute the build script")
 }
 
 fn record_bypass(kind: &str) {
@@ -654,7 +759,7 @@ fn input_state_at(
             path.parent().unwrap_or_else(|| Path::new("")).join(&target)
         };
         return Ok(InputState::Symlink {
-            target: normalize_environment_value(&target.to_string_lossy(), mappings),
+            target: normalize_environment_value(native_utf8(target.as_os_str())?, mappings),
             referent: Box::new(input_state_at(
                 &resolved,
                 mappings,
@@ -676,7 +781,7 @@ fn input_state_at(
             .filter(|entry| !excluded.iter().any(|excluded| entry.path() == *excluded))
             .map(|entry| {
                 Ok((
-                    entry.file_name().to_string_lossy().into_owned(),
+                    native_utf8(&entry.file_name())?.to_owned(),
                     input_state_at(&entry.path(), mappings, excluded, symlink_depth)?,
                 ))
             })
@@ -689,6 +794,13 @@ fn input_state_at(
         "declared build-script input is not a file or directory: {}",
         path.display()
     )
+}
+
+/// Cache descriptors must preserve native spellings exactly.
+fn native_utf8(value: &std::ffi::OsStr) -> Result<&str> {
+    value
+        .to_str()
+        .ok_or_else(|| eyre::eyre!("build-script cache input is not UTF-8"))
 }
 
 fn out_dir_is_portable() -> Result<bool> {
@@ -705,9 +817,12 @@ fn out_dir_is_portable() -> Result<bool> {
     ]
     .into_iter()
     .filter_map(std::env::var_os)
-    .map(|value| value.to_string_lossy().into_owned())
-    .filter(|value| !value.is_empty())
-    .collect::<BTreeSet<_>>();
+    .map(|value| native_utf8(&value).map(str::to_owned))
+    .collect::<Result<BTreeSet<_>>>()?;
+    let needles = needles
+        .into_iter()
+        .filter(|value| !value.is_empty())
+        .collect::<BTreeSet<_>>();
     let root = PathBuf::from(&out_dir);
     if !root.is_dir() {
         return Ok(true);
@@ -721,10 +836,8 @@ fn out_dir_is_portable() -> Result<bool> {
                 pending.push(entry.path());
             } else if kind.is_symlink() {
                 let target = std::fs::read_link(entry.path())?;
-                if needles
-                    .iter()
-                    .any(|needle| target.to_string_lossy().contains(needle))
-                {
+                let target = native_utf8(target.as_os_str())?;
+                if needles.iter().any(|needle| target.contains(needle)) {
                     return Ok(false);
                 }
             }
@@ -778,8 +891,8 @@ fn publish(action: &CacheDigest, action_bytes: &[u8], stdout: &[u8], stderr: &[u
         &normalize_output_text(stderr, &mappings),
     )?;
     let action_blob = stage_bytes(staging.path(), "action", action_bytes)?;
-    let metadata = canonical_json(&Metadata {
-        kind: ADAPTER.into(),
+    let metadata = canonical_json(&CapturedMetadata {
+        kind: CapturedMetadataKind::BuildScript,
         version: 1,
         stdout: stdout.0.clone(),
         stderr: stderr.0.clone(),
@@ -846,7 +959,7 @@ fn store_directory(
             symlinks.push(CacheSymlinkNode {
                 name,
                 mode: 0,
-                target: target.to_string_lossy().into_owned(),
+                target: native_utf8(target.as_os_str())?.to_owned(),
             });
         } else if metadata.is_dir() {
             directories.push(CacheDirectoryNode {
@@ -867,12 +980,14 @@ fn store_directory(
             bail!("OUT_DIR contains an unsupported entry");
         }
     }
-    let bytes = canonical_json(&CacheDirectory {
+    let directory = CacheDirectory {
         directories,
         files,
         symlinks,
         version: 1,
-    })?;
+    };
+    directory.validate()?;
+    let bytes = canonical_json(&directory)?;
     let name = format!("directory-{}", blobs.len());
     let staged = stage_bytes(staging, &name, &bytes)?;
     blobs.push(staged.clone());
@@ -914,9 +1029,12 @@ fn restore(action: &CacheDigest, action_bytes: &[u8]) -> Result<Option<Restored>
     if read_verified_blob(&roots[0], action, "build-script action")? != action_bytes {
         bail!("cached build-script action descriptor differs");
     }
-    let metadata: Metadata =
-        read_canonical_blob(&roots[1], &metadata_digest, "build-script metadata")?;
-    if metadata.version != 1 || metadata.kind != ADAPTER {
+    let metadata = CapturedMetadata::from_canonical_bytes(&read_verified_blob(
+        &roots[1],
+        &metadata_digest,
+        "build-script metadata",
+    )?)?;
+    if metadata.kind != CapturedMetadataKind::BuildScript {
         bail!("cached build-script metadata is unsupported");
     }
     let streams = find_blobs(&[metadata.stdout.clone(), metadata.stderr.clone()])?;
@@ -1040,9 +1158,7 @@ fn restore_directory(digest: &CacheDigest, destination: &Path) -> Result<(u64, u
     let path = find_blobs(std::slice::from_ref(digest))?.remove(0);
     let directory: CacheDirectory =
         read_canonical_blob(&path, digest, "build-script output directory")?;
-    if directory.version != 1 {
-        bail!("cached build-script output directory is unsupported");
-    }
+    directory.validate()?;
     std::fs::create_dir_all(destination)?;
     let mut count = 0_u64;
     let mut bytes = 0_u64;
@@ -1103,6 +1219,246 @@ mod tests {
     use std::time::{Duration, SystemTime};
 
     #[cfg(unix)]
+    fn executable_fixture(path: &Path, bytes: &[u8]) {
+        std::fs::write(path, bytes).unwrap();
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn shim_content_identity_changes_even_when_path_length_and_mtime_match() {
+        let directory = tempfile::tempdir().unwrap();
+        let source = directory.path().join("source");
+        let executable = directory
+            .path()
+            .join("target/debug/build/pkg-0123456789abcdef/build-script-build");
+        std::fs::create_dir_all(executable.parent().unwrap()).unwrap();
+        executable_fixture(&source, b"first binary");
+        let modified = SystemTime::UNIX_EPOCH + Duration::from_secs(1_700_000_000);
+        filetime::set_file_mtime(&source, filetime::FileTime::from_system_time(modified)).unwrap();
+        install_launcher(&source, &executable).unwrap();
+        let first = std::fs::read(&executable).unwrap();
+        executable_fixture(&source, b"other binary");
+        filetime::set_file_mtime(&source, filetime::FileTime::from_system_time(modified)).unwrap();
+        install_launcher(&source, &executable).unwrap();
+        assert_ne!(first, std::fs::read(&executable).unwrap());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn existing_pin_requires_exact_regular_executable_content() {
+        use std::os::unix::fs::symlink;
+        let directory = tempfile::tempdir().unwrap();
+        let source = directory.path().join("source");
+        let destination = directory.path().join("pins/mbx");
+        executable_fixture(&source, b"expected");
+        let identity = pinned_binary_digest(&source).unwrap();
+        install_pinned_binary(&source, &destination, &identity).unwrap();
+        let before = std::fs::metadata(&destination).unwrap().modified().unwrap();
+        install_pinned_binary(&source, &destination, &identity).unwrap();
+        assert_eq!(
+            before,
+            std::fs::metadata(&destination).unwrap().modified().unwrap()
+        );
+        executable_fixture(&destination, b"tampered");
+        assert!(install_pinned_binary(&source, &destination, &identity).is_err());
+        assert_eq!(std::fs::read(&destination).unwrap(), b"tampered");
+        std::fs::remove_file(&destination).unwrap();
+        symlink(&source, &destination).unwrap();
+        assert!(install_pinned_binary(&source, &destination, &identity).is_err());
+        std::fs::remove_file(&destination).unwrap();
+        std::fs::write(&destination, b"expected").unwrap();
+        std::fs::set_permissions(&destination, std::fs::Permissions::from_mode(0o644)).unwrap();
+        assert!(install_pinned_binary(&source, &destination, &identity).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn published_pin_is_independent_of_later_source_writes() {
+        let directory = tempfile::tempdir().unwrap();
+        let source = directory.path().join("source");
+        let destination = directory.path().join("pins/mbx");
+        executable_fixture(&source, b"expected");
+        let identity = pinned_binary_digest(&source).unwrap();
+        install_pinned_binary(&source, &destination, &identity).unwrap();
+        executable_fixture(&source, b"modified");
+        verify_pinned_binary(&destination, &identity).unwrap();
+        assert!(install_pinned_binary(&source, &destination, &identity).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn actual_script_miss_and_bypass_measure_the_child_and_preserve_failure_output() {
+        use mbx_cache_core::{AdapterKind, InvocationKind, ProcessOutcome};
+        for looked_up in [false, true] {
+            let mut events = Vec::new();
+            {
+                let mut invocation = crate::process_measurement::Invocation::with_sink(
+                    AdapterKind::BuildScript,
+                    InvocationKind::Work,
+                    None,
+                    |event| events.push(event),
+                );
+                let mut command = Command::new("sh");
+                command.args([
+                    "-c",
+                    "printf 'cargo:warning=fixture\\n'; printf 'fixture stderr\\n' >&2; exit 7",
+                ]);
+                let output = captured_execution(&mut command, &mut invocation, looked_up).unwrap();
+                assert_eq!(output.status.code(), Some(7));
+                assert_eq!(output.stdout, b"cargo:warning=fixture\n");
+                assert_eq!(output.stderr, b"fixture stderr\n");
+                invocation.finish_current();
+            }
+            assert_eq!(events.len(), 2);
+            assert!(matches!(&events[0], MeasurementEvent::Process {
+                purpose: ProcessPurpose::Work, outcome: ProcessOutcome::Failed,
+                measurement, ..
+            } if measurement.started == 1 && measurement.attempts == 1
+                && measurement.wall_observations == 1 && measurement.observed_wall_ns > 0));
+            assert!(matches!(&events[1], MeasurementEvent::Invocation {
+                cache_outcome, ..
+            } if *cache_outcome == if looked_up { CacheOutcome::Miss } else { CacheOutcome::Bypass }));
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn metadata_failure_after_real_execution_preserves_success_without_rerun() {
+        use mbx_cache_core::{AdapterKind, InvocationKind};
+        let directory = tempfile::tempdir().unwrap();
+        let marker = directory.path().join("runs");
+        let mut events = Vec::new();
+        {
+            let mut invocation = crate::process_measurement::Invocation::with_sink(
+                AdapterKind::BuildScript,
+                InvocationKind::Work,
+                None,
+                |event| events.push(event),
+            );
+            let mut command = Command::new("sh");
+            command.args(["-c", "printf x >> \"$1\"", "fixture"]);
+            command.arg(&marker);
+            let output = captured_execution(&mut command, &mut invocation, true).unwrap();
+            let code = completed_execution(&output, replay_bytes, |_| {
+                let metadata = CacheDirectory {
+                    directories: Vec::new(),
+                    files: Vec::new(),
+                    symlinks: Vec::new(),
+                    version: 255,
+                };
+                metadata.validate()?;
+                Ok(())
+            })
+            .unwrap();
+            assert_eq!(code, ExitCode::SUCCESS);
+            invocation.finish_current();
+        }
+        assert_eq!(std::fs::read(marker).unwrap(), b"x");
+        assert_eq!(
+            events
+                .iter()
+                .filter(|event| matches!(event, MeasurementEvent::Process { .. }))
+                .count(),
+            1
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn mandatory_replay_failure_propagates_after_one_real_execution() {
+        use mbx_cache_core::{AdapterKind, InvocationKind};
+        let directory = tempfile::tempdir().unwrap();
+        let marker = directory.path().join("runs");
+        let mut events = Vec::new();
+        let mut invocation = crate::process_measurement::Invocation::with_sink(
+            AdapterKind::BuildScript,
+            InvocationKind::Work,
+            None,
+            |event| events.push(event),
+        );
+        let mut command = Command::new("sh");
+        command.args([
+            "-c",
+            "printf x >> \"$1\"; printf 'cargo:rustc-cfg=required\\n'",
+            "fixture",
+        ]);
+        command.arg(&marker);
+        let output = captured_execution(&mut command, &mut invocation, true).unwrap();
+        let mut stored = false;
+        let result = completed_execution(
+            &output,
+            |stdout, _| {
+                assert_eq!(stdout, b"cargo:rustc-cfg=required\n");
+                bail!("injected output writer failure")
+            },
+            |_| {
+                stored = true;
+                Ok(())
+            },
+        );
+        assert!(result.is_err());
+        assert!(
+            invocation.has_work_attempted(),
+            "outer shim must forbid fallback"
+        );
+        assert!(!stored);
+        invocation.finish_current();
+        assert_eq!(std::fs::read(marker).unwrap(), b"x");
+        assert_eq!(
+            events
+                .iter()
+                .filter(|event| matches!(event, MeasurementEvent::Process { .. }))
+                .count(),
+            1
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn cache_input_and_output_reject_non_utf8_native_spellings() {
+        use std::os::unix::ffi::OsStringExt as _;
+        use std::os::unix::fs::symlink;
+        let directory = tempfile::tempdir().unwrap();
+        let input = directory.path().join("input");
+        std::fs::create_dir(&input).unwrap();
+        let name = std::ffi::OsString::from_vec(vec![0xff]);
+        std::fs::write(input.join(&name), b"first").unwrap();
+        assert!(input_state(&input, &[]).is_err());
+        std::fs::remove_file(input.join(name)).unwrap();
+        symlink(std::ffi::OsString::from_vec(vec![0xfe]), input.join("link")).unwrap();
+        assert!(input_state(&input.join("link"), &[]).is_err());
+        let staging = tempfile::tempdir().unwrap();
+        let mut blobs = Vec::new();
+        assert!(store_directory(&input, staging.path(), &mut blobs).is_err());
+        assert!(
+            blobs.is_empty(),
+            "invalid target must not stage cache objects"
+        );
+    }
+
+    #[test]
+    fn restored_script_hit_emits_one_invocation_and_no_subprocess() {
+        use mbx_cache_core::{AdapterKind, InvocationKind};
+        let mut events = Vec::new();
+        let mut invocation = crate::process_measurement::Invocation::with_sink(
+            AdapterKind::BuildScript,
+            InvocationKind::Work,
+            None,
+            |event| events.push(event),
+        );
+        invocation.set_outcome(CacheOutcome::Hit);
+        invocation.finish_current();
+        assert!(matches!(
+            events.as_slice(),
+            [MeasurementEvent::Invocation {
+                cache_outcome: CacheOutcome::Hit,
+                ..
+            }]
+        ));
+    }
+
+    #[cfg(unix)]
     #[test]
     fn build_script_shims_pin_one_binary_per_profile_in_either_layout() {
         for unit in [
@@ -1115,7 +1471,7 @@ mod tests {
             std::fs::create_dir_all(executable.parent().unwrap()).unwrap();
             std::fs::write(&executable, b"compiled build script").unwrap();
 
-            install(&executable, &CacheDigest::blake3(b"action")).unwrap();
+            install(&executable, &CacheDigest::blake3(b"action"), None).unwrap();
 
             assert!(
                 profile.join(".mbx-build-script-shims").is_dir(),
@@ -1146,7 +1502,7 @@ mod tests {
         filetime::set_file_mtime(&executable, filetime::FileTime::from_system_time(modified))
             .unwrap();
 
-        install(&executable, &CacheDigest::blake3(b"action")).unwrap();
+        install(&executable, &CacheDigest::blake3(b"action"), None).unwrap();
 
         assert_eq!(
             std::fs::metadata(&executable).unwrap().modified().unwrap(),

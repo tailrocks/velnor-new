@@ -1,12 +1,15 @@
 use super::*;
 
 /// Capture every recorded Cargo target as a manifest plus an inline metadata tar.
-pub(crate) fn capture(store: &Path, targets: &[WorkspaceRoots]) -> Result<ExportAdditions> {
-    let executable = std::env::current_exe()?;
-    let executable_digest = CacheDigest::blake3_file(&executable)?;
-    let cas = LocalCas::new(store);
-    let mut objects = BTreeSet::new();
-    let mut workspaces = Vec::new();
+pub(crate) fn capture(
+    config: &Config,
+    store: &Path,
+    targets: &[WorkspaceRoots],
+    owner_root: &Path,
+    evidence: &[mbx_cache_store::ReceiptEvidence],
+) -> Result<CaptureOutcome> {
+    let owner_root = crate::out_dir::resolve_root(owner_root)?;
+    let mut resolved = Vec::new();
     for target in targets {
         if !target.workspace_root.is_dir() {
             bail!(
@@ -14,27 +17,52 @@ pub(crate) fn capture(store: &Path, targets: &[WorkspaceRoots]) -> Result<Export
                 target.workspace_root.display()
             );
         }
-        workspaces.push(capture_workspace(
+        let (physical, owned_link) = resolve_roots(target)?;
+        if placement::overlaps(store, &owner_root, &physical)? {
+            return Ok(CaptureOutcome::UnavailableManagedOverlap);
+        }
+        resolved.push((target, physical, owned_link));
+    }
+    let executable = std::env::current_exe()?;
+    let executable_digest = CacheDigest::blake3_file(&executable)?;
+    let cas = LocalCas::new(store);
+    let mut objects = BTreeSet::new();
+    let mut workspaces = Vec::new();
+    for (target, physical, owned_link) in resolved {
+        let state = capture_workspace(
             &cas,
             target,
             &executable_digest,
             &mut objects,
-        )?);
+            &owner_root,
+            (&physical, owned_link),
+            evidence,
+        );
+        match state {
+            Ok(state) => workspaces.push(state),
+            Err(error) if crate::out_dir::is_unavailable(&error) => {
+                return Ok(CaptureOutcome::UnavailableOwnerProof {
+                    reason: error.to_string(),
+                });
+            }
+            Err(error) => return Err(error),
+        }
     }
-    if workspaces.is_empty() {
-        return Ok(ExportAdditions::default());
+    let (workspaces, retained_owner_reasons) =
+        match lineage_capture::captured_owners(config, store, targets, evidence, workspaces) {
+            Ok(value) => value,
+            Err(error) => {
+                return Ok(CaptureOutcome::UnavailableOwnerProof {
+                    reason: error.to_string(),
+                });
+            }
+        };
+    match lineage_capture::publish_captures(&cas, workspaces, retained_owner_reasons) {
+        Ok(outcome) => Ok(outcome),
+        Err(error) => Ok(CaptureOutcome::UnavailableOwnerProof {
+            reason: error.to_string(),
+        }),
     }
-    let bytes = serde_json::to_vec(&Bundle {
-        version: VERSION,
-        workspaces,
-    })?;
-    let digest = CacheDigest::blake3(&bytes);
-    cas.store_bytes(&digest, &bytes)?;
-    objects.insert(digest.clone());
-    Ok(ExportAdditions {
-        attachments: BTreeMap::from([(ATTACHMENT.to_owned(), digest)]),
-        objects,
-    })
 }
 
 /// Retain omitted supported workspaces while current captures replace the same root.
@@ -42,19 +70,17 @@ pub(crate) fn retain(
     store: &Path,
     mut additions: ExportAdditions,
     baseline: Option<&CacheDigest>,
-) -> Result<ExportAdditions> {
+) -> Result<RetainOutcome> {
+    let mut unavailable_reasons = Vec::new();
     let Some(baseline) = baseline else {
-        return Ok(additions);
+        return Ok(RetainOutcome {
+            additions,
+            unavailable_reasons,
+        });
     };
     let cas = LocalCas::new(store);
     let load = |digest: &CacheDigest| -> Result<Bundle> {
-        let path = cas
-            .find(digest)?
-            .ok_or_else(|| eyre::eyre!("retained workspace attachment is missing"))?;
-        let bundle: Bundle = serde_json::from_slice(&std::fs::read(path)?)?;
-        if bundle.version != VERSION || bundle.workspaces.is_empty() {
-            bail!("invalid retained workspace attachment");
-        }
+        let bundle = lineage::read_bundle(&cas, digest)?;
         for state in &bundle.workspaces {
             semantic_workspace(&cas, state)?;
         }
@@ -63,49 +89,38 @@ pub(crate) fn retain(
     let mut states = load(baseline)?
         .workspaces
         .into_iter()
-        .map(|state| {
-            (
-                (
-                    state.workspace_root.clone(),
-                    state.cargo_roots.target_dir.clone(),
-                    state.cargo_roots.build_dir.clone(),
-                ),
-                state,
-            )
-        })
+        .map(|state| (state.owner.clone(), state))
         .collect::<BTreeMap<_, _>>();
     if let Some(current) = additions.attachments.get(ATTACHMENT) {
-        for state in load(current)?.workspaces {
-            states.insert(
-                (
-                    state.workspace_root.clone(),
-                    state.cargo_roots.target_dir.clone(),
-                    state.cargo_roots.build_dir.clone(),
-                ),
-                state,
-            );
-        }
+        lineage_capture::merge_retained(
+            &cas,
+            &mut states,
+            load(current)?,
+            &mut unavailable_reasons,
+        )?;
     }
     let bundle = Bundle {
         version: VERSION,
         workspaces: states.into_values().collect(),
     };
+    validate_bundle(&bundle)?;
+    additions.required_receipt_evidence = lineage::required_receipts(&cas, &bundle.workspaces)?;
+    additions.objects.clear();
     for state in &bundle.workspaces {
-        for tree in &state.trees {
-            additions.objects.insert(tree.inline_archive.clone());
-            for reference in &tree.references {
-                if let FileSource::Cas(digest) = &reference.source {
-                    additions.objects.insert(digest.clone());
-                }
-            }
-        }
+        additions
+            .objects
+            .extend(lineage::owner_objects(&cas, &state.owner)?.1);
+        additions.objects.extend(lineage::snapshot_objects(state));
     }
-    let bytes = serde_json::to_vec(&bundle)?;
+    let bytes = mbx_cache_core::canonical_json(&bundle)?;
     let digest = CacheDigest::blake3(&bytes);
     cas.store_bytes(&digest, &bytes)?;
     additions.objects.insert(digest.clone());
     additions.attachments.insert(ATTACHMENT.to_owned(), digest);
-    Ok(additions)
+    Ok(RetainOutcome {
+        additions,
+        unavailable_reasons,
+    })
 }
 
 pub(super) fn capture_workspace(
@@ -113,8 +128,20 @@ pub(super) fn capture_workspace(
     target: &WorkspaceRoots,
     executable_digest: &CacheDigest,
     objects: &mut BTreeSet<CacheDigest>,
+    owner_root: &Path,
+    resolved: (&CargoBuildRoots, Option<PathBuf>),
+    evidence: &[mbx_cache_store::ReceiptEvidence],
 ) -> Result<WorkspaceState> {
-    let (physical, owned_link) = resolve_roots(target)?;
+    let (physical, owned_link) = resolved;
+    let owned_out_dirs =
+        crate::out_dir::capture(owner_root, target, &physical.build_dir, cas, evidence)?;
+    for snapshot in &owned_out_dirs {
+        objects.extend(snapshot.files.iter().map(|file| file.digest.clone()));
+    }
+    let exact_sources = owned_out_dirs
+        .iter()
+        .map(|snapshot| physical.build_dir.join(&snapshot.source))
+        .collect::<Vec<_>>();
     let mut owned_paths = Vec::new();
     if let Some(link) = owned_link {
         owned_paths.push(link);
@@ -122,8 +149,9 @@ pub(super) fn capture_workspace(
     }
     let mut trees = vec![capture_tree(
         cas,
-        &physical,
+        physical,
         &owned_paths,
+        &exact_sources,
         RootRole::Target,
         executable_digest,
         objects,
@@ -131,25 +159,31 @@ pub(super) fn capture_workspace(
     if target.cargo.build_dir != target.cargo.target_dir {
         trees.push(capture_tree(
             cas,
-            &physical,
+            physical,
             &owned_paths,
+            &exact_sources,
             RootRole::Build,
             executable_digest,
             objects,
         )?);
     }
-    Ok(WorkspaceState {
+    let state = WorkspaceState {
+        owner: CacheDigest::blake3(b"unassigned native snapshot owner"),
         workspace_root: target.workspace_root.clone(),
         cargo_roots: target.cargo.clone(),
         signature: workspace_signature(&target.workspace_root)?,
         trees,
-    })
+        owned_out_dirs,
+    };
+    semantic_workspace(cas, &state)?;
+    Ok(state)
 }
 
 pub(super) fn capture_tree(
     cas: &LocalCas,
     roots: &CargoBuildRoots,
     owned_paths: &[PathBuf],
+    exact_sources: &[PathBuf],
     role: RootRole,
     executable_digest: &CacheDigest,
     objects: &mut BTreeSet<CacheDigest>,
@@ -194,7 +228,9 @@ pub(super) fn capture_tree(
             });
         } else if kind.is_file() {
             let digest = CacheDigest::blake3_file(&path)?;
-            let source = if digest == *executable_digest {
+            let source = if digest == *executable_digest
+                && !exact_sources.iter().any(|source| path.starts_with(source))
+            {
                 Some(FileSource::Mbx)
             } else if cas.path_for(&digest)?.is_file() {
                 objects.insert(digest.clone());

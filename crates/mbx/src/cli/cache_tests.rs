@@ -205,3 +205,31 @@ fn cache_import_requires_separator_before_cargo_root_options() {
     .map(std::ffi::OsStr::new);
     assert!(Cli::try_parse_from(&arguments).is_err());
 }
+
+#[test]
+fn directory_cache_verification_has_explicit_data_only_arguments() {
+    let arguments = ["mbx", "cache", "verify", "bundle", "--json"].map(std::ffi::OsStr::new);
+    let cli = Cli::try_parse_from(&arguments).unwrap();
+    let Commands::Cache(CacheArgs {
+        command: CacheCommands::Verify(args),
+    }) = cli.command
+    else {
+        panic!("directory verification should parse");
+    };
+    assert_eq!(args.directory, Some(PathBuf::from("bundle")));
+    assert!(args.json);
+}
+
+#[test]
+fn local_cache_verification_keeps_its_directory_optional() {
+    let arguments = ["mbx", "cache", "verify"].map(std::ffi::OsStr::new);
+    let cli = Cli::try_parse_from(&arguments).unwrap();
+    let Commands::Cache(CacheArgs {
+        command: CacheCommands::Verify(args),
+    }) = cli.command
+    else {
+        panic!("local verification should parse");
+    };
+    assert!(args.directory.is_none());
+    assert!(!args.json);
+}

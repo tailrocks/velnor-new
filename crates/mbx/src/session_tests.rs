@@ -5,6 +5,17 @@ use super::shims::{first_in_path, is_shim_directory, mark_shim_directory};
 use super::*;
 use crate::config::SummaryStyle;
 
+fn private_test_directory() -> tempfile::TempDir {
+    let mut builder = tempfile::Builder::new();
+    builder.prefix("mbx-session-fixture-");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        builder.permissions(std::fs::Permissions::from_mode(0o700));
+    }
+    builder.tempdir().unwrap()
+}
+
 #[test]
 fn low_disk_session_settings_require_an_explicit_session_policy() {
     let config = Config::for_test(Path::new("/cache"));
@@ -194,6 +205,7 @@ fn test_config(cache_dir: &Path) -> Config {
         cache_dir: cache_dir.to_path_buf(),
         shims_dir: cache_dir.join("shims"),
         stats_report: None,
+        stats_report_dir: None,
         ar_determinism: "auto".into(),
         verify: false,
         verify_sample_rate: 0,
@@ -263,7 +275,11 @@ async fn cmake_selection_uses_the_final_build_environment() {
         serde_json::from_str(&environment["MBX_CMAKE_PROGRAMS"]).unwrap();
     for (variable, program) in selected {
         let shim = Path::new(&environment[&variable]);
-        assert!(shim.starts_with(&config.shims_dir));
+        assert!(
+            shim.canonicalize()
+                .unwrap()
+                .starts_with(config.shims_dir.canonicalize().unwrap())
+        );
         assert!(shim.is_file());
         assert_eq!(
             programs[shim.file_stem().unwrap().to_str().unwrap()],
@@ -1623,7 +1639,7 @@ fn managed_linkers_are_added_only_to_native_links() {
 /// is not reliably runnable on macOS -- see [`install_shim`]. Asserted on the
 /// kind of link rather than by racing the kernel, which no test can do
 /// dependably.
-#[cfg(unix)]
+#[cfg(all(unix, not(feature = "owned-cache-transport")))]
 #[test]
 fn the_session_shim_tracks_the_binary_it_was_installed_from() {
     let directory = tempfile::tempdir().unwrap();
@@ -2131,6 +2147,7 @@ async fn cargo_session_carries_separate_roots_and_exec_clears_inherited_roots() 
         .await
         .unwrap();
     assert_eq!(run.cargo_roots, Some(roots.clone()));
+    assert!(run.receipt_lineage.is_none());
     assert_eq!(
         PathBuf::from(&environment[TARGET_DIR_ENV]),
         roots.target_dir
@@ -2145,7 +2162,534 @@ async fn cargo_session_carries_separate_roots_and_exec_clears_inherited_roots() 
         .await
         .unwrap();
     assert_eq!(run.cargo_roots, None);
+    assert!(run.receipt_lineage.is_none());
     assert!(!environment.contains_key(TARGET_DIR_ENV));
     assert!(!environment.contains_key(BUILD_DIR_ENV));
     exec.finish().await.unwrap();
+}
+
+#[tokio::test]
+async fn unavailable_lineage_stays_frozen_for_the_original_complete_roots() {
+    let cache = tempfile::tempdir().unwrap();
+    let session_dir = tempfile::tempdir().unwrap();
+    let workspace = tempfile::tempdir().unwrap();
+    let config = test_config(cache.path());
+    let session = CacheSession::start(session_dir.path(), &config)
+        .await
+        .unwrap();
+    let roots = crate::store::WorkspaceRoots {
+        workspace_root: workspace.path().to_path_buf(),
+        cargo: crate::store::CargoBuildRoots {
+            target_dir: workspace.path().join("target"),
+            build_dir: workspace.path().join("build"),
+        },
+    };
+    std::fs::create_dir(&roots.cargo.target_dir).unwrap();
+    std::fs::create_dir(&roots.cargo.build_dir).unwrap();
+    session.freeze_lineage(&config, &roots).unwrap();
+    let frozen = session.receipt_lineage.get().unwrap();
+    assert_eq!(frozen.roots, roots);
+    assert!(frozen.receipt.is_none(), "no restored local grant exists");
+    let mut other = roots.clone();
+    other.cargo.build_dir = workspace.path().join("different-build");
+    assert!(session.freeze_lineage(&config, &other).is_err());
+    assert_eq!(session.receipt_lineage.get().unwrap().roots, roots);
+    assert!(
+        session
+            .lineage_for_roots(&other.workspace_root, &other.cargo)
+            .is_none()
+    );
+    session.finish().await.unwrap();
+}
+
+#[tokio::test]
+async fn action_start_prevents_late_lineage_lookup() {
+    let cache = tempfile::tempdir().unwrap();
+    let session_dir = tempfile::tempdir().unwrap();
+    let workspace = tempfile::tempdir().unwrap();
+    let config = test_config(cache.path());
+    let session = CacheSession::start(session_dir.path(), &config)
+        .await
+        .unwrap();
+    let roots = crate::store::WorkspaceRoots {
+        workspace_root: workspace.path().to_path_buf(),
+        cargo: crate::store::CargoBuildRoots {
+            target_dir: workspace.path().join("target"),
+            build_dir: workspace.path().join("build"),
+        },
+    };
+    let run = session
+        .begin(
+            &roots.workspace_root,
+            &roots.cargo,
+            &["check".into()],
+            &mut BTreeMap::new(),
+        )
+        .await
+        .unwrap();
+    assert!(session.freeze_lineage(&config, &roots).is_err());
+    assert!(run.receipt_lineage.is_none());
+    assert!(session.receipt_lineage.get().unwrap().receipt.is_none());
+    session.finish().await.unwrap();
+}
+
+#[tokio::test]
+async fn action_run_retains_frozen_lineage_data_for_only_the_original_roots() {
+    let cache = tempfile::tempdir().unwrap();
+    let session_dir = tempfile::tempdir().unwrap();
+    let workspace = tempfile::tempdir().unwrap();
+    let config = test_config(cache.path());
+    let session = CacheSession::start(session_dir.path(), &config)
+        .await
+        .unwrap();
+    let roots = crate::store::WorkspaceRoots {
+        workspace_root: workspace.path().to_path_buf(),
+        cargo: crate::store::CargoBuildRoots {
+            target_dir: workspace.path().join("target"),
+            build_dir: workspace.path().join("build"),
+        },
+    };
+    // Synthetic transported data tests propagation, never local grant authority.
+    let owner = CacheDigest::blake3(b"original owner");
+    let selected_attachment = CacheDigest::blake3(b"selected attachment");
+    let mut selected_objects = vec![owner.clone(), selected_attachment.clone()];
+    selected_objects.sort();
+    selected_objects.dedup();
+    let lineage = mbx_cache_store::ReceiptLineage {
+        version: 1,
+        owner,
+        selected_attachment,
+        selected_state: CacheDigest::blake3(b"selected state"),
+        selected_objects,
+        origin: roots.clone(),
+        destination: roots.clone(),
+        physical: roots.clone(),
+    };
+    lineage.validate().unwrap();
+    assert!(
+        session
+            .receipt_lineage
+            .set(FrozenReceiptLineage {
+                roots: roots.clone(),
+                receipt: Some(lineage.clone()),
+            })
+            .is_ok()
+    );
+    let run = session
+        .begin(
+            &roots.workspace_root,
+            &roots.cargo,
+            &["check".into()],
+            &mut BTreeMap::new(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(run.receipt_lineage, Some(lineage.clone()));
+    let mut other = roots.cargo.clone();
+    other.build_dir = workspace.path().join("another-build");
+    assert!(
+        session
+            .lineage_for_roots(&roots.workspace_root, &other)
+            .is_none()
+    );
+    assert_eq!(run.receipt_lineage, Some(lineage));
+    session.finish().await.unwrap();
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn public_completed_report_keeps_unknown_workload_and_refuses_overwrite() {
+    let cache = tempfile::tempdir().unwrap();
+    let report_dir = private_test_directory();
+    let session_dir = tempfile::tempdir().unwrap();
+    let mut config = test_config(cache.path());
+    config.stats_report_dir = Some(report_dir.path().canonicalize().unwrap());
+    let session = CacheSession::start(session_dir.path(), &config)
+        .await
+        .unwrap();
+    let identity = session.completed_identity().unwrap();
+    let report = report_dir
+        .path()
+        .join(format!("{}.json", identity.session_id));
+    assert!(!report.exists());
+    session.finish().await.unwrap();
+    let bytes = std::fs::read(&report).unwrap();
+    let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(value["workload"]["outcome"], "unknown");
+    assert!(value["workload"]["exit_code"].is_null());
+    assert!(value["statistics"]["measurement"]["workload_wall_ns"].is_null());
+    assert!(session.finish().await.is_err());
+    assert_eq!(std::fs::read(&report).unwrap(), bytes);
+}
+
+#[cfg(unix)]
+async fn nested_public_report_child(reports: PathBuf) {
+    let cache = tempfile::tempdir().unwrap();
+    let session_dir = tempfile::tempdir().unwrap();
+    let mut config = test_config(cache.path());
+    config.stats_report_dir = Some(reports);
+    let session = CacheSession::start(session_dir.path(), &config)
+        .await
+        .unwrap();
+    let mut environment = BTreeMap::new();
+    session
+        .begin_exec(cache.path(), &["test-child".into()], None, &mut environment)
+        .await;
+    assert_eq!(
+        environment[completed_report::PARENT_SESSION_ID_ENV],
+        std::env::var(completed_report::SESSION_ID_ENV).unwrap()
+    );
+    let mut command = Command::new("sh");
+    command.args(["-c", "exit 7"]);
+    let timer = session.workload_timer();
+    let status = command.spawn().unwrap().wait().unwrap();
+    timer.finish(status.into());
+    session.finish().await.unwrap();
+}
+
+#[cfg(all(unix, feature = "owned-cache-transport"))]
+fn assert_nested_admission_ledger(root: &Path, session: &str, owner: &str, closed: bool) {
+    use std::collections::BTreeSet;
+    use std::os::unix::fs::PermissionsExt;
+    let directory = root.join(format!(".mbx-admissions-{session}"));
+    let metadata = std::fs::symlink_metadata(&directory).unwrap();
+    assert!(metadata.is_dir());
+    assert_eq!(metadata.permissions().mode() & 0o777, 0o700);
+    let mut expected = BTreeSet::from(["identity.json".to_owned(), "ledger.lock".to_owned()]);
+    if closed {
+        expected.extend(["closed.json".to_owned(), "seal.json".to_owned()]);
+    }
+    let actual = std::fs::read_dir(&directory)
+        .unwrap()
+        .map(|entry| {
+            let entry = entry.unwrap();
+            assert!(entry.file_type().unwrap().is_file());
+            entry.file_name().into_string().unwrap()
+        })
+        .collect::<BTreeSet<_>>();
+    assert_eq!(actual, expected);
+    let read = |name: &str| -> serde_json::Value {
+        serde_json::from_slice(&std::fs::read(directory.join(name)).unwrap()).unwrap()
+    };
+    assert_eq!(
+        read("identity.json"),
+        serde_json::json!({
+            "session_id": session, "root_session_id": owner,
+        })
+    );
+    if closed {
+        assert_eq!(
+            read("closed.json"),
+            serde_json::json!({
+                "schema_version": 1, "session_id": session,
+                "root_session_id": owner, "lifetime": "accepted_before_close",
+            })
+        );
+        let seal = read("seal.json");
+        assert_eq!(seal["schema_version"], 1);
+        assert_eq!(seal["session_id"], session);
+        assert_eq!(seal["root_session_id"], owner);
+        assert_eq!(seal["scope"], "mbx_session_admissions");
+        assert_eq!(seal["lifetime"], "accepted_before_close");
+        assert_eq!(seal["accepted_count"], 0);
+        assert_eq!(seal["acknowledged_count"], 0);
+        assert_eq!(seal["failed_count"], 0);
+        assert_eq!(seal["outstanding_count"], 0);
+        assert_eq!(seal["entries"], serde_json::json!([]));
+    }
+}
+
+#[cfg(unix)]
+fn nested_report_inventory(
+    directory: &Path,
+    outer: &completed_report::SessionIdentity,
+    finished: bool,
+) -> serde_json::Value {
+    use std::collections::BTreeSet;
+    let mut actual = BTreeSet::new();
+    let mut reports = BTreeMap::new();
+    for entry in std::fs::read_dir(directory).unwrap() {
+        let entry = entry.unwrap();
+        let name = entry.file_name().into_string().unwrap();
+        if let Some(session) = name.strip_suffix(".json") {
+            assert!(entry.file_type().unwrap().is_file());
+            assert!(completed_report::valid_uuid(session));
+            let report: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(entry.path()).unwrap()).unwrap();
+            assert_eq!(report["identity"]["session_id"], session);
+            assert_eq!(report["identity"]["root_session_id"], outer.root_session_id);
+            assert_eq!(report["identity"]["command_role"], "exec");
+            reports.insert(session.to_owned(), report);
+        } else {
+            assert!(entry.file_type().unwrap().is_dir());
+        }
+        actual.insert(name);
+    }
+    assert_eq!(reports.len(), if finished { 2 } else { 1 });
+    let children = reports
+        .iter()
+        .filter(|(id, _)| *id != &outer.session_id)
+        .collect::<Vec<_>>();
+    assert_eq!(children.len(), 1);
+    let (child, report) = children[0];
+    assert_eq!(report["identity"]["parent_session_id"], outer.session_id);
+    assert_ne!(child, &outer.session_id);
+    let mut expected = BTreeSet::from([format!("{child}.json")]);
+    if finished {
+        expected.insert(format!("{}.json", outer.session_id));
+        assert_eq!(
+            reports[&outer.session_id]["identity"],
+            serde_json::to_value(outer).unwrap()
+        );
+    }
+    #[cfg(feature = "owned-cache-transport")]
+    {
+        expected.extend([
+            format!(".mbx-admissions-{child}"),
+            format!(".mbx-admissions-{}", outer.session_id),
+        ]);
+        assert_nested_admission_ledger(directory, child, &outer.root_session_id, true);
+        assert_nested_admission_ledger(
+            directory,
+            &outer.session_id,
+            &outer.root_session_id,
+            finished,
+        );
+    }
+    assert_eq!(
+        actual, expected,
+        "unknown report-root entry or missing native owner record"
+    );
+    report.clone()
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn nested_public_sessions_publish_after_their_captured_workloads() {
+    const CHILD: &str = "MBX_REPORT_TEST_CHILD";
+    const DIRECTORY: &str = "MBX_REPORT_TEST_DIRECTORY";
+    if std::env::var_os(CHILD).is_some() {
+        nested_public_report_child(PathBuf::from(std::env::var_os(DIRECTORY).unwrap())).await;
+        return;
+    }
+    let cache = tempfile::tempdir().unwrap();
+    let report_dir = private_test_directory();
+    let session_dir = tempfile::tempdir().unwrap();
+    let mut config = test_config(cache.path());
+    config.stats_report_dir = Some(report_dir.path().canonicalize().unwrap());
+    let session = CacheSession::start(session_dir.path(), &config)
+        .await
+        .unwrap();
+    let mut environment = BTreeMap::new();
+    session
+        .begin_exec(
+            cache.path(),
+            &["captured-tests".into()],
+            None,
+            &mut environment,
+        )
+        .await;
+    let identity = session.completed_identity().unwrap();
+    if identity.parent_session_id.is_none() {
+        assert!(!environment.contains_key(completed_report::PARENT_SESSION_ID_ENV));
+    }
+    let outer = report_dir
+        .path()
+        .join(format!("{}.json", identity.session_id));
+    let mut child = Command::new(std::env::current_exe().unwrap());
+    child
+        .args([
+            "--exact",
+            "session::tests::nested_public_sessions_publish_after_their_captured_workloads",
+            "--nocapture",
+        ])
+        .envs(environment)
+        .env(CHILD, "1")
+        .env(DIRECTORY, config.stats_report_dir.as_ref().unwrap());
+    let timer = session.workload_timer();
+    let status = child.spawn().unwrap().wait().unwrap();
+    timer.finish(status.into());
+    assert!(status.success());
+    assert!(
+        !outer.exists(),
+        "outer completion must follow the captured test child"
+    );
+    let inner = nested_report_inventory(report_dir.path(), &identity, false);
+    let inner_path = report_dir.path().join(format!(
+        "{}.json",
+        inner["identity"]["session_id"].as_str().unwrap()
+    ));
+    let inner_bytes = std::fs::read(&inner_path).unwrap();
+    assert_eq!(inner["identity"]["parent_session_id"], identity.session_id);
+    assert_eq!(
+        inner["identity"]["root_session_id"],
+        identity.root_session_id
+    );
+    assert_eq!(inner["workload"]["outcome"], "failed");
+    assert_eq!(inner["workload"]["exit_code"], 7);
+    assert!(
+        inner["statistics"]["measurement"]["workload_wall_ns"]
+            .as_u64()
+            .unwrap()
+            > 0
+    );
+    session.finish().await.unwrap();
+    let completed: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&outer).unwrap()).unwrap();
+    assert_eq!(completed["workload"]["outcome"], "succeeded");
+    assert_eq!(completed["workload"]["exit_code"], 0);
+    assert_eq!(
+        nested_report_inventory(report_dir.path(), &identity, true),
+        inner
+    );
+    assert_eq!(std::fs::read(inner_path).unwrap(), inner_bytes);
+}
+
+#[test]
+fn transparent_rustc_probe_classification_preserves_real_stdin_and_link_work() {
+    let arguments = |values: &[&str]| values.iter().map(OsString::from).collect::<Vec<_>>();
+    assert!(rustc_probe(&arguments(&["-vV"])));
+    assert!(rustc_probe(&arguments(&["--version"])));
+    for values in [
+        vec!["src.rs", "--out-dir", "--version"],
+        vec!["src.rs", "-L", "--version"],
+        vec!["src.rs", "--out-dir", "--print=cfg"],
+        vec!["src.rs", "-L", "--print=cfg"],
+        vec!["src.rs", "--unknown", "--print=cfg"],
+        vec!["@response", "--print=cfg"],
+    ] {
+        assert!(!rustc_probe(&arguments(&values)), "{values:?}");
+    }
+
+    assert!(rustc_probe(&arguments(&[
+        "-",
+        "--crate-name",
+        "___",
+        "--print=file-names",
+        "--print",
+        "cfg"
+    ])));
+    assert!(!rustc_probe(&arguments(&[
+        "-",
+        "--crate-name",
+        "stdin_crate",
+        "--emit=link"
+    ])));
+    assert!(!rustc_probe(&arguments(&["src.rs", "--print=link-args"])));
+    assert!(!rustc_probe(&arguments(&[
+        "src.rs",
+        "--print=native-static-libs"
+    ])));
+}
+
+#[tokio::test]
+async fn unobserved_workload_attempt_never_invents_a_wall_or_exit_status() {
+    let cache = tempfile::tempdir().unwrap();
+    let session_dir = tempfile::tempdir().unwrap();
+    let session = CacheSession::start(session_dir.path(), &test_config(cache.path()))
+        .await
+        .unwrap();
+    let mut command = Command::new(cache.path().join("missing-workload"));
+    let timer = session.workload_timer();
+    assert!(command.spawn().is_err());
+    drop(timer);
+    {
+        let observation = session.workload.lock().unwrap();
+        let observation = observation.as_ref().unwrap();
+        assert_eq!(
+            observation.result.outcome,
+            completed_report::WorkloadOutcome::Unknown
+        );
+        assert_eq!(observation.result.exit_code, None);
+        assert_eq!(observation.duration_ns, None);
+        assert_eq!(observation.ended, None);
+    }
+    session.finish().await.unwrap();
+}
+
+#[tokio::test]
+async fn cargo_session_passes_relative_cache_out_dir_root_as_original_absolute_path() {
+    const CHILD: &str = "MBX_RELATIVE_SESSION_TEST_CHILD";
+    if std::env::var_os(CHILD).is_none() {
+        let invocation = private_test_directory();
+        let original = std::env::current_dir().unwrap();
+        let status = Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "session::tests::cargo_session_passes_relative_cache_out_dir_root_as_original_absolute_path",
+                "--nocapture",
+            ])
+            .current_dir(invocation.path().canonicalize().unwrap())
+            .env(CHILD, "1")
+            .status()
+            .unwrap();
+        assert!(status.success());
+        assert_eq!(std::env::current_dir().unwrap(), original);
+        return;
+    }
+    let invocation = std::env::current_dir().unwrap();
+    let cache = tempfile::Builder::new()
+        .prefix("mbx-relative-session-")
+        .tempdir_in(&invocation)
+        .unwrap();
+    let relative = cache
+        .path()
+        .strip_prefix(&invocation)
+        .unwrap()
+        .to_path_buf();
+    let session_dir = tempfile::tempdir().unwrap();
+    let workspace = tempfile::tempdir().unwrap();
+    let mut config = test_config(cache.path());
+    config.cache_dir = relative.clone();
+    let session = CacheSession::start(session_dir.path(), &config)
+        .await
+        .unwrap();
+    let target = workspace.path().join("target");
+    let roots = crate::store::CargoBuildRoots {
+        target_dir: target.clone(),
+        build_dir: target,
+    };
+    let mut environment = BTreeMap::new();
+    session
+        .begin(
+            workspace.path(),
+            &roots,
+            &["build".into()],
+            &mut environment,
+        )
+        .await;
+    let root = PathBuf::from(&environment[crate::out_dir::ROOT_ENV]);
+    assert!(root.is_absolute());
+    assert_eq!(root, invocation.join(relative).join(crate::out_dir::ROOT));
+    // A dependency's cwd cannot redirect this authoritative storage root.
+    assert_eq!(workspace.path().join(&root), root);
+    session.finish().await.unwrap();
+}
+
+#[cfg(all(unix, feature = "owned-cache-transport"))]
+#[tokio::test]
+async fn session_closes_accepted_admissions_before_completed_publication() {
+    let cache = tempfile::tempdir().unwrap();
+    let session_dir = tempfile::tempdir().unwrap();
+    let mut config = test_config(cache.path());
+    config.stats_report_dir = Some(cache.path().canonicalize().unwrap().join("reports"));
+    let session = CacheSession::start(session_dir.path(), &config)
+        .await
+        .unwrap();
+    let identity = session.completed_identity().unwrap();
+    let report_directory = config.stats_report_dir.as_ref().unwrap();
+    let ledger = report_directory.join(format!(".mbx-admissions-{}", identity.session_id));
+    assert!(ledger.join("identity.json").is_file());
+    assert!(!ledger.join("closed.json").exists());
+    let report_path = report_directory.join(format!("{}.json", identity.session_id));
+    assert!(!report_path.exists());
+    session.finish().await.unwrap();
+    assert!(ledger.join("closed.json").is_file());
+    let report: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(report_path).unwrap()).unwrap();
+    let closure = &report["statistics"]["native_admission_closure"];
+    assert_eq!(closure["session_id"], identity.session_id);
+    assert_eq!(closure["lifetime"], "accepted_before_close");
+    assert_eq!(closure["accepted_count"], 0);
+    assert_eq!(report["workload"]["outcome"], "unknown");
 }

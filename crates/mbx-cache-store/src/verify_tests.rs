@@ -28,6 +28,8 @@ fn bundle() -> (tempfile::TempDir, PathBuf, CacheDigest) {
             adapter: "rustc".into(),
             payload: "{}".into(),
         }],
+        None,
+        None,
     )
     .unwrap();
     let bundle = root.join("bundle");

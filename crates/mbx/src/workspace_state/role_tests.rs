@@ -1,3 +1,4 @@
+use super::tests::capture_fixture as capture;
 use super::*;
 use std::fs;
 
@@ -178,7 +179,7 @@ fn retention_keeps_root_pairs_and_ambiguity_is_explicit() -> Result<()> {
     second.workspace_root = first.workspace_root.clone();
     let baseline = capture(store.path(), std::slice::from_ref(&first))?;
     let current = capture(store.path(), std::slice::from_ref(&second))?;
-    let retained = retain(store.path(), current, Some(digest(&baseline)?))?;
+    let retained = retain(store.path(), current, Some(digest(&baseline)?))?.additions;
     let cas = LocalCas::new(store.path());
     let bundle: Bundle = serde_json::from_slice(&fs::read(cas.path_for(digest(&retained)?)?)?)?;
     assert_eq!(bundle.workspaces.len(), 2);
@@ -320,7 +321,7 @@ fn missing_role_is_an_explicit_empty_tree_and_preserves_existing_role() -> Resul
 }
 
 #[test]
-fn an_added_unit_replaces_current_pair_wholesale_without_reviving_deleted_entries() -> Result<()> {
+fn unbound_added_unit_preserves_baseline_and_reports_unavailable_replacement() -> Result<()> {
     let store = tempfile::tempdir()?;
     let roots = roots_fixture(&store.path().join("source"), 1)?;
     let baseline = capture(store.path(), std::slice::from_ref(&roots))?;
@@ -330,15 +331,17 @@ fn an_added_unit_replaces_current_pair_wholesale_without_reviving_deleted_entrie
         b"new compiled unit",
     )?;
     let current = capture(store.path(), std::slice::from_ref(&roots))?;
-    let retained = retain(store.path(), current, Some(digest(&baseline)?))?;
+    let outcome = retain(store.path(), current, Some(digest(&baseline)?))?;
+    assert!(!outcome.unavailable_reasons.is_empty());
+    let retained = outcome.additions;
     let inventory = semantic_inventory(store.path(), Some(digest(&retained)?))?;
     assert!(
-        inventory
+        !inventory
             .keys()
             .any(|key| key.ends_with("/target/new-unit"))
     );
     assert!(
-        !inventory
+        inventory
             .keys()
             .any(|key| key.ends_with("/target/artifact"))
     );

@@ -4,22 +4,24 @@
 use crate::config::{Config, MinFree};
 use crate::events::{ActionDetail, ActionOutcome, EventWriter};
 use crate::util::duration_ns;
+use crate::version::VERSION;
 use eyre::Result;
 use log::{debug, warn};
 use mbx_cache_cc::CcLanguage;
 #[cfg(test)]
 use mbx_cache_core::AGENT_PROTOCOL_VERSION;
 use mbx_cache_core::{
-    ActionDiagnostic, AgentEvent, AgentEventObserver, AgentRemoteCache, AgentRequest,
-    AgentResponse, AgentStats, CacheAgent, CacheDigest, FileDigestCache, FileDigestScope,
-    FileIdentity, NoFileDigestCache, RecordedFileDigest, canonical_json,
+    ActionDiagnostic, AdapterKind, AgentEvent, AgentEventObserver, AgentRemoteCache, AgentRequest,
+    AgentResponse, AgentStats, CacheAgent, CacheDigest, CacheOutcome, FileDigestCache,
+    FileDigestScope, FileIdentity, InvocationKind, NoFileDigestCache, ProcessPurpose,
+    RecordedFileDigest, canonical_json,
 };
 use serde::Serialize;
 use std::collections::{BTreeMap, VecDeque};
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
-#[cfg(unix)]
+#[cfg(all(unix, not(feature = "owned-cache-transport")))]
 use std::sync::atomic::AtomicU64;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
@@ -28,7 +30,10 @@ use tokio::task::JoinHandle;
 
 mod client;
 pub mod cmake;
+pub mod completed_report;
 mod diagnostics;
+#[path = "session/measurement_qualification.rs"]
+pub(crate) mod measurement_qualification;
 mod server;
 mod shims;
 mod stats;
@@ -46,6 +51,8 @@ pub(crate) use server::create_fifo;
 pub(crate) use server::listener_unavailable;
 use server::spawn_server;
 pub(crate) use shims::CC_CRATE_ENV;
+#[cfg(feature = "owned-cache-transport")]
+pub(crate) use shims::SessionDispatchPin;
 #[cfg(all(test, windows))]
 use shims::link_path_shim;
 use shims::{CcShims, install_cc_shims, install_session_shims, is_shim_directory};
@@ -58,15 +65,29 @@ use shims::{
     targeted_compiler_language,
 };
 use stats::StatsReport;
-pub(crate) use stats::display_stats;
 pub(crate) use stats::session_was_active;
 #[cfg(test)]
 use stats::{
     ci_summary, short_summary, should_display_short_stats, should_display_stats,
     stale_manifest_note,
 };
+pub(crate) use stats::{display_stats, publish_completed_stats};
 
 pub const RUSTC_SHIM_STEM: &str = "mbx-rustc";
+pub(crate) const RECEIPT_CONTEXT_ENV: &str = "MBX_RECEIPT_CONTEXT";
+
+pub(crate) fn receipt_context_from_environment() -> Result<Option<mbx_cache_store::ReceiptContext>>
+{
+    std::env::var_os(RECEIPT_CONTEXT_ENV)
+        .map(|value| {
+            let text = value
+                .into_string()
+                .map_err(|_| eyre::eyre!("{RECEIPT_CONTEXT_ENV} must be canonical UTF-8 JSON"))?;
+            mbx_cache_store::ReceiptContext::from_canonical_json(&text)
+        })
+        .transpose()
+}
+
 pub const RUSTDOC_SHIM_STEM: &str = "mbx-rustdoc";
 /// File stem of the C shim, which build scripts inherit as an absolute path.
 ///
@@ -123,8 +144,7 @@ const PREVIOUS_RUSTC_WRAPPER_ENV: &str = "MBX_PREVIOUS_RUSTC_WRAPPER";
 const PREVIOUS_RUSTC_WORKSPACE_WRAPPER_ENV: &str = "MBX_PREVIOUS_RUSTC_WORKSPACE_WRAPPER";
 const REAL_RUSTDOC_ENV: &str = "MBX_REAL_RUSTDOC";
 pub(crate) const BYPASS_LOG_ENV: &str = "MBX_BYPASS_LOG";
-const VERSION: &str = env!("CARGO_PKG_VERSION");
-#[cfg(unix)]
+#[cfg(all(unix, not(feature = "owned-cache-transport")))]
 static SHIM_STAGING_NONCE: AtomicU64 = AtomicU64::new(0);
 
 /// Encode only the resolved retention input the compiler shim needs. The
@@ -216,6 +236,8 @@ fn low_disk_min_free_from_environment(
 pub struct CacheSession {
     socket: String,
     rustc_shim: PathBuf,
+    #[cfg(feature = "owned-cache-transport")]
+    dispatch_pin: SessionDispatchPin,
     /// Held for the session's lifetime so collection keeps `rustc_shim`.
     _rustc_shim_lease: shims::ShimLease,
     rustdoc_shim: PathBuf,
@@ -252,9 +274,106 @@ pub struct CacheSession {
     /// session that was alone in the checkout can write without merging.
     ledger_stamp: Arc<Mutex<Option<crate::digest_ledger::Stamp>>>,
     started: Instant,
+    completed_report: Option<CompletedSession>,
+    workload: Arc<Mutex<Option<WorkloadObservation>>>,
+    cargo_capture: Mutex<Option<crate::cargo_artifact_capture::CargoCaptureReport>>,
+    native_dispatch: Mutex<Option<crate::dispatch_identity::NativeDispatchWitness>>,
+    receipt_context: Option<mbx_cache_store::ReceiptContext>,
+    receipt_lineage: std::sync::OnceLock<FrozenReceiptLineage>,
+    admission_owner: Mutex<Option<crate::dispatch_admission::AdmissionOwner>>,
     shutdown: Mutex<Option<oneshot::Sender<()>>>,
     server: Mutex<Option<JoinHandle<Result<()>>>>,
     task: Arc<SessionTask>,
+}
+
+struct FrozenReceiptLineage {
+    roots: crate::store::WorkspaceRoots,
+    receipt: Option<mbx_cache_store::ReceiptLineage>,
+}
+
+struct WorkloadObservation {
+    result: completed_report::WorkloadResult,
+    duration_ns: Option<u64>,
+    started: Option<Instant>,
+    ended: Option<Instant>,
+}
+
+pub(crate) struct WorkloadTimer {
+    observation: Arc<Mutex<Option<WorkloadObservation>>>,
+    started: Instant,
+    finished: bool,
+}
+
+impl WorkloadTimer {
+    pub(crate) fn finish_cargo(
+        mut self,
+        completion: &crate::cargo_artifact_capture::CargoCommandCompletion,
+    ) {
+        let mut observation = self.observation.lock().unwrap();
+        let started = observation
+            .as_ref()
+            .and_then(|workload| workload.started)
+            .unwrap_or_else(|| completion.started_at());
+        let elapsed = if started == completion.started_at() {
+            completion.workload_wall_ns()
+        } else {
+            duration_ns(completion.terminal_at().duration_since(started))
+        };
+        *observation = Some(WorkloadObservation {
+            result: completion.status().into(),
+            duration_ns: Some(elapsed),
+            started: Some(started),
+            ended: Some(completion.terminal_at()),
+        });
+        self.finished = true;
+    }
+
+    pub(crate) fn finish(mut self, result: completed_report::WorkloadResult) {
+        let ended = Instant::now();
+        let mut observation = self.observation.lock().unwrap();
+        let started = observation
+            .as_ref()
+            .and_then(|workload| workload.started)
+            .unwrap_or(self.started);
+        *observation = Some(WorkloadObservation {
+            result,
+            duration_ns: Some(duration_ns(ended.duration_since(started))),
+            started: Some(started),
+            ended: Some(ended),
+        });
+        self.finished = true;
+    }
+}
+
+impl Drop for WorkloadTimer {
+    fn drop(&mut self) {
+        if !self.finished {
+            *self.observation.lock().unwrap() = Some(WorkloadObservation {
+                result: completed_report::WorkloadResult {
+                    outcome: completed_report::WorkloadOutcome::Unknown,
+                    exit_code: None,
+                },
+                duration_ns: None,
+                started: None,
+                ended: None,
+            });
+        }
+    }
+}
+
+struct CompletedSession {
+    directory: PathBuf,
+    identity: Mutex<completed_report::SessionIdentity>,
+}
+
+fn report_env(name: &str) -> Result<Option<String>> {
+    std::env::var_os(name)
+        .map(|value| {
+            value
+                .into_string()
+                .map_err(|_| eyre::eyre!("{name} must contain a UTF-8 public token"))
+        })
+        .transpose()
 }
 
 /// The Cargo task is loaded only if a compiler shim connects.
@@ -318,6 +437,47 @@ impl CacheSession {
         events_max_size: Option<u64>,
         min_free: Option<MinFree>,
     ) -> Result<Self> {
+        let receipt_context = receipt_context_from_environment()?;
+        let completed_report = config
+            .stats_report_dir
+            .as_ref()
+            .map(|directory| -> Result<CompletedSession> {
+                let parent = report_env(completed_report::SESSION_ID_ENV)?;
+                let root = report_env(completed_report::ROOT_SESSION_ID_ENV)?;
+                let correlation = report_env(completed_report::CORRELATION_ID_ENV)?;
+                let directory = std::path::absolute(directory)?;
+                if directory.to_str().is_none() {
+                    eyre::bail!(
+                        "completed-report directory must be UTF-8 for nested-session propagation"
+                    );
+                }
+                Ok(CompletedSession {
+                    directory,
+                    identity: Mutex::new(completed_report::SessionIdentity::new(
+                        completed_report::CommandRole::Other,
+                        parent.as_deref(),
+                        root.as_deref(),
+                        correlation.as_deref(),
+                    )?),
+                })
+            })
+            .transpose()?;
+        let admission_owner = if cfg!(all(unix, feature = "owned-cache-transport")) {
+            completed_report.as_ref().and_then(|report| {
+                match crate::dispatch_admission::AdmissionOwner::open(
+                    &report.directory,
+                    &report.identity.lock().unwrap(),
+                ) {
+                    Ok(owner) => Some(owner),
+                    Err(error) => {
+                        warn!("native admission ledger unavailable: {error:#}");
+                        None
+                    }
+                }
+            })
+        } else {
+            None
+        };
         let session_shims = install_session_shims(session_dir, &config.shims_dir)?;
         let (shim, rustdoc_shim) = (session_shims.rustc, session_shims.rustdoc);
         let rustc_shim_lease = session_shims.lease;
@@ -378,6 +538,8 @@ impl CacheSession {
         Ok(Self {
             socket,
             rustc_shim: shim,
+            #[cfg(feature = "owned-cache-transport")]
+            dispatch_pin: session_shims.dispatch_pin,
             _rustc_shim_lease: rustc_shim_lease,
             rustdoc_shim,
             cc_shims,
@@ -398,15 +560,202 @@ impl CacheSession {
             gc_env: session_gc_environment(config, min_free),
             store,
             incremental_root: config.cache_dir.join("incremental"),
-            out_dir_root: config.cache_dir.join(crate::out_dir::ROOT),
+            // Resolve before Cargo moves compiler cwd into dependency packages.
+            out_dir_root: crate::out_dir::resolve_root(
+                &config.cache_dir.join(crate::out_dir::ROOT),
+            )?,
             incremental_leases: Mutex::new(Vec::new()),
             ledger_dir: Mutex::new(None),
             ledger_stamp: Arc::new(Mutex::new(None)),
             started: Instant::now(),
+            completed_report,
+            workload: Arc::new(Mutex::new(None)),
+            cargo_capture: Mutex::new(None),
+            native_dispatch: Mutex::new(None),
+            receipt_context,
+            receipt_lineage: std::sync::OnceLock::new(),
+            admission_owner: Mutex::new(admission_owner),
             shutdown: Mutex::new(Some(shutdown_tx)),
             server: Mutex::new(Some(server)),
             task,
         })
+    }
+
+    /// Freeze restored-state provenance before this invocation starts children.
+    pub(crate) fn freeze_lineage(
+        &self,
+        config: &Config,
+        roots: &crate::store::WorkspaceRoots,
+    ) -> Result<()> {
+        if self.task.identity.get().is_some() {
+            eyre::bail!("receipt lineage must be frozen before the action run begins");
+        }
+        let frozen = self.receipt_lineage.get_or_init(|| FrozenReceiptLineage {
+            roots: roots.clone(),
+            receipt: match crate::workspace_state::freeze_lineage(config, &self.store, roots) {
+                Ok(receipt) => receipt,
+                Err(error) => {
+                    warn!("restored receipt lineage unavailable: {error}");
+                    None
+                }
+            },
+        });
+        if frozen.roots != *roots {
+            eyre::bail!("receipt lineage was frozen for different Cargo roots");
+        }
+        Ok(())
+    }
+
+    fn lineage_for_roots(
+        &self,
+        workspace_root: &Path,
+        cargo: &crate::store::CargoBuildRoots,
+    ) -> Option<mbx_cache_store::ReceiptLineage> {
+        let roots = crate::store::WorkspaceRoots {
+            workspace_root: workspace_root.to_path_buf(),
+            cargo: cargo.clone(),
+        };
+        let frozen = self.receipt_lineage.get_or_init(|| FrozenReceiptLineage {
+            roots: roots.clone(),
+            receipt: None,
+        });
+        (frozen.roots == roots)
+            .then(|| frozen.receipt.clone())
+            .flatten()
+    }
+
+    /// Start immediately before spawning the owning workload process.
+    pub(crate) fn workload_timer(&self) -> WorkloadTimer {
+        WorkloadTimer {
+            observation: Arc::clone(&self.workload),
+            started: Instant::now(),
+            finished: false,
+        }
+    }
+
+    /// The public identity for this session's completed report.
+    pub fn completed_identity(&self) -> Option<completed_report::SessionIdentity> {
+        self.completed_report
+            .as_ref()
+            .map(|report| report.identity.lock().unwrap().clone())
+    }
+
+    pub(crate) fn record_cargo_capture(
+        &self,
+        capture: crate::cargo_artifact_capture::CargoCaptureReport,
+    ) {
+        *self.cargo_capture.lock().unwrap() = Some(capture);
+    }
+
+    pub(crate) fn propagate_completed_environment(&self, command: &mut Command) {
+        command.env_remove(completed_report::PARENT_SESSION_ID_ENV);
+        if let Some(report) = &self.completed_report {
+            let identity = report.identity.lock().unwrap();
+            command.envs(identity.child_environment());
+            command.env("MBX_STATS_REPORT_DIR", &report.directory);
+        }
+    }
+
+    fn pin_dispatch(
+        &self,
+        witness: Result<crate::dispatch_identity::NativeDispatchWitness>,
+    ) -> Result<crate::dispatch_identity::NativeDispatchWitness> {
+        let witness = witness?;
+        #[cfg(feature = "owned-cache-transport")]
+        let witness = witness.bind_snapshot_pin(&self.dispatch_pin)?;
+        Ok(witness)
+    }
+
+    fn observe_exec_dispatch(&self) {
+        use crate::dispatch_identity::{
+            DispatchRoutes, NativeDispatchWitness, RouteConfiguration, UnknownReason,
+        };
+        let Some(identity) = self.completed_identity() else {
+            return;
+        };
+        let routes = DispatchRoutes {
+            rustc: RouteConfiguration::unknown(UnknownReason::DispatchNotVerified),
+            rustdoc: RouteConfiguration::unknown(UnknownReason::DispatchNotVerified),
+            build_script: RouteConfiguration::unknown(UnknownReason::DispatchNotVerified),
+            cc: RouteConfiguration::unknown(UnknownReason::CompilerSelectionUnverified),
+        };
+        match self.pin_dispatch(NativeDispatchWitness::verify(&identity, routes)) {
+            Ok(witness) => *self.native_dispatch.lock().unwrap() = Some(witness),
+            Err(error) => warn!("native dispatch witness unavailable: {error:#}"),
+        }
+    }
+
+    fn observe_cargo_dispatch(&self, environment: &BTreeMap<String, String>) {
+        use crate::dispatch_identity::{
+            DispatchRoutes, NativeDispatchWitness, RouteConfiguration, UnknownReason, WrapperChain,
+        };
+        let Some(identity) = self.completed_identity() else {
+            return;
+        };
+        let rustc_external = environment.contains_key(PREVIOUS_RUSTC_WRAPPER_ENV);
+        let workspace_external = environment.contains_key(PREVIOUS_RUSTC_WORKSPACE_WRAPPER_ENV);
+        let rustc = match (rustc_external, workspace_external) {
+            (false, false) => RouteConfiguration::managed(vec![self.rustc_shim.clone()]),
+            (true, false) => RouteConfiguration::external_wrapper(
+                vec![self.rustc_shim.clone()],
+                WrapperChain::Rustc,
+            ),
+            (false, true) => RouteConfiguration::external_wrapper(
+                vec![self.rustc_shim.clone()],
+                WrapperChain::Workspace,
+            ),
+            (true, true) => RouteConfiguration::external_wrapper(
+                vec![self.rustc_shim.clone()],
+                WrapperChain::RustcAndWorkspace,
+            ),
+        };
+        let routes = DispatchRoutes {
+            rustc,
+            rustdoc: RouteConfiguration::managed(vec![self.rustdoc_shim.clone()]),
+            cc: if self.cc_shims.is_some() {
+                RouteConfiguration::unknown(UnknownReason::CompilerSelectionUnverified)
+            } else {
+                RouteConfiguration::disabled()
+            },
+            build_script: if self.build_script_execution {
+                RouteConfiguration::unknown(UnknownReason::DynamicInstallationPending)
+            } else {
+                RouteConfiguration::disabled()
+            },
+        };
+        match self.pin_dispatch(NativeDispatchWitness::verify(&identity, routes)) {
+            Ok(witness) => *self.native_dispatch.lock().unwrap() = Some(witness),
+            Err(error) => warn!("native dispatch witness unavailable: {error:#}"),
+        }
+    }
+
+    fn report_environment(
+        &self,
+        role: completed_report::CommandRole,
+        environment: &mut BTreeMap<String, String>,
+    ) {
+        environment.remove(RECEIPT_CONTEXT_ENV);
+        if let Some(context) = &self.receipt_context {
+            // Parsed once before any child. Canonical encoding cannot fail for JSON values.
+            match context.canonical_json() {
+                Ok(value) => {
+                    environment.insert(RECEIPT_CONTEXT_ENV.into(), value);
+                }
+                Err(error) => warn!("receipt context propagation unavailable: {error:#}"),
+            }
+        }
+        if let Some(report) = &self.completed_report {
+            let mut identity = report.identity.lock().unwrap();
+            identity.command_role = role;
+            environment.remove(completed_report::PARENT_SESSION_ID_ENV);
+            for (name, value) in identity.child_environment() {
+                environment.insert(name.into(), value.into());
+            }
+            environment.insert(
+                "MBX_STATS_REPORT_DIR".into(),
+                report.directory.to_string_lossy().into_owned(),
+            );
+        }
     }
 
     /// Begin the build's action run and return the environment cargo needs.
@@ -423,6 +772,15 @@ impl CacheSession {
         command: &[String],
         environment: &mut BTreeMap<String, String>,
     ) -> Option<ActionRun> {
+        let role = match crate::cli::launch::cargo_subcommand(command) {
+            Some("build" | "b") => completed_report::CommandRole::CargoBuild,
+            Some("check" | "c" | "clippy") => completed_report::CommandRole::CargoCheck,
+            Some("test" | "t") => completed_report::CommandRole::CargoTest,
+            Some("run" | "r") => completed_report::CommandRole::CargoRun,
+            Some("doc") => completed_report::CommandRole::CargoDoc,
+            _ => completed_report::CommandRole::Other,
+        };
+        self.report_environment(role, environment);
         let target_dir = &cargo_roots.target_dir;
         let identity = build_identity(workspace_root, command);
         // Named before the first compilation, so a TUI that attaches mid-build
@@ -459,6 +817,8 @@ impl CacheSession {
             identity: identity.clone(),
             workspace_root: workspace_root.to_path_buf(),
             cargo_roots: Some(cargo_roots.clone()),
+            receipt_context: self.receipt_context.clone(),
+            receipt_lineage: self.lineage_for_roots(workspace_root, cargo_roots),
             export_group: std::env::var(CACHE_EXPORT_GROUP_ENV).ok(),
             store: self.store.clone(),
             agent: self.agent.clone(),
@@ -640,6 +1000,7 @@ impl CacheSession {
             // rather than left to bypass every action.
             environment.insert("CARGO_INCREMENTAL".into(), "0".into());
         }
+        self.observe_cargo_dispatch(environment);
         action_run
     }
 
@@ -711,6 +1072,8 @@ impl CacheSession {
         shims: Option<&PathShims>,
         environment: &mut BTreeMap<String, String>,
     ) -> Option<ActionRun> {
+        self.report_environment(completed_report::CommandRole::Exec, environment);
+        self.observe_exec_dispatch();
         let identity = exec_identity(project_root, command);
         if let Some(events) = &self.events {
             events
@@ -736,6 +1099,8 @@ impl CacheSession {
                         identity: identity.clone(),
                         workspace_root: project_root.to_path_buf(),
                         cargo_roots: None,
+                        receipt_context: self.receipt_context.clone(),
+                        receipt_lineage: None,
                         export_group: std::env::var(CACHE_EXPORT_GROUP_ENV).ok(),
                         store: self.store.clone(),
                         agent: self.agent.clone(),
@@ -816,6 +1181,11 @@ impl CacheSession {
         }
     }
 
+    /// Install PATH aliases from this session's captured owner snapshot.
+    pub fn install_path_shims(&self) -> Result<Option<PathShims>> {
+        shims::install_path_shims(&self.cmake_shims_dir)
+    }
+
     /// Warm the recorded actions for a Cargo command without running Cargo.
     pub async fn prefetch(&self, workspace_root: &Path, command: &[String]) -> Result<()> {
         let identity = build_identity(workspace_root, command);
@@ -851,6 +1221,18 @@ impl CacheSession {
                 .and_then(|served| served),
             None => Ok(()),
         };
+        let admission_closure = self
+            .admission_owner
+            .lock()
+            .unwrap()
+            .take()
+            .and_then(|owner| match owner.close() {
+                Ok(closure) => Some(closure),
+                Err(error) => {
+                    warn!("native admission closure unavailable: {error:#}");
+                    None
+                }
+            });
         self.agent.cancel_prefetches().await;
         // Cancelling first hands the queue the transfer budget the abandoned
         // downloads were holding.
@@ -876,6 +1258,39 @@ impl CacheSession {
             && let Ok(totals) = serde_json::to_value(StatsReport::from(&stats))
         {
             events.writer.finished(totals);
+        }
+        if let Some(report) = &self.completed_report {
+            let identity = report.identity.lock().unwrap().clone();
+            let workload = self.workload.lock().unwrap();
+            let result = workload.as_ref().map_or(
+                completed_report::WorkloadResult {
+                    outcome: completed_report::WorkloadOutcome::Unknown,
+                    exit_code: None,
+                },
+                |workload| workload.result,
+            );
+            let mut native_dispatch = self.native_dispatch.lock().unwrap();
+            if native_dispatch
+                .as_ref()
+                .is_some_and(|witness| witness.validate_current().is_err())
+            {
+                warn!("native dispatch witness became invalid before publication");
+                *native_dispatch = None;
+            }
+            publish_completed_stats(
+                Some(&report.directory),
+                &identity,
+                result,
+                workload.as_ref().and_then(|workload| workload.duration_ns),
+                workload
+                    .as_ref()
+                    .and_then(|workload| workload.ended)
+                    .map(|ended| duration_ns(ended.elapsed())),
+                self.cargo_capture.lock().unwrap().as_ref(),
+                native_dispatch.as_ref(),
+                admission_closure.as_ref(),
+                &stats,
+            )?;
         }
         Ok(stats)
     }
@@ -1058,6 +1473,8 @@ pub struct ActionRun {
     identity: String,
     workspace_root: PathBuf,
     cargo_roots: Option<crate::store::CargoBuildRoots>,
+    receipt_context: Option<mbx_cache_store::ReceiptContext>,
+    receipt_lineage: Option<mbx_cache_store::ReceiptLineage>,
     export_group: Option<String>,
     store: PathBuf,
     agent: CacheAgent,
@@ -1082,6 +1499,8 @@ impl ActionRun {
                     self.cargo_roots.as_ref(),
                     self.export_group.as_deref(),
                     Vec::new(),
+                    self.receipt_context.as_ref(),
+                    self.receipt_lineage.as_ref(),
                 )?;
             }
             return Ok(());
@@ -1109,6 +1528,8 @@ impl ActionRun {
             self.cargo_roots.as_ref(),
             self.export_group.as_deref(),
             predictions,
+            self.receipt_context.as_ref(),
+            self.receipt_lineage.as_ref(),
         )
     }
 }
@@ -1324,25 +1745,53 @@ pub fn is_rustdoc_shim() -> bool {
 
 /// Ultra-early argv0 path used by Cargo's `RUSTDOC` integration.
 pub fn run_rustdoc_shim() -> ExitCode {
+    let _timing = session_socket().map(|_| crate::phase_timing::start("rustdoc", None));
     let rustdoc = std::env::var_os(REAL_RUSTDOC_ENV).unwrap_or_else(|| "rustdoc".into());
     let arguments = std::env::args_os().skip(1).collect::<Vec<_>>();
-    match crate::rustdoc::document(&rustdoc, &arguments) {
+    let kind = if simple_compiler_probe(&arguments) {
+        InvocationKind::Probe
+    } else {
+        InvocationKind::Work
+    };
+    let mut measurement = crate::process_measurement::Invocation::new(
+        AdapterKind::Rustdoc,
+        kind,
+        crate::unit_attribution::identity(&arguments, None),
+    );
+    match crate::rustdoc::document(&rustdoc, &arguments, &mut measurement) {
         Ok(code) => code,
         Err(_error) => {
-            let _ = request_agent(&[AgentRequest::RecordBypass {
-                kind: "rustdoc".into(),
-            }]);
-            #[cfg(debug_assertions)]
-            eprintln!("mbx[warning]: rustdoc cache bypassed: {_error:#}");
-            run_transparent_rustdoc(rustdoc, arguments)
+            if measurement.has_work_attempted() {
+                report_shim_warning(&format!("rustdoc cache failed after execution: {_error:#}"));
+                ExitCode::FAILURE
+            } else {
+                let _ = request_agent(&[AgentRequest::RecordBypass {
+                    kind: "rustdoc".into(),
+                }]);
+                #[cfg(debug_assertions)]
+                eprintln!("mbx[warning]: rustdoc cache bypassed: {_error:#}");
+                run_transparent_rustdoc(rustdoc, arguments, &mut measurement)
+            }
         }
     }
 }
 
-fn run_transparent_rustdoc(rustdoc: OsString, arguments: Vec<OsString>) -> ExitCode {
-    let status = Command::new(&rustdoc).args(arguments).status();
+fn run_transparent_rustdoc(
+    rustdoc: OsString,
+    arguments: Vec<OsString>,
+    measurement: &mut crate::process_measurement::Invocation,
+) -> ExitCode {
+    measurement.set_outcome(CacheOutcome::Bypass);
+    let mut command = Command::new(&rustdoc);
+    command.args(&arguments);
+    let purpose = if simple_compiler_probe(&arguments) {
+        ProcessPurpose::Probe
+    } else {
+        ProcessPurpose::Work
+    };
+    let status = measurement.process(purpose).status(&mut command);
     match status {
-        Ok(status) => ExitCode::from(u8::try_from(status.code().unwrap_or(1)).unwrap_or(1)),
+        Ok(status) => crate::materialize::exit_code(status),
         Err(error) => {
             eprintln!("mbx[error]: the rustdoc shim failed to execute rustdoc: {error}");
             ExitCode::FAILURE
@@ -1420,18 +1869,31 @@ pub(crate) fn find_build_script_real_path(executable: &Path) -> Option<PathBuf> 
 
 /// Run Cargo's build script through the execution cache.
 pub fn run_build_script_shim() -> ExitCode {
+    let _timing = session_socket().and_then(|_| crate::build_script::start_timing());
+    let mut measurement = crate::process_measurement::Invocation::new(
+        AdapterKind::BuildScript,
+        InvocationKind::Work,
+        crate::unit_attribution::package_context(
+            build_script_invocation_path()
+                .and_then(|invoked| find_build_script_real_path(&invoked))
+                .as_deref(),
+        ),
+    );
     // The wrapper lives in Cargo's target directory, so it can outlive the mbx
     // session that installed it. A later plain `cargo` invocation must remain
     // a transparent build-script call.
     if session_socket().is_none() || !build_script_execution_requested() {
-        return crate::build_script::run_real();
+        return crate::build_script::run_real(&mut measurement);
     }
-    let _timing = crate::build_script::start_timing();
-    match crate::build_script::run() {
+    match crate::build_script::run(&mut measurement) {
         Ok(code) => code,
         Err(error) => {
             report_shim_warning(&format!("build-script cache bypassed: {error:#}"));
-            crate::build_script::run_real()
+            if measurement.has_work_attempted() {
+                ExitCode::FAILURE
+            } else {
+                crate::build_script::run_real(&mut measurement)
+            }
         }
     }
 }
@@ -1525,11 +1987,22 @@ fn shim_invocation_name() -> Option<String> {
 /// shim that cannot find one falls back to the platform default rather than
 /// failing a build it was only meant to observe.
 pub fn run_cc_shim(language: CcLanguage) -> ExitCode {
+    let _timing = session_socket().map(|_| crate::phase_timing::start("cc", None));
     // From here on, stderr carries only what the real compiler would have
     // written: build scripts probe compilers by running them and reading that
     // stream, and a diagnostic mixed into it changes what they decide.
     reserve_stderr_for_compiler();
     let arguments = std::env::args_os().skip(1).collect::<Vec<_>>();
+    let kind = if simple_compiler_probe(&arguments) {
+        InvocationKind::Probe
+    } else {
+        InvocationKind::Work
+    };
+    let mut measurement = crate::process_measurement::Invocation::new(
+        AdapterKind::Cc,
+        kind,
+        crate::unit_attribution::package_context(None),
+    );
     let compiler = match real_compiler(language) {
         Ok(compiler) => compiler,
         Err(error) => {
@@ -1545,15 +2018,58 @@ pub fn run_cc_shim(language: CcLanguage) -> ExitCode {
     // under `mbx exec` and then built without it. Stand aside before probing
     // anything, so that costs one exec rather than a compiler query first.
     if session_socket().is_none() {
-        return run_transparent_cc(compiler, arguments);
+        return run_transparent_cc(compiler, arguments, &mut measurement);
     }
-    match crate::cc::compile(&compiler, &arguments, language) {
+    match crate::cc::compile(&compiler, &arguments, language, &mut measurement) {
         Ok(exit_code) => return exit_code,
         Err(error) => {
+            if measurement.has_work_attempted() {
+                report_shim_warning(&format!("cc cache failed after execution: {error:#}"));
+                return ExitCode::FAILURE;
+            }
             record_cc_bypass(&error);
         }
     }
-    run_transparent_cc(compiler, arguments)
+    run_transparent_cc(compiler, arguments, &mut measurement)
+}
+
+/// The invoking entry and route input actually consumed by this CC shim.
+pub(crate) fn cc_dispatch_observation(
+    compiler: &OsStr,
+) -> Result<(PathBuf, Vec<(String, PathBuf)>)> {
+    let invoked = std::env::args_os()
+        .next()
+        .ok_or_else(|| eyre::eyre!("CC dispatch has no invocation path"))?;
+    let shim = crate::materialize::resolve_executable(&invoked)?;
+    let name = Path::new(&invoked)
+        .file_name()
+        .and_then(OsStr::to_str)
+        .ok_or_else(|| eyre::eyre!("CC invocation name is unavailable"))?;
+    let stem = Path::new(&invoked)
+        .file_stem()
+        .and_then(OsStr::to_str)
+        .ok_or_else(|| eyre::eyre!("CC invocation stem is unavailable"))?;
+    let Some(language) = cc_shim_language(stem) else {
+        // A CMake launcher consumes its actual compiler argv, not these env pins.
+        return Ok((shim, Vec::new()));
+    };
+    if let Some(pin) = pinned_path_shim(name) {
+        if pin.as_os_str() != compiler {
+            eyre::bail!("CC selected compiler differs from its consumed path pin");
+        }
+        return Ok((shim, vec![(PATH_SHIMS_ENV.into(), pin)]));
+    }
+    let variable = match language {
+        CcLanguage::C => REAL_CC_ENV,
+        CcLanguage::Cxx => REAL_CXX_ENV,
+    };
+    if let Some(pin) = std::env::var_os(variable).filter(|value| !value.is_empty()) {
+        if pin.as_os_str() != compiler {
+            eyre::bail!("CC selected compiler differs from its consumed host pin");
+        }
+        return Ok((shim, vec![(variable.into(), pin.into())]));
+    }
+    Ok((shim, Vec::new()))
 }
 
 /// The compiler a cc shim stands in for.
@@ -1648,26 +2164,25 @@ fn is_same_binary(candidate: &Path, current: Option<&Path>) -> bool {
     false
 }
 
-fn run_transparent_cc(compiler: OsString, arguments: Vec<OsString>) -> ExitCode {
+fn run_transparent_cc(
+    compiler: OsString,
+    arguments: Vec<OsString>,
+    measurement: &mut crate::process_measurement::Invocation,
+) -> ExitCode {
+    measurement.set_outcome(CacheOutcome::Bypass);
     let mut command = Command::new(&compiler);
     command.args(&arguments);
-
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::CommandExt as _;
-
-        let error = command.exec();
-        eprintln!("mbx[error]: the cc shim failed to execute {compiler:?}: {error}");
-        ExitCode::from(1)
-    }
-    #[cfg(not(unix))]
-    {
-        match command.status() {
-            Ok(status) => ExitCode::from(u8::try_from(status.code().unwrap_or(1)).unwrap_or(1)),
-            Err(error) => {
-                eprintln!("mbx[error]: the cc shim failed to execute {compiler:?}: {error}");
-                ExitCode::from(1)
-            }
+    let _compiler = crate::phase_timing::phase("compiler");
+    let purpose = if simple_compiler_probe(&arguments) {
+        ProcessPurpose::Probe
+    } else {
+        ProcessPurpose::Work
+    };
+    match measurement.process(purpose).status(&mut command) {
+        Ok(status) => crate::materialize::exit_code(status),
+        Err(error) => {
+            eprintln!("mbx[error]: the cc shim failed to execute {compiler:?}: {error}");
+            ExitCode::FAILURE
         }
     }
 }
@@ -1708,7 +2223,18 @@ pub fn run_rustc_shim() -> ExitCode {
         .unwrap_or_else(|_| arguments.clone());
     // Held here rather than inside the cache attempt so that a compilation
     // that bypasses is timed through its compiler run as well.
-    let _timing = crate::phase_timing::start("rustc", crate_name_argument(&described));
+    let _timing = session_socket()
+        .map(|_| crate::phase_timing::start("rustc", crate_name_argument(&described)));
+    let kind = if rustc_probe(compiler_arguments) {
+        InvocationKind::Probe
+    } else {
+        InvocationKind::Work
+    };
+    let mut measurement = crate::process_measurement::Invocation::new(
+        AdapterKind::Rustc,
+        kind,
+        crate::unit_attribution::identity(&described, None),
+    );
     let out_dir = std::env::var_os("OUT_DIR").map(PathBuf::from);
     let (unit_id, dependencies) = crate::unit_graph::rustc_unit(&described, out_dir.as_deref());
     crate::phase_timing::identify(unit_id, dependencies);
@@ -1720,15 +2246,24 @@ pub fn run_rustc_shim() -> ExitCode {
         // `clippy-driver <real-rustc> <rustc arguments>`. The real rustc path
         // must still be passed to the driver when it executes, but it is not a
         // source input and must not be handed to the rustc argument parser.
-        match crate::rustc::compile(&rustc, compiler_arguments, wrapper_argument) {
+        match crate::rustc::compile(
+            &rustc,
+            compiler_arguments,
+            wrapper_argument,
+            &mut measurement,
+        ) {
             Ok(exit_code) => return exit_code,
             Err(error) => {
+                if measurement.has_work_attempted() {
+                    report_shim_warning(&format!("rustc cache failed after execution: {error:#}"));
+                    return ExitCode::FAILURE;
+                }
                 record_bypass(&error);
             }
         }
     }
 
-    run_transparent_rustc(rustc, arguments, &described)
+    run_transparent_rustc(rustc, arguments, &described, &mut measurement)
 }
 
 /// Explicit Cargo targets must not affect host build scripts or proc macros.
@@ -1790,11 +2325,38 @@ fn executable_stem(executable: &OsStr) -> Option<&str> {
 /// Run the compiler without caching. `described` is `arguments` with any
 /// `@argfile` expanded, which is where to look for what is being compiled;
 /// rustc itself is given `arguments` unchanged.
+fn simple_compiler_probe(arguments: &[OsString]) -> bool {
+    arguments.len() == 1
+        && matches!(
+            arguments[0].to_str(),
+            Some(
+                "--version"
+                    | "-V"
+                    | "-Vv"
+                    | "-vV"
+                    | "-v"
+                    | "--help"
+                    | "-h"
+                    | "-dumpversion"
+                    | "-dumpfullversion"
+                    | "-dumpmachine"
+                    | "-print-search-dirs"
+                    | "-print-libgcc-file-name"
+            )
+        )
+}
+
+fn rustc_probe(arguments: &[OsString]) -> bool {
+    crate::probe_classifier::rustc_probe(arguments)
+}
+
 fn run_transparent_rustc(
     rustc: OsString,
     arguments: Vec<OsString>,
     described: &[OsString],
+    measurement: &mut crate::process_measurement::Invocation,
 ) -> ExitCode {
+    measurement.set_outcome(CacheOutcome::Bypass);
     // The compiler below may replace this process, and with it any lease on
     // a stable `OUT_DIR`; it compiles against Cargo's own tree instead.
     crate::out_dir::restore();
@@ -1805,12 +2367,13 @@ fn run_transparent_rustc(
     // for a permit would stall a build's startup behind its siblings' permits.
     // Most probes carry no --crate-name; the target-info queries carry the
     // placeholder name `___` alongside `--print`, and compile nothing.
-    let is_query = described.iter().any(|argument| {
-        argument == "-"
-            || argument
-                .to_str()
-                .is_some_and(|argument| argument.starts_with("--print"))
-    });
+    let (_, compiler_arguments) = workspace_wrapper_arguments(&rustc, &arguments);
+    let is_query = rustc_probe(compiler_arguments);
+    let purpose = if is_query {
+        ProcessPurpose::Probe
+    } else {
+        ProcessPurpose::Work
+    };
     let demand = crate_name
         .as_deref()
         .filter(|_| !is_query)
@@ -1845,27 +2408,16 @@ fn run_transparent_rustc(
 
     #[cfg(unix)]
     {
-        use std::os::unix::process::CommandExt as _;
-
-        // A probe compiles nothing worth timing, so this process can become
-        // the compiler. A real compilation is waited for even without a
-        // permit, so that its time is recorded.
-        if demand.is_none() {
-            crate::phase_timing::finish();
-            let error = command.exec();
-            report_shim_error(&format!("the rustc shim failed to execute rustc: {error}"));
-            return ExitCode::from(1);
-        }
-        // A held permit must be released when the compiler finishes, and its
-        // lease lock is close-on-exec, so this process has to outlive the
-        // compiler rather than become it.
         let compiler = crate::phase_timing::phase("compiler");
-        let waited = command.spawn().and_then(|mut child| {
-            if let Some(action) = &mut action {
-                action.started();
-            }
-            child.wait()
-        });
+        let waited = measurement
+            .process(purpose)
+            .spawn(&mut command)
+            .and_then(|child| {
+                if let Some(action) = &mut action {
+                    action.started();
+                }
+                child.wait()
+            });
         drop(compiler);
         match waited {
             Ok(status) => {
@@ -1873,11 +2425,13 @@ fn run_transparent_rustc(
                 if let Some(demand) = &demand {
                     crate::scheduler::record_compiler_memory(demand, &status);
                 }
-                record_compiler_invocation(
-                    "bypass",
-                    crate_name.as_deref(),
-                    duration_ns(started.elapsed()),
-                );
+                if !is_query {
+                    record_compiler_invocation(
+                        "bypass",
+                        crate_name.as_deref(),
+                        duration_ns(started.elapsed()),
+                    );
+                }
                 crate::materialize::exit_code(status)
             }
             Err(error) => {
@@ -1888,35 +2442,26 @@ fn run_transparent_rustc(
     }
     #[cfg(windows)]
     {
-        use std::os::windows::io::AsRawHandle as _;
-        use windows_sys::Win32::System::Threading::GetExitCodeProcess;
-
+        use std::os::windows::process::ExitStatusExt as _;
         let compiler = crate::phase_timing::phase("compiler");
-        let waited = command.spawn().and_then(|mut child| {
-            let status = child.wait()?;
-            let mut exit_code = 1;
-            // SAFETY: the child owns a valid process handle until it is
-            // dropped, and `exit_code` is a valid out pointer.
-            if unsafe { GetExitCodeProcess(child.as_raw_handle().cast(), &raw mut exit_code) } == 0
-            {
-                Err(std::io::Error::last_os_error())
-            } else {
-                Ok((exit_code, status))
-            }
-        });
+        let waited = measurement.process(purpose).status(&mut command);
         drop(compiler);
         match waited {
-            Ok((exit_code, status)) => {
+            Ok(status) => {
+                let exit_code = status.into_raw();
                 drop(permit);
                 if let Some(demand) = &demand {
                     crate::scheduler::record_compiler_memory(demand, &status);
                 }
-                record_compiler_invocation(
-                    "bypass",
-                    crate_name.as_deref(),
-                    duration_ns(started.elapsed()),
-                );
+                if !is_query {
+                    record_compiler_invocation(
+                        "bypass",
+                        crate_name.as_deref(),
+                        duration_ns(started.elapsed()),
+                    );
+                }
                 // ExitProcess skips Rust destructors, including the timer.
+                measurement.finish_now();
                 crate::phase_timing::finish();
                 // SAFETY: This process is only a transparent compiler wrapper.
                 // ExitProcess is required to preserve Windows exception codes,
@@ -2622,6 +3167,16 @@ pub(crate) fn request_agent(requests: &[AgentRequest]) -> Result<Vec<AgentRespon
     }
 }
 
+/// Deliver telemetry only to an existing owning cache session.
+/// No socket means this process has no managed measurement scope.
+pub(crate) fn request_session_agent(
+    requests: &[AgentRequest],
+) -> Result<Option<Vec<AgentResponse>>> {
+    session_socket()
+        .map(|socket| request_agent_at(&socket, requests))
+        .transpose()
+}
+
 /// The session socket a shim should ask, if a session named one.
 ///
 /// An empty value means the same as an absent one: there is no session to
@@ -2629,7 +3184,7 @@ pub(crate) fn request_agent(requests: &[AgentRequest]) -> Result<Vec<AgentRespon
 /// agree on that, because the alternatives are not equivalent for a cc shim
 /// -- a standalone agent runs in the shim itself and writes to the stderr the
 /// compiler owns, which is what [`report_shim_warning`] exists to avoid.
-fn session_socket() -> Option<OsString> {
+pub(crate) fn session_socket() -> Option<OsString> {
     std::env::var_os(SOCKET_ENV).filter(|socket| !socket.is_empty())
 }
 

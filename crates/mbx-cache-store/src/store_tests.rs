@@ -117,6 +117,8 @@ fn record_build_in_group(
         Some(&cargo_roots(workspace_root)),
         group,
         predictions,
+        None,
+        None,
     )
     .unwrap();
 }
@@ -142,6 +144,8 @@ fn an_identical_receipt_is_left_standing() {
         None,
         None,
         predictions.clone(),
+        None,
+        None,
     )
     .unwrap();
     let path = latest_receipt_path(store, workspace);
@@ -156,6 +160,8 @@ fn an_identical_receipt_is_left_standing() {
         None,
         None,
         predictions.clone(),
+        None,
+        None,
     )
     .unwrap();
     let kept = std::fs::metadata(&path).unwrap();
@@ -182,9 +188,11 @@ fn an_identical_receipt_is_left_standing() {
         None,
         None,
         more.clone(),
+        None,
+        None,
     )
     .unwrap();
-    let receipt = read_build_receipt(&path).unwrap();
+    let receipt = read_build_receipt(store, &path).unwrap();
     assert_eq!(receipt.predictions, more);
 }
 
@@ -384,7 +392,11 @@ fn a_workspace_counts_each_reachable_object_once() {
             .action_bytes
     };
 
-    assert_eq!(bytes(&whole), stats(store).unwrap().total_bytes());
+    let totals = stats(store).unwrap();
+    assert_eq!(
+        bytes(&whole),
+        totals.object_bytes + totals.action_result_bytes
+    );
     assert_eq!(bytes(&partial), flat_bytes);
 }
 
@@ -568,6 +580,7 @@ fn exports_and_imports_named_attachment_objects() {
     record_build(source.path(), &"7".repeat(64), &workspace, &[action]);
     let attachment = store_object(source.path(), b"Cargo scheduler state");
     let additions = ExportAdditions {
+        required_receipt_evidence: Vec::new(),
         attachments: BTreeMap::from([("cargo-state-v1".into(), attachment.clone())]),
         objects: BTreeSet::from([attachment.clone()]),
     };
@@ -1357,6 +1370,9 @@ fn grouped_export_keeps_each_commands_predictions_and_newest_conflicts() {
     let new_shared = prediction("shared", "new shared result");
     let receipt = |completed_nanos, predictions| BuildReceipt {
         version: BUILD_RECEIPT_VERSION,
+        lineage: None,
+        run: "a".repeat(64),
+        context: None,
         cargo: None,
         workspace_root: source.path().join("workspace"),
         identity: identity.clone(),
@@ -1543,6 +1559,9 @@ fn equal_timestamp_exports_ignore_receipt_enumeration_order() {
     let identity = "e".repeat(64);
     let receipts = ["first", "second"].map(|name| BuildReceipt {
         version: BUILD_RECEIPT_VERSION,
+        lineage: None,
+        run: "a".repeat(64),
+        context: None,
         cargo: None,
         workspace_root: source.path().to_path_buf(),
         identity: identity.clone(),
@@ -1924,8 +1943,14 @@ fn evicts_objects_no_live_checkout_needs_before_older_rooted_ones() {
     age(&store, &kept, Duration::from_secs(2 * 60 * 60));
     age(&store, &dropped, Duration::from_secs(60 * 60));
     std::fs::remove_dir_all(&deleted).unwrap();
+    // Stale latest metadata is pruned first; require another artifact's bytes
+    // after that reclamation to exercise unrooted-before-rooted eviction.
+    let stale_receipt_bytes = std::fs::metadata(latest_receipt_path(&store, &deleted))
+        .unwrap()
+        .len();
+    let budget = stats(&store).unwrap().total_bytes() - stale_receipt_bytes - 10;
 
-    gc(&store, stats(&store).unwrap().total_bytes() - 10).unwrap();
+    gc(&store, budget).unwrap();
 
     let cas = LocalCas::new(&store);
     assert!(
@@ -1955,9 +1980,14 @@ fn keeps_rooting_when_a_sibling_worktree_survives() {
     record_build(&store, &identity, &first, std::slice::from_ref(&action));
     record_build(&store, &identity, &second, &[action]);
     let spare = store_object(&store, b"unrooted spare");
+    age(&store, &spare, Duration::from_secs(24 * 60 * 60));
     std::fs::remove_dir_all(&second).unwrap();
+    let stale_receipt_bytes = std::fs::metadata(latest_receipt_path(&store, &second))
+        .unwrap()
+        .len();
+    let budget = stats(&store).unwrap().total_bytes() - stale_receipt_bytes - 1;
 
-    let outcome = gc(&store, stats(&store).unwrap().total_bytes() - 1).unwrap();
+    let outcome = gc(&store, budget).unwrap();
 
     assert_eq!(outcome.removed_checkout_records, 1);
     let cas = LocalCas::new(&store);
@@ -2601,6 +2631,8 @@ fn an_empty_latest_receipt_retains_an_imported_baseline_action() {
         None,
         None,
         vec![prediction],
+        None,
+        None,
     )
     .unwrap();
     let baseline_bundle = source.path().join("baseline");
@@ -2631,6 +2663,8 @@ fn an_empty_latest_receipt_retains_an_imported_baseline_action() {
         None,
         None,
         Vec::new(),
+        None,
+        None,
     )
     .unwrap();
     let bundle = baseline_store.path().join("current");
@@ -2701,6 +2735,8 @@ fn current_prediction_wins_same_invocation_and_retains_old_invocations() {
         None,
         None,
         vec![baseline_same.clone(), baseline_old.clone()],
+        None,
+        None,
     )
     .unwrap();
     let baseline_bundle = source.path().join("baseline");
@@ -2728,6 +2764,8 @@ fn current_prediction_wins_same_invocation_and_retains_old_invocations() {
         None,
         None,
         vec![current.clone()],
+        None,
+        None,
     )
     .unwrap();
     let bundle = source.path().join("current");
@@ -2806,6 +2844,8 @@ fn corrupt_or_deleted_retained_objects_fail_before_the_publish_callback() {
             None,
             None,
             Vec::new(),
+            None,
+            None,
         )
         .unwrap();
         let output_path = LocalCas::new(source.path()).path_for(&output).unwrap();
@@ -2960,6 +3000,8 @@ fn grouped_roots_are_immutable_across_checkout_updates() {
             Some(roots),
             Some("job"),
             Vec::new(),
+            None,
+            None,
         )
         .unwrap();
     }
@@ -3009,10 +3051,12 @@ fn unchanged_predictions_replace_receipts_when_either_cargo_root_changes() {
             Some(&roots),
             None,
             Vec::new(),
+            None,
+            None,
         )
         .unwrap();
         assert_eq!(
-            read_build_receipt(&latest_receipt_path(store, &workspace))
+            read_build_receipt(store, &latest_receipt_path(store, &workspace))
                 .unwrap()
                 .cargo,
             Some(roots.clone())
@@ -3026,6 +3070,8 @@ fn unchanged_predictions_replace_receipts_when_either_cargo_root_changes() {
             Some(&roots),
             None,
             Vec::new(),
+            None,
+            None,
         )
         .unwrap();
         assert_eq!(
@@ -3041,6 +3087,8 @@ fn unchanged_predictions_replace_receipts_when_either_cargo_root_changes() {
         None,
         None,
         Vec::new(),
+        None,
+        None,
     )
     .unwrap();
     assert_eq!(checkout_workspace_roots(store, &workspace).unwrap(), None);
@@ -3066,6 +3114,8 @@ fn standalone_receipts_never_claim_cargo_roots() {
         None,
         Some("job"),
         Vec::new(),
+        None,
+        None,
     )
     .unwrap();
     assert!(group_workspace_roots(store, "job").unwrap().is_empty());
@@ -3081,16 +3131,21 @@ fn roots_record_schemas_reject_legacy_missing_and_unknown_fields() {
     let receipt = serde_json::json!({
         "version": BUILD_RECEIPT_VERSION, "workspace_root": "/workspace",
         "cargo": {"target_dir": "/target", "build_dir": "/build"},
+        "run": "b".repeat(64), "context": null, "lineage": null,
         "identity": "a".repeat(64), "completed_nanos": 1, "predictions": [],
     });
     let directory = tempfile::tempdir().unwrap();
     for (name, original) in [("checkout", checkout), ("receipt", receipt)] {
-        let path = directory.path().join(name);
-        write_atomic(&path, &serde_json::to_vec(&original).unwrap()).unwrap();
+        let path = if name == "receipt" {
+            latest_receipt_path(directory.path(), Path::new("/workspace"))
+        } else {
+            directory.path().join(name)
+        };
+        write_atomic(&path, &mbx_cache_core::canonical_json(&original).unwrap()).unwrap();
         if name == "checkout" {
             assert!(read_checkout_record(&path).is_some());
         } else {
-            assert!(read_build_receipt(&path).is_some());
+            assert!(read_build_receipt(directory.path(), &path).is_some());
         }
         for defect in [
             "legacy",
@@ -3118,11 +3173,14 @@ fn roots_record_schemas_reject_legacy_missing_and_unknown_fields() {
                 }
                 _ => unreachable!(),
             }
-            write_atomic(&path, &serde_json::to_vec(&broken).unwrap()).unwrap();
+            write_atomic(&path, &mbx_cache_core::canonical_json(&broken).unwrap()).unwrap();
             if name == "checkout" {
                 assert!(read_checkout_record(&path).is_none(), "{defect}");
             } else {
-                assert!(read_build_receipt(&path).is_none(), "{defect}");
+                assert!(
+                    read_build_receipt(directory.path(), &path).is_none(),
+                    "{defect}"
+                );
             }
         }
     }
@@ -3183,4 +3241,149 @@ fn project_usage_deduplicates_roots_through_symlink_aliases() {
     };
     record_checkout(store, &"b".repeat(64), &workspace, Some(&nested)).unwrap();
     assert_eq!(projects(store).unwrap()[0].target_bytes, 8);
+}
+
+#[test]
+fn receipt_context_changes_replace_latest_and_preserve_group_origins() {
+    let directory = tempfile::tempdir().unwrap();
+    let store = directory.path();
+    let workspace = store.join("workspace");
+    let roots = cargo_roots(&workspace);
+    let identity = "a".repeat(64);
+    let first = ReceiptContext {
+        schema: 1,
+        source: serde_json::json!({"revision": "first"}),
+        tool: serde_json::json!({"version": "1.21.0"}),
+    };
+    let mut second = first.clone();
+    second.source["revision"] = "second".into();
+    let path = latest_receipt_path(store, &workspace);
+    for (run, context) in [("b", &first), ("c", &second)] {
+        record_build_receipt(
+            store,
+            &run.repeat(64),
+            &identity,
+            &workspace,
+            Some(&roots),
+            None,
+            Vec::new(),
+            Some(context),
+            None,
+        )
+        .unwrap();
+        assert_eq!(
+            read_build_receipt(store, &path).unwrap().context.as_ref(),
+            Some(context)
+        );
+        let written = std::fs::read(&path).unwrap();
+        record_build_receipt(
+            store,
+            &"d".repeat(64),
+            &identity,
+            &workspace,
+            Some(&roots),
+            None,
+            Vec::new(),
+            Some(context),
+            None,
+        )
+        .unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), written);
+        record_build_receipt(
+            store,
+            &run.repeat(64),
+            &identity,
+            &workspace,
+            Some(&roots),
+            Some("context-origins"),
+            Vec::new(),
+            Some(context),
+            None,
+        )
+        .unwrap();
+    }
+    let evidence = group_receipt_evidence(store, "context-origins").unwrap();
+    assert_eq!(evidence.len(), 2);
+    assert!(
+        evidence
+            .iter()
+            .any(|receipt| receipt.context.as_ref() == Some(&first))
+    );
+    assert!(
+        evidence
+            .iter()
+            .any(|receipt| receipt.context.as_ref() == Some(&second))
+    );
+    record_build_receipt(
+        store,
+        &"e".repeat(64),
+        &identity,
+        &workspace,
+        Some(&roots),
+        None,
+        Vec::new(),
+        None,
+        None,
+    )
+    .unwrap();
+    assert!(read_build_receipt(store, &path).unwrap().context.is_none());
+}
+
+#[test]
+fn directory_import_rejects_empty_or_populated_local_grant_namespace() {
+    let source = tempfile::tempdir().unwrap();
+    let workspace = source.path().join("workspace");
+    std::fs::create_dir_all(&workspace).unwrap();
+    let action = store_result(source.path(), "native action", &[]);
+    record_build(source.path(), &"a".repeat(64), &workspace, &[action]);
+    let bundle = source.path().join("bundle");
+    export_checkout_as(
+        source.path(),
+        &workspace,
+        &bundle,
+        ExportAdditions::default(),
+        ExportForm::Directory,
+    )
+    .unwrap();
+    let grants = bundle.join(BUILD_RECEIPTS_DIR).join("local-grants");
+    std::fs::create_dir_all(&grants).unwrap();
+    for populated in [false, true] {
+        if populated {
+            std::fs::write(grants.join("owner-key"), [7_u8; 32]).unwrap();
+        }
+        let destination = tempfile::tempdir().unwrap();
+        let error = import_archive(destination.path(), &bundle).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("forbidden native directory namespace")
+        );
+        assert_eq!(stats(destination.path()).unwrap(), StoreStats::default());
+    }
+}
+
+#[test]
+fn local_grant_and_owner_key_bytes_share_receipt_budget_and_gc() {
+    let directory = tempfile::tempdir().unwrap();
+    let store = directory.path();
+    let grants = store.join(BUILD_RECEIPTS_DIR).join("local-grants");
+    std::fs::create_dir_all(&grants).unwrap();
+    std::fs::write(grants.join("owner-key"), [7_u8; 32]).unwrap();
+    std::fs::write(grants.join(format!("{}.json", "a".repeat(64))), [9_u8; 48]).unwrap();
+    let before = stats(store).unwrap();
+    assert_eq!(before.receipt_evidence, 2);
+    assert_eq!(before.receipt_evidence_bytes, 80);
+    assert_eq!(before.total_bytes(), 80);
+    assert_eq!(before.objects, 0);
+    let preview = gc_dry_run(store, 0).unwrap();
+    assert_eq!(preview.removed_receipt_evidence, 2);
+    assert_eq!(preview.removed_objects, 0);
+    assert_eq!(preview.removed_bytes, 80);
+    assert_eq!(preview.remaining_bytes, 0);
+    assert_eq!(stats(store).unwrap(), before);
+    let actual = gc(store, 0).unwrap();
+    assert_eq!(actual, preview);
+    assert_eq!(stats(store).unwrap(), StoreStats::default());
+    assert!(!grants.join("owner-key").exists());
+    assert!(!grants.join(format!("{}.json", "a".repeat(64))).exists());
 }

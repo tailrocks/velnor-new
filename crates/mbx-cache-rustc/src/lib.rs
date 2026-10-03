@@ -41,6 +41,7 @@ use std::path::{Component, Path, PathBuf};
 use thiserror::Error;
 
 mod dep_info;
+mod owned_out_dir;
 
 pub use dep_info::{DepInfoCommand, DiscoveredInputs, RustcDepInfo};
 

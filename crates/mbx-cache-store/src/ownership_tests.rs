@@ -29,10 +29,13 @@ fn native_action(root: &Path, label: &[u8], kind: CapturedMetadataKind) -> Cache
 fn receipt(root: &Path, action: CacheDigest, completed_nanos: u64, adapter: &str) -> BuildReceipt {
     BuildReceipt {
         version: BUILD_RECEIPT_VERSION,
+        lineage: None,
+        run: "b".repeat(64),
         workspace_root: root.join("workspace"),
         cargo: None,
         identity: "a".repeat(64),
         completed_nanos,
+        context: None,
         group: None,
         predictions: vec![ActionPrediction {
             action,
@@ -94,6 +97,25 @@ fn ownership_survives_group_prediction_deduplication() {
             Some("rustc")
         );
     }
+}
+
+#[test]
+fn comparison_rejects_equivalent_noncanonical_prediction_strings() {
+    let source = tempfile::tempdir().unwrap();
+    let action = native_action(source.path(), b"action", CapturedMetadataKind::Rustc);
+    let bundle = export(
+        source.path(),
+        vec![receipt(source.path(), action, 1, "rustc")],
+        "bundle",
+        None,
+    );
+    let mut comparison = ComparisonState::from_directory(&bundle).unwrap();
+    let canonical = comparison.predictions.pop_first().unwrap();
+    let value: serde_json::Value = serde_json::from_str(&canonical).unwrap();
+    comparison
+        .predictions
+        .insert(serde_json::to_string_pretty(&value).unwrap());
+    assert!(comparison.validate().is_err());
 }
 
 #[test]
@@ -191,7 +213,7 @@ fn export_manifest_rejects_legacy_versions_and_missing_registry() {
     );
     let path = bundle.join(EXPORT_MANIFEST);
     let original = std::fs::read(&path).unwrap();
-    for version in [1, 2] {
+    for version in [1, 2, 3, 4] {
         let mut value: serde_json::Value = serde_json::from_slice(&original).unwrap();
         value["version"] = serde_json::json!(version);
         std::fs::write(&path, serde_json::to_vec(&value).unwrap()).unwrap();
@@ -222,7 +244,7 @@ fn export_manifest_rejects_duplicate_keys_and_noncanonical_bytes() {
     assert!(verify_directory_bundle(&bundle).is_err());
     let mut duplicated = original;
     duplicated.pop();
-    duplicated.extend_from_slice(b",\"version\":3}");
+    duplicated.extend_from_slice(b",\"version\":5}");
     std::fs::write(path, duplicated).unwrap();
     assert!(verify_directory_bundle(&bundle).is_err());
 }

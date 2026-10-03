@@ -624,11 +624,8 @@ pub(crate) fn file_mode(_metadata: &std::fs::Metadata) -> u32 {
 
 #[cfg(unix)]
 pub(crate) fn validate_file_mode(node: &CacheFileNode, executable: bool) -> Result<()> {
-    if node.executable != executable
-        || node.mode & !0o777 != 0
-        || node.mode & 0o111 != 0
-        || node.mode & 0o022 != 0
-    {
+    node.validate_mode()?;
+    if node.executable != executable {
         bail!("cached output has an unsafe file mode: {}", node.name);
     }
     Ok(())

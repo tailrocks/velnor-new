@@ -30,6 +30,14 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime};
 
+#[path = "out_dir_state.rs"]
+mod state;
+pub(crate) use state::{
+    Snapshot, capture, finalize, hydrate, hydrate_cas, inventory_matches, is_unavailable, register,
+    resolve_root, source_matches, source_path, validate_cas, validate_inventory, validate_receipts,
+    validate_snapshot,
+};
+
 /// Where the session tells the shim to keep stable trees.
 pub(crate) const ROOT_ENV: &str = "MBX_OUT_DIR_ROOT";
 
@@ -104,6 +112,15 @@ pub(crate) fn stabilize_for(source: &Path) -> Option<PathBuf> {
     }
     match stabilize(&real, &root) {
         Ok(Some(stable)) => {
+            if let Err(error) = state::validate_live(&real, &root, &stable) {
+                if let Some(digest) = stable.file_name().and_then(|name| name.to_str()) {
+                    release(&root, digest);
+                }
+                crate::session::report_shim_warning(&format!(
+                    "OUT_DIR ownership was not recorded: {error:#}"
+                ));
+                return None;
+            }
             // Single-threaded here, ahead of any thread the shim starts, and
             // rustc inherits what is set by the time it is spawned.
             *ORIGINAL.lock().unwrap() = Some(real.into_os_string());
@@ -133,6 +150,11 @@ pub(crate) fn restore() {
     };
     unsafe { std::env::set_var("OUT_DIR", original) };
     LEASES.lock().unwrap().clear();
+    if let Err(error) = state::abandon() {
+        crate::session::report_shim_warning(&format!(
+            "OUT_DIR bypass ownership was not retired: {error:#}"
+        ));
+    }
 }
 
 /// Whether any Rust source below `directory` mentions `OUT_DIR`.
@@ -203,7 +225,7 @@ pub(crate) fn stabilize(real: &Path, root: &Path) -> Result<Option<PathBuf>> {
         let mut publishing = fslock::LockFile::open(&publish_lock_path(root, &digest))?;
         publishing.lock()?;
         if !stable.is_dir() {
-            materialize(real, root, &stable, &manifest, &files, &directories)?;
+            materialize(real, root, &stable, &manifest, &files, &directories, None)?;
         }
         Ok(())
     })();
@@ -369,6 +391,7 @@ fn materialize(
     manifest: &[u8],
     files: &[(PathBuf, bool)],
     directories: &[PathBuf],
+    times: Option<&std::collections::BTreeMap<PathBuf, SystemTime>>,
 ) -> Result<()> {
     std::fs::create_dir_all(root)?;
     let name = stable
@@ -393,7 +416,12 @@ fn materialize(
             // taking the copy for a changed input and compiling the unit again.
             // Through a read-only handle, since a build script may have made
             // the file read-only and the copy keeps its mode.
-            let modified = std::fs::metadata(&source)?.modified()?;
+            let modified = match times {
+                Some(times) => *times
+                    .get(file)
+                    .ok_or_else(|| eyre::eyre!("generated output has no preserved timestamp"))?,
+                None => std::fs::metadata(&source)?.modified()?,
+            };
             crate::materialize::set_modified(&destination, modified)?;
             // Read-only: the tree is shared by every checkout whose generated
             // sources match, and a write through one compilation would leave

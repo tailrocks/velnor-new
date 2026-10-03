@@ -25,6 +25,7 @@ use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWrite
 mod file_digest;
 mod manifest;
 mod measurement;
+mod measurement_attribution;
 mod prefetch;
 mod stats;
 mod wire;
@@ -165,6 +166,7 @@ pub struct AgentRemoteCache {
 #[derive(Default)]
 struct AtomicAgentStats {
     measurement_adapters: Mutex<BTreeMap<crate::AdapterKind, crate::AdapterMeasurement>>,
+    measurement_packages: Mutex<measurement_attribution::PackageSnapshot>,
     wrapper_phases_ns: Mutex<BTreeMap<String, u64>>,
     lookups: AtomicU64,
     unconsulted: AtomicU64,
@@ -1791,8 +1793,12 @@ impl CacheAgent {
 
     /// Return a snapshot of this session's cache activity.
     pub fn stats(&self) -> AgentStats {
+        let measurement = self.measurement_snapshot();
         AgentStats {
-            measurement_adapters: measurement::snapshot(&self.stats.measurement_adapters),
+            measurement_adapters: measurement.adapters,
+            measurement_package_generation: measurement.generation,
+            measurement_package_availability: measurement.availability,
+            measurement_packages: measurement.packages,
             session_duration_ns: 0,
             lookups: self.stats.lookups.load(Ordering::Relaxed),
             unconsulted: self.stats.unconsulted.load(Ordering::Relaxed),
@@ -2057,6 +2063,19 @@ impl CacheAgent {
             AgentRequest::RecordFileDigests { scope, entries } => {
                 self.record_file_digests(scope, entries)
             }
+            AgentRequest::RecordMeasurementPackages {
+                generation,
+                availability,
+                packages,
+            } => (|| {
+                let mut index = self
+                    .stats
+                    .measurement_packages
+                    .lock()
+                    .map_err(|_| eyre::eyre!("measurement package lock poisoned"))?;
+                measurement_attribution::record(&mut index, generation, availability, packages)
+                    .map(|()| AgentResponse::MeasurementPackagesRecorded)
+            })(),
             AgentRequest::RecordMeasurement { event } => {
                 measurement::record(&self.stats.measurement_adapters, event)
                     .map(|()| AgentResponse::MeasurementRecorded)

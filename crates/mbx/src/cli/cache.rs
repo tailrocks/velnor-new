@@ -8,6 +8,27 @@ use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
+#[derive(Clone, Copy, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+enum WorkspaceUsefulnessReason {
+    SchedulerValidityNotProven,
+    OwnerCoverageUnavailable,
+    OwnerProofUnavailable,
+    ManagedOverlap,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+enum WorkspaceUsefulnessStatus {
+    Unavailable,
+}
+
+#[derive(serde::Serialize)]
+struct WorkspaceUsefulness {
+    status: WorkspaceUsefulnessStatus,
+    reason: WorkspaceUsefulnessReason,
+}
+
 #[derive(usage::Args)]
 pub(super) struct CacheArgs {
     #[usage(subcommand)]
@@ -28,8 +49,8 @@ pub(super) enum CacheCommands {
     Projects,
     /// List the largest objects and action-result records.
     Largest(LargestArgs),
-    /// Verify local objects and action results.
-    Verify,
+    /// Verify local objects and action results, or an exact directory bundle without importing it.
+    Verify(VerifyArgs),
     /// Export the cache closure of this checkout's last build. The export includes
     /// Cargo scheduler state for recorded workspaces, with compiler outputs referenced
     /// from the content-addressed closure instead of duplicated.
@@ -71,6 +92,15 @@ pub(super) struct JsonArgs {
     /// Print a stable machine-readable report.
     #[usage(long)]
     json: bool,
+}
+
+#[derive(usage::Args)]
+pub(super) struct VerifyArgs {
+    /// Directory bundle to verify without configuration, execution, import, or hydration.
+    pub(super) directory: Option<PathBuf>,
+    /// Print a stable machine-readable directory verification report.
+    #[usage(long)]
+    pub(super) json: bool,
 }
 
 #[derive(usage::Args)]
@@ -136,7 +166,11 @@ pub(super) fn run(config: &Config, command: CacheCommands) -> Result<ExitCode> {
     match command {
         CacheCommands::ComparisonState(args) => {
             if args.verify {
-                super::cache_comparison::read(&args.file)?;
+                let baseline = super::cache_comparison::read(&args.file)?;
+                super::cache_comparison::validate_owner_receipts(
+                    &config.store_dir(),
+                    &baseline.cache,
+                )?;
             } else {
                 super::cache_comparison::empty(&args.file)?;
             }
@@ -167,7 +201,15 @@ pub(super) fn run(config: &Config, command: CacheCommands) -> Result<ExitCode> {
         CacheCommands::Largest(args) => {
             cache_largest(config, args.limit).map(|()| ExitCode::SUCCESS)
         }
-        CacheCommands::Verify => cache_verify(config),
+        CacheCommands::Verify(args) => {
+            if let Some(directory) = args.directory {
+                verify_directory(&directory, args.json)
+            } else if args.json {
+                eyre::bail!("--json requires a directory bundle");
+            } else {
+                cache_verify(config)
+            }
+        }
         CacheCommands::Export(args) => cache_export(
             config,
             &args.archive,
@@ -223,23 +265,70 @@ pub(super) fn cache_export(
             .into_iter()
             .collect(),
     };
-    let additions = match workspace_state::capture(&store_dir, &targets) {
-        Ok(additions) => additions,
-        Err(error) => {
-            if compare.is_some() {
-                return Err(error);
-            }
-            log::warn!("Cargo workspace state was not included in the cache export: {error}");
+    let evidence = match group {
+        Some(group) => store::group_receipt_evidence(&store_dir, group)?,
+        None => store::checkout_receipt_evidence(&store_dir, &workspace)?,
+    };
+    if let Some(baseline) = &baseline {
+        super::cache_comparison::validate_owner_receipts(&store_dir, &baseline.cache)?;
+    }
+    let mut workspace_capture = "captured";
+    let mut workspace_usefulness_reason = WorkspaceUsefulnessReason::SchedulerValidityNotProven;
+    let mut workspace_capture_unavailable_reason = None;
+    let additions = match workspace_state::capture(
+        config,
+        &store_dir,
+        &targets,
+        &config.cache_dir.join(crate::out_dir::ROOT),
+        &evidence,
+    ) {
+        Ok(workspace_state::CaptureOutcome::Captured(additions)) => additions,
+        Ok(workspace_state::CaptureOutcome::RetainedOwner { additions, reasons }) => {
+            workspace_capture = "unavailable_owner_coverage";
+            workspace_usefulness_reason = WorkspaceUsefulnessReason::OwnerCoverageUnavailable;
+            let reason = reasons.join("; ");
+            log::warn!("Cargo workspace persistence is unverified: {reason}");
+            workspace_capture_unavailable_reason = Some(reason);
+            additions
+        }
+        Ok(workspace_state::CaptureOutcome::UnavailableManagedOverlap) => {
+            workspace_capture = "unavailable_managed_overlap";
+            workspace_usefulness_reason = WorkspaceUsefulnessReason::ManagedOverlap;
+            workspace_capture_unavailable_reason =
+                Some("target or build roots overlap native cache-owned paths".to_owned());
+            log::warn!(
+                "Cargo workspace persistence is unverified: target or build roots overlap native cache-owned paths"
+            );
             store::ExportAdditions::default()
         }
+        Ok(workspace_state::CaptureOutcome::UnavailableOwnerProof { reason }) => {
+            workspace_capture = "unavailable_owner_proof";
+            workspace_usefulness_reason = WorkspaceUsefulnessReason::OwnerProofUnavailable;
+            log::warn!("Cargo workspace persistence is unverified: {reason}");
+            workspace_capture_unavailable_reason = Some(reason);
+            store::ExportAdditions::default()
+        }
+        Err(error) => return Err(error),
     };
-    let additions = workspace_state::retain(
+    let retained = workspace_state::retain(
         &store_dir,
         additions,
         baseline
             .as_ref()
             .and_then(|baseline| baseline.cache.attachments.get(workspace_state::ATTACHMENT)),
     )?;
+    if !retained.unavailable_reasons.is_empty() {
+        workspace_capture = "unavailable_owner_coverage";
+        workspace_usefulness_reason = WorkspaceUsefulnessReason::OwnerCoverageUnavailable;
+        let mut reasons = retained.unavailable_reasons;
+        if let Some(reason) = workspace_capture_unavailable_reason.take() {
+            reasons.insert(0, reason);
+        }
+        let reason = reasons.join("; ");
+        log::warn!("Cargo workspace persistence is unverified: {reason}");
+        workspace_capture_unavailable_reason = Some(reason);
+    }
+    let additions = retained.additions;
     let snapshot_budget = baseline.as_ref().map(|_| config.gc.max_bytes);
     let mut report = None;
     let mut publish = |root: &Path, state: &store::ComparisonState| {
@@ -281,7 +370,7 @@ pub(super) fn cache_export(
         Ok(outcome) => outcome,
         Err(error) => {
             if json && let Some(refusal) = error.downcast_ref::<store::ExportBudgetExceeded>() {
-                print_json(&serde_json::json!({"version": 1, "exported": false,
+                print_json(&serde_json::json!({"version": 2, "exported": false,
                     "budget_refused": true, "snapshot_budget_bytes": refusal.budget,
                     "logical_closure_bytes": refusal.logical_bytes,
                     "qualification": "verified inventory exceeds owner budget; persistence not verified"}))?;
@@ -291,15 +380,14 @@ pub(super) fn cache_export(
     };
     if let Some((delta, semantic_digest)) = report {
         if json {
-            return print_json(&serde_json::json!({
-                "version": 1, "budget_refused": false, "snapshot_budget_bytes": snapshot_budget, "exported": outcome.exported, "actions": outcome.actions, "objects": outcome.objects,
-                "bytes": outcome.bytes, "useful_delta": delta.as_ref().map_or(outcome.actions > 0, |d| d.useful()),
-                "delta": delta,
-                "semantic_digest": semantic_digest,
-                "workspace_comparison": "relative_path_type_content_mode_symlink_target",
-                "workspace_comparison_exclusions": ["effective_build_root/.rustc_info.json"],
-                "workspace_transport_scope": "recorded_target_and_build_directories",
-                "qualification": "compiled actions, predictions and Cargo unit state; includes Cargo output and intermediate roots; excludes only effective build-root compiler-query cache .rustc_info.json; other scheduler content differences are reported, not proven additional cache hits"
+            return print_json(&export_report(ExportReportInput {
+                outcome: &outcome,
+                snapshot_budget,
+                delta: delta.as_ref(),
+                semantic_digest: &semantic_digest,
+                capture: workspace_capture,
+                capture_reason: workspace_capture_unavailable_reason.as_deref(),
+                usefulness_reason: workspace_usefulness_reason,
             }));
         }
         if let Some(delta) = delta {
@@ -322,6 +410,21 @@ pub(super) fn cache_export(
     Ok(())
 }
 
+/// Validate native owner evidence before adoption, with optional comparison persistence.
+pub(crate) fn import_cache_archive(
+    store: &Path,
+    archive: &Path,
+    comparison_state: Option<&Path>,
+) -> Result<store::ImportOutcome> {
+    store::import_archive_with_comparison(store, archive, |root, state| {
+        super::cache_comparison::validate_owner_receipts(root, state)?;
+        if let Some(path) = comparison_state {
+            super::cache_comparison::write(path, root, state)?;
+        }
+        Ok(())
+    })
+}
+
 pub(super) fn cache_import(
     config: &Config,
     archive: &Path,
@@ -330,12 +433,7 @@ pub(super) fn cache_import(
     cargo_args: &[String],
 ) -> Result<()> {
     let store = config.store_dir();
-    let imported = store::import_archive_with_comparison(&store, archive, |root, state| {
-        if let Some(path) = comparison_state {
-            super::cache_comparison::write(path, root, state)?;
-        }
-        Ok(())
-    })?;
+    let imported = import_cache_archive(&store, archive, comparison_state)?;
     let mut restore_status = "not_present";
     let restored = if let Some(attachment) = imported.attachments.get(workspace_state::ATTACHMENT) {
         let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
@@ -364,6 +462,10 @@ pub(super) fn cache_import(
                     log::warn!(
                         "cache imported without restoring Cargo workspace state: multiple root pairs match; pass the Cargo invocation after `--` to select its roots"
                     );
+                    None
+                }
+                Ok(workspace_state::RestoreOutcome::SkippedManagedOverlap) => {
+                    restore_status = "skipped_managed_overlap";
                     None
                 }
                 Ok(workspace_state::RestoreOutcome::SkippedIncompatible) => {
@@ -633,6 +735,55 @@ pub(super) fn cache_largest(config: &Config, limit: usize) -> Result<()> {
     Ok(())
 }
 
+/// Data-only owner validation; this path requires no user or workspace configuration.
+pub(super) fn verify_directory(directory: &Path, json: bool) -> Result<ExitCode> {
+    let verified = store::verify_directory_bundle(directory)?;
+    if verified
+        .comparison
+        .attachments
+        .keys()
+        .any(|name| name != workspace_state::ATTACHMENT)
+    {
+        eyre::bail!("cache directory uses unsupported attachment schemas");
+    }
+    let mut expected = std::collections::BTreeSet::new();
+    for attachment in verified.comparison.attachments.values() {
+        workspace_state::validate_receipt_evidence(
+            directory,
+            attachment,
+            &verified.comparison.receipt_evidence,
+        )?;
+        expected.extend(workspace_state::referenced_objects(directory, attachment)?);
+    }
+    if expected != verified.attachment_objects {
+        eyre::bail!(
+            "cache directory attachment object inventory does not match its owner references"
+        );
+    }
+    let (_, semantic_digest) =
+        super::cache_comparison::report(None, directory, &verified.comparison)?;
+    let after = store::verify_directory_bundle(directory)?;
+    if after.physical_digest != verified.physical_digest {
+        eyre::bail!("cache directory changed during owner verification");
+    }
+    if json {
+        print_json(&serde_json::json!({
+            "version": 1, "valid": true,
+            "actions": verified.actions, "objects": verified.objects,
+            "files": verified.files, "bytes": verified.bytes,
+            "physical_digest": verified.physical_digest,
+            "native_closure_digest": verified.physical_digest.hash,
+            "semantic_digest": semantic_digest,
+        }))?;
+    } else {
+        println!(
+            "verified directory bundle: {} actions, {} objects",
+            verified.actions, verified.objects
+        );
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
 pub(super) fn cache_verify(config: &Config) -> Result<ExitCode> {
     let outcome = store::verify(&config.store_dir())?;
     println!(
@@ -830,3 +981,10 @@ pub(super) fn cache_workspace_root(cargo: &std::ffi::OsStr, requested: &Path) ->
         .map(|roots| roots.workspace_root)
         .unwrap_or_else(|| requested.to_path_buf())
 }
+
+#[path = "cache_export_report.rs"]
+mod export_report;
+use export_report::{ExportReportInput, export_report};
+#[cfg(test)]
+#[path = "cache_export_report_tests.rs"]
+mod export_report_tests;

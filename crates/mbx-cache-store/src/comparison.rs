@@ -11,12 +11,13 @@ pub struct ComparisonState {
     pub action_owners: BTreeMap<String, String>,
     /// Full prediction tuples including their task identity.
     pub predictions: BTreeSet<String>,
+    pub receipt_evidence: Vec<ReceiptEvidence>,
     pub attachments: BTreeMap<String, CacheDigest>,
 }
 
 impl ComparisonState {
     /// The current complete owner-inventory schema version.
-    pub const VERSION: u8 = 2;
+    pub const VERSION: u8 = 3;
 
     /// Validate the complete owner state shape without requiring retained blobs.
     pub fn validate(&self) -> Result<()> {
@@ -28,6 +29,7 @@ impl ComparisonState {
         {
             eyre::bail!("comparison ownership does not cover exactly its action results");
         }
+        receipt_evidence::validate_evidence(&self.receipt_evidence, &self.action_owners)?;
         for owner in self.action_owners.values() {
             CapturedMetadataKind::for_adapter(owner)?;
         }
@@ -55,7 +57,8 @@ impl ComparisonState {
         let mut tasks: BTreeMap<String, Vec<ActionPrediction>> = BTreeMap::new();
         for value in &self.predictions {
             let (task, prediction): (String, ActionPrediction) = serde_json::from_str(value)?;
-            if !is_task_identity(&task)
+            if *value != String::from_utf8(mbx_cache_core::canonical_json(&(&task, &prediction))?)?
+                || !is_task_identity(&task)
                 || !self
                     .action_results
                     .contains_key(&serde_json::to_string(&prediction.action)?)
@@ -121,7 +124,9 @@ impl ComparisonState {
         let mut predictions = BTreeSet::new();
         for task in &manifest.tasks {
             for prediction in &task.predictions {
-                predictions.insert(serde_json::to_string(&(&task.task, prediction))?);
+                predictions.insert(String::from_utf8(mbx_cache_core::canonical_json(&(
+                    &task.task, prediction,
+                ))?)?);
             }
         }
         Ok(Self {
@@ -129,6 +134,7 @@ impl ComparisonState {
             action_results,
             action_owners: manifest.action_owners.clone(),
             predictions,
+            receipt_evidence: manifest.receipt_evidence.clone(),
             attachments: manifest.attachments.clone(),
         })
     }

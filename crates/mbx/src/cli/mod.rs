@@ -14,7 +14,7 @@ use std::process::ExitCode;
 
 mod adopt;
 mod analyze;
-mod cache;
+pub(crate) mod cache;
 mod cache_comparison;
 mod cargo;
 mod cargo_invocation;
@@ -64,9 +64,16 @@ use {cache::*, cargo::*, exec::*, gc::*, settings::*, setup::*};
 
 #[derive(usage::Cli)]
 #[usage(completion = true)]
+#[cfg_attr(
+    feature = "owned-cache-transport",
+    usage(
+        version = crate::version::VERSION,
+        version_spec = "1.21.1-owned-cache-transport"
+    )
+)]
+#[cfg_attr(not(feature = "owned-cache-transport"), usage(version))]
 #[usage(
     bin = "mbx",
-    version,
     config = crate::config::RawConfig,
     about = "A build cache for Rust projects",
     long_about = "Run `mbx setup` once, then keep using Cargo normally. Compiled work is shared across every checkout and build storage prunes itself. Use mbx directly for its own commands, such as `tui`, `stats`, `cache`, `gc`, and `doctor`, or prefix Cargo commands with `mbx` for zero-config use.\n\nExamples:\n  mbx setup\n  cargo build --release\n  cargo test --workspace\n  cargo clippy --all-targets -- -D warnings\n  mbx gc --dry-run",
@@ -178,6 +185,25 @@ fn compiles_nothing(command: &Commands) -> Option<&'static str> {
     }
 }
 
+/// Dispatch exact directory verification before any runtime hooks or configuration.
+pub fn data_only_verify() -> Option<Result<ExitCode>> {
+    let arguments = std::env::args_os().collect::<Vec<_>>();
+    if arguments.get(1).is_none_or(|value| value != "cache")
+        || arguments.get(2).is_none_or(|value| value != "verify")
+    {
+        return None;
+    }
+    let cli = Cli::parse();
+    let Commands::Cache(cache::CacheArgs {
+        command: cache::CacheCommands::Verify(args),
+    }) = cli.command
+    else {
+        return None;
+    };
+    args.directory
+        .map(|directory| cache::verify_directory(&directory, args.json))
+}
+
 /// Parse the command line and run it.
 pub fn run() -> Result<ExitCode> {
     let original = std::env::args_os().collect::<Vec<_>>();
@@ -186,6 +212,13 @@ pub fn run() -> Result<ExitCode> {
         return Ok(ExitCode::SUCCESS);
     }
     let mut cli = Cli::parse();
+    if let Commands::Cache(cache::CacheArgs {
+        command: cache::CacheCommands::Verify(args),
+    }) = &cli.command
+        && let Some(directory) = &args.directory
+    {
+        return cache::verify_directory(directory, args.json);
+    }
     let toolchain = cli.toolchain.take();
     let toolchain = toolchain.as_deref();
     if let Some(toolchain) = toolchain
@@ -338,6 +371,8 @@ mod dispatch_tests;
 mod exec_tests;
 #[cfg(test)]
 mod gc_tests;
+#[cfg(test)]
+mod identity_tests;
 #[cfg(test)]
 mod prefetch_tests;
 #[cfg(test)]

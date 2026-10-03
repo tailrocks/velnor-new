@@ -11,7 +11,7 @@ use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
-const AGENT_FIXTURE: &str = include_str!("fixtures/agent-protocol-v12.jsonl");
+const AGENT_FIXTURE: &str = include_str!("fixtures/agent-protocol-v13.jsonl");
 
 fn digest() -> CacheDigest {
     CacheDigest {
@@ -112,6 +112,43 @@ fn assert_variant_coverage<'a>(
 
 fn requests() -> Vec<(&'static str, AgentRequest)> {
     vec![
+        (
+            "request.record_measurement_packages",
+            AgentRequest::RecordMeasurementPackages {
+                generation: 1,
+                availability: mbx_cache_core::MeasurementPackageAvailability::Available,
+                packages: vec![mbx_cache_core::MeasurementPackageIdentity {
+                    package_id: "path+file:///workspace/package#0.1.0".into(),
+                    manifest_path: PathBuf::from("/workspace/package/Cargo.toml"),
+                    sources: vec![PathBuf::from("/workspace/package/src/lib.rs")],
+                    origin: mbx_cache_core::PackageOrigin::Workspace,
+                }],
+            },
+        ),
+        (
+            "request.record_measurement_packages_unavailable",
+            AgentRequest::RecordMeasurementPackages {
+                generation: 2,
+                availability: mbx_cache_core::MeasurementPackageAvailability::Unavailable,
+                packages: vec![],
+            },
+        ),
+        (
+            "request.record_measurement_output",
+            AgentRequest::RecordMeasurement {
+                event: mbx_cache_core::MeasurementEvent::Output {
+                    adapter: mbx_cache_core::AdapterKind::Rustc,
+                    unit: None,
+                    observation: mbx_cache_core::OutputObservation {
+                        path: PathBuf::from("/workspace/package/target/lib.rlib"),
+                        aliases: vec![],
+                        cache_outcome: mbx_cache_core::CacheOutcome::Hit,
+                        digest: digest(),
+                        file_identity: None,
+                    },
+                },
+            },
+        ),
         (
             "request.record_measurement_invocation",
             AgentRequest::RecordMeasurement {
@@ -332,6 +369,10 @@ fn requests() -> Vec<(&'static str, AgentRequest)> {
 fn responses() -> Vec<(&'static str, AgentResponse)> {
     vec![
         (
+            "response.measurement_packages_recorded",
+            AgentResponse::MeasurementPackagesRecorded,
+        ),
+        (
             "response.measurement_recorded",
             AgentResponse::MeasurementRecorded,
         ),
@@ -506,7 +547,7 @@ fn assert_fixture<T: Serialize>(expected: &mut BTreeMap<&str, &str>, name: &str,
 }
 
 #[test]
-fn agent_protocol_v12_shapes_match_the_conformance_fixture() {
+fn agent_protocol_v13_shapes_match_the_conformance_fixture() {
     let mut expected = fixture();
     for line in AGENT_FIXTURE.lines() {
         let (name, json) = line
@@ -584,7 +625,7 @@ fn agent_protocol_v12_shapes_match_the_conformance_fixture() {
 
 #[test]
 fn protocol_constants_match_the_contract() {
-    assert_eq!(AGENT_PROTOCOL_VERSION, 12);
+    assert_eq!(AGENT_PROTOCOL_VERSION, 13);
     assert_eq!(PROTOCOL_VERSION, 1);
     assert_eq!(
         ACTION_RESULT_MEDIA_TYPE,
@@ -647,6 +688,7 @@ define_variant_coverage!(request_variant_name, EXPECTED_REQUEST_VARIANTS, AgentR
     AgentRequest::JoinActionPromise { .. } => "join_action_promise",
     AgentRequest::CompleteActionPromise { .. } => "complete_action_promise",
     AgentRequest::ResolveFileDigests { .. } => "resolve_file_digests",
+    AgentRequest::RecordMeasurementPackages { .. } => "record_measurement_packages",
     AgentRequest::RecordMeasurement { .. } => "record_measurement",
     AgentRequest::RecordWrapperTiming { .. } => "record_wrapper_timing",
 });
@@ -677,6 +719,7 @@ define_variant_coverage!(response_variant_name, EXPECTED_RESPONSE_VARIANTS, Agen
     AgentResponse::ActionPromise { .. } => "action_promise",
     AgentResponse::ActionPromiseCompleted => "action_promise_completed",
     AgentResponse::FileDigestsResolved { .. } => "file_digests_resolved",
+    AgentResponse::MeasurementPackagesRecorded => "measurement_packages_recorded",
     AgentResponse::MeasurementRecorded => "measurement_recorded",
     AgentResponse::WrapperTimingRecorded => "wrapper_timing_recorded",
 });

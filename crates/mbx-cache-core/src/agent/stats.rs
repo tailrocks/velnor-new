@@ -1,4 +1,6 @@
-use crate::{AdapterKind, AdapterMeasurement};
+use crate::{
+    AdapterKind, AdapterMeasurement, MeasurementPackageAvailability, MeasurementPackageIdentity,
+};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Aggregate cache activity for one task session.
@@ -12,6 +14,12 @@ use std::collections::{BTreeMap, BTreeSet};
 pub struct AgentStats {
     /// Direct typed adapter observations, retaining unknown unit attribution.
     pub measurement_adapters: BTreeMap<AdapterKind, AdapterMeasurement>,
+    /// Latest owning Cargo metadata snapshot generation; None means unobserved.
+    pub measurement_package_generation: Option<u64>,
+    /// Explicit availability of the latest owning Cargo metadata snapshot.
+    pub measurement_package_availability: Option<MeasurementPackageAvailability>,
+    /// Actual resolved package map from the same generation/availability snapshot.
+    pub measurement_packages: Vec<MeasurementPackageIdentity>,
     /// Cumulative exclusive wrapper durations, including an unattributed remainder.
     pub wrapper_phases_ns: BTreeMap<String, u64>,
     /// End-to-end lifetime of the task-scoped cache session.

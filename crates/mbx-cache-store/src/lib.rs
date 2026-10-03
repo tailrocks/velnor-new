@@ -3,14 +3,25 @@
 //! The store holds six trees: `cas/v1` for content-addressed objects,
 //! `action-results/v1` for the results that reference them, `task-manifests/v1`
 //! for the prediction index, `checkouts/v1` for the checkouts that have built
-//! each identity, `build-receipts/v1` for exact completed build closures, and
-//! `sessions/v1` for per-build event streams. Only the first two are collected
-//! for size; manifests and receipts are small, checkout records expire with
-//! their checkout claims, and session streams are bounded by age and count
-//! because they are history rather than cache content.
+//! each identity, `build-receipts/v4` for exact completed build closures, and
+//! `sessions/v1` for per-build event streams. CAS, action results, and original
+//! receipt metadata share the cache byte budget. Checkout claims expire with
+//! their workspaces; session streams have separate age and count bounds.
 
 mod comparison;
 mod events;
+#[cfg(test)]
+mod receipt_binding_tests;
+mod receipt_context;
+mod receipt_evidence;
+mod receipt_gc;
+mod receipt_lineage;
+pub use receipt_context::ReceiptContext;
+pub use receipt_evidence::{
+    ReceiptEvidence, checkout_receipt_evidence, group_receipt_evidence, semantic_receipt_evidence,
+    stored_receipt_evidence,
+};
+pub use receipt_lineage::ReceiptLineage;
 mod verify;
 pub use comparison::ComparisonState;
 pub use verify::{BundleVerification, verify_directory_bundle};
@@ -38,11 +49,11 @@ const CHECKOUTS_DIR: &str = "checkouts/v1";
 const SWEEP_STAMP: &str = "gc/v1/last-sweep";
 const SWEEP_LOCK: &str = "gc/v1/sweep.lock";
 const CHECKOUT_RECORD_VERSION: u8 = 2;
-const BUILD_RECEIPTS_DIR: &str = "build-receipts/v1";
-const BUILD_RECEIPT_VERSION: u8 = 2;
+const BUILD_RECEIPTS_DIR: &str = "build-receipts/v4";
+const BUILD_RECEIPT_VERSION: u8 = 4;
 const IMPORT_STAGING_DIR: &str = "import-staging";
-const EXPORT_MANIFEST: &str = "mbx-cache-export-v3.json";
-const EXPORT_VERSION: u8 = 3;
+const EXPORT_MANIFEST: &str = "mbx-cache-export-v5.json";
+const EXPORT_VERSION: u8 = 5;
 
 const IMPORT_STAGING_RETENTION: Duration = Duration::from_secs(24 * 60 * 60);
 const SESSION_RETENTION: Duration = Duration::from_secs(7 * 24 * 60 * 60);
@@ -82,6 +93,8 @@ pub struct StoreStats {
     pub object_bytes: u64,
     pub action_results: u64,
     pub action_result_bytes: u64,
+    pub receipt_evidence: u64,
+    pub receipt_evidence_bytes: u64,
     pub live_checkouts: u64,
     /// Claims that root nothing any more: a checkout that is gone, or one that
     /// is still there but has not renewed this claim inside the retention
@@ -92,7 +105,9 @@ pub struct StoreStats {
 
 impl StoreStats {
     pub fn total_bytes(&self) -> u64 {
-        self.object_bytes.saturating_add(self.action_result_bytes)
+        self.object_bytes
+            .saturating_add(self.action_result_bytes)
+            .saturating_add(self.receipt_evidence_bytes)
     }
 }
 
@@ -100,6 +115,7 @@ impl StoreStats {
 pub struct GcOutcome {
     pub removed_objects: u64,
     pub removed_action_results: u64,
+    pub removed_receipt_evidence: u64,
     pub removed_checkout_records: u64,
     /// Event streams dropped on age or count. These bytes are not included in
     /// `remaining_bytes` because session history is not cache content.
@@ -185,6 +201,9 @@ pub struct ExportAdditions {
     pub attachments: BTreeMap<String, CacheDigest>,
     /// Every object the attachments reach, including the named objects.
     pub objects: BTreeSet<CacheDigest>,
+    /// Exact persisted originals required by the selected native attachment.
+    /// These records preserve provenance; they do not authenticate source origin.
+    pub required_receipt_evidence: Vec<ReceiptEvidence>,
 }
 
 /// Cargo's output and intermediate build directories for one completed build.
@@ -205,7 +224,8 @@ where
 }
 
 /// One Cargo workspace and the roots recorded for its build.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct WorkspaceRoots {
     pub workspace_root: PathBuf,
     pub cargo: CargoBuildRoots,
@@ -218,6 +238,7 @@ struct ExportManifest {
     tasks: Vec<TaskActionManifest>,
     actions: Vec<CacheDigest>,
     action_owners: BTreeMap<String, String>,
+    receipt_evidence: Vec<ReceiptEvidence>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     attachments: BTreeMap<String, CacheDigest>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -229,11 +250,15 @@ struct ExportManifest {
 #[serde(deny_unknown_fields)]
 struct BuildReceipt {
     version: u8,
+    run: String,
     workspace_root: PathBuf,
     #[serde(deserialize_with = "deserialize_cargo_roots")]
     cargo: Option<CargoBuildRoots>,
     identity: String,
     completed_nanos: u64,
+    context: Option<ReceiptContext>,
+    #[serde(deserialize_with = "receipt_lineage::deserialize_required_lineage")]
+    lineage: Option<ReceiptLineage>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     group: Option<String>,
     predictions: Vec<ActionPrediction>,
@@ -248,7 +273,21 @@ pub fn record_build_receipt(
     cargo: Option<&CargoBuildRoots>,
     group: Option<&str>,
     predictions: Vec<ActionPrediction>,
+    context: Option<&ReceiptContext>,
+    lineage: Option<&ReceiptLineage>,
 ) -> Result<()> {
+    if let Some(context) = context {
+        context.validate()?;
+    }
+    receipt_evidence::validate_workspace_paths(workspace_root, cargo)?;
+    if let Some(lineage) = lineage {
+        lineage.validate()?;
+        if lineage.destination.workspace_root != workspace_root
+            || Some(&lineage.destination.cargo) != cargo
+        {
+            eyre::bail!("frozen receipt lineage does not match completed Cargo roots");
+        }
+    }
     if !is_task_identity(run) || !is_task_identity(identity) {
         eyre::bail!("invalid build receipt identity");
     }
@@ -269,13 +308,17 @@ pub fn record_build_receipt(
     // wants the prediction set, not the hour. A group receipt is per run and
     // always written.
     if group.is_none()
-        && read_build_receipt(&latest_receipt_path(store, workspace_root)).is_some_and(|latest| {
-            latest.identity == identity
-                && latest.workspace_root == workspace_root
-                && latest.cargo.as_ref() == cargo
-                && latest.group.is_none()
-                && latest.predictions == predictions
-        })
+        && read_build_receipt(store, &latest_receipt_path(store, workspace_root)).is_some_and(
+            |latest| {
+                latest.identity == identity
+                    && latest.workspace_root == workspace_root
+                    && latest.cargo.as_ref() == cargo
+                    && latest.group.is_none()
+                    && latest.context.as_ref() == context
+                    && latest.lineage.as_ref() == lineage
+                    && latest.predictions == predictions
+            },
+        )
     {
         return Ok(());
     }
@@ -293,14 +336,18 @@ pub fn record_build_receipt(
         .unwrap_or_default();
     let receipt = BuildReceipt {
         version: BUILD_RECEIPT_VERSION,
+        run: run.to_owned(),
         workspace_root: workspace_root.to_path_buf(),
         cargo: cargo.cloned(),
         identity: identity.to_owned(),
         completed_nanos,
+        context: context.cloned(),
+        lineage: lineage.cloned(),
         group: group.map(str::to_owned),
         predictions,
     };
-    let bytes = serde_json::to_vec(&receipt)?;
+    let bytes = mbx_cache_core::canonical_json(&receipt)?;
+    receipt_evidence::store_receipt_evidence(store, &receipt)?;
     write_atomic(&latest_receipt_path(store, workspace_root), &bytes)?;
     if let Some(group) = group {
         write_atomic(&group_receipt_path(store, group, run), &bytes)?;
@@ -331,16 +378,48 @@ fn group_key(group: &str) -> String {
     CacheDigest::blake3(group.as_bytes()).hash
 }
 
-fn read_build_receipt(path: &Path) -> Option<BuildReceipt> {
+fn read_build_receipt(store: &Path, path: &Path) -> Option<BuildReceipt> {
+    if !receipt_evidence::is_receipt_path(store, path) {
+        return None;
+    }
     let bytes = std::fs::read(path).ok()?;
     let receipt = serde_json::from_slice::<BuildReceipt>(&bytes).ok()?;
+    if receipt
+        .group
+        .as_ref()
+        .is_some_and(|group| validate_export_group(group).is_err())
+    {
+        return None;
+    }
+    if !is_task_identity(&receipt.run)
+        || mbx_cache_core::canonical_json(&receipt).ok()?.as_slice() != bytes
+        || receipt_evidence::validate_workspace_paths(
+            &receipt.workspace_root,
+            receipt.cargo.as_ref(),
+        )
+        .is_err()
+        || !receipt_evidence::receipt_path_matches(store, path, &receipt)
+    {
+        return None;
+    }
     let valid = TaskActionManifest {
         version: 1,
         task: receipt.identity.clone(),
         predictions: receipt.predictions.clone(),
     }
     .validate();
-    (receipt.version == BUILD_RECEIPT_VERSION && valid).then_some(receipt)
+    (receipt.version == BUILD_RECEIPT_VERSION
+        && valid
+        && receipt
+            .context
+            .as_ref()
+            .is_none_or(|context| context.validate().is_ok())
+        && receipt.lineage.as_ref().is_none_or(|lineage| {
+            lineage.validate().is_ok()
+                && lineage.destination.workspace_root == receipt.workspace_root
+                && Some(&lineage.destination.cargo) == receipt.cargo.as_ref()
+        }))
+    .then_some(receipt)
 }
 
 fn validate_export_group(group: &str) -> Result<()> {
@@ -384,7 +463,7 @@ pub fn export_checkout(
     workspace_root: &Path,
     archive: &Path,
 ) -> Result<TransferOutcome> {
-    let receipt = read_build_receipt(&latest_receipt_path(store, workspace_root))
+    let receipt = read_build_receipt(store, &latest_receipt_path(store, workspace_root))
         .filter(|receipt| receipt.workspace_root == workspace_root)
         .ok_or_else(|| {
             eyre::eyre!(
@@ -408,7 +487,7 @@ pub fn checkout_workspace_roots(
     store: &Path,
     workspace_root: &Path,
 ) -> Result<Option<WorkspaceRoots>> {
-    let Some(receipt) = read_build_receipt(&latest_receipt_path(store, workspace_root))
+    let Some(receipt) = read_build_receipt(store, &latest_receipt_path(store, workspace_root))
         .filter(|receipt| receipt.workspace_root == workspace_root)
     else {
         return Ok(None);
@@ -425,7 +504,7 @@ pub fn group_workspace_roots(store: &Path, group: &str) -> Result<Vec<WorkspaceR
         .join(group_key(group));
     let targets = walk_files(&root)?
         .into_iter()
-        .filter_map(|entry| read_build_receipt(&entry.path))
+        .filter_map(|entry| read_build_receipt(store, &entry.path))
         .filter(|receipt| receipt.group.as_deref() == Some(group))
         .filter_map(|receipt| workspace_roots_for_receipt(&receipt))
         .collect::<BTreeSet<_>>();
@@ -446,7 +525,7 @@ pub fn export_checkout_with(
     archive: &Path,
     additions: ExportAdditions,
 ) -> Result<TransferOutcome> {
-    let receipt = read_build_receipt(&latest_receipt_path(store, workspace_root))
+    let receipt = read_build_receipt(store, &latest_receipt_path(store, workspace_root))
         .filter(|receipt| receipt.workspace_root == workspace_root)
         .ok_or_else(|| {
             eyre::eyre!(
@@ -494,7 +573,7 @@ pub fn export_checkout_as_checked(
     policy: ExportPolicy<'_>,
     mut publish: impl FnMut(&Path, &ComparisonState) -> Result<bool>,
 ) -> Result<TransferOutcome> {
-    let receipt = read_build_receipt(&latest_receipt_path(store, workspace_root))
+    let receipt = read_build_receipt(store, &latest_receipt_path(store, workspace_root))
         .filter(|receipt| receipt.workspace_root == workspace_root)
         .ok_or_else(|| {
             eyre::eyre!(
@@ -564,7 +643,9 @@ pub fn export_group_as_checked(
         .join(group_key(group));
     let receipts = walk_files(&root)?
         .into_iter()
-        .filter_map(|entry| read_build_receipt(&entry.path).map(|receipt| (entry.path, receipt)))
+        .filter_map(|entry| {
+            read_build_receipt(store, &entry.path).map(|receipt| (entry.path, receipt))
+        })
         .filter(|(_, receipt)| receipt.group.as_deref() == Some(group))
         .collect::<Vec<_>>();
     if receipts.is_empty() {
@@ -627,9 +708,26 @@ fn export_receipts(
                     .cmp(right.predictions.iter().map(key))
             })
     });
+    receipt_evidence::validate_required_export_evidence(
+        store,
+        &additions.required_receipt_evidence,
+    )?;
+    let mut receipt_evidence = receipt_evidence::selected_evidence(store, &receipts)?;
+    receipt_evidence.extend(additions.required_receipt_evidence.clone());
+    if let Some(retained) = policy.retained {
+        receipt_evidence.extend(retained.receipt_evidence.clone());
+    }
+    receipt_evidence = receipt_evidence::canonical_evidence(receipt_evidence)?;
     let mut actions = BTreeSet::new();
     let mut action_owners = BTreeMap::new();
     let mut tasks = BTreeMap::new();
+    receipt_evidence::seed_required_predictions(&mut tasks, &additions.required_receipt_evidence)?;
+    for evidence in &receipt_evidence {
+        for prediction in &evidence.predictions {
+            record_action_owner(&mut action_owners, &prediction.action, &prediction.adapter)?;
+            actions.insert(prediction.action.clone());
+        }
+    }
     for receipt in receipts {
         for prediction in &receipt.predictions {
             record_action_owner(&mut action_owners, &prediction.action, &prediction.adapter)?;
@@ -716,6 +814,7 @@ fn export_receipts(
         tasks,
         actions: actions.iter().cloned().collect(),
         action_owners,
+        receipt_evidence,
         attachments: additions.attachments.clone(),
         objects: additions.objects.iter().cloned().collect(),
     };
@@ -932,6 +1031,7 @@ pub fn import_archive_with_comparison(
         .wrap_err("cache export is incomplete or corrupt")?;
 
     before_publish(root, &ComparisonState::from_root(root)?)?;
+    receipt_evidence::store_evidence(store, &manifest.receipt_evidence)?;
     let cas = LocalCas::new(store);
     for path in &closure.objects {
         let relative = path.strip_prefix(root)?;
@@ -1022,6 +1122,7 @@ fn validate_export_manifest(manifest: &ExportManifest) -> Result<BTreeSet<CacheD
     }
     validate_action_owners(&manifest.action_owners, &actions)?;
     validate_prediction_owners(&manifest.tasks, &manifest.action_owners)?;
+    receipt_evidence::validate_evidence(&manifest.receipt_evidence, &manifest.action_owners)?;
     Ok(actions)
 }
 
@@ -1393,6 +1494,26 @@ fn validate_directory_bundle(root: &Path) -> Result<()> {
             let metadata = entry.metadata()?;
             let path = entry.path();
             if metadata.is_dir() {
+                let relative = path.strip_prefix(root)?;
+                let parts = relative.components().collect::<Vec<_>>();
+                let permitted = match parts.as_slice() {
+                    [Component::Normal(namespace)] => {
+                        *namespace == "cas" || *namespace == "action-results"
+                    }
+                    [
+                        Component::Normal(namespace),
+                        Component::Normal(version),
+                        rest @ ..,
+                    ] => {
+                        (*namespace == "cas" || *namespace == "action-results")
+                            && *version == "v1"
+                            && rest.iter().all(|part| matches!(part, Component::Normal(_)))
+                    }
+                    _ => false,
+                };
+                if !permitted {
+                    eyre::bail!("cache export contains a forbidden native directory namespace");
+                }
                 pending.push(path);
                 continue;
             }
@@ -1475,12 +1596,15 @@ struct CheckoutRecord {
 
 /// Summarize what the store currently holds.
 pub fn stats(store: &Path) -> Result<StoreStats> {
+    let receipts = receipt_gc::entries(store)?;
     let objects = walk_files(&store.join(CAS_DIR))?;
     let results = walk_files(&store.join(ACTION_RESULTS_DIR))?;
     let checkouts = scan_checkouts(store)?;
     Ok(StoreStats {
         objects: objects.len() as u64,
         object_bytes: objects.iter().map(|entry| entry.size).sum(),
+        receipt_evidence: receipts.len() as u64,
+        receipt_evidence_bytes: receipts.iter().map(|entry| entry.size).sum(),
         action_results: results.len() as u64,
         action_result_bytes: results.iter().map(|entry| entry.size).sum(),
         live_checkouts: checkouts.live_records,
@@ -1946,6 +2070,17 @@ pub fn gc_dry_run(store: &Path, max_bytes: u64) -> Result<GcOutcome> {
 
 fn gc_with_mode(store: &Path, max_bytes: u64, dry_run: bool) -> Result<GcOutcome> {
     let mut objects = walk_files(&store.join(CAS_DIR))?;
+    let (stale_receipts, removed_receipt_count, removed_receipt_bytes) =
+        receipt_gc::prune_stale_checkouts(store, dry_run)?;
+    let receipts = receipt_gc::entries(store)?
+        .into_iter()
+        .filter(|entry| !stale_receipts.contains(&entry.path))
+        .collect::<Vec<_>>();
+    let receipt_paths = receipts
+        .iter()
+        .map(|entry| entry.path.clone())
+        .collect::<HashSet<_>>();
+    objects.extend(receipts);
     let results = walk_files(&store.join(ACTION_RESULTS_DIR))?;
     let mut live_bytes = objects
         .iter()
@@ -1953,7 +2088,11 @@ fn gc_with_mode(store: &Path, max_bytes: u64, dry_run: bool) -> Result<GcOutcome
         .map(|entry| entry.size)
         .sum::<u64>();
 
-    let mut outcome = GcOutcome::default();
+    let mut outcome = GcOutcome {
+        removed_receipt_evidence: removed_receipt_count,
+        removed_bytes: removed_receipt_bytes,
+        ..GcOutcome::default()
+    };
 
     // Prune before deciding what is rooted, so a checkout deleted since the
     // last sweep stops protecting its artifacts during this one.
@@ -1975,12 +2114,13 @@ fn gc_with_mode(store: &Path, max_bytes: u64, dry_run: bool) -> Result<GcOutcome
         // it is computed only when something is actually about to be evicted.
         // Under budget a sweep stays a directory walk and nothing more.
         let mut rooted = rooted_objects(store, &checkouts.live_identities)?;
+        rooted.extend(receipt_gc::rooted_paths(store)?);
         // A grouped CI export deliberately retains the exact actions from
         // every command in the job. Later commands can replace the current
         // task-manifest prediction for the same invocation, but the earlier
         // receipt still has to remain exportable until the post-job step runs.
-        // Receipt bookkeeping is not part of the cache budget, so consult it
-        // only when a sweep is already necessary and root its object closure.
+        // Receipt metadata shares this byte budget; consult its pending action
+        // roots before the same eviction pool can remove a receipt.
         rooted.extend(rooted_action_objects(
             store,
             grouped_receipt_actions(store)?,
@@ -1989,16 +2129,22 @@ fn gc_with_mode(store: &Path, max_bytes: u64, dry_run: bool) -> Result<GcOutcome
         // each class goes oldest-first. A store with no records at all roots
         // nothing and this is exactly the LRU it was before.
         objects.sort_by_cached_key(|entry| (rooted.contains(&entry.path), entry.used));
+        let mut removed_receipts = 0;
         let evicted = evict_objects(&objects, &rooted, live_bytes, max_bytes, |path| {
-            if dry_run {
+            let removal = if dry_run {
                 virtually_removed.insert(path.to_path_buf());
-                Ok(Removal::Removed)
+                Removal::Removed
             } else {
-                remove(path)
+                remove(path)?
+            };
+            if matches!(removal, Removal::Removed) && receipt_paths.contains(path) {
+                removed_receipts += 1;
             }
+            Ok(removal)
         })?;
         live_bytes = evicted.remaining_bytes;
-        outcome.removed_objects += evicted.removed_objects;
+        outcome.removed_objects += evicted.removed_objects.saturating_sub(removed_receipts);
+        outcome.removed_receipt_evidence += removed_receipts;
         outcome.removed_bytes += evicted.removed_bytes;
     }
 
@@ -2308,7 +2454,7 @@ fn grouped_receipt_actions(store: &Path) -> Result<BTreeSet<CacheDigest>> {
     let root = store.join(BUILD_RECEIPTS_DIR).join("groups");
     Ok(walk_files(&root)?
         .into_iter()
-        .filter_map(|entry| read_build_receipt(&entry.path))
+        .filter_map(|entry| read_build_receipt(store, &entry.path))
         .flat_map(|receipt| receipt.predictions.into_iter())
         .map(|prediction| prediction.action)
         .collect())

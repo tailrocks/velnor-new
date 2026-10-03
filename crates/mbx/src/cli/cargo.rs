@@ -4,6 +4,7 @@ use crate::session::{self, CacheSession};
 use crate::{policy, target};
 use bytesize::ByteSize;
 use eyre::{Context, Result};
+use log::warn;
 use mbx_cache_core::AgentStats;
 use std::collections::BTreeMap;
 use std::io::IsTerminal;
@@ -401,6 +402,13 @@ fn cargo_with_settings_bypass_log_and_roots(
             }
             Err(error) => return Err(error),
         };
+        session.freeze_lineage(
+            config,
+            &crate::store::WorkspaceRoots {
+                workspace_root: roots.workspace_root.clone(),
+                cargo: cargo_roots.clone(),
+            },
+        )?;
         let mut environment = inherited_environment(|name| std::env::var(name).ok(), &working_dir);
         let _lease = super::launch::lease(session_dir.path(), &mut environment)?;
         if let Some(path) = bypass_log {
@@ -487,9 +495,9 @@ fn cargo_with_settings_bypass_log_and_roots(
             arguments
         };
         let status = if !settings.plain_output && super::pretty::enabled(arguments) {
-            match super::pretty::run(&cargo, cargo_arguments, &environment, settings.pretty_inspect, || session.progress_stats()) {
+            match super::pretty::run(&cargo, cargo_arguments, &environment, settings.pretty_inspect, &session, || session.progress_stats()) {
                 Ok(Some(status)) => Ok(status),
-                Ok(None) => run_cargo(&cargo, cargo_arguments, environment),
+                Ok(None) => run_workload(&cargo, cargo_arguments, environment, &session),
                 Err(error) => Err(error),
             }
         } else if super::plain_progress::eligible(arguments, std::env::var("CARGO_TERM_PROGRESS_WHEN").ok().as_deref())
@@ -497,9 +505,16 @@ fn cargo_with_settings_bypass_log_and_roots(
             && log::max_level() < log::LevelFilter::Debug
             && (settings.plain_output || !std::io::stderr().is_terminal())
         {
-            super::plain_progress::run(&cargo, cargo_arguments, environment, || session.progress_stats())
+            super::plain_progress::run(&cargo, cargo_arguments, environment, &session, || session.progress_stats())
         } else {
-            run_cargo(&cargo, cargo_arguments, environment)
+            run_workload(&cargo, cargo_arguments, environment, &session)
+        };
+        let status = match status {
+            Ok(status) if status == ExitCode::SUCCESS
+                && launch.as_ref().is_some_and(|launch| launch.was_captured()) => {
+                launch.as_ref().unwrap().run(&session)
+            }
+            other => other,
         };
         // The shim records a prediction only after a compilation has either
         // been restored or published successfully. Preserve that completed
@@ -523,18 +538,6 @@ fn cargo_with_settings_bypass_log_and_roots(
         };
         Ok((status, stats))
     });
-    // Finish the build session before the application takes over stderr, but
-    // keep the automatic target sweep after it exits: collection must not
-    // remove the executable Cargo just selected before we have started it.
-    let session_outcome = match session_outcome {
-        Ok((Ok(status), stats))
-            if status == ExitCode::SUCCESS
-                && launch.as_ref().is_some_and(|launch| launch.was_captured()) =>
-        {
-            Ok((launch.unwrap().run(), stats))
-        }
-        other => other,
-    };
     // Released before the sweep is scheduled, so the collector this command
     // starts does not find the view in use by this very command, and so
     // ordinary policy applies to the view as soon as the command is over.
@@ -1047,12 +1050,118 @@ pub(super) fn run_cargo(
     arguments: &[impl AsRef<std::ffi::OsStr>],
     environment: BTreeMap<String, String>,
 ) -> Result<ExitCode> {
+    run_cargo_observed(cargo, arguments, environment, None)
+}
+
+pub(super) fn run_workload(
+    cargo: &std::ffi::OsStr,
+    arguments: &[impl AsRef<std::ffi::OsStr>],
+    environment: BTreeMap<String, String>,
+    session: &CacheSession,
+) -> Result<ExitCode> {
+    run_cargo_observed(cargo, arguments, environment, Some(session))
+}
+
+fn run_cargo_observed(
+    cargo: &std::ffi::OsStr,
+    arguments: &[impl AsRef<std::ffi::OsStr>],
+    environment: BTreeMap<String, String>,
+    session: Option<&CacheSession>,
+) -> Result<ExitCode> {
     let mut command = Command::new(cargo);
     command.args(arguments);
     apply_build_environment(&mut command, environment);
+    if let Some(session) = session
+        && let Some(identity) = session.completed_identity()
+    {
+        return run_captured_workload(&mut command, session, identity);
+    }
+    let timer = session.map(CacheSession::workload_timer);
     let status = command
-        .status()
+        .spawn()
+        .and_then(|mut child| child.wait())
         .wrap_err_with(|| format!("failed to run {}", cargo.to_string_lossy()))?;
+    if let Some(timer) = timer {
+        timer.finish(status.into());
+    }
+    Ok(exit_code(status))
+}
+
+fn run_captured_workload(
+    command: &mut Command,
+    session: &CacheSession,
+    identity: session::completed_report::SessionIdentity,
+) -> Result<ExitCode> {
+    use crate::cargo_artifact_capture::{
+        CargoCommandBinding, CargoCommandCompletion, CargoStderrCapture, CargoStdoutCapture,
+    };
+    command.stdout(std::process::Stdio::piped());
+    command.stderr(std::process::Stdio::piped());
+    let timer = session.workload_timer();
+    let (mut child, binding) =
+        CargoCommandBinding::spawn(command, identity.session_id, identity.root_session_id)?;
+    let streams = binding.take_stdout(&mut child).and_then(|stdout| {
+        binding
+            .take_stderr(&mut child)
+            .map(|stderr| (stdout, stderr))
+    });
+    let (stdout, stderr) = match streams {
+        Ok(streams) => streams,
+        Err(error) => {
+            if let Err(cleanup_error) = child.kill() {
+                warn!("failed to stop child after output stream setup failure: {cleanup_error}");
+            }
+            match CargoCommandCompletion::wait(&mut child, binding) {
+                Ok(completion) => timer.finish_cargo(&completion),
+                Err(cleanup_error) => {
+                    warn!("failed to reap child after output stream setup failure: {cleanup_error}")
+                }
+            }
+            return Err(error).wrap_err("failed to prepare native output streams");
+        }
+    };
+    std::thread::scope(|scope| {
+        let stdout_reader =
+            scope.spawn(move || CargoStdoutCapture::read(stdout, &mut std::io::stdout().lock()));
+        let stderr_reader =
+            scope.spawn(move || CargoStderrCapture::read(stderr, &mut std::io::stderr().lock()));
+        let completion = CargoCommandCompletion::wait(&mut child, binding);
+        if let Ok(completion) = &completion {
+            timer.finish_cargo(completion);
+        } else if let Err(error) = child.kill() {
+            warn!("failed to stop child after terminal wait failure: {error}");
+        }
+        if completion.is_err()
+            && let Err(error) = child.wait()
+        {
+            warn!("failed to reap child after terminal wait failure: {error}");
+        }
+        // Both handles are joined even when wait or either observer fails.
+        let stdout_capture = stdout_reader.join();
+        let stderr_capture = stderr_reader.join();
+        finish_captured_output(session, completion?, stdout_capture, stderr_capture)
+    })
+}
+
+pub(super) fn finish_captured_output(
+    session: &CacheSession,
+    completion: crate::cargo_artifact_capture::CargoCommandCompletion,
+    stdout: std::thread::Result<crate::cargo_artifact_capture::CargoStdoutCapture>,
+    stderr: std::thread::Result<crate::cargo_artifact_capture::CargoStderrCapture>,
+) -> Result<ExitCode> {
+    let status = completion.status();
+    match (stdout, stderr) {
+        (Ok(stdout), Ok(stderr)) => {
+            let capture = stdout.finish(completion, stderr);
+            let output_failed =
+                capture.read_failed || capture.forward_failed || capture.stderr.output_failed();
+            session.record_cargo_capture(capture);
+            if output_failed && status.success() {
+                eyre::bail!("failed to forward native workload output");
+            }
+        }
+        _ => warn!("native stream telemetry unavailable after reader failure"),
+    }
     Ok(exit_code(status))
 }
 
@@ -1063,7 +1172,9 @@ pub(super) fn apply_build_environment(
 ) {
     command
         .env_remove(session::TARGET_DIR_ENV)
-        .env_remove(session::BUILD_DIR_ENV);
+        .env_remove(session::BUILD_DIR_ENV)
+        .env_remove(session::RECEIPT_CONTEXT_ENV)
+        .env_remove(session::completed_report::PARENT_SESSION_ID_ENV);
     command.envs(environment);
 }
 

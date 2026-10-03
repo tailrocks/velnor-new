@@ -41,6 +41,8 @@ mod client;
 mod imds;
 mod local;
 mod measurement;
+mod owner_seal;
+pub use owner_seal::local_owner_seal;
 mod path_mapping;
 mod remote_http;
 mod remote_s3;
@@ -73,8 +75,10 @@ pub use mbx_cache_protocol::{
 };
 pub use measurement::{
     AdapterKind, AdapterMeasurement, CacheOutcome, CompletedMeasurement, InvocationKind,
-    LinkAttribution, MeasurementEvent, PackageOrigin, ProcessMeasurement, ProcessOutcome,
-    ProcessPurpose, UnitIdentity, UnitMeasurement,
+    LinkAttribution, MeasurementCoverage, MeasurementCoverageReason, MeasurementCoverageStatus,
+    MeasurementEvent, MeasurementPackageAvailability, MeasurementPackageIdentity, MeasurementScope,
+    OutputObservation, PackageOrigin, ProcessMeasurement, ProcessOutcome, ProcessPurpose,
+    UnitIdentity, UnitMeasurement, UnitProvenance,
 };
 pub use path_mapping::{
     PathAliases, PathMapping, PathNormalizationError, normalize_mapped_path,

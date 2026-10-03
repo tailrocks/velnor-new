@@ -9,6 +9,10 @@ use serde::Serialize;
 use std::collections::BTreeMap;
 use std::path::Path;
 
+#[path = "completed_stats.rs"]
+mod completed;
+pub(crate) use completed::publish_completed_stats;
+
 #[derive(Serialize)]
 pub(super) struct StatsReport {
     version: u8,

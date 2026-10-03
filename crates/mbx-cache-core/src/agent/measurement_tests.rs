@@ -180,3 +180,112 @@ fn missing_package_identity_cannot_assert_workspace_ownership() {
     );
     assert!(snapshot(&destination).is_empty());
 }
+
+fn output() -> crate::OutputObservation {
+    crate::OutputObservation {
+        path: std::env::temp_dir().join("measurement-output.rlib"),
+        aliases: vec![],
+        cache_outcome: CacheOutcome::Hit,
+        digest: crate::CacheDigest::blake3(b"actual test bytes"),
+        file_identity: None,
+    }
+}
+fn output_event(observation: crate::OutputObservation) -> MeasurementEvent {
+    MeasurementEvent::Output {
+        adapter: AdapterKind::Rustc,
+        unit: None,
+        observation,
+    }
+}
+#[test]
+fn output_evidence_never_increments_invocation_or_process_counts() {
+    let destination = Measurements::default();
+    record(&destination, invocation(None)).unwrap();
+    record(&destination, output_event(output())).unwrap();
+    let stats = snapshot(&destination);
+    let adapter = &stats[&AdapterKind::Rustc];
+    assert_eq!(
+        adapter.invocations[&InvocationKind::Work][&CacheOutcome::Miss],
+        1
+    );
+    assert!(adapter.subprocesses.is_empty());
+    assert_eq!(adapter.units[0].outputs, vec![output()]);
+}
+#[test]
+fn invalid_digest_or_duplicate_alias_is_rejected_before_accumulation() {
+    let destination = Measurements::default();
+    let mut invalid = output();
+    invalid.digest.hash = "invalid".into();
+    assert!(record(&destination, output_event(invalid)).is_err());
+    let mut duplicate = output();
+    duplicate.aliases.push(duplicate.path.clone());
+    assert!(record(&destination, output_event(duplicate)).is_err());
+    assert!(snapshot(&destination).is_empty());
+}
+#[test]
+fn output_bound_is_explicit_and_does_not_erase_actual_counts() {
+    let destination = Measurements::default();
+    record(&destination, invocation(None)).unwrap();
+    destination
+        .lock()
+        .unwrap()
+        .get_mut(&AdapterKind::Rustc)
+        .unwrap()
+        .units[0]
+        .outputs = vec![output(); MAX_OUTPUTS_PER_ADAPTER];
+    record(&destination, output_event(output())).unwrap();
+    let stats = snapshot(&destination);
+    let adapter = &stats[&AdapterKind::Rustc];
+    assert_eq!(adapter.units[0].outputs.len(), MAX_OUTPUTS_PER_ADAPTER);
+    assert_eq!(adapter.omitted_output_events, 1);
+    assert_eq!(adapter.units[0].omitted_output_events, 1);
+    assert_eq!(
+        adapter.invocations[&InvocationKind::Work][&CacheOutcome::Miss],
+        1
+    );
+}
+
+fn retained_output() -> crate::OutputObservation {
+    let mut observation = output();
+    observation.file_identity = Some(crate::FileIdentity {
+        path: observation.path.clone(),
+        len: observation.digest.size,
+        modified: std::time::SystemTime::UNIX_EPOCH,
+        changed: None,
+        object: Some(crate::FileObjectIdentity {
+            device_major: 1,
+            device_minor: 2,
+            mount_id: 3,
+            inode: 4,
+        }),
+    });
+    observation
+}
+#[test]
+fn retained_output_identity_must_match_original_path_and_size() {
+    let destination = Measurements::default();
+    let mut wrong_path = retained_output();
+    wrong_path.file_identity.as_mut().unwrap().path =
+        std::env::temp_dir().join("other-output.rlib");
+    assert!(record(&destination, output_event(wrong_path)).is_err());
+    let mut wrong_size = retained_output();
+    wrong_size.file_identity.as_mut().unwrap().len += 1;
+    assert!(record(&destination, output_event(wrong_size)).is_err());
+    assert!(snapshot(&destination).is_empty());
+    record(&destination, output_event(retained_output())).unwrap();
+    let observed = snapshot(&destination);
+    assert_eq!(
+        observed[&AdapterKind::Rustc].units[0].outputs,
+        vec![retained_output()]
+    );
+}
+#[test]
+fn aliases_without_retained_physical_identity_stay_unavailable() {
+    let destination = Measurements::default();
+    let mut unsupported = output();
+    unsupported
+        .aliases
+        .push(std::env::temp_dir().join("same-content-copy.rlib"));
+    assert!(record(&destination, output_event(unsupported)).is_err());
+    assert!(snapshot(&destination).is_empty());
+}

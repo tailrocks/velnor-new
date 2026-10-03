@@ -38,7 +38,7 @@ impl Delta {
 
 pub(super) fn read(path: &Path) -> Result<Baseline> {
     let baseline: Baseline = serde_json::from_slice(&std::fs::read(path)?)?;
-    if baseline.version != 1 || baseline.cache.version != 1 {
+    if baseline.version != 3 || baseline.cache.version != 3 {
         bail!("unsupported cache comparison state version");
     }
     baseline.cache.validate()?;
@@ -52,11 +52,21 @@ pub(super) fn read(path: &Path) -> Result<Baseline> {
         bail!("comparison state uses unsupported attachment schemas");
     }
 
-    let bytes = serde_json::to_vec(&(1u8, &baseline.cache, &baseline.workspace_entries))?;
+    let bytes = serde_json::to_vec(&(3u8, &baseline.cache, &baseline.workspace_entries))?;
     if baseline.integrity != CacheDigest::blake3(&bytes).hash {
         bail!("cache comparison state integrity mismatch");
     }
     Ok(baseline)
+}
+
+pub(super) fn validate_owner_receipts(root: &Path, cache: &store::ComparisonState) -> Result<()> {
+    for (name, attachment) in &cache.attachments {
+        if name != workspace_state::ATTACHMENT {
+            bail!("comparison state uses unsupported attachment schemas");
+        }
+        workspace_state::validate_receipt_evidence(root, attachment, &cache.receipt_evidence)?;
+    }
+    Ok(())
 }
 
 pub(super) fn write(path: &Path, root: &Path, cache: &store::ComparisonState) -> Result<()> {
@@ -69,12 +79,13 @@ pub(super) fn write(path: &Path, root: &Path, cache: &store::ComparisonState) ->
         bail!("comparison state must be outside the consumed cache bundle");
     }
 
+    validate_owner_receipts(root, cache)?;
     let entries = workspace_state::semantic_inventory(
         root,
         cache.attachments.get(workspace_state::ATTACHMENT),
     )?;
-    let integrity = CacheDigest::blake3(&serde_json::to_vec(&(1u8, cache, &entries))?).hash;
-    let value = serde_json::json!({"version": 1, "cache": cache, "workspace_entries": entries, "integrity": integrity});
+    let integrity = CacheDigest::blake3(&serde_json::to_vec(&(3u8, cache, &entries))?).hash;
+    let value = serde_json::json!({"version": 3, "cache": cache, "workspace_entries": entries, "integrity": integrity});
     publish(path, &serde_json::to_vec_pretty(&value)?)
 }
 
@@ -92,10 +103,12 @@ fn publish(path: &Path, bytes: &[u8]) -> Result<()> {
 
 pub(super) fn empty(path: &Path) -> Result<()> {
     let mut baseline = Baseline {
-        version: 1,
+        version: 3,
         cache: store::ComparisonState {
-            version: 1,
+            version: 3,
             action_results: BTreeMap::new(),
+            action_owners: BTreeMap::new(),
+            receipt_evidence: Vec::new(),
             predictions: Default::default(),
             attachments: BTreeMap::new(),
         },
@@ -103,7 +116,7 @@ pub(super) fn empty(path: &Path) -> Result<()> {
         integrity: String::new(),
     };
     baseline.integrity = CacheDigest::blake3(&serde_json::to_vec(&(
-        1u8,
+        3u8,
         &baseline.cache,
         &baseline.workspace_entries,
     ))?)
@@ -116,12 +129,20 @@ pub(super) fn report(
     root: &Path,
     current: &store::ComparisonState,
 ) -> Result<(Option<Delta>, String)> {
+    validate_owner_receipts(root, current)?;
     let entries = workspace_state::semantic_inventory(
         root,
         current.attachments.get(workspace_state::ATTACHMENT),
     )?;
     let delta = baseline.map(|baseline| compare_inventories(baseline, current, &entries));
-    let bytes = serde_json::to_vec(&(1u8, &current.action_results, &current.predictions, entries))?;
+    let bytes = serde_json::to_vec(&(
+        3u8,
+        &current.action_results,
+        &current.action_owners,
+        &current.predictions,
+        store::semantic_receipt_evidence(&current.receipt_evidence)?,
+        entries,
+    ))?;
     Ok((delta, CacheDigest::blake3(&bytes).hash))
 }
 
@@ -228,7 +249,12 @@ mod tests {
 
     fn cache(actions: &[(&str, u64)], predictions: &[&str]) -> store::ComparisonState {
         store::ComparisonState {
-            version: 1,
+            version: 3,
+            receipt_evidence: Vec::new(),
+            action_owners: actions
+                .iter()
+                .map(|(key, _)| (key.to_string(), "rustc".to_string()))
+                .collect(),
             action_results: actions
                 .iter()
                 .map(|(k, v)| (k.to_string(), serde_json::json!({"outputs":v})))
@@ -244,7 +270,7 @@ mod tests {
     #[test]
     fn comparison_subset_has_no_useful_delta() {
         let baseline = Baseline {
-            version: 1,
+            version: 3,
             integrity: String::new(),
             cache: cache(&[("a", 1), ("b", 2)], &["p", "q"]),
             workspace_entries: BTreeMap::from([("a".into(), serde_json::json!(1))]),
@@ -256,7 +282,7 @@ mod tests {
     #[test]
     fn comparison_same_count_replacement_and_changed_results_are_useful() {
         let baseline = Baseline {
-            version: 1,
+            version: 3,
             integrity: String::new(),
             cache: cache(&[("a", 1)], &["p"]),
             workspace_entries: BTreeMap::new(),
@@ -276,7 +302,7 @@ mod tests {
         let q = r#"["task",{"adapter":"rustc","payload":"compiler_duration_ns=456"}]"#;
         let baseline = Baseline {
             integrity: String::new(),
-            version: 1,
+            version: 3,
             cache: cache(&[("a", 1)], &[p]),
             workspace_entries: BTreeMap::new(),
         };
@@ -300,7 +326,18 @@ mod tests {
         value["version"] = serde_json::json!(2);
         std::fs::write(&path, serde_json::to_vec(&value)?)?;
         assert!(read(&path).is_err());
-        value["version"] = serde_json::json!(1);
+        value["version"] = serde_json::json!(3);
+        value["cache"]["version"] = serde_json::json!(2);
+        std::fs::write(&path, serde_json::to_vec(&value)?)?;
+        assert!(read(&path).unwrap_err().to_string().contains("unsupported"));
+        value["cache"]["version"] = serde_json::json!(3);
+        let mut missing_evidence = value.clone();
+        missing_evidence["cache"]
+            .as_object_mut()
+            .unwrap()
+            .remove("receipt_evidence");
+        std::fs::write(&path, serde_json::to_vec(&missing_evidence)?)?;
+        assert!(read(&path).is_err());
         value["workspace_entries"]["unexpected"] = serde_json::json!({"type":"file"});
         std::fs::write(&path, serde_json::to_vec(&value)?)?;
         assert!(read(&path).is_err());

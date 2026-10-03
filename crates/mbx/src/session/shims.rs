@@ -1,17 +1,26 @@
-#[cfg(unix)]
+#[cfg(feature = "owned-cache-transport")]
+#[path = "pinned_shims.rs"]
+mod pinned_shims;
+#[cfg(feature = "owned-cache-transport")]
+pub(crate) use pinned_shims::SessionDispatchPin;
+
+#[cfg(not(feature = "owned-cache-transport"))]
+use super::RUSTDOC_SHIM_STEM;
+#[cfg(all(unix, not(feature = "owned-cache-transport")))]
 use super::SHIM_STAGING_NONCE;
 use super::{
-    PATH_SHIM_NAMES, REAL_CC_ENV, REAL_CXX_ENV, RUSTC_SHIM_STEM, RUSTDOC_SHIM_STEM, is_same_binary,
+    PATH_SHIM_NAMES, REAL_CC_ENV, REAL_CXX_ENV, RUSTC_SHIM_STEM, is_same_binary,
     legacy_cc_shim_name,
 };
 use eyre::{Context, Result};
 use log::debug;
 use mbx_cache_cc::CcLanguage;
+#[cfg(any(test, not(feature = "owned-cache-transport")))]
 use mbx_cache_core::CacheDigest;
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
-#[cfg(unix)]
+#[cfg(all(unix, not(feature = "owned-cache-transport")))]
 use std::sync::atomic::Ordering;
 
 pub(super) struct CcShims {
@@ -362,7 +371,7 @@ pub fn install_path_shims(directory: &Path) -> Result<Option<PathShims>> {
 /// directory is shared: another build may be executing the very name being
 /// replaced, and `rename` leaves it resolvable at every instant where removing
 /// and recreating would not.
-#[cfg(unix)]
+#[cfg(all(unix, not(feature = "owned-cache-transport")))]
 pub(super) fn link_path_shim(executable: &Path, destination: &Path) -> Result<()> {
     // Absolutized for the same reason [`symlink_shim`] does it: a symlink is
     // resolved from the directory holding it, which here is the cache's shim
@@ -389,7 +398,7 @@ pub(super) fn link_path_shim(executable: &Path, destination: &Path) -> Result<()
     Ok(())
 }
 
-#[cfg(windows)]
+#[cfg(all(windows, not(feature = "owned-cache-transport")))]
 pub(super) fn link_path_shim(executable: &Path, destination: &Path) -> Result<()> {
     // Windows cannot replace an executable while another process has it open,
     // so a stable existing shim is preferable to a racy in-place upgrade. A
@@ -414,9 +423,14 @@ pub(super) fn link_path_shim(executable: &Path, destination: &Path) -> Result<()
     Ok(())
 }
 
-#[cfg(not(any(unix, windows)))]
+#[cfg(all(not(any(unix, windows)), not(feature = "owned-cache-transport")))]
 pub(super) fn link_path_shim(_executable: &Path, _destination: &Path) -> Result<()> {
     eyre::bail!("PATH shims are not supported on this platform")
+}
+
+#[cfg(feature = "owned-cache-transport")]
+pub(super) fn link_path_shim(executable: &Path, destination: &Path) -> Result<()> {
+    pinned_shims::install(executable, destination)
 }
 
 /// Find the real compiler `name` refers to, never a shim.
@@ -461,6 +475,8 @@ fn canonical(path: &Path) -> PathBuf {
 
 /// The shims a session installs for itself.
 pub(super) struct SessionShims {
+    #[cfg(feature = "owned-cache-transport")]
+    pub(super) dispatch_pin: SessionDispatchPin,
     /// The persistent `RUSTC_WRAPPER`, private to the running binary.
     pub(super) rustc: PathBuf,
     /// The session-local `RUSTDOC`.
@@ -473,6 +489,20 @@ pub(super) struct SessionShims {
 }
 
 pub(super) fn install_session_shims(
+    session_dir: &Path,
+    persistent_shims: &Path,
+) -> Result<SessionShims> {
+    #[cfg(feature = "owned-cache-transport")]
+    {
+        let _ = session_dir;
+        return pinned_shims::install_session(persistent_shims);
+    }
+    #[cfg(not(feature = "owned-cache-transport"))]
+    install_upstream_session_shims(session_dir, persistent_shims)
+}
+
+#[cfg(not(feature = "owned-cache-transport"))]
+fn install_upstream_session_shims(
     session_dir: &Path,
     persistent_shims: &Path,
 ) -> Result<SessionShims> {
@@ -532,10 +562,12 @@ pub(super) fn install_session_shims(
 const SHIM_LEASES_DIR: &str = ".mbx-leases";
 
 /// Lock serializing lease creation against collection of `rust/` directories.
+#[cfg(any(test, not(feature = "owned-cache-transport")))]
 const SHIM_REGISTRAR: &str = ".registrar";
 
 static SHIM_LEASE_NONCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
+#[cfg(any(test, not(feature = "owned-cache-transport")))]
 fn shims_registrar(persistent_shims: &Path) -> Result<fslock::LockFile> {
     let rust = persistent_shims.join("rust");
     std::fs::create_dir_all(&rust)?;
@@ -592,7 +624,7 @@ impl Drop for ShimLease {
 
 /// Whether a running session holds a lease on `directory`. Lease files left
 /// by sessions that are gone are removed along the way.
-#[cfg(unix)]
+#[cfg(all(unix, any(test, not(feature = "owned-cache-transport"))))]
 fn leased(directory: &Path) -> bool {
     let Ok(listing) = std::fs::read_dir(directory.join(SHIM_LEASES_DIR)) else {
         return false;
@@ -615,12 +647,14 @@ fn leased(directory: &Path) -> bool {
 
 /// How long a per-binary shim directory must go unused before collection
 /// may take it.
+#[cfg(not(feature = "owned-cache-transport"))]
 const STRANDED_SHIMS_AGE: std::time::Duration = std::time::Duration::from_secs(7 * 24 * 60 * 60);
 
 /// Record that a session of this binary is using `directory` now.
 ///
 /// Best effort: a marker that cannot be refreshed only makes the directory
 /// look older, and collection still requires every link in it to dangle.
+#[cfg(not(feature = "owned-cache-transport"))]
 fn touch_shim_directory(directory: &Path) {
     let refreshed = std::fs::File::options()
         .write(true)
@@ -657,7 +691,7 @@ fn touch_shim_directory(directory: &Path) {
 /// Windows shims are hard links or copies, which say nothing about whether
 /// their installation still exists, so they are left alone. Best effort: a
 /// failure only leaves the directory for a later session.
-#[cfg(unix)]
+#[cfg(all(unix, any(test, not(feature = "owned-cache-transport"))))]
 pub(super) fn remove_stranded_binary_shims(
     persistent_shims: &Path,
     own_binary: &str,
@@ -711,7 +745,7 @@ pub(super) fn remove_stranded_binary_shims(
     }
 }
 
-#[cfg(not(unix))]
+#[cfg(all(not(unix), any(test, not(feature = "owned-cache-transport"))))]
 pub(super) fn remove_stranded_binary_shims(
     _persistent_shims: &Path,
     _own_binary: &str,
@@ -721,7 +755,7 @@ pub(super) fn remove_stranded_binary_shims(
 }
 
 /// Whether no session has refreshed `directory` within `age`.
-#[cfg(unix)]
+#[cfg(all(unix, any(test, not(feature = "owned-cache-transport"))))]
 fn unused_for_at_least(directory: &Path, age: std::time::Duration) -> bool {
     std::fs::metadata(directory.join(SHIM_DIR_MARKER))
         .and_then(|marker| marker.modified())
@@ -731,7 +765,7 @@ fn unused_for_at_least(directory: &Path, age: std::time::Duration) -> bool {
 }
 
 /// Whether `directory` holds at least one symlink and none that resolves.
-#[cfg(unix)]
+#[cfg(all(unix, any(test, not(feature = "owned-cache-transport"))))]
 fn every_link_dangles(directory: &Path) -> bool {
     let Ok(listing) = std::fs::read_dir(directory) else {
         return false;
@@ -751,7 +785,7 @@ fn every_link_dangles(directory: &Path) -> bool {
 
 /// Whether the rustc shim in `directory` now reaches a binary other than the
 /// one `identity` names.
-#[cfg(unix)]
+#[cfg(all(unix, any(test, not(feature = "owned-cache-transport"))))]
 fn superseded_binary(directory: &Path, identity: &str) -> bool {
     std::fs::read_link(directory.join(shim_file_name(RUSTC_SHIM_STEM)))
         .ok()
@@ -774,6 +808,7 @@ fn superseded_binary(directory: &Path, identity: &str) -> bool {
 /// release would be one that collection could never tell was finished with:
 /// its links still resolve. Windows shims are copies, so there the binary
 /// keys them instead.
+#[cfg(any(test, not(feature = "owned-cache-transport")))]
 pub(super) fn installation_identity(executable: &Path) -> Result<String> {
     let executable = std::path::absolute(executable)?;
     Ok(CacheDigest::blake3(executable.as_os_str().as_encoded_bytes()).hash)
@@ -786,6 +821,7 @@ pub(super) fn installation_identity(executable: &Path) -> Result<String> {
 /// single machine-wide name would conceal upgrades. The executable's path and
 /// file identity give repeated runs of one binary the same name and a replaced
 /// binary a new one without reading the whole executable at startup.
+#[cfg(any(test, not(feature = "owned-cache-transport")))]
 pub(super) fn binary_identity(executable: &Path) -> Result<String> {
     let executable = std::path::absolute(executable)?;
     let metadata = std::fs::metadata(&executable)?;
@@ -828,7 +864,12 @@ pub fn shim_file_name(stem: &str) -> String {
     }
 }
 
-/// Install a rustc shim into `directory` as a link to `executable`.
+/// Install a rustc shim into `directory`.
+///
+/// The owned-cache-transport feature always publishes an independent verified
+/// snapshot, regardless of the requested upstream link policy. It never tracks
+/// an installation path or shares its source inode. The following link behavior
+/// applies only to upstream builds without that feature.
 ///
 /// The shim must be the same binary as the agent -- the handshake requires an
 /// exact version match -- so it is a link to the running binary rather than an
@@ -874,6 +915,23 @@ pub fn install_shim_named(
     link: ShimLink,
 ) -> Result<PathBuf> {
     let shim = directory.join(shim_file_name(stem));
+    #[cfg(feature = "owned-cache-transport")]
+    {
+        let _ = link;
+        pinned_shims::install(executable, &shim)?;
+        return Ok(shim);
+    }
+    #[cfg(not(feature = "owned-cache-transport"))]
+    install_upstream_shim(executable, shim, stem, link)
+}
+
+#[cfg(not(feature = "owned-cache-transport"))]
+fn install_upstream_shim(
+    executable: &Path,
+    shim: PathBuf,
+    stem: &str,
+    link: ShimLink,
+) -> Result<PathBuf> {
     let _ = std::fs::remove_file(&shim);
     if link == ShimLink::Tracking && symlink_shim(executable, &shim) {
         return Ok(shim);
@@ -915,7 +973,7 @@ pub fn install_shim_named(
 /// A target that is not there gets no symlink at all. A hard link and a copy
 /// both refuse one, and a symlink would instead name it and leave cargo to
 /// discover the dangling wrapper mid-build.
-#[cfg(unix)]
+#[cfg(all(unix, any(test, not(feature = "owned-cache-transport"))))]
 pub(super) fn symlink_shim(executable: &Path, shim: &Path) -> bool {
     let Ok(target) = std::path::absolute(executable) else {
         return false;
@@ -926,7 +984,10 @@ pub(super) fn symlink_shim(executable: &Path, shim: &Path) -> bool {
 /// Windows has no shim symlinks: creating one needs a privilege ordinary
 /// accounts lack, and the code-signature race they exist to avoid is a macOS
 /// kernel behaviour with no Windows counterpart.
-#[cfg(windows)]
+#[cfg(all(windows, any(test, not(feature = "owned-cache-transport"))))]
 pub(super) fn symlink_shim(_executable: &Path, _shim: &Path) -> bool {
     false
 }
+#[cfg(unix)]
+#[path = "snapshot_publication.rs"]
+pub(super) mod snapshot_publication;

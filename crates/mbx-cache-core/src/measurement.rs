@@ -1,6 +1,7 @@
 //! Actual subprocess measurements, separate from cache outcomes and estimates.
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 
 /// Adapter owning a measured invocation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -89,6 +90,17 @@ pub enum PackageOrigin {
     Unknown,
 }
 
+/// Authority used to associate the invoking package with a native observation.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UnitProvenance {
+    /// A Cargo target matched by its exact manifest and target source.
+    #[default]
+    CargoTarget,
+    /// A native process executed in an authoritative Cargo package context.
+    CargoPackageContext,
+}
+
 /// Real Cargo unit/package identity, with unavailable components explicit.
 #[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct UnitIdentity {
@@ -96,7 +108,38 @@ pub struct UnitIdentity {
     pub cargo_unit_id: Option<String>,
     /// Full package ID supplied by Cargo resolution, when available.
     pub package_id: Option<String>,
+    /// Exact actual invoking Cargo manifest, when supplied by its owner.
+    pub manifest_path: Option<PathBuf>,
+    /// Actual compiler/native source path, never a crate-name inference.
+    pub source_path: Option<PathBuf>,
+    /// Authority for resolving the invoking package.
+    pub provenance: UnitProvenance,
     /// Resolved package ownership; absent evidence remains unknown.
+    pub origin: PackageOrigin,
+    /// Ownership of the actual native source; context does not establish it.
+    pub source_origin: PackageOrigin,
+}
+
+/// Fresh resolved Cargo package authority, supplied by the owning invocation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MeasurementPackageAvailability {
+    /// The owning fresh package-resolution probe completed successfully.
+    Available,
+    /// The current owning probe failed or could not establish package authority.
+    Unavailable,
+}
+
+/// Fresh resolved Cargo package authority, supplied by the owning invocation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MeasurementPackageIdentity {
+    /// Full exact resolved Cargo package ID.
+    pub package_id: String,
+    /// Resolved manifest path.
+    pub manifest_path: PathBuf,
+    /// Exact resolved Cargo target sources, not guessed directory membership.
+    pub sources: Vec<PathBuf>,
+    /// Package origin determined by Cargo source and workspace membership.
     pub origin: PackageOrigin,
 }
 
@@ -113,6 +156,22 @@ pub struct ProcessMeasurement {
     pub wall_observations: u64,
 }
 
+/// Actual emitted or restored regular output, observed by its native owner.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub struct OutputObservation {
+    /// Canonical observed regular output path.
+    pub path: PathBuf,
+    /// Independently observed equivalent output paths, never guessed names.
+    pub aliases: Vec<PathBuf>,
+    /// Owning invocation's actual cache disposition.
+    pub cache_outcome: CacheOutcome,
+    /// Native output integrity digest with its actual algorithm and size.
+    pub digest: crate::CacheDigest,
+    /// Native regular-file object identity retained across integrity hashing.
+    #[serde(default)]
+    pub file_identity: Option<crate::FileIdentity>,
+}
+
 /// Invocation and child-process aggregates for one unit.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UnitMeasurement {
@@ -122,6 +181,12 @@ pub struct UnitMeasurement {
     pub invocations: BTreeMap<InvocationKind, BTreeMap<CacheOutcome, u64>>,
     /// Actual processes, including probes and finalization after cache hits.
     pub subprocesses: BTreeMap<ProcessPurpose, BTreeMap<ProcessOutcome, ProcessMeasurement>>,
+    /// Native observed output inventory for independent Cargo artifact joins.
+    #[serde(default)]
+    pub outputs: Vec<OutputObservation>,
+    /// Output observations omitted by a supported bound.
+    #[serde(default)]
+    pub omitted_output_events: u64,
 }
 
 /// Totals and unit attribution for one adapter.
@@ -135,6 +200,9 @@ pub struct AdapterMeasurement {
     pub units: Vec<UnitMeasurement>,
     /// Attribution rows omitted by a supported bound; totals still continue.
     pub omitted_unit_events: u64,
+    /// Output observations omitted by a supported bound.
+    #[serde(default)]
+    pub omitted_output_events: u64,
 }
 
 /// A directly recorded observation sent from an adapter to its owning agent.
@@ -164,6 +232,15 @@ pub enum MeasurementEvent {
         measurement: ProcessMeasurement,
         /// Authoritative Cargo attribution, when available.
         unit: Option<UnitIdentity>,
+    },
+    /// A native owner independently observed one emitted/restored output.
+    Output {
+        /// Owning adapter.
+        adapter: AdapterKind,
+        /// Exact observed native unit attribution.
+        unit: Option<UnitIdentity>,
+        /// Actual observed regular-file output and integrity.
+        observation: OutputObservation,
     },
 }
 
@@ -233,6 +310,13 @@ impl Default for MeasurementCoverage {
 pub struct CompletedMeasurement {
     /// Reliability scope; a completed session alone does not prove delivery.
     pub coverage: MeasurementCoverage,
+    /// Generation of the latest owning package-resolution observation.
+    pub measurement_package_generation: Option<u64>,
+    /// Whether that exact generation established fresh package authority.
+    pub measurement_package_availability: Option<MeasurementPackageAvailability>,
+    /// Actual package authority snapshot collected with its generation.
+    #[serde(default)]
+    pub measurement_packages: Vec<MeasurementPackageIdentity>,
     /// Observed owning workload wall; absent when no terminal boundary exists.
     pub workload_wall_ns: Option<u64>,
     /// Post-workload cache drain; absent when its boundaries are unknown.

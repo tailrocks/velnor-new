@@ -4,6 +4,11 @@
 //! Breaking changes are made in a new pre-1.0 minor release.
 #![deny(missing_docs)]
 
+mod measurement;
+pub use measurement::{
+    MeasurementMetadata, MeasurementPackage, MetadataObservation, measurement_metadata,
+};
+
 use mbx_cache_core::{CacheDigest, canonical_json};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;

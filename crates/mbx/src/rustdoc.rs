@@ -3,12 +3,13 @@
 use crate::materialize::{
     find_blobs, read_canonical_blob, read_verified_blob, record_action_hit, resolve_executable,
 };
+use crate::process_measurement;
 use crate::session;
 use crate::util::duration_ns;
 use eyre::{Context as _, Result, bail};
 use mbx_cache_core::{
-    AgentRequest, AgentResponse, CacheDigest, CacheDirectory, CacheFileNode, RemoteActionResult,
-    RustcMetadata, canonical_json,
+    AgentRequest, AgentResponse, CacheDigest, CacheDirectory, CacheFileNode, CacheOutcome,
+    MeasurementEvent, ProcessPurpose, RemoteActionResult, RustcMetadata, canonical_json,
 };
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -105,14 +106,23 @@ struct InstalledDocs {
     bytes: u64,
 }
 
-pub(crate) fn document(rustdoc: &OsStr, arguments: &[OsString]) -> Result<ExitCode> {
+pub(crate) fn document(
+    rustdoc: &OsStr,
+    arguments: &[OsString],
+    measurement: &mut process_measurement::Invocation,
+) -> Result<ExitCode> {
+    measurement.identify(crate::unit_attribution::package_context(None));
     let invocation = Invocation::parse(arguments)?;
-    let action_bytes = action_descriptor(rustdoc, &invocation)?;
+    let action_bytes = action_descriptor(rustdoc, &invocation, measurement)?;
     let action = CacheDigest::blake3(&action_bytes);
     if let Some(cached) = restore(&action, &action_bytes)? {
         let started = Instant::now();
         let installed = install_archive(&cached.archive, &invocation)?;
-        finalize(rustdoc, &invocation)?;
+        measurement.set_outcome(CacheOutcome::Hit);
+        let status = finalize(rustdoc, &invocation, measurement)?;
+        if status != ExitCode::SUCCESS {
+            return Ok(status);
+        }
         record_action_hit(
             &action,
             mbx_cache_core::RestoreStats {
@@ -130,6 +140,7 @@ pub(crate) fn document(rustdoc: &OsStr, arguments: &[OsString]) -> Result<ExitCo
         return Ok(ExitCode::SUCCESS);
     }
 
+    measurement.set_outcome(CacheOutcome::Miss);
     let generated = tempfile::tempdir()?;
     let doc = generated.path().join("doc");
     let parts = generated.path().join("parts");
@@ -140,7 +151,7 @@ pub(crate) fn document(rustdoc: &OsStr, arguments: &[OsString]) -> Result<ExitCo
     let mut command = Command::new(rustdoc);
     command.args(&rewritten);
     prepare_command(&mut command);
-    let output = command.output().wrap_err("failed to run rustdoc")?;
+    let output = run_work(&mut command, measurement)?;
     let duration = duration_ns(started.elapsed());
     session::check_low_disk_after_compile();
     std::io::stdout().write_all(&output.stdout)?;
@@ -151,23 +162,72 @@ pub(crate) fn document(rustdoc: &OsStr, arguments: &[OsString]) -> Result<ExitCo
     // session's accounting entirely.
     session::record_compiler_invocation("miss", Some(&invocation.crate_name), duration);
     if !output.status.success() {
-        return Ok(ExitCode::from(
-            u8::try_from(output.status.code().unwrap_or(1)).unwrap_or(1),
-        ));
+        return Ok(exit_code(output.status));
     }
 
-    let archive = generated.path().join("rustdoc.archive");
-    write_archive(&archive, &[(&doc, "doc"), (&parts, "parts")])?;
-    install_archive(&archive, &invocation)?;
-    finalize(rustdoc, &invocation)?;
-    publish(
-        &action,
-        &action_bytes,
-        &archive,
-        &output.stdout,
-        &output.stderr,
-    )?;
+    install_generated(&doc, &parts, &invocation)?;
+    let status = finalize(rustdoc, &invocation, measurement)?;
+    if status != ExitCode::SUCCESS {
+        return Ok(status);
+    }
+    let cache_result = (|| {
+        let archive = generated.path().join("rustdoc.archive");
+        write_archive(&archive, &[(&doc, "doc"), (&parts, "parts")])?;
+        publish(
+            &action,
+            &action_bytes,
+            &archive,
+            &output.stdout,
+            &output.stderr,
+        )
+    })();
+    if let Err(error) = cache_result {
+        log::warn!("rustdoc cache publication failed: {error:#}");
+    }
     Ok(ExitCode::SUCCESS)
+}
+
+fn run_work<S: FnMut(MeasurementEvent)>(
+    command: &mut Command,
+    measurement: &mut process_measurement::Invocation<S>,
+) -> Result<std::process::Output> {
+    measurement
+        .process(ProcessPurpose::Work)
+        .output(command)
+        .wrap_err("failed to run rustdoc")
+}
+
+fn install_generated(doc: &Path, parts: &Path, invocation: &Invocation) -> Result<()> {
+    for (source, destination) in [
+        (doc, invocation.output.clone()),
+        (parts, invocation.parts_root()?.join(&invocation.crate_name)),
+    ] {
+        let mut files = Vec::new();
+        collect_generated_files(source, &mut files)?;
+        for path in files {
+            let relative = path.strip_prefix(source)?;
+            let destination = destination.join(relative);
+            if let Some(parent) = destination.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            let temporary = destination.with_extension(format!("mbx-{}", std::process::id()));
+            std::fs::copy(path, &temporary)?;
+            replace_generated_file(&temporary, &destination)?;
+        }
+    }
+    Ok(())
+}
+
+fn replace_generated_file(temporary: &Path, destination: &Path) -> Result<()> {
+    match std::fs::rename(temporary, destination) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+            std::fs::remove_file(destination)?;
+            std::fs::rename(temporary, destination)?;
+            Ok(())
+        }
+        Err(error) => Err(error.into()),
+    }
 }
 
 impl Invocation {
@@ -261,9 +321,17 @@ impl Invocation {
     }
 }
 
-fn action_descriptor(rustdoc: &OsStr, invocation: &Invocation) -> Result<Vec<u8>> {
+fn action_descriptor(
+    rustdoc: &OsStr,
+    invocation: &Invocation,
+    measurement: &mut process_measurement::Invocation,
+) -> Result<Vec<u8>> {
     let rustdoc = resolve_executable(rustdoc)?;
-    let identity = Command::new(&rustdoc).arg("-Vv").output()?;
+    let mut command = Command::new(&rustdoc);
+    command.arg("-Vv");
+    let identity = measurement
+        .process(ProcessPurpose::Probe)
+        .output(&mut command)?;
     if !identity.status.success() {
         bail!("rustdoc identity query failed");
     }
@@ -504,15 +572,18 @@ fn restore(action: &CacheDigest, action_bytes: &[u8]) -> Result<Option<CachedDoc
         bail!("cached rustdoc action descriptor does not match");
     }
     let metadata: RustcMetadata = read_canonical_blob(&roots[1], &metadata, "rustdoc metadata")?;
-    if metadata.version != 1 || metadata.kind != "rustc" {
+    if !metadata.validate() {
         bail!("cached rustdoc metadata is unsupported");
     }
     let directory: CacheDirectory = read_canonical_blob(&roots[2], &directory, "rustdoc output")?;
+    directory.validate()?;
     if directory.version != 1
         || !directory.directories.is_empty()
         || !directory.symlinks.is_empty()
         || directory.files.len() != 1
         || directory.files[0].name != "rustdoc.archive"
+        || directory.files[0].executable
+        || directory.files[0].mode != 0o644
     {
         bail!("cached rustdoc output directory is invalid");
     }
@@ -522,6 +593,9 @@ fn restore(action: &CacheDigest, action_bytes: &[u8]) -> Result<Option<CachedDoc
         metadata.stdout.clone(),
         metadata.stderr.clone(),
     ])?;
+    if !node.digest.matches_file(&blobs[0])? {
+        bail!("cached rustdoc archive failed digest verification");
+    }
     let stdout = read_verified_blob(&blobs[1], &metadata.stdout, "rustdoc stdout")?;
     let stderr = read_verified_blob(&blobs[2], &metadata.stderr, "rustdoc stderr")?;
     Ok(Some(CachedDocs {
@@ -559,7 +633,7 @@ fn publish(
         stderr: stderr.0.clone(),
     })?;
     let metadata = stage("metadata", &metadata_bytes)?;
-    let directory_bytes = canonical_json(&CacheDirectory {
+    let directory_node = CacheDirectory {
         directories: Vec::new(),
         files: vec![CacheFileNode {
             digest: archive_digest.clone(),
@@ -569,7 +643,9 @@ fn publish(
         }],
         symlinks: Vec::new(),
         version: 1,
-    })?;
+    };
+    directory_node.validate()?;
+    let directory_bytes = canonical_json(&directory_node)?;
     let directory = stage("directory", &directory_bytes)?;
     let mut requests = vec![
         AgentRequest::StoreBlob {
@@ -640,17 +716,45 @@ fn collect_archive_files(
     prefix: &str,
     files: &mut Vec<(String, PathBuf)>,
 ) -> Result<()> {
+    let mut generated = Vec::new();
+    collect_generated_files(dir, &mut generated)?;
+    for path in generated {
+        let relative = path.strip_prefix(root)?;
+        let name = relative
+            .components()
+            .map(|component| {
+                let Component::Normal(name) = component else {
+                    bail!("rustdoc archive path has an unsupported component");
+                };
+                let name = name
+                    .to_str()
+                    .ok_or_else(|| eyre::eyre!("rustdoc archive path is not UTF-8"))?;
+                if name.contains('\\') {
+                    bail!("rustdoc archive path contains a nonportable separator");
+                }
+                Ok(name)
+            })
+            .collect::<Result<Vec<_>>>()?
+            .join("/");
+        files.push((format!("{prefix}/{name}"), path));
+    }
+    Ok(())
+}
+
+fn collect_generated_files(dir: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
     for entry in std::fs::read_dir(dir)? {
         let entry = entry?;
         let path = entry.path();
-        if path.is_dir() {
-            collect_archive_files(root, &path, prefix, files)?;
-        } else if path.is_file() {
-            let relative = path
-                .strip_prefix(root)?
-                .to_string_lossy()
-                .replace('\\', "/");
-            files.push((format!("{prefix}/{relative}"), path));
+        let kind = entry.file_type()?;
+        if kind.is_symlink() {
+            bail!("rustdoc generated output contains a symbolic link");
+        }
+        if kind.is_dir() {
+            collect_generated_files(&path, files)?;
+        } else if kind.is_file() {
+            files.push(path);
+        } else {
+            bail!("rustdoc generated output contains an unsupported node");
         }
     }
     Ok(())
@@ -701,14 +805,7 @@ fn install_archive(archive: &Path, invocation: &Invocation) -> Result<InstalledD
         if copied != size {
             bail!("cached rustdoc archive is truncated");
         }
-        match std::fs::rename(&temporary, &destination) {
-            Ok(()) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-                std::fs::remove_file(&destination)?;
-                std::fs::rename(temporary, destination)?;
-            }
-            Err(error) => return Err(error.into()),
-        }
+        replace_generated_file(&temporary, &destination)?;
         installed.files = installed.files.saturating_add(1);
         installed.bytes = installed.bytes.saturating_add(size);
     }
@@ -727,7 +824,11 @@ fn read_u32(input: &mut File) -> Result<u32> {
     Ok(u32::from_le_bytes(bytes))
 }
 
-fn finalize(rustdoc: &OsStr, invocation: &Invocation) -> Result<()> {
+fn finalize<S: FnMut(MeasurementEvent)>(
+    rustdoc: &OsStr,
+    invocation: &Invocation,
+    measurement: &mut process_measurement::Invocation<S>,
+) -> Result<ExitCode> {
     std::fs::create_dir_all(&invocation.output)?;
     let parts_root = invocation.parts_root()?;
     std::fs::create_dir_all(&parts_root)?;
@@ -749,12 +850,17 @@ fn finalize(rustdoc: &OsStr, invocation: &Invocation) -> Result<()> {
     for part in parts {
         command.arg("--include-parts-dir").arg(part);
     }
-    let status = command.status()?;
-    lock.unlock()?;
-    if !status.success() {
-        bail!("rustdoc shared-output finalization failed");
+    let status = measurement
+        .process(ProcessPurpose::RustdocFinalize)
+        .status(&mut command)?;
+    if let Err(error) = lock.unlock() {
+        log::warn!("rustdoc finalization lock release failed: {error}");
     }
-    Ok(())
+    Ok(exit_code(status))
+}
+
+fn exit_code(status: std::process::ExitStatus) -> ExitCode {
+    ExitCode::from(u8::try_from(status.code().unwrap_or(1)).unwrap_or(1))
 }
 
 fn prepare_command(command: &mut Command) {
@@ -930,6 +1036,12 @@ mod tests {
             manifest: destination.path().into(),
             arguments: Vec::new(),
         };
+        install_generated(&doc, &parts, &invocation).unwrap();
+        assert_eq!(
+            std::fs::read(invocation.output.join("widget/index.html")).unwrap(),
+            b"docs"
+        );
+        std::fs::remove_dir_all(&invocation.output).unwrap();
         install_archive(&archive, &invocation).unwrap();
 
         assert_eq!(
@@ -959,6 +1071,108 @@ mod tests {
                 OsString::from("--extend-css"),
                 OsString::from("theme.css"),
             ]
+        );
+    }
+    #[cfg(unix)]
+    #[test]
+    fn rustdoc_hit_finalizes_and_miss_has_two_real_children_one_invocation() {
+        use mbx_cache_core::{AdapterKind, InvocationKind, ProcessOutcome};
+        use std::os::unix::fs::PermissionsExt as _;
+
+        for (cache_outcome, exit) in [
+            (CacheOutcome::Hit, 0),
+            (CacheOutcome::Miss, 0),
+            (CacheOutcome::Hit, 7),
+        ] {
+            let directory = tempfile::tempdir().unwrap();
+            let executable = directory.path().join("rustdoc");
+            std::fs::write(&executable, format!("#!/bin/sh\nexit {exit}\n")).unwrap();
+            std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755)).unwrap();
+            let parsed = Invocation {
+                crate_name: "widget".into(),
+                output: directory.path().join("doc"),
+                manifest: directory.path().into(),
+                arguments: Vec::new(),
+            };
+            let mut events = Vec::new();
+            let mut measurement = process_measurement::Invocation::with_sink(
+                AdapterKind::Rustdoc,
+                InvocationKind::Work,
+                None,
+                |event| events.push(event),
+            );
+            measurement.set_outcome(cache_outcome);
+            if cache_outcome == CacheOutcome::Miss {
+                let output = run_work(&mut Command::new(&executable), &mut measurement).unwrap();
+                assert!(output.status.success());
+            }
+            let status = finalize(executable.as_os_str(), &parsed, &mut measurement).unwrap();
+            assert_eq!(status, ExitCode::from(exit));
+            assert!(measurement.has_work_attempted());
+            measurement.finish_current();
+            let children = events
+                .iter()
+                .filter_map(|event| match event {
+                    MeasurementEvent::Process {
+                        purpose,
+                        outcome,
+                        measurement,
+                        ..
+                    } => {
+                        assert_eq!(measurement.attempts, 1);
+                        assert_eq!(measurement.started, 1);
+                        assert_eq!(measurement.wall_observations, 1);
+                        assert!(measurement.observed_wall_ns > 0);
+                        Some((*purpose, *outcome))
+                    }
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            let final_outcome = if exit == 0 {
+                ProcessOutcome::Succeeded
+            } else {
+                ProcessOutcome::Failed
+            };
+            let expected = if cache_outcome == CacheOutcome::Miss {
+                vec![
+                    (ProcessPurpose::Work, ProcessOutcome::Succeeded),
+                    (ProcessPurpose::RustdocFinalize, final_outcome),
+                ]
+            } else {
+                vec![(ProcessPurpose::RustdocFinalize, final_outcome)]
+            };
+            assert_eq!(children, expected);
+            assert_eq!(events.iter().filter(|event| matches!(event, MeasurementEvent::Invocation { cache_outcome: actual, .. } if *actual == cache_outcome)).count(), 1);
+        }
+    }
+    #[cfg(unix)]
+    #[test]
+    fn archive_rejects_non_utf8_names_without_breaking_native_install() {
+        use std::os::unix::ffi::OsStringExt as _;
+        let generated = tempfile::tempdir().unwrap();
+        let doc = generated.path().join("doc");
+        let parts = generated.path().join("parts");
+        std::fs::create_dir(&doc).unwrap();
+        std::fs::create_dir(&parts).unwrap();
+        let name = OsString::from_vec(vec![b'a', 0xff]);
+        std::fs::write(doc.join(&name), b"docs").unwrap();
+        let destination = tempfile::tempdir().unwrap();
+        let invocation = Invocation {
+            crate_name: "widget".into(),
+            output: destination.path().join("doc"),
+            manifest: destination.path().into(),
+            arguments: Vec::new(),
+        };
+        install_generated(&doc, &parts, &invocation).unwrap();
+        assert_eq!(
+            std::fs::read(invocation.output.join(name)).unwrap(),
+            b"docs"
+        );
+        assert!(
+            write_archive(&generated.path().join("archive"), &[(&doc, "doc")])
+                .unwrap_err()
+                .to_string()
+                .contains("not UTF-8")
         );
     }
 }

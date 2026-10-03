@@ -411,3 +411,188 @@ fn cc_cargo_build_root_has_its_own_portable_name() {
         );
     }
 }
+
+#[cfg(unix)]
+#[test]
+fn restored_cc_invocation_records_no_compiler_process() {
+    use mbx_cache_core::{AdapterKind, CacheOutcome, InvocationKind, MeasurementEvent};
+    let mut events = Vec::new();
+    let mut measurement = crate::process_measurement::Invocation::with_sink(
+        AdapterKind::Cc,
+        InvocationKind::Work,
+        None,
+        |event| events.push(event),
+    );
+    measurement.set_outcome(CacheOutcome::Hit);
+    measurement.finish_current();
+    assert!(matches!(
+        events.as_slice(),
+        [MeasurementEvent::Invocation {
+            cache_outcome: CacheOutcome::Hit,
+            ..
+        }]
+    ));
+}
+
+#[cfg(unix)]
+#[test]
+fn failed_cc_child_records_actual_wall_and_preserves_output() {
+    use mbx_cache_core::{
+        AdapterKind, CacheOutcome, InvocationKind, MeasurementEvent, ProcessOutcome, ProcessPurpose,
+    };
+    let mut events = Vec::new();
+    let mut measurement = crate::process_measurement::Invocation::with_sink(
+        AdapterKind::Cc,
+        InvocationKind::Work,
+        None,
+        |event| events.push(event),
+    );
+    measurement.set_outcome(CacheOutcome::Miss);
+    let mut command = Command::new("sh");
+    command.args(["-c", "sleep 0.02; printf cc-out; printf cc-err >&2; exit 7"]);
+    let output = measured_compiler_output(&mut command, &mut measurement).expect("compiler child");
+    assert_eq!(output.status.code(), Some(7));
+    assert_eq!(output.stdout, b"cc-out");
+    assert_eq!(output.stderr, b"cc-err");
+    measurement.finish_current();
+    assert!(matches!(
+        &events[0],
+        MeasurementEvent::Process {
+            purpose: ProcessPurpose::Work,
+            outcome: ProcessOutcome::Failed,
+            measurement,
+            ..
+        } if measurement.attempts == 1 && measurement.started == 1
+            && measurement.wall_observations == 1 && measurement.observed_wall_ns > 0
+    ));
+    assert!(matches!(
+        &events[1],
+        MeasurementEvent::Invocation {
+            cache_outcome: CacheOutcome::Miss,
+            ..
+        }
+    ));
+}
+
+#[cfg(unix)]
+#[test]
+fn cc_preparation_time_is_outside_real_child_wall() {
+    use mbx_cache_core::{AdapterKind, InvocationKind, MeasurementEvent};
+    let mut events = Vec::new();
+    let mut measurement = crate::process_measurement::Invocation::with_sink(
+        AdapterKind::Cc,
+        InvocationKind::Work,
+        None,
+        |event| events.push(event),
+    );
+    let outer = Instant::now();
+    std::thread::sleep(std::time::Duration::from_millis(80));
+    let mut command = Command::new("sh");
+    command.args(["-c", "exit 0"]);
+    let output = measured_compiler_output(&mut command, &mut measurement).expect("compiler child");
+    assert!(output.status.success());
+    let outer_ns = outer.elapsed().as_nanos();
+    measurement.finish_current();
+    let MeasurementEvent::Process { measurement, .. } = &events[0] else {
+        panic!("expected actual child measurement");
+    };
+    assert!(outer_ns - u128::from(measurement.observed_wall_ns) >= 70_000_000);
+}
+
+#[cfg(unix)]
+#[test]
+fn cc_and_owning_build_script_child_walls_overlap() {
+    use mbx_cache_core::{AdapterKind, InvocationKind, MeasurementEvent, ProcessPurpose};
+    let events = std::cell::RefCell::new(Vec::new());
+    let mut script = crate::process_measurement::Invocation::with_sink(
+        AdapterKind::BuildScript,
+        InvocationKind::Work,
+        None,
+        |event| events.borrow_mut().push(event),
+    );
+    let mut cc = crate::process_measurement::Invocation::with_sink(
+        AdapterKind::Cc,
+        InvocationKind::Work,
+        None,
+        |event| events.borrow_mut().push(event),
+    );
+    let mut script_command = Command::new("sh");
+    script_command.args(["-c", "sleep 0.2"]);
+    let root_started = Instant::now();
+    let script_child = script
+        .process(ProcessPurpose::Work)
+        .spawn(&mut script_command)
+        .expect("build script child");
+    let mut compiler_command = Command::new("sh");
+    compiler_command.args(["-c", "sleep 0.12"]);
+    assert!(
+        measured_compiler_output(&mut compiler_command, &mut cc)
+            .expect("nested compiler child")
+            .status
+            .success()
+    );
+    assert!(
+        script_child
+            .wait()
+            .expect("build script terminal")
+            .success()
+    );
+    let root_wall = root_started.elapsed().as_nanos();
+    script.finish_current();
+    cc.finish_current();
+    let summed_child_wall = events
+        .borrow()
+        .iter()
+        .filter_map(|event| match event {
+            MeasurementEvent::Process { measurement, .. } => {
+                Some(u128::from(measurement.observed_wall_ns))
+            }
+            MeasurementEvent::Invocation { .. } | MeasurementEvent::Output { .. } => None,
+        })
+        .sum::<u128>();
+    // The owning script includes its compiler's interval. These observations
+    // describe overlapping real work; adding them cannot partition root wall.
+    assert!(summed_child_wall > root_wall);
+}
+
+#[test]
+fn cc_selection_sdk_evidence_uses_explicit_parsed_sysroot() {
+    for arguments in [
+        vec!["-isysroot", "sdk", "-c", "source.c", "-o", "source.o"],
+        vec!["--sysroot=sdk", "-c", "source.c", "-o", "source.o"],
+    ] {
+        let arguments = arguments
+            .into_iter()
+            .map(OsString::from)
+            .collect::<Vec<_>>();
+        let invocation = CcInvocation::parse(&arguments).expect("actual supported invocation");
+        let working_dir = std::env::current_dir().expect("working directory");
+        assert_eq!(
+            supplied_sdk_roots(&invocation, &working_dir),
+            vec![working_dir.join("sdk")]
+        );
+    }
+}
+
+#[test]
+fn actual_cc_prediction_payload_uses_common_canonical_codec() {
+    let prediction = CcInputPrediction {
+        path_specific: true,
+        version: 1,
+        inputs: vec!["${workspace}/source.c".into()],
+        environment: vec!["SDKROOT".into()],
+        compiler_duration_ns: 17,
+        source_name: "source.c".into(),
+    };
+    let payload = canonical_prediction_payload(&prediction).expect("canonical native prediction");
+    assert_eq!(
+        payload,
+        r#"{"compiler_duration_ns":17,"environment":["SDKROOT"],"inputs":["${workspace}/source.c"],"path_specific":true,"source_name":"source.c","version":1}"#
+    );
+    assert_eq!(payload.as_bytes(), canonical_json(&prediction).unwrap());
+    assert_eq!(
+        serde_json::from_str::<CcInputPrediction>(&payload).expect("actual adapter decoder"),
+        prediction
+    );
+    assert_ne!(payload, serde_json::to_string(&prediction).unwrap());
+}

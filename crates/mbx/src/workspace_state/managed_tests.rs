@@ -1,3 +1,4 @@
+use super::tests::capture_fixture as capture;
 use super::*;
 use std::fs;
 

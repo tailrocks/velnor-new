@@ -1,4 +1,6 @@
 use super::*;
+#[cfg(unix)]
+use crate::session::CacheSession;
 
 /// Verify that placement escapes the target as TOML and preserves both the
 /// leading toolchain selector and application arguments after `--`.
@@ -409,6 +411,7 @@ pub(super) fn managed_target_config(root: &Path) -> Config {
         cache_dir: root.join("cache"),
         shims_dir: root.join("cache").join("shims"),
         stats_report: None,
+        stats_report_dir: None,
         ar_determinism: "auto".into(),
         verify: false,
         verify_sample_rate: 0,
@@ -959,13 +962,163 @@ fn standalone_child_removes_inherited_cargo_root_environment() {
     let mut command = std::process::Command::new("sh");
     command.env(crate::session::TARGET_DIR_ENV, "/parent/target");
     command.env(crate::session::BUILD_DIR_ENV, "/parent/build");
+    command.env(crate::session::RECEIPT_CONTEXT_ENV, "stale-context");
+    command.env(
+        crate::session::completed_report::PARENT_SESSION_ID_ENV,
+        "stale-parent",
+    );
     apply_build_environment(&mut command, std::collections::BTreeMap::new());
     let output = command
         .args([
             "-c",
-            r#"test -z "${MBX_TARGET_DIR+x}" && test -z "${MBX_BUILD_DIR+x}""#,
+            r#"test -z "${MBX_TARGET_DIR+x}" && test -z "${MBX_BUILD_DIR+x}" && test -z "${MBX_REPORT_PARENT_SESSION_ID+x}" && test -z "${MBX_RECEIPT_CONTEXT+x}""#,
         ])
         .output()
         .unwrap();
     assert!(output.status.success());
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn report_mode_raw_streams_bind_actual_terminal_without_json_claims() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut config = managed_target_config(directory.path());
+    config.stats_report_dir = Some(directory.path().join("reports"));
+    let session_directory = tempfile::tempdir().unwrap();
+    let session = CacheSession::start(session_directory.path(), &config)
+        .await
+        .unwrap();
+    let identity = session.completed_identity().unwrap();
+    let code = run_workload(
+        std::ffi::OsStr::new("sh"),
+        &["-c", "printf raw-output; printf raw-diagnostic >&2; exit 7"],
+        std::collections::BTreeMap::new(),
+        &session,
+    )
+    .unwrap();
+    assert_eq!(code, std::process::ExitCode::from(7));
+    let report_path = config
+        .stats_report_dir
+        .as_ref()
+        .unwrap()
+        .join(format!("{}.json", identity.session_id));
+    assert!(!report_path.exists());
+    session.finish().await.unwrap();
+    let report: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(report_path).unwrap()).unwrap();
+    assert_eq!(report["workload"]["outcome"], "failed");
+    assert_eq!(report["workload"]["exit_code"], 7);
+    let capture = &report["statistics"]["cargo_capture"];
+    assert_eq!(capture["native_process_capture_complete"], true);
+    assert_eq!(capture["protocol_complete"], false);
+    assert_eq!(capture["stdout_bytes"], 10);
+    assert_eq!(capture["process_exit_code"], 7);
+    assert_eq!(capture["command"]["session_id"], identity.session_id);
+    assert!(capture["messages"].as_array().unwrap().is_empty());
+    assert!(
+        report["statistics"]["measurement"]["workload_wall_ns"]
+            .as_u64()
+            .unwrap()
+            > 0
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn report_mode_spawn_failure_cannot_mint_terminal_or_stream_completion() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut config = managed_target_config(directory.path());
+    config.stats_report_dir = Some(directory.path().join("reports"));
+    let session_directory = tempfile::tempdir().unwrap();
+    let session = CacheSession::start(session_directory.path(), &config)
+        .await
+        .unwrap();
+    let identity = session.completed_identity().unwrap();
+    let missing = directory.path().join("missing-cargo");
+    assert!(
+        run_workload(
+            missing.as_os_str(),
+            &[] as &[&str],
+            std::collections::BTreeMap::new(),
+            &session
+        )
+        .is_err()
+    );
+    session.finish().await.unwrap();
+    let report_path = config
+        .stats_report_dir
+        .as_ref()
+        .unwrap()
+        .join(format!("{}.json", identity.session_id));
+    let report: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(report_path).unwrap()).unwrap();
+    assert_eq!(report["workload"]["outcome"], "unknown");
+    assert!(report["statistics"]["cargo_capture"].is_null());
+    assert!(report["statistics"]["measurement"]["workload_wall_ns"].is_null());
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn stream_observer_panic_preserves_actual_exit_and_workload_wall() {
+    use crate::cargo_artifact_capture::{
+        CargoCommandBinding, CargoCommandCompletion, CargoStderrCapture, CargoStdoutCapture,
+    };
+    for native_code in [0, 7] {
+        let directory = tempfile::tempdir().unwrap();
+        let mut config = managed_target_config(directory.path());
+        config.stats_report_dir = Some(directory.path().join("reports"));
+        let session_directory = tempfile::tempdir().unwrap();
+        let session = CacheSession::start(session_directory.path(), &config)
+            .await
+            .unwrap();
+        let identity = session.completed_identity().unwrap();
+        let mut command = std::process::Command::new("sh");
+        let script = format!("printf actual; printf diagnostic >&2; exit {native_code}");
+        command
+            .args(["-c", &script])
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped());
+        let timer = session.workload_timer();
+        let (mut child, binding) = CargoCommandBinding::spawn(
+            &mut command,
+            identity.session_id.clone(),
+            identity.root_session_id.clone(),
+        )
+        .unwrap();
+        let stdout = binding.take_stdout(&mut child).unwrap();
+        let stderr = binding.take_stderr(&mut child).unwrap();
+        let result = std::thread::scope(|scope| {
+            let stdout_reader = scope.spawn(move || -> CargoStdoutCapture {
+                let _capture = CargoStdoutCapture::read(stdout, &mut std::io::sink());
+                panic!("injected observer failure after native output forwarding");
+            });
+            let stderr_reader =
+                scope.spawn(move || CargoStderrCapture::read(stderr, &mut std::io::sink()));
+            let completion = CargoCommandCompletion::wait(&mut child, binding).unwrap();
+            timer.finish_cargo(&completion);
+            finish_captured_output(
+                &session,
+                completion,
+                stdout_reader.join(),
+                stderr_reader.join(),
+            )
+        })
+        .unwrap();
+        assert_eq!(result, std::process::ExitCode::from(native_code as u8));
+        session.finish().await.unwrap();
+        let report_path = config
+            .stats_report_dir
+            .unwrap()
+            .join(format!("{}.json", identity.session_id));
+        let report: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(report_path).unwrap()).unwrap();
+        assert_eq!(report["workload"]["exit_code"], native_code);
+        assert!(report["statistics"]["cargo_capture"].is_null());
+        assert!(
+            report["statistics"]["measurement"]["workload_wall_ns"]
+                .as_u64()
+                .unwrap()
+                > 0
+        );
+    }
 }

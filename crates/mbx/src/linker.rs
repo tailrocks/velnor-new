@@ -11,9 +11,11 @@
 //! startup objects are hashed instead, because nothing else pins the libc a
 //! link resolves against.
 
-use crate::session;
+use crate::{process_measurement, session};
 use eyre::{Context, Result, bail};
-use mbx_cache_core::{AgentRequest, AgentResponse, CacheDigest, PinnedFile, canonical_json};
+use mbx_cache_core::{
+    AdapterKind, AgentRequest, AgentResponse, CacheDigest, PinnedFile, canonical_json,
+};
 use mbx_cache_rustc::LinkerIdentity;
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
@@ -250,12 +252,14 @@ fn search_dirs(driver: &Path) -> Option<SearchDirs> {
     // asked in the C locale, and an answer without both lists is no map:
     // a driver that accepts the flag but prints something else would
     // otherwise pass for one that searched nowhere.
-    let output = Command::new(driver)
-        .arg("-print-search-dirs")
-        .env("LC_ALL", "C")
-        .env("LANGUAGE", "C")
-        .output()
-        .ok()?;
+    let output = process_measurement::probe_output(
+        AdapterKind::Rustc,
+        Command::new(driver)
+            .arg("-print-search-dirs")
+            .env("LC_ALL", "C")
+            .env("LANGUAGE", "C"),
+    )
+    .ok()?;
     if !output.status.success() {
         return None;
     }
@@ -597,8 +601,9 @@ fn visual_studio_tools_dir() -> Option<PathBuf> {
         .join("Microsoft Visual Studio")
         .join("Installer")
         .join("vswhere.exe");
-    let output = Command::new(vswhere)
-        .args([
+    let output = process_measurement::probe_output(
+        AdapterKind::Rustc,
+        Command::new(vswhere).args([
             "-latest",
             "-products",
             "*",
@@ -606,9 +611,9 @@ fn visual_studio_tools_dir() -> Option<PathBuf> {
             "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
             "-property",
             "installationPath",
-        ])
-        .output()
-        .ok()?;
+        ]),
+    )
+    .ok()?;
     if !output.status.success() {
         return None;
     }
@@ -632,10 +637,11 @@ fn native_msvc_arch() -> String {
 }
 
 fn run_allowing_status(program: &Path, arguments: &[&str]) -> Result<String> {
-    let output = Command::new(program)
-        .args(arguments)
-        .output()
-        .wrap_err_with(|| format!("failed to run {}", program.display()))?;
+    let output = process_measurement::probe_output(
+        AdapterKind::Rustc,
+        Command::new(program).args(arguments),
+    )
+    .wrap_err_with(|| format!("failed to run {}", program.display()))?;
     let mut text = String::from_utf8_lossy(&output.stdout).into_owned();
     text.push_str(&String::from_utf8_lossy(&output.stderr));
     let reported = text.trim();
@@ -810,10 +816,9 @@ fn linker_version(
         // path and its version line: on content-addressed toolchains the
         // path alone identifies the build, and elsewhere the version line
         // names what a path cannot.
-        let output = Command::new(program)
-            .arg("-v")
-            .output()
-            .wrap_err_with(|| format!("failed to query the linker {}", program.display()))?;
+        let output =
+            process_measurement::probe_output(AdapterKind::Rustc, Command::new(program).arg("-v"))
+                .wrap_err_with(|| format!("failed to query the linker {}", program.display()))?;
         let combined = if output.stdout.is_empty() {
             output.stderr
         } else {
@@ -840,10 +845,9 @@ fn linker_version(
     let located = Located::program(OsStr::new("ld"), &named, search)
         .wrap_err_with(|| format!("failed to find the linker `{}`", named.display()))?;
     let linker = located.path.as_path();
-    let output = Command::new(linker)
-        .arg("-v")
-        .output()
-        .wrap_err_with(|| format!("failed to query the linker {}", linker.display()))?;
+    let output =
+        process_measurement::probe_output(AdapterKind::Rustc, Command::new(linker).arg("-v"))
+            .wrap_err_with(|| format!("failed to query the linker {}", linker.display()))?;
     let combined = if output.stdout.is_empty() {
         output.stderr
     } else {
@@ -953,7 +957,11 @@ fn sdk_identity_for(root: Option<String>) -> Result<Option<String>> {
 }
 
 fn xcrun(arguments: &[&str]) -> Option<String> {
-    let output = Command::new("xcrun").args(arguments).output().ok()?;
+    let output = process_measurement::probe_output(
+        AdapterKind::Rustc,
+        Command::new("xcrun").args(arguments),
+    )
+    .ok()?;
     output
         .status
         .success()
@@ -962,10 +970,11 @@ fn xcrun(arguments: &[&str]) -> Option<String> {
 }
 
 fn run(program: &Path, arguments: &[&str]) -> Result<String> {
-    let output = Command::new(program)
-        .args(arguments)
-        .output()
-        .wrap_err_with(|| format!("failed to run {}", program.display()))?;
+    let output = process_measurement::probe_output(
+        AdapterKind::Rustc,
+        Command::new(program).args(arguments),
+    )
+    .wrap_err_with(|| format!("failed to run {}", program.display()))?;
     if !output.status.success() {
         bail!(
             "{} {arguments:?} failed: {}",
@@ -986,3 +995,7 @@ fn run(program: &Path, arguments: &[&str]) -> Result<String> {
 #[cfg(test)]
 #[path = "linker_tests.rs"]
 mod tests;
+
+#[cfg(all(test, unix))]
+#[path = "linker_probe_tests.rs"]
+mod probe_tests;

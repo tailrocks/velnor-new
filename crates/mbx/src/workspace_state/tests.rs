@@ -1,4 +1,78 @@
+use self::capture_fixture as capture;
 use super::*;
+
+pub(super) fn capture_fixture(store: &Path, targets: &[WorkspaceRoots]) -> Result<ExportAdditions> {
+    let evidence = persisted_evidence(store, &fixture_evidence(targets))?;
+    match super::capture(
+        &Config::for_test(store),
+        store,
+        targets,
+        &store.join("out-dirs"),
+        &evidence,
+    )? {
+        CaptureOutcome::Captured(additions) | CaptureOutcome::RetainedOwner { additions, .. } => {
+            Ok(additions)
+        }
+        CaptureOutcome::UnavailableManagedOverlap
+        | CaptureOutcome::UnavailableOwnerProof { .. } => {
+            bail!("unsupported fixture placement")
+        }
+    }
+}
+
+pub(super) fn fixture_evidence(
+    targets: &[WorkspaceRoots],
+) -> Vec<mbx_cache_store::ReceiptEvidence> {
+    targets
+        .iter()
+        .map(|workspace| mbx_cache_store::ReceiptEvidence {
+            lineage: None,
+            workspace: workspace.clone(),
+            identity: "a".repeat(64),
+            context: None,
+            predictions: vec![],
+        })
+        .collect()
+}
+
+pub(super) fn persist_evidence(
+    store: &Path,
+    evidence: &[mbx_cache_store::ReceiptEvidence],
+) -> Result<()> {
+    for receipt in evidence {
+        mbx_cache_store::record_build_receipt(
+            store,
+            &"b".repeat(64),
+            &receipt.identity,
+            &receipt.workspace.workspace_root,
+            Some(&receipt.workspace.cargo),
+            None,
+            receipt.predictions.clone(),
+            receipt.context.as_ref(),
+            receipt.lineage.as_ref(),
+        )?;
+    }
+    Ok(())
+}
+
+pub(super) fn persisted_evidence(
+    store: &Path,
+    evidence: &[mbx_cache_store::ReceiptEvidence],
+) -> Result<Vec<mbx_cache_store::ReceiptEvidence>> {
+    persist_evidence(store, evidence)?;
+    let stored = mbx_cache_store::stored_receipt_evidence(store)?;
+    evidence
+        .iter()
+        .map(|requested| {
+            stored
+                .iter()
+                .find(|record| *record == requested)
+                .cloned()
+                .ok_or_else(|| eyre::eyre!("native fixture receipt was not persisted exactly"))
+        })
+        .collect()
+}
+
 use std::fs;
 
 struct Fixture {
@@ -151,7 +225,7 @@ fn semantic_inventory_excludes_only_root_compiler_probe_cache() -> Result<()> {
     Ok(())
 }
 #[test]
-fn retained_workspace_union_replaces_current_root_and_keeps_omitted_roots() -> Result<()> {
+fn retained_workspace_union_preserves_unbound_current_and_omitted_roots() -> Result<()> {
     let store = tempfile::tempdir()?;
     let first = fixture(store.path(), "first", b"first output")?;
     let second = fixture(store.path(), "second", b"second output")?;
@@ -159,7 +233,9 @@ fn retained_workspace_union_replaces_current_root_and_keeps_omitted_roots() -> R
     let baseline_inventory = semantic_inventory(store.path(), Some(&attachment(&baseline)?))?;
     std::fs::write(&first.inline, b"updated current state")?;
     let current = capture(store.path(), std::slice::from_ref(&first.target))?;
-    let merged = retain(store.path(), current, Some(&attachment(&baseline)?))?;
+    let outcome = retain(store.path(), current, Some(&attachment(&baseline)?))?;
+    assert!(!outcome.unavailable_reasons.is_empty());
+    let merged = outcome.additions;
     let cas = LocalCas::new(store.path());
     let bundle: Bundle =
         serde_json::from_slice(&std::fs::read(cas.path_for(&attachment(&merged)?)?)?)?;
@@ -180,12 +256,13 @@ fn retained_workspace_union_replaces_current_root_and_keeps_omitted_roots() -> R
             .iter()
             .all(|(key, value)| inventory.get(key) == Some(value))
     );
-    assert_ne!(baseline_inventory, inventory);
+    assert_eq!(baseline_inventory, inventory);
     let unchanged = retain(
         store.path(),
         ExportAdditions::default(),
         Some(&attachment(&merged)?),
-    )?;
+    )?
+    .additions;
     assert_eq!(
         inventory,
         semantic_inventory(store.path(), Some(&attachment(&unchanged)?))?

@@ -91,6 +91,7 @@ pub(super) fn run(
     arguments: &[String],
     environment: &BTreeMap<String, String>,
     inspect_warnings: bool,
+    session: &crate::session::CacheSession,
     stats: impl Fn() -> AgentStats,
 ) -> Result<Option<ExitCode>> {
     let mut started = false;
@@ -99,6 +100,7 @@ pub(super) fn run(
         arguments,
         environment,
         inspect_warnings,
+        session,
         &mut started,
         stats,
     ) {
@@ -133,6 +135,7 @@ fn run_inner(
     arguments: &[String],
     environment: &BTreeMap<String, String>,
     inspect_warnings: bool,
+    session: &crate::session::CacheSession,
     started: &mut bool,
     stats: impl Fn() -> AgentStats,
 ) -> Result<ExitCode> {
@@ -144,6 +147,8 @@ fn run_inner(
     if cfg!(windows) {
         seed_process_environment(&mut command, std::env::vars_os());
     }
+    command.env_remove(crate::session::completed_report::PARENT_SESSION_ID_ENV);
+    command.env_remove(crate::session::RECEIPT_CONTEXT_ENV);
     command.args(cargo_arguments(arguments));
     // Cargo supplies the denominator itself, without an unstable unit-graph
     // probe. Include presentation overrides in the launch overlay so native
@@ -159,11 +164,32 @@ fn run_inner(
     let mut reader = pair.master.try_clone_reader().map_err(|e| eyre::eyre!(e))?;
     let mut input = pair.master.take_writer().map_err(|e| eyre::eyre!(e))?;
     let mut screen = Screen::new()?;
+    let workload = session.workload_timer();
     let mut child = pair
         .slave
         .spawn_command(command)
         .map_err(|e| eyre::eyre!(e))?;
     *started = true;
+    let mut killer = child.clone_killer();
+    // Observe termination independently of terminal output and presentation.
+    let terminal = std::thread::spawn(move || -> Result<portable_pty::ExitStatus> {
+        let status = child.wait().map_err(|e| eyre::eyre!(e))?;
+        workload.finish(crate::session::completed_report::WorkloadResult {
+            outcome: if status.signal().is_some() {
+                crate::session::completed_report::WorkloadOutcome::Terminated
+            } else if status.success() {
+                crate::session::completed_report::WorkloadOutcome::Succeeded
+            } else {
+                crate::session::completed_report::WorkloadOutcome::Failed
+            },
+            exit_code: if status.signal().is_some() {
+                None
+            } else {
+                i32::try_from(status.exit_code()).ok()
+            },
+        });
+        Ok(status)
+    });
     drop(pair.slave);
     let (send, receive) = mpsc::sync_channel(32);
     std::thread::spawn(move || {
@@ -193,11 +219,11 @@ fn run_inner(
     let mut decoder = Decoder::default();
     let mut proxy = false;
     let mut last_frame = Instant::now() - Duration::from_secs(1);
-    let result = (|| -> Result<portable_pty::ExitStatus> {
+    let result = (|| -> Result<()> {
         let mut exit_seen = false;
         let mut last_output = Instant::now();
         loop {
-            if !exit_seen && child.try_wait().map_err(|e| eyre::eyre!(e))?.is_some() {
+            if !exit_seen && terminal.is_finished() {
                 exit_seen = true;
                 last_output = Instant::now();
             }
@@ -245,78 +271,90 @@ fn run_inner(
             }
         }
         decoder.finish(&mut screen)?;
-        child.wait().map_err(|e| eyre::eyre!(e))
+        Ok::<(), eyre::Report>(())
     })();
     if result.is_err() {
-        let _ = child.kill();
-        let _ = child.wait();
+        let _ = killer.kill();
     }
-    let status = result.wrap_err("running Cargo with the pretty display")?;
-    model.update_stats(stats());
-    model.finished = Some((status.success(), model.started.elapsed()));
-    if !proxy {
-        screen.draw(view::render(
-            &mut model,
-            None,
-            screen.width(),
-            screen.height(),
-        ))?;
-        // Full diagnostic text remains in scrollback even if the user dismisses
-        // the optional browser, and the child's failure status stays authoritative.
-        screen.commit();
-        for error in &model.errors {
-            screen.diagnostic(error)?;
-            screen.write(b"\r\n")?;
-        }
-        let count = model.warnings.len() + model.failures.len();
-        if count > 0 && (!status.success() || inspect_warnings) {
-            let mut browser = view::Browser::default();
-            loop {
-                screen.draw(view::render(
-                    &mut model,
-                    Some(&mut browser),
-                    screen.width(),
-                    screen.height(),
-                ))?;
-                if let Event::Key(key) = event::read()?
-                    && key.kind != event::KeyEventKind::Release
-                {
-                    match key.code {
-                        KeyCode::Esc | KeyCode::Char('q') => break,
-                        KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                            break;
+    let status = terminal
+        .join()
+        .map_err(|_| eyre::eyre!("Cargo waiter panicked"))?
+        .wrap_err("waiting for Cargo with the pretty display")?;
+    let presentation = (|| -> Result<()> {
+        result.wrap_err("running Cargo with the pretty display")?;
+        model.update_stats(stats());
+        model.finished = Some((status.success(), model.started.elapsed()));
+        if !proxy {
+            screen.draw(view::render(
+                &mut model,
+                None,
+                screen.width(),
+                screen.height(),
+            ))?;
+            // Full diagnostic text remains in scrollback even if the user dismisses
+            // the optional browser, and the child's failure status stays authoritative.
+            screen.commit();
+            for error in &model.errors {
+                screen.diagnostic(error)?;
+                screen.write(b"\r\n")?;
+            }
+            let count = model.warnings.len() + model.failures.len();
+            if count > 0 && (!status.success() || inspect_warnings) {
+                let mut browser = view::Browser::default();
+                loop {
+                    screen.draw(view::render(
+                        &mut model,
+                        Some(&mut browser),
+                        screen.width(),
+                        screen.height(),
+                    ))?;
+                    if let Event::Key(key) = event::read()?
+                        && key.kind != event::KeyEventKind::Release
+                    {
+                        match key.code {
+                            KeyCode::Esc | KeyCode::Char('q') => break,
+                            KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                                break;
+                            }
+                            KeyCode::Up if browser.inspecting => {
+                                browser.scroll = browser.scroll.saturating_sub(1)
+                            }
+                            KeyCode::Down if browser.inspecting => {
+                                browser.scroll = browser.scroll.saturating_add(1)
+                            }
+                            KeyCode::Up => {
+                                browser.selected = browser.selected.saturating_sub(1);
+                                browser.scroll = 0;
+                            }
+                            KeyCode::Down => {
+                                browser.selected = (browser.selected + 1).min(count - 1);
+                                browser.scroll = 0;
+                            }
+                            KeyCode::Enter => {
+                                browser.inspecting = !browser.inspecting;
+                                browser.scroll = 0;
+                            }
+                            KeyCode::PageUp => browser.scroll = browser.scroll.saturating_sub(10),
+                            KeyCode::PageDown => browser.scroll = browser.scroll.saturating_add(10),
+                            _ => {}
                         }
-                        KeyCode::Up if browser.inspecting => {
-                            browser.scroll = browser.scroll.saturating_sub(1)
-                        }
-                        KeyCode::Down if browser.inspecting => {
-                            browser.scroll = browser.scroll.saturating_add(1)
-                        }
-                        KeyCode::Up => {
-                            browser.selected = browser.selected.saturating_sub(1);
-                            browser.scroll = 0;
-                        }
-                        KeyCode::Down => {
-                            browser.selected = (browser.selected + 1).min(count - 1);
-                            browser.scroll = 0;
-                        }
-                        KeyCode::Enter => {
-                            browser.inspecting = !browser.inspecting;
-                            browser.scroll = 0;
-                        }
-                        KeyCode::PageUp => browser.scroll = browser.scroll.saturating_sub(10),
-                        KeyCode::PageDown => browser.scroll = browser.scroll.saturating_add(10),
-                        _ => {}
                     }
                 }
+                screen.clear()?;
             }
-            screen.clear()?;
+            for warning in &model.warnings {
+                screen.diagnostic(&warning.rendered)?;
+                screen.write(b"\r\n")?;
+            }
+            screen.commit();
         }
-        for warning in &model.warnings {
-            screen.diagnostic(&warning.rendered)?;
-            screen.write(b"\r\n")?;
+        Ok(())
+    })();
+    if let Err(error) = presentation {
+        if status.success() {
+            return Err(error);
         }
-        screen.commit();
+        log::warn!("Cargo presentation failed after native failure: {error:#}");
     }
     Ok(ExitCode::from(status_code(&status)))
 }

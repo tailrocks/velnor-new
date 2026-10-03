@@ -560,10 +560,13 @@ impl ActionPrediction {
                 self.payload.len()
             ));
         }
-        if serde_json::from_str::<serde_json::Value>(&self.payload).is_err() {
+        let Ok(payload) = serde_json::from_str::<serde_json::Value>(&self.payload) else {
             return Some("payload is not valid JSON".into());
+        };
+        match canonical_json(&payload) {
+            Ok(bytes) if bytes == self.payload.as_bytes() => None,
+            _ => Some("payload is not canonical JSON".into()),
         }
-        None
     }
 }
 
@@ -856,3 +859,6 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod prediction_payload_tests;

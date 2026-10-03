@@ -347,7 +347,7 @@ impl EventWriter {
             ts_ms: now_ms(),
             session: self.id.clone(),
             pid: std::process::id(),
-            mbx_version: env!("CARGO_PKG_VERSION").to_string(),
+            mbx_version: crate::version::VERSION.to_string(),
             workspace_root: workspace_root.to_path_buf(),
             command: command.to_vec(),
             identity: identity.map(str::to_string),

@@ -12,8 +12,8 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::UNIX_EPOCH;
 
-pub(crate) const ATTACHMENT: &str = "cargo-workspace-state-v2";
-const VERSION: u8 = 2;
+pub(crate) const ATTACHMENT: &str = "cargo-workspace-state-v4";
+const VERSION: u8 = 4;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -25,10 +25,12 @@ struct Bundle {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct WorkspaceState {
+    owner: CacheDigest,
     workspace_root: PathBuf,
     cargo_roots: CargoBuildRoots,
     signature: CacheDigest,
     trees: Vec<RootTree>,
+    owned_out_dirs: Vec<crate::out_dir::Snapshot>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -89,6 +91,25 @@ pub(crate) enum RestoreOutcome {
     SkippedIncompatible,
     SkippedAmbiguous,
     SkippedNonempty,
+    SkippedManagedOverlap,
+}
+
+#[derive(Debug)]
+pub(crate) enum CaptureOutcome {
+    Captured(ExportAdditions),
+    RetainedOwner {
+        additions: ExportAdditions,
+        reasons: Vec<String>,
+    },
+    UnavailableManagedOverlap,
+    UnavailableOwnerProof {
+        reason: String,
+    },
+}
+
+pub(crate) struct RetainOutcome {
+    pub additions: ExportAdditions,
+    pub unavailable_reasons: Vec<String>,
 }
 
 struct OwnedView {
@@ -105,7 +126,20 @@ use capture::resolve_roots;
 pub(crate) use capture::{capture, retain};
 #[path = "workspace_state/inventory.rs"]
 mod inventory;
-pub(crate) use inventory::semantic_inventory;
+pub(crate) use inventory::{referenced_objects, semantic_inventory, validate_receipt_evidence};
+#[path = "workspace_state/lineage.rs"]
+mod lineage;
+#[path = "workspace_state/lineage_capture.rs"]
+mod lineage_capture;
+#[path = "workspace_state/lineage_select.rs"]
+mod lineage_select;
+#[path = "workspace_state/owned_out_dirs.rs"]
+mod owned_out_dirs;
+#[path = "workspace_state/placement.rs"]
+mod placement;
+pub(crate) use lineage::freeze_lineage;
+#[path = "workspace_state/useful.rs"]
+mod useful;
 #[path = "workspace_state/validation.rs"]
 mod validation;
 pub(crate) use validation::validate_semantic_inventory;
@@ -145,3 +179,15 @@ mod nested_tests;
 #[cfg(all(test, unix))]
 #[path = "workspace_state/managed_restore_tests.rs"]
 mod managed_restore_tests;
+
+#[cfg(test)]
+#[path = "workspace_state/out_dir_tests.rs"]
+mod out_dir_tests;
+
+#[cfg(test)]
+#[path = "workspace_state/placement_tests.rs"]
+mod placement_tests;
+
+#[cfg(test)]
+#[path = "workspace_state/out_dir_cas_tests.rs"]
+mod out_dir_cas_tests;

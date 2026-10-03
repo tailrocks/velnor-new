@@ -1,4 +1,5 @@
 use super::managed_tests::managed_fixture;
+use super::tests::capture_fixture as capture;
 use super::*;
 use std::fs;
 

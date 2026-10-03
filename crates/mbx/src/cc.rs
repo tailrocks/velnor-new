@@ -25,8 +25,9 @@ use mbx_cache_cc::{
 };
 use mbx_cache_core::{
     ActionPrediction, AgentRequest, AgentResponse, CacheDigest, CacheDirectory, CacheFileNode,
-    CcMetadata, FileDigestScope, FileIdentity, FileSnapshot, PathMapping, RecordedFileDigest,
-    RemoteActionResult, RestoreStats, canonical_json, normalize_mapped_path,
+    CacheOutcome, CcMetadata, FileDigestScope, FileIdentity, FileSnapshot, PathMapping,
+    ProcessPurpose, RecordedFileDigest, RemoteActionResult, RestoreStats, canonical_json,
+    normalize_mapped_path,
 };
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
@@ -45,12 +46,23 @@ const PREDICTION_ADAPTER: &str = "cc-path-binding-v1";
 /// An `Err` is a bypass: the caller runs the real compiler transparently. Only
 /// a successful compile is ever published, so a compiler error always reaches
 /// the build exactly as it would have without mbx.
-pub fn compile(compiler: &OsStr, arguments: &[OsString], language: CcLanguage) -> Result<ExitCode> {
-    let _timing = crate::phase_timing::start("cc", None);
+pub(crate) fn compile(
+    compiler: &OsStr,
+    arguments: &[OsString],
+    language: CcLanguage,
+    measurement: &mut crate::process_measurement::Invocation,
+) -> Result<ExitCode> {
+    let selection = match crate::dispatch_admission::SelectionAttempt::begin() {
+        Ok(selection) => selection,
+        Err(error) => {
+            session::report_shim_warning(&format!("cc selection admission unavailable: {error:#}"));
+            None
+        }
+    };
     let setup = crate::phase_timing::phase("key");
     let working_dir = std::env::current_dir()?;
     let mappings = path_mappings(&working_dir);
-    let identity = compiler_identity(compiler, language)?;
+    let identity = compiler_identity(compiler, language, measurement)?;
     // Prefix maps enter the final parse so they are keyed like caller flags.
     // Named preprocessor output retains its original path spellings instead.
     let preprocessing = CcInvocation::parse_for(arguments, identity.family)?.is_preprocessing();
@@ -67,6 +79,12 @@ pub fn compile(compiler: &OsStr, arguments: &[OsString], language: CcLanguage) -
     let arguments = portable.applied_to(arguments);
     let arguments = arguments.as_ref();
     let invocation = CcInvocation::parse_for(arguments, identity.family)?;
+    measurement.identify(crate::unit_attribution::package_context(Some(
+        invocation.source(),
+    )));
+    if let Some(selection) = selection {
+        record_selected_cc(selection, compiler, &invocation, &working_dir);
+    }
     // The driver honors one `-MF`, and the shim's own dependency list is the
     // one it needs; the caller's is written by the shim once the files this
     // compilation read are known.
@@ -161,6 +179,7 @@ pub fn compile(compiler: &OsStr, arguments: &[OsString], language: CcLanguage) -
                     cached.restore,
                     &compilation_name(&invocation),
                 );
+                measurement.set_outcome(CacheOutcome::Hit);
                 return Ok(ExitCode::SUCCESS);
             }
             verification = Some(cached);
@@ -202,6 +221,7 @@ pub fn compile(compiler: &OsStr, arguments: &[OsString], language: CcLanguage) -
                 );
                 replay_bytes(&cached.stdout, &cached.stderr)?;
                 record_action_hit(&action, cached.restore, &compilation_name(&invocation));
+                measurement.set_outcome(CacheOutcome::Hit);
                 return Ok(ExitCode::SUCCESS);
             }
             Ok(None) => {}
@@ -255,6 +275,7 @@ pub fn compile(compiler: &OsStr, arguments: &[OsString], language: CcLanguage) -
                                 cached.restore,
                                 &compilation_name(&invocation),
                             );
+                            measurement.set_outcome(CacheOutcome::Hit);
                             return Ok(ExitCode::SUCCESS);
                         }
                         Ok(None) => {}
@@ -308,8 +329,15 @@ pub fn compile(compiler: &OsStr, arguments: &[OsString], language: CcLanguage) -
     // copy of it, which the compiler cannot write over.
     let object = invocation.output_in(&working_dir);
     crate::materialize::clear_linked_outputs(std::iter::once(object.as_path()));
+    measurement.set_outcome(if verification.is_some() {
+        CacheOutcome::Verification
+    } else if lookup.attempted {
+        CacheOutcome::Miss
+    } else {
+        CacheOutcome::Unconsulted
+    });
     let output = crate::phase_timing::measure("compiler", || {
-        crate::supervision::output(&mut command, true)
+        measured_compiler_output(&mut command, measurement)
     })
     .wrap_err_with(|| format!("failed to run {}", Path::new(compiler).display()))?;
     drop(permit);
@@ -388,6 +416,83 @@ pub fn compile(compiler: &OsStr, arguments: &[OsString], language: CcLanguage) -
         }
     }
     Ok(exit_code(output.status))
+}
+
+/// Capture the route actually consumed by this wrapper. Selection evidence
+/// failure is diagnostic; it cannot replace native compiler behavior.
+fn record_selected_cc(
+    selection: crate::dispatch_admission::SelectionAttempt,
+    compiler: &OsStr,
+    invocation: &CcInvocation,
+    working_dir: &Path,
+) {
+    let (shim, environment) = match session::cc_dispatch_observation(compiler) {
+        Ok(observation) => observation,
+        Err(error) => {
+            if let Err(error) = selection.unavailable(&format!(
+                "actual CC dispatch observation unavailable: {error:#}"
+            )) {
+                session::report_shim_warning(&format!(
+                    "cc selection admission was not recorded: {error:#}"
+                ));
+            }
+            return;
+        }
+    };
+    let roots = supplied_sdk_roots(invocation, working_dir);
+    let driver = match resolve_executable(compiler) {
+        Ok(driver) => driver,
+        Err(error) => {
+            if let Err(error) = selection.unavailable(&format!(
+                "actual CC driver could not be observed: {error:#}"
+            )) {
+                session::report_shim_warning(&format!(
+                    "cc selection admission was not recorded: {error:#}"
+                ));
+            }
+            return;
+        }
+    };
+    if let Err(error) = selection.selected(
+        &shim,
+        &driver,
+        environment,
+        crate::unit_attribution::package_context(Some(invocation.source())),
+        roots,
+    ) {
+        session::report_shim_warning(&format!(
+            "cc selection admission was not recorded: {error:#}"
+        ));
+    }
+}
+
+/// Only supplied roots are observed; this grants no SDK qualification.
+fn supplied_sdk_roots(invocation: &CcInvocation, working_dir: &Path) -> Vec<PathBuf> {
+    invocation
+        .sysroot()
+        .map(Path::to_path_buf)
+        .or_else(|| std::env::var_os("SDKROOT").map(PathBuf::from))
+        .filter(|path| !path.as_os_str().is_empty())
+        .map(|path| absolute(&path, working_dir))
+        .into_iter()
+        .collect()
+}
+
+/// Supervision preparation is cache/scheduler overhead, outside child wall.
+fn measured_compiler_output<S: FnMut(mbx_cache_core::MeasurementEvent)>(
+    command: &mut Command,
+    measurement: &mut crate::process_measurement::Invocation<S>,
+) -> std::io::Result<Output> {
+    let mut action = crate::supervision::prepare(command, true);
+    command
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    let child = measurement.process(ProcessPurpose::Work).spawn(command)?;
+    if let Some(action) = &mut action {
+        action.started();
+    }
+    child.wait_with_output()
 }
 
 /// Digest the inputs the compiler reported, build the key, and store the
@@ -953,7 +1058,11 @@ fn rustc_path_mappings(mappings: &[PathMapping]) -> Vec<mbx_cache_rustc::PathMap
 /// The probe output is memoized through the agent, because a build script may
 /// compile hundreds of translation units and each one would otherwise re-run
 /// the compiler just to ask its version.
-fn compiler_identity(compiler: &OsStr, language: CcLanguage) -> Result<CcCompilerIdentity> {
+fn compiler_identity(
+    compiler: &OsStr,
+    language: CcLanguage,
+    measurement: &mut crate::process_measurement::Invocation,
+) -> Result<CcCompilerIdentity> {
     let _phase = crate::phase_timing::phase("key");
     let executable = resolve_executable(compiler)?;
     let is_cl = executable
@@ -961,9 +1070,9 @@ fn compiler_identity(compiler: &OsStr, language: CcLanguage) -> Result<CcCompile
         .and_then(OsStr::to_str)
         .is_some_and(|stem| stem.eq_ignore_ascii_case("cl"));
     let probe = if is_cl {
-        probe_msvc(&executable)?
+        probe_msvc(&executable, measurement)?
     } else {
-        probe_executable(&executable, &["-v"], &executable)?
+        probe_executable(&executable, &["-v"], &executable, measurement)?
     };
     let family = CcCompilerFamily::classify(&probe)?;
     let target = if family.is_msvc() {
@@ -976,7 +1085,7 @@ fn compiler_identity(compiler: &OsStr, language: CcLanguage) -> Result<CcCompile
             .to_string()
     };
     let assembler = if family.uses_external_assembler() {
-        assembler_identity(&executable)
+        assembler_identity(&executable, measurement)
     } else {
         String::new()
     };
@@ -992,7 +1101,10 @@ fn compiler_identity(compiler: &OsStr, language: CcLanguage) -> Result<CcCompile
 /// MSVC prints its detailed `/Bv` identity before complaining that no source
 /// was supplied. That non-zero exit is a property of the query shape, not a
 /// failed identity probe, so accept it only when the expected banner is there.
-fn probe_msvc(executable: &Path) -> Result<String> {
+fn probe_msvc(
+    executable: &Path,
+    measurement: &mut crate::process_measurement::Invocation,
+) -> Result<String> {
     let environment = BTreeMap::new();
     if let Ok(responses) = session::request_agent(&[AgentRequest::FindExecutableIdentity {
         executable: executable.to_path_buf(),
@@ -1002,9 +1114,9 @@ fn probe_msvc(executable: &Path) -> Result<String> {
     {
         return Ok(String::from_utf8_lossy(&text).into_owned());
     }
-    let output = Command::new(executable)
-        .arg("/Bv")
-        .output()
+    let output = measurement
+        .process(ProcessPurpose::Probe)
+        .output(Command::new(executable).arg("/Bv"))
         .map_err(|error| CcBypassReason::CompilerIdentityUnavailable(error.to_string()))?;
     let mut text = String::from_utf8_lossy(&output.stderr).into_owned();
     text.push_str(&String::from_utf8_lossy(&output.stdout));
@@ -1050,11 +1162,19 @@ fn named_assembler(printed: &str) -> Option<PathBuf> {
 /// An assembler that cannot be resolved yields a marker rather than a bypass:
 /// the compile still happens, and the key is simply less specific than it could
 /// have been -- which every machine in that state shares.
-fn assembler_identity(compiler: &Path) -> String {
+fn assembler_identity(
+    compiler: &Path,
+    measurement: &mut crate::process_measurement::Invocation,
+) -> String {
     // A driver that cannot resolve the tool echoes the bare name back, and then
     // searching PATH is exactly what it does itself.
-    let named = probe_executable(compiler, &["-print-prog-name=as"], &compiler.join("as"))
-        .unwrap_or_default();
+    let named = probe_executable(
+        compiler,
+        &["-print-prog-name=as"],
+        &compiler.join("as"),
+        measurement,
+    )
+    .unwrap_or_default();
     let assembler = match named_assembler(&named) {
         Some(assembler) => assembler,
         None => match resolve_executable(OsStr::new("as")) {
@@ -1062,7 +1182,7 @@ fn assembler_identity(compiler: &Path) -> String {
             Err(_) => return "unresolved".into(),
         },
     };
-    let version = probe_executable(&assembler, &["--version"], &assembler)
+    let version = probe_executable(&assembler, &["--version"], &assembler, measurement)
         .ok()
         .and_then(|probe| probe.lines().next().map(ToOwned::to_owned))
         .unwrap_or_default();
@@ -1075,7 +1195,12 @@ fn assembler_identity(compiler: &Path) -> String {
 /// identity by path alone, so two probes of the same binary would otherwise
 /// return each other's output; a caller asking a compiler something other than
 /// its version passes a key that cannot collide with a real path.
-fn probe_executable(executable: &Path, arguments: &[&str], memo: &Path) -> Result<String> {
+fn probe_executable(
+    executable: &Path,
+    arguments: &[&str],
+    memo: &Path,
+    measurement: &mut crate::process_measurement::Invocation,
+) -> Result<String> {
     let key = memo.to_path_buf();
     // No environment variable changes what a C driver prints for these, so the
     // memo needs nothing beyond the key.
@@ -1090,9 +1215,9 @@ fn probe_executable(executable: &Path, arguments: &[&str], memo: &Path) -> Resul
     {
         return Ok(String::from_utf8_lossy(&text).into_owned());
     }
-    let output = Command::new(executable)
-        .args(arguments)
-        .output()
+    let output = measurement
+        .process(ProcessPurpose::Probe)
+        .output(Command::new(executable).args(arguments))
         .map_err(|error| CcBypassReason::CompilerIdentityUnavailable(error.to_string()))?;
     if !output.status.success() {
         return Err(CcBypassReason::CompilerIdentityUnavailable(format!(
@@ -1139,6 +1264,10 @@ fn find_prediction(task: &str, invocation: &CacheDigest) -> Result<Option<CcInpu
     Ok(Some(payload))
 }
 
+fn canonical_prediction_payload(prediction: &CcInputPrediction) -> Result<String> {
+    Ok(String::from_utf8(canonical_json(prediction)?)?)
+}
+
 fn record_prediction(
     task: &str,
     invocation: &CacheDigest,
@@ -1148,7 +1277,7 @@ fn record_prediction(
     remote_claim: Option<&str>,
 ) {
     let _phase = crate::phase_timing::phase("predict");
-    let Ok(payload) = serde_json::to_string(prediction) else {
+    let Ok(payload) = canonical_prediction_payload(prediction) else {
         return;
     };
     // Anyone waiting on this flight -- and any later build of the same
@@ -1256,6 +1385,7 @@ fn restore_result(
     }
     let directory: CacheDirectory =
         read_canonical_blob(&roots[2], &output_root_digest, "output directory")?;
+    directory.validate()?;
     let node = validated_object(directory, invocation)?;
     let destination = invocation.output_in(working_dir);
 
@@ -1440,12 +1570,14 @@ fn publish_result(
     })?;
     let metadata = staged_bytes(staging.path(), "metadata.json", &metadata_bytes)?;
     blobs.push(metadata.clone());
-    let directory_bytes = canonical_json(&CacheDirectory {
+    let directory_value = CacheDirectory {
         directories: Vec::new(),
         files,
         symlinks: Vec::new(),
         version: 1,
-    })?;
+    };
+    directory_value.validate()?;
+    let directory_bytes = canonical_json(&directory_value)?;
     let directory = staged_bytes(staging.path(), "directory.json", &directory_bytes)?;
     blobs.push(directory.clone());
 
