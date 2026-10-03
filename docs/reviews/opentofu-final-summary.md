@@ -1,21 +1,13 @@
 # OpenTofu Phase B final evidence summary (T36)
 
-Identity: producer lane branch `impl/phaseb-postmerge` at
-`a3ab5e3` (this refresh commits on top; tree clean); producer main
-`d369a83`; consumer repo `tailrocks/github-terraform`, main
-`a00bbff` (PR #37 squash-merged). Refresh of the f202133 edition:
-v0.1.0 re-cut, T34 READY, T35 merged, producer main green.
-Required sections per ws7 Q7 (`velnor-ws7-e2e-qual.md:138-145`, pinned
-`619ad6f1...40ace9`) + the T36 ledger row. Every item evidenced; nothing
-invented. Gaps say MISSING or cite the open item explicitly.
+Identity: producer lane branch `impl/phaseb-postmerge` at `a3ab5e3` (this refresh commits on top; tree clean); producer main `d369a83`; consumer repo `tailrocks/github-terraform`, main `a00bbff` (PR #37 squash-merged).
+Refresh of the f202133 edition: v0.1.0 re-cut, T34 READY, T35 merged, producer main green. Required sections per ws7 Q7 (`velnor-ws7-e2e-qual.md:138-145`, pinned `619ad6f1...40ace9`) + the T36 ledger row.
+Every item evidenced; nothing invented. Gaps say MISSING or cite the open item explicitly.
 
 ## 1. Per-T-item table (T01–T36)
 
-Columns: owner, status, paths (git-derived scopes), commit, commands+results,
-reviewer, run/artifact links. Producer branch CI ran zero times on any
-`feat/*` branch (PR/main-only triggers; `gh run list` empty per T24/T28
-reports) — per-commit CI links are therefore honestly "none"; local gates
-are the signal. Fn counts are `#[test]`-fn greps from the ledger.
+Producer branch CI ran zero times on any `feat/*` branch (PR/main-only triggers; `gh run list` empty per T24/T28 reports) — per-commit CI links are therefore honestly "none"; local gates are the signal.
+Fn counts are `#[test]`-fn greps from the ledger.
 
 | ID | Owner | Status | Paths / commit | Commands + results | Reviewer | Run / artifact links |
 |----|-------|--------|----------------|--------------------|----------|----------------------|
@@ -58,36 +50,17 @@ are the signal. Fn counts are `#[test]`-fn greps from the ledger.
 
 ### Non-T producer commits verified in-lane
 
-- `58997d4c1660e3b68dc9f09dd711b3cd85381c04` fixtofu-ci (11 files
-  +297/-14): mise Prepare gains `opentofu@1.13.1` for tofu-spawning
-  suites; nextest 2649/2649 + 1. PASS 5/5 (verify-fixtofu-ci) +
-  coordinator. Fix content present in-lane and in 95c1d6f
-  (`matrix_tools.rs`/`matrix_step.rs` zero-diff vs lane head;
-  `opentofu@1.13.1` Prepare line in both ci.ymls; surrounding files
-  evolved further via merge2/alint-fix).
-- `141693be57c54b965e80f61e217e1e252c404434` fixtofu-alint (14 files
-  +106/-175): golden capture `cp -RP` + link-pinned hashes; nextest
-  2650/2650 + 1; alint 5 errors → 0. PASS 5/5
-  (verify-fixtofu-alint) + coordinator. Fix content present in-lane
-  and in 95c1d6f (capture script zero-diff vs lane head; `link`
-  lines in 95c1d6f tree.sha256).
-- `6435b71` merge2 (PR #11 agent docs into feat): verify-merge2 FAIL
-  (F4 alint red on recaptured previews; F5 message alint claim
-  inaccurate; F1/F2/F3 green). Superseded: equivalent content +
-  the alint fix are in 95c1d6f; the FAIL is recorded, not hidden.
-- `c2857db` T29 close (T08–T29 ledger complete) and `7a0286e` main-merge
-  are recorded under T29/T30; `da4f2ac` (PR #11) and `aaae477` (PR #9)
-  are main-line parents, not Phase-B deliverables.
-- `89c69f629858cf11be8cbe903b323a18631197e0` owner direct-push
-  (orchestrator excluded-manifest filter, 2 files, Rust-only) +
-  v0.1.0 re-cut from it; preserved, never reverted. Reddened main
-  (fmt + clippy `too_many_arguments`, run 37008361711).
-- `d369a83d619a4c2e89b4c66d0488b5380d633bbb` coordinator direct-push
-  fix-forward on main (2 files +13/-7: `&PlannedWorkspace`
-  bundling 8→7 args + rustfmt expansion; zero behavior change):
-  FMT_OK, clippy `-D warnings` clean, nextest 1253/1253
-  (orchestrator+cli incl. `size_limits_hold`), main CI 16/16 green
-  (run 37009657819).
+- `58997d4c1660e3b68dc9f09dd711b3cd85381c04` fixtofu-ci (11 files +297/-14): mise Prepare gains `opentofu@1.13.1` for tofu-spawning suites; nextest 2649/2649 + 1. PASS 5/5 (verify-fixtofu-ci) + coordinator.
+  Fix content present in-lane and in 95c1d6f (`matrix_tools.rs`/`matrix_step.rs` zero-diff vs lane head; `opentofu@1.13.1` Prepare line in both ci.ymls; surrounding files evolved further via merge2/alint-fix).
+- `141693be57c54b965e80f61e217e1e252c404434` fixtofu-alint (14 files +106/-175): golden capture `cp -RP` + link-pinned hashes; nextest 2650/2650 + 1; alint 5 errors → 0. PASS 5/5 (verify-fixtofu-alint) + coordinator.
+  Fix content present in-lane and in 95c1d6f (capture script zero-diff vs lane head; `link` lines in 95c1d6f tree.sha256).
+- `6435b71` merge2 (PR #11 agent docs into feat): verify-merge2 FAIL (F4 alint red on recaptured previews; F5 message alint claim inaccurate; F1/F2/F3 green).
+  Superseded: equivalent content + the alint fix are in 95c1d6f; the FAIL is recorded, not hidden.
+- `c2857db` T29 close (T08–T29 ledger complete) and `7a0286e` main-merge are recorded under T29/T30; `da4f2ac` (PR #11) and `aaae477` (PR #9) are main-line parents, not Phase-B deliverables.
+- `89c69f629858cf11be8cbe903b323a18631197e0` owner direct-push (orchestrator excluded-manifest filter, 2 files, Rust-only) + v0.1.0 re-cut from it; preserved, never reverted.
+  Reddened main (fmt + clippy `too_many_arguments`, run 37008361711).
+- `d369a83d619a4c2e89b4c66d0488b5380d633bbb` coordinator direct-push fix-forward on main (2 files +13/-7: `&PlannedWorkspace` bundling 8→7 args + rustfmt expansion; zero behavior change):
+  FMT_OK, clippy `-D warnings` clean, nextest 1253/1253 (orchestrator+cli incl. `size_limits_hold`), main CI 16/16 green (run 37009657819).
 
 ## 2. Source SHAs, artifact, toolchain, local gates
 
