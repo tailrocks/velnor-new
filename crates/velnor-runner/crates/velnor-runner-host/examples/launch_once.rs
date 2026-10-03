@@ -1,10 +1,10 @@
-//! Acquire one scale-set job, mint JIT, and start the official worker.
+//! Acquire scale-set jobs up to capacity and start one official worker each.
 //! The PAT comes from `gh auth token` and is not printed. JIT is not printed.
 
 use std::path::PathBuf;
 use std::process::{Command, ExitCode};
 
-use velnor_runner_host::{Journal, connect_unix, launch_once};
+use velnor_runner_host::{Journal, Started, connect_unix, launch_once};
 use zeroize::Zeroize;
 
 #[tokio::main]
@@ -43,27 +43,26 @@ async fn run(pat: &str) -> ExitCode {
     };
     match launch_once(pat, "tailrocks", "velnor-new", &docker, &journal).await {
         Ok(report) => {
-            let runner = report
-                .started
-                .as_ref()
-                .map_or("", |started| started.runner_id.as_str());
-            let dind = report
-                .started
-                .as_ref()
-                .map_or("", |started| started.dind_id.as_str());
-            println!(
-                "set_id={} started={} runner_id={} dind_id={}",
-                report.set_id,
-                report.started.is_some(),
-                runner,
-                dind
-            );
+            print_workers(report.set_id, &report.workers);
             ExitCode::SUCCESS
         }
         Err(err) => {
             eprintln!("launch_once: {err}");
             ExitCode::from(1)
         }
+    }
+}
+
+fn print_workers(set_id: i64, workers: &[Started]) {
+    if workers.is_empty() {
+        println!("set_id={set_id} started=false runner_id= dind_id=");
+        return;
+    }
+    for worker in workers {
+        println!(
+            "set_id={set_id} started=true runner_id={} dind_id={}",
+            worker.runner_id, worker.dind_id
+        );
     }
 }
 

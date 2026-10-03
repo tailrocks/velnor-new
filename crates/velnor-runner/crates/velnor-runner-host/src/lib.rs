@@ -65,6 +65,8 @@ mod journal_tests;
 #[cfg(test)]
 mod keychain_tests;
 #[cfg(test)]
+mod launch_capacity_tests;
+#[cfg(test)]
 mod launch_harness;
 #[cfg(test)]
 mod launch_scale_tests;

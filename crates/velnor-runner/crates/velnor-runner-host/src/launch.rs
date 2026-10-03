@@ -1,4 +1,4 @@
-//! Acquire one job, mint JIT, and start the paired worker.
+//! Acquire jobs up to capacity, mint JIT, and start one paired worker each.
 //!
 //! The journal row is committed before acquire, JIT, and Docker. JIT bytes are
 //! passed to the starter and are not written to the journal.
@@ -16,17 +16,22 @@ use velnor_runner_github::{
 use crate::ensure_product_scale_set;
 use crate::error::HostError;
 use crate::journal::Journal;
-use crate::listen::{
-    Link, OWNER_NAME, Secret, admin_link, annotate, map_listen, point_at_queue, poll_path,
-    restore_base,
-};
+use crate::listen::{Link, OWNER_NAME, Secret, admin_link, annotate, map_listen};
 use crate::scale_set::EnsureError;
 use crate::worker::{Started, start_pair};
 
+mod capacity;
 mod slot;
 mod steps;
 mod trace;
+mod turn;
 
+pub(crate) use capacity::job_capacity;
+
+#[cfg(test)]
+pub(crate) use capacity::{Admit, Seat, admit, needs_running, parse_job_capacity, poll_limit};
+#[cfg(test)]
+pub(crate) use slot::occupies;
 #[cfg(test)]
 pub(crate) use steps::{Idle, idle};
 
@@ -35,11 +40,13 @@ pub(crate) use steps::{Idle, idle};
 pub struct LaunchReport {
     /// Scale-set id.
     pub set_id: i64,
-    /// Worker ids when a pair is running. Absent when the queue had no job.
+    /// First worker started in this call. Absent when the queue had no job.
     pub started: Option<Started>,
+    /// Every worker started in this call, in start order. No JIT and no token.
+    pub workers: Vec<Started>,
 }
 
-/// Open one session, start at most one worker, then delete that session.
+/// Open one session, start the admitted workers, then delete that session.
 ///
 /// # Errors
 ///
@@ -59,7 +66,8 @@ pub async fn launch_once(
     let admin = Secret::new(link.token());
     let session = create_session(link.transport(), set.id, OWNER_NAME, admin.expose())
         .map_err(|err| annotate(err, "create-session"))?;
-    let driven = poll_and_drive(&mut link, set.id, &session, admin.expose(), journal, docker).await;
+    let driven =
+        turn::poll_and_drive(&mut link, set.id, &session, admin.expose(), journal, docker).await;
     let closed = delete_session(
         link.transport(),
         set.id,
@@ -150,72 +158,20 @@ where
 
 fn report(
     set_id: i64,
-    driven: Result<Option<Started>, EnsureError>,
+    driven: Result<Vec<Started>, EnsureError>,
     closed: Result<(), EnsureError>,
 ) -> Result<LaunchReport, EnsureError> {
     match (driven, closed) {
-        (Ok(started), Ok(())) => Ok(LaunchReport { set_id, started }),
+        (Ok(workers), Ok(())) => {
+            let started = workers.first().cloned();
+            Ok(LaunchReport {
+                set_id,
+                started,
+                workers,
+            })
+        }
         (_, Err(error)) | (Err(error), Ok(())) => Err(error),
     }
-}
-
-async fn poll_and_drive(
-    link: &mut Link,
-    set_id: i64,
-    session: &QueueSession,
-    admin_token: &str,
-    journal: &Journal,
-    docker: &bollard::Docker,
-) -> Result<Option<Started>, EnsureError> {
-    trace::session(session);
-    let started = scale_session(link, set_id, session, admin_token, journal, docker).await?;
-    let primed = started.is_some();
-    for _ in 0..poll_bound() {
-        let (saved, path) = point_at_queue(link, &session.message_queue_url)?;
-        let queue = saved.as_ref().map(|_| link.base().to_owned());
-        let polled = poll_path(link, session, &path);
-        restore_base(link, saved)?;
-        let polled = polled?;
-        trace::batch(&polled);
-        match steps::idle(&polled) {
-            // A 202 is the long-poll timeout. A job can be queued while this
-            // session is still open, so keep the session and poll again.
-            steps::Idle::Empty => {}
-            steps::Idle::Blocked => {
-                return Err(EnsureError::Unexpected {
-                    status: 0,
-                    step: "queue",
-                });
-            }
-            steps::Idle::Ack => ack_ready(link, session, path, queue, &polled)?,
-            steps::Idle::Scale if started.is_some() => {
-                ack_ready(link, session, path, queue, &polled)?;
-                return Ok(started);
-            }
-            steps::Idle::Launch if started.is_some() => return Ok(started),
-            steps::Idle::Launch | steps::Idle::Scale => {
-                let launched = drive_ready(
-                    link,
-                    Ready {
-                        set_id,
-                        session,
-                        admin_token,
-                        path,
-                        queue,
-                        polled: &polled,
-                    },
-                    journal,
-                    docker,
-                )
-                .await?;
-                return Ok(started.or(launched));
-            }
-        }
-        if primed {
-            return Ok(started);
-        }
-    }
-    Ok(started)
 }
 
 async fn scale_session(
@@ -267,16 +223,6 @@ fn runner_name(session_id: &str) -> String {
     name
 }
 
-fn poll_bound() -> usize {
-    let Ok(text) = std::env::var("VELNOR_LAUNCH_POLLS") else {
-        return 8;
-    };
-    let Ok(bound) = text.parse::<usize>() else {
-        return 8;
-    };
-    bound.clamp(1, 8)
-}
-
 struct Ready<'a> {
     set_id: i64,
     session: &'a QueueSession,
@@ -291,8 +237,9 @@ async fn drive_ready(
     ready: Ready<'_>,
     journal: &Journal,
     docker: &bollard::Docker,
+    capacity: u32,
 ) -> Result<Option<Started>, EnsureError> {
-    if slot::busy(journal, docker).await? {
+    if slot::busy(journal, docker, capacity).await? {
         return held(link, ready);
     }
     let ctx = Drive {
