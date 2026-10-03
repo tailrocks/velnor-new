@@ -129,3 +129,11 @@ The Gradle wrapper authority records execution engine `9.5.1` separately from bo
 PostgreSQL fixture authority is `postgres:18.6-trixie@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280`. Its exact registry manifest identifies the source image; database startup, tests, trust and hosted cache behavior are not qualified by this metadata.
 
 Mise descriptors for three hosts are migrating to the independently identified official artifacts recorded above. This is official tool-artifact qualification; it does not establish a newly published Velnor runtime identity, consumer rollout or hosted performance completion.
+
+## Committed source and pending qualification checkpoint
+
+At commit `577694a`, the authoritative inventory has **13 tool rows: 12 `PinnedTool` entries plus Mise**. Python `3.14.8`, Uv `0.12.22` and REUSE `6.2.0` are committed; Mise remains `2026.9.18`, MBX `1.21.0`, Alint action `v0.16.1` and MBX action `v1.5.0`. The preceding 26/28-row integration snapshots describe working qualification evidence, not the catalog committed at that SHA.
+
+The inspected working inventory has 29 rows (28 `PinnedTool` entries plus Mise), with Community Java `25.0.4.1` and Boltffi `0.30.1` still stale. Bun `1.4.2`, Node `24.21.0`, desktop Rust `1.99.0` and cargo-semver-checks `0.50.0` source/qualification changes remain prospective relative to `577694a`; do not treat them as committed adoption before the separately verified pin unit lands. Local proof retains nine format violations, two unchanged visual failures and five Node dependency vulnerabilities; Rust's Xcode 26.6 / SDK 26.5 hosted gate remains open.
+
+Latest GraalVM Community `25.0.4.1.1` bounded local wrapper qualification passed independent review and parent approval; exact registry/pin adoption is pending. [Official Community release source](https://api.github.com/repos/graalvm/graalvm-ce-builds/releases?per_page=10) remains distinct from the historical Oracle provider. Gradle `push=false` is a read-only cache configuration, not proof of filesystem immutability; observed raw log outcomes retain a structured argv/exit receipt gap. Latest metadata, local compatibility, committed source and hosted performance are separate qualification states.
