@@ -9,8 +9,8 @@ use std::future::Future;
 use zeroize::Zeroize;
 
 use velnor_runner_github::{
-    Exchange, Poll, QueueSession, SessionRequest, Transport, TransportFail, create_session,
-    delete_session,
+    Exchange, InnerKind, Poll, QueueSession, SessionRequest, Transport, TransportFail,
+    create_session, delete_session,
 };
 
 use crate::ensure_product_scale_set;
@@ -159,12 +159,13 @@ async fn poll_and_drive(
     journal: &Journal,
     docker: &bollard::Docker,
 ) -> Result<Option<Started>, EnsureError> {
-    for _ in 0..8 {
+    for _ in 0..poll_bound() {
         let (saved, path) = point_at_queue(link, &session.message_queue_url)?;
         let queue = saved.as_ref().map(|_| link.base().to_owned());
         let polled = poll_path(link, session, &path);
         restore_base(link, saved)?;
         let polled = polled?;
+        trace_batch(&polled);
         match steps::idle(&polled) {
             // A 202 is the long-poll timeout. A job can be queued while this
             // session is still open, so keep the session and poll again.
@@ -195,6 +196,58 @@ async fn poll_and_drive(
         }
     }
     Ok(None)
+}
+
+fn poll_bound() -> usize {
+    let Ok(text) = std::env::var("VELNOR_LAUNCH_POLLS") else {
+        return 8;
+    };
+    let Ok(bound) = text.parse::<usize>() else {
+        return 8;
+    };
+    bound.clamp(1, 8)
+}
+
+fn trace_batch(polled: &Poll) {
+    if std::env::var_os("VELNOR_HTTPS_TRACE").is_none() {
+        return;
+    }
+    let Poll::Batch(batch) = polled else {
+        eprintln!("batch empty");
+        return;
+    };
+    let kinds = batch
+        .jobs
+        .iter()
+        .map(|job| kind_name(&job.kind))
+        .collect::<Vec<_>>()
+        .join(",");
+    let ids = batch
+        .jobs
+        .iter()
+        .filter_map(|job| job.request_id)
+        .map(|id| id.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let available = batch
+        .statistics
+        .as_ref()
+        .map_or(-1, |stats| stats.total_available_jobs);
+    eprintln!(
+        "batch id={} jobs={} kinds={kinds} request_ids={ids} stats_available={available}",
+        batch.message_id,
+        batch.jobs.len()
+    );
+}
+
+fn kind_name(kind: &InnerKind) -> String {
+    match kind {
+        InnerKind::Available => "JobAvailable".to_owned(),
+        InnerKind::Assigned => "JobAssigned".to_owned(),
+        InnerKind::Started => "JobStarted".to_owned(),
+        InnerKind::Completed => "JobCompleted".to_owned(),
+        InnerKind::Unsupported(name) => format!("other:{name}"),
+    }
 }
 
 struct Ready<'a> {
