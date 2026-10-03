@@ -124,8 +124,18 @@ while [ "$i" -lt "${#args[@]}" ]; do
           P) absolute=1 ;;
           j | J | Z | v | h | m | o | k | O | a) ;;
           f | C)
+            # GNU old style: `tar cfz archive` keeps `z` as a flag and takes
+            # the archive from the next word. The rest of the cluster is an
+            # attached argument only when it is not more option letters.
             rest="${cluster:$((k + 1))}"
+            attached=0
             if [ -n "$rest" ]; then
+              case "${rest:0:1}" in
+                c | x | t | z | P | j | J | Z | v | h | m | o | k | O | a | f | C) ;;
+                *) attached=1 ;;
+              esac
+            fi
+            if [ "$attached" -eq 1 ]; then
               value="$rest"
             else
               need
@@ -136,7 +146,9 @@ while [ "$i" -lt "${#args[@]}" ]; do
             else
               chdir="$value"
             fi
-            break
+            if [ "$attached" -eq 1 ]; then
+              break
+            fi
             ;;
           *)
             die "unsupported flag -$flag"

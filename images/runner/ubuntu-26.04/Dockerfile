@@ -96,6 +96,11 @@ RUN chmod 0755 /usr/local/bin/velnor-runner-entrypoint /usr/local/bin/velnor-tar
     && mkdir -p /tmp/tar-old \
     && tar xz -C /tmp/tar-old -f /tmp/tar-probe.tgz \
     && test "$(cat /tmp/tar-old/dir/file)" = ok \
+    && echo cfz-ok > /tmp/tar-src/cfz.txt \
+    && tar cfz /tmp/cfz.tgz -C /tmp/tar-src cfz.txt \
+    && mkdir -p /tmp/cfz-out \
+    && tar xfz /tmp/cfz.tgz -C /tmp/cfz-out \
+    && test "$(cat /tmp/cfz-out/cfz.txt)" = cfz-ok \
     && tar --zstd --version \
     && echo cache-ok > /tmp/tar-src/g4-cache.txt \
     && printf '%s\n' g4-cache.txt > /tmp/tar-manifest \
@@ -139,7 +144,7 @@ RUN chmod 0755 /usr/local/bin/velnor-runner-entrypoint /usr/local/bin/velnor-tar
     && rm -rf /tmp/p-home/runner/.cache /tmp/p-home/runner/_work/repo/repo/.cache \
     && tar -xf /tmp/p.tzst -P -C /tmp/p-home/runner/_work/repo/repo --use-compress-program unzstd \
     && test "$(cat /tmp/p-home/runner/.cache/mbx/marker)" = mbx-ok \
-    && rm -rf /tmp/tar-src /tmp/tar-out /tmp/tar-old /tmp/tar-probe.tgz /tmp/tar-manifest /tmp/cache.tgz /tmp/cache.tzst /tmp/tar-cache-out /tmp/tar-zstd-out /tmp/p-home /tmp/p-manifest /tmp/p-abs.tar /tmp/p.tzst /tmp/abs-marker /tmp/abs.tar /tmp/abs-out
+    && rm -rf /tmp/tar-src /tmp/tar-out /tmp/tar-old /tmp/tar-probe.tgz /tmp/tar-manifest /tmp/cache.tgz /tmp/cache.tzst /tmp/tar-cache-out /tmp/tar-zstd-out /tmp/p-home /tmp/p-manifest /tmp/p-abs.tar /tmp/p.tzst /tmp/abs-marker /tmp/abs.tar /tmp/abs-out /tmp/cfz.tgz /tmp/cfz-out
 
 # Job steps call `node` on PATH. Action JavaScript uses the runner's own runtime.
 RUN curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL -o /tmp/node.tar.gz \
