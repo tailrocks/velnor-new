@@ -172,9 +172,10 @@ impl Turn<'_> {
                     self.capacity,
                 )
                 .await?;
-                if let Some(worker) = launched {
-                    workers.push(worker);
-                }
+                let Some(worker) = launched else {
+                    return Ok(false);
+                };
+                workers.push(worker);
                 Ok(stop)
             }
         }

@@ -132,3 +132,49 @@ async fn finished_scale_row_does_not_block_the_next_message() -> Result<(), Stri
     assert_eq!(rows.len(), 2);
     absent(&scratch.file())
 }
+
+#[tokio::test]
+async fn redelivered_scale_row_does_not_count_as_a_worker() -> Result<(), String> {
+    let (scratch, journal) = open("scale-redeliver").await?;
+    let mut first = Script {
+        calls: Vec::new(),
+        mode: Mode::Ok,
+    };
+    let started = drive_offer(
+        &mut first,
+        &ctx(),
+        &assigned_wait(7, 1),
+        &journal,
+        |_name, _jit| async {
+            Ok(Started {
+                dind_id: "dind-1".to_owned(),
+                runner_id: "runner-1".to_owned(),
+            })
+        },
+    )
+    .await
+    .map_err(|err| err.to_string())?;
+    assert_eq!(
+        started.map(|item| item.runner_id).as_deref(),
+        Some("runner-1")
+    );
+    let mut second = Script {
+        calls: Vec::new(),
+        mode: Mode::Ok,
+    };
+    let again = drive_offer(
+        &mut second,
+        &ctx(),
+        &assigned_wait(7, 1),
+        &journal,
+        |_name, _jit| async { Err(HostError::Docker) },
+    )
+    .await
+    .map_err(|err| err.to_string())?;
+    assert_eq!(again, None);
+    assert_eq!(second.calls, ["ack"]);
+    let rows = journal.rows().await.map_err(|err| err.to_string())?;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].state, IntentState::Done);
+    absent(&scratch.file())
+}

@@ -98,8 +98,8 @@ where
     lane.on_admin()?;
     let subject = format!("m{}r{request_id}", batch.message_id);
     let id = journal.begin(KIND, &subject).await.map_err(map_journal)?;
-    if let Some(runner_id) = docker_of(journal, id).await? {
-        return ack_bound(lane, ctx, batch, journal, id, runner_id).await;
+    if docker_of(journal, id).await?.is_some() {
+        return ack_bound(lane, ctx, batch, journal, id).await;
     }
     match taken(lane, ctx, request_id) {
         Ok(AcquireOutcome::Acquired(ids)) if ids.is_empty() => reject_empty(journal, id).await,
@@ -205,8 +205,8 @@ where
         return finish_live(lane, ctx, journal, live, batch).await;
     }
     let id = journal.begin(KIND, subject).await.map_err(map_journal)?;
-    if let Some(runner_id) = docker_of(journal, id).await? {
-        return finish_live(lane, ctx, journal, Live { id, runner_id }, batch).await;
+    if docker_of(journal, id).await?.is_some() {
+        return finish_live(lane, ctx, journal, Live { id }, batch).await;
     }
     mint(lane, ctx, batch, journal, id, name, start).await
 }
@@ -255,17 +255,16 @@ where
 
 struct Live {
     id: i64,
-    runner_id: String,
 }
 
 async fn live_runner(journal: &Journal) -> Result<Option<Live>, EnsureError> {
     let rows = journal.rows().await.map_err(map_journal)?;
     Ok(rows.into_iter().find_map(|row| {
-        if row.kind == KIND && matches!(row.state, IntentState::Pending | IntentState::Uncertain) {
-            row.docker_id.map(|runner_id| Live {
-                id: row.id,
-                runner_id,
-            })
+        if row.kind == KIND
+            && matches!(row.state, IntentState::Pending | IntentState::Uncertain)
+            && row.docker_id.is_some()
+        {
+            Some(Live { id: row.id })
         } else {
             None
         }
@@ -288,10 +287,9 @@ where
         return hold(journal, live.id, error).await;
     }
     mark_done(journal, live.id).await?;
-    Ok(Some(Started {
-        dind_id: String::new(),
-        runner_id: live.runner_id,
-    }))
+    // Already recorded. Counting it fills `started` and the session stops
+    // before a later JobAvailable. A live container still occupies its slot.
+    Ok(None)
 }
 
 pub(super) fn acknowledge<T>(
@@ -330,7 +328,6 @@ async fn ack_bound<T>(
     batch: &velnor_runner_github::ParsedBatch,
     journal: &Journal,
     id: i64,
-    runner_id: String,
 ) -> Result<Option<Started>, EnsureError>
 where
     T: velnor_runner_github::Transport + Lane,
@@ -339,10 +336,7 @@ where
         return hold(journal, id, error).await;
     }
     mark_done(journal, id).await?;
-    Ok(Some(Started {
-        dind_id: String::new(),
-        runner_id,
-    }))
+    Ok(None)
 }
 
 async fn hold(
