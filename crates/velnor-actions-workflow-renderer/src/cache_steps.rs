@@ -130,7 +130,7 @@ fn check_job_mbx(id: &str, job: &Job, driver: CompileDriver) -> Result<(), Rende
 }
 
 /// True for `jdx/mr-boxington-action` steps.
-fn is_mbx_action(step: &Step) -> bool {
+pub(crate) fn is_mbx_action(step: &Step) -> bool {
     matches!(&step.kind, velnor_actions_contract::StepKind::Action { uses, .. } if uses.starts_with(&format!("{MBX_ACTION_NAME}@")))
 }
 
@@ -143,6 +143,10 @@ fn uses_mbx_tool(step: &Step) -> bool {
 pub const MBX_CACHE_MODE_ENV: &str = "ACTIONS_CACHE_MODE";
 /// Display name of the MBX objects restore step.
 pub const MBX_RESTORE_NAME: &str = "Restore MBX objects";
+/// MBX automatic collection must stay enabled so low-disk builds can recover.
+pub(crate) const MBX_GC_AUTO_ENV: &str = "MBX_GC_AUTO";
+/// MBX 1.21.1+ honors this value and protects active build consumers.
+pub(crate) const MBX_GC_AUTO_VALUE: &str = "1";
 
 /// Objects-mode MBX step; cargo profiles must never emit or install MBX.
 ///
@@ -157,6 +161,8 @@ pub const MBX_RESTORE_NAME: &str = "Restore MBX objects";
 /// `read` elsewhere, restore always) instead of relying on the
 /// action's internal event check, so a future action release can
 /// never widen PR runs into writers.
+/// The cache generation follows the exact MBX release, so upgrading its
+/// storage or collection behavior starts with an isolated cold namespace.
 /// # Errors
 pub fn mbx_objects_step(
     uses: &str,
@@ -178,6 +184,10 @@ pub fn mbx_objects_step(
     let with = BTreeMap::from([
         ("github-cache-mode".to_owned(), "objects".to_owned()),
         ("version".to_owned(), mbx_version.to_owned()),
+        (
+            "cache-generation".to_owned(),
+            format!("velnor-mbx-{mbx_version}"),
+        ),
     ]);
     let env = BTreeMap::from([(
         MBX_CACHE_MODE_ENV.to_owned(),

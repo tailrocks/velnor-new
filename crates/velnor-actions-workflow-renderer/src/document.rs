@@ -2,12 +2,7 @@
 //!
 //! Fixed key order: name, on, permissions, concurrency, jobs.
 
-use std::collections::BTreeMap;
-
-use velnor_actions_contract::{
-    Job, Permissions, Step, StepKind, Trigger, WorkflowIr,
-    workflow::{ir::DispatchInput, permissions::PermissionLevel},
-};
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
     RenderError, commands,
@@ -16,6 +11,10 @@ use crate::{
     steps::{self, INTERNAL_OP_ENV, REQUEST_FILE_ENV},
     yaml::Yaml,
 };
+use velnor_actions_contract::{
+    Job, Permissions, Step, StepKind, Trigger, WorkflowIr,
+    workflow::{ir::DispatchInput, permissions::PermissionLevel},
+};
 
 /// Build the workflow document: name, on, permissions, concurrency, jobs.
 pub(crate) fn workflow_to_yaml(
@@ -23,12 +22,16 @@ pub(crate) fn workflow_to_yaml(
     jobs: &BTreeMap<String, Job>,
     ctx: &RenderContext,
     shared: &BTreeMap<String, String>,
+    mbx_gc_jobs: &BTreeSet<String>,
 ) -> Result<Yaml, RenderError> {
     let needs_env = needs_channel_envs(jobs)?;
     let mut rendered_jobs = Vec::with_capacity(jobs.len());
     for (id, job) in jobs {
         let call = shared.get(id).map(String::as_str);
-        rendered_jobs.push((id.clone(), job_to_yaml(id, job, ctx, &needs_env, call)?));
+        rendered_jobs.push((
+            id.clone(),
+            job_to_yaml(id, job, ctx, &needs_env, call, mbx_gc_jobs.contains(id))?,
+        ));
     }
     Ok(Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(ir.name.clone())),
@@ -180,6 +183,7 @@ fn job_to_yaml(
     ctx: &RenderContext,
     needs_envs: &[(String, String)],
     shared: Option<&str>,
+    mbx_gc_auto: bool,
 ) -> Result<Yaml, RenderError> {
     steps::scan_for_private_subcommands(&job.display_name)?;
     let mut entries = vec![
@@ -193,6 +197,15 @@ fn job_to_yaml(
             Yaml::Int(i64::from(job.timeout_minutes.minutes())),
         ),
     ];
+    if mbx_gc_auto {
+        entries.push((
+            "env".to_owned(),
+            Yaml::Map(vec![(
+                crate::cache_steps::MBX_GC_AUTO_ENV.to_owned(),
+                Yaml::str(crate::cache_steps::MBX_GC_AUTO_VALUE.to_owned()),
+            )]),
+        ));
+    }
     if let Some(environment) = &job.environment {
         entries.push(("environment".to_owned(), Yaml::str(environment.clone())));
     }
