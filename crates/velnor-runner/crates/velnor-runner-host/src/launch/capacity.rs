@@ -48,6 +48,8 @@ pub(crate) struct Seat {
     pub(crate) started: u32,
     /// Running launch containers. Unused when [`needs_running`] is false.
     pub(crate) running: u32,
+    /// `statistics.totalAssignedJobs` for this poll. Zero when the poll has none.
+    pub(crate) assigned: u32,
     /// Classified poll.
     pub(crate) idle: Idle,
 }
@@ -116,12 +118,19 @@ const fn above_scale(seat: Seat) -> Admit {
     if seat.started >= seat.target {
         return Admit::Ack { stop: true };
     }
-    if seat.running < seat.capacity {
-        return Admit::Start {
-            stop: seat.started.saturating_add(1) >= seat.target,
-        };
+    if scale_covered(seat) || seat.running >= seat.capacity {
+        return Admit::Ack { stop: false };
     }
-    Admit::Ack { stop: false }
+    Admit::Start {
+        stop: seat.started.saturating_add(1) >= seat.target,
+    }
+}
+
+const fn scale_covered(seat: Seat) -> bool {
+    // An exited start still increments `started`. Only a running container
+    // covers `totalAssignedJobs`. Otherwise the next queued job is acknowledged
+    // and never minted while this session stays under capacity.
+    seat.running >= seat.assigned
 }
 
 const fn admit_empty(seat: Seat) -> Admit {
@@ -145,12 +154,13 @@ const fn admit_launch(seat: Seat) -> Admit {
 }
 
 const fn admit_scale(seat: Seat) -> Admit {
-    if seat.started < seat.capacity && seat.running < seat.capacity {
+    if !scale_covered(seat) && seat.started < seat.capacity && seat.running < seat.capacity {
         return Admit::Start {
             stop: seat.started.saturating_add(1) >= seat.capacity,
         };
     }
     // Capacity 1 leaves. A larger capacity leaves only after enough starts.
+    // A population already covered by this session is acknowledged, not minted again.
     Admit::Ack {
         stop: seat.capacity == 1 || seat.started >= seat.capacity,
     }
