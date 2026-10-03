@@ -36,13 +36,42 @@ fn hosted_save_is_one_bundle_outside_the_store() -> Result<(), RenderError> {
     let restore = text
         .find("name: Restore MBX objects")
         .expect("restore step");
+    let bundle_key = text
+        .find("name: Prepare MBX bundle key")
+        .expect("bundle key");
+    let bundle = text
+        .find("name: Restore MBX single bundle")
+        .expect("bundle restore");
+    let import = text
+        .find("name: Import MBX single bundle")
+        .expect("bundle import");
     let export = text
         .find("name: Export MBX single bundle")
         .expect("export step");
     let save = text
         .find("name: Save MBX single bundle")
         .expect("save step");
-    assert!(restore < export && export < save, "{text}");
+    assert!(
+        restore < bundle_key
+            && bundle_key < bundle
+            && bundle < import
+            && import < export
+            && export < save,
+        "{text}"
+    );
+    let restored = &text[bundle..import];
+    assert!(restored.contains("actions/cache/restore@"), "{restored}");
+    assert!(
+        restored.contains("path: ${{ runner.temp }}/mbx-single-bundle"),
+        "{restored}"
+    );
+    assert!(
+        restored.contains("restore-keys: ${{ steps.mbx-bundle-key.outputs.prefix }}"),
+        "{restored}"
+    );
+    let imported = &text[import..export];
+    assert!(imported.contains("mbx cache import"), "{imported}");
+    assert!(imported.contains("no mbx bundle matched"), "{imported}");
     let action = &text[restore..export];
     assert!(action.contains("id: mbx"), "{action}");
     assert!(action.contains("ACTIONS_CACHE_MODE: read"), "{action}");
