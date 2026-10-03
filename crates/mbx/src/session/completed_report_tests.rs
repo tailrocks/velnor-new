@@ -13,6 +13,15 @@ fn outcome() -> WorkloadResult {
 }
 
 fn directory() -> (tempfile::TempDir, PathBuf) {
+    #[cfg(unix)]
+    let temporary = {
+        use std::os::unix::fs::PermissionsExt;
+        tempfile::Builder::new()
+            .permissions(std::fs::Permissions::from_mode(0o700))
+            .tempdir()
+            .unwrap()
+    };
+    #[cfg(not(unix))]
     let temporary = tempfile::tempdir().unwrap();
     let canonical = temporary.path().canonicalize().unwrap();
     (temporary, canonical)
