@@ -189,10 +189,7 @@ async fn runner_created_does_not_start() -> Result<(), HostError> {
     let engine = Fake::new();
     let partial = drive(&engine, "worker_a", b"jit", PairStop::RunnerCreated).await?;
     assert!(partial.dind_id.is_some() && partial.runner_id.is_some());
-    assert_eq!(
-        engine.events(),
-        ["volumes", "create", "start", "create"]
-    );
+    assert_eq!(engine.events(), ["volumes", "create", "start", "create"]);
     Ok(())
 }
 
@@ -224,7 +221,10 @@ async fn second_create_failure_removes_only_the_owned_dind() -> Result<(), HostE
     assert_eq!(engine.removed(), ["000000000001".to_owned()]);
     assert_eq!(engine.events(), ["volumes", "create", "start", "remove"]);
     let names = engine.names.lock().map_err(|_| HostError::Docker)?;
-    assert_eq!(names.get("foreign").map(String::as_str), Some("bbbbbbbbbbbb"));
+    assert_eq!(
+        names.get("foreign").map(String::as_str),
+        Some("bbbbbbbbbbbb")
+    );
     Ok(())
 }
 
