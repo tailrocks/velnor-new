@@ -1,8 +1,9 @@
 //! I/O hardening cases: config sample, MBX transport.
 
+use crate::impl_common::git_fixture;
+
 use std::fs;
 use std::path::Path;
-use std::process::Command;
 
 use tempfile::TempDir;
 use velnor_actions_contract::WorkflowPolicy;
@@ -19,7 +20,10 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 /// Run git with inherited failure context.
 fn git(args: &[&str], cwd: &Path) -> TestResult {
-    let status = Command::new("git").args(args).current_dir(cwd).status()?;
+    let status = git_fixture::command(cwd)?
+        .args(args)
+        .current_dir(cwd)
+        .status()?;
     assert!(status.success(), "git {args:?} failed");
     Ok(())
 }

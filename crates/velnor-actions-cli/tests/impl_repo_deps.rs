@@ -1,5 +1,8 @@
 //! Repo-shape policy continued: dependencies, tests, sizes, CLI structure.
 
+#[path = "impl_repo_git_policy.rs"]
+mod git_policy;
+
 use std::collections::BTreeMap;
 use std::error::Error;
 
@@ -242,26 +245,6 @@ fn size_limits_hold() -> Result<(), Box<dyn Error>> {
     for path in docs {
         let lines = physical_lines(&std::fs::read_to_string(&path)?);
         assert!(lines <= 400, "{} has {lines} lines", path.display());
-    }
-    Ok(())
-}
-
-#[test]
-fn lockfile_committed_and_locked_used() -> Result<(), Box<dyn Error>> {
-    assert!(!read("Cargo.lock")?.trim().is_empty());
-    let tracked = std::process::Command::new("git")
-        .arg("ls-files")
-        .arg("--error-unmatch")
-        .arg("Cargo.lock")
-        .current_dir(repo_root())
-        .output()?;
-    assert!(tracked.status.success(), "Cargo.lock not committed");
-    for file in [
-        "crates/velnor-actions-mise/src/requests.rs",
-        "crates/velnor-actions-orchestrator/src/vectors.rs",
-        ".github/workflows/ci.yml",
-    ] {
-        assert!(read(file)?.contains("--locked"), "{file} misses --locked");
     }
     Ok(())
 }
