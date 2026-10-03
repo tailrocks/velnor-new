@@ -1,0 +1,10 @@
+{
+  "path": "node_modules/@actions/cache/lib/cache.js",
+  "upstreamSha256": "258ab7dcfe2424ab849ebe42cba42f7d5ee586bc077c894cd5e45803c5b2ba11",
+  "replacements": [
+    {
+      "from": "cacheId = parseInt(finalizeResponse.entryId);",
+      "to": "cacheId = /^[0-9]+$/.test(finalizeResponse.entryId)\n                ? Number(finalizeResponse.entryId)\n                : -1;\n            if (!Number.isSafeInteger(cacheId) || cacheId < 0) {\n                throw new Error('Invalid finalized cache entry ID');\n            }"
+    }
+  ]
+}

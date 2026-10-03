@@ -1,6 +1,7 @@
 import * as cache from "@actions/cache";
 import * as core from "@actions/core";
 
+import { getCacheServiceVersion } from "../node_modules/@actions/cache/lib/internal/config.js";
 import { Events, Inputs, State } from "./constants";
 import {
     IStateProvider,
@@ -62,6 +63,7 @@ export async function saveImpl(
             Inputs.EnableCrossOsArchive
         );
 
+        const supportsPublicationReceipt = getCacheServiceVersion() === "v2";
         cacheId = await cache.saveCache(
             cachePaths,
             primaryKey,
@@ -69,7 +71,11 @@ export async function saveImpl(
             enableCrossOsArchive
         );
 
-        if (cacheId != -1) {
+        if (Number.isSafeInteger(cacheId) && cacheId >= 0) {
+            if (supportsPublicationReceipt) {
+                core.setOutput("cache-saved-key", primaryKey);
+                core.setOutput("cache-id", String(cacheId));
+            }
             core.info(`Cache saved with key: ${primaryKey}`);
         }
     } catch (error: unknown) {

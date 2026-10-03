@@ -2,6 +2,9 @@ name: 'Restore Cache'
 description: 'Restore Cache artifacts like dependencies and build outputs to improve workflow execution time'
 author: 'GitHub'
 inputs:
+  quarantine-path:
+    description: 'Absolute new isolated RUNNER_TEMP/velnor/cache-staging/<lowercase-SHA256-digest> destination; required for actual restore'
+    required: false
   path:
     description: 'A list of files, directories, and wildcard patterns to restore'
     required: true
@@ -24,6 +27,12 @@ inputs:
     default: 'false'
     required: false
 outputs:
+  cache-restore-error:
+    description: 'Fixed archive admission rejection code; rejected entries remain cache misses'
+  cache-quarantine-path:
+    description: 'Untrusted quarantined cache root; authenticate complete payload before canonical materialization or execution'
+  cache-quarantine-manifest:
+    description: 'Untrusted bounded archive admission descriptor path; not a producer authentication receipt'
   cache-hit:
     description: 'A boolean value to indicate an exact match was found for the primary key'
   cache-primary-key:

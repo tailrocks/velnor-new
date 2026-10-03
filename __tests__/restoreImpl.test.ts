@@ -1,4 +1,11 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { afterEach, beforeEach, expect, jest, test } from "@jest/globals";
+
+let runnerTemp: string;
+let quarantinePath: string;
 
 // Mock @actions/core
 jest.unstable_mockModule("@actions/core", () => ({
@@ -47,6 +54,14 @@ const { StateProvider } = await import("../src/stateProvider");
 const testUtils = await import("../src/utils/testUtils");
 
 beforeEach(() => {
+    runnerTemp = mkdtempSync(join(tmpdir(), "cache-restore-test-"));
+    process.env.RUNNER_TEMP = runnerTemp;
+    quarantinePath = join(
+        runnerTemp,
+        "velnor",
+        "cache-staging",
+        "a".repeat(64)
+    );
     jest.clearAllMocks();
     jest.mocked(core.getInput).mockImplementation(
         (name: string, options?: { required?: boolean }) => {
@@ -63,12 +78,16 @@ beforeEach(() => {
     jest.mocked(cache.isFeatureAvailable).mockReturnValue(true);
     process.env[Events.Key] = Events.Push;
     process.env[RefKey] = "refs/heads/feature-branch";
+    process.env["INPUT_QUARANTINE-PATH"] = quarantinePath;
 });
 
 afterEach(() => {
+    rmSync(runnerTemp, { recursive: true, force: true });
+    delete process.env.RUNNER_TEMP;
     testUtils.clearInputs();
     delete process.env[Events.Key];
     delete process.env[RefKey];
+    delete process.env["INPUT_QUARANTINE-PATH"];
 });
 
 test("restore with invalid event outputs warning", async () => {
@@ -129,13 +148,14 @@ test("restore on GHES with AC available ", async () => {
         key,
         [],
         {
-            lookupOnly: false
+            lookupOnly: false,
+            quarantinePath: quarantinePath
         },
         false
     );
 
     expect(core.saveState).toHaveBeenCalledWith("CACHE_KEY", key);
-    expect(core.setOutput).toHaveBeenCalledTimes(1);
+    expect(core.setOutput).toHaveBeenCalledTimes(3);
     expect(core.setOutput).toHaveBeenCalledWith("cache-hit", "true");
     expect(core.info).toHaveBeenCalledWith(`Cache restored from key: ${key}`);
     expect(core.setFailed).toHaveBeenCalledTimes(0);
@@ -275,7 +295,7 @@ test("restore with cache found for key", async () => {
 
     expect(cache.restoreCache).toHaveBeenCalledTimes(1);
     expect(core.saveState).toHaveBeenCalledWith("CACHE_KEY", key);
-    expect(core.setOutput).toHaveBeenCalledTimes(1);
+    expect(core.setOutput).toHaveBeenCalledTimes(3);
     expect(core.setOutput).toHaveBeenCalledWith("cache-hit", "true");
     expect(core.info).toHaveBeenCalledWith(`Cache restored from key: ${key}`);
     expect(core.setFailed).toHaveBeenCalledTimes(0);
@@ -298,7 +318,7 @@ test("restore with cache found for restore key", async () => {
 
     expect(cache.restoreCache).toHaveBeenCalledTimes(1);
     expect(core.saveState).toHaveBeenCalledWith("CACHE_KEY", key);
-    expect(core.setOutput).toHaveBeenCalledTimes(1);
+    expect(core.setOutput).toHaveBeenCalledTimes(3);
     expect(core.setOutput).toHaveBeenCalledWith("cache-hit", "false");
     expect(core.info).toHaveBeenCalledWith(
         `Cache restored from key: ${restoreKey}`
@@ -325,7 +345,8 @@ test("restore with lookup-only set", async () => {
         key,
         [],
         {
-            lookupOnly: true
+            lookupOnly: true,
+            quarantinePath: undefined
         },
         false
     );
@@ -356,4 +377,74 @@ test("restore failure with earlyExit should call process exit", async () => {
     );
     expect(processExitMock).toHaveBeenCalledWith(1);
     processExitMock.mockRestore();
+});
+
+test("actual restore requires quarantine before service lookup", async () => {
+    testUtils.setInput(Inputs.Key, "owned-key");
+    testUtils.setInput(Inputs.Path, "/tmp/velnor/mise");
+    delete process.env["INPUT_QUARANTINE-PATH"];
+    await restoreImpl(new StateProvider());
+    expect(cache.restoreCache).not.toHaveBeenCalled();
+    expect(core.setFailed).toHaveBeenCalledWith(
+        "Input required and not supplied: quarantine-path"
+    );
+});
+
+test("lookup-only does not need quarantine or publish quarantine outputs", async () => {
+    testUtils.setInput(Inputs.Key, "owned-key");
+    testUtils.setInput(Inputs.Path, "/tmp/velnor/mise");
+    testUtils.setInput(Inputs.LookupOnly, "true");
+    delete process.env["INPUT_QUARANTINE-PATH"];
+    jest.mocked(cache.restoreCache).mockResolvedValue("owned-key");
+    await restoreImpl(new StateProvider());
+    expect(cache.restoreCache).toHaveBeenCalledWith(
+        ["/tmp/velnor/mise"],
+        "owned-key",
+        [],
+        { lookupOnly: true, quarantinePath: undefined },
+        false
+    );
+    expect(core.setOutput).not.toHaveBeenCalledWith(
+        "cache-quarantine-path",
+        expect.anything()
+    );
+    expect(core.setOutput).not.toHaveBeenCalledWith(
+        "cache-quarantine-manifest",
+        expect.anything()
+    );
+});
+
+test("archive rejection returns fixed code without stage outputs", async () => {
+    const { ArchiveAdmissionError } =
+        await import("../node_modules/@actions/cache/lib/internal/archive-admission.mjs");
+    testUtils.setInputs({ path: "node_modules", key: "archive-rejection" });
+    jest.mocked(cache.restoreCache).mockRejectedValueOnce(
+        new ArchiveAdmissionError("ADMISSION_MEMBER", "private detail")
+    );
+    await restoreImpl(new StateProvider());
+    expect(core.setOutput).toHaveBeenCalledWith(
+        "cache-restore-error",
+        "ADMISSION_MEMBER"
+    );
+    expect(core.setOutput).toHaveBeenCalledWith("cache-hit", "false");
+    expect(core.setOutput).not.toHaveBeenCalledWith(
+        "cache-quarantine-path",
+        expect.anything()
+    );
+    expect(core.setFailed).not.toHaveBeenCalled();
+    expect(core.warning).toHaveBeenCalledWith(
+        "Cache archive rejected: ADMISSION_MEMBER"
+    );
+});
+
+test("invalid quarantine fails before service lookup", async () => {
+    testUtils.setInputs({ path: "node_modules", key: "invalid-quarantine" });
+    process.env["INPUT_QUARANTINE-PATH"] = runnerTemp;
+    await restoreImpl(new StateProvider());
+    expect(cache.restoreCache).not.toHaveBeenCalled();
+    expect(core.setFailed).toHaveBeenCalledTimes(1);
+    expect(core.setOutput).not.toHaveBeenCalledWith(
+        "cache-quarantine-path",
+        expect.anything()
+    );
 });

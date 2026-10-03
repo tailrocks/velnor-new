@@ -1,0 +1,20 @@
+name: Foundation native qualification
+description: First-step fresh-runner SDK observation and native positive probes
+outputs:
+  receipt-path:
+    description: Exact native-positive receipt path
+  receipt-sha256:
+    description: SHA-256 of exact native-positive receipt bytes
+  observation-path:
+    description: Complete SDK closure observation path
+  observation-sha256:
+    description: SHA-256 of exact SDK observation bytes
+  control-root:
+    description: Independent private control root, outside payload namespaces
+  fresh-gh-receipt-path:
+    description: Exact sealed fresh GH native positive receipt path
+  fresh-gh-receipt-sha256:
+    description: SHA-256 of exact sealed fresh GH receipt bytes
+runs:
+  using: node24
+  main: ../owned-cache/foundation-native-entrypoint.mjs

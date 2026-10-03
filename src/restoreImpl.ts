@@ -1,6 +1,12 @@
+import * as path from "node:path";
+
 import * as cache from "@actions/cache";
 import * as core from "@actions/core";
 
+import {
+    ArchiveAdmissionError,
+    validateQuarantinePath
+} from "../node_modules/@actions/cache/lib/internal/archive-admission.mjs";
 import { Events, Inputs, Outputs, State } from "./constants";
 import {
     IStateProvider,
@@ -14,81 +20,117 @@ export async function restoreImpl(
     earlyExit?: boolean | undefined
 ): Promise<string | undefined> {
     try {
-        if (!utils.isCacheFeatureAvailable()) {
-            core.setOutput(Outputs.CacheHit, "false");
-            return;
-        }
-
-        // Validate inputs, this can cause task failure
-        if (!utils.isValidEvent()) {
-            utils.logWarning(
-                `Event Validation Error: The event type ${
-                    process.env[Events.Key]
-                } is not supported because it's not tied to a branch or tag ref.`
-            );
-            return;
-        }
-
-        const primaryKey = core.getInput(Inputs.Key, { required: true });
-        stateProvider.setState(State.CachePrimaryKey, primaryKey);
-
-        const restoreKeys = utils.getInputAsArray(Inputs.RestoreKeys);
-        const cachePaths = utils.getInputAsArray(Inputs.Path, {
-            required: true
-        });
-        const enableCrossOsArchive = utils.getInputAsBool(
-            Inputs.EnableCrossOsArchive
-        );
-        const failOnCacheMiss = utils.getInputAsBool(Inputs.FailOnCacheMiss);
-        const lookupOnly = utils.getInputAsBool(Inputs.LookupOnly);
-
-        const cacheKey = await cache.restoreCache(
-            cachePaths,
-            primaryKey,
-            restoreKeys,
-            { lookupOnly: lookupOnly },
-            enableCrossOsArchive
-        );
-
-        if (!cacheKey) {
-            // `cache-hit` is intentionally not set to `false` here to preserve existing behavior
-            // See https://github.com/actions/cache/issues/1466
-
-            if (failOnCacheMiss) {
-                throw new Error(
-                    `Failed to restore cache entry. Exiting as fail-on-cache-miss is set. Input key: ${primaryKey}`
-                );
-            }
-            core.info(
-                `Cache not found for input keys: ${[
-                    primaryKey,
-                    ...restoreKeys
-                ].join(", ")}`
-            );
-            return;
-        }
-
-        // Store the matched cache key in states
-        stateProvider.setState(State.CacheMatchedKey, cacheKey);
-
-        const isExactKeyMatch = utils.isExactKeyMatch(
-            core.getInput(Inputs.Key, { required: true }),
-            cacheKey
-        );
-
-        core.setOutput(Outputs.CacheHit, isExactKeyMatch.toString());
-        if (lookupOnly) {
-            core.info(`Cache found and can be restored from key: ${cacheKey}`);
-        } else {
-            core.info(`Cache restored from key: ${cacheKey}`);
-        }
-
-        return cacheKey;
+        return await performRestore(stateProvider);
     } catch (error: unknown) {
+        if (error instanceof ArchiveAdmissionError) {
+            core.setOutput("cache-restore-error", error.code);
+            core.setOutput(Outputs.CacheHit, "false");
+            core.warning(`Cache archive rejected: ${error.code}`);
+            return;
+        }
         core.setFailed((error as Error).message);
         if (earlyExit) {
             process.exit(1);
         }
+    }
+}
+
+async function performRestore(
+    stateProvider: IStateProvider
+): Promise<string | undefined> {
+    if (!utils.isCacheFeatureAvailable()) {
+        core.setOutput(Outputs.CacheHit, "false");
+        return;
+    }
+
+    // Validate inputs, this can cause task failure
+    if (!utils.isValidEvent()) {
+        utils.logWarning(
+            `Event Validation Error: The event type ${
+                process.env[Events.Key]
+            } is not supported because it's not tied to a branch or tag ref.`
+        );
+        return;
+    }
+
+    const primaryKey = core.getInput(Inputs.Key, { required: true });
+    stateProvider.setState(State.CachePrimaryKey, primaryKey);
+
+    const restoreKeys = utils.getInputAsArray(Inputs.RestoreKeys);
+    const cachePaths = utils.getInputAsArray(Inputs.Path, {
+        required: true
+    });
+    const enableCrossOsArchive = utils.getInputAsBool(
+        Inputs.EnableCrossOsArchive
+    );
+    const failOnCacheMiss = utils.getInputAsBool(Inputs.FailOnCacheMiss);
+    const lookupOnly = utils.getInputAsBool(Inputs.LookupOnly);
+
+    const quarantinePath = lookupOnly
+        ? ""
+        : core.getInput(Inputs.QuarantinePath, { required: true });
+    if (!lookupOnly) {
+        validateQuarantinePath(quarantinePath);
+    }
+    const restoreOptions = {
+        lookupOnly,
+        quarantinePath: lookupOnly ? undefined : quarantinePath
+    };
+
+    const cacheKey = await cache.restoreCache(
+        cachePaths,
+        primaryKey,
+        restoreKeys,
+        restoreOptions,
+        enableCrossOsArchive
+    );
+
+    if (!cacheKey) {
+        // `cache-hit` is intentionally not set to `false` here to preserve existing behavior
+        // See https://github.com/actions/cache/issues/1466
+
+        if (failOnCacheMiss) {
+            throw new Error(
+                `Failed to restore cache entry. Exiting as fail-on-cache-miss is set. Input key: ${primaryKey}`
+            );
+        }
+        core.info(
+            `Cache not found for input keys: ${[
+                primaryKey,
+                ...restoreKeys
+            ].join(", ")}`
+        );
+        return;
+    }
+
+    publishQuarantine(cacheKey, quarantinePath, lookupOnly, stateProvider);
+    return cacheKey;
+}
+
+function publishQuarantine(
+    cacheKey: string,
+    quarantinePath: string,
+    lookupOnly: boolean,
+    stateProvider: IStateProvider
+): void {
+    // Store the matched cache key in states
+    stateProvider.setState(State.CacheMatchedKey, cacheKey);
+
+    const isExactKeyMatch = utils.isExactKeyMatch(
+        core.getInput(Inputs.Key, { required: true }),
+        cacheKey
+    );
+
+    core.setOutput(Outputs.CacheHit, isExactKeyMatch.toString());
+    if (lookupOnly) {
+        core.info(`Cache found and can be restored from key: ${cacheKey}`);
+    } else {
+        core.setOutput("cache-quarantine-path", quarantinePath);
+        core.setOutput(
+            "cache-quarantine-manifest",
+            path.join(quarantinePath, "archive-admission.json")
+        );
+        core.info(`Cache restored from key: ${cacheKey}`);
     }
 }
 

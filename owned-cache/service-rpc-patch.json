@@ -1,0 +1,10 @@
+{
+  "path": "node_modules/@actions/cache/lib/generated/results/api/v1/cache.twirp-client.js",
+  "upstreamSha256": "4cc4b94891834731f0b9538eec980cf3033a878f34ba221dc8d3873131f503da",
+  "replacements": [
+    {
+      "from": "return promise.then((data) => FinalizeCacheEntryUploadResponse.fromJson(data, {\n            ignoreUnknownFields: true,\n        }));",
+      "to": "return promise.then((data) => {\n            const isFinalized = data !== null &&\n                typeof data === 'object' &&\n                !Array.isArray(data) &&\n                data.ok === true;\n            if (isFinalized) {\n                const hasSnakeEntryId = Object.prototype.hasOwnProperty.call(data, 'entry_id');\n                const hasCamelEntryId = Object.prototype.hasOwnProperty.call(data, 'entryId');\n                const hasEntryId = hasSnakeEntryId !== hasCamelEntryId;\n                const entryId = hasSnakeEntryId ? data.entry_id :\n                    hasCamelEntryId ? data.entryId : undefined;\n                if (!hasEntryId ||\n                    typeof entryId !== 'string' ||\n                    !/^(0|[1-9][0-9]*)$/.test(entryId) ||\n                    !Number.isSafeInteger(Number(entryId))) {\n                    throw new Error('Invalid finalized cache entry ID response');\n                }\n            }\n            return FinalizeCacheEntryUploadResponse.fromJson(data, {\n                ignoreUnknownFields: true,\n            });\n        });"
+    }
+  ]
+}

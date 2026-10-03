@@ -69,6 +69,7 @@ afterEach(() => {
     testUtils.clearInputs();
     delete process.env[Events.Key];
     delete process.env[RefKey];
+    delete process.env["ACTIONS_CACHE_SERVICE_V2"];
 });
 
 test("save with invalid event outputs warning", async () => {
@@ -281,4 +282,67 @@ test("save with valid inputs uploads a cache", async () => {
     );
 
     expect(core.setFailed).toHaveBeenCalledTimes(0);
+});
+
+function receiptInputs(): void {
+    testUtils.setInput(Inputs.Key, "owned-receipt-key");
+    testUtils.setInput(Inputs.Path, "owned-payload");
+    process.env["ACTIONS_CACHE_SERVICE_V2"] = "true";
+}
+
+test("confirmed v2 finalization emits exact key and ID", async () => {
+    receiptInputs();
+    (cache.saveCache as jest.Mock).mockResolvedValue(42);
+    await saveImpl(new StateProvider());
+    expect(core.setOutput).toHaveBeenNthCalledWith(
+        1,
+        "cache-saved-key",
+        "owned-receipt-key"
+    );
+    expect(core.setOutput).toHaveBeenNthCalledWith(2, "cache-id", "42");
+    expect(core.setOutput).toHaveBeenCalledTimes(2);
+});
+
+test.each([-1, NaN, Infinity, 4.5, Number.MAX_SAFE_INTEGER + 1, undefined])(
+    "invalid or absent publication ID %s emits no receipt",
+    async value => {
+        receiptInputs();
+        (cache.saveCache as jest.Mock).mockResolvedValue(value);
+        await saveImpl(new StateProvider());
+        expect(core.setOutput).not.toHaveBeenCalled();
+    }
+);
+
+test("unsupported v1 reservation ID emits no publication receipt", async () => {
+    receiptInputs();
+    delete process.env["ACTIONS_CACHE_SERVICE_V2"];
+    (cache.saveCache as jest.Mock).mockResolvedValue(42);
+    await saveImpl(new StateProvider());
+    expect(core.setOutput).not.toHaveBeenCalled();
+});
+
+test("GHES v1 ID emits no receipt despite v2 environment flag", async () => {
+    receiptInputs();
+    process.env["GITHUB_SERVER_URL"] = "https://ghes.example.com";
+    (cache.saveCache as jest.Mock).mockResolvedValue(42);
+    await saveImpl(new StateProvider());
+    expect(core.setOutput).not.toHaveBeenCalled();
+    delete process.env["GITHUB_SERVER_URL"];
+});
+
+test("save failure emits no publication receipt", async () => {
+    receiptInputs();
+    (cache.saveCache as jest.Mock).mockRejectedValue(
+        new Error("network failure")
+    );
+    await saveImpl(new StateProvider());
+    expect(core.setOutput).not.toHaveBeenCalled();
+});
+
+test("exact restore hit emits no new publication receipt", async () => {
+    receiptInputs();
+    (core.getState as jest.Mock).mockReturnValue("owned-receipt-key");
+    await saveImpl(new StateProvider());
+    expect(cache.saveCache).not.toHaveBeenCalled();
+    expect(core.setOutput).not.toHaveBeenCalled();
 });

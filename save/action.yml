@@ -15,6 +15,11 @@ inputs:
     description: 'An optional boolean when enabled, allows windows runners to save caches that can be restored on other platforms'
     default: 'false'
     required: false
+outputs:
+  cache-saved-key:
+    description: 'Exact key published after supported cache service v2 finalization; absent for no-op or failure'
+  cache-id:
+    description: 'Confirmed nonnegative safe-integer cache service v2 entry ID; absent for no-op or failure'
 runs:
   using: 'node24'
   main: '../dist/save-only/index.js'

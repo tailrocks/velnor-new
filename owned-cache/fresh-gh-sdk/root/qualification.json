@@ -1,0 +1,164 @@
+{
+  "schema": 1,
+  "scope": "public_good_root_and_official_verifier_compatibility_only",
+  "qualified_at": "2026-10-03",
+  "bootstrap": {
+    "repository": "sigstore/sigstore-go",
+    "source_commit": "22d3691c7b8e0c5530fae3c05577690bfef5cd00",
+    "source_path": "pkg/tuf/repository/root.json",
+    "tuf_initial_version": 14,
+    "tuf_rotated_version": 15
+  },
+  "root": {
+    "raw_sha256": "6494e21ea73fa7ee769f85f57d5a3e6a08725eae1e38c755fc3517c9e6bc0b66",
+    "verifier_jsonl_sha256": "3c2cc7f357dc064ec527fdcd78da6e9245c21a381e1abaa0f2b62b186bcac1a1",
+    "applicability": [
+      "public"
+    ],
+    "private_internal_qualified": false
+  },
+  "verifier": {
+    "tool": "gh",
+    "version": "2.102.0",
+    "source_commit": "fc4b137cdef0a6bd28fd461b7cf9c84a5812a8cd",
+    "host": "linux-arm64",
+    "binary_sha256": "93308395c2d296a63a662742c6366e4db413d2a4870d07bd9b84e491c065d65d",
+    "container_image_sha256": "3595d7fc4286a33fad0fd853a4063e654287a9c3787437d7937c94ca3f7a804e",
+    "readonly_container": true,
+    "readonly_evidence": true,
+    "binary_hash_checked_before_execution": true,
+    "root_fetch_network": "bridge",
+    "verification_network": "none",
+    "environment": "env -i; fixed PATH/HOME/GH_CONFIG_DIR/XDG_CONFIG_HOME/XDG_CACHE_HOME/GH_HOST/GH_PROMPT_DISABLED; no token"
+  },
+  "research_transport_ca": {
+    "source": "Homebrew public CA bundle /opt/homebrew/etc/ca-certificates/cert.pem",
+    "sha256": "2907fa07d144ade2c5afb3abaad65610ff9e88e31bb576bcb0b09ebff3b8295a",
+    "platform_ca_qualification": false,
+    "root_fetch_explicit_ssl_cert_file": true
+  },
+  "public_positive": {
+    "subject": "gh_2.102.0_linux_amd64.tar.gz",
+    "subject_sha256": "bb766f710eef8ede859c18578c72c327597cd4c8a85b06001b1f3843c6019386",
+    "service_api": "https://api.github.com/repos/cli/cli/attestations/sha256:bb766f710eef8ede859c18578c72c327597cd4c8a85b06001b1f3843c6019386",
+    "service_http_status": 200,
+    "service_bundle_count": 2,
+    "selected_bundle": "user initiated Public Good v0.3 DSSE",
+    "transport": "Snappy decoded by isolated cramjam; public signed download URL not retained",
+    "decoded_bundle_sha256": "b05db30dbcf69f6df8edcc5c71951a2a1429674520b480a5001890706e3976e5",
+    "gh_verify_exit": 0,
+    "gh_trusted_root_exit": 0,
+    "authenticated_repository": "cli/cli",
+    "authenticated_repository_id": "212613049",
+    "authenticated_source_visibility": "public",
+    "authenticated_source_sha": "fc4b137cdef0a6bd28fd461b7cf9c84a5812a8cd",
+    "authenticated_event": "workflow_dispatch",
+    "authenticated_run_id": "36659926055",
+    "authenticated_run_attempt": 1,
+    "protected_push_qualified": false,
+    "pure_producer_qualified": false,
+    "verification_output_sha256": "aeb3fde11f3a295c0d8daf933f33c2bc306761d9d49632075511d467944a1f7f"
+  },
+  "commands": {
+    "root_fetch": {
+      "command": [
+        "docker",
+        "run",
+        "--rm",
+        "--network",
+        "bridge",
+        "--read-only",
+        "--tmpfs",
+        "/work:rw,exec,mode=700",
+        "-v",
+        "/tmp/velnor-public-root-evidence:/evidence:ro",
+        "-v",
+        "/tmp/pure-signer-design/gh-binaries:/binaries:ro",
+        "ubuntu:26.04",
+        "/usr/bin/env",
+        "-i",
+        "PATH=/usr/bin:/bin",
+        "HOME=/work",
+        "GH_CONFIG_DIR=/work/gh",
+        "XDG_CONFIG_HOME=/work/config",
+        "XDG_CACHE_HOME=/work/cache",
+        "GH_HOST=github.com",
+        "GH_PROMPT_DISABLED=1",
+        "SSL_CERT_FILE=/evidence/qualification-ca.pem",
+        "/bin/sh",
+        "-c",
+        "echo \"93308395c2d296a63a662742c6366e4db413d2a4870d07bd9b84e491c065d65d  /binaries/gh-linux-arm64\" | sha256sum -c >/dev/null && cp /binaries/gh-linux-arm64 /work/gh-verify && chmod 500 /work/gh-verify && exec /work/gh-verify attestation trusted-root --hostname github.com --tuf-url https://tuf-repo-cdn.sigstore.dev --tuf-root /evidence/bootstrap-root.json"
+      ],
+      "exit": 0,
+      "ca_sha256": "2907fa07d144ade2c5afb3abaad65610ff9e88e31bb576bcb0b09ebff3b8295a"
+    },
+    "offline_verify": {
+      "command": [
+        "docker",
+        "run",
+        "--rm",
+        "--network",
+        "none",
+        "--read-only",
+        "--tmpfs",
+        "/work:rw,exec,mode=700",
+        "-v",
+        "/tmp/velnor-public-root-evidence:/evidence:ro",
+        "-v",
+        "/tmp/pure-signer-design/gh-binaries:/binaries:ro",
+        "ubuntu:26.04",
+        "/usr/bin/env",
+        "-i",
+        "PATH=/usr/bin:/bin",
+        "HOME=/work",
+        "GH_CONFIG_DIR=/work/gh",
+        "XDG_CONFIG_HOME=/work/config",
+        "XDG_CACHE_HOME=/work/cache",
+        "GH_HOST=github.com",
+        "GH_PROMPT_DISABLED=1",
+        "/bin/sh",
+        "-c",
+        "echo \"93308395c2d296a63a662742c6366e4db413d2a4870d07bd9b84e491c065d65d  /binaries/gh-linux-arm64\" | sha256sum -c >/dev/null && cp /binaries/gh-linux-arm64 /work/gh-verify && chmod 500 /work/gh-verify && exec /work/gh-verify attestation verify /binaries/gh_2.102.0_linux_amd64.tar.gz --bundle /evidence/official-gh-bundle-1.json --repo cli/cli --custom-trusted-root /evidence/trusted_root.jsonl --deny-self-hosted-runners --format json"
+      ],
+      "exit": 0
+    }
+  },
+  "evidence": {
+    "bootstrap_root.json": {
+      "bytes": 5491,
+      "sha256": "a0dfcc5d51c1ce4a66b541a3fff0afa97225ccc40456b21140bb2e2f113122e2"
+    },
+    "15.root.json": {
+      "bytes": 5630,
+      "sha256": "73747011d0857ada15479a16c4cae0f3ed03aac698b523b97e1de314ac9d9ca8"
+    },
+    "14.targets.json": {
+      "bytes": 4942,
+      "sha256": "6a697f7f8908c8ab26c11786ecb490b54acec97fa8c802e399f065f8a0cc1acd"
+    },
+    "trusted_root.jsonl": {
+      "bytes": 5748,
+      "sha256": "3c2cc7f357dc064ec527fdcd78da6e9245c21a381e1abaa0f2b62b186bcac1a1"
+    },
+    "165.snapshot.json": {
+      "bytes": 1760,
+      "sha256": "8f784ab614ec62bfdd5f568eb2a2e3011668449ba235ed4eb7befa99f8469933"
+    },
+    "trusted_root.json": {
+      "bytes": 6787,
+      "sha256": "6494e21ea73fa7ee769f85f57d5a3e6a08725eae1e38c755fc3517c9e6bc0b66"
+    },
+    "public_release_verification.json": {
+      "bytes": 19184,
+      "sha256": "aeb3fde11f3a295c0d8daf933f33c2bc306761d9d49632075511d467944a1f7f"
+    },
+    "798.timestamp.json": {
+      "bytes": 451,
+      "sha256": "12ff8634dd593bf446c734e941266a68cc822f6950e7d9f73cb9f6fe7097d2c1"
+    },
+    "public_release_bundle.json": {
+      "bytes": 13943,
+      "sha256": "b05db30dbcf69f6df8edcc5c71951a2a1429674520b480a5001890706e3976e5"
+    }
+  }
+}

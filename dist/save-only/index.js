@@ -1,2770 +1,6 @@
 import { createRequire as __WEBPACK_EXTERNAL_createRequire } from "module";
 /******/ var __webpack_modules__ = ({
 
-/***/ 9497:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-
-
-const ANY = Symbol('SemVer ANY')
-// hoisted class for cyclic dependency
-class Comparator {
-  static get ANY () {
-    return ANY
-  }
-
-  constructor (comp, options) {
-    options = parseOptions(options)
-
-    if (comp instanceof Comparator) {
-      if (comp.loose === !!options.loose) {
-        return comp
-      } else {
-        comp = comp.value
-      }
-    }
-
-    comp = comp.trim().split(/\s+/).join(' ')
-    debug('comparator', comp, options)
-    this.options = options
-    this.loose = !!options.loose
-    this.parse(comp)
-
-    if (this.semver === ANY) {
-      this.value = ''
-    } else {
-      this.value = this.operator + this.semver.version
-    }
-
-    debug('comp', this)
-  }
-
-  parse (comp) {
-    const r = this.options.loose ? re[t.COMPARATORLOOSE] : re[t.COMPARATOR]
-    const m = comp.match(r)
-
-    if (!m) {
-      throw new TypeError(`Invalid comparator: ${comp}`)
-    }
-
-    this.operator = m[1] !== undefined ? m[1] : ''
-    if (this.operator === '=') {
-      this.operator = ''
-    }
-
-    // if it literally is just '>' or '' then allow anything.
-    if (!m[2]) {
-      this.semver = ANY
-    } else {
-      this.semver = new SemVer(m[2], this.options.loose)
-    }
-  }
-
-  toString () {
-    return this.value
-  }
-
-  test (version) {
-    debug('Comparator.test', version, this.options.loose)
-
-    if (this.semver === ANY || version === ANY) {
-      return true
-    }
-
-    if (typeof version === 'string') {
-      try {
-        version = new SemVer(version, this.options)
-      } catch (er) {
-        return false
-      }
-    }
-
-    return cmp(version, this.operator, this.semver, this.options)
-  }
-
-  intersects (comp, options) {
-    if (!(comp instanceof Comparator)) {
-      throw new TypeError('a Comparator is required')
-    }
-
-    if (this.operator === '') {
-      if (this.value === '') {
-        return true
-      }
-      return new Range(comp.value, options).test(this.value)
-    } else if (comp.operator === '') {
-      if (comp.value === '') {
-        return true
-      }
-      return new Range(this.value, options).test(comp.semver)
-    }
-
-    options = parseOptions(options)
-
-    // Special cases where nothing can possibly be lower
-    if (options.includePrerelease &&
-      (this.value === '<0.0.0-0' || comp.value === '<0.0.0-0')) {
-      return false
-    }
-    if (!options.includePrerelease &&
-      (this.value.startsWith('<0.0.0') || comp.value.startsWith('<0.0.0'))) {
-      return false
-    }
-
-    // Same direction increasing (> or >=)
-    if (this.operator.startsWith('>') && comp.operator.startsWith('>')) {
-      return true
-    }
-    // Same direction decreasing (< or <=)
-    if (this.operator.startsWith('<') && comp.operator.startsWith('<')) {
-      return true
-    }
-    // same SemVer and both sides are inclusive (<= or >=)
-    if (
-      (this.semver.version === comp.semver.version) &&
-      this.operator.includes('=') && comp.operator.includes('=')) {
-      return true
-    }
-    // opposite directions less than
-    if (cmp(this.semver, '<', comp.semver, options) &&
-      this.operator.startsWith('>') && comp.operator.startsWith('<')) {
-      return true
-    }
-    // opposite directions greater than
-    if (cmp(this.semver, '>', comp.semver, options) &&
-      this.operator.startsWith('<') && comp.operator.startsWith('>')) {
-      return true
-    }
-    return false
-  }
-}
-
-module.exports = Comparator
-
-const parseOptions = __nccwpck_require__(5226)
-const { safeRe: re, t } = __nccwpck_require__(5357)
-const cmp = __nccwpck_require__(48)
-const debug = __nccwpck_require__(8277)
-const SemVer = __nccwpck_require__(1153)
-const Range = __nccwpck_require__(6816)
-
-
-/***/ }),
-
-/***/ 6816:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-
-
-const SPACE_CHARACTERS = /\s+/g
-
-// hoisted class for cyclic dependency
-class Range {
-  constructor (range, options) {
-    options = parseOptions(options)
-
-    if (range instanceof Range) {
-      if (
-        range.loose === !!options.loose &&
-        range.includePrerelease === !!options.includePrerelease
-      ) {
-        return range
-      } else {
-        return new Range(range.raw, options)
-      }
-    }
-
-    if (range instanceof Comparator) {
-      // just put it in the set and return
-      this.raw = range.value
-      this.set = [[range]]
-      this.formatted = undefined
-      return this
-    }
-
-    this.options = options
-    this.loose = !!options.loose
-    this.includePrerelease = !!options.includePrerelease
-
-    // First reduce all whitespace as much as possible so we do not have to rely
-    // on potentially slow regexes like \s*. This is then stored and used for
-    // future error messages as well.
-    this.raw = range.trim().replace(SPACE_CHARACTERS, ' ')
-
-    // First, split on ||
-    this.set = this.raw
-      .split('||')
-      // map the range to a 2d array of comparators
-      .map(r => this.parseRange(r.trim()))
-      // throw out any comparator lists that are empty
-      // this generally means that it was not a valid range, which is allowed
-      // in loose mode, but will still throw if the WHOLE range is invalid.
-      .filter(c => c.length)
-
-    if (!this.set.length) {
-      throw new TypeError(`Invalid SemVer Range: ${this.raw}`)
-    }
-
-    // if we have any that are not the null set, throw out null sets.
-    if (this.set.length > 1) {
-      // keep the first one, in case they're all null sets
-      const first = this.set[0]
-      this.set = this.set.filter(c => !isNullSet(c[0]))
-      if (this.set.length === 0) {
-        this.set = [first]
-      } else if (this.set.length > 1) {
-        // if we have any that are *, then the range is just *
-        for (const c of this.set) {
-          if (c.length === 1 && isAny(c[0])) {
-            this.set = [c]
-            break
-          }
-        }
-      }
-    }
-
-    this.formatted = undefined
-  }
-
-  get range () {
-    if (this.formatted === undefined) {
-      this.formatted = ''
-      for (let i = 0; i < this.set.length; i++) {
-        if (i > 0) {
-          this.formatted += '||'
-        }
-        const comps = this.set[i]
-        for (let k = 0; k < comps.length; k++) {
-          if (k > 0) {
-            this.formatted += ' '
-          }
-          this.formatted += comps[k].toString().trim()
-        }
-      }
-    }
-    return this.formatted
-  }
-
-  format () {
-    return this.range
-  }
-
-  toString () {
-    return this.range
-  }
-
-  parseRange (range) {
-    // strip build metadata so it can't bleed into the version
-    range = range.replace(BUILDSTRIPRE, '')
-
-    // memoize range parsing for performance.
-    // this is a very hot path, and fully deterministic.
-    const memoOpts =
-      (this.options.includePrerelease && FLAG_INCLUDE_PRERELEASE) |
-      (this.options.loose && FLAG_LOOSE)
-    const memoKey = memoOpts + ':' + range
-    const cached = cache.get(memoKey)
-    if (cached) {
-      return cached
-    }
-
-    const loose = this.options.loose
-    // `1.2.3 - 1.2.4` => `>=1.2.3 <=1.2.4`
-    const hr = loose ? re[t.HYPHENRANGELOOSE] : re[t.HYPHENRANGE]
-    range = range.replace(hr, hyphenReplace(this.options.includePrerelease))
-    debug('hyphen replace', range)
-
-    // `> 1.2.3 < 1.2.5` => `>1.2.3 <1.2.5`
-    range = range.replace(re[t.COMPARATORTRIM], comparatorTrimReplace)
-    debug('comparator trim', range)
-
-    // `~ 1.2.3` => `~1.2.3`
-    range = range.replace(re[t.TILDETRIM], tildeTrimReplace)
-    debug('tilde trim', range)
-
-    // `^ 1.2.3` => `^1.2.3`
-    range = range.replace(re[t.CARETTRIM], caretTrimReplace)
-    debug('caret trim', range)
-
-    // At this point, the range is completely trimmed and
-    // ready to be split into comparators.
-
-    let rangeList = range
-      .split(' ')
-      .map(comp => parseComparator(comp, this.options))
-      .join(' ')
-      .split(/\s+/)
-      // >=0.0.0 is equivalent to *
-      .map(comp => replaceGTE0(comp, this.options))
-
-    if (loose) {
-      // in loose mode, throw out any that are not valid comparators
-      rangeList = rangeList.filter(comp => {
-        debug('loose invalid filter', comp, this.options)
-        return !!comp.match(re[t.COMPARATORLOOSE])
-      })
-    }
-    debug('range list', rangeList)
-
-    // if any comparators are the null set, then replace with JUST null set
-    // if more than one comparator, remove any * comparators
-    // also, don't include the same comparator more than once
-    const rangeMap = new Map()
-    const comparators = rangeList.map(comp => new Comparator(comp, this.options))
-    for (const comp of comparators) {
-      if (isNullSet(comp)) {
-        return [comp]
-      }
-      rangeMap.set(comp.value, comp)
-    }
-    if (rangeMap.size > 1 && rangeMap.has('')) {
-      rangeMap.delete('')
-    }
-
-    const result = [...rangeMap.values()]
-    cache.set(memoKey, result)
-    return result
-  }
-
-  intersects (range, options) {
-    if (!(range instanceof Range)) {
-      throw new TypeError('a Range is required')
-    }
-
-    return this.set.some((thisComparators) => {
-      return (
-        isSatisfiable(thisComparators, options) &&
-        range.set.some((rangeComparators) => {
-          return (
-            isSatisfiable(rangeComparators, options) &&
-            thisComparators.every((thisComparator) => {
-              return rangeComparators.every((rangeComparator) => {
-                return thisComparator.intersects(rangeComparator, options)
-              })
-            })
-          )
-        })
-      )
-    })
-  }
-
-  // if ANY of the sets match ALL of its comparators, then pass
-  test (version) {
-    if (!version) {
-      return false
-    }
-
-    if (typeof version === 'string') {
-      try {
-        version = new SemVer(version, this.options)
-      } catch (er) {
-        return false
-      }
-    }
-
-    for (let i = 0; i < this.set.length; i++) {
-      if (testSet(this.set[i], version, this.options)) {
-        return true
-      }
-    }
-    return false
-  }
-}
-
-module.exports = Range
-
-const LRU = __nccwpck_require__(6829)
-const cache = new LRU()
-
-const parseOptions = __nccwpck_require__(5226)
-const Comparator = __nccwpck_require__(9497)
-const debug = __nccwpck_require__(8277)
-const SemVer = __nccwpck_require__(1153)
-const {
-  safeRe: re,
-  src,
-  t,
-  comparatorTrimReplace,
-  tildeTrimReplace,
-  caretTrimReplace,
-} = __nccwpck_require__(5357)
-const { FLAG_INCLUDE_PRERELEASE, FLAG_LOOSE } = __nccwpck_require__(947)
-
-// unbounded global build-metadata stripper used by parseRange
-const BUILDSTRIPRE = new RegExp(src[t.BUILD], 'g')
-
-const isNullSet = c => c.value === '<0.0.0-0'
-const isAny = c => c.value === ''
-
-// take a set of comparators and determine whether there
-// exists a version which can satisfy it
-const isSatisfiable = (comparators, options) => {
-  let result = true
-  const remainingComparators = comparators.slice()
-  let testComparator = remainingComparators.pop()
-
-  while (result && remainingComparators.length) {
-    result = remainingComparators.every((otherComparator) => {
-      return testComparator.intersects(otherComparator, options)
-    })
-
-    testComparator = remainingComparators.pop()
-  }
-
-  return result
-}
-
-// comprised of xranges, tildes, stars, and gtlt's at this point.
-// already replaced the hyphen ranges
-// turn into a set of JUST comparators.
-const parseComparator = (comp, options) => {
-  comp = comp.replace(re[t.BUILD], '')
-  debug('comp', comp, options)
-  comp = replaceCarets(comp, options)
-  debug('caret', comp)
-  comp = replaceTildes(comp, options)
-  debug('tildes', comp)
-  comp = replaceXRanges(comp, options)
-  debug('xrange', comp)
-  comp = replaceStars(comp, options)
-  debug('stars', comp)
-  return comp
-}
-
-const isX = id => !id || id.toLowerCase() === 'x' || id === '*'
-
-const invalidXRangeOrder = (M, m, p) => (
-  (isX(M) && !isX(m)) ||
-  (isX(m) && p && !isX(p))
-)
-
-// ~, ~> --> * (any, kinda silly)
-// ~2, ~2.x, ~2.x.x, ~>2, ~>2.x ~>2.x.x --> >=2.0.0 <3.0.0-0
-// ~2.0, ~2.0.x, ~>2.0, ~>2.0.x --> >=2.0.0 <2.1.0-0
-// ~1.2, ~1.2.x, ~>1.2, ~>1.2.x --> >=1.2.0 <1.3.0-0
-// ~1.2.3, ~>1.2.3 --> >=1.2.3 <1.3.0-0
-// ~1.2.0, ~>1.2.0 --> >=1.2.0 <1.3.0-0
-// ~0.0.1 --> >=0.0.1 <0.1.0-0
-const replaceTildes = (comp, options) => {
-  return comp
-    .trim()
-    .split(/\s+/)
-    .map((c) => replaceTilde(c, options))
-    .join(' ')
-}
-
-const replaceTilde = (comp, options) => {
-  const r = options.loose ? re[t.TILDELOOSE] : re[t.TILDE]
-  // if we're including prereleases in the match, then the lower bound is
-  // -0, the lowest possible prerelease value, just like x-ranges and carets.
-  // this keeps `~1.2` equivalent to the `1.2.x` x-range it's documented as.
-  const z = options.includePrerelease ? '-0' : ''
-  return comp.replace(r, (_, M, m, p, pr) => {
-    debug('tilde', comp, _, M, m, p, pr)
-    let ret
-
-    if (isX(M)) {
-      ret = ''
-    } else if (isX(m)) {
-      ret = `>=${M}.0.0${z} <${+M + 1}.0.0-0`
-    } else if (isX(p)) {
-      // ~1.2 == >=1.2.0 <1.3.0-0
-      ret = `>=${M}.${m}.0${z} <${M}.${+m + 1}.0-0`
-    } else if (pr) {
-      debug('replaceTilde pr', pr)
-      ret = `>=${M}.${m}.${p}-${pr
-      } <${M}.${+m + 1}.0-0`
-    } else {
-      // ~1.2.3 == >=1.2.3 <1.3.0-0
-      ret = `>=${M}.${m}.${p
-      } <${M}.${+m + 1}.0-0`
-    }
-
-    debug('tilde return', ret)
-    return ret
-  })
-}
-
-// ^ --> * (any, kinda silly)
-// ^2, ^2.x, ^2.x.x --> >=2.0.0 <3.0.0-0
-// ^2.0, ^2.0.x --> >=2.0.0 <3.0.0-0
-// ^1.2, ^1.2.x --> >=1.2.0 <2.0.0-0
-// ^1.2.3 --> >=1.2.3 <2.0.0-0
-// ^1.2.0 --> >=1.2.0 <2.0.0-0
-// ^0.0.1 --> >=0.0.1 <0.0.2-0
-// ^0.1.0 --> >=0.1.0 <0.2.0-0
-const replaceCarets = (comp, options) => {
-  return comp
-    .trim()
-    .split(/\s+/)
-    .map((c) => replaceCaret(c, options))
-    .join(' ')
-}
-
-const replaceCaret = (comp, options) => {
-  debug('caret', comp, options)
-  const r = options.loose ? re[t.CARETLOOSE] : re[t.CARET]
-  const z = options.includePrerelease ? '-0' : ''
-  return comp.replace(r, (_, M, m, p, pr) => {
-    debug('caret', comp, _, M, m, p, pr)
-    let ret
-
-    if (isX(M)) {
-      ret = ''
-    } else if (isX(m)) {
-      ret = `>=${M}.0.0${z} <${+M + 1}.0.0-0`
-    } else if (isX(p)) {
-      if (M === '0') {
-        ret = `>=${M}.${m}.0${z} <${M}.${+m + 1}.0-0`
-      } else {
-        ret = `>=${M}.${m}.0${z} <${+M + 1}.0.0-0`
-      }
-    } else if (pr) {
-      debug('replaceCaret pr', pr)
-      if (M === '0') {
-        if (m === '0') {
-          ret = `>=${M}.${m}.${p}-${pr
-          } <${M}.${m}.${+p + 1}-0`
-        } else {
-          ret = `>=${M}.${m}.${p}-${pr
-          } <${M}.${+m + 1}.0-0`
-        }
-      } else {
-        ret = `>=${M}.${m}.${p}-${pr
-        } <${+M + 1}.0.0-0`
-      }
-    } else {
-      debug('no pr')
-      if (M === '0') {
-        if (m === '0') {
-          ret = `>=${M}.${m}.${p
-          } <${M}.${m}.${+p + 1}-0`
-        } else {
-          ret = `>=${M}.${m}.${p
-          } <${M}.${+m + 1}.0-0`
-        }
-      } else {
-        ret = `>=${M}.${m}.${p
-        } <${+M + 1}.0.0-0`
-      }
-    }
-
-    debug('caret return', ret)
-    return ret
-  })
-}
-
-const replaceXRanges = (comp, options) => {
-  debug('replaceXRanges', comp, options)
-  return comp
-    .split(/\s+/)
-    .map((c) => replaceXRange(c, options))
-    .join(' ')
-}
-
-const replaceXRange = (comp, options) => {
-  comp = comp.trim()
-  const r = options.loose ? re[t.XRANGELOOSE] : re[t.XRANGE]
-  return comp.replace(r, (ret, gtlt, M, m, p, pr) => {
-    debug('xRange', comp, ret, gtlt, M, m, p, pr)
-    if (invalidXRangeOrder(M, m, p)) {
-      return comp
-    }
-
-    const xM = isX(M)
-    const xm = xM || isX(m)
-    const xp = xm || isX(p)
-    const anyX = xp
-
-    if (gtlt === '=' && anyX) {
-      gtlt = ''
-    }
-
-    // if we're including prereleases in the match, then we need
-    // to fix this to -0, the lowest possible prerelease value
-    pr = options.includePrerelease ? '-0' : ''
-
-    if (xM) {
-      if (gtlt === '>' || gtlt === '<') {
-        // nothing is allowed
-        ret = '<0.0.0-0'
-      } else {
-        // nothing is forbidden
-        ret = '*'
-      }
-    } else if (gtlt && anyX) {
-      // we know patch is an x, because we have any x at all.
-      // replace X with 0
-      if (xm) {
-        m = 0
-      }
-      p = 0
-
-      if (gtlt === '>') {
-        // >1 => >=2.0.0
-        // >1.2 => >=1.3.0
-        gtlt = '>='
-        if (xm) {
-          M = +M + 1
-          m = 0
-          p = 0
-        } else {
-          m = +m + 1
-          p = 0
-        }
-      } else if (gtlt === '<=') {
-        // <=0.7.x is actually <0.8.0, since any 0.7.x should
-        // pass.  Similarly, <=7.x is actually <8.0.0, etc.
-        gtlt = '<'
-        if (xm) {
-          M = +M + 1
-        } else {
-          m = +m + 1
-        }
-      }
-
-      if (gtlt === '<') {
-        pr = '-0'
-      }
-
-      ret = `${gtlt + M}.${m}.${p}${pr}`
-    } else if (xm) {
-      ret = `>=${M}.0.0${pr} <${+M + 1}.0.0-0`
-    } else if (xp) {
-      ret = `>=${M}.${m}.0${pr
-      } <${M}.${+m + 1}.0-0`
-    }
-
-    debug('xRange return', ret)
-
-    return ret
-  })
-}
-
-// Because * is AND-ed with everything else in the comparator,
-// and '' means "any version", just remove the *s entirely.
-const replaceStars = (comp, options) => {
-  debug('replaceStars', comp, options)
-  // Looseness is ignored here.  star is always as loose as it gets!
-  return comp
-    .trim()
-    .replace(re[t.STAR], '')
-}
-
-const replaceGTE0 = (comp, options) => {
-  debug('replaceGTE0', comp, options)
-  return comp
-    .trim()
-    .replace(re[options.includePrerelease ? t.GTE0PRE : t.GTE0], '')
-}
-
-// This function is passed to string.replace(re[t.HYPHENRANGE])
-// M, m, patch, prerelease, build
-// 1.2 - 3.4.5 => >=1.2.0 <=3.4.5
-// 1.2.3 - 3.4 => >=1.2.0 <3.5.0-0 Any 3.4.x will do
-// 1.2 - 3.4 => >=1.2.0 <3.5.0-0
-// TODO build?
-const hyphenReplace = incPr => ($0,
-  from, fM, fm, fp, fpr, fb,
-  to, tM, tm, tp, tpr) => {
-  if (isX(fM)) {
-    from = ''
-  } else if (isX(fm)) {
-    from = `>=${fM}.0.0${incPr ? '-0' : ''}`
-  } else if (isX(fp)) {
-    from = `>=${fM}.${fm}.0${incPr ? '-0' : ''}`
-  } else if (fpr) {
-    from = `>=${from}`
-  } else {
-    from = `>=${from}${incPr ? '-0' : ''}`
-  }
-
-  if (isX(tM)) {
-    to = ''
-  } else if (isX(tm)) {
-    to = `<${+tM + 1}.0.0-0`
-  } else if (isX(tp)) {
-    to = `<${tM}.${+tm + 1}.0-0`
-  } else if (tpr) {
-    to = `<=${tM}.${tm}.${tp}-${tpr}`
-  } else if (incPr) {
-    to = `<${tM}.${tm}.${+tp + 1}-0`
-  } else {
-    to = `<=${to}`
-  }
-
-  return `${from} ${to}`.trim()
-}
-
-const testSet = (set, version, options) => {
-  for (let i = 0; i < set.length; i++) {
-    if (!set[i].test(version)) {
-      return false
-    }
-  }
-
-  if (version.prerelease.length && !options.includePrerelease) {
-    // Find the set of versions that are allowed to have prereleases
-    // For example, ^1.2.3-pr.1 desugars to >=1.2.3-pr.1 <2.0.0
-    // That should allow `1.2.3-pr.2` to pass.
-    // However, `1.2.4-alpha.notready` should NOT be allowed,
-    // even though it's within the range set by the comparators.
-    for (let i = 0; i < set.length; i++) {
-      debug(set[i].semver)
-      if (set[i].semver === Comparator.ANY) {
-        continue
-      }
-
-      if (set[i].semver.prerelease.length > 0) {
-        const allowed = set[i].semver
-        if (allowed.major === version.major &&
-            allowed.minor === version.minor &&
-            allowed.patch === version.patch) {
-          return true
-        }
-      }
-    }
-
-    // Version has a -pre, but it's not one of the ones we like.
-    return false
-  }
-
-  return true
-}
-
-
-/***/ }),
-
-/***/ 1153:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-
-
-const debug = __nccwpck_require__(8277)
-const { MAX_LENGTH, MAX_SAFE_INTEGER } = __nccwpck_require__(947)
-const { safeRe: re, t } = __nccwpck_require__(5357)
-
-const parseOptions = __nccwpck_require__(5226)
-const { compareIdentifiers } = __nccwpck_require__(1362)
-
-const isPrereleaseIdentifier = (prerelease, identifier) => {
-  const identifiers = identifier.split('.')
-  if (identifiers.length > prerelease.length) {
-    return false
-  }
-
-  for (let i = 0; i < identifiers.length; i++) {
-    if (compareIdentifiers(prerelease[i], identifiers[i]) !== 0) {
-      return false
-    }
-  }
-
-  return true
-}
-
-class SemVer {
-  constructor (version, options) {
-    options = parseOptions(options)
-
-    if (version instanceof SemVer) {
-      if (version.loose === !!options.loose &&
-        version.includePrerelease === !!options.includePrerelease) {
-        return version
-      } else {
-        version = version.version
-      }
-    } else if (typeof version !== 'string') {
-      throw new TypeError(`Invalid version. Must be a string. Got type "${typeof version}".`)
-    }
-
-    if (version.length > MAX_LENGTH) {
-      throw new TypeError(
-        `version is longer than ${MAX_LENGTH} characters`
-      )
-    }
-
-    debug('SemVer', version, options)
-    this.options = options
-    this.loose = !!options.loose
-    // this isn't actually relevant for versions, but keep it so that we
-    // don't run into trouble passing this.options around.
-    this.includePrerelease = !!options.includePrerelease
-
-    const m = version.trim().match(options.loose ? re[t.LOOSE] : re[t.FULL])
-
-    if (!m) {
-      throw new TypeError(`Invalid Version: ${version}`)
-    }
-
-    this.raw = version
-
-    // these are actually numbers
-    this.major = +m[1]
-    this.minor = +m[2]
-    this.patch = +m[3]
-
-    if (this.major > MAX_SAFE_INTEGER || this.major < 0) {
-      throw new TypeError('Invalid major version')
-    }
-
-    if (this.minor > MAX_SAFE_INTEGER || this.minor < 0) {
-      throw new TypeError('Invalid minor version')
-    }
-
-    if (this.patch > MAX_SAFE_INTEGER || this.patch < 0) {
-      throw new TypeError('Invalid patch version')
-    }
-
-    // numberify any prerelease numeric ids
-    if (!m[4]) {
-      this.prerelease = []
-    } else {
-      this.prerelease = m[4].split('.').map((id) => {
-        if (/^[0-9]+$/.test(id)) {
-          const num = +id
-          if (num >= 0 && num < MAX_SAFE_INTEGER) {
-            return num
-          }
-        }
-        return id
-      })
-    }
-
-    this.build = m[5] ? m[5].split('.') : []
-    this.format()
-  }
-
-  format () {
-    this.version = `${this.major}.${this.minor}.${this.patch}`
-    if (this.prerelease.length) {
-      this.version += `-${this.prerelease.join('.')}`
-    }
-    return this.version
-  }
-
-  toString () {
-    return this.version
-  }
-
-  compare (other) {
-    debug('SemVer.compare', this.version, this.options, other)
-    if (!(other instanceof SemVer)) {
-      if (typeof other === 'string' && other === this.version) {
-        return 0
-      }
-      other = new SemVer(other, this.options)
-    }
-
-    if (other.version === this.version) {
-      return 0
-    }
-
-    return this.compareMain(other) || this.comparePre(other)
-  }
-
-  compareMain (other) {
-    if (!(other instanceof SemVer)) {
-      other = new SemVer(other, this.options)
-    }
-
-    if (this.major < other.major) {
-      return -1
-    }
-    if (this.major > other.major) {
-      return 1
-    }
-    if (this.minor < other.minor) {
-      return -1
-    }
-    if (this.minor > other.minor) {
-      return 1
-    }
-    if (this.patch < other.patch) {
-      return -1
-    }
-    if (this.patch > other.patch) {
-      return 1
-    }
-    return 0
-  }
-
-  comparePre (other) {
-    if (!(other instanceof SemVer)) {
-      other = new SemVer(other, this.options)
-    }
-
-    // NOT having a prerelease is > having one
-    if (this.prerelease.length && !other.prerelease.length) {
-      return -1
-    } else if (!this.prerelease.length && other.prerelease.length) {
-      return 1
-    } else if (!this.prerelease.length && !other.prerelease.length) {
-      return 0
-    }
-
-    let i = 0
-    do {
-      const a = this.prerelease[i]
-      const b = other.prerelease[i]
-      debug('prerelease compare', i, a, b)
-      if (a === undefined && b === undefined) {
-        return 0
-      } else if (b === undefined) {
-        return 1
-      } else if (a === undefined) {
-        return -1
-      } else if (a === b) {
-        continue
-      } else {
-        return compareIdentifiers(a, b)
-      }
-    } while (++i)
-  }
-
-  compareBuild (other) {
-    if (!(other instanceof SemVer)) {
-      other = new SemVer(other, this.options)
-    }
-
-    let i = 0
-    do {
-      const a = this.build[i]
-      const b = other.build[i]
-      debug('build compare', i, a, b)
-      if (a === undefined && b === undefined) {
-        return 0
-      } else if (b === undefined) {
-        return 1
-      } else if (a === undefined) {
-        return -1
-      } else if (a === b) {
-        continue
-      } else {
-        return compareIdentifiers(a, b)
-      }
-    } while (++i)
-  }
-
-  // preminor will bump the version up to the next minor release, and immediately
-  // down to pre-release. premajor and prepatch work the same way.
-  inc (release, identifier, identifierBase) {
-    if (release.startsWith('pre')) {
-      if (!identifier && identifierBase === false) {
-        throw new Error('invalid increment argument: identifier is empty')
-      }
-      // Avoid an invalid semver results
-      if (identifier) {
-        const match = `-${identifier}`.match(this.options.loose ? re[t.PRERELEASELOOSE] : re[t.PRERELEASE])
-        if (!match || match[1] !== identifier) {
-          throw new Error(`invalid identifier: ${identifier}`)
-        }
-      }
-    }
-
-    switch (release) {
-      case 'premajor':
-        this.prerelease.length = 0
-        this.patch = 0
-        this.minor = 0
-        this.major++
-        this.inc('pre', identifier, identifierBase)
-        break
-      case 'preminor':
-        this.prerelease.length = 0
-        this.patch = 0
-        this.minor++
-        this.inc('pre', identifier, identifierBase)
-        break
-      case 'prepatch':
-        // If this is already a prerelease, it will bump to the next version
-        // drop any prereleases that might already exist, since they are not
-        // relevant at this point.
-        this.prerelease.length = 0
-        this.inc('patch', identifier, identifierBase)
-        this.inc('pre', identifier, identifierBase)
-        break
-      // If the input is a non-prerelease version, this acts the same as
-      // prepatch.
-      case 'prerelease':
-        if (this.prerelease.length === 0) {
-          this.inc('patch', identifier, identifierBase)
-        }
-        this.inc('pre', identifier, identifierBase)
-        break
-      case 'release':
-        if (this.prerelease.length === 0) {
-          throw new Error(`version ${this.raw} is not a prerelease`)
-        }
-        this.prerelease.length = 0
-        break
-
-      case 'major':
-        // If this is a pre-major version, bump up to the same major version.
-        // Otherwise increment major.
-        // 1.0.0-5 bumps to 1.0.0
-        // 1.1.0 bumps to 2.0.0
-        if (
-          this.minor !== 0 ||
-          this.patch !== 0 ||
-          this.prerelease.length === 0
-        ) {
-          this.major++
-        }
-        this.minor = 0
-        this.patch = 0
-        this.prerelease = []
-        break
-      case 'minor':
-        // If this is a pre-minor version, bump up to the same minor version.
-        // Otherwise increment minor.
-        // 1.2.0-5 bumps to 1.2.0
-        // 1.2.1 bumps to 1.3.0
-        if (this.patch !== 0 || this.prerelease.length === 0) {
-          this.minor++
-        }
-        this.patch = 0
-        this.prerelease = []
-        break
-      case 'patch':
-        // If this is not a pre-release version, it will increment the patch.
-        // If it is a pre-release it will bump up to the same patch version.
-        // 1.2.0-5 patches to 1.2.0
-        // 1.2.0 patches to 1.2.1
-        if (this.prerelease.length === 0) {
-          this.patch++
-        }
-        this.prerelease = []
-        break
-      // This probably shouldn't be used publicly.
-      // 1.0.0 'pre' would become 1.0.0-0 which is the wrong direction.
-      case 'pre': {
-        const base = Number(identifierBase) ? 1 : 0
-
-        if (this.prerelease.length === 0) {
-          this.prerelease = [base]
-        } else {
-          let i = this.prerelease.length
-          while (--i >= 0) {
-            if (typeof this.prerelease[i] === 'number') {
-              this.prerelease[i]++
-              i = -2
-            }
-          }
-          if (i === -1) {
-            // didn't increment anything
-            if (identifier === this.prerelease.join('.') && identifierBase === false) {
-              throw new Error('invalid increment argument: identifier already exists')
-            }
-            this.prerelease.push(base)
-          }
-        }
-        if (identifier) {
-          // 1.2.0-beta.1 bumps to 1.2.0-beta.2,
-          // 1.2.0-beta.fooblz or 1.2.0-beta bumps to 1.2.0-beta.0
-          let prerelease = [identifier, base]
-          if (identifierBase === false) {
-            prerelease = [identifier]
-          }
-          if (isPrereleaseIdentifier(this.prerelease, identifier)) {
-            const prereleaseBase = this.prerelease[identifier.split('.').length]
-            if (isNaN(prereleaseBase)) {
-              this.prerelease = prerelease
-            }
-          } else {
-            this.prerelease = prerelease
-          }
-        }
-        break
-      }
-      default:
-        throw new Error(`invalid increment argument: ${release}`)
-    }
-    this.raw = this.format()
-    if (this.build.length) {
-      this.raw += `+${this.build.join('.')}`
-    }
-    return this
-  }
-}
-
-module.exports = SemVer
-
-
-/***/ }),
-
-/***/ 1653:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-
-
-const parse = __nccwpck_require__(3055)
-const clean = (version, options) => {
-  const s = parse(version.trim().replace(/^[=v]+/, ''), options)
-  return s ? s.version : null
-}
-module.exports = clean
-
-
-/***/ }),
-
-/***/ 48:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-
-
-const eq = __nccwpck_require__(7876)
-const neq = __nccwpck_require__(6160)
-const gt = __nccwpck_require__(4349)
-const gte = __nccwpck_require__(9822)
-const lt = __nccwpck_require__(8602)
-const lte = __nccwpck_require__(9667)
-
-const cmp = (a, op, b, loose) => {
-  switch (op) {
-    case '===':
-      if (typeof a === 'object') {
-        a = a.version
-      }
-      if (typeof b === 'object') {
-        b = b.version
-      }
-      return a === b
-
-    case '!==':
-      if (typeof a === 'object') {
-        a = a.version
-      }
-      if (typeof b === 'object') {
-        b = b.version
-      }
-      return a !== b
-
-    case '':
-    case '=':
-    case '==':
-      return eq(a, b, loose)
-
-    case '!=':
-      return neq(a, b, loose)
-
-    case '>':
-      return gt(a, b, loose)
-
-    case '>=':
-      return gte(a, b, loose)
-
-    case '<':
-      return lt(a, b, loose)
-
-    case '<=':
-      return lte(a, b, loose)
-
-    default:
-      throw new TypeError(`Invalid operator: ${op}`)
-  }
-}
-module.exports = cmp
-
-
-/***/ }),
-
-/***/ 4915:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-
-
-const SemVer = __nccwpck_require__(1153)
-const parse = __nccwpck_require__(3055)
-const { safeRe: re, t } = __nccwpck_require__(5357)
-
-const coerce = (version, options) => {
-  if (version instanceof SemVer) {
-    return version
-  }
-
-  if (typeof version === 'number') {
-    version = String(version)
-  }
-
-  if (typeof version !== 'string') {
-    return null
-  }
-
-  options = options || {}
-
-  let match = null
-  if (!options.rtl) {
-    match = version.match(options.includePrerelease ? re[t.COERCEFULL] : re[t.COERCE])
-  } else {
-    // Find the right-most coercible string that does not share
-    // a terminus with a more left-ward coercible string.
-    // Eg, '1.2.3.4' wants to coerce '2.3.4', not '3.4' or '4'
-    // With includePrerelease option set, '1.2.3.4-rc' wants to coerce '2.3.4-rc', not '2.3.4'
-    //
-    // Walk through the string checking with a /g regexp
-    // Manually set the index so as to pick up overlapping matches.
-    // Stop when we get a match that ends at the string end, since no
-    // coercible string can be more right-ward without the same terminus.
-    const coerceRtlRegex = options.includePrerelease ? re[t.COERCERTLFULL] : re[t.COERCERTL]
-    let next
-    while ((next = coerceRtlRegex.exec(version)) &&
-        (!match || match.index + match[0].length !== version.length)
-    ) {
-      if (!match ||
-            next.index + next[0].length !== match.index + match[0].length) {
-        match = next
-      }
-      coerceRtlRegex.lastIndex = next.index + next[1].length + next[2].length
-    }
-    // leave it in a clean state
-    coerceRtlRegex.lastIndex = -1
-  }
-
-  if (match === null) {
-    return null
-  }
-
-  const major = match[2]
-  const minor = match[3] || '0'
-  const patch = match[4] || '0'
-  const prerelease = options.includePrerelease && match[5] ? `-${match[5]}` : ''
-  const build = options.includePrerelease && match[6] ? `+${match[6]}` : ''
-
-  return parse(`${major}.${minor}.${patch}${prerelease}${build}`, options)
-}
-module.exports = coerce
-
-
-/***/ }),
-
-/***/ 7238:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-
-
-const SemVer = __nccwpck_require__(1153)
-const compareBuild = (a, b, loose) => {
-  const versionA = new SemVer(a, loose)
-  const versionB = new SemVer(b, loose)
-  return versionA.compare(versionB) || versionA.compareBuild(versionB)
-}
-module.exports = compareBuild
-
-
-/***/ }),
-
-/***/ 1112:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-
-
-const compare = __nccwpck_require__(6375)
-const compareLoose = (a, b) => compare(a, b, true)
-module.exports = compareLoose
-
-
-/***/ }),
-
-/***/ 6375:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-
-
-const SemVer = __nccwpck_require__(1153)
-const compare = (a, b, loose) =>
-  new SemVer(a, loose).compare(new SemVer(b, loose))
-
-module.exports = compare
-
-
-/***/ }),
-
-/***/ 745:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-
-
-const parse = __nccwpck_require__(3055)
-
-const diff = (version1, version2) => {
-  const v1 = parse(version1, null, true)
-  const v2 = parse(version2, null, true)
-  const comparison = v1.compare(v2)
-
-  if (comparison === 0) {
-    return null
-  }
-
-  const v1Higher = comparison > 0
-  const highVersion = v1Higher ? v1 : v2
-  const lowVersion = v1Higher ? v2 : v1
-  const highHasPre = !!highVersion.prerelease.length
-  const lowHasPre = !!lowVersion.prerelease.length
-
-  if (lowHasPre && !highHasPre) {
-    // Going from prerelease -> no prerelease requires some special casing
-
-    // If the low version has only a major, then it will always be a major
-    // Some examples:
-    // 1.0.0-1 -> 1.0.0
-    // 1.0.0-1 -> 1.1.1
-    // 1.0.0-1 -> 2.0.0
-    if (!lowVersion.patch && !lowVersion.minor) {
-      return 'major'
-    }
-
-    // If the main part has no difference
-    if (lowVersion.compareMain(highVersion) === 0) {
-      if (lowVersion.minor && !lowVersion.patch) {
-        return 'minor'
-      }
-      return 'patch'
-    }
-  }
-
-  // add the `pre` prefix if we are going to a prerelease version
-  const prefix = highHasPre ? 'pre' : ''
-
-  if (v1.major !== v2.major) {
-    return prefix + 'major'
-  }
-
-  if (v1.minor !== v2.minor) {
-    return prefix + 'minor'
-  }
-
-  if (v1.patch !== v2.patch) {
-    return prefix + 'patch'
-  }
-
-  // high and low are prereleases
-  return 'prerelease'
-}
-
-module.exports = diff
-
-
-/***/ }),
-
-/***/ 7876:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-
-
-const compare = __nccwpck_require__(6375)
-const eq = (a, b, loose) => compare(a, b, loose) === 0
-module.exports = eq
-
-
-/***/ }),
-
-/***/ 4349:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-
-
-const compare = __nccwpck_require__(6375)
-const gt = (a, b, loose) => compare(a, b, loose) > 0
-module.exports = gt
-
-
-/***/ }),
-
-/***/ 9822:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-
-
-const compare = __nccwpck_require__(6375)
-const gte = (a, b, loose) => compare(a, b, loose) >= 0
-module.exports = gte
-
-
-/***/ }),
-
-/***/ 2384:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-
-
-const SemVer = __nccwpck_require__(1153)
-
-const inc = (version, release, options, identifier, identifierBase) => {
-  if (typeof (options) === 'string') {
-    identifierBase = identifier
-    identifier = options
-    options = undefined
-  }
-
-  try {
-    return new SemVer(
-      version instanceof SemVer ? version.version : version,
-      options
-    ).inc(release, identifier, identifierBase).version
-  } catch (er) {
-    return null
-  }
-}
-module.exports = inc
-
-
-/***/ }),
-
-/***/ 8602:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-
-
-const compare = __nccwpck_require__(6375)
-const lt = (a, b, loose) => compare(a, b, loose) < 0
-module.exports = lt
-
-
-/***/ }),
-
-/***/ 9667:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-
-
-const compare = __nccwpck_require__(6375)
-const lte = (a, b, loose) => compare(a, b, loose) <= 0
-module.exports = lte
-
-
-/***/ }),
-
-/***/ 8433:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-
-
-const SemVer = __nccwpck_require__(1153)
-const major = (a, loose) => new SemVer(a, loose).major
-module.exports = major
-
-
-/***/ }),
-
-/***/ 5173:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-
-
-const SemVer = __nccwpck_require__(1153)
-const minor = (a, loose) => new SemVer(a, loose).minor
-module.exports = minor
-
-
-/***/ }),
-
-/***/ 6160:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-
-
-const compare = __nccwpck_require__(6375)
-const neq = (a, b, loose) => compare(a, b, loose) !== 0
-module.exports = neq
-
-
-/***/ }),
-
-/***/ 3055:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-
-
-const SemVer = __nccwpck_require__(1153)
-const parse = (version, options, throwErrors = false) => {
-  if (version instanceof SemVer) {
-    return version
-  }
-  try {
-    return new SemVer(version, options)
-  } catch (er) {
-    if (!throwErrors) {
-      return null
-    }
-    throw er
-  }
-}
-
-module.exports = parse
-
-
-/***/ }),
-
-/***/ 5902:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-
-
-const SemVer = __nccwpck_require__(1153)
-const patch = (a, loose) => new SemVer(a, loose).patch
-module.exports = patch
-
-
-/***/ }),
-
-/***/ 8408:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-
-
-const parse = __nccwpck_require__(3055)
-const prerelease = (version, options) => {
-  const parsed = parse(version, options)
-  return (parsed && parsed.prerelease.length) ? parsed.prerelease : null
-}
-module.exports = prerelease
-
-
-/***/ }),
-
-/***/ 2375:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-
-
-const compare = __nccwpck_require__(6375)
-const rcompare = (a, b, loose) => compare(b, a, loose)
-module.exports = rcompare
-
-
-/***/ }),
-
-/***/ 8758:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-
-
-const compareBuild = __nccwpck_require__(7238)
-const rsort = (list, loose) => list.sort((a, b) => compareBuild(b, a, loose))
-module.exports = rsort
-
-
-/***/ }),
-
-/***/ 505:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-
-
-const Range = __nccwpck_require__(6816)
-const satisfies = (version, range, options) => {
-  try {
-    range = new Range(range, options)
-  } catch (er) {
-    return false
-  }
-  return range.test(version)
-}
-module.exports = satisfies
-
-
-/***/ }),
-
-/***/ 9414:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-
-
-const compareBuild = __nccwpck_require__(7238)
-const sort = (list, loose) => list.sort((a, b) => compareBuild(a, b, loose))
-module.exports = sort
-
-
-/***/ }),
-
-/***/ 5056:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-
-
-const parse = __nccwpck_require__(3055)
-const constants = __nccwpck_require__(947)
-const SemVer = __nccwpck_require__(1153)
-
-const truncate = (version, truncation, options) => {
-  if (!constants.RELEASE_TYPES.includes(truncation)) {
-    return null
-  }
-
-  const clonedVersion = cloneInputVersion(version, options)
-  return clonedVersion && doTruncation(clonedVersion, truncation)
-}
-
-const cloneInputVersion = (version, options) => {
-  const versionStringToParse = (
-    version instanceof SemVer ? version.version : version
-  )
-
-  return parse(versionStringToParse, options)
-}
-
-const doTruncation = (version, truncation) => {
-  if (isPrerelease(truncation)) {
-    return version.version
-  }
-
-  version.prerelease = []
-
-  switch (truncation) {
-    case 'major':
-      version.minor = 0
-      version.patch = 0
-      break
-    case 'minor':
-      version.patch = 0
-      break
-  }
-
-  return version.format()
-}
-
-const isPrerelease = (type) => {
-  return type.startsWith('pre')
-}
-
-module.exports = truncate
-
-
-/***/ }),
-
-/***/ 1750:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-
-
-const parse = __nccwpck_require__(3055)
-const valid = (version, options) => {
-  const v = parse(version, options)
-  return v ? v.version : null
-}
-module.exports = valid
-
-
-/***/ }),
-
-/***/ 2710:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-
-
-// just pre-load all the stuff that index.js lazily exports
-const internalRe = __nccwpck_require__(5357)
-const constants = __nccwpck_require__(947)
-const SemVer = __nccwpck_require__(1153)
-const identifiers = __nccwpck_require__(1362)
-const parse = __nccwpck_require__(3055)
-const valid = __nccwpck_require__(1750)
-const clean = __nccwpck_require__(1653)
-const inc = __nccwpck_require__(2384)
-const diff = __nccwpck_require__(745)
-const major = __nccwpck_require__(8433)
-const minor = __nccwpck_require__(5173)
-const patch = __nccwpck_require__(5902)
-const prerelease = __nccwpck_require__(8408)
-const compare = __nccwpck_require__(6375)
-const rcompare = __nccwpck_require__(2375)
-const compareLoose = __nccwpck_require__(1112)
-const compareBuild = __nccwpck_require__(7238)
-const sort = __nccwpck_require__(9414)
-const rsort = __nccwpck_require__(8758)
-const gt = __nccwpck_require__(4349)
-const lt = __nccwpck_require__(8602)
-const eq = __nccwpck_require__(7876)
-const neq = __nccwpck_require__(6160)
-const gte = __nccwpck_require__(9822)
-const lte = __nccwpck_require__(9667)
-const cmp = __nccwpck_require__(48)
-const coerce = __nccwpck_require__(4915)
-const truncate = __nccwpck_require__(5056)
-const Comparator = __nccwpck_require__(9497)
-const Range = __nccwpck_require__(6816)
-const satisfies = __nccwpck_require__(505)
-const toComparators = __nccwpck_require__(2675)
-const maxSatisfying = __nccwpck_require__(6027)
-const minSatisfying = __nccwpck_require__(1745)
-const minVersion = __nccwpck_require__(4156)
-const validRange = __nccwpck_require__(3319)
-const outside = __nccwpck_require__(9442)
-const gtr = __nccwpck_require__(9294)
-const ltr = __nccwpck_require__(1107)
-const intersects = __nccwpck_require__(7427)
-const simplifyRange = __nccwpck_require__(7178)
-const subset = __nccwpck_require__(5499)
-module.exports = {
-  parse,
-  valid,
-  clean,
-  inc,
-  diff,
-  major,
-  minor,
-  patch,
-  prerelease,
-  compare,
-  rcompare,
-  compareLoose,
-  compareBuild,
-  sort,
-  rsort,
-  gt,
-  lt,
-  eq,
-  neq,
-  gte,
-  lte,
-  cmp,
-  coerce,
-  truncate,
-  Comparator,
-  Range,
-  satisfies,
-  toComparators,
-  maxSatisfying,
-  minSatisfying,
-  minVersion,
-  validRange,
-  outside,
-  gtr,
-  ltr,
-  intersects,
-  simplifyRange,
-  subset,
-  SemVer,
-  re: internalRe.re,
-  src: internalRe.src,
-  tokens: internalRe.t,
-  SEMVER_SPEC_VERSION: constants.SEMVER_SPEC_VERSION,
-  RELEASE_TYPES: constants.RELEASE_TYPES,
-  compareIdentifiers: identifiers.compareIdentifiers,
-  rcompareIdentifiers: identifiers.rcompareIdentifiers,
-}
-
-
-/***/ }),
-
-/***/ 947:
-/***/ ((module) => {
-
-
-
-// Note: this is the semver.org version of the spec that it implements
-// Not necessarily the package version of this code.
-const SEMVER_SPEC_VERSION = '2.0.0'
-
-const MAX_LENGTH = 256
-const MAX_SAFE_INTEGER = Number.MAX_SAFE_INTEGER ||
-/* istanbul ignore next */ 9007199254740991
-
-// Max safe segment length for coercion.
-const MAX_SAFE_COMPONENT_LENGTH = 16
-
-// Max safe length for a build identifier. The max length minus 6 characters for
-// the shortest version with a build 0.0.0+BUILD.
-const MAX_SAFE_BUILD_LENGTH = MAX_LENGTH - 6
-
-const RELEASE_TYPES = [
-  'major',
-  'premajor',
-  'minor',
-  'preminor',
-  'patch',
-  'prepatch',
-  'prerelease',
-]
-
-module.exports = {
-  MAX_LENGTH,
-  MAX_SAFE_COMPONENT_LENGTH,
-  MAX_SAFE_BUILD_LENGTH,
-  MAX_SAFE_INTEGER,
-  RELEASE_TYPES,
-  SEMVER_SPEC_VERSION,
-  FLAG_INCLUDE_PRERELEASE: 0b001,
-  FLAG_LOOSE: 0b010,
-}
-
-
-/***/ }),
-
-/***/ 8277:
-/***/ ((module) => {
-
-
-
-const debug = (
-  typeof process === 'object' &&
-  process.env &&
-  process.env.NODE_DEBUG &&
-  /\bsemver\b/i.test(process.env.NODE_DEBUG)
-) ? (...args) => console.error('SEMVER', ...args)
-  : () => {}
-
-module.exports = debug
-
-
-/***/ }),
-
-/***/ 1362:
-/***/ ((module) => {
-
-
-
-const numeric = /^[0-9]+$/
-const compareIdentifiers = (a, b) => {
-  if (typeof a === 'number' && typeof b === 'number') {
-    return a === b ? 0 : a < b ? -1 : 1
-  }
-
-  const anum = numeric.test(a)
-  const bnum = numeric.test(b)
-
-  if (anum && bnum) {
-    a = +a
-    b = +b
-  }
-
-  return a === b ? 0
-    : (anum && !bnum) ? -1
-    : (bnum && !anum) ? 1
-    : a < b ? -1
-    : 1
-}
-
-const rcompareIdentifiers = (a, b) => compareIdentifiers(b, a)
-
-module.exports = {
-  compareIdentifiers,
-  rcompareIdentifiers,
-}
-
-
-/***/ }),
-
-/***/ 6829:
-/***/ ((module) => {
-
-
-
-class LRUCache {
-  constructor () {
-    this.max = 1000
-    this.map = new Map()
-  }
-
-  get (key) {
-    const value = this.map.get(key)
-    if (value === undefined) {
-      return undefined
-    } else {
-      // Remove the key from the map and add it to the end
-      this.map.delete(key)
-      this.map.set(key, value)
-      return value
-    }
-  }
-
-  delete (key) {
-    return this.map.delete(key)
-  }
-
-  set (key, value) {
-    const deleted = this.delete(key)
-
-    if (!deleted && value !== undefined) {
-      // If cache is full, delete the least recently used item
-      if (this.map.size >= this.max) {
-        const firstKey = this.map.keys().next().value
-        this.delete(firstKey)
-      }
-
-      this.map.set(key, value)
-    }
-
-    return this
-  }
-}
-
-module.exports = LRUCache
-
-
-/***/ }),
-
-/***/ 5226:
-/***/ ((module) => {
-
-
-
-// parse out just the options we care about
-const looseOption = Object.freeze({ loose: true })
-const emptyOpts = Object.freeze({ })
-const parseOptions = options => {
-  if (!options) {
-    return emptyOpts
-  }
-
-  if (typeof options !== 'object') {
-    return looseOption
-  }
-
-  return options
-}
-module.exports = parseOptions
-
-
-/***/ }),
-
-/***/ 5357:
-/***/ ((module, exports, __nccwpck_require__) => {
-
-
-
-const {
-  MAX_SAFE_COMPONENT_LENGTH,
-  MAX_SAFE_BUILD_LENGTH,
-  MAX_LENGTH,
-} = __nccwpck_require__(947)
-const debug = __nccwpck_require__(8277)
-exports = module.exports = {}
-
-// The actual regexps go on exports.re
-const re = exports.re = []
-const safeRe = exports.safeRe = []
-const src = exports.src = []
-const safeSrc = exports.safeSrc = []
-const t = exports.t = {}
-let R = 0
-
-const LETTERDASHNUMBER = '[a-zA-Z0-9-]'
-
-// Replace some greedy regex tokens to prevent regex dos issues. These regex are
-// used internally via the safeRe object since all inputs in this library get
-// normalized first to trim and collapse all extra whitespace. The original
-// regexes are exported for userland consumption and lower level usage. A
-// future breaking change could export the safer regex only with a note that
-// all input should have extra whitespace removed.
-const safeRegexReplacements = [
-  ['\\s', 1],
-  ['\\d', MAX_LENGTH],
-  [LETTERDASHNUMBER, MAX_SAFE_BUILD_LENGTH],
-]
-
-const makeSafeRegex = (value) => {
-  for (const [token, max] of safeRegexReplacements) {
-    value = value
-      .split(`${token}*`).join(`${token}{0,${max}}`)
-      .split(`${token}+`).join(`${token}{1,${max}}`)
-  }
-  return value
-}
-
-const createToken = (name, value, isGlobal) => {
-  const safe = makeSafeRegex(value)
-  const index = R++
-  debug(name, index, value)
-  t[name] = index
-  src[index] = value
-  safeSrc[index] = safe
-  re[index] = new RegExp(value, isGlobal ? 'g' : undefined)
-  safeRe[index] = new RegExp(safe, isGlobal ? 'g' : undefined)
-}
-
-// The following Regular Expressions can be used for tokenizing,
-// validating, and parsing SemVer version strings.
-
-// ## Numeric Identifier
-// A single `0`, or a non-zero digit followed by zero or more digits.
-
-createToken('NUMERICIDENTIFIER', '0|[1-9]\\d*')
-createToken('NUMERICIDENTIFIERLOOSE', '\\d+')
-
-// ## Non-numeric Identifier
-// Zero or more digits, followed by a letter or hyphen, and then zero or
-// more letters, digits, or hyphens.
-
-createToken('NONNUMERICIDENTIFIER', `\\d*[a-zA-Z-]${LETTERDASHNUMBER}*`)
-
-// ## Main Version
-// Three dot-separated numeric identifiers.
-
-createToken('MAINVERSION', `(${src[t.NUMERICIDENTIFIER]})\\.` +
-                   `(${src[t.NUMERICIDENTIFIER]})\\.` +
-                   `(${src[t.NUMERICIDENTIFIER]})`)
-
-createToken('MAINVERSIONLOOSE', `(${src[t.NUMERICIDENTIFIERLOOSE]})\\.` +
-                        `(${src[t.NUMERICIDENTIFIERLOOSE]})\\.` +
-                        `(${src[t.NUMERICIDENTIFIERLOOSE]})`)
-
-// ## Pre-release Version Identifier
-// A numeric identifier, or a non-numeric identifier.
-// Non-numeric identifiers include numeric identifiers but can be longer.
-// Therefore non-numeric identifiers must go first.
-
-createToken('PRERELEASEIDENTIFIER', `(?:${src[t.NONNUMERICIDENTIFIER]
-}|${src[t.NUMERICIDENTIFIER]})`)
-
-createToken('PRERELEASEIDENTIFIERLOOSE', `(?:${src[t.NONNUMERICIDENTIFIER]
-}|${src[t.NUMERICIDENTIFIERLOOSE]})`)
-
-// ## Pre-release Version
-// Hyphen, followed by one or more dot-separated pre-release version
-// identifiers.
-
-createToken('PRERELEASE', `(?:-(${src[t.PRERELEASEIDENTIFIER]
-}(?:\\.${src[t.PRERELEASEIDENTIFIER]})*))`)
-
-createToken('PRERELEASELOOSE', `(?:-?(${src[t.PRERELEASEIDENTIFIERLOOSE]
-}(?:\\.${src[t.PRERELEASEIDENTIFIERLOOSE]})*))`)
-
-// ## Build Metadata Identifier
-// Any combination of digits, letters, or hyphens.
-
-createToken('BUILDIDENTIFIER', `${LETTERDASHNUMBER}+`)
-
-// ## Build Metadata
-// Plus sign, followed by one or more period-separated build metadata
-// identifiers.
-
-createToken('BUILD', `(?:\\+(${src[t.BUILDIDENTIFIER]
-}(?:\\.${src[t.BUILDIDENTIFIER]})*))`)
-
-// ## Full Version String
-// A main version, followed optionally by a pre-release version and
-// build metadata.
-
-// Note that the only major, minor, patch, and pre-release sections of
-// the version string are capturing groups.  The build metadata is not a
-// capturing group, because it should not ever be used in version
-// comparison.
-
-createToken('FULLPLAIN', `v?${src[t.MAINVERSION]
-}${src[t.PRERELEASE]}?${
-  src[t.BUILD]}?`)
-
-createToken('FULL', `^${src[t.FULLPLAIN]}$`)
-
-// like full, but allows v1.2.3 and =1.2.3, which people do sometimes.
-// also, 1.0.0alpha1 (prerelease without the hyphen) which is pretty
-// common in the npm registry.
-createToken('LOOSEPLAIN', `[v=\\s]*${src[t.MAINVERSIONLOOSE]
-}${src[t.PRERELEASELOOSE]}?${
-  src[t.BUILD]}?`)
-
-createToken('LOOSE', `^${src[t.LOOSEPLAIN]}$`)
-
-createToken('GTLT', '((?:<|>)?=?)')
-
-// Something like "2.*" or "1.2.x".
-// Note that "x.x" is a valid xRange identifier, meaning "any version"
-// Only the first item is strictly required.
-createToken('XRANGEIDENTIFIERLOOSE', `${src[t.NUMERICIDENTIFIERLOOSE]}|x|X|\\*`)
-createToken('XRANGEIDENTIFIER', `${src[t.NUMERICIDENTIFIER]}|x|X|\\*`)
-
-createToken('XRANGEPLAIN', `[v=\\s]*(${src[t.XRANGEIDENTIFIER]})` +
-                   `(?:\\.(${src[t.XRANGEIDENTIFIER]})` +
-                   `(?:\\.(${src[t.XRANGEIDENTIFIER]})` +
-                   `(?:${src[t.PRERELEASE]})?${
-                     src[t.BUILD]}?` +
-                   `)?)?`)
-
-createToken('XRANGEPLAINLOOSE', `[v=\\s]*(${src[t.XRANGEIDENTIFIERLOOSE]})` +
-                        `(?:\\.(${src[t.XRANGEIDENTIFIERLOOSE]})` +
-                        `(?:\\.(${src[t.XRANGEIDENTIFIERLOOSE]})` +
-                        `(?:${src[t.PRERELEASELOOSE]})?${
-                          src[t.BUILD]}?` +
-                        `)?)?`)
-
-createToken('XRANGE', `^${src[t.GTLT]}\\s*${src[t.XRANGEPLAIN]}$`)
-createToken('XRANGELOOSE', `^${src[t.GTLT]}\\s*${src[t.XRANGEPLAINLOOSE]}$`)
-
-// Coercion.
-// Extract anything that could conceivably be a part of a valid semver
-createToken('COERCEPLAIN', `${'(^|[^\\d])' +
-              '(\\d{1,'}${MAX_SAFE_COMPONENT_LENGTH}})` +
-              `(?:\\.(\\d{1,${MAX_SAFE_COMPONENT_LENGTH}}))?` +
-              `(?:\\.(\\d{1,${MAX_SAFE_COMPONENT_LENGTH}}))?`)
-createToken('COERCE', `${src[t.COERCEPLAIN]}(?:$|[^\\d])`)
-createToken('COERCEFULL', src[t.COERCEPLAIN] +
-              `(?:${src[t.PRERELEASE]})?` +
-              `(?:${src[t.BUILD]})?` +
-              `(?:$|[^\\d])`)
-createToken('COERCERTL', src[t.COERCE], true)
-createToken('COERCERTLFULL', src[t.COERCEFULL], true)
-
-// Tilde ranges.
-// Meaning is "reasonably at or greater than"
-createToken('LONETILDE', '(?:~>?)')
-
-createToken('TILDETRIM', `(\\s*)${src[t.LONETILDE]}\\s+`, true)
-exports.tildeTrimReplace = '$1~'
-
-createToken('TILDE', `^${src[t.LONETILDE]}${src[t.XRANGEPLAIN]}$`)
-createToken('TILDELOOSE', `^${src[t.LONETILDE]}${src[t.XRANGEPLAINLOOSE]}$`)
-
-// Caret ranges.
-// Meaning is "at least and backwards compatible with"
-createToken('LONECARET', '(?:\\^)')
-
-createToken('CARETTRIM', `(\\s*)${src[t.LONECARET]}\\s+`, true)
-exports.caretTrimReplace = '$1^'
-
-createToken('CARET', `^${src[t.LONECARET]}${src[t.XRANGEPLAIN]}$`)
-createToken('CARETLOOSE', `^${src[t.LONECARET]}${src[t.XRANGEPLAINLOOSE]}$`)
-
-// A simple gt/lt/eq thing, or just "" to indicate "any version"
-createToken('COMPARATORLOOSE', `^${src[t.GTLT]}\\s*(${src[t.LOOSEPLAIN]})$|^$`)
-createToken('COMPARATOR', `^${src[t.GTLT]}\\s*(${src[t.FULLPLAIN]})$|^$`)
-
-// An expression to strip any whitespace between the gtlt and the thing
-// it modifies, so that `> 1.2.3` ==> `>1.2.3`
-createToken('COMPARATORTRIM', `(\\s*)${src[t.GTLT]
-}\\s*(${src[t.LOOSEPLAIN]}|${src[t.XRANGEPLAIN]})`, true)
-exports.comparatorTrimReplace = '$1$2$3'
-
-// Something like `1.2.3 - 1.2.4`
-// Note that these all use the loose form, because they'll be
-// checked against either the strict or loose comparator form
-// later.
-createToken('HYPHENRANGE', `^\\s*(${src[t.XRANGEPLAIN]})` +
-                   `\\s+-\\s+` +
-                   `(${src[t.XRANGEPLAIN]})` +
-                   `\\s*$`)
-
-createToken('HYPHENRANGELOOSE', `^\\s*(${src[t.XRANGEPLAINLOOSE]})` +
-                        `\\s+-\\s+` +
-                        `(${src[t.XRANGEPLAINLOOSE]})` +
-                        `\\s*$`)
-
-// Star ranges basically just allow anything at all.
-createToken('STAR', '(<|>)?=?\\s*\\*')
-// >=0.0.0 is like a star
-createToken('GTE0', '^\\s*>=\\s*0\\.0\\.0\\s*$')
-createToken('GTE0PRE', '^\\s*>=\\s*0\\.0\\.0-0\\s*$')
-
-
-/***/ }),
-
-/***/ 9294:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-
-
-// Determine if version is greater than all the versions possible in the range.
-const outside = __nccwpck_require__(9442)
-const gtr = (version, range, options) => outside(version, range, '>', options)
-module.exports = gtr
-
-
-/***/ }),
-
-/***/ 7427:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-
-
-const Range = __nccwpck_require__(6816)
-const intersects = (r1, r2, options) => {
-  r1 = new Range(r1, options)
-  r2 = new Range(r2, options)
-  return r1.intersects(r2, options)
-}
-module.exports = intersects
-
-
-/***/ }),
-
-/***/ 1107:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-
-
-const outside = __nccwpck_require__(9442)
-// Determine if version is less than all the versions possible in the range
-const ltr = (version, range, options) => outside(version, range, '<', options)
-module.exports = ltr
-
-
-/***/ }),
-
-/***/ 6027:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-
-
-const SemVer = __nccwpck_require__(1153)
-const Range = __nccwpck_require__(6816)
-
-const maxSatisfying = (versions, range, options) => {
-  let max = null
-  let maxSV = null
-  let rangeObj = null
-  try {
-    rangeObj = new Range(range, options)
-  } catch (er) {
-    return null
-  }
-  versions.forEach((v) => {
-    if (rangeObj.test(v)) {
-      // satisfies(v, range, options)
-      if (!max || maxSV.compare(v) === -1) {
-        // compare(max, v, true)
-        max = v
-        maxSV = new SemVer(max, options)
-      }
-    }
-  })
-  return max
-}
-module.exports = maxSatisfying
-
-
-/***/ }),
-
-/***/ 1745:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-
-
-const SemVer = __nccwpck_require__(1153)
-const Range = __nccwpck_require__(6816)
-const minSatisfying = (versions, range, options) => {
-  let min = null
-  let minSV = null
-  let rangeObj = null
-  try {
-    rangeObj = new Range(range, options)
-  } catch (er) {
-    return null
-  }
-  versions.forEach((v) => {
-    if (rangeObj.test(v)) {
-      // satisfies(v, range, options)
-      if (!min || minSV.compare(v) === 1) {
-        // compare(min, v, true)
-        min = v
-        minSV = new SemVer(min, options)
-      }
-    }
-  })
-  return min
-}
-module.exports = minSatisfying
-
-
-/***/ }),
-
-/***/ 4156:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-
-
-const SemVer = __nccwpck_require__(1153)
-const Range = __nccwpck_require__(6816)
-const gt = __nccwpck_require__(4349)
-
-const minVersion = (range, loose) => {
-  range = new Range(range, loose)
-
-  let minver = new SemVer('0.0.0')
-  if (range.test(minver)) {
-    return minver
-  }
-
-  minver = new SemVer('0.0.0-0')
-  if (range.test(minver)) {
-    return minver
-  }
-
-  minver = null
-  for (let i = 0; i < range.set.length; ++i) {
-    const comparators = range.set[i]
-
-    let setMin = null
-    comparators.forEach((comparator) => {
-      // Clone to avoid manipulating the comparator's semver object.
-      const compver = new SemVer(comparator.semver.version)
-      switch (comparator.operator) {
-        case '>':
-          if (compver.prerelease.length === 0) {
-            compver.patch++
-          } else {
-            compver.prerelease.push(0)
-          }
-          compver.raw = compver.format()
-          /* fallthrough */
-        case '':
-        case '>=':
-          if (!setMin || gt(compver, setMin)) {
-            setMin = compver
-          }
-          break
-        case '<':
-        case '<=':
-          /* Ignore maximum versions */
-          break
-        /* istanbul ignore next */
-        default:
-          throw new Error(`Unexpected operation: ${comparator.operator}`)
-      }
-    })
-    if (setMin && (!minver || gt(minver, setMin))) {
-      minver = setMin
-    }
-  }
-
-  if (minver && range.test(minver)) {
-    return minver
-  }
-
-  return null
-}
-module.exports = minVersion
-
-
-/***/ }),
-
-/***/ 9442:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-
-
-const SemVer = __nccwpck_require__(1153)
-const Comparator = __nccwpck_require__(9497)
-const { ANY } = Comparator
-const Range = __nccwpck_require__(6816)
-const satisfies = __nccwpck_require__(505)
-const gt = __nccwpck_require__(4349)
-const lt = __nccwpck_require__(8602)
-const lte = __nccwpck_require__(9667)
-const gte = __nccwpck_require__(9822)
-
-const outside = (version, range, hilo, options) => {
-  version = new SemVer(version, options)
-  range = new Range(range, options)
-
-  let gtfn, ltefn, ltfn, comp, ecomp
-  switch (hilo) {
-    case '>':
-      gtfn = gt
-      ltefn = lte
-      ltfn = lt
-      comp = '>'
-      ecomp = '>='
-      break
-    case '<':
-      gtfn = lt
-      ltefn = gte
-      ltfn = gt
-      comp = '<'
-      ecomp = '<='
-      break
-    default:
-      throw new TypeError('Must provide a hilo val of "<" or ">"')
-  }
-
-  // If it satisfies the range it is not outside
-  if (satisfies(version, range, options)) {
-    return false
-  }
-
-  // From now on, variable terms are as if we're in "gtr" mode.
-  // but note that everything is flipped for the "ltr" function.
-
-  for (let i = 0; i < range.set.length; ++i) {
-    const comparators = range.set[i]
-
-    let high = null
-    let low = null
-
-    comparators.forEach((comparator) => {
-      if (comparator.semver === ANY) {
-        comparator = new Comparator('>=0.0.0')
-      }
-      high = high || comparator
-      low = low || comparator
-      if (gtfn(comparator.semver, high.semver, options)) {
-        high = comparator
-      } else if (ltfn(comparator.semver, low.semver, options)) {
-        low = comparator
-      }
-    })
-
-    // If the edge version comparator has a operator then our version
-    // isn't outside it
-    if (high.operator === comp || high.operator === ecomp) {
-      return false
-    }
-
-    // If the lowest version comparator has an operator and our version
-    // is less than it then it isn't higher than the range
-    if ((!low.operator || low.operator === comp) &&
-        ltefn(version, low.semver)) {
-      return false
-    } else if (low.operator === ecomp && ltfn(version, low.semver)) {
-      return false
-    }
-  }
-  return true
-}
-
-module.exports = outside
-
-
-/***/ }),
-
-/***/ 7178:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-
-
-// given a set of versions and a range, create a "simplified" range
-// that includes the same versions that the original range does
-// If the original range is shorter than the simplified one, return that.
-const satisfies = __nccwpck_require__(505)
-const compare = __nccwpck_require__(6375)
-module.exports = (versions, range, options) => {
-  const set = []
-  let first = null
-  let prev = null
-  const v = versions.sort((a, b) => compare(a, b, options))
-  for (const version of v) {
-    const included = satisfies(version, range, options)
-    if (included) {
-      prev = version
-      if (!first) {
-        first = version
-      }
-    } else {
-      if (prev) {
-        set.push([first, prev])
-      }
-      prev = null
-      first = null
-    }
-  }
-  if (first) {
-    set.push([first, null])
-  }
-
-  const ranges = []
-  for (const [min, max] of set) {
-    if (min === max) {
-      ranges.push(min)
-    } else if (!max && min === v[0]) {
-      ranges.push('*')
-    } else if (!max) {
-      ranges.push(`>=${min}`)
-    } else if (min === v[0]) {
-      ranges.push(`<=${max}`)
-    } else {
-      ranges.push(`${min} - ${max}`)
-    }
-  }
-  const simplified = ranges.join(' || ')
-  const original = typeof range.raw === 'string' ? range.raw : String(range)
-  return simplified.length < original.length ? simplified : range
-}
-
-
-/***/ }),
-
-/***/ 5499:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-
-
-const Range = __nccwpck_require__(6816)
-const Comparator = __nccwpck_require__(9497)
-const { ANY } = Comparator
-const satisfies = __nccwpck_require__(505)
-const compare = __nccwpck_require__(6375)
-
-// Complex range `r1 || r2 || ...` is a subset of `R1 || R2 || ...` iff:
-// - Every simple range `r1, r2, ...` is a null set, OR
-// - Every simple range `r1, r2, ...` which is not a null set is a subset of
-//   some `R1, R2, ...`
-//
-// Simple range `c1 c2 ...` is a subset of simple range `C1 C2 ...` iff:
-// - If c is only the ANY comparator
-//   - If C is only the ANY comparator, return true
-//   - Else if in prerelease mode, return false
-//   - else replace c with `[>=0.0.0]`
-// - If C is only the ANY comparator
-//   - if in prerelease mode, return true
-//   - else replace C with `[>=0.0.0]`
-// - Let EQ be the set of = comparators in c
-// - If EQ is more than one, return true (null set)
-// - Let GT be the highest > or >= comparator in c
-// - Let LT be the lowest < or <= comparator in c
-// - If GT and LT, and GT.semver > LT.semver, return true (null set)
-// - If any C is a = range, and GT or LT are set, return false
-// - If EQ
-//   - If GT, and EQ does not satisfy GT, return true (null set)
-//   - If LT, and EQ does not satisfy LT, return true (null set)
-//   - If EQ satisfies every C, return true
-//   - Else return false
-// - If GT
-//   - If GT.semver is lower than any > or >= comp in C, return false
-//   - If GT is >=, and GT.semver does not satisfy every C, return false
-//   - If GT.semver has a prerelease, and not in prerelease mode
-//     - If no C has a prerelease and the GT.semver tuple, return false
-// - If LT
-//   - If LT.semver is greater than any < or <= comp in C, return false
-//   - If LT is <=, and LT.semver does not satisfy every C, return false
-//   - If LT.semver has a prerelease, and not in prerelease mode
-//     - If no C has a prerelease and the LT.semver tuple, return false
-// - Else return true
-
-const subset = (sub, dom, options = {}) => {
-  if (sub === dom) {
-    return true
-  }
-
-  sub = new Range(sub, options)
-  dom = new Range(dom, options)
-  let sawNonNull = false
-
-  OUTER: for (const simpleSub of sub.set) {
-    for (const simpleDom of dom.set) {
-      const isSub = simpleSubset(simpleSub, simpleDom, options)
-      sawNonNull = sawNonNull || isSub !== null
-      if (isSub) {
-        continue OUTER
-      }
-    }
-    // the null set is a subset of everything, but null simple ranges in
-    // a complex range should be ignored.  so if we saw a non-null range,
-    // then we know this isn't a subset, but if EVERY simple range was null,
-    // then it is a subset.
-    if (sawNonNull) {
-      return false
-    }
-  }
-  return true
-}
-
-const minimumVersionWithPreRelease = [new Comparator('>=0.0.0-0')]
-const minimumVersion = [new Comparator('>=0.0.0')]
-
-const simpleSubset = (sub, dom, options) => {
-  if (sub === dom) {
-    return true
-  }
-
-  if (sub.length === 1 && sub[0].semver === ANY) {
-    if (dom.length === 1 && dom[0].semver === ANY) {
-      return true
-    } else if (options.includePrerelease) {
-      sub = minimumVersionWithPreRelease
-    } else {
-      sub = minimumVersion
-    }
-  }
-
-  if (dom.length === 1 && dom[0].semver === ANY) {
-    if (options.includePrerelease) {
-      return true
-    } else {
-      dom = minimumVersion
-    }
-  }
-
-  const eqSet = new Set()
-  let gt, lt
-  for (const c of sub) {
-    if (c.operator === '>' || c.operator === '>=') {
-      gt = higherGT(gt, c, options)
-    } else if (c.operator === '<' || c.operator === '<=') {
-      lt = lowerLT(lt, c, options)
-    } else {
-      eqSet.add(c.semver)
-    }
-  }
-
-  if (eqSet.size > 1) {
-    return null
-  }
-
-  let gtltComp
-  if (gt && lt) {
-    gtltComp = compare(gt.semver, lt.semver, options)
-    if (gtltComp > 0) {
-      return null
-    } else if (gtltComp === 0 && (gt.operator !== '>=' || lt.operator !== '<=')) {
-      return null
-    }
-  }
-
-  // will iterate one or zero times
-  for (const eq of eqSet) {
-    if (gt && !satisfies(eq, String(gt), options)) {
-      return null
-    }
-
-    if (lt && !satisfies(eq, String(lt), options)) {
-      return null
-    }
-
-    for (const c of dom) {
-      if (!satisfies(eq, String(c), options)) {
-        return false
-      }
-    }
-
-    return true
-  }
-
-  let higher, lower
-  let hasDomLT, hasDomGT
-  // if the subset has a prerelease, we need a comparator in the superset
-  // with the same tuple and a prerelease, or it's not a subset
-  let needDomLTPre = lt &&
-    !options.includePrerelease &&
-    lt.semver.prerelease.length ? lt.semver : false
-  let needDomGTPre = gt &&
-    !options.includePrerelease &&
-    gt.semver.prerelease.length ? gt.semver : false
-  // exception: <1.2.3-0 is the same as <1.2.3
-  if (needDomLTPre && needDomLTPre.prerelease.length === 1 &&
-      lt.operator === '<' && needDomLTPre.prerelease[0] === 0) {
-    needDomLTPre = false
-  }
-
-  for (const c of dom) {
-    hasDomGT = hasDomGT || c.operator === '>' || c.operator === '>='
-    hasDomLT = hasDomLT || c.operator === '<' || c.operator === '<='
-    if (gt) {
-      if (needDomGTPre) {
-        if (c.semver.prerelease && c.semver.prerelease.length &&
-            c.semver.major === needDomGTPre.major &&
-            c.semver.minor === needDomGTPre.minor &&
-            c.semver.patch === needDomGTPre.patch) {
-          needDomGTPre = false
-        }
-      }
-      if (c.operator === '>' || c.operator === '>=') {
-        higher = higherGT(gt, c, options)
-        if (higher === c && higher !== gt) {
-          return false
-        }
-      } else if (gt.operator === '>=' && !c.test(gt.semver)) {
-        return false
-      }
-    }
-    if (lt) {
-      if (needDomLTPre) {
-        if (c.semver.prerelease && c.semver.prerelease.length &&
-            c.semver.major === needDomLTPre.major &&
-            c.semver.minor === needDomLTPre.minor &&
-            c.semver.patch === needDomLTPre.patch) {
-          needDomLTPre = false
-        }
-      }
-      if (c.operator === '<' || c.operator === '<=') {
-        lower = lowerLT(lt, c, options)
-        if (lower === c && lower !== lt) {
-          return false
-        }
-      } else if (lt.operator === '<=' && !c.test(lt.semver)) {
-        return false
-      }
-    }
-    if (!c.operator && (lt || gt) && gtltComp !== 0) {
-      return false
-    }
-  }
-
-  // if there was a < or >, and nothing in the dom, then must be false
-  // UNLESS it was limited by another range in the other direction.
-  // Eg, >1.0.0 <1.0.1 is still a subset of <2.0.0
-  if (gt && hasDomLT && !lt && gtltComp !== 0) {
-    return false
-  }
-
-  if (lt && hasDomGT && !gt && gtltComp !== 0) {
-    return false
-  }
-
-  // we needed a prerelease range in a specific tuple, but didn't get one
-  // then this isn't a subset.  eg >=1.2.3-pre is not a subset of >=1.0.0,
-  // because it includes prereleases in the 1.2.3 tuple
-  if (needDomGTPre || needDomLTPre) {
-    return false
-  }
-
-  return true
-}
-
-// >=1.2.3 is lower than >1.2.3
-const higherGT = (a, b, options) => {
-  if (!a) {
-    return b
-  }
-  const comp = compare(a.semver, b.semver, options)
-  return comp > 0 ? a
-    : comp < 0 ? b
-    : b.operator === '>' && a.operator === '>=' ? b
-    : a
-}
-
-// <=1.2.3 is higher than <1.2.3
-const lowerLT = (a, b, options) => {
-  if (!a) {
-    return b
-  }
-  const comp = compare(a.semver, b.semver, options)
-  return comp < 0 ? a
-    : comp > 0 ? b
-    : b.operator === '<' && a.operator === '<=' ? b
-    : a
-}
-
-module.exports = subset
-
-
-/***/ }),
-
-/***/ 2675:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-
-
-const Range = __nccwpck_require__(6816)
-
-// Mostly just for testing and legacy API reasons
-const toComparators = (range, options) =>
-  new Range(range, options).set
-    .map(comp => comp.map(c => c.value).join(' ').trim().split(' '))
-
-module.exports = toComparators
-
-
-/***/ }),
-
-/***/ 3319:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-
-
-const Range = __nccwpck_require__(6816)
-const validRange = (range, options) => {
-  try {
-    // Return '*' instead of '' so that truthiness works.
-    // This will throw if it's invalid anyway
-    return new Range(range, options).range || '*'
-  } catch (er) {
-    return null
-  }
-}
-module.exports = validRange
-
-
-/***/ }),
-
 /***/ 7889:
 /***/ (function(__unused_webpack_module, exports) {
 
@@ -3982,7 +1218,7 @@ exports.UnaryCall = UnaryCall;
 
 /***/ }),
 
-/***/ 6221:
+/***/ 8602:
 /***/ ((__unused_webpack_module, exports) => {
 
 
@@ -4462,7 +1698,7 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.BinaryWriter = exports.binaryWriteOptions = void 0;
 const pb_long_1 = __nccwpck_require__(1753);
 const goog_varint_1 = __nccwpck_require__(3223);
-const assert_1 = __nccwpck_require__(6221);
+const assert_1 = __nccwpck_require__(8602);
 const defaultsWrite = {
     writeUnknownFields: true,
     writerFactory: () => new BinaryWriter(),
@@ -5162,7 +2398,7 @@ Object.defineProperty(exports, "isEnumObject", ({ enumerable: true, get: functio
 var lower_camel_case_1 = __nccwpck_require__(4073);
 Object.defineProperty(exports, "lowerCamelCase", ({ enumerable: true, get: function () { return lower_camel_case_1.lowerCamelCase; } }));
 // assertion functions are exported for plugin, may also be useful to user
-var assert_1 = __nccwpck_require__(6221);
+var assert_1 = __nccwpck_require__(8602);
 Object.defineProperty(exports, "assert", ({ enumerable: true, get: function () { return assert_1.assert; } }));
 Object.defineProperty(exports, "assertNever", ({ enumerable: true, get: function () { return assert_1.assertNever; } }));
 Object.defineProperty(exports, "assertInt32", ({ enumerable: true, get: function () { return assert_1.assertInt32; } }));
@@ -6135,7 +3371,7 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.ReflectionBinaryWriter = void 0;
 const binary_format_contract_1 = __nccwpck_require__(4816);
 const reflection_info_1 = __nccwpck_require__(7910);
-const assert_1 = __nccwpck_require__(6221);
+const assert_1 = __nccwpck_require__(8602);
 const pb_long_1 = __nccwpck_require__(1753);
 /**
  * Writes proto3 messages in binary format using reflection information.
@@ -6702,7 +3938,7 @@ const json_typings_1 = __nccwpck_require__(9999);
 const base64_1 = __nccwpck_require__(6335);
 const reflection_info_1 = __nccwpck_require__(7910);
 const pb_long_1 = __nccwpck_require__(1753);
-const assert_1 = __nccwpck_require__(6221);
+const assert_1 = __nccwpck_require__(8602);
 const reflection_long_convert_1 = __nccwpck_require__(3402);
 /**
  * Reads proto3 messages in canonical JSON format using reflection information.
@@ -7025,7 +4261,7 @@ exports.ReflectionJsonWriter = void 0;
 const base64_1 = __nccwpck_require__(6335);
 const pb_long_1 = __nccwpck_require__(1753);
 const reflection_info_1 = __nccwpck_require__(7910);
-const assert_1 = __nccwpck_require__(6221);
+const assert_1 = __nccwpck_require__(8602);
 /**
  * Writes proto3 messages in canonical JSON format using reflection
  * information.
@@ -8001,6 +5237,40 @@ var escClose = '\0CLOSE'+Math.random()+'\0';
 var escComma = '\0COMMA'+Math.random()+'\0';
 var escPeriod = '\0PERIOD'+Math.random()+'\0';
 
+var EXPANSION_MAX = 100000
+
+// `EXPANSION_MAX` caps the *number* of expansions, but not their length. An
+// input like `'{a,b}'.repeat(1500)` stays under that count - its output is
+// truncated to 100k results - while making every result ~1500 characters
+// long. The result set, and the intermediate arrays built while combining
+// brace sets, then grow large enough to exhaust memory and crash the process
+// (CVE-2026-14257). `EXPANSION_MAX_LENGTH` bounds the total number of
+// characters the accumulator may hold at any point, so memory stays flat no
+// matter how many brace groups are chained. The limit sits well above any
+// realistic expansion (100k results hitting `EXPANSION_MAX` measure ~1M
+// characters) so legitimate input is unaffected.
+var EXPANSION_MAX_LENGTH = 4000000
+
+// `expand` recurses once per level of brace *nesting* - both when expanding a
+// set's comma members and when re-wrapping a set whose body is a single part.
+// The CVE-2026-14257 fix made the *tail* iterative (recursion on `m.post`, one
+// level per chained group), which left nesting depth unbounded: about 3,100
+// levels of `{{{...a,b...}}}` - only ~6KB of input - exhausted the native stack
+// and crashed the process. `EXPANSION_MAX_DEPTH` bounds how deep the parser
+// will follow nesting. It sits far above any realistic pattern and well below
+// the depth at which the stack runs out.
+var EXPANSION_MAX_DEPTH = 1000
+
+// Bash keeps a quirk where a brace group followed by a comma set still expands
+// (`{a},b}`). The parser implements it by rewriting the string and restarting
+// the scan, absorbing one `}` per pass. `n` trailing braces therefore cost `n`
+// full passes over a string that itself grows by one `escClose` sentinel each
+// time - quadratic in `n`, with a ~26x constant from the sentinel's length.
+// 128KB of `'{a}' + '}'.repeat(n) + ',z}'` blocked the event loop for 27
+// seconds to produce two results. `EXPANSION_MAX_REWRITES` bounds how many
+// times the scan may restart. Real `{a},b}` input needs a handful.
+var EXPANSION_MAX_REWRITES = 1000
+
 function numeric(str) {
   return parseInt(str, 10) == str
     ? parseInt(str, 10)
@@ -8024,39 +5294,65 @@ function unescapeBraces(str) {
 }
 
 
+// Like `target.push(...items)` but doesn't overflow the stack
+function pushAll(target, items) {
+  for (var i = 0; i < items.length; i++) {
+    target.push(items[i]);
+  }
+}
+
 // Basically just str.split(","), but handling cases
 // where we have nested braced sections, which should be
 // treated as individual members, like {a,{b,c},d}
 function parseCommaParts(str) {
-  if (!str)
-    return [''];
-
   var parts = [];
-  var m = balanced('{', '}', str);
 
-  if (!m)
-    return str.split(',');
+  // Walk the brace groups iteratively. Recursing on `post` once per group let a
+  // chain of them exhaust the stack - the parsing-side counterpart to
+  // the `expand` overflow fixed for CVE-2026-14257, and not something `max` or
+  // `maxLength` can bound, since it happens before expansion.
+  //
+  // The part the next chunk continues
+  var carry = '';
 
-  var pre = m.pre;
-  var body = m.body;
-  var post = m.post;
-  var p = pre.split(',');
+  for (;;) {
+    var m = balanced('{', '}', str);
 
-  p[p.length-1] += '{' + body + '}';
-  var postParts = parseCommaParts(post);
-  if (post.length) {
-    p[p.length-1] += postParts.shift();
-    p.push.apply(p, postParts);
+    if (!m) {
+      var tail = str.split(',');
+      tail[0] = carry + tail[0];
+      pushAll(parts, tail);
+      return parts;
+    }
+
+    var pre = m.pre;
+    var body = m.body;
+    var post = m.post;
+    var p = pre.split(',');
+
+    p[0] = carry + p[0];
+    p[p.length-1] += '{' + body + '}';
+
+    if (!post.length) {
+      pushAll(parts, p);
+      return parts;
+    }
+
+    carry = p.pop();
+    pushAll(parts, p);
+    str = post;
   }
-
-  parts.push.apply(parts, p);
-
-  return parts;
 }
 
-function expandTop(str) {
+function expandTop(str, options) {
   if (!str)
     return [];
+
+  options = options || {};
+  var max = options.max == null ? EXPANSION_MAX : options.max;
+  var maxLength = options.maxLength == null ? EXPANSION_MAX_LENGTH : options.maxLength;
+  var maxDepth = options.maxDepth == null ? EXPANSION_MAX_DEPTH : options.maxDepth;
+  var maxRewrites = options.maxRewrites == null ? EXPANSION_MAX_REWRITES : options.maxRewrites;
 
   // I don't know why Bash 4.3 does this, but it does.
   // Anything starting with {} will have the first two bytes preserved
@@ -8068,7 +5364,7 @@ function expandTop(str) {
     str = '\\{\\}' + str.substr(2);
   }
 
-  return expand(escapeBraces(str), true).map(unescapeBraces);
+  return expand(escapeBraces(str), max, maxLength, maxDepth, 0, maxRewrites, true).map(unescapeBraces);
 }
 
 function identity(e) {
@@ -8089,108 +5385,285 @@ function gte(i, y) {
   return i >= y;
 }
 
-function expand(str, isTop) {
-  var expansions = [];
-
-  var m = balanced('{', '}', str);
-  if (!m || /\$$/.test(m.pre)) return [str];
-
-  var isNumericSequence = /^-?\d+\.\.-?\d+(?:\.\.-?\d+)?$/.test(m.body);
-  var isAlphaSequence = /^[a-zA-Z]\.\.[a-zA-Z](?:\.\.-?\d+)?$/.test(m.body);
-  var isSequence = isNumericSequence || isAlphaSequence;
-  var isOptions = m.body.indexOf(',') >= 0;
-  if (!isSequence && !isOptions) {
-    // {a},b}
-    if (m.post.match(/,(?!,).*\}/)) {
-      str = m.pre + '{' + m.body + escClose + m.post;
-      return expand(str);
+// Build `{ acc[a] + pre + values[v] }` for every combination, capping the
+// number of results at `max` and the total number of characters at `maxLength`.
+// This is the one place output grows, so bounding it here keeps the single
+// accumulator - and therefore memory - flat regardless of how many brace groups
+// are combined (CVE-2026-14257).
+//
+// `base[a]` is the length of the part of `acc[a]` that predates the current
+// empty-drop baseline (see `expand`). The matching baselines for the results
+// are appended to `outBase`, which the caller carries forward alongside them.
+function combine(
+  acc,
+  base,
+  pre,
+  values,
+  max,
+  maxLength,
+  dropEmpties,
+  outBase
+) {
+  var out = []
+  var length = 0
+  for (var a = 0; a < acc.length; a++) {
+    for (var v = 0; v < values.length; v++) {
+      if (out.length >= max) return out
+      var expansion = acc[a] + pre + values[v]
+      // Bash drops empty results at the top level. Skip them before they count
+      // against `max`, so `max` bounds the number of *kept* results. "Empty"
+      // means "adds nothing past the baseline", not "empty overall".
+      if (dropEmpties && expansion.length === base[a]) continue
+      if (length + expansion.length > maxLength) return out
+      out.push(expansion)
+      outBase.push(base[a])
+      length += expansion.length
     }
-    return [str];
   }
+  return out
+}
 
-  var n;
-  if (isSequence) {
-    n = m.body.split(/\.\./);
-  } else {
-    n = parseCommaParts(m.body);
-    if (n.length === 1) {
-      // x{{a,b}}y ==> x{a}y x{b}y
-      n = expand(n[0], false).map(embrace);
-      if (n.length === 1) {
-        var post = m.post.length
-          ? expand(m.post, false)
-          : [''];
-        return post.map(function(p) {
-          return m.pre + n[0] + p;
-        });
+// The expansion values of a single numeric (`1..5`) or alphabetic (`a..e..2`)
+// sequence body.
+function expandSequence(
+  body,
+  isAlphaSequence,
+  max,
+  maxLength
+) {
+  var n = body.split(/\.\./)
+  var N = []
+  // A sequence body always splits into two or three parts, but the compiler
+  // can't know that.
+  /* c8 ignore start */
+  if (n[0] === undefined || n[1] === undefined) {
+    return N
+  }
+  /* c8 ignore stop */
+  var x = numeric(n[0])
+  var y = numeric(n[1])
+  var width = Math.max(n[0].length, n[1].length)
+  var incr =
+    n.length === 3 && n[2] !== undefined ?
+      Math.max(Math.abs(numeric(n[2])), 1)
+    : 1
+  var test = lte
+  var reverse = y < x
+  if (reverse) {
+    incr *= -1
+    test = gte
+  }
+  var pad = n.some(isPadded)
+
+  var length = 0
+  for (var i = x; test(i, y) && N.length < max; i += incr) {
+    var c
+    if (isAlphaSequence) {
+      c = String.fromCharCode(i)
+      if (c === '\\') {
+        c = ''
       }
-    }
-  }
-
-  // at this point, n is the parts, and we know it's not a comma set
-  // with a single entry.
-
-  // no need to expand pre, since it is guaranteed to be free of brace-sets
-  var pre = m.pre;
-  var post = m.post.length
-    ? expand(m.post, false)
-    : [''];
-
-  var N;
-
-  if (isSequence) {
-    var x = numeric(n[0]);
-    var y = numeric(n[1]);
-    var width = Math.max(n[0].length, n[1].length)
-    var incr = n.length == 3
-      ? Math.abs(numeric(n[2]))
-      : 1;
-    var test = lte;
-    var reverse = y < x;
-    if (reverse) {
-      incr *= -1;
-      test = gte;
-    }
-    var pad = n.some(isPadded);
-
-    N = [];
-
-    for (var i = x; test(i, y); i += incr) {
-      var c;
-      if (isAlphaSequence) {
-        c = String.fromCharCode(i);
-        if (c === '\\')
-          c = '';
-      } else {
-        c = String(i);
-        if (pad) {
-          var need = width - c.length;
-          if (need > 0) {
-            var z = new Array(need + 1).join('0');
-            if (i < 0)
-              c = '-' + z + c.slice(1);
-            else
-              c = z + c;
+    } else {
+      c = String(i)
+      if (pad) {
+        var need = width - c.length
+        if (need > 0) {
+          var z = new Array(need + 1).join('0')
+          if (i < 0) {
+            c = '-' + z + c.slice(1)
+          } else {
+            c = z + c
           }
         }
       }
-      N.push(c);
     }
-  } else {
-    N = concatMap(n, function(el) { return expand(el, false) });
+    if (length + c.length > maxLength) break
+    N.push(c)
+    length += c.length
   }
-
-  for (var j = 0; j < N.length; j++) {
-    for (var k = 0; k < post.length; k++) {
-      var expansion = pre + N[j] + post[k];
-      if (!isTop || isSequence || expansion)
-        expansions.push(expansion);
-    }
-  }
-
-  return expansions;
+  return N
 }
 
+function expand(
+  str,
+  max,
+  maxLength,
+  maxDepth,
+  depth,
+  maxRewrites,
+  isTop
+) {
+  // Too deeply nested to keep following: treat the rest as literal, the same
+  // way a group that cannot expand is already handled. Truncating rather than
+  // throwing keeps expansion total, matching `max` and `maxLength`.
+  if (depth > maxDepth) {
+    return [str];
+  }
+
+  // Consume the string's top-level brace groups left to right, threading a
+  // running set of combined prefixes (`acc`). Expanding the tail iteratively -
+  // rather than recursing on `m.post` once per group - keeps the native stack
+  // depth constant, so deeply chained input (`'{a,b}'.repeat(3000)`) can no
+  // longer overflow the stack, and leaves a single accumulator whose size
+  // `maxLength` bounds directly (CVE-2026-14257).
+  var acc = ['']
+
+  // Bash drops empty results, but only when the *first* group of the run is a
+  // comma set - a sequence like `{a..\}` may legitimately yield ''. The drop
+  // is on the final strings, so it is applied to whichever `combine` produces
+  // them (the one with no brace set left in the tail).
+  //
+  // The old implementation recursed on `m.post`, so the drop tested only the
+  // expansion of the current call's substring. The `{a},b}` rewrite below turns
+  // `isTop` back on part-way through a string, starting a fresh such run, so
+  // the drop must ignore whatever `acc` already holds from earlier groups.
+  // `accBase[a]` records how much of `acc[a]` predates the current run;
+  // `combine` treats an expansion as empty when it adds nothing past that.
+  var accBase = [0]
+  // How many times the `{a},b}` rewrite below has restarted the scan. Each pass
+  // re-reads the whole string, so leaving this unbounded is quadratic.
+  var rewrites = 0
+  var dropEmpties = false
+  var firstGroup = true
+  var nextBase
+
+  for (;;) {
+    var m = balanced('{', '}', str);
+
+    // No brace set left: the rest of the string is literal.
+    if (!m) {
+      return combine(acc, accBase, str, [''], max, maxLength, dropEmpties, [])
+    }
+
+    // no need to expand pre, since it is guaranteed to be free of brace-sets
+    var pre = m.pre;
+
+    // For compatibility reasons, `${` is not eligible for brace expansion, and
+    // on the 1.x line it suppresses expansion of the rest of the string too:
+    // the whole remainder is literal. The 2.x and 5.x lines instead keep
+    // expanding the tail, which is what bash does, but changing that here would
+    // be a breaking change for 1.x consumers. Routed through `combine` so the
+    // result is still bounded by `max` and `maxLength`.
+    if (/\$$/.test(pre)) {
+      return combine(acc, accBase, str, [''], max, maxLength, dropEmpties, [])
+    }
+
+    var isNumericSequence = /^-?\d+\.\.-?\d+(?:\.\.-?\d+)?$/.test(m.body);
+    var isAlphaSequence = /^[a-zA-Z]\.\.[a-zA-Z](?:\.\.-?\d+)?$/.test(m.body);
+    var isSequence = isNumericSequence || isAlphaSequence;
+    var isOptions = m.body.indexOf(',') >= 0;
+    if (!isSequence && !isOptions) {
+      // {a},b}
+      if (rewrites < maxRewrites && m.post.match(/,(?!,).*\}/)) {
+        rewrites++;
+        str = m.pre + '{' + m.body + escClose + m.post;
+        // The rewritten string is expanded as if it were a fresh top-level one,
+        // so start a new empty-drop run: anchor the baseline at what `acc`
+        // holds now, and let the next expanding group decide whether to drop.
+        isTop = true
+        firstGroup = true
+        dropEmpties = false
+        accBase = []
+        for (var b = 0; b < acc.length; b++) {
+          accBase.push(acc[b].length)
+        }
+        continue
+      }
+      // Nothing here expands, so the whole remaining string is literal.
+      return combine(
+        acc,
+        accBase,
+        pre + '{' + m.body + '}' + m.post,
+        [''],
+        max,
+        maxLength,
+        dropEmpties,
+        []
+      )
+    }
+
+    if (firstGroup) {
+      dropEmpties = isTop && !isSequence
+      firstGroup = false
+    }
+
+    var values;
+    if (isSequence) {
+      values = expandSequence(m.body, isAlphaSequence, max, maxLength);
+    } else {
+      var n = parseCommaParts(m.body);
+      if (n.length === 1 && n[0] !== undefined) {
+        // x{{a,b}}y ==> x{a}y x{b}y
+        n = expand(n[0], max, maxLength, maxDepth, depth + 1, maxRewrites, false).map(embrace);
+        //XXX is this necessary? Can't seem to hit it in tests.
+        /* c8 ignore start */
+        if (n.length === 1) {
+          nextBase = []
+          acc = combine(
+            acc,
+            accBase,
+            pre + n[0],
+            [''],
+            max,
+            maxLength,
+            dropEmpties && !m.post.length,
+            nextBase
+          )
+          accBase = nextBase
+          if (!m.post.length) break
+          str = m.post
+          continue
+        }
+        /* c8 ignore stop */
+      }
+
+      // Values that `combine` is going to drop as empty produce no result, so
+      // they must not count against `max` - otherwise `{a,,b}` with `max: 2`
+      // would stop at `['a', '']` and yield one result instead of two. Skipping
+      // them outright keeps `values` bounded while leaving `max` a bound on
+      // *kept* results. A value is dropped when it adds nothing past the
+      // baseline, which is what `combine` tests.
+      var dropsEmpties = dropEmpties && !m.post.length && !pre
+      for (var d = 0; dropsEmpties && d < acc.length; d++) {
+        if (acc[d].length !== accBase[d]) {
+          dropsEmpties = false
+        }
+      }
+
+      values = []
+      var valuesLength = 0
+      outer: for (var j = 0; j < n.length; j++) {
+        var expanded = expand(n[j], max, maxLength, maxDepth, depth + 1, maxRewrites, false)
+        for (var k = 0; k < expanded.length; k++) {
+          var v = expanded[k]
+          if (dropsEmpties && !v) continue
+          if (values.length >= max || valuesLength + v.length > maxLength) {
+            break outer
+          }
+          values.push(v)
+          valuesLength += v.length
+        }
+      }
+    }
+
+    nextBase = []
+    acc = combine(
+      acc,
+      accBase,
+      pre,
+      values,
+      max,
+      maxLength,
+      dropEmpties && !m.post.length,
+      nextBase
+    )
+    accBase = nextBase
+    if (!m.post.length) break
+    str = m.post
+  }
+
+  return acc
+}
 
 
 /***/ }),
@@ -14109,11 +11582,77 @@ class Request {
     }
   }
 
-  onUpgrade (statusCode, headers, socket) {
+  /**
+   * @param {number|null} statusCode
+   * @param {Buffer[]|null} headers
+   * @param {import('node:stream').Duplex} socket
+   * @param {string} [statusText]
+   */
+  onUpgrade (statusCode, headers, socket, statusText = '') {
+    this.onFinally()
+
     assert(!this.aborted)
     assert(!this.completed)
 
-    return this[kHandler].onUpgrade(statusCode, headers, socket)
+    if (statusCode !== null) {
+      this.#publishUpgradeHeaders(statusCode, headers, statusText)
+    }
+
+    const result = this[kHandler].onUpgrade(statusCode, headers, socket)
+
+    if (!this.aborted) {
+      this.completed = true
+      if (statusCode !== null) {
+        this.#publishUpgradeTrailers()
+      }
+    }
+
+    return result
+  }
+
+  /**
+   * @param {number} statusCode
+   * @param {import('node:http2').IncomingHttpHeaders} headers
+   * @param {(headers: import('node:http2').IncomingHttpHeaders) => Buffer[]} parseHeaders
+   * @param {string} [statusText]
+   */
+  onUpgradeResponse (statusCode, headers, parseHeaders, statusText = '') {
+    assert(!this.aborted)
+    assert(this.completed)
+
+    if (channels.headers.hasSubscribers) {
+      this.#publishUpgradeHeaders(statusCode, parseHeaders(headers), statusText)
+    }
+    this.#publishUpgradeTrailers()
+  }
+
+  /**
+   * @param {Error} error
+   */
+  onUpgradeError (error) {
+    assert(!this.aborted)
+    assert(this.completed)
+
+    if (channels.error.hasSubscribers) {
+      channels.error.publish({ request: this, error })
+    }
+  }
+
+  /**
+   * @param {number} statusCode
+   * @param {Buffer[]} headers
+   * @param {string} statusText
+   */
+  #publishUpgradeHeaders (statusCode, headers, statusText) {
+    if (channels.headers.hasSubscribers) {
+      channels.headers.publish({ request: this, response: { statusCode, headers, statusText } })
+    }
+  }
+
+  #publishUpgradeTrailers () {
+    if (channels.trailers.hasSubscribers) {
+      channels.trailers.publish({ request: this, trailers: [] })
+    }
   }
 
   onComplete (trailers) {
@@ -14196,7 +11735,13 @@ function processHeader (request, key, val) {
       } else if (typeof val[i] === 'object') {
         throw new InvalidArgumentError(`invalid ${key} header`)
       } else {
-        arr.push(`${val[i]}`)
+        // Coerce primitives (and reject unsafe coercions such as functions
+        // with a crafted toString/Symbol.toPrimitive).
+        const str = `${val[i]}`
+        if (!isValidHeaderValue(str)) {
+          throw new InvalidArgumentError(`invalid ${key} header`)
+        }
+        arr.push(str)
       }
     }
     val = arr
@@ -14207,7 +11752,12 @@ function processHeader (request, key, val) {
   } else if (val === null) {
     val = ''
   } else {
+    // Coerce primitives (and reject unsafe coercions such as functions
+    // with a crafted toString/Symbol.toPrimitive).
     val = `${val}`
+    if (!isValidHeaderValue(val)) {
+      throw new InvalidArgumentError(`invalid ${key} header`)
+    }
   }
 
   if (headerName === 'host') {
@@ -15579,6 +13129,7 @@ const {
   RequestContentLengthMismatchError,
   ResponseContentLengthMismatchError,
   RequestAbortedError,
+  InvalidArgumentError,
   HeadersTimeoutError,
   HeadersOverflowError,
   SocketError,
@@ -16000,7 +13551,7 @@ class Parser {
   }
 
   onUpgrade (head) {
-    const { upgrade, client, socket, headers, statusCode } = this
+    const { upgrade, client, socket, headers, statusCode, statusText } = this
 
     assert(upgrade)
     assert(client[kSocket] === socket)
@@ -16035,9 +13586,10 @@ class Parser {
     client.emit('disconnect', client[kUrl], [client], new InformationalError('upgrade'))
 
     try {
-      request.onUpgrade(statusCode, headers, socket)
-    } catch (err) {
-      util.destroy(socket, err)
+      request.onUpgrade(statusCode, headers, socket, statusText)
+    } catch (error) {
+      util.errorRequest(client, request, error)
+      util.destroy(socket, error)
     }
 
     client[kResume]()
@@ -16444,7 +13996,7 @@ async function connectH1 (client, socket) {
 
 function clearIdleSocketValidation (socket) {
   if (socket[kIdleSocketValidationTimeout]) {
-    clearTimeout(socket[kIdleSocketValidationTimeout])
+    clearImmediate(socket[kIdleSocketValidationTimeout])
     socket[kIdleSocketValidationTimeout] = null
   }
 
@@ -16453,15 +14005,23 @@ function clearIdleSocketValidation (socket) {
 
 function scheduleIdleSocketValidation (client, socket) {
   socket[kIdleSocketValidation] = 1
-  socket[kIdleSocketValidationTimeout] = setTimeout(() => {
+  // Yield to the check phase (after poll) so unsolicited bytes / FIN / RST
+  // already pending on this idle keep-alive socket are processed before the
+  // next request is written (GHSA-35p6-xmwp-9g52).
+  //
+  // setTimeout(0) pays Node's ~1ms timer floor on every sequential reuse
+  // (#5493). setImmediate avoids that, but an *unref'd* Immediate lets poll
+  // block for ~500ms when the event loop is otherwise idle (#5600 / #5606).
+  // A ref'd Immediate both keeps the pending request alive and makes poll
+  // return immediately — the hybrid those issues asked for.
+  socket[kIdleSocketValidationTimeout] = setImmediate(() => {
     socket[kIdleSocketValidationTimeout] = null
     socket[kIdleSocketValidation] = 2
 
     if (client[kSocket] === socket && !socket.destroyed) {
       client[kResume]()
     }
-  }, 0)
-  socket[kIdleSocketValidationTimeout].unref?.()
+  })
 }
 
 /**
@@ -16562,8 +14122,16 @@ function writeH1 (client, request) {
     }
     body = bodyStream.stream
     contentLength = bodyStream.length
-  } else if (util.isBlobLike(body) && request.contentType == null && body.type) {
-    headers.push('content-type', body.type)
+  } else if (util.isBlobLike(body) && request.contentType == null) {
+    const contentType = body.type
+    if (contentType) {
+      const contentTypeValue = `${contentType}`
+      if (!util.isValidHeaderValue(contentTypeValue)) {
+        util.errorRequest(client, request, new InvalidArgumentError('invalid content-type header'))
+        return false
+      }
+      headers.push('content-type', contentTypeValue)
+    }
   }
 
   if (body && typeof body.read === 'function') {
@@ -16602,12 +14170,22 @@ function writeH1 (client, request) {
   const socket = client[kSocket]
   clearIdleSocketValidation(socket)
 
-  const abort = (err) => {
-    if (request.aborted || request.completed) {
+  /**
+   * @param {Error} [error]
+   */
+  const abort = (error) => {
+    if (request.aborted) {
       return
     }
 
-    util.errorRequest(client, request, err || new RequestAbortedError())
+    if (request.completed) {
+      if (request.upgrade || request.method === 'CONNECT') {
+        util.destroy(socket, new InformationalError('aborted'))
+      }
+      return
+    }
+
+    util.errorRequest(client, request, error || new RequestAbortedError())
 
     util.destroy(body)
     util.destroy(socket, new InformationalError('aborted'))
@@ -17064,6 +14642,7 @@ module.exports = connectH1
 
 
 const assert = __nccwpck_require__(4589)
+const { errorMonitor } = __nccwpck_require__(8474)
 const { pipeline } = __nccwpck_require__(7075)
 const util = __nccwpck_require__(3440)
 const {
@@ -17138,6 +14717,15 @@ function parseH2Headers (headers) {
   }
 
   return result
+}
+
+/**
+ * @param {import('node:http2').IncomingHttpHeaders} headers
+ * @returns {Buffer[]}
+ */
+function parseH2ResponseHeaders (headers) {
+  const { [HTTP2_HEADER_STATUS]: _statusCode, ...realHeaders } = headers
+  return parseH2Headers(realHeaders)
 }
 
 async function connectH2 (client, socket) {
@@ -17360,22 +14948,32 @@ function writeH2 (client, request) {
   headers[HTTP2_HEADER_AUTHORITY] = host || `${hostname}${port ? `:${port}` : ''}`
   headers[HTTP2_HEADER_METHOD] = method
 
-  const abort = (err) => {
-    if (request.aborted || request.completed) {
+  /**
+   * @param {Error} [error]
+   */
+  const abort = (error) => {
+    if (request.aborted) {
       return
     }
 
-    err = err || new RequestAbortedError()
+    if (request.completed) {
+      if (method === 'CONNECT' && stream != null) {
+        util.destroy(stream, error || new RequestAbortedError())
+      }
+      return
+    }
 
-    util.errorRequest(client, request, err)
+    error = error || new RequestAbortedError()
+
+    util.errorRequest(client, request, error)
 
     if (stream != null) {
-      util.destroy(stream, err)
+      util.destroy(stream, error)
     }
 
     // We do not destroy the socket as we can continue using the session
     // the stream get's destroyed and the session remains to create new streams
-    util.destroy(body, err)
+    util.destroy(body, error)
     client[kQueue][client[kRunningIdx]++] = null
     client[kResume]()
   }
@@ -17394,25 +14992,57 @@ function writeH2 (client, request) {
 
   if (method === 'CONNECT') {
     session.ref()
-    // We are already connected, streams are pending, first request
-    // will create a new stream. We trigger a request to create the stream and wait until
-    // `ready` event is triggered
     // We disabled endStream to allow the user to write to the stream
     stream = session.request(headers, { endStream: false, signal })
+    let upgradeResponseFinished = false
 
-    if (stream.id && !stream.pending) {
-      request.onUpgrade(null, null, stream)
-      ++session[kOpenStreams]
-      client[kQueue][client[kRunningIdx]++] = null
-    } else {
-      stream.once('ready', () => {
-        request.onUpgrade(null, null, stream)
-        ++session[kOpenStreams]
-        client[kQueue][client[kRunningIdx]++] = null
-      })
+    /**
+     * @param {import('node:http2').IncomingHttpHeaders} headers
+     */
+    const onResponse = (headers) => {
+      upgradeResponseFinished = true
+      stream.off(errorMonitor, onUpgradeError)
+      request.onUpgradeResponse(Number(headers[HTTP2_HEADER_STATUS]), headers, parseH2ResponseHeaders)
     }
 
+    /**
+     * @param {Error} error
+     */
+    const onUpgradeError = (error) => {
+      upgradeResponseFinished = true
+      stream.off('response', onResponse)
+      request.onUpgradeError(error)
+    }
+
+    const onReady = () => {
+      try {
+        request.onUpgrade(null, null, stream)
+      } catch (error) {
+        stream.off('response', onResponse)
+        abort(error)
+        return
+      }
+
+      if (request.aborted) {
+        return
+      }
+
+      stream.off('error', abort)
+      stream.once(errorMonitor, onUpgradeError)
+      client[kQueue][client[kRunningIdx]++] = null
+    }
+
+    stream.once('response', onResponse)
+    stream.once('error', abort)
+    ++session[kOpenStreams]
+    onReady()
+
     stream.once('close', () => {
+      if (!upgradeResponseFinished && request.completed) {
+        stream.off('response', onResponse)
+        stream.off(errorMonitor, onUpgradeError)
+        request.onUpgradeError(new InformationalError(`HTTP/2: "stream error" received - code ${stream.rstCode}`))
+      }
       session[kOpenStreams] -= 1
       if (session[kOpenStreams] === 0) session.unref()
     })
@@ -20036,6 +17666,28 @@ function calculateRetryAfterHeader (retryAfter) {
   return new Date(retryAfter).getTime() - current
 }
 
+function validatePartialResponseContentLength (headers, range, statusCode, retryCount) {
+  const contentLength = headers['content-length']
+  if (contentLength == null) {
+    return null
+  }
+
+  if (!Number.isFinite(range.start) || !Number.isFinite(range.end)) {
+    return null
+  }
+
+  const length = Number(contentLength)
+  const expectedLength = range.end - range.start + 1
+  if (!Number.isFinite(length) || length !== expectedLength) {
+    return new RequestRetryError('Content-Length mismatch', statusCode, {
+      headers,
+      data: { count: retryCount }
+    })
+  }
+
+  return null
+}
+
 class RetryHandler {
   constructor (opts, handlers) {
     const { retryOptions, ...dispatchOpts } = opts
@@ -20089,6 +17741,7 @@ class RetryHandler {
     this.end = null
     this.etag = null
     this.resume = null
+    this.headersSent = false
 
     // Handle possible onConnect duplication
     this.handler.onConnect(reason => {
@@ -20099,6 +17752,20 @@ class RetryHandler {
         this.reason = reason
       }
     })
+  }
+
+  checkpointResponseEnd (headers, resume) {
+    if (this.end == null && this.opts.method !== 'HEAD') {
+      const contentLength = headers['content-length']
+      this.end = contentLength != null ? Number(contentLength) - 1 : null
+
+      assert(
+        this.end == null || Number.isFinite(this.end),
+        'invalid content-length'
+      )
+    }
+
+    this.resume = this.end != null ? resume : null
   }
 
   onRequestSent () {
@@ -20189,7 +17856,12 @@ class RetryHandler {
     this.retryCount += 1
 
     if (statusCode >= 300) {
-      if (this.retryOpts.statusCodes.includes(statusCode) === false) {
+      // Only expose a response if no earlier attempt has reached the caller.
+      // Otherwise abort this attempt so the error settles the existing body
+      // instead of replacing it with a new response.
+      if (!this.headersSent && this.retryOpts.statusCodes.includes(statusCode) === false) {
+        this.headersSent = true
+        this.checkpointResponseEnd(headers, resume)
         return this.handler.onHeaders(
           statusCode,
           rawHeaders,
@@ -20250,10 +17922,23 @@ class RetryHandler {
         return false
       }
 
+      const contentLengthError = validatePartialResponseContentLength(headers, contentRange, statusCode, this.retryCount)
+      if (contentLengthError != null) {
+        this.abort(contentLengthError)
+        return false
+      }
+
       const { start, size, end = size - 1 } = contentRange
 
-      assert(this.start === start, 'content-range mismatch')
-      assert(this.end == null || this.end === end, 'content-range mismatch')
+      if (this.start !== start || (this.end != null && this.end !== end)) {
+        this.abort(
+          new RequestRetryError('Content-Range mismatch', statusCode, {
+            headers,
+            data: { count: this.retryCount }
+          })
+        )
+        return false
+      }
 
       this.resume = resume
       return true
@@ -20265,12 +17950,19 @@ class RetryHandler {
         const range = parseRangeHeader(headers['content-range'])
 
         if (range == null) {
+          this.headersSent = true
           return this.handler.onHeaders(
             statusCode,
             rawHeaders,
             resume,
             statusMessage
           )
+        }
+
+        const contentLengthError = validatePartialResponseContentLength(headers, range, statusCode, this.retryCount)
+        if (contentLengthError != null) {
+          this.abort(contentLengthError)
+          return false
         }
 
         const { start, size, end = size - 1 } = range
@@ -20297,6 +17989,7 @@ class RetryHandler {
       )
 
       this.resume = resume
+      this.headersSent = true
       this.etag = headers.etag != null ? headers.etag : null
 
       // Weak etags are not useful for comparison nor cache
@@ -20336,7 +18029,7 @@ class RetryHandler {
   }
 
   onError (err) {
-    if (this.aborted || isDisturbed(this.opts.body)) {
+    if (this.aborted || isDisturbed(this.opts.body) || (this.headersSent && this.resume == null)) {
       return this.handler.onError(err)
     }
 
@@ -24517,7 +22210,7 @@ function validateCookiePath (path) {
 
     if (
       code < 0x20 || // exclude CTLs (0-31)
-      code === 0x7F || // DEL
+      code > 0x7E || // exclude DEL and non-ascii
       code === 0x3B // ;
     ) {
       throw new Error('Invalid cookie path')
@@ -24526,16 +22219,80 @@ function validateCookiePath (path) {
 }
 
 /**
- * I have no idea why these values aren't allowed to be honest,
- * but Deno tests these. - Khafra
+ * <let-dig> ::= <letter> | <digit>
+ *
+ * <letter> ::= any one of the 52 alphabetic characters A through Z in
+ * upper case and a through z in lower case
+ *
+ * <digit> ::= any one of the ten digits 0 through 9r
+ *
+ * @see https://www.rfc-editor.org/rfc/rfc1034#section-3.5
+ * @param {number} code
+ */
+function isLetterOrDigit (code) {
+  return (
+    (code >= 0x30 && code <= 0x39) || // 0-9
+    (code >= 0x41 && code <= 0x5A) || // A-Z
+    (code >= 0x61 && code <= 0x7A) // a-z
+  )
+}
+
+/**
+ * Validates a cookie domain against the "preferred name syntax".
+ *
+ * <domain>      ::= <subdomain> | " "
+ * <subdomain>   ::= <label> | <subdomain> "." <label>
+ * <label>       ::= <let-dig> [ [ <ldh-str> ] <let-dig> ]
+ * <ldh-str>     ::= <let-dig-hyp> | <let-dig-hyp> <ldh-str>
+ * <let-dig-hyp> ::= <let-dig> | "-"
+ *
+ * @see https://www.rfc-editor.org/rfc/rfc1034#section-3.5
+ * @see https://www.rfc-editor.org/rfc/rfc1123#section-2.1
+ * @see https://www.rfc-editor.org/rfc/rfc1035#section-2.3.4
  * @param {string} domain
  */
 function validateCookieDomain (domain) {
-  if (
-    domain.startsWith('-') ||
-    domain.endsWith('.') ||
-    domain.endsWith('-')
-  ) {
+  // <domain> ::= <subdomain> | " "
+  if (domain === ' ') {
+    return
+  }
+
+  if (domain.length > 255) {
+    throw new Error('Invalid cookie domain')
+  }
+
+  let labelLength = 0
+
+  for (let i = 0; i < domain.length; ++i) {
+    const code = domain.charCodeAt(i)
+
+    if (code === 0x2E) {
+      if (labelLength === 0) {
+        throw new Error('Invalid cookie domain')
+      }
+
+      if (domain.charCodeAt(i - 1) === 0x2D) { // "-"
+        throw new Error('Invalid cookie domain')
+      }
+
+      labelLength = 0
+      continue
+    }
+
+    if (labelLength === 0 && !isLetterOrDigit(code)) {
+      throw new Error('Invalid cookie domain')
+    }
+
+    if (!isLetterOrDigit(code) && code !== 0x2D) { // "-"
+      throw new Error('Invalid cookie domain')
+    }
+
+    if (++labelLength > 63) {
+      throw new Error('Invalid cookie domain')
+    }
+  }
+
+  if (labelLength === 0 || domain.charCodeAt(domain.length - 1) === 0x2D) { // "-"
     throw new Error('Invalid cookie domain')
   }
 }
@@ -24678,7 +22435,13 @@ function stringify (cookie) {
 
     const [key, ...value] = part.split('=')
 
-    out.push(`${key.trim()}=${value.join('=')}`)
+    const trimmedKey = key.trim()
+    const joinedValue = value.join('=')
+
+    validateCookieName(trimmedKey)
+    validateCookieValue(joinedValue)
+
+    out.push(`${trimmedKey}=${joinedValue}`)
   }
 
   return out.join('; ')
@@ -24724,6 +22487,49 @@ const COLON = 0x3A
  */
 const SPACE = 0x20
 
+const DATA = Buffer.from('data')
+const EVENT = Buffer.from('event')
+const ID = Buffer.from('id')
+const RETRY = Buffer.from('retry')
+
+function isASCIINumberBytes (buffer, start) {
+  if (start >= buffer.length) {
+    return false
+  }
+
+  for (let i = start; i < buffer.length; i++) {
+    if (buffer[i] < 0x30 || buffer[i] > 0x39) {
+      return false
+    }
+  }
+
+  return true
+}
+
+function isValidLastEventIdBytes (buffer, start) {
+  for (let i = start; i < buffer.length; i++) {
+    if (buffer[i] === 0x00) {
+      return false
+    }
+  }
+
+  return true
+}
+
+function isFieldName (line, length, field) {
+  if (length !== field.length) {
+    return false
+  }
+
+  for (let i = 0; i < length; i++) {
+    if (line[i] !== field[i]) {
+      return false
+    }
+  }
+
+  return true
+}
+
 /**
  * @typedef {object} EventSourceStreamEvent
  * @type {object}
@@ -24764,11 +22570,14 @@ class EventSourceStream extends Transform {
   eventEndCheck = false
 
   /**
-   * @type {Buffer}
+   * @type {Buffer[]}
    */
-  buffer = null
+  chunks = []
 
+  chunkIndex = 0
   pos = 0
+  lineChunkIndex = 0
+  linePos = 0
 
   event = {
     data: undefined,
@@ -24807,92 +22616,20 @@ class EventSourceStream extends Transform {
       return
     }
 
-    // Cache the chunk in the buffer, as the data might not be complete while
-    // processing it
-    // TODO: Investigate if there is a more performant way to handle
-    // incoming chunks
-    // see: https://github.com/nodejs/undici/issues/2630
-    if (this.buffer) {
-      this.buffer = Buffer.concat([this.buffer, chunk])
-    } else {
-      this.buffer = chunk
-    }
+    this.chunks.push(chunk)
 
     // Strip leading byte-order-mark if we opened the stream and started
     // the processing of the incoming data
     if (this.checkBOM) {
-      switch (this.buffer.length) {
-        case 1:
-          // Check if the first byte is the same as the first byte of the BOM
-          if (this.buffer[0] === BOM[0]) {
-            // If it is, we need to wait for more data
-            callback()
-            return
-          }
-          // Set the checkBOM flag to false as we don't need to check for the
-          // BOM anymore
-          this.checkBOM = false
-
-          // The buffer only contains one byte so we need to wait for more data
-          callback()
-          return
-        case 2:
-          // Check if the first two bytes are the same as the first two bytes
-          // of the BOM
-          if (
-            this.buffer[0] === BOM[0] &&
-            this.buffer[1] === BOM[1]
-          ) {
-            // If it is, we need to wait for more data, because the third byte
-            // is needed to determine if it is the BOM or not
-            callback()
-            return
-          }
-
-          // Set the checkBOM flag to false as we don't need to check for the
-          // BOM anymore
-          this.checkBOM = false
-          break
-        case 3:
-          // Check if the first three bytes are the same as the first three
-          // bytes of the BOM
-          if (
-            this.buffer[0] === BOM[0] &&
-            this.buffer[1] === BOM[1] &&
-            this.buffer[2] === BOM[2]
-          ) {
-            // If it is, we can drop the buffered data, as it is only the BOM
-            this.buffer = Buffer.alloc(0)
-            // Set the checkBOM flag to false as we don't need to check for the
-            // BOM anymore
-            this.checkBOM = false
-
-            // Await more data
-            callback()
-            return
-          }
-          // If it is not the BOM, we can start processing the data
-          this.checkBOM = false
-          break
-        default:
-          // The buffer is longer than 3 bytes, so we can drop the BOM if it is
-          // present
-          if (
-            this.buffer[0] === BOM[0] &&
-            this.buffer[1] === BOM[1] &&
-            this.buffer[2] === BOM[2]
-          ) {
-            // Remove the BOM from the buffer
-            this.buffer = this.buffer.subarray(3)
-          }
-
-          // Set the checkBOM flag to false as we don't need to check for the
-          this.checkBOM = false
-          break
+      if (this.handleBOM()) {
+        callback()
+        return
       }
     }
 
-    while (this.pos < this.buffer.length) {
+    while (this.hasCurrentByte()) {
+      const byte = this.currentByte()
+
       // If the previous line ended with an end-of-line, we need to check
       // if the next character is also an end-of-line.
       if (this.eventEndCheck) {
@@ -24905,10 +22642,9 @@ class EventSourceStream extends Transform {
         if (this.crlfCheck) {
           // If the current character is a line feed, we can remove it
           // from the buffer and reset the crlfCheck flag
-          if (this.buffer[this.pos] === LF) {
-            this.buffer = this.buffer.subarray(this.pos + 1)
-            this.pos = 0
+          if (byte === LF) {
             this.crlfCheck = false
+            this.consumeCurrentByte()
 
             // It is possible that the line feed is not the end of the
             // event. We need to check if the next character is an
@@ -24924,19 +22660,17 @@ class EventSourceStream extends Transform {
           this.crlfCheck = false
         }
 
-        if (this.buffer[this.pos] === LF || this.buffer[this.pos] === CR) {
+        if (byte === LF || byte === CR) {
           // If the current character is a carriage return, we need to
           // set the crlfCheck flag to true, as we need to check if the
           // next character is a line feed so we can remove it from the
           // buffer
-          if (this.buffer[this.pos] === CR) {
+          if (byte === CR) {
             this.crlfCheck = true
           }
 
-          this.buffer = this.buffer.subarray(this.pos + 1)
-          this.pos = 0
-          if (
-            this.event.data !== undefined || this.event.event || this.event.id || this.event.retry) {
+          this.consumeCurrentByte()
+          if (this.hasPendingEvent()) {
             this.processEvent(this.event)
           }
           this.clearEvent()
@@ -24950,22 +22684,18 @@ class EventSourceStream extends Transform {
 
       // If the current character is an end-of-line, we can process the
       // line
-      if (this.buffer[this.pos] === LF || this.buffer[this.pos] === CR) {
+      if (byte === LF || byte === CR) {
         // If the current character is a carriage return, we need to
         // set the crlfCheck flag to true, as we need to check if the
         // next character is a line feed
-        if (this.buffer[this.pos] === CR) {
+        if (byte === CR) {
           this.crlfCheck = true
         }
 
         // In any case, we can process the line as we reached an
         // end-of-line character
-        this.parseLine(this.buffer.subarray(0, this.pos), this.event)
-
-        // Remove the processed line from the buffer
-        this.buffer = this.buffer.subarray(this.pos + 1)
-        // Reset the position as we removed the processed line from the buffer
-        this.pos = 0
+        this.parseLine(this.readLine(), this.event)
+        this.consumeCurrentByte()
         // A line was processed and this could be the end of the event. We need
         // to check if the next line is empty to determine if the event is
         // finished.
@@ -24973,7 +22703,7 @@ class EventSourceStream extends Transform {
         continue
       }
 
-      this.pos++
+      this.advanceCursor()
     }
 
     callback()
@@ -24998,64 +22728,53 @@ class EventSourceStream extends Transform {
       return
     }
 
-    let field = ''
-    let value = ''
+    let fieldLength = line.length
+    let valueStart = line.length
 
     // If the line contains a U+003A COLON character (:)
     if (colonPosition !== -1) {
-      // Collect the characters on the line before the first U+003A COLON
-      // character (:), and let field be that string.
-      // TODO: Investigate if there is a more performant way to extract the
-      // field
-      // see: https://github.com/nodejs/undici/issues/2630
-      field = line.subarray(0, colonPosition).toString('utf8')
+      fieldLength = colonPosition
 
       // Collect the characters on the line after the first U+003A COLON
       // character (:), and let value be that string.
       // If value starts with a U+0020 SPACE character, remove it from value.
-      let valueStart = colonPosition + 1
+      valueStart = colonPosition + 1
       if (line[valueStart] === SPACE) {
         ++valueStart
       }
-      // TODO: Investigate if there is a more performant way to extract the
-      // value
-      // see: https://github.com/nodejs/undici/issues/2630
-      value = line.subarray(valueStart).toString('utf8')
-
-      // Otherwise, the string is not empty but does not contain a U+003A COLON
-      // character (:)
-    } else {
-      // Process the field using the steps described below, using the whole
-      // line as the field name, and the empty string as the field value.
-      field = line.toString('utf8')
-      value = ''
     }
 
-    // Modify the event with the field name and value. The value is also
-    // decoded as UTF-8
-    switch (field) {
-      case 'data':
-        if (event[field] === undefined) {
-          event[field] = value
-        } else {
-          event[field] += `\n${value}`
-        }
-        break
-      case 'retry':
-        if (isASCIINumber(value)) {
-          event[field] = value
-        }
-        break
-      case 'id':
-        if (isValidLastEventId(value)) {
-          event[field] = value
-        }
-        break
-      case 'event':
-        if (value.length > 0) {
-          event[field] = value
-        }
-        break
+    if (isFieldName(line, fieldLength, DATA)) {
+      const value = line.toString('utf8', valueStart)
+
+      if (event.data === undefined) {
+        event.data = value
+      } else {
+        event.data += `\n${value}`
+      }
+      return
+    }
+
+    if (isFieldName(line, fieldLength, RETRY)) {
+      if (isASCIINumberBytes(line, valueStart)) {
+        event.retry = line.toString('utf8', valueStart)
+      }
+      return
+    }
+
+    if (isFieldName(line, fieldLength, ID)) {
+      if (isValidLastEventIdBytes(line, valueStart)) {
+        event.id = line.toString('utf8', valueStart)
+      }
+      return
+    }
+
+    if (isFieldName(line, fieldLength, EVENT)) {
+      const value = line.toString('utf8', valueStart)
+
+      if (value.length > 0) {
+        event.event = value
+      }
     }
   }
 
@@ -25085,12 +22804,151 @@ class EventSourceStream extends Transform {
   }
 
   clearEvent () {
-    this.event = {
-      data: undefined,
-      event: undefined,
-      id: undefined,
-      retry: undefined
+    this.event.data = undefined
+    this.event.event = undefined
+    this.event.id = undefined
+    this.event.retry = undefined
+  }
+
+  hasPendingEvent () {
+    return this.event.data !== undefined ||
+      this.event.event !== undefined ||
+      this.event.id !== undefined ||
+      this.event.retry !== undefined
+  }
+
+  hasCurrentByte () {
+    return this.chunkIndex < this.chunks.length &&
+      this.pos < this.chunks[this.chunkIndex].length
+  }
+
+  currentByte () {
+    return this.chunks[this.chunkIndex][this.pos]
+  }
+
+  consumeCurrentByte () {
+    this.advanceCursor()
+    this.syncLineStartToCursor()
+  }
+
+  advanceCursor () {
+    this.pos++
+
+    while (this.chunkIndex < this.chunks.length && this.pos >= this.chunks[this.chunkIndex].length) {
+      this.chunkIndex++
+      this.pos = 0
     }
+  }
+
+  syncLineStartToCursor () {
+    this.lineChunkIndex = this.chunkIndex
+    this.linePos = this.pos
+    this.dropConsumedChunks()
+  }
+
+  dropConsumedChunks () {
+    while (this.lineChunkIndex > 0) {
+      this.chunks.shift()
+      this.lineChunkIndex--
+      this.chunkIndex--
+    }
+
+    if (this.chunkIndex === this.chunks.length) {
+      this.chunks.length = 0
+      this.chunkIndex = 0
+      this.pos = 0
+      this.lineChunkIndex = 0
+      this.linePos = 0
+    }
+  }
+
+  readLine () {
+    if (this.lineChunkIndex === this.chunkIndex) {
+      return this.chunks[this.chunkIndex].subarray(this.linePos, this.pos)
+    }
+
+    const chunks = []
+    let length = 0
+
+    for (let i = this.lineChunkIndex; i <= this.chunkIndex; i++) {
+      const chunk = this.chunks[i]
+      const start = i === this.lineChunkIndex ? this.linePos : 0
+      const end = i === this.chunkIndex ? this.pos : chunk.length
+      const slice = chunk.subarray(start, end)
+      length += slice.length
+      chunks.push(slice)
+    }
+
+    return Buffer.concat(chunks, length)
+  }
+
+  peekBufferedByte (offset) {
+    let chunkIndex = this.lineChunkIndex
+    let pos = this.linePos
+
+    while (chunkIndex < this.chunks.length) {
+      const chunk = this.chunks[chunkIndex]
+      const remaining = chunk.length - pos
+
+      if (offset < remaining) {
+        return chunk[pos + offset]
+      }
+
+      offset -= remaining
+      chunkIndex++
+      pos = 0
+    }
+  }
+
+  discardLeadingBytes (count) {
+    while (count > 0 && this.lineChunkIndex < this.chunks.length) {
+      const chunk = this.chunks[this.lineChunkIndex]
+      const remaining = chunk.length - this.linePos
+
+      if (count < remaining) {
+        this.linePos += count
+        count = 0
+      } else {
+        count -= remaining
+        this.lineChunkIndex++
+        this.linePos = 0
+      }
+    }
+
+    this.chunkIndex = this.lineChunkIndex
+    this.pos = this.linePos
+    this.dropConsumedChunks()
+  }
+
+  handleBOM () {
+    const first = this.peekBufferedByte(0)
+    const second = this.peekBufferedByte(1)
+    const third = this.peekBufferedByte(2)
+
+    if (second === undefined) {
+      if (first === BOM[0]) {
+        return true
+      }
+
+      this.checkBOM = false
+      return true
+    }
+
+    if (third === undefined) {
+      if (first === BOM[0] && second === BOM[1]) {
+        return true
+      }
+
+      this.checkBOM = false
+      return false
+    }
+
+    if (first === BOM[0] && second === BOM[1] && third === BOM[2]) {
+      this.discardLeadingBytes(3)
+    }
+
+    this.checkBOM = false
+    return !this.hasCurrentByte()
   }
 }
 
@@ -36359,7 +34217,7 @@ function establishWebSocketConnection (url, protocols, client, ws, onEstablish, 
         // is specified, the server needs to include the same field and one of
         // the selected subprotocol values in its response for the connection to
         // be established.
-        if (!requestProtocols.includes(secProtocol)) {
+        if (requestProtocols === null || !requestProtocols.includes(secProtocol)) {
           failWebsocketConnection(ws, 'Protocol was not set in the opening handshake.')
           return
         }
@@ -37120,7 +34978,12 @@ class PerMessageDeflate {
 
         if (this.#maxPayloadSize > 0 && this.#inflate[kLength] > this.#maxPayloadSize) {
           callback(new MessageSizeExceededError())
+          // The inflater may still hold buffered input that can emit a late
+          // zlib error. Remove the data listener, then deterministically stop
+          // the stream so a subsequent 'error' cannot fire without a listener
+          // (which would terminate the process as an unhandled error event).
           this.#inflate.removeAllListeners()
+          this.#inflate.destroy()
           this.#inflate = null
           return
         }
@@ -41816,14 +39679,14 @@ var exec_awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arg
  */
 function exec_exec(commandLine, args, options) {
     return exec_awaiter(this, void 0, void 0, function* () {
-        const commandArgs = argStringToArray(commandLine);
+        const commandArgs = tr.argStringToArray(commandLine);
         if (commandArgs.length === 0) {
             throw new Error(`Parameter 'commandLine' cannot be null or empty.`);
         }
         // Path to tool to execute should be first arg
         const toolPath = commandArgs[0];
         args = commandArgs.slice(1).concat(args || []);
-        const runner = new ToolRunner(toolPath, args, options);
+        const runner = new tr.ToolRunner(toolPath, args, options);
         return runner.exec();
     });
 }
@@ -42255,6 +40118,8 @@ function getIDToken(aud) {
  */
 
 //# sourceMappingURL=core.js.map
+// EXTERNAL MODULE: external "node:zlib"
+var external_node_zlib_ = __nccwpck_require__(8522);
 ;// CONCATENATED MODULE: ./node_modules/@actions/glob/lib/internal-glob-options-helper.js
 
 /**
@@ -43218,8 +41083,6 @@ function glob_hashFiles(patterns_1) {
     });
 }
 //# sourceMappingURL=glob.js.map
-// EXTERNAL MODULE: ./node_modules/@actions/cache/node_modules/semver/index.js
-var semver = __nccwpck_require__(2710);
 ;// CONCATENATED MODULE: ./node_modules/@actions/cache/lib/internal/constants.js
 var CacheFilename;
 (function (CacheFilename) {
@@ -43248,9 +41111,9 @@ const DefaultRetryDelay = 5000;
 // is aborted.
 const constants_SocketTimeout = 5000;
 // The default path of GNUtar on hosted Windows runners
-const GnuTarPathOnWindows = `${process.env['PROGRAMFILES']}\\Git\\usr\\bin\\tar.exe`;
+const GnuTarPathOnWindows = (/* unused pure expression or super */ null && (`${process.env['PROGRAMFILES']}\\Git\\usr\\bin\\tar.exe`));
 // The default path of BSDtar on hosted Windows runners
-const SystemTarPathOnWindows = `${process.env['SYSTEMDRIVE']}\\Windows\\System32\\tar.exe`;
+const SystemTarPathOnWindows = (/* unused pure expression or super */ null && (`${process.env['SYSTEMDRIVE']}\\Windows\\System32\\tar.exe`));
 const TarFilename = 'cache.tar';
 const ManifestFilename = 'manifest.txt';
 const CacheFileSizeLimit = 10 * Math.pow(1024, 3); // 10GiB per repository
@@ -43281,8 +41144,7 @@ var cacheUtils_asyncValues = (undefined && undefined.__asyncValues) || function 
 
 
 
-
-const versionSalt = '1.0';
+const versionSalt = 'velnor-cache-archive-v1';
 // From https://github.com/actions/toolkit/blob/main/packages/tool-cache/src/tool-cache.ts#L23
 function createTempDirectory() {
     return cacheUtils_awaiter(this, void 0, void 0, function* () {
@@ -43354,56 +41216,21 @@ function unlinkFile(filePath) {
         return external_util_.promisify(external_fs_namespaceObject.unlink)(filePath);
     });
 }
-function getVersion(app_1) {
-    return cacheUtils_awaiter(this, arguments, void 0, function* (app, additionalArgs = []) {
-        let versionOutput = '';
-        additionalArgs.push('--version');
-        core_debug(`Checking ${app} ${additionalArgs.join(' ')}`);
-        try {
-            yield exec_exec(`${app}`, additionalArgs, {
-                ignoreReturnCode: true,
-                silent: true,
-                listeners: {
-                    stdout: (data) => (versionOutput += data.toString()),
-                    stderr: (data) => (versionOutput += data.toString())
-                }
-            });
-        }
-        catch (err) {
-            core_debug(err.message);
-        }
-        versionOutput = versionOutput.trim();
-        core_debug(versionOutput);
-        return versionOutput;
-    });
-}
-// Use zstandard if possible to maximize cache performance
+// One source-owned transport ABI; no ambient executable or runtime selection.
 function getCompressionMethod() {
     return cacheUtils_awaiter(this, void 0, void 0, function* () {
-        const versionOutput = yield getVersion('zstd', ['--quiet']);
-        const version = semver.clean(versionOutput);
-        core_debug(`zstd version: ${version}`);
-        if (versionOutput === '') {
-            return CompressionMethod.Gzip;
+        const major = Number(process.versions.node.split('.')[0]);
+        if (major !== 24 || typeof external_node_zlib_.createZstdCompress !== 'function' ||
+            typeof external_node_zlib_.createZstdDecompress !== 'function') {
+            throw new Error('Unsupported Node cache transport ABI');
         }
-        else {
-            return CompressionMethod.ZstdWithoutLong;
-        }
+        return CompressionMethod.ZstdWithoutLong;
     });
 }
 function getCacheFileName(compressionMethod) {
     return compressionMethod === CompressionMethod.Gzip
         ? CacheFilename.Gzip
         : CacheFilename.Zstd;
-}
-function getGnuTarPathOnWindows() {
-    return cacheUtils_awaiter(this, void 0, void 0, function* () {
-        if (external_fs_namespaceObject.existsSync(GnuTarPathOnWindows)) {
-            return GnuTarPathOnWindows;
-        }
-        const versionOutput = yield getVersion('tar');
-        return versionOutput.toLowerCase().includes('gnu tar') ? which('tar') : '';
-    });
 }
 function assertDefined(name, value) {
     if (value === undefined) {
@@ -44573,8 +42400,6 @@ function restError_isRestError(e) {
 var external_node_http_ = __nccwpck_require__(7067);
 ;// CONCATENATED MODULE: external "node:https"
 const external_node_https_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:https");
-// EXTERNAL MODULE: external "node:zlib"
-var external_node_zlib_ = __nccwpck_require__(8522);
 // EXTERNAL MODULE: external "node:stream"
 var external_node_stream_ = __nccwpck_require__(7075);
 ;// CONCATENATED MODULE: ./node_modules/@typespec/ts-http-runtime/dist/esm/log.js
@@ -93723,9 +91548,28 @@ class CacheServiceClientJSON {
             emitDefaultValues: false,
         });
         const promise = this.rpc.request("github.actions.results.api.v1.CacheService", "FinalizeCacheEntryUpload", "application/json", data);
-        return promise.then((data) => cache_FinalizeCacheEntryUploadResponse.fromJson(data, {
-            ignoreUnknownFields: true,
-        }));
+        return promise.then((data) => {
+            const isFinalized = data !== null &&
+                typeof data === 'object' &&
+                !Array.isArray(data) &&
+                data.ok === true;
+            if (isFinalized) {
+                const hasSnakeEntryId = Object.prototype.hasOwnProperty.call(data, 'entry_id');
+                const hasCamelEntryId = Object.prototype.hasOwnProperty.call(data, 'entryId');
+                const hasEntryId = hasSnakeEntryId !== hasCamelEntryId;
+                const entryId = hasSnakeEntryId ? data.entry_id :
+                    hasCamelEntryId ? data.entryId : undefined;
+                if (!hasEntryId ||
+                    typeof entryId !== 'string' ||
+                    !/^(0|[1-9][0-9]*)$/.test(entryId) ||
+                    !Number.isSafeInteger(Number(entryId))) {
+                    throw new Error('Invalid finalized cache entry ID response');
+                }
+            }
+            return cache_FinalizeCacheEntryUploadResponse.fromJson(data, {
+                ignoreUnknownFields: true,
+            });
+        });
     }
     GetCacheEntryDownloadURL(request) {
         const data = cache_GetCacheEntryDownloadURLRequest.toJson(request, {
@@ -94005,250 +91849,6759 @@ function internalCacheTwirpClient(options) {
     return new CacheServiceClientJSON(client);
 }
 //# sourceMappingURL=cacheTwirpClient.js.map
-;// CONCATENATED MODULE: ./node_modules/@actions/cache/lib/internal/tar.js
-var tar_awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
+;// CONCATENATED MODULE: external "node:child_process"
+const external_node_child_process_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:child_process");
+;// CONCATENATED MODULE: external "node:stream/promises"
+const promises_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:stream/promises");
+// EXTERNAL MODULE: external "node:events"
+var external_node_events_ = __nccwpck_require__(8474);
+;// CONCATENATED MODULE: external "node:string_decoder"
+const external_node_string_decoder_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:string_decoder");
+;// CONCATENATED MODULE: ./node_modules/minipass/dist/esm/index.js
+const proc = typeof process === 'object' && process
+    ? process
+    : {
+        stdout: null,
+        stderr: null,
+    };
 
 
 
-
-
-
-const tar_IS_WINDOWS = process.platform === 'win32';
-// Returns tar path and type: BSD or GNU
-function getTarPath() {
-    return tar_awaiter(this, void 0, void 0, function* () {
-        switch (process.platform) {
-            case 'win32': {
-                const gnuTar = yield getGnuTarPathOnWindows();
-                const systemTar = SystemTarPathOnWindows;
-                if (gnuTar) {
-                    // Use GNUtar as default on windows
-                    return { path: gnuTar, type: ArchiveToolType.GNU };
-                }
-                else if ((0,external_fs_namespaceObject.existsSync)(systemTar)) {
-                    return { path: systemTar, type: ArchiveToolType.BSD };
-                }
-                break;
-            }
-            case 'darwin': {
-                const gnuTar = yield which('gtar', false);
-                if (gnuTar) {
-                    // fix permission denied errors when extracting BSD tar archive with GNU tar - https://github.com/actions/cache/issues/527
-                    return { path: gnuTar, type: ArchiveToolType.GNU };
-                }
-                else {
-                    return {
-                        path: yield which('tar', true),
-                        type: ArchiveToolType.BSD
-                    };
-                }
-            }
-            default:
-                break;
-        }
-        // Default assumption is GNU tar is present in path
-        return {
-            path: yield which('tar', true),
-            type: ArchiveToolType.GNU
-        };
-    });
+/**
+ * Return true if the argument is a Minipass stream, Node stream, or something
+ * else that Minipass can interact with.
+ */
+const isStream = (s) => !!s &&
+    typeof s === 'object' &&
+    (s instanceof Minipass ||
+        s instanceof external_node_stream_ ||
+        isReadable(s) ||
+        isWritable(s));
+/**
+ * Return true if the argument is a valid {@link Minipass.Readable}
+ */
+const isReadable = (s) => !!s &&
+    typeof s === 'object' &&
+    s instanceof external_node_events_.EventEmitter &&
+    typeof s.pipe === 'function' &&
+    // node core Writable streams have a pipe() method, but it throws
+    s.pipe !== external_node_stream_.Writable.prototype.pipe;
+/**
+ * Return true if the argument is a valid {@link Minipass.Writable}
+ */
+const isWritable = (s) => !!s &&
+    typeof s === 'object' &&
+    s instanceof external_node_events_.EventEmitter &&
+    typeof s.write === 'function' &&
+    typeof s.end === 'function';
+const EOF = Symbol('EOF');
+const MAYBE_EMIT_END = Symbol('maybeEmitEnd');
+const EMITTED_END = Symbol('emittedEnd');
+const EMITTING_END = Symbol('emittingEnd');
+const EMITTED_ERROR = Symbol('emittedError');
+const CLOSED = Symbol('closed');
+const READ = Symbol('read');
+const FLUSH = Symbol('flush');
+const FLUSHCHUNK = Symbol('flushChunk');
+const ENCODING = Symbol('encoding');
+const DECODER = Symbol('decoder');
+const FLOWING = Symbol('flowing');
+const PAUSED = Symbol('paused');
+const RESUME = Symbol('resume');
+const BUFFER = Symbol('buffer');
+const PIPES = Symbol('pipes');
+const BUFFERLENGTH = Symbol('bufferLength');
+const BUFFERPUSH = Symbol('bufferPush');
+const BUFFERSHIFT = Symbol('bufferShift');
+const OBJECTMODE = Symbol('objectMode');
+// internal event when stream is destroyed
+const DESTROYED = Symbol('destroyed');
+// internal event when stream has an error
+const ERROR = Symbol('error');
+const EMITDATA = Symbol('emitData');
+const EMITEND = Symbol('emitEnd');
+const EMITEND2 = Symbol('emitEnd2');
+const ASYNC = Symbol('async');
+const ABORT = Symbol('abort');
+const ABORTED = Symbol('aborted');
+const SIGNAL = Symbol('signal');
+const DATALISTENERS = Symbol('dataListeners');
+const DISCARDED = Symbol('discarded');
+const defer = (fn) => Promise.resolve().then(fn);
+const nodefer = (fn) => fn();
+const isEndish = (ev) => ev === 'end' || ev === 'finish' || ev === 'prefinish';
+const isArrayBufferLike = (b) => b instanceof ArrayBuffer ||
+    (!!b &&
+        typeof b === 'object' &&
+        b.constructor &&
+        b.constructor.name === 'ArrayBuffer' &&
+        b.byteLength >= 0);
+const isArrayBufferView = (b) => !Buffer.isBuffer(b) && ArrayBuffer.isView(b);
+/**
+ * Internal class representing a pipe to a destination stream.
+ *
+ * @internal
+ */
+class Pipe {
+    src;
+    dest;
+    opts;
+    ondrain;
+    constructor(src, dest, opts) {
+        this.src = src;
+        this.dest = dest;
+        this.opts = opts;
+        this.ondrain = () => src[RESUME]();
+        this.dest.on('drain', this.ondrain);
+    }
+    unpipe() {
+        this.dest.removeListener('drain', this.ondrain);
+    }
+    // only here for the prototype
+    /* c8 ignore start */
+    proxyErrors(_er) { }
+    /* c8 ignore stop */
+    end() {
+        this.unpipe();
+        if (this.opts.end)
+            this.dest.end();
+    }
 }
-// Return arguments for tar as per tarPath, compressionMethod, method type and os
-function getTarArgs(tarPath_1, compressionMethod_1, type_1) {
-    return tar_awaiter(this, arguments, void 0, function* (tarPath, compressionMethod, type, archivePath = '') {
-        const args = [`"${tarPath.path}"`];
-        const cacheFileName = getCacheFileName(compressionMethod);
-        const tarFile = 'cache.tar';
-        const workingDirectory = getWorkingDirectory();
-        // Speficic args for BSD tar on windows for workaround
-        const BSD_TAR_ZSTD = tarPath.type === ArchiveToolType.BSD &&
-            compressionMethod !== CompressionMethod.Gzip &&
-            tar_IS_WINDOWS;
-        // Method specific args
-        switch (type) {
-            case 'create':
-                args.push('--posix', '-cf', BSD_TAR_ZSTD
-                    ? tarFile
-                    : cacheFileName.replace(new RegExp(`\\${external_path_.sep}`, 'g'), '/'), '--exclude', BSD_TAR_ZSTD
-                    ? tarFile
-                    : cacheFileName.replace(new RegExp(`\\${external_path_.sep}`, 'g'), '/'), '-P', '-C', workingDirectory.replace(new RegExp(`\\${external_path_.sep}`, 'g'), '/'), '--files-from', ManifestFilename);
-                break;
-            case 'extract':
-                args.push('-xf', BSD_TAR_ZSTD
-                    ? tarFile
-                    : archivePath.replace(new RegExp(`\\${external_path_.sep}`, 'g'), '/'), '-P', '-C', workingDirectory.replace(new RegExp(`\\${external_path_.sep}`, 'g'), '/'));
-                break;
-            case 'list':
-                args.push('-tf', BSD_TAR_ZSTD
-                    ? tarFile
-                    : archivePath.replace(new RegExp(`\\${external_path_.sep}`, 'g'), '/'), '-P');
-                break;
-        }
-        // Platform specific args
-        if (tarPath.type === ArchiveToolType.GNU) {
-            switch (process.platform) {
-                case 'win32':
-                    args.push('--force-local');
-                    break;
-                case 'darwin':
-                    args.push('--delay-directory-restore');
-                    break;
-            }
-        }
-        return args;
-    });
+/**
+ * Internal class representing a pipe to a destination stream where
+ * errors are proxied.
+ *
+ * @internal
+ */
+class PipeProxyErrors extends Pipe {
+    unpipe() {
+        this.src.removeListener('error', this.proxyErrors);
+        super.unpipe();
+    }
+    constructor(src, dest, opts) {
+        super(src, dest, opts);
+        this.proxyErrors = (er) => this.dest.emit('error', er);
+        src.on('error', this.proxyErrors);
+    }
 }
-// Returns commands to run tar and compression program
-function getCommands(compressionMethod_1, type_1) {
-    return tar_awaiter(this, arguments, void 0, function* (compressionMethod, type, archivePath = '') {
-        let args;
-        const tarPath = yield getTarPath();
-        const tarArgs = yield getTarArgs(tarPath, compressionMethod, type, archivePath);
-        const compressionArgs = type !== 'create'
-            ? yield getDecompressionProgram(tarPath, compressionMethod, archivePath)
-            : yield getCompressionProgram(tarPath, compressionMethod);
-        const BSD_TAR_ZSTD = tarPath.type === ArchiveToolType.BSD &&
-            compressionMethod !== CompressionMethod.Gzip &&
-            tar_IS_WINDOWS;
-        if (BSD_TAR_ZSTD && type !== 'create') {
-            args = [[...compressionArgs].join(' '), [...tarArgs].join(' ')];
+const isObjectModeOptions = (o) => !!o.objectMode;
+const isEncodingOptions = (o) => !o.objectMode && !!o.encoding && o.encoding !== 'buffer';
+/**
+ * Main export, the Minipass class
+ *
+ * `RType` is the type of data emitted, defaults to Buffer
+ *
+ * `WType` is the type of data to be written, if RType is buffer or string,
+ * then any {@link Minipass.ContiguousData} is allowed.
+ *
+ * `Events` is the set of event handler signatures that this object
+ * will emit, see {@link Minipass.Events}
+ */
+class Minipass extends external_node_events_.EventEmitter {
+    [FLOWING] = false;
+    [PAUSED] = false;
+    [PIPES] = [];
+    [BUFFER] = [];
+    [OBJECTMODE];
+    [ENCODING];
+    [ASYNC];
+    [DECODER];
+    [EOF] = false;
+    [EMITTED_END] = false;
+    [EMITTING_END] = false;
+    [CLOSED] = false;
+    [EMITTED_ERROR] = null;
+    [BUFFERLENGTH] = 0;
+    [DESTROYED] = false;
+    [SIGNAL];
+    [ABORTED] = false;
+    [DATALISTENERS] = 0;
+    [DISCARDED] = false;
+    /**
+     * true if the stream can be written
+     */
+    writable = true;
+    /**
+     * true if the stream can be read
+     */
+    readable = true;
+    /**
+     * If `RType` is Buffer, then options do not need to be provided.
+     * Otherwise, an options object must be provided to specify either
+     * {@link Minipass.SharedOptions.objectMode} or
+     * {@link Minipass.SharedOptions.encoding}, as appropriate.
+     */
+    constructor(...args) {
+        const options = (args[0] ||
+            {});
+        super();
+        if (options.objectMode && typeof options.encoding === 'string') {
+            throw new TypeError('Encoding and objectMode may not be used together');
+        }
+        if (isObjectModeOptions(options)) {
+            this[OBJECTMODE] = true;
+            this[ENCODING] = null;
+        }
+        else if (isEncodingOptions(options)) {
+            this[ENCODING] = options.encoding;
+            this[OBJECTMODE] = false;
         }
         else {
-            args = [[...tarArgs].join(' '), [...compressionArgs].join(' ')];
+            this[OBJECTMODE] = false;
+            this[ENCODING] = null;
         }
-        if (BSD_TAR_ZSTD) {
-            return args;
+        this[ASYNC] = !!options.async;
+        this[DECODER] = this[ENCODING]
+            ? new external_node_string_decoder_namespaceObject.StringDecoder(this[ENCODING])
+            : null;
+        //@ts-ignore - private option for debugging and testing
+        if (options && options.debugExposeBuffer === true) {
+            Object.defineProperty(this, 'buffer', { get: () => this[BUFFER] });
         }
-        return [args.join(' ')];
-    });
+        //@ts-ignore - private option for debugging and testing
+        if (options && options.debugExposePipes === true) {
+            Object.defineProperty(this, 'pipes', { get: () => this[PIPES] });
+        }
+        const { signal } = options;
+        if (signal) {
+            this[SIGNAL] = signal;
+            if (signal.aborted) {
+                this[ABORT]();
+            }
+            else {
+                signal.addEventListener('abort', () => this[ABORT]());
+            }
+        }
+    }
+    /**
+     * The amount of data stored in the buffer waiting to be read.
+     *
+     * For Buffer strings, this will be the total byte length.
+     * For string encoding streams, this will be the string character length,
+     * according to JavaScript's `string.length` logic.
+     * For objectMode streams, this is a count of the items waiting to be
+     * emitted.
+     */
+    get bufferLength() {
+        return this[BUFFERLENGTH];
+    }
+    /**
+     * The `BufferEncoding` currently in use, or `null`
+     */
+    get encoding() {
+        return this[ENCODING];
+    }
+    /**
+     * @deprecated - This is a read only property
+     */
+    set encoding(_enc) {
+        throw new Error('Encoding must be set at instantiation time');
+    }
+    /**
+     * @deprecated - Encoding may only be set at instantiation time
+     */
+    setEncoding(_enc) {
+        throw new Error('Encoding must be set at instantiation time');
+    }
+    /**
+     * True if this is an objectMode stream
+     */
+    get objectMode() {
+        return this[OBJECTMODE];
+    }
+    /**
+     * @deprecated - This is a read-only property
+     */
+    set objectMode(_om) {
+        throw new Error('objectMode must be set at instantiation time');
+    }
+    /**
+     * true if this is an async stream
+     */
+    get ['async']() {
+        return this[ASYNC];
+    }
+    /**
+     * Set to true to make this stream async.
+     *
+     * Once set, it cannot be unset, as this would potentially cause incorrect
+     * behavior.  Ie, a sync stream can be made async, but an async stream
+     * cannot be safely made sync.
+     */
+    set ['async'](a) {
+        this[ASYNC] = this[ASYNC] || !!a;
+    }
+    // drop everything and get out of the flow completely
+    [ABORT]() {
+        this[ABORTED] = true;
+        this.emit('abort', this[SIGNAL]?.reason);
+        this.destroy(this[SIGNAL]?.reason);
+    }
+    /**
+     * True if the stream has been aborted.
+     */
+    get aborted() {
+        return this[ABORTED];
+    }
+    /**
+     * No-op setter. Stream aborted status is set via the AbortSignal provided
+     * in the constructor options.
+     */
+    set aborted(_) { }
+    write(chunk, encoding, cb) {
+        if (this[ABORTED])
+            return false;
+        if (this[EOF])
+            throw new Error('write after end');
+        if (this[DESTROYED]) {
+            this.emit('error', Object.assign(new Error('Cannot call write after a stream was destroyed'), { code: 'ERR_STREAM_DESTROYED' }));
+            return true;
+        }
+        if (typeof encoding === 'function') {
+            cb = encoding;
+            encoding = 'utf8';
+        }
+        if (!encoding)
+            encoding = 'utf8';
+        const fn = this[ASYNC] ? defer : nodefer;
+        // convert array buffers and typed array views into buffers
+        // at some point in the future, we may want to do the opposite!
+        // leave strings and buffers as-is
+        // anything is only allowed if in object mode, so throw
+        if (!this[OBJECTMODE] && !Buffer.isBuffer(chunk)) {
+            if (isArrayBufferView(chunk)) {
+                //@ts-ignore - sinful unsafe type changing
+                chunk = Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength);
+            }
+            else if (isArrayBufferLike(chunk)) {
+                //@ts-ignore - sinful unsafe type changing
+                chunk = Buffer.from(chunk);
+            }
+            else if (typeof chunk !== 'string') {
+                throw new Error('Non-contiguous data written to non-objectMode stream');
+            }
+        }
+        // handle object mode up front, since it's simpler
+        // this yields better performance, fewer checks later.
+        if (this[OBJECTMODE]) {
+            // maybe impossible?
+            /* c8 ignore start */
+            if (this[FLOWING] && this[BUFFERLENGTH] !== 0)
+                this[FLUSH](true);
+            /* c8 ignore stop */
+            if (this[FLOWING])
+                this.emit('data', chunk);
+            else
+                this[BUFFERPUSH](chunk);
+            if (this[BUFFERLENGTH] !== 0)
+                this.emit('readable');
+            if (cb)
+                fn(cb);
+            return this[FLOWING];
+        }
+        // at this point the chunk is a buffer or string
+        // don't buffer it up or send it to the decoder
+        if (!chunk.length) {
+            if (this[BUFFERLENGTH] !== 0)
+                this.emit('readable');
+            if (cb)
+                fn(cb);
+            return this[FLOWING];
+        }
+        // fast-path writing strings of same encoding to a stream with
+        // an empty buffer, skipping the buffer/decoder dance
+        if (typeof chunk === 'string' &&
+            // unless it is a string already ready for us to use
+            !(encoding === this[ENCODING] && !this[DECODER]?.lastNeed)) {
+            //@ts-ignore - sinful unsafe type change
+            chunk = Buffer.from(chunk, encoding);
+        }
+        if (Buffer.isBuffer(chunk) && this[ENCODING]) {
+            //@ts-ignore - sinful unsafe type change
+            chunk = this[DECODER].write(chunk);
+        }
+        // Note: flushing CAN potentially switch us into not-flowing mode
+        if (this[FLOWING] && this[BUFFERLENGTH] !== 0)
+            this[FLUSH](true);
+        if (this[FLOWING])
+            this.emit('data', chunk);
+        else
+            this[BUFFERPUSH](chunk);
+        if (this[BUFFERLENGTH] !== 0)
+            this.emit('readable');
+        if (cb)
+            fn(cb);
+        return this[FLOWING];
+    }
+    /**
+     * Low-level explicit read method.
+     *
+     * In objectMode, the argument is ignored, and one item is returned if
+     * available.
+     *
+     * `n` is the number of bytes (or in the case of encoding streams,
+     * characters) to consume. If `n` is not provided, then the entire buffer
+     * is returned, or `null` is returned if no data is available.
+     *
+     * If `n` is greater that the amount of data in the internal buffer,
+     * then `null` is returned.
+     */
+    read(n) {
+        if (this[DESTROYED])
+            return null;
+        this[DISCARDED] = false;
+        if (this[BUFFERLENGTH] === 0 ||
+            n === 0 ||
+            (n && n > this[BUFFERLENGTH])) {
+            this[MAYBE_EMIT_END]();
+            return null;
+        }
+        if (this[OBJECTMODE])
+            n = null;
+        if (this[BUFFER].length > 1 && !this[OBJECTMODE]) {
+            // not object mode, so if we have an encoding, then RType is string
+            // otherwise, must be Buffer
+            this[BUFFER] = [
+                (this[ENCODING]
+                    ? this[BUFFER].join('')
+                    : Buffer.concat(this[BUFFER], this[BUFFERLENGTH])),
+            ];
+        }
+        const ret = this[READ](n || null, this[BUFFER][0]);
+        this[MAYBE_EMIT_END]();
+        return ret;
+    }
+    [READ](n, chunk) {
+        if (this[OBJECTMODE])
+            this[BUFFERSHIFT]();
+        else {
+            const c = chunk;
+            if (n === c.length || n === null)
+                this[BUFFERSHIFT]();
+            else if (typeof c === 'string') {
+                this[BUFFER][0] = c.slice(n);
+                chunk = c.slice(0, n);
+                this[BUFFERLENGTH] -= n;
+            }
+            else {
+                this[BUFFER][0] = c.subarray(n);
+                chunk = c.subarray(0, n);
+                this[BUFFERLENGTH] -= n;
+            }
+        }
+        this.emit('data', chunk);
+        if (!this[BUFFER].length && !this[EOF])
+            this.emit('drain');
+        return chunk;
+    }
+    end(chunk, encoding, cb) {
+        if (typeof chunk === 'function') {
+            cb = chunk;
+            chunk = undefined;
+        }
+        if (typeof encoding === 'function') {
+            cb = encoding;
+            encoding = 'utf8';
+        }
+        if (chunk !== undefined)
+            this.write(chunk, encoding);
+        if (cb)
+            this.once('end', cb);
+        this[EOF] = true;
+        this.writable = false;
+        // if we haven't written anything, then go ahead and emit,
+        // even if we're not reading.
+        // we'll re-emit if a new 'end' listener is added anyway.
+        // This makes MP more suitable to write-only use cases.
+        if (this[FLOWING] || !this[PAUSED])
+            this[MAYBE_EMIT_END]();
+        return this;
+    }
+    // don't let the internal resume be overwritten
+    [RESUME]() {
+        if (this[DESTROYED])
+            return;
+        if (!this[DATALISTENERS] && !this[PIPES].length) {
+            this[DISCARDED] = true;
+        }
+        this[PAUSED] = false;
+        this[FLOWING] = true;
+        this.emit('resume');
+        if (this[BUFFER].length)
+            this[FLUSH]();
+        else if (this[EOF])
+            this[MAYBE_EMIT_END]();
+        else
+            this.emit('drain');
+    }
+    /**
+     * Resume the stream if it is currently in a paused state
+     *
+     * If called when there are no pipe destinations or `data` event listeners,
+     * this will place the stream in a "discarded" state, where all data will
+     * be thrown away. The discarded state is removed if a pipe destination or
+     * data handler is added, if pause() is called, or if any synchronous or
+     * asynchronous iteration is started.
+     */
+    resume() {
+        return this[RESUME]();
+    }
+    /**
+     * Pause the stream
+     */
+    pause() {
+        this[FLOWING] = false;
+        this[PAUSED] = true;
+        this[DISCARDED] = false;
+    }
+    /**
+     * true if the stream has been forcibly destroyed
+     */
+    get destroyed() {
+        return this[DESTROYED];
+    }
+    /**
+     * true if the stream is currently in a flowing state, meaning that
+     * any writes will be immediately emitted.
+     */
+    get flowing() {
+        return this[FLOWING];
+    }
+    /**
+     * true if the stream is currently in a paused state
+     */
+    get paused() {
+        return this[PAUSED];
+    }
+    [BUFFERPUSH](chunk) {
+        if (this[OBJECTMODE])
+            this[BUFFERLENGTH] += 1;
+        else
+            this[BUFFERLENGTH] += chunk.length;
+        this[BUFFER].push(chunk);
+    }
+    [BUFFERSHIFT]() {
+        if (this[OBJECTMODE])
+            this[BUFFERLENGTH] -= 1;
+        else
+            this[BUFFERLENGTH] -= this[BUFFER][0].length;
+        return this[BUFFER].shift();
+    }
+    [FLUSH](noDrain = false) {
+        do { } while (this[FLUSHCHUNK](this[BUFFERSHIFT]()) &&
+            this[BUFFER].length);
+        if (!noDrain && !this[BUFFER].length && !this[EOF])
+            this.emit('drain');
+    }
+    [FLUSHCHUNK](chunk) {
+        this.emit('data', chunk);
+        return this[FLOWING];
+    }
+    /**
+     * Pipe all data emitted by this stream into the destination provided.
+     *
+     * Triggers the flow of data.
+     */
+    pipe(dest, opts) {
+        if (this[DESTROYED])
+            return dest;
+        this[DISCARDED] = false;
+        const ended = this[EMITTED_END];
+        opts = opts || {};
+        if (dest === proc.stdout || dest === proc.stderr)
+            opts.end = false;
+        else
+            opts.end = opts.end !== false;
+        opts.proxyErrors = !!opts.proxyErrors;
+        // piping an ended stream ends immediately
+        if (ended) {
+            if (opts.end)
+                dest.end();
+        }
+        else {
+            // "as" here just ignores the WType, which pipes don't care about,
+            // since they're only consuming from us, and writing to the dest
+            this[PIPES].push(!opts.proxyErrors
+                ? new Pipe(this, dest, opts)
+                : new PipeProxyErrors(this, dest, opts));
+            if (this[ASYNC])
+                defer(() => this[RESUME]());
+            else
+                this[RESUME]();
+        }
+        return dest;
+    }
+    /**
+     * Fully unhook a piped destination stream.
+     *
+     * If the destination stream was the only consumer of this stream (ie,
+     * there are no other piped destinations or `'data'` event listeners)
+     * then the flow of data will stop until there is another consumer or
+     * {@link Minipass#resume} is explicitly called.
+     */
+    unpipe(dest) {
+        const p = this[PIPES].find(p => p.dest === dest);
+        if (p) {
+            if (this[PIPES].length === 1) {
+                if (this[FLOWING] && this[DATALISTENERS] === 0) {
+                    this[FLOWING] = false;
+                }
+                this[PIPES] = [];
+            }
+            else
+                this[PIPES].splice(this[PIPES].indexOf(p), 1);
+            p.unpipe();
+        }
+    }
+    /**
+     * Alias for {@link Minipass#on}
+     */
+    addListener(ev, handler) {
+        return this.on(ev, handler);
+    }
+    /**
+     * Mostly identical to `EventEmitter.on`, with the following
+     * behavior differences to prevent data loss and unnecessary hangs:
+     *
+     * - Adding a 'data' event handler will trigger the flow of data
+     *
+     * - Adding a 'readable' event handler when there is data waiting to be read
+     *   will cause 'readable' to be emitted immediately.
+     *
+     * - Adding an 'endish' event handler ('end', 'finish', etc.) which has
+     *   already passed will cause the event to be emitted immediately and all
+     *   handlers removed.
+     *
+     * - Adding an 'error' event handler after an error has been emitted will
+     *   cause the event to be re-emitted immediately with the error previously
+     *   raised.
+     */
+    on(ev, handler) {
+        const ret = super.on(ev, handler);
+        if (ev === 'data') {
+            this[DISCARDED] = false;
+            this[DATALISTENERS]++;
+            if (!this[PIPES].length && !this[FLOWING]) {
+                this[RESUME]();
+            }
+        }
+        else if (ev === 'readable' && this[BUFFERLENGTH] !== 0) {
+            super.emit('readable');
+        }
+        else if (isEndish(ev) && this[EMITTED_END]) {
+            super.emit(ev);
+            this.removeAllListeners(ev);
+        }
+        else if (ev === 'error' && this[EMITTED_ERROR]) {
+            const h = handler;
+            if (this[ASYNC])
+                defer(() => h.call(this, this[EMITTED_ERROR]));
+            else
+                h.call(this, this[EMITTED_ERROR]);
+        }
+        return ret;
+    }
+    /**
+     * Alias for {@link Minipass#off}
+     */
+    removeListener(ev, handler) {
+        return this.off(ev, handler);
+    }
+    /**
+     * Mostly identical to `EventEmitter.off`
+     *
+     * If a 'data' event handler is removed, and it was the last consumer
+     * (ie, there are no pipe destinations or other 'data' event listeners),
+     * then the flow of data will stop until there is another consumer or
+     * {@link Minipass#resume} is explicitly called.
+     */
+    off(ev, handler) {
+        const ret = super.off(ev, handler);
+        // if we previously had listeners, and now we don't, and we don't
+        // have any pipes, then stop the flow, unless it's been explicitly
+        // put in a discarded flowing state via stream.resume().
+        if (ev === 'data') {
+            this[DATALISTENERS] = this.listeners('data').length;
+            if (this[DATALISTENERS] === 0 &&
+                !this[DISCARDED] &&
+                !this[PIPES].length) {
+                this[FLOWING] = false;
+            }
+        }
+        return ret;
+    }
+    /**
+     * Mostly identical to `EventEmitter.removeAllListeners`
+     *
+     * If all 'data' event handlers are removed, and they were the last consumer
+     * (ie, there are no pipe destinations), then the flow of data will stop
+     * until there is another consumer or {@link Minipass#resume} is explicitly
+     * called.
+     */
+    removeAllListeners(ev) {
+        const ret = super.removeAllListeners(ev);
+        if (ev === 'data' || ev === undefined) {
+            this[DATALISTENERS] = 0;
+            if (!this[DISCARDED] && !this[PIPES].length) {
+                this[FLOWING] = false;
+            }
+        }
+        return ret;
+    }
+    /**
+     * true if the 'end' event has been emitted
+     */
+    get emittedEnd() {
+        return this[EMITTED_END];
+    }
+    [MAYBE_EMIT_END]() {
+        if (!this[EMITTING_END] &&
+            !this[EMITTED_END] &&
+            !this[DESTROYED] &&
+            this[BUFFER].length === 0 &&
+            this[EOF]) {
+            this[EMITTING_END] = true;
+            this.emit('end');
+            this.emit('prefinish');
+            this.emit('finish');
+            if (this[CLOSED])
+                this.emit('close');
+            this[EMITTING_END] = false;
+        }
+    }
+    /**
+     * Mostly identical to `EventEmitter.emit`, with the following
+     * behavior differences to prevent data loss and unnecessary hangs:
+     *
+     * If the stream has been destroyed, and the event is something other
+     * than 'close' or 'error', then `false` is returned and no handlers
+     * are called.
+     *
+     * If the event is 'end', and has already been emitted, then the event
+     * is ignored. If the stream is in a paused or non-flowing state, then
+     * the event will be deferred until data flow resumes. If the stream is
+     * async, then handlers will be called on the next tick rather than
+     * immediately.
+     *
+     * If the event is 'close', and 'end' has not yet been emitted, then
+     * the event will be deferred until after 'end' is emitted.
+     *
+     * If the event is 'error', and an AbortSignal was provided for the stream,
+     * and there are no listeners, then the event is ignored, matching the
+     * behavior of node core streams in the presense of an AbortSignal.
+     *
+     * If the event is 'finish' or 'prefinish', then all listeners will be
+     * removed after emitting the event, to prevent double-firing.
+     */
+    emit(ev, ...args) {
+        const data = args[0];
+        // error and close are only events allowed after calling destroy()
+        if (ev !== 'error' &&
+            ev !== 'close' &&
+            ev !== DESTROYED &&
+            this[DESTROYED]) {
+            return false;
+        }
+        else if (ev === 'data') {
+            return !this[OBJECTMODE] && !data
+                ? false
+                : this[ASYNC]
+                    ? (defer(() => this[EMITDATA](data)), true)
+                    : this[EMITDATA](data);
+        }
+        else if (ev === 'end') {
+            return this[EMITEND]();
+        }
+        else if (ev === 'close') {
+            this[CLOSED] = true;
+            // don't emit close before 'end' and 'finish'
+            if (!this[EMITTED_END] && !this[DESTROYED])
+                return false;
+            const ret = super.emit('close');
+            this.removeAllListeners('close');
+            return ret;
+        }
+        else if (ev === 'error') {
+            this[EMITTED_ERROR] = data;
+            super.emit(ERROR, data);
+            const ret = !this[SIGNAL] || this.listeners('error').length
+                ? super.emit('error', data)
+                : false;
+            this[MAYBE_EMIT_END]();
+            return ret;
+        }
+        else if (ev === 'resume') {
+            const ret = super.emit('resume');
+            this[MAYBE_EMIT_END]();
+            return ret;
+        }
+        else if (ev === 'finish' || ev === 'prefinish') {
+            const ret = super.emit(ev);
+            this.removeAllListeners(ev);
+            return ret;
+        }
+        // Some other unknown event
+        const ret = super.emit(ev, ...args);
+        this[MAYBE_EMIT_END]();
+        return ret;
+    }
+    [EMITDATA](data) {
+        for (const p of this[PIPES]) {
+            if (p.dest.write(data) === false)
+                this.pause();
+        }
+        const ret = this[DISCARDED] ? false : super.emit('data', data);
+        this[MAYBE_EMIT_END]();
+        return ret;
+    }
+    [EMITEND]() {
+        if (this[EMITTED_END])
+            return false;
+        this[EMITTED_END] = true;
+        this.readable = false;
+        return this[ASYNC]
+            ? (defer(() => this[EMITEND2]()), true)
+            : this[EMITEND2]();
+    }
+    [EMITEND2]() {
+        if (this[DECODER]) {
+            const data = this[DECODER].end();
+            if (data) {
+                for (const p of this[PIPES]) {
+                    p.dest.write(data);
+                }
+                if (!this[DISCARDED])
+                    super.emit('data', data);
+            }
+        }
+        for (const p of this[PIPES]) {
+            p.end();
+        }
+        const ret = super.emit('end');
+        this.removeAllListeners('end');
+        return ret;
+    }
+    /**
+     * Return a Promise that resolves to an array of all emitted data once
+     * the stream ends.
+     */
+    async collect() {
+        const buf = Object.assign([], {
+            dataLength: 0,
+        });
+        if (!this[OBJECTMODE])
+            buf.dataLength = 0;
+        // set the promise first, in case an error is raised
+        // by triggering the flow here.
+        const p = this.promise();
+        this.on('data', c => {
+            buf.push(c);
+            if (!this[OBJECTMODE])
+                buf.dataLength += c.length;
+        });
+        await p;
+        return buf;
+    }
+    /**
+     * Return a Promise that resolves to the concatenation of all emitted data
+     * once the stream ends.
+     *
+     * Not allowed on objectMode streams.
+     */
+    async concat() {
+        if (this[OBJECTMODE]) {
+            throw new Error('cannot concat in objectMode');
+        }
+        const buf = await this.collect();
+        return (this[ENCODING]
+            ? buf.join('')
+            : Buffer.concat(buf, buf.dataLength));
+    }
+    /**
+     * Return a void Promise that resolves once the stream ends.
+     */
+    async promise() {
+        return new Promise((resolve, reject) => {
+            this.on(DESTROYED, () => reject(new Error('stream destroyed')));
+            this.on('error', er => reject(er));
+            this.on('end', () => resolve());
+        });
+    }
+    /**
+     * Asynchronous `for await of` iteration.
+     *
+     * This will continue emitting all chunks until the stream terminates.
+     */
+    [Symbol.asyncIterator]() {
+        // set this up front, in case the consumer doesn't call next()
+        // right away.
+        this[DISCARDED] = false;
+        let stopped = false;
+        const stop = async () => {
+            this.pause();
+            stopped = true;
+            return { value: undefined, done: true };
+        };
+        const next = () => {
+            if (stopped)
+                return stop();
+            const res = this.read();
+            if (res !== null)
+                return Promise.resolve({ done: false, value: res });
+            if (this[EOF])
+                return stop();
+            let resolve;
+            let reject;
+            const onerr = (er) => {
+                this.off('data', ondata);
+                this.off('end', onend);
+                this.off(DESTROYED, ondestroy);
+                stop();
+                reject(er);
+            };
+            const ondata = (value) => {
+                this.off('error', onerr);
+                this.off('end', onend);
+                this.off(DESTROYED, ondestroy);
+                this.pause();
+                resolve({ value, done: !!this[EOF] });
+            };
+            const onend = () => {
+                this.off('error', onerr);
+                this.off('data', ondata);
+                this.off(DESTROYED, ondestroy);
+                stop();
+                resolve({ done: true, value: undefined });
+            };
+            const ondestroy = () => onerr(new Error('stream destroyed'));
+            return new Promise((res, rej) => {
+                reject = rej;
+                resolve = res;
+                this.once(DESTROYED, ondestroy);
+                this.once('error', onerr);
+                this.once('end', onend);
+                this.once('data', ondata);
+            });
+        };
+        return {
+            next,
+            throw: stop,
+            return: stop,
+            [Symbol.asyncIterator]() {
+                return this;
+            },
+            [Symbol.asyncDispose]: async () => { },
+        };
+    }
+    /**
+     * Synchronous `for of` iteration.
+     *
+     * The iteration will terminate when the internal buffer runs out, even
+     * if the stream has not yet terminated.
+     */
+    [Symbol.iterator]() {
+        // set this up front, in case the consumer doesn't call next()
+        // right away.
+        this[DISCARDED] = false;
+        let stopped = false;
+        const stop = () => {
+            this.pause();
+            this.off(ERROR, stop);
+            this.off(DESTROYED, stop);
+            this.off('end', stop);
+            stopped = true;
+            return { done: true, value: undefined };
+        };
+        const next = () => {
+            if (stopped)
+                return stop();
+            const value = this.read();
+            return value === null ? stop() : { done: false, value };
+        };
+        this.once('end', stop);
+        this.once(ERROR, stop);
+        this.once(DESTROYED, stop);
+        return {
+            next,
+            throw: stop,
+            return: stop,
+            [Symbol.iterator]() {
+                return this;
+            },
+            [Symbol.dispose]: () => { },
+        };
+    }
+    /**
+     * Destroy a stream, preventing it from being used for any further purpose.
+     *
+     * If the stream has a `close()` method, then it will be called on
+     * destruction.
+     *
+     * After destruction, any attempt to write data, read data, or emit most
+     * events will be ignored.
+     *
+     * If an error argument is provided, then it will be emitted in an
+     * 'error' event.
+     */
+    destroy(er) {
+        if (this[DESTROYED]) {
+            if (er)
+                this.emit('error', er);
+            else
+                this.emit(DESTROYED);
+            return this;
+        }
+        this[DESTROYED] = true;
+        this[DISCARDED] = true;
+        // throw away all buffered data, it's never coming out
+        this[BUFFER].length = 0;
+        this[BUFFERLENGTH] = 0;
+        const wc = this;
+        if (typeof wc.close === 'function' && !this[CLOSED])
+            wc.close();
+        if (er)
+            this.emit('error', er);
+        // if no error to emit, still reject pending promises
+        else
+            this.emit(DESTROYED);
+        return this;
+    }
+    /**
+     * Alias for {@link isStream}
+     *
+     * Former export location, maintained for backwards compatibility.
+     *
+     * @deprecated
+     */
+    static get isStream() {
+        return isStream;
+    }
 }
-function getWorkingDirectory() {
-    var _a;
-    return (_a = process.env['GITHUB_WORKSPACE']) !== null && _a !== void 0 ? _a : process.cwd();
-}
-// Common function for extractTar and listTar to get the compression method
-function getDecompressionProgram(tarPath, compressionMethod, archivePath) {
-    return tar_awaiter(this, void 0, void 0, function* () {
-        // -d: Decompress.
-        // unzstd is equivalent to 'zstd -d'
-        // --long=#: Enables long distance matching with # bits. Maximum is 30 (1GB) on 32-bit OS and 31 (2GB) on 64-bit.
-        // Using 30 here because we also support 32-bit self-hosted runners.
-        const BSD_TAR_ZSTD = tarPath.type === ArchiveToolType.BSD &&
-            compressionMethod !== CompressionMethod.Gzip &&
-            tar_IS_WINDOWS;
-        switch (compressionMethod) {
-            case CompressionMethod.Zstd:
-                return BSD_TAR_ZSTD
-                    ? [
-                        'zstd -d --long=30 --force -o',
-                        TarFilename,
-                        archivePath.replace(new RegExp(`\\${external_path_.sep}`, 'g'), '/')
-                    ]
-                    : [
-                        '--use-compress-program',
-                        tar_IS_WINDOWS ? '"zstd -d --long=30"' : 'unzstd --long=30'
-                    ];
-            case CompressionMethod.ZstdWithoutLong:
-                return BSD_TAR_ZSTD
-                    ? [
-                        'zstd -d --force -o',
-                        TarFilename,
-                        archivePath.replace(new RegExp(`\\${external_path_.sep}`, 'g'), '/')
-                    ]
-                    : ['--use-compress-program', tar_IS_WINDOWS ? '"zstd -d"' : 'unzstd'];
+//# sourceMappingURL=index.js.map
+;// CONCATENATED MODULE: ./node_modules/@isaacs/fs-minipass/dist/esm/index.js
+
+
+
+const writev = external_fs_namespaceObject.writev;
+const _autoClose = Symbol('_autoClose');
+const _close = Symbol('_close');
+const _ended = Symbol('_ended');
+const _fd = Symbol('_fd');
+const _finished = Symbol('_finished');
+const _flags = Symbol('_flags');
+const _flush = Symbol('_flush');
+const _handleChunk = Symbol('_handleChunk');
+const _makeBuf = Symbol('_makeBuf');
+const _mode = Symbol('_mode');
+const _needDrain = Symbol('_needDrain');
+const _onerror = Symbol('_onerror');
+const _onopen = Symbol('_onopen');
+const _onread = Symbol('_onread');
+const _onwrite = Symbol('_onwrite');
+const _open = Symbol('_open');
+const _path = Symbol('_path');
+const _pos = Symbol('_pos');
+const _queue = Symbol('_queue');
+const _read = Symbol('_read');
+const _readSize = Symbol('_readSize');
+const _reading = Symbol('_reading');
+const _remain = Symbol('_remain');
+const _size = Symbol('_size');
+const _write = Symbol('_write');
+const _writing = Symbol('_writing');
+const _defaultFlag = Symbol('_defaultFlag');
+const _errored = Symbol('_errored');
+class ReadStream extends Minipass {
+    [_errored] = false;
+    [_fd];
+    [_path];
+    [_readSize];
+    [_reading] = false;
+    [_size];
+    [_remain];
+    [_autoClose];
+    constructor(path, opt) {
+        opt = opt || {};
+        super(opt);
+        this.readable = true;
+        this.writable = false;
+        if (typeof path !== 'string') {
+            throw new TypeError('path must be a string');
+        }
+        this[_errored] = false;
+        this[_fd] = typeof opt.fd === 'number' ? opt.fd : undefined;
+        this[_path] = path;
+        this[_readSize] = opt.readSize || 16 * 1024 * 1024;
+        this[_reading] = false;
+        this[_size] = typeof opt.size === 'number' ? opt.size : Infinity;
+        this[_remain] = this[_size];
+        this[_autoClose] =
+            typeof opt.autoClose === 'boolean' ? opt.autoClose : true;
+        if (typeof this[_fd] === 'number') {
+            this[_read]();
+        }
+        else {
+            this[_open]();
+        }
+    }
+    get fd() {
+        return this[_fd];
+    }
+    get path() {
+        return this[_path];
+    }
+    //@ts-ignore
+    write() {
+        throw new TypeError('this is a readable stream');
+    }
+    //@ts-ignore
+    end() {
+        throw new TypeError('this is a readable stream');
+    }
+    [_open]() {
+        external_fs_namespaceObject.open(this[_path], 'r', (er, fd) => this[_onopen](er, fd));
+    }
+    [_onopen](er, fd) {
+        if (er) {
+            this[_onerror](er);
+        }
+        else {
+            this[_fd] = fd;
+            this.emit('open', fd);
+            this[_read]();
+        }
+    }
+    [_makeBuf]() {
+        return Buffer.allocUnsafe(Math.min(this[_readSize], this[_remain]));
+    }
+    [_read]() {
+        if (!this[_reading]) {
+            this[_reading] = true;
+            const buf = this[_makeBuf]();
+            /* c8 ignore start */
+            if (buf.length === 0) {
+                return process.nextTick(() => this[_onread](null, 0, buf));
+            }
+            /* c8 ignore stop */
+            external_fs_namespaceObject.read(this[_fd], buf, 0, buf.length, null, (er, br, b) => this[_onread](er, br, b));
+        }
+    }
+    [_onread](er, br, buf) {
+        this[_reading] = false;
+        if (er) {
+            this[_onerror](er);
+        }
+        else if (this[_handleChunk](br, buf)) {
+            this[_read]();
+        }
+    }
+    [_close]() {
+        if (this[_autoClose] && typeof this[_fd] === 'number') {
+            const fd = this[_fd];
+            this[_fd] = undefined;
+            external_fs_namespaceObject.close(fd, er => er ? this.emit('error', er) : this.emit('close'));
+        }
+    }
+    [_onerror](er) {
+        this[_reading] = true;
+        this[_close]();
+        this.emit('error', er);
+    }
+    [_handleChunk](br, buf) {
+        let ret = false;
+        // no effect if infinite
+        this[_remain] -= br;
+        if (br > 0) {
+            ret = super.write(br < buf.length ? buf.subarray(0, br) : buf);
+        }
+        if (br === 0 || this[_remain] <= 0) {
+            ret = false;
+            this[_close]();
+            super.end();
+        }
+        return ret;
+    }
+    emit(ev, ...args) {
+        switch (ev) {
+            case 'prefinish':
+            case 'finish':
+                return false;
+            case 'drain':
+                if (typeof this[_fd] === 'number') {
+                    this[_read]();
+                }
+                return false;
+            case 'error':
+                if (this[_errored]) {
+                    return false;
+                }
+                this[_errored] = true;
+                return super.emit(ev, ...args);
             default:
-                return ['-z'];
+                return super.emit(ev, ...args);
         }
-    });
+    }
 }
-// Used for creating the archive
-// -T#: Compress using # working thread. If # is 0, attempt to detect and use the number of physical CPU cores.
-// zstdmt is equivalent to 'zstd -T0'
-// --long=#: Enables long distance matching with # bits. Maximum is 30 (1GB) on 32-bit OS and 31 (2GB) on 64-bit.
-// Using 30 here because we also support 32-bit self-hosted runners.
-// Long range mode is added to zstd in v1.3.2 release, so we will not use --long in older version of zstd.
-function getCompressionProgram(tarPath, compressionMethod) {
-    return tar_awaiter(this, void 0, void 0, function* () {
-        const cacheFileName = getCacheFileName(compressionMethod);
-        const BSD_TAR_ZSTD = tarPath.type === ArchiveToolType.BSD &&
-            compressionMethod !== CompressionMethod.Gzip &&
-            tar_IS_WINDOWS;
-        switch (compressionMethod) {
-            case CompressionMethod.Zstd:
-                return BSD_TAR_ZSTD
-                    ? [
-                        'zstd -T0 --long=30 --force -o',
-                        cacheFileName.replace(new RegExp(`\\${external_path_.sep}`, 'g'), '/'),
-                        TarFilename
-                    ]
-                    : [
-                        '--use-compress-program',
-                        tar_IS_WINDOWS ? '"zstd -T0 --long=30"' : 'zstdmt --long=30'
-                    ];
-            case CompressionMethod.ZstdWithoutLong:
-                return BSD_TAR_ZSTD
-                    ? [
-                        'zstd -T0 --force -o',
-                        cacheFileName.replace(new RegExp(`\\${external_path_.sep}`, 'g'), '/'),
-                        TarFilename
-                    ]
-                    : ['--use-compress-program', tar_IS_WINDOWS ? '"zstd -T0"' : 'zstdmt'];
-            default:
-                return ['-z'];
+class ReadStreamSync extends ReadStream {
+    [_open]() {
+        let threw = true;
+        try {
+            this[_onopen](null, external_fs_namespaceObject.openSync(this[_path], 'r'));
+            threw = false;
         }
-    });
+        finally {
+            if (threw) {
+                this[_close]();
+            }
+        }
+    }
+    [_read]() {
+        let threw = true;
+        try {
+            if (!this[_reading]) {
+                this[_reading] = true;
+                do {
+                    const buf = this[_makeBuf]();
+                    /* c8 ignore start */
+                    const br = buf.length === 0
+                        ? 0
+                        : external_fs_namespaceObject.readSync(this[_fd], buf, 0, buf.length, null);
+                    /* c8 ignore stop */
+                    if (!this[_handleChunk](br, buf)) {
+                        break;
+                    }
+                } while (true);
+                this[_reading] = false;
+            }
+            threw = false;
+        }
+        finally {
+            if (threw) {
+                this[_close]();
+            }
+        }
+    }
+    [_close]() {
+        if (this[_autoClose] && typeof this[_fd] === 'number') {
+            const fd = this[_fd];
+            this[_fd] = undefined;
+            external_fs_namespaceObject.closeSync(fd);
+            this.emit('close');
+        }
+    }
 }
-// Executes all commands as separate processes
-function execCommands(commands, cwd) {
-    return tar_awaiter(this, void 0, void 0, function* () {
-        for (const command of commands) {
+class WriteStream extends external_events_ {
+    readable = false;
+    writable = true;
+    [_errored] = false;
+    [_writing] = false;
+    [_ended] = false;
+    [_queue] = [];
+    [_needDrain] = false;
+    [_path];
+    [_mode];
+    [_autoClose];
+    [_fd];
+    [_defaultFlag];
+    [_flags];
+    [_finished] = false;
+    [_pos];
+    constructor(path, opt) {
+        opt = opt || {};
+        super(opt);
+        this[_path] = path;
+        this[_fd] = typeof opt.fd === 'number' ? opt.fd : undefined;
+        this[_mode] = opt.mode === undefined ? 0o666 : opt.mode;
+        this[_pos] = typeof opt.start === 'number' ? opt.start : undefined;
+        this[_autoClose] =
+            typeof opt.autoClose === 'boolean' ? opt.autoClose : true;
+        // truncating makes no sense when writing into the middle
+        const defaultFlag = this[_pos] !== undefined ? 'r+' : 'w';
+        this[_defaultFlag] = opt.flags === undefined;
+        this[_flags] = opt.flags === undefined ? defaultFlag : opt.flags;
+        if (this[_fd] === undefined) {
+            this[_open]();
+        }
+    }
+    emit(ev, ...args) {
+        if (ev === 'error') {
+            if (this[_errored]) {
+                return false;
+            }
+            this[_errored] = true;
+        }
+        return super.emit(ev, ...args);
+    }
+    get fd() {
+        return this[_fd];
+    }
+    get path() {
+        return this[_path];
+    }
+    [_onerror](er) {
+        this[_close]();
+        this[_writing] = true;
+        this.emit('error', er);
+    }
+    [_open]() {
+        external_fs_namespaceObject.open(this[_path], this[_flags], this[_mode], (er, fd) => this[_onopen](er, fd));
+    }
+    [_onopen](er, fd) {
+        if (this[_defaultFlag] &&
+            this[_flags] === 'r+' &&
+            er &&
+            er.code === 'ENOENT') {
+            this[_flags] = 'w';
+            this[_open]();
+        }
+        else if (er) {
+            this[_onerror](er);
+        }
+        else {
+            this[_fd] = fd;
+            this.emit('open', fd);
+            if (!this[_writing]) {
+                this[_flush]();
+            }
+        }
+    }
+    end(buf, enc) {
+        if (buf) {
+            //@ts-ignore
+            this.write(buf, enc);
+        }
+        this[_ended] = true;
+        // synthetic after-write logic, where drain/finish live
+        if (!this[_writing] &&
+            !this[_queue].length &&
+            typeof this[_fd] === 'number') {
+            this[_onwrite](null, 0);
+        }
+        return this;
+    }
+    write(buf, enc) {
+        if (typeof buf === 'string') {
+            buf = Buffer.from(buf, enc);
+        }
+        if (this[_ended]) {
+            this.emit('error', new Error('write() after end()'));
+            return false;
+        }
+        if (this[_fd] === undefined || this[_writing] || this[_queue].length) {
+            this[_queue].push(buf);
+            this[_needDrain] = true;
+            return false;
+        }
+        this[_writing] = true;
+        this[_write](buf);
+        return true;
+    }
+    [_write](buf) {
+        external_fs_namespaceObject.write(this[_fd], buf, 0, buf.length, this[_pos], (er, bw) => this[_onwrite](er, bw));
+    }
+    [_onwrite](er, bw) {
+        if (er) {
+            this[_onerror](er);
+        }
+        else {
+            if (this[_pos] !== undefined && typeof bw === 'number') {
+                this[_pos] += bw;
+            }
+            if (this[_queue].length) {
+                this[_flush]();
+            }
+            else {
+                this[_writing] = false;
+                if (this[_ended] && !this[_finished]) {
+                    this[_finished] = true;
+                    this[_close]();
+                    this.emit('finish');
+                }
+                else if (this[_needDrain]) {
+                    this[_needDrain] = false;
+                    this.emit('drain');
+                }
+            }
+        }
+    }
+    [_flush]() {
+        if (this[_queue].length === 0) {
+            if (this[_ended]) {
+                this[_onwrite](null, 0);
+            }
+        }
+        else if (this[_queue].length === 1) {
+            this[_write](this[_queue].pop());
+        }
+        else {
+            const iovec = this[_queue];
+            this[_queue] = [];
+            writev(this[_fd], iovec, this[_pos], (er, bw) => this[_onwrite](er, bw));
+        }
+    }
+    [_close]() {
+        if (this[_autoClose] && typeof this[_fd] === 'number') {
+            const fd = this[_fd];
+            this[_fd] = undefined;
+            external_fs_namespaceObject.close(fd, er => er ? this.emit('error', er) : this.emit('close'));
+        }
+    }
+}
+class WriteStreamSync extends (/* unused pure expression or super */ null && (WriteStream)) {
+    [_open]() {
+        let fd;
+        // only wrap in a try{} block if we know we'll retry, to avoid
+        // the rethrow obscuring the error's source frame in most cases.
+        if (this[_defaultFlag] && this[_flags] === 'r+') {
             try {
-                yield exec_exec(command, undefined, {
-                    cwd,
-                    env: Object.assign(Object.assign({}, process.env), { MSYS: 'winsymlinks:nativestrict' })
+                fd = fs.openSync(this[_path], this[_flags], this[_mode]);
+            }
+            catch (er) {
+                if (er?.code === 'ENOENT') {
+                    this[_flags] = 'w';
+                    return this[_open]();
+                }
+                else {
+                    throw er;
+                }
+            }
+        }
+        else {
+            fd = fs.openSync(this[_path], this[_flags], this[_mode]);
+        }
+        this[_onopen](null, fd);
+    }
+    [_close]() {
+        if (this[_autoClose] && typeof this[_fd] === 'number') {
+            const fd = this[_fd];
+            this[_fd] = undefined;
+            fs.closeSync(fd);
+            this.emit('close');
+        }
+    }
+    [_write](buf) {
+        // throw the original, but try to close if it fails
+        let threw = true;
+        try {
+            this[_onwrite](null, fs.writeSync(this[_fd], buf, 0, buf.length, this[_pos]));
+            threw = false;
+        }
+        finally {
+            if (threw) {
+                try {
+                    this[_close]();
+                }
+                catch {
+                    // ok error
+                }
+            }
+        }
+    }
+}
+//# sourceMappingURL=index.js.map
+;// CONCATENATED MODULE: ./node_modules/tar/dist/esm/options.js
+// turn tar(1) style args like `C` into the more verbose things like `cwd`
+const argmap = new Map([
+    ['C', 'cwd'],
+    ['f', 'file'],
+    ['z', 'gzip'],
+    ['P', 'preservePaths'],
+    ['U', 'unlink'],
+    ['strip-components', 'strip'],
+    ['stripComponents', 'strip'],
+    ['keep-newer', 'newer'],
+    ['keepNewer', 'newer'],
+    ['keep-newer-files', 'newer'],
+    ['keepNewerFiles', 'newer'],
+    ['k', 'keep'],
+    ['keep-existing', 'keep'],
+    ['keepExisting', 'keep'],
+    ['m', 'noMtime'],
+    ['no-mtime', 'noMtime'],
+    ['p', 'preserveOwner'],
+    ['L', 'follow'],
+    ['h', 'follow'],
+    ['onentry', 'onReadEntry'],
+]);
+const isSyncFile = (o) => !!o.sync && !!o.file;
+const isAsyncFile = (o) => !o.sync && !!o.file;
+const isSyncNoFile = (o) => !!o.sync && !o.file;
+const isAsyncNoFile = (o) => !o.sync && !o.file;
+const isSync = (o) => !!o.sync;
+const isAsync = (o) => !o.sync;
+const isFile = (o) => !!o.file;
+const isNoFile = (o) => !o.file;
+const dealiasKey = (k) => {
+    const d = argmap.get(k);
+    if (d)
+        return d;
+    return k;
+};
+const dealias = (opt = {}) => {
+    if (!opt)
+        return {};
+    const result = {};
+    for (const [key, v] of Object.entries(opt)) {
+        // TS doesn't know that aliases are going to always be the same type
+        const k = dealiasKey(key);
+        result[k] = v;
+    }
+    // affordance for deprecated noChmod -> chmod
+    if (result.chmod === undefined && result.noChmod === false) {
+        result.chmod = true;
+    }
+    delete result.noChmod;
+    return result;
+};
+//# sourceMappingURL=options.js.map
+;// CONCATENATED MODULE: ./node_modules/tar/dist/esm/make-command.js
+
+const makeCommand = (syncFile, asyncFile, syncNoFile, asyncNoFile, validate) => {
+    return Object.assign((opt_ = [], entries, cb) => {
+        if (Array.isArray(opt_)) {
+            entries = opt_;
+            opt_ = {};
+        }
+        if (typeof entries === 'function') {
+            cb = entries;
+            entries = undefined;
+        }
+        entries = !entries ? [] : Array.from(entries);
+        const opt = dealias(opt_);
+        validate?.(opt, entries);
+        if (isSyncFile(opt)) {
+            if (typeof cb === 'function') {
+                throw new TypeError('callback not supported for sync tar functions');
+            }
+            return syncFile(opt, entries);
+        }
+        else if (isAsyncFile(opt)) {
+            const p = asyncFile(opt, entries);
+            return cb ? p.then(() => cb(), cb) : p;
+        }
+        else if (isSyncNoFile(opt)) {
+            if (typeof cb === 'function') {
+                throw new TypeError('callback not supported for sync tar functions');
+            }
+            return syncNoFile(opt, entries);
+        }
+        else if (isAsyncNoFile(opt)) {
+            if (typeof cb === 'function') {
+                throw new TypeError('callback only supported with file option');
+            }
+            return asyncNoFile(opt, entries);
+            /* c8 ignore start */
+        }
+        throw new Error('impossible options??');
+        /* c8 ignore stop */
+    }, {
+        syncFile,
+        asyncFile,
+        syncNoFile,
+        asyncNoFile,
+        validate,
+    });
+};
+//# sourceMappingURL=make-command.js.map
+;// CONCATENATED MODULE: external "zlib"
+const external_zlib_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("zlib");
+var external_zlib_namespaceObject_0 = /*#__PURE__*/__nccwpck_require__.t(external_zlib_namespaceObject, 2);
+;// CONCATENATED MODULE: ./node_modules/minizlib/dist/esm/constants.js
+// Update with any zlib constants that are added or changed in the future.
+// Node v6 didn't export this, so we just hard code the version and rely
+// on all the other hard-coded values from zlib v4736.  When node v6
+// support drops, we can just export the realZlibConstants object.
+
+/* c8 ignore start */
+const realZlibConstants = external_zlib_namespaceObject.constants || { ZLIB_VERNUM: 4736 };
+/* c8 ignore stop */
+const constants_constants = Object.freeze(Object.assign(Object.create(null), {
+    Z_NO_FLUSH: 0,
+    Z_PARTIAL_FLUSH: 1,
+    Z_SYNC_FLUSH: 2,
+    Z_FULL_FLUSH: 3,
+    Z_FINISH: 4,
+    Z_BLOCK: 5,
+    Z_OK: 0,
+    Z_STREAM_END: 1,
+    Z_NEED_DICT: 2,
+    Z_ERRNO: -1,
+    Z_STREAM_ERROR: -2,
+    Z_DATA_ERROR: -3,
+    Z_MEM_ERROR: -4,
+    Z_BUF_ERROR: -5,
+    Z_VERSION_ERROR: -6,
+    Z_NO_COMPRESSION: 0,
+    Z_BEST_SPEED: 1,
+    Z_BEST_COMPRESSION: 9,
+    Z_DEFAULT_COMPRESSION: -1,
+    Z_FILTERED: 1,
+    Z_HUFFMAN_ONLY: 2,
+    Z_RLE: 3,
+    Z_FIXED: 4,
+    Z_DEFAULT_STRATEGY: 0,
+    DEFLATE: 1,
+    INFLATE: 2,
+    GZIP: 3,
+    GUNZIP: 4,
+    DEFLATERAW: 5,
+    INFLATERAW: 6,
+    UNZIP: 7,
+    BROTLI_DECODE: 8,
+    BROTLI_ENCODE: 9,
+    Z_MIN_WINDOWBITS: 8,
+    Z_MAX_WINDOWBITS: 15,
+    Z_DEFAULT_WINDOWBITS: 15,
+    Z_MIN_CHUNK: 64,
+    Z_MAX_CHUNK: Infinity,
+    Z_DEFAULT_CHUNK: 16384,
+    Z_MIN_MEMLEVEL: 1,
+    Z_MAX_MEMLEVEL: 9,
+    Z_DEFAULT_MEMLEVEL: 8,
+    Z_MIN_LEVEL: -1,
+    Z_MAX_LEVEL: 9,
+    Z_DEFAULT_LEVEL: -1,
+    BROTLI_OPERATION_PROCESS: 0,
+    BROTLI_OPERATION_FLUSH: 1,
+    BROTLI_OPERATION_FINISH: 2,
+    BROTLI_OPERATION_EMIT_METADATA: 3,
+    BROTLI_MODE_GENERIC: 0,
+    BROTLI_MODE_TEXT: 1,
+    BROTLI_MODE_FONT: 2,
+    BROTLI_DEFAULT_MODE: 0,
+    BROTLI_MIN_QUALITY: 0,
+    BROTLI_MAX_QUALITY: 11,
+    BROTLI_DEFAULT_QUALITY: 11,
+    BROTLI_MIN_WINDOW_BITS: 10,
+    BROTLI_MAX_WINDOW_BITS: 24,
+    BROTLI_LARGE_MAX_WINDOW_BITS: 30,
+    BROTLI_DEFAULT_WINDOW: 22,
+    BROTLI_MIN_INPUT_BLOCK_BITS: 16,
+    BROTLI_MAX_INPUT_BLOCK_BITS: 24,
+    BROTLI_PARAM_MODE: 0,
+    BROTLI_PARAM_QUALITY: 1,
+    BROTLI_PARAM_LGWIN: 2,
+    BROTLI_PARAM_LGBLOCK: 3,
+    BROTLI_PARAM_DISABLE_LITERAL_CONTEXT_MODELING: 4,
+    BROTLI_PARAM_SIZE_HINT: 5,
+    BROTLI_PARAM_LARGE_WINDOW: 6,
+    BROTLI_PARAM_NPOSTFIX: 7,
+    BROTLI_PARAM_NDIRECT: 8,
+    BROTLI_DECODER_RESULT_ERROR: 0,
+    BROTLI_DECODER_RESULT_SUCCESS: 1,
+    BROTLI_DECODER_RESULT_NEEDS_MORE_INPUT: 2,
+    BROTLI_DECODER_RESULT_NEEDS_MORE_OUTPUT: 3,
+    BROTLI_DECODER_PARAM_DISABLE_RING_BUFFER_REALLOCATION: 0,
+    BROTLI_DECODER_PARAM_LARGE_WINDOW: 1,
+    BROTLI_DECODER_NO_ERROR: 0,
+    BROTLI_DECODER_SUCCESS: 1,
+    BROTLI_DECODER_NEEDS_MORE_INPUT: 2,
+    BROTLI_DECODER_NEEDS_MORE_OUTPUT: 3,
+    BROTLI_DECODER_ERROR_FORMAT_EXUBERANT_NIBBLE: -1,
+    BROTLI_DECODER_ERROR_FORMAT_RESERVED: -2,
+    BROTLI_DECODER_ERROR_FORMAT_EXUBERANT_META_NIBBLE: -3,
+    BROTLI_DECODER_ERROR_FORMAT_SIMPLE_HUFFMAN_ALPHABET: -4,
+    BROTLI_DECODER_ERROR_FORMAT_SIMPLE_HUFFMAN_SAME: -5,
+    BROTLI_DECODER_ERROR_FORMAT_CL_SPACE: -6,
+    BROTLI_DECODER_ERROR_FORMAT_HUFFMAN_SPACE: -7,
+    BROTLI_DECODER_ERROR_FORMAT_CONTEXT_MAP_REPEAT: -8,
+    BROTLI_DECODER_ERROR_FORMAT_BLOCK_LENGTH_1: -9,
+    BROTLI_DECODER_ERROR_FORMAT_BLOCK_LENGTH_2: -10,
+    BROTLI_DECODER_ERROR_FORMAT_TRANSFORM: -11,
+    BROTLI_DECODER_ERROR_FORMAT_DICTIONARY: -12,
+    BROTLI_DECODER_ERROR_FORMAT_WINDOW_BITS: -13,
+    BROTLI_DECODER_ERROR_FORMAT_PADDING_1: -14,
+    BROTLI_DECODER_ERROR_FORMAT_PADDING_2: -15,
+    BROTLI_DECODER_ERROR_FORMAT_DISTANCE: -16,
+    BROTLI_DECODER_ERROR_DICTIONARY_NOT_SET: -19,
+    BROTLI_DECODER_ERROR_INVALID_ARGUMENTS: -20,
+    BROTLI_DECODER_ERROR_ALLOC_CONTEXT_MODES: -21,
+    BROTLI_DECODER_ERROR_ALLOC_TREE_GROUPS: -22,
+    BROTLI_DECODER_ERROR_ALLOC_CONTEXT_MAP: -25,
+    BROTLI_DECODER_ERROR_ALLOC_RING_BUFFER_1: -26,
+    BROTLI_DECODER_ERROR_ALLOC_RING_BUFFER_2: -27,
+    BROTLI_DECODER_ERROR_ALLOC_BLOCK_TYPE_TREES: -30,
+    BROTLI_DECODER_ERROR_UNREACHABLE: -31,
+}, realZlibConstants));
+//# sourceMappingURL=constants.js.map
+;// CONCATENATED MODULE: ./node_modules/minizlib/dist/esm/index.js
+
+
+
+
+
+
+const OriginalBufferConcat = external_buffer_namespaceObject.Buffer.concat;
+const desc = Object.getOwnPropertyDescriptor(external_buffer_namespaceObject.Buffer, 'concat');
+const noop = (args) => args;
+const passthroughBufferConcat = desc?.writable === true || desc?.set !== undefined
+    ? (makeNoOp) => {
+        external_buffer_namespaceObject.Buffer.concat = makeNoOp ? noop : OriginalBufferConcat;
+    }
+    : (_) => { };
+const _superWrite = Symbol('_superWrite');
+class ZlibError extends Error {
+    code;
+    errno;
+    constructor(err, origin) {
+        super('zlib: ' + err.message, { cause: err });
+        this.code = err.code;
+        this.errno = err.errno;
+        /* c8 ignore next */
+        if (!this.code)
+            this.code = 'ZLIB_ERROR';
+        this.message = 'zlib: ' + err.message;
+        Error.captureStackTrace(this, origin ?? this.constructor);
+    }
+    get name() {
+        return 'ZlibError';
+    }
+}
+// the Zlib class they all inherit from
+// This thing manages the queue of requests, and returns
+// true or false if there is anything in the queue when
+// you call the .write() method.
+const _flushFlag = Symbol('flushFlag');
+class ZlibBase extends Minipass {
+    #sawError = false;
+    #ended = false;
+    #flushFlag;
+    #finishFlushFlag;
+    #fullFlushFlag;
+    #handle;
+    #onError;
+    get sawError() {
+        return this.#sawError;
+    }
+    get handle() {
+        return this.#handle;
+    }
+    /* c8 ignore start */
+    get flushFlag() {
+        return this.#flushFlag;
+    }
+    /* c8 ignore stop */
+    constructor(opts, mode) {
+        if (!opts || typeof opts !== 'object')
+            throw new TypeError('invalid options for ZlibBase constructor');
+        //@ts-ignore
+        super(opts);
+        /* c8 ignore start */
+        this.#flushFlag = opts.flush ?? 0;
+        this.#finishFlushFlag = opts.finishFlush ?? 0;
+        this.#fullFlushFlag = opts.fullFlushFlag ?? 0;
+        /* c8 ignore stop */
+        //@ts-ignore
+        if (typeof external_zlib_namespaceObject_0[mode] !== 'function') {
+            throw new TypeError('Compression method not supported: ' + mode);
+        }
+        // this will throw if any options are invalid for the class selected
+        try {
+            // @types/node doesn't know that it exports the classes, but they're there
+            //@ts-ignore
+            this.#handle = new external_zlib_namespaceObject_0[mode](opts);
+        }
+        catch (er) {
+            // make sure that all errors get decorated properly
+            throw new ZlibError(er, this.constructor);
+        }
+        this.#onError = err => {
+            // no sense raising multiple errors, since we abort on the first one.
+            if (this.#sawError)
+                return;
+            this.#sawError = true;
+            // there is no way to cleanly recover.
+            // continuing only obscures problems.
+            this.close();
+            this.emit('error', err);
+        };
+        this.#handle?.on('error', er => this.#onError(new ZlibError(er)));
+        this.once('end', () => this.close);
+    }
+    close() {
+        if (this.#handle) {
+            this.#handle.close();
+            this.#handle = undefined;
+            this.emit('close');
+        }
+    }
+    reset() {
+        if (!this.#sawError) {
+            external_assert_(this.#handle, 'zlib binding closed');
+            //@ts-ignore
+            return this.#handle.reset?.();
+        }
+    }
+    flush(flushFlag) {
+        if (this.ended)
+            return;
+        if (typeof flushFlag !== 'number')
+            flushFlag = this.#fullFlushFlag;
+        this.write(Object.assign(external_buffer_namespaceObject.Buffer.alloc(0), { [_flushFlag]: flushFlag }));
+    }
+    end(chunk, encoding, cb) {
+        /* c8 ignore start */
+        if (typeof chunk === 'function') {
+            cb = chunk;
+            encoding = undefined;
+            chunk = undefined;
+        }
+        if (typeof encoding === 'function') {
+            cb = encoding;
+            encoding = undefined;
+        }
+        /* c8 ignore stop */
+        if (chunk) {
+            if (encoding)
+                this.write(chunk, encoding);
+            else
+                this.write(chunk);
+        }
+        this.flush(this.#finishFlushFlag);
+        this.#ended = true;
+        return super.end(cb);
+    }
+    get ended() {
+        return this.#ended;
+    }
+    // overridden in the gzip classes to do portable writes
+    [_superWrite](data) {
+        return super.write(data);
+    }
+    write(chunk, encoding, cb) {
+        // process the chunk using the sync process
+        // then super.write() all the outputted chunks
+        if (typeof encoding === 'function')
+            (cb = encoding), (encoding = 'utf8');
+        if (typeof chunk === 'string')
+            chunk = external_buffer_namespaceObject.Buffer.from(chunk, encoding);
+        if (this.#sawError)
+            return;
+        external_assert_(this.#handle, 'zlib binding closed');
+        // _processChunk tries to .close() the native handle after it's done, so we
+        // intercept that by temporarily making it a no-op.
+        // diving into the node:zlib internals a bit here
+        const nativeHandle = this.#handle
+            ._handle;
+        const originalNativeClose = nativeHandle.close;
+        nativeHandle.close = () => { };
+        const originalClose = this.#handle.close;
+        this.#handle.close = () => { };
+        // It also calls `Buffer.concat()` at the end, which may be convenient
+        // for some, but which we are not interested in as it slows us down.
+        passthroughBufferConcat(true);
+        let result = undefined;
+        try {
+            const flushFlag = typeof chunk[_flushFlag] === 'number'
+                ? chunk[_flushFlag]
+                : this.#flushFlag;
+            result = this.#handle._processChunk(chunk, flushFlag);
+            // if we don't throw, reset it back how it was
+            passthroughBufferConcat(false);
+        }
+        catch (err) {
+            // or if we do, put Buffer.concat() back before we emit error
+            // Error events call into user code, which may call Buffer.concat()
+            passthroughBufferConcat(false);
+            this.#onError(new ZlibError(err, this.write));
+        }
+        finally {
+            if (this.#handle) {
+                // Core zlib resets `_handle` to null after attempting to close the
+                // native handle. Our no-op handler prevented actual closure, but we
+                // need to restore the `._handle` property.
+                ;
+                this.#handle._handle =
+                    nativeHandle;
+                nativeHandle.close = originalNativeClose;
+                this.#handle.close = originalClose;
+                // `_processChunk()` adds an 'error' listener. If we don't remove it
+                // after each call, these handlers start piling up.
+                this.#handle.removeAllListeners('error');
+                // make sure OUR error listener is still attached tho
+            }
+        }
+        if (this.#handle)
+            this.#handle.on('error', er => this.#onError(new ZlibError(er, this.write)));
+        let writeReturn;
+        if (result) {
+            if (Array.isArray(result) && result.length > 0) {
+                const r = result[0];
+                // The first buffer is always `handle._outBuffer`, which would be
+                // re-used for later invocations; so, we always have to copy that one.
+                writeReturn = this[_superWrite](external_buffer_namespaceObject.Buffer.from(r));
+                for (let i = 1; i < result.length; i++) {
+                    writeReturn = this[_superWrite](result[i]);
+                }
+            }
+            else {
+                // either a single Buffer or an empty array
+                writeReturn = this[_superWrite](external_buffer_namespaceObject.Buffer.from(result));
+            }
+        }
+        if (cb)
+            cb();
+        return writeReturn;
+    }
+}
+class Zlib extends ZlibBase {
+    #level;
+    #strategy;
+    constructor(opts, mode) {
+        opts = opts || {};
+        opts.flush = opts.flush || constants_constants.Z_NO_FLUSH;
+        opts.finishFlush = opts.finishFlush || constants_constants.Z_FINISH;
+        opts.fullFlushFlag = constants_constants.Z_FULL_FLUSH;
+        super(opts, mode);
+        this.#level = opts.level;
+        this.#strategy = opts.strategy;
+    }
+    params(level, strategy) {
+        if (this.sawError)
+            return;
+        if (!this.handle)
+            throw new Error('cannot switch params when binding is closed');
+        // no way to test this without also not supporting params at all
+        /* c8 ignore start */
+        if (!this.handle.params)
+            throw new Error('not supported in this implementation');
+        /* c8 ignore stop */
+        if (this.#level !== level || this.#strategy !== strategy) {
+            this.flush(constants_constants.Z_SYNC_FLUSH);
+            external_assert_(this.handle, 'zlib binding closed');
+            // .params() calls .flush(), but the latter is always async in the
+            // core zlib. We override .flush() temporarily to intercept that and
+            // flush synchronously.
+            const origFlush = this.handle.flush;
+            this.handle.flush = (flushFlag, cb) => {
+                /* c8 ignore start */
+                if (typeof flushFlag === 'function') {
+                    cb = flushFlag;
+                    flushFlag = this.flushFlag;
+                }
+                /* c8 ignore stop */
+                this.flush(flushFlag);
+                cb?.();
+            };
+            try {
+                ;
+                this.handle.params(level, strategy);
+            }
+            finally {
+                this.handle.flush = origFlush;
+            }
+            /* c8 ignore start */
+            if (this.handle) {
+                this.#level = level;
+                this.#strategy = strategy;
+            }
+            /* c8 ignore stop */
+        }
+    }
+}
+// minimal 2-byte header
+class Deflate extends Zlib {
+    constructor(opts) {
+        super(opts, 'Deflate');
+    }
+}
+class Inflate extends Zlib {
+    constructor(opts) {
+        super(opts, 'Inflate');
+    }
+}
+class Gzip extends Zlib {
+    #portable;
+    constructor(opts) {
+        super(opts, 'Gzip');
+        this.#portable = opts && !!opts.portable;
+    }
+    [_superWrite](data) {
+        if (!this.#portable)
+            return super[_superWrite](data);
+        // we'll always get the header emitted in one first chunk
+        // overwrite the OS indicator byte with 0xFF
+        this.#portable = false;
+        data[9] = 255;
+        return super[_superWrite](data);
+    }
+}
+class Gunzip extends Zlib {
+    constructor(opts) {
+        super(opts, 'Gunzip');
+    }
+}
+// raw - no header
+class DeflateRaw extends Zlib {
+    constructor(opts) {
+        super(opts, 'DeflateRaw');
+    }
+}
+class InflateRaw extends Zlib {
+    constructor(opts) {
+        super(opts, 'InflateRaw');
+    }
+}
+// auto-detect header.
+class Unzip extends Zlib {
+    constructor(opts) {
+        super(opts, 'Unzip');
+    }
+}
+class Brotli extends ZlibBase {
+    constructor(opts, mode) {
+        opts = opts || {};
+        opts.flush = opts.flush || constants_constants.BROTLI_OPERATION_PROCESS;
+        opts.finishFlush =
+            opts.finishFlush || constants_constants.BROTLI_OPERATION_FINISH;
+        opts.fullFlushFlag = constants_constants.BROTLI_OPERATION_FLUSH;
+        super(opts, mode);
+    }
+}
+class BrotliCompress extends Brotli {
+    constructor(opts) {
+        super(opts, 'BrotliCompress');
+    }
+}
+class BrotliDecompress extends Brotli {
+    constructor(opts) {
+        super(opts, 'BrotliDecompress');
+    }
+}
+class Zstd extends ZlibBase {
+    constructor(opts, mode) {
+        opts = opts || {};
+        opts.flush = opts.flush || constants_constants.ZSTD_e_continue;
+        opts.finishFlush = opts.finishFlush || constants_constants.ZSTD_e_end;
+        opts.fullFlushFlag = constants_constants.ZSTD_e_flush;
+        super(opts, mode);
+    }
+}
+class ZstdCompress extends Zstd {
+    constructor(opts) {
+        super(opts, 'ZstdCompress');
+    }
+}
+class ZstdDecompress extends Zstd {
+    constructor(opts) {
+        super(opts, 'ZstdDecompress');
+    }
+}
+//# sourceMappingURL=index.js.map
+;// CONCATENATED MODULE: ./node_modules/tar/dist/esm/large-numbers.js
+// Tar can encode large and negative numbers using a leading byte of
+// 0xff for negative, and 0x80 for positive.
+const encode = (num, buf) => {
+    if (!Number.isSafeInteger(num)) {
+        // The number is so large that javascript cannot represent it with integer
+        // precision.
+        throw Error('cannot encode number outside of javascript safe integer range');
+    }
+    else if (num < 0) {
+        encodeNegative(num, buf);
+    }
+    else {
+        encodePositive(num, buf);
+    }
+    return buf;
+};
+const encodePositive = (num, buf) => {
+    buf[0] = 0x80;
+    for (var i = buf.length; i > 1; i--) {
+        buf[i - 1] = num & 0xff;
+        num = Math.floor(num / 0x100);
+    }
+};
+const encodeNegative = (num, buf) => {
+    buf[0] = 0xff;
+    var flipped = false;
+    num = num * -1;
+    for (var i = buf.length; i > 1; i--) {
+        var byte = num & 0xff;
+        num = Math.floor(num / 0x100);
+        if (flipped) {
+            buf[i - 1] = onesComp(byte);
+        }
+        else if (byte === 0) {
+            buf[i - 1] = 0;
+        }
+        else {
+            flipped = true;
+            buf[i - 1] = twosComp(byte);
+        }
+    }
+};
+const large_numbers_parse = (buf) => {
+    const pre = buf[0];
+    const value = pre === 0x80 ? pos(buf.subarray(1, buf.length))
+        : pre === 0xff ? twos(buf)
+            : null;
+    if (value === null) {
+        throw Error('invalid base256 encoding');
+    }
+    if (!Number.isSafeInteger(value)) {
+        // The number is so large that javascript cannot represent it with integer
+        // precision.
+        throw Error('parsed number outside of javascript safe integer range');
+    }
+    return value;
+};
+const twos = (buf) => {
+    var len = buf.length;
+    var sum = 0;
+    var flipped = false;
+    for (var i = len - 1; i > -1; i--) {
+        var byte = Number(buf[i]);
+        var f;
+        if (flipped) {
+            f = onesComp(byte);
+        }
+        else if (byte === 0) {
+            f = byte;
+        }
+        else {
+            flipped = true;
+            f = twosComp(byte);
+        }
+        if (f !== 0) {
+            sum -= f * Math.pow(256, len - i - 1);
+        }
+    }
+    return sum;
+};
+const pos = (buf) => {
+    var len = buf.length;
+    var sum = 0;
+    for (var i = len - 1; i > -1; i--) {
+        var byte = Number(buf[i]);
+        if (byte !== 0) {
+            sum += byte * Math.pow(256, len - i - 1);
+        }
+    }
+    return sum;
+};
+const onesComp = (byte) => (0xff ^ byte) & 0xff;
+const twosComp = (byte) => ((0xff ^ byte) + 1) & 0xff;
+//# sourceMappingURL=large-numbers.js.map
+;// CONCATENATED MODULE: ./node_modules/tar/dist/esm/types.js
+const isCode = (c) => types_name.has(c);
+const types_isName = (c) => code.has(c);
+/**
+ * types that are a normal file system entry, not metadata.
+ *
+ * These can be the subject of extended/globalExtended headers, long path
+ * names, long linkpath names, etc.
+ *
+ * Any other types are meta, and cannot be targetted by extended PAX headers.
+ */
+const normalFsTypes = new Set([
+    '0',
+    '',
+    '1',
+    '2',
+    '3',
+    '4',
+    '5',
+    '6',
+    '7',
+    'D',
+]);
+// map types from key to human-friendly name
+const types_name = new Map([
+    ['0', 'File'],
+    // same as File
+    ['', 'OldFile'],
+    ['1', 'Link'],
+    ['2', 'SymbolicLink'],
+    // Devices and FIFOs aren't fully supported
+    // they are parsed, but skipped when unpacking
+    ['3', 'CharacterDevice'],
+    ['4', 'BlockDevice'],
+    ['5', 'Directory'],
+    ['6', 'FIFO'],
+    // same as File
+    ['7', 'ContiguousFile'],
+    // pax headers
+    ['g', 'GlobalExtendedHeader'],
+    ['x', 'ExtendedHeader'],
+    // vendor-specific stuff
+    // skip
+    ['A', 'SolarisACL'],
+    // like 5, but with data, which should be skipped
+    ['D', 'GNUDumpDir'],
+    // metadata only, skip
+    ['I', 'Inode'],
+    // data = link path of next file
+    ['K', 'NextFileHasLongLinkpath'],
+    // data = path of next file
+    ['L', 'NextFileHasLongPath'],
+    // skip
+    ['M', 'ContinuationFile'],
+    // like L
+    ['N', 'OldGnuLongPath'],
+    // skip
+    ['S', 'SparseFile'],
+    // skip
+    ['V', 'TapeVolumeHeader'],
+    // like x
+    ['X', 'OldExtendedHeader'],
+]);
+// map the other direction
+const code = new Map(Array.from(types_name).map(kv => [kv[1], kv[0]]));
+//# sourceMappingURL=types.js.map
+;// CONCATENATED MODULE: ./node_modules/tar/dist/esm/header.js
+// parse a 512-byte header block to a data object, or vice-versa
+// encode returns `true` if a pax extended header is needed, because
+// the data could not be faithfully encoded in a simple header.
+// (Also, check header.needPax to see if it needs a pax header.)
+
+
+
+const notNegative = (n) => n === undefined || n < 0 ? undefined : n;
+class Header {
+    cksumValid = false;
+    needPax = false;
+    nullBlock = false;
+    block;
+    path;
+    mode;
+    uid;
+    gid;
+    size;
+    cksum;
+    #type = 'Unsupported';
+    linkpath;
+    uname;
+    gname;
+    devmaj = 0;
+    devmin = 0;
+    atime;
+    ctime;
+    mtime;
+    charset;
+    comment;
+    constructor(data, off = 0, ex, gex) {
+        if (Buffer.isBuffer(data)) {
+            this.decode(data, off || 0, ex, gex);
+        }
+        else if (data) {
+            this.#slurp(data);
+        }
+    }
+    decode(buf, off, ex, gex) {
+        if (!off) {
+            off = 0;
+        }
+        if (!buf || !(buf.length >= off + 512)) {
+            throw new Error('need 512 bytes for header');
+        }
+        // Decode the typeflag (independent of any pending PAX/GNU extended header)
+        // up front so we can tell whether THIS block is itself an intermediary
+        // extension header (PAX `x`/`g`, GNU long-name `L`, GNU long-link `K`).
+        // Per POSIX pax, a PAX extended header describes the *next file entry*, not
+        // the extension headers that may sit between it and that file. Applying the
+        // pending PAX overrides (notably `size`) to an intervening `L`/`K`/`x`/`g`
+        // header desynchronizes the stream relative to other tar implementations
+        // and enables tar interpretation-conflict / file-smuggling attacks.
+        const t = decString(buf, off + 156, 1);
+        const isNormalFS = normalFsTypes.has(t);
+        const exForFields = isNormalFS ? ex : undefined;
+        const gexForFields = isNormalFS ? gex : undefined;
+        this.path = exForFields?.path ?? decString(buf, off, 100);
+        this.mode =
+            exForFields?.mode ??
+                gexForFields?.mode ??
+                decNumber(buf, off + 100, 8);
+        this.uid =
+            exForFields?.uid ?? gexForFields?.uid ?? decNumber(buf, off + 108, 8);
+        this.gid =
+            exForFields?.gid ?? gexForFields?.gid ?? decNumber(buf, off + 116, 8);
+        this.size = notNegative(exForFields?.size ??
+            gexForFields?.size ??
+            decNumber(buf, off + 124, 12));
+        this.mtime =
+            exForFields?.mtime ??
+                gexForFields?.mtime ??
+                decDate(buf, off + 136, 12);
+        this.cksum = decNumber(buf, off + 148, 12);
+        // if we have extended or global extended headers, apply them now
+        // See https://github.com/npm/node-tar/pull/187
+        // Apply global before local, so it overrides. Never slurp the pending
+        // extended-header fields onto an intermediary extension header.
+        if (gexForFields)
+            this.#slurp(gexForFields, true);
+        if (exForFields)
+            this.#slurp(exForFields);
+        // old tar versions marked dirs as a file with a trailing /
+        if (isCode(t)) {
+            this.#type = t || '0';
+        }
+        if (this.#type === '0' && this.path.slice(-1) === '/') {
+            this.#type = '5';
+        }
+        // tar implementations sometimes incorrectly put the stat(dir).size
+        // as the size in the tarball, even though Directory entries are
+        // not able to have any body at all.  In the very rare chance that
+        // it actually DOES have a body, we weren't going to do anything with
+        // it anyway, and it'll just be a warning about an invalid header.
+        if (this.#type === '5') {
+            this.size = 0;
+        }
+        this.linkpath = decString(buf, off + 157, 100);
+        if (buf.subarray(off + 257, off + 265).toString() === 'ustar\u000000') {
+            /* c8 ignore start */
+            this.uname =
+                exForFields?.uname ??
+                    gexForFields?.uname ??
+                    decString(buf, off + 265, 32);
+            this.gname =
+                exForFields?.gname ??
+                    gexForFields?.gname ??
+                    decString(buf, off + 297, 32);
+            this.devmaj =
+                exForFields?.devmaj ??
+                    gexForFields?.devmaj ??
+                    decNumber(buf, off + 329, 8) ??
+                    0;
+            this.devmin =
+                exForFields?.devmin ??
+                    gexForFields?.devmin ??
+                    decNumber(buf, off + 337, 8) ??
+                    0;
+            /* c8 ignore stop */
+            if (buf[off + 475] !== 0) {
+                // definitely a prefix, definitely >130 chars.
+                const prefix = decString(buf, off + 345, 155);
+                this.path = prefix + '/' + this.path;
+            }
+            else {
+                const prefix = decString(buf, off + 345, 130);
+                if (prefix) {
+                    this.path = prefix + '/' + this.path;
+                }
+                /* c8 ignore start */
+                this.atime = ex?.atime ?? gex?.atime ?? decDate(buf, off + 476, 12);
+                this.ctime = ex?.ctime ?? gex?.ctime ?? decDate(buf, off + 488, 12);
+                /* c8 ignore stop */
+            }
+        }
+        let sum = 8 * 0x20;
+        for (let i = off; i < off + 148; i++) {
+            sum += buf[i];
+        }
+        for (let i = off + 156; i < off + 512; i++) {
+            sum += buf[i];
+        }
+        this.cksumValid = sum === this.cksum;
+        if (this.cksum === undefined && sum === 8 * 0x20) {
+            this.nullBlock = true;
+        }
+    }
+    #slurp(ex, gex = false) {
+        Object.assign(this, Object.fromEntries(Object.entries(ex).filter(([k, v]) => {
+            // we slurp in everything except for the path attribute in
+            // a global extended header, because that's weird. Also, any
+            // null/undefined values are ignored.
+            return !(v === null ||
+                v === undefined ||
+                (k === 'size' && Number(v) < 0) ||
+                (k === 'path' && gex) ||
+                (k === 'linkpath' && gex) ||
+                k === 'global');
+        })));
+    }
+    encode(buf, off = 0) {
+        if (!buf) {
+            buf = this.block = Buffer.alloc(512);
+        }
+        if (this.#type === 'Unsupported') {
+            this.#type = '0';
+        }
+        if (!(buf.length >= off + 512)) {
+            throw new Error('need 512 bytes for header');
+        }
+        const prefixSize = this.ctime || this.atime ? 130 : 155;
+        const split = splitPrefix(this.path || '', prefixSize);
+        const path = split[0];
+        const prefix = split[1];
+        this.needPax = !!split[2];
+        this.needPax = encString(buf, off, 100, path) || this.needPax;
+        this.needPax = encNumber(buf, off + 100, 8, this.mode) || this.needPax;
+        this.needPax = encNumber(buf, off + 108, 8, this.uid) || this.needPax;
+        this.needPax = encNumber(buf, off + 116, 8, this.gid) || this.needPax;
+        this.needPax = encNumber(buf, off + 124, 12, this.size) || this.needPax;
+        this.needPax = encDate(buf, off + 136, 12, this.mtime) || this.needPax;
+        buf[off + 156] = Number(this.#type.codePointAt(0));
+        this.needPax =
+            encString(buf, off + 157, 100, this.linkpath) || this.needPax;
+        buf.write('ustar\u000000', off + 257, 8);
+        this.needPax =
+            encString(buf, off + 265, 32, this.uname) || this.needPax;
+        this.needPax =
+            encString(buf, off + 297, 32, this.gname) || this.needPax;
+        this.needPax =
+            encNumber(buf, off + 329, 8, this.devmaj) || this.needPax;
+        this.needPax =
+            encNumber(buf, off + 337, 8, this.devmin) || this.needPax;
+        this.needPax =
+            encString(buf, off + 345, prefixSize, prefix) || this.needPax;
+        if (buf[off + 475] !== 0) {
+            this.needPax = encString(buf, off + 345, 155, prefix) || this.needPax;
+        }
+        else {
+            this.needPax = encString(buf, off + 345, 130, prefix) || this.needPax;
+            this.needPax =
+                encDate(buf, off + 476, 12, this.atime) || this.needPax;
+            this.needPax =
+                encDate(buf, off + 488, 12, this.ctime) || this.needPax;
+        }
+        let sum = 8 * 0x20;
+        for (let i = off; i < off + 148; i++) {
+            sum += buf[i];
+        }
+        for (let i = off + 156; i < off + 512; i++) {
+            sum += buf[i];
+        }
+        this.cksum = sum;
+        encNumber(buf, off + 148, 8, this.cksum);
+        this.cksumValid = true;
+        return this.needPax;
+    }
+    get type() {
+        return (this.#type === 'Unsupported' ?
+            this.#type
+            : types_name.get(this.#type));
+    }
+    get typeKey() {
+        return this.#type;
+    }
+    set type(type) {
+        const c = String(code.get(type));
+        if (isCode(c) || c === 'Unsupported') {
+            this.#type = c;
+        }
+        else if (isCode(type)) {
+            this.#type = type;
+        }
+        else {
+            throw new TypeError('invalid entry type: ' + type);
+        }
+    }
+}
+const splitPrefix = (p, prefixSize) => {
+    const pathSize = 100;
+    let pp = p;
+    let prefix = '';
+    let ret = undefined;
+    const root = external_node_path_namespaceObject.posix.parse(p).root || '.';
+    if (Buffer.byteLength(pp) < pathSize) {
+        ret = [pp, prefix, false];
+    }
+    else {
+        // first set prefix to the dir, and path to the base
+        prefix = external_node_path_namespaceObject.posix.dirname(pp);
+        pp = external_node_path_namespaceObject.posix.basename(pp);
+        do {
+            if (Buffer.byteLength(pp) <= pathSize &&
+                Buffer.byteLength(prefix) <= prefixSize) {
+                // both fit!
+                ret = [pp, prefix, false];
+            }
+            else if (Buffer.byteLength(pp) > pathSize &&
+                Buffer.byteLength(prefix) <= prefixSize) {
+                // prefix fits in prefix, but path doesn't fit in path
+                ret = [pp.slice(0, pathSize - 1), prefix, true];
+            }
+            else {
+                // make path take a bit from prefix
+                pp = external_node_path_namespaceObject.posix.join(external_node_path_namespaceObject.posix.basename(prefix), pp);
+                prefix = external_node_path_namespaceObject.posix.dirname(prefix);
+            }
+        } while (prefix !== root && ret === undefined);
+        // at this point, found no resolution, just truncate
+        if (!ret) {
+            ret = [p.slice(0, pathSize - 1), '', true];
+        }
+    }
+    return ret;
+};
+const decString = (buf, off, size) => buf
+    .subarray(off, off + size)
+    .toString('utf8')
+    .replace(/\0.*/, '');
+const decDate = (buf, off, size) => numToDate(decNumber(buf, off, size));
+const numToDate = (num) => num === undefined ? undefined : new Date(num * 1000);
+const decNumber = (buf, off, size) => Number(buf[off]) & 0x80 ?
+    large_numbers_parse(buf.subarray(off, off + size))
+    : decSmallNumber(buf, off, size);
+const nanUndef = (value) => (isNaN(value) ? undefined : value);
+const decSmallNumber = (buf, off, size) => nanUndef(parseInt(buf
+    .subarray(off, off + size)
+    .toString('utf8')
+    .replace(/\0.*$/, '')
+    .trim(), 8));
+// the maximum encodable as a null-terminated octal, by field size
+const MAXNUM = {
+    12: 0o77777777777,
+    8: 0o7777777,
+};
+const encNumber = (buf, off, size, num) => num === undefined ? false
+    : num > MAXNUM[size] || num < 0 ?
+        (encode(num, buf.subarray(off, off + size)), true)
+        : (encSmallNumber(buf, off, size, num), false);
+const encSmallNumber = (buf, off, size, num) => buf.write(octalString(num, size), off, size, 'ascii');
+const octalString = (num, size) => padOctal(Math.floor(num).toString(8), size);
+const padOctal = (str, size) => (str.length === size - 1 ?
+    str
+    : new Array(size - str.length - 1).join('0') + str + ' ') + '\0';
+const encDate = (buf, off, size, date) => date === undefined ? false : (encNumber(buf, off, size, date.getTime() / 1000));
+// enough to fill the longest string we've got
+const NULLS = new Array(156).join('\0');
+// pad with nulls, return true if it's longer or non-ascii
+const encString = (buf, off, size, str) => str === undefined ? false : ((buf.write(str + NULLS, off, size, 'utf8'),
+    str.length !== Buffer.byteLength(str) || str.length > size));
+//# sourceMappingURL=header.js.map
+;// CONCATENATED MODULE: ./node_modules/tar/dist/esm/pax.js
+
+
+class Pax {
+    atime;
+    mtime;
+    ctime;
+    charset;
+    comment;
+    gid;
+    uid;
+    gname;
+    uname;
+    linkpath;
+    dev;
+    ino;
+    nlink;
+    path;
+    size;
+    mode;
+    global;
+    constructor(obj, global = false) {
+        this.atime = obj.atime;
+        this.charset = obj.charset;
+        this.comment = obj.comment;
+        this.ctime = obj.ctime;
+        this.dev = obj.dev;
+        this.gid = obj.gid;
+        this.global = global;
+        this.gname = obj.gname;
+        this.ino = obj.ino;
+        this.linkpath = obj.linkpath;
+        this.mtime = obj.mtime;
+        this.nlink = obj.nlink;
+        this.path = obj.path;
+        this.size = obj.size;
+        this.uid = obj.uid;
+        this.uname = obj.uname;
+    }
+    encode() {
+        const body = this.encodeBody();
+        if (body === '') {
+            return Buffer.allocUnsafe(0);
+        }
+        const bodyLen = Buffer.byteLength(body);
+        // round up to 512 bytes
+        // add 512 for header
+        const bufLen = 512 * Math.ceil(1 + bodyLen / 512);
+        const buf = Buffer.allocUnsafe(bufLen);
+        // 0-fill the header section, it might not hit every field
+        for (let i = 0; i < 512; i++) {
+            buf[i] = 0;
+        }
+        new Header({
+            // XXX split the path
+            // then the path should be PaxHeader + basename, but less than 99,
+            // prepend with the dirname
+            /* c8 ignore start */
+            path: ('PaxHeader/' + (0,external_node_path_namespaceObject.basename)(this.path ?? '')).slice(0, 99),
+            /* c8 ignore stop */
+            mode: this.mode || 0o644,
+            uid: this.uid,
+            gid: this.gid,
+            size: bodyLen,
+            mtime: this.mtime,
+            type: this.global ? 'GlobalExtendedHeader' : 'ExtendedHeader',
+            linkpath: '',
+            uname: this.uname || '',
+            gname: this.gname || '',
+            devmaj: 0,
+            devmin: 0,
+            atime: this.atime,
+            ctime: this.ctime,
+        }).encode(buf);
+        buf.write(body, 512, bodyLen, 'utf8');
+        // null pad after the body
+        for (let i = bodyLen + 512; i < buf.length; i++) {
+            buf[i] = 0;
+        }
+        return buf;
+    }
+    encodeBody() {
+        return (this.encodeField('path') +
+            this.encodeField('ctime') +
+            this.encodeField('atime') +
+            this.encodeField('dev') +
+            this.encodeField('ino') +
+            this.encodeField('nlink') +
+            this.encodeField('charset') +
+            this.encodeField('comment') +
+            this.encodeField('gid') +
+            this.encodeField('gname') +
+            this.encodeField('linkpath') +
+            this.encodeField('mtime') +
+            this.encodeField('size') +
+            this.encodeField('uid') +
+            this.encodeField('uname'));
+    }
+    encodeField(field) {
+        if (this[field] === undefined) {
+            return '';
+        }
+        const r = this[field];
+        const v = r instanceof Date ? r.getTime() / 1000 : r;
+        const s = ' ' +
+            (field === 'dev' || field === 'ino' || field === 'nlink' ?
+                'SCHILY.'
+                : '') +
+            field +
+            '=' +
+            v +
+            '\n';
+        const byteLen = Buffer.byteLength(s);
+        // the digits includes the length of the digits in ascii base-10
+        // so if it's 9 characters, then adding 1 for the 9 makes it 10
+        // which makes it 11 chars.
+        let digits = Math.floor(Math.log(byteLen) / Math.log(10)) + 1;
+        if (byteLen + digits >= Math.pow(10, digits)) {
+            digits += 1;
+        }
+        const len = digits + byteLen;
+        return len + s;
+    }
+    static parse(str, ex, g = false) {
+        return new Pax(merge(parseKV(str), ex), g);
+    }
+}
+const merge = (a, b) => b ? Object.assign({}, b, a) : a;
+const parseKV = (str) => str
+    .replace(/\n$/, '')
+    .split('\n')
+    .reduce(parseKVLine, Object.create(null));
+const parseKVLine = (set, line) => {
+    const n = parseInt(line, 10);
+    // XXX Values with \n in them will fail this.
+    // Refactor to not be a naive line-by-line parse.
+    if (n !== Buffer.byteLength(line) + 1) {
+        return set;
+    }
+    line = line.slice((n + ' ').length);
+    const kv = line.split('=');
+    const r = kv.shift();
+    if (!r) {
+        return set;
+    }
+    const k = r.replace(/^SCHILY\.(dev|ino|nlink)/, '$1');
+    const v = kv.join('=').replace(/\0.*/, '');
+    switch (k) {
+        case 'path':
+        case 'linkpath':
+        case 'type':
+        case 'charset':
+        case 'comment':
+        case 'gname':
+        case 'uname':
+            set[k] = v;
+            break;
+        case 'ctime':
+        case 'atime':
+        case 'mtime':
+            set[k] = new Date(Number(v) * 1000);
+            break;
+        case 'size':
+            const s = +v;
+            if (s >= 0)
+                set[k] = s;
+            break;
+        case 'gid':
+        case 'uid':
+        case 'dev':
+        case 'ino':
+        case 'nlink':
+        case 'mode':
+            set[k] = +v;
+            break;
+    }
+    return set;
+};
+//# sourceMappingURL=pax.js.map
+;// CONCATENATED MODULE: ./node_modules/tar/dist/esm/normalize-windows-path.js
+// on windows, either \ or / are valid directory separators.
+// on unix, \ is a valid character in filenames.
+// so, on windows, and only on windows, we replace all \ chars with /,
+// so that we can use / as our one and only directory separator char.
+const normalize_windows_path_platform = process.env.TESTING_TAR_FAKE_PLATFORM || process.platform;
+const normalizeWindowsPath = normalize_windows_path_platform !== 'win32' ?
+    (p) => String(p)
+    : (p) => String(p).replaceAll(/\\/g, '/');
+//# sourceMappingURL=normalize-windows-path.js.map
+;// CONCATENATED MODULE: ./node_modules/tar/dist/esm/read-entry.js
+
+
+class ReadEntry extends Minipass {
+    extended;
+    globalExtended;
+    header;
+    startBlockSize;
+    blockRemain;
+    remain;
+    type;
+    meta = false;
+    ignore = false;
+    path;
+    mode;
+    uid;
+    gid;
+    uname;
+    gname;
+    size = 0;
+    mtime;
+    atime;
+    ctime;
+    linkpath;
+    dev;
+    ino;
+    nlink;
+    invalid = false;
+    absolute;
+    unsupported = false;
+    constructor(header, ex, gex) {
+        super({});
+        // read entries always start life paused.  this is to avoid the
+        // situation where Minipass's auto-ending empty streams results
+        // in an entry ending before we're ready for it.
+        this.pause();
+        this.extended = ex;
+        this.globalExtended = gex;
+        this.header = header;
+        /* c8 ignore start */
+        this.remain = header.size ?? 0;
+        /* c8 ignore stop */
+        this.startBlockSize = 512 * Math.ceil(this.remain / 512);
+        this.blockRemain = this.startBlockSize;
+        this.type = header.type;
+        switch (this.type) {
+            case 'File':
+            case 'OldFile':
+            case 'Link':
+            case 'SymbolicLink':
+            case 'CharacterDevice':
+            case 'BlockDevice':
+            case 'Directory':
+            case 'FIFO':
+            case 'ContiguousFile':
+            case 'GNUDumpDir':
+                break;
+            case 'NextFileHasLongLinkpath':
+            case 'NextFileHasLongPath':
+            case 'OldGnuLongPath':
+            case 'GlobalExtendedHeader':
+            case 'ExtendedHeader':
+            case 'OldExtendedHeader':
+                this.meta = true;
+                break;
+            // NOTE: gnutar and bsdtar treat unrecognized types as 'File'
+            // it may be worth doing the same, but with a warning.
+            default:
+                this.ignore = true;
+        }
+        /* c8 ignore start */
+        if (!header.path) {
+            throw new Error('no path provided for tar.ReadEntry');
+        }
+        /* c8 ignore stop */
+        this.path = normalizeWindowsPath(header.path);
+        this.mode = header.mode;
+        if (this.mode) {
+            this.mode = this.mode & 0o7777;
+        }
+        this.uid = header.uid;
+        this.gid = header.gid;
+        this.uname = header.uname;
+        this.gname = header.gname;
+        this.size = this.remain;
+        this.mtime = header.mtime;
+        this.atime = header.atime;
+        this.ctime = header.ctime;
+        /* c8 ignore start */
+        this.linkpath =
+            header.linkpath ? normalizeWindowsPath(header.linkpath) : undefined;
+        /* c8 ignore stop */
+        this.uname = header.uname;
+        this.gname = header.gname;
+        if (ex) {
+            this.#slurp(ex);
+        }
+        if (gex) {
+            this.#slurp(gex, true);
+        }
+    }
+    write(data) {
+        const writeLen = data.length;
+        if (writeLen > this.blockRemain) {
+            throw new Error('writing more to entry than is appropriate');
+        }
+        const r = this.remain;
+        const br = this.blockRemain;
+        this.remain = Math.max(0, r - writeLen);
+        this.blockRemain = Math.max(0, br - writeLen);
+        if (this.ignore) {
+            return true;
+        }
+        if (r >= writeLen) {
+            return super.write(data);
+        }
+        // r < writeLen
+        return super.write(data.subarray(0, r));
+    }
+    #slurp(ex, gex = false) {
+        if (ex.path)
+            ex.path = normalizeWindowsPath(ex.path);
+        if (ex.linkpath)
+            ex.linkpath = normalizeWindowsPath(ex.linkpath);
+        Object.assign(this, Object.fromEntries(Object.entries(ex).filter(([k, v]) => {
+            // we slurp in everything except for the path attribute in
+            // a global extended header, because that's weird. Also, any
+            // null/undefined values are ignored.
+            return !(v === null || v === undefined || (k === 'path' && gex));
+        })));
+    }
+}
+//# sourceMappingURL=read-entry.js.map
+;// CONCATENATED MODULE: ./node_modules/tar/dist/esm/warn-method.js
+const warnMethod = (self, code, message, data = {}) => {
+    if (self.file) {
+        data.file = self.file;
+    }
+    if (self.cwd) {
+        data.cwd = self.cwd;
+    }
+    data.code =
+        (message instanceof Error &&
+            message.code) ||
+            code;
+    data.tarCode = code;
+    if (!self.strict && data.recoverable !== false) {
+        if (message instanceof Error) {
+            data = Object.assign(message, data);
+            message = message.message;
+        }
+        self.emit('warn', code, message, data);
+    }
+    else if (message instanceof Error) {
+        self.emit('error', Object.assign(message, data));
+    }
+    else {
+        self.emit('error', Object.assign(new Error(`${code}: ${message}`), data));
+    }
+};
+//# sourceMappingURL=warn-method.js.map
+;// CONCATENATED MODULE: ./node_modules/tar/dist/esm/parse.js
+// this[BUFFER] is the remainder of a chunk if we're waiting for
+// the full 512 bytes of a header to come in.  We will Buffer.concat()
+// it to the next write(), which is a mem copy, but a small one.
+//
+// this[QUEUE] is a list of entries that haven't been emitted
+// yet this can only get filled up if the user keeps write()ing after
+// a write() returns false, or does a write() with more than one entry
+//
+// We don't buffer chunks, we always parse them and either create an
+// entry, or push it into the active entry.  The ReadEntry class knows
+// to throw data away if .ignore=true
+//
+// Shift entry off the buffer when it emits 'end', and emit 'entry' for
+// the next one in the list.
+//
+// At any time, we're pushing body chunks into the entry at WRITEENTRY,
+// and waiting for 'end' on the entry at READENTRY
+//
+// ignored entries get .resume() called on them straight away
+
+
+
+
+
+
+const maxMetaEntrySize = 1024 * 1024;
+const gzipHeader = Buffer.from([0x1f, 0x8b]);
+const zstdHeader = Buffer.from([0x28, 0xb5, 0x2f, 0xfd]);
+const ZIP_HEADER_LEN = Math.max(gzipHeader.length, zstdHeader.length);
+const STATE = Symbol('state');
+const WRITEENTRY = Symbol('writeEntry');
+const READENTRY = Symbol('readEntry');
+const NEXTENTRY = Symbol('nextEntry');
+const PROCESSENTRY = Symbol('processEntry');
+const EX = Symbol('extendedHeader');
+const GEX = Symbol('globalExtendedHeader');
+const META = Symbol('meta');
+const EMITMETA = Symbol('emitMeta');
+const parse_BUFFER = Symbol('buffer');
+const QUEUE = Symbol('queue');
+const ENDED = Symbol('ended');
+const EMITTEDEND = Symbol('emittedEnd');
+const EMIT = Symbol('emit');
+const UNZIP = Symbol('unzip');
+const CONSUMECHUNK = Symbol('consumeChunk');
+const CONSUMECHUNKSUB = Symbol('consumeChunkSub');
+const CONSUMEBODY = Symbol('consumeBody');
+const CONSUMEMETA = Symbol('consumeMeta');
+const CONSUMEHEADER = Symbol('consumeHeader');
+const CONSUMING = Symbol('consuming');
+const BUFFERCONCAT = Symbol('bufferConcat');
+const MAYBEEND = Symbol('maybeEnd');
+const WRITING = Symbol('writing');
+const parse_ABORTED = Symbol('aborted');
+const DONE = Symbol('onDone');
+const SAW_VALID_ENTRY = Symbol('sawValidEntry');
+const SAW_NULL_BLOCK = Symbol('sawNullBlock');
+const SAW_EOF = Symbol('sawEOF');
+const CLOSESTREAM = Symbol('closeStream');
+const MAX_DECOMPRESSION_RATIO = 1000;
+const COMPRESSEDBYTESREAD = Symbol('compressedBytesRead');
+const DECOMPRESSEDBYTESREAD = Symbol('decompressedBytesRead');
+const CHECKDECOMPRESSIONRATIO = Symbol('checkDecompressionRatio');
+const parse_noop = () => true;
+class parse_Parser extends external_events_.EventEmitter {
+    file;
+    strict;
+    maxMetaEntrySize;
+    filter;
+    brotli;
+    zstd;
+    maxDecompressionRatio;
+    writable = true;
+    readable = false;
+    [QUEUE] = [];
+    [parse_BUFFER];
+    [READENTRY];
+    [WRITEENTRY];
+    [STATE] = 'begin';
+    [META] = '';
+    [EX];
+    [GEX];
+    [ENDED] = false;
+    [UNZIP];
+    [parse_ABORTED] = false;
+    [SAW_VALID_ENTRY];
+    [SAW_NULL_BLOCK] = false;
+    [SAW_EOF] = false;
+    [WRITING] = false;
+    [CONSUMING] = false;
+    [EMITTEDEND] = false;
+    [COMPRESSEDBYTESREAD] = 0;
+    [DECOMPRESSEDBYTESREAD] = 0;
+    constructor(opt = {}) {
+        super();
+        this.file = opt.file || '';
+        // these BADARCHIVE errors can't be detected early. listen on DONE.
+        this.on(DONE, () => {
+            if (this[STATE] === 'begin' || this[SAW_VALID_ENTRY] === false) {
+                // either less than 1 block of data, or all entries were invalid.
+                // Either way, probably not even a tarball.
+                this.warn('TAR_BAD_ARCHIVE', 'Unrecognized archive format');
+            }
+        });
+        if (opt.ondone) {
+            this.on(DONE, opt.ondone);
+        }
+        else {
+            this.on(DONE, () => {
+                this.emit('prefinish');
+                this.emit('finish');
+                this.emit('end');
+            });
+        }
+        this.strict = !!opt.strict;
+        this.maxDecompressionRatio =
+            typeof opt.maxDecompressionRatio === 'number' ?
+                opt.maxDecompressionRatio
+                : MAX_DECOMPRESSION_RATIO;
+        this.maxMetaEntrySize = opt.maxMetaEntrySize || maxMetaEntrySize;
+        this.filter = typeof opt.filter === 'function' ? opt.filter : parse_noop;
+        // Unlike gzip, brotli doesn't have any magic bytes to identify it
+        // Users need to explicitly tell us they're extracting a brotli file
+        // Or we infer from the file extension
+        const isTBR = opt.file &&
+            (opt.file.endsWith('.tar.br') || opt.file.endsWith('.tbr'));
+        // if it's a tbr file it MIGHT be brotli, but we don't know until
+        // we look at it and verify it's not a valid tar file.
+        this.brotli =
+            !(opt.gzip || opt.zstd) && opt.brotli !== undefined ? opt.brotli
+                : isTBR ? undefined
+                    : false;
+        // zstd has magic bytes to identify it, but we also support explicit options
+        // and file extension detection
+        const isTZST = opt.file &&
+            (opt.file.endsWith('.tar.zst') || opt.file.endsWith('.tzst'));
+        this.zstd =
+            !(opt.gzip || opt.brotli) && opt.zstd !== undefined ? opt.zstd
+                : isTZST ? true
+                    : undefined;
+        // have to set this so that streams are ok piping into it
+        this.on('end', () => this[CLOSESTREAM]());
+        if (typeof opt.onwarn === 'function') {
+            this.on('warn', opt.onwarn);
+        }
+        if (typeof opt.onReadEntry === 'function') {
+            this.on('entry', opt.onReadEntry);
+        }
+    }
+    warn(code, message, data = {}) {
+        warnMethod(this, code, message, data);
+    }
+    [CONSUMEHEADER](chunk, position) {
+        if (this[SAW_VALID_ENTRY] === undefined) {
+            this[SAW_VALID_ENTRY] = false;
+        }
+        let header;
+        try {
+            header = new Header(chunk, position, this[EX], this[GEX]);
+        }
+        catch (er) {
+            return this.warn('TAR_ENTRY_INVALID', er);
+        }
+        if (header.nullBlock) {
+            if (this[SAW_NULL_BLOCK]) {
+                this[SAW_EOF] = true;
+                // ending an archive with no entries.  pointless, but legal.
+                if (this[STATE] === 'begin') {
+                    this[STATE] = 'header';
+                }
+                this[EMIT]('eof');
+            }
+            else {
+                this[SAW_NULL_BLOCK] = true;
+                this[EMIT]('nullBlock');
+            }
+        }
+        else {
+            this[SAW_NULL_BLOCK] = false;
+            if (!header.cksumValid) {
+                this.warn('TAR_ENTRY_INVALID', 'checksum failure', { header });
+            }
+            else if (!header.path) {
+                this.warn('TAR_ENTRY_INVALID', 'path is required', { header });
+            }
+            else {
+                const type = header.type;
+                if (/^(Symbolic)?Link$/.test(type) && !header.linkpath) {
+                    this.warn('TAR_ENTRY_INVALID', 'linkpath required', {
+                        header,
+                    });
+                }
+                else if (!/^(Symbolic)?Link$/.test(type) &&
+                    !/^(Global)?ExtendedHeader$/.test(type) &&
+                    header.linkpath) {
+                    this.warn('TAR_ENTRY_INVALID', 'linkpath forbidden', {
+                        header,
+                    });
+                }
+                else {
+                    const entry = (this[WRITEENTRY] = new ReadEntry(header, this[EX], this[GEX]));
+                    // we do this for meta & ignored entries as well, because they
+                    // are still valid tar, or else we wouldn't know to ignore them
+                    if (!this[SAW_VALID_ENTRY]) {
+                        if (entry.remain) {
+                            // this might be the one!
+                            const onend = () => {
+                                if (!entry.invalid) {
+                                    this[SAW_VALID_ENTRY] = true;
+                                }
+                            };
+                            entry.on('end', onend);
+                        }
+                        else {
+                            this[SAW_VALID_ENTRY] = true;
+                        }
+                    }
+                    if (entry.meta) {
+                        if (entry.size > this.maxMetaEntrySize) {
+                            entry.ignore = true;
+                            this[EMIT]('ignoredEntry', entry);
+                            this[STATE] = 'ignore';
+                            entry.resume();
+                        }
+                        else if (entry.size > 0) {
+                            this[META] = '';
+                            entry.on('data', c => (this[META] += c));
+                            this[STATE] = 'meta';
+                        }
+                    }
+                    else {
+                        this[EX] = undefined;
+                        entry.ignore = entry.ignore || !this.filter(entry.path, entry);
+                        if (entry.ignore) {
+                            // probably valid, just not something we care about
+                            this[EMIT]('ignoredEntry', entry);
+                            this[STATE] = entry.remain ? 'ignore' : 'header';
+                            entry.resume();
+                        }
+                        else {
+                            if (entry.remain) {
+                                this[STATE] = 'body';
+                            }
+                            else {
+                                this[STATE] = 'header';
+                                entry.end();
+                            }
+                            if (!this[READENTRY]) {
+                                this[QUEUE].push(entry);
+                                this[NEXTENTRY]();
+                            }
+                            else {
+                                this[QUEUE].push(entry);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    [CLOSESTREAM]() {
+        queueMicrotask(() => this.emit('close'));
+    }
+    [PROCESSENTRY](entry) {
+        let go = true;
+        if (!entry) {
+            this[READENTRY] = undefined;
+            go = false;
+        }
+        else if (Array.isArray(entry)) {
+            const [ev, ...args] = entry;
+            this.emit(ev, ...args);
+        }
+        else {
+            this[READENTRY] = entry;
+            this.emit('entry', entry);
+            if (!entry.emittedEnd) {
+                entry.on('end', () => this[NEXTENTRY]());
+                go = false;
+            }
+        }
+        return go;
+    }
+    [NEXTENTRY]() {
+        do { } while (this[PROCESSENTRY](this[QUEUE].shift()));
+        if (this[QUEUE].length === 0) {
+            // At this point, there's nothing in the queue, but we may have an
+            // entry which is being consumed (readEntry).
+            // If we don't, then we definitely can handle more data.
+            // If we do, and either it's flowing, or it has never had any data
+            // written to it, then it needs more.
+            // The only other possibility is that it has returned false from a
+            // write() call, so we wait for the next drain to continue.
+            const re = this[READENTRY];
+            const drainNow = !re || re.flowing || re.size === re.remain;
+            if (drainNow) {
+                if (!this[WRITING]) {
+                    this.emit('drain');
+                }
+            }
+            else {
+                re.once('drain', () => this.emit('drain'));
+            }
+        }
+    }
+    [CONSUMEBODY](chunk, position) {
+        // write up to but no  more than writeEntry.blockRemain
+        const entry = this[WRITEENTRY];
+        /* c8 ignore start */
+        if (!entry) {
+            throw new Error('attempt to consume body without entry??');
+        }
+        const br = entry.blockRemain ?? 0;
+        /* c8 ignore stop */
+        const c = br >= chunk.length && position === 0 ?
+            chunk
+            : chunk.subarray(position, position + br);
+        entry.write(c);
+        if (!entry.blockRemain) {
+            this[STATE] = 'header';
+            this[WRITEENTRY] = undefined;
+            entry.end();
+        }
+        return c.length;
+    }
+    [CONSUMEMETA](chunk, position) {
+        const entry = this[WRITEENTRY];
+        const ret = this[CONSUMEBODY](chunk, position);
+        // if we finished, then the entry is reset
+        if (!this[WRITEENTRY] && entry) {
+            this[EMITMETA](entry);
+        }
+        return ret;
+    }
+    [EMIT](ev, data, extra) {
+        if (this[QUEUE].length === 0 && !this[READENTRY]) {
+            this.emit(ev, data, extra);
+        }
+        else {
+            this[QUEUE].push([ev, data, extra]);
+        }
+    }
+    [EMITMETA](entry) {
+        this[EMIT]('meta', this[META]);
+        switch (entry.type) {
+            case 'ExtendedHeader':
+            case 'OldExtendedHeader':
+                this[EX] = Pax.parse(this[META], this[EX], false);
+                break;
+            case 'GlobalExtendedHeader':
+                this[GEX] = Pax.parse(this[META], this[GEX], true);
+                break;
+            case 'NextFileHasLongPath':
+            case 'OldGnuLongPath': {
+                const ex = this[EX] ?? Object.create(null);
+                this[EX] = ex;
+                ex.path = this[META].replace(/\0.*/, '');
+                break;
+            }
+            case 'NextFileHasLongLinkpath': {
+                const ex = this[EX] || Object.create(null);
+                this[EX] = ex;
+                ex.linkpath = this[META].replace(/\0.*/, '');
+                break;
+            }
+            /* c8 ignore start */
+            default:
+                throw new Error('unknown meta: ' + entry.type);
+            /* c8 ignore stop */
+        }
+    }
+    abort(error) {
+        if (this[parse_ABORTED]) {
+            return;
+        }
+        if (this[UNZIP]) {
+            // fully nerf the decompressor and close its underlying binding
+            const u = this[UNZIP];
+            /* c8 ignore start */
+            u.write = () => true;
+            u.end = () => u;
+            u.emit = () => false;
+            /* c8 ignore stop */
+            u.destroy?.();
+        }
+        this[parse_ABORTED] = true;
+        this.emit('abort', error);
+        // always throws, even in non-strict mode
+        this.warn('TAR_ABORT', error, { recoverable: false });
+    }
+    [CHECKDECOMPRESSIONRATIO](chunk) {
+        this[DECOMPRESSEDBYTESREAD] += chunk.length;
+        const ratio = this[DECOMPRESSEDBYTESREAD] / this[COMPRESSEDBYTESREAD];
+        if (ratio > this.maxDecompressionRatio) {
+            this.abort(new Error(`max decompression ratio exceeded: ${ratio.toFixed(2)} > ${this.maxDecompressionRatio}`));
+            return false;
+        }
+        return true;
+    }
+    write(chunk, encoding, cb) {
+        if (typeof encoding === 'function') {
+            cb = encoding;
+            encoding = undefined;
+        }
+        if (typeof chunk === 'string') {
+            chunk = Buffer.from(chunk, 
+            /* c8 ignore next */
+            typeof encoding === 'string' ? encoding : 'utf8');
+        }
+        if (this[parse_ABORTED]) {
+            /* c8 ignore next */
+            cb?.();
+            return false;
+        }
+        // first write, might be gzipped, zstd, or brotli compressed
+        const needSniff = this[UNZIP] === undefined ||
+            (this.brotli === undefined && this[UNZIP] === false);
+        if (needSniff && chunk) {
+            if (this[parse_BUFFER]) {
+                chunk = Buffer.concat([this[parse_BUFFER], chunk]);
+                this[parse_BUFFER] = undefined;
+            }
+            if (chunk.length < ZIP_HEADER_LEN) {
+                this[parse_BUFFER] = chunk;
+                /* c8 ignore next */
+                cb?.();
+                return true;
+            }
+            // look for gzip header
+            for (let i = 0; this[UNZIP] === undefined && i < gzipHeader.length; i++) {
+                if (chunk[i] !== gzipHeader[i]) {
+                    this[UNZIP] = false;
+                }
+            }
+            // look for zstd header if gzip header not found
+            let isZstd = false;
+            if (this[UNZIP] === false && this.zstd !== false) {
+                isZstd = true;
+                for (let i = 0; i < zstdHeader.length; i++) {
+                    if (chunk[i] !== zstdHeader[i]) {
+                        isZstd = false;
+                        break;
+                    }
+                }
+            }
+            const maybeBrotli = this.brotli === undefined && !isZstd;
+            if (this[UNZIP] === false && maybeBrotli) {
+                // read the first header to see if it's a valid tar file. If so,
+                // we can safely assume that it's not actually brotli, despite the
+                // .tbr or .tar.br file extension.
+                // if we ended before getting a full chunk, yes, def brotli
+                if (chunk.length < 512) {
+                    if (this[ENDED]) {
+                        this.brotli = true;
+                    }
+                    else {
+                        this[parse_BUFFER] = chunk;
+                        /* c8 ignore next */
+                        cb?.();
+                        return true;
+                    }
+                }
+                else {
+                    // if it's tar, it's pretty reliably not brotli, chances of
+                    // that happening are astronomical.
+                    try {
+                        new Header(chunk.subarray(0, 512));
+                        this.brotli = false;
+                    }
+                    catch (_) {
+                        this.brotli = true;
+                    }
+                }
+            }
+            if (this[UNZIP] === undefined ||
+                (this[UNZIP] === false && (this.brotli || isZstd))) {
+                const ended = this[ENDED];
+                this[ENDED] = false;
+                this[UNZIP] =
+                    this[UNZIP] === undefined ? new Unzip({})
+                        : isZstd ? new ZstdDecompress({})
+                            : new BrotliDecompress({});
+                this[UNZIP].on('data', chunk => {
+                    if (this[CHECKDECOMPRESSIONRATIO](chunk)) {
+                        this[CONSUMECHUNK](chunk);
+                    }
+                });
+                this[UNZIP].on('error', er => {
+                    if (!this[parse_ABORTED]) {
+                        this.abort(er);
+                    }
+                });
+                this[UNZIP].on('end', () => {
+                    this[ENDED] = true;
+                    this[CONSUMECHUNK]();
+                });
+                this[WRITING] = true;
+                this[COMPRESSEDBYTESREAD] += chunk.length;
+                const ret = !!this[UNZIP][ended ? 'end' : 'write'](chunk);
+                this[WRITING] = false;
+                cb?.();
+                return ret;
+            }
+        }
+        this[WRITING] = true;
+        if (this[UNZIP]) {
+            this[COMPRESSEDBYTESREAD] += chunk.length;
+            this[UNZIP].write(chunk);
+        }
+        else {
+            this[CONSUMECHUNK](chunk);
+        }
+        this[WRITING] = false;
+        // return false if there's a queue, or if the current entry isn't flowing
+        const ret = this[QUEUE].length > 0 ? false
+            : this[READENTRY] ? this[READENTRY].flowing
+                : true;
+        // if we have no queue, then that means a clogged READENTRY
+        if (!ret && this[QUEUE].length === 0) {
+            this[READENTRY]?.once('drain', () => this.emit('drain'));
+        }
+        /* c8 ignore next */
+        cb?.();
+        return ret;
+    }
+    [BUFFERCONCAT](c) {
+        if (c && !this[parse_ABORTED]) {
+            this[parse_BUFFER] = this[parse_BUFFER] ? Buffer.concat([this[parse_BUFFER], c]) : c;
+        }
+    }
+    [MAYBEEND]() {
+        if (this[ENDED] &&
+            !this[EMITTEDEND] &&
+            !this[parse_ABORTED] &&
+            !this[CONSUMING]) {
+            this[EMITTEDEND] = true;
+            const entry = this[WRITEENTRY];
+            if (entry?.blockRemain) {
+                // truncated, likely a damaged file
+                const have = this[parse_BUFFER] ? this[parse_BUFFER].length : 0;
+                this.warn('TAR_BAD_ARCHIVE', `Truncated input (needed ${entry.blockRemain} more bytes, only ${have} available)`, { entry });
+                if (this[parse_BUFFER]) {
+                    entry.write(this[parse_BUFFER]);
+                }
+                entry.end();
+            }
+            this[EMIT](DONE);
+        }
+    }
+    [CONSUMECHUNK](chunk) {
+        if (this[CONSUMING] && chunk) {
+            this[BUFFERCONCAT](chunk);
+        }
+        else if (!chunk && !this[parse_BUFFER]) {
+            this[MAYBEEND]();
+        }
+        else if (chunk) {
+            this[CONSUMING] = true;
+            if (this[parse_BUFFER]) {
+                this[BUFFERCONCAT](chunk);
+                const c = this[parse_BUFFER];
+                this[parse_BUFFER] = undefined;
+                this[CONSUMECHUNKSUB](c);
+            }
+            else {
+                this[CONSUMECHUNKSUB](chunk);
+            }
+            while (this[parse_BUFFER] &&
+                this[parse_BUFFER]?.length >= 512 &&
+                !this[parse_ABORTED] &&
+                !this[SAW_EOF]) {
+                const c = this[parse_BUFFER];
+                this[parse_BUFFER] = undefined;
+                this[CONSUMECHUNKSUB](c);
+            }
+            this[CONSUMING] = false;
+        }
+        if (!this[parse_BUFFER] || this[ENDED]) {
+            this[MAYBEEND]();
+        }
+    }
+    [CONSUMECHUNKSUB](chunk) {
+        // we know that we are in CONSUMING mode, so anything written goes into
+        // the buffer.  Advance the position and put any remainder in the buffer.
+        let position = 0;
+        const length = chunk.length;
+        while (position + 512 <= length && !this[parse_ABORTED] && !this[SAW_EOF]) {
+            switch (this[STATE]) {
+                case 'begin':
+                case 'header':
+                    this[CONSUMEHEADER](chunk, position);
+                    position += 512;
+                    break;
+                case 'ignore':
+                case 'body':
+                    position += this[CONSUMEBODY](chunk, position);
+                    break;
+                case 'meta':
+                    position += this[CONSUMEMETA](chunk, position);
+                    break;
+                /* c8 ignore start */
+                default:
+                    throw new Error('invalid state: ' + this[STATE]);
+                /* c8 ignore stop */
+            }
+        }
+        if (position < length) {
+            this[parse_BUFFER] =
+                this[parse_BUFFER] ?
+                    Buffer.concat([chunk.subarray(position), this[parse_BUFFER]])
+                    : chunk.subarray(position);
+        }
+    }
+    end(chunk, encoding, cb) {
+        if (typeof chunk === 'function') {
+            cb = chunk;
+            encoding = undefined;
+            chunk = undefined;
+        }
+        if (typeof encoding === 'function') {
+            cb = encoding;
+            encoding = undefined;
+        }
+        if (typeof chunk === 'string') {
+            chunk = Buffer.from(chunk, encoding);
+        }
+        if (cb)
+            this.once('finish', cb);
+        if (!this[parse_ABORTED]) {
+            if (this[UNZIP]) {
+                /* c8 ignore start */
+                if (chunk) {
+                    this[COMPRESSEDBYTESREAD] += chunk.length;
+                    this[UNZIP].write(chunk);
+                }
+                /* c8 ignore stop */
+                this[UNZIP].end();
+            }
+            else {
+                this[ENDED] = true;
+                if (this.brotli === undefined || this.zstd === undefined)
+                    chunk = chunk || Buffer.alloc(0);
+                if (chunk)
+                    this.write(chunk);
+                this[MAYBEEND]();
+            }
+        }
+        return this;
+    }
+}
+//# sourceMappingURL=parse.js.map
+;// CONCATENATED MODULE: ./node_modules/tar/dist/esm/strip-trailing-slashes.js
+// warning: extremely hot code path.
+// This has been meticulously optimized for use
+// within npm install on large package trees.
+// Do not edit without careful benchmarking.
+const stripTrailingSlashes = (str) => {
+    let i = str.length - 1;
+    let slashesStart = -1;
+    while (i > -1 && str.charAt(i) === '/') {
+        slashesStart = i;
+        i--;
+    }
+    return slashesStart === -1 ? str : str.slice(0, slashesStart);
+};
+//# sourceMappingURL=strip-trailing-slashes.js.map
+;// CONCATENATED MODULE: ./node_modules/tar/dist/esm/list.js
+// tar -t
+
+
+
+
+
+
+const onReadEntryFunction = (opt) => {
+    const onReadEntry = opt.onReadEntry;
+    opt.onReadEntry =
+        onReadEntry ?
+            e => {
+                onReadEntry(e);
+                e.resume();
+            }
+            : e => e.resume();
+};
+// construct a filter that limits the file entries listed
+// include child entries if a dir is included
+const filesFilter = (opt, files) => {
+    const map = new Map(files.map(f => [stripTrailingSlashes(f), true]));
+    const filter = opt.filter;
+    // limit recursion to 100 levels
+    const MAX = 100;
+    const mapHas = (file, r = '', depth = 0) => {
+        /* c8 ignore start - excessive caution */
+        if (depth >= MAX) {
+            map.set(file, false);
+            return false;
+        }
+        /* c8 ignore stop */
+        const root = r || (0,external_path_.parse)(file).root || '.';
+        let ret;
+        if (file === root)
+            ret = false;
+        else {
+            const m = map.get(file);
+            ret = m !== undefined ? m : mapHas((0,external_path_.dirname)(file), root, depth + 1);
+        }
+        map.set(file, ret);
+        return ret;
+    };
+    opt.filter =
+        filter ?
+            (file, entry) => filter(file, entry) && mapHas(stripTrailingSlashes(file))
+            : file => mapHas(stripTrailingSlashes(file));
+};
+const listFileSync = (opt) => {
+    const p = new parse_Parser(opt);
+    const file = opt.file;
+    let fd;
+    try {
+        fd = external_node_fs_namespaceObject.openSync(file, 'r');
+        const stat = external_node_fs_namespaceObject.fstatSync(fd);
+        const readSize = opt.maxReadSize || 16 * 1024 * 1024;
+        if (stat.size < readSize) {
+            const buf = Buffer.allocUnsafe(stat.size);
+            const read = external_node_fs_namespaceObject.readSync(fd, buf, 0, stat.size, 0);
+            p.end(read === buf.byteLength ? buf : buf.subarray(0, read));
+        }
+        else {
+            let pos = 0;
+            const buf = Buffer.allocUnsafe(readSize);
+            while (pos < stat.size) {
+                const bytesRead = external_node_fs_namespaceObject.readSync(fd, buf, 0, readSize, pos);
+                if (bytesRead === 0)
+                    break;
+                pos += bytesRead;
+                p.write(buf.subarray(0, bytesRead));
+            }
+            p.end();
+        }
+    }
+    finally {
+        if (typeof fd === 'number') {
+            try {
+                external_node_fs_namespaceObject.closeSync(fd);
+                /* c8 ignore next */
+            }
+            catch { }
+        }
+    }
+};
+const listFile = (opt, _files) => {
+    const parse = new parse_Parser(opt);
+    const readSize = opt.maxReadSize || 16 * 1024 * 1024;
+    const file = opt.file;
+    const p = new Promise((resolve, reject) => {
+        parse.on('error', reject);
+        parse.on('end', resolve);
+        external_node_fs_namespaceObject.stat(file, (er, stat) => {
+            if (er) {
+                reject(er);
+            }
+            else {
+                const stream = new ReadStream(file, {
+                    readSize: readSize,
+                    size: stat.size,
+                });
+                stream.on('error', reject);
+                stream.pipe(parse);
+            }
+        });
+    });
+    return p;
+};
+const list = makeCommand(listFileSync, listFile, opt => new parse_Parser(opt), opt => new parse_Parser(opt), (opt, files) => {
+    if (files?.length)
+        filesFilter(opt, files);
+    if (!opt.noResume)
+        onReadEntryFunction(opt);
+});
+//# sourceMappingURL=list.js.map
+// EXTERNAL MODULE: external "node:assert"
+var external_node_assert_ = __nccwpck_require__(4589);
+;// CONCATENATED MODULE: ./node_modules/tar/dist/esm/get-write-flag.js
+// Get the appropriate flag to use for creating files
+// We use fmap on Windows platforms for files less than
+// 512kb.  This is a fairly low limit, but avoids making
+// things slower in some cases.  Since most of what this
+// library is used for is extracting tarballs of many
+// relatively small files in npm packages and the like,
+// it can be a big boost on Windows platforms.
+
+const get_write_flag_platform = process.env.__FAKE_PLATFORM__ || process.platform;
+const get_write_flag_isWindows = get_write_flag_platform === 'win32';
+/* c8 ignore start */
+const { O_CREAT, O_NOFOLLOW, O_TRUNC, O_WRONLY } = external_fs_namespaceObject.constants;
+const UV_FS_O_FILEMAP = Number(process.env.__FAKE_FS_O_FILENAME__) ||
+    external_fs_namespaceObject.constants.UV_FS_O_FILEMAP ||
+    0;
+/* c8 ignore stop */
+const fMapEnabled = get_write_flag_isWindows && !!UV_FS_O_FILEMAP;
+const fMapLimit = 512 * 1024;
+const fMapFlag = UV_FS_O_FILEMAP | O_TRUNC | O_CREAT | O_WRONLY;
+const noFollowFlag = !get_write_flag_isWindows && typeof O_NOFOLLOW === 'number' ?
+    O_NOFOLLOW | O_TRUNC | O_CREAT | O_WRONLY
+    : null;
+const getWriteFlag = noFollowFlag !== null ? () => noFollowFlag
+    : !fMapEnabled ? () => 'w'
+        : (size) => (size < fMapLimit ? fMapFlag : 'w');
+//# sourceMappingURL=get-write-flag.js.map
+;// CONCATENATED MODULE: ./node_modules/chownr/dist/esm/index.js
+
+
+const lchownSync = (path, uid, gid) => {
+    try {
+        return external_node_fs_namespaceObject.lchownSync(path, uid, gid);
+    }
+    catch (er) {
+        if (er?.code !== 'ENOENT')
+            throw er;
+    }
+};
+const chown = (cpath, uid, gid, cb) => {
+    external_node_fs_namespaceObject.lchown(cpath, uid, gid, er => {
+        // Skip ENOENT error
+        cb(er && er?.code !== 'ENOENT' ? er : null);
+    });
+};
+const chownrKid = (p, child, uid, gid, cb) => {
+    if (child.isDirectory()) {
+        chownr(external_node_path_namespaceObject.resolve(p, child.name), uid, gid, (er) => {
+            if (er)
+                return cb(er);
+            const cpath = external_node_path_namespaceObject.resolve(p, child.name);
+            chown(cpath, uid, gid, cb);
+        });
+    }
+    else {
+        const cpath = external_node_path_namespaceObject.resolve(p, child.name);
+        chown(cpath, uid, gid, cb);
+    }
+};
+const chownr = (p, uid, gid, cb) => {
+    external_node_fs_namespaceObject.readdir(p, { withFileTypes: true }, (er, children) => {
+        // any error other than ENOTDIR or ENOTSUP means it's not readable,
+        // or doesn't exist.  give up.
+        if (er) {
+            if (er.code === 'ENOENT')
+                return cb();
+            else if (er.code !== 'ENOTDIR' && er.code !== 'ENOTSUP')
+                return cb(er);
+        }
+        if (er || !children.length)
+            return chown(p, uid, gid, cb);
+        let len = children.length;
+        let errState = null;
+        const then = (er) => {
+            /* c8 ignore start */
+            if (errState)
+                return;
+            /* c8 ignore stop */
+            if (er)
+                return cb((errState = er));
+            if (--len === 0)
+                return chown(p, uid, gid, cb);
+        };
+        for (const child of children) {
+            chownrKid(p, child, uid, gid, then);
+        }
+    });
+};
+const chownrKidSync = (p, child, uid, gid) => {
+    if (child.isDirectory())
+        chownrSync(external_node_path_namespaceObject.resolve(p, child.name), uid, gid);
+    lchownSync(external_node_path_namespaceObject.resolve(p, child.name), uid, gid);
+};
+const chownrSync = (p, uid, gid) => {
+    let children;
+    try {
+        children = external_node_fs_namespaceObject.readdirSync(p, { withFileTypes: true });
+    }
+    catch (er) {
+        const e = er;
+        if (e?.code === 'ENOENT')
+            return;
+        else if (e?.code === 'ENOTDIR' || e?.code === 'ENOTSUP')
+            return lchownSync(p, uid, gid);
+        else
+            throw e;
+    }
+    for (const child of children) {
+        chownrKidSync(p, child, uid, gid);
+    }
+    return lchownSync(p, uid, gid);
+};
+//# sourceMappingURL=index.js.map
+;// CONCATENATED MODULE: external "node:fs/promises"
+const external_node_fs_promises_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:fs/promises");
+;// CONCATENATED MODULE: ./node_modules/tar/dist/esm/cwd-error.js
+class CwdError extends Error {
+    path;
+    code;
+    syscall = 'chdir';
+    constructor(path, code) {
+        super(`${code}: Cannot cd into '${path}'`);
+        this.path = path;
+        this.code = code;
+    }
+    get name() {
+        return 'CwdError';
+    }
+}
+//# sourceMappingURL=cwd-error.js.map
+;// CONCATENATED MODULE: ./node_modules/tar/dist/esm/symlink-error.js
+class SymlinkError extends Error {
+    path;
+    symlink;
+    syscall = 'symlink';
+    code = 'TAR_SYMLINK_ERROR';
+    constructor(symlink, path) {
+        super('TAR_SYMLINK_ERROR: Cannot extract through symbolic link');
+        this.symlink = symlink;
+        this.path = path;
+    }
+    get name() {
+        return 'SymlinkError';
+    }
+}
+//# sourceMappingURL=symlink-error.js.map
+;// CONCATENATED MODULE: ./node_modules/tar/dist/esm/mkdir.js
+
+
+
+
+
+
+
+const checkCwd = (dir, cb) => {
+    external_node_fs_namespaceObject.stat(dir, (er, st) => {
+        if (er || !st.isDirectory()) {
+            er = new CwdError(dir, er?.code || 'ENOTDIR');
+        }
+        cb(er);
+    });
+};
+/**
+ * Wrapper around fs/promises.mkdir for tar's needs.
+ *
+ * The main purpose is to avoid creating directories if we know that
+ * they already exist (and track which ones exist for this purpose),
+ * and prevent entries from being extracted into symlinked folders,
+ * if `preservePaths` is not set.
+ */
+const mkdir_mkdir = (dir, opt, cb) => {
+    dir = normalizeWindowsPath(dir);
+    // if there's any overlap between mask and mode,
+    // then we'll need an explicit chmod
+    /* c8 ignore next */
+    const umask = opt.umask ?? 0o22;
+    const mode = opt.mode | 0o0700;
+    const needChmod = (mode & umask) !== 0;
+    const uid = opt.uid;
+    const gid = opt.gid;
+    const doChown = typeof uid === 'number' &&
+        typeof gid === 'number' &&
+        (uid !== opt.processUid || gid !== opt.processGid);
+    const preserve = opt.preserve;
+    const unlink = opt.unlink;
+    const cwd = normalizeWindowsPath(opt.cwd);
+    const done = (er, created) => {
+        if (er) {
+            cb(er);
+        }
+        else {
+            if (created && doChown) {
+                chownr(created, uid, gid, er => done(er));
+            }
+            else if (needChmod) {
+                external_node_fs_namespaceObject.chmod(dir, mode, cb);
+            }
+            else {
+                cb();
+            }
+        }
+    };
+    if (dir === cwd) {
+        return checkCwd(dir, done);
+    }
+    if (preserve) {
+        return external_node_fs_promises_namespaceObject.mkdir(dir, { mode, recursive: true }).then(made => done(null, made ?? undefined), // oh, ts
+        done);
+    }
+    const sub = normalizeWindowsPath(external_node_path_namespaceObject.relative(cwd, dir));
+    const parts = sub.split('/');
+    mkdir_(cwd, parts, mode, unlink, cwd, undefined, done);
+};
+const mkdir_ = (base, parts, mode, unlink, cwd, created, cb) => {
+    if (parts.length === 0) {
+        return cb(null, created);
+    }
+    const p = parts.shift();
+    const part = normalizeWindowsPath(external_node_path_namespaceObject.resolve(base + '/' + p));
+    external_node_fs_namespaceObject.mkdir(part, mode, onmkdir(part, parts, mode, unlink, cwd, created, cb));
+};
+const onmkdir = (part, parts, mode, unlink, cwd, created, cb) => (er) => {
+    if (er) {
+        external_node_fs_namespaceObject.lstat(part, (statEr, st) => {
+            if (statEr) {
+                statEr.path = statEr.path && normalizeWindowsPath(statEr.path);
+                cb(statEr);
+            }
+            else if (st.isDirectory()) {
+                mkdir_(part, parts, mode, unlink, cwd, created, cb);
+            }
+            else if (unlink) {
+                external_node_fs_namespaceObject.unlink(part, er => {
+                    if (er) {
+                        return cb(er);
+                    }
+                    external_node_fs_namespaceObject.mkdir(part, mode, onmkdir(part, parts, mode, unlink, cwd, created, cb));
                 });
             }
-            catch (error) {
-                throw new Error(`${command.split(' ')[0]} failed with error: ${error === null || error === void 0 ? void 0 : error.message}`);
+            else if (st.isSymbolicLink()) {
+                return cb(new SymlinkError(part, part + '/' + parts.join('/')));
+            }
+            else {
+                cb(er);
+            }
+        });
+    }
+    else {
+        created = created || part;
+        mkdir_(part, parts, mode, unlink, cwd, created, cb);
+    }
+};
+const checkCwdSync = (dir) => {
+    let ok = false;
+    let code;
+    try {
+        ok = external_node_fs_namespaceObject.statSync(dir).isDirectory();
+    }
+    catch (er) {
+        code = er?.code;
+    }
+    finally {
+        if (!ok) {
+            throw new CwdError(dir, code ?? 'ENOTDIR');
+        }
+    }
+};
+const mkdir_mkdirSync = (dir, opt) => {
+    dir = normalizeWindowsPath(dir);
+    // if there's any overlap between mask and mode,
+    // then we'll need an explicit chmod
+    /* c8 ignore next */
+    const umask = opt.umask ?? 0o22;
+    const mode = opt.mode | 0o700;
+    const needChmod = (mode & umask) !== 0;
+    const uid = opt.uid;
+    const gid = opt.gid;
+    const doChown = typeof uid === 'number' &&
+        typeof gid === 'number' &&
+        (uid !== opt.processUid || gid !== opt.processGid);
+    const preserve = opt.preserve;
+    const unlink = opt.unlink;
+    const cwd = normalizeWindowsPath(opt.cwd);
+    const done = (created) => {
+        if (created && doChown) {
+            chownrSync(created, uid, gid);
+        }
+        if (needChmod) {
+            external_node_fs_namespaceObject.chmodSync(dir, mode);
+        }
+    };
+    if (dir === cwd) {
+        checkCwdSync(cwd);
+        return done();
+    }
+    if (preserve) {
+        return done(external_node_fs_namespaceObject.mkdirSync(dir, { mode, recursive: true }) ?? undefined);
+    }
+    const sub = normalizeWindowsPath(external_node_path_namespaceObject.relative(cwd, dir));
+    const parts = sub.split('/');
+    let created;
+    for (let p = parts.shift(), part = cwd; p && (part += '/' + p); p = parts.shift()) {
+        part = normalizeWindowsPath(external_node_path_namespaceObject.resolve(part));
+        try {
+            external_node_fs_namespaceObject.mkdirSync(part, mode);
+            created = created || part;
+        }
+        catch {
+            const st = external_node_fs_namespaceObject.lstatSync(part);
+            if (st.isDirectory()) {
+                continue;
+            }
+            else if (unlink) {
+                external_node_fs_namespaceObject.unlinkSync(part);
+                external_node_fs_namespaceObject.mkdirSync(part, mode);
+                created = created || part;
+                continue;
+            }
+            else if (st.isSymbolicLink()) {
+                return new SymlinkError(part, part + '/' + parts.join('/'));
             }
         }
-    });
+    }
+    return done(created);
+};
+//# sourceMappingURL=mkdir.js.map
+;// CONCATENATED MODULE: ./node_modules/tar/dist/esm/strip-absolute-path.js
+// unix absolute paths are also absolute on win32, so we use this for both
+
+const { isAbsolute, parse: strip_absolute_path_parse } = external_node_path_namespaceObject.win32;
+// returns [root, stripped]
+// Note that windows will think that //x/y/z/a has a "root" of //x/y, and in
+// those cases, we want to sanitize it to x/y/z/a, not z/a, so we strip /
+// explicitly if it's the first character.
+// drive-specific relative paths on Windows get their root stripped off even
+// though they are not absolute, so `c:../foo` becomes ['c:', '../foo']
+const stripAbsolutePath = (path) => {
+    let r = '';
+    let parsed = strip_absolute_path_parse(path);
+    while (isAbsolute(path) || parsed.root) {
+        // windows will think that //x/y/z has a "root" of //x/y/
+        // but strip the //?/C:/ off of //?/C:/path
+        const root = path.charAt(0) === '/' && path.slice(0, 4) !== '//?/' ?
+            '/'
+            : parsed.root;
+        path = path.slice(root.length);
+        r += root;
+        parsed = strip_absolute_path_parse(path);
+    }
+    return [r, path];
+};
+//# sourceMappingURL=strip-absolute-path.js.map
+;// CONCATENATED MODULE: ./node_modules/tar/dist/esm/winchars.js
+// When writing files on Windows, translate the characters to their
+// 0xf000 higher-encoded versions.
+const raw = ['|', '<', '>', '?', ':'];
+const win = raw.map(char => String.fromCodePoint(0xf000 + Number(char.codePointAt(0))));
+const toWin = new Map(raw.map((char, i) => [char, win[i]]));
+const toRaw = new Map(win.map((char, i) => [char, raw[i]]));
+const winchars_encode = (s) => raw.reduce((s, c) => s.split(c).join(toWin.get(c)), s);
+const decode = (s) => win.reduce((s, c) => s.split(c).join(toRaw.get(c)), s);
+//# sourceMappingURL=winchars.js.map
+;// CONCATENATED MODULE: ./node_modules/tar/dist/esm/normalize-unicode.js
+// warning: extremely hot code path.
+// This has been meticulously optimized for use
+// within npm install on large package trees.
+// Do not edit without careful benchmarking.
+const normalizeCache = Object.create(null);
+// Limit the size of this. Very low-sophistication LRU cache
+const MAX = 10000;
+const cache = new Set();
+const normalizeUnicode = (s) => {
+    if (!cache.has(s)) {
+        // shake out identical accents and ligatures
+        normalizeCache[s] = s
+            .normalize('NFD')
+            .toLocaleLowerCase('en')
+            .toLocaleUpperCase('en');
+    }
+    else {
+        cache.delete(s);
+    }
+    cache.add(s);
+    const ret = normalizeCache[s];
+    let i = cache.size - MAX;
+    // only prune when we're 10% over the max
+    if (i > MAX / 10) {
+        for (const s of cache) {
+            cache.delete(s);
+            delete normalizeCache[s];
+            if (--i <= 0)
+                break;
+        }
+    }
+    return ret;
+};
+//# sourceMappingURL=normalize-unicode.js.map
+;// CONCATENATED MODULE: ./node_modules/tar/dist/esm/path-reservations.js
+// A path exclusive reservation system
+// reserve([list, of, paths], fn)
+// When the fn is first in line for all its paths, it
+// is called with a cb that clears the reservation.
+//
+// Used by async unpack to avoid clobbering paths in use,
+// while still allowing maximal safe parallelization.
+
+
+
+const path_reservations_platform = process.env.TESTING_TAR_FAKE_PLATFORM || process.platform;
+const path_reservations_isWindows = path_reservations_platform === 'win32';
+// return a set of parent dirs for a given path
+// '/a/b/c/d' -> ['/', '/a', '/a/b', '/a/b/c', '/a/b/c/d']
+const getDirs = (path) => {
+    const dirs = path
+        .split('/')
+        .slice(0, -1)
+        .reduce((set, path) => {
+        const s = set.at(-1);
+        if (s !== undefined) {
+            path = (0,external_node_path_namespaceObject.join)(s, path);
+        }
+        set.push(path || '/');
+        return set;
+    }, []);
+    return dirs;
+};
+class PathReservations {
+    // path => [function or Set]
+    // A Set object means a directory reservation
+    // A fn is a direct reservation on that path
+    #queues = new Map();
+    // fn => {paths:[path,...], dirs:[path, ...]}
+    #reservations = new Map();
+    // functions currently running
+    #running = new Set();
+    reserve(paths, fn) {
+        paths =
+            path_reservations_isWindows ?
+                ['win32 parallelization disabled']
+                : paths.map(p => {
+                    // don't need normPath, because we skip this entirely for windows
+                    return stripTrailingSlashes((0,external_node_path_namespaceObject.join)(normalizeUnicode(p)));
+                });
+        const dirs = new Set(paths.map(path => getDirs(path)).reduce((a, b) => a.concat(b)));
+        this.#reservations.set(fn, { dirs, paths });
+        for (const p of paths) {
+            const q = this.#queues.get(p);
+            if (!q) {
+                this.#queues.set(p, [fn]);
+            }
+            else {
+                q.push(fn);
+            }
+        }
+        for (const dir of dirs) {
+            const q = this.#queues.get(dir);
+            if (!q) {
+                this.#queues.set(dir, [new Set([fn])]);
+            }
+            else {
+                const l = q.at(-1);
+                if (l instanceof Set) {
+                    l.add(fn);
+                }
+                else {
+                    q.push(new Set([fn]));
+                }
+            }
+        }
+        return this.#run(fn);
+    }
+    // return the queues for each path the function cares about
+    // fn => {paths, dirs}
+    #getQueues(fn) {
+        const res = this.#reservations.get(fn);
+        /* c8 ignore start */
+        if (!res) {
+            throw new Error('function does not have any path reservations');
+        }
+        /* c8 ignore stop */
+        return {
+            paths: res.paths.map((path) => this.#queues.get(path)),
+            dirs: [...res.dirs].map(path => this.#queues.get(path)),
+        };
+    }
+    // check if fn is first in line for all its paths, and is
+    // included in the first set for all its dir queues
+    check(fn) {
+        const { paths, dirs } = this.#getQueues(fn);
+        return (paths.every(q => q && q[0] === fn) &&
+            dirs.every(q => q && q[0] instanceof Set && q[0].has(fn)));
+    }
+    // run the function if it's first in line and not already running
+    #run(fn) {
+        if (this.#running.has(fn) || !this.check(fn)) {
+            return false;
+        }
+        this.#running.add(fn);
+        fn(() => this.#clear(fn));
+        return true;
+    }
+    #clear(fn) {
+        if (!this.#running.has(fn)) {
+            return false;
+        }
+        const res = this.#reservations.get(fn);
+        /* c8 ignore start */
+        if (!res) {
+            throw new Error('invalid reservation');
+        }
+        /* c8 ignore stop */
+        const { paths, dirs } = res;
+        const next = new Set();
+        for (const path of paths) {
+            const q = this.#queues.get(path);
+            /* c8 ignore start */
+            if (!q || q?.[0] !== fn) {
+                continue;
+            }
+            /* c8 ignore stop */
+            const q0 = q[1];
+            if (!q0) {
+                this.#queues.delete(path);
+                continue;
+            }
+            q.shift();
+            if (typeof q0 === 'function') {
+                next.add(q0);
+            }
+            else {
+                for (const f of q0) {
+                    next.add(f);
+                }
+            }
+        }
+        for (const dir of dirs) {
+            const q = this.#queues.get(dir);
+            const q0 = q?.[0];
+            /* c8 ignore next - type safety only */
+            if (!q || !(q0 instanceof Set))
+                continue;
+            if (q0.size === 1 && q.length === 1) {
+                this.#queues.delete(dir);
+                continue;
+            }
+            else if (q0.size === 1) {
+                q.shift();
+                // next one must be a function,
+                // or else the Set would've been reused
+                const n = q[0];
+                if (typeof n === 'function') {
+                    next.add(n);
+                }
+            }
+            else {
+                q0.delete(fn);
+            }
+        }
+        this.#running.delete(fn);
+        next.forEach(fn => this.#run(fn));
+        return true;
+    }
 }
-// List the contents of a tar
-function tar_listTar(archivePath, compressionMethod) {
-    return tar_awaiter(this, void 0, void 0, function* () {
-        const commands = yield getCommands(compressionMethod, 'list', archivePath);
-        yield execCommands(commands);
+//# sourceMappingURL=path-reservations.js.map
+;// CONCATENATED MODULE: ./node_modules/tar/dist/esm/process-umask.js
+// separate file so I stop getting nagged in vim about deprecated API.
+const umask = () => process.umask();
+//# sourceMappingURL=process-umask.js.map
+;// CONCATENATED MODULE: ./node_modules/tar/dist/esm/unpack.js
+// the PEND/UNPEND stuff tracks whether we're ready to emit end/close yet.
+// but the path reservations are required to avoid race conditions where
+// parallelized unpack ops may mess with one another, due to dependencies
+// (like a Link depending on its target) or destructive operations (like
+// clobbering an fs object to create one of a different type.)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+const ONENTRY = Symbol('onEntry');
+const CHECKFS = Symbol('checkFs');
+const CHECKFS2 = Symbol('checkFs2');
+const ISREUSABLE = Symbol('isReusable');
+const MAKEFS = Symbol('makeFs');
+const FILE = Symbol('file');
+const DIRECTORY = Symbol('directory');
+const LINK = Symbol('link');
+const SYMLINK = Symbol('symlink');
+const HARDLINK = Symbol('hardlink');
+const ENSURE_NO_SYMLINK = Symbol('ensureNoSymlink');
+const UNSUPPORTED = Symbol('unsupported');
+const CHECKPATH = Symbol('checkPath');
+const STRIPABSOLUTEPATH = Symbol('stripAbsolutePath');
+const MKDIR = Symbol('mkdir');
+const ONERROR = Symbol('onError');
+const PENDING = Symbol('pending');
+const PEND = Symbol('pend');
+const UNPEND = Symbol('unpend');
+const unpack_ENDED = Symbol('ended');
+const MAYBECLOSE = Symbol('maybeClose');
+const SKIP = Symbol('skip');
+const DOCHOWN = Symbol('doChown');
+const UID = Symbol('uid');
+const GID = Symbol('gid');
+const CHECKED_CWD = Symbol('checkedCwd');
+const unpack_platform = process.env.TESTING_TAR_FAKE_PLATFORM || process.platform;
+const unpack_isWindows = unpack_platform === 'win32';
+const DEFAULT_MAX_DEPTH = 1024;
+// Unlinks on Windows are not atomic.
+//
+// This means that if you have a file entry, followed by another
+// file entry with an identical name, and you cannot re-use the file
+// (because it's a hardlink, or because unlink:true is set, or it's
+// Windows, which does not have useful nlink values), then the unlink
+// will be committed to the disk AFTER the new file has been written
+// over the old one, deleting the new file.
+//
+// To work around this, on Windows systems, we rename the file and then
+// delete the renamed file.  It's a sloppy kludge, but frankly, I do not
+// know of a better way to do this, given windows' non-atomic unlink
+// semantics.
+//
+// See: https://github.com/npm/node-tar/issues/183
+/* c8 ignore start */
+const unpack_unlinkFile = (path, cb) => {
+    if (!unpack_isWindows) {
+        return external_node_fs_namespaceObject.unlink(path, cb);
+    }
+    const name = path + '.DELETE.' + (0,external_node_crypto_.randomBytes)(16).toString('hex');
+    external_node_fs_namespaceObject.rename(path, name, er => {
+        if (er) {
+            return cb(er);
+        }
+        external_node_fs_namespaceObject.unlink(name, cb);
     });
+};
+/* c8 ignore stop */
+/* c8 ignore start */
+const unlinkFileSync = (path) => {
+    if (!unpack_isWindows) {
+        return external_node_fs_namespaceObject.unlinkSync(path);
+    }
+    const name = path + '.DELETE.' + (0,external_node_crypto_.randomBytes)(16).toString('hex');
+    external_node_fs_namespaceObject.renameSync(path, name);
+    external_node_fs_namespaceObject.unlinkSync(name);
+};
+/* c8 ignore stop */
+// this.gid, entry.gid, this.processUid
+const uint32 = (a, b, c) => a !== undefined && a === a >>> 0 ? a
+    : b !== undefined && b === b >>> 0 ? b
+        : c;
+class Unpack extends parse_Parser {
+    [unpack_ENDED] = false;
+    [CHECKED_CWD] = false;
+    [PENDING] = 0;
+    reservations = new PathReservations();
+    transform;
+    writable = true;
+    readable = false;
+    uid;
+    gid;
+    setOwner;
+    preserveOwner;
+    processGid;
+    processUid;
+    maxDepth;
+    forceChown;
+    win32;
+    newer;
+    keep;
+    noMtime;
+    preservePaths;
+    unlink;
+    cwd;
+    strip;
+    processUmask;
+    umask;
+    dmode;
+    fmode;
+    chmod;
+    constructor(opt = {}) {
+        opt.ondone = () => {
+            this[unpack_ENDED] = true;
+            this[MAYBECLOSE]();
+        };
+        super(opt);
+        this.transform = opt.transform;
+        this.chmod = !!opt.chmod;
+        if (typeof opt.uid === 'number' || typeof opt.gid === 'number') {
+            // need both or neither
+            if (typeof opt.uid !== 'number' || typeof opt.gid !== 'number') {
+                throw new TypeError('cannot set owner without number uid and gid');
+            }
+            if (opt.preserveOwner) {
+                throw new TypeError('cannot preserve owner in archive and also set owner explicitly');
+            }
+            this.uid = opt.uid;
+            this.gid = opt.gid;
+            this.setOwner = true;
+        }
+        else {
+            this.uid = undefined;
+            this.gid = undefined;
+            this.setOwner = false;
+        }
+        // default true for root
+        this.preserveOwner =
+            opt.preserveOwner === undefined && typeof opt.uid !== 'number' ?
+                !!(process.getuid?.() === 0)
+                : !!opt.preserveOwner;
+        this.processUid =
+            (this.preserveOwner || this.setOwner) && process.getuid ?
+                process.getuid()
+                : undefined;
+        this.processGid =
+            (this.preserveOwner || this.setOwner) && process.getgid ?
+                process.getgid()
+                : undefined;
+        // prevent excessively deep nesting of subfolders
+        // set to `Infinity` to remove this restriction
+        this.maxDepth =
+            typeof opt.maxDepth === 'number' ? opt.maxDepth : DEFAULT_MAX_DEPTH;
+        // mostly just for testing, but useful in some cases.
+        // Forcibly trigger a chown on every entry, no matter what
+        this.forceChown = opt.forceChown === true;
+        // turn ><?| in filenames into 0xf000-higher encoded forms
+        this.win32 = !!opt.win32 || unpack_isWindows;
+        // do not unpack over files that are newer than what's in the archive
+        this.newer = !!opt.newer;
+        // do not unpack over ANY files
+        this.keep = !!opt.keep;
+        // do not set mtime/atime of extracted entries
+        this.noMtime = !!opt.noMtime;
+        // allow .., absolute path entries, and unpacking through symlinks
+        // without this, warn and skip .., relativize absolutes, and error
+        // on symlinks in extraction path
+        this.preservePaths = !!opt.preservePaths;
+        // unlink files and links before writing. This breaks existing hard
+        // links, and removes symlink directories rather than erroring
+        this.unlink = !!opt.unlink;
+        this.cwd = normalizeWindowsPath(external_node_path_namespaceObject.resolve(opt.cwd || process.cwd()));
+        this.strip = Number(opt.strip) || 0;
+        // if we're not chmodding, then we don't need the process umask
+        this.processUmask =
+            !this.chmod ? 0
+                : typeof opt.processUmask === 'number' ? opt.processUmask
+                    : umask();
+        this.umask =
+            typeof opt.umask === 'number' ? opt.umask : this.processUmask;
+        // default mode for dirs created as parents
+        this.dmode = opt.dmode || 0o0777 & ~this.umask;
+        this.fmode = opt.fmode || 0o0666 & ~this.umask;
+        this.on('entry', entry => this[ONENTRY](entry));
+    }
+    // a bad or damaged archive is a warning for Parser, but an error
+    // when extracting.  Mark those errors as unrecoverable, because
+    // the Unpack contract cannot be met.
+    warn(code, msg, data = {}) {
+        if (code === 'TAR_BAD_ARCHIVE' || code === 'TAR_ABORT') {
+            data.recoverable = false;
+        }
+        return super.warn(code, msg, data);
+    }
+    [MAYBECLOSE]() {
+        if (this[unpack_ENDED] && this[PENDING] === 0) {
+            this.emit('prefinish');
+            this.emit('finish');
+            this.emit('end');
+        }
+    }
+    // return false if we need to skip this file
+    // return true if the field was successfully sanitized
+    [STRIPABSOLUTEPATH](entry, field) {
+        const p = entry[field];
+        const { type } = entry;
+        if (!p || this.preservePaths)
+            return true;
+        // strip off the root
+        const [root, stripped] = stripAbsolutePath(p);
+        const parts = stripped.replaceAll(/\\/g, '/').split('/');
+        if (parts.includes('..') ||
+            /* c8 ignore next */
+            (unpack_isWindows && /^[a-z]:\.\.$/i.test(parts[0] ?? ''))) {
+            // For linkpath, check if the resolved path escapes cwd rather than
+            // just rejecting any path with '..' - relative symlinks like
+            // '../sibling/file' are valid if they resolve within the cwd.
+            // For paths, they just simply may not ever use .. at all.
+            if (field === 'path' || type === 'Link') {
+                this.warn('TAR_ENTRY_ERROR', `${field} contains '..'`, {
+                    entry,
+                    [field]: p,
+                });
+                // not ok!
+                return false;
+            }
+            // Resolve linkpath relative to the entry's directory.
+            // `path.posix` is safe to use because we're operating on
+            // tar paths, not a filesystem.
+            const entryDir = external_node_path_namespaceObject.posix.dirname(entry.path);
+            const resolved = external_node_path_namespaceObject.posix.normalize(external_node_path_namespaceObject.posix.join(entryDir, parts.join('/')));
+            // If the resolved path escapes (starts with ..), reject it
+            if (resolved.startsWith('../') || resolved === '..') {
+                this.warn('TAR_ENTRY_ERROR', `${field} escapes extraction directory`, {
+                    entry,
+                    [field]: p,
+                });
+                return false;
+            }
+        }
+        if (root) {
+            // ok, but triggers warning about stripping root
+            entry[field] = String(stripped);
+            this.warn('TAR_ENTRY_INFO', `stripping ${root} from absolute ${field}`, {
+                entry,
+                [field]: p,
+            });
+        }
+        return true;
+    }
+    // no IO, just string checking for absolute indicators
+    [CHECKPATH](entry) {
+        const p = normalizeWindowsPath(entry.path);
+        const parts = p.split('/');
+        if (this.strip) {
+            if (parts.length < this.strip) {
+                return false;
+            }
+            if (entry.type === 'Link') {
+                const linkparts = normalizeWindowsPath(String(entry.linkpath)).split('/');
+                if (linkparts.length >= this.strip) {
+                    entry.linkpath = linkparts.slice(this.strip).join('/');
+                }
+                else {
+                    return false;
+                }
+            }
+            parts.splice(0, this.strip);
+            entry.path = parts.join('/');
+        }
+        if (isFinite(this.maxDepth) && parts.length > this.maxDepth) {
+            this.warn('TAR_ENTRY_ERROR', 'path excessively deep', {
+                entry,
+                path: p,
+                depth: parts.length,
+                maxDepth: this.maxDepth,
+            });
+            return false;
+        }
+        if (!this[STRIPABSOLUTEPATH](entry, 'path') ||
+            !this[STRIPABSOLUTEPATH](entry, 'linkpath')) {
+            return false;
+        }
+        entry.absolute =
+            external_node_path_namespaceObject.isAbsolute(entry.path) ?
+                normalizeWindowsPath(external_node_path_namespaceObject.resolve(entry.path))
+                : normalizeWindowsPath(external_node_path_namespaceObject.resolve(this.cwd, entry.path));
+        // if we somehow ended up with a path that escapes the cwd, and we are
+        // not in preservePaths mode, then something is fishy!  This should have
+        // been prevented above, so ignore this for coverage.
+        /* c8 ignore start - defense in depth */
+        if (!this.preservePaths &&
+            typeof entry.absolute === 'string' &&
+            entry.absolute.indexOf(this.cwd + '/') !== 0 &&
+            entry.absolute !== this.cwd) {
+            this.warn('TAR_ENTRY_ERROR', 'path escaped extraction target', {
+                entry,
+                path: normalizeWindowsPath(entry.path),
+                resolvedPath: entry.absolute,
+                cwd: this.cwd,
+            });
+            return false;
+        }
+        /* c8 ignore stop */
+        // an archive can set properties on the extraction directory, but it
+        // may not replace the cwd with a different kind of thing entirely.
+        if (entry.absolute === this.cwd &&
+            entry.type !== 'Directory' &&
+            entry.type !== 'GNUDumpDir') {
+            return false;
+        }
+        // only encode : chars that aren't drive letter indicators
+        if (this.win32) {
+            const { root: aRoot } = external_node_path_namespaceObject.win32.parse(String(entry.absolute));
+            entry.absolute =
+                aRoot + winchars_encode(String(entry.absolute).slice(aRoot.length));
+            const { root: pRoot } = external_node_path_namespaceObject.win32.parse(entry.path);
+            entry.path = pRoot + winchars_encode(entry.path.slice(pRoot.length));
+        }
+        return true;
+    }
+    [ONENTRY](entry) {
+        if (!this[CHECKPATH](entry)) {
+            return entry.resume();
+        }
+        external_node_assert_.equal(typeof entry.absolute, 'string');
+        switch (entry.type) {
+            case 'Directory':
+            case 'GNUDumpDir':
+                if (entry.mode) {
+                    entry.mode = entry.mode | 0o700;
+                }
+            // eslint-disable-next-line no-fallthrough
+            case 'File':
+            case 'OldFile':
+            case 'ContiguousFile':
+            case 'Link':
+            case 'SymbolicLink':
+                return this[CHECKFS](entry);
+            case 'CharacterDevice':
+            case 'BlockDevice':
+            case 'FIFO':
+            default:
+                return this[UNSUPPORTED](entry);
+        }
+    }
+    [ONERROR](er, entry) {
+        // Cwd has to exist, or else nothing works. That's serious.
+        // Other errors are warnings, which raise the error in strict
+        // mode, but otherwise continue on.
+        if (er.name === 'CwdError') {
+            this.emit('error', er);
+        }
+        else {
+            this.warn('TAR_ENTRY_ERROR', er, { entry });
+            this[UNPEND]();
+            entry.resume();
+        }
+    }
+    [MKDIR](dir, mode, cb) {
+        void mkdir_mkdir(normalizeWindowsPath(dir), {
+            uid: this.uid,
+            gid: this.gid,
+            processUid: this.processUid,
+            processGid: this.processGid,
+            umask: this.processUmask,
+            preserve: this.preservePaths,
+            unlink: this.unlink,
+            cwd: this.cwd,
+            mode: mode,
+        }, cb);
+    }
+    [DOCHOWN](entry) {
+        // in preserve owner mode, chown if the entry doesn't match process
+        // in set owner mode, chown if setting doesn't match process
+        return (this.forceChown ||
+            (this.preserveOwner &&
+                ((typeof entry.uid === 'number' &&
+                    entry.uid !== this.processUid) ||
+                    (typeof entry.gid === 'number' &&
+                        entry.gid !== this.processGid))) ||
+            (typeof this.uid === 'number' && this.uid !== this.processUid) ||
+            (typeof this.gid === 'number' && this.gid !== this.processGid));
+    }
+    [UID](entry) {
+        return uint32(this.uid, entry.uid, this.processUid);
+    }
+    [GID](entry) {
+        return uint32(this.gid, entry.gid, this.processGid);
+    }
+    [FILE](entry, fullyDone) {
+        const mode = typeof entry.mode === 'number' ? entry.mode & 0o7777 : this.fmode;
+        const stream = new WriteStream(String(entry.absolute), {
+            // slight lie, but it can be numeric flags
+            flags: getWriteFlag(entry.size),
+            mode: mode,
+            autoClose: false,
+        });
+        stream.on('error', (er) => {
+            if (stream.fd) {
+                external_node_fs_namespaceObject.close(stream.fd, () => { });
+            }
+            // flush all the data out so that we aren't left hanging
+            // if the error wasn't actually fatal.  otherwise the parse
+            // is blocked, and we never proceed.
+            stream.write = () => true;
+            this[ONERROR](er, entry);
+            fullyDone();
+        });
+        let actions = 1;
+        const done = (er) => {
+            if (er) {
+                /* c8 ignore start - we should always have a fd by now */
+                if (stream.fd) {
+                    external_node_fs_namespaceObject.close(stream.fd, () => { });
+                }
+                /* c8 ignore stop */
+                this[ONERROR](er, entry);
+                fullyDone();
+                return;
+            }
+            if (--actions === 0) {
+                if (stream.fd !== undefined) {
+                    external_node_fs_namespaceObject.close(stream.fd, er => {
+                        if (er) {
+                            this[ONERROR](er, entry);
+                        }
+                        else {
+                            this[UNPEND]();
+                        }
+                        fullyDone();
+                    });
+                }
+            }
+        };
+        stream.on('finish', () => {
+            // if futimes fails, try utimes
+            // if utimes fails, fail with the original error
+            // same for fchown/chown
+            const abs = String(entry.absolute);
+            const fd = stream.fd;
+            if (typeof fd === 'number' && entry.mtime && !this.noMtime) {
+                actions++;
+                const atime = entry.atime || new Date();
+                const mtime = entry.mtime;
+                external_node_fs_namespaceObject.futimes(fd, atime, mtime, er => er ?
+                    external_node_fs_namespaceObject.utimes(abs, atime, mtime, er2 => done(er2 && er))
+                    : done());
+            }
+            if (typeof fd === 'number' && this[DOCHOWN](entry)) {
+                actions++;
+                const uid = this[UID](entry);
+                const gid = this[GID](entry);
+                if (typeof uid === 'number' && typeof gid === 'number') {
+                    external_node_fs_namespaceObject.fchown(fd, uid, gid, er => er ? external_node_fs_namespaceObject.chown(abs, uid, gid, er2 => done(er2 && er)) : done());
+                }
+            }
+            done();
+        });
+        const tx = this.transform ? this.transform(entry) || entry : entry;
+        if (tx !== entry) {
+            tx.on('error', er => {
+                this[ONERROR](er, entry);
+                fullyDone();
+            });
+            entry.pipe(tx);
+        }
+        tx.pipe(stream);
+    }
+    [DIRECTORY](entry, fullyDone) {
+        const mode = typeof entry.mode === 'number' ? entry.mode & 0o7777 : this.dmode;
+        this[MKDIR](String(entry.absolute), mode, er => {
+            if (er) {
+                this[ONERROR](er, entry);
+                fullyDone();
+                return;
+            }
+            let actions = 1;
+            const done = () => {
+                if (--actions === 0) {
+                    fullyDone();
+                    this[UNPEND]();
+                    entry.resume();
+                }
+            };
+            if (entry.mtime && !this.noMtime) {
+                actions++;
+                external_node_fs_namespaceObject.utimes(String(entry.absolute), entry.atime || new Date(), entry.mtime, done);
+            }
+            if (this[DOCHOWN](entry)) {
+                actions++;
+                external_node_fs_namespaceObject.chown(String(entry.absolute), Number(this[UID](entry)), Number(this[GID](entry)), done);
+            }
+            done();
+        });
+    }
+    [UNSUPPORTED](entry) {
+        entry.unsupported = true;
+        this.warn('TAR_ENTRY_UNSUPPORTED', `unsupported entry type: ${entry.type}`, { entry });
+        entry.resume();
+    }
+    [SYMLINK](entry, done) {
+        const parts = normalizeWindowsPath(external_node_path_namespaceObject.relative(this.cwd, external_node_path_namespaceObject.resolve(external_node_path_namespaceObject.dirname(String(entry.absolute)), String(entry.linkpath)))).split('/');
+        this[ENSURE_NO_SYMLINK](entry, this.cwd, parts, () => this[LINK](entry, String(entry.linkpath), 'symlink', done), er => {
+            this[ONERROR](er, entry);
+            done();
+        });
+    }
+    [HARDLINK](entry, done) {
+        const linkpath = normalizeWindowsPath(external_node_path_namespaceObject.resolve(this.cwd, String(entry.linkpath)));
+        const parts = normalizeWindowsPath(String(entry.linkpath)).split('/');
+        this[ENSURE_NO_SYMLINK](entry, this.cwd, parts, () => this[LINK](entry, linkpath, 'link', done), er => {
+            this[ONERROR](er, entry);
+            done();
+        });
+    }
+    [ENSURE_NO_SYMLINK](entry, cwd, parts, done, onError) {
+        const p = parts.shift();
+        if (this.preservePaths || p === undefined)
+            return done();
+        const t = external_node_path_namespaceObject.resolve(cwd, p);
+        external_node_fs_namespaceObject.lstat(t, (er, st) => {
+            if (er)
+                return done();
+            if (st?.isSymbolicLink()) {
+                return onError(new SymlinkError(t, external_node_path_namespaceObject.resolve(t, parts.join('/'))));
+            }
+            this[ENSURE_NO_SYMLINK](entry, t, parts, done, onError);
+        });
+    }
+    [PEND]() {
+        this[PENDING]++;
+    }
+    [UNPEND]() {
+        this[PENDING]--;
+        this[MAYBECLOSE]();
+    }
+    [SKIP](entry) {
+        this[UNPEND]();
+        entry.resume();
+    }
+    // Check if we can reuse an existing filesystem entry safely and
+    // overwrite it, rather than unlinking and recreating
+    // Windows doesn't report a useful nlink, so we just never reuse entries
+    [ISREUSABLE](entry, st) {
+        return (entry.type === 'File' &&
+            !this.unlink &&
+            st.isFile() &&
+            st.nlink <= 1 &&
+            !unpack_isWindows);
+    }
+    // check if a thing is there, and if so, try to clobber it
+    [CHECKFS](entry) {
+        this[PEND]();
+        const paths = [entry.path];
+        if (entry.linkpath) {
+            paths.push(entry.linkpath);
+        }
+        this.reservations.reserve(paths, done => this[CHECKFS2](entry, done));
+    }
+    [CHECKFS2](entry, fullyDone) {
+        const done = (er) => {
+            fullyDone(er);
+        };
+        const checkCwd = () => {
+            this[MKDIR](this.cwd, this.dmode, er => {
+                if (er) {
+                    this[ONERROR](er, entry);
+                    done();
+                    return;
+                }
+                this[CHECKED_CWD] = true;
+                start();
+            });
+        };
+        const start = () => {
+            if (entry.absolute !== this.cwd) {
+                const parent = normalizeWindowsPath(external_node_path_namespaceObject.dirname(String(entry.absolute)));
+                if (parent !== this.cwd) {
+                    return this[MKDIR](parent, this.dmode, er => {
+                        if (er) {
+                            this[ONERROR](er, entry);
+                            done();
+                            return;
+                        }
+                        afterMakeParent();
+                    });
+                }
+            }
+            afterMakeParent();
+        };
+        const afterMakeParent = () => {
+            external_node_fs_namespaceObject.lstat(String(entry.absolute), (lstatEr, st) => {
+                if (st &&
+                    (this.keep ||
+                        /* c8 ignore next */
+                        (this.newer && st.mtime > (entry.mtime ?? st.mtime)))) {
+                    this[SKIP](entry);
+                    done();
+                    return;
+                }
+                if (lstatEr || this[ISREUSABLE](entry, st)) {
+                    return this[MAKEFS](null, entry, done);
+                }
+                if (st.isDirectory()) {
+                    if (entry.type === 'Directory') {
+                        const needChmod = this.chmod && entry.mode && (st.mode & 0o7777) !== entry.mode;
+                        const afterChmod = (er) => this[MAKEFS](er ?? null, entry, done);
+                        if (!needChmod) {
+                            return afterChmod();
+                        }
+                        return external_node_fs_namespaceObject.chmod(String(entry.absolute), Number(entry.mode), afterChmod);
+                    }
+                    // Not a dir entry, have to remove it.
+                    // NB: the only way to end up with an entry that is the cwd
+                    // itself, in such a way that == does not detect, is a
+                    // tricky windows absolute path with UNC or 8.3 parts (and
+                    // preservePaths:true, or else it will have been stripped).
+                    // In that case, the user has opted out of path protections
+                    // explicitly, so if they blow away the cwd, c'est la vie.
+                    if (entry.absolute !== this.cwd) {
+                        return external_node_fs_namespaceObject.rmdir(String(entry.absolute), (er) => this[MAKEFS](er ?? null, entry, done));
+                    }
+                }
+                // not a dir, and not reusable
+                // don't remove if the cwd, we want that error
+                if (entry.absolute === this.cwd) {
+                    return this[MAKEFS](null, entry, done);
+                }
+                unpack_unlinkFile(String(entry.absolute), er => this[MAKEFS](er ?? null, entry, done));
+            });
+        };
+        if (this[CHECKED_CWD]) {
+            start();
+        }
+        else {
+            checkCwd();
+        }
+    }
+    [MAKEFS](er, entry, done) {
+        if (er) {
+            this[ONERROR](er, entry);
+            done();
+            return;
+        }
+        switch (entry.type) {
+            case 'File':
+            case 'OldFile':
+            case 'ContiguousFile':
+                return this[FILE](entry, done);
+            case 'Link':
+                return this[HARDLINK](entry, done);
+            case 'SymbolicLink':
+                return this[SYMLINK](entry, done);
+            case 'Directory':
+            case 'GNUDumpDir':
+                return this[DIRECTORY](entry, done);
+        }
+    }
+    [LINK](entry, linkpath, link, done) {
+        external_node_fs_namespaceObject[link](linkpath, String(entry.absolute), er => {
+            if (er) {
+                this[ONERROR](er, entry);
+            }
+            else {
+                this[UNPEND]();
+                entry.resume();
+            }
+            done();
+        });
+    }
 }
-// Extract a tar
-function tar_extractTar(archivePath, compressionMethod) {
-    return tar_awaiter(this, void 0, void 0, function* () {
-        // Create directory to extract tar into
-        const workingDirectory = getWorkingDirectory();
-        yield io.mkdirP(workingDirectory);
-        const commands = yield getCommands(compressionMethod, 'extract', archivePath);
-        yield execCommands(commands);
+const callSync = (fn) => {
+    try {
+        return [null, fn()];
+    }
+    catch (er) {
+        return [er, null];
+    }
+};
+class UnpackSync extends Unpack {
+    sync = true;
+    [MAKEFS](er, entry) {
+        return super[MAKEFS](er, entry, () => { });
+    }
+    [CHECKFS](entry) {
+        if (!this[CHECKED_CWD]) {
+            const er = this[MKDIR](this.cwd, this.dmode);
+            if (er) {
+                return this[ONERROR](er, entry);
+            }
+            this[CHECKED_CWD] = true;
+        }
+        // don't bother to make the parent if the current entry is the cwd,
+        // we've already checked it.
+        if (entry.absolute !== this.cwd) {
+            const parent = normalizeWindowsPath(external_node_path_namespaceObject.dirname(String(entry.absolute)));
+            if (parent !== this.cwd) {
+                const mkParent = this[MKDIR](parent, this.dmode);
+                if (mkParent) {
+                    return this[ONERROR](mkParent, entry);
+                }
+            }
+        }
+        const [lstatEr, st] = callSync(() => external_node_fs_namespaceObject.lstatSync(String(entry.absolute)));
+        if (st &&
+            (this.keep ||
+                /* c8 ignore next */
+                (this.newer && st.mtime > (entry.mtime ?? st.mtime)))) {
+            return this[SKIP](entry);
+        }
+        if (lstatEr || this[ISREUSABLE](entry, st)) {
+            return this[MAKEFS](null, entry);
+        }
+        if (st.isDirectory()) {
+            if (entry.type === 'Directory') {
+                const needChmod = this.chmod && entry.mode && (st.mode & 0o7777) !== entry.mode;
+                const [er] = needChmod ?
+                    callSync(() => {
+                        external_node_fs_namespaceObject.chmodSync(String(entry.absolute), Number(entry.mode));
+                    })
+                    : [];
+                return this[MAKEFS](er, entry);
+            }
+            // not a dir entry, have to remove it
+            const [er] = callSync(() => external_node_fs_namespaceObject.rmdirSync(String(entry.absolute)));
+            this[MAKEFS](er, entry);
+        }
+        // not a dir, and not reusable.
+        // don't remove if it's the cwd, since we want that error.
+        const [er] = entry.absolute === this.cwd ?
+            []
+            : callSync(() => unlinkFileSync(String(entry.absolute)));
+        this[MAKEFS](er, entry);
+    }
+    [FILE](entry, done) {
+        const mode = typeof entry.mode === 'number' ? entry.mode & 0o7777 : this.fmode;
+        const oner = (er) => {
+            let closeError;
+            try {
+                external_node_fs_namespaceObject.closeSync(fd);
+            }
+            catch (e) {
+                closeError = e;
+            }
+            if (er || closeError) {
+                this[ONERROR](er || closeError, entry);
+            }
+            done();
+        };
+        let fd;
+        try {
+            fd = external_node_fs_namespaceObject.openSync(String(entry.absolute), getWriteFlag(entry.size), mode);
+            /* c8 ignore start - This is only a problem if the file was successfully
+             * statted, BUT failed to open. Testing this is annoying, and we
+             * already have ample testint for other uses of oner() methods.
+             */
+        }
+        catch (er) {
+            return oner(er);
+        }
+        /* c8 ignore stop */
+        const tx = this.transform ? this.transform(entry) || entry : entry;
+        if (tx !== entry) {
+            tx.on('error', er => this[ONERROR](er, entry));
+            entry.pipe(tx);
+        }
+        tx.on('data', (chunk) => {
+            try {
+                external_node_fs_namespaceObject.writeSync(fd, chunk, 0, chunk.length);
+            }
+            catch (er) {
+                oner(er);
+            }
+        });
+        tx.on('end', () => {
+            let er = null;
+            // try both, falling futimes back to utimes
+            // if either fails, handle the first error
+            if (entry.mtime && !this.noMtime) {
+                const atime = entry.atime || new Date();
+                const mtime = entry.mtime;
+                try {
+                    external_node_fs_namespaceObject.futimesSync(fd, atime, mtime);
+                }
+                catch (futimeser) {
+                    try {
+                        external_node_fs_namespaceObject.utimesSync(String(entry.absolute), atime, mtime);
+                    }
+                    catch {
+                        er = futimeser;
+                    }
+                }
+            }
+            if (this[DOCHOWN](entry)) {
+                const uid = this[UID](entry);
+                const gid = this[GID](entry);
+                try {
+                    external_node_fs_namespaceObject.fchownSync(fd, Number(uid), Number(gid));
+                }
+                catch (fchowner) {
+                    try {
+                        external_node_fs_namespaceObject.chownSync(String(entry.absolute), Number(uid), Number(gid));
+                    }
+                    catch {
+                        er = er || fchowner;
+                    }
+                }
+            }
+            oner(er);
+        });
+    }
+    [DIRECTORY](entry, done) {
+        const mode = typeof entry.mode === 'number' ? entry.mode & 0o7777 : this.dmode;
+        const er = this[MKDIR](String(entry.absolute), mode);
+        if (er) {
+            this[ONERROR](er, entry);
+            done();
+            return;
+        }
+        if (entry.mtime && !this.noMtime) {
+            try {
+                external_node_fs_namespaceObject.utimesSync(String(entry.absolute), entry.atime || new Date(), entry.mtime);
+                /* c8 ignore next */
+            }
+            catch { }
+        }
+        if (this[DOCHOWN](entry)) {
+            try {
+                external_node_fs_namespaceObject.chownSync(String(entry.absolute), Number(this[UID](entry)), Number(this[GID](entry)));
+            }
+            catch { }
+        }
+        done();
+        entry.resume();
+    }
+    [MKDIR](dir, mode) {
+        try {
+            return mkdir_mkdirSync(normalizeWindowsPath(dir), {
+                uid: this.uid,
+                gid: this.gid,
+                processUid: this.processUid,
+                processGid: this.processGid,
+                umask: this.processUmask,
+                preserve: this.preservePaths,
+                unlink: this.unlink,
+                cwd: this.cwd,
+                mode: mode,
+            });
+        }
+        catch (er) {
+            return er;
+        }
+    }
+    [ENSURE_NO_SYMLINK](_entry, cwd, parts, done, onError) {
+        if (this.preservePaths || parts.length === 0)
+            return done();
+        let t = cwd;
+        for (const p of parts) {
+            t = external_node_path_namespaceObject.resolve(t, p);
+            const [er, st] = callSync(() => external_node_fs_namespaceObject.lstatSync(t));
+            if (er)
+                return done();
+            if (st.isSymbolicLink()) {
+                return onError(new SymlinkError(t, external_node_path_namespaceObject.resolve(cwd, parts.join('/'))));
+            }
+        }
+        done();
+    }
+    [LINK](entry, linkpath, link, done) {
+        const linkSync = `${link}Sync`;
+        try {
+            external_node_fs_namespaceObject[linkSync](linkpath, String(entry.absolute));
+            done();
+            entry.resume();
+        }
+        catch (er) {
+            return this[ONERROR](er, entry);
+        }
+    }
+}
+//# sourceMappingURL=unpack.js.map
+;// CONCATENATED MODULE: ./node_modules/tar/dist/esm/extract.js
+// tar -x
+
+
+
+
+
+const extractFileSync = (opt) => {
+    const u = new UnpackSync(opt);
+    const file = opt.file;
+    const stat = external_node_fs_namespaceObject.statSync(file);
+    // This trades a zero-byte read() syscall for a stat
+    // However, it will usually result in less memory allocation
+    const readSize = opt.maxReadSize || 16 * 1024 * 1024;
+    const stream = new ReadStreamSync(file, {
+        readSize: readSize,
+        size: stat.size,
     });
-}
-// Create a tar
-function createTar(archiveFolder, sourceDirectories, compressionMethod) {
-    return tar_awaiter(this, void 0, void 0, function* () {
-        // Write source directories to manifest.txt to avoid command length limits
-        (0,external_fs_namespaceObject.writeFileSync)(external_path_.join(archiveFolder, ManifestFilename), sourceDirectories.join('\n'));
-        const commands = yield getCommands(compressionMethod, 'create');
-        yield execCommands(commands, archiveFolder);
+    stream.pipe(u);
+};
+const extractFile = (opt, _) => {
+    const u = new Unpack(opt);
+    const readSize = opt.maxReadSize || 16 * 1024 * 1024;
+    const file = opt.file;
+    const p = new Promise((resolve, reject) => {
+        u.on('error', reject);
+        u.on('close', resolve);
+        // This trades a zero-byte read() syscall for a stat
+        // However, it will usually result in less memory allocation
+        external_node_fs_namespaceObject.stat(file, (er, stat) => {
+            if (er) {
+                reject(er);
+            }
+            else {
+                const stream = new ReadStream(file, {
+                    readSize: readSize,
+                    size: stat.size,
+                });
+                stream.on('error', reject);
+                stream.pipe(u);
+            }
+        });
     });
+    return p;
+};
+const extract_extract = makeCommand(extractFileSync, extractFile, opt => new UnpackSync(opt), opt => new Unpack(opt), (opt, files) => {
+    if (files?.length)
+        filesFilter(opt, files);
+});
+//# sourceMappingURL=extract.js.map
+;// CONCATENATED MODULE: ./node_modules/@actions/cache/lib/internal/archive-codec.mjs
+
+
+
+
+const archiveVersion = 'velnor-cache-archive-v1';
+const zstdWindowLog = 30;
+const zstdWindowParam = external_node_zlib_.constants.ZSTD_d_windowLogMax;
+
+function requireNode24() {
+  const major = Number(process.versions.node.split('.')[0]);
+  if (major !== 24) throw codecError('ARCHIVE_CODEC', 'Node 24 is required for the archive codec');
 }
-//# sourceMappingURL=tar.js.map
+
+function codecError(code, message) {
+  const error = new Error(`${archiveVersion}: ${message}`);
+  error.code = code;
+  return error;
+}
+
+function requireCodec(name, codec) {
+  requireNode24();
+  if (typeof codec !== 'function' || typeof zstdWindowParam !== 'number') {
+    throw codecError('ARCHIVE_CODEC', `Node ${name} codec is unavailable`);
+  }
+  return codec;
+}
+
+function zstdOptions() {
+  return { params: { [zstdWindowParam]: zstdWindowLog } };
+}
+
+function createArchiveDecoder(compressionMethod) {
+  if (compressionMethod === 'gzip') return zlib.createGunzip();
+  if (compressionMethod === 'zstd' || compressionMethod === 'zstd-without-long') {
+    const decoder = requireCodec('zstd decompression', zlib.createZstdDecompress);
+    return decoder(zstdOptions());
+  }
+  throw codecError('ARCHIVE_CODEC', `unsupported decoder ${compressionMethod}`);
+}
+
+function createArchiveEncoder(compressionMethod) {
+  if (compressionMethod !== 'zstd-without-long') {
+    throw codecError('ARCHIVE_CODEC', `unsupported encoder ${compressionMethod}`);
+  }
+  const encoder = requireCodec('zstd compression', external_node_zlib_.createZstdCompress);
+  return encoder();
+}
+
+function archive_codec_decodeArchive(file, compressionMethod, limits) {
+  const source = createReadStream(file, { highWaterMark: 1024 * 1024 });
+  const decoder = createArchiveDecoder(compressionMethod);
+  const state = { compressedBytes: statSync(file).size, decodedBytes: 0 };
+  const bounded = new Transform({
+    transform(chunk, _encoding, callback) {
+      state.decodedBytes += chunk.length;
+      if (state.decodedBytes > limits.maxDecodedBytes) {
+        callback(codecError('ARCHIVE_DECODE_LIMIT', 'decoded archive exceeds maximum size'));
+        return;
+      }
+      if (state.compressedBytes > 0 && state.decodedBytes / state.compressedBytes > limits.maxRatio) {
+        callback(codecError('ARCHIVE_DECODE_RATIO', 'archive decompression ratio exceeds maximum'));
+        return;
+      }
+      callback(null, chunk);
+    }
+  });
+  const abort = error => {
+    decoder.destroy(error);
+    bounded.destroy(error);
+  };
+  source.on('error', abort);
+  decoder.on('error', error => bounded.destroy(error));
+  bounded.on('error', error => source.destroy(error));
+  source.pipe(decoder).pipe(bounded);
+  return { source, stream: bounded, state };
+}
+
+;// CONCATENATED MODULE: ./node_modules/@actions/cache/lib/internal/archive-admission-errors.mjs
+class archive_admission_errors_ArchiveAdmissionError extends Error {
+  constructor(code, message) {
+    super(`${code}: ${message}`);
+    this.name = 'ArchiveAdmissionError';
+    this.code = code;
+  }
+}
+
+function archive_admission_errors_admissionFail(code, message) {
+  throw new archive_admission_errors_ArchiveAdmissionError(code, message);
+}
+
+;// CONCATENATED MODULE: ./node_modules/@actions/cache/lib/internal/quarantine-path.mjs
+
+
+
+class quarantine_path_ArchiveConfigurationError extends Error {
+  constructor(code, message) {
+    super(`${code}: ${message}`);
+    this.name = 'ArchiveConfigurationError';
+    this.code = code;
+  }
+}
+
+function inspectOwnedDirectory(directory, runnerTemp) {
+  const root = path.resolve(runnerTemp);
+  const target = path.resolve(directory);
+  if (target === root || !target.startsWith(`${root}${path.sep}`)) {
+    throw new quarantine_path_ArchiveConfigurationError('QUARANTINE_SCOPE', 'quarantine path is outside RUNNER_TEMP');
+  }
+  const relative = target.slice(root.length + 1).split(path.sep);
+  const uid = typeof process.getuid === 'function' ? process.getuid() : undefined;
+  let rootStat;
+  try {
+    rootStat = lstatSync(root);
+  }
+  catch (error) {
+    throw new quarantine_path_ArchiveConfigurationError('QUARANTINE_IO', `cannot inspect RUNNER_TEMP: ${error.message}`);
+  }
+  checkDirectory(rootStat, uid, 'RUNNER_TEMP');
+  let current = root;
+  for (const component of ['', ...relative.slice(0, -1)]) {
+    if (component) current = path.join(current, component);
+    try {
+      const stat = lstatSync(current);
+      checkDirectory(stat, uid, 'quarantine ancestor');
+    }
+    catch (error) {
+      if (error.code === 'ENOENT') continue;
+      if (error instanceof quarantine_path_ArchiveConfigurationError) throw error;
+      throw new quarantine_path_ArchiveConfigurationError('QUARANTINE_IO', `cannot inspect quarantine ancestor: ${error.message}`);
+    }
+  }
+}
+
+function checkDirectory(stat, uid, label) {
+  if (stat.isSymbolicLink() || !stat.isDirectory()) {
+    throw new quarantine_path_ArchiveConfigurationError('QUARANTINE_SCOPE', `${label} is not a directory`);
+  }
+  if (uid !== undefined && stat.uid !== uid && stat.uid !== 0) {
+    throw new quarantine_path_ArchiveConfigurationError('QUARANTINE_OWNER', `${label} is not runner-owned`);
+  }
+  if ((stat.mode & 0o022) !== 0) {
+    throw new quarantine_path_ArchiveConfigurationError('QUARANTINE_SCOPE', `${label} is writable by another user`);
+  }
+}
+
+function quarantine_path_validateQuarantinePath(quarantinePath, runnerTemp = process.env.RUNNER_TEMP) {
+  if (typeof runnerTemp !== 'string' || runnerTemp.length === 0 || !path.isAbsolute(runnerTemp)) {
+    throw new quarantine_path_ArchiveConfigurationError('QUARANTINE_INPUT', 'RUNNER_TEMP is required');
+  }
+  if (typeof quarantinePath !== 'string' || !path.isAbsolute(quarantinePath)) {
+    throw new quarantine_path_ArchiveConfigurationError('QUARANTINE_INPUT', 'quarantine path must be absolute');
+  }
+  const root = path.resolve(runnerTemp);
+  const supplied = path.resolve(quarantinePath);
+  if (!/^[a-f0-9]{64}$/.test(path.basename(supplied))) {
+    throw new quarantine_path_ArchiveConfigurationError('QUARANTINE_INPUT', 'quarantine leaf must be lowercase SHA-256 hex');
+  }
+  const expectedParent = path.join(root, 'velnor', 'cache-staging');
+  if (path.dirname(supplied) !== expectedParent) {
+    throw new quarantine_path_ArchiveConfigurationError('QUARANTINE_SCOPE', 'quarantine path is outside the closed staging domain');
+  }
+  inspectOwnedDirectory(supplied, root);
+  try {
+    const stat = lstatSync(supplied);
+    if (stat.isSymbolicLink() || !stat.isDirectory()) {
+      throw new quarantine_path_ArchiveConfigurationError('QUARANTINE_SCOPE', 'quarantine path is not a directory');
+    }
+    throw new quarantine_path_ArchiveConfigurationError('QUARANTINE_EXISTS', 'quarantine path must be absent');
+  }
+  catch (error) {
+    if (error instanceof quarantine_path_ArchiveConfigurationError) throw error;
+    if (error.code !== 'ENOENT') {
+      throw new quarantine_path_ArchiveConfigurationError('QUARANTINE_IO', `cannot inspect quarantine path: ${error.message}`);
+    }
+  }
+  return supplied;
+}
+
+function ensureOwnedDirectory(directory, runnerTemp) {
+  const root = path.resolve(runnerTemp);
+  const relative = path.relative(root, directory);
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new quarantine_path_ArchiveConfigurationError('QUARANTINE_SCOPE', 'staging directory is outside RUNNER_TEMP');
+  }
+  let current = root;
+  const uid = typeof process.getuid === 'function' ? process.getuid() : undefined;
+  for (const component of relative.split(path.sep).filter(Boolean)) {
+    current = path.join(current, component);
+    try {
+      const stat = lstatSync(current);
+      checkDirectory(stat, uid, 'staging component');
+    }
+    catch (error) {
+      if (error instanceof quarantine_path_ArchiveConfigurationError) throw error;
+      if (error.code !== 'ENOENT') {
+        throw new quarantine_path_ArchiveConfigurationError('QUARANTINE_IO', `cannot inspect staging component: ${error.message}`);
+      }
+      mkdirSync(current, { mode: 0o700 });
+    }
+  }
+}
+
+function quarantine_path_createQuarantinePath(quarantinePath, descriptorDigest, runnerTemp = process.env.RUNNER_TEMP) {
+  if (typeof runnerTemp !== 'string' || runnerTemp.length === 0 || !path.isAbsolute(runnerTemp)) {
+    throw new quarantine_path_ArchiveConfigurationError('QUARANTINE_INPUT', 'RUNNER_TEMP is required');
+  }
+  if (!/^[a-f0-9]{64}$/.test(descriptorDigest || '')) {
+    throw new quarantine_path_ArchiveConfigurationError('QUARANTINE_INPUT', 'descriptor digest must be lowercase SHA-256 hex');
+  }
+  if (typeof quarantinePath !== 'string' || !path.isAbsolute(quarantinePath)) {
+    throw new quarantine_path_ArchiveConfigurationError('QUARANTINE_INPUT', 'quarantine path must be absolute');
+  }
+  const expected = path.join(path.resolve(runnerTemp), 'velnor', 'cache-staging', descriptorDigest);
+  const supplied = path.resolve(quarantinePath);
+  if (supplied !== expected) {
+    throw new quarantine_path_ArchiveConfigurationError('QUARANTINE_SCOPE', 'quarantine path is not the closed staging path');
+  }
+  quarantine_path_validateQuarantinePath(supplied, runnerTemp);
+  ensureOwnedDirectory(path.dirname(supplied), runnerTemp);
+  mkdirSync(supplied, { mode: 0o700 });
+  const finalStat = lstatSync(supplied);
+  if (!finalStat.isDirectory() || finalStat.isSymbolicLink() || (finalStat.mode & 0o077) !== 0) {
+    throw new quarantine_path_ArchiveConfigurationError('QUARANTINE_SCOPE', 'created quarantine directory is unsafe');
+  }
+  return supplied;
+}
+
+function quarantine_path_writeAdmissionManifest(quarantinePath, manifest) {
+  if (!manifest || manifest.schema !== 'velnor-cache-quarantine-v1' || !Array.isArray(manifest.entries)) {
+    throw new quarantine_path_ArchiveConfigurationError('QUARANTINE_MANIFEST', 'invalid admission manifest');
+  }
+  const target = path.join(quarantinePath, 'archive-admission.json');
+  if (path.dirname(target) !== path.resolve(quarantinePath)) {
+    throw new quarantine_path_ArchiveConfigurationError('QUARANTINE_SCOPE', 'manifest path escaped quarantine');
+  }
+  writeFileSync(target, `${JSON.stringify(manifest)}\n`, { encoding: 'utf8', flag: 'wx', mode: 0o600 });
+  return target;
+}
+
+;// CONCATENATED MODULE: ./node_modules/@actions/cache/lib/internal/foundation-python-inventory.mjs
+
+
+
+
+// Complete trees include bytecode: -B disables writes, not bytecode reads.
+const MAX_FILES = 100000;
+const MAX_BYTES = (/* unused pure expression or super */ null && (32 * 1024 ** 3));
+function sameStat(left, right) {
+  return ['dev', 'ino', 'mode', 'uid', 'gid', 'size', 'mtimeMs', 'ctimeMs']
+    .every(key => left[key] === right[key]);
+}
+function directoryChildren(filename, remaining) {
+  const children = [];
+  const directory = fs.opendirSync(filename);
+  try {
+    let entry;
+    while ((entry = directory.readSync()) !== null) {
+      if (children.length >= remaining) throw new Error('foundation directory bound');
+      children.push(entry.name);
+    }
+  } finally { directory.closeSync(); }
+  return children.sort();
+}
+function hashFile(filename, budget, expected) {
+  const fd = fs.openSync(filename, fs.constants.O_RDONLY |
+    fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
+  try {
+    const before = fs.fstatSync(fd);
+    if (!sameStat(expected, before) || !before.isFile() ||
+        before.uid !== 0 || (before.mode & 0o022) !== 0 ||
+        before.size > MAX_BYTES - budget.bytes)
+      throw new Error('foundation closure bound');
+    const digest = crypto.createHash('sha256');
+    const buffer = Buffer.alloc(1024 * 1024);
+    let count;
+    let bytes = 0;
+    while ((count = fs.readSync(fd, buffer)) !== 0) {
+      bytes += count;
+      if (bytes > before.size) throw new Error('foundation changed during read');
+      digest.update(buffer.subarray(0, count));
+    }
+    const after = fs.fstatSync(fd);
+    if (bytes !== before.size || !sameStat(before, after) ||
+        !sameStat(after, fs.lstatSync(filename)))
+      throw new Error('foundation changed during read');
+    budget.bytes += bytes;
+    return { size: bytes, sha256: digest.digest('hex') };
+  } finally { fs.closeSync(fd); }
+}
+
+function foundation_python_inventory_inventoryFoundation(roots) {
+  const entries = new Map();
+  const expanded = new Set();
+  const budget = { bytes: 0 };
+  function captureDirectory(filename) {
+    if (entries.has(filename)) return;
+    if (entries.size >= MAX_FILES) throw new Error('foundation entry bound');
+    let stat;
+    try { stat = fs.lstatSync(filename); }
+    catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+      entries.set(filename, { kind: 'ancestor-absent' });
+      if (filename !== '/') captureDirectory(path.dirname(filename));
+      return;
+    }
+    if (!stat.isDirectory() && !stat.isSymbolicLink())
+      throw new Error('foundation ancestor is not a directory');
+    if (stat.uid !== 0 || (!stat.isSymbolicLink() && (stat.mode & 0o022) !== 0))
+      throw new Error('foundation ancestor is mutable');
+    const identity = { mode: stat.mode & 0o7777, uid: stat.uid, gid: stat.gid };
+    entries.set(filename, stat.isSymbolicLink() ?
+      { ...identity, kind: 'ancestor-symlink', target: fs.readlinkSync(filename) } :
+      { ...identity, kind: 'ancestor-directory' });
+    if (filename !== '/') captureDirectory(path.dirname(filename));
+    if (stat.isSymbolicLink())
+      captureDirectory(path.resolve(path.dirname(filename), fs.readlinkSync(filename)));
+  }
+  function visit(filename) {
+    if (!path.isAbsolute(filename) || path.normalize(filename) !== filename)
+      throw new Error('foundation path');
+    if (expanded.has(filename)) return;
+    captureDirectory(path.dirname(filename));
+    if (entries.size >= MAX_FILES) throw new Error('foundation entry bound');
+    let stat;
+    try { stat = fs.lstatSync(filename); }
+    catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+      entries.set(filename, { kind: 'absent' });
+      expanded.add(filename);
+      return;
+    }
+    if (stat.uid !== 0 || (!stat.isSymbolicLink() && (stat.mode & 0o022) !== 0))
+      throw new Error('foundation is mutable by unprivileged users');
+    expanded.add(filename);
+    const identity = { mode: stat.mode & 0o7777, uid: stat.uid, gid: stat.gid };
+    if (stat.isSymbolicLink()) {
+      const target = fs.readlinkSync(filename);
+      entries.set(filename, { ...identity, kind: 'symlink', target });
+      visit(path.resolve(path.dirname(filename), target));
+    } else if (stat.isDirectory()) {
+      const children = directoryChildren(filename, MAX_FILES - entries.size);
+      entries.set(filename, { ...identity, kind: 'directory', children });
+      for (const child of children) visit(path.join(filename, child));
+      if (!sameStat(stat, fs.lstatSync(filename)) ||
+          JSON.stringify(children) !== JSON.stringify(directoryChildren(filename, MAX_FILES)))
+        throw new Error('foundation directory changed during traversal');
+    } else if (stat.isFile()) {
+      entries.set(filename, { ...identity, kind: 'file', ...hashFile(filename, budget, stat) });
+    } else throw new Error('foundation special file');
+  }
+  // Capture parent resolution for every entry, including followed link targets.
+  for (const root of roots) visit(root);
+  return [...entries].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)
+    .map(([filename, record]) => ({ path: filename, ...record }));
+}
+
+function foundation_python_inventory_canonicalInventory(value) { return JSON.stringify(value); }
+
+;// CONCATENATED MODULE: ./node_modules/@actions/cache/lib/internal/foundation-python-verifier.mjs
+
+
+// Observations become authority only after source review, immutable publication,
+// and exact hosted-image qualification. Caller records/digests are never accepted.
+const QUALIFIED_HOSTED_PROFILES = Object.freeze([]);
+
+function foundation_python_verifier_qualifiedFoundationPython() {
+  const image = {
+    platform: process.platform,
+    architecture: process.arch,
+    imageOS: process.env.ImageOS,
+    imageVersion: process.env.ImageVersion
+  };
+  const profile = QUALIFIED_HOSTED_PROFILES.find(candidate =>
+    canonicalInventory(candidate.host) === canonicalInventory(image));
+  if (!profile) return { available: false, reason: 'unqualified-foundation-image' };
+  try {
+    const actual = inventoryFoundation(profile.roots);
+    if (canonicalInventory(actual) !== canonicalInventory(profile.inventory))
+      return { available: false, reason: 'foundation-closure-mismatch' };
+    if (!actual.some(entry => entry.path === profile.executable && entry.kind === 'file'))
+      return { available: false, reason: 'foundation-closure-mismatch' };
+    return { available: true, executable: profile.executable,
+      argv: Object.freeze(['-I', '-S', '-B']),
+      cwd: '/',
+      environment: Object.freeze({ LANG: 'C', LC_ALL: 'C' }) };
+  } catch {
+    return { available: false, reason: 'foundation-closure-unavailable' };
+  }
+}
+
+;// CONCATENATED MODULE: ./node_modules/@actions/cache/lib/internal/appledouble-admission.mjs
+
+
+
+
+
+
+
+
+const METADATA_CONTAINER_SOURCE_SHA256 =
+  '3bba7f21fc728bea94c1d8202611537a1f8791585313e126a7a00b0249823fb1';
+const appledouble_admission_METADATA_CONTAINER_MAX_PREFIX_BYTES = (/* unused pure expression or super */ null && (1024 * 1024));
+const METADATA_CONTAINER_MAX_CANDIDATES = 256;
+const METADATA_CONTAINER_MAX_TOTAL_PREFIX_BYTES = (/* unused pure expression or super */ null && (64 * 1024 * 1024));
+const METADATA_CONTAINER_MAX_FILE_BYTES = (/* unused pure expression or super */ null && (10 * 1024 ** 3));
+const METADATA_CONTAINER_MAGIC = Buffer.from([0x00, 0x05, 0x16, 0x07]);
+const SOURCE_MAX_BYTES = (/* unused pure expression or super */ null && (1024 * 1024));
+const PREDICATE_TIMEOUT_MS = 30000;
+const PREDICATE_OUTPUT_BYTES = 1024;
+const PYTHON_DRIVER = (/* unused pure expression or super */ null && (`
+import sys
+def read_exact(count):
+    chunks = []
+    while count:
+        chunk = sys.stdin.buffer.read(count)
+        if not chunk:
+            raise RuntimeError('metadata frame')
+        chunks.append(chunk)
+        count -= len(chunk)
+    return b''.join(chunks)
+source_length = int.from_bytes(read_exact(8), 'big')
+if source_length > 1048576:
+    raise RuntimeError('metadata source bound')
+source = read_exact(source_length)
+size = int.from_bytes(read_exact(8), 'big')
+if size > 10737418240:
+    raise RuntimeError('metadata file bound')
+prefix_length = int.from_bytes(read_exact(8), 'big')
+if prefix_length > 1048576:
+    raise RuntimeError('metadata prefix bound')
+prefix = read_exact(prefix_length)
+if sys.stdin.buffer.read(1):
+    raise RuntimeError('metadata frame')
+namespace = {}
+exec(compile(source, '<metadata_container.py>', 'exec'), namespace)
+result = namespace['is_appledouble'](prefix, size)
+sys.stdout.buffer.write(b'1' if result else b'0')
+`));
+
+function unavailable(reason) {
+  const allowed = new Set([
+    'unqualified-foundation-image',
+    'foundation-closure-mismatch',
+    'foundation-closure-unavailable',
+    'source-integrity',
+    'execution'
+  ]);
+  const detail = allowed.has(reason) ? reason : 'foundation-unavailable';
+  return new ArchiveAdmissionError(
+    'ADMISSION_METADATA_PREDICATE_UNAVAILABLE',
+    `canonical metadata predicate unavailable: ${detail}`
+  );
+}
+
+function canonicalSourcePath() {
+  return fileURLToPath(__nccwpck_require__.ab + "metadata_container.py");
+}
+
+function verifyCanonicalSource() {
+  let stat;
+  let source;
+  try {
+    const filename = canonicalSourcePath();
+    stat = lstatSync(filename);
+    if (!stat.isFile() || stat.size > SOURCE_MAX_BYTES) throw unavailable('source-integrity');
+    source = readFileSync(filename);
+    if (source.length !== stat.size ||
+        createHash('sha256').update(source).digest('hex') !== METADATA_CONTAINER_SOURCE_SHA256) {
+      throw unavailable('source-integrity');
+    }
+  }
+  catch (error) {
+    if (error instanceof ArchiveAdmissionError) throw error;
+    throw unavailable('source-integrity');
+  }
+  return source;
+}
+
+function qualifiedRuntime() {
+  let runtime;
+  try { runtime = qualifiedFoundationPython(); }
+  catch (_error) { throw unavailable('execution'); }
+  if (!runtime?.available || typeof runtime.executable !== 'string' || !path.isAbsolute(runtime.executable) ||
+      JSON.stringify(runtime.argv) !== JSON.stringify(['-I', '-S', '-B']) ||
+      runtime.environment?.LANG !== 'C' || runtime.environment?.LC_ALL !== 'C' ||
+      Object.keys(runtime.environment).sort().join(',') !== 'LANG,LC_ALL') {
+    throw unavailable(runtime?.available === false ? runtime.reason : 'execution');
+  }
+  return runtime;
+}
+
+function frameInput(source, prefix, size) {
+  const encodeLength = value => {
+    const bytes = Buffer.alloc(8);
+    bytes.writeBigUInt64BE(BigInt(value));
+    return bytes;
+  };
+  return Buffer.concat([
+    encodeLength(source.length), source,
+    encodeLength(size), encodeLength(prefix.length), prefix
+  ]);
+}
+
+function invokePredicate(prefix, size) {
+  const source = verifyCanonicalSource();
+  const runtime = qualifiedRuntime();
+  let result;
+  try {
+    result = spawnSync(runtime.executable, [...runtime.argv, '-c', PYTHON_DRIVER], {
+      cwd: '/',
+      env: { LANG: 'C', LC_ALL: 'C' },
+      input: frameInput(source, prefix, size),
+      encoding: 'utf8',
+      timeout: PREDICATE_TIMEOUT_MS,
+      maxBuffer: PREDICATE_OUTPUT_BYTES,
+      shell: false,
+      windowsHide: true
+    });
+  }
+  catch (_error) {
+    throw unavailable('execution');
+  }
+  if (result.error || result.signal || result.status !== 0) throw unavailable('execution');
+  const output = typeof result.stdout === 'string' ? result.stdout.trim() : '';
+  if (output === '1') {
+    throw new ArchiveAdmissionError(
+      'ADMISSION_METADATA_APPLEDOUBLE',
+      'literal AppleDouble metadata container is forbidden'
+    );
+  }
+  if (output !== '0') throw unavailable('execution');
+}
+
+function accountCandidate(prefix, budget) {
+  if (!budget) return;
+  budget.candidateCount += 1;
+  budget.prefixBytes += prefix.length;
+  if (budget.candidateCount > METADATA_CONTAINER_MAX_CANDIDATES ||
+      budget.prefixBytes > METADATA_CONTAINER_MAX_TOTAL_PREFIX_BYTES) {
+    throw new ArchiveAdmissionError('ADMISSION_LIMIT', 'metadata predicate budget exceeded');
+  }
+}
+
+function appledouble_admission_inspectMetadataPrefix(prefix, size, budget) {
+  if (!Buffer.isBuffer(prefix) && !(prefix instanceof Uint8Array)) {
+    throw new ArchiveAdmissionError('ADMISSION_METADATA', 'metadata prefix is invalid');
+  }
+  if (!Number.isSafeInteger(size) || size < 0 || size > METADATA_CONTAINER_MAX_FILE_BYTES) {
+    throw new ArchiveAdmissionError('ADMISSION_LIMIT', 'metadata container exceeds maximum size');
+  }
+  const bytes = Buffer.from(prefix);
+  if (bytes.length > appledouble_admission_METADATA_CONTAINER_MAX_PREFIX_BYTES) {
+    throw new ArchiveAdmissionError('ADMISSION_LIMIT', 'metadata prefix exceeds maximum size');
+  }
+  if (bytes.length < METADATA_CONTAINER_MAGIC.length ||
+      !METADATA_CONTAINER_MAGIC.equals(bytes.subarray(0, METADATA_CONTAINER_MAGIC.length))) return;
+  accountCandidate(bytes, budget);
+  invokePredicate(bytes, size);
+}
+
+;// CONCATENATED MODULE: ./node_modules/@actions/cache/lib/internal/archive-private-copy.mjs
+
+
+
+
+function fail(message) {
+  throw new ArchiveAdmissionError('ADMISSION_RACE', message);
+}
+
+function regular(fd, expected, label) {
+  const stat = fstatSync(fd, { bigint: true });
+  if (!stat.isFile() || (stat.mode & 0o7000n) !== 0n || stat.nlink !== 1n) fail(`${label} is not an independent regular file`);
+  if (stat.size !== BigInt(expected.size) || Number(stat.mode & 0o7777n) !== expected.mode) fail(`${label} metadata differs`);
+  return stat;
+}
+
+function unchanged(before, after, label) {
+  for (const field of ['dev', 'ino', 'mode', 'nlink', 'size', 'mtimeNs', 'ctimeNs']) {
+    if (before[field] !== after[field]) fail(`${label} changed during copy`);
+  }
+}
+
+function samePath(filename, stat, label) {
+  const current = lstatSync(filename, { bigint: true });
+  if (!current.isFile() || current.dev !== stat.dev || current.ino !== stat.ino) fail(`${label} pathname changed`);
+}
+
+function closeDescriptor(fd) {
+  if (fd === undefined) return;
+  try { closeSync(fd); }
+  catch { fail('hardlink descriptor close failed'); }
+}
+
+function digest(fd, expected) {
+  const hash = createHash('sha256');
+  const buffer = Buffer.alloc(1024 * 1024);
+  let position = 0;
+  while (position < expected.size) {
+    const count = readSync(fd, buffer, 0, Math.min(buffer.length, expected.size - position), position);
+    if (count === 0) fail('hardlink destination ended early');
+    hash.update(buffer.subarray(0, count));
+    position += count;
+  }
+  if (hash.digest('hex') !== expected.content_sha256) fail('hardlink destination bytes differ');
+}
+
+function copyBytes(source, destination, expected) {
+  const hash = createHash('sha256');
+  const buffer = Buffer.alloc(1024 * 1024);
+  let position = 0;
+  while (position < expected.size) {
+    const count = readSync(source, buffer, 0, Math.min(buffer.length, expected.size - position), position);
+    if (count === 0) fail('hardlink source ended early');
+    hash.update(buffer.subarray(0, count));
+    let written = 0;
+    while (written < count) {
+      const amount = writeSync(destination, buffer, written, count - written, position + written);
+      if (amount <= 0) fail('hardlink destination write stopped');
+      written += amount;
+    }
+    position += count;
+  }
+  if (hash.digest('hex') !== expected.content_sha256) fail('hardlink source bytes differ');
+}
+
+// Caller validates all ancestors inside a fresh quiescent owned job namespace.
+// Node has no openat API: this does not claim safety against arbitrary same-UID
+// concurrent ancestor mutation. Final components are held no-follow descriptors.
+function archive_private_copy_copyPrivateRegular(sourcePath, destinationPath, expected) {
+  let source;
+  let destination;
+  try {
+    if (![constants.O_NOFOLLOW, constants.O_NONBLOCK].every(value => Number.isInteger(value) && value > 0)) fail('required descriptor flags unavailable');
+    source = openSync(sourcePath, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    const before = regular(source, expected, 'hardlink source');
+    samePath(sourcePath, before, 'hardlink source');
+    destination = openSync(destinationPath, constants.O_RDWR | constants.O_CREAT |
+      constants.O_EXCL | constants.O_NOFOLLOW | constants.O_NONBLOCK, 0o600);
+    copyBytes(source, destination, expected);
+    unchanged(before, regular(source, expected, 'hardlink source'), 'hardlink source');
+    samePath(sourcePath, before, 'hardlink source');
+    fchmodSync(destination, expected.mode);
+    const completed = regular(destination, expected, 'hardlink destination');
+    digest(destination, expected);
+    unchanged(completed, regular(destination, expected, 'hardlink destination'), 'hardlink destination');
+    samePath(destinationPath, completed, 'hardlink destination');
+  }
+  catch (error) {
+    if (error instanceof ArchiveAdmissionError) throw error;
+    throw new ArchiveAdmissionError('ADMISSION_RACE', 'hardlink descriptor copy failed');
+  }
+  finally {
+    try { closeDescriptor(destination); }
+    finally { closeDescriptor(source); }
+  }
+}
+
+;// CONCATENATED MODULE: ./node_modules/@actions/cache/lib/internal/archive-admission-policy.mjs
+
+
+
+
+const archive_admission_policy_ADMISSION_SCHEMA = 'velnor-cache-quarantine-v1';
+const archive_admission_policy_ADMISSION_LIMITS = Object.freeze({
+  maxArchiveBytes: 10 * 1024 * 1024 * 1024,
+  maxExpandedBytes: 10 * 1024 * 1024 * 1024,
+  maxEntries: 1_000_000,
+  maxPathBytes: 4096,
+  maxComponentBytes: 255,
+  maxLinkBytes: 4096,
+  maxDepth: 256,
+  maxDecompressionRatio: 1000
+});
+
+const compressionMagic = Object.freeze({
+  gzip: [0x1f, 0x8b],
+  zstd: [0x28, 0xb5, 0x2f, 0xfd],
+  'zstd-without-long': [0x28, 0xb5, 0x2f, 0xfd]
+});
+
+const archive_admission_policy_fileKinds = new Set(['File', 'OldFile', 'ContiguousFile']);
+const archive_admission_policy_linkKinds = new Set(['SymbolicLink', 'Link']);
+
+function archive_admission_policy_asAbsolutePath(value, name, baseDirectory = process.cwd()) {
+  if (typeof value !== 'string' || value.length === 0 || value.includes('\0')) {
+    archive_admission_errors_admissionFail('ADMISSION_INPUT', `${name} must be a non-empty path`);
+  }
+  if (value.includes('\\')) archive_admission_errors_admissionFail('ADMISSION_INPUT', `${name} cannot contain backslashes`);
+  if (/[?*\[\]{}!]/.test(value)) archive_admission_errors_admissionFail('ADMISSION_INPUT', `${name} must be an exact path`);
+  return external_node_path_namespaceObject.resolve(baseDirectory, value);
+}
+
+function archive_admission_policy_posixMemberPath(value, field) {
+  if (typeof value !== 'string' || value.length === 0 || value.includes('\0')) {
+    archive_admission_errors_admissionFail('ADMISSION_MEMBER', `${field} is empty or contains NUL`);
+  }
+  if (value.includes('\\') || value.startsWith('/')) {
+    archive_admission_errors_admissionFail('ADMISSION_MEMBER', `${field} is not a relative POSIX path`);
+  }
+  const withoutSlash = value.endsWith('/') ? value.slice(0, -1) : value;
+  if (withoutSlash.length === 0) archive_admission_errors_admissionFail('ADMISSION_MEMBER', `${field} is empty`);
+  const normalized = external_node_path_namespaceObject.posix.normalize(withoutSlash);
+  if (normalized !== withoutSlash || normalized.split('/').some(part => part === '')) {
+    archive_admission_errors_admissionFail('ADMISSION_MEMBER', `${field} is not canonical: ${JSON.stringify(value)}`);
+  }
+  const parts = normalized.split('/');
+  if (parts.length > archive_admission_policy_ADMISSION_LIMITS.maxDepth) archive_admission_errors_admissionFail('ADMISSION_LIMIT', `${field} exceeds maximum depth`);
+  if (Buffer.byteLength(normalized, 'utf8') > archive_admission_policy_ADMISSION_LIMITS.maxPathBytes) archive_admission_errors_admissionFail('ADMISSION_LIMIT', `${field} exceeds maximum length`);
+  if (parts.some(part => Buffer.byteLength(part, 'utf8') > archive_admission_policy_ADMISSION_LIMITS.maxComponentBytes)) archive_admission_errors_admissionFail('ADMISSION_LIMIT', `${field} has an oversized component`);
+  return normalized;
+}
+
+function archiveRootPath(workspace, value) {
+  const canonical = archive_admission_policy_asAbsolutePath(value, 'requested root', workspace);
+  const relative = external_node_path_namespaceObject.relative(workspace, canonical).replaceAll(external_node_path_namespaceObject.sep, '/');
+  return { canonical, archive: relative === '' ? '.' : archive_admission_policy_posixMemberPath(relative, 'requested root') };
+}
+
+function archive_admission_policy_requestedRoots(paths, workspace) {
+  if (!Array.isArray(paths) || paths.length === 0) archive_admission_errors_admissionFail('ADMISSION_INPUT', 'at least one requested root is required');
+  return paths.map((value, index) => {
+    const root = archiveRootPath(workspace, value);
+    return { index, original_root: root.canonical, archive_root: root.archive, quarantine_root: `roots/${index}` };
+  });
+}
+
+function archive_admission_policy_readMagic(file, compression) {
+  const expected = compressionMagic[compression];
+  if (!expected) admissionFail('ADMISSION_INPUT', `unsupported compression method: ${compression}`);
+  const fd = openSync(file, 'r');
+  try {
+    const header = Buffer.alloc(expected.length);
+    const count = readSync(fd, header, 0, header.length, 0);
+    if (count !== expected.length || !expected.every((byte, index) => header[index] === byte)) {
+      admissionFail('ADMISSION_FORMAT', `archive header does not match ${compression}`);
+    }
+  }
+  finally {
+    closeSync(fd);
+  }
+}
+
+function archive_admission_policy_rootMatch(member, roots) {
+  return roots
+    .filter(root => root.archive_root === '.' || member === root.archive_root || member.startsWith(`${root.archive_root}/`))
+    .sort((left, right) => right.archive_root.length - left.archive_root.length || left.index - right.index)[0];
+}
+
+function archive_admission_policy_rootRelative(member, root) {
+  if (root.archive_root === '.') return member === '.' ? '' : member;
+  if (member === root.archive_root) return '';
+  return member.slice(root.archive_root.length + 1);
+}
+
+function archive_admission_policy_validateMode(entry) {
+  const mode = typeof entry.mode === 'number' && Number.isSafeInteger(entry.mode) ? entry.mode & 0o7777 : 0;
+  if ((mode & 0o7000) !== 0) admissionFail('ADMISSION_MEMBER', `special mode bits are forbidden: ${entry.path}`);
+  return mode;
+}
+
+function archive_admission_policy_validateLinkPath(value) {
+  if (typeof value !== 'string' || value.length === 0 || value.includes('\0') || value.includes('\\') || value.startsWith('/') || /^[A-Za-z]:/.test(value)) {
+    admissionFail('ADMISSION_LINK', 'link target is invalid');
+  }
+  if (Buffer.byteLength(value, 'utf8') > archive_admission_policy_ADMISSION_LIMITS.maxLinkBytes) admissionFail('ADMISSION_LIMIT', 'link target exceeds maximum length');
+  return value;
+}
+
+function structuralDirectories(roots) {
+  const result = new Set(['.']);
+  for (const root of roots) {
+    const components = root.archive_root.split('/');
+    let prefix = '.';
+    for (const component of components.slice(0, -1)) {
+      prefix = path.posix.join(prefix, component);
+      result.add(prefix);
+    }
+  }
+  return result;
+}
+
+function archive_admission_policy_resolveSymlink(member, link, recordByPath, roots) {
+  const structural = structuralDirectories(roots);
+  const directory = value => {
+    const record = recordByPath.get(value);
+    if (record ? record.kind !== 'directory' : !structural.has(value)) {
+      admissionFail('ADMISSION_LINK', 'raw symlink target traverses an unadmitted directory');
+    }
+  };
+  let current = path.posix.dirname(member);
+  let initial = '.';
+  directory(initial);
+  for (const component of current.split('/')) {
+    if (component === '.') continue;
+    initial = path.posix.join(initial, component);
+    directory(initial);
+  }
+  const components = archive_admission_policy_validateLinkPath(link).split('/');
+  for (let index = 0; index < components.length; index++) {
+    const component = components[index];
+    if (component === '' || component === '.' || component === '..') {
+      directory(current);
+      if (component === '..') current = path.posix.join(current, '..');
+    }
+    else {
+      current = path.posix.join(current, component);
+    }
+    if (index < components.length - 1) directory(current);
+  }
+  return archive_admission_policy_posixMemberPath(current, 'symlink target');
+}
+
+function archive_admission_policy_checkArchiveFile(file) {
+  const archive = archive_admission_policy_asAbsolutePath(file, 'archive');
+  let stat;
+  try {
+    stat = statSync(archive);
+  }
+  catch (error) {
+    admissionFail('ADMISSION_IO', `cannot stat archive: ${error.message}`);
+  }
+  if (!stat.isFile()) admissionFail('ADMISSION_IO', 'archive is not a regular file');
+  if (!Number.isSafeInteger(stat.size) || stat.size > archive_admission_policy_ADMISSION_LIMITS.maxArchiveBytes) admissionFail('ADMISSION_LIMIT', 'compressed archive exceeds maximum size');
+  return { archive, size: stat.size };
+}
+
+const allowedPaxKeys = new Set([
+  'atime', 'ctime', 'mtime', 'charset', 'comment', 'gid', 'uid', 'gname',
+  'uname', 'linkpath', 'path', 'size', 'mode', 'dev', 'ino', 'nlink',
+  'SCHILY.dev', 'SCHILY.ino', 'SCHILY.nlink'
+]);
+
+function archive_admission_policy_validatePaxMetadata(metadata) {
+  for (const line of String(metadata).split('\n')) {
+    if (line === '') continue;
+    const separator = line.indexOf(' ');
+    const equals = line.indexOf('=', separator + 1);
+    if (separator < 1 || equals <= separator + 1) admissionFail('ADMISSION_METADATA', 'malformed PAX metadata');
+    const key = line.slice(separator + 1, equals);
+    if (!allowedPaxKeys.has(key)) admissionFail('ADMISSION_METADATA', `unsupported PAX metadata key: ${key}`);
+  }
+}
+
+;// CONCATENATED MODULE: ./node_modules/@actions/cache/lib/internal/archive-hardlinks.mjs
+
+
+
+
+
+
+function archive_hardlinks_memberKind(entry, member) {
+  if (entry.type === 'Directory') return 'directory';
+  if (fileKinds.has(entry.type)) return 'file';
+  if (entry.type === 'SymbolicLink') return 'symlink';
+  if (entry.type === 'Link') return 'hardlink';
+  admissionFail('ADMISSION_MEMBER', `unsupported member type: ${entry.type}`);
+}
+
+function archive_hardlinks_memberSize(entry, member) {
+  if (typeof entry.size !== 'number' || !Number.isSafeInteger(entry.size) || entry.size < 0) {
+    admissionFail('ADMISSION_MEMBER', `invalid member size: ${member}`);
+  }
+  return entry.size;
+}
+
+function archive_hardlinks_resolveHardlinks(records, recordByPath, state, maxExpandedBytes) {
+  const hardlinkPaths = new Set(records.filter(record => record.kind === 'hardlink').map(record => record.path));
+  for (const record of records) {
+    if (record.kind !== 'hardlink') continue;
+    if (record.size !== 0) admissionFail('ADMISSION_LINK', `hardlink has nonzero size: ${record.path}`);
+    const targetPath = posixMemberPath(path.posix.normalize(record.link_target), 'hardlink target');
+    const target = recordByPath.get(targetPath);
+    if (!target || target.kind !== 'file' || hardlinkPaths.has(target.path)) {
+      admissionFail('ADMISSION_LINK', `hardlink target is not a direct regular file: ${record.path}`);
+    }
+    if (target.mode !== record.mode || !target.content_sha256) {
+      admissionFail('ADMISSION_LINK', `hardlink target metadata differs: ${record.path}`);
+    }
+    state.expandedBytes += target.size;
+    if (state.expandedBytes > maxExpandedBytes) {
+      admissionFail('ADMISSION_LIMIT', 'expanded archive exceeds maximum size');
+    }
+    record.hardlink_wire_target = record.link_target;
+    record.hardlink_target = target.path;
+    record.hardlink_source_quarantine_path = target.quarantine_path;
+    record.kind = 'file';
+    record.size = target.size;
+    record.content_sha256 = target.content_sha256;
+    record.link_target = null;
+  }
+}
+
+function archive_hardlinks_validateMemberAncestors(records, recordByPath) {
+  for (const record of records) {
+    const parts = record.path.split('/');
+    let ancestorPath = '';
+    for (let index = 0; index < parts.length - 1; index += 1) {
+      ancestorPath = ancestorPath ? `${ancestorPath}/${parts[index]}` : parts[index];
+      const ancestor = recordByPath.get(ancestorPath);
+      if (ancestor && ancestor.kind !== 'directory') {
+        admissionFail('ADMISSION_MEMBER', `member ancestor is not a directory: ${record.path}`);
+      }
+    }
+  }
+}
+
+function archive_hardlinks_copyHardlinkMetadata(output, record) {
+  if (!record.hardlink_target) return;
+  Object.defineProperties(output, {
+    hardlink_target: { value: record.hardlink_target, enumerable: false },
+    hardlink_wire_target: { value: record.hardlink_wire_target, enumerable: false },
+    hardlink_source_quarantine_path: {
+      value: record.hardlink_source_quarantine_path, enumerable: false
+    }
+  });
+}
+
+function normalizedRecordPath(value) {
+  return posixMemberPath(String(value), 'member path');
+}
+
+function archive_hardlinks_quarantineFilter(quarantinePath, entries) {
+  return (_entryPath, entry) => {
+    const record = entries.get(normalizedRecordPath(entry.path));
+    if (!record) admissionFail('ADMISSION_FOREIGN', `member changed during quarantine extraction: ${entry.path}`);
+    if (record.hardlink_target) {
+      assertHardlinkEntry(entry, record);
+      return false;
+    }
+    assertEntryMatches(entry, record);
+    entry.path = record.quarantine_path;
+    if (record.kind === 'symlink') {
+      const target = path.resolve(quarantinePath, record.resolved_link_path);
+      const linkParent = path.dirname(path.resolve(quarantinePath, record.quarantine_path));
+      entry.linkpath = path.relative(linkParent, target).replaceAll(path.sep, '/');
+    }
+    return true;
+  };
+}
+
+function assertHardlinkEntry(entry, record) {
+  if (entry.type !== 'Link' || archive_hardlinks_memberSize(entry, record.path) !== 0 ||
+      validateMode(entry) !== record.mode || entry.linkpath !== record.hardlink_wire_target) {
+    admissionFail('ADMISSION_RACE', `archive hardlink changed after admission: ${recordName(record)}`);
+  }
+}
+
+function recordName(record) {
+  return record.member ?? record.path;
+}
+
+function assertEntryMatches(entry, record) {
+  if (archive_hardlinks_memberKind(entry, record.path) !== record.kind || archive_hardlinks_memberSize(entry, record.path) !== record.size) {
+    admissionFail('ADMISSION_RACE', `archive member changed after admission: ${recordName(record)}`);
+  }
+  if (validateMode(entry) !== record.mode) admissionFail('ADMISSION_RACE', `archive mode changed after admission: ${recordName(record)}`);
+  if (record.kind === 'symlink' && entry.linkpath !== record.link_target) {
+    admissionFail('ADMISSION_RACE', `archive link changed after admission: ${recordName(record)}`);
+  }
+}
+
+function privatePath(root, relative, label) {
+  const target = path.resolve(root, relative);
+  if (target !== root && !target.startsWith(`${root}${path.sep}`)) {
+    throw new ArchiveAdmissionError('ADMISSION_RACE', `${label} escaped quarantine`);
+  }
+  return target;
+}
+
+function privateRealPath(root, target, label) {
+  const relative = path.relative(root, target);
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new ArchiveAdmissionError('ADMISSION_RACE', `${label} escaped quarantine`);
+  }
+  let current = root;
+  for (const component of relative.split(path.sep).filter(Boolean)) {
+    current = path.join(current, component);
+    let stat;
+    try { stat = lstatSync(current); }
+    catch (error) { throw new ArchiveAdmissionError('ADMISSION_RACE', `${label} is unavailable: ${error.message}`); }
+    if (stat.isSymbolicLink()) throw new ArchiveAdmissionError('ADMISSION_RACE', `${label} has a symlink ancestor`);
+  }
+  let resolved;
+  try { resolved = realpathSync(target); }
+  catch (error) { throw new ArchiveAdmissionError('ADMISSION_RACE', `${label} is unavailable: ${error.message}`); }
+  if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) {
+    throw new ArchiveAdmissionError('ADMISSION_RACE', `${label} escaped quarantine`);
+  }
+  return resolved;
+}
+
+function copyHardlink(root, record) {
+  const source = privatePath(root, record.hardlink_source_quarantine_path, 'hardlink source');
+  const destination = privatePath(root, record.quarantine_path, 'hardlink destination');
+  privateRealPath(root, source, 'hardlink source');
+  privateRealPath(root, path.dirname(destination), 'hardlink destination parent');
+  copyPrivateRegular(source, destination, record);
+  privateRealPath(root, destination, 'hardlink destination');
+}
+
+async function archive_hardlinks_materializeHardlinks(quarantinePath, entries) {
+  let root;
+  try { root = realpathSync(path.resolve(quarantinePath)); }
+  catch (error) { throw new ArchiveAdmissionError('ADMISSION_RACE', `quarantine is unavailable: ${error.message}`); }
+  for (const record of entries) {
+    if (record.hardlink_target) await copyHardlink(root, record);
+  }
+}
+
+;// CONCATENATED MODULE: ./node_modules/@actions/cache/lib/internal/archive-admission.mjs
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function recordArchiveEntry(entry, roots, records, recordByPath, recordByAlias, state, failOnce) {
+  if (records.length >= ADMISSION_LIMITS.maxEntries) admissionFail('ADMISSION_LIMIT', 'archive has too many members');
+  const member = posixMemberPath(entry.path, 'member path');
+  const root = rootMatch(member, roots);
+  if (!root) admissionFail('ADMISSION_FOREIGN', `member is outside requested roots: ${member}`);
+  if (recordByPath.has(member)) admissionFail('ADMISSION_MEMBER', `duplicate member: ${member}`);
+  const mode = validateMode(entry);
+  const relative = rootRelative(member, root);
+  validateRootRelative(relative, member);
+  const kind = memberKind(entry, member);
+  const size = memberSize(entry, member);
+  if (kind === 'file') {
+    state.expandedBytes += size;
+    if (state.expandedBytes > ADMISSION_LIMITS.maxExpandedBytes) admissionFail('ADMISSION_LIMIT', 'expanded archive exceeds maximum size');
+  }
+  const record = {
+    path: member,
+    root_index: root.index,
+    relative_path: relative,
+    quarantine_path: relative === '' ? root.quarantine_root : `${root.quarantine_root}/${relative}`,
+    kind,
+    mode,
+    size,
+    content_sha256: null,
+    link_target: null,
+    resolved_link_path: null
+  };
+  if (linkKinds.has(entry.type)) record.link_target = validateLinkPath(entry.linkpath);
+  const alias = quarantineAlias(record.quarantine_path);
+  const previous = recordByAlias.get(alias);
+  if (previous && previous.path !== member) admissionFail('ADMISSION_MEMBER', `path aliases another member: ${member}`);
+  records.push(record);
+  recordByPath.set(member, record);
+  recordByAlias.set(alias, record);
+  hashEntry(entry, record, state, failOnce);
+  entry.resume();
+}
+
+function quarantineAlias(value) {
+  try {
+    return value.split('/').map(component => component.normalize('NFKD').toLocaleLowerCase('en-US')).join('/');
+  }
+  catch (error) {
+    admissionFail('ADMISSION_MEMBER', `member path has invalid Unicode: ${error.message}`);
+  }
+}
+
+function validateRootRelative(relative, member) {
+  if (relative === '' || !relative.split('/').includes('..')) return;
+  admissionFail('ADMISSION_FOREIGN', `member escapes requested root: ${member}`);
+}
+
+function hashEntry(entry, record, state, failOnce) {
+  if (record.kind !== 'file') return;
+  const contentHash = createHash('sha256');
+  const prefixParts = [];
+  let prefixBytes = 0;
+  entry.on('data', chunk => {
+    contentHash.update(chunk);
+    if (prefixBytes >= METADATA_CONTAINER_MAX_PREFIX_BYTES) return;
+    const count = Math.min(chunk.length, METADATA_CONTAINER_MAX_PREFIX_BYTES - prefixBytes);
+    prefixParts.push(chunk.subarray(0, count));
+    prefixBytes += count;
+  });
+  entry.on('end', () => {
+    try {
+      inspectMetadataPrefix(Buffer.concat(prefixParts, prefixBytes), record.size, state.metadata);
+      record.content_sha256 = contentHash.digest('hex');
+    }
+    catch (error) {
+      failOnce(error);
+    }
+  });
+}
+
+function parseArchive(file, compression, roots) {
+  const archiveHash = createHash('sha256');
+  const records = [];
+  const recordByPath = new Map();
+  const recordByAlias = new Map();
+  const state = { expandedBytes: 0, metadata: { candidateCount: 0, prefixBytes: 0 } };
+  let stream;
+  let settled = false;
+  return new Promise((resolve, reject) => {
+    const failOnce = error => {
+      if (settled) return;
+      settled = true;
+      stream?.destroy();
+      const admissionError = error instanceof ArchiveAdmissionError
+        ? error
+        : new ArchiveAdmissionError(decodeErrorCode(error), error?.message || String(error));
+      reject(admissionError);
+    };
+    const parser = new Parser({
+      strict: true,
+      maxDecompressionRatio: ADMISSION_LIMITS.maxDecompressionRatio,
+      maxMetaEntrySize: 1024 * 1024,
+      onReadEntry: entry => readEntry(entry, roots, records, recordByPath, recordByAlias, state, failOnce)
+    });
+    parser.on('meta', metadata => catchAdmission(() => validatePaxMetadata(metadata), failOnce));
+    parser.on('ignoredEntry', entry => {
+      if (entry?.meta) failOnce(new ArchiveAdmissionError('ADMISSION_METADATA', 'PAX metadata exceeds maximum size'));
+    });
+    parser.on('error', failOnce);
+    parser.on('end', () => {
+      if (settled) return;
+      try {
+        resolveHardlinks(records, recordByPath, state, ADMISSION_LIMITS.maxExpandedBytes);
+        validateMemberAncestors(records, recordByPath);
+        validateLinks(records, recordByPath, roots);
+        settled = true;
+        resolve({ records, expandedBytes: state.expandedBytes, archive_sha256: archiveHash.digest('hex') });
+      }
+      catch (error) {
+        failOnce(error);
+      }
+    });
+    try {
+      const decoded = decodeArchive(file, compression, {
+        maxDecodedBytes: ADMISSION_LIMITS.maxExpandedBytes,
+        maxRatio: ADMISSION_LIMITS.maxDecompressionRatio
+      });
+      stream = decoded.stream;
+      decoded.source.on('data', chunk => archiveHash.update(chunk));
+      stream.on('error', failOnce);
+      stream.pipe(parser);
+    }
+    catch (error) {
+      failOnce(error);
+    }
+  });
+}
+
+function readEntry(entry, roots, records, recordByPath, recordByAlias, state, failOnce) {
+  try {
+    recordArchiveEntry(entry, roots, records, recordByPath, recordByAlias, state, failOnce);
+  }
+  catch (error) {
+    failOnce(error);
+    entry.resume();
+  }
+}
+
+function catchAdmission(action, failOnce) {
+  try {
+    action();
+  }
+  catch (error) {
+    failOnce(error);
+  }
+}
+
+function decodeErrorCode(error) {
+  if (error?.code === 'ARCHIVE_DECODE_LIMIT' || error?.code === 'ARCHIVE_DECODE_RATIO') return 'ADMISSION_LIMIT';
+  return 'ADMISSION_FORMAT';
+}
+
+function validateLinks(records, recordByPath, roots) {
+  for (const record of records) {
+    if (record.kind !== 'symlink') continue;
+    const targetPath = resolveSymlink(record.path, record.link_target, recordByPath, roots);
+    const target = recordByPath.get(targetPath);
+    if (!target || !['file', 'directory'].includes(target.kind)) {
+      admissionFail('ADMISSION_LINK', `symlink target is outside admitted closure: ${record.path}`);
+    }
+    record.resolved_link_path = target.quarantine_path;
+  }
+}
+
+async function extractDecodedArchive(archivePath, compression, target, entries) {
+  let decoded;
+  try {
+    decoded = decodeArchive(archivePath, compression, {
+      maxDecodedBytes: ADMISSION_LIMITS.maxExpandedBytes,
+      maxRatio: ADMISSION_LIMITS.maxDecompressionRatio
+    });
+  }
+  catch (error) {
+    throw new ArchiveAdmissionError(decodeErrorCode(error), error.message || String(error));
+  }
+  const unpack = extract({
+    cwd: target,
+    strict: true,
+    preservePaths: false,
+    preserveOwner: false,
+    noMtime: true,
+    chmod: true,
+    processUmask: 0o022,
+    dmode: 0o700,
+    fmode: 0o600,
+    maxDepth: ADMISSION_LIMITS.maxDepth,
+    maxDecompressionRatio: ADMISSION_LIMITS.maxDecompressionRatio,
+    filter: quarantineFilter(target, entries)
+  });
+  await pipeDecoder(decoded, unpack);
+}
+
+async function snapshotArchive(sourcePath, quarantinePath, manifest) {
+  const snapshot = path.join(quarantinePath, '.archive-input');
+  const hash = createHash('sha256');
+  let bytes = 0;
+  const bounded = new Transform({
+    transform(chunk, _encoding, callback) {
+      bytes += chunk.length;
+      if (bytes > ADMISSION_LIMITS.maxArchiveBytes) {
+        callback(new ArchiveAdmissionError('ADMISSION_LIMIT', 'archive changed beyond size limit'));
+        return;
+      }
+      hash.update(chunk);
+      callback(null, chunk);
+    }
+  });
+  try {
+    await pipeline(createReadStream(sourcePath), bounded, createWriteStream(snapshot, { flags: 'wx', mode: 0o600 }));
+  }
+  catch (error) {
+    rmSync(snapshot, { force: true });
+    throw error instanceof ArchiveAdmissionError
+      ? error
+      : new ArchiveAdmissionError('ADMISSION_IO', error.message || String(error));
+  }
+  if (bytes !== manifest.archive_bytes || hash.digest('hex') !== manifest.archive_sha256) {
+    rmSync(snapshot, { force: true });
+    throw new ArchiveAdmissionError('ADMISSION_RACE', 'archive changed after admission');
+  }
+  return snapshot;
+}
+
+function pipeDecoder(decoded, unpack) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = error => {
+      if (settled) return;
+      settled = true;
+      if (error) {
+        decoded.stream.destroy();
+        unpack.destroy(error);
+        reject(error instanceof ArchiveAdmissionError ? error : new ArchiveAdmissionError(decodeErrorCode(error), error.message));
+      }
+      else resolve();
+    };
+    decoded.stream.on('error', finish);
+    unpack.on('error', finish);
+    unpack.on('close', () => finish());
+    decoded.stream.pipe(unpack);
+  });
+}
+
+async function archive_admission_extractAdmittedArchive(archivePath, manifest, quarantinePath) {
+  if (!manifest || manifest.schema !== ADMISSION_SCHEMA || !Array.isArray(manifest.entries)) {
+    throw new ArchiveAdmissionError('ADMISSION_MANIFEST', 'invalid admission manifest');
+  }
+  if (typeof quarantinePath !== 'string' || !path.isAbsolute(quarantinePath)) {
+    throw new ArchiveConfigurationError('QUARANTINE_INPUT', 'quarantine path must be absolute');
+  }
+  const target = path.resolve(quarantinePath);
+  let stat;
+  try {
+    stat = lstatSync(target);
+  }
+  catch (error) {
+    throw new ArchiveAdmissionError('ADMISSION_QUARANTINE', `cannot inspect quarantine directory: ${error.message}`);
+  }
+  const uid = typeof process.getuid === 'function' ? process.getuid() : undefined;
+  if (uid !== undefined && stat.uid !== uid && stat.uid !== 0) throw new ArchiveConfigurationError('QUARANTINE_OWNER', 'quarantine directory is not runner-owned');
+  if (stat.isSymbolicLink() || !stat.isDirectory() || (stat.mode & 0o077) !== 0) {
+    throw new ArchiveAdmissionError('ADMISSION_QUARANTINE', 'quarantine directory is unsafe');
+  }
+  try {
+    if (readdirSync(target).length !== 0) throw new ArchiveAdmissionError('ADMISSION_QUARANTINE', 'quarantine directory must be empty');
+  }
+  catch (error) {
+    if (error instanceof ArchiveAdmissionError) throw error;
+    throw new ArchiveAdmissionError('ADMISSION_QUARANTINE', `cannot inspect quarantine directory: ${error.message}`);
+  }
+  const snapshot = await snapshotArchive(archivePath, target, manifest);
+  try {
+    const roots = manifest.ordered_roots.map(root => root.original_root);
+    const current = await archive_admission_admitArchive(snapshot, manifest.compression, roots, { workspace: manifest.workspace });
+    if (JSON.stringify(current) !== JSON.stringify(manifest)) throw new ArchiveAdmissionError('ADMISSION_RACE', 'admission manifest changed after parsing');
+    await extractDecodedArchive(snapshot, manifest.compression, target, new Map(current.entries.map(entry => [entry.member, entry])));
+    await materializeHardlinks(target, current.entries);
+    return current;
+  }
+  finally {
+    rmSync(snapshot, { force: true });
+  }
+}
+
+async function archive_admission_admitArchive(archivePath, compressionMethod, paths, options = {}) {
+  const { archive, size } = checkArchiveFile(archivePath);
+  const workspace = asAbsolutePath(options.workspace || process.env.GITHUB_WORKSPACE || process.cwd(), 'workspace');
+  const roots = requestedRoots(paths, workspace);
+  readMagic(archive, compressionMethod);
+  const parsed = await parseArchive(archive, compressionMethod, roots);
+  const entries = parsed.records.map(entry => {
+    const output = {
+      member: entry.path,
+      original_root_index: entry.root_index,
+      relative_path: entry.relative_path,
+      quarantine_path: entry.quarantine_path,
+      kind: entry.kind,
+      mode: entry.mode,
+      size: entry.size,
+      content_sha256: entry.content_sha256,
+      link_target: entry.link_target,
+      resolved_link_path: entry.resolved_link_path
+    };
+    copyHardlinkMetadata(output, entry);
+    return output;
+  });
+  return {
+    schema: ADMISSION_SCHEMA,
+    archive_sha256: parsed.archive_sha256,
+    archive_bytes: size,
+    compression: compressionMethod,
+    workspace,
+    ordered_roots: roots,
+    entries,
+    totals: { entry_count: parsed.records.length, expanded_bytes: parsed.expandedBytes }
+  };
+}
+
+
+
+;// CONCATENATED MODULE: ./node_modules/@actions/cache/lib/internal/archive-output.mjs
+
+
+
+
+
+function archive_output_fail() {
+  throw new quarantine_path_ArchiveConfigurationError('ARCHIVE_OUTPUT_OVERLAP',
+    'archive control files must be outside selected source roots');
+}
+
+function same(left, right) {
+  return left.dev === right.dev && left.ino === right.ino;
+}
+
+function hold(actual, directory) {
+  if (!external_node_fs_namespaceObject.constants.O_NOFOLLOW || !external_node_fs_namespaceObject.constants.O_NONBLOCK || !external_node_fs_namespaceObject.constants.O_DIRECTORY) archive_output_fail();
+  const flags = external_node_fs_namespaceObject.constants.O_RDONLY | external_node_fs_namespaceObject.constants.O_NOFOLLOW | external_node_fs_namespaceObject.constants.O_NONBLOCK |
+    (directory ? external_node_fs_namespaceObject.constants.O_DIRECTORY : 0);
+  const fd = (0,external_node_fs_namespaceObject.openSync)(actual, flags);
+  try {
+    const identity = (0,external_node_fs_namespaceObject.fstatSync)(fd, { bigint: true });
+    if (directory ? !identity.isDirectory() : !identity.isFile()) archive_output_fail();
+    return { fd, actual, identity };
+  } catch (error) {
+    (0,external_node_fs_namespaceObject.closeSync)(fd);
+    throw error;
+  }
+}
+
+function checkHeld(held) {
+  for (const entry of held) {
+    if (!same(entry.identity, (0,external_node_fs_namespaceObject.fstatSync)(entry.fd, { bigint: true })) ||
+        !same(entry.identity, (0,external_node_fs_namespaceObject.lstatSync)(entry.actual, { bigint: true }))) archive_output_fail();
+  }
+}
+
+// Fresh quiescent job namespace required: Node has no dirfd-relative openat.
+// Actual directory identities, rather than lexical prefixes, prove containment.
+function validateArchiveOutput(folder, sources, workspace, controlNames) {
+  const roots = archive_admission_policy_requestedRoots(sources, workspace);
+  const held = [];
+  try {
+    const selected = roots.map(root => {
+      const actual = external_node_fs_namespaceObject.realpathSync.native(root.original_root);
+      const kind = (0,external_node_fs_namespaceObject.statSync)(actual, { bigint: true });
+      const entry = hold(actual, kind.isDirectory());
+      held.push(entry);
+      return entry;
+    });
+    const actualFolder = external_node_fs_namespaceObject.realpathSync.native(folder);
+    let ancestor = actualFolder;
+    while (true) {
+      const entry = hold(ancestor, true);
+      held.push(entry);
+      if (selected.some(root => same(root.identity, entry.identity))) archive_output_fail();
+      const parent = external_node_path_namespaceObject.dirname(ancestor);
+      if (parent === ancestor) break;
+      ancestor = parent;
+    }
+    for (const name of controlNames) {
+      const candidate = external_node_path_namespaceObject.join(actualFolder, name);
+      let existing;
+      try { existing = (0,external_node_fs_namespaceObject.lstatSync)(candidate, { bigint: true }); }
+      catch (error) { if (error.code === 'ENOENT') continue; throw error; }
+      // Creator owns fresh regular control files; aliases are never overwritten.
+      if (!existing.isFile() || existing.nlink !== 1n) archive_output_fail();
+      const entry = hold(candidate, false);
+      held.push(entry);
+      if (selected.some(root => same(root.identity, entry.identity))) archive_output_fail();
+    }
+    checkHeld(held);
+  } finally {
+    for (const entry of held.reverse()) (0,external_node_fs_namespaceObject.closeSync)(entry.fd);
+  }
+}
+
+;// CONCATENATED MODULE: ./node_modules/@actions/cache/lib/internal/tar.js
+
+
+
+
+
+
+
+
+
+
+const ownedArchiveVersion = 'velnor-cache-archive-v1';
+if (!['linux', 'darwin'].includes(process.platform)) {
+  throw new Error(`${ownedArchiveVersion}: unsupported platform ${process.platform}`);
+}
+
+function archivePathEntries() {
+  return ['/usr/bin', '/bin', '/usr/sbin', '/sbin'];
+}
+
+function archiveEnvironment() {
+  return {
+    PATH: archivePathEntries().join(external_node_path_namespaceObject.delimiter),
+    LANG: 'C',
+    LC_ALL: 'C',
+    COPYFILE_DISABLE: '1'
+  };
+}
+
+function findArchiveExecutable() {
+  const candidate = '/usr/bin/tar';
+  try {
+    (0,external_node_fs_namespaceObject.accessSync)(candidate, external_node_fs_namespaceObject.constants.X_OK);
+    return candidate;
+  }
+  catch (_error) {
+    return undefined;
+  }
+}
+
+function readArchiveVersion(executable) {
+  return (0,external_node_child_process_namespaceObject.execFileSync)(executable, ['--version'], {
+    encoding: 'utf8',
+    env: archiveEnvironment(),
+    stdio: ['ignore', 'pipe', 'pipe']
+  });
+}
+
+async function getTarPath() {
+  const executable = findArchiveExecutable();
+  if (!executable) throw new Error(`${ownedArchiveVersion}: qualified tar executable not found`);
+  const version = readArchiveVersion(executable).toLowerCase();
+  if (process.platform === 'darwin' && !version.includes('bsdtar')) {
+    throw new Error(`${ownedArchiveVersion}: expected BSD tar on macOS`);
+  }
+  if (process.platform === 'linux' && !version.includes('gnu tar')) {
+    throw new Error(`${ownedArchiveVersion}: expected GNU tar on Linux`);
+  }
+  return { path: executable, type: process.platform === 'darwin' ? ArchiveToolType.BSD : ArchiveToolType.GNU };
+}
+
+function getWorkingDirectory() {
+  return process.env.GITHUB_WORKSPACE || process.cwd();
+}
+
+function getTarArgs(tarPath, compressionMethod, type, archivePath, manifestPath) {
+  if (![CompressionMethod.Gzip, CompressionMethod.ZstdWithoutLong].includes(compressionMethod)) {
+    throw new Error(`${ownedArchiveVersion}: unsupported compression method ${compressionMethod}`);
+  }
+  const args = [];
+  const workingDirectory = getWorkingDirectory();
+  if (type === 'create') {
+    args.push('--posix', '-cf', archivePath, '-P', '-C', workingDirectory, '--null', '--files-from', manifestPath);
+    if (compressionMethod === CompressionMethod.Gzip) args.push('-z');
+  }
+  else {
+    throw new Error(`${ownedArchiveVersion}: native archive extraction is not an admission path`);
+  }
+  args.push('--no-xattrs', '--no-acls');
+  if (tarPath.type === ArchiveToolType.BSD) args.push('--no-fflags', '--no-mac-metadata');
+  return args;
+}
+
+function processFailure(child, command) {
+  return new Promise((resolve, reject) => {
+    let stderr = '';
+    child.stderr.on('data', chunk => {
+      if (stderr.length < 8192) stderr += chunk.toString('utf8').slice(0, 8192 - stderr.length);
+    });
+    child.once('error', reject);
+    child.once('close', (code, signal) => {
+      if (code === 0) resolve();
+      else reject(new Error(`${command} failed (${code ?? signal}): ${stderr}`));
+    });
+  });
+}
+
+async function createZstdArchive(tarPath, archiveFolder, args, outputPath) {
+  const encoder = createArchiveEncoder(CompressionMethod.ZstdWithoutLong);
+  const child = (0,external_node_child_process_namespaceObject.spawn)(tarPath.path, args, {
+    cwd: archiveFolder,
+    env: archiveEnvironment(),
+    stdio: ['ignore', 'pipe', 'pipe']
+  });
+  try {
+    await Promise.all([
+      (0,promises_namespaceObject.pipeline)(child.stdout, encoder, (0,external_node_fs_namespaceObject.createWriteStream)(outputPath, { mode: 0o600 })),
+      processFailure(child, tarPath.path)
+    ]);
+  }
+  catch (error) {
+    child.kill('SIGTERM');
+    (0,external_node_fs_namespaceObject.rmSync)(outputPath, { force: true });
+    throw error;
+  }
+}
+
+async function createGzipArchive(tarPath, archiveFolder, args) {
+  const child = (0,external_node_child_process_namespaceObject.spawn)(tarPath.path, args, {
+    cwd: archiveFolder,
+    env: archiveEnvironment(),
+    stdio: ['ignore', 'ignore', 'pipe']
+  });
+  await processFailure(child, tarPath.path);
+}
+
+function archiveManifestPaths(sourceDirectories) {
+  if (!Array.isArray(sourceDirectories) || sourceDirectories.length === 0) {
+    throw new Error(`${ownedArchiveVersion}: source directories are required`);
+  }
+  const workspace = getWorkingDirectory();
+  return sourceDirectories.map(sourceDirectory => {
+    if (typeof sourceDirectory !== 'string' || sourceDirectory.length === 0 || sourceDirectory.includes('\0')) {
+      throw new Error(`${ownedArchiveVersion}: source directory is invalid`);
+    }
+    const absolute = external_node_path_namespaceObject.resolve(workspace, sourceDirectory);
+    const relative = external_node_path_namespaceObject.relative(workspace, absolute).replaceAll(external_node_path_namespaceObject.sep, '/');
+    return relative || '.';
+  });
+}
+
+async function tar_extractTar(archivePath, compressionMethod, admissionOptions) {
+  if (!admissionOptions || typeof admissionOptions.quarantinePath !== 'string') {
+    throw new ArchiveConfigurationError('QUARANTINE_INPUT', 'restore quarantinePath is required');
+  }
+  if (!Array.isArray(admissionOptions.roots) || admissionOptions.roots.length === 0) {
+    throw new ArchiveConfigurationError('QUARANTINE_INPUT', 'restore roots are required for quarantine admission');
+  }
+  const quarantinePath = validateQuarantinePath(admissionOptions.quarantinePath);
+  const manifest = await admitArchive(archivePath, compressionMethod, admissionOptions.roots);
+  const createdPath = createQuarantinePath(quarantinePath, path.basename(quarantinePath));
+  const extracted = await extractAdmittedArchive(archivePath, manifest, createdPath);
+  const manifestPath = writeAdmissionManifest(createdPath, extracted);
+  return { quarantinePath: createdPath, manifestPath, manifest: extracted };
+}
+
+async function createTar(archiveFolder, sourceDirectories, compressionMethod) {
+  const manifestPaths = archiveManifestPaths(sourceDirectories);
+  validateArchiveOutput(archiveFolder, sourceDirectories, getWorkingDirectory(),
+    [ManifestFilename, getCacheFileName(compressionMethod)]);
+  (0,external_node_fs_namespaceObject.writeFileSync)(external_node_path_namespaceObject.join(archiveFolder, ManifestFilename), `${manifestPaths.join('\0')}\0`, { mode: 0o600 });
+  const tarPath = await getTarPath();
+  const outputPath = external_node_path_namespaceObject.join(archiveFolder, getCacheFileName(compressionMethod));
+  const archivePath = compressionMethod === CompressionMethod.ZstdWithoutLong ? '-' : getCacheFileName(compressionMethod);
+  const args = getTarArgs(tarPath, compressionMethod, 'create', archivePath, external_node_path_namespaceObject.join(archiveFolder, ManifestFilename));
+  if (compressionMethod === CompressionMethod.ZstdWithoutLong) await createZstdArchive(tarPath, archiveFolder, args, outputPath);
+  else await createGzipArchive(tarPath, archiveFolder, args);
+}
+
 ;// CONCATENATED MODULE: ./node_modules/@actions/cache/lib/cache.js
 var cache_awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
@@ -94259,6 +98612,7 @@ var cache_awaiter = (undefined && undefined.__awaiter) || function (thisArg, _ar
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
+
 
 
 
@@ -94415,18 +98769,17 @@ function restoreCacheV1(paths_1, primaryKey_1, restoreKeys_1, options_1) {
             core.debug(`Archive Path: ${archivePath}`);
             // Download the cache from the cache entry
             yield cacheHttpClient.downloadCache(cacheEntry.archiveLocation, archivePath, options);
-            if (core.isDebug()) {
-                yield listTar(archivePath, compressionMethod);
-            }
             const archiveFileSize = utils.getArchiveFileSizeInBytes(archivePath);
             core.info(`Cache Size: ~${Math.round(archiveFileSize / (1024 * 1024))} MB (${archiveFileSize} B)`);
-            yield extractTar(archivePath, compressionMethod);
+            yield extractTar(archivePath, compressionMethod, { roots: paths, quarantinePath: options === null || options === void 0 ? void 0 : options.quarantinePath });
             core.info('Cache restored successfully');
             return cacheEntry.cacheKey;
         }
         catch (error) {
             const typedError = error;
-            if (typedError.name === ValidationError.name) {
+            if (typedError.name === ValidationError.name ||
+                typedError instanceof ArchiveAdmissionError ||
+                typedError instanceof ArchiveConfigurationError) {
                 throw error;
             }
             else {
@@ -94509,16 +98862,15 @@ function restoreCacheV2(paths_1, primaryKey_1, restoreKeys_1, options_1) {
             yield cacheHttpClient.downloadCache(response.signedDownloadUrl, archivePath, options);
             const archiveFileSize = utils.getArchiveFileSizeInBytes(archivePath);
             core.info(`Cache Size: ~${Math.round(archiveFileSize / (1024 * 1024))} MB (${archiveFileSize} B)`);
-            if (core.isDebug()) {
-                yield listTar(archivePath, compressionMethod);
-            }
-            yield extractTar(archivePath, compressionMethod);
+            yield extractTar(archivePath, compressionMethod, { roots: paths, quarantinePath: options === null || options === void 0 ? void 0 : options.quarantinePath });
             core.info('Cache restored successfully');
             return response.matchedKey;
         }
         catch (error) {
             const typedError = error;
-            if (typedError.name === ValidationError.name) {
+            if (typedError.name === ValidationError.name ||
+                typedError instanceof ArchiveAdmissionError ||
+                typedError instanceof ArchiveConfigurationError) {
                 throw error;
             }
             else {
@@ -94596,9 +98948,6 @@ function saveCacheV1(paths_1, key_1, options_1) {
         core_debug(`Archive Path: ${archivePath}`);
         try {
             yield createTar(archiveFolder, cachePaths, compressionMethod);
-            if (isDebug()) {
-                yield tar_listTar(archivePath, compressionMethod);
-            }
             const fileSizeLimit = 10 * 1024 * 1024 * 1024; // 10GB per repo limit
             const archiveFileSize = getArchiveFileSizeInBytes(archivePath);
             core_debug(`File Size: ${archiveFileSize}`);
@@ -94702,9 +99051,6 @@ function saveCacheV2(paths_1, key_1, options_1) {
         core_debug(`Archive Path: ${archivePath}`);
         try {
             yield createTar(archiveFolder, cachePaths, compressionMethod);
-            if (isDebug()) {
-                yield tar_listTar(archivePath, compressionMethod);
-            }
             const archiveFileSize = getArchiveFileSizeInBytes(archivePath);
             core_debug(`File Size: ${archiveFileSize}`);
             // Set the archive size in the options, will be used to display the upload progress
@@ -94753,7 +99099,12 @@ function saveCacheV2(paths_1, key_1, options_1) {
                 }
                 throw new Error(`Unable to finalize cache with key ${key}, another job may be finalizing this cache.`);
             }
-            cacheId = parseInt(finalizeResponse.entryId);
+            cacheId = /^[0-9]+$/.test(finalizeResponse.entryId)
+                ? Number(finalizeResponse.entryId)
+                : -1;
+            if (!Number.isSafeInteger(cacheId) || cacheId < 0) {
+                throw new Error('Invalid finalized cache entry ID');
+            }
         }
         catch (error) {
             const typedError = error;
@@ -94800,6 +99151,7 @@ function saveCacheV2(paths_1, key_1, options_1) {
 ;// CONCATENATED MODULE: ./src/constants.ts
 var Inputs;
 (function (Inputs) {
+    Inputs["QuarantinePath"] = "quarantine-path";
     Inputs["Key"] = "key";
     Inputs["Path"] = "path";
     Inputs["RestoreKeys"] = "restore-keys";
@@ -94923,6 +99275,7 @@ Otherwise please upgrade to GHES version >= 3.5 and If you are also using Github
 
 
 
+
 // Catch and log any unhandled exceptions.  These exceptions can leak out of the uploadChunk method in
 // @actions/toolkit when a failed upload closes the file descriptor causing any in-process reads to
 // throw an uncaught exception.  Instead of failing this action, just warn.
@@ -94956,8 +99309,13 @@ async function saveImpl(stateProvider) {
             required: true
         });
         const enableCrossOsArchive = getInputAsBool(Inputs.EnableCrossOsArchive);
+        const supportsPublicationReceipt = config_getCacheServiceVersion() === "v2";
         cacheId = await cache_saveCache(cachePaths, primaryKey, { uploadChunkSize: getInputAsInt(Inputs.UploadChunkSize) }, enableCrossOsArchive);
-        if (cacheId != -1) {
+        if (Number.isSafeInteger(cacheId) && cacheId >= 0) {
+            if (supportsPublicationReceipt) {
+                setOutput("cache-saved-key", primaryKey);
+                setOutput("cache-id", String(cacheId));
+            }
             info(`Cache saved with key: ${primaryKey}`);
         }
     }

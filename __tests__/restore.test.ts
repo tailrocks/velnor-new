@@ -1,4 +1,11 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { afterEach, beforeEach, expect, jest, test } from "@jest/globals";
+
+let runnerTemp: string;
+let quarantinePath: string;
 
 // Mock @actions/core
 jest.unstable_mockModule("@actions/core", () => ({
@@ -46,6 +53,14 @@ const { restoreRun } = await import("../src/restoreImpl");
 const testUtils = await import("../src/utils/testUtils");
 
 beforeEach(() => {
+    runnerTemp = mkdtempSync(join(tmpdir(), "cache-restore-test-"));
+    process.env.RUNNER_TEMP = runnerTemp;
+    quarantinePath = join(
+        runnerTemp,
+        "velnor",
+        "cache-staging",
+        "a".repeat(64)
+    );
     jest.clearAllMocks();
     (core.getInput as jest.Mock).mockImplementation(
         (name: string, options?: { required?: boolean }) => {
@@ -61,12 +76,16 @@ beforeEach(() => {
     (cache.isFeatureAvailable as jest.Mock).mockReturnValue(true);
     process.env[Events.Key] = Events.Push;
     process.env[RefKey] = "refs/heads/feature-branch";
+    process.env["INPUT_QUARANTINE-PATH"] = quarantinePath;
 });
 
 afterEach(() => {
+    rmSync(runnerTemp, { recursive: true, force: true });
+    delete process.env.RUNNER_TEMP;
     testUtils.clearInputs();
     delete process.env[Events.Key];
     delete process.env[RefKey];
+    delete process.env["INPUT_QUARANTINE-PATH"];
 });
 
 test("restore with no cache found", async () => {
@@ -88,7 +107,8 @@ test("restore with no cache found", async () => {
         key,
         [],
         {
-            lookupOnly: false
+            lookupOnly: false,
+            quarantinePath: quarantinePath
         },
         false
     );
@@ -122,7 +142,8 @@ test("restore with restore keys and no cache found", async () => {
         key,
         [restoreKey],
         {
-            lookupOnly: false
+            lookupOnly: false,
+            quarantinePath: quarantinePath
         },
         false
     );
@@ -154,7 +175,8 @@ test("restore with cache found for key", async () => {
         key,
         [],
         {
-            lookupOnly: false
+            lookupOnly: false,
+            quarantinePath: quarantinePath
         },
         false
     );
@@ -162,7 +184,7 @@ test("restore with cache found for key", async () => {
     expect(core.saveState).toHaveBeenCalledWith("CACHE_KEY", key);
     expect(core.saveState).toHaveBeenCalledWith("CACHE_RESULT", key);
     expect(core.saveState).toHaveBeenCalledTimes(2);
-    expect(core.setOutput).toHaveBeenCalledTimes(1);
+    expect(core.setOutput).toHaveBeenCalledTimes(3);
     expect(core.setOutput).toHaveBeenCalledWith("cache-hit", "true");
     expect(core.info).toHaveBeenCalledWith(`Cache restored from key: ${key}`);
     expect(core.setFailed).toHaveBeenCalledTimes(0);
@@ -187,7 +209,7 @@ test("restore with cache found for restore key", async () => {
     expect(core.saveState).toHaveBeenCalledWith("CACHE_KEY", key);
     expect(core.saveState).toHaveBeenCalledWith("CACHE_RESULT", restoreKey);
     expect(core.saveState).toHaveBeenCalledTimes(2);
-    expect(core.setOutput).toHaveBeenCalledTimes(1);
+    expect(core.setOutput).toHaveBeenCalledTimes(3);
     expect(core.setOutput).toHaveBeenCalledWith("cache-hit", "false");
     expect(core.info).toHaveBeenCalledWith(
         `Cache restored from key: ${restoreKey}`
@@ -238,7 +260,7 @@ test("restore when fail on cache miss is enabled and primary key doesn't match r
     expect(core.saveState).toHaveBeenCalledWith("CACHE_KEY", key);
     expect(core.saveState).toHaveBeenCalledWith("CACHE_RESULT", restoreKey);
     expect(core.saveState).toHaveBeenCalledTimes(2);
-    expect(core.setOutput).toHaveBeenCalledTimes(1);
+    expect(core.setOutput).toHaveBeenCalledTimes(3);
     expect(core.setOutput).toHaveBeenCalledWith("cache-hit", "false");
     expect(core.info).toHaveBeenCalledWith(
         `Cache restored from key: ${restoreKey}`
