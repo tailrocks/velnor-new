@@ -346,6 +346,9 @@ dependencies = [
  "trustfall",
  "trustfall_core",
  "trustfall_rustdoc",
+ "trustfall-rustdoc-adapter 57.1.0",
+ "trustfall-rustdoc-adapter 60.0.0",
+ "trustfall-rustdoc-adapter 61.0.0",
  "urlencoding",
 ]
 

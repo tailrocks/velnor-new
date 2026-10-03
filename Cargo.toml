@@ -20,6 +20,9 @@ trustfall = "0.8.1"  # Ensure this matches the `trustfall_core` dev-dependency v
 # so ensure the version we use for `cargo_metadata` here matches what `trustfall_rustdoc` uses too.
 trustfall_rustdoc = { version = "0.41.0", default-features = false, features = ["v57", "v60", "v61", "rayon", "rustc-hash"] }
 cargo_metadata = "0.23.0"
+trustfall-rustdoc-adapter-v57 = { package = "trustfall-rustdoc-adapter", version = "=57.1.0" }
+trustfall-rustdoc-adapter-v60 = { package = "trustfall-rustdoc-adapter", version = "=60.0.0" }
+trustfall-rustdoc-adapter-v61 = { package = "trustfall-rustdoc-adapter", version = "=61.0.0" }
 # End of dependency block
 
 clap = { version = "4.5.26", features = ["derive", "cargo"] }

@@ -713,7 +713,7 @@ in the metadata and stderr didn't mention it was lacking a lib target. This is p
     )))
 }
 
-fn determine_rustdoc_dir(
+pub(crate) fn determine_rustdoc_dir(
     request: &CrateDataRequest<'_>,
     target_dir: &Path,
     crate_name: &str,

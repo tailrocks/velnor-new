@@ -7,6 +7,9 @@ mod data_generation;
 mod manifest;
 mod query;
 mod rustdoc_gen;
+mod supplied_compare;
+mod supplied_plan;
+mod supplied_report;
 mod templating;
 mod util;
 mod witness_gen;
@@ -32,6 +35,14 @@ pub use query::{
     ActualSemverUpdate, LintLevel, OverrideMap, OverrideStack, QueryOverride, RequiredSemverUpdate,
     SemverQuery, Witness, WitnessPurpose,
 };
+pub use supplied_compare::{
+    PackageContext, SuppliedCompareRequest, SuppliedDocs, SuppliedReleaseType, compare_supplied,
+};
+pub use supplied_plan::{
+    SuppliedBuildEnvironment, SuppliedFeatureGroup, SuppliedPackagePlan, SuppliedPlan,
+    SuppliedPlanRequest, plan_supplied,
+};
+pub use supplied_report::supplied_report;
 
 /// Test a release for semver violations.
 #[non_exhaustive]
@@ -697,7 +708,7 @@ note: skipped the following crates since they have no library target: {skipped}"
     }
 }
 
-fn overrides_for_workspace_package(
+pub(crate) fn overrides_for_workspace_package(
     package: &cargo_metadata::Package,
     workspace_overrides: Option<&[BTreeMap<String, QueryOverride>]>,
 ) -> Result<OverrideStack, anyhow::Error> {

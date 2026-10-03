@@ -8,8 +8,8 @@ use trustfall_rustdoc::{VersionedIndex, VersionedRustdocAdapter, VersionedStorag
 use crate::RustdocIndexingMode;
 
 pub(crate) use error::{IntoTerminalResult, TerminalError};
-pub(crate) use generate::GenerationSettings;
 pub(crate) use generate::effective_witness_rustflags;
+pub(crate) use generate::{GenerationSettings, RustdocBuildEnvironment, determine_rustdoc_dir};
 pub(crate) use progress::ProgressCallbacks;
 pub(crate) use request::{CacheSettings, CrateDataRequest};
 
