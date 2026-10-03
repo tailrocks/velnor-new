@@ -9,7 +9,7 @@ use velnor_runner_github::{
 
 use crate::Offer;
 use crate::error::HostError;
-use crate::journal::{Journal, Outcome};
+use crate::journal::{IntentState, Journal, Outcome};
 use crate::listen::map_listen;
 use crate::offer;
 use crate::scale_set::EnsureError;
@@ -26,23 +26,34 @@ pub(crate) enum Idle {
     Empty,
     /// One `JobAvailable` id. Do not acknowledge yet.
     Launch,
-    /// No offer. Delete the message so the next one can arrive.
+    /// Assigned population is positive. Mint one JIT runner, then acknowledge.
+    Scale,
+    /// No offer and no assigned job. Delete the message so the next one can arrive.
     Ack,
     /// A message that must stay on the queue.
     Blocked,
 }
 
-/// Classify one poll. A statistics batch is acknowledged. An offer is not.
+/// Classify one poll. One available id is acquired. An assigned population
+/// starts one runner before ack. Anything else that is safe to delete is acked.
 #[must_use]
 pub(crate) fn idle(polled: &Poll) -> Idle {
     match polled {
         Poll::Empty => Idle::Empty,
         Poll::Batch(batch) => match offer(polled) {
             Offer::Acquire { ids, .. } if ids.len() == 1 => Idle::Launch,
+            Offer::Wait if needs_scale(batch) && may_ack(batch, true) => Idle::Scale,
             Offer::Wait if may_ack(batch, true) => Idle::Ack,
             Offer::Acquire { .. } | Offer::Wait => Idle::Blocked,
         },
     }
+}
+
+fn needs_scale(batch: &velnor_runner_github::ParsedBatch) -> bool {
+    batch
+        .statistics
+        .as_ref()
+        .is_some_and(|stats| stats.assigned_population() > 0)
 }
 
 pub(super) fn assignment(
@@ -92,9 +103,46 @@ where
     }
     match taken(lane, ctx, request_id) {
         Ok(AcquireOutcome::Acquired(ids)) if ids.is_empty() => reject_empty(journal, id).await,
-        Ok(_) => mint(lane, ctx, batch, journal, id, request_id, start).await,
+        Ok(_) => {
+            let name = format!("v{request_id}");
+            mint(lane, ctx, Some(batch), journal, id, &name, start).await
+        }
         Err(error) => fail_acquire(journal, id, error).await,
     }
+}
+
+/// One runner for `statistics.totalAssignedJobs`, then ack `batch`.
+pub(super) async fn scale_id<T, S, F>(
+    lane: &mut T,
+    ctx: &Drive,
+    batch: &velnor_runner_github::ParsedBatch,
+    journal: &Journal,
+    start: S,
+) -> Result<Option<Started>, EnsureError>
+where
+    T: velnor_runner_github::Transport + Lane,
+    S: FnOnce(&str, &[u8]) -> F,
+    F: Future<Output = Result<Started, HostError>>,
+{
+    let name = format!("m{}", batch.message_id);
+    let subject = name.clone();
+    ensure_runner(lane, ctx, journal, &name, &subject, Some(batch), start).await
+}
+
+/// One runner from the create-session statistics. There is no message to ack.
+pub(super) async fn scale_unacked<T, S, F>(
+    lane: &mut T,
+    ctx: &Drive,
+    journal: &Journal,
+    name: &str,
+    start: S,
+) -> Result<Option<Started>, EnsureError>
+where
+    T: velnor_runner_github::Transport + Lane,
+    S: FnOnce(&str, &[u8]) -> F,
+    F: Future<Output = Result<Started, HostError>>,
+{
+    ensure_runner(lane, ctx, journal, name, "scale", None, start).await
 }
 
 fn taken<T>(lane: &mut T, ctx: &Drive, request_id: i64) -> Result<AcquireOutcome, SessionError>
@@ -138,13 +186,13 @@ async fn reject_empty(journal: &Journal, id: i64) -> Result<Option<Started>, Ens
     })
 }
 
-async fn mint<T, S, F>(
+async fn ensure_runner<T, S, F>(
     lane: &mut T,
     ctx: &Drive,
-    batch: &velnor_runner_github::ParsedBatch,
     journal: &Journal,
-    id: i64,
-    request_id: i64,
+    name: &str,
+    subject: &str,
+    batch: Option<&velnor_runner_github::ParsedBatch>,
     start: S,
 ) -> Result<Option<Started>, EnsureError>
 where
@@ -152,32 +200,98 @@ where
     S: FnOnce(&str, &[u8]) -> F,
     F: Future<Output = Result<Started, HostError>>,
 {
-    let encoded = match fetch_jit(lane, ctx, request_id) {
+    lane.on_admin()?;
+    if let Some(live) = live_runner(journal).await? {
+        return finish_live(lane, ctx, journal, live, batch).await;
+    }
+    let id = journal.begin(KIND, subject).await.map_err(map_journal)?;
+    if let Some(runner_id) = docker_of(journal, id).await? {
+        return finish_live(lane, ctx, journal, Live { id, runner_id }, batch).await;
+    }
+    mint(lane, ctx, batch, journal, id, name, start).await
+}
+
+async fn mint<T, S, F>(
+    lane: &mut T,
+    ctx: &Drive,
+    batch: Option<&velnor_runner_github::ParsedBatch>,
+    journal: &Journal,
+    id: i64,
+    name: &str,
+    start: S,
+) -> Result<Option<Started>, EnsureError>
+where
+    T: velnor_runner_github::Transport + Lane,
+    S: FnOnce(&str, &[u8]) -> F,
+    F: Future<Output = Result<Started, HostError>>,
+{
+    let encoded = match fetch_jit(lane, ctx, name) {
         Ok(encoded) => encoded,
         Err(error) => return hold(journal, id, map_listen(error)).await,
     };
-    let volume = format!("v{request_id}");
-    let Ok(started) = start(&volume, encoded.expose().as_bytes()).await else {
+    let Ok(started) = start(name, encoded.expose().as_bytes()).await else {
         return hold(journal, id, EnsureError::Uncertain).await;
     };
     journal
         .bind(id, Some(&started.runner_id), None)
         .await
         .map_err(map_journal)?;
-    if let Err(error) = acknowledge(lane, ctx, batch) {
+    if let Some(batch) = batch
+        && let Err(error) = acknowledge(lane, ctx, batch)
+    {
         return hold(journal, id, error).await;
     }
     mark_done(journal, id).await?;
     Ok(Some(started))
 }
 
-fn fetch_jit<T>(lane: &mut T, ctx: &Drive, request_id: i64) -> Result<EncodedJit, SessionError>
+fn fetch_jit<T>(lane: &mut T, ctx: &Drive, name: &str) -> Result<EncodedJit, SessionError>
 where
     T: velnor_runner_github::Transport + ?Sized,
 {
-    let name = format!("v{request_id}");
-    let body = jit_request(&name)?;
+    let body = jit_request(name)?;
     jit(lane, ctx.set_id, &ctx.admin_token, &body)
+}
+
+struct Live {
+    id: i64,
+    runner_id: String,
+}
+
+async fn live_runner(journal: &Journal) -> Result<Option<Live>, EnsureError> {
+    let rows = journal.rows().await.map_err(map_journal)?;
+    Ok(rows.into_iter().find_map(|row| {
+        if row.kind == KIND && matches!(row.state, IntentState::Pending | IntentState::Uncertain) {
+            row.docker_id.map(|runner_id| Live {
+                id: row.id,
+                runner_id,
+            })
+        } else {
+            None
+        }
+    }))
+}
+
+async fn finish_live<T>(
+    lane: &mut T,
+    ctx: &Drive,
+    journal: &Journal,
+    live: Live,
+    batch: Option<&velnor_runner_github::ParsedBatch>,
+) -> Result<Option<Started>, EnsureError>
+where
+    T: velnor_runner_github::Transport + Lane,
+{
+    if let Some(batch) = batch
+        && let Err(error) = acknowledge(lane, ctx, batch)
+    {
+        return hold(journal, live.id, error).await;
+    }
+    mark_done(journal, live.id).await?;
+    Ok(Some(Started {
+        dind_id: String::new(),
+        runner_id: live.runner_id,
+    }))
 }
 
 pub(super) fn acknowledge<T>(

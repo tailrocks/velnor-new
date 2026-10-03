@@ -13,7 +13,13 @@ fn batch(jobs: Vec<InnerJob>) -> Poll {
 }
 
 fn job(kind: InnerKind, request_id: Option<i64>) -> InnerJob {
-    InnerJob { kind, request_id }
+    InnerJob {
+        kind,
+        request_id,
+        job_id: None,
+        labels: Vec::new(),
+        fields: Vec::new(),
+    }
 }
 
 #[test]

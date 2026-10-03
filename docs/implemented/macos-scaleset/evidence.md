@@ -3,8 +3,9 @@
 Resolved 2026-10-03 with `gh api` from this machine. Offline generator and
 runner tests cited below have run. A per-user LaunchAgent was installed,
 observed, and removed. Image builds were inspected. The product scale set was
-created with the shipped client. No live JIT worker and no ChainArgos rollout.
-G3, G4, G7, and G8 stay `NOT_RUN`.
+created with the shipped client. One ordinary scale-set job has run on the
+official runner. The rest of the G4 suite is not run. No ChainArgos rollout.
+G3, the full G4 suite, G7, and G8 stay `NOT_RUN`.
 
 ## Identities
 
@@ -79,6 +80,14 @@ a Java adapter: the pinned required set does not run Java.
 
 An older note recorded the required context as `ci-required`. The 2026-10-03 ruleset read does not contain that string. The required context to preserve is `Required`.
 
+## One ordinary scale-set job
+
+On 2026-10-03T00:53:23Z, from `crates/velnor-runner`, `VELNOR_HTTPS_TRACE=1 VELNOR_LAUNCH_POLLS=8 cargo run --locked --offline -p velnor-runner-host --example launch_once` exited 0. Session statistics `totalAssignedJobs` was 0. The next broker batch was message `100000009`, kind `JobAssigned`, labels `velnor,ubuntu-26.04-scale-set`, `stats_assigned=1`. The client called `POST .../runnerscalesets/1/generatejitconfig` (HTTP 200), started the pair, then deleted that message (HTTP 204). Printed `set_id=1 started=true runner_id=5516fe1a8344beba849773ce1ee407f1db2a25e6eb67c5f6cc6f9bda0ba4b094 dind_id=7c08215c6586e4b34179c7ec229670eebc83ff5bea4f223b3de80c90af999245`. Transcript: scratch `launch-once-8.log` (no token, no JIT body).
+
+`gh api repos/tailrocks/velnor-new/actions/runs/37081936404/jobs` showed job [111084145716](https://github.com/tailrocks/velnor-new/actions/runs/37081936404/job/111084145716) `Verify / Velnor Scale Set / Linux x64` conclusion `success`, runner `m100000009`, runner group `Default`, labels `velnor` and `ubuntu-26.04-scale-set`. Step `Qualify scale-set lane` succeeded. Runner log line `Current runner version: '2.337.0'` and `Running job: Verify / Velnor Scale Set / Linux x64`.
+
+Host is macOS 27.0 `arm64`. Docker server is `linux` `aarch64` 29.4.0. The runner image is `velnor-runner:ubuntu-26.04-2.337.0` `linux/amd64`, so this job ran under emulation. `docker inspect` reported runner `privileged=false`, user `runner`, platform `linux`. DinD `velnor-dind:29.8.2` was `privileged=true`. Mounts were only volumes `m100000009` at `/run` and `m100000009-work` at `/home/runner/_work`. A search of runner env, cmd, labels, and entrypoint for `jitconfig` returned 0. JIT was not in that config. This is one ordinary `run` step. It is not the rest of the G4 suite (JavaScript actions, services, artifacts, Buildx, or expected-negative workflows).
+
 ## Not yet run
 
-No JIT worker, no paired workflow, and no published image or macOS binary beyond the existing `v0.1.0` generator assets. Scale set id 1 exists and has no official runner job.
+No paired ChainArgos workflow, and no published image or macOS binary beyond the existing `v0.1.0` generator assets. The full G4 suite has not run.

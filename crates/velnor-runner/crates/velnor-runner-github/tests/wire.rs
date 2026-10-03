@@ -53,7 +53,7 @@ fn empty_poll_is_not_an_ack_and_unknown_kind_is_visible() -> Result<(), &'static
 
 #[test]
 fn assigned_population_is_not_the_batch_length() -> Result<(), &'static str> {
-    let raw = r#"{"messageId":1,"messageType":"RunnerScaleSetJobMessages","body":"[{\"messageType\":\"JobAvailable\",\"runnerRequestId\":1}]","statistics":{"totalAvailableJobs":1,"totalAcquiredJobs":0,"totalAssignedJobs":5,"totalRunningJobs":0,"totalRegisteredRunners":0,"totalBusyRunners":0,"totalIdleRunners":0}}"#;
+    let raw = r#"{"messageId":1,"messageType":"RunnerScaleSetJobMessages","body":"[{\"messageType\":\"JobAvailable\",\"runnerRequestId\":1,\"jobId\":\"111\",\"requestLabels\":[\"velnor\",\"ubuntu-26.04-scale-set\"]}]","statistics":{"totalAvailableJobs":1,"totalAcquiredJobs":0,"totalAssignedJobs":5,"totalRunningJobs":0,"totalRegisteredRunners":0,"totalBusyRunners":0,"totalIdleRunners":0}}"#;
     let Poll::Batch(batch) = parse_poll(200, raw).map_err(|_| "batch")? else {
         return Err("batch");
     };
@@ -61,6 +61,11 @@ fn assigned_population_is_not_the_batch_length() -> Result<(), &'static str> {
     let len = i64::try_from(batch.jobs.len()).map_err(|_| "len")?;
     assert_eq!(stats.assigned_population(), 5);
     assert_ne!(stats.assigned_population(), len);
+    assert_eq!(batch.jobs[0].job_id.as_deref(), Some("111"));
+    assert_eq!(
+        batch.jobs[0].labels,
+        ["velnor".to_owned(), "ubuntu-26.04-scale-set".to_owned()]
+    );
     Ok(())
 }
 

@@ -47,6 +47,12 @@ pub struct InnerJob {
     pub kind: InnerKind,
     /// `runnerRequestId` when present.
     pub request_id: Option<i64>,
+    /// Numeric `jobId` only. Other shapes are dropped.
+    pub job_id: Option<String>,
+    /// `requestLabels` names. Empty when the field is absent.
+    pub labels: Vec<String>,
+    /// Object keys. Names only, so a live trace can show the shape.
+    pub fields: Vec<String>,
 }
 
 /// `statistics` object from the pinned Go struct.
@@ -130,6 +136,9 @@ fn parse_inner(value: &Value) -> Result<InnerJob, WireError> {
         .and_then(Value::as_str)
         .ok_or(WireError::Malformed)?;
     let request_id = value.get("runnerRequestId").and_then(Value::as_i64);
+    let job_id = numeric_job_id(value.get("jobId").and_then(Value::as_str));
+    let labels = label_names(value.get("requestLabels"));
+    let fields = object_fields(value);
     let kind = match kind_text {
         "JobAvailable" => InnerKind::Available,
         "JobAssigned" => InnerKind::Assigned,
@@ -137,7 +146,55 @@ fn parse_inner(value: &Value) -> Result<InnerJob, WireError> {
         "JobCompleted" => InnerKind::Completed,
         other => InnerKind::Unsupported(other.to_owned()),
     };
-    Ok(InnerJob { kind, request_id })
+    Ok(InnerJob {
+        kind,
+        request_id,
+        job_id,
+        labels,
+        fields,
+    })
+}
+
+fn numeric_job_id(value: Option<&str>) -> Option<String> {
+    let text = value?;
+    if text.is_empty() || text.len() > 24 || !text.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
+    Some(text.to_owned())
+}
+
+fn object_fields(value: &Value) -> Vec<String> {
+    let Some(map) = value.as_object() else {
+        return Vec::new();
+    };
+    map.keys()
+        .filter(|name| {
+            !name.is_empty()
+                && name.len() <= 64
+                && name
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_'))
+        })
+        .map(ToOwned::to_owned)
+        .collect()
+}
+
+fn label_names(value: Option<&Value>) -> Vec<String> {
+    let Some(items) = value.and_then(Value::as_array) else {
+        return Vec::new();
+    };
+    items
+        .iter()
+        .filter_map(Value::as_str)
+        .filter(|name| {
+            !name.is_empty()
+                && name.len() <= 64
+                && name
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+        })
+        .map(str::to_owned)
+        .collect()
 }
 
 /// Acknowledge only a real id, and never a batch that still has an unknown kind.

@@ -9,8 +9,8 @@ use std::future::Future;
 use zeroize::Zeroize;
 
 use velnor_runner_github::{
-    Exchange, InnerKind, Poll, QueueSession, SessionRequest, Transport, TransportFail,
-    create_session, delete_session,
+    Exchange, Poll, QueueSession, SessionRequest, Transport, TransportFail, create_session,
+    delete_session,
 };
 
 use crate::ensure_product_scale_set;
@@ -23,7 +23,9 @@ use crate::listen::{
 use crate::scale_set::EnsureError;
 use crate::worker::{Started, start_pair};
 
+mod slot;
 mod steps;
+mod trace;
 
 #[cfg(test)]
 pub(crate) use steps::{Idle, idle};
@@ -37,7 +39,7 @@ pub struct LaunchReport {
     pub started: Option<Started>,
 }
 
-/// Open one session, launch at most one acquired job, then delete that session.
+/// Open one session, start at most one worker, then delete that session.
 ///
 /// # Errors
 ///
@@ -134,6 +136,12 @@ where
     S: FnOnce(&str, &[u8]) -> F,
     F: Future<Output = Result<Started, HostError>>,
 {
+    if matches!(steps::idle(polled), steps::Idle::Scale) {
+        let Poll::Batch(batch) = polled else {
+            return Ok(None);
+        };
+        return steps::scale_id(lane, ctx, batch, journal, start).await;
+    }
     let Some((batch, request_id)) = steps::assignment(polled)? else {
         return Ok(None);
     };
@@ -159,13 +167,16 @@ async fn poll_and_drive(
     journal: &Journal,
     docker: &bollard::Docker,
 ) -> Result<Option<Started>, EnsureError> {
+    trace::session(session);
+    let started = scale_session(link, set_id, session, admin_token, journal, docker).await?;
+    let primed = started.is_some();
     for _ in 0..poll_bound() {
         let (saved, path) = point_at_queue(link, &session.message_queue_url)?;
         let queue = saved.as_ref().map(|_| link.base().to_owned());
         let polled = poll_path(link, session, &path);
         restore_base(link, saved)?;
         let polled = polled?;
-        trace_batch(&polled);
+        trace::batch(&polled);
         match steps::idle(&polled) {
             // A 202 is the long-poll timeout. A job can be queued while this
             // session is still open, so keep the session and poll again.
@@ -177,8 +188,13 @@ async fn poll_and_drive(
                 });
             }
             steps::Idle::Ack => ack_ready(link, session, path, queue, &polled)?,
-            steps::Idle::Launch => {
-                return drive_ready(
+            steps::Idle::Scale if started.is_some() => {
+                ack_ready(link, session, path, queue, &polled)?;
+                return Ok(started);
+            }
+            steps::Idle::Launch if started.is_some() => return Ok(started),
+            steps::Idle::Launch | steps::Idle::Scale => {
+                let launched = drive_ready(
                     link,
                     Ready {
                         set_id,
@@ -191,11 +207,64 @@ async fn poll_and_drive(
                     journal,
                     docker,
                 )
-                .await;
+                .await?;
+                return Ok(started.or(launched));
             }
         }
+        if primed {
+            return Ok(started);
+        }
     }
-    Ok(None)
+    Ok(started)
+}
+
+async fn scale_session(
+    link: &mut Link,
+    set_id: i64,
+    session: &QueueSession,
+    admin_token: &str,
+    journal: &Journal,
+    docker: &bollard::Docker,
+) -> Result<Option<Started>, EnsureError> {
+    let population = session
+        .statistics()
+        .map_or(0, velnor_runner_github::Statistics::assigned_population);
+    if population <= 0 {
+        return Ok(None);
+    }
+    let ctx = Drive {
+        set_id,
+        queue_path: String::new(),
+        queue_token: session.token().to_owned(),
+        admin_token: admin_token.to_owned(),
+    };
+    let admin = link.base().to_owned();
+    let mut lane = HostLane {
+        link,
+        admin,
+        queue: None,
+    };
+    let name = runner_name(&session.session_id);
+    steps::scale_unacked(&mut lane, &ctx, journal, &name, |volume, jit| {
+        let volume = volume.to_owned();
+        let payload = jit.to_vec();
+        async move { start_pair(docker, &volume, &payload).await }
+    })
+    .await
+}
+
+fn runner_name(session_id: &str) -> String {
+    let mut name = String::from("s");
+    for ch in session_id.chars().filter(char::is_ascii_alphanumeric) {
+        name.push(ch);
+        if name.len() == 13 {
+            break;
+        }
+    }
+    if name.len() == 1 {
+        name.push('0');
+    }
+    name
 }
 
 fn poll_bound() -> usize {
@@ -206,48 +275,6 @@ fn poll_bound() -> usize {
         return 8;
     };
     bound.clamp(1, 8)
-}
-
-fn trace_batch(polled: &Poll) {
-    if std::env::var_os("VELNOR_HTTPS_TRACE").is_none() {
-        return;
-    }
-    let Poll::Batch(batch) = polled else {
-        eprintln!("batch empty");
-        return;
-    };
-    let kinds = batch
-        .jobs
-        .iter()
-        .map(|job| kind_name(&job.kind))
-        .collect::<Vec<_>>()
-        .join(",");
-    let ids = batch
-        .jobs
-        .iter()
-        .filter_map(|job| job.request_id)
-        .map(|id| id.to_string())
-        .collect::<Vec<_>>()
-        .join(",");
-    let available = batch
-        .statistics
-        .as_ref()
-        .map_or(-1, |stats| stats.total_available_jobs);
-    eprintln!(
-        "batch id={} jobs={} kinds={kinds} request_ids={ids} stats_available={available}",
-        batch.message_id,
-        batch.jobs.len()
-    );
-}
-
-fn kind_name(kind: &InnerKind) -> String {
-    match kind {
-        InnerKind::Available => "JobAvailable".to_owned(),
-        InnerKind::Assigned => "JobAssigned".to_owned(),
-        InnerKind::Started => "JobStarted".to_owned(),
-        InnerKind::Completed => "JobCompleted".to_owned(),
-        InnerKind::Unsupported(name) => format!("other:{name}"),
-    }
 }
 
 struct Ready<'a> {
@@ -265,6 +292,9 @@ async fn drive_ready(
     journal: &Journal,
     docker: &bollard::Docker,
 ) -> Result<Option<Started>, EnsureError> {
+    if slot::busy(journal, docker).await? {
+        return held(link, ready);
+    }
     let ctx = Drive {
         set_id: ready.set_id,
         queue_path: ready.path,
@@ -283,6 +313,14 @@ async fn drive_ready(
         async move { start_pair(docker, &volume, &payload).await }
     })
     .await
+}
+
+fn held(link: &mut Link, ready: Ready<'_>) -> Result<Option<Started>, EnsureError> {
+    if !matches!(steps::idle(ready.polled), steps::Idle::Scale) {
+        return Ok(None);
+    }
+    ack_ready(link, ready.session, ready.path, ready.queue, ready.polled)?;
+    Ok(None)
 }
 
 fn ack_ready(

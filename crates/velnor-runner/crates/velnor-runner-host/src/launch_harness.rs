@@ -4,8 +4,8 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use velnor_runner_github::{
-    Exchange, InnerJob, InnerKind, Method, ParsedBatch, Poll, SessionRequest, Transport,
-    TransportFail,
+    Exchange, InnerJob, InnerKind, Method, ParsedBatch, Poll, SessionRequest, Statistics,
+    Transport, TransportFail,
 };
 
 use crate::launch::{Drive, Lane};
@@ -50,6 +50,7 @@ pub(crate) enum Mode {
     Timeout,
     Forbidden,
     AckFail,
+    JitFail,
 }
 
 impl Transport for Script {
@@ -60,6 +61,9 @@ impl Transport for Script {
         }
         if request.path.contains("generatejitconfig") {
             self.calls.push("jit");
+            if matches!(self.mode, Mode::JitFail) {
+                return Err(TransportFail::Http(500));
+            }
             let body = format!(r#"{{"encodedJITConfig":"{CANARY}"}}"#);
             return Ok(Exchange {
                 status: 200,
@@ -126,6 +130,28 @@ pub(crate) fn ctx() -> Drive {
     }
 }
 
+pub(crate) fn assigned_wait(message_id: i64, assigned: i64) -> Poll {
+    Poll::Batch(ParsedBatch {
+        message_id,
+        statistics: Some(Statistics {
+            total_available_jobs: 0,
+            total_acquired_jobs: 0,
+            total_assigned_jobs: assigned,
+            total_running_jobs: 0,
+            total_registered_runners: 0,
+            total_busy_runners: 0,
+            total_idle_runners: 0,
+        }),
+        jobs: vec![InnerJob {
+            kind: InnerKind::Assigned,
+            request_id: Some(0),
+            job_id: None,
+            labels: Vec::new(),
+            fields: Vec::new(),
+        }],
+    })
+}
+
 pub(crate) fn available(ids: &[i64]) -> Poll {
     Poll::Batch(ParsedBatch {
         message_id: 4,
@@ -136,6 +162,9 @@ pub(crate) fn available(ids: &[i64]) -> Poll {
             .map(|id| InnerJob {
                 kind: InnerKind::Available,
                 request_id: Some(id),
+                job_id: None,
+                labels: Vec::new(),
+                fields: Vec::new(),
             })
             .collect(),
     })

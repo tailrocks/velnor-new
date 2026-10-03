@@ -63,6 +63,8 @@ mod journal_tests;
 #[cfg(test)]
 mod launch_harness;
 #[cfg(test)]
+mod launch_scale_tests;
+#[cfg(test)]
 mod launch_tests;
 #[cfg(test)]
 mod listen_tests;
