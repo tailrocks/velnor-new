@@ -162,7 +162,56 @@ One scale-set job per run, except `ports`, which kept one session and set `VELNO
 
 The scale-set Testcontainers log printed `testcontainers-ok` and `ryuk-seen`. The scale-set submodule log showed `git-lfs/3.7.1` and the proof step exited 0, so `HEAD` matched `GITHUB_SHA` and the submodule and LFS markers matched. Both cancel-with-service logs printed `service-up` as step output, then `gh run cancel` ran (`cancel rc=0 while=probed`). Run `37096181766` was cancelled before that probe because its SHA did not match the listener's expected commit. It is not this proof. The two scale-set port jobs printed `port-held` at `2026-10-03T04:24:30Z` and `2026-10-03T04:24:33Z` while each held port 8080. One session started both workers. `VELNOR_MAX_JOBS` unset is still 1.
 
-This section does not mark G4 `PASS`. Not run: one `features` dispatch of every class, a job left queued behind two busy workers, and a live crash or restart during a job.
+This section does not mark G4 `PASS`. A later `features` dispatch and a queue-pressure run are in the next two sections. A live crash or restart during a job is still not recorded here.
+
+## One features dispatch
+
+`gh workflow run qualification.yml --ref macos-scaleset -f mode=features` at `88206432b7ee0d768e5e4bd33bf4038e6f556c6c`. Run [37097526498](https://github.com/tailrocks/velnor-new/actions/runs/37097526498) concluded `success`.
+
+| Class | Hosted job | Scale-set job | Runner |
+| --- | --- | --- | --- |
+| Services | [111130405529](https://github.com/tailrocks/velnor-new/actions/runs/37097526498/job/111130405529) | [111130405669](https://github.com/tailrocks/velnor-new/actions/runs/37097526498/job/111130405669) | `m100000089` |
+| JavaScript actions | [111130405745](https://github.com/tailrocks/velnor-new/actions/runs/37097526498/job/111130405745) | [111130405679](https://github.com/tailrocks/velnor-new/actions/runs/37097526498/job/111130405679) | `m100000091` |
+| Artifacts | [111130405766](https://github.com/tailrocks/velnor-new/actions/runs/37097526498/job/111130405766) | [111130405790](https://github.com/tailrocks/velnor-new/actions/runs/37097526498/job/111130405790) | `m100000090` |
+| Buildx | [111130405881](https://github.com/tailrocks/velnor-new/actions/runs/37097526498/job/111130405881) | [111130405823](https://github.com/tailrocks/velnor-new/actions/runs/37097526498/job/111130405823) | `m100000092` |
+
+Every non-skipped job concluded `success`. This is not a queue-pressure proof: four scale-set jobs succeeded, and no snapshot showed one still queued behind two busy workers.
+
+While those four workers were up, `docker inspect` showed each runner `privileged=false`, user `runner`, published ports empty, mounts only `volume:/run` and `volume:/home/runner/_work`. Each DinD was privileged with the same private volumes and no published ports. Needle counts for `jitconfig`, `actions_runner_input_jitconfig`, `ghp_`, and `github_pat_` were 0 on all eight containers. Host `arm64`, Docker VM `aarch64`. Scratch: `g3-inspect-features.txt`. That inspect is not the kill-at-each-stage matrix, so G3 stays `NOT_RUN`.
+
+## Queue pressure
+
+`mode=pressure` at `ab99eaac8a0003224c3ecfea1be80fcc68af8689`. Run [37098293064](https://github.com/tailrocks/velnor-new/actions/runs/37098293064) concluded `success`. Capacity was 2 and the admission target was 3. Listener pid 52965 wrote three `started=true` lines and then exited 0.
+
+At `2026-10-03T04:59:31Z` the scale-set jobs were:
+
+| Job | Name | Status then | Runner |
+| --- | --- | --- | --- |
+| [111132611747](https://github.com/tailrocks/velnor-new/actions/runs/37098293064/job/111132611747) | Pressure A | `in_progress` | `m100000095` |
+| [111132611690](https://github.com/tailrocks/velnor-new/actions/runs/37098293064/job/111132611690) | Pressure B | `in_progress` | `m100000094` |
+| [111132611829](https://github.com/tailrocks/velnor-new/actions/runs/37098293064/job/111132611829) | Pressure C | `queued` | none |
+
+C was later admitted on `m100000097` and concluded `success`. A and B also concluded `success`. Each scale-set log had two lines ending in `pressure-ok` (the step command and the step output). Hosted Pressure A/B/C also concluded `success`. The local drain script then printed `DRAIN_FAIL` because its result checker called `time.time` before importing `time`. That script failure is not a job failure. Scratch: `pressure-queue.txt`, `drain-pressure.log`.
+
+This does not mark G4 `PASS` by itself.
+
+## Live crash and restart
+
+`mode=pressure` at `ab99eaac8a0003224c3ecfea1be80fcc68af8689`. Run [37099950570](https://github.com/tailrocks/velnor-new/actions/runs/37099950570) concluded `success`.
+
+Pressure C, job [111137374561](https://github.com/tailrocks/velnor-new/actions/runs/37099950570/job/111137374561), runner `m100000099`, container `eab5d53771609ca48c07849c47fb27c2ae1c2a45d9fa9cd3172cddfadabf7777`. At `2026-10-03T05:29:30Z` the job was `in_progress` and the container was running. `kill -9` of listener pid 69253 did not remove it. A second `launch_once` at `2026-10-03T05:29:34Z` (pid 70466) left the same container running. The job later concluded `success` and the container exited on its own. The job log has one payload line `pressure-ok`. Restart deleted the recorded session id only (`DELETE .../sessions/...` 204) and did not `docker rm` the worker.
+
+Pressure A, job [111137374564](https://github.com/tailrocks/velnor-new/actions/runs/37099950570/job/111137374564), runner `m100000102`, container `7498be682741`. At `2026-10-03T05:33:51Z` it was `in_progress`. `kill -9` of pid 70466 left that container running with the same pid `671745`. Restart pid 83571 deleted session `c01c2ce4-f655-4e9d-9420-de511c818a2f` (204) and opened a new session while the container was still running. The job concluded `success` with one payload line `pressure-ok`. Pressure B then concluded `success` on `m100000105`.
+
+Scratch: `g4-crash.txt`, `g4-crash-kill.txt`, `launch-crash-restart.log`. This is not a G4 `PASS`. The Actions job log has no cgroup or `AssertCompatibleOS` line.
+
+## G3 kill and canary attempt
+
+`start_pair` was driven for `g3matrix-p1`, `p2`, `p3`, and `g3matrix-g`. Empty JIT returned `EmptyJit` and created no volume. Host `arm64`, Docker server `aarch64`, images `linux/amd64`, guest `uname -m` `x86_64` (`VirtualApple`). That is emulation.
+
+Runners were not privileged, user `runner`, no published ports, mounts only private volumes `/run` and `/home/runner/_work`. DinD was privileged with no published TCP. Canary and token needle counts were 0 in inspect env, cmd, labels, probe argv, and a read-only `launch.db`. A same-name foreign container with a different id stayed. `delete_decision` returned `KeepForeign`. `velnor-candidate` stayed 16 and `jackin` stayed 1.
+
+Not a pass: `start_pair` returns only after both containers exist, so nothing was killed between DinD create and runner start. The live runner exited 1 on dummy JIT before `docker exec` (`Unexpected character` from the entrypoint). Guest path checks used a commit of that container. `/home/runner/_temp` and `/home/runner/tools` were absent. There is no public Docker cleanup that applies `delete_decision` to a live id. Scratch: `g3-matrix.txt`. G3 stays `NOT_RUN`.
 
 ## Publish attempts
 
@@ -172,8 +221,8 @@ Each command was run once and was not retried.
 
 `gh workflow run macos-binary-release.yml --ref macos-scaleset --repo tailrocks/velnor-new` exited 1: `HTTP 404: workflow macos-binary-release.yml not found on the default branch (https://api.github.com/repos/tailrocks/velnor-new/actions/workflows/macos-binary-release.yml)`.
 
-Neither file is on this branch's `.github/workflows/` or on `main`. This is not a missing credential. Transcripts: scratch `publish-image.txt` and `publish-macos.txt`. No image and no macOS binary were published. ChainArgos was not updated. G7 and G8 stay `NOT_RUN`.
+Those two dispatches were not retried. The files were absent from `main` and from this branch at that time. Later commits put generated `image-release.yml` and `macos-binary-release.yml` on `macos-scaleset` only. They are not on `main`. No image and no macOS binary were published by those 404s. ChainArgos was not updated. G7 and G8 stay `NOT_RUN`.
 
 ## Not yet run
 
-No paired ChainArgos workflow. No published image or macOS binary beyond the existing `v0.1.0` generator assets. The two release-workflow dispatches above returned HTTP 404 and were not retried. The named section 11 classes have job URLs above. G4 stays `NOT_RUN` until a `features` dispatch, queue pressure behind two busy workers, and a live crash or restart are recorded. The G3 kill and canary matrix has not run. No promotion onto `main`.
+No paired ChainArgos workflow. No published image or macOS binary beyond the existing `v0.1.0` generator assets. The two release-workflow dispatches above returned HTTP 404 and were not retried. The named section 11 classes have job URLs above. Features dispatch `37097526498`, queue-pressure run `37098293064`, and crash run `37099950570` are recorded above. G4 stays `NOT_RUN` because the job log does not show the official runner cgroup compatibility check. The G3 matrix attempt is recorded and is not a pass. No promotion onto `main`.
