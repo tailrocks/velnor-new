@@ -12,7 +12,7 @@ fn pinned_catalog_matches_qualified_versions() {
     assert_eq!(MISE_VERSION, "2026.9.18");
     let catalog = ToolCatalog::pinned();
     assert_eq!(catalog.version(PinnedTool::Rust), "1.98.1");
-    assert_eq!(catalog.version(PinnedTool::MrBoxington), "1.21.1");
+    assert_eq!(catalog.version(PinnedTool::MrBoxington), "1.22.0");
     assert_eq!(catalog.version(PinnedTool::Gh), "2.102.0");
     assert_eq!(catalog.version(PinnedTool::Actionlint), "1.7.12");
     assert_eq!(catalog.version(PinnedTool::Shellcheck), "0.11.0");
@@ -20,7 +20,7 @@ fn pinned_catalog_matches_qualified_versions() {
     assert_eq!(catalog.version(PinnedTool::Nextest), "0.9.146");
     assert_eq!(catalog.version(PinnedTool::Opentofu), "1.13.1");
     assert_eq!(RUST_VERSION, "1.98.1");
-    assert_eq!(MR_BOXINGTON_VERSION, "1.21.1");
+    assert_eq!(MR_BOXINGTON_VERSION, "1.22.0");
     assert_eq!(GH_VERSION, "2.102.0");
     assert_eq!(ACTIONLINT_VERSION, "1.7.12");
     assert_eq!(SHELLCHECK_VERSION, "0.11.0");
@@ -35,7 +35,7 @@ fn tool_specs_use_registry_names() {
     assert_eq!(catalog.tool_spec(PinnedTool::Rust), "rust@1.98.1");
     assert_eq!(
         catalog.tool_spec(PinnedTool::MrBoxington),
-        "mr-boxington@1.21.1"
+        "mr-boxington@1.22.0"
     );
     assert_eq!(catalog.tool_spec(PinnedTool::Gh), "gh@2.102.0");
     assert_eq!(
@@ -54,7 +54,7 @@ fn tool_specs_use_registry_names() {
     assert_eq!(catalog.tool_spec(PinnedTool::Opentofu), "opentofu@1.13.1");
     assert_eq!(
         catalog.tool_specs(&[PinnedTool::Rust, PinnedTool::MrBoxington]),
-        vec!["rust@1.98.1".to_owned(), "mr-boxington@1.21.1".to_owned()]
+        vec!["rust@1.98.1".to_owned(), "mr-boxington@1.22.0".to_owned()]
     );
 }
 
@@ -137,30 +137,30 @@ fn tool_file_values_never_become_pins() {
 #[test]
 fn catalog_new_validates_every_slot() {
     let catalog = ToolCatalog::new(
-        "1.98.1", "1.21.1", "2.102.0", "1.7.12", "0.11.0", "1.30.1", "0.9.146", "1.13.1",
+        "1.98.1", "1.22.0", "2.102.0", "1.7.12", "0.11.0", "1.30.1", "0.9.146", "1.13.1",
     );
     assert!(catalog.is_ok());
     assert!(matches!(
         ToolCatalog::new(
-            "latest", "1.21.1", "2.102.0", "1.7.12", "0.11.0", "1.30.1", "0.9.146", "1.13.1"
+            "latest", "1.22.0", "2.102.0", "1.7.12", "0.11.0", "1.30.1", "0.9.146", "1.13.1"
         ),
         Err(MiseError::InvalidToolVersion { .. })
     ));
     assert!(matches!(
         ToolCatalog::new(
-            "1.98.1", "1.21.1", "2.102.0", "1.7.12", "0.11.0", "v1.30.1", "0.9.146", "1.13.1"
+            "1.98.1", "1.22.0", "2.102.0", "1.7.12", "0.11.0", "v1.30.1", "0.9.146", "1.13.1"
         ),
         Err(MiseError::InvalidToolVersion { .. })
     ));
     assert!(matches!(
         ToolCatalog::new(
-            "1.98.1", "1.21.1", "2.102.0", "1.7.12", "0.11.0", "1.30.1", "latest", "1.13.1"
+            "1.98.1", "1.22.0", "2.102.0", "1.7.12", "0.11.0", "1.30.1", "latest", "1.13.1"
         ),
         Err(MiseError::InvalidToolVersion { .. })
     ));
     assert!(matches!(
         ToolCatalog::new(
-            "1.98.1", "1.21.1", "2.102.0", "1.7.12", "0.11.0", "1.30.1", "0.9.146", "latest"
+            "1.98.1", "1.22.0", "2.102.0", "1.7.12", "0.11.0", "1.30.1", "0.9.146", "latest"
         ),
         Err(MiseError::InvalidToolVersion { .. })
     ));
@@ -183,11 +183,11 @@ fn action_mbx_reconcile_matches_pin_only() {
     let catalog = ToolCatalog::pinned();
     assert!(catalog.reconcile_action_mbx(MR_BOXINGTON_VERSION).is_ok());
     assert!(matches!(
-        catalog.reconcile_action_mbx("1.22.0"),
+        catalog.reconcile_action_mbx("1.21.1"),
         Err(MiseError::InvalidToolVersion { tool, version })
-            if tool == "mr-boxington" && version == "1.22.0"
+            if tool == "mr-boxington" && version == "1.21.1"
     ));
-    for loose in ["latest", "v1.21.1", "1.19", ""] {
+    for loose in ["latest", "v1.22.0", "1.19", ""] {
         assert!(
             matches!(
                 catalog.reconcile_action_mbx(loose),
@@ -201,7 +201,7 @@ fn action_mbx_reconcile_matches_pin_only() {
     )
     .expect("exact catalog");
     assert!(moved.reconcile_action_mbx("1.22.0").is_ok());
-    assert!(moved.reconcile_action_mbx(MR_BOXINGTON_VERSION).is_err());
+    assert!(moved.reconcile_action_mbx("1.21.1").is_err());
 }
 
 /// Qualified `tofu_1.13.1_<platform>.tar.gz` sha256 digests (T15).

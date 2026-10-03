@@ -173,11 +173,11 @@
       "status": "held"
     },
     {
-      "checked_at": "2026-10-03T14:15:14Z",
-      "latest": "v1.21.1",
+      "checked_at": "2026-10-03T23:31:54Z",
+      "latest": "v1.22.0",
       "name": "mr-boxington",
-      "pinned": "1.21.1",
-      "qualified": "1.21.1",
+      "pinned": "1.22.0",
+      "qualified": "1.22.0",
       "source": "https://api.github.com/repos/jdx/mr-boxington/releases/latest",
       "status": "current"
     },
