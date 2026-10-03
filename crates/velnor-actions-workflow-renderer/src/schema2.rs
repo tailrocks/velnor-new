@@ -24,6 +24,8 @@ pub const MONITORING_WORKFLOW: &str = ".github/workflows/monitoring.yml";
 mod classes;
 #[path = "schema2_features.rs"]
 mod features;
+#[path = "schema2_release.rs"]
+mod release;
 
 /// Which schema 2 workflows to emit, plus the selectors they use.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -73,7 +75,7 @@ pub fn render_schema2_workflows(
         files.push(file(
             IMAGE_RELEASE_WORKFLOW,
             &request.version,
-            &single(request, "Image release", "image-release", "Publish image")?,
+            &release::image_release(request)?,
         )?);
     }
     if request
@@ -83,12 +85,7 @@ pub fn render_schema2_workflows(
         files.push(file(
             MACOS_BINARY_RELEASE_WORKFLOW,
             &request.version,
-            &single(
-                request,
-                "macOS binary release",
-                "macos-binary-release",
-                "Publish macOS binary",
-            )?,
+            &release::macos_binary_release(request)?,
         )?);
     }
     if request.workflows.contains(&RoutingWorkflow::Monitoring) {
@@ -188,27 +185,6 @@ fn monitoring(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
                 "echo queue-monitor",
             ),
         ],
-    ))
-}
-
-fn single(
-    request: &Schema2WorkflowRequest,
-    title: &str,
-    id: &str,
-    step: &str,
-) -> Result<Yaml, RenderError> {
-    Ok(document(
-        title,
-        empty_dispatch(),
-        vec![job(
-            id,
-            title,
-            runs_on_yaml(&request.hosted_label)?,
-            10,
-            Vec::new(),
-            step,
-            "echo release",
-        )],
     ))
 }
 
