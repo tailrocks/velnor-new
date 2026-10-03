@@ -19,6 +19,13 @@ pub const IMAGE_RELEASE_WORKFLOW: &str = ".github/workflows/image-release.yml";
 pub const MACOS_BINARY_RELEASE_WORKFLOW: &str = ".github/workflows/macos-binary-release.yml";
 /// Queue-monitoring workflow path.
 pub const MONITORING_WORKFLOW: &str = ".github/workflows/monitoring.yml";
+/// JavaScript, service, artifact, and Buildx qualification path.
+pub const QUALIFICATION_FEATURES_WORKFLOW: &str = ".github/workflows/qualification-features.yml";
+/// Intentionally failing qualification path. Not part of the green suite.
+pub const QUALIFICATION_NEGATIVE_WORKFLOW: &str = ".github/workflows/qualification-negative.yml";
+
+#[path = "schema2_features.rs"]
+mod features;
 
 /// Which schema 2 workflows to emit, plus the selectors they use.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -62,6 +69,16 @@ pub fn render_schema2_workflows(
             QUALIFICATION_WORKFLOW,
             &request.version,
             &qualification(request)?,
+        )?);
+        files.push(file(
+            QUALIFICATION_FEATURES_WORKFLOW,
+            &request.version,
+            &features::features(request)?,
+        )?);
+        files.push(file(
+            QUALIFICATION_NEGATIVE_WORKFLOW,
+            &request.version,
+            &features::negative(request)?,
         )?);
     }
     if request.workflows.contains(&RoutingWorkflow::ImageRelease) {

@@ -7,6 +7,9 @@ use velnor_actions_workflow_renderer::RenderedTree;
 
 use crate::impl_common::{TestResult, config_with_branch, git, make_repo};
 
+#[path = "schema2_feature_snapshots.rs"]
+mod schema2_feature_snapshots;
+
 const HOSTED_RUNS: &str = "runs-on: ubuntu-26.04";
 const SCALE_RUNS: &str = "runs-on: [velnor, ubuntu-26.04-scale-set]";
 const SCALE_REVERSED: &str = "runs-on: [ubuntu-26.04-scale-set, velnor]";
@@ -119,6 +122,14 @@ fn schema2_workflows_match_expected_bytes() -> TestResult {
     assert_eq!(
         required_file(&tree, ".github/workflows/monitoring.yml")?,
         &marked(MONITORING)
+    );
+    assert_eq!(
+        required_file(&tree, ".github/workflows/qualification-features.yml")?,
+        &marked(schema2_feature_snapshots::FEATURES)
+    );
+    assert_eq!(
+        required_file(&tree, ".github/workflows/qualification-negative.yml")?,
+        &marked(schema2_feature_snapshots::NEGATIVE)
     );
     Ok(())
 }

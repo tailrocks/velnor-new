@@ -20,6 +20,8 @@ pub enum Yaml {
     Map(Vec<(String, Self)>),
     /// One-line flow sequence of scalars: `[a, b]`.
     Flow(Vec<String>),
+    /// Double-quoted scalar. Plain `6379:6379` is a mapping in a sequence.
+    Quoted(String),
 }
 
 impl Yaml {
@@ -29,10 +31,21 @@ impl Yaml {
         Self::Str(value.into())
     }
 
+    /// Build a scalar that is always double-quoted.
+    #[must_use]
+    pub fn quoted(value: impl Into<String>) -> Self {
+        Self::Quoted(value.into())
+    }
+
     /// True when the value fits on one line after `key: ` or `- `.
     fn is_inline(&self) -> bool {
         match self {
-            Self::Null | Self::Str(_) | Self::Bool(_) | Self::Int(_) | Self::Flow(_) => true,
+            Self::Null
+            | Self::Str(_)
+            | Self::Bool(_)
+            | Self::Int(_)
+            | Self::Flow(_)
+            | Self::Quoted(_) => true,
             Self::Seq(items) => items.is_empty(),
             Self::Map(entries) => entries.is_empty(),
         }
@@ -102,7 +115,12 @@ fn emit_node(value: &Yaml, indent: usize, out: &mut String) {
                 emit_map_entry(key, child, indent, out);
             }
         }
-        Yaml::Null | Yaml::Str(_) | Yaml::Bool(_) | Yaml::Int(_) | Yaml::Flow(_) => {}
+        Yaml::Null
+        | Yaml::Str(_)
+        | Yaml::Bool(_)
+        | Yaml::Int(_)
+        | Yaml::Flow(_)
+        | Yaml::Quoted(_) => {}
     }
 }
 
@@ -171,6 +189,7 @@ fn emit_first_entry(key: &str, value: &Yaml, indent: usize, out: &mut String) {
 fn emit_inline(value: &Yaml, out: &mut String) {
     match value {
         Yaml::Str(text) => out.push_str(&quote_scalar(text)),
+        Yaml::Quoted(text) => out.push_str(&quote_double(text)),
         Yaml::Bool(flag) => out.push_str(if *flag { "true" } else { "false" }),
         Yaml::Int(num) => out.push_str(&num.to_string()),
         Yaml::Seq(items) if items.is_empty() => out.push_str("[]"),
