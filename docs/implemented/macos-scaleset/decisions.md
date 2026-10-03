@@ -21,3 +21,4 @@
 | D17 | Plan artifacts are named `velnor-plan-r<run_id>-a<run_attempt>`. `gh run rerun --failed` does not re-run Plan, so dependents look up an artifact that was never uploaded. A rerun of failed jobs must include Plan in the same attempt. |
 | D18 | Owned Docker cleanup matches the full container id. `NetworkMode` is `container:<64-hex>`. A 12-character id is not ownership proof and must not authorize `docker rm`. |
 | D19 | An expired scale-set session is only the specifically identified HTTP 400 on delete/reopen. Any other 400 remains a failure. |
+| D20 | `max_jobs` is the ceiling (still default 1, still clamped at 8). Each poll grows or shrinks the advertised capacity by one from host load, free memory, and free disk. A missing sample holds the previous count. The first advertisement starts at 1. Running jobs are not killed to shrink. |

@@ -7,7 +7,8 @@ use std::cell::Cell;
 
 use super::steps::Idle;
 
-const JOB_MAX: u32 = 8;
+/// Hard ceiling for one host. Configured `max_jobs` cannot advertise more.
+pub(super) const JOB_MAX: u32 = 8;
 const POLL_DEFAULT: usize = 8;
 const POLL_MAX: usize = 8;
 const POLL_MAX_MULTI: usize = 24;

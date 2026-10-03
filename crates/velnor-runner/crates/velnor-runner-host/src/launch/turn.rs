@@ -33,7 +33,8 @@ pub(super) async fn poll_and_drive(
 ) -> Result<Vec<Started>, EnsureError> {
     trace::session(session);
     let mut workers = Vec::new();
-    let capacity = capacity::job_capacity();
+    let ceiling = capacity::job_capacity();
+    let capacity = super::pressure::advertise(ceiling);
     if !slot::busy(journal, docker, capacity).await?
         && let Some(started) =
             scale_session(link, set_id, session, admin_token, journal, docker).await?
@@ -120,6 +121,7 @@ struct Turn<'a> {
 
 impl Turn<'_> {
     async fn drive_poll(&mut self, workers: &mut Vec<Started>) -> Result<bool, EnsureError> {
+        self.fit_pressure().await?;
         let (saved, path) = point_at_queue(self.link, &self.session.message_queue_url)?;
         let queue = saved.as_ref().map(|_| self.link.base().to_owned());
         let polled = poll_path(self.link, self.session, &path, self.capacity);
@@ -138,6 +140,17 @@ impl Turn<'_> {
             idle,
         });
         self.apply(decision, workers, path, queue, &polled).await
+    }
+
+    async fn fit_pressure(&mut self) -> Result<(), EnsureError> {
+        let running_now = slot::running_count(self.journal, self.docker).await?;
+        let ceiling = capacity::job_capacity();
+        let next = super::pressure::adjust(self.capacity, running_now, ceiling);
+        if self.target == self.capacity {
+            self.target = next;
+        }
+        self.capacity = next;
+        Ok(())
     }
 
     async fn running(&self, started: u32, idle: steps::Idle) -> Result<u32, EnsureError> {
