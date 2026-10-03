@@ -12,6 +12,7 @@ fn decide(capacity: u32, started: u32, running: u32, idle: Idle) -> Admit {
         target: capacity,
         started,
         running,
+        assigned: u32::MAX,
         idle,
     })
 }
@@ -22,6 +23,7 @@ fn decide_at(capacity: u32, target: u32, started: u32, running: u32, idle: Idle)
         target,
         started,
         running,
+        assigned: u32::MAX,
         idle,
     })
 }
@@ -70,6 +72,43 @@ fn ack_does_not_start_or_free_a_slot() {
     assert_eq!(decide(1, 1, 1, Idle::Ack), Admit::Ack { stop: true });
     assert_eq!(decide(2, 1, running, Idle::Ack), Admit::Ack { stop: false });
     assert_eq!(decide(2, 0, running, Idle::Launch), Admit::Hold);
+}
+
+#[test]
+fn scale_does_not_mint_again_once_assigned_is_covered() {
+    assert_eq!(
+        admit(Seat {
+            capacity: 2,
+            target: 2,
+            started: 1,
+            running: 1,
+            assigned: 1,
+            idle: Idle::Scale,
+        }),
+        Admit::Ack { stop: false }
+    );
+    assert_eq!(
+        admit(Seat {
+            capacity: 2,
+            target: 2,
+            started: 1,
+            running: 1,
+            assigned: 3,
+            idle: Idle::Scale,
+        }),
+        Admit::Start { stop: true }
+    );
+    assert_eq!(
+        admit(Seat {
+            capacity: 2,
+            target: 2,
+            started: 0,
+            running: 0,
+            assigned: 1,
+            idle: Idle::Scale,
+        }),
+        Admit::Start { stop: false }
+    );
 }
 
 #[test]

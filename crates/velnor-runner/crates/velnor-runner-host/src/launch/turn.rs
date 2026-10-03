@@ -96,6 +96,17 @@ async fn departed(turn: &Turn<'_>, workers: &[Started], missed: u8) -> Result<bo
     Ok(running == 0 && (workers.is_empty() || missed >= 2))
 }
 
+fn assigned_in(polled: &Poll) -> u32 {
+    let Poll::Batch(batch) = polled else {
+        return 0;
+    };
+    let raw = batch
+        .statistics
+        .as_ref()
+        .map_or(0, velnor_runner_github::Statistics::assigned_population);
+    u32::try_from(raw.max(0)).unwrap_or(u32::MAX)
+}
+
 struct Turn<'a> {
     link: &'a mut Link,
     set_id: i64,
@@ -123,6 +134,7 @@ impl Turn<'_> {
             target: self.target,
             started,
             running,
+            assigned: assigned_in(&polled),
             idle,
         });
         self.apply(decision, workers, path, queue, &polled).await
