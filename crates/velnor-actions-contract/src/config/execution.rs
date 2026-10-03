@@ -123,6 +123,8 @@ pub enum RoutingWorkflow {
     ImageRelease,
     /// macOS binary-release workflow.
     MacosBinaryRelease,
+    /// `velnor-actions` generator release. Tag is `generator-<sha>`, not `v0.1.0`.
+    GeneratorRelease,
     /// Hosted queue-monitoring workflow.
     Monitoring,
 }

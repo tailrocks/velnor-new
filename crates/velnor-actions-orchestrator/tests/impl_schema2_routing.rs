@@ -9,6 +9,8 @@ use crate::impl_common::{TestResult, config_with_branch, git, make_repo};
 
 #[path = "schema2_feature_snapshots.rs"]
 mod schema2_feature_snapshots;
+#[path = "schema2_generator_release_snapshots.rs"]
+mod schema2_generator_release_snapshots;
 #[path = "schema2_release_snapshots.rs"]
 mod schema2_release_snapshots;
 
@@ -123,6 +125,7 @@ fn schema2_workflows_match_expected_bytes() -> TestResult {
         required_file(&tree, ".github/workflows/monitoring.yml")?,
         &marked(MONITORING)
     );
+    schema2_generator_release_snapshots::assert_rendered(&tree)?;
     Ok(())
 }
 
@@ -143,6 +146,7 @@ fn committed_release_files_match_schema2_bytes() -> TestResult {
         let body = std::fs::read_to_string(&path)?;
         assert_eq!(body, marked(expected), "{}", path.display());
     }
+    schema2_generator_release_snapshots::assert_committed(&root)?;
     Ok(())
 }
 
@@ -270,7 +274,7 @@ fn hosted_schema2() -> String {
 
 fn workflow_config() -> String {
     format!(
-        "{}\nmode = \"hosted\"\nworkflows = [\"qualification\", \"image_release\", \"macos_binary_release\", \"monitoring\"]\n{}",
+        "{}\nmode = \"hosted\"\nworkflows = [\"qualification\", \"image_release\", \"macos_binary_release\", \"generator_release\", \"monitoring\"]\n{}",
         execution_head(),
         profiles()
     )
