@@ -30,6 +30,56 @@ fn render_mbx(id: &str, scale_set: bool) -> Result<String, RenderError> {
     )
 }
 
+fn assert_cold_import(imported: &str) {
+    for needle in [
+        "mbx cache import",
+        "no mbx bundle matched",
+        "mbx bundle missing; continuing cold",
+        "mbx bundle import failed; continuing cold",
+        "df -B1 -P",
+        "df -i -P",
+    ] {
+        assert!(
+            imported.contains(needle),
+            "{needle} missing from {imported}"
+        );
+    }
+    assert!(!imported.contains("test -d"), "{imported}");
+}
+
+#[test]
+fn hosted_export_samples_disk_around_store_delete() -> Result<(), RenderError> {
+    let text = render_mbx("demo", false)?;
+    let export = text
+        .find("name: Export MBX single bundle")
+        .expect("export step");
+    let save = text
+        .find("name: Save MBX single bundle")
+        .expect("save step");
+    let script = &text[export..save];
+    let bytes = script.find("df -B1 -P").expect("byte sample");
+    let inodes = script.find("df -i -P").expect("inode sample");
+    let gc = script.find("mbx gc").expect("reclaim");
+    let exported = script.find("cache export").expect("export");
+    let durable = script.find("test -d").expect("bundle check");
+    let deleted = script.find(r#"rm -rf \"$store\""#).expect("store delete");
+    assert!(bytes < inodes, "{script}");
+    assert!(inodes < gc, "{script}");
+    assert!(gc < exported, "{script}");
+    assert!(exported < durable, "{script}");
+    assert!(durable < deleted, "{script}");
+    let after = &script[deleted..];
+    assert!(after.contains("df -B1 -P"), "{after}");
+    assert!(after.contains("df -i -P"), "{after}");
+    assert!(
+        script.contains("$RUNNER_TEMP/mbx-single-bundle"),
+        "{script}"
+    );
+    assert_eq!(script.matches("--format directory").count(), 1, "{script}");
+    assert!(!script.contains("github-actions-cache-v1"), "{script}");
+    Ok(())
+}
+
 #[test]
 fn hosted_save_is_one_bundle_outside_the_store() -> Result<(), RenderError> {
     let text = render_mbx("demo", false)?;
@@ -69,30 +119,11 @@ fn hosted_save_is_one_bundle_outside_the_store() -> Result<(), RenderError> {
         restored.contains("restore-keys: ${{ steps.mbx-bundle-key.outputs.prefix }}"),
         "{restored}"
     );
-    let imported = &text[import..export];
-    assert!(imported.contains("mbx cache import"), "{imported}");
-    assert!(imported.contains("no mbx bundle matched"), "{imported}");
+    assert_cold_import(&text[import..export]);
     let action = &text[restore..export];
     assert!(action.contains("id: mbx"), "{action}");
     assert!(action.contains("ACTIONS_CACHE_MODE: read"), "{action}");
     assert!(!action.contains("write"), "{action}");
-    let script = &text[export..save];
-    let gc = script.find("mbx gc").expect("reclaim");
-    let exported = script.find("cache export").expect("export");
-    let durable = script.find("test -d").expect("bundle check");
-    let deleted = script
-        .find(r#"rm -rf \"$store\""#)
-        .unwrap_or_else(|| panic!("store delete missing:\n{script}"));
-    assert!(
-        gc < exported && exported < durable && durable < deleted,
-        "{script}"
-    );
-    assert!(
-        script.contains("$RUNNER_TEMP/mbx-single-bundle"),
-        "{script}"
-    );
-    assert_eq!(script.matches("--format directory").count(), 1, "{script}");
-    assert!(!script.contains("github-actions-cache-v1"), "{script}");
     let saved = &text[save..];
     assert!(
         saved.contains("path: ${{ runner.temp }}/mbx-single-bundle"),
