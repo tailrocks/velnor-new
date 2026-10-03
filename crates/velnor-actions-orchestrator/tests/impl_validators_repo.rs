@@ -103,7 +103,13 @@ fn repo_config_sample_parses_through_prepare() -> TestResult {
         let sample = repo_sample_text()?;
         let repo = make_sample_repo(&sample)?;
         let prep = prepare(repo.path())?;
-        assert_eq!(prep.config.schema, 1);
+        assert_eq!(prep.config.schema, 2);
+        let execution = prep
+            .config
+            .execution
+            .as_ref()
+            .ok_or("schema 2 sample has no execution")?;
+        assert_eq!(execution.default_profile, "hosted");
         assert_eq!(
             prep.config.workflow.policy,
             WorkflowPolicy::VelnorRepositoryV1
@@ -130,6 +136,7 @@ fn repo_config_sample_covers_schema_keys() -> TestResult {
                 "stacks",
                 "discovery",
                 "actions",
+                "execution",
             ]
             .contains(&key.as_str()),
             "sample key outside schema: {key}"
@@ -159,6 +166,28 @@ fn repo_config_sample_covers_schema_keys() -> TestResult {
     for key in section_keys("discovery") {
         assert_eq!(key, "exclude", "discovery key outside schema: {key}");
     }
+    for key in section_keys("execution") {
+        assert!(
+            [
+                "default_profile",
+                "mode",
+                "hosted_profile",
+                "scale_set_profile",
+                "profiles",
+                "parity",
+                "overrides",
+                "workflows",
+            ]
+            .contains(&key.as_str()),
+            "execution key outside schema: {key}"
+        );
+    }
+    assert_sample_mentions(&sample);
+    Ok(())
+}
+
+/// Tokens the live schema-2 sample must still spell.
+fn assert_sample_mentions(sample: &str) {
     for token in [
         "schema",
         "[workflow]",
@@ -167,7 +196,6 @@ fn repo_config_sample_covers_schema_keys() -> TestResult {
         "default_branch",
         "generator_validation",
         "max_parallel_jobs",
-        "runner_label",
         "[resources]",
         "compiler_process_budget",
         "test_process_budget",
@@ -181,13 +209,17 @@ fn repo_config_sample_covers_schema_keys() -> TestResult {
         "[discovery]",
         "exclude",
         "[actions.overrides]",
+        "[execution]",
+        "default_profile",
+        "hosted_profile",
+        "scale_set_profile",
+        "workflows",
     ] {
         assert!(
             sample.contains(token),
             "schema key missing from sample: {token}"
         );
     }
-    Ok(())
 }
 
 /// Pinned `uses:` ref fixture.
