@@ -1,10 +1,13 @@
-//! Extra qualification workflows. Echo qualification stays a separate file.
-//! The negative workflow is expected to fail in GitHub.
+//! Feature and expected-negative jobs inside qualification.
+//! `inputs.mode` selects them. The default `both` keeps the echo lanes.
+//! The negative jobs must fail in GitHub. They are not a separate workflow
+//! file, because `workflow_dispatch` only sees files on the default branch.
 
-use super::{document, empty_dispatch};
-use crate::runs_on::runs_on_yaml;
+use super::with_if;
 use crate::yaml::Yaml;
-use crate::{RenderError, Schema2WorkflowRequest};
+
+const FEATURES: &str = "inputs.mode == 'features'";
+const NEGATIVE: &str = "inputs.mode == 'negative'";
 
 const CHECKOUT_USES: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
 const UPLOAD_USES: &str = "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a";
@@ -14,80 +17,94 @@ const PROBE_DNS: &str = "node -e 'const n=require(\"net\");const s=n.connect(637
 const PROBE_LOCAL: &str = "node -e 'const n=require(\"net\");const s=n.connect(6379,\"127.0.0.1\",()=>s.end());s.on(\"error\",()=>process.exit(1));setTimeout(()=>process.exit(1),10000)'";
 const BUILDX_RUN: &str = "docker buildx version && printf 'FROM scratch\\n' > Dockerfile && docker buildx build --progress=plain -t velnor-g4:probe .";
 
-/// JavaScript, service, artifact, and Buildx jobs on both lanes.
-///
-/// # Errors
-///
-/// Illegal selectors fail.
-pub(super) fn features(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
-    let hosted = runs_on_yaml(&request.hosted_label)?;
-    let scale = runs_on_yaml(&request.scale_set.token())?;
-    Ok(document(
-        "Qualification features",
-        empty_dispatch(),
-        vec![
+/// Jobs that run only when `inputs.mode` is `features`.
+pub(super) fn feature_jobs(hosted: Yaml, scale: Yaml) -> Vec<(String, Yaml)> {
+    vec![
+        gated(
             js_job(
                 "js-hosted",
                 "JavaScript actions / GitHub hosted",
                 hosted.clone(),
             ),
+            FEATURES,
+        ),
+        gated(
             js_job(
                 "js-scale-set",
                 "JavaScript actions / Velnor Scale Set",
                 scale.clone(),
             ),
+            FEATURES,
+        ),
+        gated(
             service_job(
                 "services-hosted",
                 "Services / GitHub hosted",
                 hosted.clone(),
             ),
+            FEATURES,
+        ),
+        gated(
             service_job(
                 "services-scale-set",
                 "Services / Velnor Scale Set",
                 scale.clone(),
             ),
+            FEATURES,
+        ),
+        gated(
             artifact_job(
                 "artifacts-hosted",
                 "Artifacts / GitHub hosted",
                 hosted.clone(),
                 "g4-proof-hosted",
             ),
+            FEATURES,
+        ),
+        gated(
             artifact_job(
                 "artifacts-scale-set",
                 "Artifacts / Velnor Scale Set",
                 scale.clone(),
                 "g4-proof-scale-set",
             ),
+            FEATURES,
+        ),
+        gated(
             buildx_job("buildx-hosted", "Buildx / GitHub hosted", hosted),
+            FEATURES,
+        ),
+        gated(
             buildx_job("buildx-scale-set", "Buildx / Velnor Scale Set", scale),
-        ],
-    ))
+            FEATURES,
+        ),
+    ]
 }
 
-/// Hosted and scale-set jobs that must fail in GitHub.
-///
-/// # Errors
-///
-/// Illegal selectors fail.
-pub(super) fn negative(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
-    let hosted = runs_on_yaml(&request.hosted_label)?;
-    let scale = runs_on_yaml(&request.scale_set.token())?;
-    Ok(document(
-        "Qualification negative",
-        empty_dispatch(),
-        vec![
+/// Jobs that run only when `inputs.mode` is `negative`. They must fail in GitHub.
+pub(super) fn negative_jobs(hosted: Yaml, scale: Yaml) -> Vec<(String, Yaml)> {
+    vec![
+        gated(
             fail_job(
                 "expect-fail-hosted",
                 "Expected negative / GitHub hosted",
                 hosted,
             ),
+            NEGATIVE,
+        ),
+        gated(
             fail_job(
                 "expect-fail-scale-set",
                 "Expected negative / Velnor Scale Set",
                 scale,
             ),
-        ],
-    ))
+            NEGATIVE,
+        ),
+    ]
+}
+
+fn gated(job: (String, Yaml), when: &str) -> (String, Yaml) {
+    with_if(job, when)
 }
 
 fn js_job(id: &str, name: &str, runs_on: Yaml) -> (String, Yaml) {

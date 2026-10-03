@@ -1,12 +1,45 @@
-/// `qualification-features.yml` body, without the generator marker.
-pub(super) const FEATURES: &str = r#"name: Qualification features
+/// `qualification.yml` body, without the generator marker.
+pub(super) const QUALIFICATION: &str = r#"name: Qualification
 "on":
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      mode:
+        type: string
+        required: false
+        default: both
 permissions:
   contents: read
 jobs:
+  verify-hosted:
+    name: Verify / GitHub hosted / Linux x64
+    if: inputs.mode == 'both'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    steps:
+      - name: Qualify hosted lane
+        run: echo qualification-hosted
+  verify-scale-set:
+    name: Verify / Velnor Scale Set / Linux x64
+    if: inputs.mode == 'both'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 30
+    steps:
+      - name: Qualify scale-set lane
+        run: echo qualification-scale-set
+  compare:
+    name: Compare hosted and Velnor execution
+    if: inputs.mode == 'both'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    needs:
+      - verify-hosted
+      - verify-scale-set
+    steps:
+      - name: Compare lanes
+        run: echo compare-lanes
   js-hosted:
     name: JavaScript actions / GitHub hosted
+    if: inputs.mode == 'features'
     runs-on: ubuntu-26.04
     timeout-minutes: 20
     steps:
@@ -18,6 +51,7 @@ jobs:
         run: "node -e 'console.log(\"js-action-ok\")'"
   js-scale-set:
     name: JavaScript actions / Velnor Scale Set
+    if: inputs.mode == 'features'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
     steps:
@@ -29,6 +63,7 @@ jobs:
         run: "node -e 'console.log(\"js-action-ok\")'"
   services-hosted:
     name: Services / GitHub hosted
+    if: inputs.mode == 'features'
     runs-on: ubuntu-26.04
     timeout-minutes: 20
     services:
@@ -44,6 +79,7 @@ jobs:
         run: "node -e 'const n=require(\"net\");const s=n.connect(6379,\"127.0.0.1\",()=>s.end());s.on(\"error\",()=>process.exit(1));setTimeout(()=>process.exit(1),10000)'"
   services-scale-set:
     name: Services / Velnor Scale Set
+    if: inputs.mode == 'features'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
     services:
@@ -59,6 +95,7 @@ jobs:
         run: "node -e 'const n=require(\"net\");const s=n.connect(6379,\"127.0.0.1\",()=>s.end());s.on(\"error\",()=>process.exit(1));setTimeout(()=>process.exit(1),10000)'"
   artifacts-hosted:
     name: Artifacts / GitHub hosted
+    if: inputs.mode == 'features'
     runs-on: ubuntu-26.04
     timeout-minutes: 20
     permissions:
@@ -75,6 +112,7 @@ jobs:
           if-no-files-found: error
   artifacts-scale-set:
     name: Artifacts / Velnor Scale Set
+    if: inputs.mode == 'features'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
     permissions:
@@ -91,6 +129,7 @@ jobs:
           if-no-files-found: error
   buildx-hosted:
     name: Buildx / GitHub hosted
+    if: inputs.mode == 'features'
     runs-on: ubuntu-26.04
     timeout-minutes: 20
     steps:
@@ -98,21 +137,15 @@ jobs:
         run: docker buildx version && printf 'FROM scratch\n' > Dockerfile && docker buildx build --progress=plain -t velnor-g4:probe .
   buildx-scale-set:
     name: Buildx / Velnor Scale Set
+    if: inputs.mode == 'features'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
     steps:
       - name: Buildx probe
         run: docker buildx version && printf 'FROM scratch\n' > Dockerfile && docker buildx build --progress=plain -t velnor-g4:probe .
-"#;
-/// `qualification-negative.yml` body, without the generator marker.
-pub(super) const NEGATIVE: &str = r#"name: Qualification negative
-"on":
-  workflow_dispatch: {}
-permissions:
-  contents: read
-jobs:
   expect-fail-hosted:
     name: Expected negative / GitHub hosted
+    if: inputs.mode == 'negative'
     runs-on: ubuntu-26.04
     timeout-minutes: 10
     steps:
@@ -120,6 +153,7 @@ jobs:
         run: echo expected-negative && exit 1
   expect-fail-scale-set:
     name: Expected negative / Velnor Scale Set
+    if: inputs.mode == 'negative'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 10
     steps:

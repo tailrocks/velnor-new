@@ -19,10 +19,6 @@ pub const IMAGE_RELEASE_WORKFLOW: &str = ".github/workflows/image-release.yml";
 pub const MACOS_BINARY_RELEASE_WORKFLOW: &str = ".github/workflows/macos-binary-release.yml";
 /// Queue-monitoring workflow path.
 pub const MONITORING_WORKFLOW: &str = ".github/workflows/monitoring.yml";
-/// JavaScript, service, artifact, and Buildx qualification path.
-pub const QUALIFICATION_FEATURES_WORKFLOW: &str = ".github/workflows/qualification-features.yml";
-/// Intentionally failing qualification path. Not part of the green suite.
-pub const QUALIFICATION_NEGATIVE_WORKFLOW: &str = ".github/workflows/qualification-negative.yml";
 
 #[path = "schema2_features.rs"]
 mod features;
@@ -70,16 +66,6 @@ pub fn render_schema2_workflows(
             &request.version,
             &qualification(request)?,
         )?);
-        files.push(file(
-            QUALIFICATION_FEATURES_WORKFLOW,
-            &request.version,
-            &features::features(request)?,
-        )?);
-        files.push(file(
-            QUALIFICATION_NEGATIVE_WORKFLOW,
-            &request.version,
-            &features::negative(request)?,
-        )?);
     }
     if request.workflows.contains(&RoutingWorkflow::ImageRelease) {
         files.push(file(
@@ -123,39 +109,56 @@ fn file(path: &str, version: &str, body: &Yaml) -> Result<RenderedFile, RenderEr
 fn qualification(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
     let hosted = runs_on_yaml(&request.hosted_label)?;
     let scale = runs_on_yaml(&request.scale_set.token())?;
-    Ok(document(
-        "Qualification",
-        mode_trigger(),
-        vec![
+    let echo = "inputs.mode == 'both'";
+    let mut jobs = vec![
+        with_if(
             job(
                 "verify-hosted",
                 "Verify / GitHub hosted / Linux x64",
-                hosted,
+                hosted.clone(),
                 30,
                 Vec::new(),
                 "Qualify hosted lane",
                 "echo qualification-hosted",
             ),
+            echo,
+        ),
+        with_if(
             job(
                 "verify-scale-set",
                 "Verify / Velnor Scale Set / Linux x64",
-                scale,
+                scale.clone(),
                 30,
                 Vec::new(),
                 "Qualify scale-set lane",
                 "echo qualification-scale-set",
             ),
+            echo,
+        ),
+        with_if(
             job(
                 "compare",
                 "Compare hosted and Velnor execution",
-                runs_on_yaml(&request.hosted_label)?,
+                hosted.clone(),
                 10,
                 vec!["verify-hosted".to_owned(), "verify-scale-set".to_owned()],
                 "Compare lanes",
                 "echo compare-lanes",
             ),
-        ],
-    ))
+            echo,
+        ),
+    ];
+    jobs.extend(features::feature_jobs(hosted.clone(), scale.clone()));
+    jobs.extend(features::negative_jobs(hosted, scale));
+    Ok(document("Qualification", mode_trigger(), jobs))
+}
+
+fn with_if((id, body): (String, Yaml), when: &str) -> (String, Yaml) {
+    let Yaml::Map(mut fields) = body else {
+        return (id, body);
+    };
+    fields.insert(1, ("if".to_owned(), Yaml::str(when)));
+    (id, Yaml::Map(fields))
 }
 
 fn monitoring(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {

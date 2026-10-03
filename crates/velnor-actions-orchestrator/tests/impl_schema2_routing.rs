@@ -109,7 +109,7 @@ fn schema2_workflows_match_expected_bytes() -> TestResult {
     let tree = render_staged_tree(&prepare(repo.path())?)?;
     assert_eq!(
         required_file(&tree, ".github/workflows/qualification.yml")?,
-        &marked(QUALIFICATION)
+        &marked(schema2_feature_snapshots::QUALIFICATION)
     );
     assert_eq!(
         required_file(&tree, ".github/workflows/image-release.yml")?,
@@ -122,14 +122,6 @@ fn schema2_workflows_match_expected_bytes() -> TestResult {
     assert_eq!(
         required_file(&tree, ".github/workflows/monitoring.yml")?,
         &marked(MONITORING)
-    );
-    assert_eq!(
-        required_file(&tree, ".github/workflows/qualification-features.yml")?,
-        &marked(schema2_feature_snapshots::FEATURES)
-    );
-    assert_eq!(
-        required_file(&tree, ".github/workflows/qualification-negative.yml")?,
-        &marked(schema2_feature_snapshots::NEGATIVE)
     );
     Ok(())
 }
@@ -285,43 +277,6 @@ fn marked(body: &str) -> String {
         env!("CARGO_PKG_VERSION")
     )
 }
-
-const QUALIFICATION: &str = r#"name: Qualification
-"on":
-  workflow_dispatch:
-    inputs:
-      mode:
-        type: string
-        required: false
-        default: both
-permissions:
-  contents: read
-jobs:
-  verify-hosted:
-    name: Verify / GitHub hosted / Linux x64
-    runs-on: ubuntu-26.04
-    timeout-minutes: 30
-    steps:
-      - name: Qualify hosted lane
-        run: echo qualification-hosted
-  verify-scale-set:
-    name: Verify / Velnor Scale Set / Linux x64
-    runs-on: [velnor, ubuntu-26.04-scale-set]
-    timeout-minutes: 30
-    steps:
-      - name: Qualify scale-set lane
-        run: echo qualification-scale-set
-  compare:
-    name: Compare hosted and Velnor execution
-    runs-on: ubuntu-26.04
-    timeout-minutes: 10
-    needs:
-      - verify-hosted
-      - verify-scale-set
-    steps:
-      - name: Compare lanes
-        run: echo compare-lanes
-"#;
 
 const IMAGE_RELEASE: &str = r#"name: Image release
 "on":
