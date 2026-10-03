@@ -8,8 +8,20 @@ use std::process::Command;
 pub(crate) fn command(root: &Path) -> io::Result<Command> {
     let root = root.canonicalize()?;
     let git_dir = metadata_dir(&root)?;
+    let mut command = sterile_command();
+    command
+        .current_dir(&root)
+        .arg("--git-dir")
+        .arg(git_dir)
+        .arg("--work-tree")
+        .arg(root);
+    Ok(command)
+}
+
+/// Build a fixture Git process before assigning repository authority.
+pub(crate) fn sterile_command() -> Command {
     let mut command = Command::new("git");
-    command.env_clear().current_dir(&root);
+    command.env_clear();
     for key in ["PATH", "SYSTEMROOT", "TMPDIR", "TEMP", "TMP"] {
         if let Some(value) = std::env::var_os(key) {
             command.env(key, value);
@@ -17,10 +29,6 @@ pub(crate) fn command(root: &Path) -> io::Result<Command> {
     }
     let null = if cfg!(windows) { "NUL" } else { "/dev/null" };
     command
-        .arg("--git-dir")
-        .arg(git_dir)
-        .arg("--work-tree")
-        .arg(root)
         .env("GIT_CONFIG_NOSYSTEM", "1")
         .env("GIT_CONFIG_SYSTEM", null)
         .env("GIT_CONFIG_GLOBAL", null)
@@ -28,7 +36,7 @@ pub(crate) fn command(root: &Path) -> io::Result<Command> {
         .args(["-c", &format!("core.hooksPath={null}")])
         .args(["-c", "commit.gpgsign=false", "-c", "tag.gpgsign=false"])
         .args(["-c", "core.fsmonitor=false", "-c", "init.templateDir="]);
-    Ok(command)
+    command
 }
 
 /// Existing linked-worktree fixtures carry a Git-created metadata pointer.
