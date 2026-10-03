@@ -1,10 +1,11 @@
 //! Workflow-IR, render-context, and actionlint-input construction.
 
-//! W1 emission wiring lives in the child module below (self-declared via
-//! `#[path]` so `lib.rs` stays untouched); the integrator only registers
-//! the companion test file.
+//! W1 emission wiring lives in the child module below.
 #[path = "wire_w1.rs"]
 pub(crate) mod wire_w1;
+
+#[path = "check_jobs.rs"]
+pub(crate) mod check_jobs;
 
 use std::collections::BTreeMap;
 
@@ -143,26 +144,24 @@ pub(crate) fn build_workflow(
         discovery,
     )?;
     jobs.insert(PLAN_JOB_ID.to_owned(), plan);
-    let custom_tasks: &[String] = config
-        .stacks
-        .rust
-        .as_ref()
-        .map_or(&[], |rust| &rust.custom_tasks);
     let built = crate::crate_jobs::build_crate_jobs(
         label,
         policy,
         discovery,
         &catalog,
         fetch_roots,
-        custom_tasks,
         acquire.as_ref(),
         config.workflow.max_parallel_jobs,
     )?;
-    let crate_ids: Vec<String> = built.jobs.iter().map(|(id, _)| id.clone()).collect();
+    let mut required_ids: Vec<String> = built.jobs.iter().map(|(id, _)| id.clone()).collect();
     for (id, job) in built.jobs {
         jobs.insert(id, job);
     }
-    insert_gate_jobs(&mut jobs, label, branch, &crate_ids, acquire, &catalog)?;
+    for (id, job) in check_jobs::build_check_jobs(policy, discovery, &catalog)? {
+        required_ids.push(id.clone());
+        jobs.insert(id, job);
+    }
+    insert_gate_jobs(&mut jobs, label, branch, &required_ids, acquire, &catalog)?;
     wire_w1::check_crate_mbx_gating(&jobs, &built.drivers)?;
     let ir = WorkflowIr {
         name: config.workflow.name.clone(),
@@ -289,14 +288,18 @@ pub(crate) fn plan_uses_opentofu(discovery: &Discovery) -> bool {
         .any(|task| Stack::from_id(&task.stack_id) == Some(Stack::Tofu))
 }
 
-/// True when the plan job needs the Rust toolchain.
-///
-/// Every repo keeps it except pure-tofu ones: tofu work with zero
-/// rust workspaces. Repos with neither keep it too (fail-safe: an
-/// unneeded install costs seconds, a missing toolchain fails the
-/// format/build steps).
+/// Rust inventory runs Cargo metadata for every detected Rust candidate,
+/// including ignored projects. Named checks with no Cargo candidates
+/// require only their declared tools.
 fn plan_uses_rust(discovery: &Discovery) -> bool {
-    !(plan_uses_opentofu(discovery) && discovery.workspaces.is_empty())
+    !discovery.workspaces.is_empty()
+        || discovery.statuses.iter().any(|status| {
+            let project = match status {
+                velnor_actions_contract::DetectionStatus::Selected(project)
+                | velnor_actions_contract::DetectionStatus::Ignored { project, .. } => project,
+            };
+            Stack::from_id(&project.stack_id) == Some(Stack::Rust)
+        })
 }
 
 /// Typed `Prepare Rust components` step, shared by plan and task jobs.

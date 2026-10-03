@@ -7,6 +7,8 @@
 
 mod attach;
 mod baseline_publish;
+mod check_evidence;
+mod check_runtime;
 mod clippy_groups;
 mod config;
 mod config_stacks;
@@ -87,6 +89,7 @@ mod workflow_jobs;
 mod workflow_jobs_cache;
 
 pub use baseline_publish::{PUBLISH_OP, PublishOutputs, baseline_publish};
+pub use check_runtime::{EXECUTE_CHECK_OP, execute_check};
 pub use clippy_groups::{ClippyMemoryPlan, clippy_memory_groups};
 pub use cover_compat::baseline_artifact_numeric_id;
 pub use covered_tasks::COVERED_TASKS_OUTPUT;
@@ -123,7 +126,7 @@ pub use provenance::{EvidenceProvenance, ProfileProvenance};
 pub use qualify::qualify_argv_staged;
 pub use retrieve_reports::{FETCH_OP, retrieve_reports};
 pub use root::resolve_root;
-pub use task_report::{REPORT_OP, write_task_report};
+pub use task_report::{REPORT_OP, START_TIME_OP, write_start_time, write_task_report};
 pub use toolcheck::{TOOL_INPUT_PATHS, ToolInputCheck, ToolParse, check_tool_inputs};
 pub use toolfindings::{
     CONFLICTING_TOOL_VALUES, UNSUPPORTED_TOOL_VALUE, finding_line, tool_check_lines, tool_conflicts,

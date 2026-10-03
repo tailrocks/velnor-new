@@ -67,12 +67,14 @@ verifies bytes it already trusts. Version drift, missing entries,
 and missing or malformed locks stay advisory — versions remain
 authoritative and the lock remains an optional input.
 
-Custom `mise run` allowlists are rejected while non-empty
-(`custom_tasks_unqualified`): no repository configures them today,
-and the emission path needs a redesign (a qualified
-config-visible execution boundary) before any allowlisted task may
-run. Projects MUST keep `custom_tasks` empty until that path is
-qualified.
+Repository-owned Mise execution uses explicit top-level `[[checks]]` declarations,
+independent of Rust task generation. Each declaration binds a task name,
+directory, input files, runner platform, tool pins, and optional named scenario
+evidence. Tools installation remains isolated; a separately qualified task
+projection grants only the declared task closure access to repository inputs.
+The removed Rust custom-task option is rejected as an unknown field. See the
+[implemented named-check contract](../implemented/named-mise-checks.md) for the
+execution boundary, trust admission, and Required evidence rules.
 
 Checksums are TOFU (trust on first use): the first download that
 records a checksum trusts the bytes it received. Accepted residual,

@@ -5,6 +5,9 @@ use std::path::{Path, PathBuf};
 use crate::impl_common::{TestResult, passing_reports, plan_for_source_change};
 use crate::impl_orch_plansel::merge_status;
 
+#[path = "impl_orch_runtime_acquisition.rs"]
+mod runtime_acquisition;
+
 /// Orchestrator `src/` directory.
 fn orch_src() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src")
@@ -143,49 +146,14 @@ fn orch_spawns_no_processes_and_confines_shell_wrappers() -> TestResult {
     Ok(())
 }
 
-#[test]
-fn plan_and_generate_share_one_prepare_path() -> TestResult {
-    let mut discover_calls = Vec::new();
-    let mut config_calls = Vec::new();
-    for path in src_files()? {
-        let name = path
-            .file_name()
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        for (line, code) in code_of(&path)? {
-            if code.contains("discover(") && !code.contains("fn discover(") {
-                discover_calls.push(format!("{name}:{line}"));
-            }
-            if code.contains("load_config(") && !code.contains("fn load_config(") {
-                config_calls.push(format!("{name}:{line}"));
-            }
-        }
-    }
-    assert_eq!(discover_calls.len(), 1, "{discover_calls:?}");
-    assert!(
-        discover_calls[0].starts_with("prepare.rs"),
-        "{discover_calls:?}"
-    );
-    assert_eq!(config_calls.len(), 1, "{config_calls:?}");
-    assert!(
-        config_calls[0].starts_with("prepare.rs"),
-        "{config_calls:?}"
-    );
-    let internal = std::fs::read_to_string(orch_src().join("internal.rs"))?;
-    assert!(internal.contains("prepare(&root)"), "plan runs prepare");
-    let generate = std::fs::read_to_string(orch_src().join("generate.rs"))?;
-    assert!(
-        generate.contains("prep: &GenerationPreparation"),
-        "generate consumes preparation"
-    );
-    Ok(())
-}
+#[path = "impl_orch_prepare.rs"]
+mod prepare;
 
 #[test]
-fn v1_registers_rust_and_tofu() {
+fn v1_registers_three_stacks_and_detects_rust_and_tofu() {
     use velnor_actions_contract::VelnorConfig;
     use velnor_actions_orchestrator::decisions::{DetectorInfo, detector_registry};
-    assert_eq!(VelnorConfig::REGISTERED_STACKS, &["rust", "tofu"]);
+    assert_eq!(VelnorConfig::REGISTERED_STACKS, &["mise", "rust", "tofu"]);
     assert_eq!(
         detector_registry(),
         vec![
@@ -365,7 +333,7 @@ fn offline_deps_fail_closed_without_fetch() -> TestResult {
                 );
                 continue;
             }
-            let scrubbed = code
+            let scrubbed = runtime_acquisition::scrub_bound_acquisition(&name, &code)
                 .replace("fetch_inventory", "")
                 .replace("FetchFailure", "")
                 .replace("fetch_add", "")

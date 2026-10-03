@@ -10,7 +10,9 @@ use velnor_actions_workflow_renderer::plan_format::FORMAT_STEP_NAME;
 use velnor_actions_workflow_renderer::steps::{INTERNAL_OP_ENV, STAGED_BINARY_PREFIX};
 
 use crate::OrchestratorError;
-use crate::task_report::{DOWNSTREAM_IDS_ENV, EXIT_CODE_ENV, REPORT_OP, START_MS_ENV, TASK_ID_ENV};
+use crate::task_report::{
+    DOWNSTREAM_IDS_ENV, EXIT_CODE_ENV, REPORT_OP, START_MS_ENV, START_TIME_OP, TASK_ID_ENV,
+};
 
 #[path = "matrix_tools.rs"]
 mod tools;
@@ -297,7 +299,7 @@ pub(crate) fn report_wrapper_argv(joined: &str, helper: &str, start_path: &str) 
         "sh".to_owned(),
         "-c".to_owned(),
         format!(
-            "date +%s%3N > \"{start_path}\"; {joined}; code=$?; read -r start_ms rest < \"{start_path}\"; {EXIT_CODE_ENV}=\"$code\" {START_MS_ENV}=\"$start_ms\" {INTERNAL_OP_ENV}={REPORT_OP} \"{helper}\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\""
+            "{INTERNAL_OP_ENV}={START_TIME_OP} \"{helper}\" > \"{start_path}\" || exit $?; {joined}; code=$?; read -r start_ms rest < \"{start_path}\"; {EXIT_CODE_ENV}=\"$code\" {START_MS_ENV}=\"$start_ms\" {INTERNAL_OP_ENV}={REPORT_OP} \"{helper}\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\""
         ),
     ]
 }
@@ -313,11 +315,12 @@ pub(crate) fn outcome_wrapper_argv(
     outcome_path: &str,
     start_path: &str,
 ) -> Vec<String> {
+    let helper = helper_path_for_version();
     vec![
         "sh".to_owned(),
         "-c".to_owned(),
         format!(
-            "date +%s%3N > \"{start_path}\"; {joined}; code=$?; echo \"$code\" > \"{outcome_path}\"; exit \"$code\""
+            "{INTERNAL_OP_ENV}={START_TIME_OP} \"{helper}\" > \"{start_path}\" || exit $?; {joined}; code=$?; echo \"$code\" > \"{outcome_path}\"; exit \"$code\""
         ),
     ]
 }

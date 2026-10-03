@@ -39,8 +39,6 @@ pub(crate) struct PartialRustStack {
     test_runner: Option<DeclaredTestRunner>,
     /// Rust release policy; disabled by default.
     release: Option<RustReleaseConfig>,
-    /// Allowlisted Mise custom-task names; empty by default.
-    custom_tasks: Option<Vec<String>>,
 }
 
 /// Tofu stack section: `roots` required when the table is present.
@@ -61,7 +59,6 @@ impl PartialStacks {
                 compile_driver: stack.compile_driver,
                 test_runner: stack.test_runner,
                 release: stack.release.unwrap_or_default(),
-                custom_tasks: stack.custom_tasks.unwrap_or_default(),
             }
         });
         let tofu = self
@@ -122,19 +119,6 @@ mod tests {
     }
 
     #[test]
-    fn custom_tasks_parse_and_default_empty() {
-        let load = load_config;
-        let root = rooted("schema = 1\n[stacks.rust]\ncustom_tasks = [\"audit\"]\n");
-        let config = load(root.path()).expect("custom tasks");
-        let rust = config.stacks.rust.expect("rust stack");
-        assert_eq!(rust.custom_tasks, ["audit".to_owned()]);
-        let root = rooted("schema = 1\n[stacks.rust]\n");
-        let config = load(root.path()).expect("rust config");
-        let rust = config.stacks.rust.expect("rust stack");
-        assert!(rust.custom_tasks.is_empty());
-    }
-
-    #[test]
     fn render_unsafe_stack_values_are_rejected() {
         let load = load_config;
         for (body, want) in [
@@ -150,34 +134,18 @@ mod tests {
                 "schema = 1\n[[stacks.rust.configurations]]\nname = \"x\"\nfeatures = [\"${{ x }}\"]\ntarget = \"host\"\n",
                 "bad_feature",
             ),
-            (
-                "schema = 1\n[stacks.rust]\ncustom_tasks = [\"${{secrets.x}}\"]\n",
-                "bad_custom_task",
-            ),
-            (
-                "schema = 1\n[stacks.rust]\ncustom_tasks = [\"a;true\"]\n",
-                "bad_custom_task",
-            ),
         ] {
             let root = rooted(body);
             let err = load(root.path()).expect_err("unsafe value must fail");
             assert!(err.to_string().contains(want), "got {err} want {want}");
         }
-        let root = rooted(
-            "schema = 1\n[[stacks.rust.configurations]]\nname = \"x\"\nfeatures = [\"serde\", \"dep:foo\", \"bar?/baz\"]\ntarget = \"x86_64-unknown-linux-gnu\"\n[stacks.rust]\ncustom_tasks = [\"audit\", \"lint:strict\"]\n",
-        );
-        let config = load(root.path()).expect("safe values pass");
-        let rust = config.stacks.rust.expect("rust stack");
-        assert_eq!(
-            rust.custom_tasks,
-            ["audit".to_owned(), "lint:strict".to_owned()]
-        );
     }
 
     #[test]
     fn unknown_rust_keys_are_rejected() {
         let load = load_config;
         for body in [
+            "schema = 1\n[stacks.rust]\ncustom_tasks = [\"audit\"]\n",
             "schema = 1\n[stacks.rust]\ntasks = [\"audit\"]\n",
             "schema = 1\n[stacks.rust]\ncustom = [\"audit\"]\n",
         ] {
@@ -240,5 +208,33 @@ mod tests {
             let err = load(root.path()).expect_err("bad roots must fail");
             assert!(err.to_string().contains(want), "got {err} want {want}");
         }
+    }
+    #[test]
+    fn explicit_checks_load_and_minimal_config_omits_empty_checks() {
+        let load = load_config;
+        let root = rooted("schema = 1\n");
+        let config = load(root.path()).expect("minimal config");
+        assert!(config.checks.is_empty());
+        let json = serde_json::to_value(&config).expect("serialize config");
+        assert!(json.get("checks").is_none());
+        let root = rooted(
+            r#"schema = 1
+[[checks]]
+id = "native"
+task = "test:native"
+inputs = ["mise.toml"]
+tools = []
+[checks.runner]
+label = "macos-15"
+platform = "macos_arm64"
+executor = "hosted"
+[checks.evidence]
+path = "evidence/native.json"
+expected_scenarios = ["ffi"]
+"#,
+        );
+        let config = load(root.path()).expect("explicit checks");
+        assert_eq!(config.checks[0].directory, ".");
+        assert_eq!(config.checks[0].timeout_minutes, 30);
     }
 }

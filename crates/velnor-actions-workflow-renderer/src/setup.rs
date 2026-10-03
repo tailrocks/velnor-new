@@ -31,7 +31,46 @@ pub struct MiseSetup {
     pub sha256: String,
 }
 
+/// Verified extracted binary digests for Mise 2026.10.0.
+/// Official release SHASUMS256.txt checked against each downloaded archive;
+/// extracted mise/bin/mise hashed independently on 2026-10-03.
+pub const MISE_BINARY_SHA256_LINUX_X64: &str =
+    "57ced973f968b8fbab07aa8e32bd7077d4a357e200a22356d98963c723c6de0a";
+/// Extracted Mise binary SHA-256 for macOS ARM64.
+pub const MISE_BINARY_SHA256_MACOS_ARM64: &str =
+    "8d2007efdae0c2b64e3955257533e6ec17197bc2fdcbc5dd8f6847f92881deea";
+/// Extracted Mise binary SHA-256 for macOS x86-64.
+pub const MISE_BINARY_SHA256_MACOS_X64: &str =
+    "815eb7872e453dcd30ed5e2e478978d2947e34106b6cd4f9cc4d4e51f7761332";
+
 impl MiseSetup {
+    /// Resolve a compiled binary pin for one job's target.
+    /// # Errors
+    /// Unsupported targets or versions have no qualified artifact.
+    pub fn for_target(&self, target: &str) -> Result<Self, RenderError> {
+        self.validate()?;
+        if self.version != "2026.10.0" {
+            return Err(RenderError::BadCommand(format!(
+                "mise_setup_unqualified_version:{}",
+                self.version
+            )));
+        }
+        let sha256 = match target {
+            "x86_64-unknown-linux-gnu" => MISE_BINARY_SHA256_LINUX_X64,
+            "aarch64-apple-darwin" => MISE_BINARY_SHA256_MACOS_ARM64,
+            "x86_64-apple-darwin" => MISE_BINARY_SHA256_MACOS_X64,
+            _ => {
+                return Err(RenderError::BadCommand(format!(
+                    "mise_setup_unsupported_target:{target}"
+                )));
+            }
+        };
+        Ok(Self {
+            sha256: sha256.to_owned(),
+            ..self.clone()
+        })
+    }
+
     /// Validate every pin before any step is built from it.
     /// # Errors
     pub fn validate(&self) -> Result<(), RenderError> {
@@ -80,7 +119,7 @@ pub fn mise_setup_step(setup: &MiseSetup) -> Result<Step, RenderError> {
     )
 }
 
-/// True for catalog version spellings (`2026.9.18`); never `latest`.
+/// True for catalog version spellings (`2026.10.0`); never `latest`.
 fn is_catalog_version(value: &str) -> bool {
     !value.is_empty()
         && value != "latest"

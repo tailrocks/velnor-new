@@ -18,10 +18,9 @@ rendered from the committed release manifest
 ## What a malicious-PR regen can do
 
 A PR that edits `.velnor/config.toml` and regenerates consistently stays
-green by construction. It can narrow features, append `custom_tasks`
-(which execute Mise-defined commands in CI;
-`crates/velnor-actions-orchestrator/src/init.rs:117`), pick any catalog
-runner label, and shrink the `needs` inventory — as long as the emitted
+green by construction. It can narrow features, add named Mise checks
+(which execute declared repository-owned task bodies on hosted runners),
+pick any permitted hosted catalog runner label, and shrink the `needs` inventory — as long as the emitted
 tree is internally consistent. The freshness gate
 (`closure.rs:184-202`: regenerate into scratch, `diff -r` against
 committed `.github`) catches hand edits that disagree with generator

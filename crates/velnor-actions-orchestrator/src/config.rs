@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use serde::Deserialize;
-use velnor_actions_contract::config::{ActionPinOverride, ActionsConfig};
+use velnor_actions_contract::config::{ActionPinOverride, ActionsConfig, MiseCheck, QualifiedTool};
 use velnor_actions_contract::{
     DiscoveryConfig, GeneratorValidation, ResourcesConfig, TestShardingConfig, VelnorConfig,
     WorkflowConfig, WorkflowPolicy,
@@ -111,6 +111,12 @@ struct PartialConfig {
     /// Actions section.
     #[serde(default)]
     actions: PartialActions,
+    /// Explicit repository-owned Mise checks.
+    #[serde(default)]
+    checks: Vec<MiseCheck>,
+    /// Explicit qualified repository tool closure for named checks.
+    #[serde(default)]
+    qualified_tools: Vec<QualifiedTool>,
 }
 
 /// Workflow section with every value optional.
@@ -184,6 +190,8 @@ impl PartialConfig {
             stacks: self.stacks.materialize()?,
             discovery: self.discovery.materialize(),
             actions: self.actions.materialize(),
+            checks: self.checks,
+            qualified_tools: self.qualified_tools,
         })
     }
 }

@@ -41,11 +41,14 @@ pub use canonical::{
 };
 pub use closure::{ClosureBuilder, Provenance, TaskInputClosure};
 pub use config::{
-    DeclaredCompileDriver, DeclaredTestRunner, DiscoveryConfig, GeneratorValidation,
-    ResourcesConfig, RootProblem, RunnerSelection, RustConfiguration, RustStackConfig,
-    ShardTimingEvidence, StacksConfig, TestShardingConfig, TofuStackConfig, Utf8RepoRelDir,
-    VelnorConfig, VelnorSupportWorkflow, WorkflowConfig, WorkflowPolicy, is_valid_custom_task_name,
-    is_valid_feature_name, is_valid_rust_target, validate_shard_changes_need_evidence,
+    CheckEvidence, CheckExecutor, CheckPlatform, CheckRunner, CheckSystemTool, CheckSystemToolKind,
+    ContainerPlatform, DaemonIdentityPolicy, DeclaredCompileDriver, DeclaredTestRunner,
+    DiscoveryConfig, GeneratorValidation, HostContainerProfile, HostDockerCli, HostDockerDaemon,
+    HostOrbStackSdk, MiseCheck, ResourcesConfig, RootProblem, RunnerSelection, RustConfiguration,
+    RustStackConfig, ShardTimingEvidence, StacksConfig, TestShardingConfig, TofuStackConfig,
+    Utf8RepoRelDir, VelnorConfig, VelnorSupportWorkflow, WorkflowConfig, WorkflowPolicy,
+    is_valid_feature_name, is_valid_mise_task_name, is_valid_rust_target,
+    validate_shard_changes_need_evidence,
 };
 pub use discover::{
     BUILTIN_EXCLUSIONS, DETECTION_SCHEMA, DetectError, DetectedProject, DetectionStatus,
@@ -55,6 +58,10 @@ pub use discover::{
     validate_pattern,
 };
 pub use errors::{ContractError, sanitize_error_detail};
+pub use extension_schemas::NAMED_CHECK_EXTENSION_SCHEMA;
+pub use extension_schemas::named_check::{
+    NamedCheckIdentityExtension, validate_named_check_extension,
+};
 pub use extensions::{
     RUST_EXTENSION_REQUIRED_SLOTS, TOFU_EXTENSION_REQUIRED_SLOTS, validate_rust_extension,
     validate_tofu_extension,

@@ -13,6 +13,7 @@ use velnor_actions_workflow_renderer::render::{RenderContext, WORKFLOW_PATH};
 /// Minimal crate job covering the crate attach branch.
 fn legacy_task_job() -> Job {
     Job {
+        check_runner: None,
         display_name: "Rust / demo".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
         timeout_minutes: JobTimeout::CRATE,
@@ -60,7 +61,7 @@ fn lock_acquire_inserts_digest_verified_stage() {
             }],
         },
         mise_bootstrap: MiseBootstrap {
-            version: "2026.9.18".to_owned(),
+            version: "2026.10.0".to_owned(),
             artifact: "https://example.invalid/m".to_owned(),
             sha256: "b".repeat(64),
         },
@@ -143,7 +144,7 @@ fn lock_acquire_records_source_commit() {
             }],
         },
         mise_bootstrap: MiseBootstrap {
-            version: "2026.9.18".to_owned(),
+            version: "2026.10.0".to_owned(),
             artifact: "https://example.invalid/m".to_owned(),
             sha256: "b".repeat(64),
         },

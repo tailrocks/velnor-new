@@ -16,11 +16,12 @@ use std::process::ExitCode;
 
 use clap::Parser;
 use velnor_actions_orchestrator::{
-    COVERED_TASKS_OUTPUT, FETCH_OP, GenerateOptions, MERGE_OP, OrchestratorError, PLAN_OP,
-    PRESEED_MANIFEST_OP, PUBLISH_OP, REPORT_OP, REQUEST_FILE_ENV, WRITE_REQUEST_OP, generate,
-    init_config, merge_internal, merge_passed, plan_internal, plan_outputs, plan_text_checked,
-    prepare, publish_final_report, publish_plan_files, resolve_root, response_path_for,
-    retrieve_reports, write_preseed_manifest, write_request, write_task_report,
+    COVERED_TASKS_OUTPUT, EXECUTE_CHECK_OP, FETCH_OP, GenerateOptions, MERGE_OP, OrchestratorError,
+    PLAN_OP, PRESEED_MANIFEST_OP, PUBLISH_OP, REPORT_OP, REQUEST_FILE_ENV, START_TIME_OP,
+    WRITE_REQUEST_OP, execute_check, generate, init_config, merge_internal, merge_passed,
+    plan_internal, plan_outputs, plan_text_checked, prepare, publish_final_report,
+    publish_plan_files, resolve_root, response_path_for, retrieve_reports, write_preseed_manifest,
+    write_request, write_start_time, write_task_report,
 };
 
 use crate::args::{Cli, Command};
@@ -42,6 +43,8 @@ const GITHUB_EVENT_PATH_ENV: &str = "GITHUB_EVENT_PATH";
 enum InternalOp {
     /// Materialize the request file from the GitHub environment.
     WriteRequest,
+    ExecuteCheck,
+    StartTime,
     /// Plan operation.
     Plan,
     /// Merge operation.
@@ -93,6 +96,8 @@ pub(crate) fn try_internal() -> Option<ExitCode> {
 /// takes no request file either: runner temp scopes its output.
 fn gate_request() -> Option<InternalRequest> {
     let op = match env::var(OP_ENV).as_deref() {
+        Ok(tag) if tag == EXECUTE_CHECK_OP => InternalOp::ExecuteCheck,
+        Ok(tag) if tag == START_TIME_OP => InternalOp::StartTime,
         Ok(tag) if tag == WRITE_REQUEST_OP => InternalOp::WriteRequest,
         Ok(tag) if tag == PLAN_OP => InternalOp::Plan,
         Ok(tag) if tag == MERGE_OP => InternalOp::Merge,
@@ -102,7 +107,10 @@ fn gate_request() -> Option<InternalRequest> {
         Ok(tag) if tag == PUBLISH_OP => InternalOp::Publish,
         _ => return None,
     };
-    if op == InternalOp::Fetch || op == InternalOp::Report {
+    if op == InternalOp::StartTime {
+        return runner_velnor_dir().map(|path| InternalRequest { op, path });
+    }
+    if op == InternalOp::Fetch || op == InternalOp::Report || op == InternalOp::ExecuteCheck {
         if env::var("GITHUB_RUN_ID").is_ok_and(|id| !id.is_empty()) {
             return runner_velnor_dir().map(|path| InternalRequest { op, path });
         }
@@ -131,7 +139,11 @@ fn gate_request() -> Option<InternalRequest> {
                 return None;
             }
         }
-        InternalOp::Fetch | InternalOp::Report | InternalOp::PreseedManifest => {}
+        InternalOp::Fetch
+        | InternalOp::Report
+        | InternalOp::PreseedManifest
+        | InternalOp::ExecuteCheck
+        | InternalOp::StartTime => {}
     }
     Some(InternalRequest { op, path })
 }
@@ -150,6 +162,14 @@ fn runner_velnor_dir() -> Option<PathBuf> {
 /// Run one validated private operation.
 fn run_internal(request: &InternalRequest) -> ExitCode {
     match request.op {
+        InternalOp::ExecuteCheck => match execute_check() {
+            Ok(_) => ExitCode::SUCCESS,
+            Err(error) => fail_internal(&error.to_string()),
+        },
+        InternalOp::StartTime => match write_start_time() {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => fail_internal(&error.to_string()),
+        },
         InternalOp::WriteRequest => match write_request() {
             Ok(_) => ExitCode::SUCCESS,
             Err(error) => fail_internal(&error.to_string()),

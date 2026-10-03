@@ -36,6 +36,7 @@ fn lint_job() -> Result<Job, RenderError> {
     Ok(Job {
         display_name: LINT_DISPLAY.to_owned(),
         runs_on: LABEL.to_owned(),
+        check_runner: None,
         timeout_minutes: JobTimeout::VALIDATOR,
         needs: Vec::new(),
         condition: None,
@@ -70,6 +71,7 @@ fn fixture_ir() -> Result<WorkflowIr, RenderError> {
         Job {
             display_name: "Plan".to_owned(),
             runs_on: LABEL.to_owned(),
+            check_runner: None,
             timeout_minutes: JobTimeout::PLAN,
             needs: Vec::new(),
             condition: None,
@@ -83,6 +85,7 @@ fn fixture_ir() -> Result<WorkflowIr, RenderError> {
         Job {
             display_name: "Required".to_owned(),
             runs_on: LABEL.to_owned(),
+            check_runner: None,
             timeout_minutes: JobTimeout::REQUIRED,
             needs: vec!["plan".to_owned(), LINT_ID.to_owned()],
             condition: Some("always()".to_owned()),

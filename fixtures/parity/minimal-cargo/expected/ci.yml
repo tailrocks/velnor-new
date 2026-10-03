@@ -31,19 +31,19 @@ jobs:
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
           cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-75c77caa4018556f
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.10.0-75c77caa4018556f
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
-          version: 2026.9.18
+          sha256: 57ced973f968b8fbab07aa8e32bd7077d4a357e200a22356d98963c723c6de0a
+          version: 2026.10.0
       - name: Run actionlint
         run: mise --no-config --no-env --no-hooks exec actionlint@1.7.12 shellcheck@0.11.0 -- actionlint -color
       - name: Save Mise tools
         if: success() && github.event_name == 'push'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-75c77caa4018556f
+          key: mise-v1-x86_64-unknown-linux-gnu-2026.10.0-75c77caa4018556f
           path: ~/.local/share/mise
   plan:
     name: Plan
@@ -61,12 +61,12 @@ jobs:
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
           cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-761a279144527661
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.10.0-761a279144527661
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
-          version: 2026.9.18
+          sha256: 57ced973f968b8fbab07aa8e32bd7077d4a357e200a22356d98963c723c6de0a
+          version: 2026.10.0
       - name: Prepare pinned tools
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -161,7 +161,7 @@ jobs:
         if: success() && github.event_name == 'push'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-761a279144527661
+          key: mise-v1-x86_64-unknown-linux-gnu-2026.10.0-761a279144527661
           path: ~/.local/share/mise
   publish-baseline:
     name: Publish baseline
@@ -226,12 +226,12 @@ jobs:
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
           cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-14ee3a9bbb90604c
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.10.0-14ee3a9bbb90604c
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
-          version: 2026.9.18
+          sha256: 57ced973f968b8fbab07aa8e32bd7077d4a357e200a22356d98963c723c6de0a
+          version: 2026.10.0
       - name: Acquire Velnor
         env:
           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
@@ -289,7 +289,7 @@ jobs:
         if: success() && github.event_name == 'push'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-14ee3a9bbb90604c
+          key: mise-v1-x86_64-unknown-linux-gnu-2026.10.0-14ee3a9bbb90604c
           path: ~/.local/share/mise
       - name: Publish final report
         if: always()
@@ -314,12 +314,12 @@ jobs:
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
           cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-761a279144527661
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.10.0-761a279144527661
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
-          version: 2026.9.18
+          sha256: 57ced973f968b8fbab07aa8e32bd7077d4a357e200a22356d98963c723c6de0a
+          version: 2026.10.0
       - name: Acquire Velnor
         env:
           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
@@ -392,7 +392,7 @@ jobs:
           VELNOR_MATRIX_KEY: m-ef27644090a4cf0f
           VELNOR_TASK_DIGEST: b3-90bced955e6451914c4ae619561d20c7bbc055f3b1580470e452ab3bf40890bf
           VELNOR_TASK_ID: stack/rust/root/clippy/default
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; date +%s%3N > \"$RUNNER_TEMP/velnor/start-m-ef27644090a4cf0f\"; mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo clippy --locked --offline --manifest-path Cargo.toml --package minimal-cargo --all-targets -- -D warnings; code=$?; read -r start_ms rest < \"$RUNNER_TEMP/velnor/start-m-ef27644090a4cf0f\"; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$start_ms\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; VELNOR_INTERNAL_OP=start-time-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" > \"$RUNNER_TEMP/velnor/start-m-ef27644090a4cf0f\" || exit $?; mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo clippy --locked --offline --manifest-path Cargo.toml --package minimal-cargo --all-targets -- -D warnings; code=$?; read -r start_ms rest < \"$RUNNER_TEMP/velnor/start-m-ef27644090a4cf0f\"; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$start_ms\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
       - name: Unit and integration tests
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/root/test/default,')"
         env:
@@ -421,7 +421,7 @@ jobs:
           VELNOR_MATRIX_KEY: m-8384c14af0d32e34
           VELNOR_TASK_DIGEST: b3-cbdb0ce3bd6cf66a36ed66ea710b293cfb9b15fbe0bf72b45da5ce3b085ec1e3
           VELNOR_TASK_ID: stack/rust/root/test/default
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; date +%s%3N > \"$RUNNER_TEMP/velnor/start-m-8384c14af0d32e34\"; mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo test --locked --offline --manifest-path Cargo.toml --package minimal-cargo --lib; code=$?; read -r start_ms rest < \"$RUNNER_TEMP/velnor/start-m-8384c14af0d32e34\"; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$start_ms\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; VELNOR_INTERNAL_OP=start-time-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" > \"$RUNNER_TEMP/velnor/start-m-8384c14af0d32e34\" || exit $?; mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo test --locked --offline --manifest-path Cargo.toml --package minimal-cargo --lib; code=$?; read -r start_ms rest < \"$RUNNER_TEMP/velnor/start-m-8384c14af0d32e34\"; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$start_ms\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
       - name: Doctests
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/root/doctest/default,')"
         env:
@@ -450,7 +450,7 @@ jobs:
           VELNOR_MATRIX_KEY: m-55d9e893afdceb78
           VELNOR_TASK_DIGEST: b3-5862f41de244866c9bda6199779feab4890d7d55e75d62d282cb1c3ead79f981
           VELNOR_TASK_ID: stack/rust/root/doctest/default
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; date +%s%3N > \"$RUNNER_TEMP/velnor/start-m-55d9e893afdceb78\"; mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo test --locked --offline --manifest-path Cargo.toml --package minimal-cargo --doc; code=$?; read -r start_ms rest < \"$RUNNER_TEMP/velnor/start-m-55d9e893afdceb78\"; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$start_ms\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; VELNOR_INTERNAL_OP=start-time-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" > \"$RUNNER_TEMP/velnor/start-m-55d9e893afdceb78\" || exit $?; mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo test --locked --offline --manifest-path Cargo.toml --package minimal-cargo --doc; code=$?; read -r start_ms rest < \"$RUNNER_TEMP/velnor/start-m-55d9e893afdceb78\"; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$start_ms\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
       - name: Documentation
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/root/doc/default,')"
         env:
@@ -479,7 +479,7 @@ jobs:
           VELNOR_MATRIX_KEY: m-497a92f01446c409
           VELNOR_TASK_DIGEST: b3-ad98aeeef17e6b3e936cfda7dcf4d61e039d74483a227c7d03af9b2b03c324dc
           VELNOR_TASK_ID: stack/rust/root/doc/default
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; date +%s%3N > \"$RUNNER_TEMP/velnor/start-m-497a92f01446c409\"; mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo doc --locked --offline --manifest-path Cargo.toml --package minimal-cargo --no-deps; code=$?; read -r start_ms rest < \"$RUNNER_TEMP/velnor/start-m-497a92f01446c409\"; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$start_ms\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; VELNOR_INTERNAL_OP=start-time-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" > \"$RUNNER_TEMP/velnor/start-m-497a92f01446c409\" || exit $?; mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo doc --locked --offline --manifest-path Cargo.toml --package minimal-cargo --no-deps; code=$?; read -r start_ms rest < \"$RUNNER_TEMP/velnor/start-m-497a92f01446c409\"; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$start_ms\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a

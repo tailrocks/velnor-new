@@ -3,6 +3,10 @@
 use std::collections::BTreeMap;
 use std::error::Error;
 
+#[path = "impl_repo_archive_deps.rs"]
+mod archive_deps;
+use archive_deps::reviewed_archive_dependency;
+
 use crate::impl_repo_policy::{
     MEMBERS, dep_key, dep_lines, dep_referenced, manifest, p11_toml, read, repo_root, test_markers,
     tree_files,
@@ -85,8 +89,12 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
             if key.starts_with("velnor-actions") {
                 continue;
             }
-            assert!(allowed.contains(&key), "{dir} uses {key}");
-            if let Some(index) = line.find("features") {
+            let archive_decoder = reviewed_archive_dependency(dir, key, line);
+            assert!(
+                allowed.contains(&key) || archive_decoder,
+                "{dir} uses {key}"
+            );
+            if let Some(index) = line.find("features").filter(|_| !archive_decoder) {
                 let quoted: Vec<&str> = line[index..].split('"').collect();
                 for feature in quoted.into_iter().skip(1).step_by(2) {
                     // Only `derive` globally, plus `fs` on rustix for the
@@ -95,7 +103,11 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
                     assert!(narrow, "{dir}/{key} feature {feature}");
                 }
             }
-            assert!(dep_referenced(dir, key)?, "{dir} never uses {key}");
+            // Cargo maps dependency hyphens to underscores in Rust identifiers.
+            assert!(
+                dep_referenced(dir, &key.replace('-', "_"))?,
+                "{dir} never uses {key}"
+            );
         }
     }
     Ok(())

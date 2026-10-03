@@ -221,12 +221,21 @@ pub fn finalize_jobs(
     mise.validate()?;
     let mut jobs = merged_jobs(ir, policy, support, ctx)?;
     for (id, job) in &mut jobs {
-        let always = id == PLAN_JOB_ID || id == TASK_JOB_ID;
-        let target =
-            velnor_actions_contract::target_for_runner_label(&ctx.runs_on).ok_or_else(|| {
+        let always = id == PLAN_JOB_ID || id == TASK_JOB_ID || job.check_runner.is_some();
+        let target = job
+            .check_runner
+            .as_ref()
+            .map(|runner| runner.platform.target())
+            .or_else(|| velnor_actions_contract::target_for_runner_label(&job.runs_on))
+            .ok_or_else(|| {
                 RenderError::InvalidWorkflow(format!("tools_cache_unsupported_target:{id}"))
             })?;
-        cache_p08::ensure_setup_p08(id, job, mise, always, target)?;
+        let setup = if job.check_runner.is_some() {
+            mise.for_target(target)?
+        } else {
+            mise.clone()
+        };
+        cache_p08::ensure_setup_p08(id, job, &setup, always, target)?;
         cache_p08::check_no_rust_cache_with_mbx(id, job)?;
         cache_p08::check_mbx_before_fetch(id, job)?;
         closure::check_internal_staged(id, job, ctx.preseed)?;
@@ -352,7 +361,13 @@ fn check_concurrency(concurrency: &Concurrency) -> Result<(), RenderError> {
 /// Require every job to use the single context label.
 fn check_single_label(ir: &WorkflowIr, label: &str) -> Result<(), RenderError> {
     for (id, job) in &ir.jobs {
-        if job.runs_on != label {
+        if let Some(runner) = &job.check_runner {
+            if !id.starts_with("check-") || runner.label != job.runs_on {
+                return Err(RenderError::InvalidWorkflow(format!(
+                    "check_runner_mismatch:{id}"
+                )));
+            }
+        } else if job.runs_on != label {
             return Err(RenderError::InvalidWorkflow(format!("label_mismatch:{id}")));
         }
     }

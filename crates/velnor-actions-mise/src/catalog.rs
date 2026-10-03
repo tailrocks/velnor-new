@@ -32,15 +32,15 @@ mod versions;
 pub use versions::{check_freshness_requirements, validate_exact_version};
 use versions::{invalid_version, tool_source};
 
-/// Qualified mise runner release (tag `v2026.9.18`).
-/// Source: `https://api.github.com/repos/jdx/mise/releases/latest`; checked 2026-09-30.
-pub const MISE_VERSION: &str = "2026.9.18";
+/// Qualified mise runner release (tag `v2026.10.0`).
+/// Source: `https://api.github.com/repos/jdx/mise/releases/latest`; checked 2026-10-02.
+pub const MISE_VERSION: &str = "2026.10.0";
 /// Qualified Rust stable toolchain.
 /// Source: `https://static.rust-lang.org/dist/channel-rust-stable.toml`; checked 2026-09-28.
 pub const RUST_VERSION: &str = "1.98.1";
-/// Qualified `mr-boxington` tool (binary on PATH is `mbx`; tag `v1.21.0`).
-/// Source: `https://api.github.com/repos/jdx/mr-boxington/releases/latest`; checked 2026-09-30.
-pub const MR_BOXINGTON_VERSION: &str = "1.21.0";
+/// Qualified `mr-boxington` tool (binary on PATH is `mbx`; tag `v1.21.1`).
+/// Source: `https://api.github.com/repos/jdx/mr-boxington/releases/latest`; checked 2026-10-02.
+pub const MR_BOXINGTON_VERSION: &str = "1.21.1";
 /// Qualified GitHub CLI (tag `v2.102.0`).
 /// Source: `https://api.github.com/repos/cli/cli/releases/latest`; checked 2026-09-30.
 pub const GH_VERSION: &str = "2.102.0";

@@ -151,6 +151,10 @@ sample MUST document these sections:
 ```toml
 schema = 1
 
+# Optional repository-owned named Mise checks, independent of language stacks.
+# checks = []
+# See docs/implemented/named-mise-checks.md for task, platform, tool, and evidence pins.
+
 # Optional workflow display and policy settings. Omitted values use Velnor defaults.
 # [workflow]
 # name = "CI"                         # Workflow display name.
@@ -179,7 +183,6 @@ schema = 1
 # configurations = [{ name = "default", features = ["default"], target = "host" }]
 # compile_driver = "cargo"         # Sticky override: "cargo" or "mbx"; conflicts with durable evidence fail closed.
 # test_runner = "cargo_test"       # Sticky override: "cargo_test" or "cargo_nextest".
-# custom_tasks = []                # Allowlisted Mise task names (sorted, unique); non-empty is rejected (`custom_tasks_unqualified`) until the execution path is qualified. Once qualified, only these run as `mise run <name>` steps: review before allowlisting.
 
 # Optional repository-relative POSIX globs excluded before detector input.
 # [discovery]

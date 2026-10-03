@@ -1,11 +1,16 @@
 //! Fixed subprocess wrapper: the sole `std::process::Command` constructor.
 //! Policy (`command_env.rs`) and output (`command_output.rs`) declare here.
+#[path = "check_command.rs"]
+mod check;
 #[path = "command_env.rs"]
 mod env;
 #[path = "command_output.rs"]
 mod output;
+#[path = "qualified_acquisition.rs"]
+mod qualified_acquisition;
 #[path = "command_tofu.rs"]
 mod tofu;
+pub use check::resolve_program as resolve_check_program;
 
 pub use self::env::{
     CREDENTIAL_ALLOWLIST_BASELINE, CREDENTIAL_ALLOWLIST_BOOTSTRAP, CREDENTIAL_ENV_KEYS,
@@ -197,12 +202,18 @@ impl IsolatedCommand {
 
     /// Full environment the spawner applies: overlay first, then extras.
     ///
-    /// Every policy takes the full isolation overlay: no mise command
-    /// ever loads repo config, so installs and execs share one hermetic
-    /// base and differ only in parent inheritance and extras.
+    /// Qualified probes receive explicit extras only. Qualified checks
+    /// retain task config visibility; other policies keep the fixed overlay.
     #[must_use]
     pub fn full_env(&self) -> Vec<(OsString, OsString)> {
-        let mut env = Self::env_overlay();
+        let mut env = if self.policy == EnvPolicy::QualifiedProbe {
+            Vec::new()
+        } else {
+            Self::env_overlay()
+        };
+        if self.policy == EnvPolicy::QualifiedCheck {
+            env.retain(|(key, _)| key != "MISE_NO_CONFIG");
+        }
         env.extend(self.extra_env.iter().cloned());
         env
     }
@@ -314,14 +325,14 @@ impl IsolatedCommand {
     fn command(&self) -> Command {
         let mut command = Command::new(&self.program);
         command.args(&self.args);
-        if self.policy == EnvPolicy::RepoTask {
-            command.env_clear();
-            let parent: Vec<(OsString, OsString)> = std::env::vars_os().collect();
-            for (key, value) in proxy_passthrough(&parent) {
-                command.env(key, value);
-            }
-        } else {
+        if self.policy.inherits_parent() {
             strip_credentials(&mut command, self.policy);
+        } else {
+            command.env_clear();
+            if self.policy.allows_proxy_passthrough() {
+                let parent: Vec<(OsString, OsString)> = std::env::vars_os().collect();
+                command.envs(proxy_passthrough(&parent));
+            }
         }
         for (key, value) in self.full_env() {
             command.env(key, value);

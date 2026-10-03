@@ -95,7 +95,8 @@ fn report_wrapper_stamps_start_and_hands_env_to_helper() {
     assert_eq!(&argv[..2], ["sh".to_owned(), "-c".to_owned()]);
     let script = &argv[2];
     assert!(
-        script.contains("date +%s%3N > \"/tmp/start\"; "),
+        script
+            .contains("VELNOR_INTERNAL_OP=start-time-v1 \"/tmp/h\" > \"/tmp/start\" || exit $?; "),
         "start stamp first after unset prelude: {script}"
     );
     assert!(
@@ -128,7 +129,10 @@ fn outcome_and_deferred_share_one_start_file() {
     assert_eq!(start, "$RUNNER_TEMP/velnor/start-m-abc");
     let save = outcome_wrapper_argv("true", &outcome, &start);
     assert!(
-        save[2].starts_with(&format!("date +%s%3N > \"{start}\"; ")),
+        save[2].starts_with(&format!(
+            "VELNOR_INTERNAL_OP=start-time-v1 \"{}\" > \"{start}\" || exit $?; ",
+            helper_path_for_version()
+        )),
         "outcome stamps start first (no unset prelude on outcome): {}",
         save[2]
     );

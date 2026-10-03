@@ -66,7 +66,7 @@ fn mbx_probe_vector_is_byte_exact() {
         "--no-env",
         "--no-hooks",
         "exec",
-        "mr-boxington@1.21.0",
+        "mr-boxington@1.21.1",
         "--",
         "mbx",
         "--version",
@@ -158,7 +158,7 @@ fn section4_build_vector_is_byte_exact() {
         "--no-hooks",
         "exec",
         "rust@1.98.1",
-        "mr-boxington@1.21.0",
+        "mr-boxington@1.21.1",
         "--",
         "mbx",
         "build",
@@ -170,35 +170,6 @@ fn section4_build_vector_is_byte_exact() {
         "velnor-actions",
     ]);
     assert_eq!(build, want);
-}
-
-#[test]
-fn custom_task_steps_emit_nothing_and_reject_nonempty() {
-    let catalog = ToolCatalog::pinned();
-    let steps = custom_task_steps(&[], &catalog).expect("empty allowlist");
-    assert!(steps.is_empty(), "empty emits nothing");
-    // Non-empty allowlists fail generate: the emitted steps cannot
-    // work as built (`MISE_NO_CONFIG=1` hides every task), so they
-    // must never ship silently.
-    for allowlist in [argv_of(&["audit", "lint"]), argv_of(&["audit"])] {
-        let err = custom_task_steps(&allowlist, &catalog).expect_err("must reject");
-        assert!(
-            err.to_string().contains("custom_tasks_unqualified"),
-            "{err}"
-        );
-    }
-}
-
-#[test]
-fn custom_task_steps_reject_bad_names() {
-    let catalog = ToolCatalog::pinned();
-    for bad in ["", "  ", "two words", "a/b", "--help", "-x", ".hidden"] {
-        let allowlist = argv_of(&[bad]);
-        assert!(
-            custom_task_steps(&allowlist, &catalog).is_err(),
-            "{bad:?} must fail closed"
-        );
-    }
 }
 
 #[test]

@@ -1,7 +1,7 @@
 //! Stack selection and per-stack options.
-use super::VelnorConfig;
 use super::release::RustReleaseConfig;
 use super::tofu::TofuStackConfig;
+use crate::discover::Stack;
 use crate::errors::ContractError;
 use crate::ids::is_component_byte;
 use serde::{Deserialize, Serialize};
@@ -58,10 +58,6 @@ pub struct RustStackConfig {
     /// Rust release policy (`[stacks.rust.release]`); disabled by default.
     #[serde(default)]
     pub release: RustReleaseConfig,
-    /// Allowlisted Mise custom-task names; only these become `mise run`
-    /// steps. Sorted, duplicate-free; empty (the default) emits none.
-    #[serde(default)]
-    pub custom_tasks: Vec<String>,
 }
 
 /// Documented default: one `default` configuration variant list.
@@ -117,24 +113,6 @@ pub fn is_valid_feature_name(feature: &str) -> bool {
         })
 }
 
-/// True for a render-safe Mise custom-task name.
-///
-/// Single source for the config allowlist, the fixed `mise run` argv,
-/// and the gate-6 grant: namespaced (`:`) task names plus safe
-/// punctuation, never whitespace, separators, or expansions. The first
-/// byte must be alphanumeric or `_`: a leading `-` would parse as a
-/// `mise run` flag and a leading `.` as a relative path, so both fail
-/// closed here before any argv is built.
-#[must_use]
-pub fn is_valid_custom_task_name(task: &str) -> bool {
-    let mut bytes = task.bytes();
-    match bytes.next() {
-        Some(first) if first.is_ascii_alphanumeric() || first == b'_' => {}
-        _ => return false,
-    }
-    bytes.all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b':'))
-}
-
 impl RustStackConfig {
     /// Documented default: one `default` configuration, no declarations,
     /// release disabled.
@@ -145,7 +123,6 @@ impl RustStackConfig {
             compile_driver: None,
             test_runner: None,
             release: RustReleaseConfig::default(),
-            custom_tasks: Vec::new(),
         }
     }
 }
@@ -172,11 +149,14 @@ impl StacksConfig {
             ));
         }
         for id in &self.ignore {
-            if !VelnorConfig::REGISTERED_STACKS.contains(&id.as_str()) {
+            let stack = Stack::from_id(id).ok_or_else(|| {
+                ContractError::config(file, "stacks.ignore", format!("unknown_stack_id:{id}"))
+            })?;
+            if !stack.is_ignorable() {
                 return Err(ContractError::config(
                     file,
                     "stacks.ignore",
-                    format!("unknown_stack_id:{id}"),
+                    format!("stack_not_ignorable:{id}"),
                 ));
             }
         }
@@ -242,49 +222,13 @@ impl RustStackConfig {
             }
         }
         self.release.validate(file)?;
-        self.validate_custom_tasks(file)?;
-        Ok(())
-    }
-
-    /// Validate the custom-task allowlist: sorted, unique, safe names.
-    ///
-    /// The name rule is [`is_valid_custom_task_name`], shared with the
-    /// `mise run` argv builder and the qualified-task paths.
-    /// # Errors
-    fn validate_custom_tasks(&self, file: &str) -> Result<(), ContractError> {
-        let mut sorted = self.custom_tasks.clone();
-        sorted.sort();
-        if sorted != self.custom_tasks {
-            return Err(ContractError::config(
-                file,
-                "stacks.rust.custom_tasks",
-                "must_be_sorted",
-            ));
-        }
-        let unique: BTreeSet<&str> = self.custom_tasks.iter().map(String::as_str).collect();
-        if unique.len() != self.custom_tasks.len() {
-            return Err(ContractError::config(
-                file,
-                "stacks.rust.custom_tasks",
-                "duplicate_custom_task",
-            ));
-        }
-        for task in &self.custom_tasks {
-            if !is_valid_custom_task_name(task) {
-                return Err(ContractError::config(
-                    file,
-                    "stacks.rust.custom_tasks",
-                    format!("bad_custom_task:{task}"),
-                ));
-            }
-        }
         Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{RustConfiguration, is_valid_custom_task_name, is_valid_rust_target};
+    use super::{RustConfiguration, is_valid_rust_target};
     use crate::config::RustStackConfig;
 
     #[test]
@@ -309,17 +253,7 @@ mod tests {
     }
 
     #[test]
-    fn task_name_grammar_matches_mise_tasks() {
-        for task in ["audit", "build:all", "a-b_c.d:e", "Test123"] {
-            assert!(is_valid_custom_task_name(task), "{task}");
-        }
-        for task in ["", "a b", "a/b", "${{ x }}", "$t", "`t`", "a\nb"] {
-            assert!(!is_valid_custom_task_name(task), "{task:?}");
-        }
-    }
-
-    #[test]
-    fn hostile_target_and_task_fail_validation() {
+    fn hostile_target_fails_validation() {
         let mut stack = RustStackConfig::default_config();
         stack.configurations = vec![RustConfiguration {
             name: "default".to_owned(),
@@ -328,9 +262,37 @@ mod tests {
         }];
         let err = stack.validate("config.toml").expect_err("PoC target fails");
         assert!(err.to_string().contains("bad_target"), "{err}");
-        let mut stack = RustStackConfig::default_config();
-        stack.custom_tasks = vec!["audit".to_owned(), "evil task".to_owned()];
-        let err = stack.validate("config.toml").expect_err("bad task fails");
-        assert!(err.to_string().contains("bad_custom_task"), "{err}");
+    }
+    #[test]
+    fn ignore_admission_uses_typed_stack_eligibility() {
+        use crate::config::StacksConfig;
+        for ids in [
+            vec!["rust".to_owned()],
+            vec!["tofu".to_owned()],
+            vec!["rust".to_owned(), "tofu".to_owned()],
+        ] {
+            let config = StacksConfig {
+                ignore: ids,
+                rust: None,
+                tofu: None,
+            };
+            assert!(config.validate("config.toml").is_ok());
+        }
+        let explicit = StacksConfig {
+            ignore: vec!["mise".to_owned()],
+            rust: None,
+            tofu: None,
+        };
+        let error = explicit
+            .validate("config.toml")
+            .expect_err("explicit checks cannot be ignored");
+        assert!(error.to_string().contains("stack_not_ignorable:mise"));
+        let unknown = StacksConfig {
+            ignore: vec!["unknown".to_owned()],
+            rust: None,
+            tofu: None,
+        };
+        let error = unknown.validate("config.toml").expect_err("unknown stack");
+        assert!(error.to_string().contains("unknown_stack_id:unknown"));
     }
 }

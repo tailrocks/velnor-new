@@ -324,6 +324,7 @@ fn tofu_cache_format_is_distinct_and_valid() {
 /// Minimal discovery with no workspaces or tool checks.
 fn empty_discovery() -> crate::discover::Discovery {
     crate::discover::Discovery {
+        mise_checks: Vec::new(),
         statuses: Vec::new(),
         workspaces: Vec::new(),
         proposals: Vec::new(),
@@ -366,4 +367,26 @@ fn tofu_bundles_skip_rust_checkout_probes() {
         inputs.nextest_digest,
         velnor_actions_rust::tasks::DigestSlot::Unknown("tofu_adapter_owned".to_owned())
     );
+}
+
+#[test]
+fn ordinary_stack_runner_platform_cannot_expand_with_named_check_catalog() {
+    let rust = group(
+        TaskKind::Clippy,
+        "stack/rust/root/clippy/default",
+        CompileDriver::Cargo,
+        TestRunner::CargoTest,
+    );
+    let tofu = tofu_task("validate");
+    for task in [rust, tofu] {
+        for target in ["host", "x86_64-unknown-linux-gnu", "aarch64-apple-darwin"] {
+            let mut task = task.clone();
+            task.identity.target = target.to_owned();
+            assert!(platform_id_for_group("macos-15", &task).is_err());
+            assert!(platform_id_for_group("ephemeral-linux", &task).is_err());
+        }
+        let mut mac_target = task;
+        mac_target.identity.target = "aarch64-apple-darwin".to_owned();
+        assert!(platform_id_for_group("ubuntu-24.04", &mac_target).is_err());
+    }
 }

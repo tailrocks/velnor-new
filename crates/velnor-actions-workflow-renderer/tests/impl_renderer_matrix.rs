@@ -39,6 +39,7 @@ fn fixture_ir(task: Job) -> Result<WorkflowIr, RenderError> {
         Job {
             display_name: "Plan".to_owned(),
             runs_on: LABEL.to_owned(),
+            check_runner: None,
             timeout_minutes: JobTimeout::PLAN,
             needs: Vec::new(),
             condition: None,
@@ -74,6 +75,7 @@ fn task_job(env: &BTreeMap<String, String>, needs: Vec<String>) -> Result<Job, R
     Ok(Job {
         display_name: "Task".to_owned(),
         runs_on: LABEL.to_owned(),
+        check_runner: None,
         timeout_minutes: JobTimeout::CRATE,
         needs,
         condition: None,
@@ -170,6 +172,7 @@ fn capped_job(env: &BTreeMap<String, String>, needs: Vec<String>) -> Result<Job,
     Ok(Job {
         display_name: "Rust / stacks-a".to_owned(),
         runs_on: LABEL.to_owned(),
+        check_runner: None,
         timeout_minutes: JobTimeout::CRATE,
         needs,
         condition: None,

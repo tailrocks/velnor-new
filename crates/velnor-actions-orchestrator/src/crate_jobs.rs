@@ -60,26 +60,17 @@ pub(crate) struct CrateBuild {
 /// # Errors
 ///
 /// Returns contract, render-context, or tool-request errors.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "one call site threads job scope plus the concurrency cap"
-)]
 pub(crate) fn build_crate_jobs(
     label: &str,
     policy: WorkflowPolicy,
     discovery: &Discovery,
     catalog: &ToolCatalog,
     fetch_roots: &[String],
-    custom_tasks: &[String],
     acquire: Option<&Step>,
     max_parallel_jobs: u32,
 ) -> Result<CrateBuild, OrchestratorError> {
     let grouped = group_runnable(&discovery.proposals);
     let assigned = assign_group_ids(&grouped);
-    // Reject a non-empty allowlist before the loop: with zero runnable
-    // tasks the loop body (and its rejection) never runs, so the
-    // allowlist would be silently ignored instead of failing closed.
-    let custom_steps = crate::vectors::custom_task_steps(custom_tasks, catalog)?;
     let mut jobs = Vec::with_capacity(grouped.len());
     let mut drivers = BTreeMap::new();
     let mut tofu_ids = Vec::new();
@@ -116,7 +107,7 @@ pub(crate) fn build_crate_jobs(
         };
         model.validate()?;
         let repo_has_mbx = crate::workflow::plan_uses_mbx(discovery);
-        let mut job = render_job(
+        let job = render_job(
             label,
             policy,
             &model,
@@ -130,9 +121,6 @@ pub(crate) fn build_crate_jobs(
             acquire,
             max_parallel_jobs,
         )?;
-        // Allowlisted custom tasks run after the fixed obligations; the
-        // pre-loop rejection above guarantees this is empty today.
-        job.steps.extend(custom_steps.iter().cloned());
         drivers.insert(job_id.clone(), driver);
         if use_opentofu {
             tofu_ids.push(job_id.clone());
@@ -150,7 +138,9 @@ pub(crate) fn build_crate_jobs(
 /// belong to the plan job, so neither is emitted as an obligation.
 /// Shared with `plan` so its obligation list matches emission exactly.
 pub(crate) fn is_runnable(task: &ProposedTask) -> bool {
-    !task.no_targets && !task.identity.unit_id.is_empty()
+    !task.no_targets
+        && !task.identity.unit_id.is_empty()
+        && Stack::from_id(&task.stack_id) != Some(Stack::Mise)
 }
 
 /// Obligation order rank for one task, dispatched by stack.
@@ -308,6 +298,7 @@ fn render_job(
     Ok(Job {
         display_name: model.display_name.clone(),
         runs_on: label.to_owned(),
+        check_runner: None,
         timeout_minutes: JobTimeout::CRATE,
         needs: vec![PLAN_JOB_ID.to_owned()],
         condition: None,

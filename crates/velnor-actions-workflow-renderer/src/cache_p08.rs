@@ -152,7 +152,7 @@ pub fn mise_setup_step_p08(setup: &MiseSetup, cache_key: &str) -> Result<Step, R
     )
 }
 
-/// True for catalog version spellings (`2026.9.18`); never `latest`.
+/// True for catalog version spellings (`2026.10.0`); never `latest`.
 fn is_catalog_version(value: &str) -> bool {
     !value.is_empty()
         && value != "latest"
@@ -256,6 +256,19 @@ fn upgrade_setup(
     target: &str,
 ) -> Result<(), RenderError> {
     if setup_shape_ok(&job.steps[index], true) {
+        let specs = infer_job_tools(job);
+        let specs = if specs.is_empty() {
+            vec!["mise@bootstrap".to_owned()]
+        } else {
+            specs
+        };
+        let key = mise_cache_key_for_tools(target, &setup.version, &specs)?;
+        let expected = mise_setup_step_p08(setup, &key)?;
+        if job.steps[index].kind != expected.kind {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "setup_mise_pin_mismatch:{job_id}"
+            )));
+        }
         return Ok(());
     }
     if !setup_shape_ok(&job.steps[index], false) {

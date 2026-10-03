@@ -1,19 +1,8 @@
-//! Event-time `write-task-report-v1`: typed crate-job report production.
+//! Event-time typed task-report production.
+//! Reports bind task and matrix identities through the staged plan. Named
+//! Mise success requires the qualified execution producer and final receipt proof.
 //!
-//! P05 grouped obligations into crate jobs but left no producer behind:
-//! legs-era reporting died with the matrix template, so hosted merges see
-//! zero artifacts and fail closed on `no_entry`/`source_missing`. This op
-//! closes the gap. Each obligation wrapper captures its exit code and
-//! invokes the staged helper here; the op resolves the obligation against
-//! the downloaded plan (digests stay plan-bound, never generator-baked)
-//! and writes the validated `TaskReport` plus its entry's single-task
-//! `MatrixReport` through the contract canonical JSON — report bytes are
-//! produced by Rust, never shell-composed.
-//!
-//! A failing obligation also reports every downstream same-crate
-//! obligation as `not_selected`/`upstream_failed` (task-execution
-//! contract: skipped obligations still report), because GitHub skips the
-//! later steps and nothing else could speak for them.
+//! Failed obligations also report downstream tasks as `upstream_failed`.
 
 use std::env;
 use std::path::{Path, PathBuf};
@@ -32,6 +21,9 @@ pub(crate) use crate::task_report_aggregate::single_task_aggregate;
 
 /// Report-production operation tag.
 pub const REPORT_OP: &str = "write-task-report-v1";
+#[path = "report_timer.rs"]
+mod timer;
+pub use timer::{START_TIME_OP, write_start_time};
 /// Env key carrying the executed obligation's task ID.
 pub(crate) const TASK_ID_ENV: &str = "VELNOR_TASK_ID";
 /// Env key carrying the captured obligation exit code.
@@ -125,6 +117,9 @@ pub(crate) fn write_task_report_to(
         return Ok(0);
     }
     let (entry, digest) = entry_and_digest(&plan, task_id)?;
+    if entry.stack_id == "mise" && exit_code == 0 {
+        return Err(internal("named_check_requires_qualified_execution"));
+    }
     let duration_ms = elapsed_ms(start_ms);
     let task = terminal_task_report(&plan, entry, digest, exit_code, duration_ms)
         .map_err(internal_contract)?;
@@ -276,7 +271,7 @@ fn flattened(entry: &MatrixEntry) -> Vec<&str> {
 /// # Errors
 ///
 /// Returns [`ContractError`] for derivation or validation failures.
-fn terminal_task_report(
+pub(crate) fn terminal_task_report(
     plan: &Plan,
     entry: &MatrixEntry,
     task_digest: &str,
@@ -397,3 +392,7 @@ mod load_plan_strict_tests {
         assert!(err.to_string().contains("oversize"), "{err}");
     }
 }
+
+#[cfg(test)]
+#[path = "check_gate_tests.rs"]
+mod check_gate_tests;

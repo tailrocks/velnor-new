@@ -29,6 +29,19 @@ fn supported_targets_and_naming() {
 }
 
 #[test]
+fn versioned_macos_labels_bind_explicit_architecture() {
+    for label in ["macos-14", "macos-15", "macos-26"] {
+        assert_eq!(target_for_runner_label(label), Some("aarch64-apple-darwin"));
+    }
+    for label in ["macos-15-intel", "macos-26-intel"] {
+        assert_eq!(target_for_runner_label(label), Some("x86_64-apple-darwin"));
+    }
+    for label in ["macos-latest", "macos-13", "custom-macos", "macos-15-arm"] {
+        assert!(target_for_runner_label(label).is_none(), "{label}");
+    }
+}
+
+#[test]
 fn runner_label_catalog_maps_or_fails_closed() {
     // Every config-accepted label either maps to a supported release
     // target or maps to nothing; `None` labels hard-fail generation

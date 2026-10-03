@@ -10,6 +10,7 @@ pub mod cache_sources;
 pub mod cache_transport;
 pub mod cache_trust;
 pub mod catalog;
+pub mod checks;
 pub mod command;
 pub mod custom_run;
 pub mod error;
@@ -49,6 +50,7 @@ pub use catalog::{
     SHELLCHECK_VERSION, ToolCatalog, ZIZMOR_VERSION, check_freshness_requirements,
     validate_exact_version,
 };
+pub use checks::{DiscoveredCheck, QualifiedCheck, discover_checks};
 pub use command::{
     ALLOWED_MISE_SUBCOMMANDS, CREDENTIAL_ENV_KEYS, ENDPOINT_ENV_KEYS, ISOLATION_ENV,
     IsolatedCommand, MISE_CARGO_HOME_ENV, MISE_GLOBAL_FLAGS, MISE_RUSTUP_HOME_ENV,
@@ -100,3 +102,4 @@ pub use wrappers::{
 
 /// Stable identifier for the Mise tool wrapper.
 pub const TOOL_ID: &str = "mise";
+pub mod check_tool_probes;

@@ -23,12 +23,7 @@ use crate::select_edges::{base_edges, head_edges};
 use crate::validators::{validate_diff_rev, validate_select_diff_args};
 
 /// Full obligation universe: every task with applicable targets.
-///
-/// Tasks without applicable targets are never obligations: scheduling
-/// them would emit impossible work (for example `cargo test --doc` for a
-/// package with no doctest-able target). Each omission is recorded as a
-/// `valid_no_test_targets:<task-id>` warning, never silent. Tofu
-/// subdir roots additionally record one `path.cwd:<root>` caveat each.
+/// No-target omissions and Tofu working-directory caveats are recorded.
 pub(crate) fn select_universe<'a>(
     discovery: &'a Discovery,
     warnings: &mut Vec<String>,
@@ -179,9 +174,6 @@ fn affected_from_changed(
 }
 
 /// True when one task counts as changed under the affected packages.
-///
-/// Tasks with an empty unit ID follow their manifest siblings: a
-/// workspace-level task is affected when any same-manifest package is.
 pub(crate) fn group_changed(
     task: &ProposedTask,
     changed: &BTreeSet<String>,
@@ -398,3 +390,7 @@ fn untracked_files(root: &Path) -> Result<BTreeSet<String>, String> {
 fn is_advisory_toolfile(path: &str) -> bool {
     path == ".mise.toml" || velnor_actions_rust::is_known_toolfile(path)
 }
+
+#[cfg(test)]
+#[path = "group_selection_tests.rs"]
+mod group_selection_tests;

@@ -225,6 +225,12 @@ pub enum EnvPolicy {
     /// Repository task execution: cleared env plus proxy passthrough,
     /// the isolation overlay, and declared inputs only.
     RepoTask,
+    /// Qualified task-only config visibility with owned homes and cleared env.
+    QualifiedCheck,
+    /// Read-only qualified probes: explicit environment only, no overlays.
+    QualifiedProbe,
+    /// Qualified acquisition: owned environment and fixed isolation overlay.
+    QualifiedAcquisition,
 }
 
 impl EnvPolicy {
@@ -235,15 +241,32 @@ impl EnvPolicy {
         match self {
             Self::Bootstrap => &CREDENTIAL_ALLOWLIST_BOOTSTRAP,
             Self::Baseline => &CREDENTIAL_ALLOWLIST_BASELINE,
-            Self::Verify | Self::Discovery | Self::RepoTask => &[],
+            Self::Verify
+            | Self::Discovery
+            | Self::RepoTask
+            | Self::QualifiedCheck
+            | Self::QualifiedProbe
+            | Self::QualifiedAcquisition => &[],
         }
     }
 
     /// Whether the child inherits the parent environment (filtered).
-    /// Only [`Self::RepoTask`] spawns cleared.
+    /// Repository tasks and qualified policies spawn cleared.
     #[must_use]
     pub const fn inherits_parent(&self) -> bool {
-        !matches!(self, Self::RepoTask)
+        !matches!(
+            self,
+            Self::RepoTask
+                | Self::QualifiedCheck
+                | Self::QualifiedProbe
+                | Self::QualifiedAcquisition
+        )
+    }
+
+    /// Whether a cleared child may inherit ambient proxy authority.
+    #[must_use]
+    pub const fn allows_proxy_passthrough(&self) -> bool {
+        matches!(self, Self::RepoTask)
     }
 
     /// Full child environment over an explicit parent snapshot.
@@ -260,9 +283,7 @@ impl EnvPolicy {
         additions: &[(OsString, OsString)],
     ) -> Vec<(OsString, OsString)> {
         let mut env = Vec::with_capacity(parent.len() + additions.len());
-        if *self == Self::RepoTask {
-            env.extend(proxy_passthrough(parent));
-        } else {
+        if self.inherits_parent() {
             let allowed = self.allowed_credentials();
             for (key, value) in parent {
                 let name = key.to_string_lossy();
@@ -274,6 +295,8 @@ impl EnvPolicy {
                     env.push((key.clone(), value.clone()));
                 }
             }
+        } else if self.allows_proxy_passthrough() {
+            env.extend(proxy_passthrough(parent));
         }
         env.extend(additions.iter().cloned());
         env
