@@ -79,7 +79,10 @@ fn keychain_import_does_not_take_the_secret() {
             "-a".to_owned(),
             "velnor-host".to_owned(),
             "-U".to_owned(),
+            "-w".to_owned(),
         ]
     );
-    assert!(argv.iter().all(|arg| arg != secret && arg != "-w"));
+    assert_eq!(argv.iter().filter(|arg| *arg == "-w").count(), 1);
+    assert_eq!(argv.last().map(String::as_str), Some("-w"));
+    assert!(argv.iter().all(|arg| arg != secret));
 }

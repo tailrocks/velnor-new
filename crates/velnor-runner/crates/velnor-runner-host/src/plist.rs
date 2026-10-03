@@ -48,7 +48,10 @@ fn xml_text(text: &str) -> String {
     out
 }
 
-/// Argv for a Keychain import that reads the secret on stdin, not on argv.
+/// Argv for a Keychain import.
+///
+/// A trailing `-w` with no value makes `security` prompt. The password
+/// is not an argument. `-w <password>` is the insecure form and is not used.
 #[must_use]
 pub fn keychain_import_argv(service: &str) -> Vec<String> {
     vec![
@@ -59,5 +62,6 @@ pub fn keychain_import_argv(service: &str) -> Vec<String> {
         "-a".to_owned(),
         "velnor-host".to_owned(),
         "-U".to_owned(),
+        "-w".to_owned(),
     ]
 }
