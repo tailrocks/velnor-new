@@ -20,6 +20,8 @@ pub const MACOS_BINARY_RELEASE_WORKFLOW: &str = ".github/workflows/macos-binary-
 /// Queue-monitoring workflow path.
 pub const MONITORING_WORKFLOW: &str = ".github/workflows/monitoring.yml";
 
+#[path = "schema2_classes.rs"]
+mod classes;
 #[path = "schema2_features.rs"]
 mod features;
 
@@ -149,7 +151,8 @@ fn qualification(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> 
         ),
     ];
     jobs.extend(features::feature_jobs(hosted.clone(), scale.clone()));
-    jobs.extend(features::negative_jobs(hosted, scale));
+    jobs.extend(features::negative_jobs(hosted.clone(), scale.clone()));
+    jobs.extend(classes::class_jobs(&hosted, &scale));
     Ok(document("Qualification", mode_trigger(), jobs))
 }
 

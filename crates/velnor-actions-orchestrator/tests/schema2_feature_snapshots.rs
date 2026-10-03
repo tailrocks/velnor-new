@@ -1,5 +1,6 @@
 /// `qualification.yml` body, without the generator marker.
-pub(super) const QUALIFICATION: &str = r#"name: Qualification
+pub(super) const QUALIFICATION: &str = concat!(
+    r#"name: Qualification
 "on":
   workflow_dispatch:
     inputs:
@@ -155,4 +156,6 @@ jobs:
     steps:
       - name: Intentional failure
         run: echo expected-negative && exit 1
-"#;
+"#,
+    include_str!("schema2_class_snapshot.txt"),
+);

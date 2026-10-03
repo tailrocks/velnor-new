@@ -14,7 +14,8 @@ const ARTIFACTS: &str = "inputs.mode == 'features' || inputs.mode == 'artifacts'
 const BUILDX: &str = "inputs.mode == 'features' || inputs.mode == 'buildx'";
 const NEGATIVE: &str = "inputs.mode == 'negative'";
 
-const CHECKOUT_USES: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
+/// Pinned `actions/checkout` used by qualification jobs.
+pub(super) const CHECKOUT_USES: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
 const UPLOAD_USES: &str = "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a";
 const REDIS_OPTIONS: &str =
     "--health-cmd \"redis-cli ping\" --health-interval 5s --health-timeout 5s --health-retries 12";
@@ -110,7 +111,8 @@ pub(super) fn negative_jobs(hosted: Yaml, scale: Yaml) -> Vec<(String, Yaml)> {
     ]
 }
 
-fn gated(job: (String, Yaml), when: &str) -> (String, Yaml) {
+/// Insert `if` at map index 1, matching the qualification document style.
+pub(super) fn gated(job: (String, Yaml), when: &str) -> (String, Yaml) {
     with_if(job, when)
 }
 
@@ -164,7 +166,8 @@ fn fail_job(id: &str, name: &str, runs_on: Yaml) -> (String, Yaml) {
     )
 }
 
-fn base(name: &str, runs_on: Yaml, timeout: i64) -> Vec<(String, Yaml)> {
+/// Shared preamble: name, `runs-on`, timeout. `if` is inserted later.
+pub(super) fn base(name: &str, runs_on: Yaml, timeout: i64) -> Vec<(String, Yaml)> {
     vec![
         ("name".to_owned(), Yaml::str(name)),
         ("runs-on".to_owned(), runs_on),
@@ -172,12 +175,18 @@ fn base(name: &str, runs_on: Yaml, timeout: i64) -> Vec<(String, Yaml)> {
     ]
 }
 
-fn finish(id: &str, mut fields: Vec<(String, Yaml)>, steps: Vec<Yaml>) -> (String, Yaml) {
+/// Append steps and return one job entry.
+pub(super) fn finish(
+    id: &str,
+    mut fields: Vec<(String, Yaml)>,
+    steps: Vec<Yaml>,
+) -> (String, Yaml) {
     fields.push(("steps".to_owned(), Yaml::Seq(steps)));
     (id.to_owned(), Yaml::Map(fields))
 }
 
-fn redis_service() -> Yaml {
+/// Redis 7 with the shared health options and published port 6379.
+pub(super) fn redis_service() -> Yaml {
     Yaml::Map(vec![(
         "redis".to_owned(),
         Yaml::Map(vec![
@@ -198,14 +207,16 @@ fn artifact_permissions() -> Yaml {
     ])
 }
 
-fn run_step(name: &str, run: &str) -> Yaml {
+/// One `run` step.
+pub(super) fn run_step(name: &str, run: &str) -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(name)),
         ("run".to_owned(), Yaml::str(run)),
     ])
 }
 
-fn uses_step(name: &str, uses: &str) -> Yaml {
+/// One `uses` step.
+pub(super) fn uses_step(name: &str, uses: &str) -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(name)),
         ("uses".to_owned(), Yaml::str(uses)),
