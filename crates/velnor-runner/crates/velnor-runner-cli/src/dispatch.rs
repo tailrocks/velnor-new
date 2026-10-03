@@ -6,9 +6,8 @@ use std::process::ExitCode;
 
 use clap::Parser;
 use velnor_runner_host::{
-    ConnectPlan, DaemonLock, DisconnectEffect, HostConfig, HostError, Readiness, SetOwnership,
-    connect_plan, disconnect_effects, doctor_json, import_secret, read_secret, readiness_for_empty,
-    status_json,
+    ConnectPlan, DisconnectEffect, HostConfig, HostError, Readiness, SetOwnership, connect_plan,
+    disconnect_effects, doctor_json, import_secret, read_secret, readiness_for_empty, status_json,
 };
 
 use crate::args::{Cli, Command, DaemonAction};
@@ -119,8 +118,8 @@ fn remove_flag(state: &Path, name: &str) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-const KEYCHAIN_SERVICE: &str = "com.tailrocks.velnor.host";
-const KEYCHAIN_ACCOUNT: &str = "velnor-host";
+pub(crate) const KEYCHAIN_SERVICE: &str = "com.tailrocks.velnor.host";
+pub(crate) const KEYCHAIN_ACCOUNT: &str = "velnor-host";
 
 /// Fields for one `connect` invocation. The token is not a field.
 struct ConnectRequest<'a> {
@@ -238,19 +237,7 @@ fn daemon(state: &Path, action: DaemonAction) -> ExitCode {
 }
 
 fn run_daemon(state: &Path) -> ExitCode {
-    if let Ok(lock) = DaemonLock::try_acquire(&state.join("daemon.lock")) {
-        return hold(&lock);
-    }
-    eprintln!("daemon already running");
-    ExitCode::from(1)
-}
-
-fn hold(lock: &DaemonLock) -> ExitCode {
-    if !lock.is_held() {
-        return ExitCode::from(1);
-    }
-    std::thread::park();
-    ExitCode::SUCCESS
+    crate::daemon_run::run_daemon(state)
 }
 
 fn compare_command(evidence: Option<&Path>) -> ExitCode {

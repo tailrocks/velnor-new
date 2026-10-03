@@ -2,9 +2,9 @@
 
 use std::io::Cursor;
 
-#[cfg(target_os = "macos")]
-use crate::import_secret;
 use crate::{HostError, read_secret};
+#[cfg(target_os = "macos")]
+use crate::{import_secret, load_secret};
 
 #[test]
 fn read_secret_keeps_the_canary_out_of_errors() -> Result<(), HostError> {
@@ -62,6 +62,10 @@ fn import_secret_round_trips_the_test_service() -> Result<(), HostError> {
     let _guard = TestItem { service, account };
     let canary = b"canary-token";
     import_secret(service, account, canary)?;
+    let loaded = load_secret(service, account)?;
+    if loaded.as_slice() != canary || format!("{}", HostError::Keychain).contains("canary-token") {
+        return Err(HostError::Keychain);
+    }
     let stored = security_framework::passwords::generic_password(
         security_framework::passwords::PasswordOptions::new_generic_password(service, account),
     )

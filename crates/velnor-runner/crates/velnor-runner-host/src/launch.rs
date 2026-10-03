@@ -28,7 +28,7 @@ mod steps;
 mod trace;
 mod turn;
 
-pub(crate) use capacity::job_capacity;
+pub(crate) use capacity::{install_job_capacity, job_capacity};
 
 #[cfg(test)]
 pub(crate) use capacity::{
