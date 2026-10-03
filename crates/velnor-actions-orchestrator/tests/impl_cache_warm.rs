@@ -107,6 +107,16 @@ fn identical_inputs_render_identical_caches() -> TestResult {
     Ok(())
 }
 
+fn driver_task(line: &str, driver: &str, task: &str) -> bool {
+    let needle = format!("{driver} {task}");
+    line.match_indices(&needle).any(|(at, _)| {
+        line[at + needle.len()..]
+            .chars()
+            .next()
+            .is_none_or(|ch| !ch.is_ascii_alphanumeric())
+    })
+}
+
 #[test]
 fn fetch_carries_offline_skip_branch() -> TestResult {
     for mbx in [false, true] {
@@ -142,7 +152,7 @@ fn fetch_carries_offline_skip_branch() -> TestResult {
         for line in yaml.lines().filter(|line| line.contains("run:")) {
             let is_obligation = ["clippy", "build", "test", "nextest", "doc", "fmt"]
                 .iter()
-                .any(|task| line.contains(&format!("{driver} {task}")));
+                .any(|task| driver_task(line, driver, task));
             if is_obligation {
                 obligations += 1;
                 assert!(line.contains("--offline"), "offline obligation: {line}");

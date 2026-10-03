@@ -206,7 +206,7 @@ fn policy_file_is_complete() -> Result<(), Box<dyn Error>> {
         "cargo-mutants = \"27.1.0\"",
         "mise = \"2026.9.18\"",
         "rust = \"1.98.1\"",
-        "mr-boxington = \"1.21.0\"",
+        "mr-boxington = \"1.21.1\"",
         "gh = \"2.102.0\"",
         "actionlint = \"1.7.12\"",
         "shellcheck = \"0.11.0\"",

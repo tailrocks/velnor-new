@@ -114,8 +114,9 @@ fn dispatch_mode_overrides_configured_mode() -> TestResult {
 fn schema2_workflows_match_expected_bytes() -> TestResult {
     let repo = make_repo(&workflow_config())?;
     let tree = render_staged_tree(&prepare(repo.path())?)?;
+    let qualification = required_file(&tree, ".github/workflows/qualification.yml")?;
     assert_eq!(
-        required_file(&tree, ".github/workflows/qualification.yml")?,
+        qualification,
         &marked(schema2_feature_snapshots::QUALIFICATION)
     );
     let image = required_file(&tree, ".github/workflows/image-release.yml")?;
@@ -195,7 +196,7 @@ fn job_ids(yaml: &str) -> Vec<&str> {
         .collect()
 }
 
-fn job_body<'a>(yaml: &'a str, id: &str) -> Result<&'a str, Box<dyn std::error::Error>> {
+pub(super) fn job_body<'a>(yaml: &'a str, id: &str) -> Result<&'a str, Box<dyn std::error::Error>> {
     let section = jobs_section(yaml);
     let header = format!("  {id}:");
     let mut offset = 0;
@@ -235,7 +236,7 @@ fn join_files(tree: &RenderedTree) -> String {
         .join("\n")
 }
 
-fn required_file<'a>(
+pub(super) fn required_file<'a>(
     tree: &'a RenderedTree,
     path: &str,
 ) -> Result<&'a str, Box<dyn std::error::Error>> {
@@ -272,7 +273,7 @@ fn hosted_schema2() -> String {
     format!("{}\nmode = \"hosted\"\n{}", execution_head(), profiles())
 }
 
-fn workflow_config() -> String {
+pub(super) fn workflow_config() -> String {
     format!(
         "{}\nmode = \"hosted\"\nworkflows = [\"qualification\", \"image_release\", \"macos_binary_release\", \"generator_release\", \"monitoring\"]\n{}",
         execution_head(),

@@ -26,7 +26,7 @@ fn candidate_build_argv_is_byte_exact() -> Result<(), String> {
             "--no-hooks",
             "exec",
             "rust@1.98.1",
-            "mr-boxington@1.21.0",
+            "mr-boxington@1.21.1",
             "--",
             "mbx",
             "build",
@@ -66,7 +66,7 @@ fn candidate_build_specs_come_only_from_catalog() -> Result<(), String> {
     assert!(argv.iter().any(|arg| arg == "rust@1.97.0"));
     assert!(argv.iter().any(|arg| arg == "mr-boxington@1.18.0"));
     assert!(
-        !argv.iter().any(|arg| arg == "mr-boxington@1.21.0"),
+        !argv.iter().any(|arg| arg == "mr-boxington@1.21.1"),
         "no pinned fallback may leak in: {argv:?}"
     );
     Ok(())

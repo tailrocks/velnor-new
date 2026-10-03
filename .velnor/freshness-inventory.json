@@ -67,15 +67,15 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-03T07:09:17Z",
+      "checked_at": "2026-10-03T14:15:14Z",
       "key": "jdx/mr-boxington-action",
       "latest": "v1.6.0",
-      "pinned_sha": "9df1d4b18b2147788a7ee7a2c7b84ecf62fd89d3",
-      "pinned_version": "v1.5.0",
-      "qualified_sha": "9df1d4b18b2147788a7ee7a2c7b84ecf62fd89d3",
-      "qualified_version": "v1.5.0",
+      "pinned_sha": "1687e54eb349cadf61fa38b5813a77875489e8e6",
+      "pinned_version": "v1.6.0",
+      "qualified_sha": "1687e54eb349cadf61fa38b5813a77875489e8e6",
+      "qualified_version": "v1.6.0",
       "source": "https://api.github.com/repos/jdx/mr-boxington-action/releases",
-      "status": "held"
+      "status": "current"
     },
     {
       "checked_at": "2026-10-03T07:09:17Z",
@@ -137,29 +137,11 @@
     {
       "expires": "2026-10-17",
       "granted": "2026-10-03",
-      "held_version": "v1.5.0",
-      "issue": "#6",
-      "key": "jdx/mr-boxington-action",
-      "owner": "@donbeave",
-      "reason": "probes 2026-10-03T07:08:17Z and 2026-10-03T07:09:17Z both saw latest v1.6.0; pin stays until the #6 update set"
-    },
-    {
-      "expires": "2026-10-17",
-      "granted": "2026-10-03",
       "held_version": "2026.9.18",
       "issue": "#6",
       "key": "mise",
       "owner": "@donbeave",
       "reason": "probes 2026-10-03T07:08:17Z and 2026-10-03T07:09:17Z both saw latest v2026.10.0; pin stays until the #6 update set"
-    },
-    {
-      "expires": "2026-10-17",
-      "granted": "2026-10-03",
-      "held_version": "1.21.0",
-      "issue": "#6",
-      "key": "mr-boxington",
-      "owner": "@donbeave",
-      "reason": "probes 2026-10-03T07:08:17Z and 2026-10-03T07:09:17Z both saw latest v1.21.1; pin stays until the #6 update set"
     },
     {
       "expires": "2026-10-15",
@@ -191,13 +173,13 @@
       "status": "held"
     },
     {
-      "checked_at": "2026-10-03T07:09:17Z",
+      "checked_at": "2026-10-03T14:15:14Z",
       "latest": "v1.21.1",
       "name": "mr-boxington",
-      "pinned": "1.21.0",
-      "qualified": "1.21.0",
+      "pinned": "1.21.1",
+      "qualified": "1.21.1",
       "source": "https://api.github.com/repos/jdx/mr-boxington/releases/latest",
-      "status": "held"
+      "status": "current"
     },
     {
       "checked_at": "2026-10-03T07:09:17Z",

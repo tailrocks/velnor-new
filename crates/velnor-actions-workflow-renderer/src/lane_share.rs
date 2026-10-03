@@ -247,7 +247,13 @@ mod tests {
         ctx: &RenderContext,
         calls: &BTreeMap<String, String>,
     ) -> Result<String, crate::RenderError> {
-        let document = crate::document::workflow_to_yaml(ir, jobs, ctx, calls)?;
+        let document = crate::document::workflow_to_yaml(
+            ir,
+            jobs,
+            ctx,
+            calls,
+            &std::collections::BTreeSet::new(),
+        )?;
         let quoted = crate::yaml::quote_run_values_in_yaml(document);
         crate::marker::with_marker(&ctx.generator_version, &crate::yaml::render_yaml(&quoted))
     }

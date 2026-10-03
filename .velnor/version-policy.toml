@@ -4,7 +4,7 @@
 # equal the compiled catalog in velnor-actions-mise/src/catalog.rs (checked
 # by `verify_version_policy` during dogfood generate); the [[actions]]
 # mirror MUST equal the action pins in .velnor/freshness-inventory.json
-# (qualified 2026-09-30; checked by scripts/check-freshness.sh).
+# (qualified 2026-10-03; checked by scripts/check-freshness.sh).
 # [validation-tools] pins repo-local verification tools activated for
 # manual risk-triggered runs (cargo-mutants; NOT wired into CI).
 # Consumer repositories do not need this file; the generator never
@@ -18,7 +18,7 @@ max_exception_days = 14
 [tools]
 mise = "2026.9.18"
 rust = "1.98.1"
-mr-boxington = "1.21.0"
+mr-boxington = "1.21.1"
 gh = "2.102.0"
 actionlint = "1.7.12"
 shellcheck = "0.11.0"
@@ -69,9 +69,9 @@ reviewed = "2026-09-28"
 
 [[actions]]
 name = "jdx/mr-boxington-action"
-version = "v1.5.0"
-sha = "9df1d4b18b2147788a7ee7a2c7b84ecf62fd89d3"
-reviewed = "2026-09-28"
+version = "v1.6.0"
+sha = "1687e54eb349cadf61fa38b5813a77875489e8e6"
+reviewed = "2026-10-03"
 
 [[actions]]
 name = "asamarts/alint"
