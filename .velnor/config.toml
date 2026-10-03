@@ -48,7 +48,7 @@ exclude = ["fixtures/**"]
 default_profile = "hosted"
 hosted_profile = "hosted"
 scale_set_profile = "local"
-workflows = ["qualification", "image_release", "macos_binary_release"]
+workflows = ["qualification", "image_release", "macos_binary_release", "generator_release"]
 
 [execution.profiles.hosted]
 kind = "github-hosted"
