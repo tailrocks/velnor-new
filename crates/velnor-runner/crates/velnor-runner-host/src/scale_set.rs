@@ -1,10 +1,10 @@
 //! Get or create `ubuntu-26.04-scale-set` with the shipped registration client.
 
 use velnor_runner_github::{
-    AdminConnectionCall, Exchange, RegistrationScope, RegistrationTokenCall, ScaleSetByName,
-    ScaleSetCreate, ScaleSetFound, SessionError, SessionRequest, Transport, TransportFail,
-    WireError, admin_connection, create_runner_scale_set, get_runner_scale_set,
-    product_create_labels, registration_token,
+    AdminConnectionCall, Exchange, RegistrationScope, RegistrationTokenCall, RunnerGroup,
+    ScaleSetByName, ScaleSetCreate, ScaleSetFound, SessionError, SessionRequest, Transport,
+    TransportFail, WireError, admin_connection, create_runner_scale_set, get_runner_scale_set,
+    list_runner_groups, product_create_labels, registration_token,
 };
 
 use crate::error::HostError;
@@ -76,28 +76,7 @@ pub fn ensure_product_scale_set(
     if pat.is_empty() || owner.is_empty() || repo.is_empty() {
         return Err(EnsureError::Rejected);
     }
-    let mut transport = Recording::new(HttpsTransport::new(GITHUB_API).map_err(map_host)?);
-    let registration = registration_token(
-        &mut transport,
-        &RegistrationTokenCall {
-            scope: RegistrationScope::Repository { owner, repo },
-            pat,
-        },
-    )
-    .map_err(|err| map_session(err, &transport))?;
-    let config_url = format!("https://github.com/{owner}/{repo}");
-    let admin = admin_connection(
-        &mut transport,
-        &AdminConnectionCall {
-            config_url: &config_url,
-            registration_token: registration.expose(),
-        },
-    )
-    .map_err(|err| map_session(err, &transport))?;
-    transport
-        .inner
-        .set_base(admin.expose_url())
-        .map_err(map_host)?;
+    let (mut transport, admin) = open_admin(pat, owner, repo)?;
     let found = get_runner_scale_set(
         &mut transport,
         &ScaleSetByName {
@@ -126,6 +105,54 @@ pub fn ensure_product_scale_set(
         disable_update: view.runner_setting.disable_update,
         labels: view.labels.into_iter().map(|label| label.name).collect(),
     })
+}
+
+/// Runner groups visible to this repository's Actions connection.
+///
+/// # Errors
+///
+/// Returns [`EnsureError`] when the endpoint, token, or group list is refused.
+pub fn product_runner_groups(
+    pat: &str,
+    owner: &str,
+    repo: &str,
+) -> Result<Vec<RunnerGroup>, EnsureError> {
+    if pat.is_empty() || owner.is_empty() || repo.is_empty() {
+        return Err(EnsureError::Rejected);
+    }
+    let (mut transport, admin) = open_admin(pat, owner, repo)?;
+    list_runner_groups(&mut transport, admin.expose_token())
+        .map_err(|err| map_session(err, &transport))
+}
+
+fn open_admin(
+    pat: &str,
+    owner: &str,
+    repo: &str,
+) -> Result<(Recording, velnor_runner_github::AdminConnection), EnsureError> {
+    let mut transport = Recording::new(HttpsTransport::new(GITHUB_API).map_err(map_host)?);
+    let registration = registration_token(
+        &mut transport,
+        &RegistrationTokenCall {
+            scope: RegistrationScope::Repository { owner, repo },
+            pat,
+        },
+    )
+    .map_err(|err| map_session(err, &transport))?;
+    let config_url = format!("https://github.com/{owner}/{repo}");
+    let admin = admin_connection(
+        &mut transport,
+        &AdminConnectionCall {
+            config_url: &config_url,
+            registration_token: registration.expose(),
+        },
+    )
+    .map_err(|err| map_session(err, &transport))?;
+    transport
+        .inner
+        .set_base(admin.expose_url())
+        .map_err(map_host)?;
+    Ok((transport, admin))
 }
 
 fn map_host(error: HostError) -> EnsureError {
@@ -186,6 +213,8 @@ fn step_for(path: &str) -> &'static str {
         "acquire"
     } else if path.contains("generatejitconfig") {
         "jit"
+    } else if path.contains("runnergroups") {
+        "runnergroups"
     } else {
         "runnerscalesets"
     }

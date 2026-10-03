@@ -166,7 +166,9 @@ async fn poll_and_drive(
         restore_base(link, saved)?;
         let polled = polled?;
         match steps::idle(&polled) {
-            steps::Idle::Empty => return Ok(None),
+            // A 202 is the long-poll timeout. A job can be queued while this
+            // session is still open, so keep the session and poll again.
+            steps::Idle::Empty => {}
             steps::Idle::Blocked => {
                 return Err(EnsureError::Unexpected {
                     status: 0,
@@ -192,10 +194,7 @@ async fn poll_and_drive(
             }
         }
     }
-    Err(EnsureError::Unexpected {
-        status: 0,
-        step: "queue",
-    })
+    Ok(None)
 }
 
 struct Ready<'a> {

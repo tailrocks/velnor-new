@@ -5,9 +5,9 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
 
-use crate::WireError;
 use crate::paths::SCALE_SET_ENDPOINT;
 use crate::refresh::{StatusClass, classify_status};
+use crate::{Statistics, WireError};
 
 use super::error::{SessionError, reject};
 use super::request::{Exchange, Method, SessionRequest, Transport};
@@ -19,6 +19,7 @@ pub struct QueueSession {
     pub session_id: String,
     /// Message queue path or URL. Poll uses this path.
     pub message_queue_url: String,
+    statistics: Option<Statistics>,
     token: String,
 }
 
@@ -28,6 +29,12 @@ impl QueueSession {
     pub fn token(&self) -> &str {
         &self.token
     }
+
+    /// Counts from the create or refresh body. Absent when the service omitted them.
+    #[must_use]
+    pub fn statistics(&self) -> Option<&Statistics> {
+        self.statistics.as_ref()
+    }
 }
 
 impl fmt::Debug for QueueSession {
@@ -36,6 +43,7 @@ impl fmt::Debug for QueueSession {
             .debug_struct("QueueSession")
             .field("session_id", &self.session_id)
             .field("message_queue_url", &self.message_queue_url)
+            .field("statistics", &self.statistics)
             .field("token", &"[redacted]")
             .finish()
     }
@@ -166,6 +174,7 @@ fn decode(body: &[u8]) -> Result<QueueSession, SessionError> {
     Ok(QueueSession {
         session_id: parsed.session_id,
         message_queue_url: parsed.message_queue_url,
+        statistics: parsed.statistics,
         token: parsed.message_queue_access_token,
     })
 }
@@ -184,4 +193,6 @@ struct Body {
     message_queue_url: String,
     #[serde(rename = "messageQueueAccessToken")]
     message_queue_access_token: String,
+    #[serde(default)]
+    statistics: Option<Statistics>,
 }

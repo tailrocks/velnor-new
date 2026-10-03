@@ -2,10 +2,12 @@
 //! HTTP registration calls live beside those checks and inject [`crate::Transport`].
 
 mod admin;
+mod groups;
 mod scale_set;
 mod token;
 
 pub use admin::{AdminConnection, AdminConnectionCall, admin_connection, admin_token_is_fresh};
+pub use groups::{RunnerGroup, list_runner_groups};
 pub use scale_set::{
     ScaleSetById, ScaleSetByName, ScaleSetCreate, ScaleSetFound, create_runner_scale_set,
     get_runner_scale_set, get_runner_scale_set_by_id,

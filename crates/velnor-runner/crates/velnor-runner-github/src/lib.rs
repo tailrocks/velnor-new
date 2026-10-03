@@ -21,11 +21,12 @@ pub use poll::{InnerJob, InnerKind, ParsedBatch, Poll, Statistics, may_ack, pars
 pub use refresh::{RefreshGate, StatusClass, classify_status};
 pub use registration::{
     AdminConnection, AdminConnectionCall, CreateLabel, Label, RegistrationScope, RegistrationToken,
-    RegistrationTokenCall, ScaleSetById, ScaleSetByName, ScaleSetCreate, ScaleSetFound,
-    ScaleSetView, accept_scale_set, admin_connection, admin_token_is_fresh, create_body,
-    create_runner_scale_set, enterprise_registration_token_path, get_runner_scale_set,
-    get_runner_scale_set_by_id, http_create_body, organization_registration_token_path,
-    product_create_labels, registration_token, repository_registration_token_path,
+    RegistrationTokenCall, RunnerGroup, ScaleSetById, ScaleSetByName, ScaleSetCreate,
+    ScaleSetFound, ScaleSetView, accept_scale_set, admin_connection, admin_token_is_fresh,
+    create_body, create_runner_scale_set, enterprise_registration_token_path, get_runner_scale_set,
+    get_runner_scale_set_by_id, http_create_body, list_runner_groups,
+    organization_registration_token_path, product_create_labels, registration_token,
+    repository_registration_token_path,
 };
 pub use secret::EncodedJit;
 pub use session::{

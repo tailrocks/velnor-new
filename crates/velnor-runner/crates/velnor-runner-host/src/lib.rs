@@ -34,13 +34,13 @@ pub use https::HttpsTransport;
 pub use ipc::{MAX_FRAME, SOCKET_DIR_MODE, decode_frame, encode_frame};
 pub use journal::{IntentState, Journal, Outcome};
 pub use launch::launch_once;
-pub use listen::{SessionProbe, probe_once, queue_path};
+pub use listen::{SessionCensus, SessionProbe, probe_once, queue_path, session_census};
 pub use plist::{keychain_import_argv, launch_agent_plist};
 pub use readiness::{Readiness, doctor_json, readiness_for_empty, status_json};
 pub use reconcile::{
     IntentRow, Reconcile, ReleaseFact, before_advertise, occupies, release_permitted,
 };
-pub use scale_set::{EnsureError, EnsuredSet, ensure_product_scale_set};
+pub use scale_set::{EnsureError, EnsuredSet, ensure_product_scale_set, product_runner_groups};
 pub use worker::{
     BollardCreate, CreateProjection, Started, bollard_create, dind_create, runner_create,
     start_pair,

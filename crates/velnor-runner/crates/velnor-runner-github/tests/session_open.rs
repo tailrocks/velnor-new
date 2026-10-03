@@ -41,6 +41,7 @@ fn create_stores_the_queue_and_hides_the_token() -> Result<(), &'static str> {
     assert_eq!(created.session_id, "sess");
     assert!(created.message_queue_url.contains("/messages"));
     assert_eq!(created.token(), "queue-token-canary");
+    assert!(created.statistics().is_none());
     let rendered = format!("{created:?} {:?}", script.seen[0]);
     assert!(!rendered.contains("queue-token-canary"));
     assert!(!rendered.contains("admin-canary"));
@@ -56,6 +57,24 @@ fn create_stores_the_queue_and_hides_the_token() -> Result<(), &'static str> {
             .windows(9)
             .any(|part| part == b"ownerName")
     );
+    Ok(())
+}
+
+#[test]
+fn create_keeps_session_statistics() -> Result<(), &'static str> {
+    let body = r#"{"sessionId":"sess","messageQueueUrl":"_apis/runtime/runnerscalesets/7/sessions/sess/messages","messageQueueAccessToken":"queue-token-canary","statistics":{"totalAvailableJobs":2,"totalAcquiredJobs":1,"totalAssignedJobs":4,"totalRunningJobs":3,"totalRegisteredRunners":5,"totalBusyRunners":6,"totalIdleRunners":7}}"#;
+    let mut script = Script::once(200, body);
+    let created =
+        create_session(&mut script, 7, "velnor-host", "admin-canary").map_err(|_| "create")?;
+    let stats = created.statistics().ok_or("statistics")?;
+    assert_eq!(stats.total_available_jobs, 2);
+    assert_eq!(stats.total_acquired_jobs, 1);
+    assert_eq!(stats.assigned_population(), 4);
+    assert_eq!(stats.total_running_jobs, 3);
+    assert_eq!(stats.total_registered_runners, 5);
+    assert_eq!(stats.total_busy_runners, 6);
+    assert_eq!(stats.total_idle_runners, 7);
+    assert!(!format!("{created:?}").contains("queue-token-canary"));
     Ok(())
 }
 
