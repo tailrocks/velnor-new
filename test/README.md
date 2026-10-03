@@ -1,14 +1,11 @@
 # Behavioral tests
 
 The command-line and end-to-end suite uses
-[Bats](https://github.com/bats-core/bats-core), with isolated homes and cache directories for each test. Bats and its assertion helpers are pinned as Git submodules so a
-checkout has the exact test runner used by CI.
-
-Initialize the runner once after cloning:
-
-```bash
-git submodule update --init --recursive
-```
+[Bats](https://github.com/bats-core/bats-core), with isolated homes and cache
+directories for each test. Bats and its assertion helpers are committed as exact
+upstream source trees, so a checkout includes the test runner used by CI.
+[Source provenance](../docs/owned-source/bats-closure.json) records their original
+commits, trees, file identities, and licenses.
 
 Install the repository's tools with `mise install` and a Rust toolchain with
 [rustup](https://rustup.rs), then add the target used by the WebAssembly test:

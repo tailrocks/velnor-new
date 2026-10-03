@@ -18,7 +18,6 @@ Install [mise](https://mise.jdx.dev) and a Rust toolchain through
 [rustup](https://rustup.rs), then run from the repository root:
 
 ```sh
-git submodule update --init --recursive
 mise install
 rustup target add wasm32-unknown-unknown
 mise run build
@@ -29,7 +28,7 @@ whichever one rustup makes current, and any stable release from 1.91, the
 workspace's `rust-version`, builds it. CI builds on whatever Rust its runner
 image ships, so a new stable shows up there first.
 
-The submodules provide Bats and its assertion helpers. The WebAssembly target
+The committed test sources provide Bats and its assertion helpers. The WebAssembly target
 is required by the end-to-end tests. `mise run build` first builds a bootstrap
 mbx, then uses it to build the workspace.
 
