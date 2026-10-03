@@ -92,6 +92,8 @@ rules:
       include:
         - "crates/velnor-actions-*/src/**/*.rs"
         - "crates/velnor-actions-*/tests/**/*.rs"
+        - "crates/velnor-runner/crates/*/src/**/*.rs"
+        - "crates/velnor-runner/crates/*/tests/**/*.rs"
       exclude:
         - "**/fixtures/**"
         - "**/testdata/**"
@@ -105,6 +107,8 @@ rules:
       include:
         - "crates/velnor-actions-*/src/lib.rs"
         - "crates/velnor-actions-*/src/main.rs"
+        - "crates/velnor-runner/crates/*/src/lib.rs"
+        - "crates/velnor-runner/crates/*/src/main.rs"
     max_lines: 150
     level: error
     message: "src/lib.rs and src/main.rs MUST stay under 150 physical lines (§5)"

@@ -540,7 +540,12 @@ if locked is not None and inherited is not None:
         except (OSError, tomllib.TOMLDecodeError) as err:
             fail_row("lock-staleness", manifest, f"unreadable ({err})")
             continue
-        crate = doc.get("package", {}).get("name", manifest)
+        package = doc.get("package")
+        if not isinstance(package, dict) or not package.get("name"):
+            # Nested virtual workspace (crates/velnor-runner). Its lock is
+            # separate; it is not a root member.
+            continue
+        crate = package["name"]
         member_names.add(crate)
         for scope, alias, spec in walk_dep_tables(doc, ""):
             subject = f"{crate}:{scope}:{alias}"

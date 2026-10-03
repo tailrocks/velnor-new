@@ -124,6 +124,8 @@ pub(crate) const EXPECTED: [ExpectedRule; 7] = [
                 &[
                     "crates/velnor-actions-*/src/**/*.rs",
                     "crates/velnor-actions-*/tests/**/*.rs",
+                    "crates/velnor-runner/crates/*/src/**/*.rs",
+                    "crates/velnor-runner/crates/*/tests/**/*.rs",
                 ],
             ),
             ("paths.exclude", &["**/fixtures/**", "**/testdata/**"]),
@@ -138,6 +140,8 @@ pub(crate) const EXPECTED: [ExpectedRule; 7] = [
             &[
                 "crates/velnor-actions-*/src/lib.rs",
                 "crates/velnor-actions-*/src/main.rs",
+                "crates/velnor-runner/crates/*/src/lib.rs",
+                "crates/velnor-runner/crates/*/src/main.rs",
             ],
         )],
         pairs: &[("max_lines", "150")],
@@ -241,14 +245,19 @@ pub(crate) fn parse(text: &str) -> Result<AlintConfig, Box<dyn Error>> {
             }
             continue;
         }
+        // Filtered `extends` nests past indent 2. `ignore` stays flat:
+        // a deeper `ignore` entry is a parse error, not a silent skip.
+        if section != "rules" {
+            if section != "extends" && indent > 2 {
+                return Err(format!("bad indent: {line}").into());
+            }
+            continue;
+        }
         if indent == 2 {
             let Some(rest) = line.strip_prefix("- ") else {
                 return Err(format!("bad indent: {line}").into());
             };
             path.clear();
-            if section != "rules" {
-                continue;
-            }
             let (key, value) = split_pair(rest)?;
             if key != "id" {
                 return Err(format!("expected `- id:`, saw {line}").into());
