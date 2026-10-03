@@ -81,7 +81,8 @@ COPY tar-pax.pl /usr/local/bin/velnor-tar-pax
 # After the divert, /usr/bin/tar is the BusyBox shim, not GNU tar.
 RUN chmod 0755 /usr/local/bin/velnor-runner-entrypoint /usr/local/bin/velnor-tar /usr/local/bin/velnor-tar-pax \
     && apt-get update \
-    && apt-get install -y --no-install-recommends git-lfs perl zstd \
+    && apt-get install -y --no-install-recommends build-essential git-lfs perl pkg-config zstd \
+    && cc --version \
     && rm -rf /var/lib/apt/lists/* \
     && git lfs version \
     && chown -R runner:runner /home/runner \
