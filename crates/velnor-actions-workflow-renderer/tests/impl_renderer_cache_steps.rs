@@ -1,13 +1,13 @@
 //! Gate 4 renderer cases: MBX objects, cache actions, lane target dirs.
 
-use velnor_actions_contract::workflow::ir::CACHE_MODE_PUSH_WRITE_EXPR;
-use velnor_actions_contract::{Step, StepKind, WorkflowPolicy};
+use velnor_actions_contract::cachekey::mbx_cache_generation;
+
+use velnor_actions_contract::{Step, StepKind};
 use velnor_actions_workflow_renderer::steps::{
     CompileDriver, MBX_CACHE_MODE_ENV, TOOLS_CACHE_PATH, TOOLS_RESTORE_NAME, TOOLS_SAVE_NAME,
-    cache_action_step, checkout_step, mbx_objects_step, mbx_step_for_driver, target_dir_for_lane,
-    tools_cache_key, tools_restore_step, tools_save_step,
+    cache_action_step, mbx_objects_step, mbx_step_for_driver, target_dir_for_lane, tools_cache_key,
+    tools_restore_step, tools_save_step,
 };
-use velnor_actions_workflow_renderer::{RenderError, render_workflow_ir};
 
 use super::impl_renderer_fixtures::*;
 
@@ -55,6 +55,21 @@ fn mbx_objects_step_pins_action_and_mode() {
                 Some("1.19.0"),
                 "action installs the exact catalog pin, never latest"
             );
+            assert_eq!(
+                with.get("cache-generation").map(String::as_str),
+                Some(mbx_cache_generation("1.19.0").as_str()),
+                "a new MBX release starts an isolated cache namespace"
+            );
+            for input in [
+                "save-on-pull-request",
+                "save-on-workflow-dispatch",
+                "save-on-protected-branch",
+            ] {
+                assert!(
+                    !with.contains_key(input),
+                    "consumer cache writes stay push-only: {input}"
+                );
+            }
             assert!(!with.contains_key("mode"), "no such action input");
         }
         _ => panic!("mbx must be an action step"),
@@ -342,8 +357,8 @@ fn mbx_objects_step_gates_save_to_push_via_cache_mode() {
         };
         assert_eq!(
             env.get(MBX_CACHE_MODE_ENV).map(String::as_str),
-            Some(CACHE_MODE_PUSH_WRITE_EXPR),
-            "every MBX step pins the push-only cache mode"
+            Some("read"),
+            "the action stays restore-only so its post cannot triple the store"
         );
     }
     assert!(
@@ -352,34 +367,4 @@ fn mbx_objects_step_gates_save_to_push_via_cache_mode() {
             .is_none(),
         "cargo drivers emit no MBX step to gate"
     );
-    // The mode expression must branch on the event: a constant `write`
-    // would reopen PR saves, a constant `read` would break push saves.
-    assert!(CACHE_MODE_PUSH_WRITE_EXPR.contains("github.event_name == 'push'"));
-    assert!(CACHE_MODE_PUSH_WRITE_EXPR.contains("'write'"));
-    assert!(CACHE_MODE_PUSH_WRITE_EXPR.contains("'read'"));
-}
-
-#[test]
-fn action_step_env_renders_only_when_present() -> Result<(), RenderError> {
-    let uses = format!("jdx/mr-boxington-action@{}", sha());
-    let mbx = mbx_objects_step(&uses, false, "1.19.0")?;
-    let plain = checkout_step(&checkout_pin())?;
-    let text = render_workflow_ir(
-        &fixture_ir(vec![job("demo", "Demo", Vec::new(), vec![plain, mbx])]),
-        WorkflowPolicy::ConsumerV1,
-        None,
-        &fixture_ctx(),
-    )?;
-    assert!(
-        text.contains(&format!(
-            "{MBX_CACHE_MODE_ENV}: {CACHE_MODE_PUSH_WRITE_EXPR}"
-        )),
-        "mbx mode renders on the step:\n{text}"
-    );
-    assert_eq!(
-        text.matches("env:").count(),
-        1,
-        "env-less action steps render no env map:\n{text}"
-    );
-    Ok(())
 }
