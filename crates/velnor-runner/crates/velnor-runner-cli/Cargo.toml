@@ -1,0 +1,26 @@
+[package]
+name = "velnor-runner-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+clap = { workspace = true }
+serde_json = { workspace = true }
+velnor-runner-core = { version = "=0.1.0", path = "../velnor-runner-core" }
+velnor-runner-host = { version = "=0.1.0", path = "../velnor-runner-host" }
+
+[target.'cfg(target_os = "macos")'.dev-dependencies]
+security-framework = { version = "=3.7.0" }
+
+[lib]
+name = "velnor_runner_cli"
+path = "src/lib.rs"
+
+[[bin]]
+name = "velnor-host"
+path = "src/main.rs"

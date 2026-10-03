@@ -32,10 +32,21 @@ fn unquote(text: &str) -> String {
     trimmed.to_owned()
 }
 
-/// Top-level `extends` list items (indent-aware; comments rejected).
-pub(crate) fn extends_of(text: &str) -> Result<Vec<String>, Box<dyn Error>> {
+const LOCKFILE_BUNDLE: &str = "alint://bundled/hygiene/lockfiles@v1";
+const LOCKFILE_EXCEPT: [&str; 2] = ["lockfiles-no-nested-cargo", "lockfiles-no-nested-npm"];
+
+/// One `extends` entry: bundle URL plus any `except` ids.
+pub(crate) struct ExtendEntry {
+    url: String,
+    except: Vec<String>,
+}
+
+/// Top-level `extends` entries. A bare string or `url:` mapping; `except`
+/// is the only nested key, and only on the lockfile bundle.
+pub(crate) fn extends_of(text: &str) -> Result<Vec<ExtendEntry>, Box<dyn Error>> {
     let mut items = Vec::new();
     let mut in_extends = false;
+    let mut excepting = false;
     for raw in text.lines() {
         let line = raw.split('#').next().unwrap_or("").trim_end();
         if line.trim().is_empty() {
@@ -44,37 +55,148 @@ pub(crate) fn extends_of(text: &str) -> Result<Vec<String>, Box<dyn Error>> {
         let indent = line.len() - line.trim_start().len();
         if indent == 0 {
             in_extends = line.trim() == "extends:";
+            excepting = false;
             continue;
         }
-        if in_extends && indent == 2 {
+        if !in_extends {
+            continue;
+        }
+        if indent == 2 {
+            excepting = false;
             let item = line
                 .trim()
                 .strip_prefix("- ")
                 .ok_or_else(|| format!("bad extends item: {line}"))?;
-            items.push(unquote(item.trim()));
+            let url = item
+                .trim()
+                .strip_prefix("url:")
+                .map_or_else(|| item.trim(), str::trim);
+            items.push(ExtendEntry {
+                url: unquote(url),
+                except: Vec::new(),
+            });
+            continue;
         }
+        if indent == 4 && line.trim() == "except:" {
+            excepting = true;
+            continue;
+        }
+        if excepting && indent == 6 {
+            let item = line
+                .trim()
+                .strip_prefix("- ")
+                .ok_or_else(|| format!("bad except item: {line}"))?;
+            items
+                .last_mut()
+                .ok_or("except without a bundle")?
+                .except
+                .push(unquote(item.trim()));
+            continue;
+        }
+        return Err(format!("bad extends item: {line}").into());
     }
     Ok(items)
 }
 
-/// Assert the extends set is exactly the five deduped bundles.
+/// Assert the five bundles, no repeats, and the exact lockfile `except`.
 pub(crate) fn check_extends(text: &str) -> Result<(), Box<dyn Error>> {
-    let mut found = extends_of(text)?;
-    found.sort_unstable();
+    let found = extends_of(text)?;
+    let mut urls: Vec<String> = found.iter().map(|entry| entry.url.clone()).collect();
+    urls.sort_unstable();
     let mut want = EXTENDS.to_vec();
     want.sort_unstable();
-    if found != want {
-        return Err(format!("extends is {found:?}, want {want:?}").into());
+    if urls != want {
+        return Err(format!("extends is {urls:?}, want {want:?}").into());
     }
-    let mut deduped = found.clone();
+    let mut deduped = urls.clone();
     deduped.dedup();
-    if deduped.len() != found.len() {
+    if deduped.len() != urls.len() {
         return Err("extends repeats a bundle".into());
+    }
+    for entry in &found {
+        let mut except = entry.except.clone();
+        except.sort_unstable();
+        if entry.url == LOCKFILE_BUNDLE {
+            let want: Vec<&str> = LOCKFILE_EXCEPT.to_vec();
+            let got: Vec<&str> = except.iter().map(String::as_str).collect();
+            if got != want {
+                return Err(format!("lockfile except is {got:?}").into());
+            }
+        } else if !except.is_empty() {
+            return Err(format!("except on {}", entry.url).into());
+        }
     }
     Ok(())
 }
 
-/// Full policy: frozen legacy seven plus the pinned single override.
+/// Narrow lockfile replacements. Same-id overrides of [`EXPECTED`] stay banned.
+const NARROW_LOCKS: [super::alint_miniyaml::ExpectedRule; 2] = [
+    super::alint_miniyaml::ExpectedRule {
+        id: "velnor-no-stray-cargo-lock",
+        kind: "file_absent",
+        paths: &[
+            ("paths.include", &["**/Cargo.lock"]),
+            (
+                "paths.exclude",
+                &["Cargo.lock", "crates/velnor-runner/Cargo.lock"],
+            ),
+        ],
+        pairs: &[],
+    },
+    super::alint_miniyaml::ExpectedRule {
+        id: "velnor-no-stray-npm-lock",
+        kind: "file_absent",
+        paths: &[
+            ("paths.include", &["**/package-lock.json"]),
+            (
+                "paths.exclude",
+                &[
+                    "package-lock.json",
+                    "qualification/testcontainers/package-lock.json",
+                ],
+            ),
+        ],
+        pairs: &[],
+    },
+];
+
+/// The two replacement ids, exact paths. Anything else is an unpinned rule.
+fn check_narrow_locks(rules: &[super::alint_miniyaml::AlintRule]) -> Result<(), Box<dyn Error>> {
+    let mut ids: Vec<&str> = rules.iter().map(|rule| rule.id.as_str()).collect();
+    ids.sort_unstable();
+    let mut want: Vec<&str> = NARROW_LOCKS.iter().map(|row| row.id).collect();
+    want.sort_unstable();
+    if ids != want {
+        return Err(format!("unpinned rule ids {ids:?}, want {want:?}").into());
+    }
+    for rule in rules {
+        super::alint_miniyaml::check_rule_shape(rule)?;
+        let row = NARROW_LOCKS
+            .iter()
+            .find(|row| row.id == rule.id)
+            .ok_or_else(|| format!("unknown rule {}", rule.id))?;
+        if rule.kind() != row.kind {
+            return Err(format!("{} kind is {}, want {}", rule.id, rule.kind(), row.kind).into());
+        }
+        for (key, values) in row.paths {
+            let mut found: Vec<&str> = rule
+                .pairs
+                .iter()
+                .filter(|pair| pair.0 == *key)
+                .map(|pair| pair.1.as_str())
+                .collect();
+            found.sort_unstable();
+            let mut expect = values.to_vec();
+            expect.sort_unstable();
+            if found != expect {
+                return Err(format!("{} {key} is {found:?}, want {expect:?}", rule.id).into());
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Full policy: frozen legacy seven plus the two narrow lockfile rules.
 pub(crate) fn check_extended_policy(text: &str) -> Result<(), Box<dyn Error>> {
     assert_eq!(super::alint_miniyaml::ALLOWED_KINDS.len(), 6);
     assert!(super::alint_miniyaml::ALLOWED_KINDS.contains(&"pair"));
@@ -96,10 +218,7 @@ pub(crate) fn check_extended_policy(text: &str) -> Result<(), Box<dyn Error>> {
         version: config.version,
         rules: legacy,
     })?;
-    if !extra.is_empty() {
-        let ids: Vec<&str> = extra.iter().map(|rule| rule.id.as_str()).collect();
-        return Err(format!("same-id overrides are banned, saw {ids:?}").into());
-    }
+    check_narrow_locks(&extra)?;
     Ok(())
 }
 

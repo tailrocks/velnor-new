@@ -1,0 +1,7 @@
+# This workspace does not inherit the repo-root `.config/nextest.toml`.
+# Keep `[profile.ci]` identical to that file: generated jobs pass `--profile ci`.
+[profile.ci]
+retries = 0
+test-threads = "num-cpus"
+status-level = "all"
+final-status-level = "flaky"
