@@ -13,6 +13,7 @@ Unmodified. No `/proc` spoof, no fake `os-release`. `/usr/bin/tar` is
 runs BusyBox tar. Ubuntu 26.04 GNU tar calls `openat2`, and qemu-user fails
 that with `ENOSYS`, so GNU tar stays at `/usr/bin/tar.gnu` and is not the
 `tar` on `PATH`. `zstd` is installed so cache archives match hosted runners.
+`git-lfs` is installed before the tar divert so `git lfs` is on `PATH`.
 Node.js `24.17.0` linux-x64 is on `PATH`
 for job steps. That is not the runner's private action runtime.
 

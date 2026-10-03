@@ -75,12 +75,13 @@ RUN curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL -o /tmp/docker.tgz \
 
 COPY entrypoint.sh /usr/local/bin/velnor-runner-entrypoint
 COPY tar-shim.sh /usr/local/bin/velnor-tar
-# zstd is installed before the tar divert. dpkg needs GNU tar to unpack.
+# zstd and git-lfs are installed before the tar divert. dpkg needs GNU tar to unpack.
 # After the divert, /usr/bin/tar is the BusyBox shim, not GNU tar.
 RUN chmod 0755 /usr/local/bin/velnor-runner-entrypoint /usr/local/bin/velnor-tar \
     && apt-get update \
-    && apt-get install -y --no-install-recommends zstd \
+    && apt-get install -y --no-install-recommends git-lfs zstd \
     && rm -rf /var/lib/apt/lists/* \
+    && git lfs version \
     && chown -R runner:runner /home/runner \
     && dpkg-divert --local --rename --divert /usr/bin/tar.gnu --add /usr/bin/tar \
     && ln -s /usr/local/bin/velnor-tar /usr/bin/tar \
