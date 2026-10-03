@@ -88,6 +88,9 @@ fn both_mode_splits_verification_and_keeps_release_hosted() -> TestResult {
     let tree = render_staged_tree(&prepare(repo.path())?)?;
     let ci = required_file(&tree, ".github/workflows/ci.yml")?;
     let release = required_file(&tree, ".github/workflows/release.yml")?;
+    let shared = required_file(&tree, ".github/actions/rust-demo/action.yml")?;
+    assert!(shared.contains("shell: bash"), "{shared}");
+    assert!(shared.contains("using: composite"), "{shared}");
     assert_both_ci(ci)?;
     assert_hosted_release(release);
     Ok(())
