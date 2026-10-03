@@ -9,6 +9,8 @@ use crate::impl_common::{TestResult, config_with_branch, git, make_repo};
 
 #[path = "schema2_feature_snapshots.rs"]
 mod schema2_feature_snapshots;
+#[path = "schema2_release_snapshots.rs"]
+mod schema2_release_snapshots;
 
 const HOSTED_RUNS: &str = "runs-on: ubuntu-26.04";
 const SCALE_RUNS: &str = "runs-on: [velnor, ubuntu-26.04-scale-set]";
@@ -111,14 +113,12 @@ fn schema2_workflows_match_expected_bytes() -> TestResult {
         required_file(&tree, ".github/workflows/qualification.yml")?,
         &marked(schema2_feature_snapshots::QUALIFICATION)
     );
-    assert_eq!(
-        required_file(&tree, ".github/workflows/image-release.yml")?,
-        &marked(IMAGE_RELEASE)
-    );
-    assert_eq!(
-        required_file(&tree, ".github/workflows/macos-binary-release.yml")?,
-        &marked(MACOS_RELEASE)
-    );
+    let image = required_file(&tree, ".github/workflows/image-release.yml")?;
+    let macos = required_file(&tree, ".github/workflows/macos-binary-release.yml")?;
+    assert_eq!(image, &marked(schema2_release_snapshots::IMAGE_RELEASE));
+    assert_eq!(macos, &marked(schema2_release_snapshots::MACOS_RELEASE));
+    assert_image_producer(image)?;
+    assert_macos_producer(macos)?;
     assert_eq!(
         required_file(&tree, ".github/workflows/monitoring.yml")?,
         &marked(MONITORING)
@@ -278,35 +278,67 @@ fn marked(body: &str) -> String {
     )
 }
 
-const IMAGE_RELEASE: &str = r#"name: Image release
-"on":
-  workflow_dispatch: {}
-permissions:
-  contents: read
-jobs:
-  image-release:
-    name: Image release
-    runs-on: ubuntu-26.04
-    timeout-minutes: 10
-    steps:
-      - name: Publish image
-        run: echo release
-"#;
+fn assert_image_producer(body: &str) -> TestResult {
+    assert!(body.contains("docker build --platform linux/amd64"));
+    assert!(body.contains("images/runner/ubuntu-26.04"));
+    assert!(body.contains("images/dind"));
+    assert!(body.contains("{{.Architecture}}"));
+    assert!(body.contains("= amd64"));
+    assert!(body.contains("docker save"));
+    assert!(body.contains("sha256sum"));
+    assert!(
+        body.contains("actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8")
+    );
+    assert!(body.contains("gh release create"));
+    assert!(body.contains("runner-${GITHUB_SHA}"));
+    assert!(body.contains(HOSTED_RUNS));
+    assert_release_permissions(body, "attest-images", "publish-images")?;
+    assert!(!body.contains("echo release"));
+    assert!(!body.contains("inputs:"));
+    assert!(!body.contains("packages:"));
+    assert!(!body.contains("CARGO_REGISTRY_TOKEN"));
+    assert!(!body.contains("secrets:"));
+    assert!(!body.contains("pull_request"));
+    Ok(())
+}
 
-const MACOS_RELEASE: &str = r#"name: macOS binary release
-"on":
-  workflow_dispatch: {}
-permissions:
-  contents: read
-jobs:
-  macos-binary-release:
-    name: macOS binary release
-    runs-on: ubuntu-26.04
-    timeout-minutes: 10
-    steps:
-      - name: Publish macOS binary
-        run: echo release
-"#;
+fn assert_macos_producer(body: &str) -> TestResult {
+    let build = job_body(body, "build-binary")?;
+    assert!(build.contains("runs-on: macos-15"), "{build}");
+    assert!(!build.contains("ubuntu"), "{build}");
+    assert!(!body.contains("ubuntu"));
+    assert!(body.contains(
+        "cargo build --locked --manifest-path crates/velnor-runner/Cargo.toml --release -p velnor-host"
+    ));
+    assert!(body.contains("Mach-O"));
+    assert!(body.contains("arm64"));
+    assert!(body.contains("shasum -a 256"));
+    assert!(
+        body.contains("actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8")
+    );
+    assert!(body.contains("gh release create"));
+    assert!(body.contains("binary-${GITHUB_SHA}"));
+    assert_release_permissions(body, "attest-binary", "publish-binary")?;
+    assert!(!body.contains("echo release"));
+    assert!(!body.contains("inputs:"));
+    assert!(!body.contains("packages:"));
+    assert!(!body.contains("CARGO_REGISTRY_TOKEN"));
+    Ok(())
+}
+
+fn assert_release_permissions(body: &str, attest: &str, publish: &str) -> TestResult {
+    assert_eq!(body.matches("id-token: write").count(), 1, "{body}");
+    assert_eq!(body.matches("contents: write").count(), 1, "{body}");
+    assert!(body.contains("workflow_dispatch: {}"), "{body}");
+    let attest_body = job_body(body, attest)?;
+    let publish_body = job_body(body, publish)?;
+    assert!(attest_body.contains("id-token: write"), "{attest_body}");
+    assert!(!attest_body.contains("contents: write"), "{attest_body}");
+    assert!(!attest_body.contains("packages:"), "{attest_body}");
+    assert!(publish_body.contains("contents: write"), "{publish_body}");
+    assert!(!publish_body.contains("id-token:"), "{publish_body}");
+    Ok(())
+}
 
 const MONITORING: &str = r#"name: Scale set monitoring
 "on":
