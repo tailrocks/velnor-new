@@ -6,10 +6,16 @@ pub(super) fn session(session: &QueueSession) {
     if std::env::var_os("VELNOR_HTTPS_TRACE").is_none() {
         return;
     }
-    let assigned = session
-        .statistics()
-        .map_or(-1, velnor_runner_github::Statistics::assigned_population);
-    eprintln!("session assigned={assigned}");
+    let stats = session.statistics();
+    let assigned = stats.map_or(-1, velnor_runner_github::Statistics::assigned_population);
+    let available = stats.map_or(-1, |item| item.total_available_jobs);
+    let running = stats.map_or(-1, |item| item.total_running_jobs);
+    let registered = stats.map_or(-1, |item| item.total_registered_runners);
+    let busy = stats.map_or(-1, |item| item.total_busy_runners);
+    let idle = stats.map_or(-1, |item| item.total_idle_runners);
+    eprintln!(
+        "session assigned={assigned} available={available} running={running} registered={registered} busy={busy} idle={idle}"
+    );
 }
 
 pub(super) fn batch(polled: &Poll) {

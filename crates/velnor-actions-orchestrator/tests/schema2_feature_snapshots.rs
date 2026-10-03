@@ -39,7 +39,7 @@ jobs:
         run: echo compare-lanes
   js-hosted:
     name: JavaScript actions / GitHub hosted
-    if: inputs.mode == 'features'
+    if: inputs.mode == 'features' || inputs.mode == 'js'
     runs-on: ubuntu-26.04
     timeout-minutes: 20
     steps:
@@ -51,7 +51,7 @@ jobs:
         run: "node -e 'console.log(\"js-action-ok\")'"
   js-scale-set:
     name: JavaScript actions / Velnor Scale Set
-    if: inputs.mode == 'features'
+    if: inputs.mode == 'features' || inputs.mode == 'js'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
     steps:
@@ -63,7 +63,7 @@ jobs:
         run: "node -e 'console.log(\"js-action-ok\")'"
   services-hosted:
     name: Services / GitHub hosted
-    if: inputs.mode == 'features'
+    if: inputs.mode == 'features' || inputs.mode == 'services'
     runs-on: ubuntu-26.04
     timeout-minutes: 20
     services:
@@ -77,7 +77,7 @@ jobs:
         run: timeout 20 bash -c 'until echo >/dev/tcp/127.0.0.1/6379; do sleep 1; done'
   services-scale-set:
     name: Services / Velnor Scale Set
-    if: inputs.mode == 'features'
+    if: inputs.mode == 'features' || inputs.mode == 'services'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
     services:
@@ -91,7 +91,7 @@ jobs:
         run: timeout 20 bash -c 'until echo >/dev/tcp/127.0.0.1/6379; do sleep 1; done'
   artifacts-hosted:
     name: Artifacts / GitHub hosted
-    if: inputs.mode == 'features'
+    if: inputs.mode == 'features' || inputs.mode == 'artifacts'
     runs-on: ubuntu-26.04
     timeout-minutes: 20
     permissions:
@@ -108,7 +108,7 @@ jobs:
           if-no-files-found: error
   artifacts-scale-set:
     name: Artifacts / Velnor Scale Set
-    if: inputs.mode == 'features'
+    if: inputs.mode == 'features' || inputs.mode == 'artifacts'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
     permissions:
@@ -125,7 +125,7 @@ jobs:
           if-no-files-found: error
   buildx-hosted:
     name: Buildx / GitHub hosted
-    if: inputs.mode == 'features'
+    if: inputs.mode == 'features' || inputs.mode == 'buildx'
     runs-on: ubuntu-26.04
     timeout-minutes: 20
     steps:
@@ -133,7 +133,7 @@ jobs:
         run: docker buildx version && printf 'FROM scratch\n' > Dockerfile && docker buildx build --progress=plain -t velnor-g4:probe .
   buildx-scale-set:
     name: Buildx / Velnor Scale Set
-    if: inputs.mode == 'features'
+    if: inputs.mode == 'features' || inputs.mode == 'buildx'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
     steps:

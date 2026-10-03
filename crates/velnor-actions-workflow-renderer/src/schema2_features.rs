@@ -2,11 +2,16 @@
 //! `inputs.mode` selects them. The default `both` keeps the echo lanes.
 //! The negative jobs must fail in GitHub. They are not a separate workflow
 //! file, because `workflow_dispatch` only sees files on the default branch.
+//! One class per dispatch (`js`, `services`, `artifacts`, `buildx`) is one
+//! run. `features` still selects every class.
 
 use super::with_if;
 use crate::yaml::Yaml;
 
-const FEATURES: &str = "inputs.mode == 'features'";
+const JS: &str = "inputs.mode == 'features' || inputs.mode == 'js'";
+const SERVICES: &str = "inputs.mode == 'features' || inputs.mode == 'services'";
+const ARTIFACTS: &str = "inputs.mode == 'features' || inputs.mode == 'artifacts'";
+const BUILDX: &str = "inputs.mode == 'features' || inputs.mode == 'buildx'";
 const NEGATIVE: &str = "inputs.mode == 'negative'";
 
 const CHECKOUT_USES: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
@@ -19,7 +24,7 @@ const PROBE_LOCAL: &str =
     "timeout 20 bash -c 'until echo >/dev/tcp/127.0.0.1/6379; do sleep 1; done'";
 const BUILDX_RUN: &str = "docker buildx version && printf 'FROM scratch\\n' > Dockerfile && docker buildx build --progress=plain -t velnor-g4:probe .";
 
-/// Jobs that run only when `inputs.mode` is `features`.
+/// Feature jobs. `features` runs every class. A class name runs that class.
 pub(super) fn feature_jobs(hosted: Yaml, scale: Yaml) -> Vec<(String, Yaml)> {
     vec![
         gated(
@@ -28,7 +33,7 @@ pub(super) fn feature_jobs(hosted: Yaml, scale: Yaml) -> Vec<(String, Yaml)> {
                 "JavaScript actions / GitHub hosted",
                 hosted.clone(),
             ),
-            FEATURES,
+            JS,
         ),
         gated(
             js_job(
@@ -36,7 +41,7 @@ pub(super) fn feature_jobs(hosted: Yaml, scale: Yaml) -> Vec<(String, Yaml)> {
                 "JavaScript actions / Velnor Scale Set",
                 scale.clone(),
             ),
-            FEATURES,
+            JS,
         ),
         gated(
             service_job(
@@ -44,7 +49,7 @@ pub(super) fn feature_jobs(hosted: Yaml, scale: Yaml) -> Vec<(String, Yaml)> {
                 "Services / GitHub hosted",
                 hosted.clone(),
             ),
-            FEATURES,
+            SERVICES,
         ),
         gated(
             service_job(
@@ -52,7 +57,7 @@ pub(super) fn feature_jobs(hosted: Yaml, scale: Yaml) -> Vec<(String, Yaml)> {
                 "Services / Velnor Scale Set",
                 scale.clone(),
             ),
-            FEATURES,
+            SERVICES,
         ),
         gated(
             artifact_job(
@@ -61,7 +66,7 @@ pub(super) fn feature_jobs(hosted: Yaml, scale: Yaml) -> Vec<(String, Yaml)> {
                 hosted.clone(),
                 "g4-proof-hosted",
             ),
-            FEATURES,
+            ARTIFACTS,
         ),
         gated(
             artifact_job(
@@ -70,15 +75,15 @@ pub(super) fn feature_jobs(hosted: Yaml, scale: Yaml) -> Vec<(String, Yaml)> {
                 scale.clone(),
                 "g4-proof-scale-set",
             ),
-            FEATURES,
+            ARTIFACTS,
         ),
         gated(
             buildx_job("buildx-hosted", "Buildx / GitHub hosted", hosted),
-            FEATURES,
+            BUILDX,
         ),
         gated(
             buildx_job("buildx-scale-set", "Buildx / Velnor Scale Set", scale),
-            FEATURES,
+            BUILDX,
         ),
     ]
 }
