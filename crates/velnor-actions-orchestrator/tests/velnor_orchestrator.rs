@@ -79,6 +79,7 @@ mod impl_schema2_routing;
 mod impl_select;
 mod impl_select_base;
 mod impl_select_removed;
+mod impl_self_repo_gap;
 mod impl_strict_envelope;
 mod impl_task_source_prep;
 mod impl_tofu_t09;

@@ -15,3 +15,5 @@ mod impl_actionlint_lint;
 mod impl_actionlint_tools;
 #[path = "impl_adapter_wire_actionlint.rs"]
 mod impl_adapter_wire_actionlint;
+#[path = "impl_self_repo_gap.rs"]
+mod impl_self_repo_gap;

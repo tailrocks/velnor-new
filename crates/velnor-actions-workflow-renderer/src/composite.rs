@@ -8,7 +8,11 @@ use crate::{RenderError, steps};
 
 /// One local composite call. The path is renderer-owned, not a remote pin.
 pub(crate) fn shared_call(uses: &str) -> Result<Yaml, RenderError> {
-    if !uses.starts_with("./.github/actions/") || uses.contains("..") || uses.contains('\\') {
+    if !uses.starts_with("$/.github/actions/")
+        || uses.contains("..")
+        || uses.contains('\\')
+        || uses.contains('@')
+    {
         return Err(RenderError::UnsafePath(uses.to_owned()));
     }
     Ok(Yaml::Map(vec![
