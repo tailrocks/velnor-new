@@ -25,7 +25,8 @@ HOSTS = ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu",
 def git(source, *arguments):
     environment = {key: value for key, value in os.environ.items()
                    if not key.startswith("GIT_")}
-    environment.update(GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull)
+    environment.update(GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull,
+                       GIT_OPTIONAL_LOCKS="0")
     return subprocess.run(["git", "--no-replace-objects", "-C", str(source),
                            *arguments], check=True, capture_output=True,
                           env=environment).stdout
