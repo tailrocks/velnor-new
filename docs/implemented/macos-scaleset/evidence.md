@@ -221,8 +221,17 @@ Each command was run once and was not retried.
 
 `gh workflow run macos-binary-release.yml --ref macos-scaleset --repo tailrocks/velnor-new` exited 1: `HTTP 404: workflow macos-binary-release.yml not found on the default branch (https://api.github.com/repos/tailrocks/velnor-new/actions/workflows/macos-binary-release.yml)`.
 
-Those two dispatches were not retried. The files were absent from `main` and from this branch at that time. Later commits put generated `image-release.yml` and `macos-binary-release.yml` on `macos-scaleset` only. They are not on `main`. No image and no macOS binary were published by those 404s. ChainArgos was not updated. G7 and G8 stay `NOT_RUN`.
+Those two dispatches were not retried. The files were absent from `main` and from this branch at that time. Later commits put generated `image-release.yml` and `macos-binary-release.yml` on `macos-scaleset` only. They are not on `main`. No image and no macOS binary were published by those 404s.
+
+GitHub does not index a `workflow_dispatch`-only file that is not on the default branch. `main` cannot take these files: schema-1 CI diffs the whole `.github` tree, and ruleset `protect-main` (`24396608`) requires a pull request plus the `Required` check. Qualification was indexed only after commit `6b53cd8` added `push: {}`. Commit `f229bf6` did the same for the two release workflows and was pushed. GitHub then listed Image release `373713267` and macOS binary release `373713266`.
+
+That push started both workflows at `f229bf685db2a4d296ae07159b9e250921ca17a1`:
+
+- Image release run [37101248625](https://github.com/tailrocks/velnor-new/actions/runs/37101248625) concluded `failure`. Build runner images and Attest runner images concluded `success`. Publish runner images exited 4: `gh` had no `GH_TOKEN`.
+- macOS binary release run [37101248540](https://github.com/tailrocks/velnor-new/actions/runs/37101248540) concluded `failure`. Build velnor-host exited 101: `package ID specification velnor-host did not match any packages`. The package is `velnor-runner-cli`. The binary name is `velnor-host`.
+
+Commit `784399d` selects `-p velnor-runner-cli` and removes `push: {}`. The workflow ids remained. `gh workflow run macos-binary-release.yml --ref macos-scaleset` created run [37101412470](https://github.com/tailrocks/velnor-new/actions/runs/37101412470) at `784399d`. That run was cancelled: its publish step still had no `GH_TOKEN`, so it would have failed the same way as `37101248625`. The publish step now sets `GH_TOKEN` to `${{ github.token }}` on the publish job only. No release asset is recorded yet. ChainArgos was not updated. G7 and G8 stay `NOT_RUN`.
 
 ## Not yet run
 
-No paired ChainArgos workflow. No published image or macOS binary beyond the existing `v0.1.0` generator assets. The two release-workflow dispatches above returned HTTP 404 and were not retried. The named section 11 classes have job URLs above. Features dispatch `37097526498`, queue-pressure run `37098293064`, and crash run `37099950570` are recorded above. G4 stays `NOT_RUN` because the job log does not show the official runner cgroup compatibility check. The G3 matrix attempt is recorded and is not a pass. No promotion onto `main`.
+No paired ChainArgos workflow. No published image or macOS binary beyond the existing `v0.1.0` generator assets. The first two release dispatches returned HTTP 404 and were not retried. Later runs `37101248625`, `37101248540`, and `37101412470` are in the publish section and are not a published asset. The named section 11 classes have job URLs above. Features dispatch `37097526498`, queue-pressure run `37098293064`, and crash run `37099950570` are recorded above. G4 stays `NOT_RUN` because the job log does not show the official runner cgroup compatibility check. The G3 matrix attempt is recorded and is not a pass. No promotion onto `main`.

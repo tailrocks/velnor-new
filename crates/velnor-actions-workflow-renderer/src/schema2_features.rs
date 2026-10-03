@@ -215,6 +215,21 @@ pub(super) fn run_step(name: &str, run: &str) -> Yaml {
     ])
 }
 
+/// `gh` reads `GH_TOKEN`. The job token is not a dispatch input.
+pub(super) fn publish_step(run: &str) -> Yaml {
+    Yaml::Map(vec![
+        ("name".to_owned(), Yaml::str("Publish GitHub release")),
+        (
+            "env".to_owned(),
+            Yaml::Map(vec![(
+                "GH_TOKEN".to_owned(),
+                Yaml::str("${{ github.token }}"),
+            )]),
+        ),
+        ("run".to_owned(), Yaml::str(run)),
+    ])
+}
+
 /// One `uses` step.
 pub(super) fn uses_step(name: &str, uses: &str) -> Yaml {
     Yaml::Map(vec![

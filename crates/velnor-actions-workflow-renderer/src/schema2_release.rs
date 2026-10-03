@@ -12,7 +12,7 @@ use crate::steps::{DOWNLOAD_ARTIFACT_USES, UPLOAD_ARTIFACT_USES};
 use crate::yaml::Yaml;
 
 use super::Schema2WorkflowRequest;
-use super::features::{CHECKOUT_USES, base, finish, run_step};
+use super::features::{CHECKOUT_USES, base, finish, publish_step, run_step};
 
 /// GitHub-hosted macOS label. The binary is native; it is not built on Ubuntu.
 const MACOS_RUNS_ON: &str = "macos-15";
@@ -229,10 +229,7 @@ fn publish_job(runs_on: Yaml, spec: &Publish<'_>) -> (String, Yaml) {
         ),
         vec![
             download_step(spec.artifact),
-            run_step(
-                "Publish GitHub release",
-                &release_command(spec.prefix, spec.notes, spec.files),
-            ),
+            publish_step(&release_command(spec.prefix, spec.notes, spec.files)),
         ],
     )
 }
@@ -334,12 +331,7 @@ fn build_permissions() -> Yaml {
     perm(&[("actions", "write"), ("contents", "read")])
 }
 
-/// Persist permissions required by the pinned attest action.
-///
-/// `id-token` applies to every step in the job, so this job does not upload
-/// the GitHub release and does not grant `contents: write` or `packages: write`.
-/// `attestations: write` and `artifact-metadata: write` are what that action
-/// documents for storing the statement; they are not registry publish rights.
+/// Attest job: `id-token`, no `contents: write`. Not a registry upload.
 fn attest_permissions() -> Yaml {
     perm(&[
         ("actions", "read"),

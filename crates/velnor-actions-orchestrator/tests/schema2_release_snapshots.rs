@@ -72,6 +72,8 @@ jobs:
           name: image-assets
           path: assets
       - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: "set -eu\ncd assets\ntag=\"runner-${GITHUB_SHA}\"\ngh release create \"$tag\" --target \"$GITHUB_SHA\" --title \"$tag\" --latest=false --notes \"Runner image assets built from ${GITHUB_SHA}.\" velnor-runner-linux-amd64.tar velnor-dind-linux-amd64.tar SHA256SUMS"
 "#;
 
@@ -154,5 +156,7 @@ jobs:
           name: binary-assets
           path: assets
       - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: "set -eu\ncd assets\ntag=\"binary-${GITHUB_SHA}\"\ngh release create \"$tag\" --target \"$GITHUB_SHA\" --title \"$tag\" --latest=false --notes \"velnor-host built from ${GITHUB_SHA}.\" velnor-host SHA256SUMS"
 "#;
