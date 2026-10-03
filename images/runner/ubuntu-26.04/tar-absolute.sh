@@ -186,6 +186,18 @@ finish_tar() {
     write_pax_archive
     return
   fi
+  # BusyBox parses a positional member that starts with "-" as an option
+  # (`invalid option -- 'd'`). The pax list keeps that name off argv.
+  if [ "$mode" = c ] && [ "${#filtered[@]}" -gt 0 ]; then
+    for path in "${filtered[@]}"; do
+      case "$path" in
+        -*)
+          write_pax_archive
+          return
+          ;;
+      esac
+    done
+  fi
   if [ "$absolute" -eq 1 ] && [ "$mode" = c ] && [ "${#filtered[@]}" -gt 0 ]; then
     for path in "${filtered[@]}"; do
       stripped="$(strip_unsafe "$path")"

@@ -291,6 +291,22 @@ case_absolute_file() {
   [ ! -e "$root/out/marker" ] || return 1
 }
 
+# `tar -cf -C dir -- -dash-member` must not reach BusyBox argv.
+case_dash_positional() {
+  local root="$work/dashpos"
+  local listed
+  rm -rf -- "$root"
+  mkdir -p "$root/src" "$root/out"
+  printf payload >"$root/src/-dash-member"
+  printf ok >"$root/src/plain"
+  bash "$shim" -cf "$root/arc.tar" -C "$root/src" -- plain -dash-member || return 1
+  listed="$(tar.gnu t -f "$root/arc.tar")"
+  [ "$listed" = $'plain\n-dash-member' ] || return 1
+  bash "$shim" -xf "$root/arc.tar" -C "$root/out" || return 1
+  cmp -s "$root/src/plain" "$root/out/plain" || return 1
+  cmp -s "$root/src/-dash-member" "$root/out/-dash-member" || return 1
+}
+
 run_case collision-a-then-b case_collision_ab
 run_case collision-b-then-a case_collision_ba
 run_case filter-safe-member case_filter_one
@@ -304,6 +320,7 @@ run_case safe-hardlink-with-unsafe case_safe_hardlink
 run_case unsafe-hardlink-fails case_unsafe_hardlink
 run_case plain-extract case_plain
 run_case absolute-file case_absolute_file
+run_case dash-positional case_dash_positional
 
 printf 'RESULT pass=%s fail=%s\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
