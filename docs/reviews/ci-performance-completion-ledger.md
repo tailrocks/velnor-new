@@ -1,7 +1,8 @@
 # CI performance completion ledger
 
 Status: **OPEN**. Snapshot: 2026-10-03; recorded PR/source HEAD
-`6209c06d87c2f7e41ff162b77cc51e0c99989eec` plus concurrent uncommitted work.
+`577694ab65150631cd318ef3819ba97c7a85f895` plus concurrent uncommitted work.
+This local commit has DCO signoff, no `gpgsig` header.
 No final source qualification, fresh hosted sequence, runtime promotion or consumer
 rollout is established by this ledger. Refresh identities after freezing the head.
 
@@ -23,8 +24,8 @@ separate evidence. No repository currently receives `PERF_VERIFIED` here.
 
 ## Current observed blockers
 
-The current recorded commit fixes Git branch grammar and pinned-gate issues; it
-is not the complete remediation source. Its [PR CI run 37075875245](https://github.com/tailrocks/velnor-new/actions/runs/37075875245)
+The earlier recorded commit `6209c06…` fixed Git branch grammar and pinned-gate
+issues; it is not the complete remediation source. Its [PR CI run 37075875245](https://github.com/tailrocks/velnor-new/actions/runs/37075875245)
 completed **failure**, with API head SHA
 `6209c06d87c2f7e41ff162b77cc51e0c99989eec`. The metadata below was read on
 2026-10-03; it is not a full raw-log performance audit of that run.
@@ -38,41 +39,81 @@ completed **failure**, with API head SHA
 | Publish baseline | skipped | [111066349950](https://github.com/tailrocks/velnor-new/actions/runs/37075875245/job/111066349950) |
 
 Current implementation still requires an integrated reviewed source freeze and
-all repository gates; no successful default-branch qualification is established.
-Owned tool source publication, native hosted artifact qualification, immutable
-publication/attestation and source-bound generator runtime promotion remain
-uncompleted dependencies. No qualified runtime has been distributed to the
-consumer waves, and no reviewed generated rollout or resulting default branch
-has been performance-qualified. Cold/warm/third and changed/negative hosted
-experiments, supported compiler/download/cache/queue telemetry and final
-obligation equivalence remain pending for all47.
+all repository gates; generator default-branch runtime qualification is absent.
+Native hosted artifact qualification, build attestation and source-bound generator
+runtime promotion remain uncompleted dependencies. No qualified runtime has been
+distributed to consumers. Cold/warm/third and changed/negative hosted experiments,
+compiler/download/cache/queue telemetry and final obligation equivalence remain
+pending for all47.
 
 The [owned publication record](ci-performance-owned-tool-publication.md) and
-local `source-receipt.json` records distinguish source staging from distribution:
+[actual source-only publication receipt](ci-performance-owned-source-publication.json)
+now establish two published immutable source releases, with all ten assets
+independently downloaded and hash-checked:
 
-| Source receipt | Local source identity | Receipt state / limitation |
+| Source | Exact source/tree | Source-only release |
 |---|---|---|
-| Mise | `dbbf5b0d8f9c7edc5d0111e17ebaf781ecc97a96`, tree `d5eefb0470da013d4f524555df763f16a0faf22d` | DCO signed-off; no `gpgsig` commit header. `behavioral_qualification`, `publication`, and `signed_build_provenance` are `null`; source publication remains pending |
-| Earlier MBX action | `06f353d41002af758d27490164f53c82e2165637`, tree `810f992dc95bd1efe3db25e925d7b2b727c1bc27` | DCO signed-off; no `gpgsig` commit header. Receipt qualification/publication/provenance fields are `null`. Source owner withdrew this candidate after a protected-ordering defect; replacement source/bundle review is pending |
+| Mise | `dbbf5b0d8f9c7edc5d0111e17ebaf781ecc97a96` / `d5eefb0470da013d4f524555df763f16a0faf22d` | [402229309](https://github.com/tailrocks/velnor-new/releases/tag/owned-source-mise-dbbf5b0d8f9c7edc5d0111e17ebaf781ecc97a96) |
+| MBX action | `c3cbe8e56ccb4727624df45022357f49d2953075` / `57a9336f26b9ce4a31f5f914c17594ecaa9c1248` | [402232689](https://github.com/tailrocks/velnor-new/releases/tag/owned-source-mbx-action-c3cbe8e56ccb4727624df45022357f49d2953075) |
 
-Raw local Git commit headers and DCO trailers were checked at the receipt SHAs.
-DCO signoff does not establish a cryptographic commit signature or signed build
-provenance. A local SHA is not asserted reachable in an official upstream or
-owned-source remote. Active source-reference and immutable-release implementation
-does not close publication, protection or hosted qualification gates.
+Both owned source refs are reachable; source-ref pushes triggered zero observed
+workflows. Release tags target reviewed generator `c57c700…`, excluding foreign
+source triggers. Historical action `06f353…` remains withdrawn for protected-save
+ordering. The Mise draft lookup failure was recovered by exact witnessed IDs;
+no replacement upload/tag occurred. Later latest-release metadata correction also
+made legacy release `401790118` immutable through a server policy side effect;
+the receipt retains that observation and verifies unchanged asset identities.
+
+These source commits have DCO signoffs, no cryptographic commit signatures.
+Behavioral qualification and signed build provenance remain `null`; source-only
+assets do not qualify optimized tool binaries, action behavior, production owned
+distribution, generator runtime or performance.
+
+[Protection execution](ci-performance-protection-execution.json) independently
+records protected main/tags, strict `Required`, no standing bypasses and enabled
+immutable releases. Authoritative IaC [PR39](https://github.com/tailrocks/github-terraform/pull/39)
+merged as `667eae4d8ecedde5153eb486fefe07a9d00cc3ad`; its resulting default-branch
+[CI37079136334](https://github.com/tailrocks/github-terraform/actions/runs/37079136334)
+passed OpenTofu and Required. This is the policy repository's CI, not generator
+runtime qualification. Existing generator W0 Required failed; new exact reviewed
+generator source must pass its own checks. Protection is not retroactive proof
+for old caches, baselines, assets or source provenance.
 
 Generator native source-population review binds private
-`generator-source-map/source-map.json` SHA256
-`967dccf2a7d9bd9fd72192293da7798c4f4b152f2e0fef451a2e2a592ffcc988`.
+[corrected native source map](ci-performance-generator-native-source-map.md):
+`generator-source-map/source-map-24d2d53886ed5fa9497d16992915f26015f95b1ae74aae42a4b676e83c1d54d1.json`,
+SHA256 `24d2d53886ed5fa9497d16992915f26015f95b1ae74aae42a4b676e83c1d54d1`.
+The prior `967dccf2…` map is retained at its immutable SHA-named path; its floating
+PR metadata/diff mismatch is superseded by the reviewed correction.
 Independent reviewer `closure_inputs/generator_map_review` verified 124 immutable
 source references, five full tree inventories and exact workflow events/job/step
 dependencies. Each W0/current attempt maps 47 Rust phases plus 11 control phases,
 with 15 executed raw job logs and one unexecuted baseline job; unavailable logs
 are zero for these bounded attempts. The current attempt actually checked out
 integration `9927a4907c1b3aeb4cc2043df823c62cdcd80935`, whose tree equals the
-recorded PR head tree. This closes only the prior native source-population gap;
-failed jobs, skipped baseline, whole runtime-audit limits and all performance
-gates remain distinct and unqualified.
+recorded PR head tree. The later finite W0 audit below supersedes the prior
+source-reading limits; failed jobs, skipped baseline and all qualification
+gates remain distinct.
+
+The [generator runtime audit](ci-performance-runtime-audit.md) now closes its
+**finite W0 evidence audit with explicit unavailable observations**. Immutable
+private closure `whole-w0-closure-0947e2e94a4ac1e54595c32d5a7f2a2308d1a0c5ee43ba29088b8ed12a1dd64f.json`
+binds evidence manifest `whole-w0-evidence-manifest-01dc3760ac94e32ebe469db8d5439e9bd7b4589775e3fc4f1711e2e770cce361.json`
+(716 files; 166,890,887 bytes). Final independent review
+`whole-w0-review/independent-review-385c3087cf7446c64886c008172ccb50db8b34a3bc2e3709cdde000dd85b2c91.json`
+subsequently checked both records.
+All are SHA-named under the private `generator-source-map/` root. The audit
+retains 11 complete relevant PR diffs, 101 complete semantic files, 33 complete
+workflow files, seven pinned action sources, 30 executed logs and 22 archives
+with 230 extracted payloads. Retrieval gaps are zero; original frozen archives
+remain unchanged. Identity-only inventories are not claimed full semantic reads.
+
+Skipped baseline, no recorded freshness runs, empty task-output telemetry,
+unemitted executable/compiler/queue measurements and attestation HTTP 404s retain
+explicit dispositions. Both Required attempts failed. G14/G17 semantic input
+proof, supported Mise task delivery/replay, ToFu/cache behavior, later ninth
+Rust member/eight CI lanes, final feedback and controlled T01–T26 qualification
+remain OPEN. This audit closure grants no runtime, rollout or performance proof.
 
 ## C01–C09 traceability
 
@@ -86,7 +127,7 @@ not immutable qualification identities.
 | C01 canonical transport | I/S/L: `R/cache_snapshot.rs`, `cache_p08.rs`, shared roots; actual bundled toolkit execution in [hidden-version proof](ci-performance-cache-version.md) | tools_cache, repair_snapshots | Regenerate exact head; verify identical resolved ordered payload/compression/version on hosted restore/save; new namespace, isolated Mise hooks/config |
 | C02 complete Rust tools | I/S/L: `O/rust_tools_prepare.rs`, bootstrap/proxy guards; [local closure](ci-performance-rust-tool-closure.md) | tools_cache, rust_profile, rust_health | Complete damaged toolchain/component/target detection; restore before execution; fresh Linux/macOS closure and repaired snapshot persistence; minimum actual components/targets |
 | C03 MBX immutable domains | I/S: `O/mbx_domain.rs`, `attach.rs`; local owner-API development remains separate from published integration | mbx, upstream_delta, upstream_action | Source-qualified supported MBX/action distribution; bounded useful immutable union snapshots, cohorts, reversed writers/retry and late validation persistence |
-| C04 single verified MBX | I/S: isolated action executable-path/digest interface development; earlier staged action candidate withdrawn, replacement review pending; current official pin alone does not provide that interface | mbx, upstream_action | Publish/consume reviewed supported exact integration; prove one Mise installation, no fallback download; action and task compiler/homes agree |
+| C04 single verified MBX | I/S: isolated action executable-path/digest interface development; earlier staged action candidate withdrawn, reviewed replacement source-only release published; current official pin alone does not provide that interface | mbx, upstream_action | Qualify/consume reviewed supported exact integration; prove one Mise installation, no fallback download; action and task compiler/homes agree |
 | C05 workspace state | I/S: upstream MBX comparison/retention development; owner-reported local experiments need an independently inspected immutable record | mbx, transport_source, build_dir_scope | Immutable resolved target/intermediate-build roots; supported relocation/configuration history; visible bypass accounting, no raw target cache or spoofed mtimes |
 | C06 useful source exports | I/S/L: `O/source_prep.rs`, behavior fixtures; [source closure](ci-performance-source-closure.md), [observer](ci-performance-snapshot-observer.md) | tools_cache, source_closure, repair_snapshots | Selected package/feature/target closure remains conservative complete locked workspace; qualify narrowing or verified contract decision; actual fill/export and source unpack-versus-archive costs |
 | C07 early selection | I/S: `O/analysis_*`, baseline/lineage, job predicates; `U/manifest_graph.rs`, `semantic_inputs.rs`; [correctness review](ci-performance-correctness-review.md) | selection, closure_inputs, early_plan, gate | Authenticate persisted inventory; Plan and freshness consume it before Cargo setup; both exact graphs; carried proof/rerun lineage; hosted covered path without Rust/MBX setup |
@@ -142,7 +183,7 @@ isolated namespaces and validation flows; never benchmark production publication
 
 | Gate | Evidence / current limitation | Owner / next action |
 |---|---|---|
-| W0 bounded audit closure | [Scope audit](ci-performance-scope-audit.md), wave audits below, [durable archive](ci-performance-evidence-archive.md); all46 immutable consumer audits independently closed: Wave A eight, Wave B 33, Wave C five; full relevant diffs/fallbacks, representative executable raw logs, bounded attempts/jobs and exact historical/nonexecution limits retained; all47 performance statuses remain INCOMPLETE | Audit owners / all46 consumer W0 audits CLOSED at collection, generator native source-population map independently closed; whole runtime-audit limits retained; refresh actual rollout source identities and qualify C01–C09/T01–T26; private wave closure records bind frozen collection SHAs, not later live heads |
+| W0 bounded audit closure | [Scope audit](ci-performance-scope-audit.md), wave audits below, [durable archive](ci-performance-evidence-archive.md); all47 finite W0 evidence rows independently closed: generator with explicit unavailable observations, Wave A eight, Wave B 33, Wave C five; full relevant diffs/fallbacks, representative executable raw logs, bounded attempts/jobs and exact historical/nonexecution limits retained; all47 performance statuses remain INCOMPLETE | Audit owners / all47 bounded W0 evidence rows CLOSED at their recorded source boundaries; explicit unavailable observations retained; refresh actual rollout source identities and qualify C01–C09/T01–T26; private wave closure records bind frozen collection SHAs, not later live heads |
 | Cache ownership | Tools vs sources distinct; MBX owns supported compiler/workspace state; native stores separate; same-run artifacts not passed tests; task results disabled absent qualification | tools_cache, mbx, native_caches / verify no overlapping roots, credentials, state or private content |
 | Descriptor compatibility §4.1 | Current typed fields/source inspection, not final runtime compatibility proof | tools_cache, mbx / preserve runner image or reviewed schema; actual platform/ABI/compiler/components/config/path-layout/trust; constrained prefixes and useful-export budget/retention |
 | Native §4.3 | [Native cache audit](ci-performance-native-cache-audit.md), [obligation restoration](ci-performance-obligation-restoration.md); Node/Bun/Gradle public-source/output proof incomplete; Tofu/Docker separate owners | native_caches, obligation_restore_design / complete public-origin proof and native relocation/cache-mount measurements |
@@ -198,9 +239,9 @@ across T01–T03; baseline-only omission cannot prove compiler reuse.
 ## Exact47 repository closure inventory
 
 The next table separates **bounded W0 audit closure** from performance status.
-All46 consumer W0 audits are CLOSED at their frozen collection SHAs. Generator
-native source-population mapping is independently closed; its whole runtime
-audit retains the separately documented historical review limits.
+All47 finite W0 evidence audits are CLOSED at their recorded source boundaries.
+Generator closure explicitly retains unavailable observations and does not grant
+semantic execution, runtime publication, rollout or performance qualification.
 The table repeats immutable **W0 collection** SHAs from the scope audit;
 they are not asserted live heads. Each evidence link supplies PR/run/job findings
 and limits. Every row: qualification run/attempt/job, final runtime digest,
@@ -216,7 +257,7 @@ source-bound evidence and an independent verdict. Waiver cannot grant performanc
 
 | # | Wave | Repository | W0 source SHA | Evidence / owner | W0 audit | Performance status |
 |---:|---|---|---|---|---|---|
-| 0 | G | `tailrocks/velnor-new` | `c57c700459bbe1549fe7eedcb7d8689585c38986` | [Audit](ci-performance-runtime-audit.md) / runtime_logs / parent | OPEN: whole runtime audit; native population CLOSED | INCOMPLETE |
+| 0 | G | `tailrocks/velnor-new` | `c57c700459bbe1549fe7eedcb7d8689585c38986` | [Audit](ci-performance-runtime-audit.md) / runtime_logs / parent | CLOSED: explicit unavailable observations | INCOMPLETE |
 | 1 | A | `jackin-project/jackin` | `6c389d38eadab93d6d6a4005e01dbdd8c4160221` | [Audit](ci-performance-wave-a-audit.md) / wave_a_audit | CLOSED | INCOMPLETE |
 | 2 | A | `jackin-project/jackin-agent-smith` | `2e7119b9c668ca7a9c55218b20049885299d198f` | [Audit](ci-performance-wave-a-audit.md) / wave_a_audit | CLOSED | INCOMPLETE |
 | 3 | A | `jackin-project/homebrew-tap` | `cd05a0ea2cf68fd6c2753ee938247b2dcd4c7551` | [Audit](ci-performance-wave-a-audit.md) / wave_a_audit | CLOSED | INCOMPLETE |
@@ -280,9 +321,24 @@ and reviewed evidence grades. Two missing cross-cutting rows and an unsupported
 local MBX evidence grade were corrected; final rereview found no remaining ledger
 coverage/factual issue. This is ledger verification, not implementation approval.
 
-Refresh reviewer `closure_inputs/ledger_refresh_review` independently verified
+First refresh reviewer `closure_inputs/ledger_refresh_review` independently verified
 ordered47 number/wave/repository equality against all three scope inputs, frozen
 SHA equality against the scope audit, all C01–C09/T01–T26 rows, bounded consumer
 W0 closure, retained CI metadata and raw local source receipt/commit distinctions.
 No unsupported ledger claim remained. This review used existing read-only records;
 it grants no hosted behavior, runtime publication or performance qualification.
+
+The same independent reviewer verified the later source-only publication records,
+all ten asset identities/digests, retained legacy-release metadata side effect,
+DCO/signature distinction at `577694a…`, policy-repository merge/default CI and
+corrected immutable `24d2d538…` native map. No unsupported claim remained in
+that bounded postimage. Whole generator W0 closure and performance are separate.
+
+Final finite generator W0 closure is bound to immutable `0947e2e9…` evidence,
+`01dc3760…` manifest and independent `385c3087…` review. This supersedes only
+the earlier generator audit-reading gap; qualification limits remain recorded.
+
+Final ledger reviewer `closure_inputs/ledger_refresh_review` rehashed the closure,
+manifest, final review and all 716 evidence files: zero mismatches. Ordered47
+rows/frozen SHAs, all9 C/all26 T gates and 47 INCOMPLETE performance statuses
+remain unchanged. Aggregation grants only finite bounded W0 evidence closure.
