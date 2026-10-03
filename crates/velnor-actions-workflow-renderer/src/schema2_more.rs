@@ -16,13 +16,15 @@ const SERVICE_PROBE: &str = "i=0; while [ $i -lt 30 ]; do echo >/dev/tcp/127.0.0
 const TC_RUN: &str = "npm install --prefix qualification/testcontainers testcontainers@11.14.0 && node qualification/testcontainers/reap.mjs";
 const SUBMODULE_PROOF: &str = "git rev-parse HEAD > $RUNNER_TEMP/g4-head && grep -qx $GITHUB_SHA $RUNNER_TEMP/g4-head && grep -qx submodule-ok qualification/fixtures/submodule/MARKER && grep -qx lfs-ok qualification/fixtures/lfs-marker.txt";
 const PORT_HOLD: &str = "docker run -d --name g4-hold -p 8080:80 alpine:3.22 sleep 120 && i=0 && while [ $i -lt 30 ]; do docker port g4-hold 80 | grep -q 8080 && break; i=$((i+1)); sleep 1; done && docker port g4-hold 80 | grep -q 8080 && echo port-held && sleep 45 && docker rm -f g4-hold";
+const PRESSURE_RUN: &str = "echo pressure-start && sleep 150 && echo pressure-ok";
 
-/// Compose, bind, cancel-service, testcontainers, submodule, and ports.
+/// Compose, bind, cancel-service, testcontainers, submodule, ports, and pressure.
 pub(super) fn jobs(hosted: &Yaml, scale: &Yaml) -> Vec<(String, Yaml)> {
     let mut out = paired(hosted, scale);
     out.extend(testcontainers_jobs(hosted, scale));
     out.extend(submodule_jobs(hosted, scale));
     out.extend(ports_jobs(hosted, scale));
+    out.extend(pressure_jobs(hosted, scale));
     out
 }
 
@@ -120,6 +122,54 @@ fn ports_jobs(hosted: &Yaml, scale: &Yaml) -> Vec<(String, Yaml)> {
     ]
 }
 
+fn pressure_jobs(hosted: &Yaml, scale: &Yaml) -> Vec<(String, Yaml)> {
+    let steps = pressure_steps();
+    vec![
+        timed(
+            "pressure-a-hosted",
+            "Pressure A / GitHub hosted",
+            "pressure",
+            hosted,
+            steps.clone(),
+        ),
+        timed(
+            "pressure-b-hosted",
+            "Pressure B / GitHub hosted",
+            "pressure",
+            hosted,
+            steps.clone(),
+        ),
+        timed(
+            "pressure-c-hosted",
+            "Pressure C / GitHub hosted",
+            "pressure",
+            hosted,
+            steps.clone(),
+        ),
+        timed(
+            "pressure-a-scale-set",
+            "Pressure A / Velnor Scale Set",
+            "pressure",
+            scale,
+            steps.clone(),
+        ),
+        timed(
+            "pressure-b-scale-set",
+            "Pressure B / Velnor Scale Set",
+            "pressure",
+            scale,
+            steps.clone(),
+        ),
+        timed(
+            "pressure-c-scale-set",
+            "Pressure C / Velnor Scale Set",
+            "pressure",
+            scale,
+            steps,
+        ),
+    ]
+}
+
 fn timed(id: &str, name: &str, mode: &str, runs_on: &Yaml, steps: Vec<Yaml>) -> (String, Yaml) {
     let when = format!("inputs.mode == '{mode}'");
     gated(finish(id, base(name, runs_on.clone(), 30), steps), &when)
@@ -170,4 +220,8 @@ fn submodule_steps() -> Vec<Yaml> {
 
 fn ports_steps() -> Vec<Yaml> {
     vec![run_step("Hold host port", PORT_HOLD)]
+}
+
+fn pressure_steps() -> Vec<Yaml> {
+    vec![run_step("Pressure sleep", PRESSURE_RUN)]
 }

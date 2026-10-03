@@ -535,3 +535,51 @@ jobs:
     steps:
       - name: Hold host port
         run: docker run -d --name g4-hold -p 8080:80 alpine:3.22 sleep 120 && i=0 && while [ $i -lt 30 ]; do docker port g4-hold 80 | grep -q 8080 && break; i=$((i+1)); sleep 1; done && docker port g4-hold 80 | grep -q 8080 && echo port-held && sleep 45 && docker rm -f g4-hold
+  pressure-a-hosted:
+    name: Pressure A / GitHub hosted
+    if: inputs.mode == 'pressure'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    steps:
+      - name: Pressure sleep
+        run: echo pressure-start && sleep 150 && echo pressure-ok
+  pressure-b-hosted:
+    name: Pressure B / GitHub hosted
+    if: inputs.mode == 'pressure'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    steps:
+      - name: Pressure sleep
+        run: echo pressure-start && sleep 150 && echo pressure-ok
+  pressure-c-hosted:
+    name: Pressure C / GitHub hosted
+    if: inputs.mode == 'pressure'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    steps:
+      - name: Pressure sleep
+        run: echo pressure-start && sleep 150 && echo pressure-ok
+  pressure-a-scale-set:
+    name: Pressure A / Velnor Scale Set
+    if: inputs.mode == 'pressure'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 30
+    steps:
+      - name: Pressure sleep
+        run: echo pressure-start && sleep 150 && echo pressure-ok
+  pressure-b-scale-set:
+    name: Pressure B / Velnor Scale Set
+    if: inputs.mode == 'pressure'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 30
+    steps:
+      - name: Pressure sleep
+        run: echo pressure-start && sleep 150 && echo pressure-ok
+  pressure-c-scale-set:
+    name: Pressure C / Velnor Scale Set
+    if: inputs.mode == 'pressure'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 30
+    steps:
+      - name: Pressure sleep
+        run: echo pressure-start && sleep 150 && echo pressure-ok
