@@ -222,7 +222,9 @@ fi
 if [ -n "$strip" ]; then
   bb+=(--strip-components "$strip")
 fi
-if [ "${#filtered[@]}" -gt 0 ]; then
+# A --files-from list can exceed ARG_MAX. Do not put it on the BusyBox argv.
+# tar-absolute.sh reads that list from the file instead.
+if [ -z "$files_from" ] && [ "${#filtered[@]}" -gt 0 ]; then
   bb+=("${filtered[@]}")
 fi
 

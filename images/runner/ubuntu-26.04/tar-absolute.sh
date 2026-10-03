@@ -90,14 +90,40 @@ member_intended() {
 }
 
 run_busybox() {
+  run_members
+}
+
+# One BusyBox invocation. Extra arguments are member names for this batch only.
+run_members() {
   if [ -n "$program" ]; then
     if [ "$mode" = c ]; then
-      "${bb[@]}" | bash -c "$program" >"$archive"
+      "${bb[@]}" "$@" | bash -c "$program" >"$archive"
     else
-      bash -c "$program" <"$archive" | "${bb[@]}"
+      bash -c "$program" <"$archive" | "${bb[@]}" "$@"
     fi
   else
-    "${bb[@]}"
+    "${bb[@]}" "$@"
+  fi
+}
+
+# Extract or list the file list in batches so one exec stays under ARG_MAX.
+run_listed() {
+  local line list batch=()
+  list="$(mktemp)"
+  if [ "${#filtered[@]}" -gt 0 ]; then
+    printf '%s\n' "${filtered[@]}" >"$list"
+  fi
+  while IFS= read -r line || [ -n "$line" ]; do
+    [ -n "$line" ] || continue
+    batch+=("$line")
+    if [ "${#batch[@]}" -ge 32 ]; then
+      run_members "${batch[@]}"
+      batch=()
+    fi
+  done <"$list"
+  rm -f "$list"
+  if [ "${#batch[@]}" -gt 0 ]; then
+    run_members "${batch[@]}"
   fi
 }
 
@@ -203,6 +229,12 @@ finish_tar() {
   if [ "$absolute" -eq 1 ] && [ -n "$strip" ]; then
     die "unsupported -P with --strip-components"
   fi
+  # Every --files-from create is written from that file. BusyBox has no -T,
+  # and copying the list onto argv fails once the names exceed ARG_MAX.
+  if [ "$mode" = c ] && [ -n "$files_from" ]; then
+    write_pax_archive
+    return
+  fi
   if [ "$absolute" -eq 1 ] && [ "$mode" = c ] && [ "${#filtered[@]}" -gt 0 ]; then
     for path in "${filtered[@]}"; do
       stripped="$(strip_unsafe "$path")"
@@ -214,6 +246,8 @@ finish_tar() {
   fi
   if [ "$needs_pax" -eq 1 ]; then
     write_pax_archive
+  elif [ -n "$files_from" ]; then
+    run_listed
   else
     run_busybox
   fi

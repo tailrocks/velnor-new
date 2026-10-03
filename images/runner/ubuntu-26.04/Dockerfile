@@ -112,6 +112,17 @@ RUN chmod 0755 /usr/local/bin/velnor-runner-entrypoint /usr/local/bin/velnor-tar
     && mkdir -p /tmp/tar-zstd-out \
     && tar -xf /tmp/cache.tzst -P -C /tmp/tar-zstd-out --use-compress-program unzstd \
     && test "$(cat /tmp/tar-zstd-out/g4-cache.txt)" = cache-ok \
+    && perl -e 'my $limit = 2097152; my $dir = "/tmp/argv-src"; mkdir $dir or die $!; open my $m, ">", "/tmp/argv-manifest" or die $!; my $leaf = "a" x 200; my $bytes = 0; my $n = 0; while ($bytes <= $limit) { $n++; my $name = sprintf("%s-%05d", $leaf, $n); open my $f, ">", "$dir/$name" or die $!; print $f "ok"; close $f; print $m "$name\n"; $bytes += length($name) + 1; } open my $s, ">", "$dir/short-ok" or die $!; print $s "ok"; close $s; print $m "short-ok\n"; $n++; open my $c, ">", "/tmp/argv-count" or die $!; print $c $n; close $c;' \
+    && tar -cf /tmp/argv.tar -C /tmp/argv-src --files-from /tmp/argv-manifest \
+    && test "$(tar.gnu -tf /tmp/argv.tar | wc -l | tr -d " ")" = "$(cat /tmp/argv-count)" \
+    && mkdir -p /tmp/argv-out \
+    && tar -xf /tmp/argv.tar -C /tmp/argv-out \
+    && test "$(cat /tmp/argv-out/short-ok)" = ok \
+    && printf "%s\n" short-ok > /tmp/argv-one \
+    && mkdir -p /tmp/argv-one-out \
+    && tar -xf /tmp/argv.tar -C /tmp/argv-one-out --files-from /tmp/argv-one \
+    && test "$(cat /tmp/argv-one-out/short-ok)" = ok \
+    && test "$(find /tmp/argv-one-out -type f | wc -l | tr -d " ")" = 1 \
     && long="$(printf 'n%.0s' $(seq 1 90))" \
     && mkdir -p "/tmp/p-home/runner/_work/repo/repo" \
     && mkdir -p "/tmp/p-home/runner/.cache/mbx/${long}/sub" \
@@ -144,7 +155,7 @@ RUN chmod 0755 /usr/local/bin/velnor-runner-entrypoint /usr/local/bin/velnor-tar
     && rm -rf /tmp/p-home/runner/.cache /tmp/p-home/runner/_work/repo/repo/.cache \
     && tar -xf /tmp/p.tzst -P -C /tmp/p-home/runner/_work/repo/repo --use-compress-program unzstd \
     && test "$(cat /tmp/p-home/runner/.cache/mbx/marker)" = mbx-ok \
-    && rm -rf /tmp/tar-src /tmp/tar-out /tmp/tar-old /tmp/tar-probe.tgz /tmp/tar-manifest /tmp/cache.tgz /tmp/cache.tzst /tmp/tar-cache-out /tmp/tar-zstd-out /tmp/p-home /tmp/p-manifest /tmp/p-abs.tar /tmp/p.tzst /tmp/abs-marker /tmp/abs.tar /tmp/abs-out /tmp/cfz.tgz /tmp/cfz-out
+    && rm -rf /tmp/tar-src /tmp/tar-out /tmp/tar-old /tmp/tar-probe.tgz /tmp/tar-manifest /tmp/cache.tgz /tmp/cache.tzst /tmp/tar-cache-out /tmp/tar-zstd-out /tmp/p-home /tmp/p-manifest /tmp/p-abs.tar /tmp/p.tzst /tmp/abs-marker /tmp/abs.tar /tmp/abs-out /tmp/cfz.tgz /tmp/cfz-out /tmp/argv-src /tmp/argv-manifest /tmp/argv-count /tmp/argv.tar /tmp/argv-out /tmp/argv-one /tmp/argv-one-out
 
 # Job steps call `node` on PATH. Action JavaScript uses the runner's own runtime.
 RUN curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL -o /tmp/node.tar.gz \
