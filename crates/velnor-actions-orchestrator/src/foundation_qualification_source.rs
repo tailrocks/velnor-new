@@ -28,7 +28,7 @@ struct SourcePublicationTuple {
 
 const REVIEWED_SOURCE: SourcePublicationTuple = SourcePublicationTuple {
     repository: "tailrocks/velnor-new",
-    repository_id: 1390620900,
+    repository_id: 1_390_620_900,
     source_ref: "refs/heads/owned-source/cache-action/8758d976a1b25eb387f48aa04ea86f57739b84cf",
     commit: "8758d976a1b25eb387f48aa04ea86f57739b84cf",
     tree: "e5996c377b521e75f41eeb4950623b325295d6e2",

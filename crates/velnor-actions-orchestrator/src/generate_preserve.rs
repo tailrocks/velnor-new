@@ -24,7 +24,7 @@ pub(super) fn root_permissions(
             reason: "repository_root_not_directory".to_owned(),
         }),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(error) => Err(io(source, error)),
+        Err(error) => Err(io(source, &error)),
     }
 }
 
@@ -35,7 +35,7 @@ pub(super) fn restore_root_permissions(
 ) -> Result<(), OrchestratorError> {
     if let Some(permissions) = permissions {
         std::fs::set_permissions(destination, permissions)
-            .map_err(|error| io(destination, error))?;
+            .map_err(|error| io(destination, &error))?;
     }
     Ok(())
 }
@@ -45,7 +45,8 @@ pub(super) fn restore_directory_permissions(
     directories: Vec<(PathBuf, std::fs::Permissions)>,
 ) -> Result<(), OrchestratorError> {
     for (directory, permissions) in directories {
-        std::fs::set_permissions(&directory, permissions).map_err(|error| io(&directory, error))?;
+        std::fs::set_permissions(&directory, permissions)
+            .map_err(|error| io(&directory, &error))?;
     }
     Ok(())
 }
@@ -89,7 +90,7 @@ pub(super) fn check_generated_collisions(
                 }
                 Ok(_) => {}
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => break,
-                Err(error) => return Err(io(&current, error)),
+                Err(error) => return Err(io(&current, &error)),
             }
         }
     }
@@ -110,12 +111,12 @@ pub(super) fn copy_repository_content(
     let entries = match std::fs::read_dir(source) {
         Ok(entries) => entries,
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(err) => return Err(io(source, err)),
+        Err(err) => return Err(io(source, &err)),
     };
-    std::fs::create_dir_all(destination).map_err(|err| io(destination, err))?;
+    std::fs::create_dir_all(destination).map_err(|err| io(destination, &err))?;
     let mut directories = Vec::new();
     for entry in entries {
-        let entry = entry.map_err(|err| io(source, err))?;
+        let entry = entry.map_err(|err| io(source, &err))?;
         copy_entry(
             &entry.path(),
             &destination.join(entry.file_name()),
@@ -150,15 +151,15 @@ fn copy_entry(
     if generator_owned(relative) {
         return Ok(());
     }
-    let metadata = std::fs::symlink_metadata(source).map_err(|err| io(source, err))?;
+    let metadata = std::fs::symlink_metadata(source).map_err(|err| io(source, &err))?;
     if metadata.is_symlink() {
         copy_symlink(source, destination)?;
     } else if metadata.is_file() {
-        std::fs::copy(source, destination).map_err(|err| io(source, err))?;
+        std::fs::copy(source, destination).map_err(|err| io(source, &err))?;
     } else if metadata.is_dir() {
-        std::fs::create_dir(destination).map_err(|err| io(destination, err))?;
-        for entry in std::fs::read_dir(source).map_err(|err| io(source, err))? {
-            let entry = entry.map_err(|err| io(source, err))?;
+        std::fs::create_dir(destination).map_err(|err| io(destination, &err))?;
+        for entry in std::fs::read_dir(source).map_err(|err| io(source, &err))? {
+            let entry = entry.map_err(|err| io(source, &err))?;
             copy_entry(
                 &entry.path(),
                 &destination.join(entry.file_name()),
@@ -178,26 +179,26 @@ fn copy_entry(
 
 /// Recreate a symbolic link with its literal target, including dangling links.
 fn copy_symlink(source: &Path, destination: &Path) -> Result<(), OrchestratorError> {
-    let target = std::fs::read_link(source).map_err(|err| io(source, err))?;
+    let target = std::fs::read_link(source).map_err(|err| io(source, &err))?;
     #[cfg(unix)]
     {
-        std::os::unix::fs::symlink(target, destination).map_err(|err| io(destination, err))
+        std::os::unix::fs::symlink(target, destination).map_err(|err| io(destination, &err))
     }
     #[cfg(windows)]
     {
         use std::os::windows::fs::FileTypeExt;
-        let metadata = std::fs::symlink_metadata(source).map_err(|err| io(source, err))?;
+        let metadata = std::fs::symlink_metadata(source).map_err(|err| io(source, &err))?;
         let result = if metadata.file_type().is_symlink_dir() {
             std::os::windows::fs::symlink_dir(target, destination)
         } else {
             std::os::windows::fs::symlink_file(target, destination)
         };
-        result.map_err(|err| io(destination, err))
+        result.map_err(|err| io(destination, &err))
     }
 }
 
 /// Retain the exact failing path in filesystem diagnostics.
-fn io(path: &Path, error: std::io::Error) -> OrchestratorError {
+fn io(path: &Path, error: &std::io::Error) -> OrchestratorError {
     OrchestratorError::io(path.display().to_string(), error.to_string())
 }
 

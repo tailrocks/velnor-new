@@ -145,11 +145,24 @@ fn preservation_keeps_modes_and_literal_symlink_targets() -> TestResult {
 #[cfg(unix)]
 #[test]
 fn unsupported_entry_refuses_before_replacement() -> TestResult {
-    let root = tempfile::tempdir()?;
+    use std::os::unix::ffi::OsStrExt;
+    use std::os::unix::fs::{FileTypeExt, PermissionsExt};
+
+    // Unix socket paths are bounded by the kernel, independently of TMPDIR.
+    let short_parent = Path::new("/tmp").canonicalize()?;
+    let root = tempfile::tempdir_in(short_parent)?;
+    fs::set_permissions(root.path(), fs::Permissions::from_mode(0o700))?;
+    assert_eq!(
+        fs::metadata(root.path())?.permissions().mode() & 0o777,
+        0o700
+    );
     let github = root.path().join(".github");
     fs::create_dir_all(&github)?;
     fs::write(github.join("CODEOWNERS"), b"kept")?;
-    let _socket = std::os::unix::net::UnixListener::bind(github.join("socket"))?;
+    let socket = github.join("socket");
+    assert!(socket.as_os_str().as_bytes().len() < 100);
+    let _socket = std::os::unix::net::UnixListener::bind(&socket)?;
+    assert!(fs::symlink_metadata(&socket)?.file_type().is_socket());
     let error = replacement(root.path()).expect_err("socket cannot be preserved safely");
     assert!(
         error.to_string().contains("unsupported_repository_entry"),
