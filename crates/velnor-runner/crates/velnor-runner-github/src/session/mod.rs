@@ -7,6 +7,7 @@ mod error;
 mod jobs;
 mod messages;
 mod open;
+mod reopen;
 mod request;
 mod retry;
 
@@ -20,4 +21,5 @@ pub use error::SessionError;
 pub use jobs::acquire;
 pub use messages::poll;
 pub use open::{QueueSession, create_session, refresh_if_current, refresh_session};
+pub use reopen::reopen_session;
 pub use request::{Exchange, Method, SessionRequest, Transport};

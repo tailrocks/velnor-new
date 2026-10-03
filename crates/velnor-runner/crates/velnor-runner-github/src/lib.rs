@@ -32,5 +32,5 @@ pub use secret::EncodedJit;
 pub use session::{
     Ack, AckScope, Exchange, Method, QueueSession, SessionError, SessionRequest, Transport, ack,
     acquire, create_session, delete_session, jit, jit_request, poll, refresh_if_current,
-    refresh_session,
+    refresh_session, reopen_session,
 };

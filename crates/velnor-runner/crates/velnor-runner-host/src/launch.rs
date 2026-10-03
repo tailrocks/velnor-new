@@ -9,20 +9,20 @@ use std::future::Future;
 use zeroize::Zeroize;
 
 use velnor_runner_github::{
-    Exchange, Poll, QueueSession, SessionRequest, Transport, TransportFail, create_session,
-    delete_session,
+    Exchange, Poll, QueueSession, SessionRequest, Transport, TransportFail,
 };
 
 use crate::ensure_product_scale_set;
 use crate::error::HostError;
 use crate::journal::Journal;
-use crate::listen::{Link, OWNER_NAME, Secret, admin_link, annotate, map_listen};
+use crate::listen::{Link, Secret, admin_link};
 use crate::reconcile::Reconcile;
 use crate::scale_set::EnsureError;
 use crate::worker::{Started, start_pair};
 
 mod capacity;
 mod gate;
+mod session;
 mod slot;
 mod steps;
 mod trace;
@@ -57,9 +57,11 @@ pub struct LaunchReport {
 ///
 /// Returns [`EnsureError`] when registration, acquire, JIT, Docker, or the
 /// session delete fails. A failed delete is returned even when the poll failed,
-/// because a leaked session blocks the next create. Timeout after acquire keeps
-/// the journal row uncertain and does not acknowledge. `VELNOR_RECONCILE=1`
-/// can fail the journal read before a session exists, and a hold skips it.
+/// because a leaked session blocks the next create. The next open deletes only
+/// session ids this journal recorded. Timeout after acquire keeps the journal
+/// row uncertain and does not acknowledge. `VELNOR_RECONCILE=1` can fail the
+/// journal read before a session exists, and a hold skips it. The session stays
+/// open while an owned launch container is still running.
 pub async fn launch_once(
     pat: &str,
     owner: &str,
@@ -81,17 +83,18 @@ pub async fn launch_once(
     }
     let mut link = admin_link(pat, owner, repo)?;
     let admin = Secret::new(link.token());
-    let session = create_session(link.transport(), set.id, OWNER_NAME, admin.expose())
-        .map_err(|err| annotate(err, "create-session"))?;
+    let (session, row) = session::open_session(&mut link, set.id, admin.expose(), journal).await?;
     let driven =
         turn::poll_and_drive(&mut link, set.id, &session, admin.expose(), journal, docker).await;
-    let closed = delete_session(
-        link.transport(),
+    let closed = session::close_session(
+        &mut link,
         set.id,
         &session.session_id,
+        row,
         admin.expose(),
+        journal,
     )
-    .map_err(map_listen);
+    .await;
     report(set.id, driven, closed)
 }
 

@@ -1,4 +1,4 @@
-//! One session loop. Capacity 1 returns on the first start.
+//! One session loop. A running owned worker keeps the session up.
 
 use velnor_runner_github::{Poll, QueueSession};
 
@@ -13,11 +13,12 @@ use super::steps;
 use super::trace;
 use super::{Ready, ack_ready, drive_ready, scale_session};
 
-/// Poll until this call has started its admission target, or the bound ends.
+/// Poll until admission stops and no owned launch container is running.
 ///
 /// The target equals capacity unless `VELNOR_ADMIT_TARGET` is higher.
-/// Capacity 1 returns after the first start, including a primed empty poll.
-/// A larger capacity stays on this session through empty polls.
+/// Capacity 1 still decides to stop after the first start. The session stays
+/// while that container is running, and this does not remove it.
+/// A full slot skips the statistics mint so restart does not start a second worker.
 ///
 /// # Errors
 ///
@@ -32,12 +33,13 @@ pub(super) async fn poll_and_drive(
 ) -> Result<Vec<Started>, EnsureError> {
     trace::session(session);
     let mut workers = Vec::new();
-    if let Some(started) =
-        scale_session(link, set_id, session, admin_token, journal, docker).await?
+    let capacity = capacity::job_capacity();
+    if !slot::busy(journal, docker, capacity).await?
+        && let Some(started) =
+            scale_session(link, set_id, session, admin_token, journal, docker).await?
     {
         workers.push(started);
     }
-    let capacity = capacity::job_capacity();
     let target = capacity::admit_target(capacity);
     let mut turn = Turn {
         link,
@@ -54,12 +56,44 @@ pub(super) async fn poll_and_drive(
     } else {
         capacity::poll_bound(capacity)
     };
-    for _ in 0..bound {
-        if turn.drive_poll(&mut workers).await? {
-            return Ok(workers);
-        }
-    }
+    until_idle(&mut turn, &mut workers, bound).await?;
     Ok(workers)
+}
+
+/// Keep polling after admission stops while an owned container is running.
+async fn until_idle(
+    turn: &mut Turn<'_>,
+    workers: &mut Vec<Started>,
+    bound: usize,
+) -> Result<(), EnsureError> {
+    let mut polls = 0usize;
+    let mut missed = 0u8;
+    loop {
+        if polls >= bound && departed(turn, workers, missed).await? {
+            return Ok(());
+        }
+        let stop = turn.drive_poll(workers).await?;
+        polls = polls.saturating_add(1);
+        if !stop {
+            continue;
+        }
+        let running = slot::running_count(turn.journal, turn.docker).await?;
+        if running > 0 {
+            missed = 0;
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            continue;
+        }
+        missed = missed.saturating_add(1);
+        if workers.is_empty() || missed >= 2 {
+            return Ok(());
+        }
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    }
+}
+
+async fn departed(turn: &Turn<'_>, workers: &[Started], missed: u8) -> Result<bool, EnsureError> {
+    let running = slot::running_count(turn.journal, turn.docker).await?;
+    Ok(running == 0 && (workers.is_empty() || missed >= 2))
 }
 
 struct Turn<'a> {
