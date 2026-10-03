@@ -150,6 +150,22 @@ pass "toolchain"
 # --- fmt -----------------------------------------------------------------
 stage fmt "${MISE_EXEC[@]}" cargo fmt --all --check
 
+# Nested runner workspace. Root `cargo --workspace` excludes it
+# (`exclude = ["crates/velnor-runner"]`). cargo-deny 0.20.2 matches
+# `CARGO_DENY_VERSION`; that pin rejects `--locked`.
+RUNNER_MANIFEST="crates/velnor-runner/Cargo.toml"
+if [ -f "$RUNNER_MANIFEST" ]; then
+  stage runner-fmt "${MISE_EXEC[@]}" cargo fmt --manifest-path "$RUNNER_MANIFEST" --all -- --check
+  stage runner-clippy "${MISE_EXEC[@]}" cargo clippy --manifest-path "$RUNNER_MANIFEST" --locked --workspace --all-targets -- -D warnings
+  if [ "${#NEXTEST_RUN[@]}" -gt 0 ]; then
+    stage runner-nextest "${NEXTEST_RUN[@]}" run --manifest-path "$RUNNER_MANIFEST" --locked --workspace
+  else
+    stage runner-test "${MISE_EXEC[@]}" cargo test --manifest-path "$RUNNER_MANIFEST" --locked --workspace
+  fi
+  stage runner-doctest "${MISE_EXEC[@]}" cargo test --manifest-path "$RUNNER_MANIFEST" --locked --workspace --doc
+  stage runner-deny mise exec "cargo-deny@0.20.2" -- cargo deny --manifest-path "$RUNNER_MANIFEST" check
+fi
+
 # --- repo policy -----------------------------------------------------------
 stage repo-policy scripts/check-freshness.sh
 
