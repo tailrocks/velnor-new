@@ -9,6 +9,7 @@ use crate::RenderError;
 use crate::marker::with_marker;
 use crate::render::RenderedFile;
 use crate::runs_on::runs_on_yaml;
+use crate::setup::MiseSetup;
 use crate::yaml::{Yaml, render_yaml};
 
 /// Qualification workflow path.
@@ -28,6 +29,8 @@ mod classes;
 mod features;
 #[path = "schema2_generator_release.rs"]
 mod generator_release;
+#[path = "schema2_mbx_qualification.rs"]
+mod mbx_qualification;
 #[path = "schema2_release.rs"]
 mod release;
 
@@ -42,6 +45,21 @@ pub struct Schema2WorkflowRequest {
     pub scale_set: ScaleSetSelector,
     /// Workflows to emit. Empty emits nothing.
     pub workflows: BTreeSet<RoutingWorkflow>,
+    /// Pinned tool inputs, required only when qualification is emitted.
+    pub mbx_qualification: Option<MbxQualificationPins>,
+}
+
+/// Exact tools used by the hosted MBX cache qualification.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MbxQualificationPins {
+    /// Resolved Mise action and binary pins.
+    pub mise_setup: MiseSetup,
+    /// Full-SHA MBX GitHub Action ref.
+    pub mbx_action_uses: String,
+    /// Exact MBX tool version.
+    pub mbx_version: String,
+    /// Exact Rust toolchain version used by the qualification lane.
+    pub rust_version: String,
 }
 
 impl Schema2WorkflowRequest {
@@ -164,6 +182,13 @@ fn qualification(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> 
     jobs.extend(features::feature_jobs(hosted.clone(), scale.clone()));
     jobs.extend(features::negative_jobs(hosted.clone(), scale.clone()));
     jobs.extend(classes::class_jobs(&hosted, &scale));
+    if let Some(pins) = &request.mbx_qualification {
+        jobs.extend(mbx_qualification::jobs(pins, &hosted)?);
+    } else if request.workflows.contains(&RoutingWorkflow::Qualification) {
+        return Err(RenderError::InvalidWorkflow(
+            "missing_mbx_qualification_pins".to_owned(),
+        ));
+    }
     Ok(document("Qualification", mode_trigger(), jobs))
 }
 
