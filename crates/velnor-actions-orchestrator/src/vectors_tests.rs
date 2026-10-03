@@ -69,7 +69,17 @@ fn machete_cold_install_uses_verified_asset_and_preserves_scan_invocation() {
         "cargo",
         "machete",
     ]);
-    want.extend(MACHETE_SCAN_CRATES.map(ToString::to_string));
+    let expected_scan_crates = [
+        "crates/velnor-actions-contract",
+        "crates/velnor-actions-rust",
+        "crates/velnor-actions-tofu",
+        "crates/velnor-actions-mise",
+        "crates/velnor-actions-actionlint",
+        "crates/velnor-actions-workflow-renderer",
+        "crates/velnor-actions-orchestrator",
+        "crates/velnor-actions-cli",
+    ];
+    want.extend(expected_scan_crates.map(ToString::to_string));
     assert_eq!(machete, want);
 }
 
