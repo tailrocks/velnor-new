@@ -12,7 +12,7 @@ const COMPOSE_UP: &str = "docker compose -f qualification/compose/stack.yml up -
 const COMPOSE_PROOF: &str = "docker compose -f qualification/compose/stack.yml ps --services --status running > $RUNNER_TEMP/g4-compose-ps && grep -qx api $RUNNER_TEMP/g4-compose-ps && grep -qx db $RUNNER_TEMP/g4-compose-ps";
 const COMPOSE_DOWN: &str = "docker compose -f qualification/compose/stack.yml down --volumes";
 const BIND_RUN: &str = "printf '%s\\n' bind-ok > $GITHUB_WORKSPACE/g4-bind.txt && docker run --rm -v $GITHUB_WORKSPACE/g4-bind.txt:/g4-bind.txt:ro alpine:3.22 cat /g4-bind.txt > $RUNNER_TEMP/g4-bind-out && grep -qx bind-ok $RUNNER_TEMP/g4-bind-out";
-const SERVICE_PROBE: &str = "i=0; while [ $i -lt 30 ]; do echo >/dev/tcp/127.0.0.1/6379 && break; i=$((i+1)); sleep 1; done; echo >/dev/tcp/127.0.0.1/6379 && echo service-up && sleep 180";
+const SERVICE_PROBE: &str = "i=0; while [ $i -lt 30 ]; do echo >/dev/tcp/127.0.0.1/6379 && break; i=$((i+1)); sleep 1; done; echo >/dev/tcp/127.0.0.1/6379 && echo service-up && sleep 900";
 const TC_RUN: &str = "npm install --prefix qualification/testcontainers testcontainers@11.14.0 && node qualification/testcontainers/reap.mjs";
 const SUBMODULE_PROOF: &str = "git rev-parse HEAD > $RUNNER_TEMP/g4-head && grep -qx $GITHUB_SHA $RUNNER_TEMP/g4-head && grep -qx submodule-ok qualification/fixtures/submodule/MARKER && grep -qx lfs-ok qualification/fixtures/lfs-marker.txt";
 const PORT_HOLD: &str = "docker run -d --name g4-hold -p 8080:80 alpine:3.22 sleep 120 && i=0 && while [ $i -lt 30 ]; do docker port g4-hold 80 | grep -q 8080 && break; i=$((i+1)); sleep 1; done && docker port g4-hold 80 | grep -q 8080 && echo port-held && sleep 45 && docker rm -f g4-hold";

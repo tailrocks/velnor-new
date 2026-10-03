@@ -442,7 +442,7 @@ jobs:
           - "6379:6379"
     steps:
       - name: Probe service then sleep
-        run: i=0; while [ $i -lt 30 ]; do echo >/dev/tcp/127.0.0.1/6379 && break; i=$((i+1)); sleep 1; done; echo >/dev/tcp/127.0.0.1/6379 && echo service-up && sleep 180
+        run: i=0; while [ $i -lt 30 ]; do echo >/dev/tcp/127.0.0.1/6379 && break; i=$((i+1)); sleep 1; done; echo >/dev/tcp/127.0.0.1/6379 && echo service-up && sleep 900
   cancel-service-scale-set:
     name: Cancel service / Velnor Scale Set
     if: inputs.mode == 'cancel-service'
@@ -456,7 +456,7 @@ jobs:
           - "6379:6379"
     steps:
       - name: Probe service then sleep
-        run: i=0; while [ $i -lt 30 ]; do echo >/dev/tcp/127.0.0.1/6379 && break; i=$((i+1)); sleep 1; done; echo >/dev/tcp/127.0.0.1/6379 && echo service-up && sleep 180
+        run: i=0; while [ $i -lt 30 ]; do echo >/dev/tcp/127.0.0.1/6379 && break; i=$((i+1)); sleep 1; done; echo >/dev/tcp/127.0.0.1/6379 && echo service-up && sleep 900
   testcontainers-hosted:
     name: Testcontainers / GitHub hosted
     if: inputs.mode == 'testcontainers'
