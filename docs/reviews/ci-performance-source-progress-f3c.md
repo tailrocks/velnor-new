@@ -1,4 +1,4 @@
-# Source-bound progress at f3c937a
+# Source progress from f3c937a through 57dc370
 
 Status: bounded source and checkpoint evidence. All47 performance statuses remain
 **INCOMPLETE** in the [completion ledger](ci-performance-completion-ledger.md).
@@ -108,8 +108,39 @@ New reviewed private Git V3 logs record bounded leader return codes; those
 records establish no process-family quiescence. The checkpoint's scoped
 observations likewise establish no stronger lifecycle or runtime qualification.
 
-Source migration, forward-merge compatibility, workflow regeneration, normal
-CLI preservation, all repository build gates and actual hosted execution remain
-pending. Final source integration belongs to the integration owner. Controlled
-unchanged/changed/negative experiments, cross-run reuse and consumer waves remain
-required. All47 performance statuses remain **INCOMPLETE**.
+## Private successor checkpoints after 57dc370
+
+This frozen build/metadata/owning checkpoint precedes selected-emitter proof.
+These private candidates are not committed integration or hosted qualification.
+MBX compiled 1135 unique test names; nine selected suites passed 178 tests,
+with zero failed or ignored. Hosted MBX evidence remains **UNKNOWN**.
+Generator source `d4ede5543d04fcf600c0ee60c43bfcf4a2cc9d9cc321b4641ba202cd9a0810b9`
+built a fresh CLI and orchestrator lib test binary: both direct leaders exited 0.
+Two locked, offline metadata calls for root and nested workspaces exited 0.
+The owning suite remains **RED**: 426 passed, three failed, one ignored.
+Three Shellcheck fixture tests failed with unavailable Mise/tool admission;
+the selected factory stayed ignored. Canonical emission and 21 jobs/19 Required
+needs are **UNRUN** in this checkpoint; normal discovery/Mise remains a gap.
+Canonical71 has independent **SOURCE-only clearance**; owning execution is
+**UNRUN**. Its evidence does not inherit tests from the distinct e917 candidate.
+e917 recorded 86 passed, one fixture/admission failure and 21 unrun, zero ignored.
+The failing T24 generate case lacked pinned Actionlint and used an invalid
+ambient Mise shim; validator closure remains unqualified, with no waiver.
+Earlier V3 digest-format and V4 invalid-namespace compile failures remain retained;
+V5 compilation does not erase those observations or pass the owning suite.
+
+| Private successor evidence locator | SHA256 |
+|---|---|
+| `velnor-mbx-v10-ordinary-execution-independent-review.json` | `43cf9942f0122ce1c1e5c90d7cc8cc63e5f268a162e3207624a28f2b5c6fada9` |
+| `velnor-ci-source-factory-57-a6-digest-v3-ordinary-v5-independent-actual-review.json` | `4c1e9289982d6f555063e310e8936bd3ab483e4663d41cddee23a51608d5c718` |
+| `velnor-ci-source-factory-57-a6-digest-v3/ordinary-metadata-v2-independent-actual-review.json` | `05c8950831b3d955b972ee030d59cdd4a8f8a6a5f47d6be3d19e5cb6218ef168` |
+| `velnor-ci-source-factory-57-a6-digest-v3/ordinary-owning-v2/run/result.json` | `e93b9366d1d3ca66fb6286c62510305e3b4cb00129b41b4ec373b639ba947596` |
+| `velnor-current57-retired-independent-whole-eitynbnn/source-review.json` | `5aa13f77cc976172c8c0957044e1fee9939ebf825ed8c7c11c6fd1706f97c3df` |
+| `velnor-e917-actual-independent-readback-jdscnfo1/review.json` | `4ee07b6d164313d91ec881c6ba379359f95d34caa2cda270d5b913203e11fb95` |
+| `velnor-ci-source-factory-57-a6-digest-v2-ordinary-v4-independent-actual-review.json` | `ebb62a9552f1724e0402f82e96dcdd343e6f8a63e7ab0663b945376caf3b26ca` |
+
+Receipt bytes were recomputed for this update. Direct leader, source and tool
+observations grant no process-family, native/runtime/cache authority or performance
+qualification. Final source integration remains pending.
+Final owning gates, compiled workflow, final-head PR feedback/checks, controlled
+experiments and consumer waves remain required. All47 remain **INCOMPLETE**.
