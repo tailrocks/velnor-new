@@ -609,3 +609,23 @@ jobs:
     steps:
       - name: Pressure sleep
         run: echo pressure-start && sleep 150 && echo pressure-ok
+  secret-hosted:
+    name: Secret / GitHub hosted
+    if: inputs.mode == 'secret'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - name: Hold secret canary
+        env:
+          G3_CANARY: ${{ secrets.G3_CANARY }}
+        run: "test -n \"$G3_CANARY\" && sleep 180"
+  secret-scale-set:
+    name: Secret / Velnor Scale Set
+    if: inputs.mode == 'secret'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 20
+    steps:
+      - name: Hold secret canary
+        env:
+          G3_CANARY: ${{ secrets.G3_CANARY }}
+        run: "test -n \"$G3_CANARY\" && sleep 180"

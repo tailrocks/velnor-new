@@ -26,7 +26,29 @@ pub(super) fn jobs(hosted: &Yaml, scale: &Yaml) -> Vec<(String, Yaml)> {
     out.extend(submodule_jobs(hosted, scale));
     out.extend(ports_jobs(hosted, scale));
     out.extend(pressure_jobs(hosted, scale));
+    out.extend(secret_jobs(hosted, scale));
     out
+}
+
+/// Holds a GitHub Actions secret in the step environment. The run script
+/// checks that it is non-empty and does not print it.
+fn secret_jobs(hosted: &Yaml, scale: &Yaml) -> Vec<(String, Yaml)> {
+    both(
+        "secret",
+        "Secret",
+        hosted,
+        scale,
+        secret_steps(),
+        Extras::default(),
+    )
+}
+
+fn secret_steps() -> Vec<Yaml> {
+    vec![super::steps::run_env(
+        "Hold secret canary",
+        &[("G3_CANARY", "${{ secrets.G3_CANARY }}")],
+        "test -n \"$G3_CANARY\" && sleep 180",
+    )]
 }
 
 fn paired(hosted: &Yaml, scale: &Yaml) -> Vec<(String, Yaml)> {
