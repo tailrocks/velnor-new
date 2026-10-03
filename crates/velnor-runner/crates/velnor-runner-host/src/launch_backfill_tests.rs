@@ -230,6 +230,41 @@ async fn capacity_two_mints_when_one_runner_exits() -> Result<(), String> {
 }
 
 #[tokio::test]
+async fn gone_runner_without_dind_frees_the_slot() -> Result<(), String> {
+    let (scratch, journal) = open("backfill-e").await?;
+    let engine = Engine::new();
+    let gone = hex(31);
+    let live = hex(32);
+    for (subject, runner) in [("m1", gone.as_str()), ("m2", live.as_str())] {
+        let id = journal
+            .begin("launch", subject)
+            .await
+            .map_err(|err| err.to_string())?;
+        journal
+            .bind_worker(id, Some(runner), None)
+            .await
+            .map_err(|err| err.to_string())?;
+        journal
+            .finish(id, Outcome::Done)
+            .await
+            .map_err(|err| err.to_string())?;
+    }
+    engine.plant(&live, true).map_err(|err| err.to_string())?;
+    let decision = admission(&engine, &journal, 2, 2, 0, &assigned_wait(9, 2))
+        .await
+        .map_err(|err| err.to_string())?;
+    assert_eq!(decision, Admit::Start { stop: false });
+    let rows = journal.rows().await.map_err(|err| err.to_string())?;
+    assert_eq!(rows.iter().filter(|row| row.cleanup_proven).count(), 1);
+    assert!(
+        rows.iter()
+            .any(|row| { row.docker_id.as_deref() == Some(live.as_str()) && !row.cleanup_proven })
+    );
+    assert!(engine.alive(&live).map_err(|err| err.to_string())?);
+    absent(&scratch.file())
+}
+
+#[tokio::test]
 async fn capacity_one_mints_after_the_pair_is_removed() -> Result<(), String> {
     let (scratch, journal) = open("backfill-b").await?;
     let engine = Engine::new();

@@ -102,7 +102,10 @@ impl PairEngine for Docker {
         }
         match self.inspect_container(name, None).await {
             Ok(body) => Ok(body.id.filter(|id| !id.is_empty())),
-            Err(_) => Ok(None),
+            Err(bollard::errors::Error::DockerResponseServerError {
+                status_code: 404, ..
+            }) => Ok(None),
+            Err(_) => Err(HostError::Docker),
         }
     }
 

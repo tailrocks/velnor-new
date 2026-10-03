@@ -48,7 +48,9 @@ pub(super) async fn running_count<E: PairEngine + ?Sized>(
     Ok(count)
 }
 
-/// Drop exited pairs. Proven only after both full ids delete. Partial rows stay occupied.
+/// Drop exited runners. A 404 on a recorded id is proven gone. No `DinD` id is
+/// not a live slot. A running runner stays occupied; its `DinD` is removed
+/// once that runner is gone.
 pub(super) async fn release_exited<E: PairEngine + ?Sized>(
     journal: &Journal,
     engine: &E,
@@ -68,18 +70,34 @@ async fn release_row<E: PairEngine + ?Sized>(
     if !holds(row) {
         return Ok(());
     }
-    let (Some(runner), Some(dind)) = (row.docker_id.as_deref(), row.dind_id.as_deref()) else {
+    let Some(runner) = row.docker_id.as_deref() else {
         return Ok(());
     };
-    if engine.running(runner).await.map_err(map_docker)? {
+    if engine.running(runner).await.map_err(map_docker)? || !delete_recorded(engine, runner).await?
+    {
         return Ok(());
     }
-    let runner_decision = decide(engine, runner, runner).await.map_err(map_docker)?;
-    let dind_decision = decide(engine, dind, dind).await.map_err(map_docker)?;
-    if runner_decision == DeleteDecision::Delete && dind_decision == DeleteDecision::Delete {
-        journal.record_cleanup(row.id).await.map_err(map_journal)?;
+    if let Some(dind) = row.dind_id.as_deref()
+        && !delete_recorded(engine, dind).await?
+    {
+        return Ok(());
     }
+    journal.record_cleanup(row.id).await.map_err(map_journal)?;
     Ok(())
+}
+
+async fn delete_recorded<E: PairEngine + ?Sized>(
+    engine: &E,
+    id: &str,
+) -> Result<bool, EnsureError> {
+    match engine.id_for_name(id).await.map_err(map_docker)? {
+        None => Ok(true),
+        Some(found) if found == id => {
+            let decision = decide(engine, id, id).await.map_err(map_docker)?;
+            Ok(decision == DeleteDecision::Delete)
+        }
+        Some(_) => Ok(false),
+    }
 }
 
 pub(super) fn holds(row: &IntentRow) -> bool {
