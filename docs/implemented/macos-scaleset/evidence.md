@@ -5,8 +5,12 @@ runner tests cited below have run. A per-user LaunchAgent was installed,
 observed, and removed. Image builds were inspected. The product scale set was
 created with the shipped client. Six ordinary scale-set echo jobs have run on
 the official runner, including the four that stayed queued after an earlier
-ack-without-start. The rest of the G4 suite is not run. No ChainArgos rollout.
-G3, the full G4 suite, G7, and G8 stay `NOT_RUN`.
+ack-without-start. Five later one-class runs covered a `node` step, a Redis
+service probe, artifact upload, Buildx, and an expected failure. Spec section
+11 beyond those classes is not run. No ChainArgos rollout. `image-release.yml`
+and `macos-binary-release.yml` were dispatched once each and returned HTTP 404
+because those workflows are absent from the default branch. That attempt was
+not retried. G3, the full G4 suite, G7, and G8 stay `NOT_RUN`.
 
 ## Identities
 
@@ -87,7 +91,7 @@ On 2026-10-03T00:53:23Z, from `crates/velnor-runner`, `VELNOR_HTTPS_TRACE=1 VELN
 
 `gh api repos/tailrocks/velnor-new/actions/runs/37081936404/jobs` showed job [111084145716](https://github.com/tailrocks/velnor-new/actions/runs/37081936404/job/111084145716) `Verify / Velnor Scale Set / Linux x64` conclusion `success`, runner `m100000009`, runner group `Default`, labels `velnor` and `ubuntu-26.04-scale-set`. Step `Qualify scale-set lane` succeeded. Runner log line `Current runner version: '2.337.0'` and `Running job: Verify / Velnor Scale Set / Linux x64`.
 
-Host is macOS 27.0 `arm64`. Docker server is `linux` `aarch64` 29.4.0. The runner image is `velnor-runner:ubuntu-26.04-2.337.0` `linux/amd64`, so this job ran under emulation. `docker inspect` reported runner `privileged=false`, user `runner`, platform `linux`. DinD `velnor-dind:29.8.2` was `privileged=true`. Mounts were only volumes `m100000009` at `/run` and `m100000009-work` at `/home/runner/_work`. A search of runner env, cmd, labels, and entrypoint for `jitconfig` returned 0. JIT was not in that config. This is one ordinary `run` step. It is not the rest of the G4 suite (JavaScript actions, services, artifacts, Buildx, or expected-negative workflows).
+Host is macOS 27.0 `arm64`. Docker server is `linux` `aarch64` 29.4.0. The runner image is `velnor-runner:ubuntu-26.04-2.337.0` `linux/amd64`, so this job ran under emulation. `docker inspect` reported runner `privileged=false`, user `runner`, platform `linux`. DinD `velnor-dind:29.8.2` was `privileged=true`. Mounts were only volumes `m100000009` at `/run` and `m100000009-work` at `/home/runner/_work`. A search of runner env, cmd, labels, and entrypoint for `jitconfig` returned 0. JIT was not in that config. This is one ordinary `run` step. Later one-class runs are recorded below. They are not the rest of spec section 11.
 
 ## Drained echo queue
 
@@ -101,8 +105,36 @@ Later `launch_once` sessions, one at a time and only after the previous runner c
 | [37083907366](https://github.com/tailrocks/velnor-new/actions/runs/37083907366) | [111090125130](https://github.com/tailrocks/velnor-new/actions/runs/37083907366/job/111090125130) | `m100000017` |
 | [37085082494](https://github.com/tailrocks/velnor-new/actions/runs/37085082494) | [111093559291](https://github.com/tailrocks/velnor-new/actions/runs/37085082494/job/111093559291) | `m100000019` |
 
-These are the same echo step as the first job. They do not cover JavaScript actions, services, artifacts, Buildx, or expected-negative workflows.
+These are the same echo step as the first job. The one-class runs below are separate workflows.
+
+## One-class qualification jobs
+
+On 2026-10-03, one `launch_once` session was opened before each `gh workflow run qualification.yml --ref macos-scaleset -f mode=<class>`. `mode=features` was not used. A workflow run with several parallel scale-set jobs only delivers the first `JobAssigned` to the listening session. After that session is deleted, a new session reports `assigned=0` while the sibling jobs stay `queued`. Runs `37087944845` and `37087947204` were cancelled for that reason and are not class evidence.
+
+Each class below ran its hosted job and its scale-set job. The compare job stayed `skipped` because its `if` is `inputs.mode == 'both'`. Scale-set runners are group `Default` with labels `velnor` and `ubuntu-26.04-scale-set`. Conclusions were re-read on 2026-10-03 with `gh api repos/tailrocks/velnor-new/actions/runs/<id>/jobs`.
+
+| Class | Run | Hosted job | Scale-set job | Runner | Conclusion |
+| --- | --- | --- | --- | --- | --- |
+| JavaScript (`node -e`) | [37089483013](https://github.com/tailrocks/velnor-new/actions/runs/37089483013) | [111106558048](https://github.com/tailrocks/velnor-new/actions/runs/37089483013/job/111106558048) | [111106558263](https://github.com/tailrocks/velnor-new/actions/runs/37089483013/job/111106558263) | `m100000044` | `success` |
+| services | [37089523814](https://github.com/tailrocks/velnor-new/actions/runs/37089523814) | [111106680712](https://github.com/tailrocks/velnor-new/actions/runs/37089523814/job/111106680712) | [111106680574](https://github.com/tailrocks/velnor-new/actions/runs/37089523814/job/111106680574) | `m100000046` | `success` |
+| artifacts | [37089574338](https://github.com/tailrocks/velnor-new/actions/runs/37089574338) | [111106828788](https://github.com/tailrocks/velnor-new/actions/runs/37089574338/job/111106828788) | [111106829084](https://github.com/tailrocks/velnor-new/actions/runs/37089574338/job/111106829084) | `m100000048` | `success` |
+| Buildx | [37089620426](https://github.com/tailrocks/velnor-new/actions/runs/37089620426) | [111106968032](https://github.com/tailrocks/velnor-new/actions/runs/37089620426/job/111106968032) | [111106967890](https://github.com/tailrocks/velnor-new/actions/runs/37089620426/job/111106967890) | `m100000050` | `success` |
+| expected-negative | [37089657990](https://github.com/tailrocks/velnor-new/actions/runs/37089657990) | [111107078885](https://github.com/tailrocks/velnor-new/actions/runs/37089657990/job/111107078885) | [111107079056](https://github.com/tailrocks/velnor-new/actions/runs/37089657990/job/111107079056) | `m100000052` | `failure` (required) |
+
+The JavaScript class is `node -e 'console.log("js-action-ok")'` plus checkout. It is not a pinned third-party JavaScript action and not a composite action. Services publishes `redis:7-alpine` on port 6379 and probes `127.0.0.1:6379`, not service DNS, and has no health check. Artifacts uses `actions/upload-artifact`. Buildx runs `docker buildx version` and a scratch Dockerfile. Negative is `echo expected-negative && exit 1`. Both lanes concluded `failure`, which is the required conclusion. Listener census lines (no tokens) were `session assigned=… available=… running=… registered=… busy=… idle=…`. Transcript: scratch `drain-classes.log`. After each start the runner and DinD containers were removed, and volumes `m{messageId}` and `m{messageId}-work` were removed.
+
+Not run, so this section does not mark G4 `PASS`: pinned and composite actions, local actions, Dockerfile and container actions, `container:` jobs, health checks, service DNS, outputs/env/path, secret masking, post actions, cache, checkout of submodules or LFS, permissions/OIDC, Compose, Testcontainers, bind mounts, concurrent workers on the same port, cancellation, and a failed main step with a successful post step.
+
+## Publish attempts
+
+Each command was run once and was not retried.
+
+`gh workflow run image-release.yml --ref macos-scaleset --repo tailrocks/velnor-new` exited 1: `HTTP 404: workflow image-release.yml not found on the default branch (https://api.github.com/repos/tailrocks/velnor-new/actions/workflows/image-release.yml)`.
+
+`gh workflow run macos-binary-release.yml --ref macos-scaleset --repo tailrocks/velnor-new` exited 1: `HTTP 404: workflow macos-binary-release.yml not found on the default branch (https://api.github.com/repos/tailrocks/velnor-new/actions/workflows/macos-binary-release.yml)`.
+
+Neither file is on this branch's `.github/workflows/` or on `main`. This is not a missing credential. Transcripts: scratch `publish-image.txt` and `publish-macos.txt`. No image and no macOS binary were published. ChainArgos was not updated. G7 and G8 stay `NOT_RUN`.
 
 ## Not yet run
 
-No paired ChainArgos workflow, and no published image or macOS binary beyond the existing `v0.1.0` generator assets. The full G4 suite has not run.
+No paired ChainArgos workflow. No published image or macOS binary beyond the existing `v0.1.0` generator assets. The two release-workflow dispatches above returned HTTP 404 and were not retried. The full G4 section 11 suite has not run. The G3 kill and canary matrix has not run. No promotion onto `main`.
