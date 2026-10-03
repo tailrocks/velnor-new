@@ -227,7 +227,21 @@ Later, example `stage_once` called `start_pair_until` on this Mac (`HEAD` `c7c7f
 
 Qualification run [37103831130](https://github.com/tailrocks/velnor-new/actions/runs/37103831130) at `4f512e27099d2ba1e869bcbea6abd5a43824efde` concluded `success`. Job [111148411061](https://github.com/tailrocks/velnor-new/actions/runs/37103831130/job/111148411061) (`Verify / Velnor Scale Set / Linux x64`) concluded `success` on runner `m100000108` in group `Default`, started `2026-10-03T06:49:25Z`, completed `2026-10-03T06:49:35Z`. `launch_once` printed `set_id=1 started=true runner_id=7e0e126d41c56f113f5ba16b621c48f545df99b36bb252066917ae804c1fb8c9 dind_id=948d97b50f004e26bb6f7e96bbeaf3ad6369b28f81ad374083dc140affa80edb` and exited 0. That runner container image was `velnor-runner:ubuntu-26.04-2.337.0`. It started `2026-10-03T06:49:16Z` and exited 0 at `2026-10-03T06:49:36Z`. `docker exec` at `2026-10-03T06:51:24Z` failed: `container 7e0e126d41c56f113f5ba16b621c48f545df99b36bb252066917ae804c1fb8c9 is not running`. Scratch: `launch-once-exec.txt`, `g3-jit.txt`.
 
-No canary secret was planted in that job. G3 stays `NOT_RUN`. The job log still has no cgroup or `AssertCompatibleOS` line, so G4 stays `NOT_RUN`.
+No canary secret was planted in that job. G3 stays `NOT_RUN`. The job log still has no cgroup or `AssertCompatibleOS` line. G4's cgroup proof is `BLOCKED_EXTERNAL` in `verification.md`.
+
+## Live exec during sleep 180
+
+Qualification run [37106980744](https://github.com/tailrocks/velnor-new/actions/runs/37106980744) at `3e9a619ef0355cb51fc9eab71e581eb8c446d9cf` concluded `success`. Job [111157320313](https://github.com/tailrocks/velnor-new/actions/runs/37106980744/job/111157320313) (`Cancel / Velnor Scale Set`) concluded `success` on runner `m100000113`. Dispatch was `gh workflow run qualification.yml --ref macos-scaleset --repo tailrocks/velnor-new -f mode=cancel` (exit 0). `launch_once` acquired the job. No `velnor-host` daemon was running.
+
+`docker exec` at `2026-10-03T07:39:11Z` ran while runner `b04aaf11f64597d13083530723071bad73ad548c998be4a25d74fc26cd0d1142` and DinD `24e1e091f3fe21dd568bd014205ec6d3cfde4b1920832a9234f7b88110945b6c` were both running. Guest `uname -m` was `x86_64`. Runner id was `uid=1000(runner) gid=1000(runner)` plus group `999(docker)`. Host was `arm64`. Images were `linux/amd64`. Private Docker engine `9d2b7b7e-0163-4b7e-b04e-f53a8aa378d9` (server 29.8.2, arch `x86_64`) was not host engine `bc9058a0-c807-412b-a088-6c1d96ddd462`.
+
+Runner `Privileged=false`, user `runner`, published ports empty, network `container:` the DinD id. Mounts were only volumes `m100000113` at `/run` and `m100000113-work` at `/home/runner/_work`. No host `docker.sock`, home, SSH, or Keychain mount. DinD was privileged, bridge network, no published ports, same two volumes.
+
+Same device 41 and inode in both containers: `_work` `128827765`, `_temp` `128828011`, `_tool` `128828010`, `/run/docker.sock` and `/var/run/docker.sock` `128827893`. `_actions` was absent in both. `externals` was runner-image device 53 inode `128748463` and absent in DinD. `RUNNER_TEMP` and `RUNNER_TOOL_CACHE` matched those paths.
+
+The counted secret was the controller JIT payload on the guest `Runner.Listener` argv. It was not printed. Counts of that exact string were 0 in Docker inspect (env, cmd, labels, entrypoint, and the full document), container logs, host argv, `launch.db` (including wal and shm), `.velnor` TOML, and LaunchAgent plists. The cancel job does not reference `secrets.*`, and no guest process environ contained a `GITHUB_TOKEN` key at exec time.
+
+Cleanup removed only the containers this run created and volumes `m100000110`, `m100000110-work`, `m100000113`, and `m100000113-work`. Pre-existing container count was 24 before and 24 after. G3 stays `NOT_RUN`: `_actions` was never created, no Actions secrets-context value entered the job, and kill-at-each-stage, foreign-object, and registry-auth checks were not part of this run.
 
 ## Publish attempts
 
@@ -267,4 +281,4 @@ A new generator release cannot be cut from `macos-scaleset`. `docs/proposed/boot
 
 ## Not yet run
 
-No paired ChainArgos workflow. Generator `v0.1.0` is unchanged. Image and macOS binaries from `19a43f5` are GitHub release assets in the publish section, not a GHCR image and not a consumer pin. The first two release dispatches returned HTTP 404 and were not retried. Runs `37101248625`, `37101248540`, and `37101412470` failed or were cancelled before those assets existed. The named section 11 classes have job URLs above. Features dispatch `37097526498`, queue-pressure run `37098293064`, and crash run `37099950570` are recorded above. G4 stays `NOT_RUN` because the job log does not show the official runner cgroup compatibility check. The G3 matrix attempt is recorded and is not a pass. Guest-path exec and job `111148411061` are recorded above and are not a pass. No promotion onto `main`.
+No paired ChainArgos workflow. Generator `v0.1.0` is unchanged. Image and macOS binaries from `19a43f5` are GitHub release assets in the publish section, not a GHCR image and not a consumer pin. The first two release dispatches returned HTTP 404 and were not retried. Runs `37101248625`, `37101248540`, and `37101412470` failed or were cancelled before those assets existed. The named section 11 classes have job URLs above. Features dispatch `37097526498`, queue-pressure run `37098293064`, and crash run `37099950570` are recorded above. G4 stays `NOT_RUN` because the job log does not show the official runner cgroup compatibility check. The G3 matrix attempt is recorded and is not a pass. Guest-path exec, job `111148411061`, and live exec of job `111157320313` are recorded above and are not a pass. No promotion onto `main`.
