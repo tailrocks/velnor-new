@@ -17,10 +17,12 @@ use crate::ensure_product_scale_set;
 use crate::error::HostError;
 use crate::journal::Journal;
 use crate::listen::{Link, OWNER_NAME, Secret, admin_link, annotate, map_listen};
+use crate::reconcile::Reconcile;
 use crate::scale_set::EnsureError;
 use crate::worker::{Started, start_pair};
 
 mod capacity;
+mod gate;
 mod slot;
 mod steps;
 mod trace;
@@ -29,7 +31,10 @@ mod turn;
 pub(crate) use capacity::job_capacity;
 
 #[cfg(test)]
-pub(crate) use capacity::{Admit, Seat, admit, needs_running, parse_job_capacity, poll_limit};
+pub(crate) use capacity::{
+    Admit, Seat, admit, needs_running, parse_admit_target, parse_job_capacity, poll_limit,
+    wide_poll_limit,
+};
 #[cfg(test)]
 pub(crate) use slot::occupies;
 #[cfg(test)]
@@ -53,7 +58,8 @@ pub struct LaunchReport {
 /// Returns [`EnsureError`] when registration, acquire, JIT, Docker, or the
 /// session delete fails. A failed delete is returned even when the poll failed,
 /// because a leaked session blocks the next create. Timeout after acquire keeps
-/// the journal row uncertain and does not acknowledge.
+/// the journal row uncertain and does not acknowledge. `VELNOR_RECONCILE=1`
+/// can fail the journal read before a session exists, and a hold skips it.
 pub async fn launch_once(
     pat: &str,
     owner: &str,
@@ -62,6 +68,17 @@ pub async fn launch_once(
     journal: &Journal,
 ) -> Result<LaunchReport, EnsureError> {
     let set = ensure_product_scale_set(pat, owner, repo)?;
+    if std::env::var("VELNOR_RECONCILE").ok().as_deref() == Some("1") {
+        let decision = gate::reconcile_gate(journal, docker).await?;
+        eprintln!("reconcile={}", gate::gate_line(&decision));
+        if let Reconcile::Hold { .. } = decision {
+            return Ok(LaunchReport {
+                set_id: set.id,
+                started: None,
+                workers: Vec::new(),
+            });
+        }
+    }
     let mut link = admin_link(pat, owner, repo)?;
     let admin = Secret::new(link.token());
     let session = create_session(link.transport(), set.id, OWNER_NAME, admin.expose())

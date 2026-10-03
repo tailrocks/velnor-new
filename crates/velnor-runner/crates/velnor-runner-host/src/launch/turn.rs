@@ -13,8 +13,9 @@ use super::steps;
 use super::trace;
 use super::{Ready, ack_ready, drive_ready, scale_session};
 
-/// Poll until this call has started `capacity` workers, or the bound ends.
+/// Poll until this call has started its admission target, or the bound ends.
 ///
+/// The target equals capacity unless `VELNOR_ADMIT_TARGET` is higher.
 /// Capacity 1 returns after the first start, including a primed empty poll.
 /// A larger capacity stays on this session through empty polls.
 ///
@@ -37,6 +38,7 @@ pub(super) async fn poll_and_drive(
         workers.push(started);
     }
     let capacity = capacity::job_capacity();
+    let target = capacity::admit_target(capacity);
     let mut turn = Turn {
         link,
         set_id,
@@ -45,8 +47,14 @@ pub(super) async fn poll_and_drive(
         journal,
         docker,
         capacity,
+        target,
     };
-    for _ in 0..capacity::poll_bound(capacity) {
+    let bound = if target > capacity {
+        capacity::poll_bound_wide()
+    } else {
+        capacity::poll_bound(capacity)
+    };
+    for _ in 0..bound {
         if turn.drive_poll(&mut workers).await? {
             return Ok(workers);
         }
@@ -62,6 +70,7 @@ struct Turn<'a> {
     journal: &'a Journal,
     docker: &'a bollard::Docker,
     capacity: u32,
+    target: u32,
 }
 
 impl Turn<'_> {
@@ -77,6 +86,7 @@ impl Turn<'_> {
         let running = self.running(started, idle).await?;
         let decision = capacity::admit(capacity::Seat {
             capacity: self.capacity,
+            target: self.target,
             started,
             running,
             idle,
@@ -85,7 +95,7 @@ impl Turn<'_> {
     }
 
     async fn running(&self, started: u32, idle: steps::Idle) -> Result<u32, EnsureError> {
-        if !capacity::needs_running(self.capacity, started, idle) {
+        if !capacity::needs_running(self.capacity, self.target, started, idle) {
             return Ok(0);
         }
         slot::running_count(self.journal, self.docker).await
@@ -101,8 +111,9 @@ impl Turn<'_> {
     ) -> Result<bool, EnsureError> {
         match decision {
             // HTTP 202 keeps the session open. A job can arrive on a later poll.
-            Admit::Stay => Ok(false),
-            Admit::Stop | Admit::Hold => Ok(true),
+            Admit::Stay => self.stay(workers).await,
+            Admit::Hold => self.hold().await,
+            Admit::Stop => Ok(true),
             Admit::Error => Err(EnsureError::Unexpected {
                 status: 0,
                 step: "queue",
@@ -133,5 +144,20 @@ impl Turn<'_> {
                 Ok(stop)
             }
         }
+    }
+
+    async fn stay(&self, workers: &[Started]) -> Result<bool, EnsureError> {
+        if self.target > self.capacity && workers.len() >= self.capacity as usize {
+            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        }
+        Ok(false)
+    }
+
+    async fn hold(&self) -> Result<bool, EnsureError> {
+        if self.target > self.capacity {
+            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            return Ok(false);
+        }
+        Ok(true)
     }
 }
