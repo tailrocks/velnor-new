@@ -275,13 +275,17 @@ fn validator_installs_follow_executed_suite_per_policy() {
         "demo",
     ] {
         assert!(
-            crate_needs_generate_validators(WorkflowPolicy::ConsumerV1, package),
+            crate_suite_tools(WorkflowPolicy::ConsumerV1, Some(package))
+                .expect("consumer suite")
+                .generate_validators,
             "consumer suites are opaque: {package} keeps the trio"
         );
     }
     for package in ["velnor-actions-orchestrator", "velnor-actions-cli"] {
         assert!(
-            crate_needs_generate_validators(WorkflowPolicy::VelnorRepositoryV1, package),
+            crate_suite_tools(WorkflowPolicy::VelnorRepositoryV1, Some(package))
+                .expect("registered suite")
+                .generate_validators,
             "{package} spawns validators and must install them"
         );
     }
@@ -292,21 +296,21 @@ fn validator_installs_follow_executed_suite_per_policy() {
         "velnor-actions-tofu",
         "velnor-actions-workflow-renderer",
         "velnor-actions-actionlint",
-        "demo",
+        "velnor-actions-native",
     ] {
         assert!(
-            !crate_needs_generate_validators(WorkflowPolicy::VelnorRepositoryV1, package),
+            !crate_suite_tools(WorkflowPolicy::VelnorRepositoryV1, Some(package))
+                .expect("registered suite")
+                .generate_validators,
             "{package} never spawns validators and must trim the trio"
         );
     }
 }
 
-/// Every workspace member is classified: validator-spawning or trimmed.
-///
-/// A new crate fails here by name until its suite is audited for
-/// trio execution (see `GENERATE_VALIDATOR_SUITES`) and classified.
+/// Every workspace member has one registered profile for both tool axes.
 #[test]
 fn every_workspace_member_is_classified() {
+    use velnor_actions_contract::WorkflowPolicy;
     let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let root = manifest_dir
         .parent()
@@ -336,20 +340,9 @@ fn every_workspace_member_is_classified() {
     }
     assert!(!members.is_empty(), "workspace scan must find members");
     for member in &members {
-        let known = [
-            "velnor-actions-orchestrator",
-            "velnor-actions-cli",
-            "velnor-actions-contract",
-            "velnor-actions-mise",
-            "velnor-actions-rust",
-            "velnor-actions-tofu",
-            "velnor-actions-workflow-renderer",
-            "velnor-actions-actionlint",
-        ]
-        .contains(&member.as_str());
         assert!(
-            known,
-            "{member} is unclassified: audit its suite for trio execution, then classify it"
+            crate_suite_tools(WorkflowPolicy::VelnorRepositoryV1, Some(member)).is_ok(),
+            "{member} is unclassified: audit executed tools, then register its suite owner"
         );
     }
 }
