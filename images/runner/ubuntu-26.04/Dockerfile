@@ -76,10 +76,12 @@ RUN curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL -o /tmp/docker.tgz \
 COPY entrypoint.sh /usr/local/bin/velnor-runner-entrypoint
 COPY tar-shim.sh /usr/local/bin/velnor-tar
 COPY tar-absolute.sh /usr/local/bin/tar-absolute.sh
+COPY tar-extract.sh /usr/local/bin/tar-extract.sh
+COPY tar-member.pl /usr/local/bin/tar-member.pl
 COPY tar-pax.pl /usr/local/bin/velnor-tar-pax
 # zstd and git-lfs are installed before the tar divert. dpkg needs GNU tar to unpack.
 # After the divert, /usr/bin/tar is the BusyBox shim, not GNU tar.
-RUN chmod 0755 /usr/local/bin/velnor-runner-entrypoint /usr/local/bin/velnor-tar /usr/local/bin/velnor-tar-pax \
+RUN chmod 0755 /usr/local/bin/velnor-runner-entrypoint /usr/local/bin/velnor-tar /usr/local/bin/velnor-tar-pax /usr/local/bin/tar-member.pl \
     && apt-get update \
     && apt-get install -y --no-install-recommends build-essential clang cmake git-lfs jq libclang-dev libssl-dev perl pkg-config protobuf-compiler zstd \
     && cc --version \
@@ -113,11 +115,11 @@ RUN chmod 0755 /usr/local/bin/velnor-runner-entrypoint /usr/local/bin/velnor-tar
     && tar --zstd --version \
     && echo cache-ok > /tmp/tar-src/g4-cache.txt \
     && printf '%s\n' g4-cache.txt > /tmp/tar-manifest \
-    && tar --posix -cf /tmp/cache.tgz --exclude cache.tgz -P -C /tmp/tar-src --files-from /tmp/tar-manifest -z \
+    && tar -cf /tmp/cache.tgz --exclude cache.tgz -P -C /tmp/tar-src --files-from /tmp/tar-manifest -z \
     && mkdir -p /tmp/tar-cache-out \
     && tar -xf /tmp/cache.tgz -P -C /tmp/tar-cache-out -z \
     && test "$(cat /tmp/tar-cache-out/g4-cache.txt)" = cache-ok \
-    && tar --posix -cf /tmp/cache.tzst --exclude cache.tzst -P -C /tmp/tar-src --files-from /tmp/tar-manifest --use-compress-program zstdmt \
+    && tar -cf /tmp/cache.tzst --exclude cache.tzst -P -C /tmp/tar-src --files-from /tmp/tar-manifest --use-compress-program zstdmt \
     && mkdir -p /tmp/tar-zstd-out \
     && tar -xf /tmp/cache.tzst -P -C /tmp/tar-zstd-out --use-compress-program unzstd \
     && test "$(cat /tmp/tar-zstd-out/g4-cache.txt)" = cache-ok \
@@ -154,9 +156,10 @@ RUN chmod 0755 /usr/local/bin/velnor-runner-entrypoint /usr/local/bin/velnor-tar
     && test ! -e /tmp/p-home/runner/_work/repo/repo/.cache \
     && rm -rf /tmp/p-home/runner/.cache \
     && rm -f /tmp/p-home/runner/_work/repo/repo/keep.txt \
-    && tar -xf /tmp/p-abs.tar -C /tmp/p-home/runner/_work/repo/repo \
-    && test "$(cat /tmp/p-home/runner/_work/repo/repo/.cache/mbx/marker)" = mbx-ok \
+    && if tar -xf /tmp/p-abs.tar -C /tmp/p-home/runner/_work/repo/repo; then exit 1; fi \
     && test ! -e /tmp/p-home/runner/.cache \
+    && test ! -e /tmp/p-home/runner/_work/repo/repo/.cache \
+    && test ! -e /tmp/p-home/runner/_work/repo/repo/keep.txt \
     && mkdir -p /tmp/abs-out \
     && tar -xf /tmp/abs.tar -P -C /tmp/abs-out \
     && test "$(cat /tmp/abs-marker)" = abs-ok \

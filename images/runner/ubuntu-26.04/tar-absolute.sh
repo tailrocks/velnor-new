@@ -1,7 +1,7 @@
 # Sourced by tar-shim.sh. BusyBox strips leading "/" and ".." and rejects -P.
 # GNU tar cannot stat or open those paths under qemu-user (openat2 ENOSYS).
-# -P extract: let BusyBox strip, then move each member to the path GNU -P
-# would have opened. -P create: write the caller's names with velnor-tar-pax.
+# -P extract: stage each stripped member by archive index, then move that
+# inode to the path GNU -P would have opened. -P create uses velnor-tar-pax.
 
 strip_unsafe() {
   local s="$1"
@@ -69,14 +69,6 @@ norm_path() {
   fi
   local IFS=/
   printf '%s' "${stack[*]}"
-}
-
-member_actual() {
-  local stripped base
-  stripped="$(strip_unsafe "$1")"
-  [ -n "$stripped" ] || return 0
-  base="${chdir:-$PWD}"
-  norm_path "$base/$stripped"
 }
 
 member_intended() {
@@ -180,49 +172,8 @@ move_member() {
   mv -f -- "$actual" "$intended"
 }
 
-prune_actual() {
-  local parent="$1"
-  local base="${chdir:-$PWD}"
-  while [ "$parent" != "$base" ] && [ "$parent" != "/" ] && [ "$parent" != "." ]; do
-    rmdir -- "$parent" 2>/dev/null || break
-    parent="$(dirname -- "$parent")"
-  done
-}
-
-relocate_absolute() {
-  local list member actual intended base
-  list="$(mktemp)"
-  list_members "$list"
-  local -a pairs=()
-  while IFS= read -r member || [ -n "$member" ]; do
-    [ -n "$member" ] || continue
-    case "$member" in
-      ./PaxHeaders.* | ./PaxHeaders.*/* | ././@LongLink | ././@LongName) continue ;;
-    esac
-    case "$member" in
-      *$'\t'*) die "member name contains a tab" ;;
-    esac
-    [ "$(strip_unsafe "$member")" = "$member" ] && continue
-    actual="$(member_actual "$member")"
-    intended="$(member_intended "$member")"
-    [ -n "$actual" ] || continue
-    [ "$actual" = "$intended" ] && continue
-    pairs+=("${actual}"$'\t'"${intended}")
-  done <"$list"
-  rm -f "$list"
-  [ "${#pairs[@]}" -gt 0 ] || return 0
-  base="${chdir:-$PWD}"
-  while IFS=$'\t' read -r actual intended; do
-    [ -n "$actual" ] || continue
-    if [ -e "$actual" ] || [ -L "$actual" ]; then
-      move_member "$actual" "$intended"
-      prune_actual "$(dirname -- "$actual")"
-    elif [[ "$intended" == */ ]]; then
-      mkdir -p -- "$intended"
-    fi
-  done < <(printf '%s\n' "${pairs[@]}" | awk -F '\t' '{ print length($1) "\t" $0 }' | sort -t "$(printf '\t')" -k1,1nr | cut -f2-)
-  [ -n "$base" ]
-}
+# shellcheck disable=SC1091
+. "$_velnor_tar_here/tar-extract.sh"
 
 finish_tar() {
   local needs_pax=0 path stripped
@@ -244,14 +195,15 @@ finish_tar() {
       fi
     done
   fi
+  if [ "$mode" = x ]; then
+    extract_archive
+    return
+  fi
   if [ "$needs_pax" -eq 1 ]; then
     write_pax_archive
   elif [ -n "$files_from" ]; then
     run_listed
   else
     run_busybox
-  fi
-  if [ "$absolute" -eq 1 ] && [ "$mode" = x ]; then
-    relocate_absolute
   fi
 }

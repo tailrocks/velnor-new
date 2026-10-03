@@ -9,8 +9,9 @@ docker build --platform linux/amd64 -t velnor-runner:ubuntu-26.04-2.337.0 images
 Official `actions/runner` `2.337.0` linux-x64, SHA256
 `70920811a4f8ad4328818682bca5c6469c1c942fab52448868071d0063816613`.
 Unmodified. No `/proc` spoof, no fake `os-release`. `/usr/bin/tar` is
-`tar-shim.sh`: it accepts the GNU flags `actions/cache` and dpkg pass, then
-runs BusyBox tar. Ubuntu 26.04 GNU tar calls `openat2`, and qemu-user fails
+`tar-shim.sh` runs BusyBox tar. Unimplemented semantic GNU flags fail
+closed. `--zstd`, `--files-from`, and `-P` are implemented. `-v` does not
+change archive bytes. Ubuntu 26.04 GNU tar calls `openat2`, and qemu-user fails
 that with `ENOSYS`, so GNU tar stays at `/usr/bin/tar.gnu` and is not the
 `tar` on `PATH`. `zstd` is installed so cache archives match hosted runners.
 `git-lfs` is installed before the tar divert so `git lfs` is on `PATH`.

@@ -1,7 +1,8 @@
 #!/bin/bash
 # GNU tar 1.35 stats and extracts with openat2. qemu-user returns ENOSYS and
-# glibc does not fall back. BusyBox tar works. actions/cache and dpkg pass
-# GNU-only flags, so accept those and run BusyBox.
+# glibc does not fall back. BusyBox tar works. Flags that change archive
+# bytes and are not implemented fail closed. -v is non-semantic: it does
+# not change archive bytes.
 set -euo pipefail
 
 mode=""
@@ -44,16 +45,18 @@ while [ "$i" -lt "${#args[@]}" ]; do
     --absolute-names | -P)
       absolute=1
       ;;
-    --posix | --delay-directory-restore | --force-local | --no-same-owner | --no-same-permissions | --numeric-owner | --overwrite | --zstd)
-      if [ "$arg" = "--zstd" ]; then
-        zstd=1
-      fi
+    --zstd)
+      zstd=1
+      ;;
+    --posix | --delay-directory-restore | --force-local | --no-same-owner | --no-same-permissions | --numeric-owner | --overwrite)
+      die "unsupported option $arg"
       ;;
     --version)
       printf 'velnor-tar busybox\n'
       exit 0
       ;;
     --warning | --warning=*)
+      die "unsupported option $arg"
       ;;
     --exclude)
       need
@@ -122,7 +125,11 @@ while [ "$i" -lt "${#args[@]}" ]; do
           t) mode=t ;;
           z) gzip=1 ;;
           P) absolute=1 ;;
-          j | J | Z | v | h | m | o | k | O | a) ;;
+          # -v is non-semantic. Verbose text is not part of the archive.
+          v) ;;
+          j | J | Z | h | m | o | k | O | a)
+            die "unsupported flag -$flag"
+            ;;
           f | C)
             # GNU old style: `tar cfz archive` keeps `z` as a flag and takes
             # the archive from the next word. The rest of the cluster is an
