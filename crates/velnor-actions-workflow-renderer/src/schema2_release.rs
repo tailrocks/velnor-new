@@ -228,6 +228,7 @@ fn publish_job(runs_on: Yaml, spec: &Publish<'_>) -> (String, Yaml) {
             spec.needs,
         ),
         vec![
+            checkout_step(),
             download_step(spec.artifact),
             publish_step(&release_command(spec.prefix, spec.notes, spec.files)),
         ],
@@ -370,7 +371,7 @@ fn newline_list(files: &[&str]) -> String {
 
 fn release_command(prefix: &str, notes: &str, files: &[&str]) -> String {
     format!(
-        "set -eu\ncd {ASSET_DIR}\ntag=\"{prefix}-${{GITHUB_SHA}}\"\ngh release create \"$tag\" --target \"$GITHUB_SHA\" --title \"$tag\" --latest=false --notes \"{notes}\" {}",
+        "set -eu\ncd {ASSET_DIR}\ntag=\"{prefix}-${{GITHUB_SHA}}\"\ngh release create \"$tag\" -R \"${{GITHUB_REPOSITORY}}\" --target \"$GITHUB_SHA\" --title \"$tag\" --latest=false --notes \"{notes}\" {}",
         files.join(" ")
     )
 }

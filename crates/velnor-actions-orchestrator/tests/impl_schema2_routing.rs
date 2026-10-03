@@ -362,6 +362,11 @@ fn assert_release_permissions(body: &str, attest: &str, publish: &str) -> TestRe
         publish_body.contains("GH_TOKEN: ${{ github.token }}"),
         "{publish_body}"
     );
+    assert!(publish_body.contains("actions/checkout@"), "{publish_body}");
+    assert!(
+        publish_body.contains(r#"-R \"${GITHUB_REPOSITORY}\""#),
+        "{publish_body}"
+    );
     assert!(!attest_body.contains("GH_TOKEN"), "{attest_body}");
     assert!(!publish_body.contains("id-token:"), "{publish_body}");
     Ok(())

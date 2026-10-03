@@ -23,6 +23,6 @@ this repository ran.
 | G5-compare | Duplicate, missing lane, swapped artifact, unsafe archive fail closed | PASS | `compare_tests.rs` at `658154c` |
 | G6-launchd | User LaunchAgent foreground `daemon run`; second daemon fails | PASS | `launchctl print gui/501` at 2026-10-03: absolute `daemon run`, `forks = 0`; second `daemon run` exit 1; bootout removed the job |
 | G6-binary | `velnor-host` help and not-ready status | PASS | `help_exits_success_and_a_bad_command_does_not`; status JSON `waiting_for_credentials` |
-| G7-publish | Published generator, image, and macOS binary consumed by ChainArgos | NOT_RUN | workflows `373713267` and `373713266` registered by `f229bf6`; image run `37101248625` publish exited 4 (no `GH_TOKEN`); macOS run `37101248540` failed (`-p velnor-host`); `37101412470` cancelled; ChainArgos not updated |
+| G7-publish | Published generator, image, and macOS binary consumed by ChainArgos | NOT_RUN | image `37101622880` publish failed (`not a git repository`); macOS `37101625217` cancelled; earlier `37101248625` lacked `GH_TOKEN` and `37101248540` used `-p velnor-host`; ChainArgos not updated |
 | G7-paired | Hosted baseline, N=1 canary, N=2, cold and warm paired runs | NOT_RUN | no consumer workflow run |
 | G8-merge | Final main uses pinned published generator; required checks kept | NOT_RUN | no promotion |

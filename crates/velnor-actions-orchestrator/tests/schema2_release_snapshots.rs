@@ -66,6 +66,11 @@ jobs:
     needs:
       - attest-images
     steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: "1"
+          persist-credentials: "false"
       - name: Download built assets
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
@@ -74,7 +79,7 @@ jobs:
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: "set -eu\ncd assets\ntag=\"runner-${GITHUB_SHA}\"\ngh release create \"$tag\" --target \"$GITHUB_SHA\" --title \"$tag\" --latest=false --notes \"Runner image assets built from ${GITHUB_SHA}.\" velnor-runner-linux-amd64.tar velnor-dind-linux-amd64.tar SHA256SUMS"
+        run: "set -eu\ncd assets\ntag=\"runner-${GITHUB_SHA}\"\ngh release create \"$tag\" -R \"${GITHUB_REPOSITORY}\" --target \"$GITHUB_SHA\" --title \"$tag\" --latest=false --notes \"Runner image assets built from ${GITHUB_SHA}.\" velnor-runner-linux-amd64.tar velnor-dind-linux-amd64.tar SHA256SUMS"
 "#;
 
 pub(super) const MACOS_RELEASE: &str = r#"name: macOS binary release
@@ -150,6 +155,11 @@ jobs:
     needs:
       - attest-binary
     steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: "1"
+          persist-credentials: "false"
       - name: Download built assets
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
@@ -158,5 +168,5 @@ jobs:
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: "set -eu\ncd assets\ntag=\"binary-${GITHUB_SHA}\"\ngh release create \"$tag\" --target \"$GITHUB_SHA\" --title \"$tag\" --latest=false --notes \"velnor-host built from ${GITHUB_SHA}.\" velnor-host SHA256SUMS"
+        run: "set -eu\ncd assets\ntag=\"binary-${GITHUB_SHA}\"\ngh release create \"$tag\" -R \"${GITHUB_REPOSITORY}\" --target \"$GITHUB_SHA\" --title \"$tag\" --latest=false --notes \"velnor-host built from ${GITHUB_SHA}.\" velnor-host SHA256SUMS"
 "#;
