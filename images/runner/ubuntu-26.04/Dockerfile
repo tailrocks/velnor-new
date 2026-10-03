@@ -74,17 +74,33 @@ RUN curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL -o /tmp/docker.tgz \
         /usr/local/lib/docker/cli-plugins/docker-buildx
 
 COPY entrypoint.sh /usr/local/bin/velnor-runner-entrypoint
-RUN chmod 0755 /usr/local/bin/velnor-runner-entrypoint \
+COPY tar-shim.sh /usr/local/bin/velnor-tar
+# zstd is installed before the tar divert. dpkg needs GNU tar to unpack.
+# After the divert, /usr/bin/tar is the BusyBox shim, not GNU tar.
+RUN chmod 0755 /usr/local/bin/velnor-runner-entrypoint /usr/local/bin/velnor-tar \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends zstd \
+    && rm -rf /var/lib/apt/lists/* \
     && chown -R runner:runner /home/runner \
     && dpkg-divert --local --rename --divert /usr/bin/tar.gnu --add /usr/bin/tar \
-    && ln -s /usr/bin/busybox /usr/bin/tar \
+    && ln -s /usr/local/bin/velnor-tar /usr/bin/tar \
     && mkdir -p /tmp/tar-src/dir \
     && echo ok > /tmp/tar-src/dir/file \
     && busybox tar -czf /tmp/tar-probe.tgz -C /tmp/tar-src dir \
     && mkdir -p /tmp/tar-out \
     && tar -xzf /tmp/tar-probe.tgz -C /tmp/tar-out \
     && test "$(cat /tmp/tar-out/dir/file)" = ok \
-    && rm -rf /tmp/tar-src /tmp/tar-out /tmp/tar-probe.tgz
+    && echo cache-ok > /tmp/tar-src/g4-cache.txt \
+    && printf '%s\n' g4-cache.txt > /tmp/tar-manifest \
+    && tar --posix -cf /tmp/cache.tgz --exclude cache.tgz -P -C /tmp/tar-src --files-from /tmp/tar-manifest -z \
+    && mkdir -p /tmp/tar-cache-out \
+    && tar -xf /tmp/cache.tgz -P -C /tmp/tar-cache-out -z \
+    && test "$(cat /tmp/tar-cache-out/g4-cache.txt)" = cache-ok \
+    && tar --posix -cf /tmp/cache.tzst --exclude cache.tzst -P -C /tmp/tar-src --files-from /tmp/tar-manifest --use-compress-program zstdmt \
+    && mkdir -p /tmp/tar-zstd-out \
+    && tar -xf /tmp/cache.tzst -P -C /tmp/tar-zstd-out --use-compress-program unzstd \
+    && test "$(cat /tmp/tar-zstd-out/g4-cache.txt)" = cache-ok \
+    && rm -rf /tmp/tar-src /tmp/tar-out /tmp/tar-probe.tgz /tmp/tar-manifest /tmp/cache.tgz /tmp/cache.tzst /tmp/tar-cache-out /tmp/tar-zstd-out
 
 # Job steps call `node` on PATH. Action JavaScript uses the runner's own runtime.
 RUN curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL -o /tmp/node.tar.gz \

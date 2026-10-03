@@ -8,9 +8,12 @@ docker build --platform linux/amd64 -t velnor-runner:ubuntu-26.04-2.337.0 images
 
 Official `actions/runner` `2.337.0` linux-x64, SHA256
 `70920811a4f8ad4328818682bca5c6469c1c942fab52448868071d0063816613`.
-Unmodified. No `/proc` spoof, no fake `os-release`. `/usr/bin/tar` is busybox:
-Ubuntu 26.04 GNU tar calls `openat2`, and qemu-user fails that with `ENOSYS`.
-GNU tar remains at `/usr/bin/tar.gnu`. Node.js `24.17.0` linux-x64 is on `PATH`
+Unmodified. No `/proc` spoof, no fake `os-release`. `/usr/bin/tar` is
+`tar-shim.sh`: it accepts the GNU flags `actions/cache` and dpkg pass, then
+runs BusyBox tar. Ubuntu 26.04 GNU tar calls `openat2`, and qemu-user fails
+that with `ENOSYS`, so GNU tar stays at `/usr/bin/tar.gnu` and is not the
+`tar` on `PATH`. `zstd` is installed so cache archives match hosted runners.
+Node.js `24.17.0` linux-x64 is on `PATH`
 for job steps. That is not the runner's private action runtime.
 
 The image is not privileged and has no Docker socket, host home, Keychain,
