@@ -7,7 +7,9 @@ created with the shipped client. Six ordinary scale-set echo jobs have run on
 the official runner, including the four that stayed queued after an earlier
 ack-without-start. Later one-class runs covered JavaScript, services,
 artifacts, Buildx, an expected failure, and the classes in the second table
-below. Spec section 11 is still not complete. No ChainArgos rollout. `image-release.yml`
+below, plus Compose, bind mounts, Testcontainers, submodules/LFS,
+same-port workers, and cancel-with-service in the third table. The full G4
+gate stays `NOT_RUN`. No ChainArgos rollout. `image-release.yml`
 and `macos-binary-release.yml` were dispatched once each and returned HTTP 404
 because those workflows are absent from the default branch. That attempt was
 not retried. G3, the full G4 suite, G7, and G8 stay `NOT_RUN`.
@@ -145,7 +147,22 @@ The first cache save logged `Failed to save` because `/usr/bin/tar` was BusyBox 
 
 The mask step's echoed value in the scale-set log was `***`. The workflow source line still shows the canary, which is the command text, not the step output. The outputs scale-set log checked `G4_ENV=outputs-ok` and `g4-path-ok`. Post-fail steps were re-read from the job API: `Main fails post runs` is `failure` and `Post Main fails post runs` is `success` on both lanes. Cancel was sent with `gh run cancel` only after the scale-set job status was `in_progress`; neither lane finished the sleep as `success`.
 
-Not run, so this section does not mark G4 `PASS`: checkout of submodules or LFS, Compose, Testcontainers and its cleanup helper, bind mounts, concurrent workers on the same port, and cancellation of a job that is running a service. The cancel class is a sleep, not a service. `max_jobs` remains 1, so two workers cannot hold the same port in these runs.
+## Section 11 classes that were still open
+
+One scale-set job per run, except `ports`, which kept one session and set `VELNOR_MAX_JOBS=2`. `launch_once` listened before each dispatch. Head SHAs were `9d1dcfc` for Compose, bind, Testcontainers, and submodule, and `515cc73` for cancel-with-service and ports. Transcripts: scratch `drain-more.log`, `drain-cancel.log`, `drain-ports.log`.
+
+| Class | Run | Hosted job | Scale-set job | Runner | Conclusion |
+| --- | --- | --- | --- | --- | --- |
+| Compose, `depends_on` healthy | [37095989453](https://github.com/tailrocks/velnor-new/actions/runs/37095989453) | [111125901031](https://github.com/tailrocks/velnor-new/actions/runs/37095989453/job/111125901031) | [111125901225](https://github.com/tailrocks/velnor-new/actions/runs/37095989453/job/111125901225) | `m100000076` | `success` |
+| bind mount of the workspace file | [37096048488](https://github.com/tailrocks/velnor-new/actions/runs/37096048488) | [111126078177](https://github.com/tailrocks/velnor-new/actions/runs/37096048488/job/111126078177) | [111126078163](https://github.com/tailrocks/velnor-new/actions/runs/37096048488/job/111126078163) | `m100000078` | `success` |
+| Testcontainers `11.14.0` and Ryuk | [37096079378](https://github.com/tailrocks/velnor-new/actions/runs/37096079378) | [111126173884](https://github.com/tailrocks/velnor-new/actions/runs/37096079378/job/111126173884) | [111126173802](https://github.com/tailrocks/velnor-new/actions/runs/37096079378/job/111126173802) | `m100000080` | `success` |
+| exact SHA, submodule, and LFS | [37096132369](https://github.com/tailrocks/velnor-new/actions/runs/37096132369) | [111126336324](https://github.com/tailrocks/velnor-new/actions/runs/37096132369/job/111126336324) | [111126336532](https://github.com/tailrocks/velnor-new/actions/runs/37096132369/job/111126336532) | `m100000082` | `success` |
+| cancel while redis is up | [37096285742](https://github.com/tailrocks/velnor-new/actions/runs/37096285742) | [111126787008](https://github.com/tailrocks/velnor-new/actions/runs/37096285742/job/111126787008) | [111126787200](https://github.com/tailrocks/velnor-new/actions/runs/37096285742/job/111126787200) | `sa8ccd085be05` | `cancelled` |
+| same port 8080, two workers | [37096417428](https://github.com/tailrocks/velnor-new/actions/runs/37096417428) | [111127173396](https://github.com/tailrocks/velnor-new/actions/runs/37096417428/job/111127173396) and [111127173277](https://github.com/tailrocks/velnor-new/actions/runs/37096417428/job/111127173277) | [111127173359](https://github.com/tailrocks/velnor-new/actions/runs/37096417428/job/111127173359) `m100000086` and [111127173391](https://github.com/tailrocks/velnor-new/actions/runs/37096417428/job/111127173391) `m100000087` | both scale-set runners | `success` |
+
+The scale-set Testcontainers log printed `testcontainers-ok` and `ryuk-seen`. The scale-set submodule log showed `git-lfs/3.7.1` and the proof step exited 0, so `HEAD` matched `GITHUB_SHA` and the submodule and LFS markers matched. Both cancel-with-service logs printed `service-up` as step output, then `gh run cancel` ran (`cancel rc=0 while=probed`). Run `37096181766` was cancelled before that probe because its SHA did not match the listener's expected commit. It is not this proof. The two scale-set port jobs printed `port-held` at `2026-10-03T04:24:30Z` and `2026-10-03T04:24:33Z` while each held port 8080. One session started both workers. `VELNOR_MAX_JOBS` unset is still 1.
+
+This section does not mark G4 `PASS`. Not run: one `features` dispatch of every class, a job left queued behind two busy workers, and a live crash or restart during a job.
 
 ## Publish attempts
 
@@ -159,4 +176,4 @@ Neither file is on this branch's `.github/workflows/` or on `main`. This is not 
 
 ## Not yet run
 
-No paired ChainArgos workflow. No published image or macOS binary beyond the existing `v0.1.0` generator assets. The two release-workflow dispatches above returned HTTP 404 and were not retried. The full G4 section 11 suite has not run. The G3 kill and canary matrix has not run. No promotion onto `main`.
+No paired ChainArgos workflow. No published image or macOS binary beyond the existing `v0.1.0` generator assets. The two release-workflow dispatches above returned HTTP 404 and were not retried. The named section 11 classes have job URLs above. G4 stays `NOT_RUN` until a `features` dispatch, queue pressure behind two busy workers, and a live crash or restart are recorded. The G3 kill and canary matrix has not run. No promotion onto `main`.
