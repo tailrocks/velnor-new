@@ -1,4 +1,4 @@
-//! Schema 2 generation on temp fixtures. Never the repository tree.
+//! Schema 2 generation on temp fixtures. Do not generate into the repository tree.
 
 use velnor_actions_orchestrator::{
     ExecutionMode, migrate_config, prepare, render_staged_tree, render_staged_tree_with,
@@ -123,6 +123,26 @@ fn schema2_workflows_match_expected_bytes() -> TestResult {
         required_file(&tree, ".github/workflows/monitoring.yml")?,
         &marked(MONITORING)
     );
+    Ok(())
+}
+
+#[test]
+fn committed_release_files_match_schema2_bytes() -> TestResult {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    for (name, expected) in [
+        (
+            "image-release.yml",
+            schema2_release_snapshots::IMAGE_RELEASE,
+        ),
+        (
+            "macos-binary-release.yml",
+            schema2_release_snapshots::MACOS_RELEASE,
+        ),
+    ] {
+        let path = root.join(".github/workflows").join(name);
+        let body = std::fs::read_to_string(&path)?;
+        assert_eq!(body, marked(expected), "{}", path.display());
+    }
     Ok(())
 }
 
@@ -306,6 +326,8 @@ fn assert_macos_producer(body: &str) -> TestResult {
     let build = job_body(body, "build-binary")?;
     assert!(build.contains("runs-on: macos-15"), "{build}");
     assert!(!build.contains("ubuntu"), "{build}");
+    assert!(build.contains("jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5"));
+    assert!(build.contains("rust@1.98.1"), "{build}");
     assert!(!body.contains("ubuntu"));
     assert!(body.contains(
         "cargo build --locked --manifest-path crates/velnor-runner/Cargo.toml --release -p velnor-host"

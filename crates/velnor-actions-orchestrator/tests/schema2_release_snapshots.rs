@@ -94,8 +94,17 @@ jobs:
         with:
           fetch-depth: "1"
           persist-credentials: "false"
+      - name: Setup Mise
+        uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
+        with:
+          cache: "false"
+          env: "false"
+          install: "false"
+          version: 2026.9.18
+      - name: Install pinned Rust
+        run: "set -eu\nmise --no-config --no-env --no-hooks install rust@1.98.1"
       - name: Build velnor-host
-        run: "set -eu\ncargo build --locked --manifest-path crates/velnor-runner/Cargo.toml --release -p velnor-host\ncp crates/velnor-runner/target/release/velnor-host velnor-host\ntest -s velnor-host"
+        run: "set -eu\nmise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo build --locked --manifest-path crates/velnor-runner/Cargo.toml --release -p velnor-host\ncp crates/velnor-runner/target/release/velnor-host velnor-host\ntest -s velnor-host"
       - name: Verify Mach-O architecture
         run: "set -eu\ndesc=\"$(file -b velnor-host)\"\ncase \"$desc\" in\n  *Mach-O*arm64*) ;;\n  *) echo \"not an arm64 Mach-O: $desc\" >&2; exit 1 ;;\nesac"
       - name: Checksum built bytes

@@ -16,6 +16,10 @@ use super::features::{CHECKOUT_USES, base, finish, run_step};
 
 /// GitHub-hosted macOS label. The binary is native; it is not built on Ubuntu.
 const MACOS_RUNS_ON: &str = "macos-15";
+/// Same `jdx/mise-action` commit CI pins. Not a floating tag.
+const MISE_USES: &str = "jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5";
+/// Catalog version. The Linux cache checksum is not reused on macOS.
+const MISE_VERSION: &str = "2026.9.18";
 /// `actions/attest-build-provenance` tag `v4.2.2` (commit, not a floating tag).
 const ATTEST_USES: &str =
     "actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8";
@@ -48,9 +52,13 @@ const IMAGE_SUM: &str = "\
 set -eu
 sha256sum velnor-runner-linux-amd64.tar velnor-dind-linux-amd64.tar > SHA256SUMS";
 
+const RUST_INSTALL: &str = "\
+set -eu
+mise --no-config --no-env --no-hooks install rust@1.98.1";
+
 const BINARY_BUILD: &str = "\
 set -eu
-cargo build --locked --manifest-path crates/velnor-runner/Cargo.toml --release -p velnor-host
+mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo build --locked --manifest-path crates/velnor-runner/Cargo.toml --release -p velnor-host
 cp crates/velnor-runner/target/release/velnor-host velnor-host
 test -s velnor-host";
 
@@ -132,6 +140,8 @@ pub(super) fn macos_binary_release(_request: &Schema2WorkflowRequest) -> Result<
                 macos.clone(),
                 120,
                 vec![
+                    mise_step(),
+                    run_step("Install pinned Rust", RUST_INSTALL),
                     run_step("Build velnor-host", BINARY_BUILD),
                     run_step("Verify Mach-O architecture", BINARY_VERIFY),
                     run_step("Checksum built bytes", BINARY_SUM),
@@ -233,6 +243,22 @@ fn artifact_name(build_id: &str) -> &'static str {
     } else {
         "binary-assets"
     }
+}
+
+fn mise_step() -> Yaml {
+    Yaml::Map(vec![
+        ("name".to_owned(), Yaml::str("Setup Mise")),
+        ("uses".to_owned(), Yaml::str(MISE_USES)),
+        (
+            "with".to_owned(),
+            Yaml::Map(vec![
+                ("cache".to_owned(), Yaml::str("false")),
+                ("env".to_owned(), Yaml::str("false")),
+                ("install".to_owned(), Yaml::str("false")),
+                ("version".to_owned(), Yaml::str(MISE_VERSION)),
+            ]),
+        ),
+    ])
 }
 
 fn checkout_step() -> Yaml {
