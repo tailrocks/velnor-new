@@ -19,7 +19,7 @@ pub struct Cli {
 /// Operator commands.
 #[derive(Debug, Subcommand)]
 pub enum Command {
-    /// Bind one repository and scale set.
+    /// Bind one repository and scale set. The token is read from stdin and is not a flag.
     Connect {
         /// `owner/name`.
         #[arg(long)]

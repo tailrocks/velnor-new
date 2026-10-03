@@ -1,12 +1,14 @@
 //! Parse and print. The host owns mutation.
 
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use clap::Parser;
 use velnor_runner_host::{
-    ConnectPlan, DaemonLock, DisconnectEffect, HostConfig, Readiness, SetOwnership, connect_plan,
-    disconnect_effects, doctor_json, readiness_for_empty, status_json,
+    ConnectPlan, DaemonLock, DisconnectEffect, HostConfig, HostError, Readiness, SetOwnership,
+    connect_plan, disconnect_effects, doctor_json, import_secret, read_secret, readiness_for_empty,
+    status_json,
 };
 
 use crate::args::{Cli, Command, DaemonAction};
@@ -41,15 +43,15 @@ fn dispatch(cli: &Cli) -> ExitCode {
             max_jobs,
             docker_context,
             endpoint,
-        } => connect(
-            &state,
+        } => connect(&ConnectRequest {
+            state: &state,
             repo,
             scale_set,
             platform,
-            *max_jobs,
-            docker_context.as_deref(),
-            endpoint.as_deref(),
-        ),
+            max_jobs: *max_jobs,
+            docker_context: docker_context.as_deref(),
+            endpoint: endpoint.as_deref(),
+        }),
         Command::Service { action } => crate::service::service(*action),
         Command::Daemon { action } => daemon(&state, *action),
         Command::Compare { evidence, .. } => compare_command(evidence.as_deref()),
@@ -117,40 +119,101 @@ fn remove_flag(state: &Path, name: &str) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-fn connect(
-    state: &Path,
-    repo: &str,
-    scale_set: &str,
-    platform: &str,
+const KEYCHAIN_SERVICE: &str = "com.tailrocks.velnor.host";
+const KEYCHAIN_ACCOUNT: &str = "velnor-host";
+
+/// Fields for one `connect` invocation. The token is not a field.
+struct ConnectRequest<'a> {
+    state: &'a Path,
+    repo: &'a str,
+    scale_set: &'a str,
+    platform: &'a str,
     max_jobs: Option<u32>,
-    docker_context: Option<&str>,
-    endpoint: Option<&str>,
-) -> ExitCode {
-    let text = sample_config(
-        repo,
-        scale_set,
-        platform,
-        max_jobs.unwrap_or(1),
-        docker_context,
-        endpoint,
-    );
-    let Ok(request) = HostConfig::parse(&text) else {
-        return ExitCode::from(1);
-    };
-    let existing = std::fs::read_to_string(state.join("host.toml"))
-        .ok()
-        .and_then(|raw| HostConfig::parse(&raw).ok());
-    if connect_plan(existing.as_ref(), &request) == ConnectPlan::Rejected {
-        eprintln!("rejected connection");
-        return ExitCode::from(1);
+    docker_context: Option<&'a str>,
+    endpoint: Option<&'a str>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ConnectError {
+    Config,
+    Rejected,
+    Secret(HostError),
+    Write,
+}
+
+impl std::fmt::Display for ConnectError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Config => formatter.write_str("invalid config"),
+            Self::Rejected => formatter.write_str("rejected connection"),
+            Self::Secret(error) => std::fmt::Display::fmt(error, formatter),
+            Self::Write => formatter.write_str("write failed"),
+        }
     }
+}
+
+fn connect(request: &ConnectRequest<'_>) -> ExitCode {
+    let mut stdin = std::io::stdin();
+    match connect_with(&mut stdin, KEYCHAIN_SERVICE, request) {
+        Ok(()) => {
+            println!("{}", status_json(Readiness::WaitingForCredentials));
+            ExitCode::SUCCESS
+        }
+        Err(ConnectError::Rejected) => {
+            eprintln!("rejected connection");
+            ExitCode::from(1)
+        }
+        Err(ConnectError::Secret(error)) => {
+            eprintln!("{error}");
+            ExitCode::from(1)
+        }
+        Err(ConnectError::Config | ConnectError::Write) => ExitCode::from(1),
+    }
+}
+
+fn connect_with<R: Read>(
+    input: &mut R,
+    service: &str,
+    request: &ConnectRequest<'_>,
+) -> Result<(), ConnectError> {
+    let text = sample_config(
+        request.repo,
+        request.scale_set,
+        request.platform,
+        request.max_jobs.unwrap_or(1),
+        request.docker_context,
+        request.endpoint,
+    );
+    let parsed = HostConfig::parse(&text).map_err(|_| ConnectError::Config)?;
+    if binding_rejected(request.state, &parsed) {
+        return Err(ConnectError::Rejected);
+    }
+    store_token(input, service)?;
+    persist_host(request.state, &text)
+}
+
+fn binding_rejected(state: &Path, request: &HostConfig) -> bool {
+    let existing = read_host(state);
+    connect_plan(existing.as_ref(), request) == ConnectPlan::Rejected
+}
+
+fn read_host(state: &Path) -> Option<HostConfig> {
+    let raw = std::fs::read_to_string(state.join("host.toml")).ok()?;
+    HostConfig::parse(&raw).ok()
+}
+
+fn store_token<R: Read>(input: &mut R, service: &str) -> Result<(), ConnectError> {
+    let secret = read_secret(input).map_err(ConnectError::Secret)?;
+    import_secret(service, KEYCHAIN_ACCOUNT, &secret).map_err(ConnectError::Secret)
+}
+
+fn persist_host(state: &Path, text: &str) -> Result<(), ConnectError> {
     if std::fs::create_dir_all(state).is_err()
         || std::fs::write(state.join("host.toml"), text).is_err()
     {
-        return ExitCode::from(1);
+        return Err(ConnectError::Write);
     }
-    println!("{}", status_json(Readiness::WaitingForCredentials));
-    ExitCode::SUCCESS
+    Ok(())
 }
 
 fn sample_config(
@@ -201,6 +264,9 @@ fn not_proven() -> ExitCode {
     println!("NOT_PROVEN");
     ExitCode::from(1)
 }
+
+#[cfg(test)]
+mod connect_tests;
 
 fn disconnect(drain: bool) -> ExitCode {
     let effects = disconnect_effects(SetOwnership::Adopted, drain);

@@ -33,4 +33,10 @@ pub enum HostError {
     /// Endpoint was not an `https` URL.
     #[error("bad endpoint")]
     Endpoint,
+    /// Keychain store failed, the read failed, or the token exceeded 4096 bytes.
+    #[error("keychain")]
+    Keychain,
+    /// No token bytes were read.
+    #[error("empty secret")]
+    EmptySecret,
 }

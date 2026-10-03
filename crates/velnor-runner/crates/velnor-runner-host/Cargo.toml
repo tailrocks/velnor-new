@@ -19,3 +19,6 @@ turso = { workspace = true }
 zeroize = { workspace = true }
 velnor-runner-core = { version = "=0.1.0", path = "../velnor-runner-core" }
 velnor-runner-github = { version = "=0.1.0", path = "../velnor-runner-github" }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+security-framework = { version = "=3.7.0" }
