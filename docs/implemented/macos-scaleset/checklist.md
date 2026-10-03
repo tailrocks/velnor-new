@@ -17,7 +17,7 @@ this repository ran.
 | G2-journal | Crash before and after each external step; reopen real database | PASS | `around_commits_pending_before_effect_and_hides_secret` sees pending before the effect returns; secret bytes are absent from the database |
 | G2-uncertain | Uncertain acquire and delete keep capacity | PASS | `release_permitted_gates_capacity_release` keeps occupancy at 1 until `CleanupProof`; `before_advertise_holds_uncertain_and_adopts` |
 | G3-isolation | Private DinD, no outer socket/home, canary absent from metadata | NOT_RUN | `g3-matrix.txt`: private mounts and canary count 0; live exec missed because dummy JIT exited |
-| G3-ownership | Foreign objects survive; id mismatch quarantines | NOT_RUN | foreign id stayed in `g3-matrix.txt`; `remove_recorded` deletes only a matching id in `stage_tests`; live id mismatch after that wiring is not re-proven |
+| G3-ownership | Foreign objects survive; id mismatch quarantines | NOT_RUN | `g3-stage.txt`: foreign id `d377a7f7cfc3` survived `KeepForeign`; matching id was deleted. Guest paths and a real JIT job are still absent, so this is not a G3 pass |
 | G4-live | Real GitHub job on official runner and scale-set labels | PASS | job `111084145716` runner `m100000009`; one-class jobs in `evidence.md`, including cache rerun `37093907324` and same-port run `37096417428`; full G4 suite still open |
 | G5-routing | Schema 1 unchanged; `both` duplicates verification only | PASS | `impl_schema2_routing.rs` at `40e08e8`; goldens unchanged |
 | G5-compare | Duplicate, missing lane, swapped artifact, unsafe archive fail closed | PASS | `compare_tests.rs` at `658154c` |
