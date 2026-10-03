@@ -1,7 +1,7 @@
 # CI performance completion ledger
 
 Status: **OPEN**. Snapshot: 2026-10-03; recorded PR/source HEAD
-`1dcd0791e90abb0e5b758556f0746d0f061c994e` plus concurrent uncommitted work.
+`b0df793576d020ff5778bfce7efe9093469b7144` plus concurrent uncommitted work.
 This pushed commit has DCO signoff, no `gpgsig` header.
 No final source qualification, fresh hosted sequence, runtime promotion or consumer
 rollout is established by this ledger. Refresh identities after freezing the head.
@@ -23,6 +23,10 @@ Unknown metrics remain `null`/unknown; historical green CI and merge waivers are
 separate evidence. No repository currently receives `PERF_VERIFIED` here.
 
 ## Current observed blockers
+
+Latest [source-bound progress supplement](ci-performance-source-progress-b0df.md)
+records failed PR run `37099764713` and two sealed immutable source publications.
+Runtime, hosted reuse, consumer rollout and all47 performance remain unqualified.
 
 Later pushed units are `ec89e630cde905754669e269a85fdccb2072fb11`
 (isolated Git clone fixture), `eefb3187360ab50b57c35fe2607ad8965fa7ccfe`
@@ -237,7 +241,7 @@ isolated namespaces and validation flows; never benchmark production publication
 | Security §5 | [Independent review](ci-performance-security-review.md); cache-mode server support vs pinned validator rejection is documented, not permission to bypass | security_review / final code/generated outputs + T13–16/T18/T26; preserve default PR read-only and release protection |
 | Telemetry §8 | Actual compiler CPU/fresh/link/build-script/rustdoc, payload bytes, queue/provision and full critical path remain unknown where unavailable | qualification / extend existing reports with supported diagnostics and exact layer/session identities; redact private data |
 | Statistics/budgets §7.3 | Three hosted runs not yet done; no p95; local timings only local | qualification / paired comparable sample initially20 for percentile claims, disclose outliers/queue/failures; investigate warm >120s; transport costs vs avoided work |
-| Deterministic repo gates | Focused local checks exist; latest recorded PR head `1dcd0791e90abb0e5b758556f0746d0f061c994e` CI failed (CLI stale17, Required); final integrated fmt/clippy/nextest/alint/deny/freshness not yet established | parent / serialize complete checks at frozen head, record commands/results and failures honestly |
+| Deterministic repo gates | Focused local checks exist; latest recorded PR head `b0df793576d020ff5778bfce7efe9093469b7144` CI failed (CLI stale17, Required); final integrated fmt/clippy/nextest/alint/deny/freshness not yet established | parent / serialize complete checks at frozen head, record commands/results and failures honestly |
 | Official runtime | [Runtime audit](ci-performance-runtime-audit.md): old asset integrity matches, provenance incomplete/missing supported target | release_restore, qualification / qualified actual default branch, complete supported-target assets, exact source/digests/attestation/approvals; immutable new version |
 | Consumer waves | All47 below remain INCOMPLETE; no qualified generated rollout completed | parent, wave owners / first Jackin canary; A then B then C; requalify earlier waves after relevant generator changes |
 | Final feedback/closure | Earlier bounded audits do not approve final changes | parent, independent reviewers / re-fetch reviews/comments/replies/threads at final head; verified fixing commit links or evidenced rejection; verify integration and default branch separately |
