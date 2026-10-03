@@ -5,6 +5,7 @@
 
 use std::collections::BTreeMap;
 
+use velnor_actions_contract::cachekey::mbx_cache_generation;
 use velnor_actions_contract::{Job, Step, StepKind};
 
 use crate::{
@@ -186,7 +187,7 @@ pub fn mbx_objects_step(
         ("version".to_owned(), mbx_version.to_owned()),
         (
             "cache-generation".to_owned(),
-            format!("velnor-mbx-{mbx_version}"),
+            mbx_cache_generation(mbx_version),
         ),
     ]);
     let env = BTreeMap::from([(

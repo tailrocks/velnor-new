@@ -1,5 +1,6 @@
 //! Gate 4 renderer cases: MBX objects, cache actions, lane target dirs.
 
+use velnor_actions_contract::cachekey::mbx_cache_generation;
 use velnor_actions_contract::workflow::ir::CACHE_MODE_PUSH_WRITE_EXPR;
 use velnor_actions_contract::{Step, StepKind};
 use velnor_actions_workflow_renderer::steps::{
@@ -56,9 +57,19 @@ fn mbx_objects_step_pins_action_and_mode() {
             );
             assert_eq!(
                 with.get("cache-generation").map(String::as_str),
-                Some("velnor-mbx-1.19.0"),
+                Some(mbx_cache_generation("1.19.0").as_str()),
                 "a new MBX release starts an isolated cache namespace"
             );
+            for input in [
+                "save-on-pull-request",
+                "save-on-workflow-dispatch",
+                "save-on-protected-branch",
+            ] {
+                assert!(
+                    !with.contains_key(input),
+                    "consumer cache writes stay push-only: {input}"
+                );
+            }
             assert!(!with.contains_key("mode"), "no such action input");
         }
         _ => panic!("mbx must be an action step"),
