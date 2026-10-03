@@ -13,8 +13,10 @@ const CHECKOUT_USES: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273
 const UPLOAD_USES: &str = "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a";
 const REDIS_OPTIONS: &str =
     "--health-cmd \"redis-cli ping\" --health-interval 5s --health-timeout 5s --health-retries 12";
-const PROBE_DNS: &str = "node -e 'const n=require(\"net\");const s=n.connect(6379,\"redis\",()=>s.end());s.on(\"error\",()=>process.exit(1));setTimeout(()=>process.exit(1),10000)'";
-const PROBE_LOCAL: &str = "node -e 'const n=require(\"net\");const s=n.connect(6379,\"127.0.0.1\",()=>s.end());s.on(\"error\",()=>process.exit(1));setTimeout(()=>process.exit(1),10000)'";
+/// Host-style steps reach a published service port on localhost.
+/// The service DNS name is only on the Docker network of a `container:` job.
+const PROBE_LOCAL: &str =
+    "timeout 20 bash -c 'until echo >/dev/tcp/127.0.0.1/6379; do sleep 1; done'";
 const BUILDX_RUN: &str = "docker buildx version && printf 'FROM scratch\\n' > Dockerfile && docker buildx build --progress=plain -t velnor-g4:probe .";
 
 /// Jobs that run only when `inputs.mode` is `features`.
@@ -122,14 +124,7 @@ fn js_job(id: &str, name: &str, runs_on: Yaml) -> (String, Yaml) {
 fn service_job(id: &str, name: &str, runs_on: Yaml) -> (String, Yaml) {
     let mut fields = base(name, runs_on, 20);
     fields.push(("services".to_owned(), redis_service()));
-    finish(
-        id,
-        fields,
-        vec![
-            run_step("Service DNS", PROBE_DNS),
-            run_step("Localhost port", PROBE_LOCAL),
-        ],
-    )
+    finish(id, fields, vec![run_step("Localhost port", PROBE_LOCAL)])
 }
 
 fn artifact_job(id: &str, name: &str, runs_on: Yaml, artifact: &str) -> (String, Yaml) {

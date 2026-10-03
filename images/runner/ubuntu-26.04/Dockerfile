@@ -37,9 +37,9 @@ RUN apt-get update \
 
 WORKDIR /home/runner
 
-# GNU tar from Ubuntu 26.04 returns ENOSYS (Function not implemented) when
-# extracting this archive under qemu-user. busybox tar unpacks the official
-# tarball unchanged. It is not kept in the image.
+# GNU tar from Ubuntu 26.04 calls openat2. qemu-user returns ENOSYS, and
+# glibc does not fall back, so extract fails with "Function not implemented".
+# busybox tar unpacks the official tarball and stays the tar the runner execs.
 USER root
 RUN apt-get update \
     && apt-get install -y --no-install-recommends busybox \
@@ -49,8 +49,6 @@ RUN apt-get update \
     && busybox tar -xzf /tmp/actions-runner.tar.gz -C /home/runner \
     && rm -f /tmp/actions-runner.tar.gz \
     && chown -R runner:runner /home/runner \
-    && apt-get purge -y busybox \
-    && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Official dependency installer. Does not patch Runner.Listener or os-release.
@@ -75,7 +73,16 @@ RUN curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL -o /tmp/docker.tgz \
 
 COPY entrypoint.sh /usr/local/bin/velnor-runner-entrypoint
 RUN chmod 0755 /usr/local/bin/velnor-runner-entrypoint \
-    && chown -R runner:runner /home/runner
+    && chown -R runner:runner /home/runner \
+    && dpkg-divert --local --rename --divert /usr/bin/tar.gnu --add /usr/bin/tar \
+    && ln -s /usr/bin/busybox /usr/bin/tar \
+    && mkdir -p /tmp/tar-src/dir \
+    && echo ok > /tmp/tar-src/dir/file \
+    && busybox tar -czf /tmp/tar-probe.tgz -C /tmp/tar-src dir \
+    && mkdir -p /tmp/tar-out \
+    && tar -xzf /tmp/tar-probe.tgz -C /tmp/tar-out \
+    && test "$(cat /tmp/tar-out/dir/file)" = ok \
+    && rm -rf /tmp/tar-src /tmp/tar-out /tmp/tar-probe.tgz
 
 USER runner
 ENTRYPOINT ["/usr/local/bin/velnor-runner-entrypoint"]

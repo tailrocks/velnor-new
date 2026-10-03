@@ -30,6 +30,7 @@ fn runner_create_opens_stdin_and_is_not_privileged() -> Result<(), HostError> {
     assert_eq!(spec.mounts[0].source, "volume:worker_a");
     assert_eq!(spec.mounts[0].target, "/run");
     assert_eq!(spec.env, Vec::<String>::new());
+    assert!(spec.network_mode.is_none());
     Ok(())
 }
 
@@ -59,6 +60,44 @@ fn dind_is_privileged_and_shares_the_runner_volumes() -> Result<(), HostError> {
     assert_eq!(spec.image, "velnor-dind:29.8.2");
     assert_eq!(spec.platform, "linux/amd64");
     assert_eq!(spec.mounts, runner_plan("worker_a")?.mounts);
+    assert!(spec.network_mode.is_none());
+    Ok(())
+}
+
+#[test]
+fn runner_joins_only_its_dind_netns() -> Result<(), HostError> {
+    let spec = projection("worker_a")?;
+    let not_hex = "g".repeat(64);
+    for bad in [
+        "",
+        "host",
+        "container:abc",
+        "../id",
+        "short",
+        not_hex.as_str(),
+    ] {
+        assert_eq!(
+            crate::worker::join_dind_net(spec.clone(), bad).err(),
+            Some(HostError::ForbiddenMount),
+            "{bad}"
+        );
+    }
+    let id = "a".repeat(64);
+    let mode = format!("container:{id}");
+    let joined = crate::worker::join_dind_net(spec, &id)?;
+    assert!(!joined.privileged);
+    assert_eq!(joined.network_mode.as_deref(), Some(mode.as_str()));
+    let created = bollard_create(&joined)?;
+    let host = created
+        .config
+        .host_config
+        .as_ref()
+        .ok_or(HostError::Docker)?;
+    assert_eq!(host.privileged, Some(false));
+    assert_eq!(host.network_mode.as_deref(), Some(mode.as_str()));
+    let dind = bollard_create(&dind_create("worker_a")?)?;
+    let dind_host = dind.config.host_config.as_ref().ok_or(HostError::Docker)?;
+    assert!(dind_host.network_mode.is_none());
     Ok(())
 }
 

@@ -73,10 +73,8 @@ jobs:
         ports:
           - "6379:6379"
     steps:
-      - name: Service DNS
-        run: "node -e 'const n=require(\"net\");const s=n.connect(6379,\"redis\",()=>s.end());s.on(\"error\",()=>process.exit(1));setTimeout(()=>process.exit(1),10000)'"
       - name: Localhost port
-        run: "node -e 'const n=require(\"net\");const s=n.connect(6379,\"127.0.0.1\",()=>s.end());s.on(\"error\",()=>process.exit(1));setTimeout(()=>process.exit(1),10000)'"
+        run: timeout 20 bash -c 'until echo >/dev/tcp/127.0.0.1/6379; do sleep 1; done'
   services-scale-set:
     name: Services / Velnor Scale Set
     if: inputs.mode == 'features'
@@ -89,10 +87,8 @@ jobs:
         ports:
           - "6379:6379"
     steps:
-      - name: Service DNS
-        run: "node -e 'const n=require(\"net\");const s=n.connect(6379,\"redis\",()=>s.end());s.on(\"error\",()=>process.exit(1));setTimeout(()=>process.exit(1),10000)'"
       - name: Localhost port
-        run: "node -e 'const n=require(\"net\");const s=n.connect(6379,\"127.0.0.1\",()=>s.end());s.on(\"error\",()=>process.exit(1));setTimeout(()=>process.exit(1),10000)'"
+        run: timeout 20 bash -c 'until echo >/dev/tcp/127.0.0.1/6379; do sleep 1; done'
   artifacts-hosted:
     name: Artifacts / GitHub hosted
     if: inputs.mode == 'features'

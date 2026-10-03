@@ -34,4 +34,16 @@ RUN apt-get update \
         /usr/local/bin/dockerd \
         /usr/local/bin/runc
 
-ENTRYPOINT ["dockerd", "--host=unix:///var/run/docker.sock", "--group=docker", "--data-root=/var/lib/docker"]
+# containerd's overlay snapshotter returns EINVAL when this amd64 dockerd
+# runs under emulation. vfs does not mount overlay. linux/amd64 stays the baseline.
+RUN mkdir -p /etc/docker \
+    && printf '%s\n' \
+        '{' \
+        '  "storage-driver": "vfs",' \
+        '  "features": { "containerd-snapshotter": false },' \
+        '  "group": "docker",' \
+        '  "data-root": "/var/lib/docker",' \
+        '  "iptables": true' \
+        '}' > /etc/docker/daemon.json
+
+ENTRYPOINT ["dockerd", "--host=unix:///var/run/docker.sock"]

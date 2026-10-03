@@ -39,6 +39,8 @@ pub struct CreateProjection {
     pub privileged: bool,
     /// `OpenStdin`. True only for the runner channel.
     pub open_stdin: bool,
+    /// `container:<id>` joins that container's network namespace. Runner only.
+    pub network_mode: Option<String>,
 }
 
 /// Ids this call created. No JIT and no name.
@@ -81,7 +83,31 @@ pub fn runner_create(plan: &ContainerPlan) -> Result<CreateProjection, HostError
         mounts: plan.mounts.clone(),
         privileged: false,
         open_stdin: true,
+        network_mode: None,
     })
+}
+
+/// Join `spec` to the private `DinD` network namespace.
+///
+/// Published service ports and Testcontainers then bind on the runner's localhost.
+/// `dind_id` must be one Docker container id. `host` and other modes are rejected.
+///
+/// # Errors
+///
+/// Returns [`HostError::ForbiddenMount`] when `dind_id` is not a hex container id.
+pub(crate) fn join_dind_net(
+    mut spec: CreateProjection,
+    dind_id: &str,
+) -> Result<CreateProjection, HostError> {
+    if !dind_container_id(dind_id) {
+        return Err(HostError::ForbiddenMount);
+    }
+    spec.network_mode = Some(format!("container:{dind_id}"));
+    Ok(spec)
+}
+
+fn dind_container_id(id: &str) -> bool {
+    (12..=64).contains(&id.len()) && id.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
 /// Private `DinD` create. Privilege is not a flag on the runner plan.
@@ -103,6 +129,7 @@ pub fn dind_create(private_volume: &str) -> Result<CreateProjection, HostError> 
         mounts: runner.mounts,
         privileged: true,
         open_stdin: false,
+        network_mode: None,
     })
 }
 
@@ -160,7 +187,10 @@ pub async fn start_pair(
     let runner = runner_create(&plan)?;
     create_named_volumes(docker, &plan).await?;
     let dind_id = create_started(docker, &dind).await?;
-    let runner_id = start_runner(docker, &runner, jit).await;
+    let runner_id = match join_dind_net(runner, &dind_id) {
+        Ok(spec) => start_runner(docker, &spec, jit).await,
+        Err(error) => Err(error),
+    };
     keep_dind(docker, dind_id, runner_id).await
 }
 
@@ -196,6 +226,7 @@ fn host_config(spec: &CreateProjection) -> Result<HostConfig, HostError> {
     Ok(HostConfig {
         privileged: Some(spec.privileged),
         mounts: docker_mounts(&spec.mounts)?,
+        network_mode: spec.network_mode.clone(),
         ..Default::default()
     })
 }

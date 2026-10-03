@@ -8,8 +8,10 @@ docker build --platform linux/amd64 -t velnor-dind:29.8.2 images/dind
 
 Listens only on `unix:///var/run/docker.sock` inside the worker namespace
 (`/var/run` is `/run` on Ubuntu). Data root is `/var/lib/docker`. Group
-`docker` is gid `999`. The Dockerfile does not copy or mount a host socket
-and the entrypoint does not prune.
+`docker` is gid `999`. Storage driver is `vfs` because the containerd overlay
+snapshotter returns `EINVAL` when this amd64 daemon runs under emulation.
+The Dockerfile does not copy or mount a host socket and the entrypoint does
+not prune.
 
 The image does not set `privileged`. The controller must:
 
