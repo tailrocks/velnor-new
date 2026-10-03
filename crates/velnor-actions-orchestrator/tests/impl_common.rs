@@ -12,6 +12,10 @@ use velnor_actions_orchestrator::{
     GenerationPreparation, OrchestratorError, finalized_jobs, plan_internal, plan_text,
 };
 
+#[path = "fixture_package.rs"]
+mod fixture_package;
+pub(crate) use fixture_package::root_manifest;
+
 /// Test error shortcut.
 pub(crate) type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -147,10 +151,7 @@ pub(crate) fn make_repo(config: &str) -> Result<TempDir, Box<dyn std::error::Err
         root.join(".velnor/release-manifest.json"),
         fixture_manifest_json(),
     )?;
-    fs::write(
-        root.join("Cargo.toml"),
-        "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
-    )?;
+    fs::write(root.join("Cargo.toml"), root_manifest(config))?;
     fs::create_dir_all(root.join("src"))?;
     fs::write(root.join("src/lib.rs"), "pub fn f() {}\n")?;
     Ok(dir)

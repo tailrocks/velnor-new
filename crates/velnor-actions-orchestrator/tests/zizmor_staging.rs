@@ -18,6 +18,9 @@ use velnor_actions_mise::{PinnedTool, PinnedToolExec, ProcessOutput, ToolCatalog
 use velnor_actions_orchestrator::{GenerateOptions, generate, prepare};
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
+#[path = "fixture_package.rs"]
+mod fixture_package;
+
 /// Test error shortcut.
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -92,7 +95,7 @@ fn make_repo(config: &str) -> Result<TempDir, Box<dyn std::error::Error>> {
     fs::write(root.join(".velnor/release-manifest.json"), manifest_json())?;
     fs::write(
         root.join("Cargo.toml"),
-        "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        fixture_package::root_manifest(config),
     )?;
     fs::create_dir_all(root.join("src"))?;
     fs::write(root.join("src/lib.rs"), "pub fn f() {}\n")?;
