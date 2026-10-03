@@ -119,7 +119,6 @@ fn schema2_workflows_match_expected_bytes() -> TestResult {
         qualification,
         &marked(schema2_feature_snapshots::QUALIFICATION)
     );
-    assert_mbx_cache_qualification(qualification)?;
     let image = required_file(&tree, ".github/workflows/image-release.yml")?;
     let macos = required_file(&tree, ".github/workflows/macos-binary-release.yml")?;
     assert_eq!(image, &marked(schema2_release_snapshots::IMAGE_RELEASE));
@@ -189,75 +188,6 @@ fn assert_hosted_release(release: &str) {
     assert!(!release.contains("runs-on: [velnor"), "{release}");
 }
 
-fn assert_mbx_cache_qualification(qualification: &str) -> TestResult {
-    let writer = job_body(qualification, "mbx-cache-write-hosted")?;
-    assert!(
-        writer.contains("inputs.mode == 'mbx-cache-roundtrip' && github.ref == 'refs/heads/main' && github.ref_protected == true"),
-        "{writer}"
-    );
-    assert!(writer.contains("actions: write"), "{writer}");
-    assert!(writer.contains("ACTIONS_CACHE_MODE: write"), "{writer}");
-    assert!(writer.contains("MBX_GC_AUTO: \"1\""), "{writer}");
-    assert!(
-        writer.contains("save-on-workflow-dispatch: \"true\""),
-        "{writer}"
-    );
-    assert!(
-        writer.contains("velnor-qualification-mbx-1.21.1-action-1687e54eb349cadf61fa38b5813a77875489e8e6-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}"),
-        "{writer}"
-    );
-    assert!(writer.contains("version: 1.21.1"), "{writer}");
-    assert!(writer.contains("RUSTUP_TOOLCHAIN: 1.98.1"), "{writer}");
-    assert!(
-        writer
-            .contains("CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo"),
-        "{writer}"
-    );
-    assert!(writer.contains("rustc --print sysroot"), "{writer}");
-
-    let reader = job_body(qualification, "mbx-cache-read-hosted")?;
-    assert!(
-        reader.contains("inputs.mode == 'mbx-cache-roundtrip' && github.ref == 'refs/heads/main' && github.ref_protected == true"),
-        "{reader}"
-    );
-    assert!(
-        reader.contains("needs:\n      - mbx-cache-write-hosted"),
-        "{reader}"
-    );
-    assert!(reader.contains("actions: read"), "{reader}");
-    assert!(reader.contains("ACTIONS_CACHE_MODE: read"), "{reader}");
-    assert!(reader.contains("MBX_GC_AUTO: \"1\""), "{reader}");
-    assert!(
-        reader.contains("steps.mbx_cache.outputs.cache-hit"),
-        "{reader}"
-    );
-    assert!(
-        reader.contains("velnor-qualification-mbx-1.21.1-action-1687e54eb349cadf61fa38b5813a77875489e8e6-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}"),
-        "{reader}"
-    );
-    assert!(
-        reader.contains("test \\\"$CACHE_HIT\\\" = 'false'"),
-        "{reader}"
-    );
-    assert!(
-        reader.contains("save-on-workflow-dispatch: \"false\""),
-        "{reader}"
-    );
-    assert!(reader.contains("mbx cache stats --json"), "{reader}");
-    assert!(
-        reader.contains(".savings.cached_compilations > 0"),
-        "{reader}"
-    );
-    assert!(reader.contains("version: 1.21.1"), "{reader}");
-    assert!(reader.contains("RUSTUP_TOOLCHAIN: 1.98.1"), "{reader}");
-    assert!(
-        reader
-            .contains("CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo"),
-        "{reader}"
-    );
-    Ok(())
-}
-
 fn job_ids(yaml: &str) -> Vec<&str> {
     jobs_section(yaml)
         .lines()
@@ -266,7 +196,7 @@ fn job_ids(yaml: &str) -> Vec<&str> {
         .collect()
 }
 
-fn job_body<'a>(yaml: &'a str, id: &str) -> Result<&'a str, Box<dyn std::error::Error>> {
+pub(super) fn job_body<'a>(yaml: &'a str, id: &str) -> Result<&'a str, Box<dyn std::error::Error>> {
     let section = jobs_section(yaml);
     let header = format!("  {id}:");
     let mut offset = 0;
@@ -306,7 +236,7 @@ fn join_files(tree: &RenderedTree) -> String {
         .join("\n")
 }
 
-fn required_file<'a>(
+pub(super) fn required_file<'a>(
     tree: &'a RenderedTree,
     path: &str,
 ) -> Result<&'a str, Box<dyn std::error::Error>> {
@@ -343,7 +273,7 @@ fn hosted_schema2() -> String {
     format!("{}\nmode = \"hosted\"\n{}", execution_head(), profiles())
 }
 
-fn workflow_config() -> String {
+pub(super) fn workflow_config() -> String {
     format!(
         "{}\nmode = \"hosted\"\nworkflows = [\"qualification\", \"image_release\", \"macos_binary_release\", \"generator_release\", \"monitoring\"]\n{}",
         execution_head(),
