@@ -9,13 +9,13 @@ use bollard::models::{
     ContainerCreateBody, HostConfig, Mount as DockerMount, MountType, VolumeCreateRequest,
 };
 use bollard::query_parameters::{
-    AttachContainerOptionsBuilder, CreateContainerOptions, RemoveContainerOptionsBuilder,
-    StartContainerOptions,
+    AttachContainerOptionsBuilder, CreateContainerOptions, StartContainerOptions,
 };
 use tokio::io::AsyncWriteExt;
 
 use crate::docker_spec::{ContainerPlan, Mount, audit_plan, runner_plan};
 use crate::error::HostError;
+use crate::stage::PairStop;
 
 const PLATFORM: &str = "linux/amd64";
 const DIND_IMAGE: &str = "velnor-dind:29.8.2";
@@ -179,34 +179,11 @@ pub async fn start_pair(
     private_volume: &str,
     jit: &[u8],
 ) -> Result<Started, HostError> {
-    if jit.is_empty() {
-        return Err(HostError::EmptyJit);
-    }
-    let plan = runner_plan(private_volume)?;
-    let dind = dind_create(private_volume)?;
-    let runner = runner_create(&plan)?;
-    create_named_volumes(docker, &plan).await?;
-    let dind_id = create_started(docker, &dind).await?;
-    let runner_id = match join_dind_net(runner, &dind_id) {
-        Ok(spec) => start_runner(docker, &spec, jit).await,
-        Err(error) => Err(error),
-    };
-    keep_dind(docker, dind_id, runner_id).await
-}
-
-async fn keep_dind(
-    docker: &Docker,
-    dind_id: String,
-    runner_id: Result<String, HostError>,
-) -> Result<Started, HostError> {
-    if runner_id.is_err() {
-        let error = runner_id.err().ok_or(HostError::Docker)?;
-        remove_created(docker, &dind_id).await;
-        return Err(error);
-    }
+    let partial =
+        crate::stage::start_pair_until(docker, private_volume, jit, PairStop::Jit).await?;
     Ok(Started {
-        dind_id,
-        runner_id: runner_id.map_err(|_| HostError::Docker)?,
+        dind_id: partial.dind_id.ok_or(HostError::Docker)?,
+        runner_id: partial.runner_id.ok_or(HostError::Docker)?,
     })
 }
 
@@ -271,7 +248,10 @@ fn label_map(labels: &[String]) -> Result<Option<HashMap<String, String>>, HostE
     Ok(Some(map))
 }
 
-async fn create_named_volumes(docker: &Docker, plan: &ContainerPlan) -> Result<(), HostError> {
+pub(crate) async fn create_named_volumes(
+    docker: &Docker,
+    plan: &ContainerPlan,
+) -> Result<(), HostError> {
     for mount in &plan.mounts {
         let name = volume_name(&mount.source)?;
         let request = VolumeCreateRequest {
@@ -293,42 +273,30 @@ fn volume_name(source: &str) -> Result<&str, HostError> {
         .ok_or(HostError::ForbiddenMount)
 }
 
-async fn create_started(docker: &Docker, spec: &CreateProjection) -> Result<String, HostError> {
+pub(crate) async fn create_only(
+    docker: &Docker,
+    spec: &CreateProjection,
+) -> Result<String, HostError> {
     let created = bollard_create(spec)?;
     let response = docker
         .create_container(Some(created.options), created.config)
         .await
         .map_err(|_| HostError::Docker)?;
     if response.id.is_empty() {
-        return Err(HostError::Docker);
-    }
-    if docker
-        .start_container(&response.id, None::<StartContainerOptions>)
-        .await
-        .is_ok()
-    {
-        Ok(response.id)
-    } else {
-        remove_created(docker, &response.id).await;
         Err(HostError::Docker)
-    }
-}
-
-async fn start_runner(
-    docker: &Docker,
-    spec: &CreateProjection,
-    jit: &[u8],
-) -> Result<String, HostError> {
-    let id = create_started(docker, spec).await?;
-    if let Err(error) = deliver_jit(docker, &id, jit).await {
-        remove_created(docker, &id).await;
-        Err(error)
     } else {
-        Ok(id)
+        Ok(response.id)
     }
 }
 
-async fn deliver_jit(docker: &Docker, id: &str, jit: &[u8]) -> Result<(), HostError> {
+pub(crate) async fn start_id(docker: &Docker, id: &str) -> Result<(), HostError> {
+    docker
+        .start_container(id, None::<StartContainerOptions>)
+        .await
+        .map_err(|_| HostError::Docker)
+}
+
+pub(crate) async fn deliver_jit(docker: &Docker, id: &str, jit: &[u8]) -> Result<(), HostError> {
     let options = AttachContainerOptionsBuilder::new()
         .stdin(true)
         .stream(true)
@@ -348,13 +316,4 @@ async fn deliver_jit(docker: &Docker, id: &str, jit: &[u8]) -> Result<(), HostEr
         .await
         .map_err(|_| HostError::Docker)?;
     Ok(())
-}
-
-async fn remove_created(docker: &Docker, id: &str) {
-    if id.is_empty() {
-        return;
-    }
-    let options = RemoveContainerOptionsBuilder::new().force(true).build();
-    let removed = docker.remove_container(id, Some(options)).await;
-    let _kept = removed.err().map(|_err| ());
 }

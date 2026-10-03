@@ -20,6 +20,7 @@ mod plist;
 mod readiness;
 mod reconcile;
 mod scale_set;
+mod stage;
 mod worker;
 
 pub use assign::{Offer, offer};
@@ -43,6 +44,7 @@ pub use reconcile::{
     IntentRow, Reconcile, ReleaseFact, before_advertise, occupies, release_permitted,
 };
 pub use scale_set::{EnsureError, EnsuredSet, ensure_product_scale_set, product_runner_groups};
+pub use stage::{PairStop, PartialPair, remove_recorded, start_pair_until};
 pub use worker::{
     BollardCreate, CreateProjection, Started, bollard_create, dind_create, runner_create,
     start_pair,
@@ -78,5 +80,7 @@ mod listen_tests;
 mod plist_tests;
 #[cfg(test)]
 mod readiness_tests;
+#[cfg(test)]
+mod stage_tests;
 #[cfg(test)]
 mod worker_tests;
