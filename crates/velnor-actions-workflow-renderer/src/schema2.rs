@@ -1,5 +1,5 @@
-//! Qualification, image-release, macOS-binary-release, and monitoring
-//! workflows. Emitted only when schema 2 requests them.
+//! Qualification, image-release, macOS-binary-release, generator-release,
+//! and monitoring workflows. Emitted only when schema 2 requests them.
 
 use std::collections::BTreeSet;
 
@@ -17,6 +17,8 @@ pub const QUALIFICATION_WORKFLOW: &str = ".github/workflows/qualification.yml";
 pub const IMAGE_RELEASE_WORKFLOW: &str = ".github/workflows/image-release.yml";
 /// macOS binary-release workflow path.
 pub const MACOS_BINARY_RELEASE_WORKFLOW: &str = ".github/workflows/macos-binary-release.yml";
+/// Generator-release workflow path.
+pub const GENERATOR_RELEASE_WORKFLOW: &str = ".github/workflows/generator-release.yml";
 /// Queue-monitoring workflow path.
 pub const MONITORING_WORKFLOW: &str = ".github/workflows/monitoring.yml";
 
@@ -24,6 +26,8 @@ pub const MONITORING_WORKFLOW: &str = ".github/workflows/monitoring.yml";
 mod classes;
 #[path = "schema2_features.rs"]
 mod features;
+#[path = "schema2_generator_release.rs"]
+mod generator_release;
 #[path = "schema2_release.rs"]
 mod release;
 
@@ -86,6 +90,16 @@ pub fn render_schema2_workflows(
             MACOS_BINARY_RELEASE_WORKFLOW,
             &request.version,
             &release::macos_binary_release(request)?,
+        )?);
+    }
+    if request
+        .workflows
+        .contains(&RoutingWorkflow::GeneratorRelease)
+    {
+        files.push(file(
+            GENERATOR_RELEASE_WORKFLOW,
+            &request.version,
+            &generator_release::generator_release(request)?,
         )?);
     }
     if request.workflows.contains(&RoutingWorkflow::Monitoring) {
