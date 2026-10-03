@@ -12,6 +12,8 @@ ARG COMPOSE_VERSION=5.6.0
 ARG COMPOSE_SHA256=40343e21ca777173e69cff5dbafeb37c6f81f3b0d57d9e597f036e95eb63e76a
 ARG BUILDX_VERSION=0.37.2
 ARG BUILDX_SHA256=982ca20490b45ed1ec8d99795974d3d874a358f75938c9c237305010e6b7e548
+ARG NODE_VERSION=24.17.0
+ARG NODE_SHA256=e0472427aa791ad80bdc426ff7cc73cdd28ed0f616d1ff9689a23a7f47f1265f
 ARG DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update \
@@ -83,6 +85,15 @@ RUN chmod 0755 /usr/local/bin/velnor-runner-entrypoint \
     && tar -xzf /tmp/tar-probe.tgz -C /tmp/tar-out \
     && test "$(cat /tmp/tar-out/dir/file)" = ok \
     && rm -rf /tmp/tar-src /tmp/tar-out /tmp/tar-probe.tgz
+
+# Job steps call `node` on PATH. Action JavaScript uses the runner's own runtime.
+RUN curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL -o /tmp/node.tar.gz \
+        "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.gz" \
+    && echo "${NODE_SHA256}  /tmp/node.tar.gz" | sha256sum -c - \
+    && tar -xzf /tmp/node.tar.gz --strip-components=1 -C /usr/local \
+    && rm -f /tmp/node.tar.gz \
+    && node --version \
+    && test "$(node -e 'console.log("js-action-ok")')" = js-action-ok
 
 USER runner
 ENTRYPOINT ["/usr/local/bin/velnor-runner-entrypoint"]
