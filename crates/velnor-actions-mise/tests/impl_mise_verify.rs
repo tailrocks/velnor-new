@@ -108,11 +108,11 @@ fn verify_mbx_route_reports_tool_without_cargo_test_probe() -> Result<(), String
     .map_err(|err| err.to_string())?;
     assert_eq!(
         step.specs(),
-        &["rust@1.98.1".to_owned(), "mr-boxington@1.21.0".to_owned()]
+        &["rust@1.98.1".to_owned(), "mr-boxington@1.21.1".to_owned()]
     );
     let probes = step.probes(&catalog);
     assert_eq!(probes.len(), 1, "route probe covers cargo_test: {probes:?}");
-    assert!(probes[0].iter().any(|arg| arg == "mr-boxington@1.21.0"));
+    assert!(probes[0].iter().any(|arg| arg == "mr-boxington@1.21.1"));
     assert_eq!(probes[0].last(), Some(&OsString::from("--version")));
     assert_eq!(step.target(), "x86_64-unknown-linux-gnu");
     assert_eq!(step.platform(), "ubuntu-26.04");
@@ -165,7 +165,7 @@ fn verify_nextest_adds_runner_probe_per_driver() -> Result<(), String> {
             "--no-hooks",
             "exec",
             "rust@1.98.1",
-            "mr-boxington@1.21.0",
+            "mr-boxington@1.21.1",
             "aqua:nextest-rs/nextest/cargo-nextest@0.9.146",
             "--",
             "mbx",

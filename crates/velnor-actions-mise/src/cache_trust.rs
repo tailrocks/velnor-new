@@ -1,8 +1,8 @@
 //! P08 trust, save, and quota policy: PR scoping, deltas, service data.
 //!
-//! Same-repo PR saving only when the pinned action supports a PR-scoped
-//! policy (pinned MBX v1.5.0 does not: PRs restore the default-branch
-//! cache read-only; any PR-branch save never promotes to trusted).
+//! The pinned MBX v1.6.0 action supports opt-in same-repo PR saving, but
+//! Velnor keeps that option off: PRs restore the default-branch cache
+//! read-only; any PR-branch save never promotes to trusted.
 //! Fork PRs stay read-only. PR outputs never become trusted/release
 //! evidence. Saves happen only for producer-successful useful deltas in
 //! the allowed trust scope after writers finish. Cache-service errors
@@ -12,8 +12,8 @@
 
 use crate::error::MiseError;
 
-/// Pinned MBX action supports PR-scoped save policy (v1.5.0: no).
-pub const MBX_PR_SAVE_SUPPORTED: bool = false;
+/// Velnor does not opt in to the action's same-repository PR cache writes.
+pub const MBX_PR_SAVE_OPTED_IN: bool = false;
 
 /// True when a same-repo PR may save (action must support PR scoping).
 ///
@@ -70,7 +70,7 @@ pub fn save_after_success(gate: SaveGate) -> bool {
 /// [`save_after_success`] must still require all four gate conditions,
 /// [`crate::restore::save_decision`] must permit only the
 /// trusted/push/passed combination, [`crate::cache::save_allowed`] must
-/// agree, and PR saves must stay unsupported by the pinned action. The
+/// agree, and the generator must not enable PR saves. The
 /// returned condition is the `if:` gate the emitted save step carries;
 /// policy drift fails generation instead of emitting a stale gate.
 ///
@@ -79,13 +79,13 @@ pub fn save_after_success(gate: SaveGate) -> bool {
 /// Returns [`MiseError::Contract`] when the policy no longer matches
 /// the emitted push-only gate.
 pub fn authorize_trusted_save() -> Result<&'static str, MiseError> {
-    authorize_trusted_save_for(MBX_PR_SAVE_SUPPORTED)
+    authorize_trusted_save_for(MBX_PR_SAVE_OPTED_IN)
 }
 
-/// Authorize one trusted-layer save step under an explicit PR policy.
+/// Authorize one trusted-layer save step under an explicit PR-save policy.
 ///
-/// The pinned-action capability arrives as a parameter so tests cover
-/// the drift rejection without flipping the production constant.
+/// The generator policy arrives as a parameter so tests cover drift
+/// rejection without flipping the production constant.
 ///
 /// # Errors
 ///

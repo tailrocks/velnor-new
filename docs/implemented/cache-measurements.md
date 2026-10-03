@@ -195,3 +195,24 @@ census; push triggers only on `main`, unmerged). Setups are now restore-only and
 carry explicit push-gated `Save Mise tools` steps; warmth still needs
 one post-merge `main` push to seed the `mise-v1-*` entries. Full
 per-action PR-save verdict: gate-4 doc R13 bullet.
+
+## Hosted MBX object-cache round-trip
+
+`qualification.yml` mode `mbx-cache-roundtrip` runs two hosted jobs in one
+dispatch. The protected-main writer builds a probe crate and its post step
+must export and save the MBX objects before the dependent reader starts. The
+reader has only `actions: read`, requires an imported object set, and checks
+that MBX reuses a cached compilation. A run-and-attempt-specific generation
+prevents a cache from an earlier dispatch from satisfying this check. The
+reader's `cache-hit=false` assertion intentionally expects the action's
+run-specific writer key to be reached by its restore prefix.
+
+Both jobs set `MBX_GC_AUTO=1` intentionally: this exercises the same hosted
+policy that Velnor emits for production MBX object-cache jobs, overriding the
+action's hosted default. Dispatch once from protected `main` with mode
+`mbx-cache-roundtrip`; the writer and reader run in order at the same SHA.
+
+This is a small end-to-end action and cache round-trip probe. It does not
+measure disk or inode peaks and does not qualify the affected ChainArgos
+workload. That evidence must come from the consumer's affected crates after
+adoption; a green probe alone is not an ENOSPC repair verdict.
