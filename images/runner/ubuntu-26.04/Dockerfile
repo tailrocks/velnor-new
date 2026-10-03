@@ -81,11 +81,15 @@ COPY tar-pax.pl /usr/local/bin/velnor-tar-pax
 # After the divert, /usr/bin/tar is the BusyBox shim, not GNU tar.
 RUN chmod 0755 /usr/local/bin/velnor-runner-entrypoint /usr/local/bin/velnor-tar /usr/local/bin/velnor-tar-pax \
     && apt-get update \
-    && apt-get install -y --no-install-recommends build-essential clang cmake git-lfs libclang-dev libssl-dev perl pkg-config zstd \
+    && apt-get install -y --no-install-recommends build-essential clang cmake git-lfs libclang-dev libssl-dev perl pkg-config protobuf-compiler zstd \
     && cc --version \
     && pkg-config --modversion openssl \
     && cmake --version \
     && test -n "$(find /usr/lib -path '/usr/lib/llvm-*/lib/libclang.so' -print -quit)" \
+    && protoc --version \
+    && printf 'syntax = "proto3"; message M { int32 x = 1; }\n' > /tmp/m.proto \
+    && protoc -o /tmp/m.pb -I /tmp /tmp/m.proto \
+    && test -s /tmp/m.pb \
     && rm -rf /var/lib/apt/lists/* \
     && git lfs version \
     && chown -R runner:runner /home/runner \
@@ -159,7 +163,7 @@ RUN chmod 0755 /usr/local/bin/velnor-runner-entrypoint /usr/local/bin/velnor-tar
     && rm -rf /tmp/p-home/runner/.cache /tmp/p-home/runner/_work/repo/repo/.cache \
     && tar -xf /tmp/p.tzst -P -C /tmp/p-home/runner/_work/repo/repo --use-compress-program unzstd \
     && test "$(cat /tmp/p-home/runner/.cache/mbx/marker)" = mbx-ok \
-    && rm -rf /tmp/tar-src /tmp/tar-out /tmp/tar-old /tmp/tar-probe.tgz /tmp/tar-manifest /tmp/cache.tgz /tmp/cache.tzst /tmp/tar-cache-out /tmp/tar-zstd-out /tmp/p-home /tmp/p-manifest /tmp/p-abs.tar /tmp/p.tzst /tmp/abs-marker /tmp/abs.tar /tmp/abs-out /tmp/cfz.tgz /tmp/cfz-out /tmp/argv-src /tmp/argv-manifest /tmp/argv-count /tmp/argv.tar /tmp/argv-out /tmp/argv-one /tmp/argv-one-out
+    && rm -rf /tmp/tar-src /tmp/tar-out /tmp/tar-old /tmp/tar-probe.tgz /tmp/tar-manifest /tmp/cache.tgz /tmp/cache.tzst /tmp/tar-cache-out /tmp/tar-zstd-out /tmp/p-home /tmp/p-manifest /tmp/p-abs.tar /tmp/p.tzst /tmp/abs-marker /tmp/abs.tar /tmp/abs-out /tmp/cfz.tgz /tmp/cfz-out /tmp/m.proto /tmp/m.pb /tmp/argv-src /tmp/argv-manifest /tmp/argv-count /tmp/argv.tar /tmp/argv-out /tmp/argv-one /tmp/argv-one-out
 
 # Job steps call `node` on PATH. Action JavaScript uses the runner's own runtime.
 RUN curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL -o /tmp/node.tar.gz \
