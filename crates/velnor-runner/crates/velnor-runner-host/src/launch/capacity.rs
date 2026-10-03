@@ -127,7 +127,10 @@ const fn above_scale(seat: Seat) -> Admit {
 }
 
 const fn scale_covered(seat: Seat) -> bool {
-    seat.started >= seat.assigned
+    // An exited start still increments `started`. Only a running container
+    // covers `totalAssignedJobs`. Otherwise the next queued job is acknowledged
+    // and never minted while this session stays under capacity.
+    seat.running >= seat.assigned
 }
 
 const fn admit_empty(seat: Seat) -> Admit {

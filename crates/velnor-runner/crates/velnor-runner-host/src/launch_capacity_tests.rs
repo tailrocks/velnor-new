@@ -109,6 +109,17 @@ fn scale_does_not_mint_again_once_assigned_is_covered() {
         }),
         Admit::Start { stop: false }
     );
+    assert_eq!(
+        admit(Seat {
+            capacity: 2,
+            target: 2,
+            started: 1,
+            running: 0,
+            assigned: 1,
+            idle: Idle::Scale,
+        }),
+        Admit::Start { stop: true }
+    );
 }
 
 #[test]
