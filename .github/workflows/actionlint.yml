@@ -2,6 +2,8 @@ name: Lint GitHub Actions workflows
 
 on:
   push:
+    branches:
+      - main
     paths:
       - ".github/workflows/*.ya?ml"
   pull_request:
