@@ -12,6 +12,8 @@ Authority: full [goal](../../velnor-actions-ci-performance-goal.md),
 [CSV](../../repository-evidence.csv). Latest user configuration overrides the old
 goal model clause: new subagents default to `gpt-6-luna` / `max` for all tasks; a review may use `gpt-6.1-sol` / `medium` only when explicitly selected by the parent. Never use `gpt-6-astra` for this goal, including for existing subagents; this prohibition overrides any older exception. Existing non-Astra subagents may continue under their assigned configurations. Prior model labels are historical and do not block commits. Verify actual model and effort from authoritative session metadata; spawn requests and self-description are not evidence. Missing metadata stays unverified and does not qualify the subagent result; ordinary authorized source work continues.
 
+The [2026-10-04 source-progress recovery supplement](ci-performance-source-progress-recovery-20261004.md) records the observed recovery boundary, durable Audit47 and merge-source evidence, and pending integrated qualification. It grants no qualification.
+
 ## Evidence levels
 
 `I` = working implementation exists; `S` = source inspected independently;
