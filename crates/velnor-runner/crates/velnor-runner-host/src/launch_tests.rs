@@ -210,10 +210,7 @@ async fn bound_runner_acks_without_a_second_start() -> Result<(), String> {
     )
     .await
     .map_err(|err| err.to_string())?;
-    assert_eq!(
-        again.map(|item| item.runner_id).as_deref(),
-        Some("runner-1")
-    );
+    assert_eq!(again, None);
     assert_eq!(second.calls, ["ack"]);
     absent(&scratch.file())
 }
