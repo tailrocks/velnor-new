@@ -23,6 +23,20 @@ this repository ran.
 | G5-compare | Duplicate, missing lane, swapped artifact, unsafe archive fail closed | PASS | `compare_tests.rs` at `658154c` |
 | G6-launchd | User LaunchAgent foreground `daemon run`; second daemon fails | PASS | `launchctl print gui/501` at 2026-10-03: absolute `daemon run`, `forks = 0`; second `daemon run` exit 1; bootout removed the job |
 | G6-binary | `velnor-host` help and not-ready status | PASS | `help_exits_success_and_a_bad_command_does_not`; status JSON `waiting_for_credentials` |
-| G7-publish | Published generator, image, and macOS binary consumed by ChainArgos | NOT_RUN | image `37102027384` and macOS `37102029367` published GitHub release assets at `19a43f5` (no GHCR push); ChainArgos still pins generator `v0.1.0` |
-| G7-paired | Hosted baseline, N=1 canary, N=2, cold and warm paired runs | NOT_RUN | no consumer workflow run |
+| G7-publish | Published generator, image, and macOS binary consumed by ChainArgos | NOT_RUN | consumer PR 2085 pins generator `0561601c1f71a80d16e75983124b4bd69c883bb1`; paired suite not successful; running `velnor-host` is not a published asset |
+| G7-paired | Hosted baseline, N=1 canary, N=2, cold and warm paired runs | NOT_RUN | run `37128301624` attempt 4 still open; not a suite pass |
 | G8-merge | Final main uses pinned published generator; required checks kept | NOT_RUN | no promotion |
+
+Recovery gates use R0–R8. They do not renumber G0–G8.
+
+| ID | Requirement | Status | Evidence |
+|---|---|---|---|
+| R0 | Current source, product, run, and open-PR inventory | PASS | `evidence.md` recovery inventory, 2026-10-03 |
+| R1 | Hosted MBX write then restore, bounded disk | FAIL | run `37114238559` post export ENOSPC; PR 26 GC does not bound the export; protected write not re-proven |
+| R2 | Archive semantics on the deployed amd64 image | NOT_RUN | path collision confirmed in source; image not rebuilt onto the live tag |
+| R3 | Daemon lifecycle, N>1 backfill, cleanup | FAIL | free slot does not mint while the sibling runs; DinD id is not removed; running binary is not the published host |
+| R4 | Published repaired generator and full regenerated tree | NOT_RUN | pin `0561601` predates the MBX export repair |
+| R5 | Cold and warm paired suite | NOT_RUN | attempt 4 is not a successful suite |
+| R6 | Docker capability suite and published macOS install | NOT_RUN | launchd program is a local binary, not a release asset |
+| R7 | Required checks and protected main | NOT_RUN | PR 2085 not merged |
+| R8 | P2 docs, diagnostics, PR dispositions | NOT_RUN | dispositions recorded under R0; remaining P2 work open |

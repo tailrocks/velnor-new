@@ -309,4 +309,41 @@ Same device 41 and inode in both containers: `_work` `128828916`, `_temp` `12882
 
 ## Not yet run
 
-No paired ChainArgos workflow. Generator `v0.1.0` is unchanged. Image and macOS binaries from `19a43f5` are GitHub release assets in the publish section, not a GHCR image and not a consumer pin. The first two release dispatches returned HTTP 404 and were not retried. Runs `37101248625`, `37101248540`, and `37101412470` failed or were cancelled before those assets existed. The named section 11 classes have job URLs above. Features dispatch `37097526498`, queue-pressure run `37098293064`, and crash run `37099950570` are recorded above. G4 stays `NOT_RUN` because the job log does not show the official runner cgroup compatibility check. The G3 matrix attempt is recorded and is not a pass. Guest-path exec, job `111148411061`, live exec of job `111157320313`, the composite `_actions` stat on run `37108023561`, secret run `37108914261`, and composite run `37109854949` are recorded above. G3 is PASS from those rows together. Squash merge of PR 14 is `28b83bddb1ea1a231b37f3b6619e69a768c698c9`. No workflow on that commit publishes a new `velnor-actions` tag, so `v0.1.0` was not moved. Image run `37110093259` and macOS binary run `37110095182` were started from `main` and are not finished here. ChainArgos was not updated. G7 is `BLOCKED_EXTERNAL`. G8 stays `NOT_RUN`.
+The paragraphs above are the 2026-10-03 morning record. Later rows supersede their identities. G7 and G8 stay `NOT_RUN`.
+
+## Recovery inventory (2026-10-03 19:40Z)
+
+`gh api` from this machine. This section is R0. It is not a G7 or R5 pass.
+
+| Item | Value |
+|---|---|
+| `tailrocks/velnor-new` main | `5a946c33cf005777feab2bc91fa4aa8e01dd58f4` (PR 24). No commits after it. |
+| Working branch | `tar-absolute` `9bf909a19f7c3fc26d0203fd0f28efbdc0eafd41` (PR 25 head) |
+| Consumer | `ChainArgos/java-monorepo` PR 2085, head `620df66423cdd2403b69ced1724d17fb8afd1d6f`, branch `n1-qualification`, open, mergeable, blocked |
+| Consumer pin | generator `0561601c1f71a80d16e75983124b4bd69c883bb1` (not main). Darwin asset `sha256:f3af0110d98748380943f010ae0d25eca8290c74ab21ea1ac22ef338a5c80283`. Linux asset `sha256:2e084ed7d6bc1b49228a1e033ee42ae31eceb45c7c982f14baf1721d88b96256`. |
+| Tag `v0.1.0` | commit `c57c700459bbe1549fe7eedcb7d8689585c38986`. Not moved. Release target `95c1d6f0f1056881e42d53846dac8ffccd7aa6a5` differs from the tag. |
+| Live runner tag | `velnor-runner:ubuntu-26.04-2.337.0` manifest list `sha256:3c7e4b73e9c600760b5af420f7c3bf8e725a8284d0d5f72d07758c7e7f474c29` (local tag, not a release asset) |
+| Live DinD tag | `velnor-dind:29.8.2` `sha256:67b02176948ff029862a2a0efad252a98b1f8f3becd1ef780754b19c915ac5b7` |
+| Host pid 91213 | `/Users/donbeave/Library/Application Support/Velnor/velnor-host` sha256 `ef505caf0adaa18b10998d2a11899fddf6c923ada172662b8b0380465c952a34` size 27714256. Matches no published `velnor-host` asset. Closest published size is `binary-a6d053cc` at 27680592, digest `sha256:a6b5f498b0ae92e6f69d73f01f592a6c1da3b6ee33b03265fc5322d835b09b68`. |
+| `host.toml` | `max_jobs = 2`, context `orbstack`, platform `linux/amd64`, set `ubuntu-26.04-scale-set`. Credential ref not recorded here. |
+| Docker | OrbStack, `DOCKER_HOST=unix:///Users/donbeave/.orbstack/run/docker.sock`. Host macOS arm64. Containers `linux/amd64`. |
+
+Open PR disposition:
+
+| PR | State | Disposition |
+|---|---|---|
+| 17 | merged `b9fdb1bc27b7aeeb71264cd2195328b4c5387627` | already satisfied in main |
+| 18 | open, behind, head `f2b9ef2ab0396f2b892c260818e472685ed1f367` | historical evidence only; not current deployment |
+| 19 | merged `a6d053cc43778728696dd362afd936309f2aaa23` | already satisfied in main source; running binary is a different digest |
+| 20 | draft, dirty, head `f53081d700d18e5f42723d5237679c4bccf72a78` | scheduled; do not merge for this recovery |
+| 22 | merged `2ca2fbd63c2650656ecb4ec7974fd8f7630e7a7f` | already satisfied |
+| 23 | merged `0561601c1f71a80d16e75983124b4bd69c883bb1` | already satisfied; this is the consumer generator pin |
+| 24 | merged `5a946c33cf005777feab2bc91fa4aa8e01dd58f4` | already satisfied in main source |
+| 25 | open, blocked, head `9bf909a19f7c3fc26d0203fd0f28efbdc0eafd41` | relevant; path collision not fixed yet |
+| 26 | open, clean, head `8480ddb5ee655dfc3f6c6c04360ad6c073980f0b` | adopt the GC pin only together with a single-bundle export; green PR checks do not prove a protected cache write |
+
+Run `37128301624` (PR 2085, attempt 4, not terminal at this snapshot): hosted jobs were success. Scale-set rust had 5 success, 2 failure, 2 in progress, 12 queued. Failures `111269118868` (bitcoin-processor-app) and `111269118871` (amq-protocol-types) lost their DinD network namespace because a sweep compared a 12-character id to `NetworkMode`. They are not tar failures and not rabbit failures. They stay failed until a same-attempt Plan rerun executes them on `3c7e4b73…` and seeded `67b02176…`. Attempt 3 `--failed` died on missing artifact `velnor-plan-r37128301624-a3` (D17).
+
+Run `37114238559` on consumer main failed `Post Restore MBX objects` with `No space left on device` on jobs `111178048670`, `111178048789`, `111178048807`, `111178048826`, `111178048844`. Required `111181067683` failed. R1 stays `FAIL`.
+
+R2–R8 stay open. Do not read a partial rust success as the suite.
