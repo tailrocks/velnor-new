@@ -26,6 +26,10 @@ pub use guards::ToolSnapshot;
 
 use guards::{GenerateOwnership, prepare_preview_dir, same_filesystem};
 
+/// Repository-owned content carried into the replacement transaction.
+#[path = "generate_preserve.rs"]
+mod preserve;
+
 /// Options for [`generate`].
 #[derive(Debug, Clone, Default)]
 pub struct GenerateOptions {
@@ -197,8 +201,19 @@ fn replace_in_place(
     }
     let staging = tempfile::tempdir_in(root)
         .map_err(|err| OrchestratorError::io(root.display().to_string(), err.to_string()))?;
-    let staged = staging.path().join(".github");
+    let permissions = preserve::root_permissions(&target)?;
+    // Existing roots stage as siblings: read-only directory moves must stay
+    // within one parent on macOS. Restore the final mode before publication.
+    let staged = if permissions.is_some() {
+        staging.path().to_path_buf()
+    } else {
+        staging.path().join(".github")
+    };
+    let directories = preserve::copy_repository_content(&target, &staged)?;
+    preserve::check_generated_collisions(&staged, tree)?;
     write_tree(&staged, tree)?;
+    preserve::restore_directory_permissions(directories)?;
+    preserve::restore_root_permissions(&staged, permissions)?;
     if !same_filesystem(staging.path(), root)? {
         return Err(OrchestratorError::Contract {
             problem: "cross_filesystem_staging".to_owned(),
@@ -286,7 +301,13 @@ fn write_preview(
     for rel in check_tree_paths(tree)? {
         guard::check_no_symlink(&canonical, &rel, is_symlink)?;
     }
-    write_tree(&canonical.join(".github"), tree)
+    let github = canonical.join(".github");
+    let permissions = preserve::root_permissions(&prep.root.join(".github"))?;
+    let directories = preserve::copy_repository_content(&prep.root.join(".github"), &github)?;
+    preserve::check_generated_collisions(&github, tree)?;
+    write_tree(&github, tree)?;
+    preserve::restore_directory_permissions(directories)?;
+    preserve::restore_root_permissions(&github, permissions)
 }
 
 /// Staged tree writing: regular files and symbolic links.
