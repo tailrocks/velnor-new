@@ -3,6 +3,7 @@ members = [
     "crates/velnor-actions-contract",
     "crates/velnor-actions-rust",
     "crates/velnor-actions-mise",
+    "crates/velnor-actions-native",
     "crates/velnor-actions-actionlint",
     "crates/velnor-actions-workflow-renderer",
     "crates/velnor-actions-orchestrator",
@@ -54,3 +55,6 @@ allow_attributes = "warn"
 [workspace.lints.rustdoc]
 broken_intra_doc_links = "deny"
 private_intra_doc_links = "deny"
+
+[profile.test.package."sha2:0.11.0"]
+opt-level = 3
