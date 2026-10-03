@@ -62,6 +62,26 @@ overlaps are separately recorded and subtracted. Pure queue and provision time
 remain unknown. These API intervals differ from timestamped log intervals and
 must retain their measurement origin. This failed run never qualifies a baseline.
 
+## Private collector acquisition
+
+Fresh collection requires an unused evidence directory. The collector admits all
+job pages against the exact run, attempt, head SHA and completed terminal status
+before fetching logs. It retains `original-acquisition.json` once, with source, job inventory, availability,
+original log digests and hashes of all acquired `run.json`, `jobs.json` and
+`artifacts.json` response bytes. `--reuse` verifies every original response and log
+digest before reading API evidence or rewriting a summary; it never rewrites the
+original manifest or raw evidence. Changed timestamps or artifact metadata fail
+collection. Logs originally
+unavailable remain unknown. Historical raw evidence without this manifest stays
+preserved; acquire into a new directory rather than mint original digests from
+those existing bytes.
+
+`original_run_creation_to_first_job_start_seconds` names its actual timestamp
+origin. On reruns it includes elapsed time since the original run was created,
+including time between attempts; it is not attempt queue or provision time.
+Those metrics remain null. Regex log counters remain unauthenticated observations,
+separate from supported owning-tool session reports and native authority.
+
 ## Executable unchanged-run sequence
 
 1. Freeze independently reviewed generator source, generated validation workflow,

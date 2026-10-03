@@ -26,10 +26,7 @@ def load_collector():
 
 
 COLLECTOR = load_collector()
-# Official GitHub REST OpenAPI components.schemas.job.properties.conclusion.
-# https://github.com/github/rest-api-description/blob/main/descriptions/api.github.com/api.github.com.json
-JOB_CONCLUSIONS = frozenset({"success", "failure", "neutral", "cancelled", "skipped",
-                             "timed_out", "action_required"})
+JOB_CONCLUSIONS = COLLECTOR.JOB_CONCLUSIONS
 
 
 def unique_pairs(pairs):
@@ -116,30 +113,7 @@ def evidence_identity(summary, run):
 
 
 def admitted_jobs(pages, identity):
-    if not isinstance(pages, list) or not pages:
-        raise ValueError("missing jobs pages")
-    for page in pages:
-        if not isinstance(page, dict) or type(page.get("total_count")) is not int:
-            raise ValueError("jobs page/count malformed")
-        if page["total_count"] < 0 or not isinstance(page.get("jobs"), list):
-            raise ValueError("jobs page/count malformed")
-        for job in page["jobs"]:
-            if not isinstance(job, dict):
-                raise ValueError("job must be a mapping")
-            positive_integer(job["id"])
-    jobs = COLLECTOR.complete_pages(pages, "jobs")
-    for job in jobs:
-        if (positive_integer(job["run_id"]) != identity[1]
-                or positive_integer(job["run_attempt"]) != identity[2]
-                or job.get("head_sha") != identity[3]):
-            raise ValueError("API job identity mismatch")
-        conclusion = job.get("conclusion")
-        if (job.get("status") != "completed" or not isinstance(conclusion, str)
-                or conclusion not in JOB_CONCLUSIONS):
-            raise ValueError("job must have completed status and terminal conclusion")
-        if not isinstance(job.get("name"), str):
-            raise ValueError("job name must be text")
-    return jobs
+    return COLLECTOR.admitted_jobs(pages, identity)
 
 
 def workflow_for(run, repository):
