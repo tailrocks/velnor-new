@@ -10,8 +10,9 @@ from unittest.mock import patch
 
 import publish_owned_source as P
 import source_publication as S
+import source_publication_records as records
 import source_release_policy as R
-from test_source_publication import fixture
+from test_source_publication import TARGET, fixture
 
 
 class PolicyTests(unittest.TestCase):
@@ -50,10 +51,11 @@ class FakeGithub:
         self.release_id = P.RECOVERY_ID if recovery else 42
 
     def release(self):
-        return {"id": self.release_id, "tag_name": self.tag, "target_commitish": S.TARGET,
+        return {"id": self.release_id, "tag_name": self.tag, "target_commitish": TARGET,
             "draft": self.state["draft"], "prerelease": False, "immutable": self.fault != "final_immutable",
-            "assets": [{"name": name, "id": P.RECOVERY_ASSETS[name] if self.recovery else i + 1}
-                       for i, name in enumerate(self.uploaded)]}
+            "assets": [{"name": name, "id": P.RECOVERY_ASSETS[name] if self.recovery else i + 1,
+                        "digest": "sha256:" + P.sha(data)}
+                       for i, (name, data) in enumerate(self.uploaded.items())]}
 
     def __call__(self, *arguments):
         self.commands.append(arguments)
@@ -62,7 +64,7 @@ class FakeGithub:
                 body = json.loads(Path(arguments[arguments.index("--input") + 1]).read_text())
                 self.test.assertTrue(body["draft"])
                 self.test.assertEqual(body["make_latest"], "false")
-                self.test.assertEqual(body["target_commitish"], S.TARGET)
+                self.test.assertEqual(body["target_commitish"], TARGET)
                 self.test.assertEqual(body["tag_name"], self.tag)
                 self.state["release"] = True
                 return json.dumps(self.release()).encode()
@@ -91,7 +93,7 @@ class FakeGithub:
             result = {"id": 1, "tag_name": self.tag if self.fault == "latest" else "v0.1.0"}
         elif path == "branches/main":
             result = {"name": "main", "protected": True, "commit": {"sha":
-                "0" * 40 if self.fault == "main" else S.TARGET}}
+                "0" * 40 if self.fault == "main" else TARGET}}
         elif path == "git/ref/" + self.source_ref.removeprefix("refs/"):
             result = {"ref": self.source_ref, "object": {"type": "commit", "sha": self.approved["commit"]}}
         elif path.startswith("git/commits/"):
@@ -103,7 +105,7 @@ class FakeGithub:
             if not self.state["tag"] and self.fault != "collision":
                 code = 401 if self.fault == "auth" else 404
                 raise subprocess.CalledProcessError(1, arguments, stderr=f"gh: absent (HTTP {code})".encode())
-            result = {"ref": "refs/tags/" + self.tag, "object": {"type": "commit", "sha": S.TARGET}}
+            result = {"ref": "refs/tags/" + self.tag, "object": {"type": "commit", "sha": TARGET}}
         elif path.startswith("releases/assets/"):
             asset_id = int(path.rsplit("/", 1)[1])
             name = (next(name for name, value in P.RECOVERY_ASSETS.items() if value == asset_id)
@@ -128,8 +130,9 @@ class TransactionTests(unittest.TestCase):
             root = Path(temporary).resolve()
             for name, data in stage_assets.items():
                 (root / name).write_bytes(data)
-            with patch.dict(S.APPROVED, {role: approved}), patch.object(S, "git", side_effect=git):
-                manifest, assets = S.prepare(root, root, role, github.source_ref, approved["commit"], S.TARGET)
+            with patch.object(records, "REVISIONS", {(role, approved["commit"]): approved["revision"]}), \
+                    patch.object(S, "git", side_effect=git):
+                manifest, assets = S.prepare(root, root, role, github.source_ref, approved["commit"], TARGET)
                 if recovery:
                     github.uploaded.update(assets)
                 with patch.object(P, "gh", side_effect=github), patch.object(P, "RECOVERY_MANIFEST_SHA256",
@@ -165,9 +168,10 @@ class TransactionTests(unittest.TestCase):
             root = Path(temporary).resolve()
             for name, data in stage_assets.items():
                 (root / name).write_bytes(data)
-            with patch.dict(S.APPROVED, {"mise": approved}), patch.object(S, "git", side_effect=git):
+            with patch.object(records, "REVISIONS", {("mise", approved["commit"]): approved["revision"]}), \
+                    patch.object(S, "git", side_effect=git):
                 manifest, assets = S.prepare(root, root, "mise",
-                    "refs/heads/owned-source/mise/" + approved["commit"], approved["commit"], S.TARGET)
+                    "refs/heads/owned-source/mise/" + approved["commit"], approved["commit"], TARGET)
                 mutations = [lambda m: m.update(qualified=True), lambda m: m.update(schema=True),
                     lambda m: m["raw_commit"].update(cryptographic_signature=True),
                     lambda m: m.update(behavioral_qualification={"passed": True}),

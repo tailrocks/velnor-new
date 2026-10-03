@@ -1,4 +1,4 @@
-"""Source-only publication proof for two explicitly reviewed source revisions.
+"""Source-only publication proof for closed reviewed source revisions.
 
 Git object hashes and DCO trailers prove bytes and declared signoff, never a
 cryptographic signature or behavioral qualification. No source code executes.
@@ -8,31 +8,15 @@ import hashlib
 import io
 import json
 import os
-from pathlib import Path
 import re
 import stat
 import subprocess
 import tarfile
 
+from source_publication_records import ArchiveKind, reviewed_source_revision
+
 REPO = "tailrocks/velnor-new"
-TARGET = "c57c700459bbe1549fe7eedcb7d8689585c38986"
 HOSTS = ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu", "aarch64-apple-darwin"]
-APPROVED = {
-    "mise": {"commit": "dbbf5b0d8f9c7edc5d0111e17ebaf781ecc97a96",
-        "tree": "d5eefb0470da013d4f524555df763f16a0faf22d",
-        "base": "bc11f90c74eba23bf0d7350efb540e62fb7d9ffd", "upstream": "jdx/mise",
-        "raw_commit_sha256": "fa982e90ef0857b2fb87eb4e4584197b3fc6371664ab47a404e85b7d4c4df773",
-        "source.tar": "a2ed2eec09aecf7c964fbf408d6c50fae2ec62a8354f4afb9b5ddaa3812f5d92",
-        "base.patch": "1faa8dd229d3f403695969fafb41cf5855e68d60fee04c456b851fb95a53637b",
-        "source-receipt.json": "038587e5c20392736ebdfa25d8d10557b774cbca04f13a0c93b4581b83d7e670"},
-    "mbx-action": {"commit": "c3cbe8e56ccb4727624df45022357f49d2953075",
-        "tree": "57a9336f26b9ce4a31f5f914c17594ecaa9c1248",
-        "base": "1687e54eb349cadf61fa38b5813a77875489e8e6", "upstream": "jdx/mr-boxington-action",
-        "raw_commit_sha256": "496ca46524ad9ce2a55b01a454ac4925f897cd09139f08909291a0ac579c1dc0",
-        "source.tar": "1aa5e5813cdaa08c8240693099c329d261bd93b69e97bef18e773d9e88dadcb1",
-        "base.patch": "25310d9587c5cf5854014140f0fe97aa800303b21316a660fd67bb77f9c9a554",
-        "source-receipt.json": "1798003a5f4287d774b6dfa3d54374efd3fce48a8c9543d29306d222458cae8a"},
-}
 STAGE_NAMES = {"source.tar", "base.patch", "source-receipt.json"}
 LIMIT = 512 * 1024 * 1024
 
@@ -81,12 +65,10 @@ def git(repository, *arguments):
 
 
 def source_identity(role, source_ref, source_commit, target):
-    require(role in APPROVED, "unreviewed source role")
-    approved = APPROVED[role]
-    require(target == TARGET and source_commit == approved["commit"] and
-            source_ref == "refs/heads/owned-source/" + role + "/" + source_commit,
-            "source or protected publication target differs from reviewed tuple")
-    return approved
+    revision = reviewed_source_revision(role, source_commit, target)
+    require(source_ref == revision.source_ref,
+            "owned source ref differs from the reviewed revision")
+    return revision
 
 
 def committed_files(repository, commit):
@@ -135,17 +117,18 @@ def archive_proof(data, files):
     return payloads
 
 
-def receipt_proof(receipt, role, approved, payloads, files):
+def receipt_proof(receipt, revision, payloads, files):
+    role = revision.role.value
     lock = "package-lock.json" if role == "mbx-action" else "Cargo.lock"
     require(lock in payloads and files[lock][0] == b"100644", "committed regular lock required")
     licenses = {name: sha(data) for name, data in payloads.items() if files[name][0] == b"100644" and
                 re.search(r"(^|/)(LICENSE|COPYING|NOTICE)([.\-]|$)", name)}
     require(licenses, "committed license proof missing")
     expected = {"schema": 1, "status": "STAGED_SOURCE_ONLY", "tool": role,
-        "upstream_repository": "https://github.com/" + approved["upstream"],
-        "upstream_base_commit": approved["base"], "source_commit": approved["commit"],
-        "source_tree": approved["tree"], "source_archive": {"name": "source.tar", "sha256": approved["source.tar"]},
-        "base_patch": {"name": "base.patch", "sha256": approved["base.patch"]},
+        "upstream_repository": "https://github.com/" + revision.upstream_repository,
+        "upstream_base_commit": revision.upstream_base_commit, "source_commit": revision.source_commit,
+        "source_tree": revision.source_tree, "source_archive": {"name": "source.tar", "sha256": revision.source_archive_sha256},
+        "base_patch": {"name": "base.patch", "sha256": revision.base_patch_sha256},
         "lockfile": {"path": lock, "sha256": sha(payloads[lock])}, "license_files": licenses,
         "required_hosts": [] if role == "mbx-action" else HOSTS, "publication": None,
         "behavioral_qualification": None, "signed_build_provenance": None}
@@ -157,45 +140,53 @@ def receipt_proof(receipt, role, approved, payloads, files):
             "stage receipt differs from committed source proof")
 
 
-def raw_commit_proof(repository, approved):
-    raw = git(repository, "cat-file", "commit", approved["commit"])
-    require(git_object("commit", raw) == approved["commit"] and
-            sha(raw) == approved["raw_commit_sha256"], "raw source commit proof mismatch")
+def raw_commit_proof(repository, revision):
+    raw = git(repository, "cat-file", "commit", revision.source_commit)
+    require(git_object("commit", raw) == revision.source_commit and
+            sha(raw) == revision.raw_commit_sha256, "raw source commit proof mismatch")
     headers, message = raw.split(b"\n\n", 1)
-    require(headers.splitlines()[0] == ("tree " + approved["tree"]).encode() and
+    require(headers.splitlines()[0] == ("tree " + revision.source_tree).encode() and
             b"\ngpgsig " not in headers, "source commit tree or unsigned status mismatch")
-    tree = git(repository, "cat-file", "tree", approved["tree"])
-    require(git_object("tree", tree) == approved["tree"], "root Git tree proof mismatch")
+    tree = git(repository, "cat-file", "tree", revision.source_tree)
+    require(git_object("tree", tree) == revision.source_tree, "root Git tree proof mismatch")
     signoffs = re.findall(r"^Signed-off-by: (.+ <[^<>\n]+>)$", message.decode(), re.MULTILINE)
     require(signoffs and "Co-authored-by: Codex <codex@openai.com>" in message.decode(),
             "reviewed source DCO/coauthor trailers missing")
-    git(repository, "merge-base", "--is-ancestor", approved["base"], approved["commit"])
+    git(repository, "merge-base", "--is-ancestor", revision.upstream_base_commit, revision.source_commit)
     return raw, signoffs
 
 
 def prepare(stage, repository, role, source_ref, source_commit, target):
-    approved = source_identity(role, source_ref, source_commit, target)
+    revision = source_identity(role, source_ref, source_commit, target)
     require(not stage.is_symlink() and not repository.is_symlink(), "source directory symlink forbidden")
     stage, repository = stage.resolve(strict=True), repository.resolve(strict=True)
     require({path.name for path in stage.iterdir()} == STAGE_NAMES, "unexpected source stage files")
     assets = {name: read_regular(stage / name) for name in sorted(STAGE_NAMES)}
-    for name, data in assets.items():
-        require(sha(data) == approved[name], "reviewed source stage hash mismatch")
-    raw, signoffs = raw_commit_proof(repository, approved)
-    files = committed_files(repository, approved["commit"])
-    payloads = archive_proof(assets["source.tar"], files)
-    receipt = strict_json(assets["source-receipt.json"])
-    receipt_proof(receipt, role, approved, payloads, files)
+    require(sha(assets["source.tar"]) == revision.source_archive_sha256 and
+            len(assets["source.tar"]) == revision.source_archive_size and
+            sha(assets["base.patch"]) == revision.base_patch_sha256 and
+            sha(assets["source-receipt.json"]) == revision.source_receipt_sha256,
+            "reviewed source stage hash mismatch")
+    raw, signoffs = raw_commit_proof(repository, revision)
+    assets["source.commit"] = raw
+    files = committed_files(repository, revision.source_commit)
     patch = git(repository, "diff", "--binary", "--full-index", "--no-ext-diff", "--no-textconv",
         "--no-renames", "--diff-algorithm=myers", "--src-prefix=a/", "--dst-prefix=b/",
-        approved["base"], approved["commit"], "--", ".")
-    require(patch and patch == assets["base.patch"], "base patch does not match exact committed source")
-    assets["source.commit"] = raw
-    manifest = {"schema": 1, "status": "SOURCE_ONLY", "tool": role,
-        "source_ref": source_ref, "source_commit": source_commit, "source_tree": approved["tree"],
-        "upstream_base_commit": approved["base"], "tag": "owned-source-" + role + "-" + source_commit,
-        "tag_target": target, "repository": REPO, "source_receipt": receipt,
-        "raw_commit": {"sha256": sha(raw), "git_object_sha1": source_commit,
+        revision.upstream_base_commit, revision.source_commit, "--", ".")
+    require(patch and patch == assets["base.patch"],
+            "base patch does not match exact committed source")
+    receipt = strict_json(assets["source-receipt.json"])
+    if revision.archive_kind is ArchiveKind.GIT_TAR_UMASK_022_V1:
+        from source_proof_capsule import validate_semver_receipt
+        payloads = validate_semver_receipt(receipt, assets["source-receipt.json"], assets, revision, files)
+    else:
+        payloads = archive_proof(assets["source.tar"], files)
+        receipt_proof(receipt, revision, payloads, files)
+    manifest = {"schema": 1, "status": "SOURCE_ONLY", "tool": revision.role.value,
+        "source_ref": source_ref, "source_commit": revision.source_commit, "source_tree": revision.source_tree,
+        "upstream_base_commit": revision.upstream_base_commit, "tag": revision.tag,
+        "tag_target": revision.tag_target, "repository": REPO, "source_receipt": receipt,
+        "raw_commit": {"sha256": sha(raw), "git_object_sha1": revision.source_commit,
                        "dco_signoffs": signoffs, "cryptographic_signature": None},
         "assets": {name: {"sha256": sha(data), "size": len(data)} for name, data in assets.items()},
         "behavioral_qualification": None, "signed_build_provenance": None}

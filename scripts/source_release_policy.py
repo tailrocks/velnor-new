@@ -7,7 +7,9 @@ Main checks may fail: this policy never claims runtime or CI qualification.
 import json
 import re
 
+import source_publication_records as records
 from source_publication import REPO, require
+from source_publication_records import ReviewedSourceRevision
 
 MAIN_ID = 24396608
 TAG_ID = 24397132
@@ -40,8 +42,13 @@ def reviewed_ruleset(actual, expected):
             "live protection constraints differ from reviewed ruleset")
 
 
-def verify_protection(api, tag):
-    require(re.fullmatch(r"owned-source-(?:mise|mbx-action)-[0-9a-f]{40}", tag),
+def verify_protection(api, revision: ReviewedSourceRevision):
+    reviewed = records.REVISIONS.get((revision.role.value, revision.source_commit)) \
+        if isinstance(revision, ReviewedSourceRevision) else None
+    require(isinstance(revision, ReviewedSourceRevision) and
+            reviewed is revision and
+            revision.tag == "owned-source-" + revision.role.value + "-" + revision.source_commit and
+            re.fullmatch(r"owned-source-(?:mise|mbx-action|semver-checker)-[0-9a-f]{40}", revision.tag),
             "unreviewed source tag shape")
     require(api("").get("default_branch") == "main", "default branch changed")
     reviewed_ruleset(api("rulesets/" + str(MAIN_ID)), MAIN)
