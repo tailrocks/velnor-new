@@ -10,6 +10,7 @@ import {homedir} from 'node:os'
 import path from 'node:path'
 import {compilerIdentity, preinstalledInputs, verifiedPreinstalledMbx, type MbxInstallation} from './preinstalled.js'
 import {cacheTransportUnavailable, comparisonExportResult, prepareComparisonPath, requireComparisonFile, validateComparisonMode} from './comparison.js'
+import {validateExportGroup} from './export-group.js'
 import {
   aliasedInput,
   type BundleForm,
@@ -327,6 +328,7 @@ async function main(): Promise<void> {
   }
   const backend = parseBackend(core.getInput('backend'))
   const githubCacheMode = parseGithubCacheMode(core.getInput('github-cache-mode'))
+  const requestedExportGroup = validateExportGroup(core.getInput('export-group'), backend, githubCacheMode)
   const targetCache = backend === 'github' && githubCacheMode === 'target'
   const comparisonFile = core.getInput('comparison-state')
   validateComparisonMode(comparisonFile, preinstalled, backend, githubCacheMode)
@@ -408,7 +410,7 @@ async function main(): Promise<void> {
   }
   const exportGroup =
     githubCacheMode === 'objects'
-      ? `github-actions-${context.runId}-${context.runAttempt}-${randomUUID()}`
+      ? requestedExportGroup || `github-actions-${context.runId}-${context.runAttempt}-${randomUUID()}`
       : ''
   if (exportGroup) core.exportVariable('MBX_CACHE_EXPORT_GROUP', exportGroup)
   if (githubCacheMode === 'target') {
@@ -519,7 +521,9 @@ async function main(): Promise<void> {
   }
   if (comparisonFile) {
     await requireComparisonFile(comparisonFile)
-    core.saveState(COMPARISON_DIGEST_STATE, createHash('sha256').update(await readFile(comparisonFile)).digest('hex'))
+    const comparisonDigest = createHash('sha256').update(await readFile(comparisonFile)).digest('hex')
+    core.saveState(COMPARISON_DIGEST_STATE, comparisonDigest)
+    core.setOutput('comparison-state-sha256', comparisonDigest)
   }
   const hit = restoredKey === primaryKey
   core.setOutput('cache-hit', hit ? 'true' : 'false')

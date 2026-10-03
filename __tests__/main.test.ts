@@ -1,16 +1,16 @@
 import {createHash} from 'node:crypto'
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest'
-import {chmod, mkdtemp, rm, writeFile} from 'node:fs/promises'
+import {chmod, mkdtemp, readFile, rm, writeFile} from 'node:fs/promises'
 import {tmpdir} from 'node:os'
 import path from 'node:path'
 
-const mocks = vi.hoisted(() => ({inputs: {} as Record<string, string>, state: {} as Record<string, string>, exec: vi.fn(), restore: vi.fn(), failed: vi.fn(), warning: vi.fn(), info: vi.fn(), context: {runId: 1, runAttempt: 1, eventName: 'push', ref: 'refs/heads/main', sha: 'abc', payload: {repository: {default_branch: 'main'}}}}))
+const mocks = vi.hoisted(() => ({inputs: {} as Record<string, string>, state: {} as Record<string, string>, output: vi.fn(), environment: vi.fn(), exec: vi.fn(), restore: vi.fn(), failed: vi.fn(), warning: vi.fn(), info: vi.fn(), context: {runId: 1, runAttempt: 1, eventName: 'push', ref: 'refs/heads/main', sha: 'abc', payload: {repository: {default_branch: 'main'}}}}))
 vi.mock('@actions/core', () => ({
   getState: () => '', getInput: (name: string) => mocks.inputs[name] || '',
   getMultilineInput: () => ['linux-x64-mbx-qualified-'], getBooleanInput: (name: string) => mocks.inputs[name] === 'true',
   saveState: (name: string, value: string) => { mocks.state[name] = value },
   setFailed: mocks.failed, warning: mocks.warning, info: mocks.info,
-  addPath: vi.fn(), exportVariable: vi.fn(), setOutput: vi.fn(), setSecret: vi.fn(), debug: vi.fn(),
+  addPath: vi.fn(), exportVariable: mocks.environment, setOutput: mocks.output, setSecret: vi.fn(), debug: vi.fn(),
   summary: {addDetails: () => ({write: async () => {}})}
 }))
 vi.mock('@actions/cache', () => ({restoreCache: mocks.restore, ValidationError: class ValidationError extends Error {}}))
@@ -58,10 +58,29 @@ async function invoke() {
   await vi.waitFor(() => expect(mocks.failed.mock.calls.length > 0 || mocks.state['mbx-post'] === 'github-save').toBe(true))
 }
 describe('strict object transport main', () => {
+  it('uses the supported caller group for workload receipts and post export', async () => {
+    const group = 'velnor-mbx-b3-554e69d4f330d0f2fd13e6860553d49303071f172e3b686aadfab7ec3d67ec57-r37012391691-a1'
+    mocks.inputs['export-group'] = group
+    await invoke()
+    expect(mocks.failed).not.toHaveBeenCalled()
+    expect(mocks.environment).toHaveBeenCalledWith('MBX_CACHE_EXPORT_GROUP', group)
+    expect(mocks.state['mbx-cache-export-group']).toBe(group)
+  })
+  it('rejects an invalid group before baseline creation or exporting its environment', async () => {
+    mocks.inputs['export-group'] = '../group'
+    await invoke()
+    expect(mocks.failed).toHaveBeenCalledWith(expect.objectContaining({message: expect.stringContaining('export-group')}))
+    expect(mocks.exec.mock.calls.some(call => call[1][1] === 'comparison-state')).toBe(false)
+    expect(mocks.environment.mock.calls.some(call => call[0] === 'MBX_CACHE_EXPORT_GROUP')).toBe(false)
+    expect(mocks.restore).not.toHaveBeenCalled()
+  })
   it('records imported baseline digest and never installs an executable', async () => {
     await invoke()
     expect(mocks.failed).not.toHaveBeenCalled()
     expect(mocks.state['mbx-comparison-sha256']).toMatch(/^[0-9a-f]{64}$/)
+    const digest = createHash('sha256').update(await readFile(path.join(directory, 'baseline'))).digest('hex')
+    expect(mocks.output).toHaveBeenCalledWith('comparison-state-sha256', digest)
+    expect(mocks.state['mbx-comparison-sha256']).toBe(digest)
     expect(mocks.state['mbx-bin']).toBe(mocks.inputs['mbx-path'])
     expect(mocks.exec.mock.calls.some(call => call[1][1] === 'import')).toBe(true)
   })
@@ -72,6 +91,9 @@ describe('strict object transport main', () => {
     expect(mocks.warning).toHaveBeenCalledWith(expect.stringContaining('cold comparison baseline'))
     expect(mocks.exec.mock.calls.filter(call => call[1][1] === 'comparison-state')).toHaveLength(2)
     expect(mocks.state['mbx-cache-hit']).toBe('false')
+    const digest = createHash('sha256').update(await readFile(path.join(directory, 'baseline'))).digest('hex')
+    expect(mocks.output).toHaveBeenCalledWith('comparison-state-sha256', digest)
+    expect(mocks.state['mbx-comparison-sha256']).toBe(digest)
   })
   it('continues cold on a classified cache transport outage', async () => {
     mocks.restore.mockRejectedValue(Object.assign(new Error('offline'), {code: 'ECONNRESET'}))
@@ -93,6 +115,7 @@ describe('strict object transport main', () => {
     await invoke()
     expect(mocks.failed).toHaveBeenCalled()
     expect(mocks.restore).not.toHaveBeenCalled()
+    expect(mocks.output.mock.calls.some(call => call[0] === 'comparison-state-sha256')).toBe(false)
   })
   it('keeps comparison dispatch keys semantic without a run identifier', async () => {
     mocks.context.eventName = 'workflow_dispatch'

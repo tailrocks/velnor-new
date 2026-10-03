@@ -25,6 +25,9 @@ inputs:
   comparison-state:
     description: Absolute owner comparison-state path; requires strict preinstalled mbx and GitHub objects mode; save only useful semantic delta
     required: false
+  export-group:
+    description: Owner export group for GitHub objects mode; 1-256 lowercase ASCII letters, digits, dots, underscores, or hyphens, starting with a letter or digit; omitted uses a unique run group
+    required: false
   github-token:
     description: GitHub token used to resolve mbx release metadata
     default: ${{ github.token }}
@@ -89,9 +92,11 @@ outputs:
   cache-primary-key:
     description: Primary GitHub cache key used by the action
   cache-save-eligible:
-    description: Whether the GitHub backend may attempt a save after a successful job; an exact cache hit or an empty payload still skips it
+    description: Whether the GitHub backend may attempt a save after a successful job; without comparison-state an exact cache hit skips saving; comparison-state saves only useful owner delta; empty payloads skip saving
   cache-save-reason:
     description: Why the GitHub backend may or may not save, such as "fork pull request"
+  comparison-state-sha256:
+    description: SHA-256 of the final owner comparison baseline before workload tasks; emitted only with comparison-state; baseline integrity metadata, not provenance
   mbx-version:
     description: Installed mbx version
 
