@@ -91,6 +91,10 @@ RUN chmod 0755 /usr/local/bin/velnor-runner-entrypoint /usr/local/bin/velnor-tar
     && mkdir -p /tmp/tar-out \
     && tar -xzf /tmp/tar-probe.tgz -C /tmp/tar-out \
     && test "$(cat /tmp/tar-out/dir/file)" = ok \
+    && mkdir -p /tmp/tar-old \
+    && tar xz -C /tmp/tar-old -f /tmp/tar-probe.tgz \
+    && test "$(cat /tmp/tar-old/dir/file)" = ok \
+    && tar --zstd --version \
     && echo cache-ok > /tmp/tar-src/g4-cache.txt \
     && printf '%s\n' g4-cache.txt > /tmp/tar-manifest \
     && tar --posix -cf /tmp/cache.tgz --exclude cache.tgz -P -C /tmp/tar-src --files-from /tmp/tar-manifest -z \
@@ -101,7 +105,7 @@ RUN chmod 0755 /usr/local/bin/velnor-runner-entrypoint /usr/local/bin/velnor-tar
     && mkdir -p /tmp/tar-zstd-out \
     && tar -xf /tmp/cache.tzst -P -C /tmp/tar-zstd-out --use-compress-program unzstd \
     && test "$(cat /tmp/tar-zstd-out/g4-cache.txt)" = cache-ok \
-    && rm -rf /tmp/tar-src /tmp/tar-out /tmp/tar-probe.tgz /tmp/tar-manifest /tmp/cache.tgz /tmp/cache.tzst /tmp/tar-cache-out /tmp/tar-zstd-out
+    && rm -rf /tmp/tar-src /tmp/tar-out /tmp/tar-old /tmp/tar-probe.tgz /tmp/tar-manifest /tmp/cache.tgz /tmp/cache.tzst /tmp/tar-cache-out /tmp/tar-zstd-out
 
 # Job steps call `node` on PATH. Action JavaScript uses the runner's own runtime.
 RUN curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL -o /tmp/node.tar.gz \

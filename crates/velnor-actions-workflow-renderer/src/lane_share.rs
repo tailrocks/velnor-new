@@ -68,7 +68,7 @@ pub(crate) fn share_lanes(
                 "lane_body_differs:{logical}"
             )));
         };
-        let uses = format!("./.github/actions/{logical}");
+        let uses = format!("$/.github/actions/{logical}");
         files.push(composite_file(logical, &common, ctx)?);
         calls.insert(hosted_id.clone(), uses.clone());
         calls.insert(local_id.clone(), uses);
@@ -306,7 +306,7 @@ mod tests {
         );
         assert!(yaml.contains("runs-on: ubuntu-26.04"));
         assert!(yaml.contains("runs-on: [velnor, ubuntu-26.04-scale-set]"));
-        assert!(yaml.contains("uses: ./.github/actions/rust-0"));
+        assert!(yaml.contains("uses: $/.github/actions/rust-0"));
         assert_eq!(shared.files.len(), LOGICAL_JOBS);
         for file in &shared.files {
             assert!(
