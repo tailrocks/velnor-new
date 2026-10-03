@@ -10,7 +10,7 @@ import unittest
 from unittest.mock import patch
 
 
-SOURCE = Path(__file__).resolve().parent
+SOURCE = Path(__file__).resolve().parents[2] / "src" / "oci"
 ADMISSION_SOURCE = SOURCE.parents[2] / "velnor-actions-orchestrator" / "src" / "release_admission.py"
 NAMES = (
     "oci_delivery.py", "oci_digest.py", "oci_digest_parts.py", "oci_index_receipt.py",

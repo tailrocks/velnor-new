@@ -9,7 +9,7 @@ import types
 import sys
 import unittest
 
-DIRECTORY = pathlib.Path(__file__).parent
+DIRECTORY = pathlib.Path(__file__).resolve().parents[2] / "src" / "oci"
 for module_name in ("oci_digest", "oci_archive"):
     module = types.ModuleType(module_name)
     sys.modules[module_name] = module

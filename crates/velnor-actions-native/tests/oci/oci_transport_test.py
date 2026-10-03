@@ -14,7 +14,7 @@ import zipfile
 
 
 def load(name):
-    path = Path(__file__).with_name(name + ".py")
+    path = Path(__file__).resolve().parents[2] / "src" / "oci" / (name + ".py")
     spec = importlib.util.spec_from_file_location(name, path)
     module = importlib.util.module_from_spec(spec)
     sys.modules[name] = module
