@@ -330,7 +330,7 @@ fn assert_macos_producer(body: &str) -> TestResult {
     assert!(build.contains("rust@1.98.1"), "{build}");
     assert!(!body.contains("ubuntu"));
     assert!(body.contains(
-        "cargo build --locked --manifest-path crates/velnor-runner/Cargo.toml --release -p velnor-host"
+        "cargo build --locked --manifest-path crates/velnor-runner/Cargo.toml --release -p velnor-runner-cli"
     ));
     assert!(body.contains("Mach-O"));
     assert!(body.contains("arm64"));

@@ -2,7 +2,6 @@
 
 pub(super) const IMAGE_RELEASE: &str = r#"name: Image release
 "on":
-  push: {}
   workflow_dispatch: {}
 permissions:
   contents: read
@@ -78,7 +77,6 @@ jobs:
 
 pub(super) const MACOS_RELEASE: &str = r#"name: macOS binary release
 "on":
-  push: {}
   workflow_dispatch: {}
 permissions:
   contents: read
@@ -106,7 +104,7 @@ jobs:
       - name: Install pinned Rust
         run: "set -eu\nmise --no-config --no-env --no-hooks install rust@1.98.1"
       - name: Build velnor-host
-        run: "set -eu\nmise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo build --locked --manifest-path crates/velnor-runner/Cargo.toml --release -p velnor-host\ncp crates/velnor-runner/target/release/velnor-host velnor-host\ntest -s velnor-host"
+        run: "set -eu\nmise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo build --locked --manifest-path crates/velnor-runner/Cargo.toml --release -p velnor-runner-cli\ncp crates/velnor-runner/target/release/velnor-host velnor-host\ntest -s velnor-host"
       - name: Verify Mach-O architecture
         run: "set -eu\ndesc=\"$(file -b velnor-host)\"\ncase \"$desc\" in\n  *Mach-O*arm64*) ;;\n  *) echo \"not an arm64 Mach-O: $desc\" >&2; exit 1 ;;\nesac"
       - name: Checksum built bytes
