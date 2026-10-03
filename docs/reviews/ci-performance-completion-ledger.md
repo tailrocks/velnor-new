@@ -1,8 +1,8 @@
 # CI performance completion ledger
 
 Status: **OPEN**. Snapshot: 2026-10-03; recorded PR/source HEAD
-`577694ab65150631cd318ef3819ba97c7a85f895` plus concurrent uncommitted work.
-This local commit has DCO signoff, no `gpgsig` header.
+`1dcd0791e90abb0e5b758556f0746d0f061c994e` plus concurrent uncommitted work.
+This pushed commit has DCO signoff, no `gpgsig` header.
 No final source qualification, fresh hosted sequence, runtime promotion or consumer
 rollout is established by this ledger. Refresh identities after freezing the head.
 
@@ -23,6 +23,51 @@ Unknown metrics remain `null`/unknown; historical green CI and merge waivers are
 separate evidence. No repository currently receives `PERF_VERIFIED` here.
 
 ## Current observed blockers
+
+Later pushed units are `ec89e630cde905754669e269a85fdccb2072fb11`
+(isolated Git clone fixture), `eefb3187360ab50b57c35fe2607ad8965fa7ccfe`
+(SHA test-build optimization), and `1dcd0791e90abb0e5b758556f0746d0f061c994e`
+(closed source publisher with replayable proofs). All have DCO signoffs and Codex
+coauthor trailers, no cryptographic commit signatures; all are ancestors of the
+recorded remote qualification branch. Source-publisher implementation supplies
+no hosted tool/generator runtime grant or consumer performance qualification.
+
+Bounded hosted attempt-1 observations supersede the older CI blocker snapshot:
+
+| PR head / integration checkout | Run / orchestrator job | Orchestrator suite | CLI / Required / baseline |
+|---|---|---|---|
+| `ec89e63…` / `adab4bb576cdd7936961d203e0a523d6d2005341` | [37094038593](https://github.com/tailrocks/velnor-new/actions/runs/37094038593) / [111120453098](https://github.com/tailrocks/velnor-new/actions/runs/37094038593/job/111120453098) | 1061 PASS, zero skipped; 551.061 s | 17 stale freshness entries; CLI FAIL, Required FAIL, baseline skipped |
+| `1dcd079…` / `22d9aa6a60b00febe7c8af30b5354c4fc56f723d` | [37096868863](https://github.com/tailrocks/velnor-new/actions/runs/37096868863) / [111128721442](https://github.com/tailrocks/velnor-new/actions/runs/37096868863/job/111128721442) | 1061 PASS, zero skipped; 57.898 s | 17 stale freshness entries; CLI FAIL, Required FAIL, baseline skipped |
+
+Both use base `c57c700…` and image `20260927.149.1`, but distinct runner IDs,
+changed source/context and 11 additional publisher Python files. All 1061 passed
+test identities match; the 15 unsafe-manifest negative cases remain. These are
+unpaired observations, with CPU model/features/count and actual hosted compiler
+optimization flags unavailable; no paired Linux speedup, percentile, qualified
+runtime or consumer performance claim follows. Declared SHA test optimization is
+3 in the later source; local compiler-artifact proof remains separate.
+Private `hosted-1dcd/comparison.json` under `/tmp/velnor-sha2-profile-ec89/` has
+SHA256 `849fc7456c9af6ea253a1a9cc1f80eeaa37db71d27e92bec6e8d44a20150907e`;
+actual independent `review.json` (not the earlier navigation name
+`independentreview.json`) has SHA256
+`f676dde3075763d1afeaebc4706e4e56237cc0516f673ea84555d683b72cf5cd`.
+Reviewer `orchestrator_hosted_hotspot/profile_review` cleared this bounded proof.
+PR receipts `/tmp/velnor-pr12-ci-evidence-{ec89e63,1dcd079}.json` bind raw APIs,
+workflow bytes and archives; independent rehash found zero mismatches in 21 files.
+
+Local MBX native receipt `/tmp/velnor-mbx-native-exportv2-final/execution-receipt.json`
+has SHA256 `6872edc5d57276885af7834d482bf228cd1cb142405680f2b3f58ed18ab921f5`:
+interfaces passed, store 127 PASS and Cargo library 32 PASS plus a nested one-test
+run. Four CLI/lineage/useful/session `--bin` filters each executed **zero tests**;
+command success does not prove those suites. Status is
+`commands_passed_coverage_incomplete`, `qualification_passed=false`; corrective
+`--lib` recipe remains unexecuted at this receipt boundary. No runtime grant.
+
+Root-index audit `/tmp/velnor-index-reconcile-1dcd-1791002992307301000.json`
+(SHA256 `5d4b12ead16f15aed086fd6f4ce7df40284c1288e1b4f5198b8920013bfc556f`)
+retains raw drift: 11 publisher entries changed stat fields, while all 1188
+semantic entries match the exact `1dcd079…` tree. Actor attribution is unproven;
+the recorded semantic equivalence does not erase or attribute the raw change.
 
 The earlier recorded commit `6209c06…` fixed Git branch grammar and pinned-gate
 issues; it is not the complete remediation source. Its [PR CI run 37075875245](https://github.com/tailrocks/velnor-new/actions/runs/37075875245)
@@ -192,7 +237,7 @@ isolated namespaces and validation flows; never benchmark production publication
 | Security §5 | [Independent review](ci-performance-security-review.md); cache-mode server support vs pinned validator rejection is documented, not permission to bypass | security_review / final code/generated outputs + T13–16/T18/T26; preserve default PR read-only and release protection |
 | Telemetry §8 | Actual compiler CPU/fresh/link/build-script/rustdoc, payload bytes, queue/provision and full critical path remain unknown where unavailable | qualification / extend existing reports with supported diagnostics and exact layer/session identities; redact private data |
 | Statistics/budgets §7.3 | Three hosted runs not yet done; no p95; local timings only local | qualification / paired comparable sample initially20 for percentile claims, disclose outliers/queue/failures; investigate warm >120s; transport costs vs avoided work |
-| Deterministic repo gates | Focused local checks exist; recorded PR head `6209c06d87c2f7e41ff162b77cc51e0c99989eec` CI failed; final integrated fmt/clippy/nextest/alint/deny/freshness not yet established | parent / serialize complete checks at frozen head, record commands/results and failures honestly |
+| Deterministic repo gates | Focused local checks exist; latest recorded PR head `1dcd0791e90abb0e5b758556f0746d0f061c994e` CI failed (CLI stale17, Required); final integrated fmt/clippy/nextest/alint/deny/freshness not yet established | parent / serialize complete checks at frozen head, record commands/results and failures honestly |
 | Official runtime | [Runtime audit](ci-performance-runtime-audit.md): old asset integrity matches, provenance incomplete/missing supported target | release_restore, qualification / qualified actual default branch, complete supported-target assets, exact source/digests/attestation/approvals; immutable new version |
 | Consumer waves | All47 below remain INCOMPLETE; no qualified generated rollout completed | parent, wave owners / first Jackin canary; A then B then C; requalify earlier waves after relevant generator changes |
 | Final feedback/closure | Earlier bounded audits do not approve final changes | parent, independent reviewers / re-fetch reviews/comments/replies/threads at final head; verified fixing commit links or evidenced rejection; verify integration and default branch separately |
