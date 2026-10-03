@@ -94,7 +94,7 @@ fn drive(state: &Path, config: &HostConfig) {
             return;
         }
     };
-    let Ok(pat) = std::str::from_utf8(secret.as_slice()) else {
+    let Some(pat) = credential_text(secret.as_slice()) else {
         eprintln!("keychain");
         pause();
         return;
@@ -120,6 +120,12 @@ fn finish_launch(report: &LaunchReport) {
     if report.workers.is_empty() {
         pause();
     }
+}
+
+fn credential_text(secret: &[u8]) -> Option<&str> {
+    let text = std::str::from_utf8(secret).ok()?;
+    let pat = text.trim();
+    if pat.is_empty() { None } else { Some(pat) }
 }
 
 fn split_repo(repository: &str) -> Option<(&str, &str)> {
@@ -154,6 +160,16 @@ mod tests {
         "platform = \"linux/amd64\"\n",
         "endpoint = \"unix:///var/run/docker.sock\"\n",
     );
+
+    #[test]
+    fn credential_text_trims_and_rejects_empty() {
+        assert_eq!(
+            super::credential_text(b"canary-token\n"),
+            Some("canary-token")
+        );
+        assert_eq!(super::credential_text(b"\n"), None);
+        assert_eq!(super::credential_text(&[0xff, 0xfe]), None);
+    }
 
     #[test]
     fn missing_config_waits() {
