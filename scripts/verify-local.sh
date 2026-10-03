@@ -191,7 +191,8 @@ else
       rm -f \
         "$STRIP/github/workflows/qualification.yml" \
         "$STRIP/github/workflows/image-release.yml" \
-        "$STRIP/github/workflows/macos-binary-release.yml"
+        "$STRIP/github/workflows/macos-binary-release.yml" \
+        "$STRIP/github/workflows/generator-release.yml"
       if [ -n "$BIN" ] && "$BIN" generate --output-dir "$GEN_DIR/tree" \
         >"/tmp/verify-local-generated-run.log" 2>&1 &&
         diff -r --brief "$STRIP/github" "$GEN_DIR/tree/.github" \
