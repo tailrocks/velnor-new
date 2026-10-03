@@ -142,7 +142,9 @@ where
     S: FnOnce(&str, &[u8]) -> F,
     F: Future<Output = Result<Started, HostError>>,
 {
-    ensure_runner(lane, ctx, journal, name, "scale", None, start).await
+    // Subject is this session's runner name. A shared "scale" row stayed Done
+    // and blocked every later statistics mint, so an assigned job never got a runner.
+    ensure_runner(lane, ctx, journal, name, name, None, start).await
 }
 
 fn taken<T>(lane: &mut T, ctx: &Drive, request_id: i64) -> Result<AcquireOutcome, SessionError>

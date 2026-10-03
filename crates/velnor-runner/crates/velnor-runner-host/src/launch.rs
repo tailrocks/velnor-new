@@ -25,6 +25,8 @@ mod gate;
 mod session;
 mod slot;
 mod steps;
+#[cfg(test)]
+mod subject_tests;
 mod trace;
 mod turn;
 
