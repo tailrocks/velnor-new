@@ -47,7 +47,7 @@ OFFICIAL_MISE_PINS = {
 OFFICIAL_MISE_HOSTS = {"x86_64-unknown-linux-gnu": "linux-x64",
                       "aarch64-unknown-linux-gnu": "linux-arm64.tar.gz",
                       "aarch64-apple-darwin": "macos-arm64.tar.gz"}
-# Exact measured authority: catalog_qualification_mbx.rs, release 401801734.
+# Exact measured authority: catalog_source_build_bootstrap.rs, release 401801734.
 OFFICIAL_MBX_ASSETS = {
     "x86_64-unknown-linux-gnu": {
         "url": "https://github.com/jdx/mr-boxington/releases/download/v1.21.1/mbx-x86_64-unknown-linux-gnu.tar.gz",
@@ -59,7 +59,7 @@ OFFICIAL_MBX_ASSETS = {
         "source_tree": "1158c764f3893bacbd3a2f3e51990a9de1cb3712"},
     "aarch64-unknown-linux-gnu": {
         "url": "https://github.com/jdx/mr-boxington/releases/download/v1.21.1/mbx-aarch64-unknown-linux-gnu.tar.gz",
-        "archive_sha256": "a783ff78192a3cd299cfbf2b4b8a8dc16b8142c7bb962e9e3a027b64085189b",
+        "archive_sha256": "a783ff78192a3cd299cfbf2b4b8a8dc16b8142c7bb962e9e3a027b64085189b8",
         "binary_sha256": "e39ab5b1617c9ac72108058d899d931c8d2f553a0e6ba31b95509c8b79260df4",
         "format": "tar.gz", "binary_member": "mbx", "version": "1.21.1",
         "source_repository": "https://github.com/jdx/mr-boxington",

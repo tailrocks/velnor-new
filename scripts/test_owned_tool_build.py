@@ -57,6 +57,24 @@ def fixture(tool="mise"):
 
 
 class SourceTests(unittest.TestCase):
+    def test_all_official_bootstrap_rows_have_complete_native_authority(self):
+        for tool in ("mise", "mbx"):
+            assets = source.official_assets(tool)
+            self.assertEqual(set(assets), set(source.HOSTS))
+            for target, asset in assets.items():
+                with self.subTest(tool=tool, target=target):
+                    for field in ("archive_sha256", "binary_sha256"):
+                        source.check_hash(asset[field])
+                        with self.assertRaises(ValueError):
+                            source.check_hash(asset[field][:-1])
+                    for field in ("source_commit", "source_tree"):
+                        self.assertRegex(asset[field], r"^[0-9a-f]{40}$")
+                        self.assertNotEqual(asset[field], "0" * 40)
+                    self.assertIn(asset["format"], ("standalone", "tar.gz"))
+                    member = "" if asset["format"] == "standalone" else (
+                        "mise/bin/mise" if tool == "mise" else "mbx")
+                    self.assertEqual(asset["binary_member"], member)
+
     def test_license_key_cannot_override_mandatory_lock_hash(self):
         spec = fixture()
         spec["lockfile_sha256"] = source.digest(b"wrong recorded lock")
