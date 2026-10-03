@@ -2,6 +2,7 @@
 
 mod args;
 mod compare;
+mod daemon_run;
 mod dispatch;
 mod service;
 

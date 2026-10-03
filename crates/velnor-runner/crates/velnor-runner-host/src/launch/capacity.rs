@@ -3,6 +3,8 @@
 //! `VELNOR_MAX_JOBS` is total capacity, not free slots. The poll header uses it.
 //! `VELNOR_ADMIT_TARGET`, when higher, is how many starts this session keeps polling for.
 
+use std::cell::Cell;
+
 use super::steps::Idle;
 
 const JOB_MAX: u32 = 8;
@@ -167,9 +169,39 @@ pub(crate) const fn needs_running(capacity: u32, target: u32, started: u32, idle
     }
 }
 
-/// `VELNOR_MAX_JOBS`. Unset, empty, zero, or unparsable is 1. Clamped to 1..=8.
+thread_local! {
+    static JOB_CAPACITY_OVERRIDE: Cell<Option<u32>> = const { Cell::new(None) };
+}
+
+/// Clears the thread-local capacity when dropped.
+#[must_use]
+pub(crate) struct CapacityGuard;
+
+impl Drop for CapacityGuard {
+    fn drop(&mut self) {
+        JOB_CAPACITY_OVERRIDE.with(|slot| slot.set(None));
+    }
+}
+
+/// Prefer `max_jobs` from the host file over `VELNOR_MAX_JOBS` on this thread.
+pub(crate) fn install_job_capacity(max_jobs: u32) -> CapacityGuard {
+    let clamped = if max_jobs == 0 {
+        1
+    } else {
+        max_jobs.min(JOB_MAX)
+    };
+    JOB_CAPACITY_OVERRIDE.with(|slot| slot.set(Some(clamped)));
+    CapacityGuard
+}
+
+/// Installed host capacity, else `VELNOR_MAX_JOBS`.
+///
+/// Unset, empty, zero, or unparsable env is 1. Clamped to 1..=8.
 #[must_use]
 pub(crate) fn job_capacity() -> u32 {
+    if let Some(value) = JOB_CAPACITY_OVERRIDE.with(Cell::get) {
+        return value;
+    }
     parse_job_capacity(std::env::var("VELNOR_MAX_JOBS").ok().as_deref())
 }
 
