@@ -2,7 +2,9 @@
 
 use std::io::Cursor;
 
-use crate::{HostError, import_secret, read_secret};
+#[cfg(target_os = "macos")]
+use crate::import_secret;
+use crate::{HostError, read_secret};
 
 #[test]
 fn read_secret_keeps_the_canary_out_of_errors() -> Result<(), HostError> {

@@ -245,14 +245,19 @@ pub(crate) fn parse(text: &str) -> Result<AlintConfig, Box<dyn Error>> {
             }
             continue;
         }
+        // Filtered `extends` nests past indent 2. `ignore` stays flat:
+        // a deeper `ignore` entry is a parse error, not a silent skip.
+        if section != "rules" {
+            if section != "extends" && indent > 2 {
+                return Err(format!("bad indent: {line}").into());
+            }
+            continue;
+        }
         if indent == 2 {
             let Some(rest) = line.strip_prefix("- ") else {
                 return Err(format!("bad indent: {line}").into());
             };
             path.clear();
-            if section != "rules" {
-                continue;
-            }
             let (key, value) = split_pair(rest)?;
             if key != "id" {
                 return Err(format!("expected `- id:`, saw {line}").into());

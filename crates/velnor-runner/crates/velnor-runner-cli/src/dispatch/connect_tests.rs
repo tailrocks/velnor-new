@@ -8,6 +8,7 @@ use clap::CommandFactory;
 
 use super::{ConnectRequest, connect_with};
 
+#[cfg(target_os = "macos")]
 const TEST_SERVICE: &str = "com.tailrocks.velnor.host.test";
 const EMPTY_SERVICE: &str = "com.tailrocks.velnor.host.test.empty";
 

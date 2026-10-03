@@ -107,7 +107,7 @@ impl VelnorConfig {
             _ => Err(ContractError::UnsupportedSchema {
                 field: "schema",
                 found: self.schema.to_string(),
-                expected: "1",
+                expected: "1 or 2",
             }),
         }
     }
