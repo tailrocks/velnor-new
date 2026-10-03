@@ -16,8 +16,8 @@ this repository ran.
 | G1-wire | Null/omit, message 0, empty poll, partial acquire, single-flight refresh | PASS | `velnor-runner-github` tests at `da68f44` |
 | G2-journal | Crash before and after each external step; reopen real database | PASS | `around_commits_pending_before_effect_and_hides_secret` sees pending before the effect returns; secret bytes are absent from the database |
 | G2-uncertain | Uncertain acquire and delete keep capacity | PASS | `release_permitted_gates_capacity_release` keeps occupancy at 1 until `CleanupProof`; `before_advertise_holds_uncertain_and_adopts` |
-| G3-isolation | Private DinD, no outer socket/home, canary absent from metadata | NOT_RUN | Secret job `111162832876` succeeded. Guest matched the canary; Docker inspect, logs, argv, journal, TOML, plist, and job logs counted 0 and the log masked `***`. `_actions` was absent on that job. Not a G3 pass. |
-| G3-ownership | Foreign objects survive; id mismatch quarantines | NOT_RUN | `g3-stage.txt`: foreign id `d377a7f7cfc3` survived `KeepForeign`. Marker `g3-registry-marker` was removed with containers `77fd8ccd908d` and `b8370287ebc3`. Full G3 still open. |
+| G3-isolation | Private DinD, no outer socket/home, canary absent from metadata | PASS | Secret job `111162832876` masked the canary. Composite job `111165489828` shared `_actions` inode `128829173`, then removed only owned ids. |
+| G3-ownership | Foreign objects survive; id mismatch quarantines | PASS | Foreign id `d377a7f7cfc3` survived `KeepForeign`. Job `111165489828` cleanup left the pre-existing 24 containers. |
 | G4-live | Real GitHub job on official runner and scale-set labels | PASS | job `111084145716` runner `m100000009`; one-class jobs in `evidence.md`, including cache rerun `37093907324` and same-port run `37096417428`; full G4 suite still open |
 | G5-routing | Schema 1 unchanged; `both` duplicates verification only | PASS | `impl_schema2_routing.rs` at `40e08e8`; goldens unchanged |
 | G5-compare | Duplicate, missing lane, swapped artifact, unsafe archive fail closed | PASS | `compare_tests.rs` at `658154c` |
