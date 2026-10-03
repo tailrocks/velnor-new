@@ -2,7 +2,6 @@
 
 use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_contract::config::{SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL};
-use velnor_actions_contract::workflow::ir::CACHE_MODE_PUSH_WRITE_EXPR;
 use velnor_actions_contract::workflow::lanes::{HOSTED_SUFFIX, SCALE_SUFFIX};
 use velnor_actions_workflow_renderer::steps::{
     MBX_CACHE_MODE_ENV, checkout_step, mbx_objects_step,
@@ -24,12 +23,13 @@ fn action_step_env_renders_only_when_present() -> Result<(), RenderError> {
         &fixture_ctx(),
     )?;
     assert!(
-        text.contains(&format!(
-            "{MBX_CACHE_MODE_ENV}: {CACHE_MODE_PUSH_WRITE_EXPR}"
-        )),
-        "MBX save mode stays push-only:\n{text}"
+        text.contains(&format!("{MBX_CACHE_MODE_ENV}: read")),
+        "action post stays restore-only:\n{text}"
     );
-    assert_eq!(text.matches("env:").count(), 2, "job + step env:\n{text}");
+    assert!(
+        !text.contains("&& 'write'"),
+        "push writes must not come from the action post:\n{text}"
+    );
     assert!(
         text.contains("MBX_GC_AUTO: \"1\""),
         "MBX jobs enable GC:\n{text}"
@@ -50,6 +50,10 @@ fn action_step_env_renders_only_when_present() -> Result<(), RenderError> {
     assert!(
         !cargo_text.contains("MBX_GC_AUTO"),
         "Cargo-only jobs do not receive MBX policy:\n{cargo_text}"
+    );
+    assert!(
+        !cargo_text.contains("Export MBX single bundle"),
+        "Cargo-only jobs do not export an MBX bundle:\n{cargo_text}"
     );
     Ok(())
 }

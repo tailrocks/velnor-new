@@ -314,6 +314,8 @@ fn merged_jobs(
     support::check_candidate_invariants(&jobs)?;
     support::check_final_gate(&jobs)?;
     support::check_token_hygiene(&jobs)?;
+    crate::mbx_bundle::append_single_bundle_saves(&mut jobs)?;
+    support::check_token_hygiene(&jobs)?;
     Ok(jobs)
 }
 

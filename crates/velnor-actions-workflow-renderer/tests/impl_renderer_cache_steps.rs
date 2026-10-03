@@ -1,7 +1,7 @@
 //! Gate 4 renderer cases: MBX objects, cache actions, lane target dirs.
 
 use velnor_actions_contract::cachekey::mbx_cache_generation;
-use velnor_actions_contract::workflow::ir::CACHE_MODE_PUSH_WRITE_EXPR;
+
 use velnor_actions_contract::{Step, StepKind};
 use velnor_actions_workflow_renderer::steps::{
     CompileDriver, MBX_CACHE_MODE_ENV, TOOLS_CACHE_PATH, TOOLS_RESTORE_NAME, TOOLS_SAVE_NAME,
@@ -357,8 +357,8 @@ fn mbx_objects_step_gates_save_to_push_via_cache_mode() {
         };
         assert_eq!(
             env.get(MBX_CACHE_MODE_ENV).map(String::as_str),
-            Some(CACHE_MODE_PUSH_WRITE_EXPR),
-            "every MBX step pins the push-only cache mode"
+            Some("read"),
+            "the action stays restore-only so its post cannot triple the store"
         );
     }
     assert!(
@@ -367,9 +367,4 @@ fn mbx_objects_step_gates_save_to_push_via_cache_mode() {
             .is_none(),
         "cargo drivers emit no MBX step to gate"
     );
-    // The mode expression must branch on the event: a constant `write`
-    // would reopen PR saves, a constant `read` would break push saves.
-    assert!(CACHE_MODE_PUSH_WRITE_EXPR.contains("github.event_name == 'push'"));
-    assert!(CACHE_MODE_PUSH_WRITE_EXPR.contains("'write'"));
-    assert!(CACHE_MODE_PUSH_WRITE_EXPR.contains("'read'"));
 }

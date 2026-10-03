@@ -23,6 +23,7 @@ pub mod guard;
 mod lane_share;
 pub mod marker;
 mod matrix;
+mod mbx_bundle;
 mod mbx_gc_policy;
 pub mod msrv;
 pub mod overlap;
