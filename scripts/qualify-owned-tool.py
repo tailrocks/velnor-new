@@ -16,6 +16,7 @@ import tempfile
 
 from owned_tool_source import BASES, check_hash, descriptor, strict_json, validate_receipt
 from owned_tool_behavior import MISE_ABI, native_host_target, valid_mise_cases
+from source_qualification_execution import API_EVIDENCE_FILES, validate_execution_evidence
 
 
 def require(condition, message):
@@ -65,7 +66,7 @@ def admit_artifact(directory, receipt, receipt_digest, helpers):
     raw = helpers.read_regular(directory / "artifact-admission.json")
     admission = strict_json(raw)
     closed(admission, "schema status artifact_id artifact_name api_digest workflow tool target "
-           "candidate_receipt_sha256 binary_container behavioral_qualification")
+           "execution candidate_receipt_sha256 binary_container behavioral_qualification")
     workflow = {key: receipt["workflow"][key] for key in ("commit", "run_id", "run_attempt")}
     name = f"owned-candidate-{workflow['run_id']}-{workflow['run_attempt']}-{receipt['tool']}-{receipt['target']}"
     require(type(admission["schema"]) is int and admission["schema"] == 1 and
@@ -80,7 +81,12 @@ def admit_artifact(directory, receipt, receipt_digest, helpers):
     require(isinstance(admission["api_digest"], str) and
             admission["api_digest"].startswith("sha256:"), "artifact API ZIP digest missing")
     check_hash(admission["api_digest"][len("sha256:"):])
-    return admission, hashlib.sha256(raw).hexdigest()
+    api_documents = {key: helpers.read_regular(directory / name)
+                     for key, name in API_EVIDENCE_FILES.items()}
+    execution = validate_execution_evidence(admission["execution"], api_documents)
+    require({key: execution[key] for key in workflow} == workflow,
+            "execution API origin differs from candidate workflow identity")
+    return admission, hashlib.sha256(raw).hexdigest(), api_documents
 
 
 def admit(arguments, helpers):
@@ -123,8 +129,9 @@ def admit(arguments, helpers):
     artifact = dict(receipt["artifact"], target=arguments.target)
     helpers.validate_archive(data, artifact, arguments.tool, receipt["source"])
     receipt_digest = hashlib.sha256(raw).hexdigest()
-    admission, admission_digest = admit_artifact(directory, receipt, receipt_digest, helpers)
-    return receipt, data, receipt_digest, admission, admission_digest
+    admission, admission_digest, api_documents = admit_artifact(
+        directory, receipt, receipt_digest, helpers)
+    return receipt, data, receipt_digest, admission, admission_digest, api_documents
 
 
 def write_exclusive(path, receipt):
@@ -139,13 +146,14 @@ def write_exclusive_bytes(path, content):
 
 
 def qualify(arguments):
+    execution_directory = arguments.receipt.parent / ("execution-" + arguments.target)
     require(arguments.receipt.absolute() != arguments.report.absolute(),
             "receipt and native report destinations must differ")
     require(not any(path.exists() or path.is_symlink()
-                    for path in (arguments.receipt, arguments.report)),
+                    for path in (arguments.receipt, arguments.report, execution_directory)),
             "qualification destination already exists")
     helpers = archive_helpers()
-    receipt, archive, input_digest, admission, admission_digest = admit(arguments, helpers)
+    receipt, archive, input_digest, admission, admission_digest, api_documents = admit(arguments, helpers)
     require(arguments.tool == "mise", "MBX native qualification is unavailable")
     with tempfile.TemporaryDirectory(prefix="owned-native-qualification-") as temporary:
         root = Path(temporary).resolve()
@@ -179,9 +187,14 @@ def qualify(arguments):
             "schema": 1, "passed": passed, "abi": MISE_ABI,
             "target": arguments.target, "candidate_receipt_sha256": input_digest,
             "artifact_admission": admission, "artifact_admission_sha256": admission_digest,
+            "execution_evidence": {"directory": execution_directory.name,
+                                   "api_sha256": admission["execution"]["api_sha256"]},
             "report_sha256": hashlib.sha256(report_bytes).hexdigest(),
             "cases": len(report["results"]), "report": report,
             "limitation": "Digest validation does not seal exec against concurrent path mutation."}
+        execution_directory.mkdir(mode=0o700)
+        for key, filename in API_EVIDENCE_FILES.items():
+            write_exclusive_bytes(execution_directory / filename, api_documents[key])
         write_exclusive_bytes(arguments.report, report_bytes)
         write_exclusive(arguments.receipt, receipt)
         require(passed, "native behavioral qualification failed; failed receipt preserved")

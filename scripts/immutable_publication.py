@@ -53,7 +53,7 @@ def stage_evidence(snapshot, manifest, directory, read_regular, gh, verify):
     (snapshot / "source-receipt.json").write_bytes(receipt)
     stage_qualified_evidence(snapshot, manifest, directory, read_regular)
     canonical = (json.dumps(manifest, sort_keys=True, separators=(",", ":")) + "\n").encode()
-    (snapshot / "manifest.json").write_bytes(canonical)
+    (snapshot / "owned-tool-manifest.json").write_bytes(canonical)
     for artifact in manifest["artifacts"]:
         path = snapshot / artifact["name"]
         gh("attestation", "download", str(path), "--repo", REPO,
@@ -75,12 +75,23 @@ def verify_tag(gh, manifest):
             "release tag does not identify the trusted workflow commit")
 
 
+def asset_ids(assets, names):
+    require(isinstance(assets, list) and len(assets) == len(names) and
+            all(isinstance(asset, dict) and isinstance(asset.get("name"), str) and
+                type(asset.get("id")) is int and asset["id"] > 0 for asset in assets) and
+            {asset["name"] for asset in assets} == set(names), "release asset set or typed IDs mismatch")
+    result = {asset["name"]: asset["id"] for asset in assets}
+    require(len(set(result.values())) == len(result), "duplicate release asset IDs")
+    return result
+
+
 def verify_release(gh, manifest, release_id, expected, draft):
     release = decode(gh("api", PREFIX + "releases/" + str(release_id)))
     assets = release.get("assets")
-    require(release.get("id") == release_id and release.get("draft") is draft and
-            release.get("tag_name") == manifest["tag"] and isinstance(assets, list) and
-            len(assets) == len(expected) and {asset["name"]: asset["id"] for asset in assets} == expected,
+    require(type(release.get("id")) is int and release["id"] == release_id and
+            release.get("target_commitish") == manifest["workflow_commit"] and
+            release.get("prerelease") is False and release.get("draft") is draft and
+            release.get("tag_name") == manifest["tag"] and asset_ids(assets, expected) == expected,
             "release identity, tag, state or exact assets changed")
     if not draft:
         require(release.get("immutable") is True, "published release is not immutable")
@@ -103,30 +114,53 @@ def verify_downloads(snapshot, manifest, gh, verify, validate, expected):
                snapshot / ("download-attestation-" + artifact["target"] + ".jsonl"))
 
 
+def create_draft(snapshot, manifest, gh):
+    payload = {"tag_name": manifest["tag"], "target_commitish": manifest["workflow_commit"],
+        "name": manifest["tag"], "draft": True, "prerelease": False,
+        "generate_release_notes": False, "make_latest": "false", "body": "Owned source build artifacts with associated signed evidence."}
+    path = snapshot / ".release-create.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    try:
+        created = decode(gh("api", "--method", "POST", PREFIX + "releases", "--input", str(path)))
+    finally:
+        path.unlink()
+    require(type(created.get("id")) is int and created["id"] > 0 and
+            created.get("draft") is True and created.get("prerelease") is False and
+            created.get("tag_name") == manifest["tag"] and
+            created.get("target_commitish") == manifest["workflow_commit"] and created.get("assets") == [],
+            "release creation must return the exact new empty draft identity")
+    return created["id"]
+
+
+def generator_latest(gh):
+    latest = decode(gh("api", PREFIX + "releases/latest"))
+    require(type(latest.get("id")) is int and latest["id"] > 0 and
+            isinstance(latest.get("tag_name"), str) and
+            not latest["tag_name"].startswith(("owned-source-", "mise-v", "mbx-v")),
+            "owned source/tool releases cannot become generator latest")
+
+
 def publish_snapshot(snapshot, manifest, gh, verify, validate):
     immutable_enabled(gh)
+    generator_latest(gh)
     tag = manifest["tag"]
     require_absent(gh, PREFIX + "git/ref/tags/" + tag)
     require_absent(gh, PREFIX + "releases/tags/" + tag)
-    gh("release", "create", tag, "--repo", REPO, "--target",
-       manifest["workflow_commit"], "--draft", "--title", tag,
-       "--notes", "Owned source build artifacts with associated signed evidence.")
+    gh("api", "--method", "POST", PREFIX + "git/refs",
+       "--raw-field", "ref=refs/tags/" + tag, "--raw-field", "sha=" + manifest["workflow_commit"])
+    release_id = create_draft(snapshot, manifest, gh)
     verify_tag(gh, manifest)
     names = sorted(path.name for path in snapshot.iterdir())
     for name in names:
         gh("release", "upload", tag, str(snapshot / name), "--repo", REPO)
-    release = decode(gh("api", PREFIX + "releases/tags/" + tag))
-    release_id = release.get("id")
-    require(type(release_id) is int and release_id > 0, "invalid release identity")
-    assets = release.get("assets")
-    require(isinstance(assets, list) and len(assets) == len(names) and
-            {asset["name"] for asset in assets} == set(names), "release asset set mismatch")
-    expected = {asset["name"]: asset["id"] for asset in assets}
-    require(len(set(expected.values())) == len(expected), "duplicate release asset IDs")
+    release = decode(gh("api", PREFIX + "releases/" + str(release_id)))
+    require(release.get("id") == release_id, "created release identity changed")
+    expected = asset_ids(release.get("assets"), names)
     verify_release(gh, manifest, release_id, expected, True)
     verify_downloads(snapshot, manifest, gh, verify, validate, expected)
     immutable_enabled(gh)
     verify_release(gh, manifest, release_id, expected, True)
     gh("api", "--method", "PATCH", PREFIX + "releases/" + str(release_id),
-       "--field", "draft=false")
+       "--field", "draft=false", "--raw-field", "make_latest=false")
     verify_release(gh, manifest, release_id, expected, False)
+    generator_latest(gh)

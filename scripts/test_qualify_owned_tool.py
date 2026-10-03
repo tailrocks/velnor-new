@@ -14,6 +14,7 @@ from unittest.mock import patch
 
 from owned_tool_behavior import MISE_CASES
 from owned_tool_source import BASES, HOSTS
+from source_qualification_execution import API_EVIDENCE_FILES, PREFIX, WORKFLOW_PATH, admit_execution
 
 
 def load(name, filename):
@@ -52,6 +53,9 @@ class QualifierAdmissionTests(unittest.TestCase):
         self.target = QUALIFIER.native_target()
         self.env = patch.dict(os.environ, GITHUB_SHA="3" * 40, GITHUB_RUN_ID="11",
                               GITHUB_RUN_ATTEMPT="2", OWNED_TOOL_TARGET=self.target,
+                              GITHUB_REF="refs/heads/main", GITHUB_EVENT_NAME="workflow_dispatch",
+                              GITHUB_WORKFLOW_SHA="3" * 40,
+                              GITHUB_WORKFLOW_REF="tailrocks/velnor-new/" + WORKFLOW_PATH + "@refs/heads/main",
                               ImageOS="fixture-native-image", ImageVersion="fixture-v1")
         self.env.start()
         self.addCleanup(self.env.stop)
@@ -77,7 +81,22 @@ class QualifierAdmissionTests(unittest.TestCase):
         self.arguments = SimpleNamespace(tool="mise", target=self.target,
             candidate_directory=self.directory, receipt=self.root / "qualified.json",
             report=self.root / "native-report.json")
+        self.prepare_execution()
         self.save_candidate()
+
+    def prepare_execution(self):
+        repository = {"id": 99, "full_name": "tailrocks/velnor-new", "default_branch": "main"}
+        run = {"id": 11, "run_attempt": 2, "head_sha": "3" * 40,
+            "event": "workflow_dispatch", "head_branch": "main", "repository": repository,
+            "head_repository": repository, "path": WORKFLOW_PATH, "workflow_id": 55}
+        workflow = {"id": 55, "path": WORKFLOW_PATH}
+        self.api_documents = {"repository": json.dumps(repository).encode(),
+                              "run": json.dumps(run).encode(), "workflow": json.dumps(workflow).encode()}
+        endpoints = {PREFIX: "repository", PREFIX + "/actions/runs/11": "run",
+                     PREFIX + "/actions/workflows/55": "workflow"}
+        self.execution = admit_execution(lambda endpoint: self.api_documents[endpoints[endpoint]])
+        for key, filename in API_EVIDENCE_FILES.items():
+            (self.directory / filename).write_bytes(self.api_documents[key])
 
     def source_descriptor(self):
         directory = "https://github.com/tailrocks/velnor-new/releases/download/fixture-source"
@@ -129,6 +148,7 @@ class QualifierAdmissionTests(unittest.TestCase):
             "artifact_id": 77, "artifact_name": f"owned-candidate-11-2-mise-{self.target}",
             "api_digest": "sha256:" + "8" * 64,
             "workflow": {"commit": "3" * 40, "run_id": "11", "run_attempt": "2"},
+            "execution": self.execution,
             "tool": "mise", "target": self.target, "candidate_receipt_sha256": sha(raw),
             "binary_container": self.receipt["artifact"], "behavioral_qualification": None}
         self.save_admission()
@@ -141,12 +161,13 @@ class QualifierAdmissionTests(unittest.TestCase):
         return QUALIFIER.admit(self.arguments, QUALIFIER.archive_helpers())
 
     def test_real_builder_receipt_admits_with_nested_source_digest(self):
-        receipt, archive, digest, admission, admission_digest = self.admit()
+        receipt, archive, digest, admission, admission_digest, api_documents = self.admit()
         self.assertNotIn("source_receipt_sha256", receipt)
         self.assertEqual(receipt["source"]["receipt_sha256"], sha(self.source_receipt))
         self.assertEqual(sha(archive), receipt["artifact"]["archive_sha256"])
         self.assertEqual(digest, admission["candidate_receipt_sha256"])
         self.assertEqual(admission_digest, sha((self.directory / "artifact-admission.json").read_bytes()))
+        self.assertEqual(api_documents, self.api_documents)
         build = self.build_commands[2]
         self.assertEqual(build[0], str(self.root / "verified-bootstrap-mise"))
         self.assertIn(str(self.root / "verified-bootstrap-mbx"), build)
@@ -246,6 +267,10 @@ class QualifierAdmissionTests(unittest.TestCase):
         self.assertEqual(behavior["report_sha256"], sha(self.report_bytes))
         self.assertEqual(behavior["artifact_admission"], self.admission)
         self.assertEqual(behavior["cases"], len(MISE_CASES))
+        execution = self.arguments.receipt.parent / behavior["execution_evidence"]["directory"]
+        for key, filename in API_EVIDENCE_FILES.items():
+            self.assertEqual((execution / filename).read_bytes(), self.api_documents[key])
+        self.assertEqual(behavior["execution_evidence"]["api_sha256"], self.execution["api_sha256"])
 
     def test_preexisting_output_blocks_before_native_execution(self):
         self.arguments.report.write_bytes(b"keep")
@@ -303,6 +328,55 @@ class QualifierAdmissionTests(unittest.TestCase):
         if self.target == "x86_64-unknown-linux-gnu":
             other = {"system": "Darwin", "machine": "arm64"}
         self.reject_report_mutation("host", other)
+
+    def assert_origin_blocks_execution(self, exception=ValueError):
+        with patch.object(QUALIFIER.subprocess, "run") as run:
+            with self.assertRaises(exception):
+                QUALIFIER.qualify(self.arguments)
+            run.assert_not_called()
+        self.assertFalse(self.arguments.receipt.exists())
+
+    def test_legacy_admission_without_execution_rejected(self):
+        del self.admission["execution"]
+        self.save_admission()
+        self.assert_origin_blocks_execution()
+
+    def test_raw_execution_api_digest_drift_blocks_candidate(self):
+        path = self.directory / API_EVIDENCE_FILES["run"]
+        path.write_bytes(path.read_bytes() + b" ")
+        self.assert_origin_blocks_execution()
+
+    def test_forged_head_repository_with_updated_digest_blocks_candidate(self):
+        run = json.loads(self.api_documents["run"])
+        run["head_repository"] = {"id": 100, "full_name": "tailrocks/velnor-new"}
+        raw = json.dumps(run).encode()
+        (self.directory / API_EVIDENCE_FILES["run"]).write_bytes(raw)
+        self.admission["execution"]["api_sha256"]["run"] = sha(raw)
+        self.save_admission()
+        self.assert_origin_blocks_execution()
+
+    def test_missing_raw_execution_api_blocks_candidate(self):
+        (self.directory / API_EVIDENCE_FILES["workflow"]).unlink()
+        self.assert_origin_blocks_execution(FileNotFoundError)
+
+    def test_stale_execution_attempt_blocks_candidate(self):
+        self.admission["execution"]["run_attempt"] = "1"
+        self.save_admission()
+        self.assert_origin_blocks_execution()
+
+    def test_literal_candidate_push_origin_composes_with_builder_receipt(self):
+        ref = "refs/heads/owned-tool-candidates"
+        with patch.dict(os.environ, GITHUB_EVENT_NAME="push", GITHUB_REF=ref,
+                GITHUB_WORKFLOW_REF="tailrocks/velnor-new/" + WORKFLOW_PATH + "@" + ref):
+            run = json.loads(self.api_documents["run"])
+            run.update(event="push", head_branch="owned-tool-candidates")
+            self.api_documents["run"] = json.dumps(run).encode()
+            (self.directory / API_EVIDENCE_FILES["run"]).write_bytes(self.api_documents["run"])
+            endpoints = {PREFIX: "repository", PREFIX + "/actions/runs/11": "run",
+                         PREFIX + "/actions/workflows/55": "workflow"}
+            self.execution = admit_execution(lambda endpoint: self.api_documents[endpoints[endpoint]])
+            self.save_candidate()
+            self.assertEqual(self.admit()[3]["execution"]["ref"], ref)
 
 
 if __name__ == "__main__":

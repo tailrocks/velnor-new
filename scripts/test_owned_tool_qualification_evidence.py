@@ -7,7 +7,7 @@ import tempfile
 import unittest
 
 import owned_tool_qualification_evidence as Q
-from owned_tool_publication_test_fixtures import P, fixture
+from owned_tool_execution_test_fixtures import P, fixture, environment
 
 
 class EvidenceTests(unittest.TestCase):
@@ -26,11 +26,15 @@ class EvidenceTests(unittest.TestCase):
             output = root / "snapshot"
             output.mkdir()
             for name, data in files.items():
+                (root / name).parent.mkdir(parents=True, exist_ok=True)
                 (root / name).write_bytes(data)
-            Q.stage_qualified_evidence(output, manifest, root, P.read_regular)
-            self.assertEqual(len(list(output.iterdir())), 6)
+            Q.stage_qualified_evidence(output, manifest, root, P.read_regular, environment(manifest))
+            self.assertEqual(len(list(output.iterdir())), 15)
             for path in output.iterdir():
-                self.assertEqual(path.read_bytes(), files[path.name])
+                key = path.name
+                if key.startswith("execution-"):
+                    key = next(name for name in files if name.replace("/", "-") == key)
+                self.assertEqual(path.read_bytes(), files[key])
 
     def test_claim_requires_real_supported_abi_and_positive_closed_evidence(self):
         manifest, artifact, _, _ = self.records()
@@ -68,7 +72,7 @@ class EvidenceTests(unittest.TestCase):
             candidate = copy.deepcopy(receipt)
             mutation(candidate)
             with self.subTest(mutation=mutation), self.assertRaises(ValueError):
-                Q.validate_qualified(candidate, report, manifest, artifact)
+                Q.validate_qualified(candidate, report, manifest, artifact, environment(manifest))
 
     def test_report_exact_cases_and_measured_identity(self):
         _, artifact, receipt, report = self.records()
@@ -94,11 +98,12 @@ class EvidenceTests(unittest.TestCase):
                 output = root / "snapshot"
                 output.mkdir()
                 for name, data in files.items():
+                    (root / name).parent.mkdir(parents=True, exist_ok=True)
                     (root / name).write_bytes(data)
                 name = prefix + manifest["artifacts"][0]["target"] + ".json"
                 (root / name).write_bytes(b"tampered")
                 with self.assertRaisesRegex(ValueError, "evidence digest"):
-                    Q.stage_qualified_evidence(output, manifest, root, P.read_regular)
+                    Q.stage_qualified_evidence(output, manifest, root, P.read_regular, environment(manifest))
 
 
 if __name__ == "__main__":

@@ -14,6 +14,7 @@ import zipfile
 
 sys.path.insert(0, str(Path(__file__).parent))
 import owned_tool_source as source
+import source_qualification_execution as execution
 
 
 def load(name, path):
@@ -89,7 +90,20 @@ def environment(approved):
     return {"GITHUB_SHA": WORKFLOW["commit"], "GITHUB_RUN_ID": "123", "GITHUB_RUN_ATTEMPT": "2",
             "GH_TOKEN": "read-secret", "AWS_SECRET_ACCESS_KEY": "unrelated-secret",
             "OWNED_TOOL_TARGET": TARGET, "OWNED_TOOL_SOURCE_JSON": json.dumps(approved),
+            "GITHUB_EVENT_NAME": "workflow_dispatch", "GITHUB_REF": "refs/heads/main",
+            "GITHUB_WORKFLOW_SHA": WORKFLOW["commit"],
+            "GITHUB_WORKFLOW_REF": execution.REPOSITORY + "/" + execution.WORKFLOW_PATH + "@refs/heads/main",
             "GITHUB_WORKSPACE": "/unused/trusted-checkout"}
+
+
+def execution_api():
+    repository = {"id": 444, "full_name": execution.REPOSITORY, "default_branch": "main"}
+    run = {"id": 123, "run_attempt": 2, "head_sha": WORKFLOW["commit"], "head_branch": "main",
+           "event": "workflow_dispatch", "workflow_id": 555, "path": execution.WORKFLOW_PATH,
+           "repository": {"id": 444, "full_name": execution.REPOSITORY},
+           "head_repository": {"id": 444, "full_name": execution.REPOSITORY}}
+    workflow = {"id": 555, "path": execution.WORKFLOW_PATH}
+    return [json.dumps(item).encode() for item in (repository, run, workflow)]
 
 
 class DownloadTests(unittest.TestCase):
@@ -98,7 +112,7 @@ class DownloadTests(unittest.TestCase):
         data = zip_data(contents)
         item = metadata(data)
         with tempfile.TemporaryDirectory() as temporary, patch.dict(os.environ, environment(approved)), \
-                patch.object(download, "gh", side_effect=[json.dumps([{"artifacts": [item]}]), data]) as gh:
+                patch.object(download, "gh", side_effect=execution_api() + [json.dumps([{"artifacts": [item]}]), data]) as gh:
             destination = Path(temporary) / "candidate"
             record = download.download(NAME, destination)
             self.assertEqual(record["artifact_id"], 987)
@@ -108,9 +122,15 @@ class DownloadTests(unittest.TestCase):
             for name, payload in contents.items():
                 self.assertEqual((destination / name).read_bytes(), payload)
             self.assertTrue((destination / "artifact-admission.json").is_file())
-            self.assertEqual(gh.call_args_list[0].args[0], "repos/tailrocks/velnor-new/actions/runs/123/artifacts")
-            self.assertTrue(gh.call_args_list[0].kwargs["paginate"])
-            self.assertEqual(gh.call_args_list[1].args[0], "repos/tailrocks/velnor-new/actions/artifacts/987/zip")
+            self.assertEqual(gh.call_args_list[0].args[0], execution.PREFIX)
+            self.assertEqual(gh.call_args_list[1].args[0], execution.PREFIX + "/actions/runs/123")
+            self.assertEqual(gh.call_args_list[2].args[0], execution.PREFIX + "/actions/workflows/555")
+            self.assertEqual(gh.call_args_list[3].args[0], "repos/tailrocks/velnor-new/actions/runs/123/artifacts")
+            self.assertTrue(gh.call_args_list[3].kwargs["paginate"])
+            self.assertEqual(gh.call_args_list[4].args[0], "repos/tailrocks/velnor-new/actions/artifacts/987/zip")
+            documents = {key: (destination / filename).read_bytes()
+                         for key, filename in execution.API_EVIDENCE_FILES.items()}
+            execution.validate_execution_evidence(record["execution"], documents)
             env = gh.call_args_list[0].args[1]
             self.assertEqual(env["GH_TOKEN"], "read-secret")
             self.assertNotIn("AWS_SECRET_ACCESS_KEY", env)
@@ -145,13 +165,44 @@ class DownloadTests(unittest.TestCase):
         approved, _, _ = fixture()
         item = metadata(b"expected")
         with tempfile.TemporaryDirectory() as temporary, patch.dict(os.environ, environment(approved)), \
-                patch.object(download, "gh", side_effect=[json.dumps([{"artifacts": [item]}]), b"changed"]), \
+                patch.object(download, "gh", side_effect=execution_api() + [json.dumps([{"artifacts": [item]}]), b"changed"]), \
                 patch.object(download, "zip_members") as parse:
             destination = Path(temporary) / "candidate"
             with self.assertRaises(ValueError):
                 download.download(NAME, destination)
             parse.assert_not_called()
             self.assertFalse(destination.exists())
+
+    def test_actual_execution_api_mismatch_stops_before_artifact_api(self):
+        approved, _, _ = fixture()
+        api = execution_api()
+        run = json.loads(api[1])
+        run["head_repository"] = {"id": 999, "full_name": "fork/velnor-new"}
+        api[1] = json.dumps(run).encode()
+        with tempfile.TemporaryDirectory() as temporary, patch.dict(os.environ, environment(approved)), \
+                patch.object(download, "gh", side_effect=api) as gh:
+            destination = Path(temporary) / "candidate"
+            with self.assertRaises(ValueError):
+                download.download(NAME, destination)
+            self.assertEqual(gh.call_count, 2)
+            self.assertFalse(destination.exists())
+
+    def test_event_push_branch_is_bound_in_composed_download_evidence(self):
+        approved, contents, _ = fixture()
+        data = zip_data(contents)
+        api = execution_api()
+        run = json.loads(api[1])
+        run.update(event="push", head_branch=execution.CANDIDATE_BRANCH)
+        api[1] = json.dumps(run).encode()
+        env = {**environment(approved), "GITHUB_EVENT_NAME": "push",
+               "GITHUB_REF": "refs/heads/" + execution.CANDIDATE_BRANCH,
+               "GITHUB_WORKFLOW_REF": execution.REPOSITORY + "/" + execution.WORKFLOW_PATH +
+               "@refs/heads/" + execution.CANDIDATE_BRANCH}
+        with tempfile.TemporaryDirectory() as temporary, patch.dict(os.environ, env), \
+                patch.object(download, "gh", side_effect=api + [json.dumps([{"artifacts": [metadata(data)]}]), data]):
+            record = download.download(NAME, Path(temporary) / "candidate")
+            self.assertEqual(record["execution"]["event"], "push")
+            self.assertEqual(record["execution"]["head_branch"], execution.CANDIDATE_BRANCH)
 
     def test_zip_rejects_escape_symlink_duplicate_case_and_expansion(self):
         for contents in ({"../escape": b"bad"}, {"a/file": b"bad"}, {"a\\file": b"bad"},

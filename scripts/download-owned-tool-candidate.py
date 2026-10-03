@@ -14,6 +14,8 @@ import tarfile
 import tempfile
 import zipfile
 
+from source_qualification_execution import API_EVIDENCE_FILES, PREFIX, admit_execution
+
 from owned_tool_source import (HOSTS, canonical, check_hash, descriptor, digest,
                                recipe, recipe_sha, strict_json, validate_receipt)
 
@@ -62,9 +64,11 @@ def environment(root):
 
 
 def gh(endpoint, env, limit, paginate=False):
-    require(re.fullmatch(REPO + r"actions/(?:runs/[1-9][0-9]*/artifacts|artifacts/[1-9][0-9]*/zip)", endpoint),
+    require(endpoint == PREFIX or re.fullmatch(re.escape(REPO) +
+            r"actions/(?:runs/[1-9][0-9]*(?:/artifacts)?|workflows/[1-9][0-9]*|artifacts/[1-9][0-9]*/zip)", endpoint),
             "GitHub request must use exact owned artifact read endpoint")
-    require(not paginate or "/runs/" in endpoint, "only artifact listings may paginate")
+    require(not paginate or "/runs/" in endpoint and endpoint.endswith("/artifacts"),
+            "only artifact listings may paginate")
     argv = ["gh", "api", endpoint]
     if paginate:
         argv.extend(["--paginate", "--slurp"])
@@ -185,6 +189,8 @@ def download(name, output):
             "artifact destination must be outside trusted workflow checkout")
     with tempfile.TemporaryDirectory(prefix="owned-artifact-read-") as temporary:
         env = environment(Path(temporary))
+        api_documents = {}
+        execution = admit_execution(lambda endpoint: gh(endpoint, env, MAX_API), api_documents=api_documents)
         listing = gh(REPO + "actions/runs/" + workflow["run_id"] + "/artifacts", env, MAX_API, paginate=True)
         item = select_artifact(listing, name, workflow)
         data = gh(REPO + "actions/artifacts/" + str(item["id"]) + "/zip", env, MAX_ZIP)
@@ -193,6 +199,7 @@ def download(name, output):
     receipt = admit_contents(contents, source, target, workflow)
     admission = {"schema": 1, "status": "SAME_RUN_ARTIFACT_ADMITTED", "artifact_id": item["id"],
                  "artifact_name": name, "api_digest": item["digest"], "workflow": workflow,
+                 "execution": execution,
                  "tool": source["tool"], "target": target,
                  "candidate_receipt_sha256": digest(contents["candidate-receipt.json"]),
                  "binary_container": receipt["artifact"], "behavioral_qualification": None}
@@ -200,6 +207,9 @@ def download(name, output):
     output.mkdir(mode=0o700)
     for filename, payload in contents.items():
         with (output / filename).open("xb") as file:
+            file.write(payload)
+    for key, payload in api_documents.items():
+        with (output / API_EVIDENCE_FILES[key]).open("xb") as file:
             file.write(payload)
     with (output / "artifact-admission.json").open("x", encoding="utf-8") as file:
         file.write(json.dumps(admission, sort_keys=True, indent=2) + "\n")

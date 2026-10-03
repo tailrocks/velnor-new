@@ -16,7 +16,7 @@ from unittest.mock import patch
 import immutable_publication as I
 import owned_tool_source as S
 
-from owned_tool_publication_test_fixtures import P, fixture, archive, binary, receipt_bytes, attestation
+from owned_tool_execution_test_fixtures import P, fixture, archive, binary, receipt_bytes, attestation, environment
 
 
 class ValidationTests(unittest.TestCase):
@@ -118,6 +118,7 @@ class ValidationTests(unittest.TestCase):
                      lambda s: s["predicate"]["workflow"].update(run_attempt="2"),
                      lambda s: s["predicate"].update(schema=True),
                      lambda s: s["predicate"]["qualification"].update(passed=1),
+                     lambda s: s["predicate"]["qualification"].update(sourceartifact_execution_sha256="f" * 64),
                      lambda s: s["subject"][0]["digest"].update(sha256="0" * 64)]
         for mutation in mutations:
             proof = copy.deepcopy(attestation(manifest, artifact))
@@ -156,6 +157,20 @@ class ValidationTests(unittest.TestCase):
                                          P.verify_attestation)
                     command.assert_not_called()
 
+    def test_release_asset_ids_are_typed_unique_and_complete(self):
+        self.assertEqual(I.asset_ids([{"name": "a", "id": 1}], {"a"}), {"a": 1})
+        for assets in ([{"name": "a", "id": True}], [{"name": "a", "id": 0}],
+                       [{"name": "wrong", "id": 1}],
+                       [{"name": "a", "id": 1}, {"name": "b", "id": 1}]):
+            with self.assertRaises(ValueError):
+                I.asset_ids(assets, {"a", "b"} if len(assets) == 2 else {"a"})
+
+    def test_owned_source_or_tool_latest_rejected(self):
+        for tag in ("owned-source-mise-" + "a" * 40, "mise-v1.2.3-owned-test", "mbx-v1.2.3-owned-test"):
+            with patch.object(P, "gh", return_value=json.dumps({"id": 1, "tag_name": tag}).encode()):
+                with self.assertRaises(ValueError):
+                    I.generator_latest(P.gh)
+
     def test_only_404_allows_absence(self):
         for code in (401, 403, 500, 404):
             error = subprocess.CalledProcessError(1, ["gh"], stderr=f"gh: failed (HTTP {code})".encode())
@@ -177,6 +192,7 @@ class PublicationTests(unittest.TestCase):
         state = {"created": False, "draft": True}
         def release():
             return {"id": 42, "draft": state["draft"], "immutable": not immutable,
+                "target_commitish": manifest["workflow_commit"], "prerelease": False,
                 "tag_name": manifest["tag"], "assets": [{"id": i + 1, "name": name}
                 for i, name in enumerate(uploaded)]}
         def run(argv, **kwargs):
@@ -192,8 +208,15 @@ class PublicationTests(unittest.TestCase):
                 name = Path(args[2]).name
                 item = next(a for a in manifest["artifacts"] if a["name"] == name)
                 (Path(kwargs["cwd"]) / ("sha256:" + item["archive_sha256"] + ".jsonl")).write_bytes(b"signed-bundle")
-            elif args[:2] == ["release", "create"]:
+            elif args[:4] == ["api", "--method", "POST", "repos/" + P.REPO + "/releases"]:
+                request = json.loads(Path(args[args.index("--input") + 1]).read_text())
+                self.assertTrue(request["draft"])
+                self.assertEqual(request["make_latest"], "false")
+                self.assertEqual(request["target_commitish"], manifest["workflow_commit"])
                 state["created"] = True
+                data = json.dumps(release()).encode()
+            elif args[:4] == ["api", "--method", "POST", "repos/" + P.REPO + "/git/refs"]:
+                data = b"{}"
             elif args[:2] == ["release", "upload"]:
                 uploaded[Path(args[3]).name] = Path(args[3]).read_bytes()
             elif args[:3] == ["api", "--method", "PATCH"]:
@@ -202,6 +225,8 @@ class PublicationTests(unittest.TestCase):
                 endpoint = args[1]
                 if endpoint.endswith("immutable-releases"):
                     data = json.dumps({"enabled": not disabled}).encode()
+                elif endpoint.endswith("releases/latest"):
+                    data = json.dumps({"id": 1, "tag_name": "v0.1.0"}).encode()
                 elif not state["created"]:
                     return subprocess.CompletedProcess(argv, 0 if existing else 1,
                         stdout=b"{}", stderr=b"gh: Not Found (HTTP 404)")
@@ -212,6 +237,8 @@ class PublicationTests(unittest.TestCase):
                     name = list(uploaded)[int(endpoint.rsplit("/", 1)[1]) - 1]
                     bad = corrupt or (evidence_corrupt and name == "source-receipt.json")
                     data = b"corrupt" if bad else uploaded[name]
+                elif "releases/tags/" in endpoint:
+                    return subprocess.CompletedProcess(argv, 1, stdout=b"{}", stderr=b"gh: Not Found (HTTP 404)")
                 else:
                     data = json.dumps(release()).encode()
             return subprocess.CompletedProcess(argv, 0, stdout=data, stderr=b"")
@@ -220,10 +247,9 @@ class PublicationTests(unittest.TestCase):
             (root / "manifest.json").write_text(json.dumps(manifest))
             (root / "source-receipt.json").write_bytes(receipt_bytes(manifest))
             for name, data in files.items():
+                (root / name).parent.mkdir(parents=True, exist_ok=True)
                 (root / name).write_bytes(data)
-            env = {"GITHUB_EVENT_NAME": "workflow_dispatch", "GITHUB_REF": "refs/heads/main",
-                "GITHUB_REPOSITORY": P.REPO, "GITHUB_SHA": manifest["workflow_commit"],
-                "GITHUB_RUN_ID": "12", "GITHUB_RUN_ATTEMPT": "1"}
+            env = environment(manifest)
             with patch.dict(os.environ, env), patch.object(P.subprocess, "run", side_effect=run):
                 if any((corrupt, existing, tag_race, disabled, evidence_corrupt, immutable)):
                     with self.assertRaises(ValueError):
@@ -237,14 +263,16 @@ class PublicationTests(unittest.TestCase):
         self.assertEqual(sum(c[1:3] == ["attestation", "verify"] for c in commands), 9)
         promotion = next(c for c in commands if c[1:4] == ["api", "--method", "PATCH"])
         self.assertIn("draft=false", promotion)
+        self.assertEqual(promotion[promotion.index("--raw-field") + 1], "make_latest=false")
         self.assertEqual(commands[-1][1], "api")
         uploads = [Path(c[4]).name for c in commands if c[1:3] == ["release", "upload"]]
-        self.assertEqual(len(uploads), 14)
-        self.assertIn("manifest.json", uploads)
+        self.assertEqual(len(uploads), 23)
+        self.assertIn("owned-tool-manifest.json", uploads)
         self.assertIn("source-receipt.json", uploads)
-        create = next(c for c in commands if c[1:3] == ["release", "create"])
-        self.assertIn("--draft", create)
-        self.assertEqual(create[create.index("--target") + 1], "a" * 40)
+        create = next(c for c in commands if c[1:5] == ["api", "--method", "POST", "repos/" + P.REPO + "/releases"])
+        self.assertIn("--input", create)
+        creation = commands.index(create)
+        self.assertFalse(any("releases/tags/" in str(c) for c in commands[creation + 1:]))
         self.assertFalse(any("--clobber" in c for c in commands))
 
     def test_failed_verification_never_promotes(self):
