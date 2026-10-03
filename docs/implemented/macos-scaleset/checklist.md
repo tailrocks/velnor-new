@@ -17,12 +17,12 @@ this repository ran.
 | G2-journal | Crash before and after each external step; reopen real database | PASS | `around_commits_pending_before_effect_and_hides_secret` sees pending before the effect returns; secret bytes are absent from the database |
 | G2-uncertain | Uncertain acquire and delete keep capacity | PASS | `release_permitted_gates_capacity_release` keeps occupancy at 1 until `CleanupProof`; `before_advertise_holds_uncertain_and_adopts` |
 | G3-isolation | Private DinD, no outer socket/home, canary absent from metadata | NOT_RUN | `g3-matrix.txt`: private mounts and canary count 0; live exec missed because dummy JIT exited |
-| G3-ownership | Foreign objects survive; id mismatch quarantines | NOT_RUN | foreign id stayed; `delete_decision` is not wired to a public Docker delete |
+| G3-ownership | Foreign objects survive; id mismatch quarantines | NOT_RUN | foreign id stayed in `g3-matrix.txt`; `remove_recorded` deletes only a matching id in `stage_tests`; live id mismatch after that wiring is not re-proven |
 | G4-live | Real GitHub job on official runner and scale-set labels | PASS | job `111084145716` runner `m100000009`; one-class jobs in `evidence.md`, including cache rerun `37093907324` and same-port run `37096417428`; full G4 suite still open |
 | G5-routing | Schema 1 unchanged; `both` duplicates verification only | PASS | `impl_schema2_routing.rs` at `40e08e8`; goldens unchanged |
 | G5-compare | Duplicate, missing lane, swapped artifact, unsafe archive fail closed | PASS | `compare_tests.rs` at `658154c` |
 | G6-launchd | User LaunchAgent foreground `daemon run`; second daemon fails | PASS | `launchctl print gui/501` at 2026-10-03: absolute `daemon run`, `forks = 0`; second `daemon run` exit 1; bootout removed the job |
 | G6-binary | `velnor-host` help and not-ready status | PASS | `help_exits_success_and_a_bad_command_does_not`; status JSON `waiting_for_credentials` |
-| G7-publish | Published generator, image, and macOS binary consumed by ChainArgos | NOT_RUN | image `37101622880` publish failed (`not a git repository`); macOS `37101625217` cancelled; earlier `37101248625` lacked `GH_TOKEN` and `37101248540` used `-p velnor-host`; ChainArgos not updated |
+| G7-publish | Published generator, image, and macOS binary consumed by ChainArgos | NOT_RUN | image `37102027384` and macOS `37102029367` published GitHub release assets at `19a43f5` (no GHCR push); ChainArgos still pins generator `v0.1.0` |
 | G7-paired | Hosted baseline, N=1 canary, N=2, cold and warm paired runs | NOT_RUN | no consumer workflow run |
 | G8-merge | Final main uses pinned published generator; required checks kept | NOT_RUN | no promotion |

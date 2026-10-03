@@ -9,10 +9,12 @@ ack-without-start. Later one-class runs covered JavaScript, services,
 artifacts, Buildx, an expected failure, and the classes in the second table
 below, plus Compose, bind mounts, Testcontainers, submodules/LFS,
 same-port workers, and cancel-with-service in the third table. The full G4
-gate stays `NOT_RUN`. No ChainArgos rollout. `image-release.yml`
-and `macos-binary-release.yml` were dispatched once each and returned HTTP 404
-because those workflows are absent from the default branch. That attempt was
-not retried. G3, the full G4 suite, G7, and G8 stay `NOT_RUN`.
+gate stays `NOT_RUN`. No ChainArgos rollout. The first `image-release.yml`
+and `macos-binary-release.yml` dispatches returned HTTP 404 and were not
+retried. Later registered runs published GitHub release assets from `19a43f5`
+(image run `37102027384`, macOS run `37102029367`). Those assets are not a
+GHCR push, not a new generator, and not a ChainArgos pin. G3, the full G4
+suite, G7, and G8 stay `NOT_RUN`.
 
 ## Identities
 
@@ -211,7 +213,7 @@ Scratch: `g4-crash.txt`, `g4-crash-kill.txt`, `launch-crash-restart.log`. This i
 
 Runners were not privileged, user `runner`, no published ports, mounts only private volumes `/run` and `/home/runner/_work`. DinD was privileged with no published TCP. Canary and token needle counts were 0 in inspect env, cmd, labels, probe argv, and a read-only `launch.db`. A same-name foreign container with a different id stayed. `delete_decision` returned `KeepForeign`. `velnor-candidate` stayed 16 and `jackin` stayed 1.
 
-Not a pass: `start_pair` returns only after both containers exist, so nothing was killed between DinD create and runner start. The live runner exited 1 on dummy JIT before `docker exec` (`Unexpected character` from the entrypoint). Guest path checks used a commit of that container. `/home/runner/_temp` and `/home/runner/tools` were absent. There is no public Docker cleanup that applies `delete_decision` to a live id. Scratch: `g3-matrix.txt`. G3 stays `NOT_RUN`.
+Not a pass: `start_pair` returns only after both containers exist, so nothing was killed between DinD create and runner start. The live runner exited 1 on dummy JIT before `docker exec` (`Unexpected character` from the entrypoint). Guest path checks used a commit of that container. `/home/runner/_temp` and `/home/runner/tools` were absent. `remove_recorded` now applies `delete_decision` before remove, but this live attempt did not call it. Scratch: `g3-matrix.txt`. G3 stays `NOT_RUN`.
 
 ## Publish attempts
 
@@ -230,8 +232,23 @@ That push started both workflows at `f229bf685db2a4d296ae07159b9e250921ca17a1`:
 - Image release run [37101248625](https://github.com/tailrocks/velnor-new/actions/runs/37101248625) concluded `failure`. Build runner images and Attest runner images concluded `success`. Publish runner images exited 4: `gh` had no `GH_TOKEN`.
 - macOS binary release run [37101248540](https://github.com/tailrocks/velnor-new/actions/runs/37101248540) concluded `failure`. Build velnor-host exited 101: `package ID specification velnor-host did not match any packages`. The package is `velnor-runner-cli`. The binary name is `velnor-host`.
 
-Commit `784399d` selects `-p velnor-runner-cli` and removes `push: {}`. The workflow ids remained. `gh workflow run macos-binary-release.yml --ref macos-scaleset` created run [37101412470](https://github.com/tailrocks/velnor-new/actions/runs/37101412470) at `784399d`. That run was cancelled: its publish step still had no `GH_TOKEN`, so it would have failed the same way as `37101248625`. The publish step now sets `GH_TOKEN` to `${{ github.token }}` on the publish job only. At `ebb7767`, `workflow_dispatch` started image run [37101622880](https://github.com/tailrocks/velnor-new/actions/runs/37101622880) and macOS run [37101625217](https://github.com/tailrocks/velnor-new/actions/runs/37101625217). Image build and attest succeeded again. Publish exited 1: `failed to run git: fatal: not a git repository` because the publish job had not checked out a repository and `gh` ran inside `assets`. macOS run `37101625217` was cancelled so it would not fail the same way after the compile. The publish job now checks out the ref and passes `-R "$GITHUB_REPOSITORY"`. No release asset is recorded yet. ChainArgos was not updated. G7 and G8 stay `NOT_RUN`.
+Commit `784399d` selects `-p velnor-runner-cli` and removes `push: {}`. The workflow ids remained. `gh workflow run macos-binary-release.yml --ref macos-scaleset` created run [37101412470](https://github.com/tailrocks/velnor-new/actions/runs/37101412470) at `784399d`. That run was cancelled: its publish step still had no `GH_TOKEN`, so it would have failed the same way as `37101248625`. The publish step now sets `GH_TOKEN` to `${{ github.token }}` on the publish job only. At `ebb7767`, `workflow_dispatch` started image run [37101622880](https://github.com/tailrocks/velnor-new/actions/runs/37101622880) and macOS run [37101625217](https://github.com/tailrocks/velnor-new/actions/runs/37101625217). Image build and attest succeeded again. Publish exited 1: `failed to run git: fatal: not a git repository` because the publish job had not checked out a repository and `gh` ran inside `assets`. macOS run `37101625217` was cancelled so it would not fail the same way after the compile. The publish job now checks out the ref and passes `-R "$GITHUB_REPOSITORY"`. At `19a43f5`, `workflow_dispatch` started image run [37102027384](https://github.com/tailrocks/velnor-new/actions/runs/37102027384) and macOS run [37102029367](https://github.com/tailrocks/velnor-new/actions/runs/37102029367). Both concluded `success`. Publish created GitHub release tags, not a GHCR push (`push-to-registry=false`). Attest succeeded. Generator release `v0.1.0` was not modified. ChainArgos was not updated. G7 and G8 stay `NOT_RUN`.
+
+Tag `runner-19a43f57566c1179febb4a1c3967bfcde4f032aa` (published `2026-10-03T06:11:32Z`):
+
+- `velnor-runner-linux-amd64.tar` size `444593152` sha256 `b234cad0d2668376054660bca37922bc7cdf8ef34820bf18f5a59a7e5aadc04b`
+- `velnor-dind-linux-amd64.tar` size `140550144` sha256 `bd351b3c24fde1a3ef0c5a402964218c82e72e2b173f34ac49b756feea80496f`
+- `SHA256SUMS` size `190` sha256 `d771ec90656b166444b70c8e1c2ea9e3806963b6c337cc73c967577fd2a3ab32`
+
+The job's local manifest lists were `docker.io/library/velnor-runner:linux-amd64` `sha256:bb6637bbd31d68479865e234848f2aa30622745395b604271c6cf3c5c85d3d4c` and `docker.io/library/velnor-dind:linux-amd64` `sha256:5c0ba8062bf9bf762de7339ab607adf9cec997c7c24043f9265be3a04223c4ed`. Those digests are not pullable registry addresses.
+
+Tag `binary-19a43f57566c1179febb4a1c3967bfcde4f032aa` (published `2026-10-03T06:14:13Z`):
+
+- `velnor-host` size `1586048` sha256 `c9eb774d5c3e040d54e1765e28c82f1c97e93d85ab9c53bbf4aa5eec99a452f6`
+- `SHA256SUMS` size `78` sha256 `09505a51faf714868d6b0ad8edb643ff36cff869e9c46b63427dab0ca45d82ab`
+
+Scratch: `release-assets.log`. These assets do not include the later stage-stop commit.
 
 ## Not yet run
 
-No paired ChainArgos workflow. No published image or macOS binary beyond the existing `v0.1.0` generator assets. The first two release dispatches returned HTTP 404 and were not retried. Later runs `37101248625`, `37101248540`, and `37101412470` are in the publish section and are not a published asset. The named section 11 classes have job URLs above. Features dispatch `37097526498`, queue-pressure run `37098293064`, and crash run `37099950570` are recorded above. G4 stays `NOT_RUN` because the job log does not show the official runner cgroup compatibility check. The G3 matrix attempt is recorded and is not a pass. No promotion onto `main`.
+No paired ChainArgos workflow. Generator `v0.1.0` is unchanged. Image and macOS binaries from `19a43f5` are GitHub release assets in the publish section, not a GHCR image and not a consumer pin. The first two release dispatches returned HTTP 404 and were not retried. Runs `37101248625`, `37101248540`, and `37101412470` failed or were cancelled before those assets existed. The named section 11 classes have job URLs above. Features dispatch `37097526498`, queue-pressure run `37098293064`, and crash run `37099950570` are recorded above. G4 stays `NOT_RUN` because the job log does not show the official runner cgroup compatibility check. The G3 matrix attempt is recorded and is not a pass. No promotion onto `main`.
