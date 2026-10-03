@@ -170,14 +170,16 @@ fn sample_config(
 
 fn daemon(state: &Path, action: DaemonAction) -> ExitCode {
     match action {
-        DaemonAction::Run => match DaemonLock::try_acquire(&state.join("daemon.lock")) {
-            Ok(lock) => hold(&lock),
-            Err(_) => {
-                eprintln!("daemon already running");
-                ExitCode::from(1)
-            }
-        },
+        DaemonAction::Run => run_daemon(state),
     }
+}
+
+fn run_daemon(state: &Path) -> ExitCode {
+    if let Ok(lock) = DaemonLock::try_acquire(&state.join("daemon.lock")) {
+        return hold(&lock);
+    }
+    eprintln!("daemon already running");
+    ExitCode::from(1)
 }
 
 fn hold(lock: &DaemonLock) -> ExitCode {
