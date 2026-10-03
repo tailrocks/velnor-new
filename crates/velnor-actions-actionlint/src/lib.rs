@@ -12,6 +12,7 @@ pub mod config;
 pub mod error;
 pub mod metadata;
 pub mod overrides;
+pub mod self_repo;
 pub mod tools;
 pub mod zizmor;
 
@@ -35,6 +36,7 @@ pub use overrides::{
     ActionInputSchema, ActionPinOverride, ApprovedPin, ApprovedPinCatalog, checkout_inputs_schema,
     rust_cache_inputs_schema, validate_action_inputs,
 };
+pub use self_repo::{SELF_REPO_ACTION_IGNORE, append_self_repo_action_gap};
 pub use tools::{
     ActionlintToolchain, SHELLCHECK_VERSION, ShellcheckToolchain, WorkflowLintTools,
     ZizmorToolchain,
