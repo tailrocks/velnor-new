@@ -11,8 +11,8 @@
 #                     upstream evidence, deny policy; the live advisory scan
 #                     runs in CI, not here)
 #   generated-tree    build the CLI, `generate --output-dir` to a temp dir,
-#                     and `diff -r` the staged `.github` tree (mirrors the CI
-#                     "Check generated files" step)
+#                     and `diff -r` schema-1 files. Schema-2 workflow files are
+#                     left out of that diff and locked by the orchestrator test.
 #   clippy-<crate>    per-crate pinned `cargo clippy --all-targets -- -D warnings`
 #   test-<crate>      per-crate pinned `cargo test` (unit plus integration plus doc)
 #   doctest-<crate>   per-crate pinned `cargo test --doc` for crates with library
@@ -150,6 +150,22 @@ pass "toolchain"
 # --- fmt -----------------------------------------------------------------
 stage fmt "${MISE_EXEC[@]}" cargo fmt --all --check
 
+# Nested runner workspace. Root `cargo --workspace` excludes it
+# (`exclude = ["crates/velnor-runner"]`). cargo-deny 0.20.2 matches
+# `CARGO_DENY_VERSION`; that pin rejects `--locked`.
+RUNNER_MANIFEST="crates/velnor-runner/Cargo.toml"
+if [ -f "$RUNNER_MANIFEST" ]; then
+  stage runner-fmt "${MISE_EXEC[@]}" cargo fmt --manifest-path "$RUNNER_MANIFEST" --all -- --check
+  stage runner-clippy "${MISE_EXEC[@]}" cargo clippy --manifest-path "$RUNNER_MANIFEST" --locked --workspace --all-targets -- -D warnings
+  if [ "${#NEXTEST_RUN[@]}" -gt 0 ]; then
+    stage runner-nextest "${NEXTEST_RUN[@]}" run --manifest-path "$RUNNER_MANIFEST" --locked --workspace
+  else
+    stage runner-test "${MISE_EXEC[@]}" cargo test --manifest-path "$RUNNER_MANIFEST" --locked --workspace
+  fi
+  stage runner-doctest "${MISE_EXEC[@]}" cargo test --manifest-path "$RUNNER_MANIFEST" --locked --workspace --doc
+  stage runner-deny mise exec "cargo-deny@0.20.2" -- cargo deny --manifest-path "$RUNNER_MANIFEST" check
+fi
+
 # --- repo policy -----------------------------------------------------------
 stage repo-policy scripts/check-freshness.sh
 
@@ -166,18 +182,32 @@ else
     if [ -z "$BIN" ] && [ -n "${CARGO_TARGET_DIR:-}" ]; then
       BIN="$(find "$CARGO_TARGET_DIR/debug" "$CARGO_TARGET_DIR/release" -maxdepth 1 -name velnor-actions -type f 2>/dev/null | head -n 1)"
     fi
-    if [ -n "$BIN" ] && "$BIN" generate --output-dir "$GEN_DIR/tree" \
-      >"/tmp/verify-local-generated-run.log" 2>&1 &&
-      diff -r --brief .github "$GEN_DIR/tree/.github" \
-        >"/tmp/verify-local-generated-diff.log" 2>&1; then
-      pass "generated-tree"
+    # Schema 1 does not emit these. They are schema-2 generator bytes.
+    STRIP="$(mktemp -d 2>/dev/null || true)"
+    if [ -z "$STRIP" ]; then
+      fail "generated-tree (mktemp failed)"
     else
-      fail "generated-tree (see /tmp/verify-local-generated-*.log)"
+      cp -R .github "$STRIP/github"
+      rm -f \
+        "$STRIP/github/workflows/qualification.yml" \
+        "$STRIP/github/workflows/image-release.yml" \
+        "$STRIP/github/workflows/macos-binary-release.yml"
+      if [ -n "$BIN" ] && "$BIN" generate --output-dir "$GEN_DIR/tree" \
+        >"/tmp/verify-local-generated-run.log" 2>&1 &&
+        diff -r --brief "$STRIP/github" "$GEN_DIR/tree/.github" \
+          >"/tmp/verify-local-generated-diff.log" 2>&1; then
+        pass "generated-tree"
+      else
+        fail "generated-tree (see /tmp/verify-local-generated-*.log)"
+      fi
     fi
   else
     fail "generated-tree (build failed: /tmp/verify-local-generated-build.log)"
   fi
   rm -rf "$GEN_DIR"
+  if [ -n "${STRIP:-}" ]; then
+    rm -rf "$STRIP"
+  fi
 fi
 
 # --- per-crate clippy, tests, doctests, docs ---------------------------------

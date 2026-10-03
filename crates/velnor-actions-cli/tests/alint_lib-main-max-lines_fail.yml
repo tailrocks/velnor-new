@@ -91,6 +91,8 @@ rules:
       include:
         - "crates/velnor-actions-*/src/**/*.rs"
         - "crates/velnor-actions-*/tests/**/*.rs"
+        - "crates/velnor-runner/crates/*/src/**/*.rs"
+        - "crates/velnor-runner/crates/*/tests/**/*.rs"
       exclude:
         - "**/fixtures/**"
         - "**/testdata/**"

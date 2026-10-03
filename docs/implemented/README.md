@@ -3,6 +3,8 @@
 This directory records implementation that has landed and passed its required
 acceptance checks. It is not a proposal or a list of work in progress.
 
+- [macOS Scale Set ledger](macos-scaleset/checklist.md) — G0–G8 for the Scale Set controller. Status lives in that directory, not in the V1 gate records below.
+
 ## Implementation records (Velnor Actions V1, Gates 0–8)
 
 Recorded on unmerged branch `docs/velnor-actions-spec` (suite counts and

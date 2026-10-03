@@ -5,3 +5,5 @@ config-variables: []
 self-hosted-runner:
   labels:
     - ubuntu-26.04
+    - velnor
+    - ubuntu-26.04-scale-set
