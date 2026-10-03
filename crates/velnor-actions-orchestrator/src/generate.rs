@@ -143,6 +143,7 @@ fn render_all(prep: &GenerationPreparation) -> Result<RenderedTree, Orchestrator
     let actionlint = rehead_actionlint_marker(&actionlint.yaml, version)?;
     let mut extra = crate::release_emit::release_files(prep, &mise)?;
     extra.extend(crate::freshness_emit::freshness_files(prep)?);
+    extra.extend(crate::foundation_qualification::files(prep)?);
     let tree = render_tree_with_extra(&workflow, &actionlint, &extra, version)?;
     Ok(tree)
 }
