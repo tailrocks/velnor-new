@@ -239,10 +239,7 @@ fn assert_shared_identity(writer: &str, reader: &str) {
 fn assert_external_cache_actions(job: &str, writer: bool) {
     let restore = step_body(job, "Restore MBX single bundle");
     assert!(restore.contains(CACHE_RESTORE_PIN), "{restore}");
-    assert_eq!(
-        action_input_names(restore),
-        vec!["key", "path"]
-    );
+    assert_eq!(action_input_names(restore), vec!["key", "path"]);
     assert_eq!(
         job.matches("uses: actions/cache/restore@").count(),
         1,
