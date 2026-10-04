@@ -180,7 +180,7 @@ impl ActionArchiveStore {
     ) -> Result<(), ActionArchiveSeedError> {
         let archive = staging.join(ARCHIVE_FILE);
         storage::copy_verified(source, &archive, identity)?;
-        validate_archive(&archive, identity.size)?;
+        validate_archive(&archive, identity.size, &identity.commit_sha)?;
         write_json(
             &staging.join("manifest.json"),
             &ObjectManifest {
@@ -222,6 +222,10 @@ impl ActionArchiveStore {
             return Err(ActionArchiveSeedError::StoreIntegrity);
         }
         verify_bytes(&path.join(ARCHIVE_FILE), identity)?;
-        validate_archive(&path.join(ARCHIVE_FILE), identity.size)
+        validate_archive(
+            &path.join(ARCHIVE_FILE),
+            identity.size,
+            &identity.commit_sha,
+        )
     }
 }
