@@ -36,7 +36,10 @@ pub(super) async fn poll_and_drive(
     trace::session(session);
     let mut workers = Vec::new();
     let capacity = capacity::job_capacity();
-    if let Some(started) = scale_if_free(journal, docker, capacity, || {
+    let population = session
+        .statistics()
+        .map_or(0, velnor_runner_github::Statistics::assigned_population);
+    if let Some(started) = scale_if_free(journal, docker, capacity, population, || {
         scale_session(link, set_id, session, admin_token, journal, docker)
     })
     .await?
@@ -67,13 +70,21 @@ pub(super) async fn scale_if_free<S, F>(
     journal: &Journal,
     docker: &bollard::Docker,
     capacity: u32,
+    population: i64,
     scale: S,
 ) -> Result<Option<Started>, EnsureError>
 where
     S: FnOnce() -> F,
     F: Future<Output = Result<Option<Started>, EnsureError>>,
 {
-    if slot::busy(journal, docker, capacity).await? {
+    let Ok(assigned) = u64::try_from(population) else {
+        return Ok(None);
+    };
+    if assigned == 0 {
+        return Ok(None);
+    }
+    let running = slot::running_count(journal, docker).await?;
+    if running >= capacity || u64::from(running) >= assigned {
         return Ok(None);
     }
     scale().await
