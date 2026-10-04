@@ -17,7 +17,7 @@ const RECEIPT_SCRIPT: &str = include_str!("schema2_mbx_resource_receipt.sh");
 const STOP_SCRIPT: &str = include_str!("schema2_mbx_resource_stop.sh");
 const SAMPLER: &str = include_str!("schema2_mbx_resource_sampler.sh");
 const PATH_VALIDATION: &str = include_str!("schema2_mbx_resource_path.sh");
-const SAMPLER_SHA256: &str = "106af1ca598e4738060e1833bc2cd907cdd8041ed7ba184bead49db77909ad9d";
+const SAMPLER_SHA256: &str = "f8ee1c598e2eae6814e2ec82d2c990ad7bce4cbe5ef90c51f1c7e74d537a592a";
 const PATH_VALIDATION_SHA256: &str =
     "1a73b2bc858d52af8cceaaf7e1dec8aedb2dc01618d05454d0cb862428fe5356";
 const PREUPLOAD_SCRIPT: &str = r#"set -euo pipefail

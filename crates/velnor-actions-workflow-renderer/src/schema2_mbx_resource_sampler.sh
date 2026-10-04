@@ -206,19 +206,19 @@ record_inventory_file() {
 
 hash_inventory_file() {
   local root_name="$1" dev="$2" ino="$3" nlink="$4" size="$5" blocks="$6" file="$7" escaped="$8"
-  local file_before file_after file_stat file_dev file_ino file_links file_size file_blocks file_type hash hash_output
+  local file_before file_after file_stat file_dev file_ino file_links file_size file_blocks file_mode hash hash_output
   if (( hash_bytes + size > max_hash_bytes )); then hash_cap_hit=true; return 0; fi
-  file_stat="$(stat -c '%d %i %h %s %b %F' -- "$file")" || { snapshot_status=1; return 1; }
-  read -r file_dev file_ino file_links file_size file_blocks file_type <<< "$file_stat"
-  if [[ -L "$file" || "$file_type" != 'regular file' || "$file_dev" != "$dev" ||
+  file_stat="$(stat -c '%d %i %h %s %b %f' -- "$file")" || { snapshot_status=1; return 1; }
+  read -r file_dev file_ino file_links file_size file_blocks file_mode <<< "$file_stat"
+  if [[ -L "$file" || ! "$file_mode" =~ ^[[:xdigit:]]+$ ]] || \
+    (( (16#$file_mode & 0xF000) != 0x8000 )) || [[ "$file_dev" != "$dev" ||
     "$file_ino" != "$ino" || "$file_links" != "$nlink" || "$file_size" != "$size" ||
     "$file_blocks" != "$blocks" || "$(realpath -e -- "$file" 2>/dev/null || true)" != "$file" ]]; then
     printf 'file_identity_changed_before_hash\t%s\n' "$escaped" >> "$evidence/inventory-errors.txt"
     snapshot_status=1
     return 1
   fi
-  file_before="${file_dev}:${file_ino}:${file_links}:${file_size}:${file_blocks}:${file_type}"
-  if ! hash_output="$(sha256sum -- "$file")"; then
+  file_before="${file_dev}:${file_ino}:${file_links}:${file_size}:${file_blocks}:${file_mode}"; if ! hash_output="$(sha256sum -- "$file")"; then
     printf 'sha256_failed\t%s\n' "$escaped" >> "$evidence/inventory-errors.txt"
     snapshot_status=1
     return 1
@@ -229,7 +229,7 @@ hash_inventory_file() {
     snapshot_status=1
     return 1
   fi
-  file_after="$(stat -c '%d:%i:%h:%s:%b:%F' -- "$file")" || { snapshot_status=1; return 1; }
+  file_after="$(stat -c '%d:%i:%h:%s:%b:%f' -- "$file")" || { snapshot_status=1; return 1; }
   [[ "$file_after" == "$file_before" && ! -L "$file" &&
     "$(realpath -e -- "$file" 2>/dev/null || true)" == "$file" ]] || {
     printf 'file_identity_changed_during_hash\t%s\n' "$escaped" >> "$evidence/inventory-errors.txt"
