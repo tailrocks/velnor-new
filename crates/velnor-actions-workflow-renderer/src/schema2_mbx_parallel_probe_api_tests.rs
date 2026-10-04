@@ -11,6 +11,8 @@ use super::{field, map_fields, pins, string};
 mod fixture_data;
 #[path = "schema2_mbx_parallel_probe_api_key_tests.rs"]
 mod key_tests;
+#[path = "schema2_mbx_parallel_probe_api_live_document_tests.rs"]
+mod live_document_tests;
 #[path = "schema2_mbx_parallel_probe_api_script_helpers.rs"]
 mod script_helpers;
 #[path = "schema2_mbx_parallel_probe_api_single_document_tests.rs"]

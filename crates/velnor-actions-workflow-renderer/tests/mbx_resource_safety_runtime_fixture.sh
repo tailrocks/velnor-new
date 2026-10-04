@@ -177,6 +177,8 @@ write_valid_receipts() {
 render_start
 source "$WORK/role-fixture.sh"
 verify_resource_role_classes
+source "$WORK/json-fixture.sh"
+verify_resource_json_parser
 
 setup_case evidence-existing
 mkdir -m 700 "$EVIDENCE"; printf foreign > "$EVIDENCE/private.marker"; printf keep > "$EVIDENCE/sentinel"
@@ -378,5 +380,8 @@ else
   cat "$EVIDENCE/qualification-errors.txt" >&2 2>/dev/null || true
 fi
 
+if (( FAILURES > 0 )); then printf 'runtime fixture failures: %s\n' "$FAILURES" >&2; exit 1; fi
+run_resource_json_rejections || fail 'resource JSON finalizer cases did not run'
+run_complete_observer_finalizers || fail 'observer finalizer cases did not run'
 if (( FAILURES > 0 )); then printf 'runtime fixture failures: %s\n' "$FAILURES" >&2; exit 1; fi
 printf 'all runtime safety cases passed\n'

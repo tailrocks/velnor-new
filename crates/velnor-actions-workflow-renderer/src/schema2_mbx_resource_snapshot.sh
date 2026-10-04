@@ -1,10 +1,12 @@
 set -euo pipefail
+umask 077
 evidence="$RUNNER_TEMP/mbx-cache-evidence"
 bash "$evidence/sampler.sh" "$evidence" "$RUNNER_TEMP" "$GITHUB_ENV" "$MBX_QUALIFICATION_SAMPLE_INTERVAL" snapshot "$MBX_PHASE"
+. "$evidence/path-validation.sh"
 capture_stats() {
   local base="$1" status=0
   shift
-  if "$@" > "$base.json" 2> "$base.stderr"; then :; else
+  if resource_capture_bounded "$evidence" "$base.json" "$@" 2> "$base.stderr"; then :; else
     status=$?
     printf 'exit_status=%s\n' "$status" >> "$base.stderr"
   fi

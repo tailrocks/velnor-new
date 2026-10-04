@@ -2,6 +2,9 @@ set -euo pipefail
 umask 077
 evidence="$RUNNER_TEMP/mbx-cache-evidence"
 bash "$evidence/sampler.sh" "$evidence" "$RUNNER_TEMP" "$GITHUB_ENV" "$MBX_QUALIFICATION_SAMPLE_INTERVAL" validate
+. "$evidence/path-validation.sh"
+resource_json_single_object "$evidence" "$evidence/mbx-cache-stats-import-step-end.json" || exit 1
+resource_json_single_object "$evidence" "$evidence/mbx-stats-build-end.json" || exit 1
 selected_root="${MBX_SELECTED_CACHE_ROOT:-${MBX_CACHE_DIR-}}"
 abandoned_root=''
 if [ -s "$evidence/original-cache-root.txt" ]; then

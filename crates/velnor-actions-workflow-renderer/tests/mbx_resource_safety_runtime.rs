@@ -14,13 +14,16 @@ use velnor_actions_workflow_renderer::{
 
 const START: &str = include_str!("../src/schema2_mbx_resource_start.sh");
 const SAMPLER: &str = include_str!("../src/schema2_mbx_resource_sampler.sh");
-const PATH_VALIDATION: &str = include_str!("../src/schema2_mbx_resource_path.sh");
+const PATH_VALIDATION: &str = concat!(
+    include_str!("../src/schema2_mbx_resource_path.sh"),
+    include_str!("../src/schema2_mbx_resource_json.sh"),
+);
 const STOP: &str = include_str!("../src/schema2_mbx_resource_stop.sh");
 const RECEIPT: &str = include_str!("../src/schema2_mbx_resource_receipt.sh");
 const CORRUPTOR: &str = include_str!("../src/schema2_mbx_corrupt_bundle.sh");
-const SAMPLER_SHA: &str = "b2a03511f0a36c6b7fca9fb4a95461676acbd54b82e1e902efa1313d3b8fcfd2";
+const SAMPLER_SHA: &str = "f3d6df852f9974733ae149d5ea048d850aac6c34f0e1d9ed22f34173e80c2a55";
 const PATH_VALIDATION_SHA: &str =
-    "5bcca14cce52a2d66891e384f6f9ab5a6b46819e8f9c30a6d1c779e665cf7ada";
+    "5afb3b3a0be3511b069371e84ee012dce25f6dd58130165eefb7cb547c1ada76";
 const LINUX_IMAGE: &str = concat!(
     "ghcr.io/actions/actions-runner@sha256:",
     "e5496277be5d09bc968b3d64911b74e219ac4a3f2edce956a3ecf9271bea1ef4"
@@ -31,6 +34,7 @@ const RUNTIME_PLATFORM_ENV: &str = "VELNOR_MBX_RUNTIME_PLATFORM";
 const FIXTURE: &str = include_str!("mbx_resource_safety_runtime_fixture.sh");
 const SESSION_FIXTURE: &str = include_str!("mbx_resource_safety_session_fixture.sh");
 const ROLE_FIXTURE: &str = include_str!("mbx_resource_safety_role_fixture.sh");
+const JSON_FIXTURE: &str = include_str!("mbx_resource_safety_json_fixture.sh");
 
 fn scratch_dir() -> std::io::Result<PathBuf> {
     let stamp = SystemTime::now()
@@ -185,6 +189,7 @@ fn fixed_scripts_reject_runtime_safety_regressions() -> std::io::Result<()> {
     write_script(&root, "corruptor.sh", CORRUPTOR)?;
     write_script(&root, "session-fixture.sh", SESSION_FIXTURE)?;
     write_script(&root, "role-fixture.sh", ROLE_FIXTURE)?;
+    write_script(&root, "json-fixture.sh", JSON_FIXTURE)?;
     let fixture = FIXTURE
         .replace("__SAMPLER_SHA__", SAMPLER_SHA)
         .replace("__PATH_VALIDATION_SHA__", PATH_VALIDATION_SHA);

@@ -24,8 +24,20 @@ const SHARED_SCOPE: &str = "qualification-mbx-v1/parallel/shared";
 const NEW_KEY_SCOPE: &str = "qualification-mbx-v1/parallel/new-key";
 const COMPILE_STEP_NAME: &str = "Compile MBX cache probe";
 const REUSE_STEP_NAME: &str = "Require reused compilation";
-const IMPORT_PROBE: &str = "mbx cache stats --json | jq -e '.objects > 0' >/dev/null";
-const REUSE_PROBE: &str = "mbx stats --json | jq -e '.savings.cached_compilations > 0' >/dev/null";
+const IMPORT_PROBE: &str = r#"set -euo pipefail
+evidence="$RUNNER_TEMP/mbx-cache-evidence"
+bash "$evidence/sampler.sh" "$evidence" "$RUNNER_TEMP" "$GITHUB_ENV" "$MBX_QUALIFICATION_SAMPLE_INTERVAL" validate
+. "$evidence/path-validation.sh"
+file="$evidence/mbx-cache-stats-import-step-end.json"
+resource_json_single_object "$evidence" "$file"
+jq -e '.objects > 0' "$file" >/dev/null"#;
+const REUSE_PROBE: &str = r#"set -euo pipefail
+evidence="$RUNNER_TEMP/mbx-cache-evidence"
+bash "$evidence/sampler.sh" "$evidence" "$RUNNER_TEMP" "$GITHUB_ENV" "$MBX_QUALIFICATION_SAMPLE_INTERVAL" validate
+. "$evidence/path-validation.sh"
+file="$evidence/mbx-stats-build-end.json"
+resource_json_single_object "$evidence" "$file"
+jq -e '.savings.cached_compilations > 0' "$file" >/dev/null"#;
 const SMOKE_CRATE: &str = r#"set -eu; root="$GITHUB_WORKSPACE/.velnor-mbx-parallel-qualification"; mkdir -p "$root/src"; printf '[package]\nname = "mbx-parallel-qualification"\nversion = "0.1.0"\nedition = "2024"\n\n[workspace]\nmembers = ["."]\nresolver = "3"\n\n[lib]\npath = "src/lib.rs"\n' > "$root/Cargo.toml"; printf 'pub fn cache_probe() -> u64 { 42 }\n' > "$root/src/lib.rs"; mbx build --manifest-path "$root/Cargo.toml""#;
 
 /// Build parallel qualification jobs from pinned inputs and the scoped writer contract.

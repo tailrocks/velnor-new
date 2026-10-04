@@ -103,7 +103,7 @@ check_hash_totals() {
 }
 check_required_files() {
   local file
-  for file in runner-metadata.json samples.jsonl sampling-summary.json inventory-final.tsv inventory-meta-final.tsv root-status-final.tsv cache-receipt.json phases.tsv sampler-stop.tsv mbx-cache-stats-import-step-end.json mbx-stats-build-end.json mbx-cache-stats-import-step-end.exit mbx-stats-build-end.exit; do
+  for file in runner-metadata.json samples.jsonl sampling-summary.json inventory-final.tsv inventory-meta-final.tsv root-status-final.tsv cache-receipt.json phases.tsv sampler-stop.tsv mbx-cache-stats-import-step-end.json mbx-stats-build-end.json final-cache-stats.json final-mbx-stats.json mbx-cache-stats-import-step-end.exit mbx-stats-build-end.exit; do
     if [ ! -s "$evidence/$file" ]; then fail_incomplete "required_file_missing:$file"; fi
   done
   if [ -s "$evidence/sampler-stop.tsv" ] && ! awk -F '\t' '$1 == "remaining_session_members" { found=1; if ($2 != "0") bad=1 } END { exit !(found && !bad) }' "$evidence/sampler-stop.tsv"; then
@@ -146,15 +146,22 @@ check_required_files() {
       if [ ! -s "$evidence/$file" ]; then fail_incomplete "corrupt_evidence_missing:$file"; fi
     done
   fi
-  for file in "$evidence/mbx-cache-stats-import-step-end.json" "$evidence/mbx-stats-build-end.json" "$evidence/cache-receipt.json"; do
-    if [ -s "$file" ] && ! jq -e . "$file" >/dev/null; then fail_incomplete "invalid_json:$file"; fi
+  for file in "$evidence/mbx-cache-stats-import-step-end.json" "$evidence/mbx-stats-build-end.json" \
+    "$evidence/final-cache-stats.json" "$evidence/final-mbx-stats.json" "$evidence/cache-receipt.json"; do
+    if [ -s "$file" ] && ! resource_json_single_object "$evidence" "$file"; then fail_incomplete "invalid_json:$file"; fi
   done
   for file in "$evidence/mbx-cache-stats-import-step-end.exit" "$evidence/mbx-stats-build-end.exit"; do
     if [ -s "$file" ] && [ "$(cat "$file")" != 0 ]; then fail_incomplete "stats_command_failed:$file"; fi
   done
   if [ "$MBX_QUALIFICATION_ROLE" = corrupt-reader ]; then
-    jq -e '.objects == 0 and .action_results == 0' "$evidence/corrupt-cache-stats-before-build.json" >/dev/null 2>&1 || fail_incomplete 'corrupt fallback store was not empty before build'
-    jq -e '.savings.cached_compilations == 0' "$evidence/corrupt-mbx-stats-before-build.json" >/dev/null 2>&1 || fail_incomplete 'corrupt fallback compilation count was not cold'
+    if ! resource_json_single_object "$evidence" "$evidence/corrupt-cache-stats-before-build.json" ||
+      ! jq -e '.objects == 0 and .action_results == 0' "$evidence/corrupt-cache-stats-before-build.json" >/dev/null 2>&1; then
+      fail_incomplete 'corrupt fallback store was not empty before build'
+    fi
+    if ! resource_json_single_object "$evidence" "$evidence/corrupt-mbx-stats-before-build.json" ||
+      ! jq -e '.savings.cached_compilations == 0' "$evidence/corrupt-mbx-stats-before-build.json" >/dev/null 2>&1; then
+      fail_incomplete 'corrupt fallback compilation count was not cold'
+    fi
     if [ -s "$evidence/fallback-cache-root.txt" ] && [ -s "$evidence/final-cache-root.txt" ]; then
       cmp -s "$evidence/fallback-cache-root.txt" "$evidence/final-cache-root.txt" || fail_incomplete 'selected fallback root changed after corrupt import'
     else
@@ -163,7 +170,8 @@ check_required_files() {
   fi
 }
 check_samples() {
-  if ! jq -e '.resource_samples_complete == true and .sample_count >= 2 and .maximum_sample_gap_seconds <= ((.sample_interval_seconds * 2) + 5)' "$evidence/sampling-summary.json" >/dev/null 2>&1; then
+  if ! resource_json_single_object "$evidence" "$evidence/sampling-summary.json" ||
+    ! jq -e '.resource_samples_complete == true and .sample_count >= 2 and .maximum_sample_gap_seconds <= ((.sample_interval_seconds * 2) + 5)' "$evidence/sampling-summary.json" >/dev/null 2>&1; then
     fail_partial 'resource_sampling_incomplete'
   fi
   if ! jq -se 'length >= 2 and all(.[]; .df_bytes_status == 0 and .df_inodes_status == 0 and .filesystem_used_bytes > 0 and .filesystem_used_inodes > 0)' "$evidence/samples.jsonl" >/dev/null 2>&1; then
@@ -178,7 +186,7 @@ check_samples() {
 }
 check_receipt() {
   local receipt="$evidence/cache-receipt.json"
-  if [ ! -s "$receipt" ] || ! jq -e --arg job "$MBX_QUALIFICATION_JOB_ID" --arg role "$MBX_QUALIFICATION_ROLE" \
+  if ! resource_json_single_object "$evidence" "$receipt" || ! jq -e --arg job "$MBX_QUALIFICATION_JOB_ID" --arg role "$MBX_QUALIFICATION_ROLE" \
     --arg run "$GITHUB_RUN_ID" --arg attempt "$GITHUB_RUN_ATTEMPT" --arg sha "$GITHUB_SHA" \
     --arg source_ref "$GITHUB_REF" --arg workflow_ref "$GITHUB_WORKFLOW_REF" \
     --arg scope "$MBX_CACHE_SCOPE" --arg action "$MBX_QUALIFICATION_ACTION_REF" \
@@ -217,7 +225,7 @@ if ! bash "$evidence/sampler.sh" "$evidence" "$RUNNER_TEMP" "$GITHUB_ENV" "$MBX_
   echo 'private evidence directory validation failed' >&2
   exit 1
 fi
-path_validation_sha='5bcca14cce52a2d66891e384f6f9ab5a6b46819e8f9c30a6d1c779e665cf7ada'
+path_validation_sha='5afb3b3a0be3511b069371e84ee012dce25f6dd58130165eefb7cb547c1ada76'
 printf '%s  %s\n' "$path_validation_sha" "$evidence/path-validation.sh" | sha256sum --check --status || exit 1
 . "$evidence/path-validation.sh"
 partial=0
@@ -232,12 +240,12 @@ else
   fail_partial 'selected cache root missing or unsafe at finalization'
 fi
 if command -v mbx >/dev/null 2>&1; then
-  if mbx cache stats --json > "$evidence/final-cache-stats.json" 2> "$evidence/final-cache-stats.stderr"; then :; else
+  if resource_capture_bounded "$evidence" "$evidence/final-cache-stats.json" mbx cache stats --json 2> "$evidence/final-cache-stats.stderr"; then :; else
     stats_status=$?
     printf 'exit_status=%s\n' "$stats_status" >> "$evidence/final-cache-stats.stderr"
     fail_incomplete 'final MBX cache stats command failed'
   fi
-  if mbx stats --json > "$evidence/final-mbx-stats.json" 2> "$evidence/final-mbx-stats.stderr"; then :; else
+  if resource_capture_bounded "$evidence" "$evidence/final-mbx-stats.json" mbx stats --json 2> "$evidence/final-mbx-stats.stderr"; then :; else
     stats_status=$?
     printf 'exit_status=%s\n' "$stats_status" >> "$evidence/final-mbx-stats.stderr"
     fail_incomplete 'final MBX stats command failed'

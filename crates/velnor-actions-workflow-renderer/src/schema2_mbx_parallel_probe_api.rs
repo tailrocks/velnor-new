@@ -111,6 +111,7 @@ verify_receipt() {
     echo 'invalid cache receipt file' >&2
     return 1
   fi
+  stock_restore_single_object "$file" 65536 >/dev/null
   jq -e --arg job "$job" --arg role "$role" --arg scope "$scope" --arg run "$GITHUB_RUN_ID" --arg attempt "$GITHUB_RUN_ATTEMPT" --arg sha "$GITHUB_SHA" --arg ref "$GITHUB_REF" --arg workflow "$GITHUB_WORKFLOW_REF" --arg runner_os "$RUNNER_OS" --arg runner_arch "$RUNNER_ARCH" --arg action "$MBX_EXPECTED_ACTION_REF" --arg version "$MBX_EXPECTED_VERSION" --arg rust "$MBX_EXPECTED_RUST_VERSION" '.job_id == $job and .role == $role and .scope == $scope and .run_id == $run and .run_attempt == $attempt and .source_sha == $sha and .source_ref == $ref and .workflow_ref == $workflow and .runner_os == $runner_os and .runner_arch == $runner_arch and .mbx_action_ref == $action and .mbx_version == $version and .rust_version == $rust and (.primary_key | type == "string" and length > 0) and (.cache_prefix | type == "string" and length > 0) and (.generation | type == "string" and length > 0) and (.rustc_identity | type == "string" and length == 64) and (.cache_hit | type == "string") and (.restore_primary_key | type == "string") and (.restore_conclusion | type == "string") and (.imported_objects | type == "number") and (.cached_compilations | type == "number")' "$file" >/dev/null
 }
 
@@ -195,11 +196,14 @@ test "$reader_b_restore_classification" = HIT
 test "$new_writer_restore_classification" = CLEAN_MISS
 test "$observer_restore_classification" = HIT
 
-verify_directory "$input" "$runner_temp_real/mbx-parallel-input" ''
+verify_directory "$input" "$runner_temp_real/mbx-parallel-input" 700
 verify_directory "$evidence" "$runner_temp_real/mbx-cache-evidence" 700
-gh api -X GET "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs" -f per_page=100 > "$jobs"
-gh api -X GET "repos/$GITHUB_REPOSITORY/actions/caches" -f "key=$seed_key" -f "ref=$GITHUB_REF" -f per_page=100 > "$seed_cache"
-gh api -X GET "repos/$GITHUB_REPOSITORY/actions/caches" -f "key=$new_key" -f "ref=$GITHUB_REF" -f per_page=100 > "$new_cache"
+(ulimit -f 4096; gh api -X GET "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs" -f per_page=100 > "$jobs")
+(ulimit -f 4096; gh api -X GET "repos/$GITHUB_REPOSITORY/actions/caches" -f "key=$seed_key" -f "ref=$GITHUB_REF" -f per_page=100 > "$seed_cache")
+(ulimit -f 4096; gh api -X GET "repos/$GITHUB_REPOSITORY/actions/caches" -f "key=$new_key" -f "ref=$GITHUB_REF" -f per_page=100 > "$new_cache")
+stock_restore_single_object "$jobs" 2097152 >/dev/null
+stock_restore_single_object "$seed_cache" 2097152 >/dev/null
+stock_restore_single_object "$new_cache" 2097152 >/dev/null
 jq -e --arg key "$seed_key" --arg ref "$GITHUB_REF" '[.actions_caches[] | select(.key == $key and .ref == $ref)] | length == 1' "$seed_cache" >/dev/null
 jq -e --arg key "$new_key" --arg ref "$GITHUB_REF" '[.actions_caches[] | select(.key == $key and .ref == $ref)] | length == 1' "$new_cache" >/dev/null
 

@@ -19,7 +19,7 @@ valid_session_leader_pid() {
 resource_role_class() {
   case "${MBX_QUALIFICATION_ROLE-}" in
     writer|seed|new-key-writer) printf 'cold\n' ;;
-    reader|reader-a|reader-b|corrupt-reader) printf 'hit\n' ;;
+    reader|reader-a|reader-b|corrupt-reader|observer-shared|observer-new) printf 'hit\n' ;;
     *) return 1 ;;
   esac
 }
