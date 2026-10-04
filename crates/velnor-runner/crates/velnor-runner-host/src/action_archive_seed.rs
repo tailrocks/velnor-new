@@ -151,7 +151,7 @@ impl ActionArchiveStore {
         identity: &ActionArchiveIdentity,
         source: R,
     ) -> Result<String, ActionArchiveSeedError> {
-        self.publish_with_parent_sync(identity, source, sync_directory)
+        self.publish_with_parent_sync(identity, source, sync_directory, || Ok(()))
     }
 
     #[cfg(test)]
@@ -162,14 +162,19 @@ impl ActionArchiveStore {
         fail_on_sync: usize,
     ) -> Result<String, ActionArchiveSeedError> {
         let mut calls = 0_usize;
-        self.publish_with_parent_sync(identity, source, |directory| {
-            calls += 1;
-            if calls == fail_on_sync {
-                Err(ActionArchiveSeedError::Io)
-            } else {
-                sync_directory(directory)
-            }
-        })
+        self.publish_with_parent_sync(
+            identity,
+            source,
+            |directory| {
+                calls += 1;
+                if calls == fail_on_sync {
+                    Err(ActionArchiveSeedError::Io)
+                } else {
+                    sync_directory(directory)
+                }
+            },
+            || Ok(()),
+        )
     }
 
     fn publish_with_parent_sync<R: std::io::Read>(
@@ -177,6 +182,7 @@ impl ActionArchiveStore {
         identity: &ActionArchiveIdentity,
         source: R,
         mut sync_parent: impl FnMut(&Path) -> Result<(), ActionArchiveSeedError>,
+        mut before_rename: impl FnMut() -> Result<(), ActionArchiveSeedError>,
     ) -> Result<String, ActionArchiveSeedError> {
         identity::validate_identity(identity)?;
         let generation_id = object_generation(identity)?;
@@ -187,7 +193,8 @@ impl ActionArchiveStore {
             return Ok(generation_id);
         }
         let staging = unique_directory(&self.objects, "object")?;
-        let result = Self::publish_object(&staging, &destination, identity, source);
+        let result =
+            Self::publish_object(&staging, &destination, identity, source, &mut before_rename);
         if result.is_err() {
             cleanup_dir(&staging)?;
             if destination.exists() {
@@ -206,6 +213,7 @@ impl ActionArchiveStore {
         destination: &Path,
         identity: &ActionArchiveIdentity,
         source: R,
+        before_rename: &mut impl FnMut() -> Result<(), ActionArchiveSeedError>,
     ) -> Result<(), ActionArchiveSeedError> {
         let archive = staging.join(ARCHIVE_FILE);
         storage::copy_verified(source, &archive, identity)?;
@@ -222,6 +230,7 @@ impl ActionArchiveStore {
         set_mode(&archive, 0o444)?;
         set_mode(staging, 0o555)?;
         sync_directory(staging)?;
+        before_rename()?;
         fs::rename(staging, destination).map_err(|_| ActionArchiveSeedError::Io)
     }
 

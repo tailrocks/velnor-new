@@ -50,6 +50,9 @@ impl ActionArchiveStore {
         super::validate_generation_id(generation_id)?;
         let active = self.leases.join(launch_id);
         let retired = retired_path(&self.leases, launch_id, generation_id);
+        if has_other_retired_lease(&self.leases, launch_id, &retired)? {
+            return Err(ActionArchiveSeedError::LeaseConflict);
+        }
         if retired.exists() {
             if active.exists() {
                 return Err(ActionArchiveSeedError::LeaseConflict);
@@ -70,6 +73,25 @@ impl ActionArchiveStore {
         sync_parent(&self.leases)?;
         remove_retired(&self.leases, &retired, &mut sync_parent)
     }
+}
+
+fn has_other_retired_lease(
+    leases: &Path,
+    launch_id: &str,
+    expected: &Path,
+) -> Result<bool, ActionArchiveSeedError> {
+    let prefix = format!(".retired-{launch_id}-");
+    let expected_name = expected
+        .file_name()
+        .ok_or(ActionArchiveSeedError::InvalidLease)?;
+    for entry in fs::read_dir(leases).map_err(|_| ActionArchiveSeedError::Io)? {
+        let entry = entry.map_err(|_| ActionArchiveSeedError::Io)?;
+        let name = entry.file_name();
+        if name.to_string_lossy().starts_with(&prefix) && name != expected_name {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 fn remove_retired(
