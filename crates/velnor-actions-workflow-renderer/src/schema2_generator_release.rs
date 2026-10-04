@@ -11,6 +11,8 @@ use velnor_actions_contract::RELEASE_MANIFEST_FILENAME;
 use super::Schema2WorkflowRequest;
 use super::features::{CHECKOUT_USES, base, finish};
 
+#[path = "schema2_generator_release_qualification.rs"]
+mod qualification;
 #[path = "schema2_generator_release_steps.rs"]
 mod release_steps;
 #[path = "schema2_generator_release_scripts.rs"]
@@ -18,6 +20,8 @@ mod scripts;
 
 /// Default arm64 macOS runner. Intel output uses the pinned Rust target here.
 const MACOS_RUNS_ON: &str = "macos-15";
+/// Native Intel macOS qualification runner for the `x86_64` asset.
+const MACOS_X64_RUNS_ON: &str = "macos-15-intel";
 /// Pinned `jdx/mise-action` commit (v5.0.0).
 const MISE_USES: &str = "jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5";
 /// Pinned Mise binary release.
@@ -67,12 +71,20 @@ impl AssetNames {
 pub(super) fn generator_release(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
     let hosted = runs_on_yaml(&request.hosted_label)?;
     let macos = runs_on_yaml(MACOS_RUNS_ON)?;
+    let macos_x64 = runs_on_yaml(MACOS_X64_RUNS_ON)?;
     let assets = AssetNames::for_version(&request.version);
     let mut jobs = vec![release_gate_job(hosted.clone())];
-    jobs.extend(build_jobs(hosted.clone(), macos, &assets));
+    jobs.extend(build_jobs(hosted.clone(), macos.clone(), &assets));
     jobs.extend(attest_jobs(hosted.clone(), &assets));
     jobs.push(prepare_manifest_job(
         hosted.clone(),
+        &request.version,
+        &assets,
+    ));
+    jobs.extend(qualification::jobs(
+        hosted.clone(),
+        macos,
+        macos_x64,
         &request.version,
         &assets,
     ));
@@ -305,7 +317,13 @@ fn prepare_manifest_job(hosted: Yaml, version: &str, assets: &AssetNames) -> (St
 }
 
 fn publish_job(hosted: Yaml, version: &str, assets: &AssetNames) -> (String, Yaml) {
-    let needs = ["release-gate", "prepare-manifest"];
+    let needs = [
+        "release-gate",
+        "prepare-manifest",
+        "qualify-linux-x64",
+        "qualify-macos-arm64",
+        "qualify-macos-x64",
+    ];
     let needs_success = needs
         .iter()
         .map(|job| format!("needs.{job}.result == 'success'"))
