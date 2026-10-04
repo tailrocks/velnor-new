@@ -40,7 +40,11 @@ async fn readiness_failure_returns_typed_error_after_confirmed_cleanup() -> Resu
         ))
     );
     assert_eq!(engine.containers()?, 0);
-    assert!(engine.events()?.ends_with(&["remove", "remove-volumes"]));
+    assert!(
+        engine
+            .events()?
+            .ends_with(&["remove", "engine", "list-launch", "remove-volumes"])
+    );
     Ok(())
 }
 
@@ -102,6 +106,10 @@ async fn readiness_failure_with_volume_cleanup_error_stays_uncertain() -> Result
         Err(HostError::Cleanup)
     );
     assert_eq!(engine.containers()?, 0);
-    assert!(engine.events()?.ends_with(&["remove", "remove-volumes"]));
+    assert!(
+        engine
+            .events()?
+            .ends_with(&["remove", "engine", "list-launch", "remove-volumes"])
+    );
     Ok(())
 }
