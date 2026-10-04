@@ -6,6 +6,7 @@
 use crate::RenderError;
 use crate::runs_on::runs_on_yaml;
 use crate::yaml::Yaml;
+use velnor_actions_contract::RELEASE_MANIFEST_FILENAME;
 
 use super::Schema2WorkflowRequest;
 use super::features::{CHECKOUT_USES, base, finish};
@@ -271,7 +272,7 @@ fn prepare_manifest_job(hosted: Yaml, version: &str, assets: &AssetNames) -> (St
         ),
         &needs_success,
     );
-    let manifest = format!("release-manifest/velnor-actions-release-manifest-{version}.json");
+    let manifest = format!("release-manifest/{RELEASE_MANIFEST_FILENAME}");
     finish(
         "prepare-manifest",
         fields,

@@ -1,5 +1,6 @@
 //! Exact schema-2 generator-release workflow body, without the generator marker.
 
+use velnor_actions_contract::RELEASE_MANIFEST_FILENAME;
 use velnor_actions_workflow_renderer::RenderedTree;
 
 pub(super) const GENERATOR_RELEASE: &str = include_str!("schema2_generator_release_snapshot.yml");
@@ -263,10 +264,8 @@ fn assert_publish(publish: &str) -> Result<(), Box<dyn std::error::Error>> {
         .find("validate_assets")
         .ok_or("missing artifact sidecar and attestation validation")?;
     let manifest = publish
-        .find(&format!(
-            "release-manifest/velnor-actions-release-manifest-{version}.json"
-        ))
-        .ok_or("missing versioned manifest download")?;
+        .find(&format!("release-manifest/{RELEASE_MANIFEST_FILENAME}"))
+        .ok_or("missing canonical manifest download")?;
     let verify_manifest = publish
         .rfind("verify_attestation")
         .ok_or("missing manifest attestation verification")?;
@@ -285,10 +284,7 @@ fn assert_publish(publish: &str) -> Result<(), Box<dyn std::error::Error>> {
         )),
         "{publish}"
     );
-    assert!(
-        publish.contains(&format!("velnor-actions-release-manifest-{version}.json")),
-        "{publish}"
-    );
+    assert!(publish.contains(RELEASE_MANIFEST_FILENAME), "{publish}");
     assert!(
         publish.contains(&format!("velnor-actions {version} built from")),
         "{publish}"
@@ -306,7 +302,6 @@ fn assert_publish(publish: &str) -> Result<(), Box<dyn std::error::Error>> {
 
 fn assert_manifest(body: &str) -> Result<(), Box<dyn std::error::Error>> {
     let job = super::job_body(body, "prepare-manifest")?;
-    let version = env!("CARGO_PKG_VERSION");
     assert!(job.contains("attestations: write"), "{job}");
     assert!(job.contains("id-token: write"), "{job}");
     assert!(job.contains("artifact-metadata: write"), "{job}");
@@ -317,9 +312,7 @@ fn assert_manifest(body: &str) -> Result<(), Box<dyn std::error::Error>> {
     assert!(job.contains("verify_canonical_manifest"), "{job}");
     assert!(job.contains("actions/attest-build-provenance@"), "{job}");
     assert!(
-        job.contains(&format!(
-            "release-manifest/velnor-actions-release-manifest-{version}.json"
-        )),
+        job.contains(&format!("release-manifest/{RELEASE_MANIFEST_FILENAME}")),
         "{job}"
     );
     assert!(job.contains("Upload attested release manifest"), "{job}");
