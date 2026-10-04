@@ -10,8 +10,8 @@ use velnor_actions_contract::{
 
 use crate::cover::Signals;
 use crate::cover_baseline::provenance_check::{
-    baseline_artifact_name, is_unverifiable_generator_sha, parse_workflow_ref, task_run_ids_bound,
-    validate_task_entry,
+    baseline_artifact_name, is_unverifiable_generator_sha, parse_workflow_ref,
+    validate_manifest_lineage_at,
 };
 use crate::cover_baseline::unix_now;
 use crate::decisions::baseline_expired;
@@ -233,12 +233,10 @@ pub(crate) fn revalidate_coverage_with_anchors(
 /// compares against the plan value or the trusted invariant. Mirrors the
 /// plan-time [`validate_provenance`](crate::cover_baseline::provenance_check::validate_provenance)
 /// manifest checks (identified run, verifiable generator, derived
-/// artifact name, per-task entry validation, freshness) so a manifest
-/// the plan rejects can never pass at merge. Per-task entry validation
-/// is the shared [`validate_task_entry`](crate::cover_baseline::provenance_check::validate_task_entry):
-/// identity shapes, run binding, structured-proof match, and
-/// external-data validity are identical on both sides by
-/// construction, not by parallel reimplementation. Advisory
+/// artifact name and bounded proof lineage) so a manifest the plan
+/// rejects can never pass at merge. Lineage validation includes shared
+/// task identity shapes, carrying-run binding, structured-proof match,
+/// and external-data validity. Advisory
 /// presence/freshness mirrors separately per obligation below (the
 /// planner gates it at coverage time, not validation time).
 ///
@@ -263,14 +261,7 @@ fn manifest_provenance_matches_plan(
         .is_ok_and(|expect| manifest.artifact_name == expect);
     let derived_id = manifest.artifact_id
         == crate::cover_compat::baseline_artifact_numeric_id(&manifest.artifact_name);
-    let run_bound = manifest
-        .tasks
-        .iter()
-        .all(|task| task_run_ids_bound(task, manifest.run_id));
-    let entries_ok = manifest
-        .tasks
-        .iter()
-        .all(|task| validate_task_entry(task, manifest.run_id).is_ok());
+    let lineage_ok = validate_manifest_lineage_at(manifest, now_unix).is_ok();
     manifest.source_commit == base
         && manifest.generator_version == plan.generator.version
         && manifest.generator_sha256 == plan.generator.sha256
@@ -280,8 +271,7 @@ fn manifest_provenance_matches_plan(
         && identified
         && derived_name
         && derived_id
-        && run_bound
-        && entries_ok
+        && lineage_ok
         && validate_digest(&manifest.repository_id).is_ok()
         && ref_shape_ok(&manifest.ref_)
         && workflow_ref_consistent(manifest)

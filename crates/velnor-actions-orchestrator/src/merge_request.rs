@@ -38,6 +38,7 @@ use self::needs_channel::{NEEDS_ENV, parse_needs};
 use crate::OrchestratorError;
 use crate::internal::{internal, internal_contract};
 use crate::internal_request::resolve_run_key;
+use crate::merge::required_evidence::MAX_BASELINE_MANIFEST_BYTES;
 use crate::request_event::workflow_event_for;
 
 /// Assemble one canonical merge request from a run directory.
@@ -108,7 +109,14 @@ pub(crate) fn assemble_with_needs(
         &run_dir.join("reports"),
         &mut errors,
     );
-    let baseline = read_json(run_dir, "baseline.json", "baseline", false, &mut errors);
+    let baseline = read_json_with_limit(
+        run_dir,
+        "baseline.json",
+        "baseline",
+        false,
+        u64::try_from(MAX_BASELINE_MANIFEST_BYTES).unwrap_or(u64::MAX),
+        &mut errors,
+    );
     let (inventory, jobs) = parse_needs(needs, expected, &mut errors);
     let attestation = read_attestation(run_dir, &inventory, &mut errors);
     let request = serde_json::json!({
@@ -262,7 +270,26 @@ fn read_json(
     required: bool,
     errors: &mut Vec<String>,
 ) -> serde_json::Value {
-    match crate::retrieve_reports::read_staged_text(&run_dir.join(name), MAX_ASSEMBLY_JSON_BYTES) {
+    read_json_with_limit(
+        run_dir,
+        name,
+        kind,
+        required,
+        MAX_ASSEMBLY_JSON_BYTES,
+        errors,
+    )
+}
+
+/// Read one JSON artifact with its own byte contract.
+fn read_json_with_limit(
+    run_dir: &Path,
+    name: &str,
+    kind: &str,
+    required: bool,
+    max_bytes: u64,
+    errors: &mut Vec<String>,
+) -> serde_json::Value {
+    match crate::retrieve_reports::read_staged_text(&run_dir.join(name), max_bytes) {
         Ok(text) => {
             if let Ok(value) = parse_strict_json(&text) {
                 value

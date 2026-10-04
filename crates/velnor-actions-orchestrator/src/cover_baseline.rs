@@ -28,9 +28,7 @@ use crate::decisions::baseline_expired;
 use crate::discover::Discovery;
 use crate::internal::internal_contract;
 use crate::merge::BaselineManifest;
-
-/// Maximum accepted `baseline.json` bytes: evidence stays bounded.
-const MAX_BASELINE_MANIFEST_BYTES: usize = 1_048_576;
+use crate::merge::required_evidence::MAX_BASELINE_MANIFEST_BYTES;
 
 /// Current Unix time; clock failure fails closed (all dated baselines expire).
 pub(crate) fn unix_now() -> u64 {
