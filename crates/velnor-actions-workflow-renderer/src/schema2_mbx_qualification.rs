@@ -8,19 +8,26 @@ use std::collections::BTreeMap;
 
 use super::MbxQualificationPins;
 use super::features::{base, finish, gated};
+use super::mbx_qualification_helpers::{
+    COMPILE_STEP_NAME, CORRUPT_JOB_ID, QUALIFICATION_CACHE_SCOPE, READER_JOB_ID,
+    WRITER_JOB_ID, QualificationRole, permission_yaml, qualification_env,
+};
 use crate::cache_steps::MBX_ACTION_NAME;
 use crate::render::RenderContext;
 use crate::steps::{self, MBX_SETUP_NAME};
 use crate::yaml::Yaml;
 use crate::{RenderError, document, mbx_bundle};
-use velnor_actions_contract::{Job, JobTimeout, PermissionLevel, Permissions, Step};
+use velnor_actions_contract::{
+    Job, JobTimeout, PermissionLevel, Permissions, PullRequestCachePolicy, Step,
+};
 
 const QUALIFICATION_GATE: &str = "inputs.mode == 'mbx-cache-roundtrip' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.ref_protected == true";
-const QUALIFICATION_CACHE_SCOPE: &str = "qualification-mbx-v1/single-bundle-roundtrip";
+pub(super) const MBX_CACHE_ACTION_STEP: &str = MBX_SETUP_NAME;
 const CACHE_COMPRESSION_PROBE: &str = r#"set -eu; command -v zstd >/dev/null; zstd --version > "$RUNNER_TEMP/mbx-cache-zstd-version"; tar --version > "$RUNNER_TEMP/mbx-cache-tar-version"; grep -Fq 'GNU tar' "$RUNNER_TEMP/mbx-cache-tar-version""#;
 const SMOKE_CRATE: &str = r#"set -eu; root="$GITHUB_WORKSPACE/.velnor-mbx-cache-qualification"; mkdir -p "$root/src"; printf '[package]\nname = "mbx-cache-qualification"\nversion = "0.1.0"\nedition = "2024"\n\n[workspace]\nmembers = ["."]\nresolver = "3"\n\n[lib]\npath = "src/lib.rs"\n' > "$root/Cargo.toml"; printf 'pub fn cache_probe() -> u64 { 42 }\n' > "$root/src/lib.rs"; mbx build --manifest-path "$root/Cargo.toml""#;
 const IMPORT_PROBE: &str = "mbx cache stats --json | jq -e '.objects > 0' >/dev/null";
 const REUSE_PROBE: &str = "mbx stats --json | jq -e '.savings.cached_compilations > 0' >/dev/null";
+const COLD_REUSE_PROBE: &str = "mbx stats --json | jq -e '.savings.cached_compilations == 0' >/dev/null";
 
 /// Emit isolated writer and reader jobs for the pinned MBX runtime.
 ///
@@ -44,46 +51,64 @@ pub(super) fn jobs(
 
     let mut typed_jobs = BTreeMap::from([
         (
-            "mbx-cache-read-hosted".to_owned(),
-            typed_job(request, hosted, false)?,
+            WRITER_JOB_ID.to_owned(),
+            typed_job(request, hosted, QualificationRole::Writer)?,
         ),
         (
-            "mbx-cache-write-hosted".to_owned(),
-            typed_job(request, hosted, true)?,
+            READER_JOB_ID.to_owned(),
+            typed_job(request, hosted, QualificationRole::Reader)?,
+        ),
+        (
+            CORRUPT_JOB_ID.to_owned(),
+            typed_job(request, hosted, QualificationRole::CorruptReader)?,
         ),
     ]);
-    mbx_bundle::append_single_bundle_saves(&mut typed_jobs)?;
-    let Some(writer) = typed_jobs.remove("mbx-cache-write-hosted") else {
+    mbx_bundle::append_single_bundle_saves(&mut typed_jobs, PullRequestCachePolicy::ReadOnly)?;
+    super::mbx_corrupt_probe::attach(&mut typed_jobs)?;
+    super::mbx_resource_probe::attach(&mut typed_jobs, request)?;
+    let Some(writer) = typed_jobs.remove(WRITER_JOB_ID) else {
         return Err(RenderError::InvalidWorkflow(
-            "missing_mbx_job:mbx-cache-write-hosted".to_owned(),
+            format!("missing_mbx_job:{WRITER_JOB_ID}"),
         ));
     };
-    let Some(reader) = typed_jobs.remove("mbx-cache-read-hosted") else {
+    let Some(reader) = typed_jobs.remove(READER_JOB_ID) else {
         return Err(RenderError::InvalidWorkflow(
-            "missing_mbx_job:mbx-cache-read-hosted".to_owned(),
+            format!("missing_mbx_job:{READER_JOB_ID}"),
         ));
     };
-    Ok(vec![render_job(writer, true)?, render_job(reader, false)?])
+    let Some(corrupt_reader) = typed_jobs.remove(CORRUPT_JOB_ID) else {
+        return Err(RenderError::InvalidWorkflow(
+            format!("missing_mbx_job:{CORRUPT_JOB_ID}"),
+        ));
+    };
+    Ok(vec![
+        render_job(writer, QualificationRole::Writer, request)?,
+        render_job(reader, QualificationRole::Reader, request)?,
+        render_job(corrupt_reader, QualificationRole::CorruptReader, request)?,
+    ])
 }
 
 fn typed_job(
     request: &MbxQualificationPins,
     hosted: &Yaml,
-    writer: bool,
+    role: QualificationRole,
 ) -> Result<Job, RenderError> {
-    let (title, needs) = if writer {
-        ("MBX objects cache / protected-main writer", Vec::new())
-    } else {
-        (
+    let (title, needs) = match role {
+        QualificationRole::Writer => ("MBX objects cache / protected-main writer", Vec::new()),
+        QualificationRole::Reader => (
             "MBX objects cache / read-only reuse",
-            vec!["mbx-cache-write-hosted".to_owned()],
-        )
+            vec![WRITER_JOB_ID.to_owned()],
+        ),
+        QualificationRole::CorruptReader => (
+            "MBX objects cache / corrupt import cold fallback",
+            vec![WRITER_JOB_ID.to_owned(), READER_JOB_ID.to_owned()],
+        ),
     };
     let permissions = Permissions {
         contents: PermissionLevel::Read,
         pull_requests: PermissionLevel::None,
         id_token: PermissionLevel::None,
-        actions: if writer {
+        actions: if role.is_writer() {
             PermissionLevel::Write
         } else {
             PermissionLevel::Read
@@ -107,18 +132,22 @@ fn typed_job(
         condition: Some(QUALIFICATION_GATE.to_owned()),
         permissions: Some(permissions),
         environment: None,
-        steps: qualification_steps(request, writer)?,
+        steps: qualification_steps(request, role)?,
     })
 }
 
-fn render_job(mut typed_job: Job, writer: bool) -> Result<(String, Yaml), RenderError> {
-    let id = if writer {
-        "mbx-cache-write-hosted"
-    } else {
-        "mbx-cache-read-hosted"
+fn render_job(
+    mut typed_job: Job,
+    role: QualificationRole,
+    request: &MbxQualificationPins,
+) -> Result<(String, Yaml), RenderError> {
+    let id = match role {
+        QualificationRole::Writer => WRITER_JOB_ID,
+        QualificationRole::Reader => READER_JOB_ID,
+        QualificationRole::CorruptReader => CORRUPT_JOB_ID,
     };
     let title = typed_job.display_name.clone();
-    if writer {
+    if role.is_writer() {
         gate_writer_steps(&mut typed_job.steps);
     }
     let rendered_steps = typed_job
@@ -134,8 +163,8 @@ fn render_job(mut typed_job: Job, writer: bool) -> Result<(String, Yaml), Render
             Yaml::Seq(typed_job.needs.iter().cloned().map(Yaml::str).collect()),
         ));
     }
-    fields.push(("permissions".to_owned(), permission_yaml(writer)));
-    fields.push(("env".to_owned(), qualification_env()));
+    fields.push(("permissions".to_owned(), permission_yaml(role.is_writer())));
+    fields.push(("env".to_owned(), qualification_env(request)));
     Ok(gated(
         finish(id, fields, rendered_steps),
         QUALIFICATION_GATE,
@@ -144,8 +173,9 @@ fn render_job(mut typed_job: Job, writer: bool) -> Result<(String, Yaml), Render
 
 fn qualification_steps(
     request: &MbxQualificationPins,
-    writer: bool,
+    role: QualificationRole,
 ) -> Result<Vec<Step>, RenderError> {
+    let writer = role.is_writer();
     let mut steps = vec![
         checkout_step()?,
         mise_setup_step(request)?,
@@ -158,19 +188,25 @@ fn qualification_steps(
         mbx_action_step(request, writer)?,
         verify_action_step(request)?,
     ];
-    if !writer {
+    if role.is_regular_reader() {
         steps.push(shell_step(
             request,
             "Require imported MBX objects",
             IMPORT_PROBE,
         )?);
     }
-    steps.push(shell_step(request, "Compile MBX cache probe", SMOKE_CRATE)?);
-    if !writer {
+    steps.push(shell_step(request, COMPILE_STEP_NAME, SMOKE_CRATE)?);
+    if role.is_regular_reader() {
         steps.push(shell_step(
             request,
             "Require reused compilation",
             REUSE_PROBE,
+        )?);
+    } else if role == QualificationRole::CorruptReader {
+        steps.push(shell_step(
+            request,
+            "Require cold compilation after corrupt import",
+            COLD_REUSE_PROBE,
         )?);
     }
     Ok(steps)
@@ -264,18 +300,7 @@ fn gate_writer_steps(steps: &mut [Step]) {
     }
 }
 
-fn permission_yaml(writer: bool) -> Yaml {
-    mapping(&[
-        ("contents", "read"),
-        ("actions", if writer { "write" } else { "read" }),
-    ])
-}
-
-fn qualification_env() -> Yaml {
-    mapping(&[("MBX_GC_AUTO", "1")])
-}
-
-fn qualification_shell_env(request: &MbxQualificationPins) -> BTreeMap<String, String> {
+pub(super) fn qualification_shell_env(request: &MbxQualificationPins) -> BTreeMap<String, String> {
     let home = "${{ runner.temp }}/velnor-mbx-cache-qualification";
     BTreeMap::from([
         ("CARGO_HOME".to_owned(), format!("{home}/cargo")),
@@ -292,15 +317,6 @@ fn qualification_shell_env(request: &MbxQualificationPins) -> BTreeMap<String, S
     ])
 }
 
-fn mapping(pairs: &[(&str, &str)]) -> Yaml {
-    Yaml::Map(
-        pairs
-            .iter()
-            .map(|(key, value)| ((*key).to_owned(), Yaml::str(*value)))
-            .collect(),
-    )
-}
-
 fn step_context() -> RenderContext {
     RenderContext {
         generator_version: "0.0.0".to_owned(),
@@ -311,6 +327,7 @@ fn step_context() -> RenderContext {
         validator_commands: Vec::new(),
         candidate: None,
         preseed: false,
+        pull_request_cache_policy: PullRequestCachePolicy::ReadOnly,
         plan_consumer_env: BTreeMap::new(),
     }
 }
