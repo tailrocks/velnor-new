@@ -174,6 +174,13 @@ impl ReleaseManifest {
         let mut seen = BTreeSet::new();
         for record in &self.targets {
             check_target(&record.target, file, "targets.target")?;
+            if !crate::targets::is_supported_target(&record.target) {
+                return Err(ContractError::config(
+                    file,
+                    "targets",
+                    format!("unsupported_target:{}", record.target),
+                ));
+            }
             crate::targets::check_release_artifact(
                 &record.artifact,
                 &self.version,
@@ -187,6 +194,15 @@ impl ReleaseManifest {
                     file,
                     "targets",
                     format!("duplicate_target:{}", record.target),
+                ));
+            }
+        }
+        for target in crate::targets::SUPPORTED_TARGETS {
+            if !seen.contains(target) {
+                return Err(ContractError::config(
+                    file,
+                    "targets",
+                    format!("missing_target:{target}"),
                 ));
             }
         }
