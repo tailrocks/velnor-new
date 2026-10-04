@@ -138,17 +138,12 @@ REPORT_DIR            = $RUNNER_TEMP/velnor/<run-key>/<matrix-key>
 `$MISE_TASK_CACHE_DIR/task-artifacts/v2`; CI sets that environment variable before Mise starts and archives
 only that directory.
 
-`actions/cache/restore` and `actions/cache/save` MAY archive `CARGO_SOURCE_PATHS`,
-qualified `MISE_TASK_ARTIFACTS`, and the Scale Set route's
-`$RUNNER_TEMP/mbx-single-bundle`. Hosted MBX jobs use the pinned action's
-isolated objects lifecycle; synchronous `mbx gc` runs before its post step.
-The action still stages an exported closure while the isolated store exists,
-so isolation and collection are measurement/ownership changes, not proof that
-the export-time peak fits. Its sampler reports the lowest free bytes/inodes it
-observed and local archive size when staged; it does not claim an instantaneous
-peak or uploaded compressed size. A miss, missing bundle, or failed import
-continues cold. Velnor MUST NOT reimplement either format. A Cargo-profile job
-does not invoke the Mr. Boxington action.
+GitHub caches MAY archive `CARGO_SOURCE_PATHS`, qualified `MISE_TASK_ARTIFACTS`, and `$RUNNER_TEMP/mbx-single-bundle` on Scale Set jobs; Cargo-profile jobs do not invoke Mr. Boxington. Hosted MBX jobs use the pinned action's isolated objects lifecycle;
+on protected default-branch pushes, synchronous `mbx gc` runs before its post export. The action still stages an
+exported closure while the isolated store exists. Isolation and GC define ownership and retention, but do not prove the
+export-time peak fits. Its sampler reports minimum observed free bytes/inodes and staged local archive size; it does not
+report instantaneous peak or compressed upload size. A miss, missing bundle, or failed import continues cold. Velnor
+MUST NOT reimplement either format.
 
 Velnor MUST NOT configure Mise `task.cache.remote_url`, remote namespaces, remote tokens, or OIDC task-cache
 credentials in V1. There is no Velnor cache server. The selected task-result transport is an opaque GitHub

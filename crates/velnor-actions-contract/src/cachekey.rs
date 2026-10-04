@@ -29,17 +29,6 @@ pub fn mbx_cache_generation(version: &str) -> String {
     format!("{MBX_CACHE_GENERATION_PREFIX}{version}")
 }
 
-/// Build an action-cache generation bound to the exact pinned action commit.
-///
-/// The GitHub cache restore prefix includes this value, so changing action
-/// lifecycle code starts in an empty namespace instead of falling back to
-/// entries written under an older action pin. Task cache-format identity uses
-/// [`mbx_cache_generation`] separately and remains scoped to the MBX release.
-#[must_use]
-pub fn mbx_action_cache_generation(version: &str, action_sha: &str) -> String {
-    format!("{MBX_CACHE_GENERATION_PREFIX}{version}-action-{action_sha}")
-}
-
 /// The 13 allowed `miss_reason` values (cache §3).
 pub const MISS_REASONS: [&str; 13] = [
     "no_entry",
