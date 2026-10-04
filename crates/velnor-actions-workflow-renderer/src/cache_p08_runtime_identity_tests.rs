@@ -92,6 +92,17 @@ fn run_identity_with(
     overrides: &[(&str, String)],
     removed: &[&str],
 ) -> Output {
+    identity_command(payload, fixture, overrides, removed)
+        .output()
+        .expect("run identity shell")
+}
+
+fn identity_command(
+    payload: &ToolsCachePayload,
+    fixture: &Fixture,
+    overrides: &[(&str, String)],
+    removed: &[&str],
+) -> Command {
     fs::write(&fixture.github_output, "").expect("clear outputs");
     let step = payload.runtime_identity_step().expect("identity step");
     let StepKind::Shell { run, env } = step.kind else {
@@ -124,7 +135,7 @@ fn run_identity_with(
     for key in removed {
         command.env_remove(key);
     }
-    command.output().expect("run identity shell")
+    command
 }
 
 fn assert_disabled(output: &Output, text: &str, reason: &str) {
@@ -358,3 +369,6 @@ fn identity_step_binds_fixed_tool_home_environment() {
     }
     assert_eq!(step.name, crate::cache_p08::TOOLS_CACHE_IDENTITY_NAME);
 }
+
+#[path = "cache_p08_runtime_identity_scratch_tests.rs"]
+mod scratch_tests;
