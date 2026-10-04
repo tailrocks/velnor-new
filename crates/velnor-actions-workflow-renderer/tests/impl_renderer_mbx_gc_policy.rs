@@ -15,14 +15,14 @@ use super::impl_renderer_fixtures::*;
 #[test]
 fn local_backend_and_gc_policy_render_only_when_present() -> Result<(), RenderError> {
     let uses = format!("jdx/mr-boxington-action@{}", "a".repeat(40));
-    let mbx = mbx_objects_step(&uses, false, "1.21.1")?;
+    let mbx = mbx_objects_step(&uses, false, TEST_MBX_VERSION)?;
     let plain = checkout_step(&checkout_pin())?;
     let text = render_workflow_ir(
         &fixture_ir(vec![job(
             "demo",
             "Demo",
             Vec::new(),
-            vec![pinned_rust_step()?, plain, mbx],
+            vec![pinned_tools_step(TEST_MBX_VERSION)?, plain, mbx],
         )]),
         WorkflowPolicy::ConsumerV1,
         None,
@@ -76,18 +76,18 @@ fn local_backend_and_gc_policy_render_only_when_present() -> Result<(), RenderEr
 #[test]
 fn mbx_gc_policy_is_scoped_to_hosted_mbx_jobs() -> Result<(), RenderError> {
     let uses = format!("jdx/mr-boxington-action@{}", "a".repeat(40));
-    let mbx = mbx_objects_step(&uses, false, "1.21.1")?;
+    let mbx = mbx_objects_step(&uses, false, TEST_MBX_VERSION)?;
     let hosted = job(
         &format!("rust-demo{HOSTED_SUFFIX}"),
         "Rust demo hosted",
         Vec::new(),
-        vec![pinned_rust_step()?, mbx.clone()],
+        vec![pinned_tools_step(TEST_MBX_VERSION)?, mbx.clone()],
     );
     let mut local = job(
         &format!("rust-demo{SCALE_SUFFIX}"),
         "Rust demo scale set",
         Vec::new(),
-        vec![pinned_rust_step()?, mbx],
+        vec![pinned_tools_step(TEST_MBX_VERSION)?, mbx],
     );
     local.1.runs_on = ScaleSetSelector::try_new(
         SCALE_SET_NAME,
@@ -105,7 +105,7 @@ fn mbx_gc_policy_is_scoped_to_hosted_mbx_jobs() -> Result<(), RenderError> {
     Ok(())
 }
 
-fn pinned_rust_step() -> Result<velnor_actions_contract::Step, RenderError> {
+fn pinned_tools_step(version: &str) -> Result<velnor_actions_contract::Step, RenderError> {
     shell_step(
         "Prepare pinned Rust",
         vec![
@@ -115,6 +115,7 @@ fn pinned_rust_step() -> Result<velnor_actions_contract::Step, RenderError> {
             "--no-hooks".to_owned(),
             "install".to_owned(),
             "rust@1.98.1".to_owned(),
+            format!("mr-boxington@{version}"),
         ],
         BTreeMap::from([
             (

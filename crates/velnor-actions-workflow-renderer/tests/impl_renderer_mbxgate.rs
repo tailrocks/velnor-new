@@ -1,7 +1,8 @@
 //! MBX action gating: emitted only for MBX-selected drivers.
 use std::collections::BTreeMap;
+use velnor_actions_workflow_renderer::steps::mbx_step_for_driver;
 use velnor_actions_workflow_renderer::{
-    CompileDriver, RenderError, check_mbx_gating, checkout_step, mbx_step_for_driver, shell_step,
+    CompileDriver, RenderError, check_mbx_gating, checkout_step, shell_step,
 };
 
 use super::impl_renderer_fixtures::*;

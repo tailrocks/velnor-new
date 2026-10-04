@@ -1,6 +1,6 @@
 velnor-actions: WARNING: .velnor/release-manifest.json is absent; generated workflows use a debug-only stand-in that MUST NOT ship
-Preview: /private/tmp/velnor-goldens-work/stage/minimal-cargo/preview
-Repository: /private/tmp/velnor-goldens-work/minimal-cargo
+Preview: <preview>
+Repository: <repo>
 .github/AGENTS.md
 .github/CLAUDE.md
 .github/actionlint.yaml

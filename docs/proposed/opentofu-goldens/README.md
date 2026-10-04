@@ -40,14 +40,28 @@ normalization.
 | mbx-nextest | 0 | same |
 | empty-suite | 0 | same |
 | minimal-cargo | 0 | same |
-| dogfood (this repo) | 0 | plan.txt, generate tree, `dogfood.verdict=identical` (generate ≡ checked-in `.github`), tree.sha256 |
+| dogfood (this repo) | 0 | plan.txt, generate tree, `dogfood.verdict=identical`, tree.sha256 |
+
+The checked-in producer workflow was regenerated from the reviewed source with
+the locked release candidate (`mbx build --release --locked --package
+velnor-actions-cli --bin velnor-actions`). Its complete `.github` output was
+reproduced by a second `generate --output-dir` run; the only difference from
+the preceding shipping tree was `.github/workflows/ci.yml`. The resulting CI
+workflow SHA-256 is `613eeba58b49f4b6f28da06c97fadeb6567d7f2b521dece53149631643e839b9`.
+The local golden collector still builds `target/debug/velnor-actions`; its
+`identical` dogfood verdict confirms that this source preview matches the
+checked-in tree, but the debug binary is not the producer artifact. The
+workflow's required `Check generated files` gate remains in place and must pass
+on the PR head before merge. This is producer self-dogfooding only; ChainArgos
+consumer regeneration and deployment still require a verified immutable
+Velnor product and its matching manifest.
 
 `MANIFEST.sha256` pins every golden file.
 
 ## Capture environment
 
 - `cargo 1.98.1`, `rustc 1.98.1` (pinned `mise.toml`), `--locked` builds.
-- Binary `target/debug/velnor-actions` sha256 `ca05f870fb4f9784…` (local
+- Binary `target/debug/velnor-actions` sha256 `90d43fabd3d78f3d64a2ff35cb71992c700f4c01e6e7866a286473190341c619` (local
   build; digests embedding the host triple are normalized by harness).
 - Fixture maintenance in this commit: `fixtures/nested/Cargo.lock`
   regenerated (`cargo generate-lockfile --offline`) — the stale lock made

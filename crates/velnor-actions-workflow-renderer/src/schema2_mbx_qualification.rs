@@ -199,14 +199,13 @@ fn mise_setup_step(request: &MbxQualificationPins) -> Result<Step, RenderError> 
 
 fn mise_install_step(request: &MbxQualificationPins) -> Result<Step, RenderError> {
     let rust = &request.rust_version;
+    let mbx = &request.mbx_version;
     steps::shell_step(
-        "Install pinned Rust toolchain",
+        "Install pinned Rust and MBX toolchains",
         vec![
             "bash".to_owned(),
             "-c".to_owned(),
-            format!(
-                "mise install rust@{rust} && mise exec rust@{rust} -- rustc --print sysroot > \"$RUNNER_TEMP/mbx-rust-sysroot\" && IFS= read -r sysroot < \"$RUNNER_TEMP/mbx-rust-sysroot\" && test -n \"$sysroot\" && printf '%s/bin\\n' \"$sysroot\" >> \"$GITHUB_PATH\""
-            ),
+            format!("mise --no-config --no-env --no-hooks install rust@{rust} mr-boxington@{mbx}"),
         ],
         qualification_shell_env(request),
     )

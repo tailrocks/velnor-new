@@ -15,30 +15,50 @@ report explaining why.
 
 The job's action prelude checks out the selected commit with pinned
 `actions/checkout` and `persist-credentials: false`, initializes pinned Mise
-without project config or environment loading, and installs the exact selected
-Rust components and tools. Config-less Mise installs the minimal rustup profile,
-so the fixed `Prepare Rust components` step invokes that toolchain's rustup to
-add Clippy and rustfmt into Velnor-owned tool homes. For an MBX profile only,
-the pinned `jdx/mr-boxington-action` installs the exact version with
-`backend: local`; its GitHub object-cache path is disabled. Each job gets a
-fresh private MBX store. The MBX CLI owns the object format and exports one
-directory to `$RUNNER_TEMP/mbx-single-bundle`; pinned `actions/cache` steps
-transport that opaque directory, and the MBX CLI imports it. A miss, absent
-directory, or failed import continues cold. Run `37114238559` records ENOSPC
-from the former in-store action post; it motivates external transport but does
-not prove lower peak disk use. Cargo-profile jobs omit MBX setup and steps.
+without project config, environment files, or hooks, and uses Mise to install
+the exact selected Rust toolchain and policy tools. For MBX profiles, the same
+`Prepare pinned tools` step also installs the exact catalog-pinned MBX release.
+Config-less Mise installs the minimal rustup profile, so the fixed
+`Prepare Rust components` step invokes the selected toolchain's rustup to add
+Clippy and rustfmt into Velnor-owned tool homes. For MBX only, the pinned
+`jdx/mr-boxington-action` runs with `backend: local` and the exact selected
+MBX version; its stock GitHub object-cache path is disabled. Each job gets a
+fresh private MBX store. The official MBX CLI owns the object format and exports
+one opaque directory at
+`$RUNNER_TEMP/mbx-single-bundle` with `mbx cache export`; pinned `actions/cache`
+steps transport that directory, and `mbx cache import` loads it. The same cache
+actions transport Cargo sources and qualified Mise task artifacts, never the
+live MBX store. A miss, absent directory, or failed import continues cold.
+`37114238559` records ENOSPC from the former in-store action post. It motivates
+external transport, not a claim of lower peak disk use. Hosted workload
+qualification remains pending. Cargo profiles
+omit MBX setup and bundle steps.
 
-1. `Prepare pinned tools`: install exact Velnor policy tools through a fixed
-   Mise invocation that loads no project config (`--no-config` plus
-   `MISE_NO_CONFIG=1`; project env/hooks disabled, Velnor-owned tool
-   homes). Download bytes trust upstream TLS plus exact catalog pins;
-   the committed `mise.lock` is never consulted at install time.
+The renderer centrally injects one strict MBX/Rust identity preflight in each
+applicable crate job and in the plan-job pre-seed restore path, immediately
+before the first MBX action or command. With `--no-config --no-env --no-hooks`, it uses
+Mise's exact-pin resolution (`mise where`) to find the MBX and Rust install
+roots, then checks that their executables exist and are executable. It requires
+`mbx --version` to match the exact catalog pin and verifies the selected
+toolchain-qualified `rustc` version command reports the exact Rust release.
+Missing or mismatched roots or versions fail before
+MBX runs. The preflight is the sole publisher of
+the validated MBX and Rust roots through `GITHUB_PATH`; later action and compile
+steps reuse them. Qualification workflow bootstraps also install both exact
+Rust and MBX catalog pins and use this single preflight/path flow.
+
+1. `Prepare pinned tools`: install exact Velnor policy tools through fixed
+   Mise invocations with `--no-config --no-env --no-hooks` and
+   `MISE_NO_CONFIG=1 MISE_NO_ENV=1 MISE_NO_HOOKS=1`. Use Velnor-owned tool
+   homes; MBX profiles also install the exact MBX catalog pin. Download bytes
+   trust upstream TLS plus exact catalog pins; the committed `mise.lock` is
+   never consulted at install time.
 2. `Verify toolchain`: verify Rust, selected compile driver, selected test
    runner, target, runner platform, and report optional tool-file findings.
 3. `Restore Cargo sources`: restore only the Cargo source cache owned by Velnor.
-4. `Restore compiler objects`: use MBX's supported portable-object restore
-   path only when this workspace's detected profile selects MBX; otherwise
-   this step reports `not_applicable`.
+4. `Restore compiler objects`: restore only the opaque bundle with pinned
+   `actions/cache`, then import it through the official MBX CLI when this
+   workspace selects MBX; otherwise report `not_applicable`.
 5. `Verify prepared inputs`: run locked/offline preparation checks.
 6. `Clippy`: run the matrix entry's fixed Clippy command and stop this job on
    failure.
@@ -108,7 +128,8 @@ discovery-only exception.
 
 Do not run `cargo install`, ad hoc Rust component installers, absolute Cargo
 paths, or `taiki-e/install-action`. Until task-result caching is qualified,
-commands use direct `mise exec`; afterward only qualified cached tasks may use
+commands use direct `mise exec` with `--no-config --no-env --no-hooks`;
+afterward only qualified cached tasks may use
 the temporary task definition. Nextest MUST compile its selected configuration
 once and reuse its archive/metadata for execution; it does not run doctests.
 Project `rust-toolchain.toml`, `mise.toml`, and `mise.lock` remain byte-identical.
@@ -119,11 +140,11 @@ omits `--target`.
 
 | Task kind | Cargo profile | MBX profile |
 |---|---|---|
-| `clippy` | `mise --no-config exec rust@<rust> -- cargo clippy --package <package> --all-targets --locked -- -D warnings` | `mise --no-config exec rust@<rust> mr-boxington@<mbx> -- mbx clippy --package <package> --all-targets --locked -- -D warnings` |
-| `test` | `mise --no-config exec rust@<rust> -- cargo test --package <package> <metadata-derived-non-doc-target-flags> --locked` | `mise --no-config exec rust@<rust> mr-boxington@<mbx> -- mbx test --package <package> <metadata-derived-non-doc-target-flags> --locked` |
-| `nextest` | `mise --no-config exec rust@<rust> cargo-nextest@<nextest> -- cargo nextest run --package <package> --locked` | `mise --no-config exec rust@<rust> mr-boxington@<mbx> cargo-nextest@<nextest> -- mbx nextest run --package <package> --locked` |
-| `doctest` | `mise --no-config exec rust@<rust> -- cargo test --package <package> --doc --locked` | `mise --no-config exec rust@<rust> mr-boxington@<mbx> -- mbx test --package <package> --doc --locked` |
-| `doc` | `mise --no-config exec rust@<rust> -- cargo doc --package <package> --no-deps --locked` with `RUSTDOCFLAGS=-D warnings` | `mise --no-config exec rust@<rust> mr-boxington@<mbx> -- mbx doc --package <package> --no-deps --locked` with `RUSTDOCFLAGS=-D warnings` |
+| `clippy` | `mise --no-config --no-env --no-hooks exec rust@<rust> -- cargo clippy --package <package> --all-targets --locked -- -D warnings` | `mise --no-config --no-env --no-hooks exec rust@<rust> mr-boxington@<mbx> -- mbx clippy --package <package> --all-targets --locked -- -D warnings` |
+| `test` | `mise --no-config --no-env --no-hooks exec rust@<rust> -- cargo test --package <package> <metadata-derived-non-doc-target-flags> --locked` | `mise --no-config --no-env --no-hooks exec rust@<rust> mr-boxington@<mbx> -- mbx test --package <package> <metadata-derived-non-doc-target-flags> --locked` |
+| `nextest` | `mise --no-config --no-env --no-hooks exec rust@<rust> cargo-nextest@<nextest> -- cargo nextest run --package <package> --locked` | `mise --no-config --no-env --no-hooks exec rust@<rust> mr-boxington@<mbx> cargo-nextest@<nextest> -- mbx nextest run --package <package> --locked` |
+| `doctest` | `mise --no-config --no-env --no-hooks exec rust@<rust> -- cargo test --package <package> --doc --locked` | `mise --no-config --no-env --no-hooks exec rust@<rust> mr-boxington@<mbx> -- mbx test --package <package> --doc --locked` |
+| `doc` | `mise --no-config --no-env --no-hooks exec rust@<rust> -- cargo doc --package <package> --no-deps --locked` with `RUSTDOCFLAGS=-D warnings` | `mise --no-config --no-env --no-hooks exec rust@<rust> mr-boxington@<mbx> -- mbx doc --package <package> --no-deps --locked` with `RUSTDOCFLAGS=-D warnings` |
 
 The adapters construct these command families as argument vectors; the table is
 not shell text. Clippy names exactly one package. For Cargo-test mode, the
@@ -141,7 +162,7 @@ Each generated workflow command uses the Velnor-owned environment:
 
 ```text
 MISE_LOCKFILE=0 MISE_NO_CONFIG=1 MISE_NO_ENV=1 MISE_NO_HOOKS=1 \
-mise --no-config exec <tool>@<exact-version>... -- <fixed executable> <fixed arguments>
+mise --no-config --no-env --no-hooks exec <tool>@<exact-version>... -- <fixed executable> <fixed arguments>
 ```
 
 The generated workflow sets `MISE_RUSTUP_HOME`, `MISE_CARGO_HOME`, and exact

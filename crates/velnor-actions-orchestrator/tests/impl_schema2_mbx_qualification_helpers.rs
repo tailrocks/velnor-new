@@ -79,6 +79,61 @@ pub(super) fn assert_qualification_gate(job: &str) {
     );
 }
 
+pub(super) fn assert_mbx_bootstrap(job: &str) {
+    let step = step_body(job, "Install pinned Rust and MBX toolchains");
+    assert_eq!(
+        job.matches("name: Install pinned Rust and MBX toolchains")
+            .count(),
+        1,
+        "{job}"
+    );
+    assert!(
+        step.contains(
+            "mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.22.0"
+        ),
+        "{step}"
+    );
+}
+
+pub(super) fn assert_mbx_preflight(job: &str) {
+    assert_eq!(
+        job.matches("name: Verify MBX and Rust toolchains").count(),
+        1,
+        "exactly one central preflight per MBX job: {job}"
+    );
+    let step = step_body(job, "Verify MBX and Rust toolchains");
+    assert!(
+        step.contains("mise --no-config --no-env --no-hooks where 'mr-boxington@1.22.0'"),
+        "{step}"
+    );
+    assert!(
+        step.contains("mise --no-config --no-env --no-hooks where 'rust@1.98.1'"),
+        "{step}"
+    );
+    assert!(step.contains("GITHUB_PATH"), "{step}");
+    assert!(
+        step.contains("rust_root") && step.contains("mbx_root"),
+        "{step}"
+    );
+    let rustup_home = step_value(job, "Verify MBX and Rust toolchains", "RUSTUP_HOME");
+    let mise_rustup_home = step_value(job, "Verify MBX and Rust toolchains", "MISE_RUSTUP_HOME");
+    assert!(
+        rustup_home.is_some(),
+        "preflight must set RUSTUP_HOME: {step}"
+    );
+    assert_eq!(rustup_home, mise_rustup_home);
+    let cargo_home = step_value(job, "Verify MBX and Rust toolchains", "CARGO_HOME");
+    let mise_cargo_home = step_value(job, "Verify MBX and Rust toolchains", "MISE_CARGO_HOME");
+    assert!(
+        cargo_home.is_some(),
+        "preflight must set CARGO_HOME: {step}"
+    );
+    assert_eq!(cargo_home, mise_cargo_home);
+    assert!(!job.contains("mbx-rust-sysroot"), "{job}");
+    assert!(!job.contains("sysroot/bin"), "{job}");
+    assert!(!job.contains("printf '%s/bin\\n'"), "{job}");
+}
+
 pub(super) fn assert_no_implicit_cache(job: &str) {
     let action = step_body(job, "Setup MBX");
     assert!(action.contains("backend: local"), "{action}");
@@ -164,6 +219,95 @@ pub(super) fn assert_same_step_value(writer: &str, reader: &str, step: &str, key
     let reader_value = step_value(reader, step, key);
     assert!(writer_value.is_some(), "{key} missing from writer");
     assert_eq!(writer_value, reader_value, "{step} {key} differs");
+}
+
+pub(super) fn assert_shared_identity(writer: &str, reader: &str) {
+    assert_shared_cache_identity(writer, reader);
+    assert_shared_bundle_identity(writer, reader);
+}
+
+fn assert_shared_cache_identity(writer: &str, reader: &str) {
+    assert_eq!(mbx_action_version(writer), mbx_action_version(reader));
+    assert_eq!(mbx_action_version(writer), Some(MBX_VERSION));
+    for key in [
+        "MBX_VERSION",
+        "MBX_EXPECTED_VERSION",
+        "MBX_GENERATION",
+        "MBX_CACHE_SCOPE",
+        "MBX_MATRIX_CONTEXT",
+        "RUSTUP_TOOLCHAIN",
+        "MISE_RUSTUP_HOME",
+        "MISE_CARGO_HOME",
+    ] {
+        assert_same_step_value(writer, reader, "Prepare MBX bundle key", key);
+    }
+    assert_eq!(
+        step_value(writer, "Prepare MBX bundle key", "MBX_CACHE_SCOPE"),
+        Some(QUALIFICATION_SCOPE)
+    );
+    assert_eq!(
+        step_value(writer, "Prepare MBX bundle key", "MBX_EXPECTED_VERSION"),
+        Some(MBX_VERSION)
+    );
+    assert_eq!(
+        step_value(writer, "Prepare MBX bundle key", "MBX_GENERATION"),
+        Some(MBX_GENERATION)
+    );
+    assert_eq!(
+        step_value(writer, "Prepare MBX bundle key", "MBX_MATRIX_CONTEXT"),
+        Some("${{ toJSON(matrix) }}")
+    );
+    assert_key_contract(step_body(writer, "Prepare MBX bundle key"));
+    assert_key_contract(step_body(reader, "Prepare MBX bundle key"));
+}
+
+fn assert_shared_bundle_identity(writer: &str, reader: &str) {
+    let writer_restore = step_body(writer, "Restore MBX single bundle");
+    let reader_restore = step_body(reader, "Restore MBX single bundle");
+    assert!(
+        writer_restore.contains(CACHE_RESTORE_PIN),
+        "{writer_restore}"
+    );
+    assert!(
+        reader_restore.contains(CACHE_RESTORE_PIN),
+        "{reader_restore}"
+    );
+    assert_same_step_value(writer, reader, "Restore MBX single bundle", "path");
+    assert_same_step_value(writer, reader, "Restore MBX single bundle", "key");
+    assert_eq!(
+        step_value(writer, "Restore MBX single bundle", "restore-keys"),
+        None,
+        "qualification writer must not restore a previous run's cache"
+    );
+    assert_eq!(
+        step_value(reader, "Restore MBX single bundle", "restore-keys"),
+        None,
+        "qualification reader must use only the designated writer's exact key"
+    );
+    assert_eq!(
+        step_value(writer, "Restore MBX single bundle", "path"),
+        Some(BUNDLE_PATH)
+    );
+    let writer_save = step_body(writer, "Save MBX single bundle");
+    assert!(writer_save.contains(CACHE_SAVE_PIN), "{writer_save}");
+    assert_eq!(
+        step_value(writer, "Save MBX single bundle", "if"),
+        Some(concat!(
+            "success() && inputs.mode == 'mbx-cache-roundtrip' && ",
+            "github.event_name == 'workflow_dispatch' && ",
+            "github.ref == 'refs/heads/main' && github.ref_protected == true && ",
+            "steps.mbx-bundle.outputs.cache-hit != 'true' && ",
+            "steps.mbx-export.outputs.ready == 'true'"
+        ))
+    );
+    assert!(
+        writer_save.contains("key: ${{ steps.mbx-bundle-key.outputs.primary }}"),
+        "{writer_save}"
+    );
+    assert!(
+        writer_save.contains("path: ${{ runner.temp }}/mbx-single-bundle"),
+        "{writer_save}"
+    );
 }
 
 pub(super) fn assert_ordered(job: &str, names: &[&str]) {

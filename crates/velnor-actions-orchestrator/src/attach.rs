@@ -201,12 +201,15 @@ fn insert_plan_mbx_setup(
         MR_BOXINGTON_ACTION_VERSION,
     )?
     .uses_value();
-    let restore = velnor_actions_workflow_renderer::steps::mbx_objects_step(
+    let setup = velnor_actions_workflow_renderer::steps::mbx_step_for_driver(
         &uses,
-        false,
+        velnor_actions_workflow_renderer::steps::CompileDriver::Mbx,
         catalog.version(PinnedTool::MrBoxington),
-    )?;
-    steps.insert(restore_at + 1, restore);
+    )?
+    .ok_or_else(|| OrchestratorError::Contract {
+        problem: "mbx_driver_did_not_emit_setup".to_owned(),
+    })?;
+    steps.insert(restore_at + 1, setup);
     Ok(())
 }
 

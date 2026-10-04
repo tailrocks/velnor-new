@@ -8,10 +8,9 @@ use crate::impl_common::{TestResult, make_repo};
 mod helpers;
 
 use self::helpers::{
-    BUNDLE_PATH, CACHE_RESTORE_PIN, CACHE_SAVE_PIN, MBX_GENERATION, MBX_VERSION,
-    QUALIFICATION_SCOPE, assert_compression_profile, assert_external_cache_actions,
-    assert_key_contract, assert_mbx_action_pin, assert_no_implicit_cache, assert_ordered,
-    assert_qualification_gate, assert_same_step_value, mbx_action_version, step_body, step_value,
+    assert_compression_profile, assert_external_cache_actions, assert_mbx_action_pin,
+    assert_mbx_bootstrap, assert_mbx_preflight, assert_no_implicit_cache, assert_ordered,
+    assert_qualification_gate, assert_shared_identity, step_body,
 };
 
 #[test]
@@ -51,6 +50,8 @@ fn assert_writer(writer: &str) {
     assert!(writer.contains("rustc --print sysroot"), "{writer}");
     assert_compression_profile(writer);
     assert_mbx_action_pin(writer);
+    assert_mbx_bootstrap(writer);
+    assert_mbx_preflight(writer);
     assert_external_cache_actions(writer, true);
     assert_eq!(writer.matches("if: success() &&").count(), 2, "{writer}");
     assert!(
@@ -87,7 +88,9 @@ fn assert_writer(writer: &str) {
     assert_ordered(
         writer,
         &[
+            "name: Install pinned Rust and MBX toolchains",
             "name: Verify cache compression support",
+            "name: Verify MBX and Rust toolchains",
             "name: Prepare private MBX store",
             "name: Setup MBX",
             "name: Prepare MBX bundle key",
@@ -124,6 +127,8 @@ fn assert_reader(reader: &str) {
     );
     assert_compression_profile(reader);
     assert_mbx_action_pin(reader);
+    assert_mbx_bootstrap(reader);
+    assert_mbx_preflight(reader);
     assert_external_cache_actions(reader, false);
     assert!(reader.contains("mbx cache stats --json"), "{reader}");
     assert!(reader.contains(".objects > 0"), "{reader}");
@@ -153,7 +158,9 @@ fn assert_reader(reader: &str) {
     assert_ordered(
         reader,
         &[
+            "name: Install pinned Rust and MBX toolchains",
             "name: Verify cache compression support",
+            "name: Verify MBX and Rust toolchains",
             "name: Prepare private MBX store",
             "name: Setup MBX",
             "name: Prepare MBX bundle key",
@@ -165,85 +172,4 @@ fn assert_reader(reader: &str) {
             "name: Require reused compilation",
         ],
     );
-}
-
-fn assert_shared_identity(writer: &str, reader: &str) {
-    assert_eq!(mbx_action_version(writer), mbx_action_version(reader));
-    assert_eq!(mbx_action_version(writer), Some(MBX_VERSION));
-    for key in [
-        "MBX_VERSION",
-        "MBX_EXPECTED_VERSION",
-        "MBX_GENERATION",
-        "MBX_CACHE_SCOPE",
-        "MBX_MATRIX_CONTEXT",
-        "RUSTUP_TOOLCHAIN",
-        "MISE_RUSTUP_HOME",
-        "MISE_CARGO_HOME",
-    ] {
-        assert_same_step_value(writer, reader, "Prepare MBX bundle key", key);
-    }
-    assert_eq!(
-        step_value(writer, "Prepare MBX bundle key", "MBX_CACHE_SCOPE"),
-        Some(QUALIFICATION_SCOPE)
-    );
-    assert_eq!(
-        step_value(writer, "Prepare MBX bundle key", "MBX_EXPECTED_VERSION"),
-        Some(MBX_VERSION)
-    );
-    assert_eq!(
-        step_value(writer, "Prepare MBX bundle key", "MBX_GENERATION"),
-        Some(MBX_GENERATION)
-    );
-    assert_eq!(
-        step_value(writer, "Prepare MBX bundle key", "MBX_MATRIX_CONTEXT"),
-        Some("${{ toJSON(matrix) }}")
-    );
-    let writer_restore = step_body(writer, "Restore MBX single bundle");
-    let reader_restore = step_body(reader, "Restore MBX single bundle");
-    assert!(
-        writer_restore.contains(CACHE_RESTORE_PIN),
-        "{writer_restore}"
-    );
-    assert!(
-        reader_restore.contains(CACHE_RESTORE_PIN),
-        "{reader_restore}"
-    );
-    assert_same_step_value(writer, reader, "Restore MBX single bundle", "path");
-    assert_same_step_value(writer, reader, "Restore MBX single bundle", "key");
-    assert_eq!(
-        step_value(writer, "Restore MBX single bundle", "restore-keys"),
-        None,
-        "qualification writer must not restore a previous run's cache"
-    );
-    assert_eq!(
-        step_value(reader, "Restore MBX single bundle", "restore-keys"),
-        None,
-        "qualification reader must use only the designated writer's exact key"
-    );
-    assert_eq!(
-        step_value(writer, "Restore MBX single bundle", "path"),
-        Some(BUNDLE_PATH)
-    );
-    let writer_save = step_body(writer, "Save MBX single bundle");
-    assert!(writer_save.contains(CACHE_SAVE_PIN), "{writer_save}");
-    assert_eq!(
-        step_value(writer, "Save MBX single bundle", "if"),
-        Some(concat!(
-            "success() && inputs.mode == 'mbx-cache-roundtrip' && ",
-            "github.event_name == 'workflow_dispatch' && ",
-            "github.ref == 'refs/heads/main' && github.ref_protected == true && ",
-            "steps.mbx-bundle.outputs.cache-hit != 'true' && ",
-            "steps.mbx-export.outputs.ready == 'true'"
-        ))
-    );
-    assert!(
-        writer_save.contains("key: ${{ steps.mbx-bundle-key.outputs.primary }}"),
-        "{writer_save}"
-    );
-    assert!(
-        writer_save.contains("path: ${{ runner.temp }}/mbx-single-bundle"),
-        "{writer_save}"
-    );
-    assert_key_contract(step_body(writer, "Prepare MBX bundle key"));
-    assert_key_contract(step_body(reader, "Prepare MBX bundle key"));
 }
