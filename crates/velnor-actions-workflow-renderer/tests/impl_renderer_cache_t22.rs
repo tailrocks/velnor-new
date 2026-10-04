@@ -9,7 +9,8 @@ use velnor_actions_workflow_renderer::tofu_cache::{
 
 const HOME: &str = "${{ runner.temp }}/velnor/cargo";
 const KEY: &str = "velnor-v1-sources-trusted-compat-snapshot";
-const PROVIDER_KEY: &str = "velnor-v1-tofu-providers-x86_64-unknown-linux-gnu-1.13.1-root-0123456789ab-${{hashFiles('.terraform.lock.hcl')}}";
+const ROOT_LOCATOR: &str = "b3-0000000000000000000000000000000000000000000000000000000000000000";
+const PROVIDER_KEY: &str = "velnor-v1-tofu-providers-x86_64-unknown-linux-gnu-1.13.1-b3-0000000000000000000000000000000000000000000000000000000000000000-${{hashFiles('.terraform.lock.hcl')}}";
 
 #[test]
 fn never_archive_mirror_lists_state_plans_and_credentials() {
@@ -58,12 +59,12 @@ fn sources_steps_reject_never_archive_paths() -> Result<(), RenderError> {
 
 #[test]
 fn provider_steps_reject_never_archive_paths() -> Result<(), RenderError> {
-    let good = format!("{TOFU_PROVIDER_CACHE_BASE_EXPR}/root-0123456789ab");
+    let good = format!("{TOFU_PROVIDER_CACHE_BASE_EXPR}/{ROOT_LOCATOR}");
     tofu_providers_save_step(PROVIDER_KEY, &good)?;
     for bad in [
-        format!("{TOFU_PROVIDER_CACHE_BASE_EXPR}/root-0123456789ab.tfstate"),
+        format!("{TOFU_PROVIDER_CACHE_BASE_EXPR}/{ROOT_LOCATOR}.tfstate"),
         format!("{TOFU_PROVIDER_CACHE_BASE_EXPR}/plan.tfplan"),
-        format!("{TOFU_PROVIDER_CACHE_BASE_EXPR}/credentials-root-0123456789ab"),
+        format!("{TOFU_PROVIDER_CACHE_BASE_EXPR}/credentials-{ROOT_LOCATOR}"),
     ] {
         assert!(
             tofu_providers_save_step(PROVIDER_KEY, &bad).is_err(),
@@ -75,7 +76,7 @@ fn provider_steps_reject_never_archive_paths() -> Result<(), RenderError> {
 
 #[test]
 fn provider_save_carries_no_gate_itself() -> Result<(), RenderError> {
-    let good = format!("{TOFU_PROVIDER_CACHE_BASE_EXPR}/root-0123456789ab");
+    let good = format!("{TOFU_PROVIDER_CACHE_BASE_EXPR}/{ROOT_LOCATOR}");
     let save = tofu_providers_save_step(PROVIDER_KEY, &good)?;
     assert!(
         save.condition.is_none(),

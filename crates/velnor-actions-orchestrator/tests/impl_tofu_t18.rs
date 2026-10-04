@@ -257,17 +257,19 @@ fn nested_roots_format_once_at_outer_scope() -> TestResult {
     )?;
     let prep = prepare(dir.path())?;
     let fmt_of = |unit: &str| {
+        let key = velnor_actions_tofu::key_for_root(unit);
         prep.discovery
             .proposals
             .iter()
             .find(|task| {
-                task.stack_id == "tofu" && task.task_kind == "fmt" && task.identity.unit_id == unit
+                task.stack_id == "tofu" && task.task_kind == "fmt" && task.identity.unit_id == key
             })
             .map(|task| task.no_targets)
     };
-    assert_eq!(fmt_of("root"), Some(false), "outer fmt runs");
+    assert_eq!(fmt_of(""), Some(false), "outer fmt runs");
     assert_eq!(fmt_of("stacks/a"), Some(true), "covered inner fmt skips");
-    for unit in ["root", "stacks/a"] {
+    for unit in ["", "stacks/a"] {
+        let key = velnor_actions_tofu::key_for_root(unit);
         for kind in ["init", "validate"] {
             let runnable = prep
                 .discovery
@@ -276,7 +278,7 @@ fn nested_roots_format_once_at_outer_scope() -> TestResult {
                 .find(|task| {
                     task.stack_id == "tofu"
                         && task.task_kind == kind
-                        && task.identity.unit_id == unit
+                        && task.identity.unit_id == key
                 })
                 .is_some_and(|task| !task.no_targets);
             assert!(runnable, "{unit} {kind} stays runnable");

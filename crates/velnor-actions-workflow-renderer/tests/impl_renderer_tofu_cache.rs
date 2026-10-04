@@ -9,8 +9,8 @@ use velnor_actions_workflow_renderer::tofu_cache::{
     TOFU_PROVIDERS_SAVE_USES, tofu_providers_path_ok, tofu_providers_save_step,
 };
 
-const KEY: &str = "velnor-v1-tofu-providers-x86_64-unknown-linux-gnu-1.13.1-root-0123456789ab-${{hashFiles('.terraform.lock.hcl')}}";
-const PATH: &str = "${{ runner.temp }}/velnor/tofu-cache/root-0123456789ab";
+const KEY: &str = "velnor-v1-tofu-providers-x86_64-unknown-linux-gnu-1.13.1-b3-0000000000000000000000000000000000000000000000000000000000000000-${{hashFiles('.terraform.lock.hcl')}}";
+const PATH: &str = "${{ runner.temp }}/velnor/tofu-cache/b3-0000000000000000000000000000000000000000000000000000000000000000";
 
 #[test]
 fn provider_save_step_shape_and_pin_parity() -> Result<(), RenderError> {
@@ -73,7 +73,7 @@ fn provider_layer_admits_exact_keys_without_restore_prefix() -> Result<(), Rende
 fn provider_paths_stay_under_the_owned_base() {
     assert!(tofu_providers_path_ok(PATH));
     assert!(tofu_providers_path_ok(
-        "${{ runner.temp }}/velnor/tofu-cache/stacks-vpc-abcdef012345"
+        "${{ runner.temp }}/velnor/tofu-cache/b3-1111111111111111111111111111111111111111111111111111111111111111"
     ));
     for bad in [
         TOFU_PROVIDER_CACHE_BASE_EXPR,
@@ -81,10 +81,10 @@ fn provider_paths_stay_under_the_owned_base() {
         "${{ runner.temp }}/velnor/tofu-cache/a/b",
         "${{ runner.temp }}/velnor/tofu-cache/../evil",
         "${{ runner.temp }}/velnor/tofu-cache/root-x credentials",
-        "${{ runner.temp }}/velnor/tofu-cache/credentials-root-0123456789ab",
+        "${{ runner.temp }}/velnor/tofu-cache/credentials-b3-0000000000000000000000000000000000000000000000000000000000000000",
         "${{ runner.temp }}/velnor/tofu-cache/root-*.hcl",
-        "${{ runner.temp }}/velnor/tofu-data/root-0123456789ab",
-        "$RUNNER_TEMP/velnor/tofu-cache/root-0123456789ab",
+        "${{ runner.temp }}/velnor/tofu-data/b3-0000000000000000000000000000000000000000000000000000000000000000",
+        "$RUNNER_TEMP/velnor/tofu-cache/b3-0000000000000000000000000000000000000000000000000000000000000000",
         "",
     ] {
         assert!(!tofu_providers_path_ok(bad), "{bad:?} must fail closed");

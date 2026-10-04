@@ -85,7 +85,7 @@ pub use propose::{
     resource_class_for_kind, root_for_key, step_base_name, task_id_for_root, task_kind_rank,
     validate_normalized_root,
 };
-pub use root_identity::normalized_root_for_proposal;
+pub use root_identity::{RootLocatorRegistry, normalized_root_for_proposal};
 pub use roots::qualify_roots;
 pub use select::{RootSelection, SelectAllReason, select_roots};
 pub use task_identity::{

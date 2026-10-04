@@ -186,8 +186,7 @@ fn validate_tofu_obligation_gate(
             TofuTaskKind::InitForValidate,
             configuration,
         )?],
-        TofuTaskKind::Validate => Vec::new(),
-        TofuTaskKind::Fmt | TofuTaskKind::InitForValidate => Vec::new(),
+        TofuTaskKind::Validate | TofuTaskKind::Fmt | TofuTaskKind::InitForValidate => Vec::new(),
     };
     if obligation.gated_by != expected {
         return Err(internal("tofu_obligation_gate_mismatch"));
