@@ -6,7 +6,7 @@ use mbx_cache_core::{
 
 #[test]
 #[cfg(unix)]
-fn supported_payload_keeps_actual_wall_estimates_and_unknowns_distinct() {
+fn observed_work_without_delivery_receipts_is_unverified_and_keeps_wall_estimates() {
     let temporary = tempfile::tempdir().unwrap();
     let identity =
         SessionIdentity::new(CommandRole::CargoBuild, None, None, Some("fixture-1")).unwrap();
@@ -55,11 +55,11 @@ fn supported_payload_keeps_actual_wall_estimates_and_unknowns_distinct() {
     );
     assert_eq!(
         report["statistics"]["measurement"]["coverage"]["status"],
-        "unknown"
+        "unverified"
     );
     assert_eq!(
         report["statistics"]["measurement"]["coverage"]["reason"],
-        "completeness_not_proven"
+        "delivery_incomplete"
     );
     assert_eq!(report["statistics"]["measurement"]["workload_wall_ns"], 500);
     assert!(report["statistics"]["measurement"]["cache_post_workload_drain_ns"].is_null());
@@ -78,6 +78,46 @@ fn supported_payload_keeps_actual_wall_estimates_and_unknowns_distinct() {
         8_000
     );
     assert_eq!(report["statistics"]["cache"]["session_duration_ns"], 900);
+}
+
+#[test]
+#[cfg(unix)]
+fn absent_adapter_work_observations_remain_unknown_without_a_completeness_claim() {
+    let temporary = tempfile::tempdir().unwrap();
+    let identity =
+        SessionIdentity::new(CommandRole::CargoBuild, None, None, Some("fixture-empty")).unwrap();
+    let workload = WorkloadResult {
+        outcome: WorkloadOutcome::Succeeded,
+        exit_code: Some(0),
+    };
+    let path = publish_completed_stats(
+        Some(&temporary.path().join("reports")),
+        &identity,
+        workload,
+        Some(500),
+        None,
+        None,
+        None,
+        None,
+        &AgentStats::default(),
+    )
+    .unwrap()
+    .unwrap();
+    let report: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    assert_eq!(
+        report["statistics"]["measurement"]["coverage"]["status"],
+        "unknown"
+    );
+    assert_eq!(
+        report["statistics"]["measurement"]["coverage"]["reason"],
+        "completeness_not_proven"
+    );
+    assert!(
+        report["statistics"]["measurement"]["adapters"]
+            .as_object()
+            .unwrap()
+            .is_empty()
+    );
 }
 
 #[test]

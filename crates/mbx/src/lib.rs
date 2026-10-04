@@ -62,8 +62,8 @@ mod build_script;
 pub(crate) mod cargo_artifact_capture;
 mod cc;
 mod digest_ledger;
-pub(crate) mod dispatch_identity;
 pub(crate) mod dispatch_admission;
+pub(crate) mod dispatch_identity;
 mod incremental;
 mod linker;
 mod managed_linker;
@@ -79,7 +79,7 @@ mod scheduler;
 mod storage;
 #[doc(hidden)]
 pub mod supervision;
-mod unit_graph;
 pub(crate) mod unit_artifact_binding;
 pub(crate) mod unit_attribution;
+mod unit_graph;
 mod workspace_state;
