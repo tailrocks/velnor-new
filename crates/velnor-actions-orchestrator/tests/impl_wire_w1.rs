@@ -306,10 +306,11 @@ fn w1_plan_format_runs_fmt_check() -> TestResult {
         "MISE_RUSTUP_HOME:",
         "MISE_CARGO_HOME:",
         "RUSTUP_TOOLCHAIN: 1.98.1",
-        "MISE_AUTO_INSTALL:",
-        "MISE_EXEC_AUTO_INSTALL:",
     ] {
         assert!(block.contains(key), "format env misses {key}:\n{block}");
+    }
+    for key in ["MISE_AUTO_INSTALL:", "MISE_EXEC_AUTO_INSTALL:"] {
+        assert!(job.contains(key), "job env misses {key}:\n{job}");
     }
     // Regression: exactly one Format step per crate job, none in plan.
     let formats = yaml.matches("- name: Format").count();

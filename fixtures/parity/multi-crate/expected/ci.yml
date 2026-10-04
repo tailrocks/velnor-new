@@ -22,6 +22,24 @@ jobs:
     name: Actionlint
     runs-on: ubuntu-26.04
     timeout-minutes: 10
+    env:
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+      ACTIONS_ID_TOKEN_REQUEST_URL: ""
+      ACTIONS_RUNTIME_TOKEN: ""
+      CARGO_REGISTRY_TOKEN: ""
+      GH_CONFIG_DIR: ""
+      GH_HOST: ""
+      GH_TOKEN: ""
+      GITHUB_TOKEN: ""
+      MISE_AUTO_INSTALL: "false"
+      MISE_EXEC_AUTO_INSTALL: "false"
+      MISE_GITHUB_TOKEN: ""
+      MISE_LOCKFILE: "0"
+      MISE_NO_CONFIG: "1"
+      MISE_NO_ENV: "1"
+      MISE_NO_HOOKS: "1"
+      NODE_AUTH_TOKEN: ""
+      NPM_TOKEN: ""
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -49,6 +67,24 @@ jobs:
     name: Plan
     runs-on: ubuntu-26.04
     timeout-minutes: 10
+    env:
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+      ACTIONS_ID_TOKEN_REQUEST_URL: ""
+      ACTIONS_RUNTIME_TOKEN: ""
+      CARGO_REGISTRY_TOKEN: ""
+      GH_CONFIG_DIR: ""
+      GH_HOST: ""
+      GH_TOKEN: ""
+      GITHUB_TOKEN: ""
+      MISE_AUTO_INSTALL: "false"
+      MISE_EXEC_AUTO_INSTALL: "false"
+      MISE_GITHUB_TOKEN: ""
+      MISE_LOCKFILE: "0"
+      MISE_NO_CONFIG: "1"
+      MISE_NO_ENV: "1"
+      MISE_NO_HOOKS: "1"
+      NODE_AUTH_TOKEN: ""
+      NPM_TOKEN: ""
     outputs:
       covered_tasks: ${{ steps.plan.outputs.covered_tasks }}
     steps:
@@ -70,22 +106,12 @@ jobs:
       - name: Prepare pinned tools
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_LOCKFILE: "0"
-          MISE_NO_CONFIG: "1"
-          MISE_NO_ENV: "1"
-          MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
         run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.21.1 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
       - name: Prepare Rust components
         env:
-          MISE_AUTO_INSTALL: "false"
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_EXEC_AUTO_INSTALL: "false"
-          MISE_LOCKFILE: "0"
-          MISE_NO_CONFIG: "1"
-          MISE_NO_ENV: "1"
-          MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
         run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- rustup component add --toolchain 1.98.1-x86_64-unknown-linux-gnu clippy rustfmt
@@ -97,13 +123,7 @@ jobs:
           restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
       - name: Fetch Cargo sources
         env:
-          MISE_AUTO_INSTALL: "false"
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_EXEC_AUTO_INSTALL: "false"
-          MISE_LOCKFILE: "0"
-          MISE_NO_CONFIG: "1"
-          MISE_NO_ENV: "1"
-          MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
         run: "sh -c 'mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\" && cd \"$RUNNER_TEMP/velnor/cargo-clean\" && if mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo metadata --locked --offline --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\" >/dev/null 2>&1; then echo \"velnor: sources hit, skipping fetch\"; else echo \"velnor: sources miss (source_missing), fetching\"; mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\"; fi'"
@@ -115,17 +135,6 @@ jobs:
           path: "${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin\n${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
       - name: Acquire Velnor
         env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
-          ACTIONS_RUNTIME_TOKEN: ""
-          CARGO_REGISTRY_TOKEN: ""
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
-          MISE_GITHUB_TOKEN: ""
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
           VELNOR_ASSET_SHA256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
           VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.0/velnor-actions-0.1.0-x86_64-unknown-linux-gnu
           VELNOR_RELEASE_COMMIT: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
@@ -137,25 +146,8 @@ jobs:
         run: "\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\""
       - name: Check generated files
         env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
-          ACTIONS_RUNTIME_TOKEN: ""
-          CARGO_REGISTRY_TOKEN: ""
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
-          MISE_AUTO_INSTALL: "false"
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_EXEC_AUTO_INSTALL: "false"
-          MISE_GITHUB_TOKEN: ""
-          MISE_LOCKFILE: "0"
-          MISE_NO_CONFIG: "1"
-          MISE_NO_ENV: "1"
-          MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
           RUSTUP_TOOLCHAIN: 1.98.1
         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0 generate --output-dir \"$RUNNER_TEMP/velnor-actions-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}\" && diff -r --brief .github \"$RUNNER_TEMP/velnor-actions-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/.github\"'"
       - name: Plan
@@ -191,23 +183,30 @@ jobs:
     name: Publish baseline
     runs-on: ubuntu-26.04
     timeout-minutes: 10
+    env:
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+      ACTIONS_ID_TOKEN_REQUEST_URL: ""
+      ACTIONS_RUNTIME_TOKEN: ""
+      CARGO_REGISTRY_TOKEN: ""
+      GH_CONFIG_DIR: ""
+      GH_HOST: ""
+      GH_TOKEN: ""
+      GITHUB_TOKEN: ""
+      MISE_AUTO_INSTALL: "false"
+      MISE_EXEC_AUTO_INSTALL: "false"
+      MISE_GITHUB_TOKEN: ""
+      MISE_LOCKFILE: "0"
+      MISE_NO_CONFIG: "1"
+      MISE_NO_ENV: "1"
+      MISE_NO_HOOKS: "1"
+      NODE_AUTH_TOKEN: ""
+      NPM_TOKEN: ""
     needs:
       - required
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - name: Acquire Velnor
         env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
-          ACTIONS_RUNTIME_TOKEN: ""
-          CARGO_REGISTRY_TOKEN: ""
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
-          MISE_GITHUB_TOKEN: ""
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
           VELNOR_ASSET_SHA256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
           VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.0/velnor-actions-0.1.0-x86_64-unknown-linux-gnu
           VELNOR_RELEASE_COMMIT: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
@@ -240,6 +239,24 @@ jobs:
     name: Required
     runs-on: ubuntu-26.04
     timeout-minutes: 10
+    env:
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+      ACTIONS_ID_TOKEN_REQUEST_URL: ""
+      ACTIONS_RUNTIME_TOKEN: ""
+      CARGO_REGISTRY_TOKEN: ""
+      GH_CONFIG_DIR: ""
+      GH_HOST: ""
+      GH_TOKEN: ""
+      GITHUB_TOKEN: ""
+      MISE_AUTO_INSTALL: "false"
+      MISE_EXEC_AUTO_INSTALL: "false"
+      MISE_GITHUB_TOKEN: ""
+      MISE_LOCKFILE: "0"
+      MISE_NO_CONFIG: "1"
+      MISE_NO_ENV: "1"
+      MISE_NO_HOOKS: "1"
+      NODE_AUTH_TOKEN: ""
+      NPM_TOKEN: ""
     needs:
       - plan
       - rust-parity-app
@@ -259,17 +276,6 @@ jobs:
           version: 2026.9.18
       - name: Acquire Velnor
         env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
-          ACTIONS_RUNTIME_TOKEN: ""
-          CARGO_REGISTRY_TOKEN: ""
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
-          MISE_GITHUB_TOKEN: ""
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
           VELNOR_ASSET_SHA256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
           VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.0/velnor-actions-0.1.0-x86_64-unknown-linux-gnu
           VELNOR_RELEASE_COMMIT: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
@@ -277,10 +283,6 @@ jobs:
       - name: Prepare pinned tools
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_LOCKFILE: "0"
-          MISE_NO_CONFIG: "1"
-          MISE_NO_ENV: "1"
-          MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
         run: mise --no-config --no-env --no-hooks install gh@2.102.0
@@ -329,7 +331,24 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 30
     env:
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+      ACTIONS_ID_TOKEN_REQUEST_URL: ""
+      ACTIONS_RUNTIME_TOKEN: ""
+      CARGO_REGISTRY_TOKEN: ""
+      GH_CONFIG_DIR: ""
+      GH_HOST: ""
+      GH_TOKEN: ""
+      GITHUB_TOKEN: ""
       MBX_GC_AUTO: "1"
+      MISE_AUTO_INSTALL: "false"
+      MISE_EXEC_AUTO_INSTALL: "false"
+      MISE_GITHUB_TOKEN: ""
+      MISE_LOCKFILE: "0"
+      MISE_NO_CONFIG: "1"
+      MISE_NO_ENV: "1"
+      MISE_NO_HOOKS: "1"
+      NODE_AUTH_TOKEN: ""
+      NPM_TOKEN: ""
     needs:
       - plan
     steps:
@@ -349,17 +368,6 @@ jobs:
           version: 2026.9.18
       - name: Acquire Velnor
         env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
-          ACTIONS_RUNTIME_TOKEN: ""
-          CARGO_REGISTRY_TOKEN: ""
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
-          MISE_GITHUB_TOKEN: ""
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
           VELNOR_ASSET_SHA256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
           VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.0/velnor-actions-0.1.0-x86_64-unknown-linux-gnu
           VELNOR_RELEASE_COMMIT: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
@@ -372,22 +380,12 @@ jobs:
       - name: Prepare pinned tools
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_LOCKFILE: "0"
-          MISE_NO_CONFIG: "1"
-          MISE_NO_ENV: "1"
-          MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
         run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.21.1 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
       - name: Prepare Rust components
         env:
-          MISE_AUTO_INSTALL: "false"
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_EXEC_AUTO_INSTALL: "false"
-          MISE_LOCKFILE: "0"
-          MISE_NO_CONFIG: "1"
-          MISE_NO_ENV: "1"
-          MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
         run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- rustup component add --toolchain 1.98.1-x86_64-unknown-linux-gnu clippy rustfmt
@@ -399,26 +397,9 @@ jobs:
           restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
       - name: Verify MBX and Rust toolchains
         env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
-          ACTIONS_RUNTIME_TOKEN: ""
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          CARGO_REGISTRY_TOKEN: ""
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
-          MISE_AUTO_INSTALL: "false"
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_EXEC_AUTO_INSTALL: "false"
-          MISE_GITHUB_TOKEN: ""
-          MISE_LOCKFILE: "0"
-          MISE_NO_CONFIG: "1"
-          MISE_NO_ENV: "1"
-          MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; [ -n \"$GITHUB_PATH\" ] || { printf '\\''%s\\n'\\'' '\\''GITHUB_PATH is required'\\'' >&2; exit 1; }; probe_dir=\"$RUNNER_TEMP/velnor/mbx-preflight\"; mkdir -p \"$probe_dir\"; mbx_probe=\"$probe_dir/mbx-root\"; rust_probe=\"$probe_dir/rust-root\"; mise --no-config --no-env --no-hooks where '\\''mr-boxington@1.21.1'\\'' > \"$mbx_probe\"; mise --no-config --no-env --no-hooks where '\\''rust@1.98.1'\\'' > \"$rust_probe\"; IFS= read -r mbx_root < \"$mbx_probe\" || { printf '\\''%s\\n'\\'' '\\''Mise returned no MBX install path'\\'' >&2; exit 1; }; IFS= read -r rust_root < \"$rust_probe\" || { printf '\\''%s\\n'\\'' '\\''Mise returned no Rust install path'\\'' >&2; exit 1; }; [ -n \"$mbx_root\" ] || { printf '\\''%s\\n'\\'' '\\''Mise returned an empty MBX install path'\\'' >&2; exit 1; }; [ -n \"$rust_root\" ] || { printf '\\''%s\\n'\\'' '\\''Mise returned an empty Rust install path'\\'' >&2; exit 1; }; case \"$mbx_root\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''Mise returned a non-absolute MBX install path'\\'' >&2; exit 1 ;; esac; case \"$rust_root\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''Mise returned a non-absolute Rust install path'\\'' >&2; exit 1 ;; esac; mbx_bin=\"$mbx_root/mbx\"; rustc_bin=\"$rust_root/rustc\"; [ -x \"$mbx_bin\" ] || { printf '\\''expected executable MBX at %s\\n'\\'' \"$mbx_bin\" >&2; exit 1; }; [ -x \"$rustc_bin\" ] || { printf '\\''expected Rustup shim at %s\\n'\\'' \"$rustc_bin\" >&2; exit 1; }; mbx_output_file=\"$probe_dir/mbx-version\"; rustc_output_file=\"$probe_dir/rustc-version\"; \"$mbx_bin\" --version > \"$mbx_output_file\"; IFS= read -r mbx_output < \"$mbx_output_file\" || { printf '\\''%s\\n'\\'' '\\''MBX returned no version'\\'' >&2; exit 1; }; [ \"$mbx_output\" = '\\''mbx 1.21.1'\\'' ] || { printf '\\''expected MBX 1.21.1, got %s\\n'\\'' \"$mbx_output\" >&2; exit 1; }; \"$rustc_bin\" '\\''+1.98.1'\\'' -vV > \"$rustc_output_file\"; grep -Fqx '\\''release: 1.98.1'\\'' \"$rustc_output_file\" || { printf '\\''Rustup did not report exact toolchain 1.98.1\\n'\\'' >&2; exit 1; }; rm -f \"$mbx_probe\" \"$rust_probe\" \"$mbx_output_file\" \"$rustc_output_file\"; rmdir \"$probe_dir\"; printf '\\''%s\\n'\\'' \"$rust_root\" \"$mbx_root\" >> \"$GITHUB_PATH\"'"
@@ -432,31 +413,14 @@ jobs:
         env:
           ACTIONS_CACHE_MODE: read
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_AUTO_INSTALL: "false"
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_EXEC_AUTO_INSTALL: "false"
-          MISE_LOCKFILE: "0"
-          MISE_NO_CONFIG: "1"
-          MISE_NO_ENV: "1"
-          MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
       - name: Prepare MBX bundle key
         id: mbx-bundle-key
         env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
-          ACTIONS_RUNTIME_TOKEN: ""
-          CARGO_REGISTRY_TOKEN: ""
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
           MBX_KEY: ${{ steps.mbx.outputs.cache-primary-key }}
-          MISE_GITHUB_TOKEN: ""
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
         run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; key=\"$MBX_KEY\"; case \"$key\" in '\\'''\\''|*-) exit 1 ;; esac; prefix=\"${key%-*}-\"; echo \"prefix=${prefix}\" >> \"$GITHUB_OUTPUT\"'"
       - name: Restore MBX single bundle
         id: mbx-bundle
@@ -467,53 +431,19 @@ jobs:
           restore-keys: ${{ steps.mbx-bundle-key.outputs.prefix }}
       - name: Import MBX single bundle
         env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
-          ACTIONS_RUNTIME_TOKEN: ""
-          CARGO_REGISTRY_TOKEN: ""
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
           MATCHED: ${{ steps.mbx-bundle.outputs.cache-matched-key }}
-          MISE_GITHUB_TOKEN: ""
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
         run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; if [ -z \"$MATCHED\" ]; then echo \"no mbx bundle matched\"; exit 0; fi; if [ ! -d \"$bundle\" ]; then echo \"mbx bundle missing; continuing cold\"; exit 0; fi; if ! mbx cache import \"$bundle\"; then echo \"mbx bundle import failed; continuing cold\"; rm -rf \"$bundle\"; exit 0; fi'"
       - name: Fetch Cargo sources
         env:
-          MISE_AUTO_INSTALL: "false"
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_EXEC_AUTO_INSTALL: "false"
-          MISE_LOCKFILE: "0"
-          MISE_NO_CONFIG: "1"
-          MISE_NO_ENV: "1"
-          MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
         run: "sh -c 'mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\" && cd \"$RUNNER_TEMP/velnor/cargo-clean\" && if mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo metadata --locked --offline --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\" >/dev/null 2>&1; then echo \"velnor: sources hit, skipping fetch\"; else echo \"velnor: sources miss (source_missing), fetching\"; mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\"; fi'"
       - name: Clippy
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/app/clippy/default,')"
         env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
-          ACTIONS_RUNTIME_TOKEN: ""
-          CARGO_REGISTRY_TOKEN: ""
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
-          MISE_AUTO_INSTALL: "false"
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_EXEC_AUTO_INSTALL: "false"
-          MISE_GITHUB_TOKEN: ""
-          MISE_LOCKFILE: "0"
-          MISE_NO_CONFIG: "1"
-          MISE_NO_ENV: "1"
-          MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_DOWNSTREAM_TASK_IDS: stack/rust/crates/app/build/default,stack/rust/crates/app/nextest/default/shard-1-of-2,stack/rust/crates/app/nextest/default/shard-2-of-2,stack/rust/crates/app/doctest/default,stack/rust/crates/app/doc/default
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/app/clippy/default
@@ -524,25 +454,8 @@ jobs:
       - name: Build test executables
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/app/build/default,')"
         env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
-          ACTIONS_RUNTIME_TOKEN: ""
-          CARGO_REGISTRY_TOKEN: ""
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
-          MISE_AUTO_INSTALL: "false"
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_EXEC_AUTO_INSTALL: "false"
-          MISE_GITHUB_TOKEN: ""
-          MISE_LOCKFILE: "0"
-          MISE_NO_CONFIG: "1"
-          MISE_NO_ENV: "1"
-          MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_DOWNSTREAM_TASK_IDS: stack/rust/crates/app/nextest/default/shard-1-of-2,stack/rust/crates/app/nextest/default/shard-2-of-2,stack/rust/crates/app/doctest/default,stack/rust/crates/app/doc/default
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/app/build/default
@@ -553,25 +466,8 @@ jobs:
       - name: Unit and integration tests (shard 1 of 2)
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/app/nextest/default/shard-1-of-2,')"
         env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
-          ACTIONS_RUNTIME_TOKEN: ""
-          CARGO_REGISTRY_TOKEN: ""
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
-          MISE_AUTO_INSTALL: "false"
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_EXEC_AUTO_INSTALL: "false"
-          MISE_GITHUB_TOKEN: ""
-          MISE_LOCKFILE: "0"
-          MISE_NO_CONFIG: "1"
-          MISE_NO_ENV: "1"
-          MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_DOWNSTREAM_TASK_IDS: stack/rust/crates/app/nextest/default/shard-2-of-2,stack/rust/crates/app/doctest/default,stack/rust/crates/app/doc/default
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/app/nextest/default/shard-1-of-2
@@ -582,25 +478,8 @@ jobs:
       - name: Unit and integration tests (shard 2 of 2)
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/app/nextest/default/shard-2-of-2,')"
         env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
-          ACTIONS_RUNTIME_TOKEN: ""
-          CARGO_REGISTRY_TOKEN: ""
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
-          MISE_AUTO_INSTALL: "false"
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_EXEC_AUTO_INSTALL: "false"
-          MISE_GITHUB_TOKEN: ""
-          MISE_LOCKFILE: "0"
-          MISE_NO_CONFIG: "1"
-          MISE_NO_ENV: "1"
-          MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_DOWNSTREAM_TASK_IDS: stack/rust/crates/app/doctest/default,stack/rust/crates/app/doc/default
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/app/nextest/default/shard-2-of-2
@@ -611,25 +490,8 @@ jobs:
       - name: Doctests
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/app/doctest/default,')"
         env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
-          ACTIONS_RUNTIME_TOKEN: ""
-          CARGO_REGISTRY_TOKEN: ""
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
-          MISE_AUTO_INSTALL: "false"
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_EXEC_AUTO_INSTALL: "false"
-          MISE_GITHUB_TOKEN: ""
-          MISE_LOCKFILE: "0"
-          MISE_NO_CONFIG: "1"
-          MISE_NO_ENV: "1"
-          MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_DOWNSTREAM_TASK_IDS: stack/rust/crates/app/doc/default
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/app/doctest/default
@@ -640,25 +502,8 @@ jobs:
       - name: Documentation
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/app/doc/default,')"
         env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
-          ACTIONS_RUNTIME_TOKEN: ""
-          CARGO_REGISTRY_TOKEN: ""
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
-          MISE_AUTO_INSTALL: "false"
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_EXEC_AUTO_INSTALL: "false"
-          MISE_GITHUB_TOKEN: ""
-          MISE_LOCKFILE: "0"
-          MISE_NO_CONFIG: "1"
-          MISE_NO_ENV: "1"
-          MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
           RUSTDOCFLAGS: "-D warnings"
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/app/doc/default
@@ -677,18 +522,6 @@ jobs:
       - name: Export MBX single bundle
         id: mbx-export
         if: success() && github.event_name == 'push' && steps.mbx.outputs.cache-hit != 'true' && steps.mbx-bundle.outputs.cache-hit != 'true'
-        env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
-          ACTIONS_RUNTIME_TOKEN: ""
-          CARGO_REGISTRY_TOKEN: ""
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
-          MISE_GITHUB_TOKEN: ""
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
         run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; mbx gc; mbx cache dir > \"$RUNNER_TEMP/mbx-store-path\"; IFS= read -r store < \"$RUNNER_TEMP/mbx-store-path\"; test -n \"$store\"; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; case \"$bundle\" in \"$store\"|\"$store\"/*) exit 1 ;; esac; case \"$store\" in /|.) exit 1 ;; *mbx*) ;; *) exit 1 ;; esac; rm -rf \"$bundle\"; if mbx cache export --group \"$MBX_CACHE_EXPORT_GROUP\" --format directory \"$bundle\" >\"$RUNNER_TEMP/mbx-export.out\" 2>&1; then test -d \"$bundle\"; rm -rf \"$store\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; echo \"ready=true\" >> \"$GITHUB_OUTPUT\"; else rm -rf \"$bundle\"; if grep -q \"no completed mbx builds are recorded for export group\" \"$RUNNER_TEMP/mbx-export.out\"; then echo \"ready=false\" >> \"$GITHUB_OUTPUT\"; exit 0; fi; cat \"$RUNNER_TEMP/mbx-export.out\"; exit 1; fi'"
       - name: Save MBX single bundle
         if: success() && github.event_name == 'push' && steps.mbx.outputs.cache-hit != 'true' && steps.mbx-bundle.outputs.cache-hit != 'true' && steps.mbx-export.outputs.ready == 'true'
@@ -701,7 +534,24 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 30
     env:
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+      ACTIONS_ID_TOKEN_REQUEST_URL: ""
+      ACTIONS_RUNTIME_TOKEN: ""
+      CARGO_REGISTRY_TOKEN: ""
+      GH_CONFIG_DIR: ""
+      GH_HOST: ""
+      GH_TOKEN: ""
+      GITHUB_TOKEN: ""
       MBX_GC_AUTO: "1"
+      MISE_AUTO_INSTALL: "false"
+      MISE_EXEC_AUTO_INSTALL: "false"
+      MISE_GITHUB_TOKEN: ""
+      MISE_LOCKFILE: "0"
+      MISE_NO_CONFIG: "1"
+      MISE_NO_ENV: "1"
+      MISE_NO_HOOKS: "1"
+      NODE_AUTH_TOKEN: ""
+      NPM_TOKEN: ""
     needs:
       - plan
     steps:
@@ -721,17 +571,6 @@ jobs:
           version: 2026.9.18
       - name: Acquire Velnor
         env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
-          ACTIONS_RUNTIME_TOKEN: ""
-          CARGO_REGISTRY_TOKEN: ""
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
-          MISE_GITHUB_TOKEN: ""
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
           VELNOR_ASSET_SHA256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
           VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.0/velnor-actions-0.1.0-x86_64-unknown-linux-gnu
           VELNOR_RELEASE_COMMIT: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
@@ -744,22 +583,12 @@ jobs:
       - name: Prepare pinned tools
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_LOCKFILE: "0"
-          MISE_NO_CONFIG: "1"
-          MISE_NO_ENV: "1"
-          MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
         run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.21.1 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
       - name: Prepare Rust components
         env:
-          MISE_AUTO_INSTALL: "false"
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_EXEC_AUTO_INSTALL: "false"
-          MISE_LOCKFILE: "0"
-          MISE_NO_CONFIG: "1"
-          MISE_NO_ENV: "1"
-          MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
         run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- rustup component add --toolchain 1.98.1-x86_64-unknown-linux-gnu clippy rustfmt
@@ -771,26 +600,9 @@ jobs:
           restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
       - name: Verify MBX and Rust toolchains
         env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
-          ACTIONS_RUNTIME_TOKEN: ""
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          CARGO_REGISTRY_TOKEN: ""
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
-          MISE_AUTO_INSTALL: "false"
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_EXEC_AUTO_INSTALL: "false"
-          MISE_GITHUB_TOKEN: ""
-          MISE_LOCKFILE: "0"
-          MISE_NO_CONFIG: "1"
-          MISE_NO_ENV: "1"
-          MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; [ -n \"$GITHUB_PATH\" ] || { printf '\\''%s\\n'\\'' '\\''GITHUB_PATH is required'\\'' >&2; exit 1; }; probe_dir=\"$RUNNER_TEMP/velnor/mbx-preflight\"; mkdir -p \"$probe_dir\"; mbx_probe=\"$probe_dir/mbx-root\"; rust_probe=\"$probe_dir/rust-root\"; mise --no-config --no-env --no-hooks where '\\''mr-boxington@1.21.1'\\'' > \"$mbx_probe\"; mise --no-config --no-env --no-hooks where '\\''rust@1.98.1'\\'' > \"$rust_probe\"; IFS= read -r mbx_root < \"$mbx_probe\" || { printf '\\''%s\\n'\\'' '\\''Mise returned no MBX install path'\\'' >&2; exit 1; }; IFS= read -r rust_root < \"$rust_probe\" || { printf '\\''%s\\n'\\'' '\\''Mise returned no Rust install path'\\'' >&2; exit 1; }; [ -n \"$mbx_root\" ] || { printf '\\''%s\\n'\\'' '\\''Mise returned an empty MBX install path'\\'' >&2; exit 1; }; [ -n \"$rust_root\" ] || { printf '\\''%s\\n'\\'' '\\''Mise returned an empty Rust install path'\\'' >&2; exit 1; }; case \"$mbx_root\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''Mise returned a non-absolute MBX install path'\\'' >&2; exit 1 ;; esac; case \"$rust_root\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''Mise returned a non-absolute Rust install path'\\'' >&2; exit 1 ;; esac; mbx_bin=\"$mbx_root/mbx\"; rustc_bin=\"$rust_root/rustc\"; [ -x \"$mbx_bin\" ] || { printf '\\''expected executable MBX at %s\\n'\\'' \"$mbx_bin\" >&2; exit 1; }; [ -x \"$rustc_bin\" ] || { printf '\\''expected Rustup shim at %s\\n'\\'' \"$rustc_bin\" >&2; exit 1; }; mbx_output_file=\"$probe_dir/mbx-version\"; rustc_output_file=\"$probe_dir/rustc-version\"; \"$mbx_bin\" --version > \"$mbx_output_file\"; IFS= read -r mbx_output < \"$mbx_output_file\" || { printf '\\''%s\\n'\\'' '\\''MBX returned no version'\\'' >&2; exit 1; }; [ \"$mbx_output\" = '\\''mbx 1.21.1'\\'' ] || { printf '\\''expected MBX 1.21.1, got %s\\n'\\'' \"$mbx_output\" >&2; exit 1; }; \"$rustc_bin\" '\\''+1.98.1'\\'' -vV > \"$rustc_output_file\"; grep -Fqx '\\''release: 1.98.1'\\'' \"$rustc_output_file\" || { printf '\\''Rustup did not report exact toolchain 1.98.1\\n'\\'' >&2; exit 1; }; rm -f \"$mbx_probe\" \"$rust_probe\" \"$mbx_output_file\" \"$rustc_output_file\"; rmdir \"$probe_dir\"; printf '\\''%s\\n'\\'' \"$rust_root\" \"$mbx_root\" >> \"$GITHUB_PATH\"'"
@@ -804,31 +616,14 @@ jobs:
         env:
           ACTIONS_CACHE_MODE: read
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_AUTO_INSTALL: "false"
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_EXEC_AUTO_INSTALL: "false"
-          MISE_LOCKFILE: "0"
-          MISE_NO_CONFIG: "1"
-          MISE_NO_ENV: "1"
-          MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
       - name: Prepare MBX bundle key
         id: mbx-bundle-key
         env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
-          ACTIONS_RUNTIME_TOKEN: ""
-          CARGO_REGISTRY_TOKEN: ""
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
           MBX_KEY: ${{ steps.mbx.outputs.cache-primary-key }}
-          MISE_GITHUB_TOKEN: ""
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
         run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; key=\"$MBX_KEY\"; case \"$key\" in '\\'''\\''|*-) exit 1 ;; esac; prefix=\"${key%-*}-\"; echo \"prefix=${prefix}\" >> \"$GITHUB_OUTPUT\"'"
       - name: Restore MBX single bundle
         id: mbx-bundle
@@ -839,53 +634,19 @@ jobs:
           restore-keys: ${{ steps.mbx-bundle-key.outputs.prefix }}
       - name: Import MBX single bundle
         env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
-          ACTIONS_RUNTIME_TOKEN: ""
-          CARGO_REGISTRY_TOKEN: ""
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
           MATCHED: ${{ steps.mbx-bundle.outputs.cache-matched-key }}
-          MISE_GITHUB_TOKEN: ""
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
         run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; if [ -z \"$MATCHED\" ]; then echo \"no mbx bundle matched\"; exit 0; fi; if [ ! -d \"$bundle\" ]; then echo \"mbx bundle missing; continuing cold\"; exit 0; fi; if ! mbx cache import \"$bundle\"; then echo \"mbx bundle import failed; continuing cold\"; rm -rf \"$bundle\"; exit 0; fi'"
       - name: Fetch Cargo sources
         env:
-          MISE_AUTO_INSTALL: "false"
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_EXEC_AUTO_INSTALL: "false"
-          MISE_LOCKFILE: "0"
-          MISE_NO_CONFIG: "1"
-          MISE_NO_ENV: "1"
-          MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
         run: "sh -c 'mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\" && cd \"$RUNNER_TEMP/velnor/cargo-clean\" && if mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo metadata --locked --offline --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\" >/dev/null 2>&1; then echo \"velnor: sources hit, skipping fetch\"; else echo \"velnor: sources miss (source_missing), fetching\"; mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\"; fi'"
       - name: Clippy
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/tool/clippy/default,')"
         env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
-          ACTIONS_RUNTIME_TOKEN: ""
-          CARGO_REGISTRY_TOKEN: ""
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
-          MISE_AUTO_INSTALL: "false"
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_EXEC_AUTO_INSTALL: "false"
-          MISE_GITHUB_TOKEN: ""
-          MISE_LOCKFILE: "0"
-          MISE_NO_CONFIG: "1"
-          MISE_NO_ENV: "1"
-          MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_DOWNSTREAM_TASK_IDS: stack/rust/crates/tool/build/default,stack/rust/crates/tool/nextest/default/shard-1-of-2,stack/rust/crates/tool/nextest/default/shard-2-of-2,stack/rust/crates/tool/doc/default
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/tool/clippy/default
@@ -896,25 +657,8 @@ jobs:
       - name: Build test executables
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/tool/build/default,')"
         env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
-          ACTIONS_RUNTIME_TOKEN: ""
-          CARGO_REGISTRY_TOKEN: ""
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
-          MISE_AUTO_INSTALL: "false"
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_EXEC_AUTO_INSTALL: "false"
-          MISE_GITHUB_TOKEN: ""
-          MISE_LOCKFILE: "0"
-          MISE_NO_CONFIG: "1"
-          MISE_NO_ENV: "1"
-          MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_DOWNSTREAM_TASK_IDS: stack/rust/crates/tool/nextest/default/shard-1-of-2,stack/rust/crates/tool/nextest/default/shard-2-of-2,stack/rust/crates/tool/doc/default
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/tool/build/default
@@ -925,25 +669,8 @@ jobs:
       - name: Unit and integration tests (shard 1 of 2)
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/tool/nextest/default/shard-1-of-2,')"
         env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
-          ACTIONS_RUNTIME_TOKEN: ""
-          CARGO_REGISTRY_TOKEN: ""
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
-          MISE_AUTO_INSTALL: "false"
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_EXEC_AUTO_INSTALL: "false"
-          MISE_GITHUB_TOKEN: ""
-          MISE_LOCKFILE: "0"
-          MISE_NO_CONFIG: "1"
-          MISE_NO_ENV: "1"
-          MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_DOWNSTREAM_TASK_IDS: stack/rust/crates/tool/nextest/default/shard-2-of-2,stack/rust/crates/tool/doc/default
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/tool/nextest/default/shard-1-of-2
@@ -954,25 +681,8 @@ jobs:
       - name: Unit and integration tests (shard 2 of 2)
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/tool/nextest/default/shard-2-of-2,')"
         env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
-          ACTIONS_RUNTIME_TOKEN: ""
-          CARGO_REGISTRY_TOKEN: ""
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
-          MISE_AUTO_INSTALL: "false"
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_EXEC_AUTO_INSTALL: "false"
-          MISE_GITHUB_TOKEN: ""
-          MISE_LOCKFILE: "0"
-          MISE_NO_CONFIG: "1"
-          MISE_NO_ENV: "1"
-          MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_DOWNSTREAM_TASK_IDS: stack/rust/crates/tool/doc/default
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/tool/nextest/default/shard-2-of-2
@@ -983,25 +693,8 @@ jobs:
       - name: Documentation
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/tool/doc/default,')"
         env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
-          ACTIONS_RUNTIME_TOKEN: ""
-          CARGO_REGISTRY_TOKEN: ""
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
-          MISE_AUTO_INSTALL: "false"
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_EXEC_AUTO_INSTALL: "false"
-          MISE_GITHUB_TOKEN: ""
-          MISE_LOCKFILE: "0"
-          MISE_NO_CONFIG: "1"
-          MISE_NO_ENV: "1"
-          MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
           RUSTDOCFLAGS: "-D warnings"
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/tool/doc/default
@@ -1020,18 +713,6 @@ jobs:
       - name: Export MBX single bundle
         id: mbx-export
         if: success() && github.event_name == 'push' && steps.mbx.outputs.cache-hit != 'true' && steps.mbx-bundle.outputs.cache-hit != 'true'
-        env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
-          ACTIONS_RUNTIME_TOKEN: ""
-          CARGO_REGISTRY_TOKEN: ""
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
-          MISE_GITHUB_TOKEN: ""
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
         run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; mbx gc; mbx cache dir > \"$RUNNER_TEMP/mbx-store-path\"; IFS= read -r store < \"$RUNNER_TEMP/mbx-store-path\"; test -n \"$store\"; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; case \"$bundle\" in \"$store\"|\"$store\"/*) exit 1 ;; esac; case \"$store\" in /|.) exit 1 ;; *mbx*) ;; *) exit 1 ;; esac; rm -rf \"$bundle\"; if mbx cache export --group \"$MBX_CACHE_EXPORT_GROUP\" --format directory \"$bundle\" >\"$RUNNER_TEMP/mbx-export.out\" 2>&1; then test -d \"$bundle\"; rm -rf \"$store\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; echo \"ready=true\" >> \"$GITHUB_OUTPUT\"; else rm -rf \"$bundle\"; if grep -q \"no completed mbx builds are recorded for export group\" \"$RUNNER_TEMP/mbx-export.out\"; then echo \"ready=false\" >> \"$GITHUB_OUTPUT\"; exit 0; fi; cat \"$RUNNER_TEMP/mbx-export.out\"; exit 1; fi'"
       - name: Save MBX single bundle
         if: success() && github.event_name == 'push' && steps.mbx.outputs.cache-hit != 'true' && steps.mbx-bundle.outputs.cache-hit != 'true' && steps.mbx-export.outputs.ready == 'true'
