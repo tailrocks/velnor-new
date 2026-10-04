@@ -152,7 +152,7 @@ fn tofu_roots_join_the_package_inventory() -> TestResult {
     assert!(
         tasks
             .iter()
-            .all(|id| id.starts_with("stack/tofu/stacks/a/")),
+            .all(|id| id.starts_with("stack/tofu/dir-737461636b732f61/")),
         "{tasks:?}"
     );
     Ok(())
@@ -187,7 +187,7 @@ fn docs_only_marks_tofu_obligations_unchanged() -> TestResult {
 fn affected_tofu_root_marks_its_triple_changed() -> TestResult {
     let (_repo, plan) = plan_for_tofu_change("stacks/a/main.tf")?;
     for ob in &plan.obligations {
-        let affected = ob.task_id.starts_with("stack/tofu/stacks/a/");
+        let affected = ob.task_id.starts_with("stack/tofu/dir-737461636b732f61/");
         assert_eq!(
             ob.reason == "affected_by_change",
             affected,

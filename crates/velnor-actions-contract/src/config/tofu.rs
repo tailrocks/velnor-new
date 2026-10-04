@@ -45,8 +45,6 @@ pub enum RootProblem {
     DotDot,
     /// Empty segment (`//`, leading/trailing `/`).
     EmptySegment,
-    /// Reserved `root` spelling (collides with the repo-root key).
-    ReservedRoot,
 }
 
 impl RootProblem {
@@ -61,7 +59,6 @@ impl RootProblem {
             Self::DotSegment => format!("dot_segment:{value}"),
             Self::DotDot => format!("dotdot_segment:{value}"),
             Self::EmptySegment => format!("empty_segment:{value}"),
-            Self::ReservedRoot => "reserved_root_key".to_owned(),
         }
     }
 }
@@ -115,9 +112,6 @@ fn check_root(value: &str) -> Result<(), RootProblem> {
     }
     if value == "." {
         return Ok(());
-    }
-    if value == "root" {
-        return Err(RootProblem::ReservedRoot);
     }
     for segment in value.split('/') {
         if segment.is_empty() {
