@@ -304,11 +304,11 @@ fn mise_step() -> Yaml {
 
 fn check_step() -> Yaml {
     Yaml::Map(vec![
-        ("id".to_owned(), Yaml::str("check")),
         (
             "name".to_owned(),
             Yaml::str("Verify main and latest Required CI"),
         ),
+        ("id".to_owned(), Yaml::str("check")),
         (
             "env".to_owned(),
             Yaml::Map(vec![(

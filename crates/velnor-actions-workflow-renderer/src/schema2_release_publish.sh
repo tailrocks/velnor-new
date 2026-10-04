@@ -32,10 +32,8 @@ family_gh() {
 check_eligibility_identity() {
   local output actual_source actual_authority actual_run actual_attempt
   output="$(mktemp)"
-  if ! (
-    export GITHUB_OUTPUT="$output"
-    release_eligibility
-  ); then
+  if ! GITHUB_OUTPUT="$output" bash -c \
+    "set -euo pipefail; $(declare -f release_eligibility); release_eligibility"; then
     rm -f "$output"
     return 1
   fi
@@ -66,12 +64,13 @@ assert_tag_target() {
 if [[ "$release_action" == complete ]]; then
   check_eligibility_identity
   existing_output="$(mktemp)"
-  if ! (
-    export GITHUB_OUTPUT="$existing_output"
-    export VELNOR_SOURCE_SHA="$release_source_sha"
-    export VELNOR_WORKFLOW_AUTHORITY_SHA="$release_authority_sha"
-    @PREPARE_SCRIPT@
-  ); then
+  if ! GITHUB_OUTPUT="$existing_output" \
+    VELNOR_SOURCE_SHA="$release_source_sha" \
+    VELNOR_WORKFLOW_AUTHORITY_SHA="$release_authority_sha" \
+    bash -s <<'VELNOR_PREPARE'
+@PREPARE_SCRIPT@
+VELNOR_PREPARE
+  then
     rm -f "$existing_output"
     family_fail 'already-published release failed idempotent revalidation'
   fi
