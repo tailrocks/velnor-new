@@ -1,4 +1,4 @@
-//! Both-lane `$/` calls must pass pinned actionlint 1.7.12 and zizmor 1.30.1.
+//! Local shared actions must pass pinned actionlint and zizmor.
 use std::fs;
 
 use velnor_actions_orchestrator::{
@@ -40,16 +40,22 @@ fn both_mode_generate_passes_actionlint_and_zizmor() -> TestResult {
     );
     let ci = fs::read_to_string(preview.path().join(".github/workflows/ci.yml"))?;
     let actionlint = fs::read_to_string(preview.path().join(".github/actionlint.yaml"))?;
-    assert!(ci.contains("uses: $/.github/actions/"), "{ci}");
-    assert!(!ci.contains("uses: ./.github/actions/"), "{ci}");
+    assert!(ci.contains("uses: ./.github/actions/"), "{ci}");
+    assert!(!ci.contains("uses: $"), "{ci}");
     assert!(ci.len() <= 500_000, "ci.yml is {} bytes", ci.len());
-    assert!(
-        actionlint.contains(
-            "specifying action \"\\$/\\.github/actions/[^\"]+\" in invalid format because ref is missing"
-        ),
-        "{actionlint}"
-    );
+    assert!(!actionlint.contains("paths:"), "{actionlint}");
     assert!(!actionlint.contains("shellcheck"), "{actionlint}");
+    let action_dir = preview.path().join(".github/actions");
+    let mut manifests = 0;
+    for entry in fs::read_dir(action_dir)? {
+        if entry?.path().join("action.yml").is_file() {
+            manifests += 1;
+        }
+    }
+    assert!(
+        manifests > 0,
+        "shared local action manifests were not emitted"
+    );
     let hosted_dir = tempfile::TempDir::new()?;
     let hosted = generate_dispatched(
         &prep,
@@ -67,9 +73,6 @@ fn both_mode_generate_passes_actionlint_and_zizmor() -> TestResult {
     let hosted_lint = fs::read_to_string(hosted_dir.path().join(".github/actionlint.yaml"))?;
     let hosted_ci = fs::read_to_string(hosted_dir.path().join(".github/workflows/ci.yml"))?;
     assert!(!hosted_lint.contains("paths:"), "{hosted_lint}");
-    assert!(
-        !hosted_ci.contains("uses: $/.github/actions/"),
-        "{hosted_ci}"
-    );
+    assert!(!hosted_ci.contains("uses: $"), "{hosted_ci}");
     Ok(())
 }

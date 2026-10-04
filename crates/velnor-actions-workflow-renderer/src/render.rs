@@ -9,16 +9,16 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
-    CI_WORKFLOW_PATH, Concurrency, Job, PLAN_JOB_ID as CONTRACT_PLAN_JOB_ID,
+    CI_WORKFLOW_PATH, Job, PLAN_JOB_ID as CONTRACT_PLAN_JOB_ID,
     REQUIRED_CONDITION as CONTRACT_REQUIRED_CONDITION,
     REQUIRED_DISPLAY_NAME as CONTRACT_REQUIRED_DISPLAY_NAME,
-    REQUIRED_JOB_ID as CONTRACT_REQUIRED_JOB_ID, Trigger, ValidatorKind, VelnorSupportWorkflow,
-    WorkflowIr, WorkflowPolicy,
+    REQUIRED_JOB_ID as CONTRACT_REQUIRED_JOB_ID, ValidatorKind, VelnorSupportWorkflow, WorkflowIr,
+    WorkflowPolicy,
 };
 
 use crate::{
     RenderError, cache_p08, closure, commands, document, final_steps, guard, marker, matrix, msrv,
-    preseed_closure, steps, support, yaml::render_yaml,
+    preseed_closure, steps, support, workflow_policy, yaml::render_yaml,
 };
 
 pub use crate::matrix::{
@@ -183,8 +183,6 @@ fn render_workflow_parts(
     closure::insert_task_closure(&mut jobs)?;
     closure::insert_final_closure(&mut jobs)?;
     final_steps::insert_final_fanin(&mut jobs, ctx)?;
-    crate::mbx_bundle::apply_mbx_cache_policy(&mut jobs)?;
-    support::check_token_hygiene(&jobs)?;
     render_merged(ir, &jobs, ctx)
 }
 
@@ -270,8 +268,6 @@ pub fn finalize_jobs(
     closure::insert_task_closure(&mut jobs)?;
     closure::insert_final_closure(&mut jobs)?;
     final_steps::insert_final_fanin(&mut jobs, ctx)?;
-    crate::mbx_bundle::apply_mbx_cache_policy(&mut jobs)?;
-    support::check_token_hygiene(&jobs)?;
     Ok(jobs)
 }
 
@@ -304,9 +300,9 @@ fn merged_jobs(
         });
     }
     ir.validate().map_err(RenderError::Contract)?;
-    check_triggers(&ir.triggers)?;
-    check_concurrency(&ir.concurrency)?;
-    guard::check_single_label(ir, &ctx.runs_on)?;
+    workflow_policy::check_triggers(&ir.triggers)?;
+    workflow_policy::check_concurrency(&ir.concurrency)?;
+    workflow_policy::check_single_label(ir, &ctx.runs_on)?;
     let mut jobs = ir.jobs.clone();
     match policy {
         WorkflowPolicy::ConsumerV1 => support::reject_consumer_support(&jobs, support)?,
@@ -317,6 +313,8 @@ fn merged_jobs(
     msrv::check_no_msrv(&jobs)?;
     support::check_candidate_invariants(&jobs)?;
     support::check_final_gate(&jobs)?;
+    support::check_token_hygiene(&jobs)?;
+    crate::mbx_bundle::apply_mbx_cache_policy(&mut jobs)?;
     support::check_token_hygiene(&jobs)?;
     Ok(jobs)
 }
@@ -342,6 +340,7 @@ fn render_merged(
         &shared.jobs,
         ctx,
         &shared.calls,
+        &shared.checkouts,
         &hosted_mbx_jobs,
         &hosted_linux_mbx_jobs,
     )?;
@@ -359,35 +358,4 @@ fn render_merged(
         yaml: text,
         shared: shared.files,
     })
-}
-
-/// Require the exact trigger shape: 4 PR types, one push branch, merge group.
-fn check_triggers(triggers: &Trigger) -> Result<(), RenderError> {
-    let expected: Vec<String> = EXPECTED_PR_TYPES.iter().map(ToString::to_string).collect();
-    if triggers.pull_request_types != expected {
-        return Err(RenderError::InvalidWorkflow("bad_pr_triggers".to_owned()));
-    }
-    let branch_ok = triggers.push_branches.len() == 1
-        && triggers.push_branches.first().is_some_and(|branch| {
-            !branch.trim().is_empty() && !branch.chars().any(char::is_whitespace)
-        });
-    if !branch_ok {
-        return Err(RenderError::InvalidWorkflow("bad_push_branch".to_owned()));
-    }
-    if !triggers.merge_group {
-        return Err(RenderError::InvalidWorkflow(
-            "missing_merge_group".to_owned(),
-        ));
-    }
-    Ok(())
-}
-
-/// Require the exact concurrency group plus PR-only cancel.
-fn check_concurrency(concurrency: &Concurrency) -> Result<(), RenderError> {
-    if concurrency.group != CONCURRENCY_GROUP
-        || concurrency.cancel_in_progress != CONCURRENCY_CANCEL
-    {
-        return Err(RenderError::InvalidWorkflow("bad_concurrency".to_owned()));
-    }
-    Ok(())
 }
