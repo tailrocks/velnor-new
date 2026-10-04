@@ -62,27 +62,52 @@ fn consumer_manifest_mismatch_and_bad_target_fail() {
 fn consumer_gate_rejects_attacker_manifests() {
     let version = env!("CARGO_PKG_VERSION");
     let sha = "a".repeat(64);
-    let manifest = |repository: &str, artifact: &str| {
+    let manifest = |repository: &str, first_artifact: &str| {
+        let targets = velnor_actions_contract::SUPPORTED_TARGETS
+            .iter()
+            .enumerate()
+            .map(|(index, target)| {
+                let artifact = if index == 0 {
+                    first_artifact.to_owned()
+                } else {
+                    format!(
+                        "https://github.com/tailrocks/velnor-new/releases/download/v{version}/{}",
+                        velnor_actions_contract::asset_filename(version, target)
+                    )
+                };
+                format!(
+                    "{{\"target\":\"{target}\",\"artifact\":\"{artifact}\",\"sha256\":\"{sha}\"}}"
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",");
         format!(
-            "{{\"schema\":1,\"version\":\"{version}\",\"repository\":\"{repository}\",\"commit\":\"{}\",\"targets\":[{{\"target\":\"x86_64-unknown-linux-gnu\",\"artifact\":\"{artifact}\",\"sha256\":\"{sha}\"}}]}}",
-            "a".repeat(40)
+            "{{\"schema\":1,\"version\":\"{version}\",\"repository\":\"{repository}\",\"commit\":\"{}\",\"targets\":[{targets}]}}",
+            "a".repeat(40),
         )
     };
     let bound = format!(
         "https://github.com/tailrocks/velnor-new/releases/download/v{version}/velnor-actions-{version}-x86_64-unknown-linux-gnu"
     );
-    for (repository, artifact) in [
-        ("evil/velnor-new", bound.as_str()),
+    for (repository, artifact, expected) in [
+        ("evil/velnor-new", bound.as_str(), "unexpected_repository"),
         (
             "tailrocks/velnor-new",
             "https://evil.example/r/velnor-actions-0.1.0-x86_64-unknown-linux-gnu",
+            "unexpected_artifact_url",
         ),
-        ("tailrocks/velnor-new", "https://github.com@evil.example/x"),
+        (
+            "tailrocks/velnor-new",
+            "https://github.com@evil.example/x",
+            "unexpected_artifact_url",
+        ),
     ] {
         let json = manifest(repository, artifact);
+        let err = consumer_acquire_from("ubuntu-26.04", version, Some(&json))
+            .expect_err("attacker manifest must be rejected");
         assert!(
-            consumer_acquire_from("ubuntu-26.04", version, Some(&json)).is_err(),
-            "accepted {repository} {artifact}"
+            err.to_string().contains(expected),
+            "expected {expected} for {repository} {artifact}, got {err}"
         );
     }
 }
@@ -113,6 +138,28 @@ fn fixture_manifest_embeds_runner_target_record() {
     assert_eq!(
         step.map_err(|err| err.to_string()),
         Ok("Acquire Velnor".to_owned())
+    );
+}
+
+#[test]
+fn consumer_manifest_generator_tag_matches_source_commit() {
+    let version = env!("CARGO_PKG_VERSION");
+    let commit = "a".repeat(40);
+    let version_tag = format!("/download/v{version}/");
+    let generator_tag = format!("/download/generator-{commit}/");
+    let valid = test_manifest_json().replace(&version_tag, &generator_tag);
+    assert!(
+        valid.contains(&generator_tag),
+        "fixture must use generator tag"
+    );
+    assert!(consumer_acquire_from("ubuntu-26.04", version, Some(&valid)).is_ok());
+
+    let wrong_commit = "b".repeat(40);
+    let wrong_tag = format!("/download/generator-{wrong_commit}/");
+    let mismatched = valid.replace(&generator_tag, &wrong_tag);
+    assert!(
+        consumer_acquire_from("ubuntu-26.04", version, Some(&mismatched)).is_err(),
+        "generator tag must bind to manifest source commit"
     );
 }
 

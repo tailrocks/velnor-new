@@ -141,6 +141,7 @@ fn consumer_acquire_from(
     check_release_artifact(
         &record.artifact,
         &manifest.version,
+        &manifest.commit,
         target,
         "release-manifest.json",
         "targets.artifact",
