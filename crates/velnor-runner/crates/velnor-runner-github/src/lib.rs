@@ -18,7 +18,9 @@ pub use paths::{
     CAPACITY_HEADER, acquire_path, capacity_header_value, jit_path, last_message_query,
     scale_set_path,
 };
-pub use poll::{InnerJob, InnerKind, ParsedBatch, Poll, Statistics, may_ack, parse_poll};
+pub use poll::{
+    ImmutableJobContext, InnerJob, InnerKind, ParsedBatch, Poll, Statistics, may_ack, parse_poll,
+};
 pub use refresh::{RefreshGate, StatusClass, classify_status};
 pub use registration::{
     AdminConnection, AdminConnectionCall, CreateLabel, Label, RegistrationScope, RegistrationToken,

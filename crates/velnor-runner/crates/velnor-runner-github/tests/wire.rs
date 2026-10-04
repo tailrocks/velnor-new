@@ -1,10 +1,10 @@
 //! Sanitized fixtures for the pinned `actions/scaleset` message shape.
 
 use velnor_runner_github::{
-    AcquireOutcome, CAPACITY_HEADER, Certainty, EncodedJit, InnerKind, Label, Poll, RefreshGate,
-    ScaleSetView, StatusClass, TransportFail, WireError, accept_scale_set, acquire_path,
-    capacity_header_value, classify_acquire, classify_status, create_body, effect_certainty,
-    jit_path, last_message_query, may_ack, parse_poll,
+    AcquireOutcome, CAPACITY_HEADER, Certainty, EncodedJit, ImmutableJobContext, InnerKind, Label,
+    Poll, RefreshGate, ScaleSetView, StatusClass, TransportFail, WireError, accept_scale_set,
+    acquire_path, capacity_header_value, classify_acquire, classify_status, create_body,
+    effect_certainty, jit_path, last_message_query, may_ack, parse_poll,
 };
 
 const NULL_STATS: &str =
@@ -84,6 +84,83 @@ fn malformed_runner_fields_reject_the_poll_batch() {
 }
 
 #[test]
+fn malformed_job_context_types_reject_the_poll_batch() -> Result<(), &'static str> {
+    let invalid = [
+        r#"{"messageType":"JobAvailable","runnerRequestId":"17"}"#,
+        r#"{"messageType":"JobAvailable","repositoryName":17}"#,
+        r#"{"messageType":"JobAvailable","ownerName":false}"#,
+        r#"{"messageType":"JobAvailable","jobId":111}"#,
+        r#"{"messageType":"JobAvailable","jobWorkflowRef":17}"#,
+        r#"{"messageType":"JobAvailable","jobDisplayName":[]}"#,
+        r#"{"messageType":"JobAvailable","workflowRunId":"42"}"#,
+        r#"{"messageType":"JobAvailable","eventName":{}}"#,
+        r#"{"messageType":"JobAvailable","requestLabels":["ubuntu",7]}"#,
+    ];
+    for inner in invalid {
+        let raw = poll_with_inner(inner).map_err(|_| "encode")?;
+        assert_eq!(parse_poll(200, &raw), Err(WireError::Malformed));
+    }
+    Ok(())
+}
+
+#[test]
+fn omitted_context_values_are_empty_and_absent() -> Result<(), &'static str> {
+    let raw = poll_with_inner(r#"{"messageType":"JobAvailable"}"#).map_err(|_| "encode")?;
+    let Poll::Batch(batch) = parse_poll(200, &raw).map_err(|_| "parse")? else {
+        return Err("batch");
+    };
+    let job = batch.jobs.first().ok_or("job")?;
+    assert_eq!(job.request_id, None);
+    assert_eq!(
+        job.context,
+        ImmutableJobContext {
+            repository_name: None,
+            owner_name: None,
+            job_id: None,
+            job_workflow_ref: None,
+            job_display_name: None,
+            workflow_run_id: None,
+            event_name: None,
+            request_labels: Vec::new(),
+        }
+    );
+    Ok(())
+}
+
+#[test]
+fn immutable_job_context_preserves_exact_base_fields() -> Result<(), &'static str> {
+    let raw = poll_with_inner(
+        r#"{"messageType":"JobAvailable","runnerRequestId":17,"repositoryName":"velnor-new","ownerName":"tailrocks","jobId":"job/17","jobWorkflowRef":"tailrocks/velnor-new/.github/workflows/ci.yml@refs/heads/main","jobDisplayName":"Build on macOS","workflowRunId":90210,"eventName":"push","requestLabels":["ubuntu-26.04-scale-set","","linux/arm64"]}"#,
+    )
+    .map_err(|_| "encode")?;
+    let Poll::Batch(batch) = parse_poll(200, &raw).map_err(|_| "parse")? else {
+        return Err("batch");
+    };
+    let job = batch.jobs.first().ok_or("job")?;
+    assert_eq!(job.request_id, Some(17));
+    assert_eq!(
+        job.context,
+        ImmutableJobContext {
+            repository_name: Some("velnor-new".to_owned()),
+            owner_name: Some("tailrocks".to_owned()),
+            job_id: Some("job/17".to_owned()),
+            job_workflow_ref: Some(
+                "tailrocks/velnor-new/.github/workflows/ci.yml@refs/heads/main".to_owned()
+            ),
+            job_display_name: Some("Build on macOS".to_owned()),
+            workflow_run_id: Some(90210),
+            event_name: Some("push".to_owned()),
+            request_labels: vec![
+                "ubuntu-26.04-scale-set".to_owned(),
+                String::new(),
+                "linux/arm64".to_owned(),
+            ],
+        }
+    );
+    Ok(())
+}
+
+#[test]
 fn assigned_population_is_not_the_batch_length() -> Result<(), &'static str> {
     let raw = r#"{"messageId":1,"messageType":"RunnerScaleSetJobMessages","body":"[{\"messageType\":\"JobAvailable\",\"runnerRequestId\":1,\"jobId\":\"111\",\"requestLabels\":[\"velnor\",\"ubuntu-26.04-scale-set\"]}]","statistics":{"totalAvailableJobs":1,"totalAcquiredJobs":0,"totalAssignedJobs":5,"totalRunningJobs":0,"totalRegisteredRunners":0,"totalBusyRunners":0,"totalIdleRunners":0}}"#;
     let Poll::Batch(batch) = parse_poll(200, raw).map_err(|_| "batch")? else {
@@ -93,9 +170,9 @@ fn assigned_population_is_not_the_batch_length() -> Result<(), &'static str> {
     let len = i64::try_from(batch.jobs.len()).map_err(|_| "len")?;
     assert_eq!(stats.assigned_population(), 5);
     assert_ne!(stats.assigned_population(), len);
-    assert_eq!(batch.jobs[0].job_id.as_deref(), Some("111"));
+    assert_eq!(batch.jobs[0].context.job_id.as_deref(), Some("111"));
     assert_eq!(
-        batch.jobs[0].labels,
+        batch.jobs[0].context.request_labels,
         ["velnor".to_owned(), "ubuntu-26.04-scale-set".to_owned()]
     );
     Ok(())
@@ -186,4 +263,13 @@ fn jit_debug_does_not_contain_the_secret() {
     let rendered = format!("{jit:?}");
     assert!(!rendered.contains(secret));
     assert_eq!(jit.expose(), secret);
+}
+
+fn poll_with_inner(inner: &str) -> Result<String, serde_json::Error> {
+    let parsed: serde_json::Value = serde_json::from_str(inner)?;
+    let body = serde_json::to_string(&vec![parsed])?;
+    let encoded_body = serde_json::to_string(&body)?;
+    Ok(format!(
+        r#"{{"messageId":1,"messageType":"RunnerScaleSetJobMessages","body":{encoded_body}}}"#
+    ))
 }

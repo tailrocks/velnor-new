@@ -45,20 +45,69 @@ pub struct ParsedBatch {
 pub struct InnerJob {
     /// Kind.
     pub kind: InnerKind,
-    /// `runnerRequestId` when present.
+    /// Validated `runnerRequestId` when present.
     pub request_id: Option<i64>,
+    /// Immutable GitHub job metadata from `JobMessageBase`.
+    pub context: ImmutableJobContext,
     /// `runnerId` on `JobStarted` and `JobCompleted` only.
     pub runner_id: Option<i64>,
     /// `runnerName` on `JobStarted` and `JobCompleted` only.
     pub runner_name: Option<String>,
     /// `result` on `JobCompleted` only.
     pub result: Option<String>,
-    /// Numeric `jobId` only. Other shapes are dropped.
-    pub job_id: Option<String>,
-    /// `requestLabels` names. Empty when the field is absent.
-    pub labels: Vec<String>,
     /// Object keys. Names only, so a live trace can show the shape.
     pub fields: Vec<String>,
+}
+
+/// Immutable GitHub job metadata from the pinned Scale Set message base.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImmutableJobContext {
+    /// GitHub repository name, when sent.
+    pub repository_name: Option<String>,
+    /// GitHub owner name, when sent.
+    pub owner_name: Option<String>,
+    /// GitHub job identifier as sent. This is a string in the protocol.
+    pub job_id: Option<String>,
+    /// Workflow file reference, when sent.
+    pub job_workflow_ref: Option<String>,
+    /// Display-only job name. It is not a source identity.
+    pub job_display_name: Option<String>,
+    /// Workflow run identifier, when sent.
+    pub workflow_run_id: Option<i64>,
+    /// Triggering event name, when sent.
+    pub event_name: Option<String>,
+    /// `requestLabels` exactly as sent. Empty when omitted or null.
+    pub request_labels: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct JobMessageBase {
+    message_type: String,
+    runner_request_id: Option<i64>,
+    repository_name: Option<String>,
+    owner_name: Option<String>,
+    job_id: Option<String>,
+    job_workflow_ref: Option<String>,
+    job_display_name: Option<String>,
+    workflow_run_id: Option<i64>,
+    event_name: Option<String>,
+    request_labels: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct JobStartedFields {
+    runner_id: Option<i64>,
+    runner_name: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct JobCompletedFields {
+    runner_id: Option<i64>,
+    runner_name: Option<String>,
+    result: Option<String>,
 }
 
 /// `statistics` object from the pinned Go struct.
@@ -137,15 +186,20 @@ fn parse_body(body: &str) -> Result<Vec<InnerJob>, WireError> {
 }
 
 fn parse_inner(value: &Value) -> Result<InnerJob, WireError> {
-    let kind_text = value
-        .get("messageType")
-        .and_then(Value::as_str)
-        .ok_or(WireError::Malformed)?;
-    let request_id = value.get("runnerRequestId").and_then(Value::as_i64);
-    let job_id = numeric_job_id(value.get("jobId").and_then(Value::as_str));
-    let labels = label_names(value.get("requestLabels"));
+    let base: JobMessageBase = decode_message(value)?;
+    let request_id = base.runner_request_id;
+    let context = ImmutableJobContext {
+        repository_name: base.repository_name,
+        owner_name: base.owner_name,
+        job_id: base.job_id,
+        job_workflow_ref: base.job_workflow_ref,
+        job_display_name: base.job_display_name,
+        workflow_run_id: base.workflow_run_id,
+        event_name: base.event_name,
+        request_labels: base.request_labels.unwrap_or_default(),
+    };
     let fields = object_fields(value);
-    let kind = match kind_text {
+    let kind = match base.message_type.as_str() {
         "JobAvailable" => InnerKind::Available,
         "JobAssigned" => InnerKind::Assigned,
         "JobStarted" => InnerKind::Started,
@@ -156,11 +210,10 @@ fn parse_inner(value: &Value) -> Result<InnerJob, WireError> {
     Ok(InnerJob {
         kind,
         request_id,
+        context,
         runner_id: runner_fields.runner_id,
         runner_name: runner_fields.runner_name,
         result: runner_fields.result,
-        job_id,
-        labels,
         fields,
     })
 }
@@ -170,20 +223,30 @@ fn message_runner_fields(
     kind: &InnerKind,
 ) -> Result<MessageRunnerFields, WireError> {
     match kind {
-        InnerKind::Started => Ok(MessageRunnerFields {
-            runner_id: optional_i64(value, "runnerId")?,
-            runner_name: optional_string(value, "runnerName")?,
-            result: None,
-        }),
-        InnerKind::Completed => Ok(MessageRunnerFields {
-            runner_id: optional_i64(value, "runnerId")?,
-            runner_name: optional_string(value, "runnerName")?,
-            result: optional_string(value, "result")?,
-        }),
+        InnerKind::Started => {
+            let started: JobStartedFields = decode_message(value)?;
+            Ok(MessageRunnerFields {
+                runner_id: started.runner_id,
+                runner_name: started.runner_name,
+                result: None,
+            })
+        }
+        InnerKind::Completed => {
+            let completed: JobCompletedFields = decode_message(value)?;
+            Ok(MessageRunnerFields {
+                runner_id: completed.runner_id,
+                runner_name: completed.runner_name,
+                result: completed.result,
+            })
+        }
         InnerKind::Available | InnerKind::Assigned | InnerKind::Unsupported(_) => {
             Ok(MessageRunnerFields::default())
         }
     }
+}
+
+fn decode_message<T: for<'de> Deserialize<'de>>(value: &Value) -> Result<T, WireError> {
+    serde_json::from_value(value.clone()).map_err(|_| WireError::Malformed)
 }
 
 #[derive(Default)]
@@ -191,32 +254,6 @@ struct MessageRunnerFields {
     runner_id: Option<i64>,
     runner_name: Option<String>,
     result: Option<String>,
-}
-
-fn optional_i64(value: &Value, field: &str) -> Result<Option<i64>, WireError> {
-    match value.get(field) {
-        None | Some(Value::Null) => Ok(None),
-        Some(number) => number.as_i64().map(Some).ok_or(WireError::Malformed),
-    }
-}
-
-fn optional_string(value: &Value, field: &str) -> Result<Option<String>, WireError> {
-    match value.get(field) {
-        None | Some(Value::Null) => Ok(None),
-        Some(text) => text
-            .as_str()
-            .map(str::to_owned)
-            .map(Some)
-            .ok_or(WireError::Malformed),
-    }
-}
-
-fn numeric_job_id(value: Option<&str>) -> Option<String> {
-    let text = value?;
-    if text.is_empty() || text.len() > 24 || !text.bytes().all(|byte| byte.is_ascii_digit()) {
-        return None;
-    }
-    Some(text.to_owned())
 }
 
 fn object_fields(value: &Value) -> Vec<String> {
@@ -232,24 +269,6 @@ fn object_fields(value: &Value) -> Vec<String> {
                     .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_'))
         })
         .map(ToOwned::to_owned)
-        .collect()
-}
-
-fn label_names(value: Option<&Value>) -> Vec<String> {
-    let Some(items) = value.and_then(Value::as_array) else {
-        return Vec::new();
-    };
-    items
-        .iter()
-        .filter_map(Value::as_str)
-        .filter(|name| {
-            !name.is_empty()
-                && name.len() <= 64
-                && name
-                    .bytes()
-                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
-        })
-        .map(str::to_owned)
         .collect()
 }
 
