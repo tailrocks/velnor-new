@@ -7,7 +7,7 @@ use velnor_actions_tofu::kinds::TofuTaskKind;
 use crate::support::{Outcome, TempDir};
 
 /// Minimal tofu proposal for `kind` in `unit`.
-pub(crate) fn proposal(kind: &str, unit: &str) -> ProposedTask {
+pub(crate) fn proposal(kind: &str, unit: &str) -> Result<ProposedTask, Box<dyn std::error::Error>> {
     let parsed = TofuTaskKind::parse(kind).unwrap_or(TofuTaskKind::Validate);
     let group = velnor_actions_tofu::TofuTaskGroup {
         root: unit.to_owned(),
@@ -15,11 +15,11 @@ pub(crate) fn proposal(kind: &str, unit: &str) -> ProposedTask {
         configuration: "default".to_owned(),
         no_targets: false,
     };
-    let mut task = velnor_actions_tofu::propose_task(&group).expect("fixture proposes");
+    let mut task = velnor_actions_tofu::propose_task(&group)?;
     if parsed.as_str() != kind {
-        task.task_kind = kind.to_owned();
+        kind.clone_into(&mut task.task_kind);
     }
-    task
+    Ok(task)
 }
 
 /// Seed a unit root with config, vars, and an optional lockfile.
@@ -76,7 +76,7 @@ fn unknown_kind_fails_closed() -> Outcome {
     let root = TempDir::create("tofu-closure-kind")?;
     let err = resolve_closure_at_root(
         root.path(),
-        &proposal("plan", ""),
+        &proposal("plan", "")?,
         "g",
         "t",
         "p",
@@ -93,7 +93,7 @@ fn validate_closure_binds_effective_set_and_lock() -> Outcome {
     seed(&root, "", true)?;
     let closure = resolve_closure_at_root(
         root.path(),
-        &proposal("validate", ""),
+        &proposal("validate", "")?,
         "g",
         "t",
         "p",
@@ -117,7 +117,7 @@ fn source_edit_flips_the_closure_digest() -> Outcome {
     seed(&root, "", false)?;
     let before = resolve_closure_at_root(
         root.path(),
-        &proposal("validate", ""),
+        &proposal("validate", "")?,
         "g",
         "t",
         "p",
@@ -126,7 +126,7 @@ fn source_edit_flips_the_closure_digest() -> Outcome {
     root.write("main.tf", "variable \"x\" {}\nvariable \"y\" {}\n")?;
     let after = resolve_closure_at_root(
         root.path(),
-        &proposal("validate", ""),
+        &proposal("validate", "")?,
         "g",
         "t",
         "p",
@@ -145,7 +145,7 @@ fn tfvars_edits_move_fmt_but_not_validate() -> Outcome {
     seed(&root, "", false)?;
     let fmt_before = resolve_closure_at_root(
         root.path(),
-        &proposal("fmt", ""),
+        &proposal("fmt", "")?,
         "g",
         "t",
         "p",
@@ -153,7 +153,7 @@ fn tfvars_edits_move_fmt_but_not_validate() -> Outcome {
     )?;
     let val_before = resolve_closure_at_root(
         root.path(),
-        &proposal("validate", ""),
+        &proposal("validate", "")?,
         "g",
         "t",
         "p",
@@ -162,7 +162,7 @@ fn tfvars_edits_move_fmt_but_not_validate() -> Outcome {
     root.write("extra.tfvars", "x = 2\n")?;
     let fmt_after = resolve_closure_at_root(
         root.path(),
-        &proposal("fmt", ""),
+        &proposal("fmt", "")?,
         "g",
         "t",
         "p",
@@ -170,7 +170,7 @@ fn tfvars_edits_move_fmt_but_not_validate() -> Outcome {
     )?;
     let val_after = resolve_closure_at_root(
         root.path(),
-        &proposal("validate", ""),
+        &proposal("validate", "")?,
         "g",
         "t",
         "p",
@@ -193,7 +193,7 @@ fn fmt_ignores_the_lockfile() -> Outcome {
     seed(&root, "", true)?;
     let closure = resolve_closure_at_root(
         root.path(),
-        &proposal("fmt", ""),
+        &proposal("fmt", "")?,
         "g",
         "t",
         "p",
@@ -212,7 +212,7 @@ fn missing_lockfile_is_proven_absent_for_validate() -> Outcome {
     seed(&root, "", false)?;
     let closure = resolve_closure_at_root(
         root.path(),
-        &proposal("validate", ""),
+        &proposal("validate", "")?,
         "g",
         "t",
         "p",
@@ -232,7 +232,7 @@ fn json_only_root_has_no_fmt_inputs() -> Outcome {
     root.write("main.tf.json", "{\"variable\": {\"x\": {}}}")?;
     let closure = resolve_closure_at_root(
         root.path(),
-        &proposal("fmt", ""),
+        &proposal("fmt", "")?,
         "g",
         "t",
         "p",
@@ -252,7 +252,7 @@ fn subdir_unit_scopes_to_itself() -> Outcome {
     root.write("main.tf", "variable \"other\" {}\n")?;
     let closure = resolve_closure_at_root(
         root.path(),
-        &proposal("validate", "infra"),
+        &proposal("validate", "infra")?,
         "g",
         "t",
         "p",
@@ -262,7 +262,7 @@ fn subdir_unit_scopes_to_itself() -> Outcome {
     root.write("main.tf", "variable \"changed\" {}\n")?;
     let again = resolve_closure_at_root(
         root.path(),
-        &proposal("validate", "infra"),
+        &proposal("validate", "infra")?,
         "g",
         "t",
         "p",
@@ -280,7 +280,7 @@ fn symlink_in_unit_is_unknown() -> Outcome {
     std::os::unix::fs::symlink(root.path().join("main.tf"), root.path().join("linked.tf"))?;
     let closure = resolve_closure_at_root(
         root.path(),
-        &proposal("validate", ""),
+        &proposal("validate", "")?,
         "g",
         "t",
         "p",
@@ -297,7 +297,7 @@ fn hidden_dirs_never_enter_the_tree() -> Outcome {
     root.write(".terraform/modules/x/main.tf", "variable \"cached\" {}\n")?;
     let before = resolve_closure_at_root(
         root.path(),
-        &proposal("validate", ""),
+        &proposal("validate", "")?,
         "g",
         "t",
         "p",
@@ -306,7 +306,7 @@ fn hidden_dirs_never_enter_the_tree() -> Outcome {
     root.write(".terraform/modules/x/main.tf", "variable \"changed\" {}\n")?;
     let after = resolve_closure_at_root(
         root.path(),
-        &proposal("validate", ""),
+        &proposal("validate", "")?,
         "g",
         "t",
         "p",
