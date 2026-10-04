@@ -48,7 +48,7 @@ fn attempt_record(parent: &BaselineManifest) -> serde_json::Value {
 fn resolve_mock(
     plan: &Plan,
     parent: &BaselineManifest,
-    metadata: serde_json::Value,
+    metadata: &serde_json::Value,
 ) -> (Option<BaselineManifest>, Vec<Vec<String>>) {
     let mut calls = Vec::new();
     let found = resolve_planned(plan, "o/r", "testmain", |args| {
@@ -83,7 +83,7 @@ fn selected_parent_survives_newer_same_base_run_and_attempt() {
     let (plan, parent) = fixture();
     // Latest same-base run/attempt may now be run 8 or attempt 2. The
     // resolver never lists latest runs: it authenticates run 7 attempt 1.
-    let (found, calls) = resolve_mock(&plan, &parent, attempt_record(&parent));
+    let (found, calls) = resolve_mock(&plan, &parent, &attempt_record(&parent));
     assert!(found.is_some());
     assert_eq!(calls[0], ["api", "repos/o/r/actions/runs/7/artifacts"]);
     assert_eq!(calls[1][..3], ["run", "download", "7"]);
@@ -112,7 +112,7 @@ fn wrong_service_attempt_or_provenance_never_authenticates() {
         let mut record = attempt_record(&parent);
         record[field] = wrong;
         assert!(
-            resolve_mock(&plan, &parent, record).0.is_none(),
+            resolve_mock(&plan, &parent, &record).0.is_none(),
             "reject {field}"
         );
     }
@@ -122,7 +122,7 @@ fn wrong_service_attempt_or_provenance_never_authenticates() {
 fn replacement_manifest_digest_never_downloads_as_selected_parent() {
     let (plan, mut parent) = fixture();
     parent.run_attempt = 2;
-    let (found, calls) = resolve_mock(&plan, &parent, attempt_record(&parent));
+    let (found, calls) = resolve_mock(&plan, &parent, &attempt_record(&parent));
     assert!(found.is_none());
     assert_eq!(
         calls.len(),
@@ -136,7 +136,7 @@ fn repository_service_casing_preserves_canonical_identity() {
     let (plan, mut parent) = fixture();
     let mut metadata = attempt_record(&parent);
     metadata["repository"]["full_name"] = serde_json::json!("O/R");
-    assert!(resolve_mock(&plan, &parent, metadata.clone()).0.is_some());
+    assert!(resolve_mock(&plan, &parent, &metadata).0.is_some());
     parent.workflow_ref = "O/R/.github/workflows/ci.yml@refs/heads/testmain".to_owned();
     assert!(authentic_attempt(
         &metadata.to_string(),
@@ -161,8 +161,11 @@ fn real_api_manifest(run_id: u64, run_attempt: u64, source: &str) -> BaselineMan
 /// Fixture fields came from the real Actions REST attempt endpoints on 2026-10-04.
 #[test]
 fn real_api_attempt_fixtures_authenticate_original_attempt_identity() {
-    let successful_original =
-        real_api_manifest(37163556069, 1, "47815c83b9eeadbaf84b741918fffa7ea550da89");
+    let successful_original = real_api_manifest(
+        37_163_556_069,
+        1,
+        "47815c83b9eeadbaf84b741918fffa7ea550da89",
+    );
     assert!(authentic_attempt(
         include_str!("../tests/fixtures/github-run-37163556069-attempt-1.json"),
         &successful_original,
@@ -171,10 +174,16 @@ fn real_api_attempt_fixtures_authenticate_original_attempt_identity() {
         ".github/workflows/ci.yml"
     ));
 
-    let failed_original =
-        real_api_manifest(37157003048, 1, "9a249e9ab99a019ab7ba0e6f835dee406827db20");
-    let successful_retry =
-        real_api_manifest(37157003048, 2, "9a249e9ab99a019ab7ba0e6f835dee406827db20");
+    let failed_original = real_api_manifest(
+        37_157_003_048,
+        1,
+        "9a249e9ab99a019ab7ba0e6f835dee406827db20",
+    );
+    let successful_retry = real_api_manifest(
+        37_157_003_048,
+        2,
+        "9a249e9ab99a019ab7ba0e6f835dee406827db20",
+    );
     assert!(!authentic_attempt(
         include_str!("../tests/fixtures/github-run-37157003048-attempt-1.json"),
         &failed_original,

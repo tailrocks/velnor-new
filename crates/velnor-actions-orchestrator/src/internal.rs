@@ -169,7 +169,7 @@ pub fn plan_internal(request_json: &str) -> Result<String, OrchestratorError> {
             })
             .ok()
     });
-    apply_baseline(
+    let used_manifest = apply_baseline(
         &mut plan,
         request.event,
         BaselineInputs {
@@ -179,13 +179,13 @@ pub fn plan_internal(request_json: &str) -> Result<String, OrchestratorError> {
             catalog: &catalog,
             repository: request.repository.as_deref(),
         },
-        manifest.clone(),
+        manifest,
         &prep.discovery,
         changed.as_ref(),
     )?;
     plan.validate().map_err(internal_contract)?;
     check_matrix_budget(&plan.matrix)?;
-    let response = plan_response(plan, manifest);
+    let response = plan_response(plan, used_manifest);
     serde_json::to_string(&response).map_err(|err| OrchestratorError::Internal {
         problem: format!("response_encode:{err}"),
     })
