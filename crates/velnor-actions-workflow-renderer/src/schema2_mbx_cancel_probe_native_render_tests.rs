@@ -34,8 +34,7 @@ fn protected_environment_uses_native_job_field() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn observer_jobs_run_after_controller_failure_and_keep_phase_gates()
--> Result<(), Box<dyn Error>> {
+fn observer_jobs_run_after_controller_failure_and_keep_phase_gates() -> Result<(), Box<dyn Error>> {
     let request = request();
     let hosted = Yaml::str("ubuntu-26.04");
     for phase in [Phase::PreSave, Phase::DuringSave] {
@@ -53,9 +52,7 @@ fn observer_jobs_run_after_controller_failure_and_keep_phase_gates()
             &Yaml::str(format!("always() && ({})", phase.gate("observer")))
         );
         assert!(fields.iter().any(|(key, value)| {
-            key == "needs"
-                && value
-                    == &Yaml::Seq(vec![Yaml::str(phase.controller_id().to_owned())])
+            key == "needs" && value == &Yaml::Seq(vec![Yaml::str(phase.controller_id().to_owned())])
         }));
         assert_step_env(
             &rendered,
@@ -259,8 +256,9 @@ fn assert_step_env(
     else {
         return Err("step environment is not a map".into());
     };
-    assert!(env.iter().any(|(field, value)| {
-        field == key && value == &Yaml::str(expected.to_owned())
-    }));
+    assert!(
+        env.iter()
+            .any(|(field, value)| { field == key && value == &Yaml::str(expected.to_owned()) })
+    );
     Ok(())
 }

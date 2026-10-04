@@ -17,8 +17,7 @@ const INVALID_SHAPES: [&str; 7] = [
 ];
 
 #[test]
-fn malformed_cache_shapes_remain_unknown_on_all_snapshot_paths()
--> Result<(), Box<dyn Error>> {
+fn malformed_cache_shapes_remain_unknown_on_all_snapshot_paths() -> Result<(), Box<dyn Error>> {
     for mode in INVALID_SHAPES {
         assert_controller_cache_unknown(mode)?;
         assert_observer_before_unknown(mode)?;
@@ -40,8 +39,11 @@ fn assert_controller_cache_unknown(mode: &str) -> Result<(), Box<dyn Error>> {
     fixture.readiness("good")?;
     let cancel = fixture.cancel(mode)?;
     assert!(cancel.contains("cancel_requested=true\n"), "{cancel}");
-    let snapshot =
-        fs::read_to_string(fixture.root.join("mbx-cancel-controller/cache-before-exact.json"))?;
+    let snapshot = fs::read_to_string(
+        fixture
+            .root
+            .join("mbx-cancel-controller/cache-before-exact.json"),
+    )?;
     assert!(snapshot.contains("\"count\":-1"), "{mode}: {snapshot}");
     fs::remove_dir_all(fixture.root)?;
     Ok(())
@@ -59,9 +61,16 @@ fn assert_observer_before_count(mode: &str, count: i64) -> Result<(), Box<dyn Er
     env.push(("VALIDATED_CACHE_KEY".to_owned(), expected_key()));
     let script = scripts::observer_cache_before();
     let result = run_bash(&script, &fixture.root, &fixture.bin, &env)?;
-    assert!(result.status.success(), "{}", String::from_utf8_lossy(&result.stderr));
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
     let snapshot = fs::read_to_string(fixture.root.join("mbx-cancel/observer/cache-before.json"))?;
-    assert!(snapshot.contains(&format!("\"count\":{count}")), "{mode}: {snapshot}");
+    assert!(
+        snapshot.contains(&format!("\"count\":{count}")),
+        "{mode}: {snapshot}"
+    );
     fs::remove_dir_all(fixture.root)?;
     Ok(())
 }
@@ -84,13 +93,21 @@ fn assert_observer_after_unknown(mode: &str) -> Result<(), Box<dyn Error>> {
         ("CHILD_ACTOR".to_owned(), "github-actions[bot]".to_owned()),
         ("CURL_LOCATION_MODE".to_owned(), "missing".to_owned()),
         ("CONTROLLER_CANCEL_REQUESTED".to_owned(), "true".to_owned()),
-        ("CONTROLLER_CANCEL_AT".to_owned(), "2026-10-04T00:00:10Z".to_owned()),
+        (
+            "CONTROLLER_CANCEL_AT".to_owned(),
+            "2026-10-04T00:00:10Z".to_owned(),
+        ),
         ("CONTROLLER_BEFORE_COUNT".to_owned(), "0".to_owned()),
     ]);
     let script = scripts::observer_evidence();
     let result = run_bash(&script, &fixture.root, &fixture.bin, &env)?;
-    assert!(result.status.success(), "{}", String::from_utf8_lossy(&result.stderr));
-    let evidence = fs::read_to_string(fixture.root.join("mbx-cancel/observer/child-evidence.json"))?;
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let evidence =
+        fs::read_to_string(fixture.root.join("mbx-cancel/observer/child-evidence.json"))?;
     assert!(
         evidence.contains("\"cache_after\":{\"count\":-1"),
         "{mode}: {evidence}"

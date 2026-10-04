@@ -56,10 +56,10 @@ fn fixture_mode(pre_save: bool) -> FixtureMode {
     }
 }
 
-#[path = "schema2_mbx_cancel_probe_controller_receipt_fixtures.rs"]
-mod receipt;
 #[path = "schema2_mbx_cancel_probe_date_fixture.rs"]
 mod date_fixture;
+#[path = "schema2_mbx_cancel_probe_controller_receipt_fixtures.rs"]
+mod receipt;
 pub(super) use receipt::{expected_key, readiness_receipt};
 
 pub(super) struct Fixture {
@@ -162,18 +162,12 @@ impl Fixture {
             ("MISE_ACTION_USES".to_owned(), MISE_ACTION.to_owned()),
             ("MISE_VERSION".to_owned(), "2025.9.5".to_owned()),
             ("MISE_SHA256".to_owned(), MISE_SHA.to_owned()),
-            (
-                "VICTIM_JOB_NAME".to_owned(),
-                phase.victim_name.to_owned(),
-            ),
+            ("VICTIM_JOB_NAME".to_owned(), phase.victim_name.to_owned()),
             (
                 "VICTIM_ARTIFACT_NAME".to_owned(),
                 phase.artifact_name.to_owned(),
             ),
-            (
-                "CANCEL_STEP_NAME".to_owned(),
-                phase.cancel_step.to_owned(),
-            ),
+            ("CANCEL_STEP_NAME".to_owned(), phase.cancel_step.to_owned()),
             ("RUN_ID".to_owned(), "123".to_owned()),
             ("WORKFLOW_ID".to_owned(), "77".to_owned()),
             ("GH_LOG".to_owned(), self.log.display().to_string()),

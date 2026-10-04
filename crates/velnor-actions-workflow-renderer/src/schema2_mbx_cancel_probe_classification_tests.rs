@@ -30,8 +30,8 @@ fn classifier_requires_proven_windows_and_preserves_unknown_reservations()
 }
 
 #[test]
-fn missing_restore_outputs_stay_not_run_after_a_proven_upload_window()
--> Result<(), Box<dyn Error>> {
+fn missing_restore_outputs_stay_not_run_after_a_proven_upload_window() -> Result<(), Box<dyn Error>>
+{
     for missing in ["all", "primary", "conclusion", "failed"] {
         assert_restore_not_run(missing)?;
     }

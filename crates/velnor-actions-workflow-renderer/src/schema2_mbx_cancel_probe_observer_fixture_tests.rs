@@ -110,8 +110,14 @@ fn restore_errors_and_untrusted_logs_do_not_qualify_as_misses() -> Result<(), Bo
             .insert("RESTORE_LOG_MODE".to_owned(), restore.to_owned());
         execute_evidence(label, &fixture, &setup)?;
         let evidence = fs::read_to_string(setup.observer.join("child-evidence.json"))?;
-        assert!(evidence.contains("\"upload_started_before_cancel\":true"), "{evidence}");
-        assert!(evidence.contains("\"restore_clean_miss\":false"), "{evidence}");
+        assert!(
+            evidence.contains("\"upload_started_before_cancel\":true"),
+            "{evidence}"
+        );
+        assert!(
+            evidence.contains("\"restore_clean_miss\":false"),
+            "{evidence}"
+        );
         assert_classification(&fixture, setup.env, &setup.observer, &key, false)?;
         fs::remove_dir_all(fixture.root)?;
     }
@@ -123,7 +129,10 @@ fn restore_errors_and_untrusted_logs_do_not_qualify_as_misses() -> Result<(), Bo
         .insert("OBSERVER_WORKFLOW_ID".to_owned(), "78".to_owned());
     execute_evidence("restore-wrong-workflow", &fixture, &setup)?;
     let evidence = fs::read_to_string(setup.observer.join("child-evidence.json"))?;
-    assert!(evidence.contains("\"restore_clean_miss\":false"), "{evidence}");
+    assert!(
+        evidence.contains("\"restore_clean_miss\":false"),
+        "{evidence}"
+    );
     assert!(!fs::read_to_string(&setup.curl_log)?.contains("restore-api"));
     assert_classification(&fixture, setup.env, &setup.observer, &key, false)?;
     fs::remove_dir_all(fixture.root)?;
@@ -275,7 +284,10 @@ fn validate_evidence(mode: &str, key: &str, setup: &EvidenceRun) -> Result<(), B
         )),
         "{evidence}; requests={requests}"
     );
-    assert!(evidence.contains("\"restore_clean_miss\":true"), "{evidence}");
+    assert!(
+        evidence.contains("\"restore_clean_miss\":true"),
+        "{evidence}"
+    );
     if setup.started {
         assert!(
             evidence.contains("timestamped_positive_partial_progress_before_cancel"),
@@ -301,14 +313,13 @@ fn assert_log_requests(path: &Path, mode: &str) -> Result<(), Box<dyn Error>> {
     let lines = requests.lines().collect::<Vec<_>>();
     assert_eq!(
         lines.first(),
-        Some(&"observer-api https://api.github.com/repos/tailrocks/velnor-new/actions/jobs/456/steps/2/logs true")
+        Some(
+            &"observer-api https://api.github.com/repos/tailrocks/velnor-new/actions/jobs/456/steps/2/logs true"
+        )
     );
     let child_signed = mode != "missing" && mode != "malformed" && mode != "large-header";
     if child_signed {
-        assert_eq!(
-            lines.get(1),
-            Some(&"observer-signed authorized=false")
-        );
+        assert_eq!(lines.get(1), Some(&"observer-signed authorized=false"));
     }
     let restore_at = 1 + usize::from(child_signed);
     assert_eq!(lines.get(restore_at), Some(&"restore-api authorized=true"));

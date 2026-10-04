@@ -16,7 +16,9 @@ fn pre_save_controller_validates_artifact_and_cancels_exact_live_wait_step()
     let cancel = fixture.cancel("good")?;
     assert!(cancel.contains("cancel_requested=true\n"), "{cancel}");
     let cache = fs::read_to_string(
-        fixture.root.join("mbx-cancel-controller/cache-before-exact.json"),
+        fixture
+            .root
+            .join("mbx-cancel-controller/cache-before-exact.json"),
     )?;
     assert!(cache.contains("\"count\":0"), "{cache}");
     let log = fixture.log()?;

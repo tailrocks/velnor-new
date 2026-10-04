@@ -13,12 +13,12 @@ use super::{render, scripts};
 use crate::yaml::Yaml;
 use velnor_actions_contract::StepKind;
 
+#[path = "schema2_mbx_cancel_probe_cache_snapshot_tests.rs"]
+mod cache_snapshots;
 #[path = "schema2_mbx_cancel_probe_classification_tests.rs"]
 mod classifications;
 #[path = "schema2_mbx_cancel_probe_controller_fixture_tests.rs"]
 mod controller_fixtures;
-#[path = "schema2_mbx_cancel_probe_cache_snapshot_tests.rs"]
-mod cache_snapshots;
 #[path = "schema2_mbx_cancel_probe_controller_transport_cases.rs"]
 mod controller_transport;
 #[path = "schema2_mbx_cancel_probe_key_fixture_tests.rs"]
