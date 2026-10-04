@@ -182,7 +182,7 @@ fn losing_concurrent_lease_publisher_syncs_parent_before_retry() -> Result<(), B
             thread::spawn(move || {
                 let syncs = Arc::new(AtomicUsize::new(0));
                 let recorded_syncs = Arc::clone(&syncs);
-                let result = store.lease_with_hook(
+                let result = store.lease_with_test_hooks(
                     launch_id,
                     202,
                     &[archive],
