@@ -14,6 +14,8 @@ goal model clause: new subagents default to `gpt-6-luna` / `max` for all tasks; 
 
 The [2026-10-04 source-progress recovery supplement](ci-performance-source-progress-recovery-20261004.md) records the observed recovery boundary, durable Audit47 and merge-source evidence, and pending integrated qualification. It grants no qualification.
 
+The [2026-10-04 actual hosted-run audit](ci-performance-actual-runs-20261004.md) records source-bound Jackin and generator jobs, raw-log hashes, a source-backed inference that differing restore/save paths explain the generator cache miss, and unavailable performance metrics. It leaves all47 statuses INCOMPLETE and grants no qualification.
+
 ## Evidence levels
 
 `I` = working implementation exists; `S` = source inspected independently;
