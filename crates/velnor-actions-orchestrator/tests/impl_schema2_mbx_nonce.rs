@@ -75,7 +75,10 @@ fn assert_qualification_contract(writer: &str, reader: &str) -> TestResult {
     }
     let restore = step_body(writer, "Restore MBX single bundle");
     assert!(restore.contains("key: ${{ steps.mbx-bundle-key.outputs.primary }}"));
-    assert!(restore.contains("restore-keys: ${{ steps.mbx-bundle-key.outputs.prefix }}"));
+    assert!(
+        !restore.contains("restore-keys:"),
+        "qualification writer must restore its exact run-and-attempt key: {restore}"
+    );
     assert!(step_body(writer, "Prepare MBX bundle key").contains(QUALIFICATION_SCOPE));
     let writer_import = run_value(writer, "Import MBX single bundle")?;
     assert_before(
