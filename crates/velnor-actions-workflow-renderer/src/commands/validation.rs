@@ -29,6 +29,7 @@ fn validate_argv(argv: &[String], script_index: Option<usize>) -> Result<(), Ren
     if argv.is_empty() {
         return Err(RenderError::BadCommand("empty_argv".to_owned()));
     }
+    let shell_script_index = inline_shell_script_index(argv);
     let mut previous: Option<&str> = None;
     for (index, arg) in argv.iter().enumerate() {
         if arg.is_empty() {
@@ -45,7 +46,7 @@ fn validate_argv(argv: &[String], script_index: Option<usize>) -> Result<(), Ren
                 "command_substitution:{arg}"
             )));
         }
-        if has_background_op(arg) {
+        if shell_script_index == Some(index) && has_background_op(arg) {
             return Err(RenderError::BadCommand(format!("background_shell:{arg}")));
         }
         if previous == Some("cargo") && arg == "install" {
@@ -60,6 +61,54 @@ fn validate_argv(argv: &[String], script_index: Option<usize>) -> Result<(), Ren
         previous = Some(arg);
     }
     Ok(())
+}
+
+/// Return the script argument only when argv is an inline shell invocation.
+///
+/// The generated credential wrapper is an `env -u NAME` prefix. Accept its
+/// exact known form first. Also recognize ordinary `env` unset options so an
+/// untrusted caller cannot hide a shell behind `env -u CUSTOM`.
+fn inline_shell_script_index(argv: &[String]) -> Option<usize> {
+    let prefix = crate::toolchain_env::unset_prefix_len(argv);
+    if crate::commands::is_inline_shell(argv.get(prefix..)?) {
+        return Some(prefix + 2);
+    }
+    if argv.first().is_none_or(|arg| arg != "env") {
+        return None;
+    }
+    let command_index = env_command_index(argv)?;
+    crate::commands::is_inline_shell(argv.get(command_index..)?).then_some(command_index + 2)
+}
+
+/// Find the command after the small set of ordinary `env` prefixes.
+fn env_command_index(argv: &[String]) -> Option<usize> {
+    let mut index = 1;
+    loop {
+        let arg = argv.get(index)?;
+        match arg.as_str() {
+            "--" => return Some(index + 1),
+            "-u" | "--unset" => {
+                argv.get(index + 1)?;
+                index += 2;
+            }
+            "-i" | "--ignore-environment" | "-" => index += 1,
+            value if value.starts_with("--unset=") => index += 1,
+            value if is_env_assignment(value) => index += 1,
+            value if value.starts_with('-') => return None,
+            _ => return Some(index),
+        }
+    }
+}
+
+fn is_env_assignment(value: &str) -> bool {
+    let Some((name, _)) = value.split_once('=') else {
+        return false;
+    };
+    let mut bytes = name.bytes();
+    bytes
+        .next()
+        .is_some_and(|byte| byte.is_ascii_alphabetic() || byte == b'_')
+        && bytes.all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
 }
 
 /// Validate a fixed env map: `A-Z0-9_` keys, single-line clean values.
@@ -99,7 +148,6 @@ fn has_background_op(script: &str) -> bool {
     let mut escaped = false;
     let mut comment = false;
     let mut token_start = true;
-    let mut previous = None;
     while let Some(ch) = chars.next() {
         if comment {
             if ch == '\n' {
@@ -111,7 +159,6 @@ fn has_background_op(script: &str) -> bool {
         if escaped {
             escaped = false;
             token_start = false;
-            previous = Some(ch);
             continue;
         }
         if let Some(open_quote) = quote {
@@ -120,7 +167,6 @@ fn has_background_op(script: &str) -> bool {
             } else if ch == open_quote {
                 quote = None;
             }
-            previous = Some(ch);
             continue;
         }
         match ch {
@@ -133,7 +179,6 @@ fn has_background_op(script: &str) -> bool {
             '&' if chars.peek() == Some(&'&') => {
                 chars.next();
                 token_start = true;
-                previous = Some('&');
                 continue;
             }
             '&' if chars.peek() == Some(&'>') => {
@@ -142,19 +187,29 @@ fn has_background_op(script: &str) -> bool {
                     chars.next();
                 }
                 token_start = true;
-                previous = Some('>');
                 continue;
             }
-            '&' if previous == Some('>') => {
-                token_start = false;
-            }
             '&' => return true,
+            '<' | '>' if chars.peek() == Some(&'&') => {
+                chars.next();
+                token_start = true;
+                continue;
+            }
+            '<' if chars.peek() == Some(&'<') => {
+                chars.next();
+                token_start = true;
+                continue;
+            }
+            '>' if chars.peek() == Some(&'>') => {
+                chars.next();
+                token_start = true;
+                continue;
+            }
             ' ' | '\t' | '\n' | '\r' | ';' | '|' | '(' | ')' | '<' | '>' => {
                 token_start = true;
             }
             _ => token_start = false,
         }
-        previous = Some(ch);
     }
     false
 }

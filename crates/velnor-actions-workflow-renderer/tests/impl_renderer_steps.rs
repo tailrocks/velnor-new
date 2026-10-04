@@ -120,6 +120,7 @@ fn argv_rejects_background_shell_but_keeps_chains_and_urls() {
         "sleep 1\t&echo done",
         "& echo hi",
         "run & sleep",
+        r"echo \>&echo done",
     ] {
         assert!(
             validate_command_argv(&argv(&["sh", "-c", script])).is_err(),
@@ -129,6 +130,7 @@ fn argv_rejects_background_shell_but_keeps_chains_and_urls() {
     for script in [
         "a && b",
         "cmd 2>&1",
+        "cat <&0",
         "cmd &>out",
         "echo '&'",
         "echo \\&",
@@ -141,6 +143,26 @@ fn argv_rejects_background_shell_but_keeps_chains_and_urls() {
             "legal rejected: {script}"
         );
     }
+    assert!(validate_command_argv(&argv(&["curl", "https://example.invalid/x?a=1&b=2",])).is_ok());
+    assert!(
+        validate_command_argv(&argv(&[
+            "bash",
+            "-c",
+            "curl https://example.invalid/x?a=1&b=2",
+        ]))
+        .is_err()
+    );
+    assert!(
+        validate_command_argv(&argv(&[
+            "env",
+            "-u",
+            "CUSTOM",
+            "bash",
+            "-c",
+            "sleep 1&echo done",
+        ]))
+        .is_err()
+    );
 }
 
 #[test]
