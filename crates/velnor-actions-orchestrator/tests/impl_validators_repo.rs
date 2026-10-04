@@ -5,7 +5,7 @@ use std::path::Path;
 use std::process::Command;
 
 use tempfile::TempDir;
-use velnor_actions_contract::WorkflowPolicy;
+use velnor_actions_contract::{PullRequestCachePolicy, WorkflowPolicy};
 use velnor_actions_mise::cache::validate_sources_path;
 use velnor_actions_orchestrator::prepare;
 use velnor_actions_workflow_renderer::steps::{
@@ -93,6 +93,10 @@ fn repo_config_sample_parses_through_prepare() -> TestResult {
             prep.config.workflow.policy,
             WorkflowPolicy::VelnorRepositoryV1
         );
+        assert_eq!(
+            prep.config.workflow.pull_request_cache_policy,
+            PullRequestCachePolicy::SameRepositoryScoped
+        );
         assert_eq!(prep.config.discovery.exclude, vec!["fixtures/**"]);
         // The live sample pins the branch: config wins over origin/HEAD so CI
         // checkouts (which create no origin/HEAD) still resolve the branch.
@@ -136,6 +140,7 @@ fn repo_config_sample_covers_schema_keys() -> TestResult {
                 "default_branch",
                 "generator_validation",
                 "max_parallel_jobs",
+                "pull_request_cache_policy",
                 "runner_label",
             ]
             .contains(&key.as_str()),
@@ -175,6 +180,7 @@ fn assert_sample_mentions(sample: &str) {
         "default_branch",
         "generator_validation",
         "max_parallel_jobs",
+        "pull_request_cache_policy",
         "[resources]",
         "compiler_process_budget",
         "test_process_budget",
