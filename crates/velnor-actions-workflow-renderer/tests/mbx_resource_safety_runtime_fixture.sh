@@ -94,6 +94,7 @@ render_start() {
   chmod 700 "$WORK/start.sh"
 }
 setup_case() {
+  local machine_arch runtime_arch image_os image_version
   CASE_ROOT="$WORK/$1"; RUNNER_TEMP="$CASE_ROOT/runner.temp"
   EVIDENCE="$RUNNER_TEMP/mbx-cache-evidence"; GITHUB_ENV="$CASE_ROOT/github.env"
   mkdir -p "$RUNNER_TEMP"/{cargo,cache,target,shims,mbx-single-bundle/cache/cas/v1/blake3/aa}
@@ -107,7 +108,17 @@ setup_case() {
   export GITHUB_EVENT_NAME=workflow_dispatch GITHUB_REF=refs/heads/main GITHUB_REF_PROTECTED=true
   export GITHUB_RUN_ID=701 GITHUB_RUN_ATTEMPT=1 GITHUB_SHA=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
   export GITHUB_WORKFLOW_REF=owner/repo/.github/workflows/qualification.yml@refs/heads/main
-  export RUNNER_OS=Linux RUNNER_ARCH=X64 ImageOS=ubuntu26 ImageVersion=20261004
+  machine_arch=$(uname -m)
+  case "$machine_arch" in
+    x86_64) runtime_arch=X64 ;;
+    aarch64|arm64) runtime_arch=ARM64 ;;
+    *) fail "unsupported runtime architecture $machine_arch"; return 1 ;;
+  esac
+  . /etc/os-release
+  [[ -n "${ID:-}" && -n "${VERSION_ID:-}" ]] || { fail 'OS release identity missing'; return 1; }
+  image_os="${ID}${VERSION_ID%%.*}"
+  image_version=$VERSION_ID
+  export RUNNER_OS=Linux RUNNER_ARCH="$runtime_arch" ImageOS="$image_os" ImageVersion="$image_version"
   export CARGO_HOME="$RUNNER_TEMP/cargo" MBX_SELECTED_CACHE_ROOT="$RUNNER_TEMP/cache" MBX_CACHE_DIR="$RUNNER_TEMP/cache"
   export MBX_TARGET_ROOT="$RUNNER_TEMP/target" MBX_SHIMS_DIR="$RUNNER_TEMP/shims"
   export MBX_QUALIFICATION_PHASE_FILE="$EVIDENCE/phases.tsv" MBX_QUALIFICATION_SAMPLE_INTERVAL=1
