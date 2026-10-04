@@ -2,7 +2,7 @@
 //!
 //! Each builder returns a self-contained tree under a fresh tempdir that
 //! `scripts/check-freshness.sh --root` validates. The passing root uses
-//! the real reviewed pin values as fixture data; failing roots mutate one
+//! frozen, internally consistent fixture pins; failing roots mutate one
 //! aspect each. Date helpers derive "today" from the system clock so
 //! evidence windows stay deterministic without external crates.
 

@@ -7,7 +7,6 @@ use super::p12_harness as harness;
 const INVENTORY: &str = ".velnor/freshness-inventory.json";
 const POLICY: &str = ".velnor/version-policy.toml";
 const CATALOG: &str = "crates/velnor-actions-mise/src/catalog.rs";
-const ACTIONS_RS: &str = "crates/velnor-actions-actionlint/src/actions.rs";
 const MUTANTS: &str = ".cargo/mutants.toml";
 
 /// Temporary-hold object with full attribution for `key`.
@@ -288,55 +287,6 @@ fn unknown_hold_subject_fails() -> Result<(), Box<dyn Error>> {
     )?;
     let run = harness::run_script(&fixture.dir, &[])?;
     harness::assert_fail(&run, "matches no inventoried");
-    harness::cleanup(&fixture);
-    Ok(())
-}
-
-#[test]
-fn action_const_wiring_is_mapped() -> Result<(), Box<dyn Error>> {
-    const ACTIONS: &[(&str, &str)] = &[
-        ("jdx/mise-action", "MISE_ACTION"),
-        ("actions/checkout", "CHECKOUT_ACTION"),
-        ("actions/download-artifact", "DOWNLOAD_ARTIFACT_ACTION"),
-        ("actions/upload-artifact", "UPLOAD_ARTIFACT_ACTION"),
-        ("actions/cache/restore", "CACHE_ACTION"),
-        ("actions/cache/save", "CACHE_ACTION"),
-        ("jdx/mr-boxington-action", "MR_BOXINGTON_ACTION"),
-        ("asamarts/alint", "ALINT_ACTION"),
-        ("Swatinem/rust-cache", "RUST_CACHE_ACTION"),
-    ];
-    let fixture = harness::passing("p12-action-consts")?;
-    let baseline = harness::run_script(&fixture.dir, &[])?;
-    harness::assert_clean(&baseline);
-    for (key, constant) in ACTIONS {
-        assert!(
-            baseline.stdout.contains(&format!(
-                "action {key} version ({ACTIONS_RS}::{constant}_VERSION)"
-            )),
-            "action version mapping missing for {key}:\n{}",
-            baseline.stdout
-        );
-        assert!(
-            baseline
-                .stdout
-                .contains(&format!("action {key} sha ({ACTIONS_RS}::{constant}_SHA)")),
-            "action SHA mapping missing for {key}:\n{}",
-            baseline.stdout
-        );
-    }
-    let cache_version = crate::impl_repo_policy::quoted_value(
-        include_str!("p12_actions.txt"),
-        "CACHE_ACTION_VERSION:",
-    )?;
-    harness::mutate(
-        &fixture.dir,
-        ACTIONS_RS,
-        &format!("CACHE_ACTION_VERSION: &str = \"{cache_version}\""),
-        "CACHE_ACTION_VERSION: &str = \"v0.0.0\"",
-    )?;
-    let cache_drift = harness::run_script(&fixture.dir, &[])?;
-    harness::assert_fail(&cache_drift, "action actions/cache/restore version");
-    harness::assert_fail(&cache_drift, "action actions/cache/save version");
     harness::cleanup(&fixture);
     Ok(())
 }
