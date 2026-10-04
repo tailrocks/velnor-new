@@ -72,3 +72,17 @@ fn display_gate_partitions_by_id_namespace() {
         "expressions fail even with the right prefix"
     );
 }
+
+#[test]
+fn crate_job_rejects_self_gate() {
+    let mut job = job("tofu-stacks-a", "OpenToFu — stacks/a");
+    let task_id = job.obligations[0].task_id.clone();
+    job.obligations[0].gated_by.push(task_id.clone());
+    let error = job.validate().expect_err("self gate rejected");
+    assert!(
+        error
+            .to_string()
+            .contains(&format!("unordered_gate:{task_id}:{task_id}")),
+        "{error}"
+    );
+}
