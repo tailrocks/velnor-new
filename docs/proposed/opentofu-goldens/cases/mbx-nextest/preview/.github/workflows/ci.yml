@@ -367,7 +367,7 @@ jobs:
           RUSTUP_TOOLCHAIN: 1.98.1
         run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- rustup component add --toolchain 1.98.1-x86_64-unknown-linux-gnu clippy rustfmt
       - name: Restore MBX objects
-        uses: jdx/mr-boxington-action@d0825fbaf3cc36ca2609aa38e71046265a1f1e37
+        uses: jdx/mr-boxington-action@ec3ebbfbc1fdaffa59d476e87e4f386fdc60d533
         with:
           cache-generation: velnor-mbx-1.22.0
           cache-key-suffix: ${{ github.job }}

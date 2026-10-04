@@ -106,7 +106,7 @@ the timestamps recorded in the inventory:
 uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
 uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-uses: jdx/mr-boxington-action@d0825fbaf3cc36ca2609aa38e71046265a1f1e37 # v1.7.1
+uses: jdx/mr-boxington-action@ec3ebbfbc1fdaffa59d476e87e4f386fdc60d533 # commit-ec3ebbf
 uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
 uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
 uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -127,6 +127,11 @@ fixes: it waits for in-flight resource samples and takes a final sample before
 reporting, keeps sampling failures from replacing cache-operation failures,
 and includes Windows `cache.tar` staging in archive-size sampling. The release
 notes state that cache restore and save behavior is unchanged.
+
+This branch temporarily pins PR #62’s exact commit to qualify immutable
+OUT_DIR cleanup in Velnor CI. The commit is not a release; merge this Velnor
+change only after the action fix is merged upstream and replaced with the
+verified v1.7.2 commit SHA.
 
 Checkout, Mise setup, cache restore/save, and artifact transfer are emitted
 where required by the workflow graph. The Mr. Boxington action is emitted only

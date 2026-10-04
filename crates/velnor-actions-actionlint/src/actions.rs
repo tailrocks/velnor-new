@@ -60,12 +60,11 @@ pub const UPLOAD_ARTIFACT_ACTION_SHA: &str = "043fb46d1a93c77aae656e7c1c64a875d1
 pub const CACHE_ACTION_VERSION: &str = "v6.1.0";
 /// Full commit SHA for [`CACHE_ACTION_VERSION`] (`v6` moves with it; v6 is current, no replacement).
 pub const CACHE_ACTION_SHA: &str = "55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
-/// Qualified `jdx/mr-boxington-action` release.
-/// Source: `https://api.github.com/repos/jdx/mr-boxington-action/releases`; checked 2026-10-04.
-pub const MR_BOXINGTON_ACTION_VERSION: &str = "v1.7.1";
-/// Verified full commit SHA targeted by the [`MR_BOXINGTON_ACTION_VERSION`] tag;
-/// generated action references pin this SHA rather than the mutable tag.
-pub const MR_BOXINGTON_ACTION_SHA: &str = "d0825fbaf3cc36ca2609aa38e71046265a1f1e37";
+/// Immutable candidate commit from upstream PR #62, used for integration qualification.
+/// Source: `https://api.github.com/repos/jdx/mr-boxington-action/commits/ec3ebbfbc1fdaffa59d476e87e4f386fdc60d533`; checked 2026-10-04.
+pub const MR_BOXINGTON_ACTION_VERSION: &str = "commit-ec3ebbf";
+/// Full commit SHA for the exact PR-head candidate; replace with the released SHA before merge.
+pub const MR_BOXINGTON_ACTION_SHA: &str = "ec3ebbfbc1fdaffa59d476e87e4f386fdc60d533";
 
 /// Action key for the Cargo-only Rust cache (P08-7, never with MBX).
 pub const RUST_CACHE_ACTION: &str = "Swatinem/rust-cache";

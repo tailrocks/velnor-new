@@ -79,17 +79,16 @@
       "latest_source": "https://api.github.com/repos/actions/cache/releases/latest"
     },
     {
-      "checked_at": "2026-10-04T02:41:39Z",
+      "checked_at": "2026-10-04T04:27:27Z",
       "key": "jdx/mr-boxington-action",
-      "pin_kind": "release",
-      "latest": "v1.7.1",
-      "pinned_sha": "d0825fbaf3cc36ca2609aa38e71046265a1f1e37",
-      "pinned_version": "v1.7.1",
-      "qualified_sha": "d0825fbaf3cc36ca2609aa38e71046265a1f1e37",
-      "qualified_version": "v1.7.1",
-      "source": "https://api.github.com/repos/jdx/mr-boxington-action/commits/v1.7.1",
-      "status": "current",
-      "latest_source": "https://api.github.com/repos/jdx/mr-boxington-action/releases"
+      "pin_kind": "commit",
+      "latest": "ec3ebbfbc1fdaffa59d476e87e4f386fdc60d533",
+      "pinned_sha": "ec3ebbfbc1fdaffa59d476e87e4f386fdc60d533",
+      "pinned_version": "commit-ec3ebbf",
+      "qualified_sha": "ec3ebbfbc1fdaffa59d476e87e4f386fdc60d533",
+      "qualified_version": "commit-ec3ebbf",
+      "source": "https://api.github.com/repos/jdx/mr-boxington-action/commits/ec3ebbfbc1fdaffa59d476e87e4f386fdc60d533",
+      "status": "current"
     },
     {
       "checked_at": "2026-10-03T07:09:17Z",
