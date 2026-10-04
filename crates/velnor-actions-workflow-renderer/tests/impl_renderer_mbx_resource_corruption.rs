@@ -55,6 +55,14 @@ fn assert_provisional_receipt_and_role_rules() {
     assert!(path_script.contains("writer|seed|new-key-writer) printf 'cold\\n'"));
     assert!(path_script.contains("reader|reader-a|reader-b|corrupt-reader) printf 'hit\\n'"));
     assert!(path_script.contains("*) return 1 ;;"));
+    assert!(path_script.contains("< /proc/uptime"));
+    assert!(path_script.contains("timeout --signal=KILL"));
+    assert!(path_script.contains("RESOURCE_SESSION_SCAN_LIMIT=4096"));
+    assert!(path_script.contains("RESOURCE_DEADLINE_COMMAND_EXPIRED=1"));
+    assert!(stop_script.contains("shutdown_budget_seconds"));
+    assert!(stop_script.contains("shutdown_elapsed_centiseconds"));
+    assert!(stop_script.contains("shutdown_deadline_status"));
+    assert!(stop_script.contains("[ \"${RESOURCE_SHUTDOWN_STATUS:-}\" = within_budget ]"));
     assert!(sampler_script.contains("$(resource_role_class)"));
     assert!(stop_script.contains("case \"$(resource_role_class)\" in"));
     assert!(!sampler_script.contains("reader|reader-a|reader-b|corrupt-reader"));

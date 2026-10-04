@@ -19,7 +19,7 @@ const SAMPLER: &str = include_str!("schema2_mbx_resource_sampler.sh");
 const PATH_VALIDATION: &str = include_str!("schema2_mbx_resource_path.sh");
 const SAMPLER_SHA256: &str = "b2a03511f0a36c6b7fca9fb4a95461676acbd54b82e1e902efa1313d3b8fcfd2";
 const PATH_VALIDATION_SHA256: &str =
-    "82ceedc6dd2f5c4099df4890cd9a15e851ea2df2a2b756b909ac9ee5849b395d";
+    "a4460bf8a7c9aa854310033f602b52709d0e69c249dcb8361a151a3040646970";
 const PREUPLOAD_SCRIPT: &str = r#"set -euo pipefail
 evidence="$RUNNER_TEMP/mbx-cache-evidence"
 bash "$evidence/sampler.sh" "$evidence" "$RUNNER_TEMP" "$GITHUB_ENV" "$MBX_QUALIFICATION_SAMPLE_INTERVAL" validate
@@ -354,7 +354,9 @@ fn role_for_job(job_id: &str, writer: bool, corrupt: bool) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::super::mbx_qualification_helpers::{base64_encode, verify_embedded_payload};
-    use super::{PATH_VALIDATION, PATH_VALIDATION_SHA256, SAMPLER, SAMPLER_SHA256, START_SCRIPT};
+    use super::{
+        PATH_VALIDATION, PATH_VALIDATION_SHA256, SAMPLER, SAMPLER_SHA256, START_SCRIPT, STOP_SCRIPT,
+    };
 
     #[test]
     fn sampler_source_keeps_measurements_bounded_and_labeled_as_lower_bounds() {
@@ -366,6 +368,17 @@ mod tests {
         assert!(SAMPLER.contains("GITHUB_ENV file not read"));
         assert!(SAMPLER.contains("max_files=20000"));
         assert!(SAMPLER.contains("max_hash_bytes=$((1024 * 1024 * 1024))"));
+    }
+
+    #[test]
+    fn shutdown_uses_monotonic_deadlines_for_external_process_work() {
+        assert!(PATH_VALIDATION.contains("< /proc/uptime"));
+        assert!(PATH_VALIDATION.contains("timeout --signal=KILL"));
+        assert!(PATH_VALIDATION.contains("RESOURCE_SESSION_SCAN_LIMIT=4096"));
+        assert!(PATH_VALIDATION.contains("wait_for_owned_session_until_deadline"));
+        assert!(STOP_SCRIPT.contains("shutdown_deadline_status"));
+        assert!(STOP_SCRIPT.contains("shutdown_elapsed_centiseconds"));
+        assert!(STOP_SCRIPT.contains("[ \"${RESOURCE_SHUTDOWN_STATUS:-}\" = within_budget ]"));
     }
 
     #[test]

@@ -109,6 +109,26 @@ check_required_files() {
   if [ -s "$evidence/sampler-stop.tsv" ] && ! awk -F '\t' '$1 == "remaining_session_members" { found=1; if ($2 != "0") bad=1 } END { exit !(found && !bad) }' "$evidence/sampler-stop.tsv"; then
     fail_partial 'sampler stop receipt does not prove empty owned session'
   fi
+  if [ -s "$evidence/sampler-stop.tsv" ] && ! awk -F '\t' '
+    $1 == "shutdown_deadline_status" { status=$2; status_found++ }
+    $1 == "shutdown_budget_seconds" { budget=$2; budget_found++ }
+    $1 == "shutdown_elapsed_centiseconds" { elapsed=$2; elapsed_found++ }
+    $1 == "shutdown_graceful_elapsed_centiseconds" { graceful=$2; graceful_found++ }
+    $1 == "shutdown_term_elapsed_centiseconds" { term=$2; term_found++ }
+    $1 == "shutdown_kill_elapsed_centiseconds" { killed=$2; kill_found++ }
+    $1 == "process_scan_limit" { scan_limit=$2; scan_limit_found++ }
+    END {
+      if (status_found != 1 || status != "within_budget" || budget_found != 1 ||
+          elapsed_found != 1 || graceful_found != 1 || term_found != 1 || kill_found != 1 ||
+          scan_limit_found != 1 || scan_limit != "4096" || budget !~ /^[1-9][0-9]*$/ ||
+          elapsed !~ /^[0-9]+$/ || graceful !~ /^[0-9]+$/ || term !~ /^[0-9]+$/ ||
+          killed !~ /^[0-9]+$/ || elapsed > budget * 100 || graceful > budget * 100 ||
+          term > budget * 100 || killed > budget * 100 ||
+          graceful + term + killed > elapsed || term != 0 || killed != 0) exit 1
+    }
+  ' "$evidence/sampler-stop.tsv"; then
+    fail_partial 'sampler stop did not satisfy its monotonic wall-clock budget'
+  fi
   case "$(resource_role_class)" in
     cold)
       if [ ! -s "$MBX_QUALIFICATION_EXPORT_RECEIPT" ]; then fail_incomplete 'export_receipt_missing'; fi
@@ -197,7 +217,7 @@ if ! bash "$evidence/sampler.sh" "$evidence" "$RUNNER_TEMP" "$GITHUB_ENV" "$MBX_
   echo 'private evidence directory validation failed' >&2
   exit 1
 fi
-path_validation_sha='82ceedc6dd2f5c4099df4890cd9a15e851ea2df2a2b756b909ac9ee5849b395d'
+path_validation_sha='a4460bf8a7c9aa854310033f602b52709d0e69c249dcb8361a151a3040646970'
 printf '%s  %s\n' "$path_validation_sha" "$evidence/path-validation.sh" | sha256sum --check --status || exit 1
 . "$evidence/path-validation.sh"
 partial=0
@@ -267,30 +287,15 @@ if [ -s "$evidence/sampler.pid" ] && [ -s "$evidence/sampler.session.tsv" ] && [
   if ! valid_session_leader_pid "$sampler_pid" || [[ "$sampler_pgid" != "$sampler_pid" ||
     "$sampler_sid" != "$sampler_pid" || ! "$sampler_start_ticks" =~ ^[1-9][0-9]*$ ]]; then control_valid=0; fi
   [[ "$(cat -- "$evidence/sampler.pid")" == "$sampler_pid" ]] || control_valid=0
-  if (( control_valid == 1 )) && owned_session_leader_matches; then
-    initial_members="$(owned_session_member_count 2>/dev/null)" || initial_members=unknown
-    if [[ "$initial_members" =~ ^[1-9][0-9]*$ ]] &&
-      { [ ! -e "$evidence/sampler.stop" ] && [ ! -L "$evidence/sampler.stop" ]; } &&
-      (set -o noclobber; : > "$evidence/sampler.stop"); then
-      session_verified=1
-      if ! wait_for_owned_session "$MBX_QUALIFICATION_FINALIZER_WAIT"; then
-        members="$(owned_session_member_count 2>/dev/null)" || members=unknown
-        if [[ "$members" =~ ^[1-9][0-9]*$ ]]; then
-          fail_partial 'owned sampler session exceeded stop deadline; sending TERM to validated members'
-          signal_owned_session_members TERM || fail_partial 'owned session TERM identity check failed'
-          wait_for_owned_session 5 || true
-          members="$(owned_session_member_count 2>/dev/null)" || members=unknown
-          if [[ "$members" =~ ^[1-9][0-9]*$ ]]; then
-            fail_partial 'owned sampler session remained after TERM; sending KILL to validated members'
-            signal_owned_session_members KILL || fail_partial 'owned session KILL identity check failed'
-            wait_for_owned_session 10 || fail_partial 'owned sampler session did not terminate'
-          fi
-        fi
-      fi
-      members="$(owned_session_member_count 2>/dev/null)" || members=unknown
-      if [[ "$members" == 0 ]]; then sampler_stopped=1; else fail_partial 'owned sampler session is not proven empty'; fi
+  if (( control_valid == 1 )); then
+    if resource_shutdown_owned_session "$MBX_QUALIFICATION_FINALIZER_WAIT" 5 10; then
+      session_verified="$RESOURCE_SHUTDOWN_VERIFIED"
+      members="$RESOURCE_SHUTDOWN_REMAINING"
+      sampler_stopped=1
     else
-      fail_partial 'owned sampler leader or exclusive stop marker validation failed'
+      session_verified="$RESOURCE_SHUTDOWN_VERIFIED"
+      members="$RESOURCE_SHUTDOWN_REMAINING"
+      fail_partial "owned sampler shutdown failed: $RESOURCE_SHUTDOWN_STATUS"
     fi
   else
     fail_partial 'sampler session control identity is malformed or original leader is unverified'
@@ -299,10 +304,14 @@ if [ -s "$evidence/sampler.pid" ] && [ -s "$evidence/sampler.session.tsv" ] && [
   test ! -L "$evidence/sampler-stop.tsv"
   (
     set -o noclobber
-    printf 'pid\t%s\npgid\t%s\nsid\t%s\nrun_id\t%s\nrun_attempt\t%s\njob_id\t%s\nuid\t%s\ngid\t%s\nremaining_session_members\t%s\nexit_status\t%s\n' \
+    printf 'pid\t%s\npgid\t%s\nsid\t%s\nrun_id\t%s\nrun_attempt\t%s\njob_id\t%s\nuid\t%s\ngid\t%s\nremaining_session_members\t%s\nexit_status\t%s\nshutdown_budget_seconds\t%s\nshutdown_elapsed_centiseconds\t%s\nshutdown_graceful_elapsed_centiseconds\t%s\nshutdown_term_elapsed_centiseconds\t%s\nshutdown_kill_elapsed_centiseconds\t%s\nshutdown_deadline_status\t%s\nprocess_scan_limit\t%s\n' \
       "$sampler_pid" "$sampler_pgid" "$sampler_sid" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" \
       "$MBX_QUALIFICATION_JOB_ID" "$(id -u)" "$(id -g)" "$members" \
-      "$(cat -- "$evidence/sampler.exit" 2>/dev/null || echo missing)" > "$evidence/sampler-stop.tsv"
+      "$(cat -- "$evidence/sampler.exit" 2>/dev/null || echo missing)" \
+      "${RESOURCE_SHUTDOWN_BUDGET_SECONDS:-0}" "${RESOURCE_SHUTDOWN_ELAPSED_CS:-unknown}" \
+      "${RESOURCE_SHUTDOWN_GRACEFUL_ELAPSED_CS:-0}" "${RESOURCE_SHUTDOWN_TERM_ELAPSED_CS:-0}" \
+      "${RESOURCE_SHUTDOWN_KILL_ELAPSED_CS:-0}" "${RESOURCE_SHUTDOWN_STATUS:-not_started}" \
+      "${RESOURCE_SESSION_SCAN_LIMIT:-unknown}" > "$evidence/sampler-stop.tsv"
   ) || fail_partial 'sampler stop receipt creation failed'
   if [ ! -s "$evidence/sampler.exit" ] || [ "$(cat "$evidence/sampler.exit")" != 0 ]; then
     fail_partial 'sampler did not report a clean exit'
@@ -310,7 +319,8 @@ if [ -s "$evidence/sampler.pid" ] && [ -s "$evidence/sampler.session.tsv" ] && [
 else
   fail_partial 'sampler pid, session receipt, or log missing'
 fi
-if (( sampler_stopped == 1 && session_verified == 1 )); then
+if (( sampler_stopped == 1 && session_verified == 1 )) &&
+  [ "${RESOURCE_SHUTDOWN_STATUS:-}" = within_budget ]; then
   if ! bash "$evidence/sampler.sh" "$evidence" "$RUNNER_TEMP" "$GITHUB_ENV" "$MBX_QUALIFICATION_SAMPLE_INTERVAL" snapshot final; then
     fail_partial 'final inventory snapshot failed'
   fi

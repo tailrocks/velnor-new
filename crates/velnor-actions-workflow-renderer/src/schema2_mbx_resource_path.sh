@@ -24,6 +24,77 @@ resource_role_class() {
   esac
 }
 
+RESOURCE_SESSION_SCAN_LIMIT=4096
+RESOURCE_DEADLINE_STARTED_CS=0
+RESOURCE_DEADLINE_TOTAL_CS=0
+RESOURCE_DEADLINE_ACTIVE_CS=0
+RESOURCE_DEADLINE_PHASE_STARTED_CS=0
+RESOURCE_DEADLINE_COMMAND_EXPIRED=0
+
+resource_monotonic_centiseconds() {
+  local uptime whole hundredths
+  IFS=' ' read -r uptime _ < /proc/uptime || return 1
+  [[ "$uptime" =~ ^([0-9]+)\.([0-9]{2})$ ]] || return 1
+  whole="${BASH_REMATCH[1]}"
+  hundredths="${BASH_REMATCH[2]}"
+  printf '%s\n' "$((10#$whole * 100 + 10#$hundredths))"
+}
+
+resource_deadline_begin_budget() {
+  local seconds="$1" now
+  [[ "$seconds" =~ ^[1-9][0-9]{0,2}$ ]] || return 1
+  (( 10#$seconds <= 120 )) || return 1
+  now="$(resource_monotonic_centiseconds)" || return 1
+  RESOURCE_DEADLINE_STARTED_CS="$now"
+  RESOURCE_DEADLINE_TOTAL_CS="$((now + 10#$seconds * 100))"
+  RESOURCE_DEADLINE_ACTIVE_CS="$RESOURCE_DEADLINE_TOTAL_CS"
+  RESOURCE_DEADLINE_PHASE_STARTED_CS="$now"
+}
+
+resource_deadline_start_phase() {
+  local seconds="$1" now phase_deadline
+  [[ "$seconds" =~ ^[1-9][0-9]{0,2}$ ]] || return 1
+  (( 10#$seconds <= 120 )) || return 1
+  now="$(resource_monotonic_centiseconds)" || return 1
+  phase_deadline="$((now + 10#$seconds * 100))"
+  (( phase_deadline <= RESOURCE_DEADLINE_TOTAL_CS )) ||
+    phase_deadline="$RESOURCE_DEADLINE_TOTAL_CS"
+  (( phase_deadline > now )) || return 1
+  RESOURCE_DEADLINE_ACTIVE_CS="$phase_deadline"
+  RESOURCE_DEADLINE_PHASE_STARTED_CS="$now"
+  RESOURCE_DEADLINE_COMMAND_EXPIRED=0
+}
+
+resource_deadline_remaining_cs() {
+  local now remaining
+  (( RESOURCE_DEADLINE_ACTIVE_CS > 0 )) || return 2
+  now="$(resource_monotonic_centiseconds)" || return 2
+  remaining="$((RESOURCE_DEADLINE_ACTIVE_CS - now))"
+  (( remaining > 0 )) || return 1
+  printf '%s\n' "$remaining"
+}
+
+resource_deadline_elapsed_cs() {
+  local started="$1" now
+  [[ "$started" =~ ^[0-9]+$ ]] || return 1
+  now="$(resource_monotonic_centiseconds)" || return 1
+  (( now >= started )) || return 1
+  printf '%s\n' "$((now - started))"
+}
+
+resource_deadline_command() {
+  local remaining seconds command_budget status
+  remaining="$(resource_deadline_remaining_cs)" || return 124
+  command_budget="$((remaining - 25))"
+  if (( command_budget <= 0 )); then RESOURCE_DEADLINE_COMMAND_EXPIRED=1; return 124; fi
+  seconds="$(printf '%d.%02d' "$((command_budget / 100))" "$((command_budget % 100))")"
+  timeout --signal=KILL "${seconds}s" "$@"
+  status=$?
+  if (( status == 124 || status == 137 )); then RESOURCE_DEADLINE_COMMAND_EXPIRED=1; fi
+  resource_deadline_remaining_cs >/dev/null || { RESOURCE_DEADLINE_COMMAND_EXPIRED=1; return 124; }
+  return "$status"
+}
+
 capture_walk_ancestry() {
   local root="$1" current=/ segment
   local -a components=()
@@ -82,35 +153,66 @@ validate_evidence() {
 resource_proc_identity() {
   local row remainder
   local -a fields=()
+  resource_deadline_remaining_cs >/dev/null || return 1
   IFS= read -r row < "/proc/$1/stat" || return 1
   remainder="${row##*) }"
   read -r -a fields <<< "$remainder"
   ((${#fields[@]} > 19)) || return 1
+  resource_deadline_remaining_cs >/dev/null || return 1
   printf '%s\t%s\t%s\t%s\n' "${fields[2]}" "${fields[3]}" "${fields[19]}" "${fields[0]}"
 }
 
+resource_proc_uids() {
+  local line real effective saved filesystem
+  resource_deadline_remaining_cs >/dev/null || return 1
+  while IFS= read -r line; do
+    [[ "$line" == Uid:* ]] || continue
+    read -r real effective saved filesystem <<< "${line#Uid:}"
+    [[ "$real" =~ ^[0-9]+$ && "$effective" =~ ^[0-9]+$ &&
+      "$saved" =~ ^[0-9]+$ && "$filesystem" =~ ^[0-9]+$ ]] || return 1
+    resource_deadline_remaining_cs >/dev/null || return 1
+    printf '%s\t%s\t%s\t%s\n' "$real" "$effective" "$saved" "$filesystem"
+    return 0
+  done < "/proc/$1/status" 2>/dev/null
+  return 1
+}
+
 collect_owned_session_members() {
-  local rows process_uid pid pgid sid proc_uid identity actual_pgid actual_sid ticks state
+  local rows process_uid pid pgid sid extra identity actual_pgid actual_sid ticks state
+  local uids real_uid effective_uid saved_uid filesystem_uid row_count=0
   owned_session_pids=()
   owned_session_pgids=()
   owned_session_ticks=()
-  rows="$(ps -eo uid=,pid=,pgid=,sid=)" || return 1
-  while read -r process_uid pid pgid sid; do
+  rows="$(resource_deadline_command bash -o pipefail -c \
+    'ps -eo uid=,pid=,pgid=,sid= | head -n "$1"' \
+    resource-session-scan "$((RESOURCE_SESSION_SCAN_LIMIT + 1))")" || return 1
+  while read -r process_uid pid pgid sid extra; do
+    [[ -n "${process_uid-}" ]] || continue
+    row_count=$((row_count + 1))
+    (( row_count <= RESOURCE_SESSION_SCAN_LIMIT )) || return 1
+    resource_deadline_remaining_cs >/dev/null || return 1
+    [[ -z "${extra-}" ]] || return 1
     [[ "$sid" == "$sampler_sid" ]] || continue
-    [[ "$process_uid" =~ ^[0-9]+$ && "$pid" =~ ^[0-9]+$ && "$pgid" =~ ^[0-9]+$ ]] || return 1
+    [[ "$process_uid" =~ ^[0-9]+$ ]] || return 1
+    valid_session_leader_pid "$pid" && valid_session_leader_pid "$pgid" &&
+      valid_session_leader_pid "$sid" || return 1
     [[ "$pid" != "$$" && "$pid" != "$PPID" ]] || return 1
     if ! identity="$(resource_proc_identity "$pid" 2>/dev/null)"; then
+      resource_deadline_remaining_cs >/dev/null || return 1
       [[ ! -e "/proc/$pid/stat" ]] && continue
       return 1
     fi
     IFS=$'\t' read -r actual_pgid actual_sid ticks state <<< "$identity"
-    [[ "$actual_pgid" == "$pgid" && "$actual_sid" == "$sid" &&
-      "$process_uid" == "$sampler_uid" ]] || return 1
-    if ! proc_uid="$(stat -c '%u' -- "/proc/$pid" 2>/dev/null)"; then
+    [[ "$actual_pgid" == "$pgid" && "$actual_sid" == "$sid" ]] || return 1
+    if ! uids="$(resource_proc_uids "$pid" 2>/dev/null)"; then
+      resource_deadline_remaining_cs >/dev/null || return 1
       [[ ! -e "/proc/$pid" ]] && continue
       return 1
     fi
-    [[ "$proc_uid" == "$sampler_uid" ]] || return 1
+    IFS=$'\t' read -r real_uid effective_uid saved_uid filesystem_uid <<< "$uids"
+    [[ "$process_uid" == "$effective_uid" && "$real_uid" == "$sampler_uid" &&
+      "$effective_uid" == "$sampler_uid" && "$saved_uid" == "$sampler_uid" &&
+      "$filesystem_uid" == "$sampler_uid" ]] || return 1
     [[ "$pid" != "$sampler_pid" || "$ticks" == "$sampler_start_ticks" ]] || return 1
     owned_session_pids+=("$pid")
     owned_session_pgids+=("$pgid")
@@ -124,20 +226,23 @@ owned_session_member_count() {
 }
 
 owned_session_leader_matches() {
-  local identity pgid sid ticks state owner args
+  local identity pgid sid ticks state uids real_uid effective_uid saved_uid filesystem_uid args
   identity="$(resource_proc_identity "$sampler_pid" 2>/dev/null)" || return 1
   IFS=$'\t' read -r pgid sid ticks state <<< "$identity"
   [[ "$pgid" == "$sampler_pgid" && "$sid" == "$sampler_sid" &&
     "$ticks" == "$sampler_start_ticks" ]] || return 1
-  owner="$(stat -c '%u' -- "/proc/$sampler_pid" 2>/dev/null)" || return 1
-  [[ "$owner" == "$sampler_uid" ]] || return 1
-  args="$(ps -p "$sampler_pid" -o args= 2>/dev/null)" || return 1
+  uids="$(resource_proc_uids "$sampler_pid" 2>/dev/null)" || return 1
+  IFS=$'\t' read -r real_uid effective_uid saved_uid filesystem_uid <<< "$uids"
+  [[ "$real_uid" == "$sampler_uid" && "$effective_uid" == "$sampler_uid" &&
+    "$saved_uid" == "$sampler_uid" && "$filesystem_uid" == "$sampler_uid" ]] || return 1
+  args="$(resource_deadline_command ps -p "$sampler_pid" -o args= 2>/dev/null)" || return 1
   [[ "$args" == *"$evidence/sampler.sh"* ]]
 }
 
 owned_session_member_matches() {
   local pid="$1" expected_pgid="$2" expected_ticks="$3"
-  local identity actual_pgid actual_sid actual_ticks state proc_uid
+  local identity actual_pgid actual_sid actual_ticks state uids real_uid effective_uid saved_uid filesystem_uid
+  resource_deadline_remaining_cs >/dev/null || return 1
   [[ "$pid" != "$$" && "$pid" != "$PPID" ]] || return 1
   [[ -r "/proc/$pid/stat" ]] || return 2
   identity="$(resource_proc_identity "$pid" 2>/dev/null)" || {
@@ -147,21 +252,26 @@ owned_session_member_matches() {
   IFS=$'\t' read -r actual_pgid actual_sid actual_ticks state <<< "$identity"
   [[ "$actual_pgid" == "$expected_pgid" && "$actual_sid" == "$sampler_sid" &&
     "$actual_ticks" == "$expected_ticks" ]] || return 1
-  proc_uid="$(stat -c '%u' -- "/proc/$pid" 2>/dev/null)" || {
+  uids="$(resource_proc_uids "$pid" 2>/dev/null)" || {
+    resource_deadline_remaining_cs >/dev/null || return 1
     [[ ! -e "/proc/$pid" ]] && return 2
     return 1
   }
-  [[ "$proc_uid" == "$sampler_uid" ]]
+  IFS=$'\t' read -r real_uid effective_uid saved_uid filesystem_uid <<< "$uids"
+  [[ "$real_uid" == "$sampler_uid" && "$effective_uid" == "$sampler_uid" &&
+    "$saved_uid" == "$sampler_uid" && "$filesystem_uid" == "$sampler_uid" ]]
 }
 
 signal_owned_session_members() {
   local signal="$1" index pid pgid ticks status
   collect_owned_session_members || return 1
   for index in "${!owned_session_pids[@]}"; do
+    resource_deadline_remaining_cs >/dev/null || return 1
     pid="${owned_session_pids[$index]}"
     pgid="${owned_session_pgids[$index]}"
     ticks="${owned_session_ticks[$index]}"
     if owned_session_member_matches "$pid" "$pgid" "$ticks"; then
+      resource_deadline_remaining_cs >/dev/null || return 1
       kill "-$signal" -- "$pid" 2>/dev/null || {
         [[ ! -e "/proc/$pid/stat" ]] || return 1
       }
@@ -169,17 +279,119 @@ signal_owned_session_members() {
       status=$?
       (( status == 2 )) || return 1
     fi
+    resource_deadline_remaining_cs >/dev/null || return 1
   done
 }
 
-wait_for_owned_session() {
-  local limit="$1" count=0 members
-  while (( count < limit )); do
+wait_for_owned_session_until_deadline() {
+  local members empty_passes=0
+  while :; do
+    resource_deadline_remaining_cs >/dev/null || return 1
     members="$(owned_session_member_count)" || return 2
-    [[ "$members" == 0 ]] && return 0
-    sleep 1
-    count=$((count + 1))
+    if [[ "$members" == 0 ]]; then
+      empty_passes=$((empty_passes + 1))
+      (( empty_passes >= 2 )) && {
+        resource_deadline_remaining_cs >/dev/null || return 1
+        return 0
+      }
+    else
+      empty_passes=0
+    fi
+    resource_deadline_command sleep 0.05 || return 1
   done
-  members="$(owned_session_member_count)" || return 2
-  [[ "$members" == 0 ]]
+}
+
+resource_deadline_failure_status() {
+  local phase="$1" failure_status
+  if (( RESOURCE_DEADLINE_COMMAND_EXPIRED == 1 )); then printf 'expired:%s\n' "$phase"; return; fi
+  if resource_deadline_remaining_cs >/dev/null; then
+    printf 'failed:%s\n' "$phase"
+  else
+    failure_status=$?
+    if (( failure_status == 1 )); then
+      printf 'expired:%s\n' "$phase"
+    else
+      printf 'clock_error:%s\n' "$phase"
+    fi
+  fi
+}
+
+resource_shutdown_owned_session() {
+  local graceful_seconds="$1" term_seconds="$2" kill_seconds="$3"
+  local total_seconds phase_start members term_clean=0
+  RESOURCE_SHUTDOWN_BUDGET_SECONDS=0
+  RESOURCE_SHUTDOWN_ELAPSED_CS=unknown; RESOURCE_SHUTDOWN_GRACEFUL_ELAPSED_CS=0
+  RESOURCE_SHUTDOWN_TERM_ELAPSED_CS=0; RESOURCE_SHUTDOWN_KILL_ELAPSED_CS=0
+  RESOURCE_SHUTDOWN_STATUS=not_started; RESOURCE_SHUTDOWN_VERIFIED=0
+  RESOURCE_SHUTDOWN_REMAINING=unknown
+  [[ "$graceful_seconds" =~ ^[1-9][0-9]{0,2}$ &&
+    "$term_seconds" =~ ^[1-9][0-9]{0,2}$ && "$kill_seconds" =~ ^[1-9][0-9]{0,2}$ ]] || { RESOURCE_SHUTDOWN_STATUS=invalid_budget; return 1; }
+  total_seconds="$((10#$graceful_seconds + 10#$term_seconds + 10#$kill_seconds))"
+  RESOURCE_SHUTDOWN_BUDGET_SECONDS="$total_seconds"
+  if ! resource_deadline_begin_budget "$total_seconds"; then
+    RESOURCE_SHUTDOWN_STATUS=clock_or_budget_error
+    return 1
+  fi
+  if ! resource_deadline_start_phase "$graceful_seconds"; then
+    RESOURCE_SHUTDOWN_STATUS=expired:graceful
+    return 1
+  fi
+  phase_start="$RESOURCE_DEADLINE_PHASE_STARTED_CS"
+  if ! owned_session_leader_matches; then
+    if (( RESOURCE_DEADLINE_COMMAND_EXPIRED == 1 )); then
+      RESOURCE_SHUTDOWN_STATUS="$(resource_deadline_failure_status graceful_leader)"
+    else
+      RESOURCE_SHUTDOWN_STATUS=invalid_leader
+    fi
+    RESOURCE_SHUTDOWN_GRACEFUL_ELAPSED_CS="$(resource_deadline_elapsed_cs "$phase_start" 2>/dev/null || echo unknown)"
+    RESOURCE_SHUTDOWN_ELAPSED_CS="$(resource_deadline_elapsed_cs "$RESOURCE_DEADLINE_STARTED_CS" 2>/dev/null || echo unknown)"
+    return 1
+  fi
+  resource_deadline_remaining_cs >/dev/null || {
+    RESOURCE_SHUTDOWN_STATUS="$(resource_deadline_failure_status graceful_leader)"
+    return 1
+  }
+  members="$(owned_session_member_count 2>/dev/null)" || members=unknown
+  if [[ ! "$members" =~ ^[1-9][0-9]*$ ]] ||
+    [[ -e "$evidence/sampler.stop" || -L "$evidence/sampler.stop" ]] ||
+    ! (set -o noclobber; : > "$evidence/sampler.stop"); then
+    RESOURCE_SHUTDOWN_STATUS="$(resource_deadline_failure_status graceful_scan)"
+    RESOURCE_SHUTDOWN_GRACEFUL_ELAPSED_CS="$(resource_deadline_elapsed_cs "$phase_start" 2>/dev/null || echo unknown)"
+    RESOURCE_SHUTDOWN_ELAPSED_CS="$(resource_deadline_elapsed_cs "$RESOURCE_DEADLINE_STARTED_CS" 2>/dev/null || echo unknown)"
+    return 1
+  fi
+  RESOURCE_SHUTDOWN_VERIFIED=1
+  if wait_for_owned_session_until_deadline; then
+    RESOURCE_SHUTDOWN_REMAINING=0
+    RESOURCE_SHUTDOWN_GRACEFUL_ELAPSED_CS="$(resource_deadline_elapsed_cs "$phase_start" 2>/dev/null || echo unknown)"
+    RESOURCE_SHUTDOWN_ELAPSED_CS="$(resource_deadline_elapsed_cs "$RESOURCE_DEADLINE_STARTED_CS" 2>/dev/null || echo unknown)"
+    if [[ "$RESOURCE_SHUTDOWN_GRACEFUL_ELAPSED_CS" =~ ^[0-9]+$ &&
+      "$RESOURCE_SHUTDOWN_ELAPSED_CS" =~ ^[0-9]+$ ]] &&
+      (( RESOURCE_SHUTDOWN_GRACEFUL_ELAPSED_CS <= 10#$graceful_seconds * 100 &&
+        RESOURCE_SHUTDOWN_ELAPSED_CS <= total_seconds * 100 )); then
+      RESOURCE_SHUTDOWN_STATUS=within_budget
+      return 0
+    fi
+    RESOURCE_SHUTDOWN_STATUS=expired:graceful_record
+    return 1
+  fi
+  RESOURCE_SHUTDOWN_STATUS="$(resource_deadline_failure_status graceful)"
+  RESOURCE_SHUTDOWN_GRACEFUL_ELAPSED_CS="$(resource_deadline_elapsed_cs "$phase_start" 2>/dev/null || echo unknown)"
+  if resource_deadline_start_phase "$term_seconds"; then
+    phase_start="$RESOURCE_DEADLINE_PHASE_STARTED_CS"
+    if signal_owned_session_members TERM && wait_for_owned_session_until_deadline; then
+      term_clean=1
+      RESOURCE_SHUTDOWN_REMAINING=0
+    fi
+    RESOURCE_SHUTDOWN_TERM_ELAPSED_CS="$(resource_deadline_elapsed_cs "$phase_start" 2>/dev/null || echo unknown)"
+  fi
+  if (( term_clean == 0 )) && resource_deadline_start_phase "$kill_seconds"; then
+    phase_start="$RESOURCE_DEADLINE_PHASE_STARTED_CS"
+    if signal_owned_session_members KILL && wait_for_owned_session_until_deadline; then
+      RESOURCE_SHUTDOWN_REMAINING=0
+    fi
+    RESOURCE_SHUTDOWN_KILL_ELAPSED_CS="$(resource_deadline_elapsed_cs "$phase_start" 2>/dev/null || echo unknown)"
+  fi
+  RESOURCE_SHUTDOWN_ELAPSED_CS="$(resource_deadline_elapsed_cs "$RESOURCE_DEADLINE_STARTED_CS" 2>/dev/null || echo unknown)"
+  return 1
 }
