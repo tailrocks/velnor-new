@@ -13,26 +13,20 @@ used in plans and reports only. Velnor V1 does not generate Mise task files.
 Each matrix job MUST expose these named steps. A step MAY be a validated no-op, but it MUST write a
 report explaining why.
 
-The job's action prelude checks out the selected commit with the pinned
-`actions/checkout` and `persist-credentials: false`, initializes the pinned Mise action without project config
-or environment loading, and uses Mise to install the exact selected Rust,
-components, and tools. Mise honors `components`/`profile` only from
-`mise.toml`, which config-less CI invocations cannot use, and installs
-the minimal rustup profile otherwise; so components arrive through the
-fixed `Prepare Rust components` step (`mise exec rust@<exact> --
-rustup component add --toolchain <exact>-<triple> clippy rustfmt`):
-the pinned toolchain's own rustup, deterministic, writing only
-Velnor-owned tool homes — Mise installing components, not an ad hoc
-installer. For an MBX profile only, it then invokes the pinned
-`jdx/mr-boxington-action` in `github-cache-mode: objects` with
-`ACTIONS_CACHE_MODE=read`. The action owns the MBX object format. Read mode skips
-its post export, which wrote inside the live store and exhausted runner disk
-(run `37114238559`). The workflow exports one directory with `mbx cache export`
-to `$RUNNER_TEMP/mbx-single-bundle`, and `actions/cache` transports that opaque
-directory. `mbx cache import` loads it. A miss, a missing directory, or a failed
-import continues the job cold. For a Cargo profile, that action and MBX
-installation are absent. The same cache actions also transport Cargo source
-archives and qualified Mise task artifacts. They do not archive the live MBX store.
+The job's action prelude checks out the selected commit with pinned
+`actions/checkout` and `persist-credentials: false`, initializes pinned Mise
+without project config or environment loading, and installs the exact selected
+Rust components and tools. Config-less Mise installs the minimal rustup profile,
+so the fixed `Prepare Rust components` step invokes that toolchain's rustup to
+add Clippy and rustfmt into Velnor-owned tool homes. For an MBX profile only,
+the pinned `jdx/mr-boxington-action` installs the exact version with
+`backend: local`; its GitHub object-cache path is disabled. Each job gets a
+fresh private MBX store. The MBX CLI owns the object format and exports one
+directory to `$RUNNER_TEMP/mbx-single-bundle`; pinned `actions/cache` steps
+transport that opaque directory, and the MBX CLI imports it. A miss, absent
+directory, or failed import continues cold. Run `37114238559` records ENOSPC
+from the former in-store action post; it motivates external transport but does
+not prove lower peak disk use. Cargo-profile jobs omit MBX setup and steps.
 
 1. `Prepare pinned tools`: install exact Velnor policy tools through a fixed
    Mise invocation that loads no project config (`--no-config` plus
