@@ -25,14 +25,28 @@ the pinned toolchain's own rustup, deterministic, writing only
 Velnor-owned tool homes — Mise installing components, not an ad hoc
 installer. For an MBX profile only, it then invokes the pinned
 `jdx/mr-boxington-action` in `github-cache-mode: objects` with
-`ACTIONS_CACHE_MODE=read`. The action owns the MBX object format. Read mode skips
-its post export, which wrote inside the live store and exhausted runner disk
-(run `37114238559`). The workflow exports one directory with `mbx cache export`
-to `$RUNNER_TEMP/mbx-single-bundle`, and `actions/cache` transports that opaque
-directory. `mbx cache import` loads it. A miss, a missing directory, or a failed
-import continues the job cold. For a Cargo profile, that action and MBX
-installation are absent. The same cache actions also transport Cargo source
-archives and qualified Mise task artifacts. They do not archive the live MBX store.
+`isolate-objects-cache: true` and `cache-key-suffix: ${{ github.job }}` for
+ordinary hosted jobs. The action owns the MBX object format and its private
+`RUNNER_TEMP` store. Its main step restores and imports the opaque bundle.
+When save policy permits on a successful job, its post-step exports only after
+the job's compiler writers finish, removes the live store, and saves only the
+bundle. The action applies its configured trust and save policy; Velnor does
+not set `ACTIONS_CACHE_MODE`, run
+`mbx cache export`, or archive the MBX store. Exact hits and empty exports do
+not trigger another save. A cache miss or absent entry continues cold; malformed
+data, failed import/export, local-storage errors, and cleanup failures fail the
+job. Explicitly classified cache-service or transport outages follow the pinned
+action's unavailable-cache contract and never count as task-success evidence.
+The earlier `ACTIONS_CACHE_MODE=read` plus Velnor-owned
+`$RUNNER_TEMP/mbx-single-bundle` flow was retired; run `37114238559` records
+that former configuration.
+
+The dispatch-only schema-2 qualification workflow has a separate run-bound
+protected-main writer and dependent read-only reader. It deliberately sets
+`ACTIONS_CACHE_MODE` for that qualification pair and does not use the ordinary
+hosted-job suffix. For a Cargo profile, the Mr. Boxington action and MBX
+installation are absent. Velnor-managed cache actions transport Cargo source
+archives and qualified Mise task artifacts, never the live MBX store.
 
 1. `Prepare pinned tools`: install exact Velnor policy tools through a fixed
    Mise invocation that loads no project config (`--no-config` plus
@@ -42,9 +56,9 @@ archives and qualified Mise task artifacts. They do not archive the live MBX sto
 2. `Verify toolchain`: verify Rust, selected compile driver, selected test
    runner, target, runner platform, and report optional tool-file findings.
 3. `Restore Cargo sources`: restore only the Cargo source cache owned by Velnor.
-4. `Restore compiler objects`: use MBX's supported portable-object restore
-   path only when this workspace's detected profile selects MBX; otherwise
-   this step reports `not_applicable`.
+4. `Restore compiler objects`: the pinned action restores and imports MBX's
+   supported portable-object bundle only when this workspace's detected
+   profile selects MBX; otherwise this step reports `not_applicable`.
 5. `Verify prepared inputs`: run locked/offline preparation checks.
 6. `Clippy`: run the matrix entry's fixed Clippy command and stop this job on
    failure.
@@ -54,7 +68,9 @@ archives and qualified Mise task artifacts. They do not archive the live MBX sto
    invoke `cargo test`. V1 uses one command per package/configuration.
 9. `Doctests`: run `cargo test --doc` through the selected compile driver.
 11. `Documentation`: build package docs with rustdoc warnings denied.
-12. `Save eligible caches`: save only permitted immutable snapshots.
+12. `Save eligible caches`: save permitted Cargo-source and qualified task
+    snapshots. MBX object export/save is the pinned action's post-step and
+    follows the same trust and terminal job-outcome rules.
 13. `Report timings and reuse`: write the final machine-readable report.
 
 The matrix job MUST execute Clippy before test compilation. Different matrix entries MUST run in
