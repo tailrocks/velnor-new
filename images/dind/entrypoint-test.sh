@@ -65,12 +65,13 @@ run_once() {
 install_stubs
 run_once 0 /tmp/dind-ok.err
 grep -F 'pull --platform linux/arm64 rabbitmq:3.8.22-management' /tmp/dind-pulls >/dev/null
-grep -F 'pull --platform linux/arm64 postgres:18-alpine' /tmp/dind-pulls >/dev/null
 grep -F 'velnor-dind: seeded rabbitmq:3.8.22-management linux/arm64' /tmp/dind-ok.err >/dev/null
-grep -F 'velnor-dind: seeded postgres:18-alpine linux/arm64' /tmp/dind-ok.err >/dev/null
+if grep -F 'postgres' /tmp/dind-pulls >/dev/null; then
+  echo "postgres pull is not the entrypoint" >&2
+  exit 1
+fi
 
 run_once 1 /tmp/dind-fail.err
-grep -F 'pull --platform linux/arm64 postgres:18-alpine' /tmp/dind-pulls >/dev/null
-grep -F 'velnor-dind: postgres:18-alpine linux/arm64 seed failed' /tmp/dind-fail.err >/dev/null
+grep -F 'velnor-dind: rabbitmq arm64 seed failed' /tmp/dind-fail.err >/dev/null
 [[ -L /run/docker.sock ]]
 echo "dind-entrypoint ok"

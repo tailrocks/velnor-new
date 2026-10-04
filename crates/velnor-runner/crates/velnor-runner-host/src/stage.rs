@@ -74,7 +74,7 @@ impl PairSink for Forget {
 
 impl PairEngine for Docker {
     async fn prepare_volumes(&self, volume: &str) -> Result<(), HostError> {
-        create_named_volumes(self, &runner_plan(volume)?).await
+        create_named_volumes(self, &dind_create(volume)?.mounts).await
     }
 
     async fn create(&self, spec: &CreateProjection) -> Result<String, HostError> {

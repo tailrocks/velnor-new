@@ -14,12 +14,12 @@ The Dockerfile does not copy or mount a host socket and the entrypoint does
 not prune.
 
 The entrypoint starts `dockerd` on a private socket, pulls
-`rabbitmq:3.8.22-management` and `postgres:18-alpine` for `linux/arm64`,
-then links `/run/docker.sock`. Nested Rosetta crashes the RabbitMQ image's
-amd64 Erlang JIT before `Server startup complete; 4 plugins started.`
-An amd64 `postgres:18-alpine` on the vfs driver exceeds Testcontainers'
-60s startup wait. The daemon and the runner stay `linux/amd64`. ARM64 is
-not the runner baseline.
+`rabbitmq:3.8.22-management` for `linux/arm64`, then links
+`/run/docker.sock`. Nested Rosetta crashes that image's amd64 Erlang JIT
+before `Server startup complete; 4 plugins started.` The daemon and the
+runner stay `linux/amd64`. ARM64 is not the runner baseline. The data root
+stays `/var/lib/docker` on a DinD-only volume so vfs copies are not
+whiteouts on the container layer.
 
 The image does not set `privileged`. The controller must:
 

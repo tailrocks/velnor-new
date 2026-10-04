@@ -22,21 +22,10 @@ while [ ! -S "$real" ]; do
   fi
   sleep 0.1
 done
-# postgres:18-alpine is the Testcontainers tag. An amd64 pull on this vfs
-# daemon exceeds the 60s startup wait. The arm64 image is what create finds.
-seed() {
-  image=$1
-  if docker --host "unix://${real}" pull --platform linux/arm64 "$image" >&2; then
-    echo "velnor-dind: seeded ${image} linux/arm64" >&2
-  else
-    echo "velnor-dind: ${image} linux/arm64 seed failed" >&2
-  fi
-}
-seed rabbitmq:3.8.22-management &
-rmq=$!
-seed postgres:18-alpine &
-pg=$!
-wait "$rmq" || true
-wait "$pg" || true
+if docker --host "unix://${real}" pull --platform linux/arm64 rabbitmq:3.8.22-management >&2; then
+  echo "velnor-dind: seeded rabbitmq:3.8.22-management linux/arm64" >&2
+else
+  echo "velnor-dind: rabbitmq arm64 seed failed" >&2
+fi
 ln -sfn docker.sock.real "$public"
 wait "$pid"
