@@ -49,7 +49,7 @@ fn capacity_two_empty_after_one_start_stays() {
 fn capacity_two_second_launch_starts() {
     assert!(needs_running(2, 2, 1, Idle::Launch));
     assert_eq!(decide(2, 1, 1, Idle::Launch), Admit::Start { stop: true });
-    assert_eq!(decide(2, 1, 0, Idle::Launch), Admit::Start { stop: true });
+    assert_eq!(decide(2, 1, 0, Idle::Launch), Admit::Start { stop: false });
 }
 
 #[test]
@@ -63,13 +63,14 @@ fn full_launch_is_not_started_or_acked() {
     assert_eq!(decide(1, 0, 1, Idle::Launch), Admit::Hold);
     assert_eq!(decide(2, 1, 2, Idle::Launch), Admit::Hold);
     assert_eq!(decide(8, 3, 8, Idle::Launch), Admit::Hold);
+    assert_eq!(decide(2, 99, 2, Idle::Launch), Admit::Hold);
 }
 
 #[test]
 fn full_capacity_holds_job_offers_but_keeps_aggregate_scale_ack_semantics() {
     assert_eq!(decide(2, 0, 2, Idle::Launch), Admit::Hold);
     assert_eq!(decide(2, 0, 2, Idle::Scale), Admit::Ack { stop: false });
-    assert_eq!(decide(2, 0, 1, Idle::Scale), Admit::Start { stop: false });
+    assert_eq!(decide(2, 0, 1, Idle::Scale), Admit::Start { stop: true });
 }
 
 #[test]
@@ -88,6 +89,17 @@ fn scale_does_not_mint_again_once_assigned_is_covered() {
             capacity: 2,
             target: 2,
             started: 1,
+            running: 1,
+            assigned: 1,
+            idle: Idle::Scale,
+        }),
+        Admit::Ack { stop: false }
+    );
+    assert_eq!(
+        admit(Seat {
+            capacity: 2,
+            target: 3,
+            started: 99,
             running: 1,
             assigned: 1,
             idle: Idle::Scale,
@@ -125,16 +137,16 @@ fn scale_does_not_mint_again_once_assigned_is_covered() {
             assigned: 1,
             idle: Idle::Scale,
         }),
-        Admit::Start { stop: true }
+        Admit::Start { stop: false }
     );
 }
 
 #[test]
-fn capacity_one_after_start_keeps_the_old_loop() {
-    assert_eq!(decide(1, 1, 0, Idle::Launch), Admit::Stop);
-    assert_eq!(decide(1, 1, 1, Idle::Launch), Admit::Stop);
-    assert!(!needs_running(1, 1, 1, Idle::Launch));
-    assert_eq!(decide(1, 1, 0, Idle::Scale), Admit::Ack { stop: true });
+fn capacity_one_refills_after_a_worker_exits() {
+    assert_eq!(decide(1, 1, 0, Idle::Launch), Admit::Start { stop: true });
+    assert_eq!(decide(1, 1, 1, Idle::Launch), Admit::Hold);
+    assert!(needs_running(1, 1, 1, Idle::Launch));
+    assert_eq!(decide(1, 1, 0, Idle::Scale), Admit::Start { stop: true });
     assert_eq!(decide(1, 0, 1, Idle::Scale), Admit::Ack { stop: true });
     assert_eq!(decide(1, 0, 0, Idle::Scale), Admit::Start { stop: true });
     assert_eq!(decide(1, 0, 0, Idle::Empty), Admit::Stay);
@@ -150,7 +162,7 @@ fn job_capacity_parser_bounds() {
     assert_eq!(parse_job_capacity(Some("2")), 2);
     assert_eq!(parse_job_capacity(Some(" 2 ")), 2);
     assert_eq!(parse_job_capacity(Some("8")), 8);
-    assert_eq!(parse_job_capacity(Some("99")), 8);
+    assert_eq!(parse_job_capacity(Some("99")), 99);
 }
 
 #[test]
@@ -163,15 +175,15 @@ fn installed_capacity_beats_the_env_parse() {
     drop(guard);
     assert_eq!(job_capacity(), baseline);
     let wide = install_job_capacity(99);
-    assert_eq!(job_capacity(), 8);
+    assert_eq!(job_capacity(), 99);
     drop(wide);
     assert_eq!(job_capacity(), baseline);
 }
 
 #[test]
-fn target_above_capacity_queues_the_third_job() {
+fn target_above_capacity_keeps_polling_for_more_jobs() {
     assert!(needs_running(2, 3, 2, Idle::Launch));
-    assert!(!needs_running(2, 3, 3, Idle::Launch));
+    assert!(needs_running(2, 3, 3, Idle::Launch));
     assert!(!needs_running(2, 3, 2, Idle::Empty));
     assert_eq!(decide_at(2, 3, 2, 2, Idle::Launch), Admit::Hold);
     assert_eq!(
@@ -188,7 +200,7 @@ fn target_above_capacity_queues_the_third_job() {
     assert_eq!(decide_at(2, 3, 3, 1, Idle::Ack), Admit::Ack { stop: true });
     assert_eq!(
         decide_at(2, 3, 3, 0, Idle::Scale),
-        Admit::Ack { stop: true }
+        Admit::Start { stop: false }
     );
     assert_eq!(
         decide_at(2, 3, 2, 1, Idle::Scale),
@@ -212,8 +224,51 @@ fn admit_target_parser_bounds() {
     assert_eq!(parse_admit_target(2, Some("3")), 3);
     assert_eq!(parse_admit_target(2, Some(" 3 ")), 3);
     assert_eq!(parse_admit_target(2, Some("8")), 8);
-    assert_eq!(parse_admit_target(2, Some("99")), 8);
-    assert_eq!(parse_admit_target(8, Some("9")), 8);
+    assert_eq!(parse_admit_target(2, Some("99")), 99);
+    assert_eq!(parse_admit_target(8, Some("9")), 9);
+    assert_eq!(parse_admit_target(16, Some("20")), 20);
+    assert_eq!(parse_admit_target(16, Some("8")), 16);
+}
+
+#[test]
+fn three_refill_waves_ignore_historical_starts() {
+    let capacity = 2;
+    for started in [0, 2, 4] {
+        assert_eq!(
+            decide_at(capacity, capacity, started, 0, Idle::Launch),
+            Admit::Start { stop: false },
+            "free capacity must admit a job in the next refill wave after {started} prior starts"
+        );
+    }
+    assert_eq!(
+        decide_at(capacity, capacity, 6, 1, Idle::Launch),
+        Admit::Start { stop: true },
+        "one free slot remains usable after three completed waves"
+    );
+}
+
+#[test]
+fn failed_start_history_does_not_block_recovery() {
+    assert_eq!(
+        decide_at(2, 2, 4, 0, Idle::Launch),
+        Admit::Start { stop: false }
+    );
+    assert!(needs_running(2, 2, 4, Idle::Launch));
+}
+
+#[test]
+fn capacity_above_eight_is_preserved() {
+    assert_eq!(parse_job_capacity(Some("16")), 16);
+    assert_eq!(parse_admit_target(16, Some("20")), 20);
+    assert_eq!(
+        decide_at(16, 16, 32, 15, Idle::Launch),
+        Admit::Start { stop: true }
+    );
+    assert_eq!(decide_at(16, 16, 32, 16, Idle::Launch), Admit::Hold);
+
+    let guard = install_job_capacity(16);
+    assert_eq!(job_capacity(), 16);
+    drop(guard);
 }
 
 #[test]

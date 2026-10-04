@@ -1,13 +1,12 @@
-//! How many workers one session may start.
+//! How many workers may occupy one session at a time.
 //!
 //! `VELNOR_MAX_JOBS` is total capacity, not free slots. The poll header uses it.
-//! `VELNOR_ADMIT_TARGET`, when higher, is how many starts this session keeps polling for.
+//! `VELNOR_ADMIT_TARGET`, when higher, extends the session's admission target.
 
 use std::cell::Cell;
 
 use super::steps::Idle;
 
-const JOB_MAX: u32 = 8;
 const POLL_DEFAULT: usize = 8;
 const POLL_MAX: usize = 8;
 const POLL_MAX_MULTI: usize = 24;
@@ -40,11 +39,12 @@ pub(crate) enum Admit {
 /// Inputs for [`admit`]. Counts are for this call, not free slots.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Seat {
-    /// Clamped job capacity for this session.
+    /// Configured job capacity for this session, with zero normalized to one.
     pub(crate) capacity: u32,
-    /// Starts this session should reach. Equals capacity unless admission is widened.
+    /// Session target. Equals capacity unless admission is widened.
     pub(crate) target: u32,
     /// Workers this call already started, including the statistics runner.
+    /// This history does not consume capacity or prevent a refill.
     pub(crate) started: u32,
     /// Running launch containers. Unused when [`needs_running`] is false.
     pub(crate) running: u32,
@@ -54,11 +54,7 @@ pub(crate) struct Seat {
     pub(crate) idle: Idle,
 }
 
-/// Decide one poll. Capacity 1 leaves after the first start.
-///
-/// A target equal to capacity keeps the historic decision. A higher target
-/// keeps polling until that many workers have started, and holds a launch
-/// while `running` is already at capacity.
+/// Decide one poll. Admission depends on current occupancy, never prior starts.
 #[must_use]
 pub(crate) const fn admit(seat: Seat) -> Admit {
     if seat.target > seat.capacity {
@@ -68,7 +64,7 @@ pub(crate) const fn admit(seat: Seat) -> Admit {
     }
 }
 
-/// Historic decision. Compares counts with capacity, not a wider target.
+/// Decision when the session target does not exceed capacity.
 const fn admit_exact(seat: Seat) -> Admit {
     match seat.idle {
         Idle::Blocked => Admit::Error,
@@ -81,7 +77,7 @@ const fn admit_exact(seat: Seat) -> Admit {
     }
 }
 
-/// Target is above capacity. Do not stop just because `started` reached capacity.
+/// Decision when the session target exceeds capacity.
 const fn admit_above(seat: Seat) -> Admit {
     match seat.idle {
         Idle::Blocked => Admit::Error,
@@ -89,8 +85,8 @@ const fn admit_above(seat: Seat) -> Admit {
         Idle::Ack => Admit::Ack {
             stop: seat.started >= seat.target,
         },
-        Idle::Launch => above_launch(seat),
-        Idle::Scale => above_scale(seat),
+        Idle::Launch => admit_launch(seat),
+        Idle::Scale => admit_scale(seat),
     }
 }
 
@@ -102,34 +98,8 @@ const fn above_empty(seat: Seat) -> Admit {
     }
 }
 
-const fn above_launch(seat: Seat) -> Admit {
-    if seat.started >= seat.target {
-        return Admit::Stop;
-    }
-    if seat.running >= seat.capacity {
-        return Admit::Hold;
-    }
-    Admit::Start {
-        stop: seat.started.saturating_add(1) >= seat.target,
-    }
-}
-
-const fn above_scale(seat: Seat) -> Admit {
-    if seat.started >= seat.target {
-        return Admit::Ack { stop: true };
-    }
-    if scale_covered(seat) || seat.running >= seat.capacity {
-        return Admit::Ack { stop: false };
-    }
-    Admit::Start {
-        stop: seat.started.saturating_add(1) >= seat.target,
-    }
-}
-
 const fn scale_covered(seat: Seat) -> bool {
-    // An exited start still increments `started`. Only a running container
-    // covers `totalAssignedJobs`. Otherwise the next queued job is acknowledged
-    // and never minted while this session stays under capacity.
+    // Only current occupants cover `totalAssignedJobs`; historical starts do not.
     seat.running >= seat.assigned
 }
 
@@ -142,39 +112,34 @@ const fn admit_empty(seat: Seat) -> Admit {
 }
 
 const fn admit_launch(seat: Seat) -> Admit {
-    if seat.running >= seat.capacity && seat.started < seat.capacity {
+    if seat.running >= seat.capacity {
         return Admit::Hold;
     }
-    if seat.started >= seat.capacity {
-        return Admit::Stop;
-    }
     Admit::Start {
-        stop: seat.started.saturating_add(1) >= seat.capacity,
+        stop: seat.running.saturating_add(1) >= seat.capacity,
     }
 }
 
 const fn admit_scale(seat: Seat) -> Admit {
-    if !scale_covered(seat) && seat.started < seat.capacity && seat.running < seat.capacity {
+    if !scale_covered(seat) && seat.running < seat.capacity {
         return Admit::Start {
-            stop: seat.started.saturating_add(1) >= seat.capacity,
+            stop: seat.running.saturating_add(1) >= seat.capacity,
         };
     }
-    // Capacity 1 leaves. A larger capacity leaves only after enough starts.
-    // A population already covered by this session is acknowledged, not minted again.
+    // A population already covered by current occupants is acknowledged, not minted again.
     Admit::Ack {
-        stop: seat.capacity == 1 || seat.started >= seat.capacity,
+        stop: seat.capacity == 1,
     }
 }
 
-/// True when the running count can change this poll's decision.
+/// True when this poll's admission decision needs current occupancy.
 ///
-/// Launch and scale ask while `started` is below the admission target.
-/// A target equal to capacity matches `started < capacity`.
+/// Launch and scale always check occupancy. Historical starts never suppress
+/// an occupancy lookup for an eligible offer.
 #[must_use]
-pub(crate) const fn needs_running(capacity: u32, target: u32, started: u32, idle: Idle) -> bool {
-    let limit = if target > capacity { target } else { capacity };
+pub(crate) const fn needs_running(_capacity: u32, _target: u32, _started: u32, idle: Idle) -> bool {
     match idle {
-        Idle::Launch | Idle::Scale => started < limit,
+        Idle::Launch | Idle::Scale => true,
         Idle::Empty | Idle::Ack | Idle::Blocked => false,
     }
 }
@@ -195,18 +160,14 @@ impl Drop for CapacityGuard {
 
 /// Prefer `max_jobs` from the host file over `VELNOR_MAX_JOBS` on this thread.
 pub(crate) fn install_job_capacity(max_jobs: u32) -> CapacityGuard {
-    let clamped = if max_jobs == 0 {
-        1
-    } else {
-        max_jobs.min(JOB_MAX)
-    };
-    JOB_CAPACITY_OVERRIDE.with(|slot| slot.set(Some(clamped)));
+    let capacity = if max_jobs == 0 { 1 } else { max_jobs };
+    JOB_CAPACITY_OVERRIDE.with(|slot| slot.set(Some(capacity)));
     CapacityGuard
 }
 
 /// Installed host capacity, else `VELNOR_MAX_JOBS`.
 ///
-/// Unset, empty, zero, or unparsable env is 1. Clamped to 1..=8.
+/// Unset, empty, zero, or unparsable env is 1. Positive values are preserved.
 #[must_use]
 pub(crate) fn job_capacity() -> u32 {
     if let Some(value) = JOB_CAPACITY_OVERRIDE.with(Cell::get) {
@@ -221,12 +182,11 @@ pub(crate) fn parse_job_capacity(text: Option<&str>) -> u32 {
     let Some(text) = text.map(str::trim).filter(|value| !value.is_empty()) else {
         return 1;
     };
-    text.parse::<u32>()
-        .map_or(1, |parsed| parsed.clamp(1, JOB_MAX))
+    text.parse::<u32>().map_or(1, |parsed| parsed.max(1))
 }
 
 /// `VELNOR_ADMIT_TARGET`. Unset, empty, unparsable, or below `capacity` is `capacity`.
-/// Clamped to `capacity`..=8.
+/// Values below `capacity` are raised to `capacity`.
 #[must_use]
 pub(crate) fn admit_target(capacity: u32) -> u32 {
     parse_admit_target(
@@ -247,8 +207,7 @@ pub(crate) fn parse_admit_target(capacity: u32, raw: Option<&str>) -> u32 {
     if parsed < capacity {
         return capacity;
     }
-    let hi = JOB_MAX.max(capacity);
-    if parsed > hi { hi } else { parsed }
+    parsed
 }
 
 /// `VELNOR_LAUNCH_POLLS` for `capacity`. Unset or unparsable is 8.
