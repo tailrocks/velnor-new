@@ -15,10 +15,18 @@ pub struct IntentRow {
     pub state: IntentState,
     /// Docker container id. Not a name.
     pub docker_id: Option<String>,
+    /// DinD container id. Not a name.
+    pub dind_id: Option<String>,
     /// GitHub runner id. Not a token.
     pub github_runner_id: Option<String>,
     /// Cleanup of the recorded ids was proven.
     pub cleanup_proven: bool,
+    /// Stable unique launch id. Older rows have no id.
+    pub launch_id: Option<String>,
+    /// Scale-set id and runner request id for acquired assignments.
+    pub assignment_key: Option<String>,
+    /// Immutable action archive generation pinned for this launch.
+    pub seed_generation_id: Option<String>,
 }
 
 /// Whether the host may advertise free capacity.

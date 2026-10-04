@@ -79,8 +79,12 @@ fn intent(state: IntentState, kind: &str) -> IntentRow {
         subject: "job".to_owned(),
         state,
         docker_id: None,
+        dind_id: None,
         github_runner_id: None,
         cleanup_proven: false,
+        launch_id: None,
+        assignment_key: None,
+        seed_generation_id: None,
     }
 }
 

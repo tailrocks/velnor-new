@@ -5,7 +5,12 @@ use std::ops::AsyncFnOnce;
 use std::path::{Path, PathBuf};
 
 use crate::error::HostError;
+use crate::journal_assignment::commit_assignment;
+use crate::journal_schema;
+use crate::journal_sql::{commit_live, intent_row, one_row, token_rejected};
 use crate::reconcile::IntentRow;
+
+pub use crate::launch_identity::LaunchIdentity;
 
 /// Durable intent row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -30,7 +35,7 @@ impl IntentState {
         }
     }
 
-    fn parse(text: &str) -> Result<Self, HostError> {
+    pub(super) fn parse(text: &str) -> Result<Self, HostError> {
         match text {
             "pending" => Ok(Self::Pending),
             "done" => Ok(Self::Done),
@@ -85,6 +90,138 @@ impl Journal {
         }
         let conn = self.connection().await?;
         commit_live(&conn, kind, subject).await
+    }
+
+    /// Begin or replay one acquired scale-set request.
+    ///
+    /// `runnerRequestId` is stable across queue redelivery. `message_id` is
+    /// used only to adopt rows written by the old message-based key.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`HostError::Journal`] when the request id is ambiguous or the write fails.
+    pub async fn begin_assignment(
+        &self,
+        set_id: i64,
+        request_id: i64,
+        message_id: i64,
+    ) -> Result<i64, HostError> {
+        if set_id <= 0 || request_id < 0 || message_id < 0 {
+            return Err(HostError::Journal);
+        }
+        let conn = self.connection().await?;
+        commit_assignment(&conn, set_id, request_id, message_id).await
+    }
+
+    /// Bind this journal to one Docker engine. A changed engine fails closed.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`HostError::Journal`] when the id is invalid or changes.
+    pub async fn bind_engine(&self, engine_id: &str) -> Result<(), HostError> {
+        let conn = self.connection().await?;
+        journal_schema::bind_engine(&conn, engine_id).await
+    }
+
+    /// Read one launch identity after the engine is bound.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`HostError::Journal`] for a legacy row or an unbound engine.
+    pub async fn launch_identity(&self, id: i64) -> Result<LaunchIdentity, HostError> {
+        let conn = self.connection().await?;
+        let mut rows = conn
+            .query(
+                "SELECT launch_id FROM intents WHERE id = ?1 AND kind = 'launch'",
+                [id],
+            )
+            .await
+            .map_err(|_| HostError::Journal)?;
+        let row = rows
+            .next()
+            .await
+            .map_err(|_| HostError::Journal)?
+            .ok_or(HostError::Journal)?;
+        let launch_id: Option<String> = row.get(0).map_err(|_| HostError::Journal)?;
+        let launch_id = launch_id.ok_or(HostError::Journal)?;
+        let instance_id = journal_schema::instance_id(&conn).await?;
+        let engine_id = journal_schema::engine_id(&conn).await?;
+        LaunchIdentity::new(&instance_id, id, &launch_id, &engine_id)
+    }
+
+    /// Bind both immutable Docker ids. Rebinding to another id fails.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`HostError::Journal`] when either id conflicts or the row is missing.
+    pub async fn bind_pair(
+        &self,
+        id: i64,
+        runner_id: &str,
+        dind_id: &str,
+    ) -> Result<(), HostError> {
+        if token_rejected(runner_id) || token_rejected(dind_id) {
+            return Err(HostError::Journal);
+        }
+        let conn = self.connection().await?;
+        let changed = conn
+            .execute(
+                "UPDATE intents SET docker_id = COALESCE(docker_id, ?1), dind_id = COALESCE(dind_id, ?2) WHERE id = ?3 AND (docker_id IS NULL OR docker_id = ?1) AND (dind_id IS NULL OR dind_id = ?2)",
+                (runner_id, dind_id, id),
+            )
+            .await
+            .map_err(|_| HostError::Journal)?;
+        one_row(changed)
+    }
+
+    /// Bind one immutable seed generation to a launch.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`HostError::Journal`] when a different generation is already bound.
+    pub async fn bind_seed_generation(
+        &self,
+        id: i64,
+        generation_id: &str,
+    ) -> Result<(), HostError> {
+        if token_rejected(generation_id) {
+            return Err(HostError::Journal);
+        }
+        let conn = self.connection().await?;
+        let changed = conn
+            .execute(
+                "UPDATE intents SET seed_generation_id = COALESCE(seed_generation_id, ?1) WHERE id = ?2 AND kind = 'launch' AND (seed_generation_id IS NULL OR seed_generation_id = ?1)",
+                (generation_id, id),
+            )
+            .await
+            .map_err(|_| HostError::Journal)?;
+        one_row(changed)
+    }
+
+    /// Count all launch reservations that lack proven cleanup.
+    ///
+    /// Pending, uncertain, stopped, and ID-less rows remain occupied. A worker
+    /// exit or queue acknowledgement does not release this count.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`HostError::Journal`] when the count cannot be read.
+    pub async fn occupied_launches(&self) -> Result<u32, HostError> {
+        let conn = self.connection().await?;
+        let mut rows = conn
+            .query(
+                "SELECT count(*) FROM intents WHERE kind = 'launch' AND cleanup_proven = 0",
+                (),
+            )
+            .await
+            .map_err(|_| HostError::Journal)?;
+        let row = rows
+            .next()
+            .await
+            .map_err(|_| HostError::Journal)?
+            .ok_or(HostError::Journal)?;
+        let count: i64 = row.get(0).map_err(|_| HostError::Journal)?;
+        u32::try_from(count).map_err(|_| HostError::Journal)
     }
 
     /// Record the outcome of exactly one row on a new connection.
@@ -206,7 +343,7 @@ impl Journal {
         let conn = self.connection().await?;
         let mut query = conn
             .query(
-                "SELECT id, kind, subject, state, docker_id, github_runner_id, cleanup_proven FROM intents ORDER BY id",
+                "SELECT id, kind, subject, state, docker_id, dind_id, github_runner_id, cleanup_proven, launch_id, assignment_key, seed_generation_id FROM intents ORDER BY id",
                 (),
             )
             .await
@@ -220,13 +357,7 @@ impl Journal {
 
     async fn bootstrap(&self) -> Result<(), HostError> {
         let conn = self.connection().await?;
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS intents (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, subject TEXT NOT NULL, state TEXT NOT NULL, docker_id TEXT, github_runner_id TEXT, cleanup_proven INTEGER NOT NULL DEFAULT 0)",
-            (),
-        )
-        .await
-        .map_err(|_| HostError::Journal)?;
-        Ok(())
+        journal_schema::bootstrap(&conn).await
     }
 
     async fn connection(&self) -> Result<turso::Connection, HostError> {
@@ -237,83 +368,4 @@ impl Journal {
             .map_err(|_| HostError::Journal)?;
         db.connect().map_err(|_| HostError::Journal)
     }
-}
-
-async fn commit_live(
-    conn: &turso::Connection,
-    kind: &str,
-    subject: &str,
-) -> Result<i64, HostError> {
-    conn.execute("BEGIN IMMEDIATE", ())
-        .await
-        .map_err(|_| HostError::Journal)?;
-    let result = insert_live(conn, kind, subject).await;
-    let ended = if result.is_ok() {
-        conn.execute("COMMIT", ()).await
-    } else {
-        conn.execute("ROLLBACK", ()).await
-    };
-    ended.map_err(|_| HostError::Journal)?;
-    result
-}
-
-async fn insert_live(
-    conn: &turso::Connection,
-    kind: &str,
-    subject: &str,
-) -> Result<i64, HostError> {
-    if let Some(id) = live_id(conn, kind, subject).await? {
-        return Ok(id);
-    }
-    conn.execute(
-        "INSERT INTO intents (kind, subject, state) VALUES (?1, ?2, 'pending')",
-        (kind.to_owned(), subject.to_owned()),
-    )
-    .await
-    .map_err(|_| HostError::Journal)?;
-    Ok(conn.last_insert_rowid())
-}
-
-async fn live_id(
-    conn: &turso::Connection,
-    kind: &str,
-    subject: &str,
-) -> Result<Option<i64>, HostError> {
-    let mut rows = conn
-        .query(
-            "SELECT id FROM intents WHERE kind = ?1 AND subject = ?2 AND state != 'failed' ORDER BY id LIMIT 1",
-            (kind.to_owned(), subject.to_owned()),
-        )
-        .await
-        .map_err(|_| HostError::Journal)?;
-    let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? else {
-        return Ok(None);
-    };
-    let id: i64 = row.get(0).map_err(|_| HostError::Journal)?;
-    Ok(Some(id))
-}
-
-fn intent_row(row: &turso::Row) -> Result<IntentRow, HostError> {
-    let state_text: String = row.get(3).map_err(|_| HostError::Journal)?;
-    Ok(IntentRow {
-        id: row.get(0).map_err(|_| HostError::Journal)?,
-        kind: row.get(1).map_err(|_| HostError::Journal)?,
-        subject: row.get(2).map_err(|_| HostError::Journal)?,
-        state: IntentState::parse(&state_text)?,
-        docker_id: row.get(4).map_err(|_| HostError::Journal)?,
-        github_runner_id: row.get(5).map_err(|_| HostError::Journal)?,
-        cleanup_proven: row.get(6).map_err(|_| HostError::Journal)?,
-    })
-}
-
-fn one_row(changed: u64) -> Result<(), HostError> {
-    if changed == 1 {
-        Ok(())
-    } else {
-        Err(HostError::Journal)
-    }
-}
-
-fn token_rejected(token: &str) -> bool {
-    token.is_empty() || token.chars().any(|ch| matches!(ch, '\'' | '"'))
 }

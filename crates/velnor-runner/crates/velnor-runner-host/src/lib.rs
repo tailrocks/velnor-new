@@ -13,9 +13,13 @@ mod error;
 mod https;
 mod ipc;
 mod journal;
+mod journal_assignment;
+mod journal_schema;
+mod journal_sql;
 mod keychain;
 mod launch;
 mod launch_blocking;
+mod launch_identity;
 mod listen;
 mod plist;
 mod readiness;
@@ -35,7 +39,7 @@ pub use docker_spec::{
 pub use error::HostError;
 pub use https::HttpsTransport;
 pub use ipc::{MAX_FRAME, SOCKET_DIR_MODE, decode_frame, encode_frame};
-pub use journal::{IntentState, Journal, Outcome};
+pub use journal::{IntentState, Journal, LaunchIdentity, Outcome};
 pub use keychain::{import_secret, load_secret, read_secret};
 pub use launch::{LaunchReport, launch_once};
 pub use launch_blocking::{ListenFault, launch_blocking};
@@ -64,6 +68,8 @@ mod docker_spec_tests;
 mod https_tests;
 #[cfg(test)]
 mod ipc_tests;
+#[cfg(test)]
+mod journal_identity_tests;
 #[cfg(test)]
 mod journal_tests;
 #[cfg(test)]

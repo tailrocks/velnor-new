@@ -96,8 +96,10 @@ where
     F: Future<Output = Result<Started, HostError>>,
 {
     lane.on_admin()?;
-    let subject = format!("m{}r{request_id}", batch.message_id);
-    let id = journal.begin(KIND, &subject).await.map_err(map_journal)?;
+    let id = journal
+        .begin_assignment(ctx.set_id, request_id, batch.message_id)
+        .await
+        .map_err(map_journal)?;
     if docker_of(journal, id).await?.is_some() {
         return ack_bound(lane, ctx, batch, journal, id).await;
     }
