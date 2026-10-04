@@ -135,7 +135,8 @@ elif [ "$url" = https://signed.example/log ]; then
       printf '2026-10-04T00:00:05.0000000Z Sent 256 of 1024 (25.0%%), 0.1 MBs/sec\n' ;;
     malformed-error)
       printf '2026-10-04T00:00:05.0000000Z Sent 256 of 1024 (25.0%%), 0.1 MBs/sec\n'
-      printf '2026-10-04T00:00:06.0000000Z ##[error]The operation was canceled\n' ;;
+      printf '2026-10-04T00:00:06.0000000Z ##[error]The operation was canceled\n'
+      printf '2026-10-04T00:00:07.000Z ##[error]The operation was canceled.\n' ;;
     short-timestamp)
       printf '2026-10-04T00:00:05.000Z Sent 256 of 1024 (25.0%%), 0.1 MBs/sec\n'
       printf '2026-10-04T00:00:06.0000000Z ##[error]The operation was canceled.\n' ;;
