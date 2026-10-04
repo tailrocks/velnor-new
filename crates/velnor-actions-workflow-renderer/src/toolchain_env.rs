@@ -285,6 +285,29 @@ pub const STEP_ISOLATION_DENYLIST: [&str; 6] = [
     "MISE_EXEC_AUTO_INSTALL",
 ];
 
+/// Static Mise environment variables applied to every workflow job.
+pub const MISE_STATIC_ENV: [(&str, &str); 6] = [
+    ("MISE_AUTO_INSTALL", "false"),
+    ("MISE_EXEC_AUTO_INSTALL", "false"),
+    ("MISE_LOCKFILE", "0"),
+    ("MISE_NO_CONFIG", "1"),
+    ("MISE_NO_ENV", "1"),
+    ("MISE_NO_HOOKS", "1"),
+];
+
+/// Centralized job-level environment variables hoisted from steps.
+///
+/// Contains the 11 blank credential scrub / endpoint variables stopping
+/// ambient inheritance and the 6 static Mise isolation / auto-install variables.
+#[must_use]
+pub fn job_level_env() -> BTreeMap<String, String> {
+    let mut map = credential_scrub();
+    for (key, value) in MISE_STATIC_ENV {
+        map.insert(key.to_owned(), value.to_owned());
+    }
+    map
+}
+
 /// Reject privileged isolation keys in a project-task step env map.
 /// # Errors
 pub fn reject_privileged_task_keys(env: &BTreeMap<String, String>) -> Result<(), RenderError> {
