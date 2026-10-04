@@ -58,7 +58,7 @@ const ROOT_SCRIPT: &str = r#"set -eu; test -n "$RUNNER_TEMP"; bundle="$RUNNER_TE
 const EXPORT_SCRIPT: &str = r#"set -eu; df -B1 -P "$RUNNER_TEMP"; df -i -P "$RUNNER_TEMP"; bundle="$RUNNER_TEMP/mbx-single-bundle"; export_log="$GITHUB_OUTPUT.mbx-export"; gc_log="$GITHUB_OUTPUT.mbx-gc"; for file in "$export_log" "$gc_log"; do if [ -e "$file" ] || [ -L "$file" ]; then echo "MBX export marker already exists" >&2; exit 1; fi; done; if mbx cache export --group "$MBX_CACHE_EXPORT_GROUP" --format directory "$bundle" >"$export_log" 2>&1; then test -d "$bundle"; df -B1 -P "$RUNNER_TEMP"; df -i -P "$RUNNER_TEMP"; if mbx gc --max-size 0 --json >"$gc_log" 2>&1; then cat "$gc_log"; echo 'gc-succeeded=true' >> "$GITHUB_OUTPUT"; echo 'ready=true' >> "$GITHUB_OUTPUT"; else cat "$gc_log"; echo 'gc-succeeded=false' >> "$GITHUB_OUTPUT"; echo 'ready=false' >> "$GITHUB_OUTPUT"; fi; df -B1 -P "$RUNNER_TEMP"; df -i -P "$RUNNER_TEMP"; else if grep -Fq 'no completed mbx builds are recorded for export group' "$export_log"; then cat "$export_log"; echo 'ready=false' >> "$GITHUB_OUTPUT"; exit 0; fi; cat "$export_log"; exit 1; fi"#;
 
 /// Failed imports never keep compiling against a partially published store.
-const IMPORT_SCRIPT: &str = r#"set -eu; bundle="$RUNNER_TEMP/mbx-single-bundle"; df -B1 -P "$RUNNER_TEMP"; df -i -P "$RUNNER_TEMP"; if [ -z "$MATCHED" ]; then echo 'no MBX bundle matched'; exit 0; fi; if [ ! -d "$bundle" ]; then echo 'matched MBX bundle is missing; the fresh store stays cold'; exit 0; fi; if mbx cache import "$bundle"; then echo 'MBX bundle imported'; else echo 'MBX bundle import failed; abandoning its private store'; root_file="$GITHUB_OUTPUT.mbx-fallback"; if [ -e "$root_file" ] || [ -L "$root_file" ]; then echo "MBX fallback marker already exists" >&2; exit 1; fi; mktemp -d "$RUNNER_TEMP/velnor-mbx-fallback.XXXXXXXXXX" > "$root_file"; IFS= read -r root < "$root_file"; root_id="${root##*/}"; group="velnor-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${root_id}"; printf 'MBX_CACHE_DIR=%s\nMBX_TARGET_ROOT=%s/targets\nMBX_SHIMS_DIR=%s/shims\nMBX_CACHE_EXPORT_GROUP=%s\n' "$root" "$root" "$root" "$group" >> "$GITHUB_ENV"; echo 'fresh cold MBX store selected for subsequent steps'; fi"#;
+const IMPORT_SCRIPT: &str = r#"set -eu; bundle="$RUNNER_TEMP/mbx-single-bundle"; df -B1 -P "$RUNNER_TEMP"; df -i -P "$RUNNER_TEMP"; if [ -z "$MATCHED" ]; then echo 'no MBX bundle matched'; printf 'selected_cache_root=%s\n' "$MBX_CACHE_DIR" >> "$GITHUB_OUTPUT"; exit 0; fi; if [ ! -d "$bundle" ]; then echo 'matched MBX bundle is missing; the fresh store stays cold'; printf 'selected_cache_root=%s\n' "$MBX_CACHE_DIR" >> "$GITHUB_OUTPUT"; exit 0; fi; if mbx cache import "$bundle"; then echo 'MBX bundle imported'; printf 'selected_cache_root=%s\n' "$MBX_CACHE_DIR" >> "$GITHUB_OUTPUT"; else echo 'MBX bundle import failed; abandoning its private store'; root_file="$GITHUB_OUTPUT.mbx-fallback"; if [ -e "$root_file" ] || [ -L "$root_file" ]; then echo "MBX fallback marker already exists" >&2; exit 1; fi; mktemp -d "$RUNNER_TEMP/velnor-mbx-fallback.XXXXXXXXXX" > "$root_file"; IFS= read -r root < "$root_file"; root_id="${root##*/}"; group="velnor-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${root_id}"; printf 'MBX_CACHE_DIR=%s\nMBX_TARGET_ROOT=%s/targets\nMBX_SHIMS_DIR=%s/shims\nMBX_CACHE_EXPORT_GROUP=%s\n' "$root" "$root" "$root" "$group" >> "$GITHUB_ENV"; printf 'selected_cache_root=%s\n' "$root" >> "$GITHUB_OUTPUT"; echo 'fresh cold MBX store selected for subsequent steps'; fi"#;
 /// YAML step id for MBX setup and the key/export steps that expose outputs.
 pub(crate) fn step_yaml_id(step: &Step) -> Option<&'static str> {
     if is_mbx_action(step) {
@@ -67,6 +67,7 @@ pub(crate) fn step_yaml_id(step: &Step) -> Option<&'static str> {
         match step.name.as_str() {
             MBX_BUNDLE_KEY_NAME => Some("mbx-bundle-key"),
             MBX_BUNDLE_RESTORE_NAME => Some("mbx-bundle"),
+            MBX_BUNDLE_IMPORT_NAME => Some("mbx-bundle-import"),
             MBX_BUNDLE_EXPORT_NAME => Some("mbx-export"),
             MBX_BUNDLE_SAVE_NAME if qualification_save_id(step) => Some("mbx-bundle-save"),
             _ => None,
@@ -345,3 +346,7 @@ fn save_step(
     step.condition = Some(pr_cache::save_condition(pull_request_cache_policy));
     Ok(step)
 }
+
+#[cfg(test)]
+#[path = "mbx_bundle_import_tests.rs"]
+mod import_tests;
