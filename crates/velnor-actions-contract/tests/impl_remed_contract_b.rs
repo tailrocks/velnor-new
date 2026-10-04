@@ -41,7 +41,7 @@ fn wf_contract_surface_has_no_utility_fields() {
     };
     assert_eq!(
         section("workflow").join(","),
-        "generator_validation,max_parallel_jobs,name,policy"
+        "generator_validation,max_parallel_jobs,name,policy,pull_request_cache_policy"
     );
     assert_eq!(section("stacks").join(","), "ignore");
     let text = serde_json::to_string(&value).expect("text");
