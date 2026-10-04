@@ -39,13 +39,30 @@ capture_df() {
   local file="$evidence/df-$label-$kind.txt"
   if [[ "$kind" == bytes ]]; then
     output="$(df -B1 -P "$runner_temp" 2>&1)" || status=$?
-    if (( status == 0 )) && ! awk 'NR == 2 && $2 ~ /^[0-9]+$/ && $3 ~ /^[0-9]+$/ && $4 ~ /^[0-9]+$/' <<< "$output"; then status=2; fi
   else
     output="$(df -i -P "$runner_temp" 2>&1)" || status=$?
-    if (( status == 0 )) && ! awk 'NR == 2 && $2 ~ /^[0-9]+$/ && $3 ~ /^[0-9]+$/ && $4 ~ /^[0-9]+$/' <<< "$output"; then status=2; fi
   fi
+  if (( status == 0 )) && ! valid_df "$output" "$kind"; then status=2; fi
   printf '%s\n' "$output" > "$file"
   if (( status == 0 )); then printf 'df_status=ok\n' >> "$file"; else printf 'df_status=failed:%s\n' "$status" >> "$file"; fi
+}
+
+valid_df() {
+  local output="$1" kind="$2"
+  awk -v kind="$kind" '
+    NR == 1 {
+      if (kind == "bytes" && ($1 != "Filesystem" || $2 != "1-blocks" || $3 != "Used" || $4 != "Available")) bad=1
+      if (kind == "inodes" && ($1 != "Filesystem" || $2 != "Inodes" || $3 != "IUsed" || $4 != "IFree")) bad=1
+      next
+    }
+    NR == 2 {
+      rows++
+      if (NF < 6 || $2 !~ /^[0-9]+$/ || $3 !~ /^[0-9]+$/ || $4 !~ /^[0-9]+$/) bad=1
+      next
+    }
+    { bad=1 }
+    END { if (NR != 2 || rows != 1 || bad) exit 1 }
+  ' <<< "$output"
 }
 
 sample_once() {
@@ -53,8 +70,8 @@ sample_once() {
   local bytes inodes used_bytes used_inodes elapsed
   bytes="$(df -B1 -P "$runner_temp" 2>&1)" || bytes_status=$?
   inodes="$(df -i -P "$runner_temp" 2>&1)" || inodes_status=$?
-  if (( bytes_status == 0 )) && ! awk 'NR == 2 && $2 ~ /^[0-9]+$/ && $3 ~ /^[0-9]+$/ && $4 ~ /^[0-9]+$/' <<< "$bytes"; then bytes_status=2; fi
-  if (( inodes_status == 0 )) && ! awk 'NR == 2 && $2 ~ /^[0-9]+$/ && $3 ~ /^[0-9]+$/ && $4 ~ /^[0-9]+$/' <<< "$inodes"; then inodes_status=2; fi
+  if (( bytes_status == 0 )) && ! valid_df "$bytes" bytes; then bytes_status=2; fi
+  if (( inodes_status == 0 )) && ! valid_df "$inodes" inodes; then inodes_status=2; fi
   used_bytes="$(awk 'NR == 2 { print $3 }' <<< "$bytes")"
   used_inodes="$(awk 'NR == 2 { print $3 }' <<< "$inodes")"
   elapsed=$(( $(date +%s) - start_epoch ))
@@ -178,7 +195,10 @@ record_inventory_file() {
     allocated_sum=$((allocated_sum + allocated))
   fi
   escaped="$(escape_path "$file")"
-  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$root_name" "$root_encoded" "$escaped" "$dev" "$ino" "$nlink" "$size" "$allocated" >> "$inventory_file"
+  if ! printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$root_name" "$root_encoded" "$escaped" "$dev" "$ino" "$nlink" "$size" "$allocated" >> "$inventory_file"; then
+    snapshot_status=1
+    return 1
+  fi
   if [[ "$snapshot_label" == export-complete && ( "$root_name" == selected-cache-root || "$root_name" == bundle ) ]]; then
     hash_inventory_file "$root_name" "$dev" "$ino" "$nlink" "$size" "$blocks" "$file" "$escaped" || return 1
   fi
@@ -216,8 +236,11 @@ hash_inventory_file() {
     snapshot_status=1
     return 1
   }
-  printf '%s\t%s\t%s\t%s\n' "$root_name" "$hash" "$size" "$escaped" >> "$hashes_file"
   hash_bytes=$((hash_bytes + size))
+  if ! printf '%s\t%s\t%s\t%s\n' "$root_name" "$hash" "$size" "$escaped" >> "$hashes_file"; then
+    snapshot_status=1
+    return 1
+  fi
 }
 
 duplicate_content_summary() {

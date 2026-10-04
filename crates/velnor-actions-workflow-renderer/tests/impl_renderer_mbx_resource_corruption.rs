@@ -68,6 +68,38 @@ fn hosted_resource_receipts_bind_all_qualification_roles() -> Result<(), RenderE
         assert!(block.contains("if: always()"));
         assert!(!block.contains("restore-keys:"));
         assert!(block.contains("mbx-cache-evidence-mbx-cache-"));
+        let stop_start = block
+            .find("name: Stop sampler and capture final MBX state")
+            .expect("stop step");
+        let stop_end = block[stop_start..]
+            .find("name: Upload MBX cache evidence")
+            .map(|offset| stop_start + offset)
+            .expect("upload step follows stop");
+        let stop = &block[stop_start..stop_end];
+        for (key, expression) in [
+            (
+                "MBX_QUALIFICATION_CACHE_PRIMARY:",
+                "${{ steps.mbx-bundle-key.outputs.primary }}",
+            ),
+            (
+                "MBX_QUALIFICATION_CACHE_PREFIX:",
+                "${{ steps.mbx-bundle-key.outputs.prefix }}",
+            ),
+            (
+                "MBX_QUALIFICATION_CACHE_GENERATION:",
+                "${{ steps.mbx-bundle-key.outputs.generation }}",
+            ),
+            (
+                "MBX_QUALIFICATION_RUSTC_IDENTITY:",
+                "${{ steps.mbx-bundle-key.outputs.rustc_identity }}",
+            ),
+        ] {
+            assert!(stop.contains(key), "stop env missing {key}");
+            assert!(
+                stop.contains(expression),
+                "stop env binding missing {expression}"
+            );
+        }
     }
     assert!(writer.contains("actions: write"));
     assert!(reader.contains("actions: read"));

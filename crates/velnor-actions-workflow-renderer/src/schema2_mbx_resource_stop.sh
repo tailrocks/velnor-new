@@ -9,9 +9,43 @@ check_nonempty_root() {
     fail_partial "required_nonempty_root_missing:${label}:${root}"
   fi
 }
+check_inventory_counts() {
+  local label="$1" roots="$evidence/roots-$1.tsv" inventory="$evidence/inventory-$1.tsv"
+  local summary="$evidence/inventory-summary-$1.tsv"
+  if ! awk -F '\t' '
+    FILENAME == ARGV[1] { if (FNR > 1) roots[$1]++; next }
+    FILENAME == ARGV[2] {
+      if (FNR == 1) next
+      if (NF != 8 || $1 == "" || $4 !~ /^[0-9]+$/ || $5 !~ /^[0-9]+$/ ||
+          $7 !~ /^[0-9]+$/ || $8 !~ /^[0-9]+$/) bad=1
+      key=$1 SUBSEP $4 SUBSEP $5
+      if (!seen[key]++) allocated[$1]+=$8
+      files[$1]++; logical[$1]+=$7; inventory_roots[$1]++; next
+    }
+    FILENAME == ARGV[3] {
+      if (FNR == 1) next
+      if (NF != 7 || $1 == "" || $3 !~ /^[0-9]+$/ || $4 !~ /^[0-9]+$/ ||
+          $5 !~ /^[0-9]+$/ || $6 !~ /^[0-9]+$/ || ($7 != "true" && $7 != "false")) bad=1
+      summaries[$1]++; expected_files[$1]=$3; expected_logical[$1]=$4
+      expected_allocated[$1]=$5; next
+    }
+    END {
+      for (root in roots) if (roots[root] != 1 || summaries[root] != 1) bad=1
+      for (root in summaries) {
+        if (!roots[root] || summaries[root] != 1 || files[root] + 0 != expected_files[root] + 0 ||
+            logical[root] + 0 != expected_logical[root] + 0 ||
+            allocated[root] + 0 != expected_allocated[root] + 0) bad=1
+      }
+      for (root in inventory_roots) if (!roots[root] || !summaries[root]) bad=1
+      exit bad
+    }
+  ' "$roots" "$inventory" "$summary"; then
+    fail_partial "inventory_count_or_total_mismatch:$label"
+  fi
+}
 check_inventory() {
   local label="$1" file
-  for file in "inventory-$label.tsv" "inventory-summary-$label.tsv" "inventory-meta-$label.tsv" "root-status-$label.tsv" "df-$label-bytes.txt" "df-$label-inodes.txt"; do
+  for file in "roots-$label.tsv" "inventory-$label.tsv" "inventory-summary-$label.tsv" "inventory-meta-$label.tsv" "root-status-$label.tsv" "df-$label-bytes.txt" "df-$label-inodes.txt"; do
     if [ ! -s "$evidence/$file" ]; then fail_partial "required_inventory_missing:$label:$file"; fi
   done
   if [ -s "$evidence/root-status-$label.tsv" ]; then
@@ -19,6 +53,11 @@ check_inventory() {
       fail_partial "required_root_missing:$label"
     fi
   fi
+  if [ -s "$evidence/roots-$label.tsv" ] && [ -s "$evidence/inventory-$label.tsv" ] && \
+    [ -s "$evidence/inventory-summary-$label.tsv" ]; then
+    check_inventory_counts "$label"
+  fi
+  if [ "$label" = export-complete ]; then check_hash_totals "$label"; fi
   if [ -s "$evidence/root-registry.tsv" ] && ! grep -Fq "$label"$'\t' "$evidence/root-registry.tsv"; then
     fail_partial "root_registry_missing:$label"
   fi
@@ -36,6 +75,17 @@ check_inventory() {
   if [ "$label" = build-end ] || [ "$label" = final ]; then
     check_nonempty_root "$label" MBX_TARGET_ROOT
     check_nonempty_root "$label" cargo-home
+  fi
+}
+check_hash_totals() {
+  local label="$1" hashes="$evidence/content-hashes-$1.tsv"
+  local summary="$evidence/duplicate-content-summary-$1.tsv"
+  if [ ! -s "$hashes" ] || [ ! -s "$summary" ] || ! awk -F '\t' '
+    FILENAME == ARGV[1] { if (FNR > 1) { if ($3 !~ /^[0-9]+$/) bad=1; rows++; total+=$3 } next }
+    $1 == "hashed_logical_bytes" { expected=$2; found=1 }
+    END { if (bad || !found || expected !~ /^[0-9]+$/ || rows == 0 || total != expected) exit 1 }
+  ' "$hashes" "$summary"; then
+    fail_partial "hash_inventory_mismatch:$label"
   fi
 }
 check_required_files() {

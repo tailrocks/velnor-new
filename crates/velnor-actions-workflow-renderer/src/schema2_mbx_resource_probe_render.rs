@@ -17,7 +17,7 @@ const RECEIPT_SCRIPT: &str = include_str!("schema2_mbx_resource_receipt.sh");
 const STOP_SCRIPT: &str = include_str!("schema2_mbx_resource_stop.sh");
 const SAMPLER: &str = include_str!("schema2_mbx_resource_sampler.sh");
 const PATH_VALIDATION: &str = include_str!("schema2_mbx_resource_path.sh");
-const SAMPLER_SHA256: &str = "cf5073878fabe5c1caae19b4d5d37aa72e2a34b9280a64b8767aa06452dbe1b5";
+const SAMPLER_SHA256: &str = "12775978694a493f9b16ef79d707a353a1326c524d391bcb474426d8488e37d1";
 const PATH_VALIDATION_SHA256: &str =
     "1a73b2bc858d52af8cceaaf7e1dec8aedb2dc01618d05454d0cb862428fe5356";
 const PREUPLOAD_SCRIPT: &str = r#"set -euo pipefail
@@ -260,7 +260,7 @@ fn append_finalizers(
     output.push(native_step(
         "Stop sampler and capture final MBX state",
         STOP_SCRIPT,
-        &super::mbx_resource_probe_env::observer_env(request, job_id, role, writer, corrupt),
+        &super::mbx_resource_probe_env::receipt_env(request, job_id, role, writer, corrupt),
         Some("always()"),
     )?);
     Ok(())
