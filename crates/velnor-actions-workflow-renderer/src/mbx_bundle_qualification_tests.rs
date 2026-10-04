@@ -6,8 +6,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use super::{export_script, import_script};
 use crate::mbx_bundle::EXPORT_SCRIPT;
 
+#[path = "mbx_bundle_qualification_snapshot_tests.rs"]
+mod snapshot_tests;
+
 #[test]
-fn export_and_gc_capture_receipts_phases_and_nonfatal_samples() -> Result<(), String> {
+fn export_and_gc_capture_receipts_phases_and_successful_samples() -> Result<(), String> {
     let scratch = Scratch::new()?;
     setup_evidence(&scratch)?;
     let script = export_script(true, EXPORT_SCRIPT);
@@ -22,7 +25,7 @@ fn export_and_gc_capture_receipts_phases_and_nonfatal_samples() -> Result<(), St
                 scratch.0.join("export.txt"),
             ),
             ("MBX_QUALIFICATION_SAMPLE_INTERVAL", "5".into()),
-            ("SAMPLER_STATUS", "17".into()),
+            ("SAMPLER_STATUS", "0".into()),
             ("EXPORT_STATUS", "0".into()),
             ("GC_STATUS", "0".into()),
         ],
@@ -68,7 +71,7 @@ fn export_and_gc_capture_receipts_phases_and_nonfatal_samples() -> Result<(), St
         receipt.contains("command=snapshot-gc-complete"),
         "{receipt}"
     );
-    assert_eq!(receipt.matches("exit_status=17").count(), 2, "{receipt}");
+    assert_eq!(receipt.matches("exit_status=0").count(), 4, "{receipt}");
     let output = fs::read_to_string(scratch.0.join("export-gc-github-output"))
         .map_err(|error| display_error(&error))?;
     assert!(output.contains("export_status=0\n"), "{output}");
@@ -217,6 +220,7 @@ fn importer_receipt_preserves_raw_streams_and_exit_status() -> Result<(), String
     assert!(String::from_utf8_lossy(&result.stdout).contains("fallback"));
     assert!(String::from_utf8_lossy(&result.stderr).contains("import-err"));
     let body = fs::read_to_string(&receipt).map_err(|error| display_error(&error))?;
+    assert!(body.starts_with("command=import\n"), "{body}");
     assert!(
         body.contains("stdout_bytes=11\nimport-out\nstderr_bytes=11\nimport-err\n\nexit_status=42"),
         "{body}"
@@ -240,7 +244,7 @@ fn run_script(
     )?;
     executable(
         &bin.join("bash"),
-        "#!/bin/sh\nprintf 'sample-out\\n'; printf 'sample-err\\n' >&2; exit \"${SAMPLER_STATUS:-0}\"\n",
+        "#!/bin/sh\nprintf 'sample-out\\n'; printf 'sample-err\\n' >&2; if [ \"${SAMPLER_FAIL_LABEL:-}\" = \"$7\" ]; then exit \"${SAMPLER_STATUS:-17}\"; fi; exit 0\n",
     )?;
     executable(
         &bin.join("df"),
