@@ -12,6 +12,8 @@ gh_api() { gh api --hostname github.com "$@"; }
 expected_title="MBX cancellation $VICTIM_MODE $PROBE_ID"
 valid_id() { [[ "$1" =~ ^[1-9][0-9]*$ ]]; }
 run_valid() {
+  # Split the workflow-run REST values documented at apiVersion=2022-11-28.
+  # https://docs.github.com/en/rest/actions/workflow-runs?apiVersion=2022-11-28
   jq -e --argjson id "$RUN_ID" --argjson workflow "$WORKFLOW_ID" \
     --arg repo "$GITHUB_REPOSITORY" --arg sha "$GITHUB_SHA" \
     --arg title "$expected_title" \
@@ -19,6 +21,12 @@ run_valid() {
      and .head_repository.full_name == $repo
      and .event == "workflow_dispatch" and .head_branch == "main" and .head_sha == $sha
      and .run_attempt == 1 and .display_title == $title
+     and (.status | type == "string"
+       and IN("queued", "in_progress", "requested", "waiting", "pending", "completed"))
+     and (if .status == "completed" then
+       (.conclusion | type == "string"
+         and IN("action_required", "cancelled", "failure", "neutral", "skipped", "stale", "success", "timed_out"))
+       else has("conclusion") and .conclusion == null end)
      and ((.path | split("@") | .[0]) == ".github/workflows/qualification.yml")
      and ((.path | endswith("@main")) or (.path | endswith("@refs/heads/main")))' \
     "$1" >/dev/null 2>&1
@@ -305,8 +313,8 @@ terminal_state=unknown
 if valid_id "${RUN_ID:-}" && valid_id "${WORKFLOW_ID:-}"; then
   for try in $(seq 1 240); do
     if fetch_run "$root/run.json" && run_valid "$root/run.json"; then
-      status="$(jq -er '.status | strings' "$root/run.json")"
-      terminal_state="$(jq -r '(.status // "unknown") + "/" + (.conclusion // "unknown")' "$root/run.json")"
+      status="$(jq -er '.status' "$root/run.json")"
+      terminal_state="$(jq -er '.status + "/" + (.conclusion // "unknown")' "$root/run.json")"
       if [ "$status" = completed ]; then terminal=true; break; fi
     fi
     sleep 10

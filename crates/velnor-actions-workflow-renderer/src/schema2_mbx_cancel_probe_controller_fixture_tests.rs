@@ -202,6 +202,12 @@ impl Fixture {
         date_fixture::install(&self.bin)
     }
 
+    fn install_immediate_sleep(&self) -> io::Result<()> {
+        let sleep = self.bin.join("sleep");
+        fs::write(&sleep, "#!/usr/bin/env bash\nexit 0\n")?;
+        fs::set_permissions(sleep, fs::Permissions::from_mode(0o755))
+    }
+
     pub(super) fn log(&self) -> Result<String, Box<dyn Error>> {
         Ok(fs::read_to_string(&self.log)?)
     }
@@ -258,6 +264,19 @@ impl Fixture {
         set_env(&mut env, "RUN_ID", run_id);
         prepare_controller_root(&self.root, &self.bin, &env)?;
         let result = run_bash(&scripts::cancel_exact(), &self.root, &self.bin, &env)?;
+        if !result.status.success() {
+            return Err(io::Error::other(String::from_utf8_lossy(&result.stderr)).into());
+        }
+        Ok(fs::read_to_string(output)?)
+    }
+
+    fn wait_terminal(&self, mode: &str) -> Result<String, Box<dyn Error>> {
+        let output = self.output("terminal");
+        fs::write(&output, "")?;
+        let env = self.env(&output, mode);
+        prepare_controller_root(&self.root, &self.bin, &env)?;
+        self.install_immediate_sleep()?;
+        let result = run_bash(&scripts::wait_terminal(), &self.root, &self.bin, &env)?;
         if !result.status.success() {
             return Err(io::Error::other(String::from_utf8_lossy(&result.stderr)).into());
         }
@@ -323,6 +342,31 @@ fn controller_dispatches_and_cancels_only_the_returned_validated_run() -> Result
             .root
             .join("mbx-cancel-controller/artifact-response.headers")
             .exists()
+    );
+    fs::remove_dir_all(fixture.root)?;
+    Ok(())
+}
+
+#[test]
+fn terminal_output_rejects_invalid_run_enums_before_writing() -> Result<(), Box<dyn Error>> {
+    for mode in [
+        "terminal-invalid-status",
+        "terminal-unknown-status",
+        "terminal-invalid-conclusion",
+        "terminal-unknown-conclusion",
+        "terminal-null-conclusion",
+    ] {
+        let fixture = Fixture::new(&format!("terminal-{mode}"), false)?;
+        let output = fixture.wait_terminal(mode)?;
+        assert_eq!(output, "terminal=false\nterminal_state=unknown\n", "{mode}");
+        fs::remove_dir_all(fixture.root)?;
+    }
+
+    let fixture = Fixture::new("terminal-valid-cancelled", false)?;
+    let output = fixture.wait_terminal("terminal-good")?;
+    assert_eq!(
+        output,
+        "terminal=true\nterminal_state=completed/cancelled\n"
     );
     fs::remove_dir_all(fixture.root)?;
     Ok(())

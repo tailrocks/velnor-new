@@ -223,7 +223,16 @@ case "$method:$endpoint" in
     if [ "$GH_MODE" = revalidate-attempt ] && [ "$run_count" -ge 5 ]; then attempt=2; fi
     status=in_progress
     conclusion=null
-    if [[ "$GH_MODE" == observer-* ]]; then status=completed; conclusion=\"cancelled\"; fi
+    case "$GH_MODE" in
+      observer-*|terminal-good) status=completed; conclusion='"cancelled"' ;;
+      terminal-invalid-status) status=$'bad\ninjected=true' ;;
+      terminal-unknown-status) status=unexpected ;;
+      terminal-invalid-conclusion)
+        status=completed
+        conclusion="$(jq -cn --arg value $'bad\ninjected=true' '$value')" ;;
+      terminal-unknown-conclusion) status=completed; conclusion='"unexpected"' ;;
+      terminal-null-conclusion) status=completed ;;
+    esac
     jq -cn --arg repo "$repo" --arg sha "$run_sha" --arg mode "$VICTIM_MODE" \
       --arg probe "$PROBE_ID" --arg status "$status" --argjson conclusion "$conclusion" \
       --arg actor "$actor" --argjson attempt "$attempt" \
