@@ -157,12 +157,60 @@ fn generate_keeps_recommendations_on_stderr() -> Result<(), Box<dyn Error>> {
     assert_eq!(code(&generated), 0);
     assert!(generated.stdout.is_empty());
     let stderr = String::from_utf8_lossy(&generated.stderr).into_owned();
+    assert!(
+        stderr.contains("WARNING: .velnor/release-manifest.json is absent; generated workflows use a debug-only stand-in"),
+        "consumer policy must report its debug manifest stand-in: {stderr}"
+    );
     for rec in &expected {
         assert!(
             stderr.lines().any(|line| line == rec),
             "generate stderr missing: {rec}"
         );
     }
+    assert!(preview.join(".github/workflows/ci.yml").is_file());
+    cleanup(&tmp);
+    cleanup(&outer);
+    Ok(())
+}
+
+#[test]
+fn velnor_generate_omits_consumer_manifest_warning() -> Result<(), Box<dyn Error>> {
+    let tmp = fresh_tempdir("smoke-velnor-manifest")?;
+    git_init(&tmp)?;
+    let config = tmp.join(".velnor").join("config.toml");
+    std::fs::create_dir_all(config.parent().ok_or("config parent")?)?;
+    std::fs::write(
+        &config,
+        "schema = 1\n[workflow]\nname = \"CI\"\npolicy = \"velnor-repository-v1\"\ndefault_branch = \"main\"\n",
+    )?;
+    let remote = std::process::Command::new("git")
+        .args([
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/tailrocks/velnor-new.git",
+        ])
+        .current_dir(&tmp)
+        .output()?;
+    assert!(remote.status.success(), "git remote add failed: {remote:?}");
+    std::fs::write(
+        tmp.join(".velnor").join("release-manifest.json"),
+        "not json",
+    )?;
+
+    let outer = fresh_tempdir("smoke-velnor-manifest-preview")?;
+    let preview = outer.join("preview");
+    let generated = spawn(
+        &["generate", "--output-dir", preview.to_str().unwrap_or("/")],
+        &[],
+        &tmp,
+    )?;
+    let stderr = String::from_utf8_lossy(&generated.stderr).into_owned();
+    assert_eq!(code(&generated), 0, "stderr: {stderr}");
+    assert!(
+        !stderr.contains("WARNING: .velnor/release-manifest.json is absent"),
+        "producer policy must not report the consumer-only manifest stand-in: {stderr}"
+    );
     assert!(preview.join(".github/workflows/ci.yml").is_file());
     cleanup(&tmp);
     cleanup(&outer);

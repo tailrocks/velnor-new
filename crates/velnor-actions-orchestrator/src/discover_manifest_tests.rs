@@ -6,11 +6,13 @@
 //! release twin relies on.
 
 use std::fs;
+use std::path::Path;
 
 use tempfile::TempDir;
-use velnor_actions_contract::StackCandidate;
+use velnor_actions_contract::{StackCandidate, WorkflowPolicy};
 
-use super::{detected_projects, read_manifest_file};
+use super::detected_projects;
+use crate::discover_manifest::{for_policy, read_manifest_file};
 use crate::safe_read::MAX_REPO_FILE_BYTES;
 
 /// Present file returns its exact text.
@@ -23,6 +25,10 @@ fn present_file_returns_its_text() {
     assert_eq!(
         read_manifest_file(root.path()).expect("readable"),
         Some("{\"schema\":1}".to_owned())
+    );
+    assert_eq!(
+        for_policy(root.path(), WorkflowPolicy::ConsumerV1).expect("consumer reads manifest"),
+        (Some("{\"schema\":1}".to_owned()), false)
     );
 }
 
@@ -78,6 +84,43 @@ fn oversize_file_errors() {
     fs::write(dir.join("release-manifest.json"), big).expect("manifest");
     let err = read_manifest_file(root.path()).expect_err("oversize refused");
     assert!(err.to_string().contains("oversize"), "{err}");
+}
+
+/// Velnor policy does not read irrelevant consumer-manifest inputs.
+#[test]
+fn velnor_policy_skips_consumer_manifest_input() {
+    let root = TempDir::new().expect("temp root");
+    let dir = root.path().join(".velnor");
+    fs::create_dir_all(&dir).expect("velnor dir");
+    let manifest = dir.join("release-manifest.json");
+
+    fs::write(&manifest, "not json").expect("malformed manifest");
+    assert_velnor_policy_skips(root.path());
+
+    fs::remove_file(&manifest).expect("remove malformed manifest");
+    fs::create_dir(&manifest).expect("directory at manifest path");
+    assert_velnor_policy_skips(root.path());
+
+    fs::remove_dir(&manifest).expect("remove manifest directory");
+    fs::write(&manifest, [0xff, 0xfe]).expect("invalid UTF-8 manifest");
+    assert_velnor_policy_skips(root.path());
+
+    #[cfg(unix)]
+    {
+        fs::remove_file(&manifest).expect("remove invalid UTF-8 manifest");
+        let target = dir.join("real-manifest.json");
+        fs::write(&target, "{}\n").expect("symlink target");
+        std::os::unix::fs::symlink(&target, &manifest).expect("manifest symlink");
+        assert_velnor_policy_skips(root.path());
+    }
+}
+
+/// Assert Velnor discovery carries no consumer manifest or stand-in.
+fn assert_velnor_policy_skips(root: &Path) {
+    let (manifest, stand_in) = for_policy(root, WorkflowPolicy::VelnorRepositoryV1)
+        .expect("Velnor policy ignores consumer manifest input");
+    assert_eq!(manifest, None);
+    assert!(!stand_in);
 }
 
 /// M6 spike: candidates from unregistered stacks fail closed at dispatch.
