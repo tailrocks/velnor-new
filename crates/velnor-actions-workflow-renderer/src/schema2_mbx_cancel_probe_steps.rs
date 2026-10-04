@@ -128,7 +128,7 @@ pub(super) fn observer_init_step() -> Yaml {
     super::render::bash_step(
         "Create private MBX cancellation evidence roots",
         None,
-        super::super::private_io::OBSERVER_INIT,
+        super::private_io::OBSERVER_INIT,
         &BTreeMap::new(),
     )
 }

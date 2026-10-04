@@ -20,7 +20,7 @@ pub(super) fn assert_observer_scope_and_order(jobs: &[(String, Yaml)]) {
     assert_token_env_is_scoped(jobs);
 }
 
-fn assert_observer_api_inputs(api_step: &Yaml) {
+fn assert_observer_api_inputs(api_step: &[(String, Yaml)]) {
     assert_eq!(string(field(api_step, "shell")), "bash");
     let api_env = map_fields(field(api_step, "env"));
     assert_eq!(string(field(api_env, "GH_TOKEN")), "${{ github.token }}");
