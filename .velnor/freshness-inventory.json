@@ -246,7 +246,7 @@
     },
     {
       "name": "reuse",
-      "checked_at": "2026-10-02T19:52:35.362223Z",
+      "checked_at": "2026-10-04T03:55:07Z",
       "pinned": "6.2.0",
       "latest": "6.2.0",
       "source": "https://api.github.com/repos/fsfe/reuse-tool/releases/latest",
@@ -261,7 +261,7 @@
     },
     {
       "name": "python",
-      "checked_at": "2026-10-02T21:48:42.256688+00:00",
+      "checked_at": "2026-10-04T03:55:08Z",
       "pinned": "3.14.8",
       "latest": "3.14.8",
       "source": "https://www.python.org/downloads/",
