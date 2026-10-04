@@ -150,7 +150,15 @@ impl ReleaseManifest {
         self.targets.iter().find(|record| record.target == target)
     }
 
-    /// Validate schema, version, repository, and every target record.
+    /// Validate the separate published asset URL against this manifest.
+    ///
+    /// # Errors
+    pub fn validate_published_asset_url(&self, url: &str, file: &str) -> Result<(), ContractError> {
+        crate::targets::check_release_manifest_artifact(url, &self.version, file, "manifest_asset")
+    }
+
+    /// Validate schema, version, repository, and exactly one record per
+    /// supported target.
     ///
     /// The repository is pinned to the canonical identity and every
     /// artifact URL is bound to this exact version and target (X1); a
@@ -174,6 +182,20 @@ impl ReleaseManifest {
         let mut seen = BTreeSet::new();
         for record in &self.targets {
             check_target(&record.target, file, "targets.target")?;
+            if !crate::targets::is_supported_target(&record.target) {
+                return Err(ContractError::config(
+                    file,
+                    "targets.target",
+                    format!("unsupported_target:{}", record.target),
+                ));
+            }
+            if !seen.insert(record.target.as_str()) {
+                return Err(ContractError::config(
+                    file,
+                    "targets",
+                    format!("duplicate_target:{}", record.target),
+                ));
+            }
             crate::targets::check_release_artifact(
                 &record.artifact,
                 &self.version,
@@ -182,11 +204,13 @@ impl ReleaseManifest {
                 "targets.artifact",
             )?;
             check_sha256(&record.sha256, file, "targets.sha256")?;
-            if !seen.insert(record.target.as_str()) {
+        }
+        for target in crate::targets::SUPPORTED_TARGETS {
+            if !seen.contains(target) {
                 return Err(ContractError::config(
                     file,
                     "targets",
-                    format!("duplicate_target:{}", record.target),
+                    format!("missing_target:{target}"),
                 ));
             }
         }

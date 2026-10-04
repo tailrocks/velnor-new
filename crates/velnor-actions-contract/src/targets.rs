@@ -47,7 +47,45 @@ pub const EXPECTED_REPOSITORY: &str = "tailrocks/velnor-new";
 const ASSET_HOST: &str = "github.com";
 
 /// Fixed release-asset path prefix under the host.
-const ASSET_PREFIX: &str = "/tailrocks/velnor-new/releases/download/";
+const ASSET_PREFIX: &str = "tailrocks/velnor-new/releases/download/";
+
+/// Validate a release-asset URL and return its final path segment.
+///
+/// # Errors
+fn checked_release_asset_name<'a>(
+    url: &'a str,
+    version: &str,
+    file: &str,
+    key: &str,
+) -> Result<&'a str, crate::errors::ContractError> {
+    let bad = || crate::errors::ContractError::config(file, key, "unexpected_artifact_url");
+    if url.bytes().any(|b| {
+        b.is_ascii_whitespace() || b.is_ascii_control() || matches!(b, b'$' | b'`' | b'?' | b'#')
+    }) {
+        return Err(bad());
+    }
+    let Some(rest) = url.strip_prefix("https://") else {
+        return Err(bad());
+    };
+    let Some((host, path)) = rest.split_once('/') else {
+        return Err(bad());
+    };
+    if host != ASSET_HOST {
+        return Err(bad());
+    }
+    let Some(trailer) = path.strip_prefix(ASSET_PREFIX) else {
+        return Err(bad());
+    };
+    // Split from the right: seed tags legitimately contain slashes.
+    let Some((tag, asset)) = trailer.rsplit_once('/') else {
+        return Err(bad());
+    };
+    let single = !tag.is_empty() && !tag.contains('/') && tag != "latest";
+    if asset.is_empty() || (!single && !is_seed_tag_for_version(tag, version)) {
+        return Err(bad());
+    }
+    Ok(asset)
+}
 
 /// Validate one release-asset URL against its manifest version and target.
 ///
@@ -77,39 +115,36 @@ pub fn check_release_artifact(
     file: &str,
     key: &str,
 ) -> Result<(), crate::errors::ContractError> {
-    let bad = || crate::errors::ContractError::config(file, key, "unexpected_artifact_url");
-    if url.bytes().any(|b| {
-        b.is_ascii_whitespace() || b.is_ascii_control() || matches!(b, b'$' | b'`' | b'?' | b'#')
-    }) {
-        return Err(bad());
-    }
-    let Some(rest) = url.strip_prefix("https://") else {
-        return Err(bad());
-    };
-    let Some((host, path)) = rest.split_once('/') else {
-        return Err(bad());
-    };
-    if host != ASSET_HOST {
-        return Err(bad());
-    }
-    let path = format!("/{path}");
-    let Some(trailer) = path.strip_prefix(ASSET_PREFIX) else {
-        return Err(bad());
-    };
-    // Split from the right: the asset is always the last segment, and
-    // seed tags legitimately contain slashes (see below).
-    let Some((tag, asset)) = trailer.rsplit_once('/') else {
-        return Err(bad());
-    };
-    if asset.is_empty() {
-        return Err(bad());
-    }
-    let single = !tag.is_empty() && !tag.contains('/') && tag != "latest";
-    if !single && !is_seed_tag_for_version(tag, version) {
-        return Err(bad());
-    }
+    let asset = checked_release_asset_name(url, version, file, key)?;
     if asset != asset_filename(version, target) {
-        return Err(bad());
+        return Err(crate::errors::ContractError::config(
+            file,
+            key,
+            "unexpected_artifact_url",
+        ));
+    }
+    Ok(())
+}
+
+/// Validate the separately published release-manifest asset URL.
+///
+/// The JSON manifest records target assets but not its own URL. Callers
+/// handling the release asset URL use this check to enforce the canonical
+/// filename alongside the same host and release-path rules as binaries.
+/// # Errors
+pub fn check_release_manifest_artifact(
+    url: &str,
+    version: &str,
+    file: &str,
+    key: &str,
+) -> Result<(), crate::errors::ContractError> {
+    let asset = checked_release_asset_name(url, version, file, key)?;
+    if asset != RELEASE_MANIFEST_FILENAME {
+        return Err(crate::errors::ContractError::config(
+            file,
+            key,
+            "unexpected_artifact_url",
+        ));
     }
     Ok(())
 }
