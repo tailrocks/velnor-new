@@ -82,17 +82,22 @@ pub(crate) fn share_lanes(
             .iter()
             .any(|step| step.name == crate::mbx_bundle::MBX_BUNDLE_RESTORE_NAME);
         let id = has_mbx_cache.then(|| MBX_SHARED_CALL_ID.to_owned());
+        let cache_policy = if has_mbx_cache {
+            crate::mbx_bundle::shared_lane_policy(&common, ctx.pull_request_cache_policy)?
+        } else {
+            ctx.pull_request_cache_policy
+        };
         if has_mbx_cache {
-            crate::mbx_bundle::bind_shared_lane_outputs(
-                &mut hosted_extra,
-                ctx.pull_request_cache_policy,
-            )?;
-            crate::mbx_bundle::bind_shared_lane_outputs(
-                &mut local_extra,
-                ctx.pull_request_cache_policy,
-            )?;
+            crate::mbx_bundle::bind_shared_lane_outputs(&mut hosted_extra, cache_policy)?;
+            crate::mbx_bundle::bind_shared_lane_outputs(&mut local_extra, cache_policy)?;
         }
-        files.push(composite_file(logical, &common, ctx, has_mbx_cache)?);
+        files.push(composite_file(
+            logical,
+            &common,
+            ctx,
+            has_mbx_cache,
+            cache_policy,
+        )?);
         let call = SharedCall { uses, id };
         calls.insert(hosted_id.clone(), call.clone());
         calls.insert(local_id.clone(), call);
@@ -166,6 +171,7 @@ fn composite_file(
     steps: &[Step],
     ctx: &RenderContext,
     has_mbx_cache: bool,
+    cache_policy: PullRequestCachePolicy,
 ) -> Result<RenderedFile, RenderError> {
     let mut rendered = Vec::with_capacity(steps.len());
     for step in steps {
@@ -200,7 +206,7 @@ fn composite_file(
                 ]),
             ),
         ];
-        if ctx.pull_request_cache_policy == PullRequestCachePolicy::SameRepositoryScoped {
+        if cache_policy == PullRequestCachePolicy::SameRepositoryScoped {
             outputs.push((
                 "mbx-pr-cache-allowed".to_owned(),
                 crate::yaml::Yaml::Map(vec![

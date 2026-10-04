@@ -18,11 +18,14 @@ use crate::RenderError;
 use crate::cache_steps::{MBX_ACTION_NAME, TOOLS_RESTORE_USES, TOOLS_SAVE_USES, is_mbx_action};
 #[path = "mbx_bundle_identity.rs"]
 mod identity;
+#[path = "mbx_bundle_lane.rs"]
+mod lane;
 #[path = "mbx_bundle_pr_cache.rs"]
 mod pr_cache;
 #[path = "mbx_bundle_qualification.rs"]
 mod qualification;
 use identity::{CacheIdentity, import_guard, plan_writers};
+pub(crate) use lane::{bind_shared_lane_outputs, shared_lane_policy};
 
 pub(crate) const MBX_PR_CACHE_ALLOWED_OUTPUT: &str = pr_cache::PR_CACHE_ALLOWED_OUTPUT;
 
@@ -105,11 +108,7 @@ pub(crate) fn append_single_bundle_saves(
         let identity = identities.get(id).ok_or_else(|| {
             RenderError::InvalidWorkflow(format!("mbx_cache_identity_missing:{id}"))
         })?;
-        let cache_policy = if identity.qualification_run_scoped() {
-            PullRequestCachePolicy::ReadOnly
-        } else {
-            pull_request_cache_policy
-        };
+        let cache_policy = identity.effective_policy(pull_request_cache_policy);
         reject_private_env_overrides(job, id)?;
         pin_local_backend(job, id)?;
         insert_root_step(job)?;
@@ -266,42 +265,6 @@ fn insert_writer_steps(
     )?);
     job.steps
         .push(save_step(qualification_role, pull_request_cache_policy)?);
-    Ok(())
-}
-
-/// Rebind elected save steps to outputs exported by the shared composite call.
-///
-/// The composite owns the key and restore steps, so their inner step ids are
-/// unavailable to the containing workflow job. This is called only for paired
-/// lanes; an absent writer is valid on the reader lane.
-pub(crate) fn bind_shared_lane_outputs(
-    steps: &mut [Step],
-    pull_request_cache_policy: PullRequestCachePolicy,
-) -> Result<(), RenderError> {
-    for step in steps {
-        if step.name == MBX_BUNDLE_EXPORT_NAME {
-            let condition = step.condition.as_mut().ok_or_else(|| {
-                RenderError::InvalidWorkflow("mbx_shared_export_condition_missing".to_owned())
-            })?;
-            pr_cache::rebind_lane_condition(condition, pull_request_cache_policy)?;
-        } else if step.name == MBX_BUNDLE_SAVE_NAME {
-            let condition = step.condition.as_mut().ok_or_else(|| {
-                RenderError::InvalidWorkflow("mbx_shared_save_condition_missing".to_owned())
-            })?;
-            pr_cache::rebind_lane_condition(condition, pull_request_cache_policy)?;
-            let StepKind::Action { with, .. } = &mut step.kind else {
-                return Err(RenderError::InvalidWorkflow(
-                    "mbx_shared_save_not_action".to_owned(),
-                ));
-            };
-            let Some(key) = with.get_mut("key") else {
-                return Err(RenderError::InvalidWorkflow(
-                    "mbx_shared_save_key_missing".to_owned(),
-                ));
-            };
-            SHARED_CACHE_KEY.clone_into(key);
-        }
-    }
     Ok(())
 }
 

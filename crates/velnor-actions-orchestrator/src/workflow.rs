@@ -2,13 +2,15 @@
 //! W1 emission wiring lives in the child module below.
 #[path = "wire_w1.rs"]
 pub(crate) mod wire_w1;
+#[path = "workflow_context.rs"]
+mod workflow_context;
 
 use std::collections::BTreeMap;
 
 use velnor_actions_actionlint::{ActionlintConfigInput, IgnorePolicy, StepSyntax};
 use velnor_actions_contract::{
-    Concurrency, GeneratorValidation, Job, Permissions, Stack, Step, StepKind, Trigger,
-    ValidatorKind, VelnorConfig, VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
+    Concurrency, Job, Permissions, Stack, Step, StepKind, Trigger, VelnorConfig,
+    VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
 };
 use velnor_actions_mise::{
     PREPARE_RUST_COMPONENTS_STEP, PrepareRustComponents, ToolCatalog, ToolHomes,
@@ -16,17 +18,14 @@ use velnor_actions_mise::{
 use velnor_actions_rust::{CompileDriver, TestRunner};
 use velnor_actions_workflow_renderer::render::{
     CONCURRENCY_CANCEL, CONCURRENCY_GROUP, EXPECTED_PR_TYPES, FINAL_JOB_ID, PLAN_JOB_ID,
-    PUBLISH_JOB_ID, RenderContext, ValidatorCommand, WORKFLOW_PATH,
+    PUBLISH_JOB_ID, RenderContext, WORKFLOW_PATH,
 };
-use velnor_actions_workflow_renderer::steps::{
-    DENY_STEP_NAME, MACHETE_STEP_NAME, PLAN_OPERATION, REQUEST_DIR_PREFIX, STAGED_BINARY_PREFIX,
-};
+use velnor_actions_workflow_renderer::steps::PLAN_OPERATION;
 
 use crate::OrchestratorError;
 use crate::discover::Discovery;
 use crate::pins::consumer_acquire_step;
 use crate::utf8::{strings_of, strings_of_env};
-use crate::vectors::{ZIZMOR_STEP_NAME, candidate_spec, deny_argv, machete_argv, zizmor_argv};
 use crate::workflow_jobs::{final_job, lint_job, plan_job};
 
 pub(crate) use crate::workflow_jobs::LINT_JOB_ID;
@@ -177,7 +176,7 @@ pub(crate) fn build_workflow(
         },
         jobs,
     };
-    let context = render_context(config, label, &version, &catalog, use_rust)?;
+    let context = workflow_context::render_context(config, label, &version, &catalog, use_rust)?;
     let actionlint = actionlint_input(config, &version, label);
     Ok(WorkflowPlan {
         ir,
@@ -318,65 +317,6 @@ pub(crate) fn prepare_rust_components_step(
         .map_err(|problem| OrchestratorError::Contract { problem })?;
     velnor_actions_workflow_renderer::ambient_shell_step(PREPARE_RUST_COMPONENTS_STEP, run, env)
         .map_err(OrchestratorError::from)
-}
-
-/// Renderer scalars: version, label, staged path, request dir, pins.
-///
-/// The plan-consumer env follows the plan role: pure-tofu plans run
-/// the plan-op and freshness steps triple-less, every other role
-/// keeps the owned-homes triple.
-fn render_context(
-    config: &VelnorConfig,
-    label: &str,
-    version: &str,
-    catalog: &ToolCatalog,
-    plan_needs_rust: bool,
-) -> Result<RenderContext, OrchestratorError> {
-    debug_assert!(REQUEST_DIR.starts_with(REQUEST_DIR_PREFIX));
-    let velnor = config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1;
-    let validator_commands = if velnor {
-        vec![
-            ValidatorCommand {
-                validator: ValidatorKind::CargoDeny,
-                name: DENY_STEP_NAME.to_owned(),
-                argv: deny_argv()?,
-            },
-            ValidatorCommand {
-                validator: ValidatorKind::CargoMachete,
-                name: MACHETE_STEP_NAME.to_owned(),
-                argv: machete_argv()?,
-            },
-            ValidatorCommand {
-                validator: ValidatorKind::Zizmor,
-                name: ZIZMOR_STEP_NAME.to_owned(),
-                argv: zizmor_argv(catalog)?,
-            },
-        ]
-    } else {
-        Vec::new()
-    };
-    let candidate =
-        if velnor && config.workflow.generator_validation == GeneratorValidation::Candidate {
-            Some(candidate_spec(catalog)?)
-        } else {
-            None
-        };
-    Ok(RenderContext {
-        generator_version: version.to_owned(),
-        runs_on: label.to_owned(),
-        staged_binary: format!("{STAGED_BINARY_PREFIX}{version}"),
-        request_dir: REQUEST_DIR.to_owned(),
-        checkout_uses: CHECKOUT_USES.to_owned(),
-        validator_commands,
-        candidate,
-        preseed: false,
-        pull_request_cache_policy: config.workflow.pull_request_cache_policy,
-        plan_consumer_env: crate::matrix_step::task_step_env(
-            catalog,
-            &std::collections::BTreeMap::new(),
-            plan_needs_rust,
-        )?,
-    })
 }
 
 /// Actionlint input: generated workflow path plus policy-graded ignores.

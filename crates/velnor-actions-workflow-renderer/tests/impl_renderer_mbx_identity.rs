@@ -52,7 +52,7 @@ fn explicit_qualification_scope_has_one_designated_writer() -> Result<(), Render
 }
 
 #[test]
-fn shared_scope_without_explicit_writer_roles_fails_closed() -> Result<(), RenderError> {
+fn qualification_scope_without_explicit_roles_fails_closed() -> Result<(), RenderError> {
     let mut first = super::impl_renderer_mbx_bundle::mbx_job("probe-first", "1.21.1")?;
     let mut second = super::impl_renderer_mbx_bundle::mbx_job("probe-second", "1.21.1")?;
     set_scope(&mut first.1, "qualification-mbx-v1/probe-v1", None);
@@ -63,11 +63,9 @@ fn shared_scope_without_explicit_writer_roles_fails_closed() -> Result<(), Rende
         None,
         &fixture_ctx(),
     );
-    assert!(
-        result.is_err_and(|error| {
-            format!("{error:?}").contains("shared_scope_needs_writer_roles")
-        })
-    );
+    assert!(result.is_err_and(|error| {
+        format!("{error:?}").contains("qualification_scope_requires_explicit_role")
+    }));
     Ok(())
 }
 
@@ -195,6 +193,7 @@ fn hosted_and_scale_set_copies_elect_one_cache_writer() -> Result<(), RenderErro
         composite.contains("value: ${{ steps.mbx-bundle-key.outputs.primary }}"),
         "{composite}"
     );
+    assert!(!composite.contains("mbx-pr-cache-allowed:"), "{composite}");
     Ok(())
 }
 

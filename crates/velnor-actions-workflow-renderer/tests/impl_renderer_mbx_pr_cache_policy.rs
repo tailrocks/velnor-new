@@ -150,6 +150,71 @@ fn qualification_roles_restore_exact_keys() -> Result<(), RenderError> {
 }
 
 #[test]
+fn paired_qualification_lanes_keep_read_only_policy_under_opt_in() -> Result<(), RenderError> {
+    let seed = qualification_job("mbx-pr-qualification-seed", true)?;
+    let hosted = qualification_job("mbx-pr-qualification__hosted", false)?;
+    let mut local = qualification_job("mbx-pr-qualification__local", false)?;
+    let selector = ScaleSetSelector::try_new(
+        SCALE_SET_NAME,
+        &[VELNOR_LABEL.to_owned(), SCALE_SET_NAME.to_owned()],
+    )
+    .map_err(|_| RenderError::InvalidWorkflow("bad_scale_set".to_owned()))?;
+    local.1.runs_on = selector.token();
+    let mut context = fixture_ctx();
+    context.pull_request_cache_policy = PullRequestCachePolicy::SameRepositoryScoped;
+    let rendered = render_workflow_ir_strict_shared(
+        &fixture_ir(vec![seed, hosted, local]),
+        WorkflowPolicy::ConsumerV1,
+        None,
+        &context,
+        &mise(),
+    )?;
+
+    assert_eq!(
+        rendered
+            .yaml
+            .matches("name: Export MBX single bundle")
+            .count(),
+        1
+    );
+    assert_eq!(
+        rendered
+            .yaml
+            .matches("name: Save MBX single bundle")
+            .count(),
+        1
+    );
+    assert!(
+        !rendered.yaml.contains("pr-cache-allowed"),
+        "{}",
+        rendered.yaml
+    );
+    assert!(!rendered.yaml.contains("MBX_PR_CACHE_POLICY"));
+    assert_eq!(rendered.yaml.matches("restore-keys:").count(), 0);
+    let export = step_window(
+        &rendered.yaml,
+        "Export MBX single bundle",
+        "Save MBX single bundle",
+    );
+    let save = step_window(&rendered.yaml, "Save MBX single bundle", "Save Mise tools");
+    for condition in [export, save] {
+        assert!(
+            condition.contains("github.event_name == 'push'"),
+            "{condition}"
+        );
+        assert!(!condition.contains("pull_request"), "{condition}");
+        assert!(!condition.contains("pr-cache-allowed"), "{condition}");
+    }
+    let composite = rendered
+        .shared
+        .first()
+        .ok_or_else(|| RenderError::InvalidWorkflow("missing_shared_action".to_owned()))?;
+    assert!(!composite.bytes.contains("mbx-pr-cache-allowed:"));
+    assert!(!composite.bytes.contains("pr-cache-allowed"));
+    Ok(())
+}
+
+#[test]
 fn paired_lanes_export_pr_authorization_and_keep_one_writer() -> Result<(), RenderError> {
     let hosted = mbx_job("rust-demo__hosted", "1.21.1")?;
     let mut local = mbx_job("rust-demo__local", "1.21.1")?;

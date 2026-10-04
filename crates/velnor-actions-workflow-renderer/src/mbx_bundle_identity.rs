@@ -2,7 +2,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_actions_contract::{Job, Step, StepKind};
+use velnor_actions_contract::{Job, PullRequestCachePolicy, Step, StepKind};
 
 use super::{
     HOSTED_SUFFIX, MBX_QUALIFICATION_SCOPE_PREFIX, MBX_SCOPE_INPUT, MBX_WRITER_INPUT, SCALE_SUFFIX,
@@ -59,6 +59,14 @@ impl CacheIdentity {
         self.writer.is_some() && self.scope.starts_with(MBX_QUALIFICATION_SCOPE_PREFIX)
     }
 
+    /// Qualification identities cannot inherit a workflow-wide PR opt-in.
+    pub(super) fn effective_policy(
+        &self,
+        requested: PullRequestCachePolicy,
+    ) -> PullRequestCachePolicy {
+        effective_policy(requested, &self.scope)
+    }
+
     /// Return the explicit qualification writer/reader role, if reserved.
     pub(super) fn qualification_role(&self) -> Option<bool> {
         if self.qualification_run_scoped() {
@@ -66,6 +74,18 @@ impl CacheIdentity {
         } else {
             None
         }
+    }
+}
+
+/// One policy authority shared by job lifecycle and paired-lane rendering.
+pub(super) fn effective_policy(
+    requested: PullRequestCachePolicy,
+    scope: &str,
+) -> PullRequestCachePolicy {
+    if scope.starts_with(MBX_QUALIFICATION_SCOPE_PREFIX) {
+        PullRequestCachePolicy::ReadOnly
+    } else {
+        requested
     }
 }
 
@@ -119,10 +139,17 @@ fn identity_for_action(id: &str, job: &Job, step: &Step) -> Result<CacheIdentity
         return Err(identity_error(id, "bad_cache_scope"));
     }
     let writer = parse_writer_role(id, with.get(MBX_WRITER_INPUT))?;
-    if writer.is_some()
-        && (!scope.starts_with(MBX_QUALIFICATION_SCOPE_PREFIX)
-            || scope.len() == MBX_QUALIFICATION_SCOPE_PREFIX.len())
-    {
+    let qualification_scope = scope.starts_with(MBX_QUALIFICATION_SCOPE_PREFIX);
+    if qualification_scope && scope.len() == MBX_QUALIFICATION_SCOPE_PREFIX.len() {
+        return Err(identity_error(id, "bad_cache_scope"));
+    }
+    if qualification_scope && writer.is_none() {
+        return Err(identity_error(
+            id,
+            "qualification_scope_requires_explicit_role",
+        ));
+    }
+    if !qualification_scope && writer.is_some() {
         return Err(identity_error(
             id,
             "shared_scope_outside_qualification_namespace",
