@@ -176,3 +176,40 @@ The owner then obtained a new independent exact review with explicit
 The fresh review replaces the earlier provisional triage; it does not retroactively
 make the old reviewer compliant. No product-runtime claim or PR merge follows
 from this documentation correction.
+
+## Follow-up descendant spawn incident
+
+On 2026-10-04 at 06:37 UTC, a compliant release-workflow implementation actor
+spawned two grandchildren without explicit model/effort overrides and requested
+full-history forks. The grandchildren inherited the older model default. The
+parent actor itself was `gpt-6-luna/max`; parent compliance did not propagate to
+new child spawns.
+
+| Evidence | Value |
+| --- | --- |
+| Parent session/log | `01a105a0-e4c4-7f61-ba91-ea83879d678c`; `rollout-2026-10-04T13-36-32-01a105a0-e4c4-7f61-ba91-ea83879d678c.jsonl` |
+| Parent latest turn | `01a105a0-e7b1-7ca0-807b-79dea9bd61f4`, `2026-10-04T06:57:52.504Z`, `gpt-6-luna/max` |
+| First spawn | Parent log zero-based record index 36 (line 37), `2026-10-04T06:37:12.959Z`; call `fc_0837f7d3faf136bb016ac1f416c7e087d08e5f756ec54c2dad`; model/effort omitted, `fork_turns=all` |
+| First returned handle | Parent log zero-based record index 39 (line 40): `/root/velnor_coordinator_v2/release_exact_artifact_qualification_fix_v7/release_qual_research` |
+| First invalid turn | `01a105a1-8313-7253-917e-4650b4191b74`, `2026-10-04T06:37:16.049Z`, actual `gpt-5.6-luna/max`; child log `rollout-2026-10-04T13-37-13-01a105a1-81a1-7683-97b6-bd0474c2f07e.jsonl` |
+| Second spawn | Parent log zero-based record index 42 (line 43), `2026-10-04T06:37:16.626Z`; call `fc_0837f7d3faf136bb016ac1f41ac10c87d0a9d3233ef2fb5f59`; model/effort omitted, `fork_turns=all` |
+| Second returned handle | Parent log zero-based record index 45 (line 46): `/root/velnor_coordinator_v2/release_exact_artifact_qualification_fix_v7/bootstrap_contract` |
+| Second invalid turn | `01a105a1-904a-7003-8234-bb44e455576e`, `2026-10-04T06:37:19.134Z`, actual `gpt-5.6-luna/max`; child log `rollout-2026-10-04T13-37-16-01a105a1-8fde-7de3-8b2c-0df03ed99344.jsonl` |
+
+Both invalid actors were interrupted, and their reports are not accepted as
+review evidence. The same implementation parent started explicit
+`gpt-6-luna/max`, `fork_turns=none` replacement research actors:
+`release_qual_research_v2` verified at turn
+`01a105a1-dee8-70e1-b5cd-88724faf774f` (`06:37:39.400Z`) and
+`bootstrap_contract_v2` at `01a105a2-119d-7802-8296-aee8198906a5`
+(`06:37:53.112Z`). The first replacement's narrow metadata recommendation was
+rejected; use the second report only as source-contract research, not as
+independent review. The workflow source still requires exact-candidate behavior
+qualification and a separate allowed-model review.
+
+The enabling condition was decentralized worker spawning with inherited
+defaults. `AGENTS.md` now assigns all spawns to root or the task coordinator;
+workers request bounded follow-up work instead. New spawns must set model,
+effort, and `fork_turns=none`, then verify the exact handle's latest turn
+context before relying on output. This audit does not treat coordinator message
+delivery as independently verified evidence.
