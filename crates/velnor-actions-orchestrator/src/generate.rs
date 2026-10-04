@@ -26,6 +26,10 @@ pub(crate) mod guards;
 #[path = "self_repo_gap.rs"]
 mod self_repo_gap;
 
+/// Preserve repository-owned entries while replacing generated output.
+#[path = "generate_preserve.rs"]
+mod preserve;
+
 /// Re-exported snapshot: the `generate::ToolSnapshot` path is stable API.
 pub use guards::ToolSnapshot;
 
@@ -239,8 +243,7 @@ fn replace_in_place(
     }
     let staging = tempfile::tempdir_in(root)
         .map_err(|err| OrchestratorError::io(root.display().to_string(), err.to_string()))?;
-    let staged = staging.path().join(".github");
-    write_tree(&staged, tree)?;
+    let staged = preserve::stage_in_place(&target, staging.path(), tree)?;
     if !same_filesystem(staging.path(), root)? {
         return Err(OrchestratorError::Contract {
             problem: "cross_filesystem_staging".to_owned(),
@@ -328,7 +331,7 @@ fn write_preview(
     for rel in check_tree_paths(tree)? {
         guard::check_no_symlink(&canonical, &rel, is_symlink)?;
     }
-    write_tree(&canonical.join(".github"), tree)
+    preserve::write_preview(&prep.root.join(".github"), &canonical.join(".github"), tree)
 }
 
 /// Staged tree writing: regular files and symbolic links.
