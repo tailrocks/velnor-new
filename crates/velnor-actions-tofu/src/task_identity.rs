@@ -72,7 +72,7 @@ pub enum SlotState {
 /// Typed tofu task-identity extension (cache §1); unknown schemas disable reuse.
 #[derive(Debug, Clone, Serialize)]
 pub struct TofuTaskIdentityExtension {
-    /// Tofu root key (`root` or the root directory).
+    /// Exact Tofu root key (`dir-` plus lowercase UTF-8 hex).
     pub unit_id: String,
     /// Workspace identity digest.
     pub workspace_id: String,
@@ -255,6 +255,7 @@ pub fn provider_toolchain_entries(
 ) -> Result<Vec<String>, ContractError> {
     use velnor_actions_contract::canonical::digest_b3_typed;
     use velnor_actions_contract::canonical_json_bytes;
+    crate::root_for_key(unit_key)?;
     let slot = match TofuTaskKind::parse(kind_spelling)? {
         TofuTaskKind::Fmt => "excluded:kind_does_not_read_lockfile",
         TofuTaskKind::InitForValidate | TofuTaskKind::Validate => "lockfile",
@@ -284,6 +285,7 @@ pub fn toolchain_inputs_for_task(
     specs: Vec<String>,
 ) -> Result<velnor_actions_contract::cachekey::ToolchainInputs, ContractError> {
     use velnor_actions_contract::cachekey::ToolchainInputs;
+    crate::normalized_root_for_proposal(task)?;
     let mut specs = specs;
     specs.sort();
     let spec = specs.first().map_or("", String::as_str);
