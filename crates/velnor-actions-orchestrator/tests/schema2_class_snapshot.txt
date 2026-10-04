@@ -193,9 +193,9 @@
       - name: Require cache miss
         env:
           HIT: ${{ steps.empty.outputs.cache-hit }}
-        run: "test \"$HIT\" = false"
+        run: "test -z \"$HIT\" || test \"$HIT\" = false"
       - name: Write spaced path
-        run: "mkdir -p \"g4 cache\" && printf '%s\\n' cache-ok > \"g4 cache/note.txt\""
+        run: "mkdir -p \"g4 cache\" && printf '%s\n' cache-ok > \"g4 cache/note.txt\""
       - name: Save spaced path
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
@@ -233,9 +233,9 @@
       - name: Require cache miss
         env:
           HIT: ${{ steps.empty.outputs.cache-hit }}
-        run: "test \"$HIT\" = false"
+        run: "test -z \"$HIT\" || test \"$HIT\" = false"
       - name: Write spaced path
-        run: "mkdir -p \"g4 cache\" && printf '%s\\n' cache-ok > \"g4 cache/note.txt\""
+        run: "mkdir -p \"g4 cache\" && printf '%s\n' cache-ok > \"g4 cache/note.txt\""
       - name: Save spaced path
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:

@@ -14,9 +14,9 @@ const SAVE: &str = "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
 const EMPTY_KEY: &str = "g4-empty-${{ github.run_id }}-${{ github.job }}";
 const SPACE_KEY: &str = "g4-space-${{ github.run_id }}-${{ github.job }}";
 const SPACE_PATH: &str = "g4 cache/note.txt";
-const WRITE: &str = "mkdir -p \"g4 cache\" && printf '%s\\n' cache-ok > \"g4 cache/note.txt\"";
+const WRITE: &str = "mkdir -p \"g4 cache\" && printf '%s\n' cache-ok > \"g4 cache/note.txt\"";
 const REMOVE: &str = "rm -f \"g4 cache/note.txt\"";
-const MISS: &str = "test \"$HIT\" = false";
+const MISS: &str = "test -z \"$HIT\" || test \"$HIT\" = false";
 const HIT: &str = "grep -qx cache-ok \"g4 cache/note.txt\" && test \"$HIT\" = true";
 
 /// Hosted and scale-set jobs for `inputs.mode == 'empty-cache'`.
@@ -96,5 +96,61 @@ fn path_value(path: &str) -> Yaml {
         Yaml::quoted(path)
     } else {
         Yaml::str(path)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{MISS, WRITE};
+    use std::process::Command;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static NEXT_TEMP_DIR: AtomicUsize = AtomicUsize::new(0);
+
+    #[test]
+    fn cache_miss_accepts_unset_and_empty_outputs_only() -> std::io::Result<()> {
+        for (hit, expected) in [
+            (None, true),
+            (Some(""), true),
+            (Some("false"), true),
+            (Some("true"), false),
+            (Some("unexpected"), false),
+        ] {
+            let mut command = Command::new("sh");
+            command.arg("-c").arg(MISS);
+            match hit {
+                Some(value) => {
+                    command.env("HIT", value);
+                }
+                None => {
+                    command.env_remove("HIT");
+                }
+            }
+            assert_eq!(command.status()?.success(), expected, "HIT={hit:?}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn write_spaced_path_emits_a_line_terminated_payload() -> std::io::Result<()> {
+        assert!(WRITE.contains("printf '%s\n' cache-ok"));
+
+        let dir = std::env::temp_dir().join(format!(
+            "velnor-empty-cache-{}-{}",
+            std::process::id(),
+            NEXT_TEMP_DIR.fetch_add(1, Ordering::Relaxed)
+        ));
+        std::fs::create_dir(&dir)?;
+        let status = Command::new("sh")
+            .arg("-c")
+            .arg(WRITE)
+            .current_dir(&dir)
+            .status();
+        let contents = std::fs::read(dir.join("g4 cache/note.txt"));
+        std::fs::remove_dir_all(&dir)?;
+
+        assert!(status?.success());
+        assert_eq!(contents?, b"cache-ok\n");
+        Ok(())
     }
 }
