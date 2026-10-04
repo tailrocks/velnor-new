@@ -147,6 +147,59 @@ fn repository_service_casing_preserves_canonical_identity() {
     ));
 }
 
+#[test]
+fn attempt_workflow_path_accepts_exact_bare_and_ref_forms() {
+    let (_, mut parent) = fixture();
+    let workflow = ".github/workflows/build.yml";
+    parent.ref_ = "refs/heads/testmain".to_owned();
+    parent.workflow_ref = format!("o/r/{workflow}@refs/heads/testmain");
+
+    for path in [
+        workflow.to_owned(),
+        format!("{workflow}@testmain"),
+        format!("{workflow}@refs/heads/testmain"),
+    ] {
+        let mut record = attempt_record(&parent);
+        record["path"] = serde_json::json!(path);
+        assert!(authentic_attempt(
+            &record.to_string(),
+            &parent,
+            "o/r",
+            "testmain",
+            workflow,
+        ));
+    }
+
+    for path in [
+        format!("{workflow}@other"),
+        format!("{workflow}@testmain-extra"),
+        format!("{workflow}@refs/heads/other"),
+        format!("{workflow}@refs/heads/testmain/extra"),
+        format!("{workflow}.bak@testmain"),
+    ] {
+        let mut record = attempt_record(&parent);
+        record["path"] = serde_json::json!(path);
+        assert!(!authentic_attempt(
+            &record.to_string(),
+            &parent,
+            "o/r",
+            "testmain",
+            workflow,
+        ));
+    }
+
+    let mut wrong_branch = attempt_record(&parent);
+    wrong_branch["path"] = serde_json::json!(format!("{workflow}@testmain"));
+    wrong_branch["head_branch"] = serde_json::json!("other");
+    assert!(!authentic_attempt(
+        &wrong_branch.to_string(),
+        &parent,
+        "o/r",
+        "testmain",
+        workflow,
+    ));
+}
+
 fn real_api_manifest(run_id: u64, run_attempt: u64, source: &str) -> BaselineManifest {
     let mut manifest = manifest_for(source);
     manifest.run_id = run_id;

@@ -154,7 +154,9 @@ pub(crate) fn authentic_attempt(
         && run["status"] == "completed"
         && run["conclusion"] == "success"
         && run["head_branch"] == branch
-        && run["path"] == workflow
+        && run["path"]
+            .as_str()
+            .is_some_and(|path| attempt_path_matches(path, workflow, branch))
         && run["repository"]["full_name"]
             .as_str()
             .and_then(crate::origin::validate_repository_slug)
@@ -165,6 +167,20 @@ pub(crate) fn authentic_attempt(
         && workflow_ref == format!("refs/heads/{branch}")
         && manifest.ref_ == format!("refs/heads/{branch}")
         && manifest.repository_id == digest_b3(format!("github.com/{repo}").as_bytes())
+}
+
+/// Accept the API's bare path or its exact `path@branch` form.
+fn attempt_path_matches(actual: &str, workflow: &str, branch: &str) -> bool {
+    if actual == workflow {
+        return true;
+    }
+    let Some(suffix) = actual
+        .strip_prefix(workflow)
+        .and_then(|remainder| remainder.strip_prefix('@'))
+    else {
+        return false;
+    };
+    suffix == branch || suffix.strip_prefix("refs/heads/") == Some(branch)
 }
 
 #[cfg(test)]
