@@ -74,6 +74,7 @@ RUN curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL -o /tmp/docker.tgz \
         /usr/local/lib/docker/cli-plugins/docker-buildx
 
 COPY entrypoint.sh /usr/local/bin/velnor-runner-entrypoint
+COPY wait-docker-sock.sh /usr/local/bin/wait-docker-sock
 COPY tar-shim.sh /usr/local/bin/velnor-tar
 COPY tar-absolute.sh /usr/local/bin/tar-absolute.sh
 COPY tar-extract.sh /usr/local/bin/tar-extract.sh
@@ -81,7 +82,7 @@ COPY tar-member.pl /usr/local/bin/tar-member.pl
 COPY tar-pax.pl /usr/local/bin/velnor-tar-pax
 # zstd and git-lfs are installed before the tar divert. dpkg needs GNU tar to unpack.
 # After the divert, /usr/bin/tar is the BusyBox shim, not GNU tar.
-RUN chmod 0755 /usr/local/bin/velnor-runner-entrypoint /usr/local/bin/velnor-tar /usr/local/bin/velnor-tar-pax /usr/local/bin/tar-member.pl \
+RUN chmod 0755 /usr/local/bin/velnor-runner-entrypoint /usr/local/bin/wait-docker-sock /usr/local/bin/velnor-tar /usr/local/bin/velnor-tar-pax /usr/local/bin/tar-member.pl \
     && apt-get update \
     && apt-get install -y --no-install-recommends build-essential clang cmake git-lfs jq libclang-dev libssl-dev perl pkg-config protobuf-compiler python3 zstd \
     && cc --version \

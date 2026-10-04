@@ -50,4 +50,6 @@ fi
 
 cd "$root"
 # Shell variable only. No export. Image ENV/ARG/labels never carry this.
+# DinD links the public socket after its seed. Wait before the listener.
+/usr/local/bin/wait-docker-sock
 exec "$listener" run --jitconfig "$payload"
