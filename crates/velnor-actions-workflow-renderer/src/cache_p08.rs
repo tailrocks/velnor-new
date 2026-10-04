@@ -1,25 +1,29 @@
-//! P08 qualified caches: built-in Mise, shared sources, Cargo-only fallback.
+//! P08 qualified caches: exact tool payload, shared sources, Cargo-only fallback.
 //!
-//! Tools restore through the Mise action's built-in cache with an explicit
-//! `cache_key` derived from the job's resolved tool specs (same tools share
-//! one entry; job-role names never fork copies) and save through explicit
-//! push-gated `Save Mise tools` steps on the elected writer per key. The
-//! action's built-in save is unreachable (`install: false` disables its
-//! save leg), so setups stay restore-only and never promise a save. The
+//! Tools restore through one explicit `actions/cache` step whose exact key
+//! derives from the job's resolved tool specs (same tools share one entry;
+//! job-role names never fork copies). Its payload includes Mise installs,
+//! Rustup toolchains, and Cargo proxy executables. A matching push-gated
+//! `Save Mise tools` step runs on the elected writer per key. The Mise
+//! action's cache is disabled, so it cannot duplicate the restore. The
 //! legacy `mise-tools-*` key namespace and `ensure_tools_cache` path are
 //! superseded and never emitted. Sources use one shared `actions/cache`
 //! snapshot (plan writes, crates read). Cargo-only projects (no MBX
 //! anywhere) use pinned `Swatinem/rust-cache` (registry-only, shared key);
 //! MBX jobs never do.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
-use velnor_actions_contract::{Job, Step, StepKind};
+use velnor_actions_contract::{Job, StepKind};
 
 use crate::{
-    MiseSetup, RenderError, cache_p08_detect::detector_words, setup::MISE_ACTION_NAME,
-    steps::validate_uses,
+    RenderError,
+    cache_p08_detect::{detect_commands, mise_tool_candidates},
 };
+
+#[path = "cache_p08_setup.rs"]
+mod setup_p08;
+pub use setup_p08::{ensure_setup_p08, mise_setup_step_p08};
 
 pub use crate::cache_elect::elect_mise_cache_writers;
 pub use crate::cache_elect::elect_tofu_provider_savers;
@@ -31,7 +35,7 @@ pub const SAVE_SOURCES_NAME: &str = "Save Cargo sources";
 /// Display name of the Cargo-only cache step.
 pub const RUST_CACHE_NAME: &str = "Restore Cargo registry";
 /// Owned Cargo home expression (`env:` spelling).
-pub const CARGO_HOME_EXPR: &str = "${{ runner.temp }}/velnor/cargo";
+pub const CARGO_HOME_EXPR: &str = "${{ github.workspace }}/.velnor/cache/cargo";
 /// Mise built-in cache key prefix.
 pub const MISE_KEY_PREFIX: &str = "mise-v1";
 
@@ -97,63 +101,21 @@ pub fn infer_job_tools(job: &Job) -> Vec<String> {
 /// Tool specs (`<tool>@<version>`) in one fixed argv.
 fn specs_in_argv(run: &[String]) -> Vec<String> {
     let mut out = Vec::new();
-    let mut take = false;
-    for arg in detector_words(run) {
-        if arg == "install" || arg == "exec" {
-            take = true;
-            continue;
-        }
-        if arg == "--" {
-            take = false;
-            continue;
-        }
-        if take && arg.contains('@') && is_tool_spec(&arg) {
-            out.push(arg);
-        }
+    let detection = detect_commands(run);
+    for command in &detection.commands {
+        out.extend(mise_tool_candidates(&command.words));
+    }
+    if detection.unsupported_mise_syntax {
+        // Invalid by construction. `mise_cache_key_for_tools` rejects this
+        // marker, so unknown shell syntax cannot produce an under-keyed
+        // tools payload.
+        out.push("mise@unsupported-shell-syntax".to_owned());
     }
     out
 }
 
-/// Setup step with qualified built-in cache (`cache:true` + `cache_key`).
-///
-/// Restore-only: every run restores the tools cache, but no setup ever
-/// saves through the action. The pinned `jdx/mise-action` saves only
-/// inside its `install` leg, which Velnor disables (`install: false`
-/// keeps project tool files, tasks, and hooks from running), so a
-/// push-gated `cache_save` expression would promise a save the action
-/// never performs. Push-gated saves are explicit `Save Mise tools`
-/// steps on the elected writer of each key
-/// ([`elect_mise_cache_writers`]); same-repo and fork PRs restore
-/// read-only, since the pinned action has no PR-scoped save to promote
-/// into.
-///
-/// # Errors
-///
-/// Returns [`RenderError`] for invalid pins or cache keys.
-pub fn mise_setup_step_p08(setup: &MiseSetup, cache_key: &str) -> Result<Step, RenderError> {
-    setup.validate()?;
-    if !is_cache_key(cache_key) {
-        return Err(RenderError::BadCommand(format!(
-            "bad_cache_key:{cache_key}"
-        )));
-    }
-    crate::steps::action_step(
-        crate::setup::SETUP_MISE_NAME,
-        &setup.uses,
-        BTreeMap::from([
-            ("version".to_owned(), setup.version.clone()),
-            ("sha256".to_owned(), setup.sha256.clone()),
-            ("install".to_owned(), "false".to_owned()),
-            ("env".to_owned(), "false".to_owned()),
-            ("cache".to_owned(), "true".to_owned()),
-            ("cache_save".to_owned(), "false".to_owned()),
-            ("cache_key".to_owned(), cache_key.to_owned()),
-        ]),
-    )
-}
-
 /// True for catalog version spellings (`2026.9.18`); never `latest`.
-fn is_catalog_version(value: &str) -> bool {
+pub(super) fn is_catalog_version(value: &str) -> bool {
     !value.is_empty()
         && value != "latest"
         && !value.contains("latest")
@@ -164,181 +126,33 @@ fn is_catalog_version(value: &str) -> bool {
         && !value.contains("${{")
 }
 
-/// True for `<tool>@<version>` specs (backend paths allowed).
+/// True for pinned `<tool>@<version>` specs (backend paths allowed).
 fn is_tool_spec(value: &str) -> bool {
+    if value == "mise@bootstrap" {
+        return true;
+    }
     let Some((tool, version)) = value.split_once('@') else {
         return false;
     };
     !tool.is_empty()
-        && !version.is_empty()
         && !value.contains(' ')
         && !value.contains('\n')
         && tool
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b':' | b'/' | b'-' | b'_' | b'.'))
-        && version
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'_' | b'+'))
+        && is_exact_tool_version(version)
 }
 
-/// True for qualified `mise-v1-<target>-<mise>-<16hex>` keys.
-fn is_cache_key(value: &str) -> bool {
-    let parts: Vec<&str> = value.split('-').collect();
-    value.starts_with(&format!("{MISE_KEY_PREFIX}-"))
-        && !value.contains(' ')
-        && !value.contains('\n')
-        && !value.contains("${{")
-        && !value.contains("latest")
-        && parts.len() >= 4
-        && parts.last().is_some_and(|digest| {
-            digest.len() == 16 && digest.bytes().all(|b| b.is_ascii_hexdigit())
-        })
-}
-
-/// Ensure a qualified built-in-cache setup precedes every `mise` use.
-///
-/// Infers the job's tool union from its fixed argv, keys the built-in
-/// cache on that union (same tools share; roles never fork), and inserts
-/// the setup after Checkout (or upgrades a legacy `cache:false` setup in
-/// place). Jobs without `mise` use (and `always=false`) stay untouched.
-///
-/// # Errors
-///
-/// Returns [`RenderError`] for duplicate/misordered setups, malformed
-/// pins, uninferable tools, or unsupported targets.
-pub fn ensure_setup_p08(
-    job_id: &str,
-    job: &mut Job,
-    setup: &MiseSetup,
-    always: bool,
-    target: &str,
-) -> Result<(), RenderError> {
-    setup.validate()?;
-    let present: Vec<usize> = job
-        .steps
-        .iter()
-        .enumerate()
-        .filter(|(_, step)| is_setup_step(step))
-        .map(|(index, _)| index)
-        .collect();
-    if present.len() > 1 {
-        return Err(RenderError::InvalidWorkflow(format!(
-            "duplicate_setup_mise:{job_id}"
-        )));
-    }
-    if let Some(&index) = present.first() {
-        upgrade_setup(job_id, job, index, setup, target)?;
-        check_setup_before_mise(job_id, job, index)?;
-        return Ok(());
-    }
-    if always || job_uses_mise(job) {
-        let specs = infer_job_tools(job);
-        let specs = if specs.is_empty() && always {
-            vec!["mise@bootstrap".to_owned()]
-        } else if specs.is_empty() {
-            return Ok(());
-        } else {
-            specs
-        };
-        let key = mise_cache_key_for_tools(target, &setup.version, &specs)?;
-        let at = insert_at(job).min(job.steps.len());
-        job.steps.insert(at, mise_setup_step_p08(setup, &key)?);
-    }
-    Ok(())
-}
-
-/// Upgrade one present setup to the qualified shape (or validate it).
-fn upgrade_setup(
-    job_id: &str,
-    job: &mut Job,
-    index: usize,
-    setup: &MiseSetup,
-    target: &str,
-) -> Result<(), RenderError> {
-    if setup_shape_ok(&job.steps[index], true) {
-        return Ok(());
-    }
-    if !setup_shape_ok(&job.steps[index], false) {
-        return Err(RenderError::InvalidWorkflow(format!(
-            "setup_mise_malformed:{job_id}"
-        )));
-    }
-    let specs = infer_job_tools(job);
-    if specs.is_empty() {
-        return Err(RenderError::InvalidWorkflow(format!(
-            "setup_mise_malformed:{job_id}"
-        )));
-    }
-    let key = mise_cache_key_for_tools(target, &setup.version, &specs)?;
-    job.steps[index] = mise_setup_step_p08(setup, &key)?;
-    Ok(())
-}
-
-/// Reject setups after the first `mise` use.
-fn check_setup_before_mise(job_id: &str, job: &Job, index: usize) -> Result<(), RenderError> {
-    if let Some(first_mise) = first_mise_index(job)
-        && index > first_mise
-    {
-        return Err(RenderError::InvalidWorkflow(format!(
-            "setup_mise_misordered:{job_id}"
-        )));
-    }
-    Ok(())
-}
-
-/// True for `jdx/mise-action` steps regardless of shape.
-fn is_setup_step(step: &Step) -> bool {
-    matches!(&step.kind, StepKind::Action { uses, .. } if uses.starts_with(&format!("{MISE_ACTION_NAME}@")))
-}
-
-/// True when any shell step invokes `mise`.
-fn job_uses_mise(job: &Job) -> bool {
-    first_mise_index(job).is_some()
-}
-
-/// Index of the first shell step invoking `mise`, when any.
-fn first_mise_index(job: &Job) -> Option<usize> {
-    job.steps.iter().position(|step| {
-        matches!(&step.kind, StepKind::Shell { run, .. } if detector_words(run).iter().any(|word| word == "mise"))
-    })
-}
-
-/// Insert after a leading Checkout step, else at the front.
-fn insert_at(job: &Job) -> usize {
-    job.steps
-        .first()
-        .filter(|step| step.name == "Checkout")
-        .map_or(0, |_| 1)
-}
-
-/// True for qualified (`cache:true`+key) or legacy (`cache:false`) shapes.
-fn setup_shape_ok(step: &Step, qualified: bool) -> bool {
-    let StepKind::Action { uses, with, env } = &step.kind else {
+/// Exact numeric triple required by the pinned tool catalogue.
+fn is_exact_tool_version(value: &str) -> bool {
+    let mut parts = value.split('.');
+    let (Some(major), Some(minor), Some(patch)) = (parts.next(), parts.next(), parts.next()) else {
         return false;
     };
-    if validate_uses(uses).is_err() {
-        return false;
-    }
-    // Setup steps carry no step env; anything attached is foreign shape.
-    let base = env.is_empty()
-        && with.len() == usize::from(qualified) + 6
-        && with.get("install").is_some_and(|v| v == "false")
-        && with.get("env").is_some_and(|v| v == "false")
-        && with.get("version").is_some_and(|v| is_catalog_version(v))
-        && with
-            .get("sha256")
-            .is_some_and(|v| v.len() == 64 && v.bytes().all(|b| b.is_ascii_hexdigit()));
-    if !base {
-        return false;
-    }
-    if qualified {
-        with.get("cache").is_some_and(|v| v == "true")
-            && with.get("cache_save").is_some_and(|v| v == "false")
-            && with.get("cache_key").is_some_and(|v| is_cache_key(v))
-    } else {
-        with.get("cache").is_some_and(|v| v == "false")
-            && with.get("cache_save").is_some_and(|v| v == "false")
-    }
+    parts.next().is_none()
+        && [major, minor, patch]
+            .into_iter()
+            .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()))
 }
 
 /// Reject `Swatinem/rust-cache` in MBX jobs (P08-6/7: one owner).

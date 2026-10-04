@@ -1,9 +1,10 @@
 //! F2 closure: cache layers and forbidden content.
 use std::collections::BTreeMap;
-use velnor_actions_contract::{GeneratorValidation, WorkflowPolicy};
-use velnor_actions_workflow_renderer::steps::{
-    TOOLS_RESTORE_USES, cache_action_step, tools_cache_key,
+use velnor_actions_contract::{GeneratorValidation, Job, WorkflowPolicy};
+use velnor_actions_workflow_renderer::cache_p08::{
+    ensure_setup_p08, infer_job_tools, mise_cache_key_for_tools,
 };
+use velnor_actions_workflow_renderer::steps::{TOOLS_RESTORE_USES, cache_action_step};
 use velnor_actions_workflow_renderer::{
     ALINT_BINARY_VERSION, PUBLISH_PLAN_NAME, RenderError, merge_step, render_workflow_ir,
     shell_step,
@@ -23,39 +24,132 @@ fn cache_action_rejects_empty_paths_and_keys() {
 }
 
 #[test]
-fn tools_key_bounded_and_hashed() -> Result<(), RenderError> {
-    let key = tools_cache_key("x86_64-unknown-linux-gnu", "2026.9.16", "0.1.0", "plan")?;
-    for part in [
-        "mise-tools-v1",
-        "x86_64-unknown-linux-gnu",
-        "2026.9.16",
-        "0.1.0",
-        "plan",
-        "hashFiles(",
-    ] {
+fn tools_key_bounded_and_qualified_by_tool_set() -> Result<(), RenderError> {
+    let specs = ["rust@1.98.1".to_owned(), "cargo-nextest@0.9.0".to_owned()];
+    let key = mise_cache_key_for_tools("x86_64-unknown-linux-gnu", "2026.9.16", &specs)?;
+    for part in ["mise-v1", "x86_64-unknown-linux-gnu", "2026.9.16"] {
         assert!(key.contains(part), "missing {part}:\n{key}");
     }
     assert!(!key.contains(' '), "spaces:\n{key}");
+    assert_eq!(
+        key.len(),
+        "mise-v1-x86_64-unknown-linux-gnu-2026.9.16-".len() + 16
+    );
+    assert_eq!(
+        key,
+        mise_cache_key_for_tools(
+            "x86_64-unknown-linux-gnu",
+            "2026.9.16",
+            &[specs[1].clone(), specs[0].clone()]
+        )?,
+        "tool spec ordering does not split the same payload"
+    );
+    assert_ne!(
+        key,
+        mise_cache_key_for_tools(
+            "x86_64-unknown-linux-gnu",
+            "2026.9.16",
+            &["rust@1.98.1".to_owned()]
+        )?,
+        "different payloads use different keys"
+    );
     for bad in ["latest", "", "has space"] {
         assert!(
-            tools_cache_key("x86_64-unknown-linux-gnu", bad, "0.1.0", "plan").is_err(),
+            mise_cache_key_for_tools("x86_64-unknown-linux-gnu", bad, &specs).is_err(),
             "version {bad} must fail"
         );
     }
-    assert!(tools_cache_key("riscv-none", "2026.9.16", "0.1.0", "plan").is_err());
+    assert!(mise_cache_key_for_tools("riscv-none", "2026.9.16", &specs).is_err());
+    assert!(mise_cache_key_for_tools("x86_64-unknown-linux-gnu", "2026.9.16", &[]).is_err());
+    assert!(
+        mise_cache_key_for_tools(
+            "x86_64-unknown-linux-gnu",
+            "2026.9.16",
+            &["rust@latest".to_owned()]
+        )
+        .is_err()
+    );
+    for bad in ["gh@latest", "gh@stable", "gh@nightly", "gh@1.2"] {
+        assert!(
+            mise_cache_key_for_tools("x86_64-unknown-linux-gnu", "2026.9.16", &[bad.to_owned()])
+                .is_err(),
+            "direct cache keys reject {bad}"
+        );
+    }
     Ok(())
+}
+
+fn job_for_tool_run(run: Vec<String>) -> Job {
+    let step = shell_step("Run pinned tools", run, BTreeMap::new()).expect("valid shell step");
+    job("cache-test", "Cache test", Vec::new(), vec![step]).1
+}
+
+#[test]
+fn inferred_latest_tools_fail_closed_instead_of_disappearing_or_bootstrapping() {
+    let mixed_run = ["mise", "--no-config", "install", "rust@1.98.1", "gh@latest"]
+        .into_iter()
+        .map(str::to_owned)
+        .collect();
+    let mut mixed = job_for_tool_run(mixed_run);
+    assert_eq!(
+        infer_job_tools(&mixed),
+        ["gh@latest".to_owned(), "rust@1.98.1".to_owned()]
+    );
+    assert!(
+        ensure_setup_p08(
+            "mixed-tools",
+            &mut mixed,
+            &mise(),
+            false,
+            "x86_64-unknown-linux-gnu"
+        )
+        .is_err()
+    );
+
+    for always in [false, true] {
+        let latest_run = ["mise", "--no-config", "install", "gh@latest"]
+            .into_iter()
+            .map(str::to_owned)
+            .collect();
+        let mut latest_only = job_for_tool_run(latest_run);
+        assert_eq!(infer_job_tools(&latest_only), ["gh@latest".to_owned()]);
+        assert!(
+            ensure_setup_p08(
+                "latest-only",
+                &mut latest_only,
+                &mise(),
+                always,
+                "x86_64-unknown-linux-gnu"
+            )
+            .is_err()
+        );
+        assert!(
+            latest_only
+                .steps
+                .iter()
+                .all(|step| step.name != "Setup Mise"),
+            "invalid latest tool must not be replaced by bootstrap"
+        );
+    }
+}
+
+#[test]
+fn mise_exec_node_inference_excludes_scoped_child_package_from_cache_key() {
+    let run = mise_argv("node@22.19.0", "npm", &["install", "@scope/pkg"]);
+    let job = job_for_tool_run(run);
+    let tools = infer_job_tools(&job);
+    assert_eq!(tools, ["node@22.19.0".to_owned()]);
+    assert!(mise_cache_key_for_tools("x86_64-unknown-linux-gnu", "2026.9.16", &tools).is_ok());
 }
 
 #[test]
 fn cache_layers_restore_independently() -> Result<(), RenderError> {
-    let sources = cache_action_step(
-        true,
-        TOOLS_RESTORE_USES,
-        "sources",
-        "k",
-        &[],
-        &["$CARGO_HOME/registry".to_owned()],
-    )?;
+    let source_paths = [
+        ".velnor/cache/cargo/registry/index".to_owned(),
+        ".velnor/cache/cargo/registry/cache".to_owned(),
+        ".velnor/cache/cargo/git/db".to_owned(),
+    ];
+    let sources = cache_action_step(true, TOOLS_RESTORE_USES, "sources", "k", &[], &source_paths)?;
     let task = cache_action_step(
         true,
         TOOLS_RESTORE_USES,
@@ -64,12 +158,12 @@ fn cache_layers_restore_independently() -> Result<(), RenderError> {
         &[],
         &[velnor_actions_workflow_renderer::steps::TASK_ARTIFACTS_DIR.to_owned()],
     )?;
-    let tools = velnor_actions_workflow_renderer::steps::tools_restore_step(&tools_cache_key(
+    let tools_key = mise_cache_key_for_tools(
         "x86_64-unknown-linux-gnu",
         "2026.9.16",
-        "0.1.0",
-        "plan",
-    )?)?;
+        &["rust@1.98.1".to_owned()],
+    )?;
+    let tools = velnor_actions_workflow_renderer::steps::tools_restore_step(&tools_key)?;
     for step in [&sources, &task, &tools] {
         let velnor_actions_contract::StepKind::Action { uses, .. } = &step.kind else {
             panic!("restore must be an action step");

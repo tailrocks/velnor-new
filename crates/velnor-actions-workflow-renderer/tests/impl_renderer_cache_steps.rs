@@ -1,13 +1,19 @@
 //! Gate 4 renderer cases: MBX objects, cache actions, lane target dirs.
 
 use velnor_actions_contract::{Step, StepKind};
+use velnor_actions_workflow_renderer::cache_p08::{ensure_setup_p08, infer_job_tools};
 use velnor_actions_workflow_renderer::steps::{
-    CompileDriver, MBX_CACHE_MODE_ENV, TOOLS_CACHE_PATH, TOOLS_RESTORE_NAME, TOOLS_SAVE_NAME,
-    cache_action_step, mbx_steps_for_driver, target_dir_for_lane, tools_cache_key,
+    CompileDriver, MBX_CACHE_MODE_ENV, TOOLS_CACHE_PATHS, TOOLS_RESTORE_NAME, TOOLS_SAVE_NAME,
+    WORKSPACE_CACHE_GUARD_NAME, cache_action_step, mbx_steps_for_driver, target_dir_for_lane,
     tools_restore_step, tools_save_step,
 };
 
 use super::impl_renderer_fixtures::*;
+
+#[path = "impl_renderer_cache_shell_security.rs"]
+mod shell_security;
+
+const TARGET: &str = "x86_64-unknown-linux-gnu";
 
 /// Pinned refs used across cache-step cases.
 fn sha() -> &'static str {
@@ -38,9 +44,11 @@ fn step_kinds_have_no_parallel_syntax() {
 fn cache_restore_accepts_only_allowed_paths() {
     let uses = format!("actions/cache/restore@{}", sha());
     let key = "velnor-v1-sources-trusted-compat-snapshot".to_owned();
+    let home = ".velnor/cache/cargo";
     let paths = vec![
-        "$CARGO_HOME/registry".to_owned(),
-        "$CARGO_HOME/git".to_owned(),
+        format!("{home}/registry/index"),
+        format!("{home}/registry/cache"),
+        format!("{home}/git/db"),
     ];
     let step = cache_action_step(
         true,
@@ -63,7 +71,7 @@ fn cache_restore_accepts_only_allowed_paths() {
         _ => panic!("restore must be an action step"),
     }
     for bad in [
-        "$CARGO_HOME/credentials.toml",
+        ".velnor/cache/cargo/credentials.toml",
         "$RUNNER_TEMP/velnor/target/abc",
         "/abs/path",
         "$HOME/.rustup",
@@ -124,69 +132,63 @@ fn cache_save_writes_task_artifacts_only() {
 }
 
 #[test]
-fn tools_cache_key_scopes_target_mise_generator_job_and_toolfiles() {
-    let key = tools_cache_key("x86_64-unknown-linux-gnu", "2026.9.16", "0.1.0", "plan")
-        .expect("tools key");
-    assert!(key.starts_with("mise-tools-v1-"), "{key}");
-    for part in [
-        "x86_64-unknown-linux-gnu",
-        "2026.9.16",
-        "0.1.0",
-        "plan",
-        "hashFiles('mise.toml','.mise.toml','mise.lock','.mise.lock','.tool-versions')",
-    ] {
-        assert!(key.contains(part), "key misses {part}: {key}");
-    }
-    assert!(!key.contains(' ') && !key.contains('\n'), "{key}");
-    for bad in [
-        ("", "2026.9.16", "0.1.0", "plan"),
-        ("x86_64-unknown-linux-gnu", "latest", "0.1.0", "plan"),
-        (
-            "x86_64-unknown-linux-gnu",
-            "2026.9.16",
-            "0.1.0",
-            "velnor plan",
-        ),
-        (
-            "x86_64-unknown-linux-gnu",
-            "2026.9.16",
-            "0.1.0",
-            "plan${{x}}",
-        ),
-        ("wasm32-unknown-unknown", "2026.9.16", "0.1.0", "plan"),
-    ] {
-        assert!(
-            tools_cache_key(bad.0, bad.1, bad.2, bad.3).is_err(),
-            "key accepted {bad:?}"
-        );
-    }
+fn exact_node_exec_after_generated_env_unset_is_cacheable() {
+    let run = [
+        "mise",
+        "exec",
+        "node@22.19.0",
+        "--",
+        "npm",
+        "install",
+        "@scope/pkg",
+    ]
+    .map(str::to_owned)
+    .to_vec();
+    let command = scrubbed_shell_step("Run Node", run).expect("valid Node command");
+    let StepKind::Shell { run, .. } = &command.kind else {
+        panic!("Node command must be a shell step");
+    };
+    assert_eq!(
+        run.get(..2),
+        Some(&["env".to_owned(), "-u".to_owned()][..]),
+        "credential-scrub wrapper is recognized"
+    );
+    let (_, mut workflow_job) = job("node-cache", "Node cache", Vec::new(), vec![command]);
+    assert_eq!(infer_job_tools(&workflow_job), ["node@22.19.0".to_owned()]);
+    let result = ensure_setup_p08("node-cache", &mut workflow_job, &mise(), false, TARGET);
+    assert!(result.is_ok());
 }
 
 #[test]
-fn tools_restore_and_save_pin_mise_data_dir_only() {
-    let key = tools_cache_key("x86_64-unknown-linux-gnu", "2026.9.16", "0.1.0", "plan")
-        .expect("tools key");
-    let restore = tools_restore_step(&key).expect("restore");
+fn tools_restore_and_save_share_exact_tool_paths_and_key() {
+    let key = "mise-v1-x86_64-unknown-linux-gnu-2026.9.16-aaaaaaaaaaaaaaaa";
+    let expected_paths = [
+        ".velnor/cache/mise",
+        ".velnor/cache/rustup",
+        ".velnor/cache/cargo/bin",
+    ];
+    assert_eq!(TOOLS_CACHE_PATHS, expected_paths);
+    let expected_path = TOOLS_CACHE_PATHS.join("\n");
+    let restore = tools_restore_step(key).expect("restore");
     assert_eq!(restore.name, TOOLS_RESTORE_NAME);
     let StepKind::Action { uses, with, .. } = &restore.kind else {
         panic!("restore must be an action step");
     };
     assert!(uses.starts_with("actions/cache/restore@"), "{uses}");
-    assert_eq!(with.get("key").map(String::as_str), Some(key.as_str()));
-    assert_eq!(with.get("path").map(String::as_str), Some(TOOLS_CACHE_PATH));
+    assert_eq!(with.get("key").map(String::as_str), Some(key));
+    assert_eq!(with.get("path"), Some(&expected_path));
     assert!(
-        with.get("restore-keys")
-            .is_some_and(|keys| keys.starts_with("mise-tools-v1-")),
-        "restore carries a prefix key"
+        !with.contains_key("restore-keys"),
+        "the exact tool payload never restores through a broader prefix"
     );
-    let save = tools_save_step(&key).expect("save");
+    let save = tools_save_step(key).expect("save");
     assert_eq!(save.name, TOOLS_SAVE_NAME);
     let StepKind::Action { uses, with, .. } = &save.kind else {
         panic!("save must be an action step");
     };
     assert!(uses.starts_with("actions/cache/save@"), "{uses}");
-    assert_eq!(with.get("key").map(String::as_str), Some(key.as_str()));
-    assert_eq!(with.get("path").map(String::as_str), Some(TOOLS_CACHE_PATH));
+    assert_eq!(with.get("key").map(String::as_str), Some(key));
+    assert_eq!(with.get("path"), Some(&expected_path));
     assert!(
         !with.contains_key("restore-keys"),
         "save has no restore keys"
@@ -206,7 +208,7 @@ fn tools_restore_and_save_pin_mise_data_dir_only() {
 }
 
 #[test]
-fn strict_restores_builtin_and_saves_on_elected_writer()
+fn strict_inserts_one_explicit_tool_restore_before_setup_and_saves_on_elected_writer()
 -> Result<(), velnor_actions_workflow_renderer::RenderError> {
     use velnor_actions_workflow_renderer::checkout_step;
     let lint = job(
@@ -223,9 +225,21 @@ fn strict_restores_builtin_and_saves_on_elected_writer()
     );
     let text = strict(&fixture_ir(vec![lint]), &fixture_ctx())?;
     let names = step_names(&text, "actionlint");
-    assert!(
-        !names.iter().any(|s| s == TOOLS_RESTORE_NAME),
-        "P08: restores stay built-in: {names:?}"
+    let exclusion_at = names.iter().position(|s| s == WORKSPACE_CACHE_GUARD_NAME);
+    let restore_at = names.iter().position(|s| s == TOOLS_RESTORE_NAME);
+    let setup_at = names.iter().position(|s| s == "Setup Mise");
+    assert_eq!(
+        names
+            .iter()
+            .filter(|s| *s == WORKSPACE_CACHE_GUARD_NAME)
+            .count(),
+        1,
+        "one workspace cache exclusion: {names:?}"
+    );
+    assert_eq!(
+        names.iter().filter(|s| *s == TOOLS_RESTORE_NAME).count(),
+        1,
+        "one explicit tools restore: {names:?}"
     );
     assert_eq!(
         names.iter().filter(|s| *s == TOOLS_SAVE_NAME).count(),
@@ -233,13 +247,43 @@ fn strict_restores_builtin_and_saves_on_elected_writer()
         "P08: sole owner saves once: {names:?}"
     );
     assert_eq!(
-        names.iter().position(|s| s == "Setup Mise"),
-        Some(1),
-        "setup right after checkout: {names:?}"
+        restore_at.and_then(|at| setup_at.map(|setup| setup == at + 1)),
+        Some(true),
+        "restore immediately precedes setup: {names:?}"
     );
-    for need in ["cache: \"true\"", "cache_key: mise-v1-"] {
-        assert!(text.contains(need), "built-in cache {need}:\n{text}");
+    assert_eq!(
+        exclusion_at.and_then(|at| restore_at.map(|restore| at < restore)),
+        Some(true),
+        "local exclusion precedes workspace restore: {names:?}"
+    );
+    assert_eq!(
+        names.iter().position(|s| s == "Checkout"),
+        Some(0),
+        "checkout first: {names:?}"
+    );
+    assert_eq!(
+        exclusion_at.and_then(|at| names.iter().position(|s| s == "Checkout").map(|c| c < at)),
+        Some(true),
+        "local exclusion follows checkout: {names:?}"
+    );
+    for need in [
+        "cache: \"false\"",
+        "cache_key: mise-v1-",
+        "MISE_DATA_DIR: ${{ github.workspace }}/.velnor/cache/mise",
+    ] {
+        assert!(
+            text.contains(need),
+            "disabled built-in cache {need}:\n{text}"
+        );
     }
+    assert!(
+        !text.contains("cache: \"true\""),
+        "Mise cache is disabled:\n{text}"
+    );
+    assert!(
+        !text.contains("~/.local/share/mise"),
+        "tools cache is workspace-relative:\n{text}"
+    );
     Ok(())
 }
 
