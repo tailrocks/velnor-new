@@ -11,7 +11,7 @@ use crate::schema2::mbx_cancel_probe::scripts;
 
 #[path = "schema2_mbx_cancel_probe_transport_fixture_tests.rs"]
 mod transport;
-use transport::FAKE_CURL;
+pub(super) use transport::FAKE_CURL;
 
 const PROBE_ID: &str = "0123456789abcdef0123456789abcdef";
 pub(super) const SOURCE_SHA: &str = "cccccccccccccccccccccccccccccccccccccccc";
@@ -94,6 +94,7 @@ impl Fixture {
             return Err(io::Error::other("zip fixture creation failed").into());
         }
         let archive_size = fs::metadata(&zip)?.len();
+        fs::write(root.join("curl.log"), "")?;
         let digest = if corrupt_digest {
             "0000000000000000000000000000000000000000000000000000000000000000".to_owned()
         } else {
@@ -212,6 +213,10 @@ impl Fixture {
         Ok(fs::read_to_string(&self.log)?)
     }
 
+    pub(super) fn curl_log(&self) -> Result<String, Box<dyn Error>> {
+        Ok(fs::read_to_string(self.root.join("curl.log"))?)
+    }
+
     pub(super) fn dispatch(&self, mode: &str) -> Result<(PathBuf, String), Box<dyn Error>> {
         let output = self.output("dispatch");
         fs::write(&output, "")?;
@@ -315,19 +320,24 @@ fn controller_dispatches_and_cancels_only_the_returned_validated_run() -> Result
     assert!(log.contains(
         "POST /repos/tailrocks/velnor-new/actions/workflows/qualification.yml/dispatches"
     ));
-    assert!(log.contains("GET /repos/tailrocks/velnor-new/actions/runs/123\n"));
     assert!(log.contains("POST /repos/tailrocks/velnor-new/actions/runs/123/cancel\n"));
-    assert!(!log.contains("GET /repos/tailrocks/velnor-new/actions/runs?"));
-    assert!(!log.contains("/actions/caches/"));
-    let curl_log = fs::read_to_string(fixture.root.join("curl.log"))?;
+    assert!(log.lines().all(|line| line.starts_with("POST ")));
+    let curl_log = fixture.curl_log()?;
+    assert!(curl_log.contains("workflow-api authorized=true"));
+    assert!(curl_log.contains("child-run-api authorized=true"));
     assert_eq!(
-        curl_log.lines().collect::<Vec<_>>(),
-        [
-            "artifact-api authorized=true",
-            "artifact-signed authorized=false",
-            "artifact-api authorized=true",
-            "artifact-signed authorized=false",
-        ]
+        curl_log
+            .lines()
+            .filter(|line| *line == "artifact-api authorized=true")
+            .count(),
+        2
+    );
+    assert_eq!(
+        curl_log
+            .lines()
+            .filter(|line| *line == "artifact-signed authorized=false")
+            .count(),
+        2
     );
     assert!(!curl_log.contains("fixture-secret-token"));
     assert!(!curl_log.contains("sig=fixture-only"));
@@ -395,9 +405,9 @@ fn malformed_dispatch_or_victim_identity_never_reaches_cancel() -> Result<(), Bo
         );
         assert!(!fixture.log()?.contains("/actions/runs/123/cancel"));
         let run_queries = fixture
-            .log()?
+            .curl_log()?
             .lines()
-            .filter(|line| *line == "GET /repos/tailrocks/velnor-new/actions/runs/123")
+            .filter(|line| *line == "child-run-api authorized=true")
             .count();
         assert_eq!(
             run_queries,

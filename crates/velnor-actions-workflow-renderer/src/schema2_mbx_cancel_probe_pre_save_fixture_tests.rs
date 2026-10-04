@@ -21,11 +21,11 @@ fn pre_save_controller_validates_artifact_and_cancels_exact_live_wait_step()
             .join("mbx-cancel-controller/cache-before-exact.json"),
     )?;
     assert!(cache.contains("\"count\":0"), "{cache}");
-    let log = fixture.log()?;
-    assert!(log.contains("/actions/runs/123/artifacts?per_page=100"));
+    let log = fixture.curl_log()?;
+    assert!(log.contains("artifact-list-api authorized=true"));
     assert!(log.contains("POST /repos/tailrocks/velnor-new/actions/runs/123/cancel\n"));
     let transport = fs::read_to_string(fixture.root.join("curl.log"))?;
-    assert_eq!(transport.lines().count(), 4, "{transport}");
+    assert_eq!(transport.lines().count(), 7, "{transport}");
     assert!(!transport.contains("fixture-secret-token"));
     fs::remove_dir_all(fixture.root)?;
     Ok(())

@@ -50,7 +50,7 @@ fn malformed_controller_receipt_never_observes_child() -> Result<(), Box<dyn Err
         )?;
         assert!(output.contains("should_observe=false\n"), "{output}");
         if fixture.root.join("gh.log").exists() {
-            assert!(!fixture.log()?.contains("actions/runs/"));
+            assert!(fixture.curl_log()?.is_empty());
         }
         fs::remove_dir_all(fixture.root)?;
     }
@@ -70,7 +70,7 @@ fn missing_or_nonstring_controller_probe_id_never_observes_child() -> Result<(),
         let output = execute_validator(&fixture, &receipt(&expected_key()), &event)?;
         assert!(output.contains("should_observe=false\n"), "{output}");
         if fixture.root.join("gh.log").exists() {
-            assert!(!fixture.log()?.contains("actions/runs/"));
+            assert!(fixture.curl_log()?.is_empty());
         }
         fs::remove_dir_all(fixture.root)?;
     }

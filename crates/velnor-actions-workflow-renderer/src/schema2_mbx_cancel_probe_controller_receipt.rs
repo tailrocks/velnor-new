@@ -35,7 +35,6 @@ private_capture "$root" "$path" 65536 jq -cn \
 "#;
 
 pub(in crate::schema2::mbx_cancel_probe) const VALIDATE_CONTROLLER_RECEIPT: &str = r#"set -euo pipefail
-gh_api() { gh api --hostname github.com "$@"; }
 outer="$RUNNER_TEMP/mbx-cancel-observer"
 receipt_root="$outer/controller-receipt"
 root="$outer/observer"
@@ -132,7 +131,7 @@ expected_key="linux-x64-mbx-$MBX_GENERATION-dir-rust-$RUST_VERSION-$rustc_identi
 test "$receipt_key" = "$expected_key" || exit 0
 root="$RUNNER_TEMP/mbx-cancel-observer/observer"
 private_storage_open "$root" || exit 0
-private_gh_json "$root" "$root/controller.json" --method GET \
+private_api_json "$root" "$root/controller.json" \
   "/repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" 2>/dev/null || exit 0
 jq -e --arg run "$GITHUB_RUN_ID" --arg sha "$GITHUB_SHA" \
   --arg workflow "$(jq -er '.child_workflow_id' "$path")" \
@@ -147,7 +146,7 @@ jq -e --arg run "$GITHUB_RUN_ID" --arg sha "$GITHUB_SHA" \
   "$root/controller.json" >/dev/null 2>&1 || exit 0
 child="$(jq -er '.child_run_id' "$path")"
 workflow="$(jq -er '.child_workflow_id' "$path")"
-if ! private_gh_json "$root" "$root/child.json" --method GET \
+if ! private_api_json "$root" "$root/child.json" \
     "/repos/$GITHUB_REPOSITORY/actions/runs/$child" 2>/dev/null; then exit 0; fi
 jq -e --arg id "$child" --arg workflow "$workflow" --arg repo "$GITHUB_REPOSITORY" \
   --arg sha "$GITHUB_SHA" --arg probe "$(jq -er '.probe_id' "$path")" \

@@ -31,9 +31,9 @@ run_valid() {
      and ((.path | endswith("@main")) or (.path | endswith("@refs/heads/main")))' \
     "$1" >/dev/null 2>&1
 }
-fetch_run() { private_gh_json "$root" "$1" --method GET "/repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID"; }
+fetch_run() { private_api_json "$root" "$1" "/repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID"; }
 fetch_jobs() {
-  private_gh_json "$root" "$1" --method GET \
+  private_api_json "$root" "$1" \
     "/repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/attempts/1/jobs?per_page=100" \
     && private_list_complete "$1" jobs
 }
@@ -153,7 +153,7 @@ validate_victim_artifact() {
   local run_path="${1:-$root/run.json}"
   local artifact_id artifact_size download_size digest actual members member_count statuses content_size
   ARTIFACT_CHECK=missing
-  if ! private_gh_json "$root" "$root/artifacts.json" --method GET \
+  if ! private_api_json "$root" "$root/artifacts.json" \
       "/repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/artifacts?per_page=100" 2>/dev/null \
       || ! private_list_complete "$root/artifacts.json" artifacts; then return 1; fi
   if ! jq -e '
@@ -263,7 +263,7 @@ if [ -s "$root/validated-victim.json" ] \
   && target_live "$root/jobs.json" && receipt_step_complete "$root/jobs.json" \
   && jq -e --arg actor "$(jq -er '.actor' "$root/validated-victim.json")" '.actor.login == $actor' "$root/run.json" >/dev/null 2>&1; then
   cache_key="$(jq -er '.cache_key | strings' "$root/validated-victim.json")"
-  if private_gh_json "$root" "$root/cache-before.json" --method GET \
+  if private_api_json "$root" "$root/cache-before.json" \
       "/repos/$GITHUB_REPOSITORY/actions/caches?key=$cache_key&ref=refs/heads/main&per_page=100" 2>/dev/null \
       && private_list_complete "$root/cache-before.json" actions_caches; then
     private_capture "$root" "$root/cache-before-exact.json" 65536 \

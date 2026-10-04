@@ -234,11 +234,31 @@ private_capture() {
   return 1
 }
 
-private_gh_json() {
-  local root="$1" path="$2"
-  shift 2
-  private_capture "$root" "$path" 2097152 gh_api "$@" \
-    && private_json_valid "$root" "$path" 2097152
+private_api_endpoint_valid() {
+  local endpoint="$1"
+  local allowed='^/repos/tailrocks/velnor-new/actions/(workflows/qualification\.yml|runs/[1-9][0-9]{0,19}(/attempts/1/jobs\?per_page=100|/artifacts\?per_page=100)?|caches\?key=[a-z0-9][a-z0-9.-]{0,511}&ref=refs/heads/main&per_page=100)$'
+  [ "$GITHUB_REPOSITORY" = tailrocks/velnor-new ] && [[ "$endpoint" =~ $allowed ]]
+}
+
+private_api_json() {
+  local root="$1" path="$2" endpoint="$3" status_path="$2.status"
+  private_storage_open "$root" && private_path_allowed "$root" "$path" \
+    && private_path_parent_open "$root" "$path" \
+    && private_api_endpoint_valid "$endpoint" || return 1
+  private_remove_file "$root" "$path" 2097152 || return 1
+  private_remove_file "$root" "$status_path" 3 || return 1
+  if ! stock_restore_api_json "$endpoint" "$path"; then
+    private_remove_file "$root" "$path" 2097153 || true
+    private_remove_file "$root" "$status_path" 3 || true
+    return 1
+  fi
+  if ! private_file_valid "$root" "$path" 2097152 \
+    || ! private_json_valid "$root" "$path" 2097152; then
+    private_remove_file "$root" "$path" 2097153 || true
+    private_remove_file "$root" "$status_path" 3 || true
+    return 1
+  fi
+  private_remove_file "$root" "$status_path" 3
 }
 
 private_list_complete() {

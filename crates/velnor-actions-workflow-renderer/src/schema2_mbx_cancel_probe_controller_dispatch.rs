@@ -35,7 +35,7 @@ case "$VICTIM_MODE" in
 esac
 root="$RUNNER_TEMP/mbx-cancel-controller"
 private_root_open "$root"
-if ! private_gh_json "$root" "$root/workflow.json" --method GET \
+if ! private_api_json "$root" "$root/workflow.json" \
     "/repos/$GITHUB_REPOSITORY/actions/workflows/qualification.yml" 2>/dev/null; then exit 0; fi
 candidate_workflow_id="$(jq -er '.id | select(type == "number" and . > 0 and . <= 9007199254740991 and . == floor)' "$root/workflow.json" 2>/dev/null || true)"
 test -n "$candidate_workflow_id" || exit 0
@@ -60,7 +60,7 @@ expected_url="https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$cand
 candidate_run_url="$(jq -er '.run_url | strings' "$root/dispatch-response.json" 2>/dev/null || true)"
 test "$candidate_run_url" = "$expected_url" || exit 0
 for attempt in 1 2 3 4 5 6; do
-  if private_gh_json "$root" "$root/run.json" --method GET \
+  if private_api_json "$root" "$root/run.json" \
       "/repos/$GITHUB_REPOSITORY/actions/runs/$candidate_run_id" 2>/dev/null; then
     break
   fi

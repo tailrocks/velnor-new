@@ -5,6 +5,7 @@ use std::fs;
 use std::os::unix::fs::{PermissionsExt, symlink};
 use std::path::PathBuf;
 
+use super::controller_fixtures::FAKE_CURL;
 use super::{fake_bin, prepare_controller_root, run_bash, temp_dir};
 
 #[test]
@@ -21,7 +22,11 @@ printf accepted"#,
         &bin,
         &env,
     )?;
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     assert_eq!(String::from_utf8(output.stdout)?, "accepted");
     fs::remove_dir_all(root)?;
     Ok(())
@@ -45,7 +50,11 @@ private_capture "$root" "$root/hardlink.json" 64 printf changed && exit 32
 private_capture "$root" "$root/escape/new.json" 64 printf changed && exit 33
 [ -L "$root/outside.json" ] && [ ! -e "$root/escape/new.json" ]"#;
     let result = run_bash(&body, &root, &bin, &env)?;
-    assert!(result.status.success(), "{}", String::from_utf8_lossy(&result.stderr));
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
     assert_eq!(fs::read_to_string(external.join("target"))?, "untouched");
     fs::remove_dir_all(root)?;
     Ok(())
@@ -77,7 +86,11 @@ printf rejected"#,
             &bin,
             &env,
         )?;
-        assert!(result.status.success(), "{}", String::from_utf8_lossy(&result.stderr));
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
         assert_eq!(String::from_utf8(result.stdout)?, "rejected");
         assert!(controller.exists());
         fs::remove_dir_all(root)?;
@@ -86,8 +99,8 @@ printf rejected"#,
 }
 
 #[test]
-fn traversal_foreign_roots_and_duplicate_json_documents_are_rejected()
--> Result<(), Box<dyn Error>> {
+fn traversal_foreign_roots_and_duplicate_json_documents_are_rejected() -> Result<(), Box<dyn Error>>
+{
     let (root, bin, env) = setup("private-malformed")?;
     let output = run_bash(
         r#"root="$RUNNER_TEMP/mbx-cancel-controller"
@@ -100,7 +113,11 @@ printf rejected"#,
         &bin,
         &env,
     )?;
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     assert_eq!(String::from_utf8(output.stdout)?, "rejected");
     fs::remove_dir_all(root)?;
     Ok(())
@@ -112,8 +129,17 @@ fn duplicated_event_json_never_passes_event_validation() -> Result<(), Box<dyn E
     let event = root.join("event.json");
     fs::write(&event, "{}\n{}\n")?;
     env.push(("GITHUB_EVENT_PATH".to_owned(), event.display().to_string()));
-    let output = run_bash("private_event_valid && exit 51; printf rejected", &root, &bin, &env)?;
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let output = run_bash(
+        "private_event_valid && exit 51; printf rejected",
+        &root,
+        &bin,
+        &env,
+    )?;
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     assert_eq!(String::from_utf8(output.stdout)?, "rejected");
     fs::remove_dir_all(root)?;
     Ok(())
@@ -157,20 +183,32 @@ fn bounded_rest_capture_rejects_duplicate_and_oversized_json() -> Result<(), Box
     let output = run_bash(
         r#"set -euo pipefail
 root="$RUNNER_TEMP/mbx-cancel-controller"
-gh_api() { printf '{"id":1}\n'; }
-private_gh_json "$root" "$root/api.json" --method GET /repos/tailrocks/velnor-new/actions/runs/1
+API_JSON_MODE=valid private_api_json "$root" "$root/api.json" \
+  /repos/tailrocks/velnor-new/actions/runs/1
 jq -e '.id == 1' "$root/api.json" >/dev/null
-gh_api() { printf '{}\n{}\n'; }
-private_gh_json "$root" "$root/api.json" --method GET /repos/tailrocks/velnor-new/actions/runs/1 && exit 81
-gh_api() { head -c 2097153 /dev/zero; }
-private_gh_json "$root" "$root/oversized.json" --method GET /repos/tailrocks/velnor-new/actions/runs/1 && exit 82
-[ ! -e "$root/oversized.json" ]
+[ ! -e "$root/api.json.status" ]
+API_JSON_MODE=duplicate private_api_json "$root" "$root/api.json" \
+  /repos/tailrocks/velnor-new/actions/runs/1 && exit 81
+[ ! -e "$root/api.json" ] && [ ! -e "$root/api.json.status" ]
+API_JSON_MODE=status-201 private_api_json "$root" "$root/api.json" \
+  /repos/tailrocks/velnor-new/actions/runs/1 && exit 82
+[ ! -e "$root/api.json" ] && [ ! -e "$root/api.json.status" ]
+API_JSON_MODE=oversized private_api_json "$root" "$root/oversized.json" \
+  /repos/tailrocks/velnor-new/actions/runs/1 && exit 83
+[ ! -e "$root/oversized.json" ] && [ ! -e "$root/oversized.json.status" ]
+private_api_json "$root" "$root/rejected.json" \
+  /repos/attacker/repo/actions/runs/1 && exit 84
+[ ! -e "$root/rejected.json" ]
 printf accepted"#,
         &root,
         &bin,
         &env,
     )?;
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     assert_eq!(String::from_utf8(output.stdout)?, "accepted");
     fs::remove_dir_all(root)?;
     Ok(())
@@ -179,11 +217,26 @@ printf accepted"#,
 fn setup(label: &str) -> Result<(PathBuf, PathBuf, Vec<(String, String)>), Box<dyn Error>> {
     let root = temp_dir(label)?;
     let bin = fake_bin(&root)?;
+    let curl = bin.join("curl");
+    fs::write(&curl, FAKE_CURL)?;
+    fs::set_permissions(curl, fs::Permissions::from_mode(0o755))?;
     let event = root.join("event.json");
-    fs::write(&event, r#"{"inputs":{"mode":"mbx-cancel-during-save-controller","probe_id":""}}"#)?;
+    fs::write(
+        &event,
+        r#"{"inputs":{"mode":"mbx-cancel-during-save-controller","probe_id":""}}"#,
+    )?;
     let env = vec![
+        (
+            "GITHUB_REPOSITORY".to_owned(),
+            "tailrocks/velnor-new".to_owned(),
+        ),
         ("RUNNER_TEMP".to_owned(), root.display().to_string()),
         ("GITHUB_EVENT_PATH".to_owned(), event.display().to_string()),
+        ("GH_TOKEN".to_owned(), "fixture-secret-token".to_owned()),
+        (
+            "CURL_LOG".to_owned(),
+            root.join("curl.log").display().to_string(),
+        ),
     ];
     prepare_controller_root(&root, &bin, &env)?;
     Ok((root, bin, env))

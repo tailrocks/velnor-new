@@ -10,10 +10,9 @@ const OBSERVER_CACHE_BEFORE_BODY: &str = r#"set -euo pipefail
 root="$RUNNER_TEMP/mbx-cancel-observer/observer"
 private_storage_open "$root" || exit 0
 unknown='{"count":-1,"caches":[]}'
-gh_api() { gh api --hostname github.com "$@"; }
 key="${VALIDATED_CACHE_KEY:-}"
 case "$key" in ''|*[!a-z0-9.-]*) private_capture "$root" "$root/cache-before.json" 65536 printf '%s\n' "$unknown"; exit 0 ;; esac
-if ! private_gh_json "$root" "$root/cache-before-raw.json" --method GET \
+if ! private_api_json "$root" "$root/cache-before-raw.json" \
   "/repos/$GITHUB_REPOSITORY/actions/caches?key=$key&ref=refs/heads/main&per_page=100" 2>/dev/null \
   || ! private_list_complete "$root/cache-before-raw.json" actions_caches; then
   private_capture "$root" "$root/cache-before.json" 65536 printf '%s\n' "$unknown"
@@ -54,7 +53,6 @@ umask 077
 root="$RUNNER_TEMP/mbx-cancel-observer/observer"
 private_storage_open "$root" || exit 0
 unknown='{"count":-1,"caches":[]}'
-gh_api() { gh api --hostname github.com "$@"; }
 test "$GITHUB_REPOSITORY" = tailrocks/velnor-new || exit 0
 controller_cancel_status="${CONTROLLER_CANCEL_STATUS:-}"
 controller_cancel_requested="${CONTROLLER_CANCEL_REQUESTED:-false}"
@@ -111,7 +109,7 @@ cancel_facts="$(step_facts "$CANCEL_STEP_NAME")"
 cancel_status="$(jq -r 'if (.status | type) == "string" then .status else "unknown" end' <<< "$cancel_facts")"
 cancel_conclusion="$(jq -r 'if (.conclusion | type) == "string" then .conclusion else "unknown" end' <<< "$cancel_facts")"
 cancel_started="$(jq -r '(.started_at | type) == "string"' <<< "$cancel_facts")"
-if private_gh_json "$root" "$root/cache-after-raw.json" --method GET \
+if private_api_json "$root" "$root/cache-after-raw.json" \
   "/repos/$GITHUB_REPOSITORY/actions/caches?key=$key&ref=refs/heads/main&per_page=100" 2>/dev/null \
   && private_list_complete "$root/cache-after-raw.json" actions_caches; then
   private_capture "$root" "$root/cache-after.json" 65536 \

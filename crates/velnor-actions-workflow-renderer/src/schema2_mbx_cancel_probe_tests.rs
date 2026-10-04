@@ -139,13 +139,20 @@ for path in "$RUNNER_TEMP/mbx-cancel-restore-parent" "$RUNNER_TEMP/mbx-cancel-re
 done
 "#
         }
-        _ => return Err(io::Error::new(io::ErrorKind::InvalidInput, "unknown root role")),
+        _ => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "unknown root role",
+            ));
+        }
     };
     let output = run_bash(script, root, bin, envs)?;
     if output.status.success() {
         Ok(())
     } else {
-        Err(io::Error::other(String::from_utf8_lossy(&output.stderr).into_owned()))
+        Err(io::Error::other(
+            String::from_utf8_lossy(&output.stderr).into_owned(),
+        ))
     }
 }
 
@@ -169,6 +176,7 @@ while (($#)); do
 done
 test "$hostname" = github.com
 printf '%s %s\n' "$method" "$endpoint" >> "$GH_LOG"
+test "$method" = POST
 case "$method:$endpoint" in
   GET:/repos/tailrocks/velnor-new/actions/workflows/qualification.yml)
     printf '%s\n' '{"id":77,"path":".github/workflows/qualification.yml","state":"active"}' ;;
@@ -202,7 +210,7 @@ case "$method:$endpoint" in
         display_title:$title,actor:{login:$actor}}' ;;
   GET:/repos/tailrocks/velnor-new/actions/runs/900/attempts/1/jobs?per_page=100)
     jq -cn --arg name "$OBSERVER_JOB_NAME" \
-      '{jobs:[{id:901,name:$name,status:"in_progress",steps:[
+      '{total_count:1,jobs:[{id:901,name:$name,status:"in_progress",steps:[
         {name:"Set up job",status:"completed",conclusion:"success",number:1},
         {name:"Prepare MBX bundle key",status:"completed",conclusion:"success"},
         {name:"Restore MBX single bundle",status:"completed",conclusion:"success",number:13}]}]}' ;;
@@ -245,14 +253,14 @@ case "$method:$endpoint" in
     case "${GH_MODE:-good}" in
     observer-window)
       jq -cn --arg name "$VICTIM_JOB_NAME" \
-        '{jobs:[{id:456,name:$name,status:"completed",steps:[
+        '{total_count:1,jobs:[{id:456,name:$name,status:"completed",steps:[
           {name:"Write MBX cancellation readiness receipt",status:"completed",conclusion:"success"},
           {name:"Upload MBX cancellation receipt",status:"completed",conclusion:"success"},
           {name:"Save MBX single bundle",status:"completed",conclusion:"cancelled",number:13,started_at:"2026-10-04T00:00:00Z"}]}]}'
       ;;
     observer-duplicate-save)
       jq -cn --arg name "$VICTIM_JOB_NAME" \
-        '{jobs:[{id:456,name:$name,status:"completed",steps:[
+        '{total_count:1,jobs:[{id:456,name:$name,status:"completed",steps:[
           {name:"Write MBX cancellation readiness receipt",status:"completed",conclusion:"success"},
           {name:"Upload MBX cancellation receipt",status:"completed",conclusion:"success"},
           {name:"Save MBX single bundle",status:"completed",conclusion:"cancelled",number:13,started_at:"2026-10-04T00:00:00Z"},
@@ -260,19 +268,19 @@ case "$method:$endpoint" in
       ;;
     observer-missing-save)
       jq -cn --arg name "$VICTIM_JOB_NAME" \
-        '{jobs:[{id:456,name:$name,status:"completed",steps:[
+        '{total_count:1,jobs:[{id:456,name:$name,status:"completed",steps:[
           {name:"Write MBX cancellation readiness receipt",status:"completed",conclusion:"success"},
           {name:"Upload MBX cancellation receipt",status:"completed",conclusion:"success"}]}]}'
       ;;
     observer-object-steps)
       jq -cn --arg name "$VICTIM_JOB_NAME" \
-        '{jobs:[{id:456,name:$name,status:"completed",steps:{save:{
+        '{total_count:1,jobs:[{id:456,name:$name,status:"completed",steps:{save:{
           name:"Save MBX single bundle",status:"completed",conclusion:"cancelled",number:13,started_at:"2026-10-04T00:00:00Z"}}}]}'
       ;;
     *)
       if [ "$PROBE_PHASE" = pre-save ]; then
         jq -cn --arg name "$VICTIM_JOB_NAME" \
-          '{jobs:[{id:456,name:$name,status:"in_progress",steps:[
+          '{total_count:1,jobs:[{id:456,name:$name,status:"in_progress",steps:[
             {name:"Write MBX cancellation readiness receipt",status:"completed",conclusion:"success"},
             {name:"Upload MBX cancellation receipt",status:"completed",conclusion:"success"},
             {name:"Wait at MBX pre-save cancellation point",status:"in_progress",conclusion:null},
@@ -294,7 +302,7 @@ case "$method:$endpoint" in
       jq -cn --arg name "$VICTIM_JOB_NAME" \
         --arg job_status "$job_status" --arg save_status "$save_status" \
         --argjson save_conclusion "$save_conclusion" \
-        '{jobs:[{id:456,name:$name,status:$job_status,steps:[
+        '{total_count:1,jobs:[{id:456,name:$name,status:$job_status,steps:[
           {name:"Write MBX cancellation readiness receipt",status:"completed",conclusion:"success"},
           {name:"Upload MBX cancellation receipt",status:"completed",conclusion:"success"},
           {name:"Save MBX single bundle",status:$save_status,conclusion:$save_conclusion,number:13}]}]}'
@@ -310,7 +318,7 @@ case "$method:$endpoint" in
     jq -cn --arg name "$VICTIM_ARTIFACT_NAME" --arg digest "$GH_ARTIFACT_DIGEST" \
       --argjson artifact_id "$artifact_id" \
       --argjson size "$GH_ARTIFACT_SIZE" \
-      '{artifacts:[{id:$artifact_id,name:$name,expired:false,size_in_bytes:$size,
+      '{total_count:1,artifacts:[{id:$artifact_id,name:$name,expired:false,size_in_bytes:$size,
         digest:("sha256:" + $digest),workflow_run:{id:123}}]}' ;;
   GET:/repos/tailrocks/velnor-new/actions/artifacts/55/zip)
     test -n "$output"
@@ -491,9 +499,18 @@ fn malformed_save_step_lists_never_request_step_logs() -> Result<(), Box<dyn Err
         } else {
             String::new()
         };
-        assert!(requests.contains("child-run-api authorized=true"), "{mode}: {requests}");
-        assert!(requests.contains("child-jobs-api authorized=true"), "{mode}: {requests}");
-        assert!(!requests.contains("/steps/"), "{mode} fetched a step log: {requests}");
+        assert!(
+            requests.contains("child-run-api authorized=true"),
+            "{mode}: {requests}"
+        );
+        assert!(
+            requests.contains("child-jobs-api authorized=true"),
+            "{mode}: {requests}"
+        );
+        assert!(
+            !requests.contains("/steps/"),
+            "{mode} fetched a step log: {requests}"
+        );
         fs::remove_dir_all(fixture.root)?;
     }
     Ok(())
