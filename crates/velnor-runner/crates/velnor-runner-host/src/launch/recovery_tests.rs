@@ -5,7 +5,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
-use velnor_runner_github::Poll;
+use velnor_runner_github::{ParsedBatch, Poll};
 
 use crate::journal::LaunchReservation;
 use crate::launch::steps_acquire;
@@ -19,10 +19,11 @@ async fn bound_pair_redelivery_at_full_capacity_retries_only_ack() -> Result<(),
         calls: Vec::new(),
         mode: Mode::AckFail,
     };
+    let first_batch = batch(100, 42)?;
     let failed = steps_acquire::launch_id(
         &mut first,
         &ctx(),
-        &batch(100, 42),
+        &first_batch,
         &journal,
         42,
         prepare,
@@ -67,10 +68,11 @@ async fn bound_pair_redelivery_at_full_capacity_retries_only_ack() -> Result<(),
         calls: Vec::new(),
         mode: Mode::Ok,
     };
+    let replay_batch = batch(101, 42)?;
     let recovered = steps_acquire::launch_id(
         &mut replay,
         &ctx(),
-        &batch(101, 42),
+        &replay_batch,
         &journal,
         42,
         |identity| {
@@ -135,10 +137,11 @@ async fn resolved_acquire_without_jit_resumes_without_another_acquire() -> Resul
         calls: Vec::new(),
         mode: Mode::Ok,
     };
+    let resumed_batch = batch(101, 42)?;
     let started = steps_acquire::launch_id(
         &mut resumed,
         &ctx(),
-        &batch(101, 42),
+        &resumed_batch,
         &journal,
         42,
         prepare,
@@ -175,10 +178,11 @@ async fn resolved_acquire_without_jit_resumes_without_another_acquire() -> Resul
     Ok(())
 }
 
-fn batch(message_id: i64, request_id: i64) -> Poll {
+fn batch(message_id: i64, request_id: i64) -> Result<ParsedBatch, String> {
     let mut polled = available(&[request_id]);
-    if let Poll::Batch(batch) = &mut polled {
-        batch.message_id = message_id;
-    }
-    polled
+    let Poll::Batch(mut batch) = polled else {
+        return Err("available fixture did not produce a batch".to_owned());
+    };
+    batch.message_id = message_id;
+    Ok(batch)
 }
