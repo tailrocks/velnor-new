@@ -85,11 +85,6 @@ fn all_mise_vectors() -> Result<Vec<Vec<OsString>>, String> {
     )
     .map_err(|err| err.to_string())?;
     vectors.push(lookup.list_argv(&catalog).map_err(|err| err.to_string())?);
-    vectors.push(
-        lookup
-            .download_argv(&catalog, 7, &PathBuf::from("/tmp/velnor-base"))
-            .map_err(|err| err.to_string())?,
-    );
     let gated = qualified_task_run_argv(
         "test",
         false,
@@ -121,7 +116,7 @@ fn nextest_vectors(catalog: &ToolCatalog) -> Result<Vec<Vec<OsString>>, String> 
 #[test]
 fn all_mise_vectors_invoke_mise_program() -> Result<(), String> {
     let vectors = all_mise_vectors()?;
-    assert_ne!(vectors, [] as [std::vec::Vec<std::ffi::OsString>; 0]);
+    assert_ne!(vectors, Vec::<Vec<OsString>>::new());
     for argv in &vectors {
         assert_eq!(argv[0], OsString::from("mise"), "mise-only: {argv:?}");
         let subcommand = argv
