@@ -1,36 +1,24 @@
 # PR #12 current disposition and historical evidence
 
-## Current authoritative snapshot — document updated 2026-10-04 09:55 UTC
+## Current exact-ref snapshot — paired API capture 2026-10-04T18:34:30Z (2026-10-05 01:34:30 +07:00)
 
-Fresh REST cutoff: `2026-10-04T09:55:29Z`. PR #12 is open at head
-`7c52bbda8ae9433228180c2ddc63af8513552a0b`, base
-`47815c83b9eeadbaf84b741918fffa7ea550da89`. GitHub returned 291 changed paths
-(167 added, 124 modified) across pages of 100, 100, and 91. The exact sorted
-`status<TAB>path` inventory is
-[`pr-12-paths-7c52-2026-10-04.tsv`](pr-12-paths-7c52-2026-10-04.tsv), SHA-256
-`31f6ed9f7ac5332d6222a785568da34f1315a2cc21b7427dbe7eb0659d2de468`; raw
-paginated response SHA-256 is
-`33c01f32631da1fe3e7bc1aaef3db4a446e0ced9c4a736a56a014d3c97255a04`.
-The current 79 added-Python path partition and the 2a2-to-7c52 delta are in
-[`pr-12-python-disposition-2026-10-04.md`](pr-12-python-disposition-2026-10-04.md).
-The older 54-script matrix below is historical at its 2a2 cutoff; it does not
-cover the current 7c52 files.
+Paired PR API and `refs/pull/12/head` reads bind open draft PR #12 to
+`f4f1312124cfcb4f9f531557ff5c229eb691fc58`, base
+`47815c83b9eeadbaf84b741918fffa7ea550da89`. Current Files API and exact Git
+tree agree on 461 changed paths, including 100 `.py` paths. This is the source
+capture cutoff; the ledger edit cutoff is recorded in the signed freeze record
+in the linked addendum, with UTC and `Asia/Ho_Chi_Minh` times. Snapshot hashes,
+the 225-path delta from `7c52bbda`, and path dispositions are in
+[`pr-12-delta-7c52-to-f4f131-2026-10-05.md`](pr-12-delta-7c52-to-f4f131-2026-10-05.md).
+The old 291-path/79-Python ledgers and 54-script matrix remain intact as
+historical evidence; no previous receipt was overwritten.
 
-At this cutoff, issue comments, reviews, and inline review comments were empty.
-The exact-head CI run `37192429975` failed Alint, Plan, and aggregate Required.
-Plan reported `unclassified_repository_suite:mbx-synchronous-registry-fixture`;
-Alint reported that fixture's nested lock and Rust source outside `crates/`.
-These are PR-authored fixture failures, separate from integration candidate
-checks. Re-fetch all feedback and checks at the final head before closing or
-superseding PR #12.
-
-The integration product source examined for this ledger was committed head
-`8085174c47435d63857ed48a326be28a38500731`. The later policy-only commit
-`571a649f9` changes only `AGENTS.md`; it does not alter the reviewed product
-source. The bounded gzip/encoded-plus-decoded freshness carry is still pending
-at this snapshot. No behavior-equivalence claim is made for the private
-release/source-proof capsules; their source path disposition is in the linked
-79-path ledger.
+The exact feedback/check snapshot most recently verified was head `dc492b4`,
+before current `f4f131`: comments, reviews, and review threads were zero; DCO
+was the only successful check and no status contexts existed. Re-fetch feedback
+and checks at `f4f131` before any merge or closure. DCO alone is not CI-green.
+The source delta dispositions remain scoped and `PARTIAL`; main merge, hosted
+qualification, release, consumer adoption, and archive/ref gates are open.
 
 ## Superseded 2a2 snapshot — document updated 2026-10-04 07:27 UTC
 
