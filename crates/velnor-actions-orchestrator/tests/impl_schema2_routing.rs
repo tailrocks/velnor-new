@@ -217,6 +217,11 @@ fn assert_both_ci(ci: &str) -> TestResult {
     assert!(local.contains(SCALE_RUNS), "{local}");
     assert!(!local.contains(SCALE_REVERSED), "{local}");
     assert!(!local.contains("runs-on: ubuntu-26.04\n"), "{local}");
+    assert!(
+        local.contains("defaults:\n      run:\n        shell: bash -e {0}"),
+        "{local}"
+    );
+    assert!(!hosted.contains("defaults:"), "{hosted}");
     assert_eq!(tool_lines(hosted), tool_lines(local));
     let plan = job_body(ci, "plan")?;
     assert!(plan.contains(HOSTED_RUNS), "{plan}");
@@ -271,9 +276,27 @@ fn jobs_section(yaml: &str) -> &str {
 }
 
 fn tool_lines(body: &str) -> Vec<&str> {
+    let mut in_steps = false;
     body.lines()
-        .filter(|line| line.trim().starts_with("run:") || line.trim().starts_with("uses:"))
+        .filter(|line| {
+            let indent = line.bytes().take_while(|byte| *byte == b' ').count();
+            let content = line.trim();
+            if indent == 4 {
+                in_steps = content == "steps:";
+                return false;
+            }
+            in_steps && indent == 8 && (content.starts_with("run:") || content.starts_with("uses:"))
+        })
         .collect()
+}
+
+#[test]
+fn tool_lines_ignores_defaults_but_detects_step_differences() {
+    let hosted = "    steps:\n      - name: run\n        run: cargo test\n";
+    let scaled = "    defaults:\n      run:\n        shell: bash -e {0}\n    steps:\n      - name: run\n        run: cargo test\n";
+    let changed = scaled.replace("cargo test", "cargo check");
+    assert_eq!(tool_lines(hosted), tool_lines(scaled));
+    assert_ne!(tool_lines(hosted), tool_lines(&changed));
 }
 
 fn join_files(tree: &RenderedTree) -> String {
@@ -361,6 +384,9 @@ jobs:
     name: Scale set lane
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash -e {0}
     steps:
       - name: Run scale-set lane
         run: echo scale-set-lane
