@@ -1,6 +1,11 @@
 //! Exact schema-2 generator-release workflow body, without the generator marker.
 
 use velnor_actions_workflow_renderer::RenderedTree;
+#[path = "schema2_generator_release_action_snapshots.rs"]
+mod action_snapshots;
+#[path = "schema2_generator_release_qualification_snapshots.rs"]
+mod qualification_snapshots;
+use action_snapshots::{Actions, action, action_text};
 
 pub(super) const GENERATOR_RELEASE: &str = include_str!("snapshots/generator-release.yml");
 
@@ -10,7 +15,9 @@ pub(super) fn assert_rendered(tree: &RenderedTree) -> Result<(), Box<dyn std::er
         .get(".github/workflows/generator-release.yml")
         .ok_or("missing .github/workflows/generator-release.yml")?;
     assert_eq!(body, super::marked(GENERATOR_RELEASE));
-    assert_generator(body)?;
+    assert!(body.lines().count() < 400, "workflow has too many lines");
+    let actions = action_snapshots::rendered_actions(tree)?;
+    assert_generator(body, &actions)?;
     Ok(())
 }
 
@@ -19,19 +26,22 @@ pub(super) fn assert_committed(root: &std::path::Path) -> Result<(), Box<dyn std
     let path = root.join(".github/workflows/generator-release.yml");
     let body = std::fs::read_to_string(&path)?;
     assert_eq!(body, super::marked(GENERATOR_RELEASE), "{}", path.display());
-    assert_generator(&body)?;
+    assert!(body.lines().count() < 400, "workflow has too many lines");
+    let actions = action_snapshots::committed_actions(root)?;
+    assert_generator(&body, &actions)?;
     Ok(())
 }
 
-fn assert_generator(body: &str) -> Result<(), Box<dyn std::error::Error>> {
+fn assert_generator(body: &str, actions: &Actions) -> Result<(), Box<dyn std::error::Error>> {
     assert!(body.contains("name: Generator release\n"), "{body}");
     assert_job_order(body);
-    assert_global_policy(body);
-    assert_source_gate(body);
-    assert_asset_catalog(body);
-    assert_target_builds(body)?;
-    assert_manifest_job(body)?;
-    assert_publish_job(body)?;
+    assert_global_policy(body, actions);
+    assert_checkouts(body, actions)?;
+    assert_source_gate(body)?;
+    assert_asset_catalog(&action_text(actions));
+    assert_target_builds(body, actions)?;
+    assert_manifest_job(body, actions)?;
+    assert_publish_job(body, actions)?;
     Ok(())
 }
 
@@ -52,16 +62,35 @@ fn assert_job_order(body: &str) {
     );
 }
 
-fn assert_global_policy(body: &str) {
+fn assert_global_policy(body: &str, actions: &Actions) {
+    let combined = format!("{body}\n{}", action_text(actions));
     assert_eq!(body.matches("contents: write").count(), 1, "{body}");
     assert_eq!(body.matches("id-token: write").count(), 4, "{body}");
-    assert!(!body.contains("v0.1.0"), "{body}");
-    assert!(body.contains("generator-${GITHUB_SHA}"), "{body}");
+    assert!(combined.contains("v0.1.1"), "{combined}");
+    assert!(!combined.contains("generator-${GITHUB_SHA}"), "{combined}");
     assert!(body.contains("workflow_dispatch: {}"), "{body}");
     assert!(!body.contains("inputs:"), "{body}");
 }
 
-fn assert_source_gate(body: &str) {
+fn assert_checkouts(body: &str, actions: &Actions) -> Result<(), Box<dyn std::error::Error>> {
+    for id in super::job_ids(body) {
+        let job = super::job_body(body, id)?;
+        assert_eq!(job.matches("actions/checkout@").count(), 1, "{id}: {job}");
+        if id != "verify-release-source" {
+            assert_eq!(
+                job.matches("uses: ./.github/actions/").count(),
+                1,
+                "{id}: {job}"
+            );
+        }
+    }
+    for (name, action) in actions {
+        assert!(!action.contains("actions/checkout@"), "{name}: {action}");
+    }
+    Ok(())
+}
+
+fn assert_source_gate(body: &str) -> Result<(), Box<dyn std::error::Error>> {
     assert!(body.contains("refs/heads/main"), "{body}");
     assert!(body.contains("actions/workflows/ci.yml/runs"), "{body}");
     assert!(body.contains("Required"), "{body}");
@@ -71,6 +100,19 @@ fn assert_source_gate(body: &str) {
         "{body}"
     );
     assert!(body.contains("git rev-parse HEAD"), "{body}");
+    let source_gate = super::job_body(body, "verify-release-source")?;
+    let recheck = source_gate
+        .split("Recheck default-branch source")
+        .nth(1)
+        .ok_or("missing default-branch source recheck")?
+        .split("- name:")
+        .next()
+        .ok_or("missing recheck step body")?;
+    assert!(
+        recheck.contains("GH_TOKEN: ${{ github.token }}"),
+        "{recheck}"
+    );
+    Ok(())
 }
 
 fn assert_asset_catalog(body: &str) {
@@ -81,9 +123,9 @@ fn assert_asset_catalog(body: &str) {
     );
     assert!(body.contains("sha256sum --check"), "{body}");
     for binary in [
-        "velnor-actions-0.1.0-x86_64-unknown-linux-gnu",
-        "velnor-actions-0.1.0-aarch64-apple-darwin",
-        "velnor-actions-0.1.0-x86_64-apple-darwin",
+        "velnor-actions-0.1.1-x86_64-unknown-linux-gnu",
+        "velnor-actions-0.1.1-aarch64-apple-darwin",
+        "velnor-actions-0.1.1-x86_64-apple-darwin",
     ] {
         assert!(body.contains(binary), "missing {binary}");
     }
@@ -98,9 +140,9 @@ fn assert_asset_catalog(body: &str) {
         );
     }
     for provenance in [
-        "velnor-actions-0.1.0-x86_64-unknown-linux-gnu.provenance.json",
-        "velnor-actions-0.1.0-aarch64-apple-darwin.provenance.json",
-        "velnor-actions-0.1.0-x86_64-apple-darwin.provenance.json",
+        "velnor-actions-0.1.1-x86_64-unknown-linux-gnu.provenance.json",
+        "velnor-actions-0.1.1-aarch64-apple-darwin.provenance.json",
+        "velnor-actions-0.1.1-x86_64-apple-darwin.provenance.json",
     ] {
         assert!(body.contains(provenance), "missing provenance {provenance}");
     }
@@ -110,64 +152,149 @@ fn assert_asset_catalog(body: &str) {
     assert!(!body.contains("image-assets"), "{body}");
 }
 
-fn assert_target_builds(body: &str) -> Result<(), Box<dyn std::error::Error>> {
-    assert_attest(body, "attest-linux", "ubuntu-26.04")?;
-    assert_attest(body, "attest-macos", "macos-15")?;
-    assert_attest(body, "attest-macos-intel", "macos-15-intel")?;
-    assert_candidate_qualification(body, "attest-linux")?;
-    assert_candidate_qualification(body, "attest-macos")?;
-    assert_candidate_qualification(body, "attest-macos-intel")?;
+fn assert_target_builds(body: &str, actions: &Actions) -> Result<(), Box<dyn std::error::Error>> {
+    assert_attest(body, actions, "attest-linux", "ubuntu-26.04")?;
+    assert_attest(body, actions, "attest-macos", "macos-15")?;
+    assert_attest(body, actions, "attest-macos-intel", "macos-15-intel")?;
+    qualification_snapshots::assert_candidate_qualification(
+        actions,
+        "generator-release-attest-linux",
+        "linux-assets",
+        "velnor-actions-0.1.1-x86_64-unknown-linux-gnu",
+    )?;
+    qualification_snapshots::assert_candidate_qualification(
+        actions,
+        "generator-release-attest-macos",
+        "macos-assets",
+        "velnor-actions-0.1.1-aarch64-apple-darwin",
+    )?;
+    qualification_snapshots::assert_candidate_qualification(
+        actions,
+        "generator-release-attest-macos-intel",
+        "macos-intel-assets",
+        "velnor-actions-0.1.1-x86_64-apple-darwin",
+    )?;
+    assert_job_action(body, "build-linux", "generator-release-build-linux")?;
+    assert_job_action(body, "build-macos", "generator-release-build-macos")?;
+    assert_job_action(
+        body,
+        "build-macos-intel",
+        "generator-release-build-macos-intel",
+    )?;
     let linux = super::job_body(body, "build-linux")?;
     assert!(linux.contains("runs-on: ubuntu-26.04\n"), "{linux}");
-    assert!(linux.contains("ELF"), "{linux}");
-    assert!(linux.contains("sha256sum"), "{linux}");
+    let linux_action = action(actions, "generator-release-build-linux")?;
+    assert!(linux_action.contains("ELF"), "{linux_action}");
+    assert!(linux_action.contains("sha256sum"), "{linux_action}");
     assert!(
-        linux.contains(
+        linux_action.contains(
             "mbx build --release --locked --package velnor-actions-cli --bin velnor-actions"
         ),
-        "{linux}"
+        "{linux_action}"
     );
-    assert!(linux.contains("rust@1.98.1 mr-boxington@1.21.1"), "{linux}");
+    assert!(
+        linux_action.contains("rust@1.98.1 mr-boxington@1.21.1"),
+        "{linux_action}"
+    );
     let macos = super::job_body(body, "build-macos")?;
     assert!(macos.contains("runs-on: macos-15\n"), "{macos}");
-    assert!(macos.contains("*Mach-O*arm64*"), "{macos}");
-    assert!(macos.contains("shasum -a 256"), "{macos}");
+    let macos_action = action(actions, "generator-release-build-macos")?;
+    assert!(macos_action.contains("*Mach-O*arm64*"), "{macos_action}");
+    assert!(macos_action.contains("shasum -a 256"), "{macos_action}");
     let intel = super::job_body(body, "build-macos-intel")?;
     assert!(intel.contains("runs-on: macos-15-intel\n"), "{intel}");
-    assert!(intel.contains("*Mach-O*x86_64*"), "{intel}");
-    assert!(intel.contains("shasum -a 256"), "{intel}");
+    let intel_action = action(actions, "generator-release-build-macos-intel")?;
+    assert!(intel_action.contains("*Mach-O*x86_64*"), "{intel_action}");
+    assert!(intel_action.contains("shasum -a 256"), "{intel_action}");
     Ok(())
 }
 
-fn assert_manifest_job(body: &str) -> Result<(), Box<dyn std::error::Error>> {
-    assert_attest(body, "attest-manifest", "ubuntu-26.04")?;
-    let manifest = super::job_body(body, "attest-manifest")?;
-    assert!(manifest.contains("schema\\\":1"), "{manifest}");
+fn assert_manifest_job(body: &str, actions: &Actions) -> Result<(), Box<dyn std::error::Error>> {
+    assert_attest(body, actions, "attest-manifest", "ubuntu-26.04")?;
+    assert_job_action(body, "attest-manifest", "generator-release-manifest")?;
+    let manifest = action(actions, "generator-release-manifest")?;
     assert!(
-        manifest.contains("\\\"version\\\":\\\"0.1.0\\\""),
+        manifest.contains("create-release-manifest.sh '0.1.1' 'tailrocks/velnor-new'"),
         "{manifest}"
     );
-    assert!(manifest.contains("\\\"commit\\\":\\\"%s\\\""), "{manifest}");
     assert!(manifest.contains("release-manifest.json"), "{manifest}");
-    assert!(manifest.contains("toolchain"), "{manifest}");
     assert!(manifest.contains("Attest built artifacts"), "{manifest}");
     assert!(manifest.contains("Upload release manifest"), "{manifest}");
-    assert!(manifest.contains("- attest-linux"), "{manifest}");
-    assert!(manifest.contains("- attest-macos"), "{manifest}");
-    assert!(manifest.contains("- attest-macos-intel"), "{manifest}");
+    let manifest_builder =
+        include_str!("../../../scripts/generator-release/create-release-manifest.sh");
+    assert!(
+        manifest_builder.contains(".schema == 1"),
+        "{manifest_builder}"
+    );
+    assert!(
+        manifest_builder.contains(".version == $version"),
+        "{manifest_builder}"
+    );
+    assert!(
+        manifest_builder.contains(".commit == $commit"),
+        "{manifest_builder}"
+    );
+    assert!(
+        manifest_builder.contains(".toolchain.rust == $rust"),
+        "{manifest_builder}"
+    );
+    assert!(
+        manifest_builder.contains(r#".toolchain["mr-boxington"] == $mr_boxington"#),
+        "{manifest_builder}"
+    );
+    let manifest_job = super::job_body(body, "attest-manifest")?;
+    assert!(manifest_job.contains("- attest-linux"), "{manifest_job}");
+    assert!(manifest_job.contains("- attest-macos"), "{manifest_job}");
+    assert!(
+        manifest_job.contains("- attest-macos-intel"),
+        "{manifest_job}"
+    );
     Ok(())
 }
 
-fn assert_publish_job(body: &str) -> Result<(), Box<dyn std::error::Error>> {
+fn assert_publish_job(body: &str, actions: &Actions) -> Result<(), Box<dyn std::error::Error>> {
     let publish = super::job_body(body, "publish-generator")?;
     assert!(publish.contains("runs-on: ubuntu-26.04\n"), "{publish}");
     assert!(publish.contains("contents: write"), "{publish}");
     assert!(!publish.contains("id-token:"), "{publish}");
+    assert_job_action(body, "publish-generator", "generator-release-publish")?;
+    let publish_action = action(actions, "generator-release-publish")?;
     assert!(
-        publish.contains("GH_TOKEN: ${{ github.token }}"),
-        "{publish}"
+        publish_action.contains("GH_TOKEN: ${{ github.token }}"),
+        "{publish_action}"
     );
-    assert!(publish.contains("actions/checkout@"), "{publish}");
+    assert_eq!(
+        publish_action
+            .matches("name: Download verified release attestation bundles")
+            .count(),
+        4,
+        "{publish_action}"
+    );
+    for artifact in [
+        "generator-linux-assets-attestations",
+        "generator-macos-assets-attestations",
+        "generator-macos-intel-assets-attestations",
+        "generator-release-manifest-attestations",
+    ] {
+        assert!(
+            publish_action.contains(&format!("name: {artifact}")),
+            "missing downloaded bundle artifact {artifact}: {publish_action}"
+        );
+    }
+    assert!(
+        publish_action.contains("gh attestation verify"),
+        "{publish_action}"
+    );
+    assert!(
+        publish_action.contains("--source-digest"),
+        "{publish_action}"
+    );
+    assert!(
+        publish_action.contains("--source-ref refs/heads/main"),
+        "{publish_action}"
+    );
+    assert!(publish_action.contains(".intoto.jsonl"), "{publish_action}");
+    assert!(publish_action.contains("v0.1.1"), "{publish_action}");
     assert!(publish.contains("- attest-linux"), "{publish}");
     assert!(publish.contains("- attest-macos"), "{publish}");
     assert!(publish.contains("- attest-macos-intel"), "{publish}");
@@ -175,47 +302,35 @@ fn assert_publish_job(body: &str) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn assert_candidate_qualification(body: &str, id: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let job = super::job_body(body, id)?;
-    let archive_list = job
-        .find("tar -tf \\\"$archive\\\"")
-        .ok_or("missing candidate archive member check")?;
-    let archive_extract = job
-        .find("tar -xf \\\"$archive\\\"")
-        .ok_or("missing uploaded candidate archive extraction")?;
-    let checksum = job
-        .find("Verify downloaded checksum sidecar")
-        .ok_or("missing downloaded checksum verification")?;
-    let provenance = job
-        .find("Verify candidate provenance record")
-        .ok_or("missing candidate provenance verification")?;
-    let qualification = job
-        .find("Qualify downloaded candidate")
-        .ok_or("missing exact candidate qualification")?;
-    let attestation = job
-        .find("Attest built artifacts")
-        .ok_or("missing candidate attestation")?;
+fn assert_job_action(
+    workflow: &str,
+    id: &str,
+    action_name: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let job = super::job_body(workflow, id)?;
     assert!(
-        archive_list < archive_extract
-            && archive_extract < checksum
-            && checksum < provenance
-            && provenance < qualification
-            && qualification < attestation,
+        job.contains(&format!("uses: ./.github/actions/{action_name}")),
         "{job}"
     );
-    assert!(job.contains("test -x "), "{job}");
-    assert!(job.contains("toolchain"), "{job}");
-    assert!(job.contains("--version"), "{job}");
-    assert!(job.contains(" generate --output-dir"), "{job}");
-    assert!(job.contains("diff -r --brief .github"), "{job}");
     Ok(())
 }
 
-fn assert_attest(body: &str, id: &str, runs_on: &str) -> Result<(), Box<dyn std::error::Error>> {
+fn assert_attest(
+    body: &str,
+    actions: &Actions,
+    id: &str,
+    runs_on: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     let job = super::job_body(body, id)?;
     assert!(job.contains(&format!("runs-on: {runs_on}\n")), "{job}");
     assert!(job.contains("id-token: write"), "{job}");
     assert!(!job.contains("contents: write"), "{job}");
-    assert!(job.contains("provenance.json"), "{job}");
+    let action_name = if id == "attest-manifest" {
+        "generator-release-manifest".to_owned()
+    } else {
+        format!("generator-release-{id}")
+    };
+    assert_job_action(body, id, &action_name)?;
+    assert!(action(actions, &action_name)?.contains("provenance.json"));
     Ok(())
 }

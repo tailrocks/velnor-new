@@ -17,6 +17,22 @@ pub(super) fn bash_step(name: &str, run: &str) -> Yaml {
     ])
 }
 
+/// Run one API step with only the repository's read-scoped token.
+pub(super) fn bash_step_with_token(name: &str, run: &str) -> Yaml {
+    Yaml::Map(vec![
+        ("name".to_owned(), Yaml::str(name)),
+        (
+            "env".to_owned(),
+            Yaml::Map(vec![(
+                "GH_TOKEN".to_owned(),
+                Yaml::str("${{ github.token }}"),
+            )]),
+        ),
+        ("shell".to_owned(), Yaml::str("bash")),
+        ("run".to_owned(), Yaml::str(run)),
+    ])
+}
+
 pub(super) fn publish_step(run: &str) -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str("Publish GitHub release")),
@@ -124,10 +140,10 @@ pub(super) fn build_permissions() -> Yaml {
     perm(&[("actions", "write"), ("contents", "read")])
 }
 
-/// Attestation needs an identity token, not write access to repository contents.
+/// Attestation uploads bundle artifacts but cannot write repository contents.
 pub(super) fn attest_permissions() -> Yaml {
     perm(&[
-        ("actions", "read"),
+        ("actions", "write"),
         ("artifact-metadata", "write"),
         ("attestations", "write"),
         ("contents", "read"),

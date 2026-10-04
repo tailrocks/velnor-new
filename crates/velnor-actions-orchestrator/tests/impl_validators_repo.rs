@@ -27,6 +27,7 @@ fn git(args: &[&str], cwd: &Path) -> TestResult {
 
 /// Release-manifest fixture so consumer `prepare` succeeds.
 fn fixture_manifest_json() -> String {
+    let version = env!("CARGO_PKG_VERSION");
     let targets = [
         "x86_64-unknown-linux-gnu",
         "aarch64-apple-darwin",
@@ -35,14 +36,14 @@ fn fixture_manifest_json() -> String {
     .iter()
     .map(|target| {
         format!(
-            "{{\"target\":\"{target}\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v0.1.0/velnor-actions-0.1.0-{target}\",\"sha256\":\"{}\"}}",
+            "{{\"target\":\"{target}\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v{version}/velnor-actions-{version}-{target}\",\"sha256\":\"{}\"}}",
             "a".repeat(64)
         )
     })
     .collect::<Vec<_>>()
     .join(",");
     format!(
-        "{{\"schema\":1,\"version\":\"0.1.0\",\"repository\":\"tailrocks/velnor-new\",\"targets\":[{targets}]}}"
+        "{{\"schema\":1,\"version\":\"{version}\",\"repository\":\"tailrocks/velnor-new\",\"targets\":[{targets}]}}"
     )
 }
 

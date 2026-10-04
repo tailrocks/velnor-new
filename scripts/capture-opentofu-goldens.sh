@@ -7,7 +7,7 @@
 # (plan-v1 response, expected-set, task report); this script pins the
 # user-facing plan text and generated YAML bytes around it.
 #
-# Usage: scripts/capture-opentofu-goldens.sh [capture|check [CLI_BINARY]]
+# Usage: scripts/capture-opentofu-goldens.sh [capture|check|check-release [CLI_BINARY]]
 #   capture  regenerate docs/proposed/opentofu-goldens/ (only at known-good)
 #   check    regenerate to temp and byte-diff (default; never writes goldens)
 #   CLI_BINARY uses that exact executable and skips the default debug build.
@@ -24,7 +24,7 @@ if [ "$#" -gt 2 ]; then
   exit 2
 fi
 case "$MODE" in
-  capture|check) ;;
+  capture|check|check-release) ;;
   *)
     echo "FATAL: usage: $0 [capture|check [CLI_BINARY]]"
     exit 2
@@ -122,6 +122,9 @@ setup_case() {
     mkdir -p "$repo/.velnor"
     printf 'schema = 1\n\n[workflow]\ndefault_branch = "main"\n' > "$repo/.velnor/config.toml"
   fi
+  if [ "$MODE" = "check-release" ]; then
+    write_release_fixture_manifest "$repo"
+  fi
   (cd "$repo" \
     && git init -q \
     && git add -A \
@@ -131,6 +134,24 @@ setup_case() {
   ) >/dev/null 2>&1 || { echo "FATAL: git setup failed for $case"; exit 2; }
   head=$(git -C "$repo" rev-parse HEAD)
   echo "$head"
+}
+
+write_release_fixture_manifest() {
+  local repo="$1" version commit digest
+  version=$("$BIN" --version | awk 'NR == 1 && NF == 2 && $1 == "velnor-actions" { print $2; next } { exit 1 } END { if (NR != 1) exit 1 }')
+  case "$version" in
+    ''|*[!0-9.]*|.*|*.) echo "FATAL: invalid candidate version: $version" >&2; exit 2 ;;
+  esac
+  commit=$(printf '%040d' 0 | tr '0' 'b')
+  digest=$(printf '%064d' 0 | tr '0' 'a')
+  mkdir -p "$repo/.velnor"
+  jq -n --arg version "$version" --arg commit "$commit" --arg digest "$digest" '
+    {schema:1, version:$version, repository:"tailrocks/velnor-new", commit:$commit,
+     targets:["x86_64-unknown-linux-gnu","aarch64-apple-darwin","x86_64-apple-darwin"]
+       | map(. as $target | {target:$target,
+         artifact:("https://github.com/tailrocks/velnor-new/releases/download/v" + $version + "/velnor-actions-" + $version + "-" + $target),
+         sha256:$digest})}
+  ' > "$repo/.velnor/release-manifest.json"
 }
 
 capture_case() {
@@ -155,6 +176,32 @@ capture_case() {
     exit 2
   fi
   hash_tree "$preview" "$out/tree.sha256"
+}
+
+capture_release_case() {
+  local case="$1" repo="$2" out="$3" preview="$3/preview"
+  mkdir -p "$out" "$preview"
+  (cd "$repo" && "$BIN" generate --output-dir "$preview" >"$out/stdout.txt" 2>"$out/stderr.txt") \
+    || { echo "FATAL: release candidate generate failed for $case"; exit 2; }
+  if [ ! -d "$preview/.github" ]; then
+    echo "FATAL: release candidate emitted no workflows for $case"
+    exit 2
+  fi
+  hash_tree "$preview" "$out/tree.sha256"
+}
+
+check_release_policy_negative() {
+  local repo="$WORK/hostile-config" output="$WORK/hostile-output"
+  setup_case hostile-config >/dev/null
+  if (cd "$repo" && "$BIN" generate --output-dir "$output" >"$WORK/hostile.stdout" 2>"$WORK/hostile.stderr"); then
+    echo "FAIL: release candidate accepted the hostile policy fixture"
+    fail=1
+  elif ! grep -F '.velnor/config.toml: evil: unknown_config_field' "$WORK/hostile.stderr"; then
+    echo "FAIL: release candidate rejected the hostile fixture for an unexpected reason"
+    fail=1
+  else
+    note "release policy negative match: hostile-config"
+  fi
 }
 
 capture_dogfood() {
@@ -225,6 +272,29 @@ trap cleanup_work EXIT
 
 stage="$WORK/stage"
 mkdir -p "$stage"
+if [ "$MODE" = "check-release" ]; then
+  for case in $FIXTURES; do
+    repo="$WORK/$case"
+    if ! head="$(setup_case "$case")"; then
+      echo "FATAL: could not set up release fixture $case"
+      exit 2
+    fi
+    capture_release_case "$case" "$repo" "$stage/$case"
+    if ! diff "$GOLDEN_DIR/cases/$case/tree.sha256" "$stage/$case/tree.sha256"; then
+      die "release fixture golden mismatch: $case"
+    else
+      note "release fixture match: $case"
+    fi
+    if ! link_identity "$GOLDEN_DIR/cases/$case/preview" >"$stage/$case/golden.links" \
+      || ! link_identity "$stage/$case/preview" >"$stage/$case/stage.links" \
+      || ! diff "$stage/$case/golden.links" "$stage/$case/stage.links"; then
+      die "release fixture symlink mismatch: $case"
+    fi
+  done
+  check_release_policy_negative
+  [ "$fail" = "0" ] && note "ALL RELEASE FIXTURE GOLDENS MATCH"
+  exit "$fail"
+fi
 for case in $FIXTURES; do
   repo="$WORK/$case"
   if ! head="$(setup_case "$case")"; then

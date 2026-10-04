@@ -11,6 +11,11 @@ use crate::{RenderError, steps};
 /// SHA rather than this already checked-out event tree. Keep the exception
 /// on this fixed workspace-relative reference only.
 pub(crate) fn shared_call(uses: &str) -> Result<Yaml, RenderError> {
+    shared_call_named(uses, "Run shared steps")
+}
+
+/// One named local composite call after the canonical path check.
+pub(crate) fn shared_call_named(uses: &str, name: &str) -> Result<Yaml, RenderError> {
     let Some(logical) = uses.strip_prefix("./.github/actions/") else {
         return Err(RenderError::UnsafePath(uses.to_owned()));
     };
@@ -22,7 +27,7 @@ pub(crate) fn shared_call(uses: &str) -> Result<Yaml, RenderError> {
         return Err(RenderError::UnsafePath(uses.to_owned()));
     }
     Ok(Yaml::Map(vec![
-        ("name".to_owned(), Yaml::str("Run shared steps".to_owned())),
+        ("name".to_owned(), Yaml::str(name.to_owned())),
         (
             "uses".to_owned(),
             Yaml::annotated(uses, "zizmor: ignore[self-repository]"),

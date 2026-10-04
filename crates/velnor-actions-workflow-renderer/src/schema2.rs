@@ -117,11 +117,15 @@ pub fn render_schema2_workflows(
         .workflows
         .contains(&RoutingWorkflow::GeneratorRelease)
     {
+        let generated = generator_release::generator_release(request)?;
         files.push(file(
             GENERATOR_RELEASE_WORKFLOW,
             &request.version,
-            &generator_release::generator_release(request)?,
+            &generated.workflow,
         )?);
+        for (path, action) in generated.actions {
+            files.push(file(&path, &request.version, &action)?);
+        }
     }
     if request.workflows.contains(&RoutingWorkflow::Monitoring) {
         files.push(file(
