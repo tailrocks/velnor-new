@@ -136,21 +136,24 @@ write_pax_archive() {
   rm -f "$list"
 }
 
+# Decompressed bytes on stdout. Never a second archive file under /tmp.
+stream_archive() {
+  [ -n "$archive" ] || die "missing archive"
+  if [ -n "$program" ]; then
+    bash -c "$program" <"$archive"
+  elif [ "$gzip" -eq 1 ]; then
+    gzip -dc -- "$archive"
+  else
+    cat -- "$archive"
+  fi
+}
+
 list_members() {
   local out="$1"
-  local raw=""
   # BusyBox tar -t strips "../" before it prints the name. GNU tar lists the
   # stored name and does not open the member, so openat2 is not involved.
-  if [ -n "$program" ]; then
-    raw="$(mktemp)"
-    bash -c "$program" <"$archive" >"$raw"
-    tar.gnu t -f "$raw" >"$out"
-    rm -f "$raw"
-  elif [ "$gzip" -eq 1 ]; then
-    tar.gnu t -z -f "$archive" >"$out"
-  else
-    tar.gnu t -f "$archive" >"$out"
-  fi
+  # Same stream as extract: the decompressor is not written to a file.
+  stream_archive | tar.gnu t -f - >"$out"
 }
 
 move_member() {

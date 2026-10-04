@@ -1,17 +1,26 @@
 #!/usr/bin/perl
-# List tar members and copy one member's raw bytes. Extract stays BusyBox.
-# Pax and GNU long-name headers stay attached to the member they describe.
+# List tar members and copy selected members' raw bytes.
+# --list and --emit read the archive on stdin in one forward pass.
+# Extract stays BusyBox. Pax and GNU long-name headers stay attached
+# to the member they describe. No seek: a pipe is not an archive file.
 use strict;
 use warnings;
 use bytes;
+use Fcntl qw(O_WRONLY O_NONBLOCK F_GETFL F_SETFL);
 
+binmode STDIN,  ":raw" or die "velnor-tar-member: binmode: $!\n";
 binmode STDOUT;
+$| = 1;
 
-sub tell_of {
-    my ($fh) = @_;
-    my $pos = sysseek $fh, 0, 1;
-    die "velnor-tar-member: seek: $!\n" if !defined $pos;
-    return $pos;
+my $AT = 0;
+
+sub counted_read {
+    my ($fh, $want) = @_;
+    my $buf = "";
+    my $got = sysread $fh, $buf, $want;
+    die "velnor-tar-member: read: $!\n" if !defined $got;
+    $AT += $got if $got > 0;
+    return ($got, $buf);
 }
 
 sub cstr {
@@ -84,13 +93,16 @@ sub parse_pax {
 
 sub read_header {
     my ($fh) = @_;
-    my $at = tell_of($fh);
-    my $buf;
-    my $got = sysread $fh, $buf, 512;
-    die "velnor-tar-member: read: $!\n" if !defined $got;
-    return             if $got == 0;
-    die "velnor-tar-member: short header\n" if $got != 512;
-    return ($at, $buf);
+    my $buf  = "";
+    my $need = 512;
+    while ($need > 0) {
+        my ($got, $part) = counted_read($fh, $need);
+        return              if $got == 0 && $buf eq "";
+        die "velnor-tar-member: short header\n" if $got == 0;
+        $buf .= $part;
+        $need -= $got;
+    }
+    return $buf;
 }
 
 sub read_exact {
@@ -98,39 +110,41 @@ sub read_exact {
     my $data = "";
     my $left = $size;
     while ($left > 0) {
-        my $buf;
         my $want = $left > 1048576 ? 1048576 : $left;
-        my $got = sysread $fh, $buf, $want;
-        die "velnor-tar-member: short read\n" if !defined $got || $got == 0;
+        my ($got, $buf) = counted_read($fh, $want);
+        die "velnor-tar-member: short read\n" if $got == 0;
         $data .= $buf;
         $left -= $got;
     }
     return $data;
 }
 
-sub skip_pad {
-    my ($fh, $size) = @_;
-    my $pad = (512 - ($size % 512)) % 512;
-    return if $pad == 0;
-    my $junk;
-    my $got = sysread $fh, $junk, $pad;
-    die "velnor-tar-member: short pad\n" if !defined $got || $got != $pad;
+sub transfer {
+    my ($fh, $size, $out) = @_;
+    return if $size <= 0;
+    my $left = $size;
+    while ($left > 0) {
+        my $want = $left > 1048576 ? 1048576 : $left;
+        my ($got, $buf) = counted_read($fh, $want);
+        die "velnor-tar-member: short read\n" if $got == 0;
+        if (defined $out) {
+            print $out $buf or die "velnor-tar-member: write: $!\n";
+        }
+        $left -= $got;
+    }
 }
 
-sub skip_rounded {
-    my ($fh, $size) = @_;
-    my $pad = (512 - ($size % 512)) % 512;
-    my $total = $size + $pad;
-    return if $total == 0;
-    my $pos = tell_of($fh);
-    sysseek($fh, $pos + $total, 0) or die "velnor-tar-member: seek: $!\n";
+sub pad_len {
+    my ($size) = @_;
+    return (512 - ($size % 512)) % 512;
 }
 
-sub take_body {
+sub read_padded {
     my ($fh, $size) = @_;
-    my $data = $size > 0 ? read_exact($fh, $size) : "";
-    skip_pad($fh, $size);
-    return $data;
+    my $body = read_exact($fh, $size);
+    my $padn = pad_len($size);
+    my $pad  = $padn ? read_exact($fh, $padn) : "";
+    return ($body, $body . $pad);
 }
 
 sub trim_nul {
@@ -173,45 +187,55 @@ sub apply_meta {
     }
 }
 
-sub push_member {
-    my ($members, $state, $at, $type, $ustar, $link, $end) = @_;
+sub resolve_member {
+    my ($state, $ustar, $link) = @_;
     my $name = pick_name($ustar, $state->{gnu_name}, $state->{local}, $state->{global});
     my $target = $link;
-    $target = $state->{gnu_link}        if defined $state->{gnu_link};
-    $target = $state->{global}{linkpath} if exists $state->{global}{linkpath} && !defined $state->{gnu_link};
+    $target = $state->{gnu_link} if defined $state->{gnu_link};
+    $target = $state->{global}{linkpath}
+        if exists $state->{global}{linkpath} && !defined $state->{gnu_link};
     $target = $state->{local}{linkpath} if exists $state->{local}{linkpath};
     die "velnor-tar-member: member name contains a newline\n" if $name =~ /\n/ || $target =~ /\n/;
     die "velnor-tar-member: member name contains a tab\n"     if $name =~ /\t/ || $target =~ /\t/;
-    my $start = defined $state->{prelude} ? $state->{prelude} : $at;
-    push @$members, {
-        start   => $start,
-        len     => $end - $start,
-        type    => $type,
-        name    => $name,
-        link    => $target,
-        globals => $state->{gcount},
-    };
-    $state->{prelude}  = undef;
-    $state->{local}    = {};
-    $state->{gnu_name} = undef;
-    $state->{gnu_link} = undef;
+    return ($name, $target);
 }
 
-sub note_global {
-    my ($globals, $state, $at, $end) = @_;
-    return if defined $state->{prelude};
-    push @$globals, { start => $at, len => $end - $at };
-    $state->{gcount}++;
-}
-
-sub walk {
-    my ($archive) = @_;
-    open my $fh, "<:raw", $archive or die "velnor-tar-member: $archive: $!\n";
-    my @members;
-    my @globals;
-    my $state = { global => {}, local => {}, gcount => 0 };
+sub open_fifo {
+    my ($path) = @_;
     while (1) {
-        my ($at, $hdr) = read_header($fh);
+        die "velnor-tar-member: parent gone\n" if getppid() == 1;
+        if (-e $path) {
+            my $fh;
+            if (sysopen $fh, $path, O_WRONLY | O_NONBLOCK) {
+                my $flags = fcntl $fh, F_GETFL, 0;
+                die "velnor-tar-member: fcntl: $!\n" if !defined $flags;
+                fcntl($fh, F_SETFL, $flags & ~O_NONBLOCK)
+                    or die "velnor-tar-member: fcntl: $!\n";
+                binmode $fh, ":raw" or die "velnor-tar-member: binmode: $!\n";
+                my $old = select $fh;
+                $| = 1;
+                select $old;
+                return $fh;
+            }
+            die "velnor-tar-member: $path: $!\n" if !$!{ENXIO} && !$!{ENOENT};
+        }
+        select undef, undef, undef, 0.02;
+    }
+}
+
+# Calls $cb->($index, $type, $name, $link, $hdr, $size, $prelude, $globals).
+# $cb returns ($out, $after). $out receives the body, or undef discards it.
+# $after runs after the body so a group fifo can be closed.
+sub walk {
+    my ($cb) = @_;
+    my $state = { global => {}, local => {} };
+    my @globals;
+    my $prelude    = "";
+    my $in_prelude = 0;
+    my $index      = 0;
+    while (1) {
+        my $at  = $AT;
+        my $hdr = read_header(\*STDIN);
         last if !defined $hdr;
         last if $hdr eq ("\0" x 512);
         die "velnor-tar-member: bad checksum at $at\n" if !checksum_ok($hdr);
@@ -219,89 +243,140 @@ sub walk {
         $type = "0" if $type eq "\0";
         my $size = parse_size(substr $hdr, 124, 12);
         if (meta_type($type)) {
-            $state->{prelude} = $at if !defined $state->{prelude} && $type ne "g";
-            my $body = take_body($fh, $size);
-            my $end  = tell_of($fh);
+            my ($body, $padded) = read_padded(\*STDIN, $size);
+            my $raw = $hdr . $padded;
             apply_meta($type, $body, $state);
-            note_global(\@globals, $state, $at, $end) if $type eq "g";
+            if ($type eq "g" && !$in_prelude) {
+                push @globals, $raw;
+            } else {
+                $in_prelude = 1;
+                $prelude .= $raw;
+            }
             next;
         }
-        skip_rounded($fh, $size);
-        push_member(
-            \@members, $state, $at, $type,
-            header_name($hdr), cstr(substr $hdr, 157, 100), tell_of($fh),
+        my ($name, $link) = resolve_member(
+            $state, header_name($hdr), cstr(substr $hdr, 157, 100),
         );
+        my ($out, $after) = $cb->(
+            $index, $type, $name, $link, $hdr, $size, $prelude, \@globals,
+        );
+        transfer(\*STDIN, $size, $out);
+        transfer(\*STDIN, pad_len($size), $out);
+        $after->() if $after;
+        $index++;
+        $prelude           = "";
+        $in_prelude        = 0;
+        $state->{local}    = {};
+        $state->{gnu_name} = undef;
+        $state->{gnu_link} = undef;
     }
-    close $fh;
-    return (\@members, \@globals);
-}
-
-sub copy_range {
-    my ($in, $start, $len) = @_;
-    return if $len <= 0;
-    sysseek($in, $start, 0) or die "velnor-tar-member: seek: $!\n";
-    my $left = $len;
-    while ($left > 0) {
-        my $buf;
-        my $want = $left > 1048576 ? 1048576 : $left;
-        my $got = sysread $in, $buf, $want;
-        die "velnor-tar-member: short read\n" if !defined $got || $got == 0;
-        print $buf or die "velnor-tar-member: write: $!\n";
-        $left -= $got;
-    }
+    return $index;
 }
 
 sub cmd_list {
-    my ($archive) = @_;
-    my ($members) = walk($archive);
-    for my $i (0 .. $#$members) {
-        my $m = $members->[$i];
-        print "$i\n$m->{type}\n$m->{link}\n$m->{name}\n";
-    }
+    walk(
+        sub {
+            my ($index, $type, $name, $link) = @_;
+            print "$index\n$type\n$link\n$name\n"
+                or die "velnor-tar-member: write: $!\n";
+            return;
+        }
+    );
 }
 
-sub read_indices {
-    my ($path, $last) = @_;
+sub read_groups {
+    my ($path) = @_;
     open my $fh, "<", $path or die "velnor-tar-member: $path: $!\n";
-    my @want;
+    my @groups;
+    my $last = -1;
     while (my $line = <$fh>) {
         chomp $line;
         next if $line eq "";
-        die "velnor-tar-member: bad index\n" if $line !~ /^\d+$/;
-        die "velnor-tar-member: index out of range\n" if $line > $last;
-        push @want, int $line;
+        my @idx;
+        for my $tok (split / /, $line) {
+            die "velnor-tar-member: bad index\n" if $tok !~ /^\d+$/;
+            my $idx = int $tok;
+            die "velnor-tar-member: index out of order\n" if $idx <= $last;
+            $last = $idx;
+            push @idx, $idx;
+        }
+        die "velnor-tar-member: empty group\n" if !@idx;
+        push @groups, \@idx;
     }
     close $fh;
-    return @want;
+    return @groups;
+}
+
+sub wait_done {
+    my ($dir) = @_;
+    my $done = "$dir/done";
+    while (!-e $done) {
+        die "velnor-tar-member: parent gone\n" if getppid() == 1;
+        select undef, undef, undef, 0.02;
+    }
 }
 
 sub cmd_emit {
-    my ($archive, $idxfile) = @_;
-    my ($members, $globals) = walk($archive);
-    my @want = read_indices($idxfile, $#$members);
-    open my $in, "<:raw", $archive or die "velnor-tar-member: $archive: $!\n";
-    my $written = 0;
-    for my $idx (@want) {
-        my $m = $members->[$idx];
-        while ($written < $m->{globals}) {
-            my $g = $globals->[$written];
-            copy_range($in, $g->{start}, $g->{len});
-            $written++;
-        }
-        copy_range($in, $m->{start}, $m->{len});
+    my ($plan, $dir) = @_;
+    my @groups = read_groups($plan);
+    my %seq_of;
+    my %end_of;
+    my $seq = 0;
+    for my $g (@groups) {
+        $end_of{ $g->[-1] } = 1;
+        $seq_of{$_} = $seq for @$g;
+        $seq++;
     }
-    print "\0" x 1024 or die "velnor-tar-member: write: $!\n";
-    close $in;
+    my $out;
+    my $writing_seq = -1;
+    my $gwritten    = 0;
+    my $finished    = 0;
+    walk(
+        sub {
+            my ($index, $type, $name, $link, $hdr, $size, $prelude, $globals) = @_;
+            return if !exists $seq_of{$index};
+            my $group = $seq_of{$index};
+            if (defined $out && $group != $writing_seq) {
+                die "velnor-tar-member: group split\n";
+            }
+            if (!defined $out) {
+                $out         = open_fifo("$dir/$group.fifo");
+                $writing_seq = $group;
+                $gwritten    = 0;
+            }
+            while ($gwritten < @$globals) {
+                print $out $globals->[$gwritten] or die "velnor-tar-member: write: $!\n";
+                $gwritten++;
+            }
+            if (length $prelude) {
+                print $out $prelude or die "velnor-tar-member: write: $!\n";
+            }
+            print $out $hdr or die "velnor-tar-member: write: $!\n";
+            my $after;
+            if ($end_of{$index}) {
+                $after = sub {
+                    print $out ("\0" x 1024) or die "velnor-tar-member: write: $!\n";
+                    close $out or die "velnor-tar-member: write: $!\n";
+                    $out = undef;
+                    $finished++;
+                };
+            }
+            return ($out, $after);
+        }
+    );
+    die "velnor-tar-member: index out of range\n" if $finished != @groups;
+    wait_done($dir);
 }
 
 my $cmd = shift @ARGV // die "velnor-tar-member: missing command\n";
 if ($cmd eq "--list") {
-    my $archive = shift @ARGV // die "velnor-tar-member: missing archive\n";
-    cmd_list($archive);
+    die "velnor-tar-member: unsupported extra args\n" if @ARGV;
+    cmd_list();
 } elsif ($cmd eq "--emit") {
-    my $archive = shift @ARGV // die "velnor-tar-member: missing archive\n";
-    my $idxfile = shift @ARGV // die "velnor-tar-member: missing index file\n";
-    cmd_emit($archive, $idxfile);
+    my $plan = shift @ARGV // die "velnor-tar-member: missing plan\n";
+    my $dir  = shift @ARGV // die "velnor-tar-member: missing fifo dir\n";
+    die "velnor-tar-member: unsupported extra args\n" if @ARGV;
+    cmd_emit($plan, $dir);
 } else {
     die "velnor-tar-member: unsupported $cmd\n";
 }

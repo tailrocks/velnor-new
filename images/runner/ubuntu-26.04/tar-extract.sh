@@ -2,45 +2,50 @@
 # path, so each of those members is extracted into an index-keyed directory
 # and moved alone. A hardlink needs its target in the same BusyBox extract;
 # per-member staging cannot keep that inode.
+# The decompressor is a stream. One fifo at a time reaches BusyBox, then it
+# is removed. /tmp never holds the uncompressed archive.
 
 stage_dir=""
-raw_temp=""
-pack_temp=""
-raw_file=""
+seq_dir=""
+plan_file=""
+prod_pid=""
+bb_pid=""
 dest_root=""
 isolated_any=0
 extract_all=0
 member_pl=""
 
 cleanup_extract() {
+  if [ -n "${bb_pid}" ]; then
+    kill "${bb_pid}" 2>/dev/null || true
+    wait "${bb_pid}" 2>/dev/null || true
+    bb_pid=""
+  fi
+  if [ -n "${seq_dir}" ]; then
+    : >"${seq_dir}/done" 2>/dev/null || true
+  fi
+  if [ -n "${prod_pid}" ]; then
+    local child kids
+    kids="$(ps -o pid= --ppid "${prod_pid}" 2>/dev/null || true)"
+    for child in $kids; do
+      kill "${child}" 2>/dev/null || true
+    done
+    kill "${prod_pid}" 2>/dev/null || true
+    wait "${prod_pid}" 2>/dev/null || true
+    prod_pid=""
+  fi
   if [ -n "${stage_dir}" ]; then
     rm -rf -- "$stage_dir"
     stage_dir=""
   fi
-  if [ -n "${raw_temp}" ]; then
-    rm -f -- "$raw_temp"
-    raw_temp=""
+  if [ -n "${seq_dir}" ]; then
+    rm -rf -- "$seq_dir"
+    seq_dir=""
   fi
-  if [ -n "${pack_temp}" ]; then
-    rm -f -- "$pack_temp"
-    pack_temp=""
+  if [ -n "${plan_file}" ]; then
+    rm -f -- "$plan_file"
+    plan_file=""
   fi
-}
-
-prepare_raw() {
-  [ -n "$archive" ] || die "missing archive"
-  raw_file="$archive"
-  raw_temp=""
-  if [ -z "$program" ] && [ "$gzip" -eq 0 ]; then
-    return 0
-  fi
-  raw_temp="$(mktemp "${TMPDIR:-/tmp}/velnor-tar-raw.XXXXXX")"
-  if [ -n "$program" ]; then
-    bash -c "$program" <"$archive" >"$raw_temp"
-  else
-    gzip -dc -- "$archive" >"$raw_temp"
-  fi
-  raw_file="$raw_temp"
 }
 
 path_under() {
@@ -93,7 +98,10 @@ member_tool() {
 read_perl_members() {
   local list index type link name
   list="$(mktemp "${TMPDIR:-/tmp}/velnor-tar-list.XXXXXX")"
-  perl "$member_pl" --list "$raw_file" >"$list" || die "member list failed"
+  if ! stream_archive | perl "$member_pl" --list >"$list"; then
+    rm -f -- "$list"
+    die "member list failed"
+  fi
   while IFS= read -r index && IFS= read -r type && IFS= read -r link && IFS= read -r name; do
     [ "$index" = "${#mem_name[@]}" ] || die "member index gap"
     mem_name+=("$name")
@@ -108,7 +116,10 @@ read_gnu_names() {
   gnu_names=()
   list="$(mktemp "${TMPDIR:-/tmp}/velnor-tar-gnu.XXXXXX")"
   # Same listing as list_members: GNU tar -t, never BusyBox, never -P.
-  tar.gnu t -f "$raw_file" >"$list"
+  if ! list_members "$list"; then
+    rm -f -- "$list"
+    die "member list failed"
+  fi
   while IFS= read -r line || [ -n "$line" ]; do
     [ -n "$line" ] || continue
     gnu_names+=("$line")
@@ -212,35 +223,49 @@ reject_hardlinks() {
   done
 }
 
-extract_indices() {
-  local dest="$1"
-  shift
-  local idxfile
-  [ "$#" -gt 0 ] || return 0
-  idxfile="$(mktemp "${TMPDIR:-/tmp}/velnor-tar-idx.XXXXXX")"
-  printf '%s\n' "$@" >"$idxfile"
-  pack_temp="$(mktemp "${TMPDIR:-/tmp}/velnor-tar-pack.XXXXXX")"
-  if ! perl "$member_pl" --emit "$raw_file" "$idxfile" >"$pack_temp"; then
-    rm -f -- "$idxfile"
-    die "member split failed"
-  fi
-  rm -f -- "$idxfile"
-  mkdir -p -- "$dest"
-  busybox tar -xf "$pack_temp" -C "$dest"
-  rm -f -- "$pack_temp"
-  pack_temp=""
+# kill -0 is true for a zombie, so the state byte is what ends the poll.
+child_state() {
+  local pid="$1"
+  local rest
+  [ -r "/proc/$pid/stat" ] || return 1
+  rest="$(sed -n 's/.*) //p' "/proc/$pid/stat")"
+  printf '%s' "${rest%% *}"
 }
 
-place_isolated() {
-  local i="$1"
+# Producer death while BusyBox is blocked on a fifo is a hang, not a slow extract.
+wait_child() {
+  local child="$1"
+  local prod="$2"
+  local state
+  while true; do
+    state="$(child_state "$child" || true)"
+    if [ -z "$state" ] || [ "$state" = Z ]; then
+      wait "$child"
+      return
+    fi
+    if ! kill -0 "$prod" 2>/dev/null; then
+      sleep 0.2
+      state="$(child_state "$child" || true)"
+      if [ -n "$state" ] && [ "$state" != Z ]; then
+        kill "$child" 2>/dev/null || true
+        wait "$child" 2>/dev/null || true
+        return 1
+      fi
+      wait "$child"
+      return
+    fi
+    sleep 0.05
+  done
+}
+
+install_member() {
+  local root="$1"
+  local i="$2"
   local name="${mem_name[$i]}"
   local stripped="${mem_strip[$i]}"
   local actual intended
   [ -n "$stripped" ] && [ "$stripped" != "." ] || die "empty member path: $name"
-  stage_dir="$(mktemp -d "${TMPDIR:-/tmp}/velnor-tar-m${i}.XXXXXX")"
-  mkdir -p -- "$stage_dir/root"
-  extract_indices "$stage_dir/root" "$i"
-  actual="$stage_dir/root/$stripped"
+  actual="$root/$stripped"
   intended="$(member_intended "$name")"
   if [ -e "$actual" ] || [ -L "$actual" ]; then
     move_member "$actual" "$intended"
@@ -249,31 +274,94 @@ place_isolated() {
   else
     die "member missing after extract: $name"
   fi
+}
+
+extract_root_fifo() {
+  local fifo="$1"
+  mkdir -p -- "$dest_root"
+  busybox tar -xf "$fifo" -C "$dest_root" &
+  bb_pid=$!
+  wait_child "$bb_pid" "$prod_pid" || die "member extract failed"
+  bb_pid=""
+}
+
+extract_one_fifo() {
+  local fifo="$1"
+  local index="$2"
+  stage_dir="$(mktemp -d "${TMPDIR:-/tmp}/velnor-tar-m${index}.XXXXXX")"
+  mkdir -p -- "$stage_dir/root"
+  busybox tar -xf "$fifo" -C "$stage_dir/root" &
+  bb_pid=$!
+  wait_child "$bb_pid" "$prod_pid" || die "member extract failed"
+  bb_pid=""
+  install_member "$stage_dir/root" "$index"
   rm -rf -- "$stage_dir"
   stage_dir=""
 }
 
+# One decompress for every wanted member. Isolated members are their own
+# group so a colliding stripped path cannot share a BusyBox extract.
+run_plan() {
+  local plan="$1"
+  local -n kinds=$2
+  local seq=0 line fifo
+  seq_dir="$(mktemp -d "${TMPDIR:-/tmp}/velnor-tar-seq.XXXXXX")"
+  (
+    set -o pipefail
+    stream_archive | perl "$member_pl" --emit "$plan" "$seq_dir"
+  ) &
+  prod_pid=$!
+  while IFS= read -r line || [ -n "$line" ]; do
+    [ -n "$line" ] || continue
+    fifo="$seq_dir/$seq.fifo"
+    mkfifo "$fifo"
+    if [ "${kinds[$seq]}" = root ]; then
+      extract_root_fifo "$fifo"
+    else
+      extract_one_fifo "$fifo" "$line"
+    fi
+    rm -f -- "$fifo"
+    seq=$((seq + 1))
+  done <"$plan"
+  : >"$seq_dir/done"
+  wait "$prod_pid" || die "member split failed"
+  prod_pid=""
+  rm -rf -- "$seq_dir"
+  seq_dir=""
+}
+
 extract_planned() {
   local -a batch=()
+  local -a group_kind=()
   local i
-  if [ "${#mem_name[@]}" -eq 0 ]; then
-    return 0
-  fi
+  [ "${#mem_name[@]}" -gt 0 ] || return 0
+  plan_file="$(mktemp "${TMPDIR:-/tmp}/velnor-tar-plan.XXXXXX")"
   for i in "${!mem_name[@]}"; do
     [ "${mem_wanted[$i]}" -eq 1 ] || continue
     if [ "${mem_isolated[$i]}" -eq 1 ]; then
       if [ "${#batch[@]}" -gt 0 ]; then
-        extract_indices "$dest_root" "${batch[@]}"
+        printf '%s\n' "${batch[*]}" >>"$plan_file"
+        group_kind+=("root")
         batch=()
       fi
-      place_isolated "$i"
-    else
-      batch+=("$i")
+      printf '%s\n' "$i" >>"$plan_file"
+      group_kind+=("one")
+      continue
     fi
+    batch+=("$i")
   done
   if [ "${#batch[@]}" -gt 0 ]; then
-    extract_indices "$dest_root" "${batch[@]}"
+    printf '%s\n' "${batch[*]}" >>"$plan_file"
+    group_kind+=("root")
   fi
+  if [ "${#group_kind[@]}" -eq 0 ]; then
+    rm -f -- "$plan_file"
+    plan_file=""
+    return 0
+  fi
+  run_plan "$plan_file" group_kind
+  rm -f -- "$plan_file"
+  plan_file=""
 }
 
 extract_fast() {
@@ -303,10 +391,5 @@ extract_archive() {
     extract_fast
     return 0
   fi
-  prepare_raw
   extract_absolute
-  if [ -n "$raw_temp" ]; then
-    rm -f -- "$raw_temp"
-    raw_temp=""
-  fi
 }

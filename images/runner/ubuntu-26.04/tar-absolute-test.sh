@@ -307,6 +307,91 @@ case_dash_positional() {
   cmp -s "$root/src/-dash-member" "$root/out/-dash-member" || return 1
 }
 
+# Fail if a compressed -P extract writes an uncompressed archive under TMPDIR.
+case_stream_no_raw() {
+  local root="$work/stream"
+  local payload limit real_mktemp
+  rm -rf -- "$root"
+  mkdir -p "$root/src" "$root/bin" "$root/dest/work/a/b/c"
+  payload="$(perl -e 'print "Q" x 100000')"
+  printf K >"$root/src/keep.txt"
+  write_ustar "$root/arc.tar" \
+    f keep.txt K \
+    f ../../../.cache/a "$payload" \
+    f ../../../.cache/b "$payload" || return 1
+  gzip -c "$root/arc.tar" >"$root/arc.tar.gz" || return 1
+  limit="$(stat -c '%s' "$root/arc.tar")"
+  real_mktemp="$(command -v mktemp)"
+  cat >"$root/bin/mktemp" <<EOF
+#!/bin/bash
+out="\$("$real_mktemp" "\$@")"
+watch="\${VELNOR_TAR_WATCH:-}"
+limit="\${VELNOR_TAR_LIMIT:-0}"
+if [ -n "\$watch" ]; then
+  for arg in "\$@"; do
+    case "\$arg" in
+      *velnor-tar-raw*) printf 'raw %s\\n' "\$out" >>"\$watch" ;;
+    esac
+  done
+  if [ "\$limit" -gt 0 ]; then
+    (
+      while [ -e "\$out" ]; do
+        if [ -f "\$out" ]; then
+          sz="\$(stat -c '%s' "\$out" 2>/dev/null || echo 0)"
+          if [ "\$sz" -ge "\$limit" ]; then
+            printf 'big %s %s\\n' "\$sz" "\$out" >>"\$watch"
+            exit 0
+          fi
+        fi
+        sleep 0.02
+      done
+    ) >/dev/null 2>&1 &
+  fi
+fi
+printf '%s\\n' "\$out"
+EOF
+  chmod 0755 "$root/bin/mktemp"
+  stream_extract() {
+    local stage="$1"
+    shift
+    local hit="${stage}.hit"
+    local done="${stage}.done"
+    local watcher status=0
+    rm -rf -- "$stage"
+    mkdir -p -- "$stage"
+    : >"$hit"
+    rm -f -- "$done"
+    (
+      while [ ! -f "$done" ]; do
+        find "$stage" -type f -size +$((limit - 1))c -print >>"$hit" 2>/dev/null || true
+        find "$stage" -type f -name 'velnor-tar-raw*' -print >>"$hit" 2>/dev/null || true
+        sleep 0.05
+      done
+    ) &
+    watcher=$!
+    PATH="$root/bin:$PATH" VELNOR_TAR_WATCH="$hit" VELNOR_TAR_LIMIT="$limit" TMPDIR="$stage" \
+      bash "$shim" "$@" || status=$?
+    touch "$done"
+    wait "$watcher" || true
+    [ "$status" -eq 0 ] || return 1
+    if [ -s "$hit" ]; then
+      cat "$hit" >&2
+      return 1
+    fi
+    [ -z "$(find "$stage" -mindepth 1 -print -quit)" ] || return 1
+  }
+  stream_extract "$root/stage" -xzf "$root/arc.tar.gz" -P -C "$root/dest/work/a/b/c" || return 1
+  [ "$(cat "$root/dest/work/a/b/c/keep.txt")" = K ] || return 1
+  [ "$(cat "$root/dest/work/.cache/a")" = "$payload" ] || return 1
+  [ "$(cat "$root/dest/work/.cache/b")" = "$payload" ] || return 1
+  rm -rf -- "$root/dest"
+  mkdir -p "$root/dest/work/a/b/c"
+  stream_extract "$root/stage2" -xf "$root/arc.tar.gz" -P --use-compress-program "gzip -dc" -C "$root/dest/work/a/b/c" || return 1
+  [ "$(cat "$root/dest/work/a/b/c/keep.txt")" = K ] || return 1
+  [ "$(cat "$root/dest/work/.cache/a")" = "$payload" ] || return 1
+  [ "$(cat "$root/dest/work/.cache/b")" = "$payload" ] || return 1
+}
+
 run_case collision-a-then-b case_collision_ab
 run_case collision-b-then-a case_collision_ba
 run_case filter-safe-member case_filter_one
@@ -321,6 +406,7 @@ run_case unsafe-hardlink-fails case_unsafe_hardlink
 run_case plain-extract case_plain
 run_case absolute-file case_absolute_file
 run_case dash-positional case_dash_positional
+run_case stream-no-raw-archive case_stream_no_raw
 
 printf 'RESULT pass=%s fail=%s\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
