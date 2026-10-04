@@ -116,8 +116,9 @@ fn validate_reports_executed_after_provider_cache_hit() -> TestResult {
     use velnor_actions_contract::digest_b3;
     use velnor_actions_mise::restore_evidence::{RestoreObservation, verify_provider_restore};
     let bytes = b"provider bytes".to_vec();
+    let locator = velnor_actions_tofu::tofu_root_locator("stacks/a")?;
     let hit = RestoreObservation {
-        entry_path: "tofu-cache/root-0123456789ab/provider".to_owned(),
+        entry_path: format!("tofu-cache/{locator}/provider"),
         entry_bytes: bytes.clone(),
         expected_digest: digest_b3(&bytes),
         expected_compat: digest_b3(b"compat"),
@@ -141,6 +142,7 @@ fn validate_reports_executed_after_provider_cache_hit() -> TestResult {
         .iter()
         .find(|entry| entry.task_id == obligation.task_id)
         .ok_or("validate matrix entry")?;
+    let locator = velnor_actions_tofu::tofu_root_locator("stacks/a")?;
     let report = TaskReport {
         schema: 1,
         task_report_id: task_report_id_for_task(
@@ -159,8 +161,9 @@ fn validate_reports_executed_after_provider_cache_hit() -> TestResult {
         not_selected_reason: None,
         cache: CacheOutcome {
             layer: CacheLayer::TofuProviders,
-            key: "velnor-v1-tofu-providers-x86_64-unknown-linux-gnu-1.13.1-stacks-a-0123456789ab-${{hashFiles('stacks/a/.terraform.lock.hcl')}}"
-                .to_owned(),
+            key: format!(
+                "velnor-v1-tofu-providers-x86_64-unknown-linux-gnu-1.13.1-{locator}-${{{{hashFiles('stacks/a/.terraform.lock.hcl')}}}}"
+            ),
             result: CacheResult::Hit,
             miss_reason: None,
         },

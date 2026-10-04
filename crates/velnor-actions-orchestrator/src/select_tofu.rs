@@ -270,11 +270,13 @@ pub(crate) fn derive_tofu(
     statuses: &[DetectionStatus],
     files: &[String],
 ) -> Result<Vec<ProposedTask>, OrchestratorError> {
-    use velnor_actions_tofu::{TofuTaskGroup, TofuTaskKind};
+    use velnor_actions_tofu::{RootLocatorRegistry, TofuTaskGroup, TofuTaskKind};
     let selected = tofu_selected_roots(statuses);
     let covered = velnor_actions_tofu::covered_fmt_roots(&selected);
+    let mut locators = RootLocatorRegistry::default();
     let mut proposals = Vec::new();
     for root in &selected {
+        let _locator = locators.admit(root)?;
         for kind in [
             TofuTaskKind::Fmt,
             TofuTaskKind::InitForValidate,
