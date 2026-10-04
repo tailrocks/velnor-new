@@ -45,6 +45,40 @@ and an explicit model and effort.
 This is a status record for the 2026-10-04 task. Recheck remaining reviews and
 consumer cohorts before final acceptance.
 
+## Phase-C checkpoint and coordination incidents
+
+At integration HEAD `c21f10d0c3ba5eee99580335ca5024a5c38353a6`, the pushed
+change is documentation-only. The exact source/test units below are detached
+candidates, not part of that HEAD; their scoped gates do not establish hosted
+qualification.
+
+| Candidate | Verified checkpoint | Status |
+| --- | --- | --- |
+| Resource and corruption probes | Source `fd342e63`; registered native Linux ARM64 runtime fixture `859b20d`, Rust 1.98.1, 2/2 in 80.01 s. | Source review GO and runtime fixture pass; no hosted x64 receipt. |
+| Parallel cache probe | `a094076d`; 17 source tests and exact Sol/medium review. | Source GO; hosted run unexecuted. |
+| Cancellation probe | `5c23108f`; 15 renderer unit fixtures and registered renderer/orchestrator tests passed on the c055 diagnostic composite. | HOLD: malformed cache-list shape can imply zero entries; failed controller can skip the observer; missing restore evidence can be labeled inconclusive instead of `NOT_RUN`. |
+| Official Mise | Public refresh `2026-10-04T12:10:38Z`: stable `2026.10.1`, release `402539535`, tag `b752bdc` peels to `050ce5a`; accepted fix `dfe74a90` remains eight commits ahead. | Adoption remains `PARTIAL`; no fixed official distribution. |
+
+On `2026-10-04T11:18:32.580Z`, parent
+`/root/velnor_coordinator_v2/mbx_registration_workflow_v17` spawned
+`/root/velnor_coordinator_v2/mbx_registration_workflow_v17/renderer_test_pattern_scout`
+without explicit model or effort (parent log
+`rollout-2026-10-04T18-17-36-01a106a2-35ac-78f1-943d-b08f8b0bd9b2.jsonl`,
+ordinal 41; `fork_turns=none`). Its child task was recorded at ordinal 9 in
+`rollout-2026-10-04T18-18-32-01a106a3-119f-7930-a2d2-fee87e5ebf39.jsonl`;
+session `01a106a3-119f-7930-a2d2-fee87e5ebf39` turn
+`01a106a3-126a-7c52-ad03-cab727c73565` used `gpt-5.6-luna/max`. The scout
+report was rejected as acceptance evidence; no product change came from it.
+
+The documentation actor `/root/cache_progress_evidence_docs_v20` committed
+`fedf114a770f4e8a1d77cde7fedd87ec4b819fb4` on the shared integration worktree
+instead of its assigned isolated worktree.
+`git show` confirms one file only, `docs/implemented/cache-measurements.md`
+(25 added lines); it was not pushed at that point. The coordinator later
+reviewed and corrected the two imprecise claims in signed commit
+`c21f10d0c3ba5eee99580335ca5024a5c38353a6`, which was pushed. The two
+pre-existing dirty config/test paths remained outside both commits.
+
 ## Follow-up audit and remediation
 
 A later actor-by-actor audit bound each child through parent spawn, returned
