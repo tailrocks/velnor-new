@@ -631,7 +631,7 @@ jobs:
         run: "test -n \"$G3_CANARY\" && sleep 180"
   mbx-cache-write-hosted:
     name: MBX objects cache / protected-main writer
-    if: inputs.mode == 'mbx-cache-roundtrip' && github.ref == 'refs/heads/main' && github.ref_protected == true
+    if: inputs.mode == 'mbx-cache-roundtrip' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.ref_protected == true
     runs-on: ubuntu-26.04
     timeout-minutes: 45
     permissions:
@@ -639,54 +639,217 @@ jobs:
       actions: write
     env:
       MBX_GC_AUTO: "1"
-      ACTIONS_CACHE_MODE: write
-      CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo
-      MISE_AUTO_INSTALL: "false"
-      MISE_CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo
-      MISE_EXEC_AUTO_INSTALL: "false"
-      MISE_LOCKFILE: "0"
-      MISE_NO_CONFIG: "1"
-      MISE_NO_ENV: "1"
-      MISE_NO_HOOKS: "1"
-      MISE_RUSTUP_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/rustup
-      RUSTUP_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/rustup
-      RUSTUP_TOOLCHAIN: 1.98.1
     steps:
-      - name: Check out
+      - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
       - name: Set up Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
-          version: 2026.9.18
-          sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
-          install: "false"
-          env: "false"
           cache: "false"
           cache_save: "false"
+          env: "false"
+          install: "false"
+          sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
+          version: 2026.9.18
       - name: Install pinned Rust toolchain
-        run: "mise install rust@1.98.1 && printf '%s/bin\\n' \"$(mise exec rust@1.98.1 -- rustc --print sysroot)\" >> \"$GITHUB_PATH\""
-      - name: Restore MBX objects
-        uses: jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6
-        id: mbx_cache
-        with:
-          github-cache-mode: objects
-          version: 1.21.1
-          cache-generation: velnor-qualification-mbx-1.21.1-action-1687e54eb349cadf61fa38b5813a77875489e8e6-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
-          save-on-workflow-dispatch: "true"
-      - name: Verify MBX action identity and write policy
         env:
-          MBX_VERSION: ${{ steps.mbx_cache.outputs.mbx-version }}
-          CACHE_SAVE_ELIGIBLE: ${{ steps.mbx_cache.outputs.cache-save-eligible }}
-          CACHE_SAVE_REASON: ${{ steps.mbx_cache.outputs.cache-save-reason }}
-          CACHE_HIT: ${{ steps.mbx_cache.outputs.cache-hit }}
-        run: "test \"$MBX_VERSION\" = '1.21.1' && test \"$CACHE_SAVE_ELIGIBLE\" = 'true' && test \"$CACHE_SAVE_REASON\" = 'workflow_dispatch'"
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/cargo
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_AUTO_INSTALL: "false"
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/cargo
+          MISE_EXEC_AUTO_INSTALL: "false"
+          MISE_GITHUB_TOKEN: ""
+          MISE_LOCKFILE: "0"
+          MISE_NO_CONFIG: "1"
+          MISE_NO_ENV: "1"
+          MISE_NO_HOOKS: "1"
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/rustup
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+          RUSTUP_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/rustup
+          RUSTUP_TOOLCHAIN: 1.98.1
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mise install rust@1.98.1 && mise exec rust@1.98.1 -- rustc --print sysroot > \"$RUNNER_TEMP/mbx-rust-sysroot\" && IFS= read -r sysroot < \"$RUNNER_TEMP/mbx-rust-sysroot\" && test -n \"$sysroot\" && printf '\\''%s/bin\\n'\\'' \"$sysroot\" >> \"$GITHUB_PATH\"'"
+      - name: Verify cache compression support
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/cargo
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_AUTO_INSTALL: "false"
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/cargo
+          MISE_EXEC_AUTO_INSTALL: "false"
+          MISE_GITHUB_TOKEN: ""
+          MISE_LOCKFILE: "0"
+          MISE_NO_CONFIG: "1"
+          MISE_NO_ENV: "1"
+          MISE_NO_HOOKS: "1"
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/rustup
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+          RUSTUP_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/rustup
+          RUSTUP_TOOLCHAIN: 1.98.1
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; command -v zstd >/dev/null; zstd --version > \"$RUNNER_TEMP/mbx-cache-zstd-version\"; tar --version > \"$RUNNER_TEMP/mbx-cache-tar-version\"; grep -Fq '\\''GNU tar'\\'' \"$RUNNER_TEMP/mbx-cache-tar-version\"'"
+      - name: Prepare private MBX store
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; test -n \"$RUNNER_TEMP\"; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; if [ -e \"$bundle\" ] || [ -L \"$bundle\" ]; then echo \"stable MBX bundle path already exists in runner.temp\" >&2; exit 1; fi; root_file=\"$GITHUB_OUTPUT.mbx-root\"; if [ -e \"$root_file\" ] || [ -L \"$root_file\" ]; then echo \"MBX root marker already exists\" >&2; exit 1; fi; mktemp -d \"$RUNNER_TEMP/velnor-mbx-store.XXXXXXXXXX\" > \"$root_file\"; IFS= read -r root < \"$root_file\"; root_id=\"${root##*/}\"; group=\"velnor-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${root_id}\"; printf '\\''MBX_CACHE_DIR=%s\\nMBX_TARGET_ROOT=%s/targets\\nMBX_SHIMS_DIR=%s/shims\\nMBX_CACHE_EXPORT_GROUP=%s\\n'\\'' \"$root\" \"$root\" \"$root\" \"$group\" >> \"$GITHUB_ENV\"'"
+      - name: Restore MBX objects
+        id: mbx
+        uses: jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6
+        with:
+          backend: local
+          version: 1.22.0
+      - name: Prepare MBX bundle key
+        id: mbx-bundle-key
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MBX_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          MBX_CACHE_SCOPE: qualification-mbx-v1/single-bundle-roundtrip
+          MBX_EXPECTED_VERSION: 1.22.0
+          MBX_GENERATION: velnor-mbx-1.22.0
+          MBX_MATRIX_CONTEXT: ${{ toJSON(matrix) }}
+          MBX_VERSION: ${{ steps.mbx.outputs.mbx-version }}
+          MISE_AUTO_INSTALL: "false"
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/cargo
+          MISE_EXEC_AUTO_INSTALL: "false"
+          MISE_GITHUB_TOKEN: ""
+          MISE_LOCKFILE: "0"
+          MISE_NO_CONFIG: "1"
+          MISE_NO_ENV: "1"
+          MISE_NO_HOOKS: "1"
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/rustup
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+          RUSTUP_TOOLCHAIN: 1.98.1
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; set -o pipefail; case \"$RUNNER_OS:$RUNNER_ARCH\" in Linux:X64|Linux:x64|Linux:AMD64) os=linux; arch=x64 ;; Linux:ARM64|Linux:arm64) os=linux; arch=arm64 ;; *) echo \"unsupported runner for MBX directory cache key\" >&2; exit 1 ;; esac; test \"$MBX_VERSION\" = \"$MBX_EXPECTED_VERSION\"; test -n \"$RUSTUP_TOOLCHAIN\"; workflow_ref=${GITHUB_WORKFLOW_REF:?missing GITHUB_WORKFLOW_REF}; case \"$workflow_ref\" in *@refs/*) workflow_path=${workflow_ref%%@refs/*} ;; *) echo \"invalid GITHUB_WORKFLOW_REF\" >&2; exit 1 ;; esac; test -n \"$workflow_path\"; scope_file=\"$GITHUB_OUTPUT.mbx-scope\"; identity_file=\"$GITHUB_OUTPUT.mbx-rustc\"; hash_file=\"$GITHUB_OUTPUT.mbx-hash\"; for file in \"$scope_file\" \"$identity_file\" \"$hash_file\"; do if [ -e \"$file\" ] || [ -L \"$file\" ]; then echo \"MBX key marker already exists\" >&2; exit 1; fi; done; printf '\\''%s\\n%s\\n%s\\n'\\'' \"$workflow_path\" \"$MBX_CACHE_SCOPE\" \"$MBX_MATRIX_CONTEXT\" > \"$scope_file\"; sha256sum \"$scope_file\" | cut -c1-64 > \"$hash_file\"; IFS= read -r scope_hash < \"$hash_file\"; test -n \"$scope_hash\"; mise --no-config --no-env --no-hooks exec \"rust@$RUSTUP_TOOLCHAIN\" -- rustc -vV > \"$identity_file\"; sha256sum \"$identity_file\" | cut -c1-64 > \"$hash_file\"; IFS= read -r compiler_hash < \"$hash_file\"; test -n \"$compiler_hash\"; toolchain=\"rust-${RUSTUP_TOOLCHAIN}-${compiler_hash}\"; revision=\"$GITHUB_SHA\"; if [ -n \"$MBX_BASE_SHA\" ]; then revision=\"$MBX_BASE_SHA\"; fi; case \"$revision\" in '\\'''\\''|*[!0-9a-f]*) exit 1 ;; esac; test \"${#revision}\" -eq 40; prefix=\"${os}-${arch}-mbx-${MBX_GENERATION}-dir-${toolchain}-scope-${scope_hash}-\"; printf '\\''primary=%s%s\\nprefix=%s\\n'\\'' \"$prefix\" \"$revision\" \"$prefix\" >> \"$GITHUB_OUTPUT\"'"
+      - name: Restore MBX single bundle
+        id: mbx-bundle
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: ${{ steps.mbx-bundle-key.outputs.primary }}
+          path: ${{ runner.temp }}/mbx-single-bundle
+          restore-keys: ${{ steps.mbx-bundle-key.outputs.prefix }}
+      - name: Import MBX single bundle
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MATCHED: ${{ steps.mbx-bundle.outputs.cache-matched-key }}
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; if [ -z \"$MATCHED\" ]; then echo '\\''no MBX bundle matched'\\''; exit 0; fi; if [ ! -d \"$bundle\" ]; then echo '\\''matched MBX bundle is missing; the fresh store stays cold'\\''; exit 0; fi; if mbx cache import \"$bundle\"; then echo '\\''MBX bundle imported'\\''; else echo '\\''MBX bundle import failed; abandoning its private store'\\''; root_file=\"$GITHUB_OUTPUT.mbx-fallback\"; if [ -e \"$root_file\" ] || [ -L \"$root_file\" ]; then echo \"MBX fallback marker already exists\" >&2; exit 1; fi; mktemp -d \"$RUNNER_TEMP/velnor-mbx-fallback.XXXXXXXXXX\" > \"$root_file\"; IFS= read -r root < \"$root_file\"; root_id=\"${root##*/}\"; group=\"velnor-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${root_id}\"; printf '\\''MBX_CACHE_DIR=%s\\nMBX_TARGET_ROOT=%s/targets\\nMBX_SHIMS_DIR=%s/shims\\nMBX_CACHE_EXPORT_GROUP=%s\\n'\\'' \"$root\" \"$root\" \"$root\" \"$group\" >> \"$GITHUB_ENV\"; echo '\\''fresh cold MBX store selected for subsequent steps'\\''; fi'"
+      - name: Verify pinned MBX version
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/cargo
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_AUTO_INSTALL: "false"
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/cargo
+          MISE_EXEC_AUTO_INSTALL: "false"
+          MISE_GITHUB_TOKEN: ""
+          MISE_LOCKFILE: "0"
+          MISE_NO_CONFIG: "1"
+          MISE_NO_ENV: "1"
+          MISE_NO_HOOKS: "1"
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/rustup
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+          RUSTUP_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/rustup
+          RUSTUP_TOOLCHAIN: 1.98.1
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mbx --version > \"$RUNNER_TEMP/mbx-version\" && grep -Fq '\\''1.22.0'\\'' \"$RUNNER_TEMP/mbx-version\"'"
       - name: Compile MBX cache probe
-        run: "set -eu\nroot=\"$GITHUB_WORKSPACE/.velnor-mbx-cache-qualification\"\nmkdir -p \"$root/src\"\ncat > \"$root/Cargo.toml\" <<'EOF'\n[package]\nname = \"mbx-cache-qualification\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[workspace]\nmembers = [\".\"]\nresolver = \"3\"\n\n[lib]\npath = \"src/lib.rs\"\nEOF\ncat > \"$root/src/lib.rs\" <<'EOF'\npub fn cache_probe() -> u64 { 42 }\nEOF\nmbx build --manifest-path \"$root/Cargo.toml\"\n"
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/cargo
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_AUTO_INSTALL: "false"
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/cargo
+          MISE_EXEC_AUTO_INSTALL: "false"
+          MISE_GITHUB_TOKEN: ""
+          MISE_LOCKFILE: "0"
+          MISE_NO_CONFIG: "1"
+          MISE_NO_ENV: "1"
+          MISE_NO_HOOKS: "1"
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/rustup
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+          RUSTUP_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/rustup
+          RUSTUP_TOOLCHAIN: 1.98.1
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; root=\"$GITHUB_WORKSPACE/.velnor-mbx-cache-qualification\"; mkdir -p \"$root/src\"; printf '\\''[package]\\nname = \"mbx-cache-qualification\"\\nversion = \"0.1.0\"\\nedition = \"2024\"\\n\\n[workspace]\\nmembers = [\".\"]\\nresolver = \"3\"\\n\\n[lib]\\npath = \"src/lib.rs\"\\n'\\'' > \"$root/Cargo.toml\"; printf '\\''pub fn cache_probe() -> u64 { 42 }\\n'\\'' > \"$root/src/lib.rs\"; mbx build --manifest-path \"$root/Cargo.toml\"'"
+      - name: Export MBX single bundle
+        id: mbx-export
+        if: success() && inputs.mode == 'mbx-cache-roundtrip' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.ref_protected == true && steps.mbx-bundle.outputs.cache-hit != 'true'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; export_log=\"$GITHUB_OUTPUT.mbx-export\"; gc_log=\"$GITHUB_OUTPUT.mbx-gc\"; for file in \"$export_log\" \"$gc_log\"; do if [ -e \"$file\" ] || [ -L \"$file\" ]; then echo \"MBX export marker already exists\" >&2; exit 1; fi; done; if mbx cache export --group \"$MBX_CACHE_EXPORT_GROUP\" --format directory \"$bundle\" >\"$export_log\" 2>&1; then test -d \"$bundle\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; if mbx gc --max-size 0 --json >\"$gc_log\" 2>&1; then cat \"$gc_log\"; echo '\\''gc-succeeded=true'\\'' >> \"$GITHUB_OUTPUT\"; echo '\\''ready=true'\\'' >> \"$GITHUB_OUTPUT\"; else cat \"$gc_log\"; echo '\\''gc-succeeded=false'\\'' >> \"$GITHUB_OUTPUT\"; echo '\\''ready=false'\\'' >> \"$GITHUB_OUTPUT\"; fi; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; else if grep -Fq '\\''no completed mbx builds are recorded for export group'\\'' \"$export_log\"; then cat \"$export_log\"; echo '\\''ready=false'\\'' >> \"$GITHUB_OUTPUT\"; exit 0; fi; cat \"$export_log\"; exit 1; fi'"
+      - name: Save MBX single bundle
+        if: success() && inputs.mode == 'mbx-cache-roundtrip' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.ref_protected == true && steps.mbx-bundle.outputs.cache-hit != 'true' && steps.mbx-export.outputs.ready == 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: ${{ steps.mbx-bundle-key.outputs.primary }}
+          path: ${{ runner.temp }}/mbx-single-bundle
   mbx-cache-read-hosted:
     name: MBX objects cache / read-only reuse
-    if: inputs.mode == 'mbx-cache-roundtrip' && github.ref == 'refs/heads/main' && github.ref_protected == true
+    if: inputs.mode == 'mbx-cache-roundtrip' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.ref_protected == true
     runs-on: ubuntu-26.04
     timeout-minutes: 45
     needs:
@@ -696,52 +859,239 @@ jobs:
       actions: read
     env:
       MBX_GC_AUTO: "1"
-      ACTIONS_CACHE_MODE: read
-      CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo
-      MISE_AUTO_INSTALL: "false"
-      MISE_CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo
-      MISE_EXEC_AUTO_INSTALL: "false"
-      MISE_LOCKFILE: "0"
-      MISE_NO_CONFIG: "1"
-      MISE_NO_ENV: "1"
-      MISE_NO_HOOKS: "1"
-      MISE_RUSTUP_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/rustup
-      RUSTUP_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/rustup
-      RUSTUP_TOOLCHAIN: 1.98.1
     steps:
-      - name: Check out
+      - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
       - name: Set up Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
-          version: 2026.9.18
-          sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
-          install: "false"
-          env: "false"
           cache: "false"
           cache_save: "false"
+          env: "false"
+          install: "false"
+          sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
+          version: 2026.9.18
       - name: Install pinned Rust toolchain
-        run: "mise install rust@1.98.1 && printf '%s/bin\\n' \"$(mise exec rust@1.98.1 -- rustc --print sysroot)\" >> \"$GITHUB_PATH\""
-      - name: Restore MBX objects
-        uses: jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6
-        id: mbx_cache
-        with:
-          github-cache-mode: objects
-          version: 1.21.1
-          cache-generation: velnor-qualification-mbx-1.21.1-action-1687e54eb349cadf61fa38b5813a77875489e8e6-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
-          save-on-workflow-dispatch: "false"
-      - name: Verify MBX action identity and write policy
         env:
-          MBX_VERSION: ${{ steps.mbx_cache.outputs.mbx-version }}
-          CACHE_SAVE_ELIGIBLE: ${{ steps.mbx_cache.outputs.cache-save-eligible }}
-          CACHE_SAVE_REASON: ${{ steps.mbx_cache.outputs.cache-save-reason }}
-          CACHE_HIT: ${{ steps.mbx_cache.outputs.cache-hit }}
-        run: "test \"$MBX_VERSION\" = '1.21.1' && test \"$CACHE_SAVE_ELIGIBLE\" = 'false' && test \"$CACHE_SAVE_REASON\" = 'workflow_dispatch; save-on-workflow-dispatch is off' && test \"$CACHE_HIT\" = 'false'"
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/cargo
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_AUTO_INSTALL: "false"
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/cargo
+          MISE_EXEC_AUTO_INSTALL: "false"
+          MISE_GITHUB_TOKEN: ""
+          MISE_LOCKFILE: "0"
+          MISE_NO_CONFIG: "1"
+          MISE_NO_ENV: "1"
+          MISE_NO_HOOKS: "1"
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/rustup
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+          RUSTUP_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/rustup
+          RUSTUP_TOOLCHAIN: 1.98.1
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mise install rust@1.98.1 && mise exec rust@1.98.1 -- rustc --print sysroot > \"$RUNNER_TEMP/mbx-rust-sysroot\" && IFS= read -r sysroot < \"$RUNNER_TEMP/mbx-rust-sysroot\" && test -n \"$sysroot\" && printf '\\''%s/bin\\n'\\'' \"$sysroot\" >> \"$GITHUB_PATH\"'"
+      - name: Verify cache compression support
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/cargo
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_AUTO_INSTALL: "false"
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/cargo
+          MISE_EXEC_AUTO_INSTALL: "false"
+          MISE_GITHUB_TOKEN: ""
+          MISE_LOCKFILE: "0"
+          MISE_NO_CONFIG: "1"
+          MISE_NO_ENV: "1"
+          MISE_NO_HOOKS: "1"
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/rustup
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+          RUSTUP_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/rustup
+          RUSTUP_TOOLCHAIN: 1.98.1
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; command -v zstd >/dev/null; zstd --version > \"$RUNNER_TEMP/mbx-cache-zstd-version\"; tar --version > \"$RUNNER_TEMP/mbx-cache-tar-version\"; grep -Fq '\\''GNU tar'\\'' \"$RUNNER_TEMP/mbx-cache-tar-version\"'"
+      - name: Prepare private MBX store
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; test -n \"$RUNNER_TEMP\"; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; if [ -e \"$bundle\" ] || [ -L \"$bundle\" ]; then echo \"stable MBX bundle path already exists in runner.temp\" >&2; exit 1; fi; root_file=\"$GITHUB_OUTPUT.mbx-root\"; if [ -e \"$root_file\" ] || [ -L \"$root_file\" ]; then echo \"MBX root marker already exists\" >&2; exit 1; fi; mktemp -d \"$RUNNER_TEMP/velnor-mbx-store.XXXXXXXXXX\" > \"$root_file\"; IFS= read -r root < \"$root_file\"; root_id=\"${root##*/}\"; group=\"velnor-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${root_id}\"; printf '\\''MBX_CACHE_DIR=%s\\nMBX_TARGET_ROOT=%s/targets\\nMBX_SHIMS_DIR=%s/shims\\nMBX_CACHE_EXPORT_GROUP=%s\\n'\\'' \"$root\" \"$root\" \"$root\" \"$group\" >> \"$GITHUB_ENV\"'"
+      - name: Restore MBX objects
+        id: mbx
+        uses: jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6
+        with:
+          backend: local
+          version: 1.22.0
+      - name: Prepare MBX bundle key
+        id: mbx-bundle-key
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MBX_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          MBX_CACHE_SCOPE: qualification-mbx-v1/single-bundle-roundtrip
+          MBX_EXPECTED_VERSION: 1.22.0
+          MBX_GENERATION: velnor-mbx-1.22.0
+          MBX_MATRIX_CONTEXT: ${{ toJSON(matrix) }}
+          MBX_VERSION: ${{ steps.mbx.outputs.mbx-version }}
+          MISE_AUTO_INSTALL: "false"
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/cargo
+          MISE_EXEC_AUTO_INSTALL: "false"
+          MISE_GITHUB_TOKEN: ""
+          MISE_LOCKFILE: "0"
+          MISE_NO_CONFIG: "1"
+          MISE_NO_ENV: "1"
+          MISE_NO_HOOKS: "1"
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/rustup
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+          RUSTUP_TOOLCHAIN: 1.98.1
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; set -o pipefail; case \"$RUNNER_OS:$RUNNER_ARCH\" in Linux:X64|Linux:x64|Linux:AMD64) os=linux; arch=x64 ;; Linux:ARM64|Linux:arm64) os=linux; arch=arm64 ;; *) echo \"unsupported runner for MBX directory cache key\" >&2; exit 1 ;; esac; test \"$MBX_VERSION\" = \"$MBX_EXPECTED_VERSION\"; test -n \"$RUSTUP_TOOLCHAIN\"; workflow_ref=${GITHUB_WORKFLOW_REF:?missing GITHUB_WORKFLOW_REF}; case \"$workflow_ref\" in *@refs/*) workflow_path=${workflow_ref%%@refs/*} ;; *) echo \"invalid GITHUB_WORKFLOW_REF\" >&2; exit 1 ;; esac; test -n \"$workflow_path\"; scope_file=\"$GITHUB_OUTPUT.mbx-scope\"; identity_file=\"$GITHUB_OUTPUT.mbx-rustc\"; hash_file=\"$GITHUB_OUTPUT.mbx-hash\"; for file in \"$scope_file\" \"$identity_file\" \"$hash_file\"; do if [ -e \"$file\" ] || [ -L \"$file\" ]; then echo \"MBX key marker already exists\" >&2; exit 1; fi; done; printf '\\''%s\\n%s\\n%s\\n'\\'' \"$workflow_path\" \"$MBX_CACHE_SCOPE\" \"$MBX_MATRIX_CONTEXT\" > \"$scope_file\"; sha256sum \"$scope_file\" | cut -c1-64 > \"$hash_file\"; IFS= read -r scope_hash < \"$hash_file\"; test -n \"$scope_hash\"; mise --no-config --no-env --no-hooks exec \"rust@$RUSTUP_TOOLCHAIN\" -- rustc -vV > \"$identity_file\"; sha256sum \"$identity_file\" | cut -c1-64 > \"$hash_file\"; IFS= read -r compiler_hash < \"$hash_file\"; test -n \"$compiler_hash\"; toolchain=\"rust-${RUSTUP_TOOLCHAIN}-${compiler_hash}\"; revision=\"$GITHUB_SHA\"; if [ -n \"$MBX_BASE_SHA\" ]; then revision=\"$MBX_BASE_SHA\"; fi; case \"$revision\" in '\\'''\\''|*[!0-9a-f]*) exit 1 ;; esac; test \"${#revision}\" -eq 40; prefix=\"${os}-${arch}-mbx-${MBX_GENERATION}-dir-${toolchain}-scope-${scope_hash}-\"; printf '\\''primary=%s%s\\nprefix=%s\\n'\\'' \"$prefix\" \"$revision\" \"$prefix\" >> \"$GITHUB_OUTPUT\"'"
+      - name: Restore MBX single bundle
+        id: mbx-bundle
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: ${{ steps.mbx-bundle-key.outputs.primary }}
+          path: ${{ runner.temp }}/mbx-single-bundle
+          restore-keys: ${{ steps.mbx-bundle-key.outputs.prefix }}
+      - name: Import MBX single bundle
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MATCHED: ${{ steps.mbx-bundle.outputs.cache-matched-key }}
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; if [ -z \"$MATCHED\" ]; then echo '\\''no MBX bundle matched'\\''; exit 0; fi; if [ ! -d \"$bundle\" ]; then echo '\\''matched MBX bundle is missing; the fresh store stays cold'\\''; exit 0; fi; if mbx cache import \"$bundle\"; then echo '\\''MBX bundle imported'\\''; else echo '\\''MBX bundle import failed; abandoning its private store'\\''; root_file=\"$GITHUB_OUTPUT.mbx-fallback\"; if [ -e \"$root_file\" ] || [ -L \"$root_file\" ]; then echo \"MBX fallback marker already exists\" >&2; exit 1; fi; mktemp -d \"$RUNNER_TEMP/velnor-mbx-fallback.XXXXXXXXXX\" > \"$root_file\"; IFS= read -r root < \"$root_file\"; root_id=\"${root##*/}\"; group=\"velnor-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${root_id}\"; printf '\\''MBX_CACHE_DIR=%s\\nMBX_TARGET_ROOT=%s/targets\\nMBX_SHIMS_DIR=%s/shims\\nMBX_CACHE_EXPORT_GROUP=%s\\n'\\'' \"$root\" \"$root\" \"$root\" \"$group\" >> \"$GITHUB_ENV\"; echo '\\''fresh cold MBX store selected for subsequent steps'\\''; fi'"
+      - name: Verify pinned MBX version
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/cargo
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_AUTO_INSTALL: "false"
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/cargo
+          MISE_EXEC_AUTO_INSTALL: "false"
+          MISE_GITHUB_TOKEN: ""
+          MISE_LOCKFILE: "0"
+          MISE_NO_CONFIG: "1"
+          MISE_NO_ENV: "1"
+          MISE_NO_HOOKS: "1"
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/rustup
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+          RUSTUP_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/rustup
+          RUSTUP_TOOLCHAIN: 1.98.1
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mbx --version > \"$RUNNER_TEMP/mbx-version\" && grep -Fq '\\''1.22.0'\\'' \"$RUNNER_TEMP/mbx-version\"'"
       - name: Require imported MBX objects
-        run: mbx cache stats --json | jq -e '.objects > 0' >/dev/null
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/cargo
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_AUTO_INSTALL: "false"
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/cargo
+          MISE_EXEC_AUTO_INSTALL: "false"
+          MISE_GITHUB_TOKEN: ""
+          MISE_LOCKFILE: "0"
+          MISE_NO_CONFIG: "1"
+          MISE_NO_ENV: "1"
+          MISE_NO_HOOKS: "1"
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/rustup
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+          RUSTUP_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/rustup
+          RUSTUP_TOOLCHAIN: 1.98.1
+        run: bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mbx cache stats --json | jq -e '\''.objects > 0'\'' >/dev/null'
       - name: Compile MBX cache probe
-        run: "set -eu\nroot=\"$GITHUB_WORKSPACE/.velnor-mbx-cache-qualification\"\nmkdir -p \"$root/src\"\ncat > \"$root/Cargo.toml\" <<'EOF'\n[package]\nname = \"mbx-cache-qualification\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[workspace]\nmembers = [\".\"]\nresolver = \"3\"\n\n[lib]\npath = \"src/lib.rs\"\nEOF\ncat > \"$root/src/lib.rs\" <<'EOF'\npub fn cache_probe() -> u64 { 42 }\nEOF\nmbx build --manifest-path \"$root/Cargo.toml\"\n"
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/cargo
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_AUTO_INSTALL: "false"
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/cargo
+          MISE_EXEC_AUTO_INSTALL: "false"
+          MISE_GITHUB_TOKEN: ""
+          MISE_LOCKFILE: "0"
+          MISE_NO_CONFIG: "1"
+          MISE_NO_ENV: "1"
+          MISE_NO_HOOKS: "1"
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/rustup
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+          RUSTUP_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/rustup
+          RUSTUP_TOOLCHAIN: 1.98.1
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; root=\"$GITHUB_WORKSPACE/.velnor-mbx-cache-qualification\"; mkdir -p \"$root/src\"; printf '\\''[package]\\nname = \"mbx-cache-qualification\"\\nversion = \"0.1.0\"\\nedition = \"2024\"\\n\\n[workspace]\\nmembers = [\".\"]\\nresolver = \"3\"\\n\\n[lib]\\npath = \"src/lib.rs\"\\n'\\'' > \"$root/Cargo.toml\"; printf '\\''pub fn cache_probe() -> u64 { 42 }\\n'\\'' > \"$root/src/lib.rs\"; mbx build --manifest-path \"$root/Cargo.toml\"'"
       - name: Require reused compilation
-        run: mbx stats --json | jq -e '.savings.cached_compilations > 0' >/dev/null
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/cargo
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_AUTO_INSTALL: "false"
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/cargo
+          MISE_EXEC_AUTO_INSTALL: "false"
+          MISE_GITHUB_TOKEN: ""
+          MISE_LOCKFILE: "0"
+          MISE_NO_CONFIG: "1"
+          MISE_NO_ENV: "1"
+          MISE_NO_HOOKS: "1"
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/rustup
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+          RUSTUP_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/rustup
+          RUSTUP_TOOLCHAIN: 1.98.1
+        run: bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mbx stats --json | jq -e '\''.savings.cached_compilations > 0'\'' >/dev/null'

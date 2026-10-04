@@ -35,17 +35,18 @@ pub(crate) fn validator_install_pin(spec: &str) -> Option<(&'static str, &'stati
     }
 }
 
-/// Qualified cargo-machete release.
-/// Source: `https://crates.io/api/v1/crates/cargo-machete`; checked 2026-09-29.
-/// The mise registry has no `cargo-machete` shorthand and the aqua registry
-/// has no package, so the spec is backend-qualified `ubi:` (same precedent
-/// as Nextest's aqua path): `mise ls-remote ubi:bnjbvr/cargo-machete` lists
-/// 0.9.2 and the isolated `mise exec ubi:bnjbvr/cargo-machete@0.9.2 --
-/// cargo machete --version` probe reported 0.9.2.
+/// Exact Linux `x86_64` musl release for cargo-machete.
+/// GitHub's release API digest, its published `.sha256` companion, and the
+/// downloaded asset hash agree. Ubi's cold install enumerated the broad API.
 const CARGO_MACHETE_VERSION: &str = "0.9.2";
+const CARGO_MACHETE_TOOL_SPEC: &str = concat!(
+    "http:cargo-machete[url=https://github.com/bnjbvr/cargo-machete/releases/",
+    "download/v0.9.2/cargo-machete-v0.9.2-x86_64-unknown-linux-musl.tar.gz,",
+    "checksum=sha256:48200087f54c55aabcd4db4af1e25742b49846c02a1b1bfa134711945b35b2e9]",
+);
 
 /// Mise tool specs the validator vectors may select, without versions.
-const VALIDATOR_TOOL_SPECS: [&str; 2] = ["cargo-deny", "ubi:bnjbvr/cargo-machete"];
+const VALIDATOR_TOOL_SPECS: [&str; 2] = ["cargo-deny", CARGO_MACHETE_TOOL_SPEC];
 
 /// Product crates scanned by the machete vector, in contract order.
 ///
@@ -215,12 +216,12 @@ pub(crate) fn zizmor_argv(catalog: &ToolCatalog) -> Result<Vec<String>, Orchestr
     )
 }
 
-/// Fixed validator-job vector: `cargo machete` over product crates via Mise.
+/// Fixed validator-job vector: verified `cargo machete` release via Mise.
 pub(crate) fn machete_argv() -> Result<Vec<String>, OrchestratorError> {
     let mut args = vec!["machete"];
     args.extend(MACHETE_SCAN_CRATES);
     validator_argv(
-        "ubi:bnjbvr/cargo-machete",
+        CARGO_MACHETE_TOOL_SPEC,
         CARGO_MACHETE_VERSION,
         "cargo",
         &args,

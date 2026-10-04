@@ -8,7 +8,7 @@
 //! unbranded IDs, gates referencing strictly earlier obligations),
 //! then renders each group to a fixed IR job: checkout, pinned tools,
 //! components, lockful sources, the per-root provider restore on
-//! opentofu crates, the MBX objects restore on MBX crates, and one
+//! opentofu crates, the MBX local setup on MBX crates, and one
 //! shell step per obligation in gate order.
 
 use std::collections::{BTreeMap, BTreeSet};

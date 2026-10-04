@@ -299,11 +299,12 @@ fn restore_mbx_fetch_order_every_crate_job() -> TestResult {
             .iter()
             .map(|step| step.name.clone())
             .collect();
-        cache_sources::check_restore_before_fetch(&names, true).expect("order");
+        cache_sources::check_steps_before_fetch(&names, &["Restore Cargo sources", "Setup MBX"])
+            .expect("order");
         let at = |want: &str| names.iter().position(|n| n == want);
         let (Some(restore), Some(mbx), Some(fetch)) = (
             at("Restore Cargo sources"),
-            at("Restore MBX objects"),
+            at("Setup MBX"),
             at("Fetch Cargo sources"),
         ) else {
             return Err(format!("{job} misses cache steps: {names:?}").into());

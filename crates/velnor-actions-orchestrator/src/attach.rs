@@ -13,7 +13,7 @@ use velnor_actions_contract::{
 use velnor_actions_mise::{PREPARE_PINNED_TOOLS_STEP, PinnedTool, ToolCatalog};
 use velnor_actions_workflow_renderer::cache_p08::{RESTORE_SOURCES_NAME, RUST_CACHE_NAME};
 use velnor_actions_workflow_renderer::render::{FINAL_JOB_ID, PLAN_JOB_ID, PUBLISH_JOB_ID};
-use velnor_actions_workflow_renderer::steps::{MBX_RESTORE_NAME, STAGED_BINARY_PREFIX};
+use velnor_actions_workflow_renderer::steps::{MBX_ACTION_NAME, STAGED_BINARY_PREFIX};
 use velnor_actions_workflow_renderer::{
     PreseedStageSource, preseed_build_step, preseed_download_step, preseed_manifest_step,
     preseed_manifest_verify_step, preseed_stage_step, preseed_upload_step, preseed_verify_step,
@@ -115,7 +115,7 @@ pub(crate) fn attach_preseed(
             problem: "plan_job_missing".to_owned(),
         });
     };
-    insert_plan_mbx_restore(&catalog, &mut plan.steps)?;
+    insert_plan_mbx_setup(&catalog, &mut plan.steps)?;
     let at = preseed_anchor(&plan.steps);
     plan.steps.splice(at..at, plan_steps);
     let Some(final_gate) = workflow.ir.jobs.get_mut(FINAL_JOB_ID) else {
@@ -172,7 +172,7 @@ fn after_prepare(steps: &[Step]) -> usize {
         .map_or(1, |index| index + 1)
 }
 
-/// Insert the plan-job MBX objects restore ahead of fetch (pre-seed only).
+/// Insert the plan-job MBX setup ahead of fetch (pre-seed only).
 ///
 /// The pre-seed build compiles through MBX on every repo, so the plan
 /// job warms the object store exactly like an MBX crate job: right after
@@ -180,7 +180,7 @@ fn after_prepare(steps: &[Step]) -> usize {
 /// restore (cargo-only rust-cache writers, lockless) stay untouched: an
 /// MBX step beside a rust-cache writer would trip the P08 one-owner
 /// gate, and there is nothing to warm without sources.
-fn insert_plan_mbx_restore(
+fn insert_plan_mbx_setup(
     catalog: &ToolCatalog,
     steps: &mut Vec<Step>,
 ) -> Result<(), OrchestratorError> {
@@ -213,8 +213,8 @@ fn insert_plan_mbx_restore(
 /// Insert index for the plan-job pre-seed build block.
 ///
 /// The build compiles code, so it runs after the source-probing steps
-/// that guarantee sources present (which is after every restore);
-/// without them it anchors after the last restore, and the fallback
+/// that guarantee sources present; without them it anchors after the
+/// last cache prelude, and the fallback
 /// covers lockless plans and hand-built fixtures without cache steps.
 fn preseed_anchor(steps: &[Step]) -> usize {
     if let Some(last) = steps.iter().rposition(|step| {
@@ -223,17 +223,25 @@ fn preseed_anchor(steps: &[Step]) -> usize {
     }) {
         return last + 1;
     }
-    if let Some(last) = steps.iter().rposition(|step| is_plan_restore(&step.name)) {
+    if let Some(last) = steps.iter().rposition(is_plan_cache_prelude) {
         return last + 1;
     }
     after_prepare(steps)
 }
 
-/// True for plan-job restore steps (shared, registry, MBX objects).
-fn is_plan_restore(name: &str) -> bool {
-    name == RESTORE_SOURCES_NAME || name == RUST_CACHE_NAME || name == MBX_RESTORE_NAME
+/// True for plan-job cache prep (shared, registry, MBX setup).
+fn is_plan_cache_prelude(step: &Step) -> bool {
+    let is_mbx = matches!(
+        &step.kind,
+        velnor_actions_contract::StepKind::Action { uses, .. }
+            if uses.starts_with(&format!("{MBX_ACTION_NAME}@"))
+    );
+    is_mbx || step.name == RESTORE_SOURCES_NAME || step.name == RUST_CACHE_NAME
 }
 
+#[cfg(test)]
+#[path = "attach_preseed_tests.rs"]
+mod attach_preseed_tests;
 #[cfg(test)]
 #[path = "attach_tests.rs"]
 mod attach_tests;

@@ -181,7 +181,7 @@ fn mbx_objects_precede_fetch_on_mbx_crates() -> TestResult {
     // P08: restore shared sources, configure MBX, then probe-and-fetch.
     let (Some(restore_at), Some(objects_at), Some(fetch_at), Some(run_at)) = (
         at("Restore Cargo sources"),
-        at("Restore MBX objects"),
+        at("Setup MBX"),
         at("Fetch Cargo sources"),
         at("Clippy"),
     ) else {

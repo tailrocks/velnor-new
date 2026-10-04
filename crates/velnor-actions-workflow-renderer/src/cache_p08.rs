@@ -17,8 +17,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use velnor_actions_contract::{Job, Step, StepKind};
 
 use crate::{
-    MiseSetup, RenderError, cache_p08_detect::detector_words, setup::MISE_ACTION_NAME,
-    steps::validate_uses,
+    MiseSetup, RenderError, cache_p08_detect::detector_words, cache_steps::is_mbx_action,
+    setup::MISE_ACTION_NAME, steps::validate_uses,
 };
 
 pub use crate::cache_elect::elect_mise_cache_writers;
@@ -173,9 +173,13 @@ fn is_tool_spec(value: &str) -> bool {
         && !version.is_empty()
         && !value.contains(' ')
         && !value.contains('\n')
-        && tool
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b':' | b'/' | b'-' | b'_' | b'.'))
+        && tool.bytes().all(|b| {
+            b.is_ascii_alphanumeric()
+                || matches!(
+                    b,
+                    b':' | b'/' | b'-' | b'_' | b'.' | b'[' | b']' | b'=' | b','
+                )
+        })
         && version
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'_' | b'+'))
@@ -361,18 +365,18 @@ pub fn check_no_rust_cache_with_mbx(job_id: &str, job: &Job) -> Result<(), Rende
     Ok(())
 }
 
-/// Require MBX objects restore before every fetch step (P08-4).
+/// Require the MBX action setup before every fetch step (P08-4).
 ///
 /// # Errors
 ///
 /// Returns [`RenderError::InvalidWorkflow`] when fetch precedes MBX.
 pub fn check_mbx_before_fetch(job_id: &str, job: &Job) -> Result<(), RenderError> {
-    let at = |name: &str| job.steps.iter().position(|s| s.name == name);
     let fetch = job
         .steps
         .iter()
         .position(|s| s.name.starts_with("Fetch Cargo sources"));
-    if let (Some(mbx), Some(fetch_at)) = (at("Restore MBX objects"), fetch)
+    let mbx = job.steps.iter().position(is_mbx_action);
+    if let (Some(mbx), Some(fetch_at)) = (mbx, fetch)
         && fetch_at < mbx
     {
         return Err(RenderError::InvalidWorkflow(format!(

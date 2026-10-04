@@ -1,8 +1,9 @@
 //! P08 generator integration: qualified caches in emitted workflows.
 //!
 //! Cargo-only fixtures use pinned `rust-cache` (registry-only, shared key);
-//! MBX fixtures use objects + one shared `actions/cache` snapshot (plan
-//! writes, crates read). Tools use the built-in Mise cache only.
+//! MBX fixtures use a local backend and explicit directory bundle, while Cargo
+//! sources use one shared `actions/cache` snapshot (plan writes, crates read).
+//! Tools use the built-in Mise cache only.
 
 use std::fs;
 
@@ -116,13 +117,71 @@ fn c3_sources_subset_at_owned_home_single_writer() -> TestResult {
     Ok(())
 }
 
+fn rust_demo_job(yaml: &str) -> Result<&str, &'static str> {
+    let start = yaml.find("  rust-demo:").ok_or("missing rust-demo job")?;
+    let tail = &yaml[start..];
+    Ok(&tail[..tail.find("\n  required:").unwrap_or(tail.len())])
+}
+
+fn assert_source_fetch_contract(task: &str) {
+    for need in [
+        "metadata --locked --offline",
+        "sources hit, skipping fetch",
+        "sources miss (source_missing)",
+        "cargo fetch --locked",
+    ] {
+        assert!(task.contains(need), "rust-demo fetch/mbx misses {need}");
+    }
+    assert!(
+        !task.contains("github-cache-mode"),
+        "retired MBX cache mode field:\n{task}"
+    );
+}
+
+fn step_at(task: &str, name: &str, missing: &'static str) -> Result<usize, &'static str> {
+    task.find(&format!("- name: {name}")).ok_or(missing)
+}
+
+fn assert_local_mbx_backend(task: &str) -> TestResult {
+    let setup = step_at(task, "Setup MBX", "MBX setup")?;
+    let key = step_at(task, "Prepare MBX bundle key", "MBX bundle key")?;
+    assert!(task[setup..key].contains("backend: local"), "local backend");
+    Ok(())
+}
+
+fn assert_mbx_bundle_lifecycle(task: &str) -> TestResult {
+    let restore = step_at(task, "Restore MBX single bundle", "bundle restore")?;
+    let import = step_at(task, "Import MBX single bundle", "bundle import")?;
+    let fetch = step_at(task, "Fetch Cargo sources", "Cargo fetch")?;
+    let clippy = step_at(task, "Clippy", "Cargo build")?;
+    let export = step_at(task, "Export MBX single bundle", "bundle export")?;
+    let save = step_at(task, "Save MBX single bundle", "bundle save")?;
+    assert!(
+        restore < import && import < fetch && fetch < clippy && clippy < export && export < save,
+        "bundle restore/import precede Cargo work; export/save follow it:\n{task}"
+    );
+    for (start, end, expected, label) in [
+        (restore, import, "uses: actions/cache/restore@", "restore"),
+        (import, fetch, "mbx cache import", "import"),
+        (export, save, "mbx cache export --group", "export"),
+        (save, task.len(), "uses: actions/cache/save@", "save"),
+    ] {
+        assert!(
+            task[start..end].contains(expected),
+            "explicit bundle {label}:\n{}",
+            &task[start..end]
+        );
+    }
+    Ok(())
+}
+
 #[test]
 fn c4_mbx_and_restore_precede_fetch_with_offline_skip() -> TestResult {
     let names = job_names("rust-demo", true)?;
     let at = |name: &str| names.iter().position(|seen| seen == name);
     let (Some(restore), Some(mbx), Some(fetch), Some(clippy)) = (
         at("Restore Cargo sources"),
-        at("Restore MBX objects"),
+        at("Setup MBX"),
         at("Fetch Cargo sources"),
         at("Clippy"),
     ) else {
@@ -133,16 +192,10 @@ fn c4_mbx_and_restore_precede_fetch_with_offline_skip() -> TestResult {
         "restore<mbx<fetch<clippy: {names:?}"
     );
     let yaml = yaml_for(true)?;
-    for need in [
-        "metadata --locked --offline",
-        "sources hit, skipping fetch",
-        "sources miss (source_missing)",
-        "cargo fetch --locked",
-        "github-cache-mode: objects",
-    ] {
-        assert!(yaml.contains(need), "fetch/mbx misses {need}");
-    }
-    assert!(!yaml.contains("github-cache-mode: target"), "objects only");
+    let task = rust_demo_job(&yaml)?;
+    assert_source_fetch_contract(task);
+    assert_local_mbx_backend(task)?;
+    assert_mbx_bundle_lifecycle(task)?;
     Ok(())
 }
 
