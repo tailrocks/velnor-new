@@ -7,7 +7,7 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::lanes::{HOSTED_SUFFIX, SCALE_SUFFIX};
-use velnor_actions_contract::{Job, Step};
+use velnor_actions_contract::{Job, PullRequestCachePolicy, Step};
 
 use crate::composite::composite_yaml;
 use crate::document::step_to_yaml;
@@ -83,8 +83,14 @@ pub(crate) fn share_lanes(
             .any(|step| step.name == crate::mbx_bundle::MBX_BUNDLE_RESTORE_NAME);
         let id = has_mbx_cache.then(|| MBX_SHARED_CALL_ID.to_owned());
         if has_mbx_cache {
-            crate::mbx_bundle::bind_shared_lane_outputs(&mut hosted_extra)?;
-            crate::mbx_bundle::bind_shared_lane_outputs(&mut local_extra)?;
+            crate::mbx_bundle::bind_shared_lane_outputs(
+                &mut hosted_extra,
+                ctx.pull_request_cache_policy,
+            )?;
+            crate::mbx_bundle::bind_shared_lane_outputs(
+                &mut local_extra,
+                ctx.pull_request_cache_policy,
+            )?;
         }
         files.push(composite_file(logical, &common, ctx, has_mbx_cache)?);
         let call = SharedCall { uses, id };
@@ -166,7 +172,7 @@ fn composite_file(
         rendered.push(step_to_yaml(logical, step, ctx, &[], true)?);
     }
     let outputs = has_mbx_cache.then(|| {
-        vec![
+        let mut outputs = vec![
             (
                 "mbx-cache-hit".to_owned(),
                 crate::yaml::Yaml::Map(vec![
@@ -193,7 +199,28 @@ fn composite_file(
                     ),
                 ]),
             ),
-        ]
+        ];
+        if ctx.pull_request_cache_policy == PullRequestCachePolicy::SameRepositoryScoped {
+            outputs.push((
+                "mbx-pr-cache-allowed".to_owned(),
+                crate::yaml::Yaml::Map(vec![
+                    (
+                        "description".to_owned(),
+                        crate::yaml::Yaml::str(
+                            "Whether this run has a validated same-repository PR cache key",
+                        ),
+                    ),
+                    (
+                        "value".to_owned(),
+                        crate::yaml::Yaml::str(format!(
+                            "${{{{ {}}}}}",
+                            crate::mbx_bundle::MBX_PR_CACHE_ALLOWED_OUTPUT
+                        )),
+                    ),
+                ]),
+            ));
+        }
+        outputs
     });
     let body = composite_yaml(logical, rendered, outputs)?;
     let quoted = crate::yaml::quote_run_values_in_yaml(body);
