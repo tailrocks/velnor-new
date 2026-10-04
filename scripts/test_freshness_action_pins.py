@@ -169,6 +169,20 @@ class CommitPinFixtures(unittest.TestCase):
             "release latest_source must be an exact endpoint for its repository",
         )
 
+    def test_release_latest_source_rejects_unordered_tag_listing(self):
+        entry = release_entry()
+        entry["latest_source"] = (
+            "https://api.github.com/repos/jdx/mr-boxington-action/tags"
+        )
+        self.assertEqual(
+            validate_action_pin(entry),
+            "release latest_source must be an exact endpoint for its repository",
+        )
+        self.assertNotIn(
+            "https://api.github.com/repos/jdx/mr-boxington-action/tags",
+            github_latest_release_sources("jdx/mr-boxington-action"),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

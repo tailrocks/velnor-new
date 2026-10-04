@@ -304,9 +304,9 @@ const ACTION_PROBE_ROWS: &[(&str, &str, &str)] = &[
         "{\"sha\": \"6323deb102c322ba6fcbdcafc7e3dddab59af2b6\"}",
     ),
     (
-        "https://api.github.com/repos/Swatinem/rust-cache/tags",
+        "https://api.github.com/repos/Swatinem/rust-cache/releases/latest",
         "rust-cache.json",
-        "[{\"name\": \"v2.9.2\"}]",
+        "{\"tag_name\": \"v2.9.2\"}",
     ),
 ];
 
