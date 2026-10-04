@@ -102,18 +102,24 @@ pub(super) fn assert_mbx_preflight(job: &str) {
         "exactly one central preflight per MBX job: {job}"
     );
     let step = step_body(job, "Verify MBX and Rust toolchains");
+    let command = normalized_shell_run(step);
     assert!(
-        step.contains("mise --no-config --no-env --no-hooks where 'mr-boxington@1.22.0'"),
+        command.contains("mise --no-config --no-env --no-hooks where 'mr-boxington@1.22.0'"),
         "{step}"
     );
     assert!(
-        step.contains("mise --no-config --no-env --no-hooks where 'rust@1.98.1'"),
+        command.contains("mise --no-config --no-env --no-hooks where 'rust@1.98.1'"),
         "{step}"
     );
     assert!(step.contains("GITHUB_PATH"), "{step}");
     assert!(
         step.contains("rust_root") && step.contains("mbx_root"),
         "{step}"
+    );
+    assert!(
+        command.contains("\"$rustc_bin\" '+1.98.1' -vV")
+            && command.contains("grep -Fqx 'release: 1.98.1'"),
+        "preflight verifies the selected Rustup shim and exact release: {step}"
     );
     let rustup_home = step_value(job, "Verify MBX and Rust toolchains", "RUSTUP_HOME");
     let mise_rustup_home = step_value(job, "Verify MBX and Rust toolchains", "MISE_RUSTUP_HOME");
@@ -132,6 +138,14 @@ pub(super) fn assert_mbx_preflight(job: &str) {
     assert!(!job.contains("mbx-rust-sysroot"), "{job}");
     assert!(!job.contains("sysroot/bin"), "{job}");
     assert!(!job.contains("printf '%s/bin\\n'"), "{job}");
+}
+
+fn normalized_shell_run(step: &str) -> String {
+    let run = step
+        .lines()
+        .find_map(|line| line.trim_start().strip_prefix("run: "))
+        .expect("preflight shell step has a run command");
+    run.replace("\\\\''", "").replace("\\\"", "\"")
 }
 
 pub(super) fn assert_no_implicit_cache(job: &str) {

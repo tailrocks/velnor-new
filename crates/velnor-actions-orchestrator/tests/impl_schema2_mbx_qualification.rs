@@ -47,7 +47,6 @@ fn assert_writer(writer: &str) {
         writer.contains("MBX_MATRIX_CONTEXT: ${{ toJSON(matrix) }}"),
         "{writer}"
     );
-    assert!(writer.contains("rustc --print sysroot"), "{writer}");
     assert_compression_profile(writer);
     assert_mbx_action_pin(writer);
     assert_mbx_bootstrap(writer);
