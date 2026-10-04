@@ -91,8 +91,16 @@ capture_case() {
   rm "$out/plan.raw.txt"
   if [ "$(cat "$out/plan.exit")" = "0" ]; then
     (cd "$repo" && "$BIN" generate --output-dir "$preview" >"$out/generate.stdout.txt" 2>"$out/generate.stderr.txt"; echo "$?" >"$out/generate.exit")
+    normalize_repository_log "$out/generate.stderr.txt"
     hash_tree "$preview" "$out/tree.sha256"
   fi
+}
+
+normalize_repository_log() {
+  local path="$1"
+  local normalized="$path.normalized"
+  sed -e 's|^Repository: .*|Repository: <repo>|' "$path" >"$normalized"
+  mv "$normalized" "$path"
 }
 
 capture_dogfood() {
@@ -106,6 +114,7 @@ capture_dogfood() {
     "$out/plan.raw.txt" >"$out/plan.txt"
   rm "$out/plan.raw.txt"
   (cd "$ROOT" && "$BIN" generate --output-dir "$preview" >"$out/generate.stdout.txt" 2>"$out/generate.stderr.txt"; echo "$?" >"$out/generate.exit")
+  normalize_repository_log "$out/generate.stderr.txt"
   if [ -d "$preview/.github" ]; then
     if diff -r "$ROOT/.github" "$preview/.github" >"$out/dogfood.diff" 2>&1; then
       echo "identical" >"$out/dogfood.verdict"
