@@ -213,7 +213,7 @@ mod tests {
             Some(&[]),
             false,
         ));
-        assert!(unresolved_inputs(&ext).is_empty());
+        assert_eq!(unresolved_inputs(&ext), []);
         let build = group(crate::tasks::TaskKind::Build).identity_extension(&inputs(
             DigestSlot::Known("lock".to_owned()),
             DigestSlot::Known("nextest".to_owned()),
@@ -241,7 +241,7 @@ mod tests {
             Some(&[]),
             false,
         ));
-        assert!(unresolved_inputs(&ext).is_empty());
+        assert_eq!(unresolved_inputs(&ext), []);
         assert_eq!(ext.lock_digest, None);
         assert_eq!(ext.nextest_digest, None);
         let unknown = group(crate::tasks::TaskKind::Nextest).identity_extension(&inputs(

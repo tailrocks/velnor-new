@@ -148,7 +148,7 @@ fn nested_cross_workspace_path_dep_skips_not_fails() -> TestResult {
             assert_eq!(workspace.record.skipped_edges.len(), 1);
         } else {
             assert_eq!(
-                workspace.record.skipped_edges,
+                workspace.record.skipped_edges.as_slice(),
                 [] as [velnor_actions_rust::SkippedPathEdge; 0]
             );
         }

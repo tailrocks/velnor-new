@@ -135,8 +135,8 @@ fn derives_groups_with_clippy_gates() {
         assert_eq!(group.package_id, "a-id");
     }
     let clippy = &groups[0];
-    assert!(clippy.gated_by.is_empty());
-    assert!(clippy.depends_on.is_empty());
+    assert_eq!(clippy.gated_by, Vec::<String>::new());
+    assert_eq!(clippy.depends_on, Vec::<String>::new());
     for group in groups.iter().skip(1) {
         if group.kind == TaskKind::Doc {
             let doctest = groups
@@ -151,7 +151,7 @@ fn derives_groups_with_clippy_gates() {
             assert_eq!(group.gated_by, vec![clippy.task_id.clone()]);
         }
     }
-    assert!(groups[1].depends_on.is_empty());
+    assert_eq!(groups[1].depends_on, Vec::<String>::new());
 }
 
 #[test]
@@ -174,7 +174,7 @@ fn nextest_adds_build_with_data_edge() {
             TaskKind::Doc
         ]
     );
-    assert!(ids_for(&groups, TaskKind::Test).is_empty());
+    assert_eq!(ids_for(&groups, TaskKind::Test), Vec::<&str>::new());
     let clippy = ids_for(&groups, TaskKind::Clippy);
     let build = ids_for(&groups, TaskKind::Build);
     let nextest: Vec<&velnor_actions_rust::TaskGroup> = groups
@@ -209,7 +209,7 @@ fn cargo_test_emits_only_existing_target_flags() {
         .iter()
         .filter(|group| group.kind == TaskKind::Doctest)
         .collect();
-    assert!(doctest[0].target_flags.is_empty());
+    assert_eq!(doctest[0].target_flags, Vec::<String>::new());
     assert!(!doctest[0].no_test_targets);
 }
 
@@ -227,7 +227,7 @@ fn no_targets_records_valid_no_test_targets() {
         .filter(|group| group.kind == TaskKind::Test)
         .collect();
     assert!(test[0].no_test_targets);
-    assert!(test[0].target_flags.is_empty());
+    assert_eq!(test[0].target_flags, Vec::<String>::new());
     let doctest: Vec<&velnor_actions_rust::TaskGroup> = groups
         .iter()
         .filter(|group| group.kind == TaskKind::Doctest)
@@ -286,8 +286,8 @@ fn doctest_stays_separate_in_both_profiles() {
     let Ok(groups) = derive_task_groups(&inputs) else {
         panic!("derivation must succeed");
     };
-    assert!(ids_for(&groups, TaskKind::Nextest).is_empty());
-    assert!(ids_for(&groups, TaskKind::Build).is_empty());
+    assert_eq!(ids_for(&groups, TaskKind::Nextest), Vec::<&str>::new());
+    assert_eq!(ids_for(&groups, TaskKind::Build), Vec::<&str>::new());
 }
 
 #[test]
@@ -321,7 +321,7 @@ fn fmt_only_with_explicit_config() {
     let Ok(groups) = derive_task_groups(&plain) else {
         panic!("derivation must succeed");
     };
-    assert!(ids_for(&groups, TaskKind::Fmt).is_empty());
+    assert_eq!(ids_for(&groups, TaskKind::Fmt), Vec::<&str>::new());
     let mut explicit = inputs(&package, &profile, &features);
     explicit.explicit_fmt = true;
     let Ok(groups) = derive_task_groups(&explicit) else {
@@ -333,8 +333,8 @@ fn fmt_only_with_explicit_config() {
         panic!("workspace fmt must succeed");
     };
     assert_eq!(workspace.task_id, "stack/rust/crates/a/fmt/default");
-    assert!(workspace.package_id.is_empty());
-    assert!(workspace.gated_by.is_empty());
+    assert_eq!(workspace.package_id, "");
+    assert_eq!(workspace.gated_by, Vec::<String>::new());
 }
 
 #[test]
@@ -346,7 +346,7 @@ fn workspace_fmt_carries_driver_runner() {
     };
     assert_eq!(workspace.compile_driver, CompileDriver::Mbx);
     assert_eq!(workspace.test_runner, TestRunner::CargoNextest);
-    assert!(workspace.declared_inputs.is_empty());
+    assert_eq!(workspace.declared_inputs, Vec::<String>::new());
 }
 
 #[test]

@@ -98,7 +98,7 @@ fn lanes_follow_responsibility() -> TestResult {
         .iter()
         .map(|entry| entry.cache_ids.as_ref().map_or("", |ids| ids.lane_id()))
         .collect();
-    assert_ne!(lanes, [] as [&str; 0]);
+    assert_ne!(lanes.as_slice(), [] as [&str; 0]);
     assert!(lanes.iter().all(|lane| !lane.is_empty()));
     let clippy = plan
         .matrix

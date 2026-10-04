@@ -27,8 +27,8 @@ fn old_marker_output_is_never_evidence() {
     };
     assert_eq!(outcome.profile.compile_driver, CompileDriver::Cargo);
     assert_eq!(outcome.profile.test_runner, TestRunner::CargoTest);
-    assert!(outcome.profile.evidence.is_empty());
-    assert!(outcome.findings.is_empty());
+    assert_eq!(outcome.profile.evidence, Vec::new());
+    assert_eq!(outcome.findings, Vec::new());
 }
 
 #[test]
@@ -44,8 +44,8 @@ fn new_marker_output_is_never_evidence() {
         panic!("new-marker output must fall back to defaults");
     };
     assert_eq!(outcome.profile.compile_driver, CompileDriver::Cargo);
-    assert!(outcome.profile.evidence.is_empty());
-    assert!(outcome.findings.is_empty());
+    assert_eq!(outcome.profile.evidence, Vec::new());
+    assert_eq!(outcome.findings, Vec::new());
 }
 
 #[test]
@@ -97,7 +97,7 @@ fn executable_evidence_is_durable() {
             .iter()
             .all(|sighting| sighting.strength.as_str() == "durable")
     );
-    assert!(outcome.findings.is_empty());
+    assert_eq!(outcome.findings, Vec::new());
 }
 
 #[test]
@@ -114,7 +114,7 @@ fn declared_profile_is_sticky_without_evidence() {
     assert_eq!(outcome.profile.test_runner, TestRunner::CargoNextest);
     assert_eq!(outcome.profile.driver_source, ProfileSource::Declared);
     assert_eq!(outcome.profile.runner_source, ProfileSource::Declared);
-    assert!(outcome.findings.is_empty());
+    assert_eq!(outcome.findings, Vec::new());
 }
 
 #[test]
@@ -132,7 +132,7 @@ fn declaration_resolves_transient_evidence() {
     };
     assert_eq!(outcome.profile.compile_driver, CompileDriver::Mbx);
     assert_eq!(outcome.profile.driver_source, ProfileSource::Declared);
-    assert!(outcome.findings.is_empty());
+    assert_eq!(outcome.findings, Vec::new());
 }
 
 #[test]

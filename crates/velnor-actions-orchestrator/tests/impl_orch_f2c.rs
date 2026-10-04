@@ -39,7 +39,7 @@ fn shared_lanes_get_exclusions() {
     assert_eq!(pairs, [("a".to_owned(), "b".to_owned())]);
     assert_eq!(
         resource_exclusions(&[("a", 0), ("b", 1)]),
-        [] as [(std::string::String, std::string::String); 0]
+        [] as [(String, String); 0]
     );
 }
 
@@ -78,7 +78,7 @@ fn fanout_needs(saving: u64, setup: u64, transfer: u64) -> bool {
 fn sequential_reference_is_sorted_set() {
     let ids = ["b".to_owned(), "a".to_owned(), "c".to_owned()];
     assert_eq!(sequential_reference(&ids), ["a", "b", "c"]);
-    assert_eq!(sequential_reference(&[]), [] as [std::string::String; 0]);
+    assert_eq!(sequential_reference(&[]), [] as [String; 0]);
 }
 
 #[test]

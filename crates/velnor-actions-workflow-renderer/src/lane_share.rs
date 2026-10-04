@@ -361,7 +361,7 @@ mod tests {
         );
         let shared = share_lanes(&jobs, &ctx()).expect("share");
         assert!(shared.calls.is_empty());
-        assert!(shared.files.is_empty());
+        assert_eq!(shared.files, []);
         let kept = shared.jobs.get("actionlint").expect("actionlint");
         assert_eq!(kept.steps.len(), 1);
     }
@@ -379,7 +379,7 @@ mod tests {
         let local = shared.jobs.get("rust-0__local").expect("local");
         assert_eq!(hosted.steps.len(), 1);
         assert_eq!(hosted.steps.first().expect("save").name, "Save Mise tools");
-        assert!(local.steps.is_empty());
+        assert_eq!(local.steps, []);
         let action = shared
             .files
             .iter()

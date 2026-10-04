@@ -117,7 +117,7 @@ fn nextest_config_selects_ci() {
     let sighting = &outcome.profile.evidence[0];
     assert_eq!(sighting.command_or_setting, "[profile.ci]");
     assert_eq!(sighting.line, 4);
-    assert!(outcome.recommendations.is_empty());
+    assert_eq!(outcome.recommendations, Vec::new());
 }
 
 #[test]
@@ -157,8 +157,8 @@ fn combined_wrapper_and_nextest() {
     assert_eq!(outcome.profile.test_runner, TestRunner::CargoNextest);
     assert_eq!(outcome.profile.nextest_profile, NextestProfile::Ci);
     assert_eq!(outcome.profile.evidence.len(), 2);
-    assert!(outcome.recommendations.is_empty());
-    assert!(outcome.findings.is_empty());
+    assert_eq!(outcome.recommendations, Vec::new());
+    assert_eq!(outcome.findings, Vec::new());
 }
 
 #[test]

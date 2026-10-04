@@ -122,8 +122,11 @@ fn override_and_test_files_format() {
 
 #[test]
 fn empty_selection_stays_empty() {
-    assert!(fmt_set(&[]).is_empty());
-    assert!(fmt_scope_for_root(&paths(&["main.tf.json"]), ".").is_empty());
+    assert_eq!(fmt_set(&[]), Vec::<String>::new());
+    assert_eq!(
+        fmt_scope_for_root(&paths(&["main.tf.json"]), "."),
+        Vec::<String>::new()
+    );
 }
 
 /// Normalized root list from names.

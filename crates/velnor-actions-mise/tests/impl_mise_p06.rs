@@ -165,14 +165,14 @@ fn nextest_ci_subsection_and_dotted_forms() {
 fn nextest_comment_is_not_evidence() {
     let config =
         parse_nextest_config("# [profile.ci]\n# retries = 0\n").expect("comment-only parses");
-    assert_eq!(config.profiles, [] as [std::string::String; 0]);
+    assert_eq!(config.profiles, Vec::<String>::new());
     assert_eq!(config.selected_profile(), "default");
 }
 
 #[test]
 fn nextest_empty_and_malformed() {
     let config = parse_nextest_config("").expect("empty parses");
-    assert_eq!(config.profiles, [] as [std::string::String; 0]);
+    assert_eq!(config.profiles, Vec::<String>::new());
     assert_eq!(config.selected_profile(), "default");
     let err = parse_nextest_config("[profile.ci\nretries = \n").expect_err("must fail");
     assert_eq!(err.line, 1);

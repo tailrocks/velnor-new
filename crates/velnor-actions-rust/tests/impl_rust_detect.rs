@@ -88,7 +88,7 @@ fn ignores_apply_after_detection_with_reason() -> Outcome {
         assert_eq!(reason, IGNORED_REASON);
         assert_eq!(project.stack_id, "rust");
     }
-    assert!(selected_projects(&ignored).is_empty());
+    assert_eq!(selected_projects(&ignored), Vec::<&DetectedProject>::new());
     let selected = apply_stack_ignores(projects, &[]);
     assert_eq!(selected_projects(&selected).len(), 2);
     Ok(())

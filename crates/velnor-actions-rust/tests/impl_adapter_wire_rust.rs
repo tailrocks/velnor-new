@@ -194,7 +194,7 @@ fn doc_env_denies_warnings() {
         TaskKind::Test,
         TaskKind::Build,
     ] {
-        assert!(cargo_payload_env(kind).is_empty(), "{kind:?} carries env");
+        assert_eq!(cargo_payload_env(kind), Vec::new(), "{kind:?} carries env");
     }
 }
 
@@ -238,7 +238,7 @@ fn workspace_fmt_only_with_explicit_config() {
 fn derive_marks_build_script_reads_undeclared() -> Result<(), ContractError> {
     let package = package();
     let groups = groups_for(&package)?;
-    assert!(!groups.is_empty());
+    assert_ne!(groups, Vec::new());
     for group in &groups {
         assert!(group.undeclared_reads, "{} misses signal", group.task_id);
     }
