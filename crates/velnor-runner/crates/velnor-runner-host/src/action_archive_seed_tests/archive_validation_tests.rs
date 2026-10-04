@@ -67,7 +67,7 @@ fn codeload_archive_with_body(commit_sha: &str, body: &[u8]) -> Result<Vec<u8>, 
     header.set_size(u64::try_from(body.len())?);
     header.set_mode(0o644);
     header.set_cksum();
-    archive.append(&header, body.as_slice())?;
+    archive.append(&header, body)?;
 
     let file_body = b"name: action\n";
     let mut action = Header::new_gnu();
@@ -225,7 +225,6 @@ fn rejects_global_pax_path_linkpath_and_extra_fields() -> Result<(), Box<dyn Err
 
 #[test]
 fn rejects_oversized_global_pax_body_before_reading_it() -> Result<(), Box<dyn Error>> {
-    const COMMIT: &str = "0123456789abcdef0123456789abcdef01234567";
     let root = TestRoot::new()?;
     let store = ActionArchiveStore::open(root.path().join("store"))?;
     let bytes = oversized_truncated_global_pax_archive(4097)?;
