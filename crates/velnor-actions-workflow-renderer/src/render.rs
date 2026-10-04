@@ -334,10 +334,17 @@ fn render_merged(
     } else {
         jobs.clone()
     };
-    let mbx_gc_jobs = crate::mbx_gc_policy::jobs_with_hosted_mbx_objects(&jobs);
+    let hosted_mbx_jobs = crate::mbx_gc_policy::hosted_jobs_with_mbx_objects(&jobs);
+    let hosted_linux_mbx_jobs = crate::mbx_gc_policy::hosted_linux_jobs_with_mbx_objects(&jobs);
     let shared = crate::lane_share::share_lanes(&jobs, ctx)?;
-    let mut document =
-        document::workflow_to_yaml(ir, &shared.jobs, ctx, &shared.calls, &mbx_gc_jobs)?;
+    let mut document = document::workflow_to_yaml(
+        ir,
+        &shared.jobs,
+        ctx,
+        &shared.calls,
+        &hosted_mbx_jobs,
+        &hosted_linux_mbx_jobs,
+    )?;
     if let Some((source, max_parallel)) = &matrix {
         matrix::attach_task_matrix(&mut document, source, *max_parallel)?;
     } else {

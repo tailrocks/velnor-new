@@ -4,7 +4,7 @@ use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_contract::cachekey::mbx_cache_generation;
 use velnor_actions_contract::config::{SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL};
 use velnor_actions_workflow_renderer::steps::mbx_objects_step;
-use velnor_actions_workflow_renderer::{RenderError, render_workflow_ir};
+use velnor_actions_workflow_renderer::{RenderError, render_workflow_ir, shell_step};
 
 use super::impl_renderer_fixtures::*;
 
@@ -14,7 +14,12 @@ fn mbx_uses() -> String {
 
 pub(super) fn render_mbx(id: &str, scale_set: bool) -> Result<String, RenderError> {
     let mbx = mbx_objects_step(&mbx_uses(), false, "1.21.1")?;
-    let mut built = job(id, "MBX job", Vec::new(), vec![mbx]);
+    let build = shell_step(
+        "Compile MBX probe",
+        vec!["bash".to_owned(), "-c".to_owned(), "mbx build".to_owned()],
+        std::collections::BTreeMap::new(),
+    )?;
+    let mut built = job(id, "MBX job", Vec::new(), vec![mbx, build]);
     if scale_set {
         let selector = ScaleSetSelector::try_new(
             SCALE_SET_NAME,
@@ -69,7 +74,7 @@ fn assert_hosted_action_options(text: &str) {
     let action = step_block(text, "Restore MBX objects");
     let action_sha = "a".repeat(40);
     let expected_generation = format!(
-        "cache-generation: {}-action-{action_sha}",
+        "cache-generation: {}-share-out-dir-disabled-v1-action-{action_sha}",
         mbx_cache_generation("1.21.1")
     );
     assert!(action.contains(&expected_generation), "{action}");
@@ -80,6 +85,15 @@ fn assert_hosted_action_options(text: &str) {
     );
     assert!(text.contains(&expected_generation), "{text}");
     assert!(text.contains("version: 1.21.1"), "{text}");
+    let job_env = position(text, "MBX_SHARE_OUT_DIR: \"0\"");
+    let action_step = position(text, "name: Restore MBX objects");
+    assert!(
+        job_env < action_step,
+        "job env must reach the action main and post steps: {text}"
+    );
+    assert!(text.contains("MBX_GC_AUTO: \"0\""), "{text}");
+    let build = step_block(text, "Compile MBX probe");
+    assert!(build.contains("mbx build"), "{build}");
 }
 
 fn assert_hosted_writer_policy(text: &str) {
@@ -116,81 +130,44 @@ fn assert_scale_set_steps_guarded(text: &str) {
         "Save MBX single bundle",
     ] {
         assert!(
-            step_block(text, scale_set_only_step)
-                .contains("if: runner.environment != 'github-hosted'"),
+            step_block(text, scale_set_only_step).contains("runner.environment != 'github-hosted'"),
             "non-hosted bundle step lacks runner guard: {scale_set_only_step}: {text}"
         );
     }
 }
 
-fn assert_hosted_gc_before_post(text: &str) {
+fn assert_mbx_cleanup_policy(text: &str, hosted_linux: bool) {
     let bundle_export = position(text, "name: Export MBX single bundle");
     let save = position(text, "name: Save MBX single bundle");
-    let sync_gc = position(text, "name: Collect MBX cache before export");
-    let cleanup = position(text, "name: Normalize MBX directories before action post");
-    assert!(bundle_export < save && save < sync_gc, "{text}");
-    assert!(sync_gc < cleanup, "{text}");
+    assert!(bundle_export < save, "{text}");
     assert!(
-        text.contains(
-            "if: success() && runner.environment == 'github-hosted' && github.event_name == 'push'"
-        ),
-        "only eligible hosted writers run synchronous GC before action post:\n{text}"
+        !text.contains("Collect MBX cache before export"),
+        "no collector may run before the hosted action exports its receipt closure:\n{text}"
+    );
+    let export_block = step_block(text, "Export MBX single bundle");
+    assert!(
+        !export_block.contains("mbx gc"),
+        "the Scale Set export follows the existing bundle lifecycle: {text}"
+    );
+    let export_command = export_block.find("mbx cache export");
+    let cleanup = export_block.find("rm -rf \\\"$store\\\"");
+    assert!(
+        export_command.is_some() && cleanup.is_some() && export_command < cleanup,
+        "{export_block}"
     );
     assert!(
-        step_block(text, "Collect MBX cache before export").contains("mbx gc"),
-        "run the synchronous collector before the action post export: {text}"
+        !text.contains("Normalize MBX directories before action post"),
+        "{text}"
     );
-    let normalize = step_block(text, "Normalize MBX directories before action post");
-    assert!(
-        normalize.contains(
-            "if: success() && runner.environment == 'github-hosted' && runner.os == 'Linux'"
-        ),
-        "permission normalization runs only after successful hosted Linux jobs: {normalize}"
-    );
-    assert!(
-        normalize.contains("root_name.startswith")
-            && normalize.contains("mbx-github-objects-store-")
-            && normalize.contains("open_directory(root_fd")
-            && normalize.contains("store_fd")
-            && normalize.contains("open_directory(store_fd")
-            && normalize.contains("out_dirs_fd"),
-        "permission repair must target only action-owned MBX output directories: {normalize}"
-    );
-    assert!(
-        normalize.contains("os.O_NOFOLLOW")
-            && normalize.contains("dir_fd=parent_fd")
-            && normalize.contains("os.fchmod(directory_fd")
-            && normalize.contains("os.scandir(directory_fd)")
-            && normalize.contains("def open_components(root_fd, components)")
-            && normalize.contains("pending = [()]")
-            && normalize.contains("pending.append(components + (name,))")
-            && normalize.contains("entry.is_dir(follow_symlinks=False)")
-            && !normalize.contains("frames =")
-            && !normalize.contains("MAX_DIRECTORY_DEPTH"),
-        "descriptor-relative traversal rejects symlinks before adding owner-write: {normalize}"
-    );
-    for errno in ["errno.ENOENT", "errno.ENOTDIR", "errno.ELOOP"] {
+    if hosted_linux {
         assert!(
-            normalize.contains(errno),
-            "only benign filesystem races may be skipped: {normalize}"
+            position(text, "MBX_SHARE_OUT_DIR: \"0\"")
+                < position(text, "name: Restore MBX objects"),
+            "job env must reach the hosted action main and post steps: {text}"
         );
+    } else {
+        assert!(!text.contains("MBX_SHARE_OUT_DIR"), "{text}");
     }
-    assert!(
-        !normalize.contains("mbx-github-objects-bundle"),
-        "the action bundle remains untouched: {normalize}"
-    );
-    assert!(
-        !normalize.contains("os.chmod(") && !normalize.contains("os.listdir(directory_fd)"),
-        "avoid path-based mode changes and unbounded directory listings: {normalize}"
-    );
-    assert!(
-        !normalize.contains("MBX_CACHE_DIR"),
-        "cleanup paths must come from the action-owned RUNNER_TEMP layout: {normalize}"
-    );
-    assert!(
-        !text[cleanup..].contains("\n      - name:"),
-        "permission normalization must be the final main step before action post: {text}"
-    );
     assert!(!text.contains("continue-on-error"), "{text}");
 }
 
@@ -201,7 +178,7 @@ fn hosted_jobs_isolate_each_store_and_write_only_on_protected_default_push()
     assert_hosted_action_options(&text);
     assert_hosted_writer_policy(&text);
     assert_scale_set_steps_guarded(&text);
-    assert_hosted_gc_before_post(&text);
+    assert_mbx_cleanup_policy(&text, true);
     Ok(())
 }
 
@@ -241,12 +218,12 @@ fn hosted_jobs_use_job_scoped_primary_keys_with_the_default_restore_prefix()
     Ok(())
 }
 
-fn assert_cold_import(imported: &str) {
+fn assert_external_import_fallback(imported: &str) {
     for needle in [
         "mbx cache import",
-        "no mbx bundle matched",
-        "mbx bundle missing; continuing cold",
-        "mbx bundle import failed; continuing cold",
+        "no mbx bundle matched; using local store",
+        "mbx bundle missing; using local store",
+        "mbx bundle import failed; using local store",
         "df -B1 -P",
         "df -i -P",
     ] {
@@ -330,15 +307,14 @@ fn scale_set_jobs_keep_the_existing_single_bundle_lifecycle() -> Result<(), Rend
         restored.contains("restore-keys: ${{ steps.mbx-bundle-key.outputs.prefix }}"),
         "{restored}"
     );
-    assert_cold_import(&text[import..export]);
+    assert_external_import_fallback(&text[import..export]);
     assert_scale_set_action_policy(&text[restore..bundle_key]);
     let saved = &text[save..];
     assert_scale_set_bundle_save(saved);
-    assert!(text.contains("name: Collect MBX cache before export\n        if: success() && runner.environment == 'github-hosted'"), "{text}");
+    assert_mbx_cleanup_policy(&text, false);
     assert!(
-        step_block(&text, "Normalize MBX directories before action post")
-            .contains("runner.environment == 'github-hosted' && runner.os == 'Linux'"),
-        "Scale Set jobs must skip hosted-only permission normalization: {text}"
+        !text.contains("Normalize MBX directories before action post"),
+        "{text}"
     );
     assert!(!text.contains("continue-on-error"), "{text}");
     Ok(())

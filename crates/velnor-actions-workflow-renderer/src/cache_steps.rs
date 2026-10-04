@@ -144,10 +144,10 @@ fn uses_mbx_tool(step: &Step) -> bool {
 pub const MBX_CACHE_MODE_ENV: &str = "ACTIONS_CACHE_MODE";
 /// Display name of the MBX objects restore step.
 pub const MBX_RESTORE_NAME: &str = "Restore MBX objects";
-/// MBX automatic collection must stay enabled so low-disk builds can recover.
+/// MBX automatic collection stays off until an exported bundle is published.
 pub(crate) const MBX_GC_AUTO_ENV: &str = "MBX_GC_AUTO";
-/// MBX 1.21.1+ honors this value and protects active build consumers.
-pub(crate) const MBX_GC_AUTO_VALUE: &str = "1";
+/// Prevent asynchronous low-disk collection from evicting active receipt closures.
+pub(crate) const MBX_GC_AUTO_VALUE: &str = "0";
 /// Mode that skips the action post. `read` does not permit writes.
 pub(crate) const MBX_ACTION_CACHE_MODE: &str = "read";
 
@@ -162,9 +162,10 @@ pub(crate) const MBX_ACTION_CACHE_MODE: &str = "read";
 /// runner policy upgrades hosted required jobs to isolated native saves
 /// on protected default-branch pushes; Scale Set jobs keep this action
 /// restore-only and use their external single-bundle step.
-/// The action-cache generation follows both the exact MBX release and action
-/// SHA, so changing its storage or collection behavior starts cold. The task
-/// cache-format identity remains scoped to the MBX release alone.
+/// The action-cache generation follows the exact MBX release, action SHA, and
+/// OUT_DIR sharing policy. Disabling readonly shared output trees therefore
+/// starts a fresh namespace. The task cache-format identity remains scoped to
+/// the MBX release alone.
 /// # Errors
 pub fn mbx_objects_step(
     uses: &str,
@@ -191,7 +192,10 @@ pub fn mbx_objects_step(
         ("version".to_owned(), mbx_version.to_owned()),
         (
             "cache-generation".to_owned(),
-            format!("{}-action-{action_sha}", mbx_cache_generation(mbx_version)),
+            format!(
+                "{}-share-out-dir-disabled-v1-action-{action_sha}",
+                mbx_cache_generation(mbx_version)
+            ),
         ),
     ]);
     let env = BTreeMap::from([(
@@ -293,8 +297,7 @@ fn sources_subset_ok(path: &str) -> bool {
 
 /// Check restore-before/save-after ordering over cache action steps.
 ///
-/// Every `actions/cache/restore` step (plus MBX objects restore) must
-/// precede every `actions/cache/save` step within one job.
+/// Every cache download and MBX objects restore must precede every save.
 /// # Errors
 pub fn check_cache_step_order(steps: &[Step]) -> Result<(), RenderError> {
     let mut last_restore: Option<usize> = None;

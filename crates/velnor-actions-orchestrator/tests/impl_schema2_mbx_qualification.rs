@@ -18,17 +18,30 @@ fn protected_main_mbx_roundtrip_is_run_bound_and_read_only_on_restore() -> TestR
     );
     assert!(writer.contains("actions: write"), "{writer}");
     assert!(writer.contains("ACTIONS_CACHE_MODE: write"), "{writer}");
-    assert!(writer.contains("MBX_GC_AUTO: \"1\""), "{writer}");
+    assert!(writer.contains("MBX_GC_AUTO: \"0\""), "{writer}");
+    assert!(writer.contains("MBX_SHARE_OUT_DIR: \"0\""), "{writer}");
     assert!(
         writer.contains("save-on-workflow-dispatch: \"true\""),
         "{writer}"
     );
     assert!(
-        writer.contains("velnor-qualification-mbx-1.21.1-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}"),
+        writer.contains("velnor-qualification-mbx-1.21.1-share-out-dir-disabled-v1-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}"),
         "{writer}"
     );
+    let exact_key = "velnor-qualification-mbx-1.21.1-share-out-dir-disabled-v1-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37-${{ runner.os }}-${{ runner.arch }}-rust-1.98.1-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}";
+    assert!(
+        writer.contains(&format!("cache-key: {exact_key}")),
+        "{writer}"
+    );
+    assert!(
+        writer.contains("isolate-objects-cache: \"true\""),
+        "{writer}"
+    );
+    assert!(
+        writer.contains("test \\\"$CACHE_HIT\\\" = 'false'"),
+        "writer must save a new exact key: {writer}"
+    );
     assert!(writer.contains("version: 1.21.1"), "{writer}");
-    assert!(!writer.contains("isolate-objects-cache"), "{writer}");
     assert!(!writer.contains("cache-key-suffix"), "{writer}");
     assert!(writer.contains("RUSTUP_TOOLCHAIN: 1.98.1"), "{writer}");
     assert!(
@@ -49,18 +62,27 @@ fn protected_main_mbx_roundtrip_is_run_bound_and_read_only_on_restore() -> TestR
     );
     assert!(reader.contains("actions: read"), "{reader}");
     assert!(reader.contains("ACTIONS_CACHE_MODE: read"), "{reader}");
-    assert!(reader.contains("MBX_GC_AUTO: \"1\""), "{reader}");
+    assert!(reader.contains("MBX_GC_AUTO: \"0\""), "{reader}");
+    assert!(reader.contains("MBX_SHARE_OUT_DIR: \"0\""), "{reader}");
     assert!(
         reader.contains("steps.mbx_cache.outputs.cache-hit"),
         "{reader}"
     );
     assert!(
-        reader.contains("velnor-qualification-mbx-1.21.1-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}"),
+        reader.contains("velnor-qualification-mbx-1.21.1-share-out-dir-disabled-v1-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}"),
         "{reader}"
     );
     assert!(
-        reader.contains("test \\\"$CACHE_HIT\\\" = 'false'"),
+        reader.contains(&format!("cache-key: {exact_key}")),
         "{reader}"
+    );
+    assert!(
+        reader.contains("isolate-objects-cache: \"true\""),
+        "{reader}"
+    );
+    assert!(
+        reader.contains("test \\\"$CACHE_HIT\\\" = 'true'"),
+        "reader must require an exact warm hit: {reader}"
     );
     assert!(
         reader.contains("save-on-workflow-dispatch: \"false\""),
@@ -72,7 +94,6 @@ fn protected_main_mbx_roundtrip_is_run_bound_and_read_only_on_restore() -> TestR
         "{reader}"
     );
     assert!(reader.contains("version: 1.21.1"), "{reader}");
-    assert!(!reader.contains("isolate-objects-cache"), "{reader}");
     assert!(!reader.contains("cache-key-suffix"), "{reader}");
     assert!(reader.contains("RUSTUP_TOOLCHAIN: 1.98.1"), "{reader}");
     assert!(

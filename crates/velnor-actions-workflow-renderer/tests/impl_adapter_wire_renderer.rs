@@ -103,6 +103,7 @@ fn cache_steps_restore_before_save() -> Result<(), RenderError> {
     );
     assert_eq!(check_cache_step_order(std::slice::from_ref(&save)), Ok(()));
     assert!(check_cache_step_order(&[save, restore]).is_err());
+
     Ok(())
 }
 

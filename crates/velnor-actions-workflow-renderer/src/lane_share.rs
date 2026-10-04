@@ -253,6 +253,7 @@ mod tests {
             ctx,
             calls,
             &std::collections::BTreeSet::new(),
+            &std::collections::BTreeSet::new(),
         )?;
         let quoted = crate::yaml::quote_run_values_in_yaml(document);
         crate::marker::with_marker(&ctx.generator_version, &crate::yaml::render_yaml(&quoted))

@@ -329,7 +329,8 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 30
     env:
-      MBX_GC_AUTO: "1"
+      MBX_GC_AUTO: "0"
+      MBX_SHARE_OUT_DIR: "0"
     needs:
       - plan
     steps:
@@ -401,7 +402,7 @@ jobs:
         id: mbx
         uses: jdx/mr-boxington-action@d0825fbaf3cc36ca2609aa38e71046265a1f1e37
         with:
-          cache-generation: velnor-mbx-1.21.1-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37
+          cache-generation: velnor-mbx-1.21.1-share-out-dir-disabled-v1-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37
           cache-key-suffix: ${{ runner.environment == 'github-hosted' && github.job || '' }}
           github-cache-mode: objects
           isolate-objects-cache: ${{ runner.environment == 'github-hosted' }}
@@ -448,7 +449,7 @@ jobs:
           MISE_GITHUB_TOKEN: ""
           NODE_AUTH_TOKEN: ""
           NPM_TOKEN: ""
-        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; if [ -z \"$MATCHED\" ]; then echo \"no mbx bundle matched\"; exit 0; fi; if [ ! -d \"$bundle\" ]; then echo \"mbx bundle missing; continuing cold\"; exit 0; fi; if ! mbx cache import \"$bundle\"; then echo \"mbx bundle import failed; continuing cold\"; rm -rf \"$bundle\"; exit 0; fi'"
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; if [ -z \"$MATCHED\" ]; then echo \"no mbx bundle matched; using local store\"; exit 0; fi; if [ ! -d \"$bundle\" ]; then echo \"mbx bundle missing; using local store\"; exit 0; fi; if ! mbx cache import \"$bundle\"; then echo \"mbx bundle import failed; using local store\"; rm -rf \"$bundle\"; exit 0; fi'"
       - name: Fetch Cargo sources
         env:
           MISE_AUTO_INSTALL: "false"
@@ -658,49 +659,20 @@ jobs:
           MISE_GITHUB_TOKEN: ""
           NODE_AUTH_TOKEN: ""
           NPM_TOKEN: ""
-        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; mbx gc; mbx cache dir > \"$RUNNER_TEMP/mbx-store-path\"; IFS= read -r store < \"$RUNNER_TEMP/mbx-store-path\"; test -n \"$store\"; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; case \"$bundle\" in \"$store\"|\"$store\"/*) exit 1 ;; esac; case \"$store\" in /|.) exit 1 ;; *mbx*) ;; *) exit 1 ;; esac; rm -rf \"$bundle\"; if mbx cache export --group \"$MBX_CACHE_EXPORT_GROUP\" --format directory \"$bundle\" >\"$RUNNER_TEMP/mbx-export.out\" 2>&1; then test -d \"$bundle\"; rm -rf \"$store\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; echo \"ready=true\" >> \"$GITHUB_OUTPUT\"; else rm -rf \"$bundle\"; if grep -q \"no completed mbx builds are recorded for export group\" \"$RUNNER_TEMP/mbx-export.out\"; then echo \"ready=false\" >> \"$GITHUB_OUTPUT\"; exit 0; fi; cat \"$RUNNER_TEMP/mbx-export.out\"; exit 1; fi'"
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; mbx cache dir > \"$RUNNER_TEMP/mbx-store-path\"; IFS= read -r store < \"$RUNNER_TEMP/mbx-store-path\"; test -n \"$store\"; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; case \"$bundle\" in \"$store\"|\"$store\"/*) exit 1 ;; esac; case \"$store\" in /|.) exit 1 ;; *mbx*) ;; *) exit 1 ;; esac; rm -rf \"$bundle\"; if mbx cache export --group \"$MBX_CACHE_EXPORT_GROUP\" --format directory \"$bundle\" >\"$RUNNER_TEMP/mbx-export.out\" 2>&1; then test -d \"$bundle\"; rm -rf \"$store\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; echo \"ready=true\" >> \"$GITHUB_OUTPUT\"; else rm -rf \"$bundle\"; if grep -q \"no completed mbx builds are recorded for export group\" \"$RUNNER_TEMP/mbx-export.out\"; then echo \"ready=false\" >> \"$GITHUB_OUTPUT\"; exit 0; fi; cat \"$RUNNER_TEMP/mbx-export.out\"; exit 1; fi'"
       - name: Save MBX single bundle
         if: runner.environment != 'github-hosted' && success() && github.event_name == 'push' && steps.mbx.outputs.cache-hit != 'true' && steps.mbx-bundle.outputs.cache-hit != 'true' && steps.mbx-export.outputs.ready == 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           key: ${{ steps.mbx.outputs.cache-primary-key }}
           path: ${{ runner.temp }}/mbx-single-bundle
-      - name: Collect MBX cache before export
-        if: success() && runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
-        env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
-          ACTIONS_RUNTIME_TOKEN: ""
-          CARGO_REGISTRY_TOKEN: ""
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
-          MISE_GITHUB_TOKEN: ""
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
-        run: env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mbx gc
-      - name: Normalize MBX directories before action post
-        if: success() && runner.environment == 'github-hosted' && runner.os == 'Linux'
-        env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
-          ACTIONS_RUNTIME_TOKEN: ""
-          CARGO_REGISTRY_TOKEN: ""
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
-          MISE_GITHUB_TOKEN: ""
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
-        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; python3 -c '\\''exec(\"\"\"import errno\\nimport os\\nimport stat\\n\\nDIRECTORY_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW\\nBENIGN_RACES = {errno.ENOENT, errno.ENOTDIR, errno.ELOOP}\\n\\ndef open_directory(parent_fd, name):\\n    try:\\n        return os.open(name, DIRECTORY_FLAGS, dir_fd=parent_fd)\\n    except OSError as error:\\n        if error.errno in BENIGN_RACES:\\n            return None\\n        raise\\n\\ndef open_components(root_fd, components):\\n    current_fd = os.dup(root_fd)\\n    try:\\n        for name in components:\\n            child_fd = open_directory(current_fd, name)\\n            os.close(current_fd)\\n            if child_fd is None:\\n                return None\\n            current_fd = child_fd\\n        return current_fd\\n    except BaseException:\\n        os.close(current_fd)\\n        raise\\n\\ndef add_owner_write(root_fd):\\n    pending = [()]\\n    while pending:\\n        components = pending.pop()\\n        directory_fd = open_components(root_fd, components)\\n        if directory_fd is None:\\n            continue\\n        try:\\n            details = os.fstat(directory_fd)\\n            if not stat.S_ISDIR(details.st_mode):\\n                continue\\n            os.fchmod(directory_fd, details.st_mode | stat.S_IWUSR)\\n            try:\\n                with os.scandir(directory_fd) as entries:\\n                    for entry in entries:\\n                        name = entry.name\\n                        if name in (\\\".\\\", \\\"..\\\") or os.sep in name:\\n                            continue\\n                        try:\\n                            is_directory = entry.is_dir(follow_symlinks=False)\\n                        except OSError as error:\\n                            if error.errno in BENIGN_RACES:\\n                                continue\\n                            raise\\n                        if is_directory:\\n                            pending.append(components + (name,))\\n            except OSError as error:\\n                if error.errno in BENIGN_RACES:\\n                    continue\\n                raise\\n        finally:\\n            os.close(directory_fd)\\n\\ndef open_runner_temp(path):\\n    if not os.path.isabs(path):\\n        raise ValueError(\\\"RUNNER_TEMP must be absolute\\\")\\n    current_fd = os.open(os.sep, DIRECTORY_FLAGS)\\n    try:\\n        for component in path.split(os.sep):\\n            if component in (\\\"\\\", \\\".\\\"):\\n                continue\\n            if component == \\\"..\\\":\\n                raise ValueError(\\\"RUNNER_TEMP must be normalized\\\")\\n            child_fd = open_directory(current_fd, component)\\n            if child_fd is None:\\n                os.close(current_fd)\\n                return None\\n            os.close(current_fd)\\n            current_fd = child_fd\\n        return current_fd\\n    except BaseException:\\n        os.close(current_fd)\\n        raise\\n\\nrunner_temp_fd = open_runner_temp(os.environ.get(\\\"RUNNER_TEMP\\\", \\\"\\\"))\\nif runner_temp_fd is not None:\\n    try:\\n        with os.scandir(runner_temp_fd) as roots:\\n            for entry in roots:\\n                root_name = entry.name\\n                if not root_name.startswith(\\\"mbx-github-objects-store-\\\"):\\n                    continue\\n                root_fd = open_directory(runner_temp_fd, root_name)\\n                if root_fd is None:\\n                    continue\\n                try:\\n                    store_fd = open_directory(root_fd, \\\"store\\\")\\n                    if store_fd is None:\\n                        continue\\n                    try:\\n                        out_dirs_fd = open_directory(store_fd, \\\"out-dirs\\\")\\n                        if out_dirs_fd is None:\\n                            continue\\n                        try:\\n                            add_owner_write(out_dirs_fd)\\n                        finally:\\n                            os.close(out_dirs_fd)\\n                    finally:\\n                        os.close(store_fd)\\n                finally:\\n                    os.close(root_fd)\\n    finally:\\n        os.close(runner_temp_fd)\"\"\")'\\'''"
   rust-parity-tool:
     name: Rust / parity-tool
     runs-on: ubuntu-26.04
     timeout-minutes: 30
     env:
-      MBX_GC_AUTO: "1"
+      MBX_GC_AUTO: "0"
+      MBX_SHARE_OUT_DIR: "0"
     needs:
       - plan
     steps:
@@ -772,7 +744,7 @@ jobs:
         id: mbx
         uses: jdx/mr-boxington-action@d0825fbaf3cc36ca2609aa38e71046265a1f1e37
         with:
-          cache-generation: velnor-mbx-1.21.1-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37
+          cache-generation: velnor-mbx-1.21.1-share-out-dir-disabled-v1-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37
           cache-key-suffix: ${{ runner.environment == 'github-hosted' && github.job || '' }}
           github-cache-mode: objects
           isolate-objects-cache: ${{ runner.environment == 'github-hosted' }}
@@ -819,7 +791,7 @@ jobs:
           MISE_GITHUB_TOKEN: ""
           NODE_AUTH_TOKEN: ""
           NPM_TOKEN: ""
-        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; if [ -z \"$MATCHED\" ]; then echo \"no mbx bundle matched\"; exit 0; fi; if [ ! -d \"$bundle\" ]; then echo \"mbx bundle missing; continuing cold\"; exit 0; fi; if ! mbx cache import \"$bundle\"; then echo \"mbx bundle import failed; continuing cold\"; rm -rf \"$bundle\"; exit 0; fi'"
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; if [ -z \"$MATCHED\" ]; then echo \"no mbx bundle matched; using local store\"; exit 0; fi; if [ ! -d \"$bundle\" ]; then echo \"mbx bundle missing; using local store\"; exit 0; fi; if ! mbx cache import \"$bundle\"; then echo \"mbx bundle import failed; using local store\"; rm -rf \"$bundle\"; exit 0; fi'"
       - name: Fetch Cargo sources
         env:
           MISE_AUTO_INSTALL: "false"
@@ -1000,40 +972,10 @@ jobs:
           MISE_GITHUB_TOKEN: ""
           NODE_AUTH_TOKEN: ""
           NPM_TOKEN: ""
-        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; mbx gc; mbx cache dir > \"$RUNNER_TEMP/mbx-store-path\"; IFS= read -r store < \"$RUNNER_TEMP/mbx-store-path\"; test -n \"$store\"; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; case \"$bundle\" in \"$store\"|\"$store\"/*) exit 1 ;; esac; case \"$store\" in /|.) exit 1 ;; *mbx*) ;; *) exit 1 ;; esac; rm -rf \"$bundle\"; if mbx cache export --group \"$MBX_CACHE_EXPORT_GROUP\" --format directory \"$bundle\" >\"$RUNNER_TEMP/mbx-export.out\" 2>&1; then test -d \"$bundle\"; rm -rf \"$store\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; echo \"ready=true\" >> \"$GITHUB_OUTPUT\"; else rm -rf \"$bundle\"; if grep -q \"no completed mbx builds are recorded for export group\" \"$RUNNER_TEMP/mbx-export.out\"; then echo \"ready=false\" >> \"$GITHUB_OUTPUT\"; exit 0; fi; cat \"$RUNNER_TEMP/mbx-export.out\"; exit 1; fi'"
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; mbx cache dir > \"$RUNNER_TEMP/mbx-store-path\"; IFS= read -r store < \"$RUNNER_TEMP/mbx-store-path\"; test -n \"$store\"; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; case \"$bundle\" in \"$store\"|\"$store\"/*) exit 1 ;; esac; case \"$store\" in /|.) exit 1 ;; *mbx*) ;; *) exit 1 ;; esac; rm -rf \"$bundle\"; if mbx cache export --group \"$MBX_CACHE_EXPORT_GROUP\" --format directory \"$bundle\" >\"$RUNNER_TEMP/mbx-export.out\" 2>&1; then test -d \"$bundle\"; rm -rf \"$store\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; echo \"ready=true\" >> \"$GITHUB_OUTPUT\"; else rm -rf \"$bundle\"; if grep -q \"no completed mbx builds are recorded for export group\" \"$RUNNER_TEMP/mbx-export.out\"; then echo \"ready=false\" >> \"$GITHUB_OUTPUT\"; exit 0; fi; cat \"$RUNNER_TEMP/mbx-export.out\"; exit 1; fi'"
       - name: Save MBX single bundle
         if: runner.environment != 'github-hosted' && success() && github.event_name == 'push' && steps.mbx.outputs.cache-hit != 'true' && steps.mbx-bundle.outputs.cache-hit != 'true' && steps.mbx-export.outputs.ready == 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           key: ${{ steps.mbx.outputs.cache-primary-key }}
           path: ${{ runner.temp }}/mbx-single-bundle
-      - name: Collect MBX cache before export
-        if: success() && runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
-        env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
-          ACTIONS_RUNTIME_TOKEN: ""
-          CARGO_REGISTRY_TOKEN: ""
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
-          MISE_GITHUB_TOKEN: ""
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
-        run: env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mbx gc
-      - name: Normalize MBX directories before action post
-        if: success() && runner.environment == 'github-hosted' && runner.os == 'Linux'
-        env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
-          ACTIONS_RUNTIME_TOKEN: ""
-          CARGO_REGISTRY_TOKEN: ""
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
-          MISE_GITHUB_TOKEN: ""
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
-        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; python3 -c '\\''exec(\"\"\"import errno\\nimport os\\nimport stat\\n\\nDIRECTORY_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW\\nBENIGN_RACES = {errno.ENOENT, errno.ENOTDIR, errno.ELOOP}\\n\\ndef open_directory(parent_fd, name):\\n    try:\\n        return os.open(name, DIRECTORY_FLAGS, dir_fd=parent_fd)\\n    except OSError as error:\\n        if error.errno in BENIGN_RACES:\\n            return None\\n        raise\\n\\ndef open_components(root_fd, components):\\n    current_fd = os.dup(root_fd)\\n    try:\\n        for name in components:\\n            child_fd = open_directory(current_fd, name)\\n            os.close(current_fd)\\n            if child_fd is None:\\n                return None\\n            current_fd = child_fd\\n        return current_fd\\n    except BaseException:\\n        os.close(current_fd)\\n        raise\\n\\ndef add_owner_write(root_fd):\\n    pending = [()]\\n    while pending:\\n        components = pending.pop()\\n        directory_fd = open_components(root_fd, components)\\n        if directory_fd is None:\\n            continue\\n        try:\\n            details = os.fstat(directory_fd)\\n            if not stat.S_ISDIR(details.st_mode):\\n                continue\\n            os.fchmod(directory_fd, details.st_mode | stat.S_IWUSR)\\n            try:\\n                with os.scandir(directory_fd) as entries:\\n                    for entry in entries:\\n                        name = entry.name\\n                        if name in (\\\".\\\", \\\"..\\\") or os.sep in name:\\n                            continue\\n                        try:\\n                            is_directory = entry.is_dir(follow_symlinks=False)\\n                        except OSError as error:\\n                            if error.errno in BENIGN_RACES:\\n                                continue\\n                            raise\\n                        if is_directory:\\n                            pending.append(components + (name,))\\n            except OSError as error:\\n                if error.errno in BENIGN_RACES:\\n                    continue\\n                raise\\n        finally:\\n            os.close(directory_fd)\\n\\ndef open_runner_temp(path):\\n    if not os.path.isabs(path):\\n        raise ValueError(\\\"RUNNER_TEMP must be absolute\\\")\\n    current_fd = os.open(os.sep, DIRECTORY_FLAGS)\\n    try:\\n        for component in path.split(os.sep):\\n            if component in (\\\"\\\", \\\".\\\"):\\n                continue\\n            if component == \\\"..\\\":\\n                raise ValueError(\\\"RUNNER_TEMP must be normalized\\\")\\n            child_fd = open_directory(current_fd, component)\\n            if child_fd is None:\\n                os.close(current_fd)\\n                return None\\n            os.close(current_fd)\\n            current_fd = child_fd\\n        return current_fd\\n    except BaseException:\\n        os.close(current_fd)\\n        raise\\n\\nrunner_temp_fd = open_runner_temp(os.environ.get(\\\"RUNNER_TEMP\\\", \\\"\\\"))\\nif runner_temp_fd is not None:\\n    try:\\n        with os.scandir(runner_temp_fd) as roots:\\n            for entry in roots:\\n                root_name = entry.name\\n                if not root_name.startswith(\\\"mbx-github-objects-store-\\\"):\\n                    continue\\n                root_fd = open_directory(runner_temp_fd, root_name)\\n                if root_fd is None:\\n                    continue\\n                try:\\n                    store_fd = open_directory(root_fd, \\\"store\\\")\\n                    if store_fd is None:\\n                        continue\\n                    try:\\n                        out_dirs_fd = open_directory(store_fd, \\\"out-dirs\\\")\\n                        if out_dirs_fd is None:\\n                            continue\\n                        try:\\n                            add_owner_write(out_dirs_fd)\\n                        finally:\\n                            os.close(out_dirs_fd)\\n                    finally:\\n                        os.close(store_fd)\\n                finally:\\n                    os.close(root_fd)\\n    finally:\\n        os.close(runner_temp_fd)\"\"\")'\\'''"
