@@ -8,10 +8,14 @@ use serde::{Deserialize, Serialize};
 mod archive_paths;
 mod identity;
 mod lease;
+mod preparation;
 mod projection;
 mod storage;
 mod validation;
 
+#[cfg(test)]
+#[path = "action_archive_seed_tests/preparation_tests.rs"]
+mod preparation_tests;
 #[cfg(test)]
 #[path = "action_archive_seed_tests.rs"]
 mod tests;
@@ -23,6 +27,7 @@ pub(crate) use validation::validate_archive_with_limit;
 
 pub(crate) use identity::ActionArchiveIdentity;
 use identity::object_generation;
+pub(crate) use preparation::{ActionArchiveFetcher, ActionArchiveManifest};
 use storage::{
     cleanup_dir, create_directory, read_json, set_mode, sync_directory, unique_directory,
     verify_bytes, write_json,
