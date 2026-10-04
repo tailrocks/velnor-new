@@ -104,6 +104,10 @@ pub(super) fn assert_mbx_preflight(job: &str) {
     let step = step_body(job, "Verify MBX and Rust toolchains");
     let command = normalized_shell_run(step);
     assert!(
+        !command.is_empty(),
+        "preflight shell step has a run command: {step}"
+    );
+    assert!(
         command.contains("mise --no-config --no-env --no-hooks where 'mr-boxington@1.22.0'"),
         "{step}"
     );
@@ -144,7 +148,7 @@ fn normalized_shell_run(step: &str) -> String {
     let run = step
         .lines()
         .find_map(|line| line.trim_start().strip_prefix("run: "))
-        .expect("preflight shell step has a run command");
+        .unwrap_or_default();
     run.replace("\\\\''", "").replace("\\\"", "\"")
 }
 
