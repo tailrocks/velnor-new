@@ -10,6 +10,30 @@ use super::{
 };
 use crate::RenderError;
 
+pub(super) const QUALIFICATION_WRITER_IMPORT_GUARD: &str = r#"set -eu; if [ "$CACHE_HIT" = "true" ] || [ -n "$MATCHED" ]; then echo "qualification writer restore was not cold" >&2; exit 1; fi;"#;
+pub(super) const QUALIFICATION_READER_IMPORT_GUARD: &str = r#"set -eu; if [ "$CACHE_HIT" != "true" ]; then echo "qualification reader restore was not an exact cache hit" >&2; exit 1; fi; if [ -z "$MATCHED" ] || [ "$MATCHED" != "$EXPECTED_KEY" ]; then echo "qualification reader key did not match the writer primary" >&2; exit 1; fi;"#;
+
+pub(super) fn import_guard(role: Option<bool>, env: &mut BTreeMap<String, String>) -> &'static str {
+    match role {
+        Some(writer) => {
+            env.insert(
+                "CACHE_HIT".to_owned(),
+                "${{ steps.mbx-bundle.outputs.cache-hit }}".to_owned(),
+            );
+            if writer {
+                QUALIFICATION_WRITER_IMPORT_GUARD
+            } else {
+                env.insert(
+                    "EXPECTED_KEY".to_owned(),
+                    "${{ steps.mbx-bundle-key.outputs.primary }}".to_owned(),
+                );
+                QUALIFICATION_READER_IMPORT_GUARD
+            }
+        }
+        None => "",
+    }
+}
+
 /// Internal identity used by the explicit restore/import/export lifecycle.
 #[derive(Clone)]
 pub(super) struct CacheIdentity {
@@ -27,6 +51,22 @@ pub(super) struct CacheIdentity {
     logical_job_id: String,
     /// Explicit role only for intentional cross-job shared scopes.
     writer: Option<bool>,
+}
+
+impl CacheIdentity {
+    /// Qualification roles reserve run-scoped keys for the hosted round trip.
+    pub(super) fn qualification_run_scoped(&self) -> bool {
+        self.writer.is_some() && self.scope.starts_with(MBX_QUALIFICATION_SCOPE_PREFIX)
+    }
+
+    /// Return the explicit qualification writer/reader role, if reserved.
+    pub(super) fn qualification_role(&self) -> Option<bool> {
+        if self.qualification_run_scoped() {
+            self.writer
+        } else {
+            None
+        }
+    }
 }
 
 /// Build each job identity and elect one writer for every shared identity.

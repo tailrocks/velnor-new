@@ -202,10 +202,26 @@ per-action PR-save verdict: gate-4 doc R13 bullet.
 dispatch. The protected-main writer builds a probe crate and its post step
 must export and save the MBX objects before the dependent reader starts. The
 reader has only `actions: read`, requires an imported object set, and checks
-that MBX reuses a cached compilation. A run-and-attempt-specific generation
-prevents a cache from an earlier dispatch from satisfying this check. The
-reader's `cache-hit=false` assertion intentionally expects the action's
-run-specific writer key to be reached by its restore prefix.
+that MBX reuses a cached compilation. The renderer recognizes qualification
+mode from the reserved `qualification-mbx-v1/` scope plus its explicit
+writer/reader roles. It adds trusted `GITHUB_RUN_ID` and
+`GITHUB_RUN_ATTEMPT` to both the cache primary and restore prefix; ordinary
+production MBX keys and reuse behavior keep their existing dimensions.
+
+The writer checks that restore returned no exact hit and no matched key before
+export. Its save still requires a successful export/GC receipt. The reader
+requires `cache-hit=true` and `cache-matched-key` equal to the primary before
+import; imported-object and cached-compilation checks run after import. A prior
+dispatch or retry therefore cannot exact-hit or prefix-restore bytes into the
+qualification reader.
+
+Candidate evidence is local only: the pinned-Rust orchestrator test compares
+the shared StepIR and rendered workflow shell, executes the generated key shell
+for distinct run/attempt pairs, and executes the generated writer/reader import
+guards. It does not contact GitHub's cache service. No hosted restore/save
+receipt, peak disk/inode sample, or affected ChainArgos cold/warm workload has
+been recorded. Those measurements remain open after artifact adoption; this
+probe alone does not qualify disk capacity or ENOSPC recovery.
 
 Both jobs set `MBX_GC_AUTO=1` intentionally: this exercises the same hosted
 policy that Velnor emits for production MBX object-cache jobs, overriding the
@@ -215,4 +231,6 @@ action's hosted default. Dispatch once from protected `main` with mode
 This is a small end-to-end action and cache round-trip probe. It does not
 measure disk or inode peaks and does not qualify the affected ChainArgos
 workload. That evidence must come from the consumer's affected crates after
-adoption; a green probe alone is not an ENOSPC repair verdict.
+adoption; a green probe alone is not an ENOSPC repair verdict. The hosted
+round-trip still needs to run against GitHub Actions after the generated
+workflow is adopted.

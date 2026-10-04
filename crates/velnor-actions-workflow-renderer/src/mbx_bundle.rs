@@ -18,7 +18,7 @@ use crate::RenderError;
 use crate::cache_steps::{MBX_ACTION_NAME, TOOLS_RESTORE_USES, TOOLS_SAVE_USES, is_mbx_action};
 #[path = "mbx_bundle_identity.rs"]
 mod identity;
-use identity::{CacheIdentity, plan_writers};
+use identity::{CacheIdentity, import_guard, plan_writers};
 
 /// Display name of the fresh, private MBX root step.
 pub(crate) const MBX_ROOT_NAME: &str = "Prepare private MBX store";
@@ -52,14 +52,16 @@ const SAVE_IF: &str = "success() && github.event_name == 'push' && github.ref_na
 const ROOT_SCRIPT: &str = r#"set -eu; test -n "$RUNNER_TEMP"; bundle="$RUNNER_TEMP/mbx-single-bundle"; if [ -e "$bundle" ] || [ -L "$bundle" ]; then echo "stable MBX bundle path already exists in runner.temp" >&2; exit 1; fi; root_file="$GITHUB_OUTPUT.mbx-root"; if [ -e "$root_file" ] || [ -L "$root_file" ]; then echo "MBX root marker already exists" >&2; exit 1; fi; mktemp -d "$RUNNER_TEMP/velnor-mbx-store.XXXXXXXXXX" > "$root_file"; IFS= read -r root < "$root_file"; root_id="${root##*/}"; group="velnor-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${root_id}"; printf 'MBX_CACHE_DIR=%s\nMBX_TARGET_ROOT=%s/targets\nMBX_SHIMS_DIR=%s/shims\nMBX_CACHE_EXPORT_GROUP=%s\n' "$root" "$root" "$root" "$group" >> "$GITHUB_ENV""#;
 
 /// Build the same directory-payload key dimensions as the official action.
-const KEY_SCRIPT: &str = r#"set -eu; set -o pipefail; case "$RUNNER_OS:$RUNNER_ARCH" in Linux:X64|Linux:x64|Linux:AMD64) os=linux; arch=x64 ;; Linux:ARM64|Linux:arm64) os=linux; arch=arm64 ;; *) echo "unsupported runner for MBX directory cache key" >&2; exit 1 ;; esac; test "$MBX_VERSION" = "$MBX_EXPECTED_VERSION"; test -n "$RUSTUP_TOOLCHAIN"; workflow_ref=${GITHUB_WORKFLOW_REF:?missing GITHUB_WORKFLOW_REF}; case "$workflow_ref" in *@refs/*) workflow_path=${workflow_ref%%@refs/*} ;; *) echo "invalid GITHUB_WORKFLOW_REF" >&2; exit 1 ;; esac; test -n "$workflow_path"; scope_file="$GITHUB_OUTPUT.mbx-scope"; identity_file="$GITHUB_OUTPUT.mbx-rustc"; hash_file="$GITHUB_OUTPUT.mbx-hash"; for file in "$scope_file" "$identity_file" "$hash_file"; do if [ -e "$file" ] || [ -L "$file" ]; then echo "MBX key marker already exists" >&2; exit 1; fi; done; printf '%s\n%s\n%s\n' "$workflow_path" "$MBX_CACHE_SCOPE" "$MBX_MATRIX_CONTEXT" > "$scope_file"; sha256sum "$scope_file" | cut -c1-64 > "$hash_file"; IFS= read -r scope_hash < "$hash_file"; test -n "$scope_hash"; mise --no-config --no-env --no-hooks exec "rust@$RUSTUP_TOOLCHAIN" -- rustc -vV > "$identity_file"; sha256sum "$identity_file" | cut -c1-64 > "$hash_file"; IFS= read -r compiler_hash < "$hash_file"; test -n "$compiler_hash"; toolchain="rust-${RUSTUP_TOOLCHAIN}-${compiler_hash}"; revision="$GITHUB_SHA"; if [ -n "$MBX_BASE_SHA" ]; then revision="$MBX_BASE_SHA"; fi; case "$revision" in ''|*[!0-9a-f]*) exit 1 ;; esac; test "${#revision}" -eq 40; prefix="${os}-${arch}-mbx-${MBX_GENERATION}-dir-${toolchain}-scope-${scope_hash}-"; printf 'primary=%s%s\nprefix=%s\n' "$prefix" "$revision" "$prefix" >> "$GITHUB_OUTPUT""#;
+const KEY_SCRIPT: &str = r#"set -eu; set -o pipefail; case "$RUNNER_OS:$RUNNER_ARCH" in Linux:X64|Linux:x64|Linux:AMD64) os=linux; arch=x64 ;; Linux:ARM64|Linux:arm64) os=linux; arch=arm64 ;; *) echo "unsupported runner for MBX directory cache key" >&2; exit 1 ;; esac; test "$MBX_VERSION" = "$MBX_EXPECTED_VERSION"; test -n "$RUSTUP_TOOLCHAIN"; workflow_ref=${GITHUB_WORKFLOW_REF:?missing GITHUB_WORKFLOW_REF}; case "$workflow_ref" in *@refs/*) workflow_path=${workflow_ref%%@refs/*} ;; *) echo "invalid GITHUB_WORKFLOW_REF" >&2; exit 1 ;; esac; test -n "$workflow_path"; scope_file="$GITHUB_OUTPUT.mbx-scope"; identity_file="$GITHUB_OUTPUT.mbx-rustc"; hash_file="$GITHUB_OUTPUT.mbx-hash"; for file in "$scope_file" "$identity_file" "$hash_file"; do if [ -e "$file" ] || [ -L "$file" ]; then echo "MBX key marker already exists" >&2; exit 1; fi; done; printf '%s\n%s\n%s\n' "$workflow_path" "$MBX_CACHE_SCOPE" "$MBX_MATRIX_CONTEXT" > "$scope_file"; sha256sum "$scope_file" | cut -c1-64 > "$hash_file"; IFS= read -r scope_hash < "$hash_file"; test -n "$scope_hash"; mise --no-config --no-env --no-hooks exec "rust@$RUSTUP_TOOLCHAIN" -- rustc -vV > "$identity_file"; sha256sum "$identity_file" | cut -c1-64 > "$hash_file"; IFS= read -r compiler_hash < "$hash_file"; test -n "$compiler_hash"; toolchain="rust-${RUSTUP_TOOLCHAIN}-${compiler_hash}"; revision="$GITHUB_SHA"; if [ -n "$MBX_BASE_SHA" ]; then revision="$MBX_BASE_SHA"; fi; case "$revision" in ''|*[!0-9a-f]*) exit 1 ;; esac; test "${#revision}" -eq 40; prefix="${os}-${arch}-mbx-${MBX_GENERATION}-dir-${toolchain}-scope-${scope_hash}-";"#;
+const QUALIFICATION_KEY_SCRIPT: &str = r#"run_id=${GITHUB_RUN_ID:?missing GITHUB_RUN_ID}; run_attempt=${GITHUB_RUN_ATTEMPT:?missing GITHUB_RUN_ATTEMPT}; case "$run_id" in ''|*[!0-9]*) echo "invalid GITHUB_RUN_ID" >&2; exit 1 ;; esac; case "$run_attempt" in ''|*[!0-9]*) echo "invalid GITHUB_RUN_ATTEMPT" >&2; exit 1 ;; esac; prefix="${prefix}run-${run_id}-attempt-${run_attempt}-"; printf 'primary=%s%s\nprefix=%s\n' "$prefix" "$revision" "$prefix" >> "$GITHUB_OUTPUT""#;
+const KEY_OUTPUT_SCRIPT: &str =
+    r#"printf 'primary=%s%s\nprefix=%s\n' "$prefix" "$revision" "$prefix" >> "$GITHUB_OUTPUT""#;
 
 /// Export first, then ask MBX's lock-aware collector to reclaim its private root.
 const EXPORT_SCRIPT: &str = r#"set -eu; df -B1 -P "$RUNNER_TEMP"; df -i -P "$RUNNER_TEMP"; bundle="$RUNNER_TEMP/mbx-single-bundle"; export_log="$GITHUB_OUTPUT.mbx-export"; gc_log="$GITHUB_OUTPUT.mbx-gc"; for file in "$export_log" "$gc_log"; do if [ -e "$file" ] || [ -L "$file" ]; then echo "MBX export marker already exists" >&2; exit 1; fi; done; if mbx cache export --group "$MBX_CACHE_EXPORT_GROUP" --format directory "$bundle" >"$export_log" 2>&1; then test -d "$bundle"; df -B1 -P "$RUNNER_TEMP"; df -i -P "$RUNNER_TEMP"; if mbx gc --max-size 0 --json >"$gc_log" 2>&1; then cat "$gc_log"; echo 'gc-succeeded=true' >> "$GITHUB_OUTPUT"; echo 'ready=true' >> "$GITHUB_OUTPUT"; else cat "$gc_log"; echo 'gc-succeeded=false' >> "$GITHUB_OUTPUT"; echo 'ready=false' >> "$GITHUB_OUTPUT"; fi; df -B1 -P "$RUNNER_TEMP"; df -i -P "$RUNNER_TEMP"; else if grep -Fq 'no completed mbx builds are recorded for export group' "$export_log"; then cat "$export_log"; echo 'ready=false' >> "$GITHUB_OUTPUT"; exit 0; fi; cat "$export_log"; exit 1; fi"#;
 
 /// Failed imports never keep compiling against a partially published store.
 const IMPORT_SCRIPT: &str = r#"set -eu; bundle="$RUNNER_TEMP/mbx-single-bundle"; df -B1 -P "$RUNNER_TEMP"; df -i -P "$RUNNER_TEMP"; if [ -z "$MATCHED" ]; then echo 'no MBX bundle matched'; exit 0; fi; if [ ! -d "$bundle" ]; then echo 'matched MBX bundle is missing; the fresh store stays cold'; exit 0; fi; if mbx cache import "$bundle"; then echo 'MBX bundle imported'; else echo 'MBX bundle import failed; abandoning its private store'; root_file="$GITHUB_OUTPUT.mbx-fallback"; if [ -e "$root_file" ] || [ -L "$root_file" ]; then echo "MBX fallback marker already exists" >&2; exit 1; fi; mktemp -d "$RUNNER_TEMP/velnor-mbx-fallback.XXXXXXXXXX" > "$root_file"; IFS= read -r root < "$root_file"; root_id="${root##*/}"; group="velnor-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${root_id}"; printf 'MBX_CACHE_DIR=%s\nMBX_TARGET_ROOT=%s/targets\nMBX_SHIMS_DIR=%s/shims\nMBX_CACHE_EXPORT_GROUP=%s\n' "$root" "$root" "$root" "$group" >> "$GITHUB_ENV"; echo 'fresh cold MBX store selected for subsequent steps'; fi"#;
-
 /// YAML step id for MBX setup and the key/export steps that expose outputs.
 pub(crate) fn step_yaml_id(step: &Step) -> Option<&'static str> {
     if is_mbx_action(step) {
@@ -220,15 +222,17 @@ fn insert_bundle_restore(job: &mut Job, identity: &CacheIdentity) -> Result<(), 
     }) else {
         return Ok(());
     };
+    let qualification_role = identity.qualification_role();
     let added = [
         key_step(
             &identity.generation,
             &identity.version,
             &identity.scope,
             &identity.rust_env,
+            qualification_role.is_some(),
         )?,
         restore_step()?,
-        import_step()?,
+        import_step(qualification_role)?,
     ];
     let insert_at = index + 1;
     for step in added.into_iter().rev() {
@@ -301,6 +305,7 @@ fn key_step(
     version: &str,
     scope: &str,
     rust_env: &BTreeMap<String, String>,
+    qualification_nonce: bool,
 ) -> Result<Step, RenderError> {
     let mut env = BTreeMap::from([
         (
@@ -320,9 +325,15 @@ fn key_step(
         ),
     ]);
     env.extend(rust_env.clone());
+    let output_script = if qualification_nonce {
+        QUALIFICATION_KEY_SCRIPT
+    } else {
+        KEY_OUTPUT_SCRIPT
+    };
+    let script = format!("{KEY_SCRIPT}{output_script}");
     crate::steps::shell_step(
         MBX_BUNDLE_KEY_NAME,
-        vec!["bash".to_owned(), "-c".to_owned(), KEY_SCRIPT.to_owned()],
+        vec!["bash".to_owned(), "-c".to_owned(), script],
         env,
     )
 }
@@ -345,14 +356,19 @@ fn restore_step() -> Result<Step, RenderError> {
     )
 }
 
-fn import_step() -> Result<Step, RenderError> {
-    let env = BTreeMap::from([(
+fn import_step(qualification_role: Option<bool>) -> Result<Step, RenderError> {
+    let mut env = BTreeMap::from([(
         "MATCHED".to_owned(),
         "${{ steps.mbx-bundle.outputs.cache-matched-key }}".to_owned(),
     )]);
+    let guard = import_guard(qualification_role, &mut env);
     crate::steps::shell_step(
         MBX_BUNDLE_IMPORT_NAME,
-        vec!["bash".to_owned(), "-c".to_owned(), IMPORT_SCRIPT.to_owned()],
+        vec![
+            "bash".to_owned(),
+            "-c".to_owned(),
+            format!("{guard}{IMPORT_SCRIPT}"),
+        ],
         env,
     )
 }
