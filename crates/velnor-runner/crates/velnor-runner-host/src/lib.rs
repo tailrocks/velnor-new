@@ -10,6 +10,7 @@ mod daemon_lock;
 mod docker_client;
 mod docker_spec;
 mod error;
+mod guest;
 mod https;
 mod ipc;
 mod journal;
@@ -33,6 +34,7 @@ pub use docker_spec::{
     ContainerPlan, DeleteDecision, audit_plan, delete_decision, plan_contains, runner_plan,
 };
 pub use error::HostError;
+pub use guest::guest_slots;
 pub use https::HttpsTransport;
 pub use ipc::{MAX_FRAME, SOCKET_DIR_MODE, decode_frame, encode_frame};
 pub use journal::{IntentState, Journal, Outcome};

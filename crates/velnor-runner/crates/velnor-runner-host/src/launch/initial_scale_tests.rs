@@ -1,8 +1,7 @@
 //! Initial session statistics must not overfill or redundantly cover capacity.
 
 use super::inspect_tests::{
-    DockerStub, http, inspect_error, journal, launch_row, launch_row_for_id,
-    no_response_body_in_journal, within,
+    DockerStub, http, journal, launch_row, launch_row_for_id, no_response_body_in_journal, within,
 };
 use crate::IntentState;
 use crate::launch::turn;
@@ -105,7 +104,7 @@ async fn unknown_capacity_observation_does_not_run_the_scale_callback() -> Resul
     .await?;
     stub.finish().await?;
 
-    assert_eq!(result, Err(inspect_error(500)));
+    assert_eq!(result, Ok(None));
     assert!(!scaled);
     assert_eq!(
         journal.rows().await.map_err(|error| error.to_string())?,

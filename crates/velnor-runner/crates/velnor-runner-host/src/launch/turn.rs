@@ -83,8 +83,11 @@ where
     if assigned == 0 {
         return Ok(None);
     }
-    let running = slot::running_count(journal, docker).await?;
-    if running >= capacity || u64::from(running) >= assigned {
+    let seen = slot::census(journal, docker).await?;
+    if seen.held >= capacity
+        || u64::from(seen.running) >= assigned
+        || u64::from(seen.held) >= assigned
+    {
         return Ok(None);
     }
     scale().await
@@ -158,23 +161,27 @@ impl Turn<'_> {
         trace::batch(&polled);
         let idle = steps::idle(&polled);
         let started = u32::try_from(workers.len()).unwrap_or(u32::MAX);
-        let running = self.running(started, idle).await?;
+        let seen = self.seen(idle).await?;
         let decision = capacity::admit(capacity::Seat {
             capacity: self.capacity,
             target: self.target,
             started,
-            running,
+            occupied: seen.held,
+            running: seen.running,
             assigned: assigned_in(&polled),
             idle,
         });
         self.apply(decision, workers, path, queue, &polled).await
     }
 
-    async fn running(&self, started: u32, idle: steps::Idle) -> Result<u32, EnsureError> {
-        if !capacity::needs_running(self.capacity, self.target, started, idle) {
-            return Ok(0);
+    async fn seen(&self, idle: steps::Idle) -> Result<slot::Census, EnsureError> {
+        if !capacity::needs_running(idle) {
+            return Ok(slot::Census {
+                held: 0,
+                running: 0,
+            });
         }
-        slot::running_count(self.journal, self.docker).await
+        slot::census(self.journal, self.docker).await
     }
 
     async fn apply(

@@ -11,7 +11,7 @@ use tokio::net::{UnixListener, UnixStream};
 
 use crate::launch::{gate, slot};
 use crate::launch_harness::Scratch;
-use crate::{EnsureError, IntentState, Journal};
+use crate::{IntentState, Journal};
 
 const TIMEOUT: Duration = Duration::from_secs(2);
 
@@ -33,9 +33,14 @@ async fn non_not_found_inspect_error_blocks_admission_and_reconcile() -> Result<
     .await?;
     stub.finish().await?;
 
-    let expected = inspect_error(500);
-    assert_eq!(busy, Err(expected));
-    assert_eq!(reconcile, Err(expected));
+    assert_eq!(busy, Ok(true));
+    assert_eq!(
+        reconcile,
+        Ok(crate::Reconcile::Hold {
+            adopt: Vec::new(),
+            occupied: 1,
+        })
+    );
     let errors = format!("{busy:?} {reconcile:?}");
     if errors.contains("runner-id") || errors.contains("private runner-id detail") {
         return Err("inspect error exposed Docker response data".to_owned());
@@ -62,13 +67,7 @@ async fn docker_api_observations_preserve_only_known_running_states() -> Result<
         http(200, "{}"),
     ])?;
 
-    for expected in [
-        Ok(0),
-        Ok(1),
-        Ok(0),
-        Err(inspect_error(200)),
-        Err(inspect_error(200)),
-    ] {
+    for expected in [Ok(0), Ok(1), Ok(0), Ok(0), Ok(0)] {
         let actual = within(
             slot::running_count(&journal, &stub.docker),
             "slot observation",
@@ -83,7 +82,13 @@ async fn docker_api_observations_preserve_only_known_running_states() -> Result<
     .await?;
     stub.finish().await?;
 
-    assert_eq!(gate, Err(inspect_error(200)));
+    assert_eq!(
+        gate,
+        Ok(crate::Reconcile::Hold {
+            adopt: Vec::new(),
+            occupied: 1,
+        })
+    );
     let after = journal.rows().await.map_err(|error| error.to_string())?;
     assert_eq!(after, before);
     assert_eq!(after[0].state, IntentState::Pending);
@@ -97,14 +102,11 @@ async fn closed_docker_connection_is_not_treated_as_absent() -> Result<(), Strin
     let before = journal.rows().await.map_err(|error| error.to_string())?;
     let stub = DockerStub::open(vec![closed()])?;
 
-    let actual = within(
-        slot::running_count(&journal, &stub.docker),
-        "slot observation",
-    )
-    .await?;
+    let actual = within(slot::census(&journal, &stub.docker), "slot observation").await?;
     stub.finish().await?;
 
-    assert_eq!(actual, Err(inspect_error(0)));
+    assert_eq!(actual.as_ref().map(|seen| seen.running), Ok(0));
+    assert_eq!(actual.map(|seen| seen.held), Ok(1));
     let after = journal.rows().await.map_err(|error| error.to_string())?;
     assert_eq!(after, before);
     no_response_body_in_journal(&scratch.file())
@@ -151,13 +153,6 @@ pub(super) fn no_response_body_in_journal(path: &std::path::Path) -> Result<(), 
         return Err("journal stored Docker response data".to_owned());
     }
     Ok(())
-}
-
-pub(super) const fn inspect_error(status: u16) -> EnsureError {
-    EnsureError::Unexpected {
-        status,
-        step: "docker inspect",
-    }
 }
 
 pub(super) struct DockerResponse {

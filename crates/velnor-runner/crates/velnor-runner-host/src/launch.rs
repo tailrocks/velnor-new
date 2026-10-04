@@ -43,7 +43,7 @@ pub(crate) use capacity::{
     wide_poll_limit,
 };
 #[cfg(test)]
-pub(crate) use slot::occupies;
+pub(crate) use slot::{InspectFact, occupies, slot_held};
 #[cfg(test)]
 pub(crate) use steps::{Idle, idle};
 

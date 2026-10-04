@@ -26,8 +26,8 @@ pub(crate) fn gate_line(decision: &Reconcile) -> String {
 /// Compare the journal with running containers, then advertise or hold.
 ///
 /// Rows are loaded before any inspect, so the database connection is not held
-/// across Docker. Only a Docker 404 means not running; incomplete observations
-/// and other inspect failures return an error. Nothing is deleted.
+/// across Docker. A Docker 404 means that container is not running. A timeout
+/// or any other inspect failure counts that id as still present. Nothing is deleted.
 ///
 /// # Errors
 ///
@@ -70,8 +70,9 @@ async fn running_ids(rows: &[IntentRow], docker: &Docker) -> Result<Vec<String>,
         let Some(id) = row.docker_id.as_deref().filter(|id| !id.is_empty()) else {
             continue;
         };
-        if container_running(docker, id).await? {
-            running.push(id.to_owned());
+        match container_running(docker, id).await {
+            Ok(true) | Err(_) => running.push(id.to_owned()),
+            Ok(false) => {}
         }
     }
     Ok(running)
