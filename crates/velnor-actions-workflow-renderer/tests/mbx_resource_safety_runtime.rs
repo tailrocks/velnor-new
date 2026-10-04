@@ -78,7 +78,7 @@ fn validate_platforms(
     requested: Option<&str>,
     image: &str,
     image_platform: &str,
-) -> std::io::Result<()> {
+) -> std::io::Result<String> {
     let daemon = normalize_linux_platform(daemon).ok_or_else(|| {
         std::io::Error::other(format!("unsupported Docker daemon platform {daemon:?}"))
     })?;
@@ -105,10 +105,10 @@ fn validate_platforms(
             "runtime image {image} is {image_platform}, native Docker platform is {target}; set {RUNTIME_IMAGE_ENV} to a native image"
         )));
     }
-    Ok(())
+    Ok(target)
 }
 
-fn validate_native_docker_image(image: &str, requested: Option<&str>) -> std::io::Result<()> {
+fn validate_native_docker_image(image: &str, requested: Option<&str>) -> std::io::Result<String> {
     let daemon = docker_text(&["info", "--format", "{{.OSType}}/{{.Architecture}}"])?;
     let image_platform = docker_text(&[
         "image",
@@ -129,8 +129,8 @@ fn fixture_output(root: &Path) -> std::io::Result<Output> {
         native
     } else {
         let image = std::env::var(RUNTIME_IMAGE_ENV).unwrap_or_else(|_| LINUX_IMAGE.to_owned());
-        let platform = std::env::var(RUNTIME_PLATFORM_ENV).ok();
-        validate_native_docker_image(&image, platform.as_deref())?;
+        let requested_platform = std::env::var(RUNTIME_PLATFORM_ENV).ok();
+        let platform = validate_native_docker_image(&image, requested_platform.as_deref())?;
         let uid = Command::new("id").arg("-u").output()?;
         let gid = Command::new("id").arg("-g").output()?;
         let uid = String::from_utf8_lossy(&uid.stdout).trim().to_owned();
@@ -139,9 +139,7 @@ fn fixture_output(root: &Path) -> std::io::Result<Output> {
         let work_tmpfs = format!("/work:rw,exec,nosuid,size=128m,uid={uid},gid={gid},mode=700");
         let mut docker = Command::new("docker");
         docker.args(["run", "--rm", "--init"]);
-        if let Some(platform) = platform {
-            docker.arg(format!("--platform={platform}"));
-        }
+        docker.arg(format!("--platform={platform}"));
         docker.args([
             "--network=none",
             "--cpus=0.5",
@@ -278,5 +276,8 @@ fn docker_platform_validation_rejects_emulation_and_wrong_arch_images() {
         )
         .is_err()
     );
-    assert!(validate_platforms("linux/aarch64", None, "arm64-image", "linux/arm64").is_ok());
+    assert!(matches!(
+        validate_platforms("linux/aarch64", None, "arm64-image", "linux/arm64"),
+        Ok(platform) if platform == "linux/arm64"
+    ));
 }
