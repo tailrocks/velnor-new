@@ -23,6 +23,9 @@ use crate::worker::Started;
 mod bind;
 mod capacity;
 mod gate;
+mod inspect;
+
+pub(crate) use inspect::classify_inspect;
 mod session;
 mod slot;
 mod steps;

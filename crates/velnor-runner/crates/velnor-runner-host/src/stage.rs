@@ -110,10 +110,10 @@ impl PairEngine for Docker {
     }
 
     async fn running(&self, id: &str) -> Result<bool, HostError> {
-        let Ok(info) = self.inspect_container(id, None).await else {
-            return Ok(false);
-        };
-        Ok(info.state.and_then(|state| state.running).unwrap_or(false))
+        match crate::launch::classify_inspect(self.inspect_container(id, None).await) {
+            Ok(running) => Ok(running),
+            Err(_) => Err(HostError::Docker),
+        }
     }
 }
 
