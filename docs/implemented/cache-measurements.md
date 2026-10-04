@@ -229,7 +229,8 @@ source/native Sol GO: 4/4 registered tests passed in 83.02 s on native ARM
 Ubuntu 24.04 with the official runner
 image `ghcr.io/actions/actions-runner@sha256:e5496277be5d09bc968b3d64911b74e219ac4a3f2edce956a3ecf9271bea1ef4`;
 explicit `--platform linux/arm64` overrode inherited `DOCKER_DEFAULT_PLATFORM=linux/amd64`.
-The suite rejects empty, partial, or failed `ps` scans and false completion;
+The suite rejects failed `ps` captures with empty or partial output, invalid
+leader argv, and false completion;
 the total stop deadline is enforced, while graceful expiry leaves its receipt
 incomplete. Ephemeral local log `/private/tmp/mbx-resource-safety-97be1f14-exacthead-native.log`
 has SHA-256 `343221c822c73f962551881e90fa36419d18e6a4fcaae1259752b48960235cdc`.
