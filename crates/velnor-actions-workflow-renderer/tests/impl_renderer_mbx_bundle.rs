@@ -29,6 +29,35 @@ fn render_mbx(id: &str, scale_set: bool) -> Result<String, RenderError> {
     )
 }
 
+fn render_parallel_mbx() -> Result<String, RenderError> {
+    let checkout = velnor_actions_workflow_renderer::checkout_step(&checkout_pin())?;
+    let mbx = mbx_tool_steps(&mbx_uses(), "1.21.1", "1.98.1")?;
+    let hosted = job(
+        "rust-demo__hosted",
+        "Hosted MBX job",
+        Vec::new(),
+        vec![checkout.clone(), mbx[0].clone(), mbx[1].clone()],
+    );
+    let mut local = job(
+        "rust-demo__local",
+        "Scale Set MBX job",
+        Vec::new(),
+        vec![checkout, mbx[0].clone(), mbx[1].clone()],
+    );
+    let selector = ScaleSetSelector::try_new(
+        SCALE_SET_NAME,
+        &[VELNOR_LABEL.to_owned(), SCALE_SET_NAME.to_owned()],
+    )
+    .map_err(|_| RenderError::InvalidWorkflow("bad_scale_set".to_owned()))?;
+    local.1.runs_on = selector.token();
+    render_workflow_ir(
+        &fixture_ir(vec![hosted, local]),
+        WorkflowPolicy::ConsumerV1,
+        None,
+        &fixture_ctx(),
+    )
+}
+
 fn assert_cold_import(imported: &str) {
     for needle in [
         "mbx cache import",
@@ -94,6 +123,17 @@ fn hosted_save_is_one_bundle_outside_the_store() -> Result<(), RenderError> {
     let bundle = text
         .find("name: Restore MBX single bundle")
         .expect("bundle restore");
+    let key_step = &text[bundle_key..bundle];
+    assert!(
+        key_step.contains("MBX_JOB_ID: ${{ github.job }}"),
+        "{key_step}"
+    );
+    assert!(key_step.contains("MBX_MATRIX_KEY: \"\""), "{key_step}");
+    assert!(
+        key_step.contains("primary=\\\"${key}-${suffix}\\\""),
+        "{key_step}"
+    );
+    assert!(key_step.contains("prefix=\\\"${key%-*}-\\\""), "{key_step}");
     let import = text
         .find("name: Import MBX single bundle")
         .expect("bundle import");
@@ -133,7 +173,7 @@ fn hosted_save_is_one_bundle_outside_the_store() -> Result<(), RenderError> {
         "{saved}"
     );
     assert!(
-        saved.contains("key: ${{ steps.mbx.outputs.cache-primary-key }}"),
+        saved.contains("key: ${{ steps.mbx-bundle-key.outputs.key }}"),
         "{saved}"
     );
     assert!(
@@ -143,6 +183,55 @@ fn hosted_save_is_one_bundle_outside_the_store() -> Result<(), RenderError> {
     assert!(saved.contains("github.event_name == 'push'"), "{saved}");
     assert!(!saved.contains("pull_request"), "{saved}");
     assert!(!text.contains("continue-on-error"), "{text}");
+    Ok(())
+}
+
+#[test]
+fn parallel_jobs_use_disjoint_save_keys_and_a_common_restore_prefix() -> Result<(), RenderError> {
+    let text = render_parallel_mbx()?;
+    assert_eq!(
+        text.matches("uses: ./.github/actions/rust-demo").count(),
+        2,
+        "both lanes must use the shared action:\n{text}"
+    );
+    Ok(())
+}
+
+#[test]
+fn matrix_jobs_use_each_matrix_key_as_the_save_suffix() -> Result<(), RenderError> {
+    let plan = job(
+        "plan",
+        "Plan",
+        Vec::new(),
+        vec![
+            velnor_actions_workflow_renderer::checkout_step(&checkout_pin())?,
+            velnor_actions_workflow_renderer::plan_step(),
+        ],
+    );
+    let mut task = matrix_task_job()?.1;
+    task.steps
+        .extend(mbx_tool_steps(&mbx_uses(), "1.21.1", "1.98.1")?);
+    let text = render_workflow_ir(
+        &fixture_ir(vec![plan, ("velnor-task".to_owned(), task)]),
+        WorkflowPolicy::ConsumerV1,
+        None,
+        &fixture_ctx(),
+    )?;
+    assert_eq!(
+        text.matches("MBX_MATRIX_KEY: ${{ matrix.matrix_key }}")
+            .count(),
+        1,
+        "each matrix copy must pass its stable key to the bundle step:\n{text}"
+    );
+    assert!(
+        text.contains("matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}"),
+        "{text}"
+    );
+    assert!(
+        text.contains("key: ${{ steps.mbx-bundle-key.outputs.key }}"),
+        "{text}"
+    );
+    assert!(text.contains("primary=\\\"${key}-${suffix}\\\""), "{text}");
     Ok(())
 }
 
