@@ -214,14 +214,14 @@ owners.
 - MBX hosted writer/reader, cache-version/path reuse, cancellation, corrupt
   import, parallel writer, ChainArgos workload peak bytes/inodes, and disk
   pressure remain `PARTIAL`.
-- Adopted R13 requires an explicit same-repository PR cache opt-in in a separate PR namespace while forks remain
-  read-only and trusted production keys remain push-only. The typed `SameRepositoryScoped` config and trusted
-  push-only authorization cleanup are integrated. The renderer does not yet consume the config or enable the
-  PR-scoped namespace; that wiring and repeat same-repository PR/fork hosted proof remain pending. Do not treat a same-repository PR save as trusted-cache authorization.
+- Earlier 2026-10-04 R13 snapshot: Adopted R13 requires an explicit same-repository PR cache opt-in
+  in a separate PR namespace while forks remain read-only and trusted production keys remain push-only.
+  The typed `SameRepositoryScoped` config and trusted push-only authorization cleanup are integrated.
+  The renderer does not yet consume the config or enable the PR-scoped namespace; that wiring and repeat
+  same-repository PR/fork hosted proof remain pending. Do not treat a same-repository PR save as trusted-cache authorization.
 - 2026-10-04 cache-contract delta: renderer consumes `SameRepositoryScoped`, validates same-repository,
   non-fork PR identity, binds PR number and head SHA into a separate namespace, and gates export/save
-  on effective policy. Wiring is implemented; repeated same-repository PR/fork hosted proof remains pending.
-  PR writes do not authorize trusted-cache writes.
+  on effective policy. Wiring is implemented; repeated same-repository PR/fork hosted proof remains pending; PR writes do not authorize trusted-cache writes.
 - Published archive recovery is complete: immutable release `402793692` has
   fresh-download proof with original JSON digest
   `07b853c18389042bb8adde7051b4a188f562f5ba461eb1112e4ac8afeba7c50f`; the
