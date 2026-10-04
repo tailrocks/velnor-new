@@ -13,6 +13,13 @@ stock_restore_private_file() {
     && [ "$bytes" -gt 0 ] && [ "$bytes" -le "$max_bytes" ]
 }
 
+stock_restore_single_object() {
+  local path="$1" max_bytes="$2"
+  stock_restore_private_file "$path" "$RUNNER_TEMP" "$max_bytes" \
+    && jq -c -e -s 'if length == 1 and (.[0] | type == "object")
+      then .[0] else error("expected one object") end' "$path" 2>/dev/null
+}
+
 stock_restore_private_dir() {
   local path="$1" root="$2" resolved owner mode uid
   case "$path" in "$root"|"$root"/*) ;; *) return 1 ;; esac
@@ -45,7 +52,7 @@ stock_restore_api_json() {
   stock_restore_private_file "$destination" "$RUNNER_TEMP" 2097152 \
     && stock_restore_private_file "$status_path" "$RUNNER_TEMP" 3 || return 1
   status="$(cat "$status_path" 2>/dev/null || true)"
-  [ "$status" = 200 ]
+  [ "$status" = 200 ] && stock_restore_single_object "$destination" 2097152 >/dev/null
 }
 
 stock_restore_safe_https_url() {
@@ -139,8 +146,9 @@ stock_restore_clean_log() {
 
 stock_restore_validate_receipt() {
   local receipt="$1" job="$2" role="$3" run="$4" attempt="$5" sha="$6" ref="$7" workflow="$8"
+  local document
   stock_restore_private_dir "${receipt%/*}" "$RUNNER_TEMP" || return 1
-  stock_restore_private_file "$receipt" "$RUNNER_TEMP" 65536 || return 1
+  document="$(stock_restore_single_object "$receipt" 65536)" || return 1
   jq -e --arg job "$job" --arg role "$role" --arg run "$run" --arg attempt "$attempt" \
     --arg sha "$sha" --arg ref "$ref" --arg workflow "$workflow" '
       type == "object" and .receipt_status == "provisional"
@@ -155,7 +163,8 @@ stock_restore_validate_receipt() {
       and (.cache_hit | type == "string" and IN("", "true", "false"))
       and (.matched_key | type == "string"
         and (. == "" or test("^[a-z0-9][a-z0-9.-]{0,511}$")))
-    ' "$receipt" >/dev/null 2>&1
+    ' <<< "$document" >/dev/null 2>&1 || return 1
+  printf '%s\n' "$document"
 }
 
 stock_restore_write_evidence() {
@@ -163,7 +172,7 @@ stock_restore_write_evidence() {
   local run="$5" attempt="$6" sha="$7" ref="$8" workflow="$9"
   local workflow_id="${10}" api_job_id="${11}" step_index="${12}" derived="${13}"
   local actual="${14}" hit="${15}" matched="${16}" conclusion="${17}"
-  local classification="${18}"
+  local classification="${18}" temp_file
   local root="$RUNNER_TEMP/mbx-stock-restore-evidence" name uid
   [ -d "$root" ] && [ ! -L "$root" ] || return 1
   [ "$(realpath -e -- "$root" 2>/dev/null)" = "$root" ] || return 1
@@ -196,7 +205,7 @@ stock_restore_write_evidence() {
 }
 
 stock_restore_context_valid() {
-  local mode="$1" repository=tailrocks/velnor-new
+  local mode="$1" repository=tailrocks/velnor-new event_document
   [ "$mode" = mbx-cache-roundtrip ] || [ "$mode" = mbx-cache-parallel ] || return 1
   [ "${GITHUB_REPOSITORY:-}" = "$repository" ] \
     && [ "${GITHUB_REF:-}" = refs/heads/main ] \
@@ -209,18 +218,22 @@ stock_restore_context_valid() {
     && [ -n "${GITHUB_EVENT_PATH:-}" ] \
     && [[ "${GITHUB_RUN_ID:-}" =~ ^[1-9][0-9]{0,19}$ ]] \
     && [[ "${GITHUB_RUN_ATTEMPT:-}" =~ ^[1-9][0-9]{0,9}$ ]] \
-    && [[ "${GITHUB_SHA:-}" =~ ^[0-9a-f]{40}$ ]] \
-    && stock_restore_private_file "$GITHUB_EVENT_PATH" "$RUNNER_TEMP" 65536 \
-    && jq -e --arg mode "$mode" '(.inputs | type == "object") and .inputs.mode == $mode' \
-      "$GITHUB_EVENT_PATH" >/dev/null 2>&1
+    && [[ "${GITHUB_SHA:-}" =~ ^[0-9a-f]{40}$ ]] || return 1
+  event_document="$(stock_restore_single_object "$GITHUB_EVENT_PATH" 65536)" || return 1
+  jq -e --arg mode "$mode" '(.inputs | type == "object") and .inputs.mode == $mode' \
+    <<< "$event_document" >/dev/null 2>&1
 }
 
 stock_restore_api_snapshot() {
   local root="$1" run="$2" attempt="$3" sha="$4"
   local repository=tailrocks/velnor-new run_json="$1/run.json" jobs_json="$1/jobs.json"
+  local run_document jobs_document
   stock_restore_api_json "/repos/$repository/actions/runs/$run" "$run_json" \
     && stock_restore_api_json "/repos/$repository/actions/runs/$run/attempts/$attempt/jobs?per_page=100" "$jobs_json" \
-    && jq -e --argjson id "$run" --argjson attempt "$attempt" \
+    || return 1
+  run_document="$(stock_restore_single_object "$run_json" 2097152)" || return 1
+  jobs_document="$(stock_restore_single_object "$jobs_json" 2097152)" || return 1
+  jq -e --argjson id "$run" --argjson attempt "$attempt" \
       --arg repo "$repository" --arg sha "$sha" '
         type == "object" and .id == $id and .run_attempt == $attempt and .head_sha == $sha
         and .repository.full_name == $repo and .head_repository.full_name == $repo
@@ -228,7 +241,7 @@ stock_restore_api_snapshot() {
         and ((.path | split("@") | .[0]) == ".github/workflows/qualification.yml")
         and (.path | endswith("@refs/heads/main"))
         and (.workflow_id | type == "number" and . > 0 and . == floor)
-      ' "$run_json" >/dev/null 2>&1 \
+      ' <<< "$run_document" >/dev/null 2>&1 \
     && jq -e --arg run "$run" --arg attempt "$attempt" --arg sha "$sha" '
       type == "object" and (.jobs | type == "array")
       and (.total_count | type == "number") and .total_count >= 0
@@ -249,11 +262,13 @@ stock_restore_api_snapshot() {
           and (.status | IN("queued", "in_progress", "completed"))
           and (if .status == "completed" then (.conclusion | type == "string")
             else (.conclusion == null or (.conclusion | type == "string")) end)))' \
-      "$jobs_json" >/dev/null 2>&1
+      <<< "$jobs_document" >/dev/null 2>&1
 }
 
 stock_restore_step_identity() {
   local jobs_json="$1" name="$2" status="$3" run="$4" attempt="$5" sha="$6" conclusion="$7"
+  local jobs_document
+  jobs_document="$(stock_restore_single_object "$jobs_json" 2097152)" || return 1
   jq -er --arg name "$name" --arg status "$status" --arg run "$run" \
     --arg attempt "$attempt" --arg sha "$sha" --arg conclusion "$conclusion" \
     --arg step 'Restore MBX single bundle' '
@@ -274,15 +289,16 @@ stock_restore_step_identity() {
               then error("job id")
             else "\($job.id)\t\($steps[0].key)"
           end
-        end' "$jobs_json" 2>/dev/null
+        end' <<< "$jobs_document" 2>/dev/null
 }
 
 stock_restore_attempt_snapshot() {
   local root="$1" run="$2" attempt="$3" sha="$4" name="$5" status="$6" conclusion="$7"
-  local workflow_id identity
+  local workflow_id identity run_document
   stock_restore_api_snapshot "$root" "$run" "$attempt" "$sha" || return 1
+  run_document="$(stock_restore_single_object "$root/run.json" 2097152)" || return 1
   workflow_id="$(jq -er '.workflow_id | select(type == "number" and . > 0 and . == floor)' \
-    "$root/run.json" 2>/dev/null)" || return 1
+    <<< "$run_document" 2>/dev/null)" || return 1
   identity="$(stock_restore_step_identity "$root/jobs.json" "$name" "$status" \
     "$run" "$attempt" "$sha" "$conclusion")" || return 1
   printf '%s\t%s\n' "$workflow_id" "$identity"
@@ -295,19 +311,21 @@ stock_restore_classify_receipt() {
   local temp="" snapshot="" run_id="${GITHUB_RUN_ID:-}" attempt="${GITHUB_RUN_ATTEMPT:-}"
   local sha="${GITHUB_SHA:-}" ref="${GITHUB_REF:-}" workflow="${GITHUB_WORKFLOW_REF:-}"
   local workflow_id="" job_id="" step_index="" derived="" actual_primary=""
-  local hit="" matched="" conclusion="" outcome=NOT_RUN uid
+  local hit="" matched="" conclusion="" outcome=NOT_RUN uid receipt_document
   if ! stock_restore_context_valid "$expected_mode" \
-    || { [ "$expected_job_status" != completed ] && [ "$expected_job_status" != in_progress ]; } \
-    || ! stock_restore_validate_receipt "$receipt" "$expected_job_id" "$expected_role" \
-      "$run_id" "$attempt" "$sha" "$ref" "$workflow"; then
+    || { [ "$expected_job_status" != completed ] && [ "$expected_job_status" != in_progress ]; }; then
     printf '%s\n' NOT_RUN; return 0
   fi
+  receipt_document="$(stock_restore_validate_receipt "$receipt" "$expected_job_id" \
+    "$expected_role" "$run_id" "$attempt" "$sha" "$ref" "$workflow")" || {
+    printf '%s\n' NOT_RUN; return 0;
+  }
   uid="$(id -u)" || { printf '%s\n' NOT_RUN; return 0; }
-  derived="$(jq -r '.primary_key' "$receipt")" || { printf '%s\n' NOT_RUN; return 0; }
-  actual_primary="$(jq -r '.restore_primary_key' "$receipt")" || { printf '%s\n' NOT_RUN; return 0; }
-  hit="$(jq -r '.cache_hit' "$receipt")" || { printf '%s\n' NOT_RUN; return 0; }
-  matched="$(jq -r '.matched_key' "$receipt")" || { printf '%s\n' NOT_RUN; return 0; }
-  conclusion="$(jq -r '.restore_conclusion' "$receipt")" || { printf '%s\n' NOT_RUN; return 0; }
+  derived="$(jq -r '.primary_key' <<< "$receipt_document")" || { printf '%s\n' NOT_RUN; return 0; }
+  actual_primary="$(jq -r '.restore_primary_key' <<< "$receipt_document")" || { printf '%s\n' NOT_RUN; return 0; }
+  hit="$(jq -r '.cache_hit' <<< "$receipt_document")" || { printf '%s\n' NOT_RUN; return 0; }
+  matched="$(jq -r '.matched_key' <<< "$receipt_document")" || { printf '%s\n' NOT_RUN; return 0; }
+  conclusion="$(jq -r '.restore_conclusion' <<< "$receipt_document")" || { printf '%s\n' NOT_RUN; return 0; }
   temp="$(mktemp -d "$RUNNER_TEMP/mbx-stock-restore.XXXXXXXXXX" 2>/dev/null || true)"
   if [ -n "$temp" ] && [ -d "$temp" ] && [ ! -L "$temp" ] \
     && [ "$(realpath -e -- "$temp" 2>/dev/null)" = "$temp" ] \
