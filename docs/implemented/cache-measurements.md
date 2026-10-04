@@ -234,3 +234,28 @@ workload. That evidence must come from the consumer's affected crates after
 adoption; a green probe alone is not an ENOSPC repair verdict. The hosted
 round-trip still needs to run against GitHub Actions after the generated
 workflow is adopted.
+
+## Cache-save cancellation progress semantics
+
+Source review: pinned
+[`actions/cache` save-only bundle](https://github.com/actions/cache/blob/55cc8345863c7cc4c66a329aec7e433d2d1c52a9/dist/save-only/index.js)
+has blob `b3a8aa37f9f7a608d7d5a63a8990b1fd4c043759`. Its V2 save path forces
+the Azure SDK, 64 MiB blocks, and concurrency 8; the SDK uses a 128 MiB
+single-shot threshold. The legacy `Uploading chunk ...` marker is in the V1
+uploader and is unavailable on this V2 path. V2's ordinary `Sent N of TOTAL`
+progress line needs no debug setting; it is displayed every second and once
+when the progress timer stops.
+
+Count a cancellation probe only when the final `Save` step is live and its log
+contains `Sent N of TOTAL` with `0 < N < TOTAL` before cancellation. For an
+archive at or below 128 MiB, this shows partial request-body progress observed
+by the SDK; it does not prove server acknowledgement or cache finalization.
+For a larger archive, progress advances after successful 64 MiB `stageBlock`
+calls; it does not prove all blocks completed or V2
+`FinalizeCacheEntryUpload` succeeded.
+
+A fast small upload may produce only a final `Sent TOTAL of TOTAL` line. That
+does not qualify a cancellation probe: record `NOT_RUN`. Do not add archive
+padding or artificial delay to manufacture a partial sample. This section is
+source review only: no local upload/cancellation test is recorded, and hosted
+cache-save cancellation evidence remains `UNRUN`.
