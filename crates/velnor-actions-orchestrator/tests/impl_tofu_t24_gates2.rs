@@ -25,7 +25,7 @@ fn gate_inputs<'a>(
     config: &'a str,
 ) -> ExtensionInputs<'a> {
     ExtensionInputs {
-        unit_id: "root",
+        unit_id: "dir-737461636b732f61",
         workspace_id: workspace,
         profile: "default",
         manifest: "stacks/a",
