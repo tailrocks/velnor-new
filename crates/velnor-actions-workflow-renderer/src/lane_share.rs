@@ -208,5 +208,9 @@ fn composite_file(
 mod tests;
 
 #[cfg(test)]
+#[path = "lane_share_shell_tests.rs"]
+mod shell_tests;
+
+#[cfg(test)]
 #[path = "lane_share_unpinned_tests.rs"]
 mod unpinned_tests;

@@ -3,8 +3,10 @@
 //! job; the hosted job `needs` it. `ports` runs two scale-set jobs with no
 //! `needs` so both can hold the same logical port.
 
+use super::RunnerSpec;
 use super::features::{
-    base, checkout_step, finish, gated, local_action_step, redis_service, run_step,
+    checkout_step, finish, gated, lane_base_with_container, local_action_step, redis_service,
+    run_step,
 };
 use crate::yaml::Yaml;
 
@@ -30,7 +32,7 @@ struct Lane<'a> {
     title: &'a str,
     suffix: &'a str,
     kind: &'a str,
-    runs_on: &'a Yaml,
+    runner: &'a RunnerSpec,
     needs: &'a [&'a str],
     steps: Vec<Yaml>,
 }
@@ -44,14 +46,14 @@ struct Extras {
 }
 
 /// One mode per class. `features` does not select these jobs.
-pub(super) fn class_jobs(hosted: &Yaml, scale: &Yaml) -> Vec<(String, Yaml)> {
+pub(super) fn class_jobs(hosted: &RunnerSpec, scale: &RunnerSpec) -> Vec<(String, Yaml)> {
     let mut jobs = action_classes(hosted, scale);
     jobs.extend(state_classes(hosted, scale));
     jobs.extend(more::jobs(hosted, scale));
     jobs
 }
 
-fn action_classes(hosted: &Yaml, scale: &Yaml) -> Vec<(String, Yaml)> {
+fn action_classes(hosted: &RunnerSpec, scale: &RunnerSpec) -> Vec<(String, Yaml)> {
     let mut jobs = Vec::new();
     jobs.extend(both(
         "composite",
@@ -89,7 +91,7 @@ fn action_classes(hosted: &Yaml, scale: &Yaml) -> Vec<(String, Yaml)> {
     jobs
 }
 
-fn state_classes(hosted: &Yaml, scale: &Yaml) -> Vec<(String, Yaml)> {
+fn state_classes(hosted: &RunnerSpec, scale: &RunnerSpec) -> Vec<(String, Yaml)> {
     let mut jobs = Vec::new();
     jobs.extend(both(
         "mask",
@@ -130,8 +132,8 @@ fn state_classes(hosted: &Yaml, scale: &Yaml) -> Vec<(String, Yaml)> {
 fn both(
     mode: &str,
     title: &str,
-    hosted: &Yaml,
-    scale: &Yaml,
+    hosted: &RunnerSpec,
+    scale: &RunnerSpec,
     steps: Vec<Yaml>,
     extras: Extras,
 ) -> Vec<(String, Yaml)> {
@@ -163,7 +165,7 @@ fn both(
     ]
 }
 
-fn output_jobs(hosted: &Yaml, scale: &Yaml) -> Vec<(String, Yaml)> {
+fn output_jobs(hosted: &RunnerSpec, scale: &RunnerSpec) -> Vec<(String, Yaml)> {
     vec![
         emit(
             lane(
@@ -205,7 +207,7 @@ fn output_jobs(hosted: &Yaml, scale: &Yaml) -> Vec<(String, Yaml)> {
     ]
 }
 
-fn cache_jobs(hosted: &Yaml, scale: &Yaml) -> Vec<(String, Yaml)> {
+fn cache_jobs(hosted: &RunnerSpec, scale: &RunnerSpec) -> Vec<(String, Yaml)> {
     let perms = cache_permissions();
     vec![
         emit(
@@ -252,7 +254,7 @@ fn lane<'a>(
     title: &'a str,
     suffix: &'a str,
     kind: &'a str,
-    runs_on: &'a Yaml,
+    runner: &'a RunnerSpec,
     needs: &'a [&'a str],
     steps: Vec<Yaml>,
 ) -> Lane<'a> {
@@ -261,14 +263,15 @@ fn lane<'a>(
         title,
         suffix,
         kind,
-        runs_on,
+        runner,
         needs,
         steps,
     }
 }
 
 fn emit(job: Lane<'_>, extras: Extras) -> (String, Yaml) {
-    let mut fields = base(&job.heading(), job.runs_on.clone(), 20);
+    let mut fields =
+        lane_base_with_container(&job.heading(), job.runner, 20, extras.container.is_some());
     push_needs(&mut fields, job.needs);
     push_opt(&mut fields, "permissions", extras.permissions);
     push_opt(&mut fields, "container", extras.container);

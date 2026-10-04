@@ -13,9 +13,13 @@ use crate::{
     yaml::Yaml,
 };
 use velnor_actions_contract::{
-    Job, Permissions, Step, StepKind, Trigger, WorkflowIr,
+    Job, Permissions, RunsOn, Step, StepKind, Trigger, WorkflowIr,
     workflow::{ir::DispatchInput, permissions::PermissionLevel},
 };
+
+#[cfg(test)]
+#[path = "document_runner_shell_tests.rs"]
+mod runner_shell_tests;
 
 /// Build the workflow document: name, on, permissions, concurrency, jobs.
 pub(crate) fn workflow_to_yaml(
@@ -202,17 +206,41 @@ fn job_to_yaml(
     mbx_gc_auto: bool,
 ) -> Result<Yaml, RenderError> {
     steps::scan_for_private_subcommands(&job.display_name)?;
-    let mut entries = vec![
+    let runner = RunsOn::parse(&job.runs_on).map_err(RenderError::Contract)?;
+    let scale_set = matches!(&runner, RunsOn::ScaleSet(_));
+    let runs_on = match runner {
+        RunsOn::Hosted(label) => Yaml::str(label),
+        RunsOn::ScaleSet(selector) => Yaml::Flow(selector.labels().to_vec()),
+    };
+    let mut entries = job_header_fields(job, runs_on);
+    append_job_options(&mut entries, job, scale_set, mbx_gc_auto)?;
+    let rendered_steps = render_job_steps(id, job, ctx, needs_envs, shared, checkouts)?;
+    entries.push(("steps".to_owned(), Yaml::Seq(rendered_steps)));
+    Ok(Yaml::Map(entries))
+}
+
+fn job_header_fields(job: &Job, runs_on: Yaml) -> Vec<(String, Yaml)> {
+    vec![
         ("name".to_owned(), Yaml::str(job.display_name.clone())),
-        (
-            "runs-on".to_owned(),
-            crate::runs_on::runs_on_yaml(&job.runs_on)?,
-        ),
+        ("runs-on".to_owned(), runs_on),
         (
             "timeout-minutes".to_owned(),
             Yaml::Int(i64::from(job.timeout_minutes.minutes())),
         ),
-    ];
+    ]
+}
+
+fn append_job_options(
+    entries: &mut Vec<(String, Yaml)>,
+    job: &Job,
+    scale_set: bool,
+    mbx_gc_auto: bool,
+) -> Result<(), RenderError> {
+    if scale_set {
+        entries.push(crate::runs_on::run_shell_defaults_field(
+            crate::runs_on::SCALE_SET_RUN_SHELL,
+        ));
+    }
     if mbx_gc_auto {
         entries.push((
             "env".to_owned(),
@@ -240,6 +268,17 @@ fn job_to_yaml(
         steps::scan_for_private_subcommands(condition)?;
         entries.push(("if".to_owned(), Yaml::str(condition.clone())));
     }
+    Ok(())
+}
+
+fn render_job_steps(
+    id: &str,
+    job: &Job,
+    ctx: &RenderContext,
+    needs_envs: &[(String, String)],
+    shared: Option<&str>,
+    checkouts: &BTreeMap<String, Step>,
+) -> Result<Vec<Yaml>, RenderError> {
     let mut rendered_steps =
         Vec::with_capacity(job.steps.len() + 2 * usize::from(shared.is_some()));
     if let Some(uses) = shared {
@@ -263,8 +302,7 @@ fn job_to_yaml(
     for step in &job.steps {
         rendered_steps.push(step_to_yaml(id, step, ctx, needs_envs, false)?);
     }
-    entries.push(("steps".to_owned(), Yaml::Seq(rendered_steps)));
-    Ok(Yaml::Map(entries))
+    Ok(rendered_steps)
 }
 
 fn valid_shared_checkout(checkout: &Step, expected_uses: &str) -> bool {

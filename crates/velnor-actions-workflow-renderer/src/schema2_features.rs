@@ -5,7 +5,7 @@
 //! One class per dispatch (`js`, `services`, `artifacts`, `buildx`) is one
 //! run. `features` still selects every class.
 
-use super::with_if;
+use super::{RunnerSpec, with_if};
 use crate::yaml::Yaml;
 
 const JS: &str = "inputs.mode == 'features' || inputs.mode == 'js'";
@@ -26,45 +26,33 @@ const PROBE_LOCAL: &str =
 const BUILDX_RUN: &str = "docker buildx version && printf 'FROM scratch\\n' > Dockerfile && docker buildx build --progress=plain -t velnor-g4:probe .";
 
 /// Feature jobs. `features` runs every class. A class name runs that class.
-pub(super) fn feature_jobs(hosted: Yaml, scale: Yaml) -> Vec<(String, Yaml)> {
+pub(super) fn feature_jobs(hosted: &RunnerSpec, scale: &RunnerSpec) -> Vec<(String, Yaml)> {
     vec![
         gated(
-            js_job(
-                "js-hosted",
-                "JavaScript actions / GitHub hosted",
-                hosted.clone(),
-            ),
+            js_job("js-hosted", "JavaScript actions / GitHub hosted", hosted),
             JS,
         ),
         gated(
             js_job(
                 "js-scale-set",
                 "JavaScript actions / Velnor Scale Set",
-                scale.clone(),
+                scale,
             ),
             JS,
         ),
         gated(
-            service_job(
-                "services-hosted",
-                "Services / GitHub hosted",
-                hosted.clone(),
-            ),
+            service_job("services-hosted", "Services / GitHub hosted", hosted),
             SERVICES,
         ),
         gated(
-            service_job(
-                "services-scale-set",
-                "Services / Velnor Scale Set",
-                scale.clone(),
-            ),
+            service_job("services-scale-set", "Services / Velnor Scale Set", scale),
             SERVICES,
         ),
         gated(
             artifact_job(
                 "artifacts-hosted",
                 "Artifacts / GitHub hosted",
-                hosted.clone(),
+                hosted,
                 "g4-proof-hosted",
             ),
             ARTIFACTS,
@@ -73,7 +61,7 @@ pub(super) fn feature_jobs(hosted: Yaml, scale: Yaml) -> Vec<(String, Yaml)> {
             artifact_job(
                 "artifacts-scale-set",
                 "Artifacts / Velnor Scale Set",
-                scale.clone(),
+                scale,
                 "g4-proof-scale-set",
             ),
             ARTIFACTS,
@@ -90,7 +78,7 @@ pub(super) fn feature_jobs(hosted: Yaml, scale: Yaml) -> Vec<(String, Yaml)> {
 }
 
 /// Jobs that run only when `inputs.mode` is `negative`. They must fail in GitHub.
-pub(super) fn negative_jobs(hosted: Yaml, scale: Yaml) -> Vec<(String, Yaml)> {
+pub(super) fn negative_jobs(hosted: &RunnerSpec, scale: &RunnerSpec) -> Vec<(String, Yaml)> {
     vec![
         gated(
             fail_job(
@@ -116,10 +104,10 @@ pub(super) fn gated(job: (String, Yaml), when: &str) -> (String, Yaml) {
     with_if(job, when)
 }
 
-fn js_job(id: &str, name: &str, runs_on: Yaml) -> (String, Yaml) {
+fn js_job(id: &str, name: &str, runs_on: &RunnerSpec) -> (String, Yaml) {
     finish(
         id,
-        base(name, runs_on, 20),
+        lane_base(name, runs_on, 20),
         vec![
             checkout_step(),
             run_step("Record checkout", "git rev-parse HEAD"),
@@ -128,14 +116,14 @@ fn js_job(id: &str, name: &str, runs_on: Yaml) -> (String, Yaml) {
     )
 }
 
-fn service_job(id: &str, name: &str, runs_on: Yaml) -> (String, Yaml) {
-    let mut fields = base(name, runs_on, 20);
+fn service_job(id: &str, name: &str, runs_on: &RunnerSpec) -> (String, Yaml) {
+    let mut fields = lane_base(name, runs_on, 20);
     fields.push(("services".to_owned(), redis_service()));
     finish(id, fields, vec![run_step("Localhost port", PROBE_LOCAL)])
 }
 
-fn artifact_job(id: &str, name: &str, runs_on: Yaml, artifact: &str) -> (String, Yaml) {
-    let mut fields = base(name, runs_on, 20);
+fn artifact_job(id: &str, name: &str, runs_on: &RunnerSpec, artifact: &str) -> (String, Yaml) {
+    let mut fields = lane_base(name, runs_on, 20);
     fields.push(("permissions".to_owned(), artifact_permissions()));
     finish(
         id,
@@ -147,18 +135,18 @@ fn artifact_job(id: &str, name: &str, runs_on: Yaml, artifact: &str) -> (String,
     )
 }
 
-fn buildx_job(id: &str, name: &str, runs_on: Yaml) -> (String, Yaml) {
+fn buildx_job(id: &str, name: &str, runs_on: &RunnerSpec) -> (String, Yaml) {
     finish(
         id,
-        base(name, runs_on, 20),
+        lane_base(name, runs_on, 20),
         vec![run_step("Buildx probe", BUILDX_RUN)],
     )
 }
 
-fn fail_job(id: &str, name: &str, runs_on: Yaml) -> (String, Yaml) {
+fn fail_job(id: &str, name: &str, runs_on: &RunnerSpec) -> (String, Yaml) {
     finish(
         id,
-        base(name, runs_on, 10),
+        lane_base(name, runs_on, 10),
         vec![run_step(
             "Intentional failure",
             "echo expected-negative && exit 1",
@@ -166,8 +154,29 @@ fn fail_job(id: &str, name: &str, runs_on: Yaml) -> (String, Yaml) {
     )
 }
 
-/// Shared preamble: name, `runs-on`, timeout. `if` is inserted later.
+/// Shared preamble for typed qualification lanes.
+pub(super) fn lane_base(name: &str, runner: &RunnerSpec, timeout: i64) -> Vec<(String, Yaml)> {
+    lane_base_with_container(name, runner, timeout, false)
+}
+
+/// Shared preamble for a typed lane whose job executes in a container.
+pub(super) fn lane_base_with_container(
+    name: &str,
+    runner: &RunnerSpec,
+    timeout: i64,
+    has_container: bool,
+) -> Vec<(String, Yaml)> {
+    let mut fields = base_fields(name, runner.runs_on.clone(), timeout);
+    runner.push_default_shell(&mut fields, has_container);
+    fields
+}
+
+/// Shared preamble for hosted product-release families.
 pub(super) fn base(name: &str, runs_on: Yaml, timeout: i64) -> Vec<(String, Yaml)> {
+    base_fields(name, runs_on, timeout)
+}
+
+fn base_fields(name: &str, runs_on: Yaml, timeout: i64) -> Vec<(String, Yaml)> {
     vec![
         ("name".to_owned(), Yaml::str(name)),
         ("runs-on".to_owned(), runs_on),
