@@ -12,7 +12,7 @@
 #                     runs in CI, not here)
 #   generated-tree    build the CLI, `generate --output-dir` to a temp dir,
 #                     and `diff -r` schema-1 files. Schema-2 workflow files are
-#                     left out of that diff and locked by the orchestrator test.
+#                     omitted from both sides and locked by orchestrator tests.
 #   clippy-<crate>    per-crate pinned `cargo clippy --all-targets -- -D warnings`
 #   test-<crate>      per-crate pinned `cargo test` (unit plus integration plus doc)
 #   doctest-<crate>   per-crate pinned `cargo test --doc` for crates with library
@@ -182,22 +182,33 @@ else
     if [ -z "$BIN" ] && [ -n "${CARGO_TARGET_DIR:-}" ]; then
       BIN="$(find "$CARGO_TARGET_DIR/debug" "$CARGO_TARGET_DIR/release" -maxdepth 1 -name velnor-actions -type f 2>/dev/null | head -n 1)"
     fi
-    # Schema 1 does not emit these. They are schema-2 generator bytes.
+    # Compare schema 1 only. These schema-2 workflow bytes are locked by
+    # orchestrator tests and must be omitted from both sides of this diff.
+    SCHEMA2_WORKFLOWS=(
+      qualification.yml
+      image-release.yml
+      macos-binary-release.yml
+      generator-release.yml
+    )
     STRIP="$(mktemp -d 2>/dev/null || true)"
     if [ -z "$STRIP" ]; then
       fail "generated-tree (mktemp failed)"
     else
       cp -R .github "$STRIP/github"
-      rm -f \
-        "$STRIP/github/workflows/qualification.yml" \
-        "$STRIP/github/workflows/image-release.yml" \
-        "$STRIP/github/workflows/macos-binary-release.yml" \
-        "$STRIP/github/workflows/generator-release.yml"
+      for workflow in "${SCHEMA2_WORKFLOWS[@]}"; do
+        rm -f "$STRIP/github/workflows/$workflow"
+      done
       if [ -n "$BIN" ] && "$BIN" generate --output-dir "$GEN_DIR/tree" \
-        >"/tmp/verify-local-generated-run.log" 2>&1 &&
-        diff -r --brief "$STRIP/github" "$GEN_DIR/tree/.github" \
+        >"/tmp/verify-local-generated-run.log" 2>&1; then
+        for workflow in "${SCHEMA2_WORKFLOWS[@]}"; do
+          rm -f "$GEN_DIR/tree/.github/workflows/$workflow"
+        done
+        if diff -r --brief "$STRIP/github" "$GEN_DIR/tree/.github" \
           >"/tmp/verify-local-generated-diff.log" 2>&1; then
-        pass "generated-tree"
+          pass "generated-tree"
+        else
+          fail "generated-tree (see /tmp/verify-local-generated-*.log)"
+        fi
       else
         fail "generated-tree (see /tmp/verify-local-generated-*.log)"
       fi
