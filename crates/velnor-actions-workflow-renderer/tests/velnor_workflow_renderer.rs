@@ -33,6 +33,8 @@ mod impl_renderer_mbx_action;
 mod impl_renderer_mbx_bundle;
 #[path = "impl_renderer_mbx_gc_policy.rs"]
 mod impl_renderer_mbx_gc_policy;
+#[path = "impl_renderer_mbx_hosted_isolation.rs"]
+mod impl_renderer_mbx_hosted_isolation;
 #[path = "impl_renderer_mbx_preflight.rs"]
 mod impl_renderer_mbx_preflight;
 #[path = "impl_renderer_mbxgate.rs"]

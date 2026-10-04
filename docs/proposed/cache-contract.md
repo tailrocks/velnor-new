@@ -106,7 +106,7 @@ Each path has one owner:
 |---|---|---|
 | Mise tools and Rust components | Compiled-in generator catalog, executed by Mise | Embed and invoke exact versions; disable project config, env files, and hooks |
 | Cargo registry and Git sources | Velnor source layer | Exclude credentials; separate from MBX |
-| Compiler objects and scheduler state | `jdx/mr-boxington-action` when MBX is selected | The action owns the object format (`github-cache-mode: objects`). Generated jobs set `ACTIONS_CACHE_MODE=read` so its post does not export inside the live store. `mbx cache export` writes one directory at `$RUNNER_TEMP/mbx-single-bundle`; `actions/cache` archives only that directory; `mbx cache import` loads it. Velnor does not reimplement the object format |
+| Compiler objects and scheduler state | `jdx/mr-boxington-action` when MBX is selected | The action owns the object format (`github-cache-mode: objects`). When the pinned action provides isolated hosted storage, it owns the hosted cache lifecycle; Velnor's manual bundle route runs only on Scale Set. That route sets `ACTIONS_CACHE_MODE=read`, imports from `$RUNNER_TEMP/mbx-single-bundle-restore`, exports to `$RUNNER_TEMP/mbx-single-bundle-export`, and archives only the export path. Earlier action pins without hosted isolation use one explicit Velnor bundle owner per lane. Velnor does not reimplement the object format |
 | Mutable target directory | Matrix job | Reuse sequentially; never share concurrently |
 | Successful task result | Mise task cache | Use only for qualified deterministic tasks and complete outputs |
 
@@ -139,10 +139,14 @@ REPORT_DIR            = $RUNNER_TEMP/velnor/<run-key>/<matrix-key>
 only that directory.
 
 `actions/cache/restore` and `actions/cache/save` MAY archive `CARGO_SOURCE_PATHS`,
-qualified `MISE_TASK_ARTIFACTS`, and `$RUNNER_TEMP/mbx-single-bundle`. The action
-owns the MBX object format. `ACTIONS_CACHE_MODE=read` skips its in-store post,
-which exhausted runner disk (run `37114238559`). A miss, a missing directory, or
-a failed `mbx cache import` continues cold. Velnor MUST NOT reimplement either
+qualified `MISE_TASK_ARTIFACTS`, `$RUNNER_TEMP/mbx-single-bundle-restore`, and
+`$RUNNER_TEMP/mbx-single-bundle-export`. Restore and export paths MUST be disjoint.
+The restored bundle stays in runner temporary storage until runner cleanup. Velnor MUST
+NOT delete the MBX store or restored bundle from the workflow. The action owns the
+MBX object format. `ACTIONS_CACHE_MODE=read` skips its in-store post, which exhausted
+runner disk (run `37114238559`). A cache miss continues cold. A matched missing
+bundle or failed `mbx cache import` continues the build cold, is recorded as
+`cache_corrupt`, and MUST NOT be republished. Velnor MUST NOT reimplement either
 format. A Cargo-profile job does not invoke the Mr. Boxington action.
 
 Velnor MUST NOT configure Mise `task.cache.remote_url`, remote namespaces, remote tokens, or OIDC task-cache

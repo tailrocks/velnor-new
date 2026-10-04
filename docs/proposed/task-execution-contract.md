@@ -24,16 +24,21 @@ rustup component add --toolchain <exact>-<triple> clippy rustfmt`):
 the pinned toolchain's own rustup, deterministic, writing only
 Velnor-owned tool homes — Mise installing components, not an ad hoc
 installer. For an MBX profile only, it then invokes the pinned
-`jdx/mr-boxington-action` in `github-cache-mode: objects` with
-`ACTIONS_CACHE_MODE=read`. The action owns the MBX object format. Read mode skips
-its post export, which wrote inside the live store and exhausted runner disk
-(run `37114238559`). The workflow exports one directory with `mbx cache export`
-to `$RUNNER_TEMP/mbx-single-bundle`, and `actions/cache` transports that opaque
-directory. `mbx cache import` loads it. A miss, a missing directory, or a failed
-import continues the job cold. For a Cargo profile, that action and MBX
-installation are absent. The same cache actions also transport Cargo source
-archives and qualified Mise task artifacts. They do not archive the live MBX
-store. In selected crate jobs and the plan-job pre-seed restore path, the
+`jdx/mr-boxington-action` in `github-cache-mode: objects`. When that pin
+supports isolated hosted storage, the hosted action owns its restore, save,
+and post cleanup. The Velnor manual bundle route runs only on Scale Set. It
+sets `ACTIONS_CACHE_MODE=read`, uses a private MBX store, restores to
+`$RUNNER_TEMP/mbx-single-bundle-restore`, imports that directory, then exports
+to `$RUNNER_TEMP/mbx-single-bundle-export`. Restore and export paths are
+disjoint. Velnor keeps the private store and restored bundle until normal
+runner temporary-directory cleanup. It does not recursively delete either.
+Pins without hosted isolation use one explicit Velnor manual bundle owner per
+lane. A cache miss continues cold. A matched missing bundle or failed import
+continues the build cold, is recorded as `cache_corrupt`, and is not published.
+For a Cargo profile, the action and MBX installation are absent. The same cache
+actions also transport Cargo source archives and qualified Mise task artifacts.
+They do not archive the live MBX store. In selected crate jobs and the plan-job
+pre-seed restore path, the
 generator places a strict MBX and Rust toolchain preflight immediately before
 the MBX objects action. The preflight resolves only the exact catalog installs
 through Mise with project config, environment, and hooks disabled, requires
@@ -46,8 +51,8 @@ installs `latest` if its own PATH lookup misses. The preflight blocks a
 missing, non-executable, or mismatched catalog install before the action is
 invoked, but does not remove that upstream fallback. An unavailable or
 mismatched Rust toolchain also fails before the action can run. This
-identity preflight leaves the read-only action post and manual single-bundle
-export/import ownership unchanged. Separately generated qualification
+identity preflight validates tool paths. It does not change cache ownership or
+transport. Separately generated qualification
 workflows retain their existing action setup and are outside this preflight
 change.
 
