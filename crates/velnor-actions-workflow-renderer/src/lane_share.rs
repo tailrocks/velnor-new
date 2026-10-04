@@ -1,8 +1,8 @@
-//! One composite action per duplicated verification lane, except MBX jobs.
+//! Composite actions for common steps in duplicated verification lanes.
 //!
 //! GitHub will not start a workflow file larger than 500 KB. Inlining both
-//! lane step lists crosses that limit, so the steps live in one action and
-//! each lane job keeps its own id, `runs-on`, and `needs`.
+//! lane step lists crosses that limit, so common step runs live in actions
+//! while each lane job keeps its own id, `runs-on`, and `needs`.
 
 use std::collections::BTreeMap;
 
@@ -10,7 +10,7 @@ use velnor_actions_contract::workflow::lanes::{HOSTED_SUFFIX, SCALE_SUFFIX};
 use velnor_actions_contract::{Job, Step};
 
 use crate::composite::composite_yaml;
-use crate::document::step_to_yaml;
+use crate::document_steps::step_to_yaml;
 use crate::render::RenderContext;
 use crate::tree::RenderedFile;
 use crate::{RenderError, marker, steps, yaml::render_yaml};
@@ -20,29 +20,37 @@ use crate::{RenderError, marker, steps, yaml::render_yaml};
 pub struct RenderedWorkflow {
     /// Marked `ci.yml` bytes.
     pub yaml: String,
-    /// One composite action per shared logical job. Empty when no lane pair exists.
+    /// Composite actions for common step runs in paired lanes.
     pub shared: Vec<RenderedFile>,
 }
 
 /// Jobs rewritten to call a shared action, plus those action files.
 #[derive(Debug)]
 pub(crate) struct LaneShare {
-    /// Same jobs, with shared lanes keeping their headers and empty steps.
+    /// Same jobs, with shared steps retained for document-boundary indexing.
     pub jobs: BTreeMap<String, Job>,
-    /// Job id to local `uses` path.
-    pub calls: BTreeMap<String, String>,
-    /// Composite action files, one per logical job.
+    /// Job id to ordered calls; each call replaces the indicated source steps.
+    pub calls: BTreeMap<String, Vec<SharedCall>>,
+    /// Composite action files, one per shared step run.
     pub files: Vec<RenderedFile>,
 }
 
-/// Factor `__hosted` / `__local` pairs whose step lists match and contain no MBX action.
+/// A composite call inserted before `before_step`, replacing `skip_steps`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SharedCall {
+    pub before_step: usize,
+    pub skip_steps: usize,
+    pub uses: String,
+}
+
+/// Factor common runs from `__hosted` / `__local` pairs.
 ///
 /// # Errors
 ///
-/// A pair whose timeout, condition, permissions, environment, or steps
-/// differ fails closed. Elected cache saves (`Save Mise tools`, `Save Tofu
-/// providers`) stay on the job that owns them and are not part of that
-/// comparison. An unsafe logical id fails closed.
+/// A non-MBX pair whose timeout, condition, permissions, environment, or
+/// steps differ fails closed. MBX actions and elected cache saves stay in
+/// their owning jobs; common runs on either side of them are factored as
+/// separate composites. An unsafe logical id fails closed.
 pub(crate) fn share_lanes(
     jobs: &BTreeMap<String, Job>,
     ctx: &RenderContext,
@@ -63,12 +71,23 @@ pub(crate) fn share_lanes(
         let Some(hosted) = jobs.get(&hosted_id) else {
             continue;
         };
-        // MBX cache isolation is a hosted-job input, while local jobs keep
-        // the shared generation. Keep the action in each job so rendering
-        // can apply that lane-specific policy after common-step sharing.
+        // MBX inputs are lane-specific after hosted-cache isolation. Keep
+        // every MBX action in its job, then factor exact common runs in
+        // each lane's original order.
         if hosted.steps.iter().any(crate::cache_steps::is_mbx_action)
             || local.steps.iter().any(crate::cache_steps::is_mbx_action)
         {
+            if !same_job_policy(hosted, local) {
+                continue;
+            }
+            let (hosted_shared, local_shared) =
+                share_mbx_runs(logical, hosted, local, ctx, &mut files)?;
+            if !hosted_shared.is_empty() {
+                calls.insert(hosted_id, hosted_shared);
+            }
+            if !local_shared.is_empty() {
+                calls.insert(local_id, local_shared);
+            }
             continue;
         }
         let Some((common, hosted_extra, local_extra)) = split_pair(hosted, local) else {
@@ -78,8 +97,13 @@ pub(crate) fn share_lanes(
         };
         let uses = format!("$/.github/actions/{logical}");
         files.push(composite_file(logical, &common, ctx)?);
-        calls.insert(hosted_id.clone(), uses.clone());
-        calls.insert(local_id.clone(), uses);
+        let call = SharedCall {
+            before_step: 0,
+            skip_steps: 0,
+            uses,
+        };
+        calls.insert(hosted_id.clone(), vec![call.clone()]);
+        calls.insert(local_id.clone(), vec![call]);
         set_steps(&mut next, &hosted_id, hosted_extra);
         set_steps(&mut next, &local_id, local_extra);
     }
@@ -88,6 +112,117 @@ pub(crate) fn share_lanes(
         calls,
         files,
     })
+}
+
+fn same_job_policy(hosted: &Job, local: &Job) -> bool {
+    hosted.timeout_minutes == local.timeout_minutes
+        && hosted.condition == local.condition
+        && hosted.permissions == local.permissions
+        && hosted.environment == local.environment
+}
+
+/// Factor exact common runs from an ordered LCS. Any MBX or elected save
+/// step remains job-local, even when lane boundaries differ.
+fn share_mbx_runs(
+    logical: &str,
+    hosted: &Job,
+    local: &Job,
+    ctx: &RenderContext,
+    files: &mut Vec<RenderedFile>,
+) -> Result<(Vec<SharedCall>, Vec<SharedCall>), RenderError> {
+    let matches = common_step_matches(hosted, local);
+    let mut writer = SharedRunWriter::new(logical, ctx, files);
+    let mut current_start = None;
+    let mut previous = None;
+    let mut common = Vec::new();
+    for (hosted_index, local_index) in matches {
+        if previous.is_some_and(|(previous_hosted, previous_local)| {
+            hosted_index != previous_hosted + 1 || local_index != previous_local + 1
+        }) {
+            let start = current_start.take().ok_or_else(|| {
+                RenderError::InvalidWorkflow(format!("lane_lcs_missing_run_start:{logical}"))
+            })?;
+            writer.append(start, &common)?;
+            common.clear();
+        }
+        current_start.get_or_insert((hosted_index, local_index));
+        common.push(hosted.steps[hosted_index].clone());
+        previous = Some((hosted_index, local_index));
+    }
+    if let Some((hosted_start, local_start)) = current_start {
+        writer.append((hosted_start, local_start), &common)?;
+    }
+    Ok(writer.finish())
+}
+
+fn common_step_matches(hosted: &Job, local: &Job) -> Vec<(usize, usize)> {
+    let hosted_steps: Vec<(usize, &Step)> = hosted
+        .steps
+        .iter()
+        .enumerate()
+        .filter(|(_, step)| !crate::cache_steps::is_mbx_action(step) && !is_elected_save(step))
+        .collect();
+    let local_steps: Vec<(usize, &Step)> = local
+        .steps
+        .iter()
+        .enumerate()
+        .filter(|(_, step)| !crate::cache_steps::is_mbx_action(step) && !is_elected_save(step))
+        .collect();
+    crate::lane_share_lcs::ordered_matches(&hosted_steps, &local_steps)
+}
+
+struct SharedRunWriter<'a> {
+    logical: &'a str,
+    ctx: &'a RenderContext,
+    files: &'a mut Vec<RenderedFile>,
+    segment: usize,
+    hosted_calls: Vec<SharedCall>,
+    local_calls: Vec<SharedCall>,
+}
+
+impl<'a> SharedRunWriter<'a> {
+    fn new(logical: &'a str, ctx: &'a RenderContext, files: &'a mut Vec<RenderedFile>) -> Self {
+        Self {
+            logical,
+            ctx,
+            files,
+            segment: 0,
+            hosted_calls: Vec::new(),
+            local_calls: Vec::new(),
+        }
+    }
+
+    fn append(
+        &mut self,
+        (hosted_start, local_start): (usize, usize),
+        common: &[Step],
+    ) -> Result<(), RenderError> {
+        let file_name = format!("{}-shared-{}", self.logical, self.segment);
+        let action_path = format!(
+            ".github/actions/shared-lanes/{}/segment-{}",
+            self.logical, self.segment
+        );
+        let uses = format!("$/{action_path}");
+        let file = composite_file_at(&file_name, &action_path, common, self.ctx)?;
+        let skip_steps = common.len();
+        self.hosted_calls.push(SharedCall {
+            before_step: hosted_start,
+            skip_steps,
+            uses: uses.clone(),
+        });
+        self.local_calls.push(SharedCall {
+            before_step: local_start,
+            skip_steps,
+            uses,
+        });
+        self.files.push(file);
+        self.segment += 1;
+        Ok(())
+    }
+
+    fn finish(self) -> (Vec<SharedCall>, Vec<SharedCall>) {
+        (self.hosted_calls, self.local_calls)
+    }
 }
 
 fn hosted_ids(jobs: &BTreeMap<String, Job>) -> Vec<String> {
@@ -107,11 +242,7 @@ fn logical_id(hosted_id: &str) -> Option<&str> {
 }
 
 fn split_pair(hosted: &Job, local: &Job) -> Option<(Vec<Step>, Vec<Step>, Vec<Step>)> {
-    if hosted.timeout_minutes != local.timeout_minutes
-        || hosted.condition != local.condition
-        || hosted.permissions != local.permissions
-        || hosted.environment != local.environment
-    {
+    if !same_job_policy(hosted, local) {
         return None;
     }
     let (hosted_common, hosted_extra) = peel_saves(&hosted.steps);
@@ -148,6 +279,15 @@ fn composite_file(
     steps: &[Step],
     ctx: &RenderContext,
 ) -> Result<RenderedFile, RenderError> {
+    composite_file_at(logical, &format!(".github/actions/{logical}"), steps, ctx)
+}
+
+fn composite_file_at(
+    logical: &str,
+    action_path: &str,
+    steps: &[Step],
+    ctx: &RenderContext,
+) -> Result<RenderedFile, RenderError> {
     let mut rendered = Vec::with_capacity(steps.len());
     for step in steps {
         rendered.push(step_to_yaml(logical, step, ctx, &[], true)?);
@@ -157,244 +297,11 @@ fn composite_file(
     let bytes = marker::with_marker(&ctx.generator_version, &render_yaml(&quoted))?;
     steps::scan_for_private_subcommands(&bytes)?;
     Ok(RenderedFile {
-        path: format!(".github/actions/{logical}/action.yml"),
+        path: format!("{action_path}/action.yml"),
         bytes,
     })
 }
 
 #[cfg(test)]
-mod tests {
-    use std::collections::BTreeMap;
-
-    use velnor_actions_contract::{
-        Concurrency, Job, JobTimeout, Permissions, SCALE_SET_NAME, ScaleSetSelector, Step,
-        StepKind, Trigger, VELNOR_LABEL, WorkflowIr,
-    };
-
-    use super::{HOSTED_SUFFIX, SCALE_SUFFIX, share_lanes};
-    use crate::RenderError;
-    use crate::render::{CONCURRENCY_CANCEL, CONCURRENCY_GROUP, RenderContext};
-
-    const HOSTED_RUNS: &str = "ubuntu-26.04";
-    const CAP: usize = 500_000;
-    const LOGICAL_JOBS: usize = 21;
-    const STEPS_PER_JOB: usize = 48;
-
-    fn ctx() -> RenderContext {
-        RenderContext {
-            generator_version: "0.1.0".to_owned(),
-            runs_on: HOSTED_RUNS.to_owned(),
-            staged_binary: "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0".to_owned(),
-            request_dir: "${{ runner.temp }}/velnor/request".to_owned(),
-            checkout_uses: format!("actions/checkout@{:040x}", 0),
-            validator_commands: Vec::new(),
-            candidate: None,
-            preseed: false,
-            plan_consumer_env: BTreeMap::new(),
-        }
-    }
-
-    fn workflow_ir() -> WorkflowIr {
-        WorkflowIr {
-            name: "CI".to_owned(),
-            triggers: Trigger {
-                pull_request_types: ["opened", "synchronize", "reopened", "ready_for_review"]
-                    .into_iter()
-                    .map(str::to_owned)
-                    .collect(),
-                push_branches: vec!["main".to_owned()],
-                merge_group: true,
-                workflow_dispatch: None,
-                schedule: None,
-            },
-            permissions: Permissions::default(),
-            concurrency: Concurrency {
-                group: CONCURRENCY_GROUP.to_owned(),
-                cancel_in_progress: CONCURRENCY_CANCEL.to_owned(),
-            },
-            jobs: BTreeMap::new(),
-        }
-    }
-
-    fn scale_token() -> String {
-        ScaleSetSelector::try_new(
-            SCALE_SET_NAME,
-            &[VELNOR_LABEL.to_owned(), SCALE_SET_NAME.to_owned()],
-        )
-        .expect("scale selector")
-        .token()
-    }
-
-    fn echo_step(index: usize, payload: &str) -> Step {
-        Step {
-            name: format!("echo {index}"),
-            condition: None,
-            kind: StepKind::Shell {
-                run: vec!["echo".to_owned(), payload.to_owned()],
-                env: BTreeMap::new(),
-            },
-        }
-    }
-
-    fn lane_job(display: &str, runs_on: &str, steps: Vec<Step>) -> Job {
-        Job {
-            display_name: display.to_owned(),
-            runs_on: runs_on.to_owned(),
-            timeout_minutes: JobTimeout::CRATE,
-            needs: Vec::new(),
-            condition: None,
-            permissions: None,
-            environment: None,
-            steps,
-        }
-    }
-
-    fn render_jobs(
-        ir: &WorkflowIr,
-        jobs: &BTreeMap<String, Job>,
-        ctx: &RenderContext,
-        calls: &BTreeMap<String, String>,
-    ) -> Result<String, crate::RenderError> {
-        let document = crate::document::workflow_to_yaml(
-            ir,
-            jobs,
-            ctx,
-            calls,
-            &std::collections::BTreeSet::new(),
-        )?;
-        let quoted = crate::yaml::quote_run_values_in_yaml(document);
-        crate::marker::with_marker(&ctx.generator_version, &crate::yaml::render_yaml(&quoted))
-    }
-
-    fn heavy_steps(payload: &str) -> Vec<Step> {
-        (0..STEPS_PER_JOB)
-            .map(|index| echo_step(index, payload))
-            .collect()
-    }
-
-    fn paired(steps: &[Step]) -> BTreeMap<String, Job> {
-        let scale = scale_token();
-        let mut jobs = BTreeMap::new();
-        for index in 0..LOGICAL_JOBS {
-            let logical = format!("rust-{index}");
-            jobs.insert(
-                format!("{logical}{HOSTED_SUFFIX}"),
-                lane_job(&format!("{logical} hosted"), HOSTED_RUNS, steps.to_vec()),
-            );
-            jobs.insert(
-                format!("{logical}{SCALE_SUFFIX}"),
-                lane_job(&format!("{logical} local"), &scale, steps.to_vec()),
-            );
-        }
-        jobs
-    }
-
-    #[test]
-    fn shared_lanes_keep_ci_under_github_file_cap() {
-        let payload = "a".repeat(400);
-        let jobs = paired(&heavy_steps(&payload));
-        let ir = workflow_ir();
-        let context = ctx();
-        let unshared = render_jobs(&ir, &jobs, &context, &BTreeMap::new()).expect("unshared");
-        assert!(
-            unshared.len() > CAP,
-            "unshared render must exceed the GitHub cap, got {}",
-            unshared.len()
-        );
-        let shared = share_lanes(&jobs, &context).expect("share");
-        let yaml = render_jobs(&ir, &shared.jobs, &context, &shared.calls).expect("shared");
-        assert!(
-            yaml.len() <= CAP,
-            "shared ci.yml must fit, got {}",
-            yaml.len()
-        );
-        assert!(
-            !yaml.contains(&payload),
-            "shared ci.yml still inlines steps"
-        );
-        assert!(yaml.contains("runs-on: ubuntu-26.04"));
-        assert!(yaml.contains("runs-on: [velnor, ubuntu-26.04-scale-set]"));
-        assert!(yaml.contains("uses: $/.github/actions/rust-0"));
-        assert_eq!(shared.files.len(), LOGICAL_JOBS);
-        for file in &shared.files {
-            assert!(
-                file.bytes.len() <= CAP,
-                "{} is {} bytes",
-                file.path,
-                file.bytes.len()
-            );
-            assert!(file.bytes.contains("shell: bash"), "{}", file.path);
-            assert!(file.bytes.contains(&payload), "{}", file.path);
-            assert!(file.path.ends_with("/action.yml"), "{}", file.path);
-        }
-    }
-
-    #[test]
-    fn differing_lane_bodies_fail_closed() {
-        let step = echo_step(0, "one");
-        let mut jobs = paired(&[step]);
-        jobs.get_mut("rust-0__hosted").expect("hosted").steps.pop();
-        let err = share_lanes(&jobs, &ctx()).expect_err("differs");
-        assert!(
-            matches!(err, RenderError::InvalidWorkflow(ref problem) if problem == "lane_body_differs:rust-0"),
-            "{err}"
-        );
-    }
-
-    #[test]
-    fn unsafe_logical_id_fails_closed() {
-        let step = echo_step(0, "one");
-        let mut jobs = BTreeMap::new();
-        jobs.insert(
-            "rust.0__hosted".to_owned(),
-            lane_job("hosted", HOSTED_RUNS, vec![step.clone()]),
-        );
-        jobs.insert(
-            "rust.0__local".to_owned(),
-            lane_job("local", &scale_token(), vec![step]),
-        );
-        let err = share_lanes(&jobs, &ctx()).expect_err("bad id");
-        assert!(
-            matches!(err, RenderError::InvalidWorkflow(ref problem) if problem == "bad_lane_id:rust.0__hosted"),
-            "{err}"
-        );
-    }
-
-    #[test]
-    fn unpaired_jobs_stay_inline() {
-        let mut jobs = BTreeMap::new();
-        jobs.insert(
-            "actionlint".to_owned(),
-            lane_job("actionlint", HOSTED_RUNS, vec![echo_step(0, "one")]),
-        );
-        let shared = share_lanes(&jobs, &ctx()).expect("share");
-        assert!(shared.calls.is_empty());
-        assert_eq!(shared.files.len(), 0);
-        let kept = shared.jobs.get("actionlint").expect("actionlint");
-        assert_eq!(kept.steps.len(), 1);
-    }
-
-    #[test]
-    fn elected_save_stays_on_the_winner_job() {
-        let mut jobs = paired(&[echo_step(0, "one")]);
-        let save = crate::cache_steps::tools_save_step("mise-v1").expect("save");
-        jobs.get_mut("rust-0__hosted")
-            .expect("hosted")
-            .steps
-            .push(save);
-        let shared = share_lanes(&jobs, &ctx()).expect("share");
-        let hosted = shared.jobs.get("rust-0__hosted").expect("hosted");
-        let local = shared.jobs.get("rust-0__local").expect("local");
-        assert_eq!(hosted.steps.len(), 1);
-        assert_eq!(hosted.steps.first().expect("save").name, "Save Mise tools");
-        assert_eq!(local.steps.len(), 0);
-        let action = shared
-            .files
-            .iter()
-            .find(|file| file.path == ".github/actions/rust-0/action.yml")
-            .expect("composite");
-        assert!(!action.bytes.contains("Save Mise tools"));
-        let yaml = render_jobs(&workflow_ir(), &shared.jobs, &ctx(), &shared.calls).expect("yaml");
-        assert_eq!(yaml.matches("Save Mise tools").count(), 1);
-    }
-}
+#[path = "lane_share_tests.rs"]
+mod tests;
