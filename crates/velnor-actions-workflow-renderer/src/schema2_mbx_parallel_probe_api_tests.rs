@@ -154,7 +154,7 @@ fn write_receipts(input: &std::path::Path, shared_key: &str, new_key: &str) {
         let directory = input.join(role);
         fs::create_dir_all(&directory).expect("create receipt fixture directory");
     }
-    let seed = receipt_json(ReceiptFixture {
+    let seed = receipt_json(&ReceiptFixture {
         job: "mbx-parallel-seed",
         role: "seed",
         scope: "qualification-mbx-v1/parallel/shared",
@@ -166,7 +166,7 @@ fn write_receipts(input: &std::path::Path, shared_key: &str, new_key: &str) {
         export_ready: "true",
         save_outcome: "success",
     });
-    let reader_a = receipt_json(ReceiptFixture {
+    let reader_a = receipt_json(&ReceiptFixture {
         job: "mbx-parallel-reader-a",
         role: "reader-a",
         scope: "qualification-mbx-v1/parallel/shared",
@@ -178,7 +178,7 @@ fn write_receipts(input: &std::path::Path, shared_key: &str, new_key: &str) {
         export_ready: "",
         save_outcome: "",
     });
-    let reader_b = receipt_json(ReceiptFixture {
+    let reader_b = receipt_json(&ReceiptFixture {
         job: "mbx-parallel-reader-b",
         role: "reader-b",
         scope: "qualification-mbx-v1/parallel/shared",
@@ -190,7 +190,7 @@ fn write_receipts(input: &std::path::Path, shared_key: &str, new_key: &str) {
         export_ready: "",
         save_outcome: "",
     });
-    let writer = receipt_json(ReceiptFixture {
+    let writer = receipt_json(&ReceiptFixture {
         job: "mbx-parallel-new-key-writer",
         role: "new-key-writer",
         scope: "qualification-mbx-v1/parallel/new-key",
@@ -226,7 +226,7 @@ struct ReceiptFixture<'a> {
     save_outcome: &'a str,
 }
 
-fn receipt_json(fixture: ReceiptFixture<'_>) -> String {
+fn receipt_json(fixture: &ReceiptFixture<'_>) -> String {
     format!(
         r#"{{"job_id":"{job}","role":"{role}","scope":"{scope}","run_id":"123","run_attempt":"2","source_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","source_ref":"refs/heads/main","workflow_ref":"org/repo/.github/workflows/qualification.yml@refs/heads/main","mbx_action_ref":"jdx/mr-boxington-action@{action_sha}","mbx_version":"1.22.0","rust_version":"1.98.1","primary_key":"{key}","cache_hit":"{hit}","matched_key":{matched_key},"imported_objects":{imported_objects},"cached_compilations":{cached_compilations},"export_ready":"{export_ready}","save_outcome":"{save_outcome}"}}"#,
         job = fixture.job,

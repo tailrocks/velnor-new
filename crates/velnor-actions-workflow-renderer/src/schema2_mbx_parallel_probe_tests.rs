@@ -229,7 +229,12 @@ fn qualification_writers_save_only_after_a_cold_exact_restore() {
 #[test]
 fn api_observer_binds_current_attempt_and_records_relevant_overlap() {
     let jobs = rendered_jobs();
-    let observer = job(&jobs, Role::ObserverShared.id());
+    assert_observer_scope_and_order(&jobs);
+    assert_observer_script_semantics(&jobs);
+}
+
+fn assert_observer_scope_and_order(jobs: &[(String, Yaml)]) {
+    let observer = job(jobs, Role::ObserverShared.id());
     let api_step = step(observer, "Validate MBX parallel REST timestamps");
     assert_eq!(string(field(api_step, "shell")), "bash");
     let api_env = map_fields(field(api_step, "env"));
@@ -252,9 +257,9 @@ fn api_observer_binds_current_attempt_and_records_relevant_overlap() {
     });
     assert!(api_position.is_some_and(|api| setup_position.is_some_and(|setup| api < setup)));
     for role in [Role::Seed, Role::ReaderA, Role::ReaderB, Role::NewKeyWriter, Role::ObserverNew] {
-        assert!(optional_step(job(&jobs, role.id()), "Validate MBX parallel REST timestamps").is_none());
+        assert!(optional_step(job(jobs, role.id()), "Validate MBX parallel REST timestamps").is_none());
     }
-    for (id, fields) in &jobs {
+    for (id, fields) in jobs {
         let Yaml::Seq(steps) = field(map_fields(fields), "steps") else {
             panic!("steps must be a sequence");
         };
@@ -272,6 +277,11 @@ fn api_observer_binds_current_attempt_and_records_relevant_overlap() {
             }
         }
     }
+}
+
+fn assert_observer_script_semantics(jobs: &[(String, Yaml)]) {
+    let observer = job(jobs, Role::ObserverShared.id());
+    let api_step = step(observer, "Validate MBX parallel REST timestamps");
     let script = string(field(api_step, "run"));
     let bash_check = Command::new("bash")
         .args(["-n", "-c", script])
