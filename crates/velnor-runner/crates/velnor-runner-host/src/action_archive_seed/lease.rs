@@ -131,6 +131,26 @@ impl ActionArchiveStore {
         )
     }
 
+    #[cfg(test)]
+    pub(crate) fn lease_with_test_hooks(
+        &self,
+        launch_id: &str,
+        consumer_repository_id: u64,
+        allowlist: &[ActionArchiveIdentity],
+        expected_generation_id: Option<&str>,
+        hook: impl FnMut(PublicationStage) -> Result<(), ActionArchiveSeedError>,
+        sync_parent: impl FnMut(&Path) -> Result<(), ActionArchiveSeedError>,
+    ) -> Result<ActionArchiveLease, ActionArchiveSeedError> {
+        self.lease_with_hook(
+            launch_id,
+            consumer_repository_id,
+            allowlist,
+            expected_generation_id,
+            hook,
+            sync_parent,
+        )
+    }
+
     fn lease_with_hook(
         &self,
         launch_id: &str,
