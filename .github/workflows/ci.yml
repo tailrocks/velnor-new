@@ -201,7 +201,7 @@ jobs:
           cache-generation: velnor-mbx-1.21.1${{ runner.environment == 'github-hosted' && runner.os == 'Linux' && '-share-out-dir-disabled-v1' || '' }}-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37
           cache-key-suffix: ${{ runner.environment == 'github-hosted' && github.job || '' }}
           github-cache-mode: objects
-          isolate-objects-cache: ${{ runner.environment == 'github-hosted' }}
+          isolate-objects-cache: ${{ runner.environment == 'github-hosted' && runner.os == 'Linux' }}
           toolchain: 1.98.1
         env:
           ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
@@ -425,12 +425,6 @@ jobs:
           name: velnor-plan-r${{ github.run_id }}-a${{ github.run_attempt }}
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - name: Save Mise tools
-        if: success() && github.event_name == 'push'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-cd6926493099032f
-          path: ~/.local/share/mise
       - name: Export MBX single bundle
         id: mbx-export
         if: runner.environment != 'github-hosted' && success() && github.event_name == 'push' && steps.mbx.outputs.cache-hit != 'true' && steps.mbx-bundle.outputs.cache-hit != 'true'
@@ -453,6 +447,28 @@ jobs:
         with:
           key: ${{ steps.mbx.outputs.cache-primary-key }}
           path: ${{ runner.temp }}/mbx-single-bundle
+      - name: Save Mise tools
+        if: success() && github.event_name == 'push'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-cd6926493099032f
+          path: ~/.local/share/mise
+      - name: Measure and prune Cargo sources
+        if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && runner.environment == 'github-hosted' && runner.os == 'Linux'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; python3 \"$GITHUB_WORKSPACE/.github/scripts/prune_hosted_cargo_sources.py\"'"
   publish-baseline:
     name: Publish baseline
     runs-on: ubuntu-26.04
@@ -758,7 +774,7 @@ jobs:
           cache-generation: velnor-mbx-1.21.1${{ runner.environment == 'github-hosted' && runner.os == 'Linux' && '-share-out-dir-disabled-v1' || '' }}-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37
           cache-key-suffix: ${{ runner.environment == 'github-hosted' && github.job || '' }}
           github-cache-mode: objects
-          isolate-objects-cache: ${{ runner.environment == 'github-hosted' }}
+          isolate-objects-cache: ${{ runner.environment == 'github-hosted' && runner.os == 'Linux' }}
           toolchain: 1.98.1
         env:
           ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
@@ -1020,12 +1036,6 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-velnor-actions-actionlint
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - name: Save Mise tools
-        if: success() && github.event_name == 'push'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-ac88a89731444aab
-          path: ~/.local/share/mise
       - name: Export MBX single bundle
         id: mbx-export
         if: runner.environment != 'github-hosted' && success() && github.event_name == 'push' && steps.mbx.outputs.cache-hit != 'true' && steps.mbx-bundle.outputs.cache-hit != 'true'
@@ -1048,6 +1058,28 @@ jobs:
         with:
           key: ${{ steps.mbx.outputs.cache-primary-key }}
           path: ${{ runner.temp }}/mbx-single-bundle
+      - name: Save Mise tools
+        if: success() && github.event_name == 'push'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-ac88a89731444aab
+          path: ~/.local/share/mise
+      - name: Measure and prune Cargo sources
+        if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && runner.environment == 'github-hosted' && runner.os == 'Linux'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; python3 \"$GITHUB_WORKSPACE/.github/scripts/prune_hosted_cargo_sources.py\"'"
   rust-velnor-actions-cli:
     name: Rust / velnor-actions-cli
     runs-on: ubuntu-26.04
@@ -1170,7 +1202,7 @@ jobs:
           cache-generation: velnor-mbx-1.21.1${{ runner.environment == 'github-hosted' && runner.os == 'Linux' && '-share-out-dir-disabled-v1' || '' }}-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37
           cache-key-suffix: ${{ runner.environment == 'github-hosted' && github.job || '' }}
           github-cache-mode: objects
-          isolate-objects-cache: ${{ runner.environment == 'github-hosted' }}
+          isolate-objects-cache: ${{ runner.environment == 'github-hosted' && runner.os == 'Linux' }}
           toolchain: 1.98.1
         env:
           ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
@@ -1425,6 +1457,22 @@ jobs:
         with:
           key: ${{ steps.mbx.outputs.cache-primary-key }}
           path: ${{ runner.temp }}/mbx-single-bundle
+      - name: Measure and prune Cargo sources
+        if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && runner.environment == 'github-hosted' && runner.os == 'Linux'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; python3 \"$GITHUB_WORKSPACE/.github/scripts/prune_hosted_cargo_sources.py\"'"
   rust-velnor-actions-contract:
     name: Rust / velnor-actions-contract
     runs-on: ubuntu-26.04
@@ -1547,7 +1595,7 @@ jobs:
           cache-generation: velnor-mbx-1.21.1${{ runner.environment == 'github-hosted' && runner.os == 'Linux' && '-share-out-dir-disabled-v1' || '' }}-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37
           cache-key-suffix: ${{ runner.environment == 'github-hosted' && github.job || '' }}
           github-cache-mode: objects
-          isolate-objects-cache: ${{ runner.environment == 'github-hosted' }}
+          isolate-objects-cache: ${{ runner.environment == 'github-hosted' && runner.os == 'Linux' }}
           toolchain: 1.98.1
         env:
           ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
@@ -1831,6 +1879,22 @@ jobs:
         with:
           key: ${{ steps.mbx.outputs.cache-primary-key }}
           path: ${{ runner.temp }}/mbx-single-bundle
+      - name: Measure and prune Cargo sources
+        if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && runner.environment == 'github-hosted' && runner.os == 'Linux'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; python3 \"$GITHUB_WORKSPACE/.github/scripts/prune_hosted_cargo_sources.py\"'"
   rust-velnor-actions-mise:
     name: Rust / velnor-actions-mise
     runs-on: ubuntu-26.04
@@ -1953,7 +2017,7 @@ jobs:
           cache-generation: velnor-mbx-1.21.1${{ runner.environment == 'github-hosted' && runner.os == 'Linux' && '-share-out-dir-disabled-v1' || '' }}-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37
           cache-key-suffix: ${{ runner.environment == 'github-hosted' && github.job || '' }}
           github-cache-mode: objects
-          isolate-objects-cache: ${{ runner.environment == 'github-hosted' }}
+          isolate-objects-cache: ${{ runner.environment == 'github-hosted' && runner.os == 'Linux' }}
           toolchain: 1.98.1
         env:
           ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
@@ -2215,12 +2279,6 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-velnor-actions-mise
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - name: Save Mise tools
-        if: success() && github.event_name == 'push'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-82e6ea144dfe6a19
-          path: ~/.local/share/mise
       - name: Export MBX single bundle
         id: mbx-export
         if: runner.environment != 'github-hosted' && success() && github.event_name == 'push' && steps.mbx.outputs.cache-hit != 'true' && steps.mbx-bundle.outputs.cache-hit != 'true'
@@ -2243,6 +2301,28 @@ jobs:
         with:
           key: ${{ steps.mbx.outputs.cache-primary-key }}
           path: ${{ runner.temp }}/mbx-single-bundle
+      - name: Save Mise tools
+        if: success() && github.event_name == 'push'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-82e6ea144dfe6a19
+          path: ~/.local/share/mise
+      - name: Measure and prune Cargo sources
+        if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && runner.environment == 'github-hosted' && runner.os == 'Linux'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; python3 \"$GITHUB_WORKSPACE/.github/scripts/prune_hosted_cargo_sources.py\"'"
   rust-velnor-actions-orchestrator:
     name: Rust / velnor-actions-orchestrator
     runs-on: ubuntu-26.04
@@ -2365,7 +2445,7 @@ jobs:
           cache-generation: velnor-mbx-1.21.1${{ runner.environment == 'github-hosted' && runner.os == 'Linux' && '-share-out-dir-disabled-v1' || '' }}-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37
           cache-key-suffix: ${{ runner.environment == 'github-hosted' && github.job || '' }}
           github-cache-mode: objects
-          isolate-objects-cache: ${{ runner.environment == 'github-hosted' }}
+          isolate-objects-cache: ${{ runner.environment == 'github-hosted' && runner.os == 'Linux' }}
           toolchain: 1.98.1
         env:
           ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
@@ -2649,6 +2729,22 @@ jobs:
         with:
           key: ${{ steps.mbx.outputs.cache-primary-key }}
           path: ${{ runner.temp }}/mbx-single-bundle
+      - name: Measure and prune Cargo sources
+        if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && runner.environment == 'github-hosted' && runner.os == 'Linux'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; python3 \"$GITHUB_WORKSPACE/.github/scripts/prune_hosted_cargo_sources.py\"'"
   rust-velnor-actions-rust:
     name: Rust / velnor-actions-rust
     runs-on: ubuntu-26.04
@@ -2771,7 +2867,7 @@ jobs:
           cache-generation: velnor-mbx-1.21.1${{ runner.environment == 'github-hosted' && runner.os == 'Linux' && '-share-out-dir-disabled-v1' || '' }}-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37
           cache-key-suffix: ${{ runner.environment == 'github-hosted' && github.job || '' }}
           github-cache-mode: objects
-          isolate-objects-cache: ${{ runner.environment == 'github-hosted' }}
+          isolate-objects-cache: ${{ runner.environment == 'github-hosted' && runner.os == 'Linux' }}
           toolchain: 1.98.1
         env:
           ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
@@ -3055,6 +3151,22 @@ jobs:
         with:
           key: ${{ steps.mbx.outputs.cache-primary-key }}
           path: ${{ runner.temp }}/mbx-single-bundle
+      - name: Measure and prune Cargo sources
+        if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && runner.environment == 'github-hosted' && runner.os == 'Linux'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; python3 \"$GITHUB_WORKSPACE/.github/scripts/prune_hosted_cargo_sources.py\"'"
   rust-velnor-actions-tofu:
     name: Rust / velnor-actions-tofu
     runs-on: ubuntu-26.04
@@ -3177,7 +3289,7 @@ jobs:
           cache-generation: velnor-mbx-1.21.1${{ runner.environment == 'github-hosted' && runner.os == 'Linux' && '-share-out-dir-disabled-v1' || '' }}-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37
           cache-key-suffix: ${{ runner.environment == 'github-hosted' && github.job || '' }}
           github-cache-mode: objects
-          isolate-objects-cache: ${{ runner.environment == 'github-hosted' }}
+          isolate-objects-cache: ${{ runner.environment == 'github-hosted' && runner.os == 'Linux' }}
           toolchain: 1.98.1
         env:
           ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
@@ -3461,6 +3573,22 @@ jobs:
         with:
           key: ${{ steps.mbx.outputs.cache-primary-key }}
           path: ${{ runner.temp }}/mbx-single-bundle
+      - name: Measure and prune Cargo sources
+        if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && runner.environment == 'github-hosted' && runner.os == 'Linux'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; python3 \"$GITHUB_WORKSPACE/.github/scripts/prune_hosted_cargo_sources.py\"'"
   rust-velnor-actions-workflow-renderer:
     name: Rust / velnor-actions-workflow-renderer
     runs-on: ubuntu-26.04
@@ -3583,7 +3711,7 @@ jobs:
           cache-generation: velnor-mbx-1.21.1${{ runner.environment == 'github-hosted' && runner.os == 'Linux' && '-share-out-dir-disabled-v1' || '' }}-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37
           cache-key-suffix: ${{ runner.environment == 'github-hosted' && github.job || '' }}
           github-cache-mode: objects
-          isolate-objects-cache: ${{ runner.environment == 'github-hosted' }}
+          isolate-objects-cache: ${{ runner.environment == 'github-hosted' && runner.os == 'Linux' }}
           toolchain: 1.98.1
         env:
           ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
@@ -3867,6 +3995,22 @@ jobs:
         with:
           key: ${{ steps.mbx.outputs.cache-primary-key }}
           path: ${{ runner.temp }}/mbx-single-bundle
+      - name: Measure and prune Cargo sources
+        if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && runner.environment == 'github-hosted' && runner.os == 'Linux'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; python3 \"$GITHUB_WORKSPACE/.github/scripts/prune_hosted_cargo_sources.py\"'"
   rust-velnor-runner-cli:
     name: Rust / velnor-runner-cli
     runs-on: ubuntu-26.04
@@ -3989,7 +4133,7 @@ jobs:
           cache-generation: velnor-mbx-1.21.1${{ runner.environment == 'github-hosted' && runner.os == 'Linux' && '-share-out-dir-disabled-v1' || '' }}-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37
           cache-key-suffix: ${{ runner.environment == 'github-hosted' && github.job || '' }}
           github-cache-mode: objects
-          isolate-objects-cache: ${{ runner.environment == 'github-hosted' }}
+          isolate-objects-cache: ${{ runner.environment == 'github-hosted' && runner.os == 'Linux' }}
           toolchain: 1.98.1
         env:
           ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
@@ -4273,6 +4417,22 @@ jobs:
         with:
           key: ${{ steps.mbx.outputs.cache-primary-key }}
           path: ${{ runner.temp }}/mbx-single-bundle
+      - name: Measure and prune Cargo sources
+        if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && runner.environment == 'github-hosted' && runner.os == 'Linux'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; python3 \"$GITHUB_WORKSPACE/.github/scripts/prune_hosted_cargo_sources.py\"'"
   rust-velnor-runner-core:
     name: Rust / velnor-runner-core
     runs-on: ubuntu-26.04
@@ -4395,7 +4555,7 @@ jobs:
           cache-generation: velnor-mbx-1.21.1${{ runner.environment == 'github-hosted' && runner.os == 'Linux' && '-share-out-dir-disabled-v1' || '' }}-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37
           cache-key-suffix: ${{ runner.environment == 'github-hosted' && github.job || '' }}
           github-cache-mode: objects
-          isolate-objects-cache: ${{ runner.environment == 'github-hosted' }}
+          isolate-objects-cache: ${{ runner.environment == 'github-hosted' && runner.os == 'Linux' }}
           toolchain: 1.98.1
         env:
           ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
@@ -4679,6 +4839,22 @@ jobs:
         with:
           key: ${{ steps.mbx.outputs.cache-primary-key }}
           path: ${{ runner.temp }}/mbx-single-bundle
+      - name: Measure and prune Cargo sources
+        if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && runner.environment == 'github-hosted' && runner.os == 'Linux'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; python3 \"$GITHUB_WORKSPACE/.github/scripts/prune_hosted_cargo_sources.py\"'"
   rust-velnor-runner-github:
     name: Rust / velnor-runner-github
     runs-on: ubuntu-26.04
@@ -4801,7 +4977,7 @@ jobs:
           cache-generation: velnor-mbx-1.21.1${{ runner.environment == 'github-hosted' && runner.os == 'Linux' && '-share-out-dir-disabled-v1' || '' }}-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37
           cache-key-suffix: ${{ runner.environment == 'github-hosted' && github.job || '' }}
           github-cache-mode: objects
-          isolate-objects-cache: ${{ runner.environment == 'github-hosted' }}
+          isolate-objects-cache: ${{ runner.environment == 'github-hosted' && runner.os == 'Linux' }}
           toolchain: 1.98.1
         env:
           ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
@@ -5085,6 +5261,22 @@ jobs:
         with:
           key: ${{ steps.mbx.outputs.cache-primary-key }}
           path: ${{ runner.temp }}/mbx-single-bundle
+      - name: Measure and prune Cargo sources
+        if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && runner.environment == 'github-hosted' && runner.os == 'Linux'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; python3 \"$GITHUB_WORKSPACE/.github/scripts/prune_hosted_cargo_sources.py\"'"
   rust-velnor-runner-host:
     name: Rust / velnor-runner-host
     runs-on: ubuntu-26.04
@@ -5207,7 +5399,7 @@ jobs:
           cache-generation: velnor-mbx-1.21.1${{ runner.environment == 'github-hosted' && runner.os == 'Linux' && '-share-out-dir-disabled-v1' || '' }}-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37
           cache-key-suffix: ${{ runner.environment == 'github-hosted' && github.job || '' }}
           github-cache-mode: objects
-          isolate-objects-cache: ${{ runner.environment == 'github-hosted' }}
+          isolate-objects-cache: ${{ runner.environment == 'github-hosted' && runner.os == 'Linux' }}
           toolchain: 1.98.1
         env:
           ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
@@ -5491,6 +5683,22 @@ jobs:
         with:
           key: ${{ steps.mbx.outputs.cache-primary-key }}
           path: ${{ runner.temp }}/mbx-single-bundle
+      - name: Measure and prune Cargo sources
+        if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && runner.environment == 'github-hosted' && runner.os == 'Linux'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; python3 \"$GITHUB_WORKSPACE/.github/scripts/prune_hosted_cargo_sources.py\"'"
   zizmor:
     name: Zizmor
     runs-on: ubuntu-26.04

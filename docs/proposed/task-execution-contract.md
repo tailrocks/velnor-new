@@ -27,14 +27,18 @@ installer. For an MBX profile only, the workflow invokes the pinned
 `jdx/mr-boxington-action` in `github-cache-mode: objects` with
 `ACTIONS_CACHE_MODE=read` as its base policy. Read mode skips its post export,
 which wrote inside the live store and exhausted runner disk (run
-`37114238559`). Hosted jobs use isolated per-job stores and distinct
-job-suffixed primary keys. A protected default-branch push can write; other
-hosted events remain read-only. Hosted Linux MBX jobs set
+`37114238559`). Hosted Linux jobs use isolated per-job stores and distinct
+job-suffixed primary keys. The configured hosted profile is Ubuntu; other
+hosted operating systems do not enable isolation and are outside this
+consumer policy. A protected default-branch push can write; other hosted
+events remain read-only. Hosted Linux MBX jobs set
 `MBX_SHARE_OUT_DIR=0` before builds, disabling cross-checkout reuse of
 read-only generated OUT_DIR trees. Only hosted Linux includes the
 `share-out-dir-disabled-v1` token in the action-SHA cache generation; other
 runner classes keep the prior generation. Persistent Scale Set stores may
-still contain older shared trees.
+still contain older shared trees. Only successful protected default-branch
+hosted Linux pushes prune Cargo registry and Git source trees after reports
+and elected saves, before action post; other events retain restored sources.
 
 Hosted MBX jobs keep `MBX_GC_AUTO=0` through the action post export because
 low-disk collection can evict objects referenced by completed receipts. The
@@ -46,8 +50,18 @@ requires a miss and the reader an exact hit. Both enable isolated objects, so
 the writer's v1.7.1 post path records sampled free-space and local archive
 size. The reader has no before/after restore/import snapshots. The sampler
 does not report instantaneous peak or compressed upload size. The exporter
-still stages the closure while the source store exists, so this candidate does
-not claim to eliminate the export-time peak. The persistent Scale Set route
+still stages the closure while the source store exists. After report uploads
+and elected saves, successful protected default-branch hosted Linux pushes
+measure and remove only their owned Cargo `registry/` and `git/` source trees
+before action post. Other push refs and read-only events retain those sources.
+This cleanup walks with pinned no-follow descriptors, preflights both trees,
+and refuses nested mounts. Velnor emits its helper at
+`.github/scripts/prune_hosted_cargo_sources.py` only when a hosted Linux MBX
+job exists; the workflow invokes that generated copy. It assumes no same-UID
+process concurrently changes the private Cargo tree. This cleanup is a
+capacity candidate; no consumer cold-write run proves it frees enough space or
+eliminates the export-time peak.
+The persistent Scale Set route
 removes its action store after export and is not qualified by this hosted
 mitigation. Scale Set import misses and failures continue with the runner's
 existing store, which may be empty or warm; hosted action import failures fail

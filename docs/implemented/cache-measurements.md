@@ -232,6 +232,24 @@ receipt roots as eviction preference, so collection before export could remove
 objects that the bundle still needs. A green hosted round trip does not prove
 the target consumer's export-time disk peak fits.
 
+Successful hosted Linux pushes to the protected default branch now add a
+conditional step after report uploads and elected cache saves, before the
+action post export. Read-only events retain restored Cargo sources. The step
+records RUNNER_TEMP free bytes and inodes, filesystem device and mount identity,
+and allocated bytes/inodes for the exact `CARGO_HOME/registry` and
+`CARGO_HOME/git` trees. It removes only those two Cargo source trees and
+confirms they are absent, while retaining Cargo binaries/configuration,
+workspace targets, MBX state, and reports. The Python helper walks from `/`
+with no-follow directory descriptors, preflights both source trees before
+mutation, and rejects symlinked path components and nested/bind mounts. It
+is emitted as `.github/scripts/prune_hosted_cargo_sources.py` only when the
+generated workflow has a hosted Linux MBX job. The workflow runs that exact
+generated helper. It assumes no same-UID process concurrently changes the
+private Cargo tree. This is a measured capacity candidate, not proof that the
+consumer export fits: the local action sampler reports interval minima rather
+than instantaneous peak, and no protected-main ChainArgos cold-write run has
+measured sufficiency.
+
 ## Hosted Linux MBX output-directory policy
 
 Pinned action v1.7.1 recursively removes its isolated `store`. MBX 1.21.1
