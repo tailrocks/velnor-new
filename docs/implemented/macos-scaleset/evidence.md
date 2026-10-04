@@ -362,3 +362,11 @@ This section supersedes the 19:40Z identities. It is not a G7, G8, R1, R2, R4, o
 | Scale-set failure | Job `111323405519` (`lightdash-csv-delivery-app`) failed `postgres_copy_adapts_chunks_and_serializes_one_receipt` with TLS `IP address mismatch`. Hosted job `111323405480` on the same Ubuntu 26.04 image family passed that test. The runner finished the job process. Not G7. |
 
 R1 stays `FAIL`: push run `37163556069` wrote a bundle after the earlier ENOSPC, and that write is not the accepted restore. R2 stays `NOT_RUN` on `e1a0d1dc`. R4 stays `NOT_RUN`: `generator-47815c83` was published and `baa78037` was regenerated. Tag `v0.1.0` was not moved.
+
+## Tag move 2026-10-04 03:34Z
+
+Run `37164041817` completed `failure` at 03:32Z: 41 success, scale-set failures `111323405519` (TLS IP mismatch) and `111323405604` (shared steps exit 100), Required failed, Publish baseline skipped. Not G7.
+
+`velnor-runner:ubuntu-26.04-2.337.0` is now `sha256:3f8e0b2befb5ad11f2f3938da87effd85f3009a297b6e43d15a9262b884afcc5` from `31d460272`. `prod_state` was rechecked immediately before the tag. `sysseek` count was 0. Old id `sha256:e1a0d1dc469e5a663fdb4a26c186604f11d307ca0f32541fd14a3c20103f634b` remains on `-dash`. Tag `v0.1.0` was not moved. Host pid 35645 was not replaced.
+
+Cold Qualification `37174439776` and warm `37174494720` are `workflow_dispatch` `mode=both` on `n1-qualification` `baa78037`. Both concluded `success`. Scale-set containers `9b12e2bf1345` and `fdc9a5a5a69e` used `sha256:3f8e0b2b`. Verify and compare are echoes. Class jobs were skipped. Not a G7 or R5 pass. R2 stays `NOT_RUN`: no actions-cache round trip on this image.
