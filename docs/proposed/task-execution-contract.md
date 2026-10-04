@@ -24,17 +24,18 @@ rustup component add --toolchain <exact>-<triple> clippy rustfmt`):
 the pinned toolchain's own rustup, deterministic, writing only
 Velnor-owned tool homes — Mise installing components, not an ad hoc
 installer. For an MBX profile only, it then invokes the pinned
-`jdx/mr-boxington-action` in `github-cache-mode: objects`. When that pin
-supports isolated hosted storage, the hosted action owns its restore, save,
-and post cleanup. The Velnor manual bundle route runs only on Scale Set. It
-sets `ACTIONS_CACHE_MODE=read`, uses a private MBX store, restores to
-`$RUNNER_TEMP/mbx-single-bundle-restore`, imports that directory, then exports
-to `$RUNNER_TEMP/mbx-single-bundle-export`. Restore and export paths are
-disjoint. Velnor keeps the private store and restored bundle until normal
-runner temporary-directory cleanup. It does not recursively delete either.
-Pins without hosted isolation use one explicit Velnor manual bundle owner per
-lane. A cache miss continues cold. A matched missing bundle or failed import
-continues the build cold, is recorded as `cache_corrupt`, and is not published.
+`jdx/mr-boxington-action` in `github-cache-mode: objects`. The pinned v1.6.0
+action uses `backend: github` on hosted runners, so the action owns native
+restore, save, and post cleanup. Scale Set uses `backend: local` and the Velnor
+manual bundle route. That route sets `ACTIONS_CACHE_MODE=read`, uses a private
+MBX store, and restores and saves the same path:
+`$RUNNER_TEMP/mbx-single-bundle`. After a successful import, Velnor moves only
+that restored directory to private staging before export. The store and staging
+remain until normal runner temporary-directory cleanup. Velnor does not
+recursively delete either. A cache miss continues cold. A matched missing
+bundle or failed import continues the build cold, is recorded as `cache_corrupt`,
+and is not published. Failed `GITHUB_ENV` or `GITHUB_OUTPUT` handoff prevents
+export and save while preserving the build result.
 For a Cargo profile, the action and MBX installation are absent. The same cache
 actions also transport Cargo source archives and qualified Mise task artifacts.
 They do not archive the live MBX store. In selected crate jobs and the plan-job

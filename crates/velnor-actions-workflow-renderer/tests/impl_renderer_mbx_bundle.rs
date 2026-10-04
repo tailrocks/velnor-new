@@ -82,13 +82,15 @@ fn render_parallel_mbx()
 fn assert_cold_import(imported: &str) {
     for needle in [
         "mbx cache import",
-        "no mbx bundle matched",
+        "no-matched-bundle",
         "matched-bundle-missing",
         "mbx bundle import failed; continuing cold",
-        "df -B1 -P",
+        "df -k -P",
         "df -i -P",
         "acceptance=cache_unavailable",
         "cache_corrupt",
+        "MBX_CACHE_IMPORT_STATE",
+        "mbx-single-bundle-imported",
     ] {
         assert!(
             imported.contains(needle),
@@ -125,10 +127,10 @@ fn export_validates_owned_store_and_leaves_cleanup_to_runner_temp() -> Result<()
     assert!(setup.contains("GITHUB_JOB"), "{setup}");
     assert!(setup.contains("GITHUB_ENV"), "{setup}");
     assert!(
-        !setup.contains("if: runner.environment"),
-        "the v1.6 route owns both lanes: {setup}"
+        setup.contains("if: runner.environment != 'github-hosted'"),
+        "only the Scale Set owns the manual store: {setup}"
     );
-    let bytes_before = script.find("df -B1 -P").expect("pre-export byte sample");
+    let bytes_before = script.find("df -k -P").expect("pre-export block sample");
     let inodes_before = script.find("df -i -P").expect("pre-export inode sample");
     let gc = script.find("mbx gc").expect("reclaim");
     let exported = script.find("cache export").expect("export");
@@ -136,7 +138,7 @@ fn export_validates_owned_store_and_leaves_cleanup_to_runner_temp() -> Result<()
         .find("[ ! -d \\\"$bundle\\\" ]")
         .expect("bundle check");
     let bytes_after = script[exported..]
-        .find("df -B1 -P")
+        .find("df -k -P")
         .map(|at| at + exported)
         .expect("post-export byte sample");
     assert!(bytes_before < inodes_before, "{script}");
@@ -157,98 +159,11 @@ fn export_validates_owned_store_and_leaves_cleanup_to_runner_temp() -> Result<()
         "store and partial bundle stay owned: {script}"
     );
     assert!(
-        script.contains("$RUNNER_TEMP/mbx-single-bundle-export"),
+        script.contains("$RUNNER_TEMP/mbx-single-bundle"),
         "{script}"
     );
     assert_eq!(script.matches("--format directory").count(), 1, "{script}");
     assert!(!script.contains("github-actions-cache-v1"), "{script}");
-    Ok(())
-}
-
-#[test]
-fn hosted_bundle_key_and_restore_paths_are_disjoint() -> Result<(), RenderError> {
-    let text = render_mbx("demo", false)?;
-    let preflight = text
-        .find("name: Verify MBX and Rust toolchains")
-        .expect("toolchain preflight");
-    let restore = text
-        .find("name: Restore MBX objects")
-        .expect("restore step");
-    let bundle_key = text
-        .find("name: Prepare MBX bundle key")
-        .expect("bundle key");
-    let bundle = text
-        .find("name: Restore MBX single bundle")
-        .expect("bundle restore");
-    let import = text
-        .find("name: Import MBX single bundle")
-        .expect("bundle import");
-    let export = text
-        .find("name: Export MBX single bundle")
-        .expect("export step");
-    let save = text
-        .find("name: Save MBX single bundle")
-        .expect("save step");
-    assert!(
-        text.find("name: Initialize private MBX store")
-            .expect("private store init")
-            < preflight
-            && preflight < restore
-            && restore < bundle_key
-            && bundle_key < bundle
-            && bundle < import
-            && import < export
-            && export < save,
-        "{text}"
-    );
-
-    let key_step = &text[bundle_key..bundle];
-    assert!(
-        key_step.contains("MBX_JOB_ID: ${{ github.job }}"),
-        "{key_step}"
-    );
-    assert!(key_step.contains("MBX_MATRIX_KEY: \"\""), "{key_step}");
-    assert!(
-        key_step.contains("primary=\\\"${writer_prefix}r${run_id}-a${run_attempt}\\\""),
-        "{key_step}"
-    );
-    assert!(
-        key_step.contains("prefix=\\\"$writer_prefix\\\""),
-        "{key_step}"
-    );
-    assert!(
-        key_step.contains("compatibility_key=\\\"${key%-*}\\\""),
-        "{key_step}"
-    );
-    assert!(
-        key_step.contains("fallback=\\\"${compatibility_key}-\\\""),
-        "{key_step}"
-    );
-    assert!(
-        key_step.contains("MBX_RUN_ID: ${{ github.run_id }}"),
-        "{key_step}"
-    );
-    assert!(
-        key_step.contains("MBX_RUN_ATTEMPT: ${{ github.run_attempt }}"),
-        "{key_step}"
-    );
-
-    let restored = &text[bundle..import];
-    assert!(restored.contains("actions/cache/restore@"), "{restored}");
-    assert!(
-        restored.contains("path: ${{ runner.temp }}/mbx-single-bundle-restore"),
-        "{restored}"
-    );
-    assert!(
-        !restored.contains("mbx-single-bundle-export"),
-        "restore and export paths must stay disjoint: {restored}"
-    );
-    assert!(
-        restored.contains(
-            r#"restore-keys: "${{ steps.mbx-bundle-key.outputs.prefix }}\n${{ steps.mbx-bundle-key.outputs.fallback }}""#
-        ),
-        "stable writer prefix must precede common fallback: {restored}"
-    );
     Ok(())
 }
 
@@ -266,7 +181,8 @@ fn hosted_bundle_import_continues_cold_on_cache_failure() -> Result<(), RenderEr
 }
 
 #[test]
-fn hosted_action_and_save_use_one_bundle_owner() -> Result<(), RenderError> {
+fn hosted_action_owns_hosted_cache_and_scale_set_save_uses_the_same_path() -> Result<(), RenderError>
+{
     let text = render_mbx("demo", false)?;
     let restore = text
         .find("name: Restore MBX objects")
@@ -276,20 +192,24 @@ fn hosted_action_and_save_use_one_bundle_owner() -> Result<(), RenderError> {
         .expect("bundle key");
     let action = &text[restore..bundle_key];
     assert!(action.contains("id: mbx"), "{action}");
-    assert!(action.contains("ACTIONS_CACHE_MODE: read"), "{action}");
-    assert!(!action.contains("write"), "{action}");
+    assert!(
+        action.contains(
+            "backend: ${{ runner.environment == 'github-hosted' && 'github' || 'local' }}"
+        ),
+        "{action}"
+    );
+    assert!(
+        action.contains("ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && github.event_name == 'push' && 'write' || 'read' }}"),
+        "{action}"
+    );
 
     let save = text
         .find("name: Save MBX single bundle")
         .expect("save step");
     let saved = &text[save..];
     assert!(
-        saved.contains("path: ${{ runner.temp }}/mbx-single-bundle-export"),
+        saved.contains("path: ${{ runner.temp }}/mbx-single-bundle"),
         "{saved}"
-    );
-    assert!(
-        !saved.contains("mbx-single-bundle-restore"),
-        "save archives only the new export: {saved}"
     );
     assert!(
         saved.contains("key: ${{ steps.mbx-bundle-key.outputs.key }}"),
@@ -299,9 +219,16 @@ fn hosted_action_and_save_use_one_bundle_owner() -> Result<(), RenderError> {
         saved.contains("steps.mbx-export.outputs.ready == 'true'"),
         "{saved}"
     );
+    assert!(
+        saved.contains("steps.mbx-export.outcome == 'success'"),
+        "a failed output handoff must block save: {saved}"
+    );
     assert!(saved.contains("github.event_name == 'push'"), "{saved}");
     assert!(!saved.contains("pull_request"), "{saved}");
-    assert!(!text.contains("continue-on-error"), "{text}");
+    assert!(
+        text.contains("continue-on-error: true"),
+        "cache handoff failures must not fail the build: {text}"
+    );
     Ok(())
 }
 
@@ -385,7 +312,10 @@ fn matrix_jobs_use_each_matrix_key_as_the_save_suffix() -> Result<(), RenderErro
 fn scale_set_save_matches_and_skips_hosted_gc_env() -> Result<(), RenderError> {
     let text = render_mbx("rust-demo__local", true)?;
     assert!(text.contains("name: Export MBX single bundle"), "{text}");
-    assert!(text.contains("ACTIONS_CACHE_MODE: read"), "{text}");
+    assert!(
+        text.contains("ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && github.event_name == 'push' && 'write' || 'read' }}"),
+        "{text}"
+    );
     assert!(!text.contains("MBX_GC_AUTO"), "{text}");
     Ok(())
 }

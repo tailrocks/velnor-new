@@ -152,34 +152,60 @@ fn import_result(
     matched: &str,
     mode: &str,
 ) -> io::Result<(Output, String, String, String)> {
+    import_result_with_handoff_failure(sandbox, root, matched, mode, None)
+}
+
+fn import_result_with_handoff_failure(
+    sandbox: &Sandbox,
+    root: &Path,
+    matched: &str,
+    mode: &str,
+    failed_handoff: Option<&str>,
+) -> io::Result<(Output, String, String, String)> {
     let bin = fake_mbx(sandbox)?;
     let temp = sandbox.path().to_string_lossy().into_owned();
     let cache = root.to_string_lossy().into_owned();
     let output_path = sandbox.path().join("import-github-output");
     let summary_path = sandbox.path().join("import-github-summary");
     let env_path = sandbox.path().join("import-github-env");
-    fs::write(&output_path, "")?;
+    if failed_handoff == Some("output") {
+        fs::create_dir(&output_path)?;
+    } else {
+        fs::write(&output_path, "")?;
+    }
     fs::write(&summary_path, "")?;
-    fs::write(&env_path, "")?;
-    let output_path = output_path.to_string_lossy().into_owned();
-    let summary_path = summary_path.to_string_lossy().into_owned();
-    let env_path = env_path.to_string_lossy().into_owned();
+    if failed_handoff == Some("env") {
+        fs::create_dir(&env_path)?;
+    } else {
+        fs::write(&env_path, "")?;
+    }
+    let output_arg = output_path.to_string_lossy().into_owned();
+    let summary_arg = summary_path.to_string_lossy().into_owned();
+    let env_arg = env_path.to_string_lossy().into_owned();
     let output = run_script(
         IMPORT_SCRIPT,
         &[
             ("RUNNER_TEMP", &temp),
             ("MBX_CACHE_DIR", &cache),
             ("MATCHED", matched),
-            ("GITHUB_OUTPUT", &output_path),
-            ("GITHUB_STEP_SUMMARY", &summary_path),
-            ("GITHUB_ENV", &env_path),
+            ("GITHUB_OUTPUT", &output_arg),
+            ("GITHUB_STEP_SUMMARY", &summary_arg),
+            ("GITHUB_ENV", &env_arg),
             ("MBX_FAKE_MODE", mode),
         ],
         Some(&bin),
     )?;
-    let outputs = fs::read_to_string(output_path)?;
+    let outputs = if output_path.is_file() {
+        fs::read_to_string(&output_path)?
+    } else {
+        String::new()
+    };
     let summary = fs::read_to_string(summary_path)?;
-    let github_env = fs::read_to_string(env_path)?;
+    let github_env = if env_path.is_file() {
+        fs::read_to_string(&env_path)?
+    } else {
+        String::new()
+    };
     Ok((output, outputs, summary, github_env))
 }
 
@@ -209,7 +235,11 @@ fn export_with_cache_root(
         ("MBX_FAKE_MODE", mode),
     ];
     if mode == "import-uncertain" {
-        environment.push(("MBX_CACHE_IMPORT_UNAVAILABLE", "true"));
+        environment.push(("MBX_CACHE_IMPORT_STATE", "unavailable"));
+    } else if mode == "imported" {
+        environment.push(("MBX_CACHE_IMPORT_STATE", "imported"));
+    } else {
+        environment.push(("MBX_CACHE_IMPORT_STATE", "cold"));
     }
     let output = run_script(EXPORT_SCRIPT, &environment, Some(&bin))?;
     let outputs = fs::read_to_string(output_path)?;
@@ -261,121 +291,11 @@ fn init_creates_distinct_private_roots_with_exact_owner_identity() -> Result<(),
     Ok(())
 }
 
-#[test]
-fn successful_export_keeps_private_store_and_reports_runner_temp_cleanup()
--> Result<(), Box<dyn Error>> {
-    let sandbox = Sandbox::create()?;
-    let root = init_store(&sandbox, ATTEMPT)?;
-    let (output, outputs, summary) = export_result(&sandbox, &root, "success")?;
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert!(outputs.contains("ready=true"), "{outputs}");
-    assert!(outputs.contains("acceptance=accepted"), "{outputs}");
-    assert!(outputs.contains("cleanup=runner-temp"), "{outputs}");
-    assert!(summary.contains("accepted"), "{summary}");
-    assert_eq!(
-        fs::read_to_string(root.join("actions/sentinel"))?,
-        "store stays owned\n"
-    );
-    assert!(root.join(".velnor-mbx-owner").is_file());
-    assert_eq!(
-        fs::read_to_string(sandbox.path().join("mbx-single-bundle-export/payload"))?,
-        "bundle payload\n"
-    );
-    Ok(())
-}
-
-#[test]
-fn ownership_and_export_failures_keep_store_and_report_cache_unavailable()
--> Result<(), Box<dyn Error>> {
-    for failure in [
-        "missing-marker",
-        "forged-marker",
-        "wrong-store",
-        "gc-fail",
-        "export-fail",
-        "partial-export",
-    ] {
-        let sandbox = Sandbox::create()?;
-        let root = init_store(&sandbox, ATTEMPT)?;
-        match failure {
-            "missing-marker" => fs::remove_file(root.join(".velnor-mbx-owner"))?,
-            "forged-marker" => fs::write(root.join(".velnor-mbx-owner"), "another job\n")?,
-            _ => {}
-        }
-        let (output, outputs, summary) = export_result(&sandbox, &root, failure)?;
-        assert_unavailable(output, &outputs, &summary);
-        assert_eq!(
-            fs::read_to_string(root.join("actions/sentinel"))?,
-            "store stays owned\n",
-            "failure {failure} must preserve the store"
-        );
-        if failure == "partial-export" {
-            assert!(
-                sandbox
-                    .path()
-                    .join("mbx-single-bundle-export/payload")
-                    .is_file()
-            );
-        }
-    }
-    Ok(())
-}
-
-#[test]
-fn empty_export_is_no_entry_and_readonly_hardlinks_are_unchanged() -> Result<(), Box<dyn Error>> {
-    let sandbox = Sandbox::create()?;
-    let root = init_store(&sandbox, ATTEMPT)?;
-    let (output, outputs, summary) = export_result(&sandbox, &root, "no-entry")?;
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert!(outputs.contains("ready=false"), "{outputs}");
-    assert!(outputs.contains("acceptance=no_entry"), "{outputs}");
-    assert!(!outputs.contains("cache_unavailable"), "{outputs}");
-    assert!(summary.contains("no_entry"), "{summary}");
-    assert_eq!(
-        fs::read_to_string(root.join("actions/sentinel"))?,
-        "store stays owned\n"
-    );
-
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::{MetadataExt, PermissionsExt};
-        let sandbox = Sandbox::create()?;
-        let root = init_store(&sandbox, ATTEMPT)?;
-        let path = root.join("actions/sentinel");
-        let alias = sandbox.path().join("outside-hardlink");
-        fs::hard_link(&path, &alias)?;
-        fs::set_permissions(&path, fs::Permissions::from_mode(0o444))?;
-        fs::set_permissions(root.join("actions"), fs::Permissions::from_mode(0o555))?;
-        let original = fs::metadata(&path)?;
-        let (output, outputs, _) = export_result(&sandbox, &root, "success")?;
-        assert!(
-            output.status.success(),
-            "{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        assert!(outputs.contains("acceptance=accepted"), "{outputs}");
-        let after = fs::metadata(&path)?;
-        let outside = fs::metadata(&alias)?;
-        assert_eq!(after.ino(), original.ino());
-        assert_eq!(outside.ino(), original.ino());
-        assert_eq!(after.permissions().mode() & 0o777, 0o444);
-        assert_eq!(fs::read_to_string(alias)?, "store stays owned\n");
-        fs::set_permissions(root.join("actions"), fs::Permissions::from_mode(0o700))?;
-        fs::set_permissions(&path, fs::Permissions::from_mode(0o600))?;
-    }
-    Ok(())
-}
-
 #[path = "mbx_store_restore_tests.rs"]
 mod restore_tests;
 
 #[path = "mbx_store_failure_tests.rs"]
 mod failure_tests;
+
+#[path = "mbx_store_export_tests.rs"]
+mod export_tests;

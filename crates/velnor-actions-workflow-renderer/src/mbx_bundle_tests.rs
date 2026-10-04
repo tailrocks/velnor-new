@@ -1,9 +1,12 @@
 //! MBX bundle key and restore-prefix regressions.
 
 use std::error::Error;
-use std::process::Command;
+use std::process::{Command, Output};
 
 use super::KEY_SCRIPT;
+
+const GENERATION: &str = "velnor-mbx-1.21.1-dir";
+const COMPATIBILITY: &str = "linux-x64-mbx-velnor-mbx-1.21.1-dir-rust-eaa76ad37f36";
 
 fn output_for<'a>(script_output: &'a str, name: &str) -> Option<&'a str> {
     script_output
@@ -32,21 +35,13 @@ fn restore_payload<'a>(
 }
 
 fn run_key_script(
-    key: &str,
     job_id: &str,
     matrix_key: &str,
     run_id: &str,
     run_attempt: &str,
 ) -> std::io::Result<String> {
-    let output = Command::new("bash")
-        .args(["-c", KEY_SCRIPT])
-        .env("MBX_KEY", key)
-        .env("MBX_JOB_ID", job_id)
-        .env("MBX_MATRIX_KEY", matrix_key)
-        .env("MBX_RUN_ID", run_id)
-        .env("MBX_RUN_ATTEMPT", run_attempt)
-        .env("GITHUB_OUTPUT", "/dev/stdout")
-        .output()?;
+    let output =
+        run_key_script_with_output(job_id, matrix_key, run_id, run_attempt, "/dev/stdout")?;
     if !output.status.success() {
         return Err(std::io::Error::other(
             String::from_utf8_lossy(&output.stderr).into_owned(),
@@ -55,144 +50,109 @@ fn run_key_script(
     String::from_utf8(output.stdout).map_err(std::io::Error::other)
 }
 
-#[test]
-fn writers_are_unique_per_run_and_restore_by_stable_compatible_prefix() -> Result<(), Box<dyn Error>>
-{
-    let action_key =
-        "linux-x64-mbx-generation-rust-1.98.1-0123456789abcdef0123456789abcdef01234567";
-    let next_commit_key =
-        "linux-x64-mbx-generation-rust-1.98.1-fedcba9876543210fedcba9876543210fedcba98";
-    let hosted = run_key_script(action_key, "rust-demo__hosted", "", "100", "1")?;
-    let local = run_key_script(action_key, "rust-demo__local", "", "100", "1")?;
-    let hosted_next_run = run_key_script(next_commit_key, "rust-demo__hosted", "", "101", "1")?;
-    let hosted_rerun = run_key_script(action_key, "rust-demo__hosted", "", "100", "2")?;
-    let matrix_a = run_key_script(action_key, "velnor-task", "m-0123456789abcdef", "100", "1")?;
-    let matrix_b = run_key_script(action_key, "velnor-task", "m-fedcba9876543210", "100", "1")?;
-    let matrix_a_next_run = run_key_script(
-        next_commit_key,
-        "velnor-task",
-        "m-0123456789abcdef",
-        "101",
-        "1",
-    )?;
-    let matrix_a_second_reader = run_key_script(
-        next_commit_key,
-        "velnor-task",
-        "m-0123456789abcdef",
-        "102",
-        "1",
-    )?;
-    let common_prefix = "linux-x64-mbx-generation-rust-1.98.1-";
-    let compatibility_key = "linux-x64-mbx-generation-rust-1.98.1";
-    let hosted_stable_prefix = format!(
-        "{compatibility_key}-j{}-rust-demo__hosted-n-",
-        "rust-demo__hosted".len()
+fn run_key_script_with_output(
+    job_id: &str,
+    matrix_key: &str,
+    run_id: &str,
+    run_attempt: &str,
+    github_output: &str,
+) -> std::io::Result<Output> {
+    let script = format!(
+        r#"rustc() {{
+  [ "$1" = "+1.98.1" ] && [ "$2" = "-vV" ] || return 1
+  printf '%s' 'rustc 1.98.1
+host: x86_64-unknown-linux-gnu'
+}}
+{KEY_SCRIPT}"#
     );
-    let matrix_a_stable_prefix = format!(
-        "{compatibility_key}-j{}-velnor-task-m-m-0123456789abcdef-",
-        "velnor-task".len()
-    );
-    let hosted_key = format!("{hosted_stable_prefix}r100-a1");
-    let local_key = format!(
-        "{compatibility_key}-j{}-rust-demo__local-n-r100-a1",
-        "rust-demo__local".len()
-    );
-    let matrix_a_key = format!("{matrix_a_stable_prefix}r100-a1");
-    let matrix_b_key = format!(
-        "{compatibility_key}-j{}-velnor-task-m-m-fedcba9876543210-r100-a1",
-        "velnor-task".len()
-    );
+    Command::new("bash")
+        .args(["-c", &script])
+        .env("RUNNER_OS", "Linux")
+        .env("RUNNER_ARCH", "X64")
+        .env("MBX_GENERATION", GENERATION)
+        .env("MBX_TOOLCHAIN", "1.98.1")
+        .env("MBX_JOB_ID", job_id)
+        .env("MBX_MATRIX_KEY", matrix_key)
+        .env("MBX_RUN_ID", run_id)
+        .env("MBX_RUN_ATTEMPT", run_attempt)
+        .env("GITHUB_OUTPUT", github_output)
+        .output()
+}
 
+#[test]
+fn writers_match_action_compatibility_and_are_unique_per_run() -> Result<(), Box<dyn Error>> {
+    let hosted = run_key_script("rust-demo__hosted", "", "100", "1")?;
+    let local = run_key_script("rust-demo__local", "", "100", "1")?;
+    let hosted_next_run = run_key_script("rust-demo__hosted", "", "101", "1")?;
+    let hosted_rerun = run_key_script("rust-demo__hosted", "", "100", "2")?;
+    let matrix = run_key_script("velnor-task", "m-0123456789abcdef", "100", "1")?;
+    let matrix_next_run = run_key_script("velnor-task", "m-0123456789abcdef", "101", "1")?;
+
+    let hosted_prefix = format!("{COMPATIBILITY}-j17-rust-demo__hosted-n-");
+    let local_prefix = format!("{COMPATIBILITY}-j16-rust-demo__local-n-");
+    let matrix_prefix = format!("{COMPATIBILITY}-j11-velnor-task-m-0123456789abcdef-");
+    let hosted_key = format!("{hosted_prefix}r100-a1");
+    let local_key = format!("{local_prefix}r100-a1");
+    let matrix_writer_key = format!("{matrix_prefix}r100-a1");
     assert_eq!(output_for(&hosted, "key"), Some(hosted_key.as_str()));
     assert_eq!(output_for(&local, "key"), Some(local_key.as_str()));
-    assert_eq!(output_for(&matrix_a, "key"), Some(matrix_a_key.as_str()));
-    assert_eq!(output_for(&matrix_b, "key"), Some(matrix_b_key.as_str()));
+    assert_eq!(output_for(&matrix, "key"), Some(matrix_writer_key.as_str()));
     assert_ne!(output_for(&hosted, "key"), output_for(&local, "key"));
     assert_ne!(
         output_for(&hosted, "key"),
         output_for(&hosted_next_run, "key")
     );
     assert_ne!(output_for(&hosted, "key"), output_for(&hosted_rerun, "key"));
-    assert_ne!(output_for(&matrix_a, "key"), output_for(&matrix_b, "key"));
     assert_ne!(
-        output_for(&matrix_a, "key"),
-        output_for(&matrix_a_next_run, "key")
+        output_for(&matrix, "key"),
+        output_for(&matrix_next_run, "key")
     );
-    assert_ne!(
-        output_for(&matrix_a_next_run, "key"),
-        output_for(&matrix_a_second_reader, "key")
-    );
-    assert_eq!(
-        output_for(&hosted, "prefix"),
-        Some(hosted_stable_prefix.as_str())
-    );
-    for reader in [&hosted_next_run, &hosted_rerun] {
-        assert_eq!(
-            output_for(reader, "prefix"),
-            Some(hosted_stable_prefix.as_str())
-        );
-    }
-    for reader in [&matrix_a, &matrix_a_next_run, &matrix_a_second_reader] {
-        assert_eq!(
-            output_for(reader, "prefix"),
-            Some(matrix_a_stable_prefix.as_str())
-        );
-    }
+
+    let fallback = format!("{COMPATIBILITY}-");
     for output in [
         &hosted,
         &local,
         &hosted_next_run,
         &hosted_rerun,
-        &matrix_a,
-        &matrix_b,
-        &matrix_a_next_run,
-        &matrix_a_second_reader,
+        &matrix,
+        &matrix_next_run,
     ] {
-        assert_eq!(output_for(output, "fallback"), Some(common_prefix));
+        assert_eq!(output_for(output, "fallback"), Some(fallback.as_str()));
     }
-    let previous_hosted_key = output_for(&hosted, "key").expect("previous hosted key");
     for reader in [&hosted_next_run, &hosted_rerun] {
-        assert!(
-            previous_hosted_key
-                .starts_with(output_for(reader, "prefix").expect("hosted reader prefix"))
-        );
+        assert_eq!(output_for(reader, "prefix"), Some(hosted_prefix.as_str()));
     }
-    let previous_matrix_key = output_for(&matrix_a, "key").expect("previous matrix key");
-    for reader in [&matrix_a_next_run, &matrix_a_second_reader] {
-        assert!(
-            previous_matrix_key
-                .starts_with(output_for(reader, "prefix").expect("matrix reader prefix"))
-        );
-    }
+    assert_eq!(
+        output_for(&matrix_next_run, "prefix"),
+        Some(matrix_prefix.as_str())
+    );
     Ok(())
 }
 
 #[test]
-fn restore_order_disambiguates_job_prefix_and_matrix_mode() -> Result<(), Box<dyn Error>> {
-    let action_key =
-        "linux-x64-mbx-generation-rust-1.98.1-0123456789abcdef0123456789abcdef01234567";
-    let app = run_key_script(action_key, "rust-app", "", "100", "1")?;
-    let matrix_app = run_key_script(action_key, "rust-app", "m-0123456789abcdef", "100", "1")?;
-    let app_extra = run_key_script(action_key, "rust-app-extra", "", "100", "1")?;
-    let app_reader = run_key_script(action_key, "rust-app", "", "101", "1")?;
-    let matrix_reader = run_key_script(action_key, "rust-app", "m-0123456789abcdef", "101", "1")?;
-    let app_extra_reader = run_key_script(action_key, "rust-app-extra", "", "101", "1")?;
+fn restore_order_separates_overlapping_jobs_and_matrix_mode() -> Result<(), Box<dyn Error>> {
+    let app = run_key_script("rust-app", "", "100", "1")?;
+    let app_extra = run_key_script("rust-app-extra", "", "100", "1")?;
+    let matrix_app = run_key_script("rust-app", "m-0123456789abcdef", "100", "1")?;
+    let app_reader = run_key_script("rust-app", "", "101", "1")?;
+    let app_extra_reader = run_key_script("rust-app-extra", "", "101", "1")?;
+    let matrix_reader = run_key_script("rust-app", "m-0123456789abcdef", "101", "1")?;
 
     let app_key = output_for(&app, "key").expect("app writer key");
-    let matrix_app_key = output_for(&matrix_app, "key").expect("matrix app writer key");
     let app_extra_key = output_for(&app_extra, "key").expect("app-extra writer key");
+    let matrix_key = output_for(&matrix_app, "key").expect("matrix writer key");
     let app_prefix = output_for(&app_reader, "prefix").expect("app reader prefix");
-    let matrix_prefix = output_for(&matrix_reader, "prefix").expect("matrix reader prefix");
     let app_extra_prefix = output_for(&app_extra_reader, "prefix").expect("app-extra prefix");
+    let matrix_prefix = output_for(&matrix_reader, "prefix").expect("matrix prefix");
 
     assert!(!app_extra_key.starts_with(app_prefix));
-    assert!(!matrix_app_key.starts_with(app_prefix));
-    assert!(!app_key.starts_with(matrix_prefix));
+    assert!(!matrix_key.starts_with(app_prefix));
     assert!(!app_key.starts_with(app_extra_prefix));
+    assert!(!app_key.starts_with(matrix_prefix));
 
     let entries = [
         (app_key, "nonmatrix app payload"),
-        (matrix_app_key, "matrix app payload"),
+        (matrix_key, "matrix app payload"),
         (app_extra_key, "app-extra payload"),
     ];
     for (reader, expected) in [
@@ -201,8 +161,8 @@ fn restore_order_disambiguates_job_prefix_and_matrix_mode() -> Result<(), Box<dy
         (&app_extra_reader, "app-extra payload"),
     ] {
         let prefixes = [
-            output_for(reader, "prefix").expect("stable writer prefix"),
-            output_for(reader, "fallback").expect("common compatibility prefix"),
+            output_for(reader, "prefix").expect("writer prefix"),
+            output_for(reader, "fallback").expect("compatibility fallback"),
         ];
         assert_eq!(
             restore_payload(
@@ -211,61 +171,60 @@ fn restore_order_disambiguates_job_prefix_and_matrix_mode() -> Result<(), Box<dy
                 &prefixes
             ),
             Some((false, expected)),
-            "stable writer prefix must win before common fallback"
+            "the stable writer prefix must win before the common fallback"
         );
     }
     Ok(())
 }
 
 #[test]
-fn fresh_runs_restore_previous_compatible_payload_before_common_fallback()
--> Result<(), Box<dyn Error>> {
-    let action_key =
-        "linux-x64-mbx-generation-rust-1.98.1-0123456789abcdef0123456789abcdef01234567";
-    let prior_action_key =
-        "linux-x64-mbx-generation-rust-1.98.1-0123456789abcdef0123456789abcdef01234567";
-    let next_commit_action_key =
-        "linux-x64-mbx-generation-rust-1.98.1-fedcba9876543210fedcba9876543210fedcba98";
-    let prior_writer = run_key_script(
-        prior_action_key,
-        "velnor-task",
-        "m-0123456789abcdef",
-        "100",
-        "1",
-    )?;
-    let fresh_reader = run_key_script(
-        next_commit_action_key,
-        "velnor-task",
-        "m-0123456789abcdef",
-        "101",
-        "1",
-    )?;
-    let rerun_reader = run_key_script(action_key, "velnor-task", "m-0123456789abcdef", "100", "2")?;
+fn new_run_and_rerun_restore_the_previous_compatible_payload() -> Result<(), Box<dyn Error>> {
+    let prior_writer = run_key_script("velnor-task", "m-0123456789abcdef", "100", "1")?;
+    let fresh_reader = run_key_script("velnor-task", "m-0123456789abcdef", "101", "1")?;
+    let rerun_reader = run_key_script("velnor-task", "m-0123456789abcdef", "100", "2")?;
     let prior_key = output_for(&prior_writer, "key").expect("prior writer key");
-    let common_key = "linux-x64-mbx-generation-rust-1.98.1-older-snapshot";
+    let common_key = format!("{COMPATIBILITY}-old-snapshot");
     let entries = [
         (prior_key, "same matrix closure objects"),
-        (common_key, "common objects"),
+        (common_key.as_str(), "common objects"),
     ];
 
     for reader in [&fresh_reader, &rerun_reader] {
-        let primary = output_for(reader, "key").expect("reader primary key");
         let prefixes = [
-            output_for(reader, "prefix").expect("reader stable prefix"),
-            output_for(reader, "fallback").expect("reader common fallback"),
+            output_for(reader, "prefix").expect("reader writer prefix"),
+            output_for(reader, "fallback").expect("reader compatibility prefix"),
         ];
         assert_eq!(
-            restore_payload(&entries, primary, &prefixes),
-            Some((false, "same matrix closure objects")),
-            "reader must restore the prior compatible payload by its stable prefix"
+            restore_payload(
+                &entries,
+                output_for(reader, "key").expect("reader primary key"),
+                &prefixes
+            ),
+            Some((false, "same matrix closure objects"))
         );
     }
     Ok(())
 }
 
 #[test]
-fn invalid_run_identity_fails_closed() {
-    let key = "linux-x64-mbx-v1-rust-1.98.1-0123456789abcdef";
-    assert!(run_key_script(key, "rust-demo__hosted", "", "100/1", "1").is_err());
-    assert!(run_key_script(key, "rust-demo__hosted", "", "100", "1a").is_err());
+fn invalid_writer_identity_fails_closed() -> Result<(), Box<dyn Error>> {
+    for output in [
+        run_key_script("rust-app", "", "100/1", "1")?,
+        run_key_script("rust-app", "", "100", "1a")?,
+        run_key_script("rust-app", "bad-matrix", "100", "1")?,
+    ] {
+        assert_eq!(output_for(&output, "ready"), Some("false"));
+        assert_eq!(output_for(&output, "acceptance"), Some("cache_unavailable"));
+        assert_eq!(output_for(&output, "key"), None);
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+#[test]
+fn failed_key_output_handoff_fails_the_step() -> Result<(), Box<dyn Error>> {
+    let output = run_key_script_with_output("rust-app", "", "100", "1", "/dev/null/output")?;
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("handoff failed"));
+    Ok(())
 }

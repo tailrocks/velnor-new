@@ -1,41 +1,23 @@
-//! MBX action ownership and lane selection regressions.
+//! MBX cache ownership and version compatibility regressions.
 
 use std::collections::BTreeMap;
 use std::error::Error;
 
+use crate::cache_steps::{MBX_ACTION_CACHE_MODE, MBX_CACHE_MODE_ENV};
 use velnor_actions_contract::workflow::timeout::JobTimeout;
 use velnor_actions_contract::{Job, Step, StepKind};
 
 use super::{
-    EXPORT_SCRIPT, HOSTED_STORE_ISOLATION, MBX_ACTION_CACHE_MODE, MBX_ACTION_NAME,
-    MBX_BUNDLE_EXPORT_NAME, MBX_BUNDLE_IMPORT_NAME, MBX_BUNDLE_KEY_NAME, MBX_BUNDLE_RESTORE_NAME,
-    MBX_BUNDLE_SAVE_NAME, MBX_CACHE_MODE_ENV, MBX_RESTORE_NAME, MBX_STORE_INIT_NAME, PREP_IF,
-    SAVE_IF, SCALE_SET_ONLY_IF, STORE_INIT_SCRIPT, append_single_bundle_saves,
+    MBX_ACTION_NAME, MBX_BUNDLE_EXPORT_NAME, MBX_BUNDLE_IMPORT_NAME, MBX_BUNDLE_KEY_NAME,
+    MBX_BUNDLE_PATH, MBX_BUNDLE_RESTORE_NAME, MBX_BUNDLE_SAVE_NAME, MBX_RESTORE_NAME,
+    MBX_STORE_INIT_NAME, SCALE_SET_ONLY_IF, STORE_INIT_SCRIPT, append_single_bundle_saves, lane,
 };
 
-const HOSTED_CACHE_MODE: &str = "${{ runner.environment == 'github-hosted' && 'write' || 'read' }}";
 const ACTION_V1_6: &str = "1687e54eb349cadf61fa38b5813a77875489e8e6";
-const ACTION_V1_7_1: &str = "d0825fbaf3cc36ca2609aa38e71046265a1f1e37";
+const HOSTED_BACKEND: &str = "${{ runner.environment == 'github-hosted' && 'github' || 'local' }}";
+const HOSTED_CACHE_MODE: &str = "${{ runner.environment == 'github-hosted' && github.event_name == 'push' && 'write' || 'read' }}";
 
-fn mbx_job(isolate_hosted: bool) -> Job {
-    let with = if isolate_hosted {
-        BTreeMap::from([(
-            "isolate-objects-cache".to_owned(),
-            HOSTED_STORE_ISOLATION.to_owned(),
-        )])
-    } else {
-        BTreeMap::new()
-    };
-    let mode = if isolate_hosted {
-        HOSTED_CACHE_MODE
-    } else {
-        MBX_ACTION_CACHE_MODE
-    };
-    let action_sha = if isolate_hosted {
-        ACTION_V1_7_1
-    } else {
-        ACTION_V1_6
-    };
+fn mbx_job() -> Job {
     Job {
         display_name: "MBX job".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
@@ -48,110 +30,133 @@ fn mbx_job(isolate_hosted: bool) -> Job {
             name: MBX_RESTORE_NAME.to_owned(),
             condition: None,
             kind: StepKind::Action {
-                uses: format!("{MBX_ACTION_NAME}@{action_sha}"),
-                with,
-                env: BTreeMap::from([(MBX_CACHE_MODE_ENV.to_owned(), mode.to_owned())]),
+                uses: format!("{MBX_ACTION_NAME}@{ACTION_V1_6}"),
+                with: BTreeMap::from([
+                    ("github-cache-mode".to_owned(), "objects".to_owned()),
+                    ("toolchain".to_owned(), "1.98.1".to_owned()),
+                    (
+                        "cache-generation".to_owned(),
+                        "velnor-mbx-1.21.1".to_owned(),
+                    ),
+                ]),
+                env: BTreeMap::from([(
+                    MBX_CACHE_MODE_ENV.to_owned(),
+                    MBX_ACTION_CACHE_MODE.to_owned(),
+                )]),
             },
         }],
     }
 }
 
-fn job_with(isolate_hosted: bool) -> Result<Job, Box<dyn Error>> {
-    let mut jobs = BTreeMap::from([("demo".to_owned(), mbx_job(isolate_hosted))]);
+fn job_with_bundle_route() -> Result<Job, Box<dyn Error>> {
+    let mut jobs = BTreeMap::from([("demo".to_owned(), mbx_job())]);
     append_single_bundle_saves(&mut jobs)?;
     jobs.remove("demo")
         .ok_or_else(|| std::io::Error::other("rendered MBX job missing").into())
 }
 
 #[test]
-fn hosted_action_owns_every_hosted_cache_step_and_mode() -> Result<(), Box<dyn Error>> {
-    let job = job_with(true)?;
+fn v16_action_routes_hosted_cache_to_github_and_scaleset_to_manual_bundle()
+-> Result<(), Box<dyn Error>> {
+    let job = job_with_bundle_route()?;
+    let action_index = job
+        .steps
+        .iter()
+        .position(|step| step.name == MBX_RESTORE_NAME)
+        .ok_or_else(|| std::io::Error::other("MBX action missing"))?;
+    let StepKind::Action { uses, with, env } = &job.steps[action_index].kind else {
+        return Err(std::io::Error::other("MBX restore is not an action").into());
+    };
+    assert_eq!(uses, &format!("{MBX_ACTION_NAME}@{ACTION_V1_6}"));
+    assert_eq!(
+        with.get("backend").map(String::as_str),
+        Some(HOSTED_BACKEND)
+    );
+    assert!(!with.contains_key("isolate-objects-cache"));
+    assert_eq!(
+        env.get(MBX_CACHE_MODE_ENV).map(String::as_str),
+        Some(HOSTED_CACHE_MODE)
+    );
+
     let init = job
         .steps
         .iter()
         .find(|step| step.name == MBX_STORE_INIT_NAME)
         .ok_or_else(|| std::io::Error::other("private store init missing"))?;
     assert_eq!(init.condition.as_deref(), Some(SCALE_SET_ONLY_IF));
-    for name in [
-        MBX_BUNDLE_KEY_NAME,
-        MBX_BUNDLE_RESTORE_NAME,
-        MBX_BUNDLE_IMPORT_NAME,
+    let key = job
+        .steps
+        .iter()
+        .find(|step| step.name == MBX_BUNDLE_KEY_NAME)
+        .ok_or_else(|| std::io::Error::other("manual MBX key step missing"))?;
+    assert_eq!(key.condition.as_deref(), Some(SCALE_SET_ONLY_IF));
+    for (name, required) in [
+        (MBX_BUNDLE_RESTORE_NAME, "steps.mbx-bundle-key.outcome"),
+        (MBX_BUNDLE_IMPORT_NAME, "steps.mbx-bundle.outcome"),
     ] {
         let step = job
             .steps
             .iter()
             .find(|step| step.name == name)
             .ok_or_else(|| std::io::Error::other("manual MBX restore step missing"))?;
-        assert_eq!(step.condition.as_deref(), Some(SCALE_SET_ONLY_IF));
+        let condition = step
+            .condition
+            .as_deref()
+            .ok_or_else(|| std::io::Error::other("manual MBX step must be gated"))?;
+        assert!(condition.starts_with(SCALE_SET_ONLY_IF));
+        assert!(condition.contains(required), "{condition}");
+        if name == MBX_BUNDLE_IMPORT_NAME {
+            assert!(condition.contains("steps.mbx-bundle-key.outputs.ready == 'true'"));
+        }
     }
-    for (name, gate) in [
-        (MBX_BUNDLE_EXPORT_NAME, PREP_IF),
-        (MBX_BUNDLE_SAVE_NAME, SAVE_IF),
-    ] {
+    for name in [MBX_BUNDLE_EXPORT_NAME, MBX_BUNDLE_SAVE_NAME] {
         let step = job
             .steps
             .iter()
             .find(|step| step.name == name)
             .ok_or_else(|| std::io::Error::other("manual MBX writer step missing"))?;
-        let expected_condition = format!("{SCALE_SET_ONLY_IF} && {gate}");
-        assert_eq!(step.condition.as_deref(), Some(expected_condition.as_str()));
+        assert!(
+            step.condition
+                .as_deref()
+                .is_some_and(|condition| condition.starts_with(SCALE_SET_ONLY_IF))
+        );
     }
-    let StepKind::Action { env, .. } = &job.steps[1].kind else {
-        return Err(std::io::Error::other("expected MBX action after private init").into());
-    };
-    assert_eq!(
-        env.get(MBX_CACHE_MODE_ENV).map(String::as_str),
-        Some(HOSTED_CACHE_MODE)
-    );
-    let action_use = match &job.steps[1].kind {
-        StepKind::Action { uses, .. } => uses,
-        _ => return Err(std::io::Error::other("expected MBX action").into()),
-    };
-    assert_eq!(action_use, &format!("{MBX_ACTION_NAME}@{ACTION_V1_7_1}"));
-    assert!(!STORE_INIT_SCRIPT.is_empty());
-    assert!(!EXPORT_SCRIPT.contains("rm -rf"));
-    Ok(())
-}
-
-#[test]
-fn v16_action_keeps_the_single_manual_route_in_both_lanes() -> Result<(), Box<dyn Error>> {
-    let job = job_with(false)?;
-    let init = job
+    let restore_path = match &job
         .steps
         .iter()
-        .find(|step| step.name == MBX_STORE_INIT_NAME)
-        .ok_or_else(|| std::io::Error::other("private store init missing"))?;
-    assert!(init.condition.is_none());
-    for name in [
-        MBX_BUNDLE_KEY_NAME,
-        MBX_BUNDLE_RESTORE_NAME,
-        MBX_BUNDLE_IMPORT_NAME,
-    ] {
-        let step = job
-            .steps
-            .iter()
-            .find(|step| step.name == name)
-            .ok_or_else(|| std::io::Error::other("manual MBX restore step missing"))?;
-        assert!(step.condition.is_none());
-    }
-    let StepKind::Action { env, .. } = &job.steps[1].kind else {
-        return Err(std::io::Error::other("expected MBX action after private init").into());
+        .find(|step| step.name == MBX_BUNDLE_RESTORE_NAME)
+        .ok_or_else(|| std::io::Error::other("bundle restore missing"))?
+        .kind
+    {
+        StepKind::Action { with, .. } => with.get("path"),
+        _ => None,
     };
-    assert_eq!(
-        env.get(MBX_CACHE_MODE_ENV).map(String::as_str),
-        Some(MBX_ACTION_CACHE_MODE)
-    );
+    let save_path = match &job
+        .steps
+        .iter()
+        .find(|step| step.name == MBX_BUNDLE_SAVE_NAME)
+        .ok_or_else(|| std::io::Error::other("bundle save missing"))?
+        .kind
+    {
+        StepKind::Action { with, .. } => with.get("path"),
+        _ => None,
+    };
+    assert_eq!(restore_path.map(String::as_str), Some(MBX_BUNDLE_PATH));
+    assert_eq!(save_path, restore_path);
+    assert!(!STORE_INIT_SCRIPT.is_empty());
     Ok(())
 }
 
 #[test]
-fn unknown_action_isolation_mode_fails_closed() -> Result<(), Box<dyn Error>> {
-    let mut job = mbx_job(false);
-    let StepKind::Action { with, .. } = &mut job.steps[0].kind else {
-        return Err(std::io::Error::other("expected action").into());
-    };
-    with.insert("isolate-objects-cache".to_owned(), "true".to_owned());
-    let mut jobs = BTreeMap::from([("demo".to_owned(), job)]);
-    assert!(append_single_bundle_saves(&mut jobs).is_err());
+fn pinned_action_generation_matches_its_directory_cache_version() -> Result<(), Box<dyn Error>> {
+    assert_eq!(
+        lane::directory_cache_generation("velnor-mbx-1.21.1")?,
+        "velnor-mbx-1.21.1-dir"
+    );
+    assert_eq!(
+        lane::directory_cache_generation("velnor-mbx-1.11.9")?,
+        "velnor-mbx-1.11.9"
+    );
+    assert!(lane::directory_cache_generation("latest").is_err());
     Ok(())
 }

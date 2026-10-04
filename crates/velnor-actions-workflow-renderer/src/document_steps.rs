@@ -90,6 +90,12 @@ fn action_step_to_yaml(
             Yaml::str(crate::render::FINAL_CONDITION.to_owned()),
         ));
     }
+    if matches!(
+        step.name.as_str(),
+        crate::mbx_bundle::MBX_BUNDLE_RESTORE_NAME | crate::mbx_bundle::MBX_BUNDLE_SAVE_NAME
+    ) {
+        entries.push(("continue-on-error".to_owned(), Yaml::Bool(true)));
+    }
     if job_id == FINAL_JOB_ID && is_verdict_download(step) {
         entries.push(("continue-on-error".to_owned(), Yaml::Bool(true)));
     }
@@ -132,6 +138,14 @@ pub(crate) fn step_to_yaml(
             if let Some(condition) = &step.condition {
                 steps::scan_for_private_subcommands(condition)?;
                 entries.push(("if".to_owned(), Yaml::str(condition.clone())));
+            }
+            if matches!(
+                step.name.as_str(),
+                crate::mbx_bundle::MBX_BUNDLE_KEY_NAME
+                    | crate::mbx_bundle::MBX_BUNDLE_IMPORT_NAME
+                    | crate::mbx_bundle::MBX_BUNDLE_EXPORT_NAME
+            ) {
+                entries.push(("continue-on-error".to_owned(), Yaml::Bool(true)));
             }
             if !env.is_empty() {
                 let vars: Vec<(String, Yaml)> = env

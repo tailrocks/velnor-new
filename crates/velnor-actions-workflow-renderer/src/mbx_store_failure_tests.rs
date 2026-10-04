@@ -25,7 +25,7 @@ fn shared_root_and_existing_bundle_are_preserved_and_rejected() -> Result<(), Bo
         "store stays owned\n"
     );
 
-    let bundle = sandbox.path().join("mbx-single-bundle-export");
+    let bundle = sandbox.path().join("mbx-single-bundle");
     fs::create_dir(&bundle)?;
     fs::write(bundle.join("prior-payload"), "prior export stays owned\n")?;
     let (output, outputs, summary) = export_result(&sandbox, &root, "success")?;

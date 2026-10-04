@@ -62,9 +62,9 @@ const ENV_EXPRESSIONS: [&str; 12] = [
     "github.ref_name",
     "github.event_name",
     "github.event_name == 'push' && 'write' || 'read'",
+    "runner.environment == 'github-hosted' && github.event_name == 'push' && 'write' || 'read'",
     "secrets.CARGO_REGISTRY_TOKEN",
     "secrets.GITHUB_TOKEN",
-    "steps.mbx.outputs.cache-primary-key",
     "steps.mbx-bundle.outputs.cache-matched-key",
     "github.job",
     "github.run_id",
@@ -83,10 +83,10 @@ const WITH_EXPRESSIONS: [&str; 9] = [
     "github.run_attempt",
     "github.event_name == 'push'",
     "steps.publish-baseline.outputs.artifact_name",
-    "steps.mbx.outputs.cache-primary-key",
     "steps.mbx-bundle-key.outputs.prefix",
     "steps.mbx-bundle-key.outputs.key",
     "steps.mbx-bundle-key.outputs.fallback",
+    "runner.environment == 'github-hosted' && 'github' || 'local'",
 ];
 
 /// True for a `matrix.*` field reference (both layers allow the family).

@@ -1,8 +1,6 @@
 //! Private MBX store scripts and lane ownership.
 
-/// Released action v1.7.1 owns the hosted store when this input is present.
-pub(super) const HOSTED_STORE_ISOLATION: &str = "${{ runner.environment == 'github-hosted' }}";
-/// Velnor owns the manual bundle store only on Scale Set with action isolation.
+/// Velnor owns the manual bundle store only on Scale Set.
 pub(super) const SCALE_SET_ONLY_IF: &str = "runner.environment != 'github-hosted'";
 
 /// Initialize a mode-700 cache root in this job's temporary directory.
@@ -33,9 +31,8 @@ printf 'Initialized private MBX store under runner.temp.\n'"#;
 pub(super) const EXPORT_SCRIPT: &str = r#"set -u
 cache_unavailable() {
     reason="$1"
-    if [ -n "${GITHUB_OUTPUT:-}" ]; then
-        printf 'ready=false\nacceptance=cache_unavailable\n' >> "$GITHUB_OUTPUT" || true
-    fi
+    [ -n "${GITHUB_OUTPUT:-}" ] || { echo "GITHUB_OUTPUT is missing" >&2; exit 1; }
+    printf 'ready=false\nacceptance=cache_unavailable\n' >> "$GITHUB_OUTPUT" || exit 1
     printf '::warning::MBX cache unavailable: %s\n' "$reason" >&2
     if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
         printf 'MBX cache acceptance: cache_unavailable (%s)\n' "$reason" >> "$GITHUB_STEP_SUMMARY" || true
@@ -43,15 +40,15 @@ cache_unavailable() {
     exit 0
 }
 no_entry() {
-    if [ -n "${GITHUB_OUTPUT:-}" ]; then
-        printf 'ready=false\nacceptance=no_entry\n' >> "$GITHUB_OUTPUT" || true
-    fi
+    [ -n "${GITHUB_OUTPUT:-}" ] || { echo "GITHUB_OUTPUT is missing" >&2; exit 1; }
+    printf 'ready=false\nacceptance=no_entry\n' >> "$GITHUB_OUTPUT" || exit 1
     printf 'MBX cache acceptance: no_entry\n' >> "${GITHUB_STEP_SUMMARY:-/dev/null}" || true
     exit 0
 }
-if [ "${MBX_CACHE_IMPORT_UNAVAILABLE:-}" = "true" ]; then
-    cache_unavailable "prior-bundle-import-uncertain"
-fi
+case "${MBX_CACHE_IMPORT_STATE:-}" in
+    cold|imported) ;;
+    *) cache_unavailable "import-outcome-missing-or-uncertain" ;;
+esac
 run_id=${GITHUB_RUN_ID:-}
 run_attempt=${GITHUB_RUN_ATTEMPT:-}
 job_id=${GITHUB_JOB:-}
@@ -97,11 +94,11 @@ fi
 if ! store_real=$(CDPATH= cd -- "$expected_store" && pwd -P) || [ "$store_real" != "$expected_store" ]; then
     cache_unavailable "mbx-store-not-canonical"
 fi
-bundle="$RUNNER_TEMP/mbx-single-bundle-export"
+bundle="$RUNNER_TEMP/mbx-single-bundle"
 if [ -e "$bundle" ] || [ -L "$bundle" ]; then
     cache_unavailable "bundle-path-already-exists"
 fi
-if ! df -B1 -P "$RUNNER_TEMP" || ! df -i -P "$RUNNER_TEMP"; then
+if ! df -k -P "$RUNNER_TEMP" || ! df -i -P "$RUNNER_TEMP"; then
     cache_unavailable "disk-measurement-failed-before-export"
 fi
 if [ -z "${MBX_CACHE_EXPORT_GROUP:-}" ]; then
@@ -115,10 +112,10 @@ if mbx cache export --group "$MBX_CACHE_EXPORT_GROUP" --format directory "$bundl
     if [ ! -d "$bundle" ] || [ -L "$bundle" ]; then
         cache_unavailable "export-output-missing-or-symlink"
     fi
-    if ! df -B1 -P "$RUNNER_TEMP" || ! df -i -P "$RUNNER_TEMP"; then
+    if ! df -k -P "$RUNNER_TEMP" || ! df -i -P "$RUNNER_TEMP"; then
         cache_unavailable "disk-measurement-failed-after-export"
     fi
-    printf 'ready=true\nacceptance=accepted\ncleanup=runner-temp\n' >> "$GITHUB_OUTPUT" || true
+    printf 'ready=true\nacceptance=accepted\ncleanup=runner-temp\n' >> "$GITHUB_OUTPUT" || exit 1
     printf 'MBX cache acceptance: accepted; private store cleanup belongs to runner.temp.\n' >> "${GITHUB_STEP_SUMMARY:-/dev/null}" || true
 else
     if grep -Fq 'no completed mbx builds are recorded for export group' "$RUNNER_TEMP/mbx-export.out"; then
