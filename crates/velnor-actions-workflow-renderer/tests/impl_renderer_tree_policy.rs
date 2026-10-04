@@ -114,6 +114,14 @@ fn triggers_must_be_exact() -> Result<(), RenderError> {
     let mut ir = fixture_ir()?;
     ir.triggers.push_branches.push("other".to_owned());
     assert!(render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx).is_err());
+    for branch in ["main'||true||'", "main\non: [push]"] {
+        let mut ir = fixture_ir()?;
+        ir.triggers.push_branches[0] = branch.to_owned();
+        assert!(
+            render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx).is_err(),
+            "unsafe push branch must not reach YAML generation: {branch:?}"
+        );
+    }
     let mut ir = fixture_ir()?;
     ir.triggers.merge_group = false;
     assert!(render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx).is_err());

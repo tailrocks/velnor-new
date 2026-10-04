@@ -84,25 +84,19 @@ fn merge_anchors_from_parts(
 /// branch name); push jobs fall back to `GITHUB_REF` when it already
 /// names a protected branch ref. Anything else yields no expectation.
 fn protected_ref_from(base_ref: Option<&str>, git_ref: Option<&str>) -> Option<String> {
-    if let Some(base) = base_ref.filter(|base| valid_branch_name(base)) {
+    if let Some(base) = base_ref.filter(|base| velnor_actions_contract::is_valid_branch_name(base))
+    {
         return Some(format!("refs/heads/{base}"));
     }
     git_ref
         .filter(|git_ref| {
             git_ref.starts_with("refs/heads/")
                 && git_ref.len() > "refs/heads/".len()
-                && !git_ref.chars().any(char::is_whitespace)
+                && git_ref
+                    .strip_prefix("refs/heads/")
+                    .is_some_and(velnor_actions_contract::is_valid_branch_name)
         })
         .map(str::to_owned)
-}
-
-/// True for plausible branch names: nonempty, no whitespace, no
-/// traversal, not HEAD.
-fn valid_branch_name(base: &str) -> bool {
-    !base.is_empty()
-        && !base.chars().any(char::is_whitespace)
-        && !base.contains("..")
-        && base != "HEAD"
 }
 
 /// Revalidate planner coverage claims against the trusted manifest.
@@ -293,11 +287,11 @@ fn manifest_provenance_matches_plan(
         && workflow_ref_consistent(manifest)
 }
 
-/// Protected-branch ref shape: `refs/heads/<nonempty branch>`.
+/// Protected-branch ref shape: `refs/heads/<valid branch name>`.
 fn ref_shape_ok(git_ref: &str) -> bool {
-    git_ref.starts_with("refs/heads/")
-        && git_ref.len() > "refs/heads/".len()
-        && !git_ref.contains(' ')
+    git_ref
+        .strip_prefix("refs/heads/")
+        .is_some_and(velnor_actions_contract::is_valid_branch_name)
 }
 
 /// The workflow ref parses and agrees with the manifest's own ref.

@@ -8,6 +8,8 @@
 use std::ffi::{OsStr, OsString};
 use std::path::Path;
 
+use velnor_actions_contract::is_valid_branch_name;
+
 use crate::catalog::{PinnedTool, ToolCatalog};
 use crate::command::IsolatedCommand;
 use crate::error::MiseError;
@@ -56,7 +58,9 @@ impl BaselineLookup {
             return Err(invalid_input("base_sha", base));
         }
         check_lookup_text("workflow", workflow)?;
-        check_lookup_text("branch", branch)?;
+        if !is_valid_branch_name(branch) {
+            return Err(invalid_input("branch", branch));
+        }
         check_artifact(artifact)?;
         Ok(Self {
             base_sha: base.to_owned(),
