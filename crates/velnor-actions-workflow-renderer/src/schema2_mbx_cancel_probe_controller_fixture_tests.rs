@@ -1,5 +1,3 @@
-//! Controller scripts execute against a bounded fake GitHub API.
-
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fs;
@@ -25,6 +23,44 @@ const MISE_ACTION: &str = "jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb
 const MISE_SHA: &str = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
 const RUSTC_IDENTITY: &str = "13936cde15db9d31620cb9989927cdfa06948615fc6b8291d7fba92f191a18ec";
 const SCOPE_HASH: &str = "4efa592dc896090b6cfbca2010832cd66ffdbd2972b8c791100756fef657c61e";
+const PRE_SCOPE_HASH: &str = "e209916d29c20a2ddbb07903ece0cca30f264f7acf4a1271efec9e57771a9d6a";
+
+struct FixtureMode {
+    victim_mode: &'static str,
+    phase: &'static str,
+    scope: &'static str,
+    victim_name: &'static str,
+    artifact_name: &'static str,
+    cancel_step: &'static str,
+}
+
+fn fixture_mode(pre_save: bool) -> FixtureMode {
+    if pre_save {
+        FixtureMode {
+            victim_mode: "mbx-cancel-pre-save-victim",
+            phase: "pre-save",
+            scope: "qualification-mbx-v1/cancel-pre-save-victim",
+            victim_name: "MBX cancellation / pre-save victim",
+            artifact_name: "mbx-cancel-victim-pre-save",
+            cancel_step: "Wait at MBX pre-save cancellation point",
+        }
+    } else {
+        FixtureMode {
+            victim_mode: VICTIM_MODE,
+            phase: PHASE,
+            scope: SCOPE,
+            victim_name: "MBX cancellation / during-save victim",
+            artifact_name: "mbx-cancel-victim-during-save",
+            cancel_step: "Save MBX single bundle",
+        }
+    }
+}
+
+#[path = "schema2_mbx_cancel_probe_controller_receipt_fixtures.rs"]
+mod receipt;
+#[path = "schema2_mbx_cancel_probe_date_fixture.rs"]
+mod date_fixture;
+pub(super) use receipt::{expected_key, readiness_receipt};
 
 pub(super) struct Fixture {
     pub(super) root: PathBuf,
@@ -33,15 +69,20 @@ pub(super) struct Fixture {
     log: PathBuf,
     archive_size: u64,
     digest: String,
+    pre_save: bool,
 }
 
 impl Fixture {
     pub(super) fn new(label: &str, corrupt_digest: bool) -> Result<Self, Box<dyn Error>> {
+        let pre_save = label.starts_with("pre-save-");
         let root = temp_dir(label)?;
         let bin = super::fake_bin(&root)?;
         let artifact_dir = root.join("artifact");
         fs::create_dir(&artifact_dir)?;
-        fs::write(artifact_dir.join("readiness.json"), readiness_receipt())?;
+        fs::write(
+            artifact_dir.join("readiness.json"),
+            readiness_receipt(pre_save),
+        )?;
         let zip = root.join("victim.zip");
         let output = Command::new("zip")
             .args(["-q", "-j"])
@@ -76,12 +117,14 @@ impl Fixture {
             zip,
             digest,
             archive_size,
+            pre_save,
         };
         fixture.install_curl()?;
         Ok(fixture)
     }
 
     pub(super) fn env(&self, output: &Path, mode: &str) -> Vec<(String, String)> {
+        let phase = fixture_mode(self.pre_save);
         let env = BTreeMap::from([
             (
                 "GITHUB_REPOSITORY".to_owned(),
@@ -105,13 +148,13 @@ impl Fixture {
             ("RUNNER_TEMP".to_owned(), self.root.display().to_string()),
             ("REF_PROTECTED".to_owned(), "true".to_owned()),
             ("PROBE_ID".to_owned(), PROBE_ID.to_owned()),
-            ("VICTIM_MODE".to_owned(), VICTIM_MODE.to_owned()),
+            ("VICTIM_MODE".to_owned(), phase.victim_mode.to_owned()),
             (
                 "CONTROLLER_MODE".to_owned(),
-                "mbx-cancel-during-save-controller".to_owned(),
+                format!("mbx-cancel-{}-controller", phase.phase),
             ),
-            ("PROBE_PHASE".to_owned(), PHASE.to_owned()),
-            ("CACHE_SCOPE".to_owned(), SCOPE.to_owned()),
+            ("PROBE_PHASE".to_owned(), phase.phase.to_owned()),
+            ("CACHE_SCOPE".to_owned(), phase.scope.to_owned()),
             ("MBX_GENERATION".to_owned(), "velnor-mbx-1.22.0".to_owned()),
             ("MBX_VERSION".to_owned(), "1.22.0".to_owned()),
             ("MBX_ACTION_USES".to_owned(), MBX_ACTION.to_owned()),
@@ -121,15 +164,15 @@ impl Fixture {
             ("MISE_SHA256".to_owned(), MISE_SHA.to_owned()),
             (
                 "VICTIM_JOB_NAME".to_owned(),
-                "MBX cancellation / during-save victim".to_owned(),
+                phase.victim_name.to_owned(),
             ),
             (
                 "VICTIM_ARTIFACT_NAME".to_owned(),
-                "mbx-cancel-victim-during-save".to_owned(),
+                phase.artifact_name.to_owned(),
             ),
             (
                 "CANCEL_STEP_NAME".to_owned(),
-                "Save MBX single bundle".to_owned(),
+                phase.cancel_step.to_owned(),
             ),
             ("RUN_ID".to_owned(), "123".to_owned()),
             ("WORKFLOW_ID".to_owned(), "77".to_owned()),
@@ -162,24 +205,7 @@ impl Fixture {
     }
 
     pub(super) fn install_date(&self) -> io::Result<()> {
-        let date = self.bin.join("date");
-        fs::write(
-            &date,
-            r#"#!/usr/bin/env bash
-set -euo pipefail
-if [ "$#" = 4 ] && [ "$1" = -u ] && [ "$2" = -d ] && [ "$4" = +%s%N ]; then
-  case "$3" in
-    2026-10-04T00:00:05.0000000Z) printf '5\n' ;;
-    2026-10-04T00:00:10Z) printf '10\n' ;;
-    2026-10-04T00:00:11.0000000Z) printf '11\n' ;;
-    *) exit 1 ;;
-  esac
-else
-  exec /bin/date "$@"
-fi
-"#,
-        )?;
-        fs::set_permissions(date, fs::Permissions::from_mode(0o755))
+        date_fixture::install(&self.bin)
     }
 
     pub(super) fn log(&self) -> Result<String, Box<dyn Error>> {
@@ -361,22 +387,4 @@ fn malformed_dispatch_or_victim_identity_never_reaches_cancel() -> Result<(), Bo
     fs::remove_dir_all(mismatch.root)?;
     fs::remove_dir_all(bad_artifact.root)?;
     Ok(())
-}
-
-fn readiness_receipt() -> String {
-    let generation = "velnor-mbx-1.22.0";
-    let version = "1.22.0";
-    let rust = "1.98.1";
-    let cache_key = format!(
-        "linux-x64-mbx-{generation}-dir-rust-{rust}-{RUSTC_IDENTITY}-scope-{SCOPE_HASH}-run-123-attempt-1-{SOURCE_SHA}"
-    );
-    format!(
-        r#"{{"schema":1,"probe_id":"{PROBE_ID}","mode":"{VICTIM_MODE}","phase":"{PHASE}","child_run_id":"123","child_attempt":"1","repository":"tailrocks/velnor-new","workflow_path":".github/workflows/qualification.yml","event":"workflow_dispatch","ref":"refs/heads/main","source_sha":"{SOURCE_SHA}","actor":"github-actions[bot]","mbx_action_uses":"{MBX_ACTION}","mbx_version":"{version}","mbx_resolved_version":"{version}","cache_scope":"{SCOPE}","cache_key":"{cache_key}","generation":"{generation}","rustc_identity":"{RUSTC_IDENTITY}","rust_version":"{rust}","mise_action_uses":"{MISE_ACTION}","mise_version":"2025.9.5","mise_sha256":"{MISE_SHA}"}}"#
-    )
-}
-
-pub(super) fn expected_key() -> String {
-    format!(
-        "linux-x64-mbx-velnor-mbx-1.22.0-dir-rust-1.98.1-{RUSTC_IDENTITY}-scope-{SCOPE_HASH}-run-123-attempt-1-{SOURCE_SHA}"
-    )
 }

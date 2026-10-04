@@ -17,6 +17,8 @@ use velnor_actions_contract::StepKind;
 mod classifications;
 #[path = "schema2_mbx_cancel_probe_controller_fixture_tests.rs"]
 mod controller_fixtures;
+#[path = "schema2_mbx_cancel_probe_cache_snapshot_tests.rs"]
+mod cache_snapshots;
 #[path = "schema2_mbx_cancel_probe_controller_transport_cases.rs"]
 mod controller_transport;
 #[path = "schema2_mbx_cancel_probe_key_fixture_tests.rs"]
@@ -25,6 +27,8 @@ mod key_fixtures;
 mod native_render_tests;
 #[path = "schema2_mbx_cancel_probe_observer_fixture_tests.rs"]
 mod observer_fixtures;
+#[path = "schema2_mbx_cancel_probe_pre_save_fixture_tests.rs"]
+mod pre_save_fixtures;
 #[path = "schema2_mbx_cancel_probe_receipt_fixture_tests.rs"]
 mod receipt_fixtures;
 
@@ -117,9 +121,18 @@ case "$method:$endpoint" in
     fi ;;
   GET:/repos/tailrocks/velnor-new/actions/runs/900)
     jq -cn --arg sha "$GITHUB_SHA" --arg actor "$GITHUB_ACTOR" \
-      '{id:900,workflow_id:77,path:".github/workflows/qualification.yml@refs/heads/main",
+      --arg mode "$VICTIM_MODE" --arg probe "$PROBE_ID" \
+      --argjson workflow "${OBSERVER_WORKFLOW_ID:-77}" \
+      '{id:900,workflow_id:$workflow,path:".github/workflows/qualification.yml@refs/heads/main",
         repository:{full_name:"tailrocks/velnor-new"},head_repository:{full_name:"tailrocks/velnor-new"},
-        event:"workflow_dispatch",head_branch:"main",head_sha:$sha,run_attempt:1,actor:{login:$actor}}' ;;
+        event:"workflow_dispatch",head_branch:"main",head_sha:$sha,run_attempt:1,
+        display_title:("MBX cancellation " + $mode + " " + $probe),actor:{login:$actor}}' ;;
+  GET:/repos/tailrocks/velnor-new/actions/runs/900/attempts/1/jobs?per_page=100)
+    jq -cn --arg name "$OBSERVER_JOB_NAME" \
+      '{jobs:[{id:901,name:$name,status:"in_progress",steps:[
+        {name:"Set up job",status:"completed",conclusion:"success",number:1},
+        {name:"Prepare MBX bundle key",status:"completed",conclusion:"success"},
+        {name:"Restore MBX single bundle",status:"completed",conclusion:"success",number:13}]}]}' ;;
   GET:/repos/tailrocks/velnor-new/actions/runs/123)
     if [ "$GH_MODE" = mismatch ]; then repo=attacker/repo; else repo=tailrocks/velnor-new; fi
     run_count=0
@@ -175,6 +188,15 @@ case "$method:$endpoint" in
           name:"Save MBX single bundle",status:"completed",conclusion:"cancelled",number:13,started_at:"2026-10-04T00:00:00Z"}}}]}'
       ;;
     *)
+      if [ "$PROBE_PHASE" = pre-save ]; then
+        jq -cn --arg name "$VICTIM_JOB_NAME" \
+          '{jobs:[{id:456,name:$name,status:"in_progress",steps:[
+            {name:"Write MBX cancellation readiness receipt",status:"completed",conclusion:"success"},
+            {name:"Upload MBX cancellation receipt",status:"completed",conclusion:"success"},
+            {name:"Wait at MBX pre-save cancellation point",status:"in_progress",conclusion:null},
+            {name:"Save MBX single bundle",status:"completed",conclusion:"skipped"}]}]}'
+        exit 0
+      fi
       jobs_count=0
       if [ -s "$GH_STATE.jobs-count" ]; then IFS= read -r jobs_count < "$GH_STATE.jobs-count"; fi
       jobs_count=$((jobs_count + 1))
@@ -212,7 +234,18 @@ case "$method:$endpoint" in
     test -n "$output"
     cp "$GH_ARTIFACT_ZIP" "$output" ;;
   GET:/repos/tailrocks/velnor-new/actions/caches?key=*)
-    printf '%s\n' '{"actions_caches":[]}' ;;
+    case "${GH_MODE:-good}" in
+      cache-object) printf '%s\n' '{"actions_caches":{}}' ;;
+      cache-null-response) printf '%s\n' 'null' ;;
+      cache-null-entry) printf '%s\n' '{"actions_caches":[null]}' ;;
+      cache-missing-array) printf '%s\n' '{"count":0,"caches":[]}' ;;
+      cache-valid-record)
+        cache_key="${endpoint#*key=}"
+        cache_key="${cache_key%%&*}"
+        jq -cn --arg key "$cache_key" \
+          '{actions_caches:[{id:5,key:$key,ref:"refs/heads/main",size_in_bytes:1024,last_accessed_at:null}]}' ;;
+      *) printf '%s\n' '{"actions_caches":[]}' ;;
+    esac ;;
   POST:/repos/tailrocks/velnor-new/actions/runs/123/cancel)
     test "$include" = true
     printf 'HTTP/2 202 Accepted\r\n\r\n' ;;
@@ -327,12 +360,8 @@ fn malformed_save_step_lists_never_request_step_logs() -> Result<(), Box<dyn Err
                 summary.display().to_string(),
             ),
         ]);
-        let result = run_bash(
-            scripts::OBSERVER_EVIDENCE,
-            &fixture.root,
-            &fixture.bin,
-            &env,
-        )?;
+        let script = scripts::observer_evidence();
+        let result = run_bash(&script, &fixture.root, &fixture.bin, &env)?;
         assert!(
             result.status.success(),
             "{mode}: {}",

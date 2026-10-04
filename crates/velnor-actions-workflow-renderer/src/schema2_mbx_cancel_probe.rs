@@ -267,10 +267,11 @@ fn observer_job(
         &probe_steps::upload_observer_receipt_step(phase)?,
         runs_on,
     )?);
+    let gate = format!("always() && ({})", phase.gate("observer"));
     let job = make_job(
         format!("MBX cancellation / {} fresh observer", phase.token()),
         hosted,
-        phase.gate("observer"),
+        gate,
         vec![phase.controller_id().to_owned()],
         PermissionLevel::Read,
         Vec::new(),

@@ -26,10 +26,14 @@ fn missing_or_untrusted_save_log_evidence_stays_not_run() -> Result<(), Box<dyn 
         "signed-http-redirect",
         "no-marker",
         "valid-progress",
+        "rounded100-progress",
         "late-progress",
         "zero-progress",
         "complete-progress",
         "malformed-progress",
+        "short-timestamp",
+        "wrong-separator",
+        "invalid-calendar",
     ] {
         assert_log_case(mode)?;
     }
@@ -51,6 +55,8 @@ fn skipped_receipt_validation_still_writes_not_run_result() -> Result<(), Box<dy
         ("VALIDATED_CACHE_KEY".to_owned(), String::new()),
         ("RESTORE_HIT".to_owned(), String::new()),
         ("MATCHED_KEY".to_owned(), String::new()),
+        ("RESTORE_PRIMARY_KEY".to_owned(), String::new()),
+        ("RESTORE_CONCLUSION".to_owned(), String::new()),
         ("CONTROLLER_READY".to_owned(), String::new()),
         ("CONTROLLER_READY_REASON".to_owned(), String::new()),
         ("CONTROLLER_CANCEL_REQUESTED".to_owned(), String::new()),
@@ -84,6 +90,46 @@ fn skipped_receipt_validation_still_writes_not_run_result() -> Result<(), Box<dy
     Ok(())
 }
 
+#[test]
+fn restore_errors_and_untrusted_logs_do_not_qualify_as_misses() -> Result<(), Box<dyn Error>> {
+    for (label, transport, restore) in [
+        ("restore-error", "good", "failed"),
+        ("restore-no-location", "missing", "clean"),
+        ("restore-http-location", "http-location", "clean"),
+        ("restore-unprefixed", "good", "unprefixed"),
+        ("restore-short-time", "good", "short-timestamp"),
+    ] {
+        let fixture = Fixture::new(label, false)?;
+        let key = expected_key();
+        let mut setup = prepare_evidence(&fixture, "valid-progress", &key)?;
+        setup
+            .env
+            .insert("RESTORE_TRANSPORT_MODE".to_owned(), transport.to_owned());
+        setup
+            .env
+            .insert("RESTORE_LOG_MODE".to_owned(), restore.to_owned());
+        execute_evidence(label, &fixture, &setup)?;
+        let evidence = fs::read_to_string(setup.observer.join("child-evidence.json"))?;
+        assert!(evidence.contains("\"upload_started_before_cancel\":true"), "{evidence}");
+        assert!(evidence.contains("\"restore_clean_miss\":false"), "{evidence}");
+        assert_classification(&fixture, setup.env, &setup.observer, &key, false)?;
+        fs::remove_dir_all(fixture.root)?;
+    }
+    let fixture = Fixture::new("restore-wrong-workflow", false)?;
+    let key = expected_key();
+    let mut setup = prepare_evidence(&fixture, "valid-progress", &key)?;
+    setup
+        .env
+        .insert("OBSERVER_WORKFLOW_ID".to_owned(), "78".to_owned());
+    execute_evidence("restore-wrong-workflow", &fixture, &setup)?;
+    let evidence = fs::read_to_string(setup.observer.join("child-evidence.json"))?;
+    assert!(evidence.contains("\"restore_clean_miss\":false"), "{evidence}");
+    assert!(!fs::read_to_string(&setup.curl_log)?.contains("restore-api"));
+    assert_classification(&fixture, setup.env, &setup.observer, &key, false)?;
+    fs::remove_dir_all(fixture.root)?;
+    Ok(())
+}
+
 fn assert_log_case(mode: &str) -> Result<(), Box<dyn Error>> {
     let fixture = Fixture::new(&format!("log-{mode}"), false)?;
     let key = expected_key();
@@ -101,8 +147,19 @@ fn assert_log_case(mode: &str) -> Result<(), Box<dyn Error>> {
 
 fn run_evidence(fixture: &Fixture, mode: &str, key: &str) -> Result<EvidenceRun, Box<dyn Error>> {
     let setup = prepare_evidence(fixture, mode, key)?;
+    execute_evidence(mode, fixture, &setup)?;
+    validate_evidence(mode, key, &setup)?;
+    Ok(setup)
+}
+
+fn execute_evidence(
+    label: &str,
+    fixture: &Fixture,
+    setup: &EvidenceRun,
+) -> Result<(), Box<dyn Error>> {
+    let script = scripts::observer_evidence();
     let output = run_bash(
-        scripts::OBSERVER_EVIDENCE,
+        &script,
         &fixture.root,
         &fixture.bin,
         &setup
@@ -114,11 +171,10 @@ fn run_evidence(fixture: &Fixture, mode: &str, key: &str) -> Result<EvidenceRun,
     assert!(
         output.status.success(),
         "{}: {}",
-        mode,
+        label,
         String::from_utf8_lossy(&output.stderr)
     );
-    validate_evidence(mode, key, &setup)?;
-    Ok(setup)
+    Ok(())
 }
 
 fn prepare_evidence(
@@ -141,6 +197,15 @@ fn prepare_evidence(
     let marker = progress_marker(mode);
     env.extend([
         ("GH_TOKEN".to_owned(), "fixture-secret-token".to_owned()),
+        (
+            "OBSERVER_JOB_NAME".to_owned(),
+            "MBX cancellation / during-save fresh observer".to_owned(),
+        ),
+        ("DERIVED_KEY".to_owned(), key.to_owned()),
+        ("RESTORE_PRIMARY_KEY".to_owned(), key.to_owned()),
+        ("RESTORE_CONCLUSION".to_owned(), "success".to_owned()),
+        ("RESTORE_LOG_MODE".to_owned(), "clean".to_owned()),
+        ("RESTORE_TRANSPORT_MODE".to_owned(), "good".to_owned()),
         ("VALIDATED_CACHE_KEY".to_owned(), key.to_owned()),
         ("CURL_LOG".to_owned(), curl_log.display().to_string()),
         ("CURL_LOCATION_MODE".to_owned(), mode.to_owned()),
@@ -168,7 +233,7 @@ fn prepare_evidence(
         evidence_path.display().to_string(),
     );
     Ok(EvidenceRun {
-        started: mode == "valid-progress",
+        started: matches!(mode, "valid-progress" | "rounded100-progress"),
         env,
         observer,
         curl_log,
@@ -178,10 +243,14 @@ fn prepare_evidence(
 fn progress_marker(mode: &str) -> &'static str {
     match mode {
         "valid-progress" => "partial",
+        "rounded100-progress" => "rounded100",
         "late-progress" => "late",
         "zero-progress" => "zero",
         "complete-progress" => "complete",
         "malformed-progress" => "malformed",
+        "short-timestamp" => "short-timestamp",
+        "wrong-separator" => "wrong-separator",
+        "invalid-calendar" => "invalid-calendar",
         _ => "false",
     }
 }
@@ -200,6 +269,7 @@ fn validate_evidence(mode: &str, key: &str, setup: &EvidenceRun) -> Result<(), B
         )),
         "{evidence}; requests={requests}"
     );
+    assert!(evidence.contains("\"restore_clean_miss\":true"), "{evidence}");
     if setup.started {
         assert!(
             evidence.contains("timestamped_positive_partial_progress_before_cancel"),
@@ -214,26 +284,32 @@ fn validate_evidence(mode: &str, key: &str, setup: &EvidenceRun) -> Result<(), B
     assert!(!setup.observer.join("save-log-download.headers").exists());
     assert!(!setup.observer.join("save-log.curlrc").exists());
     assert!(!setup.observer.join("save-log-api-status").exists());
+    assert!(!setup.observer.join("restore-step.log").exists());
+    assert!(!setup.observer.join("restore-log.curlrc").exists());
     assert_log_requests(&setup.curl_log, mode)?;
     Ok(())
 }
 
 fn assert_log_requests(path: &Path, mode: &str) -> Result<(), Box<dyn Error>> {
     let requests = fs::read_to_string(path)?;
+    let lines = requests.lines().collect::<Vec<_>>();
     assert_eq!(
-        requests.lines().next(),
-        Some(
-            "observer-api https://api.github.com/repos/tailrocks/velnor-new/actions/jobs/456/steps/2/logs true"
-        )
+        lines.first(),
+        Some(&"observer-api https://api.github.com/repos/tailrocks/velnor-new/actions/jobs/456/steps/2/logs true")
     );
-    if mode != "missing" && mode != "malformed" && mode != "large-header" {
+    let child_signed = mode != "missing" && mode != "malformed" && mode != "large-header";
+    if child_signed {
         assert_eq!(
-            requests.lines().nth(1),
-            Some("observer-signed authorized=false")
+            lines.get(1),
+            Some(&"observer-signed authorized=false")
         );
-    } else {
-        assert_eq!(requests.lines().count(), 1);
     }
+    let restore_at = 1 + usize::from(child_signed);
+    assert_eq!(lines.get(restore_at), Some(&"restore-api authorized=true"));
+    assert_eq!(
+        lines.get(restore_at + 1),
+        Some(&"restore-signed authorized=false")
+    );
     Ok(())
 }
 
@@ -242,14 +318,16 @@ fn assert_classification(
     mut env: BTreeMap<String, String>,
     observer: &Path,
     key: &str,
-    started: bool,
+    reservation_expected: bool,
 ) -> Result<(), Box<dyn Error>> {
     env.extend([
         ("SHOULD_OBSERVE".to_owned(), "true".to_owned()),
         ("DERIVED_KEY".to_owned(), key.to_owned()),
         ("VALIDATED_CACHE_KEY".to_owned(), key.to_owned()),
-        ("RESTORE_HIT".to_owned(), "false".to_owned()),
+        ("RESTORE_HIT".to_owned(), String::new()),
         ("MATCHED_KEY".to_owned(), String::new()),
+        ("RESTORE_PRIMARY_KEY".to_owned(), key.to_owned()),
+        ("RESTORE_CONCLUSION".to_owned(), "success".to_owned()),
         ("CONTROLLER_READY".to_owned(), "true".to_owned()),
         (
             "CONTROLLER_READY_REASON".to_owned(),
@@ -275,7 +353,7 @@ fn assert_classification(
     )?;
     assert!(classified.status.success());
     let result = fs::read_to_string(observer.join("result.json"))?;
-    if started {
+    if reservation_expected {
         assert!(
             result.contains("\"outcome\":\"RESERVATION-UNKNOWN/INCONCLUSIVE\""),
             "{result}"

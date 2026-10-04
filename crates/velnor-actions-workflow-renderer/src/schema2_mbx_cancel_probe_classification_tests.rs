@@ -29,6 +29,51 @@ fn classifier_requires_proven_windows_and_preserves_unknown_reservations()
     Ok(())
 }
 
+#[test]
+fn missing_restore_outputs_stay_not_run_after_a_proven_upload_window()
+-> Result<(), Box<dyn Error>> {
+    for missing in ["all", "primary", "conclusion", "failed"] {
+        assert_restore_not_run(missing)?;
+    }
+    Ok(())
+}
+
+fn assert_restore_not_run(missing: &str) -> Result<(), Box<dyn Error>> {
+    let mut fixture = setup_classifier("during-save", true, false)?;
+    for (key, value) in &mut fixture.envs {
+        if matches!(missing, "all" | "failed")
+            && matches!(key.as_str(), "RESTORE_HIT" | "MATCHED_KEY")
+        {
+            value.clear();
+        }
+        if matches!(missing, "all" | "primary") && key == "RESTORE_PRIMARY_KEY" {
+            value.clear();
+        }
+        if matches!(missing, "all" | "conclusion") && key == "RESTORE_CONCLUSION" {
+            value.clear();
+        }
+        if missing == "failed" && key == "RESTORE_CONCLUSION" {
+            value.clear();
+            value.push_str("failure");
+        }
+    }
+    let output = run_bash(
+        scripts::OBSERVER_CLASSIFY,
+        &fixture.root,
+        &fixture.bin,
+        &fixture.envs,
+    )?;
+    assert!(output.status.success());
+    let result = fs::read_to_string(fixture.observer.join("result.json"))?;
+    assert!(result.contains("\"outcome\":\"NOT_RUN\""), "{result}");
+    assert!(
+        result.contains("restore_action_outputs_missing_or_inconsistent"),
+        "{result}"
+    );
+    fs::remove_dir_all(fixture.root)?;
+    Ok(())
+}
+
 fn classify(phase: &str, upload_started: bool, committed: bool) -> Result<String, Box<dyn Error>> {
     let fixture = setup_classifier(phase, upload_started, committed)?;
     let output = run_bash(
@@ -95,7 +140,8 @@ fn child_evidence(phase: &str, upload_started: bool, committed: bool) -> String 
         format!(r#"{{"count":{after_count},"caches":[]}}"#)
     };
     format!(
-        r#"{{"save_step_started":{save_started},"save_step_conclusion":"{save_conclusion}","cancel_step_conclusion":"cancelled","upload_started_before_cancel":{upload_started},"cache_before":{{"count":0,"caches":[]}},"cache_after":{after}}}"#
+        r#"{{"save_step_started":{save_started},"save_step_conclusion":"{save_conclusion}","cancel_step_conclusion":"cancelled","upload_started_before_cancel":{upload_started},"restore_clean_miss":{},"cache_before":{{"count":0,"caches":[]}},"cache_after":{after}}}"#,
+        !committed
     )
 }
 
@@ -116,7 +162,7 @@ fn classifier_env(
             "qualification-mbx-v1/cancel-pre-save-victim",
         )
     };
-    let restore_hit = if committed { "true" } else { "false" };
+    let restore_hit = if committed { "true" } else { "" };
     let matched_key = if committed { FIXTURE_KEY } else { "" };
     vec![
         ("RUNNER_TEMP".to_owned(), root.display().to_string()),
@@ -138,6 +184,8 @@ fn classifier_env(
         ("VALIDATED_CACHE_KEY".to_owned(), FIXTURE_KEY.to_owned()),
         ("RESTORE_HIT".to_owned(), restore_hit.to_owned()),
         ("MATCHED_KEY".to_owned(), matched_key.to_owned()),
+        ("RESTORE_PRIMARY_KEY".to_owned(), FIXTURE_KEY.to_owned()),
+        ("RESTORE_CONCLUSION".to_owned(), "success".to_owned()),
         ("CONTROLLER_READY".to_owned(), "true".to_owned()),
         (
             "CONTROLLER_READY_REASON".to_owned(),

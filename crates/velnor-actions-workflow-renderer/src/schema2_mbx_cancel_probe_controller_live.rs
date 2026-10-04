@@ -1,5 +1,7 @@
 //! Live child-run binding, cancellation, and terminal-state polling.
 
+use super::CACHE_SNAPSHOT_FUNCTION;
+
 const API_COMMON: &str = r#"set -euo pipefail
 umask 077
 root="$RUNNER_TEMP/mbx-cancel-controller"
@@ -107,7 +109,7 @@ artifact_location() {
   local -a pipe_status
   test -n "${GH_TOKEN:-}" || return 1
   set +o pipefail
-  curl --proto '=https' --max-redirs 0 --connect-timeout 15 --max-time 30 \
+  curl --disable --proto '=https' --max-redirs 0 --connect-timeout 15 --max-time 30 \
     --max-filesize 65536 --silent --show-error --fail --dump-header - --output /dev/null \
     --header "Authorization: Bearer $GH_TOKEN" \
     --header 'Accept: application/vnd.github+json' \
@@ -136,7 +138,7 @@ download_signed_artifact() {
   set +o pipefail
   (
     ulimit -f 128
-    if curl --config "$root/artifact.curlrc" --proto '=https' --max-redirs 0 \
+    if curl --disable --config "$root/artifact.curlrc" --proto '=https' --max-redirs 0 \
       --connect-timeout 15 --max-time 45 --max-filesize 1048576 --fail \
       --silent --show-error --dump-header "$headers" --output - \
       2> "$root/artifact-curl.stderr"; then
@@ -261,10 +263,8 @@ if [ -s "$root/validated-victim.json" ] \
   && jq -e --arg actor "$(jq -er '.actor' "$root/validated-victim.json")" '.actor.login == $actor' "$root/run.json" >/dev/null 2>&1; then
   if gh_api --method GET "/repos/$GITHUB_REPOSITORY/actions/caches?key=$(jq -r '.cache_key' "$root/validated-victim.json")&ref=refs/heads/main" \
       > "$root/cache-before.json" 2>/dev/null; then
-    jq -c --arg key "$(jq -r '.cache_key' "$root/validated-victim.json")" \
-      '[.actions_caches[] | select(.key == $key and .ref == "refs/heads/main")]
-       | {count:length,caches:map({id,key,ref,size_in_bytes,last_accessed_at})}' \
-      "$root/cache-before.json" > "$root/cache-before-exact.json" || printf '{"count":-1,"caches":[]}' > "$root/cache-before-exact.json"
+    cache_snapshot "$root/cache-before.json" "$root/cache-before-exact.json" \
+      "$(jq -r '.cache_key' "$root/validated-victim.json")"
   else
     printf '{"count":-1,"caches":[]}' > "$root/cache-before-exact.json"
   fi
@@ -318,7 +318,7 @@ printf 'terminal=%s\nterminal_state=%s\n' "$terminal" "$terminal_state" >> "$GIT
 "#;
 
 pub(in crate::schema2::mbx_cancel_probe) fn cancel_exact() -> String {
-    format!("{API_COMMON}{RECEIPT_HELPERS}{CANCEL_EXACT_BODY}")
+    format!("{API_COMMON}{RECEIPT_HELPERS}{CACHE_SNAPSHOT_FUNCTION}{CANCEL_EXACT_BODY}")
 }
 
 pub(in crate::schema2::mbx_cancel_probe) fn wait_terminal() -> String {

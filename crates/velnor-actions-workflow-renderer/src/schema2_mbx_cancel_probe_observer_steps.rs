@@ -24,10 +24,11 @@ pub(super) fn observer_cache_before_step(
             "${{ steps.mbx-cancel-receipt.outputs.child_workflow_id }}".to_owned(),
         ),
     ]);
+    let script = scripts::observer_cache_before();
     super::super::render::token_bash_step(
         "Record exact cache state before observer restore",
         None,
-        scripts::OBSERVER_CACHE_BEFORE,
+        &script,
         &env,
         Some("steps.mbx-cancel-receipt.outputs.should_observe == 'true'"),
     )
@@ -41,6 +42,22 @@ pub(super) fn observer_evidence_step(
     env.extend(controller_receipt_env());
     env.extend([
         (
+            "OBSERVER_JOB_NAME".to_owned(),
+            format!("MBX cancellation / {} fresh observer", phase.token()),
+        ),
+        (
+            "DERIVED_KEY".to_owned(),
+            "${{ steps.mbx-bundle-key.outputs.primary }}".to_owned(),
+        ),
+        (
+            "RESTORE_PRIMARY_KEY".to_owned(),
+            "${{ steps.mbx-bundle.outputs.cache-primary-key }}".to_owned(),
+        ),
+        (
+            "RESTORE_CONCLUSION".to_owned(),
+            "${{ steps.mbx-bundle.conclusion }}".to_owned(),
+        ),
+        (
             "RUN_ID".to_owned(),
             "${{ steps.mbx-cancel-receipt.outputs.child_run_id }}".to_owned(),
         ),
@@ -49,10 +66,11 @@ pub(super) fn observer_evidence_step(
             "${{ steps.mbx-cancel-receipt.outputs.child_workflow_id }}".to_owned(),
         ),
     ]);
+    let script = scripts::observer_evidence();
     super::super::render::token_bash_step(
         "Record exact child cache and upload evidence",
         None,
-        scripts::OBSERVER_EVIDENCE,
+        &script,
         &env,
         Some("always() && steps.mbx-cancel-receipt.outputs.should_observe == 'true'"),
     )
@@ -95,6 +113,14 @@ pub(super) fn observer_classify_step(request: &MbxQualificationPins, phase: Phas
         (
             "MATCHED_KEY".to_owned(),
             "${{ steps.mbx-bundle.outputs.cache-matched-key }}".to_owned(),
+        ),
+        (
+            "RESTORE_PRIMARY_KEY".to_owned(),
+            "${{ steps.mbx-bundle.outputs.cache-primary-key }}".to_owned(),
+        ),
+        (
+            "RESTORE_CONCLUSION".to_owned(),
+            "${{ steps.mbx-bundle.conclusion }}".to_owned(),
         ),
         (
             "GENERATION".to_owned(),

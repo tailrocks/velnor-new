@@ -34,6 +34,47 @@ fn protected_environment_uses_native_job_field() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn observer_jobs_run_after_controller_failure_and_keep_phase_gates()
+-> Result<(), Box<dyn Error>> {
+    let request = request();
+    let hosted = Yaml::str("ubuntu-26.04");
+    for phase in [Phase::PreSave, Phase::DuringSave] {
+        let (id, rendered) = super::super::observer_job(&request, phase, &hosted)?;
+        let Yaml::Map(fields) = &rendered else {
+            return Err(io::Error::other("observer job is not a mapping").into());
+        };
+        let condition = fields
+            .iter()
+            .find(|(key, _)| key == "if")
+            .map(|(_, value)| value)
+            .ok_or("observer job condition missing")?;
+        assert_eq!(
+            condition,
+            &Yaml::str(format!("always() && ({})", phase.gate("observer")))
+        );
+        assert!(fields.iter().any(|(key, value)| {
+            key == "needs"
+                && value
+                    == &Yaml::Seq(vec![Yaml::str(phase.controller_id().to_owned())])
+        }));
+        assert_step_env(
+            &rendered,
+            "Record observer outcome",
+            "RESTORE_PRIMARY_KEY",
+            "${{ steps.mbx-bundle.outputs.cache-primary-key }}",
+        )?;
+        assert_step_env(
+            &rendered,
+            "Record observer outcome",
+            "RESTORE_CONCLUSION",
+            "${{ steps.mbx-bundle.conclusion }}",
+        )?;
+        assert_eq!(id, phase.observer_id());
+    }
+    Ok(())
+}
+
+#[test]
 fn victim_multiline_scripts_render_as_fixed_native_yaml_bodies() -> Result<(), Box<dyn Error>> {
     for phase in [Phase::PreSave, Phase::DuringSave] {
         let request = request();
@@ -186,4 +227,40 @@ fn step_name(step: &Yaml) -> Option<&str> {
         return None;
     };
     Some(name)
+}
+
+fn assert_step_env(
+    job: &Yaml,
+    name: &str,
+    key: &str,
+    expected: &str,
+) -> Result<(), Box<dyn Error>> {
+    let Yaml::Map(job_fields) = job else {
+        return Err("rendered job is not a map".into());
+    };
+    let (_, Yaml::Seq(steps)) = job_fields
+        .iter()
+        .find(|(field, _)| field == "steps")
+        .ok_or("steps missing")?
+    else {
+        return Err("steps are not a sequence".into());
+    };
+    let step = steps
+        .iter()
+        .find(|step| step_name(step) == Some(name))
+        .ok_or("script step missing")?;
+    let Yaml::Map(fields) = step else {
+        return Err("script step is not a map".into());
+    };
+    let (_, Yaml::Map(env)) = fields
+        .iter()
+        .find(|(field, _)| field == "env")
+        .ok_or("step environment missing")?
+    else {
+        return Err("step environment is not a map".into());
+    };
+    assert!(env.iter().any(|(field, value)| {
+        field == key && value == &Yaml::str(expected.to_owned())
+    }));
+    Ok(())
 }
