@@ -155,6 +155,83 @@ fn recovery_reopens_exact_lease_after_restart_for_concurrent_readers() -> Result
 }
 
 #[test]
+fn recovery_syncs_after_visible_object_publication_and_retries() -> Result<(), Box<dyn Error>> {
+    let root = TestRoot::new()?;
+    let store_path = root.path().join("store");
+    let store = ActionArchiveStore::open(&store_path)?;
+    let bytes = archive_file(b"name: action\n")?;
+    let action = identity(&bytes)?;
+    assert_eq!(
+        store
+            .publish_with_sync_fault(&action, Cursor::new(&bytes), 1)
+            .err(),
+        Some(ActionArchiveSeedError::Io)
+    );
+    let lease = store.lease("object-sync-row", 202, std::slice::from_ref(&action), None)?;
+    let generation = lease.generation_id().to_owned();
+    drop(store);
+
+    let store = ActionArchiveStore::open(&store_path)?;
+    assert_eq!(
+        store
+            .open_existing_lease_with_sync_fault("object-sync-row", &generation, 1)
+            .err(),
+        Some(ActionArchiveSeedError::Io)
+    );
+    assert_eq!(
+        store
+            .open_existing_lease_with_sync_fault("object-sync-row", &generation, 2)
+            .err(),
+        Some(ActionArchiveSeedError::Io)
+    );
+    assert!(
+        store
+            .open_existing_lease("object-sync-row", &generation)
+            .is_ok()
+    );
+    Ok(())
+}
+
+#[test]
+fn recovery_syncs_after_visible_lease_publication_and_retries() -> Result<(), Box<dyn Error>> {
+    let root = TestRoot::new()?;
+    let store_path = root.path().join("store");
+    let store = ActionArchiveStore::open(&store_path)?;
+    let bytes = archive_file(b"name: action\n")?;
+    let action = identity(&bytes)?;
+    store.publish(&action, Cursor::new(&bytes))?;
+    let baseline = store.lease("baseline-row", 202, std::slice::from_ref(&action), None)?;
+    let generation = baseline.generation_id().to_owned();
+    assert_eq!(
+        store
+            .lease_with_sync_fault(
+                "lease-sync-row",
+                202,
+                std::slice::from_ref(&action),
+                Some(&generation),
+                1,
+            )
+            .err(),
+        Some(ActionArchiveSeedError::Io)
+    );
+    drop(store);
+
+    let store = ActionArchiveStore::open(&store_path)?;
+    assert_eq!(
+        store
+            .open_existing_lease_with_sync_fault("lease-sync-row", &generation, 2)
+            .err(),
+        Some(ActionArchiveSeedError::Io)
+    );
+    assert!(
+        store
+            .open_existing_lease("lease-sync-row", &generation)
+            .is_ok()
+    );
+    Ok(())
+}
+
+#[test]
 fn recovery_rejects_missing_mismatched_interrupted_and_retired_leases() -> Result<(), Box<dyn Error>>
 {
     let root = TestRoot::new()?;
