@@ -14,6 +14,7 @@ const MAX_ARCHIVE_BYTES: u64 = 512 * 1024 * 1024;
 const MAX_EXPANDED_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 const MAX_ENTRIES: usize = 100_000;
 const MAX_METADATA_BYTES: usize = 16 * 1024 * 1024;
+const MAX_GLOBAL_PAX_BYTES: u64 = 4096;
 struct BoundedReader<R> {
     inner: R,
     remaining: u64,
@@ -61,8 +62,14 @@ impl<R: Read> Read for BoundedReader<R> {
 pub(super) fn validate_archive(
     path: &Path,
     compressed_size: u64,
+    expected_commit_sha: &str,
 ) -> Result<(), ActionArchiveSeedError> {
-    validate_archive_bounded(path, compressed_size, MAX_EXPANDED_BYTES)
+    validate_archive_bounded(
+        path,
+        compressed_size,
+        MAX_EXPANDED_BYTES,
+        expected_commit_sha,
+    )
 }
 
 #[cfg(test)]
@@ -70,14 +77,16 @@ pub(crate) fn validate_archive_with_limit(
     path: &Path,
     compressed_size: u64,
     expanded_limit: u64,
+    expected_commit_sha: &str,
 ) -> Result<(), ActionArchiveSeedError> {
-    validate_archive_bounded(path, compressed_size, expanded_limit)
+    validate_archive_bounded(path, compressed_size, expanded_limit, expected_commit_sha)
 }
 
 fn validate_archive_bounded(
     path: &Path,
     compressed_size: u64,
     expanded_limit: u64,
+    expected_commit_sha: &str,
 ) -> Result<(), ActionArchiveSeedError> {
     if compressed_size == 0 || compressed_size > MAX_ARCHIVE_BYTES {
         return Err(ActionArchiveSeedError::SizeLimit);
@@ -89,17 +98,34 @@ fn validate_archive_bounded(
     let mut members = Vec::new();
     let mut metadata_bytes = 0_usize;
     let mut expanded = 0_u64;
+    let mut first_entry = true;
     {
         let mut entries = archive
             .entries()
             .map_err(|error| archive_error(&hit_limit, error))?
             .raw(true);
         for result in &mut entries {
-            let entry = result.map_err(|error| archive_error(&hit_limit, error))?;
+            let mut entry = result.map_err(|error| archive_error(&hit_limit, error))?;
             let entry_type = entry.header().entry_type();
+            if entry_type.is_pax_global_extensions() {
+                if !first_entry {
+                    return Err(ActionArchiveSeedError::UnsafeEntry);
+                }
+                validate_global_pax_header(
+                    &mut entry,
+                    expected_commit_sha,
+                    &mut metadata_bytes,
+                    &mut expanded,
+                    expanded_limit,
+                    &hit_limit,
+                )?;
+                first_entry = false;
+                continue;
+            }
             if is_extension(entry_type) {
                 return Err(ActionArchiveSeedError::UnsafeEntry);
             }
+            first_entry = false;
             let name = safe_path(
                 &entry
                     .path()
@@ -124,6 +150,84 @@ fn validate_archive_bounded(
     let mut reader = archive.into_inner();
     drain_archive(&mut reader, expanded, expanded_limit, &hit_limit)?;
     validate_members(members)
+}
+
+fn validate_global_pax_header<R: Read>(
+    entry: &mut tar::Entry<'_, R>,
+    expected_commit_sha: &str,
+    metadata_bytes: &mut usize,
+    expanded: &mut u64,
+    expanded_limit: u64,
+    hit_limit: &AtomicBool,
+) -> Result<(), ActionArchiveSeedError> {
+    if entry.path_bytes().as_ref() != b"pax_global_header" {
+        return Err(ActionArchiveSeedError::UnsafeEntry);
+    }
+    let size = entry.size();
+    if size > MAX_GLOBAL_PAX_BYTES {
+        return Err(ActionArchiveSeedError::SizeLimit);
+    }
+    let size_usize = usize::try_from(size).map_err(|_| ActionArchiveSeedError::SizeLimit)?;
+    *metadata_bytes = metadata_bytes
+        .checked_add(b"pax_global_header".len())
+        .and_then(|count| count.checked_add(size_usize))
+        .ok_or(ActionArchiveSeedError::SizeLimit)?;
+    if *metadata_bytes > MAX_METADATA_BYTES {
+        return Err(ActionArchiveSeedError::SizeLimit);
+    }
+    let mut body = Vec::with_capacity(size_usize);
+    entry
+        .read_to_end(&mut body)
+        .map_err(|error| archive_error(hit_limit, error))?;
+    if body.len() != size_usize {
+        return Err(ActionArchiveSeedError::InvalidArchive);
+    }
+    validate_codeload_comment(&body, expected_commit_sha)?;
+    *expanded = expanded
+        .checked_add(size)
+        .ok_or(ActionArchiveSeedError::SizeLimit)?;
+    if *expanded > expanded_limit {
+        return Err(ActionArchiveSeedError::SizeLimit);
+    }
+    Ok(())
+}
+
+fn validate_codeload_comment(
+    body: &[u8],
+    expected_commit_sha: &str,
+) -> Result<(), ActionArchiveSeedError> {
+    let newline = body
+        .iter()
+        .position(|byte| *byte == b'\n')
+        .ok_or(ActionArchiveSeedError::UnsafeEntry)?;
+    if newline + 1 != body.len() {
+        return Err(ActionArchiveSeedError::UnsafeEntry);
+    }
+    let record = &body[..=newline];
+    let separator = record
+        .iter()
+        .position(|byte| *byte == b' ')
+        .ok_or(ActionArchiveSeedError::UnsafeEntry)?;
+    let length_bytes = &record[..separator];
+    if length_bytes.is_empty()
+        || length_bytes.len() > 1 && length_bytes[0] == b'0'
+        || !length_bytes.iter().all(u8::is_ascii_digit)
+    {
+        return Err(ActionArchiveSeedError::UnsafeEntry);
+    }
+    let length = std::str::from_utf8(length_bytes)
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .ok_or(ActionArchiveSeedError::UnsafeEntry)?;
+    if length != record.len() {
+        return Err(ActionArchiveSeedError::UnsafeEntry);
+    }
+    let field = &record[separator + 1..record.len() - 1];
+    let prefix = b"comment=";
+    if !field.starts_with(prefix) || &field[prefix.len()..] != expected_commit_sha.as_bytes() {
+        return Err(ActionArchiveSeedError::UnsafeEntry);
+    }
+    Ok(())
 }
 
 fn is_extension(entry_type: EntryType) -> bool {
