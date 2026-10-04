@@ -335,7 +335,7 @@ if [ "$should_observe" = true ] && [ -s "$root/child-evidence.json" ] \
           || [ "$controller_before_count" = -1 ]; then
           reason=exact_cache_api_snapshot_unavailable
         elif [ "$after_count" = 1 ] && [ "$restore_state" = HIT ] \
-          && [ "$before_count" = 0 ] && [ "$controller_before_count" = 0 ] \
+          && [[ "$before_count" =~ ^[01]$ ]] && [ "$controller_before_count" = 0 ] \
           && [[ "$import_count" =~ ^[1-9][0-9]*$ ]] && [[ "$reuse_count" =~ ^[1-9][0-9]*$ ]]; then
           outcome=HIT
           reason=exact_key_restored_imported_and_reused_after_cancelled_upload

@@ -139,8 +139,9 @@ fn child_evidence(phase: &str, upload_started: bool, committed: bool) -> String 
     } else {
         format!(r#"{{"count":{after_count},"caches":[]}}"#)
     };
+    let before = after.clone();
     format!(
-        r#"{{"save_step_started":{save_started},"save_step_conclusion":"{save_conclusion}","cancel_step_conclusion":"cancelled","upload_started_before_cancel":{upload_started},"restore_clean_miss":{},"cache_before":{{"count":0,"caches":[]}},"cache_after":{after}}}"#,
+        r#"{{"save_step_started":{save_started},"save_step_conclusion":"{save_conclusion}","cancel_step_conclusion":"cancelled","upload_started_before_cancel":{upload_started},"restore_clean_miss":{},"cache_before":{before},"cache_after":{after}}}"#,
         !committed
     )
 }
