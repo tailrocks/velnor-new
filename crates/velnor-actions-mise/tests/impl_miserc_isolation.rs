@@ -7,12 +7,10 @@ use std::process::{Command, Output};
 use std::sync::atomic::{AtomicU64, Ordering};
 use velnor_actions_mise::command::IsolatedCommand;
 
-const PINNED_MISE: &str = "2026.9.18";
-const FIX_SOURCE_REV: &str = "dfe74a90b41603625ee6aabecb42f14a1f5eb0f6";
-const FIX_SOURCE_VERSION: &str = "2026.10.1";
-const BINARY_ENV: &str = "VELNOR_MISE_REGRESSION_BINARY";
-const BINARY_SHA_ENV: &str = "VELNOR_MISE_REGRESSION_SHA256";
-const SOURCE_REV_ENV: &str = "VELNOR_MISE_REGRESSION_SOURCE_REV";
+#[path = "impl_miserc_isolation_identity.rs"]
+mod identity;
+use identity::MiseBinary;
+
 const BAD_TOML: &str = "[invalid\n";
 const EXEC_OUTPUT: &str = "velnor-miserc-exec-ok";
 
@@ -45,12 +43,6 @@ struct Fixture {
     config: PathBuf,
     system: PathBuf,
     malformed: Option<PathBuf>,
-}
-
-struct MiseBinary {
-    path: PathBuf,
-    version: String,
-    known_broken_release: bool,
 }
 
 type RawInvocation = (Vec<OsString>, Vec<(OsString, OsString)>);
@@ -114,116 +106,6 @@ impl Drop for Fixture {
     }
 }
 
-impl MiseBinary {
-    fn select() -> Result<Self, String> {
-        let explicit_binary = std::env::var_os(BINARY_ENV).is_some();
-        let path = match std::env::var_os(BINARY_ENV) {
-            Some(path) => PathBuf::from(path),
-            None => find_on_path("mise")?,
-        };
-        let path = path.canonicalize().map_err(|err| err.to_string())?;
-        if !path.is_file() {
-            return Err(format!("mise binary is not a file: {}", path.display()));
-        }
-        let sha256 = sha256_file(&path)?;
-        let identity_fixture = Fixture::new(None)?;
-        let version_result = run_raw(
-            &path,
-            &identity_fixture,
-            &identity_fixture.root,
-            &["--version"],
-            &[],
-        );
-        let version_output = version_result?;
-        if !version_output.status.success() {
-            return Err(format!(
-                "mise --version failed: {}",
-                output_text(&version_output)
-            ));
-        }
-        let version_text = String::from_utf8_lossy(&version_output.stdout);
-        let version = version_text
-            .split_whitespace()
-            .next()
-            .ok_or_else(|| "mise --version returned no release identifier".to_owned())?
-            .to_owned();
-        let source_rev = std::env::var(SOURCE_REV_ENV).ok();
-        let behavior = if let Some(rev) = source_rev {
-            if !explicit_binary || rev != FIX_SOURCE_REV || version != FIX_SOURCE_VERSION {
-                return Err(format!("unexpected fixed-source identity: {rev} {version}"));
-            }
-            let expected = std::env::var(BINARY_SHA_ENV)
-                .map_err(|_| format!("{BINARY_SHA_ENV} required for source binary"))?;
-            if sha256 != expected {
-                return Err(format!(
-                    "source binary digest mismatch: {sha256} != {expected}"
-                ));
-            }
-            eprintln!("mise source={rev} version={version} sha256={sha256}");
-            false
-        } else {
-            if !explicit_binary && version != PINNED_MISE {
-                return Err(format!(
-                    "PATH mise {version} does not match pin {PINNED_MISE}"
-                ));
-            }
-            let expected = official_affected_digest(&version)?;
-            if sha256 != expected {
-                return Err(format!(
-                    "official mise digest mismatch: {sha256} != {expected}"
-                ));
-            }
-            eprintln!("mise official_release={version} sha256={sha256}");
-            true
-        };
-        Ok(Self {
-            path,
-            version,
-            known_broken_release: behavior,
-        })
-    }
-}
-
-fn find_on_path(program: &str) -> Result<PathBuf, String> {
-    std::env::split_paths(&std::env::var_os("PATH").ok_or_else(|| "PATH is unset".to_owned())?)
-        .map(|dir| dir.join(program))
-        .find(|candidate| candidate.is_file())
-        .ok_or_else(|| format!("{program} not found on PATH"))
-}
-
-fn official_affected_digest(version: &str) -> Result<&'static str, String> {
-    match (version, std::env::consts::OS, std::env::consts::ARCH) {
-        ("2026.9.18", "linux", "x86_64") => {
-            Ok("d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4")
-        }
-        ("2026.9.18", "macos", "aarch64") => {
-            Ok("484c135bd4329975d608d3f77e26c2ece5d2f5590f18ca71f44440294f8cfa6f")
-        }
-        _ => Err(format!(
-            "unqualified mise release/platform: {version} {}/{}",
-            std::env::consts::OS,
-            std::env::consts::ARCH
-        )),
-    }
-}
-
-fn sha256_file(path: &Path) -> Result<String, String> {
-    for (program, args) in [("shasum", vec!["-a", "256"]), ("sha256sum", vec![])] {
-        let output = match Command::new(program).args(args).arg(path).output() {
-            Ok(output) if output.status.success() => output,
-            _ => continue,
-        };
-        let line = String::from_utf8_lossy(&output.stdout);
-        let digest = line
-            .split_whitespace()
-            .next()
-            .filter(|text| text.len() == 64 && text.chars().all(|ch| ch.is_ascii_hexdigit()))
-            .ok_or_else(|| format!("invalid SHA-256 output from {program}: {line}"))?;
-        return Ok(digest.to_ascii_lowercase());
-    }
-    Err("neither shasum nor sha256sum could hash the mise executable".to_owned())
-}
-
 fn run_raw(
     binary: &Path,
     fixture: &Fixture,
@@ -243,8 +125,8 @@ fn run_raw(
 
 fn selected_args(selection: Selection, operation: Operation) -> Vec<OsString> {
     let mut args = match operation {
-        // The fixed 2026.10.1 CLI rejects `--no-config --version`; retain both supported forms.
         Operation::Version if matches!(selection, Selection::FlagOnly) => {
+            // Mise's top-level --version short-circuit cannot be combined with --no-config.
             vec![OsString::from("version")]
         }
         Operation::Version => vec![OsString::from("--version")],
@@ -297,7 +179,11 @@ fn assert_no_config_behavior(
         return assert_miserc_error(output, fixture);
     }
     if !output.status.success() {
-        return Err(format!("fixed source failed: {}", output_text(output)));
+        return Err(format!(
+            "mise {} failed: {}",
+            binary.version,
+            output_text(output)
+        ));
     }
     let expected = match operation {
         Operation::Version => binary.version.as_str(),
@@ -359,6 +245,11 @@ fn real_mise_miserc_isolation_is_release_classified() -> Result<(), String> {
         ConfigLayer::System,
     ] {
         let fixture = Fixture::new(Some(layer))?;
+        let layer_name = match layer {
+            ConfigLayer::Project => "project",
+            ConfigLayer::Global => "global",
+            ConfigLayer::System => "system",
+        };
         for nested in [false, true] {
             let cwd = fixture.cwd(nested);
             let control = run_raw(
@@ -368,7 +259,8 @@ fn real_mise_miserc_isolation_is_release_classified() -> Result<(), String> {
                 &[OsString::from("--version")],
                 &[],
             )?;
-            assert_miserc_error(&control, &fixture)?;
+            assert_miserc_error(&control, &fixture)
+                .map_err(|err| format!("control layer={layer_name} nested={nested}: {err}"))?;
             for selection in [Selection::FlagOnly, Selection::EnvironmentOnly] {
                 for operation in [Operation::Version, Operation::Exec] {
                     let overlay = selected_env(selection);
@@ -383,7 +275,15 @@ fn real_mise_miserc_isolation_is_release_classified() -> Result<(), String> {
                         return Err("no-config selectors were not isolated".to_owned());
                     }
                     let output = run_raw(&binary.path, &fixture, cwd, &args, &overlay)?;
-                    assert_no_config_behavior(&binary, &output, &fixture, operation)?;
+                    assert_no_config_behavior(&binary, &output, &fixture, operation).map_err(
+                        |err| {
+                            format!(
+                                "no-config layer={layer_name} nested={nested} selection={} operation={}: {err}",
+                                if matches!(selection, Selection::FlagOnly) { "flag" } else { "env" },
+                                if matches!(operation, Operation::Version) { "version" } else { "exec" },
+                            )
+                        },
+                    )?;
                 }
             }
             let output = run_raw(
@@ -393,7 +293,8 @@ fn real_mise_miserc_isolation_is_release_classified() -> Result<(), String> {
                 &production_args,
                 &production_env,
             )?;
-            assert_no_config_behavior(&binary, &output, &fixture, Operation::Exec)?;
+            assert_no_config_behavior(&binary, &output, &fixture, Operation::Exec)
+                .map_err(|err| format!("production layer={layer_name} nested={nested}: {err}"))?;
         }
     }
     Ok(())
