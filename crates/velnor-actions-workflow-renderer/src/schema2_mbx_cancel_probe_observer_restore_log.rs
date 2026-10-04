@@ -47,9 +47,9 @@ save_log_proves_partial_before_cancel_error() {
       if [[ "$body" == *'The operation was canceled'* ]]; then return 1; fi
       if [[ "$body" == '##[error]'* ]]; then return 1; fi
       if [[ "$body" =~ ^Sent[[:space:]]([0-9]{1,20})[[:space:]]of[[:space:]]([0-9]{1,20})[[:space:]]\([0-9]+[.][0-9]%\),[[:space:]][0-9]+[.][0-9][[:space:]]MBs/sec$ ]]; then
-        valid_runner_timestamp "$timestamp" || return 1
         sent="${BASH_REMATCH[1]}"
         total="${BASH_REMATCH[2]}"
+        valid_runner_timestamp "$timestamp" || return 1
         [[ "$sent" =~ ^(0|[1-9][0-9]{0,19})$ ]] \
           && [[ "$total" =~ ^(0|[1-9][0-9]{0,19})$ ]] \
           && [[ "$sent" =~ ^[1-9][0-9]*$ ]] \
