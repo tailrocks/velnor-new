@@ -146,7 +146,7 @@ pub const MBX_CACHE_MODE_ENV: &str = "ACTIONS_CACHE_MODE";
 pub const MBX_RESTORE_NAME: &str = "Restore MBX objects";
 /// MBX automatic collection must stay enabled so low-disk builds can recover.
 pub(crate) const MBX_GC_AUTO_ENV: &str = "MBX_GC_AUTO";
-/// MBX 1.21.1+ honors this value and protects active build consumers.
+/// MBX 1.22.0+ honors this value and protects active build consumers.
 pub(crate) const MBX_GC_AUTO_VALUE: &str = "1";
 /// Mode that skips the action post. `read` does not permit writes.
 pub(crate) const MBX_ACTION_CACHE_MODE: &str = "read";

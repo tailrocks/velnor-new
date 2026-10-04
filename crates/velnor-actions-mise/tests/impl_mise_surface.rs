@@ -182,7 +182,7 @@ fn catalog_pins_ignore_project_selectors() -> Result<(), String> {
         first
             .argv(&pinned())
             .iter()
-            .any(|arg| arg == "mr-boxington@1.21.1"),
+            .any(|arg| arg == "mr-boxington@1.22.0"),
         "exact MBX invocation never downgrades"
     );
     Ok(())

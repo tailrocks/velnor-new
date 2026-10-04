@@ -12,7 +12,7 @@ fn mbx_uses() -> String {
 }
 
 fn render_mbx(id: &str, scale_set: bool) -> Result<String, RenderError> {
-    let mbx = mbx_objects_step(&mbx_uses(), false, "1.21.1")?;
+    let mbx = mbx_objects_step(&mbx_uses(), false, "1.22.0")?;
     let mut built = job(id, "MBX job", Vec::new(), vec![mbx]);
     if scale_set {
         let selector = ScaleSetSelector::try_new(
