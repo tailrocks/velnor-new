@@ -179,7 +179,7 @@ async fn resolved_acquire_without_jit_resumes_without_another_acquire() -> Resul
 }
 
 fn batch(message_id: i64, request_id: i64) -> Result<ParsedBatch, String> {
-    let mut polled = available(&[request_id]);
+    let polled = available(&[request_id]);
     let Poll::Batch(mut batch) = polled else {
         return Err("available fixture did not produce a batch".to_owned());
     };
