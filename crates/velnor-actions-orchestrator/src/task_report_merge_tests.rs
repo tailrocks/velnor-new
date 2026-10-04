@@ -232,7 +232,7 @@ fn provider_hit_validate_execution_aggregates_executed() {
     use std::collections::BTreeMap;
     use velnor_actions_contract::{ExecuteTaskIds, MatrixStatus, Trust, WorkflowEvent, digest_b3};
     let plan = fixture_plan();
-    let task_id = "stack/tofu/stacks/a/validate/default";
+    let task_id = "stack/tofu/dir-737461636b732f61/validate/default";
     let task_digest = digest_b3(b"tofu-validate-task");
     let entry = MatrixEntry::derive(
         "tofu",

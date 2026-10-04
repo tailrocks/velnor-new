@@ -61,7 +61,7 @@ fn chdir_findings_name_each_subdir_root_once() {
         }
     }
     let mut warnings = Vec::new();
-    push_chdir_findings(&discovery, &mut warnings);
+    push_chdir_findings(&discovery, &mut warnings).expect("valid proposal roots");
     assert_eq!(
         warnings,
         vec![
@@ -80,8 +80,24 @@ fn chdir_findings_name_each_subdir_root_once() {
         .proposals
         .push(velnor_actions_tofu::propose_task(&group).expect("proposes"));
     let mut silent = Vec::new();
-    push_chdir_findings(&root_only, &mut silent);
+    push_chdir_findings(&root_only, &mut silent).expect("valid root proposal");
     assert!(silent.is_empty());
+}
+
+#[test]
+fn chdir_findings_reject_a_forged_root_identity() {
+    use velnor_actions_tofu::{TofuTaskGroup, TofuTaskKind};
+    let mut discovery = discovery_with(Vec::new(), Vec::new());
+    let group = TofuTaskGroup {
+        root: "stacks/a".to_owned(),
+        kind: TofuTaskKind::Validate,
+        configuration: "default".to_owned(),
+        no_targets: false,
+    };
+    let mut task = velnor_actions_tofu::propose_task(&group).expect("proposes");
+    task.identity.project_root = "stacks/b".to_owned();
+    discovery.proposals.push(task);
+    assert!(push_chdir_findings(&discovery, &mut Vec::new()).is_err());
 }
 
 #[test]
@@ -121,11 +137,11 @@ fn derive_tofu_proposes_triples_with_fmt_scope_targets() {
     assert!(fmt.iter().all(|task| !task.no_targets));
     let validate = tasks
         .iter()
-        .find(|task| task.task_id == "stack/tofu/stacks/b/validate/default")
+        .find(|task| task.task_id == "stack/tofu/dir-737461636b732f62/validate/default")
         .expect("second validate");
     assert_eq!(
         validate.depends_on,
-        vec!["stack/tofu/stacks/b/init/default".to_owned()]
+        vec!["stack/tofu/dir-737461636b732f62/init/default".to_owned()]
     );
 }
 
@@ -173,8 +189,8 @@ fn derive_tofu_inits_once_per_root() {
     assert_eq!(
         inits,
         [
-            "stack/tofu/stacks/a/init/default",
-            "stack/tofu/stacks/b/init/default",
+            "stack/tofu/dir-737461636b732f61/init/default",
+            "stack/tofu/dir-737461636b732f62/init/default",
         ],
         "duplicate statuses still derive one init per root"
     );

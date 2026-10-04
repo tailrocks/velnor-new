@@ -132,7 +132,7 @@ fn validate_reports_executed_after_provider_cache_hit() -> TestResult {
     let obligation = plan
         .obligations
         .iter()
-        .find(|ob| ob.task_id == "stack/tofu/stacks/a/validate/default")
+        .find(|ob| ob.task_id == "stack/tofu/dir-737461636b732f61/validate/default")
         .ok_or("validate obligation")?;
     assert_eq!(obligation.decision, ObligationDecision::Execute);
     let entry = plan

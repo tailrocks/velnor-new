@@ -32,7 +32,7 @@ use crate::validators::{validate_diff_rev, validate_select_diff_args};
 pub(crate) fn select_universe<'a>(
     discovery: &'a Discovery,
     warnings: &mut Vec<String>,
-) -> Vec<&'a ProposedTask> {
+) -> Result<Vec<&'a ProposedTask>, crate::OrchestratorError> {
     let mut kept = Vec::new();
     for task in &discovery.proposals {
         if task.no_targets {
@@ -41,8 +41,8 @@ pub(crate) fn select_universe<'a>(
             kept.push(task);
         }
     }
-    crate::select_tofu::push_chdir_findings(discovery, warnings);
-    kept
+    crate::select_tofu::push_chdir_findings(discovery, warnings)?;
+    Ok(kept)
 }
 
 /// Changed package IDs, or `None` when the comparison is unknown.
