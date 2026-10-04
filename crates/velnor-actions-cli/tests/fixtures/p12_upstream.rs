@@ -140,6 +140,33 @@ fn latest_release_movement_still_fails() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn rust_cache_tag_listing_is_rejected_as_latest_source() -> Result<(), Box<dyn Error>> {
+    let fixture = harness::passing("p12-tags-latest-source")?;
+    harness::mutate(
+        &fixture.dir,
+        INVENTORY,
+        "\"latest_source\":\"https://api.github.com/repos/Swatinem/rust-cache/releases/latest\"",
+        "\"latest_source\":\"https://api.github.com/repos/Swatinem/rust-cache/tags\"",
+    )?;
+    let run = harness::run_script(&fixture.dir, &[])?;
+    harness::assert_fail(
+        &run,
+        "release latest_source must be an exact endpoint for its repository",
+    );
+    assert!(
+        harness::rows(&run).iter().any(|line| {
+            line.contains("\"subject\":\"Swatinem/rust-cache\"")
+                && line.contains("\"status\":\"fail\"")
+                && line.contains("release latest_source")
+        }),
+        "unordered tag listing passed as latest evidence:\n{}",
+        run.stdout
+    );
+    harness::cleanup(&fixture);
+    Ok(())
+}
+
+#[test]
 fn probe_writes_nothing() -> Result<(), Box<dyn Error>> {
     let fixture = probe_fixture("p12-readonly")?;
     let before = snapshot(&fixture.dir)?;

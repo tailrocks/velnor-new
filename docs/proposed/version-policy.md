@@ -99,13 +99,14 @@ input/output metadata. Generation emits the exact SHA and a matching version
 comment; it never queries a floating `latest` ref. No tag exception
 exists: `asamarts/alint` pins a full SHA like every other action.
 
-Verified defaults on 2026-10-03 (Mr. Boxington action; other pins were last checked 2026-09-28):
+The Mr. Boxington action pin was refreshed on 2026-10-04; other evidence keeps
+the timestamps recorded in the inventory:
 
 ```yaml
 uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
 uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-uses: jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6 # v1.6.0
+uses: jdx/mr-boxington-action@d0825fbaf3cc36ca2609aa38e71046265a1f1e37 # v1.7.1
 uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
 uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
 uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -116,10 +117,16 @@ uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
 Release records: [mise-action v4.3.0](https://github.com/jdx/mise-action/releases/tag/v4.3.0),
 [checkout v7.0.1](https://github.com/actions/checkout/releases/tag/v7.0.1),
 [download-artifact v8.0.1](https://github.com/actions/download-artifact/releases/tag/v8.0.1),
-[mr-boxington-action v1.6.0](https://github.com/jdx/mr-boxington-action/releases/tag/v1.6.0),
+[mr-boxington-action v1.7.1](https://github.com/jdx/mr-boxington-action/releases/tag/v1.7.1),
 [cache v6.1.0](https://github.com/actions/cache/releases/tag/v6.1.0),
 [upload-artifact v7.0.1](https://github.com/actions/upload-artifact/releases/tag/v7.0.1),
 and [rust-cache v2.9.2](https://github.com/Swatinem/rust-cache/releases/tag/v2.9.2).
+
+The v1.7.1 action release includes PR #60’s isolated-objects-cache diagnostic
+fixes: it waits for in-flight resource samples and takes a final sample before
+reporting, keeps sampling failures from replacing cache-operation failures,
+and includes Windows `cache.tar` staging in archive-size sampling. The release
+notes state that cache restore and save behavior is unchanged.
 
 Checkout, Mise setup, cache restore/save, and artifact transfer are emitted
 where required by the workflow graph. The Mr. Boxington action is emitted only
@@ -146,8 +153,9 @@ catalog (latest release plus maintained compatibility pins). Each action row
 in `.velnor/freshness-inventory.json` declares `pin_kind = "release"` or
 `pin_kind = "commit"`. Release rows bind the version and full pinned/qualified
 SHA to the exact GitHub `/commits/{tag}` endpoint for the action's owner and
-repository. Their separate `latest_source` records the same-repository
-release or tag listing used for upstream freshness comparison. The scheduled
+repository. Their separate `latest_source` records a same-repository GitHub
+releases endpoint (`/releases/latest` or `/releases`) used for upstream
+freshness comparison; tag-listing endpoints are rejected. The scheduled
 probe requires the tag endpoint's response SHA to equal both reviewed SHAs.
 Commit rows bind the label, pinned and qualified SHA, recorded latest SHA,
 and exact GitHub commit API endpoint; an action subpath is removed from that

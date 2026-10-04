@@ -13,7 +13,7 @@ TAG_COMMIT_API = re.compile(
     r"https://api\.github\.com/repos/([A-Za-z0-9_.-]+)/"
     r"([A-Za-z0-9_.-]+)/commits/(v[0-9]+\.[0-9]+\.[0-9]+)\Z"
 )
-LATEST_RELEASE_PATHS = ("releases/latest", "releases", "tags")
+LATEST_RELEASE_PATHS = ("releases/latest", "releases")
 
 
 def _github_action_repository(action_key):

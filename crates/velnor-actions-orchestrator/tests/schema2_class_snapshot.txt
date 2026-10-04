@@ -507,12 +507,12 @@
       - name: Install pinned Rust toolchain
         run: "mise install rust@1.98.1 && printf '%s/bin\\n' \"$(mise exec rust@1.98.1 -- rustc --print sysroot)\" >> \"$GITHUB_PATH\""
       - name: Restore MBX objects
-        uses: jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6
+        uses: jdx/mr-boxington-action@d0825fbaf3cc36ca2609aa38e71046265a1f1e37
         id: mbx_cache
         with:
           github-cache-mode: objects
-          version: 1.21.1
-          cache-generation: velnor-qualification-mbx-1.21.1-action-1687e54eb349cadf61fa38b5813a77875489e8e6-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+          version: 1.22.0
+          cache-generation: velnor-qualification-mbx-1.22.0-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
           save-on-workflow-dispatch: "true"
       - name: Verify MBX action identity and write policy
         env:
@@ -520,7 +520,7 @@
           CACHE_SAVE_ELIGIBLE: ${{ steps.mbx_cache.outputs.cache-save-eligible }}
           CACHE_SAVE_REASON: ${{ steps.mbx_cache.outputs.cache-save-reason }}
           CACHE_HIT: ${{ steps.mbx_cache.outputs.cache-hit }}
-        run: "test \"$MBX_VERSION\" = '1.21.1' && test \"$CACHE_SAVE_ELIGIBLE\" = 'true' && test \"$CACHE_SAVE_REASON\" = 'workflow_dispatch'"
+        run: "test \"$MBX_VERSION\" = '1.22.0' && test \"$CACHE_SAVE_ELIGIBLE\" = 'true' && test \"$CACHE_SAVE_REASON\" = 'workflow_dispatch'"
       - name: Compile MBX cache probe
         run: "set -eu\nroot=\"$GITHUB_WORKSPACE/.velnor-mbx-cache-qualification\"\nmkdir -p \"$root/src\"\ncat > \"$root/Cargo.toml\" <<'EOF'\n[package]\nname = \"mbx-cache-qualification\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[workspace]\nmembers = [\".\"]\nresolver = \"3\"\n\n[lib]\npath = \"src/lib.rs\"\nEOF\ncat > \"$root/src/lib.rs\" <<'EOF'\npub fn cache_probe() -> u64 { 42 }\nEOF\nmbx build --manifest-path \"$root/Cargo.toml\"\n"
   mbx-cache-read-hosted:
@@ -564,12 +564,12 @@
       - name: Install pinned Rust toolchain
         run: "mise install rust@1.98.1 && printf '%s/bin\\n' \"$(mise exec rust@1.98.1 -- rustc --print sysroot)\" >> \"$GITHUB_PATH\""
       - name: Restore MBX objects
-        uses: jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6
+        uses: jdx/mr-boxington-action@d0825fbaf3cc36ca2609aa38e71046265a1f1e37
         id: mbx_cache
         with:
           github-cache-mode: objects
-          version: 1.21.1
-          cache-generation: velnor-qualification-mbx-1.21.1-action-1687e54eb349cadf61fa38b5813a77875489e8e6-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+          version: 1.22.0
+          cache-generation: velnor-qualification-mbx-1.22.0-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
           save-on-workflow-dispatch: "false"
       - name: Verify MBX action identity and write policy
         env:
@@ -577,7 +577,7 @@
           CACHE_SAVE_ELIGIBLE: ${{ steps.mbx_cache.outputs.cache-save-eligible }}
           CACHE_SAVE_REASON: ${{ steps.mbx_cache.outputs.cache-save-reason }}
           CACHE_HIT: ${{ steps.mbx_cache.outputs.cache-hit }}
-        run: "test \"$MBX_VERSION\" = '1.21.1' && test \"$CACHE_SAVE_ELIGIBLE\" = 'false' && test \"$CACHE_SAVE_REASON\" = 'workflow_dispatch; save-on-workflow-dispatch is off' && test \"$CACHE_HIT\" = 'false'"
+        run: "test \"$MBX_VERSION\" = '1.22.0' && test \"$CACHE_SAVE_ELIGIBLE\" = 'false' && test \"$CACHE_SAVE_REASON\" = 'workflow_dispatch; save-on-workflow-dispatch is off' && test \"$CACHE_HIT\" = 'false'"
       - name: Require imported MBX objects
         run: mbx cache stats --json | jq -e '.objects > 0' >/dev/null
       - name: Compile MBX cache probe

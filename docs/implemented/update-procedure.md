@@ -83,8 +83,13 @@ a skewed lock still fails the gate. Git dependencies are forbidden; a
 ## Upstream evidence and the scheduled probe
 
 No claim of "latest" is valid unless the inventory says what was checked,
-where it was checked, and when. Each tool/action row carries `source`
-(the upstream releases endpoint), `status`, and a `checked_at` timestamp
+where it was checked, and when. Tool rows carry `source` as their upstream
+version endpoint. Release-pinned action rows carry `source` as the exact
+same-repository `/commits/{pinned_version}` tag-to-SHA endpoint and a separate
+`latest_source` release endpoint (`/releases/latest` or `/releases`) for
+release comparison; tag-listing endpoints are rejected. Commit-pinned action
+rows use `source` as the exact `/commits/{pinned_sha}` endpoint and need no
+`latest_source`. Every row carries `status` and a `checked_at` timestamp
 (per row, else the inventory top level). `status: current` requires
 `qualified == pinned` AND evidence newer than `check_interval_hours`.
 `status: held` requires a covering temporary hold. Any other status, any
