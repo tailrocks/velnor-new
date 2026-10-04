@@ -178,3 +178,42 @@ fn preview_preservation_failure_cleans_reservation_and_allows_retry() -> TestRes
     assert!(preview.join(".github/workflows/ci.yml").is_file());
     Ok(())
 }
+
+#[cfg(target_os = "macos")]
+#[test]
+fn generate_preserves_dangling_symlink_permissions() -> TestResult {
+    use std::os::unix::fs::{PermissionsExt, symlink};
+
+    let repo = make_repo(config_with_branch())?;
+    let root = repo.path();
+    let github = root.join(".github");
+    fs::create_dir_all(&github)?;
+    let link = github.join("dangling-link");
+    symlink("../missing-target", &link)?;
+    rustix::fs::chmodat(
+        rustix::fs::CWD,
+        &link,
+        rustix::fs::Mode::from_raw_mode(0o750),
+        rustix::fs::AtFlags::SYMLINK_NOFOLLOW,
+    )?;
+    let expected_mode = fs::symlink_metadata(&link)?.permissions().mode() & 0o7777;
+    assert_eq!(expected_mode, 0o750);
+
+    let prep = prepare(root)?;
+    let preview_parent = TempDir::new()?;
+    let preview = preview_parent.path().join("preview");
+    generate(
+        &prep,
+        &GenerateOptions {
+            output_dir: Some(preview.clone()),
+        },
+    )?;
+    generate(&prep, &GenerateOptions::default())?;
+
+    for output in [&preview, root] {
+        let copied = fs::symlink_metadata(output.join(".github/dangling-link"))?;
+        assert!(copied.file_type().is_symlink());
+        assert_eq!(copied.permissions().mode() & 0o7777, expected_mode);
+    }
+    Ok(())
+}
