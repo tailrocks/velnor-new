@@ -255,15 +255,41 @@ fn copy_entry(
 
 /// Recreate a symbolic link with its literal target, including dangling links.
 fn copy_symlink(source: &Path, destination: &Path) -> Result<(), OrchestratorError> {
+    let metadata = std::fs::symlink_metadata(source).map_err(|error| io(source, &error))?;
     let target = std::fs::read_link(source).map_err(|error| io(source, &error))?;
     #[cfg(unix)]
     {
-        std::os::unix::fs::symlink(target, destination).map_err(|error| io(destination, &error))
+        use std::os::unix::fs::{PermissionsExt, symlink};
+
+        symlink(target, destination).map_err(|error| io(destination, &error))?;
+        let mode = metadata.permissions().mode() & 0o7777;
+        let copied_mode = std::fs::symlink_metadata(destination)
+            .map_err(|error| io(destination, &error))?
+            .permissions()
+            .mode()
+            & 0o7777;
+        if mode != copied_mode {
+            let raw_mode = mode.try_into().map_err(|error| {
+                OrchestratorError::io(
+                    destination.display().to_string(),
+                    format!("symlink_mode_invalid:{error}"),
+                )
+            })?;
+            rustix::fs::chmodat(
+                rustix::fs::CWD,
+                destination,
+                rustix::fs::Mode::from_raw_mode(raw_mode),
+                rustix::fs::AtFlags::SYMLINK_NOFOLLOW,
+            )
+            .map_err(|error| {
+                OrchestratorError::io(destination.display().to_string(), error.to_string())
+            })?;
+        }
+        Ok(())
     }
     #[cfg(windows)]
     {
         use std::os::windows::fs::FileTypeExt;
-        let metadata = std::fs::symlink_metadata(source).map_err(|error| io(source, &error))?;
         let result = if metadata.file_type().is_symlink_dir() {
             std::os::windows::fs::symlink_dir(target, destination)
         } else {
