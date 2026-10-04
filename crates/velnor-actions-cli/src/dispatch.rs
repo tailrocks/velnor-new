@@ -5,9 +5,10 @@
 //! pre-existing file, `plan-v1`/`merge-v1`/`publish-baseline-v1` need a
 //! pre-existing request file, `fetch-reports-v1`/`write-task-report-v1`
 //! need runner temp plus the numeric run ID instead, and
-//! `write-preseed-manifest-v1` needs runner temp only. Anything else falls
-//! through to Clap, so public behavior is byte-identical with or without
-//! the environment set.
+//! `write-preseed-manifest-v1` needs runner temp only. Generator release
+//! manifest operations use their own explicit asset/version/tag/repository/
+//! source context. Anything else falls through to Clap, so public behavior
+//! is byte-identical with or without the environment set.
 
 use std::env;
 use std::fs;
@@ -84,6 +85,9 @@ pub(crate) fn run_public() -> ExitCode {
 /// to Clap; bare invocations then fail with the usage diagnostic (exit 2),
 /// keeping public behavior byte-identical with or without the environment.
 pub(crate) fn try_internal() -> Option<ExitCode> {
+    if let Some(outcome) = crate::dispatch_generator_release::try_internal() {
+        return Some(outcome);
+    }
     let request = gate_request()?;
     Some(run_internal(&request))
 }
@@ -91,7 +95,7 @@ pub(crate) fn try_internal() -> Option<ExitCode> {
 /// Check the private gate: known op plus request-file presence by op.
 ///
 /// Fetch and report take no request file: they need the runner-temp
-/// velnor directory plus the numeric run ID instead. The manifest op
+/// velnor directory plus the numeric run ID instead. The preseed-manifest op
 /// takes no request file either: runner temp scopes its output.
 fn gate_request() -> Option<InternalRequest> {
     let op = match env::var(OP_ENV).as_deref() {
@@ -256,7 +260,7 @@ fn run_merge_internal(path: &Path) -> ExitCode {
 }
 
 /// Report a private failure without printing the private operation.
-fn fail_internal(problem: &str) -> ExitCode {
+pub(crate) fn fail_internal(problem: &str) -> ExitCode {
     eprintln!("velnor-actions: internal request failed: {problem}");
     ExitCode::from(1)
 }
