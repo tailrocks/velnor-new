@@ -24,7 +24,7 @@ this repository ran.
 | G6-launchd | User LaunchAgent foreground `daemon run`; second daemon fails | PASS | `launchctl print gui/501` at 2026-10-03: absolute `daemon run`, `forks = 0`; second `daemon run` exit 1; bootout removed the job |
 | G6-binary | `velnor-host` help and not-ready status | PASS | `help_exits_success_and_a_bad_command_does_not`; status JSON `waiting_for_credentials` |
 | G7-publish | Published generator, image, and macOS binary consumed by ChainArgos | NOT_RUN | `generator-47815c83` was published and `baa78037` regenerated the consumer tree. Paired suite is not successful. The running host is not a published asset. |
-| G7-paired | Hosted baseline, N=1 canary, N=2, cold and warm paired runs | NOT_RUN | Features `37175314160` succeeded on `sha256:1dd3f906`, including services `111356618707`. Cold `37174439776` and warm `37174494720` were echoes. Not the full paired suite. |
+| G7-paired | Hosted baseline, N=1 canary, N=2, cold and warm paired runs | NOT_RUN | Class pair on `sha256:1dd3f906` is in `evidence.md`. Eight modes succeeded both waves. Cache restore missed. Compose and several local actions failed on both lanes. Not a pass. |
 | G8-merge | Final main uses pinned published generator; required checks kept | NOT_RUN | no promotion |
 
 Recovery gates use R0–R8. They do not renumber G0–G8.
@@ -33,10 +33,10 @@ Recovery gates use R0–R8. They do not renumber G0–G8.
 |---|---|---|---|
 | R0 | Current source, product, run, and open-PR inventory | PASS | `evidence.md` recovery inventory, 2026-10-03 |
 | R1 | Hosted MBX write then restore, bounded disk | FAIL | ENOSPC on `37114238559`. Push run `37163556069` wrote one bundle after df. That write is not the accepted restore, so this row stays FAIL. |
-| R2 | Archive semantics on the deployed amd64 image | NOT_RUN | Live tag is `sha256:1dd3f906` (listener wait, `prod_state`). `sha256:3f8e0b2b` remains on `-stream`. No actions-cache round trip on the deployed image. |
+| R2 | Archive semantics on the deployed amd64 image | NOT_RUN | Live tag is `sha256:1dd3f906`. Cache cold `37176041544` and warm `37177029188` saved on the scale set and missed on hosted restore. Not a round trip. |
 | R3 | Daemon lifecycle, N>1 backfill, cleanup | FAIL | Live pid 35645 is cdhash `c7e59739` (sha256 `788f363c`), not `de147432d`. A second mint after exit is not proven. |
 | R4 | Published repaired generator and full regenerated tree | NOT_RUN | `generator-47815c83` was published and ChainArgos `baa78037` was regenerated. Not a pass. `v0.1.0` was not moved. |
-| R5 | Cold and warm paired suite | NOT_RUN | Cold `37174439776` and warm `37174494720` are echo `mode=both`. Class jobs skipped. Not a suite. |
+| R5 | Cold and warm paired suite | NOT_RUN | Class-mode cold/warm pair is in `evidence.md`. It is not a successful suite. |
 | R6 | Docker capability suite and published macOS install | NOT_RUN | launchd program is a local binary, not a release asset |
 | R7 | Required checks and protected main | NOT_RUN | PR 2085 not merged |
 | R8 | P2 docs, diagnostics, PR dispositions | NOT_RUN | dispositions recorded under R0; remaining P2 work open |

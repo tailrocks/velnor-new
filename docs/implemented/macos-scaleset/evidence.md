@@ -378,3 +378,13 @@ Qualification `37174659386` (`mode=features`) concluded `failure`. Hosted JavaSc
 `79a92b8a2` waits for `/run/docker.sock` before the listener. Image `sha256:1dd3f9062e914f9b4f48db4b74d579c28358eaa7cbd6c2b2f26615a243e34547` is linux/amd64, user `runner`, entrypoint `/usr/local/bin/velnor-runner-entrypoint`, calls `wait-docker-sock`, has `prod_state`, and `sysseek` count 0. That id is the live tag `velnor-runner:ubuntu-26.04-2.337.0`. `sha256:3f8e0b2b` remains on `-stream`. `sha256:e1a0d1dc` remains on `-dash`. Tag `v0.1.0` was not moved. Host pid 35645 was not replaced.
 
 Qualification `37175314160` (`mode=features` on `n1-qualification`) concluded `success`. Scale-set services `111356618707` (labels `velnor`, `ubuntu-26.04-scale-set`) succeeded, as did scale-set JavaScript `111356618511`, artifacts `111356618508`, and Buildx `111356618403`. Hosted twins of those four classes succeeded. During the run, container `d454127701d6` was the new image id. This is not a G7 or R5 pass: `mode=both` stays echo-only, and cache, compose, and the other class modes were not run. G8 was not published.
+
+## Class pair 2026-10-04
+
+Live tag stayed `sha256:1dd3f906`. Cold then warm `workflow_dispatch` on `n1-qualification`. `mbx-cache-roundtrip` was not dispatched. Not a G7 or R5 pass. G8 was not published.
+
+Both waves succeeded for js-pin `37176049046`/`37177036322`, container `37176053837`/`37177040895`, outputs `37176057253`/`37177043168`, mask `37176060119`/`37177045639`, oidc `37176063188`/`37177048459`, bind `37176069412`/`37177053888`, ports `37176079342`/`37177062781`, and pressure `37176086944`/`37177067835`.
+
+Negative `37176083075`/`37177065242` failed `Intentional failure` on both lanes. That failure is required. Cancel `37176092508`/`37177072575` and cancel-service `37176095323`/`37177074730` were cancelled after the sleep step was in progress.
+
+Same failure on both lanes in both waves: compose `37176044152`/`37177031899` (`Start compose`), composite `37176046612`/`37177034203`, docker-action `37176051327`/`37177038684`, and post-fail `37176066354`/`37177050996` (local action path missing, no checkout), testcontainers `37176072422`/`37177056620` (`Install and reap`), submodule `37176075601`/`37177059993` (prove exit 2), secret `37176089845`/`37177070228` (canary step exit 1). Cache `37176041544`/`37177029188`: scale-set save succeeded, hosted restore missed `g4-cache-<run id>`. Not an R2 pass. Post-fail is not a post-step proof.
