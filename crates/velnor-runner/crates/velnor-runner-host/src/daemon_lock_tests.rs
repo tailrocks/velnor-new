@@ -145,6 +145,42 @@ fn restart_and_one_step_crash_recovery_preserve_the_anchor() -> Result<(), Box<d
     Ok(())
 }
 
+#[tokio::test]
+async fn concurrent_journal_commits_keep_the_external_revision_in_step()
+-> Result<(), Box<dyn Error>> {
+    let scratch = Scratch::new()?;
+    let database = scratch.file("concurrent.db");
+    let engine = format!("engine-{}", uuid::Uuid::new_v4());
+    let journal = crate::Journal::open(&database).await?;
+    let second_handle = crate::Journal::open(&database).await?;
+    assert!(journal.shares_process_state(&second_handle));
+    let lineage = guard(&engine, &scratch)?;
+    journal
+        .establish_engine_lineage(&engine, lineage.clone())
+        .await?;
+    second_handle
+        .establish_engine_lineage(&engine, lineage)
+        .await?;
+
+    let (first, second) = tokio::join!(
+        journal.reserve_launch("wave-a", 2),
+        second_handle.reserve_launch("wave-b", 2),
+    );
+    assert!(first.is_ok());
+    assert!(second.is_ok());
+    assert_eq!(journal.occupied_launches().await?, 2);
+    drop(journal);
+    drop(second_handle);
+
+    let restarted = crate::Journal::open(&database).await?;
+    let restarted_guard = guard(&engine, &scratch)?;
+    restarted
+        .establish_engine_lineage(&engine, restarted_guard)
+        .await?;
+    assert_eq!(restarted.occupied_launches().await?, 2);
+    Ok(())
+}
+
 #[test]
 fn skipped_revision_or_partial_anchor_fails_closed() -> Result<(), Box<dyn Error>> {
     let scratch = Scratch::new()?;

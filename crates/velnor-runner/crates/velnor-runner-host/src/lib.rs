@@ -3,6 +3,7 @@
 //! Callers persist intent before an external effect and never hold a
 //! transaction across that effect.
 
+pub(crate) mod action_archive_seed;
 mod assign;
 mod config;
 mod connect;
@@ -14,6 +15,8 @@ mod https;
 mod ipc;
 mod journal;
 mod journal_assignment;
+mod journal_effects;
+mod journal_identity;
 mod journal_schema;
 mod journal_sql;
 mod keychain;
@@ -36,7 +39,7 @@ pub use docker_client::connect_unix;
 pub use docker_spec::{
     ContainerPlan, DeleteDecision, audit_plan, delete_decision, plan_contains, runner_plan,
 };
-pub use error::HostError;
+pub use error::{HostError, PreparationCause};
 pub use https::HttpsTransport;
 pub use ipc::{MAX_FRAME, SOCKET_DIR_MODE, decode_frame, encode_frame};
 pub use journal::{IntentState, Journal, LaunchIdentity, Outcome};
@@ -50,11 +53,7 @@ pub use reconcile::{
     IntentRow, Reconcile, ReleaseFact, before_advertise, occupies, release_permitted,
 };
 pub use scale_set::{EnsureError, EnsuredSet, ensure_product_scale_set, product_runner_groups};
-pub use stage::{PairStop, PartialPair, remove_recorded, start_pair_until};
-pub use worker::{
-    BollardCreate, CreateProjection, Started, bollard_create, dind_create, runner_create,
-    start_pair,
-};
+pub use worker::Started;
 
 #[cfg(test)]
 mod assign_tests;
@@ -69,7 +68,11 @@ mod https_tests;
 #[cfg(test)]
 mod ipc_tests;
 #[cfg(test)]
+mod journal_effects_tests;
+#[cfg(test)]
 mod journal_identity_tests;
+#[cfg(test)]
+mod journal_migration_tests;
 #[cfg(test)]
 mod journal_tests;
 #[cfg(test)]
@@ -88,6 +91,8 @@ mod listen_tests;
 mod plist_tests;
 #[cfg(test)]
 mod readiness_tests;
+#[cfg(test)]
+mod reconcile_tests;
 #[cfg(test)]
 mod stage_tests;
 #[cfg(test)]

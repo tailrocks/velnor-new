@@ -1,4 +1,4 @@
-//! Docker inspect errors must stop capacity and reconcile decisions.
+//! Docker inspect errors must stop reconciliation decisions.
 
 use std::future::Future;
 use std::path::PathBuf;
@@ -20,12 +20,9 @@ async fn non_not_found_inspect_error_blocks_admission_and_reconcile() -> Result<
     let (scratch, journal) = journal("inspect-error").await?;
     let row_id = launch_row(&journal).await?;
     let before = journal.rows().await.map_err(|error| error.to_string())?;
-    let stub = DockerStub::open(vec![
-        http(500, r#"{"message":"private runner-id detail"}"#),
-        http(500, r#"{"message":"private runner-id detail"}"#),
-    ])?;
+    let stub = DockerStub::open(vec![http(500, r#"{"message":"private runner-id detail"}"#)])?;
 
-    let busy = within(slot::busy(&journal, &stub.docker, 1), "capacity probe").await?;
+    let occupied = within(slot::occupied_count(&journal), "capacity probe").await?;
     let reconcile = within(
         gate::reconcile_gate(&journal, &stub.docker),
         "reconcile probe",
@@ -34,9 +31,9 @@ async fn non_not_found_inspect_error_blocks_admission_and_reconcile() -> Result<
     stub.finish().await?;
 
     let expected = inspect_error(500);
-    assert_eq!(busy, Err(expected));
+    assert_eq!(occupied, Ok(1));
     assert_eq!(reconcile, Err(expected));
-    let errors = format!("{busy:?} {reconcile:?}");
+    let errors = format!("{reconcile:?}");
     if errors.contains("runner-id") || errors.contains("private runner-id detail") {
         return Err("inspect error exposed Docker response data".to_owned());
     }
@@ -132,7 +129,7 @@ pub(super) async fn launch_row_for_id(
         .await
         .map_err(|error| error.to_string())?;
     journal
-        .bind(row_id, Some(docker_id), None)
+        .bind_runner_container(row_id, docker_id)
         .await
         .map_err(|error| error.to_string())?;
     Ok(row_id)

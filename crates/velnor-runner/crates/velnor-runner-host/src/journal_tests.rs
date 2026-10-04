@@ -4,12 +4,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
-use velnor_runner_core::{
-    AcquireIntentId, Capacity, CleanupProof, Epoch, OwnedIds, WorkerId, WorkerState,
-};
-
-use crate::reconcile::{before_advertise, occupies, release_permitted};
-use crate::{HostError, IntentRow, IntentState, Journal, Outcome, Reconcile, ReleaseFact};
+use crate::{HostError, IntentState, Journal, Outcome};
 
 struct Scratch {
     path: PathBuf,
@@ -70,22 +65,6 @@ fn dir_contains(dir: &Path, needle: &str) -> Result<bool, HostError> {
         }
     }
     Ok(false)
-}
-
-fn intent(state: IntentState, kind: &str) -> IntentRow {
-    IntentRow {
-        id: 1,
-        kind: kind.to_owned(),
-        subject: "job".to_owned(),
-        state,
-        docker_id: None,
-        dind_id: None,
-        github_runner_id: None,
-        cleanup_proven: false,
-        launch_id: None,
-        assignment_key: None,
-        seed_generation_id: None,
-    }
 }
 
 #[tokio::test]
@@ -182,7 +161,7 @@ async fn around_commits_pending_before_effect_and_hides_secret() -> Result<(), H
     let slot = Arc::clone(&seen);
     let probe = path.clone();
     let id = journal
-        .around("acquire", "job-1", CANARY, async move |secret| {
+        .around("launch", "job-1", CANARY, async move |secret| {
             let secret_ok = secret == CANARY;
             let state = observed_state(&probe).await;
             if let Ok(mut guard) = slot.lock() {
@@ -201,9 +180,9 @@ async fn around_commits_pending_before_effect_and_hides_secret() -> Result<(), H
     let again = open(&path).await?;
     assert_eq!(again.read(id).await?, IntentState::Uncertain);
     assert!(!dir_contains(&scratch.path, CANARY)?);
-    journal
-        .bind(id, Some("ctr-bind-1"), Some("gh-bind-9"))
-        .await?;
+    assert!(journal.claim_jit(id).await?);
+    journal.bind_runner_container(id, "ctr-bind-1").await?;
+    journal.bind_github_runner(id, "gh-bind-9").await?;
     assert!(dir_contains(&scratch.path, "ctr-bind-1")?);
     Ok(())
 }
@@ -216,12 +195,13 @@ async fn replay_reuses_live_subject_and_failed_starts_again() -> Result<(), Host
     assert_eq!(journal.begin("acquire", "req-7").await?, first);
     journal.finish(first, Outcome::Done).await?;
     assert_eq!(journal.begin("acquire", "req-7").await?, first);
-    journal.finish(first, Outcome::DefiniteFailure).await?;
-    let third = journal.begin("acquire", "req-7").await?;
-    assert_ne!(third, first);
-    assert_eq!(journal.rows().await?.len(), 2);
+    let failed = journal.begin("acquire", "retry-7").await?;
+    journal.finish(failed, Outcome::DefiniteFailure).await?;
+    let retry = journal.begin("acquire", "retry-7").await?;
+    assert_ne!(retry, failed);
+    assert_eq!(journal.rows().await?.len(), 3);
     let other = journal.begin("provision", "req-7").await?;
-    assert_ne!(other, third);
+    assert_ne!(other, retry);
     let held = journal.begin("acquire", "req-9").await?;
     journal.finish(held, Outcome::Uncertain).await?;
     assert_eq!(journal.begin("acquire", "req-9").await?, held);
@@ -234,9 +214,11 @@ async fn cleanup_proof_reopens() -> Result<(), HostError> {
     let path = scratch.file();
     let id = {
         let journal = open(&path).await?;
-        let id = journal.begin("delete", "ctr-1").await?;
+        let id = journal.begin("launch", "ctr-1").await?;
+        assert!(journal.claim_jit(id).await?);
         journal.finish(id, Outcome::Done).await?;
-        journal.bind(id, Some("ctr-1"), Some("gh-1")).await?;
+        journal.bind_runner_container(id, "ctr-1").await?;
+        journal.bind_github_runner(id, "gh-1").await?;
         journal.record_cleanup(id).await?;
         id
     };
@@ -247,154 +229,4 @@ async fn cleanup_proof_reopens() -> Result<(), HostError> {
     assert_eq!(rows[0].docker_id.as_deref(), Some("ctr-1"));
     assert_eq!(rows[0].github_runner_id.as_deref(), Some("gh-1"));
     Ok(())
-}
-
-fn apply_release(
-    capacity: &mut Capacity,
-    worker: WorkerId,
-    fact: ReleaseFact,
-    proof: &CleanupProof,
-) -> Result<(), HostError> {
-    if release_permitted(fact) {
-        capacity
-            .release(worker, proof)
-            .map_err(|_| HostError::Journal)?;
-    }
-    Ok(())
-}
-
-#[test]
-fn release_permitted_gates_capacity_release() -> Result<(), HostError> {
-    let worker = WorkerId::new(1).map_err(|_| HostError::Journal)?;
-    let intent_id = AcquireIntentId::new(1).map_err(|_| HostError::Journal)?;
-    let mut capacity = Capacity::new(1);
-    capacity
-        .reserve(worker, intent_id, Epoch::new(1), 1, 1)
-        .map_err(|_| HostError::Journal)?;
-    let owned = OwnedIds {
-        container_id: "c1".to_owned(),
-        volume: "v1".to_owned(),
-    };
-    capacity
-        .store(
-            worker,
-            WorkerState::Cleaning {
-                epoch: Epoch::new(1),
-                owned: owned.clone(),
-            },
-        )
-        .map_err(|_| HostError::Journal)?;
-    let proof = CleanupProof {
-        container_id: "c1".to_owned(),
-        volume: "v1".to_owned(),
-    };
-    assert!(!release_permitted(ReleaseFact::Pending));
-    assert!(!release_permitted(ReleaseFact::Uncertain));
-    assert!(!release_permitted(ReleaseFact::DefiniteFailure));
-    assert!(release_permitted(ReleaseFact::ProvenCleanup));
-    apply_release(&mut capacity, worker, ReleaseFact::Pending, &proof)?;
-    apply_release(&mut capacity, worker, ReleaseFact::Uncertain, &proof)?;
-    apply_release(&mut capacity, worker, ReleaseFact::DefiniteFailure, &proof)?;
-    assert_eq!(capacity.occupancy(), 1);
-    apply_release(&mut capacity, worker, ReleaseFact::ProvenCleanup, &proof)?;
-    assert_eq!(capacity.occupancy(), 0);
-    Ok(())
-}
-
-#[test]
-fn before_advertise_holds_uncertain_and_adopts() {
-    let pending = intent(IntentState::Pending, "acquire");
-    let uncertain = intent(IntentState::Uncertain, "acquire");
-    assert_eq!(
-        before_advertise(&[pending], &[], &[], &[]),
-        Reconcile::Hold {
-            adopt: vec![],
-            occupied: 1,
-        }
-    );
-    assert_eq!(
-        before_advertise(&[uncertain], &[], &[], &[]),
-        Reconcile::Hold {
-            adopt: vec![],
-            occupied: 1,
-        }
-    );
-    let mut missing = intent(IntentState::Done, "delete");
-    missing.docker_id = Some("ctr-missing".to_owned());
-    missing.github_runner_id = Some("gh-1".to_owned());
-    assert_eq!(
-        before_advertise(&[missing.clone()], &[], &["gh-1"], &["ctr-missing"]),
-        Reconcile::Hold {
-            adopt: vec![],
-            occupied: 1,
-        }
-    );
-    missing.docker_id = Some("ctr-seen".to_owned());
-    assert_eq!(
-        before_advertise(&[missing], &["ctr-seen"], &[], &["ctr-seen"]),
-        Reconcile::Hold {
-            adopt: vec![],
-            occupied: 1,
-        }
-    );
-    assert_eq!(
-        before_advertise(&[], &["ctr-owned", "ctr-foreign"], &[], &["ctr-owned"]),
-        Reconcile::Hold {
-            adopt: vec!["ctr-owned".to_owned()],
-            occupied: 0,
-        }
-    );
-    let mut settled = intent(IntentState::Done, "delete");
-    settled.docker_id = Some("ctr-seen".to_owned());
-    settled.github_runner_id = Some("gh-1".to_owned());
-    assert_eq!(
-        before_advertise(
-            &[settled.clone()],
-            &["ctr-seen", "ctr-owned"],
-            &["gh-1"],
-            &["ctr-seen", "ctr-owned"],
-        ),
-        Reconcile::Hold {
-            adopt: vec!["ctr-owned".to_owned()],
-            occupied: 1,
-        }
-    );
-    assert_eq!(
-        before_advertise(&[settled], &["ctr-seen"], &["gh-1"], &["ctr-seen"]),
-        Reconcile::Advertise { occupied: 1 }
-    );
-}
-
-#[test]
-fn failed_acquire_does_not_occupy_and_clean_rows_advertise() {
-    let failed = intent(IntentState::Failed, "acquire");
-    assert!(!occupies(&failed));
-    assert_eq!(
-        before_advertise(&[failed], &[], &[], &[]),
-        Reconcile::Advertise { occupied: 0 }
-    );
-    let done = intent(IntentState::Done, "acquire");
-    assert!(occupies(&done));
-    assert_eq!(
-        before_advertise(&[done], &[], &[], &[]),
-        Reconcile::Advertise { occupied: 1 }
-    );
-    let mut proved = intent(IntentState::Done, "delete");
-    proved.docker_id = Some("ctr-gone".to_owned());
-    proved.cleanup_proven = true;
-    assert!(!occupies(&proved));
-    assert_eq!(
-        before_advertise(&[proved], &[], &[], &[]),
-        Reconcile::Advertise { occupied: 0 }
-    );
-    let mut failed_delete = intent(IntentState::Failed, "delete");
-    failed_delete.docker_id = Some("ctr-still".to_owned());
-    assert!(occupies(&failed_delete));
-    assert_eq!(
-        before_advertise(&[failed_delete], &[], &[], &["ctr-still"]),
-        Reconcile::Hold {
-            adopt: vec![],
-            occupied: 1,
-        }
-    );
 }

@@ -1,5 +1,4 @@
-//! A running launch container occupies one slot.
-//! Busy means the running count has reached capacity.
+//! Every launch without proven cleanup occupies one slot.
 
 use bollard::Docker;
 
@@ -9,12 +8,8 @@ use crate::scale_set::EnsureError;
 
 use super::inspect::container_running;
 
-pub(super) async fn busy(
-    journal: &Journal,
-    docker: &Docker,
-    capacity: u32,
-) -> Result<bool, EnsureError> {
-    Ok(running_count(journal, docker).await? >= capacity)
+pub(super) async fn occupied_count(journal: &Journal) -> Result<u32, EnsureError> {
+    journal.occupied_launches().await.map_err(map_journal)
 }
 
 pub(super) async fn running_count(journal: &Journal, docker: &Docker) -> Result<u32, EnsureError> {
@@ -53,7 +48,7 @@ pub(crate) const fn occupies(state: IntentState, docker_id: Option<&str>, runnin
     !matches!(state, IntentState::Failed) && docker_id.is_some() && running
 }
 
-fn map_journal(error: crate::error::HostError) -> EnsureError {
+pub(super) fn map_journal(error: crate::error::HostError) -> EnsureError {
     match error {
         crate::error::HostError::Endpoint => EnsureError::Endpoint,
         _ => EnsureError::Unexpected {

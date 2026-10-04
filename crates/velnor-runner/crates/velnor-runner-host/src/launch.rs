@@ -4,7 +4,6 @@
 //! passed to the starter and are not written to the journal.
 
 use std::fmt;
-use std::future::Future;
 
 use zeroize::Zeroize;
 
@@ -12,13 +11,14 @@ use velnor_runner_github::{
     Exchange, Poll, QueueSession, SessionRequest, Transport, TransportFail,
 };
 
+use crate::daemon_lock::EngineLineageGuard;
 use crate::ensure_product_scale_set;
 use crate::error::HostError;
-use crate::journal::Journal;
+use crate::journal::{Journal, LaunchIdentity, LaunchReservation};
 use crate::listen::{Link, Secret, admin_link};
 use crate::reconcile::Reconcile;
 use crate::scale_set::EnsureError;
-use crate::worker::{Started, start_pair};
+use crate::worker::{PreparedDind, Started, prepare_dind_until, start_runner_until};
 
 mod capacity;
 mod gate;
@@ -27,13 +27,20 @@ mod initial_scale_tests;
 mod inspect;
 #[cfg(all(test, unix))]
 mod inspect_tests;
+mod names;
+#[cfg(all(test, unix))]
+mod recovery_tests;
 mod session;
 mod slot;
 mod steps;
+mod steps_ack;
+mod steps_acquire;
 #[cfg(test)]
 mod subject_tests;
 mod trace;
 mod turn;
+
+use names::runner_name;
 
 pub(crate) use capacity::{install_job_capacity, job_capacity};
 
@@ -76,6 +83,29 @@ pub async fn launch_once(
     docker: &bollard::Docker,
     journal: &Journal,
 ) -> Result<LaunchReport, EnsureError> {
+    let engine = docker
+        .info()
+        .await
+        .map_err(|_| EnsureError::Unexpected {
+            status: 0,
+            step: "docker-info",
+        })?
+        .id
+        .ok_or(EnsureError::Unexpected {
+            status: 0,
+            step: "docker-engine-id",
+        })?;
+    let lineage = EngineLineageGuard::acquire(&engine).map_err(|_| EnsureError::Unexpected {
+        status: 0,
+        step: "engine-lineage",
+    })?;
+    journal
+        .establish_engine_lineage(&engine, lineage)
+        .await
+        .map_err(|_| EnsureError::Unexpected {
+            status: 0,
+            step: "engine-lineage",
+        })?;
     let set = ensure_product_scale_set(pat, owner, repo)?;
     if std::env::var("VELNOR_RECONCILE").ok().as_deref() == Some("1") {
         let decision = gate::reconcile_gate(journal, docker).await?;
@@ -159,28 +189,61 @@ pub(crate) trait Lane {
 ///
 /// Returns [`EnsureError`] when more than one job is offered, or a later step fails.
 /// An uncertain acquire is not acknowledged.
-pub(crate) async fn drive_offer<T, S, F>(
+pub(crate) async fn drive_offer<T, P, PF, S, F>(
     lane: &mut T,
     ctx: &Drive,
     polled: &Poll,
     journal: &Journal,
+    prepare: P,
     start: S,
 ) -> Result<Option<Started>, EnsureError>
 where
     T: velnor_runner_github::Transport + Lane,
-    S: FnOnce(&str, &[u8]) -> F,
-    F: Future<Output = Result<Started, HostError>>,
+    P: FnOnce(LaunchIdentity) -> PF,
+    PF: std::future::Future<Output = Result<PreparedDind, HostError>>,
+    S: FnOnce(LaunchIdentity, PreparedDind, Vec<u8>) -> F,
+    F: std::future::Future<Output = Result<Started, HostError>>,
+{
+    drive_offer_reserved(lane, ctx, polled, journal, None, prepare, start).await
+}
+
+/// Run one offer after poll admission reserved its durable slot.
+pub(crate) async fn drive_offer_reserved<T, P, PF, S, F>(
+    lane: &mut T,
+    ctx: &Drive,
+    polled: &Poll,
+    journal: &Journal,
+    reservation: Option<LaunchReservation>,
+    prepare: P,
+    start: S,
+) -> Result<Option<Started>, EnsureError>
+where
+    T: velnor_runner_github::Transport + Lane,
+    P: FnOnce(LaunchIdentity) -> PF,
+    PF: std::future::Future<Output = Result<PreparedDind, HostError>>,
+    S: FnOnce(LaunchIdentity, PreparedDind, Vec<u8>) -> F,
+    F: std::future::Future<Output = Result<Started, HostError>>,
 {
     if matches!(steps::idle(polled), steps::Idle::Scale) {
         let Poll::Batch(batch) = polled else {
             return Ok(None);
         };
-        return steps::scale_id(lane, ctx, batch, journal, start).await;
+        return steps::scale_id(lane, ctx, batch, journal, prepare, start).await;
     }
     let Some((batch, request_id)) = steps::assignment(polled)? else {
         return Ok(None);
     };
-    steps::launch_id(lane, ctx, batch, journal, request_id, start).await
+    steps_acquire::launch_reserved(
+        lane,
+        ctx,
+        batch,
+        journal,
+        request_id,
+        reservation,
+        prepare,
+        start,
+    )
+    .await
 }
 
 fn report(
@@ -228,26 +291,17 @@ async fn scale_session(
         queue: None,
     };
     let name = runner_name(&session.session_id);
-    steps::scale_unacked(&mut lane, &ctx, journal, &name, |volume, jit| {
-        let volume = volume.to_owned();
-        let payload = jit.to_vec();
-        async move { start_pair(docker, &volume, &payload).await }
-    })
+    steps::scale_unacked(
+        &mut lane,
+        &ctx,
+        journal,
+        &name,
+        |identity| async move { prepare_dind_until(docker, &identity).await },
+        |_identity, prepared, payload| async move {
+            start_runner_until(docker, &prepared, &payload, None).await
+        },
+    )
     .await
-}
-
-fn runner_name(session_id: &str) -> String {
-    let mut name = String::from("s");
-    for ch in session_id.chars().filter(char::is_ascii_alphanumeric) {
-        name.push(ch);
-        if name.len() == 13 {
-            break;
-        }
-    }
-    if name.len() == 1 {
-        name.push('0');
-    }
-    name
 }
 
 struct Ready<'a> {
@@ -264,11 +318,8 @@ async fn drive_ready(
     ready: Ready<'_>,
     journal: &Journal,
     docker: &bollard::Docker,
-    capacity: u32,
+    reservation: Option<LaunchReservation>,
 ) -> Result<Option<Started>, EnsureError> {
-    if slot::busy(journal, docker, capacity).await? {
-        return held(link, ready);
-    }
     let ctx = Drive {
         set_id: ready.set_id,
         queue_path: ready.path,
@@ -281,20 +332,18 @@ async fn drive_ready(
         admin,
         queue: ready.queue,
     };
-    drive_offer(&mut lane, &ctx, ready.polled, journal, |volume, jit| {
-        let volume = volume.to_owned();
-        let payload = jit.to_vec();
-        async move { start_pair(docker, &volume, &payload).await }
-    })
+    drive_offer_reserved(
+        &mut lane,
+        &ctx,
+        ready.polled,
+        journal,
+        reservation,
+        |identity| async move { prepare_dind_until(docker, &identity).await },
+        |_identity, prepared, payload| async move {
+            start_runner_until(docker, &prepared, &payload, None).await
+        },
+    )
     .await
-}
-
-fn held(link: &mut Link, ready: Ready<'_>) -> Result<Option<Started>, EnsureError> {
-    if !matches!(steps::idle(ready.polled), steps::Idle::Scale) {
-        return Ok(None);
-    }
-    ack_ready(link, ready.session, ready.path, ready.queue, ready.polled)?;
-    Ok(None)
 }
 
 fn ack_ready(
@@ -315,7 +364,7 @@ fn ack_ready(
     };
     let admin = link.base().to_owned();
     let mut lane = HostLane { link, admin, queue };
-    steps::acknowledge(&mut lane, &ctx, batch)
+    steps_ack::acknowledge(&mut lane, &ctx, batch)
 }
 
 struct HostLane<'a> {

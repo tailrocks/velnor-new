@@ -27,6 +27,14 @@ pub struct IntentRow {
     pub assignment_key: Option<String>,
     /// Immutable action archive generation pinned for this launch.
     pub seed_generation_id: Option<String>,
+    /// An AcquireJobs call may have started for this assignment.
+    pub acquire_attempted: bool,
+    /// The AcquireJobs response was received and recorded.
+    pub acquire_resolved: bool,
+    /// The response confirmed this request was acquired.
+    pub acquired: bool,
+    /// A JIT registration call may have created the official runner.
+    pub jit_requested: bool,
 }
 
 /// Whether the host may advertise free capacity.

@@ -1,12 +1,18 @@
 //! Assignment reservations participate in the production poll admission gate.
 
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
+
 use velnor_runner_github::Poll;
 
+use crate::HostError;
 use crate::Outcome;
 use crate::journal::LaunchReservation;
-use crate::launch::Admit;
 use crate::launch::inspect_tests::DockerStub;
-use crate::launch_harness::{available, open};
+use crate::launch::{Admit, drive_offer_reserved};
+use crate::launch_harness::{Mode, Script, available, ctx, open, prepare};
 
 use super::admission;
 
@@ -35,6 +41,76 @@ async fn full_capacity_replay_of_existing_assignment_is_admitted() -> Result<(),
 
     assert_eq!(admission.reservation, Some(LaunchReservation::Existing(id)));
     assert_eq!(admission.decision, Admit::Start { stop: true });
+    assert_eq!(
+        journal
+            .occupied_launches()
+            .await
+            .map_err(|e| e.to_string())?,
+        1
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn admitted_full_capacity_replay_uses_existing_worker_and_only_acks() -> Result<(), String> {
+    let (_scratch, journal) = open("admission-dispatch").await?;
+    let LaunchReservation::New(id) = journal
+        .reserve_assignment(1, 42, 100, 1)
+        .await
+        .map_err(|error| error.to_string())?
+    else {
+        return Err("expected a new assignment reservation".to_owned());
+    };
+    journal
+        .bind_pair(id, "runner-42", "dind-42")
+        .await
+        .map_err(|error| error.to_string())?;
+    journal
+        .finish(id, Outcome::Uncertain)
+        .await
+        .map_err(|error| error.to_string())?;
+
+    let polled = batch(101, 42);
+    let admission = admission(&journal, 1, 1, 1, 0, 0, &polled)
+        .await
+        .map_err(|error| error.to_string())?;
+    let prepare_called = Arc::new(AtomicBool::new(false));
+    let start_called = Arc::new(AtomicBool::new(false));
+    let prepare_flag = Arc::clone(&prepare_called);
+    let start_flag = Arc::clone(&start_called);
+    let mut script = Script {
+        calls: Vec::new(),
+        mode: Mode::Ok,
+    };
+    let result = drive_offer_reserved(
+        &mut script,
+        &ctx(),
+        &polled,
+        &journal,
+        admission.reservation,
+        |identity| {
+            prepare_flag.store(true, Ordering::Relaxed);
+            prepare(identity)
+        },
+        |_identity, _prepared, _jit| {
+            start_flag.store(true, Ordering::Relaxed);
+            async { Err(HostError::Docker) }
+        },
+    )
+    .await
+    .map_err(|error| error.to_string())?;
+
+    assert_eq!(admission.decision, Admit::Start { stop: true });
+    assert_eq!(result, None);
+    assert_eq!(script.calls, ["ack"]);
+    assert!(!prepare_called.load(Ordering::Relaxed));
+    assert!(!start_called.load(Ordering::Relaxed));
+    let rows = journal.rows().await.map_err(|error| error.to_string())?;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].id, id);
+    assert_eq!(rows[0].state, crate::IntentState::Done);
+    assert_eq!(rows[0].docker_id.as_deref(), Some("runner-42"));
+    assert_eq!(rows[0].dind_id.as_deref(), Some("dind-42"));
     assert_eq!(
         journal
             .occupied_launches()

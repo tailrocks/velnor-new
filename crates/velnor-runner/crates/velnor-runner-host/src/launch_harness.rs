@@ -1,5 +1,6 @@
 //! Scripted acquire, JIT, and ack transport for launch tests.
 
+use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -9,9 +10,11 @@ use velnor_runner_github::{
 };
 
 use crate::launch::{Drive, Lane};
-use crate::{EnsureError, HostError, Journal};
+use crate::worker::PreparedDind;
+use crate::{EnsureError, HostError, Journal, LaunchIdentity};
 
 pub(crate) const CANARY: &str = "CANARYJIT";
+const TEST_DIND_ID: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
 pub(crate) struct Scratch {
     path: PathBuf,
@@ -64,7 +67,17 @@ impl Transport for Script {
             if matches!(self.mode, Mode::JitFail) {
                 return Err(TransportFail::Http(500));
             }
-            let body = format!(r#"{{"encodedJITConfig":"{CANARY}"}}"#);
+            let value: serde_json::Value =
+                serde_json::from_slice(&request.body).map_err(|_| TransportFail::Http(400))?;
+            let name = value
+                .get("name")
+                .and_then(serde_json::Value::as_str)
+                .ok_or(TransportFail::Http(400))?;
+            let body = serde_json::json!({
+                "encodedJITConfig": CANARY,
+                "runner": { "id": 71, "name": name, "runnerScaleSetId": 1 }
+            })
+            .to_string();
             return Ok(Exchange {
                 status: 200,
                 body: body.into_bytes(),
@@ -130,6 +143,12 @@ pub(crate) fn ctx() -> Drive {
     }
 }
 
+pub(crate) fn prepare(
+    identity: LaunchIdentity,
+) -> impl Future<Output = Result<PreparedDind, HostError>> {
+    async move { PreparedDind::from_journal(&identity, TEST_DIND_ID) }
+}
+
 pub(crate) fn assigned_wait(message_id: i64, assigned: i64) -> Poll {
     Poll::Batch(ParsedBatch {
         message_id,
@@ -145,6 +164,9 @@ pub(crate) fn assigned_wait(message_id: i64, assigned: i64) -> Poll {
         jobs: vec![InnerJob {
             kind: InnerKind::Assigned,
             request_id: Some(0),
+            runner_id: None,
+            runner_name: None,
+            result: None,
             job_id: None,
             labels: Vec::new(),
             fields: Vec::new(),
@@ -162,6 +184,9 @@ pub(crate) fn available(ids: &[i64]) -> Poll {
             .map(|id| InnerJob {
                 kind: InnerKind::Available,
                 request_id: Some(id),
+                runner_id: None,
+                runner_name: None,
+                result: None,
                 job_id: None,
                 labels: Vec::new(),
                 fields: Vec::new(),
@@ -173,6 +198,10 @@ pub(crate) fn available(ids: &[i64]) -> Poll {
 pub(crate) async fn open(label: &str) -> Result<(Scratch, Journal), String> {
     let scratch = Scratch::new(label).map_err(|err| err.to_string())?;
     let journal = Journal::open(&scratch.file())
+        .await
+        .map_err(|err| err.to_string())?;
+    journal
+        .bind_engine("docker-engine-test")
         .await
         .map_err(|err| err.to_string())?;
     Ok((scratch, journal))

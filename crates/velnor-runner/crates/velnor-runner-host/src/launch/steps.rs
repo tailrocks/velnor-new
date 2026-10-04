@@ -1,23 +1,19 @@
 //! Acquire, JIT, and ack for one offered id. The journal commits first.
 
-use std::future::Future;
-
 use velnor_runner_github::{
-    Ack, AckScope, AcquireOutcome, Certainty, EncodedJit, Poll, RefreshGate, SessionError, ack,
-    acquire, jit, jit_request, may_ack,
+    JitResult, Poll, RunnerReference, SessionError, jit, jit_request, may_ack,
 };
 
 use crate::Offer;
 use crate::error::HostError;
-use crate::journal::{Journal, Outcome};
+use crate::journal::{Journal, LaunchIdentity, LaunchReservation, Outcome};
 use crate::listen::map_listen;
 use crate::offer;
 use crate::scale_set::EnsureError;
-use crate::worker::Started;
+use crate::worker::{PreparedDind, Started};
 
+use super::steps_ack::{acknowledge, finish_live, hold, mark_done};
 use super::{Drive, Lane};
-
-const KIND: &str = "launch";
 
 /// What one poll allows before acquire.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -82,159 +78,159 @@ fn one_request<'a>(
     }
 }
 
-pub(super) async fn launch_id<T, S, F>(
-    lane: &mut T,
-    ctx: &Drive,
-    batch: &velnor_runner_github::ParsedBatch,
-    journal: &Journal,
-    request_id: i64,
-    start: S,
-) -> Result<Option<Started>, EnsureError>
-where
-    T: velnor_runner_github::Transport + Lane,
-    S: FnOnce(&str, &[u8]) -> F,
-    F: Future<Output = Result<Started, HostError>>,
-{
-    lane.on_admin()?;
-    let id = journal
-        .begin_assignment(ctx.set_id, request_id, batch.message_id)
-        .await
-        .map_err(map_journal)?;
-    if docker_of(journal, id).await?.is_some() {
-        return ack_bound(lane, ctx, batch, journal, id).await;
-    }
-    match taken(lane, ctx, request_id) {
-        Ok(AcquireOutcome::Acquired(ids)) if ids.is_empty() => reject_empty(journal, id).await,
-        Ok(_) => {
-            let name = format!("v{request_id}");
-            mint(lane, ctx, Some(batch), journal, id, &name, start).await
-        }
-        Err(error) => fail_acquire(journal, id, error).await,
-    }
-}
-
 /// One runner for `statistics.totalAssignedJobs`, then ack `batch`.
-pub(super) async fn scale_id<T, S, F>(
+pub(super) async fn scale_id<T, P, PF, S, F>(
     lane: &mut T,
     ctx: &Drive,
     batch: &velnor_runner_github::ParsedBatch,
     journal: &Journal,
+    prepare: P,
     start: S,
 ) -> Result<Option<Started>, EnsureError>
 where
     T: velnor_runner_github::Transport + Lane,
-    S: FnOnce(&str, &[u8]) -> F,
-    F: Future<Output = Result<Started, HostError>>,
+    P: FnOnce(LaunchIdentity) -> PF,
+    PF: std::future::Future<Output = Result<PreparedDind, HostError>>,
+    S: FnOnce(LaunchIdentity, PreparedDind, Vec<u8>) -> F,
+    F: std::future::Future<Output = Result<Started, HostError>>,
 {
     let name = format!("m{}", batch.message_id);
-    let subject = name.clone();
-    ensure_runner(lane, ctx, journal, &name, &subject, Some(batch), start).await
+    ensure_runner(lane, ctx, journal, &name, Some(batch), prepare, start).await
 }
 
 /// One runner from the create-session statistics. There is no message to ack.
-pub(super) async fn scale_unacked<T, S, F>(
+pub(super) async fn scale_unacked<T, P, PF, S, F>(
     lane: &mut T,
     ctx: &Drive,
     journal: &Journal,
-    name: &str,
+    subject: &str,
+    prepare: P,
     start: S,
 ) -> Result<Option<Started>, EnsureError>
 where
     T: velnor_runner_github::Transport + Lane,
-    S: FnOnce(&str, &[u8]) -> F,
-    F: Future<Output = Result<Started, HostError>>,
+    P: FnOnce(LaunchIdentity) -> PF,
+    PF: std::future::Future<Output = Result<PreparedDind, HostError>>,
+    S: FnOnce(LaunchIdentity, PreparedDind, Vec<u8>) -> F,
+    F: std::future::Future<Output = Result<Started, HostError>>,
 {
-    // Subject is this session's runner name. A shared "scale" row stayed Done
-    // and blocked every later statistics mint, so an assigned job never got a runner.
-    ensure_runner(lane, ctx, journal, name, name, None, start).await
+    ensure_runner(lane, ctx, journal, subject, None, prepare, start).await
 }
 
-fn taken<T>(lane: &mut T, ctx: &Drive, request_id: i64) -> Result<AcquireOutcome, SessionError>
-where
-    T: velnor_runner_github::Transport + ?Sized,
-{
-    let gate = RefreshGate::new();
-    let refresh = || Ok(());
-    acquire(
-        lane,
-        ctx.set_id,
-        &[request_id],
-        &[],
-        &ctx.queue_token,
-        &gate,
-        refresh,
-    )
-}
-
-async fn fail_acquire(
-    journal: &Journal,
-    id: i64,
-    error: SessionError,
-) -> Result<Option<Started>, EnsureError> {
-    let outcome = match error.certainty() {
-        Certainty::Uncertain => Outcome::Uncertain,
-        Certainty::Definite => Outcome::DefiniteFailure,
-    };
-    journal.finish(id, outcome).await.map_err(map_journal)?;
-    Err(map_listen(error))
-}
-
-async fn reject_empty(journal: &Journal, id: i64) -> Result<Option<Started>, EnsureError> {
-    journal
-        .finish(id, Outcome::DefiniteFailure)
-        .await
-        .map_err(map_journal)?;
-    Err(EnsureError::Unexpected {
-        status: 0,
-        step: "acquire",
-    })
-}
-
-async fn ensure_runner<T, S, F>(
+async fn ensure_runner<T, P, PF, S, F>(
     lane: &mut T,
     ctx: &Drive,
     journal: &Journal,
-    name: &str,
     subject: &str,
     batch: Option<&velnor_runner_github::ParsedBatch>,
+    prepare: P,
     start: S,
 ) -> Result<Option<Started>, EnsureError>
 where
     T: velnor_runner_github::Transport + Lane,
-    S: FnOnce(&str, &[u8]) -> F,
-    F: Future<Output = Result<Started, HostError>>,
+    P: FnOnce(LaunchIdentity) -> PF,
+    PF: std::future::Future<Output = Result<PreparedDind, HostError>>,
+    S: FnOnce(LaunchIdentity, PreparedDind, Vec<u8>) -> F,
+    F: std::future::Future<Output = Result<Started, HostError>>,
 {
     lane.on_admin()?;
-    let id = journal.begin(KIND, subject).await.map_err(map_journal)?;
-    if docker_of(journal, id).await?.is_some() {
-        return finish_live(lane, ctx, journal, id, batch).await;
-    }
-    mint(lane, ctx, batch, journal, id, name, start).await
+    let reservation = journal
+        .reserve_launch(subject, super::capacity::job_capacity())
+        .await
+        .map_err(map_journal)?;
+    let id = match reservation {
+        LaunchReservation::AtCapacity => return Ok(None),
+        LaunchReservation::Existing(id) => {
+            if docker_pair_bound(journal, id).await? {
+                return finish_live(lane, ctx, journal, id, batch).await;
+            }
+            if journal.intent(id).await.map_err(map_journal)?.jit_requested {
+                return Err(EnsureError::Uncertain);
+            }
+            id
+        }
+        LaunchReservation::New(id) => id,
+    };
+    mint(lane, ctx, batch, journal, id, false, prepare, start).await
 }
 
-async fn mint<T, S, F>(
+pub(super) async fn mint<T, P, PF, S, F>(
     lane: &mut T,
     ctx: &Drive,
     batch: Option<&velnor_runner_github::ParsedBatch>,
     journal: &Journal,
     id: i64,
-    name: &str,
+    acquired: bool,
+    prepare: P,
     start: S,
 ) -> Result<Option<Started>, EnsureError>
 where
     T: velnor_runner_github::Transport + Lane,
-    S: FnOnce(&str, &[u8]) -> F,
-    F: Future<Output = Result<Started, HostError>>,
+    P: FnOnce(LaunchIdentity) -> PF,
+    PF: std::future::Future<Output = Result<PreparedDind, HostError>>,
+    S: FnOnce(LaunchIdentity, PreparedDind, Vec<u8>) -> F,
+    F: std::future::Future<Output = Result<Started, HostError>>,
 {
-    let encoded = match fetch_jit(lane, ctx, name) {
-        Ok(encoded) => encoded,
-        Err(error) => return hold(journal, id, map_listen(error)).await,
+    let identity = journal.launch_identity(id).await.map_err(map_journal)?;
+    let name = format!("v{}", identity.launch_id());
+    let prepared = match prepare(identity.clone()).await {
+        Ok(prepared) => prepared,
+        Err(HostError::PreparationFailedClean(_)) => {
+            if acquired {
+                return hold(journal, id, EnsureError::Uncertain).await;
+            }
+            journal
+                .finish(id, Outcome::DefiniteFailure)
+                .await
+                .map_err(map_journal)?;
+            journal.record_cleanup(id).await.map_err(map_journal)?;
+            return Err(EnsureError::Unexpected {
+                status: 0,
+                step: "dind-ready",
+            });
+        }
+        Err(_) => return hold(journal, id, EnsureError::Uncertain).await,
     };
-    let Ok(started) = start(name, encoded.expose().as_bytes()).await else {
+    journal
+        .bind_dind_container(id, prepared.dind_id())
+        .await
+        .map_err(map_journal)?;
+    if !journal.claim_jit(id).await.map_err(map_journal)? {
+        return Err(EnsureError::Uncertain);
+    }
+    let jit_result = match fetch_jit(lane, ctx, &name) {
+        Ok(result) => result,
+        Err(error) => {
+            let mapped = map_listen(error);
+            return hold(journal, id, mapped).await;
+        }
+    };
+    if !runner_matches(&jit_result.runner, ctx.set_id, &name) {
+        return hold(
+            journal,
+            id,
+            EnsureError::Unexpected {
+                status: 0,
+                step: "jit-runner",
+            },
+        )
+        .await;
+    }
+    journal
+        .bind_github_runner(id, &jit_result.runner.id.to_string())
+        .await
+        .map_err(map_journal)?;
+    let Ok(started) = start(
+        identity,
+        prepared,
+        jit_result.encoded_jit_config.expose().as_bytes().to_vec(),
+    )
+    .await
+    else {
         return hold(journal, id, EnsureError::Uncertain).await;
     };
     journal
-        .bind(id, Some(&started.runner_id), None)
+        .bind_pair(id, &started.runner_id, &started.dind_id)
         .await
         .map_err(map_journal)?;
     if let Some(batch) = batch
@@ -246,7 +242,11 @@ where
     Ok(Some(started))
 }
 
-fn fetch_jit<T>(lane: &mut T, ctx: &Drive, name: &str) -> Result<EncodedJit, SessionError>
+fn runner_matches(runner: &RunnerReference, set_id: i64, name: &str) -> bool {
+    runner.id > 0 && runner.runner_scale_set_id == set_id && runner.name == name
+}
+
+fn fetch_jit<T>(lane: &mut T, ctx: &Drive, name: &str) -> Result<JitResult, SessionError>
 where
     T: velnor_runner_github::Transport + ?Sized,
 {
@@ -254,102 +254,14 @@ where
     jit(lane, ctx.set_id, &ctx.admin_token, &body)
 }
 
-async fn finish_live<T>(
-    lane: &mut T,
-    ctx: &Drive,
-    journal: &Journal,
-    id: i64,
-    batch: Option<&velnor_runner_github::ParsedBatch>,
-) -> Result<Option<Started>, EnsureError>
-where
-    T: velnor_runner_github::Transport + Lane,
-{
-    if let Some(batch) = batch
-        && let Err(error) = acknowledge(lane, ctx, batch)
-    {
-        return hold(journal, id, error).await;
-    }
-    mark_done(journal, id).await?;
-    // Already recorded. Counting it fills `started` and the session stops
-    // before a later JobAvailable. A live container still occupies its slot.
-    Ok(None)
-}
-
-pub(super) fn acknowledge<T>(
-    lane: &mut T,
-    ctx: &Drive,
-    batch: &velnor_runner_github::ParsedBatch,
-) -> Result<(), EnsureError>
-where
-    T: velnor_runner_github::Transport + Lane,
-{
-    lane.on_queue()?;
-    let gate = RefreshGate::new();
-    let refresh = || Ok(());
-    let scope = AckScope {
-        replay_safe: true,
-        sole_unacquired_offer: false,
-        queue_token: &ctx.queue_token,
-    };
-    let acked = ack(lane, &ctx.queue_path, batch, &scope, &gate, refresh);
-    let restored = lane.on_admin();
-    let deleted = match acked {
-        Ok(Ack::Deleted) => Ok(()),
-        Ok(Ack::Suppressed) => Err(EnsureError::Unexpected {
-            status: 0,
-            step: "ack",
-        }),
-        Err(error) => Err(map_listen(error)),
-    };
-    restored?;
-    deleted
-}
-
-async fn ack_bound<T>(
-    lane: &mut T,
-    ctx: &Drive,
-    batch: &velnor_runner_github::ParsedBatch,
-    journal: &Journal,
-    id: i64,
-) -> Result<Option<Started>, EnsureError>
-where
-    T: velnor_runner_github::Transport + Lane,
-{
-    if let Err(error) = acknowledge(lane, ctx, batch) {
-        return hold(journal, id, error).await;
-    }
-    mark_done(journal, id).await?;
-    Ok(None)
-}
-
-async fn hold(
-    journal: &Journal,
-    id: i64,
-    error: EnsureError,
-) -> Result<Option<Started>, EnsureError> {
-    journal
-        .finish(id, Outcome::Uncertain)
-        .await
-        .map_err(map_journal)?;
-    Err(error)
-}
-
-async fn mark_done(journal: &Journal, id: i64) -> Result<(), EnsureError> {
-    if journal.read(id).await.map_err(map_journal)? == crate::IntentState::Done {
-        return Ok(());
-    }
-    journal.finish(id, Outcome::Done).await.map_err(map_journal)
-}
-
-async fn docker_of(journal: &Journal, id: i64) -> Result<Option<String>, EnsureError> {
+async fn docker_pair_bound(journal: &Journal, id: i64) -> Result<bool, EnsureError> {
     let rows = journal.rows().await.map_err(map_journal)?;
     Ok(rows
         .into_iter()
-        .find(|row| row.id == id)
-        .and_then(|row| row.docker_id))
+        .any(|row| row.id == id && row.docker_id.is_some() && row.dind_id.is_some()))
 }
 
-fn map_journal(error: HostError) -> EnsureError {
+pub(super) fn map_journal(error: HostError) -> EnsureError {
     match error {
         HostError::Endpoint => EnsureError::Endpoint,
         _ => EnsureError::Unexpected {

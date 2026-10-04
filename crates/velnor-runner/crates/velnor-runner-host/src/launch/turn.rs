@@ -4,7 +4,7 @@ use std::future::Future;
 
 use velnor_runner_github::{Poll, QueueSession};
 
-use crate::journal::Journal;
+use crate::journal::{Journal, LaunchReservation};
 use crate::listen::{Link, point_at_queue, poll_path, restore_base};
 use crate::scale_set::EnsureError;
 use crate::worker::Started;
@@ -14,6 +14,9 @@ use super::slot;
 use super::steps;
 use super::trace;
 use super::{Ready, ack_ready, drive_ready, scale_session};
+
+#[cfg(test)]
+mod admission_tests;
 
 /// Poll until admission stops and no owned launch container is running.
 ///
@@ -83,11 +86,66 @@ where
     if assigned == 0 {
         return Ok(None);
     }
+    let occupied = slot::occupied_count(journal).await?;
+    if occupied >= capacity {
+        return Ok(None);
+    }
     let running = slot::running_count(journal, docker).await?;
-    if running >= capacity || u64::from(running) >= assigned {
+    if occupied > running || running >= capacity || u64::from(running) >= assigned {
         return Ok(None);
     }
     scale().await
+}
+
+/// Admission result plus any launch reservation made before dispatch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct PollAdmission {
+    pub(super) decision: Admit,
+    pub(super) reservation: Option<LaunchReservation>,
+}
+
+/// Reserve an offered assignment before applying the slot gate.
+pub(super) async fn admission(
+    journal: &Journal,
+    set_id: i64,
+    capacity: u32,
+    target: u32,
+    started: u32,
+    running: u32,
+    polled: &Poll,
+) -> Result<PollAdmission, EnsureError> {
+    if let Some((batch, request_id)) = steps::assignment(polled)? {
+        let reservation = journal
+            .reserve_assignment(set_id, request_id, batch.message_id, capacity)
+            .await
+            .map_err(slot::map_journal)?;
+        let decision = match reservation {
+            LaunchReservation::AtCapacity => Admit::Hold,
+            LaunchReservation::New(_) | LaunchReservation::Existing(_) => {
+                let occupied = slot::occupied_count(journal).await?;
+                Admit::Start {
+                    stop: occupied >= capacity,
+                }
+            }
+        };
+        return Ok(PollAdmission {
+            decision,
+            reservation: Some(reservation),
+        });
+    }
+    let occupied = slot::occupied_count(journal).await?;
+    Ok(PollAdmission {
+        decision: capacity::admit(capacity::Seat {
+            capacity,
+            target,
+            started,
+            occupied,
+            running,
+            assigned: assigned_in(polled),
+            idle: steps::idle(polled),
+        }),
+        reservation: None,
+    })
 }
 
 /// Keep polling after admission stops while an owned container is running.
@@ -159,19 +217,23 @@ impl Turn<'_> {
         let idle = steps::idle(&polled);
         let started = u32::try_from(workers.len()).unwrap_or(u32::MAX);
         let running = self.running(started, idle).await?;
-        let decision = capacity::admit(capacity::Seat {
-            capacity: self.capacity,
-            target: self.target,
+        let admission = admission(
+            self.journal,
+            self.set_id,
+            self.capacity,
+            self.target,
             started,
             running,
-            assigned: assigned_in(&polled),
-            idle,
-        });
-        self.apply(decision, workers, path, queue, &polled).await
+            &polled,
+        )
+        .await?;
+        self.apply(admission, workers, path, queue, &polled).await
     }
 
     async fn running(&self, started: u32, idle: steps::Idle) -> Result<u32, EnsureError> {
-        if !capacity::needs_running(self.capacity, self.target, started, idle) {
+        if idle != steps::Idle::Scale
+            || !capacity::needs_running(self.capacity, self.target, started, idle)
+        {
             return Ok(0);
         }
         slot::running_count(self.journal, self.docker).await
@@ -179,13 +241,13 @@ impl Turn<'_> {
 
     async fn apply(
         &mut self,
-        decision: Admit,
+        admission: PollAdmission,
         workers: &mut Vec<Started>,
         path: String,
         queue: Option<String>,
         polled: &Poll,
     ) -> Result<bool, EnsureError> {
-        match decision {
+        match admission.decision {
             // HTTP 202 keeps the session open. A job can arrive on a later poll.
             Admit::Stay => self.stay(workers).await,
             Admit::Hold => self.hold().await,
@@ -211,7 +273,7 @@ impl Turn<'_> {
                     },
                     self.journal,
                     self.docker,
-                    self.capacity,
+                    admission.reservation,
                 )
                 .await?;
                 let Some(worker) = launched else {

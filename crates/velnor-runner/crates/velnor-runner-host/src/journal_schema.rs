@@ -7,19 +7,44 @@ use crate::error::HostError;
 
 pub(super) async fn bootstrap(connection: &Connection) -> Result<(), HostError> {
     connection
+        .execute("BEGIN IMMEDIATE", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let result = bootstrap_transaction(connection).await;
+    let ended = if result.is_ok() {
+        connection.execute("COMMIT", ()).await
+    } else {
+        connection.execute("ROLLBACK", ()).await
+    };
+    ended.map_err(|_| HostError::Journal)?;
+    result
+}
+
+async fn bootstrap_transaction(connection: &Connection) -> Result<(), HostError> {
+    connection
         .execute(
             "CREATE TABLE IF NOT EXISTS intents (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, subject TEXT NOT NULL, state TEXT NOT NULL, docker_id TEXT, github_runner_id TEXT, cleanup_proven INTEGER NOT NULL DEFAULT 0)",
             (),
         )
         .await
         .map_err(|_| HostError::Journal)?;
+    let lifecycle_flags_present = lifecycle_flags_present(connection).await?;
     ensure_column(connection, "dind_id", "TEXT").await?;
     ensure_column(connection, "launch_id", "TEXT").await?;
     ensure_column(connection, "assignment_key", "TEXT").await?;
     ensure_column(connection, "seed_generation_id", "TEXT").await?;
+    ensure_column(
+        connection,
+        "acquire_attempted",
+        "INTEGER NOT NULL DEFAULT 0",
+    )
+    .await?;
+    ensure_column(connection, "acquire_resolved", "INTEGER NOT NULL DEFAULT 0").await?;
+    ensure_column(connection, "acquired", "INTEGER NOT NULL DEFAULT 0").await?;
+    ensure_column(connection, "jit_requested", "INTEGER NOT NULL DEFAULT 0").await?;
     connection
         .execute(
-            "CREATE TABLE IF NOT EXISTS journal_meta (singleton INTEGER PRIMARY KEY CHECK(singleton = 1), instance_id TEXT NOT NULL, engine_id TEXT)",
+            "CREATE TABLE IF NOT EXISTS journal_meta (singleton INTEGER PRIMARY KEY CHECK(singleton = 1), instance_id TEXT NOT NULL, engine_id TEXT, revision INTEGER NOT NULL DEFAULT 0, lineage_pinned INTEGER NOT NULL DEFAULT 0)",
             (),
         )
         .await
@@ -32,6 +57,28 @@ pub(super) async fn bootstrap(connection: &Connection) -> Result<(), HostError> 
         )
         .await
         .map_err(|_| HostError::Journal)?;
+    ensure_meta_column(connection, "revision", "INTEGER NOT NULL DEFAULT 0").await?;
+    ensure_meta_column(connection, "lineage_pinned", "INTEGER NOT NULL DEFAULT 0").await?;
+    if !lifecycle_flags_present {
+        drop_revision_triggers(connection).await?;
+        let changed = connection
+            .execute(
+                "UPDATE intents SET acquire_attempted = 1, jit_requested = 1 WHERE kind = 'launch' AND cleanup_proven = 0",
+                (),
+            )
+            .await
+            .map_err(|_| HostError::Journal)?;
+        if changed > 0 {
+            connection
+                .execute(
+                    "UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1",
+                    (),
+                )
+                .await
+                .map_err(|_| HostError::Journal)?;
+        }
+    }
+    install_revision_triggers(connection).await?;
     connection
         .execute(
             "CREATE UNIQUE INDEX IF NOT EXISTS unique_launch_id ON intents(launch_id) WHERE launch_id IS NOT NULL",
@@ -40,12 +87,61 @@ pub(super) async fn bootstrap(connection: &Connection) -> Result<(), HostError> 
         .await
         .map_err(|_| HostError::Journal)?;
     connection
+        .execute("DROP INDEX IF EXISTS unique_assignment_key", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    connection
         .execute(
-            "CREATE UNIQUE INDEX IF NOT EXISTS unique_assignment_key ON intents(assignment_key) WHERE assignment_key IS NOT NULL",
+            "CREATE UNIQUE INDEX IF NOT EXISTS unique_active_assignment_key ON intents(assignment_key) WHERE assignment_key IS NOT NULL AND cleanup_proven = 0",
             (),
         )
         .await
         .map_err(|_| HostError::Journal)?;
+    Ok(())
+}
+
+async fn lifecycle_flags_present(connection: &Connection) -> Result<bool, HostError> {
+    for name in [
+        "acquire_attempted",
+        "acquire_resolved",
+        "acquired",
+        "jit_requested",
+    ] {
+        if !has_column(connection, name).await? {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+async fn drop_revision_triggers(connection: &Connection) -> Result<(), HostError> {
+    for name in [
+        "intents_revision_insert",
+        "intents_revision_update",
+        "intents_revision_delete",
+        "journal_lineage_revision",
+    ] {
+        connection
+            .execute(&format!("DROP TRIGGER IF EXISTS {name}"), ())
+            .await
+            .map_err(|_| HostError::Journal)?;
+    }
+    Ok(())
+}
+
+async fn install_revision_triggers(connection: &Connection) -> Result<(), HostError> {
+    for statement in [
+        "DROP TRIGGER IF EXISTS journal_lineage_revision",
+        "CREATE TRIGGER IF NOT EXISTS intents_revision_insert AFTER INSERT ON intents BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END",
+        "CREATE TRIGGER IF NOT EXISTS intents_revision_update AFTER UPDATE ON intents BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END",
+        "CREATE TRIGGER IF NOT EXISTS intents_revision_delete AFTER DELETE ON intents BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END",
+        "CREATE TRIGGER journal_lineage_revision AFTER UPDATE OF instance_id, engine_id, lineage_pinned ON journal_meta WHEN OLD.instance_id IS NOT NEW.instance_id OR OLD.engine_id IS NOT NEW.engine_id OR OLD.lineage_pinned IS NOT NEW.lineage_pinned BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END",
+    ] {
+        connection
+            .execute(statement, ())
+            .await
+            .map_err(|_| HostError::Journal)?;
+    }
     Ok(())
 }
 
@@ -65,21 +161,33 @@ pub(super) async fn instance_id(connection: &Connection) -> Result<String, HostE
     row.get(0).map_err(|_| HostError::Journal)
 }
 
-pub(super) async fn bind_engine(connection: &Connection, engine_id: &str) -> Result<(), HostError> {
-    if !engine_id_valid(engine_id) {
+pub(super) async fn bind_engine(
+    connection: &Connection,
+    expected_engine: &str,
+) -> Result<(), HostError> {
+    if !engine_id_valid(expected_engine) {
         return Err(HostError::Journal);
+    }
+    if let Some(current) = engine_id_optional(connection).await? {
+        return if current == expected_engine {
+            Ok(())
+        } else {
+            Err(HostError::Journal)
+        };
     }
     let changed = connection
         .execute(
-            "UPDATE journal_meta SET engine_id = COALESCE(engine_id, ?1) WHERE singleton = 1 AND (engine_id IS NULL OR engine_id = ?1)",
-            [engine_id],
+            "UPDATE journal_meta SET engine_id = ?1 WHERE singleton = 1 AND engine_id IS NULL",
+            [expected_engine],
         )
         .await
         .map_err(|_| HostError::Journal)?;
     if changed == 1 {
         Ok(())
     } else {
-        Err(HostError::Journal)
+        (engine_id_optional(connection).await? == Some(expected_engine.to_owned()))
+            .then_some(())
+            .ok_or(HostError::Journal)
     }
 }
 
@@ -88,7 +196,7 @@ fn engine_id_valid(value: &str) -> bool {
         && value.len() <= 128
         && value
             .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-' | b':'))
 }
 
 pub(super) async fn engine_id(connection: &Connection) -> Result<String, HostError> {
@@ -102,6 +210,85 @@ pub(super) async fn engine_id(connection: &Connection) -> Result<String, HostErr
         .map_err(|_| HostError::Journal)?
         .ok_or(HostError::Journal)?;
     row.get(0).map_err(|_| HostError::Journal)
+}
+
+pub(super) async fn revision(connection: &Connection) -> Result<u64, HostError> {
+    let mut rows = connection
+        .query("SELECT revision FROM journal_meta WHERE singleton = 1", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let row = rows
+        .next()
+        .await
+        .map_err(|_| HostError::Journal)?
+        .ok_or(HostError::Journal)?;
+    let revision: i64 = row.get(0).map_err(|_| HostError::Journal)?;
+    u64::try_from(revision).map_err(|_| HostError::Journal)
+}
+
+pub(super) async fn lineage_pinned(connection: &Connection) -> Result<bool, HostError> {
+    let mut rows = connection
+        .query(
+            "SELECT lineage_pinned FROM journal_meta WHERE singleton = 1",
+            (),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let row = rows
+        .next()
+        .await
+        .map_err(|_| HostError::Journal)?
+        .ok_or(HostError::Journal)?;
+    row.get(0).map_err(|_| HostError::Journal)
+}
+
+pub(super) async fn engine_id_optional(
+    connection: &Connection,
+) -> Result<Option<String>, HostError> {
+    let mut rows = connection
+        .query("SELECT engine_id FROM journal_meta WHERE singleton = 1", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let row = rows
+        .next()
+        .await
+        .map_err(|_| HostError::Journal)?
+        .ok_or(HostError::Journal)?;
+    row.get(0).map_err(|_| HostError::Journal)
+}
+
+async fn ensure_meta_column(
+    connection: &Connection,
+    name: &str,
+    kind: &str,
+) -> Result<(), HostError> {
+    if has_column_named(connection, "journal_meta", name).await? {
+        return Ok(());
+    }
+    let statement = format!("ALTER TABLE journal_meta ADD COLUMN {name} {kind}");
+    connection
+        .execute(&statement, ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    Ok(())
+}
+
+async fn has_column_named(
+    connection: &Connection,
+    table: &str,
+    name: &str,
+) -> Result<bool, HostError> {
+    let mut rows = connection
+        .query(&format!("PRAGMA table_info({table})"), ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    while let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? {
+        let column: String = row.get(1).map_err(|_| HostError::Journal)?;
+        if column == name {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 async fn ensure_column(connection: &Connection, name: &str, kind: &str) -> Result<(), HostError> {

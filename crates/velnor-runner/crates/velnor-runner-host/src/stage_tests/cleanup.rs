@@ -14,7 +14,11 @@ async fn prepared_dind_cleanup_removes_only_its_private_resources() -> Result<()
     let prepared = prepare_dind(&engine, &identity).await?;
     cleanup_prepared_dind(&engine, &prepared).await?;
     assert_eq!(engine.containers()?, 0);
-    assert!(engine.events()?.ends_with(&["remove", "remove-volumes"]));
+    assert!(
+        engine
+            .events()?
+            .ends_with(&["remove", "engine", "list-launch", "remove-volumes"])
+    );
     Ok(())
 }
 
@@ -114,17 +118,17 @@ async fn cleanup_discovers_owned_pair_when_journal_ids_are_missing() -> Result<(
 
 #[test]
 fn only_a_confirmed_not_found_is_absence() {
-    assert!(crate::worker::resources::confirmed_not_found(
+    assert!(crate::worker::confirmed_not_found(
         &DockerError::DockerResponseServerError {
             status_code: 404,
             message: "missing".to_owned(),
         }
     ));
-    assert!(!crate::worker::resources::confirmed_not_found(
+    assert!(!crate::worker::confirmed_not_found(
         &DockerError::RequestTimeoutError
     ));
     for status_code in [401, 500, 503] {
-        assert!(!crate::worker::resources::confirmed_not_found(
+        assert!(!crate::worker::confirmed_not_found(
             &DockerError::DockerResponseServerError {
                 status_code,
                 message: "failure".to_owned(),

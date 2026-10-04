@@ -6,10 +6,15 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 
-use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
-
 use crate::error::HostError;
+use serde::{Deserialize, Serialize};
+
+#[path = "daemon_lock_existing.rs"]
+mod existing;
+#[path = "daemon_lock_identity.rs"]
+mod identity;
+
+pub(super) use identity::{engine_id_valid, engine_key, instance_id_valid};
 
 const ANCHOR_VERSION: u8 = 1;
 const MAX_ANCHOR_BYTES: u64 = 16 * 1024;
@@ -198,6 +203,14 @@ impl EngineLineageGuard {
     }
 }
 
+#[cfg(test)]
+pub(crate) fn test_engine_lineage_guard(
+    engine_id: &str,
+    root: &Path,
+) -> Result<EngineLineageGuard, HostError> {
+    EngineLineageGuard::acquire_at(engine_id, root)
+}
+
 fn process_guards() -> &'static Mutex<HashMap<String, EngineLineageGuard>> {
     static GUARDS: OnceLock<Mutex<HashMap<String, EngineLineageGuard>>> = OnceLock::new();
     GUARDS.get_or_init(|| Mutex::new(HashMap::new()))
@@ -370,28 +383,6 @@ fn write_anchor(path: &Path, anchor: &Anchor) -> Result<(), HostError> {
     File::open(parent)
         .and_then(|directory| directory.sync_all())
         .map_err(|_| HostError::Journal)
-}
-
-fn engine_key(engine_id: &str) -> String {
-    Sha256::digest(engine_id.as_bytes())
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect()
-}
-
-fn engine_id_valid(value: &str) -> bool {
-    !value.is_empty()
-        && value.len() <= 128
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || b"._-:".contains(&byte))
-}
-
-fn instance_id_valid(value: &str) -> bool {
-    value.len() == 32
-        && value
-            .bytes()
-            .all(|byte| b"0123456789abcdef".contains(&byte))
 }
 
 #[cfg(test)]

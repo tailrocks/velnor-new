@@ -1,23 +1,34 @@
 //! Statistics mint uses one subject per session runner.
 
-use crate::launch_harness::{Mode, Script, absent, ctx, open};
+use crate::launch_harness::{Mode, Script, absent, ctx, open, prepare};
 use crate::{IntentState, Started};
 
 use super::steps::scale_unacked;
 
 #[tokio::test]
 async fn a_second_statistics_name_mints_again() -> Result<(), String> {
+    let _capacity = super::install_job_capacity(2);
     let (scratch, journal) = open("scale-subject").await?;
     let mut first = Script {
         calls: Vec::new(),
         mode: Mode::Ok,
     };
-    let started = scale_unacked(&mut first, &ctx(), &journal, "s-one", |_name, _jit| async {
-        Ok(Started {
-            dind_id: "dind-1".to_owned(),
-            runner_id: "runner-1".to_owned(),
-        })
-    })
+    let started = scale_unacked(
+        &mut first,
+        &ctx(),
+        &journal,
+        "s-one",
+        prepare,
+        |_identity, prepared, _jit| {
+            let dind_id = prepared.dind_id().to_owned();
+            async move {
+                Ok(Started {
+                    dind_id,
+                    runner_id: "runner-1".to_owned(),
+                })
+            }
+        },
+    )
     .await
     .map_err(|err| err.to_string())?;
     assert_eq!(
@@ -34,11 +45,15 @@ async fn a_second_statistics_name_mints_again() -> Result<(), String> {
         &ctx(),
         &journal,
         "s-two",
-        |_name, _jit| async {
-            Ok(Started {
-                dind_id: "dind-2".to_owned(),
-                runner_id: "runner-2".to_owned(),
-            })
+        prepare,
+        |_identity, prepared, _jit| {
+            let dind_id = prepared.dind_id().to_owned();
+            async move {
+                Ok(Started {
+                    dind_id,
+                    runner_id: "runner-2".to_owned(),
+                })
+            }
         },
     )
     .await
@@ -57,11 +72,15 @@ async fn a_second_statistics_name_mints_again() -> Result<(), String> {
         &ctx(),
         &journal,
         "s-one",
-        |_name, _jit| async {
-            Ok(Started {
-                dind_id: "dind-3".to_owned(),
-                runner_id: "runner-3".to_owned(),
-            })
+        prepare,
+        |_identity, prepared, _jit| {
+            let dind_id = prepared.dind_id().to_owned();
+            async move {
+                Ok(Started {
+                    dind_id,
+                    runner_id: "runner-3".to_owned(),
+                })
+            }
         },
     )
     .await

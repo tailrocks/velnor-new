@@ -9,7 +9,7 @@ pub(super) async fn commit_live(
     conn: &turso::Connection,
     kind: &str,
     subject: &str,
-) -> Result<i64, HostError> {
+) -> Result<(i64, bool), HostError> {
     conn.execute("BEGIN IMMEDIATE", ())
         .await
         .map_err(|_| HostError::Journal)?;
@@ -27,9 +27,9 @@ async fn insert_live(
     conn: &turso::Connection,
     kind: &str,
     subject: &str,
-) -> Result<i64, HostError> {
+) -> Result<(i64, bool), HostError> {
     if let Some(id) = live_id(conn, kind, subject).await? {
-        return Ok(id);
+        return Ok((id, false));
     }
     let launch_id = (kind == "launch").then(|| Uuid::new_v4().simple().to_string());
     conn.execute(
@@ -38,7 +38,7 @@ async fn insert_live(
     )
     .await
     .map_err(|_| HostError::Journal)?;
-    Ok(conn.last_insert_rowid())
+    Ok((conn.last_insert_rowid(), true))
 }
 
 async fn live_id(
@@ -73,6 +73,10 @@ pub(super) fn intent_row(row: &turso::Row) -> Result<IntentRow, HostError> {
         launch_id: row.get(8).map_err(|_| HostError::Journal)?,
         assignment_key: row.get(9).map_err(|_| HostError::Journal)?,
         seed_generation_id: row.get(10).map_err(|_| HostError::Journal)?,
+        acquire_attempted: row.get(11).map_err(|_| HostError::Journal)?,
+        acquire_resolved: row.get(12).map_err(|_| HostError::Journal)?,
+        acquired: row.get(13).map_err(|_| HostError::Journal)?,
+        jit_requested: row.get(14).map_err(|_| HostError::Journal)?,
     })
 }
 

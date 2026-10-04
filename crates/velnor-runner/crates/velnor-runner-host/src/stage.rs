@@ -11,8 +11,9 @@ use crate::action_archive_seed::ActionArchiveLease;
 use crate::error::{HostError, PreparationCause};
 use crate::journal::LaunchIdentity;
 use crate::worker::{
-    CreateProjection, PreparedDind, Started, create_only, deliver_jit, dind_create, join_dind_net,
-    resources, runner_create_for_identity, start_id,
+    CreateProjection, PreparedDind, Started, confirmed_not_found, create_only,
+    create_owned_volumes, deliver_jit, dind_create, join_dind_net, list_launch, probe_dind,
+    remove_owned_volumes, runner_create_for_identity, start_id, verify_container, verify_engine,
 };
 
 mod cleanup;
@@ -74,7 +75,7 @@ pub(crate) trait PairEngine {
 
 impl PairEngine for Docker {
     async fn prepare_volumes(&self, identity: &LaunchIdentity) -> Result<(), HostError> {
-        resources::create_owned_volumes(self, identity).await
+        create_owned_volumes(self, identity).await
     }
 
     async fn create(&self, spec: &CreateProjection) -> Result<String, HostError> {
@@ -86,14 +87,14 @@ impl PairEngine for Docker {
     }
 
     async fn probe_dind(&self, id: &str) -> Result<DindProbe, HostError> {
-        resources::probe_dind(self, id).await
+        probe_dind(self, id).await
     }
 
     async fn list_launch(
         &self,
         identity: &LaunchIdentity,
     ) -> Result<Vec<ContainerRecord>, HostError> {
-        resources::list_launch(self, identity).await
+        list_launch(self, identity).await
     }
 
     async fn verify_container(
@@ -105,7 +106,7 @@ impl PairEngine for Docker {
         archive_lease: Option<&ActionArchiveLease>,
         require_running: bool,
     ) -> Result<ContainerRecord, HostError> {
-        resources::verify_container(
+        verify_container(
             self,
             identity,
             role,
@@ -130,7 +131,7 @@ impl PairEngine for Docker {
         .await
         {
             Ok(Ok(())) => Ok(()),
-            Ok(Err(error)) if resources::confirmed_not_found(&error) => Ok(()),
+            Ok(Err(error)) if confirmed_not_found(&error) => Ok(()),
             Err(_) | Ok(Err(_)) => {
                 if confirm_container_absent(self, id).await? {
                     Ok(())
@@ -147,12 +148,15 @@ impl PairEngine for Docker {
     ) -> Result<Option<ContainerRecord>, HostError> {
         let found = match timeout(INSPECT_CALL, self.inspect_container(id_or_name, None)).await {
             Err(_) => return Err(HostError::DockerTimeout),
-            Ok(Err(error)) if resources::confirmed_not_found(&error) => return Ok(None),
+            Ok(Err(error)) if confirmed_not_found(&error) => return Ok(None),
             Ok(Err(_)) => return Err(HostError::Docker),
             Ok(Ok(found)) => found,
         };
         let record = ContainerRecord {
-            id: found.id.ok_or(HostError::Ownership)?,
+            id: found
+                .id
+                .filter(|id| valid_container_id(id))
+                .ok_or(HostError::Ownership)?,
             labels: found
                 .config
                 .and_then(|config| config.labels)
@@ -163,18 +167,22 @@ impl PairEngine for Docker {
     }
 
     async fn remove_volumes(&self, identity: &LaunchIdentity) -> Result<(), HostError> {
-        resources::remove_owned_volumes(self, identity).await
+        remove_owned_volumes(self, identity).await
     }
 
     async fn verify_engine(&self, identity: &LaunchIdentity) -> Result<(), HostError> {
-        resources::verify_engine(self, identity).await
+        verify_engine(self, identity).await
     }
+}
+
+fn valid_container_id(id: &str) -> bool {
+    (12..=64).contains(&id.len()) && id.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
 async fn confirm_container_absent(docker: &Docker, id: &str) -> Result<bool, HostError> {
     match timeout(INSPECT_CALL, docker.inspect_container(id, None)).await {
         Err(_) => Err(HostError::DockerTimeout),
-        Ok(Err(error)) if resources::confirmed_not_found(&error) => Ok(true),
+        Ok(Err(error)) if confirmed_not_found(&error) => Ok(true),
         Ok(Err(_)) => Err(HostError::Docker),
         Ok(Ok(_)) => Ok(false),
     }
@@ -340,3 +348,6 @@ fn preparation_cause(error: HostError) -> Option<PreparationCause> {
         _ => None,
     }
 }
+
+#[cfg(test)]
+mod tests;
