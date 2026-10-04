@@ -3,6 +3,7 @@
 
 use std::collections::BTreeSet;
 
+use velnor_actions_contract::config::is_hosted_catalog;
 use velnor_actions_contract::{RoutingWorkflow, SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL};
 
 use crate::RenderError;
@@ -11,6 +12,50 @@ use crate::render::RenderedFile;
 use crate::runs_on::runs_on_yaml;
 use crate::setup::MiseSetup;
 use crate::yaml::{Yaml, render_yaml};
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum RunnerLane {
+    Hosted,
+    ScaleSet,
+}
+
+pub(super) struct RunnerSpec {
+    pub(super) runs_on: Yaml,
+    lane: RunnerLane,
+}
+
+impl RunnerSpec {
+    fn hosted(label: &str) -> Result<Self, RenderError> {
+        if !is_hosted_catalog(label) {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "schema2_hosted_runner_not_catalog:{label}"
+            )));
+        }
+        Ok(Self {
+            runs_on: Yaml::str(label),
+            lane: RunnerLane::Hosted,
+        })
+    }
+
+    fn scale_set(runs_on: Yaml) -> Self {
+        Self {
+            runs_on,
+            lane: RunnerLane::ScaleSet,
+        }
+    }
+
+    pub(super) fn push_default_shell(&self, fields: &mut Vec<(String, Yaml)>, has_container: bool) {
+        if has_container {
+            fields.push(crate::runs_on::run_shell_defaults_field(
+                crate::runs_on::CONTAINER_RUN_SHELL,
+            ));
+        } else if self.lane == RunnerLane::ScaleSet {
+            fields.push(crate::runs_on::run_shell_defaults_field(
+                crate::runs_on::SCALE_SET_RUN_SHELL,
+            ));
+        }
+    }
+}
 
 /// Qualification workflow path.
 pub const QUALIFICATION_WORKFLOW: &str = ".github/workflows/qualification.yml";
@@ -36,6 +81,10 @@ mod release;
 /// Exact-source gates for composed product-release workflows.
 #[path = "schema2_release_eligibility.rs"]
 pub mod release_eligibility;
+
+#[cfg(test)]
+#[path = "schema2_runner_shell_tests.rs"]
+mod runner_shell_tests;
 
 /// Which schema 2 workflows to emit, plus the selectors they use.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -88,6 +137,7 @@ impl Schema2WorkflowRequest {
 pub fn render_schema2_workflows(
     request: &Schema2WorkflowRequest,
 ) -> Result<Vec<RenderedFile>, RenderError> {
+    RunnerSpec::hosted(&request.hosted_label)?;
     let mut files = Vec::new();
     if request.workflows.contains(&RoutingWorkflow::Qualification) {
         files.push(file(
@@ -145,15 +195,15 @@ fn file(path: &str, version: &str, body: &Yaml) -> Result<RenderedFile, RenderEr
 }
 
 fn qualification(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
-    let hosted = runs_on_yaml(&request.hosted_label)?;
-    let scale = runs_on_yaml(&request.scale_set.token())?;
+    let hosted = RunnerSpec::hosted(&request.hosted_label)?;
+    let scale = RunnerSpec::scale_set(runs_on_yaml(&request.scale_set.token())?);
     let echo = "inputs.mode == 'both'";
     let mut jobs = vec![
         with_if(
             job(
                 "verify-hosted",
                 "Verify / GitHub hosted / Linux x64",
-                hosted.clone(),
+                &hosted,
                 30,
                 Vec::new(),
                 "Qualify hosted lane",
@@ -165,7 +215,7 @@ fn qualification(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> 
             job(
                 "verify-scale-set",
                 "Verify / Velnor Scale Set / Linux x64",
-                scale.clone(),
+                &scale,
                 30,
                 Vec::new(),
                 "Qualify scale-set lane",
@@ -177,7 +227,7 @@ fn qualification(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> 
             job(
                 "compare",
                 "Compare hosted and Velnor execution",
-                hosted.clone(),
+                &hosted,
                 10,
                 vec!["verify-hosted".to_owned(), "verify-scale-set".to_owned()],
                 "Compare lanes",
@@ -186,8 +236,8 @@ fn qualification(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> 
             echo,
         ),
     ];
-    jobs.extend(features::feature_jobs(hosted.clone(), scale.clone()));
-    jobs.extend(features::negative_jobs(hosted.clone(), scale.clone()));
+    jobs.extend(features::feature_jobs(&hosted, &scale));
+    jobs.extend(features::negative_jobs(&hosted, &scale));
     jobs.extend(classes::class_jobs(&hosted, &scale));
     if let Some(pins) = &request.mbx_qualification {
         jobs.extend(mbx_qualification::jobs(pins, &hosted)?);
@@ -208,6 +258,8 @@ fn with_if((id, body): (String, Yaml), when: &str) -> (String, Yaml) {
 }
 
 fn monitoring(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
+    let scale = RunnerSpec::scale_set(runs_on_yaml(&request.scale_set.token())?);
+    let hosted = RunnerSpec::hosted(&request.hosted_label)?;
     Ok(document(
         "Scale set monitoring",
         empty_dispatch(),
@@ -215,7 +267,7 @@ fn monitoring(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
             job(
                 "scale-set-lane",
                 "Scale set lane",
-                runs_on_yaml(&request.scale_set.token())?,
+                &scale,
                 30,
                 Vec::new(),
                 "Run scale-set lane",
@@ -224,7 +276,7 @@ fn monitoring(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
             job(
                 "queue-monitor",
                 "Queue monitor",
-                runs_on_yaml(&request.hosted_label)?,
+                &hosted,
                 10,
                 Vec::new(),
                 "Watch admission",
@@ -270,7 +322,7 @@ fn empty_dispatch() -> Yaml {
 fn job(
     id: &str,
     name: &str,
-    runs_on: Yaml,
+    runner: &RunnerSpec,
     timeout: i64,
     needs: Vec<String>,
     step_name: &str,
@@ -278,9 +330,10 @@ fn job(
 ) -> (String, Yaml) {
     let mut fields = vec![
         ("name".to_owned(), Yaml::str(name)),
-        ("runs-on".to_owned(), runs_on),
+        ("runs-on".to_owned(), runner.runs_on.clone()),
         ("timeout-minutes".to_owned(), Yaml::Int(timeout)),
     ];
+    runner.push_default_shell(&mut fields, false);
     if !needs.is_empty() {
         fields.push((
             "needs".to_owned(),
