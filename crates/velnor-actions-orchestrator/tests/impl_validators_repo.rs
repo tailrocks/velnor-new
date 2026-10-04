@@ -12,7 +12,7 @@ use velnor_actions_workflow_renderer::steps::{
     TASK_ARTIFACTS_DIR, cache_action_step, mbx_objects_step,
 };
 
-use crate::impl_common::without_ambient_identity;
+use crate::impl_common::{fixture_manifest_json, without_ambient_identity};
 
 /// Test error shortcut.
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -22,27 +22,6 @@ fn git(args: &[&str], cwd: &Path) -> TestResult {
     let status = Command::new("git").args(args).current_dir(cwd).status()?;
     assert!(status.success(), "git {args:?} failed");
     Ok(())
-}
-
-/// Release-manifest fixture so consumer `prepare` succeeds.
-fn fixture_manifest_json() -> String {
-    let targets = [
-        "x86_64-unknown-linux-gnu",
-        "aarch64-apple-darwin",
-        "x86_64-apple-darwin",
-    ]
-    .iter()
-    .map(|target| {
-        format!(
-            "{{\"target\":\"{target}\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v0.1.0/velnor-actions-0.1.0-{target}\",\"sha256\":\"{}\"}}",
-            "a".repeat(64)
-        )
-    })
-    .collect::<Vec<_>>()
-    .join(",");
-    format!(
-        "{{\"schema\":1,\"version\":\"0.1.0\",\"repository\":\"tailrocks/velnor-new\",\"targets\":[{targets}]}}"
-    )
 }
 
 /// Live repository sample text (the file under review for drift).
