@@ -55,10 +55,13 @@ const ASSET_PREFIX: &str = "tailrocks/velnor-new/releases/download/";
 fn checked_release_asset_name<'a>(
     url: &'a str,
     version: &str,
+    commit: &str,
     file: &str,
     key: &str,
 ) -> Result<&'a str, crate::errors::ContractError> {
     let bad = || crate::errors::ContractError::config(file, key, "unexpected_artifact_url");
+    crate::manifest_checks::check_semver(version, file, "version")?;
+    crate::manifest_checks::check_commit(commit, file, "commit")?;
     if url.bytes().any(|b| {
         b.is_ascii_whitespace() || b.is_ascii_control() || matches!(b, b'$' | b'`' | b'?' | b'#')
     }) {
@@ -80,11 +83,20 @@ fn checked_release_asset_name<'a>(
     let Some((tag, asset)) = trailer.rsplit_once('/') else {
         return Err(bad());
     };
-    let single = !tag.is_empty() && !tag.contains('/') && tag != "latest";
-    if asset.is_empty() || (!single && !is_seed_tag_for_version(tag, version)) {
+    if asset.is_empty() || !is_release_tag_for_source(tag, version, commit) {
         return Err(bad());
     }
     Ok(asset)
+}
+
+/// Accept only release tags whose spelling is bound to the manifest.
+fn is_release_tag_for_source(tag: &str, version: &str, commit: &str) -> bool {
+    tag.strip_prefix('v')
+        .is_some_and(|tag_version| tag_version == version)
+        || tag.strip_prefix("generator-").is_some_and(|tag_commit| {
+            crate::ids::is_lower_hex_len(tag_commit, 40) && tag_commit == commit
+        })
+        || is_seed_tag_for_version(tag, version)
 }
 
 /// Validate one release-asset URL against its manifest version and target.
@@ -92,12 +104,12 @@ fn checked_release_asset_name<'a>(
 /// Bootstrap/release contract §2: the URL MUST be
 /// `https://github.com/tailrocks/velnor-new/releases/download/<tag>/
 /// <asset>` where `<asset>` is exactly [`asset_filename`] for this
-/// version and target and `<tag>` is either a single non-`latest`
-/// segment or a seed tag bound to this version
-/// ([`is_seed_tag_for_version`]). Shape-only `https://` checks would
-/// let a merged manifest redirect the Acquire step at attacker
-/// infrastructure. Userinfo, query, fragment, `$`, backtick, and
-/// whitespace all fail closed.
+/// version and target. `<tag>` MUST be `v<version>`,
+/// `generator-<manifest commit>`, or a seed tag bound to this version
+/// ([`is_seed_tag_for_version`]). Exact grammar rejects path traversal,
+/// backslash, percent-encoding, and other URL-normalization ambiguity.
+/// Userinfo, query, fragment, `$`, backtick, and whitespace also fail
+/// closed.
 ///
 /// Residual (X1/X4): same-version seed rollback stays review-gated. The
 /// binding proves the URL names this version's official asset, but an
@@ -111,11 +123,12 @@ fn checked_release_asset_name<'a>(
 pub fn check_release_artifact(
     url: &str,
     version: &str,
+    commit: &str,
     target: &str,
     file: &str,
     key: &str,
 ) -> Result<(), crate::errors::ContractError> {
-    let asset = checked_release_asset_name(url, version, file, key)?;
+    let asset = checked_release_asset_name(url, version, commit, file, key)?;
     if asset != asset_filename(version, target) {
         return Err(crate::errors::ContractError::config(
             file,
@@ -135,10 +148,11 @@ pub fn check_release_artifact(
 pub fn check_release_manifest_artifact(
     url: &str,
     version: &str,
+    commit: &str,
     file: &str,
     key: &str,
 ) -> Result<(), crate::errors::ContractError> {
-    let asset = checked_release_asset_name(url, version, file, key)?;
+    let asset = checked_release_asset_name(url, version, commit, file, key)?;
     if asset != RELEASE_MANIFEST_FILENAME {
         return Err(crate::errors::ContractError::config(
             file,
