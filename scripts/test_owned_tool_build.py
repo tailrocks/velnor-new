@@ -16,6 +16,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent))
 import owned_tool_source as source
+from owned_tool_git_fixture import fixture_ignored_blob
 
 
 def module(name, filename):
@@ -139,8 +140,7 @@ class SourceTests(unittest.TestCase):
             directory = Path(temp) / "source"
             source.extract(data, directory)
             tree = source.git_tree(directory, {"PATH": os.environ["PATH"], "GIT_CONFIG_COUNT": "999"})
-            output = subprocess.run(["git", "-C", str(directory), "show", ":ignored"],
-                                    check=True, capture_output=True).stdout
+            output = fixture_ignored_blob(self, directory, tree)
             self.assertEqual(output, b"raw\r\n")
             self.assertEqual((directory / "link").readlink(), Path("ignored"))
             self.assertRegex(tree, r"^[a-f0-9]{40}$")
