@@ -62,10 +62,7 @@ async fn full_capacity_skips_initial_scale_even_if_population_is_larger() -> Res
     launch_row(&journal).await?;
     launch_row_for_id(&journal, "job-2", "runner-id-2").await?;
     let before = journal.rows().await.map_err(|error| error.to_string())?;
-    let stub = DockerStub::open(vec![
-        http(200, r#"{"State":{"Running":true}}"#),
-        http(200, r#"{"State":{"Running":true}}"#),
-    ])?;
+    let stub = DockerStub::open(Vec::new())?;
     let mut scaled = false;
 
     let result = within(
@@ -160,7 +157,7 @@ async fn large_population_is_not_clamped_to_the_running_count_type() -> Result<(
 }
 
 #[tokio::test]
-async fn stopped_or_absent_worker_leaves_population_uncovered() -> Result<(), String> {
+async fn stopped_or_absent_worker_keeps_its_unresolved_reservation() -> Result<(), String> {
     let (_scratch, journal) = journal("initial-stopped-worker").await?;
     launch_row(&journal).await?;
     for response in [
@@ -180,7 +177,7 @@ async fn stopped_or_absent_worker_leaves_population_uncovered() -> Result<(), St
         stub.finish().await?;
 
         assert_eq!(result, Ok(None));
-        assert!(scaled);
+        assert!(!scaled);
     }
     Ok(())
 }
