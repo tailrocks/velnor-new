@@ -14,19 +14,24 @@ stock_restore_private_file() {
 }
 
 stock_restore_api_json() {
-  local path="$1" destination="$2"
-  [ ! -e "$destination" ] && [ ! -L "$destination" ] || return 1
+  local path="$1" destination="$2" status_path="${2}.status" status
+  [ ! -e "$destination" ] && [ ! -L "$destination" ] \
+    && [ ! -e "$status_path" ] && [ ! -L "$status_path" ] || return 1
   (
     ulimit -f 4096
     curl --disable --noproxy '*' --proto '=https' --max-redirs 0 \
       --connect-timeout 15 --max-time 30 --max-filesize 2097152 \
-      --silent --show-error --fail \
+      --silent --show-error --fail --write-out '%{http_code}' \
       --header "Authorization: Bearer $GH_TOKEN" \
       --header 'Accept: application/vnd.github+json' \
       --header 'X-GitHub-Api-Version: 2022-11-28' \
-      --output "$destination" "https://api.github.com$path" 2>/dev/null
+      --output "$destination" "https://api.github.com$path" \
+      > "$status_path" 2>/dev/null
   ) || return 1
-  stock_restore_private_file "$destination" "$RUNNER_TEMP" 2097152
+  stock_restore_private_file "$destination" "$RUNNER_TEMP" 2097152 \
+    && stock_restore_private_file "$status_path" "$RUNNER_TEMP" 3 || return 1
+  status="$(cat "$status_path" 2>/dev/null || true)"
+  [ "$status" = 200 ]
 }
 
 stock_restore_safe_https_url() {
@@ -118,11 +123,14 @@ stock_restore_validate_receipt() {
       and .job_id == $job and .role == $role
       and .run_id == $run and .run_attempt == $attempt
       and .source_sha == $sha and .source_ref == $ref and .workflow_ref == $workflow
-      and (.primary_key | type == "string" and test("^[a-z0-9-]+$"))
+      and (.primary_key | type == "string" and test("^[a-z0-9][a-z0-9.-]{0,511}$"))
       and .derived_primary_key == .primary_key
-      and (.restore_primary_key | type == "string" and (. == "" or test("^[a-z0-9-]+$")))
-      and (.restore_conclusion | type == "string")
-      and (.cache_hit | type == "string") and (.matched_key | type == "string")
+      and (.restore_primary_key | type == "string"
+        and (. == "" or test("^[a-z0-9][a-z0-9.-]{0,511}$")))
+      and (.restore_conclusion | type == "string" and length <= 32)
+      and (.cache_hit | type == "string" and IN("", "true", "false"))
+      and (.matched_key | type == "string"
+        and (. == "" or test("^[a-z0-9][a-z0-9.-]{0,511}$")))
     ' "$receipt" >/dev/null 2>&1
 }
 
@@ -158,46 +166,119 @@ stock_restore_write_evidence() {
       restore_step_index:($restore_step_index|tonumber),derived_primary_key:$derived_primary_key,
       restore_primary_key:$restore_primary_key,cache_hit:$cache_hit,
       matched_key:$matched_key,restore_conclusion:$restore_conclusion}' \
-    > "$temp_file" 2>/dev/null || { rm -f -- "$temp_file"; return 1; }
+    >| "$temp_file" 2>/dev/null || { rm -f -- "$temp_file"; return 1; }
   ln -- "$temp_file" "$target" 2>/dev/null || { rm -f -- "$temp_file"; return 1; }
   rm -f -- "$temp_file"
+}
+
+stock_restore_context_valid() {
+  local mode="$1" repository=tailrocks/velnor-new
+  [ "$mode" = mbx-cache-roundtrip ] || [ "$mode" = mbx-cache-parallel ] || return 1
+  [ "${GITHUB_REPOSITORY:-}" = "$repository" ] \
+    && [ "${GITHUB_REF:-}" = refs/heads/main ] \
+    && [ "${GITHUB_REF_PROTECTED:-}" = true ] \
+    && [ "${GITHUB_EVENT_NAME:-}" = workflow_dispatch ] \
+    && [ "${GITHUB_WORKFLOW_REF:-}" = "$repository/.github/workflows/qualification.yml@refs/heads/main" ] \
+    && [ -n "${GH_TOKEN:-}" ] && [ -n "${RUNNER_TEMP:-}" ] \
+    && [ -d "$RUNNER_TEMP" ] && [ ! -L "$RUNNER_TEMP" ] \
+    && [ "$(realpath -e -- "$RUNNER_TEMP" 2>/dev/null)" = "$RUNNER_TEMP" ] \
+    && [ -n "${GITHUB_EVENT_PATH:-}" ] \
+    && [[ "${GITHUB_RUN_ID:-}" =~ ^[1-9][0-9]{0,19}$ ]] \
+    && [[ "${GITHUB_RUN_ATTEMPT:-}" =~ ^[1-9][0-9]{0,9}$ ]] \
+    && [[ "${GITHUB_SHA:-}" =~ ^[0-9a-f]{40}$ ]] \
+    && stock_restore_private_file "$GITHUB_EVENT_PATH" "$RUNNER_TEMP" 65536 \
+    && jq -e --arg mode "$mode" '(.inputs | type == "object") and .inputs.mode == $mode' \
+      "$GITHUB_EVENT_PATH" >/dev/null 2>&1
+}
+
+stock_restore_api_snapshot() {
+  local root="$1" run="$2" attempt="$3" sha="$4"
+  local repository=tailrocks/velnor-new run_json="$1/run.json" jobs_json="$1/jobs.json"
+  stock_restore_api_json "/repos/$repository/actions/runs/$run" "$run_json" \
+    && stock_restore_api_json "/repos/$repository/actions/runs/$run/attempts/$attempt/jobs?per_page=100" "$jobs_json" \
+    && jq -e --argjson id "$run" --argjson attempt "$attempt" \
+      --arg repo "$repository" --arg sha "$sha" '
+        type == "object" and .id == $id and .run_attempt == $attempt and .head_sha == $sha
+        and .repository.full_name == $repo and .head_repository.full_name == $repo
+        and .event == "workflow_dispatch" and .head_branch == "main"
+        and ((.path | split("@") | .[0]) == ".github/workflows/qualification.yml")
+        and (.path | endswith("@refs/heads/main"))
+        and (.workflow_id | type == "number" and . > 0 and . == floor)
+      ' "$run_json" >/dev/null 2>&1 \
+    && jq -e --arg run "$run" --arg attempt "$attempt" --arg sha "$sha" '
+      type == "object" and (.jobs | type == "array")
+      and (.total_count | type == "number") and .total_count >= 0
+      and .total_count == (.total_count | floor) and .total_count == (.jobs | length)
+      and all(.jobs[]; type == "object"
+        and (.id | type == "number" and . > 0 and . == floor)
+        and (.run_id | type == "number") and (.run_id | tostring) == $run
+        and (if has("run_attempt") then
+          (.run_attempt | type == "number") and (.run_attempt | tostring) == $attempt
+          else true end)
+        and (.head_sha | type == "string" and . == $sha)
+        and (.name | type == "string" and length > 0)
+        and (.status | IN("queued", "in_progress", "completed"))
+        and (if .status == "completed" then (.conclusion | type == "string")
+          else (.conclusion == null or (.conclusion | type == "string")) end)
+        and (.steps | type == "array")
+        and all(.steps[]; type == "object" and (.name | type == "string")
+          and (.status | IN("queued", "in_progress", "completed"))
+          and (if .status == "completed" then (.conclusion | type == "string")
+            else (.conclusion == null or (.conclusion | type == "string")) end)))' \
+      "$jobs_json" >/dev/null 2>&1
+}
+
+stock_restore_step_identity() {
+  local jobs_json="$1" name="$2" status="$3" run="$4" attempt="$5" sha="$6" conclusion="$7"
+  jq -er --arg name "$name" --arg status "$status" --arg run "$run" \
+    --arg attempt "$attempt" --arg sha "$sha" --arg conclusion "$conclusion" \
+    --arg step 'Restore MBX single bundle' '
+      [.jobs[] | select(.name == $name and .status == $status
+        and (.run_id | type == "number") and (.run_id | tostring) == $run
+        and (if has("run_attempt") then
+          (.run_attempt | type == "number") and (.run_attempt | tostring) == $attempt
+          else true end)
+        and .head_sha == $sha
+        and ($status != "completed" or .conclusion == "success"))] as $jobs
+      | if ($jobs | length) != 1 or ($jobs[0].steps | type) != "array" then error("job steps")
+        else $jobs[0] as $job
+          | ($job.steps | to_entries | map(select(.value.name == $step))) as $steps
+          | if ($steps | length) != 1 or $steps[0].value.status != "completed"
+              or $steps[0].value.conclusion != "success" or $conclusion != "success"
+            then error("restore step")
+            elif ($job.id | type) != "number" or $job.id <= 0 or $job.id != ($job.id | floor)
+              then error("job id")
+            else "\($job.id)\t\($steps[0].key)"
+          end
+        end' "$jobs_json" 2>/dev/null
+}
+
+stock_restore_attempt_snapshot() {
+  local root="$1" run="$2" attempt="$3" sha="$4" name="$5" status="$6" conclusion="$7"
+  local workflow_id identity
+  stock_restore_api_snapshot "$root" "$run" "$attempt" "$sha" || return 1
+  workflow_id="$(jq -er '.workflow_id | select(type == "number" and . > 0 and . == floor)' \
+    "$root/run.json" 2>/dev/null)" || return 1
+  identity="$(stock_restore_step_identity "$root/jobs.json" "$name" "$status" \
+    "$run" "$attempt" "$sha" "$conclusion")" || return 1
+  printf '%s\t%s\n' "$workflow_id" "$identity"
 }
 
 stock_restore_classify_receipt() {
   if [ "$#" -lt 6 ] || [ "$#" -gt 7 ]; then printf '%s\n' NOT_RUN; return 0; fi
   local receipt="$1" expected_job_id="$2" expected_role="$3" expected_job_name="$4"
   local expected_job_status="$5" expected_mode="$6" evidence_path="${7:-}"
-  local temp run_json jobs_json run_id attempt sha ref workflow workflow_id job_id step_index
-  local derived actual_primary hit matched conclusion outcome=NOT_RUN
-  local github_repository=tailrocks/velnor-new uid
-  if [ "${GITHUB_REPOSITORY:-}" != "$github_repository" ] \
-    || [ "${GITHUB_REF:-}" != refs/heads/main ] || [ "${GITHUB_REF_PROTECTED:-}" != true ] \
-    || [ "${GITHUB_EVENT_NAME:-}" != workflow_dispatch ] \
-    || [ "${GITHUB_WORKFLOW_REF:-}" != "$github_repository/.github/workflows/qualification.yml@refs/heads/main" ] \
-    || [ -z "${GH_TOKEN:-}" ] || [ -z "${RUNNER_TEMP:-}" ] \
-    || [ ! -d "$RUNNER_TEMP" ] || [ -L "$RUNNER_TEMP" ] \
-    || [ "$(realpath -e -- "$RUNNER_TEMP" 2>/dev/null)" != "$RUNNER_TEMP" ] \
-    || [ -z "${GITHUB_EVENT_PATH:-}" ]; then
+  local temp="" snapshot="" run_id="${GITHUB_RUN_ID:-}" attempt="${GITHUB_RUN_ATTEMPT:-}"
+  local sha="${GITHUB_SHA:-}" ref="${GITHUB_REF:-}" workflow="${GITHUB_WORKFLOW_REF:-}"
+  local workflow_id="" job_id="" step_index="" derived="" actual_primary=""
+  local hit="" matched="" conclusion="" outcome=NOT_RUN uid
+  if ! stock_restore_context_valid "$expected_mode" \
+    || { [ "$expected_job_status" != completed ] && [ "$expected_job_status" != in_progress ]; } \
+    || ! stock_restore_validate_receipt "$receipt" "$expected_job_id" "$expected_role" \
+      "$run_id" "$attempt" "$sha" "$ref" "$workflow"; then
     printf '%s\n' NOT_RUN; return 0
   fi
   uid="$(id -u)" || { printf '%s\n' NOT_RUN; return 0; }
-  [[ "${GITHUB_RUN_ID:-}" =~ ^[1-9][0-9]{0,19}$ ]] \
-    && [[ "${GITHUB_RUN_ATTEMPT:-}" =~ ^[1-9][0-9]{0,9}$ ]] \
-    && [[ "${GITHUB_SHA:-}" =~ ^[0-9a-f]{40}$ ]] \
-    || { printf '%s\n' NOT_RUN; return 0; }
-  stock_restore_private_file "$GITHUB_EVENT_PATH" "$RUNNER_TEMP" 65536 \
-    || { printf '%s\n' NOT_RUN; return 0; }
-  stock_restore_validate_receipt "$receipt" "$expected_job_id" "$expected_role" \
-    "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$GITHUB_SHA" "$GITHUB_REF" \
-    "$GITHUB_WORKFLOW_REF" \
-    || { printf '%s\n' NOT_RUN; return 0; }
-  jq -e --arg mode "$expected_mode" '.inputs.mode == $mode' "$GITHUB_EVENT_PATH" \
-    >/dev/null 2>&1 || { printf '%s\n' NOT_RUN; return 0; }
-  run_id="$GITHUB_RUN_ID"; attempt="$GITHUB_RUN_ATTEMPT"; sha="$GITHUB_SHA"
-  ref="$GITHUB_REF"; workflow="$GITHUB_WORKFLOW_REF"
-  if { [ "$expected_job_status" != completed ] && [ "$expected_job_status" != in_progress ]; }; then
-    printf '%s\n' NOT_RUN; return 0
-  fi
   derived="$(jq -r '.primary_key' "$receipt")" || { printf '%s\n' NOT_RUN; return 0; }
   actual_primary="$(jq -r '.restore_primary_key' "$receipt")" || { printf '%s\n' NOT_RUN; return 0; }
   hit="$(jq -r '.cache_hit' "$receipt")" || { printf '%s\n' NOT_RUN; return 0; }
@@ -207,46 +288,10 @@ stock_restore_classify_receipt() {
   if [ -n "$temp" ] && [ -d "$temp" ] && [ ! -L "$temp" ] \
     && [ "$(realpath -e -- "$temp" 2>/dev/null)" = "$temp" ] \
     && [ "$(stat -c '%a:%u' -- "$temp" 2>/dev/null)" = "700:$uid" ]; then
-    run_json="$temp/run.json"; jobs_json="$temp/jobs.json"
-    if stock_restore_api_json "/repos/$github_repository/actions/runs/$run_id" "$run_json" \
-      && stock_restore_api_json "/repos/$github_repository/actions/runs/$run_id/attempts/$attempt/jobs?per_page=100" "$jobs_json" \
-      && jq -e --argjson id "$run_id" --argjson attempt "$attempt" \
-        --arg repo "$github_repository" --arg sha "$sha" --arg workflow "$workflow" '
-          type == "object" and .id == $id and .run_attempt == $attempt and .head_sha == $sha
-          and .repository.full_name == $repo and .head_repository.full_name == $repo
-          and .event == "workflow_dispatch" and .head_branch == "main"
-          and ((.path | split("@") | .[0]) == ".github/workflows/qualification.yml")
-          and (.path | endswith("@refs/heads/main"))
-          and (.workflow_id | type == "number" and . > 0 and . == floor)
-        ' "$run_json" >/dev/null 2>&1 \
-      && jq -e 'type == "object" and (.jobs | type == "array")
-        and (.total_count | type == "number" and . == (.jobs | length))' \
-        "$jobs_json" >/dev/null 2>&1; then
-      workflow_id="$(jq -er '.workflow_id | select(type == "number" and . > 0 and . == floor)' "$run_json" 2>/dev/null || true)"
-      job_id="$(jq -er --arg name "$expected_job_name" --arg status "$expected_job_status" \
-        --arg run "$run_id" --arg attempt "$attempt" --arg sha "$sha" '
-          [.jobs[] | select(.name == $name and .status == $status
-            and (.run_id | tostring) == $run and (.run_attempt | tostring) == $attempt
-            and .head_sha == $sha
-            and ($status != "completed" or .conclusion == "success"))]
-          | if length == 1 then .[0].id | select(type == "number" and . > 0 and . == floor)
-            else error("job identity") end' "$jobs_json" 2>/dev/null || true)"
-      step_index="$(jq -er --arg name "$expected_job_name" --arg status "$expected_job_status" \
-        --arg run "$run_id" --arg attempt "$attempt" --arg sha "$sha" \
-        --arg step 'Restore MBX single bundle' --arg conclusion "$conclusion" '
-          [.jobs[] | select(.name == $name and .status == $status
-            and (.run_id | tostring) == $run and (.run_attempt | tostring) == $attempt
-            and .head_sha == $sha
-            and ($status != "completed" or .conclusion == "success"))] as $jobs
-          | if ($jobs | length) != 1 or ($jobs[0].steps | type) != "array" then error("job steps")
-            else ($jobs[0].steps | to_entries | map(select(.value.name == $step))) as $steps
-              | if ($steps | length) != 1 or $steps[0].value.status != "completed"
-                  or $steps[0].value.conclusion != "success" or $conclusion != "success"
-                then error("restore step")
-                else $steps[0].key | tonumber
-                  | select(type == "number" and . >= 0 and . < ($jobs[0].steps | length) and . == floor)
-              end
-            end' "$jobs_json" 2>/dev/null || true)"
+    snapshot="$(stock_restore_attempt_snapshot "$temp" "$run_id" "$attempt" "$sha" \
+      "$expected_job_name" "$expected_job_status" "$conclusion" 2>/dev/null || true)"
+    if [ -n "$snapshot" ]; then
+      read -r workflow_id job_id step_index <<< "$snapshot"
       if [[ "$job_id" =~ ^[1-9][0-9]{0,19}$ ]] && [[ "$step_index" =~ ^[0-9]{1,6}$ ]] \
         && [ "$actual_primary" = "$derived" ]; then
         if [ "$hit" = true ] && [ "$matched" = "$derived" ] \
@@ -259,14 +304,18 @@ stock_restore_classify_receipt() {
       fi
     fi
   fi
-  if [ -n "${temp:-}" ] && [ -d "$temp" ] && [ ! -L "$temp" ]; then rm -rf -- "$temp"; fi
+  if [ -n "$temp" ]; then
+    if [ -d "$temp" ] && [ ! -L "$temp" ]; then
+      rm -rf -- "$temp" || outcome=NOT_RUN
+    else
+      outcome=NOT_RUN
+    fi
+  fi
   if [ "$#" -eq 7 ] && [ "$outcome" != NOT_RUN ]; then
-    if stock_restore_write_evidence "$evidence_path" "$expected_job_id" \
+    if ! stock_restore_write_evidence "$evidence_path" "$expected_job_id" \
       "$expected_role" "$expected_job_name" "$run_id" "$attempt" "$sha" "$ref" \
       "$workflow" "$workflow_id" "$job_id" "$step_index" "$derived" \
       "$actual_primary" "$hit" "$matched" "$conclusion" "$outcome"; then
-      :
-    else
       outcome=NOT_RUN
     fi
   fi
