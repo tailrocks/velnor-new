@@ -176,10 +176,13 @@ RUN chmod 0755 /usr/local/bin/velnor-runner-entrypoint /usr/local/bin/wait-docke
     && rm -rf /tmp/tar-src /tmp/tar-out /tmp/tar-old /tmp/tar-probe.tgz /tmp/tar-manifest /tmp/cache.tgz /tmp/cache.tzst /tmp/tar-cache-out /tmp/tar-zstd-out /tmp/p-home /tmp/p-manifest /tmp/p-abs.tar /tmp/p.tzst /tmp/abs-marker /tmp/abs.tar /tmp/abs-out /tmp/cfz.tgz /tmp/cfz-out /tmp/m.proto /tmp/m.pb /tmp/argv-src /tmp/argv-manifest /tmp/argv-count /tmp/argv.tar /tmp/argv-out /tmp/argv-one /tmp/argv-one-out
 
 # Job steps call `node` on PATH. Action JavaScript uses the runner's own runtime.
+# /usr/bin/tar is the job shim after the divert. Listing that trusted vendor
+# archive goes through GNU tar and does not finish under qemu-user. BusyBox
+# unpacks it. Job archives still enter the shim.
 RUN curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL -o /tmp/node.tar.gz \
         "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.gz" \
     && echo "${NODE_SHA256}  /tmp/node.tar.gz" | sha256sum -c - \
-    && tar -xzf /tmp/node.tar.gz --strip-components=1 -C /usr/local \
+    && busybox tar -xzf /tmp/node.tar.gz --strip-components=1 -C /usr/local \
     && rm -f /tmp/node.tar.gz \
     && node --version \
     && test "$(node -e 'console.log("js-action-ok")')" = js-action-ok
