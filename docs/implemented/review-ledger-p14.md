@@ -5,8 +5,10 @@ Requirements: `docs/reviews/pr-1.md` §5; adoption: `docs/reviews/pr-1-adoption.
 prior skeleton: `docs/reviews/pr-1-disposition.md` (stale in places — see verdicts).
 Prior audit: same file at `48af774` (2026-09-30); this revision re-verifies
 every row at the new head and adds the F1–F7 + G1–G7 consumer rounds.
-Method: each verdict from implementation/test bodies opened at the audited head,
-fixing SHA via blame/log. No code changed for this ledger.
+Method: original verdicts came from implementation/test bodies opened at the audited
+head, fixing SHA via blame/log. R13 was rechecked at integration head
+`e50edd991551ea33b409af263633f6c7bf2b7d41`; scoped same-repository rendering is
+absent there, so its disposition is now pending nonce integration.
 
 PR #1 state (fetched 2026-10-01): OPEN, head `34550e8`, 0 unresolved threads,
 no APPROVED/CHANGES_REQUESTED (4 Codex COMMENTED reviews, 2026-09-28 only).
@@ -16,9 +18,11 @@ Two consumer finding comments since `48af774`: F1–F7 (`5921204817`,
 2026-10-01) with maintainer reply `5931252884`. All other issue comments
 are agent coordination notes.
 
-Counts: R fixed 30/30 (R26 residual closed) · G01–G03 fixed ·
+Counts: R fixed 29/30 (R13 pending nonce integration; R26 residual closed) ·
+G01–G03 fixed ·
 F fixed 7/7 (F3 keeps an external release-infra residual) ·
-G fixed/documented 6 + rejected-with-evidence 1 (G2) · still-open 0.
+G fixed/documented 6 + rejected-with-evidence 1 (G2) ·
+unaddressed review findings 0.
 
 ## Verdict table (R + original G)
 
@@ -36,7 +40,7 @@ G fixed/documented 6 + rejected-with-evidence 1 (G2) · still-open 0.
 | R10 | Real Cargo home; offline warm; cold fetch | fixed | `9861cdf` |
 | R11 | Whole-workflow sizes/transfer/eviction/quota | fixed | `33b3178` |
 | R12 | Warm run reuses; deltas rebuild | fixed | `33b3178` |
-| R13 | PR-scoped save; fork read-only | fixed | `b94fe9e`+`d2eae99` |
+| R13 | PR-scoped save; fork read-only | pending | awaiting nonce integration and scoped-rendering owners |
 | R14 | `ci.yml` + display `CI`; responsibility names | fixed | `16a25a9` |
 | R15 | Rust grouping, package display, collision IDs | fixed | `7a2cc3a`+`86a6223` |
 | R16 | fmt+clippy+test inside crate jobs | fixed | `7a2cc3a` |
@@ -131,12 +135,16 @@ counter-evidence after a tried-and-reverted implementation (see below).
   every crate fetch step, `--offline` on every obligation, and disjoint
   MBX/Cargo shapes; hosted warm/green show zero fetch re-download;
   local `cacheprobe` fixture replays both branches verbatim.
-- R13: `Step.condition` in contract IR with validation, serialized as
-  step-level `if:` in both renderers (`document.rs`); Save Cargo sources
-  plus every Setup Mise `cache_save` gated on `github.event_name ==
-  'push'`; PRs (same-repo or fork) restore read-only; policy recorded in
-  the Gate 4 doc; tests `c11_cache_saves_push_only_prs_and_forks_read_only`,
-  `step_conditions_serialize_as_if_with_upload_default`.
+- R13: trusted cache saves are producer-successful protected pushes;
+  `authorize_trusted_save()` checks that policy without an action-PR-
+  capability parameter. Fork and same-repository PR events, merge
+  groups, schedules, manual runs, reusable workflows, and unknown events
+  remain denied. `Step.condition` serializes the push gate, and fork PRs
+  remain read-only. Same-repository scoped rendering is still pending
+  nonce integration; this row is not fixed. Tests:
+  `impl_mise_p08.rs:c10b_trusted_save_authorizes_only_the_push_only_gate`,
+  `impl_orch_p08.rs:c11_cache_saves_push_only_prs_and_forks_read_only`,
+  `impl_renderer_p08.rs:step_conditions_serialize_as_if_with_upload_default`.
 - R14: main tree is `ci.yml` only, `name: CI`; stale removal by whole-tree
   swap (`generate.rs:208`); test `impl_renderer_tree.rs:116`. The scheduled
   `freshness.yml` probe (P12-4) stands alongside under the Velnor policy;
