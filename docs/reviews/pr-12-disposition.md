@@ -93,7 +93,7 @@ scripts/ci-performance-analysis-requirements.txt
 | Changed paths in PR #12 | Status / disposition |
 |---|---|
 | `.github/workflows/ci.yml`, `.github/workflows/foundation-qualification.yml`, `Cargo.toml`, `Cargo.lock` | `PARTIAL` / `TEMPORARY-HOLD`: workflow and dependency changes travel with the exact generator/feature that owns them; retain the base workflow and cache behavior meanwhile. |
-| `.velnor/freshness-inventory.json`, `.velnor/version-policy.toml`, `scripts/check-freshness.sh`, `scripts/verify-local.sh` | `PARTIAL`: preserve the existing freshness/pin gates; PR edits are not evidence those gates pass on the integration source. |
+| `.velnor/freshness-inventory.json`, `.velnor/version-policy.toml`, `scripts/check-freshness.sh` | `PARTIAL`: preserve the existing freshness/pin gates; PR edits are not evidence those gates pass on the integration source. |
 | `crates/velnor-actions-mise/src/catalog.rs`, `catalog_versions.rs`, and catalog tests | `PARTIAL`: keep catalog/version changes with their pin and freshness evidence; no new tool version is adopted by this ledger. |
 | `crates/velnor-actions-orchestrator/src/release_admission.py`, `release_source_snapshot.py`, `release_source_tree.py`; `crates/velnor-actions-rust/src/release_source_intent_guard.py` and tests | `TEMPORARY-HOLD`: PR-only embedded release guards and source readers; absent at the base and unqualified as callers. Keep with source-bound publication work. |
 | `crates/test_support/**`, `crates/velnor-actions-cli/tests/fixtures/p12_*`, `crates/velnor-actions-*/tests/**`, `fixtures/parity/**` | `PARTIAL`: test helpers, P12 fixtures, and regenerated expected outputs remain attached to their held source changes; a golden update is not implementation proof. |
