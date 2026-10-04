@@ -153,7 +153,8 @@ list_members() {
   # BusyBox tar -t strips "../" before it prints the name. GNU tar lists the
   # stored name and does not open the member, so openat2 is not involved.
   # Same stream as extract: the decompressor is not written to a file.
-  stream_archive | tar.gnu t -f - >"$out"
+  # A POSIX locale escapes non-ASCII bytes. Literal quoting keeps the stored name.
+  stream_archive | tar.gnu -t --quoting-style=literal -f - >"$out"
 }
 
 move_member() {

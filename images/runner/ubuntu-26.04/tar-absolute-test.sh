@@ -475,7 +475,19 @@ case_cache_posix() {
   grep -F -q -- '--posix' "$err" || return 1
 }
 
+case_unicode() {
+  local root="$work/unicode"
+  rm -rf -- "$root"
+  mkdir -p "$root/src" "$root/dest"
+  printf 'uni-ok\n' >"$root/src/café.txt"
+  printf '%s\n' 'café.txt' >"$root/manifest"
+  bash "$shim" -cf "$root/arc.tar" -P -C "$root/src" --files-from "$root/manifest" || return 1
+  bash "$shim" -xf "$root/arc.tar" -P -C "$root/dest" || return 1
+  grep -qx 'uni-ok' "$root/dest/café.txt" || return 1
+}
+
 run_case cache-posix case_cache_posix
+run_case unicode-member case_unicode
 
 printf 'RESULT pass=%s fail=%s\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
