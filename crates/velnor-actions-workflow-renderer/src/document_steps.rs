@@ -38,6 +38,7 @@ fn internal_env(
     target: &str,
     ctx: &RenderContext,
     needs_envs: &[(String, String)],
+    job_env: &BTreeMap<String, String>,
 ) -> Yaml {
     if op == steps::FETCH_OPERATION {
         return Yaml::Map(vec![
@@ -54,7 +55,9 @@ fn internal_env(
     env.push((REQUEST_FILE_ENV.to_owned(), Yaml::str(request)));
     if op == steps::PLAN_OPERATION && target == steps::PLAN_OPERATION {
         for (key, value) in &ctx.plan_consumer_env {
-            env.push((key.clone(), Yaml::str(value.clone())));
+            if job_env.get(key).map(String::as_str) != Some(value.as_str()) {
+                env.push((key.clone(), Yaml::str(value.clone())));
+            }
         }
     }
     Yaml::Map(env)
@@ -173,7 +176,10 @@ pub(crate) fn step_to_yaml(
             } else {
                 &[]
             };
-            entries.push(("env".to_owned(), internal_env(op, target, ctx, channel)));
+            entries.push((
+                "env".to_owned(),
+                internal_env(op, target, ctx, channel, job_env),
+            ));
             push_composite_shell(&mut entries, composite);
             entries.push((
                 "run".to_owned(),
