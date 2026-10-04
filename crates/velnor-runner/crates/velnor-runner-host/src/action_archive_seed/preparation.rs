@@ -1,4 +1,5 @@
 use std::io::Read;
+use std::path::Path;
 use std::sync::{Mutex, MutexGuard, OnceLock};
 
 use super::identity::{normalized_allowlist, object_generation, validate_identity};
@@ -94,11 +95,57 @@ impl ActionArchiveStore {
         expected_generation_id: Option<&str>,
         fetcher: &mut impl ActionArchiveFetcher,
     ) -> Result<ActionArchiveLease, ActionArchiveSeedError> {
+        self.prepare_and_lease_with_parent_sync(
+            launch_id,
+            manifest,
+            expected_generation_id,
+            fetcher,
+            super::sync_directory,
+        )
+    }
+
+    #[cfg(test)]
+    pub(crate) fn prepare_and_lease_with_sync_fault(
+        &self,
+        launch_id: &str,
+        manifest: &ActionArchiveManifest,
+        expected_generation_id: Option<&str>,
+        fetcher: &mut impl ActionArchiveFetcher,
+        fail_on_sync: usize,
+    ) -> Result<ActionArchiveLease, ActionArchiveSeedError> {
+        let mut calls = 0_usize;
+        self.prepare_and_lease_with_parent_sync(
+            launch_id,
+            manifest,
+            expected_generation_id,
+            fetcher,
+            |directory| {
+                calls += 1;
+                if calls == fail_on_sync {
+                    Err(ActionArchiveSeedError::Io)
+                } else {
+                    super::sync_directory(directory)
+                }
+            },
+        )
+    }
+
+    fn prepare_and_lease_with_parent_sync(
+        &self,
+        launch_id: &str,
+        manifest: &ActionArchiveManifest,
+        expected_generation_id: Option<&str>,
+        fetcher: &mut impl ActionArchiveFetcher,
+        mut sync_objects_parent: impl FnMut(&Path) -> Result<(), ActionArchiveSeedError>,
+    ) -> Result<ActionArchiveLease, ActionArchiveSeedError> {
         for identity in &manifest.archives {
             let generation = object_generation(identity)?;
             let _guard = object_lock(&generation)?;
             match self.object_path(identity) {
-                Ok(_) => continue,
+                Ok(_) => {
+                    sync_objects_parent(&self.objects)?;
+                    continue;
+                }
                 Err(ActionArchiveSeedError::MissingArchive) => {}
                 Err(error) => return Err(error),
             }

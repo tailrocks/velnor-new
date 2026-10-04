@@ -185,6 +185,46 @@ fn preparation_fetches_missing_bytes_once_and_replays_warm_lease() -> Result<(),
 }
 
 #[test]
+fn warm_preparation_syncs_after_an_interrupted_object_publication() -> Result<(), Box<dyn Error>> {
+    let root = TestRoot::new()?;
+    let store = ActionArchiveStore::open(root.path().join("store"))?;
+    let bytes = archive_bytes()?;
+    let action = identity("owner/action", &bytes)?;
+    let manifest = build_manifest(vec![action.clone()])?;
+    assert_eq!(
+        store.publish_with_sync_fault(&action, Cursor::new(&bytes), 1),
+        Err(ActionArchiveSeedError::Io)
+    );
+
+    let calls = Arc::new(AtomicUsize::new(0));
+    let mut source = fetcher(Vec::new(), Arc::clone(&calls));
+    assert_eq!(
+        store
+            .prepare_and_lease_with_sync_fault(
+                "launch-after-publish",
+                &manifest,
+                None,
+                &mut source,
+                1
+            )
+            .err(),
+        Some(ActionArchiveSeedError::Io)
+    );
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+    assert_eq!(fs::read_dir(root.path().join("store/leases"))?.count(), 0);
+
+    let lease = store.prepare_and_lease(
+        "launch-after-publish",
+        &manifest,
+        None,
+        &mut fetcher(Vec::new(), Arc::clone(&calls)),
+    )?;
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+    assert!(lease.cache_path().exists());
+    Ok(())
+}
+
+#[test]
 fn preparation_rejects_corrupt_or_oversized_source_without_a_lease() -> Result<(), Box<dyn Error>> {
     let root = TestRoot::new()?;
     let store = ActionArchiveStore::open(root.path().join("store"))?;
