@@ -21,6 +21,10 @@ use crate::{
     steps::validate_uses,
 };
 
+#[path = "cache_p08_tool_payload.rs"]
+mod tool_payload;
+pub use tool_payload::{ToolsCacheInputs, ToolsCachePayload};
+
 pub use crate::cache_elect::elect_mise_cache_writers;
 pub use crate::cache_elect::elect_tofu_provider_savers;
 

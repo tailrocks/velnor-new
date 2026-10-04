@@ -26,8 +26,8 @@ use crate::{
 mod tools;
 
 pub use tools::{
-    TOOLS_CACHE_PATH, TOOLS_KEY_PREFIX, TOOLS_RESTORE_NAME, TOOLS_RESTORE_USES, TOOLS_SAVE_NAME,
-    TOOLS_SAVE_USES, tools_cache_key, tools_restore_step, tools_save_step,
+    TOOLS_CACHE_PATH, TOOLS_CACHE_PATHS, TOOLS_KEY_PREFIX, TOOLS_RESTORE_NAME, TOOLS_RESTORE_USES,
+    TOOLS_SAVE_NAME, TOOLS_SAVE_USES, tools_cache_key, tools_restore_step, tools_save_step,
 };
 
 /// Pinned mr-boxington action name (objects mode).
@@ -117,7 +117,7 @@ fn validate_cache_path(layer: &str, path: &str) -> Result<(), RenderError> {
     let legacy_ok = path.starts_with("$CARGO_HOME/") && matches!(second, Some("registry" | "git"));
     if layer == "sources" && (legacy_ok || sources_subset_ok(path))
         || layer == "task" && path == TASK_ARTIFACTS_DIR
-        || layer == "tools" && path == TOOLS_CACHE_PATH
+        || layer == "tools" && tools::tools_cache_path_ok(path)
         || layer == "tofu-providers" && crate::tofu_cache::tofu_providers_path_ok(path)
     {
         Ok(())

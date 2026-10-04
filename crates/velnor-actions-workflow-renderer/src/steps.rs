@@ -11,8 +11,8 @@ use crate::{RenderError, commands, marker};
 pub use crate::cache_steps::{
     CACHE_RESTORE_NAME, CACHE_SAVE_NAME, CompileDriver, MBX_ACTION_NAME, MBX_CACHE_MODE_ENV,
     MBX_PREFLIGHT_NAME, MBX_RESTORE_NAME, NEVER_ARCHIVE_MARKERS, TASK_ARTIFACTS_DIR,
-    TOOLS_CACHE_PATH, TOOLS_KEY_PREFIX, TOOLS_RESTORE_NAME, TOOLS_RESTORE_USES, TOOLS_SAVE_NAME,
-    TOOLS_SAVE_USES, cache_action_step, check_cache_step_order, check_mbx_gating,
+    TOOLS_CACHE_PATH, TOOLS_CACHE_PATHS, TOOLS_KEY_PREFIX, TOOLS_RESTORE_NAME, TOOLS_RESTORE_USES,
+    TOOLS_SAVE_NAME, TOOLS_SAVE_USES, cache_action_step, check_cache_step_order, check_mbx_gating,
     is_never_archive_path, mbx_steps_for_driver, tools_cache_key, tools_restore_step,
     tools_save_step,
 };

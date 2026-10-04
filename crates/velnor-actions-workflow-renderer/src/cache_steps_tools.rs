@@ -16,8 +16,14 @@ pub const TOOLS_SAVE_USES: &str = "actions/cache/save@55cc8345863c7cc4c66a329aec
 pub const TOOLS_RESTORE_NAME: &str = "Restore Mise tools";
 /// Display name of the tools save step.
 pub const TOOLS_SAVE_NAME: &str = "Save Mise tools";
-/// Sole tools-cache path: the default mise data dir.
+/// Legacy V1 tools-cache path: the default Mise data directory.
 pub const TOOLS_CACHE_PATH: &str = "~/.local/share/mise";
+/// Exact V2 tool-payload paths shared by restore and save.
+pub const TOOLS_CACHE_PATHS: [&str; 3] = [
+    TOOLS_CACHE_PATH,
+    "${{ runner.temp }}/velnor/rustup",
+    "${{ runner.temp }}/velnor/cargo/bin",
+];
 /// Tools-cache key namespace.
 pub const TOOLS_KEY_PREFIX: &str = "mise-tools-v1";
 /// Tool files hashed into the tools key (literal names, never globs).
@@ -105,6 +111,11 @@ fn rename_step(mut step: Step, name: &str) -> Result<Step, RenderError> {
     crate::steps::scan_for_private_subcommands(name)?;
     name.clone_into(&mut step.name);
     Ok(step)
+}
+
+/// Whether a tools layer owns one of its exact V2 payload paths.
+pub(super) fn tools_cache_path_ok(path: &str) -> bool {
+    TOOLS_CACHE_PATHS.contains(&path)
 }
 
 // P08: the manual `ensure_tools_cache` wrapper is removed. Tools restore

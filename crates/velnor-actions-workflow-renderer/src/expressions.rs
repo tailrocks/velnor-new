@@ -71,9 +71,11 @@ const ENV_EXPRESSIONS: [&str; 8] = [
 ///
 /// Run-scoped names, runner paths, matrix coordinates, the
 /// push-gated cache-save flag, and the publish step's derived
-/// artifact name. Notably absent: every `secrets.*` handle (rejected
-/// separately as `secret_in_action_input`).
-const WITH_EXPRESSIONS: [&str; 7] = [
+/// artifact name. The tools identity output is a renderer-owned
+/// fingerprint for the exact runtime image and home roots. Notably
+/// absent: every `secrets.*` handle (rejected separately as
+/// `secret_in_action_input`).
+const WITH_EXPRESSIONS: [&str; 8] = [
     "runner.temp",
     "github.run_id",
     "github.run_attempt",
@@ -81,6 +83,7 @@ const WITH_EXPRESSIONS: [&str; 7] = [
     "steps.publish-baseline.outputs.artifact_name",
     "steps.mbx.outputs.cache-primary-key",
     "steps.mbx-bundle-key.outputs.prefix",
+    "steps.velnor-tool-cache-identity.outputs.identity",
 ];
 
 /// True for a `matrix.*` field reference (both layers allow the family).
