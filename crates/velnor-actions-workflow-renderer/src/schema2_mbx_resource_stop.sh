@@ -100,8 +100,8 @@ check_required_files() {
   for file in runner-metadata.json samples.jsonl sampling-summary.json inventory-final.tsv inventory-meta-final.tsv root-status-final.tsv cache-receipt.json phases.tsv sampler-stop.tsv mbx-cache-stats-import-step-end.json mbx-stats-build-end.json mbx-cache-stats-import-step-end.exit mbx-stats-build-end.exit; do
     if [ ! -s "$evidence/$file" ]; then fail_incomplete "required_file_missing:$file"; fi
   done
-  if [ -s "$evidence/sampler-stop.tsv" ] && ! awk -F '\t' '$1 == "remaining_group_members" { found=1; if ($2 != "0") bad=1 } END { exit !(found && !bad) }' "$evidence/sampler-stop.tsv"; then
-    fail_partial 'sampler stop receipt does not prove empty process group'
+  if [ -s "$evidence/sampler-stop.tsv" ] && ! awk -F '\t' '$1 == "remaining_session_members" { found=1; if ($2 != "0") bad=1 } END { exit !(found && !bad) }' "$evidence/sampler-stop.tsv"; then
+    fail_partial 'sampler stop receipt does not prove empty owned session'
   fi
   case "$MBX_QUALIFICATION_ROLE" in
     writer|seed|new-key-writer)
@@ -180,48 +180,13 @@ write_qualification_status() {
   printf 'qualification_status\t%s\n' "$state" > "$evidence/qualification-status.tsv"
   if [ "$state" != complete ]; then exit 1; fi
 }
-proc_identity() {
-  local row remainder
-  local -a fields=()
-  IFS= read -r row < "/proc/$1/stat" || return 1
-  remainder="${row##*) }"
-  read -r -a fields <<< "$remainder"
-  ((${#fields[@]} > 19)) || return 1
-  printf '%s\t%s\t%s\n' "${fields[2]}" "${fields[3]}" "${fields[19]}"
-}
-group_member_count() {
-  local rows pid pgid sid count=0
-  rows="$(ps -eo pid=,pgid=,sid=)" || return 1
-  while read -r pid pgid sid; do
-    [[ "$pgid" == "$sampler_pgid" ]] || continue
-    [[ "$sid" == "$sampler_sid" ]] || return 1
-    count=$((count + 1))
-  done <<< "$rows"
-  printf '%s\n' "$count"
-}
-sampler_leader_matches() {
-  local actual args expected
-  actual="$(proc_identity "$sampler_pid" 2>/dev/null)" || return 1
-  expected="$(printf '%s\t%s\t%s' "$sampler_pgid" "$sampler_sid" "$sampler_start_ticks")"
-  [[ "$actual" == "$expected" ]] || return 1
-  args="$(ps -p "$sampler_pid" -o args= 2>/dev/null)" || return 1
-  case "$args" in *"$evidence/sampler.sh"*) return 0 ;; *) return 1 ;; esac
-}
-wait_for_sampler_group() {
-  local limit="$1" count=0 members
-  while (( count < limit )); do
-    members="$(group_member_count)" || return 2
-    [[ "$members" == 0 ]] && return 0
-    sleep 1
-    count=$((count + 1))
-  done
-  members="$(group_member_count)" || return 2
-  [[ "$members" == 0 ]]
-}
 if ! bash "$evidence/sampler.sh" "$evidence" "$RUNNER_TEMP" "$GITHUB_ENV" "$MBX_QUALIFICATION_SAMPLE_INTERVAL" validate; then
   echo 'private evidence directory validation failed' >&2
   exit 1
 fi
+path_validation_sha='6dfb3776daa533b45efac0f02d24e3b8f9fa29e294ac1c9a9d5ba91f3a7e865e'
+printf '%s  %s\n' "$path_validation_sha" "$evidence/path-validation.sh" | sha256sum --check --status || exit 1
+. "$evidence/path-validation.sh"
 partial=0
 incomplete=0
 selected_root="${MBX_SELECTED_CACHE_ROOT:-${MBX_CACHE_DIR-}}"
@@ -251,70 +216,87 @@ sampler_pid=''
 sampler_pgid=''
 sampler_sid=''
 sampler_start_ticks=''
+sampler_uid=''
+sampler_gid=''
+sampler_stopped=0
+session_verified=0
+members=unknown
 if [ -s "$evidence/sampler.pid" ] && [ -s "$evidence/sampler.session.tsv" ] && [ -s "$evidence/sampler.log" ]; then
+  control_valid=1
+  declare -A control=()
   if [ "$(stat -c '%h:%a:%u:%g' -- "$evidence/sampler.session.tsv")" != "1:600:$(id -u):$(id -g)" ] || \
-    [ "$(awk -F '\t' '$1 == "evidence_identity" { print $2 }' "$evidence/sampler.session.tsv")" != "$(cat -- "$evidence/private.identity")" ]; then
-    fail_partial 'sampler session receipt is unsafe or unbound'
-  else
-    while IFS=$'\t' read -r key value; do
-      case "$key" in
-        pid) sampler_pid="$value" ;;
-        pgid) sampler_pgid="$value" ;;
-        sid) sampler_sid="$value" ;;
-        start_ticks) sampler_start_ticks="$value" ;;
-      esac
-    done < "$evidence/sampler.session.tsv"
+    [ "$(cat -- "$evidence/private.marker")" != "$(evidence_marker)" ] || \
+    [ "$(cat -- "$evidence/private.identity")" != "$(stat -c '%d:%i:%u:%g' -- "$evidence")" ]; then
+    control_valid=0
   fi
-  if [[ "$sampler_pid" =~ ^[0-9]+$ && "$sampler_pgid" == "$sampler_pid" && \
-    "$sampler_sid" == "$sampler_pid" && "$sampler_start_ticks" =~ ^[0-9]+$ ]]; then
-    if [ "$(cat -- "$evidence/sampler.pid")" != "$sampler_pid" ]; then
-      fail_partial 'sampler pid differs from private session receipt'
-    fi
-    if [ -e "$evidence/sampler.stop" ] || [ -L "$evidence/sampler.stop" ]; then
-      fail_partial 'sampler stop marker already exists'
-    elif ! (set -o noclobber; : > "$evidence/sampler.stop"); then
-      fail_partial 'sampler stop marker could not be created exclusively'
-    fi
-    if ! wait_for_sampler_group "$MBX_QUALIFICATION_FINALIZER_WAIT"; then
-      members="$(group_member_count 2>/dev/null)" || members=unknown
-      if [[ "$members" =~ ^[0-9]+$ ]] && (( members > 0 )) && \
-        { ! kill -0 "$sampler_pid" 2>/dev/null || sampler_leader_matches; }; then
-        fail_partial 'sampler session exceeded stop deadline; sending TERM to its isolated group'
-        kill -TERM -- "-$sampler_pgid" 2>/dev/null || fail_partial 'sampler group TERM failed'
-        wait_for_sampler_group 5 || true
-        members="$(group_member_count 2>/dev/null)" || members=unknown
-        if [[ "$members" =~ ^[0-9]+$ ]] && (( members > 0 )); then
-          fail_partial 'sampler group remained after TERM; sending KILL to its isolated group'
-          kill -KILL -- "-$sampler_pgid" 2>/dev/null || fail_partial 'sampler group KILL failed'
-          wait_for_sampler_group 10 || fail_partial 'sampler process group did not terminate'
-        elif [[ "$members" == unknown ]]; then
-          fail_partial 'sampler process group identity changed during shutdown'
+  while IFS=$'\t' read -r key value extra; do
+    case "$key" in pid|pgid|sid|start_ticks|run_id|run_attempt|job_id|uid|gid|evidence_identity) ;; *) control_valid=0; break ;; esac
+    if [[ -z "$value" || -n "$extra" || -n "${control[$key]+set}" ]]; then control_valid=0; break; fi
+    control[$key]="$value"
+  done < "$evidence/sampler.session.tsv"
+  if [[ "${#control[@]}" != 10 || "${control[run_id]-}" != "$GITHUB_RUN_ID" ||
+    "${control[run_attempt]-}" != "$GITHUB_RUN_ATTEMPT" ||
+    "${control[job_id]-}" != "$MBX_QUALIFICATION_JOB_ID" ||
+    "${control[uid]-}" != "$(id -u)" || "${control[gid]-}" != "$(id -g)" ||
+    "${control[evidence_identity]-}" != "$(cat -- "$evidence/private.identity")" ]]; then control_valid=0; fi
+  sampler_pid="${control[pid]-}"
+  sampler_pgid="${control[pgid]-}"
+  sampler_sid="${control[sid]-}"
+  sampler_start_ticks="${control[start_ticks]-}"
+  sampler_uid="${control[uid]-}"
+  sampler_gid="${control[gid]-}"
+  if [[ ! "$sampler_pid" =~ ^[2-9][0-9]*$ || "$sampler_pgid" != "$sampler_pid" ||
+    "$sampler_sid" != "$sampler_pid" || ! "$sampler_start_ticks" =~ ^[1-9][0-9]*$ ]]; then control_valid=0; fi
+  [[ "$(cat -- "$evidence/sampler.pid")" == "$sampler_pid" ]] || control_valid=0
+  if (( control_valid == 1 )) && owned_session_leader_matches; then
+    initial_members="$(owned_session_member_count 2>/dev/null)" || initial_members=unknown
+    if [[ "$initial_members" =~ ^[1-9][0-9]*$ ]] &&
+      { [ ! -e "$evidence/sampler.stop" ] && [ ! -L "$evidence/sampler.stop" ]; } &&
+      (set -o noclobber; : > "$evidence/sampler.stop"); then
+      session_verified=1
+      if ! wait_for_owned_session "$MBX_QUALIFICATION_FINALIZER_WAIT"; then
+        members="$(owned_session_member_count 2>/dev/null)" || members=unknown
+        if [[ "$members" =~ ^[1-9][0-9]*$ ]]; then
+          fail_partial 'owned sampler session exceeded stop deadline; sending TERM to validated members'
+          signal_owned_session_members TERM || fail_partial 'owned session TERM identity check failed'
+          wait_for_owned_session 5 || true
+          members="$(owned_session_member_count 2>/dev/null)" || members=unknown
+          if [[ "$members" =~ ^[1-9][0-9]*$ ]]; then
+            fail_partial 'owned sampler session remained after TERM; sending KILL to validated members'
+            signal_owned_session_members KILL || fail_partial 'owned session KILL identity check failed'
+            wait_for_owned_session 10 || fail_partial 'owned sampler session did not terminate'
+          fi
         fi
-      else
-        fail_partial 'sampler process group identity could not be verified for shutdown'
       fi
+      members="$(owned_session_member_count 2>/dev/null)" || members=unknown
+      if [[ "$members" == 0 ]]; then sampler_stopped=1; else fail_partial 'owned sampler session is not proven empty'; fi
+    else
+      fail_partial 'owned sampler leader or exclusive stop marker validation failed'
     fi
-    members="$(group_member_count 2>/dev/null)" || members=unknown
-    if [[ "$members" != 0 ]]; then fail_partial 'sampler process group is not proven empty'; fi
-    test ! -e "$evidence/sampler-stop.tsv"
-    test ! -L "$evidence/sampler-stop.tsv"
-    (
-      set -o noclobber
-      printf 'pid\t%s\npgid\t%s\nsid\t%s\nremaining_group_members\t%s\nexit_status\t%s\n' \
-        "$sampler_pid" "$sampler_pgid" "$sampler_sid" "$members" \
-        "$(cat -- "$evidence/sampler.exit" 2>/dev/null || echo missing)" > "$evidence/sampler-stop.tsv"
-    ) || fail_partial 'sampler stop receipt creation failed'
   else
-    fail_partial 'sampler session identity malformed'
+    fail_partial 'sampler session control identity is malformed or original leader is unverified'
   fi
+  test ! -e "$evidence/sampler-stop.tsv"
+  test ! -L "$evidence/sampler-stop.tsv"
+  (
+    set -o noclobber
+    printf 'pid\t%s\npgid\t%s\nsid\t%s\nrun_id\t%s\nrun_attempt\t%s\njob_id\t%s\nuid\t%s\ngid\t%s\nremaining_session_members\t%s\nexit_status\t%s\n' \
+      "$sampler_pid" "$sampler_pgid" "$sampler_sid" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" \
+      "$MBX_QUALIFICATION_JOB_ID" "$(id -u)" "$(id -g)" "$members" \
+      "$(cat -- "$evidence/sampler.exit" 2>/dev/null || echo missing)" > "$evidence/sampler-stop.tsv"
+  ) || fail_partial 'sampler stop receipt creation failed'
   if [ ! -s "$evidence/sampler.exit" ] || [ "$(cat "$evidence/sampler.exit")" != 0 ]; then
     fail_partial 'sampler did not report a clean exit'
   fi
 else
   fail_partial 'sampler pid, session receipt, or log missing'
 fi
-if ! bash "$evidence/sampler.sh" "$evidence" "$RUNNER_TEMP" "$GITHUB_ENV" "$MBX_QUALIFICATION_SAMPLE_INTERVAL" snapshot final; then
-  fail_partial 'final inventory snapshot failed'
+if (( sampler_stopped == 1 && session_verified == 1 )); then
+  if ! bash "$evidence/sampler.sh" "$evidence" "$RUNNER_TEMP" "$GITHUB_ENV" "$MBX_QUALIFICATION_SAMPLE_INTERVAL" snapshot final; then
+    fail_partial 'final inventory snapshot failed'
+  fi
+else
+  fail_partial 'final inventory skipped because owned sampler session was not proven empty'
 fi
 printf 'sampler_stopped_utc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%S.%NZ)" >> "$evidence/sampler-state.txt"
 for label in $MBX_QUALIFICATION_EXPECTED_INVENTORIES final; do

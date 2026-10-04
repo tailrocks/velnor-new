@@ -91,8 +91,9 @@ test ! -e "$evidence/sampler.session.tsv"
 test ! -L "$evidence/sampler.session.tsv"
 (
   set -o noclobber
-  printf 'pid\t%s\npgid\t%s\nsid\t%s\nstart_ticks\t%s\nevidence_identity\t%s\n' \
+  printf 'pid\t%s\npgid\t%s\nsid\t%s\nstart_ticks\t%s\nrun_id\t%s\nrun_attempt\t%s\njob_id\t%s\nuid\t%s\ngid\t%s\nevidence_identity\t%s\n' \
     "$sampler_pid" "$sampler_pgid" "$sampler_sid" "$sampler_start_ticks" \
+    "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$MBX_QUALIFICATION_JOB_ID" "$(id -u)" "$(id -g)" \
     "$(cat -- "$evidence/private.identity")" > "$evidence/sampler.session.tsv"
 )
 chmod 600 "$evidence/sampler.session.tsv"

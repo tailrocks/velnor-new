@@ -19,7 +19,7 @@ const SAMPLER: &str = include_str!("schema2_mbx_resource_sampler.sh");
 const PATH_VALIDATION: &str = include_str!("schema2_mbx_resource_path.sh");
 const SAMPLER_SHA256: &str = "f8ee1c598e2eae6814e2ec82d2c990ad7bce4cbe5ef90c51f1c7e74d537a592a";
 const PATH_VALIDATION_SHA256: &str =
-    "1a73b2bc858d52af8cceaaf7e1dec8aedb2dc01618d05454d0cb862428fe5356";
+    "6dfb3776daa533b45efac0f02d24e3b8f9fa29e294ac1c9a9d5ba91f3a7e865e";
 const PREUPLOAD_SCRIPT: &str = r#"set -euo pipefail
 evidence="$RUNNER_TEMP/mbx-cache-evidence"
 bash "$evidence/sampler.sh" "$evidence" "$RUNNER_TEMP" "$GITHUB_ENV" "$MBX_QUALIFICATION_SAMPLE_INTERVAL" validate
