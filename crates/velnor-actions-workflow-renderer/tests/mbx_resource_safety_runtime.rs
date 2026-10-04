@@ -20,7 +20,10 @@ const CORRUPTOR: &str = include_str!("../src/schema2_mbx_corrupt_bundle.sh");
 const SAMPLER_SHA: &str = "f8ee1c598e2eae6814e2ec82d2c990ad7bce4cbe5ef90c51f1c7e74d537a592a";
 const PATH_VALIDATION_SHA: &str =
     "80a92b0cfe88f41c3ae72822c735c8c8861643598c7da0d349a1d6c77e99a48d";
-const LINUX_IMAGE: &str = "velnor-runner:ubuntu-26.04-2.337.0";
+const LINUX_IMAGE: &str = concat!(
+    "ghcr.io/actions/actions-runner@sha256:",
+    "e5496277be5d09bc968b3d64911b74e219ac4a3f2edce956a3ecf9271bea1ef4"
+);
 const RUNTIME_IMAGE_ENV: &str = "VELNOR_MBX_RUNTIME_IMAGE";
 const RUNTIME_PLATFORM_ENV: &str = "VELNOR_MBX_RUNTIME_PLATFORM";
 
@@ -46,6 +49,77 @@ fn write_script(root: &Path, name: &str, value: &str) -> std::io::Result<()> {
     fs::write(root.join(name), value)
 }
 
+fn docker_text(args: &[&str]) -> std::io::Result<String> {
+    let output = Command::new("docker").args(args).output()?;
+    if !output.status.success() {
+        return Err(std::io::Error::other(format!(
+            "docker {} exited {}: {}",
+            args.join(" "),
+            output.status,
+            String::from_utf8_lossy(&output.stderr).trim()
+        )));
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned())
+}
+
+fn normalize_linux_platform(value: &str) -> Option<String> {
+    let (os, architecture) = value.split_once('/')?;
+    let architecture = architecture.split('/').next()?;
+    let architecture = match (os, architecture) {
+        ("linux", "amd64" | "x86_64") => "amd64",
+        ("linux", "arm64" | "aarch64") => "arm64",
+        _ => return None,
+    };
+    Some(format!("linux/{architecture}"))
+}
+
+fn validate_platforms(
+    daemon: &str,
+    requested: Option<&str>,
+    image: &str,
+    image_platform: &str,
+) -> std::io::Result<()> {
+    let daemon = normalize_linux_platform(daemon).ok_or_else(|| {
+        std::io::Error::other(format!("unsupported Docker daemon platform {daemon:?}"))
+    })?;
+    let target = requested
+        .map(|platform| {
+            normalize_linux_platform(platform).ok_or_else(|| {
+                std::io::Error::other(format!("unsupported runtime platform {platform:?}"))
+            })
+        })
+        .transpose()?
+        .unwrap_or_else(|| daemon.clone());
+    if target != daemon {
+        return Err(std::io::Error::other(format!(
+            "runtime platform {target} differs from native Docker daemon {daemon}; emulation is disabled"
+        )));
+    }
+    let image_platform = normalize_linux_platform(image_platform).ok_or_else(|| {
+        std::io::Error::other(format!(
+            "unsupported runtime image platform {image_platform:?} for {image}"
+        ))
+    })?;
+    if image_platform != target {
+        return Err(std::io::Error::other(format!(
+            "runtime image {image} is {image_platform}, native Docker platform is {target}; set {RUNTIME_IMAGE_ENV} to a native image"
+        )));
+    }
+    Ok(())
+}
+
+fn validate_native_docker_image(image: &str, requested: Option<&str>) -> std::io::Result<()> {
+    let daemon = docker_text(&["info", "--format", "{{.OSType}}/{{.Architecture}}"])?;
+    let image_platform = docker_text(&[
+        "image",
+        "inspect",
+        "--format",
+        "{{.Os}}/{{.Architecture}}",
+        image,
+    ])?;
+    validate_platforms(&daemon, requested, image, &image_platform)
+}
+
 fn fixture_output(root: &Path) -> std::io::Result<Output> {
     let mut command = if cfg!(target_os = "linux") {
         let mut native = Command::new("timeout");
@@ -56,6 +130,7 @@ fn fixture_output(root: &Path) -> std::io::Result<Output> {
     } else {
         let image = std::env::var(RUNTIME_IMAGE_ENV).unwrap_or_else(|_| LINUX_IMAGE.to_owned());
         let platform = std::env::var(RUNTIME_PLATFORM_ENV).ok();
+        validate_native_docker_image(&image, platform.as_deref())?;
         let uid = Command::new("id").arg("-u").output()?;
         let gid = Command::new("id").arg("-g").output()?;
         let uid = String::from_utf8_lossy(&uid.stdout).trim().to_owned();
@@ -172,4 +247,36 @@ fn rendered_stop_step_supplies_receipt_identity_environment()
         assert!(block.contains(key), "rendered stop env missing {key}");
     }
     Ok(())
+}
+
+#[test]
+fn docker_platform_aliases_normalize_to_native_architectures() {
+    assert_eq!(
+        normalize_linux_platform("linux/x86_64").as_deref(),
+        Some("linux/amd64")
+    );
+    assert_eq!(
+        normalize_linux_platform("linux/aarch64").as_deref(),
+        Some("linux/arm64")
+    );
+    assert_eq!(
+        normalize_linux_platform("linux/arm64/v8").as_deref(),
+        Some("linux/arm64")
+    );
+    assert_eq!(normalize_linux_platform("windows/amd64"), None);
+}
+
+#[test]
+fn docker_platform_validation_rejects_emulation_and_wrong_arch_images() {
+    assert!(validate_platforms("linux/aarch64", None, "amd64-image", "linux/amd64").is_err());
+    assert!(
+        validate_platforms(
+            "linux/aarch64",
+            Some("linux/amd64"),
+            "arm64-image",
+            "linux/arm64"
+        )
+        .is_err()
+    );
+    assert!(validate_platforms("linux/aarch64", None, "arm64-image", "linux/arm64").is_ok());
 }
