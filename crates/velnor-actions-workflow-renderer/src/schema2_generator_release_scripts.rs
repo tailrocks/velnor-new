@@ -36,8 +36,8 @@ gh() {
 
 const CI_CHECK: &str = r#"
 verify_same_sha_ci() {
-  gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&event=push&branch=main&per_page=100" |
-    jq -e --arg sha "$GITHUB_SHA" --arg repo "$GITHUB_REPOSITORY" '
+  runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&event=push&branch=main&per_page=100")" || return 1
+  printf '%s\n' "$runs" | jq -e --arg sha "$GITHUB_SHA" --arg repo "$GITHUB_REPOSITORY" '
       [
         .workflow_runs[]? |
         select(
@@ -51,14 +51,14 @@ verify_same_sha_ci() {
       ] |
       sort_by(.run_started_at) | last |
       select(. != null and .status == "completed" and .conclusion == "success") != null
-    ' >/dev/null
+    ' >/dev/null || return 1
 }
 "#;
 
 const ENVIRONMENT_CHECK: &str = r#"
 verify_release_environment() {
-  gh api "repos/$GITHUB_REPOSITORY/environments/generator-release" |
-    jq -e '
+  environment="$(gh api "repos/$GITHUB_REPOSITORY/environments/generator-release")" || return 1
+  printf '%s\n' "$environment" | jq -e '
       any(.protection_rules[]?;
         .type == "required_reviewers" and
         .prevent_self_review == true and
@@ -66,7 +66,7 @@ verify_release_environment() {
       ) and
       .deployment_branch_policy.protected_branches == true and
       .deployment_branch_policy.custom_branch_policies == false
-    ' >/dev/null
+    ' >/dev/null || return 1
 }
 "#;
 
@@ -75,7 +75,8 @@ test "$GITHUB_REPOSITORY" = "tailrocks/velnor-new"
 test "$GITHUB_REF" = "refs/heads/main"
 test "$GITHUB_REF_PROTECTED" = "true"
 test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-gh api "repos/$GITHUB_REPOSITORY" | jq -e '.default_branch == "main"' >/dev/null
+repository="$(gh api "repos/$GITHUB_REPOSITORY")" || exit 1
+printf '%s\n' "$repository" | jq -e '.default_branch == "main"' >/dev/null || exit 1
 "#;
 
 const FRESHNESS_CHECK: &str = "scripts/check-freshness.sh";
