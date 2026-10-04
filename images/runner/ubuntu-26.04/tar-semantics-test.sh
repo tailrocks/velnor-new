@@ -5,7 +5,9 @@ set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 
 if ! command -v busybox >/dev/null 2>&1 || ! command -v tar.gnu >/dev/null 2>&1 || ! command -v perl >/dev/null 2>&1; then
+  # /lowdisk is the disk-full case. The extract must fail closed there.
   exec docker run --rm --platform linux/amd64 --network none --entrypoint bash \
+    --tmpfs /lowdisk:rw,mode=1777,size=1048576 \
     -v "$here:/scripts:ro" \
     velnor-runner:ubuntu-26.04-2.337.0 \
     /scripts/tar-semantics-test.sh
@@ -235,6 +237,55 @@ case_dot_symlink_walk() {
   [ ! -e "$root/outside/pwned" ] || return 1
 }
 
+case_corrupt_header() {
+  local root="$work/corrupt" err status=0 pstatus=0
+  rm -rf -- "$root"
+  mkdir -p "$root/dest"
+  write_ustar "$root/arc.tar" f note.txt hello || return 1
+  perl -e 'open my $f, "+<:raw", shift or die $!; print $f "X"' "$root/arc.tar" || return 1
+  err="$root/err"
+  bash "$shim" -xf "$root/arc.tar" -C "$root/dest" >"$err" 2>&1 || status=$?
+  [ "$status" -ne 0 ] || return 1
+  grep -E -q 'bad checksum|does not look like a tar archive' "$err" || return 1
+  [ ! -e "$root/dest/note.txt" ] || return 1
+  perl "$rundir/tar-member.pl" --list <"$root/arc.tar" >"$root/list" 2>"$root/perlerr" || pstatus=$?
+  [ "$pstatus" -ne 0 ] || return 1
+  grep -F -q 'bad checksum' "$root/perlerr" || return 1
+}
+
+case_partial_archive() {
+  local root="$work/partial" err status=0 pstatus=0
+  rm -rf -- "$root"
+  mkdir -p "$root/dest"
+  write_ustar "$root/arc.tar" f note.txt hello-partial-body || return 1
+  dd if="$root/arc.tar" of="$root/cut.tar" bs=1 count=514 status=none || return 1
+  err="$root/err"
+  bash "$shim" -xf "$root/cut.tar" -C "$root/dest" >"$err" 2>&1 || status=$?
+  [ "$status" -ne 0 ] || return 1
+  grep -E -q 'short read|Unexpected EOF' "$err" || return 1
+  [ ! -e "$root/dest/note.txt" ] || return 1
+  perl "$rundir/tar-member.pl" --list <"$root/cut.tar" >"$root/list" 2>"$root/perlerr" || pstatus=$?
+  [ "$pstatus" -ne 0 ] || return 1
+  grep -F -q 'short read' "$root/perlerr" || return 1
+}
+
+case_disk_full() {
+  local root="$work/diskfull" err status=0 bytes
+  [ -d /lowdisk ] || return 1
+  rm -rf -- "$root" /lowdisk/dest
+  mkdir -p "$root/src" /lowdisk/dest
+  dd if=/dev/zero of="$root/src/big.bin" bs=1024 count=2048 status=none || return 1
+  bash "$shim" -cf "$root/arc.tar" -C "$root/src" big.bin || return 1
+  err="$root/err"
+  bash "$shim" -xf "$root/arc.tar" -C /lowdisk/dest >"$err" 2>&1 || status=$?
+  [ "$status" -ne 0 ] || return 1
+  grep -F -q 'No space left on device' "$err" || return 1
+  if [ -f /lowdisk/dest/big.bin ]; then
+    bytes="$(wc -c </lowdisk/dest/big.bin)"
+    [ "$bytes" -lt 2097152 ] || return 1
+  fi
+}
+
 run_case newline-rejected case_newline
 run_case absolute-relative-target case_absolute_relative_target
 run_case dot-symlink-walk case_dot_symlink_walk
@@ -245,6 +296,9 @@ run_case mode-and-mtime case_mode_and_mtime
 run_case empty-dir case_empty_dir
 run_case long-and-deep case_long_and_deep
 run_case space-name case_space_name
+run_case corrupt-header case_corrupt_header
+run_case partial-archive case_partial_archive
+run_case disk-full case_disk_full
 
 printf 'RESULT pass=%s fail=%s\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
