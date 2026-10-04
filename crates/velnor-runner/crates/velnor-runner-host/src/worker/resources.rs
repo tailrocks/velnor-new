@@ -15,7 +15,7 @@ use crate::error::HostError;
 use crate::journal::LaunchIdentity;
 use crate::stage::{ContainerRecord, DindProbe};
 
-pub(super) mod containers;
+mod containers;
 pub(super) use containers::refuse_existing;
 
 const DOCKER_CALL_TIMEOUT: Duration = Duration::from_secs(5);
@@ -45,7 +45,7 @@ const PRIVATE_VOLUMES: [PrivateVolume; 3] = [
     },
 ];
 
-pub(super) async fn create_owned_volumes(
+pub(crate) async fn create_owned_volumes(
     docker: &Docker,
     identity: &LaunchIdentity,
 ) -> Result<(), HostError> {
@@ -56,7 +56,7 @@ pub(super) async fn create_owned_volumes(
     Ok(())
 }
 
-pub(super) async fn remove_owned_volumes(
+pub(crate) async fn remove_owned_volumes(
     docker: &Docker,
     identity: &LaunchIdentity,
 ) -> Result<(), HostError> {
@@ -149,7 +149,7 @@ async fn inspect_volume(
     }
 }
 
-pub(super) async fn verify_engine(
+pub(crate) async fn verify_engine(
     docker: &Docker,
     identity: &LaunchIdentity,
 ) -> Result<(), HostError> {
@@ -164,13 +164,13 @@ pub(super) async fn verify_engine(
     }
 }
 
-pub(super) async fn probe_dind(docker: &Docker, dind_id: &str) -> Result<DindProbe, HostError> {
+pub(crate) async fn probe_dind(docker: &Docker, dind_id: &str) -> Result<DindProbe, HostError> {
     let created = create_probe(docker, dind_id).await?;
     start_probe(docker, &created.id).await?;
     await_exec_result(docker, &created.id).await
 }
 
-pub(super) async fn list_launch(
+pub(crate) async fn list_launch(
     docker: &Docker,
     identity: &LaunchIdentity,
 ) -> Result<Vec<ContainerRecord>, HostError> {
@@ -178,7 +178,7 @@ pub(super) async fn list_launch(
     containers::list_launch(docker, identity).await
 }
 
-pub(super) async fn verify_container(
+pub(crate) async fn verify_container(
     docker: &Docker,
     identity: &LaunchIdentity,
     role: &str,

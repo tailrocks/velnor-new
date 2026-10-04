@@ -21,20 +21,22 @@ use crate::error::HostError;
 
 mod prepared;
 mod projection;
-pub(super) mod resources;
-pub(crate) use prepared::{
-    PreparedDind, cleanup_prepared_dind, prepare_dind_until, start_runner_until,
-};
-pub(crate) use projection::dind_create;
-pub(crate) use projection::identity_labels_match;
-pub(crate) use projection::launch_identity_labels_match;
+mod resources;
+pub(crate) use prepared::{PreparedDind, prepare_dind_until, start_runner_until};
 pub(super) use projection::{container_labels, container_name, runner_create_for_identity};
+pub(super) use projection::{dind_create, identity_labels_match, launch_identity_labels_match};
+pub(super) use resources::{
+    confirmed_not_found, create_owned_volumes, list_launch, probe_dind, remove_owned_volumes,
+    verify_container, verify_engine,
+};
 
 #[cfg(test)]
 mod projection_tests;
 
 const PLATFORM: &str = "linux/amd64";
 pub(super) const DIND_IMAGE: &str = "velnor-dind:29.8.2";
+const RUNNER_ENTRYPOINT: &str = "/usr/local/bin/velnor-runner-entrypoint";
+const DIND_ENTRYPOINT: [&str; 2] = ["dockerd", "--host=unix:///var/run/docker.sock"];
 const CONTAINER_CREATE_TIMEOUT: Duration = Duration::from_secs(10);
 const CONTAINER_START_TIMEOUT: Duration = Duration::from_secs(10);
 const JIT_DELIVERY_TIMEOUT: Duration = Duration::from_secs(10);
@@ -52,6 +54,12 @@ pub(crate) struct CreateProjection {
     pub env: Vec<String>,
     /// Command. Empty when the image entrypoint stands.
     pub cmd: Vec<String>,
+    /// Expected image entrypoint. It is checked during reconciliation, not sent to Docker.
+    pub entrypoint: Vec<String>,
+    /// Expected image user. An empty image value means the image default.
+    pub user: Option<String>,
+    /// Expected image working directory. An empty image value means the image default.
+    pub working_dir: Option<String>,
     /// `key=value` labels. No JIT.
     pub labels: Vec<String>,
     /// Mounts. Volume sources use `volume:<name>`.
@@ -114,6 +122,9 @@ pub(crate) fn runner_create(plan: &ContainerPlan) -> Result<CreateProjection, Ho
         platform: plan.platform.clone(),
         env: plan.env.clone(),
         cmd: plan.cmd.clone(),
+        entrypoint: vec![RUNNER_ENTRYPOINT.to_owned()],
+        user: Some("runner".to_owned()),
+        working_dir: Some("/home/runner".to_owned()),
         labels: plan.labels.clone(),
         mounts: plan.mounts.clone(),
         bind_mounts: Vec::new(),

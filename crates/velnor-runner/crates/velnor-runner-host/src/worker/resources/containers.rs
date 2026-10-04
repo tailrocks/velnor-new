@@ -8,14 +8,18 @@ use bollard::query_parameters::ListContainersOptionsBuilder;
 use tokio::time::timeout;
 
 use super::super::{
-    CreateProjection, DIND_IMAGE, dind_create, identity_labels_match, join_dind_net, label_map,
-    launch_identity_labels_match, mount_source, runner_create_for_identity,
+    CreateProjection, DIND_ENTRYPOINT, DIND_IMAGE, dind_create, identity_labels_match,
+    join_dind_net, label_map, launch_identity_labels_match, mount_source,
+    runner_create_for_identity,
 };
 use super::confirmed_not_found;
 use crate::action_archive_seed::ActionArchiveLease;
 use crate::error::HostError;
 use crate::journal::LaunchIdentity;
 use crate::stage::ContainerRecord;
+
+mod environment;
+use environment::environment_matches;
 
 const DOCKER_CALL_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -252,6 +256,12 @@ fn dind_projection(runner: &CreateProjection) -> Result<CreateProjection, HostEr
         platform: runner.platform.clone(),
         env: Vec::new(),
         cmd: Vec::new(),
+        entrypoint: DIND_ENTRYPOINT
+            .iter()
+            .map(|item| (*item).to_owned())
+            .collect(),
+        user: None,
+        working_dir: None,
         labels,
         mounts,
         bind_mounts: Vec::new(),
@@ -291,16 +301,29 @@ fn topology_matches(
     let labels = label_map(&spec.labels)?.ok_or(HostError::Ownership)?;
     if config.image.as_deref() != Some(spec.image.as_str())
         || !inspect_labels_match(&labels, found)?
+        || !execution_matches(spec, config)
+        || !environment_matches(spec, config)?
         || host.privileged != Some(spec.privileged)
         || !network_matches(spec.network_mode.as_deref(), host.network_mode.as_deref())
-        || !spec
-            .env
-            .iter()
-            .all(|item| config.env.as_ref().is_some_and(|env| env.contains(item)))
     {
         return Ok(false);
     }
     Ok(expected_mounts(spec)? == observed_mounts(found)?)
+}
+
+fn execution_matches(spec: &CreateProjection, config: &bollard::models::ContainerConfig) -> bool {
+    config.cmd.as_deref().unwrap_or_default() == spec.cmd.as_slice()
+        && config.entrypoint.as_deref() == Some(spec.entrypoint.as_slice())
+        && image_value_matches(spec.user.as_deref(), config.user.as_deref())
+        && image_value_matches(spec.working_dir.as_deref(), config.working_dir.as_deref())
+        && config.attach_stdin == Some(spec.open_stdin)
+        && config.open_stdin == Some(spec.open_stdin)
+        && config.stdin_once == Some(spec.open_stdin)
+        && !config.tty.unwrap_or(false)
+}
+
+fn image_value_matches(expected: Option<&str>, actual: Option<&str>) -> bool {
+    expected == actual.filter(|value| !value.is_empty())
 }
 
 fn inspect_labels_match(

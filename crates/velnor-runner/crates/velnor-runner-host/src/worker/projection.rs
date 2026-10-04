@@ -7,7 +7,7 @@ use crate::docker_spec::{Mount, runner_plan};
 use crate::error::HostError;
 use crate::journal::LaunchIdentity;
 
-use super::{BindMount, CreateProjection, DIND_IMAGE, runner_create};
+use super::{BindMount, CreateProjection, DIND_ENTRYPOINT, DIND_IMAGE, runner_create};
 
 /// Private `DinD` create. Privilege is not a flag on the runner plan.
 ///
@@ -29,6 +29,12 @@ pub(crate) fn dind_create(identity: &LaunchIdentity) -> Result<CreateProjection,
         platform: runner.platform,
         env: Vec::new(),
         cmd: Vec::new(),
+        entrypoint: DIND_ENTRYPOINT
+            .iter()
+            .map(|item| (*item).to_owned())
+            .collect(),
+        user: None,
+        working_dir: None,
         labels: container_labels(identity, "dind"),
         mounts,
         bind_mounts: Vec::new(),
@@ -44,7 +50,7 @@ pub(crate) fn dind_create(identity: &LaunchIdentity) -> Result<CreateProjection,
 ///
 /// Returns [`HostError::Path`] when the cache path is not absolute or Unicode.
 /// Returns runner-plan errors from [`runner_create`].
-pub(super) fn runner_create_for_identity(
+pub(crate) fn runner_create_for_identity(
     identity: &LaunchIdentity,
     archive_cache_path: Option<&Path>,
 ) -> Result<CreateProjection, HostError> {
@@ -68,11 +74,11 @@ pub(super) fn runner_create_for_identity(
     Ok(spec)
 }
 
-pub(super) fn container_name(identity: &LaunchIdentity, role: &str) -> String {
+pub(crate) fn container_name(identity: &LaunchIdentity, role: &str) -> String {
     format!("velnor-{role}-{}", identity.launch_id())
 }
 
-pub(super) fn container_labels(identity: &LaunchIdentity, role: &str) -> Vec<String> {
+pub(crate) fn container_labels(identity: &LaunchIdentity, role: &str) -> Vec<String> {
     vec![
         "velnor.product=velnor".to_owned(),
         format!("velnor.instance={}", identity.instance_id()),
