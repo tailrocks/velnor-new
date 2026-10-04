@@ -77,5 +77,28 @@ class FreshnessProbeTests(unittest.TestCase):
                 fetch_text(url)
 
 
+    def test_encoded_body_at_limit_is_accepted(self):
+        with ProbeResponse(b"x" * FETCH_CAP, "identity") as url:
+            self.assertEqual(len(fetch_text(url)), FETCH_CAP)
+
+    def test_decompressed_body_at_limit_is_accepted(self):
+        body = gzip.compress(b"x" * FETCH_CAP, mtime=0)
+        with ProbeResponse(body, "gzip") as url:
+            self.assertEqual(len(fetch_text(url)), FETCH_CAP)
+
+    def test_gzip_checksum_corruption_fails_closed(self):
+        body = bytearray(gzip.compress(b"payload", mtime=0))
+        body[-8] ^= 1
+        with ProbeResponse(bytes(body), "gzip") as url:
+            with self.assertRaisesRegex(ValueError, "invalid gzip freshness response"):
+                fetch_text(url)
+
+    def test_truncated_gzip_footer_fails_closed(self):
+        body = gzip.compress(b"payload", mtime=0)[:-1]
+        with ProbeResponse(body, "gzip") as url:
+            with self.assertRaisesRegex(ValueError, "invalid gzip freshness response"):
+                fetch_text(url)
+
+
 if __name__ == "__main__":
     unittest.main()
