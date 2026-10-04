@@ -1,7 +1,9 @@
 //! Build, qualify, attest, and publish workflow jobs.
 
 use crate::RenderError;
-use crate::composite::{composite_yaml, shared_call_named};
+use crate::composite::{
+    composite_yaml, composite_yaml_with_inputs, shared_call_named, shared_call_named_with_inputs,
+};
 use crate::yaml::Yaml;
 
 use super::super::features::{base, finish};
@@ -60,8 +62,7 @@ pub(super) fn attest_job(
     actions: &mut Vec<(String, Yaml)>,
 ) -> Result<(String, Yaml), RenderError> {
     let files = [product.binary, product.sidecar, product.provenance];
-    let downloads =
-        assets::download_build_steps(product, "Download built asset archive", product.build_job);
+    let downloads = assets::download_build_steps(product, "Download built asset archive");
     let mut action_steps = vec![
         workflow_steps::mise_step(),
         workflow_steps::bash_step(
@@ -97,7 +98,15 @@ pub(super) fn attest_job(
             &bundle_path_refs,
         ),
     ]);
-    let call = local_action(action, name, action_steps, actions)?;
+    let call = local_action_with_input(
+        action,
+        name,
+        action_steps,
+        "artifact_id",
+        "Artifact ID from this target's build job",
+        &format!("${{{{ needs.{}.outputs.artifact_id }}}}", product.build_job),
+        actions,
+    )?;
     Ok(finish(
         id,
         workflow_steps::with_needs(
@@ -180,4 +189,27 @@ pub(super) fn local_action(
     let action = composite_yaml(name, steps)?;
     actions.push((format!(".github/actions/{logical}/action.yml"), action));
     shared_call_named(&format!("./.github/actions/{logical}"), name)
+}
+
+pub(super) fn local_action_with_input(
+    logical: &str,
+    name: &str,
+    steps: Vec<Yaml>,
+    input_name: &str,
+    input_description: &str,
+    input_value: &str,
+    actions: &mut Vec<(String, Yaml)>,
+) -> Result<Yaml, RenderError> {
+    let definition = Yaml::Map(vec![
+        ("description".to_owned(), Yaml::str(input_description)),
+        ("required".to_owned(), Yaml::Bool(true)),
+    ]);
+    let action =
+        composite_yaml_with_inputs(name, vec![(input_name.to_owned(), definition)], steps)?;
+    actions.push((format!(".github/actions/{logical}/action.yml"), action));
+    shared_call_named_with_inputs(
+        &format!("./.github/actions/{logical}"),
+        name,
+        vec![(input_name.to_owned(), Yaml::str(input_value))],
+    )
 }

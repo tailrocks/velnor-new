@@ -23,6 +23,8 @@ mod jobs;
 mod manifest;
 #[path = "schema2_generator_release_qualification.rs"]
 mod qualification;
+#[path = "schema2_generator_release_source.rs"]
+mod source;
 #[path = "schema2_generator_release_workflow_steps.rs"]
 mod workflow_steps;
 

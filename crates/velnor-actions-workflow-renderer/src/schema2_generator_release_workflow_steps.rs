@@ -177,9 +177,9 @@ pub(super) fn attest_permissions() -> Yaml {
     ])
 }
 
-/// Qualification can read the checked-out source but cannot write attestations or repository data.
+/// Qualification needs no token because it fetches the public source by commit.
 pub(super) fn qualification_permissions() -> Yaml {
-    perm(&[("contents", "read")])
+    Yaml::Map(Vec::new())
 }
 
 /// Only the release-upload job may write repository contents.

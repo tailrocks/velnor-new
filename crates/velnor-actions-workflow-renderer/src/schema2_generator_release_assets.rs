@@ -10,9 +10,6 @@ pub(super) const VERSION: &str = "0.1.1";
 pub(super) const REPOSITORY: &str = "tailrocks/velnor-new";
 const CI_WORKFLOW: &str = "ci.yml";
 const GH_VERSION: &str = "2.102.0";
-pub(super) const QUALIFICATION_TOOLS_INSTALL: &str = "\
-set -eu
-mise --no-config --no-env --no-hooks install actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1";
 
 /// One target binary, checksum sidecar, and source-bound build record.
 #[derive(Clone, Copy)]
@@ -169,11 +166,11 @@ pub(super) fn download_steps(asset: ProductAsset, name: &str) -> Vec<Yaml> {
 }
 
 /// Download the exact immutable artifact produced by one build job.
-pub(super) fn download_build_steps(asset: ProductAsset, name: &str, build_job: &str) -> Vec<Yaml> {
-    let artifact_id = format!("${{{{ needs.{build_job}.outputs.artifact_id }}}}");
+pub(super) fn download_build_steps(asset: ProductAsset, name: &str) -> Vec<Yaml> {
+    let artifact_id = "${{ inputs.artifact_id }}";
     download_steps_with(
         asset,
-        workflow_steps::download_step_by_id(name, &artifact_id, asset.directory),
+        workflow_steps::download_step_by_id(name, artifact_id, asset.directory),
     )
 }
 
@@ -234,7 +231,7 @@ fn verify_provenance_in_directory(asset: ProductAsset, directory: &str) -> Strin
 /// Check candidate identity and deterministic generation on the uploaded bytes.
 pub(super) fn qualification_script(binary: &str, directory: &str) -> String {
     format!(
-        "set -eu\nunset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN GH_TOKEN MISE_GITHUB_TOKEN GH_HOST GH_CONFIG_DIR\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\ntest \"$(./{directory}/{binary} --version)\" = \"velnor-actions {VERSION}\"\nscripts/capture-opentofu-goldens.sh check-release \"$GITHUB_WORKSPACE/{directory}/{binary}\"\nmise --no-config --no-env --no-hooks exec actionlint@1.7.12 shellcheck@0.11.0 -- actionlint -color\nmise --no-config --no-env --no-hooks exec zizmor@1.30.1 -- zizmor --no-online-audits --config .zizmor.yml .github/workflows"
+        "set -eu\nunset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN GH_TOKEN MISE_GITHUB_TOKEN GH_HOST GH_CONFIG_DIR\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\ntest \"$(./{directory}/{binary} --version)\" = \"velnor-actions {VERSION}\"\nscripts/capture-opentofu-goldens.sh check-release \"$GITHUB_WORKSPACE/{directory}/{binary}\""
     )
 }
 
@@ -252,8 +249,16 @@ pub(super) fn source_gate_job(hosted: Yaml) -> (String, Yaml) {
             workflow_steps::bash_step(
                 "Install pinned release gate tools",
                 &format!(
-                    "mise --no-config --no-env --no-hooks install rust@1.98.1 gh@{GH_VERSION}"
+                    "mise --no-config --no-env --no-hooks install rust@1.98.1 gh@{GH_VERSION} actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1"
                 ),
+            ),
+            workflow_steps::bash_step(
+                "Run actionlint",
+                "mise --no-config --no-env --no-hooks exec actionlint@1.7.12 shellcheck@0.11.0 -- actionlint -color",
+            ),
+            workflow_steps::bash_step(
+                "Run zizmor",
+                "mise --no-config --no-env --no-hooks exec zizmor@1.30.1 -- zizmor --no-online-audits --config .zizmor.yml .github/workflows",
             ),
             ci_check_step(),
             workflow_steps::bash_step(
@@ -298,73 +303,5 @@ test "$(mise --no-config --no-env --no-hooks exec gh@{GH_VERSION} -- gh api repo
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{LINUX, qualification_script, verify_provenance_in_directory};
-    use std::error::Error;
-    use std::fs;
-    use std::os::unix::fs::PermissionsExt;
-    use std::path::PathBuf;
-    use std::process::Command;
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    struct Scratch(PathBuf);
-
-    impl Drop for Scratch {
-        fn drop(&mut self) {
-            drop(fs::remove_dir_all(&self.0));
-        }
-    }
-
-    #[test]
-    fn wrong_checksum_filename_stops_before_candidate_execution() -> Result<(), Box<dyn Error>> {
-        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../..")
-            .canonicalize()?;
-        let nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
-        let directory_name = format!("target/release-sidecar-test-{}-{nonce}", std::process::id());
-        let directory = root.join(&directory_name);
-        fs::create_dir_all(&directory)?;
-        let scratch = Scratch(directory.clone());
-        let executed = scratch.0.join("candidate-executed");
-        let candidate = directory.join(LINUX.binary);
-        fs::write(
-            &candidate,
-            "#!/bin/sh\nprintf '%s\\n' executed >> \"$CANDIDATE_EXECUTED\"\nprintf '%s\\n' 'velnor-actions 0.1.1'\n",
-        )?;
-        let mut permissions = fs::metadata(&candidate)?.permissions();
-        permissions.set_mode(0o755);
-        fs::set_permissions(&candidate, permissions)?;
-        fs::write(
-            directory.join(LINUX.sidecar),
-            format!("{}  unrelated-binary\n", "a".repeat(64)),
-        )?;
-        let sha = Command::new("git")
-            .args(["rev-parse", "HEAD"])
-            .current_dir(&root)
-            .output()?;
-        if !sha.status.success() {
-            return Err("cannot read candidate source SHA".into());
-        }
-        let source_sha = String::from_utf8(sha.stdout)?.trim().to_owned();
-        let command = format!(
-            "{}\n{}",
-            verify_provenance_in_directory(LINUX, &directory_name),
-            qualification_script(LINUX.binary, &directory_name)
-        );
-        let status = Command::new("bash")
-            .arg("-c")
-            .arg(command)
-            .current_dir(&root)
-            .env("GITHUB_REPOSITORY", "tailrocks/velnor-new")
-            .env("GITHUB_SHA", source_sha)
-            .env("GITHUB_WORKSPACE", &root)
-            .env("CANDIDATE_EXECUTED", &executed)
-            .status()?;
-        assert!(!status.success(), "accepted a sidecar for another filename");
-        assert!(
-            !executed.exists(),
-            "candidate ran before its sidecar passed validation"
-        );
-        Ok(())
-    }
-}
+#[path = "schema2_generator_release_assets_tests.rs"]
+mod tests;
