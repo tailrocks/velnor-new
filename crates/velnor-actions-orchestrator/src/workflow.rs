@@ -1,8 +1,5 @@
 //! Workflow-IR, render-context, and actionlint-input construction.
-
-//! W1 emission wiring lives in the child module below (self-declared via
-//! `#[path]` so `lib.rs` stays untouched); the integrator only registers
-//! the companion test file.
+//! W1 emission wiring lives in the child module below.
 #[path = "wire_w1.rs"]
 pub(crate) mod wire_w1;
 
@@ -130,7 +127,7 @@ pub(crate) fn build_workflow(
     };
     let use_nextest = plan_uses_nextest(discovery);
     let use_opentofu = plan_uses_opentofu(discovery);
-    let use_rust = plan_uses_rust(discovery);
+    let use_rust = plan_uses_rust(discovery, policy);
     let plan = build_plan_job(
         label,
         acquire.clone(),
@@ -291,12 +288,15 @@ pub(crate) fn plan_uses_opentofu(discovery: &Discovery) -> bool {
 
 /// True when the plan job needs the Rust toolchain.
 ///
-/// Every repo keeps it except pure-tofu ones: tofu work with zero
-/// rust workspaces. Repos with neither keep it too (fail-safe: an
-/// unneeded install costs seconds, a missing toolchain fails the
-/// format/build steps).
-fn plan_uses_rust(discovery: &Discovery) -> bool {
-    !(plan_uses_opentofu(discovery) && discovery.workspaces.is_empty())
+/// Consumers require Rust for selected Rust evidence. Velnor also builds
+/// its candidate-source helper in Plan.
+pub(crate) fn plan_uses_rust(discovery: &Discovery, policy: WorkflowPolicy) -> bool {
+    policy == WorkflowPolicy::VelnorRepositoryV1
+        || !discovery.workspaces.is_empty()
+        || discovery
+            .proposals
+            .iter()
+            .any(|task| Stack::from_id(&task.stack_id) == Some(Stack::Rust))
 }
 
 /// Typed `Prepare Rust components` step, shared by plan and task jobs.
