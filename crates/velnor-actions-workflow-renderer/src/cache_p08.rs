@@ -361,7 +361,7 @@ pub fn check_no_rust_cache_with_mbx(job_id: &str, job: &Job) -> Result<(), Rende
     Ok(())
 }
 
-/// Require MBX objects restore before every fetch step (P08-4).
+/// Require MBX setup before every fetch step (P08-4).
 ///
 /// # Errors
 ///
@@ -372,7 +372,7 @@ pub fn check_mbx_before_fetch(job_id: &str, job: &Job) -> Result<(), RenderError
         .steps
         .iter()
         .position(|s| s.name.starts_with("Fetch Cargo sources"));
-    if let (Some(mbx), Some(fetch_at)) = (at("Restore MBX objects"), fetch)
+    if let (Some(mbx), Some(fetch_at)) = (at(crate::cache_steps::MBX_RESTORE_NAME), fetch)
         && fetch_at < mbx
     {
         return Err(RenderError::InvalidWorkflow(format!(

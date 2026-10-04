@@ -18,7 +18,7 @@ fn mbx_argv() -> Vec<String> {
 fn mbx_emitted_only_for_mbx_driver() -> Result<(), RenderError> {
     let selected =
         mbx_step_for_driver(&mbx_pin(), CompileDriver::Mbx, "1.19.0")?.expect("mbx step");
-    assert_eq!(selected.name, "Restore MBX objects");
+    assert_eq!(selected.name, "Setup MBX");
     assert!(mbx_step_for_driver(&mbx_pin(), CompileDriver::Cargo, "1.19.0")?.is_none());
     assert!(
         mbx_step_for_driver(&checkout_pin(), CompileDriver::Mbx, "1.19.0")

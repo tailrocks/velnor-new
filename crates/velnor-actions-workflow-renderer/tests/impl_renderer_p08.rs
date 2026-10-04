@@ -245,7 +245,7 @@ fn mbx_restore_precedes_fetch() {
         },
     };
     let mbx = velnor_actions_contract::Step {
-        name: "Restore MBX objects".to_owned(),
+        name: "Setup MBX".to_owned(),
         condition: None,
         kind: StepKind::Action {
             uses: format!("jdx/mr-boxington-action@{}", "d".repeat(40)),

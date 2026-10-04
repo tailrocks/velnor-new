@@ -1,6 +1,6 @@
 //! Cache and lane step templates over validated action refs.
 //!
-//! Covers MBX objects-mode restore, `actions/cache` restore/save, and
+//! Covers MBX local setup, `actions/cache` restore/save, and
 //! per-lane target directories; pins arrive validated.
 
 use std::collections::BTreeMap;
@@ -20,7 +20,7 @@ pub use tools::{
     TOOLS_SAVE_USES, tools_cache_key, tools_restore_step, tools_save_step,
 };
 
-/// Pinned mr-boxington action name (objects mode).
+/// Pinned mr-boxington action name (local setup backend).
 pub const MBX_ACTION_NAME: &str = "jdx/mr-boxington-action";
 /// Cache restore/save action names.
 pub const CACHE_RESTORE_NAME: &str = "actions/cache/restore";
@@ -139,8 +139,8 @@ fn uses_mbx_tool(step: &Step) -> bool {
     matches!(&step.kind, velnor_actions_contract::StepKind::Shell { run, .. } if run.iter().any(|arg| arg == "mbx" || arg.contains("mr-boxington")))
 }
 
-/// Display name of the pinned MBX setup step.
-pub const MBX_RESTORE_NAME: &str = "Restore MBX objects";
+/// Display name of the pinned MBX local setup step.
+pub const MBX_RESTORE_NAME: &str = "Setup MBX";
 /// MBX automatic collection must stay enabled so low-disk builds can recover.
 pub(crate) const MBX_GC_AUTO_ENV: &str = "MBX_GC_AUTO";
 /// MBX 1.21.1+ honors this value and protects active build consumers.

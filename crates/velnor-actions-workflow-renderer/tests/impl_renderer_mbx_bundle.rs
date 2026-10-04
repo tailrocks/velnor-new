@@ -69,7 +69,7 @@ fn private_root_precedes_local_setup_and_external_restore() -> Result<(), Render
     let root = text
         .find("name: Prepare private MBX store")
         .expect("root step");
-    let setup = text.find("name: Restore MBX objects").expect("local setup");
+    let setup = text.find("name: Setup MBX").expect("local setup");
     let key = text.find("name: Prepare MBX bundle key").expect("key step");
     let restore = text
         .find("name: Restore MBX single bundle")
