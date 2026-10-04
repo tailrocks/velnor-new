@@ -28,6 +28,7 @@ fn group(kind: TaskKind) -> TaskGroup {
         uses_network: false,
         uses_clock: false,
         uses_random: false,
+        run_ignored: None,
         nextest_profile: NextestProfile::Default,
     }
 }
@@ -357,4 +358,27 @@ fn leading_dash_values_fail_closed() {
 
     let err = cargo_payload_with_profile(&target).expect_err("profiled dash target");
     assert!(err.to_string().contains("leading_dash_target"), "{err}");
+}
+
+#[test]
+fn nextest_payload_carries_run_ignored() -> Result<(), ContractError> {
+    let mut g = group(TaskKind::Nextest);
+    g.test_runner = TestRunner::CargoNextest;
+    g.run_ignored = Some("all".to_owned());
+    let argv = text(&g)?;
+    assert!(
+        argv.windows(2).any(|w| w == ["--run-ignored", "all"]),
+        "must contain --run-ignored all: {argv:?}"
+    );
+
+    let mut g_default = group(TaskKind::Nextest);
+    g_default.test_runner = TestRunner::CargoNextest;
+    g_default.run_ignored = Some("default".to_owned());
+    let argv_default = text(&g_default)?;
+    assert!(
+        !argv_default.iter().any(|arg| arg == "--run-ignored"),
+        "default mode must not emit --run-ignored: {argv_default:?}"
+    );
+
+    Ok(())
 }

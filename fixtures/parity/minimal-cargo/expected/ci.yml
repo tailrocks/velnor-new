@@ -49,6 +49,24 @@ jobs:
     name: Plan
     runs-on: ubuntu-26.04
     timeout-minutes: 10
+    env:
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+      ACTIONS_ID_TOKEN_REQUEST_URL: ""
+      ACTIONS_RUNTIME_TOKEN: ""
+      CARGO_REGISTRY_TOKEN: ""
+      GH_CONFIG_DIR: ""
+      GH_HOST: ""
+      GH_TOKEN: ""
+      GITHUB_TOKEN: ""
+      MISE_AUTO_INSTALL: "false"
+      MISE_EXEC_AUTO_INSTALL: "false"
+      MISE_GITHUB_TOKEN: ""
+      MISE_LOCKFILE: "0"
+      MISE_NO_CONFIG: "1"
+      MISE_NO_ENV: "1"
+      MISE_NO_HOOKS: "1"
+      NODE_AUTH_TOKEN: ""
+      NPM_TOKEN: ""
     outputs:
       covered_tasks: ${{ steps.plan.outputs.covered_tasks }}
     steps:
@@ -70,38 +88,17 @@ jobs:
       - name: Prepare pinned tools
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_LOCKFILE: "0"
-          MISE_NO_CONFIG: "1"
-          MISE_NO_ENV: "1"
-          MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
         run: mise --no-config --no-env --no-hooks install rust@1.98.1 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1
       - name: Prepare Rust components
         env:
-          MISE_AUTO_INSTALL: "false"
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_EXEC_AUTO_INSTALL: "false"
-          MISE_LOCKFILE: "0"
-          MISE_NO_CONFIG: "1"
-          MISE_NO_ENV: "1"
-          MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
         run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- rustup component add --toolchain 1.98.1-x86_64-unknown-linux-gnu clippy rustfmt
       - name: Acquire Velnor
         env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
-          ACTIONS_RUNTIME_TOKEN: ""
-          CARGO_REGISTRY_TOKEN: ""
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
-          MISE_GITHUB_TOKEN: ""
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
           VELNOR_ASSET_SHA256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
           VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.0/velnor-actions-0.1.0-x86_64-unknown-linux-gnu
           VELNOR_RELEASE_COMMIT: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
@@ -113,25 +110,8 @@ jobs:
         run: "\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\""
       - name: Check generated files
         env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
-          ACTIONS_RUNTIME_TOKEN: ""
-          CARGO_REGISTRY_TOKEN: ""
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
-          MISE_AUTO_INSTALL: "false"
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_EXEC_AUTO_INSTALL: "false"
-          MISE_GITHUB_TOKEN: ""
-          MISE_LOCKFILE: "0"
-          MISE_NO_CONFIG: "1"
-          MISE_NO_ENV: "1"
-          MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
           RUSTUP_TOOLCHAIN: 1.98.1
         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0 generate --output-dir \"$RUNNER_TEMP/velnor-actions-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}\" && diff -r --brief .github \"$RUNNER_TEMP/velnor-actions-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/.github\"'"
       - name: Plan
@@ -167,23 +147,30 @@ jobs:
     name: Publish baseline
     runs-on: ubuntu-26.04
     timeout-minutes: 10
+    env:
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+      ACTIONS_ID_TOKEN_REQUEST_URL: ""
+      ACTIONS_RUNTIME_TOKEN: ""
+      CARGO_REGISTRY_TOKEN: ""
+      GH_CONFIG_DIR: ""
+      GH_HOST: ""
+      GH_TOKEN: ""
+      GITHUB_TOKEN: ""
+      MISE_AUTO_INSTALL: "false"
+      MISE_EXEC_AUTO_INSTALL: "false"
+      MISE_GITHUB_TOKEN: ""
+      MISE_LOCKFILE: "0"
+      MISE_NO_CONFIG: "1"
+      MISE_NO_ENV: "1"
+      MISE_NO_HOOKS: "1"
+      NODE_AUTH_TOKEN: ""
+      NPM_TOKEN: ""
     needs:
       - required
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - name: Acquire Velnor
         env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
-          ACTIONS_RUNTIME_TOKEN: ""
-          CARGO_REGISTRY_TOKEN: ""
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
-          MISE_GITHUB_TOKEN: ""
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
           VELNOR_ASSET_SHA256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
           VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.0/velnor-actions-0.1.0-x86_64-unknown-linux-gnu
           VELNOR_RELEASE_COMMIT: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
@@ -216,6 +203,24 @@ jobs:
     name: Required
     runs-on: ubuntu-26.04
     timeout-minutes: 10
+    env:
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+      ACTIONS_ID_TOKEN_REQUEST_URL: ""
+      ACTIONS_RUNTIME_TOKEN: ""
+      CARGO_REGISTRY_TOKEN: ""
+      GH_CONFIG_DIR: ""
+      GH_HOST: ""
+      GH_TOKEN: ""
+      GITHUB_TOKEN: ""
+      MISE_AUTO_INSTALL: "false"
+      MISE_EXEC_AUTO_INSTALL: "false"
+      MISE_GITHUB_TOKEN: ""
+      MISE_LOCKFILE: "0"
+      MISE_NO_CONFIG: "1"
+      MISE_NO_ENV: "1"
+      MISE_NO_HOOKS: "1"
+      NODE_AUTH_TOKEN: ""
+      NPM_TOKEN: ""
     needs:
       - plan
       - rust-minimal-cargo
@@ -234,17 +239,6 @@ jobs:
           version: 2026.9.18
       - name: Acquire Velnor
         env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
-          ACTIONS_RUNTIME_TOKEN: ""
-          CARGO_REGISTRY_TOKEN: ""
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
-          MISE_GITHUB_TOKEN: ""
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
           VELNOR_ASSET_SHA256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
           VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.0/velnor-actions-0.1.0-x86_64-unknown-linux-gnu
           VELNOR_RELEASE_COMMIT: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
@@ -252,10 +246,6 @@ jobs:
       - name: Prepare pinned tools
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_LOCKFILE: "0"
-          MISE_NO_CONFIG: "1"
-          MISE_NO_ENV: "1"
-          MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
         run: mise --no-config --no-env --no-hooks install gh@2.102.0
@@ -303,6 +293,24 @@ jobs:
     name: Rust / minimal-cargo
     runs-on: ubuntu-26.04
     timeout-minutes: 30
+    env:
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+      ACTIONS_ID_TOKEN_REQUEST_URL: ""
+      ACTIONS_RUNTIME_TOKEN: ""
+      CARGO_REGISTRY_TOKEN: ""
+      GH_CONFIG_DIR: ""
+      GH_HOST: ""
+      GH_TOKEN: ""
+      GITHUB_TOKEN: ""
+      MISE_AUTO_INSTALL: "false"
+      MISE_EXEC_AUTO_INSTALL: "false"
+      MISE_GITHUB_TOKEN: ""
+      MISE_LOCKFILE: "0"
+      MISE_NO_CONFIG: "1"
+      MISE_NO_ENV: "1"
+      MISE_NO_HOOKS: "1"
+      NODE_AUTH_TOKEN: ""
+      NPM_TOKEN: ""
     needs:
       - plan
     steps:
@@ -322,17 +330,6 @@ jobs:
           version: 2026.9.18
       - name: Acquire Velnor
         env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
-          ACTIONS_RUNTIME_TOKEN: ""
-          CARGO_REGISTRY_TOKEN: ""
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
-          MISE_GITHUB_TOKEN: ""
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
           VELNOR_ASSET_SHA256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
           VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.0/velnor-actions-0.1.0-x86_64-unknown-linux-gnu
           VELNOR_RELEASE_COMMIT: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
@@ -345,47 +342,20 @@ jobs:
       - name: Prepare pinned tools
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_LOCKFILE: "0"
-          MISE_NO_CONFIG: "1"
-          MISE_NO_ENV: "1"
-          MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
         run: mise --no-config --no-env --no-hooks install rust@1.98.1 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1
       - name: Prepare Rust components
         env:
-          MISE_AUTO_INSTALL: "false"
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_EXEC_AUTO_INSTALL: "false"
-          MISE_LOCKFILE: "0"
-          MISE_NO_CONFIG: "1"
-          MISE_NO_ENV: "1"
-          MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
         run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- rustup component add --toolchain 1.98.1-x86_64-unknown-linux-gnu clippy rustfmt
       - name: Clippy
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/root/clippy/default,')"
         env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
-          ACTIONS_RUNTIME_TOKEN: ""
-          CARGO_REGISTRY_TOKEN: ""
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
-          MISE_AUTO_INSTALL: "false"
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_EXEC_AUTO_INSTALL: "false"
-          MISE_GITHUB_TOKEN: ""
-          MISE_LOCKFILE: "0"
-          MISE_NO_CONFIG: "1"
-          MISE_NO_ENV: "1"
-          MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_DOWNSTREAM_TASK_IDS: stack/rust/root/test/default,stack/rust/root/doctest/default,stack/rust/root/doc/default
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/root/clippy/default
@@ -396,25 +366,8 @@ jobs:
       - name: Unit and integration tests
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/root/test/default,')"
         env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
-          ACTIONS_RUNTIME_TOKEN: ""
-          CARGO_REGISTRY_TOKEN: ""
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
-          MISE_AUTO_INSTALL: "false"
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_EXEC_AUTO_INSTALL: "false"
-          MISE_GITHUB_TOKEN: ""
-          MISE_LOCKFILE: "0"
-          MISE_NO_CONFIG: "1"
-          MISE_NO_ENV: "1"
-          MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_DOWNSTREAM_TASK_IDS: stack/rust/root/doctest/default,stack/rust/root/doc/default
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/root/test/default
@@ -425,25 +378,8 @@ jobs:
       - name: Doctests
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/root/doctest/default,')"
         env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
-          ACTIONS_RUNTIME_TOKEN: ""
-          CARGO_REGISTRY_TOKEN: ""
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
-          MISE_AUTO_INSTALL: "false"
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_EXEC_AUTO_INSTALL: "false"
-          MISE_GITHUB_TOKEN: ""
-          MISE_LOCKFILE: "0"
-          MISE_NO_CONFIG: "1"
-          MISE_NO_ENV: "1"
-          MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_DOWNSTREAM_TASK_IDS: stack/rust/root/doc/default
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/root/doctest/default
@@ -454,25 +390,8 @@ jobs:
       - name: Documentation
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/root/doc/default,')"
         env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
-          ACTIONS_RUNTIME_TOKEN: ""
-          CARGO_REGISTRY_TOKEN: ""
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
-          MISE_AUTO_INSTALL: "false"
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_EXEC_AUTO_INSTALL: "false"
-          MISE_GITHUB_TOKEN: ""
-          MISE_LOCKFILE: "0"
-          MISE_NO_CONFIG: "1"
-          MISE_NO_ENV: "1"
-          MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
           RUSTDOCFLAGS: "-D warnings"
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/root/doc/default
