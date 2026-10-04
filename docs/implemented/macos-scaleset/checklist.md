@@ -33,7 +33,7 @@ Recovery gates use R0–R8. They do not renumber G0–G8.
 |---|---|---|---|
 | R0 | Current source, product, run, and open-PR inventory | PASS | `evidence.md` recovery inventory, 2026-10-03 |
 | R1 | Hosted MBX write then restore, bounded disk | FAIL | ENOSPC on `37114238559`. Push run `37163556069` wrote one bundle after df. That write is not the accepted restore, so this row stays FAIL. |
-| R2 | Archive semantics on the deployed amd64 image | NOT_RUN | Live tag is `sha256:1dd3f906`. Cache cold `37176041544` and warm `37177029188`: scale-set job succeeded, `Post Save cache` rejected `--posix`, hosted restore missed. Not a round trip. |
+| R2 | Archive semantics on the deployed amd64 image | NOT_RUN | Live tag is `sha256:1dd3f906`. Cache upload rejected `--posix`. Side tag `sha256:fe791063` accepts it and is not live while run `37178675286` is open. Not a round trip. |
 | R3 | Daemon lifecycle, N>1 backfill, cleanup | FAIL | Live pid 35645 is cdhash `c7e59739` (sha256 `788f363c`), not `de147432d`. A second mint after exit is not proven. |
 | R4 | Published repaired generator and full regenerated tree | NOT_RUN | `generator-47815c83` was published and ChainArgos `baa78037` was regenerated. Not a pass. `v0.1.0` was not moved. |
 | R5 | Cold and warm paired suite | NOT_RUN | Class-mode cold/warm pair is in `evidence.md`. It is not a successful suite. |
