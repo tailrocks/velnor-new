@@ -23,8 +23,7 @@ async fn non_not_found_inspect_error_blocks_admission_and_reconcile() -> Result<
     let stub = DockerStub::open(vec![
         http(500, r#"{"message":"private runner-id detail"}"#),
         http(500, r#"{"message":"private runner-id detail"}"#),
-    ])
-    .await?;
+    ])?;
 
     let busy = within(slot::busy(&journal, &stub.docker, 1), "capacity probe").await?;
     let reconcile = within(
@@ -61,8 +60,7 @@ async fn docker_api_observations_preserve_only_known_running_states() -> Result<
         http(200, "{}"),
         http(200, r#"{"State":{}}"#),
         http(200, "{}"),
-    ])
-    .await?;
+    ])?;
 
     for expected in [
         Ok(0),
@@ -97,7 +95,7 @@ async fn closed_docker_connection_is_not_treated_as_absent() -> Result<(), Strin
     let (scratch, journal) = journal("inspect-transport").await?;
     launch_row(&journal).await?;
     let before = journal.rows().await.map_err(|error| error.to_string())?;
-    let stub = DockerStub::open(vec![closed()]).await?;
+    let stub = DockerStub::open(vec![closed()])?;
 
     let actual = within(
         slot::running_count(&journal, &stub.docker),
@@ -166,7 +164,7 @@ struct DockerStub {
 }
 
 impl DockerStub {
-    async fn open(responses: Vec<DockerResponse>) -> Result<Self, String> {
+    fn open(responses: Vec<DockerResponse>) -> Result<Self, String> {
         static NEXT: AtomicU64 = AtomicU64::new(0);
         let number = NEXT.fetch_add(1, Ordering::Relaxed);
         let path = PathBuf::from(format!(
@@ -203,12 +201,11 @@ impl DockerStub {
             .task
             .take()
             .ok_or_else(|| "Docker stub already stopped".to_owned())?;
-        let served = match tokio::time::timeout(TIMEOUT, &mut task).await {
-            Ok(result) => result.map_err(|error| error.to_string())?,
-            Err(_) => {
-                task.abort();
-                return Err("Docker stub timed out waiting for requests".to_owned());
-            }
+        let served = if let Ok(result) = tokio::time::timeout(TIMEOUT, &mut task).await {
+            result.map_err(|error| error.to_string())?
+        } else {
+            task.abort();
+            return Err("Docker stub timed out waiting for requests".to_owned());
         };
         let removed = std::fs::remove_file(&self.path).map_err(|error| error.to_string());
         served?;

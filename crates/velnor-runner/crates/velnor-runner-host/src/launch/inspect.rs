@@ -60,7 +60,7 @@ mod tests {
 
     #[test]
     fn running_state_must_be_present() -> Result<(), String> {
-        for body in [r#"{}"#, r#"{"State":{}}"#] {
+        for body in ["{}", r#"{"State":{}}"#] {
             let info = serde_json::from_str(body).map_err(|error| error.to_string())?;
             assert_eq!(classify_inspect(Ok(info)), Err(inspect_error(200)));
         }
