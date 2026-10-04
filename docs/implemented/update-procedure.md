@@ -116,9 +116,14 @@ gate. A `lookup_failed` row is fail-closed signal, never current:
 re-run the probe to separate a transient fetch fault (a retry resolves
 clean) from a persistent upstream change (repeated runs agree); both
 fail, and only agreeing runs back an evidence refresh. The
-GitHub-hosted runner family has no releases API: its
-latest-family evidence comes from platform qualification, recorded as
-runtime `ImageOS`/`ImageVersion`, not from this probe.
+GitHub-hosted runner family has no releases API: verify supported labels
+against GitHub's hosted-runner reference, then record the actual operating
+system and `Runner Image` image/version/release values from a successful
+hosted workflow log. Keep a normal CI runtime observation separate from a
+formal `Qualification` workflow result: a newer CI observation refreshes
+image identity only and does not claim the qualification matrix ran again.
+The [2026-10-04 evidence snapshot](freshness-evidence-2026-10-04.md)
+records this distinction.
 
 ## Exceptions (≤14 days)
 

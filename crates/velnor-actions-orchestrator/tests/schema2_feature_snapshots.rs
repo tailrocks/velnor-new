@@ -161,5 +161,8 @@ jobs:
       - name: Intentional failure
         run: echo expected-negative && exit 1
 "#,
-    include_str!("schema2_class_snapshot.txt"),
+    include_str!("schema2_class_snapshot_parts/qualification-00.txt"),
+    include_str!("schema2_class_snapshot_parts/qualification-01.txt"),
+    include_str!("schema2_class_snapshot_parts/qualification-02.txt"),
+    include_str!("schema2_class_snapshot_parts/qualification-03.txt"),
 );

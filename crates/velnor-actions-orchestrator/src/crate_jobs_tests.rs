@@ -217,29 +217,8 @@ fn shards_name_their_index() {
     );
 }
 
-#[test]
-fn drivers_follow_per_crate_selection() {
-    let mut mbx = group("demo", TaskKind::Clippy, &[]);
-    mbx.identity.compile_driver = CompileDriver::Mbx.as_str().to_owned();
-    let cargo = group("nested", TaskKind::Clippy, &[]);
-    let found = build_crate_jobs(
-        "ubuntu-26.04",
-        WorkflowPolicy::ConsumerV1,
-        &discovery(vec![mbx, cargo]),
-        &ToolCatalog::pinned(),
-        &[],
-        &[],
-        None,
-        2,
-    )
-    .expect("crate jobs");
-    assert_eq!(found.drivers["rust-demo"], RenderDriver::Mbx);
-    assert_eq!(found.drivers["rust-nested"], RenderDriver::Cargo);
-    let steps = names(&found.jobs[0].1);
-    assert!(steps.contains(&"Setup MBX"), "{steps:?}");
-    let steps = names(&found.jobs[1].1);
-    assert!(!steps.contains(&"Setup MBX"), "{steps:?}");
-}
+#[path = "crate_jobs_mbx_tests.rs"]
+mod mbx_tests;
 
 #[test]
 fn empty_groups_build_no_jobs() {

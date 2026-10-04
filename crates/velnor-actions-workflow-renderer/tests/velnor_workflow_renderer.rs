@@ -25,6 +25,8 @@ mod impl_renderer_guard;
 mod impl_renderer_lint;
 #[path = "impl_renderer_matrix.rs"]
 mod impl_renderer_matrix;
+#[path = "impl_renderer_mbx_action.rs"]
+mod impl_renderer_mbx_action;
 #[path = "impl_renderer_mbx_bundle.rs"]
 mod impl_renderer_mbx_bundle;
 #[path = "impl_renderer_mbx_gc_policy.rs"]
@@ -33,6 +35,8 @@ mod impl_renderer_mbx_gc_policy;
 mod impl_renderer_mbx_identity;
 #[path = "impl_renderer_mbx_pr_cache_policy.rs"]
 mod impl_renderer_mbx_pr_cache_policy;
+#[path = "impl_renderer_mbx_preflight.rs"]
+mod impl_renderer_mbx_preflight;
 #[path = "impl_renderer_mbxgate.rs"]
 mod impl_renderer_mbxgate;
 #[path = "impl_renderer_msrv.rs"]

@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_contract::config::{SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL};
 use velnor_actions_contract::{Job, Step, StepKind};
-use velnor_actions_workflow_renderer::steps::mbx_objects_step;
+use velnor_actions_workflow_renderer::steps::{MBX_PREFLIGHT_NAME, mbx_objects_step};
 use velnor_actions_workflow_renderer::{RenderError, render_workflow_ir};
 
 use super::impl_renderer_fixtures::*;
@@ -27,7 +27,7 @@ pub(super) fn mbx_job(id: &str, version: &str) -> Result<(String, Job), RenderEr
                 "--no-hooks".to_owned(),
                 "install".to_owned(),
                 "rust@1.98.1".to_owned(),
-                "mr-boxington@1.21.1".to_owned(),
+                format!("mr-boxington@{version}"),
             ],
             env: BTreeMap::from([
                 (
@@ -46,7 +46,7 @@ pub(super) fn mbx_job(id: &str, version: &str) -> Result<(String, Job), RenderEr
 }
 
 fn render_mbx(id: &str, scale_set: bool) -> Result<String, RenderError> {
-    let mut built = mbx_job(id, "1.21.1")?;
+    let mut built = mbx_job(id, TEST_MBX_VERSION)?;
     if scale_set {
         let selector = ScaleSetSelector::try_new(
             SCALE_SET_NAME,
@@ -66,26 +66,50 @@ fn render_mbx(id: &str, scale_set: bool) -> Result<String, RenderError> {
 #[test]
 fn private_root_precedes_local_setup_and_external_restore() -> Result<(), RenderError> {
     let text = render_mbx("demo", false)?;
-    let root = text
-        .find("name: Prepare private MBX store")
-        .expect("root step");
-    let setup = text.find("name: Setup MBX").expect("local setup");
-    let key = text.find("name: Prepare MBX bundle key").expect("key step");
-    let restore = text
-        .find("name: Restore MBX single bundle")
-        .expect("bundle restore");
-    let import = text
-        .find("name: Import MBX single bundle")
-        .expect("bundle import");
-    let export = text
-        .find("name: Export MBX single bundle")
-        .expect("bundle export");
-    let save = text
-        .find("name: Save MBX single bundle")
-        .expect("bundle save");
-    assert!(root < setup && setup < key && key < restore && restore < import);
-    assert!(import < export && export < save);
+    assert_preflight_order(&text);
+    assert_preflight_content(&text);
+    assert_private_root_content(&text);
+    assert_local_setup_content(&text);
+    assert_mbx_key_content(&text);
+    Ok(())
+}
 
+fn assert_preflight_order(text: &str) {
+    let prepare = step_index(text, "Prepare pinned tools");
+    let preflight = step_index(text, MBX_PREFLIGHT_NAME);
+    let root = step_index(text, "Prepare private MBX store");
+    let setup = step_index(text, "Setup MBX");
+    let key = step_index(text, "Prepare MBX bundle key");
+    let restore = step_index(text, "Restore MBX single bundle");
+    let import = step_index(text, "Import MBX single bundle");
+    let export = step_index(text, "Export MBX single bundle");
+    let save = step_index(text, "Save MBX single bundle");
+    assert_eq!(
+        text.matches(&format!("name: {MBX_PREFLIGHT_NAME}")).count(),
+        1
+    );
+    assert!(prepare < preflight && preflight < root && root < setup);
+    assert!(setup < key && key < restore && restore < import);
+    assert!(import < export && export < save);
+}
+
+fn assert_preflight_content(text: &str) {
+    let preflight = step_index(text, MBX_PREFLIGHT_NAME);
+    let root = step_index(text, "Prepare private MBX store");
+    let preflight_script = &text[preflight..root];
+    assert!(
+        preflight_script.contains("mr-boxington@1.22.0"),
+        "preflight resolves the exact installed MBX: {preflight_script}"
+    );
+    assert!(
+        preflight_script.contains("rust@1.98.1") && preflight_script.contains("GITHUB_PATH"),
+        "preflight verifies and publishes the exact Rustup shim: {preflight_script}"
+    );
+}
+
+fn assert_private_root_content(text: &str) {
+    let root = step_index(text, "Prepare private MBX store");
+    let setup = step_index(text, "Setup MBX");
     let root_script = &text[root..setup];
     assert!(root_script.contains("mktemp -d"), "{root_script}");
     assert!(
@@ -108,11 +132,15 @@ fn private_root_precedes_local_setup_and_external_restore() -> Result<(), Render
     assert!(root_script.contains("stable MBX bundle path already exists"));
     assert!(root_script.contains("velnor-mbx-store.XXXXXXXXXX"));
     assert!(!root_script.contains("rm -"), "{root_script}");
+}
 
+fn assert_local_setup_content(text: &str) {
+    let setup = step_index(text, "Setup MBX");
+    let key = step_index(text, "Prepare MBX bundle key");
     let local = &text[setup..key];
     assert!(local.contains("id: mbx"), "{local}");
     assert!(local.contains("backend: local"), "{local}");
-    assert!(local.contains("version: 1.21.1"), "{local}");
+    assert!(local.contains("version: 1.22.0"), "{local}");
     for forbidden in [
         "github-cache-mode",
         "cache-generation",
@@ -123,11 +151,15 @@ fn private_root_precedes_local_setup_and_external_restore() -> Result<(), Render
             "implicit cache behavior: {local}"
         );
     }
+}
 
+fn assert_mbx_key_content(text: &str) {
+    let key = step_index(text, "Prepare MBX bundle key");
+    let restore = step_index(text, "Restore MBX single bundle");
     let key_yaml = &text[key..restore];
     for component in [
-        "MBX_GENERATION: velnor-mbx-1.21.1",
-        "MBX_EXPECTED_VERSION: 1.21.1",
+        "MBX_GENERATION: velnor-mbx-1.22.0",
+        "MBX_EXPECTED_VERSION: 1.22.0",
         "github.event.pull_request.base.sha",
         "MBX_CACHE_SCOPE: demo",
         "toJSON(matrix)",
@@ -145,7 +177,6 @@ fn private_root_precedes_local_setup_and_external_restore() -> Result<(), Render
     assert!(!key_yaml.contains("toolchain=norust"), "{key_yaml}");
     assert!(key_yaml.contains("mise --no-config --no-env --no-hooks exec"));
     assert!(key_yaml.contains("-- rustc -vV"));
-    Ok(())
 }
 
 #[test]

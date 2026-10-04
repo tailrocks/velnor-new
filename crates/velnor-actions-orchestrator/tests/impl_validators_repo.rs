@@ -7,9 +7,9 @@ use std::process::Command;
 use tempfile::TempDir;
 use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_mise::cache::validate_sources_path;
-use velnor_actions_orchestrator::prepare;
+use velnor_actions_orchestrator::{prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::steps::{
-    TASK_ARTIFACTS_DIR, cache_action_step, mbx_objects_step,
+    CompileDriver, TASK_ARTIFACTS_DIR, cache_action_step, mbx_step_for_driver,
 };
 
 use crate::impl_common::{fixture_manifest_json, without_ambient_identity};
@@ -99,6 +99,47 @@ fn repo_config_sample_parses_through_prepare() -> TestResult {
         assert_eq!(prep.default_branch, "main");
         Ok(())
     })
+}
+
+#[test]
+fn full_render_places_one_preflight_before_each_mbx_setup() -> TestResult {
+    without_ambient_identity(
+        "full_render_places_one_preflight_before_each_mbx_setup",
+        || {
+            let sample = repo_sample_text()?;
+            let repo = make_sample_repo(&sample)?;
+            let prep = prepare(repo.path())?;
+            let tree = render_staged_tree(&prep)?;
+            let yaml = tree
+                .get(".github/workflows/ci.yml")
+                .ok_or_else(|| std::io::Error::other("missing workflow"))?;
+            let preflight_positions: Vec<usize> = yaml
+                .match_indices("name: Verify MBX and Rust toolchains")
+                .map(|(position, _)| position)
+                .collect();
+            let setup_positions: Vec<usize> = yaml
+                .match_indices("name: Setup MBX")
+                .map(|(position, _)| position)
+                .collect();
+            assert!(
+                !setup_positions.is_empty(),
+                "sample emits MBX setup: {yaml}"
+            );
+            assert_eq!(
+                preflight_positions.len(),
+                setup_positions.len(),
+                "full rendering injects exactly one central preflight per MBX job"
+            );
+            assert!(
+                preflight_positions
+                    .iter()
+                    .zip(&setup_positions)
+                    .all(|(preflight, setup)| preflight < setup),
+                "preflight precedes each MBX setup: {yaml}"
+            );
+            Ok(())
+        },
+    )
 }
 
 #[test]
@@ -278,16 +319,23 @@ fn cache_action_transport_never_carries_mbx() {
 fn mbx_transport_stays_with_mr_boxington_action() {
     let mbx = uses("jdx/mr-boxington-action");
     let pin = velnor_actions_mise::MR_BOXINGTON_VERSION;
-    let step = mbx_objects_step(&mbx, false, pin).expect("objects step");
+    let step = mbx_step_for_driver(&mbx, CompileDriver::Mbx, pin)
+        .expect("setup step")
+        .expect("MBX profile");
     assert!(
         format!("{:?}", step.kind).contains("jdx/mr-boxington-action"),
         "mbx bytes move only through the external action"
     );
+    let velnor_actions_contract::StepKind::Action { with, .. } = &step.kind else {
+        panic!("MBX setup must be an action");
+    };
+    assert_eq!(with.get("version").map(String::as_str), Some(pin));
+    assert_eq!(with.get("backend").map(String::as_str), Some("local"));
     assert!(
-        format!("{:?}", step.kind).contains(pin),
-        "action installs the catalog pin, never latest"
+        mbx_step_for_driver(&mbx, CompileDriver::Cargo, pin)
+            .expect("Cargo profile")
+            .is_none()
     );
-    assert!(mbx_objects_step(&mbx, true, pin).is_err());
     let other = uses("actions/cache/restore");
-    assert!(mbx_objects_step(&other, false, pin).is_err());
+    assert!(mbx_step_for_driver(&other, CompileDriver::Mbx, pin).is_err());
 }

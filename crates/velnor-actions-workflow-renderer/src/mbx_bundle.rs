@@ -15,7 +15,10 @@ use velnor_actions_contract::workflow::lanes::{HOSTED_SUFFIX, SCALE_SUFFIX};
 use velnor_actions_contract::{Job, PullRequestCachePolicy, Step, StepKind};
 
 use crate::RenderError;
-use crate::cache_steps::{MBX_ACTION_NAME, TOOLS_RESTORE_USES, TOOLS_SAVE_USES, is_mbx_action};
+use crate::cache_steps::{
+    MBX_ACTION_NAME, MBX_PREFLIGHT_NAME, TOOLS_RESTORE_USES, TOOLS_SAVE_USES, is_mbx_action,
+    mbx_path_preflight_step,
+};
 #[path = "mbx_bundle_identity.rs"]
 mod identity;
 #[path = "mbx_bundle_lane.rs"]
@@ -113,6 +116,7 @@ pub(crate) fn append_single_bundle_saves(
         reject_private_env_overrides(job, id)?;
         pin_local_backend(job, id)?;
         insert_root_step(job)?;
+        insert_mbx_preflight_step(job, id, identity)?;
         insert_bundle_restore(job, identity, cache_policy)?;
         if winners.contains(id) {
             insert_writer_steps(job, identity.qualification_role(), cache_policy)?;
@@ -122,6 +126,43 @@ pub(crate) fn append_single_bundle_saves(
             )));
         }
     }
+    Ok(())
+}
+
+/// Insert the centrally owned tool check immediately ahead of the private root.
+fn insert_mbx_preflight_step(
+    job: &mut Job,
+    id: &str,
+    identity: &CacheIdentity,
+) -> Result<(), RenderError> {
+    let Some(root_index) = job.steps.iter().position(|step| step.name == MBX_ROOT_NAME) else {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "mbx_private_root_missing:{id}"
+        )));
+    };
+    let preflight = mbx_path_preflight_step(
+        &identity.version,
+        &identity.rustup_toolchain,
+        identity.rust_env.clone(),
+    )?;
+    let preflight_positions: Vec<usize> = job
+        .steps
+        .iter()
+        .enumerate()
+        .filter_map(|(index, step)| (step.name == MBX_PREFLIGHT_NAME).then_some(index))
+        .collect();
+    match preflight_positions.as_slice() {
+        [] => {}
+        [index] if *index + 1 == root_index && job.steps.get(*index) == Some(&preflight) => {
+            return Ok(());
+        }
+        _ => {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "mbx_preflight_mismatch:{id}"
+            )));
+        }
+    }
+    job.steps.insert(root_index, preflight);
     Ok(())
 }
 

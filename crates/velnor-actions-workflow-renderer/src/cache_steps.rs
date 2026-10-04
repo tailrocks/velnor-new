@@ -7,6 +7,10 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract::{Job, Step, StepKind};
 
+#[path = "cache_steps_mbx_preflight.rs"]
+mod mbx_preflight;
+pub use mbx_preflight::{MBX_PREFLIGHT_NAME, mbx_path_preflight_step};
+
 use crate::{
     RenderError,
     steps::{action_step, validate_uses},
