@@ -17,21 +17,17 @@ struct ClassifierFixture {
 }
 
 #[test]
-fn classifier_requires_proven_windows_and_preserves_unknown_reservations()
+fn classifier_requires_runner_record_order_and_preserves_unknown_reservations()
 -> Result<(), Box<dyn Error>> {
     assert_eq!(classify("pre-save", false, false)?, "MUSTMISS");
     assert_eq!(classify("during-save", true, true)?, "HIT");
-    assert_eq!(
-        classify("during-save", true, false)?,
-        "RESERVATION-UNKNOWN/INCONCLUSIVE"
-    );
+    assert_eq!(classify("during-save", true, false)?, "MISS");
     assert_eq!(classify("during-save", false, false)?, "NOT_RUN");
     Ok(())
 }
 
 #[test]
-fn missing_restore_outputs_stay_not_run_after_a_proven_upload_window() -> Result<(), Box<dyn Error>>
-{
+fn missing_restore_outputs_stay_not_run_after_proven_log_order() -> Result<(), Box<dyn Error>> {
     for missing in ["all", "primary", "conclusion", "failed"] {
         assert_restore_not_run(missing)?;
     }
@@ -74,8 +70,12 @@ fn assert_restore_not_run(missing: &str) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn classify(phase: &str, upload_started: bool, committed: bool) -> Result<String, Box<dyn Error>> {
-    let fixture = setup_classifier(phase, upload_started, committed)?;
+fn classify(
+    phase: &str,
+    progress_before_runner_cancel_error: bool,
+    committed: bool,
+) -> Result<String, Box<dyn Error>> {
+    let fixture = setup_classifier(phase, progress_before_runner_cancel_error, committed)?;
     let output = run_bash(
         scripts::OBSERVER_CLASSIFY,
         &fixture.root,
@@ -88,23 +88,22 @@ fn classify(phase: &str, upload_started: bool, committed: bool) -> Result<String
         String::from_utf8_lossy(&output.stderr)
     );
     let result = fs::read_to_string(fixture.observer.join("result.json"))?;
-    let outcome = [
-        "MUSTMISS",
-        "HIT",
-        "RESERVATION-UNKNOWN/INCONCLUSIVE",
-        "NOT_RUN",
-    ]
-    .into_iter()
-    .find(|candidate| result.contains(&format!("\"outcome\":\"{candidate}\"")))
-    .ok_or_else(|| std::io::Error::other("classifier outcome missing"))?
-    .to_owned();
+    assert!(
+        result.contains("\"reservation_state\":\"UNKNOWN\""),
+        "{result}"
+    );
+    let outcome = ["MUSTMISS", "HIT", "MISS", "NOT_RUN"]
+        .into_iter()
+        .find(|candidate| result.contains(&format!("\"outcome\":\"{candidate}\"")))
+        .ok_or_else(|| std::io::Error::other("classifier outcome missing"))?
+        .to_owned();
     fs::remove_dir_all(fixture.root)?;
     Ok(outcome)
 }
 
 fn setup_classifier(
     phase: &str,
-    upload_started: bool,
+    progress_before_runner_cancel_error: bool,
     committed: bool,
 ) -> Result<ClassifierFixture, Box<dyn Error>> {
     let root = temp_dir("classify")?;
@@ -113,7 +112,7 @@ fn setup_classifier(
     fs::create_dir_all(&observer)?;
     fs::write(
         observer.join("child-evidence.json"),
-        child_evidence(phase, upload_started, committed),
+        child_evidence(phase, progress_before_runner_cancel_error, committed),
     )?;
     fs::write(observer.join("import-count"), "7\n")?;
     fs::write(observer.join("reuse-count"), "2\n")?;
@@ -128,7 +127,11 @@ fn setup_classifier(
     })
 }
 
-fn child_evidence(phase: &str, upload_started: bool, committed: bool) -> String {
+fn child_evidence(
+    phase: &str,
+    progress_before_runner_cancel_error: bool,
+    committed: bool,
+) -> String {
     let save_started = phase == "during-save";
     let save_conclusion = if save_started { "cancelled" } else { "skipped" };
     let after_count = usize::from(committed);
@@ -141,7 +144,7 @@ fn child_evidence(phase: &str, upload_started: bool, committed: bool) -> String 
     };
     let before = after.clone();
     format!(
-        r#"{{"save_step_started":{save_started},"save_step_conclusion":"{save_conclusion}","cancel_step_conclusion":"cancelled","upload_started_before_cancel":{upload_started},"restore_clean_miss":{},"cache_before":{before},"cache_after":{after}}}"#,
+        r#"{{"save_step_started":{save_started},"save_step_conclusion":"{save_conclusion}","cancel_step_conclusion":"cancelled","progress_before_runner_cancel_error":{progress_before_runner_cancel_error},"restore_clean_miss":{},"cache_before":{before},"cache_after":{after}}}"#,
         !committed
     )
 }

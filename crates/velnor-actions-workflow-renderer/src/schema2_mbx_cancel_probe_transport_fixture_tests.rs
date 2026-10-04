@@ -119,16 +119,42 @@ elif [ "$url" = https://signed.example/log ]; then
     head -c 1048577 /dev/zero
   else
     case "$CURL_MARKER" in
-    partial) printf '2026-10-04T00:00:05.0000000Z Sent 256 of 1024 (25.0%%), 0.1 MBs/sec\n' ;;
-    rounded100) printf '2026-10-04T00:00:05.0000000Z Sent 9996 of 10000 (100.0%%), 0.1 MBs/sec\n' ;;
-    short-timestamp) printf '2026-10-04T00:00:05.000Z Sent 256 of 1024 (25.0%%), 0.1 MBs/sec\n' ;;
-    wrong-separator) printf '2026/10/04T00:00:05.0000000Z Sent 256 of 1024 (25.0%%), 0.1 MBs/sec\n' ;;
-    invalid-calendar) printf '2026-02-30T00:00:05.0000000Z Sent 256 of 1024 (25.0%%), 0.1 MBs/sec\n' ;;
-    late) printf '2026-10-04T00:00:11.0000000Z Sent 256 of 1024 (25.0%%), 0.1 MBs/sec\n' ;;
-    zero) printf '2026-10-04T00:00:05.0000000Z Sent 0 of 1024 (0.0%%), 0.1 MBs/sec\n' ;;
-    complete) printf '2026-10-04T00:00:05.0000000Z Sent 1024 of 1024 (100.0%%), 0.1 MBs/sec\n' ;;
-    malformed) printf '2026-10-04T00:00:05.0000000Z Sent many of 1024 (25.0%%), 0.1 MBs/sec\n' ;;
-      *) printf 'ordinary save log without progress evidence\n' ;;
+    partial)
+      printf '2026-10-04T00:00:05.0000000Z Sent 256 of 1024 (25.0%%), 0.1 MBs/sec\n'
+      printf '2026-10-04T00:00:06.0000000Z ##[error]The operation was canceled.\n' ;;
+    rounded100)
+      printf '2026-10-04T00:00:05.0000000Z Sent 9996 of 10000 (100.0%%), 0.1 MBs/sec\n'
+      printf '2026-10-04T00:00:06.0000000Z ##[error]The operation was canceled.\n' ;;
+    clock-skew)
+      printf '2099-12-31T23:59:59.0000000Z Sent 256 of 1024 (25.0%%), 0.1 MBs/sec\n'
+      printf '1999-01-01T00:00:00.0000000Z ##[error]The operation was canceled.\n' ;;
+    reverse)
+      printf '2099-12-31T23:59:59.0000000Z ##[error]The operation was canceled.\n'
+      printf '1999-01-01T00:00:00.0000000Z Sent 256 of 1024 (25.0%%), 0.1 MBs/sec\n' ;;
+    partial-no-error)
+      printf '2026-10-04T00:00:05.0000000Z Sent 256 of 1024 (25.0%%), 0.1 MBs/sec\n' ;;
+    malformed-error)
+      printf '2026-10-04T00:00:05.0000000Z Sent 256 of 1024 (25.0%%), 0.1 MBs/sec\n'
+      printf '2026-10-04T00:00:06.0000000Z ##[error]The operation was canceled\n' ;;
+    short-timestamp)
+      printf '2026-10-04T00:00:05.000Z Sent 256 of 1024 (25.0%%), 0.1 MBs/sec\n'
+      printf '2026-10-04T00:00:06.0000000Z ##[error]The operation was canceled.\n' ;;
+    wrong-separator)
+      printf '2026/10/04T00:00:05.0000000Z Sent 256 of 1024 (25.0%%), 0.1 MBs/sec\n'
+      printf '2026-10-04T00:00:06.0000000Z ##[error]The operation was canceled.\n' ;;
+    invalid-calendar)
+      printf '2026-02-30T00:00:05.0000000Z Sent 256 of 1024 (25.0%%), 0.1 MBs/sec\n'
+      printf '2026-10-04T00:00:06.0000000Z ##[error]The operation was canceled.\n' ;;
+    zero)
+      printf '2026-10-04T00:00:05.0000000Z Sent 0 of 1024 (0.0%%), 0.1 MBs/sec\n'
+      printf '2026-10-04T00:00:06.0000000Z ##[error]The operation was canceled.\n' ;;
+    complete)
+      printf '2026-10-04T00:00:05.0000000Z Sent 1024 of 1024 (100.0%%), 0.1 MBs/sec\n'
+      printf '2026-10-04T00:00:06.0000000Z ##[error]The operation was canceled.\n' ;;
+    malformed)
+      printf '2026-10-04T00:00:05.0000000Z Sent many of 1024 (25.0%%), 0.1 MBs/sec\n'
+      printf '2026-10-04T00:00:06.0000000Z ##[error]The operation was canceled.\n' ;;
+    *) printf 'ordinary save log without progress evidence\n' ;;
       esac
   fi
 elif [ "$url" = https://signed.example/restore-log ]; then

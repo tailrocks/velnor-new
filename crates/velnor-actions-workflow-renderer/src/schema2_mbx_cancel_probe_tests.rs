@@ -378,7 +378,7 @@ fn malformed_save_step_lists_never_request_step_logs() -> Result<(), Box<dyn Err
         );
         assert!(
             fs::read_to_string(observer.join("child-evidence.json"))?
-                .contains("\"upload_started_before_cancel\":false")
+                .contains("\"progress_before_runner_cancel_error\":false")
         );
         let requests = if curl_log.exists() {
             fs::read_to_string(&curl_log)?

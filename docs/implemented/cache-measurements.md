@@ -234,3 +234,36 @@ workload. That evidence must come from the consumer's affected crates after
 adoption; a green probe alone is not an ENOSPC repair verdict. The hosted
 round-trip still needs to run against GitHub Actions after the generated
 workflow is adopted.
+
+## MBX cancelled Save probe
+
+The cancellation probe binds its controller to one dispatched victim run,
+revalidates that run immediately before the accepted cancellation request, and
+checks the victim's final Save step and exact cache key. A during-Save result
+requires the exact actions/cache pin
+55cc8345863c7cc4c66a329aec7e433d2d1c52a9 Save output Sent N of TOTAL ... with
+0 < N < TOTAL, followed later in that same Save step log by the
+cancellation error record ##[error]The operation was canceled. from
+runner pin d7bc179baf11a02110b46cfbbc4040f74ac3f60a. The parser requires the
+runner timestamp shape and a valid calendar date, but uses
+the order of records in the log; it does not compare timestamps with the
+controller's cancellation time or compare clocks across runners.
+
+This proves only that positive partial SDK progress appears before the runner
+cancellation error record in a cancelled Save step. The runner drains process
+output before recording the cancellation error, so progress may have occurred
+after cancellation was received. The probe does not establish progress before
+the cancellation request, an interrupted transfer, cache commit/rollback, or
+reservation cleanup.
+
+HIT requires the exact primary key to appear in the cache API, the fresh
+observer to restore that key, import objects, and reuse a cached compilation.
+MISS means the controller and child snapshots both show exact-key absence and
+the observer has a clean exact-key restore miss. Its reservation_state stays
+UNKNOWN; this result describes observed absence only. Missing or unfamiliar
+log records, identities, or cache API shape produce NOT_RUN.
+
+These are source and fixture checks. No hosted cancellation receipt or
+downloaded Save-step log has been recorded, so this probe has no hosted result
+yet. A hosted log with an unfamiliar timestamp or cancellation marker remains
+NOT_RUN.

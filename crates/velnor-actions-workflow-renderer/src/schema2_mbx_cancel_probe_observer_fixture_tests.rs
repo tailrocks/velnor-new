@@ -1,4 +1,4 @@
-//! Save-step log evidence must be present and predate the cancel request.
+//! Same-step log order must place partial SDK progress before runner cancellation error.
 
 use std::collections::BTreeMap;
 use std::error::Error;
@@ -10,14 +10,15 @@ use super::run_bash;
 use crate::schema2::mbx_cancel_probe::scripts;
 
 struct EvidenceRun {
-    started: bool,
+    progress_precedes_runner_error: bool,
     env: BTreeMap<String, String>,
     observer: PathBuf,
     curl_log: PathBuf,
 }
 
 #[test]
-fn missing_or_untrusted_save_log_evidence_stays_not_run() -> Result<(), Box<dyn Error>> {
+fn log_evidence_requires_partial_progress_before_exact_runner_error() -> Result<(), Box<dyn Error>>
+{
     for mode in [
         "missing",
         "malformed",
@@ -27,7 +28,10 @@ fn missing_or_untrusted_save_log_evidence_stays_not_run() -> Result<(), Box<dyn 
         "no-marker",
         "valid-progress",
         "rounded100-progress",
-        "late-progress",
+        "clock-skew-progress-after",
+        "reverse-record-order",
+        "partial-without-runner-error",
+        "malformed-runner-error",
         "zero-progress",
         "complete-progress",
         "malformed-progress",
@@ -111,7 +115,7 @@ fn restore_errors_and_untrusted_logs_do_not_qualify_as_misses() -> Result<(), Bo
         execute_evidence(label, &fixture, &setup)?;
         let evidence = fs::read_to_string(setup.observer.join("child-evidence.json"))?;
         assert!(
-            evidence.contains("\"upload_started_before_cancel\":true"),
+            evidence.contains("\"progress_before_runner_cancel_error\":true"),
             "{evidence}"
         );
         assert!(
@@ -148,7 +152,7 @@ fn assert_log_case(mode: &str) -> Result<(), Box<dyn Error>> {
         evidence.env,
         &evidence.observer,
         &key,
-        evidence.started,
+        evidence.progress_precedes_runner_error,
     )?;
     fs::remove_dir_all(fixture.root)?;
     Ok(())
@@ -209,6 +213,11 @@ fn prepare_evidence(
     let curl_log = fixture.root.join("curl.log");
     let mut env = BTreeMap::from_iter(fixture.env(&fixture.output("evidence"), "observer-window"));
     let marker = progress_marker(mode);
+    let controller_cancel_at = match mode {
+        "clock-skew-progress-after" => "1900-01-01T00:00:00Z",
+        "reverse-record-order" => "2100-01-01T00:00:00Z",
+        _ => "2026-10-04T00:00:10Z",
+    };
     env.extend([
         ("GH_TOKEN".to_owned(), "fixture-secret-token".to_owned()),
         ("GITHUB_EVENT_PATH".to_owned(), event.display().to_string()),
@@ -231,9 +240,11 @@ fn prepare_evidence(
         ),
         ("CHILD_ACTOR".to_owned(), "github-actions[bot]".to_owned()),
         ("CONTROLLER_CANCEL_REQUESTED".to_owned(), "true".to_owned()),
+        ("CONTROLLER_CANCEL_STATUS".to_owned(), "202".to_owned()),
+        ("CONTROLLER_POST_REVALIDATED".to_owned(), "true".to_owned()),
         (
             "CONTROLLER_CANCEL_AT".to_owned(),
-            "2026-10-04T00:00:10Z".to_owned(),
+            controller_cancel_at.to_owned(),
         ),
         ("CONTROLLER_BEFORE_COUNT".to_owned(), "0".to_owned()),
         (
@@ -248,7 +259,10 @@ fn prepare_evidence(
         evidence_path.display().to_string(),
     );
     Ok(EvidenceRun {
-        started: matches!(mode, "valid-progress" | "rounded100-progress"),
+        progress_precedes_runner_error: matches!(
+            mode,
+            "valid-progress" | "rounded100-progress" | "clock-skew-progress-after"
+        ),
         env,
         observer,
         curl_log,
@@ -259,7 +273,10 @@ fn progress_marker(mode: &str) -> &'static str {
     match mode {
         "valid-progress" => "partial",
         "rounded100-progress" => "rounded100",
-        "late-progress" => "late",
+        "clock-skew-progress-after" => "clock-skew",
+        "reverse-record-order" => "reverse",
+        "partial-without-runner-error" => "partial-no-error",
+        "malformed-runner-error" => "malformed-error",
         "zero-progress" => "zero",
         "complete-progress" => "complete",
         "malformed-progress" => "malformed",
@@ -279,8 +296,8 @@ fn validate_evidence(mode: &str, key: &str, setup: &EvidenceRun) -> Result<(), B
     };
     assert!(
         evidence.contains(&format!(
-            "\"upload_started_before_cancel\":{}",
-            setup.started
+            "\"progress_before_runner_cancel_error\":{}",
+            setup.progress_precedes_runner_error
         )),
         "{evidence}; requests={requests}"
     );
@@ -288,9 +305,9 @@ fn validate_evidence(mode: &str, key: &str, setup: &EvidenceRun) -> Result<(), B
         evidence.contains("\"restore_clean_miss\":true"),
         "{evidence}"
     );
-    if setup.started {
+    if setup.progress_precedes_runner_error {
         assert!(
-            evidence.contains("timestamped_positive_partial_progress_before_cancel"),
+            evidence.contains("positive_partial_sdk_progress_precedes_runner_cancel_error"),
             "{evidence}"
         );
     }
@@ -335,7 +352,7 @@ fn assert_classification(
     mut env: BTreeMap<String, String>,
     observer: &Path,
     key: &str,
-    reservation_expected: bool,
+    expected_miss: bool,
 ) -> Result<(), Box<dyn Error>> {
     env.extend([
         ("SHOULD_OBSERVE".to_owned(), "true".to_owned()),
@@ -370,9 +387,10 @@ fn assert_classification(
     )?;
     assert!(classified.status.success());
     let result = fs::read_to_string(observer.join("result.json"))?;
-    if reservation_expected {
+    if expected_miss {
+        assert!(result.contains("\"outcome\":\"MISS\""), "{result}");
         assert!(
-            result.contains("\"outcome\":\"RESERVATION-UNKNOWN/INCONCLUSIVE\""),
+            result.contains("\"reservation_state\":\"UNKNOWN\""),
             "{result}"
         );
     } else {

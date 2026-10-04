@@ -58,8 +58,8 @@ signed_headers="$root/save-log-download.headers"
 status_file="$root/save-log-api-status"
 signed_config="$root/save-log.curlrc"
 trap 'rm -f "$response" "$log" "$signed_headers" "$status_file" "$signed_config" "$root/save-log-api.stderr" "$root/save-log-download.stderr" "$root/restore-run.json" "$root/restore-jobs.json" "$root/restore-log-api.headers" "$root/restore-log-api.status" "$root/restore-log-api.stderr" "$root/restore-log.curlrc" "$root/restore-log-signed.headers" "$root/restore-log-signed.stderr" "$root/restore-step.log"' EXIT
-upload_started=false
-upload_observation=unavailable
+progress_before_runner_cancel_error=false
+progress_observation=not_proven
 restore_clean_miss=false
 child_state=unknown/unknown
 job_id=
@@ -113,10 +113,10 @@ if gh_api --method GET "/repos/$GITHUB_REPOSITORY/actions/caches?key=$key&ref=re
 else
   printf '%s\n' "$unknown" > "$root/cache-after.json"
 fi
-cancel_at="${CONTROLLER_CANCEL_AT:-}"
 if [ "$PROBE_PHASE" = during-save ] && [ "$CONTROLLER_CANCEL_REQUESTED" = true ] \
+  && [ "$CONTROLLER_CANCEL_STATUS" = 202 ] && [ "$CONTROLLER_POST_REVALIDATED" = true ] \
   && [ "$child_state" = completed/cancelled ] && [ "$save_status" = completed ] \
-  && [ "$save_conclusion" = cancelled ] && [ -n "$cancel_at" ]; then
+  && [ "$save_conclusion" = cancelled ] && [ "$save_started" = true ]; then
   index="$(jq -er --arg name "$VICTIM_JOB_NAME" \
     '[.jobs[] | select(.name == $name)] as $jobs |
      if ($jobs | length) != 1 then error("job identity")
@@ -186,27 +186,29 @@ canonical_decimal() {
                 exit 1
               }'
             }
-            cancel_ns="$(date -u -d "$cancel_at" +%s%N 2>/dev/null || printf -1)"
-            cancel_ns="$(canonical_decimal "$cancel_ns" 2>/dev/null || printf invalid)"
-            # Runner source persists DateTime.UtcNow.ToString("O") plus one space.
-            while IFS= read -r progress_line; do
-              if [[ "$progress_line" =~ ^([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{7}Z)[[:space:]]Sent[[:space:]]([0-9]{1,20})[[:space:]]of[[:space:]]([0-9]{1,20})[[:space:]]\([0-9]+[.][0-9]%\),[[:space:]][0-9]+[.][0-9][[:space:]]MBs/sec$ ]]; then
+            partial_progress_seen=false
+            while IFS= read -r log_line || [ -n "$log_line" ]; do
+              if [[ "$log_line" =~ ^([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{7}Z)\ (.*)$ ]]; then
                 stamp="${BASH_REMATCH[1]}"
-                sent="$(canonical_decimal "${BASH_REMATCH[2]}" 2>/dev/null || printf invalid)"
-                total="$(canonical_decimal "${BASH_REMATCH[3]}" 2>/dev/null || printf invalid)"
-                normalized_stamp="$(date -u -d "$stamp" '+%Y-%m-%dT%H:%M:%S.%7NZ' 2>/dev/null || printf invalid)"
-                if [ "$normalized_stamp" = "$stamp" ]; then
-                  upload_ns="$(date -u -d "$stamp" +%s%N 2>/dev/null || printf -1)"
-                else
-                  upload_ns=invalid
-                fi
-                upload_ns="$(canonical_decimal "$upload_ns" 2>/dev/null || printf invalid)"
-                if [[ "$sent" =~ ^[1-9][0-9]*$ ]] && [[ "$total" =~ ^[1-9][0-9]*$ ]] \
-                  && [[ "$upload_ns" =~ ^[0-9]+$ ]] && [[ "$cancel_ns" =~ ^[0-9]+$ ]] \
-                  && decimal_less "$sent" "$total" && decimal_less "$upload_ns" "$cancel_ns"; then
-                  upload_started=true
-                  upload_observation=timestamped_positive_partial_progress_before_cancel
+                body="${BASH_REMATCH[2]}"
+                if [ "$body" = '##[error]The operation was canceled.' ]; then
+                  normalized_stamp="$(date -u -d "$stamp" '+%Y-%m-%dT%H:%M:%S.%7NZ' 2>/dev/null || printf invalid)"
+                  if [ "$normalized_stamp" = "$stamp" ] && [ "$partial_progress_seen" = true ]; then
+                    progress_before_runner_cancel_error=true
+                    progress_observation=positive_partial_sdk_progress_precedes_runner_cancel_error
+                  fi
                   break
+                fi
+                if [[ "$body" =~ ^Sent[[:space:]]([0-9]{1,20})[[:space:]]of[[:space:]]([0-9]{1,20})[[:space:]]\([0-9]+[.][0-9]%\),[[:space:]][0-9]+[.][0-9][[:space:]]MBs/sec$ ]]; then
+                  normalized_stamp="$(date -u -d "$stamp" '+%Y-%m-%dT%H:%M:%S.%7NZ' 2>/dev/null || printf invalid)"
+                  sent="$(canonical_decimal "${BASH_REMATCH[1]}" 2>/dev/null || printf invalid)"
+                  total="$(canonical_decimal "${BASH_REMATCH[2]}" 2>/dev/null || printf invalid)"
+                  if [ "$normalized_stamp" = "$stamp" ] \
+                    && [[ "$sent" =~ ^[1-9][0-9]*$ ]] \
+                    && [[ "$total" =~ ^[1-9][0-9]*$ ]] \
+                    && decimal_less "$sent" "$total"; then
+                    partial_progress_seen=true
+                  fi
                 fi
               fi
             done < "$log"
@@ -229,15 +231,17 @@ jq -cn --arg run "$RUN_ID" --arg child_state "$child_state" --arg job_id "$job_i
   --arg save_status "$save_status" --arg save_conclusion "$save_conclusion" \
   --argjson save_started "$save_started" --arg cancel_status "$cancel_status" \
   --arg cancel_conclusion "$cancel_conclusion" --argjson cancel_started "$cancel_started" \
-  --argjson upload_started "$upload_started" --arg upload_observation "$upload_observation" \
+  --argjson progress_precedes_runner_error "$progress_before_runner_cancel_error" \
+  --arg progress_observation "$progress_observation" \
   --argjson restore_clean_miss "$restore_clean_miss" \
   --argjson cache_after "$after" --argjson cache_before "$before" \
   --argjson controller_before_count "${CONTROLLER_BEFORE_COUNT:--1}" \
   '{child_run_id:$run,child_state:$child_state,child_job_id:$job_id,
     save_step_status:$save_status,save_step_conclusion:$save_conclusion,save_step_started:$save_started,
     cancel_step_status:$cancel_status,cancel_step_conclusion:$cancel_conclusion,
-    cancel_step_started:$cancel_started,upload_started_before_cancel:$upload_started,
-    upload_observation:$upload_observation,restore_clean_miss:$restore_clean_miss,
+    cancel_step_started:$cancel_started,
+    progress_before_runner_cancel_error:$progress_precedes_runner_error,
+    progress_observation:$progress_observation,restore_clean_miss:$restore_clean_miss,
     controller_cache_before_count:$controller_before_count,
     cache_before:$cache_before,cache_after:$cache_after}' \
   > "$root/child-evidence.json"
@@ -260,7 +264,7 @@ import_count=unknown
 reuse_count=unknown
 before_count=-1
 after_count=-1
-upload_started=false
+progress_before_runner_cancel_error=false
 should_observe=false
 if [ "${SHOULD_OBSERVE:-}" = true ]; then should_observe=true; fi
 controller_before_count="${CONTROLLER_BEFORE_COUNT:--1}"
@@ -272,7 +276,7 @@ if [ -s "$root/reuse-count" ]; then IFS= read -r reuse_count < "$root/reuse-coun
 if [ -s "$root/child-evidence.json" ]; then
   before_count="$(jq -r '.cache_before.count' "$root/child-evidence.json")"
   after_count="$(jq -r '.cache_after.count' "$root/child-evidence.json")"
-  upload_started="$(jq -r '.upload_started_before_cancel' "$root/child-evidence.json")"
+  progress_before_runner_cancel_error="$(jq -r '.progress_before_runner_cancel_error' "$root/child-evidence.json")"
   restore_clean_miss="$(jq -r 'if .restore_clean_miss == true then "true" else "false" end' "$root/child-evidence.json")"
 fi
 if [ "$after_count" = 0 ]; then cache_state=MISS; elif [ "$after_count" = 1 ]; then cache_state=HIT; fi
@@ -330,7 +334,7 @@ if [ "$should_observe" = true ] && [ -s "$root/child-evidence.json" ] \
     elif [ "$PROBE_PHASE" = during-save ]; then
       window_ok="$(jq -r '.save_step_started == true and .save_step_conclusion == "cancelled"' "$root/child-evidence.json")"
       if [ "$cancel_ok" = true ] && [ "$terminal_ok" = true ] && [ "$window_ok" = true ] \
-        && [ "$upload_started" = true ]; then
+      && [ "$progress_before_runner_cancel_error" = true ]; then
         if [ "$before_count" = -1 ] || [ "$after_count" = -1 ] \
           || [ "$controller_before_count" = -1 ]; then
           reason=exact_cache_api_snapshot_unavailable
@@ -338,17 +342,17 @@ if [ "$should_observe" = true ] && [ -s "$root/child-evidence.json" ] \
           && [[ "$before_count" =~ ^[01]$ ]] && [ "$controller_before_count" = 0 ] \
           && [[ "$import_count" =~ ^[1-9][0-9]*$ ]] && [[ "$reuse_count" =~ ^[1-9][0-9]*$ ]]; then
           outcome=HIT
-          reason=exact_key_restored_imported_and_reused_after_cancelled_upload
+          reason=exact_key_restored_imported_and_reused_after_cancelled_save
         elif [ "$after_count" = 0 ] && [ "$restore_state" = MISS ] \
           && [ "$controller_before_count" = 0 ] && [ "$before_count" = 0 ]; then
-          outcome=RESERVATION-UNKNOWN/INCONCLUSIVE
-          reason=upload_started_before_cancel_but_no_committed_exact_cache_observed
+          outcome=MISS
+          reason=cancelled_save_clean_exact_key_absence_reservation_unknown
         else
           outcome=INCONCLUSIVE
           reason=cache_api_restore_or_import_evidence_disagreed
         fi
       else
-        reason=save_upload_window_not_proven_before_cancel
+        reason=cancelled_save_progress_order_or_runner_error_not_proven
       fi
     fi
   fi
@@ -378,11 +382,13 @@ jq -cn --arg outcome "$outcome" --arg reason "$reason" --arg cache_state "$cache
   --arg derived_key "$derived_key" --arg scope "$CACHE_SCOPE" --arg version "$MBX_VERSION" \
   --arg generation "$GENERATION" --argjson should_observe "$should_observe" \
   --argjson controller_before_count "$controller_before_count" \
+  --arg reservation_state "UNKNOWN" \
   --argjson controller "$controller" --argjson victim "$victim" --argjson evidence "$evidence" \
   '{schema:1,outcome:$outcome,reason:$reason,should_observe:$should_observe,
     exact_cache_state:$cache_state,restore_state:$restore_state,cache_scope:$scope,
     mbx_version:$version,generation:$generation,derived_primary:$derived_key,
     controller_cache_before_count:$controller_before_count,
+    reservation_state:$reservation_state,
     imported_objects:$import_count,cached_compilations_reused:$reuse_count,
     controller:$controller,victim:$victim,child_evidence:$evidence}' > "$result"
 printf 'MBX cancellation probe: %s (%s)\n' "$outcome" "$reason" >> "$GITHUB_STEP_SUMMARY"
