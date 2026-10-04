@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use std::error::Error;
 use std::fs;
 
-use super::controller_fixtures::Fixture;
+use super::super::controller_fixtures::Fixture;
 use super::{prepare_observer_root, run_bash};
 use crate::schema2::mbx_cancel_probe::scripts;
 
