@@ -9,7 +9,7 @@ use bollard::Docker;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{UnixListener, UnixStream};
 
-use crate::launch::{gate, slot};
+use crate::launch::{gate, slot, turn};
 use crate::launch_harness::Scratch;
 use crate::{EnsureError, IntentState, Journal};
 
@@ -107,6 +107,33 @@ async fn closed_docker_connection_is_not_treated_as_absent() -> Result<(), Strin
     assert_eq!(actual, Err(inspect_error(0)));
     let after = journal.rows().await.map_err(|error| error.to_string())?;
     assert_eq!(after, before);
+    no_response_body_in_journal(&scratch.file())
+}
+
+#[tokio::test]
+async fn full_capacity_skips_the_initial_scale_callback() -> Result<(), String> {
+    let (scratch, journal) = journal("inspect-full-capacity").await?;
+    let row_id = launch_row(&journal).await?;
+    let before = journal.rows().await.map_err(|error| error.to_string())?;
+    let stub = DockerStub::open(vec![http(200, r#"{"State":{"Running":true}}"#)])?;
+    let mut scaled = false;
+
+    let result = within(
+        turn::scale_if_free(&journal, &stub.docker, 1, || async {
+            scaled = true;
+            Ok(None)
+        }),
+        "initial scale admission",
+    )
+    .await?;
+    stub.finish().await?;
+
+    assert_eq!(result, Ok(None));
+    assert!(!scaled);
+    let after = journal.rows().await.map_err(|error| error.to_string())?;
+    assert_eq!(after, before);
+    assert_eq!(after[0].id, row_id);
+    assert_eq!(after[0].state, IntentState::Pending);
     no_response_body_in_journal(&scratch.file())
 }
 

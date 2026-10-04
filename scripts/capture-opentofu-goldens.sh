@@ -169,6 +169,21 @@ if ! WORK="$(mktemp -d "${TMPDIR:-/tmp}/velnor-goldens-work.XXXXXX")"; then
   echo "FATAL: could not create a private golden workspace"
   exit 2
 fi
+# The EXIT trap invokes this function after capture/check completes.
+# shellcheck disable=SC2329
+cleanup_work() {
+  local result=$?
+  if [ "$result" -eq 0 ]; then
+    if ! rm -rf "$WORK"; then
+      echo "FATAL: could not remove private golden workspace: $WORK" >&2
+      trap - EXIT
+      exit 2
+    fi
+  else
+    echo "retaining failed golden workspace: $WORK" >&2
+  fi
+}
+trap cleanup_work EXIT
 
 stage="$WORK/stage"
 mkdir -p "$stage"
