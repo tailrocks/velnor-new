@@ -1,5 +1,7 @@
 //! The stock MBX action installs the exact catalog version through local setup.
 
+use std::collections::BTreeMap;
+
 use velnor_actions_contract::{StepKind, WorkflowPolicy};
 use velnor_actions_workflow_renderer::steps::{
     CompileDriver, MBX_PREFLIGHT_NAME, MBX_SETUP_NAME, mbx_path_preflight_step, mbx_step_for_driver,
@@ -144,7 +146,7 @@ fn render_rejects_spoofed_preflight_name() -> Result<(), RenderError> {
         shell_step(
             MBX_PREFLIGHT_NAME,
             vec!["true".to_owned()],
-            Default::default(),
+            BTreeMap::default(),
         )?,
     );
     let result = render_workflow_ir(
