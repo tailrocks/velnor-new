@@ -3,7 +3,69 @@
 //! Declared via `#[path]` from `workflow_jobs.rs` under `cfg(test)`.
 
 use super::*;
+use crate::clippy_groups::ClippyMemoryPlan;
+use crate::discover::Discovery;
+use crate::workflow::plan_uses_rust;
 use velnor_actions_contract::StepKind;
+use velnor_actions_contract::WorkflowPolicy;
+
+/// Discovery with no selected workloads.
+fn empty_discovery() -> Discovery {
+    Discovery {
+        statuses: Vec::new(),
+        workspaces: Vec::new(),
+        proposals: Vec::new(),
+        feature_fallbacks: Vec::new(),
+        tool_checks: Vec::new(),
+        clippy_memory: ClippyMemoryPlan {
+            groups: Vec::new(),
+            barriers: 0,
+        },
+        recommendations: Vec::new(),
+        consumer_manifest_json: None,
+        consumer_manifest_stand_in: false,
+        skipped_non_utf8: false,
+        tofu_note: None,
+        tofu_units: Vec::new(),
+    }
+}
+
+#[test]
+fn consumer_plan_uses_rust_only_for_selected_rust_evidence() {
+    assert!(!plan_uses_rust(
+        &empty_discovery(),
+        WorkflowPolicy::ConsumerV1
+    ));
+}
+
+#[test]
+fn generator_plan_keeps_rust_for_candidate_helper() {
+    assert!(plan_uses_rust(
+        &empty_discovery(),
+        WorkflowPolicy::VelnorRepositoryV1
+    ));
+}
+
+#[test]
+fn rust_proposals_require_rust_without_inventory_records() {
+    let profile = velnor_actions_rust::RustExecutionProfile {
+        compile_driver: velnor_actions_rust::CompileDriver::Cargo,
+        test_runner: velnor_actions_rust::TestRunner::CargoTest,
+        evidence: Vec::new(),
+        driver_source: velnor_actions_rust::ProfileSource::Detected,
+        runner_source: velnor_actions_rust::ProfileSource::Detected,
+        nextest_profile: velnor_actions_rust::NextestProfile::Default,
+        nextest_config: None,
+    };
+    let group =
+        velnor_actions_rust::derive_workspace_fmt("Cargo.toml", &profile, "default", "host")
+            .expect("Rust format group");
+    let mut discovery = empty_discovery();
+    discovery
+        .proposals
+        .push(velnor_actions_rust::propose_task(&group).expect("Rust proposal"));
+    assert!(plan_uses_rust(&discovery, WorkflowPolicy::ConsumerV1));
+}
 
 /// Internal operation of one step, if any.
 fn operation_of(step: &Step) -> Option<&str> {
