@@ -131,6 +131,8 @@ sub source_of {
 
 sub add_path {
     my ($stored) = @_;
+    die "velnor-tar-pax: member name contains a newline\n" if $stored =~ /\n/;
+    die "velnor-tar-pax: member name contains a tab\n"     if $stored =~ /\t/;
     return if $seen{$stored}++;
     my $source = source_of($stored);
     my @st = lstat $source or die "velnor-tar-pax: $stored: $!\n";

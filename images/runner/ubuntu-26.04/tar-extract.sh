@@ -170,6 +170,7 @@ load_members() {
     done
   fi
   mark_isolated
+  reject_symlink_traversal
 }
 
 mark_isolated() {
@@ -390,6 +391,8 @@ extract_archive() {
   trap cleanup_extract EXIT
   if [ "$absolute" -ne 1 ]; then
     reject_untrusted
+    member_tool
+    load_members
     extract_fast
     return 0
   fi

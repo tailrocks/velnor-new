@@ -176,6 +176,64 @@ move_member() {
   mv -f -- "$actual" "$intended"
 }
 
+# A symlink may point only inside the extract root. A later member must
+# not walk through an archive symlink or a symlink already on disk.
+reject_symlink_traversal() {
+  local -A links=()
+  local i name target base intended root prefix walk part rest
+  root="$(norm_path "${chdir:-$PWD}")"
+  for i in "${!mem_name[@]}"; do
+    [ "${mem_wanted[$i]}" -eq 1 ] || continue
+    [ "${mem_type[$i]}" = 2 ] || continue
+    name="${mem_name[$i]}"
+    links["$name"]=1
+    target="${mem_link[$i]}"
+    [ -n "$target" ] || die "symlink escapes destination: $name"
+    if [[ "$target" == /* ]]; then
+      intended="$(norm_path "$target")"
+    else
+      base="$(dirname -- "$name")"
+      if [ "$base" = "." ]; then
+        intended="$(norm_path "$root/$target")"
+      else
+        intended="$(norm_path "$root/$base/$target")"
+      fi
+    fi
+    path_under "$root" "$intended" || die "symlink escapes destination: $name"
+  done
+  for i in "${!mem_name[@]}"; do
+    [ "${mem_wanted[$i]}" -eq 1 ] || continue
+    name="${mem_name[$i]}"
+    prefix=""
+    if [[ "$name" == /* ]]; then
+      walk="/"
+    else
+      walk="$root"
+    fi
+    rest="$name"
+    while [[ "$rest" == */* ]]; do
+      part="${rest%%/*}"
+      rest="${rest#*/}"
+      [ -n "$part" ] || continue
+      if [ -n "$prefix" ]; then
+        prefix="$prefix/$part"
+      elif [[ "$name" == /* ]]; then
+        prefix="/$part"
+      else
+        prefix="$part"
+      fi
+      if [ "$walk" = "/" ]; then
+        walk="/$part"
+      else
+        walk="$walk/$part"
+      fi
+      if [ -n "${links[$prefix]:-}" ] || [ -L "$walk" ]; then
+        die "member traverses symlink: $name"
+      fi
+    done
+  done
+}
+
 # shellcheck disable=SC1091
 . "$_velnor_tar_here/tar-extract.sh"
 
