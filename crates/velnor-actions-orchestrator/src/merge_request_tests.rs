@@ -3,6 +3,7 @@
 //! Declared via `#[path]` from `merge_request.rs` under `cfg(test)`.
 
 use super::*;
+use crate::merge::required_evidence::MAX_BASELINE_MANIFEST_BYTES;
 
 /// Minimal plan JSON naming `(artifact-id, matrix-key)` entries.
 pub(crate) fn plan_with(entries: &[(&str, &str)]) -> String {
@@ -240,6 +241,48 @@ fn assembly_rejects_links_oversize_and_unreadable_inputs() {
     assert!(
         errors.contains(&"unreadable_baseline".to_owned()),
         "{errors:?}"
+    );
+}
+
+#[test]
+fn baseline_raw_limit_covers_nested_parents_and_padding() {
+    let dir = staged("{}", &[]);
+    let nested = serde_json::json!({"parent": {"parent": {"parent": null}}}).to_string();
+    let padded_len = MAX_BASELINE_MANIFEST_BYTES + 1;
+    let padded = format!("{nested}{}", " ".repeat(padded_len - nested.len()));
+    std::fs::write(dir.path().join("baseline.json"), padded).expect("padded baseline");
+    let request = assemble_with_needs(
+        "local",
+        dir.path(),
+        Some(r#"{"plan":"success"}"#),
+        Some(r#"["plan"]"#),
+        Some("push"),
+        Some("{}"),
+    )
+    .expect("assemble");
+    assert!(
+        error_list(&request).contains(&"oversize_baseline".to_owned()),
+        "{request}"
+    );
+
+    let expanded = serde_json::json!({
+        "parent": {"parent": null},
+        "padding": "x".repeat(padded_len),
+    })
+    .to_string();
+    std::fs::write(dir.path().join("baseline.json"), expanded).expect("expanded baseline");
+    let request = assemble_with_needs(
+        "local",
+        dir.path(),
+        Some(r#"{"plan":"success"}"#),
+        Some(r#"["plan"]"#),
+        Some("push"),
+        Some("{}"),
+    )
+    .expect("assemble");
+    assert!(
+        error_list(&request).contains(&"oversize_baseline".to_owned()),
+        "{request}"
     );
 }
 
