@@ -8,7 +8,6 @@ mod artifact_paths;
 pub mod cache_elect;
 pub mod cache_p08;
 mod cache_p08_detect;
-mod cache_p08_http;
 mod cache_steps;
 mod candidate;
 pub mod closure;

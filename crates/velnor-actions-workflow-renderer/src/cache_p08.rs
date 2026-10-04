@@ -164,11 +164,8 @@ fn is_catalog_version(value: &str) -> bool {
         && !value.contains("${{")
 }
 
-/// True for `<tool>@<version>` specs and fixed verified HTTP tool specs.
+/// True for `<tool>@<version>` specs (backend paths allowed).
 fn is_tool_spec(value: &str) -> bool {
-    if let Some(http_spec) = value.strip_prefix("http:") {
-        return crate::cache_p08_http::is_verified_http_tool_spec(http_spec);
-    }
     let Some((tool, version)) = value.split_once('@') else {
         return false;
     };
