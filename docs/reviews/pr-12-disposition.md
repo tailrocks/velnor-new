@@ -1,4 +1,176 @@
-# PR #12 feature and file disposition
+# PR #12 current disposition and historical evidence
+
+## Current authoritative snapshot — 2026-10-04 06:03 UTC
+
+This section supersedes every status below the “Historical snapshot” heading.
+It is bound to PR #12 head `0efb5565dd33a70b67fc2198d032153f6c5bee9f`, base
+`47815c83b9eeadbaf84b741918fffa7ea550da89`, and integration candidate
+`140faf33052193163d447e1b92394435b7c759ff`. PR #12 is still open and draft.
+The paginated GitHub Files API returned 262 paths; a fresh pass found 0 issue
+comments, 0 reviews, and 0 review comments/threads (`hasNextPage=false`).
+These are candidate-branch source dispositions; they do not mean changes are
+merged to `main`, released, or adopted by consumers.
+
+### Complete changed-path partition
+
+The independent exact-head audit accounted for all 262 unique PR paths. The
+following disjoint selectors define the file-level status partition; the
+remaining 146 are the PR file set after subtracting the first five selectors.
+
+| Paths | Count | Disposition |
+|---|---:|---|
+| `crates/velnor-actions-native/**` | 22 | `NOT-CARRIED`; no adopted native recipe or production caller. Preserve independent image-release, runner, DinD, tar-shim, ShellCheck, and freshness owners. |
+| Python files under `crates/**` outside `velnor-actions-native` | 7 | `NOT-CARRIED`; unadopted source-proof capsules. Rust asset-manifest validation does not replace their Git-tree, ZIP, or Cargo-read semantics. |
+| `scripts/**`, excluding `scripts/check-freshness.sh` | 37 | `TEMPORARY-HOLD`; private builder, qualification, publication, fixture, and Python-test paths need an explicit owned-source disposition. |
+| `docs/**`, plus `repositories.txt`, `repository-evidence.csv`, `scope.json`, and `velnor-actions-ci-performance-{goal,spec}.md` | 44 | `PARTIAL`; passive proposals/evidence/inventory, not executable or rollout proof. |
+| `fixtures/**` | 6 | `PARTIAL`; output fixtures alone do not establish implementation. Keep only fixtures whose producer/consumer maps to retained code. |
+| All other paths in the exact 262-file PR response | 146 | Feature-by-feature decisions below; includes integrated source fixes and explicit partial/hold deltas. |
+
+The five selectors are disjoint. Their counts plus the residual set equal the
+262 unique paths returned by the API. The precise API file set is linked at
+[PR #12 Files changed](https://github.com/tailrocks/velnor-new/pull/12/files).
+
+### Fixes already present in the integration candidate
+
+`LANDED IN INTEGRATION` below means the listed change is in candidate
+`140faf33052193163d447e1b92394435b7c759ff`; it is not merged into current
+`main` (`47815c83b9eeadbaf84b741918fffa7ea550da89`). None of these source
+fixes proves hosted qualification or consumer adoption.
+
+| Feature | Integration source commit(s) | Current disposition |
+|---|---|---|
+| Crate-obligation self-gates | `87bc5c8041fb066f407017daa664a29dd8bb194e` | `LANDED IN INTEGRATION`; self-gate, strict-prior-gate, and duplicate-precedence regressions retained. |
+| Canonical release-tool URL | `a97797e738df4e90b50142d7e44ae2b048ba659f`, `8a5f6c87008fe8cf0578253c1a7bd8462fbb39e9` | `LANDED IN INTEGRATION`; strict URL validation and caller closure. |
+| Git optional-lock isolation | `d32139e95d2a88795f065e7cf634ba49e8a9a39d`, `8de8a5ec869b731d7e08e452eb19d290c8216803` | `LANDED IN INTEGRATION`; lock control, config isolation, and Git regressions. |
+| Tools-only bootstrap | `dd995b5df61b1573cd75386ae558bfdb7062acb9` | `LANDED IN INTEGRATION`; Rust installation remains absent when the suite owns no Rust tools. |
+| Attempt-bound artifact retrieval | `d20226ebc052af03199c4ed2f37a17ae48043520` | `LANDED IN INTEGRATION`; baseline, planned, shard, retry, and race paths. |
+| Full Git-ref validation | `f7d38268ce45c23216d9bbdb20184177fc9888ba` | `LANDED IN INTEGRATION`; Git-oracle cases include valid intermediate-dot components. |
+| Branch shorthand validation | `77dc7631bde8d0bc20db8c91ea5327243a3aa7d1`, `115781a7e` | `LANDED IN INTEGRATION`; validation is carried through current callers. |
+| Generated `.github` preservation | `6fb3229af`, `71f7d0bd9`, `1ddefb071` | `LANDED IN INTEGRATION`; transactional generation, ownership, and symlink-mode handling. |
+| Typed suite/tool ownership | `6ee09251a7c8e6fa9c2a19135a73e9eba6d91943` | `LANDED IN INTEGRATION` in `matrix_tools.rs`; PR `matrix_suite.rs` classification remains a separate delta. |
+| Nextest binary preparation | `f9743505c`, `075c76ab8` | `LANDED IN INTEGRATION`; argv/bootstrap coverage and test split. |
+| Tofu root identity and caller closure | `0ed1882c5`, `731a161b4`, `b901a8603` | `LANDED IN INTEGRATION`; typed identity, root obligations, and fallible caller propagation. |
+| Bounded provenance carry | `93371bb48`, `086a257fe`, `b901a8603` | `LANDED IN INTEGRATION`; baseline carries original proof run and distinct carrying-run evidence with parent/digest bounds. |
+| MBX external-bundle lifecycle and 1.22.0 fixtures | `9a249e9ab`, `47815c83b`, `c447a2e35`, `b4c5f38e6`, `3da61ae9f` | `LANDED IN INTEGRATION`; production uses the reviewed local backend + explicit bundle route. Hosted workload/disk-pressure qualification remains `PARTIAL`. |
+| Release-manifest validation/publication source | `385a772bc`, `03dc45e9a`, `35f52bf18`, `fccd0beb9`, `4b9e30f06` | `LANDED IN INTEGRATION`; version 0.1.1, canonical manifest name, source/freshness/CI checks, and attestation validation are source changes, not release receipts. |
+| Version pins and regenerated outputs | `95f82d3b6`, `5b42f908d`, `4c90b851e`, `47a5b50e4`, `5b3f4c8e1`, `140faf330` | `LANDED IN INTEGRATION`; generator 0.1.1 and MBX 1.22.0 source/fixtures. Nested runner 0.1.0 and historical immutable v0.1.0 artifacts remain intentional. |
+
+### Latest PR-only delta and outstanding dispositions
+
+Since PR head `9d7fc047565d97a7635133f590f967d16dcbddef`, the current PR has
+33 changed blobs, with five paths newly added. Current tree comparison found
+23 byte-identical paths, 112 paths present with different blobs, and 127 PR
+paths absent from the integration candidate. PR tree responses were not
+truncated.
+
+- **Consumer manifest policy — `PARTIAL`, active source fix required.** PR
+  `discover.rs`/`discover_manifest.rs` reads the manifest only under
+  `ConsumerV1`; current integration still reads
+  `.velnor/release-manifest.json` unconditionally in `discover.rs`. Under
+  `VelnorRepositoryV1`, malformed, invalid-UTF-8, directory, or symlink
+  consumer-only `.velnor/release-manifest.json` inputs must be ignored. The
+  `ConsumerV1` path must keep failing on malformed manifest data. Separately,
+  Velnor plan/generate must still fail closed on malformed producer-owned
+  `.velnor/generator.lock` data through `finalized::owned_preparation` and
+  `verify_velnor_repository_files`/`parse_generator_lock`; version-policy
+  catalog mismatch validation also remains. The current integration has no
+  direct malformed-`generator.lock` regression, so retain that test obligation.
+  The bounded fix owns
+  `discover.rs`, a focused module/test, and CLI warning regression. Do not
+  close PR #12 before these cases are reviewed and integrated.
+- **Generation and workflow-context extraction — `PARTIAL`.** PR adds
+  `generate_output_commit.rs` and `workflow_context.rs`; transactional output
+  behavior already exists in integration. Treat these as implementation
+  structure, not a missing-behavior claim, unless a caller-level regression
+  is demonstrated.
+- **Suite ownership — `PARTIAL`.** PR adds runner classifications to
+  `matrix_suite.rs`. Integration uses the typed `matrix_tools.rs` registry.
+  Reconcile the registries without adopting native recipes or putting runner
+  behavior into V1.
+- **Foundation additions — `NOT-CARRIED` for the executable proposal.** PR
+  adds CLI arguments, smoke/validator paths, staging, and Foundation workflow
+  behavior. Current integration rejects the retired Foundation flag and has
+  detachment regression `7bdc4d147`; keep that explicit decision and its
+  tests. Do not label PR-only Foundation code as landed.
+- **T32 identity — `LANDED IN INTEGRATION`.** The current path is
+  byte-identical and uses `dir-` identity.
+- **Freshness timestamp refreshes — `PARTIAL`.** Timestamp-only edits do not
+  qualify tools or prove current-source freshness.
+- **Remaining private owned-source files — `TEMPORARY-HOLD`.** The 37 paths
+  remain individually bounded by the scripts selector above; no private
+  qualification or publication is inferred.
+
+The independent audit specifically accounted for all seven embedded Python
+capsule paths:
+
+```text
+crates/velnor-actions-orchestrator/src/release_admission.py
+crates/velnor-actions-orchestrator/src/release_source_snapshot.py
+crates/velnor-actions-orchestrator/src/release_source_tree.py
+crates/velnor-actions-orchestrator/tests/release_source_snapshot_test.py
+crates/velnor-actions-orchestrator/tests/release_source_tree_test.py
+crates/velnor-actions-rust/src/release_source_intent_guard.py
+crates/velnor-actions-rust/tests/release_source_intent_guard_test.py
+```
+
+These are `NOT-CARRIED`: no production caller is registered. This is not a
+claim that the Rust asset manifest replaces source-tree authentication, ZIP
+comparison, or Cargo read-closure behavior. Likewise, the 22 native paths are
+`NOT-CARRIED` because no adopted recipe/caller uses them. This does not remove
+the separate image-release, runner, DinD, tar-shim, ShellCheck, or freshness
+owners.
+
+### Current validation and rollout limits
+
+- Integration candidate `140faf` passed pinned local workspace gates: Nextest
+  2,761 passed / 1 skipped; strict workspace/all-target Clippy, fmt, Alint,
+  cargo-deny, and freshness passed. Local freshness did not run the optional
+  live advisory scan; CI Cargo Deny owns that scan.
+- PR #28 at `140faf` has a terminal CI failure (run `37181006379`): Linux
+  `Rust / velnor-actions-cli` and `Rust / velnor-actions-orchestrator` fail
+  strict Clippy at `generate_preserve.rs:272` because Unix `mode_t` is `u32`
+  on Linux, making `mode.try_into()` a useless conversion. macOS uses `u16`;
+  a target-aware checked conversion is in progress. Do not call PR #28 ready
+  until exact-head Linux and macOS gates pass.
+- PR #12 check run `37178556819` is not fully green: `Rust / velnor-actions-cli`
+  and aggregate `Required` failed. Refresh exact checks after the policy fix.
+- Official Mise adoption is `PARTIAL`: latest published stable 2026.10.1 is
+  still the known-broken pre-fix binary. Do not claim a fixed official
+  distribution from the source-built auxiliary binary.
+- MBX hosted writer/reader, cache-version/path reuse, cancellation, corrupt
+  import, parallel writer, ChainArgos workload peak bytes/inodes, and disk
+  pressure remain `PARTIAL`.
+- Published archive recovery and the six protected archive anchor tags are
+  complete. Consumer migration and six-ref retirement remain
+  `TEMPORARY-HOLD`: the 46-default + relevant-PR union found no snapshot SHAs
+  and recorded three owner holds; 45 workflows still use 0.1.0 and ChainArgos
+  generator migration remains held. Recheck live consumers, preserve action
+  SHA history, complete owner checkpoints, then run a separate exact-ref
+  deletion review. Do not delete the three out-of-scope MBX refs.
+- Release publication remains unqualified: `generator-release` environment
+  requires self-review prevention and protected branches, but GitHub reports
+  `can_admins_bypass=true`; BOOT-4.2 still lacks two distinct administrator
+  approvals and an independent reproducible rebuild receipt.
+
+### Required final refresh before PR #12 closure
+
+At final integration head, fetch the PR head/base, every paginated changed
+path, all issue/review/inline comments and thread resolution state, and all
+required check runs. Recompute the 262-path partition and current-tree blob
+comparison; update this record if the PR moves. Reply to every accepted or
+rejected review item with a fixing commit URL or evidence before resolving.
+Keep PR #12 open until the consumer-manifest policy fix and every other
+applicable disposition are complete; then close or supersede it only after a
+fresh zero-feedback review.
+
+---
+
+## Historical snapshot — superseded
+
+The following snapshot was written against PR head `c694d8029` / 252 paths and
+integration base `f7d38268`. It is retained as historical evidence only. Its
+status claims, especially its archive state and `TEMPORARY-HOLD` rows for work
+now landed in `140faf`, are not current.
 
 Snapshot: 2026-10-04. This is a passive review record against integration base
 `f7d38268ce45c23216d9bbdb20184177fc9888ba`.
