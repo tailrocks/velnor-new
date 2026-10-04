@@ -18,6 +18,8 @@ use crate::action_archive_seed::{
 
 #[path = "action_archive_seed_tests/archive_validation_tests.rs"]
 mod archive_validation_tests;
+#[path = "action_archive_seed_tests/durability_tests.rs"]
+mod durability_tests;
 #[path = "action_archive_seed_tests/lease_fault_tests.rs"]
 mod lease_fault_tests;
 
