@@ -17,6 +17,8 @@ mod impl_contract_job_ids;
 mod impl_contract_release;
 #[path = "impl_contract_release_ir.rs"]
 mod impl_contract_release_ir;
+#[path = "impl_contract_release_manifest.rs"]
+mod impl_contract_release_manifest;
 #[path = "impl_contract_release_modes.rs"]
 mod impl_contract_release_modes;
 #[path = "impl_contract_reports.rs"]
