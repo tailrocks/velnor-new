@@ -69,10 +69,12 @@ fn respond_to_probe(
     if stream.read(&mut request)? == 0 {
         return Err(std::io::Error::other("empty HTTP request"));
     }
-    let coding = encodings
-        .iter()
-        .map(|value| format!("Content-Encoding: {value}\r\n"))
-        .collect::<String>();
+    let mut coding = String::new();
+    for value in encodings {
+        coding.push_str("Content-Encoding: ");
+        coding.push_str(value);
+        coding.push_str("\r\n");
+    }
     let headers = format!(
         "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n{coding}Connection: close\r\n\r\n",
         body.len()
@@ -248,7 +250,7 @@ fn gzip_encoded_response_cap_fails_closed() -> Result<(), Box<dyn Error>> {
             state ^= state << 13;
             state ^= state >> 17;
             state ^= state << 5;
-            state as u8
+            state.to_le_bytes()[0]
         })
         .collect::<Vec<_>>();
     let body = gzip_bytes(&expanded)?;
