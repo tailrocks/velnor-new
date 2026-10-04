@@ -17,7 +17,7 @@ pub(crate) fn write_stock_restore_fixtures(
     fs::write(
         root.join("stock-run.json"),
         format!(
-            r#"{{"id":123,"run_attempt":2,"head_sha":"{SOURCE_SHA}","repository":{{"full_name":"tailrocks/velnor-new"}},"head_repository":{{"full_name":"tailrocks/velnor-new"}},"event":"workflow_dispatch","head_branch":"main","path":".github/workflows/qualification.yml@refs/heads/main","workflow_id":456}}"#
+            r#"{{"id":123,"run_attempt":2,"head_sha":"{SOURCE_SHA}","repository":{{"full_name":"tailrocks/velnor-new"}},"head_repository":{{"full_name":"tailrocks/velnor-new"}},"event":"workflow_dispatch","head_branch":"main","path":".github/workflows/qualification.yml@main","workflow_id":456}}"#
         ),
     )
     .expect("write workflow run fixture");

@@ -238,8 +238,8 @@ stock_restore_api_snapshot() {
         type == "object" and .id == $id and .run_attempt == $attempt and .head_sha == $sha
         and .repository.full_name == $repo and .head_repository.full_name == $repo
         and .event == "workflow_dispatch" and .head_branch == "main"
-        and ((.path | split("@") | .[0]) == ".github/workflows/qualification.yml")
-        and (.path | endswith("@refs/heads/main"))
+        and (.path == ".github/workflows/qualification.yml@main"
+          or .path == ".github/workflows/qualification.yml@refs/heads/main")
         and (.workflow_id | type == "number" and . > 0 and . == floor)
       ' <<< "$run_document" >/dev/null 2>&1 \
     && jq -e --arg run "$run" --arg attempt "$attempt" --arg sha "$sha" '

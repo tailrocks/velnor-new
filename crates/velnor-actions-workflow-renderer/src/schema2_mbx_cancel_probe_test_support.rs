@@ -48,7 +48,7 @@ case "$method:$endpoint" in
     jq -cn --arg sha "$GITHUB_SHA" --arg actor "$GITHUB_ACTOR" \
       --arg title "$controller_title" \
       --argjson workflow "${OBSERVER_WORKFLOW_ID:-77}" \
-      '{id:900,workflow_id:$workflow,path:".github/workflows/qualification.yml@refs/heads/main",
+      '{id:900,workflow_id:$workflow,path:".github/workflows/qualification.yml@main",
         repository:{full_name:"tailrocks/velnor-new"},head_repository:{full_name:"tailrocks/velnor-new"},
         event:"workflow_dispatch",head_branch:"main",head_sha:$sha,run_attempt:1,
         display_title:$title,actor:{login:$actor}}' ;;
@@ -88,7 +88,7 @@ case "$method:$endpoint" in
     jq -cn --arg repo "$repo" --arg sha "$run_sha" --arg mode "$VICTIM_MODE" \
       --arg probe "$PROBE_ID" --arg status "$status" --argjson conclusion "$conclusion" \
       --arg actor "$actor" --argjson attempt "$attempt" \
-      '{id:123,workflow_id:77,path:".github/workflows/qualification.yml@refs/heads/main",
+      '{id:123,workflow_id:77,path:".github/workflows/qualification.yml@main",
         repository:{full_name:$repo},head_repository:{full_name:"tailrocks/velnor-new"},
         event:"workflow_dispatch",head_branch:"main",head_sha:$sha,run_attempt:$attempt,
         display_title:("MBX cancellation " + $mode + " " + $probe),
