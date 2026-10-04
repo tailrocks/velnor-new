@@ -115,12 +115,11 @@ fn unchanged_tofu_init_validate_refuse_reuse() -> TestResult {
 fn validate_reports_executed_after_provider_cache_hit() -> TestResult {
     use velnor_actions_contract::digest_b3;
     use velnor_actions_mise::restore_evidence::{RestoreObservation, verify_provider_restore};
-    let bytes = b"provider bytes".to_vec();
     let locator = velnor_actions_tofu::tofu_root_locator("stacks/a")?;
     let hit = RestoreObservation {
         entry_path: format!("tofu-cache/{locator}/provider"),
-        entry_bytes: bytes.clone(),
-        expected_digest: digest_b3(&bytes),
+        entry_bytes: b"provider bytes".to_vec(),
+        expected_digest: digest_b3(b"provider bytes"),
         expected_compat: digest_b3(b"compat"),
         observed_compat: digest_b3(b"compat"),
         expected_owner: "trusted".to_owned(),
@@ -142,7 +141,6 @@ fn validate_reports_executed_after_provider_cache_hit() -> TestResult {
         .iter()
         .find(|entry| entry.task_id == obligation.task_id)
         .ok_or("validate matrix entry")?;
-    let locator = velnor_actions_tofu::tofu_root_locator("stacks/a")?;
     let report = TaskReport {
         schema: 1,
         task_report_id: task_report_id_for_task(
