@@ -13,7 +13,9 @@ use crate::render::RenderContext;
 use crate::steps::{self, MBX_SETUP_NAME};
 use crate::yaml::Yaml;
 use crate::{RenderError, document, mbx_bundle};
-use velnor_actions_contract::{Job, JobTimeout, PermissionLevel, Permissions, Step};
+use velnor_actions_contract::{
+    Job, JobTimeout, PermissionLevel, Permissions, PullRequestCachePolicy, Step,
+};
 
 const QUALIFICATION_GATE: &str = "inputs.mode == 'mbx-cache-roundtrip' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.ref_protected == true";
 const QUALIFICATION_CACHE_SCOPE: &str = "qualification-mbx-v1/single-bundle-roundtrip";
@@ -52,7 +54,7 @@ pub(super) fn jobs(
             typed_job(request, hosted, true)?,
         ),
     ]);
-    mbx_bundle::append_single_bundle_saves(&mut typed_jobs)?;
+    mbx_bundle::append_single_bundle_saves(&mut typed_jobs, PullRequestCachePolicy::ReadOnly)?;
     let Some(writer) = typed_jobs.remove("mbx-cache-write-hosted") else {
         return Err(RenderError::InvalidWorkflow(
             "missing_mbx_job:mbx-cache-write-hosted".to_owned(),
@@ -311,6 +313,7 @@ fn step_context() -> RenderContext {
         validator_commands: Vec::new(),
         candidate: None,
         preseed: false,
+        pull_request_cache_policy: PullRequestCachePolicy::ReadOnly,
         plan_consumer_env: BTreeMap::new(),
     }
 }
