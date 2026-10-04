@@ -54,9 +54,9 @@ qualification.
 
 | Candidate | Verified checkpoint | Status |
 | --- | --- | --- |
-| Resource and corruption probes | Source `fd342e63`; registered native Linux ARM64 runtime fixture `859b20d`, Rust 1.98.1, 2/2 in 80.01 s. A composition rerun using `3dcd23a` reports 4/4 in 65.45 s with hostile `DOCKER_DEFAULT_PLATFORM=linux/amd64`; exact test-source review remains pending. | Source review GO; ARM64 runtime only, not hosted x64. |
+| Resource and corruption probes | Source `fd342e63` received scoped source-review GO. Safety fixture `3dcd23a`: native Ubuntu 24.04.4 ARM64, 4/4 in 95.89 s; independent Sol/medium fixture review GO. Earlier receipts are separate runs. | HOLD: stock `actions/cache` clean MISS leaves hit/matched outputs unset; `resource_stop.sh` requires `cache_hit=false` and can treat unavailable/swallowed restore errors as cold. Fix and re-review before composition. No hosted x64 result. |
 | Parallel cache probe | `a094076d`; 17 source tests and exact Sol/medium review. | HOLD after stock `actions/cache` audit: clean MISS leaves hit/matched outputs unset, while the probe expects `cache_hit=false`; update and re-review before integration. Hosted run unexecuted. |
-| Cancellation probe | `850e9aea`; 22 renderer unit fixtures, registered renderer/orchestrator tests 1/1 each, strict renderer Clippy on Rust 1.98.1/Clippy 0.1.98. Exact security and correctness reviews returned GO. | Source-scope GO only; hosted run unexecuted. |
+| Cancellation probe | `850e9aea`; 22 renderer unit fixtures, registered renderer/orchestrator tests 1/1 each, strict renderer Clippy on Rust 1.98.1/Clippy 0.1.98. Exact security and correctness reviews returned GO. | Source-scope GO only. Strict cross-host pre/post timing is not established by unbounded clock comparison; hosted run unexecuted. |
 | Official Mise | Public refresh `2026-10-04T12:10:38Z`: stable `2026.10.1`, release `402539535`, tag `b752bdc` peels to `050ce5a`; accepted fix `dfe74a90` remains eight commits ahead. | Adoption remains `PARTIAL`; no fixed official distribution. |
 
 On `2026-10-04T11:18:32.580Z`, parent
