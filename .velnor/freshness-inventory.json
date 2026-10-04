@@ -152,7 +152,7 @@
       "issue": "#29",
       "key": "mr-boxington",
       "owner": "@donbeave",
-      "reason": "latest v1.22.0 resolves to commit 10474d43342ad65df3b02323dd8092d18ab38101; keep qualified 1.21.1 pending #29 current-source cache lifecycle, disk, and input qualification. The read-only OUT_DIR cleanup failure is addressed by the Velnor workaround in PR #30 pending its hosted run; the upstream action fix remains in PR #62 pending author confirmation."
+      "reason": "latest v1.22.0 resolves to commit 10474d43342ad65df3b02323dd8092d18ab38101; keep qualified 1.21.1 pending #29 current-source cache lifecycle, disk, and input qualification. PR #30 run 37202815647 passed on pre-merge head 0d8912dc6bf78bff16f5dcdabe3c99cc4d57a4ea (Required and DCO succeeded; Publish baseline skipped). Run 37206636207 passed Plan and Required on merge head a724269a2dac0e32b978e05fdd12e5009ab6fa1e. Neither run proves MBX export/save correctness, and neither covers the pending cache lifecycle edits. Upstream action PR #62 merged as e26ba570 on 2026-10-04; published action v1.7.1 at d0825fb does not include that merge."
     },
     {
       "expires": "2026-10-15",

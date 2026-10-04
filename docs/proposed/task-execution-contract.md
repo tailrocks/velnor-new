@@ -25,21 +25,36 @@ the pinned toolchain's own rustup, deterministic, writing only
 Velnor-owned tool homes — Mise installing components, not an ad hoc
 installer. For an MBX profile only, hosted jobs invoke the pinned
 `jdx/mr-boxington-action` in `github-cache-mode: objects` with MBX 1.21.1,
-isolated per-job stores, an action-SHA-scoped cache generation, and distinct
-job-suffixed primary keys. Its generated compatible restore prefix stays
-shared within that action generation; the same job and SHA can reuse its exact
-entry. Only a protected default-branch push receives
+isolated per-job stores, an action-SHA and OUT_DIR-policy-scoped cache
+generation, and distinct job-suffixed primary keys. Its generated compatible
+restore prefix stays shared within that action generation; the same job and
+SHA can reuse its exact entry. Hosted Linux MBX jobs set the supported
+`MBX_SHARE_OUT_DIR=0` before builds to avoid read-only shared OUT_DIR trees;
+this disables cross-checkout reuse of generated OUT_DIR trees.
+The fresh action-cache generation applies to hosted restores; persistent Scale
+Set stores can still contain older shared trees. Only a protected default-branch push receives
 `ACTIONS_CACHE_MODE=write`; PRs, forks, and other hosted events remain read-only.
-`MBX_GC_AUTO=1` stays enabled, and the final ordinary hosted step runs
-synchronous `mbx gc` before the action post export/save. The action samples
-free bytes/inodes and staged archive size during that lifecycle. The exporter
+`MBX_GC_AUTO=0` stays set on hosted MBX jobs through action export, because
+MBX GC roots are eviction preference and low-disk collection can remove
+objects referenced by completed receipts. No Velnor collector runs before the
+hosted action post export/save. The qualification writer and reader use one exact run-, attempt-,
+source-, action-, OS-, architecture-, and toolchain-bound key; the writer
+requires a miss and the reader an exact hit. Both enable isolated objects, so
+the writer's v1.7.1 post path records sampled free-space and local archive
+size. The reader has no before/after restore/import snapshots. The sampler
+does not report instantaneous peak or compressed upload size. The exporter
 still stages the closure while the source store exists, so this candidate does
 not claim to eliminate the export-time peak. Scale Set jobs keep the action
-restore-only and use the external one-directory bundle route. A miss, missing
-bundle, or failed import continues cold. For a Cargo profile, the MBX action
-and installation are absent. The same cache actions also transport Cargo
-source archives and qualified Mise task artifacts; hosted MBX does not archive
-the live store.
+restore-only and use the existing external one-directory bundle route. That
+route's exporter removes its local action store after export; its
+persistent-store lifecycle is unchanged and is not qualified by this hosted
+mitigation. `MBX_SHARE_OUT_DIR=0` is limited to hosted Linux MBX jobs, where
+v1.7.1 post cleanup removes the isolated store. Scale Set import misses and
+failures continue with the runner's existing store, which may be empty or warm; hosted action
+import failures fail the job through the action's error handler. For a Cargo
+profile, the MBX action and installation are absent. The same cache actions
+also transport Cargo source archives and qualified Mise task artifacts;
+hosted MBX does not archive the live store.
 
 1. `Prepare pinned tools`: install exact Velnor policy tools through a fixed
    Mise invocation that loads no project config (`--no-config` plus

@@ -202,38 +202,44 @@ per-action PR-save verdict: gate-4 doc R13 bullet.
 dispatch. The protected-main writer builds a probe crate and its post step
 must export and save the MBX objects before the dependent reader starts. The
 reader has only `actions: read`, requires an imported object set, and checks
-that MBX reuses a cached compilation. A run-and-attempt-specific generation
-prevents a cache from an earlier dispatch from satisfying this check. The
-reader's `cache-hit=false` assertion intentionally expects the action's
-run-specific writer key to be reached by its restore prefix.
+that MBX reuses a cached compilation. Both steps use one explicit exact key,
+including OS, architecture, Rust and MBX versions, action SHA, run, attempt,
+and source SHA. The writer requires an exact miss before save; the reader
+requires an exact hit before its reuse check. A run-and-attempt-specific
+generation also prevents restoring an earlier dispatch.
 
-Both jobs set `MBX_GC_AUTO=1` intentionally: this exercises the same hosted
-policy that Velnor emits for production MBX object-cache jobs, overriding the
-action's hosted default. Dispatch once from protected `main` with mode
+Both jobs set `MBX_GC_AUTO=0` and `MBX_SHARE_OUT_DIR=0`. Asynchronous
+low-disk collection can evict objects referenced by completed build receipts,
+so the writer must keep it off until the action post step exports its group.
+Disabling shared OUT_DIR trees prevents MBX from making directories read-only
+before the action removes its isolated store. Production hosted Linux MBX jobs
+use these settings. Dispatch once from protected `main` with mode
 `mbx-cache-roundtrip`; the writer and reader run in order at the same SHA.
 
-This is a small end-to-end action and cache round-trip probe. With action
-v1.7.1, its real export/save path emits sampled free-byte and free-inode minima
-plus local staged archive size when the archive is observed. Sampling is
-interval-based, so it is not an instantaneous peak or the compressed upload
-size. No run of this candidate has produced those measurements yet, and the
-probe does not qualify the target consumer workload. That evidence must
-come from the consumer's affected crates; a green probe alone is not an ENOSPC
-repair verdict.
+This is a small end-to-end action and exact-key cache round-trip probe. Both
+jobs enable `isolate-objects-cache`; the writer enters action v1.7.1's
+isolated export/save path and records free-byte, free-inode, and local
+archive-size samples. The reader does not currently record before/after
+restore or import snapshots. The sampler is interval-based: it does not report
+instantaneous peak or compressed upload size. This probe also does not qualify
+the target consumer workload; a green round trip alone is not an ENOSPC repair
+verdict.
 
-## Hosted action cleanup permissions
+The persistent Scale Set lane retains its existing external bundle lifecycle,
+including local-store removal after export. This qualification does not cover
+that persistent-store path or prove its cache completeness. MBX GC treats
+receipt roots as eviction preference, so collection before export could remove
+objects that the bundle still needs. A green hosted round trip does not prove
+the target consumer's export-time disk peak fits.
 
-Pinned action v1.7.1 post cleanup recursively removes its isolated `store`,
-including `out-dirs` left read-only by MBX. Velnor adds a successful hosted
-Linux final main step that adds owner-write only to real directories beneath
-`RUNNER_TEMP/mbx-github-objects-store-*/store/out-dirs` with an
-`openat`/`O_NOFOLLOW` descriptor walk and `fchmod`. Each component is opened
-relative to its parent with `O_NOFOLLOW`, preventing symlink following and
-pinning each opened directory's identity by descriptor. This does not guarantee
-continuous containment under the original path against concurrent same-UID
-renames by workflow code. It anchors `RUNNER_TEMP` the same way, skips only
-`ENOENT`/`ENOTDIR`/`ELOOP` races, and fails on other traversal errors. Existing
-read and search bits are preserved; no other mode bits change. It does not read
-`MBX_CACHE_DIR`, touch the sibling bundle, or run on Scale Set runners. The
-released action's cleanup does not normalize MBX read-only directories; that
-upstream fix remains deferred separately.
+## Hosted Linux MBX output-directory policy
+
+Pinned action v1.7.1 recursively removes its isolated `store`. MBX 1.21.1
+defaults shared OUT_DIR materialization on and creates read-only directories,
+which can make that cleanup fail. Hosted Linux MBX jobs therefore set the
+supported `MBX_SHARE_OUT_DIR=0` option before builds. This disables cross-checkout reuse
+of generated OUT_DIR trees. The action-cache generation includes a new
+`share-out-dir-disabled-v1` component so remote restores do not reuse old
+read-only trees. The generation prevents remote restores but does not clear
+existing local store contents. No permission-normalization step is used, and
+the Scale Set store lifecycle is outside this hosted cleanup qualification.
