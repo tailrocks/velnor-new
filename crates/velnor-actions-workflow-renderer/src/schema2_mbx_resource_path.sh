@@ -164,7 +164,6 @@ resource_proc_identity() {
   resource_deadline_remaining_cs >/dev/null || return 1
   printf '%s\t%s\t%s\t%s\n' "${fields[2]}" "${fields[3]}" "${fields[19]}" "${fields[0]}"
 }
-
 resource_proc_uids() {
   local line real effective saved filesystem
   resource_deadline_remaining_cs >/dev/null || return 1
@@ -225,9 +224,8 @@ collect_owned_session_members() {
 
 owned_session_member_count() {
   collect_owned_session_members || return 1
-  printf '%s\n' "${#owned_session_pids[@]}"
+  owned_session_count_value="${#owned_session_pids[@]}"
 }
-
 owned_session_leader_matches() {
   local identity pgid sid ticks state uids real_uid effective_uid saved_uid filesystem_uid args
   identity="$(resource_proc_identity "$sampler_pid" 2>/dev/null)" || return 1
@@ -290,7 +288,8 @@ wait_for_owned_session_until_deadline() {
   local members empty_passes=0
   while :; do
     resource_deadline_remaining_cs >/dev/null || return 1
-    members="$(owned_session_member_count)" || return 2
+    owned_session_member_count || return 2
+    members="$owned_session_count_value"
     if [[ "$members" == 0 ]]; then
       empty_passes=$((empty_passes + 1))
       (( empty_passes >= 2 )) && {
@@ -354,7 +353,8 @@ resource_shutdown_owned_session() {
     RESOURCE_SHUTDOWN_STATUS="$(resource_deadline_failure_status graceful_leader)"
     return 1
   }
-  members="$(owned_session_member_count 2>/dev/null)" || members=unknown
+  members=unknown
+  if owned_session_member_count 2>/dev/null; then members="$owned_session_count_value"; fi
   if [[ ! "$members" =~ ^[1-9][0-9]*$ ]] ||
     [[ -e "$evidence/sampler.stop" || -L "$evidence/sampler.stop" ]] ||
     ! (set -o noclobber; : > "$evidence/sampler.stop"); then

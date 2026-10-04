@@ -19,7 +19,7 @@ const SAMPLER: &str = include_str!("schema2_mbx_resource_sampler.sh");
 const PATH_VALIDATION: &str = include_str!("schema2_mbx_resource_path.sh");
 const SAMPLER_SHA256: &str = "b2a03511f0a36c6b7fca9fb4a95461676acbd54b82e1e902efa1313d3b8fcfd2";
 const PATH_VALIDATION_SHA256: &str =
-    "bbdaa2d1cd7cb426512b1f8a22762a7c37db2254eae4d4d15ebf5188213df447";
+    "aeb6a305ae82c86a08c6b08d459747c551369be18b6b84c26fa7d0be5084589b";
 const PREUPLOAD_SCRIPT: &str = r#"set -euo pipefail
 evidence="$RUNNER_TEMP/mbx-cache-evidence"
 bash "$evidence/sampler.sh" "$evidence" "$RUNNER_TEMP" "$GITHUB_ENV" "$MBX_QUALIFICATION_SAMPLE_INTERVAL" validate
@@ -377,6 +377,7 @@ mod tests {
         assert!(PATH_VALIDATION.contains("RESOURCE_SESSION_SCAN_LIMIT=4096"));
         assert!(PATH_VALIDATION.contains("resource_deadline_capture_failed \"$?\""));
         assert!(PATH_VALIDATION.contains("wait_for_owned_session_until_deadline"));
+        assert!(!PATH_VALIDATION.contains("$(owned_session_member_count"));
         assert!(STOP_SCRIPT.contains("shutdown_deadline_status"));
         assert!(STOP_SCRIPT.contains("shutdown_elapsed_centiseconds"));
         assert!(STOP_SCRIPT.contains("[ \"${RESOURCE_SHUTDOWN_STATUS:-}\" = within_budget ]"));

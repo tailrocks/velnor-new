@@ -60,6 +60,7 @@ fn assert_provisional_receipt_and_role_rules() {
     assert!(path_script.contains("RESOURCE_SESSION_SCAN_LIMIT=4096"));
     assert!(path_script.contains("RESOURCE_DEADLINE_COMMAND_EXPIRED=1"));
     assert!(path_script.contains("resource_deadline_capture_failed \"$?\""));
+    assert!(!path_script.contains("$(owned_session_member_count"));
     assert!(stop_script.contains("shutdown_budget_seconds"));
     assert!(stop_script.contains("shutdown_elapsed_centiseconds"));
     assert!(stop_script.contains("shutdown_deadline_status"));
