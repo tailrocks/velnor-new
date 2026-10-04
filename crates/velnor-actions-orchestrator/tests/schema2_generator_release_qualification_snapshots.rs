@@ -3,6 +3,7 @@ use super::action_snapshots::{Actions, action};
 pub(super) fn assert_candidate_qualification(
     actions: &Actions,
     action_name: &str,
+    build_job: &str,
     directory: &str,
     binary: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -22,17 +23,19 @@ pub(super) fn assert_candidate_qualification(
     let qualification = job
         .find("Qualify downloaded candidate")
         .ok_or("missing exact candidate qualification")?;
-    let attestation = job
-        .find("Attest built artifacts")
-        .ok_or("missing candidate attestation")?;
+    let artifact_id = format!("artifact-ids: ${{{{ needs.{build_job}.outputs.artifact_id }}}}");
     assert!(
         archive_extract < file_modes
             && file_modes < provenance
             && provenance < checksum
-            && provenance < qualification
-            && qualification < attestation,
+            && checksum < qualification,
         "{job}"
     );
+    assert!(job.contains(&artifact_id), "{job}");
+    assert!(!job.contains("Attest built artifacts"), "{job}");
+    assert!(!job.contains("GH_TOKEN:"), "{job}");
+    assert!(!job.contains("actions/upload-artifact@"), "{job}");
+    assert_eq!(job.matches("Qualify downloaded candidate").count(), 1);
     assert!(job.contains("test -x "), "{job}");
     assert!(job.contains("toolchain"), "{job}");
     assert!(job.contains("--version"), "{job}");

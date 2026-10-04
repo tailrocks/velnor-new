@@ -2,8 +2,8 @@
 
 use crate::yaml::Yaml;
 
+use super::super::features::{base, finish};
 use super::archive;
-use super::finish;
 use super::workflow_steps::{self, checkout_step, with_permissions};
 
 pub(super) const VERSION: &str = "0.1.1";
@@ -24,11 +24,15 @@ pub(super) struct ProductAsset {
     pub archive: &'static str,
     pub workflow_artifact: &'static str,
     pub directory: &'static str,
+    pub build_job: &'static str,
+    pub qualify_job: &'static str,
     pub attest_job: &'static str,
+    pub upload_name: &'static str,
+    pub sum_command: &'static str,
     pub checksum_command: &'static str,
 }
 
-/// Linux x86_64 binary.
+/// Linux `x86_64` binary.
 pub(super) const LINUX: ProductAsset = ProductAsset {
     target: "x86_64-unknown-linux-gnu",
     binary: "velnor-actions-0.1.1-x86_64-unknown-linux-gnu",
@@ -37,7 +41,11 @@ pub(super) const LINUX: ProductAsset = ProductAsset {
     archive: "generator-linux-assets.tar",
     workflow_artifact: "generator-linux-assets",
     directory: "linux-assets",
+    build_job: "build-linux",
+    qualify_job: "qualify-linux",
     attest_job: "attest-linux",
+    upload_name: "Upload Linux assets",
+    sum_command: "sha256sum",
     checksum_command: "sha256sum --check",
 };
 
@@ -50,11 +58,15 @@ pub(super) const MACOS_ARM64: ProductAsset = ProductAsset {
     archive: "generator-macos-assets.tar",
     workflow_artifact: "generator-macos-assets",
     directory: "macos-assets",
+    build_job: "build-macos",
+    qualify_job: "qualify-macos",
     attest_job: "attest-macos",
+    upload_name: "Upload macOS assets",
+    sum_command: "shasum -a 256",
     checksum_command: "shasum -a 256 --check",
 };
 
-/// macOS x86_64 binary.
+/// macOS `x86_64` binary.
 pub(super) const MACOS_X86_64: ProductAsset = ProductAsset {
     target: "x86_64-apple-darwin",
     binary: "velnor-actions-0.1.1-x86_64-apple-darwin",
@@ -63,39 +75,40 @@ pub(super) const MACOS_X86_64: ProductAsset = ProductAsset {
     archive: "generator-macos-intel-assets.tar",
     workflow_artifact: "generator-macos-intel-assets",
     directory: "macos-intel-assets",
+    build_job: "build-macos-intel",
+    qualify_job: "qualify-macos-intel",
     attest_job: "attest-macos-intel",
+    upload_name: "Upload macOS x86_64 assets",
+    sum_command: "shasum -a 256",
     checksum_command: "shasum -a 256 --check",
 };
 
 pub(super) const ASSETS: [ProductAsset; 3] = [LINUX, MACOS_ARM64, MACOS_X86_64];
 
 /// Build, inspect, and checksum one native candidate before uploading it.
-pub(super) fn build_steps(
-    asset: &str,
-    verify_name: &str,
-    verify: &str,
-    sum_cmd: &str,
-    sidecar: &str,
-    provenance: &str,
-    target: &str,
-    archive: &str,
-) -> Vec<Yaml> {
+pub(super) fn build_steps(product: ProductAsset, verify_name: &str, verify: &str) -> Vec<Yaml> {
     vec![
         workflow_steps::mise_step(),
         workflow_steps::bash_step(
             "Install pinned Rust and MBX",
             "mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.21.1",
         ),
-        workflow_steps::bash_step("Build velnor-actions with MBX", &build_script(asset)),
+        workflow_steps::bash_step(
+            "Build velnor-actions with MBX",
+            &build_script(product.binary),
+        ),
         workflow_steps::bash_step(verify_name, verify),
-        workflow_steps::bash_step("Checksum built bytes", &sum_script(sum_cmd, asset, sidecar)),
+        workflow_steps::bash_step(
+            "Checksum built bytes",
+            &sum_script(product.sum_command, product.binary, product.sidecar),
+        ),
         workflow_steps::bash_step(
             "Record candidate provenance",
-            &candidate_provenance_script(asset, sidecar, provenance, target),
+            &candidate_provenance_script(product),
         ),
         workflow_steps::bash_step(
             "Package candidate preserving executable mode",
-            &archive_script(asset, sidecar, provenance, archive),
+            &archive_script(product),
         ),
     ]
 }
@@ -125,26 +138,48 @@ fn sum_script(command: &str, asset: &str, sidecar: &str) -> String {
     format!("set -eu\n{command} {asset} > {sidecar}")
 }
 
-fn candidate_provenance_script(
-    asset: &str,
-    sidecar: &str,
-    provenance: &str,
-    target: &str,
-) -> String {
-    let digest = archive::sidecar_digest_command(sidecar, asset);
+fn candidate_provenance_script(product: ProductAsset) -> String {
+    let digest = archive::sidecar_digest_command(product.sidecar, product.binary);
     format!(
-        "set -eu\ndigest=\"$({digest})\"\njq -n --arg repository \"$GITHUB_REPOSITORY\" --arg commit \"$GITHUB_SHA\" --arg target \"{target}\" --arg asset \"{asset}\" --arg sha256 \"$digest\" --arg rust 1.98.1 --arg mr_boxington 1.21.1 '{{\"schema\":1,\"version\":\"{VERSION}\",\"repository\":$repository,\"commit\":$commit,\"target\":$target,\"asset\":$asset,\"sha256\":$sha256,\"toolchain\":{{\"rust\":$rust,\"mr-boxington\":$mr_boxington}}}}' > {provenance}\nchmod 755 {asset}\nchmod 644 {sidecar} {provenance}\ntest -s {provenance}\ntest -s {asset}"
+        "set -eu\ndigest=\"$({digest})\"\njq -n --arg repository \"$GITHUB_REPOSITORY\" --arg commit \"$GITHUB_SHA\" --arg target \"{}\" --arg asset \"{}\" --arg sha256 \"$digest\" --arg rust 1.98.1 --arg mr_boxington 1.21.1 '{{\"schema\":1,\"version\":\"{VERSION}\",\"repository\":$repository,\"commit\":$commit,\"target\":$target,\"asset\":$asset,\"sha256\":$sha256,\"toolchain\":{{\"rust\":$rust,\"mr-boxington\":$mr_boxington}}}}' > {}\nchmod 755 {}\nchmod 644 {} {}\ntest -s {}\ntest -s {}",
+        product.target,
+        product.binary,
+        product.provenance,
+        product.binary,
+        product.sidecar,
+        product.provenance,
+        product.provenance,
+        product.binary
     )
 }
 
-fn archive_script(asset: &str, sidecar: &str, provenance: &str, archive: &str) -> String {
-    format!("set -eu\ntar -cf {archive} {asset} {sidecar} {provenance}\ntest -s {archive}")
+fn archive_script(product: ProductAsset) -> String {
+    format!(
+        "set -eu\ntar -cf {} {} {} {}\ntest -s {}",
+        product.archive, product.binary, product.sidecar, product.provenance, product.archive
+    )
 }
 
 /// Download the exact build artifact archive and restore its executable mode.
 pub(super) fn download_steps(asset: ProductAsset, name: &str) -> Vec<Yaml> {
+    download_steps_with(
+        asset,
+        workflow_steps::download_step(name, asset.workflow_artifact, asset.directory),
+    )
+}
+
+/// Download the exact immutable artifact produced by one build job.
+pub(super) fn download_build_steps(asset: ProductAsset, name: &str, build_job: &str) -> Vec<Yaml> {
+    let artifact_id = format!("${{{{ needs.{build_job}.outputs.artifact_id }}}}");
+    download_steps_with(
+        asset,
+        workflow_steps::download_step_by_id(name, &artifact_id, asset.directory),
+    )
+}
+
+fn download_steps_with(asset: ProductAsset, download: Yaml) -> Vec<Yaml> {
     vec![
-        download_step(name, asset),
+        download,
         workflow_steps::bash_step(
             "Prevalidate and extract uploaded candidate archive",
             &archive::extraction_script(
@@ -196,10 +231,6 @@ fn verify_provenance_in_directory(asset: ProductAsset, directory: &str) -> Strin
     )
 }
 
-fn download_step(name: &str, asset: ProductAsset) -> Yaml {
-    workflow_steps::download_step(name, asset.workflow_artifact, asset.directory)
-}
-
 /// Check candidate identity and deterministic generation on the uploaded bytes.
 pub(super) fn qualification_script(binary: &str, directory: &str) -> String {
     format!(
@@ -212,7 +243,7 @@ pub(super) fn source_gate_job(hosted: Yaml) -> (String, Yaml) {
     finish(
         "verify-release-source",
         with_permissions(
-            super::base("Verify generator release source", hosted, 20),
+            base("Verify generator release source", hosted, 20),
             workflow_steps::perm(&[("actions", "read"), ("contents", "read")]),
         ),
         vec![
@@ -236,6 +267,33 @@ pub(super) fn source_gate_job(hosted: Yaml) -> (String, Yaml) {
                 ),
             ),
         ],
+    )
+}
+
+fn ci_check_step() -> Yaml {
+    workflow_steps::bash_step_with_token(
+        "Require successful CI at exact main SHA",
+        &ci_check_script(),
+    )
+}
+
+fn ci_check_script() -> String {
+    format!(
+        r#"set -eu
+test "$GITHUB_REPOSITORY" = '{REPOSITORY}'
+test "$GITHUB_REF" = 'refs/heads/main'
+test "$GITHUB_EVENT_NAME" = 'workflow_dispatch'
+test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+test "$(mise --no-config --no-env --no-hooks exec gh@{GH_VERSION} -- gh api repos/{REPOSITORY}/commits/main --jq .sha)" = "$GITHUB_SHA"
+runs="$(mise --no-config --no-env --no-hooks exec gh@{GH_VERSION} -- gh api --paginate --slurp "repos/{REPOSITORY}/actions/workflows/{CI_WORKFLOW}/runs?head_sha=$GITHUB_SHA&branch=main&event=push&per_page=100")"
+run="$(printf '%s\n' "$runs" | jq -ce --arg sha "$GITHUB_SHA" --arg repo '{REPOSITORY}' '[.[] | (.workflow_runs // [])[] | select(.path == ".github/workflows/{CI_WORKFLOW}" and .head_sha == $sha and .head_branch == "main" and .head_repository.full_name == $repo and .event == "push")] | sort_by([.run_number, .id]) | last // error("no exact-source main CI run")')"
+test "$(printf '%s\n' "$run" | jq -r .status)" = completed
+test "$(printf '%s\n' "$run" | jq -r .conclusion)" = success
+run_id="$(printf '%s\n' "$run" | jq -r .id)"
+attempt="$(printf '%s\n' "$run" | jq -r .run_attempt)"
+jobs="$(mise --no-config --no-env --no-hooks exec gh@{GH_VERSION} -- gh api --paginate --slurp "repos/{REPOSITORY}/actions/runs/$run_id/attempts/$attempt/jobs?per_page=100")"
+printf '%s\n' "$jobs" | jq -e --arg sha "$GITHUB_SHA" '[.[] | (.jobs // [])[] | select(.name == "Required" and .head_sha == $sha and .head_branch == "main" and .status == "completed" and .conclusion == "success")] | length == 1' >/dev/null
+test "$(mise --no-config --no-env --no-hooks exec gh@{GH_VERSION} -- gh api repos/{REPOSITORY}/commits/main --jq .sha)" = "$GITHUB_SHA""#
     )
 }
 
@@ -309,31 +367,4 @@ mod tests {
         );
         Ok(())
     }
-}
-
-fn ci_check_step() -> Yaml {
-    workflow_steps::bash_step_with_token(
-        "Require successful CI at exact main SHA",
-        &ci_check_script(),
-    )
-}
-
-fn ci_check_script() -> String {
-    format!(
-        r#"set -eu
-test "$GITHUB_REPOSITORY" = '{REPOSITORY}'
-test "$GITHUB_REF" = 'refs/heads/main'
-test "$GITHUB_EVENT_NAME" = 'workflow_dispatch'
-test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-test "$(mise --no-config --no-env --no-hooks exec gh@{GH_VERSION} -- gh api repos/{REPOSITORY}/commits/main --jq .sha)" = "$GITHUB_SHA"
-runs="$(mise --no-config --no-env --no-hooks exec gh@{GH_VERSION} -- gh api --paginate --slurp "repos/{REPOSITORY}/actions/workflows/{CI_WORKFLOW}/runs?head_sha=$GITHUB_SHA&branch=main&event=push&per_page=100")"
-run="$(printf '%s\n' "$runs" | jq -ce --arg sha "$GITHUB_SHA" --arg repo '{REPOSITORY}' '[.[] | (.workflow_runs // [])[] | select(.path == ".github/workflows/{CI_WORKFLOW}" and .head_sha == $sha and .head_branch == "main" and .head_repository.full_name == $repo and .event == "push")] | sort_by([.run_number, .id]) | last // error("no exact-source main CI run")')"
-test "$(printf '%s\n' "$run" | jq -r .status)" = completed
-test "$(printf '%s\n' "$run" | jq -r .conclusion)" = success
-run_id="$(printf '%s\n' "$run" | jq -r .id)"
-attempt="$(printf '%s\n' "$run" | jq -r .run_attempt)"
-jobs="$(mise --no-config --no-env --no-hooks exec gh@{GH_VERSION} -- gh api --paginate --slurp "repos/{REPOSITORY}/actions/runs/$run_id/attempts/$attempt/jobs?per_page=100")"
-printf '%s\n' "$jobs" | jq -e --arg sha "$GITHUB_SHA" '[.[] | (.jobs // [])[] | select(.name == "Required" and .head_sha == $sha and .head_branch == "main" and .status == "completed" and .conclusion == "success")] | length == 1' >/dev/null
-test "$(mise --no-config --no-env --no-hooks exec gh@{GH_VERSION} -- gh api repos/{REPOSITORY}/commits/main --jq .sha)" = "$GITHUB_SHA""#
-    )
 }

@@ -28,10 +28,3 @@ runs:
     - name: Package candidate preserving executable mode
       shell: bash
       run: "set -eu\ntar -cf generator-macos-assets.tar velnor-actions-0.1.1-aarch64-apple-darwin velnor-actions-0.1.1-aarch64-apple-darwin.sha256 velnor-actions-0.1.1-aarch64-apple-darwin.provenance.json\ntest -s generator-macos-assets.tar"
-    - name: Upload macOS assets
-      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-      with:
-        if-no-files-found: error
-        name: generator-macos-assets
-        path: generator-macos-assets.tar
-        retention-days: 1

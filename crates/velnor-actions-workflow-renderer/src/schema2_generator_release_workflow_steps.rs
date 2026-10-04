@@ -79,8 +79,19 @@ pub(super) fn checkout_step() -> Yaml {
 }
 
 pub(super) fn upload_step(name: &str, artifact: &str, files: &[&str]) -> Yaml {
-    Yaml::Map(vec![
-        ("name".to_owned(), Yaml::str(name)),
+    upload_step_inner(None, name, artifact, files)
+}
+
+pub(super) fn upload_step_with_id(id: &str, name: &str, artifact: &str, files: &[&str]) -> Yaml {
+    upload_step_inner(Some(id), name, artifact, files)
+}
+
+fn upload_step_inner(id: Option<&str>, name: &str, artifact: &str, files: &[&str]) -> Yaml {
+    let mut fields = vec![("name".to_owned(), Yaml::str(name))];
+    if let Some(id) = id {
+        fields.push(("id".to_owned(), Yaml::str(id)));
+    }
+    fields.extend([
         ("uses".to_owned(), Yaml::str(UPLOAD_ARTIFACT_USES)),
         (
             "with".to_owned(),
@@ -91,7 +102,8 @@ pub(super) fn upload_step(name: &str, artifact: &str, files: &[&str]) -> Yaml {
                 ("retention-days".to_owned(), Yaml::Int(1)),
             ]),
         ),
-    ])
+    ]);
+    Yaml::Map(fields)
 }
 
 pub(super) fn download_step(name: &str, artifact: &str, path: &str) -> Yaml {
@@ -102,6 +114,20 @@ pub(super) fn download_step(name: &str, artifact: &str, path: &str) -> Yaml {
             "with".to_owned(),
             Yaml::Map(vec![
                 ("name".to_owned(), Yaml::str(artifact)),
+                ("path".to_owned(), Yaml::str(path)),
+            ]),
+        ),
+    ])
+}
+
+pub(super) fn download_step_by_id(name: &str, artifact_id: &str, path: &str) -> Yaml {
+    Yaml::Map(vec![
+        ("name".to_owned(), Yaml::str(name)),
+        ("uses".to_owned(), Yaml::str(DOWNLOAD_ARTIFACT_USES)),
+        (
+            "with".to_owned(),
+            Yaml::Map(vec![
+                ("artifact-ids".to_owned(), Yaml::str(artifact_id)),
                 ("path".to_owned(), Yaml::str(path)),
             ]),
         ),
@@ -149,6 +175,11 @@ pub(super) fn attest_permissions() -> Yaml {
         ("contents", "read"),
         ("id-token", "write"),
     ])
+}
+
+/// Qualification can read the checked-out source but cannot write attestations or repository data.
+pub(super) fn qualification_permissions() -> Yaml {
+    perm(&[("contents", "read")])
 }
 
 /// Only the release-upload job may write repository contents.

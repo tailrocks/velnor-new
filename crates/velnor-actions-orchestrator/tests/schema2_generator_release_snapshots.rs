@@ -5,6 +5,8 @@ use velnor_actions_workflow_renderer::RenderedTree;
 mod action_snapshots;
 #[path = "schema2_generator_release_qualification_snapshots.rs"]
 mod qualification_snapshots;
+#[path = "schema2_generator_release_security_snapshots.rs"]
+mod security_snapshots;
 use action_snapshots::{Actions, action, action_text};
 
 pub(super) const GENERATOR_RELEASE: &str = include_str!("snapshots/generator-release.yml");
@@ -38,6 +40,7 @@ fn assert_generator(body: &str, actions: &Actions) -> Result<(), Box<dyn std::er
     assert_global_policy(body, actions);
     assert_checkouts(body, actions)?;
     assert_source_gate(body)?;
+    security_snapshots::assert_isolated_candidate_execution(body, actions)?;
     assert_asset_catalog(&action_text(actions));
     assert_target_builds(body, actions)?;
     assert_manifest_job(body, actions)?;
@@ -51,10 +54,13 @@ fn assert_job_order(body: &str) {
         vec![
             "verify-release-source",
             "build-linux",
+            "qualify-linux",
             "attest-linux",
             "build-macos",
+            "qualify-macos",
             "attest-macos",
             "build-macos-intel",
+            "qualify-macos-intel",
             "attest-macos-intel",
             "attest-manifest",
             "publish-generator",
@@ -158,19 +164,22 @@ fn assert_target_builds(body: &str, actions: &Actions) -> Result<(), Box<dyn std
     assert_attest(body, actions, "attest-macos-intel", "macos-15-intel")?;
     qualification_snapshots::assert_candidate_qualification(
         actions,
-        "generator-release-attest-linux",
+        "generator-release-qualify-linux",
+        "build-linux",
         "linux-assets",
         "velnor-actions-0.1.1-x86_64-unknown-linux-gnu",
     )?;
     qualification_snapshots::assert_candidate_qualification(
         actions,
-        "generator-release-attest-macos",
+        "generator-release-qualify-macos",
+        "build-macos",
         "macos-assets",
         "velnor-actions-0.1.1-aarch64-apple-darwin",
     )?;
     qualification_snapshots::assert_candidate_qualification(
         actions,
-        "generator-release-attest-macos-intel",
+        "generator-release-qualify-macos-intel",
+        "build-macos-intel",
         "macos-intel-assets",
         "velnor-actions-0.1.1-x86_64-apple-darwin",
     )?;

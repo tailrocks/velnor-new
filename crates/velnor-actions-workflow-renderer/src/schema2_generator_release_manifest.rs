@@ -3,8 +3,8 @@
 use crate::RenderError;
 use crate::yaml::Yaml;
 
+use super::super::features::{base, finish};
 use super::assets::{self, ASSETS, REPOSITORY, VERSION};
-use super::finish;
 use super::workflow_steps::{self, upload_step, with_needs, with_permissions};
 
 /// Published versioned release manifest.
@@ -54,7 +54,7 @@ pub(super) fn job(
         ),
         upload_step("Upload release manifest", ARTIFACT, &[FILE]),
     ]);
-    let call = super::local_action(
+    let call = super::jobs::local_action(
         "generator-release-manifest",
         "Attest generator release manifest",
         steps,
@@ -64,7 +64,7 @@ pub(super) fn job(
         "attest-manifest",
         with_needs(
             with_permissions(
-                super::base("Attest generator release manifest", hosted, 20),
+                base("Attest generator release manifest", hosted, 20),
                 workflow_steps::perm(&[
                     ("actions", "write"),
                     ("artifact-metadata", "write"),
@@ -84,6 +84,17 @@ pub(super) fn publication_verify_script() -> String {
     format!("{}\ncmp {FILE} {DIR}/{FILE}", manifest_script())
 }
 
+/// Assemble release verification and creation in one parent shell.
+pub(super) fn publish_script() -> String {
+    let verify = publication_verify_script();
+    let assets = release_asset_paths();
+    let preflight = tag_preflight_script();
+    let postflight = published_release_verify_script();
+    format!(
+        "set -eu\ntag=\"v{VERSION}\"\n{verify}\n{preflight}\ngh release create \"$tag\" -R \"${{GITHUB_REPOSITORY}}\" --target \"$GITHUB_SHA\" --title \"velnor-actions $tag\" --latest=false --notes \"velnor-actions {VERSION} built from ${{GITHUB_SHA}}.\" {assets}\n{postflight}"
+    )
+}
+
 /// Require confirmed 404 responses for both immutable tag and release lookups.
 pub(super) fn tag_preflight_script() -> String {
     format!("bash scripts/generator-release/preflight-release-tag.sh '{VERSION}' '{REPOSITORY}'")
@@ -92,13 +103,13 @@ pub(super) fn tag_preflight_script() -> String {
 /// Verify immutable release metadata, target commit, exact asset set, and digests.
 pub(super) fn published_release_verify_script() -> String {
     let paths = release_asset_path_list();
-    let quoted_paths = paths
+    let bash_paths = paths
         .iter()
-        .map(|path| format!("'{path}'"))
+        .map(|path| format!("  '{path}'"))
         .collect::<Vec<_>>()
-        .join(" ");
+        .join("\n");
     format!(
-        "set -eu\ntag=\"v{VERSION}\"\nref=\"$(gh api \"repos/$GITHUB_REPOSITORY/git/ref/tags/$tag\")\"\nref_type=\"$(printf '%s\\n' \"$ref\" | jq -er .object.type)\"\nref_sha=\"$(printf '%s\\n' \"$ref\" | jq -er .object.sha)\"\ncase \"$ref_type\" in\n  commit) tag_commit=\"$ref_sha\" ;;\n  tag) tag_commit=\"$(gh api \"repos/$GITHUB_REPOSITORY/git/tags/$ref_sha\" --jq .object.sha)\" ;;\n  *) echo \"release tag has unexpected object type: $ref_type\" >&2; exit 1 ;;\nesac\ntest \"$tag_commit\" = \"$GITHUB_SHA\"\nrelease=\"$(gh api \"repos/$GITHUB_REPOSITORY/releases/tags/$tag\")\"\nprintf '%s\\n' \"$release\" | jq -e --arg tag \"$tag\" '.tag_name == $tag and .draft == false and .prerelease == false and .immutable == true' > /dev/null\npaths='{quoted_paths}'\ntest \"$(printf '%s\\n' \"$release\" | jq -r '.assets | length')\" -eq {}\nfor path in $paths; do\n  name=\"${{path##*/}}\"\n  digest=\"$(sha256sum \"$path\" | awk 'NR == 1 {{ print $1; next }} {{ exit 1 }} END {{ if (NR != 1) exit 1 }}')\"\n  expected=\"sha256:$digest\"\n  actual=\"$(printf '%s\\n' \"$release\" | jq -er --arg name \"$name\" '[.assets[] | select(.name == $name)] | if length == 1 then .[0].digest else error(\"missing or duplicate release asset\") end')\"\n  test \"$actual\" = \"$expected\"\ndone",
+        "set -eu\ntag=\"v{VERSION}\"\nref=\"$(gh api \"repos/$GITHUB_REPOSITORY/git/ref/tags/$tag\")\"\nref_type=\"$(printf '%s\\n' \"$ref\" | jq -er .object.type)\"\nref_sha=\"$(printf '%s\\n' \"$ref\" | jq -er .object.sha)\"\ncase \"$ref_type\" in\n  commit) tag_commit=\"$ref_sha\" ;;\n  tag) tag_commit=\"$(gh api \"repos/$GITHUB_REPOSITORY/git/tags/$ref_sha\" --jq .object.sha)\" ;;\n  *) echo \"release tag has unexpected object type: $ref_type\" >&2; exit 1 ;;\nesac\ntest \"$tag_commit\" = \"$GITHUB_SHA\"\nrelease=\"$(gh api \"repos/$GITHUB_REPOSITORY/releases/tags/$tag\")\"\nprintf '%s\\n' \"$release\" | jq -e --arg tag \"$tag\" '.tag_name == $tag and .draft == false and .prerelease == false and .immutable == true' > /dev/null\npaths=(\n{bash_paths}\n)\ntest \"$(printf '%s\\n' \"$release\" | jq -r '.assets | length')\" -eq {}\nfor path in \"${{paths[@]}}\"; do\n  name=\"${{path##*/}}\"\n  digest=\"$(sha256sum \"$path\" | awk 'NR == 1 {{ print $1; next }} {{ exit 1 }} END {{ if (NR != 1) exit 1 }}')\"\n  expected=\"sha256:$digest\"\n  actual=\"$(printf '%s\\n' \"$release\" | jq -er --arg name \"$name\" '[.assets[] | select(.name == $name)] | if length == 1 then .[0].digest else error(\"missing or duplicate release asset\") end')\"\n  test \"$actual\" = \"$expected\"\ndone",
         paths.len()
     )
 }
@@ -243,7 +254,7 @@ mod tests {
             let gh = scratch.0.join("gh");
             fs::write(
                 &gh,
-                r##"#!/bin/sh
+                r#"#!/bin/sh
 printf '%s\n' "$*" >> "$GH_CALLS"
 case "$GH_CASE" in
   confirmed-404) printf 'HTTP/2 404\r\ncontent-type: application/json\r\n\r\n{"message":"Not Found","status":"404"}\n'; exit 1 ;;
@@ -252,7 +263,7 @@ case "$GH_CASE" in
   malformed) printf 'not-an-http-response\n\nnot-json\n'; exit 1 ;;
   missing-status) printf 'HTTP/2 404\r\n\r\n{"message":"Not Found"}\n'; exit 1 ;;
 esac
-"##,
+"#,
             )?;
             let mut permissions = fs::metadata(&gh)?.permissions();
             permissions.set_mode(0o755);
