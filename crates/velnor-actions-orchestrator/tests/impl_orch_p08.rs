@@ -299,15 +299,17 @@ fn assert_tools_saves_push_gated_per_key(yaml: &str) {
         }
     }
     assert!(!keys.is_empty(), "at least one restored tools key:\n{yaml}");
+    let mbx_saves = yaml.matches("- name: Save MBX single bundle").count();
+    let mbx_exports = yaml.matches("- name: Export MBX single bundle").count();
     assert_eq!(
         yaml.matches("actions/cache/save@").count(),
-        1 + keys.len(),
-        "sources plus one tools save per key:\n{yaml}"
+        1 + keys.len() + mbx_saves,
+        "sources plus one tools save per key plus the MBX bundle:\n{yaml}"
     );
     assert_eq!(
         yaml.matches("if: success() && github.event_name == 'push'")
             .count(),
-        1 + keys.len(),
+        1 + keys.len() + mbx_saves + mbx_exports,
         "every save push-gated:\n{yaml}"
     );
     assert!(

@@ -53,7 +53,7 @@ pub(crate) fn load_config(root: &Path) -> Result<VelnorConfig, OrchestratorError
 }
 
 /// Map validation failures to file plus key-path errors.
-fn config_error(error: velnor_actions_contract::ContractError) -> OrchestratorError {
+pub(crate) fn config_error(error: velnor_actions_contract::ContractError) -> OrchestratorError {
     match error {
         velnor_actions_contract::ContractError::Config {
             file,
@@ -111,6 +111,9 @@ struct PartialConfig {
     /// Actions section.
     #[serde(default)]
     actions: PartialActions,
+    /// Schema 2 routing section.
+    #[serde(default)]
+    execution: Option<velnor_actions_contract::ExecutionConfig>,
 }
 
 /// Workflow section with every value optional.
@@ -184,6 +187,7 @@ impl PartialConfig {
             stacks: self.stacks.materialize()?,
             discovery: self.discovery.materialize(),
             actions: self.actions.materialize(),
+            execution: self.execution,
         })
     }
 }

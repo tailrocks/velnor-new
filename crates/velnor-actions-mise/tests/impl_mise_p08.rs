@@ -148,7 +148,7 @@ fn c6_no_path_has_two_owners() {
 
 #[test]
 fn c9_pr_save_needs_action_support_and_forks_stay_read_only() {
-    const _: () = assert!(!trust::MBX_PR_SAVE_SUPPORTED);
+    const _: () = assert!(!trust::MBX_PR_SAVE_OPTED_IN);
     assert!(!trust::pr_save_allowed(false, false, "pull_request"));
     assert!(trust::pr_save_allowed(true, false, "pull_request"));
     assert!(!trust::pr_save_allowed(true, true, "pull_request"));
@@ -157,11 +157,11 @@ fn c9_pr_save_needs_action_support_and_forks_stay_read_only() {
     assert!(!trust::is_read_only(false));
     assert!(trust::pr_outputs_trusted("trusted"));
     assert!(!trust::pr_outputs_trusted("pr"));
-    // R13: the pinned action cannot scope PR saves, so no pull_request run
-    // (same-repo or fork) may save — the emitted condition is push-only.
+    // Velnor leaves the v1.6 action's opt-in PR save disabled, so no
+    // pull_request run (same-repo or fork) may save — push remains the gate.
     for fork in [false, true] {
         assert!(
-            !trust::pr_save_allowed(trust::MBX_PR_SAVE_SUPPORTED, fork, "pull_request"),
+            !trust::pr_save_allowed(trust::MBX_PR_SAVE_OPTED_IN, fork, "pull_request"),
             "PR saves forbidden (fork={fork})"
         );
     }

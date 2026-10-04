@@ -46,7 +46,7 @@ fn fresh_binary_manifest_passes_shell_verifier() -> TestResult {
         .env("VELNOR_PRESEED_TARGET", target)
         .env(
             "VELNOR_PRESEED_TOOLCHAIN",
-            "rust@1.98.1+mr-boxington@1.21.0",
+            "rust@1.98.1+mr-boxington@1.21.1",
         )
         .output()?;
     let stdout = String::from_utf8_lossy(&output.stdout);
