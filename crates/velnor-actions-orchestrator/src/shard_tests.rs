@@ -10,14 +10,21 @@ use velnor_actions_mise::ToolCatalog;
 #[test]
 fn lookup_args_are_fixed_and_validated() {
     let base = "a".repeat(40);
-    let lookup =
-        BaselineLookup::new(&base, ".github/workflows/ci.yml", "testmain", "o/r").expect("valid");
+    let lookup = BaselineLookup::new(&base, ".github/workflows/ci.yml", "release/1.2", "o/r")
+        .expect("valid");
     let list: Vec<String> = lookup
         .list_args()
         .iter()
         .map(|a| a.to_string_lossy().into_owned())
         .collect();
     assert_eq!(list[0..5], ["run", "list", "--repo", "o/r", "--workflow"]);
+    assert_eq!(list[7], "release/1.2");
+    for branch in ["-main", "main;--repo=evil", "main\non: [push]"] {
+        assert!(
+            BaselineLookup::new(&base, "w", branch, "o/r").is_err(),
+            "malformed branch must fail before gh argv construction: {branch:?}"
+        );
+    }
     assert!(BaselineLookup::new("short", "w", "b", "o/r").is_err());
     assert!(BaselineLookup::new(&base, "https://evil/x", "b", "o/r").is_err());
     assert!(BaselineLookup::new(&base, "w", "b", "not-a-slug").is_err());

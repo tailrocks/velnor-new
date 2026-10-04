@@ -137,14 +137,7 @@ fn resolve_default_branch(root: &Path, config: &VelnorConfig) -> Result<String, 
 /// Strip the `origin/` prefix, rejecting empty or malformed branches.
 fn branch_from_origin_head(text: &str) -> Option<String> {
     let branch = text.strip_prefix("origin/").unwrap_or(text);
-    if branch.is_empty()
-        || branch.contains(char::is_whitespace)
-        || branch.contains("..")
-        || branch == "HEAD"
-    {
-        return None;
-    }
-    Some(branch.to_owned())
+    velnor_actions_contract::is_valid_branch_name(branch).then(|| branch.to_owned())
 }
 
 /// Require the canonical identity for the Velnor-repository policy.
@@ -224,3 +217,7 @@ pub(crate) fn split_host_path(url: &str) -> Option<(&str, &str)> {
     }
     Some((host, path))
 }
+
+#[cfg(test)]
+#[path = "prepare_branch_tests.rs"]
+mod prepare_branch_tests;
