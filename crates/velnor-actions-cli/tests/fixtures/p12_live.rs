@@ -170,7 +170,48 @@ fn every_fail_row_is_nonzero() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn script_covers_all_forms_scopes_and_namespaces() -> Result<(), Box<dyn Error>> {
-    let script = crate::impl_repo_policy::read("scripts/check-freshness.sh")?;
+    let shell = crate::impl_repo_policy::read("scripts/check-freshness.sh")?;
+    assert!(
+        shell.contains("freshness_checks/main.py"),
+        "shell must launch checker"
+    );
+    let entrypoint = crate::impl_repo_policy::read("scripts/freshness_checks/main.py")?;
+    assert!(
+        entrypoint.contains("os.path.abspath(__file__)")
+            && entrypoint.contains("sys.path.insert(0, MODULE_DIR)"),
+        "helper imports must resolve beside the executing stage"
+    );
+    for module in [
+        "advisories", "evidence", "inventory", "lockfile", "pins", "probe", "report",
+    ] {
+        assert!(
+            entrypoint.contains(&format!("import {module}")),
+            "entrypoint must import {module}"
+        );
+        assert!(
+            entrypoint.contains(&format!("{module}.")),
+            "entrypoint must call {module}"
+        );
+    }
+    let pins = crate::impl_repo_policy::read("scripts/freshness_checks/pins.py")?;
+    assert!(
+        pins.contains("from rust_pin_parser import"),
+        "active pin check must import Rust parser"
+    );
+    let mut implementation = shell;
+    for path in [
+        "scripts/freshness_checks/main.py",
+        "scripts/freshness_checks/report.py",
+        "scripts/freshness_checks/inventory.py",
+        "scripts/freshness_checks/pins.py",
+        "scripts/freshness_checks/rust_pin_parser.py",
+        "scripts/freshness_checks/lockfile.py",
+        "scripts/freshness_checks/evidence.py",
+        "scripts/freshness_checks/advisories.py",
+        "scripts/freshness_checks/probe.py",
+    ] {
+        implementation.push_str(&crate::impl_repo_policy::read(path)?);
+    }
     for marker in [
         "build-dependencies",
         "dev-dependencies",
@@ -188,9 +229,9 @@ fn script_covers_all_forms_scopes_and_namespaces() -> Result<(), Box<dyn Error>>
         "standing-exception",
         "advisories",
         "def fail_row",
-        "sys.exit(1)",
+        "SystemExit(1)",
     ] {
-        assert!(script.contains(marker), "script misses {marker}");
+        assert!(implementation.contains(marker), "checker misses {marker}");
     }
     Ok(())
 }

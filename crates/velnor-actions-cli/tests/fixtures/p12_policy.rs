@@ -294,7 +294,7 @@ fn unknown_hold_subject_fails() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn action_const_wiring_is_mapped() -> Result<(), Box<dyn Error>> {
-    let script = crate::impl_repo_policy::read("scripts/check-freshness.sh")?;
+    let script = crate::impl_repo_policy::read("scripts/freshness_checks/pins.py")?;
     assert!(
         script.contains(ACTIONS_RS),
         "action const path must be read"
