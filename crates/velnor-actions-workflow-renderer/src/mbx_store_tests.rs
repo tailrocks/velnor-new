@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use super::{EXPORT_SCRIPT, IMPORT_SCRIPT, STORE_INIT_SCRIPT};
+use super::{EXPORT_SCRIPT, IMPORT_SCRIPT, store::STORE_INIT_SCRIPT};
 
 static NEXT_SANDBOX: AtomicUsize = AtomicUsize::new(0);
 
@@ -219,19 +219,19 @@ fn export_with_cache_root(
     let summary_path = sandbox.path().join("github-summary");
     fs::write(&output_path, "")?;
     fs::write(&summary_path, "")?;
-    let temp = sandbox.path().to_string_lossy().into_owned();
-    let cache = cache_root.to_string_lossy().into_owned();
-    let output_path = output_path.to_string_lossy().into_owned();
-    let summary_path = summary_path.to_string_lossy().into_owned();
+    let temp = sandbox.path().to_string_lossy();
+    let cache = cache_root.to_string_lossy();
+    let output_arg = output_path.to_string_lossy();
+    let summary_arg = summary_path.to_string_lossy();
     let mut environment = vec![
-        ("RUNNER_TEMP", &temp),
-        ("MBX_CACHE_DIR", &cache),
+        ("RUNNER_TEMP", temp.as_ref()),
+        ("MBX_CACHE_DIR", cache.as_ref()),
         ("MBX_CACHE_EXPORT_GROUP", "g-run-2-job"),
         ("GITHUB_RUN_ID", RUN_ID),
         ("GITHUB_RUN_ATTEMPT", ATTEMPT),
         ("GITHUB_JOB", JOB_ID),
-        ("GITHUB_OUTPUT", &output_path),
-        ("GITHUB_STEP_SUMMARY", &summary_path),
+        ("GITHUB_OUTPUT", output_arg.as_ref()),
+        ("GITHUB_STEP_SUMMARY", summary_arg.as_ref()),
         ("MBX_FAKE_MODE", mode),
     ];
     if mode == "import-uncertain" {
