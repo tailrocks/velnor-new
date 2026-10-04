@@ -41,7 +41,7 @@ fn config_with(overrides: BTreeMap<String, ActionPinOverride>) -> VelnorConfig {
 
 #[test]
 fn source_build_consumer_generation_fails_with_provenance() {
-    let err = consumer_acquire_from("ubuntu-26.04", "0.1.0", None);
+    let err = consumer_acquire_from("ubuntu-26.04", env!("CARGO_PKG_VERSION"), None);
     assert!(err.is_err_and(|err| {
         err.to_string()
             .contains("consumer_requires_release_install")
@@ -52,9 +52,10 @@ fn source_build_consumer_generation_fails_with_provenance() {
 fn consumer_manifest_mismatch_and_bad_target_fail() {
     let err = consumer_acquire_from("ubuntu-26.04", "9.9.9", Some(&test_manifest_json()));
     assert!(err.is_err_and(|err| err.to_string().contains("version_mismatch")));
-    let err = consumer_acquire_from("ubuntu-26.04-arm", "0.1.0", Some(&test_manifest_json()));
+    let version = env!("CARGO_PKG_VERSION");
+    let err = consumer_acquire_from("ubuntu-26.04-arm", version, Some(&test_manifest_json()));
     assert!(err.is_err_and(|err| err.to_string().contains("unsupported_target_for_runner")));
-    let err = consumer_acquire_from("ubuntu-26.04", "0.1.0", Some("not json"));
+    let err = consumer_acquire_from("ubuntu-26.04", version, Some("not json"));
     assert!(err.is_err());
 }
 
