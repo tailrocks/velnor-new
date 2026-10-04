@@ -71,6 +71,11 @@ test "$GITHUB_REF" = refs/heads/main
 test "$GITHUB_WORKFLOW_REF" = "$GITHUB_REPOSITORY/.github/workflows/qualification.yml@refs/heads/main"
 case "$GITHUB_SHA" in ''|*[!0-9a-f]*) echo 'invalid current source SHA' >&2; exit 1 ;; esac
 test "${#GITHUB_SHA}" -eq 40
+case "$RUNNER_OS:$RUNNER_ARCH" in
+  Linux:X64|Linux:x64|Linux:AMD64) key_os=linux; key_arch=x64 ;;
+  Linux:ARM64|Linux:arm64) key_os=linux; key_arch=arm64 ;;
+  *) echo 'unsupported runner platform for MBX cache key' >&2; exit 1 ;;
+esac
 workflow_path=${GITHUB_WORKFLOW_REF%%@refs/*}
 printf '%s\n%s\n%s\n' "$workflow_path" "$MBX_EXPECTED_SHARED_SCOPE" '{}' > "$shared_scope_input"
 printf '%s\n%s\n%s\n' "$workflow_path" "$MBX_EXPECTED_NEW_KEY_SCOPE" '{}' > "$new_scope_input"
@@ -86,7 +91,7 @@ verify_receipt() {
     echo 'invalid cache receipt file' >&2
     return 1
   fi
-  jq -e --arg job "$job" --arg role "$role" --arg scope "$scope" --arg run "$GITHUB_RUN_ID" --arg attempt "$GITHUB_RUN_ATTEMPT" --arg sha "$GITHUB_SHA" --arg ref "$GITHUB_REF" --arg workflow "$GITHUB_WORKFLOW_REF" --arg action "$MBX_EXPECTED_ACTION_REF" --arg version "$MBX_EXPECTED_VERSION" --arg rust "$MBX_EXPECTED_RUST_VERSION" '.job_id == $job and .role == $role and .scope == $scope and .run_id == $run and .run_attempt == $attempt and .source_sha == $sha and .source_ref == $ref and .workflow_ref == $workflow and .mbx_action_ref == $action and .mbx_version == $version and .rust_version == $rust and (.primary_key | type == "string" and length > 0) and (.cache_prefix | type == "string" and length > 0) and (.generation | type == "string" and length > 0) and (.rustc_identity | type == "string" and length == 64) and (.cache_hit | type == "string") and (.imported_objects | type == "number") and (.cached_compilations | type == "number")' "$file" >/dev/null
+  jq -e --arg job "$job" --arg role "$role" --arg scope "$scope" --arg run "$GITHUB_RUN_ID" --arg attempt "$GITHUB_RUN_ATTEMPT" --arg sha "$GITHUB_SHA" --arg ref "$GITHUB_REF" --arg workflow "$GITHUB_WORKFLOW_REF" --arg runner_os "$RUNNER_OS" --arg runner_arch "$RUNNER_ARCH" --arg action "$MBX_EXPECTED_ACTION_REF" --arg version "$MBX_EXPECTED_VERSION" --arg rust "$MBX_EXPECTED_RUST_VERSION" '.job_id == $job and .role == $role and .scope == $scope and .run_id == $run and .run_attempt == $attempt and .source_sha == $sha and .source_ref == $ref and .workflow_ref == $workflow and .runner_os == $runner_os and .runner_arch == $runner_arch and .mbx_action_ref == $action and .mbx_version == $version and .rust_version == $rust and (.primary_key | type == "string" and length > 0) and (.cache_prefix | type == "string" and length > 0) and (.generation | type == "string" and length > 0) and (.rustc_identity | type == "string" and length == 64) and (.cache_hit | type == "string") and (.imported_objects | type == "number") and (.cached_compilations | type == "number")' "$file" >/dev/null
 }
 
 verify_receipt "$seed" mbx-parallel-seed seed "$MBX_EXPECTED_SHARED_SCOPE"
@@ -117,7 +122,7 @@ verify_primary_key() {
     echo 'cache receipt key identity does not match pinned tools' >&2
     return 1
   fi
-  expected_prefix="linux-x64-mbx-$generation-dir-rust-$MBX_EXPECTED_RUST_VERSION-$rustc_identity-scope-$scope_hash-run-$GITHUB_RUN_ID-attempt-$GITHUB_RUN_ATTEMPT-"
+  expected_prefix="$key_os-$key_arch-mbx-$generation-dir-rust-$MBX_EXPECTED_RUST_VERSION-$rustc_identity-scope-$scope_hash-run-$GITHUB_RUN_ID-attempt-$GITHUB_RUN_ATTEMPT-"
   if [ "$cache_prefix" != "$expected_prefix" ]; then
     echo "cache prefix does not match the expected $role scope and current run attempt" >&2
     return 1

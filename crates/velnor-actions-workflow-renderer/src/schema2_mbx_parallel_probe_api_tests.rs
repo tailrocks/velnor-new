@@ -45,6 +45,38 @@ fn exact_api_fixtures_distinguish_observed_overlap_from_not_run() {
 }
 
 #[test]
+fn api_accepts_exact_arm64_keys_from_the_supported_key_builder() {
+    let root = fixture_data::TestDirectory::new();
+    let (runner_temp, jobs_path) =
+        prepare_api_fixture_for_platform(&root.0, true, "Linux", "ARM64", "arm64");
+    let output =
+        run_api_script_for_platform(&root.0, &runner_temp, &jobs_path, "Linux", "ARM64", "arm64");
+    assert!(
+        output.status.success(),
+        "ARM64 fixture API script failed: {}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        verify_api_receipt(
+            true,
+            &runner_temp.join("mbx-cache-evidence/parallel-api-receipt.json"),
+        ),
+        ("RUN".to_owned(), "6000".to_owned())
+    );
+}
+
+#[test]
+fn api_rejects_unsupported_runner_architecture() {
+    let root = fixture_data::TestDirectory::new();
+    let (runner_temp, jobs_path) = prepare_api_fixture(&root.0, true);
+    let output =
+        run_api_script_for_platform(&root.0, &runner_temp, &jobs_path, "Linux", "RISCV64", "x64");
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("unsupported runner platform"));
+}
+
+#[test]
 fn api_rejects_stale_seed_when_new_writer_key_is_current() {
     assert_api_fixture_rejected(KeyMutation::StaleSeed);
 }
@@ -161,13 +193,20 @@ fn replace_receipt_field(path: &std::path::Path, field: &str, old: &str, new: &s
 }
 
 fn cache_prefix(scope_hash: &str, run_id: &str, attempt: &str) -> String {
+    cache_prefix_for_arch(scope_hash, run_id, attempt, "x64")
+}
+
+fn cache_prefix_for_arch(scope_hash: &str, run_id: &str, attempt: &str, key_arch: &str) -> String {
     format!(
-        "linux-x64-mbx-velnor-mbx-1.22.0-dir-rust-1.98.1-{RUSTC_IDENTITY}-scope-{scope_hash}-run-{run_id}-attempt-{attempt}-"
+        "linux-{key_arch}-mbx-velnor-mbx-1.22.0-dir-rust-1.98.1-{RUSTC_IDENTITY}-scope-{scope_hash}-run-{run_id}-attempt-{attempt}-"
     )
 }
 
-fn cache_key_fixture(scope_hash: &str) -> String {
-    format!("{}{SOURCE_SHA}", cache_prefix(scope_hash, "123", "2"))
+fn cache_key_fixture_for_arch(scope_hash: &str, key_arch: &str) -> String {
+    format!(
+        "{}{SOURCE_SHA}",
+        cache_prefix_for_arch(scope_hash, "123", "2", key_arch)
+    )
 }
 
 fn run_api_fixture(overlap: bool) -> (String, String) {
@@ -187,6 +226,16 @@ fn run_api_fixture(overlap: bool) -> (String, String) {
 }
 
 fn prepare_api_fixture(root: &std::path::Path, overlap: bool) -> (PathBuf, PathBuf) {
+    prepare_api_fixture_for_platform(root, overlap, "Linux", "X64", "x64")
+}
+
+fn prepare_api_fixture_for_platform(
+    root: &std::path::Path,
+    overlap: bool,
+    runner_os: &str,
+    runner_arch: &str,
+    key_arch: &str,
+) -> (PathBuf, PathBuf) {
     let runner_temp = root.join("runner-temp");
     let input = runner_temp.join("mbx-parallel-input");
     let evidence = runner_temp.join("mbx-cache-evidence");
@@ -197,11 +246,19 @@ fn prepare_api_fixture(root: &std::path::Path, overlap: bool) -> (PathBuf, PathB
         .expect("make evidence fixture private");
     fs::create_dir_all(&fake_bin).expect("create fixture command directory");
 
-    let shared_prefix = cache_prefix(SHARED_SCOPE_HASH, "123", "2");
-    let new_prefix = cache_prefix(NEW_SCOPE_HASH, "123", "2");
+    let shared_prefix = cache_prefix_for_arch(SHARED_SCOPE_HASH, "123", "2", key_arch);
+    let new_prefix = cache_prefix_for_arch(NEW_SCOPE_HASH, "123", "2", key_arch);
     let shared_key = format!("{shared_prefix}{SOURCE_SHA}");
     let new_key = format!("{new_prefix}{SOURCE_SHA}");
-    fixture_data::write_receipts(&input, &shared_key, &shared_prefix, &new_key, &new_prefix);
+    fixture_data::write_receipts(
+        &input,
+        &shared_key,
+        &shared_prefix,
+        &new_key,
+        &new_prefix,
+        runner_os,
+        runner_arch,
+    );
     let jobs_path = root.join("jobs.json");
     let seed_cache_path = root.join("seed-cache.json");
     let new_cache_path = root.join("new-cache.json");
@@ -221,6 +278,17 @@ fn run_api_script(
     root: &std::path::Path,
     runner_temp: &std::path::Path,
     jobs_path: &std::path::Path,
+) -> std::process::Output {
+    run_api_script_for_platform(root, runner_temp, jobs_path, "Linux", "X64", "x64")
+}
+
+fn run_api_script_for_platform(
+    root: &std::path::Path,
+    runner_temp: &std::path::Path,
+    jobs_path: &std::path::Path,
+    runner_os: &str,
+    runner_arch: &str,
+    key_arch: &str,
 ) -> std::process::Output {
     let fake_bin = root.join("bin");
     let seed_cache_path = root.join("seed-cache.json");
@@ -243,6 +311,8 @@ fn run_api_script(
             "org/repo/.github/workflows/qualification.yml@refs/heads/main",
         )
         .env("GITHUB_SHA", SOURCE_SHA)
+        .env("RUNNER_OS", runner_os)
+        .env("RUNNER_ARCH", runner_arch)
         .env(
             "MBX_EXPECTED_ACTION_REF",
             format!("jdx/mr-boxington-action@{}", "c".repeat(40)),
@@ -262,11 +332,11 @@ fn run_api_script(
         .env("MBX_PARALLEL_FIXTURE_NEW_CACHE", &new_cache_path)
         .env(
             "MBX_PARALLEL_FIXTURE_SEED_KEY",
-            cache_key_fixture(SHARED_SCOPE_HASH),
+            cache_key_fixture_for_arch(SHARED_SCOPE_HASH, key_arch),
         )
         .env(
             "MBX_PARALLEL_FIXTURE_NEW_KEY",
-            cache_key_fixture(NEW_SCOPE_HASH),
+            cache_key_fixture_for_arch(NEW_SCOPE_HASH, key_arch),
         )
         .output()
         .expect("run API receipt script against fixtures")
