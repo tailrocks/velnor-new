@@ -212,7 +212,15 @@ fn job_to_yaml(
         RunsOn::Hosted(label) => Yaml::str(label),
         RunsOn::ScaleSet(selector) => Yaml::Flow(selector.labels().to_vec()),
     };
-    let mut job_env = crate::toolchain_env::job_level_env();
+    let step_has_env = job.steps.iter().any(|step| match &step.kind {
+        StepKind::Shell { env, .. } | StepKind::Action { env, .. } => !env.is_empty(),
+        StepKind::Internal { .. } => false,
+    });
+    let mut job_env = if step_has_env {
+        crate::toolchain_env::job_level_env()
+    } else {
+        BTreeMap::new()
+    };
     if mbx_gc_auto {
         job_env.insert(
             crate::cache_steps::MBX_GC_AUTO_ENV.to_owned(),
