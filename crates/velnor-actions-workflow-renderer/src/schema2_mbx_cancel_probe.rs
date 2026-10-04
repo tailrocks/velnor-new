@@ -12,6 +12,8 @@ use velnor_actions_contract::{Job, PermissionLevel, PullRequestCachePolicy, Step
 
 #[path = "schema2_mbx_cancel_probe_policy.rs"]
 mod policy;
+#[path = "schema2_mbx_cancel_probe_private_io.rs"]
+mod private_io;
 #[path = "schema2_mbx_cancel_probe_steps.rs"]
 mod probe_steps;
 #[path = "schema2_mbx_cancel_probe_render.rs"]
@@ -287,6 +289,7 @@ fn observer_start_steps(
     runs_on: &str,
 ) -> Result<Vec<Yaml>, RenderError> {
     let mut steps = vec![
+        probe_steps::observer_init_step(),
         render::typed_step(
             id,
             &probe_steps::download_controller_receipt_step(phase)?,

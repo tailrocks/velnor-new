@@ -6,7 +6,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use super::{run_bash, temp_dir};
+use super::{prepare_controller_root, run_bash, temp_dir};
 use crate::schema2::mbx_cancel_probe::scripts;
 
 #[path = "schema2_mbx_cancel_probe_transport_fixture_tests.rs"]
@@ -209,6 +209,7 @@ impl Fixture {
     pub(super) fn dispatch(&self, mode: &str) -> Result<(PathBuf, String), Box<dyn Error>> {
         let output = self.output("dispatch");
         fs::write(&output, "")?;
+        prepare_controller_root(&self.root, &self.bin, &self.env(&output, mode))?;
         let result = run_bash(
             scripts::DISPATCH,
             &self.root,
@@ -234,6 +235,7 @@ impl Fixture {
         fs::write(&output, "")?;
         let mut env = self.env(&output, mode);
         set_env(&mut env, "RUN_ID", run_id);
+        prepare_controller_root(&self.root, &self.bin, &env)?;
         let result = run_bash(&scripts::wait_readiness(), &self.root, &self.bin, &env)?;
         if !result.status.success() {
             return Err(io::Error::other(String::from_utf8_lossy(&result.stderr)).into());
@@ -254,6 +256,7 @@ impl Fixture {
         fs::write(&output, "")?;
         let mut env = self.env(&output, mode);
         set_env(&mut env, "RUN_ID", run_id);
+        prepare_controller_root(&self.root, &self.bin, &env)?;
         let result = run_bash(&scripts::cancel_exact(), &self.root, &self.bin, &env)?;
         if !result.status.success() {
             return Err(io::Error::other(String::from_utf8_lossy(&result.stderr)).into());

@@ -4,7 +4,7 @@ use std::error::Error;
 use std::fs;
 
 use super::controller_fixtures::{Fixture, expected_key};
-use super::{run_bash, scripts};
+use super::{prepare_observer_root, run_bash, scripts};
 
 const INVALID_SHAPES: [&str; 7] = [
     "cache-object",
@@ -59,6 +59,7 @@ fn assert_observer_before_count(mode: &str, count: i64) -> Result<(), Box<dyn Er
     fs::write(&output, "")?;
     let mut env = fixture.env(&output, mode);
     env.push(("VALIDATED_CACHE_KEY".to_owned(), expected_key()));
+    prepare_observer_root(&fixture.root, &fixture.bin, &env)?;
     let script = scripts::observer_cache_before();
     let result = run_bash(&script, &fixture.root, &fixture.bin, &env)?;
     assert!(
@@ -66,7 +67,11 @@ fn assert_observer_before_count(mode: &str, count: i64) -> Result<(), Box<dyn Er
         "{}",
         String::from_utf8_lossy(&result.stderr)
     );
-    let snapshot = fs::read_to_string(fixture.root.join("mbx-cancel/observer/cache-before.json"))?;
+    let snapshot = fs::read_to_string(
+        fixture
+            .root
+            .join("mbx-cancel-observer/observer/cache-before.json"),
+    )?;
     assert!(
         snapshot.contains(&format!("\"count\":{count}")),
         "{mode}: {snapshot}"
@@ -99,6 +104,7 @@ fn assert_observer_after_unknown(mode: &str) -> Result<(), Box<dyn Error>> {
         ),
         ("CONTROLLER_BEFORE_COUNT".to_owned(), "0".to_owned()),
     ]);
+    prepare_observer_root(&fixture.root, &fixture.bin, &env)?;
     let script = scripts::observer_evidence();
     let result = run_bash(&script, &fixture.root, &fixture.bin, &env)?;
     assert!(
@@ -107,7 +113,11 @@ fn assert_observer_after_unknown(mode: &str) -> Result<(), Box<dyn Error>> {
         String::from_utf8_lossy(&result.stderr)
     );
     let evidence =
-        fs::read_to_string(fixture.root.join("mbx-cancel/observer/child-evidence.json"))?;
+        fs::read_to_string(
+            fixture
+                .root
+                .join("mbx-cancel-observer/observer/child-evidence.json"),
+        )?;
     assert!(
         evidence.contains("\"cache_after\":{\"count\":-1"),
         "{mode}: {evidence}"

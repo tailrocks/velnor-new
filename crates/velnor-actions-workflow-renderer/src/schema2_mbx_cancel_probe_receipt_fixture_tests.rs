@@ -4,7 +4,7 @@ use std::error::Error;
 use std::fs;
 
 use super::controller_fixtures::{Fixture, expected_key};
-use super::run_bash;
+use super::{prepare_observer_root, run_bash};
 use crate::schema2::mbx_cancel_probe::scripts;
 
 const CONTROLLER_MODE: &str = "mbx-cancel-during-save-controller";
@@ -82,12 +82,16 @@ fn execute_validator(
     receipt: &str,
     event_payload: &str,
 ) -> Result<String, Box<dyn Error>> {
-    let path = fixture.root.join("mbx-cancel/controller/receipt.json");
-    fs::create_dir_all(path.parent().ok_or("receipt parent missing")?)?;
+    let output = fixture.output("receipt-validation");
+    fs::write(&output, "")?;
+    let env = fixture.env(&output, "receipt-valid");
+    prepare_observer_root(&fixture.root, &fixture.bin, &env)?;
+    let path = fixture
+        .root
+        .join("mbx-cancel-observer/controller-receipt/receipt.json");
     fs::write(&path, receipt)?;
     let event = fixture.root.join("event.json");
     fs::write(&event, event_payload)?;
-    let output = fixture.output("receipt-validation");
     fs::write(&output, "")?;
     let mut env = fixture.env(&output, "receipt-valid");
     env.push(("GITHUB_EVENT_PATH".to_owned(), event.display().to_string()));

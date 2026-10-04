@@ -2,7 +2,7 @@
 
 pub(super) const CACHE_SNAPSHOT_FUNCTION: &str = r#"
 cache_snapshot() {
-  local source="$1" destination="$2" key="$3"
+  local source="$1" key="$2"
   if jq -cse --arg key "$key" '
     def valid_cache:
       type == "object"
@@ -24,10 +24,10 @@ cache_snapshot() {
       | [.[] | select(.key == $key and .ref == "refs/heads/main")]
       | {count:length,caches:map({id,key,ref,size_in_bytes,last_accessed_at})}
     end
-  ' "$source" > "$destination" 2>/dev/null; then
+  ' "$source" 2>/dev/null; then
     return 0
   fi
-  printf '%s\n' '{"count":-1,"caches":[]}' > "$destination"
+  printf '%s\n' '{"count":-1,"caches":[]}'
 }
 "#;
 

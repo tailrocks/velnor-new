@@ -22,10 +22,10 @@ use velnor_actions_contract::{Job, JobTimeout, PermissionLevel, Permissions, Ste
 mod observer_steps;
 
 const HOSTED_RUNNER: &str = "ubuntu-26.04";
-const CONTROLLER_RECEIPT_PATH: &str = "${{ runner.temp }}/mbx-cancel/receipt.json";
-const OBSERVER_RECEIPT_DIR: &str = "${{ runner.temp }}/mbx-cancel/controller";
-const OBSERVER_RESULT_PATH: &str = "${{ runner.temp }}/mbx-cancel/observer/result.json";
-const VICTIM_RECEIPT_PATH: &str = "${{ runner.temp }}/mbx-cancel/victim/readiness.json";
+const CONTROLLER_RECEIPT_PATH: &str = "${{ runner.temp }}/mbx-cancel-controller/receipt.json";
+const OBSERVER_RECEIPT_DIR: &str = "${{ runner.temp }}/mbx-cancel-observer/controller-receipt";
+const OBSERVER_RESULT_PATH: &str = "${{ runner.temp }}/mbx-cancel-observer/observer/result.json";
+const VICTIM_RECEIPT_PATH: &str = "${{ runner.temp }}/mbx-cancel-victim/readiness.json";
 
 pub(super) fn validate_request(
     request: &MbxQualificationPins,
@@ -121,6 +121,15 @@ pub(super) fn victim_identity_yaml(request: &MbxQualificationPins, phase: Phase)
         None,
         scripts::VICTIM_IDENTITY,
         &victim_phase_env(request, phase),
+    )
+}
+
+pub(super) fn observer_init_step() -> Yaml {
+    super::render::bash_step(
+        "Create private MBX cancellation evidence roots",
+        None,
+        super::super::private_io::OBSERVER_INIT,
+        &BTreeMap::new(),
     )
 }
 

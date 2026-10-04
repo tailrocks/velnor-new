@@ -8,6 +8,7 @@ config=
 url=
 max_filesize=
 proto_redir=
+write_out=
 authorized=false
 disabled=false
 follow=false
@@ -20,7 +21,8 @@ while (($#)); do
     --header) case "$2" in "Authorization: Bearer "*) authorized=true ;; esac; shift 2 ;;
     --max-filesize) max_filesize="$2"; shift 2 ;;
     --proto-redir) proto_redir="$2"; shift 2 ;;
-    --write-out|--proto|--proto-redir|--connect-timeout|--max-time|--max-redirs) shift 2 ;;
+    --write-out) write_out="$2"; shift 2 ;;
+    --proto|--proto-redir|--connect-timeout|--max-time|--max-redirs) shift 2 ;;
     --location) follow=true; shift ;;
     --silent|--show-error|--fail) shift ;;
     https://*) url="$1"; shift ;;
@@ -28,7 +30,73 @@ while (($#)); do
   esac
 done
 if [ -n "$config" ]; then url="$(sed -n 's/^url = "\(.*\)"$/\1/p' "$config")"; fi
-if [ "$url" = https://api.github.com/repos/tailrocks/velnor-new/actions/artifacts/55/zip ]; then
+if [ "$url" = https://api.github.com/repos/tailrocks/velnor-new/actions/runs/900 ]; then
+  test "$authorized" = true && test -n "$output"
+  printf 'restore-run-api authorized=true\n' >> "$CURL_LOG"
+  controller_mode="$(jq -er '.inputs.mode' "$GITHUB_EVENT_PATH")"
+  controller_probe="$(jq -er '.inputs.probe_id' "$GITHUB_EVENT_PATH")"
+  controller_title="MBX cancellation $controller_mode"
+  if [ -n "$controller_probe" ]; then controller_title="$controller_title $controller_probe"; fi
+  jq -cn --arg sha "$GITHUB_SHA" --arg actor "$GITHUB_ACTOR" \
+    --arg title "$controller_title" --argjson workflow "${OBSERVER_WORKFLOW_ID:-77}" \
+    '{id:900,workflow_id:$workflow,path:".github/workflows/qualification.yml@refs/heads/main",
+      repository:{full_name:"tailrocks/velnor-new"},head_repository:{full_name:"tailrocks/velnor-new"},
+      event:"workflow_dispatch",head_branch:"main",head_sha:$sha,run_attempt:1,
+      status:"in_progress",display_title:$title,actor:{login:$actor}}' > "$output"
+  printf 200
+elif [ "$url" = 'https://api.github.com/repos/tailrocks/velnor-new/actions/runs/900/attempts/1/jobs?per_page=100' ]; then
+  test "$authorized" = true && test -n "$output"
+  printf 'restore-jobs-api authorized=true\n' >> "$CURL_LOG"
+  jq -cn --arg name "$OBSERVER_JOB_NAME" --arg sha "$GITHUB_SHA" \
+    '{total_count:1,jobs:[{id:901,run_id:900,run_attempt:1,head_sha:$sha,
+      name:$name,status:"in_progress",conclusion:null,steps:[
+        {name:"Set up job",status:"completed",conclusion:"success",number:1},
+        {name:"Prepare MBX bundle key",status:"completed",conclusion:"success",number:2},
+        {name:"Restore MBX single bundle",status:"completed",conclusion:"success",number:13}]}]}' > "$output"
+  printf 200
+elif [ "$url" = https://api.github.com/repos/tailrocks/velnor-new/actions/runs/123 ]; then
+  test "$authorized" = true && test -n "$output"
+  printf 'child-run-api authorized=true\n' >> "$CURL_LOG"
+  jq -cn --arg repo "$GITHUB_REPOSITORY" --arg sha "$CHILD_SOURCE_SHA" \
+    --arg mode "$VICTIM_MODE" --arg probe "$PROBE_ID" --arg actor "$CHILD_ACTOR" \
+    '{id:123,workflow_id:77,path:".github/workflows/qualification.yml@refs/heads/main",
+      repository:{full_name:$repo},head_repository:{full_name:$repo},event:"workflow_dispatch",
+      head_branch:"main",head_sha:$sha,run_attempt:1,status:"completed",conclusion:"cancelled",
+      display_title:("MBX cancellation " + $mode + " " + $probe),actor:{login:$actor}}' > "$output"
+  printf 200
+elif [ "$url" = 'https://api.github.com/repos/tailrocks/velnor-new/actions/runs/123/attempts/1/jobs?per_page=100' ]; then
+  test "$authorized" = true && test -n "$output"
+  printf 'child-jobs-api authorized=true\n' >> "$CURL_LOG"
+  if [ "$GH_MODE" = observer-object-steps ]; then
+    jq -cn --arg name "$VICTIM_JOB_NAME" --arg sha "$CHILD_SOURCE_SHA" \
+      '{total_count:1,jobs:[{id:456,run_id:123,run_attempt:1,head_sha:$sha,name:$name,
+        status:"completed",conclusion:"cancelled",steps:{save:{name:"Save MBX single bundle",
+          status:"completed",conclusion:"cancelled"}}}]}' > "$output"
+  elif [ "$GH_MODE" = observer-missing-save ]; then
+    jq -cn --arg name "$VICTIM_JOB_NAME" --arg sha "$CHILD_SOURCE_SHA" \
+      '{total_count:1,jobs:[{id:456,run_id:123,run_attempt:1,head_sha:$sha,name:$name,
+        status:"completed",conclusion:"cancelled",steps:[
+          {name:"Write MBX cancellation readiness receipt",status:"completed",conclusion:"success"},
+          {name:"Upload MBX cancellation receipt",status:"completed",conclusion:"success"}]}]}' > "$output"
+  elif [ "$GH_MODE" = observer-duplicate-save ]; then
+    jq -cn --arg name "$VICTIM_JOB_NAME" --arg sha "$CHILD_SOURCE_SHA" \
+      '{total_count:1,jobs:[{id:456,run_id:123,run_attempt:1,head_sha:$sha,name:$name,
+        status:"completed",conclusion:"cancelled",steps:[
+          {name:"Write MBX cancellation readiness receipt",status:"completed",conclusion:"success"},
+          {name:"Upload MBX cancellation receipt",status:"completed",conclusion:"success"},
+          {name:"Save MBX single bundle",status:"completed",conclusion:"cancelled",number:13},
+          {name:"Save MBX single bundle",status:"completed",conclusion:"cancelled",number:14}]}]}' > "$output"
+  else
+    jq -cn --arg name "$VICTIM_JOB_NAME" --arg sha "$CHILD_SOURCE_SHA" \
+      '{total_count:1,jobs:[{id:456,run_id:123,run_attempt:1,head_sha:$sha,name:$name,
+        status:"completed",conclusion:"cancelled",steps:[
+          {name:"Write MBX cancellation readiness receipt",status:"completed",conclusion:"success"},
+          {name:"Upload MBX cancellation receipt",status:"completed",conclusion:"success"},
+          {name:"Save MBX single bundle",status:"completed",conclusion:"cancelled",number:13,
+            started_at:"2026-10-04T00:00:00Z"}]}]}' > "$output"
+  fi
+  printf 200
+elif [ "$url" = https://api.github.com/repos/tailrocks/velnor-new/actions/artifacts/55/zip ]; then
   test "$disabled" = true
   test "$authorized" = true
   test "$follow" = false
@@ -74,6 +142,7 @@ elif [[ "$url" == https://signed.example/archive* ]]; then
   fi
 elif [ "$url" = https://api.github.com/repos/tailrocks/velnor-new/actions/jobs/456/steps/2/logs ]; then
   test "$disabled" = true
+  test "$follow" = false
   test "$max_filesize" = 65536
   printf 'observer-api %s %s\n' "$url" "$authorized" >> "$CURL_LOG"
   case "$CURL_LOCATION_MODE" in
@@ -105,16 +174,16 @@ elif [ "$url" = https://api.github.com/repos/tailrocks/velnor-new/actions/jobs/9
   printf 302
 elif [ "$url" = https://signed.example/log ]; then
   test "$disabled" = true
-  test "$follow" = true
+  test "$follow" = false
   test "$authorized" = false
   test "$max_filesize" = 1048576
-  test "$proto_redir" = =https
   printf 'observer-signed authorized=false\n' >> "$CURL_LOG"
   if [ "$CURL_LOCATION_MODE" = signed-http-redirect ]; then
     printf 'HTTP/2 302 Found\r\nLocation: http://signed.example/blocked\r\n\r\n' > "$headers"
   else
     printf 'HTTP/2 200 OK\r\n\r\n' > "$headers"
   fi
+  {
   if [ "$CURL_LOCATION_MODE" = large-body ]; then
     head -c 1048577 /dev/zero
   else
@@ -158,12 +227,13 @@ elif [ "$url" = https://signed.example/log ]; then
     *) printf 'ordinary save log without progress evidence\n' ;;
       esac
   fi
+  } > "$output"
+  if [ "$CURL_LOCATION_MODE" = signed-http-redirect ]; then printf 302; else printf 200; fi
 elif [ "$url" = https://signed.example/restore-log ]; then
   test "$disabled" = true
-  test "$follow" = true
+  test "$follow" = false
   test "$authorized" = false
   test "$max_filesize" = 1048576
-  test "$proto_redir" = =https
   printf 'restore-signed authorized=false\n' >> "$CURL_LOG"
   if [ "$RESTORE_TRANSPORT_MODE" = signed-http-redirect ]; then
     printf 'HTTP/2 302 Found\r\nLocation: http://signed.example/blocked\r\n\r\n' > "$headers"
@@ -173,6 +243,7 @@ elif [ "$url" = https://signed.example/restore-log ]; then
   else
     printf 'HTTP/2 200 OK\r\n\r\n' > "$headers"
   fi
+  {
   if [ "$RESTORE_TRANSPORT_MODE" = large-body ]; then
     head -c 1048577 /dev/zero
   else
@@ -184,6 +255,8 @@ elif [ "$url" = https://signed.example/restore-log ]; then
       *) printf 'Cache not found for input keys: %s\n' "$DERIVED_KEY" ;;
     esac
   fi
+  } > "$output"
+  if [ "$RESTORE_TRANSPORT_MODE" = signed-http-redirect ]; then printf 302; else printf 200; fi
 elif [[ "$url" == https://api.github.com/*/steps/*/logs ]]; then
   exit 93
 else

@@ -2,15 +2,15 @@
 
 pub(in crate::schema2::mbx_cancel_probe) const CONTROLLER_RECEIPT: &str = r#"set -euo pipefail
 root="$RUNNER_TEMP/mbx-cancel-controller"
-path="$RUNNER_TEMP/mbx-cancel/receipt.json"
-mkdir -m 700 -p "${path%/*}"
+private_root_open "$root"
+path="$root/receipt.json"
 victim=null
 before='{"count":-1,"caches":[]}'
 cancel_at=
-if [ -s "$root/validated-victim.json" ]; then victim="$(jq -c . "$root/validated-victim.json")"; fi
-if [ -s "$root/cache-before-exact.json" ]; then before="$(jq -c . "$root/cache-before-exact.json")"; fi
-if [ -s "$root/cancel-request-started-at" ]; then IFS= read -r cancel_at < "$root/cancel-request-started-at"; fi
-jq -cn \
+if private_json_valid "$root" "$root/validated-victim.json" 65536; then victim="$(jq -c . "$root/validated-victim.json")"; fi
+if private_json_valid "$root" "$root/cache-before-exact.json" 65536; then before="$(jq -c . "$root/cache-before-exact.json")"; fi
+if private_file_valid "$root" "$root/cancel-request-started-at" 128; then IFS= read -r cancel_at < "$root/cancel-request-started-at"; fi
+private_capture "$root" "$path" 65536 jq -cn \
   --arg probe "$PROBE_ID" --arg phase "$PROBE_PHASE" --arg mode "$CONTROLLER_MODE" \
   --arg repository "$GITHUB_REPOSITORY" --arg source_sha "$GITHUB_SHA" \
   --arg controller_run_id "$GITHUB_RUN_ID" --arg controller_attempt "$GITHUB_RUN_ATTEMPT" \
@@ -31,13 +31,17 @@ jq -cn \
     cancel_reason:$cancel_reason,post_revalidated:($post_revalidated == "true"),
     cancel_request_started_at:$cancel_at,
     terminal:($terminal == "true"),terminal_state:$terminal_state,
-    cache_before:$cache_before,victim:$victim}' > "$path"
-chmod 600 "$path"
+    cache_before:$cache_before,victim:$victim}'
 "#;
 
 pub(in crate::schema2::mbx_cancel_probe) const VALIDATE_CONTROLLER_RECEIPT: &str = r#"set -euo pipefail
 gh_api() { gh api --hostname github.com "$@"; }
-path="$RUNNER_TEMP/mbx-cancel/controller/receipt.json"
+outer="$RUNNER_TEMP/mbx-cancel-observer"
+receipt_root="$outer/controller-receipt"
+root="$outer/observer"
+private_child_open "$outer" "$receipt_root" || exit 0
+private_child_open "$outer" "$root" || exit 0
+path="$receipt_root/receipt.json"
 should_observe=false
 trap 'printf "should_observe=%s\\n" "$should_observe" >> "$GITHUB_OUTPUT"' EXIT
 test "$GITHUB_REPOSITORY" = tailrocks/velnor-new || exit 0
@@ -45,7 +49,8 @@ test "$GITHUB_EVENT_NAME" = workflow_dispatch || exit 0
 test "$GITHUB_REF" = refs/heads/main || exit 0
 test "$REF_PROTECTED" = true || exit 0
 test "$GITHUB_WORKFLOW_REF" = "tailrocks/velnor-new/.github/workflows/qualification.yml@refs/heads/main" || exit 0
-test -s "$path" || exit 0
+private_json_valid "$receipt_root" "$path" 65536 || exit 0
+private_event_valid || exit 0
 jq -e --arg expected_scope "$CACHE_SCOPE" --arg phase "$PROBE_PHASE" --arg mode "$CONTROLLER_MODE" \
   --arg repo "$GITHUB_REPOSITORY" --arg run "$GITHUB_RUN_ID" \
   --arg attempt "$GITHUB_RUN_ATTEMPT" --arg sha "$GITHUB_SHA" \
@@ -125,9 +130,10 @@ scope_hash="$(printf '%s\n%s\n%s\n' \
   | sha256sum | cut -c1-64)" || exit 0
 expected_key="linux-x64-mbx-$MBX_GENERATION-dir-rust-$RUST_VERSION-$rustc_identity-scope-$scope_hash-run-$child_id-attempt-$child_attempt-$child_sha"
 test "$receipt_key" = "$expected_key" || exit 0
-root="$RUNNER_TEMP/mbx-cancel/observer"
-mkdir -m 700 -p "$root"
-gh_api --method GET "/repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" > "$root/controller.json" 2>/dev/null || exit 0
+root="$RUNNER_TEMP/mbx-cancel-observer/observer"
+private_storage_open "$root" || exit 0
+private_gh_json "$root" "$root/controller.json" --method GET \
+  "/repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" 2>/dev/null || exit 0
 jq -e --arg run "$GITHUB_RUN_ID" --arg sha "$GITHUB_SHA" \
   --arg workflow "$(jq -er '.child_workflow_id' "$path")" \
   --arg actor "$(jq -er '.controller_actor' "$path")" \
@@ -141,7 +147,8 @@ jq -e --arg run "$GITHUB_RUN_ID" --arg sha "$GITHUB_SHA" \
   "$root/controller.json" >/dev/null 2>&1 || exit 0
 child="$(jq -er '.child_run_id' "$path")"
 workflow="$(jq -er '.child_workflow_id' "$path")"
-if ! gh_api --method GET "/repos/$GITHUB_REPOSITORY/actions/runs/$child" > "$root/child.json" 2>/dev/null; then exit 0; fi
+if ! private_gh_json "$root" "$root/child.json" --method GET \
+    "/repos/$GITHUB_REPOSITORY/actions/runs/$child" 2>/dev/null; then exit 0; fi
 jq -e --arg id "$child" --arg workflow "$workflow" --arg repo "$GITHUB_REPOSITORY" \
   --arg sha "$GITHUB_SHA" --arg probe "$(jq -er '.probe_id' "$path")" \
   --arg actor "$(jq -er '.victim.actor' "$path")" \
@@ -154,10 +161,11 @@ jq -e --arg id "$child" --arg workflow "$workflow" --arg repo "$GITHUB_REPOSITOR
    and ((.path | split("@") | .[0]) == ".github/workflows/qualification.yml")
    and ((.path | endswith("@main")) or (.path | endswith("@refs/heads/main")))' \
   "$root/child.json" >/dev/null 2>&1 || exit 0
-jq -r '.victim | {probe_id,child_run_id,child_attempt,source_sha,cache_key,cache_scope,
+private_capture "$root" "$root/validated-victim.json" 65536 jq -r \
+  '.victim | {probe_id,child_run_id,child_attempt,source_sha,cache_key,cache_scope,
       generation,rustc_identity,mbx_version,mode,phase,actor,repository,workflow_path,
       mbx_action_uses,mbx_resolved_version,rust_version,mise_action_uses,mise_version,mise_sha256}' \
-  "$path" > "$root/validated-victim.json"
+  "$path"
 {
   jq -r '. as $receipt | $receipt.victim |
     "probe_id=\(.probe_id)\nchild_run_id=\(.child_run_id)\nchild_attempt=\(.child_attempt)\nsource_sha=\(.source_sha)\ncache_key=\(.cache_key)\ncache_scope=\(.cache_scope)\ngeneration=\(.generation)\nrustc_identity=\(.rustc_identity)\nmbx_version=\(.mbx_version)\nchild_workflow_id=\($receipt.child_workflow_id)\nchild_actor=\(.actor)\nready=\($receipt.ready)\nready_reason=\($receipt.ready_reason)\ncancel_requested=\($receipt.cancel_requested)\ncancel_status=\($receipt.cancel_status)\npost_revalidated=\($receipt.post_revalidated)\ncancel_request_started_at=\($receipt.cancel_request_started_at)\nterminal=\($receipt.terminal)\nterminal_state=\($receipt.terminal_state)\ncontroller_cache_before_count=\($receipt.cache_before.count)"' "$path"

@@ -1,6 +1,7 @@
 //! Exact workflow dispatch and initial returned-run binding.
 
 pub(in crate::schema2::mbx_cancel_probe) const GENERATE_ID: &str = r#"set -euo pipefail
+private_root_create "$RUNNER_TEMP/mbx-cancel-controller"
 probe_id="$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')"
 [[ "$probe_id" =~ ^[0-9a-f]{32}$ ]]
 printf 'probe_id=%s\n' "$probe_id" >> "$GITHUB_OUTPUT"
@@ -33,29 +34,34 @@ case "$VICTIM_MODE" in
   *) exit 1 ;;
 esac
 root="$RUNNER_TEMP/mbx-cancel-controller"
-test ! -e "$root" && test ! -L "$root"
-mkdir -m 700 -p "$root"
-if ! gh_api --method GET "/repos/$GITHUB_REPOSITORY/actions/workflows/qualification.yml" \
-    > "$root/workflow.json" 2>/dev/null; then exit 0; fi
+private_root_open "$root"
+if ! private_gh_json "$root" "$root/workflow.json" --method GET \
+    "/repos/$GITHUB_REPOSITORY/actions/workflows/qualification.yml" 2>/dev/null; then exit 0; fi
 candidate_workflow_id="$(jq -er '.id | select(type == "number" and . > 0 and . <= 9007199254740991 and . == floor)' "$root/workflow.json" 2>/dev/null || true)"
 test -n "$candidate_workflow_id" || exit 0
 jq -e '.path == ".github/workflows/qualification.yml" and .state == "active"' "$root/workflow.json" >/dev/null 2>&1 || { workflow_id=; exit 0; }
-jq -cn --arg ref refs/heads/main --arg mode "$VICTIM_MODE" --arg probe "$PROBE_ID" \
-  '{ref:$ref,return_run_details:true,inputs:{mode:$mode,probe_id:$probe}}' > "$root/dispatch.json"
-gh_api --include --method POST --input "$root/dispatch.json" \
-  "/repos/$GITHUB_REPOSITORY/actions/workflows/qualification.yml/dispatches" > "$root/dispatch-response.txt" 2>/dev/null || true
+private_capture "$root" "$root/dispatch.json" 65536 jq -cn \
+  --arg ref refs/heads/main --arg mode "$VICTIM_MODE" --arg probe "$PROBE_ID" \
+  '{ref:$ref,return_run_details:true,inputs:{mode:$mode,probe_id:$probe}}'
+private_capture "$root" "$root/dispatch-response.txt" 2097152 gh_api --include --method POST \
+  --input "$root/dispatch.json" \
+  "/repos/$GITHUB_REPOSITORY/actions/workflows/qualification.yml/dispatches" 2>/dev/null || true
+private_file_valid "$root" "$root/dispatch-response.txt" 2097152 || exit 0
 status="$(sed -n '1s/^[^ ]* \([0-9][0-9][0-9]\).*/\1/p' "$root/dispatch-response.txt")"
 dispatch_status="${status:-request_failed}"
 test "$status" = 200 || exit 0
-awk 'BEGIN { body=0 } { sub(/\r$/, ""); if (!body && $0 == "") { body=1; next } if (body) print }' \
-  "$root/dispatch-response.txt" > "$root/dispatch-response.json"
+private_capture "$root" "$root/dispatch-response.json" 65536 awk \
+  'BEGIN { body=0 } { sub(/\r$/, ""); if (!body && $0 == "") { body=1; next } if (body) print }' \
+  "$root/dispatch-response.txt"
+private_json_valid "$root" "$root/dispatch-response.json" 65536 || exit 0
 candidate_run_id="$(jq -er '.workflow_run_id | select(type == "number" and . > 0 and . <= 9007199254740991 and . == floor)' "$root/dispatch-response.json" 2>/dev/null || true)"
 test -n "$candidate_run_id" || exit 0
 expected_url="https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$candidate_run_id"
 candidate_run_url="$(jq -er '.run_url | strings' "$root/dispatch-response.json" 2>/dev/null || true)"
 test "$candidate_run_url" = "$expected_url" || exit 0
 for attempt in 1 2 3 4 5 6; do
-  if gh_api --method GET "/repos/$GITHUB_REPOSITORY/actions/runs/$candidate_run_id" > "$root/run.json" 2>/dev/null; then
+  if private_gh_json "$root" "$root/run.json" --method GET \
+      "/repos/$GITHUB_REPOSITORY/actions/runs/$candidate_run_id" 2>/dev/null; then
     break
   fi
   sleep 2

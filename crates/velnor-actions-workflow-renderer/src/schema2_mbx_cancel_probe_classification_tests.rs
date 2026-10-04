@@ -4,7 +4,7 @@ use std::error::Error;
 use std::fs;
 use std::path::PathBuf;
 
-use super::{fake_bin, run_bash, temp_dir};
+use super::{fake_bin, prepare_observer_root, run_bash, temp_dir};
 use crate::schema2::mbx_cancel_probe::scripts;
 
 const FIXTURE_KEY: &str = "linux-x64-mbx-velnor-mbx-1.22.0-dir-rust-1.98.1-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-scope-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-run-123-attempt-1-cccccccccccccccccccccccccccccccccccccccc";
@@ -108,17 +108,17 @@ fn setup_classifier(
 ) -> Result<ClassifierFixture, Box<dyn Error>> {
     let root = temp_dir("classify")?;
     let bin = fake_bin(&root)?;
-    let observer = root.join("mbx-cancel/observer");
-    fs::create_dir_all(&observer)?;
+    let summary = root.join("summary.md");
+    fs::write(&summary, "")?;
+    let envs = classifier_env(&root, &summary, phase, committed);
+    prepare_observer_root(&root, &bin, &envs)?;
+    let observer = root.join("mbx-cancel-observer/observer");
     fs::write(
         observer.join("child-evidence.json"),
         child_evidence(phase, progress_before_runner_cancel_error, committed),
     )?;
     fs::write(observer.join("import-count"), "7\n")?;
     fs::write(observer.join("reuse-count"), "2\n")?;
-    let summary = root.join("summary.md");
-    fs::write(&summary, "")?;
-    let envs = classifier_env(&root, &summary, phase, committed);
     Ok(ClassifierFixture {
         root,
         bin,

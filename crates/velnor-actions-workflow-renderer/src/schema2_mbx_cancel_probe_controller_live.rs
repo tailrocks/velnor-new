@@ -5,9 +5,9 @@ use super::CACHE_SNAPSHOT_FUNCTION;
 const API_COMMON: &str = r#"set -euo pipefail
 umask 077
 root="$RUNNER_TEMP/mbx-cancel-controller"
-mkdir -p "$root"
-chmod 700 "$root"
-trap 'rm -f "$root/artifact-response.headers" "$root/artifact.curlrc" "$root/signed-response.headers" "$root/signed-curl.status" "$root/artifact-curl.stderr"' EXIT
+private_root_open "$root"
+trap 'private_remove_file "$root" "$root/artifact-response.headers" 65536 || true
+  private_remove_file "$root" "$root/signed-response.headers" 65536 || true' EXIT
 gh_api() { gh api --hostname github.com "$@"; }
 expected_title="MBX cancellation $VICTIM_MODE $PROBE_ID"
 valid_id() { [[ "$1" =~ ^[1-9][0-9]*$ ]]; }
@@ -23,8 +23,12 @@ run_valid() {
      and ((.path | endswith("@main")) or (.path | endswith("@refs/heads/main")))' \
     "$1" >/dev/null 2>&1
 }
-fetch_run() { gh_api --method GET "/repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" > "$1" 2>/dev/null; }
-fetch_jobs() { gh_api --method GET "/repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/attempts/1/jobs?per_page=100" > "$1" 2>/dev/null; }
+fetch_run() { private_gh_json "$root" "$1" --method GET "/repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID"; }
+fetch_jobs() {
+  private_gh_json "$root" "$1" --method GET \
+    "/repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/attempts/1/jobs?per_page=100" \
+    && private_list_complete "$1" jobs
+}
 job_count() { jq -er --arg name "$VICTIM_JOB_NAME" '[.jobs[] | select(.name == $name)] | length' "$1"; }
 job_id() { jq -er --arg name "$VICTIM_JOB_NAME" '[.jobs[] | select(.name == $name)] | if length == 1 then .[0].id else error("job identity") end' "$1"; }
 job_state() { jq -er --arg name "$VICTIM_JOB_NAME" '[.jobs[] | select(.name == $name)] | if length == 1 then .[0].status else error("job identity") end' "$1"; }
@@ -105,67 +109,54 @@ validate_key() {
   test "$key" = "$expected"
 }
 artifact_location() {
-  local artifact_id="$1" response="$root/artifact-response.headers" api_status location_count location
-  local -a pipe_status
+  local artifact_id="$1" response="$root/artifact-response.headers" status_line location_count location
   test -n "${GH_TOKEN:-}" || return 1
-  set +o pipefail
-  curl --disable --proto '=https' --max-redirs 0 --connect-timeout 15 --max-time 30 \
+  private_capture "$root" "$response" 65536 curl --disable --noproxy '*' \
+    --proto '=https' --max-redirs 0 --connect-timeout 15 --max-time 30 \
     --max-filesize 65536 --silent --show-error --fail --dump-header - --output /dev/null \
+    --write-out '\nSTATUS:%{http_code}\n' \
     --header "Authorization: Bearer $GH_TOKEN" \
     --header 'Accept: application/vnd.github+json' \
     --header 'X-GitHub-Api-Version: 2022-11-28' \
     "https://api.github.com/repos/tailrocks/velnor-new/actions/artifacts/$artifact_id/zip" \
-    | head -c 65537 > "$response"
-  pipe_status=("${PIPESTATUS[@]}")
-  set -o pipefail
-  test "${pipe_status[1]}" = 0 || return 1
-  test "${pipe_status[0]}" = 0 || return 1
-  test "$(wc -c < "$response" | tr -d ' ')" -le 65536 || return 1
-  api_status="$(awk '$1 ~ /^HTTP\// { status=$2 } END { print status }' "$response")"
-  test "$api_status" = 302 || return 1
+    || return 1
+  private_file_valid "$root" "$response" 65536 || return 1
+  status_line="$(awk '/^STATUS:/ { sub(/^STATUS:/, ""); print }' "$response")"
+  test "$status_line" = 302 || return 1
   location_count="$(awk 'tolower($1) == "location:" { count++ } END { print count+0 }' "$response")"
   test "$location_count" = 1 || return 1
   location="$(awk 'tolower($1) == "location:" { sub(/^[^:]*:[[:space:]]*/, ""); sub(/\r$/, ""); print }' "$response")"
-  case "$location" in https://*) ;; *) return 1 ;; esac
-  case "$location" in *[[:space:][:cntrl:]]*|*'"'*|*'\'*) return 1 ;; esac
-  printf 'url = "%s"\n' "$location" > "$root/artifact.curlrc"
-  rm -f "$response"
+  stock_restore_safe_https_url "$location" || return 1
+  ARTIFACT_LOCATION="$location"
 }
+bounded_header_curl() { (ulimit -f 128; curl "$@"); }
 download_signed_artifact() {
-  local destination="$1" headers="$root/signed-response.headers"
-  local curl_status signed_status size
-  local -a pipe_status
-  set +o pipefail
-  (
-    ulimit -f 128
-    if curl --disable --config "$root/artifact.curlrc" --proto '=https' --max-redirs 0 \
-      --connect-timeout 15 --max-time 45 --max-filesize 1048576 --fail \
-      --silent --show-error --dump-header "$headers" --output - \
-      2> "$root/artifact-curl.stderr"; then
-      curl_status=0
-    else
-      curl_status=$?
-    fi
-    printf '%s\n' "$curl_status" > "$root/signed-curl.status"
-  ) | head -c 1048577 > "$destination"
-  pipe_status=("${PIPESTATUS[@]}")
-  set -o pipefail
-  test "${pipe_status[1]}" = 0 || return 1
-  test "${pipe_status[0]}" = 0 || return 1
-  curl_status="$(cat "$root/signed-curl.status")"
-  test "$curl_status" = 0 || return 1
-  size="$(wc -c < "$destination" | tr -d ' ')" || return 1
-  test "$size" -le 1048576 || return 1
-  test -s "$headers" || return 1
-  test "$(wc -c < "$headers" | tr -d ' ')" -le 65536 || return 1
-  signed_status="$(awk '$1 ~ /^HTTP\// { status=$2 } END { print status }' "$headers")"
-  test "$signed_status" = 200
+  local destination="$1" headers="$root/signed-response.headers" status
+  private_capture "$root" "$headers" 65536 printf '' || return 1
+  private_capture "$root" "$destination" 1048576 bounded_header_curl --disable --noproxy '*' \
+    --proto '=https' --max-redirs 0 --connect-timeout 15 --max-time 45 \
+    --max-filesize 1048576 --silent --show-error --dump-header "$headers" \
+    --output - -- "$ARTIFACT_LOCATION" 2>/dev/null || return 1
+  private_file_valid "$root" "$headers" 65536 || return 1
+  status="$(awk '$1 ~ /^HTTP\// { status=$2 } END { print status }' "$headers")"
+  test "$status" = 200
 }
 validate_victim_artifact() {
   local run_path="${1:-$root/run.json}"
   local artifact_id artifact_size download_size digest actual members member_count statuses content_size
   ARTIFACT_CHECK=missing
-  if ! gh_api --method GET "/repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/artifacts?per_page=100" > "$root/artifacts.json" 2>/dev/null; then return 1; fi
+  if ! private_gh_json "$root" "$root/artifacts.json" --method GET \
+      "/repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/artifacts?per_page=100" 2>/dev/null \
+      || ! private_list_complete "$root/artifacts.json" artifacts; then return 1; fi
+  if ! jq -e '
+    all(.artifacts[]; type == "object"
+      and (.id | type == "number" and . > 0 and . == floor)
+      and (.name | type == "string" and length > 0 and length <= 128)
+      and (.expired | type == "boolean")
+      and (.size_in_bytes | type == "number" and . > 0 and . <= 1048576 and . == floor)
+      and (.digest | type == "string" and test("^sha256:[0-9a-f]{64}$"))
+      and (.workflow_run | type == "object" and (.id | type == "number" and . > 0 and . == floor)))' \
+      "$root/artifacts.json" >/dev/null 2>&1; then ARTIFACT_CHECK=invalid; return 1; fi
   member_count="$(jq -er --arg name "$VICTIM_ARTIFACT_NAME" --argjson id "$RUN_ID" \
     '[.artifacts[] | select(.name == $name and .expired == false and .workflow_run.id == $id)] | length' \
     "$root/artifacts.json" 2>/dev/null || printf 0)"
@@ -183,33 +174,33 @@ validate_victim_artifact() {
   digest="$(jq -er --arg name "$VICTIM_ARTIFACT_NAME" --argjson id "$RUN_ID" \
     '[.artifacts[] | select(.name == $name and .expired == false and .workflow_run.id == $id)] | .[0].digest | strings | sub("^sha256:"; "") | select(test("^[0-9a-f]{64}$"))' \
     "$root/artifacts.json")" || { ARTIFACT_CHECK=invalid; return 1; }
-  if [ -e "$root/validated-artifact.json" ] \
-    && ! jq -e --arg id "$artifact_id" --arg digest "$digest" --argjson size "$artifact_size" \
+  if [ -e "$root/validated-artifact.json" ] || [ -L "$root/validated-artifact.json" ]; then
+    private_json_valid "$root" "$root/validated-artifact.json" 1024 \
+      || { ARTIFACT_CHECK=invalid; return 1; }
+    jq -e --arg id "$artifact_id" --arg digest "$digest" --argjson size "$artifact_size" \
       '.id == $id and .digest == $digest and .size_in_bytes == $size' \
-      "$root/validated-artifact.json" >/dev/null 2>&1; then
-    ARTIFACT_CHECK=invalid
-    return 1
+      "$root/validated-artifact.json" >/dev/null 2>&1 || { ARTIFACT_CHECK=invalid; return 1; }
   fi
   if ! artifact_location "$artifact_id" || ! download_signed_artifact "$root/victim.zip"; then
     ARTIFACT_CHECK=invalid
     return 1
   fi
-  rm -f "$root/artifact.curlrc" "$root/signed-response.headers" "$root/signed-curl.status" "$root/artifact-curl.stderr"
-  download_size="$(wc -c < "$root/victim.zip" | tr -d ' ')"
+  private_remove_file "$root" "$root/artifact-response.headers" 65536 || return 1
+  private_remove_file "$root" "$root/signed-response.headers" 65536 || return 1
+  private_file_valid "$root" "$root/victim.zip" 1048576 \
+    || { ARTIFACT_CHECK=invalid; return 1; }
+  download_size="$(private_stat size "$root/victim.zip")"
   test "$download_size" = "$artifact_size" || { ARTIFACT_CHECK=invalid; return 1; }
   test "$download_size" -le 1048576 || { ARTIFACT_CHECK=invalid; return 1; }
   actual="$(sha256sum "$root/victim.zip" | cut -d' ' -f1)"
   test "$actual" = "$digest" || { ARTIFACT_CHECK=invalid; return 1; }
   members="$(unzip -Z1 "$root/victim.zip" 2>/dev/null)" || { ARTIFACT_CHECK=invalid; return 1; }
   test "$members" = readiness.json || { ARTIFACT_CHECK=invalid; return 1; }
-  set +o pipefail
-  unzip -p "$root/victim.zip" readiness.json 2>/dev/null | head -c 65537 > "$root/readiness.json"
-  statuses=("${PIPESTATUS[@]}")
-  set -o pipefail
-  content_size="$(wc -c < "$root/readiness.json" | tr -d ' ')"
-  test "$content_size" -le 65536 || { ARTIFACT_CHECK=invalid; return 1; }
-  test "${statuses[1]}" = 0 || { ARTIFACT_CHECK=invalid; return 1; }
-  test "${statuses[0]}" = 0 || test "${statuses[0]}" = 141 || { ARTIFACT_CHECK=invalid; return 1; }
+  private_capture "$root" "$root/readiness.json" 65536 unzip -p \
+    "$root/victim.zip" readiness.json 2>/dev/null \
+    || { ARTIFACT_CHECK=invalid; return 1; }
+  private_json_valid "$root" "$root/readiness.json" 65536 \
+    || { ARTIFACT_CHECK=invalid; return 1; }
   if ! jq -e --arg probe "$PROBE_ID" --arg mode "$VICTIM_MODE" --arg phase "$PROBE_PHASE" \
     --arg id "$RUN_ID" --arg repo "$GITHUB_REPOSITORY" --arg sha "$GITHUB_SHA" \
     --arg scope "$CACHE_SCOPE" --arg generation "$MBX_GENERATION" \
@@ -232,14 +223,16 @@ validate_victim_artifact() {
     return 1
   fi
   validate_key || { ARTIFACT_CHECK=invalid; return 1; }
-  if [ ! -e "$root/validated-artifact.json" ]; then
-    jq -cn --arg id "$artifact_id" --arg digest "$digest" --argjson size "$artifact_size" \
-      '{id:$id,digest:$digest,size_in_bytes:$size}' > "$root/validated-artifact.json" \
+  if [ ! -e "$root/validated-artifact.json" ] && [ ! -L "$root/validated-artifact.json" ]; then
+    private_capture "$root" "$root/validated-artifact.json" 1024 jq -cn \
+      --arg id "$artifact_id" --arg digest "$digest" --argjson size "$artifact_size" \
+      '{id:$id,digest:$digest,size_in_bytes:$size}' \
       || { ARTIFACT_CHECK=invalid; return 1; }
   fi
-  jq '{schema,probe_id,mode,phase,child_run_id,child_attempt,repository,workflow_path,event,ref,source_sha,actor,
+  private_capture "$root" "$root/validated-victim.json" 65536 jq \
+    '{schema,probe_id,mode,phase,child_run_id,child_attempt,repository,workflow_path,event,ref,source_sha,actor,
        mbx_action_uses,mbx_version,mbx_resolved_version,cache_scope,cache_key,generation,rustc_identity,
-       rust_version,mise_action_uses,mise_version,mise_sha256}' "$root/readiness.json" > "$root/validated-victim.json" \
+       rust_version,mise_action_uses,mise_version,mise_sha256}' "$root/readiness.json" \
     || { ARTIFACT_CHECK=invalid; return 1; }
   ARTIFACT_CHECK=valid
   return 0
@@ -261,12 +254,15 @@ if [ -s "$root/validated-victim.json" ] \
   && [ "$(job_state "$root/jobs.json")" = in_progress ] \
   && target_live "$root/jobs.json" && receipt_step_complete "$root/jobs.json" \
   && jq -e --arg actor "$(jq -er '.actor' "$root/validated-victim.json")" '.actor.login == $actor' "$root/run.json" >/dev/null 2>&1; then
-  if gh_api --method GET "/repos/$GITHUB_REPOSITORY/actions/caches?key=$(jq -r '.cache_key' "$root/validated-victim.json")&ref=refs/heads/main&per_page=100" \
-      > "$root/cache-before.json" 2>/dev/null; then
-    cache_snapshot "$root/cache-before.json" "$root/cache-before-exact.json" \
-      "$(jq -r '.cache_key' "$root/validated-victim.json")"
+  cache_key="$(jq -er '.cache_key | strings' "$root/validated-victim.json")"
+  if private_gh_json "$root" "$root/cache-before.json" --method GET \
+      "/repos/$GITHUB_REPOSITORY/actions/caches?key=$cache_key&ref=refs/heads/main&per_page=100" 2>/dev/null \
+      && private_list_complete "$root/cache-before.json" actions_caches; then
+    private_capture "$root" "$root/cache-before-exact.json" 65536 \
+      cache_snapshot "$root/cache-before.json" "$cache_key"
   else
-    printf '{"count":-1,"caches":[]}' > "$root/cache-before-exact.json"
+    private_capture "$root" "$root/cache-before-exact.json" 65536 \
+      printf '%s\n' '{"count":-1,"caches":[]}'
   fi
   if fetch_run "$root/run-before-artifact.json" && run_valid "$root/run-before-artifact.json" \
     && jq -e --arg actor "$(jq -er '.actor' "$root/validated-victim.json")" '.actor.login == $actor' "$root/run-before-artifact.json" >/dev/null 2>&1 \
@@ -279,9 +275,11 @@ if [ -s "$root/validated-victim.json" ] \
       && receipt_step_complete "$root/jobs-before-cancel.json" \
       && jq -e --arg actor "$(jq -er '.actor' "$root/validated-victim.json")" '.actor.login == $actor' "$root/run-before-cancel.json" >/dev/null 2>&1; then
     cancel_at="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-    printf '%s\n' "$cancel_at" > "$root/cancel-request-started-at"
-    gh_api --include --method POST "/repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/cancel" \
-      > "$root/cancel-response.txt" 2>/dev/null || true
+    private_capture "$root" "$root/cancel-request-started-at" 128 printf '%s\n' "$cancel_at"
+    private_capture "$root" "$root/cancel-response.txt" 65536 \
+      gh_api --include --method POST "/repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/cancel" \
+      2>/dev/null || true
+    private_file_valid "$root" "$root/cancel-response.txt" 65536 || exit 0
     cancel_status="$(sed -n '1s/^[^ ]* \([0-9][0-9][0-9]\).*/\1/p' "$root/cancel-response.txt")"
     if [ "$cancel_status" = 202 ]; then
       cancel_requested=true

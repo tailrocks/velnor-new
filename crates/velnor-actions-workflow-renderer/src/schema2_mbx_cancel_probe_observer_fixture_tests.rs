@@ -6,7 +6,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use super::controller_fixtures::{Fixture, expected_key};
-use super::run_bash;
+use super::{prepare_observer_root, run_bash};
 use crate::schema2::mbx_cancel_probe::scripts;
 
 struct EvidenceRun {
@@ -75,6 +75,11 @@ fn skipped_receipt_validation_still_writes_not_run_result() -> Result<(), Box<dy
             summary.display().to_string(),
         ),
     ]);
+    prepare_observer_root(
+        &fixture.root,
+        &fixture.bin,
+        &env.iter().map(|(key, value)| (key.clone(), value.clone())).collect::<Vec<_>>(),
+    )?;
     let result = run_bash(
         scripts::OBSERVER_CLASSIFY,
         &fixture.root,
@@ -86,7 +91,11 @@ fn skipped_receipt_validation_still_writes_not_run_result() -> Result<(), Box<dy
         "{}",
         String::from_utf8_lossy(&result.stderr)
     );
-    let evidence = fs::read_to_string(fixture.root.join("mbx-cancel/observer/result.json"))?;
+    let evidence = fs::read_to_string(
+        fixture
+            .root
+            .join("mbx-cancel-observer/observer/result.json"),
+    )?;
     assert!(evidence.contains("\"outcome\":\"NOT_RUN\""), "{evidence}");
     assert!(evidence.contains("\"should_observe\":false"), "{evidence}");
     assert!(evidence.contains("\"cache_before_count\":-1"), "{evidence}");
@@ -197,8 +206,9 @@ fn prepare_evidence(
 ) -> Result<EvidenceRun, Box<dyn Error>> {
     fixture.install_curl()?;
     fixture.install_date()?;
-    let observer = fixture.root.join("mbx-cancel/observer");
-    fs::create_dir_all(&observer)?;
+    let initial_env = fixture.env(&fixture.output("evidence"), "observer-window");
+    prepare_observer_root(&fixture.root, &fixture.bin, &initial_env)?;
+    let observer = fixture.root.join("mbx-cancel-observer/observer");
     fs::write(
         observer.join("cache-before.json"),
         "{\"count\":0,\"caches\":[]}\n",
@@ -211,7 +221,7 @@ fn prepare_evidence(
         r#"{"inputs":{"mode":"mbx-cancel-during-save-controller","probe_id":""}}"#,
     )?;
     let curl_log = fixture.root.join("curl.log");
-    let mut env = BTreeMap::from_iter(fixture.env(&fixture.output("evidence"), "observer-window"));
+    let mut env = BTreeMap::from_iter(initial_env);
     let marker = progress_marker(mode);
     let controller_cancel_at = match mode {
         "clock-skew-progress-after" => "1900-01-01T00:00:00Z",

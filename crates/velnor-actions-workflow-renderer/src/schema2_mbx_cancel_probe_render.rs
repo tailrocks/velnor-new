@@ -214,7 +214,12 @@ fn bash_step_inner(
     if let Some(condition) = condition {
         entries.push(("if".to_owned(), Yaml::str(condition)));
     }
-    entries.push(("run".to_owned(), Yaml::str(script)));
+    let body = format!(
+        "{}\n{}\n{script}",
+        crate::schema2::mbx_stock_restore::STOCK_RESTORE_CLASSIFIER_SCRIPT,
+        super::private_io::PRIVATE_IO_HELPERS
+    );
+    entries.push(("run".to_owned(), Yaml::str(body)));
     Yaml::Map(entries)
 }
 

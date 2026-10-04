@@ -1,6 +1,9 @@
 //! Victim identity, natural build work, and readiness receipt scripts.
 
 pub(in crate::schema2::mbx_cancel_probe) const VICTIM_IDENTITY: &str = r#"set -euo pipefail
+root="$RUNNER_TEMP/mbx-cancel-victim"
+private_root_create "$root"
+private_event_valid || exit 1
 test "$GITHUB_REPOSITORY" = "tailrocks/velnor-new"
 test "$GITHUB_EVENT_NAME" = workflow_dispatch
 test "$GITHUB_REF" = refs/heads/main
@@ -16,8 +19,9 @@ test "$GITHUB_RUN_ATTEMPT" = 1
 "#;
 
 pub(in crate::schema2::mbx_cancel_probe) const FETCH_SOURCE: &str = r#"set -euo pipefail
-repo="$RUNNER_TEMP/mbx-cancel-source"
-test ! -e "$repo" && test ! -L "$repo"
+root="$RUNNER_TEMP/mbx-cancel-victim"
+repo="$root/source"
+private_child_create "$root" "$repo"
 git init --quiet "$repo"
 git -C "$repo" remote add origin "https://github.com/$GITHUB_REPOSITORY.git"
 git -C "$repo" fetch --quiet --depth=1 --no-tags origin "$GITHUB_SHA"
@@ -26,7 +30,9 @@ test "$(git -C "$repo" rev-parse HEAD)" = "$GITHUB_SHA"
 "#;
 
 pub(in crate::schema2::mbx_cancel_probe) const BUILD_WORKSPACE: &str = r#"set -euo pipefail
-repo="$RUNNER_TEMP/mbx-cancel-source"
+root="$RUNNER_TEMP/mbx-cancel-victim"
+repo="$root/source"
+private_child_open "$root" "$repo"
 test "$(git -C "$repo" rev-parse HEAD)" = "$GITHUB_SHA"
 cd "$repo"
 mbx build --locked --workspace
@@ -34,7 +40,8 @@ mbx build --locked --workspace
 
 pub(in crate::schema2::mbx_cancel_probe) const PRE_SAVE_GUARD: &str = r#"set -euo pipefail
 test "$PROBE_PHASE" = pre-save
-test -f "$RUNNER_TEMP/mbx-cancel/victim/readiness.json"
+root="$RUNNER_TEMP/mbx-cancel-victim"
+private_json_valid "$root" "$root/readiness.json" 65536
 "#;
 
 pub(in crate::schema2::mbx_cancel_probe) const PRE_SAVE_WAIT: &str = r#"set -euo pipefail
@@ -43,6 +50,8 @@ sleep 600
 "#;
 
 pub(in crate::schema2::mbx_cancel_probe) const WRITE_VICTIM_RECEIPT: &str = r#"set -euo pipefail
+root="$RUNNER_TEMP/mbx-cancel-victim"
+private_root_open "$root"
 case "$MBX_RUSTC_IDENTITY" in ''|*[!0-9a-f]*) exit 1 ;; esac
 [[ "$MBX_RUSTC_IDENTITY" =~ ^[0-9a-f]{64}$ ]]
 test "$MBX_GENERATION" != ""
@@ -51,10 +60,8 @@ case "$MBX_PRIMARY" in
   linux-x64-mbx-"$MBX_GENERATION"-dir-rust-"$RUST_VERSION"-"$MBX_RUSTC_IDENTITY"-scope-*-run-"$GITHUB_RUN_ID"-attempt-1-"$GITHUB_SHA") ;;
   *) echo 'invalid exact MBX qualification key' >&2; exit 1 ;;
 esac
-path="$RUNNER_TEMP/mbx-cancel/victim"
-test ! -e "$path" && test ! -L "$path"
-mkdir -m 700 -p "$path"
-jq -cn \
+path="$root/readiness.json"
+private_capture "$root" "$path" 65536 jq -cn \
   --arg probe_id "$PROBE_ID" --arg mode "$VICTIM_MODE" --arg phase "$PROBE_PHASE" \
   --arg child_run_id "$GITHUB_RUN_ID" --arg child_attempt "$GITHUB_RUN_ATTEMPT" \
   --arg repository "$GITHUB_REPOSITORY" --arg workflow_path .github/workflows/qualification.yml \
@@ -72,7 +79,5 @@ jq -cn \
     mbx_resolved_version:$mbx_resolved_version,cache_scope:$cache_scope,
     cache_key:$cache_key,generation:$generation,rustc_identity:$rustc_identity,
     rust_version:$rust_version,mise_action_uses:$mise_action_uses,
-    mise_version:$mise_version,mise_sha256:$mise_sha256}' \
-  > "$path/readiness.json"
-chmod 600 "$path/readiness.json"
+    mise_version:$mise_version,mise_sha256:$mise_sha256}'
 "#;
