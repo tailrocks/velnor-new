@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use crate::journal::LaunchIdentity;
 
 pub(super) struct RequestTarget {
-    method: &'static str,
+    pub(super) method: &'static str,
     path: String,
     query_required: bool,
     expected_labels: Option<Vec<String>>,
@@ -67,8 +67,12 @@ pub(super) fn verify_versioned_path(actual: &str, expected: &RequestTarget) -> R
 fn verify_query(query: &str, expected: &RequestTarget) -> Result<(), String> {
     let parameters = decode_query(query)?;
     if let Some(labels) = expected.expected_labels.as_ref() {
-        if parameters.get("all").map(String::as_str) != Some("true") {
-            return Err("Docker container list did not request all states".to_owned());
+        // Bollard 0.21.1 serializes both bool fields and omits `limit` when it is `None`.
+        if parameters.len() != 3
+            || parameters.get("all").map(String::as_str) != Some("true")
+            || parameters.get("size").map(String::as_str) != Some("false")
+        {
+            return Err("Docker container list options do not match the launch query".to_owned());
         }
         let filter_json = parameters
             .get("filters")
@@ -168,19 +172,23 @@ mod tests {
             identity.launch_id(),
             identity.engine_id()
         );
-        let valid = format!("/v1.41/containers/json?all=true&filters={filters}");
+        let valid = format!("/v1.41/containers/json?all=true&size=false&filters={filters}");
         assert_eq!(verify_versioned_path(&valid, &expected), Ok(()));
 
-        let missing_filters = "/v1.41/containers/json?all=true";
+        let missing_filters = "/v1.41/containers/json?all=true&size=false";
         assert!(verify_versioned_path(missing_filters, &expected).is_err());
-        let malformed_query = "/v1.41/containers/json?all=true&filters=%GG";
+        let malformed_query = "/v1.41/containers/json?all=true&size=false&filters=%GG";
         assert!(verify_versioned_path(malformed_query, &expected).is_err());
-        let wrong_all = format!("/v1.41/containers/json?all=false&filters={filters}");
+        let wrong_all = format!("/v1.41/containers/json?all=false&size=false&filters={filters}");
         assert!(verify_versioned_path(&wrong_all, &expected).is_err());
         let wrong_identity =
             filters.replace(identity.launch_id(), "33333333333333333333333333333333");
-        let wrong_scope = format!("/v1.41/containers/json?all=true&filters={wrong_identity}");
+        let wrong_scope =
+            format!("/v1.41/containers/json?all=true&size=false&filters={wrong_identity}");
         assert!(verify_versioned_path(&wrong_scope, &expected).is_err());
+        let limited =
+            format!("/v1.41/containers/json?all=true&size=false&filters={filters}&limit=1");
+        assert!(verify_versioned_path(&limited, &expected).is_err());
         Ok(())
     }
 }
