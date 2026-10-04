@@ -17,6 +17,15 @@ use velnor_actions_contract::{
     workflow::{ir::DispatchInput, permissions::PermissionLevel},
 };
 
+struct JobRenderInputs<'a> {
+    ctx: &'a RenderContext,
+    needs_envs: &'a [(String, String)],
+    shared: Option<&'a str>,
+    checkouts: &'a BTreeMap<String, Step>,
+    mbx_job: bool,
+    hosted_linux_mbx_job: bool,
+}
+
 /// Build the workflow document: name, on, permissions, concurrency, jobs.
 pub(crate) fn workflow_to_yaml(
     ir: &WorkflowIr,
@@ -36,19 +45,15 @@ pub(crate) fn workflow_to_yaml(
     let mut rendered_jobs = Vec::with_capacity(jobs.len());
     for (id, job) in jobs {
         let call = shared.get(id).map(String::as_str);
-        rendered_jobs.push((
-            id.clone(),
-            job_to_yaml(
-                id,
-                job,
-                ctx,
-                &needs_env,
-                call,
-                checkouts,
-                hosted_mbx_jobs.contains(id),
-                hosted_linux_mbx_jobs.contains(id),
-            )?,
-        ));
+        let inputs = JobRenderInputs {
+            ctx,
+            needs_envs: &needs_env,
+            shared: call,
+            checkouts,
+            mbx_job: hosted_mbx_jobs.contains(id),
+            hosted_linux_mbx_job: hosted_linux_mbx_jobs.contains(id),
+        };
+        rendered_jobs.push((id.clone(), job_to_yaml(id, job, &inputs)?));
     }
     Ok(Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(ir.name.clone())),
@@ -194,16 +199,7 @@ fn dispatch_input_to_yaml(input: &DispatchInput) -> Yaml {
 }
 
 /// Render one job: name, runs-on, timeout, environment, permissions, needs, if, steps.
-fn job_to_yaml(
-    id: &str,
-    job: &Job,
-    ctx: &RenderContext,
-    needs_envs: &[(String, String)],
-    shared: Option<&str>,
-    checkouts: &BTreeMap<String, Step>,
-    mbx_job: bool,
-    hosted_linux_mbx_job: bool,
-) -> Result<Yaml, RenderError> {
+fn job_to_yaml(id: &str, job: &Job, inputs: &JobRenderInputs<'_>) -> Result<Yaml, RenderError> {
     steps::scan_for_private_subcommands(&job.display_name)?;
     let mut entries = vec![
         ("name".to_owned(), Yaml::str(job.display_name.clone())),
@@ -216,7 +212,9 @@ fn job_to_yaml(
             Yaml::Int(i64::from(job.timeout_minutes.minutes())),
         ),
     ];
-    if let Some(job_env) = crate::mbx_gc_policy::job_env(mbx_job, hosted_linux_mbx_job) {
+    if let Some(job_env) =
+        crate::mbx_gc_policy::job_env(inputs.mbx_job, inputs.hosted_linux_mbx_job)
+    {
         entries.push(("env".to_owned(), job_env));
     }
     if let Some(environment) = &job.environment {
@@ -238,27 +236,39 @@ fn job_to_yaml(
         entries.push(("if".to_owned(), Yaml::str(condition.clone())));
     }
     let mut rendered_steps =
-        Vec::with_capacity(job.steps.len() + 2 * usize::from(shared.is_some()));
-    if let Some(uses) = shared {
-        let Some(checkout) = checkouts.get(id) else {
+        Vec::with_capacity(job.steps.len() + 2 * usize::from(inputs.shared.is_some()));
+    if let Some(uses) = inputs.shared {
+        let Some(checkout) = inputs.checkouts.get(id) else {
             return Err(RenderError::InvalidWorkflow(format!(
                 "shared_lane_missing_checkout:{id}"
             )));
         };
-        if !valid_shared_checkout(checkout, &ctx.checkout_uses) {
+        if !valid_shared_checkout(checkout, &inputs.ctx.checkout_uses) {
             return Err(RenderError::InvalidWorkflow(format!(
                 "shared_lane_invalid_checkout:{id}"
             )));
         }
-        rendered_steps.push(step_to_yaml(id, checkout, ctx, needs_envs, false)?);
+        rendered_steps.push(step_to_yaml(
+            id,
+            checkout,
+            inputs.ctx,
+            inputs.needs_envs,
+            false,
+        )?);
         rendered_steps.push(shared_call(uses)?);
-    } else if checkouts.contains_key(id) {
+    } else if inputs.checkouts.contains_key(id) {
         return Err(RenderError::InvalidWorkflow(format!(
             "checkout_without_shared_lane:{id}"
         )));
     }
     for step in &job.steps {
-        rendered_steps.push(step_to_yaml(id, step, ctx, needs_envs, false)?);
+        rendered_steps.push(step_to_yaml(
+            id,
+            step,
+            inputs.ctx,
+            inputs.needs_envs,
+            false,
+        )?);
     }
     entries.push(("steps".to_owned(), Yaml::Seq(rendered_steps)));
     Ok(Yaml::Map(entries))

@@ -20,7 +20,7 @@ use crate::{RenderError, marker, steps, yaml::render_yaml};
 pub struct RenderedWorkflow {
     /// Marked `ci.yml` bytes.
     pub yaml: String,
-    /// One composite action per shared logical job. Empty when no lane pair exists.
+    /// Generated shared assets, such as composite actions and required helper scripts.
     pub shared: Vec<RenderedFile>,
 }
 

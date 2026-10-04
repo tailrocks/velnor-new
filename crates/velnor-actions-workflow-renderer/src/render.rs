@@ -334,7 +334,15 @@ fn render_merged(
     };
     let hosted_mbx_jobs = crate::mbx_gc_policy::hosted_jobs_with_mbx_objects(&jobs);
     let hosted_linux_mbx_jobs = crate::mbx_gc_policy::hosted_linux_jobs_with_mbx_objects(&jobs);
-    let shared = crate::lane_share::share_lanes(&jobs, ctx)?;
+    let mut shared = crate::lane_share::share_lanes(&jobs, ctx)?;
+    crate::mbx_bundle::append_hosted_linux_source_prune(&mut shared.jobs, &hosted_linux_mbx_jobs)?;
+    if !hosted_linux_mbx_jobs.is_empty() {
+        shared
+            .files
+            .push(crate::mbx_bundle::hosted_source_prune_file(
+                &ctx.generator_version,
+            )?);
+    }
     let mut document = document::workflow_to_yaml(
         ir,
         &shared.jobs,

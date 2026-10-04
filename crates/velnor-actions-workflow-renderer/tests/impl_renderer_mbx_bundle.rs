@@ -1,9 +1,16 @@
 //! Hosted MBX saves one bundle outside the store. The action post does not.
 
+use std::collections::BTreeMap;
+
 use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_contract::cachekey::mbx_cache_generation;
 use velnor_actions_contract::config::{SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL};
-use velnor_actions_workflow_renderer::{RenderError, render_workflow_ir};
+use velnor_actions_contract::workflow::lanes::{HOSTED_SUFFIX, SCALE_SUFFIX};
+use velnor_actions_workflow_renderer::render::{
+    RenderedWorkflow, render_workflow_ir_strict_shared,
+};
+use velnor_actions_workflow_renderer::steps::checkout_step;
+use velnor_actions_workflow_renderer::{RenderError, render_workflow_ir, shell_step};
 
 use super::impl_renderer_fixtures::*;
 
@@ -27,6 +34,26 @@ fn render_mbx(id: &str, scale_set: bool) -> Result<String, RenderError> {
         WorkflowPolicy::ConsumerV1,
         None,
         &fixture_ctx(),
+    )
+}
+
+fn render_plain() -> Result<RenderedWorkflow, RenderError> {
+    let plain = job(
+        "plain",
+        "Plain job",
+        Vec::new(),
+        vec![shell_step(
+            "No MBX",
+            vec!["printf".to_owned(), "ok".to_owned()],
+            BTreeMap::new(),
+        )?],
+    );
+    render_workflow_ir_strict_shared(
+        &fixture_ir(vec![plain]),
+        WorkflowPolicy::ConsumerV1,
+        None,
+        &fixture_ctx(),
+        &mise(),
     )
 }
 
@@ -183,6 +210,147 @@ fn hosted_isolation_keeps_scale_set_bundle_guarded() -> Result<(), RenderError> 
     Ok(())
 }
 
+fn hosted_prune_fixture() -> Result<RenderedWorkflow, RenderError> {
+    let [preflight, mbx] = mbx_tool_steps(&mbx_uses(), "1.21.1", "1.98.1")?;
+    let report_upload = shell_step(
+        "Upload crate reports",
+        vec!["bash".to_owned(), "-c".to_owned(), "true".to_owned()],
+        BTreeMap::new(),
+    )?;
+    let source_save = shell_step(
+        "Save Cargo sources",
+        vec!["bash".to_owned(), "-c".to_owned(), "true".to_owned()],
+        BTreeMap::new(),
+    )?;
+    let tools_save = shell_step(
+        "Save Mise tools",
+        vec!["bash".to_owned(), "-c".to_owned(), "true".to_owned()],
+        BTreeMap::new(),
+    )?;
+    let checkout = checkout_step(&checkout_pin())?;
+    let steps = vec![
+        checkout.clone(),
+        preflight.clone(),
+        mbx.clone(),
+        report_upload,
+        source_save,
+        tools_save,
+    ];
+    let hosted = job(
+        &format!("rust-demo{HOSTED_SUFFIX}"),
+        "Rust demo hosted",
+        Vec::new(),
+        steps.clone(),
+    );
+    let mut local = job(
+        &format!("rust-demo{SCALE_SUFFIX}"),
+        "Rust demo scale set",
+        Vec::new(),
+        steps,
+    );
+    local.1.runs_on = ScaleSetSelector::try_new(
+        SCALE_SET_NAME,
+        &[VELNOR_LABEL.to_owned(), SCALE_SET_NAME.to_owned()],
+    )
+    .map_err(|_| RenderError::InvalidWorkflow("bad_scale_set".to_owned()))?
+    .token();
+    render_workflow_ir_strict_shared(
+        &fixture_ir(vec![hosted, local]),
+        WorkflowPolicy::ConsumerV1,
+        None,
+        &fixture_ctx(),
+        &mise(),
+    )
+}
+
+fn assert_shared_report_save_order(rendered: &RenderedWorkflow) -> Result<(), RenderError> {
+    let composite = rendered
+        .shared
+        .iter()
+        .find(|file| file.path == ".github/actions/rust-demo/action.yml")
+        .ok_or_else(|| RenderError::InvalidWorkflow("test_missing_shared_lane".to_owned()))?;
+    let composite = composite.bytes.as_str();
+    let report = composite
+        .find("name: Upload crate reports")
+        .ok_or_else(|| RenderError::InvalidWorkflow("test_missing_report_step".to_owned()))?;
+    let source = composite
+        .find("name: Save Cargo sources")
+        .ok_or_else(|| RenderError::InvalidWorkflow("test_missing_source_save_step".to_owned()))?;
+    assert!(
+        report < source,
+        "report and source save order in composite:\n{composite}"
+    );
+    Ok(())
+}
+
+fn assert_hosted_prune_order_and_scope(text: &str) -> Result<(), RenderError> {
+    let hosted_start = text
+        .find("rust-demo__hosted:")
+        .ok_or_else(|| RenderError::InvalidWorkflow("test_missing_hosted_job".to_owned()))?;
+    let local_start = text
+        .find("rust-demo__local:")
+        .ok_or_else(|| RenderError::InvalidWorkflow("test_missing_scale_set_job".to_owned()))?;
+    let hosted_section = &text[hosted_start..local_start];
+    let composite_call = hosted_section
+        .find("uses: ./.github/actions/rust-demo")
+        .ok_or_else(|| RenderError::InvalidWorkflow("test_missing_shared_call".to_owned()))?;
+    let tools = hosted_section
+        .find("name: Save Mise tools")
+        .ok_or_else(|| RenderError::InvalidWorkflow("test_missing_elected_save".to_owned()))?;
+    let prune = hosted_section
+        .find("name: Measure and prune Cargo sources")
+        .ok_or_else(|| RenderError::InvalidWorkflow("test_missing_source_prune".to_owned()))?;
+    assert!(composite_call < tools && tools < prune, "{hosted_section}");
+    assert!(
+        !text[local_start..].contains("Measure and prune Cargo sources"),
+        "Scale Set must not prune its persistent lane:\n{text}"
+    );
+    let cleanup = &hosted_section[prune..];
+    for needle in [
+        "if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && runner.environment == 'github-hosted' && runner.os == 'Linux'",
+        "CARGO_HOME: ${{ runner.temp }}/velnor/cargo",
+        "python3 \\\"$GITHUB_WORKSPACE/.github/scripts/prune_hosted_cargo_sources.py\\\"",
+    ] {
+        assert!(
+            cleanup.contains(needle),
+            "missing `{needle}` in cleanup:\n{cleanup}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn hosted_linux_prunes_only_cargo_sources_after_reports_and_saves() -> Result<(), RenderError> {
+    let rendered = hosted_prune_fixture()?;
+    assert_shared_report_save_order(&rendered)?;
+    assert_hosted_prune_order_and_scope(&rendered.yaml)?;
+    let helper = rendered
+        .shared
+        .iter()
+        .find(|file| file.path == ".github/scripts/prune_hosted_cargo_sources.py")
+        .ok_or_else(|| RenderError::InvalidWorkflow("missing_generated_source_prune".to_owned()))?;
+    assert!(
+        helper.bytes.contains("def prune_sources("),
+        "{}",
+        helper.bytes
+    );
+    assert!(helper.bytes.contains("mnt_id:"), "{}", helper.bytes);
+    Ok(())
+}
+
+#[test]
+fn no_hosted_linux_mbx_omits_the_prune_step_and_helper() -> Result<(), RenderError> {
+    let rendered = render_plain()?;
+    assert!(!rendered.yaml.contains("Measure and prune Cargo sources"));
+    assert!(
+        !rendered
+            .shared
+            .iter()
+            .any(|file| file.path == ".github/scripts/prune_hosted_cargo_sources.py")
+    );
+    Ok(())
+}
+
 #[test]
 fn scale_set_save_matches_and_skips_hosted_gc_env() -> Result<(), RenderError> {
     let text = render_mbx("rust-demo__local", true)?;
@@ -193,6 +361,7 @@ fn scale_set_save_matches_and_skips_hosted_gc_env() -> Result<(), RenderError> {
     );
     assert!(!text.contains("MBX_GC_AUTO"), "{text}");
     assert!(!text.contains("MBX_SHARE_OUT_DIR"), "{text}");
+    assert!(!text.contains("Measure and prune Cargo sources"), "{text}");
     let action_uses = mbx_uses();
     let action_sha = &action_uses["jdx/mr-boxington-action@".len()..];
     let expected_generation = format!(

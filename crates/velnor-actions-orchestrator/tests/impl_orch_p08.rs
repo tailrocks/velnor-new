@@ -38,10 +38,39 @@ fn yaml_for(mbx: bool) -> Result<String, Box<dyn std::error::Error>> {
     }
     let prep = prepare(root)?;
     let tree = render_staged_tree(&prep)?;
+    let prune_helper = tree.get(".github/scripts/prune_hosted_cargo_sources.py");
+    assert_eq!(
+        prune_helper.is_some(),
+        mbx,
+        "helper follows hosted Linux MBX use"
+    );
+    if let Some(helper) = prune_helper {
+        assert!(helper.contains("def prune_sources("), "{helper}");
+        assert!(helper.contains("mnt_id:"), "{helper}");
+    }
     Ok(tree
         .get(WORKFLOW_PATH)
         .ok_or_else(|| std::io::Error::other("missing workflow"))?
         .to_owned())
+}
+
+/// Return the generated job that contains one step marker.
+fn job_block_containing<'a>(yaml: &'a str, needle: &str) -> Option<&'a str> {
+    let needle_at = yaml.find(needle)?;
+    let jobs_start = yaml.find("\njobs:\n")? + "\njobs:\n".len();
+    let mut offsets = Vec::new();
+    let mut offset = jobs_start;
+    for line in yaml[jobs_start..].split_inclusive('\n') {
+        let heading = line.strip_suffix('\n').unwrap_or(line);
+        if heading.starts_with("  ") && !heading.starts_with("   ") && heading.ends_with(':') {
+            offsets.push(offset);
+        }
+        offset += line.len();
+    }
+    let index = offsets.iter().rposition(|start| *start <= needle_at)?;
+    let start = offsets[index];
+    let end = offsets.get(index + 1).copied().unwrap_or(yaml.len());
+    Some(&yaml[start..end])
 }
 
 /// Step names of one IR job in a lockful fixture (MBX when `mbx`).
@@ -285,6 +314,45 @@ fn c11_cache_saves_push_only_prs_and_forks_read_only() -> TestResult {
         ),
         "save renders push-only if:\n{yaml}"
     );
+    let source_save_at = yaml
+        .find("- name: Save Cargo sources")
+        .ok_or("plan source save")?;
+    let source_save_job =
+        job_block_containing(&yaml, "- name: Save Cargo sources").ok_or("source save job")?;
+    assert!(
+        source_save_job.starts_with("  plan:\n"),
+        "{source_save_job}"
+    );
+    let save_step_start = source_save_job
+        .find("- name: Save Cargo sources")
+        .ok_or("source save step")?;
+    let source_save_step = source_save_job[save_step_start..]
+        .split_once("\n      - name:")
+        .map(|(step, _)| step)
+        .ok_or("end of source save step")?;
+    assert!(
+        source_save_step.contains("uses: actions/cache/save@"),
+        "source save must use the explicit cache-save action:\n{source_save_step}"
+    );
+    let prune_at = yaml
+        .find("- name: Measure and prune Cargo sources")
+        .ok_or("hosted source prune")?;
+    let prune_job = job_block_containing(&yaml, "- name: Measure and prune Cargo sources")
+        .ok_or("source prune job")?;
+    assert!(
+        source_save_at < prune_at,
+        "real source-cache save must precede cleanup in generated YAML:\n{yaml}"
+    );
+    assert!(
+        prune_job.contains("needs:\n      - plan"),
+        "prune job must depend on the plan that saves Cargo sources:\n{prune_job}"
+    );
+    assert!(
+        prune_job.contains(
+            "if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && runner.environment == 'github-hosted' && runner.os == 'Linux'"
+        ),
+        "prune must run only for a successful protected default-branch hosted Linux push:\n{prune_job}"
+    );
     assert_tools_saves_push_gated_per_key(&yaml);
     Ok(())
 }
@@ -307,6 +375,9 @@ fn assert_tools_saves_push_gated_per_key(yaml: &str) {
         1 + keys.len() + mbx_saves,
         "sources plus one tools save per key; hosted MBX is action-owned:\n{yaml}"
     );
+    let source_prunes = yaml
+        .matches("- name: Measure and prune Cargo sources")
+        .count();
     let push_gated_cache_steps = yaml
         .lines()
         .filter(|line| {
@@ -318,8 +389,8 @@ fn assert_tools_saves_push_gated_per_key(yaml: &str) {
         .count();
     assert_eq!(
         push_gated_cache_steps,
-        1 + keys.len() + mbx_saves + mbx_exports,
-        "cache saves and exports are push-gated:\n{yaml}"
+        1 + keys.len() + mbx_saves + mbx_exports + source_prunes,
+        "cache saves, exports, and source pruning are push-gated:\n{yaml}"
     );
     assert!(
         !yaml.contains("- name: Restore Cargo sources\n        if:"),

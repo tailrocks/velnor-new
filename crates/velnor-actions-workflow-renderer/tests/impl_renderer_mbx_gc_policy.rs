@@ -32,8 +32,8 @@ fn hosted_action_step_has_isolated_trusted_main_cache_policy() -> Result<(), Ren
         "hosted cache mode is event-gated:\n{text}"
     );
     assert!(
-        text.contains("isolate-objects-cache: ${{ runner.environment == 'github-hosted' }}"),
-        "isolation activates only on hosted runners:\n{text}"
+        text.contains("isolate-objects-cache: ${{ runner.environment == 'github-hosted' && runner.os == 'Linux' }}"),
+        "isolation activates only on hosted Linux runners:\n{text}"
     );
     assert!(
         text.contains(
@@ -122,8 +122,18 @@ fn mbx_gc_policy_covers_both_runner_lanes() -> Result<(), RenderError> {
         "{text}"
     );
     assert!(
-        text.contains("uses: $/.github/actions/rust-demo"),
+        text.contains("uses: ./.github/actions/rust-demo"),
         "both lanes keep the shared composite:\n{text}"
+    );
+    let hosted_start = text.find("rust-demo__hosted:").expect("hosted job");
+    let local_start = text.find("rust-demo__local:").expect("scale-set job");
+    assert!(
+        text[hosted_start..local_start].contains("name: Measure and prune Cargo sources"),
+        "hosted Linux cleanup follows the shared composite call:\n{text}"
+    );
+    assert!(
+        !text[local_start..].contains("Measure and prune Cargo sources"),
+        "Scale Set retains its existing source lifecycle:\n{text}"
     );
     assert!(
         text.contains("MBX_GC_AUTO: \"0\""),

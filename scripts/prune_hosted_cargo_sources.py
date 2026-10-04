@@ -1,0 +1,385 @@
+#!/usr/bin/env python3
+"""Measure and remove only this job's Cargo registry and Git source trees.
+
+This runs after all task processes, reports, and cache saves have completed.
+The owned Cargo home is private to the job at RUNNER_TEMP/velnor/cargo. The
+cleanup assumes no same-UID process is concurrently changing that private tree.
+All path traversal and deletion stays relative to pinned directory descriptors;
+Linux mount IDs reject nested mounts, including same-device bind mounts.
+"""
+
+from __future__ import annotations
+
+import errno
+import os
+import posixpath
+import stat
+import sys
+from typing import Callable, TextIO
+
+
+class PruneError(RuntimeError):
+    """Raised when cleanup cannot prove a target is safe to remove."""
+
+
+MountIdReader = Callable[[int], int]
+
+
+def linux_mount_id(fd: int) -> int:
+    """Read Linux's mount ID for an already-open file descriptor."""
+    try:
+        with open(f"/proc/self/fdinfo/{fd}", encoding="ascii") as fdinfo:
+            for line in fdinfo:
+                if line.startswith("mnt_id:"):
+                    return int(line.partition(":")[2].strip())
+    except OSError as exc:
+        raise PruneError(f"cannot read mount ID for fd {fd}: {exc}") from exc
+    raise PruneError(f"fdinfo has no mount ID for fd {fd}")
+
+
+def _require_canonical_absolute(path: str, label: str) -> None:
+    if (
+        not path.startswith("/")
+        or path.startswith("//")
+        or path == "/"
+        or posixpath.normpath(path) != path
+    ):
+        raise PruneError(f"{label} must be a canonical non-root absolute path")
+
+
+def _directory_flags() -> int:
+    return os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
+
+
+def _open_absolute_directory(path: str) -> int:
+    """Open every path component without following symlinks."""
+    _require_canonical_absolute(path, "RUNNER_TEMP")
+    current_fd = os.open("/", _directory_flags())
+    try:
+        for part in path.split("/")[1:]:
+            if not part:
+                continue
+            try:
+                next_fd = os.open(part, _directory_flags(), dir_fd=current_fd)
+            except OSError as exc:
+                raise PruneError(f"unsafe RUNNER_TEMP component {part!r}: {exc}") from exc
+            os.close(current_fd)
+            current_fd = next_fd
+        return current_fd
+    except Exception:
+        os.close(current_fd)
+        raise
+
+
+def _open_child_directory(
+    parent_fd: int,
+    name: str,
+    expected_mount_id: int,
+    mount_id_reader: MountIdReader,
+) -> int:
+    """Open a child directory without following links or crossing mounts."""
+    try:
+        before = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+    except FileNotFoundError:
+        raise
+    if not stat.S_ISDIR(before.st_mode):
+        raise PruneError(f"expected a real directory at {name!r}")
+    try:
+        child_fd = os.open(name, _directory_flags(), dir_fd=parent_fd)
+    except OSError as exc:
+        raise PruneError(f"cannot safely open directory {name!r}: {exc}") from exc
+    try:
+        after = os.fstat(child_fd)
+        if (before.st_dev, before.st_ino) != (after.st_dev, after.st_ino):
+            raise PruneError(f"directory changed while opening {name!r}")
+        actual_mount_id = mount_id_reader(child_fd)
+        if actual_mount_id != expected_mount_id:
+            raise PruneError(
+                f"refusing nested mount at {name!r}: "
+                f"mount ID {actual_mount_id} differs from {expected_mount_id}"
+            )
+        return child_fd
+    except Exception:
+        os.close(child_fd)
+        raise
+
+
+def _check_non_directory_mount(
+    parent_fd: int,
+    name: str,
+    expected_mount_id: int,
+    mount_id_reader: MountIdReader,
+) -> None:
+    """Inspect files/symlinks with O_PATH so mounted files cannot be removed."""
+    path_flag = getattr(os, "O_PATH", None)
+    if path_flag is None:
+        # Production is Linux-only and always has O_PATH. Non-Linux unit tests
+        # still exercise directory mount checks through the injected reader.
+        return
+    try:
+        object_fd = os.open(
+            name,
+            path_flag | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0),
+            dir_fd=parent_fd,
+        )
+    except FileNotFoundError:
+        raise PruneError(f"entry changed during mount check: {name!r}")
+    except OSError as exc:
+        raise PruneError(f"cannot safely inspect {name!r}: {exc}") from exc
+    try:
+        actual_mount_id = mount_id_reader(object_fd)
+        if actual_mount_id != expected_mount_id:
+            raise PruneError(
+                f"refusing mounted entry {name!r}: "
+                f"mount ID {actual_mount_id} differs from {expected_mount_id}"
+            )
+    finally:
+        os.close(object_fd)
+
+
+def _add_inode(st: os.stat_result, seen: set[tuple[int, int]]) -> tuple[int, int]:
+    identity = (st.st_dev, st.st_ino)
+    if identity in seen:
+        return (0, 0)
+    seen.add(identity)
+    return (getattr(st, "st_blocks", 0) * 512, 1)
+
+
+def _inventory_directory(
+    directory_fd: int,
+    expected_mount_id: int,
+    mount_id_reader: MountIdReader,
+    seen: set[tuple[int, int]],
+) -> tuple[int, int]:
+    """Preflight a complete tree and count allocated blocks and unique inodes."""
+    if mount_id_reader(directory_fd) != expected_mount_id:
+        raise PruneError("source tree mount changed during inventory")
+    total_bytes, total_inodes = _add_inode(os.fstat(directory_fd), seen)
+    try:
+        names = sorted(os.listdir(directory_fd))
+    except OSError as exc:
+        raise PruneError(f"cannot inventory source directory: {exc}") from exc
+    for name in names:
+        try:
+            st = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+        except OSError as exc:
+            raise PruneError(f"cannot inspect source entry {name!r}: {exc}") from exc
+        allocated, inodes = _add_inode(st, seen)
+        total_bytes += allocated
+        total_inodes += inodes
+        if stat.S_ISDIR(st.st_mode):
+            child_fd = _open_child_directory(
+                directory_fd, name, expected_mount_id, mount_id_reader
+            )
+            try:
+                child_bytes, child_inodes = _inventory_directory(
+                    child_fd, expected_mount_id, mount_id_reader, seen
+                )
+                total_bytes += child_bytes
+                total_inodes += child_inodes
+            finally:
+                os.close(child_fd)
+        else:
+            _check_non_directory_mount(
+                directory_fd, name, expected_mount_id, mount_id_reader
+            )
+    return total_bytes, total_inodes
+
+
+def _remove_directory_contents(
+    directory_fd: int,
+    expected_mount_id: int,
+    mount_id_reader: MountIdReader,
+) -> None:
+    """Delete entries by descriptor, never following a child symlink."""
+    if mount_id_reader(directory_fd) != expected_mount_id:
+        raise PruneError("source tree mount changed during deletion")
+    try:
+        names = sorted(os.listdir(directory_fd))
+    except OSError as exc:
+        raise PruneError(f"cannot enumerate source directory for deletion: {exc}") from exc
+    for name in names:
+        try:
+            before = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+        except FileNotFoundError as exc:
+            raise PruneError(f"source entry changed before deletion: {name!r}") from exc
+        if stat.S_ISDIR(before.st_mode):
+            child_fd = _open_child_directory(
+                directory_fd, name, expected_mount_id, mount_id_reader
+            )
+            try:
+                _remove_directory_contents(child_fd, expected_mount_id, mount_id_reader)
+                current = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+                pinned = os.fstat(child_fd)
+                if (current.st_dev, current.st_ino) != (pinned.st_dev, pinned.st_ino):
+                    raise PruneError(f"directory moved during deletion: {name!r}")
+                os.rmdir(name, dir_fd=directory_fd)
+            except OSError as exc:
+                raise PruneError(f"cannot remove source directory {name!r}: {exc}") from exc
+            finally:
+                os.close(child_fd)
+        else:
+            _check_non_directory_mount(
+                directory_fd, name, expected_mount_id, mount_id_reader
+            )
+            try:
+                os.unlink(name, dir_fd=directory_fd)
+            except OSError as exc:
+                raise PruneError(f"cannot remove source entry {name!r}: {exc}") from exc
+
+
+def _open_source_root(
+    cargo_fd: int,
+    name: str,
+    expected_mount_id: int,
+    mount_id_reader: MountIdReader,
+) -> int | None:
+    try:
+        st = os.stat(name, dir_fd=cargo_fd, follow_symlinks=False)
+    except FileNotFoundError:
+        return None
+    if not stat.S_ISDIR(st.st_mode):
+        raise PruneError(f"Cargo source root {name!r} must be a real directory")
+    return _open_child_directory(cargo_fd, name, expected_mount_id, mount_id_reader)
+
+
+def _filesystem_metrics(runner_temp_fd: int, runner_temp_mount_id: int, output: TextIO, phase: str) -> None:
+    fs = os.fstatvfs(runner_temp_fd)
+    st = os.fstat(runner_temp_fd)
+    block_size = fs.f_frsize or fs.f_bsize
+    free_bytes = fs.f_bavail * block_size
+    free_inodes = fs.f_favail
+    print(
+        f"RUNNER_TEMP phase={phase} free_bytes={free_bytes} "
+        f"free_inodes={free_inodes} device={st.st_dev} mount_id={runner_temp_mount_id}",
+        file=output,
+    )
+
+
+def prune_sources(
+    runner_temp: str,
+    cargo_home: str,
+    *,
+    mount_id_reader: MountIdReader,
+    output: TextIO,
+) -> None:
+    """Preflight both owned source roots, then remove only those roots."""
+    _require_canonical_absolute(runner_temp, "RUNNER_TEMP")
+    expected_cargo_home = f"{runner_temp}/velnor/cargo"
+    if cargo_home != expected_cargo_home:
+        raise PruneError("CARGO_HOME must equal RUNNER_TEMP/velnor/cargo")
+    _require_canonical_absolute(cargo_home, "CARGO_HOME")
+
+    runner_temp_fd = _open_absolute_directory(runner_temp)
+    try:
+        runner_mount_id = mount_id_reader(runner_temp_fd)
+        _filesystem_metrics(runner_temp_fd, runner_mount_id, output, "before")
+        try:
+            velnor_fd = _open_child_directory(
+                runner_temp_fd, "velnor", runner_mount_id, mount_id_reader
+            )
+        except FileNotFoundError:
+            print("Cargo home absent; source cleanup skipped", file=output)
+            _filesystem_metrics(runner_temp_fd, runner_mount_id, output, "after")
+            return
+        try:
+            try:
+                cargo_fd = _open_child_directory(
+                    velnor_fd, "cargo", runner_mount_id, mount_id_reader
+                )
+            except FileNotFoundError:
+                print("Cargo home absent; source cleanup skipped", file=output)
+                _filesystem_metrics(runner_temp_fd, runner_mount_id, output, "after")
+                return
+        finally:
+            os.close(velnor_fd)
+
+        source_roots: dict[str, int] = {}
+        try:
+            seen: set[tuple[int, int]] = set()
+            measurements: dict[str, tuple[int, int]] = {}
+            # Inspect both trees completely before deleting either one. A
+            # nested mount in either tree therefore fails closed without a
+            # partial cleanup of the other tree.
+            for name in ("registry", "git"):
+                source_fd = _open_source_root(
+                    cargo_fd, name, runner_mount_id, mount_id_reader
+                )
+                if source_fd is not None:
+                    source_roots[name] = source_fd
+                    measurements[name] = _inventory_directory(
+                        source_fd, runner_mount_id, mount_id_reader, seen
+                    )
+                else:
+                    measurements[name] = (0, 0)
+
+            cargo_stat = os.fstat(cargo_fd)
+            print(
+                f"CARGO_HOME device={cargo_stat.st_dev} mount_id={runner_mount_id}",
+                file=output,
+            )
+            for name in ("registry", "git"):
+                allocated, inodes = measurements[name]
+                print(
+                    f"Cargo source phase=before name={name} allocated_bytes={allocated} "
+                    f"inodes={inodes} present={name in source_roots}",
+                    file=output,
+                )
+
+            for name in ("registry", "git"):
+                source_fd = source_roots.get(name)
+                if source_fd is None:
+                    continue
+                _remove_directory_contents(source_fd, runner_mount_id, mount_id_reader)
+                current = os.stat(name, dir_fd=cargo_fd, follow_symlinks=False)
+                pinned = os.fstat(source_fd)
+                if (current.st_dev, current.st_ino) != (pinned.st_dev, pinned.st_ino):
+                    raise PruneError(f"Cargo source root moved during deletion: {name!r}")
+                if mount_id_reader(source_fd) != runner_mount_id:
+                    raise PruneError(f"Cargo source mount changed during deletion: {name!r}")
+                os.rmdir(name, dir_fd=cargo_fd)
+
+            for name in ("registry", "git"):
+                try:
+                    os.stat(name, dir_fd=cargo_fd, follow_symlinks=False)
+                except FileNotFoundError:
+                    pass
+                else:
+                    raise PruneError(f"Cargo source root remains after cleanup: {name!r}")
+                print(
+                    f"Cargo source phase=after name={name} allocated_bytes=0 inodes=0 present=false",
+                    file=output,
+                )
+        finally:
+            for source_fd in source_roots.values():
+                os.close(source_fd)
+            os.close(cargo_fd)
+        _filesystem_metrics(runner_temp_fd, runner_mount_id, output, "after")
+    finally:
+        os.close(runner_temp_fd)
+
+
+def main() -> int:
+    if not sys.platform.startswith("linux"):
+        print("Cargo source pruning requires Linux", file=sys.stderr)
+        return 1
+    if not hasattr(os, "O_PATH") or not hasattr(os, "O_NOFOLLOW"):
+        print("Cargo source pruning requires O_PATH and O_NOFOLLOW", file=sys.stderr)
+        return 1
+    runner_temp = os.environ.get("RUNNER_TEMP", "")
+    cargo_home = os.environ.get("CARGO_HOME", "")
+    try:
+        prune_sources(
+            runner_temp,
+            cargo_home,
+            mount_id_reader=linux_mount_id,
+            output=sys.stdout,
+        )
+    except (OSError, PruneError) as exc:
+        print(f"Cargo source pruning failed closed: {exc}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -34,7 +34,7 @@ pub(crate) fn hosted_jobs_with_mbx_objects(jobs: &BTreeMap<String, Job>) -> BTre
         .collect()
 }
 
-/// Return hosted Linux jobs using MBX; isolated action cleanup removes their store.
+/// Return hosted Linux jobs using MBX for Linux-only capacity diagnostics.
 pub(crate) fn hosted_linux_jobs_with_mbx_objects(jobs: &BTreeMap<String, Job>) -> BTreeSet<String> {
     jobs.iter()
         .filter(|(_, job)| {
