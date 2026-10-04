@@ -52,10 +52,11 @@ fn expression_spans(text: &str) -> Option<Vec<&str>> {
 /// fixed secret bindings (bootstrap registry plus the release forge
 /// token, whose placements the release gates still police separately),
 /// cache-mode selector (a pure function of the event name over string
-/// literals), MBX key inputs, and exact child-run identity outputs.
+/// literals), MBX key and restore evidence, and exact child-run identity
+/// outputs.
 /// Notably absent: `github.token` (render-time fetch binding only),
 /// direct `github.run_id`, and arbitrary step outputs.
-const ENV_EXPRESSIONS: [&str; 26] = [
+const ENV_EXPRESSIONS: [&str; 28] = [
     "runner.temp",
     "github.ref_name",
     "github.event_name",
@@ -65,6 +66,8 @@ const ENV_EXPRESSIONS: [&str; 26] = [
     "steps.mbx.outputs.mbx-version",
     "steps.mbx-bundle.outputs.cache-matched-key",
     "steps.mbx-bundle.outputs.cache-hit",
+    "steps.mbx-bundle.outputs.cache-primary-key",
+    "steps.mbx-bundle.conclusion",
     "steps.mbx-bundle-import.outputs.selected_cache_root",
     "steps.mbx-cancel-receipt.outputs.child_run_id",
     "steps.mbx-cancel-receipt.outputs.child_attempt",

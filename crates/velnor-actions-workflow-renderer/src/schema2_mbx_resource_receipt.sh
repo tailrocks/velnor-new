@@ -23,6 +23,8 @@ jq -cn \
   --arg cache_prefix "$MBX_QUALIFICATION_CACHE_PREFIX" \
   --arg cache_matched_key "$MBX_QUALIFICATION_CACHE_MATCHED_KEY" \
   --arg cache_hit "$MBX_QUALIFICATION_CACHE_HIT" \
+  --arg restore_primary_key "$MBX_QUALIFICATION_RESTORE_PRIMARY_KEY" \
+  --arg restore_conclusion "$MBX_QUALIFICATION_RESTORE_CONCLUSION" \
   --arg export_ready "$MBX_QUALIFICATION_EXPORT_READY" \
   --arg export_status "$MBX_QUALIFICATION_EXPORT_STATUS" \
   --arg gc_status "$MBX_QUALIFICATION_GC_STATUS" \
@@ -36,6 +38,6 @@ jq -cn \
   --arg import_receipt_path "$MBX_QUALIFICATION_IMPORT_RECEIPT" \
   --arg selected_root "$selected_root" --arg abandoned_root "$abandoned_root" \
   --arg bundle "$RUNNER_TEMP/mbx-single-bundle" --arg cargo_home "$CARGO_HOME" \
-  '{job_id:$job_id,role:$role,run_id:$run_id,run_attempt:$run_attempt,source_sha:$sha,source_ref:$ref,workflow_ref:$workflow_ref,runner_os:$runner_os,runner_arch:$runner_arch,image_os:$image_os,image_version:$image_version,mbx_action_ref:$action_ref,mbx_version:$mbx_version,rust_version:$rust_toolchain,generation:$generation,rustc_identity:$rustc_identity,scope:$cache_scope,primary_key:$cache_primary,cache_prefix:$cache_prefix,matched_key:$cache_matched_key,cache_hit:$cache_hit,export_ready:$export_ready,export_status:$export_status,gc_status:$gc_status,save_outcome:$save_outcome,imported_objects:(try ($imported_objects|tonumber) catch null),cached_compilations:(try ($cached_compilations|tonumber) catch null),import_status:$import_status,import_receipt_path:$import_receipt_path,selected_cache_root:$selected_root,selected_import_root:$selected_root,abandoned_import_root:$abandoned_root,bundle:$bundle,cargo_home:$cargo_home}' \
+  '{receipt_status:"provisional",job_id:$job_id,role:$role,run_id:$run_id,run_attempt:$run_attempt,source_sha:$sha,source_ref:$ref,workflow_ref:$workflow_ref,runner_os:$runner_os,runner_arch:$runner_arch,image_os:$image_os,image_version:$image_version,mbx_action_ref:$action_ref,mbx_version:$mbx_version,rust_version:$rust_toolchain,generation:$generation,rustc_identity:$rustc_identity,scope:$cache_scope,primary_key:$cache_primary,derived_primary_key:$cache_primary,restore_primary_key:$restore_primary_key,restore_conclusion:$restore_conclusion,restore_miss_candidate:($cache_primary != "" and $restore_conclusion == "success" and $restore_primary_key == $cache_primary and $cache_hit == "" and $cache_matched_key == ""),cache_prefix:$cache_prefix,matched_key:$cache_matched_key,cache_hit:$cache_hit,export_ready:$export_ready,export_status:$export_status,gc_status:$gc_status,save_outcome:$save_outcome,imported_objects:(try ($imported_objects|tonumber) catch null),cached_compilations:(try ($cached_compilations|tonumber) catch null),import_status:$import_status,import_receipt_path:$import_receipt_path,selected_cache_root:$selected_root,selected_import_root:$selected_root,abandoned_import_root:$abandoned_root,bundle:$bundle,cargo_home:$cargo_home}' \
   > "$receipt_tmp"
 mv -T -- "$receipt_tmp" "$evidence/cache-receipt.json"

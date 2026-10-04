@@ -93,6 +93,14 @@ fn qualification_restore_outputs_allow_only_exact_guard_bindings() -> Result<(),
                 "EXPECTED_KEY".to_owned(),
                 "${{ steps.mbx-bundle-key.outputs.primary }}".to_owned(),
             ),
+            (
+                "RESTORE_PRIMARY_KEY".to_owned(),
+                "${{ steps.mbx-bundle.outputs.cache-primary-key }}".to_owned(),
+            ),
+            (
+                "RESTORE_CONCLUSION".to_owned(),
+                "${{ steps.mbx-bundle.conclusion }}".to_owned(),
+            ),
         ]),
     )?;
 
@@ -158,6 +166,14 @@ fn selected_import_root_output_has_one_exact_environment_binding() -> Result<(),
         (
             "MBX_CHILD_VERSION",
             "${{ steps.mbx-cancel-receipt.outputs.mbx_version }}",
+        ),
+        (
+            "MBX_RESTORE_PRIMARY",
+            "${{ steps.mbx-bundle.outputs.cache-primary-key }}",
+        ),
+        (
+            "MBX_RESTORE_CONCLUSION",
+            "${{ steps.mbx-bundle.conclusion }}",
         ),
     ];
     for (key, expression) in outputs {

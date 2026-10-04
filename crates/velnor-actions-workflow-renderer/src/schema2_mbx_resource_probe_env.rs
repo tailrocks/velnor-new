@@ -47,6 +47,14 @@ fn native_output_binding(key: &str, value: &str) -> bool {
             "${{ steps.mbx-bundle.outputs.cache-hit }}",
         ),
         (
+            "MBX_QUALIFICATION_RESTORE_PRIMARY_KEY",
+            "${{ steps.mbx-bundle.outputs.cache-primary-key }}",
+        ),
+        (
+            "MBX_QUALIFICATION_RESTORE_CONCLUSION",
+            "${{ steps.mbx-bundle.conclusion }}",
+        ),
+        (
             "MBX_QUALIFICATION_EXPORT_READY",
             "${{ steps.mbx-export.outputs.ready }}",
         ),
@@ -172,6 +180,14 @@ pub(super) fn receipt_env(
             "${{ steps.mbx-bundle.outputs.cache-hit }}".to_owned(),
         ),
         (
+            "MBX_QUALIFICATION_RESTORE_PRIMARY_KEY".to_owned(),
+            "${{ steps.mbx-bundle.outputs.cache-primary-key }}".to_owned(),
+        ),
+        (
+            "MBX_QUALIFICATION_RESTORE_CONCLUSION".to_owned(),
+            "${{ steps.mbx-bundle.conclusion }}".to_owned(),
+        ),
+        (
             "MBX_QUALIFICATION_EXPORT_READY".to_owned(),
             "${{ steps.mbx-export.outputs.ready }}".to_owned(),
         ),
@@ -214,6 +230,14 @@ mod tests {
             "${{ steps.mbx-bundle-key.outputs.prefix }}"
         ));
         assert!(native_output_binding(
+            "MBX_QUALIFICATION_RESTORE_PRIMARY_KEY",
+            "${{ steps.mbx-bundle.outputs.cache-primary-key }}"
+        ));
+        assert!(native_output_binding(
+            "MBX_QUALIFICATION_RESTORE_CONCLUSION",
+            "${{ steps.mbx-bundle.conclusion }}"
+        ));
+        assert!(native_output_binding(
             "MBX_QUALIFICATION_RUSTC_IDENTITY",
             "${{ steps.mbx-bundle-key.outputs.rustc_identity }}"
         ));
@@ -224,6 +248,14 @@ mod tests {
         assert!(!native_output_binding(
             "MBX_SELECTED_CACHE_ROOT",
             "${{ steps.mbx-bundle-import.outputs.selected_cache_root-extra }}"
+        ));
+        assert!(!native_output_binding(
+            "MBX_QUALIFICATION_RESTORE_PRIMARY_KEY",
+            "${{ steps.mbx-bundle.outputs.cache-primary-key-extra }}"
+        ));
+        assert!(!native_output_binding(
+            "MBX_QUALIFICATION_RESTORE_CONCLUSION",
+            "${{ steps.mbx-bundle.outcome }}"
         ));
         assert!(!native_output_binding(
             "OTHER",

@@ -41,6 +41,23 @@ fn job_block<'a>(text: &'a str, id: &str, next_id: Option<&str>) -> Result<&'a s
     Ok(&text[start..start + end.unwrap_or(text.len() - start)])
 }
 
+fn assert_provisional_receipt_and_role_rules() {
+    let stop_script = include_str!("../src/schema2_mbx_resource_stop.sh");
+    let receipt_script = include_str!("../src/schema2_mbx_resource_receipt.sh");
+    let sampler_script = include_str!("../src/schema2_mbx_resource_sampler.sh");
+    assert!(receipt_script.contains("receipt_status:\"provisional\""));
+    assert!(receipt_script.contains("restore_miss_candidate:"));
+    assert!(stop_script.contains(".restore_miss_candidate == true"));
+    assert!(stop_script.contains(".restore_primary_key == .primary_key"));
+    assert!(stop_script.contains(".cache_hit == \"\""));
+    assert!(!stop_script.contains(".cache_hit == \"false\""));
+    assert!(sampler_script.contains(
+        "if [[ \"$snapshot_label\" == restore-step-end && \"$role\" =~ ^(reader|reader-a|reader-b|corrupt-reader)$ ]]; then required=1; fi"
+    ));
+    assert!(stop_script.contains("writer|seed|new-key-writer) ;;"));
+    assert!(stop_script.contains("reader|reader-a|reader-b|corrupt-reader) check_nonempty_root"));
+}
+
 #[test]
 fn hosted_resource_receipts_bind_all_qualification_roles() -> Result<(), RenderError> {
     let text = qualification()?;
@@ -93,6 +110,14 @@ fn hosted_resource_receipts_bind_all_qualification_roles() -> Result<(), RenderE
                 "MBX_QUALIFICATION_RUSTC_IDENTITY:",
                 "${{ steps.mbx-bundle-key.outputs.rustc_identity }}",
             ),
+            (
+                "MBX_QUALIFICATION_RESTORE_PRIMARY_KEY:",
+                "${{ steps.mbx-bundle.outputs.cache-primary-key }}",
+            ),
+            (
+                "MBX_QUALIFICATION_RESTORE_CONCLUSION:",
+                "${{ steps.mbx-bundle.conclusion }}",
+            ),
         ] {
             assert!(stop.contains(key), "stop env missing {key}");
             assert!(
@@ -106,6 +131,7 @@ fn hosted_resource_receipts_bind_all_qualification_roles() -> Result<(), RenderE
     assert!(corrupt.contains("actions: read"));
     assert!(writer.contains("export-complete"));
     assert!(writer.contains("gc-complete"));
+    assert_provisional_receipt_and_role_rules();
     Ok(())
 }
 

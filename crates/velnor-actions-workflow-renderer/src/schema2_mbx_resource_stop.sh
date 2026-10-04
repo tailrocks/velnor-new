@@ -69,7 +69,13 @@ check_inventory() {
   fi
   if [ -s "$evidence/df-$label-bytes.txt" ] && ! grep -qx 'df_status=ok' "$evidence/df-$label-bytes.txt"; then fail_partial "df_bytes_invalid:$label"; fi
   if [ -s "$evidence/df-$label-inodes.txt" ] && ! grep -qx 'df_status=ok' "$evidence/df-$label-inodes.txt"; then fail_partial "df_inodes_invalid:$label"; fi
-  if [ "$label" = restore-step-end ] && [ "$MBX_QUALIFICATION_ROLE" != writer ]; then check_nonempty_root "$label" bundle; fi
+  if [ "$label" = restore-step-end ]; then
+    case "$MBX_QUALIFICATION_ROLE" in
+      reader|reader-a|reader-b|corrupt-reader) check_nonempty_root "$label" bundle ;;
+      writer|seed|new-key-writer) ;;
+      *) fail_partial "unknown_cache_role:$MBX_QUALIFICATION_ROLE" ;;
+    esac
+  fi
   if [ "$label" = export-complete ] && { [ "$MBX_QUALIFICATION_ROLE" = writer ] || [ "$MBX_QUALIFICATION_ROLE" = seed ] || [ "$MBX_QUALIFICATION_ROLE" = new-key-writer ]; }; then
     check_nonempty_root "$label" selected-cache-root
     check_nonempty_root "$label" bundle
@@ -157,27 +163,32 @@ check_receipt() {
     --arg scope "$MBX_CACHE_SCOPE" --arg action "$MBX_QUALIFICATION_ACTION_REF" \
     --arg mbx "$MBX_VERSION" --arg rust "$RUSTUP_TOOLCHAIN" \
     --arg primary "$MBX_QUALIFICATION_CACHE_PRIMARY" --arg prefix "$MBX_QUALIFICATION_CACHE_PREFIX" \
+    --arg restore_primary "$MBX_QUALIFICATION_RESTORE_PRIMARY_KEY" \
+    --arg restore_conclusion "$MBX_QUALIFICATION_RESTORE_CONCLUSION" \
     --arg generation "$MBX_QUALIFICATION_CACHE_GENERATION" --arg rustc "$MBX_QUALIFICATION_RUSTC_IDENTITY" \
-    '.job_id == $job and .role == $role and .run_id == $run and .run_attempt == $attempt and .source_sha == $sha and .source_ref == $source_ref and .workflow_ref == $workflow_ref and .scope == $scope and .mbx_action_ref == $action and .mbx_version == $mbx and .rust_version == $rust and .primary_key == $primary and .cache_prefix == $prefix and .generation == $generation and .rustc_identity == $rustc and .primary_key != "" and .generation != "" and .rustc_identity != ""' "$receipt" >/dev/null 2>&1; then
+    '.receipt_status == "provisional" and .job_id == $job and .role == $role and .run_id == $run and .run_attempt == $attempt and .source_sha == $sha and .source_ref == $source_ref and .workflow_ref == $workflow_ref and .scope == $scope and .mbx_action_ref == $action and .mbx_version == $mbx and .rust_version == $rust and .primary_key == $primary and .derived_primary_key == $primary and .restore_primary_key == $restore_primary and .restore_conclusion == $restore_conclusion and .cache_prefix == $prefix and .generation == $generation and .rustc_identity == $rustc and .primary_key != "" and .generation != "" and .rustc_identity != ""' "$receipt" >/dev/null 2>&1; then
     fail_incomplete 'cache receipt identity binding failed'
     return
   fi
   case "$MBX_QUALIFICATION_ROLE" in
     writer|seed|new-key-writer)
-      jq -e '.cache_hit == "false" and .matched_key == "" and .export_ready == "true" and .export_status == "0" and .gc_status == "0" and .save_outcome == "success"' "$receipt" >/dev/null 2>&1 || fail_incomplete 'writer cache lifecycle receipt failed'
+      jq -e '.restore_miss_candidate == true and .restore_conclusion == "success" and .restore_primary_key == .primary_key and .cache_hit == "" and .matched_key == "" and .export_ready == "true" and .export_status == "0" and .gc_status == "0" and .save_outcome == "success"' "$receipt" >/dev/null 2>&1 || fail_incomplete 'writer cache lifecycle receipt failed'
       ;;
     reader|reader-a|reader-b)
-      jq -e '.cache_hit == "true" and .matched_key == .primary_key and .imported_objects > 0 and .cached_compilations > 0' "$receipt" >/dev/null 2>&1 || fail_incomplete 'reader cache reuse receipt failed'
+      jq -e '.restore_conclusion == "success" and .restore_primary_key == .primary_key and .cache_hit == "true" and .matched_key == .primary_key and .imported_objects > 0 and .cached_compilations > 0' "$receipt" >/dev/null 2>&1 || fail_incomplete 'reader cache reuse receipt failed'
       ;;
     corrupt-reader)
-      jq -e '.cache_hit == "true" and .matched_key == .primary_key and .import_status != "" and .import_status != "0" and .selected_cache_root != "" and .abandoned_import_root != "" and .selected_cache_root != .abandoned_import_root and .imported_objects == 0 and .cached_compilations == 0' "$receipt" >/dev/null 2>&1 || fail_incomplete 'corrupt import fallback receipt failed'
+      jq -e '.restore_conclusion == "success" and .restore_primary_key == .primary_key and .cache_hit == "true" and .matched_key == .primary_key and .import_status != "" and .import_status != "0" and .selected_cache_root != "" and .abandoned_import_root != "" and .selected_cache_root != .abandoned_import_root and .imported_objects == 0 and .cached_compilations == 0' "$receipt" >/dev/null 2>&1 || fail_incomplete 'corrupt import fallback receipt failed'
+      ;;
+    *)
+      fail_incomplete "unknown_cache_role:$MBX_QUALIFICATION_ROLE"
       ;;
   esac
 }
 write_qualification_status() {
   local state=complete
   if [ "$incomplete" -ne 0 ]; then state=incomplete; elif [ "$partial" -ne 0 ]; then state=partial; fi
-  printf 'qualification_status\t%s\n' "$state" > "$evidence/qualification-status.tsv"
+  printf 'qualification_status\t%s\ncache_certification\tprovisional\n' "$state" > "$evidence/qualification-status.tsv"
   if [ "$state" != complete ]; then exit 1; fi
 }
 if ! bash "$evidence/sampler.sh" "$evidence" "$RUNNER_TEMP" "$GITHUB_ENV" "$MBX_QUALIFICATION_SAMPLE_INTERVAL" validate; then
