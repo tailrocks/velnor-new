@@ -141,7 +141,7 @@
       "issue": "#6",
       "key": "mise",
       "owner": "@donbeave",
-      "reason": "probes 2026-10-03T07:08:17Z and 2026-10-03T07:09:17Z both saw latest v2026.10.0; pin stays until the #6 update set"
+      "reason": "2026-10-04T01:17:59Z official latest v2026.10.1 is release 402539535; annotated tag b752bdc18b1b5961e4f9ba01a63bc3c11a0a1f79 peels to 050ce5a20287a0aafd872b1191699a5fdafff5ac, eight commits before accepted fix dfe74a90b41603625ee6aabecb42f14a1f5eb0f6; no fixed stable binary is available."
     },
     {
       "expires": "2026-10-15",
@@ -155,8 +155,8 @@
   ],
   "tools": [
     {
-      "checked_at": "2026-10-03T07:09:17Z",
-      "latest": "v2026.10.0",
+      "checked_at": "2026-10-04T01:17:59Z",
+      "latest": "v2026.10.1",
       "name": "mise",
       "pinned": "2026.9.18",
       "qualified": "2026.9.18",
