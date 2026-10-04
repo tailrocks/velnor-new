@@ -390,9 +390,10 @@ done
 validate_evidence || { echo 'private evidence directory identity changed before final sample' >&2; exit 1; }
 sample_once "$sample_count" "$start_epoch"
 sample_count=$((sample_count + 1))
+started=''; if resource_json_single_object "$evidence" "$evidence/runner-metadata.json"; then started="$(jq -r '.utc_started' "$evidence/runner-metadata.json")"; fi
 jq -s \
   --arg interval "$interval" --arg max_bytes "$max_used_bytes" --arg max_inodes "$max_used_inodes" \
-  --arg started "$(jq -r '.utc_started' "$evidence/runner-metadata.json")" \
+  --arg started "$started" \
   --arg ended "$(utc_now)" --arg max_runtime_hit "$max_runtime_hit" \
   '([range(1; length) as $i | .[$i].elapsed_seconds - .[$i-1].elapsed_seconds] | max // 0) as $gap |
    {sample_interval_seconds:($interval|tonumber),observed_max_filesystem_used_bytes_lower_bound:($max_bytes|tonumber),observed_max_filesystem_used_inodes_lower_bound:($max_inodes|tonumber),sample_count:length,maximum_sample_gap_seconds:$gap,observed_start_utc:$started,observed_end_utc:$ended,peak_is_instantaneous:false,used_values_include_other_filesystem_users:true,max_runtime_hit:($max_runtime_hit=="true"),resource_samples_complete:(length>=2 and $gap<=((($interval|tonumber)*2)+5) and all(.[]; .df_bytes_status==0 and .df_inodes_status==0 and .filesystem_used_bytes>0 and .filesystem_used_inodes>0) and ($max_bytes|tonumber)>0 and ($max_inodes|tonumber)>0 and $max_runtime_hit!="true"),max_runtime_seconds:2400}' \

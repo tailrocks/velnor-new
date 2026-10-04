@@ -21,7 +21,7 @@ const PATH_VALIDATION: &str = concat!(
 const STOP: &str = include_str!("../src/schema2_mbx_resource_stop.sh");
 const RECEIPT: &str = include_str!("../src/schema2_mbx_resource_receipt.sh");
 const CORRUPTOR: &str = include_str!("../src/schema2_mbx_corrupt_bundle.sh");
-const SAMPLER_SHA: &str = "f3d6df852f9974733ae149d5ea048d850aac6c34f0e1d9ed22f34173e80c2a55";
+const SAMPLER_SHA: &str = "9675f69c8c8695540bbb6e1e58fff247c88b6b544b24587f7ca9960e5f26a1da";
 const PATH_VALIDATION_SHA: &str =
     "5afb3b3a0be3511b069371e84ee012dce25f6dd58130165eefb7cb547c1ada76";
 const LINUX_IMAGE: &str = concat!(

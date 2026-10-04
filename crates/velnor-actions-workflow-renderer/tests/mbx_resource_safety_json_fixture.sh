@@ -1,7 +1,29 @@
+REAL_JQ="$(command -v jq)"
+export REAL_JQ
+cat > "$WORK/bin/jq" <<'SH'
+#!/usr/bin/bash
+if "$REAL_JQ" "$@"; then status=0; else status=$?; fi
+if [[ "$status" == 0 && "${RESOURCE_JSON_INJECT_MODE:-}" == summary &&
+  -n "${RESOURCE_JSON_INJECT_MARKER:-}" && ! -e "$RESOURCE_JSON_INJECT_MARKER" ]]; then
+  summary_source=0
+  for argument in "$@"; do [[ "$argument" != "$EVIDENCE/samples.jsonl" ]] || summary_source=1; done
+  if (( summary_source == 1 )); then
+    temporary="$EVIDENCE/sampling-summary.json.injected"
+    test ! -e "$temporary" && test ! -L "$temporary" || exit 1
+    printf '{"resource_samples_complete":false,"sample_count":0,"maximum_sample_gap_seconds":0,"sample_interval_seconds":1}\n' > "$temporary"
+    cat "$EVIDENCE/sampling-summary.json" >> "$temporary"
+    /usr/bin/mv -T -- "$temporary" "$EVIDENCE/sampling-summary.json"
+    : > "$RESOURCE_JSON_INJECT_MARKER"
+  fi
+fi
+exit "$status"
+SH
+chmod 700 "$WORK/bin/jq"
+
 verify_resource_json_parser() {
   local root="$WORK/json-evidence" file kind
   mkdir -m 700 "$root"
-  for kind in stats receipt summary; do
+  for kind in stats receipt summary metadata; do
     file="$root/$kind.json"
     printf '{"ok":true}\n' > "$file"
     expect_success "$kind single object" resource_json_single_object "$root" "$file"
@@ -22,8 +44,13 @@ verify_resource_json_parser() {
 
 run_resource_json_rejections() {
   local kind file saved
-  for kind in stats receipt summary; do
+  for kind in stats receipt summary metadata; do
     setup_case "json-$kind"
+    if [[ "$kind" == summary ]]; then
+      RESOURCE_JSON_INJECT_MODE=summary
+      RESOURCE_JSON_INJECT_MARKER="$CASE_ROOT/summary-injection.marker"
+      export RESOURCE_JSON_INJECT_MODE RESOURCE_JSON_INJECT_MARKER
+    fi
     unset SPAWN_CHILD_PID SPAWN_CHILD_FILE
     set_hit_role reader
     MBX_QUALIFICATION_EXPECTED_INVENTORIES='restore-step-end import-step-end build-end'
@@ -42,17 +69,25 @@ run_resource_json_rejections() {
     case "$kind" in
       stats) file="$EVIDENCE/mbx-cache-stats-import-step-end.json" ;;
       receipt) file="$EVIDENCE/cache-receipt.json" ;;
-      summary) file="$EVIDENCE/sampling-summary.json" ;;
+      metadata) file="$EVIDENCE/runner-metadata.json" ;;
     esac
-    saved="$CASE_ROOT/$kind.valid.json"
-    cp "$file" "$saved"
-    printf '{"invalid":true}\n' > "$file"
-    cat "$saved" >> "$file"
+    if [[ "$kind" == summary ]]; then
+      :
+    else
+      saved="$CASE_ROOT/$kind.valid.json"
+      cp "$file" "$saved"
+      printf '{"invalid":true}\n' > "$file"
+      cat "$saved" >> "$file"
+    fi
     stop_and_check_partial || fail "finalizer completed with multiple $kind documents"
     case "$kind" in
       summary) grep -q 'resource_sampling_incomplete' "$EVIDENCE/qualification-errors.txt" || fail 'summary stream rejection missing' ;;
       *) grep -q "invalid_json:$file" "$EVIDENCE/qualification-errors.txt" || fail "$kind stream rejection missing" ;;
     esac
+    if [[ "$kind" == summary ]]; then
+      [[ -e "$RESOURCE_JSON_INJECT_MARKER" ]] || fail 'summary stream was not injected after generation'
+      unset RESOURCE_JSON_INJECT_MODE RESOURCE_JSON_INJECT_MARKER
+    fi
   done
 }
 

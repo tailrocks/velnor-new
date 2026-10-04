@@ -146,7 +146,7 @@ check_required_files() {
       if [ ! -s "$evidence/$file" ]; then fail_incomplete "corrupt_evidence_missing:$file"; fi
     done
   fi
-  for file in "$evidence/mbx-cache-stats-import-step-end.json" "$evidence/mbx-stats-build-end.json" \
+  for file in "$evidence/runner-metadata.json" "$evidence/mbx-cache-stats-import-step-end.json" "$evidence/mbx-stats-build-end.json" \
     "$evidence/final-cache-stats.json" "$evidence/final-mbx-stats.json" "$evidence/cache-receipt.json"; do
     if [ -s "$file" ] && ! resource_json_single_object "$evidence" "$file"; then fail_incomplete "invalid_json:$file"; fi
   done

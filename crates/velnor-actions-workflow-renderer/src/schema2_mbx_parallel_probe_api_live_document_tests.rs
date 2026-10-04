@@ -27,4 +27,10 @@ fn second_attempt_jobs_response_document_fails_before_parallel_receipt() {
             .exists(),
         "parallel API wrote its final receipt before rejecting the extra document"
     );
+    assert_eq!(
+        fs::read_to_string(runner_temp.join("mbx-cache-evidence/seed-restore-classification.txt"))
+            .expect("read fail-closed seed classification"),
+        "NOT_RUN\n",
+        "parallel API classified cache evidence before validating its jobs response"
+    );
 }
