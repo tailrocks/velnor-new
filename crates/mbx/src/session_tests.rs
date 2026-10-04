@@ -260,6 +260,7 @@ async fn cmake_selection_uses_the_final_build_environment() {
         ),
     ]);
     let mut environment = selected.clone();
+    let canonical_shims_dir = config.shims_dir.canonicalize().unwrap();
     session
         .begin(
             workspace.path(),
@@ -276,9 +277,11 @@ async fn cmake_selection_uses_the_final_build_environment() {
     for (variable, program) in selected {
         let shim = Path::new(&environment[&variable]);
         assert!(
-            shim.canonicalize()
+            shim.parent()
                 .unwrap()
-                .starts_with(config.shims_dir.canonicalize().unwrap())
+                .canonicalize()
+                .unwrap()
+                .starts_with(&canonical_shims_dir)
         );
         assert!(shim.is_file());
         assert_eq!(
