@@ -233,17 +233,19 @@ child_state() {
 }
 
 # Producer death while BusyBox is blocked on a fifo is a hang, not a slow extract.
+# kill -0 stays true for a zombie, so the producer uses the same state byte.
 wait_child() {
   local child="$1"
   local prod="$2"
-  local state
+  local state prod_state
   while true; do
     state="$(child_state "$child" || true)"
     if [ -z "$state" ] || [ "$state" = Z ]; then
       wait "$child"
       return
     fi
-    if ! kill -0 "$prod" 2>/dev/null; then
+    prod_state="$(child_state "$prod" || true)"
+    if [ -z "$prod_state" ] || [ "$prod_state" = Z ]; then
       sleep 0.2
       state="$(child_state "$child" || true)"
       if [ -n "$state" ] && [ "$state" != Z ]; then

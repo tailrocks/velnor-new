@@ -405,8 +405,52 @@ run_case safe-hardlink-with-unsafe case_safe_hardlink
 run_case unsafe-hardlink-fails case_unsafe_hardlink
 run_case plain-extract case_plain
 run_case absolute-file case_absolute_file
+# List twice, then the extract decompress fails. The producer becomes a
+# zombie while BusyBox is blocked on the fifo. That must fail, not hang.
+case_emit_death_does_not_hang() {
+  local root="$work/emit-die" pid i status=0
+  rm -rf -- "$root"
+  mkdir -p "$root/dest" "$root/bin"
+  write_ustar "$root/arc.tar" \
+    f keep.txt K \
+    f ../../../.cache/a payload || return 1
+  gzip -c "$root/arc.tar" >"$root/arc.tar.gz" || return 1
+  cat >"$root/bin/flaky-dc" <<'EOF'
+#!/bin/bash
+nfile="${VELNOR_DC_COUNT:?}"
+n=0
+if [ -f "$nfile" ]; then
+  n="$(cat "$nfile")"
+fi
+n=$((n + 1))
+printf '%s' "$n" >"$nfile"
+if [ "$n" -ge 3 ]; then
+  exit 1
+fi
+exec gzip -dc
+EOF
+  chmod 0755 "$root/bin/flaky-dc"
+  : >"$root/count"
+  VELNOR_DC_COUNT="$root/count" \
+    bash "$shim" -xf "$root/arc.tar.gz" -P \
+    --use-compress-program "$root/bin/flaky-dc" -C "$root/dest" &
+  pid=$!
+  for i in 1 2 3 4 5 6 7 8; do
+    if ! kill -0 "$pid" 2>/dev/null; then
+      wait "$pid" || status=$?
+      [ "$status" -ne 0 ]
+      return
+    fi
+    sleep 0.5
+  done
+  kill "$pid" 2>/dev/null || true
+  wait "$pid" 2>/dev/null || true
+  return 1
+}
+
 run_case dash-positional case_dash_positional
 run_case stream-no-raw-archive case_stream_no_raw
+run_case emit-death-does-not-hang case_emit_death_does_not_hang
 
 printf 'RESULT pass=%s fail=%s\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
