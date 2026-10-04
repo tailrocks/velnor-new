@@ -106,14 +106,13 @@ Each path has one owner:
 |---|---|---|
 | Mise tools and Rust components | Compiled-in generator catalog, executed by Mise | Embed and invoke exact versions; disable project config, env files, and hooks |
 | Cargo registry and Git sources | Velnor source layer | Exclude credentials; separate from MBX |
-| Compiler objects and scheduler state | `jdx/mr-boxington-action` when MBX is selected | The action owns the object format (`github-cache-mode: objects`). Generated jobs set `ACTIONS_CACHE_MODE=read` so its post does not export inside the live store. `mbx cache export` writes one directory at `$RUNNER_TEMP/mbx-single-bundle`; `actions/cache` archives only that directory; `mbx cache import` loads it. Velnor does not reimplement the object format |
+| Compiler objects and scheduler state | Pinned `jdx/mr-boxington-action` local setup plus the MBX CLI | The action installs the exact MBX version with `backend: local`. Every job gets a fresh private store. The MBX CLI owns its object format and exports one directory at `$RUNNER_TEMP/mbx-single-bundle`; pinned `actions/cache` steps transport only that directory, and the MBX CLI imports it |
 | Mutable target directory | Matrix job | Reuse sequentially; never share concurrently |
 | Successful task result | Mise task cache | Use only for qualified deterministic tasks and complete outputs |
 
 The orchestrator decides whether each cache operation is allowed and records that decision in the plan. The
-workflow renderer serializes approved GitHub cache restore/save operations from typed workflow IR; it does not
-choose keys, trust, eligibility, or save timing. Mise installs the exact MBX binary. The pinned
-Mr. Boxington action owns the object format. The archive rule below is the transport.
+workflow renderer pins the action's local backend and serializes the explicit external-bundle lifecycle from
+typed workflow IR. The MBX CLI owns the object format; `actions/cache` transports its opaque directory.
 
 Cache save is allowed only after its producer succeeded, the current run is trusted for that namespace, and
 the export has a useful delta. A task-result cache hit, failed/cancelled task, untrusted PR, empty export, or
@@ -138,12 +137,12 @@ REPORT_DIR            = $RUNNER_TEMP/velnor/<run-key>/<matrix-key>
 `$MISE_TASK_CACHE_DIR/task-artifacts/v2`; CI sets that environment variable before Mise starts and archives
 only that directory.
 
-`actions/cache/restore` and `actions/cache/save` MAY archive `CARGO_SOURCE_PATHS`,
-qualified `MISE_TASK_ARTIFACTS`, and `$RUNNER_TEMP/mbx-single-bundle`. The action
-owns the MBX object format. `ACTIONS_CACHE_MODE=read` skips its in-store post,
-which exhausted runner disk (run `37114238559`). A miss, a missing directory, or
-a failed `mbx cache import` continues cold. Velnor MUST NOT reimplement either
-format. A Cargo-profile job does not invoke the Mr. Boxington action.
+Pinned `actions/cache/restore` and `actions/cache/save` MAY archive `CARGO_SOURCE_PATHS`, qualified
+`MISE_TASK_ARTIFACTS`, and `$RUNNER_TEMP/mbx-single-bundle` (the opaque external bundle). The MBX CLI
+owns its export/import format; local action setup disables the stock GitHub object-cache path.
+Run `37114238559` records ENOSPC from the former in-store action post; it motivates external transport,
+not a claim of lower peak disk use. Hosted workload measurement remains required. A miss, absent bundle,
+or failed import continues cold. Velnor MUST NOT reimplement formats. Cargo-profile jobs omit MBX setup.
 
 Velnor MUST NOT configure Mise `task.cache.remote_url`, remote namespaces, remote tokens, or OIDC task-cache
 credentials in V1. There is no Velnor cache server. The selected task-result transport is an opaque GitHub
@@ -170,10 +169,11 @@ pushes use `read-write`; release jobs use `off`. The exact task TOML cache field
 be enabled only with Gate 6 qualification fixtures; no task-cache behavior is implied before that gate.
 
 Pull requests and merge groups MAY restore trusted default-branch archives but MUST NOT write trusted or
-release archives. They MUST NOT promote PR-produced executable contents. Fork pull requests are read-only.
-Protected default-branch pushes MAY write trusted archives only after the task passes and its report is
-complete. Release jobs MUST reject PR archives and MUST NOT restore or save MBX or task-result archives;
-release outputs use a clean or trusted-source-only path.
+release archives or promote PR-produced executable contents. A same-repository PR MAY write only when the
+`SameRepositoryScoped` policy is enabled, under a separate key namespace bound to its PR number and head SHA;
+forks remain read-only. Protected default-branch pushes MAY write trusted archives only after the task passes
+and its report is complete. Release jobs MUST reject PR archives and MUST NOT restore or save MBX or task-result
+archives; release outputs use a clean or trusted-source-only path.
 
 Cache restore MUST verify compatibility and ownership before use. A missing archive is `no_entry`; a GitHub
 restore/save failure is `cache_unavailable`; failed MBX import is `cache_corrupt`; a failed task-cache
