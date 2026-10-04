@@ -15,3 +15,7 @@ workspace = true
 [[test]]
 name = "velnor_workflow_renderer"
 path = "tests/velnor_workflow_renderer.rs"
+
+[[test]]
+name = "mbx_resource_safety_runtime"
+path = "tests/mbx_resource_safety_runtime.rs"
