@@ -63,7 +63,7 @@ fn publish_job_needs_required_and_gates_push() {
 
 #[test]
 fn publish_job_rejects_malformed_branches() {
-    for bad in ["", "  ", "feat/x y", "a\nb"] {
+    for bad in ["", "  ", "feat/x y", "a\nb", "main'||true||'"] {
         assert!(
             baseline_publish_job("ubuntu-26.04", bad, None).is_err(),
             "malformed branches never reach the gate: {bad:?}"

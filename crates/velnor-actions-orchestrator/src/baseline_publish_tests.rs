@@ -24,7 +24,7 @@ fn push_payload(head: &str) -> String {
 }
 
 /// Publish request JSON over `head` with explicit fields.
-fn request_json(head: &str) -> String {
+pub(super) fn request_json(head: &str) -> String {
     serde_json::json!({
         "schema": 1,
         "op": PUBLISH_OP,
@@ -81,7 +81,7 @@ fn obligation_for(
 }
 
 /// Valid push fixture plan over `head` with clippy plus test.
-fn fixture_plan(head: &str, run_key: &str) -> Plan {
+pub(super) fn fixture_plan(head: &str, run_key: &str) -> Plan {
     let clippy = "stack/rust/demo/clippy/default";
     let test = "stack/rust/demo/test/default";
     let (clippy_entry, clippy_digest) = entry_for(clippy, "clippy", 1, run_key);
@@ -202,7 +202,7 @@ fn publish_skips_covered_without_carry_forward() {
 ///
 /// Refusals stage nothing: the run directory carries no baseline file
 /// after the refused call.
-fn refuse_problem(request: &str, plan: &Plan, run_key: &str) -> String {
+pub(super) fn refuse_problem(request: &str, plan: &Plan, run_key: &str) -> String {
     let temp = staged_run(plan, run_key);
     let problem = baseline_publish_to(request, run_key, temp.path())
         .expect_err("must refuse")

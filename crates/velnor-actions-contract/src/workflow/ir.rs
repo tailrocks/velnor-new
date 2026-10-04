@@ -186,8 +186,16 @@ impl WorkflowIr {
     }
 }
 impl Trigger {
-    /// Validate dispatch inputs and schedule (other fields pass through).
+    /// Validate push branch names, dispatch inputs, and schedule.
     fn validate(&self) -> Result<(), ContractError> {
+        for branch in &self.push_branches {
+            if !crate::is_valid_branch_name(branch) {
+                return Err(ContractError::identity(
+                    "trigger.push_branches",
+                    format!("malformed_branch:{branch}"),
+                ));
+            }
+        }
         if let Some(dispatch) = &self.workflow_dispatch {
             dispatch.validate()?;
         }

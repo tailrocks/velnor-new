@@ -7,7 +7,8 @@
 /// Whether a branch is a literal supported Git branch name.
 ///
 /// Names are never patterns or expressions. Components cannot be empty,
-/// start with a dot or hyphen, end with a dot or `.lock`, or contain `..`.
+/// start with a dot or hyphen, end with a dot or lowercase `.lock`, or
+/// contain `..`.
 #[must_use]
 pub fn is_valid_branch_name(value: &str) -> bool {
     !value.is_empty()
@@ -21,7 +22,9 @@ pub fn is_valid_branch_name(value: &str) -> bool {
             !part.is_empty()
                 && !part.starts_with(['.', '-'])
                 && !part.ends_with('.')
-                && !part.ends_with(".lock")
+                && part
+                    .rsplit_once('.')
+                    .is_none_or(|(_, suffix)| suffix != "lock")
         })
 }
 
@@ -31,13 +34,21 @@ mod tests {
 
     #[test]
     fn branch_authority_accepts_literal_names() {
-        for branch in ["main", "trunk", "release/1.2", "feature/x_y-z", "Main"] {
+        for branch in [
+            "main",
+            "trunk",
+            "release/1.2",
+            "feature/x_y-z",
+            "Main",
+            "main.LOCK",
+            "a/b.Lock",
+        ] {
             assert!(is_valid_branch_name(branch), "{branch:?}");
         }
     }
 
     #[test]
-    fn branch_authority_rejects_expression_shell_and_git_special_names() {
+    fn branch_authority_rejects_expression_yaml_shell_and_git_names() {
         for branch in [
             "",
             "HEAD",
@@ -81,6 +92,7 @@ mod tests {
             "a@b",
             "${{github.ref}}",
             "main'||true||'",
+            "main\non: [push]",
         ] {
             assert!(!is_valid_branch_name(branch), "{branch:?}");
         }

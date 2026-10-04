@@ -220,7 +220,7 @@ fn publish_gate(request: &PublishRequest) -> Result<(), OrchestratorError> {
     let protected = request
         .default_branch
         .as_deref()
-        .filter(|branch| !branch.is_empty() && !branch.chars().any(char::is_whitespace))
+        .filter(|branch| velnor_actions_contract::is_valid_branch_name(branch))
         .map(|branch| format!("refs/heads/{branch}"));
     if protected.is_none() || request.git_ref.as_ref() != protected.as_ref() {
         return Err(internal("publish_refused:unprotected_ref"));
@@ -360,3 +360,7 @@ fn self_check(
 #[cfg(test)]
 #[path = "baseline_publish_tests.rs"]
 mod baseline_publish_tests;
+
+#[cfg(test)]
+#[path = "baseline_publish_branch_tests.rs"]
+mod baseline_publish_branch_tests;

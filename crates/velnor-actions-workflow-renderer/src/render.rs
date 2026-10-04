@@ -359,9 +359,10 @@ fn check_triggers(triggers: &Trigger) -> Result<(), RenderError> {
         return Err(RenderError::InvalidWorkflow("bad_pr_triggers".to_owned()));
     }
     let branch_ok = triggers.push_branches.len() == 1
-        && triggers.push_branches.first().is_some_and(|branch| {
-            !branch.trim().is_empty() && !branch.chars().any(char::is_whitespace)
-        });
+        && triggers
+            .push_branches
+            .first()
+            .is_some_and(|branch| velnor_actions_contract::is_valid_branch_name(branch));
     if !branch_ok {
         return Err(RenderError::InvalidWorkflow("bad_push_branch".to_owned()));
     }

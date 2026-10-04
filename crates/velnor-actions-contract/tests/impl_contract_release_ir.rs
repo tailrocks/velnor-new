@@ -91,6 +91,20 @@ fn ir_default_permissions_preserve_read_read_ci() {
 }
 
 #[test]
+fn ir_rejects_unsafe_push_branch_names() {
+    for branch in ["main\non: [push]", "main'||true||'", "main.lock", "-main"] {
+        let mut workflow = ci_workflow();
+        workflow.triggers.push_branches = vec![branch.to_owned()];
+        assert!(
+            identity_problem(&workflow).is_some_and(|problem| {
+                problem.starts_with("trigger.push_branches malformed_branch:")
+            }),
+            "unsafe branch name must fail IR validation: {branch:?}"
+        );
+    }
+}
+
+#[test]
 fn ir_rejects_permission_violations() {
     let mut id_token = ci_workflow();
     id_token.permissions.id_token = PermissionLevel::Write;

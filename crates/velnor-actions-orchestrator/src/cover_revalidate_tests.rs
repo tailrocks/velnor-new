@@ -50,6 +50,9 @@ fn wrong_provenance_fails_per_field() {
     let mut git_ref = manifest.clone();
     git_ref.ref_ = "testmain".to_owned();
     check("malformed ref", &plan, &git_ref);
+    let mut hostile_ref = manifest.clone();
+    hostile_ref.ref_ = "refs/heads/main;evil".to_owned();
+    check("hostile branch ref", &plan, &hostile_ref);
     let mut workflow = manifest.clone();
     workflow.workflow_ref = "o/r/.github/workflows/ci.yml@refs/heads/other".to_owned();
     check("inconsistent workflow ref", &plan, &workflow);
@@ -204,6 +207,12 @@ fn anchor_parts_map_env_values() {
         merge_anchors_from_parts(Some("nope"), Some(""), Some("nope"), Some("nope")),
         MergeAnchorExpectations::default(),
         "malformed values yield no expectations"
+    );
+    assert!(
+        merge_anchors_from_parts(None, None, Some("refs/heads/main;evil"), None)
+            .protected_ref
+            .is_none(),
+        "malformed pushed branch names yield no expectation"
     );
     assert!(
         merge_anchors_from_parts(None, Some("a b"), None, None)
