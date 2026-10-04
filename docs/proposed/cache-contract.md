@@ -1,7 +1,9 @@
 # Velnor V1 Cache and Report Contract
 
-Status: proposed; no implementation is claimed. Defines task identity, cache ownership/trust, reports, and
-final result aggregation.
+Status: mixed. V1 generated Rust CI implements Cargo-source caching and action-owned MBX object transport
+(see the [Rust cache transport contract](rust-cache-transport-contract.md)). Mise task-result caching remains
+disabled pending Gate 6. The generic task-identity reuse, trust-scoped key, report, and coverage requirements
+below define the intended contract; their presence does not claim that each requirement is implemented.
 
 ## 1. Task identity and canonical digests
 
@@ -71,11 +73,13 @@ format and emit no MBX object-cache steps. Velnor MUST compute
 containing `schema_id`, `repository_id`, `workspace_id`, `lane_id`, `platform_id`, `toolchain_id`,
 `cache_format_id`, and `stack_extension_id`.
 
-Trust is an access and promotion boundary, not semantic task input. Keep trust out of `input_digest`; encode
-it in cache namespaces, permissions, and baseline proof. This permits PRs to read exact trusted baseline
-evidence without allowing PR results to become trusted. An input digest MUST include task definition and
-arguments, working directory, complete declared input closure, dependency and tool identities, relevant
-environment, generator/schema, and output contract. Unknown or dynamic inputs disable result reuse and
+In the proposed generic task-result cache model, trust is an access and promotion boundary, not semantic task
+input. Keep trust out of `input_digest`; future Velnor-owned task-result caches encode it in namespaces,
+permissions, and baseline proof. This permits PRs to read exact trusted baseline evidence without allowing PR
+results to become trusted. The implemented Cargo-source cache has a separate key and save rule, documented in
+§2; this proposal does not define the action-owned MBX key or save policy. An input digest MUST include task
+definition and arguments, working directory, complete declared input closure, dependency and tool identities,
+relevant environment, generator/schema, and output contract. Unknown or dynamic inputs disable result reuse and
 baseline coverage.
 
 `lane_id` MUST also include task/build configuration and a distinct concurrent writer lane. Concurrent Cargo
@@ -83,108 +87,26 @@ writers never share a target directory. The complete graph, change selection, tr
 status definitions are specified in the [parallelism and affected-work
 contract](parallelism-and-selection-contract.md).
 
-The GitHub cache key MUST be:
+For future Velnor-owned GitHub cache layers that implement this proposed trust model, the key MUST be:
 
 ```text
 velnor-v1-${layer}-${trust}-${compatibility_id}-${snapshot_id}
 ```
 
-`layer` is `sources`, `mbx`, or `task`; `trust` is `trusted` or `pr`; every digest is `b3-` plus 64 lowercase
-hex characters. `snapshot_id` is the full `input_digest` for an exact task result, a source-input digest for
-Cargo sources, and a unique run/matrix closure digest for MBX. The complete key MUST be no longer than 512
-bytes; the generator MUST fail if it is longer. Restore prefixes MAY omit `snapshot_id` only for the same
-compatibility ID. A commit SHA alone MUST NOT be a cache identity.
+`layer` is `sources` or `task`; `trust` is `trusted` or `pr`; every digest is `b3-` plus 64 lowercase hex
+characters. `snapshot_id` is the full `input_digest` for an exact task result or a source-input digest for
+Cargo sources. The complete key MUST be no longer than 512 bytes; the generator MUST fail if it is longer.
+Restore prefixes MAY omit `snapshot_id` only for the same compatibility ID. A commit SHA alone MUST NOT be
+a Velnor-owned cache identity. Current V1 Cargo-source keys do not follow this proposed formula: they omit
+the trust segment and use the implemented key/save behavior documented in §2. These key rules do not define
+MBX object transport; the Mr. Boxington action generates its own key and restore prefix, described in §2.
 
 ## 2. V1 Rust cache paths, transport, and fallback
 
-The Cargo/MBX paths below map generic cache rules for V1 Rust. Future adapters define their own paths and
-compatibility fields under the same invariants.
-
-Each path has one owner:
-
-| Data | Owner | Rule |
-|---|---|---|
-| Mise tools and Rust components | Compiled-in generator catalog, executed by Mise | Embed and invoke exact versions; disable project config, env files, and hooks |
-| Cargo registry and Git sources | Velnor source layer | Exclude credentials; separate from MBX |
-| Compiler objects and scheduler state | `jdx/mr-boxington-action` when MBX is selected | The action owns the object format (`github-cache-mode: objects`). Generated jobs set `ACTIONS_CACHE_MODE=read` so its post does not export inside the live store. `mbx cache export` writes one directory at `$RUNNER_TEMP/mbx-single-bundle`; `actions/cache` archives only that directory; `mbx cache import` loads it. Velnor does not reimplement the object format |
-| Mutable target directory | Matrix job | Reuse sequentially; never share concurrently |
-| Successful task result | Mise task cache | Use only for qualified deterministic tasks and complete outputs |
-
-The orchestrator decides whether each cache operation is allowed and records that decision in the plan. The
-workflow renderer serializes approved GitHub cache restore/save operations from typed workflow IR; it does not
-choose keys, trust, eligibility, or save timing. Mise installs the exact MBX binary. The pinned
-Mr. Boxington action owns the object format. The archive rule below is the transport.
-
-Cache save is allowed only after its producer succeeded, the current run is trusted for that namespace, and
-the export has a useful delta. A task-result cache hit, failed/cancelled task, untrusted PR, empty export, or
-unavailable producer MUST NOT trigger a trusted save. Restore and save destinations MUST not overlap active
-compiler writers.
-
-The generated workflow MUST use these paths. `CARGO_TARGET_DIR` is never an archive path:
-
-```text
-VELNOR_CACHE_ROOT     = $RUNNER_TEMP/velnor/cache
-CARGO_HOME            = $VELNOR_CACHE_ROOT/cargo
-CARGO_SOURCE_PATHS    = $CARGO_HOME/registry $CARGO_HOME/git
-CARGO_TARGET_DIR      = $RUNNER_TEMP/velnor/target/<lane_id>
-MBX_TARGET_DIR        = $RUNNER_TEMP/velnor/target/<lane_id>
-MISE_TASK_CACHE_DIR   = $VELNOR_CACHE_ROOT/mise-task
-MISE_TASK_ARTIFACTS   = $MISE_TASK_CACHE_DIR/task-artifacts/v2
-REPORT_DIR            = $RUNNER_TEMP/velnor/<run-key>/<matrix-key>
-```
-
-`CARGO_HOME` is set to this isolated path for every generated task. The source archive MUST include only
-`registry/` and `git/`, never credentials or other files under Cargo home. Mise stores task artifacts under
-`$MISE_TASK_CACHE_DIR/task-artifacts/v2`; CI sets that environment variable before Mise starts and archives
-only that directory.
-
-`actions/cache/restore` and `actions/cache/save` MAY archive `CARGO_SOURCE_PATHS`,
-qualified `MISE_TASK_ARTIFACTS`, and `$RUNNER_TEMP/mbx-single-bundle`. The action
-owns the MBX object format. `ACTIONS_CACHE_MODE=read` skips its in-store post,
-which exhausted runner disk (run `37114238559`). A miss, a missing directory, or
-a failed `mbx cache import` continues cold. Velnor MUST NOT reimplement either
-format. A Cargo-profile job does not invoke the Mr. Boxington action.
-
-Velnor MUST NOT configure Mise `task.cache.remote_url`, remote namespaces, remote tokens, or OIDC task-cache
-credentials in V1. There is no Velnor cache server. The selected task-result transport is an opaque GitHub
-archive of the Mise local directory above; Mise remains the only authority for task keys, checksums, output
-replay, and cache invalidation.
-
-Task-result caching is disabled until Gate 6. Before that gate, workflows use direct pinned `mise exec`
-commands; no task definition is written into the repository. At Gate 6, the Mise adapter may write a
-versioned, deterministic task TOML file under `$RUNNER_TEMP/velnor/tasks/` and invoke that task with the
-pinned Mise binary. The temporary task file MUST declare fixed command arguments, complete `sources`, explicit
-`outputs` (including `outputs = []` when appropriate), and complete `cache.command_inputs`. Its first line
-MUST carry the Velnor Actions version marker without a date. It MUST NOT read, create, or modify project
-`mise.toml`, `mise.lock`, or `.mise/tasks`.
-
-Before Gate 6, task-cache access remains off. After Gate 6, only qualified tasks MAY enable Mise's
-experimental artifact cache. The task command is invoked as:
-
-```text
-mise run --task-cache <read-only|read-write|off> <task-name> --file <runner-temp-task-file>
-```
-
-Local runs use `local-only` by default. PR and `merge_group` runs use `read-only`; protected default-branch
-pushes use `read-write`; release jobs use `off`. The exact task TOML cache field is a schema change and MUST
-be enabled only with Gate 6 qualification fixtures; no task-cache behavior is implied before that gate.
-
-Pull requests and merge groups MAY restore trusted default-branch archives but MUST NOT write trusted or
-release archives. They MUST NOT promote PR-produced executable contents. Fork pull requests are read-only.
-Protected default-branch pushes MAY write trusted archives only after the task passes and its report is
-complete. Release jobs MUST reject PR archives and MUST NOT restore or save MBX or task-result archives;
-release outputs use a clean or trusted-source-only path.
-
-Cache restore MUST verify compatibility and ownership before use. A missing archive is `no_entry`; a GitHub
-restore/save failure is `cache_unavailable`; failed MBX import is `cache_corrupt`; a failed task-cache
-read/write is a Mise-reported miss. Corrupt, incomplete, or mismatched data MUST be discarded and the task
-MUST execute when otherwise eligible. A cache miss MUST never fail a task by itself. A cache save failure MUST
-leave a successful task successful and report `cache_write_disabled` or `cache_unavailable`.
-
-Velnor MUST NOT save unchanged data, use an unbounded stable key, globally prune caches, or restore one cache
-layer through two mechanisms. MBX objects, Cargo sources, and Mise task artifacts MUST remain independently
-restorable. The default branch MUST produce warm snapshots through ordinary CI; no unconditional warm-up
-workflow is allowed.
+The current generated Rust cache paths, action-owned MBX key and lifecycle, save/read policy, failure
+semantics, and proposed Gate 6 task-artifact flow are specified in the [Rust cache transport contract]
+(rust-cache-transport-contract.md). It distinguishes implemented cache transport from inactive
+task-result caching.
 
 ## 3. Miss reasons, artifacts, and report schema
 

@@ -1,4 +1,5 @@
-**Status:** Proposed implementation specification. No task execution behavior is implemented.
+**Status:** V1 generated Rust workflow task execution is implemented. Mise task-result caching remains disabled
+pending Gate 6 qualification; future stack adapters remain proposed.
 
 # Velnor Actions V1 Rust workflow-task execution contract
 
@@ -25,14 +26,42 @@ the pinned toolchain's own rustup, deterministic, writing only
 Velnor-owned tool homes — Mise installing components, not an ad hoc
 installer. For an MBX profile only, it then invokes the pinned
 `jdx/mr-boxington-action` in `github-cache-mode: objects` with
-`ACTIONS_CACHE_MODE=read`. The action owns the MBX object format. Read mode skips
-its post export, which wrote inside the live store and exhausted runner disk
-(run `37114238559`). The workflow exports one directory with `mbx cache export`
-to `$RUNNER_TEMP/mbx-single-bundle`, and `actions/cache` transports that opaque
-directory. `mbx cache import` loads it. A miss, a missing directory, or a failed
-import continues the job cold. For a Cargo profile, that action and MBX
-installation are absent. The same cache actions also transport Cargo source
-archives and qualified Mise task artifacts. They do not archive the live MBX store.
+`isolate-objects-cache: true` and `cache-key-suffix: ${{ github.job }}` for
+ordinary hosted jobs. The action owns the MBX object format and its private
+`RUNNER_TEMP` store. Mise installs the catalog-pinned MBX executable used by
+Rust commands; the action separately installs MBX through its exact `version`
+input for cache import/export. The renderer passes the same catalog version to
+both. Its main step restores and imports the opaque bundle. The action declares
+`post-if: success()`, so its post-step export and cleanup run only after the job
+has remained successful. If eligible, post exports after compiler writers
+finish, removes the live store, and saves only the bundle.
+
+The action has no Velnor trust namespace. It evaluates event/ref, repository,
+default-branch and protected-ref status, `save-on-*` inputs, and
+`ACTIONS_CACHE_MODE` when supplied. Ordinary generated hosted CI sets no cache
+mode or non-default save opt-ins, so only default-branch pushes save by
+default. A miss remains cold; malformed bundles, failed imports, restore
+service errors, export/validation, local-storage, and cleanup errors fail the
+job. A recognized empty export and exact hit skip saving. Only save reservation,
+5xx, or network failures explicitly classified by the action warn and continue;
+unknown or local-storage failures fail. See the [Rust cache transport contract](rust-cache-transport-contract.md)
+for key, qualification, and failure details. If an earlier task fails or the
+job is cancelled, `post-if: success()` skips this action's cleanup/export; the
+disposable runner tears down its temporary store.
+
+The earlier ordinary-hosted MBX flow set `ACTIONS_CACHE_MODE=read` and used a
+Velnor-owned `$RUNNER_TEMP/mbx-single-bundle`; it was retired. Run
+`37114238559` documents that former ordinary-hosted configuration.
+
+The dispatch-only schema-2 qualification workflow has a separate run-bound
+protected-main writer and dependent read-only reader. It deliberately sets
+`ACTIONS_CACHE_MODE` for that qualification pair and does not use the ordinary
+hosted-job suffix. For a Cargo profile, the Mr. Boxington action and MBX
+installation are absent. Current Velnor-managed archive transport for Rust
+task inputs covers Cargo sources only; task-result artifact archives remain
+future Gate 6 work. Current generated CI does not set `MISE_TASK_CACHE_DIR` or
+archive task artifacts. The Mise tools cache and action-owned MBX bundle are
+separate cache layers.
 
 1. `Prepare pinned tools`: install exact Velnor policy tools through a fixed
    Mise invocation that loads no project config (`--no-config` plus
@@ -42,9 +71,9 @@ archives and qualified Mise task artifacts. They do not archive the live MBX sto
 2. `Verify toolchain`: verify Rust, selected compile driver, selected test
    runner, target, runner platform, and report optional tool-file findings.
 3. `Restore Cargo sources`: restore only the Cargo source cache owned by Velnor.
-4. `Restore compiler objects`: use MBX's supported portable-object restore
-   path only when this workspace's detected profile selects MBX; otherwise
-   this step reports `not_applicable`.
+4. `Restore compiler objects`: the pinned action restores and imports MBX's
+   supported portable-object bundle only when this workspace's detected
+   profile selects MBX; otherwise this step reports `not_applicable`.
 5. `Verify prepared inputs`: run locked/offline preparation checks.
 6. `Clippy`: run the matrix entry's fixed Clippy command and stop this job on
    failure.
@@ -54,7 +83,10 @@ archives and qualified Mise task artifacts. They do not archive the live MBX sto
    invoke `cargo test`. V1 uses one command per package/configuration.
 9. `Doctests`: run `cargo test --doc` through the selected compile driver.
 11. `Documentation`: build package docs with rustdoc warnings denied.
-12. `Save eligible caches`: save only permitted immutable snapshots.
+12. `Save eligible caches`: current generated CI saves the permitted Cargo-source
+    cache. Qualified task-artifact snapshots require future Gate 6 support and
+    qualification. MBX object export/save is the pinned action's post-step and
+    follows the action-specific policy above.
 13. `Report timings and reuse`: write the final machine-readable report.
 
 The matrix job MUST execute Clippy before test compilation. Different matrix entries MUST run in
@@ -113,10 +145,13 @@ equivalent, the adapter may use it, otherwise Cargo metadata is an explicit
 discovery-only exception.
 
 Do not run `cargo install`, ad hoc Rust component installers, absolute Cargo
-paths, or `taiki-e/install-action`. Until task-result caching is qualified,
-commands use direct `mise exec`; afterward only qualified cached tasks may use
-the temporary task definition. Nextest MUST compile its selected configuration
-once and reuse its archive/metadata for execution; it does not run doctests.
+paths, or `taiki-e/install-action`. Current commands use direct `mise exec`.
+Task-result caching remains blocked pending a task-definition delivery mechanism
+supported by the pinned Mise version; the proposed `mise run --file` form is
+unsupported by Mise 2026.9.18. Gate 6 also requires backend proof and qualification
+before qualified tasks can use the experimental artifact cache. Nextest MUST
+compile its selected configuration once and reuse its archive/metadata for
+execution; it does not run doctests.
 Project `rust-toolchain.toml`, `mise.toml`, and `mise.lock` remain byte-identical.
 
 For a matrix entry, generated workflow steps MUST use these commands. The generator appends sorted

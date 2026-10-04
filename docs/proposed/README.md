@@ -60,7 +60,7 @@ The generator crates MUST NOT implement a runner, a Scale Set client, or an Acti
 4. [CLI contract](cli-contract.md) fixes the stack-generic `velnor-actions` Clap command tree (`init`, `plan`, and `generate`), automatic detection, TOML ignore settings, and V1 Rust behavior.
 5. [Workflow contract](workflow-contract.md) defines triggers, jobs, and matrix data.
 6. [Task execution contract](task-execution-contract.md) defines task steps, Mise invocation, execution, and reports.
-7. [Cache and report contract](cache-contract.md) defines task identities, cache ownership/trust, reports, and final status aggregation.
+7. [Cache and report contract](cache-contract.md) defines task identities, generic cache ownership/trust, reports, and final status aggregation. [Rust cache transport contract](rust-cache-transport-contract.md) describes current V1 Rust cache transport and the Gate 6 task-cache proposal.
 8. [Parallelism and affected-work contract](parallelism-and-selection-contract.md) defines dependency-aware selection, trusted baseline coverage, native background/wait steps, bounded concurrency, and complete test partitioning.
 9. [Rust quality contract](rust-quality-contract.md) defines tests, lints, file limits, dependencies, verification and policy protection.
 10. [Agent and performance contract](agent-and-performance-contract.md) defines agent instructions, performance measurements, acceptance budgets, and readiness evidence.
