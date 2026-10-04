@@ -50,6 +50,9 @@ jobs:
       contents: read
     needs:
       - verify-release-source
+    outputs:
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -58,6 +61,30 @@ jobs:
           persist-credentials: "false"
       - name: Build Linux velnor-actions
         uses: ./.github/actions/generator-release-build-linux # zizmor: ignore[self-repository]
+      - name: Upload Linux assets
+        id: upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          if-no-files-found: error
+          name: generator-linux-assets
+          path: generator-linux-assets.tar
+          retention-days: 1
+  qualify-linux:
+    name: Qualify Linux velnor-actions
+    runs-on: ubuntu-26.04
+    timeout-minutes: 120
+    needs:
+      - build-linux
+    permissions:
+      contents: read
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: "1"
+          persist-credentials: "false"
+      - name: Qualify Linux velnor-actions
+        uses: ./.github/actions/generator-release-qualify-linux # zizmor: ignore[self-repository]
   attest-linux:
     name: Attest Linux velnor-actions
     runs-on: ubuntu-26.04
@@ -70,6 +97,7 @@ jobs:
       id-token: write
     needs:
       - build-linux
+      - qualify-linux
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -87,6 +115,9 @@ jobs:
       contents: read
     needs:
       - verify-release-source
+    outputs:
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -95,6 +126,30 @@ jobs:
           persist-credentials: "false"
       - name: Build macOS velnor-actions
         uses: ./.github/actions/generator-release-build-macos # zizmor: ignore[self-repository]
+      - name: Upload macOS assets
+        id: upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          if-no-files-found: error
+          name: generator-macos-assets
+          path: generator-macos-assets.tar
+          retention-days: 1
+  qualify-macos:
+    name: Qualify macOS velnor-actions
+    runs-on: macos-15
+    timeout-minutes: 120
+    needs:
+      - build-macos
+    permissions:
+      contents: read
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: "1"
+          persist-credentials: "false"
+      - name: Qualify macOS velnor-actions
+        uses: ./.github/actions/generator-release-qualify-macos # zizmor: ignore[self-repository]
   attest-macos:
     name: Attest macOS velnor-actions
     runs-on: macos-15
@@ -107,6 +162,7 @@ jobs:
       id-token: write
     needs:
       - build-macos
+      - qualify-macos
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -124,6 +180,9 @@ jobs:
       contents: read
     needs:
       - verify-release-source
+    outputs:
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -132,6 +191,30 @@ jobs:
           persist-credentials: "false"
       - name: Build macOS x86_64 velnor-actions
         uses: ./.github/actions/generator-release-build-macos-intel # zizmor: ignore[self-repository]
+      - name: Upload macOS x86_64 assets
+        id: upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          if-no-files-found: error
+          name: generator-macos-intel-assets
+          path: generator-macos-intel-assets.tar
+          retention-days: 1
+  qualify-macos-intel:
+    name: Qualify macOS x86_64 velnor-actions
+    runs-on: macos-15-intel
+    timeout-minutes: 120
+    needs:
+      - build-macos-intel
+    permissions:
+      contents: read
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: "1"
+          persist-credentials: "false"
+      - name: Qualify macOS x86_64 velnor-actions
+        uses: ./.github/actions/generator-release-qualify-macos-intel # zizmor: ignore[self-repository]
   attest-macos-intel:
     name: Attest macOS x86_64 velnor-actions
     runs-on: macos-15-intel
@@ -144,6 +227,7 @@ jobs:
       id-token: write
     needs:
       - build-macos-intel
+      - qualify-macos-intel
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
