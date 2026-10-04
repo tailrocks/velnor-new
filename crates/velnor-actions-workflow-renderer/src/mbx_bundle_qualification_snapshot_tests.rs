@@ -26,6 +26,7 @@ fn export_snapshot_failure_fails_qualification_before_gc() -> Result<(), String>
             ("EXPORT_STATUS", "0".into()),
             ("GC_STATUS", "0".into()),
         ],
+        true,
         false,
     )?;
     assert!(
@@ -69,6 +70,7 @@ fn gc_snapshot_failure_fails_qualification_after_gc() -> Result<(), String> {
             ("EXPORT_STATUS", "0".into()),
             ("GC_STATUS", "0".into()),
         ],
+        true,
         false,
     )?;
     assert!(

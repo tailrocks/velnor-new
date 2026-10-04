@@ -19,6 +19,8 @@ use crate::cache_steps::{
     MBX_ACTION_NAME, MBX_PREFLIGHT_NAME, TOOLS_RESTORE_USES, TOOLS_SAVE_USES, is_mbx_action,
     mbx_path_preflight_step,
 };
+#[path = "mbx_bundle_backend.rs"]
+mod backend;
 #[path = "mbx_bundle_identity.rs"]
 mod identity;
 #[path = "mbx_bundle_lane.rs"]
@@ -29,6 +31,7 @@ mod observer;
 mod pr_cache;
 #[path = "mbx_bundle_qualification.rs"]
 mod qualification;
+use backend::{pin_local_backend, reject_private_env_overrides};
 use identity::{CacheIdentity, import_guard, plan_writers};
 pub(crate) use lane::{bind_shared_lane_outputs, shared_lane_policy};
 pub(crate) use observer::qualification_observer_steps;
@@ -48,6 +51,9 @@ pub(crate) const MBX_BUNDLE_KEY_NAME: &str = "Prepare MBX bundle key";
 pub(crate) const MBX_BUNDLE_RESTORE_NAME: &str = "Restore MBX single bundle";
 /// Display name of the import into the private MBX store.
 pub(crate) const MBX_BUNDLE_IMPORT_NAME: &str = "Import MBX single bundle";
+/// Bind export snapshots to the resource sampler actually attached to a job.
+pub(crate) const MBX_RESOURCE_EVIDENCE_REQUIRED_ENV: &str =
+    "MBX_QUALIFICATION_RESOURCE_EVIDENCE_REQUIRED";
 /// Bundle path and cache action version stay stable across jobs and runs.
 pub(crate) const MBX_BUNDLE_PATH: &str = "${{ runner.temp }}/mbx-single-bundle";
 /// Internal-only MBX input that selects a shared logical cache scope.
@@ -167,67 +173,6 @@ fn insert_mbx_preflight_step(
         }
     }
     job.steps.insert(root_index, preflight);
-    Ok(())
-}
-
-/// These names must remain job-owned so later steps cannot redirect MBX or export.
-fn reject_private_env_overrides(job: &Job, id: &str) -> Result<(), RenderError> {
-    for step in &job.steps {
-        let env = match &step.kind {
-            StepKind::Action { env, .. } | StepKind::Shell { env, .. } => env,
-            StepKind::Internal { .. } => continue,
-        };
-        if [
-            "MBX_CACHE_DIR",
-            "MBX_TARGET_ROOT",
-            "MBX_SHIMS_DIR",
-            "MBX_CACHE_EXPORT_GROUP",
-        ]
-        .iter()
-        .any(|name| env.contains_key(*name))
-        {
-            return Err(RenderError::InvalidWorkflow(format!(
-                "mbx_private_env_override:{id}:{}",
-                step.name
-            )));
-        }
-    }
-    Ok(())
-}
-
-/// Prevent the stock GitHub backend from restoring/importing/saving internally.
-fn pin_local_backend(job: &mut Job, id: &str) -> Result<(), RenderError> {
-    for step in &mut job.steps {
-        let StepKind::Action { uses, with, env } = &mut step.kind else {
-            continue;
-        };
-        if !uses.starts_with(&format!("{MBX_ACTION_NAME}@")) {
-            continue;
-        }
-        if ["isolate-objects-cache", "cache-key-suffix"]
-            .iter()
-            .any(|input| with.contains_key(*input))
-        {
-            return Err(RenderError::InvalidWorkflow(format!(
-                "unsupported_mbx_input:{id}"
-            )));
-        }
-        with.insert("backend".to_owned(), "local".to_owned());
-        for input in [
-            MBX_SCOPE_INPUT,
-            MBX_WRITER_INPUT,
-            "github-cache-mode",
-            "cache-generation",
-            "cache-key",
-            "restore-keys",
-            "save-on-workflow-dispatch",
-            "save-on-pull-request",
-            "save-on-protected-branch",
-        ] {
-            with.remove(input);
-        }
-        env.remove("ACTIONS_CACHE_MODE");
-    }
     Ok(())
 }
 
@@ -356,10 +301,18 @@ fn export_step(
     pull_request_cache_policy: PullRequestCachePolicy,
 ) -> Result<Step, RenderError> {
     let script = qualification::export_script(qualification_writer, EXPORT_SCRIPT);
+    let env = if qualification_writer {
+        BTreeMap::from([(
+            MBX_RESOURCE_EVIDENCE_REQUIRED_ENV.to_owned(),
+            "false".to_owned(),
+        )])
+    } else {
+        BTreeMap::new()
+    };
     let mut step = crate::steps::shell_step(
         MBX_BUNDLE_EXPORT_NAME,
         vec!["bash".to_owned(), "-c".to_owned(), script],
-        BTreeMap::new(),
+        env,
     )?;
     step.condition = Some(pr_cache::prep_condition(pull_request_cache_policy));
     Ok(step)
