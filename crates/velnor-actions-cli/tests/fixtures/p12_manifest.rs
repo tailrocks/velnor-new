@@ -8,31 +8,6 @@ use std::error::Error;
 use super::p12_harness as harness;
 
 #[test]
-fn complete_supported_inventory_passes() -> Result<(), Box<dyn Error>> {
-    let fixture = harness::passing("p12-pass")?;
-    let run = harness::run_script(&fixture.dir, &[])?;
-    harness::assert_clean(&run);
-    for needle in [
-        "aaa:dependencies:serde",
-        "aaa:dependencies:js",
-        "aaa:build-dependencies:toml",
-        "aaa:dev-dependencies:tempfile",
-        "aaa:target.cfg(unix).dependencies:globset",
-        "path-only, no registry identity",
-        "9 locked names retained",
-        "10 locked packages reachable",
-    ] {
-        assert!(
-            run.stdout.contains(needle),
-            "missing {needle}:\n{}",
-            run.stdout
-        );
-    }
-    harness::cleanup(&fixture);
-    Ok(())
-}
-
-#[test]
 fn inexact_requirement_fails() -> Result<(), Box<dyn Error>> {
     let fixture = harness::passing("p12-inexact")?;
     harness::mutate(

@@ -169,27 +169,82 @@ fn every_fail_row_is_nonzero() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn script_covers_all_forms_scopes_and_namespaces() -> Result<(), Box<dyn Error>> {
-    let fixture = harness::passing("p12-script-closure")?;
+fn public_wrapper_covers_all_dependency_forms_scopes_and_namespaces() -> Result<(), Box<dyn Error>>
+{
+    let fixture = harness::passing("p12-dependency-coverage")?;
     let run = harness::run_script(&fixture.dir, &[])?;
     harness::assert_clean(&run);
-    for row in [
-        "aaa:dependencies:serde",
-        "aaa:dependencies:serde_json",
-        "aaa:dependencies:js",
-        "aaa:dev-dependencies:tempfile",
-        "aaa:build-dependencies:toml",
-        "aaa:target.cfg(unix).dependencies:globset",
-        "(declared-summary)",
-        "(lock-membership)",
-        "(lock-graph)",
+
+    // Fixture rows cover string requirements, version tables, workspace
+    // inheritance, renamed packages, path members, and each supported scope.
+    for (subject, detail) in [
+        ("aaa:dependencies:serde", "=1.0.200 @ registry"),
+        ("aaa:dependencies:serde_json", "=1.0.100 @ registry"),
+        ("aaa:dependencies:blake3", "=1.5.0 @ registry"),
+        ("aaa:dependencies:js", "=1.0.100 @ registry"),
+        ("aaa:dependencies:bbb", "=0.1.0 @ workspace"),
+        ("aaa:dev-dependencies:tempfile", "=3.9.0 @ registry"),
+        ("aaa:build-dependencies:toml", "=0.9.0 @ registry"),
+        (
+            "aaa:target.cfg(unix).dependencies:globset",
+            "=0.4.10 @ registry",
+        ),
     ] {
+        let expected_subject = format!("\"subject\":\"{subject}\"");
+        let expected_detail = format!("\"detail\":\"{detail}\"");
         assert!(
-            run.stdout.contains(row),
-            "script closure misses {row}:\n{}",
+            harness::rows(&run).iter().any(|row| {
+                row.contains("\"check\":\"lock-staleness\"")
+                    && row.contains("\"status\":\"pass\"")
+                    && row.contains(&expected_subject)
+                    && row.contains(&expected_detail)
+            }),
+            "missing lock pass for {subject} ({detail}):\n{}",
             run.stdout
         );
     }
+    for (subject, status, detail) in [
+        (
+            "(declared-summary)",
+            "info",
+            "9 match, 0 fail, 9 locked names retained",
+        ),
+        ("(lock-membership)", "pass", "2 members"),
+        ("(lock-graph)", "pass", "10 locked packages reachable"),
+    ] {
+        let expected_subject = format!("\"subject\":\"{subject}\"");
+        let expected_status = format!("\"status\":\"{status}\"");
+        assert!(
+            harness::rows(&run).iter().any(|row| {
+                row.contains("\"check\":\"lock-staleness\"")
+                    && row.contains(&expected_subject)
+                    && row.contains(&expected_status)
+                    && row.contains(detail)
+            }),
+            "missing lock summary {subject} ({detail}):\n{}",
+            run.stdout
+        );
+    }
+    assert!(
+        harness::rows(&run).iter().any(|row| {
+            row.contains("\"check\":\"lock-staleness\"")
+                && row.contains("\"status\":\"pass\"")
+                && row.contains("\"subject\":\"aaa:dependencies:local_only\"")
+                && row.contains("path-only, no registry identity")
+        }),
+        "missing path-only dependency pass:\n{}",
+        run.stdout
+    );
+    assert!(
+        run.stdout.contains("9 locked names retained"),
+        "{}",
+        run.stdout
+    );
+    assert!(
+        run.stdout.contains("10 locked packages reachable"),
+        "{}",
+        run.stdout
+    );
     harness::cleanup(&fixture);
     Ok(())
 }
