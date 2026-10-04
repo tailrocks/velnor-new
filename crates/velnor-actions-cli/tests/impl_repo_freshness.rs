@@ -265,6 +265,30 @@ fn ver37_merge_after_qual() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn ver_fork_action_pin_checks_commit_identity() -> Result<(), Box<dyn Error>> {
+    let script = read("scripts/check-freshness.sh")?;
+    for token in [
+        "pin_kind = entry.get(\"pin_kind\", \"release\")",
+        "fork-commit source, SHA, or pin label mismatch",
+        "commit_sha = payload.get(\"sha\")",
+        "verified immutable commit {latest}",
+        "action.get(\"pinned_sha\")",
+        "/commits/{sha}",
+    ] {
+        assert!(
+            script.contains(token),
+            "fork pin verification misses {token}"
+        );
+    }
+    let policy = read("docs/proposed/version-policy.md")?;
+    assert!(
+        policy.contains("fork-<first-seven-SHA-chars>"),
+        "policy must distinguish fork commits from upstream releases"
+    );
+    Ok(())
+}
+
+#[test]
 fn ver44_velnor_owned_refresh_only() -> Result<(), Box<dyn Error>> {
     let procedure = read("docs/implemented/update-procedure.md")?;
     assert!(procedure.contains("VER-4.4"), "procedure must cite VER-4.4");

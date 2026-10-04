@@ -1,12 +1,12 @@
 //! Per-project override schema and action-input validation.
 //!
-//! Overrides are allowlisted by action key and approved `(sha, version)`
+//! Overrides are allowlisted by action key and approved `(sha, pin label)`
 //! pairs; inputs validate against each action's allowlisted schema.
 
 use crate::ActionlintError;
 use crate::actions::{
     ALINT_ACTION, ALLOWED_ACTIONS, CHECKOUT_ACTION, PinnedActionRef, RUST_CACHE_ACTION,
-    is_full_sha, is_version_tag, split_key,
+    is_full_sha, is_pin_label, split_key,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -17,16 +17,16 @@ pub struct ActionPinOverride {
     pub action: String,
     /// Exact 40-char commit SHA.
     pub sha: String,
-    /// Matching stable version (`vX.Y.Z`).
+    /// Matching stable version or fork-commit identity (`fork-<sha-prefix>`).
     pub version: String,
 }
 
-/// One approved `(sha, version)` pair for an allowlisted action.
+/// One approved `(sha, pin label)` pair for an allowlisted action.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ApprovedPin {
     /// Exact 40-char commit SHA.
     pub sha: String,
-    /// Matching stable version (`vX.Y.Z`).
+    /// Matching stable version or fork-commit identity (`fork-<sha-prefix>`).
     pub version: String,
 }
 
@@ -65,7 +65,7 @@ impl ApprovedPinCatalog {
                 problem: "action_not_overridable".to_owned(),
             });
         }
-        if !is_full_sha(sha) || !is_version_tag(version) {
+        if !is_full_sha(sha) || !is_pin_label(sha, version) {
             return Err(ActionlintError::OverrideRejected {
                 action: action.to_owned(),
                 problem: "malformed_pair".to_owned(),
@@ -108,7 +108,7 @@ impl ApprovedPinCatalog {
                 problem: "ref_must_be_full_sha".to_owned(),
             });
         }
-        if !is_version_tag(&request.version) {
+        if !is_pin_label(&request.sha, &request.version) {
             return Err(ActionlintError::OverrideRejected {
                 action: request.action.clone(),
                 problem: format!("invalid_version:{}", request.version),

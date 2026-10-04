@@ -721,6 +721,21 @@ def freshness_row(subject, entry, pinned, qualified, latest=None,
                  f"check timestamp {stamp} is in the future")
         return
     status = entry.get("status")
+    pin_kind = entry.get("pin_kind", "release")
+    if pin_kind not in ("release", "fork-commit"):
+        fail_row("upstream-freshness", subject,
+                 f"unsupported pin_kind: {pin_kind!r}")
+        return
+    if pin_kind == "fork-commit":
+        sha = entry.get("pinned_sha", "")
+        version = entry.get("pinned_version", "")
+        source_want = f"https://api.github.com/repos/{entry.get('key')}/commits/{sha}"
+        prefix = sha[:7] if isinstance(sha, str) and \
+            re.fullmatch(r"[0-9a-f]{40}", sha) else ""
+        if source != source_want or not prefix or version != f"fork-{prefix}":
+            fail_row("upstream-freshness", subject,
+                     "fork-commit source, SHA, or pin label mismatch")
+            return
     if status == "held":
         if subject not in hold_keys and entry.get("key", subject) not in hold_keys:
             fail_row("upstream-freshness", subject,
@@ -932,6 +947,11 @@ def sniff_latest(source, body):
     except ValueError:
         payload = None
     if payload is not None:
+        if "/commits/" in source and isinstance(payload, dict):
+            commit_sha = payload.get("sha")
+            if isinstance(commit_sha, str) and \
+                    re.fullmatch(r"[0-9a-f]{40}", commit_sha):
+                return commit_sha
         if "crates.io/api/v1/crates/" in source \
                 and isinstance(payload, dict):
             crate = payload.get("crate") or {}
@@ -983,6 +1003,17 @@ if check_upstream:
             fail_row("upstream-probe", key,
                      f"lookup_failed ({err}); source {source}, "
                      f"checked {stamp}")
+            continue
+        if action.get("pin_kind", "release") == "fork-commit":
+            if latest != action.get("pinned_sha"):
+                fail_row("upstream-probe", key,
+                         f"fork commit mismatch: pinned_sha="
+                         f"{action.get('pinned_sha')!r} latest={latest!r}; "
+                         f"source {source}, checked {stamp}")
+            else:
+                pass_row("upstream-probe", key,
+                         f"verified immutable commit {latest}; "
+                         f"source {source}, checked {stamp}")
             continue
         if latest is None:
             fail_row("upstream-probe", key,
