@@ -175,7 +175,14 @@ fn help_and_version_identical_with_env() -> Result<(), Box<dyn Error>> {
     for flag in ["--help", "--version"] {
         let plain = spawn_isolated(&[flag], &[], &tmp)?;
         assert_eq!(code(&plain), 0);
-        for op in ["write-request-v1", "plan-v1", "merge-v1", "bogus-v9"] {
+        for op in [
+            "write-request-v1",
+            "plan-v1",
+            "merge-v1",
+            "assemble-generator-release-manifest-v1",
+            "verify-generator-release-manifest-v1",
+            "bogus-v9",
+        ] {
             let gated = spawn_isolated(
                 &[flag],
                 &[("VELNOR_INTERNAL_OP", op), ("VELNOR_REQUEST_FILE", &file)],
