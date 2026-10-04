@@ -11,6 +11,7 @@ fn decide(capacity: u32, started: u32, running: u32, idle: Idle) -> Admit {
         capacity,
         target: capacity,
         started,
+        occupied: running,
         running,
         assigned: u32::MAX,
         idle,
@@ -22,6 +23,25 @@ fn decide_at(capacity: u32, target: u32, started: u32, running: u32, idle: Idle)
         capacity,
         target,
         started,
+        occupied: running,
+        running,
+        assigned: u32::MAX,
+        idle,
+    })
+}
+
+fn decide_with_occupied(
+    capacity: u32,
+    started: u32,
+    occupied: u32,
+    running: u32,
+    idle: Idle,
+) -> Admit {
+    admit(Seat {
+        capacity,
+        target: capacity,
+        started,
+        occupied,
         running,
         assigned: u32::MAX,
         idle,
@@ -74,6 +94,50 @@ fn full_capacity_holds_job_offers_but_keeps_aggregate_scale_ack_semantics() {
 }
 
 #[test]
+fn durable_reservations_block_launch_until_cleanup_proof() {
+    assert_eq!(
+        decide_with_occupied(1, 1, 1, 0, Idle::Launch),
+        Admit::Hold,
+        "an uncertain or stopped worker still owns the durable slot"
+    );
+    assert_eq!(
+        decide_with_occupied(1, 1, 0, 0, Idle::Launch),
+        Admit::Start { stop: true },
+        "the slot is reusable after cleanup proof removes its reservation"
+    );
+}
+
+#[test]
+fn scale_capacity_uses_reservations_and_population_uses_live_workers() {
+    assert_eq!(
+        admit(Seat {
+            capacity: 2,
+            target: 2,
+            started: 9,
+            occupied: 2,
+            running: 0,
+            assigned: 1,
+            idle: Idle::Scale,
+        }),
+        Admit::Ack { stop: false },
+        "a pending cleanup reservation fills capacity even without a running container"
+    );
+    assert_eq!(
+        admit(Seat {
+            capacity: 2,
+            target: 2,
+            started: 9,
+            occupied: 1,
+            running: 0,
+            assigned: 1,
+            idle: Idle::Scale,
+        }),
+        Admit::Start { stop: true },
+        "an uncleaned reservation does not claim assigned population coverage"
+    );
+}
+
+#[test]
 fn ack_does_not_start_or_free_a_slot() {
     let running = 2;
     assert_eq!(decide(1, 0, 1, Idle::Ack), Admit::Ack { stop: false });
@@ -89,6 +153,7 @@ fn scale_does_not_mint_again_once_assigned_is_covered() {
             capacity: 2,
             target: 2,
             started: 1,
+            occupied: 1,
             running: 1,
             assigned: 1,
             idle: Idle::Scale,
@@ -100,6 +165,7 @@ fn scale_does_not_mint_again_once_assigned_is_covered() {
             capacity: 2,
             target: 3,
             started: 99,
+            occupied: 1,
             running: 1,
             assigned: 1,
             idle: Idle::Scale,
@@ -111,6 +177,7 @@ fn scale_does_not_mint_again_once_assigned_is_covered() {
             capacity: 2,
             target: 2,
             started: 1,
+            occupied: 1,
             running: 1,
             assigned: 3,
             idle: Idle::Scale,
@@ -122,6 +189,7 @@ fn scale_does_not_mint_again_once_assigned_is_covered() {
             capacity: 2,
             target: 2,
             started: 0,
+            occupied: 0,
             running: 0,
             assigned: 1,
             idle: Idle::Scale,
@@ -133,6 +201,7 @@ fn scale_does_not_mint_again_once_assigned_is_covered() {
             capacity: 2,
             target: 2,
             started: 1,
+            occupied: 0,
             running: 0,
             assigned: 1,
             idle: Idle::Scale,
@@ -235,13 +304,13 @@ fn three_refill_waves_ignore_historical_starts() {
     let capacity = 2;
     for started in [0, 2, 4] {
         assert_eq!(
-            decide_at(capacity, capacity, started, 0, Idle::Launch),
+            decide_with_occupied(capacity, started, 0, 0, Idle::Launch),
             Admit::Start { stop: false },
             "free capacity must admit a job in the next refill wave after {started} prior starts"
         );
     }
     assert_eq!(
-        decide_at(capacity, capacity, 6, 1, Idle::Launch),
+        decide_with_occupied(capacity, 6, 1, 0, Idle::Launch),
         Admit::Start { stop: true },
         "one free slot remains usable after three completed waves"
     );

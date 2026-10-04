@@ -30,7 +30,7 @@ pub(crate) enum Admit {
         /// Leave the session after the acknowledgement.
         stop: bool,
     },
-    /// Running count is at capacity. The launch stays unacquired.
+    /// Durable occupied count is at capacity. The launch stays unacquired.
     Hold,
     /// Two ids, or another message that must stay on the queue. No start.
     Error,
@@ -46,7 +46,10 @@ pub(crate) struct Seat {
     /// Workers this call already started, including the statistics runner.
     /// This history does not consume capacity or prevent a refill.
     pub(crate) started: u32,
-    /// Running launch containers. Unused when [`needs_running`] is false.
+    /// Durable launch reservations, including pending/uncertain or uncleaned rows.
+    /// A row remains occupied until exact owned cleanup is proven.
+    pub(crate) occupied: u32,
+    /// Currently running owned workers; used only for scale-population coverage.
     pub(crate) running: u32,
     /// `statistics.totalAssignedJobs` for this poll. Zero when the poll has none.
     pub(crate) assigned: u32,
@@ -112,18 +115,18 @@ const fn admit_empty(seat: Seat) -> Admit {
 }
 
 const fn admit_launch(seat: Seat) -> Admit {
-    if seat.running >= seat.capacity {
+    if seat.occupied >= seat.capacity {
         return Admit::Hold;
     }
     Admit::Start {
-        stop: seat.running.saturating_add(1) >= seat.capacity,
+        stop: seat.occupied.saturating_add(1) >= seat.capacity,
     }
 }
 
 const fn admit_scale(seat: Seat) -> Admit {
-    if !scale_covered(seat) && seat.running < seat.capacity {
+    if !scale_covered(seat) && seat.occupied < seat.capacity {
         return Admit::Start {
-            stop: seat.running.saturating_add(1) >= seat.capacity,
+            stop: seat.occupied.saturating_add(1) >= seat.capacity,
         };
     }
     // A population already covered by current occupants is acknowledged, not minted again.
