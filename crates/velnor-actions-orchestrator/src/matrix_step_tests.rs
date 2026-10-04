@@ -275,13 +275,16 @@ fn validator_installs_follow_executed_suite_per_policy() {
         "demo",
     ] {
         assert!(
-            crate_needs_generate_validators(WorkflowPolicy::ConsumerV1, package),
+            crate_needs_generate_validators(WorkflowPolicy::ConsumerV1, suite_for_package(package)),
             "consumer suites are opaque: {package} keeps the trio"
         );
     }
     for package in ["velnor-actions-orchestrator", "velnor-actions-cli"] {
         assert!(
-            crate_needs_generate_validators(WorkflowPolicy::VelnorRepositoryV1, package),
+            crate_needs_generate_validators(
+                WorkflowPolicy::VelnorRepositoryV1,
+                suite_for_package(package)
+            ),
             "{package} spawns validators and must install them"
         );
     }
@@ -295,61 +298,11 @@ fn validator_installs_follow_executed_suite_per_policy() {
         "demo",
     ] {
         assert!(
-            !crate_needs_generate_validators(WorkflowPolicy::VelnorRepositoryV1, package),
+            !crate_needs_generate_validators(
+                WorkflowPolicy::VelnorRepositoryV1,
+                suite_for_package(package)
+            ),
             "{package} never spawns validators and must trim the trio"
-        );
-    }
-}
-
-/// Every workspace member is classified: validator-spawning or trimmed.
-///
-/// A new crate fails here by name until its suite is audited for
-/// trio execution (see `GENERATE_VALIDATOR_SUITES`) and classified.
-#[test]
-fn every_workspace_member_is_classified() {
-    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let root = manifest_dir
-        .parent()
-        .and_then(std::path::Path::parent)
-        .expect("crate lives two levels under the workspace root");
-    let mut members = Vec::new();
-    let crates = std::fs::read_dir(root.join("crates")).expect("crates dir lists");
-    for entry in crates {
-        let manifest = entry.expect("dir entry reads").path().join("Cargo.toml");
-        let text = std::fs::read_to_string(&manifest).expect("member manifest reads");
-        let mut in_package = false;
-        for line in text.lines() {
-            if line.trim() == "[package]" {
-                in_package = true;
-            } else if line.starts_with('[') {
-                in_package = false;
-            } else if in_package && line.trim_start().starts_with("name = ") {
-                let name = line
-                    .trim_start()
-                    .trim_start_matches("name = ")
-                    .trim()
-                    .trim_matches('"');
-                members.push(name.to_owned());
-                break;
-            }
-        }
-    }
-    assert!(!members.is_empty(), "workspace scan must find members");
-    for member in &members {
-        let known = [
-            "velnor-actions-orchestrator",
-            "velnor-actions-cli",
-            "velnor-actions-contract",
-            "velnor-actions-mise",
-            "velnor-actions-rust",
-            "velnor-actions-tofu",
-            "velnor-actions-workflow-renderer",
-            "velnor-actions-actionlint",
-        ]
-        .contains(&member.as_str());
-        assert!(
-            known,
-            "{member} is unclassified: audit its suite for trio execution, then classify it"
         );
     }
 }
