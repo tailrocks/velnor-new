@@ -206,7 +206,38 @@ case_space_name() {
   grep -qx 'space-ok' "$root/dest/my file.txt" || return 1
 }
 
+case_absolute_relative_target() {
+  local root="$work/absrel" err status=0 link
+  rm -rf -- "$root"
+  mkdir -p "$root/dest" "$root/pit"
+  link="$root/pit/link"
+  write_ustar "$root/arc.tar" s "$link" tmp || return 1
+  err="$root/err"
+  bash "$shim" -xf "$root/arc.tar" -P -C "$root/dest" >"$err" 2>&1 || status=$?
+  [ "$status" -ne 0 ] || return 1
+  grep -E -q 'escapes|traverses' "$err" || return 1
+  [ ! -e "$link" ] || return 1
+  [ ! -L "$link" ] || return 1
+  [ ! -e "$root/pit/tmp" ] || return 1
+}
+
+case_dot_symlink_walk() {
+  local root="$work/dotwalk" err status=0
+  rm -rf -- "$root"
+  mkdir -p "$root/dest" "$root/outside"
+  write_ustar "$root/arc.tar" s link nested f ./link/pwned PWNED || return 1
+  err="$root/err"
+  bash "$shim" -xf "$root/arc.tar" -C "$root/dest" >"$err" 2>&1 || status=$?
+  [ "$status" -ne 0 ] || return 1
+  grep -F -q 'traverses' "$err" || return 1
+  [ ! -e "$root/dest/nested/pwned" ] || return 1
+  [ ! -e "$root/dest/pwned" ] || return 1
+  [ ! -e "$root/outside/pwned" ] || return 1
+}
+
 run_case newline-rejected case_newline
+run_case absolute-relative-target case_absolute_relative_target
+run_case dot-symlink-walk case_dot_symlink_walk
 run_case symlink-escape case_symlink_escape
 run_case preexisting-symlink case_preexisting_symlink
 run_case symlink-inside case_symlink_inside
