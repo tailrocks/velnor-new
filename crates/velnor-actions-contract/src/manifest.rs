@@ -154,7 +154,13 @@ impl ReleaseManifest {
     ///
     /// # Errors
     pub fn validate_published_asset_url(&self, url: &str, file: &str) -> Result<(), ContractError> {
-        crate::targets::check_release_manifest_artifact(url, &self.version, file, "manifest_asset")
+        crate::targets::check_release_manifest_artifact(
+            url,
+            &self.version,
+            &self.commit,
+            file,
+            "manifest_asset",
+        )
     }
 
     /// Validate schema, version, repository, and exactly one record per
@@ -199,6 +205,7 @@ impl ReleaseManifest {
             crate::targets::check_release_artifact(
                 &record.artifact,
                 &self.version,
+                &self.commit,
                 &record.target,
                 file,
                 "targets.artifact",
