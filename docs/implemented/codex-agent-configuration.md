@@ -36,3 +36,23 @@ Review agents set `sandbox_mode = "read-only"` and their instructions prohibit e
 For the installed CLI, strictly validate project configuration with `codex app-server --strict-config` from the repository root. CLI 0.160.0 does not expose an app-server `customAgents/list` RPC, so that endpoint cannot enumerate the named agents. The standalone `.codex/agents/*.toml` files follow the documented project-agent discovery layout; select roles by their `name` values and inspect rollout metadata after any future spawn that requires an exact runtime check.
 
 The configuration follows the official [Codex subagent documentation](https://learn.chatgpt.com/docs/agent-configuration/subagents) and [config precedence](https://learn.chatgpt.com/docs/config-file/config-basic).
+
+## Commit identity and trailers
+
+The primary project session and every implementation or coordination role that prepares commits use the repository-local identity `Alexey Zhokhov <alexey@zhokhov.com>`. The project `developer_instructions` and each productive agent file require these exact trailers on every new commit, in this order. Configure the identity with `git config --local user.name "Alexey Zhokhov"` and `git config --local user.email "alexey@zhokhov.com"`:
+
+```text
+Co-authored-by: Codex <codex@openai.com>
+Signed-off-by: Alexey Zhokhov <alexey@zhokhov.com>
+```
+
+Pass both trailers to `git commit` in that order, for example:
+
+```sh
+git commit \
+  --trailer "Co-authored-by: Codex <codex@openai.com>" \
+  --trailer "Signed-off-by: Alexey Zhokhov <alexey@zhokhov.com>" \
+  -m "docs: explain repository agent roles"
+```
+
+Inspect the resulting message with `git show -s --format=%B HEAD`. Review-only agents must not edit or commit. Never rewrite a commit already pushed to a shared branch to correct its trailers; make a new follow-up commit and describe any historical metadata correction truthfully.
