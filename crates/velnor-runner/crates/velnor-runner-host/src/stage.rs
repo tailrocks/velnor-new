@@ -1,55 +1,80 @@
-//! Stop a worker pair between Docker calls.
-//!
-//! `remove_recorded` deletes only when the name still resolves to the owned id.
+//! Prepare DinD before JIT. Start the runner only after durable preparation.
+
+use std::collections::HashMap;
+use std::time::Duration;
 
 use bollard::Docker;
 use bollard::query_parameters::RemoveContainerOptionsBuilder;
+use tokio::time::{sleep, timeout};
 
-use crate::docker_spec::{DeleteDecision, delete_decision, runner_plan};
-use crate::error::HostError;
+use crate::action_archive_seed::ActionArchiveLease;
+use crate::error::{HostError, PreparationCause};
+use crate::journal::LaunchIdentity;
 use crate::worker::{
-    CreateProjection, create_named_volumes, create_only, deliver_jit, dind_create, join_dind_net,
-    runner_create, start_id,
+    CreateProjection, PreparedDind, Started, create_only, deliver_jit, dind_create, join_dind_net,
+    resources, runner_create_for_identity, start_id,
 };
 
-/// Where `start_pair_until` returns. Later steps are not started.
+mod cleanup;
+pub(crate) use cleanup::cleanup_worker;
+mod reconcile;
+pub(crate) use reconcile::{ObservedWorker, reconcile_worker};
+
+const PREPARE_DEADLINE: Duration = Duration::from_secs(60);
+const RUNNER_DEADLINE: Duration = Duration::from_secs(45);
+const CLEANUP_DEADLINE: Duration = Duration::from_secs(45);
+const READINESS_DEADLINE: Duration = Duration::from_secs(30);
+const READINESS_STEP: Duration = Duration::from_millis(500);
+const INSPECT_CALL: Duration = Duration::from_secs(5);
+const PROBE_CALL: Duration = Duration::from_secs(15);
+const CONTAINER_REMOVE_CALL: Duration = Duration::from_secs(10);
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PairStop {
-    /// Volumes exist. No container has been created.
-    Volumes,
-    /// `DinD` exists and is not started.
-    DindCreated,
-    /// `DinD` is running. The runner does not exist.
-    DindStarted,
-    /// The runner exists and is not started.
-    RunnerCreated,
-    /// The runner is running. JIT has not been written.
-    RunnerStarted,
-    /// Both containers are up and JIT was written.
-    Jit,
+pub(crate) enum DindProbe {
+    /// Inner daemon responds with the configured VFS root.
+    Ready,
+    /// The inner daemon is still starting.
+    Starting,
 }
 
-/// Containers created before a stop. Absent means that step did not run.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PartialPair {
-    /// `DinD` id, after create.
-    pub dind_id: Option<String>,
-    /// Runner id, after create.
-    pub runner_id: Option<String>,
+pub(crate) struct ContainerRecord {
+    pub(crate) id: String,
+    pub(crate) labels: HashMap<String, String>,
+    pub(crate) running: Option<bool>,
 }
 
 pub(crate) trait PairEngine {
-    async fn prepare_volumes(&self, volume: &str) -> Result<(), HostError>;
+    async fn prepare_volumes(&self, identity: &LaunchIdentity) -> Result<(), HostError>;
     async fn create(&self, spec: &CreateProjection) -> Result<String, HostError>;
     async fn start(&self, id: &str) -> Result<(), HostError>;
+    async fn probe_dind(&self, id: &str) -> Result<DindProbe, HostError>;
+    async fn list_launch(
+        &self,
+        identity: &LaunchIdentity,
+    ) -> Result<Vec<ContainerRecord>, HostError>;
+    async fn verify_container(
+        &self,
+        identity: &LaunchIdentity,
+        role: &str,
+        id: &str,
+        dind_id: Option<&str>,
+        archive_lease: Option<&ActionArchiveLease>,
+        require_running: bool,
+    ) -> Result<ContainerRecord, HostError>;
     async fn write_jit(&self, id: &str, jit: &[u8]) -> Result<(), HostError>;
     async fn remove(&self, id: &str) -> Result<(), HostError>;
-    async fn id_for_name(&self, name: &str) -> Result<Option<String>, HostError>;
+    async fn inspect_container(
+        &self,
+        id_or_name: &str,
+    ) -> Result<Option<ContainerRecord>, HostError>;
+    async fn remove_volumes(&self, identity: &LaunchIdentity) -> Result<(), HostError>;
+    async fn verify_engine(&self, identity: &LaunchIdentity) -> Result<(), HostError>;
 }
 
 impl PairEngine for Docker {
-    async fn prepare_volumes(&self, volume: &str) -> Result<(), HostError> {
-        create_named_volumes(self, &runner_plan(volume)?).await
+    async fn prepare_volumes(&self, identity: &LaunchIdentity) -> Result<(), HostError> {
+        resources::create_owned_volumes(self, identity).await
     }
 
     async fn create(&self, spec: &CreateProjection) -> Result<String, HostError> {
@@ -60,165 +85,258 @@ impl PairEngine for Docker {
         start_id(self, id).await
     }
 
+    async fn probe_dind(&self, id: &str) -> Result<DindProbe, HostError> {
+        resources::probe_dind(self, id).await
+    }
+
+    async fn list_launch(
+        &self,
+        identity: &LaunchIdentity,
+    ) -> Result<Vec<ContainerRecord>, HostError> {
+        resources::list_launch(self, identity).await
+    }
+
+    async fn verify_container(
+        &self,
+        identity: &LaunchIdentity,
+        role: &str,
+        id: &str,
+        dind_id: Option<&str>,
+        archive_lease: Option<&ActionArchiveLease>,
+        require_running: bool,
+    ) -> Result<ContainerRecord, HostError> {
+        resources::verify_container(
+            self,
+            identity,
+            role,
+            id,
+            dind_id,
+            archive_lease,
+            require_running,
+        )
+        .await
+    }
+
     async fn write_jit(&self, id: &str, jit: &[u8]) -> Result<(), HostError> {
         deliver_jit(self, id, jit).await
     }
 
     async fn remove(&self, id: &str) -> Result<(), HostError> {
         let options = RemoveContainerOptionsBuilder::new().force(true).build();
-        self.remove_container(id, Some(options))
-            .await
-            .map_err(|_| HostError::Docker)
+        match timeout(
+            CONTAINER_REMOVE_CALL,
+            self.remove_container(id, Some(options)),
+        )
+        .await
+        {
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(error)) if resources::confirmed_not_found(&error) => Ok(()),
+            Err(_) | Ok(Err(_)) => {
+                if confirm_container_absent(self, id).await? {
+                    Ok(())
+                } else {
+                    Err(HostError::Cleanup)
+                }
+            }
+        }
     }
 
-    async fn id_for_name(&self, name: &str) -> Result<Option<String>, HostError> {
-        if name.is_empty() {
-            return Ok(None);
-        }
-        match self.inspect_container(name, None).await {
-            Ok(body) => Ok(body.id.filter(|id| !id.is_empty())),
-            Err(_) => Ok(None),
-        }
+    async fn inspect_container(
+        &self,
+        id_or_name: &str,
+    ) -> Result<Option<ContainerRecord>, HostError> {
+        let found = match timeout(INSPECT_CALL, self.inspect_container(id_or_name, None)).await {
+            Err(_) => return Err(HostError::DockerTimeout),
+            Ok(Err(error)) if resources::confirmed_not_found(&error) => return Ok(None),
+            Ok(Err(_)) => return Err(HostError::Docker),
+            Ok(Ok(found)) => found,
+        };
+        let record = ContainerRecord {
+            id: found.id.ok_or(HostError::Ownership)?,
+            labels: found
+                .config
+                .and_then(|config| config.labels)
+                .ok_or(HostError::Ownership)?,
+            running: found.state.and_then(|state| state.running),
+        };
+        Ok(Some(record))
+    }
+
+    async fn remove_volumes(&self, identity: &LaunchIdentity) -> Result<(), HostError> {
+        resources::remove_owned_volumes(self, identity).await
+    }
+
+    async fn verify_engine(&self, identity: &LaunchIdentity) -> Result<(), HostError> {
+        resources::verify_engine(self, identity).await
     }
 }
 
-/// Create through `stop`, then return. `Jit` matches [`crate::worker::start_pair`].
+async fn confirm_container_absent(docker: &Docker, id: &str) -> Result<bool, HostError> {
+    match timeout(INSPECT_CALL, docker.inspect_container(id, None)).await {
+        Err(_) => Err(HostError::DockerTimeout),
+        Ok(Err(error)) if resources::confirmed_not_found(&error) => Ok(true),
+        Ok(Err(_)) => Err(HostError::Docker),
+        Ok(Ok(_)) => Ok(false),
+    }
+}
+
+/// Create volumes and DinD. Return only after its Docker API and private VFS root are ready.
 ///
 /// # Errors
 ///
-/// Returns [`HostError::EmptyJit`] before any create when `jit` is empty.
-/// Returns [`HostError::Docker`] when a Docker call fails. A failed later step
-/// removes only an id that still inspects as the one this call created.
-pub async fn start_pair_until(
+/// Returns [`HostError::PreparationFailedClean`] only before JIT and only after exact
+/// local cleanup succeeds. Ambiguous create, start, or cleanup results remain uncertain.
+pub(crate) async fn prepare_dind_until(
     docker: &Docker,
-    private_volume: &str,
-    jit: &[u8],
-    stop: PairStop,
-) -> Result<PartialPair, HostError> {
-    drive(docker, private_volume, jit, stop).await
+    identity: &LaunchIdentity,
+) -> Result<PreparedDind, HostError> {
+    timeout(PREPARE_DEADLINE, prepare_dind(docker, identity))
+        .await
+        .map_err(|_| HostError::LaunchUncertain)?
 }
 
-pub(crate) async fn drive<E: PairEngine>(
+pub(crate) async fn prepare_dind<E: PairEngine>(
     engine: &E,
-    private_volume: &str,
+    identity: &LaunchIdentity,
+) -> Result<PreparedDind, HostError> {
+    let observed = reconcile_worker(engine, identity, None, None, None).await?;
+    if observed.runner_id().is_some() {
+        return Err(HostError::Ownership);
+    }
+    if let Some(dind_id) = observed.dind_id() {
+        let record = engine
+            .verify_container(identity, "dind", dind_id, None, None, false)
+            .await?;
+        match record.running {
+            Some(true) => {}
+            Some(false) => engine.start(dind_id).await?,
+            None => return Err(HostError::Ownership),
+        }
+        let prepared = PreparedDind::from_journal(identity, dind_id)?;
+        return match wait_dind_ready(engine, dind_id).await {
+            Ok(()) => Ok(prepared),
+            Err(error) => {
+                cleanup_prepared_dind(engine, &prepared)
+                    .await
+                    .map_err(|_| HostError::Cleanup)?;
+                match preparation_cause(error) {
+                    Some(cause) => Err(HostError::PreparationFailedClean(cause)),
+                    None => Err(error),
+                }
+            }
+        };
+    }
+    engine.prepare_volumes(identity).await?;
+    let dind_id = engine.create(&dind_create(identity)?).await?;
+    engine.start(&dind_id).await?;
+    match wait_dind_ready(engine, &dind_id).await {
+        Ok(()) => PreparedDind::from_journal(identity, &dind_id),
+        Err(error) => {
+            let prepared = PreparedDind::from_journal(identity, &dind_id)?;
+            cleanup_prepared_dind(engine, &prepared)
+                .await
+                .map_err(|_| HostError::Cleanup)?;
+            match preparation_cause(error) {
+                Some(cause) => Err(HostError::PreparationFailedClean(cause)),
+                None => Err(error),
+            }
+        }
+    }
+}
+
+/// Start the runner on a prepared, exact-identity DinD and write the JIT payload.
+///
+/// # Errors
+///
+/// Returns an uncertainty error when runner create, start, or JIT delivery may have
+/// completed. The caller must retain the durable launch reservation.
+pub(crate) async fn start_runner_until(
+    docker: &Docker,
+    prepared: &PreparedDind,
     jit: &[u8],
-    stop: PairStop,
-) -> Result<PartialPair, HostError> {
+    archive_lease: Option<&ActionArchiveLease>,
+) -> Result<Started, HostError> {
+    timeout(
+        RUNNER_DEADLINE,
+        start_runner(docker, prepared, jit, archive_lease),
+    )
+    .await
+    .map_err(|_| HostError::LaunchUncertain)?
+}
+
+pub(crate) async fn start_runner<E: PairEngine>(
+    engine: &E,
+    prepared: &PreparedDind,
+    jit: &[u8],
+    archive_lease: Option<&ActionArchiveLease>,
+) -> Result<Started, HostError> {
     if jit.is_empty() {
         return Err(HostError::EmptyJit);
     }
-    let runner = runner_create(&runner_plan(private_volume)?)?;
-    let dind = dind_create(private_volume)?;
-    engine.prepare_volumes(private_volume).await?;
-    if stop == PairStop::Volumes {
-        return Ok(PartialPair::none());
+    let identity = prepared.identity();
+    if archive_lease.is_some_and(|lease| lease.launch_id() != identity.launch_id()) {
+        return Err(HostError::Ownership);
     }
-    let dind_id = engine.create(&dind).await?;
-    if stop == PairStop::DindCreated {
-        return Ok(PartialPair::dind(dind_id));
+    let observed = reconcile_worker(engine, identity, None, Some(prepared.dind_id()), None).await?;
+    if observed.dind_id() != Some(prepared.dind_id()) || observed.runner_id().is_some() {
+        return Err(HostError::Ownership);
     }
-    start_or_drop(engine, &dind_id).await?;
-    if stop == PairStop::DindStarted {
-        return Ok(PartialPair::dind(dind_id));
-    }
-    let spec = join_or_drop(engine, runner, &dind_id).await?;
-    let runner_id = match engine.create(&spec).await {
-        Ok(id) => id,
-        Err(error) => drop_id(engine, &dind_id, error).await?,
-    };
-    if stop == PairStop::RunnerCreated {
-        return Ok(PartialPair::both(dind_id, runner_id));
-    }
-    if let Err(error) = engine.start(&runner_id).await {
-        return drop_both(engine, &dind_id, &runner_id, error).await;
-    }
-    if stop == PairStop::RunnerStarted {
-        return Ok(PartialPair::both(dind_id, runner_id));
-    }
-    if let Err(error) = engine.write_jit(&runner_id, jit).await {
-        return drop_both(engine, &dind_id, &runner_id, error).await;
-    }
-    Ok(PartialPair::both(dind_id, runner_id))
+    engine
+        .verify_container(identity, "dind", prepared.dind_id(), None, None, true)
+        .await?;
+    let cache_path = archive_lease.map(|lease| lease.cache_path());
+    let runner = runner_create_for_identity(identity, cache_path)?;
+    let spec = join_dind_net(runner, prepared.dind_id())?;
+    let runner_id = engine.create(&spec).await?;
+    engine.start(&runner_id).await?;
+    engine.write_jit(&runner_id, jit).await?;
+    Ok(Started {
+        dind_id: prepared.dind_id().to_owned(),
+        runner_id,
+    })
 }
 
-/// Inspect `name`, then delete `owned_id` only on [`DeleteDecision::Delete`].
+/// Remove a prepared DinD only when no runner exists for its durable identity.
+///
+/// Call this only before JIT or after the caller proves that JIT created no runner.
 ///
 /// # Errors
 ///
-/// Returns [`HostError::Docker`] when the owned container cannot be removed.
-pub async fn remove_recorded(
-    docker: &Docker,
-    owned_id: &str,
-    name: &str,
-) -> Result<DeleteDecision, HostError> {
-    decide(docker, owned_id, name).await
-}
-
-pub(crate) async fn decide<E: PairEngine>(
+/// Returns an error when any exact owner or absence check fails. The caller must
+/// retain the launch reservation until reconciliation resolves the state.
+pub(crate) async fn cleanup_prepared_dind<E: PairEngine>(
     engine: &E,
-    owned_id: &str,
-    name: &str,
-) -> Result<DeleteDecision, HostError> {
-    let observed = engine.id_for_name(name).await?;
-    let decision = delete_decision(owned_id, observed.as_deref());
-    if decision == DeleteDecision::Delete {
-        engine.remove(owned_id).await?;
-    }
-    Ok(decision)
+    prepared: &PreparedDind,
+) -> Result<(), HostError> {
+    timeout(
+        CLEANUP_DEADLINE,
+        cleanup::cleanup_unstarted_dind(engine, prepared.identity(), prepared.dind_id()),
+    )
+    .await
+    .map_err(|_| HostError::Cleanup)?
 }
 
-async fn start_or_drop<E: PairEngine>(engine: &E, id: &str) -> Result<(), HostError> {
-    if let Err(error) = engine.start(id).await {
-        return drop_id(engine, id, error).await;
-    }
-    Ok(())
-}
-
-async fn join_or_drop<E: PairEngine>(
-    engine: &E,
-    runner: CreateProjection,
-    dind_id: &str,
-) -> Result<CreateProjection, HostError> {
-    match join_dind_net(runner, dind_id) {
-        Ok(spec) => Ok(spec),
-        Err(error) => drop_id(engine, dind_id, error).await,
-    }
-}
-
-async fn drop_id<E: PairEngine, T>(engine: &E, id: &str, error: HostError) -> Result<T, HostError> {
-    let _kept = decide(engine, id, id).await.err();
-    Err(error)
-}
-
-async fn drop_both<E: PairEngine, T>(
-    engine: &E,
-    dind_id: &str,
-    runner_id: &str,
-    error: HostError,
-) -> Result<T, HostError> {
-    let _runner = decide(engine, runner_id, runner_id).await.err();
-    drop_id(engine, dind_id, error).await
-}
-
-impl PartialPair {
-    fn none() -> Self {
-        Self {
-            dind_id: None,
-            runner_id: None,
+async fn wait_dind_ready<E: PairEngine>(engine: &E, id: &str) -> Result<(), HostError> {
+    timeout(READINESS_DEADLINE, async {
+        loop {
+            match timeout(PROBE_CALL, engine.probe_dind(id)).await {
+                Err(_) => return Err(HostError::DockerTimeout),
+                Ok(Err(error)) => return Err(error),
+                Ok(Ok(DindProbe::Ready)) => return Ok(()),
+                Ok(Ok(DindProbe::Starting)) => sleep(READINESS_STEP).await,
+            }
         }
-    }
+    })
+    .await
+    .map_err(|_| HostError::DindReadiness)?
+}
 
-    fn dind(dind_id: String) -> Self {
-        Self {
-            dind_id: Some(dind_id),
-            runner_id: None,
-        }
-    }
-
-    fn both(dind_id: String, runner_id: String) -> Self {
-        Self {
-            dind_id: Some(dind_id),
-            runner_id: Some(runner_id),
-        }
+fn preparation_cause(error: HostError) -> Option<PreparationCause> {
+    match error {
+        HostError::Docker => Some(PreparationCause::Docker),
+        HostError::DockerTimeout => Some(PreparationCause::DockerTimeout),
+        HostError::DindReadiness => Some(PreparationCause::DindReadiness),
+        HostError::DindStorage => Some(PreparationCause::DindStorage),
+        _ => None,
     }
 }

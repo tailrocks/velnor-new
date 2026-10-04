@@ -1,28 +1,47 @@
-//! Docker create projection for one runner and its private `DinD`.
+//! Docker create projections for one runner and its private `DinD`.
 //!
-//! JIT is not a field. `start_pair` writes it on stdin and does not store it.
+//! JIT is not a projection field. The launch sequence writes it on runner stdin.
 
 use std::collections::HashMap;
+use std::path::Path;
+use std::time::Duration;
 
 use bollard::Docker;
 use bollard::models::{
-    ContainerCreateBody, HostConfig, Mount as DockerMount, MountType, VolumeCreateRequest,
+    ContainerCreateBody, HostConfig, Mount as DockerMount, MountBindOptions, MountType,
 };
 use bollard::query_parameters::{
     AttachContainerOptionsBuilder, CreateContainerOptions, StartContainerOptions,
 };
 use tokio::io::AsyncWriteExt;
+use tokio::time::timeout;
 
-use crate::docker_spec::{ContainerPlan, Mount, audit_plan, runner_plan};
+use crate::docker_spec::{ContainerPlan, Mount, audit_plan};
 use crate::error::HostError;
-use crate::stage::PairStop;
+
+mod prepared;
+mod projection;
+pub(super) mod resources;
+pub(crate) use prepared::{
+    PreparedDind, cleanup_prepared_dind, prepare_dind_until, start_runner_until,
+};
+pub(crate) use projection::dind_create;
+pub(super) use projection::{container_labels, container_name, runner_create_for_identity};
+
+#[cfg(test)]
+mod projection_tests;
 
 const PLATFORM: &str = "linux/amd64";
-const DIND_IMAGE: &str = "velnor-dind:29.8.2";
+pub(super) const DIND_IMAGE: &str = "velnor-dind:29.8.2";
+const CONTAINER_CREATE_TIMEOUT: Duration = Duration::from_secs(10);
+const CONTAINER_START_TIMEOUT: Duration = Duration::from_secs(10);
+const JIT_DELIVERY_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// One Docker create. Not a bollard type. JIT is not a field.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CreateProjection {
+pub(crate) struct CreateProjection {
+    /// Deterministic Docker name for this durable launch.
+    pub name: Option<String>,
     /// Image reference.
     pub image: String,
     /// OCI platform. Always `linux/amd64`.
@@ -35,12 +54,25 @@ pub struct CreateProjection {
     pub labels: Vec<String>,
     /// Mounts. Volume sources use `volume:<name>`.
     pub mounts: Vec<Mount>,
+    /// Private host binds. The action archive bind is read-only.
+    pub bind_mounts: Vec<BindMount>,
     /// Host privilege. False for the runner. True only for private `DinD`.
     pub privileged: bool,
     /// `OpenStdin`. True only for the runner channel.
     pub open_stdin: bool,
     /// `container:<id>` joins that container's network namespace. Runner only.
     pub network_mode: Option<String>,
+}
+
+/// One controller-owned host bind in a runner create projection.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct BindMount {
+    /// Controller-owned source path.
+    pub source: String,
+    /// Container path.
+    pub target: String,
+    /// Whether the container may write to the source.
+    pub read_only: bool,
 }
 
 /// Ids this call created. No JIT and no name.
@@ -56,7 +88,7 @@ pub struct Started {
 ///
 /// Bollard 0.21.1 has no platform field on [`ContainerCreateBody`].
 #[derive(Debug, Clone, PartialEq)]
-pub struct BollardCreate {
+pub(crate) struct BollardCreate {
     /// Query options for `create_container`, including platform.
     pub options: CreateContainerOptions,
     /// Body for `create_container`. No JIT.
@@ -69,18 +101,20 @@ pub struct BollardCreate {
 ///
 /// Returns [`HostError::PrivilegedRunner`] or [`HostError::ForbiddenMount`]
 /// from [`audit_plan`], including JIT in env, cmd, or labels.
-pub fn runner_create(plan: &ContainerPlan) -> Result<CreateProjection, HostError> {
+pub(crate) fn runner_create(plan: &ContainerPlan) -> Result<CreateProjection, HostError> {
     audit_plan(plan)?;
     if plan.cmd.iter().any(|item| cmd_names_jit(item)) {
         return Err(HostError::ForbiddenMount);
     }
     Ok(CreateProjection {
+        name: None,
         image: plan.image.clone(),
         platform: plan.platform.clone(),
         env: plan.env.clone(),
         cmd: plan.cmd.clone(),
         labels: plan.labels.clone(),
         mounts: plan.mounts.clone(),
+        bind_mounts: Vec::new(),
         privileged: false,
         open_stdin: true,
         network_mode: None,
@@ -110,36 +144,13 @@ fn dind_container_id(id: &str) -> bool {
     (12..=64).contains(&id.len()) && id.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
-/// Private `DinD` create. Privilege is not a flag on the runner plan.
-///
-/// Mounts are the runner plan's socket volume at `/run` and the work volume at
-/// `/home/runner/_work`. Same names [`runner_plan`] rejects.
-///
-/// # Errors
-///
-/// Returns [`HostError::ForbiddenMount`] when `private_volume` is not one private name.
-pub fn dind_create(private_volume: &str) -> Result<CreateProjection, HostError> {
-    let runner = runner_plan(private_volume)?;
-    Ok(CreateProjection {
-        image: DIND_IMAGE.to_owned(),
-        platform: runner.platform,
-        env: Vec::new(),
-        cmd: Vec::new(),
-        labels: Vec::new(),
-        mounts: runner.mounts,
-        privileged: true,
-        open_stdin: false,
-        network_mode: None,
-    })
-}
-
 /// Bollard config for [`bollard::Docker::create_container`]. No JIT parameter.
 ///
 /// # Errors
 ///
 /// Returns [`HostError::ForbiddenMount`] when the platform is not `linux/amd64`
 /// or a mount or label cannot be sent.
-pub fn bollard_create(spec: &CreateProjection) -> Result<BollardCreate, HostError> {
+pub(crate) fn bollard_create(spec: &CreateProjection) -> Result<BollardCreate, HostError> {
     if spec.platform != PLATFORM {
         return Err(HostError::ForbiddenMount);
     }
@@ -156,34 +167,10 @@ pub fn bollard_create(spec: &CreateProjection) -> Result<BollardCreate, HostErro
     };
     Ok(BollardCreate {
         options: CreateContainerOptions {
-            name: None,
+            name: spec.name.clone(),
             platform: PLATFORM.to_owned(),
         },
         config,
-    })
-}
-
-/// Create volumes, start `DinD`, start the runner, then write `jit` on stdin.
-///
-/// Empty `jit` returns before any container create. Failure after a create
-/// removes only ids this call created.
-///
-/// # Errors
-///
-/// Returns [`HostError::EmptyJit`] when `jit` is empty.
-/// Returns [`HostError::ForbiddenMount`] for a rejected volume name.
-/// Returns [`HostError::Docker`] when Docker rejects a call. The error text
-/// does not include `jit`.
-pub async fn start_pair(
-    docker: &Docker,
-    private_volume: &str,
-    jit: &[u8],
-) -> Result<Started, HostError> {
-    let partial =
-        crate::stage::start_pair_until(docker, private_volume, jit, PairStop::Jit).await?;
-    Ok(Started {
-        dind_id: partial.dind_id.ok_or(HostError::Docker)?,
-        runner_id: partial.runner_id.ok_or(HostError::Docker)?,
     })
 }
 
@@ -200,12 +187,51 @@ fn none_if_empty(items: &[String]) -> Option<Vec<String>> {
 }
 
 fn host_config(spec: &CreateProjection) -> Result<HostConfig, HostError> {
+    let mut mounts = docker_mounts(&spec.mounts)?.unwrap_or_default();
+    mounts.extend(bind_mounts(spec)?);
     Ok(HostConfig {
         privileged: Some(spec.privileged),
-        mounts: docker_mounts(&spec.mounts)?,
+        mounts: Some(mounts),
         network_mode: spec.network_mode.clone(),
         ..Default::default()
     })
+}
+
+fn bind_mounts(spec: &CreateProjection) -> Result<Vec<DockerMount>, HostError> {
+    let archive_env = "ACTIONS_RUNNER_ACTION_ARCHIVE_CACHE=/opt/velnor/action-archives";
+    let archive_envs = spec
+        .env
+        .iter()
+        .filter(|entry| entry.starts_with("ACTIONS_RUNNER_ACTION_ARCHIVE_CACHE="))
+        .count();
+    if spec.bind_mounts.len() > 1 || archive_envs != if spec.bind_mounts.is_empty() { 0 } else { 1 }
+    {
+        return Err(HostError::ForbiddenMount);
+    }
+    for mount in &spec.bind_mounts {
+        if mount.target != "/opt/velnor/action-archives"
+            || !Path::new(&mount.source).is_absolute()
+            || !mount.read_only
+            || !spec.env.iter().any(|entry| entry == archive_env)
+        {
+            return Err(HostError::ForbiddenMount);
+        }
+    }
+    Ok(spec
+        .bind_mounts
+        .iter()
+        .map(|mount| DockerMount {
+            target: Some(mount.target.clone()),
+            source: Some(mount.source.clone()),
+            typ: Some(MountType::BIND),
+            read_only: Some(mount.read_only),
+            bind_options: Some(MountBindOptions {
+                create_mountpoint: Some(false),
+                ..Default::default()
+            }),
+            ..Default::default()
+        })
+        .collect())
 }
 
 fn docker_mounts(mounts: &[Mount]) -> Result<Option<Vec<DockerMount>>, HostError> {
@@ -248,24 +274,6 @@ fn label_map(labels: &[String]) -> Result<Option<HashMap<String, String>>, HostE
     Ok(Some(map))
 }
 
-pub(crate) async fn create_named_volumes(
-    docker: &Docker,
-    plan: &ContainerPlan,
-) -> Result<(), HostError> {
-    for mount in &plan.mounts {
-        let name = volume_name(&mount.source)?;
-        let request = VolumeCreateRequest {
-            name: Some(name.to_owned()),
-            ..Default::default()
-        };
-        docker
-            .create_volume(request)
-            .await
-            .map_err(|_| HostError::Docker)?;
-    }
-    Ok(())
-}
-
 fn volume_name(source: &str) -> Result<&str, HostError> {
     source
         .strip_prefix("volume:")
@@ -273,27 +281,38 @@ fn volume_name(source: &str) -> Result<&str, HostError> {
         .ok_or(HostError::ForbiddenMount)
 }
 
+fn container_id(id: &str) -> bool {
+    (12..=64).contains(&id.len()) && id.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
 pub(crate) async fn create_only(
     docker: &Docker,
     spec: &CreateProjection,
 ) -> Result<String, HostError> {
+    resources::refuse_existing(docker, spec).await?;
     let created = bollard_create(spec)?;
-    let response = docker
-        .create_container(Some(created.options), created.config)
-        .await
-        .map_err(|_| HostError::Docker)?;
-    if response.id.is_empty() {
-        Err(HostError::Docker)
+    let response = timeout(
+        CONTAINER_CREATE_TIMEOUT,
+        docker.create_container(Some(created.options), created.config),
+    )
+    .await
+    .map_err(|_| HostError::ContainerCreateUncertain)?
+    .map_err(|_| HostError::ContainerCreateUncertain)?;
+    if !container_id(&response.id) {
+        Err(HostError::ContainerCreateUncertain)
     } else {
         Ok(response.id)
     }
 }
 
 pub(crate) async fn start_id(docker: &Docker, id: &str) -> Result<(), HostError> {
-    docker
-        .start_container(id, None::<StartContainerOptions>)
-        .await
-        .map_err(|_| HostError::Docker)
+    timeout(
+        CONTAINER_START_TIMEOUT,
+        docker.start_container(id, None::<StartContainerOptions>),
+    )
+    .await
+    .map_err(|_| HostError::ContainerStartUncertain)?
+    .map_err(|_| HostError::ContainerStartUncertain)
 }
 
 pub(crate) async fn deliver_jit(docker: &Docker, id: &str, jit: &[u8]) -> Result<(), HostError> {
@@ -301,19 +320,23 @@ pub(crate) async fn deliver_jit(docker: &Docker, id: &str, jit: &[u8]) -> Result
         .stdin(true)
         .stream(true)
         .build();
-    let mut attached = docker
-        .attach_container(id, Some(options))
-        .await
-        .map_err(|_| HostError::Docker)?;
-    attached
-        .input
-        .write_all(jit)
-        .await
-        .map_err(|_| HostError::Docker)?;
-    attached
-        .input
-        .shutdown()
-        .await
-        .map_err(|_| HostError::Docker)?;
-    Ok(())
+    timeout(JIT_DELIVERY_TIMEOUT, async {
+        let mut attached = docker
+            .attach_container(id, Some(options))
+            .await
+            .map_err(|_| HostError::JitDeliveryUncertain)?;
+        attached
+            .input
+            .write_all(jit)
+            .await
+            .map_err(|_| HostError::JitDeliveryUncertain)?;
+        attached
+            .input
+            .shutdown()
+            .await
+            .map_err(|_| HostError::JitDeliveryUncertain)?;
+        Ok(())
+    })
+    .await
+    .map_err(|_| HostError::JitDeliveryUncertain)?
 }

@@ -6,10 +6,12 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use bollard::models::MountType;
 
-use crate::{
-    BollardCreate, CreateProjection, HostError, bollard_create, connect_unix, dind_create,
-    runner_create, runner_plan, start_pair,
+use crate::docker_spec::runner_plan;
+use crate::worker::{
+    BollardCreate, CreateProjection, PreparedDind, bollard_create, dind_create, runner_create,
+    start_runner_until,
 };
+use crate::{HostError, LaunchIdentity, connect_unix};
 
 fn projection(volume: &str) -> Result<CreateProjection, HostError> {
     runner_create(&runner_plan(volume)?)
@@ -17,6 +19,15 @@ fn projection(volume: &str) -> Result<CreateProjection, HostError> {
 
 fn bollard(volume: &str) -> Result<BollardCreate, HostError> {
     bollard_create(&projection(volume)?)
+}
+
+fn identity() -> Result<LaunchIdentity, HostError> {
+    LaunchIdentity::new(
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        7,
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "engine-test",
+    )
 }
 
 #[test]
@@ -48,18 +59,24 @@ fn runner_create_rejects_jit_in_env_or_cmd() -> Result<(), HostError> {
 }
 
 #[test]
-fn dind_is_privileged_and_shares_the_runner_volumes() -> Result<(), HostError> {
-    for name in ["", "a/b", "a b", ".hidden", "has:colon"] {
-        assert_eq!(dind_create(name).err(), runner_plan(name).err(), "{name}");
-    }
-    let spec = dind_create("worker_a")?;
+fn dind_is_privileged_and_owns_its_data_volume() -> Result<(), HostError> {
+    let identity = identity()?;
+    let spec = dind_create(&identity)?;
     assert!(spec.privileged);
     assert!(!spec.open_stdin);
     assert_eq!(spec.env, Vec::<String>::new());
     assert_eq!(spec.cmd, Vec::<String>::new());
     assert_eq!(spec.image, "velnor-dind:29.8.2");
     assert_eq!(spec.platform, "linux/amd64");
-    assert_eq!(spec.mounts, runner_plan("worker_a")?.mounts);
+    assert_eq!(spec.mounts.len(), 3);
+    assert_eq!(spec.mounts[0].target, "/run");
+    assert_eq!(spec.mounts[1].target, "/home/runner/_work");
+    assert_eq!(
+        spec.mounts[2].source,
+        "volume:vbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-docker"
+    );
+    assert_eq!(spec.mounts[2].target, "/var/lib/docker");
+    assert_eq!(spec.bind_mounts.len(), 0);
     assert!(spec.network_mode.is_none());
     Ok(())
 }
@@ -95,7 +112,8 @@ fn runner_joins_only_its_dind_netns() -> Result<(), HostError> {
         .ok_or(HostError::Docker)?;
     assert_eq!(host.privileged, Some(false));
     assert_eq!(host.network_mode.as_deref(), Some(mode.as_str()));
-    let dind = bollard_create(&dind_create("worker_a")?)?;
+    let identity = identity()?;
+    let dind = bollard_create(&dind_create(&identity)?)?;
     let dind_host = dind.config.host_config.as_ref().ok_or(HostError::Docker)?;
     assert!(dind_host.network_mode.is_none());
     Ok(())
@@ -116,7 +134,8 @@ fn bollard_config_from_a_clean_plan_omits_canary() -> Result<(), HostError> {
     assert!(!text.contains("canary-jit"));
     assert!(!text.to_ascii_lowercase().contains("jitconfig"));
 
-    let dind = bollard_create(&dind_create("worker_a")?)?;
+    let identity = identity()?;
+    let dind = bollard_create(&dind_create(&identity)?)?;
     assert_eq!(dind.options.platform, "linux/amd64");
     assert_eq!(dind.config.open_stdin, Some(false));
     assert!(dind.config.env.is_none());
@@ -124,13 +143,22 @@ fn bollard_config_from_a_clean_plan_omits_canary() -> Result<(), HostError> {
     let host = dind.config.host_config.as_ref().ok_or(HostError::Docker)?;
     assert_eq!(host.privileged, Some(true));
     let mounts = host.mounts.as_ref().ok_or(HostError::Docker)?;
-    assert_eq!(mounts.len(), 2);
+    assert_eq!(mounts.len(), 3);
     assert_eq!(mounts[0].target.as_deref(), Some("/run"));
     assert_eq!(mounts[0].source.as_deref(), Some("worker_a"));
     assert_eq!(mounts[0].typ, Some(MountType::VOLUME));
     assert_eq!(mounts[1].target.as_deref(), Some("/home/runner/_work"));
-    assert_eq!(mounts[1].source.as_deref(), Some("worker_a-work"));
+    assert_eq!(
+        mounts[1].source.as_deref(),
+        Some("vbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-work")
+    );
     assert_eq!(mounts[1].typ, Some(MountType::VOLUME));
+    assert_eq!(mounts[2].target.as_deref(), Some("/var/lib/docker"));
+    assert_eq!(
+        mounts[2].source.as_deref(),
+        Some("vbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-docker")
+    );
+    assert_eq!(mounts[2].typ, Some(MountType::VOLUME));
     let text = format!("{dind:?}");
     assert!(!text.contains("canary-jit"));
     assert!(!text.contains("/var/run/docker.sock"));
@@ -172,8 +200,27 @@ impl Drop for IdleDocker {
 
 #[test]
 fn bollard_create_rejects_a_host_bind() -> Result<(), HostError> {
-    let mut spec = dind_create("worker_a")?;
+    let identity = identity()?;
+    let mut spec = dind_create(&identity)?;
     spec.mounts[0].source = "/var/run/docker.sock".to_owned();
+    assert_eq!(bollard_create(&spec), Err(HostError::ForbiddenMount));
+    Ok(())
+}
+
+#[test]
+fn bollard_create_rejects_writable_or_unapproved_bind_mounts() -> Result<(), HostError> {
+    let identity = identity()?;
+    let path = PathBuf::from("/tmp/velnor-action-cache");
+    let mut spec = crate::worker::runner_create_for_identity(&identity, Some(&path))?;
+    spec.bind_mounts[0].read_only = false;
+    assert_eq!(bollard_create(&spec), Err(HostError::ForbiddenMount));
+
+    let mut spec = crate::worker::runner_create_for_identity(&identity, Some(&path))?;
+    spec.bind_mounts[0].target = "/etc".to_owned();
+    assert_eq!(bollard_create(&spec), Err(HostError::ForbiddenMount));
+
+    let mut spec = crate::worker::runner_create_for_identity(&identity, Some(&path))?;
+    spec.env.clear();
     assert_eq!(bollard_create(&spec), Err(HostError::ForbiddenMount));
     Ok(())
 }
@@ -181,12 +228,11 @@ fn bollard_create_rejects_a_host_bind() -> Result<(), HostError> {
 #[tokio::test]
 async fn empty_jit_does_not_create() -> Result<(), HostError> {
     let idle = IdleDocker::open()?;
+    let identity = identity()?;
+    let dind_id = "a".repeat(64);
+    let prepared = PreparedDind::from_journal(&identity, &dind_id)?;
     assert_eq!(
-        start_pair(&idle.docker, "a/b", b"").await,
-        Err(HostError::EmptyJit)
-    );
-    assert_eq!(
-        start_pair(&idle.docker, "worker_a", b"").await,
+        start_runner_until(&idle.docker, &prepared, b"", None).await,
         Err(HostError::EmptyJit)
     );
     Ok(())
