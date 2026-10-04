@@ -1,11 +1,9 @@
 //! Gate 4 renderer cases: MBX objects, cache actions, lane target dirs.
 
-use velnor_actions_contract::cachekey::mbx_cache_generation;
-
 use velnor_actions_contract::{Step, StepKind};
 use velnor_actions_workflow_renderer::steps::{
-    CompileDriver, MBX_CACHE_MODE_ENV, TOOLS_CACHE_PATH, TOOLS_RESTORE_NAME, TOOLS_SAVE_NAME,
-    cache_action_step, mbx_objects_step, mbx_step_for_driver, target_dir_for_lane, tools_cache_key,
+    CompileDriver, TOOLS_CACHE_PATH, TOOLS_RESTORE_NAME, TOOLS_SAVE_NAME, cache_action_step,
+    mbx_objects_step, mbx_step_for_driver, target_dir_for_lane, tools_cache_key,
     tools_restore_step, tools_save_step,
 };
 
@@ -37,7 +35,7 @@ fn step_kinds_have_no_parallel_syntax() {
 }
 
 #[test]
-fn mbx_objects_step_pins_action_and_mode() {
+fn mbx_objects_step_pins_action_to_supported_local_backend() {
     let uses = format!("jdx/mr-boxington-action@{}", sha());
     let step = mbx_objects_step(&uses, false, "1.19.0").expect("mbx");
     assert_eq!(kind_name(&step), "action");
@@ -46,21 +44,17 @@ fn mbx_objects_step_pins_action_and_mode() {
             uses: got, with, ..
         } => {
             assert!(got.starts_with("jdx/mr-boxington-action@"), "{got}");
-            assert_eq!(
-                with.get("github-cache-mode").map(String::as_str),
-                Some("objects")
-            );
+            assert_eq!(with.get("backend").map(String::as_str), Some("local"));
             assert_eq!(
                 with.get("version").map(String::as_str),
                 Some("1.19.0"),
                 "action installs the exact catalog pin, never latest"
             );
-            assert_eq!(
-                with.get("cache-generation").map(String::as_str),
-                Some(mbx_cache_generation("1.19.0").as_str()),
-                "a new MBX release starts an isolated cache namespace"
-            );
             for input in [
+                "github-cache-mode",
+                "cache-generation",
+                "cache-key",
+                "restore-keys",
                 "save-on-pull-request",
                 "save-on-workflow-dispatch",
                 "save-on-protected-branch",
@@ -345,21 +339,18 @@ fn lane_target_dirs_stay_isolated() {
 }
 
 #[test]
-fn mbx_objects_step_gates_save_to_push_via_cache_mode() {
+fn mbx_objects_step_uses_local_backend_without_implicit_cache_mode() {
     let uses = format!("jdx/mr-boxington-action@{}", sha());
     let direct = mbx_objects_step(&uses, false, "1.19.0").expect("mbx");
     let driven = mbx_step_for_driver(&uses, CompileDriver::Mbx, "1.19.0")
         .expect("driver mbx")
         .expect("mbx driver emits");
     for step in [&direct, &driven] {
-        let StepKind::Action { env, .. } = &step.kind else {
+        let StepKind::Action { env, with, .. } = &step.kind else {
             panic!("mbx must be an action step");
         };
-        assert_eq!(
-            env.get(MBX_CACHE_MODE_ENV).map(String::as_str),
-            Some("read"),
-            "the action stays restore-only so its post cannot triple the store"
-        );
+        assert!(env.is_empty(), "local setup needs no cache-mode override");
+        assert_eq!(with.get("backend").map(String::as_str), Some("local"));
     }
     assert!(
         mbx_step_for_driver(&uses, CompileDriver::Cargo, "1.19.0")

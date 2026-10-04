@@ -7,8 +7,7 @@ use std::collections::BTreeMap;
 use velnor_actions_contract::{Job, WorkflowPolicy};
 use velnor_actions_workflow_renderer::{
     RenderError, action_step_with_env, ambient_shell_step, checkout_step, plan_step,
-    render_workflow_ir,
-    steps::{MBX_CACHE_MODE_ENV, mbx_objects_step},
+    render_workflow_ir, shell_step, steps::mbx_objects_step,
 };
 
 use super::impl_renderer_fixtures::*;
@@ -24,7 +23,33 @@ fn action_plan_job(step: velnor_actions_contract::Step) -> Result<(String, Job),
         "plan",
         "Plan",
         Vec::new(),
-        vec![checkout_step(&checkout_pin())?, step, plan_step()],
+        vec![
+            checkout_step(&checkout_pin())?,
+            shell_step(
+                "Prepare pinned Rust",
+                vec![
+                    "mise".to_owned(),
+                    "--no-config".to_owned(),
+                    "--no-env".to_owned(),
+                    "--no-hooks".to_owned(),
+                    "install".to_owned(),
+                    "rust@1.98.1".to_owned(),
+                ],
+                BTreeMap::from([
+                    (
+                        "MISE_CARGO_HOME".to_owned(),
+                        "${{ runner.temp }}/velnor/cargo".to_owned(),
+                    ),
+                    (
+                        "MISE_RUSTUP_HOME".to_owned(),
+                        "${{ runner.temp }}/velnor/rustup".to_owned(),
+                    ),
+                    ("RUSTUP_TOOLCHAIN".to_owned(), "1.98.1".to_owned()),
+                ]),
+            )?,
+            step,
+            plan_step(),
+        ],
     ))
 }
 
@@ -35,20 +60,15 @@ fn token_in_action_env_fails_render() -> Result<(), RenderError> {
     let leaked = action_step_with_env(
         "Restore MBX objects",
         &mbx_pin(),
-        BTreeMap::from([("github-cache-mode".to_owned(), "objects".to_owned())]),
-        BTreeMap::from([(
-            MBX_CACHE_MODE_ENV.to_owned(),
-            "see GITHUB_TOKEN here".to_owned(),
-        )]),
+        BTreeMap::from([("backend".to_owned(), "local".to_owned())]),
+        BTreeMap::from([("NOTE".to_owned(), "see GITHUB_TOKEN here".to_owned())]),
     )?;
     render_fails_with(vec![action_plan_job(leaked)?], "token_in_action_env");
     Ok(())
 }
 
 #[test]
-fn benign_mbx_cache_mode_env_passes() -> Result<(), RenderError> {
-    // The genuine MBX restore step pins its push-gated cache mode in
-    // step env; the extended gate must not flag that expression.
+fn local_mbx_backend_passes() -> Result<(), RenderError> {
     let restore = mbx_objects_step(&mbx_pin(), false, "1.5.0")?;
     render_workflow_ir(
         &fixture_ir(vec![action_plan_job(restore)?]),
