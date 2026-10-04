@@ -215,8 +215,6 @@ stop_started=$(/usr/bin/date +%s)
 stop_sampler > "$CASE_ROOT/stop.log" 2>&1 &
 stop_pid=$!
 stop_marker_seen=0
-term_seen=0
-kill_seen=0
 fork_seen=0
 printf 'TIMING elapsed=%ss term-resistant-stop-invoked\n' "$SECONDS"
 for _ in {1..120}; do [[ -s "$SPAWN_FORK_PID" ]] && break; /usr/bin/sleep 0.1; done
@@ -233,44 +231,78 @@ for _ in {1..300}; do
     stop_marker_seen=1
     printf 'TIMING elapsed=%ss sampler-stop-marker-created\n' "$SECONDS"
   fi
-  if (( term_seen == 0 )) && grep -Fq 'sending TERM to validated members' "$EVIDENCE/qualification-errors.txt"; then
-    term_seen=1
-    printf 'TIMING elapsed=%ss stop-issued-TERM\n' "$SECONDS"
-  fi
-  if (( kill_seen == 0 )) && grep -Fq 'sending KILL to validated members' "$EVIDENCE/qualification-errors.txt"; then
-    kill_seen=1
-    printf 'TIMING elapsed=%ss stop-issued-KILL\n' "$SECONDS"
-  fi
   jobs -pr | grep -qx "$stop_pid" || break
   /usr/bin/sleep 0.1
 done
 if wait "$stop_pid"; then term_status=0; else term_status=$?; fi
 stop_finished=$(/usr/bin/date +%s)
 stop_elapsed=$((stop_finished - stop_started))
-printf 'TIMING elapsed=%ss stop-returned duration=%ss status=%s marker=%s fork=%s TERM=%s KILL=%s\n' \
-  "$SECONDS" "$stop_elapsed" "$term_status" "$stop_marker_seen" "$fork_seen" "$term_seen" "$kill_seen"
+printf 'TIMING elapsed=%ss stop-returned duration=%ss status=%s marker=%s fork=%s\n' \
+  "$SECONDS" "$stop_elapsed" "$term_status" "$stop_marker_seen" "$fork_seen"
 (( stop_elapsed >= 5 && stop_elapsed < 30 )) || fail "TERM/KILL cleanup exceeded bound or skipped TERM wait: ${stop_elapsed}s"
-if (( stop_marker_seen != 1 || term_seen != 1 || kill_seen != 1 )); then
-  fail 'TERM/KILL phase markers were not all observed'
-  cat "$EVIDENCE/qualification-errors.txt" >&2 2>/dev/null || true
-  cat "$EVIDENCE/sampler-stop.tsv" >&2 2>/dev/null || true
-fi
-grep -q 'exceeded stop deadline' "$EVIDENCE/qualification-errors.txt" || fail 'TERM-resistant fixture did not reach session shutdown path'
+(( stop_marker_seen == 1 )) || fail 'TERM-resistant fixture did not reach owned-session stop path'
 remaining_session_members=$(awk -F '\t' '$1 == "remaining_session_members" {print $2}' "$EVIDENCE/sampler-stop.tsv")
-if [[ "$remaining_session_members" == 0 ]]; then
-  pass 'TERM-resistant fork ended with empty owned session'
-  if (( term_status == 0 )); then
-    grep -qx $'qualification_status\tcomplete' "$EVIDENCE/qualification-status.tsv" || fail 'empty TERM/KILL session did not qualify'
-  else
-    pass 'bounded TERM/KILL cleanup reported incomplete after intervention'
-    assert_status_not_complete || fail 'nonzero TERM/KILL result reported complete'
-  fi
-  wait_pid_gone 'TERM-resistant writer' "$child_pid"
-  wait_pid_gone 'TERM fork child' "$fork_pid"
-elif (( term_status != 0 )) && assert_status_not_complete; then
-  pass "TERM-resistant fork residual reported incomplete: $remaining_session_members"
+shutdown_status=$(awk -F '\t' '$1 == "shutdown_deadline_status" {print $2}' "$EVIDENCE/sampler-stop.tsv")
+shutdown_budget=$(awk -F '\t' '$1 == "shutdown_budget_seconds" {print $2}' "$EVIDENCE/sampler-stop.tsv")
+shutdown_elapsed=$(awk -F '\t' '$1 == "shutdown_elapsed_centiseconds" {print $2}' "$EVIDENCE/sampler-stop.tsv")
+graceful_elapsed=$(awk -F '\t' '$1 == "shutdown_graceful_elapsed_centiseconds" {print $2}' "$EVIDENCE/sampler-stop.tsv")
+term_elapsed=$(awk -F '\t' '$1 == "shutdown_term_elapsed_centiseconds" {print $2}' "$EVIDENCE/sampler-stop.tsv")
+kill_elapsed=$(awk -F '\t' '$1 == "shutdown_kill_elapsed_centiseconds" {print $2}' "$EVIDENCE/sampler-stop.tsv")
+if [[ "$shutdown_budget" =~ ^[0-9]+$ && "$shutdown_elapsed" =~ ^[0-9]+$ &&
+    "$graceful_elapsed" =~ ^[0-9]+$ && "$term_elapsed" =~ ^[0-9]+$ &&
+    "$kill_elapsed" =~ ^[0-9]+$ ]]; then
+  (( 10#$shutdown_budget == 20 && 10#$shutdown_elapsed <= 10#$shutdown_budget * 100 &&
+    10#$graceful_elapsed <= 500 && 10#$term_elapsed > 0 && 10#$term_elapsed <= 500 &&
+    10#$kill_elapsed > 0 && 10#$kill_elapsed <= 1000 &&
+    10#$graceful_elapsed + 10#$term_elapsed + 10#$kill_elapsed <= 10#$shutdown_elapsed )) || \
+    fail 'TERM/KILL timing receipt exceeded the configured total or phase bound'
 else
-  fail "TERM-resistant fork left $remaining_session_members members without fail-closed status"
+  fail 'TERM/KILL timing receipt contains malformed centiseconds'
 fi
+[[ "$remaining_session_members" == 0 ]] || fail "TERM/KILL left owned session members: $remaining_session_members"
+[[ "$shutdown_status" == expired:graceful ]] || fail "TERM/KILL graceful expiry was not recorded: $shutdown_status"
+(( term_status != 0 )) || fail 'graceful expiry returned a successful Stop status'
+assert_status_not_complete || fail 'graceful expiry reported qualification complete'
+[[ ! -e "$EVIDENCE/inventory-final.tsv" && ! -e "$EVIDENCE/root-status-final.tsv" ]] || \
+  fail 'graceful expiry captured a final snapshot'
+pass 'TERM/KILL emptied owned SID within total budget but graceful expiry stayed incomplete'
+wait_pid_gone 'TERM-resistant writer' "$child_pid"
+wait_pid_gone 'TERM fork child' "$fork_pid"
 if kill -0 "$decoy_pid" 2>/dev/null; then pass 'external SID decoy survived TERM/KILL'; else fail 'TERM/KILL signaled external SID decoy'; fi
 stop_decoy
+
+start_session_writer slow-ps-deadline || exit 1
+cat > "$WORK/bin/ps" <<'SH'
+#!/usr/bin/bash
+if [[ "${1-}" == -p && -n "${SLOW_PS_MARKER:-}" && -e "$SLOW_PS_MARKER" ]]; then
+  printf 'blocked leader check\n' >> "$SLOW_PS_LOG"
+  exec /usr/bin/sleep 30
+fi
+exec /usr/bin/ps "$@"
+SH
+chmod 700 "$WORK/bin/ps"
+export SLOW_PS_MARKER="$CASE_ROOT/block-ps" SLOW_PS_LOG="$CASE_ROOT/ps.log"
+: > "$SLOW_PS_MARKER"
+export MBX_QUALIFICATION_FINALIZER_WAIT=1
+source "$WORK/path-validation.sh"
+slow_stop_started=$(resource_monotonic_centiseconds)
+expect_rejected_without_signal 'slow leader ps deadline' alive true
+slow_stop_finished=$(resource_monotonic_centiseconds)
+slow_stop_elapsed=$((slow_stop_finished - slow_stop_started))
+(( slow_stop_elapsed <= 200 )) || fail "slow leader check exceeded deadline bound: ${slow_stop_elapsed}cs"
+[[ "$(cat "$SLOW_PS_LOG")" == 'blocked leader check' ]] || fail 'slow ps injection did not reach leader check'
+grep -qx $'shutdown_deadline_status\texpired:graceful_leader' "$EVIDENCE/sampler-stop.tsv" || \
+  fail 'slow leader timeout was not recorded as expired:graceful_leader'
+grep -qx $'remaining_session_members\tunknown' "$EVIDENCE/sampler-stop.tsv" || \
+  fail 'slow leader timeout reported a member scan result'
+[[ ! -e "$EVIDENCE/inventory-final.tsv" && ! -e "$EVIDENCE/root-status-final.tsv" ]] || \
+  fail 'slow leader timeout captured a final snapshot'
+assert_status_not_complete || fail 'slow leader timeout reported qualification complete'
+stop_child_session "$sampler_session_sid"
+stop_decoy
+wait_pid_gone 'slow-ps same-session writer cleanup' "$child_pid"
+[[ ! -e "$EVIDENCE/sampler.stop" ]] || fail 'slow leader timeout created sampler stop marker'
+unset SLOW_PS_MARKER SLOW_PS_LOG
+rm -f "$WORK/bin/ps"
+export MBX_QUALIFICATION_FINALIZER_WAIT=5
+printf 'TIMING slow_leader_check elapsed=%scs status=expired:graceful_leader\n' "$slow_stop_elapsed"
