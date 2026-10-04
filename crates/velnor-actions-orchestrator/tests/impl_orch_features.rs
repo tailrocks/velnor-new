@@ -179,6 +179,21 @@ fn testless_crate_omits_test_runners() -> TestResult {
             .any(|line| line.contains("nextest run") && line.contains("--package app")),
         "app keeps its nextest command:\n{yaml}"
     );
+    assert!(
+        yaml.lines().any(|line| {
+            line.contains("cargo nextest list --profile default --list-type binaries-only")
+                && line.contains("--package app")
+        }),
+        "app prepares real Nextest test binaries under its selected profile:\n{yaml}"
+    );
+    assert!(
+        yaml.lines().any(|line| {
+            line.contains("cargo nextest run")
+                && line.contains("--package app")
+                && line.contains("--no-tests fail")
+        }),
+        "app runs through Nextest and fails on an empty selected suite:\n{yaml}"
+    );
     for line in yaml.lines().filter(|line| line.contains("nextest run")) {
         assert!(
             !line.contains("--package fuzz"),
