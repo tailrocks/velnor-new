@@ -25,8 +25,8 @@ mod impl_renderer_guard;
 mod impl_renderer_lint;
 #[path = "impl_renderer_matrix.rs"]
 mod impl_renderer_matrix;
-#[path = "impl_renderer_mbx_bundle.rs"]
-mod impl_renderer_mbx_bundle;
+#[path = "impl_renderer_mbx_cache_isolation.rs"]
+mod impl_renderer_mbx_cache_isolation;
 #[path = "impl_renderer_mbx_gc_policy.rs"]
 mod impl_renderer_mbx_gc_policy;
 #[path = "impl_renderer_mbxgate.rs"]
@@ -39,6 +39,8 @@ mod impl_renderer_overlap;
 mod impl_renderer_p08;
 #[path = "impl_renderer_p08_elect.rs"]
 mod impl_renderer_p08_elect;
+#[path = "impl_renderer_p08_http.rs"]
+mod impl_renderer_p08_http;
 #[path = "impl_renderer_planclose.rs"]
 mod impl_renderer_planclose;
 #[path = "impl_renderer_planformat.rs"]

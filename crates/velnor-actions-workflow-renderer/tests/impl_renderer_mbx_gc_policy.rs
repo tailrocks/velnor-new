@@ -3,18 +3,17 @@
 use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_contract::config::{SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL};
 use velnor_actions_contract::workflow::lanes::{HOSTED_SUFFIX, SCALE_SUFFIX};
-use velnor_actions_workflow_renderer::steps::{
-    MBX_CACHE_MODE_ENV, checkout_step, mbx_objects_step,
-};
+use velnor_actions_workflow_renderer::steps::{checkout_step, mbx_objects_step};
 use velnor_actions_workflow_renderer::{RenderError, render_workflow_ir};
 
 use super::impl_renderer_fixtures::*;
 
 /// Rendered GC policy reaches MBX only and composes with push-only saves.
 #[test]
-fn action_step_env_renders_only_when_present() -> Result<(), RenderError> {
+fn hosted_mbx_policy_keeps_gc_without_overriding_action_cache_lifecycle() -> Result<(), RenderError>
+{
     let uses = format!("jdx/mr-boxington-action@{}", "a".repeat(40));
-    let mbx = mbx_objects_step(&uses, false, "1.21.1")?;
+    let mbx = mbx_objects_step(&uses, false, "1.22.0")?;
     let plain = checkout_step(&checkout_pin())?;
     let text = render_workflow_ir(
         &fixture_ir(vec![job("demo", "Demo", Vec::new(), vec![plain, mbx])]),
@@ -23,12 +22,8 @@ fn action_step_env_renders_only_when_present() -> Result<(), RenderError> {
         &fixture_ctx(),
     )?;
     assert!(
-        text.contains(&format!("{MBX_CACHE_MODE_ENV}: read")),
-        "action post stays restore-only:\n{text}"
-    );
-    assert!(
-        !text.contains("&& 'write'"),
-        "push writes must not come from the action post:\n{text}"
+        !text.contains("ACTIONS_CACHE_MODE"),
+        "action owns cache lifecycle:\n{text}"
     );
     assert!(
         text.contains("MBX_GC_AUTO: \"1\""),
@@ -52,8 +47,8 @@ fn action_step_env_renders_only_when_present() -> Result<(), RenderError> {
         "Cargo-only jobs do not receive MBX policy:\n{cargo_text}"
     );
     assert!(
-        !cargo_text.contains("Export MBX single bundle"),
-        "Cargo-only jobs do not export an MBX bundle:\n{cargo_text}"
+        !cargo_text.contains("MBX single bundle"),
+        "Cargo-only jobs have no MBX lifecycle steps:\n{cargo_text}"
     );
     Ok(())
 }
@@ -62,7 +57,7 @@ fn action_step_env_renders_only_when_present() -> Result<(), RenderError> {
 #[test]
 fn mbx_gc_policy_is_scoped_to_hosted_mbx_jobs() -> Result<(), RenderError> {
     let uses = format!("jdx/mr-boxington-action@{}", "a".repeat(40));
-    let mbx = mbx_objects_step(&uses, false, "1.21.1")?;
+    let mbx = mbx_objects_step(&uses, false, "1.22.0")?;
     let hosted = job(
         &format!("rust-demo{HOSTED_SUFFIX}"),
         "Rust demo hosted",

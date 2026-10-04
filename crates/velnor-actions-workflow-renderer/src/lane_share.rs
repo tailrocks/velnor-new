@@ -1,4 +1,4 @@
-//! One composite action per duplicated verification lane.
+//! One composite action per duplicated verification lane, except MBX jobs.
 //!
 //! GitHub will not start a workflow file larger than 500 KB. Inlining both
 //! lane step lists crosses that limit, so the steps live in one action and
@@ -35,7 +35,7 @@ pub(crate) struct LaneShare {
     pub files: Vec<RenderedFile>,
 }
 
-/// Factor `__hosted` / `__local` pairs whose step lists match.
+/// Factor `__hosted` / `__local` pairs whose step lists match and contain no MBX action.
 ///
 /// # Errors
 ///
@@ -63,6 +63,14 @@ pub(crate) fn share_lanes(
         let Some(hosted) = jobs.get(&hosted_id) else {
             continue;
         };
+        // MBX cache isolation is a hosted-job input, while local jobs keep
+        // the shared generation. Keep the action in each job so rendering
+        // can apply that lane-specific policy after common-step sharing.
+        if hosted.steps.iter().any(crate::cache_steps::is_mbx_action)
+            || local.steps.iter().any(crate::cache_steps::is_mbx_action)
+        {
+            continue;
+        }
         let Some((common, hosted_extra, local_extra)) = split_pair(hosted, local) else {
             return Err(RenderError::InvalidWorkflow(format!(
                 "lane_body_differs:{logical}"
@@ -361,7 +369,7 @@ mod tests {
         );
         let shared = share_lanes(&jobs, &ctx()).expect("share");
         assert!(shared.calls.is_empty());
-        assert!(shared.files.is_empty());
+        assert_eq!(shared.files.len(), 0);
         let kept = shared.jobs.get("actionlint").expect("actionlint");
         assert_eq!(kept.steps.len(), 1);
     }
@@ -379,7 +387,7 @@ mod tests {
         let local = shared.jobs.get("rust-0__local").expect("local");
         assert_eq!(hosted.steps.len(), 1);
         assert_eq!(hosted.steps.first().expect("save").name, "Save Mise tools");
-        assert!(local.steps.is_empty());
+        assert_eq!(local.steps.len(), 0);
         let action = shared
             .files
             .iter()

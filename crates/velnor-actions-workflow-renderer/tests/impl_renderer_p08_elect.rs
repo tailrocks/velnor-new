@@ -76,7 +76,7 @@ fn mise_cache_writer_election_prefers_plan_then_lowest_id() -> Result<(), Render
         Some(shared),
         "lowest id wins without plan"
     );
-    assert!(tools_saves(&jobs["rust-b"]).is_empty());
+    assert_eq!(tools_saves(&jobs["rust-b"]).len(), 0);
     Ok(())
 }
 
@@ -228,7 +228,7 @@ fn provider_writer_election_elects_lowest_id_per_key() -> Result<(), RenderError
         Some(PROVIDER_KEY_A),
         "lowest id wins the shared key"
     );
-    assert!(provider_saves(&jobs["tofu-b"]).is_empty());
+    assert_eq!(provider_saves(&jobs["tofu-b"]).len(), 0);
     assert_eq!(
         provider_saved_key(&jobs["tofu-c"]),
         Some(PROVIDER_KEY_B),

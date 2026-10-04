@@ -9,11 +9,11 @@ use velnor_actions_contract::{Step, StepKind};
 use crate::{RenderError, commands, marker};
 
 pub use crate::cache_steps::{
-    CACHE_RESTORE_NAME, CACHE_SAVE_NAME, CompileDriver, MBX_ACTION_NAME, MBX_CACHE_MODE_ENV,
-    MBX_RESTORE_NAME, NEVER_ARCHIVE_MARKERS, TASK_ARTIFACTS_DIR, TOOLS_CACHE_PATH,
-    TOOLS_KEY_PREFIX, TOOLS_RESTORE_NAME, TOOLS_RESTORE_USES, TOOLS_SAVE_NAME, TOOLS_SAVE_USES,
-    cache_action_step, check_cache_step_order, check_mbx_gating, is_never_archive_path,
-    mbx_objects_step, mbx_step_for_driver, tools_cache_key, tools_restore_step, tools_save_step,
+    CACHE_RESTORE_NAME, CACHE_SAVE_NAME, CompileDriver, MBX_ACTION_NAME, MBX_RESTORE_NAME,
+    NEVER_ARCHIVE_MARKERS, TASK_ARTIFACTS_DIR, TOOLS_CACHE_PATH, TOOLS_KEY_PREFIX,
+    TOOLS_RESTORE_NAME, TOOLS_RESTORE_USES, TOOLS_SAVE_NAME, TOOLS_SAVE_USES, cache_action_step,
+    check_cache_step_order, check_mbx_gating, is_never_archive_path, mbx_objects_step,
+    mbx_step_for_driver, tools_cache_key, tools_restore_step, tools_save_step,
 };
 
 pub use crate::steps_artifact::{
@@ -162,9 +162,7 @@ pub fn action_step(
 /// Validated action step with step-level environment.
 ///
 /// Same gates as [`action_step`]; `env` renders as the step's `env:`
-/// map and applies to the action's main and post phases alike, which
-/// is what lets a cache mode gate the post-step save while the
-/// restore still runs on every event.
+/// map and applies to the action's main and post phases alike.
 /// # Errors
 pub fn action_step_with_env(
     name: &str,

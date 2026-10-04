@@ -289,8 +289,7 @@ fn c11_cache_saves_push_only_prs_and_forks_read_only() -> TestResult {
     Ok(())
 }
 
-/// YAML: one push-gated tools save per restored `mise-v1-` key (plus the
-/// sources save), every setup restore-only.
+/// YAML: Cargo and Mise saves stay push-gated; MBX uses its action post.
 fn assert_tools_saves_push_gated_per_key(yaml: &str) {
     let mut keys = std::collections::BTreeSet::new();
     for line in yaml.lines() {
@@ -299,19 +298,25 @@ fn assert_tools_saves_push_gated_per_key(yaml: &str) {
         }
     }
     assert!(!keys.is_empty(), "at least one restored tools key:\n{yaml}");
-    let mbx_saves = yaml.matches("- name: Save MBX single bundle").count();
-    let mbx_exports = yaml.matches("- name: Export MBX single bundle").count();
     assert_eq!(
         yaml.matches("actions/cache/save@").count(),
-        1 + keys.len() + mbx_saves,
-        "sources plus one tools save per key plus the MBX bundle:\n{yaml}"
+        1 + keys.len(),
+        "Cargo sources plus one Mise save per key; MBX uses its action post:\n{yaml}"
     );
     assert_eq!(
         yaml.matches("if: success() && github.event_name == 'push'")
             .count(),
-        1 + keys.len() + mbx_saves + mbx_exports,
-        "every save push-gated:\n{yaml}"
+        1 + keys.len(),
+        "Cargo and Mise saves stay push-gated:\n{yaml}"
     );
+    assert!(!yaml.contains("Export MBX single bundle"), "{yaml}");
+    assert!(!yaml.contains("Save MBX single bundle"), "{yaml}");
+    assert!(yaml.contains("isolate-objects-cache: \"true\""), "{yaml}");
+    assert!(
+        yaml.contains("cache-key-suffix: ${{ github.job }}"),
+        "{yaml}"
+    );
+    assert!(!yaml.contains("ACTIONS_CACHE_MODE"), "{yaml}");
     assert!(
         !yaml.contains("- name: Restore Cargo sources\n        if:"),
         "restores stay unconditional:\n{yaml}"
