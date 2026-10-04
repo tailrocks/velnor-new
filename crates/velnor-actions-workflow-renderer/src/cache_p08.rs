@@ -24,6 +24,8 @@ use crate::{
 #[path = "cache_p08_tool_payload.rs"]
 mod tool_payload;
 pub use tool_payload::{ToolsCacheInputs, ToolsCachePayload};
+#[path = "cache_p08_save_policy.rs"]
+mod save_policy;
 
 pub use crate::cache_elect::elect_mise_cache_writers;
 pub use crate::cache_elect::elect_tofu_provider_savers;
@@ -32,6 +34,13 @@ pub use crate::cache_elect::elect_tofu_provider_savers;
 pub const RESTORE_SOURCES_NAME: &str = "Restore Cargo sources";
 /// Display name of the shared sources save step.
 pub const SAVE_SOURCES_NAME: &str = "Save Cargo sources";
+/// Display name of the runtime identity step gating the tools cache.
+pub const TOOLS_CACHE_IDENTITY_NAME: &str = "Identify Mise cache runtime";
+/// Step output owner used by both V2 restore and save expressions.
+pub const TOOLS_CACHE_IDENTITY_STEP_ID: &str = "velnor-tool-cache-identity";
+/// Cache restore is unavailable unless runtime roots/image were qualified.
+pub const TOOLS_CACHE_RESTORE_CONDITION: &str =
+    "steps.velnor-tool-cache-identity.outputs.enabled == 'true'";
 /// Display name of the Cargo-only cache step.
 pub const RUST_CACHE_NAME: &str = "Restore Cargo registry";
 /// Owned Cargo home expression (`env:` spelling).

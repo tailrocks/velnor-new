@@ -8,8 +8,8 @@ use velnor_actions_contract::{RunsOn, Step};
 
 use crate::{MiseSetup, RenderError, cache_p08, steps};
 
-/// Fixed step whose output binds runtime image and absolute home roots.
-const TOOLS_CACHE_IDENTITY_STEP_ID: &str = "velnor-tool-cache-identity";
+#[path = "cache_p08_runtime_identity.rs"]
+mod runtime_identity;
 
 /// Inputs resolved from a job's typed preparation/catalog obligations.
 #[derive(Debug, Clone, Copy)]
@@ -33,6 +33,8 @@ pub struct ToolsCacheInputs<'a> {
 pub struct ToolsCachePayload {
     static_digest: String,
     paths: Vec<String>,
+    runs_on: String,
+    target: String,
 }
 
 impl ToolsCachePayload {
@@ -63,6 +65,8 @@ impl ToolsCachePayload {
         Ok(Self {
             static_digest,
             paths,
+            runs_on: inputs.runs_on.to_owned(),
+            target: inputs.target.to_owned(),
         })
     }
 
@@ -82,9 +86,16 @@ impl ToolsCachePayload {
     #[must_use]
     pub fn key_expression(&self) -> String {
         format!(
-            "mise-tools-v2-{}-${{{{steps.{TOOLS_CACHE_IDENTITY_STEP_ID}.outputs.identity}}}}",
-            self.static_digest
+            "mise-tools-v2-{}-${{{{steps.{}.outputs.identity}}}}",
+            self.static_digest,
+            cache_p08::TOOLS_CACHE_IDENTITY_STEP_ID,
         )
+    }
+
+    /// Runtime image/root identity step; unknown identities take a cold path.
+    /// # Errors
+    pub fn runtime_identity_step(&self) -> Result<Step, RenderError> {
+        runtime_identity::step(self)
     }
 
     /// Concrete key builder for an exact lower-case SHA-256 runtime identity.
@@ -108,27 +119,31 @@ impl ToolsCachePayload {
     /// Read-only restore over the payload's key expression and exact paths.
     /// # Errors
     pub fn restore_step(&self) -> Result<Step, RenderError> {
-        steps::cache_action_step(
+        let mut step = steps::cache_action_step(
             true,
             steps::TOOLS_RESTORE_USES,
             "tools",
             &self.key_expression(),
             &[],
             &self.paths,
-        )
+        )?;
+        step.condition = Some(cache_p08::TOOLS_CACHE_RESTORE_CONDITION.to_owned());
+        Ok(step)
     }
 
     /// Save over the identical key expression and exact paths.
     /// # Errors
     pub fn save_step(&self) -> Result<Step, RenderError> {
-        steps::cache_action_step(
+        let mut step = steps::cache_action_step(
             false,
             steps::TOOLS_SAVE_USES,
             "tools",
             &self.key_expression(),
             &[],
             &self.paths,
-        )
+        )?;
+        step.condition = Some(super::save_policy::condition());
+        Ok(step)
     }
 }
 

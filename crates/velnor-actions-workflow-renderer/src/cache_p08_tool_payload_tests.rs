@@ -1,6 +1,9 @@
+use std::collections::BTreeMap;
+
+use velnor_actions_contract::Step;
 use velnor_actions_contract::StepKind;
 
-use crate::setup::MiseSetup;
+use crate::{RenderContext, setup::MiseSetup, yaml::Yaml};
 
 use super::{ToolsCacheInputs, ToolsCachePayload};
 
@@ -42,6 +45,33 @@ fn action_inputs(
     }
 }
 
+fn rendered_condition(step: &Step) -> String {
+    let context = RenderContext {
+        generator_version: "0.1.0".to_owned(),
+        runs_on: "ubuntu-26.04".to_owned(),
+        staged_binary: "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0".to_owned(),
+        request_dir: "${{ runner.temp }}/velnor/request".to_owned(),
+        checkout_uses: format!("actions/checkout@{:040x}", 0),
+        validator_commands: Vec::new(),
+        candidate: None,
+        preseed: false,
+        plan_consumer_env: BTreeMap::new(),
+    };
+    let Yaml::Map(entries) =
+        crate::document_steps::step_to_yaml("rust-amq", step, &context, &[], false)
+            .expect("render consumer step")
+    else {
+        panic!("a rendered step is a mapping");
+    };
+    entries
+        .into_iter()
+        .find_map(|(key, value)| match (key.as_str(), value) {
+            ("if", Yaml::Str(condition)) => Some(condition),
+            _ => None,
+        })
+        .expect("rendered save condition")
+}
+
 #[test]
 fn payload_paths_and_restore_save_inputs_are_identical() {
     let setup = pinned_mise();
@@ -66,6 +96,12 @@ fn payload_paths_and_restore_save_inputs_are_identical() {
     let save = payload.save_step().expect("save");
     let restore_with = action_inputs(&restore);
     let save_with = action_inputs(&save);
+    assert_eq!(
+        restore.condition.as_deref(),
+        Some(crate::cache_p08::TOOLS_CACHE_RESTORE_CONDITION)
+    );
+    let save_condition = crate::cache_p08::save_policy::condition();
+    assert_eq!(save.condition.as_deref(), Some(save_condition.as_str()));
     assert_eq!(restore_with.get("path"), save_with.get("path"));
     assert_eq!(restore_with.get("key"), save_with.get("key"));
     assert_eq!(restore_with.get("key"), Some(&payload.key_expression()));
@@ -74,6 +110,23 @@ fn payload_paths_and_restore_save_inputs_are_identical() {
             .get("restore-keys")
             .is_none_or(String::is_empty)
     );
+}
+
+#[test]
+fn save_step_renders_generic_protected_default_branch_policy() {
+    let setup = pinned_mise();
+    let specs = vec!["rust@1.98.1".to_owned()];
+    let payload = payload(inputs("ubuntu-26.04", &setup, &specs, Some("1.98.1"), &[]));
+    let condition = rendered_condition(&payload.save_step().expect("save step"));
+
+    assert_eq!(
+        condition,
+        "success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.velnor-tool-cache-identity.outputs.enabled == 'true'"
+    );
+    assert!(!condition.contains("github.repository"));
+    assert!(!condition.contains("refs/heads/main"));
+    assert!(condition.contains("github.event.repository.default_branch"));
+    assert!(condition.contains("github.ref_protected == true"));
 }
 
 #[test]
