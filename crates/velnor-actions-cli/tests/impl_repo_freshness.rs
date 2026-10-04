@@ -265,25 +265,26 @@ fn ver37_merge_after_qual() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn ver_fork_action_pin_checks_commit_identity() -> Result<(), Box<dyn Error>> {
+fn ver_commit_action_pin_fixture_checks_exact_identity() -> Result<(), Box<dyn Error>> {
+    let root = crate::impl_repo_policy::repo_root();
+    let output = std::process::Command::new("python3")
+        .arg(root.join("scripts/test_freshness_action_pins.py"))
+        .current_dir(&root)
+        .output()?;
+    assert!(
+        output.status.success(),
+        "action pin fixtures failed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
     let script = read("scripts/check-freshness.sh")?;
-    for token in [
-        "pin_kind = entry.get(\"pin_kind\", \"release\")",
-        "fork-commit source, SHA, or pin label mismatch",
-        "commit_sha = payload.get(\"sha\")",
-        "verified immutable commit {latest}",
-        "action.get(\"pinned_sha\")",
-        "/commits/{sha}",
-    ] {
-        assert!(
-            script.contains(token),
-            "fork pin verification misses {token}"
-        );
-    }
+    assert!(script.contains("validate_action_pin(entry)"));
+    assert!(script.contains("commit_sha_from_response(source, body)"));
     let policy = read("docs/proposed/version-policy.md")?;
     assert!(
-        policy.contains("fork-<first-seven-SHA-chars>"),
-        "policy must distinguish fork commits from upstream releases"
+        policy.contains("commit-<first-seven-SHA-chars>"),
+        "policy must label immutable commits without claiming release status"
     );
     Ok(())
 }

@@ -22,7 +22,8 @@ fn hold(key: &str, granted: &str, expires: &str) -> String {
 #[test]
 fn missing_action_row_fails() -> Result<(), Box<dyn Error>> {
     let fixture = harness::passing("p12-missing-action")?;
-    let row = "{\"key\":\"actions/cache/save\",\"pinned_version\":\"v6.1.0\",\
+    let row = "{\"key\":\"actions/cache/save\",\"pin_kind\":\"release\",\
+        \"pinned_version\":\"v6.1.0\",\
         \"pinned_sha\":\"55cc8345863c7cc4c66a329aec7e433d2d1c52a9\",\
         \"qualified_version\":\"v6.1.0\",\
         \"qualified_sha\":\"55cc8345863c7cc4c66a329aec7e433d2d1c52a9\",\

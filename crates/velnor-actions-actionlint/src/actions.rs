@@ -1,7 +1,7 @@
 //! Pinned action refs against the 9-entry allowlist.
 //!
 //! Every ref pins `repo[/path]@sha` plus a stable version or matching
-//! immutable fork-commit comment; no mutable-tag exceptions exist.
+//! immutable commit comment; no mutable-tag exceptions exist.
 
 use crate::ActionlintError;
 
@@ -83,7 +83,7 @@ pub struct PinnedActionRef {
     pub path: Option<String>,
     /// Full 40-char commit SHA.
     pub sha: String,
-    /// Matching stable-version or fork-commit comment text.
+    /// Matching release-version or immutable-commit comment text.
     pub version_comment: String,
 }
 
@@ -94,7 +94,7 @@ impl PinnedActionRef {
     ///
     /// Returns [`ActionlintError`] when the key is not allowlisted, the
     /// SHA is not 40 lowercase hex, or the comment is neither `vX.Y.Z`
-    /// nor `fork-<first-seven-SHA-chars>`.
+    /// nor `commit-<first-seven-SHA-chars>`.
     pub fn new(
         repo: &str,
         path: Option<&str>,
@@ -286,14 +286,14 @@ pub(crate) fn is_version_tag(value: &str) -> bool {
 
 /// True for a release version or a comment bound to the pinned commit SHA.
 pub(crate) fn is_pin_label(sha: &str, value: &str) -> bool {
-    is_version_tag(value) || is_fork_commit_label(sha, value)
+    is_version_tag(value) || is_commit_sha_label(sha, value)
 }
 
-/// `fork-<first seven SHA chars>` identifies immutable fork commits without
-/// claiming that they have an upstream release tag.
-fn is_fork_commit_label(sha: &str, value: &str) -> bool {
+/// `commit-<first seven SHA chars>` identifies an immutable commit without
+/// claiming that it has an upstream release tag.
+fn is_commit_sha_label(sha: &str, value: &str) -> bool {
     sha.get(..7)
-        .is_some_and(|prefix| value == format!("fork-{prefix}"))
+        .is_some_and(|prefix| value == format!("commit-{prefix}"))
 }
 
 #[cfg(test)]
@@ -301,11 +301,11 @@ mod tests {
     use super::is_pin_label;
 
     #[test]
-    fn fork_pin_label_matches_sha_prefix() {
+    fn commit_pin_label_matches_sha_prefix() {
         let sha = "abcdef0123456789abcdef0123456789abcdef01";
-        assert!(is_pin_label(sha, "fork-abcdef0"));
-        assert!(!is_pin_label(sha, "fork-abcdef1"));
-        assert!(!is_pin_label(sha, "fork-abcdef012"));
-        assert!(!is_pin_label("short", "fork-short"));
+        assert!(is_pin_label(sha, "commit-abcdef0"));
+        assert!(!is_pin_label(sha, "commit-abcdef1"));
+        assert!(!is_pin_label(sha, "commit-abcdef012"));
+        assert!(!is_pin_label("short", "commit-short"));
     }
 }

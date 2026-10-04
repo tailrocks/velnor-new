@@ -170,7 +170,7 @@ fn invalid_config_fails_with_key_path_and_no_replace() -> Result<(), Box<dyn Err
     std::fs::write(&config, body)?;
     let plan = spawn(&["plan"], &[], &tmp)?;
     assert_eq!(code(&plan), 1);
-    assert!(plan.stdout.is_empty());
+    assert_eq!(plan.stdout, [] as [u8; 0]);
     let stderr = String::from_utf8_lossy(&plan.stderr).into_owned();
     assert!(stderr.contains(".velnor/config.toml"), "{stderr}");
     assert!(stderr.contains("stacks.ignore"), "{stderr}");

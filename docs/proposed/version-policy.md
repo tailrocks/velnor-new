@@ -137,12 +137,17 @@ Pyflakes.
 
 The only per-project pin override is `[actions.overrides]` in
 `.velnor/config.toml`. Each ordinary value contains an exact 40-hex commit SHA
-and its matching pin label. Stable releases use `vX.Y.Z`. An immutable fork
-commit without an upstream release uses `fork-<first-seven-SHA-chars>`; the
+and its matching pin label. Stable releases use `vX.Y.Z`. An immutable
+commit without an upstream release uses `commit-<first-seven-SHA-chars>`; the
 label must match its SHA and does not claim an upstream release. Keys must be
-exact allowlisted action
-repositories, and the pair must appear in that action's bundled approved-pin
-catalog (latest release plus maintained compatibility pins). The Alint action
+exact allowlisted action repositories, and the pair must appear in that action's
+bundled approved-pin
+catalog (latest release plus maintained compatibility pins). Each action row
+in `.velnor/freshness-inventory.json` declares `pin_kind = "release"` or
+`pin_kind = "commit"`. Commit rows bind the label, pinned and qualified SHA,
+recorded latest SHA, and exact GitHub commit API endpoint; an action subpath is
+removed from that endpoint so `actions/cache/restore` and `actions/cache/save`
+use the `actions/cache` repository. The Alint action
 is not a per-project override: Velnor emits exactly
 `asamarts/alint@9f9d34ba0eae3888299b9e570f43338b0e7f2cdb` (`# v0.16.1`).
 Changing that pin is a Velnor version-policy change,

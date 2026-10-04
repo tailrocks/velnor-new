@@ -211,14 +211,14 @@ fn actions_overrides_validate_allowlist_and_pin_shape() {
     };
     assert_eq!(good.validate("cfg"), Ok(()));
     assert_eq!(ActionsConfig::default().validate("cfg"), Ok(()));
-    let fork_sha = "abcdef0123456789abcdef0123456789abcdef01";
-    let fork = ActionsConfig {
+    let commit_sha = "abcdef0123456789abcdef0123456789abcdef01";
+    let commit = ActionsConfig {
         overrides: BTreeMap::from([(
             "jdx/mr-boxington-action".to_owned(),
-            pin(fork_sha, "fork-abcdef0"),
+            pin(commit_sha, "commit-abcdef0"),
         )]),
     };
-    assert_eq!(fork.validate("cfg"), Ok(()));
+    assert_eq!(commit.validate("cfg"), Ok(()));
     let alint = ActionsConfig {
         overrides: BTreeMap::from([(
             "asamarts/alint".to_owned(),
@@ -240,8 +240,8 @@ fn actions_overrides_validate_allowlist_and_pin_shape() {
         ("actions/checkout", pin(sha, "v7"), "invalid_version:v7"),
         (
             "jdx/mr-boxington-action",
-            pin(fork_sha, "fork-abcdef1"),
-            "invalid_version:fork-abcdef1",
+            pin(commit_sha, "commit-abcdef1"),
+            "invalid_version:commit-abcdef1",
         ),
     ] {
         let config = ActionsConfig {
