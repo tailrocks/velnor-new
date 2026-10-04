@@ -102,6 +102,10 @@ done
 case "$url" in
   https://api.github.com/repos/tailrocks/velnor-new/actions/runs/123/attempts/2/jobs\?per_page=100)
     cat "$MBX_STOCK_FIXTURE_JOBS" > "$output"
+    if [ "${MBX_STOCK_DUPLICATE_JOBS:-false}" = true ]; then
+      printf '\n' >> "$output"
+      cat "$MBX_STOCK_FIXTURE_JOBS" >> "$output"
+    fi
     printf 200 ;;
   https://api.github.com/repos/tailrocks/velnor-new/actions/runs/123)
     cat "$MBX_STOCK_FIXTURE_RUN" > "$output"

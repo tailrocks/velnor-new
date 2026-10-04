@@ -8,6 +8,14 @@ use crate::schema2::MbxQualificationPins;
 use crate::steps;
 use crate::yaml::Yaml;
 
+#[path = "schema2_mbx_parallel_probe_api_dirs.rs"]
+mod dirs;
+
+#[cfg(test)]
+pub(super) const fn prepare_receipt_dirs_script() -> &'static str {
+    dirs::PREPARE_RECEIPT_DIRS_SCRIPT
+}
+
 pub(super) const API_STEP_NAME: &str = "Validate MBX parallel REST timestamps";
 
 const API_RECEIPT_SCRIPT: &str = r#"set -euo pipefail
@@ -45,7 +53,7 @@ verify_directory() {
     find "$directory" -prune -type d -perm 700 -print -quit | grep -Fqx "$directory"
   fi
 }
-verify_directory "$input" "$runner_temp_real/mbx-parallel-input" ''
+verify_directory "$input" "$runner_temp_real/mbx-parallel-input" 700
 verify_directory "$evidence" "$runner_temp_real/mbx-cache-evidence" 700
 if [ -e "$stock_evidence" ] || [ -L "$stock_evidence" ]; then
   echo 'stock restore evidence directory already exists' >&2
@@ -98,7 +106,7 @@ IFS= read -r new_scope_hash < "$new_scope_hash_file"
 
 verify_receipt() {
   local file="$1" job="$2" role="$3" scope="$4" directory="${1%/*}"
-  verify_directory "$directory" "$input/${directory##*/}" ''
+  verify_directory "$directory" "$input/${directory##*/}" 700
   if [ ! -f "$file" ] || [ -L "$file" ] || [ ! -O "$file" ]; then
     echo 'invalid cache receipt file' >&2
     return 1
@@ -303,7 +311,7 @@ jq -er '"MBX parallel overlap classification: " + .classification' "$receipt"
 /// Returns errors when a pinned artifact step is invalid.
 pub(super) fn receipt_steps() -> Result<Vec<Step>, RenderError> {
     let input_root = "${{ runner.temp }}/mbx-parallel-input";
-    let mut steps = Vec::new();
+    let mut steps = vec![dirs::prepare_receipt_dirs_step()?];
     for (role, job_id) in [
         ("seed", "mbx-parallel-seed"),
         ("reader-a", "mbx-parallel-reader-a"),

@@ -13,6 +13,8 @@ mod fixture_data;
 mod stock_miss_tests;
 #[path = "schema2_mbx_parallel_probe_api_key_tests.rs"]
 mod key_tests;
+#[path = "schema2_mbx_parallel_probe_api_single_document_tests.rs"]
+mod single_document_tests;
 
 const SOURCE_SHA: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const OTHER_SHA: &str = "cccccccccccccccccccccccccccccccccccccccc";
@@ -81,6 +83,23 @@ fn api_rejects_unsupported_runner_architecture() {
     assert!(String::from_utf8_lossy(&output.stderr).contains("unsupported runner platform"));
 }
 
+#[test]
+fn receipt_directory_setup_rejects_preexisting_input_directory() {
+    let root = fixture_data::TestDirectory::new();
+    let runner_temp = root.0.join("runner-temp");
+    let fake_bin = root.0.join("bin");
+    fs::create_dir_all(&runner_temp).expect("create runner temp fixture");
+    fs::create_dir_all(&fake_bin).expect("create fixture command directory");
+    let runner_temp = fs::canonicalize(runner_temp).expect("canonicalize runner temp fixture");
+    fixture_data::write_stock_restore_fixtures(&root.0, &runner_temp, "seed-key", "writer-key");
+    let input = runner_temp.join("mbx-parallel-input");
+    fs::create_dir(&input).expect("create preexisting input fixture");
+
+    let output = run_receipt_directory_setup(&runner_temp, &fake_bin);
+    assert!(!output.status.success());
+    assert!(!input.join("seed").exists());
+}
+
 fn cache_prefix(scope_hash: &str, run_id: &str, attempt: &str) -> String {
     cache_prefix_for_arch(scope_hash, run_id, attempt, "x64")
 }
@@ -126,10 +145,9 @@ fn prepare_api_fixture_for_platform(
     key_arch: &str,
 ) -> (PathBuf, PathBuf) {
     let runner_temp = root.join("runner-temp");
-    let input = runner_temp.join("mbx-parallel-input");
     let evidence = runner_temp.join("mbx-cache-evidence");
     let fake_bin = root.join("bin");
-    fs::create_dir_all(&input).expect("create runner temp input");
+    fs::create_dir_all(&runner_temp).expect("create runner temp fixture");
     fs::create_dir(&evidence).expect("create private evidence fixture");
     fs::set_permissions(&evidence, fs::Permissions::from_mode(0o700))
         .expect("make evidence fixture private");
@@ -140,8 +158,15 @@ fn prepare_api_fixture_for_platform(
     let new_prefix = cache_prefix_for_arch(NEW_SCOPE_HASH, "123", "2", key_arch);
     let shared_key = format!("{shared_prefix}{SOURCE_SHA}");
     let new_key = format!("{new_prefix}{SOURCE_SHA}");
+    fixture_data::write_stock_restore_fixtures(root, &runner_temp, &shared_key, &new_key);
+    let directory_setup = run_receipt_directory_setup(&runner_temp, &fake_bin);
+    assert!(
+        directory_setup.status.success(),
+        "production receipt directory setup failed: {}",
+        String::from_utf8_lossy(&directory_setup.stderr)
+    );
     fixture_data::write_receipts(
-        &input,
+        &runner_temp.join("mbx-parallel-input"),
         &shared_key,
         &shared_prefix,
         &new_key,
@@ -149,7 +174,6 @@ fn prepare_api_fixture_for_platform(
         runner_os,
         runner_arch,
     );
-    fixture_data::write_stock_restore_fixtures(root, &runner_temp, &shared_key, &new_key);
     let jobs_path = root.join("jobs.json");
     let seed_cache_path = root.join("seed-cache.json");
     let new_cache_path = root.join("new-cache.json");
@@ -163,6 +187,22 @@ fn prepare_api_fixture_for_platform(
         .expect("write new cache fixture");
     fixture_data::write_fake_gh(&fake_bin.join("gh"));
     (runner_temp, jobs_path)
+}
+
+fn run_receipt_directory_setup(
+    runner_temp: &std::path::Path,
+    fake_bin: &std::path::Path,
+) -> std::process::Output {
+    let mut path_entries = vec![fake_bin.to_path_buf()];
+    path_entries.extend(env::split_paths(&env::var_os("PATH").unwrap_or_default()));
+    let path = env::join_paths(path_entries).expect("join fixture PATH");
+    let script = super::super::api::prepare_receipt_dirs_script();
+    Command::new("bash")
+        .args(["-c", script])
+        .env("PATH", path)
+        .env("RUNNER_TEMP", runner_temp)
+        .output()
+        .expect("run production receipt directory setup")
 }
 
 fn run_api_script(
@@ -180,6 +220,26 @@ fn run_api_script_for_platform(
     runner_os: &str,
     runner_arch: &str,
     key_arch: &str,
+) -> std::process::Output {
+    run_api_script_for_platform_with_duplicate_jobs(
+        root,
+        runner_temp,
+        jobs_path,
+        runner_os,
+        runner_arch,
+        key_arch,
+        false,
+    )
+}
+
+fn run_api_script_for_platform_with_duplicate_jobs(
+    root: &std::path::Path,
+    runner_temp: &std::path::Path,
+    jobs_path: &std::path::Path,
+    runner_os: &str,
+    runner_arch: &str,
+    key_arch: &str,
+    duplicate_jobs: bool,
 ) -> std::process::Output {
     let fake_bin = root.join("bin");
     let seed_cache_path = root.join("seed-cache.json");
@@ -214,6 +274,10 @@ fn run_api_script_for_platform(
         .env(
             "MBX_STOCK_FIXTURE_JOBS",
             runner_temp.parent().expect("fixture root").join("stock-jobs.json"),
+        )
+        .env(
+            "MBX_STOCK_DUPLICATE_JOBS",
+            if duplicate_jobs { "true" } else { "false" },
         )
         .env(
             "MBX_STOCK_FIXTURE_LOG_DIR",

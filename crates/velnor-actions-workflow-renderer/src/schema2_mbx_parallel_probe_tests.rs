@@ -234,6 +234,8 @@ fn api_observer_binds_current_attempt_and_records_relevant_overlap() {
 
 fn assert_observer_scope_and_order(jobs: &[(String, Yaml)]) {
     let observer = job(jobs, Role::ObserverShared.id());
+    let prepare_dirs = step(observer, "Prepare private MBX receipt directories");
+    assert!(string(field(prepare_dirs, "run")).contains("mkdir -m 700"));
     let api_step = step(observer, "Validate MBX parallel REST timestamps");
     assert_eq!(string(field(api_step, "shell")), "bash");
     let api_env = map_fields(field(api_step, "env"));
@@ -269,6 +271,7 @@ fn assert_observer_scope_and_order(jobs: &[(String, Yaml)]) {
     let Yaml::Seq(observer_steps) = field(observer, "steps") else {
         panic!("steps must be a sequence");
     };
+    assert_receipt_directories_precede_downloads(observer_steps);
     let api_position = observer_steps.iter().position(|candidate| {
         string(field(map_fields(candidate), "name")) == "Validate MBX parallel REST timestamps"
     });
@@ -308,6 +311,25 @@ fn assert_observer_scope_and_order(jobs: &[(String, Yaml)]) {
                 );
             }
         }
+    }
+}
+
+fn assert_receipt_directories_precede_downloads(observer_steps: &[Yaml]) {
+    let prepare_position = observer_steps.iter().position(|candidate| {
+        string(field(map_fields(candidate), "name")) == "Prepare private MBX receipt directories"
+    });
+    for receipt_step in [
+        "Download MBX seed receipt",
+        "Download MBX reader-a receipt",
+        "Download MBX reader-b receipt",
+        "Download MBX new-key-writer receipt",
+    ] {
+        let download_position = observer_steps.iter().position(|candidate| {
+            string(field(map_fields(candidate), "name")) == receipt_step
+        });
+        assert!(prepare_position.is_some_and(|prepare| {
+            download_position.is_some_and(|download| prepare < download)
+        }));
     }
 }
 
