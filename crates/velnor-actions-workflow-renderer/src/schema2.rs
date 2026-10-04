@@ -1,5 +1,5 @@
-//! Qualification, image-release, macOS-binary-release, generator-release,
-//! and monitoring workflows. Emitted only when schema 2 requests them.
+//! Qualification, composed product-release, and monitoring workflows.
+//! Emitted only when schema 2 requests them.
 
 use std::collections::BTreeSet;
 
@@ -14,12 +14,8 @@ use crate::yaml::{Yaml, render_yaml};
 
 /// Qualification workflow path.
 pub const QUALIFICATION_WORKFLOW: &str = ".github/workflows/qualification.yml";
-/// Image-release workflow path.
-pub const IMAGE_RELEASE_WORKFLOW: &str = ".github/workflows/image-release.yml";
-/// macOS binary-release workflow path.
-pub const MACOS_BINARY_RELEASE_WORKFLOW: &str = ".github/workflows/macos-binary-release.yml";
-/// Generator-release workflow path.
-pub const GENERATOR_RELEASE_WORKFLOW: &str = ".github/workflows/generator-release.yml";
+/// Shared product-release coordinator workflow path.
+pub const PRODUCT_RELEASE_WORKFLOW: &str = product_release::WORKFLOW_PATH;
 /// Queue-monitoring workflow path.
 pub const MONITORING_WORKFLOW: &str = ".github/workflows/monitoring.yml";
 
@@ -31,6 +27,10 @@ mod features;
 mod generator_release;
 #[path = "schema2_mbx_qualification.rs"]
 mod mbx_qualification;
+#[path = "schema2_product_release.rs"]
+mod product_release;
+#[path = "schema2_product_release_family.rs"]
+mod product_release_family;
 #[path = "schema2_release.rs"]
 mod release;
 /// Exact-source gates for composed product-release workflows.
@@ -96,31 +96,11 @@ pub fn render_schema2_workflows(
             &qualification(request)?,
         )?);
     }
-    if request.workflows.contains(&RoutingWorkflow::ImageRelease) {
+    if let Some(product_release) = product_release::render(request)? {
         files.push(file(
-            IMAGE_RELEASE_WORKFLOW,
+            PRODUCT_RELEASE_WORKFLOW,
             &request.version,
-            &release::image_release(request)?,
-        )?);
-    }
-    if request
-        .workflows
-        .contains(&RoutingWorkflow::MacosBinaryRelease)
-    {
-        files.push(file(
-            MACOS_BINARY_RELEASE_WORKFLOW,
-            &request.version,
-            &release::macos_binary_release(request)?,
-        )?);
-    }
-    if request
-        .workflows
-        .contains(&RoutingWorkflow::GeneratorRelease)
-    {
-        files.push(file(
-            GENERATOR_RELEASE_WORKFLOW,
-            &request.version,
-            &generator_release::generator_release(request)?,
+            &product_release,
         )?);
     }
     if request.workflows.contains(&RoutingWorkflow::Monitoring) {
