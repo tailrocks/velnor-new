@@ -27,6 +27,8 @@ mod impl_generate_tofu_env;
 mod impl_git_authority_p10;
 mod impl_git_paths_p10;
 mod impl_lane_isolation;
+#[path = "impl_local_shared_action.rs"]
+mod impl_local_shared_action;
 mod impl_matrix;
 mod impl_merge;
 mod impl_merge_plan;
@@ -80,7 +82,6 @@ mod impl_schema2_routing;
 mod impl_select;
 mod impl_select_base;
 mod impl_select_removed;
-mod impl_self_repo_gap;
 mod impl_strict_envelope;
 mod impl_task_source_prep;
 mod impl_tofu_t09;

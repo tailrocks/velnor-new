@@ -5,10 +5,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
-    RenderError, commands,
-    composite::{push_composite_shell, shared_call},
+    RenderError,
+    composite::shared_call,
+    document_steps::step_to_yaml,
     render::{FINAL_JOB_ID, RenderContext},
-    steps::{self, INTERNAL_OP_ENV, REQUEST_FILE_ENV},
+    steps,
     yaml::Yaml,
 };
 use velnor_actions_contract::{
@@ -22,15 +23,29 @@ pub(crate) fn workflow_to_yaml(
     jobs: &BTreeMap<String, Job>,
     ctx: &RenderContext,
     shared: &BTreeMap<String, String>,
+    checkouts: &BTreeMap<String, Step>,
     mbx_gc_jobs: &BTreeSet<String>,
 ) -> Result<Yaml, RenderError> {
+    if shared.keys().ne(checkouts.keys()) || shared.keys().any(|id| !jobs.contains_key(id)) {
+        return Err(RenderError::InvalidWorkflow(
+            "shared_lane_checkout_map_mismatch".to_owned(),
+        ));
+    }
     let needs_env = needs_channel_envs(jobs)?;
     let mut rendered_jobs = Vec::with_capacity(jobs.len());
     for (id, job) in jobs {
         let call = shared.get(id).map(String::as_str);
         rendered_jobs.push((
             id.clone(),
-            job_to_yaml(id, job, ctx, &needs_env, call, mbx_gc_jobs.contains(id))?,
+            job_to_yaml(
+                id,
+                job,
+                ctx,
+                &needs_env,
+                call,
+                checkouts,
+                mbx_gc_jobs.contains(id),
+            )?,
         ));
     }
     Ok(Yaml::Map(vec![
@@ -183,6 +198,7 @@ fn job_to_yaml(
     ctx: &RenderContext,
     needs_envs: &[(String, String)],
     shared: Option<&str>,
+    checkouts: &BTreeMap<String, Step>,
     mbx_gc_auto: bool,
 ) -> Result<Yaml, RenderError> {
     steps::scan_for_private_subcommands(&job.display_name)?;
@@ -224,9 +240,25 @@ fn job_to_yaml(
         steps::scan_for_private_subcommands(condition)?;
         entries.push(("if".to_owned(), Yaml::str(condition.clone())));
     }
-    let mut rendered_steps = Vec::with_capacity(job.steps.len() + usize::from(shared.is_some()));
+    let mut rendered_steps =
+        Vec::with_capacity(job.steps.len() + 2 * usize::from(shared.is_some()));
     if let Some(uses) = shared {
+        let Some(checkout) = checkouts.get(id) else {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "shared_lane_missing_checkout:{id}"
+            )));
+        };
+        if !valid_shared_checkout(checkout, &ctx.checkout_uses) {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "shared_lane_invalid_checkout:{id}"
+            )));
+        }
+        rendered_steps.push(step_to_yaml(id, checkout, ctx, needs_envs, false)?);
         rendered_steps.push(shared_call(uses)?);
+    } else if checkouts.contains_key(id) {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "checkout_without_shared_lane:{id}"
+        )));
     }
     for step in &job.steps {
         rendered_steps.push(step_to_yaml(id, step, ctx, needs_envs, false)?);
@@ -235,164 +267,14 @@ fn job_to_yaml(
     Ok(Yaml::Map(entries))
 }
 
-/// True for the final job's plan download (fetch is gated inline below).
-///
-/// An absent plan artifact (failed plan) must still reach the merge
-/// verdict instead of failing the job at the download step.
-fn is_verdict_download(step: &Step) -> bool {
-    matches!(
-        &step.kind,
-        StepKind::Action { uses, .. } if uses == steps::DOWNLOAD_ARTIFACT_USES
-    ) && step.name == crate::closure::DOWNLOAD_PLAN_NAME
-}
-
-/// Env for one internal step: op plus request file, fetch carries auth.
-///
-/// The fetch op takes no request file; it reads the plan from the
-/// run directory and authenticates `gh` with the job token plus the
-/// repository slug (fixed literals, never caller input). Token hygiene
-/// still gates IR-level `GH_TOKEN` (see `support`); this render-time
-/// pair is fixed by construction for the fetch step only. Merge-family
-/// steps in the final job additionally carry the finalized `needs`
-/// conclusions channel plus the rendered expected inventory, so the
-/// merge binds required validators to the committed workflow.
-fn internal_env(
-    op: &str,
-    target: &str,
-    ctx: &RenderContext,
-    needs_envs: &[(String, String)],
-) -> Yaml {
-    if op == steps::FETCH_OPERATION {
-        return Yaml::Map(vec![
-            ("GH_REPO".to_owned(), Yaml::str("${{ github.repository }}")),
-            ("GH_TOKEN".to_owned(), Yaml::str("${{ github.token }}")),
-            (INTERNAL_OP_ENV.to_owned(), Yaml::str(op.to_owned())),
-        ]);
-    }
-    let request = format!("{}/{target}-request.json", ctx.request_dir);
-    let mut env = vec![(INTERNAL_OP_ENV.to_owned(), Yaml::str(op.to_owned()))];
-    for (key, value) in needs_envs {
-        env.push((key.clone(), Yaml::str(value.clone())));
-    }
-    env.push((REQUEST_FILE_ENV.to_owned(), Yaml::str(request)));
-    if op == steps::PLAN_OPERATION && target == steps::PLAN_OPERATION {
-        for (key, value) in &ctx.plan_consumer_env {
-            env.push((key.clone(), Yaml::str(value.clone())));
-        }
-    }
-    Yaml::Map(env)
-}
-
-/// Render one action step: name, condition, pin, inputs, step env.
-///
-/// Step env (cache modes) renders after `with:`; absent env renders
-/// nothing, so env-less steps keep their exact historical bytes.
-fn action_step_to_yaml(
-    job_id: &str,
-    step: &Step,
-    uses: &str,
-    with: &BTreeMap<String, String>,
-    env: &BTreeMap<String, String>,
-) -> Result<Yaml, RenderError> {
-    steps::validate_uses(uses)?;
-    for (key, value) in with {
-        crate::expressions::check_with_key(key)?;
-        crate::expressions::check_with_value(key, value)?;
-        steps::scan_for_private_subcommands(key)?;
-        steps::scan_for_private_subcommands(value)?;
-    }
-    commands::validate_env(env)?;
-    let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
-    crate::mbx_bundle::push_step_id(&mut entries, &step.name);
-    if let Some(condition) = &step.condition {
-        steps::scan_for_private_subcommands(condition)?;
-        entries.push(("if".to_owned(), Yaml::str(condition.clone())));
-    } else if uses == steps::UPLOAD_ARTIFACT_USES {
-        entries.push((
-            "if".to_owned(),
-            Yaml::str(crate::render::FINAL_CONDITION.to_owned()),
-        ));
-    }
-    if job_id == FINAL_JOB_ID && is_verdict_download(step) {
-        entries.push(("continue-on-error".to_owned(), Yaml::Bool(true)));
-    }
-    entries.push(("uses".to_owned(), Yaml::str(uses.to_owned())));
-    if !with.is_empty() {
-        entries.push(("with".to_owned(), string_map_yaml(with)));
-    }
-    if !env.is_empty() {
-        entries.push(("env".to_owned(), string_map_yaml(env)));
-    }
-    Ok(Yaml::Map(entries))
-}
-
-/// Sorted string map as YAML (shared by `with:` and `env:` emission).
-fn string_map_yaml(map: &BTreeMap<String, String>) -> Yaml {
-    Yaml::Map(
-        map.iter()
-            .map(|(key, value)| (key.clone(), Yaml::str(value.clone())))
-            .collect(),
-    )
-}
-
-/// Render one step; internal ops become env plus request file, never argv.
-/// Every action ref (including the Alint pin) must be a full-SHA pin.
-pub(crate) fn step_to_yaml(
-    job_id: &str,
-    step: &Step,
-    ctx: &RenderContext,
-    needs_envs: &[(String, String)],
-    composite: bool,
-) -> Result<Yaml, RenderError> {
-    steps::scan_for_private_subcommands(&step.name)?;
-    match &step.kind {
-        StepKind::Action { uses, with, env } => action_step_to_yaml(job_id, step, uses, with, env),
-        StepKind::Shell { run, env } => {
-            commands::validate_command_argv(run)?;
-            commands::validate_env(env)?;
-            let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
-            crate::mbx_bundle::push_step_id(&mut entries, &step.name);
-            if let Some(condition) = &step.condition {
-                steps::scan_for_private_subcommands(condition)?;
-                entries.push(("if".to_owned(), Yaml::str(condition.clone())));
-            }
-            if !env.is_empty() {
-                let vars: Vec<(String, Yaml)> = env
-                    .iter()
-                    .map(|(key, value)| (key.clone(), Yaml::str(value.clone())))
-                    .collect();
-                entries.push(("env".to_owned(), Yaml::Map(vars)));
-            }
-            push_composite_shell(&mut entries, composite);
-            entries.push((
-                "run".to_owned(),
-                Yaml::str(commands::join_argv_for_run(run)?),
-            ));
-            Ok(Yaml::Map(entries))
-        }
-        StepKind::Internal { operation } => {
-            let (op, target) = steps::split_internal_operation(operation)?;
-            let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
-            if let Some(condition) = &step.condition {
-                steps::scan_for_private_subcommands(condition)?;
-                entries.push(("if".to_owned(), Yaml::str(condition.clone())));
-            }
-            // No `continue-on-error` on the fetch step (F5): the helper
-            // retries each leg bounded and still exits success on
-            // per-leg failure, so the merge judges honestly; only hard
-            // environment failures fail the job, unmasked.
-            let channel = if job_id == FINAL_JOB_ID && target == steps::MERGE_OPERATION {
-                needs_envs
-            } else {
-                &[]
-            };
-            entries.push(("env".to_owned(), internal_env(op, target, ctx, channel)));
-            push_composite_shell(&mut entries, composite);
-            entries.push((
-                "run".to_owned(),
-                Yaml::str(commands::quote_run_arg(&ctx.staged_binary)),
-            ));
-            Ok(Yaml::Map(entries))
-        }
-    }
+fn valid_shared_checkout(checkout: &Step, expected_uses: &str) -> bool {
+    checkout.name == "Checkout"
+        && checkout.condition.is_none()
+        && matches!(
+            &checkout.kind,
+            StepKind::Action { uses, with, env }
+                if uses == expected_uses
+                    && with.get("persist-credentials").map(String::as_str) == Some("false")
+                    && env.is_empty()
+        )
 }
