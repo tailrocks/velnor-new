@@ -112,7 +112,15 @@ fn step_names_reject_github_expressions() {
 
 #[test]
 fn argv_rejects_background_shell_but_keeps_chains_and_urls() {
-    for script in ["a & b", "sleep 1&", "& echo hi", "run & sleep"] {
+    for script in [
+        "a & b",
+        "sleep 1&",
+        "sleep 1&echo done",
+        "sleep 1 &\techo done",
+        "sleep 1\t&echo done",
+        "& echo hi",
+        "run & sleep",
+    ] {
         assert!(
             validate_command_argv(&argv(&["sh", "-c", script])).is_err(),
             "background accepted: {script}"
@@ -121,6 +129,10 @@ fn argv_rejects_background_shell_but_keeps_chains_and_urls() {
     for script in [
         "a && b",
         "cmd 2>&1",
+        "cmd &>out",
+        "echo '&'",
+        "echo \\&",
+        "echo done # & ignored",
         "curl 'https://example.invalid/x?a=1&b=2'",
         "echo done",
     ] {

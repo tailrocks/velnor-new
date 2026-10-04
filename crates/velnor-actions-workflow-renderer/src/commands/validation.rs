@@ -92,17 +92,69 @@ fn is_absolute_cargo(arg: &str) -> bool {
     arg.starts_with('/') && (arg == "/cargo" || arg.ends_with("/cargo"))
 }
 
-/// True for shell background operators (`&`), never for `&&`/redirections.
-fn has_background_op(arg: &str) -> bool {
-    if arg.contains(" & ") {
-        return true;
-    }
-    let trimmed = arg.trim();
-    if let Some(head) = trimmed.strip_prefix('&') {
-        return !head.starts_with('&');
-    }
-    if let Some(body) = trimmed.strip_suffix('&') {
-        return !body.ends_with('&');
+/// Find one unquoted background operator while keeping chains and redirects.
+fn has_background_op(script: &str) -> bool {
+    let mut chars = script.chars().peekable();
+    let mut quote = None;
+    let mut escaped = false;
+    let mut comment = false;
+    let mut token_start = true;
+    let mut previous = None;
+    while let Some(ch) = chars.next() {
+        if comment {
+            if ch == '\n' {
+                comment = false;
+                token_start = true;
+            }
+            continue;
+        }
+        if escaped {
+            escaped = false;
+            token_start = false;
+            previous = Some(ch);
+            continue;
+        }
+        if let Some(open_quote) = quote {
+            if ch == '\\' && open_quote == '"' {
+                escaped = true;
+            } else if ch == open_quote {
+                quote = None;
+            }
+            previous = Some(ch);
+            continue;
+        }
+        match ch {
+            '\\' => escaped = true,
+            '\'' | '"' => {
+                quote = Some(ch);
+                token_start = false;
+            }
+            '#' if token_start => comment = true,
+            '&' if chars.peek() == Some(&'&') => {
+                chars.next();
+                token_start = true;
+                previous = Some('&');
+                continue;
+            }
+            '&' if chars.peek() == Some(&'>') => {
+                chars.next();
+                if chars.peek() == Some(&'>') {
+                    chars.next();
+                }
+                token_start = true;
+                previous = Some('>');
+                continue;
+            }
+            '&' if previous == Some('>') => {
+                token_start = false;
+            }
+            '&' => return true,
+            ' ' | '\t' | '\n' | '\r' | ';' | '|' | '(' | ')' | '<' | '>' => {
+                token_start = true;
+            }
+            _ => token_start = false,
+        }
+        previous = Some(ch);
     }
     false
 }

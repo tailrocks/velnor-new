@@ -242,6 +242,18 @@ fn only_exact_renderer_owned_mbx_scripts_allow_multiline_bash() -> Result<(), Bo
         crate::commands::validate_step_command_argv(MBX_STORE_INIT_NAME, &partial_unset).is_err()
     );
 
+    for background_script in ["sleep 1&echo done", "sleep 1 &\techo done"] {
+        let background = vec![
+            "bash".to_owned(),
+            "-c".to_owned(),
+            background_script.to_owned(),
+        ];
+        assert!(super::trusted_script_argument(MBX_STORE_INIT_NAME, &background).is_none());
+        assert!(
+            crate::commands::validate_step_command_argv(MBX_STORE_INIT_NAME, &background).is_err()
+        );
+    }
+
     let mut script_with_extra_arg = vec![
         "bash".to_owned(),
         "-c".to_owned(),
