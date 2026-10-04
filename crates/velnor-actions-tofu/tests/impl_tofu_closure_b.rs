@@ -12,7 +12,7 @@ fn declared_extras_and_digests_bind() -> Outcome {
     let root = TempDir::create("tofu-closure-declared")?;
     seed(&root, "", false)?;
     root.write("policy.rego", "package x\n")?;
-    let mut task = proposal("validate", "");
+    let mut task = proposal("validate", "")?;
     task.identity.declared_inputs = vec!["policy.rego".to_owned(), "absent.txt".to_owned()];
     let closure = resolve_closure_at_root(
         root.path(),
@@ -50,7 +50,7 @@ fn declared_extras_and_digests_bind() -> Outcome {
 fn undeclared_reads_mark_vcs_unknown() -> Outcome {
     let root = TempDir::create("tofu-closure-vcs")?;
     seed(&root, "", false)?;
-    let mut task = proposal("validate", "");
+    let mut task = proposal("validate", "")?;
     task.identity.undeclared_reads = true;
     let closure =
         resolve_closure_at_root(root.path(), &task, "g", "t", "p", &mut FileCache::new())?;
@@ -64,7 +64,7 @@ fn init_and_validate_share_the_load_set() -> Outcome {
     seed(&root, "", false)?;
     let init = resolve_closure_at_root(
         root.path(),
-        &proposal("init", ""),
+        &proposal("init", "")?,
         "g",
         "t",
         "p",
@@ -72,7 +72,7 @@ fn init_and_validate_share_the_load_set() -> Outcome {
     )?;
     let validate = resolve_closure_at_root(
         root.path(),
-        &proposal("validate", ""),
+        &proposal("validate", "")?,
         "g",
         "t",
         "p",
@@ -92,7 +92,7 @@ fn modules_input_binds_local_closure() -> Outcome {
     seed_modules(&root, "")?;
     let closure = resolve_closure_at_root(
         root.path(),
-        &proposal("validate", ""),
+        &proposal("validate", "")?,
         "g",
         "t",
         "p",
@@ -112,7 +112,7 @@ fn module_edit_flips_modules_digest() -> Outcome {
     seed_modules(&root, "")?;
     let before = resolve_closure_at_root(
         root.path(),
-        &proposal("validate", ""),
+        &proposal("validate", "")?,
         "g",
         "t",
         "p",
@@ -121,7 +121,7 @@ fn module_edit_flips_modules_digest() -> Outcome {
     root.write("mods/a/main.tf", "variable \"x\" {}\nvariable \"y\" {}\n")?;
     let after = resolve_closure_at_root(
         root.path(),
-        &proposal("validate", ""),
+        &proposal("validate", "")?,
         "g",
         "t",
         "p",
@@ -137,7 +137,7 @@ fn dynamic_source_marks_modules_unknown() -> Outcome {
     root.write("main.tf", "module \"d\" {\n  source = var.x\n}\n")?;
     let closure = resolve_closure_at_root(
         root.path(),
-        &proposal("validate", ""),
+        &proposal("validate", "")?,
         "g",
         "t",
         "p",
@@ -153,7 +153,7 @@ fn missing_target_marks_modules_unknown() -> Outcome {
     root.write("main.tf", "module \"a\" {\n  source = \"./absent\"\n}\n")?;
     let closure = resolve_closure_at_root(
         root.path(),
-        &proposal("validate", ""),
+        &proposal("validate", "")?,
         "g",
         "t",
         "p",
@@ -171,7 +171,7 @@ fn varfiles_input_binds_auto_tfvars() -> Outcome {
     root.write("extra.auto.tfvars", "y = 2\n")?;
     let before = resolve_closure_at_root(
         root.path(),
-        &proposal("validate", ""),
+        &proposal("validate", "")?,
         "g",
         "t",
         "p",
@@ -184,7 +184,7 @@ fn varfiles_input_binds_auto_tfvars() -> Outcome {
     root.write("extra.tfvars", "x = 9\n")?;
     let same = resolve_closure_at_root(
         root.path(),
-        &proposal("validate", ""),
+        &proposal("validate", "")?,
         "g",
         "t",
         "p",
@@ -194,7 +194,7 @@ fn varfiles_input_binds_auto_tfvars() -> Outcome {
     root.write("extra.auto.tfvars", "y = 3\n")?;
     let after = resolve_closure_at_root(
         root.path(),
-        &proposal("validate", ""),
+        &proposal("validate", "")?,
         "g",
         "t",
         "p",
@@ -212,7 +212,7 @@ fn force_added_varfiles_still_bound() -> Outcome {
     root.write("forced.auto.tfvars", "x = 1\n")?;
     let closure = resolve_closure_at_root(
         root.path(),
-        &proposal("validate", ""),
+        &proposal("validate", "")?,
         "g",
         "t",
         "p",
@@ -232,7 +232,7 @@ fn fmt_excludes_modules_and_varfiles() -> Outcome {
     root.write("terraform.tfvars", "x = 1\n")?;
     let closure = resolve_closure_at_root(
         root.path(),
-        &proposal("fmt", ""),
+        &proposal("fmt", "")?,
         "g",
         "t",
         "p",
