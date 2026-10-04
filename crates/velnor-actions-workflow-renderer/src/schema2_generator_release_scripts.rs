@@ -119,6 +119,15 @@ pub(super) fn install_rust_target(target: &str) -> String {
     )
 }
 
+/// Install the catalog Rust toolchain used by the candidate CLI at runtime.
+/// This provides `cargo metadata` to `plan`/`generate` and never builds the
+/// downloaded candidate.
+pub(super) fn install_qualification_toolchain() -> String {
+    format!(
+        "set -eu\n{CATALOG_VERSION}\nRUST_VERSION=\"$(catalog_version RUST_VERSION)\"\nACTIONLINT_VERSION=\"$(catalog_version ACTIONLINT_VERSION)\"\nSHELLCHECK_VERSION=\"$(catalog_version SHELLCHECK_VERSION)\"\nZIZMOR_VERSION=\"$(catalog_version ZIZMOR_VERSION)\"\nmise --no-config --no-env --no-hooks install \"rust@$RUST_VERSION\" \"actionlint@$ACTIONLINT_VERSION\" \"shellcheck@$SHELLCHECK_VERSION\" \"zizmor@$ZIZMOR_VERSION\""
+    )
+}
+
 /// Build with exact Rust and MBX versions, verify MBX recorded this build,
 /// verify the output architecture, and write its checksum sidecar.
 pub(super) fn build(
