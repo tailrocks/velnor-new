@@ -29,8 +29,18 @@ mod classes;
 mod features;
 #[path = "schema2_generator_release.rs"]
 mod generator_release;
+#[path = "schema2_mbx_corrupt_probe.rs"]
+mod mbx_corrupt_probe;
 #[path = "schema2_mbx_qualification.rs"]
 mod mbx_qualification;
+#[path = "schema2_mbx_qualification_helpers.rs"]
+mod mbx_qualification_helpers;
+#[path = "schema2_mbx_resource_probe.rs"]
+mod mbx_resource_probe;
+#[path = "schema2_mbx_resource_probe_env.rs"]
+mod mbx_resource_probe_env;
+#[path = "schema2_mbx_resource_probe_render.rs"]
+mod mbx_resource_probe_render;
 #[path = "schema2_release.rs"]
 mod release;
 

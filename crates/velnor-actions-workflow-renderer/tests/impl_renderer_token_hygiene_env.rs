@@ -125,6 +125,79 @@ fn qualification_restore_outputs_allow_only_exact_guard_bindings() -> Result<(),
 }
 
 #[test]
+fn selected_import_root_output_has_one_exact_environment_binding() -> Result<(), RenderError> {
+    let outputs = [
+        (
+            "MBX_SELECTED_CACHE_ROOT",
+            "${{ steps.mbx-bundle-import.outputs.selected_cache_root }}",
+        ),
+        (
+            "MBX_CHILD_RUN_ID",
+            "${{ steps.mbx-cancel-receipt.outputs.child_run_id }}",
+        ),
+        (
+            "MBX_CHILD_ATTEMPT",
+            "${{ steps.mbx-cancel-receipt.outputs.child_attempt }}",
+        ),
+        (
+            "MBX_CHILD_SOURCE_SHA",
+            "${{ steps.mbx-cancel-receipt.outputs.source_sha }}",
+        ),
+        (
+            "MBX_CHILD_CACHE_KEY",
+            "${{ steps.mbx-cancel-receipt.outputs.cache_key }}",
+        ),
+        (
+            "MBX_CHILD_GENERATION",
+            "${{ steps.mbx-cancel-receipt.outputs.generation }}",
+        ),
+        (
+            "MBX_CHILD_RUSTC_IDENTITY",
+            "${{ steps.mbx-cancel-receipt.outputs.rustc_identity }}",
+        ),
+        (
+            "MBX_CHILD_VERSION",
+            "${{ steps.mbx-cancel-receipt.outputs.mbx_version }}",
+        ),
+    ];
+    for (key, expression) in outputs {
+        shell_step(
+            "Exact qualification output",
+            vec!["true".to_owned()],
+            BTreeMap::from([(key.to_owned(), expression.to_owned())]),
+        )?;
+        let base = expression
+            .strip_suffix(" }}")
+            .ok_or_else(|| RenderError::InvalidWorkflow("malformed_test_expression".to_owned()))?;
+        let denied = format!("{base}_extra }}}}");
+        let result = shell_step(
+            "Exact qualification output",
+            vec!["true".to_owned()],
+            BTreeMap::from([(key.to_owned(), denied.clone())]),
+        );
+        assert!(
+            result.is_err(),
+            "unexpectedly accepted env expression: {denied}"
+        );
+    }
+    for denied in [
+        "${{ steps.mbx-bundle-import.outputs.other }}",
+        "${{ steps.mbx-cancel-receipt.outputs.arbitrary }}",
+    ] {
+        let result = shell_step(
+            "Exact qualification output",
+            vec!["true".to_owned()],
+            BTreeMap::from([("MBX_OUTPUT".to_owned(), denied.to_owned())]),
+        );
+        assert!(
+            result.is_err(),
+            "unexpectedly accepted env expression: {denied}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn nested_fetch_exemption_requires_generator_shape() -> Result<(), RenderError> {
     // Genuine nested names stay exempt with unscrubbed ambient env.
     for name in [
