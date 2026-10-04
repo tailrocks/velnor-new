@@ -5,7 +5,6 @@ set +o allexport
 set -euo pipefail
 
 root="/home/runner"
-work="${root}/_work"
 listener="${root}/bin/Runner.Listener"
 # Stay under Linux MAX_ARG_STRLEN so --jitconfig fits in one argv slot.
 max=131071
@@ -15,9 +14,8 @@ if [[ ! -x "$listener" ]]; then
   exit 1
 fi
 
-mkdir -p "$work"
 umask 077
-jit_file="$(mktemp "${work}/jit.XXXXXX")"
+jit_file="$(mktemp /tmp/jit.XXXXXX)"
 chmod 0600 "$jit_file"
 trap 'rm -f "$jit_file"' EXIT
 
@@ -52,4 +50,6 @@ cd "$root"
 # Shell variable only. No export. Image ENV/ARG/labels never carry this.
 # DinD links the public socket after its seed. Wait before the listener.
 /usr/local/bin/wait-docker-sock
+/usr/local/bin/clear-dockerenv
+/usr/local/bin/runner-job-env
 exec "$listener" run --jitconfig "$payload"

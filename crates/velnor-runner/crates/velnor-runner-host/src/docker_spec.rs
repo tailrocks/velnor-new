@@ -47,7 +47,7 @@ const RUNNER_PLATFORM: &str = "linux/amd64";
 const RUNNER_IMAGE: &str = "velnor-runner:ubuntu-26.04-2.337.0";
 const ENTRYPOINT: &str = "/usr/local/bin/velnor-runner-entrypoint";
 const SOCKET_TARGET: &str = "/run";
-const WORK_TARGET: &str = "/home/runner/_work";
+const WORK_TARGET: &str = "/home/runner/work";
 
 const HOST_NEEDLES: &[&str] = &[
     "ssh-agent",

@@ -113,7 +113,7 @@ fn dind_container_id(id: &str) -> bool {
 /// Private `DinD` create. Privilege is not a flag on the runner plan.
 ///
 /// Mounts are the runner plan's socket volume at `/run` and the work volume at
-/// `/home/runner/_work`. Same names [`runner_plan`] rejects.
+/// `/home/runner/work`. Same names [`runner_plan`] rejects.
 ///
 /// # Errors
 ///

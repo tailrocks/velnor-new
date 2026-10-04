@@ -9,7 +9,11 @@ use super::error::{SessionError, reject};
 use super::request::{Method, SessionRequest, Transport};
 use super::retry::{API_QUERY, bearer, execute, fresh_gate, json_content, user_agent};
 
-/// JSON body for [`jit`]. `workFolder` is empty, matching the pinned scaler.
+/// JSON body for [`jit`]. `workFolder` is `work`, not the scaler's empty default.
+///
+/// Hosted `runner.temp` is `/home/runner/work/_temp`. Cache versions hash that
+/// path. An empty folder becomes `_work` and misses those entries. The work
+/// volume is mounted at `/home/runner/work`.
 ///
 /// # Errors
 ///
@@ -21,7 +25,7 @@ pub fn jit_request(name: &str) -> Result<Vec<u8>, WireError> {
     }
     serde_json::to_vec(&JitRequest {
         name,
-        work_folder: "",
+        work_folder: "work",
     })
     .map_err(|_| WireError::Encode)
 }
