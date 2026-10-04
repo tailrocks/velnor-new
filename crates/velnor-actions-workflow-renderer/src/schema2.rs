@@ -14,6 +14,7 @@ use crate::yaml::{Yaml, render_yaml};
 
 /// Qualification workflow path.
 pub const QUALIFICATION_WORKFLOW: &str = ".github/workflows/qualification.yml";
+const QUALIFICATION_RUN_NAME: &str = "${{ (inputs.mode == 'mbx-cancel-pre-save-controller' || inputs.mode == 'mbx-cancel-pre-save-victim' || inputs.mode == 'mbx-cancel-during-save-controller' || inputs.mode == 'mbx-cancel-during-save-victim') && format('MBX cancellation {0} {1}', inputs.mode, inputs.probe_id) || '' }}";
 /// Image-release workflow path.
 pub const IMAGE_RELEASE_WORKFLOW: &str = ".github/workflows/image-release.yml";
 /// macOS binary-release workflow path.
@@ -29,8 +30,26 @@ mod classes;
 mod features;
 #[path = "schema2_generator_release.rs"]
 mod generator_release;
+#[path = "schema2_mbx_cancel_probe.rs"]
+mod mbx_cancel_probe;
+#[path = "schema2_mbx_corrupt_probe.rs"]
+mod mbx_corrupt_probe;
+#[path = "schema2_mbx_parallel_probe.rs"]
+mod mbx_parallel_probe;
 #[path = "schema2_mbx_qualification.rs"]
 mod mbx_qualification;
+#[path = "schema2_mbx_qualification_helpers.rs"]
+mod mbx_qualification_helpers;
+#[path = "schema2_mbx_resource_probe.rs"]
+mod mbx_resource_probe;
+#[path = "schema2_mbx_resource_probe_env.rs"]
+mod mbx_resource_probe_env;
+#[path = "schema2_mbx_resource_probe_render.rs"]
+mod mbx_resource_probe_render;
+#[path = "schema2_mbx_roundtrip_terminal.rs"]
+mod mbx_roundtrip_terminal;
+#[path = "schema2_mbx_stock_restore.rs"]
+mod mbx_stock_restore;
 #[path = "schema2_release.rs"]
 mod release;
 
@@ -189,7 +208,14 @@ fn qualification(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> 
             "missing_mbx_qualification_pins".to_owned(),
         ));
     }
-    Ok(document("Qualification", mode_trigger(), jobs))
+    let mut workflow = document("Qualification", mode_trigger(), jobs);
+    if let Yaml::Map(fields) = &mut workflow {
+        fields.insert(
+            1,
+            ("run-name".to_owned(), Yaml::str(QUALIFICATION_RUN_NAME)),
+        );
+    }
+    Ok(workflow)
 }
 
 fn with_if((id, body): (String, Yaml), when: &str) -> (String, Yaml) {
@@ -244,14 +270,24 @@ fn mode_trigger() -> Yaml {
         "workflow_dispatch".to_owned(),
         Yaml::Map(vec![(
             "inputs".to_owned(),
-            Yaml::Map(vec![(
-                "mode".to_owned(),
-                Yaml::Map(vec![
-                    ("type".to_owned(), Yaml::str("string")),
-                    ("required".to_owned(), Yaml::Bool(false)),
-                    ("default".to_owned(), Yaml::str("both")),
-                ]),
-            )]),
+            Yaml::Map(vec![
+                (
+                    "mode".to_owned(),
+                    Yaml::Map(vec![
+                        ("type".to_owned(), Yaml::str("string")),
+                        ("required".to_owned(), Yaml::Bool(false)),
+                        ("default".to_owned(), Yaml::str("both")),
+                    ]),
+                ),
+                (
+                    "probe_id".to_owned(),
+                    Yaml::Map(vec![
+                        ("type".to_owned(), Yaml::str("string")),
+                        ("required".to_owned(), Yaml::Bool(false)),
+                        ("default".to_owned(), Yaml::str("")),
+                    ]),
+                ),
+            ]),
         )]),
     )])
 }
