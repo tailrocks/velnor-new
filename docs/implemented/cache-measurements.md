@@ -215,13 +215,37 @@ import; imported-object and cached-compilation checks run after import. A prior
 dispatch or retry therefore cannot exact-hit or prefix-restore bytes into the
 qualification reader.
 
-Candidate evidence is local only: the pinned-Rust orchestrator test compares
-the shared StepIR and rendered workflow shell, executes the generated key shell
-for distinct run/attempt pairs, and executes the generated writer/reader import
-guards. It does not contact GitHub's cache service. No hosted restore/save
-receipt, peak disk/inode sample, or affected ChainArgos cold/warm workload has
-been recorded. Those measurements remain open after artifact adoption; this
-probe alone does not qualify disk capacity or ENOSPC recovery.
+Local pinned-Rust orchestrator tests compare shared StepIR with the rendered
+workflow shell, execute the generated key shell for distinct run/attempt
+pairs, and execute writer/reader guards; they do not contact GitHub's cache
+service. Phase C evidence remains candidate-local. Stock restore helper
+`028a7c2` received source-only
+security/correctness GO (74 security checks, 33 correctness cases); it has no
+cache-service path. Its ephemeral security receipt is
+`/private/tmp/v28-stock-single-object-fixtures-1yrkpa7v/review-receipt.json`
+(SHA-256 `c93effb0b72dbaae6a47ee2596ff0f5a9878a8b3e69545bda1c402573b957a76`).
+Resource-safety candidate `97be1f1` plus registered test `13e0bf0` received
+source/native Sol GO: 4/4 registered tests passed in 83.02 s on native ARM
+Ubuntu 24.04 with the official runner
+image `ghcr.io/actions/actions-runner@sha256:e5496277be5d09bc968b3d64911b74e219ac4a3f2edce956a3ecf9271bea1ef4`;
+explicit `--platform linux/arm64` overrode inherited `DOCKER_DEFAULT_PLATFORM=linux/amd64`.
+The suite rejects empty, partial, or failed `ps` scans and false completion;
+the total stop deadline is enforced, while graceful expiry leaves its receipt
+incomplete. Ephemeral local log `/private/tmp/mbx-resource-safety-97be1f14-exacthead-native.log`
+has SHA-256 `343221c822c73f962551881e90fa36419d18e6a4fcaae1259752b48960235cdc`.
+
+Parallel candidate `dc199f0` received source GO for mode-0700 receipt
+directories; its 16 composite cases remain WIP, and its foreign R13 Clippy
+blocker means it has no final coupled verdict. Terminal prepare `2ae9c4a`
+received source GO; independent native preparation harnesses reported security 12/12 and
+correctness 7/7, but no actual artifact action was extracted or exercised.
+Its ephemeral security receipt is
+`/private/tmp/v28-terminal-prepare-review-2vkz3_vo/review-receipt.json`
+(SHA-256 `4cd120793b0512cfc6288cefe2ca79ce3faeec1703031345b1058ecd2628f9fa`).
+These local results do not qualify hosted behavior or capacity: Phase C hosted
+restore/save, cancellation, parallel, and terminal qualification remain
+`UNRUN`; no peak disk/inode sample or affected ChainArgos workload is recorded.
+ChainArgos workload, release, and consumer adoption remain `PARTIAL`.
 
 Both jobs set `MBX_GC_AUTO=1` intentionally: this exercises the same hosted
 policy that Velnor emits for production MBX object-cache jobs, overriding the
@@ -256,6 +280,17 @@ prove all blocks completed or V2 `FinalizeCacheEntryUpload` succeeded.
 
 A fast small upload may produce only a final `Sent TOTAL of TOTAL` line. That
 does not qualify a cancellation probe: record `NOT_RUN`. Do not add archive
-padding or artificial delay to manufacture a partial sample. This section is
-source review only: no local upload/cancellation test is recorded, and hosted
-cache-save cancellation evidence remains `UNRUN`.
+padding or artificial delay to manufacture a partial sample. Controller
+`122c79a1` has source-only GO for enum validation and terminal output across
+18 mocked states. A successful live step-log `GET` (exact HTTP 200), positive
+timestamped progress fixtures, and registered integration execution remain
+pending. Once obtained, the timing claim is limited to a positive partial SDK
+progress row with a lower log ordinal than the runner cancellation error in
+`cancelledSave`; it does not show progress before POST or the initial cancel
+receipt, interrupted payload bytes, cache commit/rollback, or reservation
+cleanup. `MISS` records observed exact-key absence; reservation state remains
+`UNKNOWN`. Only enum mocks have local cancellation coverage; no service-backed
+upload/cancellation test has run. Local enum receipt
+`/private/tmp/velnor-v22-122c79-enum-receipt.json`
+has SHA-256 `717626ad7643e344e0fb67411c4671d19fc2399dd6f00f2a405986112bda961c`.
+This does not qualify hosted cancellation: status remains `UNRUN`.
