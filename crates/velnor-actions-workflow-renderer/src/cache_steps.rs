@@ -6,11 +6,11 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::cachekey::mbx_cache_generation;
-use velnor_actions_contract::{Job, Step, StepKind};
+use velnor_actions_contract::{Job, Step, StepKind, target_for_runner_label};
 
 use crate::{
     RenderError,
-    steps::{action_step, action_step_with_env, validate_uses},
+    steps::{action_step, validate_uses},
 };
 
 #[path = "cache_steps_tools.rs"]
@@ -135,21 +135,43 @@ pub(crate) fn is_mbx_action(step: &Step) -> bool {
     matches!(&step.kind, velnor_actions_contract::StepKind::Action { uses, .. } if uses.starts_with(&format!("{MBX_ACTION_NAME}@")))
 }
 
+/// Isolate the built-in MBX object cache only on ordinary hosted CI jobs.
+///
+/// Scale-set jobs and schema-2 qualification workflows keep the shared
+/// run-bound generation. The action owns restore/save lifecycle; hosted CI
+/// separates writers by job through these inputs.
+pub(crate) fn isolate_hosted_mbx_object_caches(jobs: &mut BTreeMap<String, Job>) {
+    for job in jobs.values_mut() {
+        if target_for_runner_label(&job.runs_on).is_none() {
+            continue;
+        }
+        for step in &mut job.steps {
+            if !is_mbx_action(step) {
+                continue;
+            }
+            let StepKind::Action { with, .. } = &mut step.kind else {
+                continue;
+            };
+            with.insert("isolate-objects-cache".to_owned(), "true".to_owned());
+            with.insert(
+                "cache-key-suffix".to_owned(),
+                "${{ github.job }}".to_owned(),
+            );
+        }
+    }
+}
+
 /// True when shell argv invokes the `mbx` program or tool spec.
 fn uses_mbx_tool(step: &Step) -> bool {
     matches!(&step.kind, velnor_actions_contract::StepKind::Shell { run, .. } if run.iter().any(|arg| arg == "mbx" || arg.contains("mr-boxington")))
 }
 
-/// Env key the cache backend reads for its restore/save mode.
-pub const MBX_CACHE_MODE_ENV: &str = "ACTIONS_CACHE_MODE";
 /// Display name of the MBX objects restore step.
 pub const MBX_RESTORE_NAME: &str = "Restore MBX objects";
 /// MBX automatic collection must stay enabled so low-disk builds can recover.
 pub(crate) const MBX_GC_AUTO_ENV: &str = "MBX_GC_AUTO";
-/// MBX 1.21.1+ honors this value and protects active build consumers.
+/// MBX honors this value and protects active build consumers.
 pub(crate) const MBX_GC_AUTO_VALUE: &str = "1";
-/// Mode that skips the action post. `read` does not permit writes.
-pub(crate) const MBX_ACTION_CACHE_MODE: &str = "read";
 
 /// Objects-mode MBX step; cargo profiles must never emit or install MBX.
 ///
@@ -157,14 +179,9 @@ pub(crate) const MBX_ACTION_CACHE_MODE: &str = "read";
 /// the `version` input the action resolves `latest`, and an action-SHA
 /// pin never proves the installed executable (P07 effective-version
 /// defect; the action documents that setting `version` always installs
-/// that release: `https://github.com/jdx/mr-boxington-action`).
-/// The step-level [`MBX_CACHE_MODE_ENV`] is the literal `read`. The
-/// action's post exports inside the live store and then archives that
-/// copy, and a default-branch push saves even when `save-on-*` is off.
-/// `read` is the switch that skips that post. Push saves are a later
-/// single-bundle step, still refused for pull requests.
-/// The cache generation follows the exact MBX release, so upgrading its
-/// storage or collection behavior starts with an isolated cold namespace.
+/// that release: `https://github.com/jdx/mr-boxington-action`). The cache
+/// generation follows the exact MBX release. Hosted CI adds a per-job
+/// suffix after lane sharing; native jobs share this generation.
 /// # Errors
 pub fn mbx_objects_step(
     uses: &str,
@@ -191,11 +208,7 @@ pub fn mbx_objects_step(
             mbx_cache_generation(mbx_version),
         ),
     ]);
-    let env = BTreeMap::from([(
-        MBX_CACHE_MODE_ENV.to_owned(),
-        MBX_ACTION_CACHE_MODE.to_owned(),
-    )]);
-    action_step_with_env(MBX_RESTORE_NAME, uses, with, env)
+    action_step(MBX_RESTORE_NAME, uses, with)
 }
 
 /// Exact MBX versions: three nonempty numeric dot parts, nothing else.

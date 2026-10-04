@@ -1,5 +1,7 @@
 //! Security assertions for the protected-main MBX cache round trip.
 
+use velnor_actions_actionlint::actions::MR_BOXINGTON_ACTION_SHA;
+use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
 
 use crate::impl_common::{TestResult, make_repo};
@@ -12,6 +14,11 @@ fn protected_main_mbx_roundtrip_is_run_bound_and_read_only_on_restore() -> TestR
         crate::impl_schema2_routing::required_file(&tree, ".github/workflows/qualification.yml")?;
 
     let writer = crate::impl_schema2_routing::job_body(qualification, "mbx-cache-write-hosted")?;
+    let catalog = ToolCatalog::pinned();
+    let version = catalog.version(PinnedTool::MrBoxington);
+    let generation = format!(
+        "velnor-qualification-mbx-{version}-action-{MR_BOXINGTON_ACTION_SHA}-run-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}-${{{{ github.sha }}}}"
+    );
     assert!(
         writer.contains("inputs.mode == 'mbx-cache-roundtrip' && github.ref == 'refs/heads/main' && github.ref_protected == true"),
         "{writer}"
@@ -23,11 +30,10 @@ fn protected_main_mbx_roundtrip_is_run_bound_and_read_only_on_restore() -> TestR
         writer.contains("save-on-workflow-dispatch: \"true\""),
         "{writer}"
     );
-    assert!(
-        writer.contains("velnor-qualification-mbx-1.21.1-action-1687e54eb349cadf61fa38b5813a77875489e8e6-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}"),
-        "{writer}"
-    );
-    assert!(writer.contains("version: 1.21.1"), "{writer}");
+    assert!(writer.contains(&generation), "{writer}");
+    assert!(writer.contains(&format!("version: {version}")), "{writer}");
+    assert!(!writer.contains("isolate-objects-cache"), "{writer}");
+    assert!(!writer.contains("cache-key-suffix"), "{writer}");
     assert!(writer.contains("RUSTUP_TOOLCHAIN: 1.98.1"), "{writer}");
     assert!(
         writer
@@ -52,10 +58,7 @@ fn protected_main_mbx_roundtrip_is_run_bound_and_read_only_on_restore() -> TestR
         reader.contains("steps.mbx_cache.outputs.cache-hit"),
         "{reader}"
     );
-    assert!(
-        reader.contains("velnor-qualification-mbx-1.21.1-action-1687e54eb349cadf61fa38b5813a77875489e8e6-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}"),
-        "{reader}"
-    );
+    assert!(reader.contains(&generation), "{reader}");
     assert!(
         reader.contains("test \\\"$CACHE_HIT\\\" = 'false'"),
         "{reader}"
@@ -69,7 +72,9 @@ fn protected_main_mbx_roundtrip_is_run_bound_and_read_only_on_restore() -> TestR
         reader.contains(".savings.cached_compilations > 0"),
         "{reader}"
     );
-    assert!(reader.contains("version: 1.21.1"), "{reader}");
+    assert!(reader.contains(&format!("version: {version}")), "{reader}");
+    assert!(!reader.contains("isolate-objects-cache"), "{reader}");
+    assert!(!reader.contains("cache-key-suffix"), "{reader}");
     assert!(reader.contains("RUSTUP_TOOLCHAIN: 1.98.1"), "{reader}");
     assert!(
         reader

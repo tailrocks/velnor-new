@@ -285,8 +285,8 @@ fn internal_env(
 
 /// Render one action step: name, condition, pin, inputs, step env.
 ///
-/// Step env (cache modes) renders after `with:`; absent env renders
-/// nothing, so env-less steps keep their exact historical bytes.
+/// Step env renders after `with:`; absent env renders nothing, so
+/// env-less steps keep their exact historical bytes.
 fn action_step_to_yaml(
     job_id: &str,
     step: &Step,
@@ -303,7 +303,6 @@ fn action_step_to_yaml(
     }
     commands::validate_env(env)?;
     let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
-    crate::mbx_bundle::push_step_id(&mut entries, &step.name);
     if let Some(condition) = &step.condition {
         steps::scan_for_private_subcommands(condition)?;
         entries.push(("if".to_owned(), Yaml::str(condition.clone())));
@@ -351,7 +350,6 @@ pub(crate) fn step_to_yaml(
             commands::validate_command_argv(run)?;
             commands::validate_env(env)?;
             let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
-            crate::mbx_bundle::push_step_id(&mut entries, &step.name);
             if let Some(condition) = &step.condition {
                 steps::scan_for_private_subcommands(condition)?;
                 entries.push(("if".to_owned(), Yaml::str(condition.clone())));

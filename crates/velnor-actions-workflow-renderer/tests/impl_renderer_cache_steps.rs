@@ -4,8 +4,8 @@ use velnor_actions_contract::cachekey::mbx_cache_generation;
 
 use velnor_actions_contract::{Step, StepKind};
 use velnor_actions_workflow_renderer::steps::{
-    CompileDriver, MBX_CACHE_MODE_ENV, TOOLS_CACHE_PATH, TOOLS_RESTORE_NAME, TOOLS_SAVE_NAME,
-    cache_action_step, mbx_objects_step, mbx_step_for_driver, target_dir_for_lane, tools_cache_key,
+    CompileDriver, TOOLS_CACHE_PATH, TOOLS_RESTORE_NAME, TOOLS_SAVE_NAME, cache_action_step,
+    mbx_objects_step, mbx_step_for_driver, target_dir_for_lane, tools_cache_key,
     tools_restore_step, tools_save_step,
 };
 
@@ -37,7 +37,7 @@ fn step_kinds_have_no_parallel_syntax() {
 }
 
 #[test]
-fn mbx_objects_step_pins_action_and_mode() {
+fn mbx_objects_step_pins_action_and_cache_generation() {
     let uses = format!("jdx/mr-boxington-action@{}", sha());
     let step = mbx_objects_step(&uses, false, "1.19.0").expect("mbx");
     assert_eq!(kind_name(&step), "action");
@@ -64,10 +64,12 @@ fn mbx_objects_step_pins_action_and_mode() {
                 "save-on-pull-request",
                 "save-on-workflow-dispatch",
                 "save-on-protected-branch",
+                "isolate-objects-cache",
+                "cache-key-suffix",
             ] {
                 assert!(
                     !with.contains_key(input),
-                    "consumer cache writes stay push-only: {input}"
+                    "workflow finalization owns hosted isolation: {input}"
                 );
             }
             assert!(!with.contains_key("mode"), "no such action input");
@@ -345,7 +347,7 @@ fn lane_target_dirs_stay_isolated() {
 }
 
 #[test]
-fn mbx_objects_step_gates_save_to_push_via_cache_mode() {
+fn mbx_action_uses_its_own_cache_lifecycle() {
     let uses = format!("jdx/mr-boxington-action@{}", sha());
     let direct = mbx_objects_step(&uses, false, "1.19.0").expect("mbx");
     let driven = mbx_step_for_driver(&uses, CompileDriver::Mbx, "1.19.0")
@@ -355,10 +357,9 @@ fn mbx_objects_step_gates_save_to_push_via_cache_mode() {
         let StepKind::Action { env, .. } = &step.kind else {
             panic!("mbx must be an action step");
         };
-        assert_eq!(
-            env.get(MBX_CACHE_MODE_ENV).map(String::as_str),
-            Some("read"),
-            "the action stays restore-only so its post cannot triple the store"
+        assert!(
+            env.is_empty(),
+            "renderer does not override action lifecycle"
         );
     }
     assert!(

@@ -44,7 +44,7 @@ fn machete_cold_install_uses_verified_asset_and_preserves_scan_invocation() {
         tool_spec.starts_with(
             "http:cargo-machete[url=https://github.com/bnjbvr/cargo-machete/releases/download/v0.9.2/"
         ),
-        "cold install must fetch the exact v0.9.2 asset: {tool_spec}"
+        "cold install must pin the exact v0.9.2 asset: {tool_spec}"
     );
     assert!(
         tool_spec.contains(
@@ -92,7 +92,7 @@ fn mbx_probe_vector_is_byte_exact() {
         "--no-env",
         "--no-hooks",
         "exec",
-        "mr-boxington@1.21.1",
+        "mr-boxington@1.22.0",
         "--",
         "mbx",
         "--version",
@@ -184,7 +184,7 @@ fn section4_build_vector_is_byte_exact() {
         "--no-hooks",
         "exec",
         "rust@1.98.1",
-        "mr-boxington@1.21.1",
+        "mr-boxington@1.22.0",
         "--",
         "mbx",
         "build",
