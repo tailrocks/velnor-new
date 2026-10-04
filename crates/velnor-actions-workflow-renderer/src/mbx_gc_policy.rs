@@ -4,6 +4,23 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{Job, RunsOn};
 
+use crate::{cache_steps, yaml::Yaml};
+
+/// Build job-level MBX environment policy before workflow emission.
+pub(crate) fn job_env(mbx_job: bool, hosted_linux_mbx_job: bool) -> Option<Yaml> {
+    let mut env = Vec::new();
+    if mbx_job {
+        env.push((
+            cache_steps::MBX_GC_AUTO_ENV.to_owned(),
+            Yaml::str(cache_steps::MBX_GC_AUTO_VALUE.to_owned()),
+        ));
+    }
+    if hosted_linux_mbx_job {
+        env.push(("MBX_SHARE_OUT_DIR".to_owned(), Yaml::str("0")));
+    }
+    (!env.is_empty()).then_some(Yaml::Map(env))
+}
+
 /// Return hosted jobs that use MBX, so action export sees a stable store.
 ///
 /// The renderer attaches this policy before lane sharing extracts steps into

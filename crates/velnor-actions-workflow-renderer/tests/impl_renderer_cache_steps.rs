@@ -1,11 +1,9 @@
 //! Gate 4 renderer cases: MBX objects, cache actions, lane target dirs.
 
-use velnor_actions_contract::cachekey::mbx_cache_generation;
-
 use velnor_actions_contract::{Step, StepKind};
 use velnor_actions_workflow_renderer::steps::{
     CompileDriver, MBX_CACHE_MODE_ENV, TOOLS_CACHE_PATH, TOOLS_RESTORE_NAME, TOOLS_SAVE_NAME,
-    cache_action_step, mbx_objects_step, mbx_step_for_driver, target_dir_for_lane, tools_cache_key,
+    cache_action_step, mbx_steps_for_driver, target_dir_for_lane, tools_cache_key,
     tools_restore_step, tools_save_step,
 };
 
@@ -34,72 +32,6 @@ fn step_kinds_have_no_parallel_syntax() {
         kind_name(&velnor_actions_workflow_renderer::steps::plan_step()),
         "internal"
     );
-}
-
-#[test]
-fn mbx_objects_step_pins_action_and_mode() {
-    let uses = format!("jdx/mr-boxington-action@{}", sha());
-    let step = mbx_objects_step(&uses, false, "1.19.0").expect("mbx");
-    assert_eq!(kind_name(&step), "action");
-    match &step.kind {
-        StepKind::Action {
-            uses: got, with, ..
-        } => {
-            assert!(got.starts_with("jdx/mr-boxington-action@"), "{got}");
-            assert_eq!(
-                with.get("github-cache-mode").map(String::as_str),
-                Some("objects")
-            );
-            assert_eq!(
-                with.get("version").map(String::as_str),
-                Some("1.19.0"),
-                "action installs the exact catalog pin, never latest"
-            );
-            assert_eq!(
-                with.get("cache-generation").map(String::as_str),
-                Some(
-                    format!(
-                        "{}-share-out-dir-disabled-v1-action-{}",
-                        mbx_cache_generation("1.19.0"),
-                        sha()
-                    )
-                    .as_str()
-                ),
-                "a new MBX release, action pin, or writable OUT_DIR policy starts cold"
-            );
-            for input in [
-                "save-on-pull-request",
-                "save-on-workflow-dispatch",
-                "save-on-protected-branch",
-            ] {
-                assert!(
-                    !with.contains_key(input),
-                    "consumer cache writes stay push-only: {input}"
-                );
-            }
-            assert!(!with.contains_key("mode"), "no such action input");
-        }
-        _ => panic!("mbx must be an action step"),
-    }
-    assert!(
-        mbx_objects_step(&uses, true, "1.19.0").is_err(),
-        "cargo profiles never emit MBX"
-    );
-    let other = format!("actions/cache/restore@{}", sha());
-    assert!(
-        mbx_objects_step(&other, false, "1.19.0").is_err(),
-        "wrong action rejected"
-    );
-    assert!(
-        mbx_objects_step("jdx/mr-boxington-action@main", false, "1.19.0").is_err(),
-        "unpinned rejected"
-    );
-    for bad in ["latest", "v1.19.0", "1.19", "1.19.0.1", "1.19.x", ""] {
-        assert!(
-            mbx_objects_step(&uses, false, bad).is_err(),
-            "loose mbx version {bad:?} must fail"
-        );
-    }
 }
 
 #[test]
@@ -354,10 +286,16 @@ fn lane_target_dirs_stay_isolated() {
 #[test]
 fn mbx_objects_step_gates_save_to_push_via_cache_mode() {
     let uses = format!("jdx/mr-boxington-action@{}", sha());
-    let direct = mbx_objects_step(&uses, false, "1.19.0").expect("mbx");
-    let driven = mbx_step_for_driver(&uses, CompileDriver::Mbx, "1.19.0")
-        .expect("driver mbx")
-        .expect("mbx driver emits");
+    let [_, direct] = mbx_tool_steps(&uses, "1.19.0", "1.98.1").expect("direct MBX steps");
+    let [_, driven] = mbx_steps_for_driver(
+        &uses,
+        CompileDriver::Mbx,
+        "1.19.0",
+        "1.98.1",
+        mbx_tool_env("1.98.1"),
+    )
+    .expect("driver MBX")
+    .expect("MBX driver emits");
     for step in [&direct, &driven] {
         let StepKind::Action { env, .. } = &step.kind else {
             panic!("mbx must be an action step");
@@ -369,9 +307,15 @@ fn mbx_objects_step_gates_save_to_push_via_cache_mode() {
         );
     }
     assert!(
-        mbx_step_for_driver(&uses, CompileDriver::Cargo, "1.19.0")
-            .expect("cargo driver")
-            .is_none(),
-        "cargo drivers emit no MBX step to gate"
+        mbx_steps_for_driver(
+            &uses,
+            CompileDriver::Cargo,
+            "1.19.0",
+            "1.98.1",
+            mbx_tool_env("1.98.1"),
+        )
+        .expect("cargo driver")
+        .is_none(),
+        "cargo drivers emit no preflight or MBX step to gate"
     );
 }

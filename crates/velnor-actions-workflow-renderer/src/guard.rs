@@ -7,6 +7,8 @@
 
 use std::path::{Path, PathBuf};
 
+use velnor_actions_contract::WorkflowIr;
+
 use crate::{RenderError, steps};
 
 /// A validated relative output path inside the generated tree.
@@ -148,6 +150,19 @@ where
                 "symlink_prefix:{}",
                 prefix.display()
             )));
+        }
+    }
+    Ok(())
+}
+
+/// Require every job to use the context's single runner label.
+pub(crate) fn check_single_label(ir: &WorkflowIr, label: &str) -> Result<(), RenderError> {
+    for (id, job) in &ir.jobs {
+        if job.runs_on != label
+            && !velnor_actions_contract::RunsOn::parse(&job.runs_on)
+                .is_ok_and(|selector| selector.is_scale_set())
+        {
+            return Err(RenderError::InvalidWorkflow(format!("label_mismatch:{id}")));
         }
     }
     Ok(())

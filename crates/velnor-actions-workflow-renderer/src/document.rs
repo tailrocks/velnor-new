@@ -16,6 +16,10 @@ use velnor_actions_contract::{
     workflow::{ir::DispatchInput, permissions::PermissionLevel},
 };
 
+#[path = "document_action.rs"]
+mod action;
+use action::action_step_to_yaml;
+
 /// Build the workflow document: name, on, permissions, concurrency, jobs.
 pub(crate) fn workflow_to_yaml(
     ir: &WorkflowIr,
@@ -207,18 +211,8 @@ fn job_to_yaml(
             Yaml::Int(i64::from(job.timeout_minutes.minutes())),
         ),
     ];
-    let mut job_env = Vec::new();
-    if mbx_job {
-        job_env.push((
-            crate::cache_steps::MBX_GC_AUTO_ENV.to_owned(),
-            Yaml::str(crate::cache_steps::MBX_GC_AUTO_VALUE.to_owned()),
-        ));
-    }
-    if hosted_linux_mbx_job {
-        job_env.push(("MBX_SHARE_OUT_DIR".to_owned(), Yaml::str("0")));
-    }
-    if !job_env.is_empty() {
-        entries.push(("env".to_owned(), Yaml::Map(job_env)));
+    if let Some(job_env) = crate::mbx_gc_policy::job_env(mbx_job, hosted_linux_mbx_job) {
+        entries.push(("env".to_owned(), job_env));
     }
     if let Some(environment) = &job.environment {
         entries.push(("environment".to_owned(), Yaml::str(environment.clone())));
@@ -247,17 +241,6 @@ fn job_to_yaml(
     }
     entries.push(("steps".to_owned(), Yaml::Seq(rendered_steps)));
     Ok(Yaml::Map(entries))
-}
-
-/// True for the final job's plan download (fetch is gated inline below).
-///
-/// An absent plan artifact (failed plan) must still reach the merge
-/// verdict instead of failing the job at the download step.
-fn is_verdict_download(step: &Step) -> bool {
-    matches!(
-        &step.kind,
-        StepKind::Action { uses, .. } if uses == steps::DOWNLOAD_ARTIFACT_USES
-    ) && step.name == crate::closure::DOWNLOAD_PLAN_NAME
 }
 
 /// Env for one internal step: op plus request file, fetch carries auth.
@@ -295,58 +278,6 @@ fn internal_env(
         }
     }
     Yaml::Map(env)
-}
-
-/// Render one action step: name, condition, pin, inputs, step env.
-///
-/// Step env (cache modes) renders after `with:`; absent env renders
-/// nothing, so env-less steps keep their exact historical bytes.
-fn action_step_to_yaml(
-    job_id: &str,
-    step: &Step,
-    uses: &str,
-    with: &BTreeMap<String, String>,
-    env: &BTreeMap<String, String>,
-) -> Result<Yaml, RenderError> {
-    steps::validate_uses(uses)?;
-    for (key, value) in with {
-        crate::expressions::check_with_key(key)?;
-        crate::expressions::check_with_value(key, value)?;
-        steps::scan_for_private_subcommands(key)?;
-        steps::scan_for_private_subcommands(value)?;
-    }
-    commands::validate_env(env)?;
-    let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
-    crate::mbx_bundle::push_step_id(&mut entries, &step.name);
-    if let Some(condition) = &step.condition {
-        steps::scan_for_private_subcommands(condition)?;
-        entries.push(("if".to_owned(), Yaml::str(condition.clone())));
-    } else if uses == steps::UPLOAD_ARTIFACT_USES {
-        entries.push((
-            "if".to_owned(),
-            Yaml::str(crate::render::FINAL_CONDITION.to_owned()),
-        ));
-    }
-    if job_id == FINAL_JOB_ID && is_verdict_download(step) {
-        entries.push(("continue-on-error".to_owned(), Yaml::Bool(true)));
-    }
-    entries.push(("uses".to_owned(), Yaml::str(uses.to_owned())));
-    if !with.is_empty() {
-        entries.push(("with".to_owned(), string_map_yaml(with)));
-    }
-    if !env.is_empty() {
-        entries.push(("env".to_owned(), string_map_yaml(env)));
-    }
-    Ok(Yaml::Map(entries))
-}
-
-/// Sorted string map as YAML (shared by `with:` and `env:` emission).
-fn string_map_yaml(map: &BTreeMap<String, String>) -> Yaml {
-    Yaml::Map(
-        map.iter()
-            .map(|(key, value)| (key.clone(), Yaml::str(value.clone())))
-            .collect(),
-    )
 }
 
 /// Render one step; internal ops become env plus request file, never argv.

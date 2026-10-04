@@ -306,7 +306,7 @@ fn merged_jobs(
     ir.validate().map_err(RenderError::Contract)?;
     check_triggers(&ir.triggers)?;
     check_concurrency(&ir.concurrency)?;
-    check_single_label(ir, &ctx.runs_on)?;
+    guard::check_single_label(ir, &ctx.runs_on)?;
     let mut jobs = ir.jobs.clone();
     match policy {
         WorkflowPolicy::ConsumerV1 => support::reject_consumer_support(&jobs, support)?,
@@ -388,19 +388,6 @@ fn check_concurrency(concurrency: &Concurrency) -> Result<(), RenderError> {
         || concurrency.cancel_in_progress != CONCURRENCY_CANCEL
     {
         return Err(RenderError::InvalidWorkflow("bad_concurrency".to_owned()));
-    }
-    Ok(())
-}
-
-/// Require every job to use the single context label.
-fn check_single_label(ir: &WorkflowIr, label: &str) -> Result<(), RenderError> {
-    for (id, job) in &ir.jobs {
-        if job.runs_on != label
-            && !velnor_actions_contract::RunsOn::parse(&job.runs_on)
-                .is_ok_and(|selector| selector.is_scale_set())
-        {
-            return Err(RenderError::InvalidWorkflow(format!("label_mismatch:{id}")));
-        }
     }
     Ok(())
 }
