@@ -7,8 +7,8 @@
     "manifest_sha256": "c968bda9f6f24db43b86f8d2ce5e2dc99bcac041b4f5edbb9b78e9d59ed1fe1c"
   },
   "checkpoint": {
-    "commit": "12eeae8060abb80df2436acccc7e1082ff70d1fe",
-    "tree": "8c6e3fbc49f7e7af62866ea010fde15c1128f473",
+    "commit": "05308a2371ae89db5b1751882545732cf69ce225",
+    "tree": "89cb2c383236b8861fd5681709c15e368d8bf7ee",
     "clean_worktree": true,
     "private_detached_author_worktree": "/private/tmp/velnor-phasec-registered-assembly-v30",
     "remote_operations": false
@@ -60,6 +60,19 @@
         "crates/velnor-actions-workflow-renderer/tests/impl_renderer_mbx_cancel_probe.rs",
         "crates/velnor-actions-workflow-renderer/tests/impl_renderer_mbx_resource_corruption.rs"
       ]
+    },
+    {
+      "commit": "05308a2371ae89db5b1751882545732cf69ce225",
+      "subject": "test(renderer): assert cancellation save readiness gate",
+      "stat": {"files": 1, "insertions": 4, "deletions": 0},
+      "signed_off": true,
+      "co_authored_by": "Codex <codex@openai.com>",
+      "changes": [
+        "Assert the typed cancellation Save step consumes the ready=true output produced by the successful export fixture."
+      ],
+      "paths": [
+        "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_export_composition_tests.rs"
+      ]
     }
   ],
   "registered_cases_added": [
@@ -79,7 +92,8 @@
         "resource evidence binding false",
         "sampler absent",
         "export and GC succeed",
-        "ready=true before the existing Save step"
+        "ready=true before the existing Save step",
+        "existing Save readiness condition consumes steps.mbx-export.outputs.ready"
       ]
     },
     {
@@ -94,7 +108,7 @@
     {"path": "crates/velnor-actions-workflow-renderer/src/mbx_bundle_qualification.rs", "sha256": "2887ceb25f22968a4c0dcfaf4359119cf8cff0f96d27fe04a5e18bb461d8903d"},
     {"path": "crates/velnor-actions-workflow-renderer/src/mbx_bundle_qualification_snapshot_tests.rs", "sha256": "a809e84d8653368f2cf08a0241a74f94ab8e620d68c48757e4a5f85c1dc8da88"},
     {"path": "crates/velnor-actions-workflow-renderer/src/mbx_bundle_qualification_tests.rs", "sha256": "8f3ba9f50faaad1ed41d5949a58c66281b6cb77cd68255d2805844482c3c7b08"},
-    {"path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_export_composition_tests.rs", "sha256": "463178ed52a601ce5420c18ff8fa94512eadb037aa63232bcd4b494d2715c6bf"},
+    {"path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_export_composition_tests.rs", "sha256": "b7f1838c46e18a5ba449fff1bc7a379656caee4ad174f362e0f73e6ea673d50a"},
     {"path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_observer_restore_log.rs", "sha256": "64225c55add8e9111c91a8d0203fd30bc0fb21b79cd9dd00e2c11f58f3096a6a"},
     {"path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_test_support.rs", "sha256": "7b00ae54c766aeaff75b9078b16570676fcdf205bd7f15667ba7cc46f4d339ea"},
     {"path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_tests.rs", "sha256": "7ce80a00ec2187601f077bd147606bb933f7d8c8d25216b5ab7ea811685d5a0c"},
