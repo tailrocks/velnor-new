@@ -137,7 +137,7 @@ pub fn cargo_payload_argv(group: &TaskGroup) -> Result<Vec<OsString>, ContractEr
     Ok(args)
 }
 
-/// Payload argv with the group's resolved Nextest profile after `run`;
+/// Payload argv with the group's resolved Nextest profile after `run` or `list`;
 /// others match [`cargo_payload_argv`] byte for byte (doctests stay
 /// separate). The profile comes from the group itself, never a parallel
 /// argument that could disagree with it.
@@ -148,7 +148,9 @@ pub fn cargo_payload_argv(group: &TaskGroup) -> Result<Vec<OsString>, ContractEr
 /// [`cargo_payload_argv`].
 pub fn cargo_payload_with_profile(group: &TaskGroup) -> Result<Vec<OsString>, ContractError> {
     let mut argv = cargo_payload_argv(group)?;
-    if group.kind == TaskKind::Nextest {
+    if group.kind == TaskKind::Nextest
+        || (group.kind == TaskKind::Build && group.test_runner == TestRunner::CargoNextest)
+    {
         let flag = OsString::from("--profile");
         let name = OsString::from(group.nextest_profile.as_str());
         argv.splice(2..2, [flag, name]);
@@ -217,12 +219,29 @@ fn push_kind_args(
             args.push(flag("--no-deps"));
         }
         TaskKind::Build => {
-            args.extend([flag("build"), flag("--locked"), flag("--offline")]);
+            push_test_build_args(args, group.test_runner);
             push_manifest(args, manifest)?;
             push_package(args, group)?;
         }
     }
     Ok(())
+}
+
+/// Prepare the selected runner's test binaries without executing tests.
+fn push_test_build_args(args: &mut Vec<OsString>, runner: TestRunner) {
+    let flags: &[&str] = if runner == TestRunner::CargoNextest {
+        &[
+            "nextest",
+            "list",
+            "--list-type",
+            "binaries-only",
+            "--locked",
+            "--offline",
+        ]
+    } else {
+        &["test", "--no-run", "--locked", "--offline"]
+    };
+    args.extend(flags.iter().map(OsString::from));
 }
 
 /// Reject one cargo-side value starting with `-` (clap would reparse it).
