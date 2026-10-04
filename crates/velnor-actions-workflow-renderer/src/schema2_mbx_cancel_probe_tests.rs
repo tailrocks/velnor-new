@@ -120,13 +120,19 @@ case "$method:$endpoint" in
         '{"workflow_run_id":123,"run_url":"https://api.github.com/repos/tailrocks/velnor-new/actions/runs/123"}'
     fi ;;
   GET:/repos/tailrocks/velnor-new/actions/runs/900)
+    controller_mode="$(jq -er '.inputs.mode' "$GITHUB_EVENT_PATH")"
+    controller_probe="$(jq -er '.inputs.probe_id' "$GITHUB_EVENT_PATH")"
+    test "$controller_mode" = "$CONTROLLER_MODE"
+    test "$controller_probe" != "$PROBE_ID"
+    controller_title="MBX cancellation $controller_mode"
+    if [ -n "$controller_probe" ]; then controller_title="$controller_title $controller_probe"; fi
     jq -cn --arg sha "$GITHUB_SHA" --arg actor "$GITHUB_ACTOR" \
-      --arg mode "$VICTIM_MODE" --arg probe "$PROBE_ID" \
+      --arg title "$controller_title" \
       --argjson workflow "${OBSERVER_WORKFLOW_ID:-77}" \
       '{id:900,workflow_id:$workflow,path:".github/workflows/qualification.yml@refs/heads/main",
         repository:{full_name:"tailrocks/velnor-new"},head_repository:{full_name:"tailrocks/velnor-new"},
         event:"workflow_dispatch",head_branch:"main",head_sha:$sha,run_attempt:1,
-        display_title:("MBX cancellation " + $mode + " " + $probe),actor:{login:$actor}}' ;;
+        display_title:$title,actor:{login:$actor}}' ;;
   GET:/repos/tailrocks/velnor-new/actions/runs/900/attempts/1/jobs?per_page=100)
     jq -cn --arg name "$OBSERVER_JOB_NAME" \
       '{jobs:[{id:901,name:$name,status:"in_progress",steps:[
@@ -235,16 +241,19 @@ case "$method:$endpoint" in
     cp "$GH_ARTIFACT_ZIP" "$output" ;;
   GET:/repos/tailrocks/velnor-new/actions/caches?key=*)
     case "${GH_MODE:-good}" in
-      cache-object) printf '%s\n' '{"actions_caches":{}}' ;;
+      cache-object) printf '%s\n' '{"total_count":0,"actions_caches":{}}' ;;
       cache-null-response) printf '%s\n' 'null' ;;
-      cache-null-entry) printf '%s\n' '{"actions_caches":[null]}' ;;
+      cache-null-entry) printf '%s\n' '{"total_count":1,"actions_caches":[null]}' ;;
       cache-missing-array) printf '%s\n' '{"count":0,"caches":[]}' ;;
+      cache-missing-total) printf '%s\n' '{"actions_caches":[]}' ;;
+      cache-count-mismatch) printf '%s\n' '{"total_count":1,"actions_caches":[]}' ;;
+      cache-truncated-page) printf '%s\n' '{"total_count":101,"actions_caches":[]}' ;;
       cache-valid-record)
         cache_key="${endpoint#*key=}"
         cache_key="${cache_key%%&*}"
         jq -cn --arg key "$cache_key" \
-          '{actions_caches:[{id:5,key:$key,ref:"refs/heads/main",size_in_bytes:1024,last_accessed_at:null}]}' ;;
-      *) printf '%s\n' '{"actions_caches":[]}' ;;
+          '{total_count:1,actions_caches:[{id:5,key:$key,ref:"refs/heads/main",size_in_bytes:1024,last_accessed_at:null}]}' ;;
+      *) printf '%s\n' '{"total_count":0,"actions_caches":[]}' ;;
     esac ;;
   POST:/repos/tailrocks/velnor-new/actions/runs/123/cancel)
     test "$include" = true

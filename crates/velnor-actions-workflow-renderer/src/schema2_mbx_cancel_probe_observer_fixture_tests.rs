@@ -192,11 +192,17 @@ fn prepare_evidence(
     )?;
     let summary = fixture.root.join("summary.md");
     fs::write(&summary, "")?;
+    let event = fixture.root.join("controller-event.json");
+    fs::write(
+        &event,
+        r#"{"inputs":{"mode":"mbx-cancel-during-save-controller","probe_id":""}}"#,
+    )?;
     let curl_log = fixture.root.join("curl.log");
     let mut env = BTreeMap::from_iter(fixture.env(&fixture.output("evidence"), "observer-window"));
     let marker = progress_marker(mode);
     env.extend([
         ("GH_TOKEN".to_owned(), "fixture-secret-token".to_owned()),
+        ("GITHUB_EVENT_PATH".to_owned(), event.display().to_string()),
         (
             "OBSERVER_JOB_NAME".to_owned(),
             "MBX cancellation / during-save fresh observer".to_owned(),

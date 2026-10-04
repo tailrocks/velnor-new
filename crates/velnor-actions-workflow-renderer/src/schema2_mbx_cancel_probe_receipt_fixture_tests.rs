@@ -11,7 +11,11 @@ const CONTROLLER_MODE: &str = "mbx-cancel-during-save-controller";
 #[test]
 fn validator_accepts_exact_dotted_key_and_bound_child() -> Result<(), Box<dyn Error>> {
     let fixture = Fixture::new("valid-controller-receipt", false)?;
-    let output = execute_validator(&fixture, &receipt(&expected_key()))?;
+    let output = execute_validator(
+        &fixture,
+        &receipt(&expected_key()),
+        &format!(r#"{{"inputs":{{"mode":"{CONTROLLER_MODE}","probe_id":""}}}}"#),
+    )?;
     assert!(output.contains("should_observe=true\n"), "{output}");
     assert!(output.contains("child_run_id=123\n"), "{output}");
     assert!(
@@ -39,7 +43,11 @@ fn malformed_controller_receipt_never_observes_child() -> Result<(), Box<dyn Err
     ));
     for (index, invalid) in cases.into_iter().enumerate() {
         let fixture = Fixture::new(&format!("malformed-controller-receipt-{index}"), false)?;
-        let output = execute_validator(&fixture, &invalid)?;
+        let output = execute_validator(
+            &fixture,
+            &invalid,
+            &format!(r#"{{"inputs":{{"mode":"{CONTROLLER_MODE}","probe_id":""}}}}"#),
+        )?;
         assert!(output.contains("should_observe=false\n"), "{output}");
         if fixture.root.join("gh.log").exists() {
             assert!(!fixture.log()?.contains("actions/runs/"));
@@ -49,15 +57,36 @@ fn malformed_controller_receipt_never_observes_child() -> Result<(), Box<dyn Err
     Ok(())
 }
 
-fn execute_validator(fixture: &Fixture, receipt: &str) -> Result<String, Box<dyn Error>> {
+#[test]
+fn missing_or_nonstring_controller_probe_id_never_observes_child() -> Result<(), Box<dyn Error>> {
+    for (index, event) in [
+        format!(r#"{{"inputs":{{"mode":"{CONTROLLER_MODE}"}}}}"#),
+        format!(r#"{{"inputs":{{"mode":"{CONTROLLER_MODE}","probe_id":null}}}}"#),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let fixture = Fixture::new(&format!("invalid-controller-event-{index}"), false)?;
+        let output = execute_validator(&fixture, &receipt(&expected_key()), &event)?;
+        assert!(output.contains("should_observe=false\n"), "{output}");
+        if fixture.root.join("gh.log").exists() {
+            assert!(!fixture.log()?.contains("actions/runs/"));
+        }
+        fs::remove_dir_all(fixture.root)?;
+    }
+    Ok(())
+}
+
+fn execute_validator(
+    fixture: &Fixture,
+    receipt: &str,
+    event_payload: &str,
+) -> Result<String, Box<dyn Error>> {
     let path = fixture.root.join("mbx-cancel/controller/receipt.json");
     fs::create_dir_all(path.parent().ok_or("receipt parent missing")?)?;
     fs::write(&path, receipt)?;
     let event = fixture.root.join("event.json");
-    fs::write(
-        &event,
-        format!(r#"{{"inputs":{{"mode":"{CONTROLLER_MODE}"}}}}"#),
-    )?;
+    fs::write(&event, event_payload)?;
     let output = fixture.output("receipt-validation");
     fs::write(&output, "")?;
     let mut env = fixture.env(&output, "receipt-valid");

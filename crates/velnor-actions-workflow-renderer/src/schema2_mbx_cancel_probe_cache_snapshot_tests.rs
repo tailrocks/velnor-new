@@ -6,11 +6,14 @@ use std::fs;
 use super::controller_fixtures::{Fixture, expected_key};
 use super::{run_bash, scripts};
 
-const INVALID_SHAPES: [&str; 4] = [
+const INVALID_SHAPES: [&str; 7] = [
     "cache-object",
     "cache-null-response",
     "cache-null-entry",
     "cache-missing-array",
+    "cache-missing-total",
+    "cache-count-mismatch",
+    "cache-truncated-page",
 ];
 
 #[test]

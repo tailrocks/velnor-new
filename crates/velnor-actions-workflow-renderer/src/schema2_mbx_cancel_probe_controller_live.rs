@@ -261,7 +261,7 @@ if [ -s "$root/validated-victim.json" ] \
   && [ "$(job_state "$root/jobs.json")" = in_progress ] \
   && target_live "$root/jobs.json" && receipt_step_complete "$root/jobs.json" \
   && jq -e --arg actor "$(jq -er '.actor' "$root/validated-victim.json")" '.actor.login == $actor' "$root/run.json" >/dev/null 2>&1; then
-  if gh_api --method GET "/repos/$GITHUB_REPOSITORY/actions/caches?key=$(jq -r '.cache_key' "$root/validated-victim.json")&ref=refs/heads/main" \
+  if gh_api --method GET "/repos/$GITHUB_REPOSITORY/actions/caches?key=$(jq -r '.cache_key' "$root/validated-victim.json")&ref=refs/heads/main&per_page=100" \
       > "$root/cache-before.json" 2>/dev/null; then
     cache_snapshot "$root/cache-before.json" "$root/cache-before-exact.json" \
       "$(jq -r '.cache_key' "$root/validated-victim.json")"

@@ -104,7 +104,8 @@ jq -e --arg expected_scope "$CACHE_SCOPE" --arg phase "$PROBE_PHASE" --arg mode 
      or ($receipt.cache_before.count >= 0
        and ($receipt.cache_before.caches | length) == $receipt.cache_before.count))' \
   "$path" >/dev/null 2>&1 || exit 0
-jq -e --arg mode "$CONTROLLER_MODE" '.inputs.mode == $mode' \
+jq -e --arg mode "$CONTROLLER_MODE" \
+  '.inputs.mode == $mode and (.inputs.probe_id | type == "string")' \
   "$GITHUB_EVENT_PATH" >/dev/null 2>&1 || exit 0
 child_id="$(jq -er '.child_run_id' "$path" 2>/dev/null || true)"
 child_attempt="$(jq -er '.victim.child_attempt' "$path" 2>/dev/null || true)"

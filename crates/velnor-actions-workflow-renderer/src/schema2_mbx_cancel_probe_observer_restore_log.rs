@@ -6,11 +6,17 @@ fetch_restore_log() {
   local workflow_id="${WORKFLOW_ID:-}"
   local run_path="$root/restore-run.json" jobs_path="$root/restore-jobs.json"
   local job_id index api_url status header_size locations location signed_status log_size
+  local controller_mode controller_probe_id controller_title controller_title_without_probe
   local timestamp body normalized
   local -a api_pipe signed_pipe
   [[ "$run_id" =~ ^[1-9][0-9]{0,19}$ ]] || return 1
   [[ "$attempt" =~ ^[1-9][0-9]{0,9}$ ]] || return 1
   [[ "$workflow_id" =~ ^[1-9][0-9]{0,19}$ ]] || return 1
+  controller_mode="$(jq -er '.inputs.mode | select(type == "string")' "$GITHUB_EVENT_PATH" 2>/dev/null)" || return 1
+  controller_probe_id="$(jq -er 'if (.inputs.probe_id | type) == "string" then .inputs.probe_id else error("controller probe shape") end' "$GITHUB_EVENT_PATH" 2>/dev/null)" || return 1
+  [ "$controller_mode" = "$CONTROLLER_MODE" ] || return 1
+  controller_title="MBX cancellation $controller_mode $controller_probe_id"
+  controller_title_without_probe="MBX cancellation $controller_mode"
   [ "$GITHUB_REPOSITORY" = tailrocks/velnor-new ] || return 1
   [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] || return 1
   [ "$GITHUB_REF" = refs/heads/main ] || return 1
@@ -19,11 +25,15 @@ fetch_restore_log() {
     > "$run_path" 2>/dev/null || return 1
   jq -e --argjson id "$run_id" --argjson workflow "$workflow_id" --argjson attempt "$attempt" \
     --arg repo "$GITHUB_REPOSITORY" --arg sha "$GITHUB_SHA" \
-    --arg actor "$GITHUB_ACTOR" --arg title "MBX cancellation $VICTIM_MODE $PROBE_ID" \
+    --arg actor "$GITHUB_ACTOR" --arg title "$controller_title" \
+    --arg title_without_probe "$controller_title_without_probe" \
+    --arg input_probe "$controller_probe_id" \
     '.id == $id and .workflow_id == $workflow
      and .repository.full_name == $repo and .head_repository.full_name == $repo
      and .event == "workflow_dispatch" and .head_branch == "main" and .head_sha == $sha
-     and .run_attempt == $attempt and .actor.login == $actor and .display_title == $title
+     and .run_attempt == $attempt and .actor.login == $actor
+     and (.display_title == $title
+       or ($input_probe == "" and .display_title == $title_without_probe))
      and ((.path | split("@") | .[0]) == ".github/workflows/qualification.yml")
      and ((.path | endswith("@refs/heads/main")))' \
     "$run_path" >/dev/null 2>&1 || return 1

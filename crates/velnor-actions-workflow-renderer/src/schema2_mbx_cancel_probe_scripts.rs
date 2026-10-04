@@ -14,7 +14,10 @@ cache_snapshot() {
       and (.last_accessed_at == null or (.last_accessed_at | type == "string" and length > 0));
     if length != 1 then error("cache response count")
     elif (.[0] | type) != "object" then error("cache response object")
+    elif (.[0].total_count | type) != "number"
+      or (.[0].total_count | . < 0 or . != floor) then error("cache total count")
     elif (.[0].actions_caches | type) != "array" then error("cache array")
+    elif .[0].total_count != (.[0].actions_caches | length) then error("cache page incomplete")
     elif (.[0].actions_caches | all(.[]; valid_cache)) != true then error("cache entry")
     else
       .[0].actions_caches
