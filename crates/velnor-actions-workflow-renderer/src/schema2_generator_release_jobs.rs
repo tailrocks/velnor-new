@@ -142,7 +142,6 @@ pub(super) fn publish_job(
     for artifact in [
         format!("{}-attestations", assets::LINUX.workflow_artifact),
         format!("{}-attestations", assets::MACOS_ARM64.workflow_artifact),
-        format!("{}-attestations", assets::MACOS_X86_64.workflow_artifact),
         format!("{}-attestations", manifest::ARTIFACT),
     ] {
         steps.push(workflow_steps::download_step(
@@ -169,12 +168,7 @@ pub(super) fn publish_job(
                 base("Publish velnor-actions", hosted, 30),
                 workflow_steps::publish_permissions(),
             ),
-            &[
-                "attest-linux",
-                "attest-macos",
-                "attest-macos-intel",
-                "attest-manifest",
-            ],
+            &["attest-linux", "attest-macos", "attest-manifest"],
         ),
         vec![workflow_steps::checkout_step(), call],
     ))

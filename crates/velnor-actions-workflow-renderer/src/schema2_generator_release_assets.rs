@@ -63,24 +63,7 @@ pub(super) const MACOS_ARM64: ProductAsset = ProductAsset {
     checksum_command: "shasum -a 256 --check",
 };
 
-/// macOS `x86_64` binary.
-pub(super) const MACOS_X86_64: ProductAsset = ProductAsset {
-    target: "x86_64-apple-darwin",
-    binary: "velnor-actions-0.1.1-x86_64-apple-darwin",
-    sidecar: "velnor-actions-0.1.1-x86_64-apple-darwin.sha256",
-    provenance: "velnor-actions-0.1.1-x86_64-apple-darwin.provenance.json",
-    archive: "generator-macos-intel-assets.tar",
-    workflow_artifact: "generator-macos-intel-assets",
-    directory: "macos-intel-assets",
-    build_job: "build-macos-intel",
-    qualify_job: "qualify-macos-intel",
-    attest_job: "attest-macos-intel",
-    upload_name: "Upload macOS x86_64 assets",
-    sum_command: "shasum -a 256",
-    checksum_command: "shasum -a 256 --check",
-};
-
-pub(super) const ASSETS: [ProductAsset; 3] = [LINUX, MACOS_ARM64, MACOS_X86_64];
+pub(super) const ASSETS: [ProductAsset; 2] = [LINUX, MACOS_ARM64];
 
 /// Build, inspect, and checksum one native candidate before uploading it.
 pub(super) fn build_steps(product: ProductAsset, verify_name: &str, verify: &str) -> Vec<Yaml> {

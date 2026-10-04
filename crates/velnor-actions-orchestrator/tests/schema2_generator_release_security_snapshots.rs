@@ -36,14 +36,6 @@ pub(super) fn assert_isolated_candidate_execution(
             qualifier_action: "generator-release-qualify-macos",
             attester_action: "generator-release-attest-macos",
         },
-        TargetJobs {
-            target: "macos-intel",
-            build: "build-macos-intel",
-            qualify: "qualify-macos-intel",
-            attest: "attest-macos-intel",
-            qualifier_action: "generator-release-qualify-macos-intel",
-            attester_action: "generator-release-attest-macos-intel",
-        },
     ] {
         assert_target_boundary(workflow, actions, target)?;
     }

@@ -149,12 +149,12 @@ fn copy_release_helpers(root: &Path) -> Result<(), Box<dyn Error>> {
 }
 
 fn write_candidate_records(root: &Path, case: Failure) -> Result<(), Box<dyn Error>> {
-    let products = [assets::LINUX, assets::MACOS_ARM64, assets::MACOS_X86_64];
+    let products = assets::ASSETS;
     for (index, product) in products.into_iter().enumerate() {
         let directory = root.join(product.directory);
         fs::create_dir_all(&directory)?;
         let binary = directory.join(product.binary);
-        if !(case == Failure::MissingBinary && index == 2) {
+        if !(case == Failure::MissingBinary && index == 1) {
             fs::write(&binary, format!("candidate bytes for {}\n", product.target))?;
         }
         let digest = if binary.exists() {

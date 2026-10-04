@@ -11,8 +11,6 @@ use super::Schema2WorkflowRequest;
 
 /// GitHub-hosted macOS label. The arm64 binary is not built on Ubuntu.
 const MACOS_RUNS_ON: &str = "macos-15";
-/// Intel macOS runner for the `x86_64` release binary.
-const MACOS_INTEL_RUNS_ON: &str = "macos-15-intel";
 #[path = "schema2_generator_release_archive.rs"]
 mod archive;
 #[path = "schema2_generator_release_assets.rs"]
@@ -44,12 +42,10 @@ pub(super) fn generator_release(
 ) -> Result<GeneratorRelease, RenderError> {
     let hosted = runs_on_yaml(&request.hosted_label)?;
     let macos = runs_on_yaml(MACOS_RUNS_ON)?;
-    let macos_intel = runs_on_yaml(MACOS_INTEL_RUNS_ON)?;
     let mut actions = Vec::new();
     let mut jobs = vec![assets::source_gate_job(hosted.clone())];
     jobs.extend(linux_jobs(hosted.clone(), &mut actions)?);
     jobs.extend(macos_arm64_jobs(macos, &mut actions)?);
-    jobs.extend(macos_x86_64_jobs(macos_intel, &mut actions)?);
     jobs.push(manifest::job(hosted.clone(), &mut actions)?);
     jobs.push(jobs::publish_job(hosted, &mut actions)?);
     Ok(GeneratorRelease {
@@ -131,45 +127,6 @@ fn macos_arm64_jobs(
             "generator-release-attest-macos",
             macos,
             assets::MACOS_ARM64,
-            actions,
-        )?,
-    ])
-}
-
-fn macos_x86_64_jobs(
-    macos: Yaml,
-    actions: &mut Vec<(String, Yaml)>,
-) -> Result<Vec<(String, Yaml)>, RenderError> {
-    let steps = assets::build_steps(
-        assets::MACOS_X86_64,
-        "Verify Mach-O x86_64 architecture",
-        &assets::macos_verify(assets::MACOS_X86_64.binary, "x86_64"),
-    );
-    Ok(vec![
-        jobs::build_job(
-            "build-macos-intel",
-            "Build macOS x86_64 velnor-actions",
-            "generator-release-build-macos-intel",
-            macos.clone(),
-            steps,
-            assets::MACOS_X86_64,
-            actions,
-        )?,
-        qualification::job(
-            "qualify-macos-intel",
-            "Qualify macOS x86_64 velnor-actions",
-            "generator-release-qualify-macos-intel",
-            macos.clone(),
-            "build-macos-intel",
-            assets::MACOS_X86_64,
-            actions,
-        )?,
-        jobs::attest_job(
-            "attest-macos-intel",
-            "Attest macOS x86_64 velnor-actions",
-            "generator-release-attest-macos-intel",
-            macos,
-            assets::MACOS_X86_64,
             actions,
         )?,
     ])

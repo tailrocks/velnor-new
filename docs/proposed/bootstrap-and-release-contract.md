@@ -141,11 +141,6 @@ target = "aarch64-apple-darwin"
 artifact = "<immutable-release-asset-url>"
 sha256 = "<64-lowercase-hex>"
 
-[[generator.binaries]]
-target = "x86_64-apple-darwin"
-artifact = "<immutable-release-asset-url>"
-sha256 = "<64-lowercase-hex>"
-
 [mise-bootstrap]
 version = "<exact-semver>"
 artifact = "<immutable-release-asset-url>"

@@ -147,7 +147,7 @@ write_release_fixture_manifest() {
   mkdir -p "$repo/.velnor"
   jq -n --arg version "$version" --arg commit "$commit" --arg digest "$digest" '
     {schema:1, version:$version, repository:"tailrocks/velnor-new", commit:$commit,
-     targets:["x86_64-unknown-linux-gnu","aarch64-apple-darwin","x86_64-apple-darwin"]
+     targets:["x86_64-unknown-linux-gnu","aarch64-apple-darwin"]
        | map(. as $target | {target:$target,
          artifact:("https://github.com/tailrocks/velnor-new/releases/download/v" + $version + "/velnor-actions-" + $version + "-" + $target),
          sha256:$digest})}
