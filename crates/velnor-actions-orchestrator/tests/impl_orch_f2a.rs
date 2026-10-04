@@ -313,43 +313,24 @@ fn merge_consumes_no_publish_verbs() -> TestResult {
 
 #[test]
 fn offline_deps_fail_closed_without_fetch() -> TestResult {
-    for path in src_files()? {
-        let name = path
-            .file_name()
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        for (line, code) in code_of(&path)? {
-            if name == "source_prep.rs" {
-                assert!(
-                    !code.contains(".run("),
-                    "source_prep emits fetch steps, never executes: {}:{line}",
-                    path.display()
-                );
-                continue;
-            }
-            let scrubbed = code
-                .replace("fetch_inventory", "")
-                .replace("FetchFailure", "")
-                .replace("fetch_add", "")
-                // Gate-1 emission threading: plan-job `cargo fetch` step
-                // builders plus their lockful-root inputs. The argv literal
-                // lives in source_prep.rs (scoped above, execution-free);
-                // analysis-time fetching stays forbidden.
-                .replace("fetch_steps", "")
-                .replace("fetch_roots", "")
-                // Plan checkout input emission: `fetch-depth: 0` is a
-                // workflow input literal (history for HEAD^2 + base diff),
-                // never an analysis-time fetch execution.
-                .replace("fetch-depth", "")
-                // Contract error-code literal asserted by cache-key
-                // rejection tests, never an execution.
-                .replace("unsafe_fetch_root", "");
+    let src = orch_src();
+    let source_prep_path = src.join("source_prep.rs");
+    let source_prep = source_prep_path.canonicalize()?;
+    for path in crate::impl_orch_f2a_offline::production_src_files(&src)? {
+        if crate::impl_orch_f2a_offline::is_source_prep_source(&path, &source_prep) {
             assert!(
-                !scrubbed.contains("fetch"),
-                "fetch verb at {}:{line}: {code}",
+                !crate::impl_orch_f2a_offline::source_prep_tree_executes(&source_prep_path)?,
+                "source_prep emits fetch steps, never executes in its source tree: {}",
                 path.display()
             );
+            continue;
         }
+        let hits = crate::impl_orch_f2a_offline::production_fetch_hits(&path)?;
+        assert!(
+            hits.is_empty(),
+            "production fetch verb at {}: {hits:?}",
+            path.display()
+        );
     }
     Ok(())
 }
