@@ -6,10 +6,56 @@
 
 use std::error::Error;
 
-use crate::impl_repo_policy::{quoted_value, read};
+use crate::impl_repo_policy::{p12_harness, quoted_value, read};
 
 #[path = "fixtures/p12_property.rs"]
 mod p12_property;
+
+fn assert_lock_staleness_row(
+    run: &p12_harness::Run,
+    subject: &str,
+    status: &str,
+    detail: Option<&str>,
+) -> Result<(), Box<dyn Error>> {
+    let rows = run
+        .stdout
+        .lines()
+        .filter_map(|line| line.strip_prefix("row: "))
+        .map(serde_json::from_str::<serde_json::Value>)
+        .collect::<Result<Vec<_>, _>>()?;
+    let row = rows
+        .iter()
+        .find(|row| {
+            row["check"] == "lock-staleness" && row["subject"] == subject && row["status"] == status
+        })
+        .ok_or_else(|| {
+            format!(
+                "missing lock-staleness row for {subject} with status {status}:\n{}",
+                run.stdout
+            )
+        })?;
+    if let Some(detail) = detail {
+        assert!(
+            row["detail"]
+                .as_str()
+                .is_some_and(|value| value.contains(detail)),
+            "row detail misses {detail}: {row}"
+        );
+    }
+    Ok(())
+}
+
+fn assert_lock_staleness_failure(
+    run: &p12_harness::Run,
+    detail: &str,
+) -> Result<(), Box<dyn Error>> {
+    assert_ne!(
+        run.code, 0,
+        "expected lock-staleness failure: {}",
+        run.stdout
+    );
+    assert_lock_staleness_row(run, "aaa:dependencies:serde_json", "fail", Some(detail))
+}
 
 #[test]
 fn boot34_mise_version_matches_catalog() -> Result<(), Box<dyn Error>> {
@@ -56,37 +102,44 @@ fn gape2_seed_rules_documented() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn rq211_lock_staleness_probe() -> Result<(), Box<dyn Error>> {
-    let fixture = crate::impl_repo_policy::p12_harness::passing("p12-rq211")?;
-    let baseline = crate::impl_repo_policy::p12_harness::run_script(&fixture.dir, &[])?;
-    crate::impl_repo_policy::p12_harness::assert_clean(&baseline);
+    let fixture = p12_harness::passing("rq211-lock-staleness")?;
+    let baseline = p12_harness::run_script(&fixture.dir, &[])?;
+    p12_harness::assert_clean(&baseline);
+    assert_lock_staleness_row(&baseline, "aaa:dependencies:serde_json", "pass", None)?;
 
-    crate::impl_repo_policy::p12_harness::mutate(
+    p12_harness::mutate(
         &fixture.dir,
         "Cargo.lock",
         "name = \"serde_json\"\nversion = \"1.0.100\"",
         "name = \"serde_json\"\nversion = \"1.0.101\"",
     )?;
-    let stale_lock = crate::impl_repo_policy::p12_harness::run_script(&fixture.dir, &[])?;
-    crate::impl_repo_policy::p12_harness::assert_fail(&stale_lock, "has no locked identity");
+    let stale_lock = p12_harness::run_script(&fixture.dir, &[])?;
+    assert_lock_staleness_failure(&stale_lock, "has no locked identity")?;
 
-    crate::impl_repo_policy::p12_harness::mutate(
+    p12_harness::mutate(
         &fixture.dir,
         "Cargo.lock",
         "name = \"serde_json\"\nversion = \"1.0.101\"",
         "name = \"serde_json\"\nversion = \"1.0.100\"",
     )?;
-    crate::impl_repo_policy::p12_harness::mutate(
+    p12_harness::mutate(
         &fixture.dir,
         "crates/aaa/Cargo.toml",
         "serde_json = \"=1.0.100\"",
+        "serde_json = \"=1.0.101\"",
+    )?;
+    let skewed = p12_harness::run_script(&fixture.dir, &[])?;
+    assert_lock_staleness_failure(&skewed, "has no locked identity")?;
+
+    p12_harness::mutate(
+        &fixture.dir,
+        "crates/aaa/Cargo.toml",
+        "serde_json = \"=1.0.101\"",
         "serde_json = \"1.0.100\"",
     )?;
-    let inexact_requirement = crate::impl_repo_policy::p12_harness::run_script(&fixture.dir, &[])?;
-    crate::impl_repo_policy::p12_harness::assert_fail(
-        &inexact_requirement,
-        "exact `=x.y.z` (VER-2.26)",
-    );
-    crate::impl_repo_policy::p12_harness::cleanup(&fixture);
+    let inexact = p12_harness::run_script(&fixture.dir, &[])?;
+    assert_lock_staleness_failure(&inexact, "exact `=x.y.z` (VER-2.26)")?;
+    p12_harness::cleanup(&fixture);
 
     let procedure = read("docs/implemented/update-procedure.md")?;
     assert!(
