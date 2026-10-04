@@ -401,7 +401,7 @@ jobs:
         id: mbx
         uses: jdx/mr-boxington-action@d0825fbaf3cc36ca2609aa38e71046265a1f1e37
         with:
-          cache-generation: velnor-mbx-1.21.1
+          cache-generation: velnor-mbx-1.21.1-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37
           cache-key-suffix: ${{ runner.environment == 'github-hosted' && github.job || '' }}
           github-cache-mode: objects
           isolate-objects-cache: ${{ runner.environment == 'github-hosted' }}
@@ -757,7 +757,7 @@ jobs:
         id: mbx
         uses: jdx/mr-boxington-action@d0825fbaf3cc36ca2609aa38e71046265a1f1e37
         with:
-          cache-generation: velnor-mbx-1.21.1
+          cache-generation: velnor-mbx-1.21.1-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37
           cache-key-suffix: ${{ runner.environment == 'github-hosted' && github.job || '' }}
           github-cache-mode: objects
           isolate-objects-cache: ${{ runner.environment == 'github-hosted' }}

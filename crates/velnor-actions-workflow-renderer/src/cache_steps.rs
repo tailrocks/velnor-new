@@ -5,7 +5,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::cachekey::mbx_cache_generation;
+use velnor_actions_contract::cachekey::mbx_action_cache_generation;
 use velnor_actions_contract::{Job, Step, StepKind};
 
 use crate::{
@@ -162,8 +162,9 @@ pub(crate) const MBX_ACTION_CACHE_MODE: &str = "read";
 /// runner policy upgrades hosted required jobs to isolated native saves
 /// on protected default-branch pushes; Scale Set jobs keep this action
 /// restore-only and use their external single-bundle step.
-/// The cache generation follows the exact MBX release, so upgrading its
-/// storage or collection behavior starts with an isolated cold namespace.
+/// The action-cache generation follows both the exact MBX release and action
+/// SHA, so changing its storage or collection behavior starts cold. The task
+/// cache-format identity remains scoped to the MBX release alone.
 /// # Errors
 pub fn mbx_objects_step(
     uses: &str,
@@ -182,12 +183,15 @@ pub fn mbx_objects_step(
             "bad_mbx_version:{mbx_version}"
         )));
     }
+    let Some((_, action_sha)) = uses.split_once('@') else {
+        return Err(RenderError::BadActionRef(format!("missing_sha:{uses}")));
+    };
     let with = BTreeMap::from([
         ("github-cache-mode".to_owned(), "objects".to_owned()),
         ("version".to_owned(), mbx_version.to_owned()),
         (
             "cache-generation".to_owned(),
-            mbx_cache_generation(mbx_version),
+            mbx_action_cache_generation(mbx_version, action_sha),
         ),
     ]);
     let env = BTreeMap::from([(

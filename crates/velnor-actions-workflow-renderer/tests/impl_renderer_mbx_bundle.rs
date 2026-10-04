@@ -1,6 +1,7 @@
 //! Hosted jobs use action-owned isolated caches; Scale Set jobs keep the bundle route.
 
 use velnor_actions_contract::WorkflowPolicy;
+use velnor_actions_contract::cachekey::mbx_action_cache_generation;
 use velnor_actions_contract::config::{SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL};
 use velnor_actions_workflow_renderer::steps::mbx_objects_step;
 use velnor_actions_workflow_renderer::{RenderError, render_workflow_ir};
@@ -66,8 +67,12 @@ fn assert_hosted_action_options(text: &str) {
         "{text}"
     );
     let action = step_block(text, "Restore MBX objects");
+    let action_sha = "a".repeat(40);
     assert!(
-        action.contains("cache-generation: velnor-mbx-1.21.1"),
+        action.contains(&format!(
+            "cache-generation: {}",
+            mbx_action_cache_generation("1.21.1", &action_sha)
+        )),
         "{action}"
     );
     assert!(action.contains("version: 1.21.1"), "{action}");
@@ -76,7 +81,10 @@ fn assert_hosted_action_options(text: &str) {
         "keep the action's generated primary-key format and shared compatible restore prefix: {action}"
     );
     assert!(
-        text.contains("cache-generation: velnor-mbx-1.21.1"),
+        text.contains(&format!(
+            "cache-generation: {}",
+            mbx_action_cache_generation("1.21.1", &action_sha)
+        )),
         "{text}"
     );
     assert!(text.contains("version: 1.21.1"), "{text}");

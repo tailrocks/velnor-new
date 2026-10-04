@@ -11,7 +11,7 @@ use crate::errors::ContractError;
 
 /// Cache-key schema id, always `v1`.
 pub const CACHE_SCHEMA_ID: &str = "v1";
-/// Prefix shared by the MBX action namespace and task cache identity.
+/// Prefix used by MBX action-cache generations and task cache identities.
 pub const MBX_CACHE_GENERATION_PREFIX: &str = "velnor-mbx-";
 pub use crate::extension_schemas::{
     KNOWN_STACK_EXTENSION_SCHEMAS, RUST_EXTENSION_SCHEMA, TOFU_EXTENSION_SCHEMA,
@@ -27,6 +27,17 @@ pub const MAX_CACHE_KEY_BYTES: usize = 512;
 #[must_use]
 pub fn mbx_cache_generation(version: &str) -> String {
     format!("{MBX_CACHE_GENERATION_PREFIX}{version}")
+}
+
+/// Build an action-cache generation bound to the exact pinned action commit.
+///
+/// The GitHub cache restore prefix includes this value, so changing action
+/// lifecycle code starts in an empty namespace instead of falling back to
+/// entries written under an older action pin. Task cache-format identity uses
+/// [`mbx_cache_generation`] separately and remains scoped to the MBX release.
+#[must_use]
+pub fn mbx_action_cache_generation(version: &str, action_sha: &str) -> String {
+    format!("{MBX_CACHE_GENERATION_PREFIX}{version}-action-{action_sha}")
 }
 
 /// The 13 allowed `miss_reason` values (cache §3).

@@ -25,9 +25,10 @@ the pinned toolchain's own rustup, deterministic, writing only
 Velnor-owned tool homes — Mise installing components, not an ad hoc
 installer. For an MBX profile only, hosted jobs invoke the pinned
 `jdx/mr-boxington-action` in `github-cache-mode: objects` with MBX 1.21.1,
-isolated per-job stores, and distinct job-suffixed primary keys. Its generated
-compatible restore prefix stays shared; the same job and SHA can reuse its
-exact entry. Only a protected default-branch push receives
+isolated per-job stores, an action-SHA-scoped cache generation, and distinct
+job-suffixed primary keys. Its generated compatible restore prefix stays
+shared within that action generation; the same job and SHA can reuse its exact
+entry. Only a protected default-branch push receives
 `ACTIONS_CACHE_MODE=write`; PRs, forks, and other hosted events remain read-only.
 `MBX_GC_AUTO=1` stays enabled, and the final ordinary hosted step runs
 synchronous `mbx gc` before the action post export/save. The action samples

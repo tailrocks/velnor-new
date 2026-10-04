@@ -1,6 +1,6 @@
 //! Gate 4 renderer cases: MBX objects, cache actions, lane target dirs.
 
-use velnor_actions_contract::cachekey::mbx_cache_generation;
+use velnor_actions_contract::cachekey::mbx_action_cache_generation;
 
 use velnor_actions_contract::{Step, StepKind};
 use velnor_actions_workflow_renderer::steps::{
@@ -57,8 +57,8 @@ fn mbx_objects_step_pins_action_and_mode() {
             );
             assert_eq!(
                 with.get("cache-generation").map(String::as_str),
-                Some(mbx_cache_generation("1.19.0").as_str()),
-                "a new MBX release starts an isolated cache namespace"
+                Some(mbx_action_cache_generation("1.19.0", sha()).as_str()),
+                "a new MBX release or action pin starts a cold cache namespace"
             );
             for input in [
                 "save-on-pull-request",
