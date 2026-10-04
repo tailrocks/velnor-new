@@ -23,7 +23,8 @@ pub(crate) use tools::crate_needs_tofu_install;
 #[cfg(test)]
 pub(crate) use tools::task_driver_tools;
 pub(crate) use tools::{
-    crate_needs_generate_validators, prepare_crate_tools_step, prepare_install_opentofu,
+    CrateSuite, crate_needs_generate_validators, prepare_crate_tools_step,
+    prepare_install_opentofu, suite_for_package,
 };
 
 /// `Documentation` obligation step name.
