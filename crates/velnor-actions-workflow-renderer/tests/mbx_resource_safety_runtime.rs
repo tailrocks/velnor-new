@@ -20,7 +20,7 @@ const RECEIPT: &str = include_str!("../src/schema2_mbx_resource_receipt.sh");
 const CORRUPTOR: &str = include_str!("../src/schema2_mbx_corrupt_bundle.sh");
 const SAMPLER_SHA: &str = "b2a03511f0a36c6b7fca9fb4a95461676acbd54b82e1e902efa1313d3b8fcfd2";
 const PATH_VALIDATION_SHA: &str =
-    "aeb6a305ae82c86a08c6b08d459747c551369be18b6b84c26fa7d0be5084589b";
+    "5bcca14cce52a2d66891e384f6f9ab5a6b46819e8f9c30a6d1c779e665cf7ada";
 const LINUX_IMAGE: &str = concat!(
     "ghcr.io/actions/actions-runner@sha256:",
     "e5496277be5d09bc968b3d64911b74e219ac4a3f2edce956a3ecf9271bea1ef4"

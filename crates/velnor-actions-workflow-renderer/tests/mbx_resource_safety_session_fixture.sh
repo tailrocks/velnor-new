@@ -108,10 +108,14 @@ assert_valid_session_receipt() {
   pass 'session receipt has ten unique bound fields'
 }
 expect_rejected_without_signal() {
-  local name=$1 sampler_expected=$2 preserve_session=${3:-false} before after
+  local name=$1 sampler_expected=$2 preserve_session=${3:-false} marker_expected=${4:-absent} before after
   write_valid_receipts
   if stop_sampler > "$CASE_ROOT/stop.log" 2>&1; then fail "$name was accepted"; else pass "$name rejected"; fi
-  [[ ! -e "$EVIDENCE/sampler.stop" ]] || fail "$name created stop marker before identity validation"
+  if [[ "$marker_expected" == present ]]; then
+    [[ -e "$EVIDENCE/sampler.stop" ]] || fail "$name did not reach owned-session shutdown"
+  else
+    [[ ! -e "$EVIDENCE/sampler.stop" ]] || fail "$name created stop marker before identity validation"
+  fi
   if [[ "$sampler_expected" == alive ]]; then assert_live "$name sampler" "$sampler_pid"; fi
   assert_live "$name same-session writer" "$child_pid"
   before=$(wc -c < "$SPAWN_CHILD_FILE")
@@ -124,6 +128,79 @@ expect_rejected_without_signal() {
     stop_child_session "$sampler_session_sid"
     stop_decoy
   fi
+}
+install_ps_failure() {
+  local mode=$1
+  cat > "$WORK/bin/ps" <<'SH'
+#!/usr/bin/bash
+case "${PS_FAILURE_MODE:-}" in
+  leader-empty)
+    if [[ "${1-}" == -p && -e "$PS_FAILURE_ARM" ]]; then
+      printf '%s\n' leader-empty >> "$PS_FAILURE_LOG"
+      exit 43
+    fi
+    ;;
+  leader-partial)
+    if [[ "${1-}" == -p && -e "$PS_FAILURE_ARM" ]]; then
+      printf 'bash %s/sampler.sh\n' "$EVIDENCE"
+      printf '%s\n' leader-partial >> "$PS_FAILURE_LOG"
+      exit 43
+    fi
+    ;;
+  scan-empty)
+    if [[ "${1-}" == -eo && -e "$PS_FAILURE_ARM" && -e "$EVIDENCE/sampler.stop" ]]; then
+      printf '%s\n' scan-empty >> "$PS_FAILURE_LOG"
+      exit 43
+    fi
+    ;;
+  scan-partial)
+    if [[ "${1-}" == -eo && -e "$PS_FAILURE_ARM" && -e "$EVIDENCE/sampler.stop" ]]; then
+      printf '%s %s %s %s\n' "$PS_FAILURE_UID" "$PS_FAILURE_PID" \
+        "$PS_FAILURE_PGID" "$PS_FAILURE_SID"
+      printf '%s\n' scan-partial >> "$PS_FAILURE_LOG"
+      exit 43
+    fi
+    ;;
+esac
+exec /usr/bin/ps "$@"
+SH
+  chmod 700 "$WORK/bin/ps"
+  export PS_FAILURE_MODE="$mode" PS_FAILURE_ARM="$CASE_ROOT/ps-failure-arm"
+  export PS_FAILURE_LOG="$CASE_ROOT/ps-failure.log"
+  export PS_FAILURE_UID="$(id -u)" PS_FAILURE_PID="$sampler_pid"
+  export PS_FAILURE_PGID="$sampler_session_pgid" PS_FAILURE_SID="$sampler_session_sid"
+  : > "$PS_FAILURE_ARM"
+}
+clear_ps_failure() {
+  rm -f "$WORK/bin/ps"
+  unset PS_FAILURE_MODE PS_FAILURE_ARM PS_FAILURE_LOG PS_FAILURE_UID PS_FAILURE_PID \
+    PS_FAILURE_PGID PS_FAILURE_SID
+}
+assert_ps_failure_result() {
+  local name=$1 status
+  [[ -s "$PS_FAILURE_LOG" ]] || fail "$name did not invoke injected ps failure"
+  [[ -s "$EVIDENCE/qualification-errors.txt" ]] || fail "$name omitted failure diagnostics"
+  grep -qx $'qualification_status\tincomplete' "$EVIDENCE/qualification-status.tsv" || \
+    fail "$name did not record incomplete qualification"
+  status=$(awk -F '\t' '$1 == "shutdown_deadline_status" {print $2}' "$EVIDENCE/sampler-stop.tsv")
+  [[ -n "$status" && "$status" != within_budget ]] || fail "$name accepted failed ps status: $status"
+  [[ ! -e "$EVIDENCE/inventory-final.tsv" && ! -e "$EVIDENCE/root-status-final.tsv" ]] || \
+    fail "$name captured a final snapshot after ps failure"
+  assert_status_not_complete || fail "$name reported qualification complete"
+}
+run_ps_failure_case() {
+  local mode=$1 marker_expected=absent sampler_expected=alive
+  start_session_writer "ps-failure-$mode" || exit 1
+  install_ps_failure "$mode"
+  export MBX_QUALIFICATION_FINALIZER_WAIT=1
+  if [[ "$mode" == scan-* ]]; then marker_expected=present; fi
+  expect_rejected_without_signal "ps failure $mode" "$sampler_expected" true "$marker_expected"
+  assert_ps_failure_result "ps failure $mode"
+  clear_ps_failure
+  stop_child_session "$sampler_session_sid"
+  stop_decoy
+  wait_pid_gone "ps failure $mode writer cleanup" "$child_pid"
+  export MBX_QUALIFICATION_FINALIZER_WAIT=5
 }
 
 setup_case pid-validator
@@ -270,6 +347,11 @@ wait_pid_gone 'TERM-resistant writer' "$child_pid"
 wait_pid_gone 'TERM fork child' "$fork_pid"
 if kill -0 "$decoy_pid" 2>/dev/null; then pass 'external SID decoy survived TERM/KILL'; else fail 'TERM/KILL signaled external SID decoy'; fi
 stop_decoy
+
+run_ps_failure_case leader-empty
+run_ps_failure_case leader-partial
+run_ps_failure_case scan-empty
+run_ps_failure_case scan-partial
 
 start_session_writer slow-ps-deadline || exit 1
 cat > "$WORK/bin/ps" <<'SH'
