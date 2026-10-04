@@ -14,6 +14,9 @@ mod storage;
 mod validation;
 
 #[cfg(test)]
+#[path = "action_archive_seed_tests/lease_recovery_tests.rs"]
+mod lease_recovery_tests;
+#[cfg(test)]
 #[path = "action_archive_seed_tests/preparation_tests.rs"]
 mod preparation_tests;
 #[cfg(test)]

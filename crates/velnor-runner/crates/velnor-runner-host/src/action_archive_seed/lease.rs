@@ -52,6 +52,41 @@ pub(crate) enum PublicationStage {
 }
 
 impl ActionArchiveStore {
+    /// Reopen one durable lease from its persisted launch and generation identities.
+    ///
+    /// This method only verifies existing state. It does not fetch, publish, or recreate a
+    /// projection. The scheduler must serialize recovery with confirmed cleanup and keep the
+    /// lease until every consumer has stopped.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the active lease, manifest, archive objects, or projection is
+    /// missing, retired, corrupt, or bound to another generation.
+    pub(crate) fn open_existing_lease(
+        &self,
+        launch_id: &str,
+        expected_generation_id: &str,
+    ) -> Result<ActionArchiveLease, ActionArchiveSeedError> {
+        validate_component(launch_id).map_err(|_| ActionArchiveSeedError::InvalidLease)?;
+        validate_generation_id(expected_generation_id)?;
+        if has_retired_lease(&self.leases, launch_id)? {
+            return Err(ActionArchiveSeedError::LeaseConflict);
+        }
+        let active = self.leases.join(launch_id);
+        if !active.exists() {
+            return Err(ActionArchiveSeedError::MissingArchive);
+        }
+        let manifest = validate_live_lease(&active, launch_id, expected_generation_id)?;
+        for identity in &manifest.archives {
+            self.object_path(identity)?;
+        }
+        Ok(ActionArchiveLease {
+            launch_id: launch_id.to_owned(),
+            generation_id: expected_generation_id.to_owned(),
+            cache_path: active.join(RUNNER_CACHE_DIR),
+        })
+    }
+
     /// Create or replay a durable, allowlisted projection for one scheduler launch.
     ///
     /// Pass the persisted full `LaunchIdentity.launch_id` without rewriting it. Pass `None`
@@ -308,7 +343,7 @@ fn validate_live_lease(
     path: &Path,
     launch_id: &str,
     generation_id: &str,
-) -> Result<(), ActionArchiveSeedError> {
+) -> Result<LeaseManifest, ActionArchiveSeedError> {
     let manifest = read_lease_manifest(path)?;
     let expected = normalized_allowlist(&manifest.archives)?;
     if manifest.format_version != FORMAT_VERSION
@@ -322,7 +357,8 @@ fn validate_live_lease(
     {
         return Err(ActionArchiveSeedError::LeaseConflict);
     }
-    verify_projection(&path.join(RUNNER_CACHE_DIR), &expected)
+    verify_projection(&path.join(RUNNER_CACHE_DIR), &expected)?;
+    Ok(manifest)
 }
 
 fn read_lease_manifest(path: &Path) -> Result<LeaseManifest, ActionArchiveSeedError> {
