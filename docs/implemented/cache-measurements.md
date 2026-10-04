@@ -243,16 +243,16 @@ has blob `b3a8aa37f9f7a608d7d5a63a8990b1fd4c043759`. Its V2 save path forces
 the Azure SDK, 64 MiB blocks, and concurrency 8; the SDK uses a 128 MiB
 single-shot threshold. The legacy `Uploading chunk ...` marker is in the V1
 uploader and is unavailable on this V2 path. V2's ordinary `Sent N of TOTAL`
-progress line needs no debug setting; it is displayed every second and once
-when the progress timer stops.
+progress line needs no debug setting; it uses a one-second display timer, with
+a final display attempt on cleanup unless completion was already displayed.
 
 Count a cancellation probe only when the final `Save` step is live and its log
 contains `Sent N of TOTAL` with `0 < N < TOTAL` before cancellation. For an
 archive at or below 128 MiB, this shows partial request-body progress observed
 by the SDK; it does not prove server acknowledgement or cache finalization.
-For a larger archive, progress advances after successful 64 MiB `stageBlock`
-calls; it does not prove all blocks completed or V2
-`FinalizeCacheEntryUpload` succeeded.
+For a larger archive, progress advances after successful `stageBlock` calls
+for blocks of at most 64 MiB; the final block may be smaller. This does not
+prove all blocks completed or V2 `FinalizeCacheEntryUpload` succeeded.
 
 A fast small upload may produce only a final `Sent TOTAL of TOTAL` line. That
 does not qualify a cancellation probe: record `NOT_RUN`. Do not add archive
