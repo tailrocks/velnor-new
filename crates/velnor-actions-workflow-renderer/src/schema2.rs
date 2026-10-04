@@ -33,6 +33,9 @@ mod generator_release;
 mod mbx_qualification;
 #[path = "schema2_release.rs"]
 mod release;
+/// Exact-source gates for composed product-release workflows.
+#[path = "schema2_release_eligibility.rs"]
+pub mod release_eligibility;
 
 /// Which schema 2 workflows to emit, plus the selectors they use.
 #[derive(Debug, Clone, PartialEq, Eq)]
