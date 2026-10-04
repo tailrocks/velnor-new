@@ -137,7 +137,10 @@ Pyflakes.
 
 The only per-project pin override is `[actions.overrides]` in
 `.velnor/config.toml`. Each ordinary value contains an exact 40-hex commit SHA
-and its matching stable version. Keys must be exact allowlisted action
+and its matching pin label. Stable releases use `vX.Y.Z`. An immutable fork
+commit without an upstream release uses `fork-<first-seven-SHA-chars>`; the
+label must match its SHA and does not claim an upstream release. Keys must be
+exact allowlisted action
 repositories, and the pair must appear in that action's bundled approved-pin
 catalog (latest release plus maintained compatibility pins). The Alint action
 is not a per-project override: Velnor emits exactly

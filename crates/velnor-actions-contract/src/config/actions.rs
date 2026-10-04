@@ -37,7 +37,7 @@ pub struct ActionsConfig {
 pub struct ActionPinOverride {
     /// Exact 40-char lowercase-hex commit SHA.
     pub sha: String,
-    /// Matching stable version (`vX.Y.Z`).
+    /// Matching stable version or fork-commit identity (`fork-<sha-prefix>`).
     pub version: String,
 }
 
@@ -61,7 +61,7 @@ impl ActionsConfig {
                     "ref_must_be_full_sha",
                 ));
             }
-            if !is_version_tag(&pin.version) {
+            if !is_pin_label(&pin.sha, &pin.version) {
                 return Err(ContractError::config(
                     file,
                     key_path,
@@ -82,6 +82,13 @@ fn is_full_sha(value: &str) -> bool {
 }
 
 /// Stable version tags: `vX.Y.Z` with numeric parts.
+fn is_pin_label(sha: &str, value: &str) -> bool {
+    is_version_tag(value)
+        || sha
+            .get(..7)
+            .is_some_and(|prefix| value == format!("fork-{prefix}"))
+}
+
 fn is_version_tag(value: &str) -> bool {
     let Some(number) = value.strip_prefix('v') else {
         return false;
