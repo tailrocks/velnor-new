@@ -142,3 +142,39 @@ fn dispatch_switch_preserves_custom_actions_and_removes_shared_outputs() -> Test
     );
     Ok(())
 }
+
+#[cfg(unix)]
+#[test]
+fn preview_preservation_failure_cleans_reservation_and_allows_retry() -> TestResult {
+    use std::os::unix::net::UnixListener;
+
+    let repo = make_repo(config_with_branch())?;
+    let root = repo.path();
+    let github = root.join(".github");
+    fs::create_dir_all(&github)?;
+    let socket_path = github.join("unsupported-socket");
+    let socket = UnixListener::bind(&socket_path)?;
+    let prep = prepare(root)?;
+    let preview_parent = TempDir::new()?;
+    let preview = preview_parent.path().join("preview");
+    let options = GenerateOptions {
+        output_dir: Some(preview.clone()),
+    };
+
+    let error = generate(&prep, &options).expect_err("unsupported entry must refuse preview");
+    assert!(
+        error.to_string().contains("unsupported_repository_entry"),
+        "got {error}"
+    );
+    assert!(preview.is_dir());
+    assert!(
+        !preview.join(".github").exists(),
+        "failed preview must remove its reserved output"
+    );
+    drop(socket);
+    fs::remove_file(socket_path)?;
+
+    generate(&prep, &options)?;
+    assert!(preview.join(".github/workflows/ci.yml").is_file());
+    Ok(())
+}

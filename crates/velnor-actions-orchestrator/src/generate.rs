@@ -30,10 +30,14 @@ mod self_repo_gap;
 #[path = "generate_preserve.rs"]
 mod preserve;
 
+/// Stage and publish fresh preview output transactionally.
+#[path = "generate_preview.rs"]
+mod preview;
+
 /// Re-exported snapshot: the `generate::ToolSnapshot` path is stable API.
 pub use guards::ToolSnapshot;
 
-use guards::{GenerateOwnership, prepare_preview_dir, same_filesystem};
+use guards::{GenerateOwnership, same_filesystem};
 
 /// Options for [`generate`].
 #[derive(Debug, Clone, Default)]
@@ -95,10 +99,7 @@ pub fn generate_dispatched(
         .map_err(|problem| OrchestratorError::Contract { problem })?;
     let warnings = match &opts.output_dir {
         None => replace_in_place(prep, &tree)?,
-        Some(dir) => {
-            write_preview(prep, dir, &tree)?;
-            Vec::new()
-        }
+        Some(dir) => preview::write_preview(prep, dir, &tree)?,
     };
     Ok(GenerateReport {
         files_written: tree.paths(),
@@ -319,19 +320,6 @@ fn backup_path(root: &Path, target: &Path) -> PathBuf {
         candidate = root.join(format!("{base}.{counter}"));
     }
     candidate
-}
-
-/// Write `PATH/.github` for a fresh outside-repo preview root.
-fn write_preview(
-    prep: &GenerationPreparation,
-    dest: &Path,
-    tree: &RenderedTree,
-) -> Result<(), OrchestratorError> {
-    let canonical = prepare_preview_dir(&prep.root, dest)?;
-    for rel in check_tree_paths(tree)? {
-        guard::check_no_symlink(&canonical, &rel, is_symlink)?;
-    }
-    preserve::write_preview(&prep.root.join(".github"), &canonical.join(".github"), tree)
 }
 
 /// Staged tree writing: regular files and symbolic links.
