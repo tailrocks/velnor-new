@@ -40,7 +40,14 @@ normalization.
 | mbx-nextest | 0 | same |
 | empty-suite | 0 | same |
 | minimal-cargo | 0 | same |
-| dogfood (this repo) | 0 | plan.txt, generate tree, `dogfood.verdict=identical` (generate ≡ checked-in `.github`), tree.sha256 |
+| dogfood (this repo) | 0 | plan.txt, generate tree, `dogfood.verdict=DIFFERS` (preview is not shipped), tree.sha256 |
+
+The current dogfood capture records a source preview, not a release. Its diff
+includes this preflight change and existing generator-to-`.github` drift from
+main, including qualification workflow changes; it is not attributable only to
+this patch and does not establish release parity. Shipping `.github` remains
+unchanged. Regenerate it only from a verified release artifact and review the
+resulting diff before publishing.
 
 `MANIFEST.sha256` pins every golden file.
 
