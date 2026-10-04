@@ -1,7 +1,8 @@
 #!/bin/bash
 # GNU tar 1.35 stats and extracts with openat2. qemu-user returns ENOSYS and
-# glibc does not fall back. BusyBox tar works. actions/cache and dpkg pass
-# GNU-only flags, so accept those and run BusyBox.
+# glibc does not fall back. BusyBox tar works. Flags that change archive
+# bytes and are not implemented fail closed. -v is non-semantic: it does
+# not change archive bytes.
 set -euo pipefail
 
 mode=""
@@ -12,6 +13,7 @@ gzip=0
 zstd=0
 program=""
 strip=""
+absolute=0
 excludes=()
 positionals=()
 args=("$@")
@@ -40,16 +42,21 @@ need() {
 while [ "$i" -lt "${#args[@]}" ]; do
   arg="${args[$i]}"
   case "$arg" in
-    --posix | -P | --delay-directory-restore | --force-local | --no-same-owner | --no-same-permissions | --numeric-owner | --overwrite | --zstd)
-      if [ "$arg" = "--zstd" ]; then
-        zstd=1
-      fi
+    --absolute-names | -P)
+      absolute=1
+      ;;
+    --zstd)
+      zstd=1
+      ;;
+    --posix | --delay-directory-restore | --force-local | --no-same-owner | --no-same-permissions | --numeric-owner | --overwrite)
+      die "unsupported option $arg"
       ;;
     --version)
       printf 'velnor-tar busybox\n'
       exit 0
       ;;
     --warning | --warning=*)
+      die "unsupported option $arg"
       ;;
     --exclude)
       need
@@ -117,10 +124,25 @@ while [ "$i" -lt "${#args[@]}" ]; do
           x) mode=x ;;
           t) mode=t ;;
           z) gzip=1 ;;
-          j | J | Z | v | h | m | o | k | O | a | P) ;;
+          P) absolute=1 ;;
+          # -v is non-semantic. Verbose text is not part of the archive.
+          v) ;;
+          j | J | Z | h | m | o | k | O | a)
+            die "unsupported flag -$flag"
+            ;;
           f | C)
+            # GNU old style: `tar cfz archive` keeps `z` as a flag and takes
+            # the archive from the next word. The rest of the cluster is an
+            # attached argument only when it is not more option letters.
             rest="${cluster:$((k + 1))}"
+            attached=0
             if [ -n "$rest" ]; then
+              case "${rest:0:1}" in
+                c | x | t | z | P | j | J | Z | v | h | m | o | k | O | a | f | C) ;;
+                *) attached=1 ;;
+              esac
+            fi
+            if [ "$attached" -eq 1 ]; then
               value="$rest"
             else
               need
@@ -131,7 +153,9 @@ while [ "$i" -lt "${#args[@]}" ]; do
             else
               chdir="$value"
             fi
-            break
+            if [ "$attached" -eq 1 ]; then
+              break
+            fi
             ;;
           *)
             die "unsupported flag -$flag"
@@ -205,16 +229,13 @@ fi
 if [ -n "$strip" ]; then
   bb+=(--strip-components "$strip")
 fi
-if [ "${#filtered[@]}" -gt 0 ]; then
+# A --files-from list can exceed ARG_MAX. Do not put it on the BusyBox argv.
+# tar-absolute.sh reads that list from the file instead.
+if [ -z "$files_from" ] && [ "${#filtered[@]}" -gt 0 ]; then
   bb+=("${filtered[@]}")
 fi
 
-if [ -n "$program" ]; then
-  if [ "$mode" = c ]; then
-    "${bb[@]}" | bash -c "$program" >"$archive"
-  else
-    bash -c "$program" <"$archive" | "${bb[@]}"
-  fi
-else
-  exec "${bb[@]}"
-fi
+_velnor_tar_here="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+# shellcheck disable=SC1091
+. "$_velnor_tar_here/tar-absolute.sh"
+finish_tar

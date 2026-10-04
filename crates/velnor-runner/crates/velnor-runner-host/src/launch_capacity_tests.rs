@@ -1,8 +1,7 @@
 //! Admission for one poll. `poll_and_drive` calls `admit`.
 
-use crate::IntentState;
 use crate::launch::{
-    Admit, Idle, Seat, admit, install_job_capacity, job_capacity, needs_running, occupies,
+    Admit, Idle, Seat, admit, install_job_capacity, job_capacity, needs_running,
     parse_admit_target, parse_job_capacity, poll_limit, wide_poll_limit,
 };
 
@@ -11,6 +10,7 @@ fn decide(capacity: u32, started: u32, running: u32, idle: Idle) -> Admit {
         capacity,
         target: capacity,
         started,
+        occupied: running,
         running,
         assigned: u32::MAX,
         idle,
@@ -22,6 +22,7 @@ fn decide_at(capacity: u32, target: u32, started: u32, running: u32, idle: Idle)
         capacity,
         target,
         started,
+        occupied: running,
         running,
         assigned: u32::MAX,
         idle,
@@ -47,7 +48,7 @@ fn capacity_two_empty_after_one_start_stays() {
 
 #[test]
 fn capacity_two_second_launch_starts() {
-    assert!(needs_running(2, 2, 1, Idle::Launch));
+    assert!(needs_running(Idle::Launch));
     assert_eq!(decide(2, 1, 1, Idle::Launch), Admit::Start { stop: true });
     assert_eq!(decide(2, 1, 0, Idle::Launch), Admit::Start { stop: true });
 }
@@ -81,6 +82,7 @@ fn scale_does_not_mint_again_once_assigned_is_covered() {
             capacity: 2,
             target: 2,
             started: 1,
+            occupied: 1,
             running: 1,
             assigned: 1,
             idle: Idle::Scale,
@@ -92,6 +94,7 @@ fn scale_does_not_mint_again_once_assigned_is_covered() {
             capacity: 2,
             target: 2,
             started: 1,
+            occupied: 1,
             running: 1,
             assigned: 3,
             idle: Idle::Scale,
@@ -103,6 +106,7 @@ fn scale_does_not_mint_again_once_assigned_is_covered() {
             capacity: 2,
             target: 2,
             started: 0,
+            occupied: 0,
             running: 0,
             assigned: 1,
             idle: Idle::Scale,
@@ -114,6 +118,7 @@ fn scale_does_not_mint_again_once_assigned_is_covered() {
             capacity: 2,
             target: 2,
             started: 1,
+            occupied: 0,
             running: 0,
             assigned: 1,
             idle: Idle::Scale,
@@ -123,12 +128,13 @@ fn scale_does_not_mint_again_once_assigned_is_covered() {
 }
 
 #[test]
-fn capacity_one_after_start_keeps_the_old_loop() {
-    assert_eq!(decide(1, 1, 0, Idle::Launch), Admit::Stop);
+fn capacity_one_after_exit_admits_the_next_job() {
+    assert_eq!(decide(1, 1, 0, Idle::Launch), Admit::Start { stop: true });
     assert_eq!(decide(1, 1, 1, Idle::Launch), Admit::Stop);
-    assert!(!needs_running(1, 1, 1, Idle::Launch));
-    assert_eq!(decide(1, 1, 0, Idle::Scale), Admit::Ack { stop: true });
-    assert_eq!(decide(1, 0, 1, Idle::Scale), Admit::Ack { stop: true });
+    assert!(needs_running(Idle::Launch));
+    assert!(!needs_running(Idle::Empty));
+    assert_eq!(decide(1, 1, 0, Idle::Scale), Admit::Start { stop: true });
+    assert_eq!(decide(1, 0, 1, Idle::Scale), Admit::Hold);
     assert_eq!(decide(1, 0, 0, Idle::Scale), Admit::Start { stop: true });
     assert_eq!(decide(1, 0, 0, Idle::Empty), Admit::Stay);
 }
@@ -163,9 +169,9 @@ fn installed_capacity_beats_the_env_parse() {
 
 #[test]
 fn target_above_capacity_queues_the_third_job() {
-    assert!(needs_running(2, 3, 2, Idle::Launch));
-    assert!(!needs_running(2, 3, 3, Idle::Launch));
-    assert!(!needs_running(2, 3, 2, Idle::Empty));
+    assert!(needs_running(Idle::Launch));
+    assert!(needs_running(Idle::Scale));
+    assert!(!needs_running(Idle::Empty));
     assert_eq!(decide_at(2, 3, 2, 2, Idle::Launch), Admit::Hold);
     assert_eq!(
         decide_at(2, 3, 1, 0, Idle::Launch),
@@ -181,16 +187,13 @@ fn target_above_capacity_queues_the_third_job() {
     assert_eq!(decide_at(2, 3, 3, 1, Idle::Ack), Admit::Ack { stop: true });
     assert_eq!(
         decide_at(2, 3, 3, 0, Idle::Scale),
-        Admit::Ack { stop: true }
+        Admit::Start { stop: true }
     );
     assert_eq!(
         decide_at(2, 3, 2, 1, Idle::Scale),
         Admit::Start { stop: true }
     );
-    assert_eq!(
-        decide_at(2, 3, 2, 2, Idle::Scale),
-        Admit::Ack { stop: false }
-    );
+    assert_eq!(decide_at(2, 3, 2, 2, Idle::Scale), Admit::Hold);
 }
 
 #[test]
@@ -234,13 +237,33 @@ fn poll_limit_follows_capacity() {
 }
 
 #[test]
-fn occupies_only_a_running_named_container() {
-    let id = Some("abc");
-    assert!(occupies(IntentState::Done, id, true));
-    assert!(occupies(IntentState::Pending, id, true));
-    assert!(occupies(IntentState::Uncertain, id, true));
-    assert!(!occupies(IntentState::Done, id, false));
-    assert!(!occupies(IntentState::Failed, id, true));
-    assert!(!occupies(IntentState::Pending, None, true));
-    assert!(!occupies(IntentState::Failed, None, false));
+fn historical_starts_do_not_cover_a_free_slot() {
+    assert_eq!(
+        admit(Seat {
+            capacity: 2,
+            target: 2,
+            started: 2,
+            occupied: 1,
+            running: 1,
+            assigned: 2,
+            idle: Idle::Scale,
+        }),
+        Admit::Start { stop: true }
+    );
+}
+
+#[test]
+fn uncertain_occupancy_does_not_mint_or_ack() {
+    assert_eq!(
+        admit(Seat {
+            capacity: 1,
+            target: 1,
+            started: 0,
+            occupied: 1,
+            running: 0,
+            assigned: 1,
+            idle: Idle::Scale,
+        }),
+        Admit::Hold
+    );
 }

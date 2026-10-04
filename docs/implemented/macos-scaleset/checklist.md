@@ -23,6 +23,20 @@ this repository ran.
 | G5-compare | Duplicate, missing lane, swapped artifact, unsafe archive fail closed | PASS | `compare_tests.rs` at `658154c` |
 | G6-launchd | User LaunchAgent foreground `daemon run`; second daemon fails | PASS | `launchctl print gui/501` at 2026-10-03: absolute `daemon run`, `forks = 0`; second `daemon run` exit 1; bootout removed the job |
 | G6-binary | `velnor-host` help and not-ready status | PASS | `help_exits_success_and_a_bad_command_does_not`; status JSON `waiting_for_credentials` |
-| G7-publish | Published generator, image, and macOS binary consumed by ChainArgos | NOT_RUN | image `37102027384` and macOS `37102029367` published GitHub release assets at `19a43f5` (no GHCR push); ChainArgos still pins generator `v0.1.0` |
-| G7-paired | Hosted baseline, N=1 canary, N=2, cold and warm paired runs | NOT_RUN | no consumer workflow run |
+| G7-publish | Published generator, image, and macOS binary consumed by ChainArgos | NOT_RUN | `generator-47815c83` was published and `baa78037` regenerated the consumer tree. Paired suite is not successful. The running host is not a published asset. |
+| G7-paired | Hosted baseline, N=1 canary, N=2, cold and warm paired runs | NOT_RUN | Run `37164041817` on `baa78037` was still open. Job `111323405519` failed TLS IP mismatch; hosted job `111323405480` passed. Not a suite. |
 | G8-merge | Final main uses pinned published generator; required checks kept | NOT_RUN | no promotion |
+
+Recovery gates use R0–R8. They do not renumber G0–G8.
+
+| ID | Requirement | Status | Evidence |
+|---|---|---|---|
+| R0 | Current source, product, run, and open-PR inventory | PASS | `evidence.md` recovery inventory, 2026-10-03 |
+| R1 | Hosted MBX write then restore, bounded disk | FAIL | ENOSPC on `37114238559`. Push run `37163556069` wrote one bundle after df. That write is not the accepted restore, so this row stays FAIL. |
+| R2 | Archive semantics on the deployed amd64 image | NOT_RUN | Live tag `sha256:e1a0d1dc` is `0cd9bd5e`. Side tag `sha256:3f8e0b2b` is `31d460272` and has `prod_state`, but it is not the deployed tag. |
+| R3 | Daemon lifecycle, N>1 backfill, cleanup | FAIL | Live pid 35645 is cdhash `c7e59739` (sha256 `788f363c`), not `de147432d`. A second mint after exit is not proven. |
+| R4 | Published repaired generator and full regenerated tree | NOT_RUN | `generator-47815c83` was published and ChainArgos `baa78037` was regenerated. Not a pass. `v0.1.0` was not moved. |
+| R5 | Cold and warm paired suite | NOT_RUN | attempt 4 is not a successful suite |
+| R6 | Docker capability suite and published macOS install | NOT_RUN | launchd program is a local binary, not a release asset |
+| R7 | Required checks and protected main | NOT_RUN | PR 2085 not merged |
+| R8 | P2 docs, diagnostics, PR dispositions | NOT_RUN | dispositions recorded under R0; remaining P2 work open |

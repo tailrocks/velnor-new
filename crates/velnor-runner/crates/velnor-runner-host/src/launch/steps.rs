@@ -92,7 +92,7 @@ pub(super) async fn launch_id<T, S, F>(
 ) -> Result<Option<Started>, EnsureError>
 where
     T: velnor_runner_github::Transport + Lane,
-    S: FnOnce(&str, &[u8]) -> F,
+    S: FnOnce(&str, &[u8], super::bind::Bind) -> F,
     F: Future<Output = Result<Started, HostError>>,
 {
     lane.on_admin()?;
@@ -121,7 +121,7 @@ pub(super) async fn scale_id<T, S, F>(
 ) -> Result<Option<Started>, EnsureError>
 where
     T: velnor_runner_github::Transport + Lane,
-    S: FnOnce(&str, &[u8]) -> F,
+    S: FnOnce(&str, &[u8], super::bind::Bind) -> F,
     F: Future<Output = Result<Started, HostError>>,
 {
     let name = format!("m{}", batch.message_id);
@@ -139,7 +139,7 @@ pub(super) async fn scale_unacked<T, S, F>(
 ) -> Result<Option<Started>, EnsureError>
 where
     T: velnor_runner_github::Transport + Lane,
-    S: FnOnce(&str, &[u8]) -> F,
+    S: FnOnce(&str, &[u8], super::bind::Bind) -> F,
     F: Future<Output = Result<Started, HostError>>,
 {
     // Subject is this session's runner name. A shared "scale" row stayed Done
@@ -199,7 +199,7 @@ async fn ensure_runner<T, S, F>(
 ) -> Result<Option<Started>, EnsureError>
 where
     T: velnor_runner_github::Transport + Lane,
-    S: FnOnce(&str, &[u8]) -> F,
+    S: FnOnce(&str, &[u8], super::bind::Bind) -> F,
     F: Future<Output = Result<Started, HostError>>,
 {
     lane.on_admin()?;
@@ -224,18 +224,19 @@ async fn mint<T, S, F>(
 ) -> Result<Option<Started>, EnsureError>
 where
     T: velnor_runner_github::Transport + Lane,
-    S: FnOnce(&str, &[u8]) -> F,
+    S: FnOnce(&str, &[u8], super::bind::Bind) -> F,
     F: Future<Output = Result<Started, HostError>>,
 {
     let encoded = match fetch_jit(lane, ctx, name) {
         Ok(encoded) => encoded,
         Err(error) => return hold(journal, id, map_listen(error)).await,
     };
-    let Ok(started) = start(name, encoded.expose().as_bytes()).await else {
+    let bound = super::bind::Bind::new(journal, id);
+    let Ok(started) = start(name, encoded.expose().as_bytes(), bound).await else {
         return hold(journal, id, EnsureError::Uncertain).await;
     };
     journal
-        .bind(id, Some(&started.runner_id), None)
+        .bind_worker(id, Some(&started.runner_id), Some(&started.dind_id))
         .await
         .map_err(map_journal)?;
     if let Some(batch) = batch

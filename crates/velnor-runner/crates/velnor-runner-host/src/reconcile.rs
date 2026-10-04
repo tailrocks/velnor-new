@@ -13,8 +13,10 @@ pub struct IntentRow {
     pub subject: String,
     /// Durable state.
     pub state: IntentState,
-    /// Docker container id. Not a name.
+    /// Runner container id. Not a name.
     pub docker_id: Option<String>,
+    /// Private `DinD` container id. Not a name.
+    pub dind_id: Option<String>,
     /// GitHub runner id. Not a token.
     pub github_runner_id: Option<String>,
     /// Cleanup of the recorded ids was proven.

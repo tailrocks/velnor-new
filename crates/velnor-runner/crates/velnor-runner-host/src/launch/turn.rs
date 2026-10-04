@@ -34,7 +34,13 @@ pub(super) async fn poll_and_drive(
     trace::session(session);
     let mut workers = Vec::new();
     let capacity = capacity::job_capacity();
-    if !slot::busy(journal, docker, capacity).await?
+    slot::release_exited(journal, docker).await?;
+    let population = session
+        .statistics()
+        .map_or(0, velnor_runner_github::Statistics::assigned_population);
+    let occupied = slot::occupied(journal).await?;
+    let running = slot::running_count(journal, docker).await?;
+    if !capacity::statistics_blocked(occupied, running, capacity, population)
         && let Some(started) =
             scale_session(link, set_id, session, admin_token, journal, docker).await?
     {
@@ -107,6 +113,33 @@ fn assigned_in(polled: &Poll) -> u32 {
     u32::try_from(raw.max(0)).unwrap_or(u32::MAX)
 }
 
+pub(crate) async fn admission<E: crate::stage::PairEngine + ?Sized>(
+    engine: &E,
+    journal: &Journal,
+    capacity: u32,
+    target: u32,
+    started: u32,
+    polled: &Poll,
+) -> Result<Admit, EnsureError> {
+    slot::release_exited(journal, engine).await?;
+    let idle = steps::idle(polled);
+    let occupied = slot::occupied(journal).await?;
+    let running = if capacity::needs_running(idle) {
+        slot::running_count(journal, engine).await?
+    } else {
+        0
+    };
+    Ok(capacity::admit(capacity::Seat {
+        capacity,
+        target,
+        started,
+        occupied,
+        running,
+        assigned: assigned_in(polled),
+        idle,
+    }))
+}
+
 struct Turn<'a> {
     link: &'a mut Link,
     set_id: i64,
@@ -126,25 +159,17 @@ impl Turn<'_> {
         restore_base(self.link, saved)?;
         let polled = polled?;
         trace::batch(&polled);
-        let idle = steps::idle(&polled);
         let started = u32::try_from(workers.len()).unwrap_or(u32::MAX);
-        let running = self.running(started, idle).await?;
-        let decision = capacity::admit(capacity::Seat {
-            capacity: self.capacity,
-            target: self.target,
+        let decision = admission(
+            self.docker,
+            self.journal,
+            self.capacity,
+            self.target,
             started,
-            running,
-            assigned: assigned_in(&polled),
-            idle,
-        });
+            &polled,
+        )
+        .await?;
         self.apply(decision, workers, path, queue, &polled).await
-    }
-
-    async fn running(&self, started: u32, idle: steps::Idle) -> Result<u32, EnsureError> {
-        if !capacity::needs_running(self.capacity, self.target, started, idle) {
-            return Ok(0);
-        }
-        slot::running_count(self.journal, self.docker).await
     }
 
     async fn apply(
