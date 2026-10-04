@@ -47,16 +47,16 @@ consumer cohorts before final acceptance.
 
 ## Phase-C checkpoint and coordination incidents
 
-At integration HEAD `c21f10d0c3ba5eee99580335ca5024a5c38353a6`, the pushed
-change is documentation-only. The exact source/test units below are detached
+At integration HEAD `97abf91ff210a6fe29e275b6dd6c83f8e1cb8b14`, the pushed
+changes are documentation-only. The exact source/test units below are detached
 candidates, not part of that HEAD; their scoped gates do not establish hosted
 qualification.
 
 | Candidate | Verified checkpoint | Status |
 | --- | --- | --- |
-| Resource and corruption probes | Source `fd342e63`; registered native Linux ARM64 runtime fixture `859b20d`, Rust 1.98.1, 2/2 in 80.01 s. | Source review GO and runtime fixture pass; no hosted x64 receipt. |
-| Parallel cache probe | `a094076d`; 17 source tests and exact Sol/medium review. | Source GO; hosted run unexecuted. |
-| Cancellation probe | `5c23108f`; 15 renderer unit fixtures and registered renderer/orchestrator tests passed on the c055 diagnostic composite. | HOLD: malformed cache-list shape can imply zero entries; failed controller can skip the observer; missing restore evidence can be labeled inconclusive instead of `NOT_RUN`. |
+| Resource and corruption probes | Source `fd342e63`; registered native Linux ARM64 runtime fixture `859b20d`, Rust 1.98.1, 2/2 in 80.01 s. A composition rerun using `3dcd23a` reports 4/4 in 65.45 s with hostile `DOCKER_DEFAULT_PLATFORM=linux/amd64`; exact test-source review remains pending. | Source review GO; ARM64 runtime only, not hosted x64. |
+| Parallel cache probe | `a094076d`; 17 source tests and exact Sol/medium review. | HOLD after stock `actions/cache` audit: clean MISS leaves hit/matched outputs unset, while the probe expects `cache_hit=false`; update and re-review before integration. Hosted run unexecuted. |
+| Cancellation probe | `850e9aea`; 22 renderer unit fixtures, registered renderer/orchestrator tests 1/1 each, strict renderer Clippy on Rust 1.98.1/Clippy 0.1.98. Exact security and correctness reviews returned GO. | Source-scope GO only; hosted run unexecuted. |
 | Official Mise | Public refresh `2026-10-04T12:10:38Z`: stable `2026.10.1`, release `402539535`, tag `b752bdc` peels to `050ce5a`; accepted fix `dfe74a90` remains eight commits ahead. | Adoption remains `PARTIAL`; no fixed official distribution. |
 
 On `2026-10-04T11:18:32.580Z`, parent
