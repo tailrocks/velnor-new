@@ -84,25 +84,29 @@ fn writers_are_unique_per_run_and_restore_by_stable_compatible_prefix() -> Resul
     )?;
     let common_prefix = "linux-x64-mbx-generation-rust-1.98.1-";
     let compatibility_key = "linux-x64-mbx-generation-rust-1.98.1";
-    let hosted_stable_prefix = format!("{compatibility_key}-rust-demo__hosted-");
-    let matrix_a_stable_prefix = format!("{compatibility_key}-velnor-task-m-0123456789abcdef-");
+    let hosted_stable_prefix = format!(
+        "{compatibility_key}-j{}-rust-demo__hosted-n-",
+        "rust-demo__hosted".len()
+    );
+    let matrix_a_stable_prefix = format!(
+        "{compatibility_key}-j{}-velnor-task-m-m-0123456789abcdef-",
+        "velnor-task".len()
+    );
+    let hosted_key = format!("{hosted_stable_prefix}r100-a1");
+    let local_key = format!(
+        "{compatibility_key}-j{}-rust-demo__local-n-r100-a1",
+        "rust-demo__local".len()
+    );
+    let matrix_a_key = format!("{matrix_a_stable_prefix}r100-a1");
+    let matrix_b_key = format!(
+        "{compatibility_key}-j{}-velnor-task-m-m-fedcba9876543210-r100-a1",
+        "velnor-task".len()
+    );
 
-    assert_eq!(
-        output_for(&hosted, "key"),
-        Some("linux-x64-mbx-generation-rust-1.98.1-rust-demo__hosted-r100-a1")
-    );
-    assert_eq!(
-        output_for(&local, "key"),
-        Some("linux-x64-mbx-generation-rust-1.98.1-rust-demo__local-r100-a1")
-    );
-    assert_eq!(
-        output_for(&matrix_a, "key"),
-        Some("linux-x64-mbx-generation-rust-1.98.1-velnor-task-m-0123456789abcdef-r100-a1")
-    );
-    assert_eq!(
-        output_for(&matrix_b, "key"),
-        Some("linux-x64-mbx-generation-rust-1.98.1-velnor-task-m-fedcba9876543210-r100-a1")
-    );
+    assert_eq!(output_for(&hosted, "key"), Some(hosted_key.as_str()));
+    assert_eq!(output_for(&local, "key"), Some(local_key.as_str()));
+    assert_eq!(output_for(&matrix_a, "key"), Some(matrix_a_key.as_str()));
+    assert_eq!(output_for(&matrix_b, "key"), Some(matrix_b_key.as_str()));
     assert_ne!(output_for(&hosted, "key"), output_for(&local, "key"));
     assert_ne!(
         output_for(&hosted, "key"),
@@ -158,6 +162,56 @@ fn writers_are_unique_per_run_and_restore_by_stable_compatible_prefix() -> Resul
         assert!(
             previous_matrix_key
                 .starts_with(output_for(reader, "prefix").expect("matrix reader prefix"))
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn restore_order_disambiguates_job_prefix_and_matrix_mode() -> Result<(), Box<dyn Error>> {
+    let action_key =
+        "linux-x64-mbx-generation-rust-1.98.1-0123456789abcdef0123456789abcdef01234567";
+    let app = run_key_script(action_key, "rust-app", "", "100", "1")?;
+    let matrix_app = run_key_script(action_key, "rust-app", "m-0123456789abcdef", "100", "1")?;
+    let app_extra = run_key_script(action_key, "rust-app-extra", "", "100", "1")?;
+    let app_reader = run_key_script(action_key, "rust-app", "", "101", "1")?;
+    let matrix_reader = run_key_script(action_key, "rust-app", "m-0123456789abcdef", "101", "1")?;
+    let app_extra_reader = run_key_script(action_key, "rust-app-extra", "", "101", "1")?;
+
+    let app_key = output_for(&app, "key").expect("app writer key");
+    let matrix_app_key = output_for(&matrix_app, "key").expect("matrix app writer key");
+    let app_extra_key = output_for(&app_extra, "key").expect("app-extra writer key");
+    let app_prefix = output_for(&app_reader, "prefix").expect("app reader prefix");
+    let matrix_prefix = output_for(&matrix_reader, "prefix").expect("matrix reader prefix");
+    let app_extra_prefix = output_for(&app_extra_reader, "prefix").expect("app-extra prefix");
+
+    assert!(!app_extra_key.starts_with(app_prefix));
+    assert!(!matrix_app_key.starts_with(app_prefix));
+    assert!(!app_key.starts_with(matrix_prefix));
+    assert!(!app_key.starts_with(app_extra_prefix));
+
+    let entries = [
+        (app_key, "nonmatrix app payload"),
+        (matrix_app_key, "matrix app payload"),
+        (app_extra_key, "app-extra payload"),
+    ];
+    for (reader, expected) in [
+        (&app_reader, "nonmatrix app payload"),
+        (&matrix_reader, "matrix app payload"),
+        (&app_extra_reader, "app-extra payload"),
+    ] {
+        let prefixes = [
+            output_for(reader, "prefix").expect("stable writer prefix"),
+            output_for(reader, "fallback").expect("common compatibility prefix"),
+        ];
+        assert_eq!(
+            restore_payload(
+                &entries,
+                output_for(reader, "key").expect("reader key"),
+                &prefixes
+            ),
+            Some((false, expected)),
+            "stable writer prefix must win before common fallback"
         );
     }
     Ok(())
