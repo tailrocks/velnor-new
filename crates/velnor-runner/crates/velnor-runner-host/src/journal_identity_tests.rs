@@ -32,28 +32,91 @@ async fn open(path: &Path) -> Result<Journal, HostError> {
     Journal::open(path).await
 }
 
+async fn create_legacy_database(path: &Path, message_id: i64) -> Result<(), HostError> {
+    const LEGACY_ID: i64 = 41;
+    let path = path.to_str().ok_or(HostError::Path)?;
+    let database = turso::Builder::new_local(path)
+        .build()
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let connection = database.connect().map_err(|_| HostError::Journal)?;
+    connection
+        .execute(
+            "CREATE TABLE intents (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, subject TEXT NOT NULL, state TEXT NOT NULL, docker_id TEXT, github_runner_id TEXT, cleanup_proven INTEGER NOT NULL DEFAULT 0)",
+            (),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    connection
+        .execute(
+            "INSERT INTO intents (id, kind, subject, state, docker_id, github_runner_id, cleanup_proven) VALUES (?1, 'launch', ?2, 'uncertain', ?3, ?4, 0)",
+            (
+                LEGACY_ID,
+                format!("m{message_id}r42"),
+                "legacy-runner-container",
+                "legacy-github-runner",
+            ),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    Ok(())
+}
+
+async fn assert_legacy_reservation(
+    journal: &Journal,
+    expected_subject: &str,
+    expected_assignment: Option<&str>,
+) -> Result<(), HostError> {
+    let rows = journal.rows().await?;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].id, 41);
+    assert_eq!(rows[0].kind, "launch");
+    assert_eq!(rows[0].subject, expected_subject);
+    assert_eq!(rows[0].state, IntentState::Uncertain);
+    assert_eq!(
+        rows[0].docker_id.as_deref(),
+        Some("legacy-runner-container")
+    );
+    assert_eq!(
+        rows[0].github_runner_id.as_deref(),
+        Some("legacy-github-runner")
+    );
+    assert_eq!(rows[0].assignment_key.as_deref(), expected_assignment);
+    assert!(!rows[0].cleanup_proven);
+    assert_eq!(journal.occupied_launches().await?, 1);
+    Ok(())
+}
+
 #[tokio::test]
 async fn assignment_key_survives_queue_redelivery_and_separates_sets() -> Result<(), HostError> {
     let scratch = Scratch::new("assignment")?;
     let journal = open(&scratch.file()).await?;
-    let first = journal.begin_assignment(7, 42, 100).await?;
-    assert_eq!(journal.begin_assignment(7, 42, 101).await?, first);
-    assert_ne!(journal.begin_assignment(8, 42, 101).await?, first);
+    let (first, created) = journal.begin_assignment(7, 42, 100).await?;
+    assert!(created);
+    assert_eq!(journal.begin_assignment(7, 42, 101).await?, (first, false));
+    assert_ne!(journal.begin_assignment(8, 42, 101).await?.0, first);
     assert_eq!(journal.rows().await?.len(), 2);
     Ok(())
 }
 
 #[tokio::test]
-async fn legacy_assignment_is_adopted_without_replacing_its_launch_identity()
--> Result<(), HostError> {
-    let scratch = Scratch::new("legacy")?;
-    let journal = open(&scratch.file()).await?;
-    let legacy = journal.begin("launch", "m100r42").await?;
-    let legacy_launch_id = journal.rows().await?[0].launch_id.clone();
-    assert_eq!(journal.begin_assignment(7, 42, 100).await?, legacy);
-    let row = journal.rows().await?.remove(0);
-    assert_eq!(row.launch_id, legacy_launch_id);
-    assert_eq!(row.assignment_key.as_deref(), Some("7:42"));
+async fn legacy_assignment_is_adopted_only_for_its_original_message() -> Result<(), HostError> {
+    let adopted = Scratch::new("legacy-adopt")?;
+    create_legacy_database(&adopted.file(), 100).await?;
+    let journal = open(&adopted.file()).await?;
+    let (id, created) = journal.begin_assignment(7, 42, 100).await?;
+    assert_eq!(id, 41);
+    assert!(!created);
+    assert_legacy_reservation(&journal, "m100r42", Some("7:42")).await?;
+
+    let mismatched = Scratch::new("legacy-message-mismatch")?;
+    create_legacy_database(&mismatched.file(), 100).await?;
+    let journal = open(&mismatched.file()).await?;
+    assert_eq!(
+        journal.begin_assignment(7, 42, 101).await,
+        Err(HostError::Journal)
+    );
+    assert_legacy_reservation(&journal, "m100r42", None).await?;
     Ok(())
 }
 
@@ -61,7 +124,8 @@ async fn legacy_assignment_is_adopted_without_replacing_its_launch_identity()
 async fn uncertain_launch_reserves_slot_until_cleanup_is_proven() -> Result<(), HostError> {
     let scratch = Scratch::new("reservation")?;
     let journal = open(&scratch.file()).await?;
-    let id = journal.begin_assignment(7, 42, 100).await?;
+    let (id, created) = journal.begin_assignment(7, 42, 100).await?;
+    assert!(created);
     assert_eq!(journal.occupied_launches().await?, 1);
     journal.finish(id, Outcome::Uncertain).await?;
     assert_eq!(journal.occupied_launches().await?, 1);
