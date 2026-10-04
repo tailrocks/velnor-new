@@ -54,6 +54,18 @@ link_identity() {
   done)
 }
 
+# Generated diagnostics contain checkout and preview paths. Pin their labels,
+# not their machine-specific values, so the goldens compare across worktrees.
+normalize_generated_paths() {
+  local stderr="$1"
+  local normalized="$stderr.normalized"
+  sed -E \
+    -e 's|^Preview: .*|Preview: <preview>|' \
+    -e 's|^Repository: .*|Repository: <repo>|' \
+    "$stderr" >"$normalized"
+  mv "$normalized" "$stderr"
+}
+
 build_bin() {
   (cd "$ROOT" && cargo build --locked -p velnor-actions-cli) >/dev/null 2>&1 \
     || { echo "FATAL: cargo build failed"; exit 2; }
@@ -91,6 +103,7 @@ capture_case() {
   rm "$out/plan.raw.txt"
   if [ "$(cat "$out/plan.exit")" = "0" ]; then
     (cd "$repo" && "$BIN" generate --output-dir "$preview" >"$out/generate.stdout.txt" 2>"$out/generate.stderr.txt"; echo "$?" >"$out/generate.exit")
+    normalize_generated_paths "$out/generate.stderr.txt"
     hash_tree "$preview" "$out/tree.sha256"
   fi
 }
@@ -106,6 +119,7 @@ capture_dogfood() {
     "$out/plan.raw.txt" >"$out/plan.txt"
   rm "$out/plan.raw.txt"
   (cd "$ROOT" && "$BIN" generate --output-dir "$preview" >"$out/generate.stdout.txt" 2>"$out/generate.stderr.txt"; echo "$?" >"$out/generate.exit")
+  normalize_generated_paths "$out/generate.stderr.txt"
   if [ -d "$preview/.github" ]; then
     if diff -r "$ROOT/.github" "$preview/.github" >"$out/dogfood.diff" 2>&1; then
       echo "identical" >"$out/dogfood.verdict"

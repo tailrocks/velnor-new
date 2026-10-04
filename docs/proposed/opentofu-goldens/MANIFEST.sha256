@@ -1,7 +1,7 @@
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./dogfood/dogfood.diff
 1cc103f316d7707bb7ead8d7a203934bbf0f1251b615eb6056deb22c90d6144f  ./dogfood/dogfood.verdict
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./dogfood/generate.exit
-606963688c074b3456369b0d92f36c4498c803184402ca7ab7d4d7a8ca916a26  ./dogfood/generate.stderr.txt
+bac44cf6d5fdf14849be67badee333f0d0e67557dbefd2fe49b023499e884c67  ./dogfood/generate.stderr.txt
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./dogfood/generate.stdout.txt
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./dogfood/plan.exit
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./dogfood/plan.stderr.txt
@@ -16,7 +16,7 @@ f3edd65a1dcc1de22b67e08446003e41d10c8fd4595ffcff72fb9e821a935846  ./dogfood/prev
 847ae7b29a32895ae00de895208c721af1037417234cebb26b15e28cfc1107d8  ./dogfood/preview/.github/workflows/qualification.yml
 2d9dde85b2e1fac5ef7c6c44a9c9697a3b44176224f53fc7d01449246e9cf145  ./dogfood/tree.sha256
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./empty-suite/generate.exit
-ad04762376231d91f329e9ea333a60490f11b04bee74582984c20b87018dd92c  ./empty-suite/generate.stderr.txt
+2b8a5970c82395615b1e51c370a508026b99d2b0e20ccbda540d88f573e74174  ./empty-suite/generate.stderr.txt
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./empty-suite/generate.stdout.txt
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./empty-suite/plan.exit
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./empty-suite/plan.stderr.txt
@@ -26,7 +26,7 @@ b3f39f72416eee5077f2fd187f860e6d9a0a9ea4b33fdf3cfc671b1afbb34e0e  ./empty-suite/
 ba06686fbd9df07c91550b4631a46e5bba8e48ddad28127c022676c0d79ce839  ./empty-suite/preview/.github/workflows/ci.yml
 4ffd5654bc2ab99f3ade5447970893112d16c19312aafae834e4403233464696  ./empty-suite/tree.sha256
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./mbx-nextest/generate.exit
-047292a4dcdbd9c6be320fe76d5e4c115b6ee29e3e7859dfe6ab781f83b7a648  ./mbx-nextest/generate.stderr.txt
+3e7e017f66dea20bde24aba7573d15d9770a4c9abf2b17a7afea86ec05d222c1  ./mbx-nextest/generate.stderr.txt
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./mbx-nextest/generate.stdout.txt
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./mbx-nextest/plan.exit
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./mbx-nextest/plan.stderr.txt
@@ -36,7 +36,7 @@ b3f39f72416eee5077f2fd187f860e6d9a0a9ea4b33fdf3cfc671b1afbb34e0e  ./mbx-nextest/
 bfd5b7ab2b4981b60efae6f43bf86eca8f967fdfdf9d04b5d29504eb7651962d  ./mbx-nextest/preview/.github/workflows/ci.yml
 4e7911e662d0daea97d316307439cd22966177f6dd163235bdda05b0fb6a19dd  ./mbx-nextest/tree.sha256
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./minimal-cargo/generate.exit
-3da7be568f1c24a9df85b746ed703fe5d9dad1ccf3344e3f2cf96a3bf899e492  ./minimal-cargo/generate.stderr.txt
+2b8a5970c82395615b1e51c370a508026b99d2b0e20ccbda540d88f573e74174  ./minimal-cargo/generate.stderr.txt
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./minimal-cargo/generate.stdout.txt
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./minimal-cargo/plan.exit
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./minimal-cargo/plan.stderr.txt
@@ -46,7 +46,7 @@ b3f39f72416eee5077f2fd187f860e6d9a0a9ea4b33fdf3cfc671b1afbb34e0e  ./minimal-carg
 fab25d231d27b3326662990aa2bc01c12d50e107d341ffab2ff8d22c6b30739e  ./minimal-cargo/preview/.github/workflows/ci.yml
 57d761c7b6170426a666cda16ce9611a9736a66f74de0b74e205b0553a8733ed  ./minimal-cargo/tree.sha256
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./nested/generate.exit
-621313517dfe1f8d23aafcaba10dd5c91e32384ea60491373222491db5268907  ./nested/generate.stderr.txt
+2b8a5970c82395615b1e51c370a508026b99d2b0e20ccbda540d88f573e74174  ./nested/generate.stderr.txt
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./nested/generate.stdout.txt
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./nested/plan.exit
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./nested/plan.stderr.txt
