@@ -34,11 +34,7 @@ pub(crate) fn detect_commands(run: &[String]) -> Detection {
     if is_inline_shell(&words) {
         return lex::detect_script(&words[2], 0);
     }
-    let starts_mise = command_starts_mise(&words);
-    let unsupported_mise_syntax = command_has_dynamic_executable(&words)
-        || command_has_unsupported_launcher(&words)
-        // Direct Mise argv is checked with its bounded parser below.
-        || (!starts_mise && command_has_unmodeled_mise_payload(&words));
+    let unsupported_mise_syntax = command_has_unmodeled_execution_head(&words);
     let command = DetectedCommand { words };
     Detection {
         commands: vec![command],
@@ -51,6 +47,15 @@ pub(crate) fn command_starts_mise(words: &[String]) -> bool {
     executable_words(words)
         .first()
         .is_some_and(|word| is_mise_executable(word))
+}
+
+/// True when a command head needs classification outside the direct Mise parser.
+pub(crate) fn command_has_unmodeled_execution_head(words: &[String]) -> bool {
+    let starts_mise = command_starts_mise(words);
+    command_has_dynamic_executable(words)
+        || command_has_unsupported_launcher(words)
+        // Direct Mise heads own their bounded `exec --` payload parsing.
+        || (!starts_mise && command_has_unmodeled_mise_payload(words))
 }
 
 /// True when the executable is expanded at run time.

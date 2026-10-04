@@ -2,8 +2,7 @@
 
 use super::heredoc;
 use super::{
-    DetectedCommand, Detection, command_has_dynamic_executable, command_has_unmodeled_mise_payload,
-    command_has_unsupported_launcher, command_starts_mise,
+    DetectedCommand, Detection, command_has_unmodeled_execution_head, command_starts_mise,
 };
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -228,13 +227,9 @@ impl Scanner {
         let has_mise_command = parsed
             .iter()
             .any(|command| command_starts_mise(&command.words));
-        let has_unmodeled_head = parsed.iter().any(|command| {
-            let starts_mise = command_starts_mise(&command.words);
-            command_has_dynamic_executable(&command.words)
-                || command_has_unsupported_launcher(&command.words)
-                // Direct Mise argv owns its `exec --` payload parsing.
-                || !starts_mise && command_has_unmodeled_mise_payload(&command.words)
-        });
+        let has_unmodeled_head = parsed
+            .iter()
+            .any(|command| command_has_unmodeled_execution_head(&command.words));
         Detection {
             unsupported_mise_syntax: self.unmodeled_execution
                 || has_unmodeled_head
