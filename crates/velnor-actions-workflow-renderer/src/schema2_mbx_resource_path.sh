@@ -30,7 +30,6 @@ RESOURCE_DEADLINE_TOTAL_CS=0
 RESOURCE_DEADLINE_ACTIVE_CS=0
 RESOURCE_DEADLINE_PHASE_STARTED_CS=0
 RESOURCE_DEADLINE_COMMAND_EXPIRED=0
-
 resource_monotonic_centiseconds() {
   local uptime whole hundredths
   IFS=' ' read -r uptime _ < /proc/uptime || return 1
@@ -39,7 +38,6 @@ resource_monotonic_centiseconds() {
   hundredths="${BASH_REMATCH[2]}"
   printf '%s\n' "$((10#$whole * 100 + 10#$hundredths))"
 }
-
 resource_deadline_begin_budget() {
   local seconds="$1" now
   [[ "$seconds" =~ ^[1-9][0-9]{0,2}$ ]] || return 1
@@ -93,6 +91,11 @@ resource_deadline_command() {
   if (( status == 124 || status == 137 )); then RESOURCE_DEADLINE_COMMAND_EXPIRED=1; fi
   resource_deadline_remaining_cs >/dev/null || { RESOURCE_DEADLINE_COMMAND_EXPIRED=1; return 124; }
   return "$status"
+}
+
+resource_deadline_capture_failed() {
+  (( $1 == 124 || $1 == 137 )) && RESOURCE_DEADLINE_COMMAND_EXPIRED=1
+  return 1
 }
 
 capture_walk_ancestry() {
@@ -185,7 +188,7 @@ collect_owned_session_members() {
   owned_session_ticks=()
   rows="$(resource_deadline_command bash -o pipefail -c \
     'ps -eo uid=,pid=,pgid=,sid= | head -n "$1"' \
-    resource-session-scan "$((RESOURCE_SESSION_SCAN_LIMIT + 1))")" || return 1
+    resource-session-scan "$((RESOURCE_SESSION_SCAN_LIMIT + 1))")" || resource_deadline_capture_failed "$?"
   while read -r process_uid pid pgid sid extra; do
     [[ -n "${process_uid-}" ]] || continue
     row_count=$((row_count + 1))
@@ -235,7 +238,7 @@ owned_session_leader_matches() {
   IFS=$'\t' read -r real_uid effective_uid saved_uid filesystem_uid <<< "$uids"
   [[ "$real_uid" == "$sampler_uid" && "$effective_uid" == "$sampler_uid" &&
     "$saved_uid" == "$sampler_uid" && "$filesystem_uid" == "$sampler_uid" ]] || return 1
-  args="$(resource_deadline_command ps -p "$sampler_pid" -o args= 2>/dev/null)" || return 1
+  args="$(resource_deadline_command ps -p "$sampler_pid" -o args= 2>/dev/null)" || resource_deadline_capture_failed "$?"
   [[ "$args" == *"$evidence/sampler.sh"* ]]
 }
 
