@@ -166,6 +166,58 @@ fn argv_rejects_background_shell_but_keeps_chains_and_urls() {
 }
 
 #[test]
+fn argv_scans_path_shells_and_bounded_option_forms() {
+    for command in [
+        argv(&["/bin/sh", "-c", "sleep 1&echo done"]),
+        argv(&["/usr/bin/bash", "-ec", "sleep 1&echo done"]),
+        argv(&["bash", "-e", "-u", "-c", "sleep 1&echo done"]),
+        argv(&[
+            "/usr/bin/env",
+            "-u",
+            "CUSTOM",
+            "/bin/bash",
+            "--norc",
+            "-c",
+            "sleep 1&echo done",
+        ]),
+        argv(&[
+            "env",
+            "-u",
+            "CUSTOM",
+            "bash",
+            "-O",
+            "extglob",
+            "-c",
+            "sleep 1&echo done",
+        ]),
+    ] {
+        assert!(
+            validate_command_argv(&command).is_err(),
+            "unsafe shell invocation accepted: {command:?}"
+        );
+    }
+
+    for command in [
+        argv(&["/bin/bash", "-euc", "first && second"]),
+        argv(&[
+            "env",
+            "-u",
+            "CUSTOM",
+            "/bin/sh",
+            "-e",
+            "-u",
+            "-c",
+            "first && second",
+        ]),
+    ] {
+        assert!(
+            validate_command_argv(&command).is_ok(),
+            "supported shell invocation rejected: {command:?}"
+        );
+    }
+}
+
+#[test]
 fn acquire_template_requires_digest_and_staging() {
     let staged = format!("{STAGED_BINARY_PREFIX}0.1.0");
     let mut env = BTreeMap::new();

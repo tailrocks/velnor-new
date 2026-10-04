@@ -29,7 +29,7 @@ fn validate_argv(argv: &[String], script_index: Option<usize>) -> Result<(), Ren
     if argv.is_empty() {
         return Err(RenderError::BadCommand("empty_argv".to_owned()));
     }
-    let shell_script_index = inline_shell_script_index(argv);
+    let shell_script_index = inline_shell_script_index(argv)?;
     let mut previous: Option<&str> = None;
     for (index, arg) in argv.iter().enumerate() {
         if arg.is_empty() {
@@ -68,21 +68,125 @@ fn validate_argv(argv: &[String], script_index: Option<usize>) -> Result<(), Ren
 /// The generated credential wrapper is an `env -u NAME` prefix. Accept its
 /// exact known form first. Also recognize ordinary `env` unset options so an
 /// untrusted caller cannot hide a shell behind `env -u CUSTOM`.
-fn inline_shell_script_index(argv: &[String]) -> Option<usize> {
+fn inline_shell_script_index(argv: &[String]) -> Result<Option<usize>, RenderError> {
     let prefix = crate::toolchain_env::unset_prefix_len(argv);
-    if crate::commands::is_inline_shell(argv.get(prefix..)?) {
-        return Some(prefix + 2);
+    if argv
+        .get(prefix)
+        .is_some_and(|command| is_supported_shell(command))
+    {
+        return shell_script_argument_index(argv, prefix);
     }
-    if argv.first().is_none_or(|arg| arg != "env") {
-        return None;
+    if argv
+        .first()
+        .is_none_or(|command| !is_executable_named(command, "env"))
+    {
+        return Ok(None);
     }
-    let command_index = env_command_index(argv)?;
-    crate::commands::is_inline_shell(argv.get(command_index..)?).then_some(command_index + 2)
+    let Some(command_index) = env_command_index(argv, 0) else {
+        return Ok(None);
+    };
+    if argv
+        .get(command_index)
+        .is_some_and(|command| is_supported_shell(command))
+    {
+        return shell_script_argument_index(argv, command_index);
+    }
+    Ok(None)
+}
+
+fn shell_script_argument_index(
+    argv: &[String],
+    shell_index: usize,
+) -> Result<Option<usize>, RenderError> {
+    let mut index = shell_index + 1;
+    let mut unsupported_option = false;
+    while let Some(option) = argv.get(index) {
+        if option == "--" {
+            return Ok(None);
+        }
+        if option == "-c" {
+            if unsupported_option {
+                return Err(unsupported_shell_options());
+            }
+            return argv
+                .get(index + 1)
+                .map(|_| Some(index + 1))
+                .ok_or_else(unsupported_shell_options);
+        }
+        if let Some(short_options) = option.strip_prefix('-') {
+            if short_options.is_empty() {
+                return Ok(None);
+            }
+            if short_options.starts_with('-') {
+                unsupported_option = true;
+                index += 1;
+                if matches!(option.as_str(), "--rcfile" | "--init-file") {
+                    index += 1;
+                }
+                continue;
+            }
+            if short_options.ends_with('c') {
+                if short_options[..short_options.len() - 1]
+                    .chars()
+                    .all(is_supported_shell_flag)
+                    && !unsupported_option
+                {
+                    return argv
+                        .get(index + 1)
+                        .map(|_| Some(index + 1))
+                        .ok_or_else(unsupported_shell_options);
+                }
+                return Err(unsupported_shell_options());
+            }
+            if short_options.contains('c') {
+                return Err(unsupported_shell_options());
+            }
+            if short_options.chars().all(is_supported_shell_flag) {
+                index += 1;
+                continue;
+            }
+            unsupported_option = true;
+            index += 1;
+            if matches!(option.as_str(), "-o" | "-O") {
+                index += 1;
+            }
+            continue;
+        }
+        if option.starts_with('+') {
+            if option.contains('c') {
+                return Err(unsupported_shell_options());
+            }
+            unsupported_option = true;
+            index += 1;
+            continue;
+        }
+        return Ok(None);
+    }
+    Ok(None)
+}
+
+fn is_supported_shell(command: &str) -> bool {
+    is_executable_named(command, "sh") || is_executable_named(command, "bash")
+}
+
+fn is_executable_named(command: &str, expected: &str) -> bool {
+    command
+        .rsplit(|ch| ch == '/' || ch == '\\')
+        .next()
+        .is_some_and(|basename| basename == expected)
+}
+
+const fn is_supported_shell_flag(flag: char) -> bool {
+    matches!(flag, 'e' | 'u' | 'x')
+}
+
+fn unsupported_shell_options() -> RenderError {
+    RenderError::BadCommand("unsupported_inline_shell_options".to_owned())
 }
 
 /// Find the command after the small set of ordinary `env` prefixes.
-fn env_command_index(argv: &[String]) -> Option<usize> {
-    let mut index = 1;
+fn env_command_index(argv: &[String], env_index: usize) -> Option<usize> {
+    let mut index = env_index + 1;
     loop {
         let arg = argv.get(index)?;
         match arg.as_str() {
