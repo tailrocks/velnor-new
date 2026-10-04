@@ -5,6 +5,7 @@ use velnor_runner_github::Poll;
 use crate::Outcome;
 use crate::journal::LaunchReservation;
 use crate::launch::Admit;
+use crate::launch::inspect_tests::DockerStub;
 use crate::launch_harness::{available, open};
 
 use super::admission;
@@ -95,6 +96,46 @@ async fn full_capacity_rejects_an_unrelated_assignment() -> Result<(), String> {
     assert_eq!(
         journal.intent(id).await.map_err(|e| e.to_string())?.subject,
         "s1:42"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn unresolved_assignment_reservation_blocks_initial_scale_mint() -> Result<(), String> {
+    let (_scratch, journal) = open("scale-reserved-assignment").await?;
+    let LaunchReservation::New(id) = journal
+        .reserve_assignment(1, 42, 100, 2)
+        .await
+        .map_err(|error| error.to_string())?
+    else {
+        return Err("expected a new assignment reservation".to_owned());
+    };
+    journal
+        .finish(id, Outcome::Uncertain)
+        .await
+        .map_err(|error| error.to_string())?;
+    let docker = DockerStub::open(Vec::new())?;
+    let mut scaled = false;
+
+    let result = super::scale_if_free(&journal, &docker.docker, 2, 1, || {
+        scaled = true;
+        async { Ok(None) }
+    })
+    .await
+    .map_err(|error| error.to_string())?;
+    docker.finish().await?;
+
+    assert_eq!(result, None);
+    assert!(
+        !scaled,
+        "occupied assignment reservation must block scaling"
+    );
+    assert_eq!(
+        journal
+            .occupied_launches()
+            .await
+            .map_err(|e| e.to_string())?,
+        1
     );
     Ok(())
 }
