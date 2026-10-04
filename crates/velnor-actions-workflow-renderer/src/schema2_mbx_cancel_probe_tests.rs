@@ -25,6 +25,8 @@ mod classifications;
 mod controller_fixtures;
 #[path = "schema2_mbx_cancel_probe_controller_transport_cases.rs"]
 mod controller_transport;
+#[path = "schema2_mbx_cancel_probe_export_composition_tests.rs"]
+mod export_composition;
 #[path = "schema2_mbx_cancel_probe_key_fixture_tests.rs"]
 mod key_fixtures;
 #[path = "schema2_mbx_cancel_probe_native_render_tests.rs"]

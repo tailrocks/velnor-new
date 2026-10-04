@@ -157,3 +157,24 @@ fn cancellation_receipts_keep_run_identity_and_observers_use_r13_cache_reader()
     }
     Ok(())
 }
+
+#[test]
+fn during_save_writer_has_no_sampler_binding_and_keeps_the_export_save_path()
+-> Result<(), RenderError> {
+    let workflow = qualification_workflow()?;
+    let victim = job_block(&workflow, "mbx-cancel-during-save-victim")?;
+    let export = victim
+        .find("name: Export MBX single bundle")
+        .ok_or_else(|| RenderError::InvalidWorkflow("missing_cancel_export".to_owned()))?;
+    let save = victim
+        .find("name: Save MBX single bundle")
+        .ok_or_else(|| RenderError::InvalidWorkflow("missing_cancel_save".to_owned()))?;
+    assert!(export < save);
+    assert!(victim.lines().any(|line| {
+        line.trim_start()
+            .strip_prefix("MBX_QUALIFICATION_RESOURCE_EVIDENCE_REQUIRED: ")
+            .is_some_and(|value| value.trim_matches('"') == "false")
+    }));
+    assert!(victim.contains("snapshot_if_required export-complete"));
+    Ok(())
+}

@@ -29,6 +29,7 @@ fn export_and_gc_capture_receipts_phases_and_successful_samples() -> Result<(), 
             ("EXPORT_STATUS", "0".into()),
             ("GC_STATUS", "0".into()),
         ],
+        true,
         false,
     )?;
     assert!(
@@ -101,6 +102,7 @@ fn gc_failure_is_recorded_without_changing_nonfatal_export_status() -> Result<()
             ("EXPORT_STATUS", "0".into()),
             ("GC_STATUS", "44".into()),
         ],
+        true,
         false,
     )?;
     assert!(
@@ -158,6 +160,7 @@ fn no_build_export_is_nonfatal_and_does_not_run_gc() -> Result<(), String> {
             ("EXPORT_NO_BUILD", "true".into()),
         ],
         false,
+        false,
     )?;
     assert!(
         no_build.status.success(),
@@ -207,6 +210,7 @@ fn enospc_export_failure_never_marks_bundle_ready_or_runs_gc() -> Result<(), Str
             ("MBX_QUALIFICATION_SAMPLE_INTERVAL", "5".into()),
             ("EXPORT_ENOSPC", "true".into()),
         ],
+        true,
         false,
     )?;
     assert!(
@@ -252,6 +256,7 @@ fn importer_receipt_preserves_raw_streams_and_exit_status() -> Result<(), String
             ("MBX_QUALIFICATION_IMPORT_RECEIPT", receipt.clone()),
             ("IMPORT_STATUS", "42".into()),
         ],
+        false,
         true,
     )?;
     assert!(
@@ -277,6 +282,7 @@ fn run_script(
     name: &str,
     script: &str,
     extra_env: &[(&str, std::path::PathBuf)],
+    resource_evidence_required: bool,
     importing: bool,
 ) -> Result<std::process::Output, String> {
     let bin = scratch.0.join(format!("{name}-bin"));
@@ -316,6 +322,9 @@ fn run_script(
         } else {
             return Err("non-UTF8 test environment value".to_owned());
         }
+    }
+    if resource_evidence_required {
+        command.env(super::super::MBX_RESOURCE_EVIDENCE_REQUIRED_ENV, "true");
     }
     if importing {
         command.env("MATCHED", "true");

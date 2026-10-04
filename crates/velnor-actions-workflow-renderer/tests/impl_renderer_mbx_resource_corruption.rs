@@ -149,6 +149,11 @@ fn hosted_resource_receipts_bind_all_qualification_roles() -> Result<(), RenderE
     assert!(corrupt.contains("MBX_QUALIFICATION_ROLE: corrupt-reader"));
     assert!(writer.contains("export-complete"));
     assert!(writer.contains("gc-complete"));
+    assert!(writer.lines().any(|line| {
+        line.trim_start()
+            .strip_prefix("MBX_QUALIFICATION_RESOURCE_EVIDENCE_REQUIRED: ")
+            .is_some_and(|value| value.trim_matches('"') == "true")
+    }));
     assert_provisional_receipt_and_role_rules();
     Ok(())
 }
