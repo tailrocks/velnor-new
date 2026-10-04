@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
     CI_WORKFLOW_PATH, Concurrency, Job, PLAN_JOB_ID as CONTRACT_PLAN_JOB_ID,
-    REQUIRED_CONDITION as CONTRACT_REQUIRED_CONDITION,
+    PullRequestCachePolicy, REQUIRED_CONDITION as CONTRACT_REQUIRED_CONDITION,
     REQUIRED_DISPLAY_NAME as CONTRACT_REQUIRED_DISPLAY_NAME,
     REQUIRED_JOB_ID as CONTRACT_REQUIRED_JOB_ID, Trigger, ValidatorKind, VelnorSupportWorkflow,
     WorkflowIr, WorkflowPolicy,
@@ -89,6 +89,8 @@ pub struct RenderContext {
     /// review). Accepts fixed pre-seed staging for internal steps and
     /// requires the build-once artifact closure; never set for consumers.
     pub preseed: bool,
+    /// Pull-request cache writes; scoped writes require explicit same-repository opt-in.
+    pub pull_request_cache_policy: PullRequestCachePolicy,
     /// Caller-validated env for plan-job helper consumers: the freshness
     /// step and the `plan-v1` internal step run the helper, whose
     /// locked/offline qualification reads the Cargo home the Fetch step
@@ -314,7 +316,7 @@ fn merged_jobs(
     support::check_candidate_invariants(&jobs)?;
     support::check_final_gate(&jobs)?;
     support::check_token_hygiene(&jobs)?;
-    crate::mbx_bundle::append_single_bundle_saves(&mut jobs)?;
+    crate::mbx_bundle::append_single_bundle_saves(&mut jobs, ctx.pull_request_cache_policy)?;
     support::check_token_hygiene(&jobs)?;
     Ok(jobs)
 }

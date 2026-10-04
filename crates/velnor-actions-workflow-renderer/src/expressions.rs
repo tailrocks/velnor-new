@@ -55,7 +55,7 @@ fn expression_spans(text: &str) -> Option<Vec<&str>> {
 /// literals), and MBX key inputs from the setup and restore steps.
 /// Notably absent: `github.token` (render-time fetch binding only)
 /// and run IDs (never in env).
-const ENV_EXPRESSIONS: [&str; 12] = [
+const ENV_EXPRESSIONS: [&str; 18] = [
     "runner.temp",
     "github.ref_name",
     "github.event_name",
@@ -68,6 +68,12 @@ const ENV_EXPRESSIONS: [&str; 12] = [
     "steps.mbx-bundle-key.outputs.primary",
     "github.event.pull_request.base.sha",
     "toJSON(matrix)",
+    "github.repository",
+    "github.event.pull_request.head.repo.full_name",
+    "github.event.pull_request.base.repo.full_name",
+    "toJSON(github.event.pull_request.head.repo.fork)",
+    "github.event.pull_request.number",
+    "github.event.pull_request.head.sha",
 ];
 
 /// Exact `${{ }}` inners permitted in action `with:` values.

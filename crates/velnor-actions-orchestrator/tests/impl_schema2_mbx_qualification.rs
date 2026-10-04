@@ -208,7 +208,16 @@ fn assert_shared_identity(writer: &str, reader: &str) {
     );
     assert_same_step_value(writer, reader, "Restore MBX single bundle", "path");
     assert_same_step_value(writer, reader, "Restore MBX single bundle", "key");
-    assert_same_step_value(writer, reader, "Restore MBX single bundle", "restore-keys");
+    assert_eq!(
+        step_value(writer, "Restore MBX single bundle", "restore-keys"),
+        None,
+        "qualification writer must not restore a previous run's cache"
+    );
+    assert_eq!(
+        step_value(reader, "Restore MBX single bundle", "restore-keys"),
+        None,
+        "qualification reader must use only the designated writer's exact key"
+    );
     assert_eq!(
         step_value(writer, "Restore MBX single bundle", "path"),
         Some(BUNDLE_PATH)
@@ -232,7 +241,7 @@ fn assert_external_cache_actions(job: &str, writer: bool) {
     assert!(restore.contains(CACHE_RESTORE_PIN), "{restore}");
     assert_eq!(
         action_input_names(restore),
-        vec!["key", "path", "restore-keys"]
+        vec!["key", "path"]
     );
     assert_eq!(
         job.matches("uses: actions/cache/restore@").count(),
