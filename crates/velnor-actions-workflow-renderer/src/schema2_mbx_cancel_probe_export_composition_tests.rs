@@ -29,6 +29,10 @@ fn during_save_writer_reaches_save_without_an_unattached_sampler() -> Result<(),
         .position(|step| step.name == mbx_bundle::MBX_BUNDLE_SAVE_NAME)
         .ok_or("cancellation save missing")?;
     assert!(export_index < save_index);
+    assert!(job.steps[save_index]
+        .condition
+        .as_deref()
+        .is_some_and(|condition| condition.contains("steps.mbx-export.outputs.ready == 'true'")));
     let StepKind::Shell { run, env } = &job.steps[export_index].kind else {
         return Err("cancellation export is not a shell step".into());
     };
