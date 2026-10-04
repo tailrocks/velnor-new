@@ -347,3 +347,18 @@ Run `37128301624` (PR 2085, attempt 4, not terminal at this snapshot): hosted jo
 Run `37114238559` on consumer main failed `Post Restore MBX objects` with `No space left on device` on jobs `111178048670`, `111178048789`, `111178048807`, `111178048826`, `111178048844`. Required `111181067683` failed. R1 stays `FAIL`.
 
 R2–R8 stay open. Do not read a partial rust success as the suite.
+
+## Snapshot 2026-10-04
+
+This section supersedes the 19:40Z identities. It is not a G7, G8, R1, R2, R4, or R5 pass.
+
+| Item | Value |
+|---|---|
+| Live runner tag | `sha256:e1a0d1dc469e5a663fdb4a26c186604f11d307ca0f32541fd14a3c20103f634b`, built from `0cd9bd5e`. Tag not moved. |
+| Side tag `-stream` | `sha256:3f8e0b2befb5ad11f2f3938da87effd85f3009a297b6e43d15a9262b884afcc5` from `31d460272`. `prod_state` is present. `sysseek` count is 0. Not the live tag. |
+| PR 25 | Head `31d460272`. Run `37166989497` succeeded. Thread `4173913640` resolved after that run and the side-image check. |
+| Host | pid 35645, cdhash `c7e59739db26a9a40aa5247348bd6128c3554b2c`, sha256 `788f363cc6057cb060cd67fa8737fcb5a2b1d7feae17d140335a84e37e00bcac`. `max_jobs = 2`. Not `de147432d`. |
+| ChainArgos | Run `37164041817` on `baa78037`, not terminal. Last count: 25 success, 1 failure, 16 queued, 1 in progress. |
+| Scale-set failure | Job `111323405519` (`lightdash-csv-delivery-app`) failed `postgres_copy_adapts_chunks_and_serializes_one_receipt` with TLS `IP address mismatch`. Hosted job `111323405480` on the same Ubuntu 26.04 image family passed that test. The runner finished the job process. Not G7. |
+
+R1 stays `FAIL`: push run `37163556069` wrote a bundle after the earlier ENOSPC, and that write is not the accepted restore. R2 stays `NOT_RUN` on `e1a0d1dc`. R4 stays `NOT_RUN`: `generator-47815c83` was published and `baa78037` was regenerated. Tag `v0.1.0` was not moved.
