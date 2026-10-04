@@ -1,17 +1,38 @@
 # PR #12 current disposition and historical evidence
 
-## Current authoritative snapshot — 2026-10-04 06:03 UTC
+## Current authoritative snapshot — document updated 2026-10-04 06:57 UTC
+
+GitHub REST snapshot cutoff: `2026-10-04T06:37:13Z`.
 
 This section supersedes every status below the “Historical snapshot” heading.
-It is bound to PR #12 head `0efb5565dd33a70b67fc2198d032153f6c5bee9f`, base
+It is bound to PR #12 head `2a2dab0e04a7da18975ca634e505eb9d72dc2e58`, base
 `47815c83b9eeadbaf84b741918fffa7ea550da89`, and integration candidate
-`140faf33052193163d447e1b92394435b7c759ff`. PR #12 is still open and draft.
-The paginated GitHub Files API returned 262 paths; a fresh pass found 0 issue
-comments, 0 reviews, and 0 review comments/threads (`hasNextPage=false`).
+`6ea09f2cb2beb595995bb2987b622791b0b7729d`. PR #12 is still open and draft.
+At this cutoff, the paginated GitHub Files API returned 280 paths; exact REST
+counts were 0 issue comments, 0 reviews, and 0 review comments/threads. The
+latest 54 `scripts/**` paths (excluding `scripts/check-freshness.sh`) are under
+per-file audit; do not apply the superseded 37-path count below to this head.
 These are candidate-branch source dispositions; they do not mean changes are
 merged to `main`, released, or adopted by consumers.
 
-### Complete changed-path partition
+### Current latest-head review status
+
+An independent source-delta review compared PR #12 head `2a2dab0e` with its
+previous head `0efb5565` and found one new commit adding 18 paths, all confined
+to a Rust observer/registry fixture; it found no product caller, registered
+generator source, workflow, or golden change. This is the latest-head delta,
+not a PR-versus-integration comparison. The immutable compare endpoint is
+[`0efb5565...2a2dab0e`](https://api.github.com/repos/tailrocks/velnor-new/compare/0efb5565dd33a70b67fc2198d032153f6c5bee9f...2a2dab0e04a7da18975ca634e505eb9d72dc2e58);
+the captured response SHA-256 is
+`186cce20df223de8036e80ef3a88cd93a043cbe0196fd6fdc18a578f50432d32`. A
+separate exact per-file audit of all
+54 latest `scripts/**` paths is in progress. The 0ef/262-path partition and its
+37-script matrix below are historical evidence only. A frozen path inventory
+for head 2a2 has not yet been recorded; the live Files page below is navigation,
+not an immutable snapshot. Replace the old partition only after the latest
+audit review.
+
+### Superseded 0ef snapshot: complete changed-path partition (262 paths)
 
 The independent exact-head audit accounted for all 262 unique PR paths. The
 following disjoint selectors define the file-level status partition; the
@@ -27,13 +48,14 @@ remaining 146 are the PR file set after subtracting the first five selectors.
 | All other paths in the exact 262-file PR response | 146 | Feature-by-feature decisions below; includes integrated source fixes and explicit partial/hold deltas. |
 
 The five selectors are disjoint. Their counts plus the residual set equal the
-262 unique paths returned by the API. The precise API file set is linked at
-[PR #12 Files changed](https://github.com/tailrocks/velnor-new/pull/12/files).
+262 unique paths returned by the API at this historical cutoff. The live
+[PR #12 Files page](https://github.com/tailrocks/velnor-new/pull/12/files) is
+mutable navigation; this historical section does not preserve its path list.
 
 ### Fixes already present in the integration candidate
 
 `LANDED IN INTEGRATION` below means the listed change is in candidate
-`140faf33052193163d447e1b92394435b7c759ff`; it is not merged into current
+`6ea09f2cb2beb595995bb2987b622791b0b7729d`; it is not merged into current
 `main` (`47815c83b9eeadbaf84b741918fffa7ea550da89`). None of these source
 fixes proves hosted qualification or consumer adoption.
 
@@ -53,31 +75,29 @@ fixes proves hosted qualification or consumer adoption.
 | Bounded provenance carry | `93371bb48`, `086a257fe`, `b901a8603` | `LANDED IN INTEGRATION`; baseline carries original proof run and distinct carrying-run evidence with parent/digest bounds. |
 | MBX external-bundle lifecycle and 1.22.0 fixtures | `9a249e9ab`, `47815c83b`, `c447a2e35`, `b4c5f38e6`, `3da61ae9f` | `LANDED IN INTEGRATION`; production uses the reviewed local backend + explicit bundle route. Hosted workload/disk-pressure qualification remains `PARTIAL`. |
 | Release-manifest validation/publication source | `385a772bc`, `03dc45e9a`, `35f52bf18`, `fccd0beb9`, `4b9e30f06` | `LANDED IN INTEGRATION`; version 0.1.1, canonical manifest name, source/freshness/CI checks, and attestation validation are source changes, not release receipts. |
+| Consumer manifest policy boundary | `7d274f201451a4575835998ed889c49e551006cf` | `LANDED IN INTEGRATION`; consumer manifest reads are policy-scoped, malformed producer `generator.lock` remains fail-closed, and CLI warning coverage is retained. Not merged to `main` or a release receipt. |
+| Cross-platform symlink mode preservation | `6ea09f2cb2beb595995bb2987b622791b0b7729d` | `LANDED IN INTEGRATION`; checked conversion targets Rustix's platform `RawMode`, retaining Apple narrowing checks and Linux `u32` behavior. Exact-head hosted PR #28 run `37183271616` passed; this does not establish release or consumer qualification. |
 | Version pins and regenerated outputs | `95f82d3b6`, `5b42f908d`, `4c90b851e`, `47a5b50e4`, `5b3f4c8e1`, `140faf330` | `LANDED IN INTEGRATION`; generator 0.1.1 and MBX 1.22.0 source/fixtures. Nested runner 0.1.0 and historical immutable v0.1.0 artifacts remain intentional. |
 
-### Latest PR-only delta and outstanding dispositions
+### Superseded 0ef delta and dispositions (historical only)
 
-Since PR head `9d7fc047565d97a7635133f590f967d16dcbddef`, the current PR has
-33 changed blobs, with five paths newly added. Current tree comparison found
-23 byte-identical paths, 112 paths present with different blobs, and 127 PR
-paths absent from the integration candidate. PR tree responses were not
-truncated.
+At PR head `0efb5565dd33a70b67fc2198d032153f6c5bee9f`, since prior head
+`9d7fc047565d97a7635133f590f967d16dcbddef`, the PR had 33 changed blobs, with
+five paths newly added. That tree comparison found 23 byte-identical paths,
+112 paths present with different blobs, and 127 PR paths absent from the then
+current integration candidate. These counts do not describe head `2a2dab0e`.
 
-- **Consumer manifest policy — `PARTIAL`, active source fix required.** PR
-  `discover.rs`/`discover_manifest.rs` reads the manifest only under
-  `ConsumerV1`; current integration still reads
-  `.velnor/release-manifest.json` unconditionally in `discover.rs`. Under
-  `VelnorRepositoryV1`, malformed, invalid-UTF-8, directory, or symlink
-  consumer-only `.velnor/release-manifest.json` inputs must be ignored. The
-  `ConsumerV1` path must keep failing on malformed manifest data. Separately,
-  Velnor plan/generate must still fail closed on malformed producer-owned
-  `.velnor/generator.lock` data through `finalized::owned_preparation` and
+- **Consumer manifest policy — `LANDED IN INTEGRATION`, not merged.** Commit
+  `7d274f201451a4575835998ed889c49e551006cf` scopes manifest reads to
+  `ConsumerV1`; `VelnorRepositoryV1` ignores malformed, invalid-UTF-8,
+  directory, and symlink consumer-only manifest inputs. A paired regression
+  proves malformed producer-owned `.velnor/generator.lock` still fails closed
+  through `finalized::owned_preparation` and
   `verify_velnor_repository_files`/`parse_generator_lock`; version-policy
-  catalog mismatch validation also remains. The current integration has no
-  direct malformed-`generator.lock` regression, so retain that test obligation.
-  The bounded fix owns
-  `discover.rs`, a focused module/test, and CLI warning regression. Do not
-  close PR #12 before these cases are reviewed and integrated.
+  catalog mismatch validation remains. Consumer CLI warning coverage remains
+  enabled while producer generation does not emit that consumer-only warning.
+  This source slice passed exact-head review; final integrated gates and main
+  merge remain separate.
 - **Generation and workflow-context extraction — `PARTIAL`.** PR adds
   `generate_output_commit.rs` and `workflow_context.rs`; transactional output
   behavior already exists in integration. Treat these as implementation
@@ -96,9 +116,11 @@ truncated.
   byte-identical and uses `dir-` identity.
 - **Freshness timestamp refreshes — `PARTIAL`.** Timestamp-only edits do not
   qualify tools or prove current-source freshness.
-- **Remaining private owned-source files — `TEMPORARY-HOLD`.** The 37 paths
-  remain individually bounded by the scripts selector above; no private
-  qualification or publication is inferred.
+- **Private owned-source files at 0ef — `TEMPORARY-HOLD`.** The historical
+  set of 37 paths had a per-file hold matrix. The latest 2a2 head has 54 paths;
+  per-file disposition and independent review are pending. No private
+  qualification or publication is inferred; supersede the hold only with the
+  exact latest-head path-level dispositions.
 
 The independent audit specifically accounted for all seven embedded Python
 capsule paths:
@@ -122,25 +144,42 @@ owners.
 
 ### Current validation and rollout limits
 
-- Integration candidate `140faf` passed pinned local workspace gates: Nextest
-  2,761 passed / 1 skipped; strict workspace/all-target Clippy, fmt, Alint,
-  cargo-deny, and freshness passed. Local freshness did not run the optional
-  live advisory scan; CI Cargo Deny owns that scan.
-- PR #28 at `140faf` has a terminal CI failure (run `37181006379`): Linux
-  `Rust / velnor-actions-cli` and `Rust / velnor-actions-orchestrator` fail
-  strict Clippy at `generate_preserve.rs:272` because Unix `mode_t` is `u32`
-  on Linux, making `mode.try_into()` a useless conversion. macOS uses `u16`;
-  a target-aware checked conversion is in progress. Do not call PR #28 ready
-  until exact-head Linux and macOS gates pass.
-- PR #12 check run `37178556819` is not fully green. `Rust / velnor-actions-cli`
-  failed `impl_cli_verify_local::verify_local_repo_policy_stage_executes`
-  because `check-freshness.sh` reported upstream `uv` evidence checked at
-  `2026-10-02T21:54:08Z`, 31.1 hours old against a 24-hour interval; aggregate
-  `Required` failed. The orchestrator job passed. Refresh the freshness
-  evidence and exact checks after the policy fix.
+- The earlier source candidate `140faf` passed pinned local workspace gates:
+  Nextest 2,761 passed / 1 skipped; strict workspace/all-target Clippy, fmt,
+  Alint, cargo-deny, and freshness passed. That receipt does not cover later
+  changes. Local freshness did not run the optional live advisory scan; CI
+  Cargo Deny owns that scan.
+- PR #28 run `37182791818` at `fdc731e3` was cancelled after its CLI and
+  orchestrator Rust jobs failed strict Clippy on Linux's `RawMode = u32`.
+  The target-aware checked conversion is in `6ea09f2`. Exact-head run
+  [`37183271616`](https://github.com/tailrocks/velnor-new/actions/runs/37183271616)
+  completed successfully at `2026-10-04T06:50:41Z`; all checks passed and
+  Publish baseline was skipped. Refresh PR feedback/reviews before marking it
+  ready or merging.
+- PR #12 current-head run `37183335691` at `2a2dab0e` failed `Alint`, `Plan`,
+  and aggregate `Required`. Alint rejects the new nested fixture's stray
+  `scripts/qualification/mbx-synchronous/registry-fixture/Cargo.lock`; Plan
+  rejects its unclassified suite `mbx-synchronous-registry-fixture`. These
+  are PR-only fixture checks, not integration-candidate failures. Do not add
+  a nested workspace lock or weaken the lock allowlist.
+- Historical PR #12 run [`37178556819`](https://github.com/tailrocks/velnor-new/actions/runs/37178556819)
+  at head `0efb5565` failed `impl_cli_verify_local::verify_local_repo_policy_stage_executes`:
+  `check-freshness.sh` reported `uv` evidence checked at
+  `2026-10-02T21:54:08Z`, 31.1 hours old against the 24-hour interval; the
+  CLI job and aggregate `Required` failed. The orchestrator job passed. This is
+  a historical failure at the earlier head, not the current run's failure.
 - Official Mise adoption is `PARTIAL`: latest published stable 2026.10.1 is
   still the known-broken pre-fix binary. Do not claim a fixed official
   distribution from the source-built auxiliary binary.
+  Fresh public release/API review at `2026-10-04T06:53:09Z` found no newer
+  stable release: [v2026.10.1 release `402539535`](https://api.github.com/repos/jdx/mise/releases/402539535)
+  remains immutable, and its tag peels to
+  `050ce5a20287a0aafd872b1191699a5fdafff5ac`, eight commits before accepted
+  fix `dfe74a90b41603625ee6aabecb42f14a1f5eb0f6` ([compare API](https://api.github.com/repos/jdx/mise/compare/v2026.10.1...dfe74a90b41603625ee6aabecb42f14a1f5eb0f6)).
+  Its [macOS ARM64 asset](https://api.github.com/repos/jdx/mise/releases/assets/607914737)
+  SHA-256 remains `d225d1c8ef2934a86be93692a19365fb1df1cd6958a0af7b85909514e0c608a7`;
+  [Linux x64](https://api.github.com/repos/jdx/mise/releases/assets/607914627)
+  remains `31e6859cf639ed4594906da3fcd0fe2055e9daddae75e9786dbe50b3fb3c0f4a`.
 - MBX hosted writer/reader, cache-version/path reuse, cancellation, corrupt
   import, parallel writer, ChainArgos workload peak bytes/inodes, and disk
   pressure remain `PARTIAL`.
@@ -172,8 +211,11 @@ owners.
 
 At final integration head, fetch the PR head/base, every paginated changed
 path, all issue/review/inline comments and thread resolution state, and all
-required check runs. Recompute the 262-path partition and current-tree blob
-comparison; update this record if the PR moves. Reply to every accepted or
+required check runs. Recompute the latest-head changed-path partition (280
+paths at the REST cutoff above) and current-tree blob comparison; update this
+record if the PR moves. Preserve the exact paginated path inventory with the
+result. The mutable [PR #12 Files page](https://github.com/tailrocks/velnor-new/pull/12/files)
+is live navigation, not the inventory snapshot. Reply to every accepted or
 rejected review item with a fixing commit URL or evidence before resolving.
 Keep PR #12 open until the consumer-manifest policy fix and every other
 applicable disposition are complete; then close or supersede it only after a
@@ -194,7 +236,7 @@ Snapshot: 2026-10-04. This is a passive review record against integration base
 ## Evidence boundary
 
 - PR #12 is open at exact head [`c694d8029eb880db639fa89b0589090dd2b15364`](https://github.com/tailrocks/velnor-new/commit/c694d8029eb880db639fa89b0589090dd2b15364). Its recorded base is `c57c700459bbe1549fe7eedcb7d8689585c38986`; live `main` is `47815c83b9eeadbaf84b741918fffa7ea550da89`. Integration base `f7d38268...` descends from that live main.
-- Refresh on 2026-10-04 returned the same PR head and base, with 252 changed paths across the paginated files endpoint; there is no new diff since this snapshot. GitHub reports only the DCO check complete/successful and no submitted reviews. No hosted qualification or consumer result is inferred. See [PR #12 Files changed](https://github.com/tailrocks/velnor-new/pull/12/files).
+- Refresh on 2026-10-04 returned the same PR head and base, with 252 changed paths across the paginated files endpoint; there is no new diff since this historical snapshot. GitHub reports only the DCO check complete/successful and no submitted reviews. No hosted qualification or consumer result is inferred. The [PR #12 Files page](https://github.com/tailrocks/velnor-new/pull/12/files) is mutable live navigation, not an immutable inventory snapshot.
 - `LANDED` means the named source fix is an ancestor of `f7d38268`; it does not mean runtime or rollout qualification. All missing or unresolved work stays `PARTIAL` or `TEMPORARY-HOLD`.
 - Direct tree checks at `f7d38268` find the private Python tools, Foundation qualification, `velnor-actions-native`, `root_identity.rs`, and typed `matrix_suite.rs` absent. Keep current freshness, release, OCI, workflow, and cache code intact; this document changes none of it.
 
@@ -287,7 +329,7 @@ scripts/ci-performance-analysis-requirements.txt
 | `crates/test_support/**`, `crates/velnor-actions-cli/tests/fixtures/p12_*`, `crates/velnor-actions-*/tests/**`, `fixtures/parity/**` | `PARTIAL`: test helpers, P12 fixtures, and regenerated expected outputs remain attached to their held source changes; a golden update is not implementation proof. |
 | `docs/proposed/{architecture.md,rust-quality-contract.md,workflow-contract.md,workflow-matrix-contract.md}` | `PARTIAL`: contract proposals only; they do not close implementation, caller, or acceptance obligations. |
 | `docs/reviews/ci-performance-*`, `docs/reviews/ci-performance-nextest-evidence/**`, `docs/reviews/python-uv-upgrade-evidence.json`, `repositories.txt`, `repository-evidence.csv`, `scope.json`, `velnor-actions-ci-performance-{goal,spec}.md` | `PARTIAL`: retain as audit/evidence records. PR source records all 47 performance rows `INCOMPLETE`; no runtime, performance, archive, or consumer rollout is granted. |
-| Remaining edits under `crates/velnor-actions-{cli,contract,mise,orchestrator,rust,tofu,workflow-renderer}/**` | Follow the feature rows above: landed base fixes stay; PR-only source, tests, and callers remain `PARTIAL` or `TEMPORARY-HOLD`. Exact paths are in the linked PR file list. |
+| Remaining edits under `crates/velnor-actions-{cli,contract,mise,orchestrator,rust,tofu,workflow-renderer}/**` | Follow the feature rows above: landed base fixes stay; PR-only source, tests, and callers remain `PARTIAL` or `TEMPORARY-HOLD`. This historical snapshot does not preserve an exact path inventory; the live PR Files page is mutable navigation. |
 
 ## Separate archive and consumer holds
 
