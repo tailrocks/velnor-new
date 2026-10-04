@@ -48,9 +48,9 @@ pub(super) async fn running_count<E: PairEngine + ?Sized>(
     Ok(count)
 }
 
-/// Drop exited runners. A 404 on a recorded id is proven gone. No `DinD` id is
-/// not a live slot. A running runner stays occupied; its `DinD` is removed
-/// once that runner is gone.
+/// Drop exited runners. A 404 on a recorded id is proven gone. No recorded
+/// runner or `DinD` id is not a live slot. A running runner stays occupied;
+/// its `DinD` is removed once that runner is gone.
 pub(super) async fn release_exited<E: PairEngine + ?Sized>(
     journal: &Journal,
     engine: &E,
@@ -71,6 +71,9 @@ async fn release_row<E: PairEngine + ?Sized>(
         return Ok(());
     }
     let Some(runner) = row.docker_id.as_deref() else {
+        if row.dind_id.is_none() {
+            journal.record_cleanup(row.id).await.map_err(map_journal)?;
+        }
         return Ok(());
     };
     if engine.running(runner).await.map_err(map_docker)? || !delete_recorded(engine, runner).await?

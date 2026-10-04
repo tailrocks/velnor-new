@@ -75,6 +75,8 @@ mod launch_capacity_tests;
 #[cfg(test)]
 mod launch_harness;
 #[cfg(test)]
+mod launch_idless_tests;
+#[cfg(test)]
 mod launch_scale_tests;
 #[cfg(test)]
 mod launch_tests;
