@@ -12,6 +12,10 @@ evidence_marker() {
     "${GITHUB_RUN_ID-}" "${GITHUB_RUN_ATTEMPT-}" "${MBX_QUALIFICATION_JOB_ID-}"
 }
 
+valid_session_leader_pid() {
+  [[ "$1" =~ ^[1-9][0-9]*$ && "$1" != 1 ]]
+}
+
 capture_walk_ancestry() {
   local root="$1" current=/ segment
   local -a components=()

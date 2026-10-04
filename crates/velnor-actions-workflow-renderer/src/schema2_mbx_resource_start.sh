@@ -71,7 +71,7 @@ while { [ ! -s "$evidence/sampler.pid" ] || [ ! -s "$evidence/runner-metadata.js
 done
 test -s "$evidence/sampler.pid"
 IFS= read -r sampler_pid < "$evidence/sampler.pid"
-[[ "$sampler_pid" =~ ^[0-9]+$ ]]
+[[ "$sampler_pid" =~ ^[1-9][0-9]*$ && "$sampler_pid" != 1 ]]
 test -s "$evidence/runner-metadata.json"
 kill -0 "$sampler_pid"
 proc_identity() {

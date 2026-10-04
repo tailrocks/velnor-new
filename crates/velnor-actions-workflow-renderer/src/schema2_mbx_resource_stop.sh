@@ -184,7 +184,7 @@ if ! bash "$evidence/sampler.sh" "$evidence" "$RUNNER_TEMP" "$GITHUB_ENV" "$MBX_
   echo 'private evidence directory validation failed' >&2
   exit 1
 fi
-path_validation_sha='6dfb3776daa533b45efac0f02d24e3b8f9fa29e294ac1c9a9d5ba91f3a7e865e'
+path_validation_sha='80a92b0cfe88f41c3ae72822c735c8c8861643598c7da0d349a1d6c77e99a48d'
 printf '%s  %s\n' "$path_validation_sha" "$evidence/path-validation.sh" | sha256sum --check --status || exit 1
 . "$evidence/path-validation.sh"
 partial=0
@@ -229,12 +229,18 @@ if [ -s "$evidence/sampler.pid" ] && [ -s "$evidence/sampler.session.tsv" ] && [
     [ "$(cat -- "$evidence/private.identity")" != "$(stat -c '%d:%i:%u:%g' -- "$evidence")" ]; then
     control_valid=0
   fi
-  while IFS=$'\t' read -r key value extra; do
+  line_count=0
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line_count=$((line_count + 1))
+    [[ "$line" == *$'\t'* ]] || { control_valid=0; break; }
+    key="${line%%$'\t'*}"
+    value="${line#*$'\t'}"
+    [[ "$value" != *$'\t'* ]] || { control_valid=0; break; }
     case "$key" in pid|pgid|sid|start_ticks|run_id|run_attempt|job_id|uid|gid|evidence_identity) ;; *) control_valid=0; break ;; esac
-    if [[ -z "$value" || -n "$extra" || -n "${control[$key]+set}" ]]; then control_valid=0; break; fi
+    if [[ -z "$key" || -z "$value" || -n "${control[$key]+set}" ]]; then control_valid=0; break; fi
     control[$key]="$value"
   done < "$evidence/sampler.session.tsv"
-  if [[ "${#control[@]}" != 10 || "${control[run_id]-}" != "$GITHUB_RUN_ID" ||
+  if [[ "$line_count" != 10 || "${#control[@]}" != 10 || "${control[run_id]-}" != "$GITHUB_RUN_ID" ||
     "${control[run_attempt]-}" != "$GITHUB_RUN_ATTEMPT" ||
     "${control[job_id]-}" != "$MBX_QUALIFICATION_JOB_ID" ||
     "${control[uid]-}" != "$(id -u)" || "${control[gid]-}" != "$(id -g)" ||
@@ -245,7 +251,7 @@ if [ -s "$evidence/sampler.pid" ] && [ -s "$evidence/sampler.session.tsv" ] && [
   sampler_start_ticks="${control[start_ticks]-}"
   sampler_uid="${control[uid]-}"
   sampler_gid="${control[gid]-}"
-  if [[ ! "$sampler_pid" =~ ^[2-9][0-9]*$ || "$sampler_pgid" != "$sampler_pid" ||
+  if ! valid_session_leader_pid "$sampler_pid" || [[ "$sampler_pgid" != "$sampler_pid" ||
     "$sampler_sid" != "$sampler_pid" || ! "$sampler_start_ticks" =~ ^[1-9][0-9]*$ ]]; then control_valid=0; fi
   [[ "$(cat -- "$evidence/sampler.pid")" == "$sampler_pid" ]] || control_valid=0
   if (( control_valid == 1 )) && owned_session_leader_matches; then
