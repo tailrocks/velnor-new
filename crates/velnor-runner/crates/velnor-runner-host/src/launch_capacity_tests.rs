@@ -119,8 +119,8 @@ fn scale_capacity_uses_reservations_and_population_uses_live_workers() {
             assigned: 1,
             idle: Idle::Scale,
         }),
-        Admit::Ack { stop: false },
-        "a pending cleanup reservation fills capacity even without a running container"
+        Admit::Stay,
+        "an unresolved durable reservation leaves the scale message unacknowledged"
     );
     assert_eq!(
         admit(Seat {
@@ -132,8 +132,8 @@ fn scale_capacity_uses_reservations_and_population_uses_live_workers() {
             assigned: 1,
             idle: Idle::Scale,
         }),
-        Admit::Start { stop: true },
-        "an uncleaned reservation does not claim assigned population coverage"
+        Admit::Stay,
+        "an unresolved reservation cannot mint a second scale worker"
     );
 }
 

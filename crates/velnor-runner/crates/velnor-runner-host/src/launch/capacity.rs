@@ -124,6 +124,9 @@ const fn admit_launch(seat: Seat) -> Admit {
 }
 
 const fn admit_scale(seat: Seat) -> Admit {
+    if seat.occupied > seat.running {
+        return Admit::Stay;
+    }
     if !scale_covered(seat) && seat.occupied < seat.capacity {
         return Admit::Start {
             stop: seat.occupied.saturating_add(1) >= seat.capacity,
