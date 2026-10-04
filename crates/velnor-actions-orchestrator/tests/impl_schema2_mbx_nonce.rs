@@ -351,6 +351,7 @@ fn execute_import(
         .env("GITHUB_ENV", temp.path().join("github-env"))
         .env("GITHUB_RUN_ID", "731")
         .env("GITHUB_RUN_ATTEMPT", "1")
+        .env("MBX_CACHE_DIR", runner_temp.join("initial-cache-root"))
         .env("CACHE_HIT", cache_hit)
         .env("MATCHED", matched)
         .env("EXPECTED_KEY", expected)
