@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use crate::action_archive_seed::ActionArchiveLease;
 use crate::error::HostError;
 use crate::journal::LaunchIdentity;
-use crate::worker::{container_labels, container_name};
+use crate::worker::{container_labels, container_name, identity_labels_match};
 
 use super::PairEngine;
 
@@ -50,7 +50,7 @@ pub(crate) async fn reconcile_worker<E: PairEngine>(
             .get("velnor.role")
             .map(String::as_str)
             .ok_or(HostError::Ownership)?;
-        if row.labels != expected_labels(identity, role) {
+        if !identity_labels_match(&expected_labels(identity, role), &row.labels) {
             return Err(HostError::Ownership);
         }
         let slot = match role {

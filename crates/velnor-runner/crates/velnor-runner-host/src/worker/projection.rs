@@ -1,5 +1,6 @@
 //! Durable launch projections for runner and DinD containers.
 
+use std::collections::HashMap;
 use std::path::Path;
 
 use crate::docker_spec::{Mount, runner_plan};
@@ -80,4 +81,21 @@ pub(super) fn container_labels(identity: &LaunchIdentity, role: &str) -> Vec<Str
         format!("velnor.role={role}"),
         format!("velnor.volume={}", identity.private_volume()),
     ]
+}
+
+/// Match required Velnor labels and reject extra Velnor keys.
+///
+/// Docker can include image labels in inspected container configuration. Those labels
+/// do not define Velnor ownership and may be present alongside the exact launch labels.
+pub(crate) fn identity_labels_match(
+    expected: &HashMap<String, String>,
+    actual: &HashMap<String, String>,
+) -> bool {
+    expected
+        .iter()
+        .all(|(key, value)| actual.get(key) == Some(value))
+        && actual
+            .keys()
+            .filter(|key| key.starts_with("velnor."))
+            .all(|key| expected.contains_key(key))
 }

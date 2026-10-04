@@ -8,7 +8,7 @@ use crate::action_archive_seed::ActionArchiveLease;
 use crate::error::HostError;
 use crate::journal::LaunchIdentity;
 use crate::stage::{ContainerRecord, DindProbe, PairEngine};
-use crate::worker::{CreateProjection, container_labels, container_name};
+use crate::worker::{CreateProjection, container_labels, container_name, identity_labels_match};
 
 pub(super) struct Fake {
     events: Mutex<Vec<&'static str>>,
@@ -88,12 +88,16 @@ impl PairEngine for Fake {
         let call = self.create_count.fetch_add(1, Ordering::Relaxed) + 1;
         self.push("create")?;
         let id = format!("{:064x}", self.next_id.fetch_add(1, Ordering::Relaxed));
-        let labels = spec
+        let mut labels = spec
             .labels
             .iter()
             .filter_map(|label| label.split_once('='))
             .map(|(key, value)| (key.to_owned(), value.to_owned()))
-            .collect();
+            .collect::<HashMap<String, String>>();
+        labels.insert(
+            "org.opencontainers.image.version".to_owned(),
+            "26.04".to_owned(),
+        );
         self.ids.lock().map_err(|_| HostError::Docker)?.insert(
             id.clone(),
             ContainerRecord {
@@ -203,7 +207,7 @@ impl PairEngine for Fake {
             .get(&container_name(identity, role))
             .cloned();
         if named.as_deref() != Some(id)
-            || record.labels != labels
+            || !identity_labels_match(&labels, &record.labels)
             || (require_running && record.running != Some(true))
         {
             return Err(HostError::Ownership);

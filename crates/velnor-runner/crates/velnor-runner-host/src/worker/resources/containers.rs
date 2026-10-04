@@ -8,8 +8,8 @@ use bollard::query_parameters::ListContainersOptionsBuilder;
 use tokio::time::timeout;
 
 use super::super::{
-    CreateProjection, DIND_IMAGE, dind_create, join_dind_net, label_map, mount_source,
-    runner_create_for_identity,
+    CreateProjection, DIND_IMAGE, dind_create, identity_labels_match, join_dind_net, label_map,
+    mount_source, runner_create_for_identity,
 };
 use super::confirmed_not_found;
 use crate::action_archive_seed::ActionArchiveLease;
@@ -209,15 +209,7 @@ async fn verify_existing(
 }
 
 fn same_launch(expected: &HashMap<String, String>, actual: &HashMap<String, String>) -> bool {
-    [
-        "velnor.product",
-        "velnor.instance",
-        "velnor.launch",
-        "velnor.engine",
-        "velnor.volume",
-    ]
-    .iter()
-    .all(|key| expected.get(*key) == actual.get(*key))
+    identity_labels_match(expected, actual)
 }
 
 fn dind_projection(runner: &CreateProjection) -> Result<CreateProjection, HostError> {
@@ -287,7 +279,7 @@ fn topology_matches(
     };
     let labels = label_map(&spec.labels)?.ok_or(HostError::Ownership)?;
     if config.image.as_deref() != Some(spec.image.as_str())
-        || config.labels.as_ref() != Some(&labels)
+        || !inspect_labels_match(&labels, found)?
         || host.privileged != Some(spec.privileged)
         || !network_matches(spec.network_mode.as_deref(), host.network_mode.as_deref())
         || !spec
@@ -298,6 +290,20 @@ fn topology_matches(
         return Ok(false);
     }
     Ok(expected_mounts(spec)? == observed_mounts(found)?)
+}
+
+fn inspect_labels_match(
+    expected: &HashMap<String, String>,
+    found: &bollard::models::ContainerInspectResponse,
+) -> Result<bool, HostError> {
+    let Some(actual) = found
+        .config
+        .as_ref()
+        .and_then(|config| config.labels.as_ref())
+    else {
+        return Ok(false);
+    };
+    Ok(identity_labels_match(expected, actual))
 }
 
 fn network_matches(expected: Option<&str>, actual: Option<&str>) -> bool {
@@ -352,3 +358,7 @@ fn observed_mounts(
     }
     Ok(mounts)
 }
+
+#[cfg(test)]
+#[path = "containers_tests.rs"]
+mod tests;
