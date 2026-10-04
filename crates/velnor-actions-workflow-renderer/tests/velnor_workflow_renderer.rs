@@ -29,6 +29,8 @@ mod impl_renderer_matrix;
 mod impl_renderer_mbx_bundle;
 #[path = "impl_renderer_mbx_gc_policy.rs"]
 mod impl_renderer_mbx_gc_policy;
+#[path = "impl_renderer_mbx_identity.rs"]
+mod impl_renderer_mbx_identity;
 #[path = "impl_renderer_mbxgate.rs"]
 mod impl_renderer_mbxgate;
 #[path = "impl_renderer_msrv.rs"]
