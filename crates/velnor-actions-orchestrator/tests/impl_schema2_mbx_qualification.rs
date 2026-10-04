@@ -224,6 +224,16 @@ fn assert_shared_identity(writer: &str, reader: &str) {
     );
     let writer_save = step_body(writer, "Save MBX single bundle");
     assert!(writer_save.contains(CACHE_SAVE_PIN), "{writer_save}");
+    assert_eq!(
+        step_value(writer, "Save MBX single bundle", "if"),
+        Some(concat!(
+            "success() && inputs.mode == 'mbx-cache-roundtrip' && ",
+            "github.event_name == 'workflow_dispatch' && ",
+            "github.ref == 'refs/heads/main' && github.ref_protected == true && ",
+            "steps.mbx-bundle.outputs.cache-hit != 'true' && ",
+            "steps.mbx-export.outputs.ready == 'true'"
+        ))
+    );
     assert!(
         writer_save.contains("key: ${{ steps.mbx-bundle-key.outputs.primary }}"),
         "{writer_save}"

@@ -185,6 +185,49 @@ fn no_build_export_is_nonfatal_and_does_not_run_gc() -> Result<(), String> {
     Ok(())
 }
 
+#[test]
+fn enospc_export_failure_never_marks_bundle_ready_or_runs_gc() -> Result<(), String> {
+    let scratch = Scratch::new()?;
+    setup_evidence(&scratch)?;
+    let script = export_script(true, EXPORT_SCRIPT);
+    let receipt = scratch.0.join("enospc-export.txt");
+    let failure = run_script(
+        &scratch,
+        "enospc-export",
+        &script,
+        &[
+            (
+                "MBX_QUALIFICATION_PHASE_FILE",
+                scratch.0.join("enospc-export.tsv"),
+            ),
+            ("MBX_QUALIFICATION_EXPORT_RECEIPT", receipt.clone()),
+            ("MBX_QUALIFICATION_SAMPLE_INTERVAL", "5".into()),
+            ("EXPORT_ENOSPC", "true".into()),
+        ],
+        false,
+    )?;
+    assert!(
+        !failure.status.success(),
+        "export failure unexpectedly succeeded"
+    );
+    let body = fs::read_to_string(receipt).map_err(|error| display_error(&error))?;
+    assert!(
+        body.contains("No space left on device (os error 28)"),
+        "{body}"
+    );
+    assert!(body.contains("exit_status=1"), "{body}");
+    let output = fs::read_to_string(scratch.0.join("enospc-export-github-output"))
+        .map_err(|error| display_error(&error))?;
+    assert!(output.contains("export_status=1\n"), "{output}");
+    assert!(!output.contains("ready=true"), "{output}");
+    assert!(!output.contains("gc_status="), "{output}");
+    assert!(
+        !body.contains("command=gc\n"),
+        "GC ran after export failure: {body}"
+    );
+    Ok(())
+}
+
 fn setup_evidence(scratch: &Scratch) -> Result<(), String> {
     fs::create_dir_all(scratch.0.join("mbx-cache-evidence")).map_err(|error| display_error(&error))
 }
@@ -236,7 +279,7 @@ fn run_script(
     fs::create_dir_all(&bin).map_err(|error| display_error(&error))?;
     executable(
         &bin.join("mbx"),
-        "#!/bin/sh\ncase \"$1:$2\" in cache:export) if [ \"${EXPORT_NO_BUILD:-false}\" = true ]; then printf 'no completed mbx builds are recorded for export group\\n' >&2; exit 1; fi; mkdir -p \"$RUNNER_TEMP/mbx-single-bundle\"; printf 'out-export\\n'; printf 'err-export\\n' >&2; exit \"${EXPORT_STATUS:-0}\" ;; gc:--max-size) printf 'gc-out\\n'; printf 'gc-err\\n' >&2; exit \"${GC_STATUS:-0}\" ;; cache:import) printf 'import-out\\n'; printf 'import-err\\n' >&2; exit \"${IMPORT_STATUS:-0}\" ;; esac\nexit 0\n",
+        "#!/bin/sh\ncase \"$1:$2\" in cache:export) if [ \"${EXPORT_NO_BUILD:-false}\" = true ]; then printf 'no completed mbx builds are recorded for export group\\n' >&2; exit 1; fi; if [ \"${EXPORT_ENOSPC:-false}\" = true ]; then printf 'mbx[error]: No space left on device (os error 28)\\n' >&2; exit 1; fi; mkdir -p \"$RUNNER_TEMP/mbx-single-bundle\"; printf 'out-export\\n'; printf 'err-export\\n' >&2; exit \"${EXPORT_STATUS:-0}\" ;; gc:--max-size) printf 'gc-out\\n'; printf 'gc-err\\n' >&2; exit \"${GC_STATUS:-0}\" ;; cache:import) printf 'import-out\\n'; printf 'import-err\\n' >&2; exit \"${IMPORT_STATUS:-0}\" ;; esac\nexit 0\n",
     )?;
     executable(
         &bin.join("bash"),
