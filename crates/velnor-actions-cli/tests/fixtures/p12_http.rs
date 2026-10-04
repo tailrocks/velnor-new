@@ -60,7 +60,7 @@ fn rewrite_probe_sources(fixture: &harness::Fixture, base_url: &str) -> Result<(
 
 fn respond_to_probe(
     stream: &mut TcpStream,
-    encoding: Option<&str>,
+    encodings: &[String],
     body: &[u8],
 ) -> std::io::Result<()> {
     stream.set_nonblocking(false)?;
@@ -69,9 +69,10 @@ fn respond_to_probe(
     if stream.read(&mut request)? == 0 {
         return Err(std::io::Error::other("empty HTTP request"));
     }
-    let coding = encoding
+    let coding = encodings
+        .iter()
         .map(|value| format!("Content-Encoding: {value}\r\n"))
-        .unwrap_or_default();
+        .collect::<String>();
     let headers = format!(
         "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n{coding}Connection: close\r\n\r\n",
         body.len()
@@ -95,7 +96,7 @@ fn respond_to_probe(
 
 fn run_http_probe(
     prefix: &str,
-    encoding: Option<&str>,
+    encodings: &[&str],
     body: &[u8],
 ) -> Result<harness::Run, Box<dyn Error>> {
     let fixture = harness::passing(prefix)?;
@@ -106,7 +107,10 @@ fn run_http_probe(
 
     let (stop_tx, stop_rx) = mpsc::channel();
     let response_body = body.to_vec();
-    let content_encoding = encoding.map(str::to_owned);
+    let content_encodings = encodings
+        .iter()
+        .map(|value| (*value).to_owned())
+        .collect::<Vec<_>>();
     let server = thread::spawn(move || -> std::io::Result<usize> {
         let mut requests = 0;
         loop {
@@ -117,7 +121,7 @@ fn run_http_probe(
             match listener.accept() {
                 Ok((mut stream, _)) => {
                     requests += 1;
-                    respond_to_probe(&mut stream, content_encoding.as_deref(), &response_body)?;
+                    respond_to_probe(&mut stream, &content_encodings, &response_body)?;
                 }
                 Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                     thread::sleep(Duration::from_millis(2));
@@ -161,8 +165,8 @@ fn assert_mise_pass(run: &harness::Run) {
 #[test]
 fn identity_http_response_is_parsed() -> Result<(), Box<dyn Error>> {
     for (prefix, encoding) in [
-        ("p12-http-identity", None),
-        ("p12-http-identity-token", Some("identity")),
+        ("p12-http-identity", &[][..]),
+        ("p12-http-identity-token", &["identity"]),
     ] {
         let run = run_http_probe(prefix, encoding, br#"{"tag_name":"v2026.9.16"}"#)?;
         assert_mise_pass(&run);
@@ -173,7 +177,7 @@ fn identity_http_response_is_parsed() -> Result<(), Box<dyn Error>> {
 #[test]
 fn gzip_http_response_is_parsed() -> Result<(), Box<dyn Error>> {
     let body = gzip_bytes(br#"{"tag_name":"v2026.9.16"}"#)?;
-    let run = run_http_probe("p12-http-gzip", Some("gzip"), &body)?;
+    let run = run_http_probe("p12-http-gzip", &["gzip"], &body)?;
     assert_mise_pass(&run);
     Ok(())
 }
@@ -182,11 +186,24 @@ fn gzip_http_response_is_parsed() -> Result<(), Box<dyn Error>> {
 fn unsupported_content_encoding_fails_closed() -> Result<(), Box<dyn Error>> {
     let run = run_http_probe(
         "p12-http-unsupported",
-        Some("br"),
+        &["br"],
         br#"{"tag_name":"v2026.9.16"}"#,
     )?;
     harness::assert_fail(&run, "unsupported Content-Encoding");
     assert!(!mise_probe_passed(&run));
+    Ok(())
+}
+
+#[test]
+fn stacked_and_duplicate_content_encodings_fail_closed() -> Result<(), Box<dyn Error>> {
+    for (prefix, encodings) in [
+        ("p12-http-stacked-encoding", &["gzip, identity"][..]),
+        ("p12-http-duplicate-encoding", &["gzip", "gzip"][..]),
+    ] {
+        let run = run_http_probe(prefix, encodings, br#"{"tag_name":"v2026.9.16"}"#)?;
+        harness::assert_fail(&run, "unsupported Content-Encoding");
+        assert!(!mise_probe_passed(&run));
+    }
     Ok(())
 }
 
@@ -198,7 +215,7 @@ fn malformed_and_truncated_gzip_fail_closed() -> Result<(), Box<dyn Error>> {
         ("p12-http-malformed", b"not gzip".to_vec()),
         ("p12-http-truncated", truncated),
     ] {
-        let run = run_http_probe(prefix, Some("gzip"), &body)?;
+        let run = run_http_probe(prefix, &["gzip"], &body)?;
         harness::assert_fail(&run, "lookup_failed");
         assert!(run.stdout.contains("lookup_failed ("), "{}", run.stdout);
         assert!(!mise_probe_passed(&run));
@@ -210,7 +227,7 @@ fn malformed_and_truncated_gzip_fail_closed() -> Result<(), Box<dyn Error>> {
 fn decompressed_response_cap_fails_closed() -> Result<(), Box<dyn Error>> {
     let expanded = vec![b'a'; RESPONSE_CAP + 1];
     let body = gzip_bytes(&expanded)?;
-    let run = run_http_probe("p12-http-decoded-limit", Some("gzip"), &body)?;
+    let run = run_http_probe("p12-http-decoded-limit", &["gzip"], &body)?;
     harness::assert_fail(&run, "decompressed response exceeds");
     Ok(())
 }
@@ -218,7 +235,29 @@ fn decompressed_response_cap_fails_closed() -> Result<(), Box<dyn Error>> {
 #[test]
 fn encoded_response_cap_fails_closed() -> Result<(), Box<dyn Error>> {
     let body = vec![b'a'; RESPONSE_CAP + 1];
-    let run = run_http_probe("p12-http-encoded-limit", Some("identity"), &body)?;
+    let run = run_http_probe("p12-http-encoded-limit", &["identity"], &body)?;
+    harness::assert_fail(&run, "encoded response exceeds");
+    Ok(())
+}
+
+#[test]
+fn gzip_encoded_response_cap_fails_closed() -> Result<(), Box<dyn Error>> {
+    let mut state = 0x9e37_79b9_u32;
+    let expanded = (0..RESPONSE_CAP)
+        .map(|_| {
+            state ^= state << 13;
+            state ^= state >> 17;
+            state ^= state << 5;
+            state as u8
+        })
+        .collect::<Vec<_>>();
+    let body = gzip_bytes(&expanded)?;
+    assert_eq!(expanded.len(), RESPONSE_CAP);
+    assert!(
+        body.len() > RESPONSE_CAP,
+        "gzip fixture must exceed the encoded response cap"
+    );
+    let run = run_http_probe("p12-http-gzip-encoded-limit", &["gzip"], &body)?;
     harness::assert_fail(&run, "encoded response exceeds");
     Ok(())
 }
