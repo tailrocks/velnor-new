@@ -31,6 +31,44 @@ async fn lost_dind_create_response_is_recovered_by_launch_identity() -> Result<(
 }
 
 #[tokio::test]
+async fn expected_dind_and_runner_pair_reconciles() -> Result<(), HostError> {
+    let identity = identity()?;
+    let engine = Fake::new();
+    let prepared = prepare_dind(&engine, &identity).await?;
+    let started = start_runner(&engine, &prepared, b"jit", None).await?;
+
+    let observed = reconcile_worker(
+        &engine,
+        &identity,
+        Some(&started.runner_id),
+        Some(&started.dind_id),
+        None,
+    )
+    .await?;
+    assert_eq!(observed.dind_id(), Some(started.dind_id.as_str()));
+    assert_eq!(observed.runner_id(), Some(started.runner_id.as_str()));
+    Ok(())
+}
+
+#[tokio::test]
+async fn unrelated_launch_with_the_same_role_is_ignored() -> Result<(), HostError> {
+    let identity = identity()?;
+    let unrelated = crate::journal::LaunchIdentity::new(
+        identity.instance_id(),
+        8,
+        "cccccccccccccccccccccccccccccccc",
+        identity.engine_id(),
+    )?;
+    let engine = Fake::new();
+    engine.create(&dind_create(&unrelated)?).await?;
+
+    let observed = reconcile_worker(&engine, &identity, None, None, None).await?;
+    assert!(observed.dind_id().is_none());
+    assert!(observed.runner_id().is_none());
+    Ok(())
+}
+
+#[tokio::test]
 async fn empty_rows_reconcile_as_absent_and_stale_recorded_id_is_checked() -> Result<(), HostError>
 {
     let identity = identity()?;
@@ -73,6 +111,25 @@ async fn recorded_id_conflict_is_not_adopted() -> Result<(), HostError> {
             .await?
             .dind_id(),
         Some(prepared.dind_id())
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn lost_response_does_not_adopt_a_foreign_launch_id() -> Result<(), HostError> {
+    let identity = identity()?;
+    let foreign = crate::journal::LaunchIdentity::new(
+        identity.instance_id(),
+        8,
+        "cccccccccccccccccccccccccccccccc",
+        identity.engine_id(),
+    )?;
+    let engine = Fake::new();
+    let foreign_id = engine.create(&dind_create(&foreign)?).await?;
+
+    assert_eq!(
+        reconcile_worker(&engine, &identity, None, Some(&foreign_id), None).await,
+        Err(HostError::Ownership)
     );
     Ok(())
 }

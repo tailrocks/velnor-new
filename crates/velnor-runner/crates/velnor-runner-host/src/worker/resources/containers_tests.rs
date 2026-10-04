@@ -82,6 +82,25 @@ fn inspect_rejects_mismatched_velnor_identity_values() -> Result<(), HostError> 
         &inspect_with_labels(actual.clone())
     )?);
     assert!(!same_launch(&expected, &actual));
+    assert_eq!(
+        validate_existing_row(&expected, &actual),
+        Err(HostError::Ownership)
+    );
+    Ok(())
+}
+
+#[test]
+fn inspect_rejects_mislabeled_container_role() -> Result<(), HostError> {
+    let spec = dind_create(&identity()?)?;
+    let expected = label_map(&spec.labels)?.ok_or(HostError::Ownership)?;
+    let mut actual = expected.clone();
+    actual.insert("velnor.role".to_owned(), "runner".to_owned());
+
+    assert!(!inspect_labels_match(
+        &expected,
+        &inspect_with_labels(actual.clone())
+    )?);
+    assert_eq!(validate_existing_row(&expected, &actual), Ok("runner"));
     Ok(())
 }
 
@@ -97,5 +116,9 @@ fn inspect_rejects_foreign_velnor_labels() -> Result<(), HostError> {
         &inspect_with_labels(actual.clone())
     )?);
     assert!(!same_launch(&expected, &actual));
+    assert_eq!(
+        validate_existing_row(&expected, &actual),
+        Err(HostError::Ownership)
+    );
     Ok(())
 }
