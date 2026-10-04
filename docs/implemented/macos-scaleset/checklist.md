@@ -24,7 +24,7 @@ this repository ran.
 | G6-launchd | User LaunchAgent foreground `daemon run`; second daemon fails | PASS | `launchctl print gui/501` at 2026-10-03: absolute `daemon run`, `forks = 0`; second `daemon run` exit 1; bootout removed the job |
 | G6-binary | `velnor-host` help and not-ready status | PASS | `help_exits_success_and_a_bad_command_does_not`; status JSON `waiting_for_credentials` |
 | G7-publish | Published generator, image, and macOS binary consumed by ChainArgos | NOT_RUN | `generator-47815c83` was published and `baa78037` regenerated the consumer tree. Paired suite is not successful. The running host is not a published asset. |
-| G7-paired | Hosted baseline, N=1 canary, N=2, cold and warm paired runs | NOT_RUN | Posix cold wave is terminal and is not a successful suite. Warm wave is in flight on `sha256:fe791063`. Not a pass. |
+| G7-paired | Hosted baseline, N=1 canary, N=2, cold and warm paired runs | NOT_RUN | Both posix waves are terminal on `sha256:fe791063` and are not a successful suite. Warm cancel `37193343224` reached the scale-set sleep step. Warm cancel-service `37193346427` exited 127 before sleep because `nc` is missing. Cold cancel never reached that step. Not a pass. |
 | G8-merge | Final main uses pinned published generator; required checks kept | NOT_RUN | no promotion |
 
 Recovery gates use R0–R8. They do not renumber G0–G8.
@@ -33,10 +33,10 @@ Recovery gates use R0–R8. They do not renumber G0–G8.
 |---|---|---|---|
 | R0 | Current source, product, run, and open-PR inventory | PASS | `evidence.md` recovery inventory, 2026-10-03 |
 | R1 | Hosted MBX write then restore, bounded disk | FAIL | ENOSPC on `37114238559`. Push run `37163556069` wrote one bundle after df. That write is not the accepted restore, so this row stays FAIL. |
-| R2 | Archive semantics on the deployed amd64 image | NOT_RUN | Cold cache `37192282748` restored `g4-cache-37192282748` on `sha256:fe791063`. Warm cache `37193281706` is in flight. Not a pass. |
+| R2 | Archive semantics on the deployed amd64 image | NOT_RUN | Cold `37192282748` restored `g4-cache-37192282748` and warm `37193281706` restored `g4-cache-37193281706` after `tar --posix` on `sha256:fe791063`. Archive security regressions beyond that cache key are not proven. Not a pass. |
 | R3 | Daemon lifecycle, N>1 backfill, cleanup | FAIL | Live pid 35645 is cdhash `c7e59739` (sha256 `788f363c`), not `de147432d`. Id-less rows 710, 717, 1005, and 1008 were marked `failed` so mint could resume. A second mint after exit is not proven. |
 | R4 | Published repaired generator and full regenerated tree | NOT_RUN | `generator-47815c83` was published and ChainArgos `baa78037` was regenerated. Not a pass. `v0.1.0` was not moved. |
-| R5 | Cold and warm paired suite | NOT_RUN | Posix cold wave is terminal. Its cancel runs never reached the scale-set sleep step. Warm wave is in flight. Not a pass. |
+| R5 | Cold and warm paired suite | NOT_RUN | Both waves are terminal. Warm cancel `37193343224` cancelled the scale-set sleep step. Cold cancel never started that step. Warm cancel-service `37193346427` failed the probe with `nc` exit 127 and was not cancelled. Not a pass. |
 | R6 | Docker capability suite and published macOS install | NOT_RUN | launchd program is a local binary, not a release asset |
 | R7 | Required checks and protected main | NOT_RUN | PR 2085 not merged |
 | R8 | P2 docs, diagnostics, PR dispositions | NOT_RUN | dispositions recorded under R0; remaining P2 work open |
