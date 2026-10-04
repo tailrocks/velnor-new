@@ -9,7 +9,7 @@ use bollard::Docker;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{UnixListener, UnixStream};
 
-use crate::launch::{gate, slot, turn};
+use crate::launch::{gate, slot};
 use crate::launch_harness::Scratch;
 use crate::{EnsureError, IntentState, Journal};
 
@@ -110,34 +110,7 @@ async fn closed_docker_connection_is_not_treated_as_absent() -> Result<(), Strin
     no_response_body_in_journal(&scratch.file())
 }
 
-#[tokio::test]
-async fn full_capacity_skips_the_initial_scale_callback() -> Result<(), String> {
-    let (scratch, journal) = journal("inspect-full-capacity").await?;
-    let row_id = launch_row(&journal).await?;
-    let before = journal.rows().await.map_err(|error| error.to_string())?;
-    let stub = DockerStub::open(vec![http(200, r#"{"State":{"Running":true}}"#)])?;
-    let mut scaled = false;
-
-    let result = within(
-        turn::scale_if_free(&journal, &stub.docker, 1, || async {
-            scaled = true;
-            Ok(None)
-        }),
-        "initial scale admission",
-    )
-    .await?;
-    stub.finish().await?;
-
-    assert_eq!(result, Ok(None));
-    assert!(!scaled);
-    let after = journal.rows().await.map_err(|error| error.to_string())?;
-    assert_eq!(after, before);
-    assert_eq!(after[0].id, row_id);
-    assert_eq!(after[0].state, IntentState::Pending);
-    no_response_body_in_journal(&scratch.file())
-}
-
-async fn journal(label: &str) -> Result<(Scratch, Journal), String> {
+pub(super) async fn journal(label: &str) -> Result<(Scratch, Journal), String> {
     let scratch = Scratch::new(label).map_err(|error| error.to_string())?;
     let journal = Journal::open(&scratch.file())
         .await
@@ -145,25 +118,33 @@ async fn journal(label: &str) -> Result<(Scratch, Journal), String> {
     Ok((scratch, journal))
 }
 
-async fn launch_row(journal: &Journal) -> Result<i64, String> {
+pub(super) async fn launch_row(journal: &Journal) -> Result<i64, String> {
+    launch_row_for_id(journal, "job", "runner-id").await
+}
+
+pub(super) async fn launch_row_for_id(
+    journal: &Journal,
+    subject: &str,
+    docker_id: &str,
+) -> Result<i64, String> {
     let row_id = journal
-        .begin("launch", "job")
+        .begin("launch", subject)
         .await
         .map_err(|error| error.to_string())?;
     journal
-        .bind(row_id, Some("runner-id"), None)
+        .bind(row_id, Some(docker_id), None)
         .await
         .map_err(|error| error.to_string())?;
     Ok(row_id)
 }
 
-async fn within<F: Future>(future: F, label: &str) -> Result<F::Output, String> {
+pub(super) async fn within<F: Future>(future: F, label: &str) -> Result<F::Output, String> {
     tokio::time::timeout(TIMEOUT, future)
         .await
         .map_err(|_| format!("{label} timed out"))
 }
 
-fn no_response_body_in_journal(path: &std::path::Path) -> Result<(), String> {
+pub(super) fn no_response_body_in_journal(path: &std::path::Path) -> Result<(), String> {
     let bytes = std::fs::read(path).map_err(|error| error.to_string())?;
     let text = String::from_utf8_lossy(&bytes);
     if text.contains("private runner-id detail") {
@@ -172,26 +153,26 @@ fn no_response_body_in_journal(path: &std::path::Path) -> Result<(), String> {
     Ok(())
 }
 
-const fn inspect_error(status: u16) -> EnsureError {
+pub(super) const fn inspect_error(status: u16) -> EnsureError {
     EnsureError::Unexpected {
         status,
         step: "docker inspect",
     }
 }
 
-struct DockerResponse {
+pub(super) struct DockerResponse {
     status: Option<u16>,
     body: String,
 }
 
-struct DockerStub {
-    docker: Docker,
+pub(super) struct DockerStub {
+    pub(super) docker: Docker,
     path: PathBuf,
     task: Option<tokio::task::JoinHandle<Result<(), String>>>,
 }
 
 impl DockerStub {
-    fn open(responses: Vec<DockerResponse>) -> Result<Self, String> {
+    pub(super) fn open(responses: Vec<DockerResponse>) -> Result<Self, String> {
         static NEXT: AtomicU64 = AtomicU64::new(0);
         let number = NEXT.fetch_add(1, Ordering::Relaxed);
         let path = PathBuf::from(format!(
@@ -223,7 +204,7 @@ impl DockerStub {
         })
     }
 
-    async fn finish(mut self) -> Result<(), String> {
+    pub(super) async fn finish(mut self) -> Result<(), String> {
         let mut task = self
             .task
             .take()
@@ -251,7 +232,7 @@ impl Drop for DockerStub {
     }
 }
 
-fn http(status: u16, body: &str) -> DockerResponse {
+pub(super) fn http(status: u16, body: &str) -> DockerResponse {
     DockerResponse {
         status: Some(status),
         body: body.to_owned(),
