@@ -73,24 +73,29 @@ fn c4_restore_and_mbx_precede_fetch_with_offline_skip() {
         "Checkout",
         "Prepare pinned tools",
         "Restore Cargo sources",
-        "Restore MBX objects",
+        "Setup MBX",
         "Fetch Cargo sources",
         "Clippy",
     ]
     .iter()
     .map(ToString::to_string)
     .collect::<Vec<_>>();
-    assert!(sources::check_restore_before_fetch(&good, true).is_ok());
+    assert!(
+        sources::check_steps_before_fetch(&good, &["Restore Cargo sources", "Setup MBX"]).is_ok()
+    );
     let fetch_first = [
         "Checkout",
         "Fetch Cargo sources",
-        "Restore MBX objects",
+        "Setup MBX",
         "Restore Cargo sources",
     ]
     .iter()
     .map(ToString::to_string)
     .collect::<Vec<_>>();
-    assert!(sources::check_restore_before_fetch(&fetch_first, true).is_err());
+    assert!(
+        sources::check_steps_before_fetch(&fetch_first, &["Restore Cargo sources", "Setup MBX"])
+            .is_err()
+    );
     assert_eq!(
         sources::fetch_decision(true, "no_entry").expect("skip"),
         sources::FetchDecision::OfflineSkip

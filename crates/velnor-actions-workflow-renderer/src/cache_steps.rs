@@ -140,7 +140,7 @@ fn uses_mbx_tool(step: &Step) -> bool {
 }
 
 /// Display name of the pinned MBX local setup step.
-pub const MBX_RESTORE_NAME: &str = "Setup MBX";
+pub const MBX_SETUP_NAME: &str = "Setup MBX";
 /// MBX automatic collection must stay enabled so low-disk builds can recover.
 pub(crate) const MBX_GC_AUTO_ENV: &str = "MBX_GC_AUTO";
 /// MBX 1.21.1+ honors this value and protects active build consumers.
@@ -178,7 +178,7 @@ pub fn mbx_objects_step(
         ("backend".to_owned(), "local".to_owned()),
         ("version".to_owned(), mbx_version.to_owned()),
     ]);
-    action_step(MBX_RESTORE_NAME, uses, with)
+    action_step(MBX_SETUP_NAME, uses, with)
 }
 
 /// Exact MBX versions: three nonempty numeric dot parts, nothing else.
@@ -273,7 +273,7 @@ fn sources_subset_ok(path: &str) -> bool {
 
 /// Check restore-before/save-after ordering over cache action steps.
 ///
-/// Every `actions/cache/restore` step (plus MBX objects restore) must
+/// Every `actions/cache/restore` step (plus MBX local setup) must
 /// precede every `actions/cache/save` step within one job.
 /// # Errors
 pub fn check_cache_step_order(steps: &[Step]) -> Result<(), RenderError> {

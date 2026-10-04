@@ -15,9 +15,7 @@ use velnor_actions_contract::workflow::lanes::{HOSTED_SUFFIX, SCALE_SUFFIX};
 use velnor_actions_contract::{Job, Step, StepKind};
 
 use crate::RenderError;
-use crate::cache_steps::{
-    MBX_ACTION_NAME, MBX_RESTORE_NAME, TOOLS_RESTORE_USES, TOOLS_SAVE_USES, is_mbx_action,
-};
+use crate::cache_steps::{MBX_ACTION_NAME, TOOLS_RESTORE_USES, TOOLS_SAVE_USES, is_mbx_action};
 #[path = "mbx_bundle_identity.rs"]
 mod identity;
 use identity::{CacheIdentity, plan_writers};
@@ -63,19 +61,22 @@ const EXPORT_SCRIPT: &str = r#"set -eu; df -B1 -P "$RUNNER_TEMP"; df -i -P "$RUN
 const IMPORT_SCRIPT: &str = r#"set -eu; bundle="$RUNNER_TEMP/mbx-single-bundle"; df -B1 -P "$RUNNER_TEMP"; df -i -P "$RUNNER_TEMP"; if [ -z "$MATCHED" ]; then echo 'no MBX bundle matched'; exit 0; fi; if [ ! -d "$bundle" ]; then echo 'matched MBX bundle is missing; the fresh store stays cold'; exit 0; fi; if mbx cache import "$bundle"; then echo 'MBX bundle imported'; else echo 'MBX bundle import failed; abandoning its private store'; root_file="$GITHUB_OUTPUT.mbx-fallback"; if [ -e "$root_file" ] || [ -L "$root_file" ]; then echo "MBX fallback marker already exists" >&2; exit 1; fi; mktemp -d "$RUNNER_TEMP/velnor-mbx-fallback.XXXXXXXXXX" > "$root_file"; IFS= read -r root < "$root_file"; root_id="${root##*/}"; group="velnor-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${root_id}"; printf 'MBX_CACHE_DIR=%s\nMBX_TARGET_ROOT=%s/targets\nMBX_SHIMS_DIR=%s/shims\nMBX_CACHE_EXPORT_GROUP=%s\n' "$root" "$root" "$root" "$group" >> "$GITHUB_ENV"; echo 'fresh cold MBX store selected for subsequent steps'; fi"#;
 
 /// YAML step id for MBX setup and the key/export steps that expose outputs.
-pub(crate) fn step_yaml_id(name: &str) -> Option<&'static str> {
-    match name {
-        MBX_RESTORE_NAME => Some("mbx"),
-        MBX_BUNDLE_KEY_NAME => Some("mbx-bundle-key"),
-        MBX_BUNDLE_RESTORE_NAME => Some("mbx-bundle"),
-        MBX_BUNDLE_EXPORT_NAME => Some("mbx-export"),
-        _ => None,
+pub(crate) fn step_yaml_id(step: &Step) -> Option<&'static str> {
+    if is_mbx_action(step) {
+        Some("mbx")
+    } else {
+        match step.name.as_str() {
+            MBX_BUNDLE_KEY_NAME => Some("mbx-bundle-key"),
+            MBX_BUNDLE_RESTORE_NAME => Some("mbx-bundle"),
+            MBX_BUNDLE_EXPORT_NAME => Some("mbx-export"),
+            _ => None,
+        }
     }
 }
 
 /// Emit `id:` for steps whose later steps read outputs.
-pub(crate) fn push_step_id(entries: &mut Vec<(String, crate::yaml::Yaml)>, name: &str) {
-    let Some(id) = step_yaml_id(name) else {
+pub(crate) fn push_step_id(entries: &mut Vec<(String, crate::yaml::Yaml)>, step: &Step) {
+    let Some(id) = step_yaml_id(step) else {
         return;
     };
     entries.push(("id".to_owned(), crate::yaml::Yaml::str(id.to_owned())));

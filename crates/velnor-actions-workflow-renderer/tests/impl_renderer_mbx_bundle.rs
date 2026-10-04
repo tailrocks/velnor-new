@@ -149,6 +149,37 @@ fn private_root_precedes_local_setup_and_external_restore() -> Result<(), Render
 }
 
 #[test]
+fn mbx_yaml_id_uses_action_identity_not_display_name() -> Result<(), RenderError> {
+    let (id, mut job) = mbx_job("demo", "1.21.1")?;
+    let action_at = job
+        .steps
+        .iter()
+        .position(|step| matches!(&step.kind, StepKind::Action { uses, .. } if uses.starts_with("jdx/mr-boxington-action@")))
+        .expect("MBX action");
+    job.steps[action_at].name = "Install MBX runtime".to_owned();
+    job.steps.insert(
+        action_at,
+        scrubbed_shell_step("Setup MBX", vec!["true".to_owned()])?,
+    );
+    let text = render_workflow_ir(
+        &fixture_ir(vec![(id, job)]),
+        WorkflowPolicy::ConsumerV1,
+        None,
+        &fixture_ctx(),
+    )?;
+    let setup = text.find("name: Setup MBX").expect("shell label");
+    let action = text
+        .find("name: Install MBX runtime")
+        .expect("action label");
+    let bundle_key = text
+        .find("name: Prepare MBX bundle key")
+        .expect("bundle key");
+    assert!(!text[setup..action].contains("id: mbx"));
+    assert!(text[action..bundle_key].contains("id: mbx"));
+    Ok(())
+}
+
+#[test]
 fn restore_import_and_save_share_stable_path_and_trusted_key() -> Result<(), RenderError> {
     let text = render_mbx("demo", false)?;
     let restore = step_index(&text, "Restore MBX single bundle");

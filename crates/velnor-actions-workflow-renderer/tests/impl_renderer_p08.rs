@@ -235,7 +235,7 @@ fn rust_cache_never_stacks_over_mbx() {
 }
 
 #[test]
-fn mbx_restore_precedes_fetch() {
+fn mbx_action_precedes_fetch() {
     let fetch = velnor_actions_contract::Step {
         name: "Fetch Cargo sources".to_owned(),
         condition: None,
@@ -245,7 +245,7 @@ fn mbx_restore_precedes_fetch() {
         },
     };
     let mbx = velnor_actions_contract::Step {
-        name: "Setup MBX".to_owned(),
+        name: "Install pinned MBX locally".to_owned(),
         condition: None,
         kind: StepKind::Action {
             uses: format!("jdx/mr-boxington-action@{}", "d".repeat(40)),

@@ -367,12 +367,12 @@ pub fn check_no_rust_cache_with_mbx(job_id: &str, job: &Job) -> Result<(), Rende
 ///
 /// Returns [`RenderError::InvalidWorkflow`] when fetch precedes MBX.
 pub fn check_mbx_before_fetch(job_id: &str, job: &Job) -> Result<(), RenderError> {
-    let at = |name: &str| job.steps.iter().position(|s| s.name == name);
     let fetch = job
         .steps
         .iter()
         .position(|s| s.name.starts_with("Fetch Cargo sources"));
-    if let (Some(mbx), Some(fetch_at)) = (at(crate::cache_steps::MBX_RESTORE_NAME), fetch)
+    let mbx = job.steps.iter().position(crate::cache_steps::is_mbx_action);
+    if let (Some(mbx), Some(fetch_at)) = (mbx, fetch)
         && fetch_at < mbx
     {
         return Err(RenderError::InvalidWorkflow(format!(

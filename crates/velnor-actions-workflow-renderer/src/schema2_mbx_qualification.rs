@@ -10,7 +10,7 @@
 
 use super::MbxQualificationPins;
 use super::features::{base, checkout_step, finish, gated, run_step};
-use crate::cache_steps::MBX_ACTION_NAME;
+use crate::cache_steps::{MBX_ACTION_NAME, MBX_SETUP_NAME};
 use crate::yaml::Yaml;
 use crate::{RenderError, steps::validate_uses};
 
@@ -158,7 +158,7 @@ fn mbx_action_step(request: &MbxQualificationPins, writer: bool) -> Yaml {
         &request.mbx_action_uses[format!("{MBX_ACTION_NAME}@").len()..]
     );
     Yaml::Map(vec![
-        ("name".to_owned(), Yaml::str("Restore MBX objects")),
+        ("name".to_owned(), Yaml::str(MBX_SETUP_NAME)),
         (
             "uses".to_owned(),
             Yaml::str(request.mbx_action_uses.clone()),

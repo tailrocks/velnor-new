@@ -8,7 +8,7 @@
 //! unbranded IDs, gates referencing strictly earlier obligations),
 //! then renders each group to a fixed IR job: checkout, pinned tools,
 //! components, lockful sources, the per-root provider restore on
-//! opentofu crates, the MBX objects restore on MBX crates, and one
+//! opentofu crates, MBX setup on MBX crates, and one
 //! shell step per obligation in gate order.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -353,7 +353,7 @@ fn restore_step_for_crate(
     crate::source_cache::sources_restore_step(&key, &[prefix]).map(Some)
 }
 
-/// MBX objects restore for MBX crates only (WF-3.52).
+/// MBX local setup for MBX crates only (WF-3.52).
 ///
 /// The action installs the catalog MBX pin through its `version` input,
 /// so action setup and the Mise-selected compiler share one proven
