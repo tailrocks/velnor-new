@@ -4,6 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
 use bollard::Docker;
+use bollard::models::ContainerSummaryStateEnum as ContainerState;
 use bollard::query_parameters::ListContainersOptionsBuilder;
 use tokio::time::timeout;
 
@@ -23,7 +24,7 @@ use environment::environment_matches;
 
 const DOCKER_CALL_TIMEOUT: Duration = Duration::from_secs(5);
 
-pub(super) async fn refuse_existing(
+pub(crate) async fn refuse_existing(
     docker: &Docker,
     spec: &CreateProjection,
 ) -> Result<(), HostError> {
@@ -134,7 +135,7 @@ pub(super) async fn list_launch(
             Ok(ContainerRecord {
                 id: row.id.ok_or(HostError::Ownership)?,
                 labels: row.labels.ok_or(HostError::Ownership)?,
-                running: row.state.as_deref().map(|state| state == "running"),
+                running: row.state.map(|state| state == ContainerState::RUNNING),
             })
         })
         .collect()
