@@ -109,7 +109,7 @@
     }
   ],
   "check_interval_hours": 24,
-  "checked_at": "2026-10-04T11:54:31Z",
+  "checked_at": "2026-10-04T12:12:20Z",
   "exceptions": [],
   "max_exception_days": 14,
   "runner": {
