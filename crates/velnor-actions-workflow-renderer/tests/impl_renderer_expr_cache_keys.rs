@@ -23,6 +23,11 @@ fn workspace_cache_homes_and_job_identity_pass_expression_validation() -> Result
             ("RUSTUP_HOME".to_owned(), rustup_home.clone()),
             ("MISE_RUSTUP_HOME".to_owned(), rustup_home),
             ("MBX_JOB_ID".to_owned(), "${{ github.job }}".to_owned()),
+            ("MBX_RUN_ID".to_owned(), "${{ github.run_id }}".to_owned()),
+            (
+                "MBX_RUN_ATTEMPT".to_owned(),
+                "${{ github.run_attempt }}".to_owned(),
+            ),
         ]),
     )?;
     let task = job(
@@ -39,5 +44,7 @@ fn workspace_cache_homes_and_job_identity_pass_expression_validation() -> Result
     )?;
     assert!(rendered.contains("${{ github.workspace }}"), "{rendered}");
     assert!(rendered.contains("${{ github.job }}"), "{rendered}");
+    assert!(rendered.contains("${{ github.run_id }}"), "{rendered}");
+    assert!(rendered.contains("${{ github.run_attempt }}"), "{rendered}");
     Ok(())
 }

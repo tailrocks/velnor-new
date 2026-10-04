@@ -2,6 +2,7 @@
 
 use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_contract::config::{SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL};
+use velnor_actions_workflow_renderer::render::render_workflow_ir_strict_shared;
 use velnor_actions_workflow_renderer::{RenderError, render_workflow_ir};
 
 use super::impl_renderer_fixtures::*;
@@ -29,9 +30,20 @@ fn render_mbx(id: &str, scale_set: bool) -> Result<String, RenderError> {
     )
 }
 
-fn render_parallel_mbx() -> Result<String, RenderError> {
+fn render_parallel_mbx()
+-> Result<velnor_actions_workflow_renderer::render::RenderedWorkflow, RenderError> {
     let checkout = velnor_actions_workflow_renderer::checkout_step(&checkout_pin())?;
     let mbx = mbx_tool_steps(&mbx_uses(), "1.21.1", "1.98.1")?;
+    let plan = job(
+        "plan",
+        "Plan",
+        Vec::new(),
+        vec![
+            checkout.clone(),
+            acquire_fixture()?,
+            velnor_actions_workflow_renderer::plan_step(),
+        ],
+    );
     let hosted = job(
         "rust-demo__hosted",
         "Hosted MBX job",
@@ -50,11 +62,12 @@ fn render_parallel_mbx() -> Result<String, RenderError> {
     )
     .map_err(|_| RenderError::InvalidWorkflow("bad_scale_set".to_owned()))?;
     local.1.runs_on = selector.token();
-    render_workflow_ir(
-        &fixture_ir(vec![hosted, local]),
+    render_workflow_ir_strict_shared(
+        &fixture_ir(vec![plan, hosted, local]),
         WorkflowPolicy::ConsumerV1,
         None,
         &fixture_ctx(),
+        &mise(),
     )
 }
 
@@ -130,10 +143,29 @@ fn hosted_save_is_one_bundle_outside_the_store() -> Result<(), RenderError> {
     );
     assert!(key_step.contains("MBX_MATRIX_KEY: \"\""), "{key_step}");
     assert!(
-        key_step.contains("primary=\\\"${key}-${suffix}\\\""),
+        key_step.contains("primary=\\\"${writer_prefix}r${run_id}-a${run_attempt}\\\""),
         "{key_step}"
     );
-    assert!(key_step.contains("prefix=\\\"${key%-*}-\\\""), "{key_step}");
+    assert!(
+        key_step.contains("prefix=\\\"$writer_prefix\\\""),
+        "{key_step}"
+    );
+    assert!(
+        key_step.contains("compatibility_key=\\\"${key%-*}\\\""),
+        "{key_step}"
+    );
+    assert!(
+        key_step.contains("fallback=\\\"${compatibility_key}-\\\""),
+        "{key_step}"
+    );
+    assert!(
+        key_step.contains("MBX_RUN_ID: ${{ github.run_id }}"),
+        "{key_step}"
+    );
+    assert!(
+        key_step.contains("MBX_RUN_ATTEMPT: ${{ github.run_attempt }}"),
+        "{key_step}"
+    );
     let import = text
         .find("name: Import MBX single bundle")
         .expect("bundle import");
@@ -159,11 +191,13 @@ fn hosted_save_is_one_bundle_outside_the_store() -> Result<(), RenderError> {
         "{restored}"
     );
     assert!(
-        restored.contains("restore-keys: ${{ steps.mbx-bundle-key.outputs.prefix }}"),
-        "{restored}"
+        restored.contains(
+            r#"restore-keys: "${{ steps.mbx-bundle-key.outputs.prefix }}\n${{ steps.mbx-bundle-key.outputs.fallback }}""#
+        ),
+        "stable writer prefix must precede common fallback: {restored}"
     );
     assert_cold_import(&text[import..export]);
-    let action = &text[restore..export];
+    let action = &text[restore..bundle_key];
     assert!(action.contains("id: mbx"), "{action}");
     assert!(action.contains("ACTIONS_CACHE_MODE: read"), "{action}");
     assert!(!action.contains("write"), "{action}");
@@ -188,12 +222,31 @@ fn hosted_save_is_one_bundle_outside_the_store() -> Result<(), RenderError> {
 
 #[test]
 fn parallel_jobs_use_disjoint_save_keys_and_a_common_restore_prefix() -> Result<(), RenderError> {
-    let text = render_parallel_mbx()?;
+    let rendered = render_parallel_mbx()?;
     assert_eq!(
-        text.matches("uses: ./.github/actions/rust-demo").count(),
+        rendered
+            .yaml
+            .matches("uses: ./.github/actions/rust-demo")
+            .count(),
         2,
-        "both lanes must use the shared action:\n{text}"
+        "both lanes must use the shared action:\n{}",
+        rendered.yaml
     );
+    let action = rendered
+        .shared
+        .iter()
+        .find(|file| file.path == ".github/actions/rust-demo/action.yml")
+        .expect("generated shared action");
+    let body = &action.bytes;
+    for expression in [
+        "MBX_JOB_ID: ${{ github.job }}",
+        "MBX_RUN_ID: ${{ github.run_id }}",
+        "MBX_RUN_ATTEMPT: ${{ github.run_attempt }}",
+        "steps.mbx-bundle-key.outputs.prefix",
+        "steps.mbx-bundle-key.outputs.fallback",
+    ] {
+        assert!(body.contains(expression), "missing {expression}: {body}");
+    }
     Ok(())
 }
 
@@ -227,11 +280,19 @@ fn matrix_jobs_use_each_matrix_key_as_the_save_suffix() -> Result<(), RenderErro
         text.contains("matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}"),
         "{text}"
     );
+    assert!(text.contains("MBX_RUN_ID: ${{ github.run_id }}"), "{text}");
+    assert!(
+        text.contains("MBX_RUN_ATTEMPT: ${{ github.run_attempt }}"),
+        "{text}"
+    );
     assert!(
         text.contains("key: ${{ steps.mbx-bundle-key.outputs.key }}"),
         "{text}"
     );
-    assert!(text.contains("primary=\\\"${key}-${suffix}\\\""), "{text}");
+    assert!(
+        text.contains("primary=\\\"${writer_prefix}r${run_id}-a${run_attempt}\\\""),
+        "{text}"
+    );
     Ok(())
 }
 
