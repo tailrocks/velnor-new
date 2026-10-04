@@ -1,12 +1,12 @@
 //! Hosted-only MBX objects-cache qualification.
 //!
-//! Write and read are separate jobs in one dispatch. The writer is restricted
-//! to protected main; the shared cache generation is bound to that run,
-//! attempt, source SHA, action pin, and MBX release. The dependent reader
-//! cannot publish a cache or pass on data from an earlier run.
+//! Write and read are separate jobs in one dispatch. Both use one explicit
+//! exact cache key bound to OS/architecture, Rust and MBX versions, action
+//! SHA, run, attempt, and source SHA. The dependent reader cannot publish a
+//! cache or pass on data from an earlier run.
 //!
-//! Both jobs set `MBX_GC_AUTO=1` to exercise the hosted policy emitted for
-//! production MBX jobs, not the action's hosted default.
+//! Both jobs keep `MBX_GC_AUTO=0` so asynchronous collection cannot evict
+//! the writer's receipt closure before the post action exports it.
 
 use super::MbxQualificationPins;
 use super::features::{base, checkout_step, finish, gated, run_step};
@@ -152,10 +152,14 @@ fn mise_install_step(request: &MbxQualificationPins) -> Yaml {
 }
 
 fn mbx_action_step(request: &MbxQualificationPins, writer: bool) -> Yaml {
+    let action_sha = &request.mbx_action_uses[format!("{MBX_ACTION_NAME}@").len()..];
     let generation = format!(
-        "velnor-qualification-mbx-{}-action-{}-run-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}-${{{{ github.sha }}}}",
-        request.mbx_version,
-        &request.mbx_action_uses[format!("{MBX_ACTION_NAME}@").len()..]
+        "velnor-qualification-mbx-{}-share-out-dir-disabled-v1-action-{action_sha}-run-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}-${{{{ github.sha }}}}",
+        request.mbx_version
+    );
+    let cache_key = format!(
+        "velnor-qualification-mbx-{}-share-out-dir-disabled-v1-action-{action_sha}-${{{{ runner.os }}}}-${{{{ runner.arch }}}}-rust-{}-run-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}-${{{{ github.sha }}}}",
+        request.mbx_version, request.rust_version
     );
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str("Restore MBX objects")),
@@ -170,6 +174,8 @@ fn mbx_action_step(request: &MbxQualificationPins, writer: bool) -> Yaml {
                 ("github-cache-mode", "objects"),
                 ("version", &request.mbx_version),
                 ("cache-generation", &generation),
+                ("cache-key", &cache_key),
+                ("isolate-objects-cache", "true"),
                 (
                     "save-on-workflow-dispatch",
                     if writer { "true" } else { "false" },
@@ -214,9 +220,9 @@ fn verify_action_step(request: &MbxQualificationPins, writer: bool) -> Yaml {
                 save_eligible,
                 save_reason,
                 if writer {
-                    ""
-                } else {
                     r#" && test "$CACHE_HIT" = 'false'"#
+                } else {
+                    r#" && test "$CACHE_HIT" = 'true'"#
                 }
             )),
         ),
@@ -233,7 +239,8 @@ fn build_step() -> Yaml {
 fn qualification_env(request: &MbxQualificationPins, writer: bool) -> Yaml {
     let home = "${{ github.workspace }}/.velnor-mbx-cache-qualification";
     mapping(&[
-        ("MBX_GC_AUTO", "1"),
+        ("MBX_GC_AUTO", "0"),
+        ("MBX_SHARE_OUT_DIR", "0"),
         ("ACTIONS_CACHE_MODE", if writer { "write" } else { "read" }),
         ("CARGO_HOME", &format!("{home}/cargo")),
         ("MISE_AUTO_INSTALL", "false"),

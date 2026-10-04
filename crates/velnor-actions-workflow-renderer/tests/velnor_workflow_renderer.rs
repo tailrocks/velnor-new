@@ -27,8 +27,6 @@ mod impl_renderer_lint;
 mod impl_renderer_matrix;
 #[path = "impl_renderer_mbx_bundle.rs"]
 mod impl_renderer_mbx_bundle;
-#[path = "impl_renderer_mbx_cleanup.rs"]
-mod impl_renderer_mbx_cleanup;
 #[path = "impl_renderer_mbx_gc_policy.rs"]
 mod impl_renderer_mbx_gc_policy;
 #[path = "impl_renderer_mbxgate.rs"]

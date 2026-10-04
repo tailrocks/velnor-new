@@ -1,4 +1,4 @@
-//! Automatic MBX collection must cover setup, build, and test steps.
+//! MBX collection stays off during producers and resumes only after publication.
 
 use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_contract::config::{SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL};
@@ -10,7 +10,7 @@ use velnor_actions_workflow_renderer::{RenderError, render_workflow_ir};
 
 use super::impl_renderer_fixtures::*;
 
-/// Hosted MBX jobs receive GC and trusted-main cache-write policy only.
+/// MBX jobs disable asynchronous GC while preserving trusted-main write policy.
 #[test]
 fn hosted_action_step_has_isolated_trusted_main_cache_policy() -> Result<(), RenderError> {
     let uses = format!("jdx/mr-boxington-action@{}", "a".repeat(40));
@@ -43,12 +43,12 @@ fn hosted_action_step_has_isolated_trusted_main_cache_policy() -> Result<(), Ren
         "untrusted events stay read-only:\n{text}"
     );
     assert!(
-        text.contains("Collect MBX cache before export"),
-        "hosted action exports only after synchronous collection:\n{text}"
+        !text.contains("Collect MBX cache before export"),
+        "the hosted post action must export before any collection:\n{text}"
     );
     assert!(
-        text.contains("MBX_GC_AUTO: \"1\""),
-        "MBX jobs enable GC:\n{text}"
+        text.contains("MBX_GC_AUTO: \"0\""),
+        "MBX jobs disable asynchronous collection through export:\n{text}"
     );
 
     let plain = checkout_step(&checkout_pin())?;
@@ -76,7 +76,7 @@ fn hosted_action_step_has_isolated_trusted_main_cache_policy() -> Result<(), Ren
 
 /// Lane extraction preserves one shared policy body for both runner profiles.
 #[test]
-fn mbx_gc_policy_is_scoped_to_hosted_mbx_jobs() -> Result<(), RenderError> {
+fn mbx_gc_policy_covers_both_runner_lanes() -> Result<(), RenderError> {
     let uses = format!("jdx/mr-boxington-action@{}", "a".repeat(40));
     let mbx = mbx_objects_step(&uses, false, "1.21.1")?;
     let hosted = job(
@@ -103,14 +103,14 @@ fn mbx_gc_policy_is_scoped_to_hosted_mbx_jobs() -> Result<(), RenderError> {
         None,
         &fixture_ctx(),
     )?;
-    assert_eq!(text.matches("MBX_GC_AUTO: \"1\"").count(), 1, "{text}");
+    assert_eq!(text.matches("MBX_GC_AUTO: \"0\"").count(), 2, "{text}");
     assert!(
         text.contains("uses: $/.github/actions/rust-demo"),
         "both lanes keep the shared composite:\n{text}"
     );
     assert!(
-        text.contains("MBX_GC_AUTO: \"1\""),
-        "only hosted jobs enable automatic collection:\n{text}"
+        text.contains("MBX_GC_AUTO: \"0\""),
+        "both runner lanes disable asynchronous collection until safe cleanup:\n{text}"
     );
     Ok(())
 }

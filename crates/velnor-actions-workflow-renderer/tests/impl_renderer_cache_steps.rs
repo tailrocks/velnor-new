@@ -57,8 +57,15 @@ fn mbx_objects_step_pins_action_and_mode() {
             );
             assert_eq!(
                 with.get("cache-generation").map(String::as_str),
-                Some(format!("{}-action-{}", mbx_cache_generation("1.19.0"), sha()).as_str()),
-                "a new MBX release or action pin starts a cold cache namespace"
+                Some(
+                    format!(
+                        "{}-share-out-dir-disabled-v1-action-{}",
+                        mbx_cache_generation("1.19.0"),
+                        sha()
+                    )
+                    .as_str()
+                ),
+                "a new MBX release, action pin, or writable OUT_DIR policy starts cold"
             );
             for input in [
                 "save-on-pull-request",

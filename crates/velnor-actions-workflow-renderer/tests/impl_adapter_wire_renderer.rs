@@ -2,7 +2,7 @@
 //! dirs, cache order, and release gates (F2 halves).
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::WorkflowPolicy;
+use velnor_actions_contract::{StepKind, WorkflowPolicy};
 use velnor_actions_workflow_renderer::steps::{
     TOOLS_CACHE_PATH, TOOLS_RESTORE_USES, TOOLS_SAVE_USES, cache_action_step,
 };
@@ -103,6 +103,28 @@ fn cache_steps_restore_before_save() -> Result<(), RenderError> {
     );
     assert_eq!(check_cache_step_order(std::slice::from_ref(&save)), Ok(()));
     assert!(check_cache_step_order(&[save, restore]).is_err());
+
+    let mut lookup = cache_action_step(
+        true,
+        TOOLS_RESTORE_USES,
+        "publication lookup",
+        "k",
+        &[],
+        &[TOOLS_CACHE_PATH.to_owned()],
+    )?;
+    let StepKind::Action { with, .. } = &mut lookup.kind else {
+        unreachable!("cache restore constructor returns an action")
+    };
+    with.insert("lookup-only".to_owned(), "true".to_owned());
+    let save = cache_action_step(
+        false,
+        TOOLS_SAVE_USES,
+        "tools",
+        "k",
+        &[],
+        &[TOOLS_CACHE_PATH.to_owned()],
+    )?;
+    assert_eq!(check_cache_step_order(&[save, lookup]), Ok(()));
     Ok(())
 }
 

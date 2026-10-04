@@ -22,7 +22,8 @@ pub(crate) fn workflow_to_yaml(
     jobs: &BTreeMap<String, Job>,
     ctx: &RenderContext,
     shared: &BTreeMap<String, String>,
-    mbx_gc_jobs: &BTreeSet<String>,
+    mbx_jobs: &BTreeSet<String>,
+    mbx_linux_jobs: &BTreeSet<String>,
 ) -> Result<Yaml, RenderError> {
     let needs_env = needs_channel_envs(jobs)?;
     let mut rendered_jobs = Vec::with_capacity(jobs.len());
@@ -30,7 +31,15 @@ pub(crate) fn workflow_to_yaml(
         let call = shared.get(id).map(String::as_str);
         rendered_jobs.push((
             id.clone(),
-            job_to_yaml(id, job, ctx, &needs_env, call, mbx_gc_jobs.contains(id))?,
+            job_to_yaml(
+                id,
+                job,
+                ctx,
+                &needs_env,
+                call,
+                mbx_jobs.contains(id),
+                mbx_linux_jobs.contains(id),
+            )?,
         ));
     }
     Ok(Yaml::Map(vec![
@@ -183,7 +192,8 @@ fn job_to_yaml(
     ctx: &RenderContext,
     needs_envs: &[(String, String)],
     shared: Option<&str>,
-    mbx_gc_auto: bool,
+    mbx_job: bool,
+    mbx_linux_job: bool,
 ) -> Result<Yaml, RenderError> {
     steps::scan_for_private_subcommands(&job.display_name)?;
     let mut entries = vec![
@@ -197,13 +207,20 @@ fn job_to_yaml(
             Yaml::Int(i64::from(job.timeout_minutes.minutes())),
         ),
     ];
-    if mbx_gc_auto {
+    let mut job_env = Vec::new();
+    if mbx_job {
+        job_env.push((
+            crate::cache_steps::MBX_GC_AUTO_ENV.to_owned(),
+            Yaml::str(crate::cache_steps::MBX_GC_AUTO_VALUE.to_owned()),
+        ));
+    }
+    if mbx_linux_job {
+        job_env.push(("MBX_SHARE_OUT_DIR".to_owned(), Yaml::str("0")));
+    }
+    if !job_env.is_empty() {
         entries.push((
             "env".to_owned(),
-            Yaml::Map(vec![(
-                crate::cache_steps::MBX_GC_AUTO_ENV.to_owned(),
-                Yaml::str(crate::cache_steps::MBX_GC_AUTO_VALUE.to_owned()),
-            )]),
+            Yaml::Map(job_env),
         ));
     }
     if let Some(environment) = &job.environment {

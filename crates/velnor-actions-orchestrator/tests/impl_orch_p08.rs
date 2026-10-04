@@ -301,8 +301,11 @@ fn assert_tools_saves_push_gated_per_key(yaml: &str) {
     assert!(!keys.is_empty(), "at least one restored tools key:\n{yaml}");
     let mbx_saves = yaml.matches("- name: Save MBX single bundle").count();
     let mbx_exports = yaml.matches("- name: Export MBX single bundle").count();
-    let mbx_gc_steps = yaml
-        .matches("- name: Collect MBX cache before export")
+    let mbx_publication_checks = yaml
+        .matches("- name: Verify MBX bundle publication")
+        .count();
+    let mbx_post_publication_gc = yaml
+        .matches("- name: Collect MBX cache after bundle publication")
         .count();
     assert_eq!(
         yaml.matches("actions/cache/save@").count(),
@@ -320,8 +323,8 @@ fn assert_tools_saves_push_gated_per_key(yaml: &str) {
         .count();
     assert_eq!(
         push_gated_cache_steps,
-        1 + keys.len() + mbx_saves + mbx_exports + mbx_gc_steps,
-        "cache saves, exports, and pre-export collection are push-gated:\n{yaml}"
+        1 + keys.len() + mbx_saves + mbx_exports + mbx_publication_checks + mbx_post_publication_gc,
+        "cache saves, exports, publication checks, and post-publication collection are push-gated:\n{yaml}"
     );
     assert!(
         !yaml.contains("- name: Restore Cargo sources\n        if:"),
