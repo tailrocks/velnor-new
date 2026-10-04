@@ -21,7 +21,7 @@ Workflow to generate
     - plan (10 steps)
     - publish-baseline (5 steps)
     - required (9 steps)
-    - rust-app (13 steps)
+    - rust-app (19 steps)
     - 1 Rust crate job
       Each: Clippy -> build -> run tests -> doctests -> doc build
       Entries:
@@ -37,7 +37,8 @@ Workflow to generate
   Clippy memory groups: 1; barriers: 0
   Cache layers: Mise tools, MBX compilation objects
   Actionlint: 1.7.12 pinned
-  Action pins: 6
+  Action pins: 7
+    - actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
     - actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
     - actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
     - actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c

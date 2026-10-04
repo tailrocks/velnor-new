@@ -1,0 +1,547 @@
+diff -r shipping/.github/workflows/ci.yml generated/.github/workflows/ci.yml
+170a171,195
+>       - name: Verify MBX and Rust toolchains
+>         env:
+>           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+>           ACTIONS_ID_TOKEN_REQUEST_URL: ""
+>           ACTIONS_RUNTIME_TOKEN: ""
+>           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           CARGO_REGISTRY_TOKEN: ""
+>           GH_CONFIG_DIR: ""
+>           GH_HOST: ""
+>           GH_TOKEN: ""
+>           GITHUB_TOKEN: ""
+>           MISE_AUTO_INSTALL: "false"
+>           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           MISE_EXEC_AUTO_INSTALL: "false"
+>           MISE_GITHUB_TOKEN: ""
+>           MISE_LOCKFILE: "0"
+>           MISE_NO_CONFIG: "1"
+>           MISE_NO_ENV: "1"
+>           MISE_NO_HOOKS: "1"
+>           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           NODE_AUTH_TOKEN: ""
+>           NPM_TOKEN: ""
+>           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           RUSTUP_TOOLCHAIN: 1.98.1
+>         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; [ -n \"$GITHUB_PATH\" ] || { printf '\\''%s\\n'\\'' '\\''GITHUB_PATH is required'\\'' >&2; exit 1; }; probe_dir=\"$RUNNER_TEMP/velnor/mbx-preflight\"; mkdir -p \"$probe_dir\"; mbx_probe=\"$probe_dir/mbx-root\"; rust_probe=\"$probe_dir/rust-root\"; mise --no-config --no-env --no-hooks where '\\''mr-boxington@1.21.1'\\'' > \"$mbx_probe\"; mise --no-config --no-env --no-hooks where '\\''rust@1.98.1'\\'' > \"$rust_probe\"; IFS= read -r mbx_root < \"$mbx_probe\" || { printf '\\''%s\\n'\\'' '\\''Mise returned no MBX install path'\\'' >&2; exit 1; }; IFS= read -r rust_root < \"$rust_probe\" || { printf '\\''%s\\n'\\'' '\\''Mise returned no Rust install path'\\'' >&2; exit 1; }; [ -n \"$mbx_root\" ] || { printf '\\''%s\\n'\\'' '\\''Mise returned an empty MBX install path'\\'' >&2; exit 1; }; [ -n \"$rust_root\" ] || { printf '\\''%s\\n'\\'' '\\''Mise returned an empty Rust install path'\\'' >&2; exit 1; }; case \"$mbx_root\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''Mise returned a non-absolute MBX install path'\\'' >&2; exit 1 ;; esac; case \"$rust_root\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''Mise returned a non-absolute Rust install path'\\'' >&2; exit 1 ;; esac; mbx_bin=\"$mbx_root/mbx\"; rustc_bin=\"$rust_root/rustc\"; [ -x \"$mbx_bin\" ] || { printf '\\''expected executable MBX at %s\\n'\\'' \"$mbx_bin\" >&2; exit 1; }; [ -x \"$rustc_bin\" ] || { printf '\\''expected Rustup shim at %s\\n'\\'' \"$rustc_bin\" >&2; exit 1; }; mbx_output_file=\"$probe_dir/mbx-version\"; rustc_output_file=\"$probe_dir/rustc-version\"; \"$mbx_bin\" --version > \"$mbx_output_file\"; IFS= read -r mbx_output < \"$mbx_output_file\" || { printf '\\''%s\\n'\\'' '\\''MBX returned no version'\\'' >&2; exit 1; }; [ \"$mbx_output\" = '\\''mbx 1.21.1'\\'' ] || { printf '\\''expected MBX 1.21.1, got %s\\n'\\'' \"$mbx_output\" >&2; exit 1; }; \"$rustc_bin\" '\\''+1.98.1'\\'' -vV > \"$rustc_output_file\"; grep -Fqx '\\''release: 1.98.1'\\'' \"$rustc_output_file\" || { printf '\\''Rustup did not report exact toolchain 1.98.1\\n'\\'' >&2; exit 1; }; rm -f \"$mbx_probe\" \"$rust_probe\" \"$mbx_output_file\" \"$rustc_output_file\"; rmdir \"$probe_dir\"; printf '\\''%s\\n'\\'' \"$rust_root\" \"$mbx_root\" >> \"$GITHUB_PATH\"'"
+177c202
+<           version: 1.21.1
+---
+>           toolchain: 1.98.1
+179a205,215
+>           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           MISE_AUTO_INSTALL: "false"
+>           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           MISE_EXEC_AUTO_INSTALL: "false"
+>           MISE_LOCKFILE: "0"
+>           MISE_NO_CONFIG: "1"
+>           MISE_NO_ENV: "1"
+>           MISE_NO_HOOKS: "1"
+>           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           RUSTUP_TOOLCHAIN: 1.98.1
+685a722,746
+>       - name: Verify MBX and Rust toolchains
+>         env:
+>           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+>           ACTIONS_ID_TOKEN_REQUEST_URL: ""
+>           ACTIONS_RUNTIME_TOKEN: ""
+>           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           CARGO_REGISTRY_TOKEN: ""
+>           GH_CONFIG_DIR: ""
+>           GH_HOST: ""
+>           GH_TOKEN: ""
+>           GITHUB_TOKEN: ""
+>           MISE_AUTO_INSTALL: "false"
+>           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           MISE_EXEC_AUTO_INSTALL: "false"
+>           MISE_GITHUB_TOKEN: ""
+>           MISE_LOCKFILE: "0"
+>           MISE_NO_CONFIG: "1"
+>           MISE_NO_ENV: "1"
+>           MISE_NO_HOOKS: "1"
+>           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           NODE_AUTH_TOKEN: ""
+>           NPM_TOKEN: ""
+>           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           RUSTUP_TOOLCHAIN: 1.98.1
+>         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; [ -n \"$GITHUB_PATH\" ] || { printf '\\''%s\\n'\\'' '\\''GITHUB_PATH is required'\\'' >&2; exit 1; }; probe_dir=\"$RUNNER_TEMP/velnor/mbx-preflight\"; mkdir -p \"$probe_dir\"; mbx_probe=\"$probe_dir/mbx-root\"; rust_probe=\"$probe_dir/rust-root\"; mise --no-config --no-env --no-hooks where '\\''mr-boxington@1.21.1'\\'' > \"$mbx_probe\"; mise --no-config --no-env --no-hooks where '\\''rust@1.98.1'\\'' > \"$rust_probe\"; IFS= read -r mbx_root < \"$mbx_probe\" || { printf '\\''%s\\n'\\'' '\\''Mise returned no MBX install path'\\'' >&2; exit 1; }; IFS= read -r rust_root < \"$rust_probe\" || { printf '\\''%s\\n'\\'' '\\''Mise returned no Rust install path'\\'' >&2; exit 1; }; [ -n \"$mbx_root\" ] || { printf '\\''%s\\n'\\'' '\\''Mise returned an empty MBX install path'\\'' >&2; exit 1; }; [ -n \"$rust_root\" ] || { printf '\\''%s\\n'\\'' '\\''Mise returned an empty Rust install path'\\'' >&2; exit 1; }; case \"$mbx_root\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''Mise returned a non-absolute MBX install path'\\'' >&2; exit 1 ;; esac; case \"$rust_root\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''Mise returned a non-absolute Rust install path'\\'' >&2; exit 1 ;; esac; mbx_bin=\"$mbx_root/mbx\"; rustc_bin=\"$rust_root/rustc\"; [ -x \"$mbx_bin\" ] || { printf '\\''expected executable MBX at %s\\n'\\'' \"$mbx_bin\" >&2; exit 1; }; [ -x \"$rustc_bin\" ] || { printf '\\''expected Rustup shim at %s\\n'\\'' \"$rustc_bin\" >&2; exit 1; }; mbx_output_file=\"$probe_dir/mbx-version\"; rustc_output_file=\"$probe_dir/rustc-version\"; \"$mbx_bin\" --version > \"$mbx_output_file\"; IFS= read -r mbx_output < \"$mbx_output_file\" || { printf '\\''%s\\n'\\'' '\\''MBX returned no version'\\'' >&2; exit 1; }; [ \"$mbx_output\" = '\\''mbx 1.21.1'\\'' ] || { printf '\\''expected MBX 1.21.1, got %s\\n'\\'' \"$mbx_output\" >&2; exit 1; }; \"$rustc_bin\" '\\''+1.98.1'\\'' -vV > \"$rustc_output_file\"; grep -Fqx '\\''release: 1.98.1'\\'' \"$rustc_output_file\" || { printf '\\''Rustup did not report exact toolchain 1.98.1\\n'\\'' >&2; exit 1; }; rm -f \"$mbx_probe\" \"$rust_probe\" \"$mbx_output_file\" \"$rustc_output_file\"; rmdir \"$probe_dir\"; printf '\\''%s\\n'\\'' \"$rust_root\" \"$mbx_root\" >> \"$GITHUB_PATH\"'"
+692c753
+<           version: 1.21.1
+---
+>           toolchain: 1.98.1
+694a756,766
+>           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           MISE_AUTO_INSTALL: "false"
+>           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           MISE_EXEC_AUTO_INSTALL: "false"
+>           MISE_LOCKFILE: "0"
+>           MISE_NO_CONFIG: "1"
+>           MISE_NO_ENV: "1"
+>           MISE_NO_HOOKS: "1"
+>           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           RUSTUP_TOOLCHAIN: 1.98.1
+1055a1128,1152
+>       - name: Verify MBX and Rust toolchains
+>         env:
+>           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+>           ACTIONS_ID_TOKEN_REQUEST_URL: ""
+>           ACTIONS_RUNTIME_TOKEN: ""
+>           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           CARGO_REGISTRY_TOKEN: ""
+>           GH_CONFIG_DIR: ""
+>           GH_HOST: ""
+>           GH_TOKEN: ""
+>           GITHUB_TOKEN: ""
+>           MISE_AUTO_INSTALL: "false"
+>           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           MISE_EXEC_AUTO_INSTALL: "false"
+>           MISE_GITHUB_TOKEN: ""
+>           MISE_LOCKFILE: "0"
+>           MISE_NO_CONFIG: "1"
+>           MISE_NO_ENV: "1"
+>           MISE_NO_HOOKS: "1"
+>           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           NODE_AUTH_TOKEN: ""
+>           NPM_TOKEN: ""
+>           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           RUSTUP_TOOLCHAIN: 1.98.1
+>         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; [ -n \"$GITHUB_PATH\" ] || { printf '\\''%s\\n'\\'' '\\''GITHUB_PATH is required'\\'' >&2; exit 1; }; probe_dir=\"$RUNNER_TEMP/velnor/mbx-preflight\"; mkdir -p \"$probe_dir\"; mbx_probe=\"$probe_dir/mbx-root\"; rust_probe=\"$probe_dir/rust-root\"; mise --no-config --no-env --no-hooks where '\\''mr-boxington@1.21.1'\\'' > \"$mbx_probe\"; mise --no-config --no-env --no-hooks where '\\''rust@1.98.1'\\'' > \"$rust_probe\"; IFS= read -r mbx_root < \"$mbx_probe\" || { printf '\\''%s\\n'\\'' '\\''Mise returned no MBX install path'\\'' >&2; exit 1; }; IFS= read -r rust_root < \"$rust_probe\" || { printf '\\''%s\\n'\\'' '\\''Mise returned no Rust install path'\\'' >&2; exit 1; }; [ -n \"$mbx_root\" ] || { printf '\\''%s\\n'\\'' '\\''Mise returned an empty MBX install path'\\'' >&2; exit 1; }; [ -n \"$rust_root\" ] || { printf '\\''%s\\n'\\'' '\\''Mise returned an empty Rust install path'\\'' >&2; exit 1; }; case \"$mbx_root\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''Mise returned a non-absolute MBX install path'\\'' >&2; exit 1 ;; esac; case \"$rust_root\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''Mise returned a non-absolute Rust install path'\\'' >&2; exit 1 ;; esac; mbx_bin=\"$mbx_root/mbx\"; rustc_bin=\"$rust_root/rustc\"; [ -x \"$mbx_bin\" ] || { printf '\\''expected executable MBX at %s\\n'\\'' \"$mbx_bin\" >&2; exit 1; }; [ -x \"$rustc_bin\" ] || { printf '\\''expected Rustup shim at %s\\n'\\'' \"$rustc_bin\" >&2; exit 1; }; mbx_output_file=\"$probe_dir/mbx-version\"; rustc_output_file=\"$probe_dir/rustc-version\"; \"$mbx_bin\" --version > \"$mbx_output_file\"; IFS= read -r mbx_output < \"$mbx_output_file\" || { printf '\\''%s\\n'\\'' '\\''MBX returned no version'\\'' >&2; exit 1; }; [ \"$mbx_output\" = '\\''mbx 1.21.1'\\'' ] || { printf '\\''expected MBX 1.21.1, got %s\\n'\\'' \"$mbx_output\" >&2; exit 1; }; \"$rustc_bin\" '\\''+1.98.1'\\'' -vV > \"$rustc_output_file\"; grep -Fqx '\\''release: 1.98.1'\\'' \"$rustc_output_file\" || { printf '\\''Rustup did not report exact toolchain 1.98.1\\n'\\'' >&2; exit 1; }; rm -f \"$mbx_probe\" \"$rust_probe\" \"$mbx_output_file\" \"$rustc_output_file\"; rmdir \"$probe_dir\"; printf '\\''%s\\n'\\'' \"$rust_root\" \"$mbx_root\" >> \"$GITHUB_PATH\"'"
+1062c1159
+<           version: 1.21.1
+---
+>           toolchain: 1.98.1
+1064a1162,1172
+>           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           MISE_AUTO_INSTALL: "false"
+>           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           MISE_EXEC_AUTO_INSTALL: "false"
+>           MISE_LOCKFILE: "0"
+>           MISE_NO_CONFIG: "1"
+>           MISE_NO_ENV: "1"
+>           MISE_NO_HOOKS: "1"
+>           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           RUSTUP_TOOLCHAIN: 1.98.1
+1390a1499,1523
+>       - name: Verify MBX and Rust toolchains
+>         env:
+>           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+>           ACTIONS_ID_TOKEN_REQUEST_URL: ""
+>           ACTIONS_RUNTIME_TOKEN: ""
+>           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           CARGO_REGISTRY_TOKEN: ""
+>           GH_CONFIG_DIR: ""
+>           GH_HOST: ""
+>           GH_TOKEN: ""
+>           GITHUB_TOKEN: ""
+>           MISE_AUTO_INSTALL: "false"
+>           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           MISE_EXEC_AUTO_INSTALL: "false"
+>           MISE_GITHUB_TOKEN: ""
+>           MISE_LOCKFILE: "0"
+>           MISE_NO_CONFIG: "1"
+>           MISE_NO_ENV: "1"
+>           MISE_NO_HOOKS: "1"
+>           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           NODE_AUTH_TOKEN: ""
+>           NPM_TOKEN: ""
+>           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           RUSTUP_TOOLCHAIN: 1.98.1
+>         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; [ -n \"$GITHUB_PATH\" ] || { printf '\\''%s\\n'\\'' '\\''GITHUB_PATH is required'\\'' >&2; exit 1; }; probe_dir=\"$RUNNER_TEMP/velnor/mbx-preflight\"; mkdir -p \"$probe_dir\"; mbx_probe=\"$probe_dir/mbx-root\"; rust_probe=\"$probe_dir/rust-root\"; mise --no-config --no-env --no-hooks where '\\''mr-boxington@1.21.1'\\'' > \"$mbx_probe\"; mise --no-config --no-env --no-hooks where '\\''rust@1.98.1'\\'' > \"$rust_probe\"; IFS= read -r mbx_root < \"$mbx_probe\" || { printf '\\''%s\\n'\\'' '\\''Mise returned no MBX install path'\\'' >&2; exit 1; }; IFS= read -r rust_root < \"$rust_probe\" || { printf '\\''%s\\n'\\'' '\\''Mise returned no Rust install path'\\'' >&2; exit 1; }; [ -n \"$mbx_root\" ] || { printf '\\''%s\\n'\\'' '\\''Mise returned an empty MBX install path'\\'' >&2; exit 1; }; [ -n \"$rust_root\" ] || { printf '\\''%s\\n'\\'' '\\''Mise returned an empty Rust install path'\\'' >&2; exit 1; }; case \"$mbx_root\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''Mise returned a non-absolute MBX install path'\\'' >&2; exit 1 ;; esac; case \"$rust_root\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''Mise returned a non-absolute Rust install path'\\'' >&2; exit 1 ;; esac; mbx_bin=\"$mbx_root/mbx\"; rustc_bin=\"$rust_root/rustc\"; [ -x \"$mbx_bin\" ] || { printf '\\''expected executable MBX at %s\\n'\\'' \"$mbx_bin\" >&2; exit 1; }; [ -x \"$rustc_bin\" ] || { printf '\\''expected Rustup shim at %s\\n'\\'' \"$rustc_bin\" >&2; exit 1; }; mbx_output_file=\"$probe_dir/mbx-version\"; rustc_output_file=\"$probe_dir/rustc-version\"; \"$mbx_bin\" --version > \"$mbx_output_file\"; IFS= read -r mbx_output < \"$mbx_output_file\" || { printf '\\''%s\\n'\\'' '\\''MBX returned no version'\\'' >&2; exit 1; }; [ \"$mbx_output\" = '\\''mbx 1.21.1'\\'' ] || { printf '\\''expected MBX 1.21.1, got %s\\n'\\'' \"$mbx_output\" >&2; exit 1; }; \"$rustc_bin\" '\\''+1.98.1'\\'' -vV > \"$rustc_output_file\"; grep -Fqx '\\''release: 1.98.1'\\'' \"$rustc_output_file\" || { printf '\\''Rustup did not report exact toolchain 1.98.1\\n'\\'' >&2; exit 1; }; rm -f \"$mbx_probe\" \"$rust_probe\" \"$mbx_output_file\" \"$rustc_output_file\"; rmdir \"$probe_dir\"; printf '\\''%s\\n'\\'' \"$rust_root\" \"$mbx_root\" >> \"$GITHUB_PATH\"'"
+1397c1530
+<           version: 1.21.1
+---
+>           toolchain: 1.98.1
+1399a1533,1543
+>           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           MISE_AUTO_INSTALL: "false"
+>           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           MISE_EXEC_AUTO_INSTALL: "false"
+>           MISE_LOCKFILE: "0"
+>           MISE_NO_CONFIG: "1"
+>           MISE_NO_ENV: "1"
+>           MISE_NO_HOOKS: "1"
+>           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           RUSTUP_TOOLCHAIN: 1.98.1
+1754a1899,1923
+>       - name: Verify MBX and Rust toolchains
+>         env:
+>           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+>           ACTIONS_ID_TOKEN_REQUEST_URL: ""
+>           ACTIONS_RUNTIME_TOKEN: ""
+>           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           CARGO_REGISTRY_TOKEN: ""
+>           GH_CONFIG_DIR: ""
+>           GH_HOST: ""
+>           GH_TOKEN: ""
+>           GITHUB_TOKEN: ""
+>           MISE_AUTO_INSTALL: "false"
+>           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           MISE_EXEC_AUTO_INSTALL: "false"
+>           MISE_GITHUB_TOKEN: ""
+>           MISE_LOCKFILE: "0"
+>           MISE_NO_CONFIG: "1"
+>           MISE_NO_ENV: "1"
+>           MISE_NO_HOOKS: "1"
+>           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           NODE_AUTH_TOKEN: ""
+>           NPM_TOKEN: ""
+>           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           RUSTUP_TOOLCHAIN: 1.98.1
+>         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; [ -n \"$GITHUB_PATH\" ] || { printf '\\''%s\\n'\\'' '\\''GITHUB_PATH is required'\\'' >&2; exit 1; }; probe_dir=\"$RUNNER_TEMP/velnor/mbx-preflight\"; mkdir -p \"$probe_dir\"; mbx_probe=\"$probe_dir/mbx-root\"; rust_probe=\"$probe_dir/rust-root\"; mise --no-config --no-env --no-hooks where '\\''mr-boxington@1.21.1'\\'' > \"$mbx_probe\"; mise --no-config --no-env --no-hooks where '\\''rust@1.98.1'\\'' > \"$rust_probe\"; IFS= read -r mbx_root < \"$mbx_probe\" || { printf '\\''%s\\n'\\'' '\\''Mise returned no MBX install path'\\'' >&2; exit 1; }; IFS= read -r rust_root < \"$rust_probe\" || { printf '\\''%s\\n'\\'' '\\''Mise returned no Rust install path'\\'' >&2; exit 1; }; [ -n \"$mbx_root\" ] || { printf '\\''%s\\n'\\'' '\\''Mise returned an empty MBX install path'\\'' >&2; exit 1; }; [ -n \"$rust_root\" ] || { printf '\\''%s\\n'\\'' '\\''Mise returned an empty Rust install path'\\'' >&2; exit 1; }; case \"$mbx_root\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''Mise returned a non-absolute MBX install path'\\'' >&2; exit 1 ;; esac; case \"$rust_root\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''Mise returned a non-absolute Rust install path'\\'' >&2; exit 1 ;; esac; mbx_bin=\"$mbx_root/mbx\"; rustc_bin=\"$rust_root/rustc\"; [ -x \"$mbx_bin\" ] || { printf '\\''expected executable MBX at %s\\n'\\'' \"$mbx_bin\" >&2; exit 1; }; [ -x \"$rustc_bin\" ] || { printf '\\''expected Rustup shim at %s\\n'\\'' \"$rustc_bin\" >&2; exit 1; }; mbx_output_file=\"$probe_dir/mbx-version\"; rustc_output_file=\"$probe_dir/rustc-version\"; \"$mbx_bin\" --version > \"$mbx_output_file\"; IFS= read -r mbx_output < \"$mbx_output_file\" || { printf '\\''%s\\n'\\'' '\\''MBX returned no version'\\'' >&2; exit 1; }; [ \"$mbx_output\" = '\\''mbx 1.21.1'\\'' ] || { printf '\\''expected MBX 1.21.1, got %s\\n'\\'' \"$mbx_output\" >&2; exit 1; }; \"$rustc_bin\" '\\''+1.98.1'\\'' -vV > \"$rustc_output_file\"; grep -Fqx '\\''release: 1.98.1'\\'' \"$rustc_output_file\" || { printf '\\''Rustup did not report exact toolchain 1.98.1\\n'\\'' >&2; exit 1; }; rm -f \"$mbx_probe\" \"$rust_probe\" \"$mbx_output_file\" \"$rustc_output_file\"; rmdir \"$probe_dir\"; printf '\\''%s\\n'\\'' \"$rust_root\" \"$mbx_root\" >> \"$GITHUB_PATH\"'"
+1761c1930
+<           version: 1.21.1
+---
+>           toolchain: 1.98.1
+1763a1933,1943
+>           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           MISE_AUTO_INSTALL: "false"
+>           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           MISE_EXEC_AUTO_INSTALL: "false"
+>           MISE_LOCKFILE: "0"
+>           MISE_NO_CONFIG: "1"
+>           MISE_NO_ENV: "1"
+>           MISE_NO_HOOKS: "1"
+>           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           RUSTUP_TOOLCHAIN: 1.98.1
+2124a2305,2329
+>       - name: Verify MBX and Rust toolchains
+>         env:
+>           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+>           ACTIONS_ID_TOKEN_REQUEST_URL: ""
+>           ACTIONS_RUNTIME_TOKEN: ""
+>           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           CARGO_REGISTRY_TOKEN: ""
+>           GH_CONFIG_DIR: ""
+>           GH_HOST: ""
+>           GH_TOKEN: ""
+>           GITHUB_TOKEN: ""
+>           MISE_AUTO_INSTALL: "false"
+>           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           MISE_EXEC_AUTO_INSTALL: "false"
+>           MISE_GITHUB_TOKEN: ""
+>           MISE_LOCKFILE: "0"
+>           MISE_NO_CONFIG: "1"
+>           MISE_NO_ENV: "1"
+>           MISE_NO_HOOKS: "1"
+>           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           NODE_AUTH_TOKEN: ""
+>           NPM_TOKEN: ""
+>           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           RUSTUP_TOOLCHAIN: 1.98.1
+>         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; [ -n \"$GITHUB_PATH\" ] || { printf '\\''%s\\n'\\'' '\\''GITHUB_PATH is required'\\'' >&2; exit 1; }; probe_dir=\"$RUNNER_TEMP/velnor/mbx-preflight\"; mkdir -p \"$probe_dir\"; mbx_probe=\"$probe_dir/mbx-root\"; rust_probe=\"$probe_dir/rust-root\"; mise --no-config --no-env --no-hooks where '\\''mr-boxington@1.21.1'\\'' > \"$mbx_probe\"; mise --no-config --no-env --no-hooks where '\\''rust@1.98.1'\\'' > \"$rust_probe\"; IFS= read -r mbx_root < \"$mbx_probe\" || { printf '\\''%s\\n'\\'' '\\''Mise returned no MBX install path'\\'' >&2; exit 1; }; IFS= read -r rust_root < \"$rust_probe\" || { printf '\\''%s\\n'\\'' '\\''Mise returned no Rust install path'\\'' >&2; exit 1; }; [ -n \"$mbx_root\" ] || { printf '\\''%s\\n'\\'' '\\''Mise returned an empty MBX install path'\\'' >&2; exit 1; }; [ -n \"$rust_root\" ] || { printf '\\''%s\\n'\\'' '\\''Mise returned an empty Rust install path'\\'' >&2; exit 1; }; case \"$mbx_root\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''Mise returned a non-absolute MBX install path'\\'' >&2; exit 1 ;; esac; case \"$rust_root\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''Mise returned a non-absolute Rust install path'\\'' >&2; exit 1 ;; esac; mbx_bin=\"$mbx_root/mbx\"; rustc_bin=\"$rust_root/rustc\"; [ -x \"$mbx_bin\" ] || { printf '\\''expected executable MBX at %s\\n'\\'' \"$mbx_bin\" >&2; exit 1; }; [ -x \"$rustc_bin\" ] || { printf '\\''expected Rustup shim at %s\\n'\\'' \"$rustc_bin\" >&2; exit 1; }; mbx_output_file=\"$probe_dir/mbx-version\"; rustc_output_file=\"$probe_dir/rustc-version\"; \"$mbx_bin\" --version > \"$mbx_output_file\"; IFS= read -r mbx_output < \"$mbx_output_file\" || { printf '\\''%s\\n'\\'' '\\''MBX returned no version'\\'' >&2; exit 1; }; [ \"$mbx_output\" = '\\''mbx 1.21.1'\\'' ] || { printf '\\''expected MBX 1.21.1, got %s\\n'\\'' \"$mbx_output\" >&2; exit 1; }; \"$rustc_bin\" '\\''+1.98.1'\\'' -vV > \"$rustc_output_file\"; grep -Fqx '\\''release: 1.98.1'\\'' \"$rustc_output_file\" || { printf '\\''Rustup did not report exact toolchain 1.98.1\\n'\\'' >&2; exit 1; }; rm -f \"$mbx_probe\" \"$rust_probe\" \"$mbx_output_file\" \"$rustc_output_file\"; rmdir \"$probe_dir\"; printf '\\''%s\\n'\\'' \"$rust_root\" \"$mbx_root\" >> \"$GITHUB_PATH\"'"
+2131c2336
+<           version: 1.21.1
+---
+>           toolchain: 1.98.1
+2133a2339,2349
+>           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           MISE_AUTO_INSTALL: "false"
+>           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           MISE_EXEC_AUTO_INSTALL: "false"
+>           MISE_LOCKFILE: "0"
+>           MISE_NO_CONFIG: "1"
+>           MISE_NO_ENV: "1"
+>           MISE_NO_HOOKS: "1"
+>           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           RUSTUP_TOOLCHAIN: 1.98.1
+2488a2705,2729
+>       - name: Verify MBX and Rust toolchains
+>         env:
+>           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+>           ACTIONS_ID_TOKEN_REQUEST_URL: ""
+>           ACTIONS_RUNTIME_TOKEN: ""
+>           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           CARGO_REGISTRY_TOKEN: ""
+>           GH_CONFIG_DIR: ""
+>           GH_HOST: ""
+>           GH_TOKEN: ""
+>           GITHUB_TOKEN: ""
+>           MISE_AUTO_INSTALL: "false"
+>           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           MISE_EXEC_AUTO_INSTALL: "false"
+>           MISE_GITHUB_TOKEN: ""
+>           MISE_LOCKFILE: "0"
+>           MISE_NO_CONFIG: "1"
+>           MISE_NO_ENV: "1"
+>           MISE_NO_HOOKS: "1"
+>           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           NODE_AUTH_TOKEN: ""
+>           NPM_TOKEN: ""
+>           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           RUSTUP_TOOLCHAIN: 1.98.1
+>         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; [ -n \"$GITHUB_PATH\" ] || { printf '\\''%s\\n'\\'' '\\''GITHUB_PATH is required'\\'' >&2; exit 1; }; probe_dir=\"$RUNNER_TEMP/velnor/mbx-preflight\"; mkdir -p \"$probe_dir\"; mbx_probe=\"$probe_dir/mbx-root\"; rust_probe=\"$probe_dir/rust-root\"; mise --no-config --no-env --no-hooks where '\\''mr-boxington@1.21.1'\\'' > \"$mbx_probe\"; mise --no-config --no-env --no-hooks where '\\''rust@1.98.1'\\'' > \"$rust_probe\"; IFS= read -r mbx_root < \"$mbx_probe\" || { printf '\\''%s\\n'\\'' '\\''Mise returned no MBX install path'\\'' >&2; exit 1; }; IFS= read -r rust_root < \"$rust_probe\" || { printf '\\''%s\\n'\\'' '\\''Mise returned no Rust install path'\\'' >&2; exit 1; }; [ -n \"$mbx_root\" ] || { printf '\\''%s\\n'\\'' '\\''Mise returned an empty MBX install path'\\'' >&2; exit 1; }; [ -n \"$rust_root\" ] || { printf '\\''%s\\n'\\'' '\\''Mise returned an empty Rust install path'\\'' >&2; exit 1; }; case \"$mbx_root\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''Mise returned a non-absolute MBX install path'\\'' >&2; exit 1 ;; esac; case \"$rust_root\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''Mise returned a non-absolute Rust install path'\\'' >&2; exit 1 ;; esac; mbx_bin=\"$mbx_root/mbx\"; rustc_bin=\"$rust_root/rustc\"; [ -x \"$mbx_bin\" ] || { printf '\\''expected executable MBX at %s\\n'\\'' \"$mbx_bin\" >&2; exit 1; }; [ -x \"$rustc_bin\" ] || { printf '\\''expected Rustup shim at %s\\n'\\'' \"$rustc_bin\" >&2; exit 1; }; mbx_output_file=\"$probe_dir/mbx-version\"; rustc_output_file=\"$probe_dir/rustc-version\"; \"$mbx_bin\" --version > \"$mbx_output_file\"; IFS= read -r mbx_output < \"$mbx_output_file\" || { printf '\\''%s\\n'\\'' '\\''MBX returned no version'\\'' >&2; exit 1; }; [ \"$mbx_output\" = '\\''mbx 1.21.1'\\'' ] || { printf '\\''expected MBX 1.21.1, got %s\\n'\\'' \"$mbx_output\" >&2; exit 1; }; \"$rustc_bin\" '\\''+1.98.1'\\'' -vV > \"$rustc_output_file\"; grep -Fqx '\\''release: 1.98.1'\\'' \"$rustc_output_file\" || { printf '\\''Rustup did not report exact toolchain 1.98.1\\n'\\'' >&2; exit 1; }; rm -f \"$mbx_probe\" \"$rust_probe\" \"$mbx_output_file\" \"$rustc_output_file\"; rmdir \"$probe_dir\"; printf '\\''%s\\n'\\'' \"$rust_root\" \"$mbx_root\" >> \"$GITHUB_PATH\"'"
+2495c2736
+<           version: 1.21.1
+---
+>           toolchain: 1.98.1
+2497a2739,2749
+>           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           MISE_AUTO_INSTALL: "false"
+>           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           MISE_EXEC_AUTO_INSTALL: "false"
+>           MISE_LOCKFILE: "0"
+>           MISE_NO_CONFIG: "1"
+>           MISE_NO_ENV: "1"
+>           MISE_NO_HOOKS: "1"
+>           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           RUSTUP_TOOLCHAIN: 1.98.1
+2852a3105,3129
+>       - name: Verify MBX and Rust toolchains
+>         env:
+>           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+>           ACTIONS_ID_TOKEN_REQUEST_URL: ""
+>           ACTIONS_RUNTIME_TOKEN: ""
+>           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           CARGO_REGISTRY_TOKEN: ""
+>           GH_CONFIG_DIR: ""
+>           GH_HOST: ""
+>           GH_TOKEN: ""
+>           GITHUB_TOKEN: ""
+>           MISE_AUTO_INSTALL: "false"
+>           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           MISE_EXEC_AUTO_INSTALL: "false"
+>           MISE_GITHUB_TOKEN: ""
+>           MISE_LOCKFILE: "0"
+>           MISE_NO_CONFIG: "1"
+>           MISE_NO_ENV: "1"
+>           MISE_NO_HOOKS: "1"
+>           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           NODE_AUTH_TOKEN: ""
+>           NPM_TOKEN: ""
+>           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           RUSTUP_TOOLCHAIN: 1.98.1
+>         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; [ -n \"$GITHUB_PATH\" ] || { printf '\\''%s\\n'\\'' '\\''GITHUB_PATH is required'\\'' >&2; exit 1; }; probe_dir=\"$RUNNER_TEMP/velnor/mbx-preflight\"; mkdir -p \"$probe_dir\"; mbx_probe=\"$probe_dir/mbx-root\"; rust_probe=\"$probe_dir/rust-root\"; mise --no-config --no-env --no-hooks where '\\''mr-boxington@1.21.1'\\'' > \"$mbx_probe\"; mise --no-config --no-env --no-hooks where '\\''rust@1.98.1'\\'' > \"$rust_probe\"; IFS= read -r mbx_root < \"$mbx_probe\" || { printf '\\''%s\\n'\\'' '\\''Mise returned no MBX install path'\\'' >&2; exit 1; }; IFS= read -r rust_root < \"$rust_probe\" || { printf '\\''%s\\n'\\'' '\\''Mise returned no Rust install path'\\'' >&2; exit 1; }; [ -n \"$mbx_root\" ] || { printf '\\''%s\\n'\\'' '\\''Mise returned an empty MBX install path'\\'' >&2; exit 1; }; [ -n \"$rust_root\" ] || { printf '\\''%s\\n'\\'' '\\''Mise returned an empty Rust install path'\\'' >&2; exit 1; }; case \"$mbx_root\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''Mise returned a non-absolute MBX install path'\\'' >&2; exit 1 ;; esac; case \"$rust_root\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''Mise returned a non-absolute Rust install path'\\'' >&2; exit 1 ;; esac; mbx_bin=\"$mbx_root/mbx\"; rustc_bin=\"$rust_root/rustc\"; [ -x \"$mbx_bin\" ] || { printf '\\''expected executable MBX at %s\\n'\\'' \"$mbx_bin\" >&2; exit 1; }; [ -x \"$rustc_bin\" ] || { printf '\\''expected Rustup shim at %s\\n'\\'' \"$rustc_bin\" >&2; exit 1; }; mbx_output_file=\"$probe_dir/mbx-version\"; rustc_output_file=\"$probe_dir/rustc-version\"; \"$mbx_bin\" --version > \"$mbx_output_file\"; IFS= read -r mbx_output < \"$mbx_output_file\" || { printf '\\''%s\\n'\\'' '\\''MBX returned no version'\\'' >&2; exit 1; }; [ \"$mbx_output\" = '\\''mbx 1.21.1'\\'' ] || { printf '\\''expected MBX 1.21.1, got %s\\n'\\'' \"$mbx_output\" >&2; exit 1; }; \"$rustc_bin\" '\\''+1.98.1'\\'' -vV > \"$rustc_output_file\"; grep -Fqx '\\''release: 1.98.1'\\'' \"$rustc_output_file\" || { printf '\\''Rustup did not report exact toolchain 1.98.1\\n'\\'' >&2; exit 1; }; rm -f \"$mbx_probe\" \"$rust_probe\" \"$mbx_output_file\" \"$rustc_output_file\"; rmdir \"$probe_dir\"; printf '\\''%s\\n'\\'' \"$rust_root\" \"$mbx_root\" >> \"$GITHUB_PATH\"'"
+2859c3136
+<           version: 1.21.1
+---
+>           toolchain: 1.98.1
+2861a3139,3149
+>           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           MISE_AUTO_INSTALL: "false"
+>           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           MISE_EXEC_AUTO_INSTALL: "false"
+>           MISE_LOCKFILE: "0"
+>           MISE_NO_CONFIG: "1"
+>           MISE_NO_ENV: "1"
+>           MISE_NO_HOOKS: "1"
+>           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           RUSTUP_TOOLCHAIN: 1.98.1
+3216a3505,3529
+>       - name: Verify MBX and Rust toolchains
+>         env:
+>           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+>           ACTIONS_ID_TOKEN_REQUEST_URL: ""
+>           ACTIONS_RUNTIME_TOKEN: ""
+>           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           CARGO_REGISTRY_TOKEN: ""
+>           GH_CONFIG_DIR: ""
+>           GH_HOST: ""
+>           GH_TOKEN: ""
+>           GITHUB_TOKEN: ""
+>           MISE_AUTO_INSTALL: "false"
+>           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           MISE_EXEC_AUTO_INSTALL: "false"
+>           MISE_GITHUB_TOKEN: ""
+>           MISE_LOCKFILE: "0"
+>           MISE_NO_CONFIG: "1"
+>           MISE_NO_ENV: "1"
+>           MISE_NO_HOOKS: "1"
+>           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           NODE_AUTH_TOKEN: ""
+>           NPM_TOKEN: ""
+>           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           RUSTUP_TOOLCHAIN: 1.98.1
+>         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; [ -n \"$GITHUB_PATH\" ] || { printf '\\''%s\\n'\\'' '\\''GITHUB_PATH is required'\\'' >&2; exit 1; }; probe_dir=\"$RUNNER_TEMP/velnor/mbx-preflight\"; mkdir -p \"$probe_dir\"; mbx_probe=\"$probe_dir/mbx-root\"; rust_probe=\"$probe_dir/rust-root\"; mise --no-config --no-env --no-hooks where '\\''mr-boxington@1.21.1'\\'' > \"$mbx_probe\"; mise --no-config --no-env --no-hooks where '\\''rust@1.98.1'\\'' > \"$rust_probe\"; IFS= read -r mbx_root < \"$mbx_probe\" || { printf '\\''%s\\n'\\'' '\\''Mise returned no MBX install path'\\'' >&2; exit 1; }; IFS= read -r rust_root < \"$rust_probe\" || { printf '\\''%s\\n'\\'' '\\''Mise returned no Rust install path'\\'' >&2; exit 1; }; [ -n \"$mbx_root\" ] || { printf '\\''%s\\n'\\'' '\\''Mise returned an empty MBX install path'\\'' >&2; exit 1; }; [ -n \"$rust_root\" ] || { printf '\\''%s\\n'\\'' '\\''Mise returned an empty Rust install path'\\'' >&2; exit 1; }; case \"$mbx_root\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''Mise returned a non-absolute MBX install path'\\'' >&2; exit 1 ;; esac; case \"$rust_root\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''Mise returned a non-absolute Rust install path'\\'' >&2; exit 1 ;; esac; mbx_bin=\"$mbx_root/mbx\"; rustc_bin=\"$rust_root/rustc\"; [ -x \"$mbx_bin\" ] || { printf '\\''expected executable MBX at %s\\n'\\'' \"$mbx_bin\" >&2; exit 1; }; [ -x \"$rustc_bin\" ] || { printf '\\''expected Rustup shim at %s\\n'\\'' \"$rustc_bin\" >&2; exit 1; }; mbx_output_file=\"$probe_dir/mbx-version\"; rustc_output_file=\"$probe_dir/rustc-version\"; \"$mbx_bin\" --version > \"$mbx_output_file\"; IFS= read -r mbx_output < \"$mbx_output_file\" || { printf '\\''%s\\n'\\'' '\\''MBX returned no version'\\'' >&2; exit 1; }; [ \"$mbx_output\" = '\\''mbx 1.21.1'\\'' ] || { printf '\\''expected MBX 1.21.1, got %s\\n'\\'' \"$mbx_output\" >&2; exit 1; }; \"$rustc_bin\" '\\''+1.98.1'\\'' -vV > \"$rustc_output_file\"; grep -Fqx '\\''release: 1.98.1'\\'' \"$rustc_output_file\" || { printf '\\''Rustup did not report exact toolchain 1.98.1\\n'\\'' >&2; exit 1; }; rm -f \"$mbx_probe\" \"$rust_probe\" \"$mbx_output_file\" \"$rustc_output_file\"; rmdir \"$probe_dir\"; printf '\\''%s\\n'\\'' \"$rust_root\" \"$mbx_root\" >> \"$GITHUB_PATH\"'"
+3223c3536
+<           version: 1.21.1
+---
+>           toolchain: 1.98.1
+3225a3539,3549
+>           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           MISE_AUTO_INSTALL: "false"
+>           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           MISE_EXEC_AUTO_INSTALL: "false"
+>           MISE_LOCKFILE: "0"
+>           MISE_NO_CONFIG: "1"
+>           MISE_NO_ENV: "1"
+>           MISE_NO_HOOKS: "1"
+>           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           RUSTUP_TOOLCHAIN: 1.98.1
+3580a3905,3929
+>       - name: Verify MBX and Rust toolchains
+>         env:
+>           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+>           ACTIONS_ID_TOKEN_REQUEST_URL: ""
+>           ACTIONS_RUNTIME_TOKEN: ""
+>           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           CARGO_REGISTRY_TOKEN: ""
+>           GH_CONFIG_DIR: ""
+>           GH_HOST: ""
+>           GH_TOKEN: ""
+>           GITHUB_TOKEN: ""
+>           MISE_AUTO_INSTALL: "false"
+>           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           MISE_EXEC_AUTO_INSTALL: "false"
+>           MISE_GITHUB_TOKEN: ""
+>           MISE_LOCKFILE: "0"
+>           MISE_NO_CONFIG: "1"
+>           MISE_NO_ENV: "1"
+>           MISE_NO_HOOKS: "1"
+>           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           NODE_AUTH_TOKEN: ""
+>           NPM_TOKEN: ""
+>           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           RUSTUP_TOOLCHAIN: 1.98.1
+>         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; [ -n \"$GITHUB_PATH\" ] || { printf '\\''%s\\n'\\'' '\\''GITHUB_PATH is required'\\'' >&2; exit 1; }; probe_dir=\"$RUNNER_TEMP/velnor/mbx-preflight\"; mkdir -p \"$probe_dir\"; mbx_probe=\"$probe_dir/mbx-root\"; rust_probe=\"$probe_dir/rust-root\"; mise --no-config --no-env --no-hooks where '\\''mr-boxington@1.21.1'\\'' > \"$mbx_probe\"; mise --no-config --no-env --no-hooks where '\\''rust@1.98.1'\\'' > \"$rust_probe\"; IFS= read -r mbx_root < \"$mbx_probe\" || { printf '\\''%s\\n'\\'' '\\''Mise returned no MBX install path'\\'' >&2; exit 1; }; IFS= read -r rust_root < \"$rust_probe\" || { printf '\\''%s\\n'\\'' '\\''Mise returned no Rust install path'\\'' >&2; exit 1; }; [ -n \"$mbx_root\" ] || { printf '\\''%s\\n'\\'' '\\''Mise returned an empty MBX install path'\\'' >&2; exit 1; }; [ -n \"$rust_root\" ] || { printf '\\''%s\\n'\\'' '\\''Mise returned an empty Rust install path'\\'' >&2; exit 1; }; case \"$mbx_root\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''Mise returned a non-absolute MBX install path'\\'' >&2; exit 1 ;; esac; case \"$rust_root\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''Mise returned a non-absolute Rust install path'\\'' >&2; exit 1 ;; esac; mbx_bin=\"$mbx_root/mbx\"; rustc_bin=\"$rust_root/rustc\"; [ -x \"$mbx_bin\" ] || { printf '\\''expected executable MBX at %s\\n'\\'' \"$mbx_bin\" >&2; exit 1; }; [ -x \"$rustc_bin\" ] || { printf '\\''expected Rustup shim at %s\\n'\\'' \"$rustc_bin\" >&2; exit 1; }; mbx_output_file=\"$probe_dir/mbx-version\"; rustc_output_file=\"$probe_dir/rustc-version\"; \"$mbx_bin\" --version > \"$mbx_output_file\"; IFS= read -r mbx_output < \"$mbx_output_file\" || { printf '\\''%s\\n'\\'' '\\''MBX returned no version'\\'' >&2; exit 1; }; [ \"$mbx_output\" = '\\''mbx 1.21.1'\\'' ] || { printf '\\''expected MBX 1.21.1, got %s\\n'\\'' \"$mbx_output\" >&2; exit 1; }; \"$rustc_bin\" '\\''+1.98.1'\\'' -vV > \"$rustc_output_file\"; grep -Fqx '\\''release: 1.98.1'\\'' \"$rustc_output_file\" || { printf '\\''Rustup did not report exact toolchain 1.98.1\\n'\\'' >&2; exit 1; }; rm -f \"$mbx_probe\" \"$rust_probe\" \"$mbx_output_file\" \"$rustc_output_file\"; rmdir \"$probe_dir\"; printf '\\''%s\\n'\\'' \"$rust_root\" \"$mbx_root\" >> \"$GITHUB_PATH\"'"
+3587c3936
+<           version: 1.21.1
+---
+>           toolchain: 1.98.1
+3589a3939,3949
+>           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           MISE_AUTO_INSTALL: "false"
+>           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           MISE_EXEC_AUTO_INSTALL: "false"
+>           MISE_LOCKFILE: "0"
+>           MISE_NO_CONFIG: "1"
+>           MISE_NO_ENV: "1"
+>           MISE_NO_HOOKS: "1"
+>           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           RUSTUP_TOOLCHAIN: 1.98.1
+3944a4305,4329
+>       - name: Verify MBX and Rust toolchains
+>         env:
+>           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+>           ACTIONS_ID_TOKEN_REQUEST_URL: ""
+>           ACTIONS_RUNTIME_TOKEN: ""
+>           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           CARGO_REGISTRY_TOKEN: ""
+>           GH_CONFIG_DIR: ""
+>           GH_HOST: ""
+>           GH_TOKEN: ""
+>           GITHUB_TOKEN: ""
+>           MISE_AUTO_INSTALL: "false"
+>           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           MISE_EXEC_AUTO_INSTALL: "false"
+>           MISE_GITHUB_TOKEN: ""
+>           MISE_LOCKFILE: "0"
+>           MISE_NO_CONFIG: "1"
+>           MISE_NO_ENV: "1"
+>           MISE_NO_HOOKS: "1"
+>           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           NODE_AUTH_TOKEN: ""
+>           NPM_TOKEN: ""
+>           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           RUSTUP_TOOLCHAIN: 1.98.1
+>         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; [ -n \"$GITHUB_PATH\" ] || { printf '\\''%s\\n'\\'' '\\''GITHUB_PATH is required'\\'' >&2; exit 1; }; probe_dir=\"$RUNNER_TEMP/velnor/mbx-preflight\"; mkdir -p \"$probe_dir\"; mbx_probe=\"$probe_dir/mbx-root\"; rust_probe=\"$probe_dir/rust-root\"; mise --no-config --no-env --no-hooks where '\\''mr-boxington@1.21.1'\\'' > \"$mbx_probe\"; mise --no-config --no-env --no-hooks where '\\''rust@1.98.1'\\'' > \"$rust_probe\"; IFS= read -r mbx_root < \"$mbx_probe\" || { printf '\\''%s\\n'\\'' '\\''Mise returned no MBX install path'\\'' >&2; exit 1; }; IFS= read -r rust_root < \"$rust_probe\" || { printf '\\''%s\\n'\\'' '\\''Mise returned no Rust install path'\\'' >&2; exit 1; }; [ -n \"$mbx_root\" ] || { printf '\\''%s\\n'\\'' '\\''Mise returned an empty MBX install path'\\'' >&2; exit 1; }; [ -n \"$rust_root\" ] || { printf '\\''%s\\n'\\'' '\\''Mise returned an empty Rust install path'\\'' >&2; exit 1; }; case \"$mbx_root\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''Mise returned a non-absolute MBX install path'\\'' >&2; exit 1 ;; esac; case \"$rust_root\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''Mise returned a non-absolute Rust install path'\\'' >&2; exit 1 ;; esac; mbx_bin=\"$mbx_root/mbx\"; rustc_bin=\"$rust_root/rustc\"; [ -x \"$mbx_bin\" ] || { printf '\\''expected executable MBX at %s\\n'\\'' \"$mbx_bin\" >&2; exit 1; }; [ -x \"$rustc_bin\" ] || { printf '\\''expected Rustup shim at %s\\n'\\'' \"$rustc_bin\" >&2; exit 1; }; mbx_output_file=\"$probe_dir/mbx-version\"; rustc_output_file=\"$probe_dir/rustc-version\"; \"$mbx_bin\" --version > \"$mbx_output_file\"; IFS= read -r mbx_output < \"$mbx_output_file\" || { printf '\\''%s\\n'\\'' '\\''MBX returned no version'\\'' >&2; exit 1; }; [ \"$mbx_output\" = '\\''mbx 1.21.1'\\'' ] || { printf '\\''expected MBX 1.21.1, got %s\\n'\\'' \"$mbx_output\" >&2; exit 1; }; \"$rustc_bin\" '\\''+1.98.1'\\'' -vV > \"$rustc_output_file\"; grep -Fqx '\\''release: 1.98.1'\\'' \"$rustc_output_file\" || { printf '\\''Rustup did not report exact toolchain 1.98.1\\n'\\'' >&2; exit 1; }; rm -f \"$mbx_probe\" \"$rust_probe\" \"$mbx_output_file\" \"$rustc_output_file\"; rmdir \"$probe_dir\"; printf '\\''%s\\n'\\'' \"$rust_root\" \"$mbx_root\" >> \"$GITHUB_PATH\"'"
+3951c4336
+<           version: 1.21.1
+---
+>           toolchain: 1.98.1
+3953a4339,4349
+>           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           MISE_AUTO_INSTALL: "false"
+>           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           MISE_EXEC_AUTO_INSTALL: "false"
+>           MISE_LOCKFILE: "0"
+>           MISE_NO_CONFIG: "1"
+>           MISE_NO_ENV: "1"
+>           MISE_NO_HOOKS: "1"
+>           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           RUSTUP_TOOLCHAIN: 1.98.1
+4308a4705,4729
+>       - name: Verify MBX and Rust toolchains
+>         env:
+>           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+>           ACTIONS_ID_TOKEN_REQUEST_URL: ""
+>           ACTIONS_RUNTIME_TOKEN: ""
+>           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           CARGO_REGISTRY_TOKEN: ""
+>           GH_CONFIG_DIR: ""
+>           GH_HOST: ""
+>           GH_TOKEN: ""
+>           GITHUB_TOKEN: ""
+>           MISE_AUTO_INSTALL: "false"
+>           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           MISE_EXEC_AUTO_INSTALL: "false"
+>           MISE_GITHUB_TOKEN: ""
+>           MISE_LOCKFILE: "0"
+>           MISE_NO_CONFIG: "1"
+>           MISE_NO_ENV: "1"
+>           MISE_NO_HOOKS: "1"
+>           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           NODE_AUTH_TOKEN: ""
+>           NPM_TOKEN: ""
+>           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           RUSTUP_TOOLCHAIN: 1.98.1
+>         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; [ -n \"$GITHUB_PATH\" ] || { printf '\\''%s\\n'\\'' '\\''GITHUB_PATH is required'\\'' >&2; exit 1; }; probe_dir=\"$RUNNER_TEMP/velnor/mbx-preflight\"; mkdir -p \"$probe_dir\"; mbx_probe=\"$probe_dir/mbx-root\"; rust_probe=\"$probe_dir/rust-root\"; mise --no-config --no-env --no-hooks where '\\''mr-boxington@1.21.1'\\'' > \"$mbx_probe\"; mise --no-config --no-env --no-hooks where '\\''rust@1.98.1'\\'' > \"$rust_probe\"; IFS= read -r mbx_root < \"$mbx_probe\" || { printf '\\''%s\\n'\\'' '\\''Mise returned no MBX install path'\\'' >&2; exit 1; }; IFS= read -r rust_root < \"$rust_probe\" || { printf '\\''%s\\n'\\'' '\\''Mise returned no Rust install path'\\'' >&2; exit 1; }; [ -n \"$mbx_root\" ] || { printf '\\''%s\\n'\\'' '\\''Mise returned an empty MBX install path'\\'' >&2; exit 1; }; [ -n \"$rust_root\" ] || { printf '\\''%s\\n'\\'' '\\''Mise returned an empty Rust install path'\\'' >&2; exit 1; }; case \"$mbx_root\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''Mise returned a non-absolute MBX install path'\\'' >&2; exit 1 ;; esac; case \"$rust_root\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''Mise returned a non-absolute Rust install path'\\'' >&2; exit 1 ;; esac; mbx_bin=\"$mbx_root/mbx\"; rustc_bin=\"$rust_root/rustc\"; [ -x \"$mbx_bin\" ] || { printf '\\''expected executable MBX at %s\\n'\\'' \"$mbx_bin\" >&2; exit 1; }; [ -x \"$rustc_bin\" ] || { printf '\\''expected Rustup shim at %s\\n'\\'' \"$rustc_bin\" >&2; exit 1; }; mbx_output_file=\"$probe_dir/mbx-version\"; rustc_output_file=\"$probe_dir/rustc-version\"; \"$mbx_bin\" --version > \"$mbx_output_file\"; IFS= read -r mbx_output < \"$mbx_output_file\" || { printf '\\''%s\\n'\\'' '\\''MBX returned no version'\\'' >&2; exit 1; }; [ \"$mbx_output\" = '\\''mbx 1.21.1'\\'' ] || { printf '\\''expected MBX 1.21.1, got %s\\n'\\'' \"$mbx_output\" >&2; exit 1; }; \"$rustc_bin\" '\\''+1.98.1'\\'' -vV > \"$rustc_output_file\"; grep -Fqx '\\''release: 1.98.1'\\'' \"$rustc_output_file\" || { printf '\\''Rustup did not report exact toolchain 1.98.1\\n'\\'' >&2; exit 1; }; rm -f \"$mbx_probe\" \"$rust_probe\" \"$mbx_output_file\" \"$rustc_output_file\"; rmdir \"$probe_dir\"; printf '\\''%s\\n'\\'' \"$rust_root\" \"$mbx_root\" >> \"$GITHUB_PATH\"'"
+4315c4736
+<           version: 1.21.1
+---
+>           toolchain: 1.98.1
+4317a4739,4749
+>           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           MISE_AUTO_INSTALL: "false"
+>           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           MISE_EXEC_AUTO_INSTALL: "false"
+>           MISE_LOCKFILE: "0"
+>           MISE_NO_CONFIG: "1"
+>           MISE_NO_ENV: "1"
+>           MISE_NO_HOOKS: "1"
+>           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           RUSTUP_TOOLCHAIN: 1.98.1
+4672a5105,5129
+>       - name: Verify MBX and Rust toolchains
+>         env:
+>           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+>           ACTIONS_ID_TOKEN_REQUEST_URL: ""
+>           ACTIONS_RUNTIME_TOKEN: ""
+>           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           CARGO_REGISTRY_TOKEN: ""
+>           GH_CONFIG_DIR: ""
+>           GH_HOST: ""
+>           GH_TOKEN: ""
+>           GITHUB_TOKEN: ""
+>           MISE_AUTO_INSTALL: "false"
+>           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           MISE_EXEC_AUTO_INSTALL: "false"
+>           MISE_GITHUB_TOKEN: ""
+>           MISE_LOCKFILE: "0"
+>           MISE_NO_CONFIG: "1"
+>           MISE_NO_ENV: "1"
+>           MISE_NO_HOOKS: "1"
+>           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           NODE_AUTH_TOKEN: ""
+>           NPM_TOKEN: ""
+>           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           RUSTUP_TOOLCHAIN: 1.98.1
+>         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; [ -n \"$GITHUB_PATH\" ] || { printf '\\''%s\\n'\\'' '\\''GITHUB_PATH is required'\\'' >&2; exit 1; }; probe_dir=\"$RUNNER_TEMP/velnor/mbx-preflight\"; mkdir -p \"$probe_dir\"; mbx_probe=\"$probe_dir/mbx-root\"; rust_probe=\"$probe_dir/rust-root\"; mise --no-config --no-env --no-hooks where '\\''mr-boxington@1.21.1'\\'' > \"$mbx_probe\"; mise --no-config --no-env --no-hooks where '\\''rust@1.98.1'\\'' > \"$rust_probe\"; IFS= read -r mbx_root < \"$mbx_probe\" || { printf '\\''%s\\n'\\'' '\\''Mise returned no MBX install path'\\'' >&2; exit 1; }; IFS= read -r rust_root < \"$rust_probe\" || { printf '\\''%s\\n'\\'' '\\''Mise returned no Rust install path'\\'' >&2; exit 1; }; [ -n \"$mbx_root\" ] || { printf '\\''%s\\n'\\'' '\\''Mise returned an empty MBX install path'\\'' >&2; exit 1; }; [ -n \"$rust_root\" ] || { printf '\\''%s\\n'\\'' '\\''Mise returned an empty Rust install path'\\'' >&2; exit 1; }; case \"$mbx_root\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''Mise returned a non-absolute MBX install path'\\'' >&2; exit 1 ;; esac; case \"$rust_root\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''Mise returned a non-absolute Rust install path'\\'' >&2; exit 1 ;; esac; mbx_bin=\"$mbx_root/mbx\"; rustc_bin=\"$rust_root/rustc\"; [ -x \"$mbx_bin\" ] || { printf '\\''expected executable MBX at %s\\n'\\'' \"$mbx_bin\" >&2; exit 1; }; [ -x \"$rustc_bin\" ] || { printf '\\''expected Rustup shim at %s\\n'\\'' \"$rustc_bin\" >&2; exit 1; }; mbx_output_file=\"$probe_dir/mbx-version\"; rustc_output_file=\"$probe_dir/rustc-version\"; \"$mbx_bin\" --version > \"$mbx_output_file\"; IFS= read -r mbx_output < \"$mbx_output_file\" || { printf '\\''%s\\n'\\'' '\\''MBX returned no version'\\'' >&2; exit 1; }; [ \"$mbx_output\" = '\\''mbx 1.21.1'\\'' ] || { printf '\\''expected MBX 1.21.1, got %s\\n'\\'' \"$mbx_output\" >&2; exit 1; }; \"$rustc_bin\" '\\''+1.98.1'\\'' -vV > \"$rustc_output_file\"; grep -Fqx '\\''release: 1.98.1'\\'' \"$rustc_output_file\" || { printf '\\''Rustup did not report exact toolchain 1.98.1\\n'\\'' >&2; exit 1; }; rm -f \"$mbx_probe\" \"$rust_probe\" \"$mbx_output_file\" \"$rustc_output_file\"; rmdir \"$probe_dir\"; printf '\\''%s\\n'\\'' \"$rust_root\" \"$mbx_root\" >> \"$GITHUB_PATH\"'"
+4679c5136
+<           version: 1.21.1
+---
+>           toolchain: 1.98.1
+4681a5139,5149
+>           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           MISE_AUTO_INSTALL: "false"
+>           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+>           MISE_EXEC_AUTO_INSTALL: "false"
+>           MISE_LOCKFILE: "0"
+>           MISE_NO_CONFIG: "1"
+>           MISE_NO_ENV: "1"
+>           MISE_NO_HOOKS: "1"
+>           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+>           RUSTUP_TOOLCHAIN: 1.98.1

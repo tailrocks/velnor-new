@@ -15,7 +15,7 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BIN="$ROOT/target/debug/velnor-actions"
 GOLDEN_DIR="$ROOT/docs/proposed/opentofu-goldens"
-WORK="/tmp/velnor-goldens-work"
+WORK=""
 MODE="${1:-check}"
 
 FIXTURES="nested mbx-nextest empty-suite minimal-cargo"
@@ -30,6 +30,21 @@ die() { echo "FAIL: $1"; fail=1; }
 # is POSIX and pins link-as-link on both BSD and GNU cp.
 copy_tree() {
   cp -RP "$1" "$2"
+}
+
+# Do not pin checkout-specific paths printed by `generate` in stderr goldens.
+normalize_generate_stderr() {
+  local path="$1" normalized="$1.normalized"
+  if ! sed -e 's|^Preview: .*|Preview: <preview>|' \
+    -e 's|^Repository: .*|Repository: <repo>|' \
+    "$path" >"$normalized"; then
+    rm -f "$normalized"
+    return 1
+  fi
+  if ! mv "$normalized" "$path"; then
+    rm -f "$normalized"
+    return 1
+  fi
 }
 
 # Deterministic content+link pin of a tree: sha256 per regular file
@@ -59,11 +74,10 @@ build_bin() {
     || { echo "FATAL: cargo build failed"; exit 2; }
 }
 
-# Deterministic scratch git checkout of one fixture; echoes "repo head".
+# Deterministic scratch git checkout of one fixture; echoes its commit head.
 setup_case() {
   local case="$1" repo head
   repo="$WORK/$case"
-  rm -rf "$repo"
   mkdir -p "$repo"
   copy_tree "$ROOT/fixtures/$case/." "$repo/"
   if [ ! -f "$repo/.velnor/config.toml" ]; then
@@ -78,7 +92,7 @@ setup_case() {
        git -c commit.gpgsign=false commit -qm "golden" \
   ) >/dev/null 2>&1 || { echo "FATAL: git setup failed for $case"; exit 2; }
   head=$(git -C "$repo" rev-parse HEAD)
-  echo "$repo $head"
+  echo "$head"
 }
 
 capture_case() {
@@ -86,48 +100,85 @@ capture_case() {
   local preview="$out/preview"
   mkdir -p "$out" "$preview"
   (cd "$repo" && "$BIN" plan >"$out/plan.raw.txt" 2>"$out/plan.stderr.txt"; echo "$?" >"$out/plan.exit")
+  if [ "$(cat "$out/plan.exit")" != "0" ]; then
+    echo "FATAL: plan failed for $case"
+    exit 2
+  fi
   sed -e "s|Repository: .*|Repository: <repo>|" -e "s|$head|<head>|g" \
     "$out/plan.raw.txt" >"$out/plan.txt"
   rm "$out/plan.raw.txt"
-  if [ "$(cat "$out/plan.exit")" = "0" ]; then
-    (cd "$repo" && "$BIN" generate --output-dir "$preview" >"$out/generate.stdout.txt" 2>"$out/generate.stderr.txt"; echo "$?" >"$out/generate.exit")
-    hash_tree "$preview" "$out/tree.sha256"
+  (cd "$repo" && "$BIN" generate --output-dir "$preview" >"$out/generate.stdout.txt" 2>"$out/generate.stderr.txt"; echo "$?" >"$out/generate.exit")
+  if ! normalize_generate_stderr "$out/generate.stderr.txt"; then
+    echo "FATAL: could not normalize generate diagnostics for $case"
+    exit 2
   fi
+  if [ "$(cat "$out/generate.exit")" != "0" ] || [ ! -d "$preview/.github" ]; then
+    echo "FATAL: generate failed for $case"
+    exit 2
+  fi
+  hash_tree "$preview" "$out/tree.sha256"
 }
 
 capture_dogfood() {
   local out="$1"
   local preview="$out/preview"
-  local head
+  local compare="$WORK/dogfood-compare"
+  local head diff_status
   mkdir -p "$out" "$preview"
   head=$(git -C "$ROOT" rev-parse HEAD)
   (cd "$ROOT" && "$BIN" plan >"$out/plan.raw.txt" 2>"$out/plan.stderr.txt"; echo "$?" >"$out/plan.exit")
+  if [ "$(cat "$out/plan.exit")" != "0" ]; then
+    echo "FATAL: dogfood plan failed"
+    exit 2
+  fi
   sed -e "s|Repository: .*|Repository: <repo>|" -e "s|$head|<head>|g" -e "s|$ROOT|<root>|g" \
     "$out/plan.raw.txt" >"$out/plan.txt"
   rm "$out/plan.raw.txt"
   (cd "$ROOT" && "$BIN" generate --output-dir "$preview" >"$out/generate.stdout.txt" 2>"$out/generate.stderr.txt"; echo "$?" >"$out/generate.exit")
-  if [ -d "$preview/.github" ]; then
-    if diff -r "$ROOT/.github" "$preview/.github" >"$out/dogfood.diff" 2>&1; then
-      echo "identical" >"$out/dogfood.verdict"
-    else
-      echo "DIFFERS" >"$out/dogfood.verdict"
-    fi
-    hash_tree "$preview" "$out/tree.sha256"
+  if ! normalize_generate_stderr "$out/generate.stderr.txt"; then
+    echo "FATAL: could not normalize dogfood generate diagnostics"
+    exit 2
   fi
+  if [ "$(cat "$out/generate.exit")" != "0" ] || [ ! -d "$preview/.github" ]; then
+    echo "FATAL: dogfood generate failed"
+    exit 2
+  fi
+  mkdir -p "$compare/shipping" "$compare/generated"
+  if ! ln -s "$ROOT/.github" "$compare/shipping/.github" \
+    || ! ln -s "$preview/.github" "$compare/generated/.github"; then
+    echo "FATAL: could not prepare dogfood comparison"
+    exit 2
+  fi
+  if (cd "$compare" && diff -r shipping/.github generated/.github) \
+    >"$out/dogfood.diff" 2>&1; then
+    echo "identical" >"$out/dogfood.verdict"
+  else
+    diff_status=$?
+    if [ "$diff_status" -eq 1 ]; then
+      echo "DIFFERS" >"$out/dogfood.verdict"
+    else
+      echo "FATAL: dogfood tree comparison failed (diff status $diff_status)"
+      exit 2
+    fi
+  fi
+  hash_tree "$preview" "$out/tree.sha256"
 }
 
 build_bin
-rm -rf "$WORK"
-mkdir -p "$WORK"
+if ! WORK="$(mktemp -d "${TMPDIR:-/tmp}/velnor-goldens-work.XXXXXX")"; then
+  echo "FATAL: could not create a private golden workspace"
+  exit 2
+fi
 
 stage="$WORK/stage"
-rm -rf "$stage"
 mkdir -p "$stage"
 for case in $FIXTURES; do
-  # intentional word-split: setup_case prints the $1 $2 pair for capture_case
-  # shellcheck disable=SC2086,SC2046
-  set -- $(setup_case "$case")
-  capture_case "$case" "$1" "$2" "$stage/$case"
+  repo="$WORK/$case"
+  if ! head="$(setup_case "$case")"; then
+    echo "FATAL: could not set up fixture $case"
+    exit 2
+  fi
+  capture_case "$case" "$repo" "$head" "$stage/$case"
   note "captured $case (plan exit $(cat "$stage/$case/plan.exit"))"
 done
 capture_dogfood "$stage/dogfood"

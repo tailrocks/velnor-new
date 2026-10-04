@@ -1,5 +1,6 @@
 //! I/O hardening cases: config sample, MBX transport.
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
@@ -9,7 +10,7 @@ use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_mise::cache::validate_sources_path;
 use velnor_actions_orchestrator::prepare;
 use velnor_actions_workflow_renderer::steps::{
-    TASK_ARTIFACTS_DIR, cache_action_step, mbx_objects_step,
+    CompileDriver, TASK_ARTIFACTS_DIR, cache_action_step, mbx_steps_for_driver,
 };
 
 use crate::impl_common::without_ambient_identity;
@@ -299,16 +300,37 @@ fn cache_action_transport_never_carries_mbx() {
 fn mbx_transport_stays_with_mr_boxington_action() {
     let mbx = uses("jdx/mr-boxington-action");
     let pin = velnor_actions_mise::MR_BOXINGTON_VERSION;
-    let step = mbx_objects_step(&mbx, false, pin).expect("objects step");
+    let rust = velnor_actions_mise::ToolCatalog::pinned()
+        .version(velnor_actions_mise::PinnedTool::Rust)
+        .to_owned();
+    let env = BTreeMap::from([
+        (
+            "MISE_RUSTUP_HOME".to_owned(),
+            "${{ runner.temp }}/velnor/rustup".to_owned(),
+        ),
+        (
+            "MISE_CARGO_HOME".to_owned(),
+            "${{ runner.temp }}/velnor/cargo".to_owned(),
+        ),
+        ("RUSTUP_TOOLCHAIN".to_owned(), rust.clone()),
+    ]);
+    let [preflight, step] = mbx_steps_for_driver(&mbx, CompileDriver::Mbx, pin, &rust, env.clone())
+        .expect("objects steps")
+        .expect("MBX profile");
+    assert_eq!(preflight.name, "Verify MBX and Rust toolchains");
     assert!(
         format!("{:?}", step.kind).contains("jdx/mr-boxington-action"),
         "mbx bytes move only through the external action"
     );
     assert!(
-        format!("{:?}", step.kind).contains(pin),
-        "action installs the catalog pin, never latest"
+        format!("{:?}", step.kind).contains("toolchain"),
+        "action uses the catalog Rust pin after an exact preflight"
     );
-    assert!(mbx_objects_step(&mbx, true, pin).is_err());
+    assert!(
+        mbx_steps_for_driver(&mbx, CompileDriver::Cargo, pin, &rust, env.clone())
+            .expect("Cargo profile")
+            .is_none()
+    );
     let other = uses("actions/cache/restore");
-    assert!(mbx_objects_step(&other, false, pin).is_err());
+    assert!(mbx_steps_for_driver(&other, CompileDriver::Mbx, pin, &rust, env).is_err());
 }
