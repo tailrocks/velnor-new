@@ -46,8 +46,7 @@ fn optional_field<'a>(fields: &'a [(String, Yaml)], name: &str) -> Option<&'a Ya
 
 fn job<'a>(jobs: &'a [(String, Yaml)], id: &str) -> &'a [(String, Yaml)] {
     map_fields(
-        jobs
-            .iter()
+        jobs.iter()
             .find_map(|(key, value)| (key == id).then_some(value))
             .unwrap_or_else(|| panic!("missing job {id}")),
     )
@@ -240,10 +239,7 @@ fn assert_observer_scope_and_order(jobs: &[(String, Yaml)]) {
     let api_env = map_fields(field(api_step, "env"));
     assert_eq!(string(field(api_env, "GH_TOKEN")), "${{ github.token }}");
     assert_eq!(
-        string(field(
-            map_fields(field(observer, "permissions")),
-            "actions"
-        )),
+        string(field(map_fields(field(observer, "permissions")), "actions")),
         "read"
     );
     let Yaml::Seq(observer_steps) = field(observer, "steps") else {
@@ -252,12 +248,24 @@ fn assert_observer_scope_and_order(jobs: &[(String, Yaml)]) {
     let api_position = observer_steps.iter().position(|candidate| {
         string(field(map_fields(candidate), "name")) == "Validate MBX parallel REST timestamps"
     });
-    let setup_position = observer_steps.iter().position(|candidate| {
-        string(field(map_fields(candidate), "name")) == "Setup MBX"
-    });
+    let setup_position = observer_steps
+        .iter()
+        .position(|candidate| string(field(map_fields(candidate), "name")) == "Setup MBX");
     assert!(api_position.is_some_and(|api| setup_position.is_some_and(|setup| api < setup)));
-    for role in [Role::Seed, Role::ReaderA, Role::ReaderB, Role::NewKeyWriter, Role::ObserverNew] {
-        assert!(optional_step(job(jobs, role.id()), "Validate MBX parallel REST timestamps").is_none());
+    for role in [
+        Role::Seed,
+        Role::ReaderA,
+        Role::ReaderB,
+        Role::NewKeyWriter,
+        Role::ObserverNew,
+    ] {
+        assert!(
+            optional_step(
+                job(jobs, role.id()),
+                "Validate MBX parallel REST timestamps"
+            )
+            .is_none()
+        );
     }
     for (id, fields) in jobs {
         let Yaml::Seq(steps) = field(map_fields(fields), "steps") else {

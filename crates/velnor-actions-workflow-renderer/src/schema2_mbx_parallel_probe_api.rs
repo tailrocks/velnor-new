@@ -55,8 +55,12 @@ jobs="$input/current-attempt-jobs.json"
 seed_cache="$input/seed-cache-api.json"
 new_cache="$input/new-cache-api.json"
 receipt="$evidence/parallel-api-receipt.json"
+shared_scope_input="$input/expected-shared-scope.txt"
+shared_scope_hash_file="$input/expected-shared-scope-hash.txt"
+new_scope_input="$input/expected-new-scope.txt"
+new_scope_hash_file="$input/expected-new-scope-hash.txt"
 
-for file in "$jobs" "$seed_cache" "$new_cache" "$receipt"; do
+for file in "$jobs" "$seed_cache" "$new_cache" "$receipt" "$shared_scope_input" "$shared_scope_hash_file" "$new_scope_input" "$new_scope_hash_file"; do
   if [ -e "$file" ] || [ -L "$file" ]; then
     echo 'qualification receipt path already exists' >&2
     exit 1
@@ -67,6 +71,13 @@ test "$GITHUB_REF" = refs/heads/main
 test "$GITHUB_WORKFLOW_REF" = "$GITHUB_REPOSITORY/.github/workflows/qualification.yml@refs/heads/main"
 case "$GITHUB_SHA" in ''|*[!0-9a-f]*) echo 'invalid current source SHA' >&2; exit 1 ;; esac
 test "${#GITHUB_SHA}" -eq 40
+workflow_path=${GITHUB_WORKFLOW_REF%%@refs/*}
+printf '%s\n%s\n%s\n' "$workflow_path" "$MBX_EXPECTED_SHARED_SCOPE" '{}' > "$shared_scope_input"
+printf '%s\n%s\n%s\n' "$workflow_path" "$MBX_EXPECTED_NEW_KEY_SCOPE" '{}' > "$new_scope_input"
+sha256sum "$shared_scope_input" | cut -c1-64 > "$shared_scope_hash_file"
+sha256sum "$new_scope_input" | cut -c1-64 > "$new_scope_hash_file"
+IFS= read -r shared_scope_hash < "$shared_scope_hash_file"
+IFS= read -r new_scope_hash < "$new_scope_hash_file"
 
 verify_receipt() {
   local file="$1" job="$2" role="$3" scope="$4" directory="${1%/*}"
@@ -75,13 +86,52 @@ verify_receipt() {
     echo 'invalid cache receipt file' >&2
     return 1
   fi
-  jq -e --arg job "$job" --arg role "$role" --arg scope "$scope" --arg run "$GITHUB_RUN_ID" --arg attempt "$GITHUB_RUN_ATTEMPT" --arg sha "$GITHUB_SHA" --arg ref "$GITHUB_REF" --arg workflow "$GITHUB_WORKFLOW_REF" --arg action "$MBX_EXPECTED_ACTION_REF" --arg version "$MBX_EXPECTED_VERSION" --arg rust "$MBX_EXPECTED_RUST_VERSION" '.job_id == $job and .role == $role and .scope == $scope and .run_id == $run and .run_attempt == $attempt and .source_sha == $sha and .source_ref == $ref and .workflow_ref == $workflow and .mbx_action_ref == $action and .mbx_version == $version and .rust_version == $rust and (.primary_key | type == "string" and length > 0) and (.cache_hit | type == "string") and (.imported_objects | type == "number") and (.cached_compilations | type == "number")' "$file" >/dev/null
+  jq -e --arg job "$job" --arg role "$role" --arg scope "$scope" --arg run "$GITHUB_RUN_ID" --arg attempt "$GITHUB_RUN_ATTEMPT" --arg sha "$GITHUB_SHA" --arg ref "$GITHUB_REF" --arg workflow "$GITHUB_WORKFLOW_REF" --arg action "$MBX_EXPECTED_ACTION_REF" --arg version "$MBX_EXPECTED_VERSION" --arg rust "$MBX_EXPECTED_RUST_VERSION" '.job_id == $job and .role == $role and .scope == $scope and .run_id == $run and .run_attempt == $attempt and .source_sha == $sha and .source_ref == $ref and .workflow_ref == $workflow and .mbx_action_ref == $action and .mbx_version == $version and .rust_version == $rust and (.primary_key | type == "string" and length > 0) and (.cache_prefix | type == "string" and length > 0) and (.generation | type == "string" and length > 0) and (.rustc_identity | type == "string" and length == 64) and (.cache_hit | type == "string") and (.imported_objects | type == "number") and (.cached_compilations | type == "number")' "$file" >/dev/null
 }
 
 verify_receipt "$seed" mbx-parallel-seed seed "$MBX_EXPECTED_SHARED_SCOPE"
 verify_receipt "$reader_a" mbx-parallel-reader-a reader-a "$MBX_EXPECTED_SHARED_SCOPE"
 verify_receipt "$reader_b" mbx-parallel-reader-b reader-b "$MBX_EXPECTED_SHARED_SCOPE"
 verify_receipt "$new_writer" mbx-parallel-new-key-writer new-key-writer "$MBX_EXPECTED_NEW_KEY_SCOPE"
+
+verify_primary_key() {
+  local file="$1" role="$2" scope_hash="$3"
+  local key_file="$input/$role-checked-primary.txt" prefix_file="$input/$role-checked-prefix.txt" generation_file="$input/$role-generation.txt" rustc_file="$input/$role-rustc-identity.txt"
+  for output in "$key_file" "$prefix_file" "$generation_file" "$rustc_file"; do
+    if [ -e "$output" ] || [ -L "$output" ]; then
+      echo 'qualification key check path already exists' >&2
+      return 1
+    fi
+  done
+  jq -er '.primary_key' "$file" > "$key_file"
+  jq -er '.cache_prefix' "$file" > "$prefix_file"
+  jq -er '.generation' "$file" > "$generation_file"
+  jq -er '.rustc_identity' "$file" > "$rustc_file"
+  local primary_key cache_prefix generation rustc_identity expected_prefix
+  IFS= read -r primary_key < "$key_file"
+  IFS= read -r cache_prefix < "$prefix_file"
+  IFS= read -r generation < "$generation_file"
+  IFS= read -r rustc_identity < "$rustc_file"
+  case "$rustc_identity" in ''|*[!0-9a-f]*) echo 'invalid rustc identity in cache receipt' >&2; return 1 ;; esac
+  if [ "${#rustc_identity}" -ne 64 ] || [ "$generation" != "velnor-mbx-$MBX_EXPECTED_VERSION" ]; then
+    echo 'cache receipt key identity does not match pinned tools' >&2
+    return 1
+  fi
+  expected_prefix="linux-x64-mbx-$generation-dir-rust-$MBX_EXPECTED_RUST_VERSION-$rustc_identity-scope-$scope_hash-run-$GITHUB_RUN_ID-attempt-$GITHUB_RUN_ATTEMPT-"
+  if [ "$cache_prefix" != "$expected_prefix" ]; then
+    echo "cache prefix does not match the expected $role scope and current run attempt" >&2
+    return 1
+  fi
+  if [ "$primary_key" != "$expected_prefix$GITHUB_SHA" ]; then
+    echo "cache primary does not bind the current SHA for $role" >&2
+    return 1
+  fi
+}
+
+verify_primary_key "$seed" seed "$shared_scope_hash"
+verify_primary_key "$reader_a" reader-a "$shared_scope_hash"
+verify_primary_key "$reader_b" reader-b "$shared_scope_hash"
+verify_primary_key "$new_writer" new-key-writer "$new_scope_hash"
 
 jq -er '.primary_key' "$seed" > "$input/seed-primary-key.txt"
 jq -er '.primary_key' "$reader_a" > "$input/reader-a-primary-key.txt"
@@ -94,7 +144,7 @@ IFS= read -r new_key < "$input/new-writer-primary-key.txt"
 test "$seed_key" = "$reader_a_key"
 test "$seed_key" = "$reader_b_key"
 test "$seed_key" != "$new_key"
-case "$seed_key:$new_key" in *"run-$GITHUB_RUN_ID-attempt-$GITHUB_RUN_ATTEMPT-"*) ;; *) echo 'parallel key is not bound to this run attempt' >&2; exit 1 ;; esac
+test "$seed_key" != "$new_key"
 
 jq -e '.cache_hit == "false" and (.matched_key == null or .matched_key == "") and .export_ready == "true" and .save_outcome == "success"' "$seed" >/dev/null
 jq -e '.cache_hit == "false" and (.matched_key == null or .matched_key == "") and .export_ready == "true" and .save_outcome == "success"' "$new_writer" >/dev/null
@@ -247,9 +297,6 @@ pub(super) fn observer_api_step(request: &MbxQualificationPins) -> Yaml {
                 ),
             ]),
         ),
-        (
-            "run".to_owned(),
-            Yaml::str(API_RECEIPT_SCRIPT),
-        ),
+        ("run".to_owned(), Yaml::str(API_RECEIPT_SCRIPT)),
     ])
 }

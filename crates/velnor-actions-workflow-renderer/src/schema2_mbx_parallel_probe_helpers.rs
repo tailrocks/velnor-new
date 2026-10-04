@@ -3,12 +3,12 @@
 use std::collections::BTreeMap;
 
 use super::{MbxQualificationPins, Role};
-use velnor_actions_contract::{PermissionLevel, Permissions, PullRequestCachePolicy};
+use crate::RenderError;
 use crate::cache_steps::MBX_ACTION_NAME;
 use crate::render::RenderContext;
 use crate::steps;
 use crate::yaml::Yaml;
-use crate::RenderError;
+use velnor_actions_contract::{PermissionLevel, Permissions, PullRequestCachePolicy};
 
 pub(super) fn permission_yaml(permissions: Option<Permissions>) -> Yaml {
     let actions = match permissions.map(|permissions| permissions.actions) {

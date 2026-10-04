@@ -8,16 +8,16 @@ use velnor_actions_contract::{
 
 use super::MbxQualificationPins;
 use super::features::{base, finish, gated};
-use helpers::{permission_yaml, qualification_job_env, step_context, validate_pins};
 use crate::render::RenderContext;
 use crate::steps::{self, MBX_SETUP_NAME};
 use crate::yaml::Yaml;
 use crate::{RenderError, mbx_bundle};
+use helpers::{permission_yaml, qualification_job_env, step_context, validate_pins};
 
-#[path = "schema2_mbx_parallel_probe_helpers.rs"]
-mod helpers;
 #[path = "schema2_mbx_parallel_probe_api.rs"]
 mod api;
+#[path = "schema2_mbx_parallel_probe_helpers.rs"]
+mod helpers;
 
 const PARALLEL_GATE: &str = "inputs.mode == 'mbx-cache-parallel' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.ref_protected == true";
 const SHARED_SCOPE: &str = "qualification-mbx-v1/parallel/shared";
@@ -330,9 +330,8 @@ fn render_steps(
     request: &MbxQualificationPins,
     role: Role,
 ) -> Result<Vec<Yaml>, RenderError> {
-    let mut rendered = super::mbx_resource_probe_render::render_job_steps(
-        id, source, request, context,
-    )?;
+    let mut rendered =
+        super::mbx_resource_probe_render::render_job_steps(id, source, request, context)?;
     if role != Role::ObserverShared {
         return Ok(rendered);
     }
