@@ -101,3 +101,37 @@ owners must recheck any implementation or disposition that relied on those
 reports. The full-ref grammar slice was separately revalidated on its frozen
 integrated blob by an allowed reviewer; the branch shorthand current-head
 candidate and typed owner change each have separate source/test gates.
+
+## Follow-up resumption incident
+
+At 2026-10-04 02:49:45 UTC, a follow-up call resumed the completed
+`/root/upstream_mise_release` actor from its pre-policy session instead of
+starting a fresh actor. The follow-up therefore retained the old runtime:
+
+| Evidence | Value |
+| --- | --- |
+| Existing actor session | `01a10437-6944-7c62-abdb-ec68e085d6f8` |
+| Existing actor log | `rollout-2026-10-04T07-01-42-01a10437-6944-7c62-abdb-ec68e085d6f8.jsonl` |
+| Follow-up call | Coordinator log `rollout-2026-10-04T07-13-35-01a10442-4a92-7211-817b-adfe1e03ae60.jsonl`, line 7182, `call_KJHdztKOjDnMJl72QK8qS4a4`, `2026-10-04T02:49:45.542Z` |
+| Latest resumed turn | `01a104d1-434f-77e0-87a6-6360efb50564`, `2026-10-04T02:49:45.692Z` |
+| Actual runtime | `gpt-5.6-luna/max` |
+| Child `NEW_TASK` | Log line 528, coordinator sender |
+
+That report is provisional and does not establish current official-release
+status. The old actor was not resumed again. A fresh replacement was explicitly
+spawned with `model=gpt-6-luna`, `reasoning_effort=max`, and `fork_turns=none`:
+
+| Evidence | Value |
+| --- | --- |
+| Replacement actor | `/root/official_mise_refresh_v3` |
+| Spawn | Root log `rollout-2026-10-04T06-50-27-01a1042d-1d81-7771-9165-c462f3fb2b4d.jsonl`, line 3781; returned handle line 3784 |
+| Child session/log | `01a104d4-f9a5-75f3-bd3f-7f0252b64f05`; `rollout-2026-10-04T09-53-48-01a104d4-f9a5-75f3-bd3f-7f0252b64f05.jsonl` |
+| Parent thread | `01a1042d-1d81-7771-9165-c462f3fb2b4d` |
+| Verified turn | `01a104d4-fc54-78e0-bbcb-9afa2b2164b0`, `2026-10-04T02:53:54.784Z` |
+| Actual runtime | `gpt-6-luna/max` |
+| Child `NEW_TASK` | Log line 10, `2026-10-04T02:53:54.790Z` |
+
+The replacement found no published fixed mise release; official adoption remains
+PARTIAL. Its runtime was independently bound through the root spawn record,
+returned handle, child task record, and child turn context. This incident adds
+no product-code change and does not qualify the earlier actor's report.
