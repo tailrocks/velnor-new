@@ -34,7 +34,7 @@ RUN apt-get update \
     && printf 'runner ALL=(ALL) NOPASSWD:ALL\n' > /etc/sudoers.d/runner \
     && chmod 0440 /etc/sudoers.d/runner \
     && visudo -cf /etc/sudoers.d/runner \
-    && mkdir -p /home/runner/_work /home/runner/work \
+    && mkdir -p /home/runner/work \
     && chown -R runner:runner /home/runner
 
 WORKDIR /home/runner
