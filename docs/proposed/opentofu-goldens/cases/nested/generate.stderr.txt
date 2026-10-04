@@ -1,5 +1,5 @@
 velnor-actions: WARNING: .velnor/release-manifest.json is absent; generated workflows use a debug-only stand-in that MUST NOT ship
-Preview: /private/tmp/velnor-goldens-work/stage/nested/preview
+Preview: <preview>
 Repository: <repo>
 .github/AGENTS.md
 .github/CLAUDE.md

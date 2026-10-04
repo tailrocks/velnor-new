@@ -99,7 +99,8 @@ capture_case() {
 normalize_repository_log() {
   local path="$1"
   local normalized="$path.normalized"
-  sed -e 's|^Repository: .*|Repository: <repo>|' "$path" >"$normalized"
+  sed -e 's|^Preview: .*|Preview: <preview>|' \
+    -e 's|^Repository: .*|Repository: <repo>|' "$path" >"$normalized"
   mv "$normalized" "$path"
 }
 
