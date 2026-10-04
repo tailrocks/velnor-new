@@ -4,7 +4,9 @@
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
+import shutil
 import tarfile
 
 ROOT = Path(__file__).resolve().parent
@@ -37,15 +39,88 @@ def inventory(directory):
     return result
 
 
+def reject_symlink_components(path):
+    require(path.is_absolute(), "fixture root must be absolute")
+    current = Path(path.anchor)
+    for component in path.parts[1:]:
+        if component == "..":
+            current = current.parent
+            continue
+        if component in ("", "."):
+            continue
+        current /= component
+        require(not current.is_symlink(), "fixture root path contains symlink component")
+
+
+def canonical_fixture_root(path, repository=None, normalize=False):
+    require(path.is_absolute(), "fixture root must be an absolute canonical path")
+    reject_symlink_components(path)
+    lexical = Path(os.path.normpath(str(path)))
+    reject_symlink_components(lexical)
+    if not normalize:
+        require(path == lexical, "fixture root must be an absolute canonical path")
+    if repository is not None:
+        require(lexical.is_relative_to(repository), "fixture root escapes the repository")
+    canonical = lexical.resolve(strict=True)
+    require(lexical == canonical,
+            "fixture root must be an absolute canonical path without symlink ancestors")
+    if repository is not None:
+        require(canonical.is_relative_to(repository.resolve(strict=True)),
+                "fixture root escapes the repository")
+    return canonical
+
+
+def fixture_source(manifest):
+    root = manifest["fixture"]["root"]
+    require(type(root) is str and root, "manifest fixture root must be a relative path")
+    relative = Path(root)
+    require(not relative.is_absolute(), "manifest fixture root must be relative")
+    repository = ROOT.parents[2]
+    return canonical_fixture_root(ROOT / relative, repository=repository, normalize=True)
+
+
+def copy_fixture(source, destination):
+    """Copy the reviewed fixture and materialize its locked Cargo workspace."""
+    source_records = inventory(source)
+    shutil.copytree(source, destination)
+    paths = [destination, *sorted(destination.rglob("*"))]
+    for path in sorted(paths, key=lambda item: (len(item.parts), item.as_posix())):
+        require(not path.is_symlink(), "copied fixture symlink forbidden")
+        require(path.is_dir() or path.is_file(), "copied fixture special file forbidden")
+        path.chmod(0o700 if path.is_dir() else 0o600)
+    require(inventory(destination) == source_records, "copied fixture bytes differ")
+    fixture_lock = destination / "Cargo.lock.fixture"
+    cargo_lock = destination / "Cargo.lock"
+    require(fixture_lock.is_file() and not fixture_lock.is_symlink(),
+            "fixture Cargo.lock.fixture required")
+    require(not cargo_lock.exists() and not cargo_lock.is_symlink(),
+            "fixture Cargo.lock destination already exists")
+    fixture_lock.rename(cargo_lock)
+    return destination
+
+
 def inventory_sha(records):
     return sha(json.dumps(records, sort_keys=True, separators=(",", ":")).encode())
 
 
 def fixture_root(args, manifest):
-    path = getattr(args, "fixture_root", None) or ROOT / manifest["fixture"]["root"]
-    require(path.is_absolute() and path == path.resolve(strict=True),
-            "fixture root must be an absolute canonical path without symlink ancestors")
-    return path
+    path = getattr(args, "fixture_root", None)
+    if path is None:
+        return fixture_source(manifest)
+    return canonical_fixture_root(path)
+
+
+def fixture_inventory(directory, expected):
+    records = inventory(directory)
+    expected_paths = {item["path"] for item in expected}
+    if "Cargo.lock.fixture" in expected_paths:
+        lock_paths = {item["path"] for item in records
+                      if item["path"] in ("Cargo.lock", "Cargo.lock.fixture")}
+        require(len(lock_paths) == 1, "fixture must contain one pinned Cargo lock")
+        if "Cargo.lock" in lock_paths:
+            records = [dict(item, path="Cargo.lock.fixture") if item["path"] == "Cargo.lock"
+                       else item for item in records]
+    return records
 
 
 def verify_registry(spec, archive, source):
@@ -72,7 +147,7 @@ def verify(args):
     manifest = json.loads(raw)
     require(manifest["scope"] == "exact_synchronous_fixture_v1", "unexpected scope")
     fixture = manifest["fixture"]
-    records = inventory(fixture_root(args, manifest))
+    records = fixture_inventory(fixture_root(args, manifest), fixture["files"])
     require(records == fixture["files"], "unexpected or changed fixture input")
     require(inventory_sha(records) == fixture["inventory_sha256"], "fixture inventory digest differs")
     verify_registry(manifest["registry"], args.registry_archive, args.registry_source)

@@ -130,8 +130,9 @@ class PipelineTests(unittest.TestCase):
         args.linker = None
         sdk = RUN.INPUTS.context_inventory(args.sdk_root)
         args.expected_sdk_inventory_sha256 = RUN.BASE.write_json(sim.root / "sdk.json", sdk)["sha256"]
+        manifest = json.loads((ROOT / "manifest.json").read_bytes())
         baseline = sim.root / "baseline"
-        shutil.copytree(ROOT / "registry-fixture", baseline)
+        RUN.BASE.BIND.copy_fixture(RUN.BASE.BIND.fixture_source(manifest), baseline)
         successor = sim.root / "successor"
         shutil.copytree(baseline, successor)
         (successor / "src/lib.rs").write_text("compile_error!(\"T06_EXPECTED_FAILURE\");" if failure else "pub fn observed() -> usize { 10 }")

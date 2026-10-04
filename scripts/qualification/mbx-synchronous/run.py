@@ -122,7 +122,7 @@ def prepare(args, number, manifest):
     for name in ("home", "cargo-home", "rustup-home", "target", "cache", "tmp", "logs"):
         (run / name).mkdir()
     workspace = run / "workspace"
-    shutil.copytree(ROOT / manifest["fixture"]["root"], workspace)
+    BIND.copy_fixture(BIND.fixture_source(manifest), workspace)
     seed_registry(args, run / "cargo-home")
     env = environment(args, run)
     configs = config_inputs(workspace, env)
