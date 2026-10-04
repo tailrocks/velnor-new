@@ -301,16 +301,25 @@ fn assert_tools_saves_push_gated_per_key(yaml: &str) {
     assert!(!keys.is_empty(), "at least one restored tools key:\n{yaml}");
     let mbx_saves = yaml.matches("- name: Save MBX single bundle").count();
     let mbx_exports = yaml.matches("- name: Export MBX single bundle").count();
+    let mbx_gc_steps = yaml.matches("- name: Collect MBX cache before export").count();
     assert_eq!(
         yaml.matches("actions/cache/save@").count(),
         1 + keys.len() + mbx_saves,
         "sources plus one tools save per key; hosted MBX is action-owned:\n{yaml}"
     );
+    let push_gated_cache_steps = yaml
+        .lines()
+        .filter(|line| {
+            let line = line.trim_start();
+            line.starts_with("if: ")
+                && line.contains("success()")
+                && line.contains("github.event_name == 'push'")
+        })
+        .count();
     assert_eq!(
-        yaml.matches("if: success() && github.event_name == 'push'")
-            .count(),
-        1 + keys.len() + mbx_saves + mbx_exports,
-        "every save push-gated:\n{yaml}"
+        push_gated_cache_steps,
+        1 + keys.len() + mbx_saves + mbx_exports + mbx_gc_steps,
+        "cache saves, exports, and pre-export collection are push-gated:\n{yaml}"
     );
     assert!(
         !yaml.contains("- name: Restore Cargo sources\n        if:"),
