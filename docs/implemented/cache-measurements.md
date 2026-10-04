@@ -220,3 +220,16 @@ size. No run of this candidate has produced those measurements yet, and the
 probe does not qualify the target consumer workload. That evidence must
 come from the consumer's affected crates; a green probe alone is not an ENOSPC
 repair verdict.
+
+## Hosted action cleanup permissions
+
+Pinned action v1.7.1 post cleanup recursively removes its isolated `store`,
+including `out-dirs` left read-only by MBX. Velnor adds a successful hosted
+Linux final main step that adds owner-write only to real directories beneath
+`RUNNER_TEMP/mbx-github-objects-store-*/store/out-dirs` with an
+`openat`/`O_NOFOLLOW` descriptor walk and `fchmod`. It anchors `RUNNER_TEMP`
+the same way, skips only `ENOENT`/`ENOTDIR`/`ELOOP` races, and fails on other
+traversal errors. Existing read and search bits are preserved; no other mode
+bits change. It does not read `MBX_CACHE_DIR`, touch the sibling bundle, or run
+on Scale Set runners. The released action's cleanup does not normalize MBX
+read-only directories; that upstream fix remains deferred separately.

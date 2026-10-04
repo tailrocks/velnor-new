@@ -12,7 +12,7 @@ fn mbx_uses() -> String {
     format!("jdx/mr-boxington-action@{}", "a".repeat(40))
 }
 
-fn render_mbx(id: &str, scale_set: bool) -> Result<String, RenderError> {
+pub(super) fn render_mbx(id: &str, scale_set: bool) -> Result<String, RenderError> {
     let mbx = mbx_objects_step(&mbx_uses(), false, "1.21.1")?;
     let mut built = job(id, "MBX job", Vec::new(), vec![mbx]);
     if scale_set {
@@ -127,7 +127,9 @@ fn assert_hosted_gc_before_post(text: &str) {
     let bundle_export = position(text, "name: Export MBX single bundle");
     let save = position(text, "name: Save MBX single bundle");
     let sync_gc = position(text, "name: Collect MBX cache before export");
+    let cleanup = position(text, "name: Normalize MBX directories before action post");
     assert!(bundle_export < save && save < sync_gc, "{text}");
+    assert!(sync_gc < cleanup, "{text}");
     assert!(
         text.contains(
             "if: success() && runner.environment == 'github-hosted' && github.event_name == 'push'"
@@ -137,6 +139,57 @@ fn assert_hosted_gc_before_post(text: &str) {
     assert!(
         step_block(text, "Collect MBX cache before export").contains("mbx gc"),
         "run the synchronous collector before the action post export: {text}"
+    );
+    let normalize = step_block(text, "Normalize MBX directories before action post");
+    assert!(
+        normalize.contains(
+            "if: success() && runner.environment == 'github-hosted' && runner.os == 'Linux'"
+        ),
+        "permission normalization runs only after successful hosted Linux jobs: {normalize}"
+    );
+    assert!(
+        normalize.contains("root_name.startswith")
+            && normalize.contains("mbx-github-objects-store-")
+            && normalize.contains("open_directory(root_fd")
+            && normalize.contains("store_fd")
+            && normalize.contains("open_directory(store_fd")
+            && normalize.contains("out_dirs_fd"),
+        "permission repair must target only action-owned MBX output directories: {normalize}"
+    );
+    assert!(
+        normalize.contains("os.O_NOFOLLOW")
+            && normalize.contains("dir_fd=parent_fd")
+            && normalize.contains("os.fchmod(directory_fd")
+            && normalize.contains("os.scandir(directory_fd)")
+            && normalize.contains("def open_components(root_fd, components)")
+            && normalize.contains("pending = [()]")
+            && normalize.contains("pending.append(components + (name,))")
+            && normalize.contains("entry.is_dir(follow_symlinks=False)")
+            && !normalize.contains("frames =")
+            && !normalize.contains("MAX_DIRECTORY_DEPTH"),
+        "descriptor-relative traversal rejects symlinks before adding owner-write: {normalize}"
+    );
+    for errno in ["errno.ENOENT", "errno.ENOTDIR", "errno.ELOOP"] {
+        assert!(
+            normalize.contains(errno),
+            "only benign filesystem races may be skipped: {normalize}"
+        );
+    }
+    assert!(
+        !normalize.contains("mbx-github-objects-bundle"),
+        "the action bundle remains untouched: {normalize}"
+    );
+    assert!(
+        !normalize.contains("os.chmod(") && !normalize.contains("os.listdir(directory_fd)"),
+        "avoid path-based mode changes and unbounded directory listings: {normalize}"
+    );
+    assert!(
+        !normalize.contains("MBX_CACHE_DIR"),
+        "cleanup paths must come from the action-owned RUNNER_TEMP layout: {normalize}"
+    );
+    assert!(
+        !text[cleanup..].contains("\n      - name:"),
+        "permission normalization must be the final main step before action post: {text}"
     );
     assert!(!text.contains("continue-on-error"), "{text}");
 }
@@ -282,6 +335,11 @@ fn scale_set_jobs_keep_the_existing_single_bundle_lifecycle() -> Result<(), Rend
     let saved = &text[save..];
     assert_scale_set_bundle_save(saved);
     assert!(text.contains("name: Collect MBX cache before export\n        if: success() && runner.environment == 'github-hosted'"), "{text}");
+    assert!(
+        step_block(&text, "Normalize MBX directories before action post")
+            .contains("runner.environment == 'github-hosted' && runner.os == 'Linux'"),
+        "Scale Set jobs must skip hosted-only permission normalization: {text}"
+    );
     assert!(!text.contains("continue-on-error"), "{text}");
     Ok(())
 }
