@@ -75,7 +75,7 @@ The documentation actor `/root/cache_progress_evidence_docs_v20` committed
 instead of its assigned isolated worktree.
 `git show` confirms one file only, `docs/implemented/cache-measurements.md`
 (25 added lines); it was not pushed at that point. The coordinator later
-reviewed and corrected the two imprecise claims in signed commit
+reviewed and corrected the two imprecise claims in DCO signed-off commit
 `c21f10d0c3ba5eee99580335ca5024a5c38353a6`, which was pushed. The two
 pre-existing dirty config/test paths remained outside both commits.
 
