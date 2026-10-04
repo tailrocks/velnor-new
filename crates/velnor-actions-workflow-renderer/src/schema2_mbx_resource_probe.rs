@@ -24,7 +24,7 @@ pub(super) fn attach(
             continue;
         }
         let mut upload = steps::upload_artifact_step(
-            &format!("mbx-cache-evidence-{job_id}"),
+            &format!("mbx-cache-evidence-{job_id}-{}", steps::RUN_KEY_EXPR),
             "${{ runner.temp }}/mbx-cache-evidence",
         )?;
         upload.name.clear();

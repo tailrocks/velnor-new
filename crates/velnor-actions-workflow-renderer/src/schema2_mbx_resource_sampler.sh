@@ -294,7 +294,7 @@ register_snapshot_roots() {
   add_root MBX_SHIMS_DIR "${MBX_SHIMS_DIR-}" false
   required=0
   [[ "$snapshot_label" == final || "$snapshot_label" == export-complete ]] && required=1
-  if [[ "$snapshot_label" == restore-step-end && "$role" =~ ^(reader|reader-a|reader-b|corrupt-reader)$ ]]; then required=1; fi
+  if [[ "$snapshot_label" == restore-step-end && "$(resource_role_class)" == hit ]]; then required=1; fi
   add_root bundle "$runner_temp/mbx-single-bundle" "$([[ "$required" == 1 ]] && echo true || echo false)"
   if [[ -s "$evidence/original-cache-root.txt" ]]; then
     IFS= read -r original_root < "$evidence/original-cache-root.txt"

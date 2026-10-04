@@ -16,6 +16,14 @@ valid_session_leader_pid() {
   [[ "$1" =~ ^[1-9][0-9]*$ && "$1" != 1 ]]
 }
 
+resource_role_class() {
+  case "${MBX_QUALIFICATION_ROLE-}" in
+    writer|seed|new-key-writer) printf 'cold\n' ;;
+    reader|reader-a|reader-b|corrupt-reader) printf 'hit\n' ;;
+    *) return 1 ;;
+  esac
+}
+
 capture_walk_ancestry() {
   local root="$1" current=/ segment
   local -a components=()

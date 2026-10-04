@@ -70,17 +70,17 @@ check_inventory() {
   if [ -s "$evidence/df-$label-bytes.txt" ] && ! grep -qx 'df_status=ok' "$evidence/df-$label-bytes.txt"; then fail_partial "df_bytes_invalid:$label"; fi
   if [ -s "$evidence/df-$label-inodes.txt" ] && ! grep -qx 'df_status=ok' "$evidence/df-$label-inodes.txt"; then fail_partial "df_inodes_invalid:$label"; fi
   if [ "$label" = restore-step-end ]; then
-    case "$MBX_QUALIFICATION_ROLE" in
-      reader|reader-a|reader-b|corrupt-reader) check_nonempty_root "$label" bundle ;;
-      writer|seed|new-key-writer) ;;
-      *) fail_partial "unknown_cache_role:$MBX_QUALIFICATION_ROLE" ;;
+    case "$(resource_role_class)" in
+      hit) check_nonempty_root "$label" bundle ;;
+      cold) ;;
+      *) fail_partial "unknown_cache_role:${MBX_QUALIFICATION_ROLE-}" ;;
     esac
   fi
-  if [ "$label" = export-complete ] && { [ "$MBX_QUALIFICATION_ROLE" = writer ] || [ "$MBX_QUALIFICATION_ROLE" = seed ] || [ "$MBX_QUALIFICATION_ROLE" = new-key-writer ]; }; then
+  if [ "$label" = export-complete ] && [ "$(resource_role_class)" = cold ]; then
     check_nonempty_root "$label" selected-cache-root
     check_nonempty_root "$label" bundle
   fi
-  if [ "$label" = import-step-end ] && [ "$MBX_QUALIFICATION_ROLE" = reader ]; then check_nonempty_root "$label" selected-cache-root; fi
+  if [ "$label" = import-step-end ] && [ "$(resource_role_class)" = hit ] && [ "$MBX_QUALIFICATION_ROLE" != corrupt-reader ]; then check_nonempty_root "$label" selected-cache-root; fi
   if [ "$label" = build-end ] || [ "$label" = final ]; then
     check_nonempty_root "$label" MBX_TARGET_ROOT
     check_nonempty_root "$label" cargo-home
@@ -109,13 +109,14 @@ check_required_files() {
   if [ -s "$evidence/sampler-stop.tsv" ] && ! awk -F '\t' '$1 == "remaining_session_members" { found=1; if ($2 != "0") bad=1 } END { exit !(found && !bad) }' "$evidence/sampler-stop.tsv"; then
     fail_partial 'sampler stop receipt does not prove empty owned session'
   fi
-  case "$MBX_QUALIFICATION_ROLE" in
-    writer|seed|new-key-writer)
+  case "$(resource_role_class)" in
+    cold)
       if [ ! -s "$MBX_QUALIFICATION_EXPORT_RECEIPT" ]; then fail_incomplete 'export_receipt_missing'; fi
       ;;
-    reader|reader-a|reader-b|corrupt-reader)
+    hit)
       if [ ! -s "$MBX_QUALIFICATION_IMPORT_RECEIPT" ]; then fail_incomplete 'import_receipt_missing'; fi
       ;;
+    *) fail_incomplete "unknown_cache_role:${MBX_QUALIFICATION_ROLE-}" ;;
   esac
   if [ "$MBX_QUALIFICATION_ROLE" = corrupt-reader ]; then
     for file in corrupt-bundle-before.tsv corrupt-bundle-after.tsv corrupt-bundle-before-summary.tsv \
@@ -170,18 +171,19 @@ check_receipt() {
     fail_incomplete 'cache receipt identity binding failed'
     return
   fi
-  case "$MBX_QUALIFICATION_ROLE" in
-    writer|seed|new-key-writer)
+  case "$(resource_role_class)" in
+    cold)
       jq -e '.restore_miss_candidate == true and .restore_conclusion == "success" and .restore_primary_key == .primary_key and .cache_hit == "" and .matched_key == "" and .export_ready == "true" and .export_status == "0" and .gc_status == "0" and .save_outcome == "success"' "$receipt" >/dev/null 2>&1 || fail_incomplete 'writer cache lifecycle receipt failed'
       ;;
-    reader|reader-a|reader-b)
+    hit)
+      if [ "$MBX_QUALIFICATION_ROLE" = corrupt-reader ]; then
+        jq -e '.restore_conclusion == "success" and .restore_primary_key == .primary_key and .cache_hit == "true" and .matched_key == .primary_key and .import_status != "" and .import_status != "0" and .selected_cache_root != "" and .abandoned_import_root != "" and .selected_cache_root != .abandoned_import_root and .imported_objects == 0 and .cached_compilations == 0' "$receipt" >/dev/null 2>&1 || fail_incomplete 'corrupt import fallback receipt failed'
+        return
+      fi
       jq -e '.restore_conclusion == "success" and .restore_primary_key == .primary_key and .cache_hit == "true" and .matched_key == .primary_key and .imported_objects > 0 and .cached_compilations > 0' "$receipt" >/dev/null 2>&1 || fail_incomplete 'reader cache reuse receipt failed'
       ;;
-    corrupt-reader)
-      jq -e '.restore_conclusion == "success" and .restore_primary_key == .primary_key and .cache_hit == "true" and .matched_key == .primary_key and .import_status != "" and .import_status != "0" and .selected_cache_root != "" and .abandoned_import_root != "" and .selected_cache_root != .abandoned_import_root and .imported_objects == 0 and .cached_compilations == 0' "$receipt" >/dev/null 2>&1 || fail_incomplete 'corrupt import fallback receipt failed'
-      ;;
     *)
-      fail_incomplete "unknown_cache_role:$MBX_QUALIFICATION_ROLE"
+      fail_incomplete "unknown_cache_role:${MBX_QUALIFICATION_ROLE-}"
       ;;
   esac
 }
@@ -195,7 +197,7 @@ if ! bash "$evidence/sampler.sh" "$evidence" "$RUNNER_TEMP" "$GITHUB_ENV" "$MBX_
   echo 'private evidence directory validation failed' >&2
   exit 1
 fi
-path_validation_sha='80a92b0cfe88f41c3ae72822c735c8c8861643598c7da0d349a1d6c77e99a48d'
+path_validation_sha='82ceedc6dd2f5c4099df4890cd9a15e851ea2df2a2b756b909ac9ee5849b395d'
 printf '%s  %s\n' "$path_validation_sha" "$evidence/path-validation.sh" | sha256sum --check --status || exit 1
 . "$evidence/path-validation.sh"
 partial=0
