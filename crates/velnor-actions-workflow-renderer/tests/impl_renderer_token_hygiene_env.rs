@@ -125,6 +125,50 @@ fn qualification_restore_outputs_allow_only_exact_guard_bindings() -> Result<(),
 }
 
 #[test]
+fn qualification_restore_miss_identity_accepts_only_exact_outputs() -> Result<(), RenderError> {
+    let expressions = [
+        (
+            "RESTORE_PRIMARY_KEY",
+            "${{ steps.mbx-bundle.outputs.cache-primary-key }}",
+        ),
+        ("RESTORE_CONCLUSION", "${{ steps.mbx-bundle.conclusion }}"),
+    ];
+    for (key, expression) in expressions {
+        shell_step(
+            "Qualification restore identity",
+            vec!["true".to_owned()],
+            BTreeMap::from([(key.to_owned(), expression.to_owned())]),
+        )?;
+    }
+    for denied in [
+        (
+            "RESTORE_PRIMARY_KEY",
+            "${{ steps.mbx-bundle.outputs.cache-primary-key-suffix }}",
+        ),
+        (
+            "RESTORE_CONCLUSION",
+            "${{ steps.mbx-bundle.conclusion-extra }}",
+        ),
+        (
+            "RESTORE_CONCLUSION",
+            "${{ steps.mbx-bundle.outputs.conclusion }}",
+        ),
+    ] {
+        let result = shell_step(
+            "Qualification restore identity",
+            vec!["true".to_owned()],
+            BTreeMap::from([(denied.0.to_owned(), denied.1.to_owned())]),
+        );
+        assert!(
+            result.is_err(),
+            "unexpectedly accepted env expression: {}",
+            denied.1
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn nested_fetch_exemption_requires_generator_shape() -> Result<(), RenderError> {
     // Genuine nested names stay exempt with unscrubbed ambient env.
     for name in [

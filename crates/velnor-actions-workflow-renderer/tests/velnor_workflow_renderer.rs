@@ -29,14 +29,22 @@ mod impl_renderer_matrix;
 mod impl_renderer_mbx_action;
 #[path = "impl_renderer_mbx_bundle.rs"]
 mod impl_renderer_mbx_bundle;
+#[path = "impl_renderer_mbx_cancel_probe.rs"]
+mod impl_renderer_mbx_cancel_probe;
 #[path = "impl_renderer_mbx_gc_policy.rs"]
 mod impl_renderer_mbx_gc_policy;
 #[path = "impl_renderer_mbx_identity.rs"]
 mod impl_renderer_mbx_identity;
+#[path = "impl_renderer_mbx_parallel_composition.rs"]
+mod impl_renderer_mbx_parallel_composition;
 #[path = "impl_renderer_mbx_pr_cache_policy.rs"]
 mod impl_renderer_mbx_pr_cache_policy;
 #[path = "impl_renderer_mbx_preflight.rs"]
 mod impl_renderer_mbx_preflight;
+#[path = "impl_renderer_mbx_resource_corruption.rs"]
+mod impl_renderer_mbx_resource_corruption;
+#[path = "impl_renderer_mbx_terminal_stock_restore.rs"]
+mod impl_renderer_mbx_terminal_stock_restore;
 #[path = "impl_renderer_mbxgate.rs"]
 mod impl_renderer_mbxgate;
 #[path = "impl_renderer_msrv.rs"]
