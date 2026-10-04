@@ -88,6 +88,7 @@ elif [ "$url" = https://api.github.com/repos/tailrocks/velnor-new/actions/runs/1
   if [ -s "$GH_STATE.run-count" ]; then IFS= read -r run_count < "$GH_STATE.run-count"; fi
   run_count=$((run_count + 1))
   printf '%s\n' "$run_count" > "$GH_STATE.run-count"
+  attempt=1
   if [ -n "${CHILD_SOURCE_SHA:-}" ]; then
     run_sha="$CHILD_SOURCE_SHA"
     actor="${CHILD_ACTOR:-github-actions[bot]}"
@@ -118,10 +119,10 @@ elif [ "$url" = https://api.github.com/repos/tailrocks/velnor-new/actions/runs/1
   esac
   jq -cn --arg repo "$repo" --arg sha "$run_sha" --arg mode "$VICTIM_MODE" \
     --arg probe "$PROBE_ID" --arg actor "$actor" --arg status "$status" \
-    --argjson conclusion "$conclusion" \
+    --argjson conclusion "$conclusion" --argjson attempt "$attempt" \
     '{id:123,workflow_id:77,path:".github/workflows/qualification.yml@refs/heads/main",
       repository:{full_name:$repo},head_repository:{full_name:"tailrocks/velnor-new"},
-      event:"workflow_dispatch",head_branch:"main",head_sha:$sha,run_attempt:1,
+      event:"workflow_dispatch",head_branch:"main",head_sha:$sha,run_attempt:$attempt,
       status:$status,conclusion:$conclusion,
       display_title:("MBX cancellation " + $mode + " " + $probe),actor:{login:$actor}}' > "$output"
   write_http_status 200
@@ -243,6 +244,7 @@ elif [ "$url" = https://api.github.com/repos/tailrocks/velnor-new/actions/artifa
       ;;
     *) printf 'HTTP/2 302 Found\r\nLocation: https://signed.example/archive?sig=fixture-only\r\n\r\n' ;;
   esac
+  write_http_status 302
 elif [[ "$url" == https://signed.example/archive* ]]; then
   test "$disabled" = true
   test "$authorized" = false

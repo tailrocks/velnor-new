@@ -235,9 +235,17 @@ private_capture() {
 }
 
 private_api_endpoint_valid() {
-  local endpoint="$1"
-  local allowed='^/repos/tailrocks/velnor-new/actions/(workflows/qualification\.yml|runs/[1-9][0-9]{0,19}(/attempts/1/jobs\?per_page=100|/artifacts\?per_page=100)?|caches\?key=[a-z0-9][a-z0-9.-]{0,511}&ref=refs/heads/main&per_page=100)$'
-  [ "$GITHUB_REPOSITORY" = tailrocks/velnor-new ] && [[ "$endpoint" =~ $allowed ]]
+  local endpoint="$1" key repository="${GITHUB_REPOSITORY:-}"
+  local caches='^/repos/tailrocks/velnor-new/actions/caches\?key=[a-z0-9][a-z0-9.-]*&ref=refs/heads/main&per_page=100$'
+  local other='^/repos/tailrocks/velnor-new/actions/(workflows/qualification\.yml|runs/[1-9][0-9]{0,19}(/attempts/1/jobs\?per_page=100|/artifacts\?per_page=100)?)$'
+  [ "$repository" = tailrocks/velnor-new ] || return 1
+  if [[ "$endpoint" =~ $caches ]]; then
+    key="${endpoint#*key=}"
+    key="${key%%&ref=*}"
+    [ "${#key}" -le 512 ]
+  else
+    [[ "$endpoint" =~ $other ]]
+  fi
 }
 
 private_api_json() {

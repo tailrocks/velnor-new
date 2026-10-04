@@ -199,6 +199,14 @@ API_JSON_MODE=oversized private_api_json "$root" "$root/oversized.json" \
 private_api_json "$root" "$root/rejected.json" \
   /repos/attacker/repo/actions/runs/1 && exit 84
 [ ! -e "$root/rejected.json" ]
+long_key="$(head -c 512 /dev/zero | tr '\000' a)"
+private_api_json "$root" "$root/cache.json" \
+  "/repos/tailrocks/velnor-new/actions/caches?key=$long_key&ref=refs/heads/main&per_page=100"
+[ ! -e "$root/cache.json.status" ]
+private_api_json "$root" "$root/too-long.json" \
+  "/repos/tailrocks/velnor-new/actions/caches?key=${long_key}a&ref=refs/heads/main&per_page=100" \
+  && exit 85
+[ ! -e "$root/too-long.json" ]
 printf accepted"#,
         &root,
         &bin,
