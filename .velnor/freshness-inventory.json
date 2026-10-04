@@ -73,15 +73,16 @@
       "source_sha256": "fab1cd173714779bcd8cf67c96c3a29f04323b5a5389ad404afcd17abfb36e53"
     },
     {
-      "checked_at": "2026-10-03T14:15:14Z",
+      "checked_at": "2026-10-04T11:28:54Z",
       "key": "jdx/mr-boxington-action",
-      "latest": "v1.6.0",
+      "latest": "v1.7.1",
       "pinned_sha": "1687e54eb349cadf61fa38b5813a77875489e8e6",
       "pinned_version": "v1.6.0",
       "qualified_sha": "1687e54eb349cadf61fa38b5813a77875489e8e6",
       "qualified_version": "v1.6.0",
       "source": "https://api.github.com/repos/jdx/mr-boxington-action/releases",
-      "status": "current"
+      "status": "held",
+      "latest_sha": "d0825fbaf3cc36ca2609aa38e71046265a1f1e37"
     },
     {
       "checked_at": "2026-10-04T11:24:55Z",
@@ -120,7 +121,8 @@
       "ubuntu-26.04",
       "ubuntu-24.04",
       "ubuntu-22.04"
-    ]
+    ],
+    "checked_at": "2026-10-04T11:17:14Z"
   },
   "schema": 1,
   "temporary_holds": [
@@ -159,6 +161,24 @@
       "key": "rust",
       "owner": "@donbeave",
       "reason": "upstream moved mid-consolidation; VER-3.2 update set tracked in #6, rust bump needs maintainer qualification decision; official source observed latest 1.99.0 at 2026-10-04T11:25:20Z"
+    },
+    {
+      "expires": "2026-10-18",
+      "granted": "2026-10-04",
+      "held_version": "v1.6.0",
+      "issue": "#29",
+      "key": "jdx/mr-boxington-action",
+      "owner": "@donbeave",
+      "reason": "latest stable v1.7.1 resolves to released commit d0825fbaf3cc36ca2609aa38e71046265a1f1e37; #29 separately qualifies candidate commit ec3ebbfbc1fdaffa59d476e87e4f386fdc60d533 for current-source cache lifecycle, disk, and input behavior; retain the qualified v1.6.0 pin until that review confirms the immutable action source"
+    },
+    {
+      "expires": "2026-10-18",
+      "granted": "2026-10-04",
+      "held_version": "1.21.1",
+      "issue": "#29",
+      "key": "mr-boxington",
+      "owner": "@donbeave",
+      "reason": "latest v1.22.0 resolves to commit 10474d43342ad65df3b02323dd8092d18ab38101; keep the qualified 1.21.1 pin pending #29 current-source cache lifecycle, disk, and input qualification"
     }
   ],
   "tools": [
@@ -183,13 +203,14 @@
       "source_sha256": "ce6dddc886364f8d786514771212cebe9b731ba82d6b859951c6b0ccc516b6a2"
     },
     {
-      "checked_at": "2026-10-03T14:15:14Z",
-      "latest": "v1.21.1",
+      "checked_at": "2026-10-04T11:28:54Z",
+      "latest": "v1.22.0",
       "name": "mr-boxington",
       "pinned": "1.21.1",
       "qualified": "1.21.1",
       "source": "https://api.github.com/repos/jdx/mr-boxington/releases/latest",
-      "status": "current"
+      "status": "held",
+      "latest_sha": "10474d43342ad65df3b02323dd8092d18ab38101"
     },
     {
       "checked_at": "2026-10-04T11:24:58Z",
