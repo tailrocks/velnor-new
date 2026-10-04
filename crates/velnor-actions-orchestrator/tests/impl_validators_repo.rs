@@ -149,8 +149,8 @@ fn repo_sample_excludes_nested_cargo_test_fixtures_before_admission() -> TestRes
             let prep = prepare(root)?;
             assert!(
                 prep.discovery.statuses.iter().all(|status| match status {
-                    DetectionStatus::Selected(project) => project.manifest != manifest,
-                    DetectionStatus::Ignored { project, .. } => project.manifest != manifest,
+                    DetectionStatus::Selected(project)
+                    | DetectionStatus::Ignored { project, .. } => project.manifest != manifest,
                 }),
                 "nested fixture entered detection status"
             );
