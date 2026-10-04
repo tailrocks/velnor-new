@@ -50,6 +50,31 @@ fn actual_stock_miss_candidates_require_verified_logs_and_keep_api_identity() {
 }
 
 #[test]
+fn documented_and_explicit_default_branch_workflow_paths_are_accepted() {
+    for suffix in ["@main", "@refs/heads/main"] {
+        let root = fixture_data::TestDirectory::new();
+        let (runner_temp, jobs_path) = prepare_api_fixture(&root.0, true);
+        let run_path = root.0.join("stock-run.json");
+        let run = fs::read_to_string(&run_path).expect("read workflow run fixture");
+        fs::write(
+            run_path,
+            run.replace(
+                ".github/workflows/qualification.yml@main",
+                &format!(".github/workflows/qualification.yml{suffix}"),
+            ),
+        )
+        .expect("write workflow path fixture");
+        let output = run_api_script(&root.0, &runner_temp, &jobs_path);
+        assert!(
+            output.status.success(),
+            "workflow path {suffix} failed: {}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
+#[test]
 fn cold_candidates_fail_closed_on_nonclean_or_unmatched_step_logs() {
     for (role, filename, log) in [
         (

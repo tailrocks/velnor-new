@@ -64,7 +64,7 @@ if [ "$url" = https://api.github.com/repos/tailrocks/velnor-new/actions/runs/900
   if [ -n "$controller_probe" ]; then controller_title="$controller_title $controller_probe"; fi
   jq -cn --arg sha "$GITHUB_SHA" --arg actor "$GITHUB_ACTOR" \
     --arg title "$controller_title" --argjson workflow "${OBSERVER_WORKFLOW_ID:-77}" \
-    '{id:900,workflow_id:$workflow,path:".github/workflows/qualification.yml@refs/heads/main",
+    '{id:900,workflow_id:$workflow,path:".github/workflows/qualification.yml@main",
       repository:{full_name:"tailrocks/velnor-new"},head_repository:{full_name:"tailrocks/velnor-new"},
       event:"workflow_dispatch",head_branch:"main",head_sha:$sha,run_attempt:1,
       status:"in_progress",conclusion:null,display_title:$title,actor:{login:$actor}}' > "$output"
@@ -118,7 +118,7 @@ elif [ "$url" = https://api.github.com/repos/tailrocks/velnor-new/actions/runs/1
   jq -cn --arg repo "$repo" --arg sha "$run_sha" --arg mode "$VICTIM_MODE" \
     --arg probe "$PROBE_ID" --arg actor "$actor" --arg status "$status" \
     --argjson conclusion "$conclusion" --argjson attempt "$attempt" \
-    '{id:123,workflow_id:77,path:".github/workflows/qualification.yml@refs/heads/main",
+    '{id:123,workflow_id:77,path:".github/workflows/qualification.yml@main",
       repository:{full_name:$repo},head_repository:{full_name:"tailrocks/velnor-new"},
       event:"workflow_dispatch",head_branch:"main",head_sha:$sha,run_attempt:$attempt,
       status:$status,conclusion:$conclusion,

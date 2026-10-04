@@ -105,8 +105,8 @@ fetch_restore_log() {
       and .run_attempt == $attempt and .actor.login == $actor and .status == "in_progress"
       and (.display_title == $title
         or ($input_probe == "" and .display_title == $title_without_probe))
-      and ((.path | split("@") | .[0]) == ".github/workflows/qualification.yml")
-      and (.path | endswith("@refs/heads/main"))
+      and (.path == ".github/workflows/qualification.yml@main"
+        or .path == ".github/workflows/qualification.yml@refs/heads/main")
     ' <<< "$document" >/dev/null 2>&1 || return 1
   read -r workflow_id job_id index <<< "$snapshot"
   [[ "$job_id" =~ ^[1-9][0-9]{0,19}$ ]] && [[ "$index" =~ ^[0-9]{1,6}$ ]] || return 1

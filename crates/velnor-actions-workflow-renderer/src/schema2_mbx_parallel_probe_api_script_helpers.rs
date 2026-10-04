@@ -5,7 +5,7 @@ use super::{
     NEW_SCOPE_HASH, SHARED_SCOPE_HASH, SOURCE_SHA, cache_key_fixture_for_arch, observer_script,
 };
 
-fn run_api_script(
+pub(super) fn run_api_script(
     root: &std::path::Path,
     runner_temp: &std::path::Path,
     jobs_path: &std::path::Path,
@@ -13,7 +13,7 @@ fn run_api_script(
     run_api_script_for_platform(root, runner_temp, jobs_path, "Linux", "X64", "x64")
 }
 
-fn run_api_script_for_platform(
+pub(super) fn run_api_script_for_platform(
     root: &std::path::Path,
     runner_temp: &std::path::Path,
     jobs_path: &std::path::Path,
@@ -32,7 +32,7 @@ fn run_api_script_for_platform(
     )
 }
 
-fn run_api_script_for_platform_with_duplicate_jobs(
+pub(super) fn run_api_script_for_platform_with_duplicate_jobs(
     root: &std::path::Path,
     runner_temp: &std::path::Path,
     jobs_path: &std::path::Path,
