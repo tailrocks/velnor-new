@@ -22,7 +22,7 @@ use velnor_actions_mise::{MiseError, ProcessOutput};
 fn provider_cache_observation() -> RestoreObservation {
     let bytes = b"provider package bytes".to_vec();
     RestoreObservation {
-        entry_path: "tofu-cache/stacks-vpc-a1b2c3/registry.opentofu.org/hashicorp/null".to_owned(),
+        entry_path: "tofu-cache/b3-0000000000000000000000000000000000000000000000000000000000000000/registry.opentofu.org/hashicorp/null".to_owned(),
         entry_bytes: bytes.clone(),
         expected_digest: digest_b3(&bytes),
         expected_compat: digest_b3(b"tofu-1.13.1"),

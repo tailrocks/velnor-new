@@ -72,7 +72,7 @@ pub enum SlotState {
 /// Typed tofu task-identity extension (cache §1); unknown schemas disable reuse.
 #[derive(Debug, Clone, Serialize)]
 pub struct TofuTaskIdentityExtension {
-    /// Exact Tofu root key (`dir-` plus lowercase UTF-8 hex).
+    /// Exact `OpenTofu` root key (`dir-` plus lowercase UTF-8 hex).
     pub unit_id: String,
     /// Workspace identity digest.
     pub workspace_id: String,
@@ -109,7 +109,7 @@ pub struct TofuTaskIdentityExtension {
 /// Inputs for deriving one task-identity extension before selection.
 #[derive(Debug, Clone)]
 pub struct ExtensionInputs<'a> {
-    /// Tofu root key.
+    /// Exact `OpenTofu` root key (`dir-` plus lowercase UTF-8 hex).
     pub unit_id: &'a str,
     /// Workspace identity digest.
     pub workspace_id: &'a str,

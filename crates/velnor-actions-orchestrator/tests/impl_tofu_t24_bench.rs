@@ -144,10 +144,14 @@ fn bench_tofu_root_change() -> TestResult {
         .filter(|(_, reason)| *reason == "affected_by_change")
         .collect();
     assert_eq!(affected.len(), 3, "touched triple only: {affected:?}");
+    let task_prefix = format!(
+        "stack/tofu/{}/",
+        velnor_actions_tofu::key_for_root("stacks/r003")
+    );
     assert!(
         affected
             .iter()
-            .all(|(task, _)| task.contains("stacks/r003")),
+            .all(|(task, _)| task.starts_with(&task_prefix)),
         "{affected:?}"
     );
     let metadata_ms = index_baseline_ms(root)?;

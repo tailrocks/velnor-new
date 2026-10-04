@@ -271,8 +271,9 @@ fn tofu_task_at(root: &str, kind: &str) -> ProposedTask {
 
 #[test]
 fn tofu_toolchain_pins_opentofu_plus_provider_surface() {
-    let inputs = toolchain_inputs_for(&tofu_task("validate"), &ToolCatalog::pinned())
-        .expect("tofu converts");
+    let task = tofu_task("validate");
+    assert_eq!(task.identity.project_root, ".");
+    let inputs = toolchain_inputs_for(&task, &ToolCatalog::pinned()).expect("tofu converts");
     assert_eq!(inputs.tools, vec!["opentofu@1.13.1".to_owned()]);
     assert_eq!(inputs.components.len(), 1);
     let entry = &inputs.components[0];
@@ -280,7 +281,7 @@ fn tofu_toolchain_pins_opentofu_plus_provider_surface() {
     let digest = entry.strip_prefix("tofu-provider-inputs:").expect("prefix");
     assert!(validate_digest(digest).is_ok());
     assert_eq!(inputs.compile_driver, "tofu");
-    assert_eq!(inputs.test_runner, "tofu");
+    assert_eq!(inputs.test_runner, "none");
     assert!(toolchain_id(&inputs).is_ok());
 }
 

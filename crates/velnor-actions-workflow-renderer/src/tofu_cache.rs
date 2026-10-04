@@ -12,7 +12,7 @@ use crate::{RenderError, cache_steps};
 
 /// Owned plugin-cache base (expression form for `path:`/`env:`).
 ///
-/// The contract's `$RUNNER_TEMP/velnor/tofu-cache/<slug>` shell
+/// The contract's `$RUNNER_TEMP/velnor/tofu-cache/<locator>` shell
 /// spelling names this same dir for `run:` scripts; cache paths and
 /// step env carry the expression form (GitHub expands no `$VAR`
 /// there).
@@ -53,7 +53,7 @@ fn rename_step(mut step: Step, name: &str) -> Result<Step, RenderError> {
 
 /// True for exactly one owned plugin-cache dir under the base.
 ///
-/// Single path segment, slug charset only, no traversal, no
+/// Single path segment, ASCII locator charset only, no traversal, no
 /// never-archive names (state, plans, credentials), never the bare
 /// base: the data dir beside it (`tofu-data`) and every foreign tree
 /// stay out.
