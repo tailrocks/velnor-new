@@ -1,6 +1,6 @@
 velnor-actions: WARNING: .velnor/release-manifest.json is absent; generated workflows use a debug-only stand-in that MUST NOT ship
 Preview: /private/tmp/velnor-goldens-work/stage/dogfood/preview
-Repository: /Users/donbeave/Projects/tailrocks-new/velnor-mbx-lifecycle-fix
+Repository: /Users/donbeave/Projects/tailrocks-new/velnor-chainargos-cache-pr
 .github/AGENTS.md
 .github/CLAUDE.md
 .github/actionlint.yaml
