@@ -9,7 +9,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{UnixListener, UnixStream};
 
 mod query;
-use query::{RequestTarget, verify_versioned_path};
+use query::{RequestTarget, verify_request_path};
 
 use crate::journal::LaunchIdentity;
 
@@ -242,7 +242,8 @@ async fn read_request(stream: &mut UnixStream, expected: &RequestTarget) -> Resu
     if fields.next().is_some() || method != expected.method || protocol != "HTTP/1.1" {
         return Err("Docker request line does not match the scripted request".to_owned());
     }
-    verify_versioned_path(actual_path, expected)
+    verify_request_path(actual_path, expected)
+        .map_err(|error| format!("{error}; actual Docker request target: {actual_path}"))
 }
 
 const fn reason(status: u16) -> &'static str {

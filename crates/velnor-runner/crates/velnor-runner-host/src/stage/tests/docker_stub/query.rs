@@ -31,36 +31,47 @@ impl RequestTarget {
     }
 }
 
-pub(super) fn verify_versioned_path(actual: &str, expected: &RequestTarget) -> Result<(), String> {
-    let versioned = actual
-        .strip_prefix("/v")
-        .ok_or_else(|| "Docker request path has no API version".to_owned())?;
-    let slash = versioned
-        .find('/')
-        .ok_or_else(|| "Docker request API path is missing".to_owned())?;
-    let version = &versioned[..slash];
-    let Some((major, minor)) = version.split_once('.') else {
-        return Err("Docker API version is malformed".to_owned());
+pub(super) fn verify_request_path(actual: &str, expected: &RequestTarget) -> Result<(), String> {
+    let path = match actual.strip_prefix("/v") {
+        Some(versioned) => {
+            let slash = versioned
+                .find('/')
+                .ok_or_else(|| "Docker request API path is missing".to_owned())?;
+            let version = &versioned[..slash];
+            let Some((major, minor)) = version.split_once('.') else {
+                return Err("Docker API version is malformed".to_owned());
+            };
+            if major.is_empty()
+                || minor.is_empty()
+                || !major.bytes().all(|byte| byte.is_ascii_digit())
+                || !minor.bytes().all(|byte| byte.is_ascii_digit())
+            {
+                return Err("Docker API version is malformed".to_owned());
+            }
+            &versioned[slash..]
+        }
+        None if actual.starts_with("/v") => {
+            return Err("Docker API version is malformed".to_owned());
+        }
+        None => actual,
     };
-    if major.is_empty()
-        || minor.is_empty()
-        || !major.bytes().all(|byte| byte.is_ascii_digit())
-        || !minor.bytes().all(|byte| byte.is_ascii_digit())
-    {
-        return Err("Docker API version is malformed".to_owned());
-    }
-    let path = &versioned[slash..];
     if expected.query_required {
         match path.split_once('?') {
             Some((actual_path, query)) if actual_path == expected.path && !query.is_empty() => {
-                verify_query(query, expected)
+                verify_query(query, expected).map_err(|_| {
+                    format!("Docker request target does not match the scripted query: {actual}")
+                })
             }
-            _ => Err("Docker request path does not match the scripted request".to_owned()),
+            _ => Err(format!(
+                "Docker request target does not match the scripted request: {actual}"
+            )),
         }
     } else if path == expected.path {
         Ok(())
     } else {
-        Err("Docker request path does not match the scripted request".to_owned())
+        Err(format!(
+            "Docker request target does not match the scripted request: {actual}"
+        ))
     }
 }
 
@@ -153,7 +164,7 @@ fn expected_labels(identity: &LaunchIdentity) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{RequestTarget, verify_versioned_path};
+    use super::{RequestTarget, verify_request_path};
     use crate::journal::LaunchIdentity;
 
     #[test]
@@ -173,22 +184,26 @@ mod tests {
             identity.engine_id()
         );
         let valid = format!("/v1.41/containers/json?all=true&size=false&filters={filters}");
-        assert_eq!(verify_versioned_path(&valid, &expected), Ok(()));
+        assert_eq!(verify_request_path(&valid, &expected), Ok(()));
+        let unversioned = format!("/containers/json?all=true&size=false&filters={filters}");
+        assert_eq!(verify_request_path(&unversioned, &expected), Ok(()));
 
         let missing_filters = "/v1.41/containers/json?all=true&size=false";
-        assert!(verify_versioned_path(missing_filters, &expected).is_err());
+        assert!(verify_request_path(missing_filters, &expected).is_err());
         let malformed_query = "/v1.41/containers/json?all=true&size=false&filters=%GG";
-        assert!(verify_versioned_path(malformed_query, &expected).is_err());
+        assert!(verify_request_path(malformed_query, &expected).is_err());
         let wrong_all = format!("/v1.41/containers/json?all=false&size=false&filters={filters}");
-        assert!(verify_versioned_path(&wrong_all, &expected).is_err());
+        assert!(verify_request_path(&wrong_all, &expected).is_err());
         let wrong_identity =
             filters.replace(identity.launch_id(), "33333333333333333333333333333333");
         let wrong_scope =
             format!("/v1.41/containers/json?all=true&size=false&filters={wrong_identity}");
-        assert!(verify_versioned_path(&wrong_scope, &expected).is_err());
+        assert!(verify_request_path(&wrong_scope, &expected).is_err());
         let limited =
             format!("/v1.41/containers/json?all=true&size=false&filters={filters}&limit=1");
-        assert!(verify_versioned_path(&limited, &expected).is_err());
+        assert!(verify_request_path(&limited, &expected).is_err());
+        assert!(verify_request_path("/v/containers/json", &expected).is_err());
+        assert!(verify_request_path("/v1.x/containers/json", &expected).is_err());
         Ok(())
     }
 }
