@@ -52,6 +52,38 @@ fn empty_poll_is_not_an_ack_and_unknown_kind_is_visible() -> Result<(), &'static
 }
 
 #[test]
+fn started_and_completed_fields_match_their_pinned_message_types() -> Result<(), &'static str> {
+    let raw = r#"{"messageId":8,"messageType":"RunnerScaleSetJobMessages","body":"[{\"messageType\":\"JobStarted\",\"runnerRequestId\":17,\"runnerId\":31,\"runnerName\":\"runner-31\"},{\"messageType\":\"JobCompleted\",\"runnerRequestId\":18,\"runnerId\":32,\"runnerName\":\"runner-32\",\"result\":\"Succeeded\"},{\"messageType\":\"JobAvailable\",\"runnerRequestId\":19,\"runnerId\":99,\"runnerName\":\"ignored\",\"result\":\"ignored\"}]"}"#;
+    let Poll::Batch(batch) = parse_poll(200, raw).map_err(|_| "batch")? else {
+        return Err("batch");
+    };
+    let started = batch.jobs.first().ok_or("started")?;
+    assert_eq!(started.kind, InnerKind::Started);
+    assert_eq!(started.request_id, Some(17));
+    assert_eq!(started.runner_id, Some(31));
+    assert_eq!(started.runner_name.as_deref(), Some("runner-31"));
+    assert_eq!(started.result, None);
+    let completed = batch.jobs.get(1).ok_or("completed")?;
+    assert_eq!(completed.kind, InnerKind::Completed);
+    assert_eq!(completed.request_id, Some(18));
+    assert_eq!(completed.runner_id, Some(32));
+    assert_eq!(completed.runner_name.as_deref(), Some("runner-32"));
+    assert_eq!(completed.result.as_deref(), Some("Succeeded"));
+    let available = batch.jobs.get(2).ok_or("available")?;
+    assert_eq!(available.request_id, Some(19));
+    assert_eq!(available.runner_id, None);
+    assert_eq!(available.runner_name, None);
+    assert_eq!(available.result, None);
+    Ok(())
+}
+
+#[test]
+fn malformed_runner_fields_reject_the_poll_batch() {
+    let raw = r#"{"messageId":8,"messageType":"RunnerScaleSetJobMessages","body":"[{\"messageType\":\"JobCompleted\",\"runnerRequestId\":18,\"runnerId\":\"32\",\"runnerName\":\"runner-32\",\"result\":\"Succeeded\"}]"}"#;
+    assert_eq!(parse_poll(200, raw), Err(WireError::Malformed));
+}
+
+#[test]
 fn assigned_population_is_not_the_batch_length() -> Result<(), &'static str> {
     let raw = r#"{"messageId":1,"messageType":"RunnerScaleSetJobMessages","body":"[{\"messageType\":\"JobAvailable\",\"runnerRequestId\":1,\"jobId\":\"111\",\"requestLabels\":[\"velnor\",\"ubuntu-26.04-scale-set\"]}]","statistics":{"totalAvailableJobs":1,"totalAcquiredJobs":0,"totalAssignedJobs":5,"totalRunningJobs":0,"totalRegisteredRunners":0,"totalBusyRunners":0,"totalIdleRunners":0}}"#;
     let Poll::Batch(batch) = parse_poll(200, raw).map_err(|_| "batch")? else {

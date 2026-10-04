@@ -265,11 +265,21 @@ fn jit_bytes_stay_out_of_debug_and_errors() -> Result<(), &'static str> {
     let request_canary = "request-jit-canary";
     let response_canary = "response-jit-canary";
     let request = format!(r#"{{"name":"{request_canary}"}}"#);
-    let response = format!(r#"{{"encodedJITConfig":"{response_canary}"}}"#);
+    let response = format!(
+        r#"{{"runner":{{"id":8,"name":"runner-eight","runnerScaleSetId":7}},"encodedJITConfig":"{response_canary}"}}"#
+    );
     let mut script = Script::once(200, &response);
     let config = jit(&mut script, 7, ADMIN, request.as_bytes()).map_err(|_| "jit")?;
-    assert_eq!(config.expose(), response_canary);
-    assert!(!config.expose().contains("encodedJITConfig"));
+    assert_eq!(config.encoded_jit_config.expose(), response_canary);
+    assert_eq!(config.runner.id, 8);
+    assert_eq!(config.runner.name, "runner-eight");
+    assert_eq!(config.runner.runner_scale_set_id, 7);
+    assert!(
+        !config
+            .encoded_jit_config
+            .expose()
+            .contains("encodedJITConfig")
+    );
     assert!(!format!("{config:?}").contains(response_canary));
     let rendered = format!("{:?}", script.seen[0]);
     assert!(!rendered.contains(request_canary));
@@ -291,6 +301,24 @@ fn jit_bytes_stay_out_of_debug_and_errors() -> Result<(), &'static str> {
     assert!(!rendered.contains(response_canary));
     assert_eq!(script.seen.len(), 1);
     assert_eq!(err.certainty(), Certainty::Definite);
+    Ok(())
+}
+
+#[test]
+fn jit_requires_both_response_values() -> Result<(), &'static str> {
+    let request = br#"{"name":"runner-eight","workFolder":""}"#;
+    for body in [
+        r#"{"encodedJITConfig":"jit-canary"}"#,
+        r#"{"runner":null,"encodedJITConfig":"jit-canary"}"#,
+        r#"{"runner":{"id":8,"name":"runner-eight"},"encodedJITConfig":"jit-canary"}"#,
+        r#"{"runner":{"id":8,"name":"runner-eight","runnerScaleSetId":7},"encodedJITConfig":""}"#,
+    ] {
+        let mut script = Script::once(200, body);
+        let err = must_err(&jit(&mut script, 7, ADMIN, request))?;
+        assert_eq!(err, SessionError::Wire(WireError::Malformed));
+        assert_eq!(err.certainty(), Certainty::Definite);
+        assert!(!format!("{err} {err:?} {:?}", script.seen[0]).contains("jit-canary"));
+    }
     Ok(())
 }
 

@@ -4,6 +4,7 @@ use std::fmt;
 
 use serde::Deserialize;
 
+use crate::paths::query_escape;
 use crate::session::{API_QUERY, bearer, execute, json_content, user_agent};
 use crate::{Method, SessionError, SessionRequest, Transport, WireError, scale_set_path};
 
@@ -228,49 +229,4 @@ struct ScaleSetPage {
     count: i64,
     #[serde(default)]
     value: Vec<ScaleSetView>,
-}
-
-fn query_escape(value: &str) -> String {
-    let mut out = String::with_capacity(value.len());
-    for byte in value.bytes() {
-        push_query_byte(&mut out, byte);
-    }
-    out
-}
-
-fn push_query_byte(out: &mut String, byte: u8) {
-    if is_unreserved(byte) {
-        out.push(char::from(byte));
-    } else if byte == b' ' {
-        out.push('+');
-    } else {
-        out.push('%');
-        out.push(hex_digit(byte >> 4));
-        out.push(hex_digit(byte & 0x0f));
-    }
-}
-
-const fn is_unreserved(byte: u8) -> bool {
-    matches!(byte, b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~')
-}
-
-const fn hex_digit(nibble: u8) -> char {
-    match nibble {
-        0 => '0',
-        1 => '1',
-        2 => '2',
-        3 => '3',
-        4 => '4',
-        5 => '5',
-        6 => '6',
-        7 => '7',
-        8 => '8',
-        9 => '9',
-        10 => 'A',
-        11 => 'B',
-        12 => 'C',
-        13 => 'D',
-        14 => 'E',
-        _ => 'F',
-    }
 }

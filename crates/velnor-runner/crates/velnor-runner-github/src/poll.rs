@@ -47,6 +47,12 @@ pub struct InnerJob {
     pub kind: InnerKind,
     /// `runnerRequestId` when present.
     pub request_id: Option<i64>,
+    /// `runnerId` on `JobStarted` and `JobCompleted` only.
+    pub runner_id: Option<i64>,
+    /// `runnerName` on `JobStarted` and `JobCompleted` only.
+    pub runner_name: Option<String>,
+    /// `result` on `JobCompleted` only.
+    pub result: Option<String>,
     /// Numeric `jobId` only. Other shapes are dropped.
     pub job_id: Option<String>,
     /// `requestLabels` names. Empty when the field is absent.
@@ -146,13 +152,63 @@ fn parse_inner(value: &Value) -> Result<InnerJob, WireError> {
         "JobCompleted" => InnerKind::Completed,
         other => InnerKind::Unsupported(other.to_owned()),
     };
+    let runner_fields = message_runner_fields(value, &kind)?;
     Ok(InnerJob {
         kind,
         request_id,
+        runner_id: runner_fields.runner_id,
+        runner_name: runner_fields.runner_name,
+        result: runner_fields.result,
         job_id,
         labels,
         fields,
     })
+}
+
+fn message_runner_fields(
+    value: &Value,
+    kind: &InnerKind,
+) -> Result<MessageRunnerFields, WireError> {
+    match kind {
+        InnerKind::Started => Ok(MessageRunnerFields {
+            runner_id: optional_i64(value, "runnerId")?,
+            runner_name: optional_string(value, "runnerName")?,
+            result: None,
+        }),
+        InnerKind::Completed => Ok(MessageRunnerFields {
+            runner_id: optional_i64(value, "runnerId")?,
+            runner_name: optional_string(value, "runnerName")?,
+            result: optional_string(value, "result")?,
+        }),
+        InnerKind::Available | InnerKind::Assigned | InnerKind::Unsupported(_) => {
+            Ok(MessageRunnerFields::default())
+        }
+    }
+}
+
+#[derive(Default)]
+struct MessageRunnerFields {
+    runner_id: Option<i64>,
+    runner_name: Option<String>,
+    result: Option<String>,
+}
+
+fn optional_i64(value: &Value, field: &str) -> Result<Option<i64>, WireError> {
+    match value.get(field) {
+        None | Some(Value::Null) => Ok(None),
+        Some(number) => number.as_i64().map(Some).ok_or(WireError::Malformed),
+    }
+}
+
+fn optional_string(value: &Value, field: &str) -> Result<Option<String>, WireError> {
+    match value.get(field) {
+        None | Some(Value::Null) => Ok(None),
+        Some(text) => text
+            .as_str()
+            .map(str::to_owned)
+            .map(Some)
+            .ok_or(WireError::Malformed),
+    }
 }
 
 fn numeric_job_id(value: Option<&str>) -> Option<String> {
