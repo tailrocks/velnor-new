@@ -35,6 +35,9 @@ async fn assignment_id(
     request_id: i64,
     capacity: u32,
 ) -> Result<LaunchReservation, HostError> {
+    if let Some(id) = completed_assignment(conn, assignment_key).await? {
+        return Ok(LaunchReservation::Completed(id));
+    }
     if let Some(reservation) = assignment_match(conn, assignment_key, capacity).await? {
         return Ok(reservation);
     }
@@ -70,6 +73,27 @@ async fn assignment_id(
         return Ok(LaunchReservation::AtCapacity);
     }
     insert_assignment(conn, assignment_key).await
+}
+
+async fn completed_assignment(
+    conn: &turso::Connection,
+    assignment_key: &str,
+) -> Result<Option<i64>, HostError> {
+    let mut rows = conn
+        .query(
+            "SELECT id FROM intents WHERE kind = 'launch' AND assignment_key = ?1 AND runner_completed = 1 ORDER BY id DESC LIMIT 2",
+            [assignment_key],
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? else {
+        return Ok(None);
+    };
+    let id: i64 = row.get(0).map_err(|_| HostError::Journal)?;
+    if rows.next().await.map_err(|_| HostError::Journal)?.is_some() {
+        return Err(HostError::Journal);
+    }
+    Ok(Some(id))
 }
 
 async fn legacy_ids(

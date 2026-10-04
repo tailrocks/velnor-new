@@ -15,6 +15,7 @@ mod https;
 mod ipc;
 mod journal;
 mod journal_assignment;
+mod journal_completion;
 mod journal_effects;
 mod journal_identity;
 mod journal_schema;
@@ -67,6 +68,8 @@ mod docker_spec_tests;
 mod https_tests;
 #[cfg(test)]
 mod ipc_tests;
+#[cfg(test)]
+mod journal_completion_tests;
 #[cfg(test)]
 mod journal_effects_tests;
 #[cfg(test)]

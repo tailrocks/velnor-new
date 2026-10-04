@@ -68,6 +68,8 @@ pub(crate) enum LaunchReservation {
     Existing(i64),
     /// This call created a durable identity before external effects.
     New(i64),
+    /// This assignment already completed and must not be acquired again.
+    Completed(i64),
 }
 
 /// File-backed journal.
@@ -276,11 +278,28 @@ impl Journal {
         let _write = self.write_guard().await;
         self.sync_lineage().await?;
         let conn = self.connection().await?;
-        let changed = conn
-            .execute("UPDATE intents SET cleanup_proven = 1 WHERE id = ?1", [id])
+        conn.execute("BEGIN IMMEDIATE", ())
             .await
-            .map_err(|_| HostError::Journal);
-        self.sync_after(changed.and_then(one_row)).await
+            .map_err(|_| HostError::Journal)?;
+        let result = async {
+            let changed = conn
+                .execute("UPDATE intents SET cleanup_proven = 1 WHERE id = ?1", [id])
+                .await
+                .map_err(|_| HostError::Journal)?;
+            one_row(changed)?;
+            conn.execute("DELETE FROM completion_cleanup WHERE intent_id = ?1", [id])
+                .await
+                .map_err(|_| HostError::Journal)?;
+            Ok(())
+        }
+        .await;
+        let ended = if result.is_ok() {
+            conn.execute("COMMIT", ()).await
+        } else {
+            conn.execute("ROLLBACK", ()).await
+        };
+        ended.map_err(|_| HostError::Journal)?;
+        self.sync_after(result).await
     }
 
     /// Load every row. The connection closes before this returns.
@@ -292,7 +311,7 @@ impl Journal {
         let conn = self.connection().await?;
         let mut query = conn
             .query(
-                "SELECT id, kind, subject, state, docker_id, dind_id, github_runner_id, cleanup_proven, launch_id, assignment_key, seed_generation_id, acquire_attempted, acquire_resolved, acquired, jit_requested FROM intents ORDER BY id",
+                "SELECT id, kind, subject, state, docker_id, dind_id, github_runner_id, cleanup_proven, launch_id, assignment_key, seed_generation_id, acquire_attempted, acquire_resolved, acquired, jit_requested, runner_completed FROM intents ORDER BY id",
                 (),
             )
             .await

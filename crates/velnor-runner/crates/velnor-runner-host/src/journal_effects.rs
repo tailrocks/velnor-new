@@ -15,7 +15,7 @@ impl Journal {
         let connection = self.connection().await?;
         let mut rows = connection
             .query(
-                "SELECT id, kind, subject, state, docker_id, dind_id, github_runner_id, cleanup_proven, launch_id, assignment_key, seed_generation_id, acquire_attempted, acquire_resolved, acquired, jit_requested FROM intents WHERE id = ?1",
+                "SELECT id, kind, subject, state, docker_id, dind_id, github_runner_id, cleanup_proven, launch_id, assignment_key, seed_generation_id, acquire_attempted, acquire_resolved, acquired, jit_requested, runner_completed FROM intents WHERE id = ?1",
                 [id],
             )
             .await

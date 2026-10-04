@@ -21,6 +21,7 @@ use crate::scale_set::EnsureError;
 use crate::worker::{PreparedDind, Started, prepare_dind_until, start_runner_until};
 
 mod capacity;
+mod completion;
 mod gate;
 #[cfg(all(test, unix))]
 mod initial_scale_tests;

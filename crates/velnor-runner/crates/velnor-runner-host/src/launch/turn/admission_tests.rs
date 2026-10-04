@@ -177,6 +177,66 @@ async fn full_capacity_rejects_an_unrelated_assignment() -> Result<(), String> {
 }
 
 #[tokio::test]
+async fn completed_assignment_replay_is_acked_without_a_new_reservation() -> Result<(), String> {
+    let (_scratch, journal) = open("admission-completed-replay").await?;
+    let LaunchReservation::New(id) = journal
+        .reserve_assignment(1, 42, 100, 1)
+        .await
+        .map_err(|error| error.to_string())?
+    else {
+        return Err("expected a new assignment reservation".to_owned());
+    };
+    if !journal
+        .claim_acquire(id)
+        .await
+        .map_err(|error| error.to_string())?
+    {
+        return Err("expected the first acquire claim".to_owned());
+    }
+    journal
+        .resolve_acquire(id, true)
+        .await
+        .map_err(|error| error.to_string())?;
+    if !journal
+        .claim_jit(id)
+        .await
+        .map_err(|error| error.to_string())?
+    {
+        return Err("expected the first JIT claim".to_owned());
+    }
+    let identity = journal
+        .launch_identity(id)
+        .await
+        .map_err(|error| error.to_string())?;
+    let name = format!("v{}", identity.launch_id());
+    journal
+        .record_runner_completed(1, 42, 71, &name)
+        .await
+        .map_err(|error| error.to_string())?;
+    journal
+        .record_cleanup(id)
+        .await
+        .map_err(|error| error.to_string())?;
+
+    let replay = admission(&journal, 1, 1, 1, 1, 0, &batch(101, 42))
+        .await
+        .map_err(|error| error.to_string())?;
+
+    assert_eq!(replay.reservation, Some(LaunchReservation::Completed(id)));
+    assert_eq!(replay.decision, Admit::Ack { stop: false });
+    assert_eq!(
+        journal
+            .rows()
+            .await
+            .map_err(|error| error.to_string())?
+            .len(),
+        1
+    );
+    assert_eq!(journal.occupied_launches().await, Ok(0));
+    Ok(())
+}
+
+#[tokio::test]
 async fn unresolved_assignment_reservation_blocks_initial_scale_mint() -> Result<(), String> {
     let (_scratch, journal) = open("scale-reserved-assignment").await?;
     let LaunchReservation::New(id) = journal

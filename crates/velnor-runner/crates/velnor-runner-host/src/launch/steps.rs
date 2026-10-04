@@ -140,6 +140,7 @@ where
         .map_err(map_journal)?;
     let id = match reservation {
         LaunchReservation::AtCapacity => return Ok(None),
+        LaunchReservation::Completed(_) => return Ok(None),
         LaunchReservation::Existing(id) => {
             if docker_pair_bound(journal, id).await? {
                 return finish_live(lane, ctx, journal, id, batch).await;

@@ -10,6 +10,7 @@ use crate::scale_set::EnsureError;
 use crate::worker::Started;
 
 use super::capacity::{self, Admit};
+use super::completion;
 use super::slot;
 use super::steps;
 use super::trace;
@@ -121,6 +122,7 @@ pub(super) async fn admission(
             .map_err(slot::map_journal)?;
         let decision = match reservation {
             LaunchReservation::AtCapacity => Admit::Hold,
+            LaunchReservation::Completed(_) => Admit::Ack { stop: false },
             LaunchReservation::New(_) | LaunchReservation::Existing(_) => {
                 let occupied = slot::occupied_count(journal).await?;
                 Admit::Start {
@@ -171,6 +173,17 @@ async fn until_idle(
             tokio::time::sleep(std::time::Duration::from_secs(2)).await;
             continue;
         }
+        if !turn
+            .journal
+            .completed_launches()
+            .await
+            .map_err(slot::map_journal)?
+            .is_empty()
+        {
+            missed = 0;
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            continue;
+        }
         missed = missed.saturating_add(1);
         if workers.is_empty() || missed >= 2 {
             return Ok(());
@@ -181,7 +194,12 @@ async fn until_idle(
 
 async fn departed(turn: &Turn<'_>, workers: &[Started], missed: u8) -> Result<bool, EnsureError> {
     let running = slot::running_count(turn.journal, turn.docker).await?;
-    Ok(running == 0 && (workers.is_empty() || missed >= 2))
+    let pending = turn
+        .journal
+        .completed_launches()
+        .await
+        .map_err(slot::map_journal)?;
+    Ok(running == 0 && pending.is_empty() && (workers.is_empty() || missed >= 2))
 }
 
 fn assigned_in(polled: &Poll) -> u32 {
@@ -214,6 +232,16 @@ impl Turn<'_> {
         restore_base(self.link, saved)?;
         let polled = polled?;
         trace::batch(&polled);
+        completion::record_completion_events(self.journal, self.set_id, &polled).await?;
+        let cleanup_tasks = completion::schedule_completed(
+            self.link.transport().cleanup_client(),
+            self.set_id,
+            self.admin_token,
+            self.journal.clone(),
+            self.docker.clone(),
+        )
+        .await?;
+        drop(cleanup_tasks);
         let idle = steps::idle(&polled);
         let started = u32::try_from(workers.len()).unwrap_or(u32::MAX);
         let running = self.running(started, idle).await?;

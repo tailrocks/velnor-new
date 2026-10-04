@@ -14,6 +14,7 @@ use super::PairEngine;
 pub(crate) struct ObservedWorker {
     dind_id: Option<String>,
     runner_id: Option<String>,
+    runner_running: Option<bool>,
 }
 
 impl ObservedWorker {
@@ -27,6 +28,12 @@ impl ObservedWorker {
     #[must_use]
     pub(crate) fn runner_id(&self) -> Option<&str> {
         self.runner_id.as_deref()
+    }
+
+    /// Running state from the exact-label-verified runner inspect, if present.
+    #[must_use]
+    pub(crate) const fn runner_running(&self) -> Option<bool> {
+        self.runner_running
     }
 }
 
@@ -71,7 +78,7 @@ pub(crate) async fn reconcile_worker<E: PairEngine>(
     }
     if let Some(runner_id) = observed.runner_id.as_deref() {
         let dind_id = observed.dind_id.as_deref().ok_or(HostError::Ownership)?;
-        engine
+        let runner = engine
             .verify_container(
                 identity,
                 "runner",
@@ -81,6 +88,7 @@ pub(crate) async fn reconcile_worker<E: PairEngine>(
                 false,
             )
             .await?;
+        observed.runner_running = runner.running;
     }
     Ok(observed)
 }

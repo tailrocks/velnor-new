@@ -35,6 +35,8 @@ pub struct IntentRow {
     pub acquired: bool,
     /// A JIT registration call may have created the official runner.
     pub jit_requested: bool,
+    /// A matching `JobCompleted` event was committed before queue acknowledgement.
+    pub runner_completed: bool,
 }
 
 /// Whether the host may advertise free capacity.

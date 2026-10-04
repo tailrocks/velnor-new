@@ -42,9 +42,17 @@ async fn bootstrap_transaction(connection: &Connection) -> Result<(), HostError>
     ensure_column(connection, "acquire_resolved", "INTEGER NOT NULL DEFAULT 0").await?;
     ensure_column(connection, "acquired", "INTEGER NOT NULL DEFAULT 0").await?;
     ensure_column(connection, "jit_requested", "INTEGER NOT NULL DEFAULT 0").await?;
+    ensure_column(connection, "runner_completed", "INTEGER NOT NULL DEFAULT 0").await?;
     connection
         .execute(
             "CREATE TABLE IF NOT EXISTS journal_meta (singleton INTEGER PRIMARY KEY CHECK(singleton = 1), instance_id TEXT NOT NULL, engine_id TEXT, revision INTEGER NOT NULL DEFAULT 0, lineage_pinned INTEGER NOT NULL DEFAULT 0)",
+            (),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    connection
+        .execute(
+            "CREATE TABLE IF NOT EXISTS completion_cleanup (intent_id INTEGER PRIMARY KEY, attempts INTEGER NOT NULL DEFAULT 0, retry_after INTEGER NOT NULL DEFAULT 0, lease_until INTEGER NOT NULL DEFAULT 0)",
             (),
         )
         .await
@@ -119,6 +127,9 @@ async fn drop_revision_triggers(connection: &Connection) -> Result<(), HostError
         "intents_revision_insert",
         "intents_revision_update",
         "intents_revision_delete",
+        "completion_cleanup_revision_insert",
+        "completion_cleanup_revision_update",
+        "completion_cleanup_revision_delete",
         "journal_lineage_revision",
     ] {
         connection
@@ -135,6 +146,9 @@ async fn install_revision_triggers(connection: &Connection) -> Result<(), HostEr
         "CREATE TRIGGER IF NOT EXISTS intents_revision_insert AFTER INSERT ON intents BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END",
         "CREATE TRIGGER IF NOT EXISTS intents_revision_update AFTER UPDATE ON intents BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END",
         "CREATE TRIGGER IF NOT EXISTS intents_revision_delete AFTER DELETE ON intents BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END",
+        "CREATE TRIGGER IF NOT EXISTS completion_cleanup_revision_insert AFTER INSERT ON completion_cleanup BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END",
+        "CREATE TRIGGER IF NOT EXISTS completion_cleanup_revision_update AFTER UPDATE ON completion_cleanup BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END",
+        "CREATE TRIGGER IF NOT EXISTS completion_cleanup_revision_delete AFTER DELETE ON completion_cleanup BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END",
         "CREATE TRIGGER journal_lineage_revision AFTER UPDATE OF instance_id, engine_id, lineage_pinned ON journal_meta WHEN OLD.instance_id IS NOT NEW.instance_id OR OLD.engine_id IS NOT NEW.engine_id OR OLD.lineage_pinned IS NOT NEW.lineage_pinned BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END",
     ] {
         connection

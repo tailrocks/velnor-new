@@ -24,6 +24,7 @@ fn intent(state: IntentState, kind: &str) -> IntentRow {
         acquire_resolved: false,
         acquired: false,
         jit_requested: false,
+        runner_completed: false,
     }
 }
 

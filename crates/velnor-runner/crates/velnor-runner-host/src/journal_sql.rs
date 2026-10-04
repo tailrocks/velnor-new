@@ -77,6 +77,7 @@ pub(super) fn intent_row(row: &turso::Row) -> Result<IntentRow, HostError> {
         acquire_resolved: row.get(12).map_err(|_| HostError::Journal)?,
         acquired: row.get(13).map_err(|_| HostError::Journal)?,
         jit_requested: row.get(14).map_err(|_| HostError::Journal)?,
+        runner_completed: row.get(15).map_err(|_| HostError::Journal)?,
     })
 }
 

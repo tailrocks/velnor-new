@@ -11,6 +11,7 @@ use crate::scale_set::EnsureError;
 use crate::worker::{PreparedDind, Started};
 
 use super::steps::mint;
+use super::steps_ack::acknowledge;
 use super::steps_ack::{ack_bound, hold};
 use super::{Drive, Lane, capacity};
 
@@ -66,6 +67,10 @@ where
     };
     let id = match reservation {
         LaunchReservation::AtCapacity => return Ok(None),
+        LaunchReservation::Completed(_) => {
+            acknowledge(lane, ctx, batch)?;
+            return Ok(None);
+        }
         LaunchReservation::Existing(id) => id,
         LaunchReservation::New(id) => id,
     };
