@@ -82,14 +82,16 @@ COPY tar-member.pl /usr/local/bin/tar-member.pl
 COPY tar-pax.pl /usr/local/bin/velnor-tar-pax
 # zstd and git-lfs are installed before the tar divert. dpkg needs GNU tar to unpack.
 # After the divert, /usr/bin/tar is the BusyBox shim, not GNU tar.
+# netcat-openbsd provides `nc -z`. Cancel-service probes the service port with it.
 RUN chmod 0755 /usr/local/bin/velnor-runner-entrypoint /usr/local/bin/wait-docker-sock /usr/local/bin/velnor-tar /usr/local/bin/velnor-tar-pax /usr/local/bin/tar-member.pl \
     && apt-get update \
-    && apt-get install -y --no-install-recommends build-essential clang cmake git-lfs jq libclang-dev libssl-dev perl pkg-config protobuf-compiler python3 zstd \
+    && apt-get install -y --no-install-recommends build-essential clang cmake git-lfs jq libclang-dev libssl-dev netcat-openbsd perl pkg-config protobuf-compiler python3 zstd \
     && cc --version \
     && pkg-config --modversion openssl \
     && cmake --version \
     && jq --version \
     && python3 --version \
+    && python3 -c 'import socket,subprocess,threading; s=socket.socket(); s.bind(("127.0.0.1",0)); s.listen(1); port=s.getsockname()[1]; threading.Thread(target=s.accept, daemon=True).start(); raise SystemExit(subprocess.run(["nc","-z","-w","1","127.0.0.1",str(port)]).returncode)' \
     && test -n "$(find /usr/lib -path '/usr/lib/llvm-*/lib/libclang.so' -print -quit)" \
     && protoc --version \
     && printf 'syntax = "proto3"; message M { int32 x = 1; }\n' > /tmp/m.proto \
