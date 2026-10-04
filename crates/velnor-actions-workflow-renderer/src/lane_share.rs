@@ -206,3 +206,7 @@ fn composite_file(
 #[cfg(test)]
 #[path = "lane_share_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "lane_share_unpinned_tests.rs"]
+mod unpinned_tests;
