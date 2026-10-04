@@ -1,12 +1,13 @@
 # PR #12 current disposition and historical evidence
 
-## Current exact-ref snapshot — paired API capture 2026-10-04T18:34:30Z (2026-10-05 01:34:30 +07:00)
+## Current exact-ref snapshot — PR `updated_at` 2026-10-04T18:34:30Z (2026-10-05 01:34:30 +07:00); observation clock unrecorded
 
 Paired PR API and `refs/pull/12/head` reads bind open draft PR #12 to
 `f4f1312124cfcb4f9f531557ff5c229eb691fc58`, base
-`47815c83b9eeadbaf84b741918fffa7ea550da89`. Current Files API and exact Git
-tree agree on 461 changed paths, including 100 `.py` paths. This is the source
-capture cutoff; the ledger edit cutoff is recorded in the signed freeze record
+`47815c83b9eeadbaf84b741918fffa7ea550da89`. PR `updated_at` was
+`2026-10-04T18:34:30Z`; the paired API/ref observation clock was not retained.
+The Files API path set matches the exact Git tree: 461 changed paths, including
+100 `.py` paths. The ledger edit cutoff is recorded in the signed freeze record
 in the linked addendum, with UTC and `Asia/Ho_Chi_Minh` times. Snapshot hashes,
 the 225-path delta from `7c52bbda`, and path dispositions are in
 [`pr-12-delta-7c52-to-f4f131-2026-10-05.md`](pr-12-delta-7c52-to-f4f131-2026-10-05.md).
