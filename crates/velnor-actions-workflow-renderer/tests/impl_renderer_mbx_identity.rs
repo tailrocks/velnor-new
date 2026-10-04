@@ -147,8 +147,10 @@ fn unsupported_action_cache_inputs_fail_closed() -> Result<(), RenderError> {
 
 #[test]
 fn hosted_and_scale_set_copies_elect_one_cache_writer() -> Result<(), RenderError> {
-    let hosted = super::impl_renderer_mbx_bundle::mbx_job("rust-demo__hosted", "1.21.1")?;
-    let mut local = super::impl_renderer_mbx_bundle::mbx_job("rust-demo__local", "1.21.1")?;
+    let hosted =
+        super::impl_renderer_mbx_bundle::mbx_job_with_checkout("rust-demo__hosted", "1.21.1")?;
+    let mut local =
+        super::impl_renderer_mbx_bundle::mbx_job_with_checkout("rust-demo__local", "1.21.1")?;
     let selector = ScaleSetSelector::try_new(
         SCALE_SET_NAME,
         &[VELNOR_LABEL.to_owned(), SCALE_SET_NAME.to_owned()],
@@ -163,9 +165,19 @@ fn hosted_and_scale_set_copies_elect_one_cache_writer() -> Result<(), RenderErro
         &mise(),
     )?;
     let text = rendered.yaml;
+    let hosted_start = text.find("rust-demo__hosted:").expect("hosted job");
+    let local_start = text.find("rust-demo__local:").expect("local job");
+    let hosted = &text[hosted_start..local_start];
+    let local = &text[local_start..];
     assert_eq!(text.matches("name: Export MBX single bundle").count(), 1);
     assert_eq!(text.matches("name: Save MBX single bundle").count(), 1);
-    assert_eq!(text.matches("uses: $/.github/actions/rust-demo").count(), 2);
+    assert_eq!(hosted.matches("name: Export MBX single bundle").count(), 1);
+    assert_eq!(hosted.matches("name: Save MBX single bundle").count(), 1);
+    assert!(!local.contains("name: Export MBX single bundle"));
+    assert!(!local.contains("name: Save MBX single bundle"));
+    assert!(hosted.contains("MBX_GC_AUTO: \"1\""));
+    assert!(!local.contains("MBX_GC_AUTO: \"1\""));
+    assert_eq!(text.matches("uses: ./.github/actions/rust-demo").count(), 2);
     assert_eq!(text.matches("id: mbx-lane-cache").count(), 2);
     assert!(
         text.contains("steps.mbx-lane-cache.outputs.mbx-cache-hit != 'true'"),

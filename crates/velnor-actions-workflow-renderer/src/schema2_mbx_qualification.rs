@@ -12,7 +12,7 @@ use crate::cache_steps::MBX_ACTION_NAME;
 use crate::render::RenderContext;
 use crate::steps::{self, MBX_SETUP_NAME};
 use crate::yaml::Yaml;
-use crate::{RenderError, document, mbx_bundle};
+use crate::{RenderError, document_steps, mbx_bundle};
 use velnor_actions_contract::{
     Job, JobTimeout, PermissionLevel, Permissions, PullRequestCachePolicy, Step,
 };
@@ -126,7 +126,7 @@ fn render_job(mut typed_job: Job, writer: bool) -> Result<(String, Yaml), Render
     let rendered_steps = typed_job
         .steps
         .iter()
-        .map(|step| document::step_to_yaml(id, step, &step_context(), &[], false))
+        .map(|step| document_steps::step_to_yaml(id, step, &step_context(), &[], false))
         .collect::<Result<Vec<_>, _>>()?;
 
     let mut fields = base(&title, Yaml::str(typed_job.runs_on.clone()), 45);

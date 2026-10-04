@@ -22,10 +22,6 @@ use crate::validate::validate_staged;
 #[path = "generate_guards.rs"]
 pub(crate) mod guards;
 
-/// Actionlint 1.7.12 false-positive ignore for `$/` self-repository calls.
-#[path = "self_repo_gap.rs"]
-mod self_repo_gap;
-
 /// Preserve repository-owned entries while replacing generated output.
 #[path = "generate_preserve.rs"]
 mod preserve;
@@ -33,7 +29,6 @@ mod preserve;
 /// Stage and publish fresh preview output transactionally.
 #[path = "generate_preview.rs"]
 mod preview;
-
 /// Re-exported snapshot: the `generate::ToolSnapshot` path is stable API.
 pub use guards::ToolSnapshot;
 
@@ -185,7 +180,6 @@ fn render_all(
     extra.extend(crate::freshness_emit::freshness_files(prep)?);
     extra.extend(crate::routing::extra_files(&prep.config, version)?);
     extra.extend(rendered.shared);
-    let actionlint = self_repo_gap::note(&actionlint, &workflow, &extra)?;
     let tree = render_tree_with_extra(&workflow, &actionlint, &extra, version)?;
     Ok(tree)
 }

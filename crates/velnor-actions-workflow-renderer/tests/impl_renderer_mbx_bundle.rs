@@ -5,7 +5,9 @@ use std::collections::BTreeMap;
 use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_contract::config::{SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL};
 use velnor_actions_contract::{Job, Step, StepKind};
-use velnor_actions_workflow_renderer::steps::{MBX_PREFLIGHT_NAME, mbx_objects_step};
+use velnor_actions_workflow_renderer::steps::{
+    MBX_PREFLIGHT_NAME, checkout_step, mbx_objects_step,
+};
 use velnor_actions_workflow_renderer::{RenderError, render_workflow_ir};
 
 use super::impl_renderer_fixtures::*;
@@ -43,6 +45,12 @@ pub(super) fn mbx_job(id: &str, version: &str) -> Result<(String, Job), RenderEr
         },
     };
     Ok(job(id, "MBX job", Vec::new(), vec![pinned_tools, mbx]))
+}
+
+pub(super) fn mbx_job_with_checkout(id: &str, version: &str) -> Result<(String, Job), RenderError> {
+    let (id, mut job) = mbx_job(id, version)?;
+    job.steps.insert(0, checkout_step(&checkout_pin())?);
+    Ok((id, job))
 }
 
 fn render_mbx(id: &str, scale_set: bool) -> Result<String, RenderError> {

@@ -6,7 +6,7 @@ use velnor_actions_workflow_renderer::render::render_workflow_ir_strict_shared;
 use velnor_actions_workflow_renderer::{RenderError, render_workflow_ir};
 
 use super::impl_renderer_fixtures::*;
-use super::impl_renderer_mbx_bundle::mbx_job;
+use super::impl_renderer_mbx_bundle::{mbx_job, mbx_job_with_checkout};
 
 #[test]
 fn opt_in_reaches_key_prep_and_elected_save_conditions() -> Result<(), RenderError> {
@@ -152,8 +152,8 @@ fn qualification_roles_restore_exact_keys() -> Result<(), RenderError> {
 #[test]
 fn paired_qualification_lanes_keep_read_only_policy_under_opt_in() -> Result<(), RenderError> {
     let seed = qualification_job("mbx-pr-qualification-seed", true)?;
-    let hosted = qualification_job("mbx-pr-qualification__hosted", false)?;
-    let mut local = qualification_job("mbx-pr-qualification__local", false)?;
+    let hosted = qualification_job_with_checkout("mbx-pr-qualification__hosted", false)?;
+    let mut local = qualification_job_with_checkout("mbx-pr-qualification__local", false)?;
     let selector = ScaleSetSelector::try_new(
         SCALE_SET_NAME,
         &[VELNOR_LABEL.to_owned(), SCALE_SET_NAME.to_owned()],
@@ -216,8 +216,8 @@ fn paired_qualification_lanes_keep_read_only_policy_under_opt_in() -> Result<(),
 
 #[test]
 fn paired_lanes_export_pr_authorization_and_keep_one_writer() -> Result<(), RenderError> {
-    let hosted = mbx_job("rust-demo__hosted", "1.21.1")?;
-    let mut local = mbx_job("rust-demo__local", "1.21.1")?;
+    let hosted = mbx_job_with_checkout("rust-demo__hosted", "1.21.1")?;
+    let mut local = mbx_job_with_checkout("rust-demo__local", "1.21.1")?;
     let selector = ScaleSetSelector::try_new(
         SCALE_SET_NAME,
         &[VELNOR_LABEL.to_owned(), SCALE_SET_NAME.to_owned()],
@@ -294,6 +294,23 @@ fn qualification_job(
     writer: bool,
 ) -> Result<(String, velnor_actions_contract::Job), RenderError> {
     let (id, mut job) = mbx_job(id, "1.21.1")?;
+    add_qualification_scope(&mut job, writer)?;
+    Ok((id, job))
+}
+
+fn qualification_job_with_checkout(
+    id: &str,
+    writer: bool,
+) -> Result<(String, velnor_actions_contract::Job), RenderError> {
+    let (id, mut job) = mbx_job_with_checkout(id, "1.21.1")?;
+    add_qualification_scope(&mut job, writer)?;
+    Ok((id, job))
+}
+
+fn add_qualification_scope(
+    job: &mut velnor_actions_contract::Job,
+    writer: bool,
+) -> Result<(), RenderError> {
     let Some(step) = job.steps.iter_mut().find(|step| match &step.kind {
         StepKind::Action { uses, .. } => uses.contains("mr-boxington-action@"),
         StepKind::Shell { .. } | StepKind::Internal { .. } => false,
@@ -313,5 +330,5 @@ fn qualification_job(
         "velnor-cache-writer".to_owned(),
         if writer { "true" } else { "false" }.to_owned(),
     );
-    Ok((id, job))
+    Ok(())
 }

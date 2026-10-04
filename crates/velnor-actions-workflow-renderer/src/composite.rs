@@ -7,17 +7,26 @@ use crate::yaml::Yaml;
 use crate::{RenderError, steps};
 
 /// One local composite call. The path is renderer-owned, not a remote pin.
+/// Zizmor's self-repository advice uses `$/'`, which resolves at the workflow
+/// SHA rather than this already checked-out event tree. Keep the exception
+/// on this fixed workspace-relative reference only.
 pub(crate) fn shared_call(uses: &str, id: Option<&str>) -> Result<Yaml, RenderError> {
-    if !uses.starts_with("$/.github/actions/")
-        || uses.contains("..")
-        || uses.contains('\\')
-        || uses.contains('@')
+    let Some(logical) = uses.strip_prefix("./.github/actions/") else {
+        return Err(RenderError::UnsafePath(uses.to_owned()));
+    };
+    if logical.is_empty()
+        || !logical
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
     {
         return Err(RenderError::UnsafePath(uses.to_owned()));
     }
     let mut entries = vec![
         ("name".to_owned(), Yaml::str("Run shared steps".to_owned())),
-        ("uses".to_owned(), Yaml::str(uses.to_owned())),
+        (
+            "uses".to_owned(),
+            Yaml::annotated(uses, "zizmor: ignore[self-repository]"),
+        ),
     ];
     if let Some(id) = id {
         entries.push(("id".to_owned(), Yaml::str(id.to_owned())));
@@ -56,5 +65,31 @@ pub(crate) fn composite_yaml(
 pub(crate) fn push_composite_shell(entries: &mut Vec<(String, Yaml)>, composite: bool) {
     if composite {
         entries.push(("shell".to_owned(), Yaml::str("bash".to_owned())));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::shared_call;
+
+    #[test]
+    fn shared_calls_use_only_canonical_repository_local_actions() {
+        let yaml = crate::yaml::render_yaml(
+            &shared_call("./.github/actions/rust-0", None).expect("canonical local action"),
+        );
+        assert!(
+            yaml.contains("uses: ./.github/actions/rust-0 # zizmor: ignore[self-repository]"),
+            "{yaml}"
+        );
+        for uses in [
+            "./.github/actions/",
+            "./.github/actions/../rust-0",
+            "./.github/actions/a/b",
+            "./.github/actions/rust.0",
+            "./.github/actions/rust-0@deadbeef",
+            "actions/checkout@0000000000000000000000000000000000000000",
+        ] {
+            assert!(shared_call(uses, None).is_err(), "accepted {uses}");
+        }
     }
 }

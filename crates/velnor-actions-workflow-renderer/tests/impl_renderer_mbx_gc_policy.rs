@@ -77,17 +77,22 @@ fn local_backend_and_gc_policy_render_only_when_present() -> Result<(), RenderEr
 fn mbx_gc_policy_is_scoped_to_hosted_mbx_jobs() -> Result<(), RenderError> {
     let uses = format!("jdx/mr-boxington-action@{}", "a".repeat(40));
     let mbx = mbx_objects_step(&uses, false, TEST_MBX_VERSION)?;
+    let checkout = checkout_step(&checkout_pin())?;
     let hosted = job(
         &format!("rust-demo{HOSTED_SUFFIX}"),
         "Rust demo hosted",
         Vec::new(),
-        vec![pinned_tools_step(TEST_MBX_VERSION)?, mbx.clone()],
+        vec![
+            checkout.clone(),
+            pinned_tools_step(TEST_MBX_VERSION)?,
+            mbx.clone(),
+        ],
     );
     let mut local = job(
         &format!("rust-demo{SCALE_SUFFIX}"),
         "Rust demo scale set",
         Vec::new(),
-        vec![pinned_tools_step(TEST_MBX_VERSION)?, mbx],
+        vec![checkout, pinned_tools_step(TEST_MBX_VERSION)?, mbx],
     );
     local.1.runs_on = ScaleSetSelector::try_new(
         SCALE_SET_NAME,

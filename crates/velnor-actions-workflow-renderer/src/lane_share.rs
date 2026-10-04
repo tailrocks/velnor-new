@@ -7,10 +7,10 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::lanes::{HOSTED_SUFFIX, SCALE_SUFFIX};
-use velnor_actions_contract::{Job, PullRequestCachePolicy, Step};
+use velnor_actions_contract::{Job, PullRequestCachePolicy, Step, StepKind};
 
 use crate::composite::composite_yaml;
-use crate::document::step_to_yaml;
+use crate::document_steps::step_to_yaml;
 use crate::render::RenderContext;
 use crate::tree::RenderedFile;
 use crate::{RenderError, marker, steps, yaml::render_yaml};
@@ -36,19 +36,28 @@ pub struct RenderedWorkflow {
 /// Jobs rewritten to call a shared action, plus those action files.
 #[derive(Debug)]
 pub(crate) struct LaneShare {
-    /// Same jobs, with shared lanes keeping their headers and empty steps.
+    /// Same jobs, with shared lanes keeping their headers and elected saves.
     pub jobs: BTreeMap<String, Job>,
-    /// Job id to local `uses` path.
+    /// Job id to local call path and optional composite output handle.
     pub calls: BTreeMap<String, SharedCall>,
+    /// Job id to the original checkout step rendered before each shared call.
+    pub checkouts: BTreeMap<String, Step>,
     /// Composite action files, one per logical job.
     pub files: Vec<RenderedFile>,
+}
+
+struct SharedLaneParts {
+    checkout: Step,
+    common: Vec<Step>,
+    hosted_extra: Vec<Step>,
+    local_extra: Vec<Step>,
 }
 
 /// Factor `__hosted` / `__local` pairs whose step lists match.
 ///
 /// # Errors
 ///
-/// A pair whose timeout, condition, permissions, environment, or steps
+/// A pair whose timeout, condition, permissions, environment, checkout, or steps
 /// differ fails closed. Elected cache saves (`Save Mise tools`, `Save Tofu
 /// providers`) stay on the job that owns them and are not part of that
 /// comparison. An unsafe logical id fails closed.
@@ -57,6 +66,7 @@ pub(crate) fn share_lanes(
     ctx: &RenderContext,
 ) -> Result<LaneShare, RenderError> {
     let mut calls = BTreeMap::new();
+    let mut checkouts = BTreeMap::new();
     let mut files = Vec::new();
     let mut next = jobs.clone();
     for hosted_id in hosted_ids(jobs) {
@@ -72,28 +82,31 @@ pub(crate) fn share_lanes(
         let Some(hosted) = jobs.get(&hosted_id) else {
             continue;
         };
-        let Some((common, mut hosted_extra, mut local_extra)) = split_pair(hosted, local) else {
+        let Some(parts) = split_pair(hosted, local, &ctx.checkout_uses) else {
             return Err(RenderError::InvalidWorkflow(format!(
                 "lane_body_differs:{logical}"
             )));
         };
-        let uses = format!("$/.github/actions/{logical}");
-        let has_mbx_cache = common
+        let uses = format!("./.github/actions/{logical}");
+        let has_mbx_cache = parts
+            .common
             .iter()
             .any(|step| step.name == crate::mbx_bundle::MBX_BUNDLE_RESTORE_NAME);
         let id = has_mbx_cache.then(|| MBX_SHARED_CALL_ID.to_owned());
         let cache_policy = if has_mbx_cache {
-            crate::mbx_bundle::shared_lane_policy(&common, ctx.pull_request_cache_policy)?
+            crate::mbx_bundle::shared_lane_policy(&parts.common, ctx.pull_request_cache_policy)?
         } else {
             ctx.pull_request_cache_policy
         };
+        let mut hosted_extra = parts.hosted_extra;
+        let mut local_extra = parts.local_extra;
         if has_mbx_cache {
             crate::mbx_bundle::bind_shared_lane_outputs(&mut hosted_extra, cache_policy)?;
             crate::mbx_bundle::bind_shared_lane_outputs(&mut local_extra, cache_policy)?;
         }
         files.push(composite_file(
             logical,
-            &common,
+            &parts.common,
             ctx,
             has_mbx_cache,
             cache_policy,
@@ -101,12 +114,15 @@ pub(crate) fn share_lanes(
         let call = SharedCall { uses, id };
         calls.insert(hosted_id.clone(), call.clone());
         calls.insert(local_id.clone(), call);
+        checkouts.insert(hosted_id.clone(), parts.checkout.clone());
+        checkouts.insert(local_id.clone(), parts.checkout);
         set_steps(&mut next, &hosted_id, hosted_extra);
         set_steps(&mut next, &local_id, local_extra);
     }
     Ok(LaneShare {
         jobs: next,
         calls,
+        checkouts,
         files,
     })
 }
@@ -127,7 +143,7 @@ fn logical_id(hosted_id: &str) -> Option<&str> {
     ok.then_some(logical)
 }
 
-fn split_pair(hosted: &Job, local: &Job) -> Option<(Vec<Step>, Vec<Step>, Vec<Step>)> {
+fn split_pair(hosted: &Job, local: &Job, checkout_uses: &str) -> Option<SharedLaneParts> {
     if hosted.timeout_minutes != local.timeout_minutes
         || hosted.condition != local.condition
         || hosted.permissions != local.permissions
@@ -135,9 +151,44 @@ fn split_pair(hosted: &Job, local: &Job) -> Option<(Vec<Step>, Vec<Step>, Vec<St
     {
         return None;
     }
-    let (hosted_common, hosted_extra) = peel_saves(&hosted.steps);
-    let (local_common, local_extra) = peel_saves(&local.steps);
-    (hosted_common == local_common).then_some((hosted_common, hosted_extra, local_extra))
+    let (hosted_checkout, hosted_steps) = peel_checkout(&hosted.steps, checkout_uses)?;
+    let (local_checkout, local_steps) = peel_checkout(&local.steps, checkout_uses)?;
+    if hosted_checkout != local_checkout {
+        return None;
+    }
+    let (hosted_common, hosted_extra) = peel_saves(hosted_steps);
+    let (local_common, local_extra) = peel_saves(local_steps);
+    (hosted_common == local_common).then_some(SharedLaneParts {
+        checkout: hosted_checkout.clone(),
+        common: hosted_common,
+        hosted_extra,
+        local_extra,
+    })
+}
+
+fn peel_checkout<'a>(steps: &'a [Step], checkout_uses: &str) -> Option<(&'a Step, &'a [Step])> {
+    let (checkout, remaining) = steps.split_first()?;
+    let expected = checkout.name == "Checkout"
+        && checkout.condition.is_none()
+        && matches!(
+            &checkout.kind,
+            StepKind::Action { uses, with, env }
+                if uses == checkout_uses
+                    && with.get("persist-credentials").map(String::as_str) == Some("false")
+                    && env.is_empty()
+        );
+    if !expected || remaining.iter().any(is_checkout_step) {
+        return None;
+    }
+    Some((checkout, remaining))
+}
+
+fn is_checkout_step(step: &Step) -> bool {
+    step.name == "Checkout"
+        || matches!(
+            &step.kind,
+            StepKind::Action { uses, .. } if uses.starts_with("actions/checkout@")
+        )
 }
 
 fn peel_saves(steps: &[Step]) -> (Vec<Step>, Vec<Step>) {
@@ -241,3 +292,7 @@ fn composite_file(
 #[cfg(test)]
 #[path = "lane_share_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "lane_share_unpinned_tests.rs"]
+mod unpinned_tests;
