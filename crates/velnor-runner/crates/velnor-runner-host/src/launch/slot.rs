@@ -7,6 +7,8 @@ use crate::IntentState;
 use crate::journal::Journal;
 use crate::scale_set::EnsureError;
 
+use super::inspect::container_running;
+
 pub(super) async fn busy(
     journal: &Journal,
     docker: &Docker,
@@ -22,7 +24,7 @@ pub(super) async fn running_count(journal: &Journal, docker: &Docker) -> Result<
         if row.kind != "launch" {
             continue;
         }
-        let running = observed(row.state, row.docker_id.as_deref(), docker).await;
+        let running = observed(row.state, row.docker_id.as_deref(), docker).await?;
         if occupies(row.state, row.docker_id.as_deref(), running) {
             count = count.saturating_add(1);
         }
@@ -30,28 +32,25 @@ pub(super) async fn running_count(journal: &Journal, docker: &Docker) -> Result<
     Ok(count)
 }
 
-async fn observed(state: IntentState, docker_id: Option<&str>, docker: &Docker) -> bool {
+async fn observed(
+    state: IntentState,
+    docker_id: Option<&str>,
+    docker: &Docker,
+) -> Result<bool, EnsureError> {
     if state == IntentState::Failed {
-        return false;
+        return Ok(false);
     }
     let Some(id) = docker_id else {
-        return false;
+        return Ok(false);
     };
-    running(docker, id).await
+    container_running(docker, id).await
 }
 
 /// Failed rows, a missing docker id, and a stopped container do not occupy a slot.
-/// `running` is false when inspect fails.
+/// Incomplete or failed Docker observations propagate as errors.
 #[must_use]
 pub(crate) const fn occupies(state: IntentState, docker_id: Option<&str>, running: bool) -> bool {
     !matches!(state, IntentState::Failed) && docker_id.is_some() && running
-}
-
-async fn running(docker: &Docker, id: &str) -> bool {
-    let Ok(info) = docker.inspect_container(id, None).await else {
-        return false;
-    };
-    info.state.and_then(|state| state.running).unwrap_or(false)
 }
 
 fn map_journal(error: crate::error::HostError) -> EnsureError {
