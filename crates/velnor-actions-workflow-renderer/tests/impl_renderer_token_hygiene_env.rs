@@ -80,6 +80,51 @@ fn local_mbx_backend_passes() -> Result<(), RenderError> {
 }
 
 #[test]
+fn qualification_restore_outputs_allow_only_exact_guard_bindings() -> Result<(), RenderError> {
+    shell_step(
+        "Qualification cache guard",
+        vec!["true".to_owned()],
+        BTreeMap::from([
+            (
+                "CACHE_HIT".to_owned(),
+                "${{ steps.mbx-bundle.outputs.cache-hit }}".to_owned(),
+            ),
+            (
+                "EXPECTED_KEY".to_owned(),
+                "${{ steps.mbx-bundle-key.outputs.primary }}".to_owned(),
+            ),
+        ]),
+    )?;
+
+    for denied in [
+        (
+            "CACHE_HIT",
+            "${{ steps.mbx-bundle.outputs.cache-hit-extra }}",
+        ),
+        (
+            "EXPECTED_KEY",
+            "${{ steps.mbx-bundle-key.outputs.restore-prefix }}",
+        ),
+        (
+            "EXPECTED_KEY",
+            "${{ steps.mbx-bundle-key.outputs.primary-suffix }}",
+        ),
+    ] {
+        let result = shell_step(
+            "Qualification cache guard",
+            vec!["true".to_owned()],
+            BTreeMap::from([(denied.0.to_owned(), denied.1.to_owned())]),
+        );
+        assert!(
+            result.is_err(),
+            "unexpectedly accepted env expression: {}",
+            denied.1
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn nested_fetch_exemption_requires_generator_shape() -> Result<(), RenderError> {
     // Genuine nested names stay exempt with unscrubbed ambient env.
     for name in [
