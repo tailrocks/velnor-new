@@ -17,8 +17,8 @@ use velnor_actions_contract::{
 use velnor_actions_mise::BaselineLookup as MiseBaselineLookup;
 
 use self::provenance_check::{
-    ProvenanceExpectations, publish_event_eligible, repository_slug_from_origin,
-    validate_provenance,
+    ProvenanceExpectations, baseline_can_carry, publish_event_eligible,
+    repository_slug_from_origin, validate_provenance,
 };
 use self::provenance_resolve::{repository_anchor_for_slug, resolve_expected_repository};
 use crate::OrchestratorError;
@@ -90,6 +90,12 @@ pub(crate) fn apply_baseline(
         }
         return Ok(());
     };
+    if !baseline_can_carry(&manifest) {
+        mark_unavailable(plan, "baseline_lineage_limit");
+        plan.warnings
+            .push("baseline_miss:baseline_lineage_limit".to_owned());
+        return Ok(());
+    }
     if !publish_event_eligible(event) {
         plan.warnings.push(format!(
             "baseline_publish:forbidden:{event:?}:no_publish_attempted"
