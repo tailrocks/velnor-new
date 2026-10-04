@@ -89,10 +89,13 @@ fn check_install_specs(body: &str, specs: &[String]) -> Result<(), String> {
 
 /// Install step and job must carry the verification-plus-homes env.
 fn check_install_env(body: &str, yaml: &str) -> Result<(), String> {
-    for key in ["MISE_RUSTUP_HOME:", "MISE_CARGO_HOME:", "RUSTUP_TOOLCHAIN:"] {
+    for key in ["MISE_RUSTUP_HOME:", "MISE_CARGO_HOME:"] {
         if !body.contains(key) {
             return Err(format!("install step env misses {key}:\n{body}"));
         }
+    }
+    if !yaml.contains("RUSTUP_TOOLCHAIN: 1.98.1") {
+        return Err(format!("job env misses RUSTUP_TOOLCHAIN:\n{yaml}"));
     }
     for key in ["MISE_NO_CONFIG:", "MISE_NO_ENV:", "MISE_NO_HOOKS:"] {
         if !yaml.contains(key) {
