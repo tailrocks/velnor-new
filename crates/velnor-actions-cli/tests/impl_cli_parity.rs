@@ -8,6 +8,10 @@ use crate::impl_cli_tmp::{
     add_crate_pair, cleanup, code, fresh_tempdir, ignore_rust, init_repo, plan_stdout, spawn,
 };
 
+const FOUNDATION_QUALIFICATION_WORKFLOW: &str = ".github/workflows/foundation-qualification.yml";
+const FOUNDATION_QUALIFICATION_ACTION_REF: &str =
+    "tailrocks/velnor-new/foundation-qualification@8758d976a1b25eb387f48aa04ea86f57739b84cf";
+
 /// Cache-query verbs and internal-artifact names plan must never print.
 ///
 /// Planned `Cache layers:` are reported (see the field-set test); querying
@@ -149,7 +153,27 @@ fn plan_job_ids_match_generated_workflow() -> Result<(), Box<dyn Error>> {
     let tmp = fresh_tempdir("parity-jobs")?;
     init_repo(&tmp)?;
     add_crate_pair(&tmp)?;
+    let config_path = tmp.join(".velnor/config.toml");
+    let config_before = std::fs::read_to_string(&config_path)?;
+    assert!(
+        config_before
+            .lines()
+            .any(|line| line.trim() == "schema = 1"),
+        "ordinary canonical config must stay on schema 1:\n{config_before}"
+    );
+    assert!(
+        !config_before.to_ascii_lowercase().contains("foundation"),
+        "ordinary canonical config must not require Foundation settings:\n{config_before}"
+    );
     let stdout = plan_stdout(&tmp)?;
+    assert!(
+        !stdout.contains(FOUNDATION_QUALIFICATION_WORKFLOW),
+        "plan registers the retired workflow:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains(FOUNDATION_QUALIFICATION_ACTION_REF),
+        "plan contains the retired Foundation action pin:\n{stdout}"
+    );
     let planned = plan_job_ids(&stdout);
     assert!(!planned.is_empty(), "no jobs in plan:\n{stdout}");
     let outer = fresh_tempdir("parity-preview")?;
@@ -161,6 +185,23 @@ fn plan_job_ids_match_generated_workflow() -> Result<(), Box<dyn Error>> {
     )?;
     assert_eq!(code(&output), 0, "stderr: {:?}", output.stderr);
     let yaml = std::fs::read_to_string(preview.join(".github/workflows/ci.yml"))?;
+    assert!(
+        !preview.join(FOUNDATION_QUALIFICATION_WORKFLOW).exists(),
+        "ordinary generation must not render the retired workflow"
+    );
+    let rendered_tree = snapshot(&preview)?;
+    assert!(
+        rendered_tree
+            .values()
+            .all(|bytes| !String::from_utf8_lossy(bytes)
+                .contains(FOUNDATION_QUALIFICATION_ACTION_REF)),
+        "ordinary generation must not render the retired Foundation action pin"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&config_path)?,
+        config_before,
+        "plan and preview generation must not add config schema or Foundation settings"
+    );
     let rendered = workflow_job_ids(&yaml);
     assert!(!rendered.is_empty(), "no jobs in workflow:\n{yaml}");
     for id in &planned {
