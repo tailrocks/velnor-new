@@ -3,6 +3,9 @@
 use velnor_actions_contract::RELEASE_MANIFEST_FILENAME;
 use velnor_actions_workflow_renderer::RenderedTree;
 
+#[path = "schema2_generator_release_qualification_tests.rs"]
+mod qualification_tests;
+
 pub(super) const GENERATOR_RELEASE: &str = include_str!("schema2_generator_release_snapshot.yml");
 
 /// Byte-lock the rendered workflow and check release invariants.
@@ -32,6 +35,7 @@ fn assert_generator(body: &str) -> Result<(), Box<dyn std::error::Error>> {
     assert_attest(body, "attest-macos-arm64", "build-macos-arm64")?;
     assert_attest(body, "attest-macos-x64", "build-macos-x64")?;
     assert_manifest(body)?;
+    qualification_tests::assert_qualification_jobs(body)?;
     assert_publish(super::job_body(body, "publish-generator")?)?;
     Ok(())
 }
@@ -49,6 +53,9 @@ fn assert_workflow_shape(body: &str) {
             "attest-macos-arm64",
             "attest-macos-x64",
             "prepare-manifest",
+            "qualify-linux-x64",
+            "qualify-macos-arm64",
+            "qualify-macos-x64",
             "publish-generator",
         ]
     );
