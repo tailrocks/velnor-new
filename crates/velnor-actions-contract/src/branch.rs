@@ -22,9 +22,7 @@ pub fn is_valid_branch_name(value: &str) -> bool {
             !part.is_empty()
                 && !part.starts_with(['.', '-'])
                 && !part.ends_with('.')
-                && part
-                    .rsplit_once('.')
-                    .is_none_or(|(_, suffix)| suffix != "lock")
+                && !part.as_bytes().ends_with(b".lock")
         })
 }
 
