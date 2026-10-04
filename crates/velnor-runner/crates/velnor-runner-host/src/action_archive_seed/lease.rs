@@ -16,6 +16,9 @@ use super::{
     FORMAT_VERSION, RUNNER_ARCHIVE_LAYOUT, TRUST_SCOPE,
 };
 
+#[path = "lease/retirement.rs"]
+mod retirement;
+
 const MAX_ACTIONS_PER_LEASE: usize = 512;
 const RUNNER_CACHE_DIR: &str = "cache";
 
@@ -72,6 +75,7 @@ impl ActionArchiveStore {
             allowlist,
             expected_generation_id,
             |_| Ok(()),
+            sync_directory,
         )
     }
 
@@ -96,6 +100,34 @@ impl ActionArchiveStore {
                     Ok(())
                 }
             },
+            sync_directory,
+        )
+    }
+
+    #[cfg(test)]
+    pub(crate) fn lease_with_sync_fault(
+        &self,
+        launch_id: &str,
+        consumer_repository_id: u64,
+        allowlist: &[ActionArchiveIdentity],
+        expected_generation_id: Option<&str>,
+        fail_on_sync: usize,
+    ) -> Result<ActionArchiveLease, ActionArchiveSeedError> {
+        let mut calls = 0_usize;
+        self.lease_with_hook(
+            launch_id,
+            consumer_repository_id,
+            allowlist,
+            expected_generation_id,
+            |_| Ok(()),
+            |directory| {
+                calls += 1;
+                if calls == fail_on_sync {
+                    Err(ActionArchiveSeedError::Io)
+                } else {
+                    sync_directory(directory)
+                }
+            },
         )
     }
 
@@ -106,6 +138,7 @@ impl ActionArchiveStore {
         allowlist: &[ActionArchiveIdentity],
         expected_generation_id: Option<&str>,
         mut hook: impl FnMut(PublicationStage) -> Result<(), ActionArchiveSeedError>,
+        mut sync_parent: impl FnMut(&Path) -> Result<(), ActionArchiveSeedError>,
     ) -> Result<ActionArchiveLease, ActionArchiveSeedError> {
         validate_component(launch_id).map_err(|_| ActionArchiveSeedError::InvalidLease)?;
         if consumer_repository_id == 0 || allowlist.len() > MAX_ACTIONS_PER_LEASE {
@@ -124,13 +157,15 @@ impl ActionArchiveStore {
         }
         let destination = self.leases.join(launch_id);
         if destination.exists() {
-            return replay_lease(
+            let lease = replay_lease(
                 &destination,
                 launch_id,
                 consumer_repository_id,
                 &generation_id,
                 &archives,
-            );
+            )?;
+            sync_parent(&self.leases)?;
+            return Ok(lease);
         }
         let objects = archives
             .iter()
@@ -150,59 +185,25 @@ impl ActionArchiveStore {
         if result.is_err() {
             cleanup_dir(&staging)?;
             if destination.exists() {
-                return replay_lease(
+                let lease = replay_lease(
                     &destination,
                     launch_id,
                     consumer_repository_id,
                     &generation_id,
                     &archives,
-                );
+                )?;
+                sync_parent(&self.leases)?;
+                return Ok(lease);
             }
         }
         result?;
-        sync_directory(&self.leases)?;
+        sync_parent(&self.leases)?;
         verify_projection(&destination.join(RUNNER_CACHE_DIR), &archives)?;
         Ok(ActionArchiveLease {
             launch_id: launch_id.to_owned(),
             generation_id,
             cache_path: destination.join(RUNNER_CACHE_DIR),
         })
-    }
-
-    /// Release a projection after the scheduler proves terminal runner state and full cleanup.
-    ///
-    /// The atomic tombstone makes interrupted removal repeatable after a daemon restart. This
-    /// removes only the lease; immutable archive generations stay in the store.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error when the generation conflicts or the live projection is corrupt.
-    pub(crate) fn release_after_confirmed_cleanup(
-        &self,
-        launch_id: &str,
-        generation_id: &str,
-    ) -> Result<(), ActionArchiveSeedError> {
-        validate_component(launch_id).map_err(|_| ActionArchiveSeedError::InvalidLease)?;
-        validate_generation_id(generation_id)?;
-        let active = self.leases.join(launch_id);
-        let retired = retired_path(&self.leases, launch_id, generation_id);
-        if retired.exists() {
-            if active.exists() {
-                return Err(ActionArchiveSeedError::LeaseConflict);
-            }
-            return remove_retired(&self.leases, &retired);
-        }
-        if !active.exists() {
-            return if has_retired_lease(&self.leases, launch_id)? {
-                Err(ActionArchiveSeedError::LeaseConflict)
-            } else {
-                Ok(())
-            };
-        }
-        validate_live_lease(&active, launch_id, generation_id)?;
-        fs::rename(&active, &retired).map_err(|_| ActionArchiveSeedError::Io)?;
-        sync_directory(&self.leases)?;
-        remove_retired(&self.leases, &retired)
     }
 }
 
@@ -322,9 +323,4 @@ fn has_retired_lease(leases: &Path, launch_id: &str) -> Result<bool, ActionArchi
         }
     }
     Ok(false)
-}
-
-fn remove_retired(leases: &Path, retired: &Path) -> Result<(), ActionArchiveSeedError> {
-    cleanup_dir(retired)?;
-    sync_directory(leases)
 }

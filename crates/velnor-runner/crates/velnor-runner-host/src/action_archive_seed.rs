@@ -151,11 +151,39 @@ impl ActionArchiveStore {
         identity: &ActionArchiveIdentity,
         source: R,
     ) -> Result<String, ActionArchiveSeedError> {
+        self.publish_with_parent_sync(identity, source, sync_directory)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn publish_with_sync_fault<R: std::io::Read>(
+        &self,
+        identity: &ActionArchiveIdentity,
+        source: R,
+        fail_on_sync: usize,
+    ) -> Result<String, ActionArchiveSeedError> {
+        let mut calls = 0_usize;
+        self.publish_with_parent_sync(identity, source, |directory| {
+            calls += 1;
+            if calls == fail_on_sync {
+                Err(ActionArchiveSeedError::Io)
+            } else {
+                sync_directory(directory)
+            }
+        })
+    }
+
+    fn publish_with_parent_sync<R: std::io::Read>(
+        &self,
+        identity: &ActionArchiveIdentity,
+        source: R,
+        mut sync_parent: impl FnMut(&Path) -> Result<(), ActionArchiveSeedError>,
+    ) -> Result<String, ActionArchiveSeedError> {
         identity::validate_identity(identity)?;
         let generation_id = object_generation(identity)?;
         let destination = self.objects.join(&generation_id);
         if destination.exists() {
             Self::verify_object(&destination, identity)?;
+            sync_parent(&self.objects)?;
             return Ok(generation_id);
         }
         let staging = unique_directory(&self.objects, "object")?;
@@ -164,11 +192,12 @@ impl ActionArchiveStore {
             cleanup_dir(&staging)?;
             if destination.exists() {
                 Self::verify_object(&destination, identity)?;
+                sync_parent(&self.objects)?;
                 return Ok(generation_id);
             }
         }
         result?;
-        sync_directory(&self.objects)?;
+        sync_parent(&self.objects)?;
         Ok(generation_id)
     }
 
