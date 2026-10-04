@@ -187,7 +187,7 @@ collect_owned_session_members() {
   owned_session_ticks=()
   rows="$(resource_deadline_command bash -o pipefail -c \
     'ps -eo uid=,pid=,pgid=,sid= | head -n "$1"' \
-    resource-session-scan "$((RESOURCE_SESSION_SCAN_LIMIT + 1))")" || resource_deadline_capture_failed "$?"
+    resource-session-scan "$((RESOURCE_SESSION_SCAN_LIMIT + 1))")" || { resource_deadline_capture_failed "$?"; return 1; }
   while read -r process_uid pid pgid sid extra; do
     [[ -n "${process_uid-}" ]] || continue
     row_count=$((row_count + 1))
@@ -236,7 +236,7 @@ owned_session_leader_matches() {
   IFS=$'\t' read -r real_uid effective_uid saved_uid filesystem_uid <<< "$uids"
   [[ "$real_uid" == "$sampler_uid" && "$effective_uid" == "$sampler_uid" &&
     "$saved_uid" == "$sampler_uid" && "$filesystem_uid" == "$sampler_uid" ]] || return 1
-  args="$(resource_deadline_command ps -p "$sampler_pid" -o args= 2>/dev/null)" || resource_deadline_capture_failed "$?"
+  args="$(resource_deadline_command ps -p "$sampler_pid" -o args= 2>/dev/null)" || { resource_deadline_capture_failed "$?"; return 1; }
   [[ "$args" == *"$evidence/sampler.sh"* ]]
 }
 

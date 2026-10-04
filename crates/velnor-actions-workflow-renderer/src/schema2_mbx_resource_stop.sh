@@ -217,7 +217,7 @@ if ! bash "$evidence/sampler.sh" "$evidence" "$RUNNER_TEMP" "$GITHUB_ENV" "$MBX_
   echo 'private evidence directory validation failed' >&2
   exit 1
 fi
-path_validation_sha='aeb6a305ae82c86a08c6b08d459747c551369be18b6b84c26fa7d0be5084589b'
+path_validation_sha='5bcca14cce52a2d66891e384f6f9ab5a6b46819e8f9c30a6d1c779e665cf7ada'
 printf '%s  %s\n' "$path_validation_sha" "$evidence/path-validation.sh" | sha256sum --check --status || exit 1
 . "$evidence/path-validation.sh"
 partial=0
