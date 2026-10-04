@@ -8,6 +8,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::{NEXT_FIXTURE_ID, RUSTC_IDENTITY, SOURCE_SHA};
 
+#[path = "schema2_mbx_parallel_probe_api_stock_fixture.rs"]
+mod stock_fixture;
+pub(super) use stock_fixture::write_stock_restore_fixtures;
+
 pub(super) fn write_receipts(
     input: &std::path::Path,
     shared_key: &str,
@@ -17,80 +21,43 @@ pub(super) fn write_receipts(
     runner_os: &str,
     runner_arch: &str,
 ) {
-    let receipt_dir = ["seed", "reader-a", "reader-b", "new-key-writer"];
-    for role in receipt_dir {
+    let context = ReceiptContext {
+        shared_key,
+        shared_prefix,
+        new_key,
+        new_prefix,
+        runner_os,
+        runner_arch,
+    };
+    for (role, fixture) in [
+        ("seed", ReceiptFixture::seed(&context)),
+        (
+            "reader-a",
+            ReceiptFixture::reader(&context, "mbx-parallel-reader-a", "reader-a"),
+        ),
+        (
+            "reader-b",
+            ReceiptFixture::reader(&context, "mbx-parallel-reader-b", "reader-b"),
+        ),
+        ("new-key-writer", ReceiptFixture::writer(&context)),
+    ] {
         let directory = input.join(role);
         fs::create_dir_all(&directory).expect("create receipt fixture directory");
-    }
-    let seed = receipt_json(&ReceiptFixture {
-        job: "mbx-parallel-seed",
-        role: "seed",
-        scope: "qualification-mbx-v1/parallel/shared",
-        key: shared_key,
-        cache_prefix: shared_prefix,
-        runner_os,
-        runner_arch,
-        hit: "false",
-        matched_key: "null".to_owned(),
-        imported_objects: 0,
-        cached_compilations: 0,
-        export_ready: "true",
-        save_outcome: "success",
-    });
-    let reader_a = receipt_json(&ReceiptFixture {
-        job: "mbx-parallel-reader-a",
-        role: "reader-a",
-        scope: "qualification-mbx-v1/parallel/shared",
-        key: shared_key,
-        cache_prefix: shared_prefix,
-        runner_os,
-        runner_arch,
-        hit: "true",
-        matched_key: format!("\"{shared_key}\""),
-        imported_objects: 17,
-        cached_compilations: 2,
-        export_ready: "",
-        save_outcome: "",
-    });
-    let reader_b = receipt_json(&ReceiptFixture {
-        job: "mbx-parallel-reader-b",
-        role: "reader-b",
-        scope: "qualification-mbx-v1/parallel/shared",
-        key: shared_key,
-        cache_prefix: shared_prefix,
-        runner_os,
-        runner_arch,
-        hit: "true",
-        matched_key: format!("\"{shared_key}\""),
-        imported_objects: 17,
-        cached_compilations: 2,
-        export_ready: "",
-        save_outcome: "",
-    });
-    let writer = receipt_json(&ReceiptFixture {
-        job: "mbx-parallel-new-key-writer",
-        role: "new-key-writer",
-        scope: "qualification-mbx-v1/parallel/new-key",
-        key: new_key,
-        cache_prefix: new_prefix,
-        runner_os,
-        runner_arch,
-        hit: "false",
-        matched_key: "null".to_owned(),
-        imported_objects: 0,
-        cached_compilations: 0,
-        export_ready: "true",
-        save_outcome: "success",
-    });
-    for (role, json) in [
-        ("seed", seed),
-        ("reader-a", reader_a),
-        ("reader-b", reader_b),
-        ("new-key-writer", writer),
-    ] {
-        fs::write(input.join(role).join("cache-receipt.json"), json)
+        fs::write(
+            input.join(role).join("cache-receipt.json"),
+            receipt_json(&fixture),
+        )
             .expect("write cache receipt fixture");
     }
+}
+
+struct ReceiptContext<'a> {
+    shared_key: &'a str,
+    shared_prefix: &'a str,
+    new_key: &'a str,
+    new_prefix: &'a str,
+    runner_os: &'a str,
+    runner_arch: &'a str,
 }
 
 struct ReceiptFixture<'a> {
@@ -103,15 +70,79 @@ struct ReceiptFixture<'a> {
     runner_arch: &'a str,
     hit: &'a str,
     matched_key: String,
+    restore_primary_key: &'a str,
+    restore_conclusion: &'a str,
     imported_objects: u64,
     cached_compilations: u64,
     export_ready: &'a str,
     save_outcome: &'a str,
 }
 
+impl<'a> ReceiptFixture<'a> {
+    fn seed(context: &ReceiptContext<'a>) -> Self {
+        Self {
+            job: "mbx-parallel-seed",
+            role: "seed",
+            scope: "qualification-mbx-v1/parallel/shared",
+            key: context.shared_key,
+            cache_prefix: context.shared_prefix,
+            runner_os: context.runner_os,
+            runner_arch: context.runner_arch,
+            hit: "",
+            matched_key: "\"\"".to_owned(),
+            restore_primary_key: context.shared_key,
+            restore_conclusion: "success",
+            imported_objects: 0,
+            cached_compilations: 0,
+            export_ready: "true",
+            save_outcome: "success",
+        }
+    }
+
+    fn reader(context: &ReceiptContext<'a>, job: &'static str, role: &'static str) -> Self {
+        Self {
+            job,
+            role,
+            scope: "qualification-mbx-v1/parallel/shared",
+            key: context.shared_key,
+            cache_prefix: context.shared_prefix,
+            runner_os: context.runner_os,
+            runner_arch: context.runner_arch,
+            hit: "true",
+            matched_key: format!("\"{}\"", context.shared_key),
+            restore_primary_key: context.shared_key,
+            restore_conclusion: "success",
+            imported_objects: 17,
+            cached_compilations: 2,
+            export_ready: "",
+            save_outcome: "",
+        }
+    }
+
+    fn writer(context: &ReceiptContext<'a>) -> Self {
+        Self {
+            job: "mbx-parallel-new-key-writer",
+            role: "new-key-writer",
+            scope: "qualification-mbx-v1/parallel/new-key",
+            key: context.new_key,
+            cache_prefix: context.new_prefix,
+            runner_os: context.runner_os,
+            runner_arch: context.runner_arch,
+            hit: "",
+            matched_key: "\"\"".to_owned(),
+            restore_primary_key: context.new_key,
+            restore_conclusion: "success",
+            imported_objects: 0,
+            cached_compilations: 0,
+            export_ready: "true",
+            save_outcome: "success",
+        }
+    }
+}
+
 fn receipt_json(fixture: &ReceiptFixture<'_>) -> String {
     format!(
-        r#"{{"job_id":"{job}","role":"{role}","scope":"{scope}","run_id":"123","run_attempt":"2","source_sha":"{source_sha}","source_ref":"refs/heads/main","workflow_ref":"org/repo/.github/workflows/qualification.yml@refs/heads/main","runner_os":"{runner_os}","runner_arch":"{runner_arch}","mbx_action_ref":"jdx/mr-boxington-action@{action_sha}","mbx_version":"1.22.0","rust_version":"1.98.1","generation":"velnor-mbx-1.22.0","rustc_identity":"{rustc_identity}","cache_prefix":"{cache_prefix}","primary_key":"{key}","cache_hit":"{hit}","matched_key":{matched_key},"imported_objects":{imported_objects},"cached_compilations":{cached_compilations},"export_ready":"{export_ready}","save_outcome":"{save_outcome}"}}"#,
+        r#"{{"receipt_status":"provisional","job_id":"{job}","role":"{role}","scope":"{scope}","run_id":"123","run_attempt":"2","source_sha":"{source_sha}","source_ref":"refs/heads/main","workflow_ref":"tailrocks/velnor-new/.github/workflows/qualification.yml@refs/heads/main","runner_os":"{runner_os}","runner_arch":"{runner_arch}","mbx_action_ref":"jdx/mr-boxington-action@{action_sha}","mbx_version":"1.22.0","rust_version":"1.98.1","generation":"velnor-mbx-1.22.0","rustc_identity":"{rustc_identity}","cache_prefix":"{cache_prefix}","primary_key":"{key}","derived_primary_key":"{key}","restore_primary_key":"{restore_primary_key}","restore_conclusion":"{restore_conclusion}","cache_hit":"{hit}","matched_key":{matched_key},"imported_objects":{imported_objects},"cached_compilations":{cached_compilations},"export_ready":"{export_ready}","save_outcome":"{save_outcome}"}}"#,
         job = fixture.job,
         role = fixture.role,
         scope = fixture.scope,
@@ -122,6 +153,8 @@ fn receipt_json(fixture: &ReceiptFixture<'_>) -> String {
         runner_arch = fixture.runner_arch,
         hit = fixture.hit,
         matched_key = fixture.matched_key,
+        restore_primary_key = fixture.restore_primary_key,
+        restore_conclusion = fixture.restore_conclusion,
         imported_objects = fixture.imported_objects,
         cached_compilations = fixture.cached_compilations,
         export_ready = fixture.export_ready,
@@ -141,7 +174,7 @@ pub(super) fn api_jobs_fixture(overlap: bool) -> String {
             "00:00:10", "00:00:15", "00:00:18", "00:00:22", "00:00:23", "00:00:24",
         )
     };
-    let seed_steps = r#"[{"name":"Save MBX single bundle","status":"completed","conclusion":"success","started_at":"2026-10-04T00:00:02Z","completed_at":"2026-10-04T00:00:03Z"}]"#;
+    let seed_steps = r#"[{"name":"Restore MBX single bundle","status":"completed","conclusion":"success","started_at":"2026-10-04T00:00:01Z","completed_at":"2026-10-04T00:00:02Z"},{"name":"Save MBX single bundle","status":"completed","conclusion":"success","started_at":"2026-10-04T00:00:02Z","completed_at":"2026-10-04T00:00:03Z"}]"#;
     let reader_a_steps = interval_steps(a_start, a_end);
     let reader_b_phase_steps = interval_steps(b_start, b_end);
     let writer_steps = interval_steps(writer_start, writer_end);

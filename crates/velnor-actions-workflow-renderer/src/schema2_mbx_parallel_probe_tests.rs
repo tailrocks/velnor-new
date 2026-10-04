@@ -238,6 +238,30 @@ fn assert_observer_scope_and_order(jobs: &[(String, Yaml)]) {
     assert_eq!(string(field(api_step, "shell")), "bash");
     let api_env = map_fields(field(api_step, "env"));
     assert_eq!(string(field(api_env, "GH_TOKEN")), "${{ github.token }}");
+    for (key, value) in [
+        (
+            "MBX_PARALLEL_OBSERVER_PRIMARY",
+            "${{ steps.mbx-bundle-key.outputs.primary }}",
+        ),
+        (
+            "MBX_PARALLEL_OBSERVER_RESTORE_PRIMARY",
+            "${{ steps.mbx-bundle.outputs.cache-primary-key }}",
+        ),
+        (
+            "MBX_PARALLEL_OBSERVER_CACHE_HIT",
+            "${{ steps.mbx-bundle.outputs.cache-hit }}",
+        ),
+        (
+            "MBX_PARALLEL_OBSERVER_MATCHED_KEY",
+            "${{ steps.mbx-bundle.outputs.cache-matched-key }}",
+        ),
+        (
+            "MBX_PARALLEL_OBSERVER_RESTORE_CONCLUSION",
+            "${{ steps.mbx-bundle.conclusion }}",
+        ),
+    ] {
+        assert_eq!(string(field(api_env, key)), value);
+    }
     assert_eq!(
         string(field(map_fields(field(observer, "permissions")), "actions")),
         "read"
@@ -248,10 +272,10 @@ fn assert_observer_scope_and_order(jobs: &[(String, Yaml)]) {
     let api_position = observer_steps.iter().position(|candidate| {
         string(field(map_fields(candidate), "name")) == "Validate MBX parallel REST timestamps"
     });
-    let setup_position = observer_steps
+    let reuse_position = observer_steps
         .iter()
-        .position(|candidate| string(field(map_fields(candidate), "name")) == "Setup MBX");
-    assert!(api_position.is_some_and(|api| setup_position.is_some_and(|setup| api < setup)));
+        .position(|candidate| string(field(map_fields(candidate), "name")) == "Require reused compilation");
+    assert!(api_position.is_some_and(|api| reuse_position.is_some_and(|reuse| api == reuse + 1)));
     for role in [
         Role::Seed,
         Role::ReaderA,
@@ -301,7 +325,9 @@ fn assert_observer_script_semantics(jobs: &[(String, Yaml)]) {
         String::from_utf8_lossy(&bash_check.stderr)
     );
     assert!(script.contains('\n'));
-    assert!(!script.contains("$("));
+    assert!(script.contains("stock_restore_classify_receipt"));
+    assert!(script.contains("mbx-stock-restore-evidence"));
+    assert!(script.contains("CLEAN_MISS"));
     assert!(script.contains("/attempts/$GITHUB_RUN_ATTEMPT/jobs"));
     assert!(script.contains("Restore MBX single bundle"));
     assert!(script.contains("Compile MBX cache probe"));

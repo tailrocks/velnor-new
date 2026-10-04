@@ -9,7 +9,6 @@ use crate::steps;
 use crate::yaml::Yaml;
 
 pub(super) const API_STEP_NAME: &str = "Validate MBX parallel REST timestamps";
-pub(super) const LAST_RECEIPT_STEP_NAME: &str = "Download MBX new-key-writer receipt";
 
 const API_RECEIPT_SCRIPT: &str = r#"set -euo pipefail
 set -o noclobber
@@ -25,6 +24,7 @@ rm -f "$parent_identity"
 cd "$runner_temp_real" || exit 1
 input="$runner_temp_real/mbx-parallel-input"
 evidence="$runner_temp_real/mbx-cache-evidence"
+stock_evidence="$runner_temp_real/mbx-stock-restore-evidence"
 identity="$runner_temp_real/.mbx-parallel-identity-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$$"
 verify_directory() {
   local directory="$1" expected="$2" mode="$3" resolved
@@ -47,6 +47,12 @@ verify_directory() {
 }
 verify_directory "$input" "$runner_temp_real/mbx-parallel-input" ''
 verify_directory "$evidence" "$runner_temp_real/mbx-cache-evidence" 700
+if [ -e "$stock_evidence" ] || [ -L "$stock_evidence" ]; then
+  echo 'stock restore evidence directory already exists' >&2
+  exit 1
+fi
+mkdir -m 700 "$stock_evidence"
+verify_directory "$stock_evidence" "$runner_temp_real/mbx-stock-restore-evidence" 700
 seed="$input/seed/cache-receipt.json"
 reader_a="$input/reader-a/cache-receipt.json"
 reader_b="$input/reader-b/cache-receipt.json"
@@ -59,8 +65,14 @@ shared_scope_input="$input/expected-shared-scope.txt"
 shared_scope_hash_file="$input/expected-shared-scope-hash.txt"
 new_scope_input="$input/expected-new-scope.txt"
 new_scope_hash_file="$input/expected-new-scope-hash.txt"
+seed_restore_classification_file="$evidence/seed-restore-classification.txt"
+reader_a_restore_classification_file="$evidence/reader-a-restore-classification.txt"
+reader_b_restore_classification_file="$evidence/reader-b-restore-classification.txt"
+new_writer_restore_classification_file="$evidence/new-writer-restore-classification.txt"
+observer_receipt="$evidence/observer-shared-stock-receipt.json"
+observer_restore_classification_file="$evidence/observer-shared-restore-classification.txt"
 
-for file in "$jobs" "$seed_cache" "$new_cache" "$receipt" "$shared_scope_input" "$shared_scope_hash_file" "$new_scope_input" "$new_scope_hash_file"; do
+for file in "$jobs" "$seed_cache" "$new_cache" "$receipt" "$shared_scope_input" "$shared_scope_hash_file" "$new_scope_input" "$new_scope_hash_file" "$seed_restore_classification_file" "$reader_a_restore_classification_file" "$reader_b_restore_classification_file" "$new_writer_restore_classification_file" "$observer_receipt" "$observer_restore_classification_file"; do
   if [ -e "$file" ] || [ -L "$file" ]; then
     echo 'qualification receipt path already exists' >&2
     exit 1
@@ -91,13 +103,16 @@ verify_receipt() {
     echo 'invalid cache receipt file' >&2
     return 1
   fi
-  jq -e --arg job "$job" --arg role "$role" --arg scope "$scope" --arg run "$GITHUB_RUN_ID" --arg attempt "$GITHUB_RUN_ATTEMPT" --arg sha "$GITHUB_SHA" --arg ref "$GITHUB_REF" --arg workflow "$GITHUB_WORKFLOW_REF" --arg runner_os "$RUNNER_OS" --arg runner_arch "$RUNNER_ARCH" --arg action "$MBX_EXPECTED_ACTION_REF" --arg version "$MBX_EXPECTED_VERSION" --arg rust "$MBX_EXPECTED_RUST_VERSION" '.job_id == $job and .role == $role and .scope == $scope and .run_id == $run and .run_attempt == $attempt and .source_sha == $sha and .source_ref == $ref and .workflow_ref == $workflow and .runner_os == $runner_os and .runner_arch == $runner_arch and .mbx_action_ref == $action and .mbx_version == $version and .rust_version == $rust and (.primary_key | type == "string" and length > 0) and (.cache_prefix | type == "string" and length > 0) and (.generation | type == "string" and length > 0) and (.rustc_identity | type == "string" and length == 64) and (.cache_hit | type == "string") and (.imported_objects | type == "number") and (.cached_compilations | type == "number")' "$file" >/dev/null
+  jq -e --arg job "$job" --arg role "$role" --arg scope "$scope" --arg run "$GITHUB_RUN_ID" --arg attempt "$GITHUB_RUN_ATTEMPT" --arg sha "$GITHUB_SHA" --arg ref "$GITHUB_REF" --arg workflow "$GITHUB_WORKFLOW_REF" --arg runner_os "$RUNNER_OS" --arg runner_arch "$RUNNER_ARCH" --arg action "$MBX_EXPECTED_ACTION_REF" --arg version "$MBX_EXPECTED_VERSION" --arg rust "$MBX_EXPECTED_RUST_VERSION" '.job_id == $job and .role == $role and .scope == $scope and .run_id == $run and .run_attempt == $attempt and .source_sha == $sha and .source_ref == $ref and .workflow_ref == $workflow and .runner_os == $runner_os and .runner_arch == $runner_arch and .mbx_action_ref == $action and .mbx_version == $version and .rust_version == $rust and (.primary_key | type == "string" and length > 0) and (.cache_prefix | type == "string" and length > 0) and (.generation | type == "string" and length > 0) and (.rustc_identity | type == "string" and length == 64) and (.cache_hit | type == "string") and (.restore_primary_key | type == "string") and (.restore_conclusion | type == "string") and (.imported_objects | type == "number") and (.cached_compilations | type == "number")' "$file" >/dev/null
 }
 
 verify_receipt "$seed" mbx-parallel-seed seed "$MBX_EXPECTED_SHARED_SCOPE"
 verify_receipt "$reader_a" mbx-parallel-reader-a reader-a "$MBX_EXPECTED_SHARED_SCOPE"
 verify_receipt "$reader_b" mbx-parallel-reader-b reader-b "$MBX_EXPECTED_SHARED_SCOPE"
 verify_receipt "$new_writer" mbx-parallel-new-key-writer new-key-writer "$MBX_EXPECTED_NEW_KEY_SCOPE"
+for file in "$seed" "$reader_a" "$reader_b" "$new_writer"; do
+  jq -e '.receipt_status == "provisional" and .derived_primary_key == .primary_key and (.matched_key | type == "string")' "$file" >/dev/null
+done
 
 verify_primary_key() {
   local file="$1" role="$2" scope_hash="$3"
@@ -149,12 +164,28 @@ IFS= read -r new_key < "$input/new-writer-primary-key.txt"
 test "$seed_key" = "$reader_a_key"
 test "$seed_key" = "$reader_b_key"
 test "$seed_key" != "$new_key"
-test "$seed_key" != "$new_key"
 
-jq -e '.cache_hit == "false" and (.matched_key == null or .matched_key == "") and .export_ready == "true" and .save_outcome == "success"' "$seed" >/dev/null
-jq -e '.cache_hit == "false" and (.matched_key == null or .matched_key == "") and .export_ready == "true" and .save_outcome == "success"' "$new_writer" >/dev/null
-jq -e '.cache_hit == "true" and .matched_key == .primary_key and .imported_objects > 0 and .cached_compilations > 0' "$reader_a" >/dev/null
-jq -e '.cache_hit == "true" and .matched_key == .primary_key and .imported_objects > 0 and .cached_compilations > 0' "$reader_b" >/dev/null
+jq -e '.restore_conclusion == "success" and .restore_primary_key == .primary_key and .cache_hit == "" and .matched_key == "" and .export_ready == "true" and .save_outcome == "success"' "$seed" >/dev/null
+jq -e '.restore_conclusion == "success" and .restore_primary_key == .primary_key and .cache_hit == "" and .matched_key == "" and .export_ready == "true" and .save_outcome == "success"' "$new_writer" >/dev/null
+jq -e '.restore_conclusion == "success" and .restore_primary_key == .primary_key and .cache_hit == "true" and .matched_key == .primary_key and .imported_objects > 0 and .cached_compilations > 0' "$reader_a" >/dev/null
+jq -e '.restore_conclusion == "success" and .restore_primary_key == .primary_key and .cache_hit == "true" and .matched_key == .primary_key and .imported_objects > 0 and .cached_compilations > 0' "$reader_b" >/dev/null
+
+stock_restore_classify_receipt "$seed" mbx-parallel-seed seed 'MBX parallel / seed' completed mbx-cache-parallel "$stock_evidence/seed.json" > "$seed_restore_classification_file"
+stock_restore_classify_receipt "$reader_a" mbx-parallel-reader-a reader-a 'MBX parallel / reader-a' completed mbx-cache-parallel "$stock_evidence/reader-a.json" > "$reader_a_restore_classification_file"
+stock_restore_classify_receipt "$reader_b" mbx-parallel-reader-b reader-b 'MBX parallel / reader-b' completed mbx-cache-parallel "$stock_evidence/reader-b.json" > "$reader_b_restore_classification_file"
+stock_restore_classify_receipt "$new_writer" mbx-parallel-new-key-writer new-key-writer 'MBX parallel / new-key-writer' completed mbx-cache-parallel "$stock_evidence/new-key-writer.json" > "$new_writer_restore_classification_file"
+jq -cn --arg job 'mbx-parallel-observer-shared' --arg role observer-shared --arg run "$GITHUB_RUN_ID" --arg attempt "$GITHUB_RUN_ATTEMPT" --arg sha "$GITHUB_SHA" --arg ref "$GITHUB_REF" --arg workflow "$GITHUB_WORKFLOW_REF" --arg primary "$MBX_PARALLEL_OBSERVER_PRIMARY" --arg derived "$MBX_PARALLEL_OBSERVER_PRIMARY" --arg restore_primary "$MBX_PARALLEL_OBSERVER_RESTORE_PRIMARY" --arg hit "$MBX_PARALLEL_OBSERVER_CACHE_HIT" --arg matched "$MBX_PARALLEL_OBSERVER_MATCHED_KEY" --arg conclusion "$MBX_PARALLEL_OBSERVER_RESTORE_CONCLUSION" '{receipt_status:"provisional",job_id:$job,role:$role,run_id:$run,run_attempt:$attempt,source_sha:$sha,source_ref:$ref,workflow_ref:$workflow,primary_key:$primary,derived_primary_key:$derived,restore_primary_key:$restore_primary,cache_hit:$hit,matched_key:$matched,restore_conclusion:$conclusion}' > "$observer_receipt"
+stock_restore_classify_receipt "$observer_receipt" mbx-parallel-observer-shared observer-shared 'MBX parallel / observer-shared' in_progress mbx-cache-parallel "$stock_evidence/observer-shared.json" > "$observer_restore_classification_file"
+IFS= read -r seed_restore_classification < "$seed_restore_classification_file"
+IFS= read -r reader_a_restore_classification < "$reader_a_restore_classification_file"
+IFS= read -r reader_b_restore_classification < "$reader_b_restore_classification_file"
+IFS= read -r new_writer_restore_classification < "$new_writer_restore_classification_file"
+IFS= read -r observer_restore_classification < "$observer_restore_classification_file"
+test "$seed_restore_classification" = CLEAN_MISS
+test "$reader_a_restore_classification" = HIT
+test "$reader_b_restore_classification" = HIT
+test "$new_writer_restore_classification" = CLEAN_MISS
+test "$observer_restore_classification" = HIT
 
 verify_directory "$input" "$runner_temp_real/mbx-parallel-input" ''
 verify_directory "$evidence" "$runner_temp_real/mbx-cache-evidence" 700
@@ -164,7 +195,7 @@ gh api -X GET "repos/$GITHUB_REPOSITORY/actions/caches" -f "key=$new_key" -f "re
 jq -e --arg key "$seed_key" --arg ref "$GITHUB_REF" '[.actions_caches[] | select(.key == $key and .ref == $ref)] | length == 1' "$seed_cache" >/dev/null
 jq -e --arg key "$new_key" --arg ref "$GITHUB_REF" '[.actions_caches[] | select(.key == $key and .ref == $ref)] | length == 1' "$new_cache" >/dev/null
 
-jq -e -n --slurpfile api "$jobs" --slurpfile seed_receipt "$seed" --slurpfile reader_a_receipt "$reader_a" --slurpfile reader_b_receipt "$reader_b" --slurpfile new_writer_receipt "$new_writer" --slurpfile seed_caches "$seed_cache" --slurpfile new_caches "$new_cache" --arg run "$GITHUB_RUN_ID" --arg attempt "$GITHUB_RUN_ATTEMPT" --arg sha "$GITHUB_SHA" --arg ref "$GITHUB_REF" --arg workflow "$GITHUB_WORKFLOW_REF" --arg action "$MBX_EXPECTED_ACTION_REF" --arg mbx "$MBX_EXPECTED_VERSION" --arg rust "$RUSTUP_TOOLCHAIN" '
+jq -e -n --slurpfile api "$jobs" --slurpfile seed_receipt "$seed" --slurpfile reader_a_receipt "$reader_a" --slurpfile reader_b_receipt "$reader_b" --slurpfile new_writer_receipt "$new_writer" --slurpfile seed_caches "$seed_cache" --slurpfile new_caches "$new_cache" --arg seed_restore_classification "$seed_restore_classification" --arg reader_a_restore_classification "$reader_a_restore_classification" --arg reader_b_restore_classification "$reader_b_restore_classification" --arg new_writer_restore_classification "$new_writer_restore_classification" --arg observer_restore_classification "$observer_restore_classification" --arg run "$GITHUB_RUN_ID" --arg attempt "$GITHUB_RUN_ATTEMPT" --arg sha "$GITHUB_SHA" --arg ref "$GITHUB_REF" --arg workflow "$GITHUB_WORKFLOW_REF" --arg action "$MBX_EXPECTED_ACTION_REF" --arg mbx "$MBX_EXPECTED_VERSION" --arg rust "$RUSTUP_TOOLCHAIN" '
   def one_job($name):
     [$api[0].jobs[] | select(.name == $name)] as $rows
     | if ($rows | length) == 1 then $rows[0] else error("missing_or_duplicate_job:" + $name) end;
@@ -207,8 +238,9 @@ jq -e -n --slurpfile api "$jobs" --slurpfile seed_receipt "$seed" --slurpfile re
         or $seed_save_end >= ([$starts[] | epoch_ms] | min))
     then error("seed_save_not_complete_before_parallel_starts") else . end
   | {
-      schema_version: 1,
+      schema_version: 2,
       classification: (if $latest_start < $earliest_end then "RUN" else "NOT_RUN" end),
+      observer_shared_restore_classification: $observer_restore_classification,
       run_id: $run,
       run_attempt: $attempt,
       source_sha: $sha,
@@ -220,18 +252,22 @@ jq -e -n --slurpfile api "$jobs" --slurpfile seed_receipt "$seed" --slurpfile re
       seed: {
         job_id: "mbx-parallel-seed", api_job_id: $seed_ok.id,
         completed_at: $seed_ok.completed_at, save_completed_at: $seed_save.completed_at,
-        primary_key: $seed_receipt[0].primary_key
+        primary_key: $seed_receipt[0].primary_key,
+        restore_classification: $seed_restore_classification
       },
       parallel_intervals: [
         {role: "reader-a", job_id: "mbx-parallel-reader-a", api_job_id: $reader_a_ok.id,
          restore_started_at: $restore_a.started_at, build_completed_at: $build_a.completed_at,
-         primary_key: $reader_a_receipt[0].primary_key},
+         primary_key: $reader_a_receipt[0].primary_key,
+         restore_classification: $reader_a_restore_classification},
         {role: "reader-b", job_id: "mbx-parallel-reader-b", api_job_id: $reader_b_ok.id,
          restore_started_at: $restore_b.started_at, build_completed_at: $build_b.completed_at,
-         primary_key: $reader_b_receipt[0].primary_key},
+         primary_key: $reader_b_receipt[0].primary_key,
+         restore_classification: $reader_b_restore_classification},
         {role: "new-key-writer", job_id: "mbx-parallel-new-key-writer", api_job_id: $writer_ok.id,
          restore_started_at: $restore_writer.started_at, build_completed_at: $build_writer.completed_at,
-         primary_key: $new_writer_receipt[0].primary_key}
+         primary_key: $new_writer_receipt[0].primary_key,
+         restore_classification: $new_writer_restore_classification}
       ],
       overlap_started_at: ([$starts[] | epoch_ms] | max),
       overlap_completed_at: ([$ends[] | epoch_ms] | min),
@@ -244,7 +280,20 @@ jq -e -n --slurpfile api "$jobs" --slurpfile seed_receipt "$seed" --slurpfile re
       ]
     }
   ' > "$receipt"
+rm -f -- "$seed_restore_classification_file" "$reader_a_restore_classification_file" "$reader_b_restore_classification_file" "$new_writer_restore_classification_file"
+for role in seed reader-a reader-b new-key-writer observer-shared; do
+  source="$stock_evidence/$role.json"
+  destination="$evidence/stock-restore-$role.json"
+  verify_directory "$stock_evidence" "$runner_temp_real/mbx-stock-restore-evidence" 700
+  if [ ! -f "$source" ] || [ -L "$source" ] || [ ! -O "$source" ] || [ -e "$destination" ] || [ -L "$destination" ]; then
+    echo 'invalid stock restore sidecar' >&2
+    exit 1
+  fi
+  mv -- "$source" "$destination"
+done
 verify_directory "$evidence" "$runner_temp_real/mbx-cache-evidence" 700
+verify_directory "$stock_evidence" "$runner_temp_real/mbx-stock-restore-evidence" 700
+rmdir "$stock_evidence"
 jq -er '"MBX parallel overlap classification: " + .classification' "$receipt"
 "#;
 
@@ -262,8 +311,9 @@ pub(super) fn receipt_steps() -> Result<Vec<Step>, RenderError> {
         ("new-key-writer", "mbx-parallel-new-key-writer"),
     ] {
         let path = format!("{input_root}/{role}");
-        let mut download =
-            steps::download_artifact_step(&format!("mbx-cache-evidence-{job_id}"), &path)?;
+        let artifact =
+            format!("mbx-cache-evidence-{job_id}-r${{{{ github.run_id }}}}-a${{{{ github.run_attempt }}}}");
+        let mut download = steps::download_artifact_step(&artifact, &path)?;
         download.name = format!("Download MBX {role} receipt");
         steps.push(download);
     }
@@ -280,6 +330,26 @@ pub(super) fn observer_api_step(request: &MbxQualificationPins) -> Yaml {
             "env".to_owned(),
             Yaml::Map(vec![
                 ("GH_TOKEN".to_owned(), Yaml::str("${{ github.token }}")),
+                (
+                    "MBX_PARALLEL_OBSERVER_PRIMARY".to_owned(),
+                    Yaml::str("${{ steps.mbx-bundle-key.outputs.primary }}"),
+                ),
+                (
+                    "MBX_PARALLEL_OBSERVER_RESTORE_PRIMARY".to_owned(),
+                    Yaml::str("${{ steps.mbx-bundle.outputs.cache-primary-key }}"),
+                ),
+                (
+                    "MBX_PARALLEL_OBSERVER_CACHE_HIT".to_owned(),
+                    Yaml::str("${{ steps.mbx-bundle.outputs.cache-hit }}"),
+                ),
+                (
+                    "MBX_PARALLEL_OBSERVER_MATCHED_KEY".to_owned(),
+                    Yaml::str("${{ steps.mbx-bundle.outputs.cache-matched-key }}"),
+                ),
+                (
+                    "MBX_PARALLEL_OBSERVER_RESTORE_CONCLUSION".to_owned(),
+                    Yaml::str("${{ steps.mbx-bundle.conclusion }}"),
+                ),
                 (
                     "MBX_EXPECTED_ACTION_REF".to_owned(),
                     Yaml::str(request.mbx_action_uses.clone()),
@@ -302,6 +372,13 @@ pub(super) fn observer_api_step(request: &MbxQualificationPins) -> Yaml {
                 ),
             ]),
         ),
-        ("run".to_owned(), Yaml::str(API_RECEIPT_SCRIPT)),
+        (
+            "run".to_owned(),
+            Yaml::str(format!(
+                "{}\n{}",
+                super::super::mbx_stock_restore::STOCK_RESTORE_CLASSIFIER_SCRIPT,
+                API_RECEIPT_SCRIPT
+            )),
+        ),
     ])
 }

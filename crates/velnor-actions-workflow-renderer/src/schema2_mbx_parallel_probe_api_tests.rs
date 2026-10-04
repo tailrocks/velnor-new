@@ -9,12 +9,16 @@ use super::{field, map_fields, pins, string};
 
 #[path = "schema2_mbx_parallel_probe_api_fixture.rs"]
 mod fixture_data;
+#[path = "schema2_mbx_parallel_probe_api_stock_miss_tests.rs"]
+mod stock_miss_tests;
+#[path = "schema2_mbx_parallel_probe_api_key_tests.rs"]
+mod key_tests;
 
 const SOURCE_SHA: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const OTHER_SHA: &str = "cccccccccccccccccccccccccccccccccccccccc";
 const RUSTC_IDENTITY: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-const SHARED_SCOPE_HASH: &str = "d56a34bb60253d84ce8cf192d43a64a8d2a31c7941da51c6fad482e6e13a0a12";
-const NEW_SCOPE_HASH: &str = "80d264d20dca8b9e9d723ab1dd7f8116255c29520be42966afa4af4c3cd0b4f9";
+const SHARED_SCOPE_HASH: &str = "41f42865fa87ca1c02ad633e08adab543e9e1d4dc92cb2116cbb3e11bb8a2a76";
+const NEW_SCOPE_HASH: &str = "f4e55cb8bd2ee005472379b3c915d9de2973e186fbfbc5db6aee443635c5a135";
 static NEXT_FIXTURE_ID: AtomicU64 = AtomicU64::new(0);
 
 #[test]
@@ -32,7 +36,8 @@ fn fixed_observer_script_is_parseable_bash() {
         String::from_utf8_lossy(&bash_check.stderr)
     );
     assert!(script.contains('\n'));
-    assert!(!script.contains("$("));
+    assert!(script.contains("stock_restore_classify_receipt"));
+    assert!(script.contains("receipt_status:\"provisional\""));
 }
 
 #[test]
@@ -74,122 +79,6 @@ fn api_rejects_unsupported_runner_architecture() {
         run_api_script_for_platform(&root.0, &runner_temp, &jobs_path, "Linux", "RISCV64", "x64");
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("unsupported runner platform"));
-}
-
-#[test]
-fn api_rejects_stale_seed_when_new_writer_key_is_current() {
-    assert_api_fixture_rejected(KeyMutation::StaleSeed);
-}
-
-#[test]
-fn api_rejects_stale_new_writer_when_seed_key_is_current() {
-    assert_api_fixture_rejected(KeyMutation::StaleWriter);
-}
-
-#[test]
-fn api_rejects_wrong_seed_sha_when_new_writer_sha_is_current() {
-    assert_api_fixture_rejected(KeyMutation::WrongSeedSha);
-}
-
-#[test]
-fn api_rejects_wrong_new_writer_sha_when_seed_sha_is_current() {
-    assert_api_fixture_rejected(KeyMutation::WrongWriterSha);
-}
-
-#[test]
-fn api_rejects_near_match_scope_hash_with_current_run_attempt_and_sha() {
-    assert_api_fixture_rejected(KeyMutation::NearMatchSharedScopeHash);
-}
-
-#[test]
-fn api_rejects_malformed_receipt_scope() {
-    assert_api_fixture_rejected(KeyMutation::MalformedSeedScope);
-}
-
-fn assert_api_fixture_rejected(mutation: KeyMutation) {
-    let root = fixture_data::TestDirectory::new();
-    let (runner_temp, jobs_path) = prepare_api_fixture(&root.0, true);
-    mutate_fixture_receipt(&runner_temp, mutation);
-    let output = run_api_script(&root.0, &runner_temp, &jobs_path);
-    assert!(
-        !output.status.success(),
-        "API script accepted key mutation {mutation:?}"
-    );
-}
-
-#[derive(Debug, Clone, Copy)]
-enum KeyMutation {
-    StaleSeed,
-    StaleWriter,
-    WrongSeedSha,
-    WrongWriterSha,
-    NearMatchSharedScopeHash,
-    MalformedSeedScope,
-}
-
-fn mutate_fixture_receipt(runner_temp: &std::path::Path, mutation: KeyMutation) {
-    let input = runner_temp.join("mbx-parallel-input");
-    let shared_prefix = cache_prefix(SHARED_SCOPE_HASH, "123", "2");
-    let shared_key = format!("{shared_prefix}{SOURCE_SHA}");
-    let new_prefix = cache_prefix(NEW_SCOPE_HASH, "123", "2");
-    let new_key = format!("{new_prefix}{SOURCE_SHA}");
-    match mutation {
-        KeyMutation::StaleSeed => {
-            let stale_prefix = cache_prefix(SHARED_SCOPE_HASH, "122", "2");
-            let stale_key = format!("{stale_prefix}{SOURCE_SHA}");
-            let receipt = input.join("seed/cache-receipt.json");
-            replace_receipt_field(&receipt, "cache_prefix", &shared_prefix, &stale_prefix);
-            replace_receipt_field(&receipt, "primary_key", &shared_key, &stale_key);
-        }
-        KeyMutation::StaleWriter => {
-            let stale_prefix = cache_prefix(NEW_SCOPE_HASH, "122", "2");
-            let stale_key = format!("{stale_prefix}{SOURCE_SHA}");
-            let receipt = input.join("new-key-writer/cache-receipt.json");
-            replace_receipt_field(&receipt, "cache_prefix", &new_prefix, &stale_prefix);
-            replace_receipt_field(&receipt, "primary_key", &new_key, &stale_key);
-        }
-        KeyMutation::WrongSeedSha => {
-            let wrong_key = format!("{shared_prefix}{OTHER_SHA}");
-            replace_receipt_field(
-                &input.join("seed/cache-receipt.json"),
-                "primary_key",
-                &shared_key,
-                &wrong_key,
-            );
-        }
-        KeyMutation::WrongWriterSha => {
-            let wrong_key = format!("{new_prefix}{OTHER_SHA}");
-            replace_receipt_field(
-                &input.join("new-key-writer/cache-receipt.json"),
-                "primary_key",
-                &new_key,
-                &wrong_key,
-            );
-        }
-        KeyMutation::NearMatchSharedScopeHash => {
-            let near_hash = format!("{}3", &SHARED_SCOPE_HASH[..SHARED_SCOPE_HASH.len() - 1]);
-            let near_prefix = cache_prefix(&near_hash, "123", "2");
-            let near_key = format!("{near_prefix}{SOURCE_SHA}");
-            let receipt = input.join("seed/cache-receipt.json");
-            replace_receipt_field(&receipt, "cache_prefix", &shared_prefix, &near_prefix);
-            replace_receipt_field(&receipt, "primary_key", &shared_key, &near_key);
-        }
-        KeyMutation::MalformedSeedScope => replace_receipt_field(
-            &input.join("seed/cache-receipt.json"),
-            "scope",
-            "qualification-mbx-v1/parallel/shared",
-            "qualification-mbx-v1/parallel/shared-near",
-        ),
-    }
-}
-
-fn replace_receipt_field(path: &std::path::Path, field: &str, old: &str, new: &str) {
-    let contents = fs::read_to_string(path).expect("read receipt fixture for mutation");
-    let old_field = format!("\"{field}\":\"{old}\"");
-    let new_field = format!("\"{field}\":\"{new}\"");
-    assert_eq!(contents.matches(&old_field).count(), 1);
-    fs::write(path, contents.replace(&old_field, &new_field))
-        .expect("write mutated receipt fixture");
 }
 
 fn cache_prefix(scope_hash: &str, run_id: &str, attempt: &str) -> String {
@@ -245,6 +134,7 @@ fn prepare_api_fixture_for_platform(
     fs::set_permissions(&evidence, fs::Permissions::from_mode(0o700))
         .expect("make evidence fixture private");
     fs::create_dir_all(&fake_bin).expect("create fixture command directory");
+    let runner_temp = fs::canonicalize(runner_temp).expect("canonicalize runner temp fixture");
 
     let shared_prefix = cache_prefix_for_arch(SHARED_SCOPE_HASH, "123", "2", key_arch);
     let new_prefix = cache_prefix_for_arch(NEW_SCOPE_HASH, "123", "2", key_arch);
@@ -259,6 +149,7 @@ fn prepare_api_fixture_for_platform(
         runner_os,
         runner_arch,
     );
+    fixture_data::write_stock_restore_fixtures(root, &runner_temp, &shared_key, &new_key);
     let jobs_path = root.join("jobs.json");
     let seed_cache_path = root.join("seed-cache.json");
     let new_cache_path = root.join("new-cache.json");
@@ -297,20 +188,37 @@ fn run_api_script_for_platform(
     let mut path_entries = vec![fake_bin];
     path_entries.extend(env::split_paths(&env::var_os("PATH").unwrap_or_default()));
     let path = env::join_paths(path_entries).expect("join fixture PATH");
-    Command::new("bash")
-        .args(["-c", &script])
-        .env("PATH", path)
-        .env("RUNNER_TEMP", runner_temp)
+    let mut command = Command::new("bash");
+    command.args(["-c", &script]).env("PATH", path);
+    set_api_script_identity(&mut command, runner_temp);
+    command
         .env("GITHUB_RUN_ID", "123")
-        .env("GITHUB_RUN_ATTEMPT", "2")
-        .env("GITHUB_EVENT_NAME", "workflow_dispatch")
-        .env("GITHUB_REF", "refs/heads/main")
-        .env("GITHUB_REPOSITORY", "org/repo")
         .env(
-            "GITHUB_WORKFLOW_REF",
-            "org/repo/.github/workflows/qualification.yml@refs/heads/main",
+            "MBX_PARALLEL_OBSERVER_PRIMARY",
+            cache_key_fixture_for_arch(SHARED_SCOPE_HASH, key_arch),
         )
-        .env("GITHUB_SHA", SOURCE_SHA)
+        .env(
+            "MBX_PARALLEL_OBSERVER_RESTORE_PRIMARY",
+            cache_key_fixture_for_arch(SHARED_SCOPE_HASH, key_arch),
+        )
+        .env("MBX_PARALLEL_OBSERVER_CACHE_HIT", "true")
+        .env(
+            "MBX_PARALLEL_OBSERVER_MATCHED_KEY",
+            cache_key_fixture_for_arch(SHARED_SCOPE_HASH, key_arch),
+        )
+        .env("MBX_PARALLEL_OBSERVER_RESTORE_CONCLUSION", "success")
+        .env(
+            "MBX_STOCK_FIXTURE_RUN",
+            runner_temp.parent().expect("fixture root").join("stock-run.json"),
+        )
+        .env(
+            "MBX_STOCK_FIXTURE_JOBS",
+            runner_temp.parent().expect("fixture root").join("stock-jobs.json"),
+        )
+        .env(
+            "MBX_STOCK_FIXTURE_LOG_DIR",
+            runner_temp.parent().expect("fixture root"),
+        )
         .env("RUNNER_OS", runner_os)
         .env("RUNNER_ARCH", runner_arch)
         .env(
@@ -330,6 +238,7 @@ fn run_api_script_for_platform(
         .env("MBX_PARALLEL_FIXTURE_JOBS", jobs_path)
         .env("MBX_PARALLEL_FIXTURE_SEED_CACHE", &seed_cache_path)
         .env("MBX_PARALLEL_FIXTURE_NEW_CACHE", &new_cache_path)
+        .env("RUSTUP_TOOLCHAIN", "1.98.1")
         .env(
             "MBX_PARALLEL_FIXTURE_SEED_KEY",
             cache_key_fixture_for_arch(SHARED_SCOPE_HASH, key_arch),
@@ -340,6 +249,23 @@ fn run_api_script_for_platform(
         )
         .output()
         .expect("run API receipt script against fixtures")
+}
+
+fn set_api_script_identity(command: &mut Command, runner_temp: &std::path::Path) {
+    command
+        .env("RUNNER_TEMP", runner_temp)
+        .env("GITHUB_RUN_ATTEMPT", "2")
+        .env("GITHUB_EVENT_NAME", "workflow_dispatch")
+        .env("GITHUB_REF", "refs/heads/main")
+        .env("GITHUB_REF_PROTECTED", "true")
+        .env("GITHUB_REPOSITORY", "tailrocks/velnor-new")
+        .env("GITHUB_EVENT_PATH", runner_temp.join("event.json"))
+        .env(
+            "GITHUB_WORKFLOW_REF",
+            "tailrocks/velnor-new/.github/workflows/qualification.yml@refs/heads/main",
+        )
+        .env("GITHUB_SHA", SOURCE_SHA)
+        .env("GH_TOKEN", "fixture-token");
 }
 
 fn verify_api_receipt(overlap: bool, receipt: &std::path::Path) -> (String, String) {

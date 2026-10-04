@@ -23,6 +23,7 @@ const PARALLEL_GATE: &str = "inputs.mode == 'mbx-cache-parallel' && github.event
 const SHARED_SCOPE: &str = "qualification-mbx-v1/parallel/shared";
 const NEW_KEY_SCOPE: &str = "qualification-mbx-v1/parallel/new-key";
 const COMPILE_STEP_NAME: &str = "Compile MBX cache probe";
+const REUSE_STEP_NAME: &str = "Require reused compilation";
 const IMPORT_PROBE: &str = "mbx cache stats --json | jq -e '.objects > 0' >/dev/null";
 const REUSE_PROBE: &str = "mbx stats --json | jq -e '.savings.cached_compilations > 0' >/dev/null";
 const SMOKE_CRATE: &str = r#"set -eu; root="$GITHUB_WORKSPACE/.velnor-mbx-parallel-qualification"; mkdir -p "$root/src"; printf '[package]\nname = "mbx-parallel-qualification"\nversion = "0.1.0"\nedition = "2024"\n\n[workspace]\nmembers = ["."]\nresolver = "3"\n\n[lib]\npath = "src/lib.rs"\n' > "$root/Cargo.toml"; printf 'pub fn cache_probe() -> u64 { 42 }\n' > "$root/src/lib.rs"; mbx build --manifest-path "$root/Cargo.toml""#;
@@ -338,10 +339,10 @@ fn render_steps(
     let mut insertion = None;
     for (index, step) in rendered.iter().enumerate() {
         match rendered_step_name(step) {
-            Some(name) if name == api::LAST_RECEIPT_STEP_NAME => {
+            Some(name) if name == REUSE_STEP_NAME => {
                 if insertion.replace(index).is_some() {
                     return Err(RenderError::InvalidWorkflow(
-                        "duplicate_mbx_parallel_api_receipt_download".to_owned(),
+                    "duplicate_mbx_parallel_reuse_probe".to_owned(),
                     ));
                 }
             }
@@ -355,7 +356,7 @@ fn render_steps(
     }
     let Some(index) = insertion else {
         return Err(RenderError::InvalidWorkflow(
-            "missing_mbx_parallel_api_receipt_download".to_owned(),
+                    "missing_mbx_parallel_reuse_probe".to_owned(),
         ));
     };
     rendered.insert(index + 1, api::observer_api_step(request));
