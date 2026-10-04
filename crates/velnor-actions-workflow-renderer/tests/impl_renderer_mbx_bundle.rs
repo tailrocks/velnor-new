@@ -68,25 +68,17 @@ fn assert_hosted_action_options(text: &str) {
     );
     let action = step_block(text, "Restore MBX objects");
     let action_sha = "a".repeat(40);
-    assert!(
-        action.contains(&format!(
-            "cache-generation: {}",
-            format!("{}-action-{action_sha}", mbx_cache_generation("1.21.1"))
-        )),
-        "{action}"
+    let expected_generation = format!(
+        "cache-generation: {}-action-{action_sha}",
+        mbx_cache_generation("1.21.1")
     );
+    assert!(action.contains(&expected_generation), "{action}");
     assert!(action.contains("version: 1.21.1"), "{action}");
     assert!(
         !action.contains("cache-key:") && !action.contains("restore-keys:"),
         "keep the action's generated primary-key format and shared compatible restore prefix: {action}"
     );
-    assert!(
-        text.contains(&format!(
-            "cache-generation: {}",
-            format!("{}-action-{action_sha}", mbx_cache_generation("1.21.1"))
-        )),
-        "{text}"
-    );
+    assert!(text.contains(&expected_generation), "{text}");
     assert!(text.contains("version: 1.21.1"), "{text}");
 }
 
