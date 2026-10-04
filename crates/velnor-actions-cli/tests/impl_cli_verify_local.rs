@@ -5,14 +5,16 @@
 //! into this very test), and `toolchain` needs `mise` plus network
 //! installs. Instead these tests pin the entrypoint's exact step list
 //! and fail-closed shape, syntax-check the script by executing
-//! `bash -n`, and execute the offline `repo-policy` stage body. A
-//! stage add, remove, or rename fails the inventory test until the
-//! expectation moves with it.
+//! `bash -n`, and execute the offline `repo-policy` stage against an
+//! isolated freshness fixture. A stage add, remove, or rename fails
+//! the inventory test until the expectation moves with it.
 
 use std::error::Error;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
+
+use crate::impl_repo_policy::p12_harness as freshness;
 
 /// Workspace root derived from this crate's manifest dir.
 fn workspace_root() -> PathBuf {
@@ -149,14 +151,9 @@ fn verify_local_entrypoint_parses() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn verify_local_repo_policy_stage_executes() -> Result<(), Box<dyn Error>> {
-    let output = Command::new("bash")
-        .arg("scripts/check-freshness.sh")
-        .current_dir(workspace_root())
-        .output()?;
-    assert!(
-        output.status.success(),
-        "repo-policy stage failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    let fixture = freshness::passing("verify-local-freshness")?;
+    let output = freshness::run_script(&fixture.dir, &[]);
+    freshness::cleanup(&fixture);
+    freshness::assert_clean(&output?);
     Ok(())
 }
