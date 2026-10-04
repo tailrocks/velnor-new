@@ -158,33 +158,58 @@ workflow_dispatch = true # optional; defaults to false
 alert = true # optional fixed failure issue observer; defaults to false
 ```
 
-Omitting this table adds neither trigger. These triggers run the existing plan,
-obligation jobs, and Required gate in the same workflow; they MUST NOT dispatch
-another workflow or create a second task graph. Manual dispatch exposes string
-inputs `scope` (default `full`, accepted values `affected` and `full`) and optional
-`base_sha`. Missing dispatch scope at the event boundary means `affected`;
-ordinary events ignore dispatch inputs. Scheduled runs always use `full`.
+Omitting this table adds neither trigger. Schedule and manual dispatch run the
+existing Plan, obligations, and Required gate in this same `ci.yml` graph; they
+MUST NOT dispatch another workflow or create a second task graph. The manual UI
+declares string `scope` with default `full` and choices `affected` or `full`, plus
+optional string `base_sha`. The default is a UI value, not evidence of what the
+event submitted: if the raw dispatch payload has no `scope`, the request scope is
+`affected`, even when the native `inputs` context exposes the YAML default
+`full`. If supplied, the scope must be exactly `affected` or `full`. Ordinary
+events ignore dispatch payload and environment fields.
 
-The request and plan record typed verification scope. Full verification MUST
-execute every applicable obligation, skip baseline lookup and coverage, and
-reject reuse decisions and baseline proofs. Affected verification retains the
-usual proof requirements. Schedule and dispatch bind their head to the runner's
-`GITHUB_SHA`; affected dispatch may compare its validated `base_sha`. The merge
-independently captures runner scope and rejects disagreement with the plan.
-Both events use read-only trust and caches; baseline publication remains limited
-to successful protected default-branch pushes. Failed, missing, or cancelled
-obligation evidence MUST fail the same Required gate.
+Schedule always selects `Full`. A manual request with explicit `full` also
+selects `Full`; an `affected` request selects `Affected` only with a usable exact
+base. A missing base, or a valid but unavailable/non-commit base, widens the
+plan to `Full` with a recorded reason. A supplied affected-mode `base_sha` must
+be exactly 40 lowercase hexadecimal characters. Reject malformed values before
+any Git lookup; do not accept branch names, tags, symbolic refs, abbreviated
+SHAs, or fallback default bases. Plan resolves the validated SHA in its own
+checkout by direct argv (no shell): `git rev-parse --verify --end-of-options
+<sha>^{commit}`. It accepts the input only when the resolved commit identity
+equals the supplied SHA. No remote fetch or baseline resolver substitutes for a
+missing object. `Full` ignores `base_sha` and performs no base lookup.
+
+The request and authenticated plan retain the event, typed scope, exact runner
+`GITHUB_SHA`, raw dispatch input presence/values, and base-resolution outcome.
+Plan and merge independently capture the runner event and inputs, validate the
+closed input grammar, and reject disagreement with the authenticated plan.
+Merge compares the newly captured raw base value with the plan's authenticated
+base identity/outcome; it performs no local Git lookup and MUST NOT claim that a
+base object exists based on merge-time state. A full plan, whether requested or
+reached by conservative widening, MUST enumerate and execute every applicable
+obligation from the complete validated inventory; no obligation lane is omitted
+by baseline-driven filtering. It skips baseline lookup and coverage, and rejects
+task-result reuse and baseline proofs. Affected selection retains the usual
+complete proof requirements. Both events use read-only trust
+and caches; baseline publication remains limited to successful protected
+default-branch pushes. Failed, missing, or cancelled obligation evidence MUST
+fail the same Required gate.
 
 `alert = true` requires schedule or manual dispatch. The separate downstream
-observer has only `issues: write`, protected environment `verification-alerts`,
-and an exact generated origin/default-branch/protected-ref schedule-or-dispatch
-gate. Verification retains read-only trust. The fixed observer opens or updates
-`Nightly CI red` using only Required's actual result, run URL, and source SHA; it
-executes no repository program, checkout, or mutable template. When alerts and
-dispatch are enabled, a native Boolean `simulate_failure` input defaults false.
-Only explicit Boolean true runs a fixed failing step immediately before Plan;
-Required emits the actual `planning_failed` report. Ordinary runs allocate no
-extra runner. See [verification observer contract](verification-observer-contract.md).
+observer has only `issues: write`, the protected environment
+`verification-alerts`, and an exact generated origin/default-branch/protected-ref
+schedule-or-dispatch gate. Verification retains read-only trust. The fixed
+observer opens or updates `Nightly CI red` using only Required's actual result,
+run URL, and source SHA; it executes no repository program, checkout, or mutable
+template. When alerts and dispatch are enabled, a native Boolean
+`simulate_failure` input defaults false. The request retains both the raw
+dispatch value and native Boolean; a mismatch or malformed value MUST fail
+closed, and a missing value means false. Only an explicitly matched true value
+runs a fixed failing step immediately before Plan; Required emits the actual
+`planning_failed` report. Ordinary runs allocate no extra runner. See
+[verification observer contract](verification-observer-contract.md) and the
+[trigger-contract decision erratum](../reviews/verification-trigger-contract-erratum-20261004.md).
 
 Every generated workflow MUST set:
 
