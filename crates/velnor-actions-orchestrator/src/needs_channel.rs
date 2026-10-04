@@ -172,7 +172,7 @@ mod tests {
             Some(r#"["a","b"]"#),
         );
         assert_eq!(inventory, ["a", "b"]);
-        assert!(errors.is_empty());
+        assert_eq!(errors, [] as [String; 0]);
     }
 
     #[test]
@@ -181,26 +181,26 @@ mod tests {
         let (inventory, results, errors) = parsed(Some(&channel), Some(r#"["plan"]"#));
         assert_eq!(inventory, ["plan"]);
         assert_eq!(results.len(), 1);
-        assert!(errors.is_empty());
+        assert_eq!(errors, [] as [String; 0]);
     }
 
     #[test]
     fn garbage_empty_and_bad_job_inputs_fail_closed() {
         for needs in [None, Some(""), Some("   ")] {
             let (inventory, results, errors) = parsed(needs, None);
-            assert!(inventory.is_empty());
-            assert!(results.is_empty());
+            assert_eq!(inventory, [] as [String; 0]);
+            assert_eq!(results, [] as [serde_json::Value; 0]);
             assert_eq!(errors, ["missing_needs_channel"]);
         }
         for needs in ["not json", "[1,2]", "42", r#""str""#] {
             let (inventory, results, errors) = parsed(Some(needs), None);
-            assert!(inventory.is_empty());
-            assert!(results.is_empty());
+            assert_eq!(inventory, [] as [String; 0]);
+            assert_eq!(results, [] as [serde_json::Value; 0]);
             assert_eq!(errors, ["unparsable_needs"], "{needs}");
         }
         let (inventory, results, errors) = parsed(Some("{}"), None);
-        assert!(inventory.is_empty());
-        assert!(results.is_empty());
+        assert_eq!(inventory, [] as [String; 0]);
+        assert_eq!(results, [] as [serde_json::Value; 0]);
         assert_eq!(errors, ["empty_needs"]);
         let (inventory, _, errors) =
             parsed(Some(r#"{"":"success","ok":"success"}"#), Some(r#"["ok"]"#));

@@ -258,7 +258,7 @@ fn deny_install_is_audited() -> TestResult {
     without_ambient_identity("deny_install_is_audited", || {
         let repo = velnor_workspace()?;
         let prep = prepare(repo.path())?;
-        assert!(prep.lock_audit_blocking.is_empty());
+        assert_eq!(prep.lock_audit_blocking, [] as [std::string::String; 0]);
         let summary = prep
             .discovery
             .recommendations

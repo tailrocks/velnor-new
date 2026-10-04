@@ -89,7 +89,10 @@ fn intake_consumer_default_ignores_velnor_files() -> TestResult {
         prep.config.workflow.policy,
         WorkflowPolicy::ConsumerV1
     ));
-    assert!(!prep.discovery.proposals.is_empty());
+    assert_ne!(
+        prep.discovery.proposals,
+        [] as [velnor_actions_contract::ProposedTask; 0]
+    );
     generate(&prep, &GenerateOptions { output_dir: None })?;
     Ok(())
 }
@@ -319,7 +322,10 @@ fn intake_default_budgets_are_conservative_and_reported() -> TestResult {
 #[test]
 fn intake_detection_without_tool_files() -> TestResult {
     let repo = make_repo(config_with_branch())?;
-    assert!(!prepare(repo.path())?.discovery.proposals.is_empty());
+    assert_ne!(
+        prepare(repo.path())?.discovery.proposals,
+        [] as [velnor_actions_contract::ProposedTask; 0]
+    );
     Ok(())
 }
 

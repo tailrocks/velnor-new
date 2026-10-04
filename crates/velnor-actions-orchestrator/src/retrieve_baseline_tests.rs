@@ -85,8 +85,11 @@ fn default_branch_args_pins_repo_and_rejects_bad_slug() {
         .map(|arg| arg.to_string_lossy().into_owned())
         .collect();
     assert_eq!(text, ["api", "repos/o/r", "--jq", ".default_branch"]);
-    assert!(default_branch_args("not a slug!!").is_empty());
-    assert!(default_branch_args("").is_empty());
+    assert_eq!(
+        default_branch_args("not a slug!!"),
+        [] as [std::ffi::OsString; 0]
+    );
+    assert_eq!(default_branch_args(""), [] as [std::ffi::OsString; 0]);
 }
 
 #[test]

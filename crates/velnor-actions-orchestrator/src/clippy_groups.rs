@@ -157,7 +157,7 @@ mod tests {
         );
         let empty = clippy_memory_groups(&[]);
         assert_eq!(empty.barriers, 0);
-        assert!(empty.groups.is_empty());
+        assert_eq!(empty.groups, [] as [Vec<String>; 0]);
         let no_clippy = clippy_memory_groups(&[task("test", "default", "test")]);
         assert_eq!(no_clippy.barriers, 0);
         assert_eq!(no_clippy.groups.len(), 1);

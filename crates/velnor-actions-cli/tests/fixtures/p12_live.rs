@@ -170,28 +170,27 @@ fn every_fail_row_is_nonzero() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn script_covers_all_forms_scopes_and_namespaces() -> Result<(), Box<dyn Error>> {
-    let script = crate::impl_repo_policy::read("scripts/check-freshness.sh")?;
-    for marker in [
-        "build-dependencies",
-        "dev-dependencies",
-        "target.",
-        "workspace",
-        "package",
-        "name+version+source",
-        "ambiguous identity",
-        "unreachable locked package",
-        "local-pin",
-        "policy-mirror",
-        "upstream-freshness",
-        "upstream-probe",
-        "exception-expiry",
-        "standing-exception",
-        "advisories",
-        "def fail_row",
-        "sys.exit(1)",
+    let fixture = harness::passing("p12-script-closure")?;
+    let run = harness::run_script(&fixture.dir, &[])?;
+    harness::assert_clean(&run);
+    for row in [
+        "aaa:dependencies:serde",
+        "aaa:dependencies:serde_json",
+        "aaa:dependencies:js",
+        "aaa:dev-dependencies:tempfile",
+        "aaa:build-dependencies:toml",
+        "aaa:target.cfg(unix).dependencies:globset",
+        "(declared-summary)",
+        "(lock-membership)",
+        "(lock-graph)",
     ] {
-        assert!(script.contains(marker), "script misses {marker}");
+        assert!(
+            run.stdout.contains(row),
+            "script closure misses {row}:\n{}",
+            run.stdout
+        );
     }
+    harness::cleanup(&fixture);
     Ok(())
 }
 

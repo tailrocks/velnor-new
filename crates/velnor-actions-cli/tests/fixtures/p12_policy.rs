@@ -294,18 +294,49 @@ fn unknown_hold_subject_fails() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn action_const_wiring_is_mapped() -> Result<(), Box<dyn Error>> {
-    let script = crate::impl_repo_policy::read("scripts/check-freshness.sh")?;
-    assert!(
-        script.contains(ACTIONS_RS),
-        "action const path must be read"
-    );
-    for key in [
-        "actions/cache/restore",
-        "actions/cache/save",
-        "asamarts/alint",
-        "Swatinem/rust-cache",
-    ] {
-        assert!(script.contains(key), "expected action set misses {key}");
+    const ACTIONS: &[(&str, &str)] = &[
+        ("jdx/mise-action", "MISE_ACTION"),
+        ("actions/checkout", "CHECKOUT_ACTION"),
+        ("actions/download-artifact", "DOWNLOAD_ARTIFACT_ACTION"),
+        ("actions/upload-artifact", "UPLOAD_ARTIFACT_ACTION"),
+        ("actions/cache/restore", "CACHE_ACTION"),
+        ("actions/cache/save", "CACHE_ACTION"),
+        ("jdx/mr-boxington-action", "MR_BOXINGTON_ACTION"),
+        ("asamarts/alint", "ALINT_ACTION"),
+        ("Swatinem/rust-cache", "RUST_CACHE_ACTION"),
+    ];
+    let fixture = harness::passing("p12-action-consts")?;
+    let baseline = harness::run_script(&fixture.dir, &[])?;
+    harness::assert_clean(&baseline);
+    for (key, constant) in ACTIONS {
+        assert!(
+            baseline.stdout.contains(&format!(
+                "action {key} version ({ACTIONS_RS}::{constant}_VERSION)"
+            )),
+            "action version mapping missing for {key}:\n{}",
+            baseline.stdout
+        );
+        assert!(
+            baseline
+                .stdout
+                .contains(&format!("action {key} sha ({ACTIONS_RS}::{constant}_SHA)")),
+            "action SHA mapping missing for {key}:\n{}",
+            baseline.stdout
+        );
     }
+    let cache_version = crate::impl_repo_policy::quoted_value(
+        include_str!("p12_actions.txt"),
+        "CACHE_ACTION_VERSION:",
+    )?;
+    harness::mutate(
+        &fixture.dir,
+        ACTIONS_RS,
+        &format!("CACHE_ACTION_VERSION: &str = \"{cache_version}\""),
+        "CACHE_ACTION_VERSION: &str = \"v0.0.0\"",
+    )?;
+    let cache_drift = harness::run_script(&fixture.dir, &[])?;
+    harness::assert_fail(&cache_drift, "action actions/cache/restore version");
+    harness::assert_fail(&cache_drift, "action actions/cache/save version");
+    harness::cleanup(&fixture);
     Ok(())
 }

@@ -16,10 +16,9 @@ fn native_qualification_retains_first_action_and_exact_fixed_policy() {
 
 #[test]
 fn consumer_policy_never_registers_foundation_qualification() {
-    assert!(
-        files_for_policy(WorkflowPolicy::ConsumerV1, &source::fixture())
-            .expect("consumer policy")
-            .is_empty()
+    assert_eq!(
+        files_for_policy(WorkflowPolicy::ConsumerV1, &source::fixture()).expect("consumer policy"),
+        [] as [velnor_actions_workflow_renderer::RenderedFile; 0]
     );
 }
 

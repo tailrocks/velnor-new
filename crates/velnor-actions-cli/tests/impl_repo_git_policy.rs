@@ -8,7 +8,7 @@ use crate::impl_repo_policy::{read, repo_root};
 
 #[test]
 fn lockfile_committed_and_locked_used() -> Result<(), Box<dyn Error>> {
-    assert!(!read("Cargo.lock")?.trim().is_empty());
+    assert_ne!(read("Cargo.lock")?.trim(), "");
     let tracked = git_fixture::command(&repo_root())?
         .arg("ls-files")
         .arg("--error-unmatch")

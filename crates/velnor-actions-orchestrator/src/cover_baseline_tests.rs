@@ -11,6 +11,7 @@ fn baseline_publish_and_download_rules() {
     assert!(!publish_event_eligible(WorkflowEvent::MergeGroup));
     let base = "a".repeat(40);
     let dir = Path::new("/tmp/x");
+    let empty_args: [std::ffi::OsString; 0] = [];
     let name = format!("velnor-baseline-{base}-{}", digest_b3(b"c"));
     let named: Vec<String> = baseline_download_args(
         &base,
@@ -27,8 +28,10 @@ fn baseline_publish_and_download_rules() {
     assert_eq!(&named[0..4], &["run", "download", "7", "--name"]);
     assert_eq!(named[4], name);
     assert_eq!(&named[named.len() - 2..], &["--repo", "o/r"]);
-    assert!(baseline_download_args(&base, "w", "b", None, 7, dir, "o/r").is_empty());
-    assert!(baseline_download_args(&base, "w", "b", Some(""), 7, dir, "o/r").is_empty());
+    let no_artifact_args = baseline_download_args(&base, "w", "b", None, 7, dir, "o/r");
+    assert_eq!(no_artifact_args, empty_args);
+    let empty_name_args = baseline_download_args(&base, "w", "b", Some(""), 7, dir, "o/r");
+    assert_eq!(empty_name_args, empty_args);
     assert!(
         baseline_download_args(&base, "w", "b", Some(&name), 7, dir, "not-a-slug").is_empty(),
         "a malformed repo yields no unscoped command"

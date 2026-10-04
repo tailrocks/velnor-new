@@ -81,7 +81,7 @@ fn chdir_findings_name_each_subdir_root_once() {
         .push(velnor_actions_tofu::propose_task(&group).expect("proposes"));
     let mut silent = Vec::new();
     push_chdir_findings(&root_only, &mut silent).expect("valid repo root");
-    assert!(silent.is_empty());
+    assert_eq!(silent, [] as [String; 0]);
 }
 
 #[test]
@@ -96,7 +96,7 @@ fn selected_roots_derive_from_selected_statuses_only() {
     };
     let roots = tofu_selected_roots(&[selected("stacks/b"), selected(""), ignored]);
     assert_eq!(roots, vec![String::new(), "stacks/b".to_owned()]);
-    assert!(tofu_selected_roots(&[]).is_empty());
+    assert_eq!(tofu_selected_roots(&[]), [] as [String; 0]);
 }
 
 #[test]
@@ -233,7 +233,7 @@ fn no_tofu_roots_passes_through_without_git() {
     .expect("passthrough");
     assert_eq!(rust, changed);
     assert!(tofu.is_empty());
-    assert!(warnings.is_empty());
+    assert_eq!(warnings, [] as [String; 0]);
 }
 
 #[test]

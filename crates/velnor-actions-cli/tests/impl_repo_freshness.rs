@@ -56,15 +56,38 @@ fn gape2_seed_rules_documented() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn rq211_lock_staleness_probe() -> Result<(), Box<dyn Error>> {
-    let script = read("scripts/check-freshness.sh")?;
-    assert!(
-        script.contains("lock-staleness"),
-        "script must probe staleness"
+    let fixture = crate::impl_repo_policy::p12_harness::passing("p12-rq211")?;
+    let baseline = crate::impl_repo_policy::p12_harness::run_script(&fixture.dir, &[])?;
+    crate::impl_repo_policy::p12_harness::assert_clean(&baseline);
+
+    crate::impl_repo_policy::p12_harness::mutate(
+        &fixture.dir,
+        "Cargo.lock",
+        "name = \"serde_json\"\nversion = \"1.0.100\"",
+        "name = \"serde_json\"\nversion = \"1.0.101\"",
+    )?;
+    let stale_lock = crate::impl_repo_policy::p12_harness::run_script(&fixture.dir, &[])?;
+    crate::impl_repo_policy::p12_harness::assert_fail(&stale_lock, "has no locked identity");
+
+    crate::impl_repo_policy::p12_harness::mutate(
+        &fixture.dir,
+        "Cargo.lock",
+        "name = \"serde_json\"\nversion = \"1.0.101\"",
+        "name = \"serde_json\"\nversion = \"1.0.100\"",
+    )?;
+    crate::impl_repo_policy::p12_harness::mutate(
+        &fixture.dir,
+        "crates/aaa/Cargo.toml",
+        "serde_json = \"=1.0.100\"",
+        "serde_json = \"1.0.100\"",
+    )?;
+    let inexact_requirement = crate::impl_repo_policy::p12_harness::run_script(&fixture.dir, &[])?;
+    crate::impl_repo_policy::p12_harness::assert_fail(
+        &inexact_requirement,
+        "exact `=x.y.z` (VER-2.26)",
     );
-    assert!(
-        script.contains("exact `=x.y.z` (VER-2.26)"),
-        "direct deps must declare exact versions"
-    );
+    crate::impl_repo_policy::p12_harness::cleanup(&fixture);
+
     let procedure = read("docs/implemented/update-procedure.md")?;
     assert!(
         procedure.contains("MUST NOT remain stale"),

@@ -15,7 +15,7 @@ mod p11_metadata;
 #[path = "fixtures/p11_toml.rs"]
 pub(crate) mod p11_toml;
 #[path = "fixtures/p12_harness.rs"]
-mod p12_harness;
+pub(crate) mod p12_harness;
 #[path = "fixtures/p12_live.rs"]
 mod p12_live;
 #[path = "fixtures/p12_manifest.rs"]

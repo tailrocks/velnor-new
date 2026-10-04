@@ -131,7 +131,7 @@ mod tests {
         let root = rooted("schema = 1\n[stacks.rust]\n");
         let config = load(root.path()).expect("rust config");
         let rust = config.stacks.rust.expect("rust stack");
-        assert!(rust.custom_tasks.is_empty());
+        assert_eq!(rust.custom_tasks, [] as [String; 0]);
     }
 
     #[test]

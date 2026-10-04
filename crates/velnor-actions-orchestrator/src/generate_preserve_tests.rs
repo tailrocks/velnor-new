@@ -43,7 +43,7 @@ fn replace_with_cleanup_policy(root: &Path, readonly_backup: bool) -> TestResult
                 .all(|warning| warning.starts_with("backup_cleanup_failed:"))
         );
     } else {
-        assert!(warnings.is_empty());
+        assert_eq!(warnings, [] as [String; 0]);
     }
     Ok(())
 }
