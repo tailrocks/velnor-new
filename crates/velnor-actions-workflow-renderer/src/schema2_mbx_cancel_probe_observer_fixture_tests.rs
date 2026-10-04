@@ -1,0 +1,354 @@
+//! Same-step log order must place partial SDK progress before runner cancellation error.
+
+use std::collections::BTreeMap;
+use std::error::Error;
+use std::fs;
+use std::path::{Path, PathBuf};
+
+use super::controller_fixtures::{Fixture, expected_key};
+use super::{prepare_observer_root, run_bash};
+use crate::schema2::mbx_cancel_probe::scripts;
+
+#[path = "schema2_mbx_cancel_probe_observer_skipped_receipt_tests.rs"]
+mod skipped_receipt_tests;
+
+struct EvidenceRun {
+    progress_precedes_runner_error: bool,
+    env: BTreeMap<String, String>,
+    observer: PathBuf,
+    curl_log: PathBuf,
+}
+
+#[test]
+fn log_evidence_requires_partial_progress_before_exact_runner_error() -> Result<(), Box<dyn Error>>
+{
+    for mode in [
+        "missing",
+        "malformed",
+        "large-header",
+        "large-body",
+        "signed-http-redirect",
+        "no-marker",
+        "valid-progress",
+        "rounded100-progress",
+        "clock-skew-progress-after",
+        "reverse-record-order",
+        "partial-without-runner-error",
+        "malformed-runner-error",
+        "zero-progress",
+        "complete-progress",
+        "malformed-progress",
+        "short-timestamp",
+        "wrong-separator",
+        "invalid-calendar",
+    ] {
+        assert_log_case(mode)?;
+    }
+    Ok(())
+}
+
+#[test]
+fn restore_errors_and_untrusted_logs_do_not_qualify_as_misses() -> Result<(), Box<dyn Error>> {
+    for (label, transport, restore) in [
+        ("restore-error", "good", "failed"),
+        ("restore-no-location", "missing", "clean"),
+        ("restore-http-location", "http-location", "clean"),
+        ("restore-unprefixed", "good", "unprefixed"),
+        ("restore-short-time", "good", "short-timestamp"),
+    ] {
+        let fixture = Fixture::new(label, false)?;
+        let key = expected_key();
+        let mut setup = prepare_evidence(&fixture, "valid-progress", &key)?;
+        setup
+            .env
+            .insert("RESTORE_TRANSPORT_MODE".to_owned(), transport.to_owned());
+        setup
+            .env
+            .insert("RESTORE_LOG_MODE".to_owned(), restore.to_owned());
+        execute_evidence(label, &fixture, &setup)?;
+        let evidence = fs::read_to_string(setup.observer.join("child-evidence.json"))?;
+        assert!(
+            evidence.contains("\"progress_before_runner_cancel_error\":true"),
+            "{evidence}"
+        );
+        assert!(
+            evidence.contains("\"restore_clean_miss\":false"),
+            "{evidence}"
+        );
+        assert_classification(&fixture, setup.env, &setup.observer, &key, false)?;
+        fs::remove_dir_all(fixture.root)?;
+    }
+    let fixture = Fixture::new("restore-wrong-workflow", false)?;
+    let key = expected_key();
+    let mut setup = prepare_evidence(&fixture, "valid-progress", &key)?;
+    setup
+        .env
+        .insert("OBSERVER_WORKFLOW_ID".to_owned(), "78".to_owned());
+    execute_evidence("restore-wrong-workflow", &fixture, &setup)?;
+    let evidence = fs::read_to_string(setup.observer.join("child-evidence.json"))?;
+    assert!(
+        evidence.contains("\"restore_clean_miss\":false"),
+        "{evidence}"
+    );
+    assert!(!fs::read_to_string(&setup.curl_log)?.contains("restore-api"));
+    assert_classification(&fixture, setup.env, &setup.observer, &key, false)?;
+    fs::remove_dir_all(fixture.root)?;
+    Ok(())
+}
+
+fn assert_log_case(mode: &str) -> Result<(), Box<dyn Error>> {
+    let fixture = Fixture::new(&format!("log-{mode}"), false)?;
+    let key = expected_key();
+    let evidence = run_evidence(&fixture, mode, &key)?;
+    assert_classification(
+        &fixture,
+        evidence.env,
+        &evidence.observer,
+        &key,
+        evidence.progress_precedes_runner_error,
+    )?;
+    fs::remove_dir_all(fixture.root)?;
+    Ok(())
+}
+
+fn run_evidence(fixture: &Fixture, mode: &str, key: &str) -> Result<EvidenceRun, Box<dyn Error>> {
+    let setup = prepare_evidence(fixture, mode, key)?;
+    execute_evidence(mode, fixture, &setup)?;
+    validate_evidence(mode, key, &setup)?;
+    Ok(setup)
+}
+
+fn execute_evidence(
+    label: &str,
+    fixture: &Fixture,
+    setup: &EvidenceRun,
+) -> Result<(), Box<dyn Error>> {
+    let script = scripts::observer_evidence();
+    let output = run_bash(
+        &script,
+        &fixture.root,
+        &fixture.bin,
+        &setup
+            .env
+            .iter()
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect::<Vec<_>>(),
+    )?;
+    assert!(
+        output.status.success(),
+        "{}: {}",
+        label,
+        String::from_utf8_lossy(&output.stderr)
+    );
+    Ok(())
+}
+
+fn prepare_evidence(
+    fixture: &Fixture,
+    mode: &str,
+    key: &str,
+) -> Result<EvidenceRun, Box<dyn Error>> {
+    fixture.install_curl()?;
+    fixture.install_date()?;
+    let initial_env = fixture.env(&fixture.output("evidence"), "observer-window");
+    prepare_observer_root(&fixture.root, &fixture.bin, &initial_env)?;
+    let observer = fixture.root.join("mbx-cancel-observer/observer");
+    fs::write(
+        observer.join("cache-before.json"),
+        "{\"count\":0,\"caches\":[]}\n",
+    )?;
+    let summary = fixture.root.join("summary.md");
+    fs::write(&summary, "")?;
+    let event = fixture.root.join("controller-event.json");
+    fs::write(
+        &event,
+        r#"{"inputs":{"mode":"mbx-cancel-during-save-controller","probe_id":""}}"#,
+    )?;
+    let curl_log = fixture.root.join("curl.log");
+    let mut env = BTreeMap::from_iter(initial_env);
+    let marker = progress_marker(mode);
+    let controller_cancel_at = match mode {
+        "clock-skew-progress-after" => "1900-01-01T00:00:00Z",
+        "reverse-record-order" => "2100-01-01T00:00:00Z",
+        _ => "2026-10-04T00:00:10Z",
+    };
+    env.extend([
+        ("GH_TOKEN".to_owned(), "fixture-secret-token".to_owned()),
+        ("GITHUB_EVENT_PATH".to_owned(), event.display().to_string()),
+        (
+            "OBSERVER_JOB_NAME".to_owned(),
+            "MBX cancellation / during-save fresh observer".to_owned(),
+        ),
+        ("DERIVED_KEY".to_owned(), key.to_owned()),
+        ("RESTORE_PRIMARY_KEY".to_owned(), key.to_owned()),
+        ("RESTORE_CONCLUSION".to_owned(), "success".to_owned()),
+        ("RESTORE_LOG_MODE".to_owned(), "clean".to_owned()),
+        ("RESTORE_TRANSPORT_MODE".to_owned(), "good".to_owned()),
+        ("VALIDATED_CACHE_KEY".to_owned(), key.to_owned()),
+        ("CURL_LOG".to_owned(), curl_log.display().to_string()),
+        ("CURL_LOCATION_MODE".to_owned(), mode.to_owned()),
+        ("CURL_MARKER".to_owned(), marker.to_owned()),
+        (
+            "CHILD_SOURCE_SHA".to_owned(),
+            super::controller_fixtures::SOURCE_SHA.to_owned(),
+        ),
+        ("CHILD_ACTOR".to_owned(), "github-actions[bot]".to_owned()),
+        ("CONTROLLER_CANCEL_REQUESTED".to_owned(), "true".to_owned()),
+        ("CONTROLLER_CANCEL_STATUS".to_owned(), "202".to_owned()),
+        ("CONTROLLER_POST_REVALIDATED".to_owned(), "true".to_owned()),
+        (
+            "CONTROLLER_CANCEL_AT".to_owned(),
+            controller_cancel_at.to_owned(),
+        ),
+        ("CONTROLLER_BEFORE_COUNT".to_owned(), "0".to_owned()),
+        (
+            "GITHUB_STEP_SUMMARY".to_owned(),
+            summary.display().to_string(),
+        ),
+    ]);
+    let evidence_path = fixture.output("evidence");
+    fs::write(&evidence_path, "")?;
+    env.insert(
+        "GITHUB_OUTPUT".to_owned(),
+        evidence_path.display().to_string(),
+    );
+    Ok(EvidenceRun {
+        progress_precedes_runner_error: matches!(
+            mode,
+            "valid-progress" | "rounded100-progress" | "clock-skew-progress-after"
+        ),
+        env,
+        observer,
+        curl_log,
+    })
+}
+
+fn progress_marker(mode: &str) -> &'static str {
+    match mode {
+        "valid-progress" => "partial",
+        "rounded100-progress" => "rounded100",
+        "clock-skew-progress-after" => "clock-skew",
+        "reverse-record-order" => "reverse",
+        "partial-without-runner-error" => "partial-no-error",
+        "malformed-runner-error" => "malformed-error",
+        "zero-progress" => "zero",
+        "complete-progress" => "complete",
+        "malformed-progress" => "malformed",
+        "short-timestamp" => "short-timestamp",
+        "wrong-separator" => "wrong-separator",
+        "invalid-calendar" => "invalid-calendar",
+        _ => "false",
+    }
+}
+
+fn validate_evidence(mode: &str, key: &str, setup: &EvidenceRun) -> Result<(), Box<dyn Error>> {
+    let evidence = fs::read_to_string(setup.observer.join("child-evidence.json"))?;
+    let requests = if setup.curl_log.exists() {
+        fs::read_to_string(&setup.curl_log)?
+    } else {
+        String::new()
+    };
+    assert!(
+        evidence.contains(&format!(
+            "\"progress_before_runner_cancel_error\":{}",
+            setup.progress_precedes_runner_error
+        )),
+        "{evidence}; requests={requests}"
+    );
+    assert!(
+        evidence.contains("\"restore_clean_miss\":true"),
+        "{evidence}"
+    );
+    if setup.progress_precedes_runner_error {
+        assert!(
+            evidence.contains("positive_partial_sdk_progress_precedes_runner_cancel_error"),
+            "{evidence}"
+        );
+    }
+    assert!(key.contains("velnor-mbx-1.22.0-dir-rust-1.98.1"));
+    assert!(!evidence.contains("signed.example"));
+    assert!(!evidence.contains("fixture-secret-token"));
+    assert!(!setup.observer.join("save-log-response.txt").exists());
+    assert!(!setup.observer.join("save-step.log").exists());
+    assert!(!setup.observer.join("save-log-download.headers").exists());
+    assert!(!setup.observer.join("save-log.curlrc").exists());
+    assert!(!setup.observer.join("save-log-api-status").exists());
+    assert!(!setup.observer.join("restore-step.log").exists());
+    assert!(!setup.observer.join("restore-log.curlrc").exists());
+    assert_log_requests(&setup.curl_log, mode)?;
+    Ok(())
+}
+
+fn assert_log_requests(path: &Path, mode: &str) -> Result<(), Box<dyn Error>> {
+    let requests = fs::read_to_string(path)?;
+    let lines = requests.lines().collect::<Vec<_>>();
+    assert_eq!(
+        lines.first(),
+        Some(
+            &"observer-api https://api.github.com/repos/tailrocks/velnor-new/actions/jobs/456/steps/2/logs true"
+        )
+    );
+    let child_signed = mode != "missing" && mode != "malformed" && mode != "large-header";
+    if child_signed {
+        assert_eq!(lines.get(1), Some(&"observer-signed authorized=false"));
+    }
+    let restore_at = 1 + usize::from(child_signed);
+    assert_eq!(lines.get(restore_at), Some(&"restore-api authorized=true"));
+    assert_eq!(
+        lines.get(restore_at + 1),
+        Some(&"restore-signed authorized=false")
+    );
+    Ok(())
+}
+
+fn assert_classification(
+    fixture: &Fixture,
+    mut env: BTreeMap<String, String>,
+    observer: &Path,
+    key: &str,
+    expected_miss: bool,
+) -> Result<(), Box<dyn Error>> {
+    env.extend([
+        ("SHOULD_OBSERVE".to_owned(), "true".to_owned()),
+        ("DERIVED_KEY".to_owned(), key.to_owned()),
+        ("VALIDATED_CACHE_KEY".to_owned(), key.to_owned()),
+        ("RESTORE_HIT".to_owned(), String::new()),
+        ("MATCHED_KEY".to_owned(), String::new()),
+        ("RESTORE_PRIMARY_KEY".to_owned(), key.to_owned()),
+        ("RESTORE_CONCLUSION".to_owned(), "success".to_owned()),
+        ("CONTROLLER_READY".to_owned(), "true".to_owned()),
+        (
+            "CONTROLLER_READY_REASON".to_owned(),
+            "exact_identity_and_cancel_window_ready".to_owned(),
+        ),
+        ("CONTROLLER_CANCEL_STATUS".to_owned(), "202".to_owned()),
+        ("CONTROLLER_POST_REVALIDATED".to_owned(), "true".to_owned()),
+        ("CONTROLLER_TERMINAL".to_owned(), "true".to_owned()),
+        (
+            "CONTROLLER_TERMINAL_STATE".to_owned(),
+            "completed/cancelled".to_owned(),
+        ),
+        ("GENERATION".to_owned(), "velnor-mbx-1.22.0".to_owned()),
+    ]);
+    let output = fixture.output("classify");
+    fs::write(&output, "")?;
+    env.insert("GITHUB_OUTPUT".to_owned(), output.display().to_string());
+    let classified = run_bash(
+        scripts::OBSERVER_CLASSIFY,
+        &fixture.root,
+        &fixture.bin,
+        &env.into_iter().collect::<Vec<_>>(),
+    )?;
+    assert!(classified.status.success());
+    let result = fs::read_to_string(observer.join("result.json"))?;
+    if expected_miss {
+        assert!(result.contains("\"outcome\":\"MISS\""), "{result}");
+        assert!(
+            result.contains("\"reservation_state\":\"UNKNOWN\""),
+            "{result}"
+        );
+    } else {
+        assert!(result.contains("\"outcome\":\"NOT_RUN\""), "{result}");
+    }
+    Ok(())
+}
