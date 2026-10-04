@@ -269,12 +269,7 @@ fn copy_symlink(source: &Path, destination: &Path) -> Result<(), OrchestratorErr
             .mode()
             & 0o7777;
         if mode != copied_mode {
-            let raw_mode = mode.try_into().map_err(|error| {
-                OrchestratorError::io(
-                    destination.display().to_string(),
-                    format!("symlink_mode_invalid:{error}"),
-                )
-            })?;
+            let raw_mode = checked_raw_mode::<rustix::fs::RawMode>(mode, destination)?;
             rustix::fs::chmodat(
                 rustix::fs::CWD,
                 destination,
@@ -297,6 +292,21 @@ fn copy_symlink(source: &Path, destination: &Path) -> Result<(), OrchestratorErr
         };
         result.map_err(|error| io(destination, &error))
     }
+}
+
+/// Convert Unix permission bits to Rustix's platform-specific raw mode type.
+#[cfg(unix)]
+fn checked_raw_mode<RawMode>(mode: u32, path: &Path) -> Result<RawMode, OrchestratorError>
+where
+    RawMode: TryFrom<u32>,
+    RawMode::Error: std::fmt::Display,
+{
+    mode.try_into().map_err(|error| {
+        OrchestratorError::io(
+            path.display().to_string(),
+            format!("symlink_mode_invalid:{error}"),
+        )
+    })
 }
 
 /// Attach the path that failed to preserve or publish output.
