@@ -24,10 +24,27 @@ const QUALIFICATION_GATE: &str = "inputs.mode == 'mbx-cache-roundtrip' && github
 pub(super) const MBX_CACHE_ACTION_STEP: &str = MBX_SETUP_NAME;
 const CACHE_COMPRESSION_PROBE: &str = r#"set -eu; command -v zstd >/dev/null; zstd --version > "$RUNNER_TEMP/mbx-cache-zstd-version"; tar --version > "$RUNNER_TEMP/mbx-cache-tar-version"; grep -Fq 'GNU tar' "$RUNNER_TEMP/mbx-cache-tar-version""#;
 const SMOKE_CRATE: &str = r#"set -eu; root="$GITHUB_WORKSPACE/.velnor-mbx-cache-qualification"; mkdir -p "$root/src"; printf '[package]\nname = "mbx-cache-qualification"\nversion = "0.1.0"\nedition = "2024"\n\n[workspace]\nmembers = ["."]\nresolver = "3"\n\n[lib]\npath = "src/lib.rs"\n' > "$root/Cargo.toml"; printf 'pub fn cache_probe() -> u64 { 42 }\n' > "$root/src/lib.rs"; mbx build --manifest-path "$root/Cargo.toml""#;
-const IMPORT_PROBE: &str = "mbx cache stats --json | jq -e '.objects > 0' >/dev/null";
-const REUSE_PROBE: &str = "mbx stats --json | jq -e '.savings.cached_compilations > 0' >/dev/null";
-const COLD_REUSE_PROBE: &str =
-    "mbx stats --json | jq -e '.savings.cached_compilations == 0' >/dev/null";
+const IMPORT_PROBE: &str = r#"set -euo pipefail
+evidence="$RUNNER_TEMP/mbx-cache-evidence"
+bash "$evidence/sampler.sh" "$evidence" "$RUNNER_TEMP" "$GITHUB_ENV" "$MBX_QUALIFICATION_SAMPLE_INTERVAL" validate
+. "$evidence/path-validation.sh"
+file="$evidence/mbx-cache-stats-import-step-end.json"
+resource_json_single_object "$evidence" "$file"
+jq -e '.objects > 0' "$file" >/dev/null"#;
+const REUSE_PROBE: &str = r#"set -euo pipefail
+evidence="$RUNNER_TEMP/mbx-cache-evidence"
+bash "$evidence/sampler.sh" "$evidence" "$RUNNER_TEMP" "$GITHUB_ENV" "$MBX_QUALIFICATION_SAMPLE_INTERVAL" validate
+. "$evidence/path-validation.sh"
+file="$evidence/mbx-stats-build-end.json"
+resource_json_single_object "$evidence" "$file"
+jq -e '.savings.cached_compilations > 0' "$file" >/dev/null"#;
+const COLD_REUSE_PROBE: &str = r#"set -euo pipefail
+evidence="$RUNNER_TEMP/mbx-cache-evidence"
+bash "$evidence/sampler.sh" "$evidence" "$RUNNER_TEMP" "$GITHUB_ENV" "$MBX_QUALIFICATION_SAMPLE_INTERVAL" validate
+. "$evidence/path-validation.sh"
+file="$evidence/mbx-stats-build-end.json"
+resource_json_single_object "$evidence" "$file"
+jq -e '.savings.cached_compilations == 0' "$file" >/dev/null"#;
 
 /// Emit roundtrip, corruption, and parallel jobs for the pinned MBX runtime.
 ///

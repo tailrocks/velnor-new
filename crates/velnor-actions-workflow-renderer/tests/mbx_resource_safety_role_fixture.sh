@@ -141,7 +141,7 @@ verify_resource_role_classes() {
       fail "role classifier did not map $role to cold"
     fi
   done
-  for role in reader reader-a reader-b corrupt-reader; do
+  for role in reader reader-a reader-b corrupt-reader observer-shared observer-new; do
     export MBX_QUALIFICATION_ROLE="$role"
     if actual=$(resource_role_class) && [[ "$actual" == hit ]]; then
       pass "role classifier maps $role to hit"

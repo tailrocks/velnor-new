@@ -4,16 +4,15 @@ set -euo pipefail
 evidence="$1"
 runner_temp="$2"
 interval="$4"
-mode="${5:-sample}"
-label="${6:-}"
-max_files=20000
-max_hash_bytes=$((1024 * 1024 * 1024))
+mode="${5:-sample}"; label="${6:-}"
+max_files=20000; max_hash_bytes=$((1024 * 1024 * 1024))
 walk_ancestor_paths=()
 walk_ancestor_ids=()
 
 [[ -d "$evidence" && ! -L "$evidence" && -f "$evidence/path-validation.sh" && ! -L "$evidence/path-validation.sh" ]] || exit 1
 [[ "$(realpath -e -- "$evidence")" == "$evidence" && \
   "$(stat -c '%h:%a:%u:%g' -- "$evidence/path-validation.sh")" == "1:700:$(id -u):$(id -g)" ]] || exit 1
+printf '5afb3b3a0be3511b069371e84ee012dce25f6dd58130165eefb7cb547c1ada76  %s\n' "$evidence/path-validation.sh" | sha256sum --check --status || exit 1
 . "$evidence/path-validation.sh"
 
 utc_now() { date -u +%Y-%m-%dT%H:%M:%S.%NZ; }

@@ -6,9 +6,11 @@ const CORRUPTOR_SHA256: &str = "dc043b77adb5f541ddff3a0d8c7a31288864709caf333b78
 pub(super) const MUTATE_NAME: &str = "Corrupt restored MBX bundle payload";
 pub(super) const VERIFY_IMPORT_NAME: &str = "Verify corrupt import selected a cold MBX store";
 
-pub(super) const VERIFY_IMPORT_SCRIPT: &str = r#"set -eu
+pub(super) const VERIFY_IMPORT_SCRIPT: &str = r#"set -euo pipefail
+umask 077
 evidence="$RUNNER_TEMP/mbx-cache-evidence"
 bash "$evidence/sampler.sh" "$evidence" "$RUNNER_TEMP" "$GITHUB_ENV" "$MBX_QUALIFICATION_SAMPLE_INTERVAL" validate
+. "$evidence/path-validation.sh"
 receipt="$MBX_QUALIFICATION_IMPORT_RECEIPT"
 test -s "$receipt"
 test "$(head -n 1 "$receipt")" = 'command=import'
@@ -31,8 +33,10 @@ case "$selected_real" in "$runner_temp"/*) ;; *) echo 'selected fallback root es
 test -d "$selected_root"
 test ! -e "$evidence/fallback-cache-root.txt"
 printf '%s\n' "$selected_root" > "$evidence/fallback-cache-root.txt"
-mbx cache stats --json > "$evidence/corrupt-cache-stats-before-build.json"
-mbx stats --json > "$evidence/corrupt-mbx-stats-before-build.json"
+resource_capture_bounded "$evidence" "$evidence/corrupt-cache-stats-before-build.json" mbx cache stats --json
+resource_capture_bounded "$evidence" "$evidence/corrupt-mbx-stats-before-build.json" mbx stats --json
+resource_json_single_object "$evidence" "$evidence/corrupt-cache-stats-before-build.json"
+resource_json_single_object "$evidence" "$evidence/corrupt-mbx-stats-before-build.json"
 jq -e '.objects == 0 and .action_results == 0' "$evidence/corrupt-cache-stats-before-build.json" >/dev/null
 jq -e '.savings.cached_compilations == 0' "$evidence/corrupt-mbx-stats-before-build.json" >/dev/null
 printf '%s\t%s\n' "$(date -u +%Y-%m-%dT%H:%M:%S.%NZ)" corrupt-import-cold-store-verified >> "$MBX_QUALIFICATION_PHASE_FILE"
