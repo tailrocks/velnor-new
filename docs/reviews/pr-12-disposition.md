@@ -140,17 +140,29 @@ owners.
 - MBX hosted writer/reader, cache-version/path reuse, cancellation, corrupt
   import, parallel writer, ChainArgos workload peak bytes/inodes, and disk
   pressure remain `PARTIAL`.
-- Published archive recovery and the six protected archive anchor tags are
-  complete. Consumer migration and six-ref retirement remain
-  `TEMPORARY-HOLD`: the 46-default + relevant-PR union found no snapshot SHAs
-  and recorded three owner holds; 45 workflows still use 0.1.0 and ChainArgos
-  generator migration remains held. Recheck live consumers, preserve action
-  SHA history, complete owner checkpoints, then run a separate exact-ref
-  deletion review. Do not delete the three out-of-scope MBX refs.
-- Release publication remains unqualified: `generator-release` environment
-  requires self-review prevention and protected branches, but GitHub reports
-  `can_admins_bypass=true`; BOOT-4.2 still lacks two distinct administrator
-  approvals and an independent reproducible rebuild receipt.
+- Published archive recovery is complete: immutable release `402793692` has
+  fresh-download proof with original JSON digest
+  `07b853c18389042bb8adde7051b4a188f562f5ba461eb1112e4ac8afeba7c50f`; the
+  183-commit enumeration addendum digest is
+  `68f84758234395a049e83c17070403915d07ada1a92bbe9c4b6785ebb21cada0`. The
+  [archive ledger](archive-proof-2026-10-04/snapshot-retirement-ledger.md)
+  records six protected anchors. These proofs do not establish historical
+  Action SHA resolution or authorize deletion.
+- Consumer migration and six-ref retirement remain `TEMPORARY-HOLD`. The
+  audited 46-default + relevant-PR union found no snapshot SHAs and recorded
+  three owner holds; 45 workflows still use 0.1.0 and ChainArgos generator
+  migration remains held. Recheck live consumers, preserve action-SHA history,
+  complete owner checkpoints, then run a separate exact-ref deletion review.
+  Do not delete the three out-of-scope MBX refs.
+- Release publication remains unqualified. Environment `generator-release`
+  (`23405613232`) has a required reviewer, self-review prevention, and
+  protected-branch-only policy, but GitHub reports `can_admins_bypass=true`.
+  The REST schema does not expose that setting; the bounded UI attempt failed
+  because no browser surface was available (`cgWindowNotFound`). No setting
+  changed. Owner `@donbeave` must disable administrator bypass through the
+  logged-in GitHub environment settings and verify readback. BOOT-4.2 still
+  lacks two distinct administrator approvals and an independent reproducible
+  rebuild receipt; environment setup does not satisfy either receipt.
 
 ### Required final refresh before PR #12 closure
 
