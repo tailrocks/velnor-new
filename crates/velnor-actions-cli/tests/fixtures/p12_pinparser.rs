@@ -15,15 +15,31 @@ fn read_catalog(fixture: &harness::Fixture) -> Result<String, Box<dyn Error>> {
 #[test]
 fn comments_strings_macros_and_nested_modules_are_decoys() -> Result<(), Box<dyn Error>> {
     let fixture = harness::passing("p12-pinparser-decoys")?;
-    let source = format!(
-        "// pub const MISE_VERSION: &str = \"0.0.0\";\n\
-         const NOTE: &str = \"pub const MISE_VERSION: &str = \\\"0.0.0\\\";\";\n\
-         const RAW: &str = r###\"pub const MISE_VERSION: &str = \"fake\";\"###;\n\
-         macro_rules! fake {{ () => {{ pub const MISE_VERSION: &str = \"0.0.0\"; }} }}\n\
-         #[cfg(any())] mod nested {{ pub const MISE_VERSION: &str = \"0.0.0\"; }}\n\
-         {}",
-        read_catalog(&fixture)?
-    );
+    let decoys = r#####"
+// pub const MISE_VERSION: &str = "0.0.0";
+/* Outer /* pub const MISE_VERSION: &str = "0.0.0"; */ decoy. */
+const NOTE: &str = "pub const MISE_VERSION: &str = \"0.0.0\";";
+const RAW_NOTE: &str = r###"pub const MISE_VERSION: &str = "fake";"###;
+const BYTE: &[u8] = b"pub const MISE_VERSION: &str = \"fake\";";
+const RAW_BYTE: &[u8] = br#"pub const MISE_VERSION: &str = "fake";"#;
+const C: &CStr = c"pub const MISE_VERSION: &str = \"fake\";";
+const RAW_C: &CStr = cr##"pub const MISE_VERSION: &str = "fake";"##;
+const OPEN: char = '{';
+#[cfg(any())]
+mod nested { pub const MISE_VERSION: &str = "0.0.0"; }
+#[cfg_attr(any(), cfg(any()))]
+mod nested_cfg_attr { pub const MISE_VERSION: &str = "0.0.0"; }
+struct Holder;
+impl Holder { pub const MISE_VERSION: &str = "0.0.0"; }
+macro_rules! fake_brace { ($($tokens:tt)*) => {}; }
+macro_rules! fake_paren ( ($($tokens:tt)*) => {} );
+macro_rules! fake_bracket [ ($($tokens:tt)*) => {} ];
+fake_brace! { pub const MISE_VERSION: &str = "0.0.0"; }
+fake_paren! (pub const MISE_VERSION: &str = "0.0.0";);
+fake_bracket! [pub const MISE_VERSION: &str = "0.0.0";];
+"#####;
+    let mut source = decoys.to_owned();
+    source.push_str(&read_catalog(&fixture)?);
     harness::write(&fixture.dir, CATALOG, &source)?;
     let run = harness::run_script(&fixture.dir, &[])?;
     harness::assert_clean(&run);
@@ -92,6 +108,17 @@ fn duplicate_conditional_and_expression_pins_fail_closed() -> Result<(), Box<dyn
     let run = harness::run_script(&conditional.dir, &[])?;
     harness::assert_fail(&run, "unsupported authority attribute");
     harness::cleanup(&conditional);
+
+    let cfg_attr = harness::passing("p12-pinparser-cfg-attr")?;
+    harness::mutate(
+        &cfg_attr.dir,
+        CATALOG,
+        "pub const MISE_VERSION",
+        "#[cfg_attr(any(), cfg(any()))]\npub const MISE_VERSION",
+    )?;
+    let run = harness::run_script(&cfg_attr.dir, &[])?;
+    harness::assert_fail(&run, "unsupported authority attribute");
+    harness::cleanup(&cfg_attr);
 
     let expression = harness::passing("p12-pinparser-expression")?;
     harness::mutate(
@@ -171,6 +198,40 @@ fn invalid_utf8_source_fails_closed() -> Result<(), Box<dyn Error>> {
     let run = harness::run_script(&fixture.dir, &[])?;
     harness::assert_fail(&run, "unsupported Rust source");
     harness::cleanup(&fixture);
+    Ok(())
+}
+
+#[test]
+fn malformed_character_group_fails_before_pin_selection() -> Result<(), Box<dyn Error>> {
+    let fixture = harness::passing("p12-pinparser-malformed-char")?;
+    let source = read_catalog(&fixture)?;
+    harness::write(
+        &fixture.dir,
+        CATALOG,
+        &format!("const BAD: char = '{{;\n{source}"),
+    )?;
+    let run = harness::run_script(&fixture.dir, &[])?;
+    harness::assert_fail(&run, "unsupported Rust source");
+    harness::cleanup(&fixture);
+    Ok(())
+}
+
+#[test]
+fn unterminated_rust_lexical_forms_fail_closed() -> Result<(), Box<dyn Error>> {
+    for (label, malformed) in [
+        ("block-comment", "/*"),
+        ("cooked-string", "const BAD: &str = \"unfinished;"),
+        ("raw-string", "const BAD: &str = r##\"unfinished;"),
+        ("character", "const BAD: char = '\\u{31};"),
+        ("group", "const BAD = ("),
+    ] {
+        let fixture = harness::passing(&format!("p12-pinparser-unclosed-{label}"))?;
+        let source = read_catalog(&fixture)?;
+        harness::write(&fixture.dir, CATALOG, &format!("{malformed}\n{source}"))?;
+        let run = harness::run_script(&fixture.dir, &[])?;
+        harness::assert_fail(&run, "unsupported Rust source");
+        harness::cleanup(&fixture);
+    }
     Ok(())
 }
 
