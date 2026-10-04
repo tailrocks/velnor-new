@@ -2,8 +2,8 @@
 use std::collections::BTreeMap;
 use velnor_actions_contract::{
     ActionPin, ContractError, GeneratorBinary, GeneratorLock, GeneratorValidation, LockedGenerator,
-    MiseBootstrap, ReleaseManifest, SUPPORTED_TARGETS, TargetRecord, WorkflowPolicy,
-    asset_filename,
+    MiseBootstrap, PullRequestCachePolicy, ReleaseManifest, SUPPORTED_TARGETS, TargetRecord,
+    WorkflowPolicy, asset_filename,
 };
 
 #[test]
@@ -22,6 +22,7 @@ fn config_validation_reports_key_paths() {
             default_branch: None,
             generator_validation: GeneratorValidation::Bootstrap,
             max_parallel_jobs: 2,
+            pull_request_cache_policy: PullRequestCachePolicy::default(),
             runner_label: None,
         },
         resources: ResourcesConfig {
@@ -93,6 +94,7 @@ fn runner_label_uses_exact_catalog_match() {
             default_branch: None,
             generator_validation: velnor_actions_contract::GeneratorValidation::Bootstrap,
             max_parallel_jobs: 2,
+            pull_request_cache_policy: PullRequestCachePolicy::default(),
             runner_label: None,
         },
         resources: ResourcesConfig {
@@ -156,6 +158,7 @@ fn uppercase_rust_config_name_rejected_with_key_path() {
             default_branch: None,
             generator_validation: GeneratorValidation::Bootstrap,
             max_parallel_jobs: 2,
+            pull_request_cache_policy: PullRequestCachePolicy::default(),
             runner_label: None,
         },
         resources: ResourcesConfig {
