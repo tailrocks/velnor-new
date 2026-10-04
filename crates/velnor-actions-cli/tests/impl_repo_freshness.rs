@@ -56,13 +56,13 @@ fn gape2_seed_rules_documented() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn rq211_lock_staleness_probe() -> Result<(), Box<dyn Error>> {
-    let script = read("scripts/check-freshness.sh")?;
+    let checker = read("scripts/freshness_checks/lockfile.py")?;
     assert!(
-        script.contains("lock-staleness"),
-        "script must probe staleness"
+        checker.contains("lock-staleness"),
+        "lockfile checker must probe staleness"
     );
     assert!(
-        script.contains("exact `=x.y.z` (VER-2.26)"),
+        checker.contains("=x.y.z") && checker.contains("VER-2.26"),
         "direct deps must declare exact versions"
     );
     let procedure = read("docs/implemented/update-procedure.md")?;
