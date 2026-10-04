@@ -120,14 +120,16 @@ fn tofu_roots_join_the_package_inventory() -> TestResult {
             )
         })
         .collect();
+    let root_a = velnor_actions_tofu::key_for_root("stacks/a");
+    let root_b = velnor_actions_tofu::key_for_root("stacks/b");
     // The plan carries the full universe: both roots selected, each
     // with its triple listed; changed-work marks obligations, not rows.
     assert!(
-        rows.contains(&("stacks/a", true, vec!["selected"])),
+        rows.contains(&(root_a.as_str(), true, vec!["selected"])),
         "affected root selected: {rows:?}"
     );
     assert!(
-        rows.contains(&("stacks/b", true, vec!["selected"])),
+        rows.contains(&(root_b.as_str(), true, vec!["selected"])),
         "full universe keeps every root: {rows:?}"
     );
     let ids: Vec<&str> = plan
@@ -142,7 +144,7 @@ fn tofu_roots_join_the_package_inventory() -> TestResult {
     let tasks: Vec<&str> = plan
         .packages
         .iter()
-        .find(|row| row.package_id == "stacks/a")
+        .find(|row| row.package_id == root_a)
         .ok_or("stacks/a row")?
         .tasks
         .iter()
@@ -174,8 +176,9 @@ fn docs_only_marks_tofu_obligations_unchanged() -> TestResult {
             .collect::<Vec<_>>()
     );
     for root in ["stacks/a", "stacks/b"] {
+        let key = velnor_actions_tofu::key_for_root(root);
         assert!(
-            plan.packages.iter().any(|row| row.package_id == root),
+            plan.packages.iter().any(|row| row.package_id == key),
             "{root} row present"
         );
     }

@@ -234,6 +234,7 @@ fn provider_hit_validate_execution_aggregates_executed() {
     let plan = fixture_plan();
     let task_id = "stack/tofu/dir-737461636b732f61/validate/default";
     let task_digest = digest_b3(b"tofu-validate-task");
+    let locator = velnor_actions_tofu::tofu_root_locator("stacks/a").expect("valid exact root");
     let entry = MatrixEntry::derive(
         "tofu",
         task_id,
@@ -266,8 +267,7 @@ fn provider_hit_validate_execution_aggregates_executed() {
         not_selected_reason: None,
         cache: CacheOutcome {
             layer: CacheLayer::TofuProviders,
-            key: "velnor-v1-tofu-providers-x86_64-unknown-linux-gnu-1.13.1-stacks-a-0123456789ab"
-                .to_owned(),
+            key: format!("velnor-v1-tofu-providers-x86_64-unknown-linux-gnu-1.13.1-{locator}"),
             result: CacheResult::Hit,
             miss_reason: None,
         },

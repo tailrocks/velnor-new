@@ -19,7 +19,7 @@ use crate::task_identity::{DigestSlot, ExtensionInputs, TofuTaskIdentityExtensio
 /// Digests and root facts the orchestrator supplies per extension.
 #[derive(Debug, Clone)]
 pub struct TofuGroupExtensionInputs<'a> {
-    /// Tofu root key.
+    /// Exact `OpenTofu` root key: `dir-` plus lowercase UTF-8 hex.
     pub unit_id: &'a str,
     /// Workspace identity digest.
     pub workspace_id: &'a str,

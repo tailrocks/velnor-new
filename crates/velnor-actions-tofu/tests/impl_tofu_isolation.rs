@@ -1,9 +1,9 @@
 //! Tofu isolation data cases: isolation pairs, per-root data dirs, M4 CLI config.
 use std::ffi::OsString;
 use velnor_actions_tofu::{
-    TF_CLI_CONFIG_FILE_ENV, TF_DATA_DIR_ENV, TF_IN_AUTOMATION_ENV, TF_IN_AUTOMATION_ON,
-    TF_INPUT_ENV, TF_INPUT_OFF, TF_PLUGIN_CACHE_DIR_ENV, tofu_cache_dir_under, tofu_cli_config,
-    tofu_data_dir_under, tofu_isolation_env, tofu_root_locator,
+    MAX_CLI_CONFIG_PATH_BYTES, TF_CLI_CONFIG_FILE_ENV, TF_DATA_DIR_ENV, TF_IN_AUTOMATION_ENV,
+    TF_IN_AUTOMATION_ON, TF_INPUT_ENV, TF_INPUT_OFF, TF_PLUGIN_CACHE_DIR_ENV, tofu_cache_dir_under,
+    tofu_cli_config, tofu_data_dir_under, tofu_isolation_env, tofu_root_locator,
 };
 
 #[test]
@@ -47,9 +47,10 @@ fn isolation_env_is_automation_pair_plus_paths() {
 #[test]
 fn root_locators_are_fixed_length_deterministic_and_exact() {
     let roots = ["", "root", "A", "a", "a-b", "a_b", "a/b", "infra/日本語"];
+    let mut registry = velnor_actions_tofu::RootLocatorRegistry::default();
     let locators: std::collections::BTreeSet<String> = roots
         .iter()
-        .map(|root| tofu_root_locator(root).expect("locator"))
+        .map(|root| registry.admit(root).expect("locator admitted"))
         .collect();
     assert_eq!(locators.len(), roots.len());
     for root in roots {
@@ -120,10 +121,10 @@ fn data_dir_rejects_empty_base() {
 }
 
 #[test]
-fn cli_config_is_plugin_cache_plus_checkpoint_only() {
+fn cli_config_uses_direct_provider_installation() {
     assert_eq!(
         tofu_cli_config("/tmp/velnor/cache").expect("config renders"),
-        "plugin_cache_dir = \"/tmp/velnor/cache\"\ndisable_checkpoint = true\n"
+        "plugin_cache_dir = \"/tmp/velnor/cache\"\ndisable_checkpoint = true\nprovider_installation {\n  direct {}\n}\n"
     );
 }
 
@@ -137,14 +138,14 @@ fn cli_config_rejects_injection_and_oversize() {
         "/tmp/${var}",
         "/tmp/\t tab",
         "/tmp/\u{7f}del",
-        &"p".repeat(1025),
     ] {
         assert!(tofu_cli_config(bad).is_err(), "{bad:?} must fail closed");
     }
-    assert!(
-        tofu_cli_config(&"p".repeat(1024)).is_ok(),
-        "1024 bytes pass"
-    );
+    let at_limit = format!("/{}", "p".repeat(MAX_CLI_CONFIG_PATH_BYTES - 1));
+    assert!(tofu_cli_config(&at_limit).is_ok(), "1024 bytes pass");
+    let over_limit = format!("/{}", "p".repeat(MAX_CLI_CONFIG_PATH_BYTES));
+    let err = tofu_cli_config(&over_limit).expect_err("oversize path must fail");
+    assert!(err.to_string().contains("oversize_cache_dir"), "{err}");
     let err = tofu_cli_config("/tmp/${var}").expect_err("interpolation must fail");
     assert!(err.to_string().contains("interpolation"), "got {err}");
 }

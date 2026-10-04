@@ -1,4 +1,6 @@
-//! One admission boundary for root-bearing OpenTofu proposal fields.
+//! One admission boundary for root-bearing `OpenTofu` proposal fields.
+
+use std::collections::BTreeMap;
 
 use velnor_actions_contract::{ContractError, ProposedTask, component_id_for_unit};
 
@@ -42,4 +44,48 @@ pub fn normalized_root_for_proposal(task: &ProposedTask) -> Result<&str, Contrac
         ));
     }
     Ok(root)
+}
+
+/// Per-generation admission map for bounded filesystem root locators.
+#[derive(Debug, Default)]
+pub struct RootLocatorRegistry(BTreeMap<String, String>);
+
+impl RootLocatorRegistry {
+    /// Admit one exact normalized root and return its bounded locator.
+    /// # Errors
+    /// Rejects invalid roots or a locator already bound to different root bytes.
+    pub fn admit(&mut self, root: &str) -> Result<String, ContractError> {
+        let locator = crate::tofu_root_locator(root)?;
+        self.admit_binding(&locator, root)?;
+        Ok(locator)
+    }
+
+    fn admit_binding(&mut self, locator: &str, root: &str) -> Result<(), ContractError> {
+        if self.0.get(locator).is_some_and(|previous| previous != root) {
+            return Err(ContractError::identity("tofu_root", "locator_collision"));
+        }
+        self.0.insert(locator.to_owned(), root.to_owned());
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn locator_collision_admission_rejects_distinct_roots() {
+        let mut registry = RootLocatorRegistry::default();
+        registry
+            .admit_binding("forced-collision", "")
+            .expect("first root admitted");
+        registry
+            .admit_binding("forced-collision", "")
+            .expect("same root admitted");
+        let error = registry
+            .admit_binding("forced-collision", "root")
+            .expect_err("collision rejected");
+        assert!(error.to_string().contains("locator_collision"), "{error}");
+        assert_eq!(registry.0["forced-collision"], "");
+    }
 }

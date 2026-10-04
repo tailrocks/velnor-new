@@ -76,7 +76,7 @@ pub fn tofu_isolation_env(
     env
 }
 
-/// Fixed-length filesystem locator bound to one exact normalized root.
+/// `b3-` plus 64 lowercase hexadecimal digits, bound to one exact root.
 ///
 /// Semantic identity stays reversible in the `dir-<hex>` task key. This
 /// opaque locator keeps data and provider-cache paths bounded.
@@ -120,13 +120,12 @@ pub fn tofu_cache_dir_under(base: &str, root: &str) -> Result<String, ContractEr
     Ok(format!("{base}/{}", tofu_root_locator(root)?))
 }
 
-/// M4 CLI config content: `plugin_cache_dir` + `disable_checkpoint` only.
+/// M4 CLI config content: private cache, checkpoint disable, direct providers.
 ///
-/// No credentials, helpers, overrides, or mirrors: the cache dir is
-/// the sole interpolated value and it rejects HCL string breakouts
-/// (quotes, backslashes, control bytes, `${` interpolation) plus
-/// empty and oversize inputs. Callers stage the text into a temp file
-/// and point `TF_CLI_CONFIG_FILE` at it.
+/// No credentials, helpers, overrides, or mirrors. Explicit `direct {}`
+/// disables implied filesystem mirrors. The cache dir is the sole
+/// interpolated value; reject HCL breakouts, empty paths, and paths over
+/// [`MAX_CLI_CONFIG_PATH_BYTES`].
 ///
 /// # Errors
 ///
@@ -160,6 +159,6 @@ pub fn tofu_cli_config(cache_dir: &str) -> Result<String, ContractError> {
         ));
     }
     Ok(format!(
-        "plugin_cache_dir = \"{cache_dir}\"\ndisable_checkpoint = true\n"
+        "plugin_cache_dir = \"{cache_dir}\"\ndisable_checkpoint = true\nprovider_installation {{\n  direct {{}}\n}}\n"
     ))
 }

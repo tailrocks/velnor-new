@@ -97,7 +97,7 @@ fn tofu_shared_module_change_rides_plan_to_passed() -> TestResult {
             obligation.reason
         );
     }
-    let hit: Vec<&str> = reasons_for(&plan, "stacks/a");
+    let hit: Vec<&str> = reasons_for(&plan, &velnor_actions_tofu::key_for_root("stacks/a"));
     assert_eq!(hit.len(), 3, "calling triple propagates: {hit:?}");
     assert_eq!(merge_passing(&plan)?, FinalStatus::Passed);
     Ok(())

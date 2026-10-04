@@ -80,8 +80,9 @@ fn provider_hit_still_runs_init_and_validate() -> TestResult {
     use velnor_actions_contract::digest_b3;
     use velnor_actions_mise::restore_evidence::{RestoreObservation, verify_provider_restore};
     let bytes = b"provider bytes".to_vec();
+    let locator = velnor_actions_tofu::tofu_root_locator("stacks/a")?;
     let hit = RestoreObservation {
-        entry_path: "tofu-cache/root-0123456789ab/provider".to_owned(),
+        entry_path: format!("tofu-cache/{locator}/provider"),
         entry_bytes: bytes.clone(),
         expected_digest: digest_b3(&bytes),
         expected_compat: digest_b3(b"compat"),
