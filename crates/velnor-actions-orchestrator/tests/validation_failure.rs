@@ -183,6 +183,7 @@ exec \"$VELNOR_REAL_MISE\" \"$@\"
 
     /// Debug-only consumer-manifest fixture for the scrubbed repo.
     fn manifest_fixture() -> String {
+        let version = env!("CARGO_PKG_VERSION");
         let targets = [
             "x86_64-unknown-linux-gnu",
             "aarch64-apple-darwin",
@@ -191,14 +192,14 @@ exec \"$VELNOR_REAL_MISE\" \"$@\"
         .iter()
         .map(|target| {
             format!(
-                "{{\"target\":\"{target}\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v0.1.0/velnor-actions-0.1.0-{target}\",\"sha256\":\"{}\"}}",
+                "{{\"target\":\"{target}\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v{version}/velnor-actions-{version}-{target}\",\"sha256\":\"{}\"}}",
                 "a".repeat(64)
             )
         })
         .collect::<Vec<_>>()
         .join(",");
         format!(
-            "{{\"schema\":1,\"version\":\"0.1.0\",\"repository\":\"tailrocks/velnor-new\",\"commit\":\"{}\",\"targets\":[{targets}]}}",
+            "{{\"schema\":1,\"version\":\"{version}\",\"repository\":\"tailrocks/velnor-new\",\"commit\":\"{}\",\"targets\":[{targets}]}}",
             "a".repeat(40)
         )
     }
