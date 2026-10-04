@@ -113,7 +113,7 @@
       "ubuntu-24.04",
       "ubuntu-22.04"
     ],
-    "checked_at": "2026-10-04T00:00:30Z"
+    "checked_at": "2026-10-04T08:15:00Z"
   },
   "schema": 1,
   "temporary_holds": [
@@ -246,7 +246,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-04T08:13:07Z",
+      "checked_at": "2026-10-04T08:12:46Z",
       "latest": "0.3.169",
       "name": "release-plz",
       "pinned": "0.3.169",
