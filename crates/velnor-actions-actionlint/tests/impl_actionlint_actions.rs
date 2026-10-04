@@ -1,5 +1,6 @@
 //! Pinned action refs, override schema, and input validation cases.
 use std::collections::BTreeMap;
+use velnor_actions_actionlint::actions::{MR_BOXINGTON_ACTION_SHA, MR_BOXINGTON_ACTION_VERSION};
 use velnor_actions_actionlint::{
     ALINT_ACTION_SHA, ALINT_ACTION_VERSION, ALLOWED_ACTIONS, ActionInputSchema, ActionPinOverride,
     ActionlintError, ApprovedPinCatalog, PinnedActionRef, validate_action_inputs,
@@ -97,6 +98,21 @@ fn alint_tag_refs_rejected() {
             "accepted {uses} # {comment}"
         );
     }
+}
+
+#[test]
+fn mbx_action_uses_the_verified_v171_release_commit() {
+    assert_eq!(MR_BOXINGTON_ACTION_VERSION, "v1.7.1");
+    assert_eq!(
+        MR_BOXINGTON_ACTION_SHA,
+        "d0825fbaf3cc36ca2609aa38e71046265a1f1e37"
+    );
+    let uses = format!("jdx/mr-boxington-action@{MR_BOXINGTON_ACTION_SHA}");
+    let parsed = PinnedActionRef::parse_uses(&uses, MR_BOXINGTON_ACTION_VERSION);
+    assert!(
+        parsed.is_ok(),
+        "published release commit must parse: {uses}"
+    );
 }
 
 #[test]

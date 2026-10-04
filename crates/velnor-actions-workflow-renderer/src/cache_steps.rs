@@ -158,11 +158,10 @@ pub(crate) const MBX_ACTION_CACHE_MODE: &str = "read";
 /// pin never proves the installed executable (P07 effective-version
 /// defect; the action documents that setting `version` always installs
 /// that release: `https://github.com/jdx/mr-boxington-action`).
-/// The step-level [`MBX_CACHE_MODE_ENV`] is the literal `read`. The
-/// action's post exports inside the live store and then archives that
-/// copy, and a default-branch push saves even when `save-on-*` is off.
-/// `read` is the switch that skips that post. Push saves are a later
-/// single-bundle step, still refused for pull requests.
+/// The initial step-level [`MBX_CACHE_MODE_ENV`] is `read`. Render-time
+/// runner policy upgrades hosted required jobs to isolated native saves
+/// on protected default-branch pushes; Scale Set jobs keep this action
+/// restore-only and use their external single-bundle step.
 /// The cache generation follows the exact MBX release, so upgrading its
 /// storage or collection behavior starts with an isolated cold namespace.
 /// # Errors

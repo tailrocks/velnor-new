@@ -212,7 +212,11 @@ policy that Velnor emits for production MBX object-cache jobs, overriding the
 action's hosted default. Dispatch once from protected `main` with mode
 `mbx-cache-roundtrip`; the writer and reader run in order at the same SHA.
 
-This is a small end-to-end action and cache round-trip probe. It does not
-measure disk or inode peaks and does not qualify the affected ChainArgos
-workload. That evidence must come from the consumer's affected crates after
-adoption; a green probe alone is not an ENOSPC repair verdict.
+This is a small end-to-end action and cache round-trip probe. With action
+v1.7.1, its real export/save path emits sampled free-byte and free-inode minima
+plus local staged archive size when the archive is observed. Sampling is
+interval-based, so it is not an instantaneous peak or the compressed upload
+size. No run of this candidate has produced those measurements yet, and the
+probe does not qualify the affected ChainArgos workload. That evidence must
+come from the consumer's affected crates; a green probe alone is not an ENOSPC
+repair verdict.

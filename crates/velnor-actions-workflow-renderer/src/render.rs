@@ -183,6 +183,8 @@ fn render_workflow_parts(
     closure::insert_task_closure(&mut jobs)?;
     closure::insert_final_closure(&mut jobs)?;
     final_steps::insert_final_fanin(&mut jobs, ctx)?;
+    crate::mbx_bundle::apply_mbx_cache_policy(&mut jobs)?;
+    support::check_token_hygiene(&jobs)?;
     render_merged(ir, &jobs, ctx)
 }
 
@@ -268,6 +270,8 @@ pub fn finalize_jobs(
     closure::insert_task_closure(&mut jobs)?;
     closure::insert_final_closure(&mut jobs)?;
     final_steps::insert_final_fanin(&mut jobs, ctx)?;
+    crate::mbx_bundle::apply_mbx_cache_policy(&mut jobs)?;
+    support::check_token_hygiene(&jobs)?;
     Ok(jobs)
 }
 
@@ -313,8 +317,6 @@ fn merged_jobs(
     msrv::check_no_msrv(&jobs)?;
     support::check_candidate_invariants(&jobs)?;
     support::check_final_gate(&jobs)?;
-    support::check_token_hygiene(&jobs)?;
-    crate::mbx_bundle::append_single_bundle_saves(&mut jobs)?;
     support::check_token_hygiene(&jobs)?;
     Ok(jobs)
 }

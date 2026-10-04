@@ -289,8 +289,8 @@ fn c11_cache_saves_push_only_prs_and_forks_read_only() -> TestResult {
     Ok(())
 }
 
-/// YAML: one push-gated tools save per restored `mise-v1-` key (plus the
-/// sources save), every setup restore-only.
+/// YAML: one push-gated tools save per restored `mise-v1-` key plus sources;
+/// hosted MBX saves through the action's isolated post lifecycle.
 fn assert_tools_saves_push_gated_per_key(yaml: &str) {
     let mut keys = std::collections::BTreeSet::new();
     for line in yaml.lines() {
@@ -304,7 +304,7 @@ fn assert_tools_saves_push_gated_per_key(yaml: &str) {
     assert_eq!(
         yaml.matches("actions/cache/save@").count(),
         1 + keys.len() + mbx_saves,
-        "sources plus one tools save per key plus the MBX bundle:\n{yaml}"
+        "sources plus one tools save per key; hosted MBX is action-owned:\n{yaml}"
     );
     assert_eq!(
         yaml.matches("if: success() && github.event_name == 'push'")

@@ -169,13 +169,57 @@ jobs:
           path: "${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin\n${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
           restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
       - name: Restore MBX objects
-        uses: jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6
+        id: mbx
+        uses: jdx/mr-boxington-action@d0825fbaf3cc36ca2609aa38e71046265a1f1e37
         with:
           cache-generation: velnor-mbx-1.21.1
+          cache-key-suffix: ${{ runner.environment == 'github-hosted' && github.job || '' }}
           github-cache-mode: objects
+          isolate-objects-cache: ${{ runner.environment == 'github-hosted' }}
           version: 1.21.1
         env:
-          ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && 'write' || 'read' }}
+          ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
+      - name: Prepare MBX bundle key
+        id: mbx-bundle-key
+        if: runner.environment != 'github-hosted'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MBX_KEY: ${{ steps.mbx.outputs.cache-primary-key }}
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; key=\"$MBX_KEY\"; case \"$key\" in '\\'''\\''|*-) exit 1 ;; esac; prefix=\"${key%-*}-\"; echo \"prefix=${prefix}\" >> \"$GITHUB_OUTPUT\"'"
+      - name: Restore MBX single bundle
+        id: mbx-bundle
+        if: runner.environment != 'github-hosted'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: ${{ steps.mbx.outputs.cache-primary-key }}
+          path: ${{ runner.temp }}/mbx-single-bundle
+          restore-keys: ${{ steps.mbx-bundle-key.outputs.prefix }}
+      - name: Import MBX single bundle
+        if: runner.environment != 'github-hosted'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MATCHED: ${{ steps.mbx-bundle.outputs.cache-matched-key }}
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; if [ -z \"$MATCHED\" ]; then echo \"no mbx bundle matched\"; exit 0; fi; if [ ! -d \"$bundle\" ]; then echo \"mbx bundle missing; continuing cold\"; exit 0; fi; if ! mbx cache import \"$bundle\"; then echo \"mbx bundle import failed; continuing cold\"; rm -rf \"$bundle\"; exit 0; fi'"
       - name: Fetch Cargo sources
         env:
           MISE_AUTO_INSTALL: "false"
@@ -350,6 +394,43 @@ jobs:
         with:
           key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-cd6926493099032f
           path: ~/.local/share/mise
+      - name: Export MBX single bundle
+        id: mbx-export
+        if: runner.environment != 'github-hosted' && success() && github.event_name == 'push' && steps.mbx.outputs.cache-hit != 'true' && steps.mbx-bundle.outputs.cache-hit != 'true'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; mbx gc; mbx cache dir > \"$RUNNER_TEMP/mbx-store-path\"; IFS= read -r store < \"$RUNNER_TEMP/mbx-store-path\"; test -n \"$store\"; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; case \"$bundle\" in \"$store\"|\"$store\"/*) exit 1 ;; esac; case \"$store\" in /|.) exit 1 ;; *mbx*) ;; *) exit 1 ;; esac; rm -rf \"$bundle\"; if mbx cache export --group \"$MBX_CACHE_EXPORT_GROUP\" --format directory \"$bundle\" >\"$RUNNER_TEMP/mbx-export.out\" 2>&1; then test -d \"$bundle\"; rm -rf \"$store\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; echo \"ready=true\" >> \"$GITHUB_OUTPUT\"; else rm -rf \"$bundle\"; if grep -q \"no completed mbx builds are recorded for export group\" \"$RUNNER_TEMP/mbx-export.out\"; then echo \"ready=false\" >> \"$GITHUB_OUTPUT\"; exit 0; fi; cat \"$RUNNER_TEMP/mbx-export.out\"; exit 1; fi'"
+      - name: Save MBX single bundle
+        if: runner.environment != 'github-hosted' && success() && github.event_name == 'push' && steps.mbx.outputs.cache-hit != 'true' && steps.mbx-bundle.outputs.cache-hit != 'true' && steps.mbx-export.outputs.ready == 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: ${{ steps.mbx.outputs.cache-primary-key }}
+          path: ${{ runner.temp }}/mbx-single-bundle
+      - name: Collect MBX cache before export
+        if: success() && runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mbx gc
   publish-baseline:
     name: Publish baseline
     runs-on: ubuntu-26.04
@@ -623,13 +704,57 @@ jobs:
           path: "${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin\n${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
           restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
       - name: Restore MBX objects
-        uses: jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6
+        id: mbx
+        uses: jdx/mr-boxington-action@d0825fbaf3cc36ca2609aa38e71046265a1f1e37
         with:
           cache-generation: velnor-mbx-1.21.1
+          cache-key-suffix: ${{ runner.environment == 'github-hosted' && github.job || '' }}
           github-cache-mode: objects
+          isolate-objects-cache: ${{ runner.environment == 'github-hosted' }}
           version: 1.21.1
         env:
-          ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && 'write' || 'read' }}
+          ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
+      - name: Prepare MBX bundle key
+        id: mbx-bundle-key
+        if: runner.environment != 'github-hosted'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MBX_KEY: ${{ steps.mbx.outputs.cache-primary-key }}
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; key=\"$MBX_KEY\"; case \"$key\" in '\\'''\\''|*-) exit 1 ;; esac; prefix=\"${key%-*}-\"; echo \"prefix=${prefix}\" >> \"$GITHUB_OUTPUT\"'"
+      - name: Restore MBX single bundle
+        id: mbx-bundle
+        if: runner.environment != 'github-hosted'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: ${{ steps.mbx.outputs.cache-primary-key }}
+          path: ${{ runner.temp }}/mbx-single-bundle
+          restore-keys: ${{ steps.mbx-bundle-key.outputs.prefix }}
+      - name: Import MBX single bundle
+        if: runner.environment != 'github-hosted'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MATCHED: ${{ steps.mbx-bundle.outputs.cache-matched-key }}
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; if [ -z \"$MATCHED\" ]; then echo \"no mbx bundle matched\"; exit 0; fi; if [ ! -d \"$bundle\" ]; then echo \"mbx bundle missing; continuing cold\"; exit 0; fi; if ! mbx cache import \"$bundle\"; then echo \"mbx bundle import failed; continuing cold\"; rm -rf \"$bundle\"; exit 0; fi'"
       - name: Fetch Cargo sources
         env:
           MISE_AUTO_INSTALL: "false"
@@ -842,6 +967,43 @@ jobs:
         with:
           key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-ac88a89731444aab
           path: ~/.local/share/mise
+      - name: Export MBX single bundle
+        id: mbx-export
+        if: runner.environment != 'github-hosted' && success() && github.event_name == 'push' && steps.mbx.outputs.cache-hit != 'true' && steps.mbx-bundle.outputs.cache-hit != 'true'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; mbx gc; mbx cache dir > \"$RUNNER_TEMP/mbx-store-path\"; IFS= read -r store < \"$RUNNER_TEMP/mbx-store-path\"; test -n \"$store\"; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; case \"$bundle\" in \"$store\"|\"$store\"/*) exit 1 ;; esac; case \"$store\" in /|.) exit 1 ;; *mbx*) ;; *) exit 1 ;; esac; rm -rf \"$bundle\"; if mbx cache export --group \"$MBX_CACHE_EXPORT_GROUP\" --format directory \"$bundle\" >\"$RUNNER_TEMP/mbx-export.out\" 2>&1; then test -d \"$bundle\"; rm -rf \"$store\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; echo \"ready=true\" >> \"$GITHUB_OUTPUT\"; else rm -rf \"$bundle\"; if grep -q \"no completed mbx builds are recorded for export group\" \"$RUNNER_TEMP/mbx-export.out\"; then echo \"ready=false\" >> \"$GITHUB_OUTPUT\"; exit 0; fi; cat \"$RUNNER_TEMP/mbx-export.out\"; exit 1; fi'"
+      - name: Save MBX single bundle
+        if: runner.environment != 'github-hosted' && success() && github.event_name == 'push' && steps.mbx.outputs.cache-hit != 'true' && steps.mbx-bundle.outputs.cache-hit != 'true' && steps.mbx-export.outputs.ready == 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: ${{ steps.mbx.outputs.cache-primary-key }}
+          path: ${{ runner.temp }}/mbx-single-bundle
+      - name: Collect MBX cache before export
+        if: success() && runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mbx gc
   rust-velnor-actions-cli:
     name: Rust / velnor-actions-cli
     runs-on: ubuntu-26.04
@@ -932,13 +1094,57 @@ jobs:
           path: "${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin\n${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
           restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
       - name: Restore MBX objects
-        uses: jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6
+        id: mbx
+        uses: jdx/mr-boxington-action@d0825fbaf3cc36ca2609aa38e71046265a1f1e37
         with:
           cache-generation: velnor-mbx-1.21.1
+          cache-key-suffix: ${{ runner.environment == 'github-hosted' && github.job || '' }}
           github-cache-mode: objects
+          isolate-objects-cache: ${{ runner.environment == 'github-hosted' }}
           version: 1.21.1
         env:
-          ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && 'write' || 'read' }}
+          ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
+      - name: Prepare MBX bundle key
+        id: mbx-bundle-key
+        if: runner.environment != 'github-hosted'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MBX_KEY: ${{ steps.mbx.outputs.cache-primary-key }}
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; key=\"$MBX_KEY\"; case \"$key\" in '\\'''\\''|*-) exit 1 ;; esac; prefix=\"${key%-*}-\"; echo \"prefix=${prefix}\" >> \"$GITHUB_OUTPUT\"'"
+      - name: Restore MBX single bundle
+        id: mbx-bundle
+        if: runner.environment != 'github-hosted'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: ${{ steps.mbx.outputs.cache-primary-key }}
+          path: ${{ runner.temp }}/mbx-single-bundle
+          restore-keys: ${{ steps.mbx-bundle-key.outputs.prefix }}
+      - name: Import MBX single bundle
+        if: runner.environment != 'github-hosted'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MATCHED: ${{ steps.mbx-bundle.outputs.cache-matched-key }}
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; if [ -z \"$MATCHED\" ]; then echo \"no mbx bundle matched\"; exit 0; fi; if [ ! -d \"$bundle\" ]; then echo \"mbx bundle missing; continuing cold\"; exit 0; fi; if ! mbx cache import \"$bundle\"; then echo \"mbx bundle import failed; continuing cold\"; rm -rf \"$bundle\"; exit 0; fi'"
       - name: Fetch Cargo sources
         env:
           MISE_AUTO_INSTALL: "false"
@@ -1116,6 +1322,43 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-velnor-actions-cli
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
+      - name: Export MBX single bundle
+        id: mbx-export
+        if: runner.environment != 'github-hosted' && success() && github.event_name == 'push' && steps.mbx.outputs.cache-hit != 'true' && steps.mbx-bundle.outputs.cache-hit != 'true'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; mbx gc; mbx cache dir > \"$RUNNER_TEMP/mbx-store-path\"; IFS= read -r store < \"$RUNNER_TEMP/mbx-store-path\"; test -n \"$store\"; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; case \"$bundle\" in \"$store\"|\"$store\"/*) exit 1 ;; esac; case \"$store\" in /|.) exit 1 ;; *mbx*) ;; *) exit 1 ;; esac; rm -rf \"$bundle\"; if mbx cache export --group \"$MBX_CACHE_EXPORT_GROUP\" --format directory \"$bundle\" >\"$RUNNER_TEMP/mbx-export.out\" 2>&1; then test -d \"$bundle\"; rm -rf \"$store\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; echo \"ready=true\" >> \"$GITHUB_OUTPUT\"; else rm -rf \"$bundle\"; if grep -q \"no completed mbx builds are recorded for export group\" \"$RUNNER_TEMP/mbx-export.out\"; then echo \"ready=false\" >> \"$GITHUB_OUTPUT\"; exit 0; fi; cat \"$RUNNER_TEMP/mbx-export.out\"; exit 1; fi'"
+      - name: Save MBX single bundle
+        if: runner.environment != 'github-hosted' && success() && github.event_name == 'push' && steps.mbx.outputs.cache-hit != 'true' && steps.mbx-bundle.outputs.cache-hit != 'true' && steps.mbx-export.outputs.ready == 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: ${{ steps.mbx.outputs.cache-primary-key }}
+          path: ${{ runner.temp }}/mbx-single-bundle
+      - name: Collect MBX cache before export
+        if: success() && runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mbx gc
   rust-velnor-actions-contract:
     name: Rust / velnor-actions-contract
     runs-on: ubuntu-26.04
@@ -1206,13 +1449,57 @@ jobs:
           path: "${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin\n${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
           restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
       - name: Restore MBX objects
-        uses: jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6
+        id: mbx
+        uses: jdx/mr-boxington-action@d0825fbaf3cc36ca2609aa38e71046265a1f1e37
         with:
           cache-generation: velnor-mbx-1.21.1
+          cache-key-suffix: ${{ runner.environment == 'github-hosted' && github.job || '' }}
           github-cache-mode: objects
+          isolate-objects-cache: ${{ runner.environment == 'github-hosted' }}
           version: 1.21.1
         env:
-          ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && 'write' || 'read' }}
+          ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
+      - name: Prepare MBX bundle key
+        id: mbx-bundle-key
+        if: runner.environment != 'github-hosted'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MBX_KEY: ${{ steps.mbx.outputs.cache-primary-key }}
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; key=\"$MBX_KEY\"; case \"$key\" in '\\'''\\''|*-) exit 1 ;; esac; prefix=\"${key%-*}-\"; echo \"prefix=${prefix}\" >> \"$GITHUB_OUTPUT\"'"
+      - name: Restore MBX single bundle
+        id: mbx-bundle
+        if: runner.environment != 'github-hosted'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: ${{ steps.mbx.outputs.cache-primary-key }}
+          path: ${{ runner.temp }}/mbx-single-bundle
+          restore-keys: ${{ steps.mbx-bundle-key.outputs.prefix }}
+      - name: Import MBX single bundle
+        if: runner.environment != 'github-hosted'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MATCHED: ${{ steps.mbx-bundle.outputs.cache-matched-key }}
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; if [ -z \"$MATCHED\" ]; then echo \"no mbx bundle matched\"; exit 0; fi; if [ ! -d \"$bundle\" ]; then echo \"mbx bundle missing; continuing cold\"; exit 0; fi; if ! mbx cache import \"$bundle\"; then echo \"mbx bundle import failed; continuing cold\"; rm -rf \"$bundle\"; exit 0; fi'"
       - name: Fetch Cargo sources
         env:
           MISE_AUTO_INSTALL: "false"
@@ -1419,6 +1706,43 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-velnor-actions-contract
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
+      - name: Export MBX single bundle
+        id: mbx-export
+        if: runner.environment != 'github-hosted' && success() && github.event_name == 'push' && steps.mbx.outputs.cache-hit != 'true' && steps.mbx-bundle.outputs.cache-hit != 'true'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; mbx gc; mbx cache dir > \"$RUNNER_TEMP/mbx-store-path\"; IFS= read -r store < \"$RUNNER_TEMP/mbx-store-path\"; test -n \"$store\"; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; case \"$bundle\" in \"$store\"|\"$store\"/*) exit 1 ;; esac; case \"$store\" in /|.) exit 1 ;; *mbx*) ;; *) exit 1 ;; esac; rm -rf \"$bundle\"; if mbx cache export --group \"$MBX_CACHE_EXPORT_GROUP\" --format directory \"$bundle\" >\"$RUNNER_TEMP/mbx-export.out\" 2>&1; then test -d \"$bundle\"; rm -rf \"$store\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; echo \"ready=true\" >> \"$GITHUB_OUTPUT\"; else rm -rf \"$bundle\"; if grep -q \"no completed mbx builds are recorded for export group\" \"$RUNNER_TEMP/mbx-export.out\"; then echo \"ready=false\" >> \"$GITHUB_OUTPUT\"; exit 0; fi; cat \"$RUNNER_TEMP/mbx-export.out\"; exit 1; fi'"
+      - name: Save MBX single bundle
+        if: runner.environment != 'github-hosted' && success() && github.event_name == 'push' && steps.mbx.outputs.cache-hit != 'true' && steps.mbx-bundle.outputs.cache-hit != 'true' && steps.mbx-export.outputs.ready == 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: ${{ steps.mbx.outputs.cache-primary-key }}
+          path: ${{ runner.temp }}/mbx-single-bundle
+      - name: Collect MBX cache before export
+        if: success() && runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mbx gc
   rust-velnor-actions-mise:
     name: Rust / velnor-actions-mise
     runs-on: ubuntu-26.04
@@ -1509,13 +1833,57 @@ jobs:
           path: "${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin\n${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
           restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
       - name: Restore MBX objects
-        uses: jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6
+        id: mbx
+        uses: jdx/mr-boxington-action@d0825fbaf3cc36ca2609aa38e71046265a1f1e37
         with:
           cache-generation: velnor-mbx-1.21.1
+          cache-key-suffix: ${{ runner.environment == 'github-hosted' && github.job || '' }}
           github-cache-mode: objects
+          isolate-objects-cache: ${{ runner.environment == 'github-hosted' }}
           version: 1.21.1
         env:
-          ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && 'write' || 'read' }}
+          ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
+      - name: Prepare MBX bundle key
+        id: mbx-bundle-key
+        if: runner.environment != 'github-hosted'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MBX_KEY: ${{ steps.mbx.outputs.cache-primary-key }}
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; key=\"$MBX_KEY\"; case \"$key\" in '\\'''\\''|*-) exit 1 ;; esac; prefix=\"${key%-*}-\"; echo \"prefix=${prefix}\" >> \"$GITHUB_OUTPUT\"'"
+      - name: Restore MBX single bundle
+        id: mbx-bundle
+        if: runner.environment != 'github-hosted'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: ${{ steps.mbx.outputs.cache-primary-key }}
+          path: ${{ runner.temp }}/mbx-single-bundle
+          restore-keys: ${{ steps.mbx-bundle-key.outputs.prefix }}
+      - name: Import MBX single bundle
+        if: runner.environment != 'github-hosted'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MATCHED: ${{ steps.mbx-bundle.outputs.cache-matched-key }}
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; if [ -z \"$MATCHED\" ]; then echo \"no mbx bundle matched\"; exit 0; fi; if [ ! -d \"$bundle\" ]; then echo \"mbx bundle missing; continuing cold\"; exit 0; fi; if ! mbx cache import \"$bundle\"; then echo \"mbx bundle import failed; continuing cold\"; rm -rf \"$bundle\"; exit 0; fi'"
       - name: Fetch Cargo sources
         env:
           MISE_AUTO_INSTALL: "false"
@@ -1728,6 +2096,43 @@ jobs:
         with:
           key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-82e6ea144dfe6a19
           path: ~/.local/share/mise
+      - name: Export MBX single bundle
+        id: mbx-export
+        if: runner.environment != 'github-hosted' && success() && github.event_name == 'push' && steps.mbx.outputs.cache-hit != 'true' && steps.mbx-bundle.outputs.cache-hit != 'true'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; mbx gc; mbx cache dir > \"$RUNNER_TEMP/mbx-store-path\"; IFS= read -r store < \"$RUNNER_TEMP/mbx-store-path\"; test -n \"$store\"; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; case \"$bundle\" in \"$store\"|\"$store\"/*) exit 1 ;; esac; case \"$store\" in /|.) exit 1 ;; *mbx*) ;; *) exit 1 ;; esac; rm -rf \"$bundle\"; if mbx cache export --group \"$MBX_CACHE_EXPORT_GROUP\" --format directory \"$bundle\" >\"$RUNNER_TEMP/mbx-export.out\" 2>&1; then test -d \"$bundle\"; rm -rf \"$store\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; echo \"ready=true\" >> \"$GITHUB_OUTPUT\"; else rm -rf \"$bundle\"; if grep -q \"no completed mbx builds are recorded for export group\" \"$RUNNER_TEMP/mbx-export.out\"; then echo \"ready=false\" >> \"$GITHUB_OUTPUT\"; exit 0; fi; cat \"$RUNNER_TEMP/mbx-export.out\"; exit 1; fi'"
+      - name: Save MBX single bundle
+        if: runner.environment != 'github-hosted' && success() && github.event_name == 'push' && steps.mbx.outputs.cache-hit != 'true' && steps.mbx-bundle.outputs.cache-hit != 'true' && steps.mbx-export.outputs.ready == 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: ${{ steps.mbx.outputs.cache-primary-key }}
+          path: ${{ runner.temp }}/mbx-single-bundle
+      - name: Collect MBX cache before export
+        if: success() && runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mbx gc
   rust-velnor-actions-orchestrator:
     name: Rust / velnor-actions-orchestrator
     runs-on: ubuntu-26.04
@@ -1818,13 +2223,57 @@ jobs:
           path: "${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin\n${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
           restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
       - name: Restore MBX objects
-        uses: jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6
+        id: mbx
+        uses: jdx/mr-boxington-action@d0825fbaf3cc36ca2609aa38e71046265a1f1e37
         with:
           cache-generation: velnor-mbx-1.21.1
+          cache-key-suffix: ${{ runner.environment == 'github-hosted' && github.job || '' }}
           github-cache-mode: objects
+          isolate-objects-cache: ${{ runner.environment == 'github-hosted' }}
           version: 1.21.1
         env:
-          ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && 'write' || 'read' }}
+          ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
+      - name: Prepare MBX bundle key
+        id: mbx-bundle-key
+        if: runner.environment != 'github-hosted'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MBX_KEY: ${{ steps.mbx.outputs.cache-primary-key }}
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; key=\"$MBX_KEY\"; case \"$key\" in '\\'''\\''|*-) exit 1 ;; esac; prefix=\"${key%-*}-\"; echo \"prefix=${prefix}\" >> \"$GITHUB_OUTPUT\"'"
+      - name: Restore MBX single bundle
+        id: mbx-bundle
+        if: runner.environment != 'github-hosted'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: ${{ steps.mbx.outputs.cache-primary-key }}
+          path: ${{ runner.temp }}/mbx-single-bundle
+          restore-keys: ${{ steps.mbx-bundle-key.outputs.prefix }}
+      - name: Import MBX single bundle
+        if: runner.environment != 'github-hosted'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MATCHED: ${{ steps.mbx-bundle.outputs.cache-matched-key }}
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; if [ -z \"$MATCHED\" ]; then echo \"no mbx bundle matched\"; exit 0; fi; if [ ! -d \"$bundle\" ]; then echo \"mbx bundle missing; continuing cold\"; exit 0; fi; if ! mbx cache import \"$bundle\"; then echo \"mbx bundle import failed; continuing cold\"; rm -rf \"$bundle\"; exit 0; fi'"
       - name: Fetch Cargo sources
         env:
           MISE_AUTO_INSTALL: "false"
@@ -2031,6 +2480,43 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-velnor-actions-orchestrator
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
+      - name: Export MBX single bundle
+        id: mbx-export
+        if: runner.environment != 'github-hosted' && success() && github.event_name == 'push' && steps.mbx.outputs.cache-hit != 'true' && steps.mbx-bundle.outputs.cache-hit != 'true'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; mbx gc; mbx cache dir > \"$RUNNER_TEMP/mbx-store-path\"; IFS= read -r store < \"$RUNNER_TEMP/mbx-store-path\"; test -n \"$store\"; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; case \"$bundle\" in \"$store\"|\"$store\"/*) exit 1 ;; esac; case \"$store\" in /|.) exit 1 ;; *mbx*) ;; *) exit 1 ;; esac; rm -rf \"$bundle\"; if mbx cache export --group \"$MBX_CACHE_EXPORT_GROUP\" --format directory \"$bundle\" >\"$RUNNER_TEMP/mbx-export.out\" 2>&1; then test -d \"$bundle\"; rm -rf \"$store\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; echo \"ready=true\" >> \"$GITHUB_OUTPUT\"; else rm -rf \"$bundle\"; if grep -q \"no completed mbx builds are recorded for export group\" \"$RUNNER_TEMP/mbx-export.out\"; then echo \"ready=false\" >> \"$GITHUB_OUTPUT\"; exit 0; fi; cat \"$RUNNER_TEMP/mbx-export.out\"; exit 1; fi'"
+      - name: Save MBX single bundle
+        if: runner.environment != 'github-hosted' && success() && github.event_name == 'push' && steps.mbx.outputs.cache-hit != 'true' && steps.mbx-bundle.outputs.cache-hit != 'true' && steps.mbx-export.outputs.ready == 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: ${{ steps.mbx.outputs.cache-primary-key }}
+          path: ${{ runner.temp }}/mbx-single-bundle
+      - name: Collect MBX cache before export
+        if: success() && runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mbx gc
   rust-velnor-actions-rust:
     name: Rust / velnor-actions-rust
     runs-on: ubuntu-26.04
@@ -2121,13 +2607,57 @@ jobs:
           path: "${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin\n${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
           restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
       - name: Restore MBX objects
-        uses: jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6
+        id: mbx
+        uses: jdx/mr-boxington-action@d0825fbaf3cc36ca2609aa38e71046265a1f1e37
         with:
           cache-generation: velnor-mbx-1.21.1
+          cache-key-suffix: ${{ runner.environment == 'github-hosted' && github.job || '' }}
           github-cache-mode: objects
+          isolate-objects-cache: ${{ runner.environment == 'github-hosted' }}
           version: 1.21.1
         env:
-          ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && 'write' || 'read' }}
+          ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
+      - name: Prepare MBX bundle key
+        id: mbx-bundle-key
+        if: runner.environment != 'github-hosted'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MBX_KEY: ${{ steps.mbx.outputs.cache-primary-key }}
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; key=\"$MBX_KEY\"; case \"$key\" in '\\'''\\''|*-) exit 1 ;; esac; prefix=\"${key%-*}-\"; echo \"prefix=${prefix}\" >> \"$GITHUB_OUTPUT\"'"
+      - name: Restore MBX single bundle
+        id: mbx-bundle
+        if: runner.environment != 'github-hosted'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: ${{ steps.mbx.outputs.cache-primary-key }}
+          path: ${{ runner.temp }}/mbx-single-bundle
+          restore-keys: ${{ steps.mbx-bundle-key.outputs.prefix }}
+      - name: Import MBX single bundle
+        if: runner.environment != 'github-hosted'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MATCHED: ${{ steps.mbx-bundle.outputs.cache-matched-key }}
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; if [ -z \"$MATCHED\" ]; then echo \"no mbx bundle matched\"; exit 0; fi; if [ ! -d \"$bundle\" ]; then echo \"mbx bundle missing; continuing cold\"; exit 0; fi; if ! mbx cache import \"$bundle\"; then echo \"mbx bundle import failed; continuing cold\"; rm -rf \"$bundle\"; exit 0; fi'"
       - name: Fetch Cargo sources
         env:
           MISE_AUTO_INSTALL: "false"
@@ -2334,6 +2864,43 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-velnor-actions-rust
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
+      - name: Export MBX single bundle
+        id: mbx-export
+        if: runner.environment != 'github-hosted' && success() && github.event_name == 'push' && steps.mbx.outputs.cache-hit != 'true' && steps.mbx-bundle.outputs.cache-hit != 'true'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; mbx gc; mbx cache dir > \"$RUNNER_TEMP/mbx-store-path\"; IFS= read -r store < \"$RUNNER_TEMP/mbx-store-path\"; test -n \"$store\"; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; case \"$bundle\" in \"$store\"|\"$store\"/*) exit 1 ;; esac; case \"$store\" in /|.) exit 1 ;; *mbx*) ;; *) exit 1 ;; esac; rm -rf \"$bundle\"; if mbx cache export --group \"$MBX_CACHE_EXPORT_GROUP\" --format directory \"$bundle\" >\"$RUNNER_TEMP/mbx-export.out\" 2>&1; then test -d \"$bundle\"; rm -rf \"$store\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; echo \"ready=true\" >> \"$GITHUB_OUTPUT\"; else rm -rf \"$bundle\"; if grep -q \"no completed mbx builds are recorded for export group\" \"$RUNNER_TEMP/mbx-export.out\"; then echo \"ready=false\" >> \"$GITHUB_OUTPUT\"; exit 0; fi; cat \"$RUNNER_TEMP/mbx-export.out\"; exit 1; fi'"
+      - name: Save MBX single bundle
+        if: runner.environment != 'github-hosted' && success() && github.event_name == 'push' && steps.mbx.outputs.cache-hit != 'true' && steps.mbx-bundle.outputs.cache-hit != 'true' && steps.mbx-export.outputs.ready == 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: ${{ steps.mbx.outputs.cache-primary-key }}
+          path: ${{ runner.temp }}/mbx-single-bundle
+      - name: Collect MBX cache before export
+        if: success() && runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mbx gc
   rust-velnor-actions-tofu:
     name: Rust / velnor-actions-tofu
     runs-on: ubuntu-26.04
@@ -2424,13 +2991,57 @@ jobs:
           path: "${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin\n${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
           restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
       - name: Restore MBX objects
-        uses: jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6
+        id: mbx
+        uses: jdx/mr-boxington-action@d0825fbaf3cc36ca2609aa38e71046265a1f1e37
         with:
           cache-generation: velnor-mbx-1.21.1
+          cache-key-suffix: ${{ runner.environment == 'github-hosted' && github.job || '' }}
           github-cache-mode: objects
+          isolate-objects-cache: ${{ runner.environment == 'github-hosted' }}
           version: 1.21.1
         env:
-          ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && 'write' || 'read' }}
+          ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
+      - name: Prepare MBX bundle key
+        id: mbx-bundle-key
+        if: runner.environment != 'github-hosted'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MBX_KEY: ${{ steps.mbx.outputs.cache-primary-key }}
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; key=\"$MBX_KEY\"; case \"$key\" in '\\'''\\''|*-) exit 1 ;; esac; prefix=\"${key%-*}-\"; echo \"prefix=${prefix}\" >> \"$GITHUB_OUTPUT\"'"
+      - name: Restore MBX single bundle
+        id: mbx-bundle
+        if: runner.environment != 'github-hosted'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: ${{ steps.mbx.outputs.cache-primary-key }}
+          path: ${{ runner.temp }}/mbx-single-bundle
+          restore-keys: ${{ steps.mbx-bundle-key.outputs.prefix }}
+      - name: Import MBX single bundle
+        if: runner.environment != 'github-hosted'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MATCHED: ${{ steps.mbx-bundle.outputs.cache-matched-key }}
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; if [ -z \"$MATCHED\" ]; then echo \"no mbx bundle matched\"; exit 0; fi; if [ ! -d \"$bundle\" ]; then echo \"mbx bundle missing; continuing cold\"; exit 0; fi; if ! mbx cache import \"$bundle\"; then echo \"mbx bundle import failed; continuing cold\"; rm -rf \"$bundle\"; exit 0; fi'"
       - name: Fetch Cargo sources
         env:
           MISE_AUTO_INSTALL: "false"
@@ -2637,6 +3248,43 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-velnor-actions-tofu
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
+      - name: Export MBX single bundle
+        id: mbx-export
+        if: runner.environment != 'github-hosted' && success() && github.event_name == 'push' && steps.mbx.outputs.cache-hit != 'true' && steps.mbx-bundle.outputs.cache-hit != 'true'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; mbx gc; mbx cache dir > \"$RUNNER_TEMP/mbx-store-path\"; IFS= read -r store < \"$RUNNER_TEMP/mbx-store-path\"; test -n \"$store\"; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; case \"$bundle\" in \"$store\"|\"$store\"/*) exit 1 ;; esac; case \"$store\" in /|.) exit 1 ;; *mbx*) ;; *) exit 1 ;; esac; rm -rf \"$bundle\"; if mbx cache export --group \"$MBX_CACHE_EXPORT_GROUP\" --format directory \"$bundle\" >\"$RUNNER_TEMP/mbx-export.out\" 2>&1; then test -d \"$bundle\"; rm -rf \"$store\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; echo \"ready=true\" >> \"$GITHUB_OUTPUT\"; else rm -rf \"$bundle\"; if grep -q \"no completed mbx builds are recorded for export group\" \"$RUNNER_TEMP/mbx-export.out\"; then echo \"ready=false\" >> \"$GITHUB_OUTPUT\"; exit 0; fi; cat \"$RUNNER_TEMP/mbx-export.out\"; exit 1; fi'"
+      - name: Save MBX single bundle
+        if: runner.environment != 'github-hosted' && success() && github.event_name == 'push' && steps.mbx.outputs.cache-hit != 'true' && steps.mbx-bundle.outputs.cache-hit != 'true' && steps.mbx-export.outputs.ready == 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: ${{ steps.mbx.outputs.cache-primary-key }}
+          path: ${{ runner.temp }}/mbx-single-bundle
+      - name: Collect MBX cache before export
+        if: success() && runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mbx gc
   rust-velnor-actions-workflow-renderer:
     name: Rust / velnor-actions-workflow-renderer
     runs-on: ubuntu-26.04
@@ -2727,13 +3375,57 @@ jobs:
           path: "${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin\n${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
           restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
       - name: Restore MBX objects
-        uses: jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6
+        id: mbx
+        uses: jdx/mr-boxington-action@d0825fbaf3cc36ca2609aa38e71046265a1f1e37
         with:
           cache-generation: velnor-mbx-1.21.1
+          cache-key-suffix: ${{ runner.environment == 'github-hosted' && github.job || '' }}
           github-cache-mode: objects
+          isolate-objects-cache: ${{ runner.environment == 'github-hosted' }}
           version: 1.21.1
         env:
-          ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && 'write' || 'read' }}
+          ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
+      - name: Prepare MBX bundle key
+        id: mbx-bundle-key
+        if: runner.environment != 'github-hosted'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MBX_KEY: ${{ steps.mbx.outputs.cache-primary-key }}
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; key=\"$MBX_KEY\"; case \"$key\" in '\\'''\\''|*-) exit 1 ;; esac; prefix=\"${key%-*}-\"; echo \"prefix=${prefix}\" >> \"$GITHUB_OUTPUT\"'"
+      - name: Restore MBX single bundle
+        id: mbx-bundle
+        if: runner.environment != 'github-hosted'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: ${{ steps.mbx.outputs.cache-primary-key }}
+          path: ${{ runner.temp }}/mbx-single-bundle
+          restore-keys: ${{ steps.mbx-bundle-key.outputs.prefix }}
+      - name: Import MBX single bundle
+        if: runner.environment != 'github-hosted'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MATCHED: ${{ steps.mbx-bundle.outputs.cache-matched-key }}
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; if [ -z \"$MATCHED\" ]; then echo \"no mbx bundle matched\"; exit 0; fi; if [ ! -d \"$bundle\" ]; then echo \"mbx bundle missing; continuing cold\"; exit 0; fi; if ! mbx cache import \"$bundle\"; then echo \"mbx bundle import failed; continuing cold\"; rm -rf \"$bundle\"; exit 0; fi'"
       - name: Fetch Cargo sources
         env:
           MISE_AUTO_INSTALL: "false"
@@ -2940,6 +3632,43 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-velnor-actions-workflow-renderer
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
+      - name: Export MBX single bundle
+        id: mbx-export
+        if: runner.environment != 'github-hosted' && success() && github.event_name == 'push' && steps.mbx.outputs.cache-hit != 'true' && steps.mbx-bundle.outputs.cache-hit != 'true'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; mbx gc; mbx cache dir > \"$RUNNER_TEMP/mbx-store-path\"; IFS= read -r store < \"$RUNNER_TEMP/mbx-store-path\"; test -n \"$store\"; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; case \"$bundle\" in \"$store\"|\"$store\"/*) exit 1 ;; esac; case \"$store\" in /|.) exit 1 ;; *mbx*) ;; *) exit 1 ;; esac; rm -rf \"$bundle\"; if mbx cache export --group \"$MBX_CACHE_EXPORT_GROUP\" --format directory \"$bundle\" >\"$RUNNER_TEMP/mbx-export.out\" 2>&1; then test -d \"$bundle\"; rm -rf \"$store\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; echo \"ready=true\" >> \"$GITHUB_OUTPUT\"; else rm -rf \"$bundle\"; if grep -q \"no completed mbx builds are recorded for export group\" \"$RUNNER_TEMP/mbx-export.out\"; then echo \"ready=false\" >> \"$GITHUB_OUTPUT\"; exit 0; fi; cat \"$RUNNER_TEMP/mbx-export.out\"; exit 1; fi'"
+      - name: Save MBX single bundle
+        if: runner.environment != 'github-hosted' && success() && github.event_name == 'push' && steps.mbx.outputs.cache-hit != 'true' && steps.mbx-bundle.outputs.cache-hit != 'true' && steps.mbx-export.outputs.ready == 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: ${{ steps.mbx.outputs.cache-primary-key }}
+          path: ${{ runner.temp }}/mbx-single-bundle
+      - name: Collect MBX cache before export
+        if: success() && runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mbx gc
   rust-velnor-runner-cli:
     name: Rust / velnor-runner-cli
     runs-on: ubuntu-26.04
@@ -3030,13 +3759,57 @@ jobs:
           path: "${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin\n${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
           restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
       - name: Restore MBX objects
-        uses: jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6
+        id: mbx
+        uses: jdx/mr-boxington-action@d0825fbaf3cc36ca2609aa38e71046265a1f1e37
         with:
           cache-generation: velnor-mbx-1.21.1
+          cache-key-suffix: ${{ runner.environment == 'github-hosted' && github.job || '' }}
           github-cache-mode: objects
+          isolate-objects-cache: ${{ runner.environment == 'github-hosted' }}
           version: 1.21.1
         env:
-          ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && 'write' || 'read' }}
+          ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
+      - name: Prepare MBX bundle key
+        id: mbx-bundle-key
+        if: runner.environment != 'github-hosted'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MBX_KEY: ${{ steps.mbx.outputs.cache-primary-key }}
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; key=\"$MBX_KEY\"; case \"$key\" in '\\'''\\''|*-) exit 1 ;; esac; prefix=\"${key%-*}-\"; echo \"prefix=${prefix}\" >> \"$GITHUB_OUTPUT\"'"
+      - name: Restore MBX single bundle
+        id: mbx-bundle
+        if: runner.environment != 'github-hosted'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: ${{ steps.mbx.outputs.cache-primary-key }}
+          path: ${{ runner.temp }}/mbx-single-bundle
+          restore-keys: ${{ steps.mbx-bundle-key.outputs.prefix }}
+      - name: Import MBX single bundle
+        if: runner.environment != 'github-hosted'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MATCHED: ${{ steps.mbx-bundle.outputs.cache-matched-key }}
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; if [ -z \"$MATCHED\" ]; then echo \"no mbx bundle matched\"; exit 0; fi; if [ ! -d \"$bundle\" ]; then echo \"mbx bundle missing; continuing cold\"; exit 0; fi; if ! mbx cache import \"$bundle\"; then echo \"mbx bundle import failed; continuing cold\"; rm -rf \"$bundle\"; exit 0; fi'"
       - name: Fetch Cargo sources
         env:
           MISE_AUTO_INSTALL: "false"
@@ -3243,6 +4016,43 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-velnor-runner-cli
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
+      - name: Export MBX single bundle
+        id: mbx-export
+        if: runner.environment != 'github-hosted' && success() && github.event_name == 'push' && steps.mbx.outputs.cache-hit != 'true' && steps.mbx-bundle.outputs.cache-hit != 'true'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; mbx gc; mbx cache dir > \"$RUNNER_TEMP/mbx-store-path\"; IFS= read -r store < \"$RUNNER_TEMP/mbx-store-path\"; test -n \"$store\"; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; case \"$bundle\" in \"$store\"|\"$store\"/*) exit 1 ;; esac; case \"$store\" in /|.) exit 1 ;; *mbx*) ;; *) exit 1 ;; esac; rm -rf \"$bundle\"; if mbx cache export --group \"$MBX_CACHE_EXPORT_GROUP\" --format directory \"$bundle\" >\"$RUNNER_TEMP/mbx-export.out\" 2>&1; then test -d \"$bundle\"; rm -rf \"$store\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; echo \"ready=true\" >> \"$GITHUB_OUTPUT\"; else rm -rf \"$bundle\"; if grep -q \"no completed mbx builds are recorded for export group\" \"$RUNNER_TEMP/mbx-export.out\"; then echo \"ready=false\" >> \"$GITHUB_OUTPUT\"; exit 0; fi; cat \"$RUNNER_TEMP/mbx-export.out\"; exit 1; fi'"
+      - name: Save MBX single bundle
+        if: runner.environment != 'github-hosted' && success() && github.event_name == 'push' && steps.mbx.outputs.cache-hit != 'true' && steps.mbx-bundle.outputs.cache-hit != 'true' && steps.mbx-export.outputs.ready == 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: ${{ steps.mbx.outputs.cache-primary-key }}
+          path: ${{ runner.temp }}/mbx-single-bundle
+      - name: Collect MBX cache before export
+        if: success() && runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mbx gc
   rust-velnor-runner-core:
     name: Rust / velnor-runner-core
     runs-on: ubuntu-26.04
@@ -3333,13 +4143,57 @@ jobs:
           path: "${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin\n${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
           restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
       - name: Restore MBX objects
-        uses: jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6
+        id: mbx
+        uses: jdx/mr-boxington-action@d0825fbaf3cc36ca2609aa38e71046265a1f1e37
         with:
           cache-generation: velnor-mbx-1.21.1
+          cache-key-suffix: ${{ runner.environment == 'github-hosted' && github.job || '' }}
           github-cache-mode: objects
+          isolate-objects-cache: ${{ runner.environment == 'github-hosted' }}
           version: 1.21.1
         env:
-          ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && 'write' || 'read' }}
+          ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
+      - name: Prepare MBX bundle key
+        id: mbx-bundle-key
+        if: runner.environment != 'github-hosted'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MBX_KEY: ${{ steps.mbx.outputs.cache-primary-key }}
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; key=\"$MBX_KEY\"; case \"$key\" in '\\'''\\''|*-) exit 1 ;; esac; prefix=\"${key%-*}-\"; echo \"prefix=${prefix}\" >> \"$GITHUB_OUTPUT\"'"
+      - name: Restore MBX single bundle
+        id: mbx-bundle
+        if: runner.environment != 'github-hosted'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: ${{ steps.mbx.outputs.cache-primary-key }}
+          path: ${{ runner.temp }}/mbx-single-bundle
+          restore-keys: ${{ steps.mbx-bundle-key.outputs.prefix }}
+      - name: Import MBX single bundle
+        if: runner.environment != 'github-hosted'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MATCHED: ${{ steps.mbx-bundle.outputs.cache-matched-key }}
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; if [ -z \"$MATCHED\" ]; then echo \"no mbx bundle matched\"; exit 0; fi; if [ ! -d \"$bundle\" ]; then echo \"mbx bundle missing; continuing cold\"; exit 0; fi; if ! mbx cache import \"$bundle\"; then echo \"mbx bundle import failed; continuing cold\"; rm -rf \"$bundle\"; exit 0; fi'"
       - name: Fetch Cargo sources
         env:
           MISE_AUTO_INSTALL: "false"
@@ -3546,6 +4400,43 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-velnor-runner-core
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
+      - name: Export MBX single bundle
+        id: mbx-export
+        if: runner.environment != 'github-hosted' && success() && github.event_name == 'push' && steps.mbx.outputs.cache-hit != 'true' && steps.mbx-bundle.outputs.cache-hit != 'true'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; mbx gc; mbx cache dir > \"$RUNNER_TEMP/mbx-store-path\"; IFS= read -r store < \"$RUNNER_TEMP/mbx-store-path\"; test -n \"$store\"; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; case \"$bundle\" in \"$store\"|\"$store\"/*) exit 1 ;; esac; case \"$store\" in /|.) exit 1 ;; *mbx*) ;; *) exit 1 ;; esac; rm -rf \"$bundle\"; if mbx cache export --group \"$MBX_CACHE_EXPORT_GROUP\" --format directory \"$bundle\" >\"$RUNNER_TEMP/mbx-export.out\" 2>&1; then test -d \"$bundle\"; rm -rf \"$store\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; echo \"ready=true\" >> \"$GITHUB_OUTPUT\"; else rm -rf \"$bundle\"; if grep -q \"no completed mbx builds are recorded for export group\" \"$RUNNER_TEMP/mbx-export.out\"; then echo \"ready=false\" >> \"$GITHUB_OUTPUT\"; exit 0; fi; cat \"$RUNNER_TEMP/mbx-export.out\"; exit 1; fi'"
+      - name: Save MBX single bundle
+        if: runner.environment != 'github-hosted' && success() && github.event_name == 'push' && steps.mbx.outputs.cache-hit != 'true' && steps.mbx-bundle.outputs.cache-hit != 'true' && steps.mbx-export.outputs.ready == 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: ${{ steps.mbx.outputs.cache-primary-key }}
+          path: ${{ runner.temp }}/mbx-single-bundle
+      - name: Collect MBX cache before export
+        if: success() && runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mbx gc
   rust-velnor-runner-github:
     name: Rust / velnor-runner-github
     runs-on: ubuntu-26.04
@@ -3636,13 +4527,57 @@ jobs:
           path: "${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin\n${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
           restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
       - name: Restore MBX objects
-        uses: jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6
+        id: mbx
+        uses: jdx/mr-boxington-action@d0825fbaf3cc36ca2609aa38e71046265a1f1e37
         with:
           cache-generation: velnor-mbx-1.21.1
+          cache-key-suffix: ${{ runner.environment == 'github-hosted' && github.job || '' }}
           github-cache-mode: objects
+          isolate-objects-cache: ${{ runner.environment == 'github-hosted' }}
           version: 1.21.1
         env:
-          ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && 'write' || 'read' }}
+          ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
+      - name: Prepare MBX bundle key
+        id: mbx-bundle-key
+        if: runner.environment != 'github-hosted'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MBX_KEY: ${{ steps.mbx.outputs.cache-primary-key }}
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; key=\"$MBX_KEY\"; case \"$key\" in '\\'''\\''|*-) exit 1 ;; esac; prefix=\"${key%-*}-\"; echo \"prefix=${prefix}\" >> \"$GITHUB_OUTPUT\"'"
+      - name: Restore MBX single bundle
+        id: mbx-bundle
+        if: runner.environment != 'github-hosted'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: ${{ steps.mbx.outputs.cache-primary-key }}
+          path: ${{ runner.temp }}/mbx-single-bundle
+          restore-keys: ${{ steps.mbx-bundle-key.outputs.prefix }}
+      - name: Import MBX single bundle
+        if: runner.environment != 'github-hosted'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MATCHED: ${{ steps.mbx-bundle.outputs.cache-matched-key }}
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; if [ -z \"$MATCHED\" ]; then echo \"no mbx bundle matched\"; exit 0; fi; if [ ! -d \"$bundle\" ]; then echo \"mbx bundle missing; continuing cold\"; exit 0; fi; if ! mbx cache import \"$bundle\"; then echo \"mbx bundle import failed; continuing cold\"; rm -rf \"$bundle\"; exit 0; fi'"
       - name: Fetch Cargo sources
         env:
           MISE_AUTO_INSTALL: "false"
@@ -3849,6 +4784,43 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-velnor-runner-github
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
+      - name: Export MBX single bundle
+        id: mbx-export
+        if: runner.environment != 'github-hosted' && success() && github.event_name == 'push' && steps.mbx.outputs.cache-hit != 'true' && steps.mbx-bundle.outputs.cache-hit != 'true'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; mbx gc; mbx cache dir > \"$RUNNER_TEMP/mbx-store-path\"; IFS= read -r store < \"$RUNNER_TEMP/mbx-store-path\"; test -n \"$store\"; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; case \"$bundle\" in \"$store\"|\"$store\"/*) exit 1 ;; esac; case \"$store\" in /|.) exit 1 ;; *mbx*) ;; *) exit 1 ;; esac; rm -rf \"$bundle\"; if mbx cache export --group \"$MBX_CACHE_EXPORT_GROUP\" --format directory \"$bundle\" >\"$RUNNER_TEMP/mbx-export.out\" 2>&1; then test -d \"$bundle\"; rm -rf \"$store\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; echo \"ready=true\" >> \"$GITHUB_OUTPUT\"; else rm -rf \"$bundle\"; if grep -q \"no completed mbx builds are recorded for export group\" \"$RUNNER_TEMP/mbx-export.out\"; then echo \"ready=false\" >> \"$GITHUB_OUTPUT\"; exit 0; fi; cat \"$RUNNER_TEMP/mbx-export.out\"; exit 1; fi'"
+      - name: Save MBX single bundle
+        if: runner.environment != 'github-hosted' && success() && github.event_name == 'push' && steps.mbx.outputs.cache-hit != 'true' && steps.mbx-bundle.outputs.cache-hit != 'true' && steps.mbx-export.outputs.ready == 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: ${{ steps.mbx.outputs.cache-primary-key }}
+          path: ${{ runner.temp }}/mbx-single-bundle
+      - name: Collect MBX cache before export
+        if: success() && runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mbx gc
   rust-velnor-runner-host:
     name: Rust / velnor-runner-host
     runs-on: ubuntu-26.04
@@ -3939,13 +4911,57 @@ jobs:
           path: "${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin\n${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
           restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
       - name: Restore MBX objects
-        uses: jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6
+        id: mbx
+        uses: jdx/mr-boxington-action@d0825fbaf3cc36ca2609aa38e71046265a1f1e37
         with:
           cache-generation: velnor-mbx-1.21.1
+          cache-key-suffix: ${{ runner.environment == 'github-hosted' && github.job || '' }}
           github-cache-mode: objects
+          isolate-objects-cache: ${{ runner.environment == 'github-hosted' }}
           version: 1.21.1
         env:
-          ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && 'write' || 'read' }}
+          ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
+      - name: Prepare MBX bundle key
+        id: mbx-bundle-key
+        if: runner.environment != 'github-hosted'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MBX_KEY: ${{ steps.mbx.outputs.cache-primary-key }}
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; key=\"$MBX_KEY\"; case \"$key\" in '\\'''\\''|*-) exit 1 ;; esac; prefix=\"${key%-*}-\"; echo \"prefix=${prefix}\" >> \"$GITHUB_OUTPUT\"'"
+      - name: Restore MBX single bundle
+        id: mbx-bundle
+        if: runner.environment != 'github-hosted'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: ${{ steps.mbx.outputs.cache-primary-key }}
+          path: ${{ runner.temp }}/mbx-single-bundle
+          restore-keys: ${{ steps.mbx-bundle-key.outputs.prefix }}
+      - name: Import MBX single bundle
+        if: runner.environment != 'github-hosted'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MATCHED: ${{ steps.mbx-bundle.outputs.cache-matched-key }}
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; if [ -z \"$MATCHED\" ]; then echo \"no mbx bundle matched\"; exit 0; fi; if [ ! -d \"$bundle\" ]; then echo \"mbx bundle missing; continuing cold\"; exit 0; fi; if ! mbx cache import \"$bundle\"; then echo \"mbx bundle import failed; continuing cold\"; rm -rf \"$bundle\"; exit 0; fi'"
       - name: Fetch Cargo sources
         env:
           MISE_AUTO_INSTALL: "false"
@@ -4152,6 +5168,43 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-velnor-runner-host
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
+      - name: Export MBX single bundle
+        id: mbx-export
+        if: runner.environment != 'github-hosted' && success() && github.event_name == 'push' && steps.mbx.outputs.cache-hit != 'true' && steps.mbx-bundle.outputs.cache-hit != 'true'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; mbx gc; mbx cache dir > \"$RUNNER_TEMP/mbx-store-path\"; IFS= read -r store < \"$RUNNER_TEMP/mbx-store-path\"; test -n \"$store\"; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; case \"$bundle\" in \"$store\"|\"$store\"/*) exit 1 ;; esac; case \"$store\" in /|.) exit 1 ;; *mbx*) ;; *) exit 1 ;; esac; rm -rf \"$bundle\"; if mbx cache export --group \"$MBX_CACHE_EXPORT_GROUP\" --format directory \"$bundle\" >\"$RUNNER_TEMP/mbx-export.out\" 2>&1; then test -d \"$bundle\"; rm -rf \"$store\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; echo \"ready=true\" >> \"$GITHUB_OUTPUT\"; else rm -rf \"$bundle\"; if grep -q \"no completed mbx builds are recorded for export group\" \"$RUNNER_TEMP/mbx-export.out\"; then echo \"ready=false\" >> \"$GITHUB_OUTPUT\"; exit 0; fi; cat \"$RUNNER_TEMP/mbx-export.out\"; exit 1; fi'"
+      - name: Save MBX single bundle
+        if: runner.environment != 'github-hosted' && success() && github.event_name == 'push' && steps.mbx.outputs.cache-hit != 'true' && steps.mbx-bundle.outputs.cache-hit != 'true' && steps.mbx-export.outputs.ready == 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: ${{ steps.mbx.outputs.cache-primary-key }}
+          path: ${{ runner.temp }}/mbx-single-bundle
+      - name: Collect MBX cache before export
+        if: success() && runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mbx gc
   zizmor:
     name: Zizmor
     runs-on: ubuntu-26.04

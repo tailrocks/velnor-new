@@ -10,9 +10,9 @@ use velnor_actions_workflow_renderer::{RenderError, render_workflow_ir};
 
 use super::impl_renderer_fixtures::*;
 
-/// Rendered GC policy reaches MBX only and composes with push-only saves.
+/// Hosted MBX jobs receive GC and trusted-main cache-write policy only.
 #[test]
-fn action_step_env_renders_only_when_present() -> Result<(), RenderError> {
+fn hosted_action_step_has_isolated_trusted_main_cache_policy() -> Result<(), RenderError> {
     let uses = format!("jdx/mr-boxington-action@{}", "a".repeat(40));
     let mbx = mbx_objects_step(&uses, false, "1.21.1")?;
     let plain = checkout_step(&checkout_pin())?;
@@ -23,12 +23,28 @@ fn action_step_env_renders_only_when_present() -> Result<(), RenderError> {
         &fixture_ctx(),
     )?;
     assert!(
-        text.contains(&format!("{MBX_CACHE_MODE_ENV}: read")),
-        "action post stays restore-only:\n{text}"
+        text.contains(&format!(
+            "{MBX_CACHE_MODE_ENV}: ${{{{ runner.environment == 'github-hosted' && github.event_name == 'push'"
+        )),
+        "hosted cache mode is event-gated:\n{text}"
     );
     assert!(
-        !text.contains("&& 'write'"),
-        "push writes must not come from the action post:\n{text}"
+        text.contains("isolate-objects-cache: ${{ runner.environment == 'github-hosted' }}"),
+        "isolation activates only on hosted runners:\n{text}"
+    );
+    assert!(
+        text.contains(
+            "cache-key-suffix: ${{ runner.environment == 'github-hosted' && github.job || '' }}"
+        ),
+        "hosted jobs use private primary keys:\n{text}"
+    );
+    assert!(
+        text.contains("github.ref_protected == true && 'write' || 'read'"),
+        "untrusted events stay read-only:\n{text}"
+    );
+    assert!(
+        text.contains("Collect MBX cache before export"),
+        "hosted action exports only after synchronous collection:\n{text}"
     );
     assert!(
         text.contains("MBX_GC_AUTO: \"1\""),
@@ -58,7 +74,7 @@ fn action_step_env_renders_only_when_present() -> Result<(), RenderError> {
     Ok(())
 }
 
-/// Lane extraction keeps hosted GC enabled and leaves scale-set policy intact.
+/// Lane extraction preserves one shared policy body for both runner profiles.
 #[test]
 fn mbx_gc_policy_is_scoped_to_hosted_mbx_jobs() -> Result<(), RenderError> {
     let uses = format!("jdx/mr-boxington-action@{}", "a".repeat(40));
@@ -88,5 +104,13 @@ fn mbx_gc_policy_is_scoped_to_hosted_mbx_jobs() -> Result<(), RenderError> {
         &fixture_ctx(),
     )?;
     assert_eq!(text.matches("MBX_GC_AUTO: \"1\"").count(), 1, "{text}");
+    assert!(
+        text.contains("uses: $/.github/actions/rust-demo"),
+        "both lanes keep the shared composite:\n{text}"
+    );
+    assert!(
+        text.contains("MBX_GC_AUTO: \"1\""),
+        "only hosted jobs enable automatic collection:\n{text}"
+    );
     Ok(())
 }

@@ -23,16 +23,22 @@ fixed `Prepare Rust components` step (`mise exec rust@<exact> --
 rustup component add --toolchain <exact>-<triple> clippy rustfmt`):
 the pinned toolchain's own rustup, deterministic, writing only
 Velnor-owned tool homes — Mise installing components, not an ad hoc
-installer. For an MBX profile only, it then invokes the pinned
-`jdx/mr-boxington-action` in `github-cache-mode: objects` with
-`ACTIONS_CACHE_MODE=read`. The action owns the MBX object format. Read mode skips
-its post export, which wrote inside the live store and exhausted runner disk
-(run `37114238559`). The workflow exports one directory with `mbx cache export`
-to `$RUNNER_TEMP/mbx-single-bundle`, and `actions/cache` transports that opaque
-directory. `mbx cache import` loads it. A miss, a missing directory, or a failed
-import continues the job cold. For a Cargo profile, that action and MBX
-installation are absent. The same cache actions also transport Cargo source
-archives and qualified Mise task artifacts. They do not archive the live MBX store.
+installer. For an MBX profile only, hosted jobs invoke the pinned
+`jdx/mr-boxington-action` in `github-cache-mode: objects` with MBX 1.21.1,
+isolated per-job stores, and distinct job-suffixed primary keys. Its generated
+compatible restore prefix stays shared; the same job and SHA can reuse its
+exact entry. Only a protected default-branch push receives
+`ACTIONS_CACHE_MODE=write`; PRs, forks, and other hosted events remain read-only.
+`MBX_GC_AUTO=1` stays enabled, and the final ordinary hosted step runs
+synchronous `mbx gc` before the action post export/save. The action samples
+free bytes/inodes and staged archive size during that lifecycle. The exporter
+still stages the closure while the source store exists, so this candidate does
+not claim to eliminate the export-time peak. Scale Set jobs keep the action
+restore-only and use the external one-directory bundle route. A miss, missing
+bundle, or failed import continues cold. For a Cargo profile, the MBX action
+and installation are absent. The same cache actions also transport Cargo
+source archives and qualified Mise task artifacts; hosted MBX does not archive
+the live store.
 
 1. `Prepare pinned tools`: install exact Velnor policy tools through a fixed
    Mise invocation that loads no project config (`--no-config` plus

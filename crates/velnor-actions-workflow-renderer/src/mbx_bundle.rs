@@ -1,15 +1,9 @@
-//! Single-bundle MBX save for hosted and scale-set object caches.
+//! Hosted action-owned MBX isolation and scale-set single-bundle saves.
 //!
-//! `jdx/mr-boxington-action` post saves on every default-branch push, ignoring
-//! `save-on-*`. That post exports a directory inside the live store and then
-//! asks `actions/cache` to archive it, so the peak is the store, a second full
-//! copy, and the cache archive together. `ACTIONS_CACHE_MODE=read` makes
-//! `savePolicy` skip that post. A later step reclaims, writes one directory
-//! bundle under `runner.temp`, deletes the store only after that bundle
-//! exists, and saves that one path. The action restore looks up a different
-//! path, so the next job restores this same path and imports it into the store.
-//! A miss, a missing directory, or a failed import continues the job cold.
-//! Import and export print byte and inode lines for `$RUNNER_TEMP`.
+//! Hosted runners use the action's isolated store, per-job cache key, and
+//! trusted-main save policy. Scale Set runners retain the external bundle
+//! lifecycle because their persistent store must not be replaced by the
+//! hosted-only isolation mode.
 
 use std::collections::BTreeMap;
 
@@ -17,8 +11,8 @@ use velnor_actions_contract::{Job, Step, StepKind};
 
 use crate::RenderError;
 use crate::cache_steps::{
-    MBX_ACTION_CACHE_MODE, MBX_ACTION_NAME, MBX_CACHE_MODE_ENV, MBX_RESTORE_NAME,
-    TOOLS_RESTORE_USES, TOOLS_SAVE_USES, is_mbx_action,
+    MBX_ACTION_NAME, MBX_CACHE_MODE_ENV, MBX_RESTORE_NAME, TOOLS_RESTORE_USES, TOOLS_SAVE_USES,
+    is_mbx_action,
 };
 
 /// Display name of the reclaim-and-export step.
@@ -37,6 +31,21 @@ pub(crate) const MBX_BUNDLE_PATH: &str = "${{ runner.temp }}/mbx-single-bundle";
 const PREP_IF: &str = "success() && github.event_name == 'push' && steps.mbx.outputs.cache-hit != 'true' && steps.mbx-bundle.outputs.cache-hit != 'true'";
 /// Save gate. Empty exports set `ready=false` and must not call `actions/cache`.
 const SAVE_IF: &str = "success() && github.event_name == 'push' && steps.mbx.outputs.cache-hit != 'true' && steps.mbx-bundle.outputs.cache-hit != 'true' && steps.mbx-export.outputs.ready == 'true'";
+/// The shared lane composite enables native isolation only on hosted runners.
+const ISOLATE_HOSTED_CACHE: &str = "${{ runner.environment == 'github-hosted' }}";
+/// Hosted primary keys are job-private; the Scale Set branch resolves empty.
+/// The action appends this suffix after its generated SHA key, while retaining
+/// its generated OS/architecture/generation/toolchain restore prefix. Therefore
+/// the same job and SHA exact-warm on later runs, and compatible jobs may still
+/// warm-start without sharing a primary writer key.
+const HOSTED_CACHE_KEY_SUFFIX: &str =
+    "${{ runner.environment == 'github-hosted' && github.job || '' }}";
+/// Hosted action writes only for protected pushes to the repository default branch.
+const HOSTED_CACHE_MODE: &str = "${{ runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}";
+/// Shared lane composites keep the external bundle route on Scale Set runners.
+const SCALE_SET_ONLY_IF: &str = "runner.environment != 'github-hosted'";
+/// Finish collection before the hosted action's post step exports the bundle.
+const HOSTED_PRE_EXPORT_GC_IF: &str = "success() && runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true";
 
 /// One-line script: gc, one external bundle, delete the store only after it exists.
 const EXPORT_SCRIPT: &str = r#"set -eu; df -B1 -P "$RUNNER_TEMP"; df -i -P "$RUNNER_TEMP"; mbx gc; mbx cache dir > "$RUNNER_TEMP/mbx-store-path"; IFS= read -r store < "$RUNNER_TEMP/mbx-store-path"; test -n "$store"; bundle="$RUNNER_TEMP/mbx-single-bundle"; case "$bundle" in "$store"|"$store"/*) exit 1 ;; esac; case "$store" in /|.) exit 1 ;; *mbx*) ;; *) exit 1 ;; esac; rm -rf "$bundle"; if mbx cache export --group "$MBX_CACHE_EXPORT_GROUP" --format directory "$bundle" >"$RUNNER_TEMP/mbx-export.out" 2>&1; then test -d "$bundle"; rm -rf "$store"; df -B1 -P "$RUNNER_TEMP"; df -i -P "$RUNNER_TEMP"; echo "ready=true" >> "$GITHUB_OUTPUT"; else rm -rf "$bundle"; if grep -q "no completed mbx builds are recorded for export group" "$RUNNER_TEMP/mbx-export.out"; then echo "ready=false" >> "$GITHUB_OUTPUT"; exit 0; fi; cat "$RUNNER_TEMP/mbx-export.out"; exit 1; fi"#;
@@ -64,19 +73,17 @@ pub(crate) fn push_step_id(entries: &mut Vec<(String, crate::yaml::Yaml)>, name:
     entries.push(("id".to_owned(), crate::yaml::Yaml::str(id.to_owned())));
 }
 
-/// Force every MBX action to restore-only and append the single-bundle save.
+/// Emit both routes into shared lane composites with runtime runner guards.
 ///
 /// # Errors
 ///
-/// Returns [`RenderError`] when the export or save step fails validation.
-pub(crate) fn append_single_bundle_saves(
-    jobs: &mut BTreeMap<String, Job>,
-) -> Result<(), RenderError> {
+/// Returns [`RenderError`] when a bundle step fails validation.
+pub(crate) fn apply_mbx_cache_policy(jobs: &mut BTreeMap<String, Job>) -> Result<(), RenderError> {
     for job in jobs.values_mut() {
         if !job.steps.iter().any(is_mbx_action) {
             continue;
         }
-        pin_restore_only(job);
+        configure_runner_scoped_cache(job);
         insert_bundle_restore(job)?;
         if job
             .steps
@@ -87,22 +94,28 @@ pub(crate) fn append_single_bundle_saves(
         }
         job.steps.push(export_step()?);
         job.steps.push(save_step()?);
+        job.steps.push(pre_export_gc_step()?);
     }
     Ok(())
 }
 
-fn pin_restore_only(job: &mut Job) {
+fn configure_runner_scoped_cache(job: &mut Job) {
     for step in &mut job.steps {
-        let StepKind::Action { uses, env, .. } = &mut step.kind else {
+        let StepKind::Action { uses, with, env } = &mut step.kind else {
             continue;
         };
         if !uses.starts_with(&format!("{MBX_ACTION_NAME}@")) {
             continue;
         }
-        env.insert(
-            MBX_CACHE_MODE_ENV.to_owned(),
-            MBX_ACTION_CACHE_MODE.to_owned(),
+        with.insert(
+            "isolate-objects-cache".to_owned(),
+            ISOLATE_HOSTED_CACHE.to_owned(),
         );
+        with.insert(
+            "cache-key-suffix".to_owned(),
+            HOSTED_CACHE_KEY_SUFFIX.to_owned(),
+        );
+        env.insert(MBX_CACHE_MODE_ENV.to_owned(), HOSTED_CACHE_MODE.to_owned());
     }
 }
 
@@ -128,15 +141,17 @@ fn key_step() -> Result<Step, RenderError> {
         "MBX_KEY".to_owned(),
         "${{ steps.mbx.outputs.cache-primary-key }}".to_owned(),
     )]);
-    crate::steps::shell_step(
+    let mut step = crate::steps::shell_step(
         MBX_BUNDLE_KEY_NAME,
         vec!["bash".to_owned(), "-c".to_owned(), KEY_SCRIPT.to_owned()],
         env,
-    )
+    )?;
+    step.condition = Some(SCALE_SET_ONLY_IF.to_owned());
+    Ok(step)
 }
 
 fn restore_step() -> Result<Step, RenderError> {
-    crate::steps::action_step(
+    let mut step = crate::steps::action_step(
         MBX_BUNDLE_RESTORE_NAME,
         TOOLS_RESTORE_USES,
         BTreeMap::from([
@@ -150,7 +165,9 @@ fn restore_step() -> Result<Step, RenderError> {
             ),
             ("path".to_owned(), MBX_BUNDLE_PATH.to_owned()),
         ]),
-    )
+    )?;
+    step.condition = Some(SCALE_SET_ONLY_IF.to_owned());
+    Ok(step)
 }
 
 fn import_step() -> Result<Step, RenderError> {
@@ -158,11 +175,13 @@ fn import_step() -> Result<Step, RenderError> {
         "MATCHED".to_owned(),
         "${{ steps.mbx-bundle.outputs.cache-matched-key }}".to_owned(),
     )]);
-    crate::steps::shell_step(
+    let mut step = crate::steps::shell_step(
         MBX_BUNDLE_IMPORT_NAME,
         vec!["bash".to_owned(), "-c".to_owned(), IMPORT_SCRIPT.to_owned()],
         env,
-    )
+    )?;
+    step.condition = Some(SCALE_SET_ONLY_IF.to_owned());
+    Ok(step)
 }
 
 fn export_step() -> Result<Step, RenderError> {
@@ -171,7 +190,7 @@ fn export_step() -> Result<Step, RenderError> {
         vec!["bash".to_owned(), "-c".to_owned(), EXPORT_SCRIPT.to_owned()],
         BTreeMap::new(),
     )?;
-    step.condition = Some(PREP_IF.to_owned());
+    step.condition = Some(format!("{SCALE_SET_ONLY_IF} && {PREP_IF}"));
     Ok(step)
 }
 
@@ -187,6 +206,16 @@ fn save_step() -> Result<Step, RenderError> {
             ("path".to_owned(), MBX_BUNDLE_PATH.to_owned()),
         ]),
     )?;
-    step.condition = Some(SAVE_IF.to_owned());
+    step.condition = Some(format!("{SCALE_SET_ONLY_IF} && {SAVE_IF}"));
+    Ok(step)
+}
+
+fn pre_export_gc_step() -> Result<Step, RenderError> {
+    let mut step = crate::steps::shell_step(
+        "Collect MBX cache before export",
+        vec!["mbx".to_owned(), "gc".to_owned()],
+        BTreeMap::new(),
+    )?;
+    step.condition = Some(HOSTED_PRE_EXPORT_GC_IF.to_owned());
     Ok(step)
 }
