@@ -35,8 +35,8 @@ fn uses_validation_rejects_moving_refs_and_forbidden_actions() {
     assert!(validate_uses(&pin("actions/checkout")).is_ok());
     assert!(validate_uses("actions/checkout@main").is_err());
     assert!(validate_uses("actions/checkout@v4").is_err());
-    assert!(validate_uses("asamarts/alint@9f9d34ba0eae3888299b9e570f43338b0e7f2cdb").is_ok());
-    assert!(validate_uses("asamarts/alint@v0.16.1").is_err());
+    assert!(validate_uses("asamarts/alint@d93c0283b19dd78afcd8a4b303f1556a7759ba81").is_ok());
+    assert!(validate_uses("asamarts/alint@v0.17.0").is_err());
     assert!(validate_uses("actions/checkout@ABCDEF").is_err());
     assert!(validate_uses("actions/checkout").is_err());
     assert!(validate_uses("just-a-name").is_err());

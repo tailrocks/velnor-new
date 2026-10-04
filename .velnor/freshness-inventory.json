@@ -85,16 +85,16 @@
       "latest_sha": "d0825fbaf3cc36ca2609aa38e71046265a1f1e37"
     },
     {
-      "checked_at": "2026-10-04T11:24:55Z",
+      "checked_at": "2026-10-04T17:50:50Z",
       "key": "asamarts/alint",
       "latest": "v0.17.0",
-      "pinned_sha": "9f9d34ba0eae3888299b9e570f43338b0e7f2cdb",
-      "pinned_version": "v0.16.1",
-      "qualified_sha": "9f9d34ba0eae3888299b9e570f43338b0e7f2cdb",
-      "qualified_version": "v0.16.1",
+      "pinned_sha": "d93c0283b19dd78afcd8a4b303f1556a7759ba81",
+      "pinned_version": "v0.17.0",
+      "qualified_sha": "d93c0283b19dd78afcd8a4b303f1556a7759ba81",
+      "qualified_version": "v0.17.0",
       "source": "https://api.github.com/repos/asamarts/alint/releases/latest",
-      "status": "held",
-      "source_sha256": "c5c52fb8d4418afbd2cad75ac8fce985494621e6ff2b35443f742dfadb1c5285"
+      "status": "current",
+      "source_sha256": "80a0eab492dff0471e57cd64f08e8fe947162b2de5aa07ed6f5d87ab0bcb9c5a"
     },
     {
       "checked_at": "2026-10-04T11:25:15Z",
@@ -126,15 +126,6 @@
   },
   "schema": 1,
   "temporary_holds": [
-    {
-      "expires": "2026-10-15",
-      "granted": "2026-10-01",
-      "held_version": "v0.16.1",
-      "issue": "#6",
-      "key": "asamarts/alint",
-      "owner": "@donbeave",
-      "reason": "upstream moved mid-consolidation; VER-3.2 update set tracked in #6, rust bump needs maintainer qualification decision; official source observed latest v0.17.0 at 2026-10-04T11:24:55Z"
-    },
     {
       "expires": "2026-10-15",
       "granted": "2026-10-01",

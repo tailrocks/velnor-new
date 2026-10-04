@@ -132,7 +132,7 @@ fn probe_action_rows() -> Vec<ProbeRow> {
         (
             "https://api.github.com/repos/asamarts/alint/releases/latest",
             "alint.json",
-            "{\"tag_name\": \"v0.16.1\"}",
+            "{\"tag_name\": \"v0.17.0\"}",
         ),
         (
             "https://api.github.com/repos/Swatinem/rust-cache/tags",

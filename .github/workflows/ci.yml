@@ -55,13 +55,13 @@ jobs:
         with:
           persist-credentials: "false"
       - name: Run Alint
-        uses: asamarts/alint@9f9d34ba0eae3888299b9e570f43338b0e7f2cdb
+        uses: asamarts/alint@d93c0283b19dd78afcd8a4b303f1556a7759ba81
         with:
           config: .alint.yml
           fail-on-warning: "true"
           format: github
           path: .
-          version: v0.16.1
+          version: v0.17.0
   cargo-deny:
     name: Cargo Deny
     runs-on: ubuntu-26.04

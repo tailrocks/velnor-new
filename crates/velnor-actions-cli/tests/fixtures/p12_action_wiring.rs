@@ -53,8 +53,8 @@ const CASES: [ActionPinCase; 8] = [
     ActionPinCase {
         keys: &["asamarts/alint"],
         prefix: "ALINT_ACTION",
-        version: "v0.16.1",
-        sha: "9f9d34ba0eae3888299b9e570f43338b0e7f2cdb",
+        version: "v0.17.0",
+        sha: "d93c0283b19dd78afcd8a4b303f1556a7759ba81",
     },
     ActionPinCase {
         keys: &["Swatinem/rust-cache"],

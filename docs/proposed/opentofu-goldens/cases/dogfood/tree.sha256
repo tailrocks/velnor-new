@@ -1,6 +1,6 @@
 a63e6a4550e75e14c2dd2ebe6efefe1360a847967c0ee2f28803eb43949dc6e4  ./.github/AGENTS.md
 0da1fbb188c99eb4cffe66befed975368b8b86ef7e375d2b8ac9a6540818fbff  ./.github/actionlint.yaml
-ddb6de84bf5f0827c5d2a14a4f8ebdae36fb76ebb1be263d82a9967e95f96a54  ./.github/workflows/ci.yml
+e3534c7655467ed1178f034d001a4f4837651e485ffda2ff94f93c389bcf9770  ./.github/workflows/ci.yml
 c777fb6c4837da2fd38fe4ac68b5235b759fb628de68a22c6adc14153ba086a3  ./.github/workflows/foundation-qualification.yml
 0d41b05d10d4da7b26a719f82908f2a47e7224ed93ef3383d81a6d45179fb5d8  ./.github/workflows/freshness.yml
 d13645f1aa9667a1ce9fa0886ca5f4930c3a9a0e33c3dfe7df6b8942cad9962a  ./.github/workflows/generator-release.yml
