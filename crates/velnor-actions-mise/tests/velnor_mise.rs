@@ -79,3 +79,5 @@ mod impl_mise_tofu_t27;
 mod impl_mise_tofu_t27_realbin;
 #[path = "impl_mise_verify.rs"]
 mod impl_mise_verify;
+#[path = "impl_miserc_isolation.rs"]
+mod impl_miserc_isolation;
