@@ -72,7 +72,7 @@ The 46-consumer scope source remains open PR #12 at head `c694d8029eb880db639fa8
 
 GitHub resolved every name. All 46 default branches are `main`; all 46 default heads and all 40 open PR heads were fetched and scanned. Final API metadata at about 03:11 UTC matched all 86 scanned full SHAs. No repository or PR head was inaccessible. The only name resolution is historical `tailrocks/tui-snap` → canonical `tailrocks/tuiscotti`, same repository ID `1358764452` (confirmed through both API names).
 
-The 02:27 CSV is stale for jackin-project/jackin PR #1111: that head advanced from `e426186cc8b7fe3387b8ac8891c7d3b08b0fc0b1` to `60f7d661d14af7ebdfbdf21bd48f5c5eebb28888` during this refresh. The new head was fetched and scanned; its four-file delta is limited to account/schema/workspace editor code and tests. The 03:11 metadata check still matched it. The refreshed per-head CSV records the current SHA for each default and PR snapshot.
+The original 02:27 CSV recorded jackin-project/jackin PR #1111 at `e426186cc8b7fe3387b8ac8891c7d3b08b0fc0b1`. During the 03:11 refresh, that head advanced to `60f7d661d14af7ebdfbdf21bd48f5c5eebb28888`; that head was fetched and scanned, and the 03:11 metadata check matched it. The later 07:42 snapshot advanced Jackin #1111 to `3a28c199f17da335ecd9abd8dd67ebf1aecc0421` and ChainArgos/java-monorepo #2085 to `7cbe1db11ccabb463053a93a8a08d33bda418b29`. Both refreshed CSVs record those current heads; all other existing scope-audit fields remain from their stated earlier snapshots.
 
 ## Search set
 
@@ -113,15 +113,20 @@ Before any deletion, verify these default/PR refs still equal the CSV SHAs and r
 ## 07:53 UTC exact-pattern full-tree scan
 
 The two moved PR trees were scanned at the exact 07:42 snapshot SHAs using
-the exact-pattern set listed above. Both scans reported zero exact-pattern
-matches:
+the 31-needle R1 set listed above. Both scans reported zero matches for the
+29 retirement needles: nine owned-source ref names, 18 reviewed or excluded
+SHAs, `owned-source/`, and `tailrocks/velnor-new@`. The other two generic URL
+needles (`tailrocks/velnor-new/` and `github.com/tailrocks/velnor-new`) match
+expected documentation, workflow, and manifest files. Their generic-path
+counts and classifications in the CSV retain prior-snapshot provenance for
+these moved PRs; they are not current-head counts. Those results are not zero.
 
-| Repository and ref | Snapshot SHA | Text files | Binary files | Exact-pattern matches |
+| Repository and ref | Snapshot SHA | Text files | Binary files | Retirement-needle matches (29) |
 |---|---|---:|---:|---:|
 | `jackin-project/jackin` PR #1111 | `3a28c199f17da335ecd9abd8dd67ebf1aecc0421` | 2,519 | 116 | 0 |
 | `ChainArgos/java-monorepo` PR #2085 | `7cbe1db11ccabb463053a93a8a08d33bda418b29` | 7,007 | 5,939 | 0 |
 
 The file counts describe the full-tree inventory for these two snapshots.
-The exact-pattern result is bounded to the fixed needles in this document;
-it does not refresh the generic-path or workflow-use classifications in the
-CSV and makes no runtime claim.
+The zero result is bounded to the 29 retirement needles. Generic URL/path and
+workflow-use classifications remain separate in the CSV and retain their
+prior-snapshot provenance for these two moved PRs. No runtime claim is made.
