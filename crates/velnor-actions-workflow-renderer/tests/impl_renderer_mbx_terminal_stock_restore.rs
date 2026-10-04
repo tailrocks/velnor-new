@@ -77,6 +77,21 @@ fn terminal_certifier_is_always_run_and_depends_only_on_roundtrip_roles() -> Res
     assert!(!terminal.contains("contents: read"));
     assert!(terminal.contains("name: Prepare private MBX terminal evidence"));
     assert!(terminal.contains("id: prepare_terminal_evidence"));
+    let prepare_at = terminal
+        .find("name: Prepare private MBX terminal evidence")
+        .ok_or_else(|| RenderError::InvalidWorkflow("terminal_prepare_missing".to_owned()))?;
+    let first_download_at = terminal
+        .find("name: Download MBX writer evidence")
+        .ok_or_else(|| RenderError::InvalidWorkflow("terminal_download_missing".to_owned()))?;
+    assert!(prepare_at < first_download_at);
+    let before_downloads = &terminal[..first_download_at];
+    assert!(
+        before_downloads.contains("test \"$(realpath -e -- \"$runner_temp\")\" = \"$runner_temp\"")
+    );
+    assert!(
+        before_downloads.contains("test \"$(stat -c '%u' -- \"$runner_temp\")\" = \"$(id -u)\"")
+    );
+    assert!(before_downloads.contains("stock_restore_private_dir \"$directory\" \"$runner_temp\""));
     assert!(
         terminal
             .contains("mkdir -m 700 \"$root/writer\" \"$root/reader\" \"$root/corrupt-reader\"")
@@ -89,7 +104,7 @@ fn terminal_certifier_is_always_run_and_depends_only_on_roundtrip_roles() -> Res
         terminal
             .matches("always() && steps.prepare_terminal_evidence.outcome == 'success'")
             .count(),
-        4
+        5
     );
     assert!(terminal.contains("name: Classify MBX stock restore outcomes"));
     assert!(terminal.contains("name: Upload MBX terminal certification"));

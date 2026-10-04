@@ -18,8 +18,12 @@ const UPLOAD_STEP: &str = "Upload MBX terminal certification";
 const RESULT_NAME: &str = "mbx-cache-roundtrip-terminal-";
 const PREPARE_SCRIPT: &str = r#"set -euo pipefail
 umask 077
-root="$RUNNER_TEMP/mbx-roundtrip-terminal"
-stock="$RUNNER_TEMP/mbx-stock-restore-evidence"
+runner_temp="${RUNNER_TEMP:?}"
+test -d "$runner_temp" && test ! -L "$runner_temp"
+test "$(realpath -e -- "$runner_temp")" = "$runner_temp"
+test "$(stat -c '%u' -- "$runner_temp")" = "$(id -u)"
+root="$runner_temp/mbx-roundtrip-terminal"
+stock="$runner_temp/mbx-stock-restore-evidence"
 for path in "$root" "$stock"; do
   if [ -e "$path" ] || [ -L "$path" ]; then
     echo 'terminal evidence directory already exists' >&2
@@ -28,6 +32,9 @@ for path in "$root" "$stock"; do
 done
 mkdir -m 700 "$root" "$stock"
 mkdir -m 700 "$root/writer" "$root/reader" "$root/corrupt-reader"
+for directory in "$root" "$root/writer" "$root/reader" "$root/corrupt-reader" "$stock"; do
+  stock_restore_private_dir "$directory" "$runner_temp"
+done
 "#;
 const CERTIFY_SCRIPT: &str = include_str!("schema2_mbx_roundtrip_terminal.sh");
 
@@ -57,12 +64,7 @@ pub(super) fn job(
         "permissions".to_owned(),
         Yaml::Map(vec![("actions".to_owned(), Yaml::str("read"))]),
     ));
-    let mut rendered = vec![raw_step(
-        "Prepare private MBX terminal evidence",
-        "prepare_terminal_evidence",
-        PREPARE_SCRIPT,
-        Some("always()"),
-    )?];
+    let mut rendered = vec![prepare_step()?];
     rendered.extend(download_steps(&context)?);
     rendered.push(classify_step(request)?);
     rendered.push(upload_step(&context)?);
@@ -95,12 +97,7 @@ fn download_steps(context: &crate::render::RenderContext) -> Result<Vec<Yaml>, R
 }
 
 fn classify_step(request: &MbxQualificationPins) -> Result<Yaml, RenderError> {
-    let mut script = String::with_capacity(
-        super::mbx_stock_restore::STOCK_RESTORE_CLASSIFIER_SCRIPT.len() + CERTIFY_SCRIPT.len(),
-    );
-    script.push_str(super::mbx_stock_restore::STOCK_RESTORE_CLASSIFIER_SCRIPT);
-    script.push('\n');
-    script.push_str(CERTIFY_SCRIPT);
+    let script = stock_restore_script(CERTIFY_SCRIPT);
     crate::steps::scan_for_private_subcommands(&script)?;
     crate::expressions::check_name_content(CLASSIFY_STEP)?;
     Ok(token_shell_step(
@@ -124,8 +121,27 @@ fn classify_step(request: &MbxQualificationPins) -> Result<Yaml, RenderError> {
                 request.mbx_version.clone(),
             ),
         ]),
-        Some("always()"),
+        Some("always() && steps.prepare_terminal_evidence.outcome == 'success'"),
     ))
+}
+
+fn prepare_step() -> Result<Yaml, RenderError> {
+    let script = stock_restore_script(PREPARE_SCRIPT);
+    raw_step(
+        "Prepare private MBX terminal evidence",
+        "prepare_terminal_evidence",
+        &script,
+        Some("always()"),
+    )
+}
+
+fn stock_restore_script(body: &str) -> String {
+    let prelude = super::mbx_stock_restore::STOCK_RESTORE_CLASSIFIER_SCRIPT;
+    let mut script = String::with_capacity(prelude.len() + body.len() + 1);
+    script.push_str(prelude);
+    script.push('\n');
+    script.push_str(body);
+    script
 }
 
 fn upload_step(context: &crate::render::RenderContext) -> Result<Yaml, RenderError> {
