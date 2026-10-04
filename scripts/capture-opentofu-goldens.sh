@@ -54,6 +54,14 @@ link_identity() {
   done)
 }
 
+normalize_generate_stderr() {
+  local stderr="$1" normalized="$1.normalized"
+  sed -e 's|^Preview: .*|Preview: <preview>|' \
+    -e 's|^Repository: .*|Repository: <repo>|' \
+    "$stderr" >"$normalized" \
+    && mv "$normalized" "$stderr"
+}
+
 build_bin() {
   (cd "$ROOT" && cargo build --locked -p velnor-actions-cli) >/dev/null 2>&1 \
     || { echo "FATAL: cargo build failed"; exit 2; }
@@ -91,7 +99,10 @@ capture_case() {
   rm "$out/plan.raw.txt"
   if [ "$(cat "$out/plan.exit")" = "0" ]; then
     (cd "$repo" && "$BIN" generate --output-dir "$preview" >"$out/generate.stdout.txt" 2>"$out/generate.stderr.txt"; echo "$?" >"$out/generate.exit")
-    hash_tree "$preview" "$out/tree.sha256"
+    normalize_generate_stderr "$out/generate.stderr.txt" \
+      || die "$case generate stderr normalization failed"
+    hash_tree "$preview" "$out/tree.sha256" \
+      || die "$case preview tree hashing failed"
   fi
 }
 
@@ -106,13 +117,16 @@ capture_dogfood() {
     "$out/plan.raw.txt" >"$out/plan.txt"
   rm "$out/plan.raw.txt"
   (cd "$ROOT" && "$BIN" generate --output-dir "$preview" >"$out/generate.stdout.txt" 2>"$out/generate.stderr.txt"; echo "$?" >"$out/generate.exit")
+  normalize_generate_stderr "$out/generate.stderr.txt" \
+    || die "dogfood generate stderr normalization failed"
   if [ -d "$preview/.github" ]; then
     if diff -r "$ROOT/.github" "$preview/.github" >"$out/dogfood.diff" 2>&1; then
       echo "identical" >"$out/dogfood.verdict"
     else
       echo "DIFFERS" >"$out/dogfood.verdict"
     fi
-    hash_tree "$preview" "$out/tree.sha256"
+    hash_tree "$preview" "$out/tree.sha256" \
+      || die "dogfood preview tree hashing failed"
   fi
 }
 
@@ -134,6 +148,37 @@ capture_dogfood "$stage/dogfood"
 note "captured dogfood (plan exit $(cat "$stage/dogfood/plan.exit"), tree $(cat "$stage/dogfood/dogfood.verdict" 2>/dev/null))"
 
 if [ "$MODE" = "capture" ]; then
+  for case in $FIXTURES dogfood; do
+    out="$stage/$case"
+    if [ ! -f "$out/plan.exit" ]; then
+      die "$case has no plan exit status"
+      continue
+    fi
+    plan_exit=$(cat "$out/plan.exit")
+    if [ "$plan_exit" != "0" ]; then
+      die "$case plan exited $plan_exit"
+    fi
+    if [ "$case" = "dogfood" ] || [ "$plan_exit" = "0" ] || [ -f "$out/generate.exit" ]; then
+      if [ ! -f "$out/generate.exit" ]; then
+        die "$case has no expected generate exit status"
+      elif [ "$(cat "$out/generate.exit")" != "0" ]; then
+        die "$case generate did not exit 0"
+      fi
+    fi
+    if [ "$plan_exit" = "0" ] && [ -f "$out/generate.exit" ] \
+      && [ "$(cat "$out/generate.exit")" = "0" ] \
+      && [ ! -f "$out/tree.sha256" ]; then
+      die "$case has no preview tree digest"
+    fi
+  done
+  if [ ! -d "$stage/dogfood/preview/.github" ]; then
+    die "dogfood preview has no .github directory"
+  fi
+  if [ "$(cat "$stage/dogfood/dogfood.verdict" 2>/dev/null)" != "identical" ]; then
+    die "dogfood generated workflows are not identical to repository workflows"
+  fi
+  [ "$fail" = "0" ] || exit "$fail"
+
   rm -rf "$GOLDEN_DIR/cases"
   mkdir -p "$GOLDEN_DIR"
   copy_tree "$stage" "$GOLDEN_DIR/cases"
