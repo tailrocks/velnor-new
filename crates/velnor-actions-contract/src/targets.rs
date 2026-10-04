@@ -5,11 +5,7 @@
 //! macOS targets exist for local release installs only.
 
 /// Every supported release target triple, in manifest order.
-pub const SUPPORTED_TARGETS: [&str; 3] = [
-    "x86_64-unknown-linux-gnu",
-    "aarch64-apple-darwin",
-    "x86_64-apple-darwin",
-];
+pub const SUPPORTED_TARGETS: [&str; 2] = ["x86_64-unknown-linux-gnu", "aarch64-apple-darwin"];
 
 /// Release-manifest JSON asset filename (version is inside the JSON).
 pub const RELEASE_MANIFEST_FILENAME: &str = "velnor-actions-release-manifest.json";

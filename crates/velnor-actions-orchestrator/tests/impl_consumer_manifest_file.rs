@@ -23,11 +23,7 @@ fn release_manifest_json() -> String {
 fn manifest_with_version(version: &str) -> String {
     // Distinctive digest proving the Acquire step copies the committed file.
     let sha = "c".repeat(64);
-    let targets = [
-        "x86_64-unknown-linux-gnu",
-        "aarch64-apple-darwin",
-        "x86_64-apple-darwin",
-    ]
+    let targets = velnor_actions_contract::SUPPORTED_TARGETS
     .iter()
     .map(|target| {
         format!(
@@ -65,7 +61,7 @@ fn expected_acquire_block() -> String {
     let sha = "c".repeat(64);
     let commit = "d".repeat(40);
     format!(
-        "- name: Acquire Velnor\n        env:\n          ACTIONS_ID_TOKEN_REQUEST_TOKEN: \"\"\n          ACTIONS_ID_TOKEN_REQUEST_URL: \"\"\n          ACTIONS_RUNTIME_TOKEN: \"\"\n          CARGO_REGISTRY_TOKEN: \"\"\n          GH_CONFIG_DIR: \"\"\n          GH_HOST: \"\"\n          GH_TOKEN: \"\"\n          GITHUB_TOKEN: \"\"\n          MISE_GITHUB_TOKEN: \"\"\n          NODE_AUTH_TOKEN: \"\"\n          NPM_TOKEN: \"\"\n          VELNOR_ASSET_SHA256: {sha}\n          VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v{version}/velnor-actions-{version}-x86_64-unknown-linux-gnu\n          VELNOR_RELEASE_COMMIT: {commit}\n        run: \"sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \\\"$RUNNER_TEMP/velnor/bin\\\" && curl -fsSL --proto '\\\\''=https'\\\\'' --tlsv1.2 \\\"$VELNOR_ASSET_URL\\\" -o \\\"$RUNNER_TEMP/velnor/bin/velnor-actions-{version}\\\" && echo \\\"$VELNOR_ASSET_SHA256  $RUNNER_TEMP/velnor/bin/velnor-actions-{version}\\\" | sha256sum -c - && chmod +x \\\"$RUNNER_TEMP/velnor/bin/velnor-actions-{version}\\\"'\"",
+        "- name: Acquire Velnor\n        env:\n          VELNOR_ASSET_SHA256: {sha}\n          VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v{version}/velnor-actions-{version}-x86_64-unknown-linux-gnu\n          VELNOR_RELEASE_COMMIT: {commit}\n        run: \"sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \\\"$RUNNER_TEMP/velnor/bin\\\" && curl -fsSL --proto '\\\\''=https'\\\\'' --tlsv1.2 \\\"$VELNOR_ASSET_URL\\\" -o \\\"$RUNNER_TEMP/velnor/bin/velnor-actions-{version}\\\" && echo \\\"$VELNOR_ASSET_SHA256  $RUNNER_TEMP/velnor/bin/velnor-actions-{version}\\\" | sha256sum -c - && chmod +x \\\"$RUNNER_TEMP/velnor/bin/velnor-actions-{version}\\\"'\"",
     )
 }
 
@@ -84,6 +80,7 @@ fn acquire_block(yaml: &str) -> Result<&str, Box<dyn std::error::Error>> {
 #[test]
 fn acquire_url_and_sha_come_from_committed_file() -> TestResult {
     let yaml = render_consumer_yaml(&release_manifest_json())?;
+    assert!(yaml.contains("ACTIONS_ID_TOKEN_REQUEST_TOKEN: \"\""));
     assert_eq!(acquire_block(&yaml)?, expected_acquire_block());
     Ok(())
 }
