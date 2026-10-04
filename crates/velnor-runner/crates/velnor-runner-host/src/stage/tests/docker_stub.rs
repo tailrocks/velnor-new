@@ -8,6 +8,9 @@ use bollard::Docker;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{UnixListener, UnixStream};
 
+mod query;
+use query::{RequestTarget, verify_versioned_path};
+
 use crate::journal::LaunchIdentity;
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
@@ -18,22 +21,6 @@ pub(super) struct Response {
     body: String,
     delay: Duration,
     target: RequestTarget,
-}
-
-struct RequestTarget {
-    method: &'static str,
-    path: String,
-    query_required: bool,
-}
-
-impl RequestTarget {
-    fn get(path: &str, query_required: bool) -> Self {
-        Self {
-            method: "GET",
-            path: path.to_owned(),
-            query_required,
-        }
-    }
 }
 
 pub(super) struct DockerStub {
@@ -141,7 +128,7 @@ pub(super) fn reconcile_responses(
             r#"{"ID":"engine_identity"}"#,
             RequestTarget::get("/info", false),
         ),
-        http(200, "[]", RequestTarget::get("/containers/json", true)),
+        http(200, "[]", RequestTarget::launch_list(identity)),
         inspect_response(404, r#"{"message":"missing DinD"}"#, identity, "dind"),
         inspect_runner,
     ]
@@ -256,39 +243,6 @@ async fn read_request(stream: &mut UnixStream, expected: &RequestTarget) -> Resu
         return Err("Docker request line does not match the scripted request".to_owned());
     }
     verify_versioned_path(actual_path, expected)
-}
-
-fn verify_versioned_path(actual: &str, expected: &RequestTarget) -> Result<(), String> {
-    let versioned = actual
-        .strip_prefix("/v")
-        .ok_or_else(|| "Docker request path has no API version".to_owned())?;
-    let slash = versioned
-        .find('/')
-        .ok_or_else(|| "Docker request API path is missing".to_owned())?;
-    let version = &versioned[..slash];
-    let Some((major, minor)) = version.split_once('.') else {
-        return Err("Docker API version is malformed".to_owned());
-    };
-    if major.is_empty()
-        || minor.is_empty()
-        || !major.bytes().all(|byte| byte.is_ascii_digit())
-        || !minor.bytes().all(|byte| byte.is_ascii_digit())
-    {
-        return Err("Docker API version is malformed".to_owned());
-    }
-    let path = &versioned[slash..];
-    if expected.query_required {
-        match path.split_once('?') {
-            Some((actual_path, query)) if actual_path == expected.path && !query.is_empty() => {
-                Ok(())
-            }
-            _ => Err("Docker request path does not match the scripted request".to_owned()),
-        }
-    } else if path == expected.path {
-        Ok(())
-    } else {
-        Err("Docker request path does not match the scripted request".to_owned())
-    }
 }
 
 const fn reason(status: u16) -> &'static str {
