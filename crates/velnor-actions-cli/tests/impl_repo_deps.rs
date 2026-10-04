@@ -82,6 +82,10 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
         // compile-gated at 1.98.1); default features only, facade-owned
         // byte/count/depth caps, no expression evaluation.
         "hcl",
+        // P12 baseline archives admit one bounded ZIP entry; raw DEFLATE
+        // must consume its full input. Both paths use only the zlib-rs backend.
+        "flate2",
+        "zip",
     ];
     for (dir, _) in MEMBERS {
         let body = manifest(dir)?;
@@ -108,9 +112,37 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
                     // P09 atomic directory exchange (no net/pty/terminal).
                     let narrow = feature == "derive"
                         || (key == "rustix" && feature == "fs")
-                        || (key == "syn" && ["full", "parsing", "visit"].contains(&feature));
+                        || (key == "syn" && ["full", "parsing", "visit"].contains(&feature))
+                        || (key == "flate2" && feature == "zlib-rs")
+                        || (key == "zip" && feature == "deflate-flate2-zlib-rs");
                     assert!(narrow, "{dir}/{key} feature {feature}");
                 }
+            }
+            if key == "flate2" || key == "zip" {
+                assert_eq!(
+                    dir, "crates/velnor-actions-orchestrator",
+                    "{key} is orchestrator-only"
+                );
+                let doc = p11_toml::parse(&body)?;
+                assert!(
+                    p11_toml::section(&doc, "dependencies").is_some_and(|dependencies| {
+                        dependencies.pairs.iter().any(|pair| pair.0 == key)
+                    }),
+                    "{dir}/{key} must be a runtime dependency"
+                );
+                let feature = if key == "flate2" {
+                    "zlib-rs"
+                } else {
+                    "deflate-flate2-zlib-rs"
+                };
+                let selected_features: Vec<&str> = line
+                    .find("features")
+                    .map(|index| line[index..].split('"').skip(1).step_by(2).collect())
+                    .unwrap_or_default();
+                assert!(
+                    line.contains("default-features = false") && selected_features == [feature],
+                    "{dir}/{key} must disable defaults and select only {feature}"
+                );
             }
             assert!(dep_referenced(dir, key)?, "{dir} never uses {key}");
         }
