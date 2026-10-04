@@ -81,7 +81,16 @@ fn assert_global_policy(body: &str, actions: &Actions) {
 fn assert_checkouts(body: &str, actions: &Actions) -> Result<(), Box<dyn std::error::Error>> {
     for id in super::job_ids(body) {
         let job = super::job_body(body, id)?;
-        assert_eq!(job.matches("actions/checkout@").count(), 1, "{id}: {job}");
+        let checkouts = job.matches("actions/checkout@").count();
+        if id.starts_with("qualify-") {
+            assert_eq!(checkouts, 0, "{id}: {job}");
+            assert!(
+                job.contains("Fetch exact public source without an action post hook"),
+                "{id}: {job}"
+            );
+        } else {
+            assert_eq!(checkouts, 1, "{id}: {job}");
+        }
         if id != "verify-release-source" {
             assert_eq!(
                 job.matches("uses: ./.github/actions/").count(),
@@ -163,21 +172,27 @@ fn assert_target_builds(body: &str, actions: &Actions) -> Result<(), Box<dyn std
     assert_attest(body, actions, "attest-macos", "macos-15")?;
     assert_attest(body, actions, "attest-macos-intel", "macos-15-intel")?;
     qualification_snapshots::assert_candidate_qualification(
+        body,
         actions,
+        "qualify-linux",
         "generator-release-qualify-linux",
         "build-linux",
         "linux-assets",
         "velnor-actions-0.1.1-x86_64-unknown-linux-gnu",
     )?;
     qualification_snapshots::assert_candidate_qualification(
+        body,
         actions,
+        "qualify-macos",
         "generator-release-qualify-macos",
         "build-macos",
         "macos-assets",
         "velnor-actions-0.1.1-aarch64-apple-darwin",
     )?;
     qualification_snapshots::assert_candidate_qualification(
+        body,
         actions,
+        "qualify-macos-intel",
         "generator-release-qualify-macos-intel",
         "build-macos-intel",
         "macos-intel-assets",

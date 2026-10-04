@@ -57,6 +57,10 @@ pub(super) fn rendered_actions(tree: &RenderedTree) -> Result<Actions, Box<dyn s
         let body = tree.get(&path).ok_or("missing generated local action")?;
         assert_eq!(body, &super::super::marked(snapshot), "{path}");
         assert!(body.lines().count() < 400, "{path} has too many lines");
+        assert!(
+            !body.contains("${{ needs."),
+            "composite action uses caller-only needs context: {path}"
+        );
         actions.insert(name, body.to_owned());
     }
     Ok(actions)
@@ -73,6 +77,11 @@ pub(super) fn committed_actions(
         assert!(
             body.lines().count() < 400,
             "{} has too many lines",
+            path.display()
+        );
+        assert!(
+            !body.contains("${{ needs."),
+            "composite action uses caller-only needs context: {}",
             path.display()
         );
         actions.insert(name, body);

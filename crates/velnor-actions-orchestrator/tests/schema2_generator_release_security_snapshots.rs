@@ -47,7 +47,7 @@ pub(super) fn assert_isolated_candidate_execution(
     ] {
         assert_target_boundary(workflow, actions, target)?;
     }
-    candidate_environment_writes_stay_in_qualifier()?;
+    candidate_environment_writes_cannot_cross_job_boundary()?;
     Ok(())
 }
 
@@ -80,7 +80,16 @@ fn assert_qualifier_boundary(
     target: TargetJobs,
 ) -> Result<(), Box<dyn Error>> {
     let qualifier = super::super::job_body(workflow, target.qualify)?;
-    assert!(qualifier.contains("contents: read"), "{qualifier}");
+    assert_qualifier_job_permissions(qualifier, target);
+    assert_qualifier_job_inputs(qualifier, target)?;
+    let qualifier_body = action(actions, target.qualifier_action)?;
+    assert_qualifier_action_boundary(qualifier_body)?;
+    assert_job_action(workflow, target.qualify, target.qualifier_action)?;
+    Ok(())
+}
+
+fn assert_qualifier_job_permissions(qualifier: &str, target: TargetJobs) {
+    assert!(qualifier.contains("permissions: {}"), "{qualifier}");
     for permission in [
         "actions: write",
         "contents: write",
@@ -98,16 +107,49 @@ fn assert_qualifier_boundary(
         "{qualifier}"
     );
     assert!(!qualifier.contains("outputs:"), "{qualifier}");
+    assert!(!qualifier.contains("persist-credentials:"), "{qualifier}");
+    assert!(!qualifier.contains("actions/checkout@"), "{qualifier}");
+}
+
+fn assert_qualifier_job_inputs(qualifier: &str, target: TargetJobs) -> Result<(), Box<dyn Error>> {
     assert!(
-        qualifier.contains("persist-credentials: \"false\""),
+        qualifier.contains(&format!(
+            "artifact_id: ${{{{ needs.{}.outputs.artifact_id }}}}",
+            target.build
+        )),
         "{qualifier}"
     );
-    assert_job_action(workflow, target.qualify, target.qualifier_action)?;
-    let qualifier_body = action(actions, target.qualifier_action)?;
-    let artifact_id = artifact_id_input(target.build);
-    assert!(qualifier_body.contains(&artifact_id), "{qualifier_body}");
+    assert_eq!(qualifier.matches("- name:").count(), 2, "{qualifier}");
+    let source_prepare = qualifier
+        .find("Fetch exact public source without an action post hook")
+        .ok_or("missing token-free source preparation")?;
+    let composite_call = qualifier
+        .find(&format!(
+            "uses: ./.github/actions/{}",
+            target.qualifier_action
+        ))
+        .ok_or("missing qualification composite call")?;
+    assert!(source_prepare < composite_call, "{qualifier}");
+    Ok(())
+}
+
+fn assert_qualifier_action_boundary(qualifier_body: &str) -> Result<(), Box<dyn Error>> {
+    assert_action_input(qualifier_body);
     assert!(
-        qualifier_body.contains("cache: \"false\""),
+        qualifier_body.contains("artifact-ids: ${{ inputs.artifact_id }}"),
+        "{qualifier_body}"
+    );
+    assert!(!qualifier_body.contains("${{ needs."), "{qualifier_body}");
+    assert!(!qualifier_body.contains("post:"), "{qualifier_body}");
+    assert!(!qualifier_body.contains("github_token"), "{qualifier_body}");
+    assert!(!qualifier_body.contains("Setup Mise"), "{qualifier_body}");
+    assert_eq!(
+        qualifier_body.matches("uses:").count(),
+        1,
+        "{qualifier_body}"
+    );
+    assert!(
+        qualifier_body.contains("actions/download-artifact@"),
         "{qualifier_body}"
     );
     assert!(
@@ -149,11 +191,22 @@ fn assert_attester_boundary(
         attester.contains(&format!("- {}\n      - {}\n", target.build, target.qualify)),
         "{attester}"
     );
+    assert!(
+        attester.contains(&format!(
+            "artifact_id: ${{{{ needs.{}.outputs.artifact_id }}}}",
+            target.build
+        )),
+        "{attester}"
+    );
     assert!(attester.contains("id-token: write"), "{attester}");
     assert_job_action(workflow, target.attest, target.attester_action)?;
     let attester_body = action(actions, target.attester_action)?;
-    let artifact_id = artifact_id_input(target.build);
-    assert!(attester_body.contains(&artifact_id), "{attester_body}");
+    assert_action_input(attester_body);
+    assert!(
+        attester_body.contains("artifact-ids: ${{ inputs.artifact_id }}"),
+        "{attester_body}"
+    );
+    assert!(!attester_body.contains("${{ needs."), "{attester_body}");
     assert!(
         attester_body.contains("Verify candidate provenance record"),
         "{attester_body}"
@@ -190,8 +243,12 @@ fn assert_attester_boundary(
     Ok(())
 }
 
-fn artifact_id_input(build: &str) -> String {
-    format!("artifact-ids: ${{{{ needs.{build}.outputs.artifact_id }}}}")
+fn assert_action_input(action: &str) {
+    assert!(
+        action.contains("inputs:\n  artifact_id:\n    description:"),
+        "{action}"
+    );
+    assert!(action.contains("    required: true\n"), "{action}");
 }
 
 fn assert_job_action(workflow: &str, id: &str, action_name: &str) -> Result<(), Box<dyn Error>> {
@@ -203,7 +260,7 @@ fn assert_job_action(workflow: &str, id: &str, action_name: &str) -> Result<(), 
     Ok(())
 }
 
-fn candidate_environment_writes_stay_in_qualifier() -> Result<(), Box<dyn Error>> {
+fn candidate_environment_writes_cannot_cross_job_boundary() -> Result<(), Box<dyn Error>> {
     let qualifier = tempfile::TempDir::new()?;
     let attester = tempfile::TempDir::new()?;
     let qualifier_bin = qualifier.path().join("bin");
