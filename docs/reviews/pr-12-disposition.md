@@ -1,17 +1,19 @@
 # PR #12 current disposition and historical evidence
 
-## Current authoritative snapshot — document updated 2026-10-04 06:57 UTC
+## Current authoritative snapshot — document updated 2026-10-04 07:27 UTC
 
-GitHub REST snapshot cutoff: `2026-10-04T06:37:13Z`.
+GitHub REST snapshot cutoff: `2026-10-04T07:27:54Z`.
 
 This section supersedes every status below the “Historical snapshot” heading.
 It is bound to PR #12 head `2a2dab0e04a7da18975ca634e505eb9d72dc2e58`, base
 `47815c83b9eeadbaf84b741918fffa7ea550da89`, and integration candidate
-`6ea09f2cb2beb595995bb2987b622791b0b7729d`. PR #12 is still open and draft.
+`df0c4df8a12e9bc66c7356f414de4f6f1f751148`. PR #12 is still open and draft.
 At this cutoff, the paginated GitHub Files API returned 280 paths; exact REST
 counts were 0 issue comments, 0 reviews, and 0 review comments/threads. The
-latest 54 `scripts/**` paths (excluding `scripts/check-freshness.sh`) are under
-per-file audit; do not apply the superseded 37-path count below to this head.
+exact 54 added `scripts/**` paths (excluding modified
+`scripts/check-freshness.sh`) are classified in
+[`pr-12-script-disposition-2026-10-04.md`](pr-12-script-disposition-2026-10-04.md):
+29 `NOT-CARRIED`, 25 `ALREADY-ABSENT`, with no unresolved path-level hold.
 These are candidate-branch source dispositions; they do not mean changes are
 merged to `main`, released, or adopted by consumers.
 
@@ -24,13 +26,11 @@ generator source, workflow, or golden change. This is the latest-head delta,
 not a PR-versus-integration comparison. The immutable compare endpoint is
 [`0efb5565...2a2dab0e`](https://api.github.com/repos/tailrocks/velnor-new/compare/0efb5565dd33a70b67fc2198d032153f6c5bee9f...2a2dab0e04a7da18975ca634e505eb9d72dc2e58);
 the captured response SHA-256 is
-`186cce20df223de8036e80ef3a88cd93a043cbe0196fd6fdc18a578f50432d32`. A
-separate exact per-file audit of all
-54 latest `scripts/**` paths is in progress. The 0ef/262-path partition and its
-37-script matrix below are historical evidence only. A frozen path inventory
-for head 2a2 has not yet been recorded; the live Files page below is navigation,
-not an immutable snapshot. Replace the old partition only after the latest
-audit review.
+`186cce20df223de8036e80ef3a88cd93a043cbe0196fd6fdc18a578f50432d32`. The
+separate exact per-file audit is bound to the same PR and integration SHAs
+above. The 0ef/262-path partition and its 37-script matrix below are historical
+evidence only. The immutable compare response records only the 0ef-to-2a2 delta;
+it is not used as the current full path inventory.
 
 ### Superseded 0ef snapshot: complete changed-path partition (262 paths)
 
@@ -116,11 +116,10 @@ current integration candidate. These counts do not describe head `2a2dab0e`.
   byte-identical and uses `dir-` identity.
 - **Freshness timestamp refreshes — `PARTIAL`.** Timestamp-only edits do not
   qualify tools or prove current-source freshness.
-- **Private owned-source files at 0ef — `TEMPORARY-HOLD`.** The historical
-  set of 37 paths had a per-file hold matrix. The latest 2a2 head has 54 paths;
-  per-file disposition and independent review are pending. No private
-  qualification or publication is inferred; supersede the hold only with the
-  exact latest-head path-level dispositions.
+- **Private owned-source files at 0ef — historical only.** The 37-path matrix
+  belongs to that old head. The latest 2a2 head's exact 54 added script paths
+  are classified in [`pr-12-script-disposition-2026-10-04.md`](pr-12-script-disposition-2026-10-04.md).
+  No private qualification or publication is inferred.
 
 The independent audit specifically accounted for all seven embedded Python
 capsule paths:
@@ -183,6 +182,13 @@ owners.
 - MBX hosted writer/reader, cache-version/path reuse, cancellation, corrupt
   import, parallel writer, ChainArgos workload peak bytes/inodes, and disk
   pressure remain `PARTIAL`.
+- Adopted R13 requires an explicit same-repository PR cache opt-in in a
+  separate PR namespace while forks remain read-only and trusted production
+  keys remain push-only. The typed `SameRepositoryScoped` config and trusted
+  push-only authorization cleanup are integrated. The renderer does not yet
+  consume the config or enable the PR-scoped namespace; that wiring and repeat
+  same-repository PR/fork hosted proof remain pending. Do not treat a
+  same-repository PR save as trusted-cache authorization.
 - Published archive recovery is complete: immutable release `402793692` has
   fresh-download proof with original JSON digest
   `07b853c18389042bb8adde7051b4a188f562f5ba461eb1112e4ac8afeba7c50f`; the
