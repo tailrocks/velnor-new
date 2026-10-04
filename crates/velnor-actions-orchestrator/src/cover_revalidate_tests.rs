@@ -68,8 +68,7 @@ fn wrong_provenance_fails_per_field() {
 /// Merge enforces the plan-time manifest invariants: every mutation
 /// below re-binds the plan (`plan_for` over the mutated manifest) so the
 /// manifest digest still verifies — only the named conjunct can fail.
-/// Pre-fix these verdicts passed; a forwarded proof the plan rejects
-/// must fail at merge too.
+/// An unbound forwarded proof rejected during planning must fail at merge too.
 #[test]
 fn merge_rejects_plan_rejected_manifest_invariants() {
     let commit = "a".repeat(40);

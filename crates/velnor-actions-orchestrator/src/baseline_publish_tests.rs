@@ -167,7 +167,10 @@ fn publish_stages_trusted_manifest_under_derived_name() {
         staged["artifact_id"],
         crate::cover_compat::baseline_artifact_numeric_id(&expected)
     );
-    assert_eq!(staged["tasks"].as_array().expect("tasks").len(), 2);
+    assert_eq!(staged["parent"], serde_json::Value::Null);
+    let tasks = staged["tasks"].as_array().expect("tasks");
+    assert_eq!(tasks.len(), 2);
+    assert!(tasks.iter().all(|task| task["carried_from"].is_null()));
 }
 
 #[test]
