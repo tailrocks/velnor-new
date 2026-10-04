@@ -13,10 +13,24 @@ stock_restore_private_file() {
     && [ "$bytes" -gt 0 ] && [ "$bytes" -le "$max_bytes" ]
 }
 
+stock_restore_private_dir() {
+  local path="$1" root="$2" resolved owner mode uid
+  case "$path" in "$root"|"$root"/*) ;; *) return 1 ;; esac
+  [ -d "$path" ] && [ ! -L "$path" ] || return 1
+  resolved="$(realpath -e -- "$path" 2>/dev/null)" || return 1
+  [ "$resolved" = "$path" ] || return 1
+  owner="$(stat -c '%u' -- "$path" 2>/dev/null)" || return 1
+  mode="$(stat -c '%a' -- "$path" 2>/dev/null)" || return 1
+  uid="$(id -u)" || return 1
+  [ "$owner" = "$uid" ] && [ "$mode" = 700 ]
+}
+
 stock_restore_api_json() {
-  local path="$1" destination="$2" status_path="${2}.status" status
+  local path="$1" destination="$2" directory="${2%/*}"
+  local status_path="${2}.status" status
   [ ! -e "$destination" ] && [ ! -L "$destination" ] \
     && [ ! -e "$status_path" ] && [ ! -L "$status_path" ] || return 1
+  stock_restore_private_dir "$directory" "$RUNNER_TEMP" || return 1
   (
     ulimit -f 4096
     curl --disable --noproxy '*' --proto '=https' --max-redirs 0 \
@@ -44,7 +58,12 @@ stock_restore_safe_https_url() {
 }
 
 stock_restore_fetch_signed_log() {
-  local root="$1" url="$2" status header_bytes bytes
+  local root="$1" url="$2" status header_bytes bytes path
+  stock_restore_private_dir "$root" "$RUNNER_TEMP" || return 1
+  for path in "$root/log-signed.headers" "$root/restore-step.log" \
+    "$root/log-signed.status" "$root/log-signed.stderr"; do
+    [ ! -e "$path" ] && [ ! -L "$path" ] || return 1
+  done
   stock_restore_safe_https_url "$url" || return 1
   (
     ulimit -f 2048
@@ -61,7 +80,11 @@ stock_restore_fetch_signed_log() {
 }
 
 stock_restore_step_log() {
-  local root="$1" job_id="$2" step_index="$3" endpoint status header_bytes locations location
+  local root="$1" job_id="$2" step_index="$3" endpoint status header_bytes locations location path
+  stock_restore_private_dir "$root" "$RUNNER_TEMP" || return 1
+  for path in "$root/log-api.headers" "$root/log-api.status" "$root/log-api.stderr"; do
+    [ ! -e "$path" ] && [ ! -L "$path" ] || return 1
+  done
   endpoint="https://api.github.com/repos/$GITHUB_REPOSITORY/actions/jobs/$job_id/steps/$step_index/logs"
   (
     ulimit -f 128
@@ -116,6 +139,7 @@ stock_restore_clean_log() {
 
 stock_restore_validate_receipt() {
   local receipt="$1" job="$2" role="$3" run="$4" attempt="$5" sha="$6" ref="$7" workflow="$8"
+  stock_restore_private_dir "${receipt%/*}" "$RUNNER_TEMP" || return 1
   stock_restore_private_file "$receipt" "$RUNNER_TEMP" 65536 || return 1
   jq -e --arg job "$job" --arg role "$role" --arg run "$run" --arg attempt "$attempt" \
     --arg sha "$sha" --arg ref "$ref" --arg workflow "$workflow" '
