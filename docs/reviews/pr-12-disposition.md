@@ -132,8 +132,12 @@ owners.
   on Linux, making `mode.try_into()` a useless conversion. macOS uses `u16`;
   a target-aware checked conversion is in progress. Do not call PR #28 ready
   until exact-head Linux and macOS gates pass.
-- PR #12 check run `37178556819` is not fully green: `Rust / velnor-actions-cli`
-  and aggregate `Required` failed. Refresh exact checks after the policy fix.
+- PR #12 check run `37178556819` is not fully green. `Rust / velnor-actions-cli`
+  failed `impl_cli_verify_local::verify_local_repo_policy_stage_executes`
+  because `check-freshness.sh` reported upstream `uv` evidence checked at
+  `2026-10-02T21:54:08Z`, 31.1 hours old against a 24-hour interval; aggregate
+  `Required` failed. The orchestrator job passed. Refresh the freshness
+  evidence and exact checks after the policy fix.
 - Official Mise adoption is `PARTIAL`: latest published stable 2026.10.1 is
   still the known-broken pre-fix binary. Do not claim a fixed official
   distribution from the source-built auxiliary binary.
