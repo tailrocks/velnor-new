@@ -285,8 +285,8 @@ fn matrix_jobs_use_each_matrix_key_as_the_save_suffix() -> Result<(), RenderErro
     assert_eq!(
         text.matches("MBX_MATRIX_KEY: ${{ matrix.matrix_key }}")
             .count(),
-        1,
-        "each matrix copy must pass its stable key to the bundle step:\n{text}"
+        2,
+        "the initializer and key step must pass the same stable matrix key:\n{text}"
     );
     assert!(
         text.contains("matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}"),
@@ -312,6 +312,18 @@ fn matrix_jobs_use_each_matrix_key_as_the_save_suffix() -> Result<(), RenderErro
 fn scale_set_save_matches_and_skips_hosted_gc_env() -> Result<(), RenderError> {
     let text = render_mbx("rust-demo__local", true)?;
     assert!(text.contains("name: Export MBX single bundle"), "{text}");
+    assert!(text.contains("id: mbx-store-init"), "{text}");
+    assert!(
+        text.contains("steps.mbx-store-init.outputs.ready == 'true'"),
+        "manual restore must be skipped when private-store setup is unavailable: {text}"
+    );
+    assert!(
+        text.contains("MBX_CACHE_EXPORT_GROUP=%s"),
+        "the generated Scale Set initializer must define the producer group: {text}"
+    );
+    assert!(text.contains("$GITHUB_RUN_ID"), "{text}");
+    assert!(text.contains("$GITHUB_RUN_ATTEMPT"), "{text}");
+    assert!(text.contains("$GITHUB_JOB"), "{text}");
     assert!(
         text.contains("ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && github.event_name == 'push' && 'write' || 'read' }}"),
         "{text}"

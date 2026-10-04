@@ -9,7 +9,7 @@ use crate::cache_steps::{MBX_ACTION_NAME, MBX_CACHE_MODE_ENV, MBX_PREFLIGHT_NAME
 
 use super::{
     MBX_BUNDLE_EXPORT_NAME, MBX_BUNDLE_IMPORT_NAME, MBX_BUNDLE_KEY_NAME, MBX_BUNDLE_RESTORE_NAME,
-    MBX_BUNDLE_SAVE_NAME, MBX_STORE_INIT_NAME, PREP_IF, SAVE_IF, store,
+    MBX_BUNDLE_SAVE_NAME, MBX_STORE_INIT_NAME, PREP_IF, SAVE_IF, STORE_READY_IF, store,
 };
 
 const HOSTED_BACKEND: &str = "${{ runner.environment == 'github-hosted' && 'github' || 'local' }}";
@@ -33,7 +33,10 @@ pub(super) fn configure_action_transport(steps: &mut [Step]) {
 }
 
 /// Set up a private store only when Velnor owns the Scale Set bundle lane.
-pub(super) fn insert_private_store_init(job: &mut Job) -> Result<(), RenderError> {
+pub(super) fn insert_private_store_init(
+    job: &mut Job,
+    matrix_job: bool,
+) -> Result<(), RenderError> {
     if job
         .steps
         .iter()
@@ -47,6 +50,12 @@ pub(super) fn insert_private_store_init(job: &mut Job) -> Result<(), RenderError
         .position(|step| step.name == MBX_PREFLIGHT_NAME)
         .or_else(|| job.steps.iter().position(is_mbx_action))
         .ok_or_else(|| RenderError::InvalidWorkflow("mbx_store_init_without_action".to_owned()))?;
+    let matrix_key = if matrix_job {
+        "${{ matrix.matrix_key }}"
+    } else {
+        ""
+    };
+    let env = BTreeMap::from([("MBX_MATRIX_KEY".to_owned(), matrix_key.to_owned())]);
     let mut step = crate::steps::shell_step(
         MBX_STORE_INIT_NAME,
         vec![
@@ -54,7 +63,7 @@ pub(super) fn insert_private_store_init(job: &mut Job) -> Result<(), RenderError
             "-c".to_owned(),
             store::STORE_INIT_SCRIPT.to_owned(),
         ],
-        BTreeMap::new(),
+        env,
     )?;
     step.condition = Some(store::SCALE_SET_ONLY_IF.to_owned());
     job.steps.insert(at, step);
@@ -65,10 +74,11 @@ pub(super) fn insert_private_store_init(job: &mut Job) -> Result<(), RenderError
 pub(super) fn scope_bundle_route_to_scale_set(job: &mut Job) {
     let export_condition = format!("{} && {PREP_IF}", store::SCALE_SET_ONLY_IF);
     let save_condition = format!("{} && {SAVE_IF}", store::SCALE_SET_ONLY_IF);
+    let key_condition = format!("{} && {STORE_READY_IF}", store::SCALE_SET_ONLY_IF);
     for step in &mut job.steps {
         match step.name.as_str() {
             MBX_BUNDLE_KEY_NAME => {
-                step.condition = Some(store::SCALE_SET_ONLY_IF.to_owned());
+                step.condition = Some(key_condition.clone());
             }
             MBX_BUNDLE_RESTORE_NAME | MBX_BUNDLE_IMPORT_NAME => {
                 let condition = step.condition.as_deref().unwrap_or("success()");

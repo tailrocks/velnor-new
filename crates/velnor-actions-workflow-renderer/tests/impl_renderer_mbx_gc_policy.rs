@@ -26,12 +26,20 @@ fn action_step_env_renders_only_when_present() -> Result<(), RenderError> {
         &fixture_ctx(),
     )?;
     assert!(
-        text.contains(&format!("{MBX_CACHE_MODE_ENV}: read")),
-        "action post stays restore-only:\n{text}"
+        text.contains(&format!(
+            "{MBX_CACHE_MODE_ENV}: ${{{{ runner.environment == 'github-hosted' && github.event_name == 'push' && 'write' || 'read' }}}}"
+        )),
+        "hosted native action writes only on push and reads on PR; Scale Set stays read-only:\n{text}"
     );
     assert!(
-        !text.contains("&& 'write'"),
-        "push writes must not come from the action post:\n{text}"
+        text.contains(
+            "backend: ${{ runner.environment == 'github-hosted' && 'github' || 'local' }}"
+        ),
+        "hosted jobs use the native backend and Scale Set uses the local backend:\n{text}"
+    );
+    assert!(
+        text.contains("if: runner.environment != 'github-hosted'"),
+        "Velnor's manual bundle steps belong only to the Scale Set lane:\n{text}"
     );
     assert!(
         text.contains("MBX_GC_AUTO: \"1\""),

@@ -6,25 +6,57 @@ pub(super) const SCALE_SET_ONLY_IF: &str = "runner.environment != 'github-hosted
 /// Initialize a mode-700 cache root in this job's temporary directory.
 pub(super) const STORE_INIT_SCRIPT: &str = r#"set -eu
 umask 077
-: "${RUNNER_TEMP:?RUNNER_TEMP is required}"
-: "${GITHUB_ENV:?GITHUB_ENV is required}"
-: "${GITHUB_RUN_ID:?GITHUB_RUN_ID is required}"
-: "${GITHUB_RUN_ATTEMPT:?GITHUB_RUN_ATTEMPT is required}"
-: "${GITHUB_JOB:?GITHUB_JOB is required}"
-case "$GITHUB_RUN_ID" in ''|*[!0-9]*) exit 1 ;; esac
-case "$GITHUB_RUN_ATTEMPT" in ''|*[!0-9]*) exit 1 ;; esac
-case "$GITHUB_JOB" in ''|*[!A-Za-z0-9_-]*) exit 1 ;; esac
-temp_root=$(CDPATH= cd -- "$RUNNER_TEMP" && pwd -P)
-root=$(mktemp -d "$temp_root/velnor-mbx-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT.XXXXXXXXXX")
-test -d "$root" && test ! -L "$root"
-root=$(CDPATH= cd -- "$root" && pwd -P)
-chmod 700 "$root"
+cache_unavailable() {
+    reason="$1"
+    printf '::warning::MBX cache unavailable: %s\n' "$reason" >&2
+    if [ -n "${GITHUB_OUTPUT:-}" ]; then
+        printf 'ready=false\nacceptance=cache_unavailable\n' >> "$GITHUB_OUTPUT" 2>/dev/null || true
+    fi
+    exit 0
+}
+if [ -z "${RUNNER_TEMP:-}" ] || [ -z "${GITHUB_ENV:-}" ] || [ -z "${GITHUB_OUTPUT:-}" ]; then
+    cache_unavailable "runtime-path-missing"
+fi
+if [ -z "${GITHUB_RUN_ID:-}" ] || [ -z "${GITHUB_RUN_ATTEMPT:-}" ] || [ -z "${GITHUB_JOB:-}" ]; then
+    cache_unavailable "run-identity-missing"
+fi
+matrix_key=${MBX_MATRIX_KEY:-}
+case "$GITHUB_RUN_ID" in ''|*[!0-9]*) cache_unavailable "invalid-run-id" ;; esac
+case "$GITHUB_RUN_ATTEMPT" in ''|*[!0-9]*) cache_unavailable "invalid-run-attempt" ;; esac
+case "$GITHUB_JOB" in ''|*[!A-Za-z0-9_-]*) cache_unavailable "invalid-job-id" ;; esac
+case "$matrix_key" in
+    '') matrix_id=nonmatrix ;;
+    m-????????????????)
+        matrix_digest=${matrix_key#m-}
+        case "$matrix_digest" in *[!a-f0-9]*) cache_unavailable "invalid-matrix-id" ;; esac
+        matrix_id="$matrix_key"
+        ;;
+    *) cache_unavailable "invalid-matrix-id" ;;
+esac
+export_group="velnor-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}-${matrix_id}"
+case "$export_group" in ''|*[!A-Za-z0-9_-]*) cache_unavailable "invalid-export-group" ;; esac
+if ! temp_root=$(CDPATH= cd -- "$RUNNER_TEMP" && pwd -P); then
+    cache_unavailable "runner-temp-unavailable"
+fi
+if ! root=$(mktemp -d "$temp_root/velnor-mbx-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT.XXXXXXXXXX"); then
+    cache_unavailable "private-root-create-failed"
+fi
+if [ ! -d "$root" ] || [ -L "$root" ]; then
+    cache_unavailable "private-root-identity-failed"
+fi
+if ! root=$(CDPATH= cd -- "$root" && pwd -P) || ! chmod 700 "$root"; then
+    cache_unavailable "private-root-permission-failed"
+fi
 marker="$root/.velnor-mbx-owner"
 if ! (set -C; printf 'run_id=%s\njob=%s\nattempt=%s\n' "$GITHUB_RUN_ID" "$GITHUB_JOB" "$GITHUB_RUN_ATTEMPT" > "$marker"); then
-    echo "could not create private MBX owner marker" >&2
-    exit 1
+    cache_unavailable "owner-marker-create-failed"
 fi
-printf 'MBX_CACHE_DIR=%s\n' "$root" >> "$GITHUB_ENV"
+if ! printf 'MBX_CACHE_DIR=%s\nMBX_CACHE_EXPORT_GROUP=%s\n' "$root" "$export_group" >> "$GITHUB_ENV"; then
+    cache_unavailable "github-env-handoff-failed"
+fi
+if ! printf 'ready=true\nacceptance=ready\n' >> "$GITHUB_OUTPUT"; then
+    cache_unavailable "github-output-handoff-failed"
+fi
 printf 'Initialized private MBX store under runner.temp.\n'"#;
 
 /// Validate exact private ownership, export one bundle, and preserve the store.

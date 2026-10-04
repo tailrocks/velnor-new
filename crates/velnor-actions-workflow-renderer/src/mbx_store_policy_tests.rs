@@ -56,6 +56,25 @@ fn job_with_bundle_route() -> Result<Job, Box<dyn Error>> {
         .ok_or_else(|| std::io::Error::other("rendered MBX job missing").into())
 }
 
+fn matrix_job_with_bundle_route() -> Result<Job, Box<dyn Error>> {
+    let mut job = mbx_job();
+    job.steps.push(Step {
+        name: "Matrix marker".to_owned(),
+        condition: None,
+        kind: StepKind::Shell {
+            run: vec!["true".to_owned()],
+            env: BTreeMap::from([(
+                crate::matrix::MATRIX_NEEDS_JOB_ENV.to_owned(),
+                "1".to_owned(),
+            )]),
+        },
+    });
+    let mut jobs = BTreeMap::from([(crate::render::TASK_JOB_ID.to_owned(), job)]);
+    append_single_bundle_saves(&mut jobs)?;
+    jobs.remove(crate::render::TASK_JOB_ID)
+        .ok_or_else(|| std::io::Error::other("matrix MBX job missing").into())
+}
+
 #[test]
 fn v16_action_routes_hosted_cache_to_github_and_scaleset_to_manual_bundle()
 -> Result<(), Box<dyn Error>> {
@@ -85,12 +104,25 @@ fn v16_action_routes_hosted_cache_to_github_and_scaleset_to_manual_bundle()
         .find(|step| step.name == MBX_STORE_INIT_NAME)
         .ok_or_else(|| std::io::Error::other("private store init missing"))?;
     assert_eq!(init.condition.as_deref(), Some(SCALE_SET_ONLY_IF));
+    assert!(matches!(
+        &init.kind,
+        StepKind::Shell { run, env }
+            if env.get("MBX_MATRIX_KEY").is_some_and(String::is_empty)
+                && run.get(2).is_some_and(|script| script.contains("MBX_CACHE_EXPORT_GROUP=%s"))
+                && run.get(2).is_some_and(|script| script.contains("$GITHUB_RUN_ID"))
+                && run.get(2).is_some_and(|script| script.contains("$GITHUB_JOB"))
+    ));
     let key = job
         .steps
         .iter()
         .find(|step| step.name == MBX_BUNDLE_KEY_NAME)
         .ok_or_else(|| std::io::Error::other("manual MBX key step missing"))?;
-    assert_eq!(key.condition.as_deref(), Some(SCALE_SET_ONLY_IF));
+    let key_condition = key
+        .condition
+        .as_deref()
+        .ok_or_else(|| std::io::Error::other("manual MBX key step must be gated"))?;
+    assert!(key_condition.starts_with(SCALE_SET_ONLY_IF));
+    assert!(key_condition.contains("steps.mbx-store-init.outputs.ready == 'true'"));
     for (name, required) in [
         (MBX_BUNDLE_RESTORE_NAME, "steps.mbx-bundle-key.outcome"),
         (MBX_BUNDLE_IMPORT_NAME, "steps.mbx-bundle.outcome"),
@@ -145,6 +177,131 @@ fn v16_action_routes_hosted_cache_to_github_and_scaleset_to_manual_bundle()
     assert_eq!(restore_path.map(String::as_str), Some(MBX_BUNDLE_PATH));
     assert_eq!(save_path, restore_path);
     assert!(!STORE_INIT_SCRIPT.is_empty());
+    Ok(())
+}
+
+#[test]
+fn matrix_store_initializer_exports_matrix_scoped_producer_group() -> Result<(), Box<dyn Error>> {
+    let job = matrix_job_with_bundle_route()?;
+    let init = job
+        .steps
+        .iter()
+        .find(|step| step.name == MBX_STORE_INIT_NAME)
+        .ok_or_else(|| std::io::Error::other("private store init missing"))?;
+    assert!(matches!(
+        &init.kind,
+        StepKind::Shell { run, env }
+            if env.get("MBX_MATRIX_KEY").is_some_and(|value| value == "${{ matrix.matrix_key }}")
+                && run.get(2).is_some_and(|script| script.contains("matrix_id=\"$matrix_key\""))
+                && run.get(2).is_some_and(|script| script.contains("MBX_CACHE_EXPORT_GROUP=%s"))
+    ));
+    Ok(())
+}
+
+#[test]
+fn only_exact_renderer_owned_mbx_scripts_allow_multiline_bash() -> Result<(), Box<dyn Error>> {
+    let raw = vec![
+        "bash".to_owned(),
+        "-c".to_owned(),
+        STORE_INIT_SCRIPT.to_owned(),
+    ];
+    let step = crate::steps::shell_step(MBX_STORE_INIT_NAME, raw, BTreeMap::new())?;
+    let StepKind::Shell { run, .. } = &step.kind else {
+        return Err(std::io::Error::other("MBX store setup is not a shell step").into());
+    };
+    assert!(crate::commands::validate_step_command_argv(MBX_STORE_INIT_NAME, run).is_ok());
+    assert!(crate::commands::validate_command_argv(run).is_err());
+    assert!(crate::commands::validate_step_command_argv("Other step", run).is_err());
+
+    let wrapped = crate::toolchain_env::with_env_unset_argv(&[
+        "bash".to_owned(),
+        "-c".to_owned(),
+        STORE_INIT_SCRIPT.to_owned(),
+    ]);
+    assert!(crate::commands::validate_step_command_argv(MBX_STORE_INIT_NAME, &wrapped).is_ok());
+
+    let bare_env = vec![
+        "env".to_owned(),
+        "bash".to_owned(),
+        "-c".to_owned(),
+        STORE_INIT_SCRIPT.to_owned(),
+    ];
+    assert!(super::trusted_script_argument(MBX_STORE_INIT_NAME, &bare_env).is_none());
+    assert!(crate::commands::validate_step_command_argv(MBX_STORE_INIT_NAME, &bare_env).is_err());
+
+    let partial_unset = vec![
+        "env".to_owned(),
+        "-u".to_owned(),
+        "GH_TOKEN".to_owned(),
+        "bash".to_owned(),
+        "-c".to_owned(),
+        STORE_INIT_SCRIPT.to_owned(),
+    ];
+    assert!(super::trusted_script_argument(MBX_STORE_INIT_NAME, &partial_unset).is_none());
+    assert!(
+        crate::commands::validate_step_command_argv(MBX_STORE_INIT_NAME, &partial_unset).is_err()
+    );
+
+    let mut script_with_extra_arg = vec![
+        "bash".to_owned(),
+        "-c".to_owned(),
+        STORE_INIT_SCRIPT.to_owned(),
+    ];
+    script_with_extra_arg.push("$(untrusted)".to_owned());
+    assert!(
+        crate::commands::validate_step_command_argv(MBX_STORE_INIT_NAME, &script_with_extra_arg)
+            .is_err()
+    );
+
+    let mut quoted_substitution_outside_body = vec![
+        "bash".to_owned(),
+        "-c".to_owned(),
+        STORE_INIT_SCRIPT.to_owned(),
+        "'\\''; $(outside-approved-body)".to_owned(),
+    ];
+    assert!(
+        super::trusted_script_argument(MBX_STORE_INIT_NAME, &quoted_substitution_outside_body)
+            .is_none()
+    );
+    assert!(
+        crate::commands::validate_step_command_argv(
+            MBX_STORE_INIT_NAME,
+            &quoted_substitution_outside_body
+        )
+        .is_err()
+    );
+    quoted_substitution_outside_body.pop();
+
+    let altered_bodies = [
+        format!("{STORE_INIT_SCRIPT}; echo altered"),
+        format!("{STORE_INIT_SCRIPT}\necho altered"),
+        STORE_INIT_SCRIPT.replacen("umask 077", r"umask 077; echo 'x'\''y'", 1),
+    ];
+    for altered_body in altered_bodies {
+        assert_ne!(altered_body, STORE_INIT_SCRIPT);
+        let altered = vec!["bash".to_owned(), "-c".to_owned(), altered_body];
+        assert!(super::trusted_script_argument(MBX_STORE_INIT_NAME, &altered).is_none());
+        assert!(
+            crate::commands::validate_step_command_argv(MBX_STORE_INIT_NAME, &altered).is_err()
+        );
+    }
+
+    for bad_script in [
+        format!("{STORE_INIT_SCRIPT}\r"),
+        format!("{STORE_INIT_SCRIPT}\0"),
+    ] {
+        let bad = vec!["bash".to_owned(), "-c".to_owned(), bad_script];
+        assert!(crate::commands::validate_step_command_argv(MBX_STORE_INIT_NAME, &bad).is_err());
+    }
+    let private = vec![
+        "bash".to_owned(),
+        "-c".to_owned(),
+        "echo safe; velnor-actions __internal".to_owned(),
+    ];
+    assert!(matches!(
+        crate::commands::validate_step_command_argv(MBX_STORE_INIT_NAME, &private),
+        Err(crate::RenderError::PrivateSubcommand(_))
+    ));
     Ok(())
 }
 

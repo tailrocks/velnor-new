@@ -34,8 +34,17 @@ that restored directory to private staging before export. The store and staging
 remain until normal runner temporary-directory cleanup. Velnor does not
 recursively delete either. A cache miss continues cold. A matched missing
 bundle or failed import continues the build cold, is recorded as `cache_corrupt`,
-and is not published. Failed `GITHUB_ENV` or `GITHUB_OUTPUT` handoff prevents
-export and save while preserving the build result.
+and is not published. Failed store preparation or `GITHUB_ENV` or
+`GITHUB_OUTPUT` handoff reports `cache_unavailable`, skips restore and export,
+and preserves the build result. The store initializer sets
+`MBX_CACHE_EXPORT_GROUP` before MBX runs. The group uses the run ID, attempt,
+job ID, and matrix key when present. The pinned v1.6.0 local action returns
+before it assigns a group; Velnor owns this value for the Scale Set bundle.
+
+Renderer validation permits multiline shell text only for the exact fixed MBX
+scripts and their named steps. It checks the script argument after the known
+credential-unset prefix and compares the full body with the renderer constant.
+All other command vectors still reject LF, CR, NUL, and command substitution.
 For a Cargo profile, the action and MBX installation are absent. The same cache
 actions also transport Cargo source archives and qualified Mise task artifacts.
 They do not archive the live MBX store. In selected crate jobs and the plan-job

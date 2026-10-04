@@ -1,6 +1,5 @@
 //! Private MBX store lifecycle regressions.
 
-use std::error::Error;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -60,18 +59,62 @@ fn run_script(
     command.output()
 }
 
+fn run_script_with_github_env(
+    script: &str,
+    environment: &[(&str, &str)],
+    path_prefix: Option<&Path>,
+) -> io::Result<Output> {
+    let wrapper = r#"set -eu
+set -a
+. "$GITHUB_ENV"
+set +a
+if [ -n "${MBX_TEST_CACHE_ROOT:-}" ]; then
+    MBX_CACHE_DIR=$MBX_TEST_CACHE_ROOT
+    export MBX_CACHE_DIR
+fi
+exec bash -c "$MBX_TEST_SCRIPT""#;
+    let mut command = Command::new("bash");
+    command.args(["-c", wrapper, "mbx-test"]);
+    command.env("MBX_TEST_SCRIPT", script);
+    for (key, value) in environment {
+        command.env(key, value);
+    }
+    if let Some(prefix) = path_prefix {
+        let path = format!(
+            "{}:{}",
+            prefix.display(),
+            std::env::var("PATH").unwrap_or_default()
+        );
+        command.env("PATH", path);
+    }
+    command.output()
+}
+
 fn init_root(sandbox: &Sandbox, attempt: &str) -> io::Result<PathBuf> {
-    let env_file = sandbox.path().join(format!("github-env-{attempt}"));
+    init_root_with_matrix(sandbox, attempt, "")
+}
+
+fn init_root_with_matrix(
+    sandbox: &Sandbox,
+    attempt: &str,
+    matrix_key: &str,
+) -> io::Result<PathBuf> {
+    let env_file = github_env_path(sandbox, attempt);
+    let output_file = sandbox.path().join(format!("store-init-output-{attempt}"));
+    fs::write(&output_file, "")?;
     let temp = sandbox.path().to_string_lossy().into_owned();
     let env_path = env_file.to_string_lossy().into_owned();
+    let output_path = output_file.to_string_lossy().into_owned();
     let output = run_script(
         STORE_INIT_SCRIPT,
         &[
             ("RUNNER_TEMP", &temp),
             ("GITHUB_ENV", &env_path),
+            ("GITHUB_OUTPUT", &output_path),
             ("GITHUB_RUN_ID", RUN_ID),
             ("GITHUB_RUN_ATTEMPT", attempt),
             ("GITHUB_JOB", JOB_ID),
+            ("MBX_MATRIX_KEY", matrix_key),
         ],
         None,
     )?;
@@ -83,9 +126,23 @@ fn init_root(sandbox: &Sandbox, attempt: &str) -> io::Result<PathBuf> {
     let environment = fs::read_to_string(env_file)?;
     let root = environment
         .lines()
+        .rev()
         .find_map(|line| line.strip_prefix("MBX_CACHE_DIR="))
         .ok_or_else(|| io::Error::other("MBX_CACHE_DIR missing from GITHUB_ENV"))?;
     Ok(PathBuf::from(root))
+}
+
+fn github_env_path(sandbox: &Sandbox, attempt: &str) -> PathBuf {
+    sandbox.path().join(format!("github-env-{attempt}"))
+}
+
+fn github_env_value(sandbox: &Sandbox, attempt: &str, key: &str) -> io::Result<String> {
+    let env = fs::read_to_string(github_env_path(sandbox, attempt))?;
+    env.lines()
+        .rev()
+        .find_map(|line| line.strip_prefix(&format!("{key}=")))
+        .map(ToOwned::to_owned)
+        .ok_or_else(|| io::Error::other(format!("{key} missing from GITHUB_ENV")))
 }
 
 fn fake_mbx(sandbox: &Sandbox) -> io::Result<PathBuf> {
@@ -223,10 +280,13 @@ fn export_with_cache_root(
     let cache = cache_root.to_string_lossy();
     let output_arg = output_path.to_string_lossy();
     let summary_arg = summary_path.to_string_lossy();
+    let env_arg = github_env_path(sandbox, ATTEMPT)
+        .to_string_lossy()
+        .into_owned();
     let mut environment = vec![
         ("RUNNER_TEMP", temp.as_ref()),
-        ("MBX_CACHE_DIR", cache.as_ref()),
-        ("MBX_CACHE_EXPORT_GROUP", "g-run-2-job"),
+        ("GITHUB_ENV", env_arg.as_str()),
+        ("MBX_TEST_CACHE_ROOT", cache.as_ref()),
         ("GITHUB_RUN_ID", RUN_ID),
         ("GITHUB_RUN_ATTEMPT", ATTEMPT),
         ("GITHUB_JOB", JOB_ID),
@@ -241,7 +301,7 @@ fn export_with_cache_root(
     } else {
         environment.push(("MBX_CACHE_IMPORT_STATE", "cold"));
     }
-    let output = run_script(EXPORT_SCRIPT, &environment, Some(&bin))?;
+    let output = run_script_with_github_env(EXPORT_SCRIPT, &environment, Some(&bin))?;
     let outputs = fs::read_to_string(output_path)?;
     let summary = fs::read_to_string(summary_path)?;
     Ok((output, outputs, summary))
@@ -269,30 +329,11 @@ fn assert_unavailable(output: Output, outputs: &str, summary: &str) {
     assert!(summary.contains("cache_unavailable"), "{summary}");
 }
 
-#[test]
-fn init_creates_distinct_private_roots_with_exact_owner_identity() -> Result<(), Box<dyn Error>> {
-    let sandbox = Sandbox::create()?;
-    let first = init_root(&sandbox, ATTEMPT)?;
-    let second = init_root(&sandbox, ATTEMPT)?;
-    let canonical_temp = fs::canonicalize(sandbox.path())?;
-    assert_ne!(first, second);
-    assert_eq!(first.parent(), Some(canonical_temp.as_path()));
-    assert_eq!(second.parent(), Some(canonical_temp.as_path()));
-    let marker = fs::read_to_string(first.join(".velnor-mbx-owner"))?;
-    assert_eq!(
-        marker,
-        format!("run_id={RUN_ID}\njob={JOB_ID}\nattempt={ATTEMPT}\n")
-    );
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        assert_eq!(fs::metadata(&first)?.permissions().mode() & 0o777, 0o700);
-    }
-    Ok(())
-}
-
 #[path = "mbx_store_restore_tests.rs"]
 mod restore_tests;
+
+#[path = "mbx_store_init_tests.rs"]
+mod init_tests;
 
 #[path = "mbx_store_failure_tests.rs"]
 mod failure_tests;

@@ -61,7 +61,7 @@ fn symlinked_roots_and_action_stores_are_not_exported() -> Result<(), Box<dyn Er
     let outside = sandbox.path().join("outside-actions");
     fs::create_dir(&outside)?;
     fs::write(outside.join("sentinel"), "outside stays owned\n")?;
-    fs::remove_dir(root.join("actions"))?;
+    fs::remove_dir_all(root.join("actions"))?;
     symlink(&outside, root.join("actions"))?;
     let (output, outputs, summary) = export_result(&sandbox, &root, "success")?;
     assert_unavailable(output, &outputs, &summary);

@@ -38,10 +38,42 @@ pub(crate) const MBX_BUNDLE_IMPORT_NAME: &str = "Import MBX single bundle";
 pub(crate) const MBX_STORE_INIT_NAME: &str = "Initialize private MBX store";
 /// One transport path shared by restore and save to preserve cache versions.
 pub(crate) const MBX_BUNDLE_PATH: &str = "${{ runner.temp }}/mbx-single-bundle";
+
+/// Locate an exact renderer-owned MBX script in a named shell step.
+///
+/// This is the only multiline-script path. The script body must match one
+/// fixed MBX script exactly, before or after the renderer's credential prelude.
+pub(crate) fn trusted_script_argument(name: &str, argv: &[String]) -> Option<usize> {
+    let expected = match name {
+        MBX_STORE_INIT_NAME => store::STORE_INIT_SCRIPT,
+        MBX_BUNDLE_KEY_NAME => KEY_SCRIPT,
+        MBX_BUNDLE_IMPORT_NAME => IMPORT_SCRIPT,
+        MBX_BUNDLE_EXPORT_NAME => EXPORT_SCRIPT,
+        _ => return None,
+    };
+    let prefix = crate::toolchain_env::unset_prefix_len(argv);
+    if prefix > 0 {
+        let expected_prefix = crate::toolchain_env::with_env_unset_argv(&[]);
+        if prefix != expected_prefix.len() || argv.get(..prefix) != Some(expected_prefix.as_slice())
+        {
+            return None;
+        }
+    }
+    let shell = argv.get(prefix..)?;
+    if shell.len() != 3 || shell[0] != "bash" || shell[1] != "-c" {
+        return None;
+    }
+    let script = &shell[2];
+    let credential_prefixed = crate::toolchain_env::with_credential_unset_script(expected);
+    (script == expected || script == &credential_prefixed).then_some(prefix + 2)
+}
+
 /// Push-only export gate. A failed import handoff cannot publish a bundle.
 const PREP_IF: &str = "success() && github.event_name == 'push' && steps.mbx-import.outcome == 'success' && (steps.mbx-import.outputs.cache-state == 'cold' || steps.mbx-import.outputs.cache-state == 'imported') && steps.mbx-bundle.outputs.cache-hit != 'true'";
 /// Save gate. Empty exports set `ready=false` and must not call `actions/cache`.
 const SAVE_IF: &str = "success() && github.event_name == 'push' && steps.mbx-import.outcome == 'success' && (steps.mbx-import.outputs.cache-state == 'cold' || steps.mbx-import.outputs.cache-state == 'imported') && steps.mbx-bundle.outputs.cache-hit != 'true' && steps.mbx-export.outcome == 'success' && steps.mbx-export.outputs.ready == 'true'";
+/// Require a prepared private store before the manual Scale Set cache route.
+const STORE_READY_IF: &str = "success() && steps.mbx-store-init.outcome == 'success' && steps.mbx-store-init.outputs.ready == 'true'";
 /// Restore by stable writer identity before the compatible common prefix.
 const KEY_SCRIPT: &str = r#"set -eu
 cache_unavailable() {
@@ -110,6 +142,7 @@ fi"#;
 pub(crate) fn step_yaml_id(name: &str) -> Option<&'static str> {
     match name {
         MBX_RESTORE_NAME => Some("mbx"),
+        MBX_STORE_INIT_NAME => Some("mbx-store-init"),
         MBX_BUNDLE_KEY_NAME => Some("mbx-bundle-key"),
         MBX_BUNDLE_RESTORE_NAME => Some("mbx-bundle"),
         MBX_BUNDLE_IMPORT_NAME => Some("mbx-import"),
@@ -118,7 +151,7 @@ pub(crate) fn step_yaml_id(name: &str) -> Option<&'static str> {
     }
 }
 
-/// Emit `id:` for the two MBX steps whose later steps read outputs.
+/// Emit `id:` for MBX steps whose later steps read outputs.
 pub(crate) fn push_step_id(entries: &mut Vec<(String, crate::yaml::Yaml)>, name: &str) {
     let Some(id) = step_yaml_id(name) else {
         return;
@@ -139,8 +172,8 @@ pub(crate) fn append_single_bundle_saves(
             continue;
         }
         configure_action_transport(&mut job.steps);
-        insert_private_store_init(job)?;
         let matrix_job = is_matrix_job(job_id, job);
+        insert_private_store_init(job, matrix_job)?;
         insert_bundle_restore(job, matrix_job)?;
         if !job
             .steps

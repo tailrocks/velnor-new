@@ -3,84 +3,11 @@
 //! Argv arrives as validated vectors; quoting preserves `$` expansion spans
 //! for runner variables while quoting every other character.
 
-use std::collections::BTreeMap;
+use crate::RenderError;
 
-use crate::{RenderError, steps::scan_for_private_subcommands};
-
-/// Validate a fixed argument vector: nonempty, no shell fragments.
-///
-/// Rejects empty argv, empty args, control characters, command substitution,
-/// `cargo install` sequences, absolute Cargo paths, and private tokens.
-/// GitHub `${{ }}` expressions stay constructible here: secret and
-/// input handles are diagnosed with specific tokens by the release
-/// gates, which run after this structural check.
-///
-/// # Errors
-///
-/// Returns [`RenderError::BadCommand`] or [`RenderError::PrivateSubcommand`].
-pub fn validate_command_argv(argv: &[String]) -> Result<(), RenderError> {
-    if argv.is_empty() {
-        return Err(RenderError::BadCommand("empty_argv".to_owned()));
-    }
-    let mut previous: Option<&str> = None;
-    for arg in argv {
-        if arg.is_empty() {
-            return Err(RenderError::BadCommand("empty_arg".to_owned()));
-        }
-        if arg.chars().any(|ch| ch == '\0' || ch == '\n' || ch == '\r') {
-            return Err(RenderError::BadCommand(format!("control_char:{arg}")));
-        }
-        if arg.contains("$(") || arg.contains('`') {
-            return Err(RenderError::BadCommand(format!(
-                "command_substitution:{arg}"
-            )));
-        }
-        if has_background_op(arg) {
-            return Err(RenderError::BadCommand(format!("background_shell:{arg}")));
-        }
-        if previous == Some("cargo") && arg == "install" {
-            return Err(RenderError::BadCommand("cargo_install".to_owned()));
-        }
-        if is_absolute_cargo(arg) {
-            return Err(RenderError::BadCommand(format!(
-                "absolute_cargo_path:{arg}"
-            )));
-        }
-        scan_for_private_subcommands(arg)?;
-        previous = Some(arg);
-    }
-    Ok(())
-}
-
-/// Validate a fixed env map: `A-Z0-9_` keys, single-line clean values.
-///
-/// Expressions stay allowlisted, never blanket-banned: only fixed
-/// runner-provided spans pass (see the private `expressions` module).
-///
-/// # Errors
-///
-/// Returns [`RenderError::BadCommand`] or [`RenderError::PrivateSubcommand`].
-pub fn validate_env(env: &BTreeMap<String, String>) -> Result<(), RenderError> {
-    for (key, value) in env {
-        if key.is_empty()
-            || !key
-                .bytes()
-                .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || b == b'_')
-        {
-            return Err(RenderError::BadCommand(format!("bad_env_key:{key}")));
-        }
-        if value
-            .chars()
-            .any(|ch| ch == '\0' || ch == '\n' || ch == '\r')
-        {
-            return Err(RenderError::BadCommand(format!("bad_env_value:{key}")));
-        }
-        crate::expressions::check_env_value(key, value)?;
-        scan_for_private_subcommands(key)?;
-        scan_for_private_subcommands(value)?;
-    }
-    Ok(())
-}
+mod validation;
+pub(crate) use validation::validate_step_command_argv;
+pub use validation::{validate_command_argv, validate_env};
 /// Join validated argv into one `run:` line with POSIX quoting.
 ///
 /// `$NAME`/`${...}` spans pass through for runner expansion; every other
@@ -97,10 +24,26 @@ pub fn validate_env(env: &BTreeMap<String, String>) -> Result<(), RenderError> {
 /// Returns [`RenderError::BadCommand`] when argv validation fails.
 pub fn join_argv_for_run(argv: &[String]) -> Result<String, RenderError> {
     validate_command_argv(argv)?;
+    Ok(join_validated_argv(argv))
+}
+
+/// Join a renderer step after its exact fixed script identity has been checked.
+///
+/// The named validator admits only byte-identical renderer-owned MBX scripts.
+/// Repository-provided argv stays on [`validate_command_argv`].
+///
+/// # Errors
+///
+/// Returns [`RenderError::BadCommand`] when argv validation fails.
+pub(crate) fn join_argv_for_step(name: &str, argv: &[String]) -> Result<String, RenderError> {
+    validate_step_command_argv(name, argv)?;
+    Ok(join_validated_argv(argv))
+}
+
+fn join_validated_argv(argv: &[String]) -> String {
     let prefix = crate::toolchain_env::unset_prefix_len(argv);
     let script_at = is_inline_shell(&argv[prefix..]).then_some(prefix + 2);
-    Ok(argv
-        .iter()
+    argv.iter()
         .enumerate()
         .map(|(index, arg)| {
             if script_at == Some(index) {
@@ -110,7 +53,7 @@ pub fn join_argv_for_run(argv: &[String]) -> Result<String, RenderError> {
             }
         })
         .collect::<Vec<_>>()
-        .join(" "))
+        .join(" ")
 }
 
 /// True for `sh -c <script>`/`bash -c <script>` vectors.
@@ -149,28 +92,6 @@ pub fn quote_run_arg(arg: &str) -> String {
     }
     flush_run_literal(&mut literal, &mut out);
     out
-}
-/// True for `/cargo` or paths ending in `/cargo`.
-fn is_absolute_cargo(arg: &str) -> bool {
-    arg.starts_with('/') && (arg == "/cargo" || arg.ends_with("/cargo"))
-}
-
-/// True for shell background operators (`&`), never for `&&`/redirections.
-///
-/// Bans ` & `, leading `&`, and trailing single `&`; `&&` chains, `>&`
-/// redirections, and URL query `&` stay legal fixed-vector content.
-fn has_background_op(arg: &str) -> bool {
-    if arg.contains(" & ") {
-        return true;
-    }
-    let trimmed = arg.trim();
-    if let Some(head) = trimmed.strip_prefix('&') {
-        return !head.starts_with('&');
-    }
-    if let Some(body) = trimmed.strip_suffix('&') {
-        return !body.ends_with('&');
-    }
-    false
 }
 /// True when an argv element needs no quoting in `run:`.
 fn is_plain_run_token(arg: &str) -> bool {

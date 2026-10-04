@@ -55,8 +55,28 @@ fn argv_validation_rejects_policy_violations() {
     assert!(validate_command_argv(&argv(&["echo", "`evil`"])).is_err());
     assert!(validate_command_argv(&argv(&["ok", ""])).is_err());
     assert!(validate_command_argv(&argv(&["bad\nline"])).is_err());
+    assert!(validate_command_argv(&argv(&["bad\rline"])).is_err());
+    assert!(validate_command_argv(&argv(&["bad\0line"])).is_err());
+    assert!(validate_command_argv(&argv(&["bash", "-c", "echo one\necho two"])).is_err());
     assert!(validate_command_argv(&argv(&["velnor-actions", "__internal"])).is_err());
     assert!(validate_command_argv(&argv(&["mise", "exec", "--", "cargo", "test"])).is_ok());
+}
+
+#[test]
+fn untrusted_multiline_scripts_stay_rejected_after_env_unset_prefix() {
+    let wrapped = velnor_actions_workflow_renderer::toolchain_env::with_env_unset_argv(&argv(&[
+        "bash",
+        "-c",
+        "echo one\necho two",
+    ]));
+    assert!(validate_command_argv(&wrapped).is_err());
+
+    let mut outside_script =
+        velnor_actions_workflow_renderer::toolchain_env::with_env_unset_argv(&argv(&[
+            "bash", "-c", "echo one",
+        ]));
+    outside_script.push("another\nargument".to_owned());
+    assert!(validate_command_argv(&outside_script).is_err());
 }
 
 #[test]

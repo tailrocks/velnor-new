@@ -225,7 +225,7 @@ pub fn shell_step(
         return Err(RenderError::BadCommand("empty_name".to_owned()));
     }
     crate::expressions::check_name_content(name)?;
-    commands::validate_command_argv(&argv)?;
+    commands::validate_step_command_argv(name, &argv)?;
     commands::validate_env(&env)?;
     crate::toolchain_env::reject_denied_step_keys(&env)?;
     scan_for_private_subcommands(name)?;

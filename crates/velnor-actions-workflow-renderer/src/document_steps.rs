@@ -131,7 +131,7 @@ pub(crate) fn step_to_yaml(
     match &step.kind {
         StepKind::Action { uses, with, env } => action_step_to_yaml(job_id, step, uses, with, env),
         StepKind::Shell { run, env } => {
-            commands::validate_command_argv(run)?;
+            commands::validate_step_command_argv(&step.name, run)?;
             commands::validate_env(env)?;
             let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
             crate::mbx_bundle::push_step_id(&mut entries, &step.name);
@@ -141,7 +141,8 @@ pub(crate) fn step_to_yaml(
             }
             if matches!(
                 step.name.as_str(),
-                crate::mbx_bundle::MBX_BUNDLE_KEY_NAME
+                crate::mbx_bundle::MBX_STORE_INIT_NAME
+                    | crate::mbx_bundle::MBX_BUNDLE_KEY_NAME
                     | crate::mbx_bundle::MBX_BUNDLE_IMPORT_NAME
                     | crate::mbx_bundle::MBX_BUNDLE_EXPORT_NAME
             ) {
@@ -157,7 +158,7 @@ pub(crate) fn step_to_yaml(
             push_composite_shell(&mut entries, composite);
             entries.push((
                 "run".to_owned(),
-                Yaml::str(commands::join_argv_for_run(run)?),
+                Yaml::str(commands::join_argv_for_step(&step.name, run)?),
             ));
             Ok(Yaml::Map(entries))
         }
