@@ -23,12 +23,16 @@ use crate::cache_steps::{
 mod identity;
 #[path = "mbx_bundle_lane.rs"]
 mod lane;
+#[path = "mbx_bundle_observer.rs"]
+mod observer;
 #[path = "mbx_bundle_pr_cache.rs"]
 mod pr_cache;
 #[path = "mbx_bundle_qualification.rs"]
 mod qualification;
 use identity::{CacheIdentity, import_guard, plan_writers};
 pub(crate) use lane::{bind_shared_lane_outputs, shared_lane_policy};
+pub(crate) use observer::qualification_observer_steps;
+pub(crate) use pr_cache::QualificationObserverBinding;
 
 pub(crate) const MBX_PR_CACHE_ALLOWED_OUTPUT: &str = pr_cache::PR_CACHE_ALLOWED_OUTPUT;
 
@@ -391,3 +395,6 @@ fn save_step(
 #[cfg(test)]
 #[path = "mbx_bundle_import_tests.rs"]
 mod import_tests;
+#[cfg(test)]
+#[path = "mbx_bundle_observer_tests.rs"]
+mod observer_tests;
